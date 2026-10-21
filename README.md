@@ -5,7 +5,7 @@ Projeto de emulação de alta precisão, iniciado com uma implementação de ref
 ## Estado atual
 
 - **Etapa 01 concluída:** infraestrutura Python, pytest, Ruff e pacote executável.
-- **Etapa 02 em andamento:** RAM interna, barramento inicial de memória, ROM de cartucho somente leitura e testes unitários.
+- **Etapa 02 em andamento:** RAM interna, barramento inicial de memória, ROM de cartucho somente leitura, contrato de barramento para a CPU e testes unitários.
 - Ainda não há CPU Z80, mapa completo de I/O, VDP, PSG ou frontend.
 
 ## Requisitos
@@ -46,6 +46,7 @@ O comando do módulo ainda informa que o núcleo não está implementado; a RAM 
 
 - [Notas de hardware do SG-1000](docs/hardware/sg1000.md)
 - Barramento inicial: `src/sega_emulator/bus/memory_bus.py`
+- Contrato de acesso à memória para a CPU: `src/sega_emulator/bus/interfaces.py`
 
 ## Decisões pendentes
 
