@@ -4,12 +4,14 @@ Projeto de emulação de alta precisão, iniciado com uma implementação de ref
 
 ## Estado atual
 
-Etapa 01 — infraestrutura inicial. Ainda não há CPU, barramento, VDP ou PSG implementados.
+- **Etapa 01 concluída:** infraestrutura Python, pytest, Ruff e pacote executável.
+- **Etapa 02 em andamento:** modelo isolado da RAM interna de 1 KiB do SG-1000 e testes unitários.
+- Ainda não há CPU Z80, barramento completo, VDP, PSG ou frontend.
 
 ## Requisitos
 
 - Windows x64
-- Python 3.13 x64
+- Python 3.14 x64
 - Git for Windows
 - PowerShell
 - Visual Studio Code (recomendado)
@@ -19,39 +21,33 @@ Etapa 01 — infraestrutura inicial. Ainda não há CPU, barramento, VDP ou PSG 
 Na raiz do repositório, execute no PowerShell:
 
 ```powershell
-py -3.13 --version
+py -3.14 --version
 git --version
-py -3.13 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+py -3.14 -m venv .venv
+.\\.venv\\Scripts\\python.exe -m pip install --upgrade pip
+.\\.venv\\Scripts\\python.exe -m pip install -e ".[dev]"
 ```
 
-A ativação do ambiente virtual é opcional. Os comandos acima chamam diretamente o Python do `.venv`, evitando depender da política de execução do PowerShell.
+A ativação do ambiente virtual é opcional. Os comandos chamam diretamente o Python do `.venv`, evitando depender da política de execução do PowerShell.
 
-## Validar a infraestrutura
+## Validar o projeto
 
 ```powershell
-.\.venv\Scripts\python.exe --version
-.\.venv\Scripts\python.exe -m pytest
-.\.venv\Scripts\python.exe -m ruff check .
-.\.venv\Scripts\python.exe -m ruff format --check .
-.\.venv\Scripts\python.exe -m sega_emulator
+.\\.venv\\Scripts\\python.exe --version
+.\\.venv\\Scripts\\python.exe -m pytest
+.\\.venv\\Scripts\\python.exe -m ruff check .
+.\\.venv\\Scripts\\python.exe -m ruff format --check .
+.\\.venv\\Scripts\\python.exe -m sega_emulator
 ```
 
-O comando do módulo deve informar que a infraestrutura existe e que o núcleo ainda não foi implementado.
+O comando do módulo ainda informa que o núcleo não está implementado; a RAM é o primeiro componente isolado, não um emulador funcional completo.
 
-## Fluxo Git inicial
+## Documentação
 
-Depois de validar os comandos:
-
-```powershell
-git status --short
-git add .gitignore .python-version pyproject.toml README.md src tests
-git commit -m "chore: establish initial Python project scaffold"
-```
+- [Notas de hardware do SG-1000](docs/hardware/sg1000.md)
 
 ## Decisões pendentes
 
-- Escolher e documentar a licença do projeto antes de publicar o repositório.
-- Criar a integração contínua na Etapa 02.
-- Documentar os mapas de memória, I/O e as variantes do SG-1000 antes de implementar os dispositivos.
+- Escolher e documentar a licença do projeto antes de qualquer distribuição.
+- Criar a integração contínua.
+- Documentar o mapa de I/O, expansões de RAM e variantes de hardware antes de ampliar o barramento.
