@@ -80,10 +80,7 @@ class SG1000MemoryBus:
             self._ram.write(address, value)
             return
 
-        if (
-            self._cartridge_rom is None
-            or address >= len(self._cartridge_rom)
-        ):
+        if self._cartridge_rom is None or address >= len(self._cartridge_rom):
             raise UnmappedMemoryError(
                 f"Não há dispositivo mapeado para o endereço {address:04X}h."
             )
