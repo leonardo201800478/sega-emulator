@@ -31,9 +31,12 @@ def test_ld_immediate_and_register_transfer_preserve_flags() -> None:
 def test_ld_hl_indirect_reads_and_writes_ram() -> None:
     program = bytes(
         [
-            0x26, 0xC0,  # LD H,C0h
-            0x2E, 0x10,  # LD L,10h
-            0x36, 0xA5,  # LD (HL),A5h
+            0x26,
+            0xC0,  # LD H,C0h
+            0x2E,
+            0x10,  # LD L,10h
+            0x36,
+            0xA5,  # LD (HL),A5h
             0x7E,  # LD A,(HL)
             0x47,  # LD B,A
         ]
@@ -46,7 +49,7 @@ def test_ld_hl_indirect_reads_and_writes_ram() -> None:
 
     assert cpu.step() == 10
     assert cpu.step() == 7
-    assert cpu.step() == 7
+    assert cpu.step() == 4
     assert cpu.a == 0xA5
     assert cpu.b == 0xA5
     assert cpu.total_cycles == 35
