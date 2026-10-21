@@ -11,7 +11,7 @@ Projeto de emulação de alta precisão, iniciado com uma implementação de ref
 ## Requisitos
 
 - Windows x64
-- Python 3.14 x64
+- Python 3.14.x x64 (versão validada no ambiente de desenvolvimento: 3.14.7)
 - Git for Windows
 - PowerShell
 - Visual Studio Code (recomendado)
