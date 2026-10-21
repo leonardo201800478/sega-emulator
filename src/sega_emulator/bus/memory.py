@@ -31,9 +31,7 @@ class SG1000Ram:
             raise ValueError("O endereço deve estar entre 0000h e FFFFh.")
 
         if not RAM_START <= address <= RAM_END:
-            raise ValueError(
-                f"O endereço {address:04X}h não pertence à região da RAM."
-            )
+            raise ValueError(f"O endereço {address:04X}h não pertence à região da RAM.")
 
         return (address - RAM_START) % RAM_SIZE
 
