@@ -145,6 +145,51 @@ class Z80Cpu:
         else:
             self.a = value
 
+    @staticmethod
+    def _parity_flag(value: int) -> int:
+        """Retorna PV quando o byte possui paridade par."""
+        return 0x04 if value.bit_count() % 2 == 0 else 0
+
+    def _add_a(self, value: int) -> None:
+        """Executa ADD A,value e atualiza as flags documentadas e XY."""
+        accumulator = self.a
+        result = accumulator + value
+        result_byte = result & 0xFF
+        flags = result_byte & 0xA8  # S, Y e X
+        if result_byte == 0:
+            flags |= 0x40
+        if (accumulator & 0x0F) + (value & 0x0F) > 0x0F:
+            flags |= 0x10
+        if (~(accumulator ^ value) & (accumulator ^ result_byte) & 0x80) != 0:
+            flags |= 0x04
+        if result > 0xFF:
+            flags |= 0x01
+        self.a = result_byte
+        self.f = flags
+
+    def _sub_a(self, value: int) -> None:
+        """Executa SUB value e atualiza as flags documentadas e XY."""
+        accumulator = self.a
+        result_byte = (accumulator - value) & 0xFF
+        flags = (result_byte & 0xA8) | 0x02  # S, Y, X e N
+        if result_byte == 0:
+            flags |= 0x40
+        if (accumulator & 0x0F) < (value & 0x0F):
+            flags |= 0x10
+        if ((accumulator ^ value) & (accumulator ^ result_byte) & 0x80) != 0:
+            flags |= 0x04
+        if accumulator < value:
+            flags |= 0x01
+        self.a = result_byte
+        self.f = flags
+
+    def _xor_a(self, value: int) -> None:
+        """Executa XOR value e atualiza S, Z, XY e paridade."""
+        self.a ^= value
+        self.f = (self.a & 0xA8) | self._parity_flag(self.a)
+        if self.a == 0:
+            self.f |= 0x40
+
     def step(self) -> int:
         """Executa uma instrução implementada e retorna seus T-states nominais.
 
@@ -152,6 +197,7 @@ class Z80Cpu:
         - NOP (00h)
         - LD r,n (06h, 0Eh, 16h, 1Eh, 26h, 2Eh, 36h, 3Eh)
         - LD r,r' (40h–7Fh, exceto HALT 76h)
+        - ADD A,r (80h–87h), SUB r (90h–97h), XOR A,r (A8h–AFh)
 
         As operações LD não alteram o registrador de flags F.
         """
@@ -170,6 +216,15 @@ class Z80Cpu:
             value = self._read_register(source)
             self._write_register(destination, value)
             cycles = 7 if destination == 6 or source == 6 else 4
+        elif 0x80 <= opcode <= 0x87:  # ADD A,r
+            self._add_a(self._read_register(opcode & 0x07))
+            cycles = 7 if opcode & 0x07 == 6 else 4
+        elif 0x90 <= opcode <= 0x97:  # SUB r
+            self._sub_a(self._read_register(opcode & 0x07))
+            cycles = 7 if opcode & 0x07 == 6 else 4
+        elif 0xA8 <= opcode <= 0xAF:  # XOR A,r
+            self._xor_a(self._read_register(opcode & 0x07))
+            cycles = 7 if opcode & 0x07 == 6 else 4
         else:
             raise UnsupportedOpcodeError(
                 f"Opcode Z80 {opcode:02X}h não implementado "
