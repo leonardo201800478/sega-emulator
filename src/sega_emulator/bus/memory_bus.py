@@ -6,8 +6,6 @@ from sega_emulator.bus.memory import (
     SG1000Ram,
 )
 
-CARTRIDGE_START = 0x0000
-CARTRIDGE_END = RAM_START - 1
 CARTRIDGE_ADDRESS_SPACE_SIZE = RAM_START
 
 
@@ -62,10 +60,7 @@ class SG1000MemoryBus:
         if address >= RAM_START:
             return self._ram.read(address)
 
-        if (
-            self._cartridge_rom is None
-            or address >= len(self._cartridge_rom)
-        ):
+        if self._cartridge_rom is None or address >= len(self._cartridge_rom):
             raise UnmappedMemoryError(
                 f"Não há dispositivo mapeado para o endereço {address:04X}h."
             )
