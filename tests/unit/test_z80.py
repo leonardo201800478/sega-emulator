@@ -65,7 +65,7 @@ def test_ld_hl_indirect_reads_and_writes_ram() -> None:
 def test_add_a_register_sets_result_and_flags(
     accumulator: int, operand: int, expected_a: int, expected_flags: int
 ) -> None:
-    cpu = make_cpu(b"\\x80")  # ADD A,B
+    cpu = make_cpu(b"\x80")  # ADD A,B
     cpu.a = accumulator
     cpu.b = operand
 
@@ -78,13 +78,13 @@ def test_add_a_register_sets_result_and_flags(
     ("accumulator", "operand", "expected_a", "expected_flags"),
     [
         (0x00, 0x01, 0xFF, 0xBB),  # sinal, half-borrow, subtração e borrow
-        (0x80, 0x01, 0x7F, 0x3F),  # overflow com borrow
+        (0x80, 0x01, 0x7F, 0x3E),  # overflow sem borrow
     ],
 )
 def test_sub_register_sets_result_and_flags(
     accumulator: int, operand: int, expected_a: int, expected_flags: int
 ) -> None:
-    cpu = make_cpu(b"\\x90")  # SUB B
+    cpu = make_cpu(b"\x90")  # SUB B
     cpu.a = accumulator
     cpu.b = operand
 
@@ -94,7 +94,7 @@ def test_sub_register_sets_result_and_flags(
 
 
 def test_xor_register_sets_zero_and_even_parity_flags() -> None:
-    cpu = make_cpu(b"\\xA8")  # XOR A,B
+    cpu = make_cpu(b"\xA8")  # XOR A,B
     cpu.a = 0x55
     cpu.b = 0x55
 
