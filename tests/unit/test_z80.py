@@ -55,6 +55,65 @@ def test_ld_hl_indirect_reads_and_writes_ram() -> None:
     assert cpu.total_cycles == 35
 
 
+@pytest.mark.parametrize(
+    ("accumulator", "operand", "expected_a", "expected_flags"),
+    [
+        (0x7F, 0x01, 0x80, 0x94),  # sinal, half-carry e overflow
+        (0xFF, 0x01, 0x00, 0x51),  # zero, half-carry e carry
+    ],
+)
+def test_add_a_register_sets_result_and_flags(
+    accumulator: int, operand: int, expected_a: int, expected_flags: int
+) -> None:
+    cpu = make_cpu(b"\\x80")  # ADD A,B
+    cpu.a = accumulator
+    cpu.b = operand
+
+    assert cpu.step() == 4
+    assert cpu.a == expected_a
+    assert cpu.f == expected_flags
+
+
+@pytest.mark.parametrize(
+    ("accumulator", "operand", "expected_a", "expected_flags"),
+    [
+        (0x00, 0x01, 0xFF, 0xBB),  # sinal, half-borrow, subtração e borrow
+        (0x80, 0x01, 0x7F, 0x3F),  # overflow com borrow
+    ],
+)
+def test_sub_register_sets_result_and_flags(
+    accumulator: int, operand: int, expected_a: int, expected_flags: int
+) -> None:
+    cpu = make_cpu(b"\\x90")  # SUB B
+    cpu.a = accumulator
+    cpu.b = operand
+
+    assert cpu.step() == 4
+    assert cpu.a == expected_a
+    assert cpu.f == expected_flags
+
+
+def test_xor_register_sets_zero_and_even_parity_flags() -> None:
+    cpu = make_cpu(b"\\xA8")  # XOR A,B
+    cpu.a = 0x55
+    cpu.b = 0x55
+
+    assert cpu.step() == 4
+    assert cpu.a == 0
+    assert cpu.f == 0x44
+
+
+def test_alu_operation_reads_value_from_hl() -> None:
+    cpu = make_cpu(bytes([0x86]))  # ADD A,(HL)
+    cpu.hl = 0xC020
+    cpu.a = 0x10
+    cpu.bus.write(0xC020, 0x22)
+
+    assert cpu.step() == 7
+    assert cpu.a == 0x32
+    assert cpu.total_cycles == 7
+
+
 def test_nop_advances_program_counter_and_cycles() -> None:
     cpu = make_cpu(b"\x00")
 
