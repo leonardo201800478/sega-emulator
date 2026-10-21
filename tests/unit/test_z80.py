@@ -94,7 +94,7 @@ def test_sub_register_sets_result_and_flags(
 
 
 def test_xor_register_sets_zero_and_even_parity_flags() -> None:
-    cpu = make_cpu(b"\xA8")  # XOR A,B
+    cpu = make_cpu(b"\xa8")  # XOR A,B
     cpu.a = 0x55
     cpu.b = 0x55
 
