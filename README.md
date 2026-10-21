@@ -5,8 +5,9 @@ Projeto de emulação de alta precisão, iniciado com uma implementação de ref
 ## Estado atual
 
 - **Etapa 01 concluída:** infraestrutura Python, pytest, Ruff e pacote executável.
-- **Etapa 02 em andamento:** RAM interna, barramento inicial de memória, ROM de cartucho somente leitura, contrato de barramento para a CPU e testes unitários.
-- Ainda não há CPU Z80, mapa completo de I/O, VDP, PSG ou frontend.
+- **Etapa 02 em andamento:** RAM interna, barramento inicial de memória, ROM de cartucho somente leitura e contrato de barramento para a CPU.
+- **Etapa 03 em andamento:** primeiro subconjunto executável da CPU Z80, com registradores, `NOP`, `LD r,n` e `LD r,r'`, além de testes sintéticos.
+- Ainda não há uma CPU Z80 completa, mapa de I/O, VDP, PSG ou frontend.
 
 ## Requisitos
 
