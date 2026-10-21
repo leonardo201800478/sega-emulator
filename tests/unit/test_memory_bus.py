@@ -54,7 +54,7 @@ def test_bus_rejects_access_without_a_cartridge(ram: SG1000Ram) -> None:
 
 
 def test_bus_rejects_unmapped_gap_after_rom_image(ram: SG1000Ram) -> None:
-    bus = SG1000MemoryBus(ram, b"\xAA\xBB")
+    bus = SG1000MemoryBus(ram, b"\xaa\xbb")
 
     with pytest.raises(UnmappedMemoryError):
         bus.read(0x0002)
