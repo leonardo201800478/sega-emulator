@@ -24,8 +24,8 @@ Na raiz do repositório, execute no PowerShell:
 py -3.14 --version
 git --version
 py -3.14 -m venv .venv
-.\\.venv\\Scripts\\python.exe -m pip install --upgrade pip
-.\\.venv\\Scripts\\python.exe -m pip install -e ".[dev]"
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 ```
 
 A ativação do ambiente virtual é opcional. Os comandos chamam diretamente o Python do `.venv`, evitando depender da política de execução do PowerShell.
@@ -33,11 +33,11 @@ A ativação do ambiente virtual é opcional. Os comandos chamam diretamente o P
 ## Validar o projeto
 
 ```powershell
-.\\.venv\\Scripts\\python.exe --version
-.\\.venv\\Scripts\\python.exe -m pytest
-.\\.venv\\Scripts\\python.exe -m ruff check .
-.\\.venv\\Scripts\\python.exe -m ruff format --check .
-.\\.venv\\Scripts\\python.exe -m sega_emulator
+.\.venv\Scripts\python.exe --version
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m ruff format --check .
+.\.venv\Scripts\python.exe -m sega_emulator
 ```
 
 O comando do módulo ainda informa que o núcleo não está implementado; a RAM é o primeiro componente isolado, não um emulador funcional completo.
