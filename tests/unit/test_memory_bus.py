@@ -75,9 +75,7 @@ def test_bus_rejects_non_bytes_rom(ram: SG1000Ram) -> None:
 
 
 @pytest.mark.parametrize("address", [-1, 0x10000])
-def test_bus_rejects_out_of_range_addresses(
-    ram: SG1000Ram, address: int
-) -> None:
+def test_bus_rejects_out_of_range_addresses(ram: SG1000Ram, address: int) -> None:
     bus = SG1000MemoryBus(ram, b"ROM")
 
     with pytest.raises(ValueError):
@@ -92,9 +90,7 @@ def test_bus_rejects_non_integer_address(ram: SG1000Ram) -> None:
 
 
 @pytest.mark.parametrize("value", [-1, 0x100])
-def test_bus_rejects_values_outside_byte_range(
-    ram: SG1000Ram, value: int
-) -> None:
+def test_bus_rejects_values_outside_byte_range(ram: SG1000Ram, value: int) -> None:
     bus = SG1000MemoryBus(ram)
 
     with pytest.raises(ValueError):
