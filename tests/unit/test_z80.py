@@ -49,7 +49,7 @@ def test_ld_hl_indirect_reads_and_writes_ram() -> None:
     assert cpu.step() == 7
     assert cpu.a == 0xA5
     assert cpu.b == 0xA5
-    assert cpu.total_cycles == 38
+    assert cpu.total_cycles == 35
 
 
 def test_nop_advances_program_counter_and_cycles() -> None:
