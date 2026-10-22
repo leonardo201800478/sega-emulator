@@ -41,6 +41,29 @@ def test_daa_adjusts_accumulator_and_flags(
     assert cpu.total_cycles == 4
 
 
+@pytest.mark.parametrize(
+    ("opcode", "accumulator", "expected_a", "expected_flags"),
+    [
+        (0x07, 0x94, 0x29, 0xED),  # RLCA: bit 7 volta ao bit 0
+        (0x0F, 0x29, 0x94, 0xC5),  # RRCA: bit 0 volta ao bit 7
+        (0x17, 0x94, 0x28, 0xED),  # RLA: carry anterior entra no bit 0
+        (0x1F, 0x29, 0x14, 0xC5),  # RRA: carry anterior entra no bit 7
+    ],
+)
+def test_accumulator_rotates_update_carry_and_preserve_selected_flags(
+    opcode: int, accumulator: int, expected_a: int, expected_flags: int
+) -> None:
+    cpu = make_cpu(bytes([opcode]))
+    cpu.a = accumulator
+    cpu.f = 0xD6  # S, Z e P/V definidos; carry anterior limpo
+
+    assert cpu.step() == 4
+    assert cpu.a == expected_a
+    assert cpu.f == expected_flags
+    assert cpu.pc == 1
+    assert cpu.total_cycles == 4
+
+
 def test_ld_immediate_and_register_transfer_preserve_flags() -> None:
     cpu = make_cpu(bytes([0x06, 0x42, 0x78]))  # LD B,42h; LD A,B
     cpu.f = 0xD7
