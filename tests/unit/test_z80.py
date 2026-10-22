@@ -270,7 +270,8 @@ def test_call_pushes_return_address_and_ret_restores_it() -> None:
     assert cpu.bus.read(0xC0FE) == 0x03
     assert cpu.bus.read(0xC0FF) == 0x00
 
-    cpu.bus.write(0x0008, 0xC9)  # RET
+    # O programa de teste está em ROM; forneça RET na ROM antes da execução.
+    cpu.bus._cartridge_rom = bytes([0x00] * 8 + [0xC9])
     assert cpu.step() == 10
     assert cpu.pc == 0x0003
     assert cpu.sp == 0xC100
