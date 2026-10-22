@@ -1515,3 +1515,78 @@ def test_ex_sp_hl_reads_both_bytes_before_writing_stack() -> None:
         ("write", 0xC001, 0xAB),
         ("write", 0xC000, 0xCD),
     ]
+
+
+@pytest.mark.parametrize(
+    ("opcode", "initial", "expected", "expected_flags"),
+    [
+        (0x00, 0x81, 0x03, 0x05),  # RLC B
+        (0x08, 0x01, 0x80, 0x85),  # RRC B
+        (0x10, 0x80, 0x00, 0x45),  # RL B
+        (0x18, 0x01, 0x00, 0x45),  # RR B
+        (0x20, 0x80, 0x00, 0x45),  # SLA B
+        (0x28, 0x81, 0xC0, 0x84),  # SRA B
+        (0x38, 0x01, 0x00, 0x45),  # SRL B
+    ],
+)
+def test_cb_rotate_and_shift_registers(
+    opcode: int, initial: int, expected: int, expected_flags: int
+) -> None:
+    cpu = make_cpu(bytes([0xCB, opcode]))
+    cpu.b = initial
+    assert cpu.step() == 8
+    assert cpu.b == expected
+    assert cpu.f == expected_flags
+    assert cpu.pc == 2
+
+
+@pytest.mark.parametrize(
+    ("opcode", "initial", "expected"),
+    [(0x40, 0x01, 0x00), (0x80, 0xFF, 0xFE), (0xC0, 0x00, 0x01)],
+)
+def test_cb_bit_res_set_registers(opcode: int, initial: int, expected: int) -> None:
+    cpu = make_cpu(bytes([0xCB, opcode]))
+    cpu.b = initial
+    cpu.f = 0x01
+    assert cpu.step() == 8
+    if opcode >> 6 == 1:
+        assert cpu.b == initial
+        assert cpu.f & 0x11 == 0x11
+    else:
+        assert cpu.b == expected
+        assert cpu.f == 0x01
+
+
+def test_cb_operations_on_hl_memory_have_expected_nominal_cycles() -> None:
+    cpu = make_cpu(bytes([0xCB, 0x06, 0xCB, 0x46, 0xCB, 0x86]))
+    cpu.hl = 0xC020
+    cpu.bus.write(cpu.hl, 0x80)
+    assert cpu.step() == 15
+    assert cpu.bus.read(cpu.hl) == 0x01
+    assert cpu.step() == 12
+    assert cpu.step() == 15
+    assert cpu.bus.read(cpu.hl) == 0x00
+
+
+def test_halt_repeats_four_tstates_until_interrupt() -> None:
+    cpu = make_cpu(bytes([0x76, 0x00]))
+    assert cpu.step() == 4
+    assert cpu.halted
+    halted_pc = cpu.pc
+    assert cpu.step() == 4
+    assert cpu.pc == halted_pc
+    assert cpu.total_cycles == 8
+
+
+def test_di_ei_and_nmi_service() -> None:
+    cpu = make_cpu(bytes([0xF3, 0xFB, 0x00]))
+    cpu.sp = 0xC100
+    cpu.iff1 = cpu.iff2 = True
+    assert cpu.step() == 4
+    assert not cpu.iff1 and not cpu.iff2
+    assert cpu.step() == 4
+    cpu.step()
+    cpu.request_nmi()
+    assert cpu.step() == 11
+    assert cpu.pc == 0x0066
+    assert cpu.sp == 0xC0FE
