@@ -397,10 +397,10 @@ def test_dec_register_pair_wraps_and_preserves_flags(
 @pytest.mark.parametrize(
     ("opcode", "hl", "operand", "expected_hl", "expected_flags"),
     [
-        (0x09, 0x1234, 0x0001, 0x1235, 0xA4),  # preserva S/Z/PV
-        (0x19, 0x0FFF, 0x0001, 0x1000, 0x10),  # half-carry
-        (0x29, 0xFFFF, 0x0001, 0x0000, 0x51),  # carry e zero XY
-        (0x39, 0x8000, 0x8000, 0x0000, 0x41),  # carry e zero
+        (0x09, 0x1234, 0x0001, 0x1235, 0xC4),  # preserva S/Z/PV
+        (0x19, 0x0FFF, 0x0001, 0x1000, 0xD4),  # half-carry
+        (0x29, 0xFFFF, 0x0001, 0x0000, 0xD5),  # carry e zero XY
+        (0x39, 0x8000, 0x8000, 0x0000, 0xC5),  # carry e zero
     ],
 )
 def test_add_hl_pair_updates_result_and_documented_flags(
@@ -421,10 +421,10 @@ def test_add_hl_pair_updates_result_and_documented_flags(
 @pytest.mark.parametrize(
     ("accumulator", "operand", "expected_flags"),
     [
-        (0x42, 0x42, 0x42),  # zero, N, paridade preservada? flags de CP
-        (0x10, 0x01, 0x02),
-        (0x00, 0x01, 0xBB),
-        (0x7F, 0x80, 0xBA),
+        (0x42, 0x42, 0x42),  # zero e N
+        (0x10, 0x01, 0x12),
+        (0x00, 0x01, 0x93),
+        (0x7F, 0x80, 0x87),
     ],
 )
 def test_cp_register_preserves_accumulator_and_sets_flags(
