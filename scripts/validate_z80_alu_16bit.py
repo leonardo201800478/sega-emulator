@@ -160,7 +160,7 @@ def main() -> int:
     parser.add_argument(
         "--workers",
         type=int,
-        default=max(1, (os.cpu_count() or 2) - 1),
+        default=min(8, max(1, (os.cpu_count() or 2) - 1)),
         help="processos paralelos (padrão: núcleos lógicos menos um)",
     )
     parser.add_argument(
