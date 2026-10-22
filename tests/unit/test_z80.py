@@ -1773,9 +1773,7 @@ def test_im0_rejects_non_rst_bus_opcode_instead_of_misrouting_it() -> None:
 def test_all_base_opcodes_are_decoded_or_explicitly_rejected() -> None:
     for opcode in range(0x100):
         cpu = Z80Cpu(
-            SG1000MemoryBus(
-                SG1000Ram(bytes(RAM_SIZE)), bytes([opcode, 0, 0, 0, 0])
-            ),
+            SG1000MemoryBus(SG1000Ram(bytes(RAM_SIZE)), bytes([opcode, 0, 0, 0, 0])),
             io_bus=FakeIOBus(),
         )
         if opcode == 0xED:
