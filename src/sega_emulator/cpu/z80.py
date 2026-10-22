@@ -550,6 +550,7 @@ class Z80Cpu:
         - INC rr (03h, 13h, 23h, 33h), DEC rr (0Bh, 1Bh, 2Bh, 3Bh)
         - ADD HL,rr (09h, 19h, 29h, 39h)
         - ADC HL,rr / SBC HL,rr (prefixo EDh)
+        - LD (nn),rr / LD rr,(nn) (ED 43h/53h/63h/73h e ED 4Bh/5Bh/6Bh/7Bh)
         - LD I,A (ED 47h), LD R,A (ED 4Fh), LD A,I (ED 57h), LD A,R (ED 5Fh)
         - CP r (B8h–BFh)
 
@@ -572,6 +573,20 @@ class Z80Cpu:
                 value = self.i if extended_opcode == 0x57 else self.r
                 self._load_a_from_special_register(value)
                 cycles = 9
+            elif extended_opcode & 0xCF == 0x43:  # LD (nn),rr
+                address = self._fetch_byte()
+                address |= self._fetch_byte() << 8
+                value = self._read_stack_pair((extended_opcode >> 4) & 0x03)
+                self.bus.write(address, value & 0xFF)
+                self.bus.write((address + 1) & 0xFFFF, value >> 8)
+                cycles = 20
+            elif extended_opcode & 0xCF == 0x4B:  # LD rr,(nn)
+                address = self._fetch_byte()
+                address |= self._fetch_byte() << 8
+                low = self.bus.read(address)
+                high = self.bus.read((address + 1) & 0xFFFF)
+                self._write_stack_pair((extended_opcode >> 4) & 0x03, (high << 8) | low)
+                cycles = 20
             elif extended_opcode & 0xCF == 0x4A:  # ADC HL,rr
                 self._add_sub_hl(
                     self._read_stack_pair((extended_opcode >> 4) & 0x03), False
