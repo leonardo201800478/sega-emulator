@@ -186,6 +186,46 @@ class Z80Cpu:
         self.hl = result_word
         self.f = flags
 
+    def _inc_register_value(self, value: int) -> int:
+        """Incrementa um byte, atualizando flags e preservando carry."""
+        result = (value + 1) & 0xFF
+        flags = (self.f & 0x01) | (result & 0xA8)
+        if result == 0:
+            flags |= 0x40
+        if (value & 0x0F) == 0x0F:
+            flags |= 0x10
+        if value == 0x7F:
+            flags |= 0x04
+        self.f = flags
+        return result
+
+    def _dec_register_value(self, value: int) -> int:
+        """Decrementa um byte, atualizando flags e preservando carry."""
+        result = (value - 1) & 0xFF
+        flags = (self.f & 0x01) | (result & 0xA8) | 0x02
+        if result == 0:
+            flags |= 0x40
+        if (value & 0x0F) == 0:
+            flags |= 0x10
+        if value == 0x80:
+            flags |= 0x04
+        self.f = flags
+        return result
+
+    def _and_a(self, value: int) -> None:
+        """Executa AND e atualiza flags de resultado, half-carry e paridade."""
+        self.a &= value
+        self.f = (self.a & 0xA8) | 0x10 | self._parity_flag(self.a)
+        if self.a == 0:
+            self.f |= 0x40
+
+    def _or_a(self, value: int) -> None:
+        """Executa OR e atualiza flags de resultado e paridade."""
+        self.a |= value
+        self.f = (self.a & 0xA8) | self._parity_flag(self.a)
+        if self.a == 0:
+            self.f |= 0x40
+
     def _compare_a(self, value: int) -> None:
         """Executa CP value: atualiza flags como SUB sem alterar A."""
         accumulator = self.a
@@ -298,7 +338,8 @@ class Z80Cpu:
         - NOP (00h)
         - LD r,n (06h, 0Eh, 16h, 1Eh, 26h, 2Eh, 36h, 3Eh)
         - LD r,r' (40h–7Fh, exceto HALT 76h)
-        - ADD A,r (80h–87h), SUB r (90h–97h), XOR A,r (A8h–AFh)
+        - ADD A,r (80h–87h), SUB r (90h–97h), AND r (A0h–A7h), XOR A,r (A8h–AFh), OR r (B0h–B7h), CP r (B8h–BFh)
+        - INC r (04h, 0Ch, 14h, 1Ch, 24h, 2Ch, 34h, 3Ch), DEC r (05h, 0Dh, 15h, 1Dh, 25h, 2Dh, 35h, 3Dh)
         - JP nn (C3h), JP cc,nn (C2h, CAh, D2h, DAh)
         - JR e (18h), JR cc,e (20h, 28h, 30h, 38h)
         - PUSH qq (C5h, D5h, E5h, F5h), POP qq (C1h, D1h, E1h, F1h)
@@ -332,12 +373,30 @@ class Z80Cpu:
         elif 0x90 <= opcode <= 0x97:  # SUB r
             self._sub_a(self._read_register(opcode & 0x07))
             cycles = 7 if opcode & 0x07 == 6 else 4
+        elif 0xA0 <= opcode <= 0xA7:  # AND r
+            self._and_a(self._read_register(opcode & 0x07))
+            cycles = 7 if opcode & 0x07 == 6 else 4
         elif 0xA8 <= opcode <= 0xAF:  # XOR A,r
             self._xor_a(self._read_register(opcode & 0x07))
+            cycles = 7 if opcode & 0x07 == 6 else 4
+        elif 0xB0 <= opcode <= 0xB7:  # OR r
+            self._or_a(self._read_register(opcode & 0x07))
             cycles = 7 if opcode & 0x07 == 6 else 4
         elif 0xB8 <= opcode <= 0xBF:  # CP r
             self._compare_a(self._read_register(opcode & 0x07))
             cycles = 7 if opcode & 0x07 == 6 else 4
+        elif opcode & 0xC7 == 0x04:  # INC r
+            register = (opcode >> 3) & 0x07
+            self._write_register(
+                register, self._inc_register_value(self._read_register(register))
+            )
+            cycles = 11 if register == 6 else 4
+        elif opcode & 0xC7 == 0x05:  # DEC r
+            register = (opcode >> 3) & 0x07
+            self._write_register(
+                register, self._dec_register_value(self._read_register(register))
+            )
+            cycles = 11 if register == 6 else 4
         elif opcode & 0xCF == 0x03:  # INC rr
             code = (opcode >> 4) & 0x03
             self._write_stack_pair(code, self._read_stack_pair(code) + 1)
