@@ -520,7 +520,7 @@ def test_and_or_register_update_accumulator_and_flags(
 ) -> None:
     cpu = make_cpu(bytes([opcode]))
     cpu.a = accumulator
-    cpu.b = operand
+    cpu._write_register(opcode & 0x07, operand)
     cpu.f = 0xFF
 
     assert cpu.step() == 4
