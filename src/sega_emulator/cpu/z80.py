@@ -641,7 +641,8 @@ class Z80Cpu:
             return 12
         if opcode & 0xC7 == 0x41:
             register = (opcode >> 3) & 7
-            self._write_port(self.bc, 0 if register == 6 else self._read_register(register))
+            value = 0 if register == 6 else self._read_register(register)
+            self._write_port(self.bc, value)
             return 12
         if opcode in (0x44, 0x4C, 0x54, 0x5C, 0x64, 0x6C, 0x74, 0x7C):
             old_a = self.a
@@ -683,7 +684,12 @@ class Z80Cpu:
             self.de = (self.de + direction) & 0xFFFF
             self.bc = (self.bc - 1) & 0xFFFF
             total = (self.a + value) & 0xFF
-            self.f = (self.f & 0xC1) | (0x04 if self.bc else 0) | (total & 0x08) | ((total & 0x02) << 4)
+            self.f = (
+                (self.f & 0xC1)
+                | (0x04 if self.bc else 0)
+                | (total & 0x08)
+                | ((total & 0x02) << 4)
+            )
             if opcode in (0xB0, 0xB8) and self.bc:
                 self.pc = (self.pc - 2) & 0xFFFF
                 return 21
@@ -696,7 +702,16 @@ class Z80Cpu:
             self.hl = (self.hl + direction) & 0xFFFF
             self.bc = (self.bc - 1) & 0xFFFF
             adjusted = (result - int(half)) & 0xFF
-            self.f = (self.f & 1) | 0x02 | (result & 0x80) | (0x40 if result == 0 else 0) | (0x10 if half else 0) | (0x04 if self.bc else 0) | (adjusted & 0x08) | ((adjusted & 0x02) << 4)
+            self.f = (
+                (self.f & 1)
+                | 0x02
+                | (result & 0x80)
+                | (0x40 if result == 0 else 0)
+                | (0x10 if half else 0)
+                | (0x04 if self.bc else 0)
+                | (adjusted & 0x08)
+                | ((adjusted & 0x02) << 4)
+            )
             if opcode in (0xB1, 0xB9) and self.bc and result:
                 self.pc = (self.pc - 2) & 0xFFFF
                 return 21
@@ -704,7 +719,8 @@ class Z80Cpu:
         if opcode in (0xA2, 0xAA, 0xB2, 0xBA, 0xA3, 0xAB, 0xB3, 0xBB):
             return self._execute_block_io(opcode)
         raise UnsupportedOpcodeError(
-            f"Opcode Z80 ED {opcode:02X}h não implementado no endereço {(self.pc - 2) & 0xFFFF:04X}h."
+            f"Opcode Z80 ED {opcode:02X}h não implementado no endereço "
+            f"{(self.pc - 2) & 0xFFFF:04X}h."
         )
 
     def _execute_block_io(self, opcode: int) -> int:
@@ -783,7 +799,7 @@ class Z80Cpu:
             return base_cycles + 4
         if opcode == 0xCB:
             displacement = self._signed_byte(self._fetch_byte())
-            cb_opcode = self._fetch_opcode_byte()
+            cb_opcode = self._fetch_byte()
             address = (index + displacement) & 0xFFFF
             value = self.bus.read(address)
             operation = cb_opcode >> 6
@@ -832,7 +848,11 @@ class Z80Cpu:
                 self.f = flags
                 cycles = 20
             else:
-                result = value & ~(1 << bit_index) if operation == 2 else value | (1 << bit_index)
+                result = (
+                    value & ~(1 << bit_index)
+                    if operation == 2
+                    else value | (1 << bit_index)
+                )
                 self.bus.write(address, result)
                 if register != 6:
                     self._write_register(register, result)
@@ -840,7 +860,9 @@ class Z80Cpu:
         elif opcode in (0x21, 0x22, 0x2A, 0x23, 0x2B, 0x09, 0x19, 0x29, 0x39,
                         0xE1, 0xE5, 0xE3, 0xE9, 0xF9):
             if opcode == 0x21:
-                self._set_index_value(prefix, self._fetch_byte() | (self._fetch_byte() << 8))
+                low = self._fetch_byte()
+                high = self._fetch_byte()
+                self._set_index_value(prefix, low | (high << 8))
                 cycles = 14
             elif opcode in (0x22, 0x2A):
                 address = self._fetch_byte() | (self._fetch_byte() << 8)
@@ -895,7 +917,11 @@ class Z80Cpu:
                 cycles = 11
             else:
                 old = self._read_index_register(prefix, code)
-                value = self._inc_register_value(old) if opcode in (0x24, 0x2C) else self._dec_register_value(old)
+                value = (
+                    self._inc_register_value(old)
+                    if opcode in (0x24, 0x2C)
+                    else self._dec_register_value(old)
+                )
                 self._write_index_register(prefix, code, value)
                 cycles = 8
         elif opcode == 0x36:
@@ -907,7 +933,11 @@ class Z80Cpu:
             displacement = self._signed_byte(self._fetch_byte())
             address = (index + displacement) & 0xFFFF
             old = self.bus.read(address)
-            value = self._inc_register_value(old) if opcode == 0x34 else self._dec_register_value(old)
+            value = (
+                self._inc_register_value(old)
+                if opcode == 0x34
+                else self._dec_register_value(old)
+            )
             self.bus.write(address, value)
             cycles = 23
         elif 0x40 <= opcode <= 0x7F and opcode != 0x76:
