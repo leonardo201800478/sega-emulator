@@ -80,17 +80,17 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 
 | Prefixo | Estado | Escopo necessário |
 |---|---|---|
-| `CB` | Implementado — cobertura inicial | RLC, RRC, RL, RR, SLA, SRA, SRL, BIT, RES e SET em registradores/(HL); SLL incluído separadamente como não documentado. Prefixos indexados ainda pendentes. |
-| `ED` | Implementado — cobertura inicial, sujeito à validação | `ADC/SBC HL,rr`, `LD I,A`, `LD R,A`, `LD A,I` e `LD A,R` implementados. `R` incrementa nos fetches de opcode M1; `LD A,I/R` atualiza S/Z/X/Y, P/V a partir do estado `IFF2`, limpa H/N e preserva C. `IFF2` existe apenas como estado mínimo (inicialmente falso), sem lógica de interrupções. Inclui I/O por (C), operações de bloco, RRD/RLD, IM 0/1/2 e RETN/RETI; flags de operações de bloco e protocolo de interrupção ainda precisam de validação diferencial. |
+| `CB` | Implementado — cobertura inicial | RLC, RRC, RL, RR, SLA, SRA, SRL, BIT, RES e SET em registradores/(HL); SLL incluído separadamente como não documentado; DD/FD-CB também está implementado. |
+| `ED` | Implementado — cobertura inicial, sujeito à validação | Inclui `ADC/SBC HL,rr`, transferências de palavras, I/O por (C), operações de bloco, RRD/RLD, IM 0/1/2, RETN/RETI e transferências entre A, I e R. `R` incrementa nos fetches M1 modelados; `LD A,I/R` usa IFF2. As flags de operações de bloco e a arbitragem de interrupções ainda precisam de validação diferencial. |
 | `DD` | Implementado — cobertura inicial | IX, IXH/IXL, (IX+d), pilha, ALU e DD-CB implementados; testes de fumaça percorrem os opcodes do segundo byte, mas validação de flags/ciclos ainda é parcial. |
 | `FD` | Implementado — cobertura inicial | Equivalente para IY; validação diferencial e de casos especiais ainda pendente. |
 | `DD CB d` / `FD CB d` | Implementado — cobertura inicial | Operações sobre (IX+d)/(IY+d), incluindo cópia opcional para registrador; validação de flags e temporização ainda pendente. |
 
 ## Estado interno, interrupções e ciclo de barramento
 
-O código atual modela registradores principais A/F/B/C/D/E/H/L, pares AF/BC/DE/HL, SP, PC e um acumulador de T-states nominais. Ainda faltam, entre outros:
+O código atual modela registradores principais e alternativos, I/R, IX/IY, SP, PC, flags e um acumulador de T-states nominais. Ainda faltam, entre outros:
 
-- Registradores alternativos AF', BC', DE' e HL' estão modelados; I e R também estão modelados. IX/IY ainda faltam.
+- Os registradores alternativos AF', BC', DE' e HL', I/R e IX/IY estão modelados.
 - IFF1/IFF2, modos 0–2, HALT e solicitações NMI/INT têm um modelo inicial; IM 0 atualmente aceita apenas instruções RST no barramento de dados; outros opcodes IM 0 falham explicitamente em vez de serem simulados incorretamente.
 - Ciclos M1, ciclos de leitura/escrita e I/O, estados de espera, contenção e temporização de barramento.
 - Flags X/Y e efeitos não documentados validados contra referências e testes específicos.
@@ -98,14 +98,14 @@ O código atual modela registradores principais A/F/B/C/D/E/H/L, pares AF/BC/DE/
 
 O contador `total_cycles` atual soma os custos nominais das instruções suportadas. Não significa que o processador já execute acessos ao barramento ciclo a ciclo.
 
-## Ordem de implementação sugerida
+## Próximos passos de validação
 
-1. Ampliar as operações não prefixadas restantes; as oito condições de salto/chamada/retorno, EX AF,AF', EXX, EX DE,HL, EX (SP),HL e RST já estão implementados.
-2. Continuar as famílias prefixadas ED e ampliar testes de flags e comportamento de barramento; ADC/SBC HL,rr, transferências absolutas ED de palavras e transferências entre A, I e R têm implementação e testes sintéticos iniciais.
-3. Implementar HALT e o modelo de interrupções antes de declarar completo o fluxo de controle.
-4. Criar contrato de I/O e implementar IN/OUT com testes de endereço de porta.
-5. Implementar famílias CB, ED, DD, FD e DD/FD-CB de forma sistemática.
-6. Adicionar testes de diagnóstico de referência e, em etapa própria, refinar os ciclos e a interação com o barramento.
-7. Só então ampliar para os opcodes não documentados relevantes, com comportamento sustentado por evidências.
+1. Executar comparação diferencial com uma suíte de referência Z80 confiável para flags, resultados, PC, SP e ciclos de cada família.
+2. Refinar o reconhecimento de INT/NMI, em especial IM 0 para opcodes fornecidos pelo barramento além de RST.
+3. Validar os efeitos de I/O e as flags de LDI/LDD, CPI/CPD e instruções de bloco de I/O contra referências primárias e testes independentes.
+4. Implementar um modelo de acesso a barramento/ciclo para M1, leitura, escrita, I/O, estados de espera e contenção quando a arquitetura do SG-1000 exigir isso.
+5. Auditar prefixos repetidos, opcodes não documentados e diferenças de revisão de hardware; não misturar extensões de outros derivados do Z80.
+
+O conjunto documentado tem caminhos de execução nas famílias base, CB, ED, DD/FD e DD/FD-CB. Isso não equivale a validação exaustiva de cada combinação de entradas nem à precisão ciclo a ciclo.
 
 Cada incremento deverá atualizar esta matriz, testes, documentação de hardware e README quando o estado do marco mudar. Não declarar “Z80 completo” enquanto houver lacunas ou enquanto os critérios de validação não forem satisfeitos.
