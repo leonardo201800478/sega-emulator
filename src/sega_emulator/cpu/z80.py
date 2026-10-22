@@ -373,6 +373,7 @@ class Z80Cpu:
         - NOP (00h)
         - LD rr,nn (01h, 11h, 21h, 31h)
         - LD (BC/DE),A (02h, 12h) e LD A,(BC/DE) (0Ah, 1Ah)
+        - LD (nn),HL (22h) e LD HL,(nn) (2Ah)
         - LD (nn),A (32h) e LD A,(nn) (3Ah)
         - LD r,n (06h, 0Eh, 16h, 1Eh, 26h, 2Eh, 36h, 3Eh)
         - LD r,r' (40h–7Fh, exceto HALT 76h)
@@ -480,6 +481,19 @@ class Z80Cpu:
             address = self.bc if opcode == 0x0A else self.de
             self.a = self.bus.read(address)
             cycles = 7
+        elif opcode in (0x22, 0x2A):  # LD (nn),HL / LD HL,(nn)
+            low = self._fetch_byte()
+            high = self._fetch_byte()
+            address = (high << 8) | low
+            next_address = (address + 1) & 0xFFFF
+            if opcode == 0x22:
+                self.bus.write(address, self.l)
+                self.bus.write(next_address, self.h)
+            else:
+                low_value = self.bus.read(address)
+                high_value = self.bus.read(next_address)
+                self.hl = (high_value << 8) | low_value
+            cycles = 16
         elif opcode in (0x32, 0x3A):  # LD (nn),A / LD A,(nn)
             low = self._fetch_byte()
             high = self._fetch_byte()
