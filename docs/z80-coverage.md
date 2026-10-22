@@ -23,7 +23,7 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | Família / opcodes | Estado atual | Lacunas e observações |
 |---|---|---|
 | `00` — NOP | Implementado — cobertura inicial | Testado quanto a PC e 4 T-states nominais. |
-| `01, 11, 21, 31` — LD rr,nn | Ausente | Carregamento imediato de BC, DE, HL e SP. |
+| `01, 11, 21, 31` — LD rr,nn | Implementado — cobertura inicial | BC, DE, HL e SP; testes de endianess, preservação de flags e avanço do PC. |
 | `02, 12` — LD (BC/DE),A | Ausente | Escrita indireta de A. |
 | `03, 13, 23, 33` — INC rr | Implementado — cobertura inicial | Inclui SP; testar todos os pares, wrap e preservação de flags. |
 | `04, 0C, ... 3C` — INC r | Implementado — cobertura inicial | Inclui (HL); ampliar testes de todas as flags e operandos. |
@@ -93,7 +93,7 @@ O contador `total_cycles` atual soma os custos nominais das instruções suporta
 
 ## Ordem de implementação sugerida
 
-1. Completar operações básicas não prefixadas e condições: LD rr,nn, acessos indiretos, rotações, DAA, CPL, SCF/CCF, DJNZ, JP (HL), EX, LD SP,HL e RST.
+1. Completar operações básicas não prefixadas e condições: acessos indiretos, rotações, DAA, CPL, SCF/CCF, DJNZ, JP (HL), EX, LD SP,HL e RST.
 2. Completar instruções aritméticas de 16 bits, incluindo `ADC HL,rr` e `SBC HL,rr`, com flags e tempos testados.
 3. Implementar HALT e o modelo de interrupções antes de declarar completo o fluxo de controle.
 4. Criar contrato de I/O e implementar IN/OUT com testes de endereço de porta.
