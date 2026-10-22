@@ -291,7 +291,7 @@ def test_ccf_complements_carry_and_updates_half_carry(
     ("initial_b", "displacement", "expected_b", "expected_pc", "expected_cycles"),
     [
         (0x02, 0x02, 0x01, 0x0004, 13),  # B não zero: desvia para frente
-        (0x01, 0xFE, 0x00, 0x0000, 8),  # B chega a zero: não desvia
+        (0x01, 0xFE, 0x00, 0x0002, 8),  # B chega a zero: não desvia
         (0x00, 0x01, 0xFF, 0x0003, 13),  # decremento com wrap para FFh
         (0x02, 0xFE, 0x01, 0x0000, 13),  # deslocamento negativo
     ],
