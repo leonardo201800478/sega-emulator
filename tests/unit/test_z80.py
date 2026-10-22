@@ -261,7 +261,7 @@ def test_pop_restores_register_pair_from_stack(
 
 
 def test_call_pushes_return_address_and_ret_restores_it() -> None:
-    cpu = make_cpu(bytes([0xCD, 0x08, 0x00]))  # CALL 0008h
+    cpu = make_cpu(bytes([0xCD, 0x08, 0x00] + [0x00] * 5 + [0xC9]))
     cpu.sp = 0xC100
 
     assert cpu.step() == 17
@@ -270,8 +270,6 @@ def test_call_pushes_return_address_and_ret_restores_it() -> None:
     assert cpu.bus.read(0xC0FE) == 0x03
     assert cpu.bus.read(0xC0FF) == 0x00
 
-    # O programa de teste está em ROM; forneça RET na ROM antes da execução.
-    cpu.bus._cartridge_rom = bytes([0x00] * 8 + [0xC9])
     assert cpu.step() == 10
     assert cpu.pc == 0x0003
     assert cpu.sp == 0xC100
