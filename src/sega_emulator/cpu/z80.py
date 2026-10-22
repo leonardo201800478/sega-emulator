@@ -1010,7 +1010,7 @@ class Z80Cpu:
     def step(self) -> int:
         """Executa uma instrução implementada e retorna seus T-states nominais.
 
-        Subconjunto atual:
+        Famílias suportadas no marco atual:
         - NOP (00h)
         - DAA (27h)
         - EX AF,AF' (08h), EXX (D9h), EX DE,HL (EBh)
@@ -1044,6 +1044,11 @@ class Z80Cpu:
         - EX (SP),HL (E3h)
         - LD I,A (ED 47h), LD R,A (ED 4Fh), LD A,I (ED 57h), LD A,R (ED 5Fh)
         - CP r (B8h–BFh)
+        - Prefixo CB: rotações, shifts, BIT, RES e SET para registradores e (HL).
+        - Prefixos DD/FD: IX/IY, operações indexadas comuns e DD/FD-CB.
+        - Prefixo ED: I/O por (C), operações de bloco, RRD/RLD, IM, RETN/RETI,
+          transferências de palavras e registradores especiais.
+        - IN/OUT imediatos, HALT, DI/EI e solicitações iniciais de NMI/INT.
 
         INC/DEC de pares e instruções de controle preservam F conforme a
         arquitetura; POP AF restaura F. ADD HL preserva S, Z e P/V.
