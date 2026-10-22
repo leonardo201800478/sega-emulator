@@ -33,7 +33,7 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | `08` — EX AF,AF' | Ausente | Requer banco alternativo AF'. |
 | `09, 19, 29, 39` — ADD HL,rr | Implementado — cobertura inicial | Inclui SP; validar flags X/Y e todos os pares/casos-limite. |
 | `0A, 1A` — LD A,(BC/DE) | Implementado — cobertura inicial | Lê A do endereço apontado por BC ou DE; 7 T-states nominais e flags preservadas. |
-| `10` — DJNZ e | Ausente | Desvio condicional pelo contador B. |
+| `10` — DJNZ e | Implementado — cobertura inicial | Decrementa B; desvia com deslocamento relativo assinado se B não for zero; preserva flags. Testes de ramo tomado/não tomado, wrap de B e wrap do PC; 13/8 T-states nominais. |
 | `18` — JR e | Implementado — cobertura inicial | Deslocamento relativo com sinal e wrap do PC já têm testes selecionados. |
 | `20, 28, 30, 38` — JR cc,e | Implementado — cobertura inicial | NZ, Z, NC, C; as condições relativas disponíveis na base são estas quatro. |
 | `22` — LD (nn),HL | Implementado — cobertura inicial | Escreve L no endereço e H no endereço seguinte, com wrap de 16 bits; 16 T-states nominais e flags preservadas. |
@@ -95,7 +95,7 @@ O contador `total_cycles` atual soma os custos nominais das instruções suporta
 
 ## Ordem de implementação sugerida
 
-1. Completar operações básicas não prefixadas e condições: acessos indiretos, rotações, DAA, CPL, SCF/CCF, DJNZ, JP (HL), EX, LD SP,HL e RST.
+1. Completar operações básicas não prefixadas e condições: acessos indiretos, rotações, DAA, CPL, SCF/CCF, JP (HL), EX, LD SP,HL e RST.
 2. Completar instruções aritméticas de 16 bits, incluindo `ADC HL,rr` e `SBC HL,rr`, com flags e tempos testados.
 3. Implementar HALT e o modelo de interrupções antes de declarar completo o fluxo de controle.
 4. Criar contrato de I/O e implementar IN/OUT com testes de endereço de porta.
