@@ -7,6 +7,7 @@ máquinas com vários núcleos.
 
 Exemplos:
     python scripts/validate_z80_alu_16bit.py --left-count 16
+    python scripts/validate_z80_alu_16bit.py --left-count 1024 --sampling distributed
     python scripts/validate_z80_alu_16bit.py --full
 """
 
@@ -131,6 +132,39 @@ def _chunks(values: Iterable[int], size: int) -> Iterable[tuple[int, ...]]:
         yield tuple(chunk)
 
 
+def _select_left_values(count: int, sampling: str) -> tuple[int, ...]:
+    """Seleciona HL em ordem determinística, sequencial ou distribuída."""
+    if sampling == "sequential":
+        return tuple(range(count))
+
+    if count == 1:
+        return (0x8000,)
+
+    # Inclui fronteiras importantes para carry, half-carry, sinal e wraparound.
+    boundary_values = (
+        0x0000, 0x0001, 0x000F, 0x0010, 0x00FF, 0x0100,
+        0x0FFF, 0x1000, 0x7FFF, 0x8000, 0x8001, 0xFFFE, 0xFFFF,
+    )
+    selected = set(boundary_values[:count])
+
+    # Os quantis percorrem o espaço completo; usar até 2*count candidatos
+    # compensa colisões com as fronteiras sem gerar uma busca quadrática.
+    for index in range(count * 2):
+        candidate = round(index * MASK16 / (count * 2 - 1))
+        selected.add(candidate)
+        if len(selected) >= count:
+            break
+
+    # O caso de contagens pequenas pode iniciar com mais fronteiras do que
+    # o solicitado; nesse caso, prioriza-se manter as extremidades do domínio.
+    if len(selected) > count:
+        required = {0x0000, 0xFFFF}
+        optional = sorted(selected - required)
+        selected = required | set(optional[: count - len(required)])
+
+    return tuple(sorted(selected))
+
+
 def _format_duration(seconds: float) -> str:
     seconds = max(0, int(seconds))
     hours, remainder = divmod(seconds, 3600)
@@ -158,6 +192,12 @@ def main() -> int:
         "(padrão: 16; use 65536 para cobertura completa)",
     )
     parser.add_argument(
+        "--sampling",
+        choices=("sequential", "distributed"),
+        default="sequential",
+        help="seleção de HL para --left-count (padrão: sequencial; distributed cobre todo o domínio)",
+    )
+    parser.add_argument(
         "--workers",
         type=int,
         default=min(8, max(1, (os.cpu_count() or 2) - 1)),
@@ -179,12 +219,14 @@ def main() -> int:
     if args.chunk_size < 1:
         parser.error("--chunk-size deve ser pelo menos 1")
 
-    tasks = list(_chunks(range(left_count), args.chunk_size))
+    left_values = _select_left_values(left_count, args.sampling)
+    tasks = list(_chunks(left_values, args.chunk_size))
     workers = min(args.workers, len(tasks))
     total_cases = left_count * 0x10000 * 5
     print(
         f"ALU Z80 16-bit: {left_count:,}/65,536 valores HL; "
-        f"até {total_cases:,} verificações; {workers} processos.",
+        f"até {total_cases:,} verificações; {workers} processos; "
+        f"amostragem {args.sampling}.",
         flush=True,
     )
     if args.full:
