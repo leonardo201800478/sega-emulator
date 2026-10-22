@@ -190,6 +190,42 @@ class Z80Cpu:
         if self.a == 0:
             self.f |= 0x40
 
+    def _read_register_pair(self, code: int) -> int:
+        """Lê BC, DE, HL ou AF conforme o campo qq."""
+        if code == 0:
+            return self.bc
+        if code == 1:
+            return self.de
+        if code == 2:
+            return self.hl
+        return self.af
+
+    def _write_register_pair(self, code: int, value: int) -> None:
+        """Escreve BC, DE, HL ou AF conforme o campo qq."""
+        if code == 0:
+            self.bc = value
+        elif code == 1:
+            self.de = value
+        elif code == 2:
+            self.hl = value
+        else:
+            self.af = value
+
+    def _push_word(self, value: int) -> None:
+        """Empilha uma palavra: byte alto primeiro, depois byte baixo."""
+        self.sp = (self.sp - 1) & 0xFFFF
+        self.bus.write(self.sp, (value >> 8) & 0xFF)
+        self.sp = (self.sp - 1) & 0xFFFF
+        self.bus.write(self.sp, value & 0xFF)
+
+    def _pop_word(self) -> int:
+        """Desempilha uma palavra em little-endian a partir de SP."""
+        low = self.bus.read(self.sp)
+        self.sp = (self.sp + 1) & 0xFFFF
+        high = self.bus.read(self.sp)
+        self.sp = (self.sp + 1) & 0xFFFF
+        return (high << 8) | low
+
     def _condition(self, code: int) -> bool:
         """Avalia NZ, Z, NC ou C conforme o campo de condição do opcode."""
         zero = bool(self.f & 0x40)
@@ -212,8 +248,12 @@ class Z80Cpu:
         - ADD A,r (80h–87h), SUB r (90h–97h), XOR A,r (A8h–AFh)
         - JP nn (C3h), JP cc,nn (C2h, CAh, D2h, DAh)
         - JR e (18h), JR cc,e (20h, 28h, 30h, 38h)
+        - PUSH qq (C5h, D5h, E5h, F5h), POP qq (C1h, D1h, E1h, F1h)
+        - CALL nn (CDh), CALL cc,nn (C4h, CCh, D4h, DCh)
+        - RET (C9h), RET cc (C0h, C8h, D0h, D8h)
 
-        As operações LD e os saltos não alteram o registrador de flags F.
+        As operações LD, saltos e instruções de pilha/controle não alteram
+        F, exceto as instruções que restauram o par AF via POP AF.
         """
         opcode = self._fetch_byte()
 
@@ -265,6 +305,36 @@ class Z80Cpu:
                 cycles = 12
             else:
                 cycles = 7
+        elif opcode & 0xCF == 0xC5:  # PUSH qq
+            self._push_word(self._read_register_pair((opcode >> 4) & 0x03))
+            cycles = 11
+        elif opcode & 0xCF == 0xC1:  # POP qq
+            self._write_register_pair((opcode >> 4) & 0x03, self._pop_word())
+            cycles = 10
+        elif opcode == 0xCD:  # CALL nn
+            low = self._fetch_byte()
+            high = self._fetch_byte()
+            self._push_word(self.pc)
+            self.pc = (high << 8) | low
+            cycles = 17
+        elif opcode in (0xC4, 0xCC, 0xD4, 0xDC):  # CALL cc,nn
+            low = self._fetch_byte()
+            high = self._fetch_byte()
+            if self._condition((opcode >> 3) & 0x03):
+                self._push_word(self.pc)
+                self.pc = (high << 8) | low
+                cycles = 17
+            else:
+                cycles = 10
+        elif opcode == 0xC9:  # RET
+            self.pc = self._pop_word()
+            cycles = 10
+        elif opcode in (0xC0, 0xC8, 0xD0, 0xD8):  # RET cc
+            if self._condition((opcode >> 3) & 0x03):
+                self.pc = self._pop_word()
+                cycles = 11
+            else:
+                cycles = 5
         else:
             raise UnsupportedOpcodeError(
                 f"Opcode Z80 {opcode:02X}h não implementado "
