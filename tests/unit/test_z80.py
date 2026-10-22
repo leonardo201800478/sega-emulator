@@ -235,7 +235,7 @@ def test_jp_conditional_checks_flags(opcode: int, flags: int, taken: bool) -> No
     [
         (0x00, 0xC5, 0xFF, 0xFF),  # resultado com S/Y/X e H/N; flags S/Z/PV/C preservadas
         (0x28, 0x45, 0xD7, 0x57),
-        (0xFF, 0x00, 0x00, 0x12),  # Z e PV preservados? CPL não altera flags Z/PV
+        (0xFF, 0x00, 0x00, 0x12),  # CPL preserva Z/PV, aqui ambos já começam zerados
     ],
 )
 def test_cpl_complements_accumulator_and_updates_only_documented_flags(
@@ -279,7 +279,7 @@ def test_scf_sets_carry_and_preserves_sign_zero_parity(
     [
         (0x00, 0xC5, 0xD4),  # carry anterior vira half-carry
         (0x28, 0x00, 0x29),  # carry anterior zero vira carry
-        (0xD7, 0xFF, 0xD4),  # carry anterior um, flags S/Z/PV e XY preservadas
+        (0xD7, 0xFF, 0xD4),  # carry anterior um vira H; X/Y vêm de A
     ],
 )
 def test_ccf_complements_carry_and_updates_half_carry(
