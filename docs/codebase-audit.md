@@ -40,11 +40,11 @@ Não foi feita alegação de compatibilidade geral, precisão ciclo a ciclo ou v
 
 ### P1 — CPU Z80 incompleta
 
-**Observação:** o decoder cobre famílias selecionadas, mas deixa instruções-base e prefixos por implementar. Entre as lacunas importantes estão HALT, CB, IX/IY, muitas instruções ED, I/O e controle de interrupções DI/EI/IM/RETI/RETN.
+**Observação:** a implementação evoluiu desde a primeira fotografia desta auditoria. Na `main` em `d6228f2`, existem caminhos de execução para as famílias base, CB, ED, DD/FD e DD/FD-CB, além de HALT, I/O e um modelo inicial de interrupções. A matriz `docs/z80-coverage.md` registra o escopo por família.
 
-**Impacto:** programas que usem instruções ausentes terminam com `UnsupportedOpcodeError`; ROMs comerciais não devem ser usadas como critério único de validação.
+**Impacto:** ainda podem existir lacunas, flags incorretas, diferenças em opcodes especiais e erros de temporização. A presença de um caminho de execução não equivale a validação diferencial.
 
-**Ação:** usar `docs/z80-coverage.md` como inventário vivo, implementar lotes coerentes, e testar resultado, flags, PC/SP, wraparound e T-states nominais por família.
+**Ação:** usar `docs/z80-coverage.md` como inventário vivo, corrigir inconsistências documentais e validar resultados, flags, PC/SP, wraparound e ciclos contra uma suíte de referência independente.
 
 ### P1 — Temporização ainda não é ciclo a ciclo
 
@@ -64,19 +64,19 @@ Não foi feita alegação de compatibilidade geral, precisão ciclo a ciclo ou v
 
 ### P2 — Testes são uma boa base, mas não medem cobertura de hardware completa
 
-**Observação:** os testes de CPU usam programas sintéticos curtos e verificam famílias e casos selecionados. Há testes de RAM/barramento, mas não existe ainda uma suíte de diagnóstico Z80 de referência nem testes de integração de uma máquina SG-1000 completa. O teste de armazenamento físico da RAM acessa o atributo privado `_data`.
+**Observação:** os testes de CPU usam programas sintéticos e verificam famílias e casos selecionados. Há testes de RAM/barramento, mas ainda não existe uma suíte diferencial de referência integrada nem testes de uma máquina SG-1000 completa. O teste de armazenamento físico da RAM acessa o atributo privado `_data`.
 
-**Impacto:** 220 testes aprovados demonstram que os casos codificados passam; não provam compatibilidade com todas as entradas, instruções ou temporizações.
+**Impacto:** na validação local reportada pelo usuário em 22/10/2026, 262 testes passaram. Isso demonstra que os casos automatizados presentes passaram, não compatibilidade com todas as entradas, instruções ou temporizações.
 
-**Ação:** acrescentar testes de limites e propriedades por família, testes de integração quando existir uma máquina, e diagnósticos de referência legalmente obtidos. Preferir verificar o comportamento público da RAM a depender de `_data` quando isso não exigir expor detalhes internos.
+**Ação:** acrescentar testes de limites e propriedades por família, integrar diagnósticos de referência com licença verificada e preferir verificar o comportamento público da RAM a depender de `_data` quando possível.
 
 ### P2 — Ausência de integração contínua confirmada na configuração revisada
 
-**Observação:** `README.md` identifica CI como pendência e a configuração inspecionada não define workflow de CI.
+**Observação:** essa pendência foi resolvida posteriormente: `.github/workflows/ci.yml` executa Ruff format check, Ruff lint e pytest em Python 3.14 no GitHub Actions.
 
-**Impacto:** os testes e linters dependem da execução manual local.
+**Impacto:** o workflow verifica a suíte automatizada em CI, mas não substitui testes diferenciais de hardware nem valida a precisão temporal.
 
-**Ação:** adicionar workflow Windows/Python compatível com a versão-alvo para executar pytest, Ruff check e Ruff format check. Fazer isso como uma mudança isolada, depois de confirmar os requisitos de runners disponíveis.
+**Ação:** manter o workflow sincronizado com as dependências e acrescentar nele os testes de referência que forem legalmente incorporados ao projeto.
 
 ### P2 — Licença do projeto ainda pendente
 
@@ -107,23 +107,24 @@ Não foi feita alegação de compatibilidade geral, precisão ciclo a ciclo ou v
 
 ## Resultado de qualidade disponível
 
-Na validação local reportada em 22/10/2026, antes desta alteração documental:
+Na validação local reportada pelo usuário em 22/10/2026 para a `main` no commit `d6228f24b4f562d5b366296c0494f00c23def8c9`:
 
-- `pytest`: **220 passed**.
+- `python -m pytest -v`: **262 passed in 0.60s**.
 - `ruff check .`: **All checks passed!**
-- `ruff format --check .`: **18 files already formatted**.
-- `git status --short --branch`: `main...origin/main`, sem alterações pendentes.
+- `ruff format --check .`: **19 files already formatted**.
+- `git diff --check`: sem erros reportados.
+- `git status -sb`: `main...origin/main`, sem alterações pendentes.
 
-Esses resultados foram fornecidos pelo usuário para o estado anterior à presente revisão. **Não foram executados novamente neste ambiente após as alterações desta branch.**
+Esses resultados são a saída local fornecida pelo usuário. Não devem ser interpretados como execução realizada por esta auditoria nem como prova de correção integral da CPU.
 
 ## Sequência recomendada
 
-1. Integrar a auditoria à documentação principal e manter esta lista como referência de riscos.
-2. Prosseguir com uma família de instruções Z80 coerente, ampliando testes e matriz de cobertura na mesma mudança.
-3. Adicionar testes de diagnóstico confiáveis e legais e comparar os resultados com o núcleo.
-4. Definir o modelo temporal antes de integrar VDP, PSG e I/O.
+1. Manter este relatório e a matriz Z80 sincronizados com o código; as pendências documentais mais antigas foram revisadas parcialmente em 22/10/2026.
+2. Executar validação diferencial Z80 com testes confiáveis e legalmente utilizáveis, começando por flags, instruções ED de bloco, IX/IY e interrupções.
+3. Corrigir divergências com mudanças pequenas e regressões automatizadas.
+4. Definir o modelo temporal/barramento antes de integrar VDP, PSG e I/O.
 5. Integrar a primeira máquina SG-1000 mínima e testar CPU, memória e dispositivos em conjunto.
-6. Adicionar CI e decidir a licença em mudanças separadas.
+6. Decidir a licença do projeto em uma alteração separada.
 
 ## Critérios para encerrar uma futura auditoria
 
@@ -134,3 +135,16 @@ Esses resultados foram fornecidos pelo usuário para o estado anterior à presen
 - [ ] O mapa de memória e os efeitos de I/O correspondem à configuração de hardware documentada.
 - [ ] A máquina integrada avança CPU e dispositivos de forma determinística.
 - [ ] A precisão declarada corresponde aos testes efetivamente executados.
+
+
+## Atualização de estado — 22/10/2026
+
+Esta seção atualiza os pontos que mudaram desde a fotografia inicial descrita acima. Para o estado operacional mais recente, consulte também [o registro de desenvolvimento e ponto de retomada](development-handoff-2026-10-22.md).
+
+- A `main` no commit `d6228f2` possui caminhos de execução para famílias base, CB, ED, DD/FD e DD/FD-CB, além de HALT, I/O e um modelo inicial de NMI/INT.
+- A execução local reportada pelo usuário aprovou 262 testes; Ruff check, Ruff format check e `git diff --check` também passaram.
+- O workflow de CI está presente em `.github/workflows/ci.yml`.
+- A máquina SG-1000 continua não integrada. O contador de ciclos é nominal por instrução, não um modelo de acessos ao barramento ciclo a ciclo.
+- A CPU ainda precisa de validação diferencial independente; não declarar completude nem precisão ciclo a ciclo com base apenas nos testes atuais.
+
+A auditoria original é mantida como histórico dos riscos encontrados, mas os estados descritos nesta atualização prevalecem quando houver conflito com observações antigas.
