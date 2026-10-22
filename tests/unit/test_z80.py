@@ -105,7 +105,7 @@ def _reference_daa(accumulator: int, flags: int) -> tuple[int, int]:
 
 def test_daa_exhaustive_accumulator_and_hnc_input_flags() -> None:
     """Verifica os 256 valores de A para todas as 8 combinações de H/N/C."""
-    cpu = make_cpu(b"\\x27")  # DAA
+    cpu = make_cpu(bytes([0x27]))  # DAA
     for initial_hnc in range(8):
         initial_flags = (
             ((initial_hnc >> 2) & 1) << 4  # H
