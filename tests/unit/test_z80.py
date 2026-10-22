@@ -2057,6 +2057,7 @@ def test_im0_accepts_all_rst_opcodes_from_interrupt_data_bus(
     cpu.pc = 0x1234
     cpu.sp = 0xC100
     cpu.iff1 = cpu.iff2 = True
+    cpu.r = 0xFE
 
     cpu.request_int(data_bus)
 
@@ -2066,6 +2067,7 @@ def test_im0_accepts_all_rst_opcodes_from_interrupt_data_bus(
     assert cpu.bus.read(0xC0FE) == 0x34
     assert cpu.bus.read(0xC0FF) == 0x12
     assert cpu._int_pending is None
+    assert cpu.r == 0xFF
     assert cpu.iff1 is False
     assert cpu.iff2 is False
 
