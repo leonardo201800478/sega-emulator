@@ -171,3 +171,10 @@ Prioridades confirmadas:
 5. **Validação semântica:** os testes “todos os opcodes têm caminho” não demonstram correção de resultados, flags, ciclos ou ordem de barramento. DAA, flags X/Y, prefixos e operações de bloco precisam de comparação diferencial.
 
 Esta auditoria foi estática; não foram executados testes nesta etapa e nenhum código da CPU foi alterado. O relatório separa lacunas confirmadas de áreas que precisam de testes antes de qualquer correção.
+
+
+## Progresso validado: interrupções e registrador R
+
+A CPU agora incrementa os sete bits inferiores de `R` ao aceitar NMI e INT, preservando o bit 7. Foram adicionados testes para IM 0/1/2, overflow de `R`, atraso de `EI`, saída de `HALT` por INT e estado de `IFF1/IFF2` em NMI.
+
+A [CI do commit `6d82d45`](https://github.com/leonardo201800478/sega-emulator/actions/runs/39787665564) passou: Ruff aprovado e **267 testes passaram**. Isso valida os casos adicionados e a suíte existente, mas não comprova precisão ciclo a ciclo nem conformidade integral com todas as variantes do Z80.
