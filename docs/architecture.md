@@ -78,9 +78,10 @@ Esta tabela é um direcionamento de arquitetura, não uma afirmação de que ess
 
 ## Estado atual
 
-O repositório contém um subconjunto inicial da CPU Z80 e um barramento de memória SG-1000 com ROM e RAM. O protocolo atual só modela leituras e escritas lógicas de bytes; não modela ciclos individuais, I/O, interrupções ou temporização de periféricos. Os testes sintéticos existentes são uma base de regressão, não prova de compatibilidade geral ou precisão ciclo a ciclo.
+O repositório contém caminhos de execução para as famílias base, CB, ED, DD/FD e DD/FD-CB da CPU Z80 e um barramento inicial de memória SG-1000 com ROM e RAM. O protocolo de memória modela leituras e escritas lógicas de bytes; não modela cada ciclo de barramento. Existe um contrato inicial separado para I/O, mas o mapa de portas da plataforma ainda não está integrado. A validação local reportada em 22/10/2026 aprovou 262 testes, além das verificações Ruff; isso não prova compatibilidade geral nem precisão ciclo a ciclo. A máquina SG-1000 completa permanece não integrada.
 
-- [Auditoria geral do código](codebase-audit.md): riscos, limitações e sequência recomendada.
+- [Registro de desenvolvimento e ponto de retomada](development-handoff-2026-10-22.md): HEAD confirmado, testes locais, limitações e próximos passos.
+- [Auditoria geral do código](codebase-audit.md): riscos e estado revisado.
 - [Auditoria de cobertura da CPU Z80](z80-coverage.md): inventário de instruções e prefixos.
 
-Próxima tarefa técnica: implementar a menor família coerente de instruções Z80 ausentes, com testes de resultado, flags, limites e T-states nominais.
+Próxima tarefa técnica: validação diferencial da CPU Z80 contra uma suíte de referência confiável, com foco inicial em flags, operações ED de bloco, IX/IY, interrupções e temporização nominal. Corrigir primeiro as divergências reproduzíveis e documentar o que não puder ser validado.
