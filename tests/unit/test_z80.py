@@ -352,6 +352,104 @@ def test_stack_pointer_wraps_across_16_bit_boundary() -> None:
     assert cpu.bus.read(0xFFFF) == 0x12
 
 
+@pytest.mark.parametrize(
+    ("opcode", "pair", "initial", "expected"),
+    [
+        (0x03, "bc", 0x12FF, 0x1300),
+        (0x13, "de", 0xFFFF, 0x0000),
+        (0x23, "hl", 0x0000, 0x0001),
+        (0x33, "sp", 0xFFFF, 0x0000),
+    ],
+)
+def test_inc_register_pair_wraps_and_preserves_flags(
+    opcode: int, pair: str, initial: int, expected: int
+) -> None:
+    cpu = make_cpu(bytes([opcode]))
+    cpu.f = 0xD7
+    setattr(cpu, pair, initial)
+
+    assert cpu.step() == 6
+    assert getattr(cpu, pair) == expected
+    assert cpu.f == 0xD7
+
+
+@pytest.mark.parametrize(
+    ("opcode", "pair", "initial", "expected"),
+    [
+        (0x0B, "bc", 0x1300, 0x12FF),
+        (0x1B, "de", 0x0000, 0xFFFF),
+        (0x2B, "hl", 0x0001, 0x0000),
+        (0x3B, "sp", 0x0000, 0xFFFF),
+    ],
+)
+def test_dec_register_pair_wraps_and_preserves_flags(
+    opcode: int, pair: str, initial: int, expected: int
+) -> None:
+    cpu = make_cpu(bytes([opcode]))
+    cpu.f = 0xD7
+    setattr(cpu, pair, initial)
+
+    assert cpu.step() == 6
+    assert getattr(cpu, pair) == expected
+    assert cpu.f == 0xD7
+
+
+@pytest.mark.parametrize(
+    ("opcode", "hl", "operand", "expected_hl", "expected_flags"),
+    [
+        (0x09, 0x1234, 0x0001, 0x1235, 0xA4),  # preserva S/Z/PV
+        (0x19, 0x0FFF, 0x0001, 0x1000, 0x10),  # half-carry
+        (0x29, 0xFFFF, 0x0001, 0x0000, 0x51),  # carry e zero XY
+        (0x39, 0x8000, 0x8000, 0x0000, 0x41),  # carry e zero
+    ],
+)
+def test_add_hl_pair_updates_result_and_documented_flags(
+    opcode: int, hl: int, operand: int, expected_hl: int, expected_flags: int
+) -> None:
+    cpu = make_cpu(bytes([opcode]))
+    cpu.hl = hl
+    cpu.bc = operand
+    cpu.de = operand
+    cpu.sp = operand
+    cpu.f = 0xC4
+
+    assert cpu.step() == 11
+    assert cpu.hl == expected_hl
+    assert cpu.f == expected_flags
+
+
+@pytest.mark.parametrize(
+    ("accumulator", "operand", "expected_flags"),
+    [
+        (0x42, 0x42, 0x42),  # zero, N, paridade preservada? flags de CP
+        (0x10, 0x01, 0x02),
+        (0x00, 0x01, 0xBB),
+        (0x7F, 0x80, 0xBA),
+    ],
+)
+def test_cp_register_preserves_accumulator_and_sets_flags(
+    accumulator: int, operand: int, expected_flags: int
+) -> None:
+    cpu = make_cpu(b"\xb8")  # CP B
+    cpu.a = accumulator
+    cpu.b = operand
+
+    assert cpu.step() == 4
+    assert cpu.a == accumulator
+    assert cpu.f == expected_flags
+
+
+def test_cp_reads_operand_from_hl() -> None:
+    cpu = make_cpu(b"\xbe")  # CP (HL)
+    cpu.hl = 0xC020
+    cpu.a = 0x20
+    cpu.bus.write(0xC020, 0x20)
+
+    assert cpu.step() == 7
+    assert cpu.a == 0x20
+    assert cpu.f == 0x42
+
+
 def test_unsupported_opcode_is_explicit() -> None:
     cpu = make_cpu(b"\x76")  # HALT ainda não foi implementado.
 
