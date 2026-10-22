@@ -1097,7 +1097,7 @@ def test_exchange_register_pair_swaps_both_values(
 
 
 def test_exx_swaps_all_three_register_pairs_without_touching_af_or_flags() -> None:
-    cpu = make_cpu(b"\\xD9")
+    cpu = make_cpu(bytes([0xD9]))
     cpu.af = 0x12D7
     cpu.bc, cpu.de, cpu.hl = 0x1234, 0x5678, 0x9ABC
     cpu.af_alt = 0xABCD
@@ -1111,7 +1111,7 @@ def test_exx_swaps_all_three_register_pairs_without_touching_af_or_flags() -> No
 
 
 def test_ex_de_hl_swaps_pairs_without_touching_flags() -> None:
-    cpu = make_cpu(b"\\xEB")
+    cpu = make_cpu(bytes([0xEB]))
     cpu.de, cpu.hl, cpu.f = 0x1234, 0xABCD, 0xD7
 
     assert cpu.step() == 4
