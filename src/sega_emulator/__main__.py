@@ -2,10 +2,10 @@
 
 
 def main() -> None:
-    """Informa o estado atual do projeto sem iniciar uma emulação."""
+    """Informa o estado atual sem sugerir que uma máquina já está integrada."""
     print(
-        "Sega Emulator: infraestrutura inicial instalada; "
-        "núcleo ainda não implementado."
+        "Sega Emulator: componentes iniciais implementados; "
+        "máquina SG-1000 ainda não integrada."
     )
 
 
