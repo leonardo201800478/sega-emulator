@@ -1324,3 +1324,112 @@ def test_ed_load_accumulator_from_r_includes_opcode_refreshes_and_flags(
     assert cpu.f == expected_flags
     assert cpu.pc == 2
     assert cpu.total_cycles == 9
+
+
+@pytest.mark.parametrize(
+    ("opcode", "pair", "value"),
+    [
+        (0x43, "bc", 0x1234),
+        (0x53, "de", 0x5678),
+        (0x63, "hl", 0x9ABC),
+        (0x73, "sp", 0xDEF0),
+    ],
+)
+def test_ed_store_register_pair_to_absolute_address_preserves_flags(
+    opcode: int, pair: str, value: int
+) -> None:
+    cpu = make_cpu(bytes([0xED, opcode, 0x20, 0xC0]))
+    setattr(cpu, pair, value)
+    cpu.f = 0xD7
+
+    assert cpu.step() == 20
+    assert cpu.bus.read(0xC020) == (value & 0xFF)
+    assert cpu.bus.read(0xC021) == (value >> 8)
+    assert getattr(cpu, pair) == value
+    assert cpu.f == 0xD7
+    assert cpu.pc == 4
+    assert cpu.total_cycles == 20
+
+
+@pytest.mark.parametrize(
+    ("opcode", "pair", "value"),
+    [
+        (0x4B, "bc", 0x1234),
+        (0x5B, "de", 0x5678),
+        (0x6B, "hl", 0x9ABC),
+        (0x7B, "sp", 0xDEF0),
+    ],
+)
+def test_ed_load_register_pair_from_absolute_address_preserves_flags(
+    opcode: int, pair: str, value: int
+) -> None:
+    cpu = make_cpu(bytes([0xED, opcode, 0x20, 0xC0]))
+    cpu.bus.write(0xC020, value & 0xFF)
+    cpu.bus.write(0xC021, value >> 8)
+    cpu.f = 0xD7
+
+    assert cpu.step() == 20
+    assert getattr(cpu, pair) == value
+    assert cpu.f == 0xD7
+    assert cpu.pc == 4
+    assert cpu.total_cycles == 20
+
+
+@pytest.mark.parametrize(
+    ("opcode", "pair", "value"),
+    [(0x43, "bc", 0x1234), (0x73, "sp", 0xABCD)],
+)
+def test_ed_store_register_pair_wraps_second_write_at_ffff(
+    opcode: int, pair: str, value: int
+) -> None:
+    class FlatMemoryBus:
+        def __init__(self) -> None:
+            self.memory = bytearray(0x10000)
+            self.memory[0x0100:0x0104] = bytes([0xED, opcode, 0xFF, 0xFF])
+
+        def read(self, address: int) -> int:
+            return self.memory[address]
+
+        def write(self, address: int, value: int) -> None:
+            self.memory[address] = value
+
+    bus = FlatMemoryBus()
+    cpu = Z80Cpu(bus)
+    cpu.pc = 0x0100
+    setattr(cpu, pair, value)
+
+    assert cpu.step() == 20
+    assert bus.memory[0xFFFF] == (value & 0xFF)
+    assert bus.memory[0x0000] == (value >> 8)
+    assert cpu.pc == 0x0104
+
+
+@pytest.mark.parametrize(
+    ("opcode", "pair", "value"),
+    [(0x4B, "bc", 0x1234), (0x7B, "sp", 0xABCD)],
+)
+def test_ed_load_register_pair_wraps_second_read_at_ffff(
+    opcode: int, pair: str, value: int
+) -> None:
+    class FlatMemoryBus:
+        def __init__(self) -> None:
+            self.memory = bytearray(0x10000)
+            self.memory[0x0100:0x0104] = bytes([0xED, opcode, 0xFF, 0xFF])
+            self.memory[0xFFFF] = value & 0xFF
+            self.memory[0x0000] = value >> 8
+
+        def read(self, address: int) -> int:
+            return self.memory[address]
+
+        def write(self, address: int, value: int) -> None:
+            self.memory[address] = value
+
+    cpu = Z80Cpu(FlatMemoryBus())
+    cpu.pc = 0x0100
+    cpu.f = 0xD7
+
+    assert cpu.step() == 20
+    assert getattr(cpu, pair) == value
+    assert cpu.f == 0xD7
+    assert cpu.pc == 0x0104
+    assert cpu.total_cycles == 20
