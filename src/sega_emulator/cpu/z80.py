@@ -374,6 +374,7 @@ class Z80Cpu:
         - LD rr,nn (01h, 11h, 21h, 31h)
         - LD (BC/DE),A (02h, 12h) e LD A,(BC/DE) (0Ah, 1Ah)
         - LD (nn),HL (22h) e LD HL,(nn) (2Ah)
+        - JP (HL) (E9h) e LD SP,HL (F9h)
         - LD (nn),A (32h) e LD A,(nn) (3Ah)
         - LD r,n (06h, 0Eh, 16h, 1Eh, 26h, 2Eh, 36h, 3Eh)
         - LD r,r' (40h–7Fh, exceto HALT 76h)
@@ -514,6 +515,12 @@ class Z80Cpu:
         elif opcode & 0xCF == 0x09:  # ADD HL,rr
             self._add_hl(self._read_stack_pair((opcode >> 4) & 0x03))
             cycles = 11
+        elif opcode == 0xE9:  # JP (HL)
+            self.pc = self.hl
+            cycles = 4
+        elif opcode == 0xF9:  # LD SP,HL
+            self.sp = self.hl
+            cycles = 6
         elif opcode == 0xC3:  # JP nn
             low = self._fetch_byte()
             high = self._fetch_byte()
