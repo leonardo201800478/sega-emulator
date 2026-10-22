@@ -5,8 +5,8 @@ __pycache__/
 *.egg-info/
 dist/
 build/
-roms_sg1000/
-firmware/
+local-assets/roms_sg1000/
+local-assets/firmware/
 
 # Virtual environments
 .venv/
@@ -31,6 +31,3 @@ Thumbs.db
 !.env.example
 *.log
 
-# Local firmware/ROM assets: never commit copyrighted dumps
-src/firmware/
-local-assets/firmware/
