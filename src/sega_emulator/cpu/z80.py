@@ -150,6 +150,59 @@ class Z80Cpu:
         """Retorna PV quando o byte possui paridade par."""
         return 0x04 if value.bit_count() % 2 == 0 else 0
 
+    def _read_stack_pair(self, code: int) -> int:
+        """Lê BC, DE, HL ou SP para instruções de pares de 16 bits."""
+        if code == 0:
+            return self.bc
+        if code == 1:
+            return self.de
+        if code == 2:
+            return self.hl
+        return self.sp
+
+    def _write_stack_pair(self, code: int, value: int) -> None:
+        """Escreve BC, DE, HL ou SP para instruções de pares de 16 bits."""
+        value &= 0xFFFF
+        if code == 0:
+            self.bc = value
+        elif code == 1:
+            self.de = value
+        elif code == 2:
+            self.hl = value
+        else:
+            self.sp = value
+
+    def _add_hl(self, value: int) -> None:
+        """Executa ADD HL,rr, preservando S, Z e P/V."""
+        previous = self.hl
+        result = previous + value
+        result_word = result & 0xFFFF
+        flags = self.f & 0xC4  # S, Z e P/V preservados
+        flags |= (result_word >> 8) & 0x28  # Y e X do byte alto
+        if (previous & 0x0FFF) + (value & 0x0FFF) > 0x0FFF:
+            flags |= 0x10
+        if result > 0xFFFF:
+            flags |= 0x01
+        self.hl = result_word
+        self.f = flags
+
+    def _compare_a(self, value: int) -> None:
+        """Executa CP value: atualiza flags como SUB sem alterar A."""
+        accumulator = self.a
+        result_byte = (accumulator - value) & 0xFF
+        flags = (value & 0x28) | 0x02  # X/Y vêm do operando em CP
+        if result_byte & 0x80:
+            flags |= 0x80
+        if result_byte == 0:
+            flags |= 0x40
+        if (accumulator & 0x0F) < (value & 0x0F):
+            flags |= 0x10
+        if ((accumulator ^ value) & (accumulator ^ result_byte) & 0x80) != 0:
+            flags |= 0x04
+        if accumulator < value:
+            flags |= 0x01
+        self.f = flags
+
     def _add_a(self, value: int) -> None:
         """Executa ADD A,value e atualiza as flags documentadas e XY."""
         accumulator = self.a
@@ -251,9 +304,12 @@ class Z80Cpu:
         - PUSH qq (C5h, D5h, E5h, F5h), POP qq (C1h, D1h, E1h, F1h)
         - CALL nn (CDh), CALL cc,nn (C4h, CCh, D4h, DCh)
         - RET (C9h), RET cc (C0h, C8h, D0h, D8h)
+        - INC rr (03h, 13h, 23h, 33h), DEC rr (0Bh, 1Bh, 2Bh, 3Bh)
+        - ADD HL,rr (09h, 19h, 29h, 39h)
+        - CP r (B8h–BFh)
 
-        As operações LD, saltos e instruções de pilha/controle não alteram
-        F, exceto as instruções que restauram o par AF via POP AF.
+        INC/DEC de pares e instruções de controle preservam F conforme a
+        arquitetura; POP AF restaura F. ADD HL preserva S, Z e P/V.
         """
         opcode = self._fetch_byte()
 
@@ -279,6 +335,20 @@ class Z80Cpu:
         elif 0xA8 <= opcode <= 0xAF:  # XOR A,r
             self._xor_a(self._read_register(opcode & 0x07))
             cycles = 7 if opcode & 0x07 == 6 else 4
+        elif 0xB8 <= opcode <= 0xBF:  # CP r
+            self._compare_a(self._read_register(opcode & 0x07))
+            cycles = 7 if opcode & 0x07 == 6 else 4
+        elif opcode & 0xCF == 0x03:  # INC rr
+            code = (opcode >> 4) & 0x03
+            self._write_stack_pair(code, self._read_stack_pair(code) + 1)
+            cycles = 6
+        elif opcode & 0xCF == 0x0B:  # DEC rr
+            code = (opcode >> 4) & 0x03
+            self._write_stack_pair(code, self._read_stack_pair(code) - 1)
+            cycles = 6
+        elif opcode & 0xCF == 0x09:  # ADD HL,rr
+            self._add_hl(self._read_stack_pair((opcode >> 4) & 0x03))
+            cycles = 11
         elif opcode == 0xC3:  # JP nn
             low = self._fetch_byte()
             high = self._fetch_byte()
