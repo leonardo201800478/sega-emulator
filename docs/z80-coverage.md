@@ -70,7 +70,7 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | `CD` — CALL nn | Implementado — cobertura inicial | Sub-rotina absoluta. |
 | `C0, C8, D0, D8, E0, E8, F0, F8` — RET cc | Implementado — cobertura inicial | Oito condições; testes de ramos tomados/não tomados, pilha e T-states nominais. |
 | `C9` — RET | Implementado — cobertura inicial | Retorno incondicional. |
-| `D3, DB` — OUT (n),A / IN A,(n) | Ausente | Requer contrato separado de portas de I/O; não deve ser simulado como memória comum. |
+| `D3, DB` — OUT (n),A / IN A,(n) | Implementado — cobertura inicial | Usa IOBus separado e endereço de porta formado por A antes da operação no byte alto e n no byte baixo; flags preservadas. |
 | `E3` — EX (SP),HL | Implementado — cobertura inicial | Troca a palavra em (SP)/(SP+1) com HL; preserva SP e flags, trata wrap de 16 bits e contabiliza 19 T-states nominais. Testes de troca, ordem dos acessos e wraparound. |
 | `E9` — JP (HL) | Implementado — cobertura inicial | Copia HL para PC; 4 T-states nominais, flags preservadas. |
 | `F3, FB` — DI / EI | Implementado — cobertura inicial | IFF1/IFF2, DI imediato e atraso de reconhecimento após EI; interrupções exigem validação adicional. |
