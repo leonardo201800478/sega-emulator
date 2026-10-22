@@ -29,12 +29,30 @@ py -3.14 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 ```
 
-## Testes e qualidade
+A ativação do ambiente virtual é opcional. Os comandos chamam diretamente o Python do `.venv`, evitando depender da política de execução do PowerShell.
+
+## Validar o projeto
 
 ```powershell
+.\.venv\Scripts\python.exe --version
 .\.venv\Scripts\python.exe -m pytest
 .\.venv\Scripts\python.exe -m ruff check .
 .\.venv\Scripts\python.exe -m ruff format --check .
+.\.venv\Scripts\python.exe -m sega_emulator
 ```
 
-Consulte [`docs/z80-coverage.md`](docs/z80-coverage.md) para a matriz de cobertura e as lacunas conhecidas.
+O comando do módulo ainda informa que o núcleo não está implementado; a RAM é o primeiro componente isolado, não um emulador funcional completo.
+
+## Documentação
+
+- [Arquitetura multi-sistema e estratégia de reutilização](docs/architecture.md)
+- [Auditoria de cobertura da CPU Z80](docs/z80-coverage.md)
+- [Notas de hardware do SG-1000](docs/hardware/sg1000.md)
+- Barramento inicial: `src/sega_emulator/bus/memory_bus.py`
+- Contrato de acesso à memória para a CPU: `src/sega_emulator/bus/interfaces.py`
+
+## Decisões pendentes
+
+- Escolher e documentar a licença do projeto antes de qualquer distribuição.
+- Criar a integração contínua.
+- Documentar o mapa de I/O, expansões de RAM e variantes de hardware antes de ampliar o barramento.
