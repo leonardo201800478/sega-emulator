@@ -1,6 +1,6 @@
 """Subconjunto inicial e determinístico da CPU Z80."""
 
-from sega_emulator.bus.interfaces import MemoryBus
+from sega_emulator.bus.interfaces import IOBus, MemoryBus
 
 
 class UnsupportedOpcodeError(NotImplementedError):
@@ -16,9 +16,10 @@ class Z80Cpu:
     ainda não sincronizam CPU, barramento e dispositivos em nível de ciclo.
     """
 
-    def __init__(self, bus: MemoryBus) -> None:
+    def __init__(self, bus: MemoryBus, io_bus: IOBus | None = None) -> None:
         """Inicializa os registradores e associa um barramento de memória."""
         self.bus = bus
+        self.io_bus = io_bus
         self.a = 0
         self.f = 0
         self.b = 0
@@ -588,6 +589,153 @@ class Z80Cpu:
         self._validate_byte(data_bus)
         self._int_pending = data_bus
 
+
+    def _read_port(self, address: int) -> int:
+        """Lê uma porta de 16 bits pelo barramento de I/O separado."""
+        if self.io_bus is None:
+            raise UnsupportedOpcodeError("Instrução IN requer um IOBus configurado.")
+        return self.io_bus.read_port(address & 0xFFFF)
+
+    def _write_port(self, address: int, value: int) -> None:
+        """Escreve uma porta de 16 bits pelo barramento de I/O separado."""
+        if self.io_bus is None:
+            raise UnsupportedOpcodeError("Instrução OUT requer um IOBus configurado.")
+        self.io_bus.write_port(address & 0xFFFF, value & 0xFF)
+
+    def _execute_ed(self, opcode: int) -> int:
+        """Executa instruções ED documentadas implementadas no Z80 clássico."""
+        if opcode in (0x47, 0x4F, 0x57, 0x5F):
+            if opcode == 0x47:
+                self.i = self.a
+            elif opcode == 0x4F:
+                self.r = self.a
+            else:
+                self._load_a_from_special_register(self.i if opcode == 0x57 else self.r)
+            return 9
+        if opcode & 0xCF == 0x43:
+            address = self._fetch_byte() | (self._fetch_byte() << 8)
+            value = self._read_stack_pair((opcode >> 4) & 3)
+            self.bus.write(address, value & 0xFF)
+            self.bus.write((address + 1) & 0xFFFF, value >> 8)
+            return 20
+        if opcode & 0xCF == 0x4B:
+            address = self._fetch_byte() | (self._fetch_byte() << 8)
+            low = self.bus.read(address)
+            high = self.bus.read((address + 1) & 0xFFFF)
+            self._write_stack_pair((opcode >> 4) & 3, (high << 8) | low)
+            return 20
+        if opcode & 0xCF == 0x4A:
+            self._add_sub_hl(self._read_stack_pair((opcode >> 4) & 3), False)
+            return 15
+        if opcode & 0xCF == 0x42:
+            self._add_sub_hl(self._read_stack_pair((opcode >> 4) & 3), True)
+            return 15
+        if opcode & 0xC7 == 0x40:
+            register = (opcode >> 3) & 7
+            value = self._read_port(self.bc)
+            if register != 6:
+                self._write_register(register, value)
+            self.f = (self.f & 1) | (value & 0xA8) | self._parity_flag(value)
+            if value == 0:
+                self.f |= 0x40
+            return 12
+        if opcode & 0xC7 == 0x41:
+            register = (opcode >> 3) & 7
+            self._write_port(self.bc, 0 if register == 6 else self._read_register(register))
+            return 12
+        if opcode in (0x44, 0x4C, 0x54, 0x5C, 0x64, 0x6C, 0x74, 0x7C):
+            old_a = self.a
+            self.a = 0
+            self._sub_a(old_a)
+            return 8
+        if opcode in (0x45, 0x4D, 0x55, 0x5D, 0x65, 0x6D, 0x75, 0x7D):
+            self.pc = self._pop_word()
+            self.iff1 = self.iff2
+            return 14
+        if opcode in (0x46, 0x4E, 0x66, 0x6E):
+            self.interrupt_mode = 0
+            return 8
+        if opcode in (0x56, 0x76):
+            self.interrupt_mode = 1
+            return 8
+        if opcode in (0x5E, 0x7E):
+            self.interrupt_mode = 2
+            return 8
+        if opcode in (0x67, 0x6F):
+            address = self.hl
+            memory_value = self.bus.read(address)
+            if opcode == 0x67:
+                new_memory = ((self.a & 0x0F) << 4) | (memory_value >> 4)
+                self.a = (self.a & 0xF0) | (memory_value & 0x0F)
+            else:
+                new_memory = ((memory_value << 4) | (self.a & 0x0F)) & 0xFF
+                self.a = (self.a & 0xF0) | (memory_value >> 4)
+            self.bus.write(address, new_memory)
+            self.f = (self.f & 1) | (self.a & 0xA8) | self._parity_flag(self.a)
+            if self.a == 0:
+                self.f |= 0x40
+            return 18
+        if opcode in (0xA0, 0xA8, 0xB0, 0xB8):
+            direction = -1 if opcode in (0xA8, 0xB8) else 1
+            value = self.bus.read(self.hl)
+            self.bus.write(self.de, value)
+            self.hl = (self.hl + direction) & 0xFFFF
+            self.de = (self.de + direction) & 0xFFFF
+            self.bc = (self.bc - 1) & 0xFFFF
+            total = (self.a + value) & 0xFF
+            self.f = (self.f & 0xC1) | (0x04 if self.bc else 0) | (total & 0x08) | ((total & 0x02) << 4)
+            if opcode in (0xB0, 0xB8) and self.bc:
+                self.pc = (self.pc - 2) & 0xFFFF
+                return 21
+            return 16
+        if opcode in (0xA1, 0xA9, 0xB1, 0xB9):
+            direction = -1 if opcode in (0xA9, 0xB9) else 1
+            value = self.bus.read(self.hl)
+            result = (self.a - value) & 0xFF
+            half = (self.a & 0x0F) < (value & 0x0F)
+            self.hl = (self.hl + direction) & 0xFFFF
+            self.bc = (self.bc - 1) & 0xFFFF
+            adjusted = (result - int(half)) & 0xFF
+            self.f = (self.f & 1) | 0x02 | (result & 0x80) | (0x40 if result == 0 else 0) | (0x10 if half else 0) | (0x04 if self.bc else 0) | (adjusted & 0x08) | ((adjusted & 0x02) << 4)
+            if opcode in (0xB1, 0xB9) and self.bc and result:
+                self.pc = (self.pc - 2) & 0xFFFF
+                return 21
+            return 16
+        if opcode in (0xA2, 0xAA, 0xB2, 0xBA, 0xA3, 0xAB, 0xB3, 0xBB):
+            return self._execute_block_io(opcode)
+        raise UnsupportedOpcodeError(
+            f"Opcode Z80 ED {opcode:02X}h não implementado no endereço {(self.pc - 2) & 0xFFFF:04X}h."
+        )
+
+    def _execute_block_io(self, opcode: int) -> int:
+        """Executa INI/IND/INIR/INDR e OUTI/OUTD/OTIR/OTDR."""
+        input_direction = opcode in (0xA2, 0xAA, 0xB2, 0xBA)
+        repeat = opcode in (0xB2, 0xBA, 0xB3, 0xBB)
+        direction = -1 if opcode in (0xAA, 0xBA, 0xAB, 0xBB) else 1
+        old_bc = self.bc
+        if input_direction:
+            value = self._read_port(old_bc)
+            self.bus.write(self.hl, value)
+        else:
+            value = self.bus.read(self.hl)
+            self._write_port(old_bc, value)
+        self.hl = (self.hl + direction) & 0xFFFF
+        self.b = (self.b - 1) & 0xFF
+        k = value + (((self.c + direction) & 0xFF) if input_direction else self.l)
+        flags = self.b & 0xA8
+        if self.b == 0:
+            flags |= 0x40
+        if value & 0x80:
+            flags |= 0x02
+        if k > 0xFF:
+            flags |= 0x11
+        flags |= self._parity_flag(((k & 7) ^ self.b) & 0xFF)
+        self.f = flags
+        if repeat and self.b:
+            self.pc = (self.pc - 2) & 0xFFFF
+            return 21
+        return 16
+
     def step(self) -> int:
         """Executa uma instrução implementada e retorna seus T-states nominais.
 
@@ -664,47 +812,8 @@ class Z80Cpu:
 
         if opcode == 0x00:  # NOP
             cycles = 4
-        elif opcode == 0xED:  # instruções prefixadas ED implementadas
-            extended_opcode = self._fetch_opcode_byte()
-            if extended_opcode in (0x47, 0x4F):  # LD I,A / LD R,A
-                if extended_opcode == 0x47:
-                    self.i = self.a
-                else:
-                    self.r = self.a
-                cycles = 9
-            elif extended_opcode in (0x57, 0x5F):  # LD A,I / LD A,R
-                value = self.i if extended_opcode == 0x57 else self.r
-                self._load_a_from_special_register(value)
-                cycles = 9
-            elif extended_opcode & 0xCF == 0x43:  # LD (nn),rr
-                address = self._fetch_byte()
-                address |= self._fetch_byte() << 8
-                value = self._read_stack_pair((extended_opcode >> 4) & 0x03)
-                self.bus.write(address, value & 0xFF)
-                self.bus.write((address + 1) & 0xFFFF, value >> 8)
-                cycles = 20
-            elif extended_opcode & 0xCF == 0x4B:  # LD rr,(nn)
-                address = self._fetch_byte()
-                address |= self._fetch_byte() << 8
-                low = self.bus.read(address)
-                high = self.bus.read((address + 1) & 0xFFFF)
-                self._write_stack_pair((extended_opcode >> 4) & 0x03, (high << 8) | low)
-                cycles = 20
-            elif extended_opcode & 0xCF == 0x4A:  # ADC HL,rr
-                self._add_sub_hl(
-                    self._read_stack_pair((extended_opcode >> 4) & 0x03), False
-                )
-                cycles = 15
-            elif extended_opcode & 0xCF == 0x42:  # SBC HL,rr
-                self._add_sub_hl(
-                    self._read_stack_pair((extended_opcode >> 4) & 0x03), True
-                )
-                cycles = 15
-            else:
-                raise UnsupportedOpcodeError(
-                    f"Opcode Z80 ED {extended_opcode:02X}h não implementado "
-                    f"no endereço {(self.pc - 2) & 0xFFFF:04X}h."
-                )
+        elif opcode == 0xED:
+            cycles = self._execute_ed(self._fetch_opcode_byte())
         elif opcode == 0xCB:  # família CB
             cycles = self._execute_cb(self._fetch_opcode_byte())
         elif opcode == 0x76:  # HALT
