@@ -450,16 +450,22 @@ class Z80Cpu:
         return (high << 8) | low
 
     def _condition(self, code: int) -> bool:
-        """Avalia NZ, Z, NC ou C conforme o campo de condição do opcode."""
+        """Avalia os oito códigos de condição definidos pelo Z80."""
         zero = bool(self.f & 0x40)
         carry = bool(self.f & 0x01)
-        if code == 0:
-            return not zero
-        if code == 1:
-            return zero
-        if code == 2:
-            return not carry
-        return carry
+        parity_overflow = bool(self.f & 0x04)
+        sign = bool(self.f & 0x80)
+        conditions = (
+            not zero,  # NZ
+            zero,  # Z
+            not carry,  # NC
+            carry,  # C
+            not parity_overflow,  # PO
+            parity_overflow,  # PE
+            not sign,  # P
+            sign,  # M
+        )
+        return conditions[code]
 
     def step(self) -> int:
         """Executa uma instrução implementada e retorna seus T-states nominais.
@@ -486,11 +492,11 @@ class Z80Cpu:
         - OR r (B0h–B7h), CP r (B8h–BFh)
         - INC r (04h, 0Ch, 14h, 1Ch, 24h, 2Ch, 34h, 3Ch)
         - DEC r (05h, 0Dh, 15h, 1Dh, 25h, 2Dh, 35h, 3Dh)
-        - JP nn (C3h), JP cc,nn (C2h, CAh, D2h, DAh)
+        - JP nn (C3h), JP cc,nn (C2h, CAh, D2h, DAh, E2h, EAh, F2h, FAh)
         - DJNZ e (10h), JR e (18h), JR cc,e (20h, 28h, 30h, 38h)
         - PUSH qq (C5h, D5h, E5h, F5h), POP qq (C1h, D1h, E1h, F1h)
-        - CALL nn (CDh), CALL cc,nn (C4h, CCh, D4h, DCh)
-        - RET (C9h), RET cc (C0h, C8h, D0h, D8h)
+        - CALL nn (CDh), CALL cc,nn (C4h, CCh, D4h, DCh, E4h, ECh, F4h, FCh)
+        - RET (C9h), RET cc (C0h, C8h, D0h, D8h, E0h, E8h, F0h, F8h)
         - INC rr (03h, 13h, 23h, 33h), DEC rr (0Bh, 1Bh, 2Bh, 3Bh)
         - ADD HL,rr (09h, 19h, 29h, 39h)
         - CP r (B8h–BFh)
@@ -649,10 +655,10 @@ class Z80Cpu:
             high = self._fetch_byte()
             self.pc = (high << 8) | low
             cycles = 10
-        elif opcode in (0xC2, 0xCA, 0xD2, 0xDA):  # JP cc,nn
+        elif opcode & 0xC7 == 0xC2:  # JP cc,nn
             low = self._fetch_byte()
             high = self._fetch_byte()
-            if self._condition((opcode >> 3) & 0x03):
+            if self._condition((opcode >> 3) & 0x07):
                 self.pc = (high << 8) | low
             cycles = 10
         elif opcode == 0x2F:  # CPL
@@ -707,10 +713,10 @@ class Z80Cpu:
             self._push_word(self.pc)
             self.pc = (high << 8) | low
             cycles = 17
-        elif opcode in (0xC4, 0xCC, 0xD4, 0xDC):  # CALL cc,nn
+        elif opcode & 0xC7 == 0xC4:  # CALL cc,nn
             low = self._fetch_byte()
             high = self._fetch_byte()
-            if self._condition((opcode >> 3) & 0x03):
+            if self._condition((opcode >> 3) & 0x07):
                 self._push_word(self.pc)
                 self.pc = (high << 8) | low
                 cycles = 17
@@ -719,8 +725,8 @@ class Z80Cpu:
         elif opcode == 0xC9:  # RET
             self.pc = self._pop_word()
             cycles = 10
-        elif opcode in (0xC0, 0xC8, 0xD0, 0xD8):  # RET cc
-            if self._condition((opcode >> 3) & 0x03):
+        elif opcode & 0xC7 == 0xC0:  # RET cc
+            if self._condition((opcode >> 3) & 0x07):
                 self.pc = self._pop_word()
                 cycles = 11
             else:
