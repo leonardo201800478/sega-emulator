@@ -698,9 +698,21 @@ def test_ld_register_pair_immediate_reads_little_endian_and_preserves_flags(
 
 
 def test_ld_register_pair_immediate_wraps_program_counter() -> None:
-    cpu = make_cpu(bytes([0x01, 0x34, 0x12]))
-    cpu.pc = 0xFFFD
+    class FlatMemoryBus:
+        def __init__(self) -> None:
+            self.memory = bytearray(0x10000)
+            self.memory[0xFFFE:0x10000] = bytes([0x01, 0x34])
+            self.memory[0x0000] = 0x12
+
+        def read(self, address: int) -> int:
+            return self.memory[address]
+
+        def write(self, address: int, value: int) -> None:
+            self.memory[address] = value
+
+    cpu = Z80Cpu(FlatMemoryBus())
+    cpu.pc = 0xFFFE
 
     assert cpu.step() == 10
     assert cpu.bc == 0x1234
-    assert cpu.pc == 0x0000
+    assert cpu.pc == 0x0001
