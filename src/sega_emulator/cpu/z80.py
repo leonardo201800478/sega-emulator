@@ -1065,6 +1065,10 @@ class Z80Cpu:
             return cycles
         if self._int_pending is not None and self.iff1 and self._ei_delay == 0:
             data_bus = self._int_pending
+            if self.interrupt_mode == 0 and data_bus & 0xC7 != 0xC7:
+                raise UnsupportedOpcodeError(
+                    "IM 0 aceita apenas opcodes RST fornecidos pelo barramento nesta etapa."
+                )
             self._int_pending = None
             self.halted = False
             self.iff1 = self.iff2 = False
@@ -1075,6 +1079,9 @@ class Z80Cpu:
                 high = self.bus.read((vector + 1) & 0xFFFF)
                 self.pc = (high << 8) | low
                 cycles = 19
+            elif self.interrupt_mode == 0:
+                self.pc = data_bus & 0x38
+                cycles = 13
             else:
                 self.pc = 0x0038
                 cycles = 13
