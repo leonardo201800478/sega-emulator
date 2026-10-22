@@ -1612,7 +1612,7 @@ def test_ed_in_out_use_separate_io_bus() -> None:
     io.ports[0x1234] = 0x81
     assert cpu.step() == 12  # IN A,(C)
     assert cpu.a == 0x81
-    assert cpu.f & 0xA9 == 0x81
+    assert cpu.f & 0xA9 == 0x80
     assert cpu.step() == 12  # OUT (C),A
     assert io.writes[-1] == (0x1234, 0x81)
 
@@ -1641,3 +1641,18 @@ def test_ed_rrd_rld_exchange_nibbles() -> None:
     assert cpu.step() == 18
     assert cpu.a == 0x12
     assert cpu.bus.read(cpu.hl) == 0x34
+
+
+def test_immediate_in_out_use_accumulator_as_high_port_byte() -> None:
+    io = FakeIOBus()
+    cpu = Z80Cpu(
+        SG1000MemoryBus(SG1000Ram(bytes(RAM_SIZE)), bytes([0xD3, 0x34, 0xDB, 0x34])),
+        io_bus=io,
+    )
+    cpu.a = 0x12
+    assert cpu.step() == 11  # OUT (34h),A
+    assert io.writes[-1] == (0x1234, 0x12)
+    cpu.a = 0x12
+    io.ports[0x1234] = 0xA5
+    assert cpu.step() == 11  # IN A,(34h)
+    assert cpu.a == 0xA5
