@@ -1679,13 +1679,31 @@ def test_index_register_load_increment_and_stack(
 
 
 def test_indexed_displacement_load_alu_and_cb_bit_operation() -> None:
-    cpu = make_cpu(bytes([
-        0xDD, 0x21, 0x10, 0xC0,       # LD IX,C010h
-        0xDD, 0x36, 0x02, 0x81,       # LD (IX+2),81h
-        0xDD, 0xCB, 0x02, 0x06,       # RLC (IX+2)
-        0xDD, 0x7E, 0x02,              # LD A,(IX+2)
-        0xDD, 0xCB, 0x02, 0x46,       # BIT 0,(IX+2)
-    ]))
+    cpu = make_cpu(
+        bytes(
+            [
+                0xDD,
+                0x21,
+                0x10,
+                0xC0,  # LD IX,C010h
+                0xDD,
+                0x36,
+                0x02,
+                0x81,  # LD (IX+2),81h
+                0xDD,
+                0xCB,
+                0x02,
+                0x06,  # RLC (IX+2)
+                0xDD,
+                0x7E,
+                0x02,  # LD A,(IX+2)
+                0xDD,
+                0xCB,
+                0x02,
+                0x46,  # BIT 0,(IX+2)
+            ]
+        )
+    )
     assert cpu.step() == 14
     assert cpu.step() == 19
     assert cpu.step() == 23
