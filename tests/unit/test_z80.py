@@ -1568,14 +1568,24 @@ def test_cb_operations_on_hl_memory_have_expected_nominal_cycles() -> None:
     assert cpu.bus.read(cpu.hl) == 0x00
 
 
-def test_halt_repeats_four_tstates_until_interrupt() -> None:
+def test_halt_repeats_until_maskable_interrupt_is_accepted() -> None:
     cpu = make_cpu(bytes([0x76, 0x00]))
-    assert cpu.step() == 4
+    cpu.sp = 0xC100
+    cpu.iff1 = cpu.iff2 = True
+
+    assert cpu.step() == 4  # HALT
     assert cpu.halted
     halted_pc = cpu.pc
-    assert cpu.step() == 4
+    assert cpu.step() == 4  # ciclo repetido enquanto aguarda interrupção
     assert cpu.pc == halted_pc
     assert cpu.total_cycles == 8
+
+    cpu.request_int(0xFF)  # IM 0: RST 38h
+    assert cpu.step() == 13
+    assert not cpu.halted
+    assert cpu.pc == 0x0038
+    assert cpu.bus.read(0xC0FE) == 0x01  # retoma após HALT
+    assert cpu.bus.read(0xC0FF) == 0x00
 
 
 def test_di_ei_and_nmi_service() -> None:
@@ -1590,6 +1600,8 @@ def test_di_ei_and_nmi_service() -> None:
     assert cpu.step() == 11
     assert cpu.pc == 0x0066
     assert cpu.sp == 0xC0FE
+    assert cpu.iff1 is False
+    assert cpu.iff2 is True  # NMI copia IFF1 para IFF2
 
 
 class FakeIOBus:
