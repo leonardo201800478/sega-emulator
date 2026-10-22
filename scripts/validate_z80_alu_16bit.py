@@ -139,7 +139,7 @@ def _select_left_values(count: int, sampling: str) -> tuple[int, ...]:
 
     if count == 1:
         return (0x8000,)
-    if count < 13:
+    if count < 64:
         return tuple(round(index * MASK16 / (count - 1)) for index in range(count))
 
     # Inclui fronteiras importantes para carry, half-carry, sinal e wraparound.
