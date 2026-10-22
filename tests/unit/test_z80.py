@@ -716,3 +716,49 @@ def test_ld_register_pair_immediate_wraps_program_counter() -> None:
     assert cpu.step() == 10
     assert cpu.bc == 0x1234
     assert cpu.pc == 0x0001
+
+
+
+@pytest.mark.parametrize(
+    ("opcode", "pair", "address", "value"),
+    [
+        (0x02, "bc", 0xC020, 0xA5),
+        (0x12, "de", 0xC021, 0x5A),
+    ],
+)
+def test_ld_indirect_pair_from_accumulator_writes_ram_and_preserves_flags(
+    opcode: int, pair: str, address: int, value: int
+) -> None:
+    cpu = make_cpu(bytes([opcode]))
+    setattr(cpu, pair, address)
+    cpu.a = value
+    cpu.f = 0xD7
+
+    assert cpu.step() == 7
+    assert cpu.bus.read(address) == value
+    assert cpu.f == 0xD7
+    assert cpu.pc == 1
+    assert cpu.total_cycles == 7
+
+
+@pytest.mark.parametrize(
+    ("opcode", "pair", "address", "value"),
+    [
+        (0x0A, "bc", 0xC020, 0xA5),
+        (0x1A, "de", 0xC021, 0x5A),
+    ],
+)
+def test_ld_accumulator_from_indirect_pair_reads_ram_and_preserves_flags(
+    opcode: int, pair: str, address: int, value: int
+) -> None:
+    cpu = make_cpu(bytes([opcode]))
+    setattr(cpu, pair, address)
+    cpu.bus.write(address, value)
+    cpu.a = 0x11
+    cpu.f = 0xD7
+
+    assert cpu.step() == 7
+    assert cpu.a == value
+    assert cpu.f == 0xD7
+    assert cpu.pc == 1
+    assert cpu.total_cycles == 7
