@@ -18,7 +18,7 @@ def test_distributed_sampling_spans_entire_16bit_domain() -> None:
     assert len(set(values)) == 1024
     assert values[0] == 0x0000
     assert values[-1] == 0xFFFF
-    assert values[512] > 0x7FFF
+    assert max(right - left for left, right in zip(values, values[1:])) < 200
 
 
 def test_distributed_sampling_includes_important_boundaries() -> None:
