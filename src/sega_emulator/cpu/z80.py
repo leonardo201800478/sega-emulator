@@ -43,6 +43,8 @@ class Z80Cpu:
         self._ei_delay = 0
         self._nmi_pending = False
         self._int_pending = None
+        # Opcode fornecido pelo barramento durante acknowledge em IM 0.
+        self._im0_opcode: int | None = None
         self.sp = 0
         self.pc = 0
         self.total_cycles = 0
@@ -167,7 +169,11 @@ class Z80Cpu:
         return value
 
     def _fetch_opcode_byte(self) -> int:
-        """Busca um byte de opcode M1 e incrementa os 7 bits baixos de R."""
+        """Busca opcode M1; IM 0 pode fornecer o primeiro byte externamente."""
+        if self._im0_opcode is not None:
+            value = self._im0_opcode
+            self._im0_opcode = None
+            return value
         value = self._fetch_byte()
         self.r = (self.r & 0x80) | ((self.r + 1) & 0x7F)
         return value
@@ -1067,16 +1073,20 @@ class Z80Cpu:
             return cycles
         if self._int_pending is not None and self.iff1 and self._ei_delay == 0:
             data_bus = self._int_pending
-            if self.interrupt_mode == 0 and data_bus & 0xC7 != 0xC7:
-                raise UnsupportedOpcodeError(
-                    "IM 0 aceita apenas opcodes RST fornecidos pelo barramento "
-                    "nesta etapa."
-                )
-            # O acknowledge de INT também incrementa os 7 bits baixos de R.
+            # O acknowledge de INT incrementa R uma vez, inclusive em IM 0.
             self.r = (self.r & 0x80) | ((self.r + 1) & 0x7F)
             self._int_pending = None
             self.halted = False
             self.iff1 = self.iff2 = False
+            if self.interrupt_mode == 0:
+                # Em IM 0, o dispositivo fornece o primeiro opcode. Os bytes
+                # seguintes (operandos/prefixos) continuam vindo de PC.
+                # O acknowledge substitui o M1 normal e custa dois T-states
+                # adicionais sobre a duração nominal da instrução decodificada.
+                self._im0_opcode = data_bus
+                cycles = self.step() + 2
+                self.total_cycles += 2
+                return cycles
             self._push_word(self.pc)
             if self.interrupt_mode == 2:
                 vector = (self.i << 8) | data_bus
@@ -1084,9 +1094,6 @@ class Z80Cpu:
                 high = self.bus.read((vector + 1) & 0xFFFF)
                 self.pc = (high << 8) | low
                 cycles = 19
-            elif self.interrupt_mode == 0:
-                self.pc = data_bus & 0x38
-                cycles = 13
             else:
                 self.pc = 0x0038
                 cycles = 13
