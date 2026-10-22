@@ -1971,6 +1971,7 @@ def test_index_prefixes_decode_all_non_ed_second_opcodes() -> None:
             cpu.bus.write(0xC020, 0xA5)
             assert cpu.step() > 0, f"{prefix:02X} {opcode:02X}h"
 
+
 def test_all_ed_second_bytes_are_supported_or_explicitly_rejected() -> None:
     """Classifica os 256 segundos bytes ED sem confundir decode com correção."""
     supported = {
