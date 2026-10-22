@@ -122,6 +122,7 @@ def test_daa_exhaustive_accumulator_and_hnc_input_flags() -> None:
                 f"DAA divergiu para A={accumulator:02X}h, F_in={initial_flags:02X}h"
             )
 
+
 def test_ld_immediate_and_register_transfer_preserve_flags() -> None:
     cpu = make_cpu(bytes([0x06, 0x42, 0x78]))  # LD B,42h; LD A,B
     cpu.f = 0xD7
