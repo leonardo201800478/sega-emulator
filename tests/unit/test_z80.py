@@ -234,8 +234,8 @@ def test_jp_conditional_checks_flags(opcode: int, flags: int, taken: bool) -> No
     ("accumulator", "flags", "expected_a", "expected_flags"),
     [
         (0x00, 0xC5, 0xFF, 0xFF),  # resultado com S/Y/X e H/N; flags S/Z/PV/C preservadas
-        (0x28, 0x45, 0xD7, 0xD7),
-        (0xFF, 0x00, 0x00, 0x56),  # Z e PV preservados? CPL não altera flags Z/PV
+        (0x28, 0x45, 0xD7, 0x57),
+        (0xFF, 0x00, 0x00, 0x12),  # Z e PV preservados? CPL não altera flags Z/PV
     ],
 )
 def test_cpl_complements_accumulator_and_updates_only_documented_flags(
@@ -255,9 +255,9 @@ def test_cpl_complements_accumulator_and_updates_only_documented_flags(
 @pytest.mark.parametrize(
     ("accumulator", "flags", "expected_flags"),
     [
-        (0x00, 0xD6, 0xFC),  # S/Z/PV preservados, XY do A, carry definido
+        (0x00, 0xD6, 0xC5),  # S/Z/PV preservados, XY do A, carry definido
         (0x28, 0x01, 0x29),
-        (0xD7, 0xFF, 0xED),
+        (0xD7, 0xFF, 0xC5),
     ],
 )
 def test_scf_sets_carry_and_preserves_sign_zero_parity(
@@ -279,7 +279,7 @@ def test_scf_sets_carry_and_preserves_sign_zero_parity(
     [
         (0x00, 0xC5, 0xD4),  # carry anterior vira half-carry
         (0x28, 0x00, 0x29),  # carry anterior zero vira carry
-        (0xD7, 0xFF, 0xFC),  # carry anterior um, flags S/Z/PV e XY preservadas
+        (0xD7, 0xFF, 0xD4),  # carry anterior um, flags S/Z/PV e XY preservadas
     ],
 )
 def test_ccf_complements_carry_and_updates_half_carry(
