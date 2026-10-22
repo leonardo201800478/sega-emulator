@@ -79,7 +79,7 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | Prefixo | Estado | Escopo necessário |
 |---|---|---|
 | `CB` | Ausente | RLC, RRC, RL, RR, SLA, SRA, SLL (não documentado), SRL, BIT, RES e SET para registradores e (HL). |
-| `ED` | Parcial | ADC/SBC HL,rr agora implementados; ainda faltam operações de I/O por (C), transferências e comparações de bloco; LD I/R; RRD/RLD; IM 0/1/2; RETI/RETN e demais instruções documentadas. |
+| `ED` | Parcial | ADC/SBC HL,rr implementados; operações de I/O por (C), transferências e comparações de bloco; LD I/R; RRD/RLD; IM 0/1/2; RETI/RETN e demais instruções documentadas ainda faltam. |
 | `DD` | Ausente | Substituição de HL por IX onde aplicável, instruções IX e endereçamento indexado (IX+d), incluindo prefixos redundantes conforme o modelo adotado. |
 | `FD` | Ausente | Equivalente para IY. |
 | `DD CB d` / `FD CB d` | Ausente | Operações de bits/rotação sobre (IX+d)/(IY+d), incluindo variantes que também copiam resultado para registrador. |
