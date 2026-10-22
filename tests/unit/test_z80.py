@@ -606,6 +606,38 @@ def test_and_reads_operand_from_hl() -> None:
     assert cpu.f == 0x14
 
 
+@pytest.mark.parametrize(
+    ("opcode", "accumulator", "operand", "carry_in", "expected_a", "expected_flags"),
+    [
+        (0xC6, 0x0F, 0x01, 0, 0x10, 0x10),  # ADD A,n: half-carry
+        (0xCE, 0x7F, 0x00, 1, 0x80, 0x94),  # ADC A,n: overflow
+        (0xD6, 0x00, 0x01, 0, 0xFF, 0xBB),  # SUB n: borrow
+        (0xDE, 0x00, 0x00, 1, 0xFF, 0xBB),  # SBC A,n: borrow de entrada
+        (0xE6, 0xF0, 0x0F, 0, 0x00, 0x54),  # AND n: zero, H e paridade
+        (0xEE, 0xF0, 0x0F, 0, 0xFF, 0xAC),  # XOR n: sinal, XY e paridade
+        (0xF6, 0x80, 0x01, 0, 0x81, 0x84),  # OR n: sinal e paridade
+        (0xFE, 0x42, 0x42, 0, 0x42, 0x42),  # CP n: zero sem alterar A
+    ],
+)
+def test_immediate_alu_instructions(
+    opcode: int,
+    accumulator: int,
+    operand: int,
+    carry_in: int,
+    expected_a: int,
+    expected_flags: int,
+) -> None:
+    cpu = make_cpu(bytes([opcode, operand]))
+    cpu.a = accumulator
+    cpu.f = carry_in
+
+    assert cpu.step() == 7
+    assert cpu.pc == 2
+    assert cpu.a == expected_a
+    assert cpu.f == expected_flags
+    assert cpu.total_cycles == 7
+
+
 def test_unsupported_opcode_is_explicit() -> None:
     cpu = make_cpu(b"\x76")  # HALT ainda não foi implementado.
 
