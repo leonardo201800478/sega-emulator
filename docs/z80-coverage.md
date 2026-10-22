@@ -81,7 +81,7 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | Prefixo | Estado | Escopo necessário |
 |---|---|---|
 | `CB` | Implementado — cobertura inicial | RLC, RRC, RL, RR, SLA, SRA, SRL, BIT, RES e SET em registradores/(HL); SLL incluído separadamente como não documentado. Prefixos indexados ainda pendentes. |
-| `ED` | Parcial | `ADC/SBC HL,rr`, `LD I,A`, `LD R,A`, `LD A,I` e `LD A,R` implementados. `R` incrementa nos fetches de opcode M1; `LD A,I/R` atualiza S/Z/X/Y, P/V a partir do estado `IFF2`, limpa H/N e preserva C. `IFF2` existe apenas como estado mínimo (inicialmente falso), sem lógica de interrupções. Ainda faltam operações de I/O por (C), transferências/comparações de bloco, RRD/RLD, IM 0/1/2, RETI/RETN e outras instruções ED documentadas. |
+| `ED` | Implementado — cobertura inicial, sujeito à validação | `ADC/SBC HL,rr`, `LD I,A`, `LD R,A`, `LD A,I` e `LD A,R` implementados. `R` incrementa nos fetches de opcode M1; `LD A,I/R` atualiza S/Z/X/Y, P/V a partir do estado `IFF2`, limpa H/N e preserva C. `IFF2` existe apenas como estado mínimo (inicialmente falso), sem lógica de interrupções. Inclui I/O por (C), operações de bloco, RRD/RLD, IM 0/1/2 e RETN/RETI; flags de operações de bloco e protocolo de interrupção ainda precisam de validação diferencial. |
 | `DD` | Ausente | Substituição de HL por IX onde aplicável, instruções IX e endereçamento indexado (IX+d), incluindo prefixos redundantes conforme o modelo adotado. |
 | `FD` | Ausente | Equivalente para IY. |
 | `DD CB d` / `FD CB d` | Ausente | Operações de bits/rotação sobre (IX+d)/(IY+d), incluindo variantes que também copiam resultado para registrador. |
