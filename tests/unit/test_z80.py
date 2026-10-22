@@ -1792,7 +1792,10 @@ def test_index_prefixes_decode_all_non_ed_second_opcodes() -> None:
         for opcode in range(0x100):
             if opcode == 0xED:
                 continue  # ED 00h é um opcode não documentado/não suportado.
-            cpu = make_cpu(bytes([prefix, opcode, 0x20, 0xC0, 0x20, 0xC0]))
+            bus = SG1000MemoryBus(
+                SG1000Ram(bytes(RAM_SIZE)), bytes([prefix, opcode, 0x20, 0xC0, 0x20, 0xC0])
+            )
+            cpu = Z80Cpu(bus, io_bus=FakeIOBus())
             cpu.bc = cpu.de = cpu.hl = 0xC020
             cpu.sp = 0xC100
             cpu.ix = cpu.iy = 0xC020
