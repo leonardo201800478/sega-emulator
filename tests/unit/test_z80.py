@@ -673,3 +673,34 @@ def test_register_pair_rejects_out_of_range_values(value: int) -> None:
 
     with pytest.raises(ValueError):
         cpu.hl = value
+
+
+@pytest.mark.parametrize(
+    ("opcode", "pair", "expected"),
+    [
+        (0x01, "bc", 0x1234),
+        (0x11, "de", 0xABCD),
+        (0x21, "hl", 0xC020),
+        (0x31, "sp", 0xFFFF),
+    ],
+)
+def test_ld_register_pair_immediate_reads_little_endian_and_preserves_flags(
+    opcode: int, pair: str, expected: int
+) -> None:
+    cpu = make_cpu(bytes([opcode, expected & 0xFF, expected >> 8]))
+    cpu.f = 0xD7
+
+    assert cpu.step() == 10
+    assert getattr(cpu, pair) == expected
+    assert cpu.pc == 3
+    assert cpu.f == 0xD7
+    assert cpu.total_cycles == 10
+
+
+def test_ld_register_pair_immediate_wraps_program_counter() -> None:
+    cpu = make_cpu(bytes([0x01, 0x34, 0x12]))
+    cpu.pc = 0xFFFD
+
+    assert cpu.step() == 10
+    assert cpu.bc == 0x1234
+    assert cpu.pc == 0x0000
