@@ -30,7 +30,11 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | `05, 0D, ... 3D` — DEC r | Implementado — cobertura inicial | Inclui (HL); ampliar testes de todas as flags e operandos. |
 | `06, 0E, ... 3E` — LD r,n | Implementado — cobertura inicial | Inclui `LD (HL),n`; ampliar casos de limites e efeitos no barramento. |
 | `07, 0F, 17, 1F` — rotações do acumulador | Implementado — cobertura inicial | RLCA, RRCA, RLA e RRA; atualizam C e XY, limpam H/N e preservam S/Z/PV; 4 T-states nominais. Testes sintéticos por opcode. |
-| `08` — EX AF,AF' | Ausente | Requer banco alternativo AF'. |
+| `08` — EX AF,AF' | Implementado — cobertura inicial | Troca AF com o banco alternativo AF'; 4 T-states nominais. |
+| `D9` — EXX | Implementado — cobertura inicial | Troca simultaneamente BC/DE/HL com BC'/DE'/HL'; AF/AF' não são alterados; 4 T-states nominais. |
+| `EB` — EX DE,HL | Implementado — cobertura inicial | Troca DE e HL sem alterar flags; 4 T-states nominais. |
+| `C7, CF, D7, DF, E7, EF, F7, FF` — RST p | Implementado — cobertura inicial | Empilha o endereço de retorno e salta para os vetores 00h–38h em passos de 8; 11 T-states nominais. Testes dos oito vetores e wrap da pilha. |
+
 | `09, 19, 29, 39` — ADD HL,rr | Implementado — cobertura inicial | Inclui SP; validar flags X/Y e todos os pares/casos-limite. |
 | `0A, 1A` — LD A,(BC/DE) | Implementado — cobertura inicial | Lê A do endereço apontado por BC ou DE; 7 T-states nominais e flags preservadas. |
 | `10` — DJNZ e | Implementado — cobertura inicial | Decrementa B; desvia com deslocamento relativo assinado se B não for zero; preserva flags. Testes de ramo tomado/não tomado, wrap de B e wrap do PC; 13/8 T-states nominais. |
@@ -59,16 +63,16 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | `C2, CA, D2, DA` — JP cc,nn | Parcial | Só NZ, Z, NC e C; faltam PO, PE, P e M. |
 | `C5, D5, E5, F5` — PUSH qq | Implementado — cobertura inicial | BC, DE, HL e AF; verificar ordem de acesso e tempos de barramento em fase futura. |
 | `C1, D1, E1, F1` — POP qq | Implementado — cobertura inicial | BC, DE, HL e AF; verificar ordem de acesso e efeitos de AF. |
-| `C7, CF, D7, DF, E7, EF, F7, FF` — RST | Ausente | Chamadas a vetores fixos e comportamento de pilha. |
+
 | `C4, CC, D4, DC` — CALL cc,nn | Parcial | Só NZ, Z, NC e C; faltam PO, PE, P e M. |
 | `CD` — CALL nn | Implementado — cobertura inicial | Sub-rotina absoluta. |
 | `C0, C8, D0, D8` — RET cc | Parcial | Só NZ, Z, NC e C; faltam PO, PE, P e M. |
 | `C9` — RET | Implementado — cobertura inicial | Retorno incondicional. |
 | `D3, DB` — OUT (n),A / IN A,(n) | Ausente | Requer contrato separado de portas de I/O; não deve ser simulado como memória comum. |
-| `D9` — EXX | Ausente | Requer bancos alternativos BC', DE' e HL'. |
+
 | `E3` — EX (SP),HL | Ausente | Troca entre pilha e HL. |
 | `E9` — JP (HL) | Implementado — cobertura inicial | Copia HL para PC; 4 T-states nominais, flags preservadas. |
-| `EB` — EX DE,HL | Ausente | Troca de pares. |
+
 | `F3, FB` — DI / EI | Ausente | Requer estado de habilitação de interrupções e regra de atraso do EI. |
 | `F9` — LD SP,HL | Implementado — cobertura inicial | Copia HL para SP; 6 T-states nominais, flags preservadas. |
 
@@ -86,7 +90,7 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 
 O código atual modela registradores principais A/F/B/C/D/E/H/L, pares AF/BC/DE/HL, SP, PC e um acumulador de T-states nominais. Ainda faltam, entre outros:
 
-- Bancos alternativos AF', BC', DE', HL', registradores IX/IY, I e R.
+- Registradores alternativos AF', BC', DE' e HL' agora estão modelados; IX/IY, I e R ainda faltam.
 - IFF1/IFF2, modo de interrupção e comportamento de EI/DI, HALT, NMI e INT.
 - Ciclos M1, ciclos de leitura/escrita e I/O, estados de espera, contenção e temporização de barramento.
 - Flags X/Y e efeitos não documentados validados contra referências e testes específicos.
@@ -96,7 +100,7 @@ O contador `total_cycles` atual soma os custos nominais das instruções suporta
 
 ## Ordem de implementação sugerida
 
-1. Completar operações básicas não prefixadas e condições: acessos indiretos, rotações, DAA, EX, LD SP,HL e RST.
+1. Ampliar as operações não prefixadas restantes e completar as oito condições de salto/chamada/retorno; EX AF,AF', EXX, EX DE,HL e RST já estão implementados.
 2. Completar instruções aritméticas de 16 bits, incluindo `ADC HL,rr` e `SBC HL,rr`, com flags e tempos testados.
 3. Implementar HALT e o modelo de interrupções antes de declarar completo o fluxo de controle.
 4. Criar contrato de I/O e implementar IN/OUT com testes de endereço de porta.

@@ -1061,3 +1061,112 @@ def test_ld_accumulator_from_absolute_reads_ram_and_preserves_flags() -> None:
     assert cpu.f == 0xD7
     assert cpu.pc == 3
     assert cpu.total_cycles == 13
+
+
+@pytest.mark.parametrize(
+    ("main_pair", "alternate_pair", "initial_main", "initial_alt"),
+    [
+        ("af", "af_alt", 0x1234, 0xABCD),
+        ("bc", "bc_alt", 0x1234, 0xABCD),
+        ("de", "de_alt", 0x1234, 0xABCD),
+        ("hl", "hl_alt", 0x1234, 0xABCD),
+    ],
+)
+def test_exchange_register_pair_swaps_both_values(
+    main_pair: str, alternate_pair: str, initial_main: int, initial_alt: int
+) -> None:
+    opcode = {"af": 0x08, "bc": 0xD9, "de": 0xD9, "hl": 0xD9}[main_pair]
+    cpu = make_cpu(bytes([opcode]))
+    setattr(cpu, main_pair, initial_main)
+    setattr(cpu, alternate_pair, initial_alt)
+
+    assert cpu.step() == 4
+    if main_pair == "af":
+        assert cpu.af == initial_alt
+        assert cpu.af_alt == initial_main
+    else:
+        # EXX swaps BC, DE and HL together; validate the selected pair and
+        # ensure the other two pairs are swapped in the same instruction.
+        assert getattr(cpu, main_pair) == initial_alt
+        assert getattr(cpu, alternate_pair) == initial_main
+        assert cpu.bc == (initial_alt if main_pair == "bc" else 0)
+        assert cpu.de == (initial_alt if main_pair == "de" else 0)
+        assert cpu.hl == (initial_alt if main_pair == "hl" else 0)
+    assert cpu.pc == 1
+    assert cpu.total_cycles == 4
+
+
+def test_exx_swaps_all_three_register_pairs_without_touching_af_or_flags() -> None:
+    cpu = make_cpu(b"\\xD9")
+    cpu.af = 0x12D7
+    cpu.bc, cpu.de, cpu.hl = 0x1234, 0x5678, 0x9ABC
+    cpu.af_alt = 0xABCD
+    cpu.bc_alt, cpu.de_alt, cpu.hl_alt = 0xCDEF, 0x9876, 0x5432
+
+    assert cpu.step() == 4
+    assert (cpu.bc, cpu.de, cpu.hl) == (0xCDEF, 0x9876, 0x5432)
+    assert (cpu.bc_alt, cpu.de_alt, cpu.hl_alt) == (0x1234, 0x5678, 0x9ABC)
+    assert cpu.af == 0x12D7
+    assert cpu.af_alt == 0xABCD
+
+
+def test_ex_de_hl_swaps_pairs_without_touching_flags() -> None:
+    cpu = make_cpu(b"\\xEB")
+    cpu.de, cpu.hl, cpu.f = 0x1234, 0xABCD, 0xD7
+
+    assert cpu.step() == 4
+    assert (cpu.de, cpu.hl, cpu.f) == (0xABCD, 0x1234, 0xD7)
+    assert cpu.pc == 1
+
+
+@pytest.mark.parametrize(
+    ("opcode", "vector"),
+    [
+        (0xC7, 0x00),
+        (0xCF, 0x08),
+        (0xD7, 0x10),
+        (0xDF, 0x18),
+        (0xE7, 0x20),
+        (0xEF, 0x28),
+        (0xF7, 0x30),
+        (0xFF, 0x38),
+    ],
+)
+def test_rst_pushes_return_address_and_jumps_to_vector(
+    opcode: int, vector: int
+) -> None:
+    cpu = make_cpu(bytes([opcode]))
+    cpu.sp = 0xC100
+    cpu.f = 0xD7
+
+    assert cpu.step() == 11
+    assert cpu.pc == vector
+    assert cpu.sp == 0xC0FE
+    assert cpu.bus.read(0xC0FE) == 0x01
+    assert cpu.bus.read(0xC0FF) == 0x00
+    assert cpu.f == 0xD7
+    assert cpu.total_cycles == 11
+
+
+def test_rst_stack_wraps_at_zero() -> None:
+    class FlatMemoryBus:
+        def __init__(self) -> None:
+            self.memory = bytearray(0x10000)
+            self.memory[0x0100] = 0xFF
+
+        def read(self, address: int) -> int:
+            return self.memory[address]
+
+        def write(self, address: int, value: int) -> None:
+            self.memory[address] = value
+
+    bus = FlatMemoryBus()
+    cpu = Z80Cpu(bus)
+    cpu.pc = 0x0100
+    cpu.sp = 0x0001
+
+    assert cpu.step() == 11
+    assert cpu.pc == 0x38
+    assert cpu.sp == 0xFFFF
+    assert bus.memory[0xFFFF] == 0x01
+    assert bus.memory[0x0000] == 0x01

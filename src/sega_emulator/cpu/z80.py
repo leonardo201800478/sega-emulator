@@ -27,6 +27,10 @@ class Z80Cpu:
         self.e = 0
         self.h = 0
         self.l = 0
+        self.af_alt = 0
+        self.bc_alt = 0
+        self.de_alt = 0
+        self.hl_alt = 0
         self.sp = 0
         self.pc = 0
         self.total_cycles = 0
@@ -84,6 +88,46 @@ class Z80Cpu:
     def hl(self, value: int) -> None:
         self._validate_word(value)
         self.h, self.l = value >> 8, value & 0xFF
+
+    @property
+    def af_alt(self) -> int:
+        """Banco alternativo A':F' usado por EX AF,AF'."""
+        return self._af_alt
+
+    @af_alt.setter
+    def af_alt(self, value: int) -> None:
+        self._validate_word(value)
+        self._af_alt = value
+
+    @property
+    def bc_alt(self) -> int:
+        """Banco alternativo B':C' usado por EXX."""
+        return self._bc_alt
+
+    @bc_alt.setter
+    def bc_alt(self, value: int) -> None:
+        self._validate_word(value)
+        self._bc_alt = value
+
+    @property
+    def de_alt(self) -> int:
+        """Banco alternativo D':E' usado por EXX."""
+        return self._de_alt
+
+    @de_alt.setter
+    def de_alt(self, value: int) -> None:
+        self._validate_word(value)
+        self._de_alt = value
+
+    @property
+    def hl_alt(self) -> int:
+        """Banco alternativo H':L' usado por EXX."""
+        return self._hl_alt
+
+    @hl_alt.setter
+    def hl_alt(self, value: int) -> None:
+        self._validate_word(value)
+        self._hl_alt = value
 
     @property
     def pc(self) -> int:
@@ -423,6 +467,8 @@ class Z80Cpu:
         Subconjunto atual:
         - NOP (00h)
         - DAA (27h)
+        - EX AF,AF' (08h), EXX (D9h), EX DE,HL (EBh)
+        - RST 00h, 08h, 10h, 18h, 20h, 28h, 30h e 38h
         - RLCA (07h), RRCA (0Fh), RLA (17h), RRA (1Fh)
         - CPL (2Fh), SCF (37h), CCF (3Fh)
         - LD rr,nn (01h, 11h, 21h, 31h)
@@ -456,6 +502,23 @@ class Z80Cpu:
 
         if opcode == 0x00:  # NOP
             cycles = 4
+        elif opcode == 0x08:  # EX AF,AF'
+            previous = self.af
+            self.af = self.af_alt
+            self.af_alt = previous
+            cycles = 4
+        elif opcode == 0xD9:  # EXX
+            self.bc, self.bc_alt = self.bc_alt, self.bc
+            self.de, self.de_alt = self.de_alt, self.de
+            self.hl, self.hl_alt = self.hl_alt, self.hl
+            cycles = 4
+        elif opcode == 0xEB:  # EX DE,HL
+            self.de, self.hl = self.hl, self.de
+            cycles = 4
+        elif opcode & 0xC7 == 0xC7:  # RST p
+            self._push_word(self.pc)
+            self.pc = opcode & 0x38
+            cycles = 11
         elif opcode == 0x27:  # DAA
             self._daa()
             cycles = 4
