@@ -49,6 +49,7 @@ O comando do módulo informa que a máquina SG-1000 ainda não está integrada. 
 - [Auditoria geral do código](docs/codebase-audit.md)
 - [Arquitetura multi-sistema e estratégia de reutilização](docs/architecture.md)
 - [Auditoria de cobertura da CPU Z80](docs/z80-coverage.md)
+- [Auditoria técnica detalhada do núcleo Z80 (22/10/2026)](docs/z80-code-audit-2026-10-22.md)
 - [Pesquisa do núcleo Z80 do MAME](docs/z80-mame-reference.md)
 - [Pesquisa comparativa de comportamentos Z80 pouco documentados](docs/z80-undocumented-behavior-research.md)
 - [Notas de hardware do SG-1000](docs/hardware/sg1000.md)
