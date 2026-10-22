@@ -1793,6 +1793,7 @@ def test_nmi_acknowledge_increments_refresh_register() -> None:
 def test_ei_enables_maskable_interrupt_after_following_instruction() -> None:
     cpu = make_cpu(bytes([0xFB, 0x00, 0x00]))  # EI; NOP; NOP
     cpu.sp = 0xC100
+    cpu.interrupt_mode = 1
     cpu.request_int(0xFF)  # IM 1
 
     assert cpu.step() == 4  # EI
