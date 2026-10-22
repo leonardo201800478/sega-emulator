@@ -1067,7 +1067,7 @@ class Z80Cpu:
             data_bus = self._int_pending
             if self.interrupt_mode == 0 and data_bus & 0xC7 != 0xC7:
                 raise UnsupportedOpcodeError(
-                    "IM 0 aceita apenas opcodes RST fornecidos pelo barramento " 
+                    "IM 0 aceita apenas opcodes RST fornecidos pelo barramento "
                     "nesta etapa."
                 )
             self._int_pending = None
