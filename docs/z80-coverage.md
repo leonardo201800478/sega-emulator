@@ -91,7 +91,7 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 O código atual modela registradores principais e alternativos, I/R, IX/IY, SP, PC, flags e um acumulador de T-states nominais. Ainda faltam, entre outros:
 
 - Os registradores alternativos AF', BC', DE' e HL', I/R e IX/IY estão modelados.
-- IFF1/IFF2, modos 0–2, HALT e solicitações NMI/INT têm um modelo inicial; IM 0 atualmente aceita apenas instruções RST no barramento de dados; outros opcodes IM 0 falham explicitamente em vez de serem simulados incorretamente.
+- IFF1/IFF2, modos 0–2, HALT e solicitações NMI/INT têm um modelo inicial. A limitação conhecida de IM 0 (aceitar apenas RST no byte de acknowledge) permanece pendente até validação e implementação genérica; confirme o comportamento no código atual antes de ampliar essa afirmação.
 - Ciclos M1, ciclos de leitura/escrita e I/O, estados de espera, contenção e temporização de barramento.
 - Flags X/Y e efeitos não documentados validados contra referências e testes específicos.
 - Comportamento de prefixos repetidos, opcodes não documentados e diferenças de revisão, conforme a meta de compatibilidade.
@@ -165,7 +165,7 @@ A leitura direta de `src/sega_emulator/cpu/z80.py` e `tests/unit/test_z80.py` id
 
 Prioridades confirmadas:
 1. **Temporização:** os ciclos ainda são contabilizados por instrução; os acessos ao barramento não são agendados em T-states.
-2. **Interrupções:** IM 0 aceita somente o padrão RST; o caminho de interrupção não foi validado sistematicamente quanto a R, acknowledge, HALT, EI delay e IFFs.
+2. **Interrupções:** a cobertura atual inclui testes para incremento de R em NMI/INT, modos IM 0/1/2, atraso de EI e saída de HALT por INT. Ainda faltam validação diferencial abrangente do acknowledge, dos estados IFF e das sequências de borda; a limitação de IM 0 para bytes RST deve ser confirmada no código atual.
 3. **Comportamentos auxiliares:** WZ/MEMPTR e Q latch não estão modelados.
 4. **ED:** handlers importantes existem, mas falta classificar e testar todos os 256 segundos bytes, incluindo aliases e NOPs não documentados.
 5. **Validação semântica:** os testes “todos os opcodes têm caminho” não demonstram correção de resultados, flags, ciclos ou ordem de barramento. DAA, flags X/Y, prefixos e operações de bloco precisam de comparação diferencial.
@@ -175,6 +175,11 @@ Esta auditoria foi estática; não foram executados testes nesta etapa e nenhum 
 
 ## Progresso validado: interrupções e registrador R
 
-A CPU agora incrementa os sete bits inferiores de `R` ao aceitar NMI e INT, preservando o bit 7. Foram adicionados testes para IM 0/1/2, overflow de `R`, atraso de `EI`, saída de `HALT` por INT e estado de `IFF1/IFF2` em NMI.
+A CPU incrementa os sete bits inferiores de `R` ao aceitar NMI e INT, preservando o bit 7, conforme os testes registrados nesta revisão. Os testes acrescentados cobrem IM 0/1/2, overflow de `R`, atraso de `EI`, saída de `HALT` por INT e estado de `IFF1/IFF2` em NMI.
 
-A [CI do commit `6d82d45`](https://github.com/leonardo201800478/sega-emulator/actions/runs/39787665564) passou: Ruff aprovado e **267 testes passaram**. Isso valida os casos adicionados e a suíte existente, mas não comprova precisão ciclo a ciclo nem conformidade integral com todas as variantes do Z80.
+A [CI do commit `6d82d45`](https://github.com/leonardo201800478/sega-emulator/actions/runs/39787665564) foi registrada como aprovada, com Ruff aprovado e **267 testes passando** naquele commit. Esse resultado é histórico e não deve ser apresentado como execução da revisão atual. Ele valida os casos existentes naquele ponto, mas não comprova precisão ciclo a ciclo nem conformidade integral com todas as variantes do Z80.
+
+
+## Retomada documental — 22/10/2026
+
+Esta matriz é um inventário de implementação e validação, não uma certificação de conformidade. Ao retomar o trabalho, distinguir os resultados históricos de CI/testes locais do estado atual da branch. Antes de ampliar o núcleo, verificar no `main` o código e os testes vigentes, então executar uma comparação diferencial reproduzível para flags, operações ED de bloco, prefixos DD/FD e interrupções. Não tratar a existência de um handler como prova de semântica correta. A temporização por instrução continua sendo nominal: acessos M1, refresh, leitura/escrita e I/O ainda não são eventos agendados individualmente por T-state.
