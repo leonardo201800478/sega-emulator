@@ -165,3 +165,72 @@ def test_inc_dec_register_flags_for_all_byte_values_and_carry_states() -> None:
                     f"{operation.upper()} flags B={value:02X} C={carry}: "
                     f"obtido {cpu.f:02X}, esperado {expected_flags:02X}"
                 )
+
+
+def test_16bit_add_adc_sbc_results_flags_and_cycles_exhaustively() -> None:
+    """Percorre todos os pares de words em ADD HL,BC/ADC HL,BC/SBC HL,BC."""
+    ram = SG1000Ram(bytes(RAM_SIZE))
+    operations = (
+        ("add", bytes([0x09]), False, 11),
+        ("adc", bytes([0xED, 0x4A]), True, 15),
+        ("sbc", bytes([0xED, 0x42]), True, 15),
+    )
+
+    for operation, program, uses_carry, expected_cycles in operations:
+        cpu = Z80Cpu(SG1000MemoryBus(ram, program))
+        carry_values = (0, 1) if uses_carry else (0,)
+        for left in range(0x10000):
+            for right in range(0x10000):
+                for carry in carry_values:
+                    old_flags = ((left >> 8) & 0xC4) | carry
+                    if operation == "add":
+                        raw_result = left + right
+                        result = raw_result & 0xFFFF
+                        expected_flags = old_flags & 0xC4
+                        expected_flags |= (result >> 8) & 0x28
+                        if (left & 0x0FFF) + (right & 0x0FFF) > 0x0FFF:
+                            expected_flags |= 0x10
+                        if raw_result > 0xFFFF:
+                            expected_flags |= 0x01
+                    elif operation == "adc":
+                        raw_result = left + right + carry
+                        result = raw_result & 0xFFFF
+                        expected_flags = (result >> 8) & 0xA8
+                        if result == 0:
+                            expected_flags |= 0x40
+                        if (left & 0x0FFF) + (right & 0x0FFF) + carry > 0x0FFF:
+                            expected_flags |= 0x10
+                        if (~(left ^ right) & (left ^ result) & 0x8000) != 0:
+                            expected_flags |= 0x04
+                        if raw_result > 0xFFFF:
+                            expected_flags |= 0x01
+                    else:
+                        raw_result = left - right - carry
+                        result = raw_result & 0xFFFF
+                        expected_flags = ((result >> 8) & 0xA8) | 0x02
+                        if result == 0:
+                            expected_flags |= 0x40
+                        if (left & 0x0FFF) < ((right & 0x0FFF) + carry):
+                            expected_flags |= 0x10
+                        if ((left ^ right) & (left ^ result) & 0x8000) != 0:
+                            expected_flags |= 0x04
+                        if raw_result < 0:
+                            expected_flags |= 0x01
+
+                    cpu.hl = left
+                    cpu.bc = right
+                    cpu.f = old_flags
+                    cpu.pc = 0
+                    assert cpu.step() == expected_cycles, (
+                        f"{operation.upper()} cycles HL={left:04X} "
+                        f"BC={right:04X} C={carry}"
+                    )
+                    assert cpu.hl == result, (
+                        f"{operation.upper()} HL={left:04X} "
+                        f"BC={right:04X} C={carry}"
+                    )
+                    assert cpu.f == expected_flags, (
+                        f"{operation.upper()} flags HL={left:04X} "
+                        f"BC={right:04X} C={carry}: "
+                        f"obtido {cpu.f:02X}, esperado {expected_flags:02X}"
+                    )
