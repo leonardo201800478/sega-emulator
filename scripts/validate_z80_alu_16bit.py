@@ -139,31 +139,25 @@ def _select_left_values(count: int, sampling: str) -> tuple[int, ...]:
 
     if count == 1:
         return (0x8000,)
+    if count < 13:
+        return tuple(round(index * MASK16 / (count - 1)) for index in range(count))
 
     # Inclui fronteiras importantes para carry, half-carry, sinal e wraparound.
     boundary_values = (
         0x0000, 0x0001, 0x000F, 0x0010, 0x00FF, 0x0100,
         0x0FFF, 0x1000, 0x7FFF, 0x8000, 0x8001, 0xFFFE, 0xFFFF,
     )
-    selected = set(boundary_values[:count])
+    selected = set(boundary_values)
 
     # Os quantis percorrem o espaço completo; usar até 2*count candidatos
     # compensa colisões com as fronteiras sem gerar uma busca quadrática.
     for index in range(count * 2):
-        candidate = round(index * MASK16 / (count * 2 - 1))
-        selected.add(candidate)
         if len(selected) >= count:
             break
-
-    # O caso de contagens pequenas pode iniciar com mais fronteiras do que
-    # o solicitado; nesse caso, prioriza-se manter as extremidades do domínio.
-    if len(selected) > count:
-        required = {0x0000, 0xFFFF}
-        optional = sorted(selected - required)
-        selected = required | set(optional[: count - len(required)])
+        candidate = round(index * MASK16 / (count * 2 - 1))
+        selected.add(candidate)
 
     return tuple(sorted(selected))
-
 
 def _format_duration(seconds: float) -> str:
     seconds = max(0, int(seconds))
