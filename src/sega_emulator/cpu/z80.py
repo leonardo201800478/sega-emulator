@@ -585,9 +585,7 @@ class Z80Cpu:
                 address |= self._fetch_byte() << 8
                 low = self.bus.read(address)
                 high = self.bus.read((address + 1) & 0xFFFF)
-                self._write_stack_pair(
-                    (extended_opcode >> 4) & 0x03, (high << 8) | low
-                )
+                self._write_stack_pair((extended_opcode >> 4) & 0x03, (high << 8) | low)
                 cycles = 20
             elif extended_opcode & 0xCF == 0x4A:  # ADC HL,rr
                 self._add_sub_hl(
