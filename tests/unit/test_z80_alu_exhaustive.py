@@ -89,6 +89,7 @@ def test_8bit_alu_results_and_flags_for_all_operand_combinations() -> None:
                         f"obtido {cpu.f:02X}, esperado {expected_flags:02X}"
                     )
 
+
 def test_logic_register_operations_for_all_operand_combinations() -> None:
     """Valida AND/XOR/OR para todos os pares A,B e suas flags."""
     operations = (("and", 0xA0), ("xor", 0xA8), ("or", 0xB0))
