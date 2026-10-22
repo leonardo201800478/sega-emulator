@@ -30,7 +30,7 @@ def test_daa_adjusts_accumulator_and_flags(
     expected_a: int,
     expected_flags: int,
 ) -> None:
-    cpu = make_cpu(b"\\x27")  # DAA
+    cpu = make_cpu(bytes([0x27]))  # DAA
     cpu.a = accumulator
     cpu.f = initial_flags
 
