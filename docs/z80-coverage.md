@@ -37,6 +37,8 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | `09, 19, 29, 39` — ADD HL,rr | Implementado — cobertura inicial | Inclui SP; validar flags X/Y e todos os pares/casos-limite. |
 | `ED 4A, 5A, 6A, 7A` — ADC HL,rr | Implementado — cobertura inicial | Inclui carry de entrada, S/Z/H/PV/N/C e X/Y; 15 T-states nominais; testes de limites. |
 | `ED 42, 52, 62, 72` — SBC HL,rr | Implementado — cobertura inicial | Inclui borrow de entrada, S/Z/H/PV/N/C e X/Y; 15 T-states nominais; testes de limites. |
+| `ED 43, 53, 63, 73` — LD (nn),rr | Implementado — cobertura inicial | Escreve BC, DE, HL ou SP em little-endian; 20 T-states nominais, flags preservadas e wrap de 16 bits no segundo acesso. |
+| `ED 4B, 5B, 6B, 7B` — LD rr,(nn) | Implementado — cobertura inicial | Lê uma palavra little-endian para BC, DE, HL ou SP; 20 T-states nominais, flags preservadas e wrap de 16 bits no segundo acesso. |
 | `0A, 1A` — LD A,(BC/DE) | Implementado — cobertura inicial | Lê A do endereço apontado por BC ou DE; 7 T-states nominais e flags preservadas. |
 | `10` — DJNZ e | Implementado — cobertura inicial | Decrementa B; desvia com deslocamento relativo assinado se B não for zero; preserva flags. Testes de ramo tomado/não tomado, wrap de B e wrap do PC; 13/8 T-states nominais. |
 | `18` — JR e | Implementado — cobertura inicial | Deslocamento relativo com sinal e wrap do PC já têm testes selecionados. |
@@ -99,7 +101,7 @@ O contador `total_cycles` atual soma os custos nominais das instruções suporta
 ## Ordem de implementação sugerida
 
 1. Ampliar as operações não prefixadas restantes; as oito condições de salto/chamada/retorno e EX AF,AF', EXX, EX DE,HL e RST já estão implementados.
-2. Continuar as famílias prefixadas ED e ampliar testes de flags e comportamento de barramento; ADC/SBC HL,rr e as transferências entre A, I e R têm implementação e testes sintéticos iniciais.
+2. Continuar as famílias prefixadas ED e ampliar testes de flags e comportamento de barramento; ADC/SBC HL,rr, transferências absolutas ED de palavras e transferências entre A, I e R têm implementação e testes sintéticos iniciais.
 3. Implementar HALT e o modelo de interrupções antes de declarar completo o fluxo de controle.
 4. Criar contrato de I/O e implementar IN/OUT com testes de endereço de porta.
 5. Implementar famílias CB, ED, DD, FD e DD/FD-CB de forma sistemática.
