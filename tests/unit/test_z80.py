@@ -89,7 +89,7 @@ def test_adc_register_includes_carry_and_sets_flags(
     expected_a: int,
     expected_flags: int,
 ) -> None:
-    cpu = make_cpu(b"\\x88")  # ADC A,B
+    cpu = make_cpu(bytes([0x88]))  # ADC A,B
     cpu.a = accumulator
     cpu.b = operand
     cpu.f = carry_in
@@ -114,7 +114,7 @@ def test_sbc_register_includes_carry_and_sets_flags(
     expected_a: int,
     expected_flags: int,
 ) -> None:
-    cpu = make_cpu(b"\\x98")  # SBC A,B
+    cpu = make_cpu(bytes([0x98]))  # SBC A,B
     cpu.a = accumulator
     cpu.b = operand
     cpu.f = carry_in
