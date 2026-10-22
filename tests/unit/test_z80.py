@@ -1976,11 +1976,7 @@ def test_all_ed_second_bytes_are_supported_or_explicitly_rejected() -> None:
     supported = {
         *(0x40 + (register << 3) for register in range(8)),  # IN r,(C)
         *(0x41 + (register << 3) for register in range(8)),  # OUT (C),r
-        *(
-            base + (pair << 4)
-            for base in (0x42, 0x43, 0x4A, 0x4B)
-            for pair in range(4)
-        ),
+        *(base + (pair << 4) for base in (0x42, 0x43, 0x4A, 0x4B) for pair in range(4)),
         0x44,
         0x4C,
         0x54,
