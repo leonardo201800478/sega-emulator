@@ -170,7 +170,7 @@ def _select_left_values(count: int, sampling: str) -> tuple[int, ...]:
             continue
         replaceable = selected - required
         if replaceable:
-            nearest = min(replaceable, key=lambda value: abs(value - boundary))
+            nearest = min(replaceable, key=lambda value: (abs(value - boundary), value))
             selected.remove(nearest)
             selected.add(boundary)
 
