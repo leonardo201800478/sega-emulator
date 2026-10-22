@@ -157,3 +157,17 @@ Na branch `main`, commit `d6228f24b4f562d5b366296c0494f00c23def8c9`, o usuário 
 - `git diff --check`: sem erros reportados.
 
 Essa execução confirma os testes presentes no repositório nesse commit, não valida instruções ainda ausentes, não substitui comparação diferencial com uma suíte independente e não comprova precisão ciclo a ciclo. A cobertura indicada nesta matriz continua sendo “caminho implementado” até validação específica por família.
+
+
+## Auditoria estática do código — 22/10/2026
+
+A leitura direta de `src/sega_emulator/cpu/z80.py` e `tests/unit/test_z80.py` identificou lacunas de arquitetura e validação que devem ser tratadas separadamente de “opcode implementado”. Ver [auditoria técnica completa](z80-code-audit-2026-10-22.md).
+
+Prioridades confirmadas:
+1. **Temporização:** os ciclos ainda são contabilizados por instrução; os acessos ao barramento não são agendados em T-states.
+2. **Interrupções:** IM 0 aceita somente o padrão RST; o caminho de interrupção não foi validado sistematicamente quanto a R, acknowledge, HALT, EI delay e IFFs.
+3. **Comportamentos auxiliares:** WZ/MEMPTR e Q latch não estão modelados.
+4. **ED:** handlers importantes existem, mas falta classificar e testar todos os 256 segundos bytes, incluindo aliases e NOPs não documentados.
+5. **Validação semântica:** os testes “todos os opcodes têm caminho” não demonstram correção de resultados, flags, ciclos ou ordem de barramento. DAA, flags X/Y, prefixos e operações de bloco precisam de comparação diferencial.
+
+Esta auditoria foi estática; não foram executados testes nesta etapa e nenhum código da CPU foi alterado. O relatório separa lacunas confirmadas de áreas que precisam de testes antes de qualquer correção.
