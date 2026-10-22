@@ -177,6 +177,7 @@ def _select_left_values(count: int, sampling: str) -> tuple[int, ...]:
 
     return tuple(sorted(selected))
 
+
 def _format_duration(seconds: float) -> str:
     seconds = max(0, int(seconds))
     hours, remainder = divmod(seconds, 3600)
