@@ -1690,7 +1690,6 @@ def test_ed_ldir_repeats_until_bc_zero() -> None:
     assert cpu.bus.read(0xC021) == 0x56
 
 
-
 def test_ed_ldi_updates_registers_memory_and_documented_flag_bits() -> None:
     cpu = make_cpu(bytes([0xED, 0xA0]))  # LDI
     cpu.hl, cpu.de, cpu.bc, cpu.a, cpu.f = 0xC010, 0xC020, 2, 0x08, 0xC1
@@ -1740,6 +1739,7 @@ def test_ed_cpir_repeats_until_match_then_stops() -> None:
     assert cpu.pc == 2
     assert (cpu.hl, cpu.bc) == (0xC012, 0)
     assert cpu.f == 0x43  # C preserved, N and Z set; P/V cleared.
+
 
 def test_ed_rrd_rld_exchange_nibbles() -> None:
     cpu = make_cpu(bytes([0xED, 0x67, 0xED, 0x6F]))
