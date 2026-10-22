@@ -17,3 +17,15 @@ class MemoryBus(Protocol):
     def write(self, address: int, value: int) -> None:
         """Escreve um byte no endereço de 16 bits."""
         ...
+
+
+class IOBus(Protocol):
+    """Contrato separado para portas de I/O de 16 bits do Z80."""
+
+    def read_port(self, address: int) -> int:
+        """Lê um byte da porta de I/O."""
+        ...
+
+    def write_port(self, address: int, value: int) -> None:
+        """Escreve um byte na porta de I/O."""
+        ...
