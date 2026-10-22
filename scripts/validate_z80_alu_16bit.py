@@ -19,7 +19,6 @@ import os
 import sys
 import time
 from collections.abc import Iterable
-from multiprocessing.pool import Pool
 
 from sega_emulator.bus.memory import RAM_SIZE, SG1000Ram
 from sega_emulator.bus.memory_bus import SG1000MemoryBus
@@ -34,9 +33,7 @@ OPERATIONS = (
 )
 
 
-def _expected(
-    operation: str, left: int, right: int, carry: int
-) -> tuple[int, int]:
+def _expected(operation: str, left: int, right: int, carry: int) -> tuple[int, int]:
     if operation == "ADD HL,BC":
         raw = left + right
         result = raw & MASK16
@@ -267,9 +264,7 @@ def main() -> int:
             elapsed = time.monotonic() - started
             percent = completed_left * 100 / left_count
             rate = completed_left / elapsed if elapsed > 0 else 0
-            remaining = (
-                (left_count - completed_left) / rate if rate > 0 else 0
-            )
+            remaining = (left_count - completed_left) / rate if rate > 0 else 0
             bar_width = 24
             filled = int(bar_width * percent / 100)
             bar = "#" * filled + "-" * (bar_width - filled)
