@@ -240,9 +240,7 @@ class Z80Cpu:
             overflow = bool((previous ^ value) & (previous ^ result) & 0x8000)
         else:
             result = previous + value + carry_in
-            half_carry = (
-                (previous & 0x0FFF) + (value & 0x0FFF) + carry_in > 0x0FFF
-            )
+            half_carry = (previous & 0x0FFF) + (value & 0x0FFF) + carry_in > 0x0FFF
             overflow = bool(~(previous ^ value) & (previous ^ result) & 0x8000)
 
         result_word = result & 0xFFFF
