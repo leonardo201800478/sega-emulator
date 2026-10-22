@@ -36,7 +36,7 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | `10` — DJNZ e | Ausente | Desvio condicional pelo contador B. |
 | `18` — JR e | Implementado — cobertura inicial | Deslocamento relativo com sinal e wrap do PC já têm testes selecionados. |
 | `20, 28, 30, 38` — JR cc,e | Implementado — cobertura inicial | NZ, Z, NC, C; as condições relativas disponíveis na base são estas quatro. |
-| `22, 2A` — LD (nn),HL / LD HL,(nn) | Ausente | Acesso absoluto de 16 bits. |
+| `22` — LD (nn),HL | Implementado — cobertura inicial | Escreve L no endereço e H no endereço seguinte, com wrap de 16 bits; 16 T-states nominais e flags preservadas. |\n| `2A` — LD HL,(nn) | Implementado — cobertura inicial | Lê dois bytes em little-endian, com wrap de 16 bits; 16 T-states nominais e flags preservadas. |
 | `27` — DAA | Ausente | Ajuste decimal; exige testes de flags e combinações de entrada. |
 | `2F` — CPL | Ausente | Complemento do acumulador. |
 | `32` — LD (nn),A | Implementado — cobertura inicial | Endereço absoluto little-endian; 13 T-states nominais, flags preservadas. |
