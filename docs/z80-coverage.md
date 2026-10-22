@@ -186,9 +186,9 @@ Esta matriz é um inventário de implementação e validação, não uma certifi
 
 ## Validação exaustiva ALU de 8 bits
 
-`tests/unit/test_z80_alu_exhaustive.py` percorre todos os pares de operandos de 8 bits para ADD, ADC, SUB, SBC, CP, AND, XOR e OR, incluindo os dois estados de carry para ADC/SBC. Também percorre todos os valores de byte e carry inicial para INC/DEC, verificando resultado, flags e preservação de C. Compara A e F com fórmulas de referência independentes dos helpers da CPU e confirma os T-states nominais das instruções de registrador.
+`tests/unit/test_z80_alu_exhaustive.py` percorre todos os pares de operandos de 8 bits para ADD, ADC, SUB, SBC, CP, AND, XOR e OR, incluindo os dois estados de carry para ADC/SBC. Também percorre todos os valores de byte e carry inicial para INC/DEC, verificando resultado, flags e preservação de C. Para 16 bits, percorre todos os pares de words em ADD HL,BC e todos os pares com carry 0/1 em ADC HL,BC e SBC HL,BC. Compara resultados e flags com fórmulas de referência independentes dos helpers da CPU e verifica os T-states nominais.
 
-A suíte cobre centenas de milhares de combinações de entrada. É uma validação exaustiva destas operações de 8 bits e suas flags, não uma comparação com silício real nem uma prova de precisão temporal global. O CP verifica também que o acumulador não é alterado e que X/Y derivam do operando.
+O conjunto cobre aproximadamente 853 mil combinações de entrada em operações aritméticas e lógicas, além da matriz de 256 segundos bytes ED. É uma validação exaustiva destas famílias, não uma comparação com silício real nem uma prova de precisão temporal global. O CP verifica também que o acumulador não é alterado e que X/Y derivam do operando.
 
 ## Matriz de decodificação ED
 
