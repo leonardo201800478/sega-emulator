@@ -311,6 +311,38 @@ class Z80Cpu:
         self.a = result_byte
         self.f = flags
 
+    def _daa(self) -> None:
+        """Ajusta A para BCD conforme os flags H, N e C anteriores."""
+        accumulator = self.a
+        old_flags = self.f
+        subtract = bool(old_flags & 0x02)
+        old_half_carry = bool(old_flags & 0x10)
+        old_carry = bool(old_flags & 0x01)
+
+        correction = 0
+        if old_half_carry or (not subtract and (accumulator & 0x0F) > 0x09):
+            correction |= 0x06
+        if old_carry or (not subtract and accumulator > 0x99):
+            correction |= 0x60
+
+        if subtract:
+            result = (accumulator - correction) & 0xFF
+        else:
+            result = (accumulator + correction) & 0xFF
+
+        flags = (result & 0xA8) | (old_flags & 0x02)
+        if result == 0:
+            flags |= 0x40
+        if self._parity_flag(result):
+            flags |= 0x04
+        if (accumulator ^ result) & 0x10:
+            flags |= 0x10
+        if old_carry or (not subtract and accumulator > 0x99):
+            flags |= 0x01
+
+        self.a = result
+        self.f = flags
+
     def _xor_a(self, value: int) -> None:
         """Executa XOR value e atualiza S, Z, XY e paridade."""
         self.a ^= value
@@ -371,6 +403,7 @@ class Z80Cpu:
 
         Subconjunto atual:
         - NOP (00h)
+        - DAA (27h)
         - CPL (2Fh), SCF (37h), CCF (3Fh)
         - LD rr,nn (01h, 11h, 21h, 31h)
         - LD (BC/DE),A (02h, 12h) e LD A,(BC/DE) (0Ah, 1Ah)
@@ -402,6 +435,9 @@ class Z80Cpu:
         opcode = self._fetch_byte()
 
         if opcode == 0x00:  # NOP
+            cycles = 4
+        elif opcode == 0x27:  # DAA
+            self._daa()
             cycles = 4
         elif opcode & 0xC7 == 0x06:  # LD r,n
             destination = (opcode >> 3) & 0x07
