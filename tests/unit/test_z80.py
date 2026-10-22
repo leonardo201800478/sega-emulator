@@ -1235,3 +1235,93 @@ def test_rst_stack_wraps_at_zero() -> None:
     assert cpu.sp == 0xFFFF
     assert bus.memory[0xFFFF] == 0x01
     assert bus.memory[0x0000] == 0x01
+
+
+
+@pytest.mark.parametrize(
+    ("opcode", "special_register"),
+    [(0x47, "i"), (0x4F, "r")],
+)
+def test_ed_load_special_register_from_accumulator(
+    opcode: int, special_register: str
+) -> None:
+    cpu = make_cpu(bytes([0xED, opcode]))
+    cpu.a = 0xA5
+    cpu.f = 0xD7
+    cpu.r = 0x10
+
+    assert cpu.step() == 9
+    assert getattr(cpu, special_register) == 0xA5
+    assert cpu.f == 0xD7
+    assert cpu.pc == 2
+    assert cpu.total_cycles == 9
+    if special_register == "r":
+        # R increments for both M1 fetches, then LD R,A overwrites it.
+        assert cpu.r == 0xA5
+    else:
+        assert cpu.r == 0x12
+
+
+@pytest.mark.parametrize(
+    ("initial_r", "expected_r"),
+    [(0x00, 0x01), (0x7F, 0x00), (0x80, 0x81), (0xFF, 0x80)],
+)
+def test_refresh_register_increments_low_seven_bits_on_opcode_fetch(
+    initial_r: int, expected_r: int
+) -> None:
+    cpu = make_cpu(bytes([0x00]))  # NOP
+    cpu.r = initial_r
+
+    assert cpu.step() == 4
+    assert cpu.r == expected_r
+
+
+@pytest.mark.parametrize(
+    ("value", "iff2", "initial_flags", "expected_flags"),
+    [
+        (0x00, False, 0xD5, 0x41),  # zero and carry; H/N/PV reset
+        (0xA8, True, 0x02, 0xAC),  # sign, undocumented X/Y and IFF2 in PV
+        (0x28, False, 0x01, 0x29),  # X/Y and carry preserved
+        (0x7F, True, 0x00, 0x2C),  # Y/X and IFF2
+    ],
+)
+def test_ed_load_accumulator_from_i_updates_flags(
+    value: int, iff2: bool, initial_flags: int, expected_flags: int
+) -> None:
+    cpu = make_cpu(bytes([0xED, 0x57]))  # LD A,I
+    cpu.i = value
+    cpu.iff2 = iff2
+    cpu.f = initial_flags
+
+    assert cpu.step() == 9
+    assert cpu.a == value
+    assert cpu.f == expected_flags
+    assert cpu.pc == 2
+    assert cpu.total_cycles == 9
+
+
+@pytest.mark.parametrize(
+    ("initial_r", "iff2", "initial_flags", "expected_a", "expected_flags"),
+    [
+        (0x05, True, 0x01, 0x07, 0x05),
+        (0x7E, False, 0x00, 0x00, 0x40),
+        (0xFF, True, 0x02, 0x81, 0x84),
+    ],
+)
+def test_ed_load_accumulator_from_r_includes_opcode_refreshes_and_flags(
+    initial_r: int,
+    iff2: bool,
+    initial_flags: int,
+    expected_a: int,
+    expected_flags: int,
+) -> None:
+    cpu = make_cpu(bytes([0xED, 0x5F]))  # LD A,R
+    cpu.r = initial_r
+    cpu.iff2 = iff2
+    cpu.f = initial_flags
+
+    assert cpu.step() == 9
+    assert cpu.a == expected_a
+    assert cpu.f == expected_flags
+    assert cpu.pc == 2
+    assert cpu.total_cycles == 9
