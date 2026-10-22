@@ -761,3 +761,29 @@ def test_ld_accumulator_from_indirect_pair_reads_ram_and_preserves_flags(
     assert cpu.f == 0xD7
     assert cpu.pc == 1
     assert cpu.total_cycles == 7
+
+
+
+def test_ld_absolute_from_accumulator_writes_ram_and_preserves_flags() -> None:
+    cpu = make_cpu(bytes([0x32, 0x20, 0xC0]))  # LD (C020h),A
+    cpu.a = 0xA5
+    cpu.f = 0xD7
+
+    assert cpu.step() == 13
+    assert cpu.bus.read(0xC020) == 0xA5
+    assert cpu.f == 0xD7
+    assert cpu.pc == 3
+    assert cpu.total_cycles == 13
+
+
+def test_ld_accumulator_from_absolute_reads_ram_and_preserves_flags() -> None:
+    cpu = make_cpu(bytes([0x3A, 0x21, 0xC0]))  # LD A,(C021h)
+    cpu.bus.write(0xC021, 0x5A)
+    cpu.a = 0x11
+    cpu.f = 0xD7
+
+    assert cpu.step() == 13
+    assert cpu.a == 0x5A
+    assert cpu.f == 0xD7
+    assert cpu.pc == 3
+    assert cpu.total_cycles == 13
