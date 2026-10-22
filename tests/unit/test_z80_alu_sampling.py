@@ -1,6 +1,6 @@
 """Testes rápidos da seleção determinística de HL do validador de 16 bits."""
 
-from scripts.validate_z80_alu_16bit import _select_left_values
+from sega_emulator.cpu.z80_alu_sampling import select_left_values as _select_left_values
 
 
 def test_sequential_sampling_preserves_legacy_order() -> None:
