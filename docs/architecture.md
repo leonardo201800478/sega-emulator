@@ -80,4 +80,7 @@ Esta tabela é um direcionamento de arquitetura, não uma afirmação de que ess
 
 O repositório contém um subconjunto inicial da CPU Z80 e um barramento de memória SG-1000 com ROM e RAM. O protocolo atual só modela leituras e escritas lógicas de bytes; não modela ciclos individuais, I/O, interrupções ou temporização de periféricos. Os testes sintéticos existentes são uma base de regressão, não prova de compatibilidade geral ou precisão ciclo a ciclo.
 
-Auditoria inicial concluída em [docs/z80-coverage.md](z80-coverage.md). Próxima tarefa técnica: revisar essa matriz contra a implementação e as referências citadas, depois implementar a menor família de instruções ausentes com testes de resultado, flags e T-states nominais.
+- [Auditoria geral do código](codebase-audit.md): riscos, limitações e sequência recomendada.
+- [Auditoria de cobertura da CPU Z80](z80-coverage.md): inventário de instruções e prefixos.
+
+Próxima tarefa técnica: implementar a menor família coerente de instruções Z80 ausentes, com testes de resultado, flags, limites e T-states nominais.
