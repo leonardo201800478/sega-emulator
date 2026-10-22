@@ -28,6 +28,8 @@ class Z80Cpu:
         self.e = 0
         self.h = 0
         self.l = 0
+        self.ix = 0
+        self.iy = 0
         self.af_alt = 0
         self.bc_alt = 0
         self.de_alt = 0
