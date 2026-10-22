@@ -39,7 +39,8 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | `22, 2A` — LD (nn),HL / LD HL,(nn) | Ausente | Acesso absoluto de 16 bits. |
 | `27` — DAA | Ausente | Ajuste decimal; exige testes de flags e combinações de entrada. |
 | `2F` — CPL | Ausente | Complemento do acumulador. |
-| `32, 3A` — LD (nn),A / LD A,(nn) | Ausente | Acesso absoluto de 8 bits. |
+| `32` — LD (nn),A | Implementado — cobertura inicial | Endereço absoluto little-endian; 13 T-states nominais, flags preservadas. |
+| `3A` — LD A,(nn) | Implementado — cobertura inicial | Lê de endereço absoluto little-endian; 13 T-states nominais, flags preservadas. |
 | `37, 3F` — SCF / CCF | Ausente | Operações de carry e flags X/Y. |
 | `40–75, 77–7F` — LD r,r' | Implementado — cobertura inicial | Registradores e (HL); opcode `76` HALT não está implementado. |
 | `76` — HALT | Ausente | Precisa de estado suspenso, comportamento de PC e interação com interrupções. |
