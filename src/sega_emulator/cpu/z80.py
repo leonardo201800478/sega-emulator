@@ -1054,6 +1054,8 @@ class Z80Cpu:
         arquitetura; POP AF restaura F. ADD HL preserva S, Z e P/V.
         """
         if self._nmi_pending:
+            # O acknowledge de interrupção ocupa um ciclo M1 e incrementa R.
+            self.r = (self.r & 0x80) | ((self.r + 1) & 0x7F)
             self._nmi_pending = False
             self.halted = False
             self.iff2 = self.iff1
@@ -1070,6 +1072,8 @@ class Z80Cpu:
                     "IM 0 aceita apenas opcodes RST fornecidos pelo barramento "
                     "nesta etapa."
                 )
+            # O acknowledge de INT também incrementa os 7 bits baixos de R.
+            self.r = (self.r & 0x80) | ((self.r + 1) & 0x7F)
             self._int_pending = None
             self.halted = False
             self.iff1 = self.iff2 = False
