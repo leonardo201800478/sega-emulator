@@ -79,7 +79,7 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | Prefixo | Estado | Escopo necessário |
 |---|---|---|
 | `CB` | Ausente | RLC, RRC, RL, RR, SLA, SRA, SLL (não documentado), SRL, BIT, RES e SET para registradores e (HL). |
-| `ED` | Parcial | ADC/SBC HL,rr implementados; operações de I/O por (C), transferências e comparações de bloco; LD I/R; RRD/RLD; IM 0/1/2; RETI/RETN e demais instruções documentadas ainda faltam. |
+| `ED` | Parcial | `ADC/SBC HL,rr`, `LD I,A`, `LD R,A`, `LD A,I` e `LD A,R` implementados. `R` incrementa nos fetches de opcode M1; `LD A,I/R` atualiza S/Z/X/Y, P/V a partir do estado `IFF2`, limpa H/N e preserva C. `IFF2` existe apenas como estado mínimo (inicialmente falso), sem lógica de interrupções. Ainda faltam operações de I/O por (C), transferências/comparações de bloco, RRD/RLD, IM 0/1/2, RETI/RETN e outras instruções ED documentadas. |
 | `DD` | Ausente | Substituição de HL por IX onde aplicável, instruções IX e endereçamento indexado (IX+d), incluindo prefixos redundantes conforme o modelo adotado. |
 | `FD` | Ausente | Equivalente para IY. |
 | `DD CB d` / `FD CB d` | Ausente | Operações de bits/rotação sobre (IX+d)/(IY+d), incluindo variantes que também copiam resultado para registrador. |
@@ -88,8 +88,8 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 
 O código atual modela registradores principais A/F/B/C/D/E/H/L, pares AF/BC/DE/HL, SP, PC e um acumulador de T-states nominais. Ainda faltam, entre outros:
 
-- Registradores alternativos AF', BC', DE' e HL' agora estão modelados; IX/IY, I e R ainda faltam.
-- IFF1/IFF2, modo de interrupção e comportamento de EI/DI, HALT, NMI e INT.
+- Registradores alternativos AF', BC', DE' e HL' estão modelados; I e R também estão modelados. IX/IY ainda faltam.
+- IFF2 existe como estado mínimo para os flags de `LD A,I/R`; IFF1, sincronização entre IFFs, modos de interrupção e comportamento de EI/DI, HALT, NMI e INT ainda não estão implementados.
 - Ciclos M1, ciclos de leitura/escrita e I/O, estados de espera, contenção e temporização de barramento.
 - Flags X/Y e efeitos não documentados validados contra referências e testes específicos.
 - Comportamento de prefixos repetidos, opcodes não documentados e diferenças de revisão, conforme a meta de compatibilidade.
@@ -99,7 +99,7 @@ O contador `total_cycles` atual soma os custos nominais das instruções suporta
 ## Ordem de implementação sugerida
 
 1. Ampliar as operações não prefixadas restantes; as oito condições de salto/chamada/retorno e EX AF,AF', EXX, EX DE,HL e RST já estão implementados.
-2. Ampliar testes de flags para aritmética de 16 bits e seguir com outras famílias prefixadas ED; ADC/SBC HL,rr têm implementação e testes iniciais.
+2. Continuar as famílias prefixadas ED e ampliar testes de flags e comportamento de barramento; ADC/SBC HL,rr e as transferências entre A, I e R têm implementação e testes sintéticos iniciais.
 3. Implementar HALT e o modelo de interrupções antes de declarar completo o fluxo de controle.
 4. Criar contrato de I/O e implementar IN/OUT com testes de endereço de porta.
 5. Implementar famílias CB, ED, DD, FD e DD/FD-CB de forma sistemática.
