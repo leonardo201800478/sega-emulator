@@ -763,6 +763,81 @@ def test_ld_accumulator_from_indirect_pair_reads_ram_and_preserves_flags(
     assert cpu.total_cycles == 7
 
 
+def test_ld_absolute_hl_writes_little_endian_and_preserves_flags() -> None:
+    cpu = make_cpu(bytes([0x22, 0x20, 0xC0]))  # LD (C020h),HL
+    cpu.hl = 0xA55A
+    cpu.f = 0xD7
+
+    assert cpu.step() == 16
+    assert cpu.bus.read(0xC020) == 0x5A
+    assert cpu.bus.read(0xC021) == 0xA5
+    assert cpu.hl == 0xA55A
+    assert cpu.f == 0xD7
+    assert cpu.pc == 3
+    assert cpu.total_cycles == 16
+
+
+def test_ld_hl_from_absolute_reads_little_endian_and_preserves_flags() -> None:
+    cpu = make_cpu(bytes([0x2A, 0x20, 0xC0]))  # LD HL,(C020h)
+    cpu.bus.write(0xC020, 0x5A)
+    cpu.bus.write(0xC021, 0xA5)
+    cpu.hl = 0x1234
+    cpu.f = 0xD7
+
+    assert cpu.step() == 16
+    assert cpu.hl == 0xA55A
+    assert cpu.f == 0xD7
+    assert cpu.pc == 3
+    assert cpu.total_cycles == 16
+
+
+def test_ld_absolute_hl_wraps_second_memory_access_at_ffff() -> None:
+    class FlatMemoryBus:
+        def __init__(self) -> None:
+            self.memory = bytearray(0x10000)
+            self.memory[0x0100:0x0103] = bytes([0x22, 0xFF, 0xFF])
+
+        def read(self, address: int) -> int:
+            return self.memory[address]
+
+        def write(self, address: int, value: int) -> None:
+            self.memory[address] = value
+
+    bus = FlatMemoryBus()
+    cpu = Z80Cpu(bus)
+    cpu.pc = 0x0100
+    cpu.hl = 0x1234
+
+    assert cpu.step() == 16
+    assert bus.memory[0xFFFF] == 0x34
+    assert bus.memory[0x0000] == 0x12
+    assert cpu.pc == 0x0103
+
+
+def test_ld_hl_from_absolute_wraps_second_memory_access_at_ffff() -> None:
+    class FlatMemoryBus:
+        def __init__(self) -> None:
+            self.memory = bytearray(0x10000)
+            self.memory[0x0100:0x0103] = bytes([0x2A, 0xFF, 0xFF])
+            self.memory[0xFFFF] = 0xCD
+            self.memory[0x0000] = 0xAB
+
+        def read(self, address: int) -> int:
+            return self.memory[address]
+
+        def write(self, address: int, value: int) -> None:
+            self.memory[address] = value
+
+    cpu = Z80Cpu(FlatMemoryBus())
+    cpu.pc = 0x0100
+    cpu.f = 0xD7
+
+    assert cpu.step() == 16
+    assert cpu.hl == 0xABCD
+    assert cpu.f == 0xD7
+    assert cpu.pc == 0x0103
+
+
 def test_ld_absolute_from_accumulator_writes_ram_and_preserves_flags() -> None:
     cpu = make_cpu(bytes([0x32, 0x20, 0xC0]))  # LD (C020h),A
     cpu.a = 0xA5
