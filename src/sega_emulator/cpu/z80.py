@@ -387,7 +387,7 @@ class Z80Cpu:
         - INC r (04h, 0Ch, 14h, 1Ch, 24h, 2Ch, 34h, 3Ch)
         - DEC r (05h, 0Dh, 15h, 1Dh, 25h, 2Dh, 35h, 3Dh)
         - JP nn (C3h), JP cc,nn (C2h, CAh, D2h, DAh)
-        - JR e (18h), JR cc,e (20h, 28h, 30h, 38h)
+        - DJNZ e (10h), JR e (18h), JR cc,e (20h, 28h, 30h, 38h)
         - PUSH qq (C5h, D5h, E5h, F5h), POP qq (C1h, D1h, E1h, F1h)
         - CALL nn (CDh), CALL cc,nn (C4h, CCh, D4h, DCh)
         - RET (C9h), RET cc (C0h, C8h, D0h, D8h)
@@ -532,6 +532,16 @@ class Z80Cpu:
             if self._condition((opcode >> 3) & 0x03):
                 self.pc = (high << 8) | low
             cycles = 10
+        elif opcode == 0x10:  # DJNZ e
+            displacement = self._fetch_byte()
+            self.b = (self.b - 1) & 0xFF
+            if self.b != 0:
+                if displacement & 0x80:
+                    displacement -= 0x100
+                self.pc = (self.pc + displacement) & 0xFFFF
+                cycles = 13
+            else:
+                cycles = 8
         elif opcode == 0x18:  # JR e
             displacement = self._fetch_byte()
             if displacement & 0x80:
