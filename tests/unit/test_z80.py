@@ -2046,7 +2046,6 @@ def test_all_ed_second_bytes_are_supported_or_explicitly_rejected() -> None:
             assert cpu.total_cycles == 0, f"ciclos após ED {opcode:02X}h"
 
 
-
 @pytest.mark.parametrize(
     ("data_bus", "expected_pc"),
     [(0xC7 | (vector << 3), vector << 3) for vector in range(8)],
