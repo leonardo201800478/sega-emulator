@@ -222,13 +222,6 @@ def test_jp_conditional_checks_flags(opcode: int, flags: int, taken: bool) -> No
 
 
 @pytest.mark.parametrize(
-    ("program", "start_pc", "expected_pc"),
-    [
-        (bytes([0x18, 0x03]), 0, 5),  # salto para frente
-        (bytes([0x18, 0xFC]), 0, 0xFFFE),  # salto para trás
-    ],
-)
-@pytest.mark.parametrize(
     ("initial_b", "displacement", "expected_b", "expected_pc", "expected_cycles"),
     [
         (0x02, 0x02, 0x01, 0x0004, 13),  # B não zero: desvia para frente
@@ -279,6 +272,13 @@ def test_djnz_relative_branch_wraps_program_counter() -> None:
     assert cpu.f == 0xA5
 
 
+@pytest.mark.parametrize(
+    ("program", "start_pc", "expected_pc"),
+    [
+        (bytes([0x18, 0x03]), 0, 5),  # salto para frente
+        (bytes([0x18, 0xFC]), 0, 0xFFFE),  # salto para trás
+    ],
+)
 def test_jr_applies_signed_displacement(
     program: bytes, start_pc: int, expected_pc: int
 ) -> None:
