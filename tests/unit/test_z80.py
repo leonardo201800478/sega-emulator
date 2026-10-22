@@ -714,7 +714,7 @@ def test_ed_adc_sbc_hl_overflow_and_boundary_flags(
 def test_unsupported_ed_opcode_reports_prefixed_opcode() -> None:
     cpu = make_cpu(bytes([0xED, 0x00]))
 
-    with pytest.raises(UnsupportedOpcodeError, match="ED 00h"):
+    with pytest.raises(UnsupportedOpcodeError, match="ED 20h"):
         cpu.step()
 
 
