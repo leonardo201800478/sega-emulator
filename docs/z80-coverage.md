@@ -35,6 +35,8 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | `EB` — EX DE,HL | Implementado — cobertura inicial | Troca DE e HL sem alterar flags; 4 T-states nominais. |
 | `C7, CF, D7, DF, E7, EF, F7, FF` — RST p | Implementado — cobertura inicial | Empilha o endereço de retorno e salta para os vetores 00h–38h em passos de 8; 11 T-states nominais. Testes dos oito vetores e wrap da pilha. |
 | `09, 19, 29, 39` — ADD HL,rr | Implementado — cobertura inicial | Inclui SP; validar flags X/Y e todos os pares/casos-limite. |
+| `ED 4A, 5A, 6A, 7A` — ADC HL,rr | Implementado — cobertura inicial | Inclui carry de entrada, S/Z/H/PV/N/C e X/Y; 15 T-states nominais; testes de limites. |
+| `ED 42, 52, 62, 72` — SBC HL,rr | Implementado — cobertura inicial | Inclui borrow de entrada, S/Z/H/PV/N/C e X/Y; 15 T-states nominais; testes de limites. |
 | `0A, 1A` — LD A,(BC/DE) | Implementado — cobertura inicial | Lê A do endereço apontado por BC ou DE; 7 T-states nominais e flags preservadas. |
 | `10` — DJNZ e | Implementado — cobertura inicial | Decrementa B; desvia com deslocamento relativo assinado se B não for zero; preserva flags. Testes de ramo tomado/não tomado, wrap de B e wrap do PC; 13/8 T-states nominais. |
 | `18` — JR e | Implementado — cobertura inicial | Deslocamento relativo com sinal e wrap do PC já têm testes selecionados. |
@@ -77,7 +79,7 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | Prefixo | Estado | Escopo necessário |
 |---|---|---|
 | `CB` | Ausente | RLC, RRC, RL, RR, SLA, SRA, SLL (não documentado), SRL, BIT, RES e SET para registradores e (HL). |
-| `ED` | Ausente | ADC/SBC HL,rr; operações de I/O por (C); transferências e comparações de bloco; LD I/R; RRD/RLD; IM 0/1/2; RETI/RETN e demais instruções documentadas. |
+| `ED` | Parcial | ADC/SBC HL,rr implementados; operações de I/O por (C), transferências e comparações de bloco; LD I/R; RRD/RLD; IM 0/1/2; RETI/RETN e demais instruções documentadas ainda faltam. |
 | `DD` | Ausente | Substituição de HL por IX onde aplicável, instruções IX e endereçamento indexado (IX+d), incluindo prefixos redundantes conforme o modelo adotado. |
 | `FD` | Ausente | Equivalente para IY. |
 | `DD CB d` / `FD CB d` | Ausente | Operações de bits/rotação sobre (IX+d)/(IY+d), incluindo variantes que também copiam resultado para registrador. |
@@ -97,7 +99,7 @@ O contador `total_cycles` atual soma os custos nominais das instruções suporta
 ## Ordem de implementação sugerida
 
 1. Ampliar as operações não prefixadas restantes; as oito condições de salto/chamada/retorno e EX AF,AF', EXX, EX DE,HL e RST já estão implementados.
-2. Completar instruções aritméticas de 16 bits, incluindo `ADC HL,rr` e `SBC HL,rr`, com flags e tempos testados.
+2. Ampliar testes de flags para aritmética de 16 bits e seguir com outras famílias prefixadas ED; ADC/SBC HL,rr têm implementação e testes iniciais.
 3. Implementar HALT e o modelo de interrupções antes de declarar completo o fluxo de controle.
 4. Criar contrato de I/O e implementar IN/OUT com testes de endereço de porta.
 5. Implementar famílias CB, ED, DD, FD e DD/FD-CB de forma sistemática.

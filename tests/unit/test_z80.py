@@ -650,6 +650,75 @@ def test_add_hl_pair_updates_result_and_documented_flags(
 
 
 @pytest.mark.parametrize(
+    ("opcode", "hl", "operand", "carry", "expected_hl", "expected_flags"),
+    [
+        (0x4A, 0x1234, 0x0001, 0, 0x1235, 0x00),
+        (0x5A, 0x0FFF, 0x0000, 1, 0x1000, 0x10),
+        (0x6A, 0x7FFF, 0x0000, 1, 0x8000, 0x94),
+        (0x7A, 0xFFFF, 0x0000, 1, 0x0000, 0x51),
+        (0x42, 0x1234, 0x0001, 0, 0x1233, 0x02),
+        (0x52, 0x1000, 0x0001, 1, 0x0FFE, 0x1A),
+        (0x62, 0x8000, 0x0001, 0, 0x7FFF, 0x3E),
+        (0x72, 0x0000, 0x0000, 1, 0xFFFF, 0xBB),
+    ],
+)
+def test_ed_adc_sbc_hl_pair_results_flags_and_cycles(
+    opcode: int,
+    hl: int,
+    operand: int,
+    carry: int,
+    expected_hl: int,
+    expected_flags: int,
+) -> None:
+    cpu = make_cpu(bytes([0xED, opcode]))
+    cpu.hl = hl
+    cpu.bc = operand
+    cpu.de = operand
+    cpu.sp = operand
+    cpu.f = carry
+
+    assert cpu.step() == 15
+    assert cpu.hl == expected_hl
+    assert cpu.f == expected_flags
+    assert cpu.pc == 2
+    assert cpu.total_cycles == 15
+
+
+@pytest.mark.parametrize(
+    ("opcode", "hl", "operand", "carry", "expected_hl", "expected_flags"),
+    [
+        (0x4A, 0x7FFF, 0x0000, 1, 0x8000, 0x94),
+        (0x4A, 0xFFFF, 0x0000, 1, 0x0000, 0x51),
+        (0x42, 0x0000, 0x0000, 1, 0xFFFF, 0xBB),
+        (0x42, 0x8000, 0x0001, 0, 0x7FFF, 0x3E),
+    ],
+)
+def test_ed_adc_sbc_hl_overflow_and_boundary_flags(
+    opcode: int,
+    hl: int,
+    operand: int,
+    carry: int,
+    expected_hl: int,
+    expected_flags: int,
+) -> None:
+    cpu = make_cpu(bytes([0xED, opcode]))
+    cpu.hl = hl
+    cpu.bc = operand
+    cpu.f = carry
+
+    assert cpu.step() == 15
+    assert cpu.hl == expected_hl
+    assert cpu.f == expected_flags
+
+
+def test_unsupported_ed_opcode_reports_prefixed_opcode() -> None:
+    cpu = make_cpu(bytes([0xED, 0x00]))
+
+    with pytest.raises(UnsupportedOpcodeError, match="ED 00h"):
+        cpu.step()
+
+
+@pytest.mark.parametrize(
     ("accumulator", "operand", "expected_flags"),
     [
         (0x42, 0x42, 0x42),  # zero e N

@@ -230,6 +230,39 @@ class Z80Cpu:
         self.hl = result_word
         self.f = flags
 
+    def _add_sub_hl(self, value: int, subtract: bool) -> None:
+        """Executa ADC/SBC HL,rr, incluindo carry, overflow e flags de 16 bits."""
+        previous = self.hl
+        carry_in = self.f & 0x01
+        if subtract:
+            result = previous - value - carry_in
+            half_carry = (previous & 0x0FFF) < ((value & 0x0FFF) + carry_in)
+            overflow = bool((previous ^ value) & (previous ^ result) & 0x8000)
+        else:
+            result = previous + value + carry_in
+            half_carry = (
+                (previous & 0x0FFF) + (value & 0x0FFF) + carry_in > 0x0FFF
+            )
+            overflow = bool(~(previous ^ value) & (previous ^ result) & 0x8000)
+
+        result_word = result & 0xFFFF
+        flags = (result_word >> 8) & 0xA8
+        if result_word == 0:
+            flags |= 0x40
+        if half_carry:
+            flags |= 0x10
+        if overflow:
+            flags |= 0x04
+        if subtract:
+            flags |= 0x02
+            if result < 0:
+                flags |= 0x01
+        elif result > 0xFFFF:
+            flags |= 0x01
+
+        self.hl = result_word
+        self.f = flags
+
     def _inc_register_value(self, value: int) -> int:
         """Incrementa um byte, atualizando flags e preservando carry."""
         result = (value + 1) & 0xFF
@@ -499,6 +532,7 @@ class Z80Cpu:
         - RET (C9h), RET cc (C0h, C8h, D0h, D8h, E0h, E8h, F0h, F8h)
         - INC rr (03h, 13h, 23h, 33h), DEC rr (0Bh, 1Bh, 2Bh, 3Bh)
         - ADD HL,rr (09h, 19h, 29h, 39h)
+        - ADC HL,rr / SBC HL,rr (prefixo EDh)
         - CP r (B8h–BFh)
 
         INC/DEC de pares e instruções de controle preservam F conforme a
@@ -508,6 +542,23 @@ class Z80Cpu:
 
         if opcode == 0x00:  # NOP
             cycles = 4
+        elif opcode == 0xED:  # instruções prefixadas ED implementadas
+            extended_opcode = self._fetch_byte()
+            if extended_opcode & 0xCF == 0x4A:  # ADC HL,rr
+                self._add_sub_hl(
+                    self._read_stack_pair((extended_opcode >> 4) & 0x03), False
+                )
+                cycles = 15
+            elif extended_opcode & 0xCF == 0x42:  # SBC HL,rr
+                self._add_sub_hl(
+                    self._read_stack_pair((extended_opcode >> 4) & 0x03), True
+                )
+                cycles = 15
+            else:
+                raise UnsupportedOpcodeError(
+                    f"Opcode Z80 ED {extended_opcode:02X}h não implementado "
+                    f"no endereço {(self.pc - 2) & 0xFFFF:04X}h."
+                )
         elif opcode == 0x08:  # EX AF,AF'
             previous = self.af
             self.af = self.af_alt
