@@ -226,8 +226,7 @@ def test_16bit_add_adc_sbc_results_flags_and_cycles_exhaustively() -> None:
                         f"BC={right:04X} C={carry}"
                     )
                     assert cpu.hl == result, (
-                        f"{operation.upper()} HL={left:04X} "
-                        f"BC={right:04X} C={carry}"
+                        f"{operation.upper()} HL={left:04X} BC={right:04X} C={carry}"
                     )
                     assert cpu.f == expected_flags, (
                         f"{operation.upper()} flags HL={left:04X} "
