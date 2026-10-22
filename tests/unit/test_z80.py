@@ -399,7 +399,7 @@ def test_dec_register_pair_wraps_and_preserves_flags(
     [
         (0x09, 0x1234, 0x0001, 0x1235, 0xC4),  # preserva S/Z/PV
         (0x19, 0x0FFF, 0x0001, 0x1000, 0xD4),  # half-carry
-        (0x29, 0xFFFF, 0x0001, 0x0000, 0xD5),  # carry e zero XY
+        (0x09, 0xFFFF, 0x0001, 0x0000, 0xD5),  # ADD HL,BC: carry e zero
         (0x39, 0x8000, 0x8000, 0x0000, 0xC5),  # carry e zero
     ],
 )
@@ -447,7 +447,7 @@ def test_cp_reads_operand_from_hl() -> None:
 
     assert cpu.step() == 7
     assert cpu.a == 0x20
-    assert cpu.f == 0x42
+    assert cpu.f == 0x62
 
 
 def test_unsupported_opcode_is_explicit() -> None:
