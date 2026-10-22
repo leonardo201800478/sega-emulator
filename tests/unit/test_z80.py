@@ -198,8 +198,11 @@ def test_jr_conditional_checks_flags_and_cycles(
 
 
 def test_jr_wraps_program_counter_at_16_bits() -> None:
-    cpu = make_cpu(bytes([0x18, 0x00]))
-    cpu.pc = 0xFFFF
+    program = bytearray(0x10000)
+    program[0xFFFE] = 0x18  # JR e
+    program[0xFFFF] = 0x01
+    cpu = make_cpu(bytes(program))
+    cpu.pc = 0xFFFE
 
     assert cpu.step() == 12
     assert cpu.pc == 1
