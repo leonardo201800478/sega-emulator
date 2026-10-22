@@ -75,6 +75,73 @@ def test_add_a_register_sets_result_and_flags(
 
 
 @pytest.mark.parametrize(
+    ("accumulator", "operand", "carry_in", "expected_a", "expected_flags"),
+    [
+        (0x7F, 0x00, 1, 0x80, 0x94),  # signed overflow e half-carry
+        (0xFF, 0x00, 1, 0x00, 0x51),  # zero, half-carry e carry
+        (0x10, 0x01, 0, 0x11, 0x00),
+    ],
+)
+def test_adc_register_includes_carry_and_sets_flags(
+    accumulator: int,
+    operand: int,
+    carry_in: int,
+    expected_a: int,
+    expected_flags: int,
+) -> None:
+    cpu = make_cpu(b"\\x88")  # ADC A,B
+    cpu.a = accumulator
+    cpu.b = operand
+    cpu.f = carry_in
+
+    assert cpu.step() == 4
+    assert cpu.a == expected_a
+    assert cpu.f == expected_flags
+
+
+@pytest.mark.parametrize(
+    ("accumulator", "operand", "carry_in", "expected_a", "expected_flags"),
+    [
+        (0x00, 0x00, 1, 0xFF, 0xBB),  # borrow, half-borrow e sinal
+        (0x80, 0x00, 1, 0x7F, 0x3E),  # signed overflow e half-borrow
+        (0x42, 0x42, 0, 0x00, 0x42),  # resultado zero
+    ],
+)
+def test_sbc_register_includes_carry_and_sets_flags(
+    accumulator: int,
+    operand: int,
+    carry_in: int,
+    expected_a: int,
+    expected_flags: int,
+) -> None:
+    cpu = make_cpu(b"\\x98")  # SBC A,B
+    cpu.a = accumulator
+    cpu.b = operand
+    cpu.f = carry_in
+
+    assert cpu.step() == 4
+    assert cpu.a == expected_a
+    assert cpu.f == expected_flags
+
+
+def test_adc_and_sbc_read_operand_from_hl() -> None:
+    cpu = make_cpu(bytes([0x8E, 0x9E]))  # ADC A,(HL); SBC A,(HL)
+    cpu.hl = 0xC020
+    cpu.a = 0x10
+    cpu.bus.write(0xC020, 0x01)
+    cpu.f = 1
+
+    assert cpu.step() == 7
+    assert cpu.a == 0x12
+    assert cpu.f == 0x00
+
+    cpu.f = 1
+    assert cpu.step() == 7
+    assert cpu.a == 0x10
+    assert cpu.f == 0x02
+
+
+@pytest.mark.parametrize(
     ("accumulator", "operand", "expected_a", "expected_flags"),
     [
         (0x00, 0x01, 0xFF, 0xBB),  # sinal, half-borrow, subtração e borrow
