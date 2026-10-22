@@ -5,6 +5,8 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+roms_sg1000/
+firmware/
 
 # Virtual environments
 .venv/
