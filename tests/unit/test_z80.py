@@ -230,6 +230,72 @@ def test_jp_conditional_checks_flags(opcode: int, flags: int, taken: bool) -> No
         (0x02, 0xFE, 0x01, 0x0000, 13),  # deslocamento negativo
     ],
 )
+@pytest.mark.parametrize(
+    ("accumulator", "flags", "expected_a", "expected_flags"),
+    [
+        (0x00, 0xC5, 0xFF, 0xFF),  # resultado com S/Y/X e H/N; flags S/Z/PV/C preservadas
+        (0x28, 0x45, 0xD7, 0xD7),
+        (0xFF, 0x00, 0x00, 0x56),  # Z e PV preservados? CPL não altera flags Z/PV
+    ],
+)
+def test_cpl_complements_accumulator_and_updates_only_documented_flags(
+    accumulator: int, flags: int, expected_a: int, expected_flags: int
+) -> None:
+    cpu = make_cpu(bytes([0x2F]))  # CPL
+    cpu.a = accumulator
+    cpu.f = flags
+
+    assert cpu.step() == 4
+    assert cpu.a == expected_a
+    assert cpu.f == expected_flags
+    assert cpu.pc == 1
+    assert cpu.total_cycles == 4
+
+
+@pytest.mark.parametrize(
+    ("accumulator", "flags", "expected_flags"),
+    [
+        (0x00, 0xD6, 0xFC),  # S/Z/PV preservados, XY do A, carry definido
+        (0x28, 0x01, 0x29),
+        (0xD7, 0xFF, 0xED),
+    ],
+)
+def test_scf_sets_carry_and_preserves_sign_zero_parity(
+    accumulator: int, flags: int, expected_flags: int
+) -> None:
+    cpu = make_cpu(bytes([0x37]))  # SCF
+    cpu.a = accumulator
+    cpu.f = flags
+
+    assert cpu.step() == 4
+    assert cpu.f == expected_flags
+    assert cpu.a == accumulator
+    assert cpu.pc == 1
+    assert cpu.total_cycles == 4
+
+
+@pytest.mark.parametrize(
+    ("accumulator", "flags", "expected_flags"),
+    [
+        (0x00, 0xC5, 0xD4),  # carry anterior vira half-carry
+        (0x28, 0x00, 0x29),  # carry anterior zero vira carry
+        (0xD7, 0xFF, 0xFC),  # carry anterior um, flags S/Z/PV e XY preservadas
+    ],
+)
+def test_ccf_complements_carry_and_updates_half_carry(
+    accumulator: int, flags: int, expected_flags: int
+) -> None:
+    cpu = make_cpu(bytes([0x3F]))  # CCF
+    cpu.a = accumulator
+    cpu.f = flags
+
+    assert cpu.step() == 4
+    assert cpu.f == expected_flags
+    assert cpu.a == accumulator
+    assert cpu.pc == 1
+    assert cpu.total_cycles == 4
+
+
 def test_djnz_decrements_b_branches_and_preserves_flags(
     initial_b: int,
     displacement: int,
