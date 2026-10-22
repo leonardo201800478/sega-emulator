@@ -1237,7 +1237,6 @@ def test_rst_stack_wraps_at_zero() -> None:
     assert bus.memory[0x0000] == 0x01
 
 
-
 @pytest.mark.parametrize(
     ("opcode", "special_register"),
     [(0x47, "i"), (0x4F, "r")],
