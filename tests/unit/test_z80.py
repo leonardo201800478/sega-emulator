@@ -1690,6 +1690,57 @@ def test_ed_ldir_repeats_until_bc_zero() -> None:
     assert cpu.bus.read(0xC021) == 0x56
 
 
+def test_ed_ldi_updates_registers_memory_and_documented_flag_bits() -> None:
+    cpu = make_cpu(bytes([0xED, 0xA0]))  # LDI
+    cpu.hl, cpu.de, cpu.bc, cpu.a, cpu.f = 0xC010, 0xC020, 2, 0x08, 0xC1
+    cpu.bus.write(0xC010, 0x03)
+
+    assert cpu.step() == 16
+    assert cpu.bus.read(0xC020) == 0x03
+    assert (cpu.hl, cpu.de, cpu.bc) == (0xC011, 0xC021, 1)
+    # S/Z/C preserved; P/V reflects BC != 0; undocumented X/Y derive from A + value.
+    assert cpu.f == 0xED
+
+
+def test_ed_ldd_decrements_addresses_and_clears_pv_when_bc_reaches_zero() -> None:
+    cpu = make_cpu(bytes([0xED, 0xA8]))  # LDD
+    cpu.hl, cpu.de, cpu.bc, cpu.a, cpu.f = 0xC010, 0xC020, 1, 0x08, 0xC1
+    cpu.bus.write(0xC010, 0x03)
+
+    assert cpu.step() == 16
+    assert cpu.bus.read(0xC020) == 0x03
+    assert (cpu.hl, cpu.de, cpu.bc) == (0xC00F, 0xC01F, 0)
+    assert cpu.f == 0xE9
+
+
+def test_ed_cpi_sets_subtract_half_carry_and_adjusted_xy_flags() -> None:
+    cpu = make_cpu(bytes([0xED, 0xA1]))  # CPI
+    cpu.hl, cpu.bc, cpu.a, cpu.f = 0xC010, 2, 0x10, 0x01
+    cpu.bus.write(0xC010, 0x01)
+
+    assert cpu.step() == 16
+    assert (cpu.hl, cpu.bc) == (0xC011, 1)
+    # A - value = 0Fh; H and N set; P/V follows remaining BC; X/Y use 0Eh.
+    assert cpu.f == 0x3F
+
+
+def test_ed_cpir_repeats_until_match_then_stops() -> None:
+    cpu = make_cpu(bytes([0xED, 0xB1]))  # CPIR
+    cpu.hl, cpu.bc, cpu.a, cpu.f = 0xC010, 2, 0x42, 0x01
+    cpu.bus.write(0xC010, 0x11)
+    cpu.bus.write(0xC011, 0x42)
+
+    assert cpu.step() == 21
+    assert cpu.pc == 0
+    assert (cpu.hl, cpu.bc) == (0xC011, 1)
+    assert cpu.f & 0x07 == 0x07  # C preserved, N set, P/V set while BC != 0.
+
+    assert cpu.step() == 16
+    assert cpu.pc == 2
+    assert (cpu.hl, cpu.bc) == (0xC012, 0)
+    assert cpu.f == 0x43  # C preserved, N and Z set; P/V cleared.
+
+
 def test_ed_rrd_rld_exchange_nibbles() -> None:
     cpu = make_cpu(bytes([0xED, 0x67, 0xED, 0x6F]))
     cpu.hl = 0xC010
