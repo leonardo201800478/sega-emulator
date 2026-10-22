@@ -371,6 +371,7 @@ class Z80Cpu:
 
         Subconjunto atual:
         - NOP (00h)
+        - CPL (2Fh), SCF (37h), CCF (3Fh)
         - LD rr,nn (01h, 11h, 21h, 31h)
         - LD (BC/DE),A (02h, 12h) e LD A,(BC/DE) (0Ah, 1Ah)
         - LD (nn),HL (22h) e LD HL,(nn) (2Ah)
@@ -532,6 +533,21 @@ class Z80Cpu:
             if self._condition((opcode >> 3) & 0x03):
                 self.pc = (high << 8) | low
             cycles = 10
+        elif opcode == 0x2F:  # CPL
+            self.a ^= 0xFF
+            self.f = (self.f & 0xC5) | (self.a & 0x28) | 0x12
+            cycles = 4
+        elif opcode == 0x37:  # SCF
+            self.f = (self.f & 0xC4) | (self.a & 0x28) | 0x01
+            cycles = 4
+        elif opcode == 0x3F:  # CCF
+            previous_carry = self.f & 0x01
+            self.f = (self.f & 0xC4) | (self.a & 0x28)
+            if previous_carry:
+                self.f |= 0x10
+            else:
+                self.f |= 0x01
+            cycles = 4
         elif opcode == 0x10:  # DJNZ e
             displacement = self._fetch_byte()
             self.b = (self.b - 1) & 0xFF
