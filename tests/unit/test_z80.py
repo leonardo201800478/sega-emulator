@@ -198,10 +198,19 @@ def test_jr_conditional_checks_flags_and_cycles(
 
 
 def test_jr_wraps_program_counter_at_16_bits() -> None:
-    program = bytearray(0x10000)
-    program[0xFFFE] = 0x18  # JR e
-    program[0xFFFF] = 0x01
-    cpu = make_cpu(bytes(program))
+    class FlatMemoryBus:
+        def __init__(self) -> None:
+            self.memory = bytearray(0x10000)
+            self.memory[0xFFFE] = 0x18  # JR e
+            self.memory[0xFFFF] = 0x01
+
+        def read(self, address: int) -> int:
+            return self.memory[address]
+
+        def write(self, address: int, value: int) -> None:
+            self.memory[address] = value
+
+    cpu = Z80Cpu(FlatMemoryBus())
     cpu.pc = 0xFFFE
 
     assert cpu.step() == 12
