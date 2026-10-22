@@ -529,7 +529,7 @@ def test_and_or_register_update_accumulator_and_flags(
 
 
 def test_and_reads_operand_from_hl() -> None:
-    cpu = make_cpu(b"\\xa6")  # AND (HL)
+    cpu = make_cpu(b"\xa6")  # AND (HL)
     cpu.hl = 0xC020
     cpu.a = 0xF3
     cpu.bus.write(0xC020, 0x0F)
