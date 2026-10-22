@@ -28,3 +28,7 @@ Thumbs.db
 .env.*
 !.env.example
 *.log
+
+# Local firmware/ROM assets: never commit copyrighted dumps
+src/firmware/
+local-assets/firmware/
