@@ -1607,7 +1607,8 @@ class FakeIOBus:
 
 def test_ed_in_out_use_separate_io_bus() -> None:
     io = FakeIOBus()
-    cpu = Z80Cpu(SG1000MemoryBus(SG1000Ram(bytes(RAM_SIZE)), bytes([0xED, 0x78, 0xED, 0x79])), io_bus=io)
+    bus = SG1000MemoryBus(SG1000Ram(bytes(RAM_SIZE)), bytes([0xED, 0x78, 0xED, 0x79]))
+    cpu = Z80Cpu(bus, io_bus=io)
     cpu.bc = 0x1234
     io.ports[0x1234] = 0x81
     assert cpu.step() == 12  # IN A,(C)
@@ -1662,7 +1663,9 @@ def test_immediate_in_out_use_accumulator_as_high_port_byte() -> None:
     ("prefix", "expected_index"),
     [(0xDD, "ix"), (0xFD, "iy")],
 )
-def test_index_register_load_increment_and_stack(prefix: int, expected_index: str) -> None:
+def test_index_register_load_increment_and_stack(
+    prefix: int, expected_index: str
+) -> None:
     cpu = make_cpu(bytes([prefix, 0x21, 0x34, 0x12, prefix, 0x23, prefix, 0xE5]))
     assert cpu.step() == 14
     assert getattr(cpu, expected_index) == 0x1234
