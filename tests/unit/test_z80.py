@@ -1970,3 +1970,80 @@ def test_index_prefixes_decode_all_non_ed_second_opcodes() -> None:
             cpu.ix = cpu.iy = 0xC020
             cpu.bus.write(0xC020, 0xA5)
             assert cpu.step() > 0, f"{prefix:02X} {opcode:02X}h"
+
+def test_all_ed_second_bytes_are_supported_or_explicitly_rejected() -> None:
+    """Classifica os 256 segundos bytes ED sem confundir decode com correção."""
+    supported = {
+        *(0x40 + (register << 3) for register in range(8)),  # IN r,(C)
+        *(0x41 + (register << 3) for register in range(8)),  # OUT (C),r
+        *(
+            base + (pair << 4)
+            for base in (0x42, 0x43, 0x4A, 0x4B)
+            for pair in range(4)
+        ),
+        0x44,
+        0x4C,
+        0x54,
+        0x5C,
+        0x64,
+        0x6C,
+        0x74,
+        0x7C,  # NEG aliases
+        0x45,
+        0x4D,
+        0x55,
+        0x5D,
+        0x65,
+        0x6D,
+        0x75,
+        0x7D,  # RETN/RETI aliases
+        0x46,
+        0x4E,
+        0x66,
+        0x6E,  # IM 0 encodings
+        0x56,
+        0x76,  # IM 1 encodings
+        0x5E,
+        0x7E,  # IM 2 encodings
+        0x47,
+        0x4F,
+        0x57,
+        0x5F,  # I/R transfers
+        0x67,
+        0x6F,  # RRD/RLD
+        0xA0,
+        0xA8,
+        0xB0,
+        0xB8,  # LDI/LDD/LDIR/LDDR
+        0xA1,
+        0xA9,
+        0xB1,
+        0xB9,  # CPI/CPD/CPIR/CPDR
+        0xA2,
+        0xAA,
+        0xB2,
+        0xBA,  # INI/IND/INIR/INDR
+        0xA3,
+        0xAB,
+        0xB3,
+        0xBB,  # OUTI/OUTD/OTIR/OTDR
+    }
+
+    for opcode in range(0x100):
+        bus = SG1000MemoryBus(
+            SG1000Ram(bytes(RAM_SIZE)),
+            bytes([0xED, opcode, 0x20, 0xC0, 0x20, 0xC0]),
+        )
+        cpu = Z80Cpu(bus, io_bus=FakeIOBus())
+        cpu.a = 0x12
+        cpu.bc = cpu.de = cpu.hl = 0xC020
+        cpu.sp = 0xC100
+        cpu.bus.write(0xC020, 0x34)
+
+        if opcode in supported:
+            assert cpu.step() > 0, f"ED {opcode:02X}h"
+        else:
+            with pytest.raises(UnsupportedOpcodeError, match=f"ED {opcode:02X}h"):
+                cpu.step()
+            assert cpu.pc == 2, f"PC após ED {opcode:02X}h"
+            assert cpu.total_cycles == 0, f"ciclos após ED {opcode:02X}h"
