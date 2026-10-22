@@ -736,6 +736,232 @@ class Z80Cpu:
             return 21
         return 16
 
+
+    @staticmethod
+    def _signed_byte(value: int) -> int:
+        return value - 0x100 if value & 0x80 else value
+
+    def _index_value(self, prefix: int) -> int:
+        return self.ix if prefix == 0xDD else self.iy
+
+    def _set_index_value(self, prefix: int, value: int) -> None:
+        if prefix == 0xDD:
+            self.ix = value & 0xFFFF
+        else:
+            self.iy = value & 0xFFFF
+
+    def _read_index_register(self, prefix: int, code: int, halves: bool = True) -> int:
+        index = self._index_value(prefix)
+        if halves and code == 4:
+            return index >> 8
+        if halves and code == 5:
+            return index & 0xFF
+        return self._read_register(code)
+
+    def _write_index_register(
+        self, prefix: int, code: int, value: int, halves: bool = True
+    ) -> None:
+        index = self._index_value(prefix)
+        value &= 0xFF
+        if halves and code == 4:
+            self._set_index_value(prefix, (value << 8) | (index & 0xFF))
+        elif halves and code == 5:
+            self._set_index_value(prefix, (index & 0xFF00) | value)
+        else:
+            self._write_register(code, value)
+
+    def _step_indexed(self, prefix: int) -> int:
+        """Executa instruções DD/FD e trata prefixos ignorados com custo adicional."""
+        opcode = self._fetch_opcode_byte()
+        index = self._index_value(prefix)
+        cycles = 0
+        if opcode in (0xDD, 0xFD):
+            self.pc = (self.pc - 1) & 0xFFFF
+            base_cycles = self.step()
+            self.total_cycles += 4
+            return base_cycles + 4
+        if opcode == 0xCB:
+            displacement = self._signed_byte(self._fetch_byte())
+            cb_opcode = self._fetch_opcode_byte()
+            address = (index + displacement) & 0xFFFF
+            value = self.bus.read(address)
+            operation = cb_opcode >> 6
+            bit_index = (cb_opcode >> 3) & 7
+            register = cb_opcode & 7
+            if operation == 0:
+                carry_in = self.f & 1
+                if bit_index == 0:
+                    carry = value >> 7
+                    result = ((value << 1) | carry) & 0xFF
+                elif bit_index == 1:
+                    carry = value & 1
+                    result = (value >> 1) | (carry << 7)
+                elif bit_index == 2:
+                    carry = value >> 7
+                    result = ((value << 1) | carry_in) & 0xFF
+                elif bit_index == 3:
+                    carry = value & 1
+                    result = (value >> 1) | (carry_in << 7)
+                elif bit_index == 4:
+                    carry = value >> 7
+                    result = (value << 1) & 0xFF
+                elif bit_index == 5:
+                    carry = value & 1
+                    result = (value >> 1) | (value & 0x80)
+                elif bit_index == 6:
+                    carry = value >> 7
+                    result = ((value << 1) | 1) & 0xFF
+                else:
+                    carry = value & 1
+                    result = value >> 1
+                self.bus.write(address, result)
+                if register != 6:
+                    self._write_register(register, result)
+                self.f = (result & 0xA8) | self._parity_flag(result) | carry
+                if result == 0:
+                    self.f |= 0x40
+                cycles = 23
+            elif operation == 1:
+                zero = not (value & (1 << bit_index))
+                flags = (self.f & 1) | 0x10 | ((address >> 8) & 0x28)
+                if zero:
+                    flags |= 0x44
+                if bit_index == 7 and not zero:
+                    flags |= 0x80
+                self.f = flags
+                cycles = 20
+            else:
+                result = value & ~(1 << bit_index) if operation == 2 else value | (1 << bit_index)
+                self.bus.write(address, result)
+                if register != 6:
+                    self._write_register(register, result)
+                cycles = 23
+        elif opcode in (0x21, 0x22, 0x2A, 0x23, 0x2B, 0x09, 0x19, 0x29, 0x39,
+                        0xE1, 0xE5, 0xE3, 0xE9, 0xF9):
+            if opcode == 0x21:
+                self._set_index_value(prefix, self._fetch_byte() | (self._fetch_byte() << 8))
+                cycles = 14
+            elif opcode in (0x22, 0x2A):
+                address = self._fetch_byte() | (self._fetch_byte() << 8)
+                if opcode == 0x22:
+                    self.bus.write(address, index & 0xFF)
+                    self.bus.write((address + 1) & 0xFFFF, index >> 8)
+                else:
+                    low = self.bus.read(address)
+                    high = self.bus.read((address + 1) & 0xFFFF)
+                    self._set_index_value(prefix, (high << 8) | low)
+                cycles = 20
+            elif opcode in (0x23, 0x2B):
+                self._set_index_value(prefix, index + (1 if opcode == 0x23 else -1))
+                cycles = 10
+            elif opcode in (0x09, 0x19, 0x29, 0x39):
+                code = (opcode >> 4) & 3
+                operand = index if code == 2 else self._read_stack_pair(code)
+                result = index + operand
+                flags = self.f & 0xC4
+                flags |= ((result & 0xFFFF) >> 8) & 0x28
+                if (index & 0x0FFF) + (operand & 0x0FFF) > 0x0FFF:
+                    flags |= 0x10
+                if result > 0xFFFF:
+                    flags |= 1
+                self._set_index_value(prefix, result)
+                self.f = flags
+                cycles = 15
+            elif opcode == 0xE1:
+                self._set_index_value(prefix, self._pop_word())
+                cycles = 14
+            elif opcode == 0xE5:
+                self._push_word(index)
+                cycles = 15
+            elif opcode == 0xE3:
+                low = self.bus.read(self.sp)
+                high_address = (self.sp + 1) & 0xFFFF
+                high = self.bus.read(high_address)
+                self.bus.write(high_address, index >> 8)
+                self.bus.write(self.sp, index & 0xFF)
+                self._set_index_value(prefix, (high << 8) | low)
+                cycles = 23
+            elif opcode == 0xE9:
+                self.pc = index
+                cycles = 8
+            else:
+                self.sp = index
+                cycles = 10
+        elif opcode in (0x24, 0x25, 0x26, 0x2C, 0x2D, 0x2E):
+            code = 4 if opcode in (0x24, 0x25, 0x26) else 5
+            if opcode in (0x26, 0x2E):
+                self._write_index_register(prefix, code, self._fetch_byte())
+                cycles = 11
+            else:
+                old = self._read_index_register(prefix, code)
+                value = self._inc_register_value(old) if opcode in (0x24, 0x2C) else self._dec_register_value(old)
+                self._write_index_register(prefix, code, value)
+                cycles = 8
+        elif opcode == 0x36:
+            displacement = self._signed_byte(self._fetch_byte())
+            value = self._fetch_byte()
+            self.bus.write((index + displacement) & 0xFFFF, value)
+            cycles = 19
+        elif opcode in (0x34, 0x35):
+            displacement = self._signed_byte(self._fetch_byte())
+            address = (index + displacement) & 0xFFFF
+            old = self.bus.read(address)
+            value = self._inc_register_value(old) if opcode == 0x34 else self._dec_register_value(old)
+            self.bus.write(address, value)
+            cycles = 23
+        elif 0x40 <= opcode <= 0x7F and opcode != 0x76:
+            destination, source = (opcode >> 3) & 7, opcode & 7
+            if destination == 6 or source == 6:
+                displacement = self._signed_byte(self._fetch_byte())
+                address = (index + displacement) & 0xFFFF
+                if source == 6:
+                    value = self.bus.read(address)
+                    self._write_index_register(prefix, destination, value, halves=False)
+                else:
+                    value = self._read_index_register(prefix, source, halves=False)
+                    self.bus.write(address, value)
+                cycles = 19
+            else:
+                value = self._read_index_register(prefix, source)
+                self._write_index_register(prefix, destination, value)
+                cycles = 8
+        elif 0x80 <= opcode <= 0xBF:
+            source = opcode & 7
+            if source == 6:
+                displacement = self._signed_byte(self._fetch_byte())
+                value = self.bus.read((index + displacement) & 0xFFFF)
+                cycles = 19
+            else:
+                value = self._read_index_register(prefix, source)
+                cycles = 8
+            operation = (opcode >> 3) & 7
+            if operation == 0:
+                self._add_a(value)
+            elif operation == 1:
+                self._adc_a(value)
+            elif operation == 2:
+                self._sub_a(value)
+            elif operation == 3:
+                self._sbc_a(value)
+            elif operation == 4:
+                self._and_a(value)
+            elif operation == 5:
+                self._xor_a(value)
+            elif operation == 6:
+                self._or_a(value)
+            else:
+                self._compare_a(value)
+        else:
+            # O prefixo DD/FD não altera instruções que não usam HL/indexação.
+            self.pc = (self.pc - 1) & 0xFFFF
+            base_cycles = self.step()
+            self.total_cycles += 4
+            return base_cycles + 4
+        self.total_cycles += cycles
+        if self._ei_delay > 0:
+            self._ei_delay -= 1
+        return cycles
+
     def step(self) -> int:
         """Executa uma instrução implementada e retorna seus T-states nominais.
 
@@ -809,6 +1035,8 @@ class Z80Cpu:
             self.total_cycles += 4
             return 4
         opcode = self._fetch_opcode_byte()
+        if opcode in (0xDD, 0xFD):
+            return self._step_indexed(opcode)
 
         if opcode == 0x00:  # NOP
             cycles = 4
