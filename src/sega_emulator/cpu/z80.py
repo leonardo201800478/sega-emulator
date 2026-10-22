@@ -190,6 +190,18 @@ class Z80Cpu:
         if self.a == 0:
             self.f |= 0x40
 
+    def _condition(self, code: int) -> bool:
+        """Avalia NZ, Z, NC ou C conforme o campo de condição do opcode."""
+        zero = bool(self.f & 0x40)
+        carry = bool(self.f & 0x01)
+        if code == 0:
+            return not zero
+        if code == 1:
+            return zero
+        if code == 2:
+            return not carry
+        return carry
+
     def step(self) -> int:
         """Executa uma instrução implementada e retorna seus T-states nominais.
 
@@ -198,8 +210,10 @@ class Z80Cpu:
         - LD r,n (06h, 0Eh, 16h, 1Eh, 26h, 2Eh, 36h, 3Eh)
         - LD r,r' (40h–7Fh, exceto HALT 76h)
         - ADD A,r (80h–87h), SUB r (90h–97h), XOR A,r (A8h–AFh)
+        - JP nn (C3h), JP cc,nn (C2h, CAh, D2h, DAh)
+        - JR e (18h), JR cc,e (20h, 28h, 30h, 38h)
 
-        As operações LD não alteram o registrador de flags F.
+        As operações LD e os saltos não alteram o registrador de flags F.
         """
         opcode = self._fetch_byte()
 
@@ -225,6 +239,32 @@ class Z80Cpu:
         elif 0xA8 <= opcode <= 0xAF:  # XOR A,r
             self._xor_a(self._read_register(opcode & 0x07))
             cycles = 7 if opcode & 0x07 == 6 else 4
+        elif opcode == 0xC3:  # JP nn
+            low = self._fetch_byte()
+            high = self._fetch_byte()
+            self.pc = (high << 8) | low
+            cycles = 10
+        elif opcode in (0xC2, 0xCA, 0xD2, 0xDA):  # JP cc,nn
+            low = self._fetch_byte()
+            high = self._fetch_byte()
+            if self._condition((opcode >> 3) & 0x03):
+                self.pc = (high << 8) | low
+            cycles = 10
+        elif opcode == 0x18:  # JR e
+            displacement = self._fetch_byte()
+            if displacement & 0x80:
+                displacement -= 0x100
+            self.pc = (self.pc + displacement) & 0xFFFF
+            cycles = 12
+        elif opcode in (0x20, 0x28, 0x30, 0x38):  # JR cc,e
+            displacement = self._fetch_byte()
+            if self._condition((opcode >> 3) & 0x03):
+                if displacement & 0x80:
+                    displacement -= 0x100
+                self.pc = (self.pc + displacement) & 0xFFFF
+                cycles = 12
+            else:
+                cycles = 7
         else:
             raise UnsupportedOpcodeError(
                 f"Opcode Z80 {opcode:02X}h não implementado "
