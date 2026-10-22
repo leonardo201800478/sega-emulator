@@ -145,9 +145,7 @@ def test_jp_absolute_loads_little_endian_target() -> None:
         (0xDA, 0x00, False),
     ],
 )
-def test_jp_conditional_checks_flags(
-    opcode: int, flags: int, taken: bool
-) -> None:
+def test_jp_conditional_checks_flags(opcode: int, flags: int, taken: bool) -> None:
     cpu = make_cpu(bytes([opcode, 0x78, 0x56]))
     cpu.f = flags
 
