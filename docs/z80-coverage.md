@@ -24,7 +24,7 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 |---|---|---|
 | `00` — NOP | Implementado — cobertura inicial | Testado quanto a PC e 4 T-states nominais. |
 | `01, 11, 21, 31` — LD rr,nn | Implementado — cobertura inicial | BC, DE, HL e SP; testes de endianess, preservação de flags e avanço do PC. |
-| `02, 12` — LD (BC/DE),A | Ausente | Escrita indireta de A. |
+| `02, 12` — LD (BC/DE),A | Implementado — cobertura inicial | Escreve A no endereço apontado por BC ou DE; 7 T-states nominais e flags preservadas. |
 | `03, 13, 23, 33` — INC rr | Implementado — cobertura inicial | Inclui SP; testar todos os pares, wrap e preservação de flags. |
 | `04, 0C, ... 3C` — INC r | Implementado — cobertura inicial | Inclui (HL); ampliar testes de todas as flags e operandos. |
 | `05, 0D, ... 3D` — DEC r | Implementado — cobertura inicial | Inclui (HL); ampliar testes de todas as flags e operandos. |
@@ -32,7 +32,7 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | `07, 0F, 17, 1F` — rotações do acumulador | Ausente | RLCA, RRCA, RLA, RRA. |
 | `08` — EX AF,AF' | Ausente | Requer banco alternativo AF'. |
 | `09, 19, 29, 39` — ADD HL,rr | Implementado — cobertura inicial | Inclui SP; validar flags X/Y e todos os pares/casos-limite. |
-| `0A, 1A` — LD A,(BC/DE) | Ausente | Leitura indireta. |
+| `0A, 1A` — LD A,(BC/DE) | Implementado — cobertura inicial | Lê A do endereço apontado por BC ou DE; 7 T-states nominais e flags preservadas. |
 | `10` — DJNZ e | Ausente | Desvio condicional pelo contador B. |
 | `18` — JR e | Implementado — cobertura inicial | Deslocamento relativo com sinal e wrap do PC já têm testes selecionados. |
 | `20, 28, 30, 38` — JR cc,e | Implementado — cobertura inicial | NZ, Z, NC, C; as condições relativas disponíveis na base são estas quatro. |
