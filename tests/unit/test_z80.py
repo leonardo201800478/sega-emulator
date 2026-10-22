@@ -483,12 +483,11 @@ def test_dec_register_updates_flags_and_preserves_carry(
     opcode: int, initial: int, expected: int, expected_flags: int
 ) -> None:
     cpu = make_cpu(bytes([opcode]))
-    cpu.b = initial
-    cpu.a = initial
+    register = (opcode >> 3) & 0x07
+    cpu._write_register(register, initial)
     cpu.f = 0x01
 
     assert cpu.step() == 4
-    register = (opcode >> 3) & 0x07
     assert cpu._read_register(register) == expected
     assert cpu.f == expected_flags
 
