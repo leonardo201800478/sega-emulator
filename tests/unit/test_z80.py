@@ -1773,9 +1773,11 @@ def test_im0_rejects_non_rst_bus_opcode_instead_of_misrouting_it() -> None:
 def test_all_base_opcodes_are_decoded_or_explicitly_rejected() -> None:
     for opcode in range(0x100):
         cpu = Z80Cpu(
-            SG1000MemoryBus(SG1000Ram(bytes(RAM_SIZE)), bytes([opcode, 0, 0, 0, 0])),
+            SG1000MemoryBus(SG1000Ram(bytes(RAM_SIZE)), bytes([opcode, 0x20, 0xC0, 0x20, 0xC0])),
             io_bus=FakeIOBus(),
         )
+        cpu.bc = cpu.de = cpu.hl = 0xC020
+        cpu.sp = 0xC100
         if opcode == 0xED:
             with pytest.raises(UnsupportedOpcodeError, match="ED 00h"):
                 cpu.step()
@@ -1788,7 +1790,9 @@ def test_index_prefixes_decode_all_non_ed_second_opcodes() -> None:
         for opcode in range(0x100):
             if opcode == 0xED:
                 continue  # ED 00h é um opcode não documentado/não suportado.
-            cpu = make_cpu(bytes([prefix, opcode, 0, 0, 0, 0]))
+            cpu = make_cpu(bytes([prefix, opcode, 0x20, 0xC0, 0x20, 0xC0]))
+            cpu.bc = cpu.de = cpu.hl = 0xC020
+            cpu.sp = 0xC100
             cpu.ix = cpu.iy = 0xC020
             cpu.bus.write(0xC020, 0xA5)
             assert cpu.step() > 0, f"{prefix:02X} {opcode:02X}h"
