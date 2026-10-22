@@ -52,7 +52,7 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | `37` — SCF | Implementado — cobertura inicial | Define C, limpa H/N, preserva S/Z/PV e copia X/Y de A; 4 T-states nominais. |
 | `3F` — CCF | Implementado — cobertura inicial | Inverte C, copia C anterior para H, limpa N, preserva S/Z/PV e copia X/Y de A; 4 T-states nominais. |
 | `40–75, 77–7F` — LD r,r' | Implementado — cobertura inicial | Registradores e (HL); opcode `76` HALT não está implementado. |
-| `76` — HALT | Ausente | Precisa de estado suspenso, comportamento de PC e interação com interrupções. |
+| `76` — HALT | Implementado — cobertura inicial | Estado de suspensão e ciclos repetidos; validar detalhes de fetch durante HALT. |
 | `80–87` — ADD A,r | Implementado — cobertura inicial | Registros e (HL); expandir testes de flags. |
 | `88–8F` — ADC A,r | Implementado — cobertura inicial | Carry de entrada implementado; ampliar testes exaustivos de carry e overflow. |
 | `90–97` — SUB r | Implementado — cobertura inicial | Registros e (HL); ampliar testes de flags. |
@@ -73,14 +73,14 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | `D3, DB` — OUT (n),A / IN A,(n) | Ausente | Requer contrato separado de portas de I/O; não deve ser simulado como memória comum. |
 | `E3` — EX (SP),HL | Implementado — cobertura inicial | Troca a palavra em (SP)/(SP+1) com HL; preserva SP e flags, trata wrap de 16 bits e contabiliza 19 T-states nominais. Testes de troca, ordem dos acessos e wraparound. |
 | `E9` — JP (HL) | Implementado — cobertura inicial | Copia HL para PC; 4 T-states nominais, flags preservadas. |
-| `F3, FB` — DI / EI | Ausente | Requer estado de habilitação de interrupções e regra de atraso do EI. |
+| `F3, FB` — DI / EI | Implementado — cobertura inicial | IFF1/IFF2, DI imediato e atraso de reconhecimento após EI; interrupções exigem validação adicional. |
 | `F9` — LD SP,HL | Implementado — cobertura inicial | Copia HL para SP; 6 T-states nominais, flags preservadas. |
 
 ## Famílias prefixadas
 
 | Prefixo | Estado | Escopo necessário |
 |---|---|---|
-| `CB` | Ausente | RLC, RRC, RL, RR, SLA, SRA, SLL (não documentado), SRL, BIT, RES e SET para registradores e (HL). |
+| `CB` | Implementado — cobertura inicial | RLC, RRC, RL, RR, SLA, SRA, SRL, BIT, RES e SET em registradores/(HL); SLL incluído separadamente como não documentado. Prefixos indexados ainda pendentes. |
 | `ED` | Parcial | `ADC/SBC HL,rr`, `LD I,A`, `LD R,A`, `LD A,I` e `LD A,R` implementados. `R` incrementa nos fetches de opcode M1; `LD A,I/R` atualiza S/Z/X/Y, P/V a partir do estado `IFF2`, limpa H/N e preserva C. `IFF2` existe apenas como estado mínimo (inicialmente falso), sem lógica de interrupções. Ainda faltam operações de I/O por (C), transferências/comparações de bloco, RRD/RLD, IM 0/1/2, RETI/RETN e outras instruções ED documentadas. |
 | `DD` | Ausente | Substituição de HL por IX onde aplicável, instruções IX e endereçamento indexado (IX+d), incluindo prefixos redundantes conforme o modelo adotado. |
 | `FD` | Ausente | Equivalente para IY. |
@@ -91,7 +91,7 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 O código atual modela registradores principais A/F/B/C/D/E/H/L, pares AF/BC/DE/HL, SP, PC e um acumulador de T-states nominais. Ainda faltam, entre outros:
 
 - Registradores alternativos AF', BC', DE' e HL' estão modelados; I e R também estão modelados. IX/IY ainda faltam.
-- IFF2 existe como estado mínimo para os flags de `LD A,I/R`; IFF1, sincronização entre IFFs, modos de interrupção e comportamento de EI/DI, HALT, NMI e INT ainda não estão implementados.
+- IFF1/IFF2, modos 0–2, HALT e solicitações NMI/INT têm um modelo inicial; arbitragem, reconhecimento e o protocolo completo de IM 0 ainda exigem validação.
 - Ciclos M1, ciclos de leitura/escrita e I/O, estados de espera, contenção e temporização de barramento.
 - Flags X/Y e efeitos não documentados validados contra referências e testes específicos.
 - Comportamento de prefixos repetidos, opcodes não documentados e diferenças de revisão, conforme a meta de compatibilidade.
