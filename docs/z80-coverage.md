@@ -39,10 +39,11 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | `22` — LD (nn),HL | Implementado — cobertura inicial | Escreve L no endereço e H no endereço seguinte, com wrap de 16 bits; 16 T-states nominais e flags preservadas. |
 | `2A` — LD HL,(nn) | Implementado — cobertura inicial | Lê dois bytes em little-endian, com wrap de 16 bits; 16 T-states nominais e flags preservadas. |
 | `27` — DAA | Ausente | Ajuste decimal; exige testes de flags e combinações de entrada. |
-| `2F` — CPL | Ausente | Complemento do acumulador. |
+| `2F` — CPL | Implementado — cobertura inicial | Complementa A; atualiza H/N, copia X/Y do resultado e preserva S/Z/PV/C; 4 T-states nominais. |
 | `32` — LD (nn),A | Implementado — cobertura inicial | Endereço absoluto little-endian; 13 T-states nominais, flags preservadas. |
 | `3A` — LD A,(nn) | Implementado — cobertura inicial | Lê de endereço absoluto little-endian; 13 T-states nominais, flags preservadas. |
-| `37, 3F` — SCF / CCF | Ausente | Operações de carry e flags X/Y. |
+| `37` — SCF | Implementado — cobertura inicial | Define C, limpa H/N, preserva S/Z/PV e copia X/Y de A; 4 T-states nominais. |
+| `3F` — CCF | Implementado — cobertura inicial | Inverte C, copia C anterior para H, limpa N, preserva S/Z/PV e copia X/Y de A; 4 T-states nominais. |
 | `40–75, 77–7F` — LD r,r' | Implementado — cobertura inicial | Registradores e (HL); opcode `76` HALT não está implementado. |
 | `76` — HALT | Ausente | Precisa de estado suspenso, comportamento de PC e interação com interrupções. |
 | `80–87` — ADD A,r | Implementado — cobertura inicial | Registros e (HL); expandir testes de flags. |
@@ -95,7 +96,7 @@ O contador `total_cycles` atual soma os custos nominais das instruções suporta
 
 ## Ordem de implementação sugerida
 
-1. Completar operações básicas não prefixadas e condições: acessos indiretos, rotações, DAA, CPL, SCF/CCF, JP (HL), EX, LD SP,HL e RST.
+1. Completar operações básicas não prefixadas e condições: acessos indiretos, rotações, DAA, EX, LD SP,HL e RST.
 2. Completar instruções aritméticas de 16 bits, incluindo `ADC HL,rr` e `SBC HL,rr`, com flags e tempos testados.
 3. Implementar HALT e o modelo de interrupções antes de declarar completo o fluxo de controle.
 4. Criar contrato de I/O e implementar IN/OUT com testes de endereço de porta.
