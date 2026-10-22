@@ -128,6 +128,25 @@ A análise acrescenta estes itens à lista de implementação, sem afirmar que j
 
 **Cuidado com a referência:** o código do MAME contém limitações e TODOs explícitos, inclusive sobre IM 0 e diferenças entre variantes. Usá-lo como comparador independente, junto ao manual Zilog e a testes dedicados; não como oráculo único. A pesquisa consultou o código-fonte, mas não executou testes diferenciais contra o MAME.
 
+## Backlog após comparação Gearsystem, MEKA, Genesis Plus GX e ares
+
+Pesquisa detalhada com revisões fixadas e análise de licenças: [docs/z80-undocumented-behavior-research.md](z80-undocumented-behavior-research.md).
+
+Os itens abaixo complementam a pesquisa do MAME e continuam **pendentes**, salvo se testes futuros comprovarem o contrário:
+
+1. **Matriz dos 256 opcodes ED:** identificar aliases de NEG/RETN/RETI/IM, NOPs e instruções não documentadas; testar flags, IFFs, PC/SP, I/O e ciclos.
+2. **WZ/MEMPTR:** estudar estado auxiliar e regras de atualização por classe de instrução antes de adicionar o registrador ao núcleo.
+3. **Q latch e flags X/Y:** investigar SCF/CCF em sequência, BIT em memória/indexado, CP, aritmética de 16 bits e origem dos bits 3/5.
+4. **Prefixos DD/FD:** validar prefixos repetidos/alternados, prefixos ignorados, IXH/IXL/IYH/IYL, DD/FD-CB, PC, R e custos temporais.
+5. **R/M1/HALT:** separar fetch de opcode, operandos e opcode final de DD/FD-CB; testar o contador R e só depois modelar refresh.
+6. **Operações de bloco ED:** validar flags e condições de repetição/saída antecipada de LDI/LDD/LDIR/LDDR, CPI/CPD/CPIR/CPDR e operações de I/O de bloco.
+7. **DAA e aritmética:** gerar matriz de casos para A/N/H/C e validar A/F com referência independente.
+8. **Interrupções e variantes:** testar IM 0 com bytes de acknowledge além de RST, atraso de EI, NMI/HALT e o comportamento de LD A,I/R interrompida após escolher a variante-alvo.
+9. **Testes externos:** avaliar ZEXALL e outros exercitadores quanto a proveniência/licença; não incorporar imagens de teste ao repositório sem revisão.
+10. **Licenças das referências:** não copiar código de MEKA ou Genesis Plus GX sem autorização/licença compatível; Gearsystem é GPL-3.0. Usar a análise para desenvolver implementação independente e testes próprios.
+
+A concordância entre fontes não é automaticamente independente: o Genesis Plus GX documenta origem no núcleo Z80 do MAME. Gearsystem e ares oferecem perspectivas adicionais, mas discrepâncias devem ser investigadas em vez de resolvidas por votação. Esta pesquisa é estática; nenhum dos quatro emuladores foi compilado/executado nesta etapa.
+
 ## Verificação local registrada em 22/10/2026
 
 Na branch `main`, commit `d6228f24b4f562d5b366296c0494f00c23def8c9`, o usuário executou os testes no Windows com Python 3.14.7 e pytest 9.1.1:
