@@ -33,7 +33,13 @@ class Z80Cpu:
         self.hl_alt = 0
         self.i = 0
         self.r = 0
+        self.iff1 = False
         self.iff2 = False
+        self.interrupt_mode = 0
+        self.halted = False
+        self._ei_delay = 0
+        self._nmi_pending = False
+        self._int_pending = None
         self.sp = 0
         self.pc = 0
         self.total_cycles = 0
@@ -517,6 +523,71 @@ class Z80Cpu:
         )
         return conditions[code]
 
+
+    def _execute_cb(self, opcode: int) -> int:
+        """Executa o conjunto CB: rotações, shifts, BIT, RES e SET."""
+        register = opcode & 0x07
+        operation = opcode >> 6
+        bit_index = (opcode >> 3) & 0x07
+        value = self._read_register(register)
+        is_memory = register == 6
+        if operation == 0:
+            carry_in = self.f & 1
+            if bit_index == 0:
+                carry = value >> 7
+                result = ((value << 1) | carry) & 0xFF
+            elif bit_index == 1:
+                carry = value & 1
+                result = (value >> 1) | (carry << 7)
+            elif bit_index == 2:
+                carry = value >> 7
+                result = ((value << 1) | carry_in) & 0xFF
+            elif bit_index == 3:
+                carry = value & 1
+                result = (value >> 1) | (carry_in << 7)
+            elif bit_index == 4:
+                carry = value >> 7
+                result = (value << 1) & 0xFF
+            elif bit_index == 5:
+                carry = value & 1
+                result = (value >> 1) | (value & 0x80)
+            elif bit_index == 6:  # SLL, não documentado
+                carry = value >> 7
+                result = ((value << 1) | 1) & 0xFF
+            else:
+                carry = value & 1
+                result = value >> 1
+            self._write_register(register, result)
+            self.f = (result & 0xA8) | self._parity_flag(result) | carry
+            if result == 0:
+                self.f |= 0x40
+        elif operation == 1:
+            zero = not (value & (1 << bit_index))
+            flags = (self.f & 1) | 0x10 | (value & 0x28)
+            if zero:
+                flags |= 0x44
+            if bit_index == 7 and not zero:
+                flags |= 0x80
+            self.f = flags
+        elif operation == 2:
+            self._write_register(register, value & ~(1 << bit_index))
+        else:
+            self._write_register(register, value | (1 << bit_index))
+        if operation == 1 and is_memory:
+            self.f = (self.f & ~0x28) | ((self.hl >> 8) & 0x28)
+        if is_memory:
+            return 12 if operation == 1 else 15
+        return 8
+
+    def request_nmi(self) -> None:
+        """Solicita NMI para atendimento no próximo step."""
+        self._nmi_pending = True
+
+    def request_int(self, data_bus: int = 0xFF) -> None:
+        """Solicita INT mascarável; data_bus representa o byte externo."""
+        self._validate_byte(data_bus)
+        self._int_pending = data_bus
+
     def step(self) -> int:
         """Executa uma instrução implementada e retorna seus T-states nominais.
 
@@ -558,6 +629,37 @@ class Z80Cpu:
         INC/DEC de pares e instruções de controle preservam F conforme a
         arquitetura; POP AF restaura F. ADD HL preserva S, Z e P/V.
         """
+        if self._nmi_pending:
+            self._nmi_pending = False
+            self.halted = False
+            self.iff2 = self.iff1
+            self.iff1 = False
+            self._push_word(self.pc)
+            self.pc = 0x0066
+            cycles = 11
+            self.total_cycles += cycles
+            return cycles
+        if self._int_pending is not None and self.iff1 and self._ei_delay == 0:
+            data_bus = self._int_pending
+            self._int_pending = None
+            self.halted = False
+            self.iff1 = self.iff2 = False
+            self._push_word(self.pc)
+            if self.interrupt_mode == 2:
+                vector = (self.i << 8) | data_bus
+                low = self.bus.read(vector)
+                high = self.bus.read((vector + 1) & 0xFFFF)
+                self.pc = (high << 8) | low
+                cycles = 19
+            else:
+                self.pc = 0x0038
+                cycles = 13
+            self.total_cycles += cycles
+            return cycles
+        if self.halted:
+            self.r = (self.r & 0x80) | ((self.r + 1) & 0x7F)
+            self.total_cycles += 4
+            return 4
         opcode = self._fetch_opcode_byte()
 
         if opcode == 0x00:  # NOP
@@ -603,6 +705,19 @@ class Z80Cpu:
                     f"Opcode Z80 ED {extended_opcode:02X}h não implementado "
                     f"no endereço {(self.pc - 2) & 0xFFFF:04X}h."
                 )
+        elif opcode == 0xCB:  # família CB
+            cycles = self._execute_cb(self._fetch_opcode_byte())
+        elif opcode == 0x76:  # HALT
+            self.halted = True
+            cycles = 4
+        elif opcode == 0xF3:  # DI
+            self.iff1 = self.iff2 = False
+            self._ei_delay = 0
+            cycles = 4
+        elif opcode == 0xFB:  # EI: reconhecimento após a instrução seguinte
+            self.iff1 = self.iff2 = True
+            self._ei_delay = 2
+            cycles = 4
         elif opcode == 0x08:  # EX AF,AF'
             previous = self.af
             self.af = self.af_alt
@@ -843,4 +958,6 @@ class Z80Cpu:
             )
 
         self.total_cycles += cycles
+        if self._ei_delay > 0:
+            self._ei_delay -= 1
         return cycles
