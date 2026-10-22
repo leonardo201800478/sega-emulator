@@ -372,6 +372,7 @@ class Z80Cpu:
         Subconjunto atual:
         - NOP (00h)
         - LD rr,nn (01h, 11h, 21h, 31h)
+        - LD (BC/DE),A (02h, 12h) e LD A,(BC/DE) (0Ah, 1Ah)
         - LD r,n (06h, 0Eh, 16h, 1Eh, 26h, 2Eh, 36h, 3Eh)
         - LD r,r' (40h–7Fh, exceto HALT 76h)
         - ADD A,r (80h–87h), ADC A,r (88h–8Fh)
@@ -470,6 +471,14 @@ class Z80Cpu:
             high = self._fetch_byte()
             self._write_stack_pair(code, (high << 8) | low)
             cycles = 10
+        elif opcode in (0x02, 0x12):  # LD (BC/DE),A
+            address = self.bc if opcode == 0x02 else self.de
+            self.bus.write(address, self.a)
+            cycles = 7
+        elif opcode in (0x0A, 0x1A):  # LD A,(BC/DE)
+            address = self.bc if opcode == 0x0A else self.de
+            self.a = self.bus.read(address)
+            cycles = 7
         elif opcode & 0xCF == 0x03:  # INC rr
             code = (opcode >> 4) & 0x03
             self._write_stack_pair(code, self._read_stack_pair(code) + 1)
