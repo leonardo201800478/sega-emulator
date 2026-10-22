@@ -74,7 +74,7 @@ O MAME usa helpers específicos para ALU, `DAA`, `BIT` em `(HL)` e em `(IX/IY+d)
 - Priorizar comparação diferencial de todos os flags documentados: S, Z, H, P/V, N e C, incluindo preservação de flags.
 - Testar `DAA` com uma matriz ampla de valores de A e combinações válidas/limítrofes de H, N e C; os poucos casos unitários atuais não bastam.
 - Testar flags de LDI/LDD/LDIR/LDDR, CPI/CPD/CPIR/CPDR e IN/OUT de bloco, incluindo condição de repetição e saída antecipada.
-- Investigar X/Y, `WZ/MEMPTR) e `Q) como estado explícito apenas na etapa de compatibilidade não documentada, após definir a variante de CPU e as fontes de evidência.
+- Investigar X/Y, `WZ/MEMPTR` e `Q` como estado explícito apenas na etapa de compatibilidade não documentada, após definir a variante de CPU e as fontes de evidência.
 - Não copiar fórmulas do MAME sem entender o estado que elas assumem; comparar com o manual Zilog, testes independentes e, quando disponível, hardware.
 
 ### 6. Interrupções: há mais que saltar para um endereço
@@ -146,7 +146,7 @@ Esses detalhes devem virar testes de integração de plataforma quando barrament
 
 ### P3 — compatibilidade não documentada
 
-13. Pesquisar e testar `WZ/MEMPTR), Q latch, flags X/Y e opcodes não documentados com fontes independentes.
+13. Pesquisar e testar `WZ/MEMPTR`, Q latch, flags X/Y e opcodes não documentados com fontes independentes.
 14. Só então decidir quais peculiaridades de variantes NMOS/CMOS/NEC entram no modelo suportado.
 
 ## Limites da pesquisa
