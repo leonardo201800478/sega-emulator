@@ -144,8 +144,19 @@ def _select_left_values(count: int, sampling: str) -> tuple[int, ...]:
 
     # Inclui fronteiras importantes para carry, half-carry, sinal e wraparound.
     boundary_values = (
-        0x0000, 0x0001, 0x000F, 0x0010, 0x00FF, 0x0100,
-        0x0FFF, 0x1000, 0x7FFF, 0x8000, 0x8001, 0xFFFE, 0xFFFF,
+        0x0000,
+        0x0001,
+        0x000F,
+        0x0010,
+        0x00FF,
+        0x0100,
+        0x0FFF,
+        0x1000,
+        0x7FFF,
+        0x8000,
+        0x8001,
+        0xFFFE,
+        0xFFFF,
     )
     selected = set(boundary_values)
 
@@ -158,6 +169,7 @@ def _select_left_values(count: int, sampling: str) -> tuple[int, ...]:
         selected.add(candidate)
 
     return tuple(sorted(selected))
+
 
 def _format_duration(seconds: float) -> str:
     seconds = max(0, int(seconds))
@@ -189,7 +201,10 @@ def main() -> int:
         "--sampling",
         choices=("sequential", "distributed"),
         default="sequential",
-        help="seleção de HL para --left-count (padrão: sequencial; distributed cobre todo o domínio)",
+        help=(
+            "seleção de HL para --left-count (padrão: sequencial; "
+            "distributed cobre todo o domínio)"
+        ),
     )
     parser.add_argument(
         "--workers",
