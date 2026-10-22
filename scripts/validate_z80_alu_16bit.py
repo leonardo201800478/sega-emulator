@@ -18,7 +18,6 @@ import os
 import sys
 import time
 from collections.abc import Iterable
-from multiprocessing.pool import Pool
 
 from sega_emulator.bus.memory import RAM_SIZE, SG1000Ram
 from sega_emulator.bus.memory_bus import SG1000MemoryBus
