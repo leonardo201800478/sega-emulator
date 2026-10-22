@@ -31,6 +31,9 @@ class Z80Cpu:
         self.bc_alt = 0
         self.de_alt = 0
         self.hl_alt = 0
+        self.i = 0
+        self.r = 0
+        self.iff2 = False
         self.sp = 0
         self.pc = 0
         self.total_cycles = 0
@@ -153,6 +156,22 @@ class Z80Cpu:
         value = self.bus.read(self.pc)
         self.pc = (self.pc + 1) & 0xFFFF
         return value
+
+    def _fetch_opcode_byte(self) -> int:
+        """Busca um byte de opcode M1 e incrementa os 7 bits baixos de R."""
+        value = self._fetch_byte()
+        self.r = (self.r & 0x80) | ((self.r + 1) & 0x7F)
+        return value
+
+    def _load_a_from_special_register(self, value: int) -> None:
+        """Executa LD A,I/R; P/V reflete IFF2 e C é preservado."""
+        self.a = value
+        flags = (value & 0xA8) | (self.f & 0x01)
+        if value == 0:
+            flags |= 0x40
+        if self.iff2:
+            flags |= 0x04
+        self.f = flags
 
     def _read_register(self, code: int) -> int:
         if code == 0:
@@ -531,18 +550,29 @@ class Z80Cpu:
         - INC rr (03h, 13h, 23h, 33h), DEC rr (0Bh, 1Bh, 2Bh, 3Bh)
         - ADD HL,rr (09h, 19h, 29h, 39h)
         - ADC HL,rr / SBC HL,rr (prefixo EDh)
+        - LD I,A (ED 47h), LD R,A (ED 4Fh), LD A,I (ED 57h), LD A,R (ED 5Fh)
         - CP r (B8h–BFh)
 
         INC/DEC de pares e instruções de controle preservam F conforme a
         arquitetura; POP AF restaura F. ADD HL preserva S, Z e P/V.
         """
-        opcode = self._fetch_byte()
+        opcode = self._fetch_opcode_byte()
 
         if opcode == 0x00:  # NOP
             cycles = 4
         elif opcode == 0xED:  # instruções prefixadas ED implementadas
-            extended_opcode = self._fetch_byte()
-            if extended_opcode & 0xCF == 0x4A:  # ADC HL,rr
+            extended_opcode = self._fetch_opcode_byte()
+            if extended_opcode in (0x47, 0x4F):  # LD I,A / LD R,A
+                if extended_opcode == 0x47:
+                    self.i = self.a
+                else:
+                    self.r = self.a
+                cycles = 9
+            elif extended_opcode in (0x57, 0x5F):  # LD A,I / LD A,R
+                value = self.i if extended_opcode == 0x57 else self.r
+                self._load_a_from_special_register(value)
+                cycles = 9
+            elif extended_opcode & 0xCF == 0x4A:  # ADC HL,rr
                 self._add_sub_hl(
                     self._read_stack_pair((extended_opcode >> 4) & 0x03), False
                 )
