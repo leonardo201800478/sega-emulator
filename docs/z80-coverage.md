@@ -59,12 +59,12 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | `B8–BF` — CP r | Implementado — cobertura inicial | Não altera A; bits X/Y são tratados a partir do operando. |
 | `C6, CE, D6, DE, E6, EE, F6, FE` — ALU imediata | Implementado — cobertura inicial | ADD, ADC, SUB, SBC, AND, XOR, OR e CP com 7 T-states nominais. |
 | `C3` — JP nn | Implementado — cobertura inicial | Salto absoluto incondicional. |
-| `C2, CA, D2, DA` — JP cc,nn | Parcial | Só NZ, Z, NC e C; faltam PO, PE, P e M. |
+| `C2, CA, D2, DA, E2, EA, F2, FA` — JP cc,nn | Implementado — cobertura inicial | Oito condições NZ, Z, NC, C, PO, PE, P e M; testes de ramos tomados/não tomados. |
 | `C5, D5, E5, F5` — PUSH qq | Implementado — cobertura inicial | BC, DE, HL e AF; verificar ordem de acesso e tempos de barramento em fase futura. |
 | `C1, D1, E1, F1` — POP qq | Implementado — cobertura inicial | BC, DE, HL e AF; verificar ordem de acesso e efeitos de AF. |
-| `C4, CC, D4, DC` — CALL cc,nn | Parcial | Só NZ, Z, NC e C; faltam PO, PE, P e M. |
+| `C4, CC, D4, DC, E4, EC, F4, FC` — CALL cc,nn | Implementado — cobertura inicial | Oito condições; testes de ramos tomados/não tomados, endereço de retorno, pilha e T-states nominais. |
 | `CD` — CALL nn | Implementado — cobertura inicial | Sub-rotina absoluta. |
-| `C0, C8, D0, D8` — RET cc | Parcial | Só NZ, Z, NC e C; faltam PO, PE, P e M. |
+| `C0, C8, D0, D8, E0, E8, F0, F8` — RET cc | Implementado — cobertura inicial | Oito condições; testes de ramos tomados/não tomados, pilha e T-states nominais. |
 | `C9` — RET | Implementado — cobertura inicial | Retorno incondicional. |
 | `D3, DB` — OUT (n),A / IN A,(n) | Ausente | Requer contrato separado de portas de I/O; não deve ser simulado como memória comum. |
 | `E3` — EX (SP),HL | Ausente | Troca entre pilha e HL. |
@@ -96,7 +96,7 @@ O contador `total_cycles` atual soma os custos nominais das instruções suporta
 
 ## Ordem de implementação sugerida
 
-1. Ampliar as operações não prefixadas restantes e completar as oito condições de salto/chamada/retorno; EX AF,AF', EXX, EX DE,HL e RST já estão implementados.
+1. Ampliar as operações não prefixadas restantes; as oito condições de salto/chamada/retorno e EX AF,AF', EXX, EX DE,HL e RST já estão implementados.
 2. Completar instruções aritméticas de 16 bits, incluindo `ADC HL,rr` e `SBC HL,rr`, com flags e tempos testados.
 3. Implementar HALT e o modelo de interrupções antes de declarar completo o fluxo de controle.
 4. Criar contrato de I/O e implementar IN/OUT com testes de endereço de porta.
