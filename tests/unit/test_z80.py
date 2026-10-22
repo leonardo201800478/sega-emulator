@@ -1730,8 +1730,8 @@ def test_all_cb_opcodes_have_a_defined_execution_path() -> None:
         cycles = cpu.step()
         register = opcode & 0x07
         operation = opcode >> 6
-        expected = 12 if register == 6 and operation == 1 else (
-            15 if register == 6 else 8
+        expected = (
+            12 if register == 6 and operation == 1 else (15 if register == 6 else 8)
         )
         assert cycles == expected, f"CB {opcode:02X}h"
 
