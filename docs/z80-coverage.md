@@ -91,7 +91,7 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 O código atual modela registradores principais A/F/B/C/D/E/H/L, pares AF/BC/DE/HL, SP, PC e um acumulador de T-states nominais. Ainda faltam, entre outros:
 
 - Registradores alternativos AF', BC', DE' e HL' estão modelados; I e R também estão modelados. IX/IY ainda faltam.
-- IFF1/IFF2, modos 0–2, HALT e solicitações NMI/INT têm um modelo inicial; arbitragem, reconhecimento e o protocolo completo de IM 0 ainda exigem validação.
+- IFF1/IFF2, modos 0–2, HALT e solicitações NMI/INT têm um modelo inicial; IM 0 atualmente aceita apenas instruções RST no barramento de dados; outros opcodes IM 0 falham explicitamente em vez de serem simulados incorretamente.
 - Ciclos M1, ciclos de leitura/escrita e I/O, estados de espera, contenção e temporização de barramento.
 - Flags X/Y e efeitos não documentados validados contra referências e testes específicos.
 - Comportamento de prefixos repetidos, opcodes não documentados e diferenças de revisão, conforme a meta de compatibilidade.
