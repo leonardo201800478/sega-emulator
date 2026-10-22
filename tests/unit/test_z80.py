@@ -215,6 +215,144 @@ def test_jr_wraps_program_counter_at_16_bits() -> None:
     assert cpu.pc == 1
 
 
+@pytest.mark.parametrize(
+    ("opcode", "pair", "value"),
+    [
+        (0xC5, "bc", 0x1234),
+        (0xD5, "de", 0x5678),
+        (0xE5, "hl", 0x9ABC),
+        (0xF5, "af", 0xDEF0),
+    ],
+)
+def test_push_stores_register_pair_in_little_endian_stack(
+    opcode: int, pair: str, value: int
+) -> None:
+    cpu = make_cpu(bytes([opcode]))
+    cpu.sp = 0xC100
+    setattr(cpu, pair, value)
+
+    assert cpu.step() == 11
+    assert cpu.sp == 0xC0FE
+    assert cpu.bus.read(0xC0FE) == (value & 0xFF)
+    assert cpu.bus.read(0xC0FF) == (value >> 8)
+    assert cpu.total_cycles == 11
+
+
+@pytest.mark.parametrize(
+    ("opcode", "pair", "value"),
+    [
+        (0xC1, "bc", 0x1234),
+        (0xD1, "de", 0x5678),
+        (0xE1, "hl", 0x9ABC),
+        (0xF1, "af", 0xDEF0),
+    ],
+)
+def test_pop_restores_register_pair_from_stack(
+    opcode: int, pair: str, value: int
+) -> None:
+    cpu = make_cpu(bytes([opcode]))
+    cpu.sp = 0xC0FE
+    cpu.bus.write(0xC0FE, value & 0xFF)
+    cpu.bus.write(0xC0FF, value >> 8)
+
+    assert cpu.step() == 10
+    assert getattr(cpu, pair) == value
+    assert cpu.sp == 0xC100
+
+
+def test_call_pushes_return_address_and_ret_restores_it() -> None:
+    cpu = make_cpu(bytes([0xCD, 0x08, 0x00]))  # CALL 0008h
+    cpu.sp = 0xC100
+
+    assert cpu.step() == 17
+    assert cpu.pc == 0x0008
+    assert cpu.sp == 0xC0FE
+    assert cpu.bus.read(0xC0FE) == 0x03
+    assert cpu.bus.read(0xC0FF) == 0x00
+
+    cpu.bus.write(0x0008, 0xC9)  # RET
+    assert cpu.step() == 10
+    assert cpu.pc == 0x0003
+    assert cpu.sp == 0xC100
+    assert cpu.total_cycles == 27
+
+
+@pytest.mark.parametrize(
+    ("opcode", "flags", "taken"),
+    [
+        (0xC4, 0x00, True),  # CALL NZ,nn
+        (0xC4, 0x40, False),
+        (0xCC, 0x40, True),  # CALL Z,nn
+        (0xCC, 0x00, False),
+        (0xD4, 0x00, True),  # CALL NC,nn
+        (0xD4, 0x01, False),
+        (0xDC, 0x01, True),  # CALL C,nn
+        (0xDC, 0x00, False),
+    ],
+)
+def test_call_conditional_checks_flags_and_cycles(
+    opcode: int, flags: int, taken: bool
+) -> None:
+    cpu = make_cpu(bytes([opcode, 0x78, 0x56]))
+    cpu.sp = 0xC100
+    cpu.f = flags
+
+    assert cpu.step() == (17 if taken else 10)
+    assert cpu.pc == (0x5678 if taken else 3)
+    assert cpu.sp == (0xC0FE if taken else 0xC100)
+    assert cpu.f == flags
+
+
+@pytest.mark.parametrize(
+    ("opcode", "flags", "taken"),
+    [
+        (0xC0, 0x00, True),  # RET NZ
+        (0xC0, 0x40, False),
+        (0xC8, 0x40, True),  # RET Z
+        (0xC8, 0x00, False),
+        (0xD0, 0x00, True),  # RET NC
+        (0xD0, 0x01, False),
+        (0xD8, 0x01, True),  # RET C
+        (0xD8, 0x00, False),
+    ],
+)
+def test_ret_conditional_checks_flags_and_cycles(
+    opcode: int, flags: int, taken: bool
+) -> None:
+    cpu = make_cpu(bytes([opcode]))
+    cpu.sp = 0xC0FE
+    cpu.bus.write(0xC0FE, 0x34)
+    cpu.bus.write(0xC0FF, 0x12)
+    cpu.f = flags
+
+    assert cpu.step() == (11 if taken else 5)
+    assert cpu.pc == (0x1234 if taken else 1)
+    assert cpu.sp == (0xC100 if taken else 0xC0FE)
+    assert cpu.f == flags
+
+
+def test_stack_pointer_wraps_across_16_bit_boundary() -> None:
+    class FlatMemoryBus:
+        def __init__(self) -> None:
+            self.memory = bytearray(0x10000)
+            self.memory[0] = 0xC5  # PUSH BC
+
+        def read(self, address: int) -> int:
+            return self.memory[address]
+
+        def write(self, address: int, value: int) -> None:
+            self.memory[address] = value
+
+    cpu = Z80Cpu(FlatMemoryBus())
+    cpu.sp = 0x0000
+    cpu.bc = 0x1234
+
+    assert cpu.step() == 11
+    assert cpu.sp == 0xFFFE
+    assert cpu.bus.read(0xFFFE) == 0x34
+    assert cpu.bus.read(0xFFFF) == 0x12
+
+
 def test_unsupported_opcode_is_explicit() -> None:
     cpu = make_cpu(b"\x76")  # HALT ainda não foi implementado.
 
