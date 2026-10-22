@@ -13,6 +13,34 @@ def make_cpu(program: bytes) -> Z80Cpu:
     return Z80Cpu(SG1000MemoryBus(ram, program))
 
 
+@pytest.mark.parametrize(
+    ("accumulator", "initial_flags", "expected_a", "expected_flags"),
+    [
+        (0x3C, 0x10, 0x42, 0x14),  # soma BCD: corrige o nibble baixo
+        (0x9A, 0x00, 0x00, 0x55),  # soma: ajuste alto gera carry
+        (0x15, 0x00, 0x15, 0x00),  # valor BCD já válido
+        (0x1B, 0x12, 0x15, 0x02),  # subtração: corrige sem alterar N
+        (0x00, 0x03, 0xA0, 0xA7),  # subtração com carry/borrow anterior
+        (0x00, 0x00, 0x00, 0x44),  # zero e paridade par
+    ],
+)
+def test_daa_adjusts_accumulator_and_flags(
+    accumulator: int,
+    initial_flags: int,
+    expected_a: int,
+    expected_flags: int,
+) -> None:
+    cpu = make_cpu(b"\\x27")  # DAA
+    cpu.a = accumulator
+    cpu.f = initial_flags
+
+    assert cpu.step() == 4
+    assert cpu.a == expected_a
+    assert cpu.f == expected_flags
+    assert cpu.pc == 1
+    assert cpu.total_cycles == 4
+
+
 def test_ld_immediate_and_register_transfer_preserve_flags() -> None:
     cpu = make_cpu(bytes([0x06, 0x42, 0x78]))  # LD B,42h; LD A,B
     cpu.f = 0xD7
