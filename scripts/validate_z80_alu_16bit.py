@@ -158,18 +158,23 @@ def _select_left_values(count: int, sampling: str) -> tuple[int, ...]:
         0xFFFE,
         0xFFFF,
     )
-    selected = set(boundary_values)
+    selected = {
+        round(index * MASK16 / (count - 1)) for index in range(count)
+    }
+    required = set(boundary_values)
 
-    # Os quantis percorrem o espaço completo; usar até 2*count candidatos
-    # compensa colisões com as fronteiras sem gerar uma busca quadrática.
-    for index in range(count * 2):
-        if len(selected) >= count:
-            break
-        candidate = round(index * MASK16 / (count * 2 - 1))
-        selected.add(candidate)
+    # Substitui os quantis mais próximos pelas fronteiras ainda ausentes,
+    # preservando o tamanho da amostra e a distribuição pelo domínio inteiro.
+    for boundary in boundary_values:
+        if boundary in selected:
+            continue
+        replaceable = selected - required
+        if replaceable:
+            nearest = min(replaceable, key=lambda value: abs(value - boundary))
+            selected.remove(nearest)
+            selected.add(boundary)
 
     return tuple(sorted(selected))
-
 
 def _format_duration(seconds: float) -> str:
     seconds = max(0, int(seconds))
