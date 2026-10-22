@@ -1435,7 +1435,6 @@ def test_ed_load_register_pair_wraps_second_read_at_ffff(
     assert cpu.total_cycles == 20
 
 
-
 def test_ex_sp_hl_exchanges_word_preserves_flags_and_stack_pointer() -> None:
     cpu = make_cpu(bytes([0xE3]))  # EX (SP),HL
     cpu.sp = 0xC020
