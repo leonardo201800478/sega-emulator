@@ -160,9 +160,7 @@ def test_inc_dec_register_flags_for_all_byte_values_and_carry_states() -> None:
                 cpu.f = 0xFE | carry
                 cpu.pc = 0
                 assert cpu.step() == 4
-                assert cpu.b == result, (
-                    f"{operation.upper()} B={value:02X} C={carry}"
-                )
+                assert cpu.b == result, f"{operation.upper()} B={value:02X} C={carry}"
                 assert cpu.f == expected_flags, (
                     f"{operation.upper()} flags B={value:02X} C={carry}: "
                     f"obtido {cpu.f:02X}, esperado {expected_flags:02X}"
