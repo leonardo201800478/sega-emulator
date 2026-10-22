@@ -638,6 +638,36 @@ def test_immediate_alu_instructions(
     assert cpu.total_cycles == 7
 
 
+@pytest.mark.parametrize(("target", "expected_cycles"), [(0x0000, 4), (0xC123, 4), (0xFFFF, 4)])
+def test_jp_hl_jumps_to_register_pair_and_preserves_flags(
+    target: int, expected_cycles: int
+) -> None:
+    cpu = make_cpu(bytes([0xE9]))  # JP (HL)
+    cpu.hl = target
+    cpu.f = 0xD7
+
+    assert cpu.step() == expected_cycles
+    assert cpu.pc == target
+    assert cpu.hl == target
+    assert cpu.f == 0xD7
+    assert cpu.total_cycles == expected_cycles
+
+
+@pytest.mark.parametrize("value", [0x0000, 0xC123, 0xFFFF])
+def test_ld_sp_hl_copies_pair_and_preserves_flags(value: int) -> None:
+    cpu = make_cpu(bytes([0xF9]))  # LD SP,HL
+    cpu.hl = value
+    cpu.sp = 0x1234
+    cpu.f = 0xD7
+
+    assert cpu.step() == 6
+    assert cpu.sp == value
+    assert cpu.hl == value
+    assert cpu.f == 0xD7
+    assert cpu.pc == 1
+    assert cpu.total_cycles == 6
+
+
 def test_unsupported_opcode_is_explicit() -> None:
     cpu = make_cpu(b"\x76")  # HALT ainda não foi implementado.
 
