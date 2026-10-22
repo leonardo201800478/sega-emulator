@@ -375,6 +375,8 @@ class Z80Cpu:
         - LD r,r' (40h–7Fh, exceto HALT 76h)
         - ADD A,r (80h–87h), ADC A,r (88h–8Fh)
         - SUB r (90h–97h), SBC A,r (98h–9Fh)
+        - Operações ALU imediatas: ADD (C6h), ADC (CEh), SUB (D6h),
+          SBC (DEh), AND (E6h), XOR (EEh), OR (F6h), CP (FEh)
         - AND r (A0h–A7h), XOR A,r (A8h–AFh)
         - OR r (B0h–B7h), CP r (B8h–BFh)
         - INC r (04h, 0Ch, 14h, 1Ch, 24h, 2Ch, 34h, 3Ch)
@@ -430,6 +432,25 @@ class Z80Cpu:
         elif 0xB8 <= opcode <= 0xBF:  # CP r
             self._compare_a(self._read_register(opcode & 0x07))
             cycles = 7 if opcode & 0x07 == 6 else 4
+        elif opcode in (0xC6, 0xCE, 0xD6, 0xDE, 0xE6, 0xEE, 0xF6, 0xFE):
+            value = self._fetch_byte()
+            if opcode == 0xC6:  # ADD A,n
+                self._add_a(value)
+            elif opcode == 0xCE:  # ADC A,n
+                self._adc_a(value)
+            elif opcode == 0xD6:  # SUB n
+                self._sub_a(value)
+            elif opcode == 0xDE:  # SBC A,n
+                self._sbc_a(value)
+            elif opcode == 0xE6:  # AND n
+                self._and_a(value)
+            elif opcode == 0xEE:  # XOR n
+                self._xor_a(value)
+            elif opcode == 0xF6:  # OR n
+                self._or_a(value)
+            else:  # CP n
+                self._compare_a(value)
+            cycles = 7
         elif opcode & 0xC7 == 0x04:  # INC r
             register = (opcode >> 3) & 0x07
             self._write_register(
