@@ -524,7 +524,6 @@ class Z80Cpu:
         )
         return conditions[code]
 
-
     def _execute_cb(self, opcode: int) -> int:
         """Executa o conjunto CB: rotações, shifts, BIT, RES e SET."""
         register = opcode & 0x07
@@ -588,7 +587,6 @@ class Z80Cpu:
         """Solicita INT mascarável; data_bus representa o byte externo."""
         self._validate_byte(data_bus)
         self._int_pending = data_bus
-
 
     def _read_port(self, address: int) -> int:
         """Lê uma porta de 16 bits pelo barramento de I/O separado."""
@@ -751,7 +749,6 @@ class Z80Cpu:
             self.pc = (self.pc - 2) & 0xFFFF
             return 21
         return 16
-
 
     @staticmethod
     def _signed_byte(value: int) -> int:
