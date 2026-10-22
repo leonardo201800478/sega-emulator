@@ -551,6 +551,7 @@ class Z80Cpu:
         - ADD HL,rr (09h, 19h, 29h, 39h)
         - ADC HL,rr / SBC HL,rr (prefixo EDh)
         - LD (nn),rr / LD rr,(nn) (ED 43h/53h/63h/73h e ED 4Bh/5Bh/6Bh/7Bh)
+        - EX (SP),HL (E3h)
         - LD I,A (ED 47h), LD R,A (ED 4Fh), LD A,I (ED 57h), LD A,R (ED 5Fh)
         - CP r (B8h–BFh)
 
@@ -738,6 +739,16 @@ class Z80Cpu:
         elif opcode & 0xCF == 0x09:  # ADD HL,rr
             self._add_hl(self._read_stack_pair((opcode >> 4) & 0x03))
             cycles = 11
+        elif opcode == 0xE3:  # EX (SP),HL
+            low_address = self.sp
+            high_address = (self.sp + 1) & 0xFFFF
+            low_value = self.bus.read(low_address)
+            high_value = self.bus.read(high_address)
+            previous_hl = self.hl
+            self.bus.write(high_address, previous_hl >> 8)
+            self.bus.write(low_address, previous_hl & 0xFF)
+            self.hl = (high_value << 8) | low_value
+            cycles = 19
         elif opcode == 0xE9:  # JP (HL)
             self.pc = self.hl
             cycles = 4

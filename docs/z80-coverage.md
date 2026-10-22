@@ -71,7 +71,7 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | `C0, C8, D0, D8, E0, E8, F0, F8` — RET cc | Implementado — cobertura inicial | Oito condições; testes de ramos tomados/não tomados, pilha e T-states nominais. |
 | `C9` — RET | Implementado — cobertura inicial | Retorno incondicional. |
 | `D3, DB` — OUT (n),A / IN A,(n) | Ausente | Requer contrato separado de portas de I/O; não deve ser simulado como memória comum. |
-| `E3` — EX (SP),HL | Ausente | Troca entre pilha e HL. |
+| `E3` — EX (SP),HL | Implementado — cobertura inicial | Troca a palavra em (SP)/(SP+1) com HL; preserva SP e flags, trata wrap de 16 bits e contabiliza 19 T-states nominais. Testes de troca, ordem dos acessos e wraparound. |
 | `E9` — JP (HL) | Implementado — cobertura inicial | Copia HL para PC; 4 T-states nominais, flags preservadas. |
 | `F3, FB` — DI / EI | Ausente | Requer estado de habilitação de interrupções e regra de atraso do EI. |
 | `F9` — LD SP,HL | Implementado — cobertura inicial | Copia HL para SP; 6 T-states nominais, flags preservadas. |
@@ -100,7 +100,7 @@ O contador `total_cycles` atual soma os custos nominais das instruções suporta
 
 ## Ordem de implementação sugerida
 
-1. Ampliar as operações não prefixadas restantes; as oito condições de salto/chamada/retorno e EX AF,AF', EXX, EX DE,HL e RST já estão implementados.
+1. Ampliar as operações não prefixadas restantes; as oito condições de salto/chamada/retorno, EX AF,AF', EXX, EX DE,HL, EX (SP),HL e RST já estão implementados.
 2. Continuar as famílias prefixadas ED e ampliar testes de flags e comportamento de barramento; ADC/SBC HL,rr, transferências absolutas ED de palavras e transferências entre A, I e R têm implementação e testes sintéticos iniciais.
 3. Implementar HALT e o modelo de interrupções antes de declarar completo o fluxo de controle.
 4. Criar contrato de I/O e implementar IN/OUT com testes de endereço de porta.

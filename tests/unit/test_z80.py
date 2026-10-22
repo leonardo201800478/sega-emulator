@@ -1433,3 +1433,86 @@ def test_ed_load_register_pair_wraps_second_read_at_ffff(
     assert cpu.f == 0xD7
     assert cpu.pc == 0x0104
     assert cpu.total_cycles == 20
+
+
+
+def test_ex_sp_hl_exchanges_word_preserves_flags_and_stack_pointer() -> None:
+    cpu = make_cpu(bytes([0xE3]))  # EX (SP),HL
+    cpu.sp = 0xC020
+    cpu.hl = 0x7012
+    cpu.bus.write(0xC020, 0x11)
+    cpu.bus.write(0xC021, 0x22)
+    cpu.f = 0xD7
+
+    assert cpu.step() == 19
+    assert cpu.hl == 0x2211
+    assert cpu.bus.read(0xC020) == 0x12
+    assert cpu.bus.read(0xC021) == 0x70
+    assert cpu.sp == 0xC020
+    assert cpu.f == 0xD7
+    assert cpu.pc == 1
+    assert cpu.total_cycles == 19
+
+
+def test_ex_sp_hl_wraps_second_address_from_ffff_to_0000() -> None:
+    class FlatMemoryBus:
+        def __init__(self) -> None:
+            self.memory = bytearray(0x10000)
+            self.memory[0x0100] = 0xE3
+            self.memory[0xFFFF] = 0x34
+            self.memory[0x0000] = 0x12
+
+        def read(self, address: int) -> int:
+            return self.memory[address]
+
+        def write(self, address: int, value: int) -> None:
+            self.memory[address] = value
+
+    bus = FlatMemoryBus()
+    cpu = Z80Cpu(bus)
+    cpu.pc = 0x0100
+    cpu.sp = 0xFFFF
+    cpu.hl = 0xABCD
+    cpu.f = 0xA5
+
+    assert cpu.step() == 19
+    assert cpu.hl == 0x1234
+    assert bus.memory[0xFFFF] == 0xCD
+    assert bus.memory[0x0000] == 0xAB
+    assert cpu.sp == 0xFFFF
+    assert cpu.f == 0xA5
+    assert cpu.pc == 0x0101
+    assert cpu.total_cycles == 19
+
+
+def test_ex_sp_hl_reads_both_bytes_before_writing_stack() -> None:
+    class TracingMemoryBus:
+        def __init__(self) -> None:
+            self.memory = bytearray(0x10000)
+            self.memory[0x0100] = 0xE3
+            self.memory[0xC000:0xC002] = bytes([0x34, 0x12])
+            self.accesses: list[tuple[str, int, int | None]] = []
+
+        def read(self, address: int) -> int:
+            self.accesses.append(("read", address, None))
+            return self.memory[address]
+
+        def write(self, address: int, value: int) -> None:
+            self.accesses.append(("write", address, value))
+            self.memory[address] = value
+
+    bus = TracingMemoryBus()
+    cpu = Z80Cpu(bus)
+    cpu.pc = 0x0100
+    cpu.sp = 0xC000
+    cpu.hl = 0xABCD
+
+    assert cpu.step() == 19
+    assert cpu.hl == 0x1234
+    assert bus.accesses == [
+        ("read", 0x0100, None),
+        ("read", 0xC000, None),
+        ("read", 0xC001, None),
+        ("write", 0xC001, 0xAB),
+        ("write", 0xC000, 0xCD),
+    ]
