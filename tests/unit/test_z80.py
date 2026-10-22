@@ -228,6 +228,57 @@ def test_jp_conditional_checks_flags(opcode: int, flags: int, taken: bool) -> No
         (bytes([0x18, 0xFC]), 0, 0xFFFE),  # salto para trás
     ],
 )
+@pytest.mark.parametrize(
+    ("initial_b", "displacement", "expected_b", "expected_pc", "expected_cycles"),
+    [
+        (0x02, 0x02, 0x01, 0x0004, 13),  # B não zero: desvia para frente
+        (0x01, 0xFE, 0x00, 0x0000, 8),  # B chega a zero: não desvia
+        (0x00, 0x01, 0xFF, 0x0003, 13),  # decremento com wrap para FFh
+        (0x02, 0xFE, 0x01, 0x0000, 13),  # deslocamento negativo
+    ],
+)
+def test_djnz_decrements_b_branches_and_preserves_flags(
+    initial_b: int,
+    displacement: int,
+    expected_b: int,
+    expected_pc: int,
+    expected_cycles: int,
+) -> None:
+    cpu = make_cpu(bytes([0x10, displacement]))
+    cpu.b = initial_b
+    cpu.f = 0xD7
+
+    assert cpu.step() == expected_cycles
+    assert cpu.b == expected_b
+    assert cpu.pc == expected_pc
+    assert cpu.f == 0xD7
+    assert cpu.total_cycles == expected_cycles
+
+
+def test_djnz_relative_branch_wraps_program_counter() -> None:
+    class FlatMemoryBus:
+        def __init__(self) -> None:
+            self.memory = bytearray(0x10000)
+            self.memory[0xFFFE] = 0x10  # DJNZ e
+            self.memory[0xFFFF] = 0xFE  # deslocamento -2
+
+        def read(self, address: int) -> int:
+            return self.memory[address]
+
+        def write(self, address: int, value: int) -> None:
+            self.memory[address] = value
+
+    cpu = Z80Cpu(FlatMemoryBus())
+    cpu.pc = 0xFFFE
+    cpu.b = 0x02
+    cpu.f = 0xA5
+
+    assert cpu.step() == 13
+    assert cpu.b == 0x01
+    assert cpu.pc == 0xFFFE
+    assert cpu.f == 0xA5
+
+
 def test_jr_applies_signed_displacement(
     program: bytes, start_pc: int, expected_pc: int
 ) -> None:
