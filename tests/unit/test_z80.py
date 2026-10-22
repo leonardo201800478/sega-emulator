@@ -120,8 +120,7 @@ def test_daa_exhaustive_accumulator_and_hnc_input_flags() -> None:
 
             assert cpu.step() == 4
             assert (cpu.a, cpu.f) == (expected_a, expected_flags), (
-                f"DAA divergiu para A={accumulator:02X}h, "
-                f"F_in={initial_flags:02X}h"
+                f"DAA divergiu para A={accumulator:02X}h, F_in={initial_flags:02X}h"
             )
 
 def test_ld_immediate_and_register_transfer_preserve_flags() -> None:
