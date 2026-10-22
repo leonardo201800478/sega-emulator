@@ -1970,6 +1970,42 @@ def test_im0_call_uses_pc_after_external_opcode_operands_as_return_address() -> 
     assert cpu.total_cycles == 19
 
 
+def test_im0_cb_prefix_fetches_second_opcode_from_memory() -> None:
+    cpu = make_cpu(bytes([0x06]))  # RLC (HL)
+    cpu.hl = 0xC020
+    cpu.bus.write(0xC020, 0x81)
+    cpu.iff1 = cpu.iff2 = True
+    cpu.request_int(0xCB)  # Prefixo CB fornecido pelo dispositivo
+
+    assert cpu.step() == 17
+    assert cpu.bus.read(0xC020) == 0x03
+    assert cpu.pc == 1
+    assert cpu.r == 2
+
+
+def test_im0_ed_prefix_executes_instruction_from_memory() -> None:
+    cpu = make_cpu(bytes([0x44]))  # NEG
+    cpu.a = 0x01
+    cpu.iff1 = cpu.iff2 = True
+    cpu.request_int(0xED)  # Prefixo ED fornecido pelo dispositivo
+
+    assert cpu.step() == 10
+    assert cpu.a == 0xFF
+    assert cpu.pc == 1
+    assert cpu.r == 2
+
+
+def test_im0_index_prefix_fetches_instruction_and_operands_from_memory() -> None:
+    cpu = make_cpu(bytes([0x21, 0x34, 0x12]))  # LD IX,1234h
+    cpu.iff1 = cpu.iff2 = True
+    cpu.request_int(0xDD)  # Prefixo DD fornecido pelo dispositivo
+
+    assert cpu.step() == 16
+    assert cpu.ix == 0x1234
+    assert cpu.pc == 3
+    assert cpu.r == 2
+
+
 def test_all_base_opcodes_are_decoded_or_explicitly_rejected() -> None:
     for opcode in range(0x100):
         cpu = Z80Cpu(
