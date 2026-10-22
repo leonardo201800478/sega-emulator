@@ -777,6 +777,7 @@ class Z80Cpu:
         cycles = 0
         if opcode in (0xDD, 0xFD):
             self.pc = (self.pc - 1) & 0xFFFF
+            self.r = (self.r & 0x80) | ((self.r - 1) & 0x7F)
             base_cycles = self.step()
             self.total_cycles += 4
             return base_cycles + 4
@@ -954,6 +955,7 @@ class Z80Cpu:
         else:
             # O prefixo DD/FD não altera instruções que não usam HL/indexação.
             self.pc = (self.pc - 1) & 0xFFFF
+            self.r = (self.r & 0x80) | ((self.r - 1) & 0x7F)
             base_cycles = self.step()
             self.total_cycles += 4
             return base_cycles + 4
