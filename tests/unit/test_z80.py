@@ -904,14 +904,13 @@ def test_ld_sp_hl_copies_pair_and_preserves_flags(value: int) -> None:
 
 
 def test_unsupported_opcode_is_explicit() -> None:
-    cpu = make_cpu(b"\x76")  # HALT ainda não foi implementado.
+    cpu = make_cpu(bytes([0xED, 0x00]))
 
-    with pytest.raises(UnsupportedOpcodeError, match="76h"):
+    with pytest.raises(UnsupportedOpcodeError, match="ED 00h"):
         cpu.step()
 
-    assert cpu.pc == 1
+    assert cpu.pc == 2
     assert cpu.total_cycles == 0
-
 
 @pytest.mark.parametrize(
     ("pair", "expected_high", "expected_low"),
