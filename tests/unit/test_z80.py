@@ -1656,3 +1656,38 @@ def test_immediate_in_out_use_accumulator_as_high_port_byte() -> None:
     io.ports[0x1234] = 0xA5
     assert cpu.step() == 11  # IN A,(34h)
     assert cpu.a == 0xA5
+
+
+@pytest.mark.parametrize(
+    ("prefix", "expected_index"),
+    [(0xDD, "ix"), (0xFD, "iy")],
+)
+def test_index_register_load_increment_and_stack(prefix: int, expected_index: str) -> None:
+    cpu = make_cpu(bytes([prefix, 0x21, 0x34, 0x12, prefix, 0x23, prefix, 0xE5]))
+    assert cpu.step() == 14
+    assert getattr(cpu, expected_index) == 0x1234
+    assert cpu.step() == 10
+    assert getattr(cpu, expected_index) == 0x1235
+    cpu.sp = 0xC100
+    assert cpu.step() == 15
+    assert cpu.sp == 0xC0FE
+    assert cpu.bus.read(cpu.sp) == 0x35
+    assert cpu.bus.read(cpu.sp + 1) == 0x12
+
+
+def test_indexed_displacement_load_alu_and_cb_bit_operation() -> None:
+    cpu = make_cpu(bytes([
+        0xDD, 0x21, 0x10, 0xC0,       # LD IX,C010h
+        0xDD, 0x36, 0x02, 0x81,       # LD (IX+2),81h
+        0xDD, 0xCB, 0x02, 0x06,       # RLC (IX+2)
+        0xDD, 0x7E, 0x02,              # LD A,(IX+2)
+        0xDD, 0xCB, 0x02, 0x46,       # BIT 0,(IX+2)
+    ]))
+    assert cpu.step() == 14
+    assert cpu.step() == 19
+    assert cpu.step() == 23
+    assert cpu.bus.read(0xC012) == 0x03
+    assert cpu.step() == 19
+    assert cpu.a == 0x03
+    assert cpu.step() == 20
+    assert cpu.f & 0x50 == 0x10
