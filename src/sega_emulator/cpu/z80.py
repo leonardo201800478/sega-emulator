@@ -814,6 +814,14 @@ class Z80Cpu:
             cycles = 4
         elif opcode == 0xED:
             cycles = self._execute_ed(self._fetch_opcode_byte())
+        elif opcode in (0xD3, 0xDB):  # OUT (n),A / IN A,(n)
+            port_low = self._fetch_byte()
+            port = (self.a << 8) | port_low
+            if opcode == 0xD3:
+                self._write_port(port, self.a)
+            else:
+                self.a = self._read_port(port)
+            cycles = 11
         elif opcode == 0xCB:  # família CB
             cycles = self._execute_cb(self._fetch_opcode_byte())
         elif opcode == 0x76:  # HALT
