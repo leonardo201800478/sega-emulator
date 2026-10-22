@@ -46,6 +46,7 @@ O comando do módulo ainda informa que o núcleo não está implementado; a RAM 
 ## Documentação
 
 - [Arquitetura multi-sistema e estratégia de reutilização](docs/architecture.md)
+- [Auditoria de cobertura da CPU Z80](docs/z80-coverage.md)
 - [Notas de hardware do SG-1000](docs/hardware/sg1000.md)
 - Barramento inicial: `src/sega_emulator/bus/memory_bus.py`
 - Contrato de acesso à memória para a CPU: `src/sega_emulator/bus/interfaces.py`
