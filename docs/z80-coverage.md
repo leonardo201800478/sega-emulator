@@ -186,9 +186,9 @@ Esta matriz é um inventário de implementação e validação, não uma certifi
 
 ## Validação exaustiva ALU de 8 bits
 
-`tests/unit/test_z80_alu_exhaustive.py` percorre todos os pares de operandos de 8 bits para ADD, ADC, SUB, SBC, CP, AND, XOR e OR, incluindo os dois estados de carry para ADC/SBC. Também percorre todos os valores de byte e carry inicial para INC/DEC, verificando resultado, flags e preservação de C. Para 16 bits, percorre todos os pares de words em ADD HL,BC e todos os pares com carry 0/1 em ADC HL,BC e SBC HL,BC. Compara resultados e flags com fórmulas de referência independentes dos helpers da CPU e verifica os T-states nominais.
+`tests/unit/test_z80_alu_exhaustive.py` percorre todos os pares de operandos de 8 bits para ADD, ADC, SUB, SBC, CP, AND, XOR e OR, incluindo os dois estados de carry para ADC/SBC. Também percorre todos os valores de byte e carry inicial para INC/DEC, verificando resultado, flags e preservação de C. Para 16 bits, `ADD HL,BC`, `ADC HL,BC` e `SBC HL,BC` são verificados em combinações de valores-limite (incluindo fronteiras de byte, nibble, sinal e wraparound) e 256 pares determinísticos adicionais. O teste compara resultados e flags com fórmulas de referência independentes dos helpers da CPU e verifica os T-states nominais.
 
-O conjunto cobre aproximadamente 853 mil combinações de entrada em operações aritméticas e lógicas, além da matriz de 256 segundos bytes ED. É uma validação exaustiva destas famílias, não uma comparação com silício real nem uma prova de precisão temporal global. O CP verifica também que o acumulador não é alterado e que X/Y derivam do operando.
+A cobertura de 8 bits é exaustiva para as famílias citadas; a cobertura de 16 bits é direcionada e amostrada, não exaustiva. Os testes sintéticos não equivalem a uma comparação com silício real nem comprovam precisão temporal global. O CP verifica também que o acumulador não é alterado e que X/Y derivam do operando.
 
 ## Matriz de decodificação ED
 
