@@ -763,7 +763,6 @@ def test_ld_accumulator_from_indirect_pair_reads_ram_and_preserves_flags(
     assert cpu.total_cycles == 7
 
 
-
 def test_ld_absolute_from_accumulator_writes_ram_and_preserves_flags() -> None:
     cpu = make_cpu(bytes([0x32, 0x20, 0xC0]))  # LD (C020h),A
     cpu.a = 0xA5
