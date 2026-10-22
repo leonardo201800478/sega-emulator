@@ -1746,3 +1746,25 @@ def test_all_indexed_cb_opcodes_have_a_defined_execution_path() -> None:
             cycles = cpu.step()
             expected = 20 if opcode >> 6 == 1 else 23
             assert cycles == expected, f"{prefix:02X} CB {opcode:02X}h"
+
+
+def test_im0_interrupt_uses_rst_vector_from_data_bus() -> None:
+    cpu = make_cpu(bytes([0x00]))
+    cpu.sp = 0xC100
+    cpu.iff1 = cpu.iff2 = True
+    cpu.request_int(0xCF)  # RST 08h
+    assert cpu.step() == 13
+    assert cpu.pc == 0x0008
+    assert cpu.sp == 0xC0FE
+    assert cpu.bus.read(0xC0FE) == 0x00
+    assert cpu.bus.read(0xC0FF) == 0x00
+
+
+def test_im0_rejects_non_rst_bus_opcode_instead_of_misrouting_it() -> None:
+    cpu = make_cpu(bytes([0x00]))
+    cpu.iff1 = cpu.iff2 = True
+    cpu.request_int(0x00)
+    with pytest.raises(UnsupportedOpcodeError, match="IM 0"):
+        cpu.step()
+    assert cpu.pc == 0
+    assert cpu.total_cycles == 0
