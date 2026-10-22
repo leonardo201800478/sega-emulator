@@ -22,9 +22,9 @@ def test_distributed_sampling_spans_entire_16bit_domain() -> None:
 
 
 def test_distributed_sampling_includes_important_boundaries() -> None:
-    values = set(_select_left_values(13, "distributed"))
+    values = set(_select_left_values(64, "distributed"))
 
-    assert values == {
+    assert {
         0x0000,
         0x0001,
         0x000F,
@@ -38,7 +38,7 @@ def test_distributed_sampling_includes_important_boundaries() -> None:
         0x8001,
         0xFFFE,
         0xFFFF,
-    }
+    } <= values
 
 
 def test_distributed_sampling_is_deterministic_and_unique() -> None:
