@@ -34,7 +34,6 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | `D9` — EXX | Implementado — cobertura inicial | Troca simultaneamente BC/DE/HL com BC'/DE'/HL'; AF/AF' não são alterados; 4 T-states nominais. |
 | `EB` — EX DE,HL | Implementado — cobertura inicial | Troca DE e HL sem alterar flags; 4 T-states nominais. |
 | `C7, CF, D7, DF, E7, EF, F7, FF` — RST p | Implementado — cobertura inicial | Empilha o endereço de retorno e salta para os vetores 00h–38h em passos de 8; 11 T-states nominais. Testes dos oito vetores e wrap da pilha. |
-
 | `09, 19, 29, 39` — ADD HL,rr | Implementado — cobertura inicial | Inclui SP; validar flags X/Y e todos os pares/casos-limite. |
 | `0A, 1A` — LD A,(BC/DE) | Implementado — cobertura inicial | Lê A do endereço apontado por BC ou DE; 7 T-states nominais e flags preservadas. |
 | `10` — DJNZ e | Implementado — cobertura inicial | Decrementa B; desvia com deslocamento relativo assinado se B não for zero; preserva flags. Testes de ramo tomado/não tomado, wrap de B e wrap do PC; 13/8 T-states nominais. |
@@ -63,16 +62,13 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | `C2, CA, D2, DA` — JP cc,nn | Parcial | Só NZ, Z, NC e C; faltam PO, PE, P e M. |
 | `C5, D5, E5, F5` — PUSH qq | Implementado — cobertura inicial | BC, DE, HL e AF; verificar ordem de acesso e tempos de barramento em fase futura. |
 | `C1, D1, E1, F1` — POP qq | Implementado — cobertura inicial | BC, DE, HL e AF; verificar ordem de acesso e efeitos de AF. |
-
 | `C4, CC, D4, DC` — CALL cc,nn | Parcial | Só NZ, Z, NC e C; faltam PO, PE, P e M. |
 | `CD` — CALL nn | Implementado — cobertura inicial | Sub-rotina absoluta. |
 | `C0, C8, D0, D8` — RET cc | Parcial | Só NZ, Z, NC e C; faltam PO, PE, P e M. |
 | `C9` — RET | Implementado — cobertura inicial | Retorno incondicional. |
 | `D3, DB` — OUT (n),A / IN A,(n) | Ausente | Requer contrato separado de portas de I/O; não deve ser simulado como memória comum. |
-
 | `E3` — EX (SP),HL | Ausente | Troca entre pilha e HL. |
 | `E9` — JP (HL) | Implementado — cobertura inicial | Copia HL para PC; 4 T-states nominais, flags preservadas. |
-
 | `F3, FB` — DI / EI | Ausente | Requer estado de habilitação de interrupções e regra de atraso do EI. |
 | `F9` — LD SP,HL | Implementado — cobertura inicial | Copia HL para SP; 6 T-states nominais, flags preservadas. |
 
