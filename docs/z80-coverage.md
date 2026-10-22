@@ -183,3 +183,16 @@ A [CI do commit `6d82d45`](https://github.com/leonardo201800478/sega-emulator/ac
 ## Retomada documental — 22/10/2026
 
 Esta matriz é um inventário de implementação e validação, não uma certificação de conformidade. Ao retomar o trabalho, distinguir os resultados históricos de CI/testes locais do estado atual da branch. Antes de ampliar o núcleo, verificar no `main` o código e os testes vigentes, então executar uma comparação diferencial reproduzível para flags, operações ED de bloco, prefixos DD/FD e interrupções. Não tratar a existência de um handler como prova de semântica correta. A temporização por instrução continua sendo nominal: acessos M1, refresh, leitura/escrita e I/O ainda não são eventos agendados individualmente por T-state.
+
+## Validação exaustiva ALU de 8 bits
+
+`tests/unit/test_z80_alu_exhaustive.py` percorre todos os pares de operandos de 8 bits para ADD, SUB e CP, e todos os pares com carry de entrada 0/1 para ADC e SBC. Compara A e F com fórmulas de referência independentes dos helpers da CPU e confirma os 4 T-states nominais dessas operações com registrador.
+
+O teste cobre aproximadamente 393 mil execuções de instrução. É uma validação exaustiva do espaço de entrada destas cinco operações e de suas flags, não uma comparação com silício real nem uma prova de precisão temporal global. O CP verifica também que o acumulador não é alterado e que X/Y derivam do operando.
+
+## Matriz de decodificação ED
+
+`test_all_ed_second_bytes_are_supported_or_explicitly_rejected` percorre os 256 valores do segundo byte após `ED`. Cada valor é classificado como codificação aceita pelo núcleo atual ou opcode explicitamente rejeitado. Para os rejeitados, verifica PC após os dois bytes do prefixo e ausência de T-states contabilizados.
+
+Esta é uma verificação de cobertura de decodificação, não de correção semântica. Aliases aceitos pelo código não são, por esse fato, considerados documentados. Resultados, flags, efeitos de I/O e ciclos de cada família ainda exigem validação própria.
+
