@@ -122,6 +122,89 @@ def test_nop_advances_program_counter_and_cycles() -> None:
     assert cpu.total_cycles == 4
 
 
+def test_jp_absolute_loads_little_endian_target() -> None:
+    cpu = make_cpu(bytes([0xC3, 0x34, 0x12]))  # JP 1234h
+    cpu.f = 0xFF
+
+    assert cpu.step() == 10
+    assert cpu.pc == 0x1234
+    assert cpu.f == 0xFF
+    assert cpu.total_cycles == 10
+
+
+@pytest.mark.parametrize(
+    ("opcode", "flags", "taken"),
+    [
+        (0xC2, 0x00, True),  # JP NZ,nn
+        (0xC2, 0x40, False),
+        (0xCA, 0x40, True),  # JP Z,nn
+        (0xCA, 0x00, False),
+        (0xD2, 0x00, True),  # JP NC,nn
+        (0xD2, 0x01, False),
+        (0xDA, 0x01, True),  # JP C,nn
+        (0xDA, 0x00, False),
+    ],
+)
+def test_jp_conditional_checks_flags(
+    opcode: int, flags: int, taken: bool
+) -> None:
+    cpu = make_cpu(bytes([opcode, 0x78, 0x56]))
+    cpu.f = flags
+
+    assert cpu.step() == 10
+    assert cpu.pc == (0x5678 if taken else 3)
+    assert cpu.f == flags
+
+
+@pytest.mark.parametrize(
+    ("program", "start_pc", "expected_pc"),
+    [
+        (bytes([0x18, 0x03]), 0, 5),  # salto para frente
+        (bytes([0x18, 0xFC]), 0, 0xFFFE),  # salto para trás
+    ],
+)
+def test_jr_applies_signed_displacement(
+    program: bytes, start_pc: int, expected_pc: int
+) -> None:
+    cpu = make_cpu(program)
+    cpu.pc = start_pc
+
+    assert cpu.step() == 12
+    assert cpu.pc == expected_pc
+
+
+@pytest.mark.parametrize(
+    ("opcode", "flags", "taken"),
+    [
+        (0x20, 0x00, True),  # JR NZ,e
+        (0x20, 0x40, False),
+        (0x28, 0x40, True),  # JR Z,e
+        (0x28, 0x00, False),
+        (0x30, 0x00, True),  # JR NC,e
+        (0x30, 0x01, False),
+        (0x38, 0x01, True),  # JR C,e
+        (0x38, 0x00, False),
+    ],
+)
+def test_jr_conditional_checks_flags_and_cycles(
+    opcode: int, flags: int, taken: bool
+) -> None:
+    cpu = make_cpu(bytes([opcode, 0x02]))
+    cpu.f = flags
+
+    assert cpu.step() == (12 if taken else 7)
+    assert cpu.pc == (4 if taken else 2)
+    assert cpu.f == flags
+
+
+def test_jr_wraps_program_counter_at_16_bits() -> None:
+    cpu = make_cpu(bytes([0x18, 0x00]))
+    cpu.pc = 0xFFFF
+
+    assert cpu.step() == 12
+    assert cpu.pc == 1
+
+
 def test_unsupported_opcode_is_explicit() -> None:
     cpu = make_cpu(b"\x76")  # HALT ainda não foi implementado.
 
