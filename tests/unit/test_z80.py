@@ -510,7 +510,7 @@ def test_inc_and_dec_hl_indirect_update_ram() -> None:
     ("opcode", "accumulator", "operand", "expected_a", "expected_flags"),
     [
         (0xA0, 0xF0, 0x0F, 0x00, 0x54),  # AND: zero, H e paridade
-        (0xA1, 0xF3, 0x0F, 0x03, 0x14),  # AND: H e paridade par 
+        (0xA1, 0xF3, 0x0F, 0x03, 0x14),  # AND: H e paridade par
         (0xB0, 0x80, 0x01, 0x81, 0x84),  # OR: sinal e paridade par
         (0xB1, 0x00, 0x00, 0x00, 0x44),  # OR: zero e paridade par
     ],
