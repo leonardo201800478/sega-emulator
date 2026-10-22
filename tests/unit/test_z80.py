@@ -638,7 +638,9 @@ def test_immediate_alu_instructions(
     assert cpu.total_cycles == 7
 
 
-@pytest.mark.parametrize(("target", "expected_cycles"), [(0x0000, 4), (0xC123, 4), (0xFFFF, 4)])
+@pytest.mark.parametrize(
+    ("target", "expected_cycles"), [(0x0000, 4), (0xC123, 4), (0xFFFF, 4)]
+)
 def test_jp_hl_jumps_to_register_pair_and_preserves_flags(
     target: int, expected_cycles: int
 ) -> None:
