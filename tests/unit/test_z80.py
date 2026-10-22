@@ -13,6 +13,18 @@ def make_cpu(program: bytes) -> Z80Cpu:
     return Z80Cpu(SG1000MemoryBus(ram, program))
 
 
+CONDITIONAL_FLAG_CASES = [
+    (0, 0x00, 0x40),  # NZ: Z=0 / Z=1
+    (1, 0x40, 0x00),  # Z: Z=1 / Z=0
+    (2, 0x00, 0x01),  # NC: C=0 / C=1
+    (3, 0x01, 0x00),  # C: C=1 / C=0
+    (4, 0x00, 0x04),  # PO: PV=0 / PV=1
+    (5, 0x04, 0x00),  # PE: PV=1 / PV=0
+    (6, 0x00, 0x80),  # P: S=0 / S=1
+    (7, 0x80, 0x00),  # M: S=1 / S=0
+]
+
+
 @pytest.mark.parametrize(
     ("accumulator", "initial_flags", "expected_a", "expected_flags"),
     [
@@ -251,25 +263,20 @@ def test_jp_absolute_loads_little_endian_target() -> None:
 
 
 @pytest.mark.parametrize(
-    ("opcode", "flags", "taken"),
-    [
-        (0xC2, 0x00, True),  # JP NZ,nn
-        (0xC2, 0x40, False),
-        (0xCA, 0x40, True),  # JP Z,nn
-        (0xCA, 0x00, False),
-        (0xD2, 0x00, True),  # JP NC,nn
-        (0xD2, 0x01, False),
-        (0xDA, 0x01, True),  # JP C,nn
-        (0xDA, 0x00, False),
-    ],
+    ("condition_code", "taken_flags", "not_taken_flags"),
+    CONDITIONAL_FLAG_CASES,
 )
-def test_jp_conditional_checks_flags(opcode: int, flags: int, taken: bool) -> None:
-    cpu = make_cpu(bytes([opcode, 0x78, 0x56]))
-    cpu.f = flags
+def test_jp_conditional_supports_all_eight_conditions(
+    condition_code: int, taken_flags: int, not_taken_flags: int
+) -> None:
+    opcode = 0xC2 + (condition_code << 3)
+    for flags, taken in ((taken_flags, True), (not_taken_flags, False)):
+        cpu = make_cpu(bytes([opcode, 0x78, 0x56]))
+        cpu.f = flags
 
-    assert cpu.step() == 10
-    assert cpu.pc == (0x5678 if taken else 3)
-    assert cpu.f == flags
+        assert cpu.step() == 10
+        assert cpu.pc == (0x5678 if taken else 3)
+        assert cpu.f == flags
 
 
 @pytest.mark.parametrize(
@@ -512,57 +519,46 @@ def test_call_pushes_return_address_and_ret_restores_it() -> None:
 
 
 @pytest.mark.parametrize(
-    ("opcode", "flags", "taken"),
-    [
-        (0xC4, 0x00, True),  # CALL NZ,nn
-        (0xC4, 0x40, False),
-        (0xCC, 0x40, True),  # CALL Z,nn
-        (0xCC, 0x00, False),
-        (0xD4, 0x00, True),  # CALL NC,nn
-        (0xD4, 0x01, False),
-        (0xDC, 0x01, True),  # CALL C,nn
-        (0xDC, 0x00, False),
-    ],
+    ("condition_code", "taken_flags", "not_taken_flags"),
+    CONDITIONAL_FLAG_CASES,
 )
-def test_call_conditional_checks_flags_and_cycles(
-    opcode: int, flags: int, taken: bool
+def test_call_conditional_supports_all_eight_conditions_and_cycles(
+    condition_code: int, taken_flags: int, not_taken_flags: int
 ) -> None:
-    cpu = make_cpu(bytes([opcode, 0x78, 0x56]))
-    cpu.sp = 0xC100
-    cpu.f = flags
+    opcode = 0xC4 + (condition_code << 3)
+    for flags, taken in ((taken_flags, True), (not_taken_flags, False)):
+        cpu = make_cpu(bytes([opcode, 0x78, 0x56]))
+        cpu.sp = 0xC100
+        cpu.f = flags
 
-    assert cpu.step() == (17 if taken else 10)
-    assert cpu.pc == (0x5678 if taken else 3)
-    assert cpu.sp == (0xC0FE if taken else 0xC100)
-    assert cpu.f == flags
+        assert cpu.step() == (17 if taken else 10)
+        assert cpu.pc == (0x5678 if taken else 3)
+        assert cpu.sp == (0xC0FE if taken else 0xC100)
+        assert cpu.f == flags
+        if taken:
+            assert cpu.bus.read(0xC0FE) == 0x03
+            assert cpu.bus.read(0xC0FF) == 0x00
 
 
 @pytest.mark.parametrize(
-    ("opcode", "flags", "taken"),
-    [
-        (0xC0, 0x00, True),  # RET NZ
-        (0xC0, 0x40, False),
-        (0xC8, 0x40, True),  # RET Z
-        (0xC8, 0x00, False),
-        (0xD0, 0x00, True),  # RET NC
-        (0xD0, 0x01, False),
-        (0xD8, 0x01, True),  # RET C
-        (0xD8, 0x00, False),
-    ],
+    ("condition_code", "taken_flags", "not_taken_flags"),
+    CONDITIONAL_FLAG_CASES,
 )
-def test_ret_conditional_checks_flags_and_cycles(
-    opcode: int, flags: int, taken: bool
+def test_ret_conditional_supports_all_eight_conditions_and_cycles(
+    condition_code: int, taken_flags: int, not_taken_flags: int
 ) -> None:
-    cpu = make_cpu(bytes([opcode]))
-    cpu.sp = 0xC0FE
-    cpu.bus.write(0xC0FE, 0x34)
-    cpu.bus.write(0xC0FF, 0x12)
-    cpu.f = flags
+    opcode = 0xC0 + (condition_code << 3)
+    for flags, taken in ((taken_flags, True), (not_taken_flags, False)):
+        cpu = make_cpu(bytes([opcode]))
+        cpu.sp = 0xC0FE
+        cpu.bus.write(0xC0FE, 0x34)
+        cpu.bus.write(0xC0FF, 0x12)
+        cpu.f = flags
 
-    assert cpu.step() == (11 if taken else 5)
-    assert cpu.pc == (0x1234 if taken else 1)
-    assert cpu.sp == (0xC100 if taken else 0xC0FE)
-    assert cpu.f == flags
+        assert cpu.step() == (11 if taken else 5)
+        assert cpu.pc == (0x1234 if taken else 1)
+        assert cpu.sp == (0xC100 if taken else 0xC0FE)
+        assert cpu.f == flags
 
 
 def test_stack_pointer_wraps_across_16_bit_boundary() -> None:
