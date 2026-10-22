@@ -51,7 +51,7 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | `3A` — LD A,(nn) | Implementado — cobertura inicial | Lê de endereço absoluto little-endian; 13 T-states nominais, flags preservadas. |
 | `37` — SCF | Implementado — cobertura inicial | Define C, limpa H/N, preserva S/Z/PV e copia X/Y de A; 4 T-states nominais. |
 | `3F` — CCF | Implementado — cobertura inicial | Inverte C, copia C anterior para H, limpa N, preserva S/Z/PV e copia X/Y de A; 4 T-states nominais. |
-| `40–75, 77–7F` — LD r,r' | Implementado — cobertura inicial | Registradores e (HL); opcode `76` HALT não está implementado. |
+| `40–75, 77–7F` — LD r,r' | Implementado — cobertura inicial | Registradores e (HL); `76` é documentado separadamente como HALT. |
 | `76` — HALT | Implementado — cobertura inicial | Estado de suspensão e ciclos repetidos; validar detalhes de fetch durante HALT. |
 | `80–87` — ADD A,r | Implementado — cobertura inicial | Registros e (HL); expandir testes de flags. |
 | `88–8F` — ADC A,r | Implementado — cobertura inicial | Carry de entrada implementado; ampliar testes exaustivos de carry e overflow. |
@@ -109,3 +109,15 @@ O contador `total_cycles` atual soma os custos nominais das instruções suporta
 O conjunto documentado tem caminhos de execução nas famílias base, CB, ED, DD/FD e DD/FD-CB. Isso não equivale a validação exaustiva de cada combinação de entradas nem à precisão ciclo a ciclo.
 
 Cada incremento deverá atualizar esta matriz, testes, documentação de hardware e README quando o estado do marco mudar. Não declarar “Z80 completo” enquanto houver lacunas ou enquanto os critérios de validação não forem satisfeitos.
+
+
+## Verificação local registrada em 22/10/2026
+
+Na branch `main`, commit `d6228f24b4f562d5b366296c0494f00c23def8c9`, o usuário executou os testes no Windows com Python 3.14.7 e pytest 9.1.1:
+
+- `python -m pytest -v`: **262 passed in 0.60s**.
+- `ruff check .`: aprovado.
+- `ruff format --check .`: 19 arquivos já formatados.
+- `git diff --check`: sem erros reportados.
+
+Essa execução confirma os testes presentes no repositório nesse commit, não valida instruções ainda ausentes, não substitui comparação diferencial com uma suíte independente e não comprova precisão ciclo a ciclo. A cobertura indicada nesta matriz continua sendo “caminho implementado” até validação específica por família.
