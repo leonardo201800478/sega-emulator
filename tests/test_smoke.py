@@ -15,4 +15,4 @@ def test_entry_point_reports_scaffold_state(capsys) -> None:
     main()
 
     captured = capsys.readouterr()
-    assert "núcleo ainda não implementado" in captured.out
+    assert "máquina SG-1000 ainda não integrada" in captured.out
