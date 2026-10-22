@@ -86,6 +86,12 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | `FD` | Implementado — cobertura inicial | Equivalente para IY; validação diferencial e de casos especiais ainda pendente. |
 | `DD CB d` / `FD CB d` | Implementado — cobertura inicial | Operações sobre (IX+d)/(IY+d), incluindo cópia opcional para registrador; validação de flags e temporização ainda pendente. |
 
+## Matriz de decodificação ED
+
+O teste `test_all_ed_second_bytes_are_supported_or_explicitly_rejected` percorre os 256 valores do segundo byte após `ED`. Cada valor está classificado como instrução documentada implementada (incluindo aliases documentados) ou opcode explicitamente rejeitado pelo núcleo atual. Para os rejeitados, o teste verifica também que o PC consumiu os dois bytes do prefixo e que não foram contabilizados T-states.
+
+Esta é uma **verificação de cobertura de decodificação**, não uma validação semântica: os caminhos aceitos ainda precisam de testes independentes para resultados, flags, endereços, efeitos de I/O e ciclos. NOPs/aliases não documentados e comportamentos específicos de variantes continuam pendentes; não devem ser aceitos implicitamente só por pertencerem à região ED.
+
 ## Estado interno, interrupções e ciclo de barramento
 
 O código atual modela registradores principais e alternativos, I/R, IX/IY, SP, PC, flags e um acumulador de T-states nominais. Ainda faltam, entre outros:
