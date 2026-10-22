@@ -76,7 +76,6 @@ def test_accumulator_rotates_update_carry_and_preserve_selected_flags(
     assert cpu.total_cycles == 4
 
 
-
 def _reference_daa(accumulator: int, flags: int) -> tuple[int, int]:
     """Modelo de referência algorítmico para DAA, restrito a A/N/H/C de entrada."""
     subtract = bool(flags & 0x02)
