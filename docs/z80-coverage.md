@@ -36,7 +36,7 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | `10` — DJNZ e | Ausente | Desvio condicional pelo contador B. |
 | `18` — JR e | Implementado — cobertura inicial | Deslocamento relativo com sinal e wrap do PC já têm testes selecionados. |
 | `20, 28, 30, 38` — JR cc,e | Implementado — cobertura inicial | NZ, Z, NC, C; as condições relativas disponíveis na base são estas quatro. |
-| `22` — LD (nn),HL | Implementado — cobertura inicial | Escreve L no endereço e H no endereço seguinte, com wrap de 16 bits; 16 T-states nominais e flags preservadas. 
+| `22` — LD (nn),HL | Implementado — cobertura inicial | Escreve L no endereço e H no endereço seguinte, com wrap de 16 bits; 16 T-states nominais e flags preservadas. |
 | `2A` — LD HL,(nn) | Implementado — cobertura inicial | Lê dois bytes em little-endian, com wrap de 16 bits; 16 T-states nominais e flags preservadas. |
 | `27` — DAA | Ausente | Ajuste decimal; exige testes de flags e combinações de entrada. |
 | `2F` — CPL | Ausente | Complemento do acumulador. |
@@ -66,10 +66,10 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | `D3, DB` — OUT (n),A / IN A,(n) | Ausente | Requer contrato separado de portas de I/O; não deve ser simulado como memória comum. |
 | `D9` — EXX | Ausente | Requer bancos alternativos BC', DE' e HL'. |
 | `E3` — EX (SP),HL | Ausente | Troca entre pilha e HL. |
-| `E9` — JP (HL) | Ausente | Salto indireto. |
+| `E9` — JP (HL) | Implementado — cobertura inicial | Copia HL para PC; 4 T-states nominais, flags preservadas. |
 | `EB` — EX DE,HL | Ausente | Troca de pares. |
 | `F3, FB` — DI / EI | Ausente | Requer estado de habilitação de interrupções e regra de atraso do EI. |
-| `F9` — LD SP,HL | Ausente | Transferência de par para SP. |
+| `F9` — LD SP,HL | Implementado — cobertura inicial | Copia HL para SP; 6 T-states nominais, flags preservadas. |
 
 ## Famílias prefixadas
 
