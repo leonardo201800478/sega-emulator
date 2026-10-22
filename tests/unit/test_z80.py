@@ -1748,6 +1748,63 @@ def test_all_indexed_cb_opcodes_have_a_defined_execution_path() -> None:
             assert cycles == expected, f"{prefix:02X} CB {opcode:02X}h"
 
 
+@pytest.mark.parametrize(
+    ("interrupt_mode", "data_bus", "expected_cycles", "expected_pc"),
+    [
+        (0, 0xCF, 13, 0x0008),  # IM 0: RST 08h fornecido pelo barramento
+        (1, 0xFF, 13, 0x0038),  # IM 1: vetor fixo
+        (2, 0x20, 19, 0x5678),  # IM 2: vetor lido da tabela
+    ],
+)
+def test_maskable_interrupt_acknowledge_increments_refresh_register(
+    interrupt_mode: int, data_bus: int, expected_cycles: int, expected_pc: int
+) -> None:
+    cpu = make_cpu(bytes([0x00]))
+    cpu.sp = 0xC100
+    cpu.i = 0xC1
+    cpu.interrupt_mode = interrupt_mode
+    cpu.iff1 = cpu.iff2 = True
+    cpu.r = 0xFE
+    if interrupt_mode == 2:
+        cpu.bus.write(0xC120, 0x78)
+        cpu.bus.write(0xC121, 0x56)
+
+    cpu.request_int(data_bus)
+
+    assert cpu.step() == expected_cycles
+    assert cpu.pc == expected_pc
+    assert cpu.r == 0xFF  # preserva bit 7 e incrementa apenas os 7 bits baixos
+    assert cpu.iff1 is False
+    assert cpu.iff2 is False
+
+
+def test_nmi_acknowledge_increments_refresh_register() -> None:
+    cpu = make_cpu(bytes([0x00]))
+    cpu.sp = 0xC100
+    cpu.r = 0xFF
+
+    cpu.request_nmi()
+
+    assert cpu.step() == 11
+    assert cpu.pc == 0x0066
+    assert cpu.r == 0x80  # overflow dos 7 bits baixos preserva o bit 7
+
+
+def test_ei_enables_maskable_interrupt_after_following_instruction() -> None:
+    cpu = make_cpu(bytes([0xFB, 0x00, 0x00]))  # EI; NOP; NOP
+    cpu.sp = 0xC100
+    cpu.request_int(0xFF)  # IM 1
+
+    assert cpu.step() == 4  # EI
+    assert cpu.pc == 1
+    assert cpu.step() == 4  # a instrução seguinte ainda é executada
+    assert cpu.pc == 2
+    assert cpu.step() == 13  # INT aceita-se agora, antes do segundo NOP
+    assert cpu.pc == 0x0038
+    assert cpu.bus.read(0xC0FE) == 0x02
+    assert cpu.bus.read(0xC0FF) == 0x00
+
+
 def test_im0_interrupt_uses_rst_vector_from_data_bus() -> None:
     cpu = make_cpu(bytes([0x00]))
     cpu.sp = 0xC100
