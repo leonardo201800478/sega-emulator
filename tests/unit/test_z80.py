@@ -912,6 +912,7 @@ def test_unsupported_opcode_is_explicit() -> None:
     assert cpu.pc == 2
     assert cpu.total_cycles == 0
 
+
 @pytest.mark.parametrize(
     ("pair", "expected_high", "expected_low"),
     [
