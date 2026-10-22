@@ -88,3 +88,81 @@ def test_8bit_alu_results_and_flags_for_all_operand_combinations() -> None:
                         f"B={operand:02X} C={carry}: "
                         f"obtido {cpu.f:02X}, esperado {expected_flags:02X}"
                     )
+
+def test_logic_register_operations_for_all_operand_combinations() -> None:
+    """Valida AND/XOR/OR para todos os pares A,B e suas flags."""
+    operations = (("and", 0xA0), ("xor", 0xA8), ("or", 0xB0))
+    ram = SG1000Ram(bytes(RAM_SIZE))
+
+    for operation, opcode in operations:
+        cpu = Z80Cpu(SG1000MemoryBus(ram, bytes([opcode])))
+        for accumulator in range(0x100):
+            for operand in range(0x100):
+                if operation == "and":
+                    result = accumulator & operand
+                elif operation == "xor":
+                    result = accumulator ^ operand
+                else:
+                    result = accumulator | operand
+
+                expected_flags = result & 0xA8
+                if result == 0:
+                    expected_flags |= 0x40
+                if result.bit_count() % 2 == 0:
+                    expected_flags |= 0x04
+                if operation == "and":
+                    expected_flags |= 0x10
+
+                cpu.a = accumulator
+                cpu.b = operand
+                cpu.f = 0xFF
+                cpu.pc = 0
+                assert cpu.step() == 4
+                assert cpu.a == result, (
+                    f"{operation.upper()} A={accumulator:02X} B={operand:02X}"
+                )
+                assert cpu.f == expected_flags, (
+                    f"{operation.upper()} flags A={accumulator:02X} "
+                    f"B={operand:02X}: obtido {cpu.f:02X}, "
+                    f"esperado {expected_flags:02X}"
+                )
+
+
+def test_inc_dec_register_flags_for_all_byte_values_and_carry_states() -> None:
+    """Valida INC B e DEC B em todo o domínio de 8 bits, preservando apenas C."""
+    ram = SG1000Ram(bytes(RAM_SIZE))
+
+    for operation, opcode in (("inc", 0x04), ("dec", 0x05)):
+        cpu = Z80Cpu(SG1000MemoryBus(ram, bytes([opcode])))
+        for value in range(0x100):
+            for carry in (0, 1):
+                if operation == "inc":
+                    result = (value + 1) & 0xFF
+                    expected_flags = (result & 0xA8) | carry
+                    if result == 0:
+                        expected_flags |= 0x40
+                    if (value & 0x0F) == 0x0F:
+                        expected_flags |= 0x10
+                    if value == 0x7F:
+                        expected_flags |= 0x04
+                else:
+                    result = (value - 1) & 0xFF
+                    expected_flags = (result & 0xA8) | 0x02 | carry
+                    if result == 0:
+                        expected_flags |= 0x40
+                    if (value & 0x0F) == 0:
+                        expected_flags |= 0x10
+                    if value == 0x80:
+                        expected_flags |= 0x04
+
+                cpu.b = value
+                cpu.f = 0xFE | carry
+                cpu.pc = 0
+                assert cpu.step() == 4
+                assert cpu.b == result, (
+                    f"{operation.upper()} B={value:02X} C={carry}"
+                )
+                assert cpu.f == expected_flags, (
+                    f"{operation.upper()} flags B={value:02X} C={carry}: "
+                    f"obtido {cpu.f:02X}, esperado {expected_flags:02X}"
+                )
