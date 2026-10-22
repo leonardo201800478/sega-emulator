@@ -196,3 +196,20 @@ A cobertura de 8 bits é exaustiva para as famílias citadas; a cobertura de 16 
 
 Esta é uma verificação de cobertura de decodificação, não de correção semântica. Aliases aceitos pelo código não são, por esse fato, considerados documentados. Resultados, flags, efeitos de I/O e ciclos de cada família ainda exigem validação própria.
 
+
+
+## Validação ALU de 16 bits com progresso e paralelismo
+
+Para investigações demoradas, existe o utilitário opcional `scripts/validate_z80_alu_16bit.py`. Ele valida a execução real da CPU para `ADD HL,BC`, `ADC HL,BC` e `SBC HL,BC`, comparando resultado, flags e T-states nominais com fórmulas independentes. O processo principal exibe percentual, valores HL concluídos, tempo decorrido e estimativa restante; os casos são distribuídos entre processos para usar vários núcleos sem depender do GIL do CPython.
+
+Exemplos no PowerShell, a partir da raiz do repositório:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/validate_z80_alu_16bit.py --left-count 1
+.\.venv\Scripts\python.exe scripts/validate_z80_alu_16bit.py --left-count 16
+.\.venv\Scripts\python.exe scripts/validate_z80_alu_16bit.py --full
+```
+
+O modo padrão verifica 16 valores de HL contra todos os 65.536 valores de BC. `--full` percorre todos os 65.536 valores de HL e, portanto, todos os pares de 16 bits. O modo completo equivale a cerca de **21,47 bilhões de verificações de instrução**; o paralelismo pode reduzir o tempo conforme CPU, número de núcleos e overhead, mas não o transforma em um teste curto. Começar com `--left-count 1` para validar o utilitário e estimar o desempenho antes de escolher a execução completa.
+
+O utilitário é intencionalmente separado do pytest padrão: a suíte diária deve permanecer rápida e determinística. O paralelismo é por processos, não por threads, porque o teste é CPU-bound e threads Python normalmente não aceleram esse tipo de trabalho sob o GIL. A cobertura completa ainda não foi executada nesta revisão.
