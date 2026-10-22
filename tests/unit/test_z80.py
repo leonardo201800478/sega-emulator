@@ -1691,3 +1691,11 @@ def test_indexed_displacement_load_alu_and_cb_bit_operation() -> None:
     assert cpu.a == 0x03
     assert cpu.step() == 20
     assert cpu.f & 0x50 == 0x10
+
+
+def test_ignored_index_prefix_counts_each_m1_fetch_once() -> None:
+    cpu = make_cpu(bytes([0xDD, 0x00]))
+    assert cpu.step() == 8
+    assert cpu.pc == 2
+    assert cpu.r == 2
+    assert cpu.total_cycles == 8
