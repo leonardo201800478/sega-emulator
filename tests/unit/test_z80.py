@@ -1590,3 +1590,54 @@ def test_di_ei_and_nmi_service() -> None:
     assert cpu.step() == 11
     assert cpu.pc == 0x0066
     assert cpu.sp == 0xC0FE
+
+
+class FakeIOBus:
+    def __init__(self) -> None:
+        self.ports: dict[int, int] = {}
+        self.writes: list[tuple[int, int]] = []
+
+    def read_port(self, address: int) -> int:
+        return self.ports.get(address, 0xFF)
+
+    def write_port(self, address: int, value: int) -> None:
+        self.writes.append((address, value))
+        self.ports[address] = value
+
+
+def test_ed_in_out_use_separate_io_bus() -> None:
+    io = FakeIOBus()
+    cpu = Z80Cpu(SG1000MemoryBus(SG1000Ram(bytes(RAM_SIZE)), bytes([0xED, 0x78, 0xED, 0x79])), io_bus=io)
+    cpu.bc = 0x1234
+    io.ports[0x1234] = 0x81
+    assert cpu.step() == 12  # IN A,(C)
+    assert cpu.a == 0x81
+    assert cpu.f & 0xA9 == 0x81
+    assert cpu.step() == 12  # OUT (C),A
+    assert io.writes[-1] == (0x1234, 0x81)
+
+
+def test_ed_ldir_repeats_until_bc_zero() -> None:
+    cpu = make_cpu(bytes([0xED, 0xB0]))
+    cpu.hl, cpu.de, cpu.bc, cpu.a = 0xC010, 0xC020, 2, 0
+    cpu.bus.write(0xC010, 0x34)
+    cpu.bus.write(0xC011, 0x56)
+    assert cpu.step() == 21
+    assert cpu.pc == 0
+    assert cpu.step() == 16
+    assert cpu.bc == 0
+    assert cpu.bus.read(0xC020) == 0x34
+    assert cpu.bus.read(0xC021) == 0x56
+
+
+def test_ed_rrd_rld_exchange_nibbles() -> None:
+    cpu = make_cpu(bytes([0xED, 0x67, 0xED, 0x6F]))
+    cpu.hl = 0xC010
+    cpu.a = 0x12
+    cpu.bus.write(cpu.hl, 0x34)
+    assert cpu.step() == 18
+    assert cpu.a == 0x14
+    assert cpu.bus.read(cpu.hl) == 0x23
+    assert cpu.step() == 18
+    assert cpu.a == 0x12
+    assert cpu.bus.read(cpu.hl) == 0x34
