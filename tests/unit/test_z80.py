@@ -76,6 +76,53 @@ def test_accumulator_rotates_update_carry_and_preserve_selected_flags(
     assert cpu.total_cycles == 4
 
 
+def _reference_daa(accumulator: int, flags: int) -> tuple[int, int]:
+    """Modelo de referência algorítmico para DAA, restrito a A/N/H/C de entrada."""
+    subtract = bool(flags & 0x02)
+    half_carry = bool(flags & 0x10)
+    carry = bool(flags & 0x01)
+
+    correction = 0
+    if half_carry or (not subtract and (accumulator & 0x0F) > 9):
+        correction |= 0x06
+    if carry or (not subtract and accumulator > 0x99):
+        correction |= 0x60
+
+    result = (accumulator - correction if subtract else accumulator + correction) & 0xFF
+    output_flags = result & 0xA8  # S e os bits não documentados X/Y
+    output_flags |= flags & 0x02  # N é preservado
+    if result == 0:
+        output_flags |= 0x40
+    if result.bit_count() % 2 == 0:
+        output_flags |= 0x04
+    if (accumulator ^ result) & 0x10:
+        output_flags |= 0x10
+    if carry or (not subtract and accumulator > 0x99):
+        output_flags |= 0x01
+    return result, output_flags
+
+
+def test_daa_exhaustive_accumulator_and_hnc_input_flags() -> None:
+    """Verifica os 256 valores de A para todas as 8 combinações de H/N/C."""
+    cpu = make_cpu(bytes([0x27]))  # DAA
+    for initial_hnc in range(8):
+        initial_flags = (
+            ((initial_hnc >> 2) & 1) << 4  # H
+            | ((initial_hnc >> 1) & 1) << 1  # N
+            | (initial_hnc & 1)  # C
+        )
+        for accumulator in range(256):
+            cpu.a = accumulator
+            cpu.f = initial_flags
+            cpu.pc = 0
+            expected_a, expected_flags = _reference_daa(accumulator, initial_flags)
+
+            assert cpu.step() == 4
+            assert (cpu.a, cpu.f) == (expected_a, expected_flags), (
+                f"DAA divergiu para A={accumulator:02X}h, F_in={initial_flags:02X}h"
+            )
+
+
 def test_ld_immediate_and_register_transfer_preserve_flags() -> None:
     cpu = make_cpu(bytes([0x06, 0x42, 0x78]))  # LD B,42h; LD A,B
     cpu.f = 0xD7
