@@ -260,6 +260,24 @@ class Z80Cpu:
         self.a = result_byte
         self.f = flags
 
+    def _adc_a(self, value: int) -> None:
+        """Executa ADC A,value incluindo o carry de entrada."""
+        accumulator = self.a
+        carry_in = self.f & 0x01
+        result = accumulator + value + carry_in
+        result_byte = result & 0xFF
+        flags = result_byte & 0xA8
+        if result_byte == 0:
+            flags |= 0x40
+        if (accumulator & 0x0F) + (value & 0x0F) + carry_in > 0x0F:
+            flags |= 0x10
+        if (~(accumulator ^ value) & (accumulator ^ result_byte) & 0x80) != 0:
+            flags |= 0x04
+        if result > 0xFF:
+            flags |= 0x01
+        self.a = result_byte
+        self.f = flags
+
     def _sub_a(self, value: int) -> None:
         """Executa SUB value e atualiza as flags documentadas e XY."""
         accumulator = self.a
@@ -272,6 +290,23 @@ class Z80Cpu:
         if ((accumulator ^ value) & (accumulator ^ result_byte) & 0x80) != 0:
             flags |= 0x04
         if accumulator < value:
+            flags |= 0x01
+        self.a = result_byte
+        self.f = flags
+
+    def _sbc_a(self, value: int) -> None:
+        """Executa SBC A,value incluindo o carry/borrow de entrada."""
+        accumulator = self.a
+        carry_in = self.f & 0x01
+        result_byte = (accumulator - value - carry_in) & 0xFF
+        flags = (result_byte & 0xA8) | 0x02
+        if result_byte == 0:
+            flags |= 0x40
+        if (accumulator & 0x0F) < ((value & 0x0F) + carry_in):
+            flags |= 0x10
+        if ((accumulator ^ value) & (accumulator ^ result_byte) & 0x80) != 0:
+            flags |= 0x04
+        if accumulator < value + carry_in:
             flags |= 0x01
         self.a = result_byte
         self.f = flags
@@ -338,8 +373,10 @@ class Z80Cpu:
         - NOP (00h)
         - LD r,n (06h, 0Eh, 16h, 1Eh, 26h, 2Eh, 36h, 3Eh)
         - LD r,r' (40h–7Fh, exceto HALT 76h)
-        - ADD A,r (80h–87h), SUB r (90h–97h), AND r (A0h–A7h)
-        - XOR A,r (A8h–AFh), OR r (B0h–B7h), CP r (B8h–BFh)
+        - ADD A,r (80h–87h), ADC A,r (88h–8Fh)
+        - SUB r (90h–97h), SBC A,r (98h–9Fh)
+        - AND r (A0h–A7h), XOR A,r (A8h–AFh)
+        - OR r (B0h–B7h), CP r (B8h–BFh)
         - INC r (04h, 0Ch, 14h, 1Ch, 24h, 2Ch, 34h, 3Ch)
         - DEC r (05h, 0Dh, 15h, 1Dh, 25h, 2Dh, 35h, 3Dh)
         - JP nn (C3h), JP cc,nn (C2h, CAh, D2h, DAh)
@@ -372,8 +409,14 @@ class Z80Cpu:
         elif 0x80 <= opcode <= 0x87:  # ADD A,r
             self._add_a(self._read_register(opcode & 0x07))
             cycles = 7 if opcode & 0x07 == 6 else 4
+        elif 0x88 <= opcode <= 0x8F:  # ADC A,r
+            self._adc_a(self._read_register(opcode & 0x07))
+            cycles = 7 if opcode & 0x07 == 6 else 4
         elif 0x90 <= opcode <= 0x97:  # SUB r
             self._sub_a(self._read_register(opcode & 0x07))
+            cycles = 7 if opcode & 0x07 == 6 else 4
+        elif 0x98 <= opcode <= 0x9F:  # SBC A,r
+            self._sbc_a(self._read_register(opcode & 0x07))
             cycles = 7 if opcode & 0x07 == 6 else 4
         elif 0xA0 <= opcode <= 0xA7:  # AND r
             self._and_a(self._read_register(opcode & 0x07))
