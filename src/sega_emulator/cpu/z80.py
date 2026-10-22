@@ -854,8 +854,22 @@ class Z80Cpu:
                 if register != 6:
                     self._write_register(register, result)
                 cycles = 23
-        elif opcode in (0x21, 0x22, 0x2A, 0x23, 0x2B, 0x09, 0x19, 0x29, 0x39,
-                        0xE1, 0xE5, 0xE3, 0xE9, 0xF9):
+        elif opcode in (
+            0x21,
+            0x22,
+            0x2A,
+            0x23,
+            0x2B,
+            0x09,
+            0x19,
+            0x29,
+            0x39,
+            0xE1,
+            0xE5,
+            0xE3,
+            0xE9,
+            0xF9,
+        ):
             if opcode == 0x21:
                 low = self._fetch_byte()
                 high = self._fetch_byte()
