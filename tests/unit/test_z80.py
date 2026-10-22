@@ -450,6 +450,97 @@ def test_cp_reads_operand_from_hl() -> None:
     assert cpu.f == 0x62
 
 
+@pytest.mark.parametrize(
+    ("opcode", "initial", "expected", "expected_flags"),
+    [
+        (0x04, 0x7F, 0x80, 0x95),  # overflow; carry preservado
+        (0x0C, 0x0F, 0x10, 0x11),  # half-carry
+        (0x3C, 0xFF, 0x00, 0x55),  # zero e half-carry
+    ],
+)
+def test_inc_register_updates_flags_and_preserves_carry(
+    opcode: int, initial: int, expected: int, expected_flags: int
+) -> None:
+    cpu = make_cpu(bytes([opcode]))
+    cpu.b = initial
+    cpu.a = initial
+    cpu.f = 0x01
+
+    assert cpu.step() == 4
+    register = (opcode >> 3) & 0x07
+    assert cpu._read_register(register) == expected
+    assert cpu.f == expected_flags
+
+
+@pytest.mark.parametrize(
+    ("opcode", "initial", "expected", "expected_flags"),
+    [
+        (0x05, 0x80, 0x7F, 0x3F),  # overflow e half-borrow
+        (0x0D, 0x01, 0x00, 0x43),  # zero, N e carry preservado
+        (0x3D, 0x00, 0xFF, 0xBB),  # sinal, half-borrow e N
+    ],
+)
+def test_dec_register_updates_flags_and_preserves_carry(
+    opcode: int, initial: int, expected: int, expected_flags: int
+) -> None:
+    cpu = make_cpu(bytes([opcode]))
+    cpu.b = initial
+    cpu.a = initial
+    cpu.f = 0x01
+
+    assert cpu.step() == 4
+    register = (opcode >> 3) & 0x07
+    assert cpu._read_register(register) == expected
+    assert cpu.f == expected_flags
+
+
+def test_inc_and_dec_hl_indirect_update_ram() -> None:
+    cpu = make_cpu(bytes([0x34, 0x35]))  # INC (HL); DEC (HL)
+    cpu.hl = 0xC020
+    cpu.bus.write(0xC020, 0x7F)
+
+    assert cpu.step() == 11
+    assert cpu.bus.read(0xC020) == 0x80
+    assert cpu.f == 0x94
+
+    assert cpu.step() == 11
+    assert cpu.bus.read(0xC020) == 0x7F
+    assert cpu.f == 0x3E
+
+
+@pytest.mark.parametrize(
+    ("opcode", "accumulator", "operand", "expected_a", "expected_flags"),
+    [
+        (0xA0, 0xF0, 0x0F, 0x00, 0x54),  # AND: zero, H e paridade
+        (0xA1, 0xF3, 0x0F, 0x03, 0x14),  # AND: H e paridade ímpar? 
+        (0xB0, 0x80, 0x01, 0x81, 0x84),  # OR: sinal e paridade par
+        (0xB1, 0x00, 0x00, 0x00, 0x44),  # OR: zero e paridade par
+    ],
+)
+def test_and_or_register_update_accumulator_and_flags(
+    opcode: int, accumulator: int, operand: int, expected_a: int, expected_flags: int
+) -> None:
+    cpu = make_cpu(bytes([opcode]))
+    cpu.a = accumulator
+    cpu.b = operand
+    cpu.f = 0xFF
+
+    assert cpu.step() == 4
+    assert cpu.a == expected_a
+    assert cpu.f == expected_flags
+
+
+def test_and_reads_operand_from_hl() -> None:
+    cpu = make_cpu(b"\\xa6")  # AND (HL)
+    cpu.hl = 0xC020
+    cpu.a = 0xF3
+    cpu.bus.write(0xC020, 0x0F)
+
+    assert cpu.step() == 7
+    assert cpu.a == 0x03
+    assert cpu.f == 0x14
+
+
 def test_unsupported_opcode_is_explicit() -> None:
     cpu = make_cpu(b"\x76")  # HALT ainda não foi implementado.
 
