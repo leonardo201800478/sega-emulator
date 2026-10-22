@@ -718,7 +718,6 @@ def test_ld_register_pair_immediate_wraps_program_counter() -> None:
     assert cpu.pc == 0x0001
 
 
-
 @pytest.mark.parametrize(
     ("opcode", "pair", "address", "value"),
     [
