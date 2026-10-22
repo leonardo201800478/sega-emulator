@@ -1720,3 +1720,29 @@ def test_ignored_index_prefix_counts_each_m1_fetch_once() -> None:
     assert cpu.pc == 2
     assert cpu.r == 2
     assert cpu.total_cycles == 8
+
+
+def test_all_cb_opcodes_have_a_defined_execution_path() -> None:
+    for opcode in range(0x100):
+        cpu = make_cpu(bytes([0xCB, opcode]))
+        cpu.hl = 0xC020
+        cpu.bus.write(cpu.hl, 0xA5)
+        cycles = cpu.step()
+        register = opcode & 0x07
+        operation = opcode >> 6
+        expected = 12 if register == 6 and operation == 1 else (
+            15 if register == 6 else 8
+        )
+        assert cycles == expected, f"CB {opcode:02X}h"
+
+
+def test_all_indexed_cb_opcodes_have_a_defined_execution_path() -> None:
+    for prefix in (0xDD, 0xFD):
+        for opcode in range(0x100):
+            cpu = make_cpu(bytes([prefix, 0xCB, 0x00, opcode]))
+            cpu.ix = 0xC020
+            cpu.iy = 0xC020
+            cpu.bus.write(0xC020, 0xA5)
+            cycles = cpu.step()
+            expected = 20 if opcode >> 6 == 1 else 23
+            assert cycles == expected, f"{prefix:02X} CB {opcode:02X}h"
