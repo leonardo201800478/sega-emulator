@@ -311,6 +311,25 @@ class Z80Cpu:
         self.a = result_byte
         self.f = flags
 
+    def _rotate_accumulator(self, opcode: int) -> None:
+        """Executa RLCA, RRCA, RLA ou RRA com flags específicas do Z80."""
+        accumulator = self.a
+        old_carry = self.f & 0x01
+
+        if opcode in (0x07, 0x17):  # RLCA / RLA
+            carry_out = (accumulator >> 7) & 0x01
+            carry_in = old_carry if opcode == 0x17 else carry_out
+            result = ((accumulator << 1) | carry_in) & 0xFF
+        else:  # RRCA / RRA
+            carry_out = accumulator & 0x01
+            carry_in = old_carry if opcode == 0x1F else carry_out
+            result = (accumulator >> 1) | (carry_in << 7)
+
+        # Estas quatro instruções preservam S, Z e P/V; H e N são limpos.
+        flags = (self.f & 0xC4) | (result & 0x28) | carry_out
+        self.a = result
+        self.f = flags
+
     def _daa(self) -> None:
         """Ajusta A para BCD conforme os flags H, N e C anteriores."""
         accumulator = self.a
@@ -404,6 +423,7 @@ class Z80Cpu:
         Subconjunto atual:
         - NOP (00h)
         - DAA (27h)
+        - RLCA (07h), RRCA (0Fh), RLA (17h), RRA (1Fh)
         - CPL (2Fh), SCF (37h), CCF (3Fh)
         - LD rr,nn (01h, 11h, 21h, 31h)
         - LD (BC/DE),A (02h, 12h) e LD A,(BC/DE) (0Ah, 1Ah)
@@ -438,6 +458,9 @@ class Z80Cpu:
             cycles = 4
         elif opcode == 0x27:  # DAA
             self._daa()
+            cycles = 4
+        elif opcode in (0x07, 0x0F, 0x17, 0x1F):  # rotações do acumulador
+            self._rotate_accumulator(opcode)
             cycles = 4
         elif opcode & 0xC7 == 0x06:  # LD r,n
             destination = (opcode >> 3) & 0x07
