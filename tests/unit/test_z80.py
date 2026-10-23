@@ -34,6 +34,7 @@ CONDITIONAL_FLAG_CASES = [
         (0x1B, 0x12, 0x15, 0x02),  # subtração: corrige sem alterar N
         (0x00, 0x03, 0xA0, 0xA7),  # subtração com carry/borrow anterior
         (0x00, 0x00, 0x00, 0x44),  # zero e paridade par
+        (0xF3, 0x4E, 0x93, 0x87),  # DAA após subtração: A>99h ainda aplica 60h
     ],
 )
 def test_daa_adjusts_accumulator_and_flags(
@@ -83,9 +84,9 @@ def _reference_daa(accumulator: int, flags: int) -> tuple[int, int]:
     carry = bool(flags & 0x01)
 
     correction = 0
-    if half_carry or (not subtract and (accumulator & 0x0F) > 9):
+    if half_carry or (accumulator & 0x0F) > 9:
         correction |= 0x06
-    if carry or (not subtract and accumulator > 0x99):
+    if carry or accumulator > 0x99:
         correction |= 0x60
 
     result = (accumulator - correction if subtract else accumulator + correction) & 0xFF
