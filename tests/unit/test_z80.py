@@ -129,8 +129,8 @@ def test_daa_exhaustive_accumulator_and_hnc_input_flags() -> None:
     [
         (0x37, 0x00, 0x2D),  # Q=0: F3/F5 recebem A | F
         (0x37, 0x01, 0x25),  # Q!=0: F3/F5 recebem A
-        (0x3F, 0x00, 0x3C),  # C anterior=0: C é setado; H=0
-        (0x3F, 0x01, 0x34),  # Q!=0 e C anterior=0
+        (0x3F, 0x00, 0x2D),  # C anterior=0: C é setado; H=0
+        (0x3F, 0x01, 0x25),  # Q!=0 e C anterior=0
     ],
 )
 def test_scf_ccf_undocumented_flags_depend_on_q(
