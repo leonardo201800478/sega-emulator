@@ -2044,3 +2044,74 @@ def test_all_ed_second_bytes_are_supported_or_explicitly_rejected() -> None:
                 cpu.step()
             assert cpu.pc == 2, f"PC após ED {opcode:02X}h"
             assert cpu.total_cycles == 0, f"ciclos após ED {opcode:02X}h"
+
+
+@pytest.mark.parametrize(
+    ("data_bus", "expected_pc"),
+    [(0xC7 | (vector << 3), vector << 3) for vector in range(8)],
+)
+def test_im0_accepts_all_rst_opcodes_from_interrupt_data_bus(
+    data_bus: int, expected_pc: int
+) -> None:
+    cpu = make_cpu(bytes([0x00]))
+    cpu.pc = 0x1234
+    cpu.sp = 0xC100
+    cpu.iff1 = cpu.iff2 = True
+    cpu.r = 0xFE
+
+    cpu.request_int(data_bus)
+
+    assert cpu.step() == 13
+    assert cpu.pc == expected_pc
+    assert cpu.sp == 0xC0FE
+    assert cpu.bus.read(0xC0FE) == 0x34
+    assert cpu.bus.read(0xC0FF) == 0x12
+    assert cpu._int_pending is None
+    assert cpu.r == 0xFF
+    assert cpu.iff1 is False
+    assert cpu.iff2 is False
+
+
+def test_masked_int_remains_pending_while_cpu_is_halted() -> None:
+    cpu = make_cpu(bytes([0x76, 0x00]))  # HALT; NOP
+    cpu.sp = 0xC100
+
+    assert cpu.step() == 4
+    assert cpu.halted
+    halted_pc = cpu.pc
+
+    cpu.request_int(0xFF)
+    assert cpu.step() == 4
+    assert cpu.halted
+    assert cpu.pc == halted_pc
+    assert cpu._int_pending == 0xFF
+
+    cpu.iff1 = cpu.iff2 = True
+    assert cpu.step() == 13
+    assert not cpu.halted
+    assert cpu.pc == 0x0038
+    assert cpu._int_pending is None
+    assert cpu.bus.read(0xC0FE) == halted_pc & 0xFF
+    assert cpu.bus.read(0xC0FF) == halted_pc >> 8
+
+
+def test_nmi_has_priority_over_pending_maskable_interrupt() -> None:
+    cpu = make_cpu(bytes([0x76, 0x00]))  # HALT; NOP
+    cpu.sp = 0xC100
+    cpu.iff1 = cpu.iff2 = True
+
+    assert cpu.step() == 4
+    assert cpu.halted
+    halted_pc = cpu.pc
+
+    cpu.request_int(0xFF)
+    cpu.request_nmi()
+
+    assert cpu.step() == 11
+    assert cpu.pc == 0x0066
+    assert not cpu.halted
+    assert cpu.iff1 is False
+    assert cpu.iff2 is True
+    assert cpu._int_pending == 0xFF
+    assert cpu.bus.read(0xC0FE) == halted_pc & 0xFF
+    assert cpu.bus.read(0xC0FF) == halted_pc >> 8
