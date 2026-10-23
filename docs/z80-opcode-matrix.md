@@ -97,6 +97,8 @@ O método `_execute_ed()` reconhece as seguintes codificações/padrões. Os byt
 | `A2,AA,B2,BA,A3,AB,B3,BB` | INI/IND/INIR/INDR/OUTI/OUTD/OTIR/OTDR | P | Flags documentadas/não documentadas; os testes de carry adicionados são casos dirigidos. |
 | Outros bytes ED | Outros opcodes/aliases | A | Sem caminho de execução no despachante atual. |
 
+**Política atual e lacuna de compatibilidade:** o núcleo lança `UnsupportedOpcodeError` para bytes ED não reconhecidos. Isso é uma política explícita de diagnóstico, não uma afirmação de que o Z80 físico necessariamente gera uma exceção. A documentação técnica de referência descreve muitos ED não listados como operações sem efeito equivalentes a dois NOPs, enquanto variantes e aliases não documentados podem depender da implementação/revisão do chip. Antes de trocar o comportamento, devemos decidir se o núcleo prioriza diagnóstico estrito ou compatibilidade com o Z80 clássico e adicionar testes específicos para a política escolhida. Referências: [Zilog Z80 CPU User Manual](https://www.zilog.com/docs/z80/um0080.pdf) e [resumo de opcodes não documentados](https://www.z80.info/decoding.htm).
+
 ## 4. Prefixos DD e FD — IX/IY
 
 O método `_step_indexed()` suporta um subconjunto indexado. Para outras instruções, tenta tratar DD/FD como prefixo ignorado e executar a instrução base, adicionando 4 T-states. Esse fallback não deve ser confundido com cobertura de todas as instruções indexadas.
