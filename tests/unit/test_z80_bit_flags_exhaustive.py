@@ -29,11 +29,12 @@ def _expected_bit_flags(value: int, bit_index: int, carry: int, xy_source: int) 
 
 def test_bit_register_flags_for_all_values_bits_and_carry_states() -> None:
     """Testa 2.048 estados em B, incluindo flags, PC, R e ciclos nominais."""
+    bus = FlatMemoryBus()
+    bus.memory[0:2] = bytes((0xCB, 0x40))
     for value in range(0x100):
         for bit_index in range(8):
             for carry in (0, 1):
-                bus = FlatMemoryBus()
-                bus.memory[0:2] = bytes((0xCB, 0x40 | (bit_index << 3)))
+                bus.memory[1] = 0x40 | (bit_index << 3)
                 cpu = Z80Cpu(bus)
                 cpu.b = value
                 cpu.f = 0xFE | carry
@@ -54,11 +55,12 @@ def test_bit_hl_flags_for_all_values_bits_carry_and_xy_address_patterns() -> Non
     for address_high in (0x00, 0x28, 0xA8, 0xD7):
         address = (address_high << 8) | 0x40
         xy_source = address_high
+        bus = FlatMemoryBus()
+        bus.memory[0:2] = bytes((0xCB, 0x46))
         for value in range(0x100):
             for bit_index in range(8):
                 for carry in (0, 1):
-                    bus = FlatMemoryBus()
-                    bus.memory[0:2] = bytes((0xCB, 0x46 | (bit_index << 3)))
+                    bus.memory[1] = 0x46 | (bit_index << 3)
                     bus.memory[address] = value
                     cpu = Z80Cpu(bus)
                     cpu.hl = address
