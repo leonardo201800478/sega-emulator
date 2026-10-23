@@ -720,12 +720,10 @@ class Z80Cpu:
             self.bc = (self.bc - 1) & 0xFFFF
             total = (self.a + value) & 0xFF
             self._set_flags(
-                (
-                    (self.f & 0xC1)
-                    | (0x04 if self.bc else 0)
-                    | (total & 0x08)
-                    | ((total & 0x02) << 4)
-                )
+                (self.f & 0xC1)
+                | (0x04 if self.bc else 0)
+                | (total & 0x08)
+                | ((total & 0x02) << 4)
             )
             if opcode in (0xB0, 0xB8) and self.bc:
                 self.pc = (self.pc - 2) & 0xFFFF
@@ -741,16 +739,14 @@ class Z80Cpu:
             self.bc = (self.bc - 1) & 0xFFFF
             adjusted = (result - int(half)) & 0xFF
             self._set_flags(
-                (
-                    (self.f & 1)
-                    | 0x02
-                    | (result & 0x80)
-                    | (0x40 if result == 0 else 0)
-                    | (0x10 if half else 0)
-                    | (0x04 if self.bc else 0)
-                    | (adjusted & 0x08)
-                    | ((adjusted & 0x02) << 4)
-                )
+                (self.f & 1)
+                | 0x02
+                | (result & 0x80)
+                | (0x40 if result == 0 else 0)
+                | (0x10 if half else 0)
+                | (0x04 if self.bc else 0)
+                | (adjusted & 0x08)
+                | ((adjusted & 0x02) << 4)
             )
             if opcode in (0xB1, 0xB9) and self.bc and result:
                 self.pc = (self.pc - 2) & 0xFFFF
