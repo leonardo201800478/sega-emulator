@@ -914,11 +914,13 @@ def test_ed_adc_sbc_hl_overflow_and_boundary_flags(
     assert cpu.f == expected_flags
 
 
-def test_unsupported_ed_opcode_reports_prefixed_opcode() -> None:
+def test_unassigned_ed_opcode_executes_as_two_byte_nop() -> None:
     cpu = make_cpu(bytes([0xED, 0x00]))
 
-    with pytest.raises(UnsupportedOpcodeError, match="ED 00h"):
-        cpu.step()
+    assert cpu.step() == 8
+    assert cpu.pc == 2
+    assert cpu.r == 2
+    assert cpu.total_cycles == 8
 
 
 @pytest.mark.parametrize(
@@ -1106,10 +1108,12 @@ def test_ld_sp_hl_copies_pair_and_preserves_flags(value: int) -> None:
     assert cpu.total_cycles == 6
 
 
-def test_unsupported_opcode_is_explicit() -> None:
-    cpu = make_cpu(bytes([0xED, 0x00]))
+def test_io_instruction_requires_an_io_bus() -> None:
+    cpu = Z80Cpu(
+        SG1000MemoryBus(SG1000Ram(bytes(RAM_SIZE)), bytes([0xDB, 0x00]))
+    )
 
-    with pytest.raises(UnsupportedOpcodeError, match="ED 00h"):
+    with pytest.raises(UnsupportedOpcodeError, match="IOBus configurado"):
         cpu.step()
 
     assert cpu.pc == 2
@@ -2485,18 +2489,12 @@ def test_all_base_opcodes_are_decoded_or_explicitly_rejected() -> None:
         )
         cpu.bc = cpu.de = cpu.hl = 0xC020
         cpu.sp = 0xC100
-        if opcode == 0xED:
-            with pytest.raises(UnsupportedOpcodeError, match="ED 20h"):
-                cpu.step()
-            continue
         assert cpu.step() > 0, f"Opcode {opcode:02X}h"
 
 
 def test_index_prefixes_decode_all_non_ed_second_opcodes() -> None:
     for prefix in (0xDD, 0xFD):
         for opcode in range(0x100):
-            if opcode == 0xED:
-                continue  # ED 00h é um opcode não documentado/não suportado.
             bus = SG1000MemoryBus(
                 SG1000Ram(bytes(RAM_SIZE)),
                 bytes([prefix, opcode, 0x20, 0xC0, 0x20, 0xC0]),
@@ -2509,8 +2507,8 @@ def test_index_prefixes_decode_all_non_ed_second_opcodes() -> None:
             assert cpu.step() > 0, f"{prefix:02X} {opcode:02X}h"
 
 
-def test_all_ed_second_bytes_are_supported_or_explicitly_rejected() -> None:
-    """Classifica os 256 segundos bytes ED sem confundir decode com correção."""
+def test_all_ed_second_bytes_are_supported_or_ed_nop() -> None:
+    """Classifica os 256 segundos bytes ED conforme handlers e ED-NOP do Z80 clássico."""
     supported = {
         *(0x40 + (register << 3) for register in range(8)),  # IN r,(C)
         *(0x41 + (register << 3) for register in range(8)),  # OUT (C),r
@@ -2577,10 +2575,10 @@ def test_all_ed_second_bytes_are_supported_or_explicitly_rejected() -> None:
         if opcode in supported:
             assert cpu.step() > 0, f"ED {opcode:02X}h"
         else:
-            with pytest.raises(UnsupportedOpcodeError, match=f"ED {opcode:02X}h"):
-                cpu.step()
+            assert cpu.step() == 8, f"ED-NOP ED {opcode:02X}h"
             assert cpu.pc == 2, f"PC após ED {opcode:02X}h"
-            assert cpu.total_cycles == 0, f"ciclos após ED {opcode:02X}h"
+            assert cpu.r == 2, f"R após ED {opcode:02X}h"
+            assert cpu.total_cycles == 8, f"ciclos após ED {opcode:02X}h"
 
 
 @pytest.mark.parametrize(
