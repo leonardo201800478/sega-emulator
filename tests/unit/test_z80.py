@@ -1690,6 +1690,23 @@ def test_ed_ldir_repeats_until_bc_zero() -> None:
     assert cpu.bus.read(0xC021) == 0x56
 
 
+def test_ed_lddr_repeats_in_reverse_until_bc_zero() -> None:
+    cpu = make_cpu(bytes([0xED, 0xB8]))  # LDDR
+    cpu.hl, cpu.de, cpu.bc, cpu.a = 0xC011, 0xC021, 2, 0
+    cpu.bus.write(0xC011, 0x34)
+    cpu.bus.write(0xC010, 0x56)
+
+    assert cpu.step() == 21
+    assert cpu.pc == 0
+    assert (cpu.hl, cpu.de, cpu.bc) == (0xC010, 0xC020, 1)
+    assert cpu.bus.read(0xC021) == 0x34
+
+    assert cpu.step() == 16
+    assert cpu.pc == 2
+    assert (cpu.hl, cpu.de, cpu.bc) == (0xC00F, 0xC01F, 0)
+    assert cpu.bus.read(0xC020) == 0x56
+
+
 def test_ed_ldi_updates_registers_memory_and_documented_flag_bits() -> None:
     cpu = make_cpu(bytes([0xED, 0xA0]))  # LDI
     cpu.hl, cpu.de, cpu.bc, cpu.a, cpu.f = 0xC010, 0xC020, 2, 0x08, 0xC1
