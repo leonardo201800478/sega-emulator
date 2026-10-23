@@ -248,3 +248,13 @@ O arquivo `tests/unit/test_z80_indexed_bit_flags.py` acrescenta:
 
 **Limites:** os testes exercitam a hipótese do núcleo para X/Y e o custo nominal; não são validação em hardware nem prova de temporização por ciclo. Os 256 valores de deslocamento são testados em quatro padrões do endereço efetivo, mas não em todas as combinações possíveis de base IX/IY e deslocamento.
 
+
+
+## Validação adicional de repetição das instruções ED — 22/10/2026
+
+Foram acrescentados casos direcionados para `LDDR` e `CPDR`, complementando os testes existentes de `LDIR` e `CPIR`:
+
+- `LDDR`: verifica cópia em ordem decrescente, atualização de HL/DE/BC, retorno do PC para repetir enquanto BC não for zero, 21 T-states na repetição e 16 T-states na iteração final.
+- `CPDR`: verifica comparação em ordem decrescente, repetição quando o byte não corresponde, encerramento antecipado quando A coincide com `(HL)`, preservação de C, N/Z e P/V, atualização de HL/BC e custos nominais de 21/16 T-states.
+
+Esses casos são testes sintéticos de fluxo de controle e estado observável. Não constituem validação diferencial contra hardware ou prova de temporização ciclo a ciclo; permanecem pendentes a cobertura sistemática de todas as condições de saída, wrap de endereços e comparação diferencial independente das flags.
