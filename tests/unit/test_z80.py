@@ -197,6 +197,24 @@ def test_wz_tracks_16_bit_add_and_absolute_jump() -> None:
     assert cpu.wz == 0x1234
 
 
+def test_wz_tracks_ed_and_indexed_memory_operations() -> None:
+    cpu = make_cpu(bytes([0xED, 0x6B, 0x00, 0xC0]))  # LD HL,(C000h)
+    cpu.bus.write(0xC000, 0x34)
+    cpu.bus.write(0xC001, 0x12)
+
+    assert cpu.step() == 20
+    assert cpu.hl == 0x1234
+    assert cpu.wz == 0xC001
+
+    cpu = make_cpu(bytes([0xDD, 0x7E, 0x02]))  # LD A,(IX+2)
+    cpu.ix = 0xC000
+    cpu.bus.write(0xC002, 0xA5)
+
+    assert cpu.step() == 19
+    assert cpu.a == 0xA5
+    assert cpu.wz == 0xC002
+
+
 def test_ld_immediate_and_register_transfer_preserve_flags() -> None:
     cpu = make_cpu(bytes([0x06, 0x42, 0x78]))  # LD B,42h; LD A,B
     cpu.f = 0xD7
