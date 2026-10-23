@@ -1,3 +1,48 @@
+@pytest.mark.parametrize(
+    ("prefix", "index_name", "opcode", "initial_a", "initial_memory", "expected_a"),
+    [
+        (0xDD, "ix", 0x7E, 0x00, 0xA6, 0xA6),  # LD A,(IX+1), IX=FFFFh
+        (0xFD, "iy", 0x77, 0x5A, 0x00, 0x5A),  # LD (IY+1),A, IY=FFFFh
+    ],
+)
+def test_indexed_memory_displacement_wraps_at_ffff(
+    prefix: int,
+    index_name: str,
+    opcode: int,
+    initial_a: int,
+    initial_memory: int,
+    expected_a: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verifica o wrap do endereço efetivo sem violar a proteção da ROM."""
+    cpu = make_cpu(bytes([initial_memory]))
+    cpu.bus.write(0xC000, prefix)
+    cpu.bus.write(0xC001, opcode)
+    cpu.bus.write(0xC002, 0x01)
+    cpu.pc = 0xC000
+    setattr(cpu, index_name, 0xFFFF)
+    cpu.a = initial_a
+
+    writes: dict[int, int] = {}
+    original_write = cpu.bus.write
+
+    def capture_write(address: int, value: int) -> None:
+        if address == 0x0000:
+            writes[address] = value
+            return
+        original_write(address, value)
+
+    monkeypatch.setattr(cpu.bus, "write", capture_write)
+
+    assert cpu.step() == 19
+    assert cpu.pc == 0xC003
+    assert cpu.r == 2
+    assert cpu.a == expected_a
+    assert cpu.bus.read(0x0000) == initial_memory
+    if opcode == 0x77:
+        assert writes == {0x0000: expected_a}
+    else:
+        assert writes == {}
 """Testes sintéticos do subconjunto inicial da CPU Z80."""
 
 import pytest
