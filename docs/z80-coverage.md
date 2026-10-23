@@ -250,6 +250,12 @@ O arquivo `tests/unit/test_z80_indexed_bit_flags.py` acrescenta:
 
 
 
+## Cobertura inicial das operações de I/O de bloco ED — 22/10/2026
+
+Foram adicionados testes parametrizados para `INI`, `IND`, `INIR`, `INDR`, `OUTI`, `OUTD`, `OTIR` e `OTDR`. Os casos verificam a direção da atualização de HL, transferência entre porta e memória, endereço de porta observado pelo barramento de I/O, decremento de B, retorno do PC e ciclos nominais de repetição (21 T-states) versus término (16 T-states). Testes separados cobrem o término das quatro variantes repetidas quando B chega a zero.
+
+Referência de arquitetura: [Zilog — Z80 CPU User Manual, Input/Output Group](https://www.zilog.com/docs/z80/um0080.pdf). O código ainda usa operações lógicas de I/O, sem modelar fases de barramento, WAIT states ou interrupções reconhecidas entre iterações. As flags não documentadas e os detalhes elétricos do endereço de porta exigem validação diferencial adicional; estes testes não demonstram precisão ciclo a ciclo.
+
 ## Validação adicional de BC inicial zero nas instruções de bloco ED — 22/10/2026
 
 Foram acrescentados testes para os casos em que `BC=0000h` antes de `LDIR` e `CPIR`. O Z80 não trata esse estado como uma operação vazia: a primeira iteração decrementa BC para `FFFFh` e a instrução continua repetindo. Os testes verificam a primeira iteração, o retorno do PC ao opcode, os registradores atualizados, os flags pertinentes e os 21 T-states nominais da iteração de repetição.
