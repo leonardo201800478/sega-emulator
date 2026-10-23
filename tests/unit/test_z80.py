@@ -1109,9 +1109,7 @@ def test_ld_sp_hl_copies_pair_and_preserves_flags(value: int) -> None:
 
 
 def test_io_instruction_requires_an_io_bus() -> None:
-    cpu = Z80Cpu(
-        SG1000MemoryBus(SG1000Ram(bytes(RAM_SIZE)), bytes([0xDB, 0x00]))
-    )
+    cpu = Z80Cpu(SG1000MemoryBus(SG1000Ram(bytes(RAM_SIZE)), bytes([0xDB, 0x00])))
 
     with pytest.raises(UnsupportedOpcodeError, match="IOBus configurado"):
         cpu.step()
