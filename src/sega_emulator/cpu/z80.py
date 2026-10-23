@@ -1149,8 +1149,10 @@ class Z80Cpu:
             port = (self.a << 8) | port_low
             if opcode == 0xD3:
                 self._write_port(port, self.a)
+                self.wz = (self.a << 8) | ((port_low + 1) & 0x00FF)
             else:
                 self.a = self._read_port(port)
+                self.wz = (port + 1) & 0xFFFF
             cycles = 11
         elif opcode == 0xCB:  # família CB
             cycles = self._execute_cb(self._fetch_opcode_byte())
@@ -1331,12 +1333,15 @@ class Z80Cpu:
             low = self._fetch_byte()
             high = self._fetch_byte()
             self.pc = (high << 8) | low
+            self.wz = self.pc
             cycles = 10
         elif opcode & 0xC7 == 0xC2:  # JP cc,nn
             low = self._fetch_byte()
             high = self._fetch_byte()
+            target = (high << 8) | low
+            self.wz = target
             if self._condition((opcode >> 3) & 0x07):
-                self.pc = (high << 8) | low
+                self.pc = target
             cycles = 10
         elif opcode == 0x2F:  # CPL
             self.a ^= 0xFF
@@ -1370,6 +1375,7 @@ class Z80Cpu:
                 if displacement & 0x80:
                     displacement -= 0x100
                 self.pc = (self.pc + displacement) & 0xFFFF
+                self.wz = self.pc
                 cycles = 13
             else:
                 cycles = 8
@@ -1378,6 +1384,7 @@ class Z80Cpu:
             if displacement & 0x80:
                 displacement -= 0x100
             self.pc = (self.pc + displacement) & 0xFFFF
+            self.wz = self.pc
             cycles = 12
         elif opcode in (0x20, 0x28, 0x30, 0x38):  # JR cc,e
             displacement = self._fetch_byte()
@@ -1385,6 +1392,7 @@ class Z80Cpu:
                 if displacement & 0x80:
                     displacement -= 0x100
                 self.pc = (self.pc + displacement) & 0xFFFF
+                self.wz = self.pc
                 cycles = 12
             else:
                 cycles = 7
@@ -1397,24 +1405,30 @@ class Z80Cpu:
         elif opcode == 0xCD:  # CALL nn
             low = self._fetch_byte()
             high = self._fetch_byte()
+            target = (high << 8) | low
+            self.wz = target
             self._push_word(self.pc)
-            self.pc = (high << 8) | low
+            self.pc = target
             cycles = 17
         elif opcode & 0xC7 == 0xC4:  # CALL cc,nn
             low = self._fetch_byte()
             high = self._fetch_byte()
+            target = (high << 8) | low
+            self.wz = target
             if self._condition((opcode >> 3) & 0x07):
                 self._push_word(self.pc)
-                self.pc = (high << 8) | low
+                self.pc = target
                 cycles = 17
             else:
                 cycles = 10
         elif opcode == 0xC9:  # RET
             self.pc = self._pop_word()
+            self.wz = self.pc
             cycles = 10
         elif opcode & 0xC7 == 0xC0:  # RET cc
             if self._condition((opcode >> 3) & 0x07):
                 self.pc = self._pop_word()
+                self.wz = self.pc
                 cycles = 11
             else:
                 cycles = 5
