@@ -157,6 +157,46 @@ def test_bit_hl_uses_wz_for_undocumented_flags() -> None:
     assert cpu.f == 0x19
 
 
+def test_wz_tracks_indirect_and_absolute_memory_accesses() -> None:
+    cpu = make_cpu(bytes([0x0A]))  # LD A,(BC)
+    cpu.bc = 0xC000
+    cpu.bus.write(0xC000, 0xA5)
+
+    assert cpu.step() == 7
+    assert cpu.a == 0xA5
+    assert cpu.wz == 0xC001
+
+    cpu = make_cpu(bytes([0x3A, 0x00, 0xC0]))  # LD A,(C000h)
+    cpu.bus.write(0xC000, 0x5A)
+
+    assert cpu.step() == 13
+    assert cpu.a == 0x5A
+    assert cpu.wz == 0xC001
+
+    cpu = make_cpu(bytes([0x32, 0x00, 0xC0]))  # LD (C000h),A
+    cpu.a = 0x5A
+
+    assert cpu.step() == 13
+    assert cpu.bus.read(0xC000) == 0x5A
+    assert cpu.wz == 0x5A01
+
+
+def test_wz_tracks_16_bit_add_and_absolute_jump() -> None:
+    cpu = make_cpu(bytes([0x09]))  # ADD HL,BC
+    cpu.hl = 0x1234
+    cpu.bc = 0x0100
+
+    assert cpu.step() == 11
+    assert cpu.hl == 0x1334
+    assert cpu.wz == 0x1235
+
+    cpu = make_cpu(bytes([0xC3, 0x34, 0x12]))  # JP 1234h
+
+    assert cpu.step() == 10
+    assert cpu.pc == 0x1234
+    assert cpu.wz == 0x1234
+
+
 def test_ld_immediate_and_register_transfer_preserve_flags() -> None:
     cpu = make_cpu(bytes([0x06, 0x42, 0x78]))  # LD B,42h; LD A,B
     cpu.f = 0xD7
