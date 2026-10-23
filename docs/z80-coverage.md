@@ -121,7 +121,7 @@ A análise acrescenta estes itens à lista de implementação, sem afirmar que j
 2. **Separar tipos de acesso:** planejar contratos distintos para fetch M1, leitura de operandos, acesso a dados e I/O; manter a API atual até haver testes de regressão.
 3. **Temporização por acesso:** substituir gradualmente a suposição de que T-states nominais por instrução bastam; modelar eventos de barramento e estados de espera antes de alegar precisão de ciclo.
 4. **Refresh e registrador R:** testar incrementos por fetch M1, prefixos, HALT/interrupções e preservação do bit 7; o sinal de refresh ainda não é um evento de barramento modelado.
-5. **Flags e estado auxiliar:** ampliar testes de DAA, operações de bloco, BIT em memória/indexado e preservação de flags; pesquisar WZ/MEMPTR, Q e X/Y como trabalho de compatibilidade, sem presumir que o MAME represente toda variante física.
+5. **Flags e estado auxiliar:** DAA, BIT e SCF/CCF estão em correção diferencial. Q tem atualização centralizada em avaliação; WZ/MEMPTR recebeu atualizações parciais por família, ainda pendentes de auditoria completa e validação externa.
 6. **Interrupções:** validar NMI por borda, IFF1/IFF2, atraso de EI, HALT e acknowledge. Fechar a limitação conhecida de IM 0 para o modelo de CPU escolhido, em vez de aceitar apenas RST por conveniência.
 7. **Reset e variante:** distinguir estado inicial do objeto e reset de hardware; definir a variante-alvo compatível com SG-1000 antes de assumir peculiaridades NMOS/CMOS/NEC.
 8. **Integração de plataforma:** futuramente conectar WAIT/READY e I/O do SG-1000 por interfaces de barramento, sem incorporar o mapa do console diretamente ao núcleo Z80.
@@ -135,8 +135,8 @@ Pesquisa detalhada com revisões fixadas e análise de licenças: [docs/z80-undo
 Os itens abaixo complementam a pesquisa do MAME e continuam **pendentes**, salvo se testes futuros comprovarem o contrário:
 
 1. **Matriz dos 256 opcodes ED:** identificar aliases de NEG/RETN/RETI/IM, NOPs e instruções não documentadas; testar flags, IFFs, PC/SP, I/O e ciclos.
-2. **WZ/MEMPTR:** estudar estado auxiliar e regras de atualização por classe de instrução antes de adicionar o registrador ao núcleo.
-3. **Q latch e flags X/Y:** investigar SCF/CCF em sequência, BIT em memória/indexado, CP, aritmética de 16 bits e origem dos bits 3/5.
+2. **WZ/MEMPTR:** o registrador está no núcleo e já recebe atualizações em operações de memória, 16 bits, fluxo de controle, I/O, acessos indexados e parte das instruções ED/bloco. Revisar a tabela de cada opcode e validar os estados finais.
+3. **Q latch e flags X/Y:** SCF/CCF consultam o Q anterior, e as escritas internas de F atualizam Q. Ainda é necessário validar a sequência completa de instruções, prefixos, interrupções e diferenças de variante.
 4. **Prefixos DD/FD:** validar prefixos repetidos/alternados, prefixos ignorados, IXH/IXL/IYH/IYL, DD/FD-CB, PC, R e custos temporais.
 5. **R/M1/HALT:** separar fetch de opcode, operandos e opcode final de DD/FD-CB; testar o contador R e só depois modelar refresh.
 6. **Operações de bloco ED:** validar flags e condições de repetição/saída antecipada de LDI/LDD/LDIR/LDDR, CPI/CPD/CPIR/CPDR e operações de I/O de bloco.
@@ -166,7 +166,7 @@ A leitura direta de `src/sega_emulator/cpu/z80.py` e `tests/unit/test_z80.py` id
 Prioridades confirmadas:
 1. **Temporização:** os ciclos ainda são contabilizados por instrução; os acessos ao barramento não são agendados em T-states.
 2. **Interrupções:** a cobertura atual inclui testes para incremento de R em NMI/INT, modos IM 0/1/2, atraso de EI e saída de HALT por INT. Ainda faltam validação diferencial abrangente do acknowledge, dos estados IFF e das sequências de borda; a limitação de IM 0 para bytes RST deve ser confirmada no código atual.
-3. **Comportamentos auxiliares:** WZ/MEMPTR e Q latch não estão modelados.
+3. **Comportamentos auxiliares:** WZ/MEMPTR e Q latch têm implementação parcial na branch de correção; a cobertura por opcode e a validação diferencial pós-correção permanecem pendentes.
 4. **ED:** handlers importantes existem, mas falta classificar e testar todos os 256 segundos bytes, incluindo aliases e NOPs não documentados.
 5. **Validação semântica:** os testes “todos os opcodes têm caminho” não demonstram correção de resultados, flags, ciclos ou ordem de barramento. DAA, flags X/Y, prefixos e operações de bloco precisam de comparação diferencial.
 
