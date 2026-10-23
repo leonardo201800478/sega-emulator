@@ -145,7 +145,7 @@ def main() -> int:
     summary = _summary(results)
 
     if args.json:
-        print(json.dumps(summary, indent=2, ensure_ascii=False))
+        print(json.dumps(summary, indent=2, ensure_ascii=True))
     else:
         print("Z80 opcode dispatch inventory")
         print("Status: executed=normal return, unsupported=UnsupportedOpcodeError")
