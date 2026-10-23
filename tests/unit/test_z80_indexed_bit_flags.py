@@ -81,3 +81,34 @@ def test_indexed_bit_uses_signed_displacement_and_wraps_address() -> None:
         assert cpu.pc == instruction_address + 4
         assert cpu.r == 2
         assert cpu.total_cycles == 20
+
+def test_indexed_bit_interprets_all_signed_displacements() -> None:
+    """Valida os 256 bytes de deslocamento para IX e IY."""
+    instruction_address = 0x1000
+    for prefix, index_name in ((0xDD, "ix"), (0xFD, "iy")):
+        for address_high in (0x00, 0x28, 0xA8, 0xD7):
+            address = (address_high << 8) | 0x40
+            for displacement in range(0x100):
+                signed_displacement = (
+                    displacement - 0x100 if displacement & 0x80 else displacement
+                )
+                index = (address - signed_displacement) & 0xFFFF
+                bus = FlatMemoryBus()
+                bus.memory[instruction_address : instruction_address + 4] = bytes(
+                    (prefix, 0xCB, displacement, 0x7E)
+                )
+                bus.memory[address] = 0x80
+                cpu = Z80Cpu(bus)
+                setattr(cpu, index_name, index)
+                cpu.f = 0x01
+                cpu.pc = instruction_address
+                cpu.r = 0
+                cpu.total_cycles = 0
+
+                assert cpu.step() == 20
+                assert cpu.f == _expected_bit_flags(0x80, 7, 1, address)
+                assert bus.memory[address] == 0x80
+                assert cpu.pc == instruction_address + 4
+                assert cpu.r == 2
+                assert cpu.total_cycles == 20
+
