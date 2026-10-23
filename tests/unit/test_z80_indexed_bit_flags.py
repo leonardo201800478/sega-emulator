@@ -112,4 +112,3 @@ def test_indexed_bit_interprets_all_signed_displacements() -> None:
                 assert cpu.pc == instruction_address + 4
                 assert cpu.r == 2
                 assert cpu.total_cycles == 20
-
