@@ -78,11 +78,7 @@ def test_immediate_alu_results_flags_pc_and_cycles_for_all_byte_pairs() -> None:
     ram = SG1000Ram(bytes(RAM_SIZE))
 
     for operation, opcode, uses_carry in operations:
-        program = bytes(
-            byte
-            for operand in range(0x100)
-            for byte in (opcode, operand)
-        )
+        program = bytes(byte for operand in range(0x100) for byte in (opcode, operand))
         cpu = Z80Cpu(SG1000MemoryBus(ram, program))
         carry_values = (0, 1) if uses_carry else (0,)
 
@@ -105,8 +101,7 @@ def test_immediate_alu_results_flags_pc_and_cycles_for_all_byte_pairs() -> None:
                     )
                     if operation == "cp":
                         assert cpu.a == accumulator, (
-                            f"CP immediate alterou A={accumulator:02X} "
-                            f"n={operand:02X}"
+                            f"CP immediate alterou A={accumulator:02X} n={operand:02X}"
                         )
                     else:
                         assert cpu.a == expected_result, (
