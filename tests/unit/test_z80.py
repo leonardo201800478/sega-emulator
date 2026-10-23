@@ -148,7 +148,7 @@ def test_scf_ccf_undocumented_flags_depend_on_q(
 
 def test_bit_hl_uses_wz_for_undocumented_flags() -> None:
     cpu = make_cpu(bytes([0xCB, 0x46]))  # BIT 0,(HL)
-    cpu.hl = 0xB3FD
+    cpu.hl = 0xC000
     cpu.bus.write(cpu.hl, 0x6B)
     cpu.f = 0x01
     cpu.wz = 0x5D48
@@ -396,6 +396,8 @@ def test_scf_sets_carry_and_preserves_sign_zero_parity(
     cpu = make_cpu(bytes([0x37]))  # SCF
     cpu.a = accumulator
     cpu.f = flags
+    # Estes casos verificam SCF após uma instrução que atualizou F.
+    cpu.q = flags
 
     assert cpu.step() == 4
     assert cpu.f == expected_flags
@@ -418,6 +420,8 @@ def test_ccf_complements_carry_and_updates_half_carry(
     cpu = make_cpu(bytes([0x3F]))  # CCF
     cpu.a = accumulator
     cpu.f = flags
+    # Estes casos verificam CCF após uma instrução que atualizou F.
+    cpu.q = flags
 
     assert cpu.step() == 4
     assert cpu.f == expected_flags
