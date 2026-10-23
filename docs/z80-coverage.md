@@ -134,7 +134,7 @@ Pesquisa detalhada com revisões fixadas e análise de licenças: [docs/z80-undo
 
 Os itens abaixo complementam a pesquisa do MAME e continuam **pendentes**, salvo se testes futuros comprovarem o contrário:
 
-1. **Matriz dos 256 opcodes ED:** identificar aliases de NEG/RETN/RETI/IM, NOPs e instruções não documentadas; testar flags, IFFs, PC/SP, I/O e ciclos.
+1. **Matriz dos 256 opcodes ED:** os handlers conhecidos/aliases são decodificados e os bytes sem operação atribuída agora usam ED-NOP (8 T-states); testes classificam os 256 segundos bytes. Ainda é necessário validar semântica, flags, IFFs, PC/SP, I/O, WZ e ciclos de cada família.
 2. **WZ/MEMPTR:** o registrador está no núcleo e já recebe atualizações em operações de memória, 16 bits, fluxo de controle, I/O, acessos indexados e parte das instruções ED/bloco. Revisar a tabela de cada opcode e validar os estados finais.
 3. **Q latch e flags X/Y:** SCF/CCF consultam o Q anterior, e as escritas internas de F atualizam Q. Ainda é necessário validar a sequência completa de instruções, prefixos, interrupções e diferenças de variante.
 4. **Prefixos DD/FD:** validar prefixos repetidos/alternados, prefixos ignorados, IXH/IXL/IYH/IYL, DD/FD-CB, PC, R e custos temporais.
