@@ -1831,10 +1831,10 @@ def test_indexed_displacement_load_alu_and_cb_bit_operation() -> None:
 @pytest.mark.parametrize(
     ("opcode", "expected_index"),
     [
-        (0x64, 0x1212),  # LD IXH/IYH,IXH/IYH
+        (0x64, 0x1234),  # LD IXH/IYH,IXH/IYH
         (0x65, 0x3434),  # LD IXH/IYH,IXL/IYL
         (0x6C, 0x1212),  # LD IXL/IYL,IXH/IYH
-        (0x6D, 0x3434),  # LD IXL/IYL,IXL/IYL
+        (0x6D, 0x1234),  # LD IXL/IYL,IXL/IYL
     ],
 )
 def test_index_half_register_transfers(
