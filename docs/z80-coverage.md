@@ -256,6 +256,12 @@ Foram adicionados testes parametrizados para `INI`, `IND`, `INIR`, `INDR`, `OUTI
 
 Referência de arquitetura: [Zilog — Z80 CPU User Manual, Input/Output Group](https://www.zilog.com/docs/z80/um0080.pdf). O código ainda usa operações lógicas de I/O, sem modelar fases de barramento, WAIT states ou interrupções reconhecidas entre iterações. As flags não documentadas e os detalhes elétricos do endereço de porta exigem validação diferencial adicional; estes testes não demonstram precisão ciclo a ciclo.
 
+## Verificação das flags de I/O de bloco em limites de carry — 22/10/2026
+
+Foram adicionados quatro casos dirigidos para `INI`, `IND`, `OUTI` e `OUTD`. Os operandos fazem a soma auxiliar `k) chegar a `0x101`, exercitando H/C, e deixam B em `0x28`, exercitando os bits X/Y modelados pelo núcleo. Os testes verificam o valor integral de F (`0x39`), além do endereço de porta pré-decremento e da direção da transferência.
+
+A fórmula de H/C e P/V para essas instruções inclui efeitos tradicionalmente tratados como não documentados; foi usada como hipótese de implementação para criar os testes, não como prova de comportamento universal em todas as revisões do silício. O manual da Zilog descreve parte das flags de I/O de bloco como dependentes do resultado ou indeterminadas; validação diferencial com uma referência independente continua necessária.
+
 ## Validação adicional de BC inicial zero nas instruções de bloco ED — 22/10/2026
 
 Foram acrescentados testes para os casos em que `BC=0000h` antes de `LDIR` e `CPIR`. O Z80 não trata esse estado como uma operação vazia: a primeira iteração decrementa BC para `FFFFh` e a instrução continua repetindo. Os testes verificam a primeira iteração, o retorno do PC ao opcode, os registradores atualizados, os flags pertinentes e os 21 T-states nominais da iteração de repetição.
