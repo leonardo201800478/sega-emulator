@@ -406,6 +406,36 @@ def test_scf_sets_carry_and_preserves_sign_zero_parity(
     assert cpu.total_cycles == 4
 
 
+def test_q_latch_clears_after_instruction_that_preserves_flags() -> None:
+    cpu = make_cpu(bytes([0x06, 0x01, 0x37]))  # LD B,1; SCF
+    cpu.a = 0x00
+    cpu.f = 0x28
+    cpu.q = 0x28
+
+    assert cpu.step() == 7
+    assert cpu.q == 0
+    assert cpu.f == 0x28
+
+    assert cpu.step() == 4
+    assert cpu.f == 0x29
+    assert cpu.q == cpu.f
+
+
+def test_q_latch_tracks_flags_written_by_previous_instruction() -> None:
+    cpu = make_cpu(bytes([0x04, 0x37]))  # INC B; SCF
+    cpu.a = 0x00
+    cpu.b = 0x07
+    cpu.f = 0x00
+
+    assert cpu.step() == 4
+    assert cpu.f == 0x08
+    assert cpu.q == 0x08
+
+    assert cpu.step() == 4
+    assert cpu.f == 0x01
+    assert cpu.q == cpu.f
+
+
 @pytest.mark.parametrize(
     ("accumulator", "flags", "expected_flags"),
     [
