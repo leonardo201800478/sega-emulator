@@ -10,7 +10,9 @@ from sega_emulator.bus.memory_bus import SG1000MemoryBus
 from sega_emulator.cpu.z80 import Z80Cpu
 
 
-def _expected(operation: str, accumulator: int, operand: int, carry: int) -> tuple[int, int]:
+def _expected(
+    operation: str, accumulator: int, operand: int, carry: int
+) -> tuple[int, int]:
     if operation in ("add", "adc"):
         carry_in = carry if operation == "adc" else 0
         raw = accumulator + operand + carry_in
