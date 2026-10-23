@@ -7,6 +7,7 @@ máquinas com vários núcleos.
 
 Exemplos:
     python scripts/validate_z80_alu_16bit.py --left-count 16
+    python scripts/validate_z80_alu_16bit.py --left-count 1024 --sampling distributed
     python scripts/validate_z80_alu_16bit.py --full
 """
 
@@ -18,11 +19,11 @@ import os
 import sys
 import time
 from collections.abc import Iterable
-from multiprocessing.pool import Pool
 
 from sega_emulator.bus.memory import RAM_SIZE, SG1000Ram
 from sega_emulator.bus.memory_bus import SG1000MemoryBus
 from sega_emulator.cpu.z80 import Z80Cpu
+from sega_emulator.cpu.z80_alu_sampling import select_left_values as _select_left_values
 
 MASK16 = 0xFFFF
 TOTAL_LEFT_VALUES = 0x10000
@@ -33,9 +34,7 @@ OPERATIONS = (
 )
 
 
-def _expected(
-    operation: str, left: int, right: int, carry: int
-) -> tuple[int, int]:
+def _expected(operation: str, left: int, right: int, carry: int) -> tuple[int, int]:
     if operation == "ADD HL,BC":
         raw = left + right
         result = raw & MASK16
@@ -158,6 +157,15 @@ def main() -> int:
         "(padrão: 16; use 65536 para cobertura completa)",
     )
     parser.add_argument(
+        "--sampling",
+        choices=("sequential", "distributed"),
+        default="sequential",
+        help=(
+            "seleção de HL para --left-count (padrão: sequencial; "
+            "distributed cobre todo o domínio)"
+        ),
+    )
+    parser.add_argument(
         "--workers",
         type=int,
         default=min(8, max(1, (os.cpu_count() or 2) - 1)),
@@ -179,12 +187,14 @@ def main() -> int:
     if args.chunk_size < 1:
         parser.error("--chunk-size deve ser pelo menos 1")
 
-    tasks = list(_chunks(range(left_count), args.chunk_size))
+    left_values = _select_left_values(left_count, args.sampling)
+    tasks = list(_chunks(left_values, args.chunk_size))
     workers = min(args.workers, len(tasks))
     total_cases = left_count * 0x10000 * 5
     print(
         f"ALU Z80 16-bit: {left_count:,}/65,536 valores HL; "
-        f"até {total_cases:,} verificações; {workers} processos.",
+        f"até {total_cases:,} verificações; {workers} processos; "
+        f"amostragem {args.sampling}.",
         flush=True,
     )
     if args.full:
@@ -209,9 +219,7 @@ def main() -> int:
             elapsed = time.monotonic() - started
             percent = completed_left * 100 / left_count
             rate = completed_left / elapsed if elapsed > 0 else 0
-            remaining = (
-                (left_count - completed_left) / rate if rate > 0 else 0
-            )
+            remaining = (left_count - completed_left) / rate if rate > 0 else 0
             bar_width = 24
             filled = int(bar_width * percent / 100)
             bar = "#" * filled + "-" * (bar_width - filled)

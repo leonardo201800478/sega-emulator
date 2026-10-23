@@ -194,9 +194,7 @@ def test_16bit_add_adc_sbc_results_flags_and_cycles_for_boundary_cases() -> None
         0xFFFF,
     )
     operand_pairs = {
-        (left, right)
-        for left in boundary_values
-        for right in boundary_values
+        (left, right) for left in boundary_values for right in boundary_values
     }
     operand_pairs.update(
         ((index * 257) & 0xFFFF, (index * 40503 + 0x1234) & 0xFFFF)
@@ -248,8 +246,7 @@ def test_16bit_add_adc_sbc_results_flags_and_cycles_for_boundary_cases() -> None
                 cpu.f = old_flags
                 cpu.pc = 0
                 assert cpu.step() == expected_cycles, (
-                    f"{operation.upper()} cycles HL={left:04X} "
-                    f"BC={right:04X} C={carry}"
+                    f"{operation.upper()} cycles HL={left:04X} BC={right:04X} C={carry}"
                 )
                 assert cpu.hl == result, (
                     f"{operation.upper()} HL={left:04X} BC={right:04X} C={carry}"

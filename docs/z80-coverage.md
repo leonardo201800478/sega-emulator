@@ -205,11 +205,18 @@ Para investigações demoradas, existe o utilitário opcional `scripts/validate_
 Exemplos no PowerShell, a partir da raiz do repositório:
 
 ```powershell
-.\.venv\Scripts\python.exe scripts/validate_z80_alu_16bit.py --left-count 1
-.\.venv\Scripts\python.exe scripts/validate_z80_alu_16bit.py --left-count 16
-.\.venv\Scripts\python.exe scripts/validate_z80_alu_16bit.py --full
+# Amostra mínima, útil para verificar o arranque do utilitário
+.\\.venv\\Scripts\\python.exe scripts/validate_z80_alu_16bit.py --left-count 1 --chunk-size 1
+
+# Amostragem distribuída por todo o domínio de HL, incluindo fronteiras
+.\\.venv\\Scripts\\python.exe scripts/validate_z80_alu_16bit.py --left-count 1024 --sampling distributed --chunk-size 1
+
+# Modo sequencial legado: os primeiros N valores de HL
+.\\.venv\\Scripts\\python.exe scripts/validate_z80_alu_16bit.py --left-count 16 --sampling sequential --chunk-size 1
 ```
 
-O modo padrão verifica 16 valores de HL contra todos os 65.536 valores de BC. `--full` percorre todos os 65.536 valores de HL e, portanto, todos os pares de 16 bits. O modo completo equivale a cerca de **21,47 bilhões de verificações de instrução**; o paralelismo pode reduzir o tempo conforme CPU, número de núcleos e overhead, mas não o transforma em um teste curto. Começar com `--left-count 1` para validar o utilitário e estimar o desempenho antes de escolher a execução completa.
+`--sampling sequential` mantém o comportamento legado e testa HL de 0 até N-1. `--sampling distributed` seleciona valores determinísticos espalhados por todo o domínio de 16 bits; para amostras de pelo menos 64 valores, também inclui fronteiras importantes para carry, half-carry, sinal e wraparound. Com `--left-count 1024 --sampling distributed`, cada um dos 1.024 valores HL é combinado com todos os 65.536 valores BC, para até **335.544.320 verificações de instrução**. Essa quantidade levou cerca de 3m29s no ambiente Windows registrado pelo usuário, mas o tempo varia por máquina; reduza `--left-count` se a estimativa local ultrapassar cinco minutos.
 
-O utilitário é intencionalmente separado do pytest padrão: a suíte diária deve permanecer rápida e determinística. O paralelismo é por processos, não por threads, porque o teste é CPU-bound e threads Python normalmente não aceleram esse tipo de trabalho sob o GIL. A cobertura completa ainda não foi executada nesta revisão.
+`--full` percorre todos os 65.536 valores HL e, portanto, todos os pares de 16 bits. Equivale a cerca de **21,47 bilhões de verificações de instrução** e não deve ser executado como parte da rotina limitada a cinco minutos. O utilitário é separado do pytest padrão. O paralelismo é por processos, não por threads, porque o teste é CPU-bound e threads Python normalmente não aceleram esse trabalho sob o GIL do CPython.
+
+Os testes unitários de `tests/unit/test_z80_alu_sampling.py` verificam a seleção, a distribuição, as fronteiras e o determinismo sem executar a varredura aritmética prolongada.
