@@ -115,3 +115,10 @@ Registrar o resultado real de cada comando, sem inferir sucesso a partir da exis
 A revisão [`a21dfdcbc02b09b7507e109b5a28be09a3674f52`](https://github.com/leonardo201800478/sega-emulator/commit/a21dfdcbc02b09b7507e109b5a28be09a3674f52) passou na [CI 39904100544](https://github.com/leonardo201800478/sega-emulator/actions/runs/39904100544): Ruff format/check aprovados e **367 testes aprovados em 5,41 s**. A revisão contém correções de DAA, atualização centralizada de Q e atualizações parciais de WZ/MEMPTR, além de testes dirigidos.
 
 Este resultado valida a suíte curta do repositório, não o corpus de um milhão de casos. A auditoria diferencial pós-correção permanece pendente; os números da linha de base acima não foram alterados. O próximo lote deve comparar também os campos finais `wz` e `q` quando fornecidos pelo corpus, além de registrar SHA, corpus, tempo e artefatos completos.
+
+
+### Validação adicional: ED-NOP e cobertura de decodificação (23/10/2026)
+
+A revisão [`88bc6d35f3c3433c01f0451688092d6f8c70f7a1`](https://github.com/leonardo201800478/sega-emulator/commit/88bc6d35f3c3433c01f0451688092d6f8c70f7a1) passou na [CI 39904473410](https://github.com/leonardo201800478/sega-emulator/actions/runs/39904473410): **372 testes aprovados em 5,62 s**, com Ruff format/check aprovados. A cobertura agora trata bytes ED sem operação atribuída como ED-NOP de 8 T-states, preservando handlers para aliases conhecidos; os testes percorrem todos os 256 segundos bytes ED.
+
+A nova auditoria diferencial completa ainda não foi executada. Os resultados de 1.000.000 de casos acima continuam sendo a linha de base anterior às correções. A próxima medição deve usar o notebook v5, comparar WZ/Q quando presentes no estado final e preservar todos os detalhes de divergência no CSV.
