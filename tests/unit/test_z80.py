@@ -1758,6 +1758,23 @@ def test_ed_cpir_repeats_until_match_then_stops() -> None:
     assert cpu.f == 0x43  # C preserved, N and Z set; P/V cleared.
 
 
+def test_ed_cpdr_repeats_until_match_then_stops() -> None:
+    cpu = make_cpu(bytes([0xED, 0xB9]))  # CPDR
+    cpu.hl, cpu.bc, cpu.a, cpu.f = 0xC011, 2, 0x42, 0x01
+    cpu.bus.write(0xC011, 0x11)
+    cpu.bus.write(0xC010, 0x42)
+
+    assert cpu.step() == 21
+    assert cpu.pc == 0
+    assert (cpu.hl, cpu.bc) == (0xC010, 1)
+    assert cpu.f & 0x07 == 0x07  # C preservado, N setado e P/V enquanto BC != 0.
+
+    assert cpu.step() == 16
+    assert cpu.pc == 2
+    assert (cpu.hl, cpu.bc) == (0xC00F, 0)
+    assert cpu.f == 0x43  # C preservado, N e Z setados; P/V limpo.
+
+
 def test_ed_rrd_rld_exchange_nibbles() -> None:
     cpu = make_cpu(bytes([0xED, 0x67, 0xED, 0x6F]))
     cpu.hl = 0xC010
