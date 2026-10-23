@@ -29,7 +29,7 @@ def select_left_values(count: int, sampling: str) -> tuple[int, ...]:
         0xFFFE,
         0xFFFF,
     )
-    selected = set(boundary_values)
+    selected: set[int] = set(boundary_values)
     remaining = count - len(selected)
 
     if remaining:
