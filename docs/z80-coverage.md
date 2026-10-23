@@ -61,7 +61,7 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | `A8–AF` — XOR r | Implementado — cobertura inicial | Registros e (HL); verificar flags em casos variados. |
 | `B0–B7` — OR r | Implementado — cobertura inicial | Registros e (HL); verificar flags em casos variados. |
 | `B8–BF` — CP r | Implementado — cobertura inicial | Não altera A; bits X/Y são tratados a partir do operando. |
-| `C6, CE, D6, DE, E6, EE, F6, FE` — ALU imediata | Implementado — cobertura inicial | ADD, ADC, SUB, SBC, AND, XOR, OR e CP com 7 T-states nominais. |
+| `C6, CE, D6, DE, E6, EE, F6, FE` — ALU imediata | Implementado — validado exaustivamente por testes sintéticos | ADD, ADC, SUB, SBC, AND, XOR, OR e CP com 7 T-states nominais. `tests/unit/test_z80_alu_immediate.py` percorre todos os pares A/n e ambos os estados de carry para ADC/SBC, verificando resultado, flags, PC, R e ciclos nominais. Isso não substitui comparação com hardware ou exercitador independente. |
 | `C3` — JP nn | Implementado — cobertura inicial | Salto absoluto incondicional. |
 | `C2, CA, D2, DA, E2, EA, F2, FA` — JP cc,nn | Implementado — cobertura inicial | Oito condições NZ, Z, NC, C, PO, PE, P e M; testes de ramos tomados/não tomados. |
 | `C5, D5, E5, F5` — PUSH qq | Implementado — cobertura inicial | BC, DE, HL e AF; verificar ordem de acesso e tempos de barramento em fase futura. |
