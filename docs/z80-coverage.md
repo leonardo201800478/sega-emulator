@@ -276,3 +276,28 @@ Foram acrescentados casos direcionados para `LDDR` e `CPDR`, complementando os t
 - `CPDR`: verifica comparação em ordem decrescente, repetição quando o byte não corresponde, encerramento antecipado quando A coincide com `(HL)`, preservação de C, N/Z e P/V, atualização de HL/BC e custos nominais de 21/16 T-states.
 
 Esses casos são testes sintéticos de fluxo de controle e estado observável. Não constituem validação diferencial contra hardware ou prova de temporização ciclo a ciclo; permanecem pendentes a cobertura sistemática de todas as condições de saída, wrap de endereços e comparação diferencial independente das flags.
+
+
+---
+
+## Atualização da validação diferencial — 23/10/2026
+
+O primeiro lote reportado do corpus `SingleStepTests/z80 v1` executou 1.000.000 de casos no commit `4a6eac4468645843c2cab22aa653413db4478221`: 992.309 aprovados e 7.691 divergências. O agrupamento indicou 6.001 casos em `BIT b,(HL)`, 1.342 em `SCF/CCF` e 348 em `DAA`. Consulte [o relatório detalhado](z80-differential-audit-2026-10-23.md).
+
+Na branch `fix/z80-single-step-audit`, o PR #14 propõe correções e testes direcionados para essas famílias. A presença dos handlers e dos testes não deve ser confundida com aprovação: os números acima pertencem à revisão antiga e ainda não há, neste registro, resultado de uma auditoria repetida após as alterações.
+
+### Como interpretar a cobertura a partir daqui
+
+- **Caminho implementado:** há código que executa a instrução.
+- **Teste unitário presente:** há um caso automatizado no repositório, mas seu status depende de execução real.
+- **Validação diferencial anterior:** há um resultado registrado para uma revisão específica; ele não valida revisões posteriores.
+- **Validação diferencial pós-correção:** só pode ser marcada após executar o corpus com o SHA corrigido e revisar os artefatos.
+- **Precisão temporal:** permanece limitada a T-states nominais por instrução. A bateria single-step não demonstra temporização de acesso ao barramento ciclo a ciclo.
+
+### Lacunas prioritárias
+
+1. Confirmar pytest/Ruff no commit corrigido.
+2. Corrigir e testar o ciclo de vida de Q para todas as instruções que modificam ou preservam F, incluindo prefixos DD/FD antes de SCF/CCF.
+3. Definir e testar as atualizações de WZ/MEMPTR para as famílias de instruções relevantes; não assumir que inicializar WZ é suficiente.
+4. Reexecutar a auditoria com o SHA explícito da branch corrigida.
+5. Classificar as divergências remanescentes por opcode, campo de estado e possível limitação do harness.
