@@ -220,3 +220,10 @@ Exemplos no PowerShell, a partir da raiz do repositório:
 `--full` percorre todos os 65.536 valores HL e, portanto, todos os pares de 16 bits. Equivale a cerca de **21,47 bilhões de verificações de instrução** e não deve ser executado como parte da rotina limitada a cinco minutos. O utilitário é separado do pytest padrão. O paralelismo é por processos, não por threads, porque o teste é CPU-bound e threads Python normalmente não aceleram esse trabalho sob o GIL do CPython.
 
 Os testes unitários de `tests/unit/test_z80_alu_sampling.py` verificam a seleção, a distribuição, as fronteiras e o determinismo sem executar a varredura aritmética prolongada.
+
+## Validação exaustiva de DAA
+
+`tests/unit/test_z80_daa_exhaustive.py` percorre todas as **2.048 combinações** do acumulador de 8 bits e dos flags de entrada N, H e C. Um oráculo separado calcula o ajuste decimal e os flags S/Z/Y/H/X/PV/N/C esperados, verificando também o PC, o incremento e o wrap do registrador R, e os 4 T-states nominais. Os flags de entrada que não participam da regra DAA são semeados intencionalmente para verificar que o resultado os recalcula.
+
+Este teste é uma validação sintética exaustiva do domínio de entrada modelado, não uma comparação com silício real nem prova de precisão ciclo a ciclo. Qualquer divergência deve ser investigada contra o manual Zilog e uma referência independente antes de alterar a implementação.
+
