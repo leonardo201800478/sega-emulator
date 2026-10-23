@@ -1,6 +1,6 @@
 # Matriz de cobertura do Z80
 
-**Revisão auditada:** `main` em `4bf3aae` (22/10/2026)  
+**Revisão estática original:** `main` em `4bf3aae` (22/10/2026)  
 **Código-base:** `src/sega_emulator/cpu/z80.py`  
 **Testes consultados:** `tests/unit/test_z80.py`, `tests/unit/test_z80_alu_immediate.py` e `docs/z80-coverage.md`
 
@@ -140,4 +140,19 @@ Ordem recomendada para transformar a matriz em evidência automatizada:
 4. Fazer comparação diferencial com um emulador de referência confiável; os testes sintéticos atuais não provam equivalência com hardware.
 5. Só então calcular percentuais e usar a matriz como critério de aceitação do marco Z80.
 
-**Limitação desta entrega:** esta matriz foi compilada por inspeção estática do código e dos documentos existentes; ainda não foi implementado nem executado um gerador automático de cobertura de todos os opcodes.
+## 7. Inventário automatizado de despacho
+
+Foi adicionado `tools/z80_opcode_inventory.py`, que executa um único passo isolado para cada byte nos espaços base, CB, ED, DD, FD, DD-CB e FD-CB, usando memória e I/O determinísticos.
+
+Execute a partir da raiz do repositório:
+
+```powershell
+python tools/z80_opcode_inventory.py
+python tools/z80_opcode_inventory.py --json
+```
+
+O modo normal resume cada espaço e lista as codificações que lançam `UnsupportedOpcodeError` ou geram exceções inesperadas. O modo JSON inclui um registo por codificação, incluindo estado e T-states retornados. O processo termina com código diferente de zero se encontrar uma exceção inesperada; codificações explicitamente não suportadas são relatadas, mas não tratadas como erro inesperado.
+
+**Limitações importantes:** cada combinação é executada apenas uma vez com operandos e estado inicial controlados. A classificação `executed` significa somente que a execução retornou sem exceção. Ela não valida o resultado semântico, as flags, os ciclos de barramento, o timing exato nem a equivalência com hardware. Prefixos repetidos e instruções que consomem operandos são smoke-tested, não exaustivamente validados. O inventário é uma ferramenta de triagem para encontrar falhas de despacho, não um teste de conformidade.
+
+**Limitação da auditoria:** a matriz funcional acima continua sendo uma avaliação estática. O novo inventário automatiza a triagem em runtime, mas os resultados reais ainda precisam ser executados no ambiente do projeto e revisados antes de atualizar percentuais ou marcar instruções como corretas.
