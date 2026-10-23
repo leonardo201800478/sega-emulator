@@ -106,3 +106,12 @@ Registrar o resultado real de cada comando, sem inferir sucesso a partir da exis
 - Execução pós-correção: **pendente**.
 - Suíte unitária/Ruff pós-correção: **não confirmada neste registro**.
 - Precisão ciclo a ciclo: **não implementada/demonstrada**.
+
+
+---
+
+## Validação curta após as correções — 23/10/2026
+
+A revisão [`a21dfdcbc02b09b7507e109b5a28be09a3674f52`](https://github.com/leonardo201800478/sega-emulator/commit/a21dfdcbc02b09b7507e109b5a28be09a3674f52) passou na [CI 39904100544](https://github.com/leonardo201800478/sega-emulator/actions/runs/39904100544): Ruff format/check aprovados e **367 testes aprovados em 5,41 s**. A revisão contém correções de DAA, atualização centralizada de Q e atualizações parciais de WZ/MEMPTR, além de testes dirigidos.
+
+Este resultado valida a suíte curta do repositório, não o corpus de um milhão de casos. A auditoria diferencial pós-correção permanece pendente; os números da linha de base acima não foram alterados. O próximo lote deve comparar também os campos finais `wz` e `q` quando fornecidos pelo corpus, além de registrar SHA, corpus, tempo e artefatos completos.
