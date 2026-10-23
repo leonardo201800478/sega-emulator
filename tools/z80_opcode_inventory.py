@@ -124,6 +124,7 @@ def _summary(results: list[Result]) -> dict[str, Any]:
             "prove semantic correctness, timing accuracy, or hardware equivalence."
         ),
         "by_space": by_space,
+        "results": [asdict(result) for result in results],
         "unexpected_errors": [
             asdict(result)
             for result in results
