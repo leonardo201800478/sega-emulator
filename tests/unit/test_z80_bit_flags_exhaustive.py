@@ -17,7 +17,7 @@ class FlatMemoryBus:
 
 
 def _expected_bit_flags(value: int, bit_index: int, carry: int, xy_source: int) -> int:
-    """Calcula flags documentadas de BIT e a origem selecionada para X/Y."""
+    """Calcula flags de BIT e aplica a hipótese testada para os bits X/Y."""
     flags = 0x10 | carry | (xy_source & 0x28)
     bit_is_clear = not (value & (1 << bit_index))
     if bit_is_clear:
