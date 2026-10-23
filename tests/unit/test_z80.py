@@ -1725,7 +1725,8 @@ def test_ed_block_io_repeat_stops_when_b_reaches_zero(opcode: int) -> None:
 
     assert cpu.step() == 16
     assert cpu.b == 0
-    assert cpu.hl == 0xC011 if opcode in (0xB2, 0xB3) else 0xC00F
+    expected_hl = 0xC011 if opcode in (0xB2, 0xB3) else 0xC00F
+    assert cpu.hl == expected_hl
     assert cpu.pc == 2
     assert cpu.f & 0x40  # Z is set when the decremented B becomes zero.
 
