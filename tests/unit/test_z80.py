@@ -124,6 +124,39 @@ def test_daa_exhaustive_accumulator_and_hnc_input_flags() -> None:
             )
 
 
+@pytest.mark.parametrize(
+    ("opcode", "initial_q", "expected_flags"),
+    [
+        (0x37, 0x00, 0x2D),  # Q=0: F3/F5 recebem A | F
+        (0x37, 0x01, 0x25),  # Q!=0: F3/F5 recebem A
+        (0x3F, 0x00, 0x3C),  # C anterior=0: C é setado; H=0
+        (0x3F, 0x01, 0x34),  # Q!=0 e C anterior=0
+    ],
+)
+def test_scf_ccf_undocumented_flags_depend_on_q(
+    opcode: int, initial_q: int, expected_flags: int
+) -> None:
+    cpu = make_cpu(bytes([opcode]))
+    cpu.a = 0x27
+    cpu.f = 0x2C
+    cpu.q = initial_q
+
+    assert cpu.step() == 4
+    assert cpu.f == expected_flags
+    assert cpu.q == expected_flags
+
+
+def test_bit_hl_uses_wz_for_undocumented_flags() -> None:
+    cpu = make_cpu(bytes([0xCB, 0x46]))  # BIT 0,(HL)
+    cpu.hl = 0xB3FD
+    cpu.bus.write(cpu.hl, 0x6B)
+    cpu.f = 0x01
+    cpu.wz = 0x5D48
+
+    assert cpu.step() == 12
+    assert cpu.f == 0x19
+
+
 def test_ld_immediate_and_register_transfer_preserve_flags() -> None:
     cpu = make_cpu(bytes([0x06, 0x42, 0x78]))  # LD B,42h; LD A,B
     cpu.f = 0xD7
