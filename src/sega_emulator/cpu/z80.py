@@ -729,7 +729,7 @@ class Z80Cpu:
             )
             if opcode in (0xB0, 0xB8) and self.bc:
                 self.pc = (self.pc - 2) & 0xFFFF
-                self.wz = (self.pc + 1) & 0xFFFF
+                self.wz = (self.pc + 3) & 0xFFFF
                 return 21
             return 16
         if opcode in (0xA1, 0xA9, 0xB1, 0xB9):
