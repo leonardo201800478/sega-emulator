@@ -2506,7 +2506,7 @@ def test_index_prefixes_decode_all_second_opcodes() -> None:
 
 
 def test_all_ed_second_bytes_are_supported_or_ed_nop() -> None:
-    """Classifica os 256 segundos bytes ED conforme handlers e ED-NOP do Z80 clássico."""
+    """Classifica os bytes ED conforme handlers e ED-NOP do Z80 clássico."""
     supported = {
         *(0x40 + (register << 3) for register in range(8)),  # IN r,(C)
         *(0x41 + (register << 3) for register in range(8)),  # OUT (C),r
