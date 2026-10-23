@@ -109,3 +109,13 @@ O resultado de 1.000.000 de casos (992.309 aprovados e 7.691 divergências) cont
 O notebook de auditoria v5 compara `WZ/MEMPTR` e `Q` quando o corpus fornece estado final, conta campos divergentes a partir do CSV completo e fixa o SHA esperado. Executá-lo no Google Colab e preservar o ZIP completo antes de atualizar qualquer estatística do relatório.
 
 A implementação de WZ/Q permanece parcial até a auditoria longa e os testes externos. A temporização ciclo a ciclo e a ordem de barramento continuam fora do escopo desta correção.
+
+
+### Complemento — ED-NOP e cobertura de 256 bytes ED (23/10/2026)
+
+- Revisão de código/testes: [`88bc6d35f3c3433c01f0451688092d6f8c70f7a1`](https://github.com/leonardo201800478/sega-emulator/commit/88bc6d35f3c3433c01f0451688092d6f8c70f7a1).
+- CI: [execução 39904473410](https://github.com/leonardo201800478/sega-emulator/actions/runs/39904473410) aprovada; Ruff format/check aprovados e **372 testes passaram em 5,62 s**.
+- Os bytes ED sem operação atribuída agora retornam como ED-NOP de 8 T-states; aliases conhecidos continuam tratados por handlers explícitos. Os testes cobrem ED-NOPs representativos e verificam a decodificação dos 256 segundos bytes ED.
+- Fontes de engenharia reversa e a ressalva sobre a ausência de especificação oficial para estes bytes foram registradas em `docs/z80-undocumented-behavior-research.md`.
+
+A CI curta está verde nesta revisão. Ainda não foi executada a auditoria longa pós-correção; usar o notebook v5 fixado no SHA acima para comparar também `WZ/MEMPTR` e `Q`, preservar o CSV completo e devolver o ZIP antes de alterar a linha de base.
