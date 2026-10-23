@@ -640,32 +640,42 @@ class Z80Cpu:
             value = self._read_stack_pair((opcode >> 4) & 3)
             self.bus.write(address, value & 0xFF)
             self.bus.write((address + 1) & 0xFFFF, value >> 8)
+            self.wz = (address + 1) & 0xFFFF
             return 20
         if opcode & 0xCF == 0x4B:
             address = self._fetch_byte() | (self._fetch_byte() << 8)
             low = self.bus.read(address)
             high = self.bus.read((address + 1) & 0xFFFF)
             self._write_stack_pair((opcode >> 4) & 3, (high << 8) | low)
+            self.wz = (address + 1) & 0xFFFF
             return 20
         if opcode & 0xCF == 0x4A:
+            previous_hl = self.hl
             self._add_sub_hl(self._read_stack_pair((opcode >> 4) & 3), False)
+            self.wz = (previous_hl + 1) & 0xFFFF
             return 15
         if opcode & 0xCF == 0x42:
+            previous_hl = self.hl
             self._add_sub_hl(self._read_stack_pair((opcode >> 4) & 3), True)
+            self.wz = (previous_hl + 1) & 0xFFFF
             return 15
         if opcode & 0xC7 == 0x40:
             register = (opcode >> 3) & 7
-            value = self._read_port(self.bc)
+            port = self.bc
+            value = self._read_port(port)
             if register != 6:
                 self._write_register(register, value)
             self._set_flags((self.f & 1) | (value & 0xA8) | self._parity_flag(value))
             if value == 0:
                 self._set_flags(self.f | 0x40)
+            self.wz = (port + 1) & 0xFFFF
             return 12
         if opcode & 0xC7 == 0x41:
             register = (opcode >> 3) & 7
+            port = self.bc
             value = 0 if register == 6 else self._read_register(register)
-            self._write_port(self.bc, value)
+            self._write_port(port, value)
+            self.wz = (port + 1) & 0xFFFF
             return 12
         if opcode in (0x44, 0x4C, 0x54, 0x5C, 0x64, 0x6C, 0x74, 0x7C):
             old_a = self.a
@@ -674,6 +684,7 @@ class Z80Cpu:
             return 8
         if opcode in (0x45, 0x4D, 0x55, 0x5D, 0x65, 0x6D, 0x75, 0x7D):
             self.pc = self._pop_word()
+            self.wz = self.pc
             self.iff1 = self.iff2
             return 14
         if opcode in (0x46, 0x4E, 0x66, 0x6E):
@@ -687,6 +698,7 @@ class Z80Cpu:
             return 8
         if opcode in (0x67, 0x6F):
             address = self.hl
+            self.wz = (address + 1) & 0xFFFF
             memory_value = self.bus.read(address)
             if opcode == 0x67:
                 new_memory = ((self.a & 0x0F) << 4) | (memory_value >> 4)
@@ -717,6 +729,7 @@ class Z80Cpu:
             )
             if opcode in (0xB0, 0xB8) and self.bc:
                 self.pc = (self.pc - 2) & 0xFFFF
+                self.wz = (self.pc + 1) & 0xFFFF
                 return 21
             return 16
         if opcode in (0xA1, 0xA9, 0xB1, 0xB9):
@@ -741,7 +754,9 @@ class Z80Cpu:
             )
             if opcode in (0xB1, 0xB9) and self.bc and result:
                 self.pc = (self.pc - 2) & 0xFFFF
+                self.wz = (self.pc + 1) & 0xFFFF
                 return 21
+            self.wz = (self.wz + direction) & 0xFFFF
             return 16
         if opcode in (0xA2, 0xAA, 0xB2, 0xBA, 0xA3, 0xAB, 0xB3, 0xBB):
             return self._execute_block_io(opcode)
@@ -774,8 +789,13 @@ class Z80Cpu:
             flags |= 0x11
         flags |= self._parity_flag(((k & 7) ^ self.b) & 0xFF)
         self._set_flags(flags)
+        if input_direction:
+            self.wz = (self.bc + 1) & 0xFFFF
+        else:
+            self.wz = (old_bc + direction) & 0xFFFF
         if repeat and self.b:
             self.pc = (self.pc - 2) & 0xFFFF
+            self.wz = (self.pc + 1) & 0xFFFF
             return 21
         return 16
 
