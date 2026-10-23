@@ -109,9 +109,7 @@ def build_inventory() -> list[Result]:
 def _summary(results: list[Result]) -> dict[str, Any]:
     by_space: dict[str, dict[str, int]] = {}
     for space in dict.fromkeys(result.space for result in results):
-        counts = Counter(
-            result.status for result in results if result.space == space
-        )
+        counts = Counter(result.status for result in results if result.space == space)
         by_space[space] = {
             "total": sum(counts.values()),
             "executed": counts["executed"],
@@ -127,9 +125,7 @@ def _summary(results: list[Result]) -> dict[str, Any]:
         "by_space": by_space,
         "results": [asdict(result) for result in results],
         "unexpected_errors": [
-            asdict(result)
-            for result in results
-            if result.status == "unexpected_error"
+            asdict(result) for result in results if result.status == "unexpected_error"
         ],
         "unsupported": [
             asdict(result) for result in results if result.status == "unsupported"
