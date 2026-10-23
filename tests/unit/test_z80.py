@@ -1824,7 +1824,6 @@ def test_indexed_displacement_load_alu_and_cb_bit_operation() -> None:
     assert cpu.f & 0x50 == 0x10
 
 
-
 @pytest.mark.parametrize(
     ("prefix", "index_name"),
     [(0xDD, "ix"), (0xFD, "iy")],
