@@ -231,3 +231,12 @@ Esta seção registra mudanças em avaliação na branch `fix/z80-single-step-au
 5. A temporização continua agregada por instrução; a precisão ciclo a ciclo exige um modelo separado de micro-operações e eventos de barramento.
 
 **Critério para fechar esta frente:** CI verde no SHA atual, testes dirigidos aprovados, nova auditoria diferencial com artefatos preservados e classificação das divergências remanescentes por instrução e variante física.
+
+
+### ED-NOP: comportamento de bytes ED sem operação atribuída
+
+As referências técnicas comunitárias [CPCWiki — Z80 undocumented opcodes](https://www.cpcwiki.eu/index.php/Z80_-_undocumented_opcodes), [Z80.info — Z80 reference](https://www.worldofspectrum.net/faq/reference/z80reference.htm) e [Decoding Z80 Opcodes](https://zxe.io/depot/documents/technical/Dinu%2C%20Cristian/Decoding%20Z80%20Opcodes%20rev2%20%28revised%29%20%282018-03%29%28Dinu%2C%20Cristian%29%28en%29%5B%21%5D.htm) concordam que bytes ED sem operação atribuída no Z80 clássico se comportam como ED-NOP: não alteram o estado arquitetural, consomem 8 T-states e realizam dois fetches M1, incrementando R duas vezes. Os aliases conhecidos de NEG, RETN/RETI, IM, IN/OUT e outras instruções são tratados explicitamente antes do fallback.
+
+O manual da Zilog documenta as instruções oficiais, mas não constitui, por si só, prova desses opcodes não documentados. Por isso a decisão é registrada como comportamento observado/documentado por engenharia reversa para o Z80 clássico, a validar na variante física alvo do SG-1000.
+
+Na branch de correção, o fallback ED agora retorna 8 T-states em vez de lançar `UnsupportedOpcodeError`. Os testes verificam ED-NOPs representativos e classificam todos os 256 segundos bytes ED como handler conhecido ou ED-NOP; a CI da revisão mais recente ainda precisa confirmar esta atualização de testes.
