@@ -238,3 +238,13 @@ O arquivo `tests/unit/test_z80_bit_flags_exhaustive.py` verifica as flags de `BI
 
 **Limites:** são testes sintéticos de regras e do modelo atual, não uma comparação contra silício ou um núcleo de referência executado. Os quatro padrões de X/Y no endereço são amostras direcionadas, não uma varredura de todos os endereços. A semântica e a temporização de `BIT b,(IX+d)`/`BIT b,(IY+d)` continuam pendentes e devem ser tratadas em uma etapa separada.
 
+## Validação de BIT indexado (DDCB/FDCB)
+
+O arquivo `tests/unit/test_z80_indexed_bit_flags.py` acrescenta:
+
+- 16.384 estados sintéticos para `BIT b,(IX+d)` e `BIT b,(IY+d)`, cobrindo os 256 valores, oito posições de bit, ambos os estados de carry e quatro padrões do byte alto do endereço efetivo.
+- Casos direcionados para deslocamento negativo, endereço efetivo com wrap de 16 bits, PC, R e 20 T-states nominais.
+- Verificação de que o operando de memória permanece inalterado e que X/Y acompanham os bits 5 e 3 do byte alto do endereço efetivo no modelo testado.
+
+**Limites:** os testes exercitam a hipótese do núcleo para X/Y e o custo nominal; não são validação em hardware nem prova de temporização por ciclo. O wrap e os deslocamentos foram testados em casos direcionados, não em todas as combinações de base e deslocamento.
+
