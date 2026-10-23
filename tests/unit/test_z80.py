@@ -1854,34 +1854,6 @@ def test_indexed_memory_displacement_wraps_at_zero(
 
 
 @pytest.mark.parametrize(
-    ("prefix", "index_name", "opcode", "initial_a", "initial_memory", "expected_a", "expected_memory"),
-    [
-        (0xDD, "ix", 0x7E, 0x00, 0xA6, 0xA6, 0xA6),  # LD A,(IX-1), IX=0000h
-        (0xFD, "iy", 0x77, 0x5A, 0x00, 0x5A, 0x5A),  # LD (IY-1),A, IY=0000h
-    ],
-)
-def test_indexed_memory_displacement_wraps_at_zero_placeholder(
-    prefix: int,
-    index_name: str,
-    opcode: int,
-    initial_a: int,
-    initial_memory: int,
-    expected_a: int,
-    expected_memory: int,
-) -> None:
-    """Temporary placeholder."""
-    cpu = make_cpu(bytes([prefix, opcode, 0xFF]))
-    setattr(cpu, index_name, 0x0000)
-    cpu.a = initial_a
-    cpu.bus.write(0xFFFF, initial_memory)
-    assert cpu.step() == 19
-    assert cpu.pc == 3
-    assert cpu.r == 2
-    assert cpu.a == expected_a
-    assert cpu.bus.read(0xFFFF) == expected_memory
-
-
-@pytest.mark.parametrize(
     ("prefix", "index_name"),
     [(0xDD, "ix"), (0xFD, "iy")],
 )
