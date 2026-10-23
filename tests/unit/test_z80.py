@@ -1928,14 +1928,82 @@ def test_im0_interrupt_uses_rst_vector_from_data_bus() -> None:
     assert cpu.bus.read(0xC0FF) == 0x00
 
 
-def test_im0_rejects_non_rst_bus_opcode_instead_of_misrouting_it() -> None:
-    cpu = make_cpu(bytes([0x00]))
+@pytest.mark.parametrize(
+    ("data_bus", "program", "expected_cycles", "expected_pc", "expected_a"),
+    [
+        (0x00, bytes([0x00]), 6, 0x0000, 0x00),  # NOP externo
+        (0x3E, bytes([0x42]), 9, 0x0001, 0x42),  # LD A,n: operando vem de PC
+    ],
+)
+def test_im0_executes_external_opcode_and_fetches_operands_from_pc(
+    data_bus: int,
+    program: bytes,
+    expected_cycles: int,
+    expected_pc: int,
+    expected_a: int,
+) -> None:
+    cpu = make_cpu(program)
     cpu.iff1 = cpu.iff2 = True
-    cpu.request_int(0x00)
-    with pytest.raises(UnsupportedOpcodeError, match="IM 0"):
-        cpu.step()
-    assert cpu.pc == 0
-    assert cpu.total_cycles == 0
+    cpu.request_int(data_bus)
+
+    assert cpu.step() == expected_cycles
+    assert cpu.pc == expected_pc
+    assert cpu.a == expected_a
+    assert cpu.r == 1
+    assert cpu.iff1 is False
+    assert cpu.iff2 is False
+    assert cpu._int_pending is None
+
+
+def test_im0_call_uses_pc_after_external_opcode_operands_as_return_address() -> None:
+    cpu = make_cpu(bytes([0x34, 0x12]))  # CALL 1234h operands in memory
+    cpu.sp = 0xC100
+    cpu.iff1 = cpu.iff2 = True
+    cpu.request_int(0xCD)  # CALL opcode supplied by interrupting device
+
+    assert cpu.step() == 19
+    assert cpu.pc == 0x1234
+    assert cpu.sp == 0xC0FE
+    assert cpu.bus.read(0xC0FE) == 0x02
+    assert cpu.bus.read(0xC0FF) == 0x00
+    assert cpu.r == 1
+    assert cpu.total_cycles == 19
+
+
+def test_im0_cb_prefix_fetches_second_opcode_from_memory() -> None:
+    cpu = make_cpu(bytes([0x06]))  # RLC (HL)
+    cpu.hl = 0xC020
+    cpu.bus.write(0xC020, 0x81)
+    cpu.iff1 = cpu.iff2 = True
+    cpu.request_int(0xCB)  # Prefixo CB fornecido pelo dispositivo
+
+    assert cpu.step() == 17
+    assert cpu.bus.read(0xC020) == 0x03
+    assert cpu.pc == 1
+    assert cpu.r == 2
+
+
+def test_im0_ed_prefix_executes_instruction_from_memory() -> None:
+    cpu = make_cpu(bytes([0x44]))  # NEG
+    cpu.a = 0x01
+    cpu.iff1 = cpu.iff2 = True
+    cpu.request_int(0xED)  # Prefixo ED fornecido pelo dispositivo
+
+    assert cpu.step() == 10
+    assert cpu.a == 0xFF
+    assert cpu.pc == 1
+    assert cpu.r == 2
+
+
+def test_im0_index_prefix_fetches_instruction_and_operands_from_memory() -> None:
+    cpu = make_cpu(bytes([0x21, 0x34, 0x12]))  # LD IX,1234h
+    cpu.iff1 = cpu.iff2 = True
+    cpu.request_int(0xDD)  # Prefixo DD fornecido pelo dispositivo
+
+    assert cpu.step() == 16
+    assert cpu.ix == 0x1234
+    assert cpu.pc == 3
+    assert cpu.r == 2
 
 
 def test_all_base_opcodes_are_decoded_or_explicitly_rejected() -> None:
