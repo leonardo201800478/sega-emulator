@@ -493,6 +493,20 @@ def test_q_latch_tracks_flags_written_by_previous_instruction() -> None:
     assert cpu.f == 0x01
     assert cpu.q == cpu.f
 
+def test_q_latch_is_preserved_through_ignored_dd_prefix() -> None:
+    cpu = make_cpu(bytes([0x04, 0xDD, 0x37]))  # INC B; DD SCF
+    cpu.a = 0x00
+    cpu.b = 0x07
+
+    assert cpu.step() == 4
+    assert cpu.f == 0x08
+    assert cpu.q == 0x08
+
+    assert cpu.step() == 8
+    assert cpu.f == 0x01
+    assert cpu.q == cpu.f
+
+
 
 @pytest.mark.parametrize(
     ("accumulator", "flags", "expected_flags"),
