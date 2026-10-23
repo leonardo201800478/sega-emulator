@@ -591,6 +591,8 @@ class Z80Cpu:
             # Em BIT b,(HL), F3/F5 vêm do registrador interno WZ/MEMPTR,
             # não do byte testado nem necessariamente do endereço HL.
             self.f = (self.f & ~0x28) | ((self.wz >> 8) & 0x28)
+        if operation == 1:
+            self.q = self.f
         if is_memory:
             return 12 if operation == 1 else 15
         return 8
@@ -1159,6 +1161,7 @@ class Z80Cpu:
             cycles = 11
         elif opcode == 0x27:  # DAA
             self._daa()
+            self.q = self.f
             cycles = 4
         elif opcode in (0x07, 0x0F, 0x17, 0x1F):  # rotações do acumulador
             self._rotate_accumulator(opcode)
