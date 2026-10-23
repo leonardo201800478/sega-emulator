@@ -1824,6 +1824,46 @@ def test_indexed_displacement_load_alu_and_cb_bit_operation() -> None:
     assert cpu.f & 0x50 == 0x10
 
 
+
+@pytest.mark.parametrize(
+    ("prefix", "index_name"),
+    [(0xDD, "ix"), (0xFD, "iy")],
+)
+@pytest.mark.parametrize(
+    ("opcode", "memory_value", "initial_hl", "expected_hl", "expected_memory"),
+    [
+        (0x66, 0xA5, 0x1234, 0xA534, 0xA5),  # LD H,(IX/IY+d): H, not IXH/IYH
+        (0x6E, 0xA5, 0x1234, 0x12A5, 0xA5),  # LD L,(IX/IY+d): L, not IXL/IYL
+        (0x74, 0x00, 0x5A34, 0x5A34, 0x5A),  # LD (IX/IY+d),H: use H
+        (0x75, 0x00, 0x12A5, 0x12A5, 0xA5),  # LD (IX/IY+d),L: use L
+    ],
+)
+def test_indexed_memory_loads_use_hl_not_index_halves(
+    prefix: int,
+    index_name: str,
+    opcode: int,
+    memory_value: int,
+    initial_hl: int,
+    expected_hl: int,
+    expected_memory: int,
+) -> None:
+    """Valida a exceção Z80: H/L comuns em LD H/L,(IX/IY+d) e vice-versa."""
+    cpu = make_cpu(bytes([prefix, opcode, 0x05]))
+    index_value = 0xC100
+    address = index_value + 0x05
+    setattr(cpu, index_name, index_value)
+    cpu.hl = initial_hl
+    cpu.bus.write(address, memory_value)
+
+    assert cpu.step() == 19
+    assert cpu.hl == expected_hl
+    assert getattr(cpu, index_name) == index_value
+    assert cpu.bus.read(address) == expected_memory
+    assert cpu.pc == 3
+    assert cpu.r == 2
+    assert cpu.total_cycles == 19
+
+
 def test_ignored_index_prefix_counts_each_m1_fetch_once() -> None:
     cpu = make_cpu(bytes([0xDD, 0x00]))
     assert cpu.step() == 8
