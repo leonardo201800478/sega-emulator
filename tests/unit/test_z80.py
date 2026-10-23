@@ -1825,7 +1825,15 @@ def test_indexed_displacement_load_alu_and_cb_bit_operation() -> None:
 
 
 @pytest.mark.parametrize(
-    ("prefix", "index_name", "opcode", "initial_a", "initial_memory", "expected_a", "expected_memory"),
+    (
+        "prefix",
+        "index_name",
+        "opcode",
+        "initial_a",
+        "initial_memory",
+        "expected_a",
+        "expected_memory",
+    ),
     [
         (0xDD, "ix", 0x7E, 0x00, 0xA6, 0xA6, 0xA6),  # LD A,(IX-1), IX=0000h
         (0xFD, "iy", 0x77, 0x5A, 0x00, 0x5A, 0x5A),  # LD (IY-1),A, IY=0000h
