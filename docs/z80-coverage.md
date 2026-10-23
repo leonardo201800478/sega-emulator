@@ -250,6 +250,12 @@ O arquivo `tests/unit/test_z80_indexed_bit_flags.py` acrescenta:
 
 
 
+## Validação adicional de BC inicial zero nas instruções de bloco ED — 22/10/2026
+
+Foram acrescentados testes para os casos em que `BC=0000h` antes de `LDIR` e `CPIR`. O Z80 não trata esse estado como uma operação vazia: a primeira iteração decrementa BC para `FFFFh` e a instrução continua repetindo. Os testes verificam a primeira iteração, o retorno do PC ao opcode, os registradores atualizados, os flags pertinentes e os 21 T-states nominais da iteração de repetição.
+
+A validação cobre apenas o primeiro passo desse percurso de 65.536 iterações; não executa a sequência completa nem constitui validação diferencial contra hardware.
+
 ## Validação adicional de repetição das instruções ED — 22/10/2026
 
 Foram acrescentados casos direcionados para `LDDR` e `CPDR`, complementando os testes existentes de `LDIR` e `CPIR`:
