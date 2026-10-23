@@ -180,3 +180,24 @@ Para este projeto, a opção segura é **reimplementar a partir de especificaç�
 - Não foram executados ZEXALL, testes de hardware ou comparação diferencial.
 - Os detalhes de Q, WZ/MEMPTR, bits X/Y, aliases ED e diferenças NMOS/CMOS continuam pendentes de confirmação por suíte independente e definição da variante-alvo.
 - Esta documentação propõe trabalho futuro; não afirma que a CPU do nosso repositório tenha sido alterada.
+
+
+---
+
+## Atualização experimental — 23/10/2026
+
+A pesquisa de comportamentos não documentados passou a orientar uma auditoria diferencial concreta. O lote anterior de `SingleStepTests/z80 v1` reportou divergências concentradas em `BIT b,(HL)`, `SCF/CCF` e `DAA`; os dados e a revisão exata estão registrados em [Auditoria diferencial Z80 — 23/10/2026](z80-differential-audit-2026-10-23.md).
+
+### Hipóteses convertidas em mudanças testáveis
+
+- **WZ/MEMPTR e BIT (HL):** o código de trabalho usa o byte alto de WZ para F3/F5 em BIT sobre memória. A atualização geral de WZ por instrução continua incompleta.
+- **Q e SCF/CCF:** o código de trabalho condiciona F3/F5 ao Q anterior e atualiza Q em alguns caminhos. Ainda falta demonstrar o ciclo de vida completo de Q, em especial instruções prefixadas DD/FD e instruções que preservam flags.
+- **DAA:** foi corrigida a seleção das correções para incluir o caso de subtração reproduzido pelo corpus; o resultado esperado foi transformado em teste de regressão.
+
+Essas mudanças estão na branch `fix/z80-single-step-audit`, no [PR #14](https://github.com/leonardo201800478/sega-emulator/pull/14). Elas são **hipóteses implementadas para validação**, não evidência de comportamento integralmente correto.
+
+### Evidência e cautelas
+
+O caso DAA reportado com A=`F3h`, F=`4Eh` espera A=`93h`, F=`87h`. A família BIT (HL) sugere dependência de estado auxiliar WZ/MEMPTR. Os casos SCF/CCF sugerem que os bits F3/F5 não podem ser tratados apenas como uma cópia direta dos bits do acumulador em todos os contextos.
+
+Antes de encerrar a investigação, comparar os resultados corrigidos com o corpus, conferir a representação dos estados iniciais no harness e revisar as diferenças por variante de Z80. Não extrapolar um caso single-step para atualização completa de estado entre instruções nem para precisão ciclo a ciclo.
