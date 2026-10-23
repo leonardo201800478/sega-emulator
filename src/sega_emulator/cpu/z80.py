@@ -36,6 +36,9 @@ class Z80Cpu:
         self.hl_alt = 0
         self.i = 0
         self.r = 0
+        # Estado interno usado por flags não documentadas do Z80.
+        self.wz = 0
+        self.q = 0
         self.iff1 = False
         self.iff2 = False
         self.interrupt_mode = 0
@@ -585,7 +588,9 @@ class Z80Cpu:
         else:
             self._write_register(register, value | (1 << bit_index))
         if operation == 1 and is_memory:
-            self.f = (self.f & ~0x28) | ((self.hl >> 8) & 0x28)
+            # Em BIT b,(HL), F3/F5 vêm do registrador interno WZ/MEMPTR,
+            # não do byte testado nem necessariamente do endereço HL.
+            self.f = (self.f & ~0x28) | ((self.wz >> 8) & 0x28)
         if is_memory:
             return 12 if operation == 1 else 15
         return 8
@@ -1303,15 +1308,25 @@ class Z80Cpu:
             self.f = (self.f & 0xC5) | (self.a & 0x28) | 0x12
             cycles = 4
         elif opcode == 0x37:  # SCF
-            self.f = (self.f & 0xC4) | (self.a & 0x28) | 0x01
+            # No Z80 NMOS, F3/F5 dependem de Q: se a instrução anterior
+            # não alterou flags (Q=0), combinam A com F; caso contrário vêm de A.
+            undocumented = self.a & 0x28
+            if self.q == 0:
+                undocumented |= self.f & 0x28
+            self.f = (self.f & 0xC4) | undocumented | 0x01
+            self.q = self.f
             cycles = 4
         elif opcode == 0x3F:  # CCF
             previous_carry = self.f & 0x01
-            self.f = (self.f & 0xC4) | (self.a & 0x28)
+            undocumented = self.a & 0x28
+            if self.q == 0:
+                undocumented |= self.f & 0x28
+            self.f = (self.f & 0xC4) | undocumented
             if previous_carry:
                 self.f |= 0x10
             else:
                 self.f |= 0x01
+            self.q = self.f
             cycles = 4
         elif opcode == 0x10:  # DJNZ e
             displacement = self._fetch_byte()
