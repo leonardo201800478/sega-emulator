@@ -258,7 +258,7 @@ Referência de arquitetura: [Zilog — Z80 CPU User Manual, Input/Output Group](
 
 ## Verificação das flags de I/O de bloco em limites de carry — 22/10/2026
 
-Foram adicionados quatro casos dirigidos para `INI`, `IND`, `OUTI` e `OUTD`. Os operandos fazem a soma auxiliar `k) chegar a `0x101`, exercitando H/C, e deixam B em `0x28`, exercitando os bits X/Y modelados pelo núcleo. Os testes verificam o valor integral de F (`0x39`), além do endereço de porta pré-decremento e da direção da transferência.
+Foram adicionados quatro casos dirigidos para `INI`, `IND`, `OUTI` e `OUTD`. Os operandos fazem a soma auxiliar `k` chegar a `0x101`, exercitando H/C, e deixam B em `0x28`, exercitando os bits X/Y modelados pelo núcleo. Os testes verificam o valor integral de F (`0x39`), além do endereço de porta pré-decremento e da direção da transferência.
 
 A fórmula de H/C e P/V para essas instruções inclui efeitos tradicionalmente tratados como não documentados; foi usada como hipótese de implementação para criar os testes, não como prova de comportamento universal em todas as revisões do silício. O manual da Zilog descreve parte das flags de I/O de bloco como dependentes do resultado ou indeterminadas; validação diferencial com uma referência independente continua necessária.
 
