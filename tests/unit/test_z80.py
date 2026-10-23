@@ -2208,3 +2208,37 @@ def test_ignored_index_prefixes_preserve_pc_r_and_nominal_cycles(
     assert cpu.pc == expected_pc
     assert cpu.r == expected_r
     assert cpu.total_cycles == expected_cycles
+
+
+@pytest.mark.parametrize(
+    ("program", "expected_index"),
+    [
+        (bytes([0xDD, 0xFD, 0x21, 0x34, 0x12]), 0x1234),
+        (bytes([0xFD, 0xDD, 0x21, 0x78, 0x56]), 0x5678),
+    ],
+)
+def test_last_repeated_index_prefix_selects_ix_or_iy(
+    program: bytes, expected_index: int
+) -> None:
+    cpu = make_cpu(program)
+    cpu.r = 0xFE
+
+    assert cpu.step() == 18
+    assert cpu.pc == 5
+    assert cpu.r == 0x81
+    if program[1] == 0xFD:
+        assert cpu.iy == expected_index
+    else:
+        assert cpu.ix == expected_index
+    assert cpu.total_cycles == 18
+
+
+def test_indexed_cb_final_opcode_does_not_increment_refresh_register() -> None:
+    cpu = make_cpu(bytes([0xDD, 0xCB, 0x01, 0x46]))  # BIT 0,(IX+1)
+    cpu.ix = 0xC020
+    cpu.bus.write(0xC021, 0x01)
+    cpu.r = 0xFE
+
+    assert cpu.step() == 20
+    assert cpu.pc == 4
+    assert cpu.r == 0x80  # DD e CB são M1; d e opcode final não são M1
