@@ -2183,3 +2183,28 @@ def test_nmi_has_priority_over_pending_maskable_interrupt() -> None:
     assert cpu._int_pending == 0xFF
     assert cpu.bus.read(0xC0FE) == halted_pc & 0xFF
     assert cpu.bus.read(0xC0FF) == halted_pc >> 8
+
+
+@pytest.mark.parametrize(
+    ("program", "expected_cycles", "expected_pc", "expected_r"),
+    [
+        (bytes([0xDD, 0x00]), 8, 2, 2),  # DD ignorado antes de NOP
+        (bytes([0xFD, 0x00]), 8, 2, 2),  # FD ignorado antes de NOP
+        (bytes([0xDD, 0xFD, 0x00]), 12, 3, 3),  # prefixos alternados
+        (bytes([0xFD, 0xDD, 0x00]), 12, 3, 3),  # prefixos alternados
+        (bytes([0xDD, 0xDD, 0x00]), 12, 3, 3),  # prefixos repetidos
+        (bytes([0xFD, 0xFD, 0x00]), 12, 3, 3),  # prefixos repetidos
+    ],
+)
+def test_ignored_index_prefixes_preserve_pc_r_and_nominal_cycles(
+    program: bytes,
+    expected_cycles: int,
+    expected_pc: int,
+    expected_r: int,
+) -> None:
+    cpu = make_cpu(program)
+
+    assert cpu.step() == expected_cycles
+    assert cpu.pc == expected_pc
+    assert cpu.r == expected_r
+    assert cpu.total_cycles == expected_cycles
