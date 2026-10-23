@@ -1829,6 +1829,35 @@ def test_indexed_displacement_load_alu_and_cb_bit_operation() -> None:
     [(0xDD, "ix"), (0xFD, "iy")],
 )
 @pytest.mark.parametrize(
+    ("opcode", "expected_index"),
+    [
+        (0x64, 0x1212),  # LD IXH/IYH,IXH/IYH
+        (0x65, 0x3434),  # LD IXH/IYH,IXL/IYL
+        (0x6C, 0x1212),  # LD IXL/IYL,IXH/IYH
+        (0x6D, 0x3434),  # LD IXL/IYL,IXL/IYL
+    ],
+)
+def test_index_half_register_transfers(
+    prefix: int, index_name: str, opcode: int, expected_index: int
+) -> None:
+    """Verifica transferências entre metades IXH/IXL e IYH/IYL."""
+    cpu = make_cpu(bytes([prefix, opcode]))
+    setattr(cpu, index_name, 0x1234)
+    cpu.f = 0xD7
+
+    assert cpu.step() == 8
+    assert getattr(cpu, index_name) == expected_index
+    assert cpu.f == 0xD7
+    assert cpu.pc == 2
+    assert cpu.r == 2
+    assert cpu.total_cycles == 8
+
+
+@pytest.mark.parametrize(
+    ("prefix", "index_name"),
+    [(0xDD, "ix"), (0xFD, "iy")],
+)
+@pytest.mark.parametrize(
     ("opcode", "memory_value", "initial_hl", "expected_hl", "expected_memory"),
     [
         (0x66, 0xA5, 0x1234, 0xA534, 0xA5),  # LD H,(IX/IY+d): H, not IXH/IYH
