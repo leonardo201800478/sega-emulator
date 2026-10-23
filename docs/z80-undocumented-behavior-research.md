@@ -201,3 +201,33 @@ Essas mudanças estão na branch `fix/z80-single-step-audit`, no [PR #14](https:
 O caso DAA reportado com A=`F3h`, F=`4Eh` espera A=`93h`, F=`87h`. A família BIT (HL) sugere dependência de estado auxiliar WZ/MEMPTR. Os casos SCF/CCF sugerem que os bits F3/F5 não podem ser tratados apenas como uma cópia direta dos bits do acumulador em todos os contextos.
 
 Antes de encerrar a investigação, comparar os resultados corrigidos com o corpus, conferir a representação dos estados iniciais no harness e revisar as diferenças por variante de Z80. Não extrapolar um caso single-step para atualização completa de estado entre instruções nem para precisão ciclo a ciclo.
+
+
+---
+
+## Aplicação incremental no núcleo Z80 — 23/10/2026
+
+Esta seção registra mudanças em avaliação na branch `fix/z80-single-step-audit`. O estado de validação deve ser confirmado pela CI e por uma nova auditoria diferencial antes de considerar as famílias encerradas.
+
+### Fontes e nível de confiança
+
+- [redcode/Z80 — MEMPTR](https://github.com/redcode/Z80/wiki/MEMPTR): tabela de instruções que atualizam WZ/MEMPTR e seus valores. É uma referência de engenharia reversa, não documentação oficial da Zilog.
+- [Zilog — Z80 CPU User Manual](https://www.zilog.com/docs/z80/um0080.pdf): referência primária para a semântica documentada e ciclos nominais, mas não especifica integralmente WZ/Q.
+- [Patrik Rak — z80test](https://github.com/raxoft/z80test): inclui testes específicos de flags, `SCF/CCF` e `MEMPTR`; deve ser usado como verificação externa adicional.
+- [Z80 from Schematics — verification](https://github.com/rejunity/z80-from-schematics/blob/main/docs/verification.md): combina exercitadores, comparação entre modelos e verificação temporal; seus resultados e limitações devem ser lidos caso a caso.
+
+### Alterações de implementação em andamento
+
+- O latch `Q` passou a ter uma atualização centralizada nas escritas internas de `F`. O início de uma instrução limpa Q; escritas de flags atualizam Q para o novo F. O valor anterior é preservado durante a decodificação aninhada de prefixos DD/FD para que SCF/CCF possam consultar o estado da instrução anterior.
+- `WZ/MEMPTR` recebe atualizações explícitas em operações de acesso indireto e absoluto à memória, operações de 16 bits, saltos/chamadas/retornos, I/O imediato, acessos indexados, parte das instruções ED e operações de bloco.
+- Testes direcionados foram adicionados para o ciclo de vida de Q e para valores WZ em acessos indiretos, acessos absolutos, ADD HL, JP, LD HL,(nn) e LD A,(IX+d).
+
+### Limites ainda abertos
+
+1. A nova CI deve confirmar formato, lint e suíte completa; os resultados de CI anteriores falharam antes de executar os testes por problemas de formatação/lint.
+2. O comportamento de Q/WZ ainda precisa de comparação diferencial pós-correção e de testes externos `z80test`/ZEXALL.
+3. A atualização de WZ deve ser revisada instrução por instrução, incluindo todos os caminhos de interrupção, prefixos, instruções de bloco e estados de repetição. A lista implementada não equivale a uma prova de cobertura total.
+4. O corpus SingleStepTests atual não deve ser tratado como oráculo independente para cada comportamento: a proveniência dos casos precisa ser considerada.
+5. A temporização continua agregada por instrução; a precisão ciclo a ciclo exige um modelo separado de micro-operações e eventos de barramento.
+
+**Critério para fechar esta frente:** CI verde no SHA atual, testes dirigidos aprovados, nova auditoria diferencial com artefatos preservados e classificação das divergências remanescentes por instrução e variante física.
