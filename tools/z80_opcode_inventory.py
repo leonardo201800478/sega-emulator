@@ -85,7 +85,8 @@ def _run_one(space: str, opcode: int) -> Result:
         cycles = cpu.step()
     except UnsupportedOpcodeError as exc:
         return Result(space, f"{opcode:02X}", "unsupported", None, str(exc))
-    except Exception as exc:  # Inventory must expose unexpected dispatch/runtime errors.
+    # Expose unexpected dispatch/runtime errors instead of hiding them.
+    except Exception as exc:
         return Result(
             space,
             f"{opcode:02X}",
