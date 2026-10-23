@@ -336,14 +336,14 @@ class Z80Cpu:
         self.a &= value
         self._set_flags((self.a & 0xA8) | 0x10 | self._parity_flag(self.a))
         if self.a == 0:
-            self.f |= 0x40
+            self._set_flags(self.f | 0x40)
 
     def _or_a(self, value: int) -> None:
         """Executa OR e atualiza flags de resultado e paridade."""
         self.a |= value
         self._set_flags((self.a & 0xA8) | self._parity_flag(self.a))
         if self.a == 0:
-            self.f |= 0x40
+            self._set_flags(self.f | 0x40)
 
     def _compare_a(self, value: int) -> None:
         """Executa CP value: atualiza flags como SUB sem alterar A."""
@@ -491,7 +491,7 @@ class Z80Cpu:
         self.a ^= value
         self._set_flags((self.a & 0xA8) | self._parity_flag(self.a))
         if self.a == 0:
-            self.f |= 0x40
+            self._set_flags(self.f | 0x40)
 
     def _read_register_pair(self, code: int) -> int:
         """Lê BC, DE, HL ou AF conforme o campo qq."""
@@ -583,7 +583,7 @@ class Z80Cpu:
             self._write_register(register, result)
             self._set_flags((result & 0xA8) | self._parity_flag(result) | carry)
             if result == 0:
-                self.f |= 0x40
+                self._set_flags(self.f | 0x40)
         elif operation == 1:
             zero = not (value & (1 << bit_index))
             flags = (self.f & 1) | 0x10 | (value & 0x28)
@@ -662,7 +662,7 @@ class Z80Cpu:
                 self._write_register(register, value)
             self._set_flags((self.f & 1) | (value & 0xA8) | self._parity_flag(value))
             if value == 0:
-                self.f |= 0x40
+                self._set_flags(self.f | 0x40)
             return 12
         if opcode & 0xC7 == 0x41:
             register = (opcode >> 3) & 7
@@ -699,7 +699,7 @@ class Z80Cpu:
             self.bus.write(address, new_memory)
             self._set_flags((self.f & 1) | (self.a & 0xA8) | self._parity_flag(self.a))
             if self.a == 0:
-                self.f |= 0x40
+                self._set_flags(self.f | 0x40)
             return 18
         if opcode in (0xA0, 0xA8, 0xB0, 0xB8):
             direction = -1 if opcode in (0xA8, 0xB8) else 1
@@ -860,7 +860,7 @@ class Z80Cpu:
                     self._write_register(register, result)
                 self._set_flags((result & 0xA8) | self._parity_flag(result) | carry)
                 if result == 0:
-                    self.f |= 0x40
+                    self._set_flags(self.f | 0x40)
                 cycles = 23
             elif operation == 1:
                 zero = not (value & (1 << bit_index))
@@ -1347,9 +1347,9 @@ class Z80Cpu:
                 undocumented |= self.f & 0x28
             self._set_flags((self.f & 0xC4) | undocumented)
             if previous_carry:
-                self.f |= 0x10
+                self._set_flags(self.f | 0x10)
             else:
-                self.f |= 0x01
+                self._set_flags(self.f | 0x01)
             self.q = self.f
             cycles = 4
         elif opcode == 0x10:  # DJNZ e
