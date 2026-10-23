@@ -243,8 +243,8 @@ O arquivo `tests/unit/test_z80_bit_flags_exhaustive.py` verifica as flags de `BI
 O arquivo `tests/unit/test_z80_indexed_bit_flags.py` acrescenta:
 
 - 32.768 estados sintéticos no total para `BIT b,(IX+d)` e `BIT b,(IY+d)` (16.384 por prefixo), cobrindo os 256 valores, oito posições de bit, ambos os estados de carry e quatro padrões do byte alto do endereço efetivo.
-- Casos direcionados para deslocamento negativo, endereço efetivo com wrap de 16 bits, PC, R e 20 T-states nominais.
+- Cobertura dos 256 valores de deslocamento (0x00–0xFF) para IX e IY em quatro padrões do byte alto do endereço efetivo, além de casos direcionados de wrap de 16 bits; PC, R e 20 T-states nominais são verificados.
 - Verificação de que o operando de memória permanece inalterado e que X/Y acompanham os bits 5 e 3 do byte alto do endereço efetivo no modelo testado.
 
-**Limites:** os testes exercitam a hipótese do núcleo para X/Y e o custo nominal; não são validação em hardware nem prova de temporização por ciclo. O wrap e os deslocamentos foram testados em casos direcionados, não em todas as combinações de base e deslocamento.
+**Limites:** os testes exercitam a hipótese do núcleo para X/Y e o custo nominal; não são validação em hardware nem prova de temporização por ciclo. Os 256 valores de deslocamento são testados em quatro padrões do endereço efetivo, mas não em todas as combinações possíveis de base IX/IY e deslocamento.
 
