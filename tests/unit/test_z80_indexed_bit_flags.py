@@ -82,6 +82,7 @@ def test_indexed_bit_uses_signed_displacement_and_wraps_address() -> None:
         assert cpu.r == 2
         assert cpu.total_cycles == 20
 
+
 def test_indexed_bit_interprets_all_signed_displacements() -> None:
     """Valida os 256 bytes de deslocamento para IX e IY."""
     instruction_address = 0x1000
