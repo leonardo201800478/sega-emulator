@@ -1677,6 +1677,59 @@ def test_ed_in_out_use_separate_io_bus() -> None:
     assert io.writes[-1] == (0x1234, 0x81)
 
 
+@pytest.mark.parametrize(
+    ("opcode", "is_input", "direction", "repeats"),
+    [
+        (0xA2, True, 1, False),   # INI
+        (0xAA, True, -1, False),  # IND
+        (0xB2, True, 1, True),   # INIR
+        (0xBA, True, -1, True),  # INDR
+        (0xA3, False, 1, False),  # OUTI
+        (0xAB, False, -1, False), # OUTD
+        (0xB3, False, 1, True),   # OTIR
+        (0xBB, False, -1, True),  # OTDR
+    ],
+)
+def test_ed_block_io_direction_data_and_repeat(
+    opcode: int, is_input: bool, direction: int, repeats: bool
+) -> None:
+    io = FakeIOBus()
+    bus = SG1000MemoryBus(SG1000Ram(bytes(RAM_SIZE)), bytes([0xED, opcode]))
+    cpu = Z80Cpu(bus, io_bus=io)
+    cpu.b, cpu.c, cpu.hl = 2, 0x34, 0xC010
+    io.ports[0x0234] = 0x81
+    cpu.bus.write(0xC010, 0x45)
+
+    assert cpu.step() == (21 if repeats else 16)
+    assert cpu.b == 1
+    assert cpu.hl == 0xC010 + direction
+    assert cpu.pc == (0 if repeats else 2)
+    assert not (cpu.f & 0x40)  # B != 0, so Z is clear.
+    assert bool(cpu.f & 0x02) is is_input  # N follows input byte bit 7 for INI/IND.
+
+    if is_input:
+        assert cpu.bus.read(0xC010) == 0x81
+        assert io.writes == []
+    else:
+        assert io.writes == [(0x0234, 0x45)]
+
+
+@pytest.mark.parametrize("opcode", [0xB2, 0xBA, 0xB3, 0xBB])
+def test_ed_block_io_repeat_stops_when_b_reaches_zero(opcode: int) -> None:
+    io = FakeIOBus()
+    bus = SG1000MemoryBus(SG1000Ram(bytes(RAM_SIZE)), bytes([0xED, opcode]))
+    cpu = Z80Cpu(bus, io_bus=io)
+    cpu.b, cpu.c, cpu.hl = 1, 0x34, 0xC010
+    io.ports[0x0134] = 0x01
+    cpu.bus.write(0xC010, 0x45)
+
+    assert cpu.step() == 16
+    assert cpu.b == 0
+    assert cpu.hl == 0xC011 if opcode in (0xB2, 0xB3) else 0xC00F
+    assert cpu.pc == 2
+    assert cpu.f & 0x40  # Z is set when the decremented B becomes zero.
+
+
 def test_ed_ldir_repeats_until_bc_zero() -> None:
     cpu = make_cpu(bytes([0xED, 0xB0]))
     cpu.hl, cpu.de, cpu.bc, cpu.a = 0xC010, 0xC020, 2, 0
