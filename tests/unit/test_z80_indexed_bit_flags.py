@@ -28,7 +28,7 @@ def _expected_bit_flags(value: int, bit_index: int, carry: int, address: int) ->
 
 
 def test_indexed_bit_flags_for_all_values_bits_carry_and_xy_patterns() -> None:
-    """Testa 16.384 estados em IX/IY com quatro padrões do byte alto."""
+    """Testa 32.768 estados em IX/IY com quatro padrões do byte alto."""
     for prefix, index_name in ((0xDD, "ix"), (0xFD, "iy")):
         for address_high in (0x00, 0x28, 0xA8, 0xD7):
             address = (address_high << 8) | 0x40
@@ -64,17 +64,20 @@ def test_indexed_bit_uses_signed_displacement_and_wraps_address() -> None:
     )
     for prefix, index_name, index, displacement, address in cases:
         bus = FlatMemoryBus()
-        bus.memory[0:4] = bytes((prefix, 0xCB, displacement, 0x46))
+        instruction_address = 0x1000
+        bus.memory[instruction_address : instruction_address + 4] = bytes(
+            (prefix, 0xCB, displacement, 0x46)
+        )
         bus.memory[address] = 0x01
         cpu = Z80Cpu(bus)
         setattr(cpu, index_name, index)
         cpu.f = 0x01
-        cpu.pc = 0
+        cpu.pc = instruction_address
         cpu.r = 0
         cpu.total_cycles = 0
 
         assert cpu.step() == 20
         assert cpu.f == _expected_bit_flags(0x01, 0, 1, address)
-        assert cpu.pc == 4
+        assert cpu.pc == instruction_address + 4
         assert cpu.r == 2
         assert cpu.total_cycles == 20
