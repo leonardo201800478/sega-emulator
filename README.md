@@ -6,8 +6,9 @@ Projeto de emulação de alta precisão, iniciado com uma implementação de ref
 
 - **Etapa 01 concluída:** infraestrutura Python, pytest, Ruff e pacote executável.
 - **Etapa 02 em andamento:** RAM interna, barramento inicial de memória, ROM de cartucho somente leitura e contrato de barramento para a CPU.
-- **Etapa 03 em andamento:** CPU Z80 em expansão, agora com operações CB, parte substancial de ED, registradores IX/IY, endereçamento indexado, HALT, DI/EI e um modelo inicial de NMI/INT. Os ciclos são nominais por instrução; a CPU ainda não é ciclo a ciclo e a cobertura indexada/interrupções precisa de validação adicional.
-- A CPU Z80 ainda não está completa nem validada contra uma suíte de referência. O contrato IOBus existe, mas o mapa real de portas SG-1000, VDP, PSG e frontend ainda não estão integrados; os componentes atuais não formam uma máquina SG-1000 funcional.
+- **Etapa 03 em andamento:** CPU Z80 em expansão, incluindo operações base/CB/ED/DD/FD e DD/FD-CB, HALT, DI/EI e modelo inicial de NMI/INT. A contagem de ciclos continua nominal por instrução; não existe ainda temporização ciclo a ciclo.
+- **Auditoria diferencial Z80 em andamento:** o lote de referência anterior reportou 1.000.000 de casos, 992.309 aprovados e 7.691 divergências. As divergências concentram-se em `BIT b,(HL)`, `SCF/CCF` e `DAA`; correções estão em branch/PR e aguardam testes curtos e nova auditoria. Veja o [relatório diferencial de 23/10/2026](docs/z80-differential-audit-2026-10-23.md).
+- A CPU Z80 ainda não está completa nem validada pós-correção contra a suíte diferencial. O estado interno `WZ/MEMPTR` e o latch `Q` têm suporte parcial e precisam de atualização abrangente e validação. O contrato IOBus existe, mas mapa real de portas SG-1000, VDP, PSG e frontend ainda não estão integrados; os componentes atuais não formam uma máquina SG-1000 funcional.
 
 ## Requisitos
 
@@ -49,6 +50,8 @@ O comando do módulo informa que a máquina SG-1000 ainda não está integrada. 
 - [Auditoria geral do código](docs/codebase-audit.md)
 - [Arquitetura multi-sistema e estratégia de reutilização](docs/architecture.md)
 - [Auditoria de cobertura da CPU Z80](docs/z80-coverage.md)
+- [Auditoria diferencial Z80 — 1 milhão de casos (23/10/2026)](docs/z80-differential-audit-2026-10-23.md)
+- [Registro de desenvolvimento e retomada (23/10/2026)](docs/development-handoff-2026-10-23.md)
 - [Auditoria técnica detalhada do núcleo Z80 (22/10/2026)](docs/z80-code-audit-2026-10-22.md)
 - [Pesquisa do núcleo Z80 do MAME](docs/z80-mame-reference.md)
 - [Pesquisa comparativa de comportamentos Z80 pouco documentados](docs/z80-undocumented-behavior-research.md)
