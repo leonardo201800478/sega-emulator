@@ -1892,6 +1892,28 @@ def test_indexed_memory_loads_use_hl_not_index_halves(
     assert cpu.total_cycles == 19
 
 
+@pytest.mark.parametrize(
+    ("program", "expected_ix", "expected_iy"),
+    [
+        (bytes([0xDD, 0xFD, 0x65]), 0x1234, 0x3434),
+        (bytes([0xFD, 0xDD, 0x6C]), 0x1212, 0x1234),
+    ],
+)
+def test_last_mixed_index_prefix_selects_index_half_registers(
+    program: bytes, expected_ix: int, expected_iy: int
+) -> None:
+    """Prefixos mistos devem aplicar a instrução ao último índice selecionado."""
+    cpu = make_cpu(program)
+    cpu.ix = cpu.iy = 0x1234
+
+    assert cpu.step() == 12
+    assert cpu.ix == expected_ix
+    assert cpu.iy == expected_iy
+    assert cpu.pc == 3
+    assert cpu.r == 3
+    assert cpu.total_cycles == 12
+
+
 def test_ignored_index_prefix_counts_each_m1_fetch_once() -> None:
     cpu = make_cpu(bytes([0xDD, 0x00]))
     assert cpu.step() == 8
