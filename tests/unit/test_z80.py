@@ -157,6 +157,22 @@ def test_bit_hl_uses_wz_for_undocumented_flags() -> None:
     assert cpu.f == 0x19
 
 
+@pytest.mark.parametrize("opcode", [0x00, 0x3F, 0x80, 0xC0, 0xFF])
+def test_unassigned_ed_opcodes_behave_as_two_byte_nops(opcode: int) -> None:
+    cpu = make_cpu(bytes([0xED, opcode]))
+    cpu.f = 0xA5
+    cpu.q = 0x28
+    cpu.wz = 0x1234
+
+    assert cpu.step() == 8
+    assert cpu.pc == 2
+    assert cpu.r == 2
+    assert cpu.f == 0xA5
+    assert cpu.q == 0
+    assert cpu.wz == 0x1234
+    assert cpu.total_cycles == 8
+
+
 def test_wz_tracks_indirect_and_absolute_memory_accesses() -> None:
     cpu = make_cpu(bytes([0x0A]))  # LD A,(BC)
     cpu.bc = 0xC000
