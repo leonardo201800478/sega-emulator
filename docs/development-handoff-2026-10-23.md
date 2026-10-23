@@ -82,3 +82,30 @@ No PR #14:
 ## Nota final
 
 O projeto avançou da auditoria estática para uma primeira medição diferencial em larga escala. O principal ganho atual é ter uma linha de base quantificada e divergências agrupadas em famílias investigáveis. A correção definitiva dessas famílias ainda depende da validação local e da nova execução diferencial.
+
+
+---
+
+## Continuação — Q/WZ e regressões direcionadas (23/10/2026)
+
+- Branch: `fix/z80-single-step-audit`.
+- HEAD confirmado: [`a21dfdcbc02b09b7507e109b5a28be09a3674f52`](https://github.com/leonardo201800478/sega-emulator/commit/a21dfdcbc02b09b7507e109b5a28be09a3674f52).
+- CI: [execução 39904100544](https://github.com/leonardo201800478/sega-emulator/actions/runs/39904100544) aprovada; Ruff format/check aprovados e **367 testes passaram em 5,41 s**.
+- PR #14 continua aberto como draft; não houve merge nem alteração direta em `main`.
+
+### Mudanças na revisão atual
+
+- Corrigida a regra de `DAA` para cobrir a regressão `A=F3h, F=4Eh`, mantendo o ajuste de nibble e o carry coerentes com os oráculos presentes no repositório.
+- Centralizadas as escritas internas de flags por `_set_flags`, que atualiza `Q`; o início de uma instrução limpa Q, preservando o valor anterior durante a decodificação aninhada de prefixos.
+- Adicionadas regressões para Q após instrução que preserva flags, após instrução que modifica flags e com prefixo DD ignorado.
+- Implementadas atualizações parciais de `WZ/MEMPTR` em acessos indiretos/absolutos, operações de 16 bits, saltos/chamadas/retornos, I/O imediato e por C, acessos indexados e parte das instruções ED/de bloco.
+- Adicionados testes de WZ para acessos de memória, `ADD HL,BC`, `JP nn`, `LD HL,(nn)` e `LD A,(IX+d)`.
+- Atualizados `docs/z80-undocumented-behavior-research.md` e `docs/z80-coverage.md` para distinguir implementação parcial de validação concluída.
+
+### Validação ainda necessária
+
+O resultado de 1.000.000 de casos (992.309 aprovados e 7.691 divergências) continua sendo a **linha de base anterior às correções**. Não existe ainda resultado diferencial pós-correção.
+
+O notebook de auditoria v5 compara `WZ/MEMPTR` e `Q` quando o corpus fornece estado final, conta campos divergentes a partir do CSV completo e fixa o SHA esperado. Executá-lo no Google Colab e preservar o ZIP completo antes de atualizar qualquer estatística do relatório.
+
+A implementação de WZ/Q permanece parcial até a auditoria longa e os testes externos. A temporização ciclo a ciclo e a ordem de barramento continuam fora do escopo desta correção.
