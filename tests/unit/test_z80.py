@@ -1690,6 +1690,32 @@ def test_ed_in_out_use_separate_io_bus() -> None:
         (0xBB, False, -1, True),  # OTDR
     ],
 )
+@pytest.mark.parametrize("opcode", [0xA2, 0xAA, 0xA3, 0xAB])
+def test_ed_block_io_calculates_all_flags_at_carry_boundaries(opcode: int) -> None:
+    io = FakeIOBus()
+    bus = SG1000MemoryBus(SG1000Ram(bytes(RAM_SIZE)), bytes([0xED, opcode]))
+    cpu = Z80Cpu(bus, io_bus=io)
+    cpu.b = 0x29
+    cpu.c = 0xFE if opcode in (0xA2, 0xA3) else 0x00
+    cpu.hl = 0xC0FE if opcode == 0xA3 else 0xC100 if opcode == 0xAB else 0xC010
+    old_bc = cpu.bc
+    value = 0x02
+    io.ports[old_bc] = value
+    cpu.bus.write(cpu.hl, value)
+
+    cpu.step()
+
+    # k = value + (C +/- 1) for input, or value + post-update L for output.
+    # These cases produce k=0x101, setting H/C; B becomes 0x28.
+    assert cpu.b == 0x28
+    assert cpu.f == 0x39  # undocumented X/Y from B, H/C set, P/V clear, N/Z/S clear.
+    if opcode in (0xA2, 0xAA):
+        assert cpu.bus.read(0xC010) == value
+        assert io.writes == []
+    else:
+        assert io.writes == [(old_bc, value)]
+
+
 def test_ed_block_io_direction_data_and_repeat(
     opcode: int, is_input: bool, direction: int, repeats: bool
 ) -> None:
