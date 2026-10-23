@@ -1680,13 +1680,13 @@ def test_ed_in_out_use_separate_io_bus() -> None:
 @pytest.mark.parametrize(
     ("opcode", "is_input", "direction", "repeats"),
     [
-        (0xA2, True, 1, False),   # INI
+        (0xA2, True, 1, False),  # INI
         (0xAA, True, -1, False),  # IND
-        (0xB2, True, 1, True),   # INIR
+        (0xB2, True, 1, True),  # INIR
         (0xBA, True, -1, True),  # INDR
         (0xA3, False, 1, False),  # OUTI
-        (0xAB, False, -1, False), # OUTD
-        (0xB3, False, 1, True),   # OTIR
+        (0xAB, False, -1, False),  # OUTD
+        (0xB3, False, 1, True),  # OTIR
         (0xBB, False, -1, True),  # OTDR
     ],
 )
@@ -1705,7 +1705,7 @@ def test_ed_block_io_direction_data_and_repeat(
     assert cpu.hl == 0xC010 + direction
     assert cpu.pc == (0 if repeats else 2)
     assert not (cpu.f & 0x40)  # B != 0, so Z is clear.
-    assert bool(cpu.f & 0x02) is is_input  # N follows input byte bit 7 for INI/IND.
+    assert bool(cpu.f & 0x02) is is_input  # N follows the transferred byte's bit 7.
 
     if is_input:
         assert cpu.bus.read(0xC010) == 0x81
