@@ -2492,7 +2492,7 @@ def test_all_base_opcodes_are_decoded_or_explicitly_rejected() -> None:
         assert cpu.step() > 0, f"Opcode {opcode:02X}h"
 
 
-def test_index_prefixes_decode_all_non_ed_second_opcodes() -> None:
+def test_index_prefixes_decode_all_second_opcodes() -> None:
     for prefix in (0xDD, 0xFD):
         for opcode in range(0x100):
             bus = SG1000MemoryBus(
