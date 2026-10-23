@@ -461,7 +461,7 @@ class Z80Cpu:
         # DAA seleciona as correções pelos valores de A e pelos flags H/C
         # anteriores. A comparação com 0x99 também se aplica após SUB:
         # por exemplo, A=F3h com N=1, H=C=0 exige subtrair 60h.
-        if old_half_carry or (not subtract and (accumulator & 0x0F) > 0x09):
+        if old_half_carry or (accumulator & 0x0F) > 0x09:
             correction |= 0x06
         if old_carry or accumulator > 0x99:
             correction |= 0x60
