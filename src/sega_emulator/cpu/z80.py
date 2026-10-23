@@ -827,6 +827,7 @@ class Z80Cpu:
             displacement = self._signed_byte(self._fetch_byte())
             cb_opcode = self._fetch_byte()
             address = (index + displacement) & 0xFFFF
+            self.wz = address
             value = self.bus.read(address)
             operation = cb_opcode >> 6
             bit_index = (cb_opcode >> 3) & 7
@@ -906,6 +907,7 @@ class Z80Cpu:
                 cycles = 14
             elif opcode in (0x22, 0x2A):
                 address = self._fetch_byte() | (self._fetch_byte() << 8)
+                self.wz = (address + 1) & 0xFFFF
                 if opcode == 0x22:
                     self.bus.write(address, index & 0xFF)
                     self.bus.write((address + 1) & 0xFFFF, index >> 8)
@@ -921,6 +923,7 @@ class Z80Cpu:
                 code = (opcode >> 4) & 3
                 operand = index if code == 2 else self._read_stack_pair(code)
                 result = index + operand
+                self.wz = (index + 1) & 0xFFFF
                 flags = self.f & 0xC4
                 flags |= ((result & 0xFFFF) >> 8) & 0x28
                 if (index & 0x0FFF) + (operand & 0x0FFF) > 0x0FFF:
@@ -937,6 +940,7 @@ class Z80Cpu:
                 self._push_word(index)
                 cycles = 15
             elif opcode == 0xE3:
+                self.wz = self.sp
                 low = self.bus.read(self.sp)
                 high_address = (self.sp + 1) & 0xFFFF
                 high = self.bus.read(high_address)
@@ -967,11 +971,14 @@ class Z80Cpu:
         elif opcode == 0x36:
             displacement = self._signed_byte(self._fetch_byte())
             value = self._fetch_byte()
-            self.bus.write((index + displacement) & 0xFFFF, value)
+            address = (index + displacement) & 0xFFFF
+            self.bus.write(address, value)
+            self.wz = address
             cycles = 19
         elif opcode in (0x34, 0x35):
             displacement = self._signed_byte(self._fetch_byte())
             address = (index + displacement) & 0xFFFF
+            self.wz = address
             old = self.bus.read(address)
             value = (
                 self._inc_register_value(old)
@@ -985,6 +992,7 @@ class Z80Cpu:
             if destination == 6 or source == 6:
                 displacement = self._signed_byte(self._fetch_byte())
                 address = (index + displacement) & 0xFFFF
+                self.wz = address
                 if source == 6:
                     value = self.bus.read(address)
                     self._write_index_register(prefix, destination, value, halves=False)
@@ -1000,7 +1008,9 @@ class Z80Cpu:
             source = opcode & 7
             if source == 6:
                 displacement = self._signed_byte(self._fetch_byte())
-                value = self.bus.read((index + displacement) & 0xFFFF)
+                address = (index + displacement) & 0xFFFF
+                self.wz = address
+                value = self.bus.read(address)
                 cycles = 19
             else:
                 value = self._read_index_register(prefix, source)
