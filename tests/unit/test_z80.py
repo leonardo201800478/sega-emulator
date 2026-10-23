@@ -1677,19 +1677,6 @@ def test_ed_in_out_use_separate_io_bus() -> None:
     assert io.writes[-1] == (0x1234, 0x81)
 
 
-@pytest.mark.parametrize(
-    ("opcode", "is_input", "direction", "repeats"),
-    [
-        (0xA2, True, 1, False),  # INI
-        (0xAA, True, -1, False),  # IND
-        (0xB2, True, 1, True),  # INIR
-        (0xBA, True, -1, True),  # INDR
-        (0xA3, False, 1, False),  # OUTI
-        (0xAB, False, -1, False),  # OUTD
-        (0xB3, False, 1, True),  # OTIR
-        (0xBB, False, -1, True),  # OTDR
-    ],
-)
 @pytest.mark.parametrize("opcode", [0xA2, 0xAA, 0xA3, 0xAB])
 def test_ed_block_io_calculates_all_flags_at_carry_boundaries(opcode: int) -> None:
     io = FakeIOBus()
@@ -1716,6 +1703,19 @@ def test_ed_block_io_calculates_all_flags_at_carry_boundaries(opcode: int) -> No
         assert io.writes == [(old_bc, value)]
 
 
+@pytest.mark.parametrize(
+    ("opcode", "is_input", "direction", "repeats"),
+    [
+        (0xA2, True, 1, False),  # INI
+        (0xAA, True, -1, False),  # IND
+        (0xB2, True, 1, True),  # INIR
+        (0xBA, True, -1, True),  # INDR
+        (0xA3, False, 1, False),  # OUTI
+        (0xAB, False, -1, False),  # OUTD
+        (0xB3, False, 1, True),  # OTIR
+        (0xBB, False, -1, True),  # OTDR
+    ],
+)
 def test_ed_block_io_direction_data_and_repeat(
     opcode: int, is_input: bool, direction: int, repeats: bool
 ) -> None:
