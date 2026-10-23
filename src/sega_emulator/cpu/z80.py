@@ -1179,6 +1179,7 @@ class Z80Cpu:
             self.de, self.hl = self.hl, self.de
             cycles = 4
         elif opcode & 0xC7 == 0xC7:  # RST p
+            self.wz = self.pc
             self._push_word(self.pc)
             self.pc = opcode & 0x38
             cycles = 11
@@ -1264,10 +1265,12 @@ class Z80Cpu:
         elif opcode in (0x02, 0x12):  # LD (BC/DE),A
             address = self.bc if opcode == 0x02 else self.de
             self.bus.write(address, self.a)
+            self.wz = (self.a << 8) | ((address + 1) & 0x00FF)
             cycles = 7
         elif opcode in (0x0A, 0x1A):  # LD A,(BC/DE)
             address = self.bc if opcode == 0x0A else self.de
             self.a = self.bus.read(address)
+            self.wz = (address + 1) & 0xFFFF
             cycles = 7
         elif opcode in (0x22, 0x2A):  # LD (nn),HL / LD HL,(nn)
             low = self._fetch_byte()
@@ -1281,6 +1284,7 @@ class Z80Cpu:
                 low_value = self.bus.read(address)
                 high_value = self.bus.read(next_address)
                 self.hl = (high_value << 8) | low_value
+            self.wz = next_address
             cycles = 16
         elif opcode in (0x32, 0x3A):  # LD (nn),A / LD A,(nn)
             low = self._fetch_byte()
@@ -1288,8 +1292,10 @@ class Z80Cpu:
             address = (high << 8) | low
             if opcode == 0x32:
                 self.bus.write(address, self.a)
+                self.wz = (self.a << 8) | ((address + 1) & 0x00FF)
             else:
                 self.a = self.bus.read(address)
+                self.wz = (address + 1) & 0xFFFF
             cycles = 13
         elif opcode & 0xCF == 0x03:  # INC rr
             code = (opcode >> 4) & 0x03
@@ -1300,11 +1306,14 @@ class Z80Cpu:
             self._write_stack_pair(code, self._read_stack_pair(code) - 1)
             cycles = 6
         elif opcode & 0xCF == 0x09:  # ADD HL,rr
+            previous_hl = self.hl
             self._add_hl(self._read_stack_pair((opcode >> 4) & 0x03))
+            self.wz = (previous_hl + 1) & 0xFFFF
             cycles = 11
         elif opcode == 0xE3:  # EX (SP),HL
             low_address = self.sp
             high_address = (self.sp + 1) & 0xFFFF
+            self.wz = low_address
             low_value = self.bus.read(low_address)
             high_value = self.bus.read(high_address)
             previous_hl = self.hl
