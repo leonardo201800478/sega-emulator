@@ -1,0 +1,38 @@
+name: LLVM ORC JIT Prototype
+
+on:
+  pull_request:
+    paths:
+      - "native/llvm_jit/**"
+      - "docs/adr/0002-llvm-orc-jit-fast-mode.md"
+      - ".github/workflows/llvm-orc-jit.yml"
+  push:
+    branches: ["perf/llvm-orc-jit-fast-mode"]
+    paths:
+      - "native/llvm_jit/**"
+      - "docs/adr/0002-llvm-orc-jit-fast-mode.md"
+      - ".github/workflows/llvm-orc-jit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  llvm-orc-smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Install LLVM and Ninja
+        shell: pwsh
+        run: choco install llvm ninja --yes --no-progress
+      - name: Configure
+        shell: pwsh
+        run: |
+          $llvmDir = Join-Path $env:ProgramFiles "LLVM\lib\cmake\llvm"
+          if (-not (Test-Path $llvmDir)) { throw "LLVM CMake package not found at $llvmDir" }
+          cmake -S native/llvm_jit -B build/llvm-jit -G Ninja "-DLLVM_DIR=$llvmDir"
+      - name: Build
+        run: cmake --build build/llvm-jit --config Release
+      - name: Run ORC smoke test
+        run: ctest --test-dir build/llvm-jit -C Release --output-on-failure
