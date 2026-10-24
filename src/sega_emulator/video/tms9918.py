@@ -48,7 +48,36 @@ class TMS9918A:
         self.scanline = 0
         self.frame_number = 0
         self.framebuffer = bytes(SCREEN_WIDTH * SCREEN_HEIGHT * 3)
+        self._working_framebuffer = bytearray(SCREEN_WIDTH * SCREEN_HEIGHT * 3)
         self._frame_ready = False
+
+    def reset(self, *, clear_vram: bool = False) -> None:
+        """Reinicia registradores e temporização sem apagar VRAM por padrão.
+
+        O conteúdo da VRAM após reset físico depende do hardware e da memória
+        usada; preservar os bytes é uma convenção explícita do modelo.
+        """
+        if type(clear_vram) is not bool:
+            raise TypeError("clear_vram deve ser bool.")
+        self.registers[:] = bytes(len(self.registers))
+        self.status = 0x1F
+        self.address = 0
+        self.read_buffer = 0
+        self._control_first = None
+        self._cycles_into_line = 0
+        self.scanline = 0
+        self.frame_number = 0
+        self.framebuffer = bytes(SCREEN_WIDTH * SCREEN_HEIGHT * 3)
+        self._working_framebuffer = bytearray(SCREEN_WIDTH * SCREEN_HEIGHT * 3)
+        self._frame_ready = False
+        if clear_vram:
+            self.vram[:] = bytes(VRAM_SIZE)
+
+    @property
+    def _display_mode(self) -> int:
+        """Combinação dos bits M1/M2/M3 documentados nos registradores 1 e 0."""
+        r0, r1 = self.registers[0], self.registers[1]
+        return ((r1 >> 4) & 1) | ((r1 >> 2) & 2) | (((r0 >> 1) & 1) << 2)
 
     @property
     def interrupt_pending(self) -> bool:
@@ -109,19 +138,121 @@ class TMS9918A:
             remaining -= step
             if self._cycles_into_line == TSTATES_PER_LINE:
                 self._cycles_into_line = 0
+                completed_line = self.scanline
+                if completed_line < SCREEN_HEIGHT:
+                    self._render_scanline(completed_line, update_sprite_status=True)
+                elif (
+                    completed_line < LINES_PER_FRAME
+                    and (self.registers[1] & 0x40)
+                    and self._display_mode != 1
+                ):
+                    self._render_sprite_line(None, completed_line, update_status=True)
                 self.scanline += 1
                 if self.scanline == VBLANK_LINE:
                     self.status |= 0x80
                     self._frame_ready = True
+                    self.framebuffer = bytes(self._working_framebuffer)
                 if self.scanline >= LINES_PER_FRAME:
-                    self.framebuffer = self.render_frame()
                     self.scanline = 0
                     self.frame_number += 1
+                    self._working_framebuffer = bytearray(
+                        SCREEN_WIDTH * SCREEN_HEIGHT * 3
+                    )
 
     def consume_frame_ready(self) -> bool:
         ready = self._frame_ready
         self._frame_ready = False
         return ready
+
+    def _render_scanline(self, y: int, *, update_sprite_status: bool = False) -> None:
+        """Renderiza uma única linha com o estado de registradores/VRAM atual."""
+        pixels = self._working_framebuffer
+        backdrop = self.registers[7] & 0x0F
+        row_start = y * SCREEN_WIDTH * 3
+        row_end = row_start + SCREEN_WIDTH * 3
+        if not (self.registers[1] & 0x40):
+            row = bytes(PALETTE[backdrop]) * SCREEN_WIDTH
+            pixels[row_start:row_end] = row
+            return
+
+        mode = self._display_mode
+        if mode == 1:
+            name_base = (self.registers[2] & 0x0F) << 10
+            pattern_base = (self.registers[4] & 0x07) << 11
+            text_row, glyph_row = divmod(y, 8)
+            foreground = (self.registers[7] >> 4) or backdrop
+            for column in range(40):
+                character = self.vram[(name_base + text_row * 40 + column) & VRAM_MASK]
+                pattern = self.vram[
+                    (pattern_base + character * 8 + glyph_row) & VRAM_MASK
+                ]
+                for bit in range(6):
+                    self._put_pixel(
+                        pixels,
+                        8 + column * 6 + bit,
+                        y,
+                        foreground if pattern & (0x80 >> bit) else backdrop,
+                    )
+            return
+
+        if mode == 4:
+            name_base = (self.registers[2] & 0x0F) << 10
+            pattern_base = (self.registers[4] & 0x04) << 11
+            color_base = (self.registers[3] & 0x80) << 6
+            row = y & 7
+            section = (y & 0xC0) << 5
+            for tile_x in range(32):
+                name = self.vram[(name_base + (y // 8) * 32 + tile_x) & VRAM_MASK]
+                offset = section + (name << 3) + row
+                pattern = self.vram[(pattern_base + offset) & VRAM_MASK]
+                color = self.vram[(color_base + offset) & VRAM_MASK]
+                foreground = (color >> 4) or backdrop
+                background = (color & 0x0F) or backdrop
+                for bit in range(8):
+                    self._put_pixel(
+                        pixels,
+                        tile_x * 8 + bit,
+                        y,
+                        foreground if pattern & (0x80 >> bit) else background,
+                    )
+        elif mode == 2:
+            name_base = (self.registers[2] & 0x0F) << 10
+            pattern_base = (self.registers[4] & 0x07) << 11
+            tile_y, local_y = divmod(y, 8)
+            pattern_row = local_y >> 2
+            for tile_x in range(32):
+                name = self.vram[(name_base + tile_y * 32 + tile_x) & VRAM_MASK]
+                pattern = self.vram[(pattern_base + name * 8 + pattern_row) & VRAM_MASK]
+                left = (pattern >> 4) or backdrop
+                right = (pattern & 0x0F) or backdrop
+                for local_x in range(8):
+                    self._put_pixel(
+                        pixels,
+                        tile_x * 8 + local_x,
+                        y,
+                        left if local_x < 4 else right,
+                    )
+        else:
+            name_base = (self.registers[2] & 0x0F) << 10
+            pattern_base = (self.registers[4] & 0x07) << 11
+            color_base = (self.registers[3] << 6) & 0x3FC0
+            tile_y, row = divmod(y, 8)
+            for tile_x in range(32):
+                name = self.vram[(name_base + tile_y * 32 + tile_x) & VRAM_MASK]
+                pattern = self.vram[(pattern_base + name * 8 + row) & VRAM_MASK]
+                color = self.vram[(color_base + name // 8) & VRAM_MASK]
+                foreground = (color >> 4) or backdrop
+                background = (color & 0x0F) or backdrop
+                for bit in range(8):
+                    self._put_pixel(
+                        pixels,
+                        tile_x * 8 + bit,
+                        y,
+                        foreground if pattern & (0x80 >> bit) else background,
+                    )
+
+        if mode != 1:
+            self._render_sprite_line(pixels, y, update_status=update_sprite_status)
 
     def render_frame(self) -> bytes:
         """Renderiza 256x192 RGB24 em Graphics I/II, texto ou multicolor."""
@@ -130,8 +261,7 @@ class TMS9918A:
         if not (self.registers[1] & 0x40):
             return bytes(pixels)
 
-        r0, r1 = self.registers[0], self.registers[1]
-        mode = ((r1 >> 4) & 1) | ((r1 >> 2) & 2) | (((r0 >> 1) & 1) << 2)
+        mode = self._display_mode
         if mode == 1:
             self._render_text(pixels, backdrop)
         elif mode == 4:
@@ -141,7 +271,7 @@ class TMS9918A:
         else:
             self._render_graphics_i(pixels, backdrop)
         if mode != 1:
-            self._render_sprites(pixels)
+            self._render_sprites(pixels, update_status=False)
         return bytes(pixels)
 
     def _put_pixel(self, pixels: bytearray, x: int, y: int, color: int) -> None:
@@ -229,54 +359,96 @@ class TMS9918A:
                             left if local_x < 4 else right,
                         )
 
-    def _render_sprites(self, pixels: bytearray) -> None:
+    def _sprite_line_active(
+        self, line: int
+    ) -> tuple[list[tuple[int, int, int, int, int]], int | None]:
+        """Retorna os quatro primeiros sprites ativos e o índice do quinto."""
         attr_base = (self.registers[5] & 0x7F) << 7
-        pattern_base = (self.registers[6] & 0x07) << 11
         size = 16 if self.registers[1] & 0x02 else 8
         scale = 2 if self.registers[1] & 0x01 else 1
-        drawn_pixels: set[tuple[int, int]] = set()
-        sprites_per_line = [0] * SCREEN_HEIGHT
+        active: list[tuple[int, int, int, int, int]] = []
+        fifth_index: int | None = None
 
         for index in range(32):
-            offset = (attr_base + index * 4) & 0x3FFF
+            offset = (attr_base + index * 4) & VRAM_MASK
             raw_y, x, pattern_number, color_byte = self.vram[offset : offset + 4]
             if raw_y == 0xD0:
                 break
+
             y = (raw_y + 1) & 0xFF
             if y >= 0xE0:
                 y -= 0x100
-            color = color_byte & 0x0F
+            raster_y = y % LINES_PER_FRAME
+            row = (line - raster_y) % LINES_PER_FRAME
+            if row >= size * scale:
+                continue
+
+            if len(active) == 4:
+                fifth_index = index
+                break
             if color_byte & 0x80:
                 x -= 32
-            height = size * scale
-            for line in range(max(0, y), min(SCREEN_HEIGHT, y + height)):
-                sprites_per_line[line] += 1
-                if sprites_per_line[line] > 4:
-                    if not (self.status & 0x40):
-                        self.status = (self.status & ~0x1F) | 0x40 | index
-                    continue
-                if color == 0:
-                    continue
-                source_y = (line - y) // scale
-                for source_x in range(size):
+            active.append((index, x, pattern_number, color_byte & 0x0F, raster_y))
+
+        return active, fifth_index
+
+    def _render_sprite_line(
+        self,
+        pixels: bytearray | None,
+        line: int,
+        *,
+        update_status: bool,
+    ) -> None:
+        """Renderiza ou avalia uma linha, incluindo flags de colisão/overflow."""
+        active, fifth_index = self._sprite_line_active(line)
+        if (
+            update_status
+            and line < VBLANK_LINE
+            and fifth_index is not None
+            and not (self.status & 0x80)
+            and not (self.status & 0x40)
+        ):
+            self.status = (self.status & 0xA0) | 0x40 | fifth_index
+
+        pattern_base = (self.registers[6] & 0x07) << 11
+        size = 16 if self.registers[1] & 0x02 else 8
+        scale = 2 if self.registers[1] & 0x01 else 1
+        occupied: set[int] = set()
+        visible: set[int] = set()
+
+        for _, x, pattern_number, color, sprite_y in active:
+            source_y = ((line - sprite_y) % LINES_PER_FRAME) // scale
+            for source_x in range(size):
+                if size == 16:
+                    tile = (pattern_number & 0xFC) + (source_y // 8) * 2 + source_x // 8
+                else:
                     tile = pattern_number
-                    if size == 16:
-                        tile = (
-                            (pattern_number & 0xFC)
-                            + (source_y // 8) * 2
-                            + source_x // 8
-                        )
-                    address = pattern_base + tile * 8 + (source_y & 7)
-                    pattern = self.vram[address & 0x3FFF]
-                    if not (pattern & (0x80 >> (source_x & 7))):
-                        continue
-                    for dx in range(scale):
-                        px = x + source_x * scale + dx
-                        if not 0 <= px < SCREEN_WIDTH:
-                            continue
-                        key = (px, line)
-                        if key in drawn_pixels:
+                address = pattern_base + tile * 8 + (source_y & 7)
+                pattern = self.vram[address & VRAM_MASK]
+                if not (pattern & (0x80 >> (source_x & 7))):
+                    continue
+
+                for dx in range(scale):
+                    px = x + source_x * scale + dx
+                    if px in occupied:
+                        if update_status:
                             self.status |= 0x20
-                            continue
+                    else:
+                        occupied.add(px)
+                    if (
+                        pixels is not None
+                        and 0 <= px < SCREEN_WIDTH
+                        and color
+                        and px not in visible
+                    ):
                         self._put_pixel(pixels, px, line, color)
-                        drawn_pixels.add(key)
+                        visible.add(px)
+
+    def _render_sprites(self, pixels: bytearray, *, update_status: bool = True) -> None:
+        """Compõe sprites em ordem de prioridade, linha a linha.
+
+        A reconstrução da imagem não deve repetir eventos de status já
+        produzidos pelo relógio raster.
+        """
+        for line in range(SCREEN_HEIGHT):
+            self._render_sprite_line(pixels, line, update_status=update_status)
