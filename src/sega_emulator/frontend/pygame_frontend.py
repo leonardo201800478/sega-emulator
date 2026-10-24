@@ -20,13 +20,22 @@ def run(machine: SG1000Machine, scale: int = 3) -> None:
     clock = pygame.time.Clock()
     running = True
     player_one_keys = {
-        pygame.K_UP: 0, pygame.K_DOWN: 1, pygame.K_LEFT: 2,
-        pygame.K_RIGHT: 3, pygame.K_z: 4, pygame.K_x: 5,
-        pygame.K_SPACE: 4, pygame.K_RETURN: 5,
+        pygame.K_UP: 0,
+        pygame.K_DOWN: 1,
+        pygame.K_LEFT: 2,
+        pygame.K_RIGHT: 3,
+        pygame.K_z: 4,
+        pygame.K_x: 5,
+        pygame.K_SPACE: 4,
+        pygame.K_RETURN: 5,
     }
     player_two_keys = {
-        pygame.K_w: 0, pygame.K_s: 1, pygame.K_a: 2,
-        pygame.K_d: 3, pygame.K_f: 4, pygame.K_g: 5,
+        pygame.K_w: 0,
+        pygame.K_s: 1,
+        pygame.K_a: 2,
+        pygame.K_d: 3,
+        pygame.K_f: 4,
+        pygame.K_g: 5,
     }
 
     try:
