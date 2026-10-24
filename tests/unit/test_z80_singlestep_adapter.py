@@ -72,14 +72,15 @@ def test_adapter_loads_operands_from_flat_ram_and_compares_state() -> None:
     assert result.cycles_returned == 7
 
 
-def test_adapter_marks_nonzero_unmodelled_state_as_unsupported() -> None:
+def test_adapter_loads_and_compares_p_latch() -> None:
     vector = vector_nop()
     vector["initial"]["p"] = 1
+    vector["final"]["p"] = 0
 
     result = run_vector(vector)
 
-    assert result.status == "unsupported"
-    assert result.unsupported_fields == ["p"]
+    assert result.status == "passed"
+    assert result.unsupported_fields == []
 
 
 def test_adapter_replays_io_read_value_and_checks_transaction() -> None:
