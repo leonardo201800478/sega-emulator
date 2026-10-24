@@ -238,9 +238,7 @@ class TMS9918A:
             color_base = (self.registers[3] << 6) & 0x3FC0
             tile_y, row = divmod(y, 8)
             for tile_x in range(32):
-                name = self.vram[
-                    (name_base + tile_y * 32 + tile_x) & VRAM_MASK
-                ]
+                name = self.vram[(name_base + tile_y * 32 + tile_x) & VRAM_MASK]
                 pattern = self.vram[(pattern_base + name * 8 + row) & VRAM_MASK]
                 color = self.vram[(color_base + name // 8) & VRAM_MASK]
                 foreground = (color >> 4) or backdrop
