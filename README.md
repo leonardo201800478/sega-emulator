@@ -94,3 +94,6 @@ git diff --check
 5. Implementar PSG e aumentar a precisão CPU–VDP com regressões reproduzíveis.
 
 ROMs de terceiros não são incluídas no repositório.
+
+
+> ROMs de jogos devem permanecer fora do repositório. Use cópias obtidas legalmente no seu ambiente local para os testes de compatibilidade.
