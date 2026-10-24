@@ -1,0 +1,12 @@
+[build-system]
+requires = ["maturin>=1.14,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "sega-z80-native"
+version = "0.1.0"
+description = "Native Z80 execution slice for Sega Emulator"
+requires-python = ">=3.14,<3.15"
+
+[tool.maturin]
+module-name = "sega_z80_native"
