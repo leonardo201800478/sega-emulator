@@ -8,8 +8,8 @@ from sega_emulator.video.tms9918 import (
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
     TMS9918A,
-    VBLANK_LINE,
     TSTATES_PER_LINE,
+    VBLANK_LINE,
     VRAM_SIZE,
 )
 
