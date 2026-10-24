@@ -20,6 +20,16 @@ class Z80Cpu:
         """Inicializa os registradores e associa um barramento de memória."""
         self.bus = bus
         self.io_bus = io_bus
+        self.reset()
+
+    def reset(self) -> None:
+        """Reinicializa o estado interno determinístico da CPU.
+
+        Esta política do emulador zera todos os registradores e contadores e
+        cancela pedidos pendentes. Não representa uma afirmação de que os
+        registradores gerais de um Z80 físico tenham valores definidos após
+        RESET. Os barramentos e o conteúdo da memória permanecem intactos.
+        """
         self.a = 0
         self.f = 0
         self.b = 0
@@ -42,7 +52,7 @@ class Z80Cpu:
         self.halted = False
         self._ei_delay = 0
         self._nmi_pending = False
-        self._int_pending = None
+        self._int_pending: int | None = None
         # Opcode fornecido pelo barramento durante acknowledge em IM 0.
         self._im0_opcode: int | None = None
         self.sp = 0
