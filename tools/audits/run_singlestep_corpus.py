@@ -10,19 +10,32 @@ from __future__ import annotations
 
 import argparse
 import json
-from collections import Counter, defaultdict
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
 from sega_emulator.testing.z80_singlestep import run_vector
 
-DEFAULT_FILES = ("00", "04", "06", "37", "3f", "76", "c6", "cb 00", "dd 21", "ed 40")
+DEFAULT_FILES = (
+    "00",
+    "04",
+    "06",
+    "37",
+    "3f",
+    "76",
+    "c6",
+    "cb 00",
+    "dd 21",
+    "ed 40",
+)
 
 
 def load_json(path: Path) -> list[dict[str, Any]]:
     with path.open(encoding="utf-8") as source:
         payload = json.load(source)
-    if not isinstance(payload, list) or not all(isinstance(item, dict) for item in payload):
+    if not isinstance(payload, list) or not all(
+        isinstance(item, dict) for item in payload
+    ):
         raise ValueError(f"{path}: esperado um array JSON de vetores")
     return payload
 
@@ -119,7 +132,12 @@ def main() -> int:
         encoding="utf-8",
     )
     print(f"Relatório completo: {report_path}")
-    print("Resumo: " + ", ".join(f"{key}={value}" for key, value in sorted(aggregate.items())))
+    print(
+        "Resumo: "
+        + ", ".join(
+            f"{key}={value}" for key, value in sorted(aggregate.items())
+        )
+    )
     # Esta é uma auditoria exploratória: divergências são o resultado a analisar,
     # não motivo para mascarar ou interromper a geração do relatório.
     return 0 if total_vectors else 2
