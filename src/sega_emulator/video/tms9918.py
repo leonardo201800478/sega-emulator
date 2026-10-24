@@ -275,7 +275,7 @@ class TMS9918A:
                 overflow_already_set = True
 
             occupied: set[int] = set()
-            for index, y, x, pattern_number, color in line_sprites[:4]:
+            for _index, y, x, pattern_number, color in line_sprites[:4]:
                 if color == 0:
                     continue
                 source_y = (line - y) // scale
