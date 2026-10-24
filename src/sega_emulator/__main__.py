@@ -49,12 +49,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     if args.rom is None:
         if args.headless_frames is not None:
             parser.error("informe uma ROM quando usar --headless-frames")
-        try:
-            from sega_emulator.frontend.qt_frontend import run
-
-            run()
-        except (RuntimeError, ImportError) as exc:
-            parser.error(str(exc))
+        print("Informe uma ROM para iniciar. Use --help para ver as opções.")
         return
 
     if args.ui == "qt" and args.headless_frames is None:
