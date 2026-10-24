@@ -16,7 +16,7 @@ jobs:
   extended-audit:
     name: Full suite and opcode inventory
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 360
     steps:
       - name: Checkout exact revision
         uses: actions/checkout@v4
@@ -48,6 +48,10 @@ jobs:
 
       - name: Run complete pytest suite with timing report
         run: pytest -q --junitxml=artifacts/pytest-junit.xml --durations=25
+
+      - name: Run long deterministic Z80 stress audit (up to 5h45m)
+        if: always()
+        run: python tools/audits/z80_long_stress_audit.py --hours 5.75 --seed 1581647872 --report artifacts/z80-long-stress-report.json
 
       - name: Generate Z80 opcode dispatch inventory
         if: always()
