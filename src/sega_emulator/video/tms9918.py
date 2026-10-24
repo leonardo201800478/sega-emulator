@@ -141,9 +141,7 @@ class TMS9918A:
                     and (self.registers[1] & 0x40)
                     and self._display_mode != 1
                 ):
-                    self._render_sprite_line(
-                        None, self.scanline, update_status=True
-                    )
+                    self._render_sprite_line(None, self.scanline, update_status=True)
                 self.scanline += 1
                 if self.scanline == VBLANK_LINE:
                     self.status |= 0x80
@@ -324,11 +322,7 @@ class TMS9918A:
             source_y = ((line - sprite_y) % LINES_PER_FRAME) // scale
             for source_x in range(size):
                 if size == 16:
-                    tile = (
-                        (pattern_number & 0xFC)
-                        + (source_y // 8) * 2
-                        + source_x // 8
-                    )
+                    tile = (pattern_number & 0xFC) + (source_y // 8) * 2 + source_x // 8
                 else:
                     tile = pattern_number
                 address = pattern_base + tile * 8 + (source_y & 7)
@@ -352,9 +346,7 @@ class TMS9918A:
                         self._put_pixel(pixels, px, line, color)
                         visible.add(px)
 
-    def _render_sprites(
-        self, pixels: bytearray, *, update_status: bool = True
-    ) -> None:
+    def _render_sprites(self, pixels: bytearray, *, update_status: bool = True) -> None:
         """Compõe sprites em ordem de prioridade, linha a linha.
 
         A reconstrução da imagem não deve repetir eventos de status já
