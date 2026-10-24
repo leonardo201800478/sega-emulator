@@ -74,7 +74,10 @@ git diff --check
 ## Documentação
 
 - [Arquitetura multi-sistema](docs/architecture.md)
-- [Notas de hardware SG-1000](docs/hardware/sg1000.md)
+- [Pesquisa de compatibilidade de hardware Sega: Z80, áudio e revisões](docs/research/hardware-compatibility-roadmap-2026-10.md)
+- [Catálogo prioritário de jogos comerciais SG-1000](docs/hardware/sg1000-game-compatibility.md)
+- [Notas técnicas de hardware SG-1000](docs/hardware/sg1000.md)
+- [Base de memória e barramentos SG-1000](docs/hardware/sg1000-memory-buses.md)
 - [Marco do primeiro jogo executável](docs/sg1000-first-playable.md)
 - [Auditoria de cobertura da CPU Z80](docs/z80-coverage.md)
 - [Auditoria técnica da CPU Z80](docs/z80-code-audit-2026-10-22.md)
