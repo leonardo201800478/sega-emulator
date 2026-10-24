@@ -1,8 +1,18 @@
 """Testes unitários do runner da auditoria diferencial Z80."""
 
+import importlib.util
 import json
+from pathlib import Path
 
-from run_singlestep_full import audit_file, category, family
+_runner_path = Path(__file__).resolve().parents[2] / "run_singlestep_full.py"
+_spec = importlib.util.spec_from_file_location("run_singlestep_full", _runner_path)
+assert _spec is not None and _spec.loader is not None
+_runner = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_runner)
+
+audit_file = _runner.audit_file
+category = _runner.category
+family = _runner.family
 
 
 def test_opcode_family_classification() -> None:
@@ -19,7 +29,7 @@ def test_mismatch_category_classification() -> None:
     assert category("erro ao executar vetor: IndexError") == "exception"
 
 
-def test_audit_file_compares_aggregated_tstates(tmp_path) -> None:
+def test_audit_file_compares_aggregated_tstates(tmp_path: Path) -> None:
     vector = {
         "name": "NOP smoke test",
         "initial": {"pc": 0, "ram": [[0, 0]]},
