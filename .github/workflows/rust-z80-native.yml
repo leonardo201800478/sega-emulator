@@ -36,8 +36,14 @@ jobs:
         run: cargo test --manifest-path native/z80/Cargo.toml
       - name: Run Clippy
         run: cargo clippy --manifest-path native/z80/Cargo.toml --all-targets -- -D warnings
-      - name: Build and install native extension
+      - name: Build native wheel
         working-directory: native/z80
-        run: maturin develop --release
+        run: maturin build --release
+      - name: Install native wheel
+        shell: pwsh
+        run: |
+          $wheel = Get-ChildItem native/z80/target/wheels/sega_z80_native-*.whl | Select-Object -First 1
+          if (-not $wheel) { throw "Maturin did not produce a native wheel." }
+          python -m pip install $wheel.FullName
       - name: Run native Python integration tests
         run: python -m pytest tests/test_native_z80.py -q
