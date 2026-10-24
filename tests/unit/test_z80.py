@@ -2972,3 +2972,15 @@ def test_unassigned_ed_opcodes_are_two_byte_nops(opcode: int) -> None:
     assert cpu.wz == 0x1234
     assert cpu.total_cycles == 8
 
+@pytest.mark.parametrize("opcode", [0x46, 0x4E, 0x56, 0x5E, 0x66, 0x6E, 0x76, 0x7E])
+def test_bit_hl_undocumented_flags_come_from_wz(opcode: int) -> None:
+    """F3/F5 de BIT b,(HL) vêm do byte alto de WZ/MEMPTR."""
+    cpu = make_cpu(bytes([0xCB, opcode]))
+    cpu.hl = 0xC000
+    cpu.bus.write(cpu.hl, 0x6B)
+    cpu.f = 0x01
+    cpu.wz = 0x5D48
+
+    assert cpu.step() == 12
+    assert cpu.f == 0x19
+
