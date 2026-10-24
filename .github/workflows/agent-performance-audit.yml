@@ -43,7 +43,9 @@ jobs:
           } > audit-artifacts/environment.txt
 
       - name: Run timed full test suite
-        run: pytest -q --durations=50 --junitxml=audit-artifacts/pytest-timing.xml 2>&1 | tee audit-artifacts/pytest-timing.txt
+        run: |
+          set -o pipefail
+          pytest -q --durations=50 --junitxml=audit-artifacts/pytest-timing.xml 2>&1 | tee audit-artifacts/pytest-timing.txt
 
       - name: Generate Z80 opcode inventory
         if: always()
