@@ -2954,3 +2954,20 @@ def test_reset_clears_p_latch() -> None:
     cpu.reset()
 
     assert cpu.p == 0
+
+@pytest.mark.parametrize("opcode", [0x00, 0x3F, 0x80, 0xC0, 0xFF])
+def test_unassigned_ed_opcodes_are_two_byte_nops(opcode: int) -> None:
+    """Bytes ED não atribuídos preservam o estado e custam 8 T-states."""
+    cpu = make_cpu(bytes([0xED, opcode]))
+    cpu.a = 0x5A
+    cpu.f = 0xA5
+    cpu.wz = 0x1234
+
+    assert cpu.step() == 8
+    assert cpu.pc == 2
+    assert cpu.r == 2
+    assert cpu.a == 0x5A
+    assert cpu.f == 0xA5
+    assert cpu.wz == 0x1234
+    assert cpu.total_cycles == 8
+
