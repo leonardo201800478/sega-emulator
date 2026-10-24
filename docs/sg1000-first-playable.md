@@ -42,7 +42,7 @@ python tools/create_sg1000_demo_rom.py --output sg1000-demo.rom
 python -m sega_emulator .\sg1000-demo.rom
 ```
 
-Essa ROM valida o caminho CPU → I/O → VDP → framebuffer; não substitui a execução de um jogo real.
+Essa ROM valida o caminho CPU → I/O → VDP → framebuffer; não substitui a execução de um jogo real. O padrão esperado usa pixels verdes e cinza sobre o backdrop azul; se a janela abrir em preto ou sem padrão, registre o estado e o hash da ROM gerada.
 
 Use `--headless-frames 0` para validar o caminho e o tamanho da ROM sem executar a CPU. Cada quadro executado é limitado por avanço de frame do VDP; a instrução que cruza a borda pode ultrapassar o orçamento nominal por alguns T-states.
 
