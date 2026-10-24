@@ -25,21 +25,31 @@ jobs:
         run: |
           set -o pipefail
           python tools/benchmarks/profile_emulation.py --repeats 5 --profile profile.pstats | tee performance-profile.txt
-      - name: Download Super Uwol homebrew ROM
+      - name: Download and verify Super Uwol homebrew ROM
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/super-uwol"
+          ROM_PATH="$RUNNER_TEMP/super-uwol.sg"
+          # SMS Power is the original release page, but its direct archive endpoint
+          # returns HTTP 403 to GitHub-hosted runners. Use a public raw mirror only
+          # for this transient test; never commit or upload the ROM itself.
           curl --fail --location --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 90 \
-            "https://www.smspower.org/uploads/Homebrew/SuperUwol-SG-201611191411.zip" \
-            --output "$RUNNER_TEMP/super-uwol.zip"
-          unzip -l "$RUNNER_TEMP/super-uwol.zip" | tee super-uwol-archive-list.txt
-          unzip -q "$RUNNER_TEMP/super-uwol.zip" -d "$RUNNER_TEMP/super-uwol"
-          ROM_PATH="$(find "$RUNNER_TEMP/super-uwol" -type f \( -iname '*.sg' -o -iname '*.bin' -o -iname '*.rom' -o -iname '*.sms' \) -print -quit)"
-          if [ -z "$ROM_PATH" ]; then
-            echo "ERROR: no SG-1000 ROM file found in Super Uwol archive"
-            exit 1
-          fi
+            "https://raw.githubusercontent.com/webrcade/webrcade/6dbe3ce143d9186b5bbff62ecd9a919a5d913cce/content/sms/mojon-twins--super-uwol.sg" \
+            --output "$ROM_PATH"
+          python - "$ROM_PATH" <<'PY'
+          import pathlib
+          import sys
+          import zlib
+
+          rom_path = pathlib.Path(sys.argv[1])
+          rom = rom_path.read_bytes()
+          crc32 = zlib.crc32(rom) & 0xFFFFFFFF
+          print(f"ROM file: {rom_path.name}")
+          print(f"ROM size: {len(rom)} bytes")
+          print(f"ROM CRC32: {crc32:08X}")
+          if len(rom) != 0xC000 or crc32 != 0xAA8EA6EB:
+              raise SystemExit("ROM identity check failed; expected Super Uwol SG-1000 CRC32 AA8EA6EB and size 0xC000")
+          PY
           echo "ROM_PATH=$ROM_PATH" >> "$GITHUB_ENV"
           sha256sum "$ROM_PATH" | tee super-uwol-rom-sha256.txt
       - name: Benchmark Super Uwol ROM
