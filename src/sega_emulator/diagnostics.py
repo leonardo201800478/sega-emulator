@@ -8,7 +8,6 @@ import time
 from pathlib import Path
 from typing import Any
 
-
 _session_handlers: list[logging.Handler] = []
 
 
