@@ -33,7 +33,7 @@ Teste headless, sem Pygame:
 python -m sega_emulator "C:\caminho\para\homebrew.rom" --headless-frames 600
 ```
 
-Use `--headless-frames 0` para validar o caminho e o tamanho da ROM sem executar a CPU.
+Use `--headless-frames 0` para validar o caminho e o tamanho da ROM sem executar a CPU. Cada quadro executado é limitado por avanço de frame do VDP; a instrução que cruza a borda pode ultrapassar o orçamento nominal por alguns T-states.
 
 Não distribua ROMs comerciais. Use homebrew ou dumps legalmente obtidos.
 
