@@ -266,7 +266,7 @@ class TMS9918A:
         # Processar por linha reflete o limite físico de quatro sprites por
         # scanline e impede que um sprite posterior cubra um anterior.
         for line in range(SCREEN_HEIGHT):
-            active: list[tuple[int, int, int, int]] = []
+            active: list[tuple[int, int, int, int, int]] = []
             fifth_index: int | None = None
 
             for index in range(32):
@@ -288,7 +288,7 @@ class TMS9918A:
                 color = color_byte & 0x0F
                 if color_byte & 0x80:
                     x -= 32
-                active.append((index, x, pattern_number, color))
+                active.append((index, x, pattern_number, color, y))
 
             # O overflow é um latch independente da colisão. O manual indica
             # que o fifth-sprite flag não é gerado enquanto F (VBlank) está 1.
@@ -301,13 +301,7 @@ class TMS9918A:
 
             occupied: set[int] = set()
             visible: set[int] = set()
-            for _, x, pattern_number, color in active:
-                source_y = (line - ((self.vram[(attr_base + _ * 4) & VRAM_MASK] + 1) & 0xFF))
-                # Recover the signed Y coordinate used by the VDP's Y+1 rule.
-                raw_y = self.vram[(attr_base + _ * 4) & VRAM_MASK]
-                sprite_y = (raw_y + 1) & 0xFF
-                if sprite_y >= 0xE0:
-                    sprite_y -= 0x100
+            for _, x, pattern_number, color, sprite_y in active:
                 source_y = (line - sprite_y) // scale
 
                 for source_x in range(size):
