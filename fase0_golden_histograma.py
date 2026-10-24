@@ -51,9 +51,7 @@ for frame in range(1, 301):
         )
     )
     if frame in (30, 60, 120, 200, 300):
-        framebuffer_hashes[frame] = hashlib.sha256(
-            machine.vdp.framebuffer
-        ).hexdigest()
+        framebuffer_hashes[frame] = hashlib.sha256(machine.vdp.framebuffer).hexdigest()
 
 print(
     "distinct framebuffers over 300 frames (scripted input):",
@@ -66,7 +64,13 @@ print(
     machine.psg.sample_rate,
 )
 video_active = bool(machine.vdp.registers[1] & 0x40)
-print("video_ativo:", video_active, " (registrador 1 =", hex(machine.vdp.registers[1]), ")")
+print(
+    "video_ativo:",
+    video_active,
+    " (registrador 1 =",
+    hex(machine.vdp.registers[1]),
+    ")",
+)
 if not video_active:
     print(
         "AVISO: vídeo desativado ao fim de 300 quadros - ROM provavelmente não foi "
