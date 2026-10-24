@@ -2511,8 +2511,6 @@ def test_masked_int_remains_pending_while_cpu_is_halted() -> None:
     assert cpu.bus.read(0xC0FF) == halted_pc >> 8
 
 
-
-
 def test_nmi_during_halt_has_priority_over_pending_int() -> None:
     cpu = make_cpu(bytes([0xFB, 0x76, 0x00]))  # EI; HALT; NOP
     cpu.sp = 0xC100
@@ -2540,6 +2538,7 @@ def test_nmi_during_halt_has_priority_over_pending_int() -> None:
     assert cpu.bus.read(0xC0FE) == 0x02
     assert cpu.bus.read(0xC0FF) == 0x00
     assert cpu.total_cycles == 19
+
 
 def test_nmi_has_priority_over_pending_maskable_interrupt() -> None:
     cpu = make_cpu(bytes([0x76, 0x00]))  # HALT; NOP
