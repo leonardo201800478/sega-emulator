@@ -8,6 +8,7 @@ from sega_emulator.video.tms9918 import (
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
     TMS9918A,
+    VBLANK_LINE,
     TSTATES_PER_LINE,
     VRAM_SIZE,
 )
@@ -297,3 +298,38 @@ def test_raster_rendering_preserves_emitted_lines_after_vram_changes() -> None:
     assert vdp.framebuffer[line_eight_pixel_zero : line_eight_pixel_zero + 3] == bytes(
         PALETTE[1]
     )
+
+
+@pytest.mark.parametrize(
+    ("r0", "r1"),
+    (
+        (0x00, 0x40),  # Graphics I
+        (0x00, 0x50),  # Text
+        (0x00, 0x48),  # Multicolor
+        (0x02, 0x40),  # Graphics II
+    ),
+)
+def test_incremental_scanlines_match_full_frame_renderer(r0: int, r1: int) -> None:
+    vdp = TMS9918A()
+    vdp.vram[:] = bytes((index * 29 + 7) & 0xFF for index in range(VRAM_SIZE))
+    _write_register(vdp, 0, r0)
+    _write_register(vdp, 1, r1)
+
+    vdp.advance(LINES_PER_FRAME * TSTATES_PER_LINE)
+
+    assert vdp.frame_number == 1
+    assert vdp.framebuffer == vdp.render_frame()
+
+
+def test_frame_is_published_when_vblank_begins() -> None:
+    vdp = TMS9918A()
+    _write_register(vdp, 1, 0x40)
+    _write_register(vdp, 7, 0x0E)
+
+    vdp.advance(VBLANK_LINE * TSTATES_PER_LINE)
+
+    assert vdp.scanline == VBLANK_LINE
+    assert vdp.frame_number == 0
+    assert vdp.framebuffer[:3] == bytes(PALETTE[14])
+    assert vdp.consume_frame_ready()
+    assert not vdp.consume_frame_ready()
