@@ -199,7 +199,7 @@ python -m sega_emulator.testing.z80_singlestep caminho\para\v1\00.json --limit 2
 
 1. **Concluído:** fixar a revisão upstream e verificar SHA-256 e tamanho dos arquivos por meio do manifesto versionado.
 2. Ampliar a cobertura de prefixos e opcodes com os arquivos disponíveis no corpus, mantendo separados aprovados, divergentes, não suportados e excluídos.
-3. Modelar ou formalmente restringir o estado interno `p`, em vez de contar esses vetores como conformes.
+3. **Concluído:** modelar `P` como latch para `LD A,I`/`LD A,R`, limpar na instrução seguinte e aplicar PV=0 se INT mascarável for aceita imediatamente após essas instruções.
 4. Implementar um traço de eventos de barramento e só então comparar os arrays `cycles`.
 5. Manter a bateria completa como auditoria prolongada; o subconjunto atual é diagnóstico, não gate obrigatório de conformidade.
 
@@ -210,9 +210,9 @@ O workflow `.github/workflows/z80-singlestep-audit.yml` baixa, durante a execuç
 
 O manifesto `tools/audits/singlestep-corpus-manifest.json` registra o commit, a licença MIT com URL imutável e o SHA-256 e tamanho em bytes esperados para cada arquivo. O verificador `tools/audits/verify_singlestep_corpus.py` valida todos os arquivos baixados antes da auditoria. Se um hash, tamanho ou arquivo não corresponder ao manifesto, o workflow falha antes de executar os vetores. O relatório inclui a revisão upstream e os hashes correspondentes. Assim, alterações futuras na branch `main` do corpus não alteram silenciosamente os dados usados pelo teste.
 
-O script `tools/audits/run_singlestep_corpus.py` exclui explicitamente vetores com o campo interno `p` diferente de zero, pois esse estado não é modelado pelo núcleo atual. Ele registra separadamente os casos executados, divergentes, não suportados e excluídos por esse estado. Divergências são resultados de auditoria e não interrompem a geração do relatório; falhas de download ou de formato interrompem o workflow.
+O script `tools/audits/run_singlestep_corpus.py` carrega e compara o campo interno `p`, agora modelado no núcleo como o latch de `LD A,I`/`LD A,R`. Ele registra separadamente casos aprovados, divergentes e não suportados. Divergências e estados não suportados fazem o workflow falhar, enquanto o artefato é preservado para diagnóstico.
 
-**Limitação essencial:** o teste compara estado arquitetural representado e RAM, mas não compara o array `cycles` do corpus. Portanto, mesmo um vetor aprovado não demonstra precisão ciclo a ciclo nem equivalência de barramento. O workflow é diagnóstico e não deve ser tratado como gate de conformidade até a revisão dos primeiros resultados e das limitações do modelo.
+**Limitação essencial:** o teste compara estado arquitetural representado e RAM, mas não compara o array `cycles` do corpus. Portanto, mesmo um vetor aprovado não demonstra precisão ciclo a ciclo nem equivalência de barramento. O workflow bloqueia regressões nos campos modelados, mas não é uma certificação geral nem uma prova independente de conformidade com silício.
 
 A licença MIT foi conferida no arquivo `LICENSE` da mesma revisão fixa. O workflow guarda no artefato `SOURCE.txt` o commit utilizado e inclui uma cópia do manifesto. Os hashes são calculados sobre os bytes dos arquivos baixados, não sobre JSON reserializado.
 
@@ -225,7 +225,7 @@ A primeira execução com os vetores de I/O expôs divergências no registrador 
 - `OUT (n),A`: WZ precisava preservar o byte alto do endereço da porta e incrementar apenas o byte baixo, inclusive no wrap de `FFh` para `00h`.
 - `IN r,(C)` e `OUT (C),r`: WZ precisava receber `BC + 1`, usando o BC anterior à instrução, inclusive quando a leitura altera B.
 
-Esses comportamentos foram corrigidos em `src/sega_emulator/cpu/z80.py`, com testes de regressão para leitura de I/O derivada do traço, atualização de WZ e wrap do byte baixo. A execução seguinte eliminou as divergências nos 11 arquivos selecionados. O resultado é evidência diferencial útil para esses vetores e campos, **não** uma certificação geral do Z80: os 5.599 vetores excluídos ainda precisam de um modelo para o estado `p`, e os traços ciclo a ciclo continuam fora da comparação.
+Esses comportamentos foram corrigidos em `src/sega_emulator/cpu/z80.py`, com testes de regressão para leitura de I/O derivada do traço, atualização de WZ e wrap do byte baixo. A execução seguinte eliminou as divergências nos 11 arquivos selecionados. Naquela execução inicial, 5.599 vetores foram excluídos por `p`; a implementação posterior passou a modelar esse latch e executou o subconjunto expandido sem exclusões. Os traços ciclo a ciclo continuam fora da comparação.
 
 O artefato JSON e os vetores usados ficam no workflow [Z80 SingleStepTests Differential Audit](https://github.com/leonardo201800478/sega-emulator/actions/workflows/z80-singlestep-audit.yml), por 30 dias.
 
@@ -239,4 +239,4 @@ Após fixar a revisão upstream e validar o manifesto SHA-256, a auditoria difer
 - **ED:** SBC HL,BC, NEG e RETN, além do vetor ED 40 existente, ampliando aritmética de 16 bits e retorno de interrupção.
 - **DD:** LD B,(IX+d), complementando LD IX,nn com leitura indexada.
 
-Os vetores adicionais seguem no mesmo commit upstream imutável e cada arquivo tem tamanho e SHA-256 fixados no manifesto. Esta etapa amplia a amostragem por família, mas **não equivale à cobertura integral dos 256 opcodes de cada espaço**; também não compara os traços de barramento ciclo a ciclo. Vetores com estado interno `p` ativo continuam excluídos explicitamente e devem ser reportados como excluídos, nunca como aprovados.
+Os vetores adicionais seguem no mesmo commit upstream imutável e cada arquivo tem tamanho e SHA-256 fixados no manifesto. Esta etapa amplia a amostragem por família, mas **não equivale à cobertura integral dos 256 opcodes de cada espaço**; também não compara os traços de barramento ciclo a ciclo. O estado `p` deixou de ser motivo de exclusão: o executor carrega e compara o latch, incluindo o erratum de INT mascarável.
