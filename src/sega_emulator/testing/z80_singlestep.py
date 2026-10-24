@@ -189,9 +189,7 @@ def run_vector(vector: dict[str, Any]) -> VectorResult:
                 f"{field_name}: esperado {normalized_expected!r}, obtido {actual!r}"
             )
 
-    expected_ram = {
-        address: value for address, value in final.get("ram", [])
-    }
+    expected_ram = {address: value for address, value in final.get("ram", [])}
     addresses_to_compare = (
         set(initial_ram) | set(expected_ram) | memory.written_addresses
     )
@@ -277,8 +275,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  - {mismatch}")
             if result.unsupported_fields:
                 print(
-                    "  - campos não suportados: "
-                    + ", ".join(result.unsupported_fields)
+                    "  - campos não suportados: " + ", ".join(result.unsupported_fields)
                 )
 
     if args.report_json:
