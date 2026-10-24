@@ -18,7 +18,11 @@ def run(machine: SG1000Machine, scale: int = 3) -> None:
 
     pygame.mixer.pre_init(frequency=44_100, size=-16, channels=1, buffer=512)
     pygame.init()
-    audio_channel = pygame.mixer.Channel(0)
+    try:
+        audio_channel = pygame.mixer.Channel(0)
+    except pygame.error as exc:
+        audio_channel = None
+        print(f"Saída de áudio indisponível: {exc}")
     screen = pygame.display.set_mode((256 * scale, 192 * scale))
     pygame.display.set_caption("Sega Emulator — SG-1000")
     clock = pygame.time.Clock()
@@ -60,7 +64,7 @@ def run(machine: SG1000Machine, scale: int = 3) -> None:
 
             machine.run_frame()
             samples = machine.drain_audio_samples()
-            if samples:
+            if samples and audio_channel is not None:
                 pcm = array(
                     "h",
                     (
