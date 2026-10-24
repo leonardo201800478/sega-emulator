@@ -65,7 +65,9 @@ def run(machine: SG1000Machine, scale: int = 3) -> None:
             machine.run_frame()
             samples = machine.drain_audio_samples()
             if samples and audio_channel is not None:
-                pcm = array("h", (max(-32768, min(32767, round(s * 32767))) for s in samples))
+                pcm = array(
+                    "h", (max(-32768, min(32767, round(s * 32767))) for s in samples)
+                )
                 sound = pygame.mixer.Sound(buffer=pcm.tobytes())
                 if audio_channel.get_busy():
                     audio_channel.queue(sound)
