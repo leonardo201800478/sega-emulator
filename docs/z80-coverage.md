@@ -282,7 +282,7 @@ Esses casos são testes sintéticos de fluxo de controle e estado observável. N
 
 ## Atualização da validação diferencial — 23/10/2026
 
-O primeiro lote reportado do corpus `SingleStepTests/z80 v1` executou 1.000.000 de casos no commit `4a6eac4468645843c2cab22aa653413db4478221`: 992.309 aprovados e 7.691 divergências. O agrupamento indicou 6.001 casos em `BIT b,(HL)`, 1.342 em `SCF/CCF` e 348 em `DAA`. Consulte [o relatório detalhado](z80-differential-audit-2026-10-23.md).
+O primeiro lote reportado do corpus `SingleStepTests/z80 v1` executou 1.000.000 de casos no commit `4a6eac4468645843c2cab22aa653413db4478221`: 992.309 aprovados e 7.691 divergências. O agrupamento indicou 6.001 casos em `BIT b,(HL)`, 1.342 em `SCF/CCF` e 348 em `DAA`. Esses números são uma linha de base histórica, anterior às correções; o relatório bruto detalhado não está presente nesta branch.
 
 Na branch `fix/z80-single-step-audit`, o PR #14 propõe correções e testes direcionados para essas famílias. A presença dos handlers e dos testes não deve ser confundida com aprovação: os números acima pertencem à revisão antiga e ainda não há, neste registro, resultado de uma auditoria repetida após as alterações.
 
