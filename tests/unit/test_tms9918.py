@@ -92,10 +92,9 @@ def test_graphics_ii_mode_uses_r0_bit_one_and_r1_bit_three() -> None:
     _write_register(vdp, 3, 0xFF)
     _write_register(vdp, 4, 0x04)
     vdp.vram[0x3800] = 0
-    vdp.vram[0x0000] = 0x80
-    vdp.vram[0x2000] = 0x20
+    vdp.vram[0x2000] = 0x80
     frame = vdp.render_frame()
-    assert frame[:3] == bytes((33, 200, 66))
+    assert frame[:3] == bytes((252, 85, 84))
 
 
 def test_negative_or_non_integer_clock_advance_is_rejected() -> None:
