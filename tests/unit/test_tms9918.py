@@ -270,4 +270,3 @@ def test_fifth_sprite_status_is_generated_at_raster_line_boundary() -> None:
     assert vdp.scanline == 1
     assert vdp.status & 0x40
     assert vdp.status & 0x1F == 4
-
