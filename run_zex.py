@@ -87,7 +87,7 @@ def main() -> int:
         nonlocal tests_done, failures
         sys.stdout.write(text)
         sys.stdout.flush()
-        if text.startswith(" ") and text.rstrip().endswith("OK"):
+        if "ERROR" not in text and text.rstrip().endswith("OK"):
             tests_done += 1
         if "ERROR" in text:
             failures += 1
