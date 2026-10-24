@@ -2754,14 +2754,7 @@ def test_reset_clears_cpu_state_without_replacing_buses() -> None:
 
     assert cpu.bus is memory_bus
     assert cpu.io_bus is io_bus
-    assert (cpu.a, cpu.f, cpu.ix, cpu.wz, cpu.q, cpu._q_previous) == (
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-    )
+    assert (cpu.a, cpu.f, cpu.ix, cpu.wz, cpu.q, cpu._q_previous) == (0, 0, 0, 0, 0, 0)
     assert not cpu._nmi_pending
     assert cpu._int_pending is None
     assert cpu._im0_opcode is None
