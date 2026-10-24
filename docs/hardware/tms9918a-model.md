@@ -57,7 +57,7 @@ linha e 262 linhas por quadro na configuração padrão. O flag F é levantado n
 fronteira da linha 192. A composição de fundo e sprites acontece na fronteira de cada linha e usa o
 estado de registradores/VRAM naquele instante. Os pixels de linhas já emitidas
 não são retroativamente alterados por escritas posteriores. A imagem completa
-é publicada ao fim do quadro.
+é publicada quando começa VBlank, após a última linha visível.
 
 Isso melhora o instante de atualização dos flags, mas **não** simula fetches de
 VRAM por dot, arbitragem, contenção, latência de barramento, pipeline de pixels
@@ -86,6 +86,8 @@ ou variações analógicas. Não anunciar precisão ciclo a ciclo.
 
 ### Fase 3 — temporização raster
 - [x] Renderizar linhas incrementalmente e preservar pixels já emitidos.
+- [x] Publicar o framebuffer no início de VBlank, quando as linhas visíveis estão completas.
+- [x] Comparar o renderizador incremental e o renderizador de referência nos quatro modos.
 - [ ] Modelar eventos de VBlank, status e interrupção no instante correto.
 - [ ] Determinar temporizações por região/revisão com evidência; não inferir
       PAL/NTSC somente a partir de frequência de apresentação.
