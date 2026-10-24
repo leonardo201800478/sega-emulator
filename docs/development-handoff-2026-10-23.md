@@ -144,3 +144,14 @@ A CI curta está verde nesta revisão. Ainda não foi executada a auditoria long
 - Ajustadas as expectativas unitárias de SCF/CCF para refletir os bits F3/F5 combinados com Q anterior, inclusive quando a instrução anterior escreveu flags.
 - Commit de testes: [e06727c07782285b0f9e63fe0f770471c084e870](https://github.com/leonardo201800478/sega-emulator/commit/e06727c07782285b0f9e63fe0f770471c084e870).
 - Estes testes ainda aguardam execução na CI. A auditoria direcionada pós-correção também precisa ser repetida.
+
+
+### Correção da fórmula Q/F em SCF/CCF — 24/10/2026
+
+- ZIP recebido: `z80-targeted-audit-pr14-r2-results.zip`, testando o commit `6434fdaea85b32e7335ddf9a37730d6e70a083ae`.
+- Resultado: 13.567/14.000 aprovados; 433 divergências, todas concentradas em SCF/CCF sem prefixo (223 em `37.json`, 210 em `3f.json`). BIT (HL) 8.000/8.000 e DAA 2.000/2.000 passaram.
+- A inspeção confirmou que a expressão usada anteriormente tratava Q como bits a combinar diretamente. A regra de F3/F5 foi alterada para `((Q XOR F) OR A) & 0x28`.
+- Código: [`9f936ec913e09f6aaf4219682d8ddf95f25603dd`](https://github.com/leonardo201800478/sega-emulator/commit/9f936ec913e09f6aaf4219682d8ddf95f25603dd).
+- Regressões: [`58671c8f09d2462723fb2c0b85a823789572ad65`](https://github.com/leonardo201800478/sega-emulator/commit/58671c8f09d2462723fb2c0b85a823789572ad65).
+- Ainda não há execução local de pytest/Ruff para esses commits neste ambiente. A próxima etapa é validar os testes curtos no Windows/CI; sem novo Colab por enquanto.
+- PR #14 continua draft e sem merge.
