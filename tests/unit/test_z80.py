@@ -415,7 +415,9 @@ def test_q_latch_clears_after_instruction_that_preserves_flags() -> None:
     assert cpu.step() == 4
     assert cpu.q == 0
     assert cpu.step() == 4
-    assert cpu.f == 0x01
+    # Q=0 after NOP, so SCF derives undocumented X/Y from A | (F ^ Q).
+    assert cpu.f == 0x09
+    assert cpu.q == 0x09
 
 
 @pytest.mark.parametrize(
