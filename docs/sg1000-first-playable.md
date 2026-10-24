@@ -33,6 +33,17 @@ Teste headless, sem Pygame:
 python -m sega_emulator "C:\caminho\para\homebrew.rom" --headless-frames 600
 ```
 
+### ROM homebrew de diagnóstico
+
+Gere uma ROM própria de 8 KiB que configura o VDP e mostra um padrão de teste:
+
+```powershell
+python tools/create_sg1000_demo_rom.py --output sg1000-demo.rom
+python -m sega_emulator .\sg1000-demo.rom
+```
+
+Essa ROM valida o caminho CPU → I/O → VDP → framebuffer; não substitui a execução de um jogo real.
+
 Use `--headless-frames 0` para validar o caminho e o tamanho da ROM sem executar a CPU. Cada quadro executado é limitado por avanço de frame do VDP; a instrução que cruza a borda pode ultrapassar o orçamento nominal por alguns T-states.
 
 Não distribua ROMs comerciais. Use homebrew ou dumps legalmente obtidos.

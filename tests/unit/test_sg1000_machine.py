@@ -35,3 +35,15 @@ def test_machine_rejects_invalid_rom_sizes_and_joystick_values() -> None:
     machine = SG1000Machine(bytes((0x00,)))
     with pytest.raises(ValueError):
         machine.set_joystick(1, 0x100)
+
+
+def test_cpu_program_can_configure_vdp_through_io_ports() -> None:
+    # LD A,C0h; OUT (BFh),A; LD A,81h; OUT (BFh),A; JP 0008h
+    rom = bytes((0x3E, 0xC0, 0xD3, 0xBF, 0x3E, 0x81, 0xD3, 0xBF, 0xC3, 0x08, 0x00))
+    machine = SG1000Machine(rom)
+
+    for _ in range(4):
+        machine.step()
+
+    assert machine.vdp.registers[1] == 0xC0
+    assert machine.cpu.pc == 8
