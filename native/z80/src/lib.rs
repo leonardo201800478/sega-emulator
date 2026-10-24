@@ -8,7 +8,6 @@ const FLAG_Y: u8 = 0x20;
 const FLAG_H: u8 = 0x10;
 const FLAG_X: u8 = 0x08;
 const FLAG_PV: u8 = 0x04;
-const FLAG_N: u8 = 0x02;
 const FLAG_C: u8 = 0x01;
 
 /// Deliberately small native execution slice used to validate the migration path.
