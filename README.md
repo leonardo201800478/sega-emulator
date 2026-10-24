@@ -9,7 +9,7 @@ Projeto de emulação de alta precisão com implementação de referência em Py
 - **Interface experimental:** menus Qt 6/PySide6 para abrir ROMs, pausar/continuar, reiniciar, alterar escala e consultar diagnóstico.
 - **Carregador:** arquivos `.sg`, `.rom`, `.bin` e ROMs dentro de ZIP; ZIP com múltiplas ROMs exige seleção explícita.
 - **Diagnóstico:** logs JSONL/texto por sessão, SHA-256 da ROM, checkpoints de execução e stack traces.
-- **Áudio:** PSG ainda não implementado. A compatibilidade de jogos reais continua pendente.
+- **Áudio:** modelo inicial SN76489 em desenvolvimento, ainda sem integração ao barramento de I/O ou frontend. A compatibilidade de jogos reais continua pendente.
 
 ## Requisitos
 
@@ -93,6 +93,10 @@ git diff --check
 - [Auditoria de cobertura da CPU Z80](docs/z80-coverage.md)
 - [Auditoria técnica da CPU Z80](docs/z80-code-audit-2026-10-22.md)
 - [Plano de resolução das lacunas Z80](docs/z80-gap-resolution-plan.md)
+
+## Áudio PSG
+
+- [Fundação do SN76489 e limitações conhecidas](docs/psg-sn76489.md)
 
 ## Limitações e próximos passos
 
