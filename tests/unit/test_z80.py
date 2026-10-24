@@ -2466,6 +2466,32 @@ def test_all_ed_second_bytes_are_supported_or_explicitly_rejected() -> None:
     ("data_bus", "expected_pc"),
     [(0xC7 | (vector << 3), vector << 3) for vector in range(8)],
 )
+
+
+@pytest.mark.parametrize(
+    "opcode",
+    [0x45, 0x4D, 0x55, 0x5D, 0x65, 0x6D, 0x75, 0x7D],
+)
+@pytest.mark.parametrize("iff2", [False, True])
+def test_retn_reti_aliases_restore_iff1_from_iff2(opcode: int, iff2: bool) -> None:
+    cpu = make_cpu(bytes([0xED, opcode]))
+    cpu.sp = 0xC0FE
+    cpu.bus.write(0xC0FE, 0x34)
+    cpu.bus.write(0xC0FF, 0x12)
+    cpu.iff1 = not iff2
+    cpu.iff2 = iff2
+    cpu.f = 0xA5
+    cpu.r = 0xFE
+
+    assert cpu.step() == 14
+    assert cpu.pc == 0x1234
+    assert cpu.sp == 0xC100
+    assert cpu.iff1 is iff2
+    assert cpu.iff2 is iff2
+    assert cpu.f == 0xA5
+    assert cpu.r == 0x80
+    assert cpu.total_cycles == 14
+
 def test_im0_accepts_all_rst_opcodes_from_interrupt_data_bus(
     data_bus: int, expected_pc: int
 ) -> None:
