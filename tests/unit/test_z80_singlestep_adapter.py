@@ -112,3 +112,31 @@ def test_load_vectors_requires_a_json_array(tmp_path) -> None:
 
     with pytest.raises(ValueError, match="lista JSON"):
         load_vectors(path)
+
+
+
+def test_adapter_derives_io_read_value_from_single_step_cycle_trace() -> None:
+    vector = {
+        "name": "ED 40 IN B,(C) cycle-derived input fixture",
+        "initial": {
+            "pc": 0x4000,
+            "b": 0x12,
+            "c": 0x34,
+            "ram": [[0x4000, 0xED], [0x4001, 0x40]],
+        },
+        "final": {
+            "pc": 0x4002,
+            "b": 0x56,
+            "r": 2,
+            "ram": [[0x4000, 0xED], [0x4001, 0x40]],
+        },
+        "cycles": [
+            [0x1234, None, "r--i"],
+            [0x1234, 0x56, "----"],
+        ],
+    }
+
+    result = run_vector(vector)
+
+    assert result.status == "passed"
+    assert result.mismatches == []
