@@ -1815,7 +1815,14 @@ def test_ed_lddr_repeats_in_reverse_until_bc_zero() -> None:
 
 
 @pytest.mark.parametrize(
-    ("opcode", "initial_hl", "initial_de", "source_value", "expected_hl", "expected_de"),
+    (
+        "opcode",
+        "initial_hl",
+        "initial_de",
+        "source_value",
+        "expected_hl",
+        "expected_de",
+    ),
     [
         (0xA0, 0xFFFF, 0xC000, 0x5A, 0x0000, 0xC001),  # LDI: increment wraps
         (0xB0, 0xFFFF, 0xC000, 0x5A, 0x0000, 0xC001),  # LDIR: increment wraps
