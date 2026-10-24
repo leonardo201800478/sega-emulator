@@ -125,3 +125,16 @@ def test_input_validation() -> None:
         SN76489().write(256)
     with pytest.raises(ValueError):
         SN76489().advance_clocks(-1)
+
+
+
+def test_clocked_audio_samples_are_buffered_and_chunk_invariant() -> None:
+    whole, chunked = SN76489(), SN76489()
+    for chip in (whole, chunked):
+        enable_tone_zero(chip, 0xFE)
+    whole.advance_clocks(357_954)
+    chunked.advance_clocks(123_456)
+    chunked.advance_clocks(234_498)
+
+    assert whole.drain_samples() == chunked.drain_samples()
+    assert 4_400 <= len(whole._pending_samples) <= 4_420
