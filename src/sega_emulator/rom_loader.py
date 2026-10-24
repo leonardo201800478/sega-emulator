@@ -50,16 +50,21 @@ def load_rom(path: str | Path, member_name: str | None = None) -> LoadedRom:
         try:
             with zipfile.ZipFile(source) as archive:
                 candidates = [
-                    item for item in archive.infolist()
+                    item
+                    for item in archive.infolist()
                     if not item.is_dir()
                     and Path(item.filename).suffix.lower() in SUPPORTED_SUFFIXES
                 ]
                 if not candidates:
                     raise ValueError("O ZIP não contém arquivos .sg, .rom ou .bin.")
                 if member_name is not None:
-                    matches = [item for item in candidates if item.filename == member_name]
+                    matches = [
+                        item for item in candidates if item.filename == member_name
+                    ]
                     if len(matches) != 1:
-                        raise ValueError(f"Membro de ROM não encontrado no ZIP: {member_name}")
+                        raise ValueError(
+                            f"Membro de ROM não encontrado no ZIP: {member_name}"
+                        )
                     chosen = matches[0]
                 elif len(candidates) == 1:
                     chosen = candidates[0]
@@ -73,9 +78,13 @@ def load_rom(path: str | Path, member_name: str | None = None) -> LoadedRom:
                         f"A ROM no ZIP excede o limite de {MAX_ROM_SIZE} bytes."
                     )
                 data = archive.read(chosen)
-                return _validate(data, Path(chosen.filename).name, source, chosen.filename)
+                return _validate(
+                    data, Path(chosen.filename).name, source, chosen.filename
+                )
         except zipfile.BadZipFile as exc:
-            raise ValueError("O arquivo possui extensão .zip, mas não é um ZIP válido.") from exc
+            raise ValueError(
+                "O arquivo possui extensão .zip, mas não é um ZIP válido."
+            ) from exc
 
     if suffix not in SUPPORTED_SUFFIXES:
         raise ValueError("Formato não suportado. Use .sg ou .zip (também .rom/.bin).")
@@ -91,7 +100,8 @@ def list_rom_members(path: str | Path) -> list[str]:
     try:
         with zipfile.ZipFile(Path(path)) as archive:
             return [
-                item.filename for item in archive.infolist()
+                item.filename
+                for item in archive.infolist()
                 if not item.is_dir()
                 and Path(item.filename).suffix.lower() in SUPPORTED_SUFFIXES
                 and item.file_size <= MAX_ROM_SIZE
