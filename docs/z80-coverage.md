@@ -297,7 +297,14 @@ Na branch `fix/z80-single-step-audit`, o PR #14 propõe correções e testes dir
 ### Lacunas prioritárias
 
 1. Confirmar pytest/Ruff no commit corrigido.
-2. Corrigir e testar o ciclo de vida de Q para todas as instruções que modificam ou preservam F, incluindo prefixos DD/FD antes de SCF/CCF.
+2. Validar a fórmula de F3/F5 em SCF/CCF: `((Q XOR F) OR A) & 0x28`, inclusive com prefixos DD/FD ignorados.
 3. Definir e testar as atualizações de WZ/MEMPTR para as famílias de instruções relevantes; não assumir que inicializar WZ é suficiente.
-4. Reexecutar a auditoria com o SHA explícito da branch corrigida.
+4. Reexecutar a auditoria direcionada somente depois de os testes rápidos locais passarem e fixar o SHA exato.
 5. Classificar as divergências remanescentes por opcode, campo de estado e possível limitação do harness.
+
+
+### Revisão da fórmula Q/F em SCF/CCF — 24/10/2026
+
+A repetição direcionada no commit `6434fdaea85b32e7335ddf9a37730d6e70a083ae` processou 14.000 vetores: 13.567 aprovados e 433 divergentes. `BIT (HL)` (8.000) e `DAA` (2.000) passaram integralmente; as divergências restantes foram em `SCF` (`37.json`, 223) e `CCF` (`3f.json`, 210), nos campos F/Q. O código anterior aplicava Q diretamente em vez de usar a relação XOR entre Q e F.
+
+Foi aplicada uma correção candidata para calcular F3/F5 com `((Q XOR F) OR A) & 0x28`. A alteração e suas regressões unitárias ainda precisam ser executadas por pytest/Ruff; os 433 casos são do commit anterior à correção e não medem o código novo. O Colab não será usado para essa validação curta.
