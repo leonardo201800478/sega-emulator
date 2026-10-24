@@ -127,7 +127,6 @@ def test_input_validation() -> None:
         SN76489().advance_clocks(-1)
 
 
-
 def test_clocked_audio_samples_are_buffered_and_chunk_invariant() -> None:
     whole, chunked = SN76489(), SN76489()
     for chip in (whole, chunked):
