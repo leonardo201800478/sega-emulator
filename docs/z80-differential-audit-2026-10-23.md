@@ -160,3 +160,23 @@ Foram adicionados testes para:
 - SCF e CCF precedidos por prefixo DD ignorado, com estado inicial reproduzível semelhante aos vetores divergentes.
 
 **Estado da validação:** o ZIP recebido mede o commit anterior à correção acima. Os commits que aplicam a correção e adicionam regressões ainda precisam passar na CI e na repetição dos 14.000 vetores. Não declarar resolvida a família DD SCF/CCF até confirmar esses resultados.
+
+
+## Segunda auditoria direcionada e revisão Q/F — 24/10/2026
+
+O ZIP `z80-targeted-audit-pr14-r2-results.zip` foi executado contra `6434fdaea85b32e7335ddf9a37730d6e70a083ae`, antes da correção mais recente:
+
+| Métrica | Resultado |
+|---|---:|
+| Vetores | 14.000 |
+| Aprovados | 13.567 (96,91%) |
+| Divergentes | 433 (3,09%) |
+| BIT (HL) | 8.000/8.000 |
+| DAA, incluindo DD 27 | 2.000/2.000 |
+| SCF | 777/1.000; 223 divergências |
+| CCF | 790/1.000; 210 divergências |
+| DD SCF / DD CCF | 1.000/1.000 em cada arquivo |
+
+As divergências restantes no lote estão nos campos `F` e `Q` de SCF/CCF sem prefixo; os T-states não divergiram. A expressão da branch usava os bits de Q diretamente quando Q era diferente de zero. A correção candidata agora calcula os bits não documentados como `((Q XOR F) OR A) & 0x28`, tanto em SCF quanto em CCF.
+
+Commits: [código](https://github.com/leonardo201800478/sega-emulator/commit/9f936ec913e09f6aaf4219682d8ddf95f25603dd) e [testes](https://github.com/leonardo201800478/sega-emulator/commit/58671c8f09d2462723fb2c0b85a823789572ad65). Essa é uma correção candidata: testes unitários/Ruff ainda precisam ser executados. Não enviar ao Colab antes de os testes rápidos passarem; o ZIP acima não valida esses novos commits.
