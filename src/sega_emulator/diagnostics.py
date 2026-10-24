@@ -16,14 +16,34 @@ class JsonLineFormatter(logging.Formatter):
         payload: dict[str, Any] = {
             "timestamp_utc": time.strftime(
                 "%Y-%m-%dT%H:%M:%S", time.gmtime(record.created)
-            ) + f".{int(record.msecs):03d}Z",
+            )
+            + f".{int(record.msecs):03d}Z",
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
         }
-        for key in ("event", "rom_path", "rom_member", "rom_sha256", "frame",
-                    "pc", "instructions", "tstates", "scanline", "registers",
-                    "status", "elapsed_ms", "exception"):
+        for key in (
+            "event",
+            "rom_path",
+            "rom_member",
+            "rom_sha256",
+            "frame",
+            "pc",
+            "instructions",
+            "instructions_total",
+            "tstates",
+            "tstates_delta",
+            "fps",
+            "speed_percent",
+            "scanline",
+            "registers",
+            "status",
+            "elapsed_ms",
+            "exception",
+            "log_json",
+            "log_text",
+            "paused",
+        ):
             if hasattr(record, key):
                 payload[key] = getattr(record, key)
         if record.exc_info:
@@ -31,7 +51,9 @@ class JsonLineFormatter(logging.Formatter):
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
 
-def configure_session_logging(log_dir: str | Path = "logs", level: int = logging.INFO) -> Path:
+def configure_session_logging(
+    log_dir: str | Path = "logs", level: int = logging.INFO
+) -> Path:
     """Cria log JSONL por sessão e um log textual legível."""
     directory = Path(log_dir)
     directory.mkdir(parents=True, exist_ok=True)
@@ -49,16 +71,19 @@ def configure_session_logging(log_dir: str | Path = "logs", level: int = logging
     json_handler = logging.FileHandler(json_path, encoding="utf-8")
     json_handler.setFormatter(JsonLineFormatter())
     text_handler = logging.FileHandler(text_path, encoding="utf-8")
-    text_handler.setFormatter(logging.Formatter(
-        "%(asctime)s %(levelname)s %(name)s: %(message)s"
-    ))
+    text_handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+    )
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
     for handler in (json_handler, text_handler, console_handler):
         root.addHandler(handler)
     logging.getLogger(__name__).info(
         "Logging de sessão inicializado",
-        extra={"event": "session_start", "log_json": str(json_path),
-               "log_text": str(text_path)},
+        extra={
+            "event": "session_start",
+            "log_json": str(json_path),
+            "log_text": str(text_path),
+        },
     )
     return json_path
