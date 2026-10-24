@@ -2845,3 +2845,74 @@ def test_indexed_memory_load_updates_wz_to_effective_address() -> None:
 
     assert cpu.b == 0xA5
     assert cpu.wz == 0xC012
+
+@pytest.mark.parametrize(
+    ("opcode", "special_value", "expected_a"),
+    [
+        (0x57, 0x42, 0x42),  # LD A,I
+        (0x5F, 0x20, 0x22),  # LD A,R: ED e 5F incrementam R
+    ],
+)
+def test_ld_a_i_or_r_sets_p_latch_for_one_instruction(
+    opcode: int, special_value: int, expected_a: int
+) -> None:
+    cpu = make_cpu(bytes([0xED, opcode]))
+    cpu.i = special_value if opcode == 0x57 else 0
+    cpu.r = special_value if opcode == 0x5F else 0
+    cpu.iff2 = True
+
+    cpu.step()
+
+    assert cpu.a == expected_a
+    assert cpu.p == 1
+    assert cpu.f & 0x04
+
+    cpu.step()  # NOP subsequente consome o latch P.
+    assert cpu.p == 0
+
+
+def test_maskable_interrupt_after_ld_a_i_clears_pv_and_p() -> None:
+    cpu = make_cpu(bytes([0xED, 0x57]))
+    cpu.i = 0x80
+    cpu.iff1 = True
+    cpu.iff2 = True
+    cpu.f = 0x05  # P/V e carry definidos antes do cenário de interrupção.
+
+    cpu.step()
+    assert cpu.p == 1
+    assert cpu.f & 0x04
+
+    cpu.request_int(0xFF)
+    cpu.step()
+
+    assert cpu.pc == 0x0038
+    assert cpu.p == 0
+    assert cpu.f & 0x04 == 0
+    assert cpu.f & 0x01
+
+
+def test_nmi_clears_p_latch_without_applying_maskable_int_pv_erratum() -> None:
+    cpu = make_cpu(bytes([0xED, 0x57]))
+    cpu.i = 0x12
+    cpu.iff2 = True
+
+    cpu.step()
+    assert cpu.p == 1
+    assert cpu.f & 0x04
+
+    cpu.request_nmi()
+    cpu.step()
+
+    assert cpu.pc == 0x0066
+    assert cpu.p == 0
+    assert cpu.f & 0x04
+
+
+def test_reset_clears_p_latch() -> None:
+    cpu = make_cpu(bytes([0x00]))
+    cpu.p = 1
+
+    cpu.reset()
+
+    assert cpu.p == 0
+\n
