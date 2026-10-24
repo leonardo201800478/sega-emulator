@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import platform
 import statistics
 import sys
@@ -37,7 +38,7 @@ def run_step_path(machine: SG1000Machine, frames: int) -> int:
 
 def percentile95(values: list[float]) -> float:
     ordered = sorted(values)
-    return ordered[min(len(ordered) - 1, int((len(ordered) - 1) * 0.95))]
+    return ordered[min(len(ordered) - 1, math.ceil(len(ordered) * 0.95) - 1)]
 
 
 def run_trial(rom: bytes, path: str, warmup_frames: int, frames: int) -> dict[str, Any]:
