@@ -168,8 +168,11 @@ class ControllerInput:
         self._player_device_indices: dict[int, int] = {}
         if pygame_module is not None:
             try:
-                from pygame._sdl2 import controller as controller_module
-
+                controller_module = getattr(
+                    getattr(pygame_module, "_sdl2", None), "controller", None
+                )
+                if controller_module is None:
+                    from pygame._sdl2 import controller as controller_module
                 if not controller_module.get_init():
                     controller_module.init()
                 self._controller_module = controller_module
