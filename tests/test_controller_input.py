@@ -76,7 +76,7 @@ class FakeControllerModule:
 
 def test_active_low_joystick_encoding() -> None:
     assert joystick_value(set()) == 0xFF
-    assert joystick_value({"up", "button2"}) == 0xDF
+    assert joystick_value({"up", "button2"}) == 0xDE
     with pytest.raises(ValueError, match="Ações desconhecidas"):
         joystick_value({"start"})
 
