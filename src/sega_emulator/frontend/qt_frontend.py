@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import logging
 from array import array
+import logging
 import time
 from pathlib import Path
 
@@ -37,15 +37,18 @@ def run(initial_path: Path | None = None) -> None:
             'Interface Qt não instalada. Execute: python -m pip install -e ".[qt]"'
         ) from exc
 
+    pygame = None
+    audio_channel = None
     try:
-        import pygame
+        import pygame as pygame_backend
 
-        pygame.mixer.pre_init(frequency=44_100, size=-16, channels=1, buffer=512)
-        pygame.mixer.init()
-        audio_channel = pygame.mixer.Channel(0)
-    except (ImportError, pygame.error if "pygame" in locals() else RuntimeError) as exc:
-        pygame = None
-        audio_channel = None
+        pygame_backend.mixer.pre_init(
+            frequency=44_100, size=-16, channels=1, buffer=512
+        )
+        pygame_backend.mixer.init()
+        audio_channel = pygame_backend.mixer.Channel(0)
+        pygame = pygame_backend
+    except Exception as exc:
         logger.warning("Saída de áudio indisponível: %s", exc)
 
     app = QApplication.instance() or QApplication([])
