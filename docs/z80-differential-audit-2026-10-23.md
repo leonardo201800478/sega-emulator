@@ -122,3 +122,41 @@ Este resultado valida a suíte curta do repositório, não o corpus de um milhã
 A revisão [`88bc6d35f3c3433c01f0451688092d6f8c70f7a1`](https://github.com/leonardo201800478/sega-emulator/commit/88bc6d35f3c3433c01f0451688092d6f8c70f7a1) passou na [CI 39904473410](https://github.com/leonardo201800478/sega-emulator/actions/runs/39904473410): **372 testes aprovados em 5,62 s**, com Ruff format/check aprovados. A cobertura agora trata bytes ED sem operação atribuída como ED-NOP de 8 T-states, preservando handlers para aliases conhecidos; os testes percorrem todos os 256 segundos bytes ED.
 
 A nova auditoria diferencial completa ainda não foi executada. Os resultados de 1.000.000 de casos acima continuam sendo a linha de base anterior às correções. A próxima medição deve usar o notebook v5, comparar WZ/Q quando presentes no estado final e preservar todos os detalhes de divergência no CSV.
+
+
+---
+
+## Auditoria direcionada pós-correção inicial — 24/10/2026
+
+Foi recebido e inspecionado o arquivo `z80-targeted-audit-pr14-results.zip`, produzido contra o commit `27fadd182c65ffbd0ab899343ed1197c3f265515` da branch `fix/z80-single-step-audit`. O lote cobriu 14 arquivos do corpus `SingleStepTests/z80 v1`, com 1.000 vetores por arquivo.
+
+| Métrica | Resultado |
+|---|---:|
+| Vetores processados | 14.000 |
+| Aprovados | 13.531 |
+| Divergentes | 469 |
+| Aprovação | 96,65% |
+| Divergência | 3,35% |
+
+### Resultado por família
+
+| Família | Aprovados | Divergentes |
+|---|---:|---:|
+| `BIT (HL)` — 8 opcodes | 8.000 | 0 |
+| `DAA`, incluindo `DD 27` | 2.000 | 0 |
+| `SCF/CCF`, sem prefixo | 2.000 | 0 |
+| `DD SCF` (`DD 37`) | 761 | 239 |
+| `DD CCF` (`DD 3F`) | 770 | 230 |
+| **Total** | **13.531** | **469** |
+
+As 469 divergências eram exclusivamente nos campos `F` e `Q`; o campo `F` diferia apenas nos bits F3/F5. Não foram reportadas divergências de ciclos nesse lote. O padrão aponta para o tratamento de Q ao executar `SCF/CCF` após um prefixo DD ignorado.
+
+### Correção subsequente
+
+A inspeção dos casos `DD 37` e `DD 3F` mostrou que, quando Q anterior é diferente de zero, a implementação considerava apenas os bits X/Y de A e descartava os bits X/Y presentes em Q. Foi corrigida a expressão para combinar os bits X/Y de A com os bits correspondentes de Q anterior; quando Q anterior é zero, preserva-se a regra já exercitada pelo corpus que combina A e F.
+
+Foram adicionados testes para:
+- Q não nulo contendo F3/F5 em SCF/CCF;
+- SCF e CCF precedidos por prefixo DD ignorado, com estado inicial reproduzível semelhante aos vetores divergentes.
+
+**Estado da validação:** o ZIP recebido mede o commit anterior à correção acima. Os commits que aplicam a correção e adicionam regressões ainda precisam passar na CI e na repetição dos 14.000 vetores. Não declarar resolvida a família DD SCF/CCF até confirmar esses resultados.
