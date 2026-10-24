@@ -745,7 +745,7 @@ def test_ed_adc_sbc_hl_pair_results_flags_and_cycles(
     expected_hl: int,
     expected_flags: int,
 ) -> None:
-    cpu = make_cpu(bytes([0xED, opcode, 0x00]))
+    cpu = make_cpu(bytes([0xED, opcode]))
     cpu.hl = hl
     cpu.bc = operand
     cpu.de = operand
@@ -776,7 +776,7 @@ def test_ed_adc_sbc_hl_overflow_and_boundary_flags(
     expected_hl: int,
     expected_flags: int,
 ) -> None:
-    cpu = make_cpu(bytes([0xED, opcode, 0x00]))
+    cpu = make_cpu(bytes([0xED, opcode]))
     cpu.hl = hl
     cpu.bc = operand
     cpu.f = carry
@@ -2857,7 +2857,7 @@ def test_indexed_memory_load_updates_wz_to_effective_address() -> None:
 def test_ld_a_i_or_r_sets_p_latch_for_one_instruction(
     opcode: int, special_value: int, expected_a: int
 ) -> None:
-    cpu = make_cpu(bytes([0xED, opcode]))
+    cpu = make_cpu(bytes([0xED, opcode, 0x00]))
     cpu.i = special_value if opcode == 0x57 else 0
     cpu.r = special_value if opcode == 0x5F else 0
     cpu.iff2 = True
