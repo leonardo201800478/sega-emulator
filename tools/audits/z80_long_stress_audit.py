@@ -58,7 +58,19 @@ def initial_state(cpu: Z80Cpu) -> dict[str, Any]:
 
 def invariant_errors(cpu: Z80Cpu) -> list[str]:
     errors: list[str] = []
-    byte_registers = ("a", "f", "b", "c", "d", "e", "h", "l", "i", "r", "q")
+    byte_registers = (
+        "a",
+        "f",
+        "b",
+        "c",
+        "d",
+        "e",
+        "h",
+        "l",
+        "i",
+        "r",
+        "q",
+    )
     word_registers = (
         "ix",
         "iy",
