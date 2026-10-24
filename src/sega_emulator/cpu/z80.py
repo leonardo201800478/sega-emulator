@@ -668,7 +668,9 @@ class Z80Cpu:
             return 15
         if opcode & 0xC7 == 0x40:
             register = (opcode >> 3) & 7
-            value = self._read_port(self.bc)
+            port = self.bc
+            value = self._read_port(port)
+            self.wz = (port + 1) & 0xFFFF
             if register != 6:
                 self._write_register(register, value)
             self.f = (self.f & 1) | (value & 0xA8) | self._parity_flag(value)
@@ -677,8 +679,10 @@ class Z80Cpu:
             return 12
         if opcode & 0xC7 == 0x41:
             register = (opcode >> 3) & 7
+            port = self.bc
             value = 0 if register == 6 else self._read_register(register)
-            self._write_port(self.bc, value)
+            self._write_port(port, value)
+            self.wz = (port + 1) & 0xFFFF
             return 12
         if opcode in (0x44, 0x4C, 0x54, 0x5C, 0x64, 0x6C, 0x74, 0x7C):
             old_a = self.a
@@ -1160,6 +1164,7 @@ class Z80Cpu:
                 self._write_port(port, self.a)
             else:
                 self.a = self._read_port(port)
+            self.wz = (port + 1) & 0xFFFF
             cycles = 11
         elif opcode == 0xCB:  # família CB
             cycles = self._execute_cb(self._fetch_opcode_byte())
