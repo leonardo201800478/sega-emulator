@@ -30,17 +30,23 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/singlestep-vectors
+          upstream_commit="ebe1875d48f374bcfd4b505d8eb8ee751568b5f7"
           files=("00" "04" "06" "37" "3f" "76" "c6" "d3" "cb 00" "dd 21" "ed 40")
           for file_stem in "${files[@]}"; do
             encoded="${file_stem// /%20}"
             curl --fail --location --retry 3 --retry-delay 2 \
-              "https://raw.githubusercontent.com/SingleStepTests/z80/main/v1/${encoded}.json" \
+              "https://raw.githubusercontent.com/SingleStepTests/z80/${upstream_commit}/v1/${encoded}.json" \
               --output "artifacts/singlestep-vectors/${file_stem}.json"
           done
+          cp tools/audits/singlestep-corpus-manifest.json artifacts/singlestep-vectors/MANIFEST.json
+          python tools/audits/verify_singlestep_corpus.py \
+            --directory artifacts/singlestep-vectors \
+            --manifest tools/audits/singlestep-corpus-manifest.json
           printf '%s\n' \
             'Corpus: https://github.com/SingleStepTests/z80' \
-            'License: MIT (upstream repository metadata)' \
-            'Files: 00 04 06 37 3f 76 c6 d3 "cb 00" "dd 21" "ed 40"' \
+            "Pinned commit: ${upstream_commit}" \
+            'License: MIT; see MANIFEST.json for the immutable license URL' \
+            'SHA-256 and byte lengths are verified against the committed manifest.' \
             'Important: the current adapter does not compare per-cycle bus traces.' \
             > artifacts/singlestep-vectors/SOURCE.txt
 
