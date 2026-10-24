@@ -18,8 +18,22 @@ LFSR_SEED = 0x4000
 
 # Um passo por nível: atenuação aproximada de 2 dB, valor 15 = silêncio.
 _ATTENUATION = (
-    1.0, 0.794328, 0.630957, 0.501187, 0.398107, 0.316228, 0.251189, 0.199526,
-    0.158489, 0.125893, 0.1, 0.079433, 0.063096, 0.050119, 0.039811, 0.0,
+    1.0,
+    0.794328,
+    0.630957,
+    0.501187,
+    0.398107,
+    0.316228,
+    0.251189,
+    0.199526,
+    0.158489,
+    0.125893,
+    0.1,
+    0.079433,
+    0.063096,
+    0.050119,
+    0.039811,
+    0.0,
 )
 
 
@@ -136,7 +150,9 @@ class SN76489:
         if type(clocks) is not int or clocks < 0:
             raise ValueError("clocks deve ser um inteiro não negativo.")
         internal_total = self._clock_divider_phase + clocks
-        internal_clocks, self._clock_divider_phase = divmod(internal_total, CLOCK_DIVIDER)
+        internal_clocks, self._clock_divider_phase = divmod(
+            internal_total, CLOCK_DIVIDER
+        )
         for _ in range(internal_clocks):
             self._tick_internal_clock()
 
