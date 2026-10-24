@@ -89,6 +89,7 @@ git diff --check
 - [Arquitetura multi-sistema](docs/architecture.md)
 - [Pesquisa de compatibilidade de hardware Sega](docs/research/hardware-compatibility-roadmap-2026-10.md)
 - [Notas de hardware SG-1000](docs/hardware/sg1000.md)
+- [Auditoria de modelagem do VDP TMS9918A](docs/hardware/tms9918a-modeling-audit.md)
 - [Memória, portas e barramentos SG-1000](docs/hardware/sg1000-memory-buses.md)
 - [Catálogo prioritário de compatibilidade SG-1000](docs/hardware/sg1000-game-compatibility.md)
 - [Marco do primeiro jogo executável](docs/sg1000-first-playable.md)
