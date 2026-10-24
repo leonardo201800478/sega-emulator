@@ -169,6 +169,7 @@ class ControllerInput:
         config: ControllerInputConfig | None = None,
     ) -> None:
         self.config = config or ControllerInputConfig()
+        self._pygame_module = pygame_module
         self._controller_module: Any | None = None
         self._controllers: dict[int, Any] = {}
         self._player_device_indices: dict[int, int] = {}
@@ -236,6 +237,13 @@ class ControllerInput:
         }
 
     def poll(self) -> dict[int, set[str]]:
+        event_module = getattr(self._pygame_module, "event", None)
+        if event_module is not None:
+            try:
+                event_module.pump()
+            except Exception:
+                # Input must remain optional if a backend/device fails mid-session.
+                pass
         self._sync_controllers()
         result = {1: set(), 2: set()}
         module = self._controller_module
@@ -263,13 +271,13 @@ class ControllerInput:
                     threshold = round(self.config.deadzone * 32767)
                     x_value = controller.get_axis(axis_x)
                     y_value = controller.get_axis(axis_y)
-                    if x_value <= -threshold:
+                    if x_value < 0 and x_value <= -threshold:
                         actions.add("left")
-                    elif x_value >= threshold:
+                    elif x_value > 0 and x_value >= threshold:
                         actions.add("right")
-                    if y_value <= -threshold:
+                    if y_value < 0 and y_value <= -threshold:
                         actions.add("up")
-                    elif y_value >= threshold:
+                    elif y_value > 0 and y_value >= threshold:
                         actions.add("down")
             except (IndexError, RuntimeError):
                 # A device can disappear while being polled. The next poll resyncs.
