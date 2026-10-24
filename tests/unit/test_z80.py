@@ -2555,3 +2555,65 @@ def test_indexed_cb_final_opcode_does_not_increment_refresh_register() -> None:
     assert cpu.step() == 20
     assert cpu.pc == 4
     assert cpu.r == 0x80  # DD e CB são M1; d e opcode final não são M1
+
+
+
+def test_reset_clears_cpu_state_and_pending_interrupts_without_clearing_memory() -> None:
+    cpu = make_cpu(bytes([0x00]))  # NOP após reinicialização
+    memory_bus = cpu.bus
+    memory_bus.write(0xC020, 0xA5)
+
+    cpu.af = 0x1234
+    cpu.bc = 0x5678
+    cpu.de = 0x9ABC
+    cpu.hl = 0xDEF0
+    cpu.ix = 0x1357
+    cpu.iy = 0x2468
+    cpu.af_alt = 0xAAAA
+    cpu.bc_alt = 0xBBBB
+    cpu.de_alt = 0xCCCC
+    cpu.hl_alt = 0xDDDD
+    cpu.i = 0x12
+    cpu.r = 0xFF
+    cpu.sp = 0xC100
+    cpu.pc = 0x4567
+    cpu.iff1 = True
+    cpu.iff2 = True
+    cpu.interrupt_mode = 2
+    cpu.halted = True
+    cpu._ei_delay = 1
+    cpu._im0_opcode = 0xCF
+    cpu.total_cycles = 123
+    cpu.request_int(0xFF)
+    cpu.request_nmi()
+
+    cpu.reset()
+
+    assert cpu.af == 0
+    assert cpu.bc == 0
+    assert cpu.de == 0
+    assert cpu.hl == 0
+    assert cpu.ix == 0
+    assert cpu.iy == 0
+    assert cpu.af_alt == 0
+    assert cpu.bc_alt == 0
+    assert cpu.de_alt == 0
+    assert cpu.hl_alt == 0
+    assert cpu.i == 0
+    assert cpu.r == 0
+    assert cpu.sp == 0
+    assert cpu.pc == 0
+    assert cpu.iff1 is False
+    assert cpu.iff2 is False
+    assert cpu.interrupt_mode == 0
+    assert cpu.halted is False
+    assert cpu._ei_delay == 0
+    assert cpu._im0_opcode is None
+    assert cpu._nmi_pending is False
+    assert cpu._int_pending is None
+    assert cpu.total_cycles == 0
+    assert cpu.bus is memory_bus
+    assert cpu.bus.read(0xC020) == 0xA5
+
+    assert cpu.step() == 4
+    assert cpu.pc == 1
