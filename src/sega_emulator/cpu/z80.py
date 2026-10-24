@@ -612,7 +612,8 @@ class Z80Cpu:
         else:
             self._write_register(register, value | (1 << bit_index))
         if operation == 1 and is_memory:
-            self.f = (self.f & ~0x28) | ((self.hl >> 8) & 0x28)
+            # BIT b,(HL): F3/F5 vêm do byte alto de WZ/MEMPTR, não de HL.
+            self.f = (self.f & ~0x28) | ((self.wz >> 8) & 0x28)
         if is_memory:
             return 12 if operation == 1 else 15
         return 8
