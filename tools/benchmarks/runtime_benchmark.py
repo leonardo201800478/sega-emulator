@@ -94,15 +94,11 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--rom", type=Path, help="caminho para ROM SG-1000 local/legal"
-    )
+    parser.add_argument("--rom", type=Path, help="caminho para ROM SG-1000 local/legal")
     parser.add_argument("--frames", type=int, default=120)
     parser.add_argument("--warmup-frames", type=int, default=30)
     parser.add_argument("--trials", type=int, default=5)
-    parser.add_argument(
-        "--output", type=Path, default=Path("runtime-benchmark.json")
-    )
+    parser.add_argument("--output", type=Path, default=Path("runtime-benchmark.json"))
     args = parser.parse_args()
     if args.frames < 1 or args.warmup_frames < 0 or args.trials < 2:
         parser.error("--frames deve ser positivo, warmup >= 0 e trials >= 2")
@@ -118,10 +114,8 @@ def main() -> int:
     # Alternate order to reduce systematic warm-cache/order bias.
     order = ("run_frame", "step")
     for trial in range(args.trials):
-        for path in (order if trial % 2 == 0 else reversed(order)):
-            paths[path].append(
-                run_trial(rom, path, args.warmup_frames, args.frames)
-            )
+        for path in order if trial % 2 == 0 else reversed(order):
+            paths[path].append(run_trial(rom, path, args.warmup_frames, args.frames))
 
     result = {
         "schema_version": 1,
