@@ -6,7 +6,7 @@ import zipfile
 import pytest
 
 from sega_emulator.diagnostics import configure_session_logging
-from sega_emulator.rom_loader import load_rom, list_rom_members
+from sega_emulator.rom_loader import list_rom_members, load_rom
 
 
 def test_load_sg_rom_and_compute_sha256(tmp_path):
