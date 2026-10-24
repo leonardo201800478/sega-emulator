@@ -128,11 +128,11 @@ def test_daa_exhaustive_accumulator_and_hnc_input_flags() -> None:
     ("opcode", "initial_q", "expected_flags"),
     [
         (0x37, 0x00, 0x2D),  # Q=0: F3/F5 recebem A | F
-        (0x37, 0x01, 0x25),  # Q!=0: F3/F5 recebem A | Q
-        (0x37, 0x28, 0x2D),  # Q fornece F5/F3 ausentes em A
+        (0x37, 0x01, 0x2D),  # Q XOR F mantém F3/F5 fora de A
+        (0x37, 0x28, 0x25),  # Q XOR F cancela bits já presentes em F
         (0x3F, 0x00, 0x2D),  # C anterior=0: C é setado; H=0
-        (0x3F, 0x01, 0x25),  # Q!=0 e C anterior=0
-        (0x3F, 0x28, 0x2D),  # CCF combina A e Q para F3/F5
+        (0x3F, 0x01, 0x2D),  # Q XOR F mantém F3/F5 fora de A
+        (0x3F, 0x28, 0x25),  # CCF aplica a mesma fórmula Q/F/A
     ],
 )
 def test_scf_ccf_undocumented_flags_depend_on_q(
@@ -153,8 +153,8 @@ def test_scf_ccf_undocumented_flags_depend_on_q(
 @pytest.mark.parametrize(
     ("opcode", "expected_flags"),
     [
-        (0x37, 0x65),  # SCF: F3/F5 incluem Q anterior
-        (0x3F, 0x74),  # CCF: H recebe C anterior e XY incluem Q
+        (0x37, 0x55),  # SCF: Q=F cancela X/Y de Q; X/Y vêm de A
+        (0x3F, 0x54),  # CCF: H recebe C anterior; X/Y vêm de A
     ],
 )
 def test_ignored_dd_prefix_preserves_q_for_scf_ccf(
@@ -487,7 +487,7 @@ def test_cpl_complements_accumulator_and_updates_only_documented_flags(
     [
         (0x00, 0xD6, 0xC5),  # S/Z/PV preservados, XY do A, carry definido
         (0x28, 0x01, 0x29),
-        (0xD7, 0xFF, 0xED),
+        (0xD7, 0xFF, 0xC5),
     ],
 )
 def test_scf_sets_carry_and_preserves_sign_zero_parity(
@@ -532,7 +532,7 @@ def test_q_latch_tracks_flags_written_by_previous_instruction() -> None:
     assert cpu.q == 0x08
 
     assert cpu.step() == 4
-    assert cpu.f == 0x09
+    assert cpu.f == 0x01
     assert cpu.q == cpu.f
 
 
@@ -546,7 +546,7 @@ def test_q_latch_is_preserved_through_ignored_dd_prefix() -> None:
     assert cpu.q == 0x08
 
     assert cpu.step() == 8
-    assert cpu.f == 0x09
+    assert cpu.f == 0x01
     assert cpu.q == cpu.f
 
 
@@ -555,7 +555,7 @@ def test_q_latch_is_preserved_through_ignored_dd_prefix() -> None:
     [
         (0x00, 0xC5, 0xD4),  # carry anterior vira half-carry
         (0x28, 0x00, 0x29),  # carry anterior zero vira carry
-        (0xD7, 0xFF, 0xFC),  # carry anterior um vira H; X/Y vêm de A
+        (0xD7, 0xFF, 0xD4),  # carry anterior um vira H; X/Y vêm de A
     ],
 )
 def test_ccf_complements_carry_and_updates_half_carry(
