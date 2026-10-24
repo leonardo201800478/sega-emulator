@@ -244,9 +244,7 @@ def test_fifth_sprite_flag_is_not_raised_during_vblank() -> None:
 
 
 
-def test_fifth_sprite_overflow_does_not_trigger_on_first_vblank_line_after_status_read() -> (
-    None
-):
+def test_vblank_line_does_not_set_fifth_sprite_overflow_after_status_read() -> None:
     vdp = TMS9918A()
     _prepare_sprite_table(vdp)
     for index in range(5):
