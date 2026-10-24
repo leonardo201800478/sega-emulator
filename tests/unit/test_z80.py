@@ -1814,6 +1814,39 @@ def test_ed_lddr_repeats_in_reverse_until_bc_zero() -> None:
     assert cpu.bus.read(0xC020) == 0x56
 
 
+@pytest.mark.parametrize(
+    ("opcode", "initial_hl", "initial_de", "source_value", "expected_hl", "expected_de"),
+    [
+        (0xA0, 0xFFFF, 0xC000, 0x5A, 0x0000, 0xC001),  # LDI: increment wraps
+        (0xB0, 0xFFFF, 0xC000, 0x5A, 0x0000, 0xC001),  # LDIR: increment wraps
+        (0xA8, 0x0000, 0xC100, 0xED, 0xFFFF, 0xC0FF),  # LDD: decrement wraps
+        (0xB8, 0x0000, 0xC100, 0xED, 0xFFFF, 0xC0FF),  # LDDR: decrement wraps
+    ],
+)
+def test_ed_block_transfer_wraps_hl_and_de_at_16_bit_boundaries(
+    opcode: int,
+    initial_hl: int,
+    initial_de: int,
+    source_value: int,
+    expected_hl: int,
+    expected_de: int,
+) -> None:
+    """Verifica o wrap de HL/DE em LDI/LDD/LDIR/LDDR sem extrapolar ciclos físicos."""
+    cpu = make_cpu(bytes([0xED, opcode]))
+    cpu.hl, cpu.de, cpu.bc = initial_hl, initial_de, 2
+    if initial_hl >= 0xC000:
+        cpu.bus.write(initial_hl, source_value)
+    else:
+        assert cpu.bus.read(initial_hl) == source_value
+
+    expected_cycles = 21 if opcode in (0xB0, 0xB8) else 16
+    assert cpu.step() == expected_cycles
+    assert (cpu.hl, cpu.de, cpu.bc) == (expected_hl, expected_de, 1)
+    assert cpu.bus.read(initial_de) == source_value
+    assert cpu.pc == (0 if opcode in (0xB0, 0xB8) else 2)
+    assert cpu.total_cycles == expected_cycles
+
+
 def test_ed_ldi_updates_registers_memory_and_documented_flag_bits() -> None:
     cpu = make_cpu(bytes([0xED, 0xA0]))  # LDI
     cpu.hl, cpu.de, cpu.bc, cpu.a, cpu.f = 0xC010, 0xC020, 2, 0x08, 0xC1
