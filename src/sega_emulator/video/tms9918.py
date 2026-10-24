@@ -182,9 +182,7 @@ class TMS9918A:
             text_row, glyph_row = divmod(y, 8)
             foreground = (self.registers[7] >> 4) or backdrop
             for column in range(40):
-                character = self.vram[
-                    (name_base + text_row * 40 + column) & VRAM_MASK
-                ]
+                character = self.vram[(name_base + text_row * 40 + column) & VRAM_MASK]
                 pattern = self.vram[
                     (pattern_base + character * 8 + glyph_row) & VRAM_MASK
                 ]
@@ -204,9 +202,7 @@ class TMS9918A:
             row = y & 7
             section = (y & 0xC0) << 5
             for tile_x in range(32):
-                name = self.vram[
-                    (name_base + (y // 8) * 32 + tile_x) & VRAM_MASK
-                ]
+                name = self.vram[(name_base + (y // 8) * 32 + tile_x) & VRAM_MASK]
                 offset = section + (name << 3) + row
                 pattern = self.vram[(pattern_base + offset) & VRAM_MASK]
                 color = self.vram[(color_base + offset) & VRAM_MASK]
@@ -225,12 +221,8 @@ class TMS9918A:
             tile_y, local_y = divmod(y, 8)
             pattern_row = local_y >> 2
             for tile_x in range(32):
-                name = self.vram[
-                    (name_base + tile_y * 32 + tile_x) & VRAM_MASK
-                ]
-                pattern = self.vram[
-                    (pattern_base + name * 8 + pattern_row) & VRAM_MASK
-                ]
+                name = self.vram[(name_base + tile_y * 32 + tile_x) & VRAM_MASK]
+                pattern = self.vram[(pattern_base + name * 8 + pattern_row) & VRAM_MASK]
                 left = (pattern >> 4) or backdrop
                 right = (pattern & 0x0F) or backdrop
                 for local_x in range(8):
@@ -249,9 +241,7 @@ class TMS9918A:
                 name = self.vram[
                     (name_base + tile_y * 32 + tile_x) & VRAM_MASK
                 ]
-                pattern = self.vram[
-                    (pattern_base + name * 8 + row) & VRAM_MASK
-                ]
+                pattern = self.vram[(pattern_base + name * 8 + row) & VRAM_MASK]
                 color = self.vram[(color_base + name // 8) & VRAM_MASK]
                 foreground = (color >> 4) or backdrop
                 background = (color & 0x0F) or backdrop
@@ -264,9 +254,7 @@ class TMS9918A:
                     )
 
         if mode != 1:
-            self._render_sprite_line(
-                pixels, y, update_status=False
-            )
+            self._render_sprite_line(pixels, y, update_status=False)
 
     def render_frame(self) -> bytes:
         """Renderiza 256x192 RGB24 em Graphics I/II, texto ou multicolor."""
