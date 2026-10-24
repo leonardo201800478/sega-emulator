@@ -4,7 +4,7 @@
 
 Construir uma base de emulação determinística, testável e evolutiva, começando pelo SG-1000. Componentes de hardware devem ser reutilizados entre consoles quando o hardware e os contratos forem realmente compatíveis. Reutilização não deve apagar diferenças entre revisões, mapas de memória, periféricos ou temporização.
 
-A implementação de referência começa em Python. Rust poderá ser adotado seletivamente após profiling e testes de equivalência, sem alterar os contratos observáveis dos componentes.
+A implementação Python permanece como referência funcional e fallback. A migração do caminho crítico começa incrementalmente em Rust, com PyO3/Maturin para a integração nativa e chamadas em lote. O núcleo Rust só será integrado à máquina após testes diferenciais e benchmarks reproduzíveis demonstrarem equivalência suficiente. LLVM JIT/ORC, HLE e multithreading ficam adiados até que medições e requisitos concretos justifiquem essas complexidades.
 
 ## Princípios
 
