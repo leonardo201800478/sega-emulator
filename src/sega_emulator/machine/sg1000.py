@@ -87,7 +87,9 @@ class SG1000Machine:
             self.step()
             steps += 1
             if steps >= max_steps:
-                raise RuntimeError("Limite de instruções excedido antes do próximo quadro.")
+                raise RuntimeError(
+                    "Limite de instruções excedido antes do próximo quadro."
+                )
         return steps
 
     def run_frames(self, count: int) -> int:

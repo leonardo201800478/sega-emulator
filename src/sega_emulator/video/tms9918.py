@@ -13,10 +13,22 @@ LINES_PER_FRAME = 262
 VBLANK_LINE = 192
 
 PALETTE: tuple[tuple[int, int, int], ...] = (
-    (0, 0, 0), (0, 0, 0), (33, 200, 66), (94, 220, 120),
-    (84, 85, 237), (125, 118, 252), (212, 82, 77), (66, 235, 245),
-    (252, 85, 84), (255, 121, 120), (212, 193, 84), (230, 206, 128),
-    (33, 176, 59), (201, 91, 186), (204, 204, 204), (255, 255, 255),
+    (0, 0, 0),
+    (0, 0, 0),
+    (33, 200, 66),
+    (94, 220, 120),
+    (84, 85, 237),
+    (125, 118, 252),
+    (212, 82, 77),
+    (66, 235, 245),
+    (252, 85, 84),
+    (255, 121, 120),
+    (212, 193, 84),
+    (230, 206, 128),
+    (33, 176, 59),
+    (201, 91, 186),
+    (204, 204, 204),
+    (255, 255, 255),
 )
 
 
@@ -147,7 +159,9 @@ class TMS9918A:
                 background = (color & 0x0F) or backdrop
                 for bit in range(8):
                     self._put_pixel(
-                        pixels, tile_x * 8 + bit, y,
+                        pixels,
+                        tile_x * 8 + bit,
+                        y,
                         foreground if pattern & (0x80 >> bit) else background,
                     )
 
@@ -182,7 +196,9 @@ class TMS9918A:
                     pattern = self.vram[(pattern_base + character * 8 + line) & 0x3FFF]
                     for bit in range(6):
                         self._put_pixel(
-                            pixels, 8 + column * 6 + bit, row * 8 + line,
+                            pixels,
+                            8 + column * 6 + bit,
+                            row * 8 + line,
                             foreground if pattern & (0x80 >> bit) else backdrop,
                         )
 
@@ -194,12 +210,16 @@ class TMS9918A:
                 name = self.vram[(name_base + tile_y * 32 + tile_x) & 0x3FFF]
                 for local_y in range(8):
                     pattern_row = local_y >> 2
-                    pattern = self.vram[(pattern_base + name * 8 + pattern_row) & 0x3FFF]
+                    pattern = self.vram[
+                        (pattern_base + name * 8 + pattern_row) & 0x3FFF
+                    ]
                     left = (pattern >> 4) or backdrop
                     right = (pattern & 0x0F) or backdrop
                     for local_x in range(8):
                         self._put_pixel(
-                            pixels, tile_x * 8 + local_x, tile_y * 8 + local_y,
+                            pixels,
+                            tile_x * 8 + local_x,
+                            tile_y * 8 + local_y,
                             left if local_x < 4 else right,
                         )
 
