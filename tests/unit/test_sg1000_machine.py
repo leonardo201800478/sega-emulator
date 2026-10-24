@@ -102,9 +102,9 @@ def test_machine_routes_psg_writes_from_sg1000_port_range() -> None:
 
 def test_machine_clocks_psg_and_produces_frame_audio() -> None:
     machine = SG1000Machine(bytes((0xC3, 0x00, 0x00)))
-    machine.write_port(0x007F, 0x90)
-    machine.write_port(0x007F, 0xFE)
+    machine.write_port(0x007F, 0x8E)
     machine.write_port(0x007F, 0x0F)
+    machine.write_port(0x007F, 0x90)
     machine.run_frame()
 
     samples = machine.drain_audio_samples()
