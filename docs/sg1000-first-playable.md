@@ -56,3 +56,10 @@ O marco não é considerado concluído apenas porque abre uma janela. É necess�
 3. confirmar vídeo e entrada jogável;
 4. registrar a ROM usada (nome/hash, sem redistribuir seu conteúdo), problemas e evidências;
 5. documentar divergências observadas e transformá-las em regressões.
+
+## Referências técnicas
+
+- [Texas Instruments — TMS9918A/TMS9928A/TMS9929A Video Display Processors Data Manual](https://www.bitsavers.org/components/ti/TMS9900/TMS9918A_TMS9928A_TMS9929A_Video_Display_Processors_Data_Manual_Nov82.pdf): registradores de controle/status, modos, VRAM, sprites e flag de VBlank.
+- [TMS9918A programming notes](https://github.com/cbmeeks/TMS9918/blob/master/tms9918a.txt): resumo independente de portas, registradores e modos gráficos.
+
+As fontes fundamentam a estrutura do protótipo, mas não certificam a implementação. As regras de renderização, colisão/overflow, acesso buffered à VRAM e temporização precisam de comparação diferencial.
