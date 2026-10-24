@@ -606,6 +606,10 @@ class Z80Cpu:
         self._validate_byte(data_bus)
         self._int_pending = data_bus
 
+    def clear_int_request(self) -> None:
+        """Retira uma INT ainda não aceita quando a linha externa desativa."""
+        self._int_pending = None
+
     def _read_port(self, address: int) -> int:
         """Lê uma porta de 16 bits pelo barramento de I/O separado."""
         if self.io_bus is None:

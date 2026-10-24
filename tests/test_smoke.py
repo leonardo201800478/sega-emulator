@@ -8,11 +8,11 @@ def test_package_version_is_defined() -> None:
     assert __version__ == "0.1.0"
 
 
-def test_entry_point_reports_scaffold_state(capsys) -> None:
-    """Confirma que o ponto de entrada não afirma executar o emulador."""
+def test_entry_point_without_rom_explains_how_to_start(capsys) -> None:
+    """Sem argumentos, o CLI informa como carregar uma ROM sem afirmar que joga."""
     from sega_emulator.__main__ import main
 
-    main()
+    main([])
 
     captured = capsys.readouterr()
-    assert "máquina SG-1000 ainda não integrada" in captured.out
+    assert "Informe uma ROM para iniciar" in captured.out
