@@ -2,6 +2,7 @@
 
 import sys
 from types import ModuleType
+from typing import cast
 
 
 def test_package_version_is_defined() -> None:
@@ -18,8 +19,12 @@ def test_entry_point_without_rom_opens_qt_frontend_without_starting_gui(
     from sega_emulator.__main__ import main
 
     calls: list[object] = []
+
+    def fake_run(rom: object) -> None:
+        calls.append(rom)
+
     frontend = ModuleType("sega_emulator.frontend.qt_frontend")
-    frontend.run = lambda rom: calls.append(rom)  # type: ignore[attr-defined]
+    setattr(frontend, "run", fake_run)
     monkeypatch.setitem(sys.modules, "sega_emulator.frontend.qt_frontend", frontend)
 
     main(["--log-dir", str(tmp_path)])
