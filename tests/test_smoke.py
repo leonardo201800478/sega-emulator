@@ -23,7 +23,7 @@ def test_entry_point_without_rom_opens_qt_frontend_without_starting_gui(
         calls.append(rom)
 
     frontend = ModuleType("sega_emulator.frontend.qt_frontend")
-    setattr(frontend, "run", fake_run)
+    frontend.run = fake_run
     monkeypatch.setitem(sys.modules, "sega_emulator.frontend.qt_frontend", frontend)
 
     main(["--log-dir", str(tmp_path)])
