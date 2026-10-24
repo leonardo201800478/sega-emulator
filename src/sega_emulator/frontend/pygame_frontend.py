@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from array import array
+
 from sega_emulator.machine.sg1000 import SG1000Machine
 
 
@@ -14,7 +16,9 @@ def run(machine: SG1000Machine, scale: int = 3) -> None:
             'python -m pip install -e ".[frontend]"'
         ) from exc
 
+    pygame.mixer.pre_init(frequency=44_100, size=-16, channels=1, buffer=512)
     pygame.init()
+    audio_channel = pygame.mixer.Channel(0)
     screen = pygame.display.set_mode((256 * scale, 192 * scale))
     pygame.display.set_caption("Sega Emulator — SG-1000")
     clock = pygame.time.Clock()
@@ -55,6 +59,20 @@ def run(machine: SG1000Machine, scale: int = 3) -> None:
                 machine.set_joystick(player, joystick)
 
             machine.run_frame()
+            samples = machine.drain_audio_samples()
+            if samples:
+                pcm = array(
+                    "h",
+                    (
+                        max(-32768, min(32767, round(sample * 32767)))
+                        for sample in samples
+                    ),
+                )
+                sound = pygame.mixer.Sound(buffer=pcm.tobytes())
+                if audio_channel.get_busy():
+                    audio_channel.queue(sound)
+                else:
+                    audio_channel.play(sound)
             frame = pygame.image.frombuffer(
                 machine.vdp.framebuffer, (256, 192), "RGB"
             ).copy()
