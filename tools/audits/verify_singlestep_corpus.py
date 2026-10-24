@@ -1,4 +1,4 @@
-"""Verify downloaded SingleStepTests vectors against the committed provenance manifest."""
+"""Verify downloaded SingleStepTests vectors against the committed manifest."""
 
 from __future__ import annotations
 
