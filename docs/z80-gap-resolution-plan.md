@@ -197,7 +197,7 @@ python -m sega_emulator.testing.z80_singlestep caminho\para\v1\00.json --limit 2
 
 ### Próximos gates
 
-1. Fixar um commit upstream e registrar SHA-256 dos arquivos para que a entrada da auditoria seja reproduzível.
+1. **Concluído:** fixar a revisão upstream e verificar SHA-256 e tamanho dos arquivos por meio do manifesto versionado.
 2. Ampliar a cobertura de prefixos e opcodes com os arquivos disponíveis no corpus, mantendo separados aprovados, divergentes, não suportados e excluídos.
 3. Modelar ou formalmente restringir o estado interno `p`, em vez de contar esses vetores como conformes.
 4. Implementar um traço de eventos de barramento e só então comparar os arrays `cycles`.
@@ -206,13 +206,15 @@ python -m sega_emulator.testing.z80_singlestep caminho\para\v1\00.json --limit 2
 
 ## 6. Auditoria diferencial exploratória com corpus externo
 
-O workflow `.github/workflows/z80-singlestep-audit.yml` baixa, durante a execução, os arquivos `00.json`, `04.json`, `06.json`, `37.json`, `3f.json`, `76.json`, `c6.json`, `cb.json`, `dd.json`, `ed.json` e `fd.json` de [SingleStepTests/Z80](https://github.com/SingleStepTests/z80). O corpus não é copiado para o repositório do emulador; os arquivos e o relatório JSON são preservados como artefato da execução por 30 dias.
+O workflow `.github/workflows/z80-singlestep-audit.yml` baixa, durante a execução, 11 arquivos JSON selecionados de [SingleStepTests/Z80](https://github.com/SingleStepTests/z80), sempre da revisão upstream fixa `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7` (commit assinado e verificado pelo GitHub). A revisão está registrada em [SingleStepTests/Z80 commit](https://github.com/SingleStepTests/z80/commit/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7). O corpus não é copiado como código-fonte para o repositório do emulador; os arquivos baixados e o relatório JSON são preservados como artefato da execução por 30 dias.
+
+O manifesto `tools/audits/singlestep-corpus-manifest.json` registra o commit, a licença MIT com URL imutável e o SHA-256 e tamanho em bytes esperados para cada arquivo. O verificador `tools/audits/verify_singlestep_corpus.py` valida todos os arquivos baixados antes da auditoria. Se um hash, tamanho ou arquivo não corresponder ao manifesto, o workflow falha antes de executar os vetores. O relatório inclui a revisão upstream e os hashes correspondentes. Assim, alterações futuras na branch `main` do corpus não alteram silenciosamente os dados usados pelo teste.
 
 O script `tools/audits/run_singlestep_corpus.py` exclui explicitamente vetores com o campo interno `p` diferente de zero, pois esse estado não é modelado pelo núcleo atual. Ele registra separadamente os casos executados, divergentes, não suportados e excluídos por esse estado. Divergências são resultados de auditoria e não interrompem a geração do relatório; falhas de download ou de formato interrompem o workflow.
 
 **Limitação essencial:** o teste compara estado arquitetural representado e RAM, mas não compara o array `cycles` do corpus. Portanto, mesmo um vetor aprovado não demonstra precisão ciclo a ciclo nem equivalência de barramento. O workflow é diagnóstico e não deve ser tratado como gate de conformidade até a revisão dos primeiros resultados e das limitações do modelo.
 
-A fonte declara licença MIT nos metadados públicos do repositório. O workflow registra a URL e a licença no artefato `SOURCE.txt`; os vetores continuam sendo obtidos da branch `main`, logo a execução não é imutável por revisão. Para tornar a auditoria reproduzível a longo prazo, o passo seguinte será fixar um commit upstream e registrar hashes SHA-256 dos arquivos obtidos.
+A licença MIT foi conferida no arquivo `LICENSE` da mesma revisão fixa. O workflow guarda no artefato `SOURCE.txt` o commit utilizado e inclui uma cópia do manifesto. Os hashes são calculados sobre os bytes dos arquivos baixados, não sobre JSON reserializado.
 
 
 ### Resultado da primeira execução diferencial (24/10/2026)
