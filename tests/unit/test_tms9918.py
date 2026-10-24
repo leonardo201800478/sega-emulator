@@ -411,3 +411,15 @@ def test_sprite_magnification_and_16_by_16_pattern_layout() -> None:
     large._render_sprites(pixels)
     assert pixels[10 * 3 : 10 * 3 + 3] == bytes(PALETTE[2])
     assert pixels[18 * 3 : 18 * 3 + 3] == bytes(PALETTE[2])
+
+
+def test_offscreen_vertical_sprites_can_set_collision_during_vblank() -> None:
+    vdp = TMS9918A()
+    _prepare_sprite_table(vdp)
+    _set_sprite(vdp, 0, x=10, pattern=1, color=2, raw_y=0xD1)
+    _set_sprite(vdp, 1, x=10, pattern=2, color=4, raw_y=0xD1)
+
+    vdp.advance(211 * TSTATES_PER_LINE)
+
+    assert vdp.status & 0x80
+    assert vdp.status & 0x20
