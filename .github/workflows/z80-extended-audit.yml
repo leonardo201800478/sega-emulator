@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: z80-extended-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   extended-audit:
@@ -57,7 +57,14 @@ jobs:
 
       - name: Run deterministic Z80 robustness audit
         if: always()
-        run: python tools/audits/z80_long_stress_audit.py --hours "${{ inputs.hours || '0.05' }}" --seed 1581647872 --report artifacts/z80-long-stress-report.json
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            hours="${{ inputs.hours }}"
+          else
+            hours="0.05"
+          fi
+          python tools/audits/z80_long_stress_audit.py --hours "$hours" --seed 1581647872 --report artifacts/z80-long-stress-report.json
 
       - name: Generate Z80 opcode dispatch inventory
         if: always()
