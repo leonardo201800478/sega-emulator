@@ -1,67 +1,92 @@
 # Sega Emulator
 
-Projeto de emulação de alta precisão, iniciado com uma implementação de referência em Python para o SG-1000.
+Projeto de emulação de alta precisão com implementação de referência em Python,
+começando pelo Sega SG-1000.
 
 ## Estado atual
 
-- **Etapa 01 concluída:** infraestrutura Python, pytest, Ruff e pacote executável.
-- **Etapa 02 em andamento:** RAM interna, barramento inicial de memória, ROM de cartucho somente leitura e contrato de barramento para a CPU.
-- **Etapa 03 em andamento:** CPU Z80 em expansão, agora com operações CB, parte substancial de ED, registradores IX/IY, endereçamento indexado, HALT, DI/EI e um modelo inicial de NMI/INT. Os ciclos são nominais por instrução; a CPU ainda não é ciclo a ciclo e a cobertura indexada/interrupções precisa de validação adicional.
-- A CPU Z80 ainda não está completa nem validada contra uma suíte de referência. O contrato IOBus existe, mas o mapa real de portas SG-1000, VDP, PSG e frontend ainda não estão integrados; os componentes atuais não formam uma máquina SG-1000 funcional.
+- **Infraestrutura:** Python 3.14, pytest, Ruff e pacote executável.
+- **CPU:** núcleo Z80 com ampla cobertura de instruções, mas ainda sujeito a auditoria
+  diferencial e sem temporização de barramento ciclo a ciclo.
+- **Primeira integração SG-1000 em desenvolvimento:** CPU, ROM/RAM, VDP compatível com
+  TMS9918A, portas iniciais de joystick e frontend Pygame opcional.
+- **Áudio:** não implementado nesta etapa; PSG será integrado depois do primeiro marco jogável.
+- A execução de uma ROM real e a validação da jogabilidade continuam pendentes. A existência
+  de uma janela ou a execução de uma ROM sintética não será considerada prova de compatibilidade.
 
 ## Requisitos
 
 - Windows x64
-- Python 3.14.x x64 (versão validada no ambiente de desenvolvimento: 3.14.7)
+- Python 3.14.x x64 (ambiente validado: Python 3.14.7)
 - Git for Windows
 - PowerShell
 - Visual Studio Code (recomendado)
 
-## Criar o ambiente local
+## Instalação
 
-Na raiz do repositório, execute no PowerShell:
+Na raiz do repositório:
 
 ```powershell
-py -3.14 --version
-git --version
 py -3.14 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.\.venv\Scripts\python.exe -m pip install -e ".[dev,frontend]"
 ```
 
-A ativação do ambiente virtual é opcional. Os comandos chamam diretamente o Python do `.venv`, evitando depender da política de execução do PowerShell.
+## Executar uma ROM SG-1000
 
-## Validar o projeto
+Use uma ROM homebrew ou legalmente obtida. ROMs comerciais não são distribuídas neste
+repositório.
 
 ```powershell
-.\.venv\Scripts\python.exe --version
-.\.venv\Scripts\python.exe -m pytest
-.\.venv\Scripts\python.exe -m ruff check .
-.\.venv\Scripts\python.exe -m ruff format --check .
-.\.venv\Scripts\python.exe -m sega_emulator
+.\.venv\Scripts\python.exe -m sega_emulator "C:\caminho\para\jogo.rom"
 ```
 
-O comando do módulo informa que a máquina SG-1000 ainda não está integrada. RAM, barramento e CPU são componentes parciais; a mensagem não indica que exista um emulador funcional completo.
+Controles iniciais: setas direcionais, Z/Space para botão 1, X/Enter para botão 2 e Esc
+para sair.
+
+Para testar o caminho de vídeo sem depender de uma ROM externa, gere uma ROM homebrew de diagnóstico:
+
+```powershell
+.\.venv\Scripts\python.exe tools/create_sg1000_demo_rom.py --output sg1000-demo.rom
+.\.venv\Scripts\python.exe -m sega_emulator .\sg1000-demo.rom
+```
+
+O gerador imprime o SHA-256 da ROM para que o artefato usado nos testes possa ser identificado. Ela testa o caminho básico de renderização, mas não comprova compatibilidade de sprites, interrupções ou jogos comerciais.
+
+Para diagnóstico sem janela:
+
+```powershell
+.\.venv\Scripts\python.exe -m sega_emulator "C:\caminho\para\jogo.rom" --headless-frames 600
+```
+
+O valor `--headless-frames 0` carrega e valida a ROM sem executar quadros; é útil para
+confirmar o caminho do arquivo antes de iniciar uma sessão.
+
+## Validar
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m ruff format --check .
+git diff --check
+```
 
 ## Documentação
 
-- [Registro de desenvolvimento e ponto de retomada (22/10/2026)](docs/development-handoff-2026-10-22.md)
-- [Auditoria geral do código](docs/codebase-audit.md)
-- [Arquitetura multi-sistema e estratégia de reutilização](docs/architecture.md)
-- [Pesquisa de compatibilidade de hardware Sega: Z80, áudio, M68K, Mega CD e 32X](docs/research/hardware-compatibility-roadmap-2026-10.md)
+- [Arquitetura multi-sistema](docs/architecture.md)
+- [Pesquisa de compatibilidade de hardware Sega: Z80, áudio e revisões](docs/research/hardware-compatibility-roadmap-2026-10.md)
+- [Catálogo prioritário de jogos comerciais SG-1000](docs/hardware/sg1000-game-compatibility.md)
+- [Notas técnicas de hardware SG-1000](docs/hardware/sg1000.md)
+- [Base de memória e barramentos SG-1000](docs/hardware/sg1000-memory-buses.md)
+- [Marco do primeiro jogo executável](docs/sg1000-first-playable.md)
 - [Auditoria de cobertura da CPU Z80](docs/z80-coverage.md)
-- [Auditoria técnica detalhada do núcleo Z80 (22/10/2026)](docs/z80-code-audit-2026-10-22.md)
-- [Especificação documental do Z80 a partir dos três manuais ZiLOG](docs/z80-zilog-manual-specification.md)
-- [Base de literatura técnica do Z80: manuais, artigos, opcodes, testes e patentes](docs/z80-technical-literature.md)
-- [Plano cruzado para fechar lacunas do Z80](docs/z80-gap-resolution-plan.md)
-- [Pesquisa do núcleo Z80 do MAME](docs/z80-mame-reference.md)
-- [Pesquisa comparativa de comportamentos Z80 pouco documentados](docs/z80-undocumented-behavior-research.md)
-- [Notas de hardware do SG-1000](docs/hardware/sg1000.md)
-- [Inventário de firmware/ROM mantidos apenas localmente](docs/firmware-inventory.md)
-- Barramento inicial: `src/sega_emulator/bus/memory_bus.py`
-- Contrato de acesso à memória para a CPU: `src/sega_emulator/bus/interfaces.py`
+- [Auditoria técnica da CPU Z80](docs/z80-code-audit-2026-10-22.md)
+- [Plano de resolução das lacunas Z80](docs/z80-gap-resolution-plan.md)
 
-## Decisões pendentes
+## Próximas etapas
 
-- Escolher e documentar a licença do projeto antes de qualquer distribuição.
-- Documentar o mapa de I/O, expansões de RAM e variantes de hardware antes de integrar os dispositivos.
+1. Validar o VDP com testes e imagens de referência.
+2. Executar uma ROM real conhecida e corrigir falhas observadas.
+3. Refinar o mapa de memória/I/O e a sincronização CPU–VDP.
+4. Implementar PSG e sincronização audiovisual depois de obter vídeo e controles funcionais.
+5. Ampliar precisão temporal com base em divergências reproduzíveis.
