@@ -353,7 +353,7 @@ def test_cpl_complements_accumulator_and_updates_only_documented_flags(
     [
         (0x00, 0xD6, 0xC5),  # S/Z/PV preservados, XY do A, carry definido
         (0x28, 0x01, 0x29),
-        (0xD7, 0xFF, 0xC5),
+        (0xD7, 0xFF, 0xED),
     ],
 )
 def test_scf_sets_carry_and_preserves_sign_zero_parity(
@@ -375,7 +375,7 @@ def test_scf_sets_carry_and_preserves_sign_zero_parity(
     [
         (0x00, 0xC5, 0xD4),  # carry anterior vira half-carry
         (0x28, 0x00, 0x29),  # carry anterior zero vira carry
-        (0xD7, 0xFF, 0xD4),  # carry anterior um vira H; X/Y vêm de A
+        (0xD7, 0xFF, 0xFC),  # carry anterior um vira H; X/Y vêm de A
     ],
 )
 def test_ccf_complements_carry_and_updates_half_carry(
@@ -401,6 +401,32 @@ def test_ccf_complements_carry_and_updates_half_carry(
         (0x02, 0xFE, 0x01, 0x0000, 13),  # deslocamento negativo
     ],
 )
+def test_scf_uses_previous_flag_write_for_undocumented_xy() -> None:
+    cpu = make_cpu(bytes([0x04, 0x37]))  # INC B; SCF
+    cpu.b = 0x07
+    cpu.a = 0x00
+
+    assert cpu.step() == 4
+    assert cpu.f == 0x08
+    assert cpu.q == 0x08
+
+    assert cpu.step() == 4
+    assert cpu.f == 0x01
+    assert cpu.q == 0x01
+
+
+def test_q_latch_clears_after_instruction_that_preserves_flags() -> None:
+    cpu = make_cpu(bytes([0x04, 0x00, 0x37]))  # INC B; NOP; SCF
+    cpu.b = 0x07
+
+    assert cpu.step() == 4
+    assert cpu.q == 0x08
+    assert cpu.step() == 4
+    assert cpu.q == 0
+    assert cpu.step() == 4
+    assert cpu.f == 0x01
+
+
 def test_djnz_decrements_b_branches_and_preserves_flags(
     initial_b: int,
     displacement: int,
