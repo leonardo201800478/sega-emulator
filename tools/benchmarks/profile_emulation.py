@@ -105,7 +105,9 @@ def main() -> None:
     print(f"cpu_only_median_ms={cpu_median * 1000:.3f}")
     print(f"cpu_only_instructions_per_second={instruction_count / cpu_median:.0f}")
     print(f"vdp_only_median_ms={vdp_median * 1000:.3f}")
-    print(\n        f"vdp_only_speed_percent={total_tstates / vdp_median / Z80_CLOCK_HZ * 100:.2f}"\n    )
+    print(
+        f"vdp_only_speed_percent={total_tstates / vdp_median / Z80_CLOCK_HZ * 100:.2f}"
+    )
     print(f"integrated_median_ms={integrated_median * 1000:.3f}")
     print(
         "integrated_speed_percent="
@@ -121,7 +123,9 @@ def main() -> None:
         profiler.disable()
         profiler.dump_stats(args.profile)
         output = io.StringIO()
-        pstats.Stats(profiler, stream=output).strip_dirs().sort_stats(\n            "cumtime"\n        ).print_stats(30)
+        pstats.Stats(profiler, stream=output).strip_dirs().sort_stats(
+            "cumtime"
+        ).print_stats(30)
         print("\nTop 30 functions by cumulative time:")
         print(output.getvalue())
 
