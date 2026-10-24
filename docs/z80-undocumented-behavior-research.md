@@ -180,3 +180,12 @@ Para este projeto, a opção segura é **reimplementar a partir de especificaç�
 - Não foram executados ZEXALL, testes de hardware ou comparação diferencial.
 - Os detalhes de Q, WZ/MEMPTR, bits X/Y, aliases ED e diferenças NMOS/CMOS continuam pendentes de confirmação por suíte independente e definição da variante-alvo.
 - Esta documentação propõe trabalho futuro; não afirma que a CPU do nosso repositório tenha sido alterada.
+
+## Atualização de implementação e validação — 24/10/2026
+
+A revisão reconciliada com `main` agora usa WZ/MEMPTR como origem dos bits F3/F5 em `BIT b,(HL)`; os testes exaustivos variam WZ independentemente do endereço HL para evitar que ambos sejam tratados como equivalentes por acidente. Referência comunitária consultada: [Sinclair Wiki — Z80](https://sinclair.wiki.zxnet.co.uk/wiki/Z80), que descreve a cópia de F3/F5 a partir de MEMPTR em `BIT n,(HL)`. Esta referência não é uma especificação primária da Zilog e não encerra a validação por revisão física do chip.
+
+Os bytes ED sem operação atribuída no Z80 clássico são modelados como ED-NOP de dois bytes e 8 T-states nominais. O comportamento foi coberto com testes dirigidos e classificação dos 256 segundos bytes ED. A auditoria SingleStepTests fixada no commit upstream `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7` passou em 25.000 vetores para as 25 famílias de instruções selecionadas, incluindo SCF/CCF. Essa suíte não cobre todos os opcodes, não compara traços de barramento por ciclo e não deve ser interpretada como validação universal de variantes NMOS/CMOS ou clones.
+
+A auditoria de robustez repete execuções determinísticas e verifica invariantes; ela complementa, mas não substitui, a comparação funcional independente.
+

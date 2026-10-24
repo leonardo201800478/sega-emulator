@@ -50,11 +50,11 @@ def test_bit_register_flags_for_all_values_bits_and_carry_states() -> None:
                 assert cpu.total_cycles == 8
 
 
-def test_bit_hl_flags_for_all_values_bits_carry_and_xy_address_patterns() -> None:
-    """Testa 8.192 estados de BIT (HL), incluindo X/Y derivados do endereço."""
-    for address_high in (0x00, 0x28, 0xA8, 0xD7):
-        address = (address_high << 8) | 0x40
-        xy_source = address_high
+def test_bit_hl_flags_for_all_values_bits_carry_and_wz_patterns() -> None:
+    """Testa 16.384 estados de BIT (HL), variando X/Y via WZ/MEMPTR."""
+    address = 0xC040
+    for wz_high in (0x00, 0x28, 0xA8, 0xD7):
+        xy_source = wz_high
         bus = FlatMemoryBus()
         bus.memory[0:2] = bytes((0xCB, 0x46))
         for value in range(0x100):
@@ -64,6 +64,7 @@ def test_bit_hl_flags_for_all_values_bits_carry_and_xy_address_patterns() -> Non
                     bus.memory[address] = value
                     cpu = Z80Cpu(bus)
                     cpu.hl = address
+                    cpu.wz = wz_high << 8
                     cpu.f = 0xFE | carry
                     cpu.pc = 0
                     cpu.r = 0

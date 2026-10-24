@@ -4,7 +4,7 @@ import pytest
 
 from sega_emulator.bus.memory import RAM_SIZE, SG1000Ram
 from sega_emulator.bus.memory_bus import SG1000MemoryBus
-from sega_emulator.cpu.z80 import UnsupportedOpcodeError, Z80Cpu
+from sega_emulator.cpu.z80 import Z80Cpu
 
 
 def make_cpu(program: bytes) -> Z80Cpu:
@@ -800,11 +800,13 @@ def test_ed_adc_sbc_hl_overflow_and_boundary_flags(
     assert cpu.f == expected_flags
 
 
-def test_unsupported_ed_opcode_reports_prefixed_opcode() -> None:
+def test_unassigned_ed_opcode_executes_as_two_byte_nop() -> None:
     cpu = make_cpu(bytes([0xED, 0x00]))
 
-    with pytest.raises(UnsupportedOpcodeError, match="ED 00h"):
-        cpu.step()
+    assert cpu.step() == 8
+    assert cpu.pc == 2
+    assert cpu.r == 2
+    assert cpu.total_cycles == 8
 
 
 @pytest.mark.parametrize(
@@ -992,14 +994,14 @@ def test_ld_sp_hl_copies_pair_and_preserves_flags(value: int) -> None:
     assert cpu.total_cycles == 6
 
 
-def test_unsupported_opcode_is_explicit() -> None:
+def test_unassigned_ed_opcode_preserves_architectural_state() -> None:
     cpu = make_cpu(bytes([0xED, 0x00]))
+    cpu.a = 0x5A
+    cpu.f = 0xA5
+    cpu.wz = 0x1234
 
-    with pytest.raises(UnsupportedOpcodeError, match="ED 00h"):
-        cpu.step()
-
-    assert cpu.pc == 2
-    assert cpu.total_cycles == 0
+    assert cpu.step() == 8
+    assert (cpu.a, cpu.f, cpu.wz) == (0x5A, 0xA5, 0x1234)
 
 
 @pytest.mark.parametrize(
@@ -2446,18 +2448,16 @@ def test_all_base_opcodes_are_decoded_or_explicitly_rejected() -> None:
         )
         cpu.bc = cpu.de = cpu.hl = 0xC020
         cpu.sp = 0xC100
+        cycles = cpu.step()
+        assert cycles > 0, f"Opcode {opcode:02X}h"
         if opcode == 0xED:
-            with pytest.raises(UnsupportedOpcodeError, match="ED 20h"):
-                cpu.step()
-            continue
-        assert cpu.step() > 0, f"Opcode {opcode:02X}h"
+            assert cycles == 8
+            assert cpu.pc == 2
 
 
-def test_index_prefixes_decode_all_non_ed_second_opcodes() -> None:
+def test_index_prefixes_decode_all_second_opcodes() -> None:
     for prefix in (0xDD, 0xFD):
         for opcode in range(0x100):
-            if opcode == 0xED:
-                continue  # ED 00h é um opcode não documentado/não suportado.
             bus = SG1000MemoryBus(
                 SG1000Ram(bytes(RAM_SIZE)),
                 bytes([prefix, opcode, 0x20, 0xC0, 0x20, 0xC0]),
@@ -2470,8 +2470,8 @@ def test_index_prefixes_decode_all_non_ed_second_opcodes() -> None:
             assert cpu.step() > 0, f"{prefix:02X} {opcode:02X}h"
 
 
-def test_all_ed_second_bytes_are_supported_or_explicitly_rejected() -> None:
-    """Classifica os 256 segundos bytes ED sem confundir decode com correção."""
+def test_all_ed_second_bytes_execute_or_as_ed_nop() -> None:
+    """Os 256 segundos bytes ED são executáveis; não atribui correção semântica."""
     supported = {
         *(0x40 + (register << 3) for register in range(8)),  # IN r,(C)
         *(0x41 + (register << 3) for register in range(8)),  # OUT (C),r
@@ -2535,13 +2535,11 @@ def test_all_ed_second_bytes_are_supported_or_explicitly_rejected() -> None:
         cpu.sp = 0xC100
         cpu.bus.write(0xC020, 0x34)
 
-        if opcode in supported:
-            assert cpu.step() > 0, f"ED {opcode:02X}h"
-        else:
-            with pytest.raises(UnsupportedOpcodeError, match=f"ED {opcode:02X}h"):
-                cpu.step()
-            assert cpu.pc == 2, f"PC após ED {opcode:02X}h"
-            assert cpu.total_cycles == 0, f"ciclos após ED {opcode:02X}h"
+        cycles = cpu.step()
+        assert cycles > 0, f"ED {opcode:02X}h"
+        if opcode not in supported:
+            assert cycles == 8, f"ED-NOP {opcode:02X}h"
+            assert cpu.pc == 2, f"PC após ED-NOP {opcode:02X}h"
 
 
 @pytest.mark.parametrize(
@@ -2954,3 +2952,32 @@ def test_reset_clears_p_latch() -> None:
     cpu.reset()
 
     assert cpu.p == 0
+
+
+@pytest.mark.parametrize("opcode", [0x00, 0x3F, 0x80, 0xC0, 0xFF])
+def test_unassigned_ed_opcodes_are_two_byte_nops(opcode: int) -> None:
+    """Bytes ED não atribuídos preservam o estado e custam 8 T-states."""
+    cpu = make_cpu(bytes([0xED, opcode]))
+    cpu.a = 0x5A
+    cpu.f = 0xA5
+    cpu.wz = 0x1234
+
+    assert cpu.step() == 8
+    assert cpu.pc == 2
+    assert cpu.r == 2
+    assert cpu.a == 0x5A
+    assert cpu.f == 0xA5
+    assert cpu.wz == 0x1234
+    assert cpu.total_cycles == 8
+
+
+def test_bit_hl_undocumented_flags_come_from_wz() -> None:
+    """F3/F5 de BIT 0,(HL) vêm do byte alto de WZ/MEMPTR."""
+    cpu = make_cpu(bytes([0xCB, 0x46]))
+    cpu.hl = 0xC000
+    cpu.bus.write(cpu.hl, 0x6B)
+    cpu.f = 0x01
+    cpu.wz = 0x5D48
+
+    assert cpu.step() == 12
+    assert cpu.f == 0x19

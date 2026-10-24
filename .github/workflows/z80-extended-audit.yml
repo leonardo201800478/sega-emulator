@@ -4,19 +4,25 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      hours:
+        description: 'Duração da auditoria (0.05 para smoke; até 5.0 para longa)'
+        required: false
+        default: '5.0'
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
   group: z80-extended-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   extended-audit:
     name: Full suite and opcode inventory
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 360
     steps:
       - name: Checkout exact revision
         uses: actions/checkout@v4
@@ -48,6 +54,17 @@ jobs:
 
       - name: Run complete pytest suite with timing report
         run: pytest -q --junitxml=artifacts/pytest-junit.xml --durations=25
+
+      - name: Run deterministic Z80 robustness audit
+        if: always()
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            hours="${{ inputs.hours }}"
+          else
+            hours="0.05"
+          fi
+          python tools/audits/z80_long_stress_audit.py --hours "$hours" --seed 1581647872 --report artifacts/z80-long-stress-report.json
 
       - name: Generate Z80 opcode dispatch inventory
         if: always()
