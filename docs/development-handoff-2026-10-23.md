@@ -137,3 +137,10 @@ A CI curta está verde nesta revisão. Ainda não foi executada a auditoria long
 - A correção ainda não foi validada por CI nem pela reexecução do corpus completo de 14.000 casos.
 - O notebook de repetição foi preparado para testar o commit `1ce9c186f9efd72e156d08077367967eed2ed932` e salvar os artefatos em `MyDrive/SegaEmulator/Z80TargetedAudit_PR14_R2/`.
 - PR #14 continua draft e sem merge. Não declarar SCF/CCF prefixados resolvidos antes de receber o ZIP pós-correção.
+
+
+### Ajustes de regressão após revisão dos casos DD — 24/10/2026
+
+- Ajustadas as expectativas unitárias de SCF/CCF para refletir os bits F3/F5 combinados com Q anterior, inclusive quando a instrução anterior escreveu flags.
+- Commit de testes: [e06727c07782285b0f9e63fe0f770471c084e870](https://github.com/leonardo201800478/sega-emulator/commit/e06727c07782285b0f9e63fe0f770471c084e870).
+- Estes testes ainda aguardam execução na CI. A auditoria direcionada pós-correção também precisa ser repetida.
