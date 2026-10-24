@@ -8,6 +8,8 @@ a resposta analógica do circuito nem integração com a máquina/frontend.
 
 from __future__ import annotations
 
+from collections import deque
+
 DEFAULT_CLOCK_HZ = 3_579_545
 DEFAULT_SAMPLE_RATE = 44_100
 CLOCK_DIVIDER = 16
@@ -62,6 +64,10 @@ class SN76489:
         self._lfsr = LFSR_SEED
         self._clock_divider_phase = 0
         self._sample_phase = 0
+        self._output_phase = 0
+        self._pending_samples.clear()
+        self._output_phase = 0
+        self._pending_samples: deque[float] = deque(maxlen=self.sample_rate)
 
     def reset(self) -> None:
         """Restaura um estado inicial determinístico e silencioso."""
@@ -155,6 +161,24 @@ class SN76489:
         )
         for _ in range(internal_clocks):
             self._tick_internal_clock()
+            # Mantém a taxa de amostragem ligada ao clock real do chip.
+            self._output_phase += self.sample_rate * CLOCK_DIVIDER
+            while self._output_phase >= self.clock_hz:
+                self._pending_samples.append(self._mix())
+                self._output_phase -= self.clock_hz
+
+    def drain_samples(self, max_samples: int | None = None) -> list[float]:
+        """Retira amostras produzidas pelo avanço do clock da máquina.
+
+        O buffer mantém no máximo um segundo de áudio para que execuções
+        headless longas não consumam memória sem limite.
+        """
+        if max_samples is not None and (type(max_samples) is not int or max_samples < 0):
+            raise ValueError("max_samples deve ser None ou inteiro não negativo.")
+        count = len(self._pending_samples) if max_samples is None else min(
+            max_samples, len(self._pending_samples)
+        )
+        return [self._pending_samples.popleft() for _ in range(count)]
 
     def _mix(self) -> float:
         total = sum(
