@@ -34,6 +34,7 @@ REGISTER_FIELDS = {
     "iy": "iy",
     "wz": "wz",
     "q": "q",
+    "p": "p",
     "af_": "af_alt",
     "bc_": "bc_alt",
     "de_": "de_alt",
