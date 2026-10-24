@@ -66,3 +66,20 @@ def test_generated_homebrew_rom_initializes_vdp_and_renders_pattern() -> None:
     assert machine.vdp.vram[0x3800] == 1
     assert machine.vdp.vram[0x3B00] == 0xD0
     assert machine.vdp.framebuffer[:3] == bytes((33, 200, 66))
+
+
+def test_machine_decodes_vdp_port_aliases() -> None:
+    machine = SG1000Machine(bytes((0x00,)))
+    machine.vdp.vram[0x0123] = 0xA9
+    machine.vdp.write_port(0xBF, 0x23)
+    machine.vdp.write_port(0xBF, 0x01)
+    assert machine.read_port(0x009E) == 0xA9
+    assert machine.read_port(0x00BF) == machine.vdp.status
+
+
+def test_machine_writes_vdp_through_aliased_data_port() -> None:
+    machine = SG1000Machine(bytes((0x00,)))
+    machine.write_port(0x009F, 0x45)
+    machine.write_port(0x009F, 0x40)
+    machine.write_port(0x009E, 0xBC)
+    assert machine.vdp.vram[0x0045] == 0xBC

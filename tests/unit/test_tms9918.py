@@ -8,6 +8,7 @@ from sega_emulator.video.tms9918 import (
     SCREEN_WIDTH,
     TMS9918A,
     TSTATES_PER_LINE,
+    VRAM_SIZE,
 )
 
 
@@ -103,3 +104,42 @@ def test_negative_or_non_integer_clock_advance_is_rejected() -> None:
         vdp.advance(-1)
     with pytest.raises(ValueError):
         vdp.advance(1.5)  # type: ignore[arg-type]
+
+
+def test_vdp_data_write_updates_read_buffer_and_wraps_address() -> None:
+    vdp = TMS9918A()
+    _set_address(vdp, 0x3FFF, write=True)
+    vdp.write_port(0xBE, 0xA6)
+    assert vdp.vram[0x3FFF] == 0xA6
+    assert vdp.read_buffer == 0xA6
+    assert vdp.address == 0
+
+
+def test_vdp_ports_decode_hardware_aliases() -> None:
+    vdp = TMS9918A()
+    vdp.vram[0x1234] = 0x6D
+    _set_address(vdp, 0x1234, write=False)
+    assert vdp.read_port(0x80) == 0x6D
+    assert vdp.read_port(0xA0) == 0
+    assert vdp.address == 0x1237
+
+
+def test_vdp_vram_is_exactly_16_kib_and_address_wraps() -> None:
+    vdp = TMS9918A()
+    assert len(vdp.vram) == VRAM_SIZE
+    _set_address(vdp, 0xFFFF, write=True)
+    assert vdp.address == 0x3FFF
+    vdp.write_port(0xBE, 0x72)
+    assert vdp.address == 0
+    assert vdp.vram[0x3FFF] == 0x72
+
+
+def test_vdp_status_read_cancels_partial_control_command() -> None:
+    vdp = TMS9918A()
+    vdp.write_port(0xBF, 0x34)
+    assert vdp._control_first == 0x34
+    vdp.read_port(0xBF)
+    assert vdp._control_first is None
+    vdp.write_port(0xBF, 0x80)
+    assert vdp.address == 0
+    assert vdp.registers[0] == 0
