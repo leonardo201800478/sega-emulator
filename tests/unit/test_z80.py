@@ -1634,6 +1634,7 @@ def test_halt_repeats_until_maskable_interrupt_is_accepted() -> None:
     assert cpu.bus.read(0xC0FE) == 0x01  # retoma após HALT
     assert cpu.bus.read(0xC0FF) == 0x00
 
+
 def test_halt_refresh_cycles_increment_r_and_preserve_bit_seven() -> None:
     cpu = make_cpu(bytes([0x76, 0x00]))
     cpu.r = 0xFE
@@ -1646,7 +1647,6 @@ def test_halt_refresh_cycles_increment_r_and_preserve_bit_seven() -> None:
     assert cpu.halted
     assert cpu.pc == 1
     assert cpu.r == 0x80
-
 
 
 def test_di_ei_and_nmi_service() -> None:
@@ -2242,6 +2242,7 @@ def test_ei_enables_maskable_interrupt_after_following_instruction() -> None:
     assert cpu.bus.read(0xC0FE) == 0x02
     assert cpu.bus.read(0xC0FF) == 0x00
 
+
 def test_di_after_ei_cancels_delayed_maskable_interrupt_acceptance() -> None:
     cpu = make_cpu(bytes([0xFB, 0xF3, 0x00]))  # EI; DI; NOP
     cpu.sp = 0xC100
@@ -2261,7 +2262,6 @@ def test_di_after_ei_cancels_delayed_maskable_interrupt_acceptance() -> None:
     assert cpu.pc == 3
     assert cpu._int_pending == 0xFF
     assert cpu.total_cycles == 12
-
 
 
 def test_im0_interrupt_uses_rst_vector_from_data_bus() -> None:
