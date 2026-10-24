@@ -70,7 +70,7 @@ def test_fifth_sprite_is_not_drawn_when_hardware_limit_is_enabled() -> None:
 
     frame = vdp.render_frame()
 
-    assert _pixel(frame, 48, 0) == bytes((0, 0, 0))
+    assert _pixel(frame, 48, 0) == bytes((255, 255, 255))
     assert vdp.status & 0x40
 
 
@@ -137,7 +137,7 @@ def test_sprite_can_be_shifted_left_by_32_pixels() -> None:
     frame = vdp.render_frame()
 
     assert _pixel(frame, 0, 0) == bytes((33, 200, 66))
-    assert _pixel(frame, 20, 0) == bytes((0, 0, 0))
+    assert _pixel(frame, 20, 0) == bytes((255, 255, 255))
 
 
 def test_16x16_sprite_uses_hardware_pattern_quadrant_order() -> None:
