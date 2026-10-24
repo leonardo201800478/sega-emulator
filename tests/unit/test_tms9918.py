@@ -6,8 +6,8 @@ from sega_emulator.video.tms9918 import (
     LINES_PER_FRAME,
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
-    TSTATES_PER_LINE,
     TMS9918A,
+    TSTATES_PER_LINE,
 )
 
 

@@ -10,7 +10,8 @@ def run(machine: SG1000Machine, scale: int = 3) -> None:
         import pygame
     except ImportError as exc:
         raise RuntimeError(
-            'Frontend gráfico não instalado. Execute: python -m pip install -e ".[frontend]"'
+            'Frontend gráfico não instalado. Execute: '
+            'python -m pip install -e ".[frontend]"'
         ) from exc
 
     pygame.init()
