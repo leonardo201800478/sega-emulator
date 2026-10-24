@@ -442,7 +442,6 @@ def test_offscreen_vertical_sprites_can_set_collision_during_vblank() -> None:
     assert vdp.status & 0x20
 
 
-
 def test_fifth_sprite_status_uses_first_raster_overflow() -> None:
     vdp = TMS9918A()
     _prepare_sprite_table(vdp)
