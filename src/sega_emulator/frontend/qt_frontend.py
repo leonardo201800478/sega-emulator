@@ -114,7 +114,8 @@ def run(initial_path: Path | None = None) -> None:
     last_checkpoint_frame = 0
 
     def show_frame() -> None:
-        nonlocal frame_count
+        nonlocal frame_count, last_checkpoint_time, last_checkpoint_tstates
+        nonlocal last_checkpoint_instructions, last_checkpoint_frame
         if machine is None or paused:
             return
         try:
