@@ -12,7 +12,7 @@ message(STATUS "LLVM CMake directory: ${LLVM_DIR}")
 
 add_executable(llvm_orc_smoke src/orc_smoke.cpp)
 target_include_directories(llvm_orc_smoke SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS})
-target_compile_definitions(llvm_orc_smoke PRIVATE ${LLVM_DEFINITIONS})
+add_definitions(${LLVM_DEFINITIONS})
 
 llvm_map_components_to_libnames(LLVM_LIBS
     Core
@@ -20,6 +20,8 @@ llvm_map_components_to_libnames(LLVM_LIBS
     ExecutionEngine
     RuntimeDyld
     native
+    nativeasmparser
+    nativecodegen
     Support
 )
 target_link_libraries(llvm_orc_smoke PRIVATE ${LLVM_LIBS})
