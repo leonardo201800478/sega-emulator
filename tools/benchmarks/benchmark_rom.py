@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 
 from sega_emulator.machine.sg1000 import SG1000Machine
+from sega_emulator.video.tms9918 import SCREEN_HEIGHT, SCREEN_WIDTH
 
 Z80_CLOCK_HZ = 3_579_545
 TSTATES_PER_FRAME = 228 * 262
