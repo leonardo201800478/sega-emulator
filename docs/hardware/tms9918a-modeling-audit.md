@@ -43,7 +43,7 @@ plataformas: https://github.com/cbmeeks/TMS9918/blob/master/tms9918a.txt
 | Comando de controle | Latch de dois bytes, escrita em registrador e seleção de endereço | Validar sequências interrompidas, mudanças de modo e comportamento exato do buffer |
 | Buffer de leitura | Prefetch ao configurar leitura e incremento automático | Casos de escrita após leitura e reset precisam de comparação com referência |
 | Registradores | Oito registradores graváveis | Máscaras de bits reservados, valores após reset e efeitos colaterais precisam ser formalizados |
-| Status | VBlank, colisão e quinto sprite; leitura limpa status | Flags de sprite são calculadas na renderização do quadro, não no instante da varredura |
+| Status | VBlank, colisão e quinto sprite; leitura limpa status | Flags de sprite agora são avaliadas no fechamento de cada linha; resolução por dot e arbitragem ainda ausentes |
 | Graphics I | Renderização de tabela de nomes, padrões e cores | Máscaras de endereços e casos extremos ainda precisam de testes exaustivos |
 | Graphics II | Renderização de padrões/colorização por seção vertical | Máscaras programáveis de R3/R4 e todos os limites de endereço precisam de auditoria |
 | Multicolor | Renderização por blocos coloridos | Confirmar endereçamento vertical e repetição de padrões contra o manual |
@@ -107,9 +107,11 @@ ordem de entrada da tabela. Isso corrige dois problemas no caminho de renderiza�
    considerados na colisão; sprites posteriores visíveis ainda podem ser
    desenhados por transparência.
 
-A rotina ainda é executada na composição completa do quadro. Logo, esta mudança
-melhora a ordem lógica de avaliação, mas **não** torna as flags de colisão e
-quinto sprite line-accurate para a CPU que consulta o status no meio do quadro.
+A avaliação das flags de colisão e quinto sprite ocorre agora ao fechar cada
+linha visível e a leitura de status limpa as flags, que podem ser novamente
+levantadas por linhas seguintes. A resolução temporal ainda é por linha, não por
+dot; a composição RGB continua sendo refeita como um quadro completo e não
+reproduz mudanças de VRAM/registradores ocorridas no meio de uma linha.
 
 ## Plano de validação
 
@@ -121,6 +123,7 @@ quinto sprite line-accurate para a CPU que consulta o status no meio do quadro.
 - [x] Modo Graphics I básico e Graphics II básico.
 - [x] Colisão de sprites e prioridade de pintura.
 - [x] Índice de quinto sprite pela ordem raster.
+- [x] Flags de colisão/overflow atualizadas por linha e colisão considerada fora da área visível.
 - [ ] Matriz completa de endereços-base/máscaras de R2–R6.
 - [ ] Sprite 8×8 e 16×16 em cada quadrante, clipping, magnificação e early-clock.
 - [ ] Colisão com cor zero, pixels sobrepostos em bordas, sprites parcialmente
@@ -142,11 +145,13 @@ screenshots sem correspondência exata de jogo, ROM, região, estado e frame.
 
 ### P2 — precisão temporal
 
-Substituir o avanço temporal grosseiro por eventos determinísticos de linha e,
-quando necessário, de dot. O VDP deve receber tempo de um scheduler comum, sem
-threads independentes nem alteração dos clocks lógicos. A CPU deve poder ler
-flags que tenham mudado no instante correto da varredura. Só então medir se
-acessos concorrentes CPU/VDP precisam de arbitragem ou contenção explícita.
+A avaliação de status já ocorre por linha, mas a CPU ainda avança o VDP somente
+após cada instrução Z80. Substituir esse avanço por eventos determinísticos de
+linha e, quando necessário, de dot, com scheduler comum e sem threads independentes
+ou alteração dos clocks lógicos. O framebuffer ainda é composto ao final do
+quadro; mudanças de VRAM/registradores durante a varredura não afetam retroativamente
+os pixels já emitidos. Só então medir se acessos concorrentes CPU/VDP precisam de
+arbitragem ou contenção explícita.
 
 ### P3 — cor e saída analógica
 
