@@ -182,7 +182,7 @@ class ControllerInput:
                 if not controller_module.get_init():
                     controller_module.init()
                 self._controller_module = controller_module
-            except (ImportError, AttributeError, RuntimeError):
+            except ImportError, AttributeError, RuntimeError:
                 # Pygame audio/video may be usable even if SDL GameController is not.
                 self._controller_module = None
 
@@ -192,24 +192,29 @@ class ControllerInput:
 
     def connected_names(self) -> list[str]:
         self._sync_controllers()
-        return [
-            str(self._controller_module.name_forindex(index) or f"Controle {index + 1}")
-            for index in self._controllers
-        ] if self._controller_module is not None else []
+        return (
+            [
+                str(
+                    self._controller_module.name_forindex(index)
+                    or f"Controle {index + 1}"
+                )
+                for index in self._controllers
+            ]
+            if self._controller_module is not None
+            else []
+        )
 
     def _sync_controllers(self) -> None:
         module = self._controller_module
         if module is None:
             return
         count = module.get_count()
-        valid_indices = {
-            index for index in range(count) if module.is_controller(index)
-        }
+        valid_indices = {index for index in range(count) if module.is_controller(index)}
         for index in list(self._controllers):
             controller = self._controllers[index]
             try:
                 attached = controller.attached()
-            except (AttributeError, RuntimeError):
+            except AttributeError, RuntimeError:
                 attached = False
             if index not in valid_indices or not attached:
                 try:
@@ -221,7 +226,7 @@ class ControllerInput:
             if index not in self._controllers:
                 try:
                     self._controllers[index] = module.Controller(index)
-                except (IndexError, RuntimeError):
+                except IndexError, RuntimeError:
                     continue
         available_indices = sorted(self._controllers)
         self._player_device_indices = {
