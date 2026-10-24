@@ -424,7 +424,7 @@ class TMS9918A:
             source_y = ((line - sprite_y) % LINES_PER_FRAME) // scale
             for source_x in range(size):
                 if size == 16:
-                    tile = (pattern_number & 0xFC) + (source_y // 8) * 2 + source_x // 8
+                    tile = (pattern_number & 0xFC) + (source_x // 8) * 2 + source_y // 8
                 else:
                     tile = pattern_number
                 address = pattern_base + tile * 8 + (source_y & 7)
