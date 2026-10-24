@@ -284,3 +284,9 @@ Esses casos são testes sintéticos de fluxo de controle e estado observável. N
 Foi acrescentado `test_ed_block_transfer_wraps_hl_and_de_at_16_bit_boundaries`, cobrindo LDI/LDIR com incremento de `HL=FFFFh` para `0000h` e LDD/LDDR com decremento de `HL=0000h` para `FFFFh`. Os quatro casos verificam a atualização de HL/DE/BC, o byte transferido, o PC conforme repetição e os T-states nominais retornados pelo núcleo.
 
 O teste foi publicado, mas sua execução local ainda está pendente. Ele caracteriza wrap de registradores e estado observável; não comprova a ordem temporal dos acessos nem precisão ciclo a ciclo.
+
+## Lacuna corrigida nesta PR: bytes ED sem atribuição
+
+A rotina ED agora trata os segundos bytes sem handler documentado como NOP de 8 T-states, em vez de lançar `UnsupportedOpcodeError`. Isso diferencia os códigos ED não atribuídos dos opcodes base ainda não implementados: a família ED do Z80 clássico reserva esses padrões como operações sem efeito arquitetural.
+
+Os testes adicionados exercitam seis valores distribuídos pelo espaço de bytes ED e verificam PC, R, flags, A e T-states nominais. A cobertura é direcionada, não uma prova exaustiva dos 256 segundos bytes ED nem validação ciclo a ciclo. As instruções ED documentadas continuam dependendo de testes específicos de resultado/flags e de comparação diferencial.
