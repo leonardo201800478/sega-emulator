@@ -64,11 +64,8 @@ def audit_file(path: Path, manifest_entry: dict[str, Any]) -> dict[str, Any]:
     for vector in vectors:
         initial = vector.get("initial", {})
         final = vector.get("final", {})
-        # "p" representa estado interno de prefixo no corpus. Não é um
-        # registrador arquitetural modelado pelo nosso núcleo instruction-level.
-        if initial.get("p", 0) or final.get("p", 0):
-            counts["skipped_prefix_state"] += 1
-            continue
+        # "p" é o latch de LD A,I/R do Z80 (não um estado de prefixo).
+        # O adaptador agora carrega e compara esse estado interno.
         result = run_vector(vector)
         counts[result.status] += 1
         if result.status != "passed":
