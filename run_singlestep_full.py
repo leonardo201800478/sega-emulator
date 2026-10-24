@@ -106,9 +106,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--directory", type=Path, required=True)
     parser.add_argument("--files", nargs="*", default=None, help="nomes sem .json")
-    parser.add_argument(
-        "--workers", type=int, default=min(2, os.cpu_count() or 1)
-    )
+    parser.add_argument("--workers", type=int, default=min(2, os.cpu_count() or 1))
     parser.add_argument("--no-cycles", action="store_true")
     parser.add_argument(
         "--report-json", type=Path, default=Path("artifacts/singlestep-full.json")
@@ -180,9 +178,7 @@ def main() -> int:
         "vectors": grand,
         "files": len(results),
         "status": dict(total),
-        "pass_rate_percent": round(total["passed"] / grand * 100, 3)
-        if grand
-        else 0.0,
+        "pass_rate_percent": round(total["passed"] / grand * 100, 3) if grand else 0.0,
         "check_cycles": not args.no_cycles,
         "elapsed_seconds": elapsed,
         "by_family": {key: dict(value) for key, value in sorted(by_family.items())},
@@ -223,9 +219,7 @@ def main() -> int:
             f"| {stats['_total']:,} | {stats['passed']:,} | {pct:.2f} |"
         )
     lines.extend(["", "## Categorias de divergência", ""])
-    lines.extend(
-        f"- `{name}`: {count:,}" for name, count in by_category.most_common()
-    )
+    lines.extend(f"- `{name}`: {count:,}" for name, count in by_category.most_common())
     bad = [item for item in results if set(item["status"]) != {"passed"}]
     lines.extend(
         [
