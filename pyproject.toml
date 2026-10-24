@@ -16,6 +16,9 @@ dev = [
     "pytest==9.1.1",
     "ruff==0.17.1",
 ]
+frontend = [
+    "pygame-ce>=2.5.3,<3.0",
+]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
