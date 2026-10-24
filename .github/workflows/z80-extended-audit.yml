@@ -1,0 +1,63 @@
+name: Z80 extended audit
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: z80-extended-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  extended-audit:
+    name: Full suite and opcode inventory
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout exact revision
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install project and development tools
+        run: python -m pip install -e ".[dev]"
+
+      - name: Record execution metadata
+        run: |
+          mkdir -p artifacts
+          {
+            echo "commit=$(git rev-parse HEAD)"
+            echo "python=$(python --version)"
+            echo "runner=ubuntu-latest"
+            echo "started_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > artifacts/run-metadata.txt
+
+      - name: Check formatting
+        run: ruff format --check .
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Run complete pytest suite with timing report
+        run: pytest -q --junitxml=artifacts/pytest-junit.xml --durations=25
+
+      - name: Generate Z80 opcode dispatch inventory
+        if: always()
+        run: python tools/z80_opcode_inventory.py --json > artifacts/z80-opcode-inventory.json
+
+      - name: Upload audit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: z80-extended-audit-${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14
