@@ -50,6 +50,9 @@ Para diagnóstico sem janela:
 .\.venv\Scripts\python.exe -m sega_emulator "C:\caminho\para\jogo.rom" --headless-frames 600
 ```
 
+O valor `--headless-frames 0` carrega e valida a ROM sem executar quadros; é útil para
+confirmar o caminho do arquivo antes de iniciar uma sessão.
+
 ## Validar
 
 ```powershell
