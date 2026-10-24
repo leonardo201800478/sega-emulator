@@ -2915,4 +2915,3 @@ def test_reset_clears_p_latch() -> None:
     cpu.reset()
 
     assert cpu.p == 0
-\n
