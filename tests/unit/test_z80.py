@@ -151,7 +151,7 @@ def test_scf_ccf_undocumented_flags_depend_on_q(
 @pytest.mark.parametrize(
     ("opcode", "expected_flags"),
     [
-        (0x37, 0x55),  # SCF: Q=F cancela X/Y de Q; X/Y vêm de A
+        (0x37, 0x45),  # SCF: Q=F cancela X/Y de Q; A não tem X/Y setados
         (0x3F, 0x54),  # CCF: H recebe C anterior; X/Y vêm de A
     ],
 )
