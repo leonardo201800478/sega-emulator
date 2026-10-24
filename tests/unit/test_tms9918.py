@@ -243,7 +243,6 @@ def test_fifth_sprite_flag_is_not_raised_during_vblank() -> None:
     assert not (vdp.status & 0x40)
 
 
-
 def test_vblank_line_does_not_set_fifth_sprite_overflow_after_status_read() -> None:
     vdp = TMS9918A()
     _prepare_sprite_table(vdp)
@@ -259,6 +258,7 @@ def test_vblank_line_does_not_set_fifth_sprite_overflow_after_status_read() -> N
 
     assert not (vdp.status & 0x40)
     assert not (vdp.status & 0x80)
+
 
 def test_reset_preserves_vram_unless_explicitly_requested() -> None:
     vdp = TMS9918A()
