@@ -199,9 +199,9 @@ def main() -> int:
         },
         "instrumented": {
             "frame_time_ms_median": round(statistics.median(frame_ms), 3),
-            "frame_time_ms_p95": round(sorted(frame_ms)[
-                min(len(frame_ms) - 1, int(len(frame_ms) * 0.95))
-            ], 3),
+            "frame_time_ms_p95": round(
+                sorted(frame_ms)[min(len(frame_ms) - 1, int(len(frame_ms) * 0.95))], 3
+            ),
             "calls": dict(metrics["calls"]),
             "time_ms_inclusive": {
                 key: round(value / 1_000_000, 3)
