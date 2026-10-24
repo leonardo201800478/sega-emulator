@@ -98,6 +98,70 @@ prioridade proposta para orientar a suíte; não é uma declaração de compatib
 | B | Space Slalom | — |
 | B | Golgo 13 | — |
 | B | The Black Onyx | — |
+| B | Q*bert | O inventário registra “Q-bert” na plataforma Othello Multivision; confirmar a nomenclatura canônica antes de fixar metadados de ROM |
+| B | Space Mountain | Registrado para Othello Multivision |
+| B | Congo Bongo | Há variantes regionais e revisões; não tratar cada dump como jogo separado |
+| B | Dragon Wang | Há revisões e variantes regionais |
+| B | Gulkave | O inventário também contém uma variante coreana não licenciada; manter o título comercial separado |
+| B | Pachinko | Título distinto de Pachinko II |
+| B | Serizawa Hachidan no Tsumeshougi | Título japonês; preservar a grafia original para pesquisa e identificação |
+| B | Shinnyushain Tooru-kun | O inventário inclui uma variante Taiwan não licenciada |
+| B | Soukoban | Há variantes Taiwan/Coreia não licenciadas no inventário |
+| B | Space Armor | Registrado para Othello Multivision |
+
+### Complemento após análise do inventário enviado
+
+Foi analisado o arquivo `Sega - SG-1000 - SC-3000 (PC Text) (20231205-110448).zip`,
+que contém um arquivo de texto com 247 linhas de registros e variantes. O conteúdo
+é um inventário de software misto — SG-1000, SC-3000, SF-7000, BIOS/testes,
+protótipos e títulos não licenciados/aftermarket — e não deve ser tratado como
+uma lista exclusiva de jogos oficiais do SG-1000.
+
+Os registros do pacote foram usados para encontrar lacunas no catálogo, não para
+inferir compatibilidade. Os títulos abaixo foram acrescentados à prioridade B
+por constarem como lançamentos de SG-1000 no inventário e ainda não estarem
+representados no catálogo canônico:
+
+| Prioridade | Título | Observações de identificação |
+|---|---|---|
+| B | Q*bert | O inventário registra “Q-bert” na plataforma Othello Multivision; confirmar a nomenclatura canônica antes de fixar metadados de ROM |
+| B | Space Mountain | Registrado para Othello Multivision |
+| B | Congo Bongo | Há variantes regionais e revisões; não tratar cada dump como jogo separado |
+| B | Dragon Wang | Há revisões e variantes regionais |
+| B | Gulkave | O inventário também contém uma variante coreana não licenciada; manter o título comercial separado |
+| B | Pachinko | Título distinto de Pachinko II |
+| B | Serizawa Hachidan no Tsumeshougi | Título japonês; preservar a grafia original para pesquisa e identificação |
+| B | Shinnyushain Tooru-kun | O inventário inclui uma variante Taiwan não licenciada |
+| B | Soukoban | Há variantes Taiwan/Coreia não licenciadas no inventário |
+| B | Space Armor | Registrado para Othello Multivision |
+
+#### Registros deliberadamente fora deste catálogo
+
+O arquivo também contém itens que não devem ser incorporados à lista de jogos
+comerciais prioritários do SG-1000 sem uma classificação própria:
+
+- **SC-3000:** Home BASIC, BASIC Level II/III, programas educacionais japoneses,
+  Music Editor e outros programas identificados explicitamente como SC-3000.
+- **SF-7000:** Disk BASIC, Sega Logo, coleções de disco e títulos identificados
+  como software SF-7000.
+- **BIOS e diagnóstico:** Othello Multivision BIOS e SG-1000 M2 Test Cartridge.
+- **Não licenciados/variantes de terceiros:** dumps Taiwan/Coreia marcados como
+  `Unl`, protótipos e títulos aftermarket. Eles podem ser úteis numa futura
+  suíte de compatibilidade ampliada, mas não comprovam lançamento comercial
+  oficial nem devem ser misturados silenciosamente ao catálogo principal.
+- **Periféricos/software especializado:** Terebi Oekaki e programas de
+  acessórios devem ter seus requisitos de hardware documentados antes de serem
+  usados como testes gerais de compatibilidade.
+
+#### Limitações da análise
+
+A lista enviada identifica nomes, regiões, revisões e relações entre variantes,
+mas o texto não contém hashes, tamanhos ou bytes das ROMs. Portanto, não permite
+validar integridade de dumps, confirmar que cada imagem funciona ou determinar
+compatibilidade com o nosso código. As marcações regionais e de licença foram
+preservadas conforme descritas no arquivo; qualquer classificação editorial
+adicional deve ser confirmada com uma segunda fonte antes de ser considerada
+definitiva.
 
 ### Prioridades
 
