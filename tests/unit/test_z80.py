@@ -4,7 +4,7 @@ import pytest
 
 from sega_emulator.bus.memory import RAM_SIZE, SG1000Ram
 from sega_emulator.bus.memory_bus import SG1000MemoryBus
-from sega_emulator.cpu.z80 import UnsupportedOpcodeError, Z80Cpu
+from sega_emulator.cpu.z80 import Z80Cpu
 
 
 def make_cpu(program: bytes) -> Z80Cpu:
