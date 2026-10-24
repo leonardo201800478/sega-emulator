@@ -1,7 +1,5 @@
 """Roteador de portas de I/O para dispositivos da plataforma."""
 
-from collections.abc import Mapping
-
 IO_ADDRESS_MASK = 0xFFFF
 IO_PORT_MASK = 0xFF
 
