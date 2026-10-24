@@ -146,9 +146,7 @@ class TMS9918A:
                     and (self.registers[1] & 0x40)
                     and self._display_mode != 1
                 ):
-                    self._render_sprite_line(
-                        None, completed_line, update_status=True
-                    )
+                    self._render_sprite_line(None, completed_line, update_status=True)
                 self.scanline += 1
                 if self.scanline == VBLANK_LINE:
                     self.status |= 0x80
