@@ -13,9 +13,22 @@ TONE_CHANNELS = 3
 NOISE_CHANNEL = 3
 
 _ATTENUATION = (
-    1.0, 0.794328, 0.630957, 0.501187, 0.398107, 0.316228, 0.251189,
-    0.199526, 0.158489, 0.125893, 0.1, 0.079433, 0.063096, 0.050119,
-    0.039811, 0.0,
+    1.0,
+    0.794328,
+    0.630957,
+    0.501187,
+    0.398107,
+    0.316228,
+    0.251189,
+    0.199526,
+    0.158489,
+    0.125893,
+    0.1,
+    0.079433,
+    0.063096,
+    0.050119,
+    0.039811,
+    0.0,
 )
 
 
@@ -75,12 +88,12 @@ class SN76489:
         is_volume = bool(register & 1)
         if channel < TONE_CHANNELS and not is_volume:
             if latched:
-                self.tone_periods[channel] = (
-                    (self.tone_periods[channel] & 0x3F0) | (data & 0x0F)
+                self.tone_periods[channel] = (self.tone_periods[channel] & 0x3F0) | (
+                    data & 0x0F
                 )
             else:
-                self.tone_periods[channel] = (
-                    (self.tone_periods[channel] & 0x00F) | ((data & 0x3F) << 4)
+                self.tone_periods[channel] = (self.tone_periods[channel] & 0x00F) | (
+                    (data & 0x3F) << 4
                 )
             self.tone_periods[channel] &= 0x3FF
             return
@@ -106,7 +119,9 @@ class SN76489:
                 self._tone_counters[channel] = 0
                 self._tone_outputs[channel] ^= 1
         select = self.noise_control & 0x03
-        noise_period = (self.tone_periods[2] or 0x400) if select == 3 else (0x10 << select)
+        noise_period = (
+            (self.tone_periods[2] or 0x400) if select == 3 else (0x10 << select)
+        )
         self._noise_counter += 1
         if self._noise_counter >= noise_period:
             self._noise_counter = 0
