@@ -17,13 +17,39 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from sega_emulator.bus.memory import RAM_SIZE, SG1000Ram
-from sega_emulator.bus.memory_bus import SG1000MemoryBus
 from sega_emulator.cpu.z80 import Z80Cpu
 
 
+class FlatStressMemoryBus:
+    """Memória plana e totalmente mapeada para isolar a CPU no stress test."""
+
+    def __init__(self, program: bytes) -> None:
+        self.memory = bytearray(0x10000)
+        self.memory[: len(program)] = program
+
+    def read(self, address: int) -> int:
+        return self.memory[address & 0xFFFF]
+
+    def write(self, address: int, value: int) -> None:
+        self.memory[address & 0xFFFF] = value & 0xFF
+
+
+class FlatStressIOBus:
+    """Portas determinísticas sem efeitos externos para a auditoria da CPU."""
+
+    def read_port(self, address: int) -> int:
+        del address
+        return 0xFF
+
+    def write_port(self, address: int, value: int) -> None:
+        del address, value
+
+
 def make_cpu(program: bytes) -> Z80Cpu:
-    return Z80Cpu(SG1000MemoryBus(SG1000Ram(bytes(RAM_SIZE)), program))
+    # O teste de robustez da CPU não deve confundir endereços sem mapeamento
+    # ou escritas em ROM com exceções internas da CPU. O mapa real é validado
+    # separadamente nos testes de integração do barramento.
+    return Z80Cpu(FlatStressMemoryBus(program), io_bus=FlatStressIOBus())
 
 
 def initial_state(cpu: Z80Cpu) -> dict[str, Any]:
