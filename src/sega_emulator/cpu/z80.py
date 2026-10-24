@@ -30,6 +30,12 @@ class Z80Cpu:
         registradores gerais de um Z80 físico tenham valores definidos após
         RESET. Os barramentos e o conteúdo da memória permanecem intactos.
         """
+        self._step_depth = 0
+        self.q = 0
+        self._q_previous = 0
+        # P latch: previous instruction was LD A,I or LD A,R.
+        self.p = 0
+        self.wz = 0
         self.a = 0
         self.f = 0
         self.b = 0
@@ -58,6 +64,18 @@ class Z80Cpu:
         self.sp = 0
         self.pc = 0
         self.total_cycles = 0
+
+    @property
+    def f(self) -> int:
+        return self._f
+
+    @f.setter
+    def f(self, value: int) -> None:
+        self._f = value & 0xFF
+        # Durante step(), escritas em F atualizam Q. Escritas externas
+        # (setup de testes e atribuições de registradores) não alteram Q.
+        if getattr(self, "_step_depth", 0) > 0:
+            self.q = self._f
 
     @staticmethod
     def _validate_byte(value: int) -> None:
@@ -263,6 +281,7 @@ class Z80Cpu:
     def _add_hl(self, value: int) -> None:
         """Executa ADD HL,rr, preservando S, Z e P/V."""
         previous = self.hl
+        self.wz = (previous + 1) & 0xFFFF
         result = previous + value
         result_word = result & 0xFFFF
         flags = self.f & 0xC4  # S, Z e P/V preservados
@@ -277,6 +296,7 @@ class Z80Cpu:
     def _add_sub_hl(self, value: int, subtract: bool) -> None:
         """Executa ADC/SBC HL,rr, incluindo carry, overflow e flags de 16 bits."""
         previous = self.hl
+        self.wz = (previous + 1) & 0xFFFF
         carry_in = self.f & 0x01
         if subtract:
             result = previous - value - carry_in
@@ -631,18 +651,21 @@ class Z80Cpu:
                 self.r = self.a
             else:
                 self._load_a_from_special_register(self.i if opcode == 0x57 else self.r)
+                self.p = 1
             return 9
         if opcode & 0xCF == 0x43:
             address = self._fetch_byte() | (self._fetch_byte() << 8)
             value = self._read_stack_pair((opcode >> 4) & 3)
             self.bus.write(address, value & 0xFF)
             self.bus.write((address + 1) & 0xFFFF, value >> 8)
+            self.wz = (address + 1) & 0xFFFF
             return 20
         if opcode & 0xCF == 0x4B:
             address = self._fetch_byte() | (self._fetch_byte() << 8)
             low = self.bus.read(address)
             high = self.bus.read((address + 1) & 0xFFFF)
             self._write_stack_pair((opcode >> 4) & 3, (high << 8) | low)
+            self.wz = (address + 1) & 0xFFFF
             return 20
         if opcode & 0xCF == 0x4A:
             self._add_sub_hl(self._read_stack_pair((opcode >> 4) & 3), False)
@@ -652,7 +675,9 @@ class Z80Cpu:
             return 15
         if opcode & 0xC7 == 0x40:
             register = (opcode >> 3) & 7
-            value = self._read_port(self.bc)
+            port = self.bc
+            value = self._read_port(port)
+            self.wz = (port + 1) & 0xFFFF
             if register != 6:
                 self._write_register(register, value)
             self.f = (self.f & 1) | (value & 0xA8) | self._parity_flag(value)
@@ -661,8 +686,10 @@ class Z80Cpu:
             return 12
         if opcode & 0xC7 == 0x41:
             register = (opcode >> 3) & 7
+            port = self.bc
             value = 0 if register == 6 else self._read_register(register)
-            self._write_port(self.bc, value)
+            self._write_port(port, value)
+            self.wz = (port + 1) & 0xFFFF
             return 12
         if opcode in (0x44, 0x4C, 0x54, 0x5C, 0x64, 0x6C, 0x74, 0x7C):
             old_a = self.a
@@ -671,6 +698,7 @@ class Z80Cpu:
             return 8
         if opcode in (0x45, 0x4D, 0x55, 0x5D, 0x65, 0x6D, 0x75, 0x7D):
             self.pc = self._pop_word()
+            self.wz = self.pc
             self.iff1 = self.iff2
             return 14
         if opcode in (0x46, 0x4E, 0x66, 0x6E):
@@ -820,6 +848,7 @@ class Z80Cpu:
             displacement = self._signed_byte(self._fetch_byte())
             cb_opcode = self._fetch_byte()
             address = (index + displacement) & 0xFFFF
+            self.wz = address
             value = self.bus.read(address)
             operation = cb_opcode >> 6
             bit_index = (cb_opcode >> 3) & 7
@@ -899,6 +928,7 @@ class Z80Cpu:
                 cycles = 14
             elif opcode in (0x22, 0x2A):
                 address = self._fetch_byte() | (self._fetch_byte() << 8)
+                self.wz = (address + 1) & 0xFFFF
                 if opcode == 0x22:
                     self.bus.write(address, index & 0xFF)
                     self.bus.write((address + 1) & 0xFFFF, index >> 8)
@@ -913,6 +943,7 @@ class Z80Cpu:
             elif opcode in (0x09, 0x19, 0x29, 0x39):
                 code = (opcode >> 4) & 3
                 operand = index if code == 2 else self._read_stack_pair(code)
+                self.wz = (index + 1) & 0xFFFF
                 result = index + operand
                 flags = self.f & 0xC4
                 flags |= ((result & 0xFFFF) >> 8) & 0x28
@@ -936,6 +967,7 @@ class Z80Cpu:
                 self.bus.write(high_address, index >> 8)
                 self.bus.write(self.sp, index & 0xFF)
                 self._set_index_value(prefix, (high << 8) | low)
+                self.wz = (high << 8) | low
                 cycles = 23
             elif opcode == 0xE9:
                 self.pc = index
@@ -960,11 +992,14 @@ class Z80Cpu:
         elif opcode == 0x36:
             displacement = self._signed_byte(self._fetch_byte())
             value = self._fetch_byte()
-            self.bus.write((index + displacement) & 0xFFFF, value)
+            address = (index + displacement) & 0xFFFF
+            self.wz = address
+            self.bus.write(address, value)
             cycles = 19
         elif opcode in (0x34, 0x35):
             displacement = self._signed_byte(self._fetch_byte())
             address = (index + displacement) & 0xFFFF
+            self.wz = address
             old = self.bus.read(address)
             value = (
                 self._inc_register_value(old)
@@ -978,6 +1013,7 @@ class Z80Cpu:
             if destination == 6 or source == 6:
                 displacement = self._signed_byte(self._fetch_byte())
                 address = (index + displacement) & 0xFFFF
+                self.wz = address
                 if source == 6:
                     value = self.bus.read(address)
                     self._write_index_register(prefix, destination, value, halves=False)
@@ -993,7 +1029,9 @@ class Z80Cpu:
             source = opcode & 7
             if source == 6:
                 displacement = self._signed_byte(self._fetch_byte())
-                value = self.bus.read((index + displacement) & 0xFFFF)
+                address = (index + displacement) & 0xFFFF
+                self.wz = address
+                value = self.bus.read(address)
                 cycles = 19
             else:
                 value = self._read_index_register(prefix, source)
@@ -1028,6 +1066,18 @@ class Z80Cpu:
         return cycles
 
     def step(self) -> int:
+        """Executa uma instrução mantendo o latch Q entre instruções."""
+        outermost = self._step_depth == 0
+        if outermost:
+            self._q_previous = self.q
+            self.q = 0
+        self._step_depth += 1
+        try:
+            return self._step_impl()
+        finally:
+            self._step_depth -= 1
+
+    def _step_impl(self) -> int:
         """Executa uma instrução implementada e retorna seus T-states nominais.
 
         Famílias suportadas no marco atual:
@@ -1074,6 +1124,9 @@ class Z80Cpu:
         arquitetura; POP AF restaura F. ADD HL preserva S, Z e P/V.
         """
         if self._nmi_pending:
+            # NMI encerra a condição de "instrução anterior LD A,I/R", mas
+            # não aplica o erratum de PV reservado ao INT mascarável.
+            self.p = 0
             # O acknowledge de interrupção ocupa um ciclo M1 e incrementa R.
             self.r = (self.r & 0x80) | ((self.r + 1) & 0x7F)
             self._nmi_pending = False
@@ -1086,6 +1139,10 @@ class Z80Cpu:
             self.total_cycles += cycles
             return cycles
         if self._int_pending is not None and self.iff1 and self._ei_delay == 0:
+            # No Z80 clássico, INT imediatamente após LD A,I/R força PV=0.
+            if self.p:
+                self.f &= ~0x04
+            self.p = 0
             data_bus = self._int_pending
             # O acknowledge de INT incrementa R uma vez, inclusive em IM 0.
             self.r = (self.r & 0x80) | ((self.r + 1) & 0x7F)
@@ -1113,6 +1170,9 @@ class Z80Cpu:
                 cycles = 13
             self.total_cycles += cycles
             return cycles
+        # Qualquer instrução normal substitui a condição anterior de LD A,I/R;
+        # a própria instrução ED 57/5F pode armar P novamente.
+        self.p = 0
         if self.halted:
             self.r = (self.r & 0x80) | ((self.r + 1) & 0x7F)
             self.total_cycles += 4
@@ -1132,6 +1192,7 @@ class Z80Cpu:
                 self._write_port(port, self.a)
             else:
                 self.a = self._read_port(port)
+            self.wz = (port & 0xFF00) | ((port_low + 1) & 0xFF)
             cycles = 11
         elif opcode == 0xCB:  # família CB
             cycles = self._execute_cb(self._fetch_opcode_byte())
@@ -1244,16 +1305,19 @@ class Z80Cpu:
         elif opcode in (0x02, 0x12):  # LD (BC/DE),A
             address = self.bc if opcode == 0x02 else self.de
             self.bus.write(address, self.a)
+            self.wz = (self.a << 8) | ((address + 1) & 0xFF)
             cycles = 7
         elif opcode in (0x0A, 0x1A):  # LD A,(BC/DE)
             address = self.bc if opcode == 0x0A else self.de
             self.a = self.bus.read(address)
+            self.wz = (address + 1) & 0xFFFF
             cycles = 7
         elif opcode in (0x22, 0x2A):  # LD (nn),HL / LD HL,(nn)
             low = self._fetch_byte()
             high = self._fetch_byte()
             address = (high << 8) | low
             next_address = (address + 1) & 0xFFFF
+            self.wz = next_address
             if opcode == 0x22:
                 self.bus.write(address, self.l)
                 self.bus.write(next_address, self.h)
@@ -1268,8 +1332,10 @@ class Z80Cpu:
             address = (high << 8) | low
             if opcode == 0x32:
                 self.bus.write(address, self.a)
+                self.wz = (self.a << 8) | ((address + 1) & 0xFF)
             else:
                 self.a = self.bus.read(address)
+                self.wz = (address + 1) & 0xFFFF
             cycles = 13
         elif opcode & 0xCF == 0x03:  # INC rr
             code = (opcode >> 4) & 0x03
@@ -1291,6 +1357,7 @@ class Z80Cpu:
             self.bus.write(high_address, previous_hl >> 8)
             self.bus.write(low_address, previous_hl & 0xFF)
             self.hl = (high_value << 8) | low_value
+            self.wz = self.hl
             cycles = 19
         elif opcode == 0xE9:  # JP (HL)
             self.pc = self.hl
@@ -1302,23 +1369,28 @@ class Z80Cpu:
             low = self._fetch_byte()
             high = self._fetch_byte()
             self.pc = (high << 8) | low
+            self.wz = self.pc
             cycles = 10
         elif opcode & 0xC7 == 0xC2:  # JP cc,nn
             low = self._fetch_byte()
             high = self._fetch_byte()
+            target = (high << 8) | low
+            self.wz = target
             if self._condition((opcode >> 3) & 0x07):
-                self.pc = (high << 8) | low
+                self.pc = target
             cycles = 10
         elif opcode == 0x2F:  # CPL
             self.a ^= 0xFF
             self.f = (self.f & 0xC5) | (self.a & 0x28) | 0x12
             cycles = 4
         elif opcode == 0x37:  # SCF
-            self.f = (self.f & 0xC4) | (self.a & 0x28) | 0x01
+            undocumented = (self.a | (self._q_previous ^ self.f)) & 0x28
+            self.f = (self.f & 0xC4) | undocumented | 0x01
             cycles = 4
         elif opcode == 0x3F:  # CCF
             previous_carry = self.f & 0x01
-            self.f = (self.f & 0xC4) | (self.a & 0x28)
+            undocumented = (self.a | (self._q_previous ^ self.f)) & 0x28
+            self.f = (self.f & 0xC4) | undocumented
             if previous_carry:
                 self.f |= 0x10
             else:
@@ -1331,6 +1403,7 @@ class Z80Cpu:
                 if displacement & 0x80:
                     displacement -= 0x100
                 self.pc = (self.pc + displacement) & 0xFFFF
+                self.wz = self.pc
                 cycles = 13
             else:
                 cycles = 8
@@ -1339,6 +1412,7 @@ class Z80Cpu:
             if displacement & 0x80:
                 displacement -= 0x100
             self.pc = (self.pc + displacement) & 0xFFFF
+            self.wz = self.pc
             cycles = 12
         elif opcode in (0x20, 0x28, 0x30, 0x38):  # JR cc,e
             displacement = self._fetch_byte()
@@ -1346,6 +1420,7 @@ class Z80Cpu:
                 if displacement & 0x80:
                     displacement -= 0x100
                 self.pc = (self.pc + displacement) & 0xFFFF
+                self.wz = self.pc
                 cycles = 12
             else:
                 cycles = 7
@@ -1360,22 +1435,27 @@ class Z80Cpu:
             high = self._fetch_byte()
             self._push_word(self.pc)
             self.pc = (high << 8) | low
+            self.wz = self.pc
             cycles = 17
         elif opcode & 0xC7 == 0xC4:  # CALL cc,nn
             low = self._fetch_byte()
             high = self._fetch_byte()
+            target = (high << 8) | low
+            self.wz = target
             if self._condition((opcode >> 3) & 0x07):
                 self._push_word(self.pc)
-                self.pc = (high << 8) | low
+                self.pc = target
                 cycles = 17
             else:
                 cycles = 10
         elif opcode == 0xC9:  # RET
             self.pc = self._pop_word()
+            self.wz = self.pc
             cycles = 10
         elif opcode & 0xC7 == 0xC0:  # RET cc
             if self._condition((opcode >> 3) & 0x07):
                 self.pc = self._pop_word()
+                self.wz = self.pc
                 cycles = 11
             else:
                 cycles = 5

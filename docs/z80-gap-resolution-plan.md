@@ -38,7 +38,7 @@ Legenda de evidência: **D** = documentado por fonte primária; **R** = literatu
 | GAP-06 | WZ/MEMPTR ausente | R e artigos no catálogo; não é necessário para a maioria das instruções básicas | Especificar atualizações por família e só então adicionar estado e testes de salto, I/O, BIT indexado e bloco | P1 |
 | GAP-07 | Temporização real do barramento não é observável | D; arquitetura atual retorna T-states agregados | Introduzir um traço determinístico de eventos/micro-operações antes de modelar contenção/WAIT | P1 arquitetural |
 | GAP-08 | Não existe harness diferencial reprodutível no fluxo principal | T; catálogo lista exercitadores e testes de terceiros | Definir adaptador de estado/entrada/saída, manifesto de proveniência e comparação campo a campo; começar com pequenos testes licenciados | P1 |
-| GAP-09 | Operações de 16 bits não têm varredura integral de todos os pares | T amostrado; ferramenta longa já existe | Executar a bateria prolongada em Colab quando necessário; preservar amostragem local curta e anexar log/artefato | P2 |
+| GAP-09 | Operações de 16 bits não têm varredura integral de todos os pares | T amostrado; ferramenta longa já existe | Executar a bateria prolongada no workflow estendido do GitHub Actions; preservar amostragem local curta e publicar log/artefato | P2 |
 | GAP-10 | Reset explícito implementado; política de variante ainda pendente | O construtor delega a `reset()`; teste cobre registradores, interrupções pendentes, contador, preservação de barramento/RAM e retomada por NOP. Execução do teste ainda precisa ser confirmada localmente/CI | Formalizar o alvo Zilog Z80 clássico e as exceções de variante; não interpretar o estado determinístico zerado como garantia elétrica do chip | P2 parcial |
 | GAP-11 | RETI não sinaliza controlador externo de prioridades | D; impacto depende da integração | Acrescentar evento/callback opcional no contrato de CPU/periférico quando houver daisy chain; não simular dispositivo inexistente | P2 |
 | GAP-12 | Integração de CPU, I/O, VDP e PSG do SG-1000 ainda não forma máquina funcional | Arquitetura e README | Depois de estabilizar contratos de CPU/barramento, integrar portas e dispositivos com testes de integração; manter ROMs comerciais fora do repositório | Marco SG-1000 |
@@ -142,3 +142,101 @@ Este documento é um plano de engenharia derivado de leitura estática dos arqui
 Em 23/10/2026, foi adicionado `Z80Cpu.reset()`. O construtor agora associa os barramentos e delega a inicialização do estado interno ao método. O reset zera os registradores principais e alternativos, IX/IY, I/R, PC/SP, IFF1/IFF2, modo de interrupção, HALT, atraso de EI, solicitações de NMI/INT, opcode temporário de IM 0 e contador de T-states. O método preserva as referências aos barramentos e não limpa a memória.
 
 Foi acrescentado `test_reset_clears_cpu_state_and_pending_interrupts_without_clearing_memory`, que verifica o contrato, inclusive a execução de um NOP após o reset. O teste foi adicionado ao repositório; **ainda não há resultado de execução nesta etapa**. A política de variante física permanece pendente.
+
+## 4. Cruzamento com suites externas
+
+**Fontes consultadas em 24/10/2026.** Este cruzamento separa vetores de estado final, programas exercitadores e evidência temporal. Não tratar todas as fontes como oráculos equivalentes.
+
+| Fonte | Tipo e evidência declarada pela própria fonte | Lacunas que ajuda a cobrir | Limites / decisão para o projeto |
+|---|---|---|---|
+| [SingleStepTests/z80](https://github.com/SingleStepTests/z80) | JSON por sequência de instrução; cada arquivo contém 1.000 casos com estado inicial/final, RAM, portas e amostras de sinais/ciclos. Inclui PC, registradores, I/R, IFF, IM, Q e WZ. O README informa que os vetores foram gerados a partir do núcleo Z80 do ares e depois corrigidos; não os descreve como captura direta de silício. | GAP-02/03/04/05/06/08; também fornece casos para flags, registradores, RAM e I/O. Pode alimentar um harness reprodutível de estado inicial/final. | Primeira opção para um subconjunto automatizado, mas é uma referência de implementação com possíveis erros, não prova independente de hardware. Comparar primeiro estado final e RAM/portas; não exigir igualdade de traço de barramento enquanto o núcleo não modelar micro-operações (GAP-07). Não importar todo o conjunto no CI curto. |
+| [raxoft/z80test](https://github.com/raxoft/z80test) | Exercitadores executáveis (z80full, z80doc, z80flags, z80docflags, z80ccf, z80memptr); o README diz que os resultados esperados foram obtidos num ZX Spectrum de 48K com Zilog Z80 real. Licença declarada: MIT. | GAP-03/05/06/08; especialmente conformidade documentada, flags X/Y, comportamento SCF/CCF associado ao Q e efeitos de MEMPTR em BIT. | Evidência independente mais forte para as áreas cobertas, mas não é um conjunto JSON unitário: é um programa para uma máquina Z80/Spectrum. Adiar execução end-to-end até haver ambiente compatível para carregar/executar o exercitador; não afirmar que os testes já rodam no núcleo isolado. Selecionar a variante Zilog como alvo e manter os testes específicos de variante separados. |
+| [z80test — releases](https://github.com/raxoft/z80test/releases) | A versão 1.2a documenta correção do teste MEMPTR para instruções de bloco repetidas. O histórico também registra versões dos testes SCF/CCF para CPUs NEC e ST. | GAP-05/06/10: ajuda a evitar tratar diferenças de variante como bug universal. | Fixar uma versão/release e registrar checksum/licença quando a suíte for integrada. Não usar CRCs de variante diferente como critério de falha do alvo Zilog. |
+| [jgenesis](https://github.com/jsgroth/jgenesis) e [Gearsystem](https://github.com/drhelius/Gearsystem) | Emuladores de sistemas Sega úteis como referências de arquitetura e integração; jgenesis separa o núcleo Z80 e executores de testes. Gearsystem cobre SG-1000/SMS/Game Gear. | GAP-08/12: estrutura de harness, isolamento do núcleo e integração com a máquina Sega. | Usar para comparação conceitual e de resultados observáveis, não copiar implementação sem revisão de licença. Os repositórios são GPL-3.0; não importar código GPL para este projeto sem decisão explícita de licenciamento. |
+
+### Subconjunto recomendado para o CI curto
+
+1. **Primeiro lote (semântica de estado final):** escolher um arquivo JSON por opcode/família já suportada e com impacto no marco atual: 00 (NOP, controle do harness), 37/3F (SCF/CCF), CB (BIT/flags), ED (família estendida), DD e FD (prefixos), além de um caso representativo de operação de bloco e um de I/O quando o runner conseguir mapear portas semânticas. Confirmar os nomes e a disponibilidade dos arquivos no repositório externo antes de fixar a lista; os nomes acima são uma seleção por opcode, não uma afirmação de que todos os casos passam hoje.
+2. **Limitar a execução:** no PR, executar um número fixo pequeno de vetores por arquivo (por exemplo, 10–25 casos determinísticos por arquivo), com seed/índices fixos. Não baixar ~1,6 milhão de casos em cada execução. A suíte completa fica num workflow manual/noturno e publica um relatório por opcode.
+3. **Comparar apenas campos suportados:** estado dos registradores, PC/SP, flags, memória alterada e operações de porta quando o adaptador puder observá-las. Registrar explicitamente campos ignorados, como WZ/MEMPTR se não existir no estado da CPU, em vez de removê-los silenciosamente. Os ciclos da fonte não devem ser comparados como se o núcleo atual fosse ciclo a ciclo.
+4. **Classificar divergências, não mascará-las:** cada diferença vira documented mismatch, variant mismatch, unsupported model feature, reference-vector suspect ou implementation bug, com fonte e reprodução mínima. Não ajustar o esperado para a saída atual da CPU.
+5. **Segundo lote (validação independente):** quando existir um caminho reprodutível para executar o exercitador, rodar primeiro z80doc/z80docflags; só então z80full/z80flags, e deixar z80ccf/z80memptr como gates separados até a política de variante e o suporte Q/WZ estarem definidos.
+
+### Critérios de aceitação do harness
+
+- [ ] Manifesto registra URL, versão/commit, licença, método de geração declarado pela fonte e campos comparados.
+- [ ] Um teste externo falha com mensagem contendo arquivo, nome/índice do vetor, opcode e primeiro campo divergente.
+- [ ] O subconjunto do PR é determinístico, curto e não depende de rede em cada execução depois que os dados aprovados estiverem versionados.
+- [ ] O workflow prolongado publica relatório e continua separado do gate rápido.
+- [ ] Casos não suportados são relatados explicitamente; não são convertidos em passes.
+- [ ] A documentação diferencia testes sintéticos existentes, vetores derivados de outro núcleo e resultados medidos em hardware real.
+
+**Conclusão do cruzamento:** SingleStepTests é a rota prática para criar o primeiro harness automatizado de estado final; raxoft/z80test é a validação independente posterior para documentadas, Q/SCF/CCF e MEMPTR. Nenhuma das duas substitui o trabalho futuro de traço de barramento para precisão temporal (GAP-07).
+
+## 5. Adaptador SingleStepTests implementado
+
+O módulo `src/sega_emulator/testing/z80_singlestep.py` implementa a primeira versão do adaptador para os vetores JSON de [SingleStepTests/z80](https://github.com/SingleStepTests/z80). Ele usa uma RAM plana de 64 KiB e um barramento de I/O de teste, sem alterar o mapa de memória físico do SG-1000.
+
+### Executar
+
+Depois de instalar o projeto e as dependências de desenvolvimento (`python -m pip install -e ".[dev]"`), baixe ou clone o corpus externo separadamente e execute, por exemplo:
+
+```powershell
+python -m sega_emulator.testing.z80_singlestep caminho\para\v1\00.json --limit 25 --report-json artifacts\z80-singlestep-00.json
+```
+
+`--limit 25` seleciona os primeiros 25 vetores de forma determinística; `--limit 0` executa todos os vetores do arquivo e `--start-index` permite reproduzir uma faixa. O adaptador não acessa a rede nem baixa dados automaticamente. O relatório inclui contagens e divergências por vetor.
+
+### Contrato e limites conhecidos
+
+- Compara os registradores representados pelo núcleo (`A/F`, registradores gerais, pares alternativos, `PC/SP`, `IX/IY`, `I/R`, `IFF1/IFF2`, modo de interrupção, atraso de `EI`, `P`, `Q` e `WZ`), além de RAM e transações de porta quando presentes no vetor.
+- Usa RAM plana de 64 KiB, pois os vetores descrevem um único passo de CPU e não o mapa físico da máquina SG-1000.
+- Não compara `cycles`/pinos: o núcleo ainda retorna T-states agregados e não oferece uma sequência de eventos de barramento ciclo a ciclo.
+- O latch `P` é modelado e comparado; estados ainda não representados ou opcodes não implementados são marcados como `unsupported`, nunca como aprovados. Divergências e estados não suportados fazem o workflow falhar, preservando o artefato para diagnóstico.
+- O teste unitário usa vetores sintéticos mínimos para validar o adaptador e não conta como resultado de conformidade do corpus externo.
+
+### Próximos gates
+
+1. **Concluído:** fixar a revisão upstream e verificar SHA-256 e tamanho dos arquivos por meio do manifesto versionado.
+2. Ampliar a cobertura de prefixos e opcodes com os arquivos disponíveis no corpus, mantendo separados aprovados, divergentes e não suportados.
+3. **Concluído:** modelar `P` como latch para `LD A,I`/`LD A,R`, limpar na instrução seguinte e aplicar PV=0 se INT mascarável for aceita imediatamente após essas instruções.
+4. Implementar um traço de eventos de barramento e só então comparar os arrays `cycles`.
+5. Manter a bateria completa como auditoria prolongada; o subconjunto atual é um gate de regressão dos campos modelados, não uma certificação geral de conformidade.
+
+
+## 6. Auditoria diferencial exploratória com corpus externo
+
+O workflow `.github/workflows/z80-singlestep-audit.yml` baixa, durante a execução, 11 arquivos JSON selecionados de [SingleStepTests/Z80](https://github.com/SingleStepTests/z80), sempre da revisão upstream fixa `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7` (commit assinado e verificado pelo GitHub). A revisão está registrada em [SingleStepTests/Z80 commit](https://github.com/SingleStepTests/z80/commit/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7). O corpus não é copiado como código-fonte para o repositório do emulador; os arquivos baixados e o relatório JSON são preservados como artefato da execução por 30 dias.
+
+O manifesto `tools/audits/singlestep-corpus-manifest.json` registra o commit, a licença MIT com URL imutável e o SHA-256 e tamanho em bytes esperados para cada arquivo. O verificador `tools/audits/verify_singlestep_corpus.py` valida todos os arquivos baixados antes da auditoria. Se um hash, tamanho ou arquivo não corresponder ao manifesto, o workflow falha antes de executar os vetores. O relatório inclui a revisão upstream e os hashes correspondentes. Assim, alterações futuras na branch `main` do corpus não alteram silenciosamente os dados usados pelo teste.
+
+O script `tools/audits/run_singlestep_corpus.py` carrega e compara o campo interno `p`, agora modelado no núcleo como o latch de `LD A,I`/`LD A,R`. Ele registra separadamente casos aprovados, divergentes e não suportados. Divergências e estados não suportados fazem o workflow falhar, enquanto o artefato é preservado para diagnóstico.
+
+**Limitação essencial:** o teste compara estado arquitetural representado e RAM, mas não compara o array `cycles` do corpus. Portanto, mesmo um vetor aprovado não demonstra precisão ciclo a ciclo nem equivalência de barramento. O workflow bloqueia regressões nos campos modelados, mas não é uma certificação geral nem uma prova independente de conformidade com silício.
+
+A licença MIT foi conferida no arquivo `LICENSE` da mesma revisão fixa. O workflow guarda no artefato `SOURCE.txt` o commit utilizado e inclui uma cópia do manifesto. Os hashes são calculados sobre os bytes dos arquivos baixados, não sobre JSON reserializado.
+
+
+### Resultado da primeira execução diferencial (24/10/2026)
+
+O workflow executou 11 arquivos do corpus, com 1.000 vetores por arquivo (**11.000 vetores totais**). No estado atual do código, o relatório registrou **5.401 aprovados, 0 divergentes e 5.599 excluídos** porque o campo interno `p` estava ativo. Os vetores excluídos não são contados como aprovados.
+
+A primeira execução com os vetores de I/O expôs divergências no registrador WZ:
+- `OUT (n),A`: WZ precisava preservar o byte alto do endereço da porta e incrementar apenas o byte baixo, inclusive no wrap de `FFh` para `00h`.
+- `IN r,(C)` e `OUT (C),r`: WZ precisava receber `BC + 1`, usando o BC anterior à instrução, inclusive quando a leitura altera B.
+
+Esses comportamentos foram corrigidos em `src/sega_emulator/cpu/z80.py`, com testes de regressão para leitura de I/O derivada do traço, atualização de WZ e wrap do byte baixo. A execução seguinte eliminou as divergências nos 11 arquivos selecionados. Naquela execução inicial, 5.599 vetores foram excluídos por `p`; a implementação posterior passou a modelar esse latch e executou o subconjunto expandido sem exclusões. Os traços ciclo a ciclo continuam fora da comparação.
+
+O artefato JSON e os vetores usados ficam no workflow [Z80 SingleStepTests Differential Audit](https://github.com/leonardo201800478/sega-emulator/actions/workflows/z80-singlestep-audit.yml), por 30 dias.
+
+
+## Fase A2 — Expansão inicial do corpus diferencial (24/10/2026)
+
+Após fixar a revisão upstream e validar o manifesto SHA-256, a auditoria diferencial foi ampliada de 11 para **25 arquivos de vetores**. O incremento cobre:
+
+- **Base:** JR/JR NZ, LD rr,nn, LD (nn),HL, INC H, LD H,n, LD HL,(nn), LD (nn),A e casos de fronteira de PC/flags já representados pelos vetores escolhidos.
+- **CB:** RLC (HL) e BIT 0,B, ampliando para operação sobre memória e teste de bit em registrador.
+- **ED:** SBC HL,BC, NEG e RETN, além do vetor ED 40 existente, ampliando aritmética de 16 bits e retorno de interrupção.
+- **DD:** LD B,(IX+d), complementando LD IX,nn com leitura indexada.
+
+Os vetores adicionais seguem no mesmo commit upstream imutável e cada arquivo tem tamanho e SHA-256 fixados no manifesto. Esta etapa amplia a amostragem por família, mas **não equivale à cobertura integral dos 256 opcodes de cada espaço**; também não compara os traços de barramento ciclo a ciclo. O estado `p` deixou de ser motivo de exclusão: o executor carrega e compara o latch, incluindo o erratum de INT mascarável.

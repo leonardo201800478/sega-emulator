@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "upstream": {
+    "repository": "https://github.com/SingleStepTests/z80",
+    "commit": "ebe1875d48f374bcfd4b505d8eb8ee751568b5f7",
+    "commit_signature_verified_by_github": true,
+    "commit_url": "https://github.com/SingleStepTests/z80/commit/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7",
+    "license": "MIT",
+    "license_url": "https://github.com/SingleStepTests/z80/blob/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7/LICENSE"
+  },
+  "files": [
+    {
+      "file": "00.json",
+      "sha256": "410958fb7f0183ec268b52f2288068722a6c9c5e738822c94b3edde1dceb5420",
+      "size_bytes": 606165
+    },
+    {
+      "file": "04.json",
+      "sha256": "0f6c8d2d32fb80f8b6c887df5074ead578b698c19386054228525f31b87922ce",
+      "size_bytes": 607303
+    },
+    {
+      "file": "06.json",
+      "sha256": "d458e170211f1fac434fd28f1bcd93bdd2c2f6cb30e97b2616a19af265dd29f3",
+      "size_bytes": 687050
+    },
+    {
+      "file": "37.json",
+      "sha256": "3cb7ca94c400154112fd03ead580f5e14146da9ea21dfca5521cdfe28e4c81cc",
+      "size_bytes": 610775
+    },
+    {
+      "file": "3f.json",
+      "sha256": "2792a4da5dc5cbde9e808bac618cf1cd23ff5cbb0b132733eca037840d96ad4f",
+      "size_bytes": 610771
+    },
+    {
+      "file": "76.json",
+      "sha256": "6ff516ac7c9cf8195cbe15d97ebe8785bff8cdd7ec48141f0fae9659156b2cca",
+      "size_bytes": 612197
+    },
+    {
+      "file": "c6.json",
+      "sha256": "4866222870650424c258a53880e0bb180c5aaf81a117008bc526795afe232d6d",
+      "size_bytes": 694363
+    },
+    {
+      "file": "d3.json",
+      "sha256": "e2e44c8501b2b987888129b2c0d5f8bda2c76f4ada94ae495a99fe562c9369ef",
+      "size_bytes": 796195
+    },
+    {
+      "file": "cb 00.json",
+      "sha256": "c82f352a5e51a77394fa1d6329bcf3dbb7c464bbda513668b7661afdddbeb808",
+      "size_bytes": 712343
+    },
+    {
+      "file": "dd 21.json",
+      "sha256": "676084c3db96894d1d11de14bcf0ca8f01de5fe69ccccb60652af830df564c0c",
+      "size_bytes": 876461
+    },
+    {
+      "file": "ed 40.json",
+      "sha256": "29f95b2433806b1625fcf3821b612d662b79255b846481ea7ba21d23da99a8d1",
+      "size_bytes": 818353
+    },
+    {
+      "file": "18.json",
+      "sha256": "9c00311e1624f148c52c7a4fb81f0753ae980e93033769a1584e2f067b62a565",
+      "size_bytes": 788938
+    },
+    {
+      "file": "20.json",
+      "sha256": "59e84df8f1c91e29af8f6c36778298c7572204446c612de5ea0e726ba607a0cd",
+      "size_bytes": 742010
+    },
+    {
+      "file": "21.json",
+      "sha256": "98bade4c0af7356e7e780cf1ab9eca3f04d4006bd43806020f33d0a64765d0fb",
+      "size_bytes": 770920
+    },
+    {
+      "file": "22.json",
+      "sha256": "0a5f53e4d7345d40402c0fea8bcbef5bf107a8519081156203ba9a5ce805e959",
+      "size_bytes": 929288
+    },
+    {
+      "file": "24.json",
+      "sha256": "19dbf9caf13702d987fbe7f300f480d52c93df5340f5967a10385a5a61ba8244",
+      "size_bytes": 610027
+    },
+    {
+      "file": "26.json",
+      "sha256": "057c5e47fe60b556cfcd26424ebddc357fe1a4b9ba49949284eed8fbf0879cde",
+      "size_bytes": 689950
+    },
+    {
+      "file": "2a.json",
+      "sha256": "2c9bdc2d0db517902cc7f31b717b7ee8d119d6d9baeacfb160558e47d707500e",
+      "size_bytes": 932215
+    },
+    {
+      "file": "32.json",
+      "sha256": "de9e969ae1eff73bf71bf0e08c81e9e79aa221c44362235d8ccc4ea9909180d5",
+      "size_bytes": 850000
+    },
+    {
+      "file": "cb 06.json",
+      "sha256": "4aed3a7dda2ddff8a953c4e092e32365e9a9926cee73c8ed7aa713ca1ec37f51",
+      "size_bytes": 871054
+    },
+    {
+      "file": "cb 40.json",
+      "sha256": "9e94583777b206955928e1d49c96cd5c3b1659acf7b295caee4a9c031a593696",
+      "size_bytes": 715117
+    },
+    {
+      "file": "ed 42.json",
+      "sha256": "d5348d64364c935970a33076e70b6972fb8157eea966e3d8795eb8089a58177b",
+      "size_bytes": 854322
+    },
+    {
+      "file": "ed 44.json",
+      "sha256": "fd4e782c4646eaf4ebf0de9273e9574ccc42876e141df3fc8b717edd9b2faccc",
+      "size_bytes": 715610
+    },
+    {
+      "file": "ed 45.json",
+      "sha256": "5b330e2cbf698e03191a76c604563b43581da8d389fba03fd95d73810cacc530",
+      "size_bytes": 875700
+    },
+    {
+      "file": "dd 46.json",
+      "sha256": "39e25494cb699424d844b7324f0972f93a95ba70ac5a4f3d08ed46ea4eb16867",
+      "size_bytes": 975512
+    }
+  ]
+}

@@ -13,6 +13,20 @@ def make_cpu(program: bytes) -> Z80Cpu:
     return Z80Cpu(SG1000MemoryBus(ram, program))
 
 
+class FlatMemoryBus:
+    """Memória plana gravável para testes que atravessam o limite FFFFh."""
+
+    def __init__(self, program: bytes) -> None:
+        self.memory = bytearray(0x10000)
+        self.memory[: len(program)] = program
+
+    def read(self, address: int) -> int:
+        return self.memory[address & 0xFFFF]
+
+    def write(self, address: int, value: int) -> None:
+        self.memory[address & 0xFFFF] = value & 0xFF
+
+
 CONDITIONAL_FLAG_CASES = [
     (0, 0x00, 0x40),  # NZ: Z=0 / Z=1
     (1, 0x40, 0x00),  # Z: Z=1 / Z=0
@@ -353,7 +367,7 @@ def test_cpl_complements_accumulator_and_updates_only_documented_flags(
     [
         (0x00, 0xD6, 0xC5),  # S/Z/PV preservados, XY do A, carry definido
         (0x28, 0x01, 0x29),
-        (0xD7, 0xFF, 0xC5),
+        (0xD7, 0xFF, 0xED),
     ],
 )
 def test_scf_sets_carry_and_preserves_sign_zero_parity(
@@ -375,7 +389,7 @@ def test_scf_sets_carry_and_preserves_sign_zero_parity(
     [
         (0x00, 0xC5, 0xD4),  # carry anterior vira half-carry
         (0x28, 0x00, 0x29),  # carry anterior zero vira carry
-        (0xD7, 0xFF, 0xD4),  # carry anterior um vira H; X/Y vêm de A
+        (0xD7, 0xFF, 0xFC),  # carry anterior um vira H; X/Y vêm de A
     ],
 )
 def test_ccf_complements_carry_and_updates_half_carry(
@@ -390,6 +404,34 @@ def test_ccf_complements_carry_and_updates_half_carry(
     assert cpu.a == accumulator
     assert cpu.pc == 1
     assert cpu.total_cycles == 4
+
+
+def test_scf_uses_previous_flag_write_for_undocumented_xy() -> None:
+    cpu = make_cpu(bytes([0x04, 0x37]))  # INC B; SCF
+    cpu.b = 0x07
+    cpu.a = 0x00
+
+    assert cpu.step() == 4
+    assert cpu.f == 0x08
+    assert cpu.q == 0x08
+
+    assert cpu.step() == 4
+    assert cpu.f == 0x01
+    assert cpu.q == 0x01
+
+
+def test_q_latch_clears_after_instruction_that_preserves_flags() -> None:
+    cpu = make_cpu(bytes([0x04, 0x00, 0x37]))  # INC B; NOP; SCF
+    cpu.b = 0x07
+
+    assert cpu.step() == 4
+    assert cpu.q == 0x08
+    assert cpu.step() == 4
+    assert cpu.q == 0
+    assert cpu.step() == 4
+    # Q=0 after NOP, so SCF derives undocumented X/Y from A | (F ^ Q).
+    assert cpu.f == 0x09
+    assert cpu.q == 0x09
 
 
 @pytest.mark.parametrize(
@@ -2745,3 +2787,170 @@ def test_reset_clears_state_and_pending_interrupts_without_clearing_memory() -> 
 
     assert cpu.step() == 4
     assert cpu.pc == 1
+
+
+@pytest.mark.parametrize(
+    ("program", "initial_f", "expected_pc"),
+    [
+        (bytes([0x18, 0x02]), 0x00, 4),  # JR e sempre atualiza WZ para o destino.
+        (bytes([0x20, 0x02]), 0x00, 4),  # JR NZ,e tomado.
+        (bytes([0x20, 0x02]), 0x40, 2),  # JR NZ,e não tomado preserva WZ.
+    ],
+)
+def test_relative_jumps_update_wz_only_when_branch_is_taken(
+    program: bytes, initial_f: int, expected_pc: int
+) -> None:
+    cpu = make_cpu(program)
+    cpu.f = initial_f
+    cpu.wz = 0xBEEF
+
+    cpu.step()
+
+    assert cpu.pc == expected_pc
+    assert cpu.wz == (expected_pc if expected_pc != 2 else 0xBEEF)
+
+
+def test_absolute_hl_load_and_store_update_wz_to_next_address() -> None:
+    # O endereço alto está em FFFFh e o byte baixo deve envolver para 0000h.
+    store = Z80Cpu(FlatMemoryBus(bytes([0x22, 0xFF, 0xFF])))
+    store.hl = 0x1234
+    store.step()
+    assert store.wz == 0x0000
+    assert store.bus.read(0xFFFF) == 0x34
+    assert store.bus.read(0x0000) == 0x12
+
+    load = make_cpu(bytes([0x2A, 0x20, 0xC0]))  # LD HL,(C020h)
+    load.bus.write(0xC020, 0x78)
+    load.bus.write(0xC021, 0x56)
+    load.step()
+    assert load.hl == 0x5678
+    assert load.wz == 0xC021
+
+
+@pytest.mark.parametrize(
+    ("opcode", "initial_f", "expected_cycles"),
+    [
+        (0xC2, 0x40, 10),  # JP NZ,nn não tomado
+        (0xC4, 0x40, 10),  # CALL NZ,nn não tomado
+    ],
+)
+def test_untaken_absolute_conditional_control_flow_updates_wz(
+    opcode: int, initial_f: int, expected_cycles: int
+) -> None:
+    cpu = make_cpu(bytes([opcode, 0x34, 0x12]))
+    cpu.f = initial_f
+    cpu.wz = 0xBEEF
+    cpu.sp = 0xC100
+
+    assert cpu.step() == expected_cycles
+    assert cpu.pc == 3
+    assert cpu.wz == 0x1234
+    assert cpu.sp == 0xC100
+
+
+def test_absolute_accumulator_store_uses_accumulator_in_wz_high_byte() -> None:
+    cpu = make_cpu(bytes([0x32, 0xFF, 0xC0]))  # LD (C0FFh),A
+    cpu.a = 0x5A
+
+    cpu.step()
+
+    assert cpu.wz == 0x5A00
+
+
+def test_sbc_hl_and_retn_update_wz() -> None:
+    sbc = make_cpu(bytes([0xED, 0x42]))  # SBC HL,BC
+    sbc.hl = 0x1234
+    sbc.bc = 0x0001
+    sbc.step()
+    assert sbc.hl == 0x1233
+    assert sbc.wz == 0x1235
+
+    retn = make_cpu(bytes([0xED, 0x45]))  # RETN
+    retn.sp = 0xC010
+    retn.bus.write(0xC010, 0x34)
+    retn.bus.write(0xC011, 0x12)
+    retn.step()
+    assert retn.pc == 0x1234
+    assert retn.wz == 0x1234
+
+
+def test_indexed_memory_load_updates_wz_to_effective_address() -> None:
+    cpu = make_cpu(bytes([0xDD, 0x46, 0x02]))  # LD B,(IX+2)
+    cpu.ix = 0xC010
+    cpu.bus.write(0xC012, 0xA5)
+
+    cpu.step()
+
+    assert cpu.b == 0xA5
+    assert cpu.wz == 0xC012
+
+
+@pytest.mark.parametrize(
+    ("opcode", "special_value", "expected_a"),
+    [
+        (0x57, 0x42, 0x42),  # LD A,I
+        (0x5F, 0x20, 0x22),  # LD A,R: ED e 5F incrementam R
+    ],
+)
+def test_ld_a_i_or_r_sets_p_latch_for_one_instruction(
+    opcode: int, special_value: int, expected_a: int
+) -> None:
+    cpu = make_cpu(bytes([0xED, opcode, 0x00]))
+    cpu.i = special_value if opcode == 0x57 else 0
+    cpu.r = special_value if opcode == 0x5F else 0
+    cpu.iff2 = True
+
+    cpu.step()
+
+    assert cpu.a == expected_a
+    assert cpu.p == 1
+    assert cpu.f & 0x04
+
+    cpu.step()  # NOP subsequente consome o latch P.
+    assert cpu.p == 0
+
+
+def test_maskable_interrupt_after_ld_a_i_clears_pv_and_p() -> None:
+    cpu = make_cpu(bytes([0xED, 0x57]))
+    cpu.i = 0x80
+    cpu.iff1 = True
+    cpu.iff2 = True
+    cpu.f = 0x05  # P/V e carry definidos antes do cenário de interrupção.
+
+    cpu.step()
+    assert cpu.p == 1
+    assert cpu.f & 0x04
+
+    cpu.request_int(0xFF)
+    cpu.step()
+
+    assert cpu.pc == 0x0038
+    assert cpu.p == 0
+    assert cpu.f & 0x04 == 0
+    assert cpu.f & 0x01
+
+
+def test_nmi_clears_p_latch_without_applying_maskable_int_pv_erratum() -> None:
+    cpu = make_cpu(bytes([0xED, 0x57]))
+    cpu.i = 0x12
+    cpu.iff2 = True
+
+    cpu.step()
+    assert cpu.p == 1
+    assert cpu.f & 0x04
+
+    cpu.request_nmi()
+    cpu.step()
+
+    assert cpu.pc == 0x0066
+    assert cpu.p == 0
+    assert cpu.f & 0x04
+
+
+def test_reset_clears_p_latch() -> None:
+    cpu = make_cpu(bytes([0x00]))
+    cpu.p = 1
+
+    cpu.reset()
+
+    assert cpu.p == 0

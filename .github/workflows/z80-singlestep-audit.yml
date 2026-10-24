@@ -1,0 +1,67 @@
+name: Z80 SingleStepTests Differential Audit
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  single-step-corpus:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install project
+        run: python -m pip install -e .
+
+      - name: Download selected upstream vectors
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/singlestep-vectors
+          upstream_commit="ebe1875d48f374bcfd4b505d8eb8ee751568b5f7"
+          files=("00" "04" "06" "37" "3f" "76" "c6" "d3" "cb 00" "dd 21" "ed 40" "18" "20" "21" "22" "24" "26" "2a" "32" "cb 06" "cb 40" "ed 42" "ed 44" "ed 45" "dd 46")
+          for file_stem in "${files[@]}"; do
+            encoded="${file_stem// /%20}"
+            curl --fail --location --retry 3 --retry-delay 2 \
+              "https://raw.githubusercontent.com/SingleStepTests/z80/${upstream_commit}/v1/${encoded}.json" \
+              --output "artifacts/singlestep-vectors/${file_stem}.json"
+          done
+          cp tools/audits/singlestep-corpus-manifest.json artifacts/singlestep-vectors/MANIFEST.json
+          python tools/audits/verify_singlestep_corpus.py \
+            --directory artifacts/singlestep-vectors \
+            --manifest tools/audits/singlestep-corpus-manifest.json
+          printf '%s\n' \
+            'Corpus: https://github.com/SingleStepTests/z80' \
+            "Pinned commit: ${upstream_commit}" \
+            'License: MIT; see MANIFEST.json for the immutable license URL' \
+            'SHA-256 and byte lengths are verified against the committed manifest.' \
+            'Important: the current adapter does not compare per-cycle bus traces.' \
+            > artifacts/singlestep-vectors/SOURCE.txt
+
+      - name: Run differential audit and preserve report
+        run: |
+          python tools/audits/run_singlestep_corpus.py \
+            --directory artifacts/singlestep-vectors \
+            --files 00 04 06 37 3f 76 c6 d3 "cb 00" "dd 21" "ed 40" 18 20 21 22 24 26 2a 32 "cb 06" "cb 40" "ed 42" "ed 44" "ed 45" "dd 46" \
+            --report-json artifacts/z80-singlestep-report.json
+
+      - name: Upload corpus and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: z80-singlestep-differential-report
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 30
