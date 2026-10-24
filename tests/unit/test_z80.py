@@ -2557,7 +2557,6 @@ def test_indexed_cb_final_opcode_does_not_increment_refresh_register() -> None:
     assert cpu.r == 0x80  # DD e CB são M1; d e opcode final não são M1
 
 
-
 def test_reset_clears_state_and_pending_interrupts_without_clearing_memory() -> None:
     cpu = make_cpu(bytes([0x00]))  # NOP após reinicialização
     memory_bus = cpu.bus
