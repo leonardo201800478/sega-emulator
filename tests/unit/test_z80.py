@@ -128,9 +128,11 @@ def test_daa_exhaustive_accumulator_and_hnc_input_flags() -> None:
     ("opcode", "initial_q", "expected_flags"),
     [
         (0x37, 0x00, 0x2D),  # Q=0: F3/F5 recebem A | F
-        (0x37, 0x01, 0x25),  # Q!=0: F3/F5 recebem A
+        (0x37, 0x01, 0x25),  # Q!=0: F3/F5 recebem A | Q
+        (0x37, 0x28, 0x2D),  # Q fornece F5/F3 ausentes em A
         (0x3F, 0x00, 0x2D),  # C anterior=0: C é setado; H=0
         (0x3F, 0x01, 0x25),  # Q!=0 e C anterior=0
+        (0x3F, 0x28, 0x2D),  # CCF combina A e Q para F3/F5
     ],
 )
 def test_scf_ccf_undocumented_flags_depend_on_q(
@@ -145,6 +147,29 @@ def test_scf_ccf_undocumented_flags_depend_on_q(
     assert cpu.f == expected_flags
     assert cpu.q == expected_flags
 
+
+
+
+@pytest.mark.parametrize(
+    ("opcode", "expected_flags"),
+    [
+        (0x37, 0x65),  # SCF: F3/F5 incluem Q anterior
+        (0x3F, 0x74),  # CCF: H recebe C anterior e XY incluem Q
+    ],
+)
+def test_ignored_dd_prefix_preserves_q_for_scf_ccf(
+    opcode: int, expected_flags: int
+) -> None:
+    cpu = make_cpu(bytes([0xDD, opcode]))
+    cpu.a = 0x50
+    cpu.f = 0x75
+    cpu.q = 0x75
+
+    assert cpu.step() == 8
+    assert cpu.f == expected_flags
+    assert cpu.q == expected_flags
+    assert cpu.pc == 2
+    assert cpu.total_cycles == 8
 
 def test_bit_hl_uses_wz_for_undocumented_flags() -> None:
     cpu = make_cpu(bytes([0xCB, 0x46]))  # BIT 0,(HL)
