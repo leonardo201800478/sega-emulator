@@ -33,7 +33,7 @@ class SG1000Ram:
         if not RAM_START <= address <= RAM_END:
             raise ValueError(f"O endereço {address:04X}h não pertence à região da RAM.")
 
-        return (address - RAM_START) % RAM_SIZE
+        return address & (RAM_SIZE - 1)
 
     def read(self, address: int) -> int:
         """Lê um byte de um endereço mapeado para a RAM."""
@@ -42,11 +42,25 @@ class SG1000Ram:
     def write(self, address: int, value: int) -> None:
         """Escreve um byte em um endereço mapeado para a RAM."""
         offset = self._offset(address)
+        self._validate_value(value)
+        self._write_offset(offset, value)
 
+    @staticmethod
+    def _validate_value(value: int) -> None:
+        """Valida um byte antes de gravá-lo na RAM."""
         if type(value) is not int:
             raise TypeError("O valor deve ser um inteiro.")
-
         if not 0 <= value <= 0xFF:
             raise ValueError("O valor deve estar entre 00h e FFh.")
 
+    def _read_mapped(self, address: int) -> int:
+        """Lê endereço já validado pelo barramento de memória."""
+        return self._data[address & (RAM_SIZE - 1)]
+
+    def _write_mapped(self, address: int, value: int) -> None:
+        """Grava byte/endereço já validados pelo barramento de memória."""
+        self._data[address & (RAM_SIZE - 1)] = value
+
+    def _write_offset(self, offset: int, value: int) -> None:
+        """Grava um byte no offset físico já calculado e validado."""
         self._data[offset] = value
