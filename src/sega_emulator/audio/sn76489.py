@@ -1,17 +1,22 @@
-"""Modelo determinístico inicial do PSG SN76489 para a família SG-1000.
+"""Modelo determinístico do PSG SN76489AN usado no Sega SG-1000.
 
-Este módulo modela escrita nos registradores e geração de amostras mono. Ainda
-não integra o relógio da máquina nem pretende reproduzir todas as variantes
-analógicas/digitais do SN76489 sem validação diferencial.
+O núcleo opera com o clock de entrada do chip e um divisor interno por 16.
+O LFSR segue a variante de 15 bits documentada para o SG-1000 (realimentação
+branca pelos bits 0 e 1). A saída é uma mistura mono normalizada; não inclui
+a resposta analógica do circuito nem integração com a máquina/frontend.
 """
 
 from __future__ import annotations
 
 DEFAULT_CLOCK_HZ = 3_579_545
 DEFAULT_SAMPLE_RATE = 44_100
+CLOCK_DIVIDER = 16
 TONE_CHANNELS = 3
 NOISE_CHANNEL = 3
+LFSR_MASK = 0x7FFF
+LFSR_SEED = 0x4000
 
+# Um passo por nível: atenuação aproximada de 2 dB, valor 15 = silêncio.
 _ATTENUATION = (
     1.0,
     0.794328,
@@ -33,7 +38,7 @@ _ATTENUATION = (
 
 
 class SN76489:
-    """PSG com três canais de tom, ruído, atenuação e saída mono normalizada."""
+    """PSG com três canais de onda quadrada, ruído e saída mono determinística."""
 
     def __init__(
         self,
@@ -46,34 +51,34 @@ class SN76489:
             raise ValueError("sample_rate deve ser um inteiro positivo.")
         self.clock_hz = clock_hz
         self.sample_rate = sample_rate
-        self.tone_periods = [0x400, 0x400, 0x400]
+        self.tone_periods = [0, 0, 0]
         self.attenuations = [15, 15, 15, 15]
         self.noise_control = 0
         self._latched_register = 0
         self._tone_counters = [0, 0, 0]
         self._tone_outputs = [1, 1, 1]
         self._noise_counter = 0
-        self._noise_output = 1
-        self._lfsr = 0x4000
-        self._divider = 0
+        self._noise_clock = 0
+        self._lfsr = LFSR_SEED
+        self._clock_divider_phase = 0
         self._sample_phase = 0
 
     def reset(self) -> None:
-        """Restaura registradores e osciladores ao estado inicial determinístico."""
-        self.tone_periods[:] = [0x400, 0x400, 0x400]
+        """Restaura um estado inicial determinístico e silencioso."""
+        self.tone_periods[:] = [0, 0, 0]
         self.attenuations[:] = [15, 15, 15, 15]
         self.noise_control = 0
         self._latched_register = 0
         self._tone_counters[:] = [0, 0, 0]
         self._tone_outputs[:] = [1, 1, 1]
         self._noise_counter = 0
-        self._noise_output = 1
-        self._lfsr = 0x4000
-        self._divider = 0
+        self._noise_clock = 0
+        self._lfsr = LFSR_SEED
+        self._clock_divider_phase = 0
         self._sample_phase = 0
 
     def write(self, value: int) -> None:
-        """Escreve um byte no barramento serial do PSG."""
+        """Processa um byte latch/data no barramento serial do PSG."""
         if type(value) is not int or not 0 <= value <= 0xFF:
             raise ValueError("value deve ser um byte inteiro.")
         if value & 0x80:
@@ -102,54 +107,75 @@ class SN76489:
             return
         if channel == NOISE_CHANNEL and not is_volume:
             self.noise_control = data & 0x07
-            self._lfsr = 0x4000
-            self._noise_output = 1
-            self._noise_counter = 0
+            self._reset_noise_generator()
             return
         self.attenuations[NOISE_CHANNEL] = data & 0x0F
 
-    def _tick_divider(self) -> None:
-        self._divider = (self._divider + 1) & 0x0F
-        if self._divider:
-            return
+    def _reset_noise_generator(self) -> None:
+        self._lfsr = LFSR_SEED
+        self._noise_clock = 0
+        self._noise_counter = 0
+
+    def _shift_noise_register(self) -> None:
+        # SN76489AN/SG-1000: 15-bit LFSR; white-noise taps are bits 0 and 1.
+        if self.noise_control & 0x04:
+            feedback = (self._lfsr ^ (self._lfsr >> 1)) & 1
+        else:
+            feedback = self._lfsr & 1
+        self._lfsr = ((self._lfsr >> 1) | (feedback << 14)) & LFSR_MASK
+
+    def _tick_internal_clock(self) -> None:
         for channel, period in enumerate(self.tone_periods):
-            period = period or 0x400
+            # On this discrete-chip variant, periods 0 and 1 hold a constant high
+            # output; period 1 is also used by some software for PCM-like output.
+            if period <= 1:
+                self._tone_outputs[channel] = 1
+                self._tone_counters[channel] = 0
+                continue
             self._tone_counters[channel] += 1
             if self._tone_counters[channel] >= period:
                 self._tone_counters[channel] = 0
                 self._tone_outputs[channel] ^= 1
-        select = self.noise_control & 0x03
-        noise_period = (
-            (self.tone_periods[2] or 0x400) if select == 3 else (0x10 << select)
-        )
+
+        rate = self.noise_control & 0x03
+        noise_period = max(1, self.tone_periods[2]) if rate == 3 else (0x10 << rate)
         self._noise_counter += 1
         if self._noise_counter >= noise_period:
             self._noise_counter = 0
-            if self.noise_control & 0x04:
-                feedback = (self._lfsr ^ (self._lfsr >> 1)) & 1
-            else:
-                feedback = self._lfsr & 1
-            self._lfsr = (self._lfsr >> 1) | (feedback << 14)
-            self._noise_output = self._lfsr & 1
+            self._noise_clock ^= 1
+            # The LFSR advances on every rising edge of the divided noise clock.
+            if self._noise_clock:
+                self._shift_noise_register()
+
+    def advance_clocks(self, clocks: int) -> None:
+        """Avança clocks de entrada do chip sem gerar amostras de áudio."""
+        if type(clocks) is not int or clocks < 0:
+            raise ValueError("clocks deve ser um inteiro não negativo.")
+        internal_total = self._clock_divider_phase + clocks
+        internal_clocks, self._clock_divider_phase = divmod(
+            internal_total, CLOCK_DIVIDER
+        )
+        for _ in range(internal_clocks):
+            self._tick_internal_clock()
 
     def _mix(self) -> float:
         total = sum(
-            _ATTENUATION[self.attenuations[ch]] * (1 if self._tone_outputs[ch] else -1)
-            for ch in range(TONE_CHANNELS)
+            _ATTENUATION[self.attenuations[channel]]
+            * (1.0 if self._tone_outputs[channel] else -1.0)
+            for channel in range(TONE_CHANNELS)
         )
-        amplitude = _ATTENUATION[self.attenuations[NOISE_CHANNEL]]
-        total += amplitude if self._noise_output else -amplitude
+        noise = _ATTENUATION[self.attenuations[NOISE_CHANNEL]]
+        total += noise * (1.0 if self._lfsr & 1 else -1.0)
         return total * 0.25
 
     def render(self, sample_count: int) -> list[float]:
-        """Gera amostras mono com acumulação inteira de fase clock/taxa."""
+        """Gera amostras mono; a fase fracionária preserva a taxa entre chamadas."""
         if type(sample_count) is not int or sample_count < 0:
             raise ValueError("sample_count deve ser um inteiro não negativo.")
         output: list[float] = []
         for _ in range(sample_count):
             self._sample_phase += self.clock_hz
             clocks, self._sample_phase = divmod(self._sample_phase, self.sample_rate)
-            for _ in range(clocks):
-                self._tick_divider()
+            self.advance_clocks(clocks)
             output.append(self._mix())
         return output
