@@ -18,8 +18,7 @@ class _CartridgeMirrorBus:
         # modulo and a second validated bus read for every opcode and operand.
         rom_size = len(cartridge_rom)
         self._rom_window = (
-            cartridge_rom * (0xC000 // rom_size)
-            + cartridge_rom[: 0xC000 % rom_size]
+            cartridge_rom * (0xC000 // rom_size) + cartridge_rom[: 0xC000 % rom_size]
         )
 
     def read(self, address: int) -> int:
