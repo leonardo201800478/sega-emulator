@@ -44,6 +44,6 @@ jobs:
         run: |
           $wheel = Get-ChildItem native/z80/target/wheels/sega_z80_native-*.whl | Select-Object -First 1
           if (-not $wheel) { throw "Maturin did not produce a native wheel." }
-          python -m pip install $wheel.FullName
+          python -m pip install "$($wheel.FullName)"
       - name: Run native Python integration tests
         run: python -m pytest tests/test_native_z80.py -q
