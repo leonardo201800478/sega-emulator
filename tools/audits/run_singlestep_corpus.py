@@ -62,8 +62,6 @@ def audit_file(path: Path, manifest_entry: dict[str, Any]) -> dict[str, Any]:
     counts: Counter[str] = Counter()
     results: list[dict[str, Any]] = []
     for vector in vectors:
-        initial = vector.get("initial", {})
-        final = vector.get("final", {})
         # "p" é o latch de LD A,I/R do Z80 (não um estado de prefixo).
         # O adaptador agora carrega e compara esse estado interno.
         result = run_vector(vector)
