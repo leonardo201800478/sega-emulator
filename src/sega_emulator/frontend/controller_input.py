@@ -103,14 +103,20 @@ class ControllerInputConfig:
             raise ValueError("A configuração deve conter os jogadores 1 e 2.")
         if not 0.0 <= self.deadzone < 1.0:
             raise ValueError("deadzone deve estar no intervalo [0, 1).")
-        if any(not isinstance(profile, PlayerInputProfile) for profile in self.players.values()):
+        if any(
+            not isinstance(profile, PlayerInputProfile)
+            for profile in self.players.values()
+        ):
             raise ValueError("Cada jogador deve ter um PlayerInputProfile.")
 
     def to_json(self) -> str:
         payload = {
             "schema_version": 1,
             "deadzone": self.deadzone,
-            "players": {str(player): profile.to_dict() for player, profile in self.players.items()},
+            "players": {
+                str(player): profile.to_dict()
+                for player, profile in self.players.items()
+            },
         }
         return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
