@@ -68,7 +68,7 @@ jobs:
 
       - name: Run complete corpus
         run: |
-          python tools/audits/run_singlestep_full.py \
+          python run_singlestep_full.py \
             --directory external/SingleStepTests-z80/v1 \
             --workers "${{ inputs.workers }}" \
             --report-json artifacts/singlestep-full.json \
