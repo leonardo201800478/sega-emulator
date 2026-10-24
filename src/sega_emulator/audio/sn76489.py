@@ -65,8 +65,6 @@ class SN76489:
         self._clock_divider_phase = 0
         self._sample_phase = 0
         self._output_phase = 0
-        self._pending_samples.clear()
-        self._output_phase = 0
         self._pending_samples: deque[float] = deque(maxlen=self.sample_rate)
 
     def reset(self) -> None:
@@ -82,6 +80,8 @@ class SN76489:
         self._lfsr = LFSR_SEED
         self._clock_divider_phase = 0
         self._sample_phase = 0
+        self._output_phase = 0
+        self._pending_samples.clear()
 
     def write(self, value: int) -> None:
         """Processa um byte latch/data no barramento serial do PSG."""
