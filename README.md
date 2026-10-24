@@ -51,6 +51,8 @@ Para testar o caminho de vídeo sem depender de uma ROM externa, gere uma ROM ho
 .\.venv\Scripts\python.exe -m sega_emulator .\sg1000-demo.rom
 ```
 
+O gerador imprime o SHA-256 da ROM para que o artefato usado nos testes possa ser identificado.
+
 Para diagnóstico sem janela:
 
 ```powershell
