@@ -61,6 +61,7 @@ class SN76489:
         self._tone_outputs = [1, 1, 1]
         self._noise_counter = 0
         self._noise_clock = 0
+        self._noise_period = 0x10
         self._lfsr = LFSR_SEED
         self._clock_divider_phase = 0
         self._sample_phase = 0
@@ -77,6 +78,7 @@ class SN76489:
         self._tone_outputs[:] = [1, 1, 1]
         self._noise_counter = 0
         self._noise_clock = 0
+        self._noise_period = 0x10
         self._lfsr = LFSR_SEED
         self._clock_divider_phase = 0
         self._sample_phase = 0
@@ -107,15 +109,25 @@ class SN76489:
                     (data & 0x3F) << 4
                 )
             self.tone_periods[channel] &= 0x3FF
+            if channel == 2:
+                self._update_noise_period()
             return
         if channel < TONE_CHANNELS and is_volume:
             self.attenuations[channel] = data & 0x0F
             return
         if channel == NOISE_CHANNEL and not is_volume:
             self.noise_control = data & 0x07
+            self._update_noise_period()
             self._reset_noise_generator()
             return
         self.attenuations[NOISE_CHANNEL] = data & 0x0F
+
+    def _update_noise_period(self) -> None:
+        """Atualiza o divisor de ruído somente quando seus registradores mudam."""
+        rate = self.noise_control & 0x03
+        self._noise_period = (
+            max(1, self.tone_periods[2]) if rate == 3 else (0x10 << rate)
+        )
 
     def _reset_noise_generator(self) -> None:
         self._lfsr = LFSR_SEED
@@ -131,21 +143,43 @@ class SN76489:
         self._lfsr = ((self._lfsr >> 1) | (feedback << 14)) & LFSR_MASK
 
     def _tick_internal_clock(self) -> None:
-        for channel, period in enumerate(self.tone_periods):
-            # No SN76489AN discreto, períodos 0 e 1 mantêm a saída alta.
-            if period <= 1:
-                self._tone_outputs[channel] = 1
-                self._tone_counters[channel] = 0
-                continue
-            self._tone_counters[channel] += 1
-            if self._tone_counters[channel] >= period:
-                self._tone_counters[channel] = 0
-                self._tone_outputs[channel] ^= 1
+        # Unroll the three tone channels: this routine is the PSG hot path and
+        # runs once per divided chip clock, so avoid enumerate/iterator overhead.
+        period = self.tone_periods[0]
+        if period <= 1:
+            self._tone_outputs[0] = 1
+            self._tone_counters[0] = 0
+        else:
+            counter = self._tone_counters[0] + 1
+            if counter >= period:
+                counter = 0
+                self._tone_outputs[0] ^= 1
+            self._tone_counters[0] = counter
 
-        rate = self.noise_control & 0x03
-        noise_period = max(1, self.tone_periods[2]) if rate == 3 else (0x10 << rate)
+        period = self.tone_periods[1]
+        if period <= 1:
+            self._tone_outputs[1] = 1
+            self._tone_counters[1] = 0
+        else:
+            counter = self._tone_counters[1] + 1
+            if counter >= period:
+                counter = 0
+                self._tone_outputs[1] ^= 1
+            self._tone_counters[1] = counter
+
+        period = self.tone_periods[2]
+        if period <= 1:
+            self._tone_outputs[2] = 1
+            self._tone_counters[2] = 0
+        else:
+            counter = self._tone_counters[2] + 1
+            if counter >= period:
+                counter = 0
+                self._tone_outputs[2] ^= 1
+            self._tone_counters[2] = counter
+
         self._noise_counter += 1
-        if self._noise_counter >= noise_period:
+        if self._noise_counter >= self._noise_period:
             self._noise_counter = 0
             self._noise_clock ^= 1
             if self._noise_clock:
@@ -185,10 +219,14 @@ class SN76489:
         return [self._pending_samples.popleft() for _ in range(count)]
 
     def _mix(self) -> float:
-        total = sum(
-            _ATTENUATION[self.attenuations[channel]]
-            * (1.0 if self._tone_outputs[channel] else -1.0)
-            for channel in range(TONE_CHANNELS)
+        total = _ATTENUATION[self.attenuations[0]] * (
+            1.0 if self._tone_outputs[0] else -1.0
+        )
+        total += _ATTENUATION[self.attenuations[1]] * (
+            1.0 if self._tone_outputs[1] else -1.0
+        )
+        total += _ATTENUATION[self.attenuations[2]] * (
+            1.0 if self._tone_outputs[2] else -1.0
         )
         noise = _ATTENUATION[self.attenuations[NOISE_CHANNEL]]
         total += noise * (1.0 if self._lfsr & 1 else -1.0)

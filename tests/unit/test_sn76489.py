@@ -100,6 +100,25 @@ def test_advance_clocks_is_chunk_invariant() -> None:
     assert whole._clock_divider_phase == chunked._clock_divider_phase
 
 
+def test_noise_period_cache_tracks_noise_rate_and_tone_two_writes() -> None:
+    psg = SN76489()
+    assert psg._noise_period == 0x10
+
+    psg.write(0xE3)
+    assert psg._noise_period == 0x80
+
+    psg.write(0xE7)
+    assert psg._noise_period == 1
+
+    psg.write(0xC5)
+    psg.write(0x12)
+    assert psg.tone_periods[2] == 0x125
+    assert psg._noise_period == 0x125
+
+    psg.write(0xE2)
+    assert psg._noise_period == 0x40
+
+
 def test_reset_returns_to_deterministic_muted_state() -> None:
     psg = SN76489()
     enable_tone_zero(psg)
@@ -109,6 +128,7 @@ def test_reset_returns_to_deterministic_muted_state() -> None:
     assert psg.tone_periods == [0, 0, 0]
     assert psg.attenuations == [15, 15, 15, 15]
     assert psg._lfsr == LFSR_SEED
+    assert psg._noise_period == 0x10
     assert psg.render(16) == [0.0] * 16
 
 
