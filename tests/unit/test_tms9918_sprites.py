@@ -8,8 +8,15 @@ def _write_register(vdp: TMS9918A, register: int, value: int) -> None:
     vdp.write_port(0xBF, 0x80 | register)
 
 
-def _setup(vdp: TMS9918A, *, size16: bool = False, magnified: bool = False) -> None:
+def _setup(
+    vdp: TMS9918A,
+    *,
+    size16: bool = False,
+    magnified: bool = False,
+    sprite_limit_enabled: bool = True,
+) -> None:
     mode = 0x40 | (0x02 if size16 else 0) | (0x01 if magnified else 0)
+    vdp.sprite_limit_enabled = sprite_limit_enabled
     _write_register(vdp, 1, mode)
     _write_register(vdp, 5, 0x40)  # atributos em 0x2000
     _write_register(vdp, 6, 0x00)  # padrões em 0x0000
@@ -106,21 +113,25 @@ def test_sprite_can_be_shifted_left_by_32_pixels() -> None:
     assert _pixel(frame, 20, 0) == bytes((0, 0, 0))
 
 
-def test_16x16_sprite_uses_aligned_four_pattern_block() -> None:
+def test_16x16_sprite_uses_hardware_pattern_quadrant_order() -> None:
     vdp = TMS9918A()
     _setup(vdp, size16=True)
     _sprite(vdp, 0, 0xFF, 10, pattern=3, color=2)
     _sprite(vdp, 1, 0xD0, 0)
-    # Em 16x16, os dois bits inferiores do número do padrão são ignorados.
-    vdp.vram[0x00:0x08] = b"\x00" * 8
-    vdp.vram[0x08:0x10] = b"\x00" * 8
-    vdp.vram[0x10:0x18] = b"\x00" * 8
-    vdp.vram[0x18:0x20] = b"\x80" * 8
+    # N=0 (superior esquerdo), N+2=2 (superior direito),
+    # N+1=1 (inferior esquerdo), N+3=3 (inferior direito).
+    for tile in range(4):
+        vdp.vram[tile * 8 : tile * 8 + 8] = b"\x00" * 8
+    vdp.vram[0x10:0x18] = b"\x80" * 8  # superior direito: N+2
+    vdp.vram[0x08:0x10] = b"\x80" * 8  # inferior esquerdo: N+1
+    vdp.vram[0x18:0x20] = b"\x80" * 8  # inferior direito: N+3
 
     frame = vdp.render_frame()
 
     assert _pixel(frame, 10, 0) == bytes((0, 0, 0))
+    assert _pixel(frame, 18, 0) == bytes((33, 200, 66))
     assert _pixel(frame, 10, 8) == bytes((33, 200, 66))
+    assert _pixel(frame, 18, 8) == bytes((33, 200, 66))
 
 
 def test_status_read_clears_sprite_flags() -> None:
