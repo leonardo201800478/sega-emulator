@@ -16,7 +16,7 @@ from typing import Any
 
 from sega_emulator.testing.z80_singlestep import run_vector
 
-DEFAULT_OPCODES = ("00", "04", "06", "37", "3f", "76", "c6", "cb", "dd", "ed", "fd")
+DEFAULT_FILES = ("00", "04", "06", "37", "3f", "76", "c6", "cb 00", "dd 21", "ed 40")
 
 
 def load_json(path: Path) -> list[dict[str, Any]]:
@@ -66,19 +66,24 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--directory", type=Path, required=True)
     parser.add_argument(
-        "--opcodes",
+        "--files",
         nargs="+",
-        default=list(DEFAULT_OPCODES),
-        help="Arquivos de opcode em hexadecimal (ex.: 00 04 37 cb)",
+        default=list(DEFAULT_FILES),
+        help='Nomes de arquivos sem ".json" (prefixos podem conter espaço)',
     )
     parser.add_argument("--report-json", type=Path, required=True)
     args = parser.parse_args()
 
     reports: list[dict[str, Any]] = []
-    for opcode in args.opcodes:
-        normalized = opcode.lower().removeprefix("0x").zfill(2)
-        if len(normalized) != 2 or any(char not in "0123456789abcdef" for char in normalized):
-            parser.error(f"opcode inválido: {opcode}")
+    for file_stem in args.files:
+        normalized = file_stem.lower()
+        if (
+            not normalized
+            or "/" in normalized
+            or "\\" in normalized
+            or not all(char in "0123456789abcdef " for char in normalized)
+        ):
+            parser.error(f"nome de arquivo inválido: {file_stem}")
         path = args.directory / f"{normalized}.json"
         if not path.is_file():
             parser.error(f"arquivo de vetor ausente: {path}")
