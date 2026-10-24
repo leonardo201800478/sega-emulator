@@ -40,9 +40,7 @@ _PALETTE_RGB_BYTES: tuple[bytes, ...] = tuple(bytes(color) for color in PALETTE)
 _BACKDROP_SCANLINES: tuple[bytes, ...] = tuple(
     bytes(color) * SCREEN_WIDTH for color in PALETTE
 )
-_COLOR_QUARTERS: tuple[bytes, ...] = tuple(
-    rgb * 4 for rgb in _PALETTE_RGB_BYTES
-)
+_COLOR_QUARTERS: tuple[bytes, ...] = tuple(rgb * 4 for rgb in _PALETTE_RGB_BYTES)
 
 
 @lru_cache(maxsize=8192)
