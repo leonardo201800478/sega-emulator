@@ -44,6 +44,13 @@ repositório.
 Controles iniciais: setas direcionais, Z/Space para botão 1, X/Enter para botão 2 e Esc
 para sair.
 
+Para testar o caminho de vídeo sem depender de uma ROM externa, gere uma ROM homebrew de diagnóstico:
+
+```powershell
+.\.venv\Scripts\python.exe tools/create_sg1000_demo_rom.py --output sg1000-demo.rom
+.\.venv\Scripts\python.exe -m sega_emulator .\sg1000-demo.rom
+```
+
 Para diagnóstico sem janela:
 
 ```powershell
