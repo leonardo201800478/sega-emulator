@@ -55,14 +55,22 @@ def new_machine(rom: bytes) -> SG1000Machine:
     return machine
 
 
-def diagnose_rendering(rom: bytes, frames: int, warmup_frames: int, max_steps: int) -> None:
+def diagnose_rendering(
+    rom: bytes, frames: int, warmup_frames: int, max_steps: int
+) -> None:
     """Count rasterizer work separately from the timed benchmark."""
     from collections import Counter
 
     machine = new_machine(rom)
     run_frames(machine, warmup_frames, max_steps)
     vdp = machine.vdp
-    mode_names = {0: "graphics_i", 1: "text", 2: "multicolor", 3: "invalid_3", 4: "graphics_ii"}
+    mode_names = {
+        0: "graphics_i",
+        1: "text",
+        2: "multicolor",
+        3: "invalid_3",
+        4: "graphics_ii",
+    }
     scanlines: Counter[str] = Counter()
     pixel_calls: Counter[str] = Counter()
     sprite_phase = False
@@ -88,9 +96,7 @@ def diagnose_rendering(rom: bytes, frames: int, warmup_frames: int, max_steps: i
         finally:
             sprite_phase = previous_phase
 
-    def counted_put_pixel(
-        pixels: bytearray, x: int, y: int, color: int
-    ) -> None:
+    def counted_put_pixel(pixels: bytearray, x: int, y: int, color: int) -> None:
         pixel_calls["sprite" if sprite_phase else "background"] += 1
         original_put_pixel(pixels, x, y, color)
 
@@ -192,7 +198,9 @@ def main() -> int:
     print(f"median_tstates_per_frame={statistics.median(cycles_per_frame):.1f}")
 
     if args.render_diagnostics:
-        diagnose_rendering(rom, args.frames, args.warmup_frames, args.max_steps_per_frame)
+        diagnose_rendering(
+            rom, args.frames, args.warmup_frames, args.max_steps_per_frame
+        )
 
     if args.profile:
         machine = new_machine(rom)
