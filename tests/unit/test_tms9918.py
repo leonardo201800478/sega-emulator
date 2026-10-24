@@ -145,6 +145,7 @@ def test_vdp_status_read_cancels_partial_control_command() -> None:
     assert vdp.address == 0
     assert vdp.registers[0] == 0
 
+
 def _prepare_sprite_table(vdp: TMS9918A) -> None:
     # Place the attribute table away from sprite patterns at address zero.
     _write_register(vdp, 1, 0x40)  # Display enabled; 8x8 sprites, no magnification.
@@ -159,7 +160,13 @@ def _prepare_sprite_table(vdp: TMS9918A) -> None:
 
 
 def _set_sprite(
-    vdp: TMS9918A, index: int, *, x: int, pattern: int, color: int, raw_y: int = 0xFF
+    vdp: TMS9918A,
+    index: int,
+    *,
+    x: int,
+    pattern: int,
+    color: int,
+    raw_y: int = 0xFF,
 ) -> None:
     offset = 0x2000 + index * 4
     vdp.vram[offset : offset + 4] = bytes((raw_y, x, pattern, color))
@@ -235,4 +242,17 @@ def test_reset_preserves_vram_unless_explicitly_requested() -> None:
     assert vdp.frame_number == 0
     vdp.reset(clear_vram=True)
     assert not any(vdp.vram)
+
+
+def test_fifth_sprite_status_is_generated_at_raster_line_boundary() -> None:
+    vdp = TMS9918A()
+    _prepare_sprite_table(vdp)
+    for index in range(5):
+        _set_sprite(vdp, index, x=index * 10, pattern=1, color=2)
+
+    vdp.advance(TSTATES_PER_LINE)
+
+    assert vdp.scanline == 1
+    assert vdp.status & 0x40
+    assert vdp.status & 0x1F == 4
 
