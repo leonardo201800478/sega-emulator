@@ -48,6 +48,7 @@ class TMS9918A:
         self.scanline = 0
         self.frame_number = 0
         self.framebuffer = bytes(SCREEN_WIDTH * SCREEN_HEIGHT * 3)
+        self._working_framebuffer = bytearray(SCREEN_WIDTH * SCREEN_HEIGHT * 3)
         self._frame_ready = False
 
     def reset(self, *, clear_vram: bool = False) -> None:
@@ -67,6 +68,7 @@ class TMS9918A:
         self.scanline = 0
         self.frame_number = 0
         self.framebuffer = bytes(SCREEN_WIDTH * SCREEN_HEIGHT * 3)
+        self._working_framebuffer = bytearray(SCREEN_WIDTH * SCREEN_HEIGHT * 3)
         self._frame_ready = False
         if clear_vram:
             self.vram[:] = bytes(VRAM_SIZE)
@@ -136,25 +138,137 @@ class TMS9918A:
             remaining -= step
             if self._cycles_into_line == TSTATES_PER_LINE:
                 self._cycles_into_line = 0
+                completed_line = self.scanline
+                if completed_line < SCREEN_HEIGHT:
+                    self._render_scanline(completed_line)
                 if (
-                    self.scanline < LINES_PER_FRAME
+                    completed_line < LINES_PER_FRAME
                     and (self.registers[1] & 0x40)
                     and self._display_mode != 1
                 ):
-                    self._render_sprite_line(None, self.scanline, update_status=True)
+                    self._render_sprite_line(
+                        None, completed_line, update_status=True
+                    )
                 self.scanline += 1
                 if self.scanline == VBLANK_LINE:
                     self.status |= 0x80
                     self._frame_ready = True
                 if self.scanline >= LINES_PER_FRAME:
-                    self.framebuffer = self.render_frame()
+                    self.framebuffer = bytes(self._working_framebuffer)
                     self.scanline = 0
                     self.frame_number += 1
+                    self._working_framebuffer = bytearray(
+                        SCREEN_WIDTH * SCREEN_HEIGHT * 3
+                    )
 
     def consume_frame_ready(self) -> bool:
         ready = self._frame_ready
         self._frame_ready = False
         return ready
+
+    def _render_scanline(self, y: int) -> None:
+        """Renderiza uma única linha com o estado de registradores/VRAM atual."""
+        pixels = self._working_framebuffer
+        backdrop = self.registers[7] & 0x0F
+        row_start = y * SCREEN_WIDTH * 3
+        row_end = row_start + SCREEN_WIDTH * 3
+        if not (self.registers[1] & 0x40):
+            row = bytes(PALETTE[backdrop]) * SCREEN_WIDTH
+            pixels[row_start:row_end] = row
+            return
+
+        mode = self._display_mode
+        if mode == 1:
+            name_base = (self.registers[2] & 0x0F) << 10
+            pattern_base = (self.registers[4] & 0x07) << 11
+            text_row, glyph_row = divmod(y, 8)
+            foreground = (self.registers[7] >> 4) or backdrop
+            for column in range(40):
+                character = self.vram[
+                    (name_base + text_row * 40 + column) & VRAM_MASK
+                ]
+                pattern = self.vram[
+                    (pattern_base + character * 8 + glyph_row) & VRAM_MASK
+                ]
+                for bit in range(6):
+                    self._put_pixel(
+                        pixels,
+                        8 + column * 6 + bit,
+                        y,
+                        foreground if pattern & (0x80 >> bit) else backdrop,
+                    )
+            return
+
+        if mode == 4:
+            name_base = (self.registers[2] & 0x0F) << 10
+            pattern_base = (self.registers[4] & 0x04) << 11
+            color_base = (self.registers[3] & 0x80) << 6
+            row = y & 7
+            section = (y & 0xC0) << 5
+            for tile_x in range(32):
+                name = self.vram[
+                    (name_base + (y // 8) * 32 + tile_x) & VRAM_MASK
+                ]
+                offset = section + (name << 3) + row
+                pattern = self.vram[(pattern_base + offset) & VRAM_MASK]
+                color = self.vram[(color_base + offset) & VRAM_MASK]
+                foreground = (color >> 4) or backdrop
+                background = (color & 0x0F) or backdrop
+                for bit in range(8):
+                    self._put_pixel(
+                        pixels,
+                        tile_x * 8 + bit,
+                        y,
+                        foreground if pattern & (0x80 >> bit) else background,
+                    )
+        elif mode == 2:
+            name_base = (self.registers[2] & 0x0F) << 10
+            pattern_base = (self.registers[4] & 0x07) << 11
+            tile_y, local_y = divmod(y, 8)
+            pattern_row = local_y >> 2
+            for tile_x in range(32):
+                name = self.vram[
+                    (name_base + tile_y * 32 + tile_x) & VRAM_MASK
+                ]
+                pattern = self.vram[
+                    (pattern_base + name * 8 + pattern_row) & VRAM_MASK
+                ]
+                left = (pattern >> 4) or backdrop
+                right = (pattern & 0x0F) or backdrop
+                for local_x in range(8):
+                    self._put_pixel(
+                        pixels,
+                        tile_x * 8 + local_x,
+                        y,
+                        left if local_x < 4 else right,
+                    )
+        else:
+            name_base = (self.registers[2] & 0x0F) << 10
+            pattern_base = (self.registers[4] & 0x07) << 11
+            color_base = (self.registers[3] << 6) & 0x3FC0
+            tile_y, row = divmod(y, 8)
+            for tile_x in range(32):
+                name = self.vram[
+                    (name_base + tile_y * 32 + tile_x) & VRAM_MASK
+                ]
+                pattern = self.vram[
+                    (pattern_base + name * 8 + row) & VRAM_MASK
+                ]
+                color = self.vram[(color_base + name // 8) & VRAM_MASK]
+                foreground = (color >> 4) or backdrop
+                background = (color & 0x0F) or backdrop
+                for bit in range(8):
+                    self._put_pixel(
+                        pixels,
+                        tile_x * 8 + bit,
+                        y,
+                        foreground if pattern & (0x80 >> bit) else background,
+                    )
+
+        if mode != 1:
+            self._render_sprite_line(
+                pixels, y, update_status=False
+            )
 
     def render_frame(self) -> bytes:
         """Renderiza 256x192 RGB24 em Graphics I/II, texto ou multicolor."""
