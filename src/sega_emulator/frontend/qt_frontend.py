@@ -58,9 +58,8 @@ def run(initial_path: Path | None = None) -> None:
     frame_count = 0
     pressed_keys: set[int] = set()
     timer = QTimer(window)
-    timer.setInterval(
-        0
-    )  # Executa tão rápido quanto possível; mede-se a velocidade real.
+    # Executa tão rápido quanto possível; mede-se a velocidade real.
+    timer.setInterval(0)
 
     key_map = {
         Qt.Key.Key_Up: 0,
