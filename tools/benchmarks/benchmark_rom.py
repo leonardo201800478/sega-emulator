@@ -54,6 +54,68 @@ def new_machine(rom: bytes) -> SG1000Machine:
     return machine
 
 
+def diagnose_rendering(rom: bytes, frames: int, warmup_frames: int, max_steps: int) -> None:
+    """Count rasterizer work separately from the timed benchmark."""
+    from collections import Counter
+
+    machine = new_machine(rom)
+    run_frames(machine, warmup_frames, max_steps)
+    vdp = machine.vdp
+    mode_names = {0: "graphics_i", 1: "text", 2: "multicolor", 3: "invalid_3", 4: "graphics_ii"}
+    scanlines: Counter[str] = Counter()
+    pixel_calls: Counter[str] = Counter()
+    sprite_phase = False
+
+    original_scanline = vdp._render_scanline
+    original_sprite_line = vdp._render_sprite_line
+    original_put_pixel = vdp._put_pixel
+
+    def counted_scanline(y: int, *, update_sprite_status: bool = False) -> None:
+        mode = mode_names.get(vdp._display_mode, f"mode_{vdp._display_mode}")
+        display_enabled = bool(vdp.registers[1] & 0x40)
+        scanlines[f"{mode}:{'enabled' if display_enabled else 'disabled'}"] += 1
+        original_scanline(y, update_sprite_status=update_sprite_status)
+
+    def counted_sprite_line(
+        pixels: bytearray | None, line: int, *, update_status: bool
+    ) -> None:
+        nonlocal sprite_phase
+        previous_phase = sprite_phase
+        sprite_phase = True
+        try:
+            original_sprite_line(pixels, line, update_status=update_status)
+        finally:
+            sprite_phase = previous_phase
+
+    def counted_put_pixel(
+        pixels: bytearray, x: int, y: int, color: int
+    ) -> None:
+        pixel_calls["sprite" if sprite_phase else "background"] += 1
+        original_put_pixel(pixels, x, y, color)
+
+    # Instrument only this diagnostic pass; the measured FPS runs above are untouched.
+    vdp._render_scanline = counted_scanline
+    vdp._render_sprite_line = counted_sprite_line
+    vdp._put_pixel = counted_put_pixel
+    steps, tstates = run_frames(machine, frames, max_steps)
+    print("Render work diagnostics (separate, instrumented pass)")
+    print(f"diagnostic_frames={frames}")
+    print(f"diagnostic_cpu_steps={steps}")
+    print(f"diagnostic_tstates={tstates}")
+    for key, count in sorted(scanlines.items()):
+        print(f"scanlines_{key}={count}")
+    for key, count in sorted(pixel_calls.items()):
+        print(f"put_pixel_calls_{key}={count}")
+    total_calls = sum(pixel_calls.values())
+    print(f"put_pixel_calls_total={total_calls}")
+    print(f"put_pixel_calls_per_frame={total_calls / frames:.1f}")
+    print(f"visible_pixels_per_frame={SCREEN_WIDTH * SCREEN_HEIGHT}")
+    print(
+        "put_pixel_calls_vs_visible_pixels_percent="
+        f"{total_calls / (frames * SCREEN_WIDTH * SCREEN_HEIGHT) * 100:.2f}"
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--rom", type=Path, required=True, help="SG-1000 ROM file")
@@ -63,6 +125,9 @@ def main() -> int:
     parser.add_argument("--max-steps-per-frame", type=int, default=200_000)
     parser.add_argument(
         "--profile", type=Path, default=None, help="write cProfile .pstats"
+    )
+    parser.add_argument(
+        "--render-diagnostics", action="store_true", help="count pixels per VDP mode"
     )
     args = parser.parse_args()
     if args.frames < 1 or args.warmup_frames < 0 or args.repeats < 1:
@@ -124,6 +189,9 @@ def main() -> int:
         f"median_instructions_per_frame={statistics.median(instructions_per_frame):.1f}"
     )
     print(f"median_tstates_per_frame={statistics.median(cycles_per_frame):.1f}")
+
+    if args.render_diagnostics:
+        diagnose_rendering(rom, args.frames, args.warmup_frames, args.max_steps_per_frame)
 
     if args.profile:
         machine = new_machine(rom)
