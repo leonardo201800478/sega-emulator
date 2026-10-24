@@ -281,7 +281,7 @@ def test_raster_rendering_preserves_emitted_lines_after_vram_changes() -> None:
     _write_register(vdp, 4, 0x01)  # Pattern table at 0800h.
     _write_register(vdp, 7, 0xF1)  # Foreground 15, background 1.
     vdp.vram[0x0400 : 0x0400 + 768] = bytes(768)
-    vdp.vram[0x0800 : 0x0808] = bytes((0x80, 0, 0, 0, 0, 0, 0, 0))
+    vdp.vram[0x0800:0x0808] = bytes((0x80, 0, 0, 0, 0, 0, 0, 0))
     vdp.vram[0x2000] = 0xF1
 
     vdp.advance(TSTATES_PER_LINE)
