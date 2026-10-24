@@ -66,3 +66,37 @@ def test_ram_rejects_non_integer_address(ram: SG1000Ram) -> None:
 def test_ram_rejects_non_integer_value(ram: SG1000Ram) -> None:
     with pytest.raises(TypeError):
         ram.write(0xC000, "255")  # type: ignore[arg-type]
+
+
+def test_every_address_in_ram_window_maps_to_low_ten_bits(ram: SG1000Ram) -> None:
+    """Os 16 KiB do intervalo usam apenas os dez bits inferiores."""
+    for address in range(0xC000, 0x10000):
+        assert ram._offset(address) == (address & 0x03FF)
+
+
+def test_all_ram_mirrors_share_the_same_physical_byte(ram: SG1000Ram) -> None:
+    """Uma escrita em qualquer espelho deve ser visível em todos os outros."""
+    for offset in range(RAM_SIZE):
+        address = 0xC000 + offset
+        value = (offset * 37 + 0x5A) & 0xFF
+        ram.write(address, value)
+
+        for mirror in range(0xC000 + offset, 0x10000, RAM_SIZE):
+            assert ram.read(mirror) == value
+
+
+def test_ram_write_does_not_alias_adjacent_physical_bytes(ram: SG1000Ram) -> None:
+    ram.write(0xC000, 0x11)
+    ram.write(0xC001, 0x22)
+    ram.write(0xC3FF, 0x33)
+
+    assert ram.read(0xC000) == 0x11
+    assert ram.read(0xC001) == 0x22
+    assert ram.read(0xC3FF) == 0x33
+    assert ram.read(0xC400) == 0x11
+
+
+def test_ram_rejects_addresses_above_16_bit_range(ram: SG1000Ram) -> None:
+    for address in (-1, 0x10000, 0x1C000):
+        with pytest.raises(ValueError):
+            ram.read(address)
