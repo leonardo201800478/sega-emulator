@@ -2,6 +2,21 @@
 
 from sega_emulator.bus.interfaces import IOBus, MemoryBus
 
+_CONDITION_TABLE = tuple(
+    condition
+    for flags in range(256)
+    for condition in (
+        not flags & 0x40,
+        bool(flags & 0x40),
+        not flags & 0x01,
+        bool(flags & 0x01),
+        not flags & 0x04,
+        bool(flags & 0x04),
+        not flags & 0x80,
+        bool(flags & 0x80),
+    )
+)
+
 
 class UnsupportedOpcodeError(NotImplementedError):
     """A CPU encontrou um opcode ainda não implementado."""
@@ -86,7 +101,7 @@ class Z80Cpu:
         self._f = value & 0xFF
         # Durante step(), escritas em F atualizam Q. Escritas externas
         # (setup de testes e atribuições de registradores) não alteram Q.
-        if getattr(self, "_step_depth", 0) > 0:
+        if self._step_depth > 0:
             self.q = self._f
 
     @staticmethod
@@ -217,7 +232,11 @@ class Z80Cpu:
             value = self._im0_opcode
             self._im0_opcode = None
             return value
-        value = self._fetch_byte()
+        # Opcode fetch is the commonest memory access. Inline _fetch_byte here
+        # to avoid one Python call for every instruction's first byte.
+        pc = self._pc
+        value = self._read_for_fetch(pc)
+        self._pc = (pc + 1) & 0xFFFF
         self.r = (self.r & 0x80) | ((self.r + 1) & 0x7F)
         return value
 
@@ -565,21 +584,7 @@ class Z80Cpu:
 
     def _condition(self, code: int) -> bool:
         """Avalia os oito códigos de condição definidos pelo Z80."""
-        zero = bool(self.f & 0x40)
-        carry = bool(self.f & 0x01)
-        parity_overflow = bool(self.f & 0x04)
-        sign = bool(self.f & 0x80)
-        conditions = (
-            not zero,  # NZ
-            zero,  # Z
-            not carry,  # NC
-            carry,  # C
-            not parity_overflow,  # PO
-            parity_overflow,  # PE
-            not sign,  # P
-            sign,  # M
-        )
-        return conditions[code]
+        return _CONDITION_TABLE[(self._f << 3) | code]
 
     def _execute_cb(self, opcode: int) -> int:
         """Executa o conjunto CB: rotações, shifts, BIT, RES e SET."""
@@ -1087,15 +1092,15 @@ class Z80Cpu:
 
     def step(self) -> int:
         """Executa uma instrução mantendo o latch Q entre instruções."""
-        outermost = self._step_depth == 0
-        if outermost:
-            self._q_previous = self.q
-            self.q = 0
-        self._step_depth += 1
+        if self._step_depth:
+            return self._step_impl()
+        self._q_previous = self.q
+        self.q = 0
+        self._step_depth = 1
         try:
             return self._step_impl()
         finally:
-            self._step_depth -= 1
+            self._step_depth = 0
 
     def _step_impl(self) -> int:
         """Executa uma instrução implementada e retorna seus T-states nominais.
@@ -1201,6 +1206,32 @@ class Z80Cpu:
         if opcode in (0xDD, 0xFD):
             return self._step_indexed(opcode)
 
+        # These two opcodes dominate Wonder Boy's hot loop. Handle them before
+        # the general decoder so they do not scan the long conditional chain.
+        if opcode == 0x20:  # JR NZ,e
+            displacement = self._fetch_byte()
+            cycles = 7
+            if not self._f & 0x40:
+                if displacement & 0x80:
+                    displacement -= 0x100
+                self._pc = (self._pc + displacement) & 0xFFFF
+                self.wz = self._pc
+                cycles = 12
+            self.total_cycles += cycles
+            if self._ei_delay > 0:
+                self._ei_delay -= 1
+            return cycles
+        if opcode == 0x21:  # LD HL,nn
+            low = self._fetch_byte()
+            high = self._fetch_byte()
+            self.h = high
+            self.l = low
+            cycles = 10
+            self.total_cycles += cycles
+            if self._ei_delay > 0:
+                self._ei_delay -= 1
+            return cycles
+
         if opcode == 0x00:  # NOP
             cycles = 4
         elif opcode == 0xED:
@@ -1219,6 +1250,33 @@ class Z80Cpu:
         elif opcode == 0x76:  # HALT
             self.halted = True
             cycles = 4
+        elif 0x40 <= opcode <= 0xBF:  # LD r,r' e grupo ALU A,r
+            if opcode < 0x80:
+                destination = (opcode >> 3) & 0x07
+                source = opcode & 0x07
+                self._write_register(destination, self._read_register(source))
+                cycles = 7 if destination == 6 or source == 6 else 4
+            else:
+                source = opcode & 0x07
+                operation = (opcode >> 3) & 0x07
+                value = self._read_register(source)
+                if operation == 0:
+                    self._add_a(value)
+                elif operation == 1:
+                    self._adc_a(value)
+                elif operation == 2:
+                    self._sub_a(value)
+                elif operation == 3:
+                    self._sbc_a(value)
+                elif operation == 4:
+                    self._and_a(value)
+                elif operation == 5:
+                    self._xor_a(value)
+                elif operation == 6:
+                    self._or_a(value)
+                else:
+                    self._compare_a(value)
+                cycles = 7 if source == 6 else 4
         elif opcode == 0xF3:  # DI
             self.iff1 = self.iff2 = False
             self._ei_delay = 0
@@ -1255,36 +1313,6 @@ class Z80Cpu:
             value = self._fetch_byte()
             self._write_register(destination, value)
             cycles = 10 if destination == 6 else 7
-        elif 0x40 <= opcode <= 0x7F and opcode != 0x76:  # LD r,r'
-            destination = (opcode >> 3) & 0x07
-            source = opcode & 0x07
-            value = self._read_register(source)
-            self._write_register(destination, value)
-            cycles = 7 if destination == 6 or source == 6 else 4
-        elif 0x80 <= opcode <= 0x87:  # ADD A,r
-            self._add_a(self._read_register(opcode & 0x07))
-            cycles = 7 if opcode & 0x07 == 6 else 4
-        elif 0x88 <= opcode <= 0x8F:  # ADC A,r
-            self._adc_a(self._read_register(opcode & 0x07))
-            cycles = 7 if opcode & 0x07 == 6 else 4
-        elif 0x90 <= opcode <= 0x97:  # SUB r
-            self._sub_a(self._read_register(opcode & 0x07))
-            cycles = 7 if opcode & 0x07 == 6 else 4
-        elif 0x98 <= opcode <= 0x9F:  # SBC A,r
-            self._sbc_a(self._read_register(opcode & 0x07))
-            cycles = 7 if opcode & 0x07 == 6 else 4
-        elif 0xA0 <= opcode <= 0xA7:  # AND r
-            self._and_a(self._read_register(opcode & 0x07))
-            cycles = 7 if opcode & 0x07 == 6 else 4
-        elif 0xA8 <= opcode <= 0xAF:  # XOR A,r
-            self._xor_a(self._read_register(opcode & 0x07))
-            cycles = 7 if opcode & 0x07 == 6 else 4
-        elif 0xB0 <= opcode <= 0xB7:  # OR r
-            self._or_a(self._read_register(opcode & 0x07))
-            cycles = 7 if opcode & 0x07 == 6 else 4
-        elif 0xB8 <= opcode <= 0xBF:  # CP r
-            self._compare_a(self._read_register(opcode & 0x07))
-            cycles = 7 if opcode & 0x07 == 6 else 4
         elif opcode in (0xC6, 0xCE, 0xD6, 0xDE, 0xE6, 0xEE, 0xF6, 0xFE):
             value = self._fetch_byte()
             if opcode == 0xC6:  # ADD A,n

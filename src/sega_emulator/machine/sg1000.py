@@ -90,27 +90,67 @@ class SG1000Machine:
         self.total_instructions += 1
         self.total_tstates += cycles
         self.vdp.advance(cycles)
-        if self.vdp.interrupt_pending:
+        if self.vdp.status & 0x80 and self.vdp.registers[1] & 0x20:
             self.cpu.request_int()
         else:
             self.cpu.clear_int_request()
         return cycles
 
     def run_frame(self, max_steps: int = 100_000) -> int:
-        """Executa até o próximo limite de quadro; retorna instruções executadas."""
+        """Executa um quadro com o laço CPU/VDP local para reduzir chamadas."""
         if type(max_steps) is not int or max_steps < 1:
             raise ValueError("max_steps deve ser um inteiro positivo.")
         start_frame = self.vdp.frame_number
         steps = 0
-        while self.vdp.frame_number == start_frame:
-            self.step()
-            steps += 1
-            if self.vdp.frame_number != start_frame:
-                break
-            if steps >= max_steps:
-                raise RuntimeError(
-                    "Limite de instruções excedido antes do próximo quadro."
-                )
+        cpu = self.cpu
+        vdp = self.vdp
+        cpu_step = cpu.step
+        execute_cpu_instruction = cpu._step_impl
+        advance_vdp = vdp.advance
+        request_int = cpu.request_int
+        clear_int = cpu.clear_int_request
+        fast_cpu_loop = (
+            getattr(cpu_step, "__func__", None) is Z80Cpu.step
+            and "step" not in self.__dict__
+            and type(self).step is SG1000Machine.step
+        )
+        if fast_cpu_loop:
+            # This loop is the machine's normal execution path. Keep Q-latch
+            # setup here and call the decoder directly to avoid a Python
+            # cpu.step() wrapper and try/finally for every emulated opcode.
+            cpu._step_depth = 1
+            try:
+                while vdp.frame_number == start_frame:
+                    cpu._q_previous = cpu.q
+                    cpu.q = 0
+                    cycles = execute_cpu_instruction()
+                    self.total_instructions += 1
+                    self.total_tstates += cycles
+                    advance_vdp(cycles)
+                    if vdp.status & 0x80 and vdp.registers[1] & 0x20:
+                        request_int()
+                    else:
+                        clear_int()
+
+                    steps += 1
+                    if vdp.frame_number != start_frame:
+                        break
+                    if steps >= max_steps:
+                        raise RuntimeError(
+                            "Limite de instruções excedido antes do próximo quadro."
+                        )
+            finally:
+                cpu._step_depth = 0
+        else:
+            while vdp.frame_number == start_frame:
+                cycles = self.step()
+                steps += 1
+                if vdp.frame_number != start_frame:
+                    break
+                if steps >= max_steps:
+                    raise RuntimeError(
+                        "Limite de instruções excedido antes do próximo quadro."
+                    )
         return steps
 
     def run_frames(self, count: int) -> int:
