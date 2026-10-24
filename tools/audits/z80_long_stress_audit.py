@@ -217,7 +217,7 @@ def main() -> int:
         status, result = execute_case(case_id, program, case_seed)
         attempts += 1
         counts[status] += 1
-        executed_vectors.add(case_id if vector < total else "random_stream")
+        executed_vectors.add(case_id)
         if status != "executed" and len(findings) < 2000:
             findings.append({"status": status, **result})
 
