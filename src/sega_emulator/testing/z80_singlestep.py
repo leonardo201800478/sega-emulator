@@ -67,6 +67,53 @@ class FlatMemoryBus:
         self.written_addresses.add(address)
 
 
+def _ports_from_cycles(cycles: Any) -> list[list[Any]]:
+    """Extrai valores/transações de I/O do traço SingleStepTests.
+
+    Em leituras, o valor costuma aparecer no registro seguinte do mesmo
+    endereço; em escritas, o valor está no próprio registro de controle.
+    Isso alimenta o barramento de I/O sem alegar comparação ciclo a ciclo.
+    """
+    if not isinstance(cycles, list):
+        return []
+    ports: list[list[Any]] = []
+    for index, entry in enumerate(cycles):
+        if not isinstance(entry, list) or len(entry) != 3:
+            continue
+        address, value, control = entry
+        if not isinstance(control, str) or "i" not in control:
+            continue
+        if "r" in control:
+            if value is None:
+                value = next(
+                    (
+                        later[1]
+                        for later in cycles[index + 1 :]
+                        if isinstance(later, list)
+                        and len(later) == 3
+                        and later[0] == address
+                        and later[1] is not None
+                    ),
+                    0,
+                )
+            ports.append([address, value, "r"])
+        elif "w" in control:
+            if value is None:
+                value = next(
+                    (
+                        later[1]
+                        for later in cycles[index + 1 :]
+                        if isinstance(later, list)
+                        and len(later) == 3
+                        and later[0] == address
+                        and later[1] is not None
+                    ),
+                    0,
+                )
+            ports.append([address, value, "w"])
+    return ports
+
+
 class RecordingIOBus:
     """Fornece bytes de entrada declarados no vetor e registra transações de I/O."""
 
@@ -148,7 +195,10 @@ def run_vector(vector: dict[str, Any]) -> VectorResult:
 
     memory = FlatMemoryBus()
     initial_ram = _load_ram(memory, initial)
-    io_bus = RecordingIOBus(vector.get("ports", []))
+    expected_ports = vector.get("ports")
+    if expected_ports is None:
+        expected_ports = _ports_from_cycles(vector.get("cycles", []))
+    io_bus = RecordingIOBus(expected_ports)
     cpu = Z80Cpu(memory, io_bus)
     unsupported = _load_state(cpu, initial)
     unsupported.extend(
@@ -201,7 +251,6 @@ def run_vector(vector: dict[str, Any]) -> VectorResult:
                 f"RAM[{address:04X}h]: esperado {expected:02X}h, obtido {actual:02X}h"
             )
 
-    expected_ports = vector.get("ports", [])
     if io_bus.transactions != expected_ports:
         result.mismatches.append(
             f"ports: esperado {expected_ports!r}, obtido {io_bus.transactions!r}"
