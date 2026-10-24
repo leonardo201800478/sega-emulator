@@ -155,15 +155,15 @@ def _configure_sprite(vdp: TMS9918A, index: int, *, y: int, x: int, pattern: int
 def test_transparent_sprite_pixels_still_trigger_collision_without_painting() -> None:
     vdp = TMS9918A()
     _write_register(vdp, 1, 0x40)  # display enabled, sprites 8x8
-    _write_register(vdp, 5, 0x00)
-    _write_register(vdp, 6, 0x00)
+    _write_register(vdp, 5, 0x04)  # sprite attributes at 0200h
+    _write_register(vdp, 6, 0x01)  # sprite patterns at 0800h
     _write_register(vdp, 7, 0x04)
     # First sprite uses transparent colour 0; second sprite is red.
     _configure_sprite(vdp, 0, y=0xFF, x=20, pattern=1, color=0)
     _configure_sprite(vdp, 1, y=0xFF, x=20, pattern=2, color=8)
     _configure_sprite(vdp, 2, y=0xD0, x=0, pattern=0, color=0)
-    vdp.vram[8:16] = bytes([0x80] * 8)
-    vdp.vram[16:24] = bytes([0x80] * 8)
+    vdp.vram[0x808:0x810] = bytes([0x80] * 8)
+    vdp.vram[0x810:0x818] = bytes([0x80] * 8)
 
     frame = vdp.render_frame()
 
@@ -175,15 +175,16 @@ def test_transparent_sprite_pixels_still_trigger_collision_without_painting() ->
 def test_fifth_sprite_status_uses_first_overflow_in_raster_order() -> None:
     vdp = TMS9918A()
     _write_register(vdp, 1, 0x40)
-    _write_register(vdp, 5, 0)
-    _write_register(vdp, 6, 0)
-    # Sprite 4 overflows on line 41; sprite 5 overflows earlier, on line 1.
-    for index in range(6):
+    _write_register(vdp, 5, 0x04)
+    _write_register(vdp, 6, 0x01)
+    # Indices 0-4 overflow on line 41 (fifth index 4); indices 5-9
+    # overflow earlier on line 1 (fifth index 9), which must win.
+    for index in range(10):
         y = 40 if index < 5 else 0
         _configure_sprite(vdp, index, y=y, x=index * 8, pattern=0, color=1)
-    _configure_sprite(vdp, 6, y=0xD0, x=0, pattern=0, color=0)
+    _configure_sprite(vdp, 10, y=0xD0, x=0, pattern=0, color=0)
 
     vdp.render_frame()
 
     assert vdp.status & 0x40
-    assert vdp.status & 0x1F == 4
+    assert (vdp.status & 0x1F) == 9
