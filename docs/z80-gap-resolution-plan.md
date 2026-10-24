@@ -179,7 +179,7 @@ O módulo `src/sega_emulator/testing/z80_singlestep.py` implementa a primeira ve
 
 ### Executar
 
-Depois de instalar o projeto e as dependências de desenvolvimento (`python -m pip install -e ".[dev]"`), baixe/clonе o corpus externo separadamente e execute, por exemplo:
+Depois de instalar o projeto e as dependências de desenvolvimento (`python -m pip install -e ".[dev]"`), baixe ou clone o corpus externo separadamente e execute, por exemplo:
 
 ```powershell
 python -m sega_emulator.testing.z80_singlestep caminho\para\v1\00.json --limit 25 --report-json artifacts\z80-singlestep-00.json
