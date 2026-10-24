@@ -27,9 +27,31 @@ def make_cpu(program: bytes) -> Z80Cpu:
 
 def initial_state(cpu: Z80Cpu) -> dict[str, Any]:
     names = (
-        "a", "f", "b", "c", "d", "e", "h", "l", "ix", "iy", "i", "r",
-        "wz", "q", "af_alt", "bc_alt", "de_alt", "hl_alt", "sp", "pc",
-        "iff1", "iff2", "interrupt_mode", "halted", "total_cycles",
+        "a",
+        "f",
+        "b",
+        "c",
+        "d",
+        "e",
+        "h",
+        "l",
+        "ix",
+        "iy",
+        "i",
+        "r",
+        "wz",
+        "q",
+        "af_alt",
+        "bc_alt",
+        "de_alt",
+        "hl_alt",
+        "sp",
+        "pc",
+        "iff1",
+        "iff2",
+        "interrupt_mode",
+        "halted",
+        "total_cycles",
     )
     return {name: getattr(cpu, name) for name in names if hasattr(cpu, name)}
 
@@ -37,7 +59,17 @@ def initial_state(cpu: Z80Cpu) -> dict[str, Any]:
 def invariant_errors(cpu: Z80Cpu) -> list[str]:
     errors: list[str] = []
     byte_registers = ("a", "f", "b", "c", "d", "e", "h", "l", "i", "r", "q")
-    word_registers = ("ix", "iy", "wz", "sp", "pc", "af_alt", "bc_alt", "de_alt", "hl_alt")
+    word_registers = (
+        "ix",
+        "iy",
+        "wz",
+        "sp",
+        "pc",
+        "af_alt",
+        "bc_alt",
+        "de_alt",
+        "hl_alt",
+    )
     for name in byte_registers:
         if hasattr(cpu, name):
             value = getattr(cpu, name)
@@ -90,28 +122,42 @@ def execute_case(
         cycles = cpu.step()
         if type(cycles) is not int or cycles <= 0:
             return "invalid_cycle_count", {
-                "case_id": case_id, "program": program.hex(), "cycles": repr(cycles)
+                "case_id": case_id,
+                "program": program.hex(),
+                "cycles": repr(cycles),
             }
         errors = invariant_errors(cpu)
         if errors:
             return "invariant_violation", {
-                "case_id": case_id, "program": program.hex(), "errors": errors,
-                "before": before, "after": initial_state(cpu), "cycles": cycles,
+                "case_id": case_id,
+                "program": program.hex(),
+                "errors": errors,
+                "before": before,
+                "after": initial_state(cpu),
+                "cycles": cycles,
             }
         return "executed", {
-            "case_id": case_id, "program": program.hex(), "before": before,
-            "after": initial_state(cpu), "cycles": cycles,
+            "case_id": case_id,
+            "program": program.hex(),
+            "before": before,
+            "after": initial_state(cpu),
+            "cycles": cycles,
         }
     except NotImplementedError as exc:
         return "unsupported_opcode", {
-            "case_id": case_id, "program": program.hex(), "error": str(exc),
+            "case_id": case_id,
+            "program": program.hex(),
+            "error": str(exc),
             "before": before,
         }
     except Exception as exc:  # the point is to capture, not hide, robustness failures
         return "runtime_exception", {
-            "case_id": case_id, "program": program.hex(),
-            "error_type": type(exc).__name__, "error": str(exc),
-            "traceback": traceback.format_exc(limit=4), "before": before,
+            "case_id": case_id,
+            "program": program.hex(),
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+            "traceback": traceback.format_exc(limit=4),
+            "before": before,
         }
 
 
@@ -119,7 +165,9 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--hours", type=float, default=5.5)
     parser.add_argument("--seed", type=int, default=0x5E6A1000)
-    parser.add_argument("--report", type=Path, default=Path("artifacts/z80-long-stress-report.json"))
+    parser.add_argument(
+        "--report", type=Path, default=Path("artifacts/z80-long-stress-report.json")
+    )
     parser.add_argument("--checkpoint-seconds", type=float, default=60.0)
     args = parser.parse_args()
     if not 0 < args.hours <= 5.75:
@@ -150,7 +198,9 @@ def main() -> int:
             "findings": findings,
         }
         args.report.parent.mkdir(parents=True, exist_ok=True)
-        args.report.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
+        args.report.write_text(
+            json.dumps(report, indent=2, sort_keys=True), encoding="utf-8"
+        )
         print(
             f"[{'FINAL' if final else 'CHECKPOINT'}] cases={report['cases']:,} "
             f"elapsed={report['elapsed_seconds']:.0f}s counts={dict(counts)}",
@@ -175,13 +225,22 @@ def main() -> int:
         if status == "executed":
             repeat_status, repeat = execute_case(case_id, program, case_seed)
             counts["determinism_checks"] += 1
-            if repeat_status != "executed" or result["after"] != repeat["after"] or result["cycles"] != repeat["cycles"]:
+            if (
+                repeat_status != "executed"
+                or result["after"] != repeat["after"]
+                or result["cycles"] != repeat["cycles"]
+            ):
                 counts["determinism_divergence"] += 1
                 if len(findings) < 2000:
-                    findings.append({
-                        "status": "determinism_divergence", "case_id": case_id,
-                        "program": program.hex(), "first": result, "repeat": repeat,
-                    })
+                    findings.append(
+                        {
+                            "status": "determinism_divergence",
+                            "case_id": case_id,
+                            "program": program.hex(),
+                            "first": result,
+                            "repeat": repeat,
+                        }
+                    )
 
         vector += 1
         now = time.monotonic()
@@ -192,8 +251,16 @@ def main() -> int:
     checkpoint(final=True)
     # The audit is considered failed only for robustness/invariant/determinism
     # regressions; unsupported instructions are reported separately as coverage gaps.
-    fatal = counts["invariant_violation"] + counts["runtime_exception"] + counts["invalid_cycle_count"] + counts["determinism_divergence"]
-    print(f"Robustness findings: {fatal}; unsupported opcodes recorded: {counts['unsupported_opcode']}", flush=True)
+    fatal = (
+        counts["invariant_violation"]
+        + counts["runtime_exception"]
+        + counts["invalid_cycle_count"]
+        + counts["determinism_divergence"]
+    )
+    print(
+        f"Robustness findings: {fatal}; unsupported opcodes recorded: {counts['unsupported_opcode']}",
+        flush=True,
+    )
     return 1 if fatal else 0
 
 
