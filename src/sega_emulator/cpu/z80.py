@@ -30,6 +30,10 @@ class Z80Cpu:
         registradores gerais de um Z80 físico tenham valores definidos após
         RESET. Os barramentos e o conteúdo da memória permanecem intactos.
         """
+        self._step_depth = 0
+        self.q = 0
+        self._q_previous = 0
+        self.wz = 0
         self.a = 0
         self.f = 0
         self.b = 0
@@ -58,6 +62,18 @@ class Z80Cpu:
         self.sp = 0
         self.pc = 0
         self.total_cycles = 0
+
+    @property
+    def f(self) -> int:
+        return self._f
+
+    @f.setter
+    def f(self, value: int) -> None:
+        self._f = value & 0xFF
+        # Durante step(), escritas em F atualizam Q. Escritas externas
+        # (setup de testes e atribuições de registradores) não alteram Q.
+        if getattr(self, "_step_depth", 0) > 0:
+            self.q = self._f
 
     @staticmethod
     def _validate_byte(value: int) -> None:
@@ -1028,6 +1044,18 @@ class Z80Cpu:
         return cycles
 
     def step(self) -> int:
+        """Executa uma instrução mantendo o latch Q entre instruções."""
+        outermost = self._step_depth == 0
+        if outermost:
+            self._q_previous = self.q
+            self.q = 0
+        self._step_depth += 1
+        try:
+            return self._step_impl()
+        finally:
+            self._step_depth -= 1
+
+    def _step_impl(self) -> int:
         """Executa uma instrução implementada e retorna seus T-states nominais.
 
         Famílias suportadas no marco atual:
@@ -1314,11 +1342,13 @@ class Z80Cpu:
             self.f = (self.f & 0xC5) | (self.a & 0x28) | 0x12
             cycles = 4
         elif opcode == 0x37:  # SCF
-            self.f = (self.f & 0xC4) | (self.a & 0x28) | 0x01
+            undocumented = (self.a | (self._q_previous ^ self.f)) & 0x28
+            self.f = (self.f & 0xC4) | undocumented | 0x01
             cycles = 4
         elif opcode == 0x3F:  # CCF
             previous_carry = self.f & 0x01
-            self.f = (self.f & 0xC4) | (self.a & 0x28)
+            undocumented = (self.a | (self._q_previous ^ self.f)) & 0x28
+            self.f = (self.f & 0xC4) | undocumented
             if previous_carry:
                 self.f |= 0x10
             else:
