@@ -117,18 +117,18 @@ def profile_frames(
         framebuffer = machine.vdp.framebuffer
         records.append(
             {
-            "frame": machine.vdp.frame_number,
-            "elapsed_ms_instrumented": round(elapsed_ns / 1_000_000, 3),
-            "instructions": machine.total_instructions - start_instructions,
-            "tstates": machine.total_tstates - start_tstates,
-            "pc": f"{machine.cpu.pc:04X}",
-            "scanline": machine.vdp.scanline,
-            "display_mode": MODE_NAMES.get(
-                machine.vdp._display_mode, f"mode_{machine.vdp._display_mode}"
-            ),
-            "display_enabled": bool(machine.vdp.registers[1] & 0x40),
-            "vdp_registers_hex": bytes(machine.vdp.registers).hex(),
-            "vdp_status_hex": f"{machine.vdp.status:02X}",
+                "frame": machine.vdp.frame_number,
+                "elapsed_ms_instrumented": round(elapsed_ns / 1_000_000, 3),
+                "instructions": machine.total_instructions - start_instructions,
+                "tstates": machine.total_tstates - start_tstates,
+                "pc": f"{machine.cpu.pc:04X}",
+                "scanline": machine.vdp.scanline,
+                "display_mode": MODE_NAMES.get(
+                    machine.vdp._display_mode, f"mode_{machine.vdp._display_mode}"
+                ),
+                "display_enabled": bool(machine.vdp.registers[1] & 0x40),
+                "vdp_registers_hex": bytes(machine.vdp.registers).hex(),
+                "vdp_status_hex": f"{machine.vdp.status:02X}",
                 "framebuffer_sha256": hashlib.sha256(framebuffer).hexdigest(),
             }
         )
