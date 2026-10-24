@@ -77,7 +77,10 @@ def test_session_logging_writes_json_lines(tmp_path):
     for handler in logging.getLogger().handlers:
         handler.flush()
 
-    records = [json.loads(line) for line in json_path.read_text(encoding="utf-8").splitlines()]
+    records = [
+        json.loads(line)
+        for line in json_path.read_text(encoding="utf-8").splitlines()
+    ]
     assert records[0]["event"] == "session_start"
     assert records[1]["event"] == "rom_loaded"
     assert records[1]["rom_sha256"] == "abc123"
