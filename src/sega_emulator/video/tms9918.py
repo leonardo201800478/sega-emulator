@@ -345,7 +345,8 @@ class TMS9918A:
             for tile_x in range(32):
                 name = self.vram[(name_base + tile_y * 32 + tile_x) & 0x3FFF]
                 for local_y in range(8):
-                    pattern_row = local_y >> 2
+                    y = tile_y * 8 + local_y
+                    pattern_row = (y & 0x1C) >> 2
                     pattern = self.vram[
                         (pattern_base + name * 8 + pattern_row) & 0x3FFF
                     ]
