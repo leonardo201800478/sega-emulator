@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 
 from sega_emulator.machine.sg1000 import SG1000Machine
-from sega_emulator.rom_loader import LoadedRom, load_rom
+from sega_emulator.rom_loader import LoadedRom, list_rom_members, load_rom
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +99,19 @@ def run(initial_path: Path | None = None) -> None:
         if not path:
             return
         try:
-            candidate = load_rom(path)
+            try:
+                candidate = load_rom(path)
+            except ValueError as error:
+                if Path(path).suffix.lower() != ".zip" or "várias ROMs" not in str(error):
+                    raise
+                members = list_rom_members(path)
+                selected, accepted = QInputDialog.getItem(
+                    window, "Selecionar ROM do ZIP",
+                    "O arquivo contém mais de uma ROM. Escolha uma:", members, 0, False,
+                )
+                if not accepted:
+                    return
+                candidate = load_rom(path, member_name=selected)
             loaded_machine = SG1000Machine(candidate.data)
         except Exception as exc:
             logger.exception("Falha ao carregar ROM", extra={
