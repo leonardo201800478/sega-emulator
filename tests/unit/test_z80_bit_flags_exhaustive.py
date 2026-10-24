@@ -64,6 +64,9 @@ def test_bit_hl_flags_for_all_values_bits_carry_and_xy_address_patterns() -> Non
                     bus.memory[address] = value
                     cpu = Z80Cpu(bus)
                     cpu.hl = address
+                    # BIT (HL) expõe F3/F5 a partir do estado WZ/MEMPTR.
+                    # O teste fixa WZ explicitamente para isolar essa regra.
+                    cpu.wz = address
                     cpu.f = 0xFE | carry
                     cpu.pc = 0
                     cpu.r = 0
