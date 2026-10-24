@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from array import array
 import logging
 import time
+from array import array
 from pathlib import Path
 
 from sega_emulator.machine.sg1000 import SG1000Machine
