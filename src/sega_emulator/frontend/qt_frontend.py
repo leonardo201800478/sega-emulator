@@ -45,7 +45,9 @@ def run(initial_path: Path | None = None) -> None:
     try:
         import pygame as pygame_backend
 
-        pygame_backend.mixer.pre_init(frequency=44_100, size=-16, channels=1, buffer=512)
+        pygame_backend.mixer.pre_init(
+            frequency=44_100, size=-16, channels=1, buffer=512
+        )
         pygame_backend.mixer.init()
         audio_channel = pygame_backend.mixer.Channel(0)
         pygame = pygame_backend
@@ -152,7 +154,9 @@ def run(initial_path: Path | None = None) -> None:
             machine.run_frame()
             samples = machine.drain_audio_samples()
             if samples and audio_channel is not None and pygame is not None:
-                pcm = array("h", (max(-32768, min(32767, round(s * 32767))) for s in samples))
+                pcm = array(
+                    "h", (max(-32768, min(32767, round(s * 32767))) for s in samples)
+                )
                 sound = pygame.mixer.Sound(buffer=pcm.tobytes())
                 if audio_channel.get_busy():
                     audio_channel.queue(sound)
@@ -277,7 +281,9 @@ def run(initial_path: Path | None = None) -> None:
                 action = recent_rom_menu.addAction(Path(recent_path).name)
                 action.setToolTip(recent_path)
                 action.triggered.connect(
-                    lambda checked=False, selected_path=recent_path: open_rom(selected_path)
+                    lambda checked=False, selected_path=recent_path: open_rom(
+                        selected_path
+                    )
                 )
             recent_rom_menu.addSeparator()
             clear_action = recent_rom_menu.addAction("Limpar histórico")
@@ -334,7 +340,9 @@ def run(initial_path: Path | None = None) -> None:
         settings.setValue("last_directory", str(Path(selected_path).parent))
         settings.setValue("last_rom", selected_path)
         recent_paths = settings.value("recent_roms", [], type=list)
-        recent_paths = [str(item) for item in recent_paths if str(item) != selected_path]
+        recent_paths = [
+            str(item) for item in recent_paths if str(item) != selected_path
+        ]
         recent_paths.insert(0, selected_path)
         settings.setValue("recent_roms", recent_paths[:10])
         refresh_recent_rom_menu()
@@ -421,7 +429,9 @@ def run(initial_path: Path | None = None) -> None:
     def dump_vdp_snapshot() -> None:
         """Salva um snapshot pontual do VDP para investigar divergências gráficas."""
         if machine is None or loaded is None:
-            QMessageBox.information(window, "Snapshot VDP", "Carregue uma ROM primeiro.")
+            QMessageBox.information(
+                window, "Snapshot VDP", "Carregue uma ROM primeiro."
+            )
             return
 
         vdp = machine.vdp
@@ -430,16 +440,18 @@ def run(initial_path: Path | None = None) -> None:
         for index in range(32):
             offset = (attr_base + index * 4) & 0x3FFF
             raw_y, raw_x, pattern, color = vdp.vram[offset : offset + 4]
-            sprites.append({
-                "index": index,
-                "vram_address": offset,
-                "raw_y": raw_y,
-                "raw_x": raw_x,
-                "pattern": pattern,
-                "color_byte": color,
-                "color": color & 0x0F,
-                "early_clock": bool(color & 0x80),
-            })
+            sprites.append(
+                {
+                    "index": index,
+                    "vram_address": offset,
+                    "raw_y": raw_y,
+                    "raw_x": raw_x,
+                    "pattern": pattern,
+                    "color_byte": color,
+                    "color": color & 0x0F,
+                    "early_clock": bool(color & 0x80),
+                }
+            )
             if raw_y == 0xD0:
                 break
 
@@ -475,7 +487,8 @@ def run(initial_path: Path | None = None) -> None:
                     "sprite_entries_raw": sprites,
                     "sprite_line_active_at_current_scanline": (
                         vdp._sprite_line_active(vdp.scanline)[0]
-                        if vdp.scanline < 262 else []
+                        if vdp.scanline < 262
+                        else []
                     ),
                     "vram_hex": bytes(vdp.vram).hex(),
                     "framebuffer_sha256": hashlib.sha256(framebuffer).hexdigest(),
@@ -489,7 +502,10 @@ def run(initial_path: Path | None = None) -> None:
                 encoding="utf-8",
             )
             image = QImage(
-                framebuffer, 256, 192, 256 * 3,
+                framebuffer,
+                256,
+                192,
+                256 * 3,
                 QImage.Format.Format_RGB888,
             ).copy()
             if not image.save(str(image_path), "PNG"):
