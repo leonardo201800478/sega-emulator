@@ -48,9 +48,7 @@ def test_performance_profile_uses_only_advertised_capabilities() -> None:
     assert resolved.effective.vdp is VdpMode.REFERENCE
     assert resolved.effective.audio is AudioMode.HLE
     assert resolved.effective.timing is TimingMode.BALANCED
-    assert resolved.fallbacks == (
-        "fast VDP path unavailable; using reference VDP",
-    )
+    assert resolved.fallbacks == ("fast VDP path unavailable; using reference VDP",)
 
 
 def test_relaxed_timing_falls_back_to_strict_without_capability() -> None:
@@ -65,6 +63,4 @@ def test_relaxed_timing_falls_back_to_strict_without_capability() -> None:
     resolved = resolve_profile(profile)
 
     assert resolved.effective.timing is TimingMode.STRICT
-    assert resolved.fallbacks == (
-        "relaxed timing unavailable; using strict timing",
-    )
+    assert resolved.fallbacks == ("relaxed timing unavailable; using strict timing",)
