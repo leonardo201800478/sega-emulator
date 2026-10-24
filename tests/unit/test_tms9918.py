@@ -333,3 +333,81 @@ def test_frame_is_published_when_vblank_begins() -> None:
     assert vdp.framebuffer[:3] == bytes(PALETTE[14])
     assert vdp.consume_frame_ready()
     assert not vdp.consume_frame_ready()
+
+
+def test_text_mode_renders_six_pixel_glyphs_with_eight_pixel_left_border() -> None:
+    vdp = TMS9918A()
+    _write_register(vdp, 1, 0x50)
+    _write_register(vdp, 2, 0x01)
+    _write_register(vdp, 4, 0x01)
+    _write_register(vdp, 7, 0xF1)
+    vdp.vram[0x0400 : 0x0400 + 960] = bytes(960)
+    vdp.vram[0x0800 : 0x0808] = bytes((0xA8, 0x40, 0, 0, 0, 0, 0, 0))
+
+    pixels = vdp.render_frame()
+
+    assert pixels[7 * 3 : 7 * 3 + 3] == bytes(PALETTE[1])
+    assert pixels[8 * 3 : 8 * 3 + 3] == bytes(PALETTE[15])
+    assert pixels[9 * 3 : 9 * 3 + 3] == bytes(PALETTE[1])
+    assert pixels[10 * 3 : 10 * 3 + 3] == bytes(PALETTE[15])
+    assert pixels[248 * 3 : 248 * 3 + 3] == bytes(PALETTE[1])
+
+
+def test_multicolor_mode_reuses_each_color_pair_for_four_scanlines() -> None:
+    vdp = TMS9918A()
+    _write_register(vdp, 1, 0x48)
+    _write_register(vdp, 2, 0x01)
+    _write_register(vdp, 4, 0x01)
+    _write_register(vdp, 7, 0x01)
+    vdp.vram[0x0400 : 0x0400 + 768] = bytes(768)
+    vdp.vram[0x0800] = 0xF2
+    vdp.vram[0x0801] = 0x34
+
+    pixels = vdp.render_frame()
+
+    assert pixels[0:3] == bytes(PALETTE[15])
+    assert pixels[3 * 3 : 3 * 3 + 3] == bytes(PALETTE[15])
+    assert pixels[4 * 3 : 4 * 3 + 3] == bytes(PALETTE[2])
+    row_three = 3 * SCREEN_WIDTH * 3
+    assert pixels[row_three : row_three + 3] == bytes(PALETTE[15])
+    row_four = 4 * SCREEN_WIDTH * 3
+    assert pixels[row_four : row_four + 3] == bytes(PALETTE[3])
+    assert pixels[row_four + 4 * 3 : row_four + 4 * 3 + 3] == bytes(PALETTE[4])
+
+
+def test_interrupt_output_tracks_vblank_and_register_enable() -> None:
+    vdp = TMS9918A()
+    _write_register(vdp, 1, 0x20)
+
+    assert not vdp.interrupt_pending
+    vdp.advance(VBLANK_LINE * TSTATES_PER_LINE)
+    assert vdp.interrupt_pending
+
+    status = vdp.read_port(0x81)
+    assert status & 0x80
+    assert not vdp.interrupt_pending
+
+
+def test_sprite_magnification_and_16_by_16_pattern_layout() -> None:
+    magnified = TMS9918A()
+    _prepare_sprite_table(magnified)
+    _write_register(magnified, 1, 0x41)
+    _set_sprite(magnified, 0, x=10, pattern=1, color=2)
+    pixels = bytearray(PALETTE[0] * (SCREEN_WIDTH * SCREEN_HEIGHT))
+    magnified._render_sprites(pixels)
+    assert pixels[10 * 3 : 10 * 3 + 3] == bytes(PALETTE[2])
+    assert pixels[11 * 3 : 11 * 3 + 3] == bytes(PALETTE[2])
+    assert pixels[(SCREEN_WIDTH + 10) * 3 : (SCREEN_WIDTH + 10) * 3 + 3] == bytes(
+        PALETTE[2]
+    )
+
+    large = TMS9918A()
+    _prepare_sprite_table(large)
+    _write_register(large, 1, 0x42)
+    _set_sprite(large, 0, x=10, pattern=5, color=2)
+    large.vram[0x20] = 0x80  # top-left tile, row zero
+    large.vram[0x28] = 0x80  # top-right tile, row zero
+    pixels = bytearray(PALETTE[0] * (SCREEN_WIDTH * SCREEN_HEIGHT))
+    large._render_sprites(pixels)
+    assert pixels[10 * 3 : 10 * 3 + 3] == bytes(PALETTE[2])
+    assert pixels[18 * 3 : 18 * 3 + 3] == bytes(PALETTE[2])
