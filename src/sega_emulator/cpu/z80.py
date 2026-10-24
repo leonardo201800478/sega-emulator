@@ -1377,7 +1377,11 @@ class Z80Cpu:
             # não alterou flags (Q=0), combinam A com F; caso contrário vêm de A.
             undocumented = self.a & 0x28
             if self._q_previous == 0:
+                # Q=0: combina A com F retido no estado de entrada.
                 undocumented |= self.f & 0x28
+            else:
+                # Q!=0: combina A com os bits X/Y do latch Q anterior.
+                undocumented |= self._q_previous & 0x28
             self._set_flags((self.f & 0xC4) | undocumented | 0x01)
             self.q = self.f
             cycles = 4
@@ -1385,7 +1389,11 @@ class Z80Cpu:
             previous_carry = self.f & 0x01
             undocumented = self.a & 0x28
             if self._q_previous == 0:
+                # Q=0: combina A com F retido no estado de entrada.
                 undocumented |= self.f & 0x28
+            else:
+                # Q!=0: combina A com os bits X/Y do latch Q anterior.
+                undocumented |= self._q_previous & 0x28
             self._set_flags((self.f & 0xC4) | undocumented)
             if previous_carry:
                 self._set_flags(self.f | 0x10)
