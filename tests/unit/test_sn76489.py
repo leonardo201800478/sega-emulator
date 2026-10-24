@@ -128,6 +128,7 @@ def test_reset_returns_to_deterministic_muted_state() -> None:
     assert psg.tone_periods == [0, 0, 0]
     assert psg.attenuations == [15, 15, 15, 15]
     assert psg._lfsr == LFSR_SEED
+    assert psg._noise_period == 0x10
     assert psg.render(16) == [0.0] * 16
 
 
