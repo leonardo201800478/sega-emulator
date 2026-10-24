@@ -47,6 +47,14 @@ def main(argv: Sequence[str] | None = None) -> None:
             parser.error(str(exc))
         return
 
+    if args.ui == "qt" and args.headless_frames is None:
+        try:
+            from sega_emulator.frontend.qt_frontend import run
+            run(args.rom)
+        except (RuntimeError, ImportError) as exc:
+            parser.error(str(exc))
+        return
+
     try:
         loaded = load_rom(args.rom)
         logger.info("ROM carregada", extra={
@@ -75,12 +83,8 @@ def main(argv: Sequence[str] | None = None) -> None:
             )
             return
 
-        if args.ui == "qt":
-            from sega_emulator.frontend.qt_frontend import run
-            run(args.rom)
-        else:
-            from sega_emulator.frontend.pygame_frontend import run
-            run(machine)
+        from sega_emulator.frontend.pygame_frontend import run
+        run(machine)
     except (OSError, ValueError, RuntimeError, NotImplementedError) as exc:
         logger.exception("Falha ao iniciar sessão", extra={
             "event": "startup_failed", "rom_path": str(args.rom),
