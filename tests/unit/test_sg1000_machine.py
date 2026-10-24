@@ -18,7 +18,9 @@ def test_machine_executes_cartridge_code_and_advances_a_frame() -> None:
 
 
 def test_machine_mirrors_small_cartridge_and_maps_joysticks() -> None:
-    machine = SG1000Machine(bytes((0x3E, 0x42, 0xC3, 0x00, 0x00)))
+    rom = bytearray(0x2000)
+    rom[:5] = bytes((0x3E, 0x42, 0xC3, 0x00, 0x00))
+    machine = SG1000Machine(bytes(rom))
 
     assert machine.memory_bus.read(0x0000) == 0x3E
     assert machine.memory_bus.read(0x2000) == 0x3E
