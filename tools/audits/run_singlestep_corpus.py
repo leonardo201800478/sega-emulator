@@ -166,11 +166,9 @@ def main() -> int:
         "Resumo: "
         + ", ".join(f"{key}={value}" for key, value in sorted(aggregate.items()))
     )
-    # Sempre preservar o relatório (o workflow publica artefatos com if: always),
-    # mas bloquear o gate quando houver divergências ou estados não suportados.
-    # Vetores com estado interno de prefixo ativo são contabilizados separadamente;
-    # não são tratados como aprovados nem bloqueiam este subconjunto delimitado.
-    if aggregate["failed"] or aggregate["unsupported"]:
+    # Preservar o relatório, mas falhar para qualquer execução não aprovada.
+    # Erros de runtime também invalidam o gate: nunca podem virar um resultado verde.
+    if aggregate["failed"] or aggregate["unsupported"] or aggregate["error"]:
         return 1
     return 0 if aggregate["passed"] else 2
 
