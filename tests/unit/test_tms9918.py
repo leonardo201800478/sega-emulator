@@ -4,6 +4,7 @@ import pytest
 
 from sega_emulator.video.tms9918 import (
     LINES_PER_FRAME,
+    PALETTE,
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
     TMS9918A,
@@ -143,3 +144,95 @@ def test_vdp_status_read_cancels_partial_control_command() -> None:
     vdp.write_port(0xBF, 0x80)
     assert vdp.address == 0
     assert vdp.registers[0] == 0
+
+def _prepare_sprite_table(vdp: TMS9918A) -> None:
+    # Place the attribute table away from sprite patterns at address zero.
+    _write_register(vdp, 1, 0x40)  # Display enabled; 8x8 sprites, no magnification.
+    _write_register(vdp, 5, 0x40)  # Attribute table at 2000h.
+    _write_register(vdp, 6, 0x00)  # Sprite patterns at 0000h.
+    for index in range(32):
+        offset = 0x2000 + index * 4
+        vdp.vram[offset : offset + 4] = bytes((0xD1, 0, 0, 0))
+    # raw Y=FFh maps to the first visible scanline; bit 7 is the left shift.
+    vdp.vram[0x0008] = 0x80
+    vdp.vram[0x0010] = 0x80
+
+
+def _set_sprite(
+    vdp: TMS9918A, index: int, *, x: int, pattern: int, color: int, raw_y: int = 0xFF
+) -> None:
+    offset = 0x2000 + index * 4
+    vdp.vram[offset : offset + 4] = bytes((raw_y, x, pattern, color))
+
+
+def test_sprite_priority_keeps_first_opaque_sprite_and_sets_collision() -> None:
+    vdp = TMS9918A()
+    _prepare_sprite_table(vdp)
+    _set_sprite(vdp, 0, x=10, pattern=1, color=2)
+    _set_sprite(vdp, 1, x=10, pattern=2, color=4)
+    pixels = bytearray(PALETTE[0] * (SCREEN_WIDTH * SCREEN_HEIGHT))
+
+    vdp._render_sprites(pixels)
+
+    offset = (10 * 3)
+    assert pixels[offset : offset + 3] == bytes(PALETTE[2])
+    assert vdp.status & 0x20
+
+
+def test_transparent_sprite_can_collide_without_hiding_visible_sprite() -> None:
+    vdp = TMS9918A()
+    _prepare_sprite_table(vdp)
+    _set_sprite(vdp, 0, x=10, pattern=1, color=0)
+    _set_sprite(vdp, 1, x=10, pattern=2, color=4)
+    pixels = bytearray(PALETTE[0] * (SCREEN_WIDTH * SCREEN_HEIGHT))
+
+    vdp._render_sprites(pixels)
+
+    assert pixels[10 * 3 : 10 * 3 + 3] == bytes(PALETTE[4])
+    assert vdp.status & 0x20
+
+
+def test_fifth_active_sprite_sets_index_and_is_not_drawn() -> None:
+    vdp = TMS9918A()
+    _prepare_sprite_table(vdp)
+    for index in range(5):
+        _set_sprite(vdp, index, x=index * 10, pattern=1, color=2)
+    pixels = bytearray(PALETTE[0] * (SCREEN_WIDTH * SCREEN_HEIGHT))
+
+    vdp._render_sprites(pixels)
+
+    assert vdp.status & 0x40
+    assert vdp.status & 0x1F == 4
+    assert pixels[40 * 3 : 40 * 3 + 3] == bytes(PALETTE[0])
+
+
+def test_fifth_sprite_flag_is_not_raised_during_vblank() -> None:
+    vdp = TMS9918A()
+    _prepare_sprite_table(vdp)
+    for index in range(5):
+        _set_sprite(vdp, index, x=index * 10, pattern=1, color=2)
+    vdp.status |= 0x80
+    pixels = bytearray(PALETTE[0] * (SCREEN_WIDTH * SCREEN_HEIGHT))
+
+    vdp._render_sprites(pixels)
+
+    assert vdp.status & 0x80
+    assert not (vdp.status & 0x40)
+
+
+def test_reset_preserves_vram_unless_explicitly_requested() -> None:
+    vdp = TMS9918A()
+    vdp.vram[0x1234] = 0xA5
+    _write_register(vdp, 1, 0x60)
+    vdp.advance(TSTATES_PER_LINE * 10)
+
+    vdp.reset()
+
+    assert vdp.vram[0x1234] == 0xA5
+    assert vdp.registers == bytes(8)
+    assert vdp.status == 0x1F
+    assert vdp.scanline == 0
+    assert vdp.frame_number == 0
+    vdp.reset(clear_vram=True)
+    assert not any(vdp.vram)
+
