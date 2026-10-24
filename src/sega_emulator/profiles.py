@@ -4,6 +4,7 @@ The profile presets describe user intent. They do not claim that a native
 backend is implemented: resolve_profile() falls back to the reference path
 until the corresponding capability is explicitly advertised by the runtime.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
