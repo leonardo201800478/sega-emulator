@@ -143,3 +143,47 @@ def test_vdp_status_read_cancels_partial_control_command() -> None:
     vdp.write_port(0xBF, 0x80)
     assert vdp.address == 0
     assert vdp.registers[0] == 0
+
+
+def _configure_sprite(vdp: TMS9918A, index: int, *, y: int, x: int, pattern: int, color: int) -> None:
+    """Configura uma entrada da tabela de atributos de sprites."""
+    base = (vdp.registers[5] & 0x7F) << 7
+    offset = base + index * 4
+    vdp.vram[offset : offset + 4] = bytes((y, x, pattern, color))
+
+
+def test_transparent_sprite_pixels_still_trigger_collision_without_painting() -> None:
+    vdp = TMS9918A()
+    _write_register(vdp, 1, 0x40)  # display enabled, sprites 8x8
+    _write_register(vdp, 5, 0x00)
+    _write_register(vdp, 6, 0x00)
+    _write_register(vdp, 7, 0x04)
+    # First sprite uses transparent colour 0; second sprite is red.
+    _configure_sprite(vdp, 0, y=0xFF, x=20, pattern=1, color=0)
+    _configure_sprite(vdp, 1, y=0xFF, x=20, pattern=2, color=8)
+    _configure_sprite(vdp, 2, y=0xD0, x=0, pattern=0, color=0)
+    vdp.vram[8:16] = bytes([0x80] * 8)
+    vdp.vram[16:24] = bytes([0x80] * 8)
+
+    frame = vdp.render_frame()
+
+    assert vdp.status & 0x20
+    pixel = (0 * SCREEN_WIDTH + 20) * 3
+    assert frame[pixel : pixel + 3] == bytes(PALETTE[8])
+
+
+def test_fifth_sprite_status_uses_first_overflow_in_raster_order() -> None:
+    vdp = TMS9918A()
+    _write_register(vdp, 1, 0x40)
+    _write_register(vdp, 5, 0)
+    _write_register(vdp, 6, 0)
+    # Sprite 4 overflows on line 41; sprite 5 overflows earlier, on line 1.
+    for index in range(6):
+        y = 40 if index < 5 else 0
+        _configure_sprite(vdp, index, y=y, x=index * 8, pattern=0, color=1)
+    _configure_sprite(vdp, 6, y=0xD0, x=0, pattern=0, color=0)
+
+    vdp.render_frame()
+
+    assert vdp.status & 0x40
+    assert vdp.status & 0x1F == 4
