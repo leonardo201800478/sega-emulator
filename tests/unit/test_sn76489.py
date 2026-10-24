@@ -1,0 +1,141 @@
+"""Testes determinísticos e funcionais do PSG SN76489AN para SG-1000."""
+
+import pytest
+
+from sega_emulator.audio.sn76489 import LFSR_MASK, LFSR_SEED, SN76489
+
+
+def enable_tone_zero(psg: SN76489, period: int = 0xFE) -> None:
+    psg.write(0x90)
+    psg.write(0x80 | (period & 0x0F))
+    psg.write((period >> 4) & 0x3F)
+
+
+def test_power_on_is_muted_and_render_is_deterministic() -> None:
+    psg = SN76489()
+    assert psg.render(8) == [0.0] * 8
+    first, second = SN76489(), SN76489()
+    for chip in (first, second):
+        enable_tone_zero(chip)
+    assert first.render(128) == second.render(128)
+
+
+def test_latch_and_data_bytes_update_ten_bit_tone_period() -> None:
+    psg = SN76489()
+    psg.write(0x85)
+    psg.write(0x12)
+    assert psg.tone_periods[0] == 0x125
+    psg.write(0x8F)
+    assert psg.tone_periods[0] == 0x12F
+
+
+def test_volume_is_four_bit_and_fifteen_mutes_channel() -> None:
+    psg = SN76489()
+    psg.write(0x90)
+    assert psg.attenuations[0] == 0
+    psg.write(0x9F)
+    assert psg.attenuations[0] == 15
+    assert psg.render(4) == [0.0] * 4
+
+
+def test_noise_write_resets_fifteen_bit_lfsr() -> None:
+    psg = SN76489()
+    psg.advance_clocks(1000)
+    psg.write(0xE7)
+    assert psg.noise_control == 7
+    assert psg._lfsr == LFSR_SEED
+    assert psg._noise_clock == 0
+    assert psg._noise_counter == 0
+    assert psg._lfsr & ~LFSR_MASK == 0
+
+
+def test_white_noise_uses_sg1000_feedback_taps_and_stays_fifteen_bit() -> None:
+    psg = SN76489()
+    psg.write(0xE4)
+    psg._lfsr = 0b01
+    psg._shift_noise_register()
+    assert psg._lfsr == LFSR_SEED
+    for _ in range(20_000):
+        psg._shift_noise_register()
+        assert 0 < psg._lfsr <= LFSR_MASK
+
+
+def test_tone_period_zero_and_one_hold_constant_high() -> None:
+    for period in (0, 1):
+        psg = SN76489()
+        psg.write(0x90)
+        psg.write(0x80 | (period & 0x0F))
+        assert psg._tone_outputs[0] == 1
+        assert all(sample > 0 for sample in psg.render(128))
+
+
+def test_tone_frequency_is_near_440_hz_at_ntsc_clock() -> None:
+    psg = SN76489()
+    enable_tone_zero(psg, 0xFE)
+    samples = psg.render(11_025)
+    transitions = sum(a != b for a, b in zip(samples, samples[1:], strict=False))
+    assert 200 <= transitions <= 240
+
+
+def test_rendering_in_chunks_matches_single_render() -> None:
+    whole, chunked = SN76489(), SN76489()
+    for chip in (whole, chunked):
+        enable_tone_zero(chip, 0xFE)
+        chip.write(0xE5)
+        chip.write(0xF2)
+    assert whole.render(997) == chunked.render(123) + chunked.render(874)
+
+
+def test_advance_clocks_is_chunk_invariant() -> None:
+    whole, chunked = SN76489(), SN76489()
+    for chip in (whole, chunked):
+        chip.write(0xE5)
+        chip.write(0xF2)
+    whole.advance_clocks(123_457)
+    chunked.advance_clocks(12_345)
+    chunked.advance_clocks(111_112)
+    assert whole._lfsr == chunked._lfsr
+    assert whole._noise_counter == chunked._noise_counter
+    assert whole._tone_counters == chunked._tone_counters
+    assert whole._clock_divider_phase == chunked._clock_divider_phase
+
+
+def test_reset_returns_to_deterministic_muted_state() -> None:
+    psg = SN76489()
+    enable_tone_zero(psg)
+    psg.write(0xE7)
+    psg.render(256)
+    psg.reset()
+    assert psg.tone_periods == [0, 0, 0]
+    assert psg.attenuations == [15, 15, 15, 15]
+    assert psg._lfsr == LFSR_SEED
+    assert psg.render(16) == [0.0] * 16
+
+
+def test_input_validation() -> None:
+    with pytest.raises(ValueError):
+        SN76489(clock_hz=0)
+    with pytest.raises(ValueError):
+        SN76489(sample_rate=0)
+    with pytest.raises(ValueError):
+        SN76489().render(-1)
+    with pytest.raises(ValueError):
+        SN76489().render(1.5)  # type: ignore[arg-type]
+    with pytest.raises(ValueError):
+        SN76489().write(256)
+    with pytest.raises(ValueError):
+        SN76489().advance_clocks(-1)
+
+
+def test_clocked_audio_samples_are_buffered_and_chunk_invariant() -> None:
+    whole, chunked = SN76489(), SN76489()
+    for chip in (whole, chunked):
+        enable_tone_zero(chip, 0xFE)
+    whole.advance_clocks(357_954)
+    chunked.advance_clocks(123_456)
+    chunked.advance_clocks(234_498)
+
+    whole_samples = whole.drain_samples()
+    chunked_samples = chunked.drain_samples()
+    assert whole_samples == chunked_samples
+    assert 4_400 <= len(whole_samples) <= 4_420

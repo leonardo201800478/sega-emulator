@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from sega_emulator.audio.sn76489 import SN76489
 from sega_emulator.bus.memory import RAM_SIZE, SG1000Ram
 from sega_emulator.bus.memory_bus import SG1000MemoryBus
 from sega_emulator.cpu.z80 import Z80Cpu
@@ -17,8 +18,7 @@ class _CartridgeMirrorBus:
         # modulo and a second validated bus read for every opcode and operand.
         rom_size = len(cartridge_rom)
         self._rom_window = (
-            cartridge_rom * (0xC000 // rom_size)
-            + cartridge_rom[: 0xC000 % rom_size]
+            cartridge_rom * (0xC000 // rom_size) + cartridge_rom[: 0xC000 % rom_size]
         )
 
     def read(self, address: int) -> int:
@@ -51,6 +51,7 @@ class SG1000Machine:
         base_bus = SG1000MemoryBus(ram, cartridge_rom)
         self.memory_bus = _CartridgeMirrorBus(base_bus, cartridge_rom)
         self.vdp = TMS9918A()
+        self.psg = SN76489()
         self.joystick1 = 0xFF
         self.joystick2 = 0xFF
         self.total_instructions = 0
@@ -73,6 +74,9 @@ class SG1000Machine:
         vdp_port = port & 0xC1
         if vdp_port in (0x80, 0x81):
             self.vdp.write_port(vdp_port, value)
+            return
+        if 0x40 <= port <= 0x7F:
+            self.psg.write(value)
 
     def set_joystick(self, player: int, value: int) -> None:
         if player not in (1, 2):
@@ -90,11 +94,16 @@ class SG1000Machine:
         self.total_instructions += 1
         self.total_tstates += cycles
         self.vdp.advance(cycles)
+        self.psg.advance_clocks(cycles)
         if self.vdp.status & 0x80 and self.vdp.registers[1] & 0x20:
             self.cpu.request_int()
         else:
             self.cpu.clear_int_request()
         return cycles
+
+    def drain_audio_samples(self, max_samples: int | None = None) -> list[float]:
+        """Retira amostras mono produzidas pelo PSG desde a última leitura."""
+        return self.psg.drain_samples(max_samples)
 
     def run_frame(self, max_steps: int = 100_000) -> int:
         """Executa um quadro com o laço CPU/VDP local para reduzir chamadas."""
@@ -107,6 +116,7 @@ class SG1000Machine:
         cpu_step = cpu.step
         execute_cpu_instruction = cpu._step_impl
         advance_vdp = vdp.advance
+        advance_psg = self.psg.advance_clocks
         request_int = cpu.request_int
         clear_int = cpu.clear_int_request
         fast_cpu_loop = (
@@ -127,6 +137,7 @@ class SG1000Machine:
                     self.total_instructions += 1
                     self.total_tstates += cycles
                     advance_vdp(cycles)
+                    advance_psg(cycles)
                     if vdp.status & 0x80 and vdp.registers[1] & 0x20:
                         request_int()
                     else:

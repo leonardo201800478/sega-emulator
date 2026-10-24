@@ -21,6 +21,7 @@ frontend = [
 ]
 qt = [
     "PySide6>=6.8,<7",
+    "pygame-ce>=2.5.3,<3.0",
 ]
 
 [tool.setuptools]
