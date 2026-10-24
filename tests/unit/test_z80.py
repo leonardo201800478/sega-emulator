@@ -2731,3 +2731,32 @@ def test_indexed_cb_final_opcode_does_not_increment_refresh_register() -> None:
     assert cpu.step() == 20
     assert cpu.pc == 4
     assert cpu.r == 0x80  # DD e CB são M1; d e opcode final não são M1
+
+def test_reset_clears_cpu_state_without_replacing_buses() -> None:
+    cpu = make_cpu(bytes([0x00]))
+    memory_bus = cpu.bus
+    io_bus = cpu.io_bus
+
+    cpu.a = 0x12
+    cpu.f = 0xA5
+    cpu.ix = 0x3456
+    cpu.wz = 0x789A
+    cpu.q = 0x28
+    cpu._q_previous = 0x08
+    cpu._nmi_pending = True
+    cpu._int_pending = 0xFF
+    cpu._im0_opcode = 0xC7
+    cpu.halted = True
+    cpu.total_cycles = 123
+
+    cpu.reset()
+
+    assert cpu.bus is memory_bus
+    assert cpu.io_bus is io_bus
+    assert (cpu.a, cpu.f, cpu.ix, cpu.wz, cpu.q, cpu._q_previous) == (0, 0, 0, 0, 0, 0)
+    assert not cpu._nmi_pending
+    assert cpu._int_pending is None
+    assert cpu._im0_opcode is None
+    assert not cpu.halted
+    assert cpu.total_cycles == 0
+
