@@ -138,7 +138,7 @@ impl Z80Subset {
         self.total_tstates
     }
 
-    fn load_program(&mut self, address: u16, data: &[u8]) -> PyResult<()> {
+    fn load_program(&mut self, address: u16, data: Vec<u8>) -> PyResult<()> {
         let start = usize::from(address);
         let end = start + data.len();
         if end > MEMORY_SIZE {
@@ -146,7 +146,7 @@ impl Z80Subset {
                 "program must fit in the 64 KiB address space without wrapping",
             ));
         }
-        self.memory[start..end].copy_from_slice(data);
+        self.memory[start..end].copy_from_slice(&data);
         self.pc = address;
         self.halted = false;
         Ok(())
@@ -206,7 +206,10 @@ mod tests {
         assert_eq!(cpu.a, 0x7F);
         assert_eq!(cpu.step_inner(), Ok(4));
         assert_eq!(cpu.a, 0x80);
-        assert_eq!(cpu.f & (FLAG_S | FLAG_H | FLAG_PV), FLAG_S | FLAG_H | FLAG_PV);
+        assert_eq!(
+            cpu.f & (FLAG_S | FLAG_H | FLAG_PV),
+            FLAG_S | FLAG_H | FLAG_PV
+        );
         assert_eq!(cpu.total_tstates, 11);
     }
 
