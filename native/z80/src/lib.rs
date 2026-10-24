@@ -157,16 +157,14 @@ impl Z80Subset {
     }
 
     fn step(&mut self) -> PyResult<u8> {
-        self.step_inner()
-            .map_err(PyValueError::new_err)
+        self.step_inner().map_err(PyValueError::new_err)
     }
 
     /// Execute multiple instructions in Rust so Python does not cross the FFI
     /// boundary for each emulated opcode.
     fn run_steps(&mut self, count: usize) -> PyResult<usize> {
         for _ in 0..count {
-            self.step_inner()
-                .map_err(PyValueError::new_err)?;
+            self.step_inner().map_err(PyValueError::new_err)?;
         }
         Ok(count)
     }
