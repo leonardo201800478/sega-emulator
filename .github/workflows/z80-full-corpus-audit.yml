@@ -3,6 +3,8 @@ name: Z80 full SingleStepTests audit
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [audit/z80-phase1-full-corpus]
   workflow_dispatch:
     inputs:
       scope:
