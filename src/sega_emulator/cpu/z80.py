@@ -20,6 +20,10 @@ class Z80Cpu:
         """Inicializa os registradores e associa um barramento de memória."""
         self.bus = bus
         self.io_bus = io_bus
+        self.reset()
+
+    def reset(self) -> None:
+        """Reset deterministic CPU state while preserving attached buses."""
         self.a = 0
         self.f = 0
         self.b = 0
@@ -36,7 +40,6 @@ class Z80Cpu:
         self.hl_alt = 0
         self.i = 0
         self.r = 0
-        # Estado interno usado por flags não documentadas do Z80.
         self.wz = 0
         self.q = 0
         self._q_previous = 0
@@ -47,8 +50,7 @@ class Z80Cpu:
         self.halted = False
         self._ei_delay = 0
         self._nmi_pending = False
-        self._int_pending = None
-        # Opcode fornecido pelo barramento durante acknowledge em IM 0.
+        self._int_pending: int | None = None
         self._im0_opcode: int | None = None
         self.sp = 0
         self.pc = 0
@@ -727,7 +729,7 @@ class Z80Cpu:
             )
             if opcode in (0xB0, 0xB8) and self.bc:
                 self.pc = (self.pc - 2) & 0xFFFF
-                self.wz = (self.pc + 3) & 0xFFFF
+                self.wz = (self.pc + 1) & 0xFFFF
                 return 21
             return 16
         if opcode in (0xA1, 0xA9, 0xB1, 0xB9):
@@ -784,10 +786,7 @@ class Z80Cpu:
             flags |= 0x11
         flags |= self._parity_flag(((k & 7) ^ self.b) & 0xFF)
         self._set_flags(flags)
-        if input_direction:
-            self.wz = (self.bc + 1) & 0xFFFF
-        else:
-            self.wz = (old_bc + direction) & 0xFFFF
+        self.wz = (old_bc + direction) & 0xFFFF
         if repeat and self.b:
             self.pc = (self.pc - 2) & 0xFFFF
             self.wz = (self.pc + 1) & 0xFFFF
