@@ -5,8 +5,9 @@
 O núcleo `TMS9918A` está em Python e mantém 16 KiB de VRAM, oito registradores
 de controle, registrador de status, portas com aliases, buffer de leitura,
 endereçamento de 14 bits, quatro modos gráficos documentados, sprites e um
-relógio raster nominal. A imagem RGB24 é reconstruída ao final do quadro; isso
-não é uma implementação ciclo a ciclo nem uma simulação elétrica do VDP.
+relógio raster nominal. A imagem RGB24 é construída linha a linha e publicada
+quando começa VBlank, após a última linha visível; isso não é uma implementação
+ciclo a ciclo nem uma simulação elétrica do VDP.
 
 Esta etapa endurece a semântica de sprites e estado:
 - os quatro primeiros sprites ativos por linha são os únicos desenhados;
