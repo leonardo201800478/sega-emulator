@@ -423,11 +423,35 @@ def test_sprite_magnification_and_16_by_16_pattern_layout() -> None:
     _write_register(large, 1, 0x42)
     _set_sprite(large, 0, x=10, pattern=5, color=2)
     large.vram[0x20] = 0x80  # top-left tile, row zero
-    large.vram[0x28] = 0x80  # top-right tile, row zero
+    large.vram[0x30] = 0x80  # top-right tile follows the lower-left tile
     pixels = bytearray(PALETTE[0] * (SCREEN_WIDTH * SCREEN_HEIGHT))
     large._render_sprites(pixels)
     assert pixels[10 * 3 : 10 * 3 + 3] == bytes(PALETTE[2])
     assert pixels[18 * 3 : 18 * 3 + 3] == bytes(PALETTE[2])
+
+
+def test_16x16_sprite_pattern_quadrants_follow_tms9918a_order() -> None:
+    vdp = TMS9918A()
+    _prepare_sprite_table(vdp)
+    _write_register(vdp, 1, 0x42)
+    _set_sprite(vdp, 0, x=10, pattern=5, color=2)
+    # Sprite 5 is aligned to pattern 4: UL, LL, UR, LR.
+    vdp.vram[0x20] = 0x80  # upper-left, row 0
+    vdp.vram[0x28] = 0x80  # lower-left, row 0
+    vdp.vram[0x30] = 0x80  # upper-right, row 0
+    vdp.vram[0x38] = 0x80  # lower-right, row 0
+    pixels = bytearray(PALETTE[0] * (SCREEN_WIDTH * SCREEN_HEIGHT))
+
+    vdp._render_sprites(pixels)
+
+    def pixel(x: int, y: int) -> bytes:
+        offset = (y * SCREEN_WIDTH + x) * 3
+        return bytes(pixels[offset : offset + 3])
+
+    assert pixel(10, 0) == bytes(PALETTE[2])
+    assert pixel(10, 8) == bytes(PALETTE[2])
+    assert pixel(18, 0) == bytes(PALETTE[2])
+    assert pixel(18, 8) == bytes(PALETTE[2])
 
 
 def test_offscreen_vertical_sprites_can_set_collision_during_vblank() -> None:
