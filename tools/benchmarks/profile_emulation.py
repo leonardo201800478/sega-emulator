@@ -111,14 +111,8 @@ def main() -> None:
         "integrated_speed_percent="
         f"{total_tstates / integrated_median / Z80_CLOCK_HZ * 100:.2f}"
     )
-    print(
-        "integrated_frames_per_second="
-        f"{1 / integrated_median:.2f}"
-    )
-    print(
-        "component_time_ratio_vdp_to_cpu="
-        f"{vdp_median / cpu_median:.3f}"
-    )
+    print(f"integrated_frames_per_second={1 / integrated_median:.2f}")
+    print(f"component_time_ratio_vdp_to_cpu={vdp_median / cpu_median:.3f}")
 
     if args.profile:
         profiler = cProfile.Profile()
