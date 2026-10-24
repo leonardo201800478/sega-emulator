@@ -440,3 +440,61 @@ def test_offscreen_vertical_sprites_can_set_collision_during_vblank() -> None:
 
     assert vdp.status & 0x80
     assert vdp.status & 0x20
+
+
+
+def test_fifth_sprite_status_uses_first_raster_overflow() -> None:
+    vdp = TMS9918A()
+    _prepare_sprite_table(vdp)
+    # Sprites 0-4 overflow on line 41; sprites 5-9 overflow earlier, on line 1.
+    for index in range(10):
+        raw_y = 40 if index < 5 else 0
+        _set_sprite(vdp, index, x=index * 8, pattern=0, color=1, raw_y=raw_y)
+    _set_sprite(vdp, 10, x=0, pattern=0, color=0, raw_y=0xD0)
+
+    vdp.advance(2 * TSTATES_PER_LINE)
+
+    assert vdp.status & 0x40
+    assert vdp.status & 0x1F == 9
+
+
+def test_sprite_collision_status_can_be_cleared_and_raised_on_later_scanline() -> None:
+    vdp = TMS9918A()
+    _prepare_sprite_table(vdp)
+    _set_sprite(vdp, 0, x=12, pattern=1, color=0)
+    _set_sprite(vdp, 1, x=12, pattern=2, color=8)
+    vdp.vram[0x0008:0x0010] = bytes([0x80] * 8)
+    vdp.vram[0x0010:0x0018] = bytes([0x80] * 8)
+
+    vdp.advance(TSTATES_PER_LINE)
+    assert vdp.status & 0x20
+
+    status = vdp.read_port(0x81)
+    assert status & 0x20
+    assert not (vdp.status & 0x20)
+
+    vdp.advance(TSTATES_PER_LINE)
+    assert vdp.status & 0x20
+
+
+def test_multicolor_pattern_row_advances_across_character_rows() -> None:
+    vdp = TMS9918A()
+    _write_register(vdp, 1, 0x48)  # Display enabled, Multicolor mode.
+    _write_register(vdp, 2, 0x0E)  # Name table at 3800h.
+    _write_register(vdp, 4, 0x01)  # Pattern table at 0800h.
+    vdp.vram[0x3800] = 1
+    vdp.vram[0x3820] = 1  # Reuse character 1 in the next 8-pixel row.
+    vdp.vram[0x0808:0x0810] = bytes(
+        (0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF, 0x10)
+    )
+
+    full_frame = vdp.render_frame()
+    top_pixel = full_frame[:3]
+    second_character_row_pixel = full_frame[8 * SCREEN_WIDTH * 3 :][:3]
+
+    assert top_pixel == bytes(PALETTE[2])
+    assert second_character_row_pixel == bytes(PALETTE[6])
+
+    vdp.advance(9 * TSTATES_PER_LINE)
+    raster_pixel = vdp._working_framebuffer[8 * SCREEN_WIDTH * 3 :][:3]
+    assert raster_pixel == bytes(PALETTE[6])
