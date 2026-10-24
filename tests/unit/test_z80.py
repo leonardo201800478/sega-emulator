@@ -392,15 +392,6 @@ def test_ccf_complements_carry_and_updates_half_carry(
     assert cpu.total_cycles == 4
 
 
-@pytest.mark.parametrize(
-    ("initial_b", "displacement", "expected_b", "expected_pc", "expected_cycles"),
-    [
-        (0x02, 0x02, 0x01, 0x0004, 13),  # B não zero: desvia para frente
-        (0x01, 0xFE, 0x00, 0x0002, 8),  # B chega a zero: não desvia
-        (0x00, 0x01, 0xFF, 0x0003, 13),  # decremento com wrap para FFh
-        (0x02, 0xFE, 0x01, 0x0000, 13),  # deslocamento negativo
-    ],
-)
 def test_scf_uses_previous_flag_write_for_undocumented_xy() -> None:
     cpu = make_cpu(bytes([0x04, 0x37]))  # INC B; SCF
     cpu.b = 0x07
@@ -427,6 +418,15 @@ def test_q_latch_clears_after_instruction_that_preserves_flags() -> None:
     assert cpu.f == 0x01
 
 
+@pytest.mark.parametrize(
+    ("initial_b", "displacement", "expected_b", "expected_pc", "expected_cycles"),
+    [
+        (0x02, 0x02, 0x01, 0x0004, 13),  # B não zero: desvia para frente
+        (0x01, 0xFE, 0x00, 0x0002, 8),  # B chega a zero: não desvia
+        (0x00, 0x01, 0xFF, 0x0003, 13),  # decremento com wrap para FFh
+        (0x02, 0xFE, 0x01, 0x0000, 13),  # deslocamento negativo
+    ],
+)
 def test_djnz_decrements_b_branches_and_preserves_flags(
     initial_b: int,
     displacement: int,
