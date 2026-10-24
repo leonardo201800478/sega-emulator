@@ -30,7 +30,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/singlestep-vectors
-          files=("00" "04" "06" "37" "3f" "76" "c6" "cb 00" "dd 21" "ed 40")
+          files=("00" "04" "06" "37" "3f" "76" "c6" "d3" "cb 00" "dd 21" "ed 40")
           for file_stem in "${files[@]}"; do
             encoded="${file_stem// /%20}"
             curl --fail --location --retry 3 --retry-delay 2 \
@@ -40,7 +40,7 @@ jobs:
           printf '%s\n' \
             'Corpus: https://github.com/SingleStepTests/z80' \
             'License: MIT (upstream repository metadata)' \
-            'Files: 00 04 06 37 3f 76 c6 "cb 00" "dd 21" "ed 40"' \
+            'Files: 00 04 06 37 3f 76 c6 d3 "cb 00" "dd 21" "ed 40"' \
             'Important: the current adapter does not compare per-cycle bus traces.' \
             > artifacts/singlestep-vectors/SOURCE.txt
 
@@ -48,7 +48,7 @@ jobs:
         run: |
           python tools/audits/run_singlestep_corpus.py \
             --directory artifacts/singlestep-vectors \
-            --files 00 04 06 37 3f 76 c6 "cb 00" "dd 21" "ed 40" \
+            --files 00 04 06 37 3f 76 c6 d3 "cb 00" "dd 21" "ed 40" \
             --report-json artifacts/z80-singlestep-report.json
 
       - name: Upload corpus and report
