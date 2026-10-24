@@ -133,5 +133,5 @@ def main() -> int:
     return 1 if failures else 0
 
 
-if __args__ == "__main__":
+if __name__ == "__main__":
     raise SystemExit(main())
