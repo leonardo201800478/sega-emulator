@@ -137,7 +137,7 @@ class TMS9918A:
             if self._cycles_into_line == TSTATES_PER_LINE:
                 self._cycles_into_line = 0
                 if (
-                    self.scanline < SCREEN_HEIGHT
+                    self.scanline < LINES_PER_FRAME
                     and (self.registers[1] & 0x40)
                     and self._display_mode != 1
                 ):
@@ -282,7 +282,9 @@ class TMS9918A:
             y = (raw_y + 1) & 0xFF
             if y >= 0xE0:
                 y -= 0x100
-            if not y <= line < y + size * scale:
+            raster_y = y % LINES_PER_FRAME
+            row = (line - raster_y) % LINES_PER_FRAME
+            if row >= size * scale:
                 continue
 
             if len(active) == 4:
@@ -290,7 +292,7 @@ class TMS9918A:
                 break
             if color_byte & 0x80:
                 x -= 32
-            active.append((index, x, pattern_number, color_byte & 0x0F, y))
+            active.append((index, x, pattern_number, color_byte & 0x0F, raster_y))
 
         return active, fifth_index
 
@@ -305,6 +307,7 @@ class TMS9918A:
         active, fifth_index = self._sprite_line_active(line)
         if (
             update_status
+            and line <= VBLANK_LINE
             and fifth_index is not None
             and not (self.status & 0x80)
             and not (self.status & 0x40)
@@ -318,7 +321,7 @@ class TMS9918A:
         visible: set[int] = set()
 
         for _, x, pattern_number, color, sprite_y in active:
-            source_y = (line - sprite_y) // scale
+            source_y = ((line - sprite_y) % LINES_PER_FRAME) // scale
             for source_x in range(size):
                 if size == 16:
                     tile = (
@@ -335,14 +338,17 @@ class TMS9918A:
 
                 for dx in range(scale):
                     px = x + source_x * scale + dx
-                    if not 0 <= px < SCREEN_WIDTH:
-                        continue
                     if px in occupied:
                         if update_status:
                             self.status |= 0x20
                     else:
                         occupied.add(px)
-                    if pixels is not None and color and px not in visible:
+                    if (
+                        pixels is not None
+                        and 0 <= px < SCREEN_WIDTH
+                        and color
+                        and px not in visible
+                    ):
                         self._put_pixel(pixels, px, line, color)
                         visible.add(px)
 
