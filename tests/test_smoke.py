@@ -2,7 +2,6 @@
 
 import sys
 from types import ModuleType
-from typing import cast
 
 
 def test_package_version_is_defined() -> None:
