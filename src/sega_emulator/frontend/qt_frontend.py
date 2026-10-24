@@ -189,8 +189,7 @@ def run(initial_path: Path | None = None) -> None:
                     for phase, total in phase_totals_ms.items()
                 }
                 phase_maxima = {
-                    phase: round(value, 3)
-                    for phase, value in phase_max_ms.items()
+                    phase: round(value, 3) for phase, value in phase_max_ms.items()
                 }
                 logger.info(
                     "Resumo de desempenho",
