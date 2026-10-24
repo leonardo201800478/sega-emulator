@@ -66,6 +66,8 @@ timer_overhead = (ns() - started_ns) / 200_000
 
 machine = new_machine()
 machine.run_frames(WARM)
+machine.total_instructions = 0
+machine.total_tstates = 0
 cpu = machine.cpu
 vdp = machine.vdp
 psg = machine.psg
