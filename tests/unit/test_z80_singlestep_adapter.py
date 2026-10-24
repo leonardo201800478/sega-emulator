@@ -114,7 +114,6 @@ def test_load_vectors_requires_a_json_array(tmp_path) -> None:
         load_vectors(path)
 
 
-
 def test_adapter_derives_io_read_value_from_single_step_cycle_trace() -> None:
     vector = {
         "name": "ED 40 IN B,(C) cycle-derived input fixture",
@@ -141,7 +140,6 @@ def test_adapter_derives_io_read_value_from_single_step_cycle_trace() -> None:
 
     assert result.status == "passed"
     assert result.mismatches == []
-
 
 
 def test_out_immediate_updates_wz_to_port_plus_one() -> None:
