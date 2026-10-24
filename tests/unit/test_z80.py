@@ -2511,6 +2511,36 @@ def test_masked_int_remains_pending_while_cpu_is_halted() -> None:
     assert cpu.bus.read(0xC0FF) == halted_pc >> 8
 
 
+
+
+def test_nmi_during_halt_has_priority_over_pending_int() -> None:
+    cpu = make_cpu(bytes([0xFB, 0x76, 0x00]))  # EI; HALT; NOP
+    cpu.sp = 0xC100
+    cpu.interrupt_mode = 1
+    cpu.request_int(0xFF)
+
+    assert cpu.step() == 4  # EI
+    assert cpu.iff1 is True
+    assert cpu.iff2 is True
+    assert cpu._ei_delay == 1
+
+    assert cpu.step() == 4  # HALT ainda executa durante o atraso de EI
+    assert cpu.halted is True
+    assert cpu.pc == 2
+    assert cpu._ei_delay == 0
+
+    cpu.request_nmi()
+    assert cpu.step() == 11
+    assert cpu.halted is False
+    assert cpu.pc == 0x0066
+    assert cpu.r == 3
+    assert cpu.iff1 is False
+    assert cpu.iff2 is True
+    assert cpu._int_pending == 0xFF
+    assert cpu.bus.read(0xC0FE) == 0x02
+    assert cpu.bus.read(0xC0FF) == 0x00
+    assert cpu.total_cycles == 19
+
 def test_nmi_has_priority_over_pending_maskable_interrupt() -> None:
     cpu = make_cpu(bytes([0x76, 0x00]))  # HALT; NOP
     cpu.sp = 0xC100
