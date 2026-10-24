@@ -26,8 +26,13 @@ def test_machine_mirrors_small_cartridge_and_maps_joysticks() -> None:
     assert machine.memory_bus.read(0x0000) == 0x3E
     assert machine.memory_bus.read(0x2000) == 0x3E
     machine.set_joystick(1, 0xEF)
+    machine.set_joystick(2, 0xDF)
     assert machine.read_port(0x01DC) == 0xEF
-    assert machine.read_port(0x01DD) == 0xFF
+    assert machine.read_port(0x01DD) == 0xDF
+    assert machine.read_port(0x0000) == 0xEF
+    assert machine.read_port(0x0001) == 0xDF
+    machine.memory_bus.write(0x0000, 0x00)
+    assert machine.memory_bus.read(0x0000) == 0x3E
 
 
 def test_machine_rejects_invalid_rom_sizes_and_joystick_values() -> None:
