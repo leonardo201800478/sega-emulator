@@ -220,7 +220,7 @@ class ControllerInput:
             if index not in valid_indices or not attached:
                 try:
                     controller.quit()
-                except (AttributeError, RuntimeError):
+                except AttributeError, RuntimeError:
                     pass
                 del self._controllers[index]
         for index in sorted(valid_indices):
@@ -279,7 +279,7 @@ class ControllerInput:
                         actions.add("up")
                     elif y_value > 0 and y_value >= threshold:
                         actions.add("down")
-            except (IndexError, RuntimeError):
+            except IndexError, RuntimeError:
                 # A device can disappear while being polled. The next poll resyncs.
                 continue
         return result
@@ -288,7 +288,7 @@ class ControllerInput:
         for controller in self._controllers.values():
             try:
                 controller.quit()
-            except (AttributeError, RuntimeError):
+            except AttributeError, RuntimeError:
                 pass
         self._controllers.clear()
         self._player_device_indices.clear()
