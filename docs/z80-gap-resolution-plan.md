@@ -195,9 +195,13 @@ python -m sega_emulator.testing.z80_singlestep caminho\para\v1\00.json --limit 2
 - Se o vetor exigir estado não modelado ativo (por exemplo, `P` diferente de zero) ou um opcode não implementado, ele é marcado como `unsupported`, nunca como aprovado. O processo termina com código diferente de zero para divergências/erros e, por padrão, também para vetores não suportados; `--allow-unsupported` apenas permite continuar com código zero quando só houver itens não suportados.
 - O teste unitário usa vetores sintéticos mínimos para validar o adaptador e não conta como resultado de conformidade do corpus externo.
 
-### Próximo gate
+### Próximos gates
 
-Antes de tornar vetores externos obrigatórios no CI, fixar a revisão/licença do corpus e versionar um pequeno subconjunto aprovado com manifesto de proveniência. Começar por um arquivo de opcode efetivamente suportado, revisar as divergências reais e só então adicionar o lote determinístico ao workflow rápido. A bateria completa deve permanecer em execução prolongada/manual.
+1. Fixar um commit upstream e registrar SHA-256 dos arquivos para que a entrada da auditoria seja reproduzível.
+2. Ampliar a cobertura de prefixos e opcodes com os arquivos disponíveis no corpus, mantendo separados aprovados, divergentes, não suportados e excluídos.
+3. Modelar ou formalmente restringir o estado interno `p`, em vez de contar esses vetores como conformes.
+4. Implementar um traço de eventos de barramento e só então comparar os arrays `cycles`.
+5. Manter a bateria completa como auditoria prolongada; o subconjunto atual é diagnóstico, não gate obrigatório de conformidade.
 
 
 ## 6. Auditoria diferencial exploratória com corpus externo
