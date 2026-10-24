@@ -61,6 +61,33 @@ def test_fifth_sprite_sets_overflow_flag_and_fifth_sprite_index() -> None:
     assert vdp.status & 0x1F == 4
 
 
+def test_fifth_sprite_is_not_drawn_when_hardware_limit_is_enabled() -> None:
+    vdp = TMS9918A()
+    _setup(vdp)
+    for index in range(5):
+        _sprite(vdp, index, 0xFF, index * 12, color=2)
+    _sprite(vdp, 5, 0xD0, 0)
+
+    frame = vdp.render_frame()
+
+    assert _pixel(frame, 48, 0) == bytes((0, 0, 0))
+    assert vdp.status & 0x40
+
+
+def test_fifth_sprite_is_drawn_when_hardware_limit_is_disabled() -> None:
+    vdp = TMS9918A(sprite_limit_enabled=False)
+    _setup(vdp, sprite_limit_enabled=False)
+    for index in range(5):
+        _sprite(vdp, index, 0xFF, index * 12, color=2)
+    _sprite(vdp, 5, 0xD0, 0)
+
+    frame = vdp.render_frame()
+
+    assert _pixel(frame, 48, 0) == bytes((33, 200, 66))
+    # A opção afeta somente a composição visual, não os flags do VDP.
+    assert vdp.status & 0x40
+
+
 def test_transparent_sprite_pixels_do_not_collide() -> None:
     vdp = TMS9918A()
     _setup(vdp)
