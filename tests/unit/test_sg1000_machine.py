@@ -16,6 +16,8 @@ def test_machine_executes_cartridge_code_and_advances_a_frame() -> None:
     assert machine.vdp.frame_number == 1
     assert machine.cpu.pc == 0
     assert machine.cpu.total_cycles >= 228 * 262
+    assert machine.total_instructions == steps
+    assert machine.total_tstates == machine.cpu.total_cycles
 
 
 def test_machine_mirrors_small_cartridge_and_maps_joysticks() -> None:
