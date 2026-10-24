@@ -78,6 +78,7 @@ class SN76489:
         self._tone_outputs[:] = [1, 1, 1]
         self._noise_counter = 0
         self._noise_clock = 0
+        self._noise_period = 0x10
         self._lfsr = LFSR_SEED
         self._clock_divider_phase = 0
         self._sample_phase = 0
