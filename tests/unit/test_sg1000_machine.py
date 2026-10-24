@@ -1,6 +1,7 @@
 """Testes de integração iniciais da máquina SG-1000."""
 
 import pytest
+
 from sega_emulator.devtools.demo_rom import build_demo_rom
 
 from sega_emulator.machine.sg1000 import SG1000Machine
