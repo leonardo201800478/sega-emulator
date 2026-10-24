@@ -26,46 +26,6 @@ int main() {
     }
     auto jit = std::move(*jit_expected);
 
-    auto context = std::make_unique<LLVMContext>();
-    auto module = std::make_unique<Module>("sega_z80_jit_smoke", *context);
-    module->setDataLayout(jit->getDataLayout());
-    module->setTargetTriple(jit->getTargetTriple().str());
-
-    auto *i64 = Type::getInt64Ty(*context);
-    auto *i8 = Type::getInt8Ty(*context);
-    auto *function_type = FunctionType::get(i64, {i64}, false);
-    auto *function = Function::Create(
-        function_type, Function::ExternalLinkage, "sega_jit_smoke", module.get()
-    );
-    auto argument = function->arg_begin();
-    argument->setName("input");
-
-    auto *entry = BasicBlock::Create(*context, "entry", function);
-    IRBuilder<> builder(entry);
-    auto *incremented = builder.CreateAdd(&*argument, ConstantInt::get(i64, 1));
-    auto *low_byte = builder.CreateTrunc(incremented, i8);
-    auto *result = builder.CreateZExt(low_byte, i64);
-    builder.CreateRet(result);
-
-    auto thread_safe_context = std::make_unique<LLVMContext>();
-    auto thread_safe_module = std::make_unique<Module>("sega_z80_jit_smoke", *thread_safe_context);
-    thread_safe_module->setDataLayout(jit->getDataLayout());
-    thread_safe_module->setTargetTriple(jit->getTargetTriple().str());
-    auto *ts_i64 = Type::getInt64Ty(*thread_safe_context);
-    auto *ts_i8 = Type::getInt8Ty(*thread_safe_context);
-    auto *ts_function_type = FunctionType::get(ts_i64, {ts_i64}, false);
-    auto *ts_function = Function::Create(
-        ts_function_type, Function::ExternalLinkage, "sega_jit_smoke", thread_safe_module.get()
-    );
-    auto ts_argument = ts_function->arg_begin();
-    ts_argument->setName("input");
-    auto *ts_entry = BasicBlock::Create(*thread_safe_context, "entry", ts_function);
-    IRBuilder<> ts_builder(ts_entry);
-    auto *ts_incremented = ts_builder.CreateAdd(&*ts_argument, ConstantInt::get(ts_i64, 1));
-    auto *ts_low_byte = ts_builder.CreateTrunc(ts_incremented, ts_i8);
-    auto *ts_result = ts_builder.CreateZExt(ts_low_byte, ts_i64);
-    ts_builder.CreateRet(ts_result);
-
     auto tsc = std::make_unique<LLVMContext>();
     auto tsm = std::make_unique<Module>("sega_z80_jit_smoke", *tsc);
     tsm->setDataLayout(jit->getDataLayout());
