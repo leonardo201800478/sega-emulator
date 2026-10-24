@@ -24,7 +24,7 @@ Para executar localmente no ambiente de desenvolvimento:
 python -m pip install -e ".[dev]"
 git clone https://github.com/SingleStepTests/z80.git external/SingleStepTests-z80
 git -C external/SingleStepTests-z80 checkout ebe1875d48f374bcfd4b505d8eb8ee751568b5f7
-python tools/audits/run_singlestep_full.py `
+python run_singlestep_full.py `
   --directory external/SingleStepTests-z80/v1 `
   --workers 2 `
   --report-json artifacts/singlestep-full.json `
@@ -37,12 +37,12 @@ corpus; os arquivos de teste não devem ser modificados.
 
 ## ZEXDOC/ZEXALL
 
-O harness `tools/audits/run_zex.py` prepara uma memória plana de 64 KiB,
+O harness `run_zex.py` prepara uma memória plana de 64 KiB,
 intercepta as chamadas BDOS 2 e 9 e termina no warm boot. Exemplo:
 
 ```powershell
-python tools/audits/run_zex.py C:\caminho\para\zexall.com --max-seconds 300
-python tools/audits/run_zex.py C:\caminho\para\zexall.com --tests 0,1,2
+python run_zex.py C:\caminho\para\zexall.com --max-seconds 300
+python run_zex.py C:\caminho\para\zexall.com --tests 0,1,2
 ```
 
 O código de saída 3 indica interrupção por limite de tempo, não aprovação
