@@ -11,13 +11,25 @@ from sega_emulator.video.tms9918 import TMS9918A
 class _CartridgeMirrorBus:
     """Adapta o mapeamento linear atual para espelhamento comum de ROMs menores."""
 
-    def __init__(self, bus: SG1000MemoryBus, rom_size: int) -> None:
+    def __init__(self, bus: SG1000MemoryBus, cartridge_rom: bytes) -> None:
         self._bus = bus
-        self._rom_size = rom_size
+        # Expand the cartridge's address window once. CPU fetches then avoid a
+        # modulo and a second validated bus read for every opcode and operand.
+        rom_size = len(cartridge_rom)
+        self._rom_window = (
+            cartridge_rom * (0xC000 // rom_size)
+            + cartridge_rom[: 0xC000 % rom_size]
+        )
 
     def read(self, address: int) -> int:
-        if 0 <= address < 0xC000:
-            return self._bus.read(address % self._rom_size)
+        if type(address) is int and 0 <= address < 0xC000:
+            return self._rom_window[address]
+        return self._bus.read(address)
+
+    def _read_for_cpu(self, address: int) -> int:
+        """Read a CPU fetch address already constrained to the 16-bit space."""
+        if address < 0xC000:
+            return self._rom_window[address]
         return self._bus.read(address)
 
     def write(self, address: int, value: int) -> None:
@@ -37,7 +49,7 @@ class SG1000Machine:
         self.cartridge_rom = cartridge_rom
         ram = SG1000Ram(bytes(RAM_SIZE))
         base_bus = SG1000MemoryBus(ram, cartridge_rom)
-        self.memory_bus = _CartridgeMirrorBus(base_bus, len(cartridge_rom))
+        self.memory_bus = _CartridgeMirrorBus(base_bus, cartridge_rom)
         self.vdp = TMS9918A()
         self.joystick1 = 0xFF
         self.joystick2 = 0xFF

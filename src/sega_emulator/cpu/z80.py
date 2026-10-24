@@ -18,9 +18,21 @@ class Z80Cpu:
 
     def __init__(self, bus: MemoryBus, io_bus: IOBus | None = None) -> None:
         """Inicializa os registradores e associa um barramento de memória."""
-        self.bus = bus
+        self._bus = bus
+        # Machine buses may expose a fast internal fetch path. Keep the
+        # generic protocol fallback for standalone CPUs and test buses.
+        self._read_for_fetch = getattr(bus, "_read_for_cpu", bus.read)
         self.io_bus = io_bus
         self.reset()
+
+    @property
+    def bus(self) -> MemoryBus:
+        return self._bus
+
+    @bus.setter
+    def bus(self, value: MemoryBus) -> None:
+        self._bus = value
+        self._read_for_fetch = getattr(value, "_read_for_cpu", value.read)
 
     def reset(self) -> None:
         """Reinicializa o estado interno determinístico da CPU.
@@ -192,8 +204,11 @@ class Z80Cpu:
         self._sp = value
 
     def _fetch_byte(self) -> int:
-        value = self.bus.read(self.pc)
-        self.pc = (self.pc + 1) & 0xFFFF
+        # Internal fetches already keep PC in range; bypass the public setter's
+        # defensive type/range validation on this per-byte hot path.
+        pc = self._pc
+        value = self._read_for_fetch(pc)
+        self._pc = (pc + 1) & 0xFFFF
         return value
 
     def _fetch_opcode_byte(self) -> int:
@@ -264,7 +279,7 @@ class Z80Cpu:
             return self.de
         if code == 2:
             return self.hl
-        return self.sp
+        return self._sp
 
     def _write_stack_pair(self, code: int, value: int) -> None:
         """Escreve BC, DE, HL ou SP para instruções de pares de 16 bits."""
@@ -276,7 +291,7 @@ class Z80Cpu:
         elif code == 2:
             self.hl = value
         else:
-            self.sp = value
+            self._sp = value
 
     def _add_hl(self, value: int) -> None:
         """Executa ADD HL,rr, preservando S, Z e P/V."""
@@ -531,17 +546,21 @@ class Z80Cpu:
 
     def _push_word(self, value: int) -> None:
         """Empilha uma palavra: byte alto primeiro, depois byte baixo."""
-        self.sp = (self.sp - 1) & 0xFFFF
-        self.bus.write(self.sp, (value >> 8) & 0xFF)
-        self.sp = (self.sp - 1) & 0xFFFF
-        self.bus.write(self.sp, value & 0xFF)
+        sp = (self._sp - 1) & 0xFFFF
+        self._sp = sp
+        self.bus.write(sp, (value >> 8) & 0xFF)
+        sp = (sp - 1) & 0xFFFF
+        self._sp = sp
+        self.bus.write(sp, value & 0xFF)
 
     def _pop_word(self) -> int:
         """Desempilha uma palavra em little-endian a partir de SP."""
-        low = self.bus.read(self.sp)
-        self.sp = (self.sp + 1) & 0xFFFF
-        high = self.bus.read(self.sp)
-        self.sp = (self.sp + 1) & 0xFFFF
+        sp = self._sp
+        low = self.bus.read(sp)
+        sp = (sp + 1) & 0xFFFF
+        self._sp = sp
+        high = self.bus.read(sp)
+        self._sp = (sp + 1) & 0xFFFF
         return (high << 8) | low
 
     def _condition(self, code: int) -> bool:

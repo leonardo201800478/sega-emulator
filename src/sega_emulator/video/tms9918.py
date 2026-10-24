@@ -6,6 +6,8 @@ simula acessos VRAM por pixel, contenção ou temporização elétrica do barram
 
 from __future__ import annotations
 
+from functools import lru_cache
+
 SCREEN_WIDTH = 256
 SCREEN_HEIGHT = 192
 TSTATES_PER_LINE = 228
@@ -35,6 +37,29 @@ PALETTE: tuple[tuple[int, int, int], ...] = (
 
 # Reuse immutable RGB triplets instead of allocating bytes for every pixel.
 _PALETTE_RGB_BYTES: tuple[bytes, ...] = tuple(bytes(color) for color in PALETTE)
+_BACKDROP_SCANLINES: tuple[bytes, ...] = tuple(
+    bytes(color) * SCREEN_WIDTH for color in PALETTE
+)
+_COLOR_QUARTERS: tuple[bytes, ...] = tuple(
+    rgb * 4 for rgb in _PALETTE_RGB_BYTES
+)
+
+
+@lru_cache(maxsize=8192)
+def _pattern_rgb_span(
+    pattern: int, foreground: int, background: int, width: int
+) -> bytes:
+    """Return a cached RGB span for one pattern row and its two colors."""
+    palette = _PALETTE_RGB_BYTES
+    if width == 6:
+        return b"".join(
+            palette[foreground if pattern & (0x80 >> bit) else background]
+            for bit in range(6)
+        )
+    return b"".join(
+        palette[foreground if pattern & (0x80 >> bit) else background]
+        for bit in range(8)
+    )
 
 
 class TMS9918A:
@@ -134,6 +159,12 @@ class TMS9918A:
         """Avança linhas e quadros; um quadro NTSC usa 228 T-states por linha."""
         if type(tstates) is not int or tstates < 0:
             raise ValueError("tstates deve ser um inteiro não negativo.")
+        cycles_to_line_end = TSTATES_PER_LINE - self._cycles_into_line
+        # Most instructions finish before the next scanline. Keep that common
+        # case out of the min()/loop path while retaining the same boundary work.
+        if tstates < cycles_to_line_end:
+            self._cycles_into_line += tstates
+            return
         remaining = tstates
         while remaining:
             step = min(remaining, TSTATES_PER_LINE - self._cycles_into_line)
@@ -174,8 +205,7 @@ class TMS9918A:
         row_start = y * SCREEN_WIDTH * 3
         row_end = row_start + SCREEN_WIDTH * 3
         if not (self.registers[1] & 0x40):
-            row = bytes(PALETTE[backdrop]) * SCREEN_WIDTH
-            pixels[row_start:row_end] = row
+            pixels[row_start:row_end] = _BACKDROP_SCANLINES[backdrop]
             return
 
         mode = self._display_mode
@@ -189,13 +219,10 @@ class TMS9918A:
                 pattern = self.vram[
                     (pattern_base + character * 8 + glyph_row) & VRAM_MASK
                 ]
-                for bit in range(6):
-                    self._put_pixel(
-                        pixels,
-                        8 + column * 6 + bit,
-                        y,
-                        foreground if pattern & (0x80 >> bit) else backdrop,
-                    )
+                offset = row_start + (8 + column * 6) * 3
+                pixels[offset : offset + 18] = _pattern_rgb_span(
+                    pattern, foreground, backdrop, 6
+                )
             return
 
         if mode == 4:
@@ -211,13 +238,10 @@ class TMS9918A:
                 color = self.vram[(color_base + offset) & VRAM_MASK]
                 foreground = (color >> 4) or backdrop
                 background = (color & 0x0F) or backdrop
-                for bit in range(8):
-                    self._put_pixel(
-                        pixels,
-                        tile_x * 8 + bit,
-                        y,
-                        foreground if pattern & (0x80 >> bit) else background,
-                    )
+                offset = row_start + tile_x * 24
+                pixels[offset : offset + 24] = _pattern_rgb_span(
+                    pattern, foreground, background, 8
+                )
         elif mode == 2:
             name_base = (self.registers[2] & 0x0F) << 10
             pattern_base = (self.registers[4] & 0x07) << 11
@@ -228,13 +252,9 @@ class TMS9918A:
                 pattern = self.vram[(pattern_base + name * 8 + pattern_row) & VRAM_MASK]
                 left = (pattern >> 4) or backdrop
                 right = (pattern & 0x0F) or backdrop
-                for local_x in range(8):
-                    self._put_pixel(
-                        pixels,
-                        tile_x * 8 + local_x,
-                        y,
-                        left if local_x < 4 else right,
-                    )
+                offset = row_start + tile_x * 24
+                pixels[offset : offset + 12] = _COLOR_QUARTERS[left]
+                pixels[offset + 12 : offset + 24] = _COLOR_QUARTERS[right]
         else:
             name_base = (self.registers[2] & 0x0F) << 10
             pattern_base = (self.registers[4] & 0x07) << 11
@@ -246,13 +266,10 @@ class TMS9918A:
                 color = self.vram[(color_base + name // 8) & VRAM_MASK]
                 foreground = (color >> 4) or backdrop
                 background = (color & 0x0F) or backdrop
-                for bit in range(8):
-                    self._put_pixel(
-                        pixels,
-                        tile_x * 8 + bit,
-                        y,
-                        foreground if pattern & (0x80 >> bit) else background,
-                    )
+                offset = row_start + tile_x * 24
+                pixels[offset : offset + 24] = _pattern_rgb_span(
+                    pattern, foreground, background, 8
+                )
 
         if mode != 1:
             self._render_sprite_line(pixels, y, update_status=update_sprite_status)
@@ -288,19 +305,17 @@ class TMS9918A:
         color_base = (self.registers[3] << 6) & 0x3FC0
         for y in range(SCREEN_HEIGHT):
             tile_y, row = divmod(y, 8)
+            row_start = y * SCREEN_WIDTH * 3
             for tile_x in range(32):
                 name = self.vram[(name_base + tile_y * 32 + tile_x) & 0x3FFF]
                 pattern = self.vram[(pattern_base + name * 8 + row) & 0x3FFF]
                 color = self.vram[(color_base + name // 8) & 0x3FFF]
                 foreground = (color >> 4) or backdrop
                 background = (color & 0x0F) or backdrop
-                for bit in range(8):
-                    self._put_pixel(
-                        pixels,
-                        tile_x * 8 + bit,
-                        y,
-                        foreground if pattern & (0x80 >> bit) else background,
-                    )
+                offset = row_start + tile_x * 24
+                pixels[offset : offset + 24] = _pattern_rgb_span(
+                    pattern, foreground, background, 8
+                )
 
     def _render_graphics_ii(self, pixels: bytearray, backdrop: int) -> None:
         name_base = (self.registers[2] & 0x0F) << 10
@@ -309,6 +324,7 @@ class TMS9918A:
         for y in range(SCREEN_HEIGHT):
             row = y & 7
             section = (y & 0xC0) << 5
+            row_start = y * SCREEN_WIDTH * 3
             for tile_x in range(32):
                 name = self.vram[(name_base + (y // 8) * 32 + tile_x) & 0x3FFF]
                 offset = section + (name << 3) + row
@@ -316,13 +332,10 @@ class TMS9918A:
                 color = self.vram[(color_base + offset) & 0x3FFF]
                 foreground = (color >> 4) or backdrop
                 background = (color & 0x0F) or backdrop
-                for bit in range(8):
-                    self._put_pixel(
-                        pixels,
-                        tile_x * 8 + bit,
-                        y,
-                        foreground if pattern & (0x80 >> bit) else background,
-                    )
+                pixel_offset = row_start + tile_x * 24
+                pixels[pixel_offset : pixel_offset + 24] = _pattern_rgb_span(
+                    pattern, foreground, background, 8
+                )
 
     def _render_text(self, pixels: bytearray, backdrop: int) -> None:
         name_base = (self.registers[2] & 0x0F) << 10
@@ -333,13 +346,11 @@ class TMS9918A:
                 character = self.vram[(name_base + row * 40 + column) & 0x3FFF]
                 for line in range(8):
                     pattern = self.vram[(pattern_base + character * 8 + line) & 0x3FFF]
-                    for bit in range(6):
-                        self._put_pixel(
-                            pixels,
-                            8 + column * 6 + bit,
-                            row * 8 + line,
-                            foreground if pattern & (0x80 >> bit) else backdrop,
-                        )
+                    row_start = (row * 8 + line) * SCREEN_WIDTH * 3
+                    offset = row_start + (8 + column * 6) * 3
+                    pixels[offset : offset + 18] = _pattern_rgb_span(
+                        pattern, foreground, backdrop, 6
+                    )
 
     def _render_multicolor(self, pixels: bytearray, backdrop: int) -> None:
         name_base = (self.registers[2] & 0x0F) << 10
@@ -355,13 +366,10 @@ class TMS9918A:
                     ]
                     left = (pattern >> 4) or backdrop
                     right = (pattern & 0x0F) or backdrop
-                    for local_x in range(8):
-                        self._put_pixel(
-                            pixels,
-                            tile_x * 8 + local_x,
-                            tile_y * 8 + local_y,
-                            left if local_x < 4 else right,
-                        )
+                    row_start = y * SCREEN_WIDTH * 3
+                    offset = row_start + tile_x * 24
+                    pixels[offset : offset + 12] = _COLOR_QUARTERS[left]
+                    pixels[offset + 12 : offset + 24] = _COLOR_QUARTERS[right]
 
     def _sprite_line_active(
         self, line: int
