@@ -234,8 +234,8 @@ Este teste é uma validação sintética exaustiva do domínio de entrada modela
 O arquivo `tests/unit/test_z80_bit_flags_exhaustive.py` verifica as flags de `BIT b,r` e `BIT b,(HL)` com um oráculo sintético para as flags documentadas e uma hipótese explícita para os bits X/Y não documentados:
 
 - `BIT b,B`: 2.048 estados (256 valores × 8 bits × 2 estados de carry).
-- `BIT b,(HL)`: 8.192 estados (256 valores × 8 bits × 2 estados de carry × 4 padrões dos bits X/Y do byte alto do endereço).
-- Verifica H=1, N=0, Z/PV quando o bit testado é zero, S apenas para `BIT 7` com o bit definido e preservação de C. Para X/Y, registra a hipótese atual do núcleo: vêm do operando em `BIT b,B` e do byte alto do endereço em `BIT b,(HL)`; isso não é apresentado como comportamento documentado nem confirmado por hardware.
+- `BIT b,(HL)`: 16.384 estados (256 valores × 8 bits × 2 estados de carry × 4 padrões do byte alto de WZ/MEMPTR).
+- Verifica H=1, N=0, Z/PV quando o bit testado é zero, S apenas para `BIT 7` com o bit definido e preservação de C. Para X/Y, o modelo deriva os bits de `BIT b,B` do operando e os de `BIT b,(HL)` do byte alto de WZ/MEMPTR; a regra de BIT em memória é sustentada por referências técnicas comunitárias, mas não substitui validação em hardware da variante-alvo.
 - Também verifica que o operando não é alterado, PC avança dois bytes, R é incrementado duas vezes no modelo atual e o custo nominal é 8 T-states para registrador e 12 para `(HL)`.
 
 **Limites:** são testes sintéticos de regras e do modelo atual, não uma comparação contra silício ou um núcleo de referência executado. Os quatro padrões de X/Y no endereço são amostras direcionadas, não uma varredura de todos os endereços. A semântica e a temporização de `BIT b,(IX+d)`/`BIT b,(IY+d)` continuam pendentes e devem ser tratadas em uma etapa separada.
