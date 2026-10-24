@@ -66,7 +66,7 @@ No PR #14:
    git diff --check
    ```
 3. Registrar literalmente os resultados reais. Se houver falha, corrigir em mudança pequena antes de enviar o lote longo.
-4. Revisar o harness do notebook v4 e confirmar que ele seleciona explicitamente o commit/branch corrigido, que inicializa WZ/Q quando fornecidos e que salva os artefatos no diretório de saída do Colab.
+4. Revisar o harness do notebook de auditoria direcionada e confirmar que ele seleciona explicitamente o commit/branch corrigido, que inicializa WZ/Q quando fornecidos e que salva os artefatos no diretório de saída do Colab.
 5. Executar a auditoria longa no Colab, registrando SHA, corpus, versão do harness, total, pass/fail, tempo e caminho dos artefatos.
 6. Comparar os grupos de divergência com a linha de base. Não atualizar números pós-correção sem um ZIP/relatório realmente gerado pela nova execução.
 7. Só depois de testes e auditoria revisados, decidir se o PR pode sair de draft e ser mesclado. Não mesclar automaticamente.
@@ -118,4 +118,22 @@ A implementação de WZ/Q permanece parcial até a auditoria longa e os testes e
 - Os bytes ED sem operação atribuída agora retornam como ED-NOP de 8 T-states; aliases conhecidos continuam tratados por handlers explícitos. Os testes cobrem ED-NOPs representativos e verificam a decodificação dos 256 segundos bytes ED.
 - Fontes de engenharia reversa e a ressalva sobre a ausência de especificação oficial para estes bytes foram registradas em `docs/z80-undocumented-behavior-research.md`.
 
-A CI curta está verde nesta revisão. Ainda não foi executada a auditoria longa pós-correção; usar o notebook v5 fixado no SHA acima para comparar também `WZ/MEMPTR` e `Q`, preservar o CSV completo e devolver o ZIP antes de alterar a linha de base.
+A CI curta está verde nesta revisão. Ainda não foi executada a auditoria longa pós-correção; usar o notebook de auditoria direcionada fixado no SHA acima para comparar também `WZ/MEMPTR` e `Q`, preservar o CSV completo e devolver o ZIP antes de alterar a linha de base.
+
+
+---
+
+## Retomada após auditoria direcionada PR #14 — 24/10/2026
+
+- Resultado recebido: `z80-targeted-audit-pr14-results.zip`.
+- Commit efetivamente testado pelo ZIP: `27fadd182c65ffbd0ab899343ed1197c3f265515`.
+- 14.000 vetores: 13.531 aprovados e 469 divergentes.
+- `BIT (HL)`: 8.000/8.000 aprovados.
+- `DAA`: 2.000/2.000 aprovados.
+- `SCF/CCF` sem prefixo: 2.000/2.000 aprovados.
+- Divergências remanescentes: 239 em `DD 37` e 230 em `DD 3F`, somente nos bits F3/F5 de `F` e no campo `Q` derivado.
+- Corrigido o uso do latch Q anterior em `SCF/CCF` quando Q não é zero; adicionados testes dirigidos para SCF/CCF com prefixo DD ignorado.
+- Commits da correção/testes/documentação: `5697bdbd4dea6d1cc8c495b1a12a8e58d87524c7`, `c26a66d585c091ad9137eb1e03b134fcd256216f`, `333c7a6601159f54430b183a85a9d321a6970e5c`, `1ce9c186f9efd72e156d08077367967eed2ed932`.
+- A correção ainda não foi validada por CI nem pela reexecução do corpus completo de 14.000 casos.
+- O notebook de repetição foi preparado para testar o commit `1ce9c186f9efd72e156d08077367967eed2ed932` e salvar os artefatos em `MyDrive/SegaEmulator/Z80TargetedAudit_PR14_R2/`.
+- PR #14 continua draft e sem merge. Não declarar SCF/CCF prefixados resolvidos antes de receber o ZIP pós-correção.
