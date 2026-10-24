@@ -41,6 +41,8 @@ class SG1000Machine:
         self.vdp = TMS9918A()
         self.joystick1 = 0xFF
         self.joystick2 = 0xFF
+        self.total_instructions = 0
+        self.total_tstates = 0
         self.cpu = Z80Cpu(self.memory_bus, self)
 
     def read_port(self, address: int) -> int:
@@ -71,6 +73,8 @@ class SG1000Machine:
     def step(self) -> int:
         """Executa uma instrução e avança o VDP pelos T-states nominais retornados."""
         cycles = self.cpu.step()
+        self.total_instructions += 1
+        self.total_tstates += cycles
         self.vdp.advance(cycles)
         if self.vdp.interrupt_pending:
             self.cpu.request_int()

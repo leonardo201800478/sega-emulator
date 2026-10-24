@@ -1,5 +1,8 @@
 """Testes mínimos para validar a infraestrutura do pacote."""
 
+import sys
+from types import ModuleType
+
 
 def test_package_version_is_defined() -> None:
     """Confirma que o pacote expõe sua versão."""
@@ -8,11 +11,22 @@ def test_package_version_is_defined() -> None:
     assert __version__ == "0.1.0"
 
 
-def test_entry_point_without_rom_explains_how_to_start(capsys) -> None:
-    """Sem argumentos, o CLI informa como carregar uma ROM sem afirmar que joga."""
+def test_entry_point_without_rom_opens_qt_frontend_without_starting_gui(
+    capsys, monkeypatch, tmp_path
+) -> None:
+    """Sem ROM, o CLI delega ao frontend Qt sem iniciar uma janela no teste."""
     from sega_emulator.__main__ import main
 
-    main([])
+    calls: list[object] = []
 
-    captured = capsys.readouterr()
-    assert "Informe uma ROM para iniciar" in captured.out
+    def fake_run(rom: object) -> None:
+        calls.append(rom)
+
+    frontend = ModuleType("sega_emulator.frontend.qt_frontend")
+    frontend.run = fake_run
+    monkeypatch.setitem(sys.modules, "sega_emulator.frontend.qt_frontend", frontend)
+
+    main(["--log-dir", str(tmp_path)])
+
+    assert calls == [None]
+    assert capsys.readouterr().out == ""
