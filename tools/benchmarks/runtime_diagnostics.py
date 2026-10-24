@@ -13,8 +13,8 @@ import json
 import statistics
 import time
 from collections import Counter
-from pathlib import Path
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from sega_emulator.machine.sg1000 import SG1000Machine
