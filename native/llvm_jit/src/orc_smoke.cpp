@@ -9,7 +9,9 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
+#include "llvm/Support/Error.h"
 #include "llvm/Support/TargetSelect.h"
+#include "llvm/Support/raw_ostream.h"
 
 int main() {
     using namespace llvm;
@@ -43,7 +45,9 @@ int main() {
     auto *t_ret = t_builder.CreateZExt(t_low, t_i64);
     t_builder.CreateRet(t_ret);
 
-    auto thread_safe_module_wrapper = ThreadSafeModule(std::move(tsm), std::move(tsc));
+    ThreadSafeContext thread_safe_context(std::move(tsc));
+    auto thread_safe_module_wrapper =
+        ThreadSafeModule(std::move(tsm), std::move(thread_safe_context));
     if (auto error = jit->addIRModule(std::move(thread_safe_module_wrapper))) {
         logAllUnhandledErrors(std::move(error), errs(), "Adding IR module failed: ");
         return 1;
