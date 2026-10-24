@@ -2767,4 +2767,3 @@ def test_reset_clears_cpu_state_without_replacing_buses() -> None:
     assert cpu._im0_opcode is None
     assert not cpu.halted
     assert cpu.total_cycles == 0
-
