@@ -278,3 +278,9 @@ Foram acrescentados casos direcionados para `LDDR` e `CPDR`, complementando os t
 - `CPDR`: verifica comparação em ordem decrescente, repetição quando o byte não corresponde, encerramento antecipado quando A coincide com `(HL)`, preservação de C, N/Z e P/V, atualização de HL/BC e custos nominais de 21/16 T-states.
 
 Esses casos são testes sintéticos de fluxo de controle e estado observável. Não constituem validação diferencial contra hardware ou prova de temporização ciclo a ciclo; permanecem pendentes a cobertura sistemática de todas as condições de saída, wrap de endereços e comparação diferencial independente das flags.
+
+## Teste adicional de wrap de endereços em transferências de bloco ED — 23/10/2026
+
+Foi acrescentado `test_ed_block_transfer_wraps_hl_and_de_at_16_bit_boundaries`, cobrindo LDI/LDIR com incremento de `HL=FFFFh` para `0000h` e LDD/LDDR com decremento de `HL=0000h` para `FFFFh`. Os quatro casos verificam a atualização de HL/DE/BC, o byte transferido, o PC conforme repetição e os T-states nominais retornados pelo núcleo.
+
+O teste foi publicado, mas sua execução local ainda está pendente. Ele caracteriza wrap de registradores e estado observável; não comprova a ordem temporal dos acessos nem precisão ciclo a ciclo.
