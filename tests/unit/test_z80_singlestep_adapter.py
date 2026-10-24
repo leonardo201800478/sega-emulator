@@ -164,3 +164,27 @@ def test_out_immediate_updates_wz_to_port_plus_one() -> None:
 
     assert result.status == "passed"
     assert result.mismatches == []
+
+
+
+def test_out_immediate_wz_wraps_low_byte_without_carrying_to_high_byte() -> None:
+    vector = {
+        "name": "D3 OUT (FFh),A WZ wrap fixture",
+        "initial": {
+            "pc": 0x5100,
+            "a": 0x9A,
+            "ram": [[0x5100, 0xD3], [0x5101, 0xFF]],
+        },
+        "final": {
+            "pc": 0x5102,
+            "wz": 0x9A00,
+            "ram": [[0x5100, 0xD3], [0x5101, 0xFF]],
+        },
+        "cycles": [],
+        "ports": [[0x9AFF, 0x9A, "w"]],
+    }
+
+    result = run_vector(vector)
+
+    assert result.status == "passed"
+    assert result.mismatches == []
