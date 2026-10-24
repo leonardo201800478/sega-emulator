@@ -58,7 +58,9 @@ def run(initial_path: Path | None = None) -> None:
     frame_count = 0
     pressed_keys: set[int] = set()
     timer = QTimer(window)
-    timer.setInterval(0)  # Executa tão rápido quanto possível; mede-se a velocidade real.
+    timer.setInterval(
+        0
+    )  # Executa tão rápido quanto possível; mede-se a velocidade real.
 
     key_map = {
         Qt.Key.Key_Up: 0,
@@ -203,7 +205,9 @@ def run(initial_path: Path | None = None) -> None:
             try:
                 candidate = load_rom(path)
             except ValueError as error:
-                if Path(path).suffix.lower() != ".zip" or "várias ROMs" not in str(error):
+                if Path(path).suffix.lower() != ".zip" or "várias ROMs" not in str(
+                    error
+                ):
                     raise
                 members = list_rom_members(path)
                 selected, accepted = QInputDialog.getItem(
