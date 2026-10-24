@@ -85,6 +85,6 @@ class SG1000MemoryBus:
                 f"Não há dispositivo mapeado para o endereço {address:04X}h."
             )
 
-        raise ReadOnlyMemoryError(
-            f"Não é permitido escrever na ROM do cartucho em {address:04X}h."
-        )
+        # Escritas em ROM de cartucho não alteram a ROM e, no modelo de
+        # hardware, não devem interromper a CPU com uma exceção Python.
+        return
