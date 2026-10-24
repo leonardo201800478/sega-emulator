@@ -3,6 +3,7 @@
 import pytest
 
 from sega_emulator.machine.sg1000 import SG1000Machine
+from tools.create_sg1000_demo_rom import build_demo_rom
 
 
 def test_machine_executes_cartridge_code_and_advances_a_frame() -> None:
@@ -47,3 +48,14 @@ def test_cpu_program_can_configure_vdp_through_io_ports() -> None:
 
     assert machine.vdp.registers[1] == 0xC0
     assert machine.cpu.pc == 8
+
+
+def test_generated_homebrew_rom_initializes_vdp_and_renders_pattern() -> None:
+    machine = SG1000Machine(build_demo_rom())
+
+    machine.run_frame()
+
+    assert machine.vdp.registers[1] == 0xC0
+    assert machine.vdp.vram[0x3800] == 1
+    assert machine.vdp.vram[0x3B00] == 0xD0
+    assert machine.vdp.framebuffer[:3] == bytes((33, 200, 66))
