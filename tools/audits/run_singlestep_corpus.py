@@ -16,6 +16,8 @@ from typing import Any
 
 from sega_emulator.testing.z80_singlestep import run_vector
 
+UPSTREAM_COMMIT = "ebe1875d48f374bcfd4b505d8eb8ee751568b5f7"
+
 DEFAULT_FILES = (
     "00",
     "04",
@@ -41,7 +43,7 @@ def load_json(path: Path) -> list[dict[str, Any]]:
     return payload
 
 
-def audit_file(path: Path) -> dict[str, Any]:
+def audit_file(path: Path, manifest_entry: dict[str, Any]) -> dict[str, Any]:
     vectors = load_json(path)
     counts: Counter[str] = Counter()
     results: list[dict[str, Any]] = []
@@ -67,7 +69,15 @@ def audit_file(path: Path) -> dict[str, Any]:
             )
     return {
         "file": path.name,
-        "source": ("https://github.com/SingleStepTests/z80/blob/main/v1/" + path.name),
+        "source": (
+            "https://github.com/SingleStepTests/z80/blob/"
+            + UPSTREAM_COMMIT
+            + "/v1/"
+            + path.name.replace(" ", "%20")
+        ),
+        "sha256": manifest_entry["sha256"],
+        "size_bytes": manifest_entry["size_bytes"],
+        "upstream_commit": UPSTREAM_COMMIT,
         "total_vectors": len(vectors),
         "counts": dict(sorted(counts.items())),
         "failures_and_unsupported": results,
@@ -84,7 +94,17 @@ def main() -> int:
         help='Nomes de arquivos sem ".json" (prefixos podem conter espaço)',
     )
     parser.add_argument("--report-json", type=Path, required=True)
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        default=Path("tools/audits/singlestep-corpus-manifest.json"),
+    )
     args = parser.parse_args()
+
+    manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
+    if manifest["upstream"]["commit"] != UPSTREAM_COMMIT:
+        parser.error("commit do manifesto diverge do commit fixado no executor")
+    manifest_by_file = {entry["file"]: entry for entry in manifest["files"]}
 
     reports: list[dict[str, Any]] = []
     for file_stem in args.files:
@@ -99,7 +119,9 @@ def main() -> int:
         path = args.directory / f"{normalized}.json"
         if not path.is_file():
             parser.error(f"arquivo de vetor ausente: {path}")
-        reports.append(audit_file(path))
+        if path.name not in manifest_by_file:
+            parser.error(f"arquivo sem entrada no manifesto SHA-256: {path.name}")
+        reports.append(audit_file(path, manifest_by_file[path.name]))
 
     aggregate: Counter[str] = Counter()
     total_vectors = 0
@@ -117,6 +139,8 @@ def main() -> int:
         json.dumps(
             {
                 "corpus": "SingleStepTests/Z80",
+                "upstream_commit": UPSTREAM_COMMIT,
+                "manifest": str(args.manifest),
                 "method": "instruction state + RAM; cycle traces not compared",
                 "total_vectors": total_vectors,
                 "aggregate": dict(sorted(aggregate.items())),
