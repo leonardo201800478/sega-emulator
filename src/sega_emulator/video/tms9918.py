@@ -181,7 +181,9 @@ class TMS9918A:
                 background = (color & 0x0F) or backdrop
                 for bit in range(8):
                     self._put_pixel(
-                        pixels, tile_x * 8 + bit, y,
+                        pixels,
+                        tile_x * 8 + bit,
+                        y,
                         foreground if pattern & (0x80 >> bit) else background,
                     )
 
