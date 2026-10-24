@@ -39,7 +39,7 @@ Legenda de evidência: **D** = documentado por fonte primária; **R** = literatu
 | GAP-07 | Temporização real do barramento não é observável | D; arquitetura atual retorna T-states agregados | Introduzir um traço determinístico de eventos/micro-operações antes de modelar contenção/WAIT | P1 arquitetural |
 | GAP-08 | Não existe harness diferencial reprodutível no fluxo principal | T; catálogo lista exercitadores e testes de terceiros | Definir adaptador de estado/entrada/saída, manifesto de proveniência e comparação campo a campo; começar com pequenos testes licenciados | P1 |
 | GAP-09 | Operações de 16 bits não têm varredura integral de todos os pares | T amostrado; ferramenta longa já existe | Executar a bateria prolongada em Colab quando necessário; preservar amostragem local curta e anexar log/artefato | P2 |
-| GAP-10 | Reset explícito e política de variante não estão formalizados | D + R; estado inicial zerado é convenção do emulador | Definir \`reset()\` sem confundir estado determinístico do software com valores físicos garantidos; registrar alvo Zilog Z80 clássico e exceções conhecidas | P2 |
+| GAP-10 | Reset explícito implementado; política de variante ainda pendente | O construtor delega a `reset()`; teste cobre registradores, interrupções pendentes, contador, preservação de barramento/RAM e retomada por NOP. Execução do teste ainda precisa ser confirmada localmente/CI | Formalizar o alvo Zilog Z80 clássico e as exceções de variante; não interpretar o estado determinístico zerado como garantia elétrica do chip | P2 parcial |
 | GAP-11 | RETI não sinaliza controlador externo de prioridades | D; impacto depende da integração | Acrescentar evento/callback opcional no contrato de CPU/periférico quando houver daisy chain; não simular dispositivo inexistente | P2 |
 | GAP-12 | Integração de CPU, I/O, VDP e PSG do SG-1000 ainda não forma máquina funcional | Arquitetura e README | Depois de estabilizar contratos de CPU/barramento, integrar portas e dispositivos com testes de integração; manter ROMs comerciais fora do repositório | Marco SG-1000 |
 
@@ -135,3 +135,10 @@ Começar por casos pequenos com licença/proveniência clara. ZEXDOC/ZEXALL e ou
 ## 6. Limites e estado de validação
 
 Este documento é um plano de engenharia derivado de leitura estática dos arquivos e da documentação do repositório. Não altera o núcleo CPU, não declara nenhuma lacuna corrigida e não afirma que testes foram executados nesta etapa. Os testes de ALU/DAA/BIT existentes devem ser preservados; as próximas alterações devem mirar primeiro as lacunas abertas da matriz, em vez de repetir trabalho já coberto.
+
+
+## Progresso de implementação — reset determinístico da CPU
+
+Em 23/10/2026, foi adicionado `Z80Cpu.reset()`. O construtor agora associa os barramentos e delega a inicialização do estado interno ao método. O reset zera os registradores principais e alternativos, IX/IY, I/R, PC/SP, IFF1/IFF2, modo de interrupção, HALT, atraso de EI, solicitações de NMI/INT, opcode temporário de IM 0 e contador de T-states. O método preserva as referências aos barramentos e não limpa a memória.
+
+Foi acrescentado `test_reset_clears_cpu_state_and_pending_interrupts_without_clearing_memory`, que verifica o contrato, inclusive a execução de um NOP após o reset. O teste foi adicionado ao repositório; **ainda não há resultado de execução nesta etapa**. A política de variante física permanece pendente.
