@@ -5,64 +5,78 @@ começando pelo Sega SG-1000.
 
 ## Estado atual
 
-- **Infraestrutura:** Python 3.14, pytest, Ruff e pacote executável.
-- **CPU:** núcleo Z80 com ampla cobertura de instruções, mas ainda sujeito a auditoria
-  diferencial e sem temporização de barramento ciclo a ciclo.
-- **Primeira integração SG-1000 em desenvolvimento:** CPU, ROM/RAM, VDP compatível com
-  TMS9918A, portas iniciais de joystick e frontend Pygame opcional.
-- **Áudio:** não implementado nesta etapa; PSG será integrado depois do primeiro marco jogável.
-- A execução de uma ROM real e a validação da jogabilidade continuam pendentes. A existência
-  de uma janela ou a execução de uma ROM sintética não será considerada prova de compatibilidade.
+- **CPU:** núcleo Z80 em auditoria diferencial; temporização ainda não é ciclo a ciclo.
+- **Máquina SG-1000:** CPU, ROM/RAM, VDP TMS9918A inicial e joystick em desenvolvimento.
+- **Interface experimental:** menus Qt 6/PySide6 para abrir ROMs, pausar/continuar, reiniciar,
+  alterar escala e consultar estado de diagnóstico.
+- **Carregador:** arquivos `.sg` e ROMs dentro de `.zip`; ZIP com múltiplas ROMs exige seleção.
+- **Logs:** cada sessão cria um arquivo JSON Lines (`.jsonl`) e um log legível (`.log`) em
+  `./logs`, incluindo eventos de carregamento, SHA-256, checkpoints de quadro e exceções.
+- **Áudio:** PSG ainda não implementado. Ainda não foi confirmado um jogo real funcional.
 
 ## Requisitos
 
 - Windows x64
-- Python 3.14.x x64 (ambiente validado: Python 3.14.7)
-- Git for Windows
-- PowerShell
-- Visual Studio Code (recomendado)
+- Python 3.14.x x64 (ambiente de desenvolvimento: Python 3.14.7)
+- Git for Windows, PowerShell e VS Code (recomendados)
 
-## Instalação
-
-Na raiz do repositório:
+## Instalação no PowerShell
 
 ```powershell
 py -3.14 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install -e ".[dev,frontend]"
+.\.venv\Scripts\python.exe -m pip install -e ".[dev,qt,frontend]"
 ```
 
-## Executar uma ROM SG-1000
-
-Use uma ROM homebrew ou legalmente obtida. ROMs comerciais não são distribuídas neste
-repositório.
+## Iniciar os menus experimentais
 
 ```powershell
-.\.venv\Scripts\python.exe -m sega_emulator "C:\caminho\para\jogo.rom"
+.\.venv\Scripts\python.exe -m sega_emulator
 ```
 
-Controles iniciais: setas direcionais, Z/Space para botão 1, X/Enter para botão 2 e Esc
-para sair.
+Menus iniciais: **Arquivo** (abrir ROM, sair), **Emulação** (pausar/continuar, reiniciar),
+**Vídeo** (escalas de teste) e **Diagnóstico** (pasta de logs e estado da máquina).
 
-Para testar o caminho de vídeo sem depender de uma ROM externa, gere uma ROM homebrew de diagnóstico:
+Para iniciar diretamente uma ROM:
 
 ```powershell
-.\.venv\Scripts\python.exe tools/create_sg1000_demo_rom.py --output sg1000-demo.rom
-.\.venv\Scripts\python.exe -m sega_emulator .\sg1000-demo.rom
+.\.venv\Scripts\python.exe -m sega_emulator "C:\caminho\para\SuperUwol-SG.sg"
 ```
 
-O gerador imprime o SHA-256 da ROM para que o artefato usado nos testes possa ser identificado. Ela testa o caminho básico de renderização, mas não comprova compatibilidade de sprites, interrupções ou jogos comerciais.
-
-Para diagnóstico sem janela:
+Também é possível apontar para o ZIP que contém a ROM:
 
 ```powershell
-.\.venv\Scripts\python.exe -m sega_emulator "C:\caminho\para\jogo.rom" --headless-frames 600
+.\.venv\Scripts\python.exe -m sega_emulator "C:\caminho\para\SuperUwol-SG.zip"
 ```
 
-O valor `--headless-frames 0` carrega e valida a ROM sem executar quadros; é útil para
-confirmar o caminho do arquivo antes de iniciar uma sessão.
+Se o ZIP contiver mais de uma ROM compatível, o carregador interrompe a abertura e informa
+os membros encontrados em vez de escolher silenciosamente um arquivo. A interface ainda
+precisa concluir o diálogo de seleção de membro para esse caso.
 
-## Validar
+## Diagnóstico headless
+
+```powershell
+.\.venv\Scripts\python.exe -m sega_emulator "C:\caminho\para\SuperUwol-SG.sg" --headless-frames 600
+```
+
+O comando informa quadro, PC, T-states e SHA-256. Não prova, por si só, compatibilidade visual
+ou de jogabilidade.
+
+## Logs da sessão
+
+Por padrão, os arquivos ficam em `logs\session-<data-hora>.jsonl` e `.log`. Para escolher
+outro diretório:
+
+```powershell
+.\.venv\Scripts\python.exe -m sega_emulator --log-dir "C:\temp\sega-logs"
+```
+
+O JSONL é destinado a análise automatizada; o log textual é para leitura rápida. Não são
+registrados dados pessoais do usuário. A captura detalhada de cada instrução ainda não está
+ativada porque geraria alto volume e afetaria o desempenho; primeiro coletamos checkpoints,
+estado de CPU/VDP e exceções, e depois adicionaremos rastreamento de instruções opcional.
+
+## Testes
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q
@@ -71,19 +85,12 @@ confirmar o caminho do arquivo antes de iniciar uma sessão.
 git diff --check
 ```
 
-## Documentação
+## Limitações e próximos passos
 
-- [Arquitetura multi-sistema](docs/architecture.md)
-- [Notas de hardware SG-1000](docs/hardware/sg1000.md)
-- [Marco do primeiro jogo executável](docs/sg1000-first-playable.md)
-- [Auditoria de cobertura da CPU Z80](docs/z80-coverage.md)
-- [Auditoria técnica da CPU Z80](docs/z80-code-audit-2026-10-22.md)
-- [Plano de resolução das lacunas Z80](docs/z80-gap-resolution-plan.md)
+1. Corrigir a renderização incorreta observada na ROM de diagnóstico e validar Super Uwol.
+2. Finalizar seleção de ROM dentro de ZIP com múltiplos candidatos.
+3. Validar os eventos do 8BitDo M-30 e então integrar SDL3.
+4. Avaliar renderização D3D11 após o caminho de vídeo estar testado.
+5. Implementar PSG e aumentar a precisão CPU–VDP com regressões reproduzíveis.
 
-## Próximas etapas
-
-1. Validar o VDP com testes e imagens de referência.
-2. Executar uma ROM real conhecida e corrigir falhas observadas.
-3. Refinar o mapa de memória/I/O e a sincronização CPU–VDP.
-4. Implementar PSG e sincronização audiovisual depois de obter vídeo e controles funcionais.
-5. Ampliar precisão temporal com base em divergências reproduzíveis.
+ROMs de terceiros não são incluídas no repositório.
