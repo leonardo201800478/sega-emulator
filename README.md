@@ -9,7 +9,7 @@ Projeto de emulação de alta precisão com implementação de referência em Py
 - **Interface experimental:** menus Qt 6/PySide6 para abrir ROMs, pausar/continuar, reiniciar, alterar escala e consultar diagnóstico.
 - **Carregador:** arquivos `.sg`, `.rom`, `.bin` e ROMs dentro de ZIP; ZIP com múltiplas ROMs exige seleção explícita.
 - **Diagnóstico:** logs JSONL/texto por sessão, SHA-256 da ROM, checkpoints de execução e stack traces.
-- **Áudio:** modelo digital inicial do PSG SN76489AN em desenvolvimento; ainda sem integração ao barramento de I/O ou frontend.
+- **Áudio:** PSG SN76489AN integrado ao mapa de escrita de I/O e sincronizado aos T-states da máquina; saída mono de 44,1 kHz nos frontends Pygame e Qt. A fidelidade analógica e a compatibilidade sonora com hardware real ainda exigem validação.
 
 ## Requisitos
 
@@ -101,8 +101,8 @@ git diff --check
 
 ## Limitações e próximos passos
 
-1. Integrar o modelo PSG ao mapa de I/O e sincronizar o clock com os T-states da máquina.
-2. Conectar o buffer de áudio ao frontend com latência limitada.
+1. Validar amostras, frequências e ruído do PSG contra referências independentes/hardware real.
+2. Medir o custo de execução do PSG integrado e definir, com profiling, se há componentes candidatos à migração para Rust.
 3. Aumentar a precisão temporal CPU–VDP com regressões reproduzíveis.
 
 ROMs comerciais e logs locais não devem ser incluídos no repositório. Use homebrew ou cópias obtidas legalmente no ambiente local.
