@@ -2558,7 +2558,8 @@ def test_indexed_cb_final_opcode_does_not_increment_refresh_register() -> None:
 
 
 
-def test_reset_clears_cpu_state_and_pending_interrupts_without_clearing_memory() -> None:
+def test_reset_clears_cpu_state_and_pending_interrupts_without_clearing_memory(
+) -> None:
     cpu = make_cpu(bytes([0x00]))  # NOP após reinicialização
     memory_bus = cpu.bus
     memory_bus.write(0xC020, 0xA5)
