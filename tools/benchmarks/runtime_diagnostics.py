@@ -4,6 +4,7 @@ Os tempos da passagem instrumentada incluem overhead de medição e não devem s
 comparados diretamente ao FPS da passagem-base. Tempos de fases internas são
 inclusivos: não some CPU/VDP com scanline/pixel, pois há chamadas aninhadas.
 """
+
 from __future__ import annotations
 
 import argparse
