@@ -1,4 +1,3 @@
-
 [build-system]
 requires = ["setuptools==84.0.0"]
 build-backend = "setuptools.build_meta"
@@ -18,6 +17,9 @@ dev = [
 ]
 frontend = [
     "pygame-ce>=2.5.3,<3.0",
+]
+qt = [
+    "PySide6>=6.8,<7",
 ]
 
 [tool.setuptools]
