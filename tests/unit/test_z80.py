@@ -1635,6 +1635,21 @@ def test_halt_repeats_until_maskable_interrupt_is_accepted() -> None:
     assert cpu.bus.read(0xC0FF) == 0x00
 
 
+def test_halt_refresh_cycles_increment_r_and_preserve_bit_seven() -> None:
+    cpu = make_cpu(bytes([0x76, 0x00]))
+    cpu.r = 0xFE
+
+    assert cpu.step() == 4  # busca do opcode HALT
+    assert cpu.halted
+    assert cpu.r == 0xFF
+
+    assert cpu.step() == 4  # ciclo repetido de HALT
+    assert cpu.halted
+    assert cpu.pc == 1
+    assert cpu.r == 0x80
+
+
+
 def test_di_ei_and_nmi_service() -> None:
     cpu = make_cpu(bytes([0xF3, 0xFB, 0x00]))
     cpu.sp = 0xC100
@@ -2227,6 +2242,28 @@ def test_ei_enables_maskable_interrupt_after_following_instruction() -> None:
     assert cpu.pc == 0x0038
     assert cpu.bus.read(0xC0FE) == 0x02
     assert cpu.bus.read(0xC0FF) == 0x00
+
+
+def test_di_after_ei_cancels_delayed_maskable_interrupt_acceptance() -> None:
+    cpu = make_cpu(bytes([0xFB, 0xF3, 0x00]))  # EI; DI; NOP
+    cpu.sp = 0xC100
+    cpu.interrupt_mode = 1
+    cpu.request_int(0xFF)
+
+    assert cpu.step() == 4  # EI
+    assert cpu.iff1 is True
+    assert cpu._ei_delay == 1
+
+    assert cpu.step() == 4  # DI executa antes do reconhecimento de INT
+    assert cpu.iff1 is False
+    assert cpu.iff2 is False
+    assert cpu._ei_delay == 0
+
+    assert cpu.step() == 4  # a INT continua pendente, mas está mascarada
+    assert cpu.pc == 3
+    assert cpu._int_pending == 0xFF
+    assert cpu.total_cycles == 12
+
 
 
 def test_im0_interrupt_uses_rst_vector_from_data_bus() -> None:
