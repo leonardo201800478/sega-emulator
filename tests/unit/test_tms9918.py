@@ -121,7 +121,7 @@ def test_vdp_ports_decode_hardware_aliases() -> None:
     _set_address(vdp, 0x1234, write=False)
     assert vdp.read_port(0x80) == 0x6D
     assert vdp.read_port(0xA0) == 0
-    assert vdp.address == 0x1236
+    assert vdp.address == 0x1237
 
 
 def test_vdp_vram_is_exactly_16_kib_and_address_wraps() -> None:
