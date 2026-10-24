@@ -135,7 +135,7 @@ A CI curta está verde nesta revisão. Ainda não foi executada a auditoria long
 - Corrigido o uso do latch Q anterior em `SCF/CCF` quando Q não é zero; adicionados testes dirigidos para SCF/CCF com prefixo DD ignorado.
 - Commits da correção/testes/documentação: `5697bdbd4dea6d1cc8c495b1a12a8e58d87524c7`, `c26a66d585c091ad9137eb1e03b134fcd256216f`, `333c7a6601159f54430b183a85a9d321a6970e5c`, `1ce9c186f9efd72e156d08077367967eed2ed932`.
 - A correção ainda não foi validada por CI nem pela reexecução do corpus completo de 14.000 casos.
-- O notebook de repetição foi preparado para testar o commit `1ce9c186f9efd72e156d08077367967eed2ed932` e salvar os artefatos em `MyDrive/SegaEmulator/Z80TargetedAudit_PR14_R2/`.
+- O notebook de repetição foi preparado para testar o commit atualizado da branch após os ajustes de regressão e salvar os artefatos em `MyDrive/SegaEmulator/Z80TargetedAudit_PR14_R2/`.
 - PR #14 continua draft e sem merge. Não declarar SCF/CCF prefixados resolvidos antes de receber o ZIP pós-correção.
 
 
