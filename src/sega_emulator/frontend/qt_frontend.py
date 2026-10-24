@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+from array import array
 from pathlib import Path
 
 from sega_emulator.machine.sg1000 import SG1000Machine
@@ -35,6 +36,20 @@ def run(initial_path: Path | None = None) -> None:
         raise RuntimeError(
             'Interface Qt não instalada. Execute: python -m pip install -e ".[qt]"'
         ) from exc
+
+    pygame = None
+    audio_channel = None
+    try:
+        import pygame as pygame_backend
+
+        pygame_backend.mixer.pre_init(
+            frequency=44_100, size=-16, channels=1, buffer=512
+        )
+        pygame_backend.mixer.init()
+        audio_channel = pygame_backend.mixer.Channel(0)
+        pygame = pygame_backend
+    except Exception as exc:
+        logger.warning("Saída de áudio indisponível: %s", exc)
 
     app = QApplication.instance() or QApplication([])
     window = QMainWindow()
@@ -121,6 +136,20 @@ def run(initial_path: Path | None = None) -> None:
             return
         try:
             machine.run_frame()
+            samples = machine.drain_audio_samples()
+            if samples and audio_channel is not None and pygame is not None:
+                pcm = array(
+                    "h",
+                    (
+                        max(-32768, min(32767, round(sample * 32767)))
+                        for sample in samples
+                    ),
+                )
+                sound = pygame.mixer.Sound(buffer=pcm.tobytes())
+                if audio_channel.get_busy():
+                    audio_channel.queue(sound)
+                else:
+                    audio_channel.play(sound)
             frame_count += 1
             image = QImage(
                 machine.vdp.framebuffer,
@@ -331,7 +360,7 @@ def run(initial_path: Path | None = None) -> None:
             window,
             "Sobre",
             "Sega Emulator SG-1000 — protótipo experimental. "
-            "Compatibilidade real e áudio ainda não validados.",
+            "Compatibilidade real e fidelidade de áudio ainda não validadas.",
         ),
     )
 
@@ -340,3 +369,5 @@ def run(initial_path: Path | None = None) -> None:
         open_rom(str(initial_path))
     window.show()
     app.exec()
+    if pygame is not None:
+        pygame.mixer.quit()

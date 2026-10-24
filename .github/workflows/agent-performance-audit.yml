@@ -47,6 +47,9 @@ jobs:
           set -o pipefail
           pytest -q --durations=50 --junitxml=audit-artifacts/pytest-timing.xml 2>&1 | tee audit-artifacts/pytest-timing.txt
 
+      - name: Benchmark PSG isolado e integrado à máquina
+        run: python tools/benchmark_psg.py 2>&1 | tee audit-artifacts/psg-benchmark.txt
+
       - name: Generate Z80 opcode inventory
         if: always()
         run: python tools/z80_opcode_inventory.py --json > audit-artifacts/z80-opcode-inventory.json

@@ -1,0 +1,56 @@
+name: PSG Audio Frontend Validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/sega_emulator/audio/**"
+      - "src/sega_emulator/machine/sg1000.py"
+      - "src/sega_emulator/frontend/**"
+      - "tests/unit/test_sn76489.py"
+      - "tests/unit/test_sg1000_machine.py"
+      - "pyproject.toml"
+      - ".github/workflows/psg-audio-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: psg-audio-validation-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  audio-backend:
+    name: Audio backend and frontend imports
+    runs-on: ubuntu-latest
+    env:
+      SDL_AUDIODRIVER: dummy
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+      - name: Install optional frontend dependencies
+        run: python -m pip install -e ".[dev,qt,frontend]"
+      - name: Import both frontends and audio backend
+        run: |
+          python -c "import pygame; import PySide6; import sega_emulator.frontend.pygame_frontend; import sega_emulator.frontend.qt_frontend; print('frontend imports: OK')"
+      - name: Smoke-test mixer with deterministic dummy audio device
+        run: |
+          python - <<'PY'
+          import pygame
+
+          pygame.mixer.init(frequency=44100, size=-16, channels=1, buffer=512)
+          sound = pygame.mixer.Sound(buffer=bytes(1470))
+          channel = pygame.mixer.Channel(0)
+          channel.play(sound)
+          assert pygame.mixer.get_init() == (44100, -16, 1)
+          pygame.mixer.quit()
+          print("pygame mixer dummy-device smoke test: OK")
+          PY
+      - name: Run PSG and machine integration tests
+        run: pytest -q tests/unit/test_sn76489.py tests/unit/test_sg1000_machine.py
