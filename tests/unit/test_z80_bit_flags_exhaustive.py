@@ -51,7 +51,7 @@ def test_bit_register_flags_for_all_values_bits_and_carry_states() -> None:
 
 
 def test_bit_hl_flags_for_all_values_bits_carry_and_wz_patterns() -> None:
-    """Testa 8.192 estados de BIT (HL), variando X/Y via WZ/MEMPTR."""
+    """Testa 16.384 estados de BIT (HL), variando X/Y via WZ/MEMPTR."""
     address = 0xC040
     for wz_high in (0x00, 0x28, 0xA8, 0xD7):
         xy_source = wz_high
