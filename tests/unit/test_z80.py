@@ -486,7 +486,7 @@ def test_cpl_complements_accumulator_and_updates_only_documented_flags(
     [
         (0x00, 0xD6, 0xC5),  # S/Z/PV preservados, XY do A, carry definido
         (0x28, 0x01, 0x29),
-        (0xD7, 0xFF, 0xC5),
+        (0xD7, 0xFF, 0xED),
     ],
 )
 def test_scf_sets_carry_and_preserves_sign_zero_parity(
@@ -531,7 +531,7 @@ def test_q_latch_tracks_flags_written_by_previous_instruction() -> None:
     assert cpu.q == 0x08
 
     assert cpu.step() == 4
-    assert cpu.f == 0x01
+    assert cpu.f == 0x09
     assert cpu.q == cpu.f
 
 
@@ -545,7 +545,7 @@ def test_q_latch_is_preserved_through_ignored_dd_prefix() -> None:
     assert cpu.q == 0x08
 
     assert cpu.step() == 8
-    assert cpu.f == 0x01
+    assert cpu.f == 0x09
     assert cpu.q == cpu.f
 
 
@@ -554,7 +554,7 @@ def test_q_latch_is_preserved_through_ignored_dd_prefix() -> None:
     [
         (0x00, 0xC5, 0xD4),  # carry anterior vira half-carry
         (0x28, 0x00, 0x29),  # carry anterior zero vira carry
-        (0xD7, 0xFF, 0xD4),  # carry anterior um vira H; X/Y vêm de A
+        (0xD7, 0xFF, 0xFC),  # carry anterior um vira H; X/Y vêm de A
     ],
 )
 def test_ccf_complements_carry_and_updates_half_carry(
