@@ -173,9 +173,10 @@ def test_transparent_sprite_pixels_still_trigger_collision_without_painting() ->
     vdp.vram[0x808:0x810] = bytes([0x80] * 8)
     vdp.vram[0x810:0x818] = bytes([0x80] * 8)
 
+    vdp.advance(TSTATES_PER_LINE)
+    assert vdp.status & 0x20
     frame = vdp.render_frame()
 
-    assert vdp.status & 0x20
     pixel = (0 * SCREEN_WIDTH + 20) * 3
     assert frame[pixel : pixel + 3] == bytes(PALETTE[8])
 
@@ -192,7 +193,30 @@ def test_fifth_sprite_status_uses_first_overflow_in_raster_order() -> None:
         _configure_sprite(vdp, index, y=y, x=index * 8, pattern=0, color=1)
     _configure_sprite(vdp, 10, y=0xD0, x=0, pattern=0, color=0)
 
+    vdp.advance(TSTATES_PER_LINE * 2)  # process lines 0 and 1
     vdp.render_frame()
 
     assert vdp.status & 0x40
     assert (vdp.status & 0x1F) == 9
+
+
+def test_sprite_collision_status_is_visible_and_clearable_per_scanline() -> None:
+    vdp = TMS9918A()
+    _write_register(vdp, 1, 0x40)
+    _write_register(vdp, 5, 0x04)
+    _write_register(vdp, 6, 0x01)
+    _configure_sprite(vdp, 0, y=0xFF, x=12, pattern=1, color=0)
+    _configure_sprite(vdp, 1, y=0xFF, x=12, pattern=2, color=8)
+    _configure_sprite(vdp, 2, y=0xD0, x=0, pattern=0, color=0)
+    vdp.vram[0x808:0x810] = bytes([0x80] * 8)
+    vdp.vram[0x810:0x818] = bytes([0x80] * 8)
+
+    vdp.advance(TSTATES_PER_LINE)
+    assert vdp.status & 0x20
+
+    status = vdp.read_port(0xBF)
+    assert status & 0x20
+    assert not (vdp.status & 0x20)
+
+    vdp.advance(TSTATES_PER_LINE)
+    assert vdp.status & 0x20
