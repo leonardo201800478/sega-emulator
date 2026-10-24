@@ -109,6 +109,9 @@ class TMS9918A:
             remaining -= step
             if self._cycles_into_line == TSTATES_PER_LINE:
                 self._cycles_into_line = 0
+                completed_line = self.scanline
+                if completed_line < SCREEN_HEIGHT:
+                    self._evaluate_sprite_status_for_line(completed_line)
                 self.scanline += 1
                 if self.scanline == VBLANK_LINE:
                     self.status |= 0x80
@@ -122,6 +125,69 @@ class TMS9918A:
         ready = self._frame_ready
         self._frame_ready = False
         return ready
+
+    def _evaluate_sprite_status_for_line(self, line: int) -> None:
+        """Atualiza colisão e quinto sprite no instante lógico da linha.
+
+        A avaliação usa a VRAM e os registradores existentes no fechamento da
+        linha, permitindo que uma leitura de status da CPU observe as flags
+        sem esperar o quadro completo. A resolução temporal ainda é por linha,
+        não por dot.
+        """
+        if not (self.registers[1] & 0x40):
+            return
+
+        r0, r1 = self.registers[0], self.registers[1]
+        mode = ((r1 >> 4) & 1) | ((r1 >> 2) & 2) | (((r0 >> 1) & 1) << 2)
+        if mode == 1:  # Text mode disables the sprite subsystem.
+            return
+
+        attr_base = (self.registers[5] & 0x7F) << 7
+        pattern_base = (self.registers[6] & 0x07) << 11
+        size = 16 if r1 & 0x02 else 8
+        scale = 2 if r1 & 0x01 else 1
+        collision_pixels: set[int] = set()
+        sprites_on_line = 0
+
+        for index in range(32):
+            offset = (attr_base + index * 4) & VRAM_MASK
+            raw_y, x, pattern_number, color_byte = self.vram[offset : offset + 4]
+            if raw_y == 0xD0:
+                break
+
+            y = (raw_y + 1) & 0xFF
+            if y >= 0xE0:
+                y -= 0x100
+            if not y <= line < y + size * scale:
+                continue
+
+            sprites_on_line += 1
+            if sprites_on_line > 4:
+                if not (self.status & 0x40):
+                    self.status = (self.status & ~0x1F) | 0x40 | index
+                continue
+
+            sprite_x = x - (32 if color_byte & 0x80 else 0)
+            source_y = (line - y) // scale
+            for source_x in range(size):
+                if size == 16:
+                    tile = (
+                        (pattern_number & 0xFC)
+                        + (source_y // 8) * 2
+                        + source_x // 8
+                    )
+                else:
+                    tile = pattern_number
+                address = pattern_base + tile * 8 + (source_y & 7)
+                pattern = self.vram[address & VRAM_MASK]
+                if not pattern & (0x80 >> (source_x & 7)):
+                    continue
+                for dx in range(scale):
+                    px = sprite_x + source_x * scale + dx
+                    if px in collision_pixels:
+                        self.status |= 0x20
+                    else:
+                        collision_pixels.add(px)
 
     def render_frame(self) -> bytes:
         """Renderiza 256x192 RGB24 em Graphics I/II, texto ou multicolor."""
@@ -230,27 +296,15 @@ class TMS9918A:
                         )
 
     def _render_sprites(self, pixels: bytearray) -> None:
-        """Renderiza sprites em ordem de varredura, preservando prioridade e flags.
-
-        A ordem de linhas importa para identificar o primeiro sprite excedente
-        (quinto sprite) no registrador de status. Esta rotina ainda é chamada
-        durante a composição completa do quadro; portanto, as flags não são
-        atualizadas em tempo real durante cada linha de execução da CPU.
-        """
+        """Compõe os sprites visíveis respeitando ordem, transparência e limite."""
         attr_base = (self.registers[5] & 0x7F) << 7
         pattern_base = (self.registers[6] & 0x07) << 11
         size = 16 if self.registers[1] & 0x02 else 8
         scale = 2 if self.registers[1] & 0x01 else 1
 
-        # O TMS9918A examina as entradas na ordem da tabela para cada linha.
-        # A máscara de colisão independe da cor: sprites com cor zero são
-        # transparentes na imagem, mas seus pixels de padrão participam da
-        # detecção de colisão.
         for line in range(SCREEN_HEIGHT):
             sprites_on_line = 0
-            collision_pixels: set[int] = set()
             visible_pixels: set[int] = set()
-
             for index in range(32):
                 offset = (attr_base + index * 4) & VRAM_MASK
                 raw_y, x, pattern_number, color_byte = self.vram[offset : offset + 4]
@@ -260,19 +314,16 @@ class TMS9918A:
                 y = (raw_y + 1) & 0xFF
                 if y >= 0xE0:
                     y -= 0x100
-                height = size * scale
-                if not y <= line < y + height:
+                if not y <= line < y + size * scale:
                     continue
 
                 sprites_on_line += 1
                 if sprites_on_line > 4:
-                    if not (self.status & 0x40):
-                        self.status = (self.status & ~0x1F) | 0x40 | index
-                    # O quinto e os seguintes sprites não são exibidos nem
-                    # participam da colisão nessa linha.
                     continue
 
                 color = color_byte & 0x0F
+                if color == 0:
+                    continue
                 sprite_x = x - (32 if color_byte & 0x80 else 0)
                 source_y = (line - y) // scale
 
@@ -287,22 +338,12 @@ class TMS9918A:
                         tile = pattern_number
                     address = pattern_base + tile * 8 + (source_y & 7)
                     pattern = self.vram[address & VRAM_MASK]
-                    if not (pattern & (0x80 >> (source_x & 7))):
+                    if not pattern & (0x80 >> (source_x & 7)):
                         continue
 
                     for dx in range(scale):
                         px = sprite_x + source_x * scale + dx
-                        if not 0 <= px < SCREEN_WIDTH:
-                            continue
-
-                        if px in collision_pixels:
-                            self.status |= 0x20
-                        else:
-                            collision_pixels.add(px)
-
-                        # Cor 0 não pinta e não esconde sprites de menor
-                        # prioridade, mas continua participando da colisão.
-                        if color == 0 or px in visible_pixels:
+                        if not 0 <= px < SCREEN_WIDTH or px in visible_pixels:
                             continue
                         self._put_pixel(pixels, px, line, color)
                         visible_pixels.add(px)
