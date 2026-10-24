@@ -57,6 +57,8 @@ O comando do módulo informa que a máquina SG-1000 ainda não está integrada. 
 - [Pesquisa do núcleo Z80 do MAME](docs/z80-mame-reference.md)
 - [Pesquisa comparativa de comportamentos Z80 pouco documentados](docs/z80-undocumented-behavior-research.md)
 - [Notas de hardware do SG-1000](docs/hardware/sg1000.md)
+- [Catálogo prioritário de jogos comerciais e critérios de compatibilidade do SG-1000](docs/hardware/sg1000-game-compatibility.md)
+- [Base inicial de memória e barramentos do SG-1000](docs/hardware/sg1000-memory-buses.md)
 - [Inventário de firmware/ROM mantidos apenas localmente](docs/firmware-inventory.md)
 - Barramento inicial: `src/sega_emulator/bus/memory_bus.py`
 - Contrato de acesso à memória para a CPU: `src/sega_emulator/bus/interfaces.py`
