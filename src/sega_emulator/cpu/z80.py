@@ -279,6 +279,7 @@ class Z80Cpu:
     def _add_hl(self, value: int) -> None:
         """Executa ADD HL,rr, preservando S, Z e P/V."""
         previous = self.hl
+        self.wz = (previous + 1) & 0xFFFF
         result = previous + value
         result_word = result & 0xFFFF
         flags = self.f & 0xC4  # S, Z e P/V preservados
@@ -293,6 +294,7 @@ class Z80Cpu:
     def _add_sub_hl(self, value: int, subtract: bool) -> None:
         """Executa ADC/SBC HL,rr, incluindo carry, overflow e flags de 16 bits."""
         previous = self.hl
+        self.wz = (previous + 1) & 0xFFFF
         carry_in = self.f & 0x01
         if subtract:
             result = previous - value - carry_in
@@ -653,12 +655,14 @@ class Z80Cpu:
             value = self._read_stack_pair((opcode >> 4) & 3)
             self.bus.write(address, value & 0xFF)
             self.bus.write((address + 1) & 0xFFFF, value >> 8)
+            self.wz = (address + 1) & 0xFFFF
             return 20
         if opcode & 0xCF == 0x4B:
             address = self._fetch_byte() | (self._fetch_byte() << 8)
             low = self.bus.read(address)
             high = self.bus.read((address + 1) & 0xFFFF)
             self._write_stack_pair((opcode >> 4) & 3, (high << 8) | low)
+            self.wz = (address + 1) & 0xFFFF
             return 20
         if opcode & 0xCF == 0x4A:
             self._add_sub_hl(self._read_stack_pair((opcode >> 4) & 3), False)
@@ -691,6 +695,7 @@ class Z80Cpu:
             return 8
         if opcode in (0x45, 0x4D, 0x55, 0x5D, 0x65, 0x6D, 0x75, 0x7D):
             self.pc = self._pop_word()
+            self.wz = self.pc
             self.iff1 = self.iff2
             return 14
         if opcode in (0x46, 0x4E, 0x66, 0x6E):
@@ -840,6 +845,7 @@ class Z80Cpu:
             displacement = self._signed_byte(self._fetch_byte())
             cb_opcode = self._fetch_byte()
             address = (index + displacement) & 0xFFFF
+            self.wz = address
             value = self.bus.read(address)
             operation = cb_opcode >> 6
             bit_index = (cb_opcode >> 3) & 7
@@ -919,6 +925,7 @@ class Z80Cpu:
                 cycles = 14
             elif opcode in (0x22, 0x2A):
                 address = self._fetch_byte() | (self._fetch_byte() << 8)
+                self.wz = (address + 1) & 0xFFFF
                 if opcode == 0x22:
                     self.bus.write(address, index & 0xFF)
                     self.bus.write((address + 1) & 0xFFFF, index >> 8)
@@ -933,6 +940,7 @@ class Z80Cpu:
             elif opcode in (0x09, 0x19, 0x29, 0x39):
                 code = (opcode >> 4) & 3
                 operand = index if code == 2 else self._read_stack_pair(code)
+                self.wz = (index + 1) & 0xFFFF
                 result = index + operand
                 flags = self.f & 0xC4
                 flags |= ((result & 0xFFFF) >> 8) & 0x28
@@ -985,6 +993,7 @@ class Z80Cpu:
         elif opcode in (0x34, 0x35):
             displacement = self._signed_byte(self._fetch_byte())
             address = (index + displacement) & 0xFFFF
+            self.wz = address
             old = self.bus.read(address)
             value = (
                 self._inc_register_value(old)
@@ -998,6 +1007,7 @@ class Z80Cpu:
             if destination == 6 or source == 6:
                 displacement = self._signed_byte(self._fetch_byte())
                 address = (index + displacement) & 0xFFFF
+                self.wz = address
                 if source == 6:
                     value = self.bus.read(address)
                     self._write_index_register(prefix, destination, value, halves=False)
@@ -1013,7 +1023,9 @@ class Z80Cpu:
             source = opcode & 7
             if source == 6:
                 displacement = self._signed_byte(self._fetch_byte())
-                value = self.bus.read((index + displacement) & 0xFFFF)
+                address = (index + displacement) & 0xFFFF
+                self.wz = address
+                value = self.bus.read(address)
                 cycles = 19
             else:
                 value = self._read_index_register(prefix, source)
@@ -1277,16 +1289,19 @@ class Z80Cpu:
         elif opcode in (0x02, 0x12):  # LD (BC/DE),A
             address = self.bc if opcode == 0x02 else self.de
             self.bus.write(address, self.a)
+            self.wz = (self.a << 8) | ((address + 1) & 0xFF)
             cycles = 7
         elif opcode in (0x0A, 0x1A):  # LD A,(BC/DE)
             address = self.bc if opcode == 0x0A else self.de
             self.a = self.bus.read(address)
+            self.wz = (address + 1) & 0xFFFF
             cycles = 7
         elif opcode in (0x22, 0x2A):  # LD (nn),HL / LD HL,(nn)
             low = self._fetch_byte()
             high = self._fetch_byte()
             address = (high << 8) | low
             next_address = (address + 1) & 0xFFFF
+            self.wz = next_address
             if opcode == 0x22:
                 self.bus.write(address, self.l)
                 self.bus.write(next_address, self.h)
@@ -1301,8 +1316,10 @@ class Z80Cpu:
             address = (high << 8) | low
             if opcode == 0x32:
                 self.bus.write(address, self.a)
+                self.wz = (self.a << 8) | ((address + 1) & 0xFF)
             else:
                 self.a = self.bus.read(address)
+                self.wz = (address + 1) & 0xFFFF
             cycles = 13
         elif opcode & 0xCF == 0x03:  # INC rr
             code = (opcode >> 4) & 0x03
@@ -1374,6 +1391,7 @@ class Z80Cpu:
             if displacement & 0x80:
                 displacement -= 0x100
             self.pc = (self.pc + displacement) & 0xFFFF
+            self.wz = self.pc
             cycles = 12
         elif opcode in (0x20, 0x28, 0x30, 0x38):  # JR cc,e
             displacement = self._fetch_byte()
@@ -1381,6 +1399,7 @@ class Z80Cpu:
                 if displacement & 0x80:
                     displacement -= 0x100
                 self.pc = (self.pc + displacement) & 0xFFFF
+                self.wz = self.pc
                 cycles = 12
             else:
                 cycles = 7
