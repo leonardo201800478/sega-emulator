@@ -47,10 +47,12 @@ class TMS9918:
 
     def read_port(self, port: int) -> int:
         if port == VDP_DATA_PORT:
-            value = self._read_buffer
-            if not self._read_buffer_valid:
+            if self._read_buffer_valid:
+                value = self._read_buffer
+            else:
                 value = self.vram.read(self.address)
-            self._read_buffer = self.vram.read((self.address + 1) & 0x3FFF)
+                self.address = (self.address + 1) & 0x3FFF
+            self._read_buffer = self.vram.read(self.address)
             self.address = (self.address + 1) & 0x3FFF
             self._read_buffer_valid = True
             self._control_latch = None
