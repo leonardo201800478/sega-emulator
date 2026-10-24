@@ -49,8 +49,8 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | `2F` — CPL | Implementado — cobertura inicial | Complementa A; atualiza H/N, copia X/Y do resultado e preserva S/Z/PV/C; 4 T-states nominais. |
 | `32` — LD (nn),A | Implementado — cobertura inicial | Endereço absoluto little-endian; 13 T-states nominais, flags preservadas. |
 | `3A` — LD A,(nn) | Implementado — cobertura inicial | Lê de endereço absoluto little-endian; 13 T-states nominais, flags preservadas. |
-| `37` — SCF | Implementado — cobertura inicial | Define C, limpa H/N, preserva S/Z/PV e copia X/Y de A; 4 T-states nominais. |
-| `3F` — CCF | Implementado — cobertura inicial | Inverte C, copia C anterior para H, limpa N, preserva S/Z/PV e copia X/Y de A; 4 T-states nominais. |
+| `37` — SCF | Implementado — cobertura inicial | Define C, limpa H/N, preserva S/Z/PV; F3/F5 usam A combinado com F quando Q anterior é zero, ou com Q anterior quando não zero. 4 T-states nominais. A correção para Q em DD ignorado aguarda nova auditoria diferencial. |
+| `3F` — CCF | Implementado — cobertura inicial | Inverte C, copia C anterior para H, limpa N e preserva S/Z/PV; F3/F5 usam A combinado com F quando Q anterior é zero, ou com Q anterior quando não zero. 4 T-states nominais. A correção para Q em DD ignorado aguarda nova auditoria diferencial. |
 | `40–75, 77–7F` — LD r,r' | Implementado — cobertura inicial | Registradores e (HL); `76` é documentado separadamente como HALT. |
 | `76` — HALT | Implementado — cobertura inicial | Estado de suspensão e ciclos repetidos; validar detalhes de fetch durante HALT. |
 | `80–87` — ADD A,r | Implementado — cobertura inicial | Registros e (HL); expandir testes de flags. |
