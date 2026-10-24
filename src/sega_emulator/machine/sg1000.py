@@ -1,7 +1,8 @@
-"""Integração inicial da máquina Sega SG-1000 sem subsistema de áudio."""
+"""Integração inicial da máquina Sega SG-1000."""
 
 from __future__ import annotations
 
+from sega_emulator.audio.sn76489 import SN76489
 from sega_emulator.bus.memory import RAM_SIZE, SG1000Ram
 from sega_emulator.bus.memory_bus import SG1000MemoryBus
 from sega_emulator.cpu.z80 import Z80Cpu
@@ -39,6 +40,7 @@ class SG1000Machine:
         base_bus = SG1000MemoryBus(ram, cartridge_rom)
         self.memory_bus = _CartridgeMirrorBus(base_bus, len(cartridge_rom))
         self.vdp = TMS9918A()
+        self.psg = SN76489()
         self.joystick1 = 0xFF
         self.joystick2 = 0xFF
         self.total_instructions = 0
@@ -61,6 +63,10 @@ class SG1000Machine:
         vdp_port = port & 0xC1
         if vdp_port in (0x80, 0x81):
             self.vdp.write_port(vdp_port, value)
+            return
+        # SN76489AN discreto do SG-1000: faixa de escrita 40h–7Fh.
+        if 0x40 <= port <= 0x7F:
+            self.psg.write(value)
 
     def set_joystick(self, player: int, value: int) -> None:
         if player not in (1, 2):
@@ -78,11 +84,16 @@ class SG1000Machine:
         self.total_instructions += 1
         self.total_tstates += cycles
         self.vdp.advance(cycles)
+        self.psg.advance_clocks(cycles)
         if self.vdp.interrupt_pending:
             self.cpu.request_int()
         else:
             self.cpu.clear_int_request()
         return cycles
+
+    def drain_audio_samples(self, max_samples: int | None = None) -> list[float]:
+        """Retira amostras mono já sincronizadas ao clock da máquina."""
+        return self.psg.drain_samples(max_samples)
 
     def run_frame(self, max_steps: int = 100_000) -> int:
         """Executa até o próximo limite de quadro; retorna instruções executadas."""
