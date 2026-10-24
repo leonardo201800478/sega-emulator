@@ -61,7 +61,9 @@ def main() -> int:
     parser.add_argument("--warmup-frames", type=int, default=30)
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--max-steps-per-frame", type=int, default=200_000)
-    parser.add_argument(\n        "--profile", type=Path, default=None, help="write cProfile .pstats"\n    )
+    parser.add_argument(
+        "--profile", type=Path, default=None, help="write cProfile .pstats"
+    )
     args = parser.parse_args()
     if args.frames < 1 or args.warmup_frames < 0 or args.repeats < 1:
         parser.error("frames/repeats must be positive and warmup-frames nonnegative")
