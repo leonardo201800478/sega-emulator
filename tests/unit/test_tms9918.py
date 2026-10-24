@@ -270,3 +270,30 @@ def test_fifth_sprite_status_is_generated_at_raster_line_boundary() -> None:
     assert vdp.scanline == 1
     assert vdp.status & 0x40
     assert vdp.status & 0x1F == 4
+
+
+def test_raster_rendering_preserves_emitted_lines_after_vram_changes() -> None:
+    vdp = TMS9918A()
+    _write_register(vdp, 1, 0x40)
+    _write_register(vdp, 2, 0x01)  # Name table at 0400h.
+    _write_register(vdp, 3, 0x80)  # Color table at 2000h.
+    _write_register(vdp, 4, 0x01)  # Pattern table at 0800h.
+    _write_register(vdp, 7, 0xF1)  # Foreground 15, background 1.
+    vdp.vram[0x0400 : 0x0400 + 768] = bytes(768)
+    vdp.vram[0x0800 : 0x0808] = bytes((0x80, 0, 0, 0, 0, 0, 0, 0))
+    vdp.vram[0x2000] = 0xF1
+
+    vdp.advance(TSTATES_PER_LINE)
+    assert vdp._working_framebuffer[:3] == bytes(PALETTE[15])
+
+    # Line zero has already been emitted. Later changes must affect later lines,
+    # not retroactively repaint the line that the raster has passed.
+    vdp.vram[0x0800] = 0x00
+    vdp.advance((LINES_PER_FRAME - 1) * TSTATES_PER_LINE)
+
+    assert vdp.frame_number == 1
+    assert vdp.framebuffer[:3] == bytes(PALETTE[15])
+    line_eight_pixel_zero = 8 * SCREEN_WIDTH * 3
+    assert vdp.framebuffer[line_eight_pixel_zero : line_eight_pixel_zero + 3] == bytes(
+        PALETTE[1]
+    )
