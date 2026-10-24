@@ -230,53 +230,79 @@ class TMS9918A:
                         )
 
     def _render_sprites(self, pixels: bytearray) -> None:
+        """Renderiza sprites em ordem de prioridade e atualiza status de hardware.
+
+        A avaliação é feita por linha: no máximo quatro sprites contam para a
+        composição visual de cada scanline. O quinto sprite define o índice de
+        overflow; sprites transparentes ainda consomem um slot de avaliação,
+        mas não desenham nem participam de colisões.
+        """
         attr_base = (self.registers[5] & 0x7F) << 7
         pattern_base = (self.registers[6] & 0x07) << 11
         size = 16 if self.registers[1] & 0x02 else 8
         scale = 2 if self.registers[1] & 0x01 else 1
-        drawn_pixels: set[tuple[int, int]] = set()
-        sprites_per_line = [0] * SCREEN_HEIGHT
+        height = size * scale
+
+        # O VDP mantém a primeira ocorrência dos flags de colisão/overflow
+        # até a leitura do registrador de status.
+        overflow_already_set = bool(self.status & 0x40)
+        collision_already_set = bool(self.status & 0x20)
+        sprites: list[tuple[int, int, int, int, int]] = []
 
         for index in range(32):
-            offset = (attr_base + index * 4) & 0x3FFF
+            offset = (attr_base + index * 4) & VRAM_MASK
             raw_y, x, pattern_number, color_byte = self.vram[offset : offset + 4]
             if raw_y == 0xD0:
                 break
-            y = (raw_y + 1) & 0xFF
-            if y >= 0xE0:
+
+            # Y é um byte assinado com o ajuste de uma linha do TMS9918A.
+            # Valores D1h..FFh colocam o sprite parcialmente/acima da tela.
+            y = ((raw_y + 1) & 0xFF)
+            if y >= 0xD0:
                 y -= 0x100
             color = color_byte & 0x0F
             if color_byte & 0x80:
                 x -= 32
-            height = size * scale
-            for line in range(max(0, y), min(SCREEN_HEIGHT, y + height)):
-                sprites_per_line[line] += 1
-                if sprites_per_line[line] > 4:
-                    if not (self.status & 0x40):
-                        self.status = (self.status & ~0x1F) | 0x40 | index
-                    continue
+            sprites.append((index, y, x, pattern_number, color))
+
+        for line in range(SCREEN_HEIGHT):
+            line_sprites = [
+                sprite
+                for sprite in sprites
+                if sprite[1] <= line < sprite[1] + height
+            ]
+            if len(line_sprites) > 4 and not overflow_already_set:
+                # Os cinco bits inferiores registram o índice da quinta sprite.
+                self.status = (self.status & ~0x1F) | 0x40 | line_sprites[4][0]
+                overflow_already_set = True
+
+            occupied: set[int] = set()
+            for index, y, x, pattern_number, color in line_sprites[:4]:
                 if color == 0:
                     continue
                 source_y = (line - y) // scale
                 for source_x in range(size):
-                    tile = pattern_number
                     if size == 16:
                         tile = (
                             (pattern_number & 0xFC)
                             + (source_y // 8) * 2
                             + source_x // 8
                         )
-                    address = pattern_base + tile * 8 + (source_y & 7)
-                    pattern = self.vram[address & 0x3FFF]
+                    else:
+                        tile = pattern_number
+                    address = (pattern_base + tile * 8 + (source_y & 7)) & VRAM_MASK
+                    pattern = self.vram[address]
                     if not (pattern & (0x80 >> (source_x & 7))):
                         continue
+
                     for dx in range(scale):
                         px = x + source_x * scale + dx
                         if not 0 <= px < SCREEN_WIDTH:
                             continue
-                        key = (px, line)
-                        if key in drawn_pixels:
-                            self.status |= 0x20
+                        if px in occupied:
+                            if not collision_already_set:
+                                self.status |= 0x20
+                                collision_already_set = True
                             continue
+                        occupied.add(px)
                         self._put_pixel(pixels, px, line, color)
-                        drawn_pixels.add(key)
