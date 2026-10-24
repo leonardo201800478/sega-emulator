@@ -20,7 +20,7 @@ Z80_CLOCK_HZ = 3_579_545
 def run(initial_path: Path | None = None) -> None:
     """Abre a interface de teste com teclado, telemetria e logs de sessão."""
     try:
-        from PySide6.QtCore import QEvent, QObject, Qt, QTimer
+        from PySide6.QtCore import QEvent, QObject, QSettings, Qt, QTimer
         from PySide6.QtGui import QAction, QImage, QKeySequence, QPixmap
         from PySide6.QtWidgets import (
             QApplication,
@@ -28,6 +28,7 @@ def run(initial_path: Path | None = None) -> None:
             QInputDialog,
             QLabel,
             QMainWindow,
+            QMenu,
             QMessageBox,
             QStatusBar,
             QVBoxLayout,
@@ -39,6 +40,9 @@ def run(initial_path: Path | None = None) -> None:
         ) from exc
 
     app = QApplication.instance() or QApplication([])
+    app.setOrganizationName("SegaEmulator")
+    app.setApplicationName("SegaEmulator")
+    settings = QSettings()
     window = QMainWindow()
     window.setWindowTitle("Sega Emulator — SG-1000 (experimental)")
     window.resize(800, 620)
@@ -236,6 +240,32 @@ def run(initial_path: Path | None = None) -> None:
                 "A emulação foi interrompida. Consulte o log da sessão.",
             )
 
+    recent_rom_menu: QMenu | None = None
+
+    def refresh_recent_rom_menu() -> None:
+        if recent_rom_menu is None:
+            return
+        recent_rom_menu.clear()
+        recent_paths = settings.value("recent_roms", [], type=list)
+        valid_paths = [str(path) for path in recent_paths if Path(str(path)).is_file()]
+        if not valid_paths:
+            action = recent_rom_menu.addAction("(Nenhuma ROM recente)")
+            action.setEnabled(False)
+        else:
+            for recent_path in valid_paths:
+                action = recent_rom_menu.addAction(Path(recent_path).name)
+                action.setToolTip(recent_path)
+                action.triggered.connect(
+                    lambda checked=False, selected_path=recent_path: open_rom(selected_path)
+                )
+            recent_rom_menu.addSeparator()
+            clear_action = recent_rom_menu.addAction("Limpar histórico")
+            clear_action.triggered.connect(clear_recent_roms)
+
+    def clear_recent_roms() -> None:
+        settings.setValue("recent_roms", [])
+        refresh_recent_rom_menu()
+
     def open_rom(path: str | None = None) -> None:
         nonlocal machine, loaded, frame_count, paused
         nonlocal last_checkpoint_time, last_checkpoint_tstates
@@ -244,7 +274,7 @@ def run(initial_path: Path | None = None) -> None:
             path, _ = QFileDialog.getOpenFileName(
                 window,
                 "Abrir ROM SG-1000",
-                str(Path.cwd()),
+                str(settings.value("last_directory", str(Path.cwd()))),
                 "ROMs SG-1000 (*.sg *.zip *.rom *.bin);;Todos os arquivos (*)",
             )
         if not path:
@@ -279,6 +309,14 @@ def run(initial_path: Path | None = None) -> None:
             return
 
         machine, loaded, frame_count, paused = loaded_machine, candidate, 0, False
+        selected_path = str(Path(path).expanduser().resolve())
+        settings.setValue("last_directory", str(Path(selected_path).parent))
+        settings.setValue("last_rom", selected_path)
+        recent_paths = settings.value("recent_roms", [], type=list)
+        recent_paths = [str(item) for item in recent_paths if str(item) != selected_path]
+        recent_paths.insert(0, selected_path)
+        settings.setValue("recent_roms", recent_paths[:10])
+        refresh_recent_rom_menu()
         pressed_keys.clear()
         update_joystick()
         last_checkpoint_time = time.perf_counter()
@@ -339,6 +377,9 @@ def run(initial_path: Path | None = None) -> None:
     open_action.setShortcut(QKeySequence.StandardKey.Open)
     open_action.triggered.connect(lambda: open_rom())
     file_menu.addAction(open_action)
+    recent_rom_menu = file_menu.addMenu("ROMs recentes")
+    refresh_recent_rom_menu()
+    file_menu.addSeparator()
     file_menu.addAction("Sair", window.close)
 
     emu_menu = window.menuBar().addMenu("&Emulação")
