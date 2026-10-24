@@ -14,9 +14,9 @@ def _expected_daa(
     accumulator: int, subtract: int, half_carry: int, carry: int
 ) -> tuple[int, int]:
     correction = 0
-    if half_carry or (not subtract and (accumulator & 0x0F) > 9):
+    if half_carry or (accumulator & 0x0F) > 9:
         correction |= 0x06
-    if carry or (not subtract and accumulator > 0x99):
+    if carry or accumulator > 0x99:
         correction |= 0x60
 
     if subtract:
@@ -24,7 +24,7 @@ def _expected_daa(
     else:
         result = (accumulator + correction) & 0xFF
 
-    carry_out = carry or (not subtract and accumulator > 0x99)
+    carry_out = carry or accumulator > 0x99
     flags = (result & 0xA8) | (0x02 if subtract else 0)
     if result == 0:
         flags |= 0x40
