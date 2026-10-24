@@ -34,6 +34,8 @@ testpaths = ["tests"]
 addopts = "-ra"
 
 [tool.ruff]
+# Ruff does not format notebook JSON as a standalone source file in this project.
+extend-exclude = ["tools/audits/*.ipynb"]
 target-version = "py314"
 line-length = 88
 src = ["src", "tests"]
