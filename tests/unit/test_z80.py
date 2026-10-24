@@ -2983,4 +2983,3 @@ def test_bit_hl_undocumented_flags_come_from_wz() -> None:
 
     assert cpu.step() == 12
     assert cpu.f == 0x19
-
