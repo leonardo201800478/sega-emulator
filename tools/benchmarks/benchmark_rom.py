@@ -120,14 +120,8 @@ def main() -> int:
     print(f"median_seconds_for_{args.frames}_frames={median_seconds:.4f}")
     print(f"median_fps={median_fps:.3f}")
     print(f"median_speed_percent={median_fps / NOMINAL_FPS * 100:.2f}")
-    print(
-        "median_instructions_per_frame="
-        f"{statistics.median(instructions_per_frame):.1f}"
-    )
-    print(
-        "median_tstates_per_frame="
-        f"{statistics.median(cycles_per_frame):.1f}"
-    )
+    print(f"median_instructions_per_frame={statistics.median(instructions_per_frame):.1f}")
+    print(f"median_tstates_per_frame={statistics.median(cycles_per_frame):.1f}")
 
     if args.profile:
         machine = new_machine(rom)
