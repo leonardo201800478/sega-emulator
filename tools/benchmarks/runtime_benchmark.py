@@ -93,11 +93,15 @@ def summarize(results: list[dict[str, Any]]) -> dict[str, Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--rom", type=Path, help="caminho para ROM SG-1000 local/legal")
+    parser.add_argument(
+        "--rom", type=Path, help="caminho para ROM SG-1000 local/legal"
+    )
     parser.add_argument("--frames", type=int, default=120)
     parser.add_argument("--warmup-frames", type=int, default=30)
     parser.add_argument("--trials", type=int, default=5)
-    parser.add_argument("--output", type=Path, default=Path("runtime-benchmark.json"))
+    parser.add_argument(
+        "--output", type=Path, default=Path("runtime-benchmark.json")
+    )
     args = parser.parse_args()
     if args.frames < 1 or args.warmup_frames < 0 or args.trials < 2:
         parser.error("--frames deve ser positivo, warmup >= 0 e trials >= 2")
@@ -113,7 +117,7 @@ def main() -> int:
     # Alternate order to reduce systematic warm-cache/order bias.
     order = ("run_frame", "step")
     for trial in range(args.trials):
-        for path in order if trial % 2 == 0 else reversed(order):
+        for path in (order if trial % 2 == 0 else reversed(order)):
             paths[path].append(
                 run_trial(rom, path, args.warmup_frames, args.frames)
             )
@@ -164,14 +168,20 @@ def main() -> int:
     args.output.write_text(
         json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
-    print(f"Workload: {result['workload']['kind']} / SHA-256 {result['workload']['sha256']}")
+    print(
+        f"Workload: {result['workload']['kind']} / "
+        f"SHA-256 {result['workload']['sha256']}"
+    )
     for path, summary in result["results"].items():
         print(
             f"{path}: median={summary['fps_median']:.2f} FPS, "
             f"p95 elapsed={summary['elapsed_seconds_p95']:.4f}s, "
             f"deterministic={summary['deterministic']}"
         )
-    print(f"run_frame/step speed ratio: {result['comparison']['speedup_run_frame_vs_step']:.3f}x")
+    print(
+        "run_frame/step speed ratio: "
+        f"{result['comparison']['speedup_run_frame_vs_step']:.3f}x"
+    )
     print(
         "cross-path equivalence: "
         f"framebuffer={result['comparison']['cross_path_framebuffer_match']}, "
@@ -181,9 +191,14 @@ def main() -> int:
     print(f"JSON: {args.output.resolve()}")
     if not all(summary["deterministic"] for summary in result["results"].values()):
         return 2
-    if not all(result["comparison"][key] for key in (
-        "cross_path_framebuffer_match", "cross_path_audio_match", "cross_path_tstates_match"
-    )):
+    if not all(
+        result["comparison"][key]
+        for key in (
+            "cross_path_framebuffer_match",
+            "cross_path_audio_match",
+            "cross_path_tstates_match",
+        )
+    ):
         return 3
     return 0
 
