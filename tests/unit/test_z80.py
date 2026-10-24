@@ -171,6 +171,7 @@ def test_ignored_dd_prefix_preserves_q_for_scf_ccf(
     assert cpu.pc == 2
     assert cpu.total_cycles == 8
 
+
 def test_bit_hl_uses_wz_for_undocumented_flags() -> None:
     cpu = make_cpu(bytes([0xCB, 0x46]))  # BIT 0,(HL)
     cpu.hl = 0xC000
