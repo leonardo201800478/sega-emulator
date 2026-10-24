@@ -1,0 +1,84 @@
+name: Z80 full SingleStepTests audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      workers:
+        description: "Número de processos para a auditoria (1-4)"
+        required: false
+        default: "2"
+        type: choice
+        options:
+          - "1"
+          - "2"
+          - "3"
+          - "4"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: z80-full-corpus-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  full-corpus:
+    name: Full SingleStepTests/Z80 corpus
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: Checkout emulator
+        uses: actions/checkout@v4
+
+      - name: Checkout pinned upstream corpus
+        uses: actions/checkout@v4
+        with:
+          repository: SingleStepTests/z80
+          ref: ebe1875d48f374bcfd4b505d8eb8ee751568b5f7
+          path: external/SingleStepTests-z80
+          persist-credentials: false
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install project and audit tools
+        run: python -m pip install -e ".[dev]"
+
+      - name: Verify pinned corpus revision and record provenance
+        shell: bash
+        run: |
+          test "$(git -C external/SingleStepTests-z80 rev-parse HEAD)" = "ebe1875d48f374bcfd4b505d8eb8ee751568b5f7"
+          mkdir -p artifacts
+          {
+            echo "emulator_commit=$(git rev-parse HEAD)"
+            echo "corpus_repository=https://github.com/SingleStepTests/z80"
+            echo "corpus_commit=$(git -C external/SingleStepTests-z80 rev-parse HEAD)"
+            echo "python=$(python --version)"
+            echo "workers=${{ inputs.workers }}"
+            echo "started_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > artifacts/run-metadata.txt
+
+      - name: Run lint and unit tests
+        run: |
+          ruff check .
+          pytest -q
+
+      - name: Run complete corpus
+        run: |
+          python tools/audits/run_singlestep_full.py \
+            --directory external/SingleStepTests-z80/v1 \
+            --workers "${{ inputs.workers }}" \
+            --report-json artifacts/singlestep-full.json \
+            --report-md artifacts/singlestep-full.md
+
+      - name: Upload complete audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: z80-full-singlestep-${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 30
