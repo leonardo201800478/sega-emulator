@@ -75,6 +75,17 @@ Gera uma medição-base sem instrumentação e um relatório JSON separado com t
 
 **Importante:** o perfil instrumentado tem overhead. Os tempos de funções aninhadas são inclusivos; não devem ser somados entre si nem usados como FPS normal. O hash do framebuffer permite localizar o primeiro quadro divergente em execuções comparáveis, mas não determina sozinho se a imagem está correta. A ROM não é copiada para o relatório.
 
+## Snapshot do VDP durante o jogo
+
+Para investigar divergências visuais em uma cena real, execute a interface Qt com a ROM local e avance até a cena desejada. Pressione **F8** ou use **Diagnóstico → Capturar snapshot VDP (JSON + PNG)**. O emulador salva em `logs/vdp_snapshots/`:
+
+- JSON com ROM identificada por SHA-256, PC, contadores da máquina, registradores do VDP, tabela bruta de atributos dos sprites, VRAM integral e hash do framebuffer.
+- PNG do último framebuffer concluído.
+
+Capture no mesmo ponto do jogo no Ares e no nosso emulador, mantendo ROM/revisão e sequência de entradas iguais. O snapshot é pontual: a VRAM/registradores são lidos no instante da captura, enquanto o PNG representa o último quadro concluído; portanto, não se deve presumir que ambos sejam um estado raster atomicamente sincronizado. O diagnóstico não altera a renderização e não deve ser usado como prova isolada de equivalência com hardware.
+
+Os snapshots podem conter o estado completo da ROM em execução; mantenha-os locais e não os versione se a ROM for comercial.
+
 ## Logs da sessão
 
 Por padrão, os arquivos ficam em `logs\\session-<data-hora>.jsonl` e `.log`. Para escolher outro diretório:
