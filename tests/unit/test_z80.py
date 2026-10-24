@@ -745,7 +745,7 @@ def test_ed_adc_sbc_hl_pair_results_flags_and_cycles(
     expected_hl: int,
     expected_flags: int,
 ) -> None:
-    cpu = make_cpu(bytes([0xED, opcode]))
+    cpu = make_cpu(bytes([0xED, opcode, 0x00]))
     cpu.hl = hl
     cpu.bc = operand
     cpu.de = operand
