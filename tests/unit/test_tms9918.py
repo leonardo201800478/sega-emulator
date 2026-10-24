@@ -181,7 +181,7 @@ def test_sprite_priority_keeps_first_opaque_sprite_and_sets_collision() -> None:
 
     vdp._render_sprites(pixels)
 
-    offset = (10 * 3)
+    offset = 10 * 3
     assert pixels[offset : offset + 3] == bytes(PALETTE[2])
     assert vdp.status & 0x20
 
