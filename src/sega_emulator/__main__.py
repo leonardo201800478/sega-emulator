@@ -18,19 +18,28 @@ def main(argv: Sequence[str] | None = None) -> None:
     arguments = list(sys.argv[1:] if argv is None else argv)
     parser = argparse.ArgumentParser(description="Emulador experimental Sega SG-1000")
     parser.add_argument(
-        "rom", type=Path, nargs="?",
+        "rom",
+        type=Path,
+        nargs="?",
         help="caminho para ROM .sg ou arquivo .zip contendo ROM",
     )
     parser.add_argument(
-        "--headless-frames", type=int, default=None, metavar="N",
+        "--headless-frames",
+        type=int,
+        default=None,
+        metavar="N",
         help="executa N quadros sem abrir janela (para diagnóstico)",
     )
     parser.add_argument(
-        "--ui", choices=("qt", "pygame"), default="qt",
+        "--ui",
+        choices=("qt", "pygame"),
+        default="qt",
         help="frontend gráfico (padrão: qt)",
     )
     parser.add_argument(
-        "--log-dir", type=Path, default=Path("logs"),
+        "--log-dir",
+        type=Path,
+        default=Path("logs"),
         help="diretório de logs da sessão (padrão: ./logs)",
     )
     args = parser.parse_args(arguments)
@@ -42,6 +51,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             parser.error("informe uma ROM quando usar --headless-frames")
         try:
             from sega_emulator.frontend.qt_frontend import run
+
             run()
         except (RuntimeError, ImportError) as exc:
             parser.error(str(exc))
@@ -50,6 +60,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     if args.ui == "qt" and args.headless_frames is None:
         try:
             from sega_emulator.frontend.qt_frontend import run
+
             run(args.rom)
         except (RuntimeError, ImportError) as exc:
             parser.error(str(exc))
@@ -57,25 +68,40 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     try:
         loaded = load_rom(args.rom)
-        logger.info("ROM carregada", extra={
-            "event": "rom_loaded", "rom_path": str(loaded.source_path),
-            "rom_member": loaded.member_name, "rom_sha256": loaded.sha256,
-        })
+        logger.info(
+            "ROM carregada",
+            extra={
+                "event": "rom_loaded",
+                "rom_path": str(loaded.source_path),
+                "rom_member": loaded.member_name,
+                "rom_sha256": loaded.sha256,
+            },
+        )
         machine = SG1000Machine(loaded.data)
-        logger.info("Máquina criada", extra={
-            "event": "machine_created", "rom_sha256": loaded.sha256,
-            "rom_path": str(loaded.source_path),
-        })
+        logger.info(
+            "Máquina criada",
+            extra={
+                "event": "machine_created",
+                "rom_sha256": loaded.sha256,
+                "rom_path": str(loaded.source_path),
+            },
+        )
         if args.headless_frames is not None:
             if args.headless_frames < 0:
                 parser.error("--headless-frames não pode ser negativo")
             steps = machine.run_frames(args.headless_frames)
-            logger.info("Execução headless concluída", extra={
-                "event": "headless_complete", "frame": machine.vdp.frame_number,
-                "pc": machine.cpu.pc, "instructions": steps,
-                "tstates": machine.cpu.total_cycles, "scanline": machine.vdp.scanline,
-                "status": machine.vdp.status,
-            })
+            logger.info(
+                "Execução headless concluída",
+                extra={
+                    "event": "headless_complete",
+                    "frame": machine.vdp.frame_number,
+                    "pc": machine.cpu.pc,
+                    "instructions": steps,
+                    "tstates": machine.cpu.total_cycles,
+                    "scanline": machine.vdp.scanline,
+                    "status": machine.vdp.status,
+                },
+            )
             print(
                 f"Execução headless concluída: quadros={machine.vdp.frame_number}, "
                 f"instruções={steps}, PC=0x{machine.cpu.pc:04X}, "
@@ -84,11 +110,16 @@ def main(argv: Sequence[str] | None = None) -> None:
             return
 
         from sega_emulator.frontend.pygame_frontend import run
+
         run(machine)
     except (OSError, ValueError, RuntimeError, NotImplementedError) as exc:
-        logger.exception("Falha ao iniciar sessão", extra={
-            "event": "startup_failed", "rom_path": str(args.rom),
-        })
+        logger.exception(
+            "Falha ao iniciar sessão",
+            extra={
+                "event": "startup_failed",
+                "rom_path": str(args.rom),
+            },
+        )
         parser.error(str(exc))
 
 
