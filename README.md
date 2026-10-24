@@ -23,14 +23,14 @@ Na raiz do repositório:
 
 ```powershell
 py -3.14 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install -e ".[dev,qt,frontend]"
+.\\.venv\\Scripts\\python.exe -m pip install --upgrade pip
+.\\.venv\\Scripts\\python.exe -m pip install -e ".[dev,qt,frontend]"
 ```
 
 ## Iniciar a interface experimental
 
 ```powershell
-.\.venv\Scripts\python.exe -m sega_emulator
+.\\.venv\\Scripts\\python.exe -m sega_emulator
 ```
 
 A interface Qt abre sem ROM carregada. Use **Arquivo → Abrir ROM** para selecionar uma ROM local.
@@ -40,13 +40,13 @@ Menus disponíveis: **Arquivo**, **Emulação** (pausar/continuar e reiniciar), 
 Para iniciar diretamente uma ROM:
 
 ```powershell
-.\.venv\Scripts\python.exe -m sega_emulator "C:\caminho\para\jogo.sg"
+.\\.venv\\Scripts\\python.exe -m sega_emulator "C:\\caminho\\para\\jogo.sg"
 ```
 
 Também é possível apontar para um ZIP:
 
 ```powershell
-.\.venv\Scripts\python.exe -m sega_emulator "C:\caminho\para\jogo.zip"
+.\\.venv\\Scripts\\python.exe -m sega_emulator "C:\\caminho\\para\\jogo.zip"
 ```
 
 Se o ZIP contiver várias ROMs compatíveis, a interface permite selecionar explicitamente o membro. O conteúdo não é extraído automaticamente.
@@ -54,23 +54,33 @@ Se o ZIP contiver várias ROMs compatíveis, a interface permite selecionar expl
 Para usar o frontend Pygame:
 
 ```powershell
-.\.venv\Scripts\python.exe -m sega_emulator "C:\caminho\para\jogo.sg" --ui pygame
+.\\.venv\\Scripts\\python.exe -m sega_emulator "C:\\caminho\\para\\jogo.sg" --ui pygame
 ```
 
 ## Diagnóstico headless
 
 ```powershell
-.\.venv\Scripts\python.exe -m sega_emulator "C:\caminho\para\jogo.sg" --headless-frames 600
+.\\.venv\\Scripts\\python.exe -m sega_emulator "C:\\caminho\\para\\jogo.sg" --headless-frames 600
 ```
 
 O comando informa quadro, PC, instruções, T-states e SHA-256. Isso não prova, por si só, compatibilidade visual ou de jogabilidade.
 
-## Logs da sessão
+### Perfil detalhado por fase (novo)
 
-Por padrão, os arquivos ficam em `logs\session-<data-hora>.jsonl` e `.log`. Para escolher outro diretório:
+Gera uma medição-base sem instrumentação e um relatório JSON separado com tempos inclusivos de CPU, avanço do VDP, rasterização por linha, composição de sprites e escrita de pixels. O JSON inclui FPS-base, tempos por quadro instrumentado, contadores por modo de vídeo, estado dos registradores e SHA-256 do framebuffer por quadro.
 
 ```powershell
-.\.venv\Scripts\python.exe -m sega_emulator --log-dir "C:\temp\sega-logs"
+.\\.venv\\Scripts\\python.exe tools\\benchmarks\\runtime_diagnostics.py --rom "C:\\caminho\\para\\jogo.sg" --warmup-frames 30 --frames 120 --output runtime-diagnostic.json
+```
+
+**Importante:** o perfil instrumentado tem overhead. Os tempos de funções aninhadas são inclusivos; não devem ser somados entre si nem usados como FPS normal. O hash do framebuffer permite localizar o primeiro quadro divergente em execuções comparáveis, mas não determina sozinho se a imagem está correta. A ROM não é copiada para o relatório.
+
+## Logs da sessão
+
+Por padrão, os arquivos ficam em `logs\\session-<data-hora>.jsonl` e `.log`. Para escolher outro diretório:
+
+```powershell
+.\\.venv\\Scripts\\python.exe -m sega_emulator --log-dir "C:\\temp\\sega-logs"
 ```
 
 O JSONL é destinado à análise automatizada; o log textual é para leitura rápida. Os logs são artefatos locais de execução e não devem ser versionados.
@@ -78,9 +88,9 @@ O JSONL é destinado à análise automatizada; o log textual é para leitura rá
 ## Testes
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\python.exe -m ruff check .
-.\.venv\Scripts\python.exe -m ruff format --check .
+.\\.venv\\Scripts\\python.exe -m pytest -q
+.\\.venv\\Scripts\\python.exe -m ruff check .
+.\\.venv\\Scripts\\python.exe -m ruff format --check .
 git diff --check
 ```
 
