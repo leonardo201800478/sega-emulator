@@ -2846,6 +2846,7 @@ def test_indexed_memory_load_updates_wz_to_effective_address() -> None:
     assert cpu.b == 0xA5
     assert cpu.wz == 0xC012
 
+
 @pytest.mark.parametrize(
     ("opcode", "special_value", "expected_a"),
     [
