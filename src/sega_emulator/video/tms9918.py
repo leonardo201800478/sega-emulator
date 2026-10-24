@@ -11,6 +11,8 @@ SCREEN_HEIGHT = 192
 TSTATES_PER_LINE = 228
 LINES_PER_FRAME = 262
 VBLANK_LINE = 192
+VRAM_SIZE = 0x4000
+VRAM_MASK = VRAM_SIZE - 1
 
 PALETTE: tuple[tuple[int, int, int], ...] = (
     (0, 0, 0),
@@ -36,7 +38,7 @@ class TMS9918A:
     """VDP com VRAM, registradores, portas, status, sprites e renderização RGB."""
 
     def __init__(self) -> None:
-        self.vram = bytearray(0x4000)
+        self.vram = bytearray(VRAM_SIZE)
         self.registers = bytearray(8)
         self.status = 0x1F
         self.address = 0
@@ -54,14 +56,14 @@ class TMS9918A:
         return bool((self.status & 0x80) and (self.registers[1] & 0x20))
 
     def read_port(self, port: int) -> int:
-        port &= 0xFF
-        if port == 0xBE:
+        port = (port & 0xFF) & 0xC1
+        if port == 0x80:
             value = self.read_buffer
-            self.read_buffer = self.vram[self.address]
-            self.address = (self.address + 1) & 0x3FFF
+            self.read_buffer = self.vram[self.address & VRAM_MASK]
+            self.address = (self.address + 1) & VRAM_MASK
             self._control_first = None
             return value
-        if port == 0xBF:
+        if port == 0x81:
             value = self.status
             self.status = 0x1F
             self._control_first = None
@@ -69,14 +71,16 @@ class TMS9918A:
         return 0xFF
 
     def write_port(self, port: int, value: int) -> None:
-        port &= 0xFF
+        port = (port & 0xFF) & 0xC1
         value &= 0xFF
-        if port == 0xBE:
-            self.vram[self.address] = value
-            self.address = (self.address + 1) & 0x3FFF
+        if port == 0x80:
+            address = self.address & VRAM_MASK
+            self.vram[address] = value
+            self.read_buffer = value
+            self.address = (address + 1) & VRAM_MASK
             self._control_first = None
             return
-        if port != 0xBF:
+        if port != 0x81:
             return
         if self._control_first is None:
             self._control_first = value
@@ -88,11 +92,11 @@ class TMS9918A:
             self.registers[value & 0x07] = first
             return
 
-        self.address = (((value & 0x3F) << 8) | first) & 0x3FFF
+        self.address = (((value & 0x3F) << 8) | first) & VRAM_MASK
         if value & 0x40:
             return
-        self.read_buffer = self.vram[self.address]
-        self.address = (self.address + 1) & 0x3FFF
+        self.read_buffer = self.vram[self.address & VRAM_MASK]
+        self.address = (self.address + 1) & VRAM_MASK
 
     def advance(self, tstates: int) -> None:
         """Avança linhas e quadros; um quadro NTSC usa 228 T-states por linha."""
