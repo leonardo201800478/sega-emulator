@@ -29,8 +29,18 @@ jobs:
       - name: Configure
         shell: pwsh
         run: |
-          $llvmDir = Join-Path $env:ProgramFiles "LLVM\lib\cmake\llvm"
-          if (-not (Test-Path $llvmDir)) { throw "LLVM CMake package not found at $llvmDir" }
+          $searchRoots = @(
+            (Join-Path $env:ProgramFiles "LLVM"),
+            (Join-Path ${env:ProgramFiles(x86)} "LLVM")
+          ) | Where-Object { Test-Path $_ }
+          $config = Get-ChildItem -Path $searchRoots -Filter "LLVMConfig.cmake" -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $config) {
+            Write-Host "LLVM installation contents:"
+            foreach ($root in $searchRoots) { Get-ChildItem -Path $root -Force | Select-Object FullName }
+            throw "LLVMConfig.cmake was not found under: $($searchRoots -join ', ')"
+          }
+          $llvmDir = $config.DirectoryName
+          Write-Host "Found LLVM CMake package at $llvmDir"
           cmake -S native/llvm_jit -B build/llvm-jit -G Ninja "-DLLVM_DIR=$llvmDir"
       - name: Build
         run: cmake --build build/llvm-jit --config Release
