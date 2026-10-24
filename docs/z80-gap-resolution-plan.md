@@ -198,3 +198,14 @@ python -m sega_emulator.testing.z80_singlestep caminho\para\v1\00.json --limit 2
 ### Próximo gate
 
 Antes de tornar vetores externos obrigatórios no CI, fixar a revisão/licença do corpus e versionar um pequeno subconjunto aprovado com manifesto de proveniência. Começar por um arquivo de opcode efetivamente suportado, revisar as divergências reais e só então adicionar o lote determinístico ao workflow rápido. A bateria completa deve permanecer em execução prolongada/manual.
+
+
+## 6. Auditoria diferencial exploratória com corpus externo
+
+O workflow `.github/workflows/z80-singlestep-audit.yml` baixa, durante a execução, os arquivos `00.json`, `04.json`, `06.json`, `37.json`, `3f.json`, `76.json`, `c6.json`, `cb.json`, `dd.json`, `ed.json` e `fd.json` de [SingleStepTests/Z80](https://github.com/SingleStepTests/z80). O corpus não é copiado para o repositório do emulador; os arquivos e o relatório JSON são preservados como artefato da execução por 30 dias.
+
+O script `tools/audits/run_singlestep_corpus.py` exclui explicitamente vetores com o campo interno `p` diferente de zero, pois esse estado não é modelado pelo núcleo atual. Ele registra separadamente os casos executados, divergentes, não suportados e excluídos por esse estado. Divergências são resultados de auditoria e não interrompem a geração do relatório; falhas de download ou de formato interrompem o workflow.
+
+**Limitação essencial:** o teste compara estado arquitetural representado e RAM, mas não compara o array `cycles` do corpus. Portanto, mesmo um vetor aprovado não demonstra precisão ciclo a ciclo nem equivalência de barramento. O workflow é diagnóstico e não deve ser tratado como gate de conformidade até a revisão dos primeiros resultados e das limitações do modelo.
+
+A fonte declara licença MIT nos metadados públicos do repositório. O workflow registra a URL e a licença no artefato `SOURCE.txt`; os vetores continuam sendo obtidos da branch `main`, logo a execução não é imutável por revisão. Para tornar a auditoria reproduzível a longo prazo, o passo seguinte será fixar um commit upstream e registrar hashes SHA-256 dos arquivos obtidos.
