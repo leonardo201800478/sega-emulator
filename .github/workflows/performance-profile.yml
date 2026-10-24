@@ -64,6 +64,16 @@ jobs:
             --repeats 3 \
             --render-diagnostics \
             --profile super-uwol.pstats | tee super-uwol-benchmark.txt
+      - name: Diagnose runtime phases and frame output
+        shell: bash
+        timeout-minutes: 7
+        run: |
+          set -o pipefail
+          python tools/benchmarks/runtime_diagnostics.py \
+            --rom "$ROM_PATH" \
+            --warmup-frames 30 \
+            --frames 120 \
+            --output runtime-diagnostic.json | tee runtime-diagnostic.txt
       - name: Upload profiling reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -74,6 +84,8 @@ jobs:
             profile.pstats
             super-uwol-benchmark.txt
             super-uwol.pstats
+            runtime-diagnostic.txt
+            runtime-diagnostic.json
             super-uwol-archive-list.txt
             super-uwol-rom-sha256.txt
           if-no-files-found: warn
