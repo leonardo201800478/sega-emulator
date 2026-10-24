@@ -1,12 +1,11 @@
-"""Executa ZEXDOC/ZEXALL (exercitadores Z80 de Frank Cringle) no núcleo do projeto.
+"""Executa ZEXDOC/ZEXALL externos contra o núcleo Z80 do projeto.
 
-O arquivo .com é um artefato EXTERNO (GPL): baixe-o, não o versione.
-Mini-CP/M: carrega em 0100h, intercepta BDOS (CALL 0005h: funções 2 e 9) e
-termina em PC=0000h (warm boot). Cada teste imprime "OK" ou "ERROR ... CRC".
+O arquivo .COM é externo e distribuído separadamente sob GPL; não o versione.
+O harness prepara uma mini-CP/M e intercepta BDOS (CALL 0005h, funções 2 e 9).
 
-Uso:  python run_zex.py zexall.com [--max-seconds N] [--only 'subtexto ...']
-Em CPython o conjunto completo leva muitas horas; --max-seconds interrompe
-de forma limpa e informa quantos testes concluíram.
+Exemplos:
+  python run_zex.py zexall.com --max-seconds 300
+  python run_zex.py zexall.com --tests 0,1,2
 """
 
 from __future__ import annotations
@@ -27,7 +26,7 @@ class CpmMemory:
         return self.m[address]
 
     def write(self, address: int, value: int) -> None:
-        self.m[address] = value
+        self.m[address] = value & 0xFF
 
 
 class NullIO:
@@ -39,47 +38,56 @@ class NullIO:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("com", type=Path)
-    ap.add_argument("--max-seconds", type=float, default=0)
-    ap.add_argument(
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("com", type=Path)
+    parser.add_argument("--max-seconds", type=float, default=0)
+    parser.add_argument(
         "--tests",
         default="",
-        help="índices (0..66) separados por vírgula; remonta a tabela de testes "
-        "do ZEX (offset 003Ah no .com) para rodar só esses",
+        help="índices de teste (0..66), separados por vírgula",
     )
-    args = ap.parse_args()
+    args = parser.parse_args()
+    if args.max_seconds < 0:
+        parser.error("--max-seconds deve ser >= 0")
 
-    mem = CpmMemory()
     image = args.com.read_bytes()
-    mem.m[0x100 : 0x100 + len(image)] = image
+    if not image or len(image) > 0xFF00:
+        parser.error("arquivo .COM vazio ou grande demais para a TPA CP/M")
+    memory = CpmMemory()
+    memory.m[0x100 : 0x100 + len(image)] = image
     if args.tests:
+        try:
+            indices = [int(value) for value in args.tests.split(",")]
+        except ValueError:
+            parser.error("--tests aceita apenas índices inteiros separados por vírgula")
+        if not indices or any(index < 0 or index > 66 for index in indices):
+            parser.error("índices de --tests devem estar entre 0 e 66")
         table = 0x100 + 0x3A
         entries = [
-            mem.m[table + 2 * i] | (mem.m[table + 2 * i + 1] << 8) for i in range(67)
+            memory.m[table + 2 * index] | (memory.m[table + 2 * index + 1] << 8)
+            for index in range(67)
         ]
-        chosen = [entries[int(t)] for t in args.tests.split(",")]
-        for i, addr in enumerate(chosen + [0]):
-            mem.m[table + 2 * i] = addr & 0xFF
-            mem.m[table + 2 * i + 1] = addr >> 8
-    mem.m[0x0000] = 0x76  # HALT em warm boot (também detectado por PC==0)
-    mem.m[0x0005] = 0xC9  # RET: o BDOS é tratado no laço
-    mem.m[0x0006], mem.m[0x0007] = 0x00, 0xF0  # topo da TPA (SP inicial do ZEX)
-    cpu = Z80Cpu(mem, NullIO())
+        for index, address in enumerate([entries[i] for i in indices] + [0]):
+            memory.m[table + 2 * index] = address & 0xFF
+            memory.m[table + 2 * index + 1] = (address >> 8) & 0xFF
+
+    memory.m[0x0000] = 0x76
+    memory.m[0x0005] = 0xC9
+    memory.m[0x0006], memory.m[0x0007] = 0x00, 0xF0
+    cpu = Z80Cpu(memory, NullIO())
     cpu.pc = 0x100
     cpu.sp = 0xF000
     line: list[str] = []
     tests_done = 0
     failures = 0
-    start = time.perf_counter()
-    last_report = start
+    started = time.perf_counter()
     steps = 0
 
     def emit(text: str) -> None:
         nonlocal tests_done, failures
         sys.stdout.write(text)
         sys.stdout.flush()
-        if "OK" in text and text.endswith("\n"):
+        if "ERROR" not in text and text.rstrip().endswith("OK"):
             tests_done += 1
         if "ERROR" in text:
             failures += 1
@@ -87,35 +95,44 @@ def main() -> int:
     while True:
         pc = cpu._pc
         if pc == 0x0005:
-            c = cpu.c
-            if c == 2:
-                ch = chr(cpu.e)
-                line.append(ch)
-                if ch == "\n":
+            if cpu.c == 2:
+                character = chr(cpu.e)
+                line.append(character)
+                if character == "\n":
                     emit("".join(line))
                     line.clear()
-            elif c == 9:
+            elif cpu.c == 9:
                 address = cpu.de
-                out = []
-                while mem.m[address] != 0x24:  # '$'
-                    out.append(chr(mem.m[address]))
+                output: list[str] = []
+                while address < 0x10000 and memory.m[address] != 0x24:
+                    output.append(chr(memory.m[address]))
                     address += 1
-                text = "".join(out)
-                emit(text)
+                if address >= 0x10000:
+                    print(
+                        "\nERRO: string BDOS sem terminador '$'",
+                        file=sys.stderr,
+                    )
+                    return 2
+                emit("".join(output))
         elif pc == 0x0000 and steps:
             break
+
         cpu.step()
         steps += 1
         if args.max_seconds and (steps & 0xFFFF) == 0:
-            now = time.perf_counter()
-            if now - start > args.max_seconds:
+            elapsed = time.perf_counter() - started
+            if elapsed > args.max_seconds:
                 print(
-                    f"\n[interrompido após {now - start:.0f}s; {steps:,} instruções; "
+                    f"\n[interrompido após {elapsed:.0f}s; {steps:,} instruções; "
                     f"testes OK: {tests_done}; ERROR: {failures}]"
                 )
                 return 3
-    print(f"\n[concluído em {time.perf_counter() - start:.0f}s; {steps:,} instruções; "
-          f"testes OK: {tests_done}; ERROR: {failures}]")
+
+    elapsed = time.perf_counter() - started
+    print(
+        f"\n[concluído em {elapsed:.0f}s; {steps:,} instruções; "
+        f"testes OK: {tests_done}; ERROR: {failures}]"
+    )
     return 1 if failures else 0
 
 
