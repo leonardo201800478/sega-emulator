@@ -108,9 +108,9 @@ class TMS9918A:
                 self.scanline += 1
                 if self.scanline == VBLANK_LINE:
                     self.status |= 0x80
-                    self.framebuffer = self.render_frame()
                     self._frame_ready = True
                 if self.scanline >= LINES_PER_FRAME:
+                    self.framebuffer = self.render_frame()
                     self.scanline = 0
                     self.frame_number += 1
 
@@ -127,10 +127,10 @@ class TMS9918A:
             return bytes(pixels)
 
         r0, r1 = self.registers[0], self.registers[1]
-        mode = ((r1 >> 4) & 1) | ((r1 >> 2) & 2) | ((r0 >> 4) & 4)
+        mode = ((r1 >> 4) & 1) | ((r1 >> 2) & 2) | ((r0 >> 1) & 4)
         if mode == 1:
             self._render_text(pixels, backdrop)
-        elif mode == 6:
+        elif mode == 4:
             self._render_graphics_ii(pixels, backdrop)
         elif mode == 2:
             self._render_multicolor(pixels, backdrop)
