@@ -172,3 +172,29 @@ Foi acrescentado `test_reset_clears_cpu_state_and_pending_interrupts_without_cle
 - [ ] A documentação diferencia testes sintéticos existentes, vetores derivados de outro núcleo e resultados medidos em hardware real.
 
 **Conclusão do cruzamento:** SingleStepTests é a rota prática para criar o primeiro harness automatizado de estado final; raxoft/z80test é a validação independente posterior para documentadas, Q/SCF/CCF e MEMPTR. Nenhuma das duas substitui o trabalho futuro de traço de barramento para precisão temporal (GAP-07).
+
+## 5. Adaptador SingleStepTests implementado
+
+O módulo `src/sega_emulator/testing/z80_singlestep.py` implementa a primeira versão do adaptador para os vetores JSON de [SingleStepTests/z80](https://github.com/SingleStepTests/z80). Ele usa uma RAM plana de 64 KiB e um barramento de I/O de teste, sem alterar o mapa de memória físico do SG-1000.
+
+### Executar
+
+Depois de instalar o projeto e as dependências de desenvolvimento (`python -m pip install -e ".[dev]"`), baixe/clonе o corpus externo separadamente e execute, por exemplo:
+
+```powershell
+python -m sega_emulator.testing.z80_singlestep caminho\para\v1\00.json --limit 25 --report-json artifacts\z80-singlestep-00.json
+```
+
+`--limit 25` seleciona os primeiros 25 vetores de forma determinística; `--limit 0` executa todos os vetores do arquivo e `--start-index` permite reproduzir uma faixa. O adaptador não acessa a rede nem baixa dados automaticamente. O relatório inclui contagens e divergências por vetor.
+
+### Contrato e limites conhecidos
+
+- Compara os registradores representados pelo núcleo (`A/F`, registradores gerais, pares alternativos, `PC/SP`, `IX/IY`, `I/R`, `IFF1/IFF2`, modo de interrupção, atraso de `EI`, `Q` e `WZ`), além de RAM e transações de porta quando presentes no vetor.
+- Usa RAM plana de 64 KiB, pois os vetores descrevem um único passo de CPU e não o mapa físico da máquina SG-1000.
+- Não compara `cycles`/pinos: o núcleo ainda retorna T-states agregados e não oferece uma sequência de eventos de barramento ciclo a ciclo.
+- Se o vetor exigir estado não modelado ativo (por exemplo, `P` diferente de zero) ou um opcode não implementado, ele é marcado como `unsupported`, nunca como aprovado. O processo termina com código diferente de zero para divergências/erros e, por padrão, também para vetores não suportados; `--allow-unsupported` apenas permite continuar com código zero quando só houver itens não suportados.
+- O teste unitário usa vetores sintéticos mínimos para validar o adaptador e não conta como resultado de conformidade do corpus externo.
+
+### Próximo gate
+
+Antes de tornar vetores externos obrigatórios no CI, fixar a revisão/licença do corpus e versionar um pequeno subconjunto aprovado com manifesto de proveniência. Começar por um arquivo de opcode efetivamente suportado, revisar as divergências reais e só então adicionar o lote determinístico ao workflow rápido. A bateria completa deve permanecer em execução prolongada/manual.
