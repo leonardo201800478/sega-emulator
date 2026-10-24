@@ -3,11 +3,7 @@
 import pytest
 
 from sega_emulator.bus.memory import RAM_SIZE, SG1000Ram
-from sega_emulator.bus.memory_bus import (
-    ReadOnlyMemoryError,
-    SG1000MemoryBus,
-    UnmappedMemoryError,
-)
+from sega_emulator.bus.memory_bus import SG1000MemoryBus, UnmappedMemoryError
 
 
 @pytest.fixture
@@ -25,11 +21,10 @@ def test_bus_reads_cartridge_rom_without_modifying_it(ram: SG1000Ram) -> None:
     assert bus.read(0x0002) == 0x00
 
 
-def test_bus_rejects_writes_to_mapped_rom(ram: SG1000Ram) -> None:
+def test_bus_ignores_writes_to_mapped_rom(ram: SG1000Ram) -> None:
     bus = SG1000MemoryBus(ram, b"\x00\x01")
 
-    with pytest.raises(ReadOnlyMemoryError):
-        bus.write(0x0001, 0xFF)
+    bus.write(0x0001, 0xFF)
 
     assert bus.read(0x0001) == 0x01
 
@@ -102,3 +97,22 @@ def test_bus_rejects_non_integer_value(ram: SG1000Ram) -> None:
 
     with pytest.raises(TypeError):
         bus.write(0xC000, "255")  # type: ignore[arg-type]
+
+
+def test_bus_all_ram_mirror_addresses_share_storage(ram: SG1000Ram) -> None:
+    bus = SG1000MemoryBus(ram)
+
+    for address in range(0xC000, 0x10000):
+        value = ((address - 0xC000) * 19 + 0xA7) & 0xFF
+        bus.write(address, value)
+        assert bus.read(address) == value
+        assert bus.read(0xC000 | (address & 0x03FF)) == value
+
+
+def test_writing_rom_does_not_modify_ram(ram: SG1000Ram) -> None:
+    bus = SG1000MemoryBus(ram, b"\x00\x01\x02")
+
+    bus.write(0x0001, 0xCC)
+
+    assert bus.read(0x0001) == 0x01
+    assert bus.read(0xC001) == 0x00
