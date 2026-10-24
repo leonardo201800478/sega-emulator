@@ -72,6 +72,12 @@ class TMS9918A:
             self.vram[:] = bytes(VRAM_SIZE)
 
     @property
+    def _display_mode(self) -> int:
+        """Combinação dos bits M1/M2/M3 documentados nos registradores 1 e 0."""
+        r0, r1 = self.registers[0], self.registers[1]
+        return ((r1 >> 4) & 1) | ((r1 >> 2) & 2) | (((r0 >> 1) & 1) << 2)
+
+    @property
     def interrupt_pending(self) -> bool:
         """A saída INT fica ativa durante VBlank se R1 habilitar interrupções."""
         return bool((self.status & 0x80) and (self.registers[1] & 0x20))
@@ -130,6 +136,14 @@ class TMS9918A:
             remaining -= step
             if self._cycles_into_line == TSTATES_PER_LINE:
                 self._cycles_into_line = 0
+                if (
+                    self.scanline < SCREEN_HEIGHT
+                    and (self.registers[1] & 0x40)
+                    and self._display_mode != 1
+                ):
+                    self._render_sprite_line(
+                        None, self.scanline, update_status=True
+                    )
                 self.scanline += 1
                 if self.scanline == VBLANK_LINE:
                     self.status |= 0x80
@@ -151,8 +165,7 @@ class TMS9918A:
         if not (self.registers[1] & 0x40):
             return bytes(pixels)
 
-        r0, r1 = self.registers[0], self.registers[1]
-        mode = ((r1 >> 4) & 1) | ((r1 >> 2) & 2) | (((r0 >> 1) & 1) << 2)
+        mode = self._display_mode
         if mode == 1:
             self._render_text(pixels, backdrop)
         elif mode == 4:
@@ -162,7 +175,7 @@ class TMS9918A:
         else:
             self._render_graphics_i(pixels, backdrop)
         if mode != 1:
-            self._render_sprites(pixels)
+            self._render_sprites(pixels, update_status=False)
         return bytes(pixels)
 
     def _put_pixel(self, pixels: bytearray, x: int, y: int, color: int) -> None:
@@ -250,87 +263,96 @@ class TMS9918A:
                             left if local_x < 4 else right,
                         )
 
-    def _render_sprites(self, pixels: bytearray) -> None:
-        """Compõe sprites respeitando ordem, transparência, colisão e overflow.
-
-        O primeiro sprite da tabela tem prioridade visual. Pixels com padrão
-        ativo contam para colisão mesmo quando a cor do sprite é zero
-        (transparente). Só os quatro primeiros sprites ativos em cada linha
-        são desenhados; o quinto é registrado no status quando F=0.
-        """
+    def _sprite_line_active(
+        self, line: int
+    ) -> tuple[list[tuple[int, int, int, int, int]], int | None]:
+        """Retorna os quatro primeiros sprites ativos e o índice do quinto."""
         attr_base = (self.registers[5] & 0x7F) << 7
+        size = 16 if self.registers[1] & 0x02 else 8
+        scale = 2 if self.registers[1] & 0x01 else 1
+        active: list[tuple[int, int, int, int, int]] = []
+        fifth_index: int | None = None
+
+        for index in range(32):
+            offset = (attr_base + index * 4) & VRAM_MASK
+            raw_y, x, pattern_number, color_byte = self.vram[offset : offset + 4]
+            if raw_y == 0xD0:
+                break
+
+            y = (raw_y + 1) & 0xFF
+            if y >= 0xE0:
+                y -= 0x100
+            if not y <= line < y + size * scale:
+                continue
+
+            if len(active) == 4:
+                fifth_index = index
+                break
+            if color_byte & 0x80:
+                x -= 32
+            active.append((index, x, pattern_number, color_byte & 0x0F, y))
+
+        return active, fifth_index
+
+    def _render_sprite_line(
+        self,
+        pixels: bytearray | None,
+        line: int,
+        *,
+        update_status: bool,
+    ) -> None:
+        """Renderiza ou avalia uma linha, incluindo flags de colisão/overflow."""
+        active, fifth_index = self._sprite_line_active(line)
+        if (
+            update_status
+            and fifth_index is not None
+            and not (self.status & 0x80)
+            and not (self.status & 0x40)
+        ):
+            self.status = (self.status & 0xA0) | 0x40 | fifth_index
+
         pattern_base = (self.registers[6] & 0x07) << 11
         size = 16 if self.registers[1] & 0x02 else 8
         scale = 2 if self.registers[1] & 0x01 else 1
+        occupied: set[int] = set()
+        visible: set[int] = set()
 
-        # Processar por linha reflete o limite físico de quatro sprites por
-        # scanline e impede que um sprite posterior cubra um anterior.
-        for line in range(SCREEN_HEIGHT):
-            active: list[tuple[int, int, int, int, int]] = []
-            fifth_index: int | None = None
-
-            for index in range(32):
-                offset = (attr_base + index * 4) & VRAM_MASK
-                raw_y, x, pattern_number, color_byte = self.vram[offset : offset + 4]
-                if raw_y == 0xD0:
-                    break
-
-                y = (raw_y + 1) & 0xFF
-                if y >= 0xE0:
-                    y -= 0x100
-                height = size * scale
-                if not y <= line < y + height:
+        for _, x, pattern_number, color, sprite_y in active:
+            source_y = (line - sprite_y) // scale
+            for source_x in range(size):
+                if size == 16:
+                    tile = (
+                        (pattern_number & 0xFC)
+                        + (source_y // 8) * 2
+                        + source_x // 8
+                    )
+                else:
+                    tile = pattern_number
+                address = pattern_base + tile * 8 + (source_y & 7)
+                pattern = self.vram[address & VRAM_MASK]
+                if not (pattern & (0x80 >> (source_x & 7))):
                     continue
 
-                if len(active) == 4:
-                    fifth_index = index
-                    break
-                color = color_byte & 0x0F
-                if color_byte & 0x80:
-                    x -= 32
-                active.append((index, x, pattern_number, color, y))
-
-            # O overflow é um latch independente da colisão. O manual indica
-            # que o fifth-sprite flag não é gerado enquanto F (VBlank) está 1.
-            if (
-                fifth_index is not None
-                and not (self.status & 0x80)
-                and not (self.status & 0x40)
-            ):
-                self.status = (self.status & 0xA0) | 0x40 | fifth_index
-
-            occupied: set[int] = set()
-            visible: set[int] = set()
-            for _, x, pattern_number, color, sprite_y in active:
-                source_y = (line - sprite_y) // scale
-
-                for source_x in range(size):
-                    if size == 16:
-                        tile = (
-                            (pattern_number & 0xFC)
-                            + (source_y // 8) * 2
-                            + source_x // 8
-                        )
-                    else:
-                        tile = pattern_number
-                    address = pattern_base + tile * 8 + (source_y & 7)
-                    pattern = self.vram[address & VRAM_MASK]
-                    if not (pattern & (0x80 >> (source_x & 7))):
+                for dx in range(scale):
+                    px = x + source_x * scale + dx
+                    if not 0 <= px < SCREEN_WIDTH:
                         continue
-
-                    for dx in range(scale):
-                        px = x + source_x * scale + dx
-                        if not 0 <= px < SCREEN_WIDTH:
-                            continue
-                        key = line * SCREEN_WIDTH + px
-                        if key in occupied:
+                    if px in occupied:
+                        if update_status:
                             self.status |= 0x20
-                        else:
-                            occupied.add(key)
+                    else:
+                        occupied.add(px)
+                    if pixels is not None and color and px not in visible:
+                        self._put_pixel(pixels, px, line, color)
+                        visible.add(px)
 
-                        # Transparent color still collides, but does not hide
-                        # sprites behind it. The first nontransparent sprite
-                        # owns the visible pixel.
-                        if color and key not in visible:
-                            self._put_pixel(pixels, px, line, color)
-                            visible.add(key)
+    def _render_sprites(
+        self, pixels: bytearray, *, update_status: bool = True
+    ) -> None:
+        """Compõe sprites em ordem de prioridade, linha a linha.
+
+        A reconstrução da imagem não deve repetir eventos de status já
+        produzidos pelo relógio raster.
+        """
+        for line in range(SCREEN_HEIGHT):
+            self._render_sprite_line(pixels, line, update_status=update_status)
