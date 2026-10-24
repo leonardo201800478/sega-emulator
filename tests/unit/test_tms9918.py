@@ -145,7 +145,15 @@ def test_vdp_status_read_cancels_partial_control_command() -> None:
     assert vdp.registers[0] == 0
 
 
-def _configure_sprite(vdp: TMS9918A, index: int, *, y: int, x: int, pattern: int, color: int) -> None:
+def _configure_sprite(
+    vdp: TMS9918A,
+    index: int,
+    *,
+    y: int,
+    x: int,
+    pattern: int,
+    color: int,
+) -> None:
     """Configura uma entrada da tabela de atributos de sprites."""
     base = (vdp.registers[5] & 0x7F) << 7
     offset = base + index * 4
