@@ -85,3 +85,29 @@ def test_machine_writes_vdp_through_aliased_data_port() -> None:
     machine.write_port(0x009F, 0x40)
     machine.write_port(0x009E, 0xBC)
     assert machine.vdp.vram[0x0045] == 0xBC
+
+
+
+def test_machine_routes_psg_writes_from_sg1000_port_range() -> None:
+    machine = SG1000Machine(bytes((0x00,)))
+
+    machine.write_port(0x007F, 0x90)
+    machine.write_port(0x0040, 0x85)
+    machine.write_port(0x0040, 0x12)
+
+    assert machine.psg.attenuations[0] == 0
+    assert machine.psg.tone_periods[0] == 0x125
+    assert machine.vdp.registers[0] == 0
+
+
+def test_machine_clocks_psg_and_produces_frame_audio() -> None:
+    machine = SG1000Machine(bytes((0xC3, 0x00, 0x00)))
+    machine.write_port(0x007F, 0x90)
+    machine.write_port(0x007F, 0xFE)
+    machine.write_port(0x007F, 0x0F)
+    machine.run_frame()
+
+    samples = machine.drain_audio_samples()
+    assert 700 <= len(samples) <= 760
+    assert all(-1.0 <= sample <= 1.0 for sample in samples)
+    assert machine.drain_audio_samples() == []
