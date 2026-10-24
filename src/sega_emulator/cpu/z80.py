@@ -1164,7 +1164,7 @@ class Z80Cpu:
                 self._write_port(port, self.a)
             else:
                 self.a = self._read_port(port)
-            self.wz = (port + 1) & 0xFFFF
+            self.wz = (port & 0xFF00) | ((port_low + 1) & 0xFF)
             cycles = 11
         elif opcode == 0xCB:  # família CB
             cycles = self._execute_cb(self._fetch_opcode_byte())
