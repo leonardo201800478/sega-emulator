@@ -1,4 +1,5 @@
 """Testes da ferramenta de diagnóstico de runtime do SG-1000."""
+
 from __future__ import annotations
 
 import json
