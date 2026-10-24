@@ -67,8 +67,24 @@ def program_for(vector: int, rng: random.Random) -> tuple[str, bytes]:
     return f"random_{vector:08X}", bytes(rng.randrange(256) for _ in range(16))
 
 
-def execute_case(case_id: str, program: bytes) -> tuple[str, dict[str, Any]]:
+def execute_case(
+    case_id: str, program: bytes, case_seed: int
+) -> tuple[str, dict[str, Any]]:
     cpu = make_cpu(program)
+    state_rng = random.Random(case_seed)
+    cpu.af = state_rng.randrange(0x10000)
+    cpu.bc = state_rng.randrange(0x10000)
+    cpu.de = state_rng.randrange(0x10000)
+    cpu.hl = state_rng.randrange(0x10000)
+    cpu.ix = state_rng.randrange(0x10000)
+    cpu.iy = state_rng.randrange(0x10000)
+    cpu.sp = state_rng.randrange(0x10000)
+    cpu.i = state_rng.randrange(0x100)
+    cpu.r = state_rng.randrange(0x100)
+    cpu.wz = state_rng.randrange(0x10000)
+    cpu.q = state_rng.randrange(0x100)
+    cpu.iff1 = bool(state_rng.randrange(2))
+    cpu.iff2 = bool(state_rng.randrange(2))
     before = initial_state(cpu)
     try:
         cycles = cpu.step()
@@ -115,6 +131,7 @@ def main() -> int:
     findings: list[dict[str, Any]] = []
     executed_vectors: set[str] = set()
     vector = 0
+    attempts = 0
     started_wall = time.time()
     last_checkpoint = time.monotonic()
     total = 256 + 4 * 256
@@ -126,7 +143,7 @@ def main() -> int:
             "requested_hours": args.hours,
             "started_epoch": started_wall,
             "elapsed_seconds": round(time.time() - started_wall, 3),
-            "cases": sum(counts.values()),
+            "cases": attempts,
             "counts": dict(counts),
             "distinct_vectors": len(executed_vectors),
             "findings_retained": len(findings),
@@ -146,7 +163,9 @@ def main() -> int:
         else:
             case_id = f"random_{vector:08X}"
             program = bytes(rng.randrange(256) for _ in range(16))
-        status, result = execute_case(case_id, program)
+        case_seed = args.seed ^ vector
+        status, result = execute_case(case_id, program, case_seed)
+        attempts += 1
         counts[status] += 1
         executed_vectors.add(case_id if vector < total else "random_stream")
         if status != "executed" and len(findings) < 2000:
@@ -154,7 +173,7 @@ def main() -> int:
 
         # Repeat each deterministic vector from the same initial conditions.
         if status == "executed":
-            repeat_status, repeat = execute_case(case_id, program)
+            repeat_status, repeat = execute_case(case_id, program, case_seed)
             counts["determinism_checks"] += 1
             if repeat_status != "executed" or result["after"] != repeat["after"] or result["cycles"] != repeat["cycles"]:
                 counts["determinism_divergence"] += 1
