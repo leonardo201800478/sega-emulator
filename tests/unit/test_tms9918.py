@@ -36,9 +36,9 @@ def test_vdp_read_port_uses_buffered_read_and_wraps() -> None:
     vdp.vram[0x3FFF] = 0xA5
     vdp.vram[0] = 0x5A
     _set_address(vdp, 0x3FFF, write=False)
-    assert vdp.read_port(0xBE) == 0
     assert vdp.read_port(0xBE) == 0xA5
     assert vdp.read_port(0xBE) == 0x5A
+    assert vdp.read_port(0xBE) == 0
 
 
 def test_vdp_register_write_and_status_read_clear_flags() -> None:
