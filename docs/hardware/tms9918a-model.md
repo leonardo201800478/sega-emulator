@@ -54,9 +54,10 @@ independente que justifique o comportamento específico.
 
 O relógio atual avança por T-states nominais do Z80, usando 228 T-states por
 linha e 262 linhas por quadro na configuração padrão. O flag F é levantado na
-fronteira da linha 192. A avaliação de colisão/overflow de sprites é executada
-nas fronteiras de linha, incluindo linhas fora da área visível, mas a composição
-de fundo e sprites ainda ocorre ao reconstruir o quadro.
+fronteira da linha 192. A composição de fundo e sprites acontece na fronteira de cada linha e usa o
+estado de registradores/VRAM naquele instante. Os pixels de linhas já emitidas
+não são retroativamente alterados por escritas posteriores. A imagem completa
+é publicada ao fim do quadro.
 
 Isso melhora o instante de atualização dos flags, mas **não** simula fetches de
 VRAM por dot, arbitragem, contenção, latência de barramento, pipeline de pixels
@@ -84,7 +85,7 @@ ou variações analógicas. Não anunciar precisão ciclo a ciclo.
       resolução, documentando diferenças de captura e paleta.
 
 ### Fase 3 — temporização raster
-- [ ] Renderizar linhas incrementalmente e preservar pixels já emitidos.
+- [x] Renderizar linhas incrementalmente e preservar pixels já emitidos.
 - [ ] Modelar eventos de VBlank, status e interrupção no instante correto.
 - [ ] Determinar temporizações por região/revisão com evidência; não inferir
       PAL/NTSC somente a partir de frequência de apresentação.
