@@ -60,7 +60,9 @@ def test_cpu_program_can_configure_vdp_through_io_ports() -> None:
 def test_generated_homebrew_rom_initializes_vdp_and_renders_pattern() -> None:
     machine = SG1000Machine(build_demo_rom())
 
-    machine.run_frame()
+    # The first frame includes startup-time VRAM initialization; the second
+    # frame validates the stable raster output after the display is configured.
+    machine.run_frames(2)
 
     assert machine.vdp.registers[1] == 0xC0
     assert machine.vdp.vram[0x3800] == 1
