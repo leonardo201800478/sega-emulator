@@ -37,7 +37,15 @@ PALETTE: tuple[tuple[int, int, int], ...] = (
 class TMS9918A:
     """VDP com VRAM, registradores, portas, status, sprites e renderização RGB."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, sprite_limit_enabled: bool = True) -> None:
+        """Inicializa o VDP.
+
+        ``sprite_limit_enabled=True`` reproduz o limite de quatro sprites por
+        linha do TMS9918A. Defina ``False`` para depuração/compatibilidade e
+        desenhar todos os sprites intersectando cada linha; o flag de overflow
+        continua refletindo o comportamento do hardware.
+        """
+        self.sprite_limit_enabled = sprite_limit_enabled
         self.vram = bytearray(VRAM_SIZE)
         self.registers = bytearray(8)
         self.status = 0x1F
@@ -275,16 +283,19 @@ class TMS9918A:
                 overflow_already_set = True
 
             occupied: set[int] = set()
-            for _index, y, x, pattern_number, color in line_sprites[:4]:
+            visible_sprites = line_sprites[:4] if self.sprite_limit_enabled else line_sprites
+            for _index, y, x, pattern_number, color in visible_sprites:
                 if color == 0:
                     continue
                 source_y = (line - y) // scale
                 for source_x in range(size):
                     if size == 16:
+                        # O TMS9918A organiza os quatro padrões como N, N+2
+                        # na linha superior e N+1, N+3 na linha inferior.
                         tile = (
                             (pattern_number & 0xFC)
-                            + (source_y // 8) * 2
-                            + source_x // 8
+                            + (source_x // 8) * 2
+                            + (source_y // 8)
                         )
                     else:
                         tile = pattern_number
