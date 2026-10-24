@@ -87,7 +87,7 @@ def test_graphics_i_pattern_and_display_enable_render_foreground() -> None:
 def test_graphics_ii_mode_uses_r0_bit_one_and_r1_bit_three() -> None:
     vdp = TMS9918A()
     _write_register(vdp, 0, 0x02)
-    _write_register(vdp, 1, 0xC8)
+    _write_register(vdp, 1, 0xC0)
     _write_register(vdp, 2, 0x0E)
     _write_register(vdp, 3, 0xFF)
     _write_register(vdp, 4, 0x04)
