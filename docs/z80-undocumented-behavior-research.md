@@ -180,3 +180,70 @@ Para este projeto, a opção segura é **reimplementar a partir de especificaç�
 - Não foram executados ZEXALL, testes de hardware ou comparação diferencial.
 - Os detalhes de Q, WZ/MEMPTR, bits X/Y, aliases ED e diferenças NMOS/CMOS continuam pendentes de confirmação por suíte independente e definição da variante-alvo.
 - Esta documentação propõe trabalho futuro; não afirma que a CPU do nosso repositório tenha sido alterada.
+
+
+---
+
+## Atualização experimental — 23/10/2026
+
+A pesquisa de comportamentos não documentados passou a orientar uma auditoria diferencial concreta. O lote anterior de `SingleStepTests/z80 v1` reportou divergências concentradas em `BIT b,(HL)`, `SCF/CCF` e `DAA`; os dados e a revisão exata estão registrados em [Auditoria diferencial Z80 — 23/10/2026](z80-differential-audit-2026-10-23.md).
+
+### Hipóteses convertidas em mudanças testáveis
+
+- **WZ/MEMPTR e BIT (HL):** o código de trabalho usa o byte alto de WZ para F3/F5 em BIT sobre memória. A atualização geral de WZ por instrução continua incompleta.
+- **Q e SCF/CCF:** o código de trabalho condiciona F3/F5 ao Q anterior e atualiza Q em alguns caminhos. Ainda falta demonstrar o ciclo de vida completo de Q, em especial instruções prefixadas DD/FD e instruções que preservam flags.
+- **DAA:** foi corrigida a seleção das correções para incluir o caso de subtração reproduzido pelo corpus; o resultado esperado foi transformado em teste de regressão.
+
+Essas mudanças estão na branch `fix/z80-single-step-audit`, no [PR #14](https://github.com/leonardo201800478/sega-emulator/pull/14). Elas são **hipóteses implementadas para validação**, não evidência de comportamento integralmente correto.
+
+### Evidência e cautelas
+
+O caso DAA reportado com A=`F3h`, F=`4Eh` espera A=`93h`, F=`87h`. A família BIT (HL) sugere dependência de estado auxiliar WZ/MEMPTR. Os casos SCF/CCF sugerem que os bits F3/F5 não podem ser tratados apenas como uma cópia direta dos bits do acumulador em todos os contextos.
+
+Antes de encerrar a investigação, comparar os resultados corrigidos com o corpus, conferir a representação dos estados iniciais no harness e revisar as diferenças por variante de Z80. Não extrapolar um caso single-step para atualização completa de estado entre instruções nem para precisão ciclo a ciclo.
+
+
+---
+
+## Aplicação incremental no núcleo Z80 — 23/10/2026
+
+Esta seção registra mudanças em avaliação na branch `fix/z80-single-step-audit`. O estado de validação deve ser confirmado pela CI e por uma nova auditoria diferencial antes de considerar as famílias encerradas.
+
+### Fontes e nível de confiança
+
+- [redcode/Z80 — MEMPTR](https://github.com/redcode/Z80/wiki/MEMPTR): tabela de instruções que atualizam WZ/MEMPTR e seus valores. É uma referência de engenharia reversa, não documentação oficial da Zilog.
+- [Zilog — Z80 CPU User Manual](https://www.zilog.com/docs/z80/um0080.pdf): referência primária para a semântica documentada e ciclos nominais, mas não especifica integralmente WZ/Q.
+- [Patrik Rak — z80test](https://github.com/raxoft/z80test): inclui testes específicos de flags, `SCF/CCF` e `MEMPTR`; deve ser usado como verificação externa adicional.
+- [Z80 from Schematics — verification](https://github.com/rejunity/z80-from-schematics/blob/main/docs/verification.md): combina exercitadores, comparação entre modelos e verificação temporal; seus resultados e limitações devem ser lidos caso a caso.
+
+### Alterações de implementação em andamento
+
+- O latch `Q` passou a ter uma atualização centralizada nas escritas internas de `F`. O início de uma instrução limpa Q; escritas de flags atualizam Q para o novo F. O valor anterior é preservado durante a decodificação aninhada de prefixos DD/FD para que SCF/CCF possam consultar o estado da instrução anterior.
+- `WZ/MEMPTR` recebe atualizações explícitas em operações de acesso indireto e absoluto à memória, operações de 16 bits, saltos/chamadas/retornos, I/O imediato, acessos indexados, parte das instruções ED e operações de bloco.
+- Testes direcionados foram adicionados para o ciclo de vida de Q e para valores WZ em acessos indiretos, acessos absolutos, ADD HL, JP, LD HL,(nn) e LD A,(IX+d).
+
+### Limites ainda abertos
+
+1. A nova CI deve confirmar formato, lint e suíte completa; os resultados de CI anteriores falharam antes de executar os testes por problemas de formatação/lint.
+2. O comportamento de Q/WZ ainda precisa de comparação diferencial pós-correção e de testes externos `z80test`/ZEXALL.
+3. A atualização de WZ deve ser revisada instrução por instrução, incluindo todos os caminhos de interrupção, prefixos, instruções de bloco e estados de repetição. A lista implementada não equivale a uma prova de cobertura total.
+4. O corpus SingleStepTests atual não deve ser tratado como oráculo independente para cada comportamento: a proveniência dos casos precisa ser considerada.
+5. A temporização continua agregada por instrução; a precisão ciclo a ciclo exige um modelo separado de micro-operações e eventos de barramento.
+
+**Critério para fechar esta frente:** CI verde no SHA atual, testes dirigidos aprovados, nova auditoria diferencial com artefatos preservados e classificação das divergências remanescentes por instrução e variante física.
+
+
+### ED-NOP: comportamento de bytes ED sem operação atribuída
+
+As referências técnicas comunitárias [CPCWiki — Z80 undocumented opcodes](https://www.cpcwiki.eu/index.php/Z80_-_undocumented_opcodes), [Z80.info — Z80 reference](https://www.worldofspectrum.net/faq/reference/z80reference.htm) e [Decoding Z80 Opcodes](https://zxe.io/depot/documents/technical/Dinu%2C%20Cristian/Decoding%20Z80%20Opcodes%20rev2%20%28revised%29%20%282018-03%29%28Dinu%2C%20Cristian%29%28en%29%5B%21%5D.htm) concordam que bytes ED sem operação atribuída no Z80 clássico se comportam como ED-NOP: não alteram o estado arquitetural, consomem 8 T-states e realizam dois fetches M1, incrementando R duas vezes. Os aliases conhecidos de NEG, RETN/RETI, IM, IN/OUT e outras instruções são tratados explicitamente antes do fallback.
+
+O manual da Zilog documenta as instruções oficiais, mas não constitui, por si só, prova desses opcodes não documentados. Por isso a decisão é registrada como comportamento observado/documentado por engenharia reversa para o Z80 clássico, a validar na variante física alvo do SG-1000.
+
+Na branch de correção, o fallback ED agora retorna 8 T-states em vez de lançar `UnsupportedOpcodeError`. Os testes verificam ED-NOPs representativos e classificam todos os 256 segundos bytes ED como handler conhecido ou ED-NOP; a CI da revisão mais recente ainda precisa confirmar esta atualização de testes.
+
+
+### Resultado diferencial e fórmula candidata de SCF/CCF — 24/10/2026
+
+A auditoria direcionada R2 encontrou 433 divergências em `SCF/CCF` sem prefixo, todas nos campos `F` e `Q`. A regra que agora está sendo testada calcula os bits não documentados por `((Q XOR F) OR A) & 0x28`. Essa relação também é descrita em [Z80_XCF_Flavor](https://github.com/redcode/Z80_XCF_Flavor), que investiga o comportamento de X/Y de SCF/CCF.
+
+A fórmula foi aplicada ao núcleo e as expectativas de regressão foram atualizadas, mas ainda é uma correção candidata: pytest/Ruff precisam ser executados no commit novo. O lote R2 antecede essa alteração e não serve como evidência de aprovação da fórmula atual. O corpus SingleStepTests é útil para detectar divergências, mas não substitui validação independente/hardware quando houver dúvidas sobre a referência.
