@@ -257,7 +257,7 @@ class TMS9918A:
 
             # Y é um byte assinado com o ajuste de uma linha do TMS9918A.
             # Valores D1h..FFh colocam o sprite parcialmente/acima da tela.
-            y = ((raw_y + 1) & 0xFF)
+            y = (raw_y + 1) & 0xFF
             if y >= 0xD0:
                 y -= 0x100
             color = color_byte & 0x0F
@@ -267,9 +267,7 @@ class TMS9918A:
 
         for line in range(SCREEN_HEIGHT):
             line_sprites = [
-                sprite
-                for sprite in sprites
-                if sprite[1] <= line < sprite[1] + height
+                sprite for sprite in sprites if sprite[1] <= line < sprite[1] + height
             ]
             if len(line_sprites) > 4 and not overflow_already_set:
                 # Os cinco bits inferiores registram o índice da quinta sprite.
