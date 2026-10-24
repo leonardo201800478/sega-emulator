@@ -29,7 +29,7 @@ def test_overlapping_opaque_sprites_set_collision_flag_and_keep_first_sprite() -
 
     frame = vdp.render_frame()
     assert vdp.status & 0x20
-    assert frame[(20 * 3) : (20 * 3 + 3)] == bytes((212, 82, 77))
+    assert frame[(20 * 3) : (20 * 3 + 3)] == bytes((33, 200, 66))
 
 
 def test_fifth_sprite_on_a_scanline_sets_overflow_and_sprite_index() -> None:
