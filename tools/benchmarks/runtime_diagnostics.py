@@ -13,7 +13,8 @@ import statistics
 import time
 from collections import Counter
 from pathlib import Path
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from sega_emulator.machine.sg1000 import SG1000Machine
 
@@ -48,6 +49,7 @@ def timed_call(
     original: Callable[..., Any], key: str, metrics: dict[str, Any]
 ) -> Callable[..., Any]:
     """Cronometra uma chamada sem alterar argumentos, retorno ou exceções."""
+
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         started = time.perf_counter_ns()
         metrics["calls"][key] += 1
@@ -75,7 +77,9 @@ def instrument(machine: SG1000Machine, metrics: dict[str, Any]) -> None:
         metrics["scanlines"][f"{mode}:{'enabled' if enabled else 'disabled'}"] += 1
         original_scanline(y, update_sprite_status=update_sprite_status)
 
-    vdp._render_scanline = timed_call(scanline_wrapper, "vdp._render_scanline", metrics)
+    vdp._render_scanline = timed_call(
+        scanline_wrapper, "vdp._render_scanline", metrics
+    )
 
     vdp._render_sprite_line = timed_call(
         vdp._render_sprite_line, "vdp._render_sprite_line", metrics
@@ -111,7 +115,8 @@ def profile_frames(
                 )
         elapsed_ns = time.perf_counter_ns() - start_ns
         framebuffer = machine.vdp.framebuffer
-        records.append({
+        records.append(
+            {
             "frame": machine.vdp.frame_number,
             "elapsed_ms_instrumented": round(elapsed_ns / 1_000_000, 3),
             "instructions": machine.total_instructions - start_instructions,
@@ -124,8 +129,9 @@ def profile_frames(
             "display_enabled": bool(machine.vdp.registers[1] & 0x40),
             "vdp_registers_hex": bytes(machine.vdp.registers).hex(),
             "vdp_status_hex": f"{machine.vdp.status:02X}",
-            "framebuffer_sha256": hashlib.sha256(framebuffer).hexdigest(),
-        })
+                "framebuffer_sha256": hashlib.sha256(framebuffer).hexdigest(),
+            }
+        )
     return records
 
 
@@ -138,7 +144,9 @@ def main() -> int:
     parser.add_argument("--output", type=Path, default=Path("runtime-diagnostic.json"))
     args = parser.parse_args()
     if args.frames < 1 or args.warmup_frames < 0 or args.max_steps_per_frame < 1:
-        parser.error("frames/max-steps devem ser positivos; warmup não pode ser negativo")
+        parser.error(
+            "frames/max-steps devem ser positivos; warmup não pode ser negativo"
+        )
 
     try:
         rom = args.rom.read_bytes()
