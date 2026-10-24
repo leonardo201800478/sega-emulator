@@ -140,8 +140,10 @@ class TMS9918A:
                 self._cycles_into_line = 0
                 completed_line = self.scanline
                 if completed_line < SCREEN_HEIGHT:
-                    self._render_scanline(completed_line)
-                if (
+                    self._render_scanline(
+                        completed_line, update_sprite_status=True
+                    )
+                elif (
                     completed_line < LINES_PER_FRAME
                     and (self.registers[1] & 0x40)
                     and self._display_mode != 1
@@ -164,7 +166,9 @@ class TMS9918A:
         self._frame_ready = False
         return ready
 
-    def _render_scanline(self, y: int) -> None:
+    def _render_scanline(
+        self, y: int, *, update_sprite_status: bool = False
+    ) -> None:
         """Renderiza uma única linha com o estado de registradores/VRAM atual."""
         pixels = self._working_framebuffer
         backdrop = self.registers[7] & 0x0F
@@ -252,7 +256,9 @@ class TMS9918A:
                     )
 
         if mode != 1:
-            self._render_sprite_line(pixels, y, update_status=False)
+            self._render_sprite_line(
+                pixels, y, update_status=update_sprite_status
+            )
 
     def render_frame(self) -> bytes:
         """Renderiza 256x192 RGB24 em Graphics I/II, texto ou multicolor."""
