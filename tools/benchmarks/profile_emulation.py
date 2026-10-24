@@ -127,7 +127,7 @@ def main() -> None:
         profiler.disable()
         profiler.dump_stats(args.profile)
         output = io.StringIO()
-        (\n            pstats.Stats(profiler, stream=output)\n            .strip_dirs()\n            .sort_stats("cumtime")\n            .print_stats(30)\n        )
+        pstats.Stats(profiler, stream=output).strip_dirs().sort_stats("cumtime").print_stats(30)
         print("\nTop 30 functions by cumulative time:")
         print(output.getvalue())
 
