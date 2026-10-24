@@ -280,8 +280,11 @@ class TMS9918A:
         for tile_y in range(24):
             for tile_x in range(32):
                 name = self.vram[(name_base + tile_y * 32 + tile_x) & 0x3FFF]
+                # Each 8x8 name selects a 4-colour block. The tile row chooses
+                # one of four pairs of bytes; the pattern row chooses its
+                # upper or lower 4x4 half. This repeats every four tile rows.
                 for local_y in range(8):
-                    pattern_row = local_y >> 2
+                    pattern_row = ((tile_y & 0x03) << 1) | (local_y >> 2)
                     pattern = self.vram[
                         (pattern_base + name * 8 + pattern_row) & 0x3FFF
                     ]
