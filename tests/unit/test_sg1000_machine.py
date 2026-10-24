@@ -1,9 +1,9 @@
 """Testes de integração iniciais da máquina SG-1000."""
 
 import pytest
+from tools.create_sg1000_demo_rom import build_demo_rom
 
 from sega_emulator.machine.sg1000 import SG1000Machine
-from tools.create_sg1000_demo_rom import build_demo_rom
 
 
 def test_machine_executes_cartridge_code_and_advances_a_frame() -> None:
