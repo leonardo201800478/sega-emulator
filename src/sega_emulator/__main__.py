@@ -26,7 +26,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument(
         "--headless-frames",
         type=int,
-        default=0,
+        default=None,
         metavar="N",
         help="executa N quadros sem abrir janela (para diagnóstico)",
     )
@@ -39,7 +39,7 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     try:
         machine = SG1000Machine(rom)
-        if args.headless_frames:
+        if args.headless_frames is not None:
             if args.headless_frames < 0:
                 parser.error("--headless-frames não pode ser negativo")
             steps = machine.run_frames(args.headless_frames)
