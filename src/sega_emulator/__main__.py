@@ -3,57 +3,88 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from sega_emulator.diagnostics import configure_session_logging
 from sega_emulator.machine.sg1000 import SG1000Machine
+from sega_emulator.rom_loader import load_rom
 
 
 def main(argv: Sequence[str] | None = None) -> None:
-    """Carrega uma ROM e abre o frontend, ou executa em modo headless."""
+    """Carrega uma ROM e abre a interface, ou executa em modo headless."""
     arguments = list(sys.argv[1:] if argv is None else argv)
-    if not arguments:
-        print(
-            "Sega Emulator — SG-1000 ainda em desenvolvimento. "
-            "Informe uma ROM para iniciar: python -m sega_emulator <jogo.rom> "
-            "[--headless-frames N]"
-        )
-        return
-
     parser = argparse.ArgumentParser(description="Emulador experimental Sega SG-1000")
-    parser.add_argument("rom", type=Path, help="caminho para uma ROM SG-1000")
     parser.add_argument(
-        "--headless-frames",
-        type=int,
-        default=None,
-        metavar="N",
+        "rom", type=Path, nargs="?",
+        help="caminho para ROM .sg ou arquivo .zip contendo ROM",
+    )
+    parser.add_argument(
+        "--headless-frames", type=int, default=None, metavar="N",
         help="executa N quadros sem abrir janela (para diagnóstico)",
     )
+    parser.add_argument(
+        "--ui", choices=("qt", "pygame"), default="qt",
+        help="frontend gráfico (padrão: qt)",
+    )
+    parser.add_argument(
+        "--log-dir", type=Path, default=Path("logs"),
+        help="diretório de logs da sessão (padrão: ./logs)",
+    )
     args = parser.parse_args(arguments)
+    configure_session_logging(args.log_dir)
+    logger = logging.getLogger(__name__)
+
+    if args.rom is None:
+        if args.headless_frames is not None:
+            parser.error("informe uma ROM quando usar --headless-frames")
+        try:
+            from sega_emulator.frontend.qt_frontend import run
+            run()
+        except (RuntimeError, ImportError) as exc:
+            parser.error(str(exc))
+        return
 
     try:
-        rom = args.rom.read_bytes()
-    except OSError as exc:
-        parser.error(f"não foi possível ler a ROM: {exc}")
-
-    try:
-        machine = SG1000Machine(rom)
+        loaded = load_rom(args.rom)
+        logger.info("ROM carregada", extra={
+            "event": "rom_loaded", "rom_path": str(loaded.source_path),
+            "rom_member": loaded.member_name, "rom_sha256": loaded.sha256,
+        })
+        machine = SG1000Machine(loaded.data)
+        logger.info("Máquina criada", extra={
+            "event": "machine_created", "rom_sha256": loaded.sha256,
+            "rom_path": str(loaded.source_path),
+        })
         if args.headless_frames is not None:
             if args.headless_frames < 0:
                 parser.error("--headless-frames não pode ser negativo")
             steps = machine.run_frames(args.headless_frames)
+            logger.info("Execução headless concluída", extra={
+                "event": "headless_complete", "frame": machine.vdp.frame_number,
+                "pc": machine.cpu.pc, "instructions": steps,
+                "tstates": machine.cpu.total_cycles, "scanline": machine.vdp.scanline,
+                "status": machine.vdp.status,
+            })
             print(
                 f"Execução headless concluída: quadros={machine.vdp.frame_number}, "
                 f"instruções={steps}, PC=0x{machine.cpu.pc:04X}, "
-                f"T-states={machine.cpu.total_cycles}"
+                f"T-states={machine.cpu.total_cycles}, ROM SHA-256={loaded.sha256}"
             )
             return
 
-        from sega_emulator.frontend.pygame_frontend import run
-
-        run(machine)
-    except (ValueError, RuntimeError, NotImplementedError) as exc:
+        if args.ui == "qt":
+            from sega_emulator.frontend.qt_frontend import run
+            run(args.rom)
+        else:
+            from sega_emulator.frontend.pygame_frontend import run
+            run(machine)
+    except (OSError, ValueError, RuntimeError, NotImplementedError) as exc:
+        logger.exception("Falha ao iniciar sessão", extra={
+            "event": "startup_failed", "rom_path": str(args.rom),
+        })
         parser.error(str(exc))
 
 
