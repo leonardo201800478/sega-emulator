@@ -1,0 +1,59 @@
+name: Agent 3 - Performance and Coverage Audit
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-performance-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Timed regression suite and Z80 opcode inventory
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout tested revision
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install project and development tools
+        run: python -m pip install -e ".[dev]"
+
+      - name: Create audit directory and capture environment
+        run: |
+          mkdir -p audit-artifacts
+          {
+            echo "commit=$(git rev-parse HEAD)"
+            echo "python=$(python --version)"
+            echo "platform=$(python -c 'import platform; print(platform.platform())')"
+            echo "started_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > audit-artifacts/environment.txt
+
+      - name: Run timed full test suite
+        run: pytest -q --durations=50 --junitxml=audit-artifacts/pytest-timing.xml 2>&1 | tee audit-artifacts/pytest-timing.txt
+
+      - name: Generate Z80 opcode inventory
+        if: always()
+        run: python tools/z80_opcode_inventory.py --json > audit-artifacts/z80-opcode-inventory.json
+
+      - name: Upload performance and coverage audit artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-audit-${{ github.run_id }}
+          path: audit-artifacts/
+          if-no-files-found: warn
+          retention-days: 30
