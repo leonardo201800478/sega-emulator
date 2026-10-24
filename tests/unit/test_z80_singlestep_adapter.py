@@ -166,7 +166,6 @@ def test_out_immediate_updates_wz_to_port_plus_one() -> None:
     assert result.mismatches == []
 
 
-
 def test_out_immediate_wz_wraps_low_byte_without_carrying_to_high_byte() -> None:
     vector = {
         "name": "D3 OUT (FFh),A WZ wrap fixture",
