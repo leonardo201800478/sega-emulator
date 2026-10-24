@@ -5,6 +5,7 @@ Unsupported opcodes and runtime exceptions are recorded as findings instead of
 being silently treated as correct behavior. Run with --hours 5.5 to fit within
 the extended workflow's six-hour job limit.
 """
+
 from __future__ import annotations
 
 import argparse
