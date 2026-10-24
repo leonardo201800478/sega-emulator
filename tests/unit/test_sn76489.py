@@ -73,7 +73,7 @@ def test_tone_frequency_is_near_440_hz_at_ntsc_clock() -> None:
     psg = SN76489()
     enable_tone_zero(psg, 0xFE)
     samples = psg.render(11_025)
-    transitions = sum(a != b for a, b in zip(samples, samples[1:]))
+    transitions = sum(a != b for a, b in zip(samples, samples[1:], strict=False))
     assert 200 <= transitions <= 240
 
 
