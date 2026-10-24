@@ -171,9 +171,13 @@ def main() -> int:
         "Resumo: "
         + ", ".join(f"{key}={value}" for key, value in sorted(aggregate.items()))
     )
-    # Esta é uma auditoria exploratória: divergências são o resultado a analisar,
-    # não motivo para mascarar ou interromper a geração do relatório.
-    return 0 if total_vectors else 2
+    # Sempre preservar o relatório (o workflow publica artefatos com if: always),
+    # mas bloquear o gate quando houver divergências ou estados não suportados.
+    # Vetores com estado interno de prefixo ativo são contabilizados separadamente;
+    # não são tratados como aprovados nem bloqueiam este subconjunto delimitado.
+    if aggregate["failed"] or aggregate["unsupported"]:
+        return 1
+    return 0 if aggregate["passed"] else 2
 
 
 if __name__ == "__main__":
