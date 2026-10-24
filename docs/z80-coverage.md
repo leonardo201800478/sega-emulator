@@ -91,7 +91,7 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 O código atual modela registradores principais e alternativos, I/R, IX/IY, SP, PC, flags e um acumulador de T-states nominais. Ainda faltam, entre outros:
 
 - Os registradores alternativos AF', BC', DE' e HL', I/R e IX/IY estão modelados.
-- IFF1/IFF2, modos 0–2, HALT e solicitações NMI/INT têm um modelo inicial. A limitação conhecida de IM 0 (aceitar apenas RST no byte de acknowledge) permanece pendente até validação e implementação genérica; confirme o comportamento no código atual antes de ampliar essa afirmação.
+- IFF1/IFF2, modos 0–2, HALT e solicitações NMI/INT têm um modelo inicial. Em IM 0, o byte de acknowledge é executado como opcode externo; há testes sintéticos para RST, NOP, `LD A,n`, `CALL`, prefixos CB/ED/DD e consumo de operandos subsequentes pela memória. Essa cobertura caracteriza o contrato atual, mas ainda requer validação diferencial para confirmar a semântica e os ciclos do acknowledge.
 - `test_nmi_during_halt_has_priority_over_pending_int` caracteriza a sequência EI → HALT → NMI com INT pendente: NMI sai de HALT, empilha o PC após HALT, incrementa R, copia IFF1 para IFF2 e mantém INT pendente. É um teste de regressão sintético; ainda não equivale a validação diferencial contra hardware.
 - `test_retn_reti_aliases_restore_iff1_from_iff2` percorre os oito aliases ED de RETN/RETI com IFF2 em ambos os estados, verificando restauração de PC/SP, preservação de F e incremento de R. A cobertura é sintética e não modela o sinal externo de daisy chain que distingue RETI em sistemas com controlador de prioridades.
 - Ciclos M1, ciclos de leitura/escrita e I/O, estados de espera, contenção e temporização de barramento.
@@ -103,7 +103,7 @@ O contador `total_cycles` atual soma os custos nominais das instruções suporta
 ## Próximos passos de validação
 
 1. Executar comparação diferencial com uma suíte de referência Z80 confiável para flags, resultados, PC, SP e ciclos de cada família.
-2. Refinar o reconhecimento de INT/NMI, em especial IM 0 para opcodes fornecidos pelo barramento além de RST.
+2. Validar diferencialmente o reconhecimento de INT/NMI, com prioridade para IM 0: opcodes e prefixos fornecidos pelo barramento, origem dos bytes seguintes, PC, R, IFFs e ciclos.
 3. Validar os efeitos de I/O e as flags de LDI/LDD, CPI/CPD e instruções de bloco de I/O contra referências primárias e testes independentes.
 4. Implementar um modelo de acesso a barramento/ciclo para M1, leitura, escrita, I/O, estados de espera e contenção quando a arquitetura do SG-1000 exigir isso.
 5. Auditar prefixos repetidos, opcodes não documentados e diferenças de revisão de hardware; não misturar extensões de outros derivados do Z80.
@@ -124,7 +124,7 @@ A análise acrescenta estes itens à lista de implementação, sem afirmar que j
 3. **Temporização por acesso:** substituir gradualmente a suposição de que T-states nominais por instrução bastam; modelar eventos de barramento e estados de espera antes de alegar precisão de ciclo.
 4. **Refresh e registrador R:** testar incrementos por fetch M1, prefixos, HALT/interrupções e preservação do bit 7; o sinal de refresh ainda não é um evento de barramento modelado.
 5. **Flags e estado auxiliar:** ampliar testes de DAA, operações de bloco, BIT em memória/indexado e preservação de flags; pesquisar WZ/MEMPTR, Q e X/Y como trabalho de compatibilidade, sem presumir que o MAME represente toda variante física.
-6. **Interrupções:** validar NMI por borda, IFF1/IFF2, atraso de EI, HALT e acknowledge. Fechar a limitação conhecida de IM 0 para o modelo de CPU escolhido, em vez de aceitar apenas RST por conveniência.
+6. **Interrupções:** validar NMI por borda, IFF1/IFF2, atraso de EI, HALT e acknowledge. IM 0 já executa opcodes externos além de RST no modelo atual; falta comparação diferencial para confirmar sequências de prefixos, bytes de operandos, ciclos e diferenças de variante.
 7. **Reset e variante:** distinguir estado inicial do objeto e reset de hardware; definir a variante-alvo compatível com SG-1000 antes de assumir peculiaridades NMOS/CMOS/NEC.
 8. **Integração de plataforma:** futuramente conectar WAIT/READY e I/O do SG-1000 por interfaces de barramento, sem incorporar o mapa do console diretamente ao núcleo Z80.
 
@@ -143,7 +143,7 @@ Os itens abaixo complementam a pesquisa do MAME e continuam **pendentes**, salvo
 5. **R/M1/HALT:** separar fetch de opcode, operandos e opcode final de DD/FD-CB; testar o contador R e só depois modelar refresh.
 6. **Operações de bloco ED:** validar flags e condições de repetição/saída antecipada de LDI/LDD/LDIR/LDDR, CPI/CPD/CPIR/CPDR e operações de I/O de bloco.
 7. **DAA e aritmética:** gerar matriz de casos para A/N/H/C e validar A/F com referência independente.
-8. **Interrupções e variantes:** testar IM 0 com bytes de acknowledge além de RST, atraso de EI, NMI/HALT e o comportamento de LD A,I/R interrompida após escolher a variante-alvo.
+8. **Interrupções e variantes:** comparar IM 0 com uma referência independente para opcodes e prefixos de acknowledge, operandos subsequentes, R e ciclos; testar atraso de EI, NMI/HALT e LD A,I/R interrompida após escolher a variante-alvo.
 9. **Testes externos:** avaliar ZEXALL e outros exercitadores quanto a proveniência/licença; não incorporar imagens de teste ao repositório sem revisão.
 10. **Licenças das referências:** não copiar código de MEKA ou Genesis Plus GX sem autorização/licença compatível; Gearsystem é GPL-3.0. Usar a análise para desenvolver implementação independente e testes próprios.
 
@@ -167,7 +167,7 @@ A leitura direta de `src/sega_emulator/cpu/z80.py` e `tests/unit/test_z80.py` id
 
 Prioridades confirmadas:
 1. **Temporização:** os ciclos ainda são contabilizados por instrução; os acessos ao barramento não são agendados em T-states.
-2. **Interrupções:** a cobertura atual inclui testes para incremento de R em NMI/INT, modos IM 0/1/2, atraso de EI e saída de HALT por INT. Ainda faltam validação diferencial abrangente do acknowledge, dos estados IFF e das sequências de borda; a limitação de IM 0 para bytes RST deve ser confirmada no código atual.
+2. **Interrupções:** a cobertura atual inclui testes para incremento de R em NMI/INT, modos IM 0/1/2, atraso de EI, saída de HALT por INT e execução de opcodes externos em IM 0 (NOP, `LD A,n`, `CALL`, prefixos CB/ED/DD e RST). Ainda faltam validação diferencial abrangente do acknowledge, dos estados IFF e das sequências de borda; não tratar os testes sintéticos como prova de compatibilidade física.
 3. **Comportamentos auxiliares:** WZ/MEMPTR e Q latch não estão modelados.
 4. **ED:** handlers importantes existem, mas falta classificar e testar todos os 256 segundos bytes, incluindo aliases e NOPs não documentados.
 5. **Validação semântica:** os testes “todos os opcodes têm caminho” não demonstram correção de resultados, flags, ciclos ou ordem de barramento. DAA, flags X/Y, prefixos e operações de bloco precisam de comparação diferencial.
