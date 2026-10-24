@@ -84,6 +84,20 @@ def test_graphics_i_pattern_and_display_enable_render_foreground() -> None:
     assert frame[3:6] == bytes((0, 0, 0))
 
 
+def test_graphics_ii_mode_uses_r0_bit_one_and_r1_bit_three() -> None:
+    vdp = TMS9918A()
+    _write_register(vdp, 0, 0x02)
+    _write_register(vdp, 1, 0xC8)
+    _write_register(vdp, 2, 0x0E)
+    _write_register(vdp, 3, 0xFF)
+    _write_register(vdp, 4, 0x04)
+    vdp.vram[0x3800] = 0
+    vdp.vram[0x0000] = 0x80
+    vdp.vram[0x2000] = 0x20
+    frame = vdp.render_frame()
+    assert frame[:3] == bytes((33, 200, 66))
+
+
 def test_negative_or_non_integer_clock_advance_is_rejected() -> None:
     vdp = TMS9918A()
     with pytest.raises(ValueError):
