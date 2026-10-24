@@ -496,8 +496,6 @@ def test_multicolor_pattern_row_advances_across_character_rows() -> None:
     raster_pixel = vdp._working_framebuffer[8 * SCREEN_WIDTH * 3 :][:3]
     assert raster_pixel == bytes(PALETTE[6])
 
-
-
 @pytest.mark.parametrize("color", range(16))
 def test_put_pixel_writes_exact_precomputed_rgb_palette(color: int) -> None:
     vdp = TMS9918A()
