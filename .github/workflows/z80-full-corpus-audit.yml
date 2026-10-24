@@ -63,7 +63,8 @@ jobs:
 
       - name: Run lint and unit tests
         run: |
-          ruff check .
+          ruff format --check src tests tools *.py
+          ruff check src tests tools *.py
           pytest -q
 
       - name: Run complete corpus
