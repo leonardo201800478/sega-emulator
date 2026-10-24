@@ -136,5 +136,7 @@ def test_clocked_audio_samples_are_buffered_and_chunk_invariant() -> None:
     chunked.advance_clocks(123_456)
     chunked.advance_clocks(234_498)
 
-    assert whole.drain_samples() == chunked.drain_samples()
-    assert 4_400 <= len(whole._pending_samples) <= 4_420
+    whole_samples = whole.drain_samples()
+    chunked_samples = chunked.drain_samples()
+    assert whole_samples == chunked_samples
+    assert 4_400 <= len(whole_samples) <= 4_420
