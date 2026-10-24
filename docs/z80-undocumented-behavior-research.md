@@ -240,3 +240,10 @@ As referências técnicas comunitárias [CPCWiki — Z80 undocumented opcodes](h
 O manual da Zilog documenta as instruções oficiais, mas não constitui, por si só, prova desses opcodes não documentados. Por isso a decisão é registrada como comportamento observado/documentado por engenharia reversa para o Z80 clássico, a validar na variante física alvo do SG-1000.
 
 Na branch de correção, o fallback ED agora retorna 8 T-states em vez de lançar `UnsupportedOpcodeError`. Os testes verificam ED-NOPs representativos e classificam todos os 256 segundos bytes ED como handler conhecido ou ED-NOP; a CI da revisão mais recente ainda precisa confirmar esta atualização de testes.
+
+
+### Resultado diferencial e fórmula candidata de SCF/CCF — 24/10/2026
+
+A auditoria direcionada R2 encontrou 433 divergências em `SCF/CCF` sem prefixo, todas nos campos `F` e `Q`. A regra que agora está sendo testada calcula os bits não documentados por `((Q XOR F) OR A) & 0x28`. Essa relação também é descrita em [Z80_XCF_Flavor](https://github.com/redcode/Z80_XCF_Flavor), que investiga o comportamento de X/Y de SCF/CCF.
+
+A fórmula foi aplicada ao núcleo e as expectativas de regressão foram atualizadas, mas ainda é uma correção candidata: pytest/Ruff precisam ser executados no commit novo. O lote R2 antecede essa alteração e não serve como evidência de aprovação da fórmula atual. O corpus SingleStepTests é útil para detectar divergências, mas não substitui validação independente/hardware quando houver dúvidas sobre a referência.
