@@ -34,7 +34,7 @@ jobs:
           # returns HTTP 403 to GitHub-hosted runners. Use a public raw mirror only
           # for this transient test; never commit or upload the ROM itself.
           curl --fail --location --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 90 \
-            "https://raw.githubusercontent.com/webrcade/webrcade/6dbe3ce143d9186b5bbff62ecd9a919a5d913cce/content/sms/mojon-twins--super-uwol.sg" \
+            "https://raw.githubusercontent.com/webrcade/webrcade-default-feed/b7bc8e1946aa67436bb296955d55bbf3f3841ba6/content/sms/mojon-twins--super-uwol.sg" \
             --output "$ROM_PATH"
           python - "$ROM_PATH" <<'PY'
           import pathlib
