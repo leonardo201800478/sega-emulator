@@ -738,10 +738,11 @@ class Z80Cpu:
             return 16
         if opcode in (0xA2, 0xAA, 0xB2, 0xBA, 0xA3, 0xAB, 0xB3, 0xBB):
             return self._execute_block_io(opcode)
-        raise UnsupportedOpcodeError(
-            f"Opcode Z80 ED {opcode:02X}h não implementado no endereço "
-            f"{(self.pc - 2) & 0xFFFF:04X}h."
-        )
+        # No Z80 clássico, os códigos ED não atribuídos a uma instrução
+        # documentada comportam-se como NOP de 8 T-states. Mantemos a
+        # exceção para opcodes base ainda não implementados; aqui o segundo
+        # byte ED não atribuído é um comportamento definido da família.
+        return 8
 
     def _execute_block_io(self, opcode: int) -> int:
         """Executa INI/IND/INIR/INDR e OUTI/OUTD/OTIR/OTDR."""
