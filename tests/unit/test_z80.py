@@ -470,7 +470,6 @@ def test_djnz_relative_branch_wraps_program_counter() -> None:
     assert cpu.pc == 0xFFFE
     assert cpu.f == 0xA5
 
-
 @pytest.mark.parametrize(
     ("program", "start_pc", "expected_pc"),
     [
