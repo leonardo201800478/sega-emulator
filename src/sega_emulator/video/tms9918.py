@@ -153,8 +153,8 @@ class TMS9918A:
                 if self.scanline == VBLANK_LINE:
                     self.status |= 0x80
                     self._frame_ready = True
-                if self.scanline >= LINES_PER_FRAME:
                     self.framebuffer = bytes(self._working_framebuffer)
+                if self.scanline >= LINES_PER_FRAME:
                     self.scanline = 0
                     self.frame_number += 1
                     self._working_framebuffer = bytearray(
