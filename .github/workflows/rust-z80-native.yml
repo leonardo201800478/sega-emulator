@@ -1,0 +1,43 @@
+name: Native Z80 Rust Validation
+
+on:
+  pull_request:
+    paths:
+      - "native/z80/**"
+      - "tests/test_native_z80.py"
+      - ".github/workflows/rust-z80-native.yml"
+  push:
+    branches: ["perf/rust-z80-native-foundation"]
+    paths:
+      - "native/z80/**"
+      - "tests/test_native_z80.py"
+      - ".github/workflows/rust-z80-native.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rust-and-python:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install test and build tools
+        run: python -m pip install --upgrade pip maturin pytest
+      - name: Check formatting
+        run: cargo fmt --manifest-path native/z80/Cargo.toml -- --check
+      - name: Run Rust tests
+        run: cargo test --manifest-path native/z80/Cargo.toml
+      - name: Run Clippy
+        run: cargo clippy --manifest-path native/z80/Cargo.toml --all-targets -- -D warnings
+      - name: Build and install native extension
+        working-directory: native/z80
+        run: maturin develop --release
+      - name: Run native Python integration tests
+        run: python -m pytest tests/test_native_z80.py -q
