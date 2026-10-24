@@ -495,3 +495,31 @@ def test_multicolor_pattern_row_advances_across_character_rows() -> None:
     vdp.advance(9 * TSTATES_PER_LINE)
     raster_pixel = vdp._working_framebuffer[8 * SCREEN_WIDTH * 3 :][:3]
     assert raster_pixel == bytes(PALETTE[6])
+
+
+
+@pytest.mark.parametrize("color", range(16))
+def test_put_pixel_writes_exact_precomputed_rgb_palette(color: int) -> None:
+    vdp = TMS9918A()
+    pixels = bytearray(SCREEN_WIDTH * SCREEN_HEIGHT * 3)
+
+    vdp._put_pixel(pixels, 7, 11, color)
+
+    offset = (11 * SCREEN_WIDTH + 7) * 3
+    assert pixels[offset : offset + 3] == bytes(PALETTE[color])
+
+
+def test_put_pixel_masks_color_and_ignores_out_of_bounds_coordinates() -> None:
+    vdp = TMS9918A()
+    pixels = bytearray(SCREEN_WIDTH * SCREEN_HEIGHT * 3)
+
+    vdp._put_pixel(pixels, 0, 0, 0x12)
+    expected = bytes(PALETTE[2])
+    assert pixels[:3] == expected
+
+    before = bytes(pixels)
+    vdp._put_pixel(pixels, -1, 0, 2)
+    vdp._put_pixel(pixels, SCREEN_WIDTH, 0, 2)
+    vdp._put_pixel(pixels, 0, -1, 2)
+    vdp._put_pixel(pixels, 0, SCREEN_HEIGHT, 2)
+    assert bytes(pixels) == before
