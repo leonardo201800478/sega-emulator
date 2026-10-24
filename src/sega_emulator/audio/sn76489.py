@@ -173,10 +173,14 @@ class SN76489:
         O buffer mantém no máximo um segundo de áudio para que execuções
         headless longas não consumam memória sem limite.
         """
-        if max_samples is not None and (type(max_samples) is not int or max_samples < 0):
+        if max_samples is not None and (
+            type(max_samples) is not int or max_samples < 0
+        ):
             raise ValueError("max_samples deve ser None ou inteiro não negativo.")
-        count = len(self._pending_samples) if max_samples is None else min(
-            max_samples, len(self._pending_samples)
+        count = (
+            len(self._pending_samples)
+            if max_samples is None
+            else min(max_samples, len(self._pending_samples))
         )
         return [self._pending_samples.popleft() for _ in range(count)]
 
