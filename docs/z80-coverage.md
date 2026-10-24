@@ -284,3 +284,10 @@ Esses casos são testes sintéticos de fluxo de controle e estado observável. N
 Foi acrescentado `test_ed_block_transfer_wraps_hl_and_de_at_16_bit_boundaries`, cobrindo LDI/LDIR com incremento de `HL=FFFFh` para `0000h` e LDD/LDDR com decremento de `HL=0000h` para `FFFFh`. Os quatro casos verificam a atualização de HL/DE/BC, o byte transferido, o PC conforme repetição e os T-states nominais retornados pelo núcleo.
 
 O teste foi publicado, mas sua execução local ainda está pendente. Ele caracteriza wrap de registradores e estado observável; não comprova a ordem temporal dos acessos nem precisão ciclo a ciclo.
+
+## ED-NOP para bytes não atribuídos — 24/10/2026
+
+No modelo do Z80 clássico, os segundos bytes ED sem operação atribuída são tratados como ED-NOP: a CPU consome os dois bytes, incrementa R nos dois fetches M1 e retorna 8 T-states nominais, sem alterar A, F ou WZ. Foram adicionados testes dirigidos para cinco bytes distribuídos pelo espaço ED.
+
+Essa cobertura é representativa, não uma prova exaustiva dos 256 segundos bytes nem de compatibilidade com clones que definam extensões próprias. Os T-states retornados continuam sendo nominais por instrução; a implementação não modela fases de barramento ciclo a ciclo.
+
