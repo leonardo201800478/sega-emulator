@@ -127,7 +127,7 @@ class TMS9918A:
             return bytes(pixels)
 
         r0, r1 = self.registers[0], self.registers[1]
-        mode = ((r1 >> 4) & 1) | ((r1 >> 2) & 2) | ((r0 >> 1) & 4)
+        mode = ((r1 >> 4) & 1) | ((r1 >> 2) & 2) | (((r0 >> 1) & 1) << 2)
         if mode == 1:
             self._render_text(pixels, backdrop)
         elif mode == 4:
