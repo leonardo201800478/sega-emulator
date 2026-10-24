@@ -181,7 +181,9 @@ def run_vector(vector: dict[str, Any]) -> VectorResult:
         if field_name not in REGISTER_FIELDS:
             continue
         actual = _state_value(cpu, field_name)
-        normalized_expected = bool(expected) if field_name in BOOLEAN_FIELDS else expected
+        normalized_expected = (
+            bool(expected) if field_name in BOOLEAN_FIELDS else expected
+        )
         if actual != normalized_expected:
             result.mismatches.append(
                 f"{field_name}: esperado {normalized_expected!r}, obtido {actual!r}"
@@ -226,15 +228,23 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Executa vetores JSON SingleStepTests contra a CPU Z80."
     )
-    parser.add_argument("json_file", type=Path, help="Caminho local para o arquivo de vetores")
-    parser.add_argument("--start-index", type=int, default=0, help="Índice inicial (base zero)")
-    parser.add_argument("--limit", type=int, default=25, help="Máximo de vetores; 0 significa todos")
+    parser.add_argument(
+        "json_file", type=Path, help="Caminho local para o arquivo de vetores"
+    )
+    parser.add_argument(
+        "--start-index", type=int, default=0, help="Índice inicial (base zero)"
+    )
+    parser.add_argument(
+        "--limit", type=int, default=25, help="Máximo de vetores; 0 significa todos"
+    )
     parser.add_argument(
         "--allow-unsupported",
         action="store_true",
         help="Não retorna erro de processo quando houver vetores não suportados",
     )
-    parser.add_argument("--report-json", type=Path, help="Grava relatório JSON neste caminho")
+    parser.add_argument(
+        "--report-json", type=Path, help="Grava relatório JSON neste caminho"
+    )
     args = parser.parse_args(argv)
 
     if args.start_index < 0 or args.limit < 0:
@@ -266,7 +276,10 @@ def main(argv: list[str] | None = None) -> int:
             for mismatch in result.mismatches:
                 print(f"  - {mismatch}")
             if result.unsupported_fields:
-                print("  - campos não suportados: " + ", ".join(result.unsupported_fields))
+                print(
+                    "  - campos não suportados: "
+                    + ", ".join(result.unsupported_fields)
+                )
 
     if args.report_json:
         args.report_json.parent.mkdir(parents=True, exist_ok=True)
