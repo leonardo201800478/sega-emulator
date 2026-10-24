@@ -1,9 +1,9 @@
 """Execute um subconjunto reproduzível do corpus externo SingleStepTests/Z80.
 
 Os arquivos JSON são baixados pelo workflow, não versionados no repositório.
-Vetores com estado de prefixo interno ativo (campo "p") são excluídos porque o
-núcleo atual não modela esse estado. Traços "cycles" não são comparados: a CPU
-retorna apenas T-states agregados. Divergências são reportadas, não ocultadas.
+O latch interno "p" (LD A,I/LD A,R e o erratum de INT) é modelado e comparado.
+Traços "cycles" não são comparados: a CPU retorna apenas T-states agregados.
+Divergências e estados ainda não suportados bloqueiam o workflow.
 """
 
 from __future__ import annotations
