@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "upstream": {
+    "repository": "https://github.com/SingleStepTests/z80",
+    "commit": "ebe1875d48f374bcfd4b505d8eb8ee751568b5f7",
+    "commit_signature_verified_by_github": true,
+    "commit_url": "https://github.com/SingleStepTests/z80/commit/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7",
+    "license": "MIT",
+    "license_url": "https://github.com/SingleStepTests/z80/blob/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7/LICENSE"
+  },
+  "files": [
+    {
+      "file": "00.json",
+      "sha256": "410958fb7f0183ec268b52f2288068722a6c9c5e738822c94b3edde1dceb5420",
+      "size_bytes": 606165
+    },
+    {
+      "file": "04.json",
+      "sha256": "0f6c8d2d32fb80f8b6c887df5074ead578b698c19386054228525f31b87922ce",
+      "size_bytes": 607303
+    },
+    {
+      "file": "06.json",
+      "sha256": "d458e170211f1fac434fd28f1bcd93bdd2c2f6cb30e97b2616a19af265dd29f3",
+      "size_bytes": 687050
+    },
+    {
+      "file": "37.json",
+      "sha256": "3cb7ca94c400154112fd03ead580f5e14146da9ea21dfca5521cdfe28e4c81cc",
+      "size_bytes": 610775
+    },
+    {
+      "file": "3f.json",
+      "sha256": "2792a4da5dc5cbde9e808bac618cf1cd23ff5cbb0b132733eca037840d96ad4f",
+      "size_bytes": 610771
+    },
+    {
+      "file": "76.json",
+      "sha256": "6ff516ac7c9cf8195cbe15d97ebe8785bff8cdd7ec48141f0fae9659156b2cca",
+      "size_bytes": 612197
+    },
+    {
+      "file": "c6.json",
+      "sha256": "4866222870650424c258a53880e0bb180c5aaf81a117008bc526795afe232d6d",
+      "size_bytes": 694363
+    },
+    {
+      "file": "d3.json",
+      "sha256": "e2e44c8501b2b987888129b2c0d5f8bda2c76f4ada94ae495a99fe562c9369ef",
+      "size_bytes": 796195
+    },
+    {
+      "file": "cb 00.json",
+      "sha256": "c82f352a5e51a77394fa1d6329bcf3dbb7c464bbda513668b7661afdddbeb808",
+      "size_bytes": 712343
+    },
+    {
+      "file": "dd 21.json",
+      "sha256": "676084c3db96894d1d11de14bcf0ca8f01de5fe69ccccb60652af830df564c0c",
+      "size_bytes": 876461
+    },
+    {
+      "file": "ed 40.json",
+      "sha256": "29f95b2433806b1625fcf3821b612d662b79255b846481ea7ba21d23da99a8d1",
+      "size_bytes": 818353
+    }
+  ]
+}
