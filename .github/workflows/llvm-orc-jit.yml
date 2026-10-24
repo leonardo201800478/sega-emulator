@@ -4,7 +4,10 @@ on:
   pull_request:
     paths:
       - "native/llvm_jit/**"
+      - "src/sega_emulator/profiles.py"
+      - "tests/unit/test_execution_profiles.py"
       - "docs/adr/0002-llvm-orc-jit-fast-mode.md"
+      - "docs/adr/0003-execution-profiles.md"
       - ".github/workflows/llvm-orc-jit.yml"
   push:
     branches: ["perf/llvm-orc-jit-fast-mode"]
