@@ -66,15 +66,18 @@ Contagem final registrada no log:
 
 A auditoria foi desenhada para registrar exceções e instruções não suportadas como achados. O contador fatal soma `invariant_violation`, `runtime_exception`, `invalid_cycle_count` e `determinism_divergence`. O log final declara falha porque o total fatal não foi zero.
 
-**Não concluir ainda:** que todas as exceções são defeitos de emulação; que os 799.950 eventos representam opcodes únicos; ou que o teste provou equivalência com hardware. O script é uma auditoria de robustez/invariantes e não um oracle independente do Z80.
+O artefato `z80-extended-audit-40070113503` foi baixado e inspecionado. O relatório retém apenas os primeiros 2.000 achados; nessa amostra há 1.890 `UnmappedMemoryError`, 10 `ReadOnlyMemoryError` e 100 amostras `unsupported_opcode`. Por exemplo, `base_02` executa `LD (BC),A` com BC aleatório apontando para um endereço não mapeado; `base_22` tenta gravar na região de ROM do cartucho. Esses eventos são consequências de combinar registradores aleatórios com o mapa de memória de produção do SG-1000 e, isoladamente, não provam defeitos no núcleo da CPU. A amostra está limitada a 2.000 registros e não representa a distribuição completa dos 17 milhões de eventos.
+
+Isso confirma uma falha concreta no harness: uma auditoria de robustez da CPU não deve classificar proteção válida do barramento (memória não mapeada ou tentativa de escrita na ROM) como exceção interna da CPU. A auditoria deve usar uma memória determinística, totalmente mapeada de 64 KiB, e um barramento de I/O determinístico; os testes de integração do mapa real do SG-1000 devem permanecer separados. Essa mudança de isolamento foi iniciada na branch `fix/z80-audit-mainline`.
+
+**Ainda não concluir:** que todas as exceções estão explicadas pelo mapa de memória; que os 799.950 eventos representam opcodes únicos; ou que o teste provou equivalência com o hardware. Após isolar o harness, é necessário executar um teste curto e depois repetir a auditoria longa para obter uma nova distribuição.
 
 ### Próxima análise obrigatória
 
-1. Obter o JSON do artefato `z80-extended-audit-40070113503`.
-2. Agrupar as amostras retidas por `status`, `error_type`, opcode/prefixo e traceback.
-3. Determinar se as exceções derivam de opcodes não suportados, estados artificiais/aleatórios, defeitos de execução ou falhas do próprio harness.
-4. Criar testes mínimos determinísticos para cada defeito confirmado.
-5. Manter `unsupported_opcode` como lacuna de cobertura separada, sem confundi-la com exceções inesperadas.
+1. Executar a auditoria curta com os barramentos planos e inspecionar eventuais `runtime_exception` restantes.
+2. Agrupar os casos restantes por `status`, `error_type`, opcode/prefixo e traceback.
+3. Criar testes determinísticos mínimos para cada defeito confirmado na CPU.
+4. Manter `unsupported_opcode` como lacuna de cobertura separada, sem confundi-la com exceções inesperadas.
 
 ## 5. Correções iniciadas
 
