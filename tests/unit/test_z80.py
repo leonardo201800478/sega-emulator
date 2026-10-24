@@ -148,8 +148,6 @@ def test_scf_ccf_undocumented_flags_depend_on_q(
     assert cpu.q == expected_flags
 
 
-
-
 @pytest.mark.parametrize(
     ("opcode", "expected_flags"),
     [
