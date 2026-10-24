@@ -33,6 +33,8 @@ class Z80Cpu:
         self._step_depth = 0
         self.q = 0
         self._q_previous = 0
+        # P latch: previous instruction was LD A,I or LD A,R.
+        self.p = 0
         self.wz = 0
         self.a = 0
         self.f = 0
@@ -649,6 +651,7 @@ class Z80Cpu:
                 self.r = self.a
             else:
                 self._load_a_from_special_register(self.i if opcode == 0x57 else self.r)
+                self.p = 1
             return 9
         if opcode & 0xCF == 0x43:
             address = self._fetch_byte() | (self._fetch_byte() << 8)
@@ -1121,6 +1124,9 @@ class Z80Cpu:
         arquitetura; POP AF restaura F. ADD HL preserva S, Z e P/V.
         """
         if self._nmi_pending:
+            # NMI encerra a condição de "instrução anterior LD A,I/R", mas
+            # não aplica o erratum de PV reservado ao INT mascarável.
+            self.p = 0
             # O acknowledge de interrupção ocupa um ciclo M1 e incrementa R.
             self.r = (self.r & 0x80) | ((self.r + 1) & 0x7F)
             self._nmi_pending = False
@@ -1133,6 +1139,10 @@ class Z80Cpu:
             self.total_cycles += cycles
             return cycles
         if self._int_pending is not None and self.iff1 and self._ei_delay == 0:
+            # No Z80 clássico, INT imediatamente após LD A,I/R força PV=0.
+            if self.p:
+                self.f &= ~0x04
+            self.p = 0
             data_bus = self._int_pending
             # O acknowledge de INT incrementa R uma vez, inclusive em IM 0.
             self.r = (self.r & 0x80) | ((self.r + 1) & 0x7F)
@@ -1160,6 +1170,9 @@ class Z80Cpu:
                 cycles = 13
             self.total_cycles += cycles
             return cycles
+        # Qualquer instrução normal substitui a condição anterior de LD A,I/R;
+        # a própria instrução ED 57/5F pode armar P novamente.
+        self.p = 0
         if self.halted:
             self.r = (self.r & 0x80) | ((self.r + 1) & 0x7F)
             self.total_cycles += 4
