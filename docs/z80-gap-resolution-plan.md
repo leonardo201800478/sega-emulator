@@ -228,3 +228,15 @@ A primeira execução com os vetores de I/O expôs divergências no registrador 
 Esses comportamentos foram corrigidos em `src/sega_emulator/cpu/z80.py`, com testes de regressão para leitura de I/O derivada do traço, atualização de WZ e wrap do byte baixo. A execução seguinte eliminou as divergências nos 11 arquivos selecionados. O resultado é evidência diferencial útil para esses vetores e campos, **não** uma certificação geral do Z80: os 5.599 vetores excluídos ainda precisam de um modelo para o estado `p`, e os traços ciclo a ciclo continuam fora da comparação.
 
 O artefato JSON e os vetores usados ficam no workflow [Z80 SingleStepTests Differential Audit](https://github.com/leonardo201800478/sega-emulator/actions/workflows/z80-singlestep-audit.yml), por 30 dias.
+
+
+## Fase A2 — Expansão inicial do corpus diferencial (24/10/2026)
+
+Após fixar a revisão upstream e validar o manifesto SHA-256, a auditoria diferencial foi ampliada de 11 para **25 arquivos de vetores**. O incremento cobre:
+
+- **Base:** JR/JR NZ, LD rr,nn, LD (nn),HL, INC H, LD H,n, LD HL,(nn), LD (nn),A e casos de fronteira de PC/flags já representados pelos vetores escolhidos.
+- **CB:** RLC (HL) e BIT 0,B, ampliando para operação sobre memória e teste de bit em registrador.
+- **ED:** SBC HL,BC, NEG e RETN, além do vetor ED 40 existente, ampliando aritmética de 16 bits e retorno de interrupção.
+- **DD:** LD B,(IX+d), complementando LD IX,nn com leitura indexada.
+
+Os vetores adicionais seguem no mesmo commit upstream imutável e cada arquivo tem tamanho e SHA-256 fixados no manifesto. Esta etapa amplia a amostragem por família, mas **não equivale à cobertura integral dos 256 opcodes de cada espaço**; também não compara os traços de barramento ciclo a ciclo. Vetores com estado interno `p` ativo continuam excluídos explicitamente e devem ser reportados como excluídos, nunca como aprovados.
