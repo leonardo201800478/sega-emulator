@@ -2492,6 +2492,7 @@ def test_retn_reti_aliases_restore_iff1_from_iff2(opcode: int, iff2: bool) -> No
     assert cpu.r == 0x80
     assert cpu.total_cycles == 14
 
+
 def test_im0_accepts_all_rst_opcodes_from_interrupt_data_bus(
     data_bus: int, expected_pc: int
 ) -> None:
