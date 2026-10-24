@@ -209,3 +209,16 @@ O script `tools/audits/run_singlestep_corpus.py` exclui explicitamente vetores c
 **Limitação essencial:** o teste compara estado arquitetural representado e RAM, mas não compara o array `cycles` do corpus. Portanto, mesmo um vetor aprovado não demonstra precisão ciclo a ciclo nem equivalência de barramento. O workflow é diagnóstico e não deve ser tratado como gate de conformidade até a revisão dos primeiros resultados e das limitações do modelo.
 
 A fonte declara licença MIT nos metadados públicos do repositório. O workflow registra a URL e a licença no artefato `SOURCE.txt`; os vetores continuam sendo obtidos da branch `main`, logo a execução não é imutável por revisão. Para tornar a auditoria reproduzível a longo prazo, o passo seguinte será fixar um commit upstream e registrar hashes SHA-256 dos arquivos obtidos.
+
+
+### Resultado da primeira execução diferencial (24/10/2026)
+
+O workflow executou 11 arquivos do corpus, com 1.000 vetores por arquivo (**11.000 vetores totais**). No estado atual do código, o relatório registrou **5.401 aprovados, 0 divergentes e 5.599 excluídos** porque o campo interno `p` estava ativo. Os vetores excluídos não são contados como aprovados.
+
+A primeira execução com os vetores de I/O expôs divergências no registrador WZ:
+- `OUT (n),A`: WZ precisava preservar o byte alto do endereço da porta e incrementar apenas o byte baixo, inclusive no wrap de `FFh` para `00h`.
+- `IN r,(C)` e `OUT (C),r`: WZ precisava receber `BC + 1`, usando o BC anterior à instrução, inclusive quando a leitura altera B.
+
+Esses comportamentos foram corrigidos em `src/sega_emulator/cpu/z80.py`, com testes de regressão para leitura de I/O derivada do traço, atualização de WZ e wrap do byte baixo. A execução seguinte eliminou as divergências nos 11 arquivos selecionados. O resultado é evidência diferencial útil para esses vetores e campos, **não** uma certificação geral do Z80: os 5.599 vetores excluídos ainda precisam de um modelo para o estado `p`, e os traços ciclo a ciclo continuam fora da comparação.
+
+O artefato JSON e os vetores usados ficam no workflow [Z80 SingleStepTests Differential Audit](https://github.com/leonardo201800478/sega-emulator/actions/workflows/z80-singlestep-audit.yml), por 30 dias.
