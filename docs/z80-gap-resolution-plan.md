@@ -33,7 +33,7 @@ Legenda de evidência: **D** = documentado por fonte primária; **R** = literatu
 | GAP-01 | Máquina de estados de INT/NMI, EI delay, HALT e R não fechada | D + T parcial; auditoria aponta casos de borda ausentes | Criar matriz de transições e testes parametrizados de estado; corrigir somente divergências reproduzíveis | P0 |
 | GAP-02 | Prefixos DD/FD repetidos/alternados e semântica H/L versus IXH/IXL | D + R; caminhos existem, caracterização incompleta | Criar testes de bytes consumidos, PC, R, flags, memória e ciclos nominais para sequências discriminantes | P0 |
 | GAP-03 | Todos os 256 segundos bytes ED classificados, mas nem todas as semânticas/aliases validadas | D + R; smoke test de aceitação/rejeição existe | Gerar matriz de 256 linhas com classe, efeito esperado e fonte; testar handlers e aliases separadamente | P0 |
-| GAP-04 | IM 0 e acknowledge de prefixos têm interpretações concorrentes | Manual ZiLOG e wiki redcode/Z80 são descritos como divergentes na auditoria | Isolar o problema num documento de decisão; desenhar teste que distingue origem de bytes, PC, R e sequência de acknowledge; não mudar a implementação antes da evidência | P0 |
+| GAP-04 | IM 0 e acknowledge de prefixos ainda exigem validação diferencial | O núcleo e os testes sintéticos já executam opcodes de acknowledge RST, NOP, `LD A,n`, `CALL` e prefixos CB/ED/DD; permanecem dúvidas de conformidade física, ciclos e variantes | Comparar estado, bytes consumidos, PC, R, pilha e ciclos com referência independente; manter a implementação estável até identificar divergência reproduzível | P0 |
 | GAP-05 | Flags X/Y de operações de bloco e I/O de bloco, SCF/CCF e Q não têm confirmação independente suficiente | T sintético + R; Q ausente | Separar testes de flags documentadas dos testes de hipóteses não documentadas; investigar Q em sequências SCF/CCF | P1 |
 | GAP-06 | WZ/MEMPTR ausente | R e artigos no catálogo; não é necessário para a maioria das instruções básicas | Especificar atualizações por família e só então adicionar estado e testes de salto, I/O, BIT indexado e bloco | P1 |
 | GAP-07 | Temporização real do barramento não é observável | D; arquitetura atual retorna T-states agregados | Introduzir um traço determinístico de eventos/micro-operações antes de modelar contenção/WAIT | P1 arquitetural |
@@ -55,7 +55,7 @@ Legenda de evidência: **D** = documentado por fonte primária; **R** = literatu
 2. **R/refresh:** verificar incrementos para fetch base, CB, ED, DD/FD, DD/FD-CB, HALT e entrada em NMI/INT. Distinguir incremento do registrador R de pulsos M1/refresh físicos, que o modelo atual ainda não representa.
 3. **Prefixos:** testar DD DD, FD FD, DD FD, FD DD; prefixo antes de instrução que não usa IX/IY; DD/FD com H/L; DD/FD-CB com deslocamento; wrap de PC e deslocamento assinado.
 4. **ED:** classificar cada segundo byte como instrução documentada, alias documentado/compatível, NOP/ignorado, comportamento não documentado ou explicitamente não suportado. A classificação deve apontar para uma fonte ou declarar a incerteza.
-5. **IM 0:** preparar casos que discriminem as hipóteses sobre bytes de prefixo fornecidos pelo dispositivo versus bytes subsequentes lidos da memória. Guardar a questão em aberto até a evidência justificar uma decisão.
+5. **IM 0:** casos sintéticos já caracterizam opcodes externos e prefixos CB/ED/DD, com operandos subsequentes lidos da memória. Próximo passo: comparar a origem dos bytes, PC, R, pilha e ciclos com referência independente; não alterar a semântica sem uma divergência reproduzível.
 
 **Critério de saída:** testes reproduzíveis para cada caso, sem alterar resultados de referência apenas para fazê-los coincidir com a implementação.
 
@@ -114,7 +114,7 @@ Começar por casos pequenos com licença/proveniência clara. ZEXDOC/ZEXALL e ou
 - [ ] Matriz de transições de INT/NMI/EI/HALT com testes para todos os estados relevantes.
 - [ ] Matriz de prefixos DD/FD e DD/FD-CB com bytes consumidos, PC, R, flags, memória e ciclos nominais.
 - [ ] 256 entradas ED classificadas; handlers documentados testados semanticamente, e aliases não confundidos com instruções documentadas.
-- [ ] Questão de IM 0 resolvida por evidência, ou marcada explicitamente como pendente com teste discriminante registrado.
+- [ ] IM 0 validado diferencialmente para opcodes/prefixos de acknowledge, origem dos operandos, PC, R, pilha e ciclos; ou divergências remanescentes documentadas com teste discriminante.
 - [ ] Testes de flags de bloco dividem claramente comportamento documentado e hipóteses X/Y.
 - [ ] Decisão fundamentada para Q e WZ/MEMPTR antes de adicionar estado interno.
 - [ ] Protótipo de traço de barramento para um conjunto pequeno de instruções, mantendo a API atual.
