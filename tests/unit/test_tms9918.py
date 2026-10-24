@@ -483,9 +483,7 @@ def test_multicolor_pattern_row_advances_across_character_rows() -> None:
     _write_register(vdp, 4, 0x01)  # Pattern table at 0800h.
     vdp.vram[0x3800] = 1
     vdp.vram[0x3820] = 1  # Reuse character 1 in the next 8-pixel row.
-    vdp.vram[0x0808:0x0810] = bytes(
-        (0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF, 0x10)
-    )
+    vdp.vram[0x0808:0x0810] = bytes((0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF, 0x10))
 
     full_frame = vdp.render_frame()
     top_pixel = full_frame[:3]
