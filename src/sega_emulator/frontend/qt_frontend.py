@@ -49,7 +49,6 @@ def run(initial_path: Path | None = None) -> None:
             QMessageBox,
             QStatusBar,
             QTabWidget,
-            QToolBar,
             QVBoxLayout,
             QWidget,
         )
