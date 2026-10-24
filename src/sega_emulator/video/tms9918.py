@@ -283,7 +283,9 @@ class TMS9918A:
                 overflow_already_set = True
 
             occupied: set[int] = set()
-            visible_sprites = line_sprites[:4] if self.sprite_limit_enabled else line_sprites
+            visible_sprites = (
+                line_sprites[:4] if self.sprite_limit_enabled else line_sprites
+            )
             for _index, y, x, pattern_number, color in visible_sprites:
                 if color == 0:
                     continue
