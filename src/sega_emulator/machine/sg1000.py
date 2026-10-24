@@ -22,7 +22,6 @@ class _CartridgeMirrorBus:
 
     def write(self, address: int, value: int) -> None:
         if 0 <= address < 0xC000:
-            self._bus.write(address % self._rom_size, value)
             return
         self._bus.write(address, value)
 
@@ -48,9 +47,9 @@ class SG1000Machine:
         port = address & 0xFF
         if port in (0xBE, 0xBF):
             return self.vdp.read_port(port)
-        if port == 0xDC:
+        if port in (0x00, 0xDC):
             return self.joystick1
-        if port == 0xDD:
+        if port in (0x01, 0xDD):
             return self.joystick2
         return 0xFF
 
@@ -81,11 +80,15 @@ class SG1000Machine:
 
     def run_frame(self, max_steps: int = 100_000) -> int:
         """Executa até o próximo limite de quadro; retorna instruções executadas."""
+        if type(max_steps) is not int or max_steps < 1:
+            raise ValueError("max_steps deve ser um inteiro positivo.")
         start_frame = self.vdp.frame_number
         steps = 0
         while self.vdp.frame_number == start_frame:
             self.step()
             steps += 1
+            if self.vdp.frame_number != start_frame:
+                break
             if steps >= max_steps:
                 raise RuntimeError(
                     "Limite de instruções excedido antes do próximo quadro."
