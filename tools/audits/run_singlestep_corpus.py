@@ -67,9 +67,7 @@ def audit_file(path: Path) -> dict[str, Any]:
             )
     return {
         "file": path.name,
-        "source": (
-            "https://github.com/SingleStepTests/z80/blob/main/v1/" + path.name
-        ),
+        "source": ("https://github.com/SingleStepTests/z80/blob/main/v1/" + path.name),
         "total_vectors": len(vectors),
         "counts": dict(sorted(counts.items())),
         "failures_and_unsupported": results,
@@ -109,10 +107,8 @@ def main() -> int:
         total_vectors += report["total_vectors"]
         aggregate.update(report["counts"])
         print(
-            f'{report["file"]}: total={report["total_vectors"]}; '
-            + "; ".join(
-                f"{key}={value}" for key, value in report["counts"].items()
-            )
+            f"{report['file']}: total={report['total_vectors']}; "
+            + "; ".join(f"{key}={value}" for key, value in report["counts"].items())
         )
 
     report_path = args.report_json
@@ -135,9 +131,7 @@ def main() -> int:
     print(f"Relatório completo: {report_path}")
     print(
         "Resumo: "
-        + ", ".join(
-            f"{key}={value}" for key, value in sorted(aggregate.items())
-        )
+        + ", ".join(f"{key}={value}" for key, value in sorted(aggregate.items()))
     )
     # Esta é uma auditoria exploratória: divergências são o resultado a analisar,
     # não motivo para mascarar ou interromper a geração do relatório.
