@@ -90,6 +90,7 @@ git diff --check
 - [Pesquisa de compatibilidade de hardware Sega](docs/research/hardware-compatibility-roadmap-2026-10.md)
 - [Notas de hardware SG-1000](docs/hardware/sg1000.md)
 - [Modelo e plano de fidelidade do VDP TMS9918A](docs/hardware/tms9918a-model.md)
+- [Backlog consolidado de validação da TMS9918A](docs/hardware/tms9918a-validation-backlog.md)
 - [Memória, portas e barramentos SG-1000](docs/hardware/sg1000-memory-buses.md)
 - [Catálogo prioritário de compatibilidade SG-1000](docs/hardware/sg1000-game-compatibility.md)
 - [Marco do primeiro jogo executável](docs/sg1000-first-playable.md)
