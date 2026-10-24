@@ -284,6 +284,9 @@ def run(initial_path: Path | None = None) -> None:
         last_checkpoint_tstates = 0
         last_checkpoint_instructions = 0
         last_checkpoint_frame = 0
+        for phase in phase_totals_ms:
+            phase_totals_ms[phase] = 0.0
+            phase_max_ms[phase] = 0.0
         logger.info(
             "ROM carregada",
             extra={
@@ -322,6 +325,9 @@ def run(initial_path: Path | None = None) -> None:
         last_checkpoint_tstates = 0
         last_checkpoint_instructions = 0
         last_checkpoint_frame = 0
+        for phase in phase_totals_ms:
+            phase_totals_ms[phase] = 0.0
+            phase_max_ms[phase] = 0.0
         logger.info(
             "Máquina reinicializada",
             extra={"event": "machine_reset", "rom_sha256": loaded.sha256},
