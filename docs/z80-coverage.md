@@ -291,3 +291,7 @@ No modelo do Z80 clássico, os segundos bytes ED sem operação atribuída são 
 
 Essa cobertura é representativa, não uma prova exaustiva dos 256 segundos bytes nem de compatibilidade com clones que definam extensões próprias. Os T-states retornados continuam sendo nominais por instrução; a implementação não modela fases de barramento ciclo a ciclo.
 
+## Flags não documentadas de BIT b,(HL) — 24/10/2026
+
+A implementação agora deriva os bits F3/F5 de `BIT b,(HL)` do byte alto de WZ/MEMPTR, em vez de assumir que esses bits vêm de HL. O teste direcionado usa HL e WZ com valores altos diferentes e cobre os oito índices de bit. Esta é a hipótese para o Z80 clássico; não equivale a validação ciclo a ciclo nem demonstra comportamento idêntico em todos os clones.
+
