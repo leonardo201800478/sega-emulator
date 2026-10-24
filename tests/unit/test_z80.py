@@ -13,6 +13,20 @@ def make_cpu(program: bytes) -> Z80Cpu:
     return Z80Cpu(SG1000MemoryBus(ram, program))
 
 
+class FlatMemoryBus:
+    """Memória plana gravável para testes que atravessam o limite FFFFh."""
+
+    def __init__(self, program: bytes) -> None:
+        self.memory = bytearray(0x10000)
+        self.memory[: len(program)] = program
+
+    def read(self, address: int) -> int:
+        return self.memory[address & 0xFFFF]
+
+    def write(self, address: int, value: int) -> None:
+        self.memory[address & 0xFFFF] = value & 0xFF
+
+
 CONDITIONAL_FLAG_CASES = [
     (0, 0x00, 0x40),  # NZ: Z=0 / Z=1
     (1, 0x40, 0x00),  # Z: Z=1 / Z=0
@@ -2797,10 +2811,13 @@ def test_relative_jumps_update_wz_only_when_branch_is_taken(
 
 
 def test_absolute_hl_load_and_store_update_wz_to_next_address() -> None:
-    store = make_cpu(bytes([0x22, 0xFF, 0xFF]))  # LD (FFFFh),HL
+    # O endereço alto está em FFFFh e o byte baixo deve envolver para 0000h.
+    store = Z80Cpu(FlatMemoryBus(bytes([0x22, 0xFF, 0xFF])))
     store.hl = 0x1234
     store.step()
     assert store.wz == 0x0000
+    assert store.bus.read(0xFFFF) == 0x12
+    assert store.bus.read(0x0000) == 0x34
 
     load = make_cpu(bytes([0x2A, 0x20, 0xC0]))  # LD HL,(C020h)
     load.bus.write(0xC020, 0x78)
@@ -2808,6 +2825,27 @@ def test_absolute_hl_load_and_store_update_wz_to_next_address() -> None:
     load.step()
     assert load.hl == 0x5678
     assert load.wz == 0xC021
+
+
+@pytest.mark.parametrize(
+    ("opcode", "initial_f", "expected_cycles"),
+    [
+        (0xC2, 0x40, 10),  # JP NZ,nn não tomado
+        (0xC4, 0x40, 10),  # CALL NZ,nn não tomado
+    ],
+)
+def test_untaken_absolute_conditional_control_flow_updates_wz(
+    opcode: int, initial_f: int, expected_cycles: int
+) -> None:
+    cpu = make_cpu(bytes([opcode, 0x34, 0x12]))
+    cpu.f = initial_f
+    cpu.wz = 0xBEEF
+    cpu.sp = 0xC100
+
+    assert cpu.step() == expected_cycles
+    assert cpu.pc == 3
+    assert cpu.wz == 0x1234
+    assert cpu.sp == 0xC100
 
 
 def test_absolute_accumulator_store_uses_accumulator_in_wz_high_byte() -> None:
