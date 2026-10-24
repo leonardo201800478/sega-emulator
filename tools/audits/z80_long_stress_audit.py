@@ -271,7 +271,8 @@ def main() -> int:
         + counts["determinism_divergence"]
     )
     print(
-        f"Robustness findings: {fatal}; unsupported opcodes recorded: {counts['unsupported_opcode']}",
+        f"Robustness findings: {fatal}; "
+        f"unsupported opcodes recorded: {counts['unsupported_opcode']}",
         flush=True,
     )
     return 1 if fatal else 0
