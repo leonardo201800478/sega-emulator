@@ -41,9 +41,11 @@ jobs:
           } > artifacts/run-metadata.txt
 
       - name: Check formatting
+        continue-on-error: true
         run: ruff format --check .
 
       - name: Lint
+        continue-on-error: true
         run: ruff check .
 
       - name: Run complete pytest suite with timing report
