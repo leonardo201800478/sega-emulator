@@ -113,6 +113,14 @@ def run(initial_path: Path | None = None) -> None:
     last_checkpoint_tstates = 0
     last_checkpoint_instructions = 0
     last_checkpoint_frame = 0
+    phase_totals_ms = {
+        "emulation": 0.0,
+        "image_copy": 0.0,
+        "scale": 0.0,
+        "set_pixmap": 0.0,
+        "total_frame": 0.0,
+    }
+    phase_max_ms = dict.fromkeys(phase_totals_ms, 0.0)
 
     def show_frame() -> None:
         nonlocal frame_count, last_checkpoint_time, last_checkpoint_tstates
@@ -120,8 +128,13 @@ def run(initial_path: Path | None = None) -> None:
         if machine is None or paused:
             return
         try:
+            frame_started = time.perf_counter()
+            phase_started = frame_started
             machine.run_frame()
+            emulation_ms = (time.perf_counter() - phase_started) * 1000
             frame_count += 1
+
+            phase_started = time.perf_counter()
             image = QImage(
                 machine.vdp.framebuffer,
                 256,
@@ -129,13 +142,31 @@ def run(initial_path: Path | None = None) -> None:
                 256 * 3,
                 QImage.Format.Format_RGB888,
             ).copy()
-            view.setPixmap(
-                QPixmap.fromImage(image).scaled(
-                    view.size(),
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.FastTransformation,
-                )
+            image_copy_ms = (time.perf_counter() - phase_started) * 1000
+
+            phase_started = time.perf_counter()
+            pixmap = QPixmap.fromImage(image).scaled(
+                view.size(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.FastTransformation,
             )
+            scale_ms = (time.perf_counter() - phase_started) * 1000
+
+            phase_started = time.perf_counter()
+            view.setPixmap(pixmap)
+            set_pixmap_ms = (time.perf_counter() - phase_started) * 1000
+            total_frame_ms = (time.perf_counter() - frame_started) * 1000
+
+            phase_values = {
+                "emulation": emulation_ms,
+                "image_copy": image_copy_ms,
+                "scale": scale_ms,
+                "set_pixmap": set_pixmap_ms,
+                "total_frame": total_frame_ms,
+            }
+            for phase, elapsed_ms in phase_values.items():
+                phase_totals_ms[phase] += elapsed_ms
+                phase_max_ms[phase] = max(phase_max_ms[phase], elapsed_ms)
 
             now = time.perf_counter()
             elapsed = max(now - last_checkpoint_time, 1e-9)
@@ -145,10 +176,22 @@ def run(initial_path: Path | None = None) -> None:
             status.showMessage(
                 f"{loaded.display_name if loaded else 'Sem ROM'} | "
                 f"Quadro {frame_count} | {fps:.1f} FPS | "
-                f"Velocidade {speed_percent:.1f}% | PC={machine.cpu.pc:04X}"
+                f"Velocidade {speed_percent:.1f}% | "
+                f"EMU {emulation_ms:.1f} ms | QImage {image_copy_ms:.2f} ms | "
+                f"escala {scale_ms:.2f} ms | UI {set_pixmap_ms:.2f} ms | "
+                f"PC={machine.cpu.pc:04X}"
             )
 
             if frame_count - last_checkpoint_frame >= 60:
+                measured_frames = frame_count - last_checkpoint_frame
+                phase_averages = {
+                    phase: round(total / measured_frames, 3)
+                    for phase, total in phase_totals_ms.items()
+                }
+                phase_maxima = {
+                    phase: round(value, 3)
+                    for phase, value in phase_max_ms.items()
+                }
                 logger.info(
                     "Resumo de desempenho",
                     extra={
@@ -163,6 +206,8 @@ def run(initial_path: Path | None = None) -> None:
                         "elapsed_ms": round(elapsed * 1000, 3),
                         "fps": round(fps, 3),
                         "speed_percent": round(speed_percent, 3),
+                        "phase_avg_ms": phase_averages,
+                        "phase_max_ms": phase_maxima,
                         "scanline": machine.vdp.scanline,
                         "status": machine.vdp.status,
                     },
@@ -171,6 +216,9 @@ def run(initial_path: Path | None = None) -> None:
                 last_checkpoint_tstates = machine.total_tstates
                 last_checkpoint_instructions = machine.total_instructions
                 last_checkpoint_frame = frame_count
+                for phase in phase_totals_ms:
+                    phase_totals_ms[phase] = 0.0
+                    phase_max_ms[phase] = 0.0
         except Exception:
             logger.exception(
                 "Falha durante execução de quadro",
