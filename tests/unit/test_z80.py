@@ -2816,8 +2816,8 @@ def test_absolute_hl_load_and_store_update_wz_to_next_address() -> None:
     store.hl = 0x1234
     store.step()
     assert store.wz == 0x0000
-    assert store.bus.read(0xFFFF) == 0x12
-    assert store.bus.read(0x0000) == 0x34
+    assert store.bus.read(0xFFFF) == 0x34
+    assert store.bus.read(0x0000) == 0x12
 
     load = make_cpu(bytes([0x2A, 0x20, 0xC0]))  # LD HL,(C020h)
     load.bus.write(0xC020, 0x78)
