@@ -20,9 +20,9 @@ direta de `SG1000Machine`, com o VDP mantendo sua própria VRAM.
   do tamanho da imagem. É uma simplificação para cartuchos pequenos, não um
   mapper universal; banking, SRAM e hardware especial de cartucho não são
   implementados.
-- `SG1000Machine`: conecta CPU Z80, barramento de memória, VDP e entradas
-  iniciais de joystick. Avança o VDP após cada instrução usando os T-states
-  nominais retornados pela CPU.
+- `SG1000Machine`: conecta CPU Z80, barramento de memória, VDP, PSG e entradas
+  iniciais de joystick. Avança VDP e PSG após cada instrução usando os T-states
+  nominais retornados pela CPU; essa granularidade ainda não é ciclo a ciclo.
 - `TMS9918A` (`src/sega_emulator/video/tms9918.py`): mantém 16 KiB de VRAM,
   registradores, portas de dados/controle, status, framebuffer e renderização
   por software dos modos implementados nesta etapa.
@@ -52,7 +52,7 @@ portas usando o byte inferior do endereço de I/O:
 | `BFh` | leitura/escrita | Porta de controle/status do VDP | Implementada |
 | `DCh` | leitura | Joystick 1 | Implementação inicial, ativa em nível baixo |
 | `DDh` | leitura | Joystick 2 | Implementação inicial, ativa em nível baixo |
-| PSG | escrita | SN76489A | Não conectado; sem áudio |
+| `40h–7Fh` | escrita | PSG SN76489AN | Integrado; faixa documentada para o chip discreto |
 
 A decodificação é deliberadamente inicial. O tratamento de endereços de 16 bits
 de I/O usa o byte inferior e não representa por si só a decodificação elétrica
@@ -71,7 +71,7 @@ regionais. Não reutilizar automaticamente o mapa de portas do Master System.
   barramento.
 - O modo headless e os testes sintéticos verificam o caminho de execução, mas
   não provam compatibilidade com jogos comerciais nem precisão de ciclo.
-- O PSG não está integrado; não há sincronização audiovisual nem saída de som.
+- O PSG é avançado com os T-states nominais retornados pela CPU. O modelo produz amostras mono a 44,1 kHz em buffer limitado a um segundo, consumido pelos frontends; isso sincroniza o áudio com o tempo lógico acumulado, mas não corrige a granularidade por instrução nem substitui temporização por acesso ao barramento.
 
 ## Testes existentes e lacunas
 
@@ -90,8 +90,8 @@ aprofundar:
 3. testes para limites e variantes de cartucho, sem assumir que o espelhamento
    modular funciona para todas as imagens;
 4. execução reproduzível de pelo menos uma ROM real legalmente obtida;
-5. sincronização temporal por eventos e, futuramente, PSG com testes de frequência
-   e regressão de amostras.
+5. comparar frequência, ruído e forma de onda do PSG com vetores externos ou captura de hardware;
+6. medir o custo do PSG na execução completa e otimizar somente após profiling.
 
 A infraestrutura modular `SG1000IOBus`/`TMS9918VRAM` proposta em outro ramo não
 está conectada a esta máquina. Se ela for reaproveitada futuramente, a integração
