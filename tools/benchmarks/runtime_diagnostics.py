@@ -78,9 +78,7 @@ def instrument(machine: SG1000Machine, metrics: dict[str, Any]) -> None:
         metrics["scanlines"][f"{mode}:{'enabled' if enabled else 'disabled'}"] += 1
         original_scanline(y, update_sprite_status=update_sprite_status)
 
-    vdp._render_scanline = timed_call(
-        scanline_wrapper, "vdp._render_scanline", metrics
-    )
+    vdp._render_scanline = timed_call(scanline_wrapper, "vdp._render_scanline", metrics)
 
     vdp._render_sprite_line = timed_call(
         vdp._render_sprite_line, "vdp._render_sprite_line", metrics
