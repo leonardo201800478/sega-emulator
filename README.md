@@ -48,6 +48,7 @@ O comando do módulo informa que a máquina SG-1000 ainda não está integrada. 
 - [Registro de desenvolvimento e ponto de retomada (22/10/2026)](docs/development-handoff-2026-10-22.md)
 - [Auditoria geral do código](docs/codebase-audit.md)
 - [Arquitetura multi-sistema e estratégia de reutilização](docs/architecture.md)
+- [Pesquisa de compatibilidade de hardware Sega: Z80, áudio, M68K, Mega CD e 32X](docs/research/hardware-compatibility-roadmap-2026-10.md)
 - [Auditoria de cobertura da CPU Z80](docs/z80-coverage.md)
 - [Auditoria técnica detalhada do núcleo Z80 (22/10/2026)](docs/z80-code-audit-2026-10-22.md)
 - [Especificação documental do Z80 a partir dos três manuais ZiLOG](docs/z80-zilog-manual-specification.md)
