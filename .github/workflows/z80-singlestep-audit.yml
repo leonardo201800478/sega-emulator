@@ -1,0 +1,59 @@
+name: Z80 SingleStepTests Differential Audit
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  single-step-corpus:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install project
+        run: python -m pip install -e .
+
+      - name: Download selected upstream vectors
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/singlestep-vectors
+          for opcode in 00 04 06 37 3f 76 c6 cb dd ed fd; do
+            curl --fail --location --retry 3 --retry-delay 2 \
+              "https://raw.githubusercontent.com/SingleStepTests/z80/main/v1/${opcode}.json" \
+              --output "artifacts/singlestep-vectors/${opcode}.json"
+          done
+          printf '%s\n' \
+            'Corpus: https://github.com/SingleStepTests/z80' \
+            'License: MIT (upstream repository metadata)' \
+            'Files: 00 04 06 37 3f 76 c6 cb dd ed fd' \
+            'Important: the current adapter does not compare per-cycle bus traces.' \
+            > artifacts/singlestep-vectors/SOURCE.txt
+
+      - name: Run differential audit and preserve report
+        run: |
+          python tools/audits/run_singlestep_corpus.py \
+            --directory artifacts/singlestep-vectors \
+            --opcodes 00 04 06 37 3f 76 c6 cb dd ed fd \
+            --report-json artifacts/z80-singlestep-report.json
+
+      - name: Upload corpus and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: z80-singlestep-differential-report
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 30
