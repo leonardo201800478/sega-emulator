@@ -220,3 +220,20 @@ def test_sprite_collision_status_is_visible_and_clearable_per_scanline() -> None
 
     vdp.advance(TSTATES_PER_LINE)
     assert vdp.status & 0x20
+
+
+def test_multicolor_mode_selects_pattern_bytes_by_tile_row() -> None:
+    vdp = TMS9918A()
+    _write_register(vdp, 1, 0x48)  # display enabled, Multicolor mode
+    _write_register(vdp, 2, 0x0E)  # name table at 3800h
+    _write_register(vdp, 4, 0x01)  # pattern generator at 0800h
+    vdp.vram[0x3800] = 1
+    vdp.vram[0x3820] = 1  # same pattern name in the next tile row
+    vdp.vram[0x808:0x810] = bytes((0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF, 0x10))
+
+    frame = vdp.render_frame()
+
+    top_left = 0
+    second_tile_row_left = (8 * SCREEN_WIDTH) * 3
+    assert frame[top_left : top_left + 3] == bytes(PALETTE[2])
+    assert frame[second_tile_row_left : second_tile_row_left + 3] == bytes(PALETTE[6])
