@@ -85,3 +85,15 @@ def test_machine_writes_vdp_through_aliased_data_port() -> None:
     machine.write_port(0x009F, 0x40)
     machine.write_port(0x009E, 0xBC)
     assert machine.vdp.vram[0x0045] == 0xBC
+
+
+
+def test_machine_routes_psg_writes_and_advances_audio_clock() -> None:
+    machine = SG1000Machine(bytes((0x00,)))
+    machine.write_port(0x7F, 0x90)
+    machine.write_port(0x40, 0x85)
+    machine.write_port(0x40, 0x12)
+    assert machine.psg.tone_periods[0] == 0x125
+    machine.step()
+    assert machine.total_tstates > 0
+    assert machine.drain_audio_samples() == []

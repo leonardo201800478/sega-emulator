@@ -9,7 +9,7 @@ Projeto de emulação de alta precisão com implementação de referência em Py
 - **Interface experimental:** menus Qt 6/PySide6 para abrir ROMs, pausar/continuar, reiniciar, alterar escala e consultar diagnóstico.
 - **Carregador:** arquivos `.sg`, `.rom`, `.bin` e ROMs dentro de ZIP; ZIP com múltiplas ROMs exige seleção explícita.
 - **Diagnóstico:** logs JSONL/texto por sessão, SHA-256 da ROM, checkpoints de execução e stack traces.
-- **Áudio:** PSG ainda não implementado. A compatibilidade de jogos reais continua pendente.
+- **Áudio:** PSG SN76489AN integrado à máquina, com saída mono nos frontends Pygame e Qt; a fidelidade sonora contra hardware real continua pendente.
 
 ## Requisitos
 
@@ -113,6 +113,7 @@ git diff --check
 - [Modelo e plano de fidelidade do VDP TMS9918A](docs/hardware/tms9918a-model.md)
 - [Backlog consolidado de validação da TMS9918A](docs/hardware/tms9918a-validation-backlog.md)
 - [Memória, portas e barramentos SG-1000](docs/hardware/sg1000-memory-buses.md)
+- [Modelo digital do PSG SN76489AN](docs/hardware/sn76489an.md)
 - [Catálogo prioritário de compatibilidade SG-1000](docs/hardware/sg1000-game-compatibility.md)
 - [Marco do primeiro jogo executável](docs/sg1000-first-playable.md)
 - [Auditoria de cobertura da CPU Z80](docs/z80-coverage.md)
@@ -123,7 +124,7 @@ git diff --check
 
 1. Reproduzir e corrigir a renderização incorreta observada com ROM real.
 2. Validar a entrada de joystick com hardware e jogos compatíveis.
-3. Implementar PSG e sincronização audiovisual.
+3. Validar amostras, ruído e latência do PSG contra referências independentes e hardware real.
 4. Aumentar a precisão temporal CPU–VDP com regressões reproduzíveis.
 
 ROMs comerciais e logs locais não devem ser incluídos no repositório. Use homebrew ou cópias obtidas legalmente no ambiente local.

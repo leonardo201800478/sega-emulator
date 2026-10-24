@@ -6,6 +6,7 @@ import hashlib
 import json
 import logging
 import time
+from array import array
 from pathlib import Path
 
 from sega_emulator.machine.sg1000 import SG1000Machine
@@ -38,6 +39,18 @@ def run(initial_path: Path | None = None) -> None:
         raise RuntimeError(
             'Interface Qt não instalada. Execute: python -m pip install -e ".[qt]"'
         ) from exc
+
+    pygame = None
+    audio_channel = None
+    try:
+        import pygame as pygame_backend
+
+        pygame_backend.mixer.pre_init(frequency=44_100, size=-16, channels=1, buffer=512)
+        pygame_backend.mixer.init()
+        audio_channel = pygame_backend.mixer.Channel(0)
+        pygame = pygame_backend
+    except Exception as exc:
+        logger.warning("Saída de áudio indisponível: %s", exc)
 
     app = QApplication.instance() or QApplication([])
     app.setOrganizationName("SegaEmulator")
@@ -137,6 +150,14 @@ def run(initial_path: Path | None = None) -> None:
             frame_started = time.perf_counter()
             phase_started = frame_started
             machine.run_frame()
+            samples = machine.drain_audio_samples()
+            if samples and audio_channel is not None and pygame is not None:
+                pcm = array("h", (max(-32768, min(32767, round(s * 32767))) for s in samples))
+                sound = pygame.mixer.Sound(buffer=pcm.tobytes())
+                if audio_channel.get_busy():
+                    audio_channel.queue(sound)
+                else:
+                    audio_channel.play(sound)
             emulation_ms = (time.perf_counter() - phase_started) * 1000
             frame_count += 1
 
@@ -538,3 +559,5 @@ def run(initial_path: Path | None = None) -> None:
         open_rom(str(initial_path))
     window.show()
     app.exec()
+    if pygame is not None:
+        pygame.mixer.quit()
