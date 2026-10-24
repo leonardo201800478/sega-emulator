@@ -2463,12 +2463,6 @@ def test_all_ed_second_bytes_are_supported_or_explicitly_rejected() -> None:
 
 
 @pytest.mark.parametrize(
-    ("data_bus", "expected_pc"),
-    [(0xC7 | (vector << 3), vector << 3) for vector in range(8)],
-)
-
-
-@pytest.mark.parametrize(
     "opcode",
     [0x45, 0x4D, 0x55, 0x5D, 0x65, 0x6D, 0x75, 0x7D],
 )
@@ -2493,6 +2487,10 @@ def test_retn_reti_aliases_restore_iff1_from_iff2(opcode: int, iff2: bool) -> No
     assert cpu.total_cycles == 14
 
 
+@pytest.mark.parametrize(
+    ("data_bus", "expected_pc"),
+    [(0xC7 | (vector << 3), vector << 3) for vector in range(8)],
+)
 def test_im0_accepts_all_rst_opcodes_from_interrupt_data_bus(
     data_bus: int, expected_pc: int
 ) -> None:
