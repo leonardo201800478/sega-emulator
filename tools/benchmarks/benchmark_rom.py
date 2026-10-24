@@ -97,9 +97,7 @@ def main() -> int:
             machine = new_machine(rom)
             run_frames(machine, args.warmup_frames, args.max_steps_per_frame)
             started = time.perf_counter()
-            steps, tstates = run_frames(
-                machine, args.frames, args.max_steps_per_frame
-            )
+            steps, tstates = run_frames(machine, args.frames, args.max_steps_per_frame)
             elapsed = time.perf_counter() - started
             fps = args.frames / elapsed
             samples.append(elapsed)
@@ -122,16 +120,16 @@ def main() -> int:
     print(f"median_seconds_for_{args.frames}_frames={median_seconds:.4f}")
     print(f"median_fps={median_fps:.3f}")
     print(f"median_speed_percent={median_fps / NOMINAL_FPS * 100:.2f}")
-    print(f"median_instructions_per_frame={statistics.median(instructions_per_frame):.1f}")
+    print(
+        f"median_instructions_per_frame={statistics.median(instructions_per_frame):.1f}"
+    )
     print(f"median_tstates_per_frame={statistics.median(cycles_per_frame):.1f}")
 
     if args.profile:
         machine = new_machine(rom)
         run_frames(machine, args.warmup_frames, args.max_steps_per_frame)
         profiler = cProfile.Profile()
-        profiler.runcall(
-            run_frames, machine, args.frames, args.max_steps_per_frame
-        )
+        profiler.runcall(run_frames, machine, args.frames, args.max_steps_per_frame)
         profiler.dump_stats(str(args.profile))
         stats = pstats.Stats(profiler).strip_dirs().sort_stats("cumtime")
         print(f"profile_file={args.profile}")
