@@ -11,7 +11,7 @@ from pathlib import Path
 def test_runtime_diagnostics_emits_baseline_phases_and_frame_hashes(
     tmp_path: Path,
 ) -> None:
-    repository = Path(__file__).resolve().parents[1]
+    repository = Path(__file__).resolve().parents[2]
     rom_path = tmp_path / "loop.sg"
     report_path = tmp_path / "runtime.json"
     # JP 0000h: laço determinístico para exercitar CPU, VDP e limites de quadro.
