@@ -189,19 +189,19 @@ python -m sega_emulator.testing.z80_singlestep caminho\para\v1\00.json --limit 2
 
 ### Contrato e limites conhecidos
 
-- Compara os registradores representados pelo núcleo (`A/F`, registradores gerais, pares alternativos, `PC/SP`, `IX/IY`, `I/R`, `IFF1/IFF2`, modo de interrupção, atraso de `EI`, `Q` e `WZ`), além de RAM e transações de porta quando presentes no vetor.
+- Compara os registradores representados pelo núcleo (`A/F`, registradores gerais, pares alternativos, `PC/SP`, `IX/IY`, `I/R`, `IFF1/IFF2`, modo de interrupção, atraso de `EI`, `P`, `Q` e `WZ`), além de RAM e transações de porta quando presentes no vetor.
 - Usa RAM plana de 64 KiB, pois os vetores descrevem um único passo de CPU e não o mapa físico da máquina SG-1000.
 - Não compara `cycles`/pinos: o núcleo ainda retorna T-states agregados e não oferece uma sequência de eventos de barramento ciclo a ciclo.
-- Se o vetor exigir estado não modelado ativo (por exemplo, `P` diferente de zero) ou um opcode não implementado, ele é marcado como `unsupported`, nunca como aprovado. O processo termina com código diferente de zero para divergências/erros e, por padrão, também para vetores não suportados; `--allow-unsupported` apenas permite continuar com código zero quando só houver itens não suportados.
+- O latch `P` é modelado e comparado; estados ainda não representados ou opcodes não implementados são marcados como `unsupported`, nunca como aprovados. Divergências e estados não suportados fazem o workflow falhar, preservando o artefato para diagnóstico.
 - O teste unitário usa vetores sintéticos mínimos para validar o adaptador e não conta como resultado de conformidade do corpus externo.
 
 ### Próximos gates
 
 1. **Concluído:** fixar a revisão upstream e verificar SHA-256 e tamanho dos arquivos por meio do manifesto versionado.
-2. Ampliar a cobertura de prefixos e opcodes com os arquivos disponíveis no corpus, mantendo separados aprovados, divergentes, não suportados e excluídos.
+2. Ampliar a cobertura de prefixos e opcodes com os arquivos disponíveis no corpus, mantendo separados aprovados, divergentes e não suportados.
 3. **Concluído:** modelar `P` como latch para `LD A,I`/`LD A,R`, limpar na instrução seguinte e aplicar PV=0 se INT mascarável for aceita imediatamente após essas instruções.
 4. Implementar um traço de eventos de barramento e só então comparar os arrays `cycles`.
-5. Manter a bateria completa como auditoria prolongada; o subconjunto atual é diagnóstico, não gate obrigatório de conformidade.
+5. Manter a bateria completa como auditoria prolongada; o subconjunto atual é um gate de regressão dos campos modelados, não uma certificação geral de conformidade.
 
 
 ## 6. Auditoria diferencial exploratória com corpus externo
