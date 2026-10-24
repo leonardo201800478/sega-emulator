@@ -2746,6 +2746,7 @@ def test_reset_clears_state_and_pending_interrupts_without_clearing_memory() -> 
     assert cpu.step() == 4
     assert cpu.pc == 1
 
+
 @pytest.mark.parametrize("opcode", [0x00, 0x01, 0x02, 0x03, 0x77, 0xFF])
 def test_unassigned_ed_opcodes_behave_as_eight_t_state_nops(opcode: int) -> None:
     """Bytes ED sem instrução atribuída não devem parar a execução do Z80."""
