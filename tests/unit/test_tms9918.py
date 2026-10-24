@@ -199,6 +199,21 @@ def test_transparent_sprite_can_collide_without_hiding_visible_sprite() -> None:
     assert vdp.status & 0x20
 
 
+def test_offscreen_sprite_pixels_still_participate_in_collision() -> None:
+    vdp = TMS9918A()
+    _prepare_sprite_table(vdp)
+    # Attribute bit 7 shifts both sprites 32 pixels left; their opaque pixels
+    # overlap at x=-32, outside the visible framebuffer.
+    _set_sprite(vdp, 0, x=0, pattern=1, color=0x82)
+    _set_sprite(vdp, 1, x=0, pattern=2, color=0x84)
+    pixels = bytearray(PALETTE[0] * (SCREEN_WIDTH * SCREEN_HEIGHT))
+
+    vdp._render_sprites(pixels)
+
+    assert vdp.status & 0x20
+    assert pixels[:3] == bytes(PALETTE[0])
+
+
 def test_fifth_active_sprite_sets_index_and_is_not_drawn() -> None:
     vdp = TMS9918A()
     _prepare_sprite_table(vdp)
