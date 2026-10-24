@@ -1,8 +1,18 @@
 name: Z80 full SingleStepTests audit
 
 on:
+  pull_request:
+    branches: [main]
   workflow_dispatch:
     inputs:
+      scope:
+        description: "Escopo: smoke para três arquivos ou full para o corpus completo"
+        required: true
+        default: "full"
+        type: choice
+        options:
+          - "smoke"
+          - "full"
       workers:
         description: "Número de processos para a auditoria (1-4)"
         required: false
@@ -57,7 +67,8 @@ jobs:
             echo "corpus_repository=https://github.com/SingleStepTests/z80"
             echo "corpus_commit=$(git -C external/SingleStepTests-z80 rev-parse HEAD)"
             echo "python=$(python --version)"
-            echo "workers=${{ inputs.workers }}"
+            echo "scope=${{ inputs.scope || 'smoke' }}"
+            echo "workers=${{ inputs.workers || '2' }}"
             echo "started_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           } > artifacts/run-metadata.txt
 
@@ -67,13 +78,21 @@ jobs:
           ruff check src tests tools *.py
           pytest -q
 
-      - name: Run complete corpus
+      - name: Run corpus smoke test on PR or full corpus on demand
+        shell: bash
         run: |
-          python run_singlestep_full.py \
-            --directory external/SingleStepTests-z80/v1 \
-            --workers "${{ inputs.workers }}" \
-            --report-json artifacts/singlestep-full.json \
+          workers="${{ inputs.workers || '2' }}"
+          common_args=(
+            --directory external/SingleStepTests-z80/v1
+            --workers "$workers"
+            --report-json artifacts/singlestep-full.json
             --report-md artifacts/singlestep-full.md
+          )
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" || "${{ inputs.scope }}" == "smoke" ]]; then
+            python run_singlestep_full.py "${common_args[@]}" --files 00 "cb 00" "ed 44"
+          else
+            python run_singlestep_full.py "${common_args[@]}"
+          fi
 
       - name: Upload complete audit report
         if: always()
