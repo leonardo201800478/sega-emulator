@@ -58,7 +58,7 @@ class SG1000MemoryBus:
         self._validate_address(address)
 
         if address >= RAM_START:
-            return self._ram.read(address)
+            return self._ram._read_mapped(address)
 
         if self._cartridge_rom is None or address >= len(self._cartridge_rom):
             raise UnmappedMemoryError(
@@ -77,7 +77,7 @@ class SG1000MemoryBus:
             raise ValueError("O valor deve estar entre 00h e FFh.")
 
         if address >= RAM_START:
-            self._ram.write(address, value)
+            self._ram._write_mapped(address, value)
             return
 
         if self._cartridge_rom is None or address >= len(self._cartridge_rom):
@@ -85,6 +85,6 @@ class SG1000MemoryBus:
                 f"Não há dispositivo mapeado para o endereço {address:04X}h."
             )
 
-        raise ReadOnlyMemoryError(
-            f"Não é permitido escrever na ROM do cartucho em {address:04X}h."
-        )
+        # Escritas em ROM de cartucho não alteram a ROM e, no modelo de
+        # hardware, não devem interromper a CPU com uma exceção Python.
+        return
