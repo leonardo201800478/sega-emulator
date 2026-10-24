@@ -128,12 +128,38 @@ def test_adapter_derives_io_read_value_from_single_step_cycle_trace() -> None:
             "pc": 0x4002,
             "b": 0x56,
             "r": 2,
+            "wz": 0x1235,
             "ram": [[0x4000, 0xED], [0x4001, 0x40]],
         },
         "cycles": [
             [0x1234, None, "r--i"],
             [0x1234, 0x56, "----"],
         ],
+    }
+
+    result = run_vector(vector)
+
+    assert result.status == "passed"
+    assert result.mismatches == []
+
+
+
+def test_out_immediate_updates_wz_to_port_plus_one() -> None:
+    vector = {
+        "name": "D3 OUT (n),A WZ fixture",
+        "initial": {
+            "pc": 0x5000,
+            "a": 0x9C,
+            "wz": 0x1111,
+            "ram": [[0x5000, 0xD3], [0x5001, 0x7C]],
+        },
+        "final": {
+            "pc": 0x5002,
+            "wz": 0x9C7D,
+            "ram": [[0x5000, 0xD3], [0x5001, 0x7C]],
+        },
+        "cycles": [],
+        "ports": [[0x9C7C, 0x9C, "w"]],
     }
 
     result = run_vector(vector)
