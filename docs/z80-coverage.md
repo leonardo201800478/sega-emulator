@@ -49,8 +49,8 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | `2F` — CPL | Implementado — cobertura inicial | Complementa A; atualiza H/N, copia X/Y do resultado e preserva S/Z/PV/C; 4 T-states nominais. |
 | `32` — LD (nn),A | Implementado — cobertura inicial | Endereço absoluto little-endian; 13 T-states nominais, flags preservadas. |
 | `3A` — LD A,(nn) | Implementado — cobertura inicial | Lê de endereço absoluto little-endian; 13 T-states nominais, flags preservadas. |
-| `37` — SCF | Implementado — cobertura inicial | Define C, limpa H/N, preserva S/Z/PV; F3/F5 usam A combinado com F quando Q anterior é zero, ou com Q anterior quando não zero. 4 T-states nominais. A correção para Q em DD ignorado aguarda nova auditoria diferencial. |
-| `3F` — CCF | Implementado — cobertura inicial | Inverte C, copia C anterior para H, limpa N e preserva S/Z/PV; F3/F5 usam A combinado com F quando Q anterior é zero, ou com Q anterior quando não zero. 4 T-states nominais. A correção para Q em DD ignorado aguarda nova auditoria diferencial. |
+| `37` — SCF | Implementado — cobertura inicial | Define C, limpa H/N, preserva S/Z/PV; F3/F5 são `((Q XOR F) OR A) & 0x28`, usando Q anterior. 4 T-states nominais. A correção para Q em DD ignorado aguarda nova auditoria diferencial. |
+| `3F` — CCF | Implementado — cobertura inicial | Inverte C, copia C anterior para H, limpa N e preserva S/Z/PV; F3/F5 são `((Q XOR F) OR A) & 0x28`, usando Q anterior. 4 T-states nominais. A correção para Q em DD ignorado aguarda nova auditoria diferencial. |
 | `40–75, 77–7F` — LD r,r' | Implementado — cobertura inicial | Registradores e (HL); `76` é documentado separadamente como HALT. |
 | `76` — HALT | Implementado — cobertura inicial | Estado de suspensão e ciclos repetidos; validar detalhes de fetch durante HALT. |
 | `80–87` — ADD A,r | Implementado — cobertura inicial | Registros e (HL); expandir testes de flags. |
@@ -308,3 +308,11 @@ Na branch `fix/z80-single-step-audit`, o PR #14 propõe correções e testes dir
 A repetição direcionada no commit `6434fdaea85b32e7335ddf9a37730d6e70a083ae` processou 14.000 vetores: 13.567 aprovados e 433 divergentes. `BIT (HL)` (8.000) e `DAA` (2.000) passaram integralmente; as divergências restantes foram em `SCF` (`37.json`, 223) e `CCF` (`3f.json`, 210), nos campos F/Q. O código anterior aplicava Q diretamente em vez de usar a relação XOR entre Q e F.
 
 Foi aplicada uma correção candidata para calcular F3/F5 com `((Q XOR F) OR A) & 0x28`. A alteração e suas regressões unitárias ainda precisam ser executadas por pytest/Ruff; os 433 casos são do commit anterior à correção e não medem o código novo. O Colab não será usado para essa validação curta.
+
+
+### Correções após revisão da PR #18 — 24/10/2026
+
+- Restaurado o método público `Z80Cpu.reset()`; ele zera registradores, estado Q/WZ, contadores e pedidos pendentes sem substituir os barramentos conectados.
+- Corrigido WZ/MEMPTR em LDIR/LDDR quando a instrução repete: após retroceder PC, WZ recebe o endereço do prefixo ED + 1.
+- Corrigido WZ/MEMPTR de INI/IND e suas formas de repetição para derivar o valor de BC anterior à instrução, com direção +1 para INI e -1 para IND; a forma de repetição mantém a atualização específica do caminho repetido.
+- Atualizada a descrição de F3/F5 em SCF/CCF para a fórmula usada pela implementação, `((Q XOR F) OR A) & 0x28`. Isso corrige a documentação, não substitui a validação diferencial independente.
