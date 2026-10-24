@@ -33,6 +33,9 @@ PALETTE: tuple[tuple[int, int, int], ...] = (
     (255, 255, 255),
 )
 
+# Reuse immutable RGB triplets instead of allocating bytes for every pixel.
+_PALETTE_RGB_BYTES: tuple[bytes, ...] = tuple(bytes(color) for color in PALETTE)
+
 
 class TMS9918A:
     """VDP com VRAM, registradores, portas, status, sprites e renderização RGB."""
@@ -277,7 +280,7 @@ class TMS9918A:
     def _put_pixel(self, pixels: bytearray, x: int, y: int, color: int) -> None:
         if 0 <= x < SCREEN_WIDTH and 0 <= y < SCREEN_HEIGHT:
             offset = (y * SCREEN_WIDTH + x) * 3
-            pixels[offset : offset + 3] = bytes(PALETTE[color & 0x0F])
+            pixels[offset : offset + 3] = _PALETTE_RGB_BYTES[color & 0x0F]
 
     def _render_graphics_i(self, pixels: bytearray, backdrop: int) -> None:
         name_base = (self.registers[2] & 0x0F) << 10
