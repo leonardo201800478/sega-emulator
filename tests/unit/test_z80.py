@@ -2773,3 +2773,75 @@ def test_reset_clears_state_and_pending_interrupts_without_clearing_memory() -> 
 
     assert cpu.step() == 4
     assert cpu.pc == 1
+
+@pytest.mark.parametrize(
+    ("program", "initial_f", "expected_pc"),
+    [
+        (bytes([0x18, 0x02]), 0x00, 4),  # JR e sempre atualiza WZ para o destino.
+        (bytes([0x20, 0x02]), 0x00, 4),  # JR NZ,e tomado.
+        (bytes([0x20, 0x02]), 0x40, 2),  # JR NZ,e não tomado preserva WZ.
+    ],
+)
+def test_relative_jumps_update_wz_only_when_branch_is_taken(
+    program: bytes, initial_f: int, expected_pc: int
+) -> None:
+    cpu = make_cpu(program)
+    cpu.f = initial_f
+    cpu.wz = 0xBEEF
+
+    cpu.step()
+
+    assert cpu.pc == expected_pc
+    assert cpu.wz == (expected_pc if expected_pc != 2 else 0xBEEF)
+
+
+def test_absolute_hl_load_and_store_update_wz_to_next_address() -> None:
+    store = make_cpu(bytes([0x22, 0xFF, 0xFF]))  # LD (FFFFh),HL
+    store.hl = 0x1234
+    store.step()
+    assert store.wz == 0x0000
+
+    load = make_cpu(bytes([0x2A, 0x20, 0xC0]))  # LD HL,(C020h)
+    load.bus.write(0xC020, 0x78)
+    load.bus.write(0xC021, 0x56)
+    load.step()
+    assert load.hl == 0x5678
+    assert load.wz == 0xC021
+
+
+def test_absolute_accumulator_store_uses_accumulator_in_wz_high_byte() -> None:
+    cpu = make_cpu(bytes([0x32, 0xFF, 0xC0]))  # LD (C0FFh),A
+    cpu.a = 0x5A
+
+    cpu.step()
+
+    assert cpu.wz == 0x5A00
+
+
+def test_sbc_hl_and_retn_update_wz() -> None:
+    sbc = make_cpu(bytes([0xED, 0x42]))  # SBC HL,BC
+    sbc.hl = 0x1234
+    sbc.bc = 0x0001
+    sbc.step()
+    assert sbc.hl == 0x1233
+    assert sbc.wz == 0x1235
+
+    retn = make_cpu(bytes([0xED, 0x45]))  # RETN
+    retn.sp = 0xC010
+    retn.bus.write(0xC010, 0x34)
+    retn.bus.write(0xC011, 0x12)
+    retn.step()
+    assert retn.pc == 0x1234
+    assert retn.wz == 0x1234
+
+
+def test_indexed_memory_load_updates_wz_to_effective_address() -> None:
+    cpu = make_cpu(bytes([0xDD, 0x46, 0x02]))  # LD B,(IX+2)
+    cpu.ix = 0xC010
+    cpu.bus.write(0xC012, 0xA5)
+
+    cpu.step()
+
+    assert cpu.b == 0xA5
+    assert cpu.wz == 0xC012
+
