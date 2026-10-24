@@ -342,7 +342,7 @@ def test_text_mode_renders_six_pixel_glyphs_with_eight_pixel_left_border() -> No
     _write_register(vdp, 4, 0x01)
     _write_register(vdp, 7, 0xF1)
     vdp.vram[0x0400 : 0x0400 + 960] = bytes(960)
-    vdp.vram[0x0800 : 0x0808] = bytes((0xA8, 0x40, 0, 0, 0, 0, 0, 0))
+    vdp.vram[0x0800:0x0808] = bytes((0xA8, 0x40, 0, 0, 0, 0, 0, 0))
 
     pixels = vdp.render_frame()
 
