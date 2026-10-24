@@ -12,7 +12,7 @@ def test_native_subset_executes_a_batch_without_per_opcode_python_calls() -> Non
 
     assert cpu.run_steps(3) == 3
     assert cpu.a == 0x80
-    assert cpu.f & 0xD4 == 0xD4
+    assert cpu.f & 0xD4 == 0x94
     assert cpu.halted
     assert cpu.total_tstates == 15
     assert cpu.state() == (0x80, cpu.f, 4, True, 15)
