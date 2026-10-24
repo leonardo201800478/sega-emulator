@@ -403,7 +403,7 @@ class TMS9918A:
         active, fifth_index = self._sprite_line_active(line)
         if (
             update_status
-            and line <= VBLANK_LINE
+            and line < VBLANK_LINE
             and fifth_index is not None
             and not (self.status & 0x80)
             and not (self.status & 0x40)
