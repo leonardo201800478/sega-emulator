@@ -243,6 +243,23 @@ def test_fifth_sprite_flag_is_not_raised_during_vblank() -> None:
     assert not (vdp.status & 0x40)
 
 
+
+def test_fifth_sprite_overflow_does_not_trigger_on_first_vblank_line_after_status_read() -> None:
+    vdp = TMS9918A()
+    _prepare_sprite_table(vdp)
+    for index in range(5):
+        _set_sprite(vdp, index, x=index * 10, pattern=1, color=2, raw_y=0xBF)
+
+    vdp.advance(VBLANK_LINE * TSTATES_PER_LINE)
+    assert vdp.status & 0x80
+
+    # Reading status clears F. That must not re-enable 5S on line 192.
+    vdp.read_port(0x81)
+    vdp.advance(TSTATES_PER_LINE)
+
+    assert not (vdp.status & 0x40)
+    assert not (vdp.status & 0x80)
+
 def test_reset_preserves_vram_unless_explicitly_requested() -> None:
     vdp = TMS9918A()
     vdp.vram[0x1234] = 0xA5
