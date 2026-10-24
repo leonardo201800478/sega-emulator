@@ -87,7 +87,6 @@ def test_machine_writes_vdp_through_aliased_data_port() -> None:
     assert machine.vdp.vram[0x0045] == 0xBC
 
 
-
 def test_machine_routes_psg_writes_from_sg1000_port_range() -> None:
     machine = SG1000Machine(bytes((0x00,)))
 
