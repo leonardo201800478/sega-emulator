@@ -13,7 +13,11 @@ from sega_emulator.frontend.controller_input import (
 
 
 class FakeController:
-    def __init__(self, buttons: set[int] | None = None, axes: dict[int, int] | None = None) -> None:
+    def __init__(
+        self,
+        buttons: set[int] | None = None,
+        axes: dict[int, int] | None = None,
+    ) -> None:
         self.buttons = buttons or set()
         self.axes = axes or {}
         self.is_attached = True
@@ -104,7 +108,9 @@ def test_controller_configuration_round_trip_and_validation() -> None:
 
 def test_sdl_controllers_map_independently_to_two_players() -> None:
     backend = FakeControllerModule()
-    backend.devices[0].buttons.update({backend.CONTROLLER_BUTTON_A, backend.CONTROLLER_BUTTON_DPAD_RIGHT})
+    backend.devices[0].buttons.update(
+        {backend.CONTROLLER_BUTTON_A, backend.CONTROLLER_BUTTON_DPAD_RIGHT}
+    )
     backend.devices[1].buttons.add(backend.CONTROLLER_BUTTON_B)
     backend.devices[1].axes[backend.CONTROLLER_AXIS_LEFTX] = -32768
     pygame_stub = SimpleNamespace(_sdl2=SimpleNamespace(controller=backend))
