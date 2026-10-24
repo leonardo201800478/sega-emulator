@@ -35,7 +35,7 @@ jobs:
             --output "$RUNNER_TEMP/super-uwol.zip"
           unzip -l "$RUNNER_TEMP/super-uwol.zip" | tee super-uwol-archive-list.txt
           unzip -q "$RUNNER_TEMP/super-uwol.zip" -d "$RUNNER_TEMP/super-uwol"
-          ROM_PATH="$(find "$RUNNER_TEMP/super-uwol" -type f \\( -iname '*.sg' -o -iname '*.bin' -o -iname '*.rom' -o -iname '*.sms' \\) -print -quit)"
+          ROM_PATH="$(find "$RUNNER_TEMP/super-uwol" -type f \( -iname '*.sg' -o -iname '*.bin' -o -iname '*.rom' -o -iname '*.sms' \) -print -quit)"
           if [ -z "$ROM_PATH" ]; then
             echo "ERROR: no SG-1000 ROM file found in Super Uwol archive"
             exit 1
