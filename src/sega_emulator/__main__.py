@@ -33,6 +33,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     args = parser.parse_args(arguments)
 
     try:
+        if args.rom.stat().st_size > 0xC000:
+            parser.error("a ROM excede o limite suportado de 48 KiB")
         rom = args.rom.read_bytes()
     except OSError as exc:
         parser.error(f"não foi possível ler a ROM: {exc}")
