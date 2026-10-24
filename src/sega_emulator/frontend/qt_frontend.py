@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import time
 from pathlib import Path
@@ -354,7 +356,109 @@ def run(initial_path: Path | None = None) -> None:
     video_menu.addAction("Escala 3×", lambda: window.resize(800, 620))
     video_menu.addAction("Escala 4×", lambda: window.resize(1050, 800))
 
+    def dump_vdp_snapshot() -> None:
+        """Salva um snapshot pontual do VDP para investigar divergências gráficas."""
+        if machine is None or loaded is None:
+            QMessageBox.information(window, "Snapshot VDP", "Carregue uma ROM primeiro.")
+            return
+
+        vdp = machine.vdp
+        attr_base = (vdp.registers[5] & 0x7F) << 7
+        sprites = []
+        for index in range(32):
+            offset = (attr_base + index * 4) & 0x3FFF
+            raw_y, raw_x, pattern, color = vdp.vram[offset : offset + 4]
+            sprites.append({
+                "index": index,
+                "vram_address": offset,
+                "raw_y": raw_y,
+                "raw_x": raw_x,
+                "pattern": pattern,
+                "color_byte": color,
+                "color": color & 0x0F,
+                "early_clock": bool(color & 0x80),
+            })
+            if raw_y == 0xD0:
+                break
+
+        try:
+            output_dir = Path("logs") / "vdp_snapshots"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            stem = f"vdp-{vdp.frame_number:06d}-{machine.cpu.pc:04X}-{time.time_ns()}"
+            framebuffer = bytes(vdp.framebuffer)
+            snapshot = {
+                "schema_version": 1,
+                "purpose": "visual-divergence-debugging",
+                "rom": {
+                    "display_name": loaded.display_name,
+                    "sha256": loaded.sha256,
+                    "member_name": loaded.member_name,
+                },
+                "machine": {
+                    "pc": machine.cpu.pc,
+                    "instructions": machine.total_instructions,
+                    "tstates": machine.total_tstates,
+                    "frame_count_frontend": frame_count,
+                },
+                "vdp": {
+                    "frame_number": vdp.frame_number,
+                    "scanline": vdp.scanline,
+                    "cycles_into_line": vdp._cycles_into_line,
+                    "status": vdp.status,
+                    "registers_hex": bytes(vdp.registers).hex(),
+                    "display_mode": vdp._display_mode,
+                    "display_enabled": bool(vdp.registers[1] & 0x40),
+                    "sprite_attribute_table_base": attr_base,
+                    "sprite_pattern_table_base": (vdp.registers[6] & 0x07) << 11,
+                    "sprite_entries_raw": sprites,
+                    "sprite_line_active_at_current_scanline": (
+                        vdp._sprite_line_active(vdp.scanline)[0]
+                        if vdp.scanline < 262 else []
+                    ),
+                    "vram_hex": bytes(vdp.vram).hex(),
+                    "framebuffer_sha256": hashlib.sha256(framebuffer).hexdigest(),
+                    "framebuffer_size": len(framebuffer),
+                },
+            }
+            json_path = output_dir / f"{stem}.json"
+            image_path = output_dir / f"{stem}.png"
+            json_path.write_text(
+                json.dumps(snapshot, indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            image = QImage(
+                framebuffer, 256, 192, 256 * 3,
+                QImage.Format.Format_RGB888,
+            ).copy()
+            if not image.save(str(image_path), "PNG"):
+                raise OSError(f"Não foi possível salvar a imagem: {image_path}")
+        except Exception as exc:
+            logger.exception("Falha ao salvar snapshot VDP")
+            QMessageBox.critical(window, "Snapshot VDP", str(exc))
+            return
+
+        logger.info(
+            "Snapshot VDP salvo",
+            extra={
+                "event": "vdp_snapshot_saved",
+                "json_path": str(json_path),
+                "image_path": str(image_path),
+                "rom_sha256": loaded.sha256,
+                "frame": vdp.frame_number,
+                "pc": machine.cpu.pc,
+            },
+        )
+        QMessageBox.information(
+            window,
+            "Snapshot VDP salvo",
+            f"JSON: {json_path.resolve()}\\nPNG: {image_path.resolve()}",
+        )
+
     tools_menu = window.menuBar().addMenu("&Diagnóstico")
+    snapshot_action = QAction("Capturar snapshot VDP (JSON + PNG)…", window)
+    snapshot_action.setShortcut("F8")
+    snapshot_action.triggered.connect(dump_vdp_snapshot)
+    tools_menu.addAction(snapshot_action)
     tools_menu.addAction(
         "Abrir pasta de logs",
         lambda: QMessageBox.information(
