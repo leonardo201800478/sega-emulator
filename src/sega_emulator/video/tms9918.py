@@ -50,6 +50,27 @@ class TMS9918A:
         self.framebuffer = bytes(SCREEN_WIDTH * SCREEN_HEIGHT * 3)
         self._frame_ready = False
 
+    def reset(self, *, clear_vram: bool = False) -> None:
+        """Reinicia registradores e temporização sem apagar VRAM por padrão.
+
+        O conteúdo da VRAM após reset físico depende do hardware e da memória
+        usada; preservar os bytes é uma convenção explícita do modelo.
+        """
+        if type(clear_vram) is not bool:
+            raise TypeError("clear_vram deve ser bool.")
+        self.registers[:] = bytes(len(self.registers))
+        self.status = 0x1F
+        self.address = 0
+        self.read_buffer = 0
+        self._control_first = None
+        self._cycles_into_line = 0
+        self.scanline = 0
+        self.frame_number = 0
+        self.framebuffer = bytes(SCREEN_WIDTH * SCREEN_HEIGHT * 3)
+        self._frame_ready = False
+        if clear_vram:
+            self.vram[:] = bytes(VRAM_SIZE)
+
     @property
     def interrupt_pending(self) -> bool:
         """A saída INT fica ativa durante VBlank se R1 habilitar interrupções."""
@@ -230,53 +251,92 @@ class TMS9918A:
                         )
 
     def _render_sprites(self, pixels: bytearray) -> None:
+        """Compõe sprites respeitando ordem, transparência, colisão e overflow.
+
+        O primeiro sprite da tabela tem prioridade visual. Pixels com padrão
+        ativo contam para colisão mesmo quando a cor do sprite é zero
+        (transparente). Só os quatro primeiros sprites ativos em cada linha
+        são desenhados; o quinto é registrado no status quando F=0.
+        """
         attr_base = (self.registers[5] & 0x7F) << 7
         pattern_base = (self.registers[6] & 0x07) << 11
         size = 16 if self.registers[1] & 0x02 else 8
         scale = 2 if self.registers[1] & 0x01 else 1
-        drawn_pixels: set[tuple[int, int]] = set()
-        sprites_per_line = [0] * SCREEN_HEIGHT
 
-        for index in range(32):
-            offset = (attr_base + index * 4) & 0x3FFF
-            raw_y, x, pattern_number, color_byte = self.vram[offset : offset + 4]
-            if raw_y == 0xD0:
-                break
-            y = (raw_y + 1) & 0xFF
-            if y >= 0xE0:
-                y -= 0x100
-            color = color_byte & 0x0F
-            if color_byte & 0x80:
-                x -= 32
-            height = size * scale
-            for line in range(max(0, y), min(SCREEN_HEIGHT, y + height)):
-                sprites_per_line[line] += 1
-                if sprites_per_line[line] > 4:
-                    if not (self.status & 0x40):
-                        self.status = (self.status & ~0x1F) | 0x40 | index
+        # Processar por linha reflete o limite físico de quatro sprites por
+        # scanline e impede que um sprite posterior cubra um anterior.
+        for line in range(SCREEN_HEIGHT):
+            active: list[tuple[int, int, int, int]] = []
+            fifth_index: int | None = None
+
+            for index in range(32):
+                offset = (attr_base + index * 4) & VRAM_MASK
+                raw_y, x, pattern_number, color_byte = self.vram[offset : offset + 4]
+                if raw_y == 0xD0:
+                    break
+
+                y = (raw_y + 1) & 0xFF
+                if y >= 0xE0:
+                    y -= 0x100
+                height = size * scale
+                if not y <= line < y + height:
                     continue
-                if color == 0:
-                    continue
-                source_y = (line - y) // scale
+
+                if len(active) == 4:
+                    fifth_index = index
+                    break
+                color = color_byte & 0x0F
+                if color_byte & 0x80:
+                    x -= 32
+                active.append((index, x, pattern_number, color))
+
+            # O overflow é um latch independente da colisão. O manual indica
+            # que o fifth-sprite flag não é gerado enquanto F (VBlank) está 1.
+            if (
+                fifth_index is not None
+                and not (self.status & 0x80)
+                and not (self.status & 0x40)
+            ):
+                self.status = (self.status & 0xA0) | 0x40 | fifth_index
+
+            occupied: set[int] = set()
+            visible: set[int] = set()
+            for _, x, pattern_number, color in active:
+                source_y = (line - ((self.vram[(attr_base + _ * 4) & VRAM_MASK] + 1) & 0xFF))
+                # Recover the signed Y coordinate used by the VDP's Y+1 rule.
+                raw_y = self.vram[(attr_base + _ * 4) & VRAM_MASK]
+                sprite_y = (raw_y + 1) & 0xFF
+                if sprite_y >= 0xE0:
+                    sprite_y -= 0x100
+                source_y = (line - sprite_y) // scale
+
                 for source_x in range(size):
-                    tile = pattern_number
                     if size == 16:
                         tile = (
                             (pattern_number & 0xFC)
                             + (source_y // 8) * 2
                             + source_x // 8
                         )
+                    else:
+                        tile = pattern_number
                     address = pattern_base + tile * 8 + (source_y & 7)
-                    pattern = self.vram[address & 0x3FFF]
+                    pattern = self.vram[address & VRAM_MASK]
                     if not (pattern & (0x80 >> (source_x & 7))):
                         continue
+
                     for dx in range(scale):
                         px = x + source_x * scale + dx
                         if not 0 <= px < SCREEN_WIDTH:
                             continue
-                        key = (px, line)
-                        if key in drawn_pixels:
+                        key = line * SCREEN_WIDTH + px
+                        if key in occupied:
                             self.status |= 0x20
-                            continue
-                        self._put_pixel(pixels, px, line, color)
-                        drawn_pixels.add(key)
+                        else:
+                            occupied.add(key)
+
+                        # Transparent color still collides, but does not hide
+                        # sprites behind it. The first nontransparent sprite
+                        # owns the visible pixel.
+                        if color and key not in visible:
+                            self._put_pixel(pixels, px, line, color)
+                            visible.add(key)
