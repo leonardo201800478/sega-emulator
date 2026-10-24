@@ -7,9 +7,9 @@ from sega_emulator.bus.memory import RAM_SIZE, SG1000Ram
 from sega_emulator.bus.memory_bus import SG1000MemoryBus
 from sega_emulator.bus.vram import TMS9918VRAM
 from sega_emulator.video.tms9918 import (
+    TMS9918,
     VDP_CONTROL_PORT,
     VDP_DATA_PORT,
-    TMS9918,
 )
 
 
