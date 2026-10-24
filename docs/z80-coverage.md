@@ -49,8 +49,8 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | `2F` — CPL | Implementado — cobertura inicial | Complementa A; atualiza H/N, copia X/Y do resultado e preserva S/Z/PV/C; 4 T-states nominais. |
 | `32` — LD (nn),A | Implementado — cobertura inicial | Endereço absoluto little-endian; 13 T-states nominais, flags preservadas. |
 | `3A` — LD A,(nn) | Implementado — cobertura inicial | Lê de endereço absoluto little-endian; 13 T-states nominais, flags preservadas. |
-| `37` — SCF | Implementado — cobertura inicial | Define C, limpa H/N, preserva S/Z/PV e copia X/Y de A; 4 T-states nominais. |
-| `3F` — CCF | Implementado — cobertura inicial | Inverte C, copia C anterior para H, limpa N, preserva S/Z/PV e copia X/Y de A; 4 T-states nominais. |
+| `37` — SCF | Implementado — cobertura inicial | Define C, limpa H/N, preserva S/Z/PV; F3/F5 usam A combinado com F quando Q anterior é zero, ou com Q anterior quando não zero. 4 T-states nominais. A correção para Q em DD ignorado aguarda nova auditoria diferencial. |
+| `3F` — CCF | Implementado — cobertura inicial | Inverte C, copia C anterior para H, limpa N e preserva S/Z/PV; F3/F5 usam A combinado com F quando Q anterior é zero, ou com Q anterior quando não zero. 4 T-states nominais. A correção para Q em DD ignorado aguarda nova auditoria diferencial. |
 | `40–75, 77–7F` — LD r,r' | Implementado — cobertura inicial | Registradores e (HL); `76` é documentado separadamente como HALT. |
 | `76` — HALT | Implementado — cobertura inicial | Estado de suspensão e ciclos repetidos; validar detalhes de fetch durante HALT. |
 | `80–87` — ADD A,r | Implementado — cobertura inicial | Registros e (HL); expandir testes de flags. |
@@ -91,9 +91,7 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 O código atual modela registradores principais e alternativos, I/R, IX/IY, SP, PC, flags e um acumulador de T-states nominais. Ainda faltam, entre outros:
 
 - Os registradores alternativos AF', BC', DE' e HL', I/R e IX/IY estão modelados.
-- IFF1/IFF2, modos 0–2, HALT e solicitações NMI/INT têm um modelo inicial. Em IM 0, o byte de acknowledge é executado como opcode externo; há testes sintéticos para RST, NOP, `LD A,n`, `CALL`, prefixos CB/ED/DD e consumo de operandos subsequentes pela memória. Essa cobertura caracteriza o contrato atual, mas ainda requer validação diferencial para confirmar a semântica e os ciclos do acknowledge.
-- `test_nmi_during_halt_has_priority_over_pending_int` caracteriza a sequência EI → HALT → NMI com INT pendente: NMI sai de HALT, empilha o PC após HALT, incrementa R, copia IFF1 para IFF2 e mantém INT pendente. É um teste de regressão sintético; ainda não equivale a validação diferencial contra hardware.
-- `test_retn_reti_aliases_restore_iff1_from_iff2` percorre os oito aliases ED de RETN/RETI com IFF2 em ambos os estados, verificando restauração de PC/SP, preservação de F e incremento de R. A cobertura é sintética e não modela o sinal externo de daisy chain que distingue RETI em sistemas com controlador de prioridades.
+- IFF1/IFF2, modos 0–2, HALT e solicitações NMI/INT têm um modelo inicial. A limitação conhecida de IM 0 (aceitar apenas RST no byte de acknowledge) permanece pendente até validação e implementação genérica; confirme o comportamento no código atual antes de ampliar essa afirmação.
 - Ciclos M1, ciclos de leitura/escrita e I/O, estados de espera, contenção e temporização de barramento.
 - Flags X/Y e efeitos não documentados validados contra referências e testes específicos.
 - Comportamento de prefixos repetidos, opcodes não documentados e diferenças de revisão, conforme a meta de compatibilidade.
@@ -103,7 +101,7 @@ O contador `total_cycles` atual soma os custos nominais das instruções suporta
 ## Próximos passos de validação
 
 1. Executar comparação diferencial com uma suíte de referência Z80 confiável para flags, resultados, PC, SP e ciclos de cada família.
-2. Validar diferencialmente o reconhecimento de INT/NMI, com prioridade para IM 0: opcodes e prefixos fornecidos pelo barramento, origem dos bytes seguintes, PC, R, IFFs e ciclos.
+2. Refinar o reconhecimento de INT/NMI, em especial IM 0 para opcodes fornecidos pelo barramento além de RST.
 3. Validar os efeitos de I/O e as flags de LDI/LDD, CPI/CPD e instruções de bloco de I/O contra referências primárias e testes independentes.
 4. Implementar um modelo de acesso a barramento/ciclo para M1, leitura, escrita, I/O, estados de espera e contenção quando a arquitetura do SG-1000 exigir isso.
 5. Auditar prefixos repetidos, opcodes não documentados e diferenças de revisão de hardware; não misturar extensões de outros derivados do Z80.
@@ -123,8 +121,8 @@ A análise acrescenta estes itens à lista de implementação, sem afirmar que j
 2. **Separar tipos de acesso:** planejar contratos distintos para fetch M1, leitura de operandos, acesso a dados e I/O; manter a API atual até haver testes de regressão.
 3. **Temporização por acesso:** substituir gradualmente a suposição de que T-states nominais por instrução bastam; modelar eventos de barramento e estados de espera antes de alegar precisão de ciclo.
 4. **Refresh e registrador R:** testar incrementos por fetch M1, prefixos, HALT/interrupções e preservação do bit 7; o sinal de refresh ainda não é um evento de barramento modelado.
-5. **Flags e estado auxiliar:** ampliar testes de DAA, operações de bloco, BIT em memória/indexado e preservação de flags; pesquisar WZ/MEMPTR, Q e X/Y como trabalho de compatibilidade, sem presumir que o MAME represente toda variante física.
-6. **Interrupções:** validar NMI por borda, IFF1/IFF2, atraso de EI, HALT e acknowledge. IM 0 já executa opcodes externos além de RST no modelo atual; falta comparação diferencial para confirmar sequências de prefixos, bytes de operandos, ciclos e diferenças de variante.
+5. **Flags e estado auxiliar:** DAA, BIT e SCF/CCF estão em correção diferencial. Q tem atualização centralizada em avaliação; WZ/MEMPTR recebeu atualizações parciais por família, ainda pendentes de auditoria completa e validação externa.
+6. **Interrupções:** validar NMI por borda, IFF1/IFF2, atraso de EI, HALT e acknowledge. Fechar a limitação conhecida de IM 0 para o modelo de CPU escolhido, em vez de aceitar apenas RST por conveniência.
 7. **Reset e variante:** distinguir estado inicial do objeto e reset de hardware; definir a variante-alvo compatível com SG-1000 antes de assumir peculiaridades NMOS/CMOS/NEC.
 8. **Integração de plataforma:** futuramente conectar WAIT/READY e I/O do SG-1000 por interfaces de barramento, sem incorporar o mapa do console diretamente ao núcleo Z80.
 
@@ -136,14 +134,14 @@ Pesquisa detalhada com revisões fixadas e análise de licenças: [docs/z80-undo
 
 Os itens abaixo complementam a pesquisa do MAME e continuam **pendentes**, salvo se testes futuros comprovarem o contrário:
 
-1. **Matriz dos 256 opcodes ED:** identificar aliases de NEG/RETN/RETI/IM, NOPs e instruções não documentadas; testar flags, IFFs, PC/SP, I/O e ciclos.
-2. **WZ/MEMPTR:** estudar estado auxiliar e regras de atualização por classe de instrução antes de adicionar o registrador ao núcleo.
-3. **Q latch e flags X/Y:** investigar SCF/CCF em sequência, BIT em memória/indexado, CP, aritmética de 16 bits e origem dos bits 3/5.
+1. **Matriz dos 256 opcodes ED:** os handlers conhecidos/aliases são decodificados e os bytes sem operação atribuída agora usam ED-NOP (8 T-states); testes classificam os 256 segundos bytes. Ainda é necessário validar semântica, flags, IFFs, PC/SP, I/O, WZ e ciclos de cada família.
+2. **WZ/MEMPTR:** o registrador está no núcleo e já recebe atualizações em operações de memória, 16 bits, fluxo de controle, I/O, acessos indexados e parte das instruções ED/bloco. Revisar a tabela de cada opcode e validar os estados finais.
+3. **Q latch e flags X/Y:** SCF/CCF consultam o Q anterior, e as escritas internas de F atualizam Q. Ainda é necessário validar a sequência completa de instruções, prefixos, interrupções e diferenças de variante.
 4. **Prefixos DD/FD:** validar prefixos repetidos/alternados, prefixos ignorados, IXH/IXL/IYH/IYL, DD/FD-CB, PC, R e custos temporais.
 5. **R/M1/HALT:** separar fetch de opcode, operandos e opcode final de DD/FD-CB; testar o contador R e só depois modelar refresh.
 6. **Operações de bloco ED:** validar flags e condições de repetição/saída antecipada de LDI/LDD/LDIR/LDDR, CPI/CPD/CPIR/CPDR e operações de I/O de bloco.
 7. **DAA e aritmética:** gerar matriz de casos para A/N/H/C e validar A/F com referência independente.
-8. **Interrupções e variantes:** comparar IM 0 com uma referência independente para opcodes e prefixos de acknowledge, operandos subsequentes, R e ciclos; testar atraso de EI, NMI/HALT e LD A,I/R interrompida após escolher a variante-alvo.
+8. **Interrupções e variantes:** testar IM 0 com bytes de acknowledge além de RST, atraso de EI, NMI/HALT e o comportamento de LD A,I/R interrompida após escolher a variante-alvo.
 9. **Testes externos:** avaliar ZEXALL e outros exercitadores quanto a proveniência/licença; não incorporar imagens de teste ao repositório sem revisão.
 10. **Licenças das referências:** não copiar código de MEKA ou Genesis Plus GX sem autorização/licença compatível; Gearsystem é GPL-3.0. Usar a análise para desenvolver implementação independente e testes próprios.
 
@@ -167,8 +165,8 @@ A leitura direta de `src/sega_emulator/cpu/z80.py` e `tests/unit/test_z80.py` id
 
 Prioridades confirmadas:
 1. **Temporização:** os ciclos ainda são contabilizados por instrução; os acessos ao barramento não são agendados em T-states.
-2. **Interrupções:** a cobertura atual inclui testes para incremento de R em NMI/INT, modos IM 0/1/2, atraso de EI, saída de HALT por INT e execução de opcodes externos em IM 0 (NOP, `LD A,n`, `CALL`, prefixos CB/ED/DD e RST). Ainda faltam validação diferencial abrangente do acknowledge, dos estados IFF e das sequências de borda; não tratar os testes sintéticos como prova de compatibilidade física.
-3. **Comportamentos auxiliares:** WZ/MEMPTR e Q latch não estão modelados.
+2. **Interrupções:** a cobertura atual inclui testes para incremento de R em NMI/INT, modos IM 0/1/2, atraso de EI e saída de HALT por INT. Ainda faltam validação diferencial abrangente do acknowledge, dos estados IFF e das sequências de borda; a limitação de IM 0 para bytes RST deve ser confirmada no código atual.
+3. **Comportamentos auxiliares:** WZ/MEMPTR e Q latch têm implementação parcial na branch de correção; a cobertura por opcode e a validação diferencial pós-correção permanecem pendentes.
 4. **ED:** handlers importantes existem, mas falta classificar e testar todos os 256 segundos bytes, incluindo aliases e NOPs não documentados.
 5. **Validação semântica:** os testes “todos os opcodes têm caminho” não demonstram correção de resultados, flags, ciclos ou ordem de barramento. DAA, flags X/Y, prefixos e operações de bloco precisam de comparação diferencial.
 
@@ -279,8 +277,34 @@ Foram acrescentados casos direcionados para `LDDR` e `CPDR`, complementando os t
 
 Esses casos são testes sintéticos de fluxo de controle e estado observável. Não constituem validação diferencial contra hardware ou prova de temporização ciclo a ciclo; permanecem pendentes a cobertura sistemática de todas as condições de saída, wrap de endereços e comparação diferencial independente das flags.
 
-## Teste adicional de wrap de endereços em transferências de bloco ED — 23/10/2026
 
-Foi acrescentado `test_ed_block_transfer_wraps_hl_and_de_at_16_bit_boundaries`, cobrindo LDI/LDIR com incremento de `HL=FFFFh` para `0000h` e LDD/LDDR com decremento de `HL=0000h` para `FFFFh`. Os quatro casos verificam a atualização de HL/DE/BC, o byte transferido, o PC conforme repetição e os T-states nominais retornados pelo núcleo.
+---
 
-O teste foi publicado, mas sua execução local ainda está pendente. Ele caracteriza wrap de registradores e estado observável; não comprova a ordem temporal dos acessos nem precisão ciclo a ciclo.
+## Atualização da validação diferencial — 23/10/2026
+
+O primeiro lote reportado do corpus `SingleStepTests/z80 v1` executou 1.000.000 de casos no commit `4a6eac4468645843c2cab22aa653413db4478221`: 992.309 aprovados e 7.691 divergências. O agrupamento indicou 6.001 casos em `BIT b,(HL)`, 1.342 em `SCF/CCF` e 348 em `DAA`. Consulte [o relatório detalhado](z80-differential-audit-2026-10-23.md).
+
+Na branch `fix/z80-single-step-audit`, o PR #14 propõe correções e testes direcionados para essas famílias. A presença dos handlers e dos testes não deve ser confundida com aprovação: os números acima pertencem à revisão antiga e ainda não há, neste registro, resultado de uma auditoria repetida após as alterações.
+
+### Como interpretar a cobertura a partir daqui
+
+- **Caminho implementado:** há código que executa a instrução.
+- **Teste unitário presente:** há um caso automatizado no repositório, mas seu status depende de execução real.
+- **Validação diferencial anterior:** há um resultado registrado para uma revisão específica; ele não valida revisões posteriores.
+- **Validação diferencial pós-correção:** só pode ser marcada após executar o corpus com o SHA corrigido e revisar os artefatos.
+- **Precisão temporal:** permanece limitada a T-states nominais por instrução. A bateria single-step não demonstra temporização de acesso ao barramento ciclo a ciclo.
+
+### Lacunas prioritárias
+
+1. Confirmar pytest/Ruff no commit corrigido.
+2. Validar a fórmula de F3/F5 em SCF/CCF: `((Q XOR F) OR A) & 0x28`, inclusive com prefixos DD/FD ignorados.
+3. Definir e testar as atualizações de WZ/MEMPTR para as famílias de instruções relevantes; não assumir que inicializar WZ é suficiente.
+4. Reexecutar a auditoria direcionada somente depois de os testes rápidos locais passarem e fixar o SHA exato.
+5. Classificar as divergências remanescentes por opcode, campo de estado e possível limitação do harness.
+
+
+### Revisão da fórmula Q/F em SCF/CCF — 24/10/2026
+
+A repetição direcionada no commit `6434fdaea85b32e7335ddf9a37730d6e70a083ae` processou 14.000 vetores: 13.567 aprovados e 433 divergentes. `BIT (HL)` (8.000) e `DAA` (2.000) passaram integralmente; as divergências restantes foram em `SCF` (`37.json`, 223) e `CCF` (`3f.json`, 210), nos campos F/Q. O código anterior aplicava Q diretamente em vez de usar a relação XOR entre Q e F.
+
+Foi aplicada uma correção candidata para calcular F3/F5 com `((Q XOR F) OR A) & 0x28`. A alteração e suas regressões unitárias ainda precisam ser executadas por pytest/Ruff; os 433 casos são do commit anterior à correção e não medem o código novo. O Colab não será usado para essa validação curta.
