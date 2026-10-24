@@ -93,6 +93,7 @@ O código atual modela registradores principais e alternativos, I/R, IX/IY, SP, 
 - Os registradores alternativos AF', BC', DE' e HL', I/R e IX/IY estão modelados.
 - IFF1/IFF2, modos 0–2, HALT e solicitações NMI/INT têm um modelo inicial. A limitação conhecida de IM 0 (aceitar apenas RST no byte de acknowledge) permanece pendente até validação e implementação genérica; confirme o comportamento no código atual antes de ampliar essa afirmação.
 - `test_nmi_during_halt_has_priority_over_pending_int` caracteriza a sequência EI → HALT → NMI com INT pendente: NMI sai de HALT, empilha o PC após HALT, incrementa R, copia IFF1 para IFF2 e mantém INT pendente. É um teste de regressão sintético; ainda não equivale a validação diferencial contra hardware.
+- `test_retn_reti_aliases_restore_iff1_from_iff2` percorre os oito aliases ED de RETN/RETI com IFF2 em ambos os estados, verificando restauração de PC/SP, preservação de F e incremento de R. A cobertura é sintética e não modela o sinal externo de daisy chain que distingue RETI em sistemas com controlador de prioridades.
 - Ciclos M1, ciclos de leitura/escrita e I/O, estados de espera, contenção e temporização de barramento.
 - Flags X/Y e efeitos não documentados validados contra referências e testes específicos.
 - Comportamento de prefixos repetidos, opcodes não documentados e diferenças de revisão, conforme a meta de compatibilidade.
