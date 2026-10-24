@@ -97,7 +97,7 @@ def test_early_sprite_keeps_priority_when_later_sprite_overlaps() -> None:
 def test_sprite_can_be_shifted_left_by_32_pixels() -> None:
     vdp = TMS9918A()
     _setup(vdp)
-    _sprite(vdp, 0, 0xFF, 20, color=2 | 0x80)
+    _sprite(vdp, 0, 0xFF, 32, color=2 | 0x80)
     _sprite(vdp, 1, 0xD0, 0)
 
     frame = vdp.render_frame()
