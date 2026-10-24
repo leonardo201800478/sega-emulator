@@ -2955,6 +2955,7 @@ def test_reset_clears_p_latch() -> None:
 
     assert cpu.p == 0
 
+
 @pytest.mark.parametrize("opcode", [0x00, 0x3F, 0x80, 0xC0, 0xFF])
 def test_unassigned_ed_opcodes_are_two_byte_nops(opcode: int) -> None:
     """Bytes ED não atribuídos preservam o estado e custam 8 T-states."""
