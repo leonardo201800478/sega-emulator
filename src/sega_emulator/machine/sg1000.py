@@ -47,8 +47,9 @@ class SG1000Machine:
 
     def read_port(self, address: int) -> int:
         port = address & 0xFF
-        if port in (0xBE, 0xBF):
-            return self.vdp.read_port(port)
+        vdp_port = port & 0xC1
+        if vdp_port in (0x80, 0x81):
+            return self.vdp.read_port(vdp_port)
         if port in (0x00, 0xDC):
             return self.joystick1
         if port in (0x01, 0xDD):
@@ -57,8 +58,9 @@ class SG1000Machine:
 
     def write_port(self, address: int, value: int) -> None:
         port = address & 0xFF
-        if port in (0xBE, 0xBF):
-            self.vdp.write_port(port, value)
+        vdp_port = port & 0xC1
+        if vdp_port in (0x80, 0x81):
+            self.vdp.write_port(vdp_port, value)
 
     def set_joystick(self, player: int, value: int) -> None:
         if player not in (1, 2):
