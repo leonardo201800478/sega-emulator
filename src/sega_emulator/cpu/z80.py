@@ -1373,27 +1373,18 @@ class Z80Cpu:
             self._set_flags((self.f & 0xC5) | (self.a & 0x28) | 0x12)
             cycles = 4
         elif opcode == 0x37:  # SCF
-            # No Z80 NMOS, F3/F5 dependem de Q: se a instrução anterior
-            # não alterou flags (Q=0), combinam A com F; caso contrário vêm de A.
-            undocumented = self.a & 0x28
-            if self._q_previous == 0:
-                # Q=0: combina A com F retido no estado de entrada.
-                undocumented |= self.f & 0x28
-            else:
-                # Q!=0: combina A com os bits X/Y do latch Q anterior.
-                undocumented |= self._q_previous & 0x28
+            # SCF: flags documentadas preservadas; F3/F5 seguem a fórmula Q/F/A.
+            # F3/F5 refletem ((Q XOR F) OR A), conforme o comportamento
+            # não documentado do Z80. Q é o latch anterior preservado por step().
+            undocumented = (self.a | (self._q_previous ^ self.f)) & 0x28
             self._set_flags((self.f & 0xC4) | undocumented | 0x01)
             self.q = self.f
             cycles = 4
         elif opcode == 0x3F:  # CCF
             previous_carry = self.f & 0x01
-            undocumented = self.a & 0x28
-            if self._q_previous == 0:
-                # Q=0: combina A com F retido no estado de entrada.
-                undocumented |= self.f & 0x28
-            else:
-                # Q!=0: combina A com os bits X/Y do latch Q anterior.
-                undocumented |= self._q_previous & 0x28
+            # F3/F5 refletem ((Q XOR F) OR A), conforme o comportamento
+            # não documentado do Z80. Q é o latch anterior preservado por step().
+            undocumented = (self.a | (self._q_previous ^ self.f)) & 0x28
             self._set_flags((self.f & 0xC4) | undocumented)
             if previous_carry:
                 self._set_flags(self.f | 0x10)
