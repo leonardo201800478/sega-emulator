@@ -4,7 +4,6 @@ from sega_emulator.machine.sg1000 import SG1000Machine
 
 pc = time.perf_counter
 ns = time.perf_counter_ns
-
 from sega_emulator.rom_loader import load_rom
 
 loaded = load_rom(sys.argv[1])  # extrai o membro do ZIP corretamente
