@@ -139,13 +139,22 @@ A Fase 0 teve uma primeira revisão estática de contratos e consumidores. A Fas
 
 ### Validação automatizada
 
-- No commit `73f4298`, o workflow Windows falhou em `cargo fmt --check`; a formatação foi corrigida em `b921490`.
-- No commit `a01b551`, a formatação passou, mas o Clippy falhou ao compilar os testes porque um dos usos dos antigos nomes de constantes de áudio não havia sido atualizado.
-- O commit `605e466` corrige a referência restante. O workflow **Qt selectable Rust Z80 core** e os agentes de validação estão executando novamente contra esse estado; **ainda não há resultado final confirmado para esse commit**.
-- Os workflows genéricos de Python reportaram 637 aprovados e 1.663 ignorados, pois não instalam a extensão Rust. Esses resultados não validam os novos componentes nativos.
+Validado no commit `73792b21dbd6e1266a4a63a33a4d9285af267ea0` pelo workflow Windows **Qt selectable Rust Z80 core**:
 
-Nenhum resultado histórico é automaticamente atribuído ao HEAD atual. Não considerar a fatia aprovada até o workflow Windows construir a extensão Release e executar os testes diferenciais com ela instalada.
+- `cargo fmt --check`: aprovado.
+- Clippy com `-D warnings`: aprovado.
+- Testes unitários Rust: 7 aprovados no núcleo Z80/runtime.
+- Build Release e instalação da extensão PyO3: aprovados.
+- Ruff (lint e formatação Python): aprovado.
+- Testes direcionados de Qt/backend Rust: 1.671 aprovados em 1,08 s.
+- Suíte completa pytest com a extensão nativa instalada: 2.326 aprovados em 4,71 s.
+- CI geral, agentes de validação funcional, integridade/determinismo, desempenho/cobertura, diagnóstico de desempenho e auditoria diferencial SingleStepTests: aprovados.
+- A auditoria Z80 estendida continuava em execução no momento deste registro; ela não substitui os testes específicos da migração de hardware.
+
+O teste diferencial revelou que PyO3 converte `Vec<u8>` em `bytes`, ao contrário das listas Python usadas pela API de referência. Os getters `attenuations` e `_tone_outputs` foram alterados para expor listas de inteiros, e a suíte completa passou depois da correção. Isso confirma a importância de validar a API observável além dos valores internos.
+
+Estes resultados validam esta fatia de migração; não provam precisão ciclo a ciclo nem que toda a coordenação do runtime já esteja em Rust.
 
 ## Próximo passo
 
-Concluir e auditar o workflow Windows desta fatia. Se fmt, Clippy, testes Rust, build Release, paridade direcionada e regressão completa passarem, a próxima implementação será mover o I/O e o laço CPU–VDP–PSG para uma máquina Rust. Essa etapa deverá preservar a ordem dos eventos temporais e as interrupções. Não declarar o runtime integralmente Rust até a coordenação deixar de depender de Python fora do frontend Qt.
+Abrir uma fatia separada para a máquina SG-1000 nativa: mover o despacho de I/O e o laço CPU–VDP–PSG para Rust, mantendo a API PyO3 na fronteira do frontend Qt. O modelo de sincronização deve preservar a ordem dos eventos e a entrega de interrupções. Antes de tornar o backend Rust padrão, resolver também o contrato de snapshots mutáveis de `vram` e `registers` e validar o comportamento em ROMs/homebrew de teste legalmente obtidas.
