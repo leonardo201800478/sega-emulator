@@ -1,4 +1,4 @@
-"""Integração inicial da máquina Sega SG-1000 sem subsistema de áudio."""
+"""Integração SG-1000 com backend de referência Python ou runtime nativo Rust."""
 
 from __future__ import annotations
 
@@ -194,7 +194,7 @@ class SG1000Machine:
         return self.psg.drain_samples(max_samples)
 
     def run_frame(self, max_steps: int = 100_000) -> int:
-        """Executa um quadro com o laço CPU/VDP local para reduzir chamadas."""
+        """Executa um quadro; o backend Rust coordena CPU e dispositivos nativamente."""
         if type(max_steps) is not int or max_steps < 1:
             raise ValueError("max_steps deve ser um inteiro positivo.")
         if self.cpu_core == "rust":

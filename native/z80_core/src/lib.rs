@@ -1618,6 +1618,7 @@ fn sega_z80_core(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<NativeTms9918A>()?;
     module.add_class::<NativeSn76489>()?;
     module.add_class::<NativeAudioSynchronizer>()?;
+    module.add_class::<NativeSG1000Io>()?;
     module.add_class::<NativeSG1000Machine>()?;
     module.add_class::<RustZ80Cpu>()?;
     Ok(())
