@@ -83,9 +83,13 @@ class EmulatorMainWindow(QMainWindow):
         emulation_menu = self.menuBar().addMenu("&Emulação")
         emulation_menu.addAction(self.pause_action)
         emulation_menu.addAction(self.reset_action)
-        self.select_emulation_backend_action = QAction("Selecionar backend de emulação…", self)
+        self.select_emulation_backend_action = QAction(
+            "Selecionar backend de emulação…", self
+        )
         if on_select_emulation_backend is not None:
-            self.select_emulation_backend_action.triggered.connect(on_select_emulation_backend)
+            self.select_emulation_backend_action.triggered.connect(
+                on_select_emulation_backend
+            )
         else:
             self.select_emulation_backend_action.setEnabled(False)
         emulation_menu.addSeparator()
