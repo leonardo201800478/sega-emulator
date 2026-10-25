@@ -9,7 +9,8 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
-ACTIONS = ("up", "down", "left", "right", "button1", "button2")
+ACTIONS = ("up", "down", "left", "right", "button1", "button2", "hold")
+JOYSTICK_ACTIONS = frozenset(ACTIONS) - {"hold"}
 ACTION_BITS = {
     "up": 0,
     "down": 1,
@@ -34,6 +35,12 @@ SUPPORTED_BUTTONS = (
     "back",
     "guide",
     "start",
+    "misc1",
+    "paddle1",
+    "paddle2",
+    "paddle3",
+    "paddle4",
+    "touchpad",
 )
 DEFAULT_GAMEPAD_BINDINGS = {
     "up": "dpad_up",
@@ -42,6 +49,7 @@ DEFAULT_GAMEPAD_BINDINGS = {
     "right": "dpad_right",
     "button1": "a",
     "button2": "b",
+    "hold": "start",
 }
 
 
