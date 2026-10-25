@@ -322,6 +322,38 @@ def run(initial_path: Path | None = None) -> None:
                         "phase_max_ms": phase_maxima,
                         "scanline": machine.vdp.scanline,
                         "status": machine.vdp.status,
+                        "backend_requested": machine.cpu_core,
+                        "backend_effective": (
+                            "rust_native_machine"
+                            if machine.cpu_core == "rust"
+                            and hasattr(machine, "native_machine")
+                            and type(machine.native_machine).__name__ == "NativeSG1000Machine"
+                            else "python_reference"
+                            if machine.cpu_core == "python"
+                            else "unexpected_backend_state"
+                        ),
+                        "component_types": {
+                            "machine": type(machine).__name__,
+                            "native_machine": (
+                                type(machine.native_machine).__name__
+                                if hasattr(machine, "native_machine")
+                                else None
+                            ),
+                            "cpu": type(machine.cpu).__name__,
+                            "memory_bus": type(machine.memory_bus).__name__,
+                            "vdp": type(machine.vdp).__name__,
+                            "psg": type(machine.psg).__name__,
+                            "audio_sync": type(machine.audio_sync).__name__,
+                        },
+                        "native_counters": (
+                            {
+                                "instructions": machine.native_machine.total_instructions,
+                                "tstates": machine.native_machine.total_tstates,
+                            }
+                            if machine.cpu_core == "rust"
+                            and hasattr(machine, "native_machine")
+                            else None
+                        ),
                     },
                 )
                 last_checkpoint_time = now
