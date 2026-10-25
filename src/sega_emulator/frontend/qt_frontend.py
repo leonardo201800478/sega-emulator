@@ -145,7 +145,7 @@ def run(initial_path: Path | None = None) -> None:
                     key_name, QKeySequence.SequenceFormat.PortableText
                 )
                 if not sequence.isEmpty():
-                    result[int(sequence[0])] = (player, action)
+                    result[int(sequence[0].toCombined())] = (player, action)
         return result
 
     key_map = build_key_map()
@@ -481,6 +481,55 @@ def run(initial_path: Path | None = None) -> None:
             extra={"event": "machine_reset", "rom_sha256": loaded.sha256},
         )
 
+    class KeyCaptureButton(QPushButton):
+        """Botão que captura uma tecla simples para o mapeamento do teclado."""
+
+        def __init__(self, key_name: str) -> None:
+            super().__init__(key_name)
+            self.key_name = key_name
+            self._capturing = False
+            self._previous_key_name = key_name
+            self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+            self.setToolTip("Clique e pressione a tecla desejada.")
+            self.clicked.connect(self._begin_capture)
+
+        def _begin_capture(self) -> None:
+            self._previous_key_name = self.key_name
+            self._capturing = True
+            self.setText("Pressione uma tecla…")
+            self.setFocus()
+
+        def keyPressEvent(self, event: QEvent) -> None:
+            if not self._capturing:
+                super().keyPressEvent(event)
+                return
+            key = event.key()
+            if key == Qt.Key.Key_Escape:
+                self._capturing = False
+                self.setText(self._previous_key_name)
+                event.accept()
+                return
+            if key in (
+                Qt.Key.Key_Control,
+                Qt.Key.Key_Shift,
+                Qt.Key.Key_Alt,
+                Qt.Key.Key_Meta,
+            ):
+                self.setText("Pressione uma tecla simples…")
+                event.accept()
+                return
+            key_name = QKeySequence(key).toString(
+                QKeySequence.SequenceFormat.PortableText
+            )
+            if not key_name:
+                self.setText("Tecla inválida; tente novamente")
+                event.accept()
+                return
+            self.key_name = key_name
+            self._capturing = False
+            self.setText(key_name)
+            event.accept()
+
     def configure_controllers() -> None:
         dialog = QDialog(window)
         dialog.setWindowTitle("Configuração de controles")
@@ -538,48 +587,7 @@ def run(initial_path: Path | None = None) -> None:
                 combo.setCurrentIndex(max(0, combo.findData(selected)))
                 combos[(player, action)] = combo
                 form.addRow(f"Controle — {action_labels[action]}", combo)
-                key_button = QPushButton(profile.keyboard_bindings[action])
-                key_button.setToolTip("Clique e pressione a tecla desejada.")
-                key_button.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-                key_button.key_name = profile.keyboard_bindings[action]
-
-                def begin_key_capture(
-                    button: QPushButton = key_button,
-                ) -> None:
-                    button.setText("Pressione uma tecla…")
-                    button.setProperty("capturing_key", True)
-                    button.setFocus()
-
-                def capture_key_press(
-                    event: QEvent,
-                    button: QPushButton = key_button,
-                ) -> None:
-                    if not button.property("capturing_key"):
-                        return
-                    key = event.key()
-                    if key in (
-                        Qt.Key.Key_Escape,
-                        Qt.Key.Key_Control,
-                        Qt.Key.Key_Shift,
-                        Qt.Key.Key_Alt,
-                        Qt.Key.Key_Meta,
-                    ):
-                        button.setText("Tecla inválida; tente novamente")
-                        return
-                    sequence = QKeySequence(key)
-                    key_name = sequence.toString(
-                        QKeySequence.SequenceFormat.PortableText
-                    )
-                    if not key_name:
-                        button.setText("Tecla inválida; tente novamente")
-                        return
-                    button.key_name = key_name
-                    button.setText(key_name)
-                    button.setProperty("capturing_key", False)
-                    event.accept()
-
-                key_button.clicked.connect(begin_key_capture)
-                key_button.keyPressEvent = capture_key_press
+                key_button = KeyCaptureButton(profile.keyboard_bindings[action])
                 key_buttons[(player, action)] = key_button
                 form.addRow(f"Teclado — {action_labels[action]}", key_button)
             turbo1 = QCheckBox("Turbo no Botão 1 (A por padrão)")
