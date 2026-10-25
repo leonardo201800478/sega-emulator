@@ -1,9 +1,12 @@
-"""Perfis de hardware de cartuchos SG-1000 conhecidos por CRC-32.
+"""Perfis de hardware de cartuchos SG-1000 identificados por hashes conhecidos.
 
-Os identificadores vêm do catálogo de software do Genesis Plus GX. O perfil
-Type-B representa os cartuchos que exigem o adaptador de expansão de RAM de
-8 KiB do SG-1000 II; não deve ser aplicado a todos os cartuchos não licenciados.
+Os CRC-32 vêm do catálogo do Genesis Plus GX. O SHA-256 adicional identifica
+a variante de Bomberman Special com logotipo em inglês usada na validação local.
+O perfil Type-B exige o adaptador de expansão de RAM de 8 KiB do SG-1000 II.
 """
+
+import hashlib
+import zlib
 
 # CRC-32 dos dumps identificados como SYSTEM_SGII_RAM_EXT no Genesis Plus GX.
 # Referência: https://github.com/ekeeke/Genesis-Plus-GX/blob/master/core/cart_hw/sms_cart.c
@@ -17,15 +20,26 @@ SG1000_II_RAM_EXT_TYPE_B_CRC32 = frozenset(
     }
 )
 
+# SHA-256 da variante "Bomberman Special (Taiwan) (English Logo) (Unl)" usada
+# na validação local do projeto; não é necessário incluir a ROM no repositório.
+SG1000_II_RAM_EXT_TYPE_B_SHA256 = frozenset(
+    {
+        "3eff3d6f1f74041f7b732455799d0978ab49724552ff2985f34b76478cd91721",
+    }
+)
+
 SG1000_II_RAM_EXT_TYPE_B_SIZE = 0x2000
 
 
 def cartridge_ram_size(cartridge_rom: bytes) -> int:
     """Retorna o tamanho da RAM para perfis conhecidos; padrão é 1 KiB."""
-    import zlib
-
     if not isinstance(cartridge_rom, bytes):
         raise TypeError("cartridge_rom deve ser bytes.")
-    if zlib.crc32(cartridge_rom) & 0xFFFFFFFF in SG1000_II_RAM_EXT_TYPE_B_CRC32:
+    crc32 = zlib.crc32(cartridge_rom) & 0xFFFFFFFF
+    sha256 = hashlib.sha256(cartridge_rom).hexdigest()
+    if (
+        crc32 in SG1000_II_RAM_EXT_TYPE_B_CRC32
+        or sha256 in SG1000_II_RAM_EXT_TYPE_B_SHA256
+    ):
         return SG1000_II_RAM_EXT_TYPE_B_SIZE
     return 0x0400
