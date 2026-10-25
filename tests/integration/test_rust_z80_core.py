@@ -1155,11 +1155,33 @@ def test_rust_all_ed_opcodes_match_python(opcode: int) -> None:
     python_cycles = python_cpu.step()
     rust_cycles = rust_cpu.step()
     attributes = (
-        "a", "f", "b", "c", "d", "e", "h", "l",
-        "af_alt", "bc_alt", "de_alt", "hl_alt",
-        "sp", "pc", "ix", "iy", "i", "r", "iff1", "iff2",
-        "interrupt_mode", "halted", "wz", "total_cycles",
-        "q", "_q_previous", "p",
+        "a",
+        "f",
+        "b",
+        "c",
+        "d",
+        "e",
+        "h",
+        "l",
+        "af_alt",
+        "bc_alt",
+        "de_alt",
+        "hl_alt",
+        "sp",
+        "pc",
+        "ix",
+        "iy",
+        "i",
+        "r",
+        "iff1",
+        "iff2",
+        "interrupt_mode",
+        "halted",
+        "wz",
+        "total_cycles",
+        "q",
+        "_q_previous",
+        "p",
     )
     assert rust_cycles == python_cycles, f"ED {opcode:02X}: cycle mismatch"
     assert {name: getattr(rust_cpu, name) for name in attributes} == {
