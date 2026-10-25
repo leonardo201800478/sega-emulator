@@ -67,7 +67,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         try:
             from sega_emulator.frontend.qt_frontend import run
 
-            run(args.rom, cpu_core=args.cpu_core, vdp_core=args.vdp_core)
+            if args.cpu_core is None and args.vdp_core is None:
+                run(args.rom)
+            else:
+                run(args.rom, cpu_core=args.cpu_core, vdp_core=args.vdp_core)
         except (RuntimeError, ImportError) as exc:
             parser.error(str(exc))
         return
