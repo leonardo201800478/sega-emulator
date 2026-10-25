@@ -25,3 +25,30 @@ def test_rust_backend_reports_missing_extension_clearly(monkeypatch) -> None:
     monkeypatch.setitem(sys.modules, "sega_z80_core", None)
     with pytest.raises(RuntimeError, match="Rust experimental"):
         SG1000Machine(b"\x00", cpu_core="rust")
+
+
+def test_rust_backend_executes_instructions_in_native_cpu_instance() -> None:
+    rust_module = pytest.importorskip(
+        "sega_z80_core",
+        reason="Rust extension is optional outside the Rust-core CI workflow",
+    )
+    from sega_z80_core import RustZ80Cpu
+
+    # LD A,12h; INC A; NOP. Assert architectural effects, not just selection metadata.
+    machine = SG1000Machine(b"\x3E\x12\x3C\x00", cpu_core="rust")
+    assert machine.cpu_core == "rust"
+    assert isinstance(machine.cpu, RustZ80Cpu)
+    assert machine.cpu.__class__.__module__ == rust_module.__name__
+
+    assert machine.step() == 7
+    assert machine.cpu.a == 0x12
+    assert machine.cpu.pc == 2
+
+    assert machine.step() == 4
+    assert machine.cpu.a == 0x13
+    assert machine.cpu.pc == 3
+
+    assert machine.step() == 4
+    assert machine.cpu.pc == 4
+    assert machine.total_instructions == 3
+    assert machine.total_tstates == 15
