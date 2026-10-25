@@ -79,8 +79,9 @@ def test_indexed_prefix_fallback_and_substitution_are_distinguished() -> None:
     assert indexed_family(0x46)[1] == "index-substitution"
     assert indexed_family(0x40)[1] == "ignored-prefix-equivalent"
     assert indexed_family(0x80)[1] == "ignored-prefix-equivalent"
-    assert indexed_family(0x84)[1] == "index-substitution"
-    assert indexed_family(0x86)[1] == "index-substitution"
+    assert indexed_family(0x84) == ("ADD A,IXH/IYH", "index-substitution")
+    assert indexed_family(0x86) == ("ADD A,(IX/IY+d)", "index-substitution")
+    assert indexed_family(0x80) == ("ADD A,B", "ignored-prefix-equivalent")
     assert indexed_family(0x00)[1] == "ignored-prefix-fallback"
     assert indexed_family(0xCB)[1] == "indexed-cb-prefix"
     assert indexed_family(0xDD)[1] == "repeated-prefix"
