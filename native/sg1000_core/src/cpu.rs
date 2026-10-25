@@ -312,7 +312,7 @@ mod tests {
     #[test]
     fn register_alu_operations_support_hl_memory_operand() {
         let mut bus = TestBus([0; 0x10000]);
-        bus.0[..6].copy_from_slice(&[
+        bus.0[..7].copy_from_slice(&[
             0x21, 0x00, 0xC0, // LD HL,0xC000
             0x36, 0x0F,       // LD (HL),0x0F
             0x3E, 0x01,       // LD A,1
