@@ -41,9 +41,7 @@ impl NativeMemoryBus {
                 "Cartridge RAM must be empty, 1 KiB, or 8 KiB.",
             ));
         }
-        if cartridge_ram_size == 0
-            && (cartridge_ram_start != 0 || cartridge_ram_end != -1)
-        {
+        if cartridge_ram_size == 0 && (cartridge_ram_start != 0 || cartridge_ram_end != -1) {
             return Err(PyValueError::new_err(
                 "Cartridge RAM address bounds require cartridge RAM.",
             ));
