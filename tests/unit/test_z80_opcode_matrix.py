@@ -27,6 +27,8 @@ def test_matrix_has_all_256_encodings_in_each_space() -> None:
     counts = Counter((row["space"], row["opcode"]) for row in matrix["rows"])
     assert len(counts) == 7 * 256
     assert all(count == 1 for count in counts.values())
+    assert all(row["validation_scope"] for row in matrix["rows"])
+    assert all(row["known_gap"] for row in matrix["rows"])
 
 
 def test_base_prefix_bytes_are_classified_as_prefixes() -> None:
@@ -65,7 +67,7 @@ def test_ed_unassigned_bytes_match_current_ed_nop_policy() -> None:
 
 
 def test_indexed_prefix_fallback_and_substitution_are_distinguished() -> None:
-    assert indexed_family(0x21)[1] == "index-substitution"
+    assert indexed_family(0x21) == ("LD IX/IY,nn", "index-substitution")
     assert indexed_family(0x24)[1] == "undocumented-index-half"
     assert indexed_family(0x46)[1] == "index-substitution"
     assert indexed_family(0x00)[1] == "ignored-prefix-fallback"
