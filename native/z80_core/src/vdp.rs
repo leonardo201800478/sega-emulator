@@ -99,6 +99,11 @@ impl NativeTms9918A {
         self.scanline
     }
 
+    #[getter(_cycles_into_line)]
+    fn cycles_into_line(&self) -> u16 {
+        self.cycles_into_line
+    }
+
     #[getter]
     fn frame_number(&self) -> u64 {
         self.frame_number
