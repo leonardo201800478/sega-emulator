@@ -43,19 +43,35 @@ class _CartridgeMirrorBus:
 class SG1000Machine:
     """Conecta CPU Z80, ROM/RAM, portas do VDP e entradas de joystick."""
 
-    def __init__(self, cartridge_rom: bytes, cpu_core: str = "python") -> None:
+    def __init__(
+        self, cartridge_rom: bytes, cpu_core: str = "python", vdp_core: str = "python"
+    ) -> None:
         if not isinstance(cartridge_rom, bytes):
             raise TypeError("cartridge_rom deve ser bytes.")
         if not 1 <= len(cartridge_rom) <= 0xC000:
             raise ValueError("A ROM deve conter entre 1 byte e 48 KiB.")
         if cpu_core not in ("python", "rust"):
             raise ValueError("cpu_core deve ser 'python' ou 'rust'.")
+        if vdp_core not in ("python", "rust"):
+            raise ValueError("vdp_core deve ser 'python' ou 'rust'.")
         self.cpu_core = cpu_core
+        self.vdp_core = vdp_core
         self.cartridge_rom = cartridge_rom
         ram = SG1000Ram(bytes(RAM_SIZE))
         base_bus = SG1000MemoryBus(ram, cartridge_rom)
         self.memory_bus = _CartridgeMirrorBus(base_bus, cartridge_rom)
-        self.vdp = TMS9918A()
+        if vdp_core == "python":
+            self.vdp = TMS9918A()
+        else:
+            try:
+                from sega_z80_core import RustTMS9918A
+            except ImportError as exc:
+                raise RuntimeError(
+                    "O VDP Rust experimental não está instalado. "
+                    "Em native/z80_core, execute: "
+                    "maturin develop --features python-extension"
+                ) from exc
+            self.vdp = RustTMS9918A()
         self.psg = SN76489()
         self.joystick1 = 0xFF
         self.joystick2 = 0xFF
