@@ -52,6 +52,7 @@ def test_ed_unassigned_bytes_match_current_ed_nop_policy() -> None:
     assert ed_family(0xFF)[2] == "ed-nop-fallback"
     assert ed_family(0xA0)[0] == "LDI"
     assert ed_family(0x4B)[0] == "LD rr,(nn)"
+    assert ed_family(0x71)[1] == "undocumented"
 
 
 def test_indexed_prefix_fallback_and_substitution_are_distinguished() -> None:
