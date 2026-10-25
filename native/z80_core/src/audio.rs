@@ -14,8 +14,8 @@ const LFSR_MASK: u16 = 0x7FFF;
 const LFSR_SEED: u16 = 0x4000;
 const SAMPLE_BUFFER_SECONDS: u64 = 1;
 const ATTENUATION: [f64; 16] = [
-    1.0, 0.794328, 0.630957, 0.501187, 0.398107, 0.316228, 0.251189, 0.199526, 0.158489,
-    0.125893, 0.1, 0.079433, 0.063096, 0.050119, 0.039811, 0.0,
+    1.0, 0.794328, 0.630957, 0.501187, 0.398107, 0.316228, 0.251189, 0.199526, 0.158489, 0.125893,
+    0.1, 0.079433, 0.063096, 0.050119, 0.039811, 0.0,
 ];
 
 #[pyclass(module = "sega_z80_core")]
@@ -46,7 +46,9 @@ impl NativeSn76489 {
     #[pyo3(signature = (clock_hz=3579545, sample_rate=44100))]
     fn new(clock_hz: u64, sample_rate: u64) -> PyResult<Self> {
         if clock_hz == 0 {
-            return Err(PyValueError::new_err("clock_hz deve ser um inteiro positivo."));
+            return Err(PyValueError::new_err(
+                "clock_hz deve ser um inteiro positivo.",
+            ));
         }
         if sample_rate == 0 {
             return Err(PyValueError::new_err(
@@ -399,7 +401,9 @@ impl NativeAudioSynchronizer {
 
     fn schedule_write(&mut self, tstate: i64, value: i64) -> PyResult<()> {
         if tstate < 0 {
-            return Err(PyValueError::new_err("tstate deve ser um inteiro não negativo."));
+            return Err(PyValueError::new_err(
+                "tstate deve ser um inteiro não negativo.",
+            ));
         }
         if !(0..=0xFF).contains(&value) {
             return Err(PyValueError::new_err("value deve ser um byte inteiro."));
