@@ -22,8 +22,8 @@ class _MemoryBus:
         self.memory[address & 0xFFFF] = value & 0xFF
 
 
-def test_rust_add_sub_adc_sbc_match_python_for_all_8_bit_operands() -> None:
-    operations = ("A", "S", "D0", "D1", "B0", "B1")
+def test_rust_alu_matches_python_for_all_8_bit_operands() -> None:
+    operations = ("A", "S", "D0", "D1", "B0", "B1", "I", "O", "X", "C")
     vectors = [
         (operation, lhs, rhs)
         for operation in operations
@@ -64,12 +64,18 @@ def test_rust_add_sub_adc_sbc_match_python_for_all_8_bit_operands() -> None:
             cpu._sub_a(rhs)
         elif operation.startswith("D"):
             cpu._adc_a(rhs)
-        else:
+        elif operation.startswith("B"):
             cpu._sbc_a(rhs)
+        elif operation == "I":
+            cpu._and_a(rhs)
+        elif operation == "O":
+            cpu._or_a(rhs)
+        elif operation == "X":
+            cpu._xor_a(rhs)
+        else:
+            cpu._compare_a(rhs)
 
-        rust_value, rust_flags = (
-            int(part, 16) for part in actual_lines[index].split()
-        )
+        rust_value, rust_flags = (int(part, 16) for part in actual_lines[index].split())
         assert (cpu.a, cpu.f) == (rust_value, rust_flags), (
             f"operation={operation} lhs=0x{lhs:02X} rhs=0x{rhs:02X}: "
             f"Python={(cpu.a, cpu.f)!r}, Rust={(rust_value, rust_flags)!r}"
