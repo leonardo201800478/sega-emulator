@@ -18,6 +18,7 @@ ENV/
 .ruff_cache/
 .coverage
 htmlcov/
+logs/
 
 # Editors and operating system
 .vscode/
