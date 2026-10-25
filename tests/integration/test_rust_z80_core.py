@@ -47,7 +47,7 @@ def test_rust_core_matches_python_for_supported_instruction_sequence() -> None:
     attributes = (
         "a", "f", "b", "c", "d", "e", "h", "l", "sp", "pc",
         "ix", "iy", "i", "r", "iff1", "iff2", "interrupt_mode",
-        "halted", "total_cycles",
+        "halted", "wz", "total_cycles",
     )
     for _ in range(20):
         python_cycles = python_cpu.step()
