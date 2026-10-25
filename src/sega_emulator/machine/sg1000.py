@@ -41,11 +41,14 @@ class _CartridgeMirrorBus:
 class SG1000Machine:
     """Conecta CPU Z80, ROM/RAM, portas do VDP e entradas de joystick."""
 
-    def __init__(self, cartridge_rom: bytes) -> None:
+    def __init__(self, cartridge_rom: bytes, cpu_core: str = "python") -> None:
         if not isinstance(cartridge_rom, bytes):
             raise TypeError("cartridge_rom deve ser bytes.")
         if not 1 <= len(cartridge_rom) <= 0xC000:
             raise ValueError("A ROM deve conter entre 1 byte e 48 KiB.")
+        if cpu_core not in ("python", "rust"):
+            raise ValueError("cpu_core deve ser 'python' ou 'rust'.")
+        self.cpu_core = cpu_core
         self.cartridge_rom = cartridge_rom
         ram = SG1000Ram(bytes(RAM_SIZE))
         base_bus = SG1000MemoryBus(ram, cartridge_rom)
@@ -56,7 +59,17 @@ class SG1000Machine:
         self.joystick2 = 0xFF
         self.total_instructions = 0
         self.total_tstates = 0
-        self.cpu = Z80Cpu(self.memory_bus, self)
+        if cpu_core == "python":
+            self.cpu = Z80Cpu(self.memory_bus, self)
+        else:
+            try:
+                from sega_z80_core import RustZ80Cpu
+            except ImportError as exc:
+                raise RuntimeError(
+                    "O núcleo Rust experimental não está instalado. "
+                    "Em native/z80_core, execute: maturin develop --features python-extension"
+                ) from exc
+            self.cpu = RustZ80Cpu(self.memory_bus, self)
 
     def read_port(self, address: int) -> int:
         port = address & 0xFF
@@ -114,7 +127,6 @@ class SG1000Machine:
         cpu = self.cpu
         vdp = self.vdp
         cpu_step = cpu.step
-        execute_cpu_instruction = cpu._step_impl
         advance_vdp = vdp.advance
         advance_psg = self.psg.advance_clocks
         request_int = cpu.request_int
@@ -125,6 +137,7 @@ class SG1000Machine:
             and type(self).step is SG1000Machine.step
         )
         if fast_cpu_loop:
+            execute_cpu_instruction = cpu._step_impl
             # This loop is the machine's normal execution path. Keep Q-latch
             # setup here and call the decoder directly to avoid a Python
             # cpu.step() wrapper and try/finally for every emulated opcode.
