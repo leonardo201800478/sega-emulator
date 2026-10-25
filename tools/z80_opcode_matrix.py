@@ -19,6 +19,11 @@ ALU = ("ADD A", "ADC A", "SUB", "SBC A", "AND", "XOR", "OR", "CP")
 ROT = ("RLC", "RRC", "RL", "RR", "SLA", "SRA", "SLL", "SRL")
 
 
+def alu_mnemonic(operation: int, operand: str) -> str:
+    name = ALU[operation]
+    return f"{name},{operand}" if operation in (0, 1) else f"{name} {operand}"
+
+
 def base_family(op: int) -> tuple[str, str]:
     """Return (family, architectural classification) for a base opcode byte."""
     x, y, z = op >> 6, (op >> 3) & 7, op & 7
@@ -75,7 +80,7 @@ def base_family(op: int) -> tuple[str, str]:
             else (f"LD {REGS[y]},{REGS[z]}", "documented")
         )
     if x == 2:
-        return f"{ALU[y]} {REGS[z]}", "documented"
+        return alu_mnemonic(y, REGS[z]), "documented"
     if z == 0:
         return f"RET {CONDS[y]}", "documented"
     if z == 1:
@@ -119,7 +124,7 @@ def base_family(op: int) -> tuple[str, str]:
             else ("PREFIX FD", "prefix")
         )
     if z == 6:
-        return f"{ALU[y]} n", "documented"
+        return alu_mnemonic(y, "n"), "documented"
     return f"RST {y * 8:02X}h", "documented"
 
 
@@ -285,7 +290,11 @@ def validation_scope(space: str, path: str, arch: str) -> tuple[str, str]:
             "fallback-policy tests exist",
             "ED-NOP is not semantic implementation of an assigned instruction.",
         )
-    if path in ("ignored-prefix-fallback", "repeated-prefix"):
+    if path in (
+        "ignored-prefix-fallback",
+        "ignored-prefix-equivalent",
+        "repeated-prefix",
+    ):
         return (
             "targeted prefix tests exist",
             "No exhaustive oracle for every prefix/opcode/state combination.",
