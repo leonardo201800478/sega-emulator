@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import weakref
+
 from sega_emulator.audio.sn76489 import SN76489
 from sega_emulator.audio.synchronization import AudioSynchronizer
 from sega_emulator.bus.memory import SG1000Ram
@@ -73,11 +75,14 @@ class _CartridgeMirrorBus:
 class SG1000Machine:
     """Conecta CPU Z80, ROM/RAM, portas do VDP e entradas de joystick."""
 
-    def __init__(self, cartridge_rom: bytes) -> None:
+    def __init__(self, cartridge_rom: bytes, *, cpu_core: str = "python") -> None:
+        if cpu_core not in ("python", "rust"):
+            raise ValueError("cpu_core deve ser 'python' ou 'rust'.")
         if not isinstance(cartridge_rom, bytes):
             raise TypeError("cartridge_rom deve ser bytes.")
         if not 1 <= len(cartridge_rom) <= 0xC000:
             raise ValueError("A ROM deve conter entre 1 byte e 48 KiB.")
+        self.cpu_core = cpu_core
         self.cartridge_rom = cartridge_rom
         profile = cartridge_profile(cartridge_rom)
         self.ram_size = profile.internal_ram_size
@@ -92,7 +97,18 @@ class SG1000Machine:
         self.joystick2 = 0xFF
         self.total_instructions = 0
         self.total_tstates = 0
-        self.cpu = Z80Cpu(self.memory_bus, self)
+        if cpu_core == "python":
+            self.cpu = Z80Cpu(self.memory_bus, self)
+        else:
+            try:
+                from sega_z80_core import RustZ80Cpu
+            except ImportError as exc:
+                raise RuntimeError(
+                    "O núcleo Z80 Rust experimental não está instalado. "
+                    "Instale com: python -m pip install maturin e "
+                    "maturin develop --manifest-path native/z80_core/Cargo.toml"
+                ) from exc
+            self.cpu = RustZ80Cpu(self.memory_bus, weakref.proxy(self))
 
     def read_port(self, address: int) -> int:
         port = address & 0xFF
