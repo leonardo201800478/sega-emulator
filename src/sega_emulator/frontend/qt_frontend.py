@@ -796,7 +796,7 @@ def run(initial_path: Path | None = None) -> None:
         QMessageBox.information(
             window,
             "Dispositivos SDL3",
-            f"Backend SDL3: {backend_state}\\n\\n{devices_text}",
+            f"Backend SDL3: {backend_state}\n\n{devices_text}",
         )
 
     controls_menu.addAction("Dispositivos detectados", show_controller_devices)
