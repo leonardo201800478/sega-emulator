@@ -8,10 +8,11 @@ The Python `Z80Cpu` remains the reference implementation.
 - 8-bit `ADD A,r` arithmetic and documented/undocumented result flags.
 - 8-bit `SUB r` arithmetic and documented/undocumented result flags.
 - 8-bit `ADC A,r` and `SBC A,r`, including carry/borrow input.
+- `AND`, `OR`, `XOR`, and `CP` 8-bit operations.
 - A stdin/stdout vector runner used by exhaustive Python differential tests.
 
-Carry-in operations (`ADC`/`SBC`), instruction decoding, cycle accounting, memory
-effects, interrupts, and integration with `Z80Cpu` are deliberately out of scope.
+Instruction decoding, cycle accounting, memory effects, interrupts, and integration
+with `Z80Cpu` are deliberately out of scope.
 No performance gain is claimed at this stage.
 
 ## Validate on Windows PowerShell
@@ -23,8 +24,9 @@ cargo test --manifest-path native/z80_alu/Cargo.toml
 .\.venv\Scripts\python.exe -m pytest tests/integration/test_z80_alu_rust_parity.py -q
 ```
 
-The differential test checks all 65,536 operand pairs for `ADD` and `SUB`, plus
-both carry-input states for `ADC` and `SBC`: 393,216 cases total. It compares both
-the result and flags with the Python implementation.
+The differential test checks all 65,536 operand pairs for each of ten operations:
+`ADD`, `SUB`, both carry-input states of `ADC` and `SBC`, `AND`, `OR`, `XOR`, and
+`CP` (655,360 vectors total). It compares result/register-preservation and flags
+with the Python implementation.
 Passing this test is a correctness checkpoint for this subset, not proof of full
 Z80 compatibility or cycle accuracy.
