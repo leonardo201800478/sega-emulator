@@ -21,7 +21,7 @@ from sega_emulator.cpu.z80 import Z80Cpu
 from sega_emulator.machine.sg1000 import SG1000Machine
 
 
-ROM = b"\xC3\x00\x00"  # JP 0000h: deterministic three-byte loop.
+ROM = b"\xc3\x00\x00"  # JP 0000h: deterministic three-byte loop.
 
 
 def make_machine(core: str) -> SG1000Machine:
