@@ -636,10 +636,13 @@ fn render_sprite_line(
     update_status: bool,
 ) {
     let (active, fifth_index) = sprite_line_active(vram, registers, line);
-    if update_status && line < i32::from(VBLANK_LINE) && *status & 0x80 == 0 && *status & 0x40 == 0 {
-        if let Some(index) = fifth_index {
-            *status = (*status & 0xA0) | 0x40 | index as u8;
-        }
+    if update_status
+        && line < i32::from(VBLANK_LINE)
+        && *status & 0x80 == 0
+        && *status & 0x40 == 0
+        && let Some(index) = fifth_index
+    {
+        *status = (*status & 0xA0) | 0x40 | index as u8;
     }
     let pattern_base = usize::from(registers[6] & 0x07) << 11;
     let size: usize = if registers[1] & 0x02 != 0 { 16 } else { 8 };
