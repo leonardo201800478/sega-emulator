@@ -59,11 +59,11 @@ Para usar o frontend Pygame:
 
 ## Núcleo Z80 Rust experimental no Qt
 
-O frontend Qt permite alternar entre **Python (referência)** e **Rust (experimental — conjunto parcial)** em **Emulação → Selecionar núcleo Z80…**. A seleção é persistida nas configurações do Qt. Se houver uma ROM carregada, trocar o núcleo reinicia a máquina para que o novo backend comece em estado limpo.
+O frontend Qt permite alternar entre **Python (referência)** e **Rust (experimental)** em **Emulação → Selecionar núcleo Z80…**. A seleção fica persistida nas configurações Qt. Se houver uma ROM carregada, trocar de núcleo recria a máquina para começar em estado limpo.
 
-O backend Python continua sendo o padrão seguro. O núcleo Rust é deliberadamente parcial: instruções ainda não implementadas interrompem a emulação com erro explícito, sem fallback silencioso para Python. Portanto, use-o para validar compatibilidade e desempenho, não como garantia de que toda ROM funcionará.
+O backend Python permanece como padrão e referência de compatibilidade. O backend Rust foi atualizado com a implementação mais abrangente e seus testes diferenciais da linha de trabalho da PR #89. Ele cobre as famílias principais de instruções, prefixos CB/DD/FD/ED, operações em bloco, interrupções e estados auxiliares, mas ainda **não é certificado como substituto universal nem ciclo a ciclo**. Instruções atribuídas que ainda não são suportadas geram erro explícito; não existe fallback silencioso para Python.
 
-Para compilar e instalar a extensão no Windows/PowerShell, a partir da raiz do repositório e com o ambiente virtual ativado:
+Para compilar e instalar a extensão no Windows/PowerShell, com o ambiente virtual ativado e a partir da raiz do repositório:
 
 ```powershell
 python -m pip install maturin
@@ -72,9 +72,9 @@ maturin develop --features python-extension
 Pop-Location
 ```
 
-Reabra o emulador e selecione **Emulação → Selecionar núcleo Z80… → Rust (experimental — conjunto parcial)**. Se a extensão não estiver instalada, a interface informa como instalá-la e mantém o backend anterior.
+Reabra o emulador e selecione **Emulação → Selecionar núcleo Z80… → Rust (experimental)**. Se a extensão não estiver instalada, a interface explica como instalá-la e preserva o backend anterior.
 
-A implementação completa em Rust segue em uma linha de trabalho separada, com testes diferenciais e validação próprios. Esta opção Qt usa o núcleo incremental recuperado e não depende de declarar concluída a validação do port completo.
+Antes de usar o núcleo Rust com ROMs reais, confirme a aprovação do workflow **Qt selectable Rust Z80 core** e faça uma validação manual. Testes diferenciais aprovados aumentam a confiança nas instruções cobertas, mas não demonstram compatibilidade universal, temporização de barramento ciclo a ciclo ou ganho de desempenho em todos os jogos.
 
 ## Diagnóstico headless
 
