@@ -24,9 +24,7 @@ class VideoWidget(QLabel):
         )
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setText("Abra uma ROM SG-1000 pelo menu Arquivo")
-        self.setStyleSheet(
-            "background: #090a0d; color: #9aa4b2; border: 0;"
-        )
+        self.setStyleSheet("background: #090a0d; color: #9aa4b2; border: 0;")
 
     def set_framebuffer(self, image: QImage) -> None:
         """Copy the frame so the caller may safely reuse its backing buffer."""
