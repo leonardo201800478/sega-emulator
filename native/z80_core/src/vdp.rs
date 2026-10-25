@@ -322,7 +322,14 @@ fn render_scanline(
         for column in 0..40 {
             let character = vram[(name_base + text_row * 40 + column) & VRAM_MASK];
             let pattern = vram[(pattern_base + usize::from(character) * 8 + glyph_row) & VRAM_MASK];
-            pattern_span(pixels, row_start + (8 + column * 6) * 3, pattern, foreground, backdrop, 6);
+            pattern_span(
+                pixels,
+                row_start + (8 + column * 6) * 3,
+                pattern,
+                foreground,
+                backdrop,
+                6,
+            );
         }
         return;
     }
@@ -455,7 +462,14 @@ fn render_text(vram: &[u8], registers: &[u8], pixels: &mut [u8], backdrop: u8) {
             for line in 0..8 {
                 let pattern = vram[(pattern_base + usize::from(character) * 8 + line) & VRAM_MASK];
                 let row_start = (row * 8 + line) * SCREEN_WIDTH * 3;
-                pattern_span(pixels, row_start + (8 + column * 6) * 3, pattern, foreground, backdrop, 6);
+                pattern_span(
+                    pixels,
+                    row_start + (8 + column * 6) * 3,
+                    pattern,
+                    foreground,
+                    backdrop,
+                    6,
+                );
             }
         }
     }
@@ -470,7 +484,8 @@ fn render_multicolor(vram: &[u8], registers: &[u8], pixels: &mut [u8], backdrop:
             for local_y in 0..8 {
                 let y = tile_y * 8 + local_y;
                 let pattern_row = (y & 0x1C) >> 2;
-                let pattern = vram[(pattern_base + usize::from(name) * 8 + pattern_row) & VRAM_MASK];
+                let pattern =
+                    vram[(pattern_base + usize::from(name) * 8 + pattern_row) & VRAM_MASK];
                 let left = if pattern >> 4 != 0 { pattern >> 4 } else { backdrop };
                 let right = if pattern & 0x0F != 0 { pattern & 0x0F } else { backdrop };
                 let row_start = y * SCREEN_WIDTH * 3;
@@ -532,11 +547,12 @@ fn render_sprite_line(
     let (active, fifth_index) = sprite_line_active(vram, registers, line);
     if update_status
         && line < i32::from(VBLANK_LINE)
-        && fifth_index.is_some()
         && *status & 0x80 == 0
         && *status & 0x40 == 0
     {
-        *status = (*status & 0xA0) | 0x40 | fifth_index.unwrap() as u8;
+        if let Some(index) = fifth_index {
+            *status = (*status & 0xA0) | 0x40 | index as u8;
+        }
     }
     let pattern_base = usize::from(registers[6] & 0x07) << 11;
     let size: usize = if registers[1] & 0x02 != 0 { 16 } else { 8 };
@@ -587,7 +603,7 @@ fn render_sprites(
             vram,
             registers,
             status,
-            Some(pixels),
+            Some(&mut *pixels),
             line as i32,
             update_status,
         );
