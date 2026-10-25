@@ -100,8 +100,8 @@ impl NativeMemoryBus {
             && address >= self.cartridge_ram_start
             && address <= self.cartridge_ram_end
         {
-            let offset = usize::from(address - self.cartridge_ram_start)
-                & (self.cartridge_ram.len() - 1);
+            let offset =
+                usize::from(address - self.cartridge_ram_start) & (self.cartridge_ram.len() - 1);
             return self.cartridge_ram[offset];
         }
         if address < RAM_START {
@@ -155,8 +155,7 @@ mod tests {
 
     #[test]
     fn maps_cartridge_ram_without_overwriting_rom_window() {
-        let mut bus = NativeMemoryBus::new(vec![0x55], 0x0400, 0x2000, 0x8000, 0xBFFF)
-            .unwrap();
+        let mut bus = NativeMemoryBus::new(vec![0x55], 0x0400, 0x2000, 0x8000, 0xBFFF).unwrap();
         bus.write_byte(0x8000, 0xA7);
         assert_eq!(bus.read_byte(0x8000), 0xA7);
         assert_eq!(bus.read_byte(0xA000), 0xA7);
