@@ -75,7 +75,6 @@ def test_boolean_options_reject_integers(field: str) -> None:
         AudioOutputConfig(**{field: 1})
 
 
-
 def test_audio_output_config_round_trips_through_json_values() -> None:
     original = AudioOutputConfig(
         backend=AudioBackend.SDL3,
