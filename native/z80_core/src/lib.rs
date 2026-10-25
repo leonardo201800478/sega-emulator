@@ -1303,6 +1303,7 @@ impl RustZ80Cpu {
                             self.a = (self.a & 0xF0) | (memory_value >> 4);
                         }
                         self.write8(py, address, new_memory)?;
+                        self.wz = address.wrapping_add(1);
                         self.f = (self.f & FLAG_C) | (self.a & 0xA8);
                         self.q = self.f;
                         if self.a == 0 {
@@ -1351,8 +1352,10 @@ impl RustZ80Cpu {
                             | (adjusted & 0x08)
                             | ((adjusted & 0x02) << 4);
                         self.q = self.f;
+                        self.wz = self.wz.wrapping_add_signed(direction);
                         if matches!(sub, 0xB1 | 0xB9) && self.bc() != 0 && result != 0 {
                             self.pc = self.pc.wrapping_sub(2);
+                            self.wz = self.pc.wrapping_add(1);
                             Ok(21)
                         } else {
                             Ok(16)
@@ -1405,8 +1408,14 @@ impl RustZ80Cpu {
                         }
                         if repeat && self.b != 0 {
                             self.pc = self.pc.wrapping_sub(2);
+                            self.wz = self.pc.wrapping_add(1);
                             Ok(21)
                         } else {
+                            self.wz = if input {
+                                old_bc.wrapping_add_signed(direction)
+                            } else {
+                                self.bc().wrapping_add_signed(direction)
+                            };
                             Ok(16)
                         }
                     }
@@ -1429,6 +1438,7 @@ impl RustZ80Cpu {
 
                         if matches!(sub, 0xB0 | 0xB8) && self.bc() != 0 {
                             self.pc = self.pc.wrapping_sub(2);
+                            self.wz = self.pc.wrapping_add(1);
                             Ok(21)
                         } else {
                             Ok(16)
@@ -1444,9 +1454,10 @@ impl RustZ80Cpu {
             }
             _ if opcode & 0xC7 == 0xC7 => {
                 let target = u16::from(opcode & 0x38);
-                self.push_word(py, self.pc)?;
+                let return_address = self.pc;
+                self.push_word(py, return_address)?;
                 self.pc = target;
-                self.wz = target;
+                self.wz = return_address;
                 Ok(11)
             }
             _ if opcode & 0xC7 == 0xC2 => {
