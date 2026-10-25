@@ -71,6 +71,6 @@ def test_video_scale_updates_window_size(qt_app, scale: int) -> None:
 
     window.set_video_scale(scale)
 
-    assert window.width() == 256 * scale + 64
-    assert window.height() == 192 * scale + 128
+    assert window.width() == max(640, 256 * scale + 64)
+    assert window.height() == max(480, 192 * scale + 128)
     window.close()
