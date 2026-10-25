@@ -2,7 +2,7 @@
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use sega_sg1000_core::{MemoryConfig, Sg1000Memory};
+use sega_sg1000_core::{MemoryConfig, MemoryError, Sg1000Memory};
 
 #[pyclass(module = "sega_z80_core")]
 pub(crate) struct NativeMemoryBus {
@@ -79,8 +79,23 @@ impl NativeMemoryBus {
             cartridge_ram_start,
             cartridge_ram_end,
         };
-        let memory = Sg1000Memory::new(&cartridge_rom, config)
-            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        let memory = Sg1000Memory::new(&cartridge_rom, config).map_err(|error| {
+            let message = match error {
+                MemoryError::InvalidRomSize(_) => {
+                    "A ROM must contain between 1 byte and 48 KiB."
+                }
+                MemoryError::InvalidInternalRamSize(_) => {
+                    "Internal RAM must be exactly 1 KiB or 8 KiB."
+                }
+                MemoryError::InvalidCartridgeRamSize(_) => {
+                    "Cartridge RAM must be empty, 1 KiB, or 8 KiB."
+                }
+                MemoryError::InvalidCartridgeRamRange => {
+                    "Cartridge RAM must be mapped below C000h."
+                }
+            };
+            PyValueError::new_err(message)
+        })?;
         Ok(Self { memory })
     }
 
