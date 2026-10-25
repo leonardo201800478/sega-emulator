@@ -22,10 +22,12 @@ Choose the core from the Qt menu **Emulação → Núcleo da CPU**, or pass
 - The Python core remains the default and compatibility reference.
 - Rust currently supports a limited subset of the base instruction set, common
   8-bit ALU operations, branches/calls/returns, stack operations, immediate I/O,
-  basic IM selection, and initial INT/NMI handling.
+  basic IM selection, initial INT/NMI handling, and ED block transfers LDI, LDD,
+  LDIR, and LDDR. Unassigned ED bytes follow classic-Z80 8-T-state NOP behavior.
 - Unsupported instructions raise \`NotImplementedError\`. There is no silent
   fallback to Python, because that would make performance measurements invalid.
-- Indexed DD/FD, CB operations, many ED instructions, full Q/P-latch behavior,
+- Indexed DD/FD, CB operations, most ED instructions (including block compare and
+  block I/O), full Q/P-latch behavior,
   and exhaustive interrupt edge cases remain incomplete.
 - Bus and I/O accesses currently cross the Python/Rust boundary. Performance
   must be measured; the Rust backend is not assumed to be faster.
@@ -33,5 +35,6 @@ Choose the core from the Qt menu **Emulação → Núcleo da CPU**, or pass
 ## Correctness gate
 
 Run the Python/Rust instruction-sequence parity tests and the existing CPU
-differential suites before expanding instruction coverage. A passing small
+differential suites before expanding instruction coverage. The block-transfer
+family has targeted parity cases, including repeat timing and unassigned ED NOPs. A passing small
 sequence is not proof of full Z80 compatibility or cycle accuracy.
