@@ -6,13 +6,13 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-import pytest
+import pytest  # noqa: E402
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from sega_emulator.frontend.qt.main_window import EmulatorMainWindow
+from sega_emulator.frontend.qt.main_window import EmulatorMainWindow  # noqa: E402
 
 
 @pytest.fixture
@@ -37,7 +37,14 @@ def test_main_window_exposes_required_menus_and_shortcuts(qt_app) -> None:
     )
 
     menu_titles = [action.text() for action in window.menuBar().actions()]
-    assert menu_titles == ["&Arquivo", "&Emulação", "&Vídeo", "&Controles", "&Diagnóstico", "&Ajuda"]
+    assert menu_titles == [
+        "&Arquivo",
+        "&Emulação",
+        "&Vídeo",
+        "&Controles",
+        "&Diagnóstico",
+        "&Ajuda",
+    ]
     assert window.open_action.shortcut().toString() == "Ctrl+O"
     assert window.pause_action.shortcut().toString() == "F5"
     assert window.reset_action.shortcut().toString() == "F10"
