@@ -207,9 +207,29 @@ def test_rust_primary_opcode_map_matches_python(opcode: int) -> None:
     python_cycles = python_cpu.step()
     rust_cycles = rust_cpu.step()
     attributes = (
-        "a", "f", "b", "c", "d", "e", "h", "l", "sp", "pc",
-        "ix", "iy", "i", "r", "iff1", "iff2", "interrupt_mode",
-        "halted", "wz", "af_alt", "bc_alt", "de_alt", "hl_alt",
+        "a",
+        "f",
+        "b",
+        "c",
+        "d",
+        "e",
+        "h",
+        "l",
+        "sp",
+        "pc",
+        "ix",
+        "iy",
+        "i",
+        "r",
+        "iff1",
+        "iff2",
+        "interrupt_mode",
+        "halted",
+        "wz",
+        "af_alt",
+        "bc_alt",
+        "de_alt",
+        "hl_alt",
         "total_cycles",
     )
     assert rust_cycles == python_cycles
@@ -228,14 +248,26 @@ def test_rust_primary_opcode_map_matches_python(opcode: int) -> None:
         (0x21, (0x34, 0x12)),  # LD IX/IY,nn
         (0x22, (0x00, 0x30)),  # LD (nn),IX/IY
         (0x2A, (0x00, 0x30)),  # LD IX/IY,(nn)
-        (0x23, ()), (0x2B, ()),  # INC/DEC IX/IY
-        (0x09, ()), (0x19, ()), (0x29, ()), (0x39, ()),  # ADD IX/IY,rr
-        (0x24, ()), (0x25, ()), (0x26, (0x55,)),  # IXH/IYH
-        (0x2C, ()), (0x2D, ()), (0x2E, (0xAA,)),  # IXL/IYL
-        (0x34, (0x05,)), (0x35, (0x05,)),  # INC/DEC (IX/IY+d)
+        (0x23, ()),
+        (0x2B, ()),  # INC/DEC IX/IY
+        (0x09, ()),
+        (0x19, ()),
+        (0x29, ()),
+        (0x39, ()),  # ADD IX/IY,rr
+        (0x24, ()),
+        (0x25, ()),
+        (0x26, (0x55,)),  # IXH/IYH
+        (0x2C, ()),
+        (0x2D, ()),
+        (0x2E, (0xAA,)),  # IXL/IYL
+        (0x34, (0x05,)),
+        (0x35, (0x05,)),  # INC/DEC (IX/IY+d)
         (0x36, (0x05, 0x77)),  # LD (IX/IY+d),n
-        (0xE1, ()), (0xE5, ()), (0xE3, ()),  # POP/PUSH/EX (SP),IX/IY
-        (0xE9, ()), (0xF9, ()),  # JP (IX/IY), LD SP,IX/IY
+        (0xE1, ()),
+        (0xE5, ()),
+        (0xE3, ()),  # POP/PUSH/EX (SP),IX/IY
+        (0xE9, ()),
+        (0xF9, ()),  # JP (IX/IY), LD SP,IX/IY
         (0x00, ()),  # ignored prefix
     ],
 )
@@ -265,9 +297,26 @@ def test_rust_indexed_special_instructions_match_python(
     python_cycles = python_cpu.step()
     rust_cycles = rust_cpu.step()
     attributes = (
-        "a", "f", "b", "c", "d", "e", "h", "l", "sp", "pc",
-        "ix", "iy", "i", "r", "iff1", "iff2", "interrupt_mode",
-        "halted", "wz", "total_cycles",
+        "a",
+        "f",
+        "b",
+        "c",
+        "d",
+        "e",
+        "h",
+        "l",
+        "sp",
+        "pc",
+        "ix",
+        "iy",
+        "i",
+        "r",
+        "iff1",
+        "iff2",
+        "interrupt_mode",
+        "halted",
+        "wz",
+        "total_cycles",
     )
     assert rust_cycles == python_cycles
     assert {name: getattr(rust_cpu, name) for name in attributes} == {
@@ -283,13 +332,10 @@ def test_rust_indexed_register_and_alu_families_match_python(
 ) -> None:
     RustZ80Cpu = _rust_cpu()
     uses_displacement = (
-        (
-            0x40 <= opcode <= 0x7F
-            and opcode != 0x76
-            and (opcode & 7 == 6 or (opcode >> 3) & 7 == 6)
-        )
-        or (0x80 <= opcode <= 0xBF and opcode & 7 == 6)
-    )
+        0x40 <= opcode <= 0x7F
+        and opcode != 0x76
+        and (opcode & 7 == 6 or (opcode >> 3) & 7 == 6)
+    ) or (0x80 <= opcode <= 0xBF and opcode & 7 == 6)
     program = bytes([prefix, opcode, *([0x05] if uses_displacement else [])])
     python_bus = MemoryBus(program)
     rust_bus = MemoryBus(program)
@@ -465,11 +511,11 @@ def test_rust_base_misc_instructions_match_python(
         (0x4A, 15),  # ADC HL,BC
         (0x43, 20),  # LD (nn),BC
         (0x4B, 20),  # LD BC,(nn)
-        (0x44, 8),   # NEG
-        (0x47, 9),   # LD I,A
-        (0x4F, 9),   # LD R,A
-        (0x57, 9),   # LD A,I
-        (0x5F, 9),   # LD A,R
+        (0x44, 8),  # NEG
+        (0x47, 9),  # LD I,A
+        (0x4F, 9),  # LD R,A
+        (0x57, 9),  # LD A,I
+        (0x5F, 9),  # LD A,R
         (0x67, 18),  # RRD
         (0x6F, 18),  # RLD
     ],
@@ -502,8 +548,23 @@ def test_rust_ed_arithmetic_and_special_ops_match_python(
     python_cycles = python_cpu.step()
     rust_cycles = rust_cpu.step()
     attributes = (
-        "a", "f", "b", "c", "d", "e", "h", "l", "sp", "pc",
-        "i", "r", "iff1", "iff2", "interrupt_mode", "wz", "total_cycles",
+        "a",
+        "f",
+        "b",
+        "c",
+        "d",
+        "e",
+        "h",
+        "l",
+        "sp",
+        "pc",
+        "i",
+        "r",
+        "iff1",
+        "iff2",
+        "interrupt_mode",
+        "wz",
+        "total_cycles",
     )
     assert python_cycles == rust_cycles == expected_cycles
     assert {name: getattr(rust_cpu, name) for name in attributes} == {
@@ -542,7 +603,11 @@ def test_rust_ed_block_compare_matches_python(
 
     assert python_cpu.step() == rust_cpu.step() == expected_cycles
     assert (rust_cpu.a, rust_cpu.f, rust_cpu.hl, rust_cpu.bc, rust_cpu.pc) == (
-        python_cpu.a, python_cpu.f, python_cpu.hl, python_cpu.bc, python_cpu.pc
+        python_cpu.a,
+        python_cpu.f,
+        python_cpu.hl,
+        python_cpu.bc,
+        python_cpu.pc,
     )
     assert rust_bus.memory == python_bus.memory
 
@@ -562,7 +627,11 @@ def test_rust_ed_block_io_matches_python() -> None:
 
     assert python_cpu.step() == rust_cpu.step() == 16
     assert (rust_cpu.b, rust_cpu.c, rust_cpu.f, rust_cpu.hl, rust_cpu.pc) == (
-        python_cpu.b, python_cpu.c, python_cpu.f, python_cpu.hl, python_cpu.pc
+        python_cpu.b,
+        python_cpu.c,
+        python_cpu.f,
+        python_cpu.hl,
+        python_cpu.pc,
     )
     assert rust_bus.memory == python_bus.memory
     assert rust_io.ports == python_io.ports
