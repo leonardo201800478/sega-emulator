@@ -1,13 +1,17 @@
-import hashlib, json, sys, time, collections
+import collections
+import hashlib
+import json
+import pathlib
+import sys
+import time
+import zlib
 
 from sega_emulator.machine.sg1000 import SG1000Machine
 from sega_emulator.rom_loader import load_rom
 
-import pathlib, zlib
-
 loaded = load_rom(sys.argv[1])  # extrai o membro do ZIP corretamente
 rom = loaded.data
-CRC = "%08X" % zlib.crc32(rom)
+CRC = f"{zlib.crc32(rom):08X}"
 print(f"ROM: {loaded.display_name}  {len(rom)} bytes  CRC32={CRC}")
 OUT = pathlib.Path(sys.argv[2] if len(sys.argv) > 2 else "golden.json")
 m = SG1000Machine(rom)
@@ -51,7 +55,8 @@ print(
 )
 if not (m.vdp.registers[1] & 0x40):
     print(
-        "AVISO: vídeo desativado ao fim de 300 quadros - ROM provavelmente não foi carregada corretamente; hashes NÃO são uma linha de base válida."
+        "AVISO: vídeo desativado ao fim de 300 quadros - ROM provavelmente não foi "
+        "carregada corretamente; hashes NÃO são uma linha de base válida."
     )
 print("audio_sha256:", audio.hexdigest())
 for k, v in fb.items():
@@ -124,5 +129,7 @@ t = time.perf_counter()
 m.run_frames(120)
 el = time.perf_counter() - t
 print(
-    f"\nVDP scanline render: {acc[0] / 1e9:.3f}s of {el:.3f}s total ({acc[0] / 1e9 / el * 100:.1f}%), {acc[1]} lines, {acc[0] / acc[1] / 1000:.1f} us/line"
+    f"\nVDP scanline render: {acc[0] / 1e9:.3f}s of {el:.3f}s total "
+    f"({acc[0] / 1e9 / el * 100:.1f}%), {acc[1]} lines, "
+    f"{acc[0] / acc[1] / 1000:.1f} us/line"
 )
