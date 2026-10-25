@@ -6,6 +6,7 @@ import pytest
 
 pytest.importorskip("sega_z80_core")
 
+from sega_emulator.frontend.qt_frontend import _runtime_diagnostic  # noqa: E402
 from sega_emulator.machine.sg1000 import SG1000Machine  # noqa: E402
 
 
@@ -32,3 +33,18 @@ def test_rust_run_frame_executes_native_instruction_loop() -> None:
     assert machine.total_tstates > 0
     assert machine.native_machine.total_tstates == machine.total_tstates
     assert machine.vdp.frame_number == 1
+
+
+
+def test_runtime_diagnostic_identifies_loaded_native_binary() -> None:
+    machine = SG1000Machine(bytes((0xC3, 0x00, 0x00)), cpu_core="rust")
+
+    diagnostic = _runtime_diagnostic(machine, "test-rom-sha256")
+
+    assert diagnostic["backend_requested"] == "rust"
+    assert diagnostic["backend_effective"] == "rust_native_machine"
+    assert diagnostic["native_machine_type"].endswith("NativeSG1000Machine")
+    assert diagnostic["native_binary_path"]
+    assert len(diagnostic["native_binary_sha256"]) == 64
+    assert diagnostic["native_binary_size"] > 0
+    assert diagnostic["rom_sha256"] == "test-rom-sha256"
