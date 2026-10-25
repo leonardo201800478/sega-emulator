@@ -32,7 +32,7 @@ class EmulatorMainWindow(QMainWindow):
         on_open_logs: Callable[[], None],
         on_show_machine_state: Callable[[], None],
         on_video_scale: Callable[[int], None],
-        on_select_cpu_core: Callable[[], None] | None = None,
+        on_select_emulation_backend: Callable[[], None] | None = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -83,13 +83,13 @@ class EmulatorMainWindow(QMainWindow):
         emulation_menu = self.menuBar().addMenu("&Emulação")
         emulation_menu.addAction(self.pause_action)
         emulation_menu.addAction(self.reset_action)
-        self.select_cpu_core_action = QAction("Selecionar núcleo Z80…", self)
-        if on_select_cpu_core is not None:
-            self.select_cpu_core_action.triggered.connect(on_select_cpu_core)
+        self.select_emulation_backend_action = QAction("Selecionar backend de emulação…", self)
+        if on_select_emulation_backend is not None:
+            self.select_emulation_backend_action.triggered.connect(on_select_emulation_backend)
         else:
-            self.select_cpu_core_action.setEnabled(False)
+            self.select_emulation_backend_action.setEnabled(False)
         emulation_menu.addSeparator()
-        emulation_menu.addAction(self.select_cpu_core_action)
+        emulation_menu.addAction(self.select_emulation_backend_action)
 
         toolbar = QToolBar("Principal", self)
         toolbar.setMovable(False)
