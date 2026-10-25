@@ -71,6 +71,7 @@ class SN76489:
         self._tone_counters = [0, 0, 0]
         self._tone_outputs = [1, 1, 1]
         self._noise_counter = 0
+        self._noise_counter_phase = 0
         self._lfsr = LFSR_SEED
         self._clock_divider_phase = 0
         self._output_phase = 0
@@ -127,6 +128,7 @@ class SN76489:
     def _reset_noise_generator(self) -> None:
         self._lfsr = LFSR_SEED
         self._noise_counter = 0
+        self._noise_counter_phase = 0
 
     def _shift_noise_register(self) -> None:
         # Variante de 15 bits adotada para o SN76489AN do SG-1000.
