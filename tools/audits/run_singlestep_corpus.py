@@ -61,6 +61,10 @@ DEFAULT_FILES = (
     "cb 7e",
     "dd 7e",
     "ed b0",
+    "ed b2",
+    "ed b3",
+    "ed ba",
+    "ed bb",
 )
 
 
