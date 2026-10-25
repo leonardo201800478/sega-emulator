@@ -158,7 +158,9 @@ def test_rust_block_transfer_matches_python(
 
 
 @pytest.mark.parametrize("opcode", [0x00, 0x77, 0x7F, 0x80, 0xA4, 0xC0])
-def test_rust_unassigned_ed_opcode_matches_classic_z80_nop_behavior(opcode: int) -> None:
+def test_rust_unassigned_ed_opcode_matches_classic_z80_nop_behavior(
+    opcode: int,
+) -> None:
     RustZ80Cpu = _rust_cpu()
     program = bytes([0xED, opcode])
     python_cpu = Z80Cpu(MemoryBus(program))
@@ -312,7 +314,9 @@ def test_rust_ed_arithmetic_and_special_ops_match_python(
         (0xB9, 21),  # CPDR repeats when not equal
     ],
 )
-def test_rust_ed_block_compare_matches_python(opcode: int, expected_cycles: int) -> None:
+def test_rust_ed_block_compare_matches_python(
+    opcode: int, expected_cycles: int
+) -> None:
     RustZ80Cpu = _rust_cpu()
     program = bytes([0xED, opcode])
     python_bus = MemoryBus(program)
