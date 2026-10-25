@@ -29,6 +29,65 @@ logger = logging.getLogger(__name__)
 Z80_CLOCK_HZ = 3_579_545
 
 
+def _runtime_diagnostic(machine: SG1000Machine, rom_sha256: str) -> dict[str, object]:
+    """Return verifiable identity of the loaded emulator runtime and native binary."""
+    import os
+    import sys
+
+    diagnostic: dict[str, object] = {
+        "backend_requested": machine.cpu_core,
+        "machine_type": type(machine).__module__ + "." + type(machine).__qualname__,
+        "cpu_type": type(machine.cpu).__module__ + "." + type(machine.cpu).__qualname__,
+        "memory_bus_type": (
+            type(machine.memory_bus).__module__ + "." + type(machine.memory_bus).__qualname__
+        ),
+        "vdp_type": type(machine.vdp).__module__ + "." + type(machine.vdp).__qualname__,
+        "psg_type": type(machine.psg).__module__ + "." + type(machine.psg).__qualname__,
+        "audio_sync_type": (
+            type(machine.audio_sync).__module__ + "." + type(machine.audio_sync).__qualname__
+        ),
+        "rom_sha256": rom_sha256,
+        "python_executable": sys.executable,
+        "python_version": sys.version,
+        "process_id": os.getpid(),
+    }
+    if machine.cpu_core != "rust":
+        diagnostic["backend_effective"] = "python_reference"
+        return diagnostic
+
+    native = getattr(machine, "native_machine", None)
+    diagnostic["backend_effective"] = (
+        "rust_native_machine"
+        if native is not None and type(native).__name__ == "NativeSG1000Machine"
+        else "unexpected_backend_state"
+    )
+    diagnostic["native_machine_type"] = (
+        type(native).__module__ + "." + type(native).__qualname__
+        if native is not None
+        else None
+    )
+    try:
+        import sega_z80_core
+
+        binary_path = Path(sega_z80_core.__file__).resolve()
+        diagnostic["native_module"] = sega_z80_core.__name__
+        diagnostic["native_binary_path"] = str(binary_path)
+        diagnostic["native_binary_size"] = binary_path.stat().st_size
+        diagnostic["native_binary_sha256"] = hashlib.sha256(
+            binary_path.read_bytes()
+        ).hexdigest()
+        diagnostic["native_binary_mtime_ns"] = binary_path.stat().st_mtime_ns
+    except Exception as exc:
+        diagnostic["native_binary_inspection_error"] = (
+            type(exc).__name__ + ": " + str(exc)
+        )
+    if native is not None:
+        diagnostic["native_instruction_count"] = native.total_instructions
+        diagnostic["native_tstates"] = native.total_tstates
+        diagnostic["native_vdp_frame"] = native.vdp.frame_number
+    return diagnostic
+
+
 def _initialize_pygame_backend() -> tuple[object | None, object | None]:
     """Inicializa entrada SDL independentemente da disponibilidade do áudio."""
     try:
@@ -467,6 +526,13 @@ def run(initial_path: Path | None = None) -> None:
                 "rom_sha256": candidate.sha256,
             },
         )
+        logger.info(
+            "Identidade do runtime que executará a ROM",
+            extra={
+                "event": "emulation_runtime_identity",
+                **_runtime_diagnostic(machine, candidate.sha256),
+            },
+        )
         status.showMessage(
             f"ROM: {candidate.display_name} | SHA-256: {candidate.sha256[:16]}…"
         )
@@ -542,6 +608,11 @@ def run(initial_path: Path | None = None) -> None:
             extra={
                 "event": "emulation_backend_selected",
                 "emulation_backend": selected_backend,
+                **(
+                    _runtime_diagnostic(machine, loaded.sha256)
+                    if machine is not None and loaded is not None
+                    else {"backend_effective": "pending_rom_load"}
+                ),
             },
         )
 
