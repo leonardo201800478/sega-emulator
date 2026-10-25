@@ -188,8 +188,7 @@ impl RustZ80Cpu {
             self.total_cycles += 11;
             return Ok(11);
         }
-        if let Some(data_bus) = self.int_pending {
-            if self.iff1 && self.ei_delay == 0 {
+        if let Some(data_bus) = self.int_pending && self.iff1 && self.ei_delay == 0 {
                 self.int_pending = None;
                 self.halted = false;
                 self.iff1 = false;
@@ -225,9 +224,8 @@ impl RustZ80Cpu {
                         )));
                     }
                 };
-                self.total_cycles += u64::from(cycles);
-                return Ok(cycles);
-            }
+        self.total_cycles += u64::from(cycles);
+            return Ok(cycles);
         }
         if self.halted {
             self.increment_r();
