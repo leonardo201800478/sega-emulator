@@ -69,7 +69,8 @@ class SG1000Machine:
             except ImportError as exc:
                 raise RuntimeError(
                     "O núcleo Rust experimental não está instalado. "
-                    "Em native/z80_core, execute: maturin develop --features python-extension"
+                    "Em native/z80_core, execute: "
+                    "maturin develop --features python-extension"
                 ) from exc
             self.cpu = RustZ80Cpu(self.memory_bus, weakref.proxy(self))
 
