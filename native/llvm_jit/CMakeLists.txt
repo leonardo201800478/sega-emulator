@@ -10,8 +10,6 @@ find_package(LLVM REQUIRED CONFIG)
 message(STATUS "Using LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "LLVM CMake directory: ${LLVM_DIR}")
 
-add_executable(llvm_orc_smoke src/orc_smoke.cpp)
-target_include_directories(llvm_orc_smoke SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
 
 llvm_map_components_to_libnames(LLVM_LIBS
@@ -24,7 +22,19 @@ llvm_map_components_to_libnames(LLVM_LIBS
     nativecodegen
     Support
 )
+
+add_executable(llvm_orc_smoke src/orc_smoke.cpp)
+target_include_directories(llvm_orc_smoke SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS})
 target_link_libraries(llvm_orc_smoke PRIVATE ${LLVM_LIBS})
+
+add_executable(z80_block_jit_smoke
+    src/z80_block_jit.cpp
+    src/z80_block_jit_smoke.cpp
+)
+target_include_directories(z80_block_jit_smoke SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS})
+target_include_directories(z80_block_jit_smoke PRIVATE src)
+target_link_libraries(z80_block_jit_smoke PRIVATE ${LLVM_LIBS})
 
 enable_testing()
 add_test(NAME llvm_orc_smoke COMMAND llvm_orc_smoke)
+add_test(NAME z80_block_jit_smoke COMMAND z80_block_jit_smoke)
