@@ -111,9 +111,7 @@ class EmulatorMainWindow(QMainWindow):
         controls_menu.addAction("Dispositivos detectados", on_show_controllers)
 
         diagnostics_menu = self.menuBar().addMenu("&Diagnóstico")
-        self.vdp_snapshot_action = QAction(
-            "Capturar snapshot VDP (JSON + PNG)…", self
-        )
+        self.vdp_snapshot_action = QAction("Capturar snapshot VDP (JSON + PNG)…", self)
         self.vdp_snapshot_action.setShortcut("F8")
         self.vdp_snapshot_action.triggered.connect(on_vdp_snapshot)
         diagnostics_menu.addAction(self.vdp_snapshot_action)
