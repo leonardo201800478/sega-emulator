@@ -119,9 +119,7 @@ def main() -> int:
         runs: list[dict[str, Any]] = []
         try:
             for _ in range(args.repeats):
-                runs.append(
-                    _run_once(rom, core, args.warmup_frames, args.frames)
-                )
+                runs.append(_run_once(rom, core, args.warmup_frames, args.frames))
         except Exception as exc:
             report["cores"][core] = {
                 "status": "failed",
