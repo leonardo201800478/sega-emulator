@@ -913,3 +913,17 @@ def test_rust_wz_is_updated_by_untaken_conditional_call() -> None:
     _assert_rust_python_interrupt_state(python_cpu, rust_cpu)
     assert rust_cpu.pc == 3
     assert rust_cpu.wz == 0x1234
+
+
+def test_rust_rst_updates_wz_to_return_address() -> None:
+    RustZ80Cpu = _rust_cpu()
+    program = bytes([0xCF])  # RST 08h
+    python_cpu = Z80Cpu(MemoryBus(program))
+    rust_cpu = RustZ80Cpu(MemoryBus(program), None)
+    for cpu in (python_cpu, rust_cpu):
+        cpu.sp = 0x3000
+
+    assert python_cpu.step() == rust_cpu.step() == 11
+    _assert_rust_python_interrupt_state(python_cpu, rust_cpu)
+    assert rust_cpu.pc == 0x0008
+    assert rust_cpu.wz == 0x0001
