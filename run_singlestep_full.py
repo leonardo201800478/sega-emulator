@@ -103,7 +103,15 @@ def audit_file(path_str: str, check_cycles: bool) -> dict[str, Any]:
 
 
 def file_sort_key(stem: str) -> tuple[int, str]:
-    order = {"base": 0, "cb": 1, "ed": 2, "dd": 3, "fd": 4, "ddcb": 5, "fdcb": 6}
+    order = {
+        "base": 0,
+        "cb": 1,
+        "ed": 2,
+        "dd": 3,
+        "fd": 4,
+        "ddcb": 5,
+        "fdcb": 6,
+    }
     return (order.get(family(stem), 9), stem)
 
 
@@ -113,18 +121,25 @@ def main() -> int:
     parser.add_argument("--files", nargs="*", default=None, help="stems sem .json")
     parser.add_argument("--workers", type=int, default=os.cpu_count() or 1)
     parser.add_argument("--no-cycles", action="store_true")
-    parser.add_argument("--report-json", type=Path, default=Path("singlestep-full.json"))
+    parser.add_argument(
+        "--report-json", type=Path, default=Path("singlestep-full.json")
+    )
     parser.add_argument("--report-md", type=Path, default=Path("singlestep-full.md"))
     args = parser.parse_args()
 
     if args.files:
         stems = args.files
     else:
-        stems = sorted((p.stem for p in args.directory.glob("*.json")), key=file_sort_key)
+        stems = sorted(
+            (p.stem for p in args.directory.glob("*.json")), key=file_sort_key
+        )
     paths = [str(args.directory / f"{s}.json") for s in stems]
     missing = [p for p in paths if not Path(p).exists()]
     if missing:
-        print(f"ERRO: {len(missing)} arquivos ausentes, ex.: {missing[:3]}", file=sys.stderr)
+        print(
+            f"ERRO: {len(missing)} arquivos ausentes, ex.: {missing[:3]}",
+            file=sys.stderr,
+        )
         return 2
 
     started = time.perf_counter()
@@ -135,7 +150,11 @@ def main() -> int:
             results.append(future.result())
             if index % 50 == 0 or index == len(paths):
                 elapsed = time.perf_counter() - started
-                print(f"[{index}/{len(paths)}] {elapsed:6.0f}s", file=sys.stderr, flush=True)
+                print(
+                    f"[{index}/{len(paths)}] {elapsed:6.0f}s",
+                    file=sys.stderr,
+                    flush=True,
+                )
     results.sort(key=lambda r: file_sort_key(r["file"]))
 
     total = Counter()
@@ -163,7 +182,9 @@ def main() -> int:
         "by_category": dict(by_cat.most_common()),
     }
     args.report_json.write_text(
-        json.dumps({"summary": summary, "files": results}, indent=1, ensure_ascii=False),
+        json.dumps(
+            {"summary": summary, "files": results}, indent=1, ensure_ascii=False
+        ),
         encoding="utf-8",
     )
 
@@ -174,7 +195,9 @@ def main() -> int:
         f"T-states comparados: {'sim' if not args.no_cycles else 'não'}. "
         f"Tempo: {summary['elapsed_seconds']} s.\n"
     )
-    lines.append("## Por família\n\n| Família | Arquivos | c/ falha | Vetores | Aprovados | % |")
+    lines.append(
+        "## Por família\n\n| Família | Arquivos | c/ falha | Vetores | Aprovados | % |"
+    )
     lines.append("|---|---|---|---|---|---|")
     for fam in ("base", "cb", "ed", "dd", "fd", "ddcb", "fdcb"):
         if fam not in by_family:
@@ -192,10 +215,22 @@ def main() -> int:
     lines.append("| Arquivo | Aprov./Total | Categorias |")
     lines.append("|---|---|---|")
     for r in bad:
-        cats = ", ".join(f"{k}:{v}" for k, v in sorted(r["categories"].items(), key=lambda kv: -kv[1])[:5])
-        lines.append(f"| `{r['file']}` | {r['status'].get('passed', 0)}/{r['total']} | {cats} |")
+        cats = ", ".join(
+            f"{k}:{v}"
+            for k, v in sorted(r["categories"].items(), key=lambda kv: -kv[1])[:5]
+        )
+        lines.append(
+            f"| `{r['file']}` | {r['status'].get('passed', 0)}/{r['total']} | {cats} |"
+        )
     args.report_md.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(json.dumps({k: summary[k] for k in ("vectors", "status", "pass_rate_percent", "elapsed_seconds")}))
+    print(
+        json.dumps(
+            {
+                k: summary[k]
+                for k in ("vectors", "status", "pass_rate_percent", "elapsed_seconds")
+            }
+        )
+    )
     return 0 if not bad else 1
 
 
