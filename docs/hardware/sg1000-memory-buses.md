@@ -11,7 +11,8 @@ direta de `SG1000Machine`, com o VDP mantendo sua própria VRAM.
 
 - `SG1000Ram` (`src/sega_emulator/bus/memory.py`): RAM interna física de 1 KiB
   espelhada em `C000h–FFFFh` por padrão, ou 8 KiB para perfis Type-B
-  conhecidos de cartucho SG-1000 II com adaptador de expansão. `The Castle (Japan)` mantém 1 KiB interno e recebe 8 KiB separados no mapa do cartucho. A RAM é
+  conhecidos de cartucho SG-1000 II com adaptador de expansão. `The Castle
+  (Japan)` mantém 1 KiB interno e recebe 8 KiB separados no mapa do cartucho. A RAM é
   inicializada com bytes zerados por convenção determinística do software; isso
   não afirma que a RAM real ligue zerada.
 - `cartridge_profiles.py`: reconhece por CRC-32 os cinco dumps catalogados
@@ -40,8 +41,9 @@ direta de `SG1000Machine`, com o VDP mantendo sua própria VRAM.
 
 | Endereços da CPU | Tratamento implementado | Limitações |
 |---|---|---|
-| `0000h–BFFFh` | ROM de cartucho por meio do adaptador de espelhamento | A imagem precisa ter entre 1 byte e 48 KiB; não há banking nem SRAM de cartucho |
-| `C000h–FFFFh` | RAM padrão de 1 KiB espelhada; perfil Type-B conhecido usa 8 KiB espelhados na janela de 16 KiB | Perfis selecionados por CRC-32 conhecido; outras expansões e mapeadores não são inferidos |
+| `0000h–7FFFh` | ROM de cartucho por meio do adaptador de espelhamento | A imagem precisa ter entre 1 byte e 48 KiB; não há banking |
+| `8000h–BFFFh` | ROM espelhada normalmente; para `The Castle (Japan)`, RAM de cartucho de 8 KiB espelhada duas vezes | Seleção explícita por CRC-32 `092F29D6`; outros cartuchos permanecem somente leitura |
+| `C000h–FFFFh` | RAM interna padrão de 1 KiB espelhada; perfis Type-B conhecidos usam 8 KiB espelhados na janela de 16 KiB | Perfis selecionados por hashes conhecidos; outras expansões e mapeadores não são inferidos |
 
 O barramento base `SG1000MemoryBus` sozinho não espelha automaticamente uma
 ROM curta; essa política fica no adaptador privado usado por `SG1000Machine`.
