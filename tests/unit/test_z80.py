@@ -1864,7 +1864,7 @@ def test_ed_block_transfer_compare_repeat_xy_flags_come_from_pc(
 ) -> None:
     """F3/F5 use PC.11/PC.13 on non-terminating LDIR/LDDR/CPIR/CPDR iterations."""
     pc = (pc_high << 8) | 0x40
-    cpu = make_cpu(bytes([0x00]))
+    cpu = Z80Cpu(FlatMemoryBus(bytes([0x00])))
     cpu.pc = pc
     cpu.bus.write(pc, 0xED)
     cpu.bus.write(pc + 1, opcode)
