@@ -86,6 +86,9 @@ def test_rust_core_matches_python_for_supported_instruction_sequence() -> None:
         "halted",
         "wz",
         "total_cycles",
+        "q",
+        "_q_previous",
+        "p",
     )
     for _ in range(20):
         python_cycles = python_cpu.step()
@@ -146,6 +149,9 @@ def test_rust_block_transfer_matches_python(
         "r",
         "wz",
         "total_cycles",
+        "q",
+        "_q_previous",
+        "p",
     )
     assert python_cycles == rust_cycles == expected_cycles
     assert {name: getattr(rust_cpu, name) for name in attributes} == {
@@ -231,6 +237,9 @@ def test_rust_primary_opcode_map_matches_python(opcode: int) -> None:
         "de_alt",
         "hl_alt",
         "total_cycles",
+        "q",
+        "_q_previous",
+        "p",
     )
     assert rust_cycles == python_cycles
     assert {name: getattr(rust_cpu, name) for name in attributes} == {
@@ -317,6 +326,9 @@ def test_rust_indexed_special_instructions_match_python(
         "halted",
         "wz",
         "total_cycles",
+        "q",
+        "_q_previous",
+        "p",
     )
     assert rust_cycles == python_cycles
     assert {name: getattr(rust_cpu, name) for name in attributes} == {
@@ -376,6 +388,9 @@ def test_rust_indexed_register_and_alu_families_match_python(
         "halted",
         "wz",
         "total_cycles",
+        "q",
+        "_q_previous",
+        "p",
     )
     assert rust_cycles == python_cycles
     assert {name: getattr(rust_cpu, name) for name in attributes} == {
@@ -429,6 +444,9 @@ def test_rust_indexed_cb_opcode_family_matches_python(
         "halted",
         "wz",
         "total_cycles",
+        "q",
+        "_q_previous",
+        "p",
     )
     assert rust_cycles == python_cycles
     assert {name: getattr(rust_cpu, name) for name in attributes} == {
@@ -478,6 +496,9 @@ def test_rust_cb_opcode_family_matches_python(opcode: int) -> None:
         "halted",
         "wz",
         "total_cycles",
+        "q",
+        "_q_previous",
+        "p",
     )
     assert rust_cycles == python_cycles
     assert {name: getattr(rust_cpu, name) for name in attributes} == {
@@ -547,6 +568,9 @@ def test_rust_base_misc_instructions_match_python(
         "wz",
         "r",
         "total_cycles",
+        "q",
+        "_q_previous",
+        "p",
     )
     assert python_cycles == rust_cycles == expected_cycles
     assert {name: getattr(rust_cpu, name) for name in attributes} == {
@@ -616,6 +640,9 @@ def test_rust_ed_arithmetic_and_special_ops_match_python(
         "interrupt_mode",
         "wz",
         "total_cycles",
+        "q",
+        "_q_previous",
+        "p",
     )
     assert python_cycles == rust_cycles == expected_cycles
     assert {name: getattr(rust_cpu, name) for name in attributes} == {
