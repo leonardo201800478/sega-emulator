@@ -85,9 +85,15 @@ class VideoOutputConfig:
             raise ValueError("shaders_enabled deve ser bool.")
         if type(self.integer_scaling) is not bool:
             raise ValueError("integer_scaling deve ser bool.")
-        if type(self.frames_in_flight) is not int or not 1 <= self.frames_in_flight <= 3:
+        if (
+            type(self.frames_in_flight) is not int
+            or not 1 <= self.frames_in_flight <= 3
+        ):
             raise ValueError("frames_in_flight deve ser um inteiro entre 1 e 3.")
         if type(self.frame_delay_ms) is not int or not 0 <= self.frame_delay_ms <= 50:
             raise ValueError("frame_delay_ms deve ser um inteiro entre 0 e 50.")
-        if type(self.run_ahead_frames) is not int or not 0 <= self.run_ahead_frames <= 2:
+        if (
+            type(self.run_ahead_frames) is not int
+            or not 0 <= self.run_ahead_frames <= 2
+        ):
             raise ValueError("run_ahead_frames deve ser um inteiro entre 0 e 2.")
