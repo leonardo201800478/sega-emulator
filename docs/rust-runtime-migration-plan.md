@@ -26,8 +26,9 @@ O objetivo é que a execução da emulação — CPU, barramentos, memória, dis
 - VDP TMS9918A: registradores, VRAM, status, interrupções e renderização.
 - PSG SN76489AN: registradores, divisores, tons, ruído, amostragem e estado determinístico.
 - Entrada e integração de periféricos.
-- Carregamento/validação de ROM e lógica de sessão necessária ao runtime.
+- Carregamento/validação de ROM, CLI/headless e lógica de sessão necessária ao runtime.
 - APIs de estado, reset, pause/step e diagnóstico necessárias à integração com a UI.
+- O frontend Pygame Python será descontinuado quando o Qt passar a consumir o runtime Rust; não manteremos dois frontends Python como objetivo final.
 
 ### Permanecer em Python
 
@@ -35,7 +36,7 @@ O objetivo é que a execução da emulação — CPU, barramentos, memória, dis
 - Testes pytest, harnesses diferenciais, scripts de benchmark, auditorias e ferramentas de desenvolvimento, salvo quando um componente de execução exigir mudança.
 - Durante a migração, a implementação Python de referência permanece disponível apenas para testes diferenciais e comparação; não será chamada como fallback silencioso pelo runtime Rust.
 
-O frontend Pygame/SDL não será tratado como parte do núcleo de emulação. Sua continuidade ou remoção será decidida em uma etapa explícita de frontend, sem misturá-la com a migração dos componentes de hardware.
+A meta final é manter apenas o frontend Qt em Python. O frontend Pygame/SDL e a CLI Python são caminhos de aplicação a retirar ou substituir por Rust; a saída de áudio e a entrada nativas serão ligadas ao runtime sem alterar os clocks lógicos. Essa consolidação ocorrerá depois de os contratos de hardware e a API Rust estarem estáveis.
 
 ## Sequência de implementação
 
