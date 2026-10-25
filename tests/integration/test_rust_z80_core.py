@@ -177,11 +177,13 @@ def test_rust_core_fails_explicitly_on_assigned_but_unsupported_ed_opcode() -> N
         (0x3F, 4),  # CCF
         (0x08, 4),  # EX AF,AF'
         (0xD9, 4),  # EXX
-        (0xE3, 19), # EX (SP),HL
+        (0xE3, 19),  # EX (SP),HL
         (0xEB, 4),  # EX DE,HL
     ],
 )
-def test_rust_base_misc_instructions_match_python(opcode: int, expected_cycles: int) -> None:
+def test_rust_base_misc_instructions_match_python(
+    opcode: int, expected_cycles: int
+) -> None:
     RustZ80Cpu = _rust_cpu()
     program = bytes([opcode])
     python_bus = MemoryBus(program)
@@ -206,8 +208,23 @@ def test_rust_base_misc_instructions_match_python(opcode: int, expected_cycles: 
     python_cycles = python_cpu.step()
     rust_cycles = rust_cpu.step()
     attributes = (
-        "a", "f", "b", "c", "d", "e", "h", "l", "sp", "pc",
-        "af_alt", "bc_alt", "de_alt", "hl_alt", "wz", "r", "total_cycles",
+        "a",
+        "f",
+        "b",
+        "c",
+        "d",
+        "e",
+        "h",
+        "l",
+        "sp",
+        "pc",
+        "af_alt",
+        "bc_alt",
+        "de_alt",
+        "hl_alt",
+        "wz",
+        "r",
+        "total_cycles",
     )
     assert python_cycles == rust_cycles == expected_cycles
     assert {name: getattr(rust_cpu, name) for name in attributes} == {
