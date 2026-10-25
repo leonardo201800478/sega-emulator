@@ -2,6 +2,10 @@ name: Performance Diagnostic
 
 on:
   pull_request:
+    paths:
+      - "src/sega_emulator/**"
+      - "tools/benchmarks/**"
+      - "pyproject.toml"
   workflow_dispatch:
 
 permissions:
