@@ -19,85 +19,6 @@ from sega_emulator.testing.z80_singlestep import run_vector
 
 UPSTREAM_COMMIT = "ebe1875d48f374bcfd4b505d8eb8ee751568b5f7"
 
-DEFAULT_FILES = (
-    "00",
-    "04",
-    "06",
-    "37",
-    "3f",
-    "76",
-    "c6",
-    "d3",
-    "cb 00",
-    "dd 21",
-    "ed 40",
-    "18",
-    "20",
-    "21",
-    "22",
-    "24",
-    "26",
-    "2a",
-    "32",
-    "cb 06",
-    "cb 40",
-    "ed 42",
-    "ed 44",
-    "ed 45",
-    "dd 46",
-    "0a",
-    "12",
-    "19",
-    "29",
-    "34",
-    "36",
-    "3a",
-    "47",
-    "c0",
-    "c5",
-    "c9",
-    "cd",
-    "e3",
-    "e9",
-    "cb 7e",
-    "dd 7e",
-    "ed b0",
-    "ed b2",
-    "ed b3",
-    "ed ba",
-    "ed bb",
-    "ed a0",
-    "ed a1",
-    "ed a3",
-    "ed a8",
-    "ed a9",
-    "ed ab",
-    "ed b1",
-    "ed b8",
-    "ed b9",
-    "80",
-    "88",
-    "98",
-    "a8",
-    "b0",
-    "b8",
-    "cb 86",
-    "cb c6",
-    "dd 34",
-    "dd 36",
-    "fd 36",
-    "fd 21",
-    "fd 7e",
-    "dd 86",
-    "fd 86",
-    "fd 34",
-    "fd 35",
-    "dd 35",
-    "dd 66",
-    "fd 74",
-)
-
-
 def load_json(path: Path) -> list[dict[str, Any]]:
     with path.open(encoding="utf-8") as source:
         payload = json.load(source)
@@ -150,7 +71,7 @@ def main() -> int:
     parser.add_argument(
         "--files",
         nargs="+",
-        default=list(DEFAULT_FILES),
+        default=None,
         help='Nomes de arquivos sem ".json" (prefixos podem conter espaço)',
     )
     parser.add_argument("--report-json", type=Path, required=True)
@@ -165,9 +86,14 @@ def main() -> int:
     if manifest["upstream"]["commit"] != UPSTREAM_COMMIT:
         parser.error("commit do manifesto diverge do commit fixado no executor")
     manifest_by_file = {entry["file"]: entry for entry in manifest["files"]}
+    file_stems = (
+        args.files
+        if args.files is not None
+        else [Path(entry["file"]).stem for entry in manifest["files"]]
+    )
 
     reports: list[dict[str, Any]] = []
-    for file_stem in args.files:
+    for file_stem in file_stems:
         normalized = file_stem.lower()
         if (
             not normalized
