@@ -390,7 +390,8 @@ impl RustZ80Cpu {
 
     fn write_stack_pair(&mut self, code: u8, value: u16) {
         if code == 3 {
-            self.set_af(value)
+            self.set_af(value);
+            self.q = self.f;
         } else {
             self.write_pair(code, value)
         }
@@ -950,6 +951,7 @@ impl RustZ80Cpu {
             0x08 => {
                 let current = self.af();
                 self.set_af(self.af_alt);
+                self.q = self.f;
                 self.af_alt = current;
                 Ok(4)
             }
