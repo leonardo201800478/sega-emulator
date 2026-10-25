@@ -105,6 +105,13 @@ O JSONL é destinado à análise automatizada; o log textual é para leitura rá
 git diff --check
 ```
 
+## Direção arquitetural
+
+- [Roteiro do núcleo nativo: Python de referência, hardware Rust e LLVM JIT opcional](docs/architecture/native-core-roadmap.md)
+- [ADR 0005 — núcleo Python/Rust/LLVM](docs/adr/0005-python-rust-llvm-architecture.md)
+
+Python permanece a referência funcional. Rust será adotado seletivamente por componente, e LLVM ORC será apenas um backend JIT opcional para o Z80. Nenhum backend será promovido sem testes diferenciais, CI e benchmarks comparáveis.
+
 ## Documentação
 
 - [Arquitetura multi-sistema](docs/architecture.md)
