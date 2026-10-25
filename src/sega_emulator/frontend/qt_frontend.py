@@ -584,15 +584,17 @@ def run(initial_path: Path | None = None) -> None:
                 return
             combo = combos[(player, action)]
             button_index = combo.findData(button_name)
-            if button_index >= 0:
-                combo.setCurrentIndex(button_index)
-                gamepad_capture_buttons[(player, action)].setText("Gravar")
-                status.showMessage(
-                    f"Controle do Jogador {player}: "
-                    f"{action_labels[action]} = {button_labels[button_name]}"
-                )
-            else:
-                gamepad_capture_buttons[(player, action)].setText("Gravar")
+            if button_index < 0:
+                display_name = button_labels.get(button_name, button_name)
+                combo.addItem(display_name, button_name)
+                button_index = combo.findData(button_name)
+            combo.setCurrentIndex(button_index)
+            gamepad_capture_buttons[(player, action)].setText("Gravar")
+            status.showMessage(
+                f"Controle do Jogador {player}: "
+                f"{action_labels[action]} = "
+                f"{button_labels.get(button_name, button_name)}"
+            )
             capture_target = None
             capture_timer.stop()
 
