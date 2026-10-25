@@ -1019,3 +1019,30 @@ def test_rust_di_cancels_ei_delay_and_blocks_pending_int() -> None:
         _assert_rust_python_interrupt_state(python_cpu, rust_cpu)
     assert rust_cpu.pc == 3
     assert not rust_cpu.iff1 and not rust_cpu.iff2
+
+
+def test_rust_int_releases_halt_and_pushes_post_halt_pc() -> None:
+    RustZ80Cpu = _rust_cpu()
+    program = bytes([0x76, 0x00])
+    python_bus = MemoryBus(program)
+    rust_bus = MemoryBus(program)
+    python_cpu = Z80Cpu(python_bus)
+    rust_cpu = RustZ80Cpu(rust_bus, None)
+    for cpu in (python_cpu, rust_cpu):
+        cpu.sp = 0x3000
+        cpu.iff1 = True
+        cpu.iff2 = True
+        cpu.interrupt_mode = 1
+
+    assert python_cpu.step() == rust_cpu.step() == 4
+    _assert_rust_python_interrupt_state(python_cpu, rust_cpu)
+    assert rust_cpu.halted and rust_cpu.pc == 1
+
+    python_cpu.request_int(0xFF)
+    rust_cpu.request_int(0xFF)
+    assert python_cpu.step() == rust_cpu.step() == 13
+    _assert_rust_python_interrupt_state(python_cpu, rust_cpu)
+    assert not rust_cpu.halted
+    assert rust_cpu.pc == 0x0038
+    assert rust_cpu.sp == 0x2FFE
+    assert rust_bus.read(0x2FFE) | (rust_bus.read(0x2FFF) << 8) == 1
