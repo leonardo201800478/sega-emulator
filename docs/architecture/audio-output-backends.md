@@ -1,8 +1,10 @@
-# Arquitetura de saída de áudio
+# Contrato de configuração para saída de áudio
+
+> Escopo desta PR: configurações validadas e serializáveis. Os backends WASAPI, XAudio2 e SDL3, o gerenciador de saída e a integração com a UI ainda **não estão implementados**; os itens abaixo são contratos e plano de trabalho, não capacidades já disponíveis.
 
 ## Objetivo
 
-Oferecer WASAPI, XAudio2 e SDL3 como backends selecionáveis pelo usuário, com configurações de frequência, formato, canais, dispositivo e latência. A saída física não pode alterar o estado determinístico do hardware emulado.
+Definir um contrato de configuração validado e independente do dispositivo para uma futura saída WASAPI, XAudio2 ou SDL3. Esta PR não abre dispositivos nem entrega áudio físico. A saída futura não poderá alterar o estado determinístico do hardware emulado.
 
 ## Separação de responsabilidades
 

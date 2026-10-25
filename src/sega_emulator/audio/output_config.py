@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from collections.abc import Mapping
 
 
 class AudioBackend(StrEnum):
@@ -79,3 +80,53 @@ class AudioOutputConfig:
             raise ValueError("allow_fallback deve ser bool.")
         if self.wasapi_exclusive and self.backend is not AudioBackend.WASAPI:
             raise ValueError("wasapi_exclusive só se aplica ao backend WASAPI.")
+
+    def to_dict(self) -> dict[str, object]:
+        """Serializa preferências para JSON sem incluir estado do dispositivo."""
+        return {
+            "backend": self.backend.value,
+            "sample_rate": self.sample_rate,
+            "pcm_format": self.pcm_format.value,
+            "output_channels": self.output_channels,
+            "latency_profile": self.latency_profile.value,
+            "buffer_ms": self.buffer_ms,
+            "device_id": self.device_id,
+            "wasapi_exclusive": self.wasapi_exclusive,
+            "allow_fallback": self.allow_fallback,
+        }
+
+    @classmethod
+    def from_dict(cls, values: Mapping[str, object]) -> AudioOutputConfig:
+        """Carrega preferências persistidas; rejeita campos desconhecidos."""
+        if not isinstance(values, Mapping):
+            raise ValueError("A configuração de áudio deve ser um mapeamento.")
+
+        allowed = {
+            "backend",
+            "sample_rate",
+            "pcm_format",
+            "output_channels",
+            "latency_profile",
+            "buffer_ms",
+            "device_id",
+            "wasapi_exclusive",
+            "allow_fallback",
+        }
+        unknown = set(values) - allowed
+        if unknown:
+            names = ", ".join(sorted(str(key) for key in unknown))
+            raise ValueError(f"Campos de configuração de áudio desconhecidos: {names}.")
+
+        parsed = dict(values)
+        for key, enum_type in (
+            ("backend", AudioBackend),
+            ("pcm_format", PcmFormat),
+            ("latency_profile", LatencyProfile),
+        ):
+            if key in parsed and not isinstance(parsed[key], enum_type):
+                try:
+                    parsed[key] = enum_type(parsed[key])
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(f"{key} contém uma opção desconhecida.") from exc
+
+        return cls(**parsed)

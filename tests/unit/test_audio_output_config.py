@@ -73,3 +73,45 @@ def test_exclusive_mode_is_wasapi_only() -> None:
 def test_boolean_options_reject_integers(field: str) -> None:
     with pytest.raises(ValueError):
         AudioOutputConfig(**{field: 1})
+
+
+
+def test_audio_output_config_round_trips_through_json_values() -> None:
+    original = AudioOutputConfig(
+        backend=AudioBackend.SDL3,
+        sample_rate=96_000,
+        pcm_format=PcmFormat.F32,
+        output_channels=2,
+        latency_profile=LatencyProfile.LOW,
+        buffer_ms=8,
+        device_id="endpoint-1",
+        allow_fallback=False,
+    )
+
+    restored = AudioOutputConfig.from_dict(original.to_dict())
+
+    assert restored == original
+
+
+def test_audio_output_config_loads_partial_mapping_with_defaults() -> None:
+    config = AudioOutputConfig.from_dict({"backend": "wasapi", "sample_rate": 44_100})
+
+    assert config.backend is AudioBackend.WASAPI
+    assert config.sample_rate == 44_100
+    assert config.pcm_format is PcmFormat.S16
+
+
+@pytest.mark.parametrize(
+    ("values", "message"),
+    [
+        ({"backend": "unknown"}, "backend"),
+        ({"pcm_format": "float64"}, "pcm_format"),
+        ({"latency_profile": "instant"}, "latency_profile"),
+        ({"unexpected": True}, "desconhecidos"),
+    ],
+)
+def test_audio_output_config_rejects_invalid_persisted_values(
+    values: dict[str, object], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        AudioOutputConfig.from_dict(values)
