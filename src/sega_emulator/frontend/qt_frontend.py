@@ -623,18 +623,35 @@ def run(initial_path: Path | None = None) -> None:
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         profiles: dict[int, PlayerInputProfile] = {}
+        seen_keyboard_keys: dict[int, tuple[int, str]] = {}
         for player in (1, 2):
             keyboard_bindings = {
                 action: key_buttons[(player, action)].key_name for action in ACTIONS
             }
-            normalized_keys = [key.casefold() for key in keyboard_bindings.values()]
-            if len(normalized_keys) != len(set(normalized_keys)):
-                QMessageBox.warning(
-                    dialog,
-                    "Mapeamento inválido",
-                    f"O Jogador {player} atribuiu a mesma tecla a mais de uma ação.",
+            for action, key_name in keyboard_bindings.items():
+                sequence = QKeySequence.fromString(
+                    key_name, QKeySequence.SequenceFormat.PortableText
                 )
-                return
+                if sequence.isEmpty():
+                    QMessageBox.warning(
+                        dialog,
+                        "Mapeamento inválido",
+                        f"A tecla configurada para {action_labels[action]} é inválida.",
+                    )
+                    return
+                key_code = int(sequence[0].toCombined())
+                previous = seen_keyboard_keys.get(key_code)
+                if previous is not None:
+                    previous_player, previous_action = previous
+                    QMessageBox.warning(
+                        dialog,
+                        "Mapeamento inválido",
+                        f"A tecla {key_name} está atribuída a "
+                        f"{action_labels[previous_action]} do Jogador {previous_player} "
+                        f"e a {action_labels[action]} do Jogador {player}.",
+                    )
+                    return
+                seen_keyboard_keys[key_code] = (player, action)
             profiles[player] = PlayerInputProfile(
                 gamepad_buttons={
                     action: str(combos[(player, action)].currentData())
