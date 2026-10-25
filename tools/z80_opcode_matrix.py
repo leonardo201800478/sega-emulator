@@ -392,9 +392,13 @@ def build_matrix() -> dict[str, Any]:
     counts = Counter(row["space"] for row in rows)
     return {
         "schema_version": 1,
-        "scope": "classic Zilog Z80 opcode classification; semantic correctness is not implied",
+        "scope": ("classic Zilog Z80 opcode classification; semantic correctness "
+                  "is not implied"),
         "source_code": "src/sega_emulator/cpu/z80.py",
-        "classification_rule": "One row per second-byte encoding per opcode space; DD/FD rows describe the second byte following that prefix.",
+        "classification_rule": (
+            "One row per second-byte encoding per opcode space; DD/FD rows "
+            "describe the second byte following that prefix."
+        ),
         "counts_by_space": {
             space: counts[space]
             for space in ("base", "CB", "ED", "DD", "FD", "DD-CB", "FD-CB")
