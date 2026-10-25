@@ -100,3 +100,25 @@ def test_ram_rejects_addresses_above_16_bit_range(ram: SG1000Ram) -> None:
     for address in (-1, 0x10000, 0x1C000):
         with pytest.raises(ValueError):
             ram.read(address)
+
+
+
+def test_ram_expansion_has_eight_kibibytes_and_mirrors_at_e000() -> None:
+    ram = SG1000Ram(bytes(0x2000))
+
+    assert ram.size == 0x2000
+    ram.write(0xC000, 0xA5)
+    ram.write(0xDFFF, 0x5A)
+
+    assert ram.read(0xC000) == 0xA5
+    assert ram.read(0xE000) == 0xA5
+    assert ram.read(0xDFFF) == 0x5A
+    assert ram.read(0xFFFF) == 0x5A
+    assert ram.read(0xC800) == 0
+
+
+def test_ram_rejects_unsupported_physical_sizes() -> None:
+    with pytest.raises(ValueError):
+        SG1000Ram(bytes(0x0800))
+    with pytest.raises(ValueError):
+        SG1000Ram(bytes(0x4000))
