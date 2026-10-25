@@ -1,9 +1,9 @@
-"""Modelo determinístico do PSG SN76489AN usado no Sega SG-1000.
+"""Modelo determinístico do PSG SN76489AN do Sega SG-1000.
 
-O núcleo opera com o clock de entrada do chip e um divisor interno por 16.
-O LFSR segue a variante de 15 bits documentada para o SG-1000 (realimentação
-branca pelos bits 0 e 1). A saída é uma mistura mono normalizada; não inclui
-a resposta analógica do circuito nem integração com a máquina/frontend.
+O núcleo é acionado pelo clock de entrada e divide-o por 16 antes de atualizar
+os geradores. A saída digital mono é uma aproximação da mistura dos quatro
+canais; não modela a resposta analógica nem afirma temporização sub-instrução
+dos writes de I/O feitos pela máquina.
 """
 
 from __future__ import annotations
@@ -17,8 +17,9 @@ TONE_CHANNELS = 3
 NOISE_CHANNEL = 3
 LFSR_MASK = 0x7FFF
 LFSR_SEED = 0x4000
+SAMPLE_BUFFER_SECONDS = 1
 
-# Um passo por nível: atenuação aproximada de 2 dB, valor 15 = silêncio.
+# Níveis nominais de atenuação em passos de aproximadamente 2 dB.
 _ATTENUATION = (
     1.0,
     0.794328,
@@ -40,7 +41,7 @@ _ATTENUATION = (
 
 
 class SN76489:
-    """PSG com três canais de onda quadrada, ruído e saída mono determinística."""
+    """SN76489AN para SG-1000, com três tons, ruído e saída mono."""
 
     def __init__(
         self,
@@ -53,6 +54,16 @@ class SN76489:
             raise ValueError("sample_rate deve ser um inteiro positivo.")
         self.clock_hz = clock_hz
         self.sample_rate = sample_rate
+        self._sample_buffer_capacity = sample_rate * SAMPLE_BUFFER_SECONDS
+        self._pending_samples: deque[float] = deque(
+            maxlen=self._sample_buffer_capacity
+        )
+        self._render_pending: deque[float] = deque()
+        self.dropped_samples = 0
+        self.reset()
+
+    def reset(self) -> None:
+        """Restaura um estado determinístico e limpa os buffers de saída."""
         self.tone_periods = [0, 0, 0]
         self.attenuations = [15, 15, 15, 15]
         self.noise_control = 0
@@ -60,31 +71,17 @@ class SN76489:
         self._tone_counters = [0, 0, 0]
         self._tone_outputs = [1, 1, 1]
         self._noise_counter = 0
-        self._noise_clock = 0
         self._lfsr = LFSR_SEED
         self._clock_divider_phase = 0
-        self._sample_phase = 0
         self._output_phase = 0
-        self._pending_samples: deque[float] = deque(maxlen=self.sample_rate)
-
-    def reset(self) -> None:
-        """Restaura um estado inicial determinístico e silencioso."""
-        self.tone_periods[:] = [0, 0, 0]
-        self.attenuations[:] = [15, 15, 15, 15]
-        self.noise_control = 0
-        self._latched_register = 0
-        self._tone_counters[:] = [0, 0, 0]
-        self._tone_outputs[:] = [1, 1, 1]
-        self._noise_counter = 0
-        self._noise_clock = 0
-        self._lfsr = LFSR_SEED
-        self._clock_divider_phase = 0
-        self._sample_phase = 0
-        self._output_phase = 0
+        self._noise_period = 0x10
         self._pending_samples.clear()
+        self._render_pending.clear()
+        self.dropped_samples = 0
+        self._refresh_noise_period()
 
     def write(self, value: int) -> None:
-        """Processa um byte latch/data no barramento serial do PSG."""
+        """Processa um byte latch/data do protocolo serial do PSG."""
         if type(value) is not int or not 0 <= value <= 0xFF:
             raise ValueError("value deve ser um byte inteiro.")
         if value & 0x80:
@@ -107,23 +104,32 @@ class SN76489:
                     (data & 0x3F) << 4
                 )
             self.tone_periods[channel] &= 0x3FF
+            if channel == 2:
+                self._refresh_noise_period()
             return
         if channel < TONE_CHANNELS and is_volume:
             self.attenuations[channel] = data & 0x0F
             return
         if channel == NOISE_CHANNEL and not is_volume:
             self.noise_control = data & 0x07
+            self._refresh_noise_period()
             self._reset_noise_generator()
             return
         self.attenuations[NOISE_CHANNEL] = data & 0x0F
 
+    def _refresh_noise_period(self) -> None:
+        """Atualiza o divisor efetivo sempre que o controle ou tom 3 muda."""
+        rate = self.noise_control & 0x03
+        self._noise_period = (
+            max(1, self.tone_periods[2]) if rate == 3 else (0x10 << rate)
+        )
+
     def _reset_noise_generator(self) -> None:
         self._lfsr = LFSR_SEED
-        self._noise_clock = 0
         self._noise_counter = 0
 
     def _shift_noise_register(self) -> None:
-        # SN76489AN/SG-1000: 15-bit LFSR; white-noise taps are bits 0 and 1.
+        # Variante de 15 bits adotada para o SN76489AN do SG-1000.
         if self.noise_control & 0x04:
             feedback = (self._lfsr ^ (self._lfsr >> 1)) & 1
         else:
@@ -132,7 +138,7 @@ class SN76489:
 
     def _tick_internal_clock(self) -> None:
         for channel, period in enumerate(self.tone_periods):
-            # No SN76489AN discreto, períodos 0 e 1 mantêm a saída alta.
+            # Hipótese de variante mantida explicitamente: períodos 0/1 ficam altos.
             if period <= 1:
                 self._tone_outputs[channel] = 1
                 self._tone_counters[channel] = 0
@@ -142,36 +148,44 @@ class SN76489:
                 self._tone_counters[channel] = 0
                 self._tone_outputs[channel] ^= 1
 
-        rate = self.noise_control & 0x03
-        noise_period = max(1, self.tone_periods[2]) if rate == 3 else (0x10 << rate)
         self._noise_counter += 1
-        if self._noise_counter >= noise_period:
+        if self._noise_counter >= self._noise_period:
             self._noise_counter = 0
-            self._noise_clock ^= 1
-            if self._noise_clock:
+            # O LFSR é acionado a cada segunda borda do divisor de ruído.
+            # Isso produz clock / 512, / 1024 e / 2048 nos três modos fixos.
+            self._noise_counter_phase ^= 1
+            if self._noise_counter_phase:
                 self._shift_noise_register()
 
     def advance_clocks(self, clocks: int) -> None:
-        """Avança clocks de entrada do chip sem gerar amostras de áudio."""
+        """Avança clocks de entrada e coloca as amostras novas no buffer limitado."""
         if type(clocks) is not int or clocks < 0:
             raise ValueError("clocks deve ser um inteiro não negativo.")
+        self._advance_clocks(clocks, self._pending_samples)
+
+    def _advance_clocks(self, clocks: int, sample_sink: deque[float]) -> None:
         internal_total = self._clock_divider_phase + clocks
         internal_clocks, self._clock_divider_phase = divmod(
             internal_total, CLOCK_DIVIDER
         )
         for _ in range(internal_clocks):
             self._tick_internal_clock()
-            # Mantém a taxa de amostragem ligada ao clock real do chip.
             self._output_phase += self.sample_rate * CLOCK_DIVIDER
             while self._output_phase >= self.clock_hz:
-                self._pending_samples.append(self._mix())
+                sample = self._mix()
+                if sample_sink is self._pending_samples and len(sample_sink) == (
+                    self._sample_buffer_capacity
+                ):
+                    self.dropped_samples += 1
+                sample_sink.append(sample)
                 self._output_phase -= self.clock_hz
 
     def drain_samples(self, max_samples: int | None = None) -> list[float]:
-        """Retira amostras produzidas pelo avanço do clock da máquina.
+        """Consome amostras geradas por advance_clocks(), em ordem FIFO.
 
-        O buffer mantém no máximo um segundo de áudio para que execuções
-        headless longas não consumam memória sem limite.
+        O buffer guarda até um segundo de áudio. Quando fica cheio, descarta as
+        amostras mais antigas e incrementa dropped_samples para tornar a perda
+        observável, em vez de silenciosa.
         """
         if max_samples is not None and (
             type(max_samples) is not int or max_samples < 0
@@ -190,18 +204,27 @@ class SN76489:
             * (1.0 if self._tone_outputs[channel] else -1.0)
             for channel in range(TONE_CHANNELS)
         )
-        noise = _ATTENUATION[self.attenuations[NOISE_CHANNEL]]
-        total += noise * (1.0 if self._lfsr & 1 else -1.0)
+        total += _ATTENUATION[self.attenuations[NOISE_CHANNEL]] * (
+            1.0 if self._lfsr & 1 else -1.0
+        )
         return total * 0.25
 
     def render(self, sample_count: int) -> list[float]:
-        """Gera amostras mono; a fase fracionária preserva a taxa entre chamadas."""
+        """Avança o chip e devolve exatamente sample_count amostras mono.
+
+        Esta API usa a mesma fase de clock que advance_clocks(), mas devolve
+        diretamente suas amostras, sem também inseri-las no buffer de drain.
+        Se uma taxa de amostragem alta produzir várias amostras num mesmo tick,
+        as excedentes ficam pendentes para a próxima chamada de render().
+        """
         if type(sample_count) is not int or sample_count < 0:
             raise ValueError("sample_count deve ser um inteiro não negativo.")
         output: list[float] = []
-        for _ in range(sample_count):
-            self._sample_phase += self.clock_hz
-            clocks, self._sample_phase = divmod(self._sample_phase, self.sample_rate)
-            self.advance_clocks(clocks)
-            output.append(self._mix())
+        while self._render_pending and len(output) < sample_count:
+            output.append(self._render_pending.popleft())
+        while len(output) < sample_count:
+            clocks_to_next_tick = CLOCK_DIVIDER - self._clock_divider_phase
+            self._advance_clocks(clocks_to_next_tick, self._render_pending)
+            while self._render_pending and len(output) < sample_count:
+                output.append(self._render_pending.popleft())
         return output
