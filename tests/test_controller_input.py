@@ -274,3 +274,25 @@ def test_disconnected_controller_is_closed_and_does_not_keep_input_pressed() -> 
     actions = inputs.poll()
     assert disconnected.closed
     assert actions[1] == set()
+
+
+def test_read_pressed_button_supports_gamepad_mapping_capture() -> None:
+    backend = FakeControllerModule()
+    inputs = ControllerInput(SimpleNamespace(_sdl2=SimpleNamespace(controller=backend)))
+
+    assert inputs.read_pressed_button(1) is None
+
+    backend.devices[0].buttons.add(backend.CONTROLLER_BUTTON_X)
+    assert inputs.read_pressed_button(1) == "x"
+
+    backend.devices[0].buttons.clear()
+    backend.devices[1].buttons.add(backend.CONTROLLER_BUTTON_DPAD_LEFT)
+    assert inputs.read_pressed_button(2) == "dpad_left"
+
+
+def test_read_pressed_button_rejects_invalid_player() -> None:
+    inputs = ControllerInput(
+        SimpleNamespace(_sdl2=SimpleNamespace(controller=FakeControllerModule()))
+    )
+    with pytest.raises(ValueError, match="player deve ser 1 ou 2"):
+        inputs.read_pressed_button(3)
