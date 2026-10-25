@@ -55,7 +55,7 @@ def run(initial_path: Path | None = None) -> None:
     """Abre a interface de teste com teclado, telemetria e logs de sessão."""
     try:
         from PySide6.QtCore import QEvent, QObject, QSettings, Qt, QTimer
-        from PySide6.QtGui import QAction, QImage, QKeySequence, QPixmap
+        from PySide6.QtGui import QImage, QKeySequence
         from PySide6.QtWidgets import (
             QApplication,
             QCheckBox,
@@ -65,31 +65,33 @@ def run(initial_path: Path | None = None) -> None:
             QDoubleSpinBox,
             QFileDialog,
             QFormLayout,
-            QFrame,
             QHBoxLayout,
             QInputDialog,
             QLabel,
-            QMainWindow,
-            QMenu,
             QMessageBox,
             QPushButton,
             QScrollArea,
-            QStatusBar,
             QTabWidget,
             QVBoxLayout,
             QWidget,
         )
+
+        from sega_emulator.frontend.qt.main_window import EmulatorMainWindow
+        from sega_emulator.frontend.qt.preferences import FrontendPreferences
     except ImportError as exc:
         raise RuntimeError(
             'Interface Qt não instalada. Execute: python -m pip install -e ".[qt]"'
         ) from exc
 
-    pygame, audio_channel = _initialize_pygame_backend()
-
     app = QApplication.instance() or QApplication([])
     app.setOrganizationName("SegaEmulator")
     app.setApplicationName("SegaEmulator")
     settings = QSettings()
+    preferences = FrontendPreferences.from_store(settings)
+    selected_cpu_core = preferences.cpu_core
+    pygame, audio_channel = (
+        _initialize_pygame_backend() if preferences.audio_enabled else (None, None)
+    )
     serialized_controller_config = settings.value("controller_config", "", type=str)
     try:
         controller_config = (
@@ -110,39 +112,22 @@ def run(initial_path: Path | None = None) -> None:
         },
     )
 
-    window = QMainWindow()
-    window.setWindowTitle("Sega Emulator — SG-1000")
-    window.resize(1024, 768)
-    window.setMinimumSize(640, 480)
-    window.setStyleSheet(
-        "QMainWindow { background: #17191f; color: #e8eaf0; }"
-        "QMenuBar, QMenu { background: #222630; color: #e8eaf0; }"
-        "QMenuBar::item:selected, QMenu::item:selected { background: #39445a; }"
-        "QToolBar { background: #222630; border: 0; spacing: 8px; padding: 6px; }"
-        "QStatusBar { background: #222630; color: #b9c2d0; }"
-        "QLabel { color: #e8eaf0; }"
-        "QFrame#screenFrame { background: #090a0d; border: 1px solid #3b4252; "
-        "border-radius: 8px; }"
-        "QPushButton { padding: 6px 12px; }"
+    window = EmulatorMainWindow(
+        on_open_rom=lambda: open_rom(),
+        on_pause_resume=lambda: pause_resume(),
+        on_reset=lambda: reset_machine(),
+        on_configure_controls=lambda: configure_controllers(),
+        on_show_controllers=lambda: show_controller_devices(),
+        on_vdp_snapshot=lambda: dump_vdp_snapshot(),
+        on_open_logs=lambda: show_logs(),
+        on_show_machine_state=lambda: show_machine_state(),
+        on_video_scale=lambda scale: window.set_video_scale(scale),
+        on_select_cpu_core=lambda: select_cpu_core(),
     )
-    view = QLabel("Abra uma ROM SG-1000 pelo menu Arquivo")
-    view.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    view.setMinimumSize(256, 192)
-    view.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-    view.setStyleSheet("background: #090a0d; color: #9aa4b2; border: 0;")
-    screen_frame = QFrame()
-    screen_frame.setObjectName("screenFrame")
-    screen_layout = QVBoxLayout(screen_frame)
-    screen_layout.setContentsMargins(8, 8, 8, 8)
-    screen_layout.addWidget(view)
-    central = QWidget()
-    layout = QVBoxLayout(central)
-    layout.setContentsMargins(16, 16, 16, 16)
-    layout.setSpacing(12)
-    layout.addWidget(screen_frame)
-    window.setCentralWidget(central)
-    status = QStatusBar()
-    window.setStatusBar(status)
+    window.resize(preferences.window_width, preferences.window_height)
+    window._video_scale = preferences.video_scale
+    view = window.video_widget
+    status = window.status
 
     machine: SG1000Machine | None = None
     loaded: LoadedRom | None = None
@@ -280,16 +265,9 @@ def run(initial_path: Path | None = None) -> None:
             image_copy_ms = (time.perf_counter() - phase_started) * 1000
 
             phase_started = time.perf_counter()
-            pixmap = QPixmap.fromImage(image).scaled(
-                view.size(),
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.FastTransformation,
-            )
+            view.set_framebuffer(image)
             scale_ms = (time.perf_counter() - phase_started) * 1000
-
-            phase_started = time.perf_counter()
-            view.setPixmap(pixmap)
-            set_pixmap_ms = (time.perf_counter() - phase_started) * 1000
+            set_pixmap_ms = scale_ms
             total_frame_ms = (time.perf_counter() - frame_started) * 1000
 
             phase_values = {
@@ -369,29 +347,14 @@ def run(initial_path: Path | None = None) -> None:
                 "A emulação foi interrompida. Consulte o log da sessão.",
             )
 
-    recent_rom_menu: QMenu | None = None
-
     def refresh_recent_rom_menu() -> None:
-        if recent_rom_menu is None:
-            return
-        recent_rom_menu.clear()
         recent_paths = settings.value("recent_roms", [], type=list)
         valid_paths = [str(path) for path in recent_paths if Path(str(path)).is_file()]
-        if not valid_paths:
-            action = recent_rom_menu.addAction("(Nenhuma ROM recente)")
-            action.setEnabled(False)
-        else:
-            for recent_path in valid_paths:
-                action = recent_rom_menu.addAction(Path(recent_path).name)
-                action.setToolTip(recent_path)
-                action.triggered.connect(
-                    lambda checked=False, selected_path=recent_path: open_rom(
-                        selected_path
-                    )
-                )
-            recent_rom_menu.addSeparator()
-            clear_action = recent_rom_menu.addAction("Limpar histórico")
-            clear_action.triggered.connect(clear_recent_roms)
+        window.set_recent_roms(
+            valid_paths,
+            on_select=lambda selected_path: open_rom(selected_path),
+            on_clear=clear_recent_roms,
+        )
 
     def clear_recent_roms() -> None:
         settings.setValue("recent_roms", [])
@@ -430,7 +393,7 @@ def run(initial_path: Path | None = None) -> None:
                 if not accepted:
                     return
                 candidate = load_rom(path, member_name=selected)
-            loaded_machine = SG1000Machine(candidate.data)
+            loaded_machine = SG1000Machine(candidate.data, cpu_core=selected_cpu_core)
         except Exception as exc:
             logger.exception(
                 "Falha ao carregar ROM",
@@ -440,6 +403,7 @@ def run(initial_path: Path | None = None) -> None:
             return
 
         machine, loaded, frame_count, paused = loaded_machine, candidate, 0, False
+        window.set_rom_label(candidate.display_name)
         selected_path = str(Path(path).expanduser().resolve())
         settings.setValue("last_directory", str(Path(selected_path).parent))
         settings.setValue("last_rom", selected_path)
@@ -474,6 +438,74 @@ def run(initial_path: Path | None = None) -> None:
         view.setFocus()
         timer.start()
 
+    def select_cpu_core() -> None:
+        nonlocal machine, selected_cpu_core, frame_count, paused
+        choices = ["Python (referência)", "Rust (experimental — conjunto parcial)"]
+        current = 0 if selected_cpu_core == "python" else 1
+        selected, accepted = QInputDialog.getItem(
+            window,
+            "Núcleo Z80",
+            "Selecione o backend da CPU. O núcleo Rust ainda não implementa "
+            "todo o conjunto de instruções; ROMs podem falhar.",
+            choices,
+            current,
+            False,
+        )
+        if not accepted:
+            return
+        requested_core = "python" if selected == choices[0] else "rust"
+        if requested_core == selected_cpu_core:
+            return
+        try:
+            if requested_core == "rust":
+                from sega_z80_core import RustZ80Cpu  # noqa: F401
+            replacement = (
+                SG1000Machine(loaded.data, cpu_core=requested_core)
+                if loaded is not None
+                else None
+            )
+        except Exception as exc:
+            logger.exception(
+                "Falha ao selecionar núcleo Z80",
+                extra={
+                    "event": "cpu_core_selection_failed",
+                    "cpu_core": requested_core,
+                },
+            )
+            QMessageBox.warning(
+                window,
+                "Núcleo Z80 indisponível",
+                f"Não foi possível ativar o backend {requested_core}: {exc}",
+            )
+            return
+        selected_cpu_core = requested_core
+        settings.setValue("cpu_core", selected_cpu_core)
+        machine = replacement
+        frame_count, paused = 0, False
+        if machine is not None:
+            update_joystick()
+        status.showMessage(
+            "Núcleo Z80: "
+            + (
+                "Python (referência)"
+                if selected_cpu_core == "python"
+                else "Rust (experimental/parcial)"
+            )
+            + (
+                " — máquina reiniciada"
+                if loaded is not None
+                else " — aplicado à próxima ROM"
+            ),
+            8000,
+        )
+        logger.info(
+            "Núcleo Z80 selecionado",
+            extra={
+                "event": "emulation_backend_selected",
+                "cpu_core": selected_cpu_core,
+            },
+        )
+
     def pause_resume() -> None:
         nonlocal paused
         paused = not paused
@@ -489,7 +521,7 @@ def run(initial_path: Path | None = None) -> None:
         nonlocal last_checkpoint_instructions, last_checkpoint_frame
         if loaded is None:
             return
-        machine = SG1000Machine(loaded.data)
+        machine = SG1000Machine(loaded.data, cpu_core=selected_cpu_core)
         frame_count, paused = 0, False
         pressed_keys.clear()
         update_joystick()
@@ -764,53 +796,17 @@ def run(initial_path: Path | None = None) -> None:
         update_joystick()
         status.showMessage("Mapeamento de controles salvo.")
 
-    file_menu = window.menuBar().addMenu("&Arquivo")
-    open_action = QAction("Abrir ROM…", window)
-    open_action.setShortcut(QKeySequence.StandardKey.Open)
-    open_action.triggered.connect(lambda: open_rom())
-    file_menu.addAction(open_action)
-    recent_rom_menu = file_menu.addMenu("ROMs recentes")
-    refresh_recent_rom_menu()
-    file_menu.addSeparator()
-    file_menu.addAction("Sair", window.close)
-
-    emu_menu = window.menuBar().addMenu("&Emulação")
-    pause_action = QAction("Pausar/Continuar", window)
-    pause_action.setShortcut("F5")
-    pause_action.triggered.connect(pause_resume)
-    emu_menu.addAction(pause_action)
-    reset_action = QAction("Reiniciar máquina", window)
-    reset_action.setShortcut("F10")
-    reset_action.triggered.connect(reset_machine)
-    emu_menu.addAction(reset_action)
-    toolbar = window.addToolBar("Principal")
-    toolbar.setMovable(False)
-    toolbar.addAction(open_action)
-    toolbar.addAction(pause_action)
-    toolbar.addAction(reset_action)
-
-    video_menu = window.menuBar().addMenu("&Vídeo")
-    video_menu.addAction("Escala 2×", lambda: window.resize(600, 450))
-    video_menu.addAction("Escala 3×", lambda: window.resize(800, 620))
-    video_menu.addAction("Escala 4×", lambda: window.resize(1050, 800))
-
-    controls_menu = window.menuBar().addMenu("&Controles")
-    controls_menu.addAction("Configurar controles…", configure_controllers)
-
     def show_controller_devices() -> None:
-        """Mostra o estado do backend SDL3 e os dispositivos atualmente enumerados."""
         names = controller_input.connected_names()
-        devices_text = (
-            "\n".join(f"• {name}" for name in names) or "Nenhum controle detectado."
-        )
+        devices_text = "\n".join(f"• {name}" for name in names)
+        if not devices_text:
+            devices_text = "Nenhum controle detectado."
         backend_state = "disponível" if controller_input.available else "indisponível"
         QMessageBox.information(
             window,
             "Dispositivos SDL3",
             f"Backend SDL3: {backend_state}\n\n{devices_text}",
         )
-
-    controls_menu.addAction("Dispositivos detectados", show_controller_devices)
 
     def dump_vdp_snapshot() -> None:
         """Salva um snapshot pontual do VDP para investigar divergências gráficas."""
@@ -918,49 +914,48 @@ def run(initial_path: Path | None = None) -> None:
             f"JSON: {json_path.resolve()}\\nPNG: {image_path.resolve()}",
         )
 
-    tools_menu = window.menuBar().addMenu("&Diagnóstico")
-    snapshot_action = QAction("Capturar snapshot VDP (JSON + PNG)…", window)
-    snapshot_action.setShortcut("F8")
-    snapshot_action.triggered.connect(dump_vdp_snapshot)
-    tools_menu.addAction(snapshot_action)
-    tools_menu.addAction(
-        "Abrir pasta de logs",
-        lambda: QMessageBox.information(
+    def show_logs() -> None:
+        QMessageBox.information(
             window, "Logs", f"Os logs estão na pasta: {Path('logs').resolve()}"
-        ),
-    )
-    tools_menu.addAction(
-        "Estado da máquina",
-        lambda: QMessageBox.information(
+        )
+
+    def show_machine_state() -> None:
+        QMessageBox.information(
             window,
             "Estado",
             (
                 "Nenhuma ROM carregada."
                 if machine is None
-                else f"ROM: {loaded.display_name}\n"
+                else f"ROM: {loaded.display_name if loaded else 'desconhecida'}\n"
                 f"PC: {machine.cpu.pc:04X}\n"
                 f"Instruções: {machine.total_instructions}\n"
                 f"T-states: {machine.total_tstates}\n"
                 f"Quadro: {machine.vdp.frame_number}\n"
                 f"Linha: {machine.vdp.scanline}"
             ),
-        ),
-    )
-    window.menuBar().addMenu("&Ajuda").addAction(
-        "Sobre",
-        lambda: QMessageBox.about(
-            window,
-            "Sobre",
-            "Sega Emulator SG-1000 — protótipo experimental. "
-            "Compatibilidade real e áudio ainda não validados.",
-        ),
-    )
+        )
 
     timer.timeout.connect(show_frame)
+    refresh_recent_rom_menu()
     if initial_path is not None:
         open_rom(str(initial_path))
     window.show()
     app.exec()
+    preferences = FrontendPreferences(
+        window_width=max(640, min(7680, window.width())),
+        window_height=max(480, min(4320, window.height())),
+        video_scale=getattr(window, "_video_scale", preferences.video_scale),
+        recent_roms=tuple(
+            str(path)
+            for path in settings.value("recent_roms", [], type=list)
+            if isinstance(path, str) and path.strip()
+        )[:12],
+        controller_config=controller_input.config.to_json(),
+        audio_enabled=preferences.audio_enabled,
+        diagnostics_enabled=preferences.diagnostics_enabled,
+        cpu_core=selected_cpu_core,
+    )
+    preferences.save_to_store(settings)
     controller_input.close()
     if pygame is not None:
         pygame.mixer.quit()

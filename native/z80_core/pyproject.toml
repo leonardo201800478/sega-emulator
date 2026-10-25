@@ -1,0 +1,12 @@
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
+
+[project]
+name = "sega-z80-core"
+version = "0.1.0"
+requires-python = ">=3.14,<3.15"
+description = "Experimental selectable Rust Z80 execution core for Sega Emulator"
+
+[tool.maturin]
+features = ["python-extension"]

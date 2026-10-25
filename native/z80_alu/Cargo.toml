@@ -1,0 +1,15 @@
+[package]
+name = "sega-z80-alu"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "sega_z80_alu"
+path = "src/lib.rs"
+
+[[bin]]
+name = "z80-alu-vectors"
+path = "src/main.rs"
+
+[dependencies]
