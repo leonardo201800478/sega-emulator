@@ -8,7 +8,9 @@ from sega_emulator.audio.sn76489 import SN76489
 from sega_emulator.audio.synchronization import AudioSynchronizer
 
 
-def _configured_pair(native_type, *, clock_hz: int = 3_579_545, sample_rate: int = 44_100):
+def _configured_pair(
+    native_type, *, clock_hz: int = 3_579_545, sample_rate: int = 44_100
+):
     python_psg = SN76489(clock_hz=clock_hz, sample_rate=sample_rate)
     rust_psg = native_type(clock_hz=clock_hz, sample_rate=sample_rate)
     writes = (
