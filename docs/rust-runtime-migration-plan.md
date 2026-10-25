@@ -13,7 +13,7 @@ O objetivo é que a execução da emulação — CPU, barramentos, memória, dis
 - A extensão PyO3 atual recebe objetos Python de barramento; portanto, o núcleo ainda pode cruzar a fronteira Rust/Python durante a execução. A migração deve eliminar essas chamadas do caminho crítico.
 - A máquina SG-1000 Python integra Z80, barramento/memória, TMS9918A, SN76489 e sincronização.
 - Baseline local informado nesta sessão: 2.317 testes aprovados; os quatro testes direcionados do backend Rust também passaram.
-- Benchmark sintético local, 100.000 instruções e 7 repetições: CPU isolada Rust 2,729×; máquina completa Rust 1,696×. O workload é `JP 0000h`, não representa desempenho de jogos.
+- Benchmark sintético local anterior à migração nativa, com 100.000 instruções e 7 repetições: CPU isolada Rust 1,078× a velocidade Python; máquina completa Rust 0,95× (cerca de 5% mais lenta). O workload é `JP 0000h`, não representa desempenho de jogos. O usuário informou depois que o resultado melhorou após o build Release, mas não há uma saída numérica completa registrada aqui para atribuir um novo fator.
 - Esses resultados são evidência de throughput em carga sintética, não prova de compatibilidade universal, precisão ciclo a ciclo ou FPS em jogos.
 
 ## Escopo
