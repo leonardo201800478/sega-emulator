@@ -95,6 +95,7 @@ class SN76489:
         channel = register >> 1
         is_volume = bool(register & 1)
         if channel < TONE_CHANNELS and not is_volume:
+            previous_period = self.tone_periods[channel]
             if latched:
                 self.tone_periods[channel] = (self.tone_periods[channel] & 0x3F0) | (
                     data & 0x0F
@@ -104,6 +105,10 @@ class SN76489:
                     (data & 0x3F) << 4
                 )
             self.tone_periods[channel] &= 0x3FF
+            # Ao habilitar um tom após período 0/1, inicia a primeira
+            # contagem com o período novo em vez de alternar no próximo tick.
+            if previous_period <= 1 and self.tone_periods[channel] > 1:
+                self._tone_counters[channel] = self.tone_periods[channel]
             if channel == 2:
                 self._refresh_noise_period()
             return

@@ -125,6 +125,27 @@ def test_noise_period_cache_tracks_rate_and_tone_three_writes() -> None:
     assert psg._noise_period == 0x10
 
 
+def test_enabling_tone_after_period_zero_or_one_loads_initial_countdown() -> None:
+    for initial_period in (0, 1):
+        psg = SN76489()
+        psg.write(0x90)  # canal 0 audível
+        psg.write(0x80 | initial_period)
+        assert psg.tone_periods[0] == initial_period
+
+        # Programa período 8; o primeiro semiperíodo também deve durar 8 ticks.
+        psg.write(0x88)
+        psg.write(0x00)
+        assert psg.tone_periods[0] == 8
+        assert psg._tone_counters[0] == 8
+        initial_output = psg._tone_outputs[0]
+
+        for _ in range(7):
+            psg._tick_internal_clock()
+            assert psg._tone_outputs[0] == initial_output
+        psg._tick_internal_clock()
+        assert psg._tone_outputs[0] != initial_output
+
+
 def test_tone_period_write_does_not_restart_active_countdown() -> None:
     psg = SN76489()
     psg.write(0x90)
