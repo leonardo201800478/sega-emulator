@@ -15,7 +15,8 @@ direta de `SG1000Machine`, com o VDP mantendo sua própria VRAM.
   inicializada com bytes zerados por convenção determinística do software; isso
   não afirma que a RAM real ligue zerada.
 - `cartridge_profiles.py`: reconhece por CRC-32 os cinco dumps catalogados
-  pelo Genesis Plus GX como dependentes da expansão Type-B de 8 KiB. Dumps
+  pelo Genesis Plus GX como dependentes da expansão Type-B de 8 KiB, além do
+  SHA-256 da variante Bomberman English Logo usada na validação local. Dumps
   desconhecidos continuam usando 1 KiB; não inferimos hardware apenas pelo
   tamanho ou pelo fato de uma ROM ser não licenciada.
 - `SG1000MemoryBus` (`src/sega_emulator/bus/memory_bus.py`): mapeia ROM
