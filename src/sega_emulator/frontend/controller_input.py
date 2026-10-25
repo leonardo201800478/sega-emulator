@@ -296,6 +296,7 @@ class ControllerInput:
         self._controllers: dict[int, Any] = {}
         self._raw_joysticks: dict[int, Any] = {}
         self._player_device_indices: dict[int, int] = {}
+        self._last_device_count: int | None = None
         if pygame_module is not None:
             try:
                 if self._joystick_module is None:
@@ -324,7 +325,7 @@ class ControllerInput:
     def connected_names(self) -> list[str]:
         """Retorna nomes sem depender de APIs específicas de uma versão do SDL."""
         self._sync_controllers()
-        if self._controller_module is None:
+        if self._controller_module is None and self._joystick_module is None:
             return []
         names: list[str] = []
         name_for_index = getattr(self._controller_module, "name_forindex", None)
@@ -375,6 +376,17 @@ class ControllerInput:
             return
         count_source = module if module is not None else joystick_module
         count = count_source.get_count()
+        if self._last_device_count is not None and count != self._last_device_count:
+            # SDL device indices can shift after unplugging a device. Reopen all
+            # handles rather than accidentally retaining the old device at index 0.
+            for device in (*self._controllers.values(), *self._raw_joysticks.values()):
+                try:
+                    device.quit()
+                except (AttributeError, RuntimeError):
+                    pass
+            self._controllers.clear()
+            self._raw_joysticks.clear()
+        self._last_device_count = count
         valid_indices = set(range(count))
         controller_indices = {
             index
@@ -545,12 +557,18 @@ class ControllerInput:
                         actions.add(action)
                 if raw_joystick is not None and profile.use_left_stick:
                     threshold = self.config.deadzone
-                    for axis_index in range(raw_joystick.get_numaxes()):
+                    for axis_index in range(min(2, raw_joystick.get_numaxes())):
                         value = raw_joystick.get_axis(axis_index)
-                        if value <= -threshold:
-                            actions.add("left" if axis_index % 2 == 0 else "up")
-                        elif value >= threshold:
-                            actions.add("right" if axis_index % 2 == 0 else "down")
+                        if axis_index == 0:
+                            if value <= -threshold:
+                                actions.add("left")
+                            elif value >= threshold:
+                                actions.add("right")
+                        else:
+                            if value <= -threshold:
+                                actions.add("up")
+                            elif value >= threshold:
+                                actions.add("down")
                     for hat_index in range(raw_joystick.get_numhats()):
                         x_value, y_value = raw_joystick.get_hat(hat_index)
                         if x_value < 0:
