@@ -9,8 +9,14 @@ from sega_emulator.machine.cartridge_profiles import (
 from sega_emulator.machine.sg1000 import SG1000Machine
 
 
-def test_bomberman_special_crc_is_registered_as_type_b() -> None:
-    assert 0x69FC1494 in SG1000_II_RAM_EXT_TYPE_B_CRC32
+def test_all_known_type_b_crcs_are_registered() -> None:
+    assert SG1000_II_RAM_EXT_TYPE_B_CRC32 == {
+        0x69FC1494,
+        0xFFC4EE3F,
+        0x2E366CCF,
+        0xAAAC12CF,
+        0xD2EDD329,
+    }
 
 
 def test_known_type_b_crc_selects_8k_ram(monkeypatch) -> None:
