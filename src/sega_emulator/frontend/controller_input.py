@@ -149,7 +149,9 @@ class PlayerInputProfile:
             isinstance(key, str) and isinstance(button, str)
             for key, button in keyboard_payload.items()
         ):
-            raise ValueError("keyboard_bindings deve mapear ações para nomes de teclas.")
+            raise ValueError(
+                "keyboard_bindings deve mapear ações para nomes de teclas."
+            )
         keyboard_bindings = (
             default_keyboard_bindings or DEFAULT_KEYBOARD_BINDINGS_P1
         ).copy()
