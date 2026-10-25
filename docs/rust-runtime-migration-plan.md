@@ -122,31 +122,30 @@ A meta final é manter apenas o frontend Qt em Python. O frontend Pygame/SDL e a
 
 ## Estado da execução — 25/10/2026
 
-A Fase 0 teve uma primeira revisão estática de contratos e consumidores. A Fase 1 começou nesta branch com:
-- `native/z80_core/src/memory.rs`: barramento nativo de ROM espelhada, RAM interna espelhada e RAM de cartucho configurável, com testes unitários Rust.
-- `native/z80_core/src/lib.rs`: construtor `RustZ80Cpu.with_native_memory`; o caminho nativo lê/escreve memória sem chamar métodos Python por acesso. O construtor antigo com barramento Python permanece para compatibilidade e testes diferenciais.
-- `native/z80_core/src/memory.rs`: ROM espelhada, RAM interna espelhada e RAM de cartucho configurável em Rust.
-- `native/z80_core/src/vdp.rs`: portas, registradores, VRAM, temporização raster, VBlank, status de sprites e renderização dos quatro modos gráficos modelados.
-- `src/sega_emulator/machine/sg1000.py`: o backend Rust passa a usar barramento e VDP nativos; o backend Python permanece inalterado.
-- `tests/test_sg1000_cpu_backend.py` e `tests/test_tms9918_rust_parity.py`: integração CPU/memória e comparação diferencial do VDP, incluindo modos gráficos, VBlank, overflow e colisões de sprites.
+A Fase 0 teve uma primeira revisão estática de contratos e consumidores. A Fase 1 está em andamento nesta branch:
 
-**Limitação desta fatia:** PSG, sincronização de áudio, arbitragem de I/O e laço de execução por instrução ainda são Python; I/O continua atravessando PyO3. O VDP nativo já está integrado, mas a máquina ainda coordena os componentes pelo laço Python. Portanto, esta alteração não conclui a migração nem satisfaz a meta final de runtime totalmente Rust.
+- `native/z80_core/src/memory.rs`: barramento nativo com ROM espelhada, RAM interna espelhada e RAM de cartucho configurável, com testes unitários Rust.
+- `native/z80_core/src/lib.rs`: `RustZ80Cpu.with_native_memory`; o caminho nativo acessa a memória sem invocar métodos Python por byte. O CPU ainda mantém objetos PyO3 para memória e I/O, portanto isto ainda não é uma máquina Rust integral.
+- `native/z80_core/src/vdp.rs`: portas, registradores, VRAM, temporização raster, VBlank, status de sprites e renderização dos quatro modos gráficos modelados.
+- `native/z80_core/src/audio.rs`: PSG SN76489AN e sincronizador de writes por T-state nativos.
+- `src/sega_emulator/machine/sg1000.py`: o backend Rust seleciona memória, VDP, PSG e sincronizador nativos; o backend Python permanece como referência.
+- `tests/test_sg1000_cpu_backend.py`, `tests/test_tms9918_rust_parity.py` e `tests/test_sn76489_rust_parity.py`: integração CPU/memória e comparações diferenciais de VDP, PSG e sincronização de áudio.
+
+### Limitações conhecidas
+
+- O laço de execução da máquina e a arbitragem de I/O ainda são coordenados por Python; operações de porta da CPU ainda atravessam o objeto PyO3 de I/O.
+- Os getters `vram` e `registers` do VDP nativo retornam cópias. Leituras de diagnóstico funcionam, mas mutações feitas diretamente nessas cópias não alteram o estado nativo. A compatibilidade desse contrato precisa ser resolvida antes de tornar o backend Rust padrão.
+- A temporização ainda não é ciclo a ciclo: o avanço dos dispositivos usa T-states nominais e writes do VDP ainda não são enfileirados em uma linha temporal própria.
 
 ### Validação automatizada
 
-No commit `4d8b669311826995474c33146fb7a0a8298f5828`, o workflow Windows **Qt selectable Rust Z80 core** passou:
-- `cargo fmt --check`: aprovado.
-- Clippy com `-D warnings`: aprovado.
-- Testes unitários Rust: 7 aprovados no núcleo; 6 testes de integração/diferenciais do VDP foram adicionados à suíte Python.
-- Build Release e instalação da extensão PyO3: aprovados.
-- Ruff (lint e formatação Python): aprovado.
-- Testes direcionados Qt/backend Rust: 1.671 aprovados.
-- Suíte completa pytest com a extensão nativa instalada: 2.323 aprovados em 8,70 s.
-- CI geral, validação funcional, integridade/determinismo, auditoria de desempenho/cobertura, diagnóstico de desempenho e auditoria diferencial SingleStepTests: aprovados.
-- A auditoria Z80 estendida ainda estava pendente no momento deste registro.
+- No commit `73f4298`, o workflow Windows falhou em `cargo fmt --check`; a formatação foi corrigida em `b921490`.
+- No commit `a01b551`, a formatação passou, mas o Clippy falhou ao compilar os testes porque um dos usos dos antigos nomes de constantes de áudio não havia sido atualizado.
+- O commit `605e466` corrige a referência restante. O workflow **Qt selectable Rust Z80 core** e os agentes de validação estão executando novamente contra esse estado; **ainda não há resultado final confirmado para esse commit**.
+- Os workflows genéricos de Python reportaram 637 aprovados e 1.663 ignorados, pois não instalam a extensão Rust. Esses resultados não validam os novos componentes nativos.
 
-Esses resultados validam o incremento atual, não a migração completa nem precisão ciclo a ciclo.
+Nenhum resultado histórico é automaticamente atribuído ao HEAD atual. Não considerar a fatia aprovada até o workflow Windows construir a extensão Release e executar os testes diferenciais com ela instalada.
 
 ## Próximo passo
 
-Iniciar a próxima fatia com PSG SN76489AN e sincronizador de áudio nativos, preservando a ordem dos writes por T-state. Em seguida, mover arbitragem de I/O e laço de execução para uma máquina Rust que coordene CPU, VDP e PSG. Só permitir avanço em lotes com limites alinhados aos eventos do hardware; não agrupar instruções se isso alterar a ordem dos eventos ou a entrega de interrupções.
+Concluir e auditar o workflow Windows desta fatia. Se fmt, Clippy, testes Rust, build Release, paridade direcionada e regressão completa passarem, a próxima implementação será mover o I/O e o laço CPU–VDP–PSG para uma máquina Rust. Essa etapa deverá preservar a ordem dos eventos temporais e as interrupções. Não declarar o runtime integralmente Rust até a coordenação deixar de depender de Python fora do frontend Qt.
