@@ -179,6 +179,38 @@ def test_rust_core_fails_explicitly_on_assigned_but_unsupported_ed_opcode() -> N
         cpu.step()
 
 
+@pytest.mark.parametrize("opcode", range(256))
+def test_rust_cb_opcode_family_matches_python(opcode: int) -> None:
+    RustZ80Cpu = _rust_cpu()
+    program = bytes([0xCB, opcode])
+    python_bus = MemoryBus(program)
+    rust_bus = MemoryBus(program)
+    python_bus.memory[0x2000] = rust_bus.memory[0x2000] = 0x96
+    python_cpu = Z80Cpu(python_bus)
+    rust_cpu = RustZ80Cpu(rust_bus, None)
+
+    for cpu in (python_cpu, rust_cpu):
+        cpu.a = 0x69
+        cpu.f = 0xA5
+        cpu.bc = 0x1234
+        cpu.de = 0x5678
+        cpu.hl = 0x2000
+        cpu.wz = 0x2800
+
+    python_cycles = python_cpu.step()
+    rust_cycles = rust_cpu.step()
+    attributes = (
+        "a", "f", "b", "c", "d", "e", "h", "l", "sp", "pc",
+        "ix", "iy", "i", "r", "iff1", "iff2", "interrupt_mode",
+        "halted", "wz", "total_cycles",
+    )
+    assert rust_cycles == python_cycles
+    assert {name: getattr(rust_cpu, name) for name in attributes} == {
+        name: getattr(python_cpu, name) for name in attributes
+    }
+    assert rust_bus.memory == python_bus.memory
+
+
 @pytest.mark.parametrize(
     ("opcode", "expected_cycles"),
     [
