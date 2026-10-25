@@ -508,7 +508,7 @@ class ControllerInput:
                     return f"raw_hat_{hat}_left"
                 if x_value > 0:
                     return f"raw_hat_{hat}_right"
-            for axis in range(joystick.get_numaxes()):
+            for axis in range(min(2, joystick.get_numaxes())):
                 value = joystick.get_axis(axis)
                 if value <= -0.75:
                     return f"raw_axis_{axis}_negative"
