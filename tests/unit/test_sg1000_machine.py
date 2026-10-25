@@ -113,7 +113,6 @@ def test_cpu_psg_write_is_applied_at_nominal_io_write_edge() -> None:
     assert machine.audio_sync.current_tstate == machine.total_tstates == 18
 
 
-
 def test_cpu_ed_out_write_is_applied_at_nominal_io_write_edge() -> None:
     # OUT (C),B ocupa 12 T-states, incluindo o ciclo de I/O.
     machine = SG1000Machine(bytes((0xED, 0x41)))
