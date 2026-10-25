@@ -77,17 +77,22 @@ def run(initial_path: Path | None = None) -> None:
         )
 
         from sega_emulator.frontend.qt.main_window import EmulatorMainWindow
+        from sega_emulator.frontend.qt.preferences import FrontendPreferences
     except ImportError as exc:
         raise RuntimeError(
             'Interface Qt não instalada. Execute: python -m pip install -e ".[qt]"'
         ) from exc
 
-    pygame, audio_channel = _initialize_pygame_backend()
-
     app = QApplication.instance() or QApplication([])
     app.setOrganizationName("SegaEmulator")
     app.setApplicationName("SegaEmulator")
     settings = QSettings()
+    preferences = FrontendPreferences.from_store(settings)
+    pygame, audio_channel = (
+        _initialize_pygame_backend()
+        if preferences.audio_enabled
+        else (None, None)
+    )
     serialized_controller_config = settings.value("controller_config", "", type=str)
     try:
         controller_config = (
@@ -119,6 +124,8 @@ def run(initial_path: Path | None = None) -> None:
         on_show_machine_state=lambda: show_machine_state(),
         on_video_scale=lambda scale: window.set_video_scale(scale),
     )
+    window.resize(preferences.window_width, preferences.window_height)
+    window._video_scale = preferences.video_scale
     view = window.video_widget
     status = window.status
 
@@ -866,6 +873,20 @@ def run(initial_path: Path | None = None) -> None:
         open_rom(str(initial_path))
     window.show()
     app.exec()
+    preferences = FrontendPreferences(
+        window_width=max(640, min(7680, window.width())),
+        window_height=max(480, min(4320, window.height())),
+        video_scale=getattr(window, "_video_scale", preferences.video_scale),
+        recent_roms=tuple(
+            str(path)
+            for path in settings.value("recent_roms", [], type=list)
+            if isinstance(path, str) and path.strip()
+        )[:12],
+        controller_config=controller_input.config.to_json(),
+        audio_enabled=preferences.audio_enabled,
+        diagnostics_enabled=preferences.diagnostics_enabled,
+    )
+    preferences.save_to_store(settings)
     controller_input.close()
     if pygame is not None:
         pygame.mixer.quit()
