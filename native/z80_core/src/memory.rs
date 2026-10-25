@@ -81,9 +81,7 @@ impl NativeMemoryBus {
         };
         let memory = Sg1000Memory::new(&cartridge_rom, config).map_err(|error| {
             let message = match error {
-                MemoryError::InvalidRomSize(_) => {
-                    "A ROM must contain between 1 byte and 48 KiB."
-                }
+                MemoryError::InvalidRomSize(_) => "A ROM must contain between 1 byte and 48 KiB.",
                 MemoryError::InvalidInternalRamSize(_) => {
                     "Internal RAM must be exactly 1 KiB or 8 KiB."
                 }
