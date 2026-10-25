@@ -46,6 +46,7 @@ def test_rust_backend_uses_native_memory_for_cpu_reads_and_writes() -> None:
     machine = SG1000Machine(rom, cpu_core="rust")
 
     assert isinstance(machine.memory_bus, native_core.NativeMemoryBus)
+    assert isinstance(machine.vdp, native_core.NativeTms9918A)
     machine.step()
     machine.step()
     machine.step()
