@@ -276,7 +276,7 @@ fn write_color(pixels: &mut [u8], offset: usize, color: u8) {
 fn fill_backdrop_line(pixels: &mut [u8], y: usize, backdrop: u8) {
     let start = y * SCREEN_WIDTH * 3;
     let color = PALETTE[usize::from(backdrop & 0x0F)];
-    for pixel in pixels[start..start + SCREEN_WIDTH * 3].chunks_exact_mut(3) {
+    for pixel in pixels[start..start + SCREEN_WIDTH * 3].as_chunks_mut::<3>().0 {
         pixel.copy_from_slice(&color);
     }
 }
@@ -438,7 +438,7 @@ fn render_scanline(
 fn render_frame_bytes(vram: &[u8], registers: &[u8], status: u8) -> Vec<u8> {
     let backdrop = registers[7] & 0x0F;
     let mut pixels = vec![0; RGB_FRAME_SIZE];
-    for pixel in pixels.chunks_exact_mut(3) {
+    for pixel in pixels.as_chunks_mut::<3>().0 {
         pixel.copy_from_slice(&PALETTE[usize::from(backdrop)]);
     }
     if registers[1] & 0x40 == 0 {
@@ -688,14 +688,13 @@ fn render_sprite_line(
                 if !occupied.insert(px) && update_status {
                     *status |= 0x20;
                 }
-                if let Some(target) = pixels.as_deref_mut() {
-                    if (0..SCREEN_WIDTH as i32).contains(&px)
-                        && sprite.color != 0
-                        && !visible.contains(&px)
-                    {
-                        put_pixel(target, px, line, sprite.color);
-                        visible.insert(px);
-                    }
+                if let Some(target) = pixels.as_deref_mut()
+                    && (0..SCREEN_WIDTH as i32).contains(&px)
+                    && sprite.color != 0
+                    && !visible.contains(&px)
+                {
+                    put_pixel(target, px, line, sprite.color);
+                    visible.insert(px);
                 }
             }
         }
