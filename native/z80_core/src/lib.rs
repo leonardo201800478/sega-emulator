@@ -1463,10 +1463,10 @@ impl RustZ80Cpu {
                 let low = self.fetch8(py)?;
                 let high = self.fetch8(py)?;
                 let target = u16::from_le_bytes([low, high]);
+                self.wz = target;
                 if self.condition((opcode >> 3) & 7) {
                     self.push_word(py, self.pc)?;
                     self.pc = target;
-                    self.wz = target;
                     Ok(17)
                 } else {
                     Ok(10)
