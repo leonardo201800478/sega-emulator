@@ -818,6 +818,92 @@ impl RustZ80Cpu {
             0xED => {
                 let sub = self.fetch_opcode(py)?;
                 match sub {
+                    0x43 | 0x53 | 0x63 | 0x73 => {
+                        let low = self.fetch8(py)?;
+                        let high = self.fetch8(py)?;
+                        let address = u16::from_le_bytes([low, high]);
+                        let value = self.read_stack_pair((sub >> 4) & 3);
+                        self.write8(py, address, value as u8)?;
+                        self.write8(py, address.wrapping_add(1), (value >> 8) as u8)?;
+                        self.wz = address.wrapping_add(1);
+                        Ok(20)
+                    }
+                    0x4B | 0x5B | 0x6B | 0x7B => {
+                        let low = self.fetch8(py)?;
+                        let high = self.fetch8(py)?;
+                        let address = u16::from_le_bytes([low, high]);
+                        let lo = self.read8(py, address)?;
+                        let hi = self.read8(py, address.wrapping_add(1))?;
+                        self.write_stack_pair((sub >> 4) & 3, u16::from_le_bytes([lo, hi]));
+                        self.wz = address.wrapping_add(1);
+                        Ok(20)
+                    }
+                    0x42 | 0x52 | 0x62 | 0x72 => {
+                        self.add_sub_hl(self.read_pair((sub >> 4) & 3), true);
+                        Ok(15)
+                    }
+                    0x4A | 0x5A | 0x6A | 0x7A => {
+                        self.add_sub_hl(self.read_pair((sub >> 4) & 3), false);
+                        Ok(15)
+                    }
+                    0x47 | 0x4F | 0x57 | 0x5F => {
+                        match sub {
+                            0x47 => self.i = self.a,
+                            0x4F => self.r = self.a,
+                            0x57 | 0x5F => {
+                                self.a = if sub == 0x57 { self.i } else { self.r };
+                                self.f = (self.f & FLAG_C) | (self.a & 0xA8);
+                                if self.a == 0 { self.f |= FLAG_Z; }
+                                if self.iff2 { self.f |= FLAG_PV; }
+                            }
+                            _ => unreachable!(),
+                        }
+                        Ok(9)
+                    }
+                    0x40 | 0x48 | 0x50 | 0x58 | 0x60 | 0x68 | 0x70 | 0x78 => {
+                        let register = (sub >> 3) & 7;
+                        let port = self.bc();
+                        let value = self.read_port(py, port)?;
+                        self.wz = port.wrapping_add(1);
+                        if register != 6 {
+                            self.write_reg(py, register, value)?;
+                        }
+                        self.f = (self.f & FLAG_C) | (value & 0xA8);
+                        if value == 0 { self.f |= FLAG_Z; }
+                        if value.count_ones() & 1 == 0 { self.f |= FLAG_PV; }
+                        Ok(12)
+                    }
+                    0x41 | 0x49 | 0x51 | 0x59 | 0x61 | 0x69 | 0x71 | 0x79 => {
+                        let register = (sub >> 3) & 7;
+                        let port = self.bc();
+                        let value = if register == 6 { 0 } else { self.read_reg(py, register)? };
+                        self.write_port(py, port, value)?;
+                        self.wz = port.wrapping_add(1);
+                        Ok(12)
+                    }
+                    0x44 | 0x4C | 0x54 | 0x5C | 0x64 | 0x6C | 0x74 | 0x7C => {
+                        let result = sub8(0, self.a);
+                        self.a = result.value;
+                        self.f = result.flags;
+                        Ok(8)
+                    }
+                    0x67 | 0x6F => {
+                        let address = self.hl();
+                        let memory_value = self.read8(py, address)?;
+                        let new_memory;
+                        if sub == 0x67 {
+                            new_memory = ((self.a & 0x0F) << 4) | (memory_value >> 4);
+                            self.a = (self.a & 0xF0) | (memory_value & 0x0F);
+                        } else {
+                            new_memory = (memory_value << 4) | (self.a & 0x0F);
+                            self.a = (self.a & 0xF0) | (memory_value >> 4);
+                        }
+                        self.write8(py, address, new_memory)?;
+                        self.f = (self.f & FLAG_C) | (self.a & 0xA8);
+                        if self.a == 0 { self.f |= FLAG_Z; }
+                        if self.a.count_ones() & 1 == 0 { self.f |= FLAG_PV; }
+                        Ok(18)
+                    }
                     0x46 | 0x4E | 0x66 | 0x6E => {
                         self.interrupt_mode = 0;
                         Ok(8)
