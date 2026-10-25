@@ -52,6 +52,7 @@ def run(initial_path: Path | None = None) -> None:
             QMessageBox,
             QPushButton,
             QStatusBar,
+            QScrollArea,
             QTabWidget,
             QVBoxLayout,
             QWidget,
@@ -533,7 +534,7 @@ def run(initial_path: Path | None = None) -> None:
     def configure_controllers() -> None:
         dialog = QDialog(window)
         dialog.setWindowTitle("Configuração de controles")
-        dialog.resize(520, 480)
+        dialog.resize(680, 640)
         dialog_layout = QVBoxLayout(dialog)
         tabs = QTabWidget()
         dialog_layout.addWidget(tabs)
@@ -602,7 +603,10 @@ def run(initial_path: Path | None = None) -> None:
             stick_check.setChecked(profile.use_left_stick)
             stick_checks[player] = stick_check
             form.addRow("", stick_check)
-            tabs.addTab(page, f"Jogador {player}")
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setWidget(page)
+            tabs.addTab(scroll, f"Jogador {player}")
         deadzone = QDoubleSpinBox()
         deadzone.setRange(0.05, 0.80)
         deadzone.setSingleStep(0.05)
