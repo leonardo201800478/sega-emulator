@@ -10,7 +10,7 @@ on:
       - "docs/adr/0003-execution-profiles.md"
       - ".github/workflows/llvm-orc-jit.yml"
   push:
-    branches: ["perf/llvm-orc-jit-fast-mode"]
+    branches: ["perf/llvm-orc-jit-fast-mode", "feat/z80-llvm-orc-translator"]
     paths:
       - "native/llvm_jit/**"
       - "src/sega_emulator/profiles.py"
