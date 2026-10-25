@@ -15,7 +15,7 @@ RP = ("BC", "DE", "HL", "SP")
 RP2 = ("BC", "DE", "HL", "AF")
 CONDS = ("NZ", "Z", "NC", "C", "PO", "PE", "P", "M")
 ALU = ("ADD A", "ADC A", "SUB", "SBC A", "AND", "XOR", "OR", "CP")
-ROT = ("RLC", "RRC", "RL", "RR", "SLA", "SRA", "SLL*", "SRL")
+ROT = ("RLC", "RRC", "RL", "RR", "SLA", "SRA", "SLL", "SRL")
 
 
 def base_family(op: int) -> tuple[str, str]:
@@ -122,6 +122,8 @@ def ed_family(op: int) -> tuple[str, str, str]:
         return f"IM {ED_IM[op]} (alias encoding possible)", "alias", "ed-implemented"
     if op & 0xC7 == 0x40:
         return "IN r,(C)", "documented", "ed-implemented"
+    if op == 0x71:
+        return "OUT (C),0", "undocumented", "ed-implemented"
     if op & 0xC7 == 0x41:
         return "OUT (C),r", "documented", "ed-implemented"
     if op & 0xCF == 0x42:
@@ -173,8 +175,6 @@ def indexed_family(op: int) -> tuple[str, str]:
         return "LD with IXH/IXL or IYH/IYL", "index-substitution"
     if 0x80 <= op <= 0xBF:
         return "ALU A,IXH/IXL or (IX/IY+d)", "index-substitution"
-    if op in (0x24, 0x25, 0x26, 0x2C, 0x2D, 0x2E):
-        return "INC/DEC/LD IXH/IXL or IYH/IYL", "undocumented-index-half"
     return "base instruction with ignored DD/FD prefix", "ignored-prefix-fallback"
 
 
@@ -195,7 +195,12 @@ def build_matrix() -> dict[str, Any]:
         family, arch = base_family(op)
         path = "base-decoder"
         if op in (0xCB, 0xDD, 0xED, 0xFD):
-            path = {"CB": "cb-prefix", "DD": "dd-prefix", "ED": "ed-prefix", "FD": "fd-prefix"}[ {0xCB:"CB",0xDD:"DD",0xED:"ED",0xFD:"FD"}[op] ]
+            path = {
+                0xCB: "cb-prefix",
+                0xDD: "dd-prefix",
+                0xED: "ed-prefix",
+                0xFD: "fd-prefix",
+            }[op]
         rows.append({"space":"base","opcode":f"{op:02X}","family":family,"architecture_class":arch,"implementation_path":path})
     for space in ("CB", "ED", "DD", "FD", "DD-CB", "FD-CB"):
         for op in range(256):
