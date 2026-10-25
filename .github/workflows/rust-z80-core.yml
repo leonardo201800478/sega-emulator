@@ -1,0 +1,64 @@
+name: Rust Z80 Core
+
+on:
+  pull_request:
+    paths:
+      - "native/z80_core/**"
+      - "native/z80_alu/**"
+      - "src/sega_emulator/__main__.py"
+      - "src/sega_emulator/machine/sg1000.py"
+      - "src/sega_emulator/frontend/qt_frontend.py"
+      - "tests/integration/test_rust_z80_core.py"
+      - "tools/benchmarks/compare_cpu_cores.py"
+      - ".github/workflows/rust-z80-core.yml"
+  push:
+    branches: ["feat/selectable-rust-z80-core"]
+    paths:
+      - "native/z80_core/**"
+      - "native/z80_alu/**"
+      - "src/sega_emulator/__main__.py"
+      - "src/sega_emulator/machine/sg1000.py"
+      - "src/sega_emulator/frontend/qt_frontend.py"
+      - "tests/integration/test_rust_z80_core.py"
+      - "tools/benchmarks/compare_cpu_cores.py"
+      - ".github/workflows/rust-z80-core.yml"
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install Python dependencies and Maturin
+        run: python -m pip install -e ".[dev]" maturin
+      - name: Check Rust formatting
+        run: |
+          cargo fmt --manifest-path native/z80_alu/Cargo.toml --all -- --check
+          cargo fmt --manifest-path native/z80_core/Cargo.toml --all -- --check
+      - name: Run Clippy
+        run: |
+          cargo clippy --manifest-path native/z80_alu/Cargo.toml --all-targets -- -D warnings
+          cargo clippy --manifest-path native/z80_core/Cargo.toml --all-targets -- -D warnings
+      - name: Run Rust unit tests
+        run: |
+          cargo test --manifest-path native/z80_alu/Cargo.toml
+          cargo test --manifest-path native/z80_core/Cargo.toml
+      - name: Build and install optional native extension
+        shell: pwsh
+        run: |
+          Push-Location native/z80_core
+          maturin build --release --features python-extension --out dist
+          Pop-Location
+          $wheel = Get-ChildItem native/z80_core/dist/*.whl | Select-Object -First 1
+          python -m pip install $wheel.FullName
+      - name: Validate changed Python files
+        run: |
+          python -m ruff check src/sega_emulator/__main__.py src/sega_emulator/machine/sg1000.py src/sega_emulator/frontend/qt_frontend.py tests/integration/test_rust_z80_core.py tools/benchmarks/compare_cpu_cores.py
+          python -m ruff format --check src/sega_emulator/__main__.py src/sega_emulator/machine/sg1000.py src/sega_emulator/frontend/qt_frontend.py tests/integration/test_rust_z80_core.py tools/benchmarks/compare_cpu_cores.py
+      - name: Test Python/Rust instruction parity
+        run: python -m pytest tests/integration/test_rust_z80_core.py -q
