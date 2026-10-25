@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import weakref
+
 from sega_emulator.audio.sn76489 import SN76489
 from sega_emulator.audio.synchronization import AudioSynchronizer
 from sega_emulator.bus.memory import SG1000Ram
@@ -73,11 +75,23 @@ class _CartridgeMirrorBus:
 class SG1000Machine:
     """Conecta CPU Z80, ROM/RAM, portas do VDP e entradas de joystick."""
 
-    def __init__(self, cartridge_rom: bytes) -> None:
+    def __init__(
+        self,
+        cartridge_rom: bytes,
+        cpu_core: str = "python",
+        vdp_core: str = "python",
+    ) -> None:
         if not isinstance(cartridge_rom, bytes):
             raise TypeError("cartridge_rom deve ser bytes.")
         if not 1 <= len(cartridge_rom) <= 0xC000:
             raise ValueError("A ROM deve conter entre 1 byte e 48 KiB.")
+        if cpu_core not in ("python", "rust"):
+            raise ValueError("cpu_core deve ser 'python' ou 'rust'.")
+        if vdp_core not in ("python", "rust"):
+            raise ValueError("vdp_core deve ser 'python' ou 'rust'.")
+
+        self.cpu_core = cpu_core
+        self.vdp_core = vdp_core
         self.cartridge_rom = cartridge_rom
         profile = cartridge_profile(cartridge_rom)
         self.ram_size = profile.internal_ram_size
@@ -85,14 +99,39 @@ class SG1000Machine:
         ram = SG1000Ram(bytes(profile.internal_ram_size))
         base_bus = SG1000MemoryBus(ram, cartridge_rom)
         self.memory_bus = _CartridgeMirrorBus(base_bus, cartridge_rom, profile)
-        self.vdp = TMS9918A()
+
+        if vdp_core == "python":
+            self.vdp = TMS9918A()
+        else:
+            try:
+                from sega_z80_core import RustTMS9918A
+            except ImportError as exc:
+                raise RuntimeError(
+                    "O VDP Rust experimental não está instalado. "
+                    "É necessária uma extensão sega_z80_core que exporte "
+                    "RustTMS9918A."
+                ) from exc
+            self.vdp = RustTMS9918A()
+
         self.psg = SN76489()
         self.audio_sync = AudioSynchronizer(self.psg)
         self.joystick1 = 0xFF
         self.joystick2 = 0xFF
         self.total_instructions = 0
         self.total_tstates = 0
-        self.cpu = Z80Cpu(self.memory_bus, self)
+
+        if cpu_core == "python":
+            self.cpu = Z80Cpu(self.memory_bus, self)
+        else:
+            try:
+                from sega_z80_core import RustZ80Cpu
+            except ImportError as exc:
+                raise RuntimeError(
+                    "O núcleo Z80 Rust experimental não está instalado. "
+                    "É necessária uma extensão sega_z80_core que exporte "
+                    "RustZ80Cpu."
+                ) from exc
+            self.cpu = RustZ80Cpu(self.memory_bus, weakref.proxy(self))
 
     def read_port(self, address: int) -> int:
         port = address & 0xFF
@@ -162,13 +201,14 @@ class SG1000Machine:
         cpu = self.cpu
         vdp = self.vdp
         cpu_step = cpu.step
-        execute_cpu_instruction = cpu._step_impl
+        execute_cpu_instruction = getattr(cpu, "_step_impl", None)
         advance_vdp = vdp.advance
         advance_audio = self.audio_sync.advance_to
         request_int = cpu.request_int
         clear_int = cpu.clear_int_request
         fast_cpu_loop = (
-            getattr(cpu_step, "__func__", None) is Z80Cpu.step
+            callable(execute_cpu_instruction)
+            and getattr(cpu_step, "__func__", None) is Z80Cpu.step
             and "step" not in self.__dict__
             and type(self).step is SG1000Machine.step
         )

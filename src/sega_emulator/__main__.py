@@ -37,6 +37,18 @@ def main(argv: Sequence[str] | None = None) -> None:
         help="frontend gráfico (padrão: qt)",
     )
     parser.add_argument(
+        "--cpu-core",
+        choices=("python", "rust"),
+        default=None,
+        help="núcleo Z80 (padrão: preferência salva no Qt ou Python no modo headless)",
+    )
+    parser.add_argument(
+        "--vdp-core",
+        choices=("python", "rust"),
+        default=None,
+        help="núcleo TMS9918A (Rust exige extensão experimental compatível)",
+    )
+    parser.add_argument(
         "--log-dir",
         type=Path,
         default=Path("logs"),
@@ -55,7 +67,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         try:
             from sega_emulator.frontend.qt_frontend import run
 
-            run(args.rom)
+            run(args.rom, cpu_core=args.cpu_core, vdp_core=args.vdp_core)
         except (RuntimeError, ImportError) as exc:
             parser.error(str(exc))
         return
@@ -71,7 +83,11 @@ def main(argv: Sequence[str] | None = None) -> None:
                 "rom_sha256": loaded.sha256,
             },
         )
-        machine = SG1000Machine(loaded.data)
+        machine = SG1000Machine(
+            loaded.data,
+            cpu_core=args.cpu_core or "python",
+            vdp_core=args.vdp_core or "python",
+        )
         logger.info(
             "Máquina criada",
             extra={

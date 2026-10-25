@@ -137,3 +137,26 @@ def test_cpu_outi_write_is_applied_before_instruction_internal_tail() -> None:
 
     assert machine.step() == 16
     assert observed == [("advance", 16), ("write", 0x90)]
+
+
+def test_machine_defaults_to_python_cpu_and_vdp() -> None:
+    machine = SG1000Machine(bytes((0x00,)))
+
+    assert machine.cpu_core == "python"
+    assert machine.vdp_core == "python"
+    assert type(machine.cpu).__name__ == "Z80Cpu"
+    assert type(machine.vdp).__name__ == "TMS9918A"
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"cpu_core": "llvm"}, "cpu_core"),
+        ({"vdp_core": "llvm"}, "vdp_core"),
+    ],
+)
+def test_machine_rejects_unknown_core_names(
+    kwargs: dict[str, str], message: str
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        SG1000Machine(bytes((0x00,)), **kwargs)

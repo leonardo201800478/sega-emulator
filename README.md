@@ -6,7 +6,7 @@ Projeto de emulação de alta precisão com implementação de referência em Py
 
 - **CPU:** núcleo Z80 em auditoria diferencial; temporização ainda não é ciclo a ciclo.
 - **Máquina SG-1000:** CPU, ROM/RAM, VDP TMS9918A inicial e joystick em desenvolvimento.
-- **Interface experimental:** menus Qt 6/PySide6 para abrir ROMs, pausar/continuar, reiniciar, alterar escala e consultar diagnóstico.
+- **Interface experimental:** Qt 6/PySide6 permite selecionar CPU Python/Rust e VDP Python/Rust; os backends Rust exigem uma extensão PyO3 compatível e permanecem experimentais. LLVM ORC ainda não está integrado ao ciclo da máquina.
 - **Carregador:** arquivos `.sg`, `.rom`, `.bin` e ROMs dentro de ZIP; ZIP com múltiplas ROMs exige seleção explícita.
 - **Diagnóstico:** logs JSONL/texto por sessão, SHA-256 da ROM, checkpoints de execução e stack traces.
 - **Áudio:** PSG SN76489AN integrado à máquina, com saída mono nos frontends Pygame e Qt; a fidelidade sonora contra hardware real continua pendente.
@@ -35,7 +35,7 @@ py -3.14 -m venv .venv
 
 A interface Qt abre sem ROM carregada. Use **Arquivo → Abrir ROM** para selecionar uma ROM local.
 
-Menus disponíveis: **Arquivo**, **Emulação** (pausar/continuar e reiniciar), **Vídeo** (escalas de teste), **Diagnóstico** (logs e estado da máquina) e **Ajuda**.
+Menus disponíveis: **Arquivo**, **Emulação** (pausar/continuar, reiniciar, núcleo da CPU e núcleo do VDP), **Vídeo** (escalas de teste), **Diagnóstico** (logs e estado da máquina) e **Ajuda**. Python permanece como padrão. Rust só pode ser selecionado se a extensão `sega_z80_core` exportar o backend solicitado. LLVM ORC aparece como indisponível até existir integração validada.
 
 Para iniciar diretamente uma ROM:
 
@@ -56,6 +56,16 @@ Para usar o frontend Pygame:
 ```powershell
 .\\.venv\\Scripts\\python.exe -m sega_emulator "C:\\caminho\\para\\jogo.sg" --ui pygame
 ```
+
+## Seleção de núcleos experimentais
+
+A interface Qt salva as seleções de CPU e VDP nas preferências do usuário. Também é possível escolher explicitamente os backends na linha de comando:
+
+```powershell
+.\\.venv\\Scripts\\python.exe -m sega_emulator --cpu-core python --vdp-core python
+```
+
+Para usar Rust, instale uma extensão PyO3 compatível com o backend desejado. O núcleo Rust é experimental e não é automaticamente equivalente ao Python; instruções não implementadas podem interromper a execução. A seleção de LLVM ORC está desativada até o JIT estar integrado e validado.
 
 ## Diagnóstico headless
 

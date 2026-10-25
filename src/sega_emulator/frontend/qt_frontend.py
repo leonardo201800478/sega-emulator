@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
 import logging
 import time
@@ -51,11 +52,15 @@ def _initialize_pygame_backend() -> tuple[object | None, object | None]:
     return pygame_backend, audio_channel
 
 
-def run(initial_path: Path | None = None) -> None:
-    """Abre a interface de teste com teclado, telemetria e logs de sessão."""
+def run(
+    initial_path: Path | None = None,
+    cpu_core: str | None = None,
+    vdp_core: str | None = None,
+) -> None:
+    """Abre a interface Qt e permite selecionar backends experimentais."""
     try:
         from PySide6.QtCore import QEvent, QObject, QSettings, Qt, QTimer
-        from PySide6.QtGui import QAction, QImage, QKeySequence, QPixmap
+        from PySide6.QtGui import QAction, QActionGroup, QImage, QKeySequence, QPixmap
         from PySide6.QtWidgets import (
             QApplication,
             QCheckBox,
@@ -90,6 +95,12 @@ def run(initial_path: Path | None = None) -> None:
     app.setOrganizationName("SegaEmulator")
     app.setApplicationName("SegaEmulator")
     settings = QSettings()
+    selected_cpu_core = cpu_core or settings.value("cpu_core", "python", type=str)
+    selected_vdp_core = vdp_core or settings.value("vdp_core", "python", type=str)
+    if selected_cpu_core not in ("python", "rust"):
+        selected_cpu_core = "python"
+    if selected_vdp_core not in ("python", "rust"):
+        selected_vdp_core = "python"
     serialized_controller_config = settings.value("controller_config", "", type=str)
     try:
         controller_config = (
@@ -411,7 +422,11 @@ def run(initial_path: Path | None = None) -> None:
                 if not accepted:
                     return
                 candidate = load_rom(path, member_name=selected)
-            loaded_machine = SG1000Machine(candidate.data)
+            loaded_machine = SG1000Machine(
+                candidate.data,
+                cpu_core=selected_cpu_core,
+                vdp_core=selected_vdp_core,
+            )
         except Exception as exc:
             logger.exception(
                 "Falha ao carregar ROM",
@@ -470,7 +485,11 @@ def run(initial_path: Path | None = None) -> None:
         nonlocal last_checkpoint_instructions, last_checkpoint_frame
         if loaded is None:
             return
-        machine = SG1000Machine(loaded.data)
+        machine = SG1000Machine(
+            loaded.data,
+            cpu_core=selected_cpu_core,
+            vdp_core=selected_vdp_core,
+        )
         frame_count, paused = 0, False
         pressed_keys.clear()
         update_joystick()
@@ -764,6 +783,103 @@ def run(initial_path: Path | None = None) -> None:
     reset_action.setShortcut("F10")
     reset_action.triggered.connect(reset_machine)
     emu_menu.addAction(reset_action)
+
+    cpu_menu = emu_menu.addMenu("Núcleo da CPU")
+    cpu_group = QActionGroup(window)
+    cpu_group.setExclusive(True)
+    cpu_actions: dict[str, QAction] = {}
+    for core, label in (
+        ("python", "Python (referência)"),
+        ("rust", "Rust (experimental)"),
+        ("llvm", "LLVM ORC (protótipo não integrado)"),
+    ):
+        action = QAction(label, window)
+        action.setCheckable(core != "llvm")
+        action.setChecked(core == selected_cpu_core)
+        if core == "llvm":
+            action.setEnabled(False)
+            action.setToolTip(
+                "O protótipo LLVM ORC ainda não está integrado ao ciclo da máquina."
+            )
+        else:
+            cpu_group.addAction(action)
+            action.triggered.connect(
+                lambda checked=False, selected=core: select_core("cpu", selected)
+            )
+        cpu_menu.addAction(action)
+        cpu_actions[core] = action
+
+    vdp_menu = emu_menu.addMenu("Núcleo do VDP")
+    vdp_group = QActionGroup(window)
+    vdp_group.setExclusive(True)
+    vdp_actions: dict[str, QAction] = {}
+    for core, label in (
+        ("python", "Python (referência)"),
+        ("rust", "Rust (experimental)"),
+    ):
+        action = QAction(label, window)
+        action.setCheckable(True)
+        action.setChecked(core == selected_vdp_core)
+        vdp_group.addAction(action)
+        action.triggered.connect(
+            lambda checked=False, selected=core: select_core("vdp", selected)
+        )
+        vdp_menu.addAction(action)
+        vdp_actions[core] = action
+
+    def select_core(kind: str, core: str) -> None:
+        nonlocal selected_cpu_core, selected_vdp_core
+        current = selected_cpu_core if kind == "cpu" else selected_vdp_core
+        if core == current:
+            return
+
+        if core == "rust":
+            symbol = "RustZ80Cpu" if kind == "cpu" else "RustTMS9918A"
+            try:
+                getattr(importlib.import_module("sega_z80_core"), symbol)
+            except (ImportError, AttributeError):
+                QMessageBox.warning(
+                    window,
+                    "Backend Rust indisponível",
+                    f"O backend {kind.upper()} Rust não está instalado nesta "
+                    "versão da extensão. A seleção não foi alterada.",
+                )
+                actions = cpu_actions if kind == "cpu" else vdp_actions
+                for name, action in actions.items():
+                    action.setChecked(name == current)
+                return
+
+        if kind == "cpu":
+            selected_cpu_core = core
+        else:
+            selected_vdp_core = core
+
+        try:
+            if loaded is not None:
+                reset_machine()
+        except Exception as exc:
+            if kind == "cpu":
+                selected_cpu_core = current
+            else:
+                selected_vdp_core = current
+            actions = cpu_actions if kind == "cpu" else vdp_actions
+            for name, action in actions.items():
+                action.setChecked(name == current)
+            QMessageBox.warning(
+                window, "Não foi possível trocar o backend", str(exc)
+            )
+            return
+
+        settings.setValue(f"{kind}_core", core)
+        logger.info(
+            "Backend de emulação selecionado",
+            extra={"event": "emulation_backend_selected", f"{kind}_core": core},
+        )
+        status.showMessage(
+            f"Núcleo da {'CPU' if kind == 'cpu' else 'VDP'}: "
+            f"{'Python (referência)' if core == 'python' else 'Rust (experimental)'}"
+        )
+
     toolbar = window.addToolBar("Principal")
     toolbar.setMovable(False)
     toolbar.addAction(open_action)
