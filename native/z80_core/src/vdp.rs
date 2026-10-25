@@ -326,10 +326,10 @@ fn render_scanline(
         let text_row = y / 8;
         let glyph_row = y % 8;
         let foreground = if registers[7] >> 4 != 0 {
-        registers[7] >> 4
-    } else {
-        backdrop
-    };
+            registers[7] >> 4
+        } else {
+            backdrop
+        };
         for column in 0..40 {
             let character = vram[(name_base + text_row * 40 + column) & VRAM_MASK];
             let pattern = vram[(pattern_base + usize::from(character) * 8 + glyph_row) & VRAM_MASK];
@@ -542,10 +542,10 @@ fn render_text(vram: &[u8], registers: &[u8], pixels: &mut [u8], backdrop: u8) {
     let name_base = usize::from(registers[2] & 0x0F) << 10;
     let pattern_base = usize::from(registers[4] & 0x07) << 11;
     let foreground = if registers[7] >> 4 != 0 {
-            registers[7] >> 4
-        } else {
-            backdrop
-        };
+        registers[7] >> 4
+    } else {
+        backdrop
+    };
     for row in 0..24 {
         for column in 0..40 {
             let character = vram[(name_base + row * 40 + column) & VRAM_MASK];
