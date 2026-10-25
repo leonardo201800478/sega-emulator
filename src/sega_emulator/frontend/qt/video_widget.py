@@ -33,7 +33,9 @@ class VideoWidget(QLabel):
         self._source_image = image.copy()
         self._refresh_pixmap()
 
-    def clear_framebuffer(self, message: str = "Abra uma ROM SG-1000 pelo menu Arquivo") -> None:
+    def clear_framebuffer(
+        self, message: str = "Abra uma ROM SG-1000 pelo menu Arquivo"
+    ) -> None:
         self._source_image = None
         self.setPixmap(QPixmap())
         self.setText(message)
