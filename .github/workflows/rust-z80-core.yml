@@ -1,0 +1,89 @@
+name: Rust Z80 Core
+
+on:
+  pull_request:
+    paths:
+      - "native/z80_core/**"
+      - "native/z80_alu/**"
+      - "src/sega_emulator/__main__.py"
+      - "src/sega_emulator/machine/sg1000.py"
+      - "src/sega_emulator/frontend/qt_frontend.py"
+      - "tests/integration/test_rust_z80_core.py"
+      - "tests/integration/test_z80_alu_rust_parity.py"
+      - "tools/benchmarks/compare_cpu_cores.py"
+      - ".github/workflows/rust-z80-core.yml"
+  push:
+    branches: ["feat/selectable-rust-z80-core"]
+    paths:
+      - "native/z80_core/**"
+      - "native/z80_alu/**"
+      - "src/sega_emulator/__main__.py"
+      - "src/sega_emulator/machine/sg1000.py"
+      - "src/sega_emulator/frontend/qt_frontend.py"
+      - "tests/integration/test_rust_z80_core.py"
+      - "tools/benchmarks/compare_cpu_cores.py"
+      - ".github/workflows/rust-z80-core.yml"
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Install Python dependencies and Maturin
+        run: python -m pip install -e ".[dev]" maturin
+      - name: Check Rust formatting
+        run: |
+          cargo fmt --manifest-path native/z80_alu/Cargo.toml --all -- --check
+          cargo fmt --manifest-path native/z80_core/Cargo.toml --all -- --check
+      - name: Run Clippy
+        run: |
+          cargo clippy --manifest-path native/z80_alu/Cargo.toml --all-targets -- -D warnings
+          cargo clippy --manifest-path native/z80_core/Cargo.toml --all-targets -- -D warnings
+      - name: Run Rust unit tests in debug and release
+        run: |
+          cargo test --manifest-path native/z80_alu/Cargo.toml
+          cargo test --manifest-path native/z80_core/Cargo.toml
+          cargo test --release --manifest-path native/z80_alu/Cargo.toml
+          cargo test --release --manifest-path native/z80_core/Cargo.toml
+      - name: Build and install optional native extension
+        shell: pwsh
+        run: |
+          Push-Location native/z80_core
+          maturin build --release --features python-extension --out dist
+          Pop-Location
+          $wheel = Get-ChildItem native/z80_core/dist/*.whl | Select-Object -First 1
+          python -m pip install $wheel.FullName
+      - name: Validate changed Python files
+        run: |
+          python -m ruff check src/sega_emulator/__main__.py src/sega_emulator/machine/sg1000.py src/sega_emulator/frontend/qt_frontend.py tests/integration/test_rust_z80_core.py tools/benchmarks/compare_cpu_cores.py
+          python -m ruff format --check src/sega_emulator/__main__.py src/sega_emulator/machine/sg1000.py src/sega_emulator/frontend/qt_frontend.py tests/integration/test_rust_z80_core.py tools/benchmarks/compare_cpu_cores.py
+      - name: Test Python/Rust ALU and CPU parity
+        run: python -m pytest tests/integration/test_z80_alu_rust_parity.py tests/integration/test_rust_z80_core.py -q
+      - name: Download and verify Super Uwol homebrew ROM
+        shell: pwsh
+        run: |
+          $rom = Join-Path $env:RUNNER_TEMP "super-uwol.sg"
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/webrcade/webrcade-default-feed/b7bc8e1946aa67436bb296955d55bbf3f3841ba6/content/sms/mojon-twins--super-uwol.sg" -OutFile $rom
+          python -c "import pathlib,sys,zlib; p=pathlib.Path(sys.argv[1]); b=p.read_bytes(); crc=zlib.crc32(b) & 0xFFFFFFFF; print(f'ROM size={len(b)} CRC32={crc:08X}'); assert len(b) == 0xC000 and crc == 0xAA8EA6EB, 'Unexpected Super Uwol ROM identity'" $rom
+          Add-Content -Path $env:GITHUB_ENV -Value "SUPER_UWOL_ROM=$rom"
+      - name: Compare Python and Rust on verified homebrew ROM
+        shell: pwsh
+        run: python tools/benchmarks/compare_cpu_cores.py --rom "$env:SUPER_UWOL_ROM" --warmup-frames 30 --frames 120 --repeats 3 --output rust-core-super-uwol.json
+      - name: Benchmark equivalent synthetic CPU workload
+        run: python tools/benchmarks/compare_cpu_cores.py --synthetic-loop --warmup-frames 1 --frames 3 --repeats 1 --output rust-core-smoke-benchmark.json
+      - name: Run full Python test suite
+        run: python -m pytest -q
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rust-core-benchmark-reports
+          path: |
+            rust-core-smoke-benchmark.json
+            rust-core-super-uwol.json
+          if-no-files-found: warn
