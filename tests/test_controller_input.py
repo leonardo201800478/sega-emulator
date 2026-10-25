@@ -8,6 +8,7 @@ from sega_emulator.frontend.controller_input import (
     ControllerInput,
     ControllerInputConfig,
     PlayerInputProfile,
+    apply_turbo,
     joystick_value,
 )
 
@@ -117,6 +118,20 @@ def test_controller_configuration_round_trip_and_validation() -> None:
     assert decoded.players[1].turbo_buttons == {"button1": False, "button2": False}
     with pytest.raises(ValueError, match="não suportada"):
         ControllerInputConfig.from_json('{"schema_version":99,"players":{}}')
+
+
+def test_turbo_pulses_button1_and_button2_at_fifteen_hz() -> None:
+    actions = {"button1", "button2", "up"}
+    turbo = {"button1": True, "button2": True}
+
+    assert apply_turbo(actions, turbo, 0) == actions
+    assert apply_turbo(actions, turbo, 1) == actions
+    assert apply_turbo(actions, turbo, 2) == {"up"}
+    assert apply_turbo(actions, turbo, 3) == {"up"}
+    assert apply_turbo(actions, {"button1": True, "button2": False}, 2) == {
+        "button2",
+        "up",
+    }
 
 
 def test_default_deadzone_is_fifteen_percent() -> None:
