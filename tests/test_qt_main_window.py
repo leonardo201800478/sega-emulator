@@ -77,7 +77,7 @@ def test_video_scale_updates_window_size(qt_app, scale: int) -> None:
     window.close()
 
 
-def test_main_window_exposes_cpu_core_selector(qt_app) -> None:
+def test_main_window_exposes_emulation_backend_selector(qt_app) -> None:
     called: list[str] = []
     window = EmulatorMainWindow(
         on_open_rom=lambda: None,
@@ -89,9 +89,9 @@ def test_main_window_exposes_cpu_core_selector(qt_app) -> None:
         on_open_logs=lambda: None,
         on_show_machine_state=lambda: None,
         on_video_scale=lambda scale: None,
-        on_select_cpu_core=lambda: called.append("select-core"),
+        on_select_emulation_backend=lambda: called.append("select-backend"),
     )
-    assert window.select_cpu_core_action.isEnabled()
-    window.select_cpu_core_action.trigger()
-    assert called == ["select-core"]
+    assert window.select_emulation_backend_action.isEnabled()
+    window.select_emulation_backend_action.trigger()
+    assert called == ["select-backend"]
     window.close()
