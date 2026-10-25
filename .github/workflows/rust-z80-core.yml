@@ -1,5 +1,8 @@
 name: Rust Z80 Core
 
+permissions:
+  contents: write
+
 on:
   pull_request:
     paths:
@@ -47,6 +50,20 @@ jobs:
         with:
           name: rustfmt-normalized-tms9918
           path: native/z80_core/src/tms9918.rs
+      - name: Commit rustfmt-normalized VDP source once
+        if: github.event.pull_request.head.ref == 'feat/rust-tms9918a-vdp'
+        shell: pwsh
+        run: |
+          $formatted = Join-Path $env:RUNNER_TEMP "tms9918.rs"
+          Copy-Item native/z80_core/src/tms9918.rs $formatted
+          git fetch origin feat/rust-tms9918a-vdp
+          git checkout -B vdp-format FETCH_HEAD
+          Copy-Item $formatted native/z80_core/src/tms9918.rs -Force
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add native/z80_core/src/tms9918.rs
+          git commit -m "style(vdp): apply rustfmt formatting"
+          git push origin HEAD:refs/heads/feat/rust-tms9918a-vdp
       - name: Run Clippy
         run: |
           cargo clippy --manifest-path native/z80_alu/Cargo.toml --all-targets -- -D warnings
