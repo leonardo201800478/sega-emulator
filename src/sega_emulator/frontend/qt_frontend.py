@@ -647,7 +647,8 @@ def run(initial_path: Path | None = None) -> None:
                         dialog,
                         "Mapeamento inválido",
                         f"A tecla {key_name} está atribuída a "
-                        f"{action_labels[previous_action]} do Jogador {previous_player} "
+                        f"{action_labels[previous_action]} "
+                        f"do Jogador {previous_player} "
                         f"e a {action_labels[action]} "
                         f"do Jogador {player}.",
                     )
