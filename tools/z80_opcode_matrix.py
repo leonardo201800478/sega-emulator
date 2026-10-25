@@ -3,6 +3,7 @@
 This is a classification inventory, not a semantic conformance oracle.
 Run: python tools/z80_opcode_matrix.py --json
 """
+
 from __future__ import annotations
 
 import argparse
@@ -24,9 +25,13 @@ def base_family(op: int) -> tuple[str, str]:
     p, q = y >> 1, y & 1
     if x == 0:
         if z == 0:
-            return (("NOP", "documented") if y == 0 else
-                    ("EX AF,AF'", "documented") if y == 1 else
-                    ("DJNZ/JR/JR cc", "documented"))
+            return (
+                ("NOP", "documented")
+                if y == 0
+                else ("EX AF,AF'", "documented")
+                if y == 1
+                else ("DJNZ/JR/JR cc", "documented")
+            )
         if z == 1:
             return (f"LD {RP[p]},nn" if not q else f"ADD HL,{RP[p]}", "documented")
         if z == 2:
@@ -43,16 +48,29 @@ def base_family(op: int) -> tuple[str, str]:
             return (f"{'INC' if z == 4 else 'DEC'} {REGS[y]}", "documented")
         if z == 6:
             return f"LD {REGS[y]},n", "documented"
-        return (("RLCA", "documented") if y == 0 else
-                ("RRCA", "documented") if y == 1 else
-                ("RLA", "documented") if y == 2 else
-                ("RRA", "documented") if y == 3 else
-                ("DAA", "documented") if y == 4 else
-                ("CPL", "documented") if y == 5 else
-                ("SCF", "documented") if y == 6 else
-                ("CCF", "documented"))
+        return (
+            ("RLCA", "documented")
+            if y == 0
+            else ("RRCA", "documented")
+            if y == 1
+            else ("RLA", "documented")
+            if y == 2
+            else ("RRA", "documented")
+            if y == 3
+            else ("DAA", "documented")
+            if y == 4
+            else ("CPL", "documented")
+            if y == 5
+            else ("SCF", "documented")
+            if y == 6
+            else ("CCF", "documented")
+        )
     if x == 1:
-        return ("HALT", "documented") if op == 0x76 else (f"LD {REGS[y]},{REGS[z]}", "documented")
+        return (
+            ("HALT", "documented")
+            if op == 0x76
+            else (f"LD {REGS[y]},{REGS[z]}", "documented")
+        )
     if x == 2:
         return f"{ALU[y]} {REGS[z]}", "documented"
     if z == 0:
@@ -60,27 +78,43 @@ def base_family(op: int) -> tuple[str, str]:
     if z == 1:
         if not q:
             return f"POP {RP2[p]}", "documented"
-        return (("RET", "documented") if y == 1 else
-                ("EXX", "documented") if y == 3 else
-                ("JP (HL)", "documented") if y == 5 else
-                ("LD SP,HL", "documented"))
+        return (
+            ("RET", "documented")
+            if y == 1
+            else ("EXX", "documented")
+            if y == 3
+            else ("JP (HL)", "documented")
+            if y == 5
+            else ("LD SP,HL", "documented")
+        )
     if z == 2:
         return f"JP {CONDS[y]},nn", "documented"
     if z == 3:
-        names = {0: ("JP nn", "documented"), 1: ("PREFIX CB", "prefix"),
-                 2: ("OUT (n),A", "documented"), 3: ("IN A,(n)", "documented"),
-                 4: ("EX (SP),HL", "documented"), 5: ("EX DE,HL", "documented"),
-                 6: ("DI", "documented"), 7: ("EI", "documented")}
+        names = {
+            0: ("JP nn", "documented"),
+            1: ("PREFIX CB", "prefix"),
+            2: ("OUT (n),A", "documented"),
+            3: ("IN A,(n)", "documented"),
+            4: ("EX (SP),HL", "documented"),
+            5: ("EX DE,HL", "documented"),
+            6: ("DI", "documented"),
+            7: ("EI", "documented"),
+        }
         return names[y]
     if z == 4:
         return f"CALL {CONDS[y]},nn", "documented"
     if z == 5:
         if not q:
             return f"PUSH {RP2[p]}", "documented"
-        return (("CALL nn", "documented") if y == 1 else
-                ("PREFIX DD", "prefix") if y == 3 else
-                ("PREFIX ED", "prefix") if y == 5 else
-                ("PREFIX FD", "prefix"))
+        return (
+            ("CALL nn", "documented")
+            if y == 1
+            else ("PREFIX DD", "prefix")
+            if y == 3
+            else ("PREFIX ED", "prefix")
+            if y == 5
+            else ("PREFIX FD", "prefix")
+        )
     if z == 6:
         return f"{ALU[y]} n", "documented"
     return f"RST {y * 8:02X}h", "documented"
@@ -98,12 +132,28 @@ def cb_family(op: int) -> tuple[str, str]:
 
 
 ED_ASSIGNED_EXACT = {
-    0x47: "LD I,A", 0x4F: "LD R,A", 0x57: "LD A,I", 0x5F: "LD A,R",
-    0x67: "RRD", 0x6F: "RLD",
-    0xA0: "LDI", 0xA8: "LDD", 0xB0: "LDIR", 0xB8: "LDDR",
-    0xA1: "CPI", 0xA9: "CPD", 0xB1: "CPIR", 0xB9: "CPDR",
-    0xA2: "INI", 0xAA: "IND", 0xB2: "INIR", 0xBA: "INDR",
-    0xA3: "OUTI", 0xAB: "OUTD", 0xB3: "OTIR", 0xBB: "OTDR",
+    0x47: "LD I,A",
+    0x4F: "LD R,A",
+    0x57: "LD A,I",
+    0x5F: "LD A,R",
+    0x67: "RRD",
+    0x6F: "RLD",
+    0xA0: "LDI",
+    0xA8: "LDD",
+    0xB0: "LDIR",
+    0xB8: "LDDR",
+    0xA1: "CPI",
+    0xA9: "CPD",
+    0xB1: "CPIR",
+    0xB9: "CPDR",
+    0xA2: "INI",
+    0xAA: "IND",
+    0xB2: "INIR",
+    0xBA: "INDR",
+    0xA3: "OUTI",
+    0xAB: "OUTD",
+    0xB3: "OTIR",
+    0xBB: "OTDR",
 }
 ED_NEG = {0x44, 0x4C, 0x54, 0x5C, 0x64, 0x6C, 0x74, 0x7C}
 ED_RETURN = {0x45, 0x4D, 0x55, 0x5D, 0x65, 0x6D, 0x75, 0x7D}
@@ -182,11 +232,15 @@ def indexed_cb_family(op: int) -> tuple[str, str]:
     group, bit, reg = op >> 6, (op >> 3) & 7, op & 7
     operand = "(IX/IY+d)"
     if group == 0:
-        return f"{ROT[bit]} {operand}" + (f" -> {REGS[reg]}" if reg != 6 else ""), "undocumented" if bit == 6 else "documented"
+        return f"{ROT[bit]} {operand}" + (
+            f" -> {REGS[reg]}" if reg != 6 else ""
+        ), "undocumented" if bit == 6 else "documented"
     if group == 1:
         return f"BIT {bit},{operand}", "documented"
     name = "RES" if group == 2 else "SET"
-    return f"{name} {bit},{operand}" + (f" -> {REGS[reg]}" if reg != 6 else ""), "documented"
+    return f"{name} {bit},{operand}" + (
+        f" -> {REGS[reg]}" if reg != 6 else ""
+    ), "documented"
 
 
 def build_matrix() -> dict[str, Any]:
@@ -201,7 +255,15 @@ def build_matrix() -> dict[str, Any]:
                 0xED: "ed-prefix",
                 0xFD: "fd-prefix",
             }[op]
-        rows.append({"space":"base","opcode":f"{op:02X}","family":family,"architecture_class":arch,"implementation_path":path})
+        rows.append(
+            {
+                "space": "base",
+                "opcode": f"{op:02X}",
+                "family": family,
+                "architecture_class": arch,
+                "implementation_path": path,
+            }
+        )
     for space in ("CB", "ED", "DD", "FD", "DD-CB", "FD-CB"):
         for op in range(256):
             if space == "CB":
@@ -211,18 +273,33 @@ def build_matrix() -> dict[str, Any]:
                 family, arch, path = ed_family(op)
             elif space in ("DD", "FD"):
                 family, path = indexed_family(op)
-                arch = "undocumented" if path == "undocumented-index-half" else "prefix-behavior"
+                arch = (
+                    "undocumented"
+                    if path == "undocumented-index-half"
+                    else "prefix-behavior"
+                )
             else:
                 family, arch = indexed_cb_family(op)
                 path = "indexed-cb-decoder"
-            rows.append({"space":space,"opcode":f"{op:02X}","family":family,"architecture_class":arch,"implementation_path":path})
+            rows.append(
+                {
+                    "space": space,
+                    "opcode": f"{op:02X}",
+                    "family": family,
+                    "architecture_class": arch,
+                    "implementation_path": path,
+                }
+            )
     counts = Counter(row["space"] for row in rows)
     return {
         "schema_version": 1,
         "scope": "classic Zilog Z80 opcode classification; semantic correctness is not implied",
         "source_code": "src/sega_emulator/cpu/z80.py",
         "classification_rule": "One row per second-byte encoding per opcode space; DD/FD rows describe the second byte following that prefix.",
-        "counts_by_space": {space: counts[space] for space in ("base","CB","ED","DD","FD","DD-CB","FD-CB")},
+        "counts_by_space": {
+            space: counts[space]
+            for space in ("base", "CB", "ED", "DD", "FD", "DD-CB", "FD-CB")
+        },
         "cell_count": len(rows),
         "rows": rows,
     }
