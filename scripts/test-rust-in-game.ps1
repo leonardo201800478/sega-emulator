@@ -16,7 +16,7 @@ Write-Host "==> Instalando Maturin no ambiente virtual"
 & $python -m pip install maturin
 if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar Maturin." }
 
-Write-Host "==> Compilando o núcleo Rust SG-1000 usado pelo frontend (Release)"
+Write-Host "==> Compilando a extensão PyO3 do runtime SG-1000 existente (Release)"
 Push-Location (Join-Path $repoRoot "native\z80_core")
 try {
     & (Join-Path $repoRoot ".venv\Scripts\maturin.exe") develop --release --features python-extension
@@ -27,7 +27,7 @@ finally {
 }
 
 Write-Host "==> Verificando importação da extensão nativa"
-& $python -c "from sega_z80_core import NativeSG1000Machine; print('Rust SG-1000 runtime: OK')"
+& $python -c "from sega_z80_core import NativeSG1000Machine; print('Extensão PyO3 NativeSG1000Machine: import OK')"
 if ($LASTEXITCODE -ne 0) { throw "A extensão foi compilada, mas não pôde ser importada." }
 
 if ([string]::IsNullOrWhiteSpace($RomPath)) {
