@@ -698,8 +698,12 @@ impl RustZ80Cpu {
                             Ok(16)
                         }
                     }
-                    // Unassigned ED bytes are 8-T-state NOPs on the classic Z80.
-                    _ => Ok(8),
+                    // Only genuinely unassigned ED bytes are NOPs. Assigned but
+                    // unsupported instructions must remain explicit errors.
+                    _ if is_unassigned_ed_opcode(sub) => Ok(8),
+                    _ => Err(PyNotImplementedError::new_err(format!(
+                        "Rust Z80 core does not support ED opcode 0x{sub:02X} at PC 0x{opcode_pc:04X}"
+                    ))),
                 }
             }
             _ if opcode & 0xC7 == 0xC7 => {
@@ -746,6 +750,19 @@ impl RustZ80Cpu {
             ))),
         }
     }
+}
+
+fn is_unassigned_ed_opcode(opcode: u8) -> bool {
+    matches!(
+        opcode,
+        0x00..=0x3F
+            | 0x80..=0x9F
+            | 0xA4..=0xA7
+            | 0xAC..=0xAF
+            | 0xB4..=0xB7
+            | 0xBC..=0xBF
+            | 0xC0..=0xFF
+    )
 }
 
 #[pymodule]
