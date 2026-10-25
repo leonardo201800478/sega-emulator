@@ -89,19 +89,25 @@ class SG1000Machine:
         self.cartridge_ram_size = profile.cartridge_ram_size
         ram = SG1000Ram(bytes(profile.internal_ram_size))
         base_bus = SG1000MemoryBus(ram, cartridge_rom)
-        self.psg = SN76489()
-        self.audio_sync = AudioSynchronizer(self.psg)
         self.joystick1 = 0xFF
         self.joystick2 = 0xFF
         self.total_instructions = 0
         self.total_tstates = 0
         if cpu_core == "python":
             self.vdp = TMS9918A()
+            self.psg = SN76489()
+            self.audio_sync = AudioSynchronizer(self.psg)
             self.memory_bus = _CartridgeMirrorBus(base_bus, cartridge_rom, profile)
             self.cpu = Z80Cpu(self.memory_bus, self)
         else:
             try:
-                from sega_z80_core import NativeMemoryBus, NativeTms9918A, RustZ80Cpu
+                from sega_z80_core import (
+                    NativeAudioSynchronizer,
+                    NativeMemoryBus,
+                    NativeSn76489,
+                    NativeTms9918A,
+                    RustZ80Cpu,
+                )
             except ImportError as exc:
                 raise RuntimeError(
                     "O núcleo Z80 Rust experimental não está instalado. "
@@ -109,6 +115,8 @@ class SG1000Machine:
                     "maturin develop --manifest-path native/z80_core/Cargo.toml"
                 ) from exc
             self.vdp = NativeTms9918A()
+            self.psg = NativeSn76489()
+            self.audio_sync = NativeAudioSynchronizer(self.psg)
             self.memory_bus = NativeMemoryBus(
                 cartridge_rom,
                 profile.internal_ram_size,
