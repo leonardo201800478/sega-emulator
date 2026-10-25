@@ -106,7 +106,10 @@ impl NativeSn76489 {
 
     #[getter]
     fn attenuations(&self) -> Vec<u16> {
-        self.attenuations.iter().map(|value| u16::from(*value)).collect()
+        self.attenuations
+            .iter()
+            .map(|value| u16::from(*value))
+            .collect()
     }
 
     #[getter]
@@ -126,7 +129,10 @@ impl NativeSn76489 {
 
     #[getter(_tone_outputs)]
     fn tone_outputs(&self) -> Vec<u16> {
-        self.tone_outputs.iter().map(|value| u16::from(*value)).collect()
+        self.tone_outputs
+            .iter()
+            .map(|value| u16::from(*value))
+            .collect()
     }
 
     #[getter(_noise_counter)]
