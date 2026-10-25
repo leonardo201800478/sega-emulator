@@ -82,7 +82,7 @@ impl RustTMS9918A {
         self.status = 0x1f; self.address = 0; self.read_buffer = 0; self.control_first = None;
         self.cycles_into_line = 0; self.scanline = 0; self.frame_number = 0;
         self.framebuffer.fill(0); self.working.fill(0); self.frame_ready = false;
-        if clear_vram { self.vram_mut(py).fill(0); }
+        if clear_vram { unsafe { self.vram.bind(py).as_bytes_mut().fill(0); } }
     }
     fn read_port(&mut self, py: Python<'_>, port: u8) -> u8 {
         match port & 0xc1 {
@@ -162,7 +162,11 @@ impl RustTMS9918A {
         let r=self.regs(py); ((r[1]>>4)&1)|((r[1]>>2)&2)|(((r[0]>>1)&1)<<2)
     }
     fn render_scanline(&mut self, py: Python<'_>, y: usize, status: bool) {
-        self.render_scanline_to(py, &mut self.working, y, status);
+        // Temporarily move the framebuffer out to avoid aliasing &mut self
+        // with a mutable borrow of one of its fields during rendering.
+        let mut frame = std::mem::take(&mut self.working);
+        self.render_scanline_to(py, &mut frame, y, status);
+        self.working = frame;
     }
     fn render_scanline_to(&mut self, py: Python<'_>, pixels: &mut [u8], y: usize, update_status: bool) {
         let r = self.regs(py).to_vec();
