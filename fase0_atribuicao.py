@@ -1,10 +1,12 @@
-import time, statistics, sys
+import statistics
+import sys
+import time
 
 from sega_emulator.machine.sg1000 import SG1000Machine
+from sega_emulator.rom_loader import load_rom
 
 pc = time.perf_counter
 ns = time.perf_counter_ns
-from sega_emulator.rom_loader import load_rom
 
 loaded = load_rom(sys.argv[1])  # extrai o membro do ZIP corretamente
 rom = loaded.data
@@ -44,7 +46,8 @@ sp = [bench_step_path() for _ in range(5)]
 for name, s in (("run_frame (fast path)", rf), ("machine.step loop", sp)):
     med = statistics.median(s)
     print(
-        f"{name:24s} median {med:.3f}s  fps={FRAMES / med:6.1f}  speed={FRAMES / med / 59.923 * 100:5.1f}%  best fps={FRAMES / min(s):.1f}"
+        f"{name:24s} median {med:.3f}s  fps={FRAMES / med:6.1f}  "
+        f"speed={FRAMES / med / 59.923 * 100:5.1f}%  best fps={FRAMES / min(s):.1f}"
     )
 
 # B) per-component attribution (timer overhead subtracted)
@@ -89,5 +92,6 @@ print(f"\ninstr={n} ({n / FRAMES:.0f}/frame)  timer-overhead/pair={ovh:.0f}ns")
 for k, v in acc.items():
     print(f"{k:5s} {v / 1e9:6.3f}s  {v / tot * 100:5.1f}%  {v / n:6.0f} ns/instr")
 print(
-    f"sum(instrumented) {tot / 1e9:.3f}s -> {FRAMES / (tot / 1e9):.1f} fps equivalent; avg {tot / n:.0f} ns/instr = {tot / n / (59736 * FRAMES / n):.0f} ns/T-state"
+    f"sum(instrumented) {tot / 1e9:.3f}s -> {FRAMES / (tot / 1e9):.1f} fps equivalent; "
+    f"avg {tot / n:.0f} ns/instr = {tot / n / (59736 * FRAMES / n):.0f} ns/T-state"
 )
