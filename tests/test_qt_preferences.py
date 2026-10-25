@@ -20,6 +20,7 @@ class MemorySettings:
     def setValue(self, key: str, value: object) -> None:
         self.values[key] = value
 
+
 def test_defaults_are_valid_and_stable() -> None:
     preferences = FrontendPreferences()
 
@@ -42,6 +43,7 @@ def test_rejects_invalid_explicit_preferences(field: str, value: int) -> None:
     with pytest.raises(ValueError):
         FrontendPreferences(**{field: value})
 
+
 def test_load_recovers_from_corrupt_or_legacy_values() -> None:
     settings = MemorySettings(
         {
@@ -61,6 +63,7 @@ def test_load_recovers_from_corrupt_or_legacy_values() -> None:
     assert preferences.recent_roms == ("game.sg",)
     assert preferences.audio_enabled is False
 
+
 def test_save_and_load_round_trip() -> None:
     original = FrontendPreferences(
         window_width=1280,
@@ -77,12 +80,14 @@ def test_save_and_load_round_trip() -> None:
 
     assert FrontendPreferences.from_store(settings) == original
 
+
 def test_recent_rom_moves_to_front_without_case_duplicates() -> None:
     preferences = FrontendPreferences(recent_roms=("one.sg", "two.zip"))
 
     updated = preferences.with_recent_rom("ONE.SG")
 
     assert updated.recent_roms == ("ONE.SG", "two.zip")
+
 
 def test_recent_rom_history_is_bounded() -> None:
     preferences = FrontendPreferences(
@@ -94,6 +99,7 @@ def test_recent_rom_history_is_bounded() -> None:
     assert len(updated.recent_roms) == MAX_RECENT_ROMS
     assert updated.recent_roms[0] == "new.sg"
 
+
 def test_cpu_core_defaults_to_python_and_round_trips() -> None:
     settings = MemorySettings()
     defaults = FrontendPreferences.from_store(settings)
@@ -104,9 +110,11 @@ def test_cpu_core_defaults_to_python_and_round_trips() -> None:
     assert settings.values["cpu_core"] == "rust"
     assert FrontendPreferences.from_store(settings).cpu_core == "rust"
 
+
 def test_invalid_saved_cpu_core_falls_back_to_python() -> None:
     settings = MemorySettings({"cpu_core": "unsupported"})
     assert FrontendPreferences.from_store(settings).cpu_core == "python"
+
 
 def test_explicit_invalid_cpu_core_is_rejected() -> None:
     with pytest.raises(ValueError, match="cpu_core"):
