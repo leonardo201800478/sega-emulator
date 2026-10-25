@@ -39,12 +39,16 @@ def _runtime_diagnostic(machine: SG1000Machine, rom_sha256: str) -> dict[str, ob
         "machine_type": type(machine).__module__ + "." + type(machine).__qualname__,
         "cpu_type": type(machine.cpu).__module__ + "." + type(machine.cpu).__qualname__,
         "memory_bus_type": (
-            type(machine.memory_bus).__module__ + "." + type(machine.memory_bus).__qualname__
+            type(machine.memory_bus).__module__
+            + "."
+            + type(machine.memory_bus).__qualname__
         ),
         "vdp_type": type(machine.vdp).__module__ + "." + type(machine.vdp).__qualname__,
         "psg_type": type(machine.psg).__module__ + "." + type(machine.psg).__qualname__,
         "audio_sync_type": (
-            type(machine.audio_sync).__module__ + "." + type(machine.audio_sync).__qualname__
+            type(machine.audio_sync).__module__
+            + "."
+            + type(machine.audio_sync).__qualname__
         ),
         "rom_sha256": rom_sha256,
         "python_executable": sys.executable,
