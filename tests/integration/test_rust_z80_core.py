@@ -761,3 +761,47 @@ def test_rust_ld_a_i_interrupt_p_latch_matches_python() -> None:
         python_cpu.f,
         python_cpu.q,
     )
+
+
+@pytest.mark.parametrize(
+    ("data_bus_opcode", "operand", "expected_cycles", "expected_pc", "expected_b"),
+    [
+        (0x00, 0x5A, 6, 0x0000, 0x00),  # IM 0 NOP: acknowledge + two T-states
+        (0x06, 0x5A, 9, 0x0001, 0x5A),  # IM 0 LD B,n: operand comes from PC
+        (0xCF, 0x5A, 13, 0x0008, 0x00),  # IM 0 RST 08h
+    ],
+)
+def test_rust_im0_executes_interrupt_supplied_opcode(
+    data_bus_opcode: int,
+    operand: int,
+    expected_cycles: int,
+    expected_pc: int,
+    expected_b: int,
+) -> None:
+    RustZ80Cpu = _rust_cpu()
+    python_bus = MemoryBus(bytes([operand, 0x00, 0x00]))
+    rust_bus = MemoryBus(bytes([operand, 0x00, 0x00]))
+    python_cpu = Z80Cpu(python_bus)
+    rust_cpu = RustZ80Cpu(rust_bus, None)
+    for cpu in (python_cpu, rust_cpu):
+        cpu.iff1 = True
+        cpu.iff2 = True
+        cpu.interrupt_mode = 0
+        cpu.sp = 0x3000
+        cpu.request_int(data_bus_opcode)
+
+    assert python_cpu.step() == rust_cpu.step() == expected_cycles
+    assert (rust_cpu.pc, rust_cpu.b, rust_cpu.sp, rust_cpu.r) == (
+        python_cpu.pc,
+        python_cpu.b,
+        python_cpu.sp,
+        python_cpu.r,
+    )
+    assert rust_cpu.pc == expected_pc
+    assert rust_cpu.b == expected_b
+    assert rust_bus.memory == python_bus.memory
+    assert (rust_cpu.q, rust_cpu.p, rust_cpu.f) == (
+        python_cpu.q,
+        python_cpu.p,
+        python_cpu.f,
+    )
