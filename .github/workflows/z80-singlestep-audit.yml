@@ -37,7 +37,7 @@ jobs:
           mkdir -p artifacts/singlestep-vectors
           upstream_commit="ebe1875d48f374bcfd4b505d8eb8ee751568b5f7"
           mapfile -t files < <(
-            python -c 'import json; from pathlib import Path; print("\\n".join(Path(item["file"]).stem for item in json.load(open("tools/audits/singlestep-corpus-manifest.json", encoding="utf-8"))["files"]))'
+            python -c 'import json; from pathlib import Path; print("\n".join(Path(item["file"]).stem for item in json.load(open("tools/audits/singlestep-corpus-manifest.json", encoding="utf-8"))["files"]))'
           )
           for file_stem in "${files[@]}"; do
             encoded="${file_stem// /%20}"
