@@ -65,6 +65,15 @@ DEFAULT_FILES = (
     "ed b3",
     "ed ba",
     "ed bb",
+    "ed a0",
+    "ed a1",
+    "ed a3",
+    "ed a8",
+    "ed a9",
+    "ed ab",
+    "ed b1",
+    "ed b8",
+    "ed b9",
 )
 
 
