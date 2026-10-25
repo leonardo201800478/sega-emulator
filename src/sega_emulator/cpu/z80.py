@@ -745,6 +745,7 @@ class Z80Cpu:
                 new_memory = ((memory_value << 4) | (self.a & 0x0F)) & 0xFF
                 self.a = (self.a & 0xF0) | (memory_value >> 4)
             self.bus.write(address, new_memory)
+            self.wz = (address + 1) & 0xFFFF
             self.f = (self.f & 1) | (self.a & 0xA8) | self._parity_flag(self.a)
             if self.a == 0:
                 self.f |= 0x40
@@ -765,6 +766,7 @@ class Z80Cpu:
             )
             if opcode in (0xB0, 0xB8) and self.bc:
                 self.pc = (self.pc - 2) & 0xFFFF
+                self.wz = (self.pc + 1) & 0xFFFF
                 return 21
             return 16
         if opcode in (0xA1, 0xA9, 0xB1, 0xB9):
@@ -785,8 +787,10 @@ class Z80Cpu:
                 | (adjusted & 0x08)
                 | ((adjusted & 0x02) << 4)
             )
+            self.wz = (self.wz + direction) & 0xFFFF
             if opcode in (0xB1, 0xB9) and self.bc and result:
                 self.pc = (self.pc - 2) & 0xFFFF
+                self.wz = (self.pc + 1) & 0xFFFF
                 return 21
             return 16
         if opcode in (0xA2, 0xAA, 0xB2, 0xBA, 0xA3, 0xAB, 0xB3, 0xBB):
@@ -822,7 +826,9 @@ class Z80Cpu:
         self.f = flags
         if repeat and self.b:
             self.pc = (self.pc - 2) & 0xFFFF
+            self.wz = (self.pc + 1) & 0xFFFF
             return 21
+        self.wz = ((old_bc + direction) if input_direction else (self.bc + direction)) & 0xFFFF
         return 16
 
     @staticmethod
@@ -1299,8 +1305,10 @@ class Z80Cpu:
             self.de, self.hl = self.hl, self.de
             cycles = 4
         elif opcode & 0xC7 == 0xC7:  # RST p
-            self._push_word(self.pc)
+            return_address = self.pc
+            self._push_word(return_address)
             self.pc = opcode & 0x38
+            self.wz = return_address
             cycles = 11
         elif opcode == 0x27:  # DAA
             self._daa()
