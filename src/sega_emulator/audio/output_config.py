@@ -52,7 +52,10 @@ class AudioOutputConfig:
     def __post_init__(self) -> None:
         if not isinstance(self.backend, AudioBackend):
             raise ValueError("backend deve ser um AudioBackend válido.")
-        if type(self.sample_rate) is not int or self.sample_rate not in SUPPORTED_SAMPLE_RATES:
+        if (
+            type(self.sample_rate) is not int
+            or self.sample_rate not in SUPPORTED_SAMPLE_RATES
+        ):
             raise ValueError(
                 f"sample_rate deve ser um destes valores: {SUPPORTED_SAMPLE_RATES}."
             )
