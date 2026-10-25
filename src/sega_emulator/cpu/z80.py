@@ -821,11 +821,7 @@ class Z80Cpu:
         else:
             pv = pv ^ bool(self._parity_flag(self.b & 0x07)) ^ True
             half = False
-        self.f = (
-            (self.f & ~(0x10 | 0x04))
-            | (0x10 if half else 0)
-            | (0x04 if pv else 0)
-        )
+        self.f = (self.f & ~(0x10 | 0x04)) | (0x10 if half else 0) | (0x04 if pv else 0)
 
     def _execute_block_io(self, opcode: int) -> int:
         """Executa INI/IND/INIR/INDR e OUTI/OUTD/OTIR/OTDR."""
