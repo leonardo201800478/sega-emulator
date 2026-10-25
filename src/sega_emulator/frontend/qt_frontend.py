@@ -75,6 +75,7 @@ def run(initial_path: Path | None = None) -> None:
             QVBoxLayout,
             QWidget,
         )
+
         from sega_emulator.frontend.qt.main_window import EmulatorMainWindow
     except ImportError as exc:
         raise RuntimeError(
@@ -719,6 +720,18 @@ def run(initial_path: Path | None = None) -> None:
         settings.setValue("controller_config", controller_input.config.to_json())
         update_joystick()
         status.showMessage("Mapeamento de controles salvo.")
+
+    def show_controller_devices() -> None:
+        names = controller_input.connected_names()
+        devices_text = "\n".join(f"• {name}" for name in names)
+        if not devices_text:
+            devices_text = "Nenhum controle detectado."
+        backend_state = "disponível" if controller_input.available else "indisponível"
+        QMessageBox.information(
+            window,
+            "Dispositivos SDL3",
+            f"Backend SDL3: {backend_state}\n\n{devices_text}",
+        )
 
     def dump_vdp_snapshot() -> None:
         """Salva um snapshot pontual do VDP para investigar divergências gráficas."""
