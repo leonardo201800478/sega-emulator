@@ -174,7 +174,6 @@ mod tests {
         assert_eq!(sbc8(0x80, 0x00, true).flags & 0x04, 0x04);
     }
 
-
     #[test]
     fn logical_operations_set_result_parity_and_half_carry() {
         assert_eq!(and8(0xf0, 0x0f).value, 0x00);
