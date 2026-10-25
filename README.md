@@ -57,24 +57,34 @@ Para usar o frontend Pygame:
 .\\.venv\\Scripts\\python.exe -m sega_emulator "C:\\caminho\\para\\jogo.sg" --ui pygame
 ```
 
-## Núcleo Z80 Rust experimental no Qt
+## Backend SG-1000 Rust experimental no Qt
 
 O frontend Qt permite alternar entre **Python (referência)** e **Rust (experimental)** em **Emulação → Selecionar núcleo Z80…**. A seleção fica persistida nas configurações Qt. Se houver uma ROM carregada, trocar de núcleo recria a máquina para começar em estado limpo.
 
-O backend Python permanece como padrão e referência de compatibilidade. O backend Rust foi atualizado com a implementação mais abrangente e seus testes diferenciais da linha de trabalho da PR #89. Ele cobre as famílias principais de instruções, prefixos CB/DD/FD/ED, operações em bloco, interrupções e estados auxiliares, mas ainda **não é certificado como substituto universal nem ciclo a ciclo**. Instruções atribuídas que ainda não são suportadas geram erro explícito; não existe fallback silencioso para Python.
+O backend Python permanece como padrão e referência de compatibilidade. Ao selecionar Rust, a extensão nativa fornece:
+
+- núcleo Z80 e barramento de memória sem chamadas a métodos Python por leitura/escrita de byte;
+- mapa de ROM espelhada, RAM interna e RAM de cartucho por perfil;
+- VDP TMS9918A com portas, raster, VBlank, status de sprites e renderização dos modos gráficos modelados;
+- PSG SN76489AN e sincronização de writes de áudio por T-state;
+- máquina SG-1000 nativa que coordena `step`, `run_frame`, portas de I/O, interrupções e avanço de CPU/VDP/PSG em Rust.
+
+**O runtime ainda não é totalmente independente de Python internamente.** O frontend e a API de aplicação continuam em Python, e a máquina Rust coordena componentes encapsulados em objetos PyO3; o GIL permanece adquirido durante um quadro. A etapa atual elimina a coordenação Python por instrução e callbacks Python nas portas, mas ainda não move todos os estados para structs Rust puros nem libera o GIL. O modelo temporal usa T-states nominais e não equivale a emulação ciclo a ciclo. A implementação Python permanece disponível como referência diferencial; não há fallback silencioso quando uma instrução Rust não é suportada.
+
+Os getters `vram` e `registers` do VDP nativo retornam cópias para diagnóstico. Alterar diretamente essas cópias não altera o estado interno do VDP; use as portas modeladas para modificar o hardware. Esse contrato será revisto antes de tornar o backend Rust padrão.
 
 Para compilar e instalar a extensão no Windows/PowerShell, com o ambiente virtual ativado e a partir da raiz do repositório:
 
 ```powershell
 python -m pip install maturin
 Push-Location native/z80_core
-maturin develop --features python-extension
+maturin develop --release --features python-extension
 Pop-Location
 ```
 
 Reabra o emulador e selecione **Emulação → Selecionar núcleo Z80… → Rust (experimental)**. Se a extensão não estiver instalada, a interface explica como instalá-la e preserva o backend anterior.
 
-Antes de usar o núcleo Rust com ROMs reais, confirme a aprovação do workflow **Qt selectable Rust Z80 core** e faça uma validação manual. Testes diferenciais aprovados aumentam a confiança nas instruções cobertas, mas não demonstram compatibilidade universal, temporização de barramento ciclo a ciclo ou ganho de desempenho em todos os jogos.
+As fatias [PR #92](https://github.com/leonardo201800478/sega-emulator/pull/92) e [PR #93](https://github.com/leonardo201800478/sega-emulator/pull/93) passaram no workflow Windows. A PR #93 validou `rustfmt`, Clippy, testes Rust, build Release, **1.674 testes direcionados** e **2.329 testes de regressão** com a extensão instalada. Isso valida os caminhos cobertos, mas não demonstra compatibilidade universal, precisão ciclo a ciclo ou ganho de desempenho em todos os jogos.
 
 ## Diagnóstico headless
 

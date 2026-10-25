@@ -1,8 +1,6 @@
-"""Integração inicial da máquina Sega SG-1000 sem subsistema de áudio."""
+"""Integração SG-1000 com backend de referência Python ou runtime nativo Rust."""
 
 from __future__ import annotations
-
-import weakref
 
 from sega_emulator.audio.sn76489 import SN76489
 from sega_emulator.audio.synchronization import AudioSynchronizer
@@ -87,30 +85,44 @@ class SG1000Machine:
         profile = cartridge_profile(cartridge_rom)
         self.ram_size = profile.internal_ram_size
         self.cartridge_ram_size = profile.cartridge_ram_size
-        ram = SG1000Ram(bytes(profile.internal_ram_size))
-        base_bus = SG1000MemoryBus(ram, cartridge_rom)
-        self.memory_bus = _CartridgeMirrorBus(base_bus, cartridge_rom, profile)
-        self.vdp = TMS9918A()
-        self.psg = SN76489()
-        self.audio_sync = AudioSynchronizer(self.psg)
         self.joystick1 = 0xFF
         self.joystick2 = 0xFF
         self.total_instructions = 0
         self.total_tstates = 0
         if cpu_core == "python":
+            ram = SG1000Ram(bytes(profile.internal_ram_size))
+            base_bus = SG1000MemoryBus(ram, cartridge_rom)
+            self.vdp = TMS9918A()
+            self.psg = SN76489()
+            self.audio_sync = AudioSynchronizer(self.psg)
+            self.memory_bus = _CartridgeMirrorBus(base_bus, cartridge_rom, profile)
             self.cpu = Z80Cpu(self.memory_bus, self)
         else:
             try:
-                from sega_z80_core import RustZ80Cpu
+                from sega_z80_core import NativeSG1000Machine
             except ImportError as exc:
                 raise RuntimeError(
-                    "O núcleo Z80 Rust experimental não está instalado. "
+                    "O runtime SG-1000 Rust experimental não está instalado. "
                     "Instale com: python -m pip install maturin e "
-                    "maturin develop --manifest-path native/z80_core/Cargo.toml"
+                    "maturin develop --release --manifest-path "
+                    "native/z80_core/Cargo.toml"
                 ) from exc
-            self.cpu = RustZ80Cpu(self.memory_bus, weakref.proxy(self))
+            self.native_machine = NativeSG1000Machine(
+                cartridge_rom,
+                profile.internal_ram_size,
+                profile.cartridge_ram_size,
+                profile.cartridge_ram_start,
+                profile.cartridge_ram_end,
+            )
+            self.vdp = self.native_machine.vdp
+            self.psg = self.native_machine.psg
+            self.audio_sync = self.native_machine.audio_sync
+            self.memory_bus = self.native_machine.memory_bus
+            self.cpu = self.native_machine.cpu
 
     def read_port(self, address: int) -> int:
+        if self.cpu_core == "rust":
+            return self.native_machine.read_port(address)
         port = address & 0xFF
         vdp_port = port & 0xC1
         if vdp_port in (0x80, 0x81):
@@ -122,6 +134,9 @@ class SG1000Machine:
         return 0xFF
 
     def write_port(self, address: int, value: int) -> None:
+        if self.cpu_core == "rust":
+            self.native_machine.write_port(address, value)
+            return
         port = address & 0xFF
         vdp_port = port & 0xC1
         if vdp_port in (0x80, 0x81):
@@ -134,6 +149,9 @@ class SG1000Machine:
 
     def write_port_at(self, address: int, value: int, tstate: int) -> None:
         """Agenda uma escrita no PSG na borda temporal informada pela CPU."""
+        if self.cpu_core == "rust":
+            self.native_machine.write_port_at(address, value, tstate)
+            return
         port = address & 0xFF
         if 0x40 <= port <= 0x7F:
             self.audio_sync.schedule_write(tstate, value)
@@ -147,6 +165,8 @@ class SG1000Machine:
             raise ValueError("player deve ser 1 ou 2.")
         if type(value) is not int or not 0 <= value <= 0xFF:
             raise ValueError("value deve estar entre 00h e FFh.")
+        if self.cpu_core == "rust":
+            self.native_machine.set_joystick(player, value)
         if player == 1:
             self.joystick1 = value
         else:
@@ -154,12 +174,17 @@ class SG1000Machine:
 
     def step(self) -> int:
         """Executa uma instrução e avança o VDP pelos T-states nominais retornados."""
+        if self.cpu_core == "rust":
+            cycles = self.native_machine.step()
+            self.total_instructions = self.native_machine.total_instructions
+            self.total_tstates = self.native_machine.total_tstates
+            return cycles
         cycles = self.cpu.step()
         self.total_instructions += 1
         self.total_tstates += cycles
         self.vdp.advance(cycles)
         self.audio_sync.advance_to(self.total_tstates)
-        if self.vdp.status & 0x80 and self.vdp.registers[1] & 0x20:
+        if self.vdp.interrupt_pending:
             self.cpu.request_int()
         else:
             self.cpu.clear_int_request()
@@ -170,9 +195,14 @@ class SG1000Machine:
         return self.psg.drain_samples(max_samples)
 
     def run_frame(self, max_steps: int = 100_000) -> int:
-        """Executa um quadro com o laço CPU/VDP local para reduzir chamadas."""
+        """Executa um quadro; o backend Rust coordena CPU e dispositivos nativamente."""
         if type(max_steps) is not int or max_steps < 1:
             raise ValueError("max_steps deve ser um inteiro positivo.")
+        if self.cpu_core == "rust":
+            steps = self.native_machine.run_frame(max_steps)
+            self.total_instructions = self.native_machine.total_instructions
+            self.total_tstates = self.native_machine.total_tstates
+            return steps
         start_frame = self.vdp.frame_number
         steps = 0
         cpu = self.cpu
