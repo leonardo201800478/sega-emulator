@@ -158,9 +158,7 @@ mod tests {
 
     #[test]
     fn rejects_cartridge_ram_mapped_over_internal_ram() {
-        assert!(
-            NativeMemoryBus::new(vec![0x00], 0x0400, 0x2000, 0xC000, 0xFFFF).is_err()
-        );
+        assert!(NativeMemoryBus::new(vec![0x00], 0x0400, 0x2000, 0xC000, 0xFFFF).is_err());
     }
 
     #[test]
