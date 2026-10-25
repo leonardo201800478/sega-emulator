@@ -100,5 +100,12 @@ non-terminating block-repeat flags](https://www.reddit.com/r/EmuDev/comments/1vk
 This is an observed compatibility rule from the differential vectors; it should
 not be generalized to every Z80 revision without hardware-specific evidence.
 
-The current change does not yet implement the additional undocumented flag
-changes reported for repeating block I/O instructions (INIR/INDR/OTIR/OTDR).
+The same 46-file corpus also exposed repeat-iteration flag behavior in
+INIR/INDR/OTIR/OTDR. For these instructions F3/F5 are taken from PC.11/PC.13;
+P/V and H receive the additional repeat-phase adjustment described by the
+referenced 2018 flag investigation. OUTI/OTIR/OUTD/OTDR drive the port address
+with the decremented B value. The implementation is checked against 4,000
+SingleStepTests vectors. This remains corpus-backed compatibility evidence,
+not a claim that every Z80 revision is identical.
+
+Additional reference: [Z80Decoder undocumented-flags notes](https://github.com/hoglet67/Z80Decoder/wiki/Undocumented-Flags).

@@ -806,6 +806,27 @@ class Z80Cpu:
         """Use PC.11/PC.13 for F3/F5 on a repeating ED block iteration."""
         self.f = (self.f & ~0x28) | ((self.pc >> 8) & 0x28)
 
+    def _set_repeat_block_io_flags(self, value: int) -> None:
+        """Apply the additional flags observed on repeating block-I/O iterations."""
+        self.f = (self.f & ~0x28) | ((self.pc >> 8) & 0x28)
+        carry = bool(self.f & 0x01)
+        pv = bool(self.f & 0x04)
+        if carry:
+            if value & 0x80:
+                pv = pv ^ bool(self._parity_flag((self.b - 1) & 0x07)) ^ True
+                half = (self.b & 0x0F) == 0
+            else:
+                pv = pv ^ bool(self._parity_flag((self.b + 1) & 0x07)) ^ True
+                half = (self.b & 0x0F) == 0x0F
+        else:
+            pv = pv ^ bool(self._parity_flag(self.b & 0x07)) ^ True
+            half = False
+        self.f = (
+            (self.f & ~(0x10 | 0x04))
+            | (0x10 if half else 0)
+            | (0x04 if pv else 0)
+        )
+
     def _execute_block_io(self, opcode: int) -> int:
         """Executa INI/IND/INIR/INDR e OUTI/OUTD/OTIR/OTDR."""
         input_direction = opcode in (0xA2, 0xAA, 0xB2, 0xBA)
@@ -817,7 +838,8 @@ class Z80Cpu:
             self.bus.write(self.hl, value)
         else:
             value = self.bus.read(self.hl)
-            self._write_port(old_bc, value)
+            output_bc = (((self.b - 1) & 0xFF) << 8) | self.c
+            self._write_port(output_bc, value)
         self.hl = (self.hl + direction) & 0xFFFF
         self.b = (self.b - 1) & 0xFF
         k = value + (((self.c + direction) & 0xFF) if input_direction else self.l)
@@ -833,6 +855,7 @@ class Z80Cpu:
         if repeat and self.b:
             self.pc = (self.pc - 2) & 0xFFFF
             self.wz = (self.pc + 1) & 0xFFFF
+            self._set_repeat_block_io_flags(value)
             return 21
         wz_base = old_bc if input_direction else self.bc
         self.wz = (wz_base + direction) & 0xFFFF

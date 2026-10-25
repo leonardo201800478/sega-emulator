@@ -1758,7 +1758,7 @@ def test_ed_block_io_calculates_all_flags_at_carry_boundaries(opcode: int) -> No
         assert cpu.bus.read(0xC010) == value
         assert io.writes == []
     else:
-        assert io.writes == [(old_bc, value)]
+        assert io.writes == [((cpu.bc), value)]
 
 
 @pytest.mark.parametrize(
@@ -1795,7 +1795,27 @@ def test_ed_block_io_direction_data_and_repeat(
         assert cpu.bus.read(0xC010) == 0x81
         assert io.writes == []
     else:
-        assert io.writes == [(0x0234, 0x45)]
+        assert io.writes == [(0x0134, 0x45)]
+
+
+@pytest.mark.parametrize("opcode", [0xB2, 0xBA, 0xB3, 0xBB])
+@pytest.mark.parametrize("pc_high", [0x08, 0x20, 0x28])
+def test_ed_block_io_repeat_xy_flags_come_from_pc(opcode: int, pc_high: int) -> None:
+    pc = (pc_high << 8) | 0x40
+    io = FakeIOBus()
+    cpu = Z80Cpu(FlatMemoryBus(bytes([0x00])), io_bus=io)
+    cpu.pc = pc
+    cpu.bus.write(pc, 0xED)
+    cpu.bus.write(pc + 1, opcode)
+    cpu.b, cpu.c, cpu.hl = 2, 0x34, 0xC010
+    io.ports[0x0234] = 0x81
+    cpu.bus.write(0xC010, 0x45)
+
+    assert cpu.step() == 21
+    assert cpu.pc == pc
+    assert cpu.wz == (pc + 1) & 0xFFFF
+    assert cpu.f & 0x28 == (pc >> 8) & 0x28
+    assert cpu.q == cpu.f
 
 
 @pytest.mark.parametrize("opcode", [0xB2, 0xBA, 0xB3, 0xBB])
