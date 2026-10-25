@@ -112,7 +112,7 @@ pub fn xor8(lhs: u8, rhs: u8) -> AluResult {
 
 fn logic_result(value: u8, extra_flags: u8) -> AluResult {
     let mut flags = sign_zero_xy(value) | extra_flags;
-    if value.count_ones() % 2 == 0 {
+    if value.count_ones().is_multiple_of(2) {
         flags |= FLAG_PV;
     }
     AluResult { value, flags }
