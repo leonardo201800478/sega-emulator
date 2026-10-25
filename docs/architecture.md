@@ -4,7 +4,7 @@
 
 Construir uma base de emulação determinística, testável e evolutiva, começando pelo SG-1000. Componentes de hardware devem ser reutilizados entre consoles quando o hardware e os contratos forem realmente compatíveis. Reutilização não deve apagar diferenças entre revisões, mapas de memória, periféricos ou temporização.
 
-A implementação de referência começa em Python e permanece como oráculo diferencial e fallback. Rust será adotado seletivamente para componentes críticos após testes de equivalência; LLVM ORC será apenas um backend JIT opcional de CPU, nunca a linguagem dos dispositivos. Consulte o [roteiro do núcleo nativo](architecture/native-core-roadmap.md) e o [ADR 0005](adr/0005-python-rust-llvm-architecture.md).
+A implementação de referência começa em Python e permanece como oráculo diferencial e fallback. Rust será adotado seletivamente para componentes críticos após testes de equivalência; LLVM ORC será apenas um backend JIT opcional de CPU, nunca a linguagem dos dispositivos. Consulte o [roteiro do núcleo nativo](architecture/native-core-roadmap.md) e o [ADR 0005](adr/0005-python-rust-llvm-architecture.md), que também definem a política para multithreading determinístico.
 
 ## Princípios
 
@@ -15,6 +15,8 @@ A implementação de referência começa em Python e permanece como oráculo dif
 5. **Sistemas compostos por componentes:** cada console conecta CPUs, barramentos, memória e periféricos por meio de uma configuração de plataforma.
 6. **Determinismo e teste:** mesma configuração, estado inicial e sequência de eventos devem produzir o mesmo resultado.
 7. **Sem abstração prematura:** interfaces devem surgir de necessidades concretas e testes; não criar uma camada genérica para todo hardware futuro sem evidência.
+8. **Concorrência explícita:** preparar ownership, filas e pontos de sincronização desde o início, mas manter o estado lógico de CPU/barramento/VDP/PSG serializado até que scheduler e benchmarks justifiquem paralelismo. Threads periféricas não podem alterar os clocks emulados.
+9. **Múltiplas CPUs não implicam uma thread por CPU:** Mega Drive, Sega CD e 32X exigirão coordenação explícita de recursos compartilhados e eventos temporais; paralelismo só será aceito se preservar os resultados observáveis do modelo de referência.
 8. **Precisão declarada por evidência:** documentar separadamente o que está implementado, o que foi validado e o que ainda é aproximação.
 
 ## Camadas previstas
