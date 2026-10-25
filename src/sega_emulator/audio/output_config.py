@@ -52,13 +52,13 @@ class AudioOutputConfig:
     def __post_init__(self) -> None:
         if not isinstance(self.backend, AudioBackend):
             raise ValueError("backend deve ser um AudioBackend válido.")
-        if self.sample_rate not in SUPPORTED_SAMPLE_RATES:
+        if type(self.sample_rate) is not int or self.sample_rate not in SUPPORTED_SAMPLE_RATES:
             raise ValueError(
                 f"sample_rate deve ser um destes valores: {SUPPORTED_SAMPLE_RATES}."
             )
         if not isinstance(self.pcm_format, PcmFormat):
             raise ValueError("pcm_format deve ser um PcmFormat válido.")
-        if self.output_channels not in (1, 2):
+        if type(self.output_channels) is not int or self.output_channels not in (1, 2):
             raise ValueError("output_channels deve ser 1 (mono) ou 2 (estéreo).")
         if not isinstance(self.latency_profile, LatencyProfile):
             raise ValueError("latency_profile deve ser um LatencyProfile válido.")
