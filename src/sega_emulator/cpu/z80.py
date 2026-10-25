@@ -529,7 +529,7 @@ class Z80Cpu:
             flags |= 0x04
         if (accumulator ^ result) & 0x10:
             flags |= 0x10
-        if old_carry or (not subtract and accumulator > 0x99):
+        if old_carry or accumulator > 0x99:
             flags |= 0x01
 
         self.a = result
