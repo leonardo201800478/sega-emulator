@@ -188,42 +188,45 @@ impl RustZ80Cpu {
             self.total_cycles += 11;
             return Ok(11);
         }
-        if let Some(data_bus) = self.int_pending && self.iff1 && self.ei_delay == 0 {
-                self.int_pending = None;
-                self.halted = false;
-                self.iff1 = false;
-                self.iff2 = false;
-                self.increment_r();
-                let cycles: u32 = match self.interrupt_mode {
-                    0 if data_bus & 0xC7 == 0xC7 => {
-                        self.push_word(py, self.pc)?;
-                        self.pc = u16::from(data_bus & 0x38);
-                        13
-                    }
-                    0 => {
-                        return Err(PyNotImplementedError::new_err(format!(
-                            "Rust Z80 core does not support IM 0 acknowledge byte 0x{data_bus:02X}"
-                        )));
-                    }
-                    1 => {
-                        self.push_word(py, self.pc)?;
-                        self.pc = 0x0038;
-                        13
-                    }
-                    2 => {
-                        self.push_word(py, self.pc)?;
-                        let vector = (u16::from(self.i) << 8) | u16::from(data_bus);
-                        let low = self.read8(py, vector)?;
-                        let high = self.read8(py, vector.wrapping_add(1))?;
-                        self.pc = u16::from_le_bytes([low, high]);
-                        19
-                    }
-                    mode => {
-                        return Err(PyNotImplementedError::new_err(format!(
-                            "Rust Z80 core does not support interrupt mode {mode}"
-                        )));
-                    }
-                };
+        if let Some(data_bus) = self.int_pending
+            && self.iff1
+            && self.ei_delay == 0
+        {
+            self.int_pending = None;
+            self.halted = false;
+            self.iff1 = false;
+            self.iff2 = false;
+            self.increment_r();
+            let cycles: u32 = match self.interrupt_mode {
+                0 if data_bus & 0xC7 == 0xC7 => {
+                    self.push_word(py, self.pc)?;
+                    self.pc = u16::from(data_bus & 0x38);
+                    13
+                }
+                0 => {
+                    return Err(PyNotImplementedError::new_err(format!(
+                        "Rust Z80 core does not support IM 0 acknowledge byte 0x{data_bus:02X}"
+                    )));
+                }
+                1 => {
+                    self.push_word(py, self.pc)?;
+                    self.pc = 0x0038;
+                    13
+                }
+                2 => {
+                    self.push_word(py, self.pc)?;
+                    let vector = (u16::from(self.i) << 8) | u16::from(data_bus);
+                    let low = self.read8(py, vector)?;
+                    let high = self.read8(py, vector.wrapping_add(1))?;
+                    self.pc = u16::from_le_bytes([low, high]);
+                    19
+                }
+                mode => {
+                    return Err(PyNotImplementedError::new_err(format!(
+                        "Rust Z80 core does not support interrupt mode {mode}"
+                    )));
+                }
+            };
             self.total_cycles += u64::from(cycles);
             return Ok(cycles);
         }
