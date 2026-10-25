@@ -178,13 +178,14 @@ class SG1000Machine:
         cpu = self.cpu
         vdp = self.vdp
         cpu_step = cpu.step
-        execute_cpu_instruction = cpu._step_impl
+        execute_cpu_instruction = getattr(cpu, "_step_impl", None)
         advance_vdp = vdp.advance
         advance_audio = self.audio_sync.advance_to
         request_int = cpu.request_int
         clear_int = cpu.clear_int_request
         fast_cpu_loop = (
-            getattr(cpu_step, "__func__", None) is Z80Cpu.step
+            callable(execute_cpu_instruction)
+            and getattr(cpu_step, "__func__", None) is Z80Cpu.step
             and "step" not in self.__dict__
             and type(self).step is SG1000Machine.step
         )
