@@ -116,6 +116,7 @@ git diff --check
 - [Modelo digital do PSG SN76489AN](docs/hardware/sn76489an.md)
 - [Catálogo prioritário de compatibilidade SG-1000](docs/hardware/sg1000-game-compatibility.md)
 - [Marco do primeiro jogo executável](docs/sg1000-first-playable.md)
+- [Protocolo reproduzível de validação in-game SG-1000](docs/validation/sg1000-in-game-validation.md)
 - [Auditoria de cobertura da CPU Z80](docs/z80-coverage.md)
 - [Auditoria técnica da CPU Z80](docs/z80-code-audit-2026-10-22.md)
 - [Plano de resolução das lacunas Z80](docs/z80-gap-resolution-plan.md)
