@@ -51,6 +51,26 @@ DEFAULT_GAMEPAD_BINDINGS = {
     "button2": "b",
     "hold": "start",
 }
+DEFAULT_KEYBOARD_BINDINGS_P1 = {
+    "up": "Up",
+    "down": "Down",
+    "left": "Left",
+    "right": "Right",
+    "button1": "Z",
+    "button2": "X",
+    "hold": "P",
+}
+DEFAULT_KEYBOARD_BINDINGS_P2 = {
+    "up": "W",
+    "down": "S",
+    "left": "A",
+    "right": "D",
+    "button1": "F",
+    "button2": "G",
+    "hold": "H",
+}
+DEFAULT_DEADZONE = 0.15
+TURBO_ACTIONS = frozenset({"button1", "button2"})
 
 
 @dataclass
@@ -61,6 +81,12 @@ class PlayerInputProfile:
         default_factory=lambda: DEFAULT_GAMEPAD_BINDINGS.copy()
     )
     use_left_stick: bool = True
+    keyboard_bindings: dict[str, str] = field(
+        default_factory=lambda: DEFAULT_KEYBOARD_BINDINGS_P1.copy()
+    )
+    turbo_buttons: dict[str, bool] = field(
+        default_factory=lambda: {"button1": False, "button2": False}
+    )
 
     def __post_init__(self) -> None:
         unknown_actions = set(self.gamepad_buttons) - set(ACTIONS)
@@ -71,15 +97,38 @@ class PlayerInputProfile:
             raise ValueError(f"Botões SDL desconhecidos: {sorted(unknown_buttons)}")
         if type(self.use_left_stick) is not bool:
             raise ValueError("use_left_stick deve ser bool.")
+        unknown_keyboard_actions = set(self.keyboard_bindings) - set(ACTIONS)
+        if unknown_keyboard_actions:
+            raise ValueError(
+                f"Ações de teclado desconhecidas: {sorted(unknown_keyboard_actions)}"
+            )
+        if not all(
+            isinstance(key, str) and key.strip()
+            for key in self.keyboard_bindings.values()
+        ):
+            raise ValueError("Cada tecla deve ser um nome não vazio.")
+        normalized_keys = [key.strip().casefold() for key in self.keyboard_bindings.values()]
+        if len(normalized_keys) != len(set(normalized_keys)):
+            raise ValueError("Uma tecla não pode estar atribuída a duas ações do mesmo jogador.")
+        if set(self.turbo_buttons) - TURBO_ACTIONS:
+            raise ValueError("Turbo só pode ser configurado para button1 e button2.")
+        if any(type(enabled) is not bool for enabled in self.turbo_buttons.values()):
+            raise ValueError("As opções de turbo devem ser booleanas.")
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "gamepad_buttons": self.gamepad_buttons.copy(),
             "use_left_stick": self.use_left_stick,
+            "keyboard_bindings": self.keyboard_bindings.copy(),
+            "turbo_buttons": self.turbo_buttons.copy(),
         }
 
     @classmethod
-    def from_dict(cls, value: dict[str, Any]) -> PlayerInputProfile:
+    def from_dict(
+        cls,
+        value: dict[str, Any],
+        default_keyboard_bindings: dict[str, str] | None = None,
+    ) -> PlayerInputProfile:
         if not isinstance(value, dict):
             raise ValueError("O perfil do jogador deve ser um objeto.")
         bindings = value.get("gamepad_buttons", DEFAULT_GAMEPAD_BINDINGS)
@@ -88,13 +137,32 @@ class PlayerInputProfile:
             for key, button in bindings.items()
         ):
             raise ValueError("gamepad_buttons deve mapear strings para strings.")
-        # Merge defaults so profiles saved before the Hold action was added
-        # retain their custom mappings while gaining the new SW/Hold binding.
+        # Merge defaults so older profiles retain custom mappings and gain new actions.
         merged_bindings = DEFAULT_GAMEPAD_BINDINGS.copy()
         merged_bindings.update(bindings)
+        keyboard_payload = value.get("keyboard_bindings", {})
+        if not isinstance(keyboard_payload, dict) or not all(
+            isinstance(key, str) and isinstance(button, str)
+            for key, button in keyboard_payload.items()
+        ):
+            raise ValueError("keyboard_bindings deve mapear ações para nomes de teclas.")
+        keyboard_bindings = (
+            default_keyboard_bindings or DEFAULT_KEYBOARD_BINDINGS_P1
+        ).copy()
+        keyboard_bindings.update(keyboard_payload)
+        turbo_payload = value.get("turbo_buttons", {})
+        if not isinstance(turbo_payload, dict) or not all(
+            isinstance(key, str) and type(enabled) is bool
+            for key, enabled in turbo_payload.items()
+        ):
+            raise ValueError("turbo_buttons deve mapear ações para booleanos.")
+        turbo_buttons = {"button1": False, "button2": False}
+        turbo_buttons.update(turbo_payload)
         return cls(
             gamepad_buttons=merged_bindings,
             use_left_stick=value.get("use_left_stick", True),
+            keyboard_bindings=keyboard_bindings,
+            turbo_buttons=turbo_buttons,
         )
 
 
@@ -104,11 +172,11 @@ class ControllerInputConfig:
 
     players: dict[int, PlayerInputProfile] = field(
         default_factory=lambda: {
-            1: PlayerInputProfile(),
-            2: PlayerInputProfile(),
+            1: PlayerInputProfile(keyboard_bindings=DEFAULT_KEYBOARD_BINDINGS_P1.copy()),
+            2: PlayerInputProfile(keyboard_bindings=DEFAULT_KEYBOARD_BINDINGS_P2.copy()),
         }
     )
-    deadzone: float = 0.35
+    deadzone: float = DEFAULT_DEADZONE
 
     def __post_init__(self) -> None:
         if set(self.players) != {1, 2}:
@@ -145,10 +213,15 @@ class ControllerInputConfig:
             raise ValueError("A configuração deve conter os jogadores 1 e 2.")
         try:
             players = {
-                int(player): PlayerInputProfile.from_dict(profile)
+                int(player): PlayerInputProfile.from_dict(
+                    profile,
+                    DEFAULT_KEYBOARD_BINDINGS_P1
+                    if player == "1"
+                    else DEFAULT_KEYBOARD_BINDINGS_P2,
+                )
                 for player, profile in players_payload.items()
             }
-            deadzone = payload.get("deadzone", 0.35)
+            deadzone = payload.get("deadzone", DEFAULT_DEADZONE)
             if isinstance(deadzone, bool) or not isinstance(deadzone, (int, float)):
                 raise ValueError("deadzone deve ser numérica.")
             return cls(players=players, deadzone=float(deadzone))
@@ -204,18 +277,39 @@ class ControllerInput:
         return self._controller_module is not None
 
     def connected_names(self) -> list[str]:
+        """Retorna nomes sem depender de APIs específicas de uma versão do SDL."""
         self._sync_controllers()
-        return (
-            [
-                str(
-                    self._controller_module.name_forindex(index)
-                    or f"Controle {index + 1}"
-                )
-                for index in self._controllers
-            ]
-            if self._controller_module is not None
-            else []
-        )
+        if self._controller_module is None:
+            return []
+        names: list[str] = []
+        name_for_index = getattr(self._controller_module, "name_forindex", None)
+        joystick_module = getattr(self._pygame_module, "joystick", None)
+        for index, controller in self._controllers.items():
+            name = None
+            if callable(name_for_index):
+                try:
+                    name = name_for_index(index)
+                except (IndexError, RuntimeError, TypeError):
+                    name = None
+            if not name:
+                controller_name = getattr(controller, "name", None)
+                if callable(controller_name):
+                    try:
+                        controller_name = controller_name()
+                    except (RuntimeError, TypeError):
+                        controller_name = None
+                name = controller_name
+            if not name and joystick_module is not None:
+                try:
+                    if not joystick_module.get_init():
+                        joystick_module.init()
+                    joystick = joystick_module.Joystick(index)
+                    name = joystick.get_name()
+                    joystick.quit()
+                except (AttributeError, IndexError, RuntimeError, TypeError):
+                    name = None
+            names.append(str(name or f"Controle {index + 1}"))
+        return names
 
     def _sync_controllers(self) -> None:
         module = self._controller_module
