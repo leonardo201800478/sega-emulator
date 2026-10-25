@@ -47,7 +47,10 @@ class FrontendPreferences:
             raise ValueError("video_scale must be one of 2, 3, or 4")
         if len(self.recent_roms) > MAX_RECENT_ROMS:
             raise ValueError(f"recent_roms may contain at most {MAX_RECENT_ROMS} items")
-        if any(not isinstance(path, str) or not path.strip() for path in self.recent_roms):
+        if any(
+            not isinstance(path, str) or not path.strip()
+            for path in self.recent_roms
+        ):
             raise ValueError("recent_roms must contain non-empty path strings")
         if not isinstance(self.controller_config, str):
             raise ValueError("controller_config must be serialized as text")
@@ -122,7 +125,9 @@ class FrontendPreferences:
         if not normalized:
             return self
         recent = (normalized,) + tuple(
-            item for item in self.recent_roms if item.casefold() != normalized.casefold()
+            item
+            for item in self.recent_roms
+            if item.casefold() != normalized.casefold()
         )
         return FrontendPreferences(
             window_width=self.window_width,
