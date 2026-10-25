@@ -156,6 +156,13 @@ def test_rust_unassigned_ed_opcode_matches_classic_z80_nop_behavior() -> None:
     assert python_cpu.total_cycles == rust_cpu.total_cycles == 8
 
 
+def test_rust_core_fails_explicitly_on_assigned_but_unsupported_ed_opcode() -> None:
+    RustZ80Cpu = _rust_cpu()
+    cpu = RustZ80Cpu(MemoryBus(bytes([0xED, 0x42])), None)
+    with pytest.raises(NotImplementedError, match="does not support ED opcode 0x42"):
+        cpu.step()
+
+
 def test_rust_core_fails_explicitly_on_unsupported_opcode() -> None:
     RustZ80Cpu = _rust_cpu()
     bus = MemoryBus(bytes([0xDD]))
