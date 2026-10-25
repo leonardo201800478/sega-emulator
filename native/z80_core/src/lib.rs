@@ -687,7 +687,7 @@ impl RustZ80Cpu {
 
                         let sum = self.a.wrapping_add(value);
                         self.f = (self.f & 0xC1)
-                            | if self.bc() != 0 { FLAG_PV } else { 0 }
+                            | (if self.bc() != 0 { FLAG_PV } else { 0 })
                             | (sum & 0x08)
                             | ((sum & 0x02) << 4);
 
