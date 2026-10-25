@@ -251,15 +251,18 @@ def indexed_family(op: int) -> tuple[str, str]:
             return "LD r,(IX/IY+d) / LD (IX/IY+d),r", "index-substitution"
         if destination in (4, 5) or source in (4, 5):
             return "LD with IXH/IXL or IYH/IYL", "index-substitution"
-        return "LD r,r' with ignored DD/FD prefix", "ignored-prefix-fallback"
+        return "LD r,r' with ignored DD/FD prefix", "ignored-prefix-equivalent"
     if 0x80 <= op <= 0xBF:
         operation, source = (op >> 3) & 7, op & 7
         if source == 6:
-            return f"{ALU[operation]} (IX/IY+d)", "index-substitution"
+            return alu_mnemonic(operation, "(IX/IY+d)"), "index-substitution"
         if source in (4, 5):
             operand = "IXH/IYH" if source == 4 else "IXL/IYL"
-            return f"{ALU[operation]} {operand}", "index-substitution"
-        return f"{ALU[operation]} with ignored DD/FD prefix", "ignored-prefix-fallback"
+            return alu_mnemonic(operation, operand), "index-substitution"
+        return (
+            alu_mnemonic(operation, REGS[source]),
+            "ignored-prefix-equivalent",
+        )
     return "base instruction with ignored DD/FD prefix", "ignored-prefix-fallback"
 
 
