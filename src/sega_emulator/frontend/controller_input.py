@@ -386,7 +386,7 @@ class ControllerInput:
                     ):
                         try:
                             device.quit()
-                        except (AttributeError, RuntimeError):
+                        except AttributeError, RuntimeError:
                             pass
                     self._controllers.clear()
                     self._raw_joysticks.clear()
@@ -405,7 +405,7 @@ class ControllerInput:
             for device in (*self._controllers.values(), *self._raw_joysticks.values()):
                 try:
                     device.quit()
-                except (AttributeError, RuntimeError):
+                except AttributeError, RuntimeError:
                     pass
             self._controllers.clear()
             self._raw_joysticks.clear()
@@ -438,7 +438,7 @@ class ControllerInput:
             joystick = self._raw_joysticks[index]
             try:
                 attached = joystick.get_init()
-            except (AttributeError, RuntimeError):
+            except AttributeError, RuntimeError:
                 attached = False
             if (
                 index not in valid_indices
@@ -447,7 +447,7 @@ class ControllerInput:
             ):
                 try:
                     joystick.quit()
-                except (AttributeError, RuntimeError):
+                except AttributeError, RuntimeError:
                     pass
                 del self._raw_joysticks[index]
         if joystick_module is not None:
@@ -455,7 +455,7 @@ class ControllerInput:
                 if index not in self._raw_joysticks:
                     try:
                         self._raw_joysticks[index] = joystick_module.Joystick(index)
-                    except (IndexError, RuntimeError):
+                    except IndexError, RuntimeError:
                         continue
         available_indices = sorted(set(self._controllers) | set(self._raw_joysticks))
         self._player_device_indices = {
@@ -484,7 +484,7 @@ class ControllerInput:
             try:
                 if controller.get_button(constant):
                     return button_name
-            except (IndexError, RuntimeError):
+            except IndexError, RuntimeError:
                 return None
         return None
 
@@ -511,7 +511,7 @@ class ControllerInput:
                     return f"raw_axis_{axis}_negative"
                 if value >= 0.75:
                     return f"raw_axis_{axis}_positive"
-        except (IndexError, RuntimeError):
+        except IndexError, RuntimeError:
             return None
         return None
 
@@ -544,7 +544,7 @@ class ControllerInput:
                     return False
                 value = joystick.get_axis(index)
                 return value <= -0.75 if direction == "negative" else value >= 0.75
-        except (IndexError, RuntimeError):
+        except IndexError, RuntimeError:
             return False
         return False
 
@@ -632,12 +632,12 @@ class ControllerInput:
         for controller in self._controllers.values():
             try:
                 controller.quit()
-            except (AttributeError, RuntimeError):
+            except AttributeError, RuntimeError:
                 pass
         for joystick in self._raw_joysticks.values():
             try:
                 joystick.quit()
-            except (AttributeError, RuntimeError):
+            except AttributeError, RuntimeError:
                 pass
         self._controllers.clear()
         self._raw_joysticks.clear()
