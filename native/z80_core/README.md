@@ -47,6 +47,11 @@ ED arithmetic and special-register operations, block transfer/compare/I/O, and
 unassigned ED NOPs. CI status must be checked before treating these tests as passing.
 Q/P latch behavior and execution of the interrupt-supplied opcode in IM 0 are
 implemented against the Python reference and covered by targeted differential
-tests; CI still needs to confirm them. The completion roadmap is tracked in
+tests; CI still needs to confirm them. WZ/MEMPTR handling was extended for RST,
+RLD/RRD, CPI/CPD/CPIR/CPDR, LDIR/LDDR, and block I/O, using the independent
+[MEMPTR instruction table](https://github.com/redcode/Z80/wiki/MEMPTR) as a
+cross-check. The `IN A,(n)` low-byte carry behavior remains a documented
+uncertainty and should be resolved with hardware tests before claiming full
+MEMPTR fidelity. The completion roadmap is tracked in
 [issue #55](https://github.com/leonardo201800478/sega-emulator/issues/55). A passing
 differential case is not proof of full Z80 compatibility or cycle accuracy.
