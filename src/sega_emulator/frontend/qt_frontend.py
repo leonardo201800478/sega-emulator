@@ -88,6 +88,7 @@ def run(initial_path: Path | None = None) -> None:
     app.setApplicationName("SegaEmulator")
     settings = QSettings()
     preferences = FrontendPreferences.from_store(settings)
+    selected_cpu_core = preferences.cpu_core
     pygame, audio_channel = (
         _initialize_pygame_backend() if preferences.audio_enabled else (None, None)
     )
@@ -121,6 +122,7 @@ def run(initial_path: Path | None = None) -> None:
         on_open_logs=lambda: show_logs(),
         on_show_machine_state=lambda: show_machine_state(),
         on_video_scale=lambda scale: window.set_video_scale(scale),
+        on_select_cpu_core=lambda: select_cpu_core(),
     )
     window.resize(preferences.window_width, preferences.window_height)
     window._video_scale = preferences.video_scale
@@ -391,7 +393,7 @@ def run(initial_path: Path | None = None) -> None:
                 if not accepted:
                     return
                 candidate = load_rom(path, member_name=selected)
-            loaded_machine = SG1000Machine(candidate.data)
+            loaded_machine = SG1000Machine(candidate.data, cpu_core=selected_cpu_core)
         except Exception as exc:
             logger.exception(
                 "Falha ao carregar ROM",
@@ -436,6 +438,60 @@ def run(initial_path: Path | None = None) -> None:
         view.setFocus()
         timer.start()
 
+    def select_cpu_core() -> None:
+        nonlocal machine, selected_cpu_core, frame_count, paused
+        choices = ["Python (referência)", "Rust (experimental — conjunto parcial)"]
+        current = 0 if selected_cpu_core == "python" else 1
+        selected, accepted = QInputDialog.getItem(
+            window,
+            "Núcleo Z80",
+            "Selecione o backend da CPU. O núcleo Rust ainda não implementa "
+            "todo o conjunto de instruções; ROMs podem falhar.",
+            choices,
+            current,
+            False,
+        )
+        if not accepted:
+            return
+        requested_core = "python" if selected == choices[0] else "rust"
+        if requested_core == selected_cpu_core:
+            return
+        try:
+            if requested_core == "rust":
+                from sega_z80_core import RustZ80Cpu  # noqa: F401
+            replacement = (
+                SG1000Machine(loaded.data, cpu_core=requested_core)
+                if loaded is not None
+                else None
+            )
+        except Exception as exc:
+            logger.exception(
+                "Falha ao selecionar núcleo Z80",
+                extra={"event": "cpu_core_selection_failed", "cpu_core": requested_core},
+            )
+            QMessageBox.warning(
+                window,
+                "Núcleo Z80 indisponível",
+                f"Não foi possível ativar o backend {requested_core}: {exc}",
+            )
+            return
+        selected_cpu_core = requested_core
+        settings.setValue("cpu_core", selected_cpu_core)
+        machine = replacement
+        frame_count, paused = 0, False
+        if machine is not None:
+            update_joystick()
+        status.showMessage(
+            "Núcleo Z80: "
+            + ("Python (referência)" if selected_cpu_core == "python" else "Rust (experimental/parcial)")
+            + (" — máquina reiniciada" if loaded is not None else " — aplicado à próxima ROM"),
+            8000,
+        )
+        logger.info(
+            "Núcleo Z80 selecionado",
+            extra={"event": "emulation_backend_selected", "cpu_core": selected_cpu_core},
+        )
+
     def pause_resume() -> None:
         nonlocal paused
         paused = not paused
@@ -451,7 +507,7 @@ def run(initial_path: Path | None = None) -> None:
         nonlocal last_checkpoint_instructions, last_checkpoint_frame
         if loaded is None:
             return
-        machine = SG1000Machine(loaded.data)
+        machine = SG1000Machine(loaded.data, cpu_core=selected_cpu_core)
         frame_count, paused = 0, False
         pressed_keys.clear()
         update_joystick()
@@ -883,6 +939,7 @@ def run(initial_path: Path | None = None) -> None:
         controller_config=controller_input.config.to_json(),
         audio_enabled=preferences.audio_enabled,
         diagnostics_enabled=preferences.diagnostics_enabled,
+        cpu_core=selected_cpu_core,
     )
     preferences.save_to_store(settings)
     controller_input.close()
