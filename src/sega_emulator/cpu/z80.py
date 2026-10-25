@@ -512,9 +512,9 @@ class Z80Cpu:
         old_carry = bool(old_flags & 0x01)
 
         correction = 0
-        if old_half_carry or (not subtract and (accumulator & 0x0F) > 0x09):
+        if old_half_carry or (accumulator & 0x0F) > 0x09:
             correction |= 0x06
-        if old_carry or (not subtract and accumulator > 0x99):
+        if old_carry or accumulator > 0x99:
             correction |= 0x60
 
         if subtract:
@@ -529,7 +529,7 @@ class Z80Cpu:
             flags |= 0x04
         if (accumulator ^ result) & 0x10:
             flags |= 0x10
-        if old_carry or (not subtract and accumulator > 0x99):
+        if old_carry or accumulator > 0x99:
             flags |= 0x01
 
         self.a = result
@@ -745,6 +745,7 @@ class Z80Cpu:
                 new_memory = ((memory_value << 4) | (self.a & 0x0F)) & 0xFF
                 self.a = (self.a & 0xF0) | (memory_value >> 4)
             self.bus.write(address, new_memory)
+            self.wz = (address + 1) & 0xFFFF
             self.f = (self.f & 1) | (self.a & 0xA8) | self._parity_flag(self.a)
             if self.a == 0:
                 self.f |= 0x40
@@ -765,6 +766,8 @@ class Z80Cpu:
             )
             if opcode in (0xB0, 0xB8) and self.bc:
                 self.pc = (self.pc - 2) & 0xFFFF
+                self.wz = (self.pc + 1) & 0xFFFF
+                self._set_repeat_block_xy_flags()
                 return 21
             return 16
         if opcode in (0xA1, 0xA9, 0xB1, 0xB9):
@@ -785,8 +788,11 @@ class Z80Cpu:
                 | (adjusted & 0x08)
                 | ((adjusted & 0x02) << 4)
             )
+            self.wz = (self.wz + direction) & 0xFFFF
             if opcode in (0xB1, 0xB9) and self.bc and result:
                 self.pc = (self.pc - 2) & 0xFFFF
+                self.wz = (self.pc + 1) & 0xFFFF
+                self._set_repeat_block_xy_flags()
                 return 21
             return 16
         if opcode in (0xA2, 0xAA, 0xB2, 0xBA, 0xA3, 0xAB, 0xB3, 0xBB):
@@ -795,6 +801,27 @@ class Z80Cpu:
         # ED-NOP: dois fetches M1, incremento de R por fetch e 8 T-states.
         # Isso não cobre extensões específicas de clones/variantes.
         return 8
+
+    def _set_repeat_block_xy_flags(self) -> None:
+        """Use PC.11/PC.13 for F3/F5 on a repeating ED block iteration."""
+        self.f = (self.f & ~0x28) | ((self.pc >> 8) & 0x28)
+
+    def _set_repeat_block_io_flags(self, value: int) -> None:
+        """Apply the additional flags observed on repeating block-I/O iterations."""
+        self.f = (self.f & ~0x28) | ((self.pc >> 8) & 0x28)
+        carry = bool(self.f & 0x01)
+        pv = bool(self.f & 0x04)
+        if carry:
+            if value & 0x80:
+                pv = pv ^ bool(self._parity_flag((self.b - 1) & 0x07)) ^ True
+                half = (self.b & 0x0F) == 0
+            else:
+                pv = pv ^ bool(self._parity_flag((self.b + 1) & 0x07)) ^ True
+                half = (self.b & 0x0F) == 0x0F
+        else:
+            pv = pv ^ bool(self._parity_flag(self.b & 0x07)) ^ True
+            half = False
+        self.f = (self.f & ~(0x10 | 0x04)) | (0x10 if half else 0) | (0x04 if pv else 0)
 
     def _execute_block_io(self, opcode: int) -> int:
         """Executa INI/IND/INIR/INDR e OUTI/OUTD/OTIR/OTDR."""
@@ -807,7 +834,8 @@ class Z80Cpu:
             self.bus.write(self.hl, value)
         else:
             value = self.bus.read(self.hl)
-            self._write_port(old_bc, value)
+            output_bc = (((self.b - 1) & 0xFF) << 8) | self.c
+            self._write_port(output_bc, value)
         self.hl = (self.hl + direction) & 0xFFFF
         self.b = (self.b - 1) & 0xFF
         k = value + (((self.c + direction) & 0xFF) if input_direction else self.l)
@@ -822,7 +850,11 @@ class Z80Cpu:
         self.f = flags
         if repeat and self.b:
             self.pc = (self.pc - 2) & 0xFFFF
+            self.wz = (self.pc + 1) & 0xFFFF
+            self._set_repeat_block_io_flags(value)
             return 21
+        wz_base = old_bc if input_direction else self.bc
+        self.wz = (wz_base + direction) & 0xFFFF
         return 16
 
     @staticmethod
@@ -1241,9 +1273,10 @@ class Z80Cpu:
             port = (self.a << 8) | port_low
             if opcode == 0xD3:
                 self._write_port(port, self.a)
+                self.wz = (port & 0xFF00) | ((port_low + 1) & 0xFF)
             else:
                 self.a = self._read_port(port)
-            self.wz = (port & 0xFF00) | ((port_low + 1) & 0xFF)
+                self.wz = (port + 1) & 0xFFFF
             cycles = 11
         elif opcode == 0xCB:  # família CB
             cycles = self._execute_cb(self._fetch_opcode_byte())
@@ -1299,8 +1332,10 @@ class Z80Cpu:
             self.de, self.hl = self.hl, self.de
             cycles = 4
         elif opcode & 0xC7 == 0xC7:  # RST p
-            self._push_word(self.pc)
+            return_address = self.pc
+            self._push_word(return_address)
             self.pc = opcode & 0x38
+            self.wz = return_address
             cycles = 11
         elif opcode == 0x27:  # DAA
             self._daa()

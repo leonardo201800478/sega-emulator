@@ -2,7 +2,8 @@
 
 Os arquivos JSON são baixados pelo workflow, não versionados no repositório.
 O latch interno "p" (LD A,I/LD A,R e o erratum de INT) é modelado e comparado.
-Traços "cycles" não são comparados: a CPU retorna apenas T-states agregados.
+O total de T-states é comparado com o comprimento de `cycles`; a ordem dos
+ciclos não é comparada.
 Divergências e estados ainda não suportados bloqueiam o workflow.
 """
 
@@ -17,34 +18,6 @@ from typing import Any
 from sega_emulator.testing.z80_singlestep import run_vector
 
 UPSTREAM_COMMIT = "ebe1875d48f374bcfd4b505d8eb8ee751568b5f7"
-
-DEFAULT_FILES = (
-    "00",
-    "04",
-    "06",
-    "37",
-    "3f",
-    "76",
-    "c6",
-    "d3",
-    "cb 00",
-    "dd 21",
-    "ed 40",
-    "18",
-    "20",
-    "21",
-    "22",
-    "24",
-    "26",
-    "2a",
-    "32",
-    "cb 06",
-    "cb 40",
-    "ed 42",
-    "ed 44",
-    "ed 45",
-    "dd 46",
-)
 
 
 def load_json(path: Path) -> list[dict[str, Any]]:
@@ -99,7 +72,7 @@ def main() -> int:
     parser.add_argument(
         "--files",
         nargs="+",
-        default=list(DEFAULT_FILES),
+        default=None,
         help='Nomes de arquivos sem ".json" (prefixos podem conter espaço)',
     )
     parser.add_argument("--report-json", type=Path, required=True)
@@ -114,9 +87,14 @@ def main() -> int:
     if manifest["upstream"]["commit"] != UPSTREAM_COMMIT:
         parser.error("commit do manifesto diverge do commit fixado no executor")
     manifest_by_file = {entry["file"]: entry for entry in manifest["files"]}
+    file_stems = (
+        args.files
+        if args.files is not None
+        else [Path(entry["file"]).stem for entry in manifest["files"]]
+    )
 
     reports: list[dict[str, Any]] = []
-    for file_stem in args.files:
+    for file_stem in file_stems:
         normalized = file_stem.lower()
         if (
             not normalized
@@ -150,7 +128,10 @@ def main() -> int:
                 "corpus": "SingleStepTests/Z80",
                 "upstream_commit": UPSTREAM_COMMIT,
                 "manifest": str(args.manifest),
-                "method": "instruction state + RAM; cycle traces not compared",
+                "method": (
+                    "instruction state + RAM + aggregate T-state count; "
+                    "ordered bus-cycle traces not compared"
+                ),
                 "total_vectors": total_vectors,
                 "aggregate": dict(sorted(aggregate.items())),
                 "files": reports,
