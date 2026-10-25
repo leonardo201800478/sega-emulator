@@ -111,11 +111,7 @@ impl Z80 {
                 let value = self.fetch8(bus);
                 let destination = (opcode >> 3) & 0x07;
                 self.write_register(bus, destination, value);
-                if destination == 6 {
-                    10
-                } else {
-                    7
-                }
+                if destination == 6 { 10 } else { 7 }
             }
             0x40..=0x7F => {
                 let destination = (opcode >> 3) & 0x07;
@@ -130,7 +126,10 @@ impl Z80 {
             }
             0x18 => {
                 let displacement = self.fetch8(bus) as i8;
-                self.registers.pc = self.registers.pc.wrapping_add_signed(i16::from(displacement));
+                self.registers.pc = self
+                    .registers
+                    .pc
+                    .wrapping_add_signed(i16::from(displacement));
                 12
             }
             0x3C => {
@@ -247,7 +246,10 @@ mod tests {
         let mut cpu = Z80::default();
         assert_eq!(
             cpu.step(&mut bus),
-            Err(CpuError::UnsupportedOpcode { opcode: 0xDD, address: 0 })
+            Err(CpuError::UnsupportedOpcode {
+                opcode: 0xDD,
+                address: 0
+            })
         );
         assert_eq!(cpu.registers.pc, 1);
     }
