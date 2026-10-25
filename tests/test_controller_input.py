@@ -337,6 +337,11 @@ class FakeRawJoystick:
         return self.hats.get(hat, (0, 0))
 
 
+class FakeRawControllerModule(FakeControllerModule):
+    def is_controller(self, index: int) -> bool:
+        return False
+
+
 class FakeRawJoystickModule:
     def __init__(self, devices: list[FakeRawJoystick]) -> None:
         self.devices = devices
@@ -360,8 +365,7 @@ def test_unmapped_joystick_supports_raw_button_hat_and_axis_bindings() -> None:
     raw.buttons.add(3)
     raw.hats[0] = (0, 1)
     raw.axes[2] = 1.0
-    controller_backend = FakeControllerModule()
-    controller_backend.is_controller = lambda index: False
+    controller_backend = FakeRawControllerModule()
     joystick_backend = FakeRawJoystickModule([raw])
     inputs = ControllerInput(
         SimpleNamespace(
@@ -387,8 +391,7 @@ def test_unmapped_joystick_supports_raw_button_hat_and_axis_bindings() -> None:
 def test_unmapped_joystick_reconnect_refreshes_device_handles() -> None:
     first = FakeRawJoystick("First device")
     first.buttons.add(0)
-    controller_backend = FakeControllerModule()
-    controller_backend.is_controller = lambda index: False
+    controller_backend = FakeRawControllerModule()
     joystick_backend = FakeRawJoystickModule([first])
     inputs = ControllerInput(
         SimpleNamespace(
