@@ -9,10 +9,15 @@ direta de `SG1000Machine`, com o VDP mantendo sua própria VRAM.
 
 ## Componentes presentes
 
-- `SG1000Ram` (`src/sega_emulator/bus/memory.py`): 1 KiB de RAM física,
-  espelhada em `C000h–FFFFh`. A RAM é inicializada com bytes zerados por
-  convenção determinística do software; isso não afirma que a RAM real ligue
-  zerada.
+- `SG1000Ram` (`src/sega_emulator/bus/memory.py`): RAM física de 1 KiB
+  espelhada em `C000h–FFFFh` por padrão, ou 8 KiB para perfis Type-B
+  conhecidos de cartucho SG-1000 II com adaptador de expansão. A RAM é
+  inicializada com bytes zerados por convenção determinística do software; isso
+  não afirma que a RAM real ligue zerada.
+- `cartridge_profiles.py`: reconhece por CRC-32 os cinco dumps catalogados
+  pelo Genesis Plus GX como dependentes da expansão Type-B de 8 KiB. Dumps
+  desconhecidos continuam usando 1 KiB; não inferimos hardware apenas pelo
+  tamanho ou pelo fato de uma ROM ser não licenciada.
 - `SG1000MemoryBus` (`src/sega_emulator/bus/memory_bus.py`): mapeia ROM
   linear e RAM. Rejeita escrita em ROM e endereços não mapeados.
 - `_CartridgeMirrorBus` (`src/sega_emulator/machine/sg1000.py`): adaptador
@@ -34,12 +39,17 @@ direta de `SG1000Machine`, com o VDP mantendo sua própria VRAM.
 | Endereços da CPU | Tratamento implementado | Limitações |
 |---|---|---|
 | `0000h–BFFFh` | ROM de cartucho por meio do adaptador de espelhamento | A imagem precisa ter entre 1 byte e 48 KiB; não há banking nem SRAM de cartucho |
-| `C000h–FFFFh` | RAM de 1 KiB, com espelhamento | Não há perfil de expansão de RAM nesta integração |
+| `C000h–FFFFh` | RAM padrão de 1 KiB espelhada; perfil Type-B conhecido usa 8 KiB espelhados na janela de 16 KiB | Perfis selecionados por CRC-32 conhecido; outras expansões e mapeadores não são inferidos |
 
 O barramento base `SG1000MemoryBus` sozinho não espelha automaticamente uma
 ROM curta; essa política fica no adaptador privado usado por `SG1000Machine`.
-Essa diferença deve permanecer explícita nos testes para não generalizar o
-comportamento do adaptador para todo tipo de cartucho físico.
+A seleção Type-B é baseada em uma lista explícita de CRC-32 conhecidos, não no
+tamanho da ROM. O perfil inicial inclui Bomberman Special (Taiwan), Magical Kid
+Wiz (Taiwan), The Castle [MSX] (Taiwan), Rally-X (Taiwan) e Road Fighter
+(Taiwan), conforme o catálogo de hardware do Genesis Plus GX. O CRC-32 do
+Bomberman Special é também registrado no catálogo de software do MAME. Essa
+lista é uma base de compatibilidade observada, não um detector universal de
+mapeadores.
 
 ## Portas de I/O atuais
 
