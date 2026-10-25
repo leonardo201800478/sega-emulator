@@ -1002,3 +1002,20 @@ def test_rust_wz_updates_for_block_io(
     assert rust_cpu.pc == expected_pc
     assert rust_bus.memory == python_bus.memory
     assert rust_io.writes == python_io.writes
+
+
+def test_rust_di_cancels_ei_delay_and_blocks_pending_int() -> None:
+    RustZ80Cpu = _rust_cpu()
+    program = bytes([0xFB, 0xF3, 0x00])
+    python_cpu = Z80Cpu(MemoryBus(program))
+    rust_cpu = RustZ80Cpu(MemoryBus(program), None)
+    for cpu in (python_cpu, rust_cpu):
+        cpu.sp = 0x3000
+        cpu.interrupt_mode = 1
+        cpu.request_int(0xFF)
+
+    for _ in range(3):
+        assert python_cpu.step() == rust_cpu.step() == 4
+        _assert_rust_python_interrupt_state(python_cpu, rust_cpu)
+    assert rust_cpu.pc == 3
+    assert not rust_cpu.iff1 and not rust_cpu.iff2
