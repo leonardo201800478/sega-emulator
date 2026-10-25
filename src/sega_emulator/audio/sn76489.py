@@ -162,7 +162,7 @@ class SN76489:
             # Um deslocamento do LFSR a cada segunda expiração do divisor.
             self._noise_counter_phase ^= 1
             if self._noise_counter_phase:
-                self._shift_noise_register()()
+                self._shift_noise_register()
 
     def advance_clocks(self, clocks: int) -> None:
         """Avança clocks de entrada e coloca as amostras novas no buffer limitado."""
