@@ -120,6 +120,16 @@ A meta final é manter apenas o frontend Qt em Python. O frontend Pygame/SDL e a
 7. Benchmarks devem informar carga, aquecimento, repetições, mediana e perfil de build; não extrapolar instruções/s diretamente para FPS.
 8. Cada PR deve informar arquivos alterados, testes realmente executados, limitações e próximo marco.
 
+## Estado da execução — 25/10/2026
+
+A Fase 0 teve uma primeira revisão estática de contratos e consumidores. A Fase 1 começou nesta branch com:
+- `native/z80_core/src/memory.rs`: barramento nativo de ROM espelhada, RAM interna espelhada e RAM de cartucho configurável, com testes unitários Rust.
+- `native/z80_core/src/lib.rs`: novo construtor `RustZ80Cpu.with_native_memory`; o caminho nativo lê/escreve memória sem chamar métodos Python por acesso. O construtor antigo com barramento Python permanece para compatibilidade e testes diferenciais.
+- `src/sega_emulator/machine/sg1000.py`: o backend Rust passa a usar o barramento nativo; o backend Python permanece inalterado.
+- `tests/test_sg1000_cpu_backend.py`: teste de integração para instruções que escrevem e leem RAM através do backend Rust.
+
+**Limitação desta fatia:** o VDP, PSG, sincronização da máquina, I/O e laço de execução por instrução ainda são Python; I/O continua atravessando PyO3. Portanto, esta alteração não conclui a Fase 1 inteira nem satisfaz a meta final de runtime totalmente Rust. A revisão estática não substitui build nem testes executados.
+
 ## Próximo passo
 
-Concluir a Fase 0 com inventário do runtime e mapa de dependências Qt/CLI/testes. Em seguida, implementar a Fase 1 em uma branch dedicada: barramento/memória e integração CPU totalmente nativos em Rust, eliminando callbacks Python no caminho crítico. Não alterar o VDP ou o PSG até a máquina nativa ter contratos e regressões estáveis.
+Executar CI de Rust e Python nesta PR, corrigir todas as falhas e medir novamente o benchmark local. Depois, migrar o I/O e o laço de execução para uma API de máquina Rust que avance múltiplas instruções por chamada, antes de portar VDP e PSG. Não alterar temporização de hardware sem testes diferenciais específicos.
