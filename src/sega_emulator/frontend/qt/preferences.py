@@ -9,7 +9,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-
 MIN_WINDOW_WIDTH = 640
 MIN_WINDOW_HEIGHT = 480
 MAX_WINDOW_WIDTH = 7680
