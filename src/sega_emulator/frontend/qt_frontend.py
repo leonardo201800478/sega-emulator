@@ -18,7 +18,11 @@ logger = logging.getLogger(__name__)
 Z80_CLOCK_HZ = 3_579_545
 
 
-def run(initial_path: Path | None = None, cpu_core: str | None = None) -> None:
+def run(
+    initial_path: Path | None = None,
+    cpu_core: str | None = None,
+    vdp_core: str | None = None,
+) -> None:
     """Abre a interface de teste com teclado, telemetria e logs de sessão."""
     try:
         from PySide6.QtCore import QEvent, QObject, QSettings, Qt, QTimer
@@ -61,6 +65,9 @@ def run(initial_path: Path | None = None, cpu_core: str | None = None) -> None:
     selected_cpu_core = cpu_core or settings.value("cpu_core", "python", type=str)
     if selected_cpu_core not in ("python", "rust"):
         selected_cpu_core = "python"
+    selected_vdp_core = vdp_core or settings.value("vdp_core", "python", type=str)
+    if selected_vdp_core not in ("python", "rust"):
+        selected_vdp_core = "python"
     window = QMainWindow()
     window.setWindowTitle("Sega Emulator — SG-1000 (experimental)")
     window.resize(800, 620)
@@ -329,7 +336,7 @@ def run(initial_path: Path | None = None, cpu_core: str | None = None) -> None:
                 if not accepted:
                     return
                 candidate = load_rom(path, member_name=selected)
-            loaded_machine = SG1000Machine(candidate.data, cpu_core=selected_cpu_core)
+            loaded_machine = SG1000Machine(candidate.data, cpu_core=selected_cpu_core, vdp_core=selected_vdp_core)
         except Exception as exc:
             logger.exception(
                 "Falha ao carregar ROM",
@@ -388,7 +395,7 @@ def run(initial_path: Path | None = None, cpu_core: str | None = None) -> None:
         nonlocal last_checkpoint_instructions, last_checkpoint_frame
         if loaded is None:
             return
-        machine = SG1000Machine(loaded.data, cpu_core=selected_cpu_core)
+        machine = SG1000Machine(loaded.data, cpu_core=selected_cpu_core, vdp_core=selected_vdp_core)
         frame_count, paused = 0, False
         pressed_keys.clear()
         update_joystick()
