@@ -704,3 +704,60 @@ def test_machine_can_select_rust_core_for_a_halted_test_cartridge() -> None:
     machine.run_frames(1)
     assert machine.vdp.frame_number == 1
     assert machine.total_tstates > 0
+
+
+def test_rust_q_latch_affects_scf_after_flag_preserving_instruction() -> None:
+    RustZ80Cpu = _rust_cpu()
+    # BIT 0,(HL) takes undocumented X/Y from WZ high byte; NOP clears Q,
+    # so SCF must combine A with the retained F bits rather than prior Q.
+    program = bytes([0xCB, 0x46, 0x00, 0x37])  # BIT 0,(HL); NOP; SCF
+    python_bus = MemoryBus(program)
+    rust_bus = MemoryBus(program)
+    python_bus.memory[0x2000] = rust_bus.memory[0x2000] = 0x00
+    python_cpu = Z80Cpu(python_bus)
+    rust_cpu = RustZ80Cpu(rust_bus, None)
+    for cpu in (python_cpu, rust_cpu):
+        cpu.hl = 0x2000
+        cpu.wz = 0x2800
+        cpu.a = 0x00
+        cpu.f = 0x01
+
+    for _ in range(3):
+        assert rust_cpu.step() == python_cpu.step()
+        assert (rust_cpu.f, rust_cpu.q, rust_cpu._q_previous, rust_cpu.p) == (
+            python_cpu.f,
+            python_cpu.q,
+            python_cpu._q_previous,
+            python_cpu.p,
+        )
+    assert rust_cpu.f & 0x28 == 0x28
+
+
+def test_rust_ld_a_i_interrupt_p_latch_matches_python() -> None:
+    RustZ80Cpu = _rust_cpu()
+    program = bytes([0xED, 0x57])  # LD A,I
+    python_cpu = Z80Cpu(MemoryBus(program))
+    rust_cpu = RustZ80Cpu(MemoryBus(program), None)
+    for cpu in (python_cpu, rust_cpu):
+        cpu.i = 0x80
+        cpu.iff1 = True
+        cpu.iff2 = True
+        cpu.interrupt_mode = 1
+
+    assert python_cpu.step() == rust_cpu.step() == 9
+    assert python_cpu.p == rust_cpu.p == 1
+    assert python_cpu.f & 0x04
+    assert rust_cpu.f & 0x04
+
+    python_cpu.request_int(0xFF)
+    rust_cpu.request_int(0xFF)
+    assert python_cpu.step() == rust_cpu.step() == 13
+    assert python_cpu.p == rust_cpu.p == 0
+    assert not (python_cpu.f & 0x04)
+    assert not (rust_cpu.f & 0x04)
+    assert (rust_cpu.pc, rust_cpu.sp, rust_cpu.f, rust_cpu.q) == (
+        python_cpu.pc,
+        python_cpu.sp,
+        python_cpu.f,
+        python_cpu.q,
+    )
