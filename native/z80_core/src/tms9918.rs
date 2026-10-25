@@ -5,6 +5,7 @@
 use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes};
+use std::collections::HashSet;
 
 const W: usize = 256;
 const H: usize = 192;
@@ -232,7 +233,8 @@ impl RustTMS9918A {
             self.status=(self.status&0xa0)|0x40|fifth.unwrap() as u8;
         }
         let pb=((r[6]&7) as usize)<<11;
-        let mut occupied=[false; W]; let mut visible=[false; W];
+        let mut occupied: HashSet<i32> = HashSet::new();
+        let mut visible: HashSet<usize> = HashSet::new();
         let mut pixels=pixels;
         for (_,x,pat,color,sy) in active {
             let source_y=((line+FRAME_LINES as usize-sy)%FRAME_LINES as usize)/scale;
@@ -242,11 +244,15 @@ impl RustTMS9918A {
                 if p&(0x80>>(sx&7))==0 {continue;}
                 for dx in 0..scale {
                     let px=x+(sx*scale+dx) as i32;
-                    if px>=0 && (px as usize)<W {
-                        let px=px as usize;
-                        if occupied[px] {if update_status {self.status|=0x20;}} else {occupied[px]=true;}
-                        if let Some(ref mut buf)=pixels {
-                            if color!=0 && !visible[px] { let o=(line*W+px)*3; buf[o..o+3].copy_from_slice(&PALETTE[color]); visible[px]=true; }
+                    if !occupied.insert(px) && update_status { self.status |= 0x20; }
+                    if px >= 0 && (px as usize) < W {
+                        let px = px as usize;
+                        if let Some(ref mut buf) = pixels {
+                            if color != 0 && !visible.contains(&px) {
+                                let o = (line * W + px) * 3;
+                                buf[o..o+3].copy_from_slice(&PALETTE[color]);
+                                visible.insert(px);
+                            }
                         }
                     }
                 }
