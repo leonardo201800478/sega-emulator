@@ -236,7 +236,7 @@ def run(initial_path: Path | None = None) -> None:
     phase_max_ms = dict.fromkeys(phase_totals_ms, 0.0)
 
     def show_frame() -> None:
-        nonlocal frame_count, last_checkpoint_time, last_checkpoint_tstates
+        nonlocal paused, frame_count, last_checkpoint_time, last_checkpoint_tstates
         nonlocal last_checkpoint_instructions, last_checkpoint_frame
         if machine is None or paused:
             return
@@ -244,6 +244,19 @@ def run(initial_path: Path | None = None) -> None:
             frame_started = time.perf_counter()
             phase_started = frame_started
             update_joystick()
+            if controller_input.consume_disconnect_event():
+                paused = True
+                status.showMessage(
+                    "Emulação pausada: controle desconectado", 5000
+                )
+                logger.warning(
+                    "Emulação pausada após desconexão de controle",
+                    extra={
+                        "event": "controller_disconnected_pause",
+                        "frame": frame_count,
+                    },
+                )
+                return
             machine.run_frame()
             samples = machine.drain_audio_samples()
             if samples and audio_channel is not None and pygame is not None:
