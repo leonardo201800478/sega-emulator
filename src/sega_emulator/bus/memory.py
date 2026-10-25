@@ -25,8 +25,7 @@ class SG1000Ram:
         self.size = len(initial_data)
         self._mask = self.size - 1
 
-    @staticmethod
-    def _offset(address: int) -> int:
+    def _offset(self, address: int) -> int:
         """Converte endereço da CPU em offset da RAM física."""
         if type(address) is not int:
             raise TypeError("O endereço deve ser um inteiro.")
