@@ -11,7 +11,6 @@ import logging
 from typing import Any
 
 from sega_emulator.frontend.controller_input import (
-    ACTIONS,
     SUPPORTED_BUTTONS,
     ControllerInputConfig,
 )
