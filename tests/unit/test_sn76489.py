@@ -164,6 +164,7 @@ def test_noise_tone_link_write_preserves_active_countdown() -> None:
     psg._tick_internal_clock()
     assert psg._noise_counter == 64
 
+
 def test_sample_buffer_drops_oldest_samples_and_reports_count() -> None:
     psg = SN76489(clock_hz=1600, sample_rate=100)
     psg.advance_clocks(16 * 250)
