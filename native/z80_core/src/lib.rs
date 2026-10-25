@@ -238,7 +238,7 @@ impl RustZ80Cpu {
                 // In IM 0, the interrupting device supplies the first opcode;
                 // any following operands or prefix bytes are fetched from PC.
                 // The acknowledge replaces M1 and costs two extra T-states.
-                let instruction_cycles = self.execute_opcode(py, data_bus, self.pc)?;
+                let instruction_cycles = self.execute_opcode(py, data_bus, self.pc.wrapping_sub(1))?;
                 let cycles = instruction_cycles + 2;
                 self.total_cycles += u64::from(cycles);
                 if self.ei_delay > 0 {
