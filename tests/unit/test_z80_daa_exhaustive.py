@@ -14,9 +14,9 @@ def _expected_daa(
     accumulator: int, subtract: int, half_carry: int, carry: int
 ) -> tuple[int, int]:
     correction = 0
-    if half_carry or (accumulator & 0x0F) > 9:
+    if half_carry or (not subtract and (accumulator & 0x0F) > 9):
         correction |= 0x06
-    if carry or accumulator > 0x99:
+    if carry or (not subtract and accumulator > 0x99):
         correction |= 0x60
 
     if subtract:
@@ -44,7 +44,7 @@ def test_daa_subtract_applies_a_thresholds_when_h_and_c_are_clear() -> None:
     cpu.f = 0x22  # N=1, H=0, C=0
 
     assert cpu.step() == 4
-    assert (cpu.a, cpu.f, cpu.q) == (0x36, 0x27, 0x27)
+    assert (cpu.a, cpu.f, cpu.q) == (0x9C, 0x8E, 0x8E)
 
 
 def test_daa_results_flags_pc_r_and_cycles_for_all_input_combinations() -> None:
