@@ -648,7 +648,8 @@ def run(initial_path: Path | None = None) -> None:
                         "Mapeamento inválido",
                         f"A tecla {key_name} está atribuída a "
                         f"{action_labels[previous_action]} do Jogador {previous_player} "
-                        f"e a {action_labels[action]} do Jogador {player}.",
+                        f"e a {action_labels[action]} "
+                        f"do Jogador {player}.",
                     )
                     return
                 seen_keyboard_keys[key_code] = (player, action)
