@@ -79,7 +79,7 @@ impl RustTMS9918A {
     }
     #[pyo3(signature = (clear_vram=false))]
     fn reset(&mut self, py: Python<'_>, clear_vram: bool) {
-        { let mut regs = self.registers.bind(py); unsafe { regs.as_bytes_mut().fill(0); } }
+        { let regs = self.registers.bind(py); unsafe { regs.as_bytes_mut().fill(0); } }
         self.status = 0x1f; self.address = 0; self.read_buffer = 0; self.control_first = None;
         self.cycles_into_line = 0; self.scanline = 0; self.frame_number = 0;
         self.framebuffer.fill(0); self.working.fill(0); self.frame_ready = false;
@@ -124,7 +124,7 @@ impl RustTMS9918A {
         let mut remaining = tstates as u64;
         while remaining > 0 {
             let step = remaining.min((LINE_TSTATES - self.cycles_into_line) as u64) as u32;
-            self.cycles_into_line += step; remaining -= step;
+            self.cycles_into_line += step; remaining -= step as u64;
             if self.cycles_into_line == LINE_TSTATES {
                 self.cycles_into_line = 0;
                 let line = self.scanline;
@@ -144,7 +144,7 @@ impl RustTMS9918A {
         Ok(())
     }
     fn consume_frame_ready(&mut self) -> bool { let v = self.frame_ready; self.frame_ready = false; v }
-    fn render_frame(&mut self, py: Python<'_>) -> Bound<'_, PyBytes> {
+    fn render_frame<'py>(&mut self, py: Python<'py>) -> Bound<'py, PyBytes> {
         let backdrop = (self.regs(py)[7] & 0x0f) as usize;
         let mut pixels = vec![0; W*H*3];
         for p in pixels.chunks_exact_mut(3) { p.copy_from_slice(&PALETTE[backdrop]); }
