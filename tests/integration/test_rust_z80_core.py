@@ -186,7 +186,11 @@ def test_rust_indexed_register_and_alu_families_match_python(
 ) -> None:
     RustZ80Cpu = _rust_cpu()
     uses_displacement = (
-        (0x40 <= opcode <= 0x7F and opcode != 0x76 and (opcode & 7 == 6 or (opcode >> 3) & 7 == 6))
+        (
+            0x40 <= opcode <= 0x7F
+            and opcode != 0x76
+            and (opcode & 7 == 6 or (opcode >> 3) & 7 == 6)
+        )
         or (0x80 <= opcode <= 0xBF and opcode & 7 == 6)
     )
     program = bytes([prefix, opcode, *([0x05] if uses_displacement else [])])
@@ -222,7 +226,9 @@ def test_rust_indexed_register_and_alu_families_match_python(
 
 @pytest.mark.parametrize("prefix", [0xDD, 0xFD])
 @pytest.mark.parametrize("cb_opcode", range(256))
-def test_rust_indexed_cb_opcode_family_matches_python(prefix: int, cb_opcode: int) -> None:
+def test_rust_indexed_cb_opcode_family_matches_python(
+    prefix: int, cb_opcode: int
+) -> None:
     RustZ80Cpu = _rust_cpu()
     program = bytes([prefix, 0xCB, 0x05, cb_opcode])
     python_bus = MemoryBus(program)
