@@ -661,11 +661,26 @@ class Z80Cpu:
             raise UnsupportedOpcodeError("Instrução IN requer um IOBus configurado.")
         return self.io_bus.read_port(address & 0xFFFF)
 
-    def _write_port(self, address: int, value: int) -> None:
-        """Escreve uma porta de 16 bits pelo barramento de I/O separado."""
+    def _write_port(
+        self, address: int, value: int, *, cycle_offset: int | None = None
+    ) -> None:
+        """Escreve em I/O; usa timestamp quando o barramento oferece esse contrato.
+
+        cycle_offset é medido desde o início da instrução atual até a borda
+        nominal de escrita do ciclo de I/O. Barramentos de teste/legados que
+        não oferecem write_port_at mantêm o comportamento síncrono anterior.
+        """
         if self.io_bus is None:
             raise UnsupportedOpcodeError("Instrução OUT requer um IOBus configurado.")
-        self.io_bus.write_port(address & 0xFFFF, value & 0xFF)
+        timed_write = getattr(self.io_bus, "write_port_at", None)
+        if cycle_offset is not None and callable(timed_write):
+            timed_write(
+                address & 0xFFFF,
+                value & 0xFF,
+                self.total_cycles + cycle_offset,
+            )
+        else:
+            self.io_bus.write_port(address & 0xFFFF, value & 0xFF)
 
     def _execute_ed(self, opcode: int) -> int:
         """Executa instruções ED documentadas implementadas no Z80 clássico."""
@@ -713,7 +728,7 @@ class Z80Cpu:
             register = (opcode >> 3) & 7
             port = self.bc
             value = 0 if register == 6 else self._read_register(register)
-            self._write_port(port, value)
+            self._write_port(port, value, cycle_offset=12)
             self.wz = (port + 1) & 0xFFFF
             return 12
         if opcode in (0x44, 0x4C, 0x54, 0x5C, 0x64, 0x6C, 0x74, 0x7C):
@@ -835,7 +850,7 @@ class Z80Cpu:
         else:
             value = self.bus.read(self.hl)
             output_bc = (((self.b - 1) & 0xFF) << 8) | self.c
-            self._write_port(output_bc, value)
+            self._write_port(output_bc, value, cycle_offset=16)
         self.hl = (self.hl + direction) & 0xFFFF
         self.b = (self.b - 1) & 0xFF
         k = value + (((self.c + direction) & 0xFF) if input_direction else self.l)
@@ -1272,7 +1287,7 @@ class Z80Cpu:
             port_low = self._fetch_byte()
             port = (self.a << 8) | port_low
             if opcode == 0xD3:
-                self._write_port(port, self.a)
+                self._write_port(port, self.a, cycle_offset=11)
                 self.wz = (port & 0xFF00) | ((port_low + 1) & 0xFF)
             else:
                 self.a = self._read_port(port)
