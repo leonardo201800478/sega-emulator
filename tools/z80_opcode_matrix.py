@@ -25,18 +25,21 @@ def base_family(op: int) -> tuple[str, str]:
     p, q = y >> 1, y & 1
     if x == 0:
         if z == 0:
-            return (
-                ("NOP", "documented")
-                if y == 0
-                else ("EX AF,AF'", "documented")
-                if y == 1
-                else ("DJNZ/JR/JR cc", "documented")
-            )
+            if y == 0:
+                return "NOP", "documented"
+            if y == 1:
+                return "EX AF,AF'", "documented"
+            if y == 2:
+                return "DJNZ e", "documented"
+            if y == 3:
+                return "JR e", "documented"
+            return f"JR {CONDS[y - 4]},e", "documented"
         if z == 1:
             return (f"LD {RP[p]},nn" if not q else f"ADD HL,{RP[p]}", "documented")
         if z == 2:
             if p in (0, 1):
-                name = "LD (BC/DE),A" if not q else "LD A,(BC/DE)"
+                pair = "BC" if p == 0 else "DE"
+                name = f"LD ({pair}),A" if not q else f"LD A,({pair})"
             elif p == 2:
                 name = "LD (nn),HL" if not q else "LD HL,(nn)"
             else:
@@ -186,6 +189,8 @@ def ed_family(op: int) -> tuple[str, str, str]:
         if op in canonical:
             return f"IM {ED_IM[op]}", "documented", "ed-implemented"
         return f"IM {ED_IM[op]} (alias encoding)", "alias", "ed-implemented"
+    if op == 0x70:
+        return "IN (C)", "undocumented", "ed-implemented"
     if op & 0xC7 == 0x40:
         return "IN r,(C)", "documented", "ed-implemented"
     if op == 0x71:
@@ -236,11 +241,20 @@ def indexed_family(op: int) -> tuple[str, str]:
     if op in INDEXED_FAMILIES:
         return INDEXED_FAMILIES[op], "index-substitution"
     if 0x40 <= op <= 0x7F and op != 0x76:
-        if ((op >> 3) & 7) == 6 or (op & 7) == 6:
+        destination, source = (op >> 3) & 7, op & 7
+        if destination == 6 or source == 6:
             return "LD r,(IX/IY+d) / LD (IX/IY+d),r", "index-substitution"
-        return "LD with IXH/IXL or IYH/IYL", "index-substitution"
+        if destination in (4, 5) or source in (4, 5):
+            return "LD with IXH/IXL or IYH/IYL", "index-substitution"
+        return "LD r,r' with ignored DD/FD prefix", "ignored-prefix-fallback"
     if 0x80 <= op <= 0xBF:
-        return "ALU A,IXH/IXL or (IX/IY+d)", "index-substitution"
+        operation, source = (op >> 3) & 7, op & 7
+        if source == 6:
+            return f"{ALU[operation]} (IX/IY+d)", "index-substitution"
+        if source in (4, 5):
+            operand = "IXH/IYH" if source == 4 else "IXL/IYL"
+            return f"{ALU[operation]} {operand}", "index-substitution"
+        return f"{ALU[operation]} with ignored DD/FD prefix", "ignored-prefix-fallback"
     return "base instruction with ignored DD/FD prefix", "ignored-prefix-fallback"
 
 
