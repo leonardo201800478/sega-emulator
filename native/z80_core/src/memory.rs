@@ -116,8 +116,8 @@ impl NativeMemoryBus {
             && address >= self.cartridge_ram_start
             && address <= self.cartridge_ram_end
         {
-            let offset = usize::from(address - self.cartridge_ram_start)
-                & (self.cartridge_ram.len() - 1);
+            let offset =
+                usize::from(address - self.cartridge_ram_start) & (self.cartridge_ram.len() - 1);
             self.cartridge_ram[offset] = value;
             return;
         }
