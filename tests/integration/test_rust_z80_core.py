@@ -88,6 +88,60 @@ def test_rust_core_matches_python_for_supported_instruction_sequence() -> None:
     assert rust_cpu.halted
 
 
+@pytest.mark.parametrize(
+    ("opcode", "byte_count", "expected_cycles"),
+    [
+        (0xA0, 1, 16),  # LDI
+        (0xA8, 1, 16),  # LDD
+        (0xB0, 2, 21),  # LDIR repeats while BC != 0
+        (0xB8, 2, 21),  # LDDR repeats while BC != 0
+    ],
+)
+def test_rust_block_transfer_matches_python(
+    opcode: int, byte_count: int, expected_cycles: int
+) -> None:
+    RustZ80Cpu = _rust_cpu()
+    program = bytes([0xED, opcode])
+    python_bus = MemoryBus(program)
+    rust_bus = MemoryBus(program)
+    python_bus.memory[0x1000:0x1000 + byte_count] = bytes(range(0x41, 0x41 + byte_count))
+    rust_bus.memory[0x1000:0x1000 + byte_count] = bytes(range(0x41, 0x41 + byte_count))
+    python_cpu = Z80Cpu(python_bus)
+    rust_cpu = RustZ80Cpu(rust_bus, None)
+
+    initial_bc = byte_count
+    python_cpu.a = rust_cpu.a = 0x10
+    python_cpu.f = rust_cpu.f = 0xC1
+    python_cpu.hl = rust_cpu.hl = 0x1000
+    python_cpu.de = rust_cpu.de = 0x2000
+    python_cpu.bc = rust_cpu.bc = initial_bc
+
+    python_cycles = python_cpu.step()
+    rust_cycles = rust_cpu.step()
+
+    attributes = ("a", "f", "b", "c", "d", "e", "h", "l", "pc", "r", "wz", "total_cycles")
+    assert python_cycles == rust_cycles == expected_cycles
+    assert {name: getattr(rust_cpu, name) for name in attributes} == {
+        name: getattr(python_cpu, name) for name in attributes
+    }
+    assert rust_cpu.bc == python_cpu.bc
+    assert rust_cpu.de == python_cpu.de
+    assert rust_cpu.hl == python_cpu.hl
+    assert rust_bus.memory == python_bus.memory
+
+
+def test_rust_unassigned_ed_opcode_matches_classic_z80_nop_behavior() -> None:
+    RustZ80Cpu = _rust_cpu()
+    program = bytes([0xED, 0x00])
+    python_cpu = Z80Cpu(MemoryBus(program))
+    rust_cpu = RustZ80Cpu(MemoryBus(program), None)
+
+    assert python_cpu.step() == rust_cpu.step() == 8
+    assert python_cpu.pc == rust_cpu.pc == 2
+    assert python_cpu.r == rust_cpu.r == 2
+    assert python_cpu.total_cycles == rust_cpu.total_cycles == 8
+
+
 def test_rust_core_fails_explicitly_on_unsupported_opcode() -> None:
     RustZ80Cpu = _rust_cpu()
     bus = MemoryBus(bytes([0xDD]))
