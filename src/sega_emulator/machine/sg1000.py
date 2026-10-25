@@ -104,7 +104,8 @@ class SG1000Machine:
                 raise RuntimeError(
                     "O runtime SG-1000 Rust experimental não está instalado. "
                     "Instale com: python -m pip install maturin e "
-                    "maturin develop --release --manifest-path native/z80_core/Cargo.toml"
+                    "maturin develop --release --manifest-path "
+                    "native/z80_core/Cargo.toml"
                 ) from exc
             self.native_machine = NativeSG1000Machine(
                 cartridge_rom,
