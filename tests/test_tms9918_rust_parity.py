@@ -26,7 +26,7 @@ def _configured_pair(native_type):
     for vdp in (python_vdp, rust_vdp):
         _write_vram(vdp, 0, vram)
         # End the sprite list deterministically at sprite zero.
-        _write_vram(vdp, 0x0F80, b"\xD0")
+        _write_vram(vdp, 0x0F80, b"\xd0")
     return python_vdp, rust_vdp
 
 
