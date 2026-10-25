@@ -128,7 +128,10 @@ class EmulatorMainWindow(QMainWindow):
         if scale not in (2, 3, 4):
             raise ValueError("video scale must be 2, 3, or 4")
         self._video_scale = scale
-        self.resize(256 * scale + 64, 192 * scale + 128)
+        self.resize(
+            max(640, 256 * scale + 64),
+            max(480, 192 * scale + 128),
+        )
 
     def set_recent_roms(
         self,
