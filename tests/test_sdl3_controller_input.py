@@ -49,11 +49,16 @@ class FakeSDL3:
         assert flags == 7
         return True
 
+    def SDL_QuitSubSystem(self, flags: int) -> None:
+        assert flags == 7
+
     def SDL_GetError(self) -> bytes:
         return b"fake error"
 
     def _ids(self, ids: list[int], count_pointer: object) -> object:
-        ctypes.cast(count_pointer, ctypes.POINTER(ctypes.c_int)).contents.value = len(ids)
+        ctypes.cast(
+            count_pointer, ctypes.POINTER(ctypes.c_int)
+        ).contents.value = len(ids)
         return (ctypes.c_int * len(ids))(*ids)
 
     def SDL_GetGamepads(self, count_pointer: object) -> object:
@@ -171,7 +176,9 @@ def test_sdl3_unmapped_joystick_uses_raw_buttons_axes_and_hat() -> None:
     assert inputs.poll()[1] == {"button1", "left", "right"}
 
 
-def test_sdl3_missing_dependency_is_a_safe_noop(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_sdl3_missing_dependency_is_a_safe_noop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setitem(sys.modules, "sdl3", None)
     inputs = SDL3ControllerInput(sdl_module=None)
 
