@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from sega_emulator.cpu.z80 import Z80Cpu
+from sega_emulator.machine.sg1000 import SG1000Machine
 
 
 class MemoryBus:
@@ -68,3 +69,12 @@ def test_rust_core_fails_explicitly_on_unsupported_opcode() -> None:
     cpu = RustZ80Cpu(bus, None)
     with pytest.raises(NotImplementedError, match="does not support opcode"):
         cpu.step()
+
+
+def test_machine_can_select_rust_core_for_a_halted_test_cartridge() -> None:
+    _rust_cpu()
+    machine = SG1000Machine(bytes([0x76]), cpu_core="rust")
+    assert machine.cpu_core == "rust"
+    machine.run_frames(1)
+    assert machine.vdp.frame_number == 1
+    assert machine.total_tstates > 0
