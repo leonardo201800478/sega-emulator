@@ -786,6 +786,19 @@ def run(initial_path: Path | None = None) -> None:
     controls_menu = window.menuBar().addMenu("&Controles")
     controls_menu.addAction("Configurar controles…", configure_controllers)
 
+    def show_controller_devices() -> None:
+        """Mostra o estado do backend SDL3 e os dispositivos atualmente enumerados."""
+        names = controller_input.connected_names()
+        devices_text = "\\n".join(f"• {name}" for name in names) or "Nenhum controle detectado."
+        backend_state = "disponível" if controller_input.available else "indisponível"
+        QMessageBox.information(
+            window,
+            "Dispositivos SDL3",
+            f"Backend SDL3: {backend_state}\\n\\n{devices_text}",
+        )
+
+    controls_menu.addAction("Dispositivos detectados", show_controller_devices)
+
     def dump_vdp_snapshot() -> None:
         """Salva um snapshot pontual do VDP para investigar divergências gráficas."""
         if machine is None or loaded is None:
