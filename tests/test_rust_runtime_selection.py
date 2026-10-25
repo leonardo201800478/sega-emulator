@@ -34,8 +34,6 @@ def test_rust_run_frame_executes_native_instruction_loop() -> None:
     assert machine.native_machine.total_tstates == machine.total_tstates
     assert machine.vdp.frame_number == 1
 
-
-
 def test_runtime_diagnostic_identifies_loaded_native_binary() -> None:
     machine = SG1000Machine(bytes((0xC3, 0x00, 0x00)), cpu_core="rust")
 
