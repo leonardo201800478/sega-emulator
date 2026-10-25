@@ -94,7 +94,7 @@ class SDL3ControllerInput:
     def _error(self) -> str:
         try:
             return _decode_name(self._sdl.SDL_GetError())
-        except (AttributeError, TypeError):
+        except AttributeError, TypeError:
             return "erro SDL3 não detalhado"
 
     def _list_ids(self, function_name: str) -> list[int]:
@@ -115,7 +115,7 @@ class SDL3ControllerInput:
         for handle in self._gamepads.values():
             try:
                 self._sdl.SDL_CloseGamepad(handle)
-            except (AttributeError, OSError, RuntimeError):
+            except AttributeError, OSError, RuntimeError:
                 pass
         for handle in self._joysticks.values():
             try:
@@ -289,7 +289,7 @@ class SDL3ControllerInput:
                                 actions.add("left")
                             if hat & _HAT_BITS["right"]:
                                 actions.add("right")
-        except (AttributeError, OSError, RuntimeError, TypeError, ValueError):
+        except AttributeError, OSError, RuntimeError, TypeError, ValueError:
             logger.exception("Erro ao consultar controles SDL3")
             self._close_handles()
             self._gamepad_ids.clear()
