@@ -9,13 +9,13 @@ assume that Rust must be faster.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 import argparse
 import json
 import platform
 import statistics
 import sys
 import time
+from collections.abc import Callable
 
 from sega_emulator.cpu.z80 import Z80Cpu
 from sega_emulator.machine.sg1000 import SG1000Machine
