@@ -224,7 +224,7 @@ impl RustZ80Cpu {
                         )));
                     }
                 };
-        self.total_cycles += u64::from(cycles);
+            self.total_cycles += u64::from(cycles);
             return Ok(cycles);
         }
         if self.halted {
