@@ -426,6 +426,30 @@ impl RustZ80Cpu {
         }
     }
 
+    fn set_repeat_block_io_flags(&mut self, value: u8) {
+        self.f = (self.f & !0x28) | (((self.pc >> 8) as u8) & 0x28);
+        let carry = self.f & FLAG_C != 0;
+        let mut parity = self.f & FLAG_PV != 0;
+        let half = if carry {
+            if value & 0x80 != 0 {
+                let even = (self.b.wrapping_sub(1) & 0x07).count_ones() & 1 == 0;
+                parity ^= !even;
+                self.b & 0x0F == 0
+            } else {
+                let even = (self.b.wrapping_add(1) & 0x07).count_ones() & 1 == 0;
+                parity ^= !even;
+                self.b & 0x0F == 0x0F
+            }
+        } else {
+            let even = (self.b & 0x07).count_ones() & 1 == 0;
+            parity ^= !even;
+            false
+        };
+        self.f = (self.f & !(FLAG_H | FLAG_PV))
+            | if half { FLAG_H } else { 0 }
+            | if parity { FLAG_PV } else { 0 };
+    }
+
     fn alu(&mut self, operation: u8, value: u8) {
         let result = match operation & 7 {
             0 => add8(self.a, value),
@@ -1374,7 +1398,9 @@ impl RustZ80Cpu {
                             value
                         } else {
                             let value = self.read8(py, self.hl())?;
-                            self.write_port(py, old_bc, value)?;
+                            let output_bc =
+                                (u16::from(self.b.wrapping_sub(1)) << 8) | u16::from(self.c);
+                            self.write_port(py, output_bc, value)?;
                             value
                         };
                         self.set_hl(self.hl().wrapping_add_signed(direction));
@@ -1386,26 +1412,22 @@ impl RustZ80Cpu {
                         };
                         let sum = u16::from(value) + u16::from(addend);
                         self.f = self.b & 0xA8;
-                        self.q = self.f;
                         if self.b == 0 {
                             self.f |= FLAG_Z;
-                            self.q = self.f;
                         }
                         if value & 0x80 != 0 {
                             self.f |= FLAG_N;
-                            self.q = self.f;
                         }
                         if sum > 0xFF {
                             self.f |= FLAG_H | FLAG_C;
-                            self.q = self.f;
                         }
                         if ((sum as u8 & 7) ^ self.b).count_ones() & 1 == 0 {
                             self.f |= FLAG_PV;
-                            self.q = self.f;
                         }
                         if repeat && self.b != 0 {
                             self.pc = self.pc.wrapping_sub(2);
                             self.wz = self.pc.wrapping_add(1);
+                            self.set_repeat_block_io_flags(value);
                             Ok(21)
                         } else {
                             self.wz = if input {
