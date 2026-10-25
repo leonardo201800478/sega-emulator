@@ -157,6 +157,13 @@ mod tests {
     }
 
     #[test]
+    fn rejects_cartridge_ram_mapped_over_internal_ram() {
+        assert!(
+            NativeMemoryBus::new(vec![0x00], 0x0400, 0x2000, 0xC000, 0xFFFF).is_err()
+        );
+    }
+
+    #[test]
     fn maps_cartridge_ram_without_overwriting_rom_window() {
         let mut bus = NativeMemoryBus::new(vec![0x55], 0x0400, 0x2000, 0x8000, 0xBFFF).unwrap();
         bus.write_byte(0x8000, 0xA7);
