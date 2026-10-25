@@ -6,23 +6,33 @@ from sega_emulator.audio.sn76489 import SN76489
 from sega_emulator.bus.memory import SG1000Ram
 from sega_emulator.bus.memory_bus import SG1000MemoryBus
 from sega_emulator.cpu.z80 import Z80Cpu
-from sega_emulator.machine.cartridge_profiles import cartridge_ram_size
+from sega_emulator.machine.cartridge_profiles import cartridge_profile
 from sega_emulator.video.tms9918 import TMS9918A
 
 
 class _CartridgeMirrorBus:
     """Adapta o mapeamento linear atual para espelhamento comum de ROMs menores."""
 
-    def __init__(self, bus: SG1000MemoryBus, cartridge_rom: bytes) -> None:
+    def __init__(self, bus: SG1000MemoryBus, cartridge_rom: bytes, profile) -> None:
         self._bus = bus
-        # Expand the cartridge's address window once. CPU fetches then avoid a
-        # modulo and a second validated bus read for every opcode and operand.
+        # Expand the ROM window once so CPU fetches avoid per-read modulo work.
         rom_size = len(cartridge_rom)
         self._rom_window = (
             cartridge_rom * (0xC000 // rom_size) + cartridge_rom[: 0xC000 % rom_size]
         )
+        # Some cartridges carry their own RAM at 8000h–BFFFh; it is distinct
+        # from the SG-1000's internal RAM at C000h–FFFFh.
+        self._cartridge_ram = bytearray(profile.cartridge_ram_size)
+        self._cartridge_ram_start = profile.cartridge_ram_start
+        self._cartridge_ram_end = profile.cartridge_ram_end
+        self._cartridge_ram_mask = profile.cartridge_ram_size - 1
 
     def read(self, address: int) -> int:
+        if (
+            self._cartridge_ram
+            and self._cartridge_ram_start <= address <= self._cartridge_ram_end
+        ):
+            return self._cartridge_ram[(address - self._cartridge_ram_start) & self._cartridge_ram_mask]
         if type(address) is int and 0 <= address < 0xC000:
             return self._rom_window[address]
         return self._bus.read(address)
@@ -34,6 +44,14 @@ class _CartridgeMirrorBus:
         return self._bus.read(address)
 
     def write(self, address: int, value: int) -> None:
+        if (
+            self._cartridge_ram
+            and self._cartridge_ram_start <= address <= self._cartridge_ram_end
+        ):
+            if type(value) is not int or not 0 <= value <= 0xFF:
+                raise ValueError("O valor deve estar entre 00h e FFh.")
+            self._cartridge_ram[(address - self._cartridge_ram_start) & self._cartridge_ram_mask] = value
+            return
         if 0 <= address < 0xC000:
             return
         self._bus.write(address, value)
@@ -48,11 +66,12 @@ class SG1000Machine:
         if not 1 <= len(cartridge_rom) <= 0xC000:
             raise ValueError("A ROM deve conter entre 1 byte e 48 KiB.")
         self.cartridge_rom = cartridge_rom
-        ram_size = cartridge_ram_size(cartridge_rom)
-        self.ram_size = ram_size
-        ram = SG1000Ram(bytes(ram_size))
+        profile = cartridge_profile(cartridge_rom)
+        self.ram_size = profile.internal_ram_size
+        self.cartridge_ram_size = profile.cartridge_ram_size
+        ram = SG1000Ram(bytes(profile.internal_ram_size))
         base_bus = SG1000MemoryBus(ram, cartridge_rom)
-        self.memory_bus = _CartridgeMirrorBus(base_bus, cartridge_rom)
+        self.memory_bus = _CartridgeMirrorBus(base_bus, cartridge_rom, profile)
         self.vdp = TMS9918A()
         self.psg = SN76489()
         self.joystick1 = 0xFF
