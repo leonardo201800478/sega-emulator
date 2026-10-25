@@ -5,8 +5,6 @@ use std::collections::VecDeque;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
-const DEFAULT_CLOCK_HZ: u64 = 3_579_545;
-const DEFAULT_SAMPLE_RATE: u64 = 44_100;
 const CLOCK_DIVIDER: u64 = 16;
 const TONE_CHANNELS: usize = 3;
 const NOISE_CHANNEL: usize = 3;
@@ -466,11 +464,11 @@ impl NativeAudioSynchronizer {
 
 #[cfg(test)]
 mod tests {
-    use super::{DEFAULT_CLOCK_HZ, DEFAULT_SAMPLE_RATE, NativeSn76489};
+    use super::NativeSn76489;
 
     #[test]
     fn reset_and_repeated_advancement_are_deterministic() {
-        let mut first = NativeSn76489::new(DEFAULT_CLOCK_HZ, DEFAULT_SAMPLE_RATE).unwrap();
+        let mut first = NativeSn76489::new(3_579_545, 44_100).unwrap();
         let mut second = NativeSn76489::new(DEFAULT_CLOCK_HZ, DEFAULT_SAMPLE_RATE).unwrap();
         for device in [&mut first, &mut second] {
             device.write_inner(0x85);
