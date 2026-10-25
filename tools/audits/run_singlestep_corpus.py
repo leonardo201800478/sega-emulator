@@ -19,6 +19,7 @@ from sega_emulator.testing.z80_singlestep import run_vector
 
 UPSTREAM_COMMIT = "ebe1875d48f374bcfd4b505d8eb8ee751568b5f7"
 
+
 def load_json(path: Path) -> list[dict[str, Any]]:
     with path.open(encoding="utf-8") as source:
         payload = json.load(source)
