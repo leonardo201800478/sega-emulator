@@ -42,7 +42,18 @@ def test_base_prefix_bytes_are_classified_as_prefixes() -> None:
         assert base_family(opcode)[1] == "prefix"
 
 
+def test_relative_branch_families_are_distinguished() -> None:
+    assert base_family(0x10)[0] == "DJNZ e"
+    assert base_family(0x18)[0] == "JR e"
+    assert base_family(0x20)[0] == "JR NZ,e"
+    assert base_family(0x38)[0] == "JR C,e"
+
+
 def test_absolute_load_store_families_are_distinguished() -> None:
+    assert base_family(0x02)[0] == "LD (BC),A"
+    assert base_family(0x0A)[0] == "LD A,(BC)"
+    assert base_family(0x12)[0] == "LD (DE),A"
+    assert base_family(0x1A)[0] == "LD A,(DE)"
     assert base_family(0x22)[0] == "LD (nn),HL"
     assert base_family(0x2A)[0] == "LD HL,(nn)"
     assert base_family(0x32)[0] == "LD (nn),A"
