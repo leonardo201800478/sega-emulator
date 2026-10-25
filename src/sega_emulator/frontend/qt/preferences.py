@@ -36,6 +36,7 @@ class FrontendPreferences:
     controller_config: str = ""
     audio_enabled: bool = True
     diagnostics_enabled: bool = True
+    cpu_core: str = "python"
 
     def __post_init__(self) -> None:
         if not MIN_WINDOW_WIDTH <= self.window_width <= MAX_WINDOW_WIDTH:
@@ -52,6 +53,8 @@ class FrontendPreferences:
             raise ValueError("recent_roms must contain non-empty path strings")
         if not isinstance(self.controller_config, str):
             raise ValueError("controller_config must be serialized as text")
+        if self.cpu_core not in ("python", "rust"):
+            raise ValueError("cpu_core must be 'python' or 'rust'")
 
     @classmethod
     def from_store(cls, store: SettingsStore) -> FrontendPreferences:
@@ -97,6 +100,9 @@ class FrontendPreferences:
             store.value("diagnostics_enabled", defaults.diagnostics_enabled),
             defaults.diagnostics_enabled,
         )
+        cpu_core = store.value("cpu_core", defaults.cpu_core)
+        if cpu_core not in ("python", "rust"):
+            cpu_core = defaults.cpu_core
         return cls(
             window_width=width,
             window_height=height,
@@ -105,6 +111,7 @@ class FrontendPreferences:
             controller_config=controller_config,
             audio_enabled=audio_enabled,
             diagnostics_enabled=diagnostics_enabled,
+            cpu_core=cpu_core,
         )
 
     def save_to_store(self, store: SettingsStore) -> None:
@@ -116,6 +123,7 @@ class FrontendPreferences:
         store.setValue("controller_config", self.controller_config)
         store.setValue("audio_enabled", self.audio_enabled)
         store.setValue("diagnostics_enabled", self.diagnostics_enabled)
+        store.setValue("cpu_core", self.cpu_core)
 
     def with_recent_rom(self, path: str) -> FrontendPreferences:
         """Return preferences with a ROM moved to the front of the history."""
@@ -135,13 +143,14 @@ class FrontendPreferences:
             controller_config=self.controller_config,
             audio_enabled=self.audio_enabled,
             diagnostics_enabled=self.diagnostics_enabled,
+            cpu_core=self.cpu_core,
         )
 
 
 def _bounded_int(value: Any, default: int, minimum: int, maximum: int) -> int:
     try:
         result = int(value)
-    except TypeError, ValueError, OverflowError:
+    except (TypeError, ValueError, OverflowError):
         return default
     return result if minimum <= result <= maximum else default
 
