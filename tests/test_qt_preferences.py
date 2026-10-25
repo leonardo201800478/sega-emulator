@@ -98,3 +98,25 @@ def test_recent_rom_history_is_bounded() -> None:
 
     assert len(updated.recent_roms) == MAX_RECENT_ROMS
     assert updated.recent_roms[0] == "new.sg"
+
+
+
+def test_cpu_core_defaults_to_python_and_round_trips() -> None:
+    settings = MemorySettings()
+    defaults = FrontendPreferences.from_store(settings)
+    assert defaults.cpu_core == "python"
+
+    selected = FrontendPreferences(cpu_core="rust")
+    selected.save_to_store(settings)
+    assert settings.values["cpu_core"] == "rust"
+    assert FrontendPreferences.from_store(settings).cpu_core == "rust"
+
+
+def test_invalid_saved_cpu_core_falls_back_to_python() -> None:
+    settings = MemorySettings({"cpu_core": "unsupported"})
+    assert FrontendPreferences.from_store(settings).cpu_core == "python"
+
+
+def test_explicit_invalid_cpu_core_is_rejected() -> None:
+    with pytest.raises(ValueError, match="cpu_core"):
+        FrontendPreferences(cpu_core="native")
