@@ -33,7 +33,10 @@ def test_all_video_backends_are_representable(backend: VideoBackend) -> None:
 
 @pytest.mark.parametrize("scaling_filter", list(ScalingFilter))
 def test_all_scaling_filters_are_representable(scaling_filter: ScalingFilter) -> None:
-    assert VideoOutputConfig(scaling_filter=scaling_filter).scaling_filter is scaling_filter
+    assert (
+        VideoOutputConfig(scaling_filter=scaling_filter).scaling_filter
+        is scaling_filter
+    )
 
 
 @pytest.mark.parametrize("aspect_ratio", list(AspectRatio))
