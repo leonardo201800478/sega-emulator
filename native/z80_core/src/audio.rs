@@ -469,7 +469,7 @@ mod tests {
     #[test]
     fn reset_and_repeated_advancement_are_deterministic() {
         let mut first = NativeSn76489::new(3_579_545, 44_100).unwrap();
-        let mut second = NativeSn76489::new(DEFAULT_CLOCK_HZ, DEFAULT_SAMPLE_RATE).unwrap();
+        let mut second = NativeSn76489::new(3_579_545, 44_100).unwrap();
         for device in [&mut first, &mut second] {
             device.write_inner(0x85);
             device.write_inner(0x12);
