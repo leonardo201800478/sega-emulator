@@ -49,3 +49,15 @@ def test_standard_machine_keeps_1k_ram_mirroring(monkeypatch) -> None:
     assert machine.memory_bus.read(0xC000) == 0xA5
     assert machine.memory_bus.read(0xC400) == 0xA5
     assert machine.memory_bus.read(0xC800) == 0xA5
+
+
+
+def test_english_logo_bomberman_sha256_selects_type_b_ram(monkeypatch) -> None:
+    class FakeDigest:
+        def hexdigest(self) -> str:
+            return "3eff3d6f1f74041f7b732455799d0978ab49724552ff2985f34b76478cd91721"
+
+    monkeypatch.setattr(zlib, "crc32", lambda data: 0x12345678)
+    monkeypatch.setattr("hashlib.sha256", lambda data: FakeDigest())
+
+    assert cartridge_ram_size(b"English-logo test ROM") == 0x2000
