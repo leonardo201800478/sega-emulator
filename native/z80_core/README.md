@@ -55,3 +55,22 @@ uncertainty and should be resolved with hardware tests before claiming full
 MEMPTR fidelity. The completion roadmap is tracked in
 [issue #55](https://github.com/leonardo201800478/sega-emulator/issues/55). A passing
 differential case is not proof of full Z80 compatibility or cycle accuracy.
+
+
+## Experimental Rust VDP
+
+The same PyO3 extension also exposes `RustTMS9918A`. The SG-1000 machine can
+select it independently from the CPU backend:
+
+```powershell
+python -m sega_emulator ROM.sg --vdp-core rust
+python -m sega_emulator ROM.sg --headless-frames 120 --vdp-core rust
+```
+
+The Python `TMS9918A` remains the default reference. Initial differential tests
+compare port buffering, raster/VBlank state, and RGB framebuffer output across
+Graphics I, Graphics II, multicolor, and text modes. The Rust port retains the
+same nominal 228-T-state scanline model; it does not add per-dot VRAM fetches,
+bus contention, or cycle-accurate interrupt timing. Treat the backend as
+experimental until the native build and full test suite pass in CI and gameplay
+is compared against the Python backend and a pinned external reference.
