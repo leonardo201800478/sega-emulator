@@ -356,9 +356,26 @@ def test_rust_indexed_register_and_alu_families_match_python(
     python_cycles = python_cpu.step()
     rust_cycles = rust_cpu.step()
     attributes = (
-        "a", "f", "b", "c", "d", "e", "h", "l", "sp", "pc",
-        "ix", "iy", "i", "r", "iff1", "iff2", "interrupt_mode",
-        "halted", "wz", "total_cycles",
+        "a",
+        "f",
+        "b",
+        "c",
+        "d",
+        "e",
+        "h",
+        "l",
+        "sp",
+        "pc",
+        "ix",
+        "iy",
+        "i",
+        "r",
+        "iff1",
+        "iff2",
+        "interrupt_mode",
+        "halted",
+        "wz",
+        "total_cycles",
     )
     assert rust_cycles == python_cycles
     assert {name: getattr(rust_cpu, name) for name in attributes} == {
@@ -392,9 +409,26 @@ def test_rust_indexed_cb_opcode_family_matches_python(
     python_cycles = python_cpu.step()
     rust_cycles = rust_cpu.step()
     attributes = (
-        "a", "f", "b", "c", "d", "e", "h", "l", "sp", "pc",
-        "ix", "iy", "i", "r", "iff1", "iff2", "interrupt_mode",
-        "halted", "wz", "total_cycles",
+        "a",
+        "f",
+        "b",
+        "c",
+        "d",
+        "e",
+        "h",
+        "l",
+        "sp",
+        "pc",
+        "ix",
+        "iy",
+        "i",
+        "r",
+        "iff1",
+        "iff2",
+        "interrupt_mode",
+        "halted",
+        "wz",
+        "total_cycles",
     )
     assert rust_cycles == python_cycles
     assert {name: getattr(rust_cpu, name) for name in attributes} == {
@@ -424,9 +458,26 @@ def test_rust_cb_opcode_family_matches_python(opcode: int) -> None:
     python_cycles = python_cpu.step()
     rust_cycles = rust_cpu.step()
     attributes = (
-        "a", "f", "b", "c", "d", "e", "h", "l", "sp", "pc",
-        "ix", "iy", "i", "r", "iff1", "iff2", "interrupt_mode",
-        "halted", "wz", "total_cycles",
+        "a",
+        "f",
+        "b",
+        "c",
+        "d",
+        "e",
+        "h",
+        "l",
+        "sp",
+        "pc",
+        "ix",
+        "iy",
+        "i",
+        "r",
+        "iff1",
+        "iff2",
+        "interrupt_mode",
+        "halted",
+        "wz",
+        "total_cycles",
     )
     assert rust_cycles == python_cycles
     assert {name: getattr(rust_cpu, name) for name in attributes} == {
