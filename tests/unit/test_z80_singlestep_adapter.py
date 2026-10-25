@@ -48,6 +48,27 @@ def test_adapter_reports_first_state_difference() -> None:
     assert any("r: esperado 0, obtido 1" in mismatch for mismatch in result.mismatches)
 
 
+def test_adapter_compares_tstate_count_when_cycle_trace_is_present() -> None:
+    vector = vector_nop()
+    vector["cycles"] = [[0x1000, 0x00, "----"] for _ in range(4)]
+
+    result = run_vector(vector)
+
+    assert result.status == "passed"
+    assert result.cycles_returned == 4
+    assert not any(mismatch.startswith("tstates:") for mismatch in result.mismatches)
+
+
+def test_adapter_reports_tstate_count_mismatch() -> None:
+    vector = vector_nop()
+    vector["cycles"] = [[0x1000, 0x00, "----"] for _ in range(5)]
+
+    result = run_vector(vector)
+
+    assert result.status == "failed"
+    assert "tstates: esperado 5, obtido 4" in result.mismatches
+
+
 def test_adapter_loads_operands_from_flat_ram_and_compares_state() -> None:
     vector = {
         "name": "06 LD B,n fixture",
