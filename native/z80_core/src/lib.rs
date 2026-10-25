@@ -1061,7 +1061,7 @@ impl RustZ80Cpu {
                 if old_half || (!subtract && (old_a & 0x0F) > 9) {
                     correction |= 0x06;
                 }
-                if old_carry || (!subtract && old_a > 0x99) {
+                if old_carry || old_a > 0x99 {
                     correction |= 0x60;
                 }
                 let result = if subtract {

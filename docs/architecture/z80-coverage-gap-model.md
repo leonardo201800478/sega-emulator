@@ -109,3 +109,17 @@ SingleStepTests vectors. This remains corpus-backed compatibility evidence,
 not a claim that every Z80 revision is identical.
 
 Additional reference: [Z80Decoder undocumented-flags notes](https://github.com/hoglet67/Z80Decoder/wiki/Undocumented-Flags).
+
+
+## Differential finding: DAA correction for invalid BCD states
+
+The expanded pinned corpus exposed 174 mismatches in `27.json` before correction.
+Across all 1,000 vectors, the low-nibble threshold (`A & 0x0F > 9`) and the
+high-byte threshold (`A > 0x99`) contribute to the correction independently
+of N; N selects whether the accumulated correction is added or subtracted.
+The previous implementation incorrectly conditioned those thresholds on N=0.
+The regression case `A=0x9C, F=0x22` now produces `A=0x36, F=0x27`.
+
+The Python core, exhaustive test oracle, and optional Rust core are kept aligned.
+This finding is based on the pinned SingleStepTests corpus and does not by itself
+establish identical behavior across all Z80 silicon revisions.
