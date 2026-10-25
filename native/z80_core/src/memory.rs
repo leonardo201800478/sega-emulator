@@ -26,7 +26,7 @@ impl NativeMemoryBus {
         cartridge_ram_start: u16,
         cartridge_ram_end: i32,
     ) -> PyResult<Self> {
-        if cartridge_rom.is_empty() || cartridge_rom.len() > ROM_WINDOW_SIZE {
+        if !(1..=ROM_WINDOW_SIZE).contains(&cartridge_rom.len()) {
             return Err(PyValueError::new_err(
                 "A ROM must contain between 1 byte and 48 KiB.",
             ));
@@ -41,17 +41,20 @@ impl NativeMemoryBus {
                 "Cartridge RAM must be empty, 1 KiB, or 8 KiB.",
             ));
         }
-        if cartridge_ram_size == 0 {
-            if cartridge_ram_end != -1 {
-                return Err(PyValueError::new_err(
-                    "A cartridge RAM end address requires cartridge RAM.",
-                ));
-            }
-        } else if cartridge_ram_end < i32::from(cartridge_ram_start)
-            || cartridge_ram_end > i32::from(u16::MAX)
+        if cartridge_ram_size == 0
+            && (cartridge_ram_start != 0 || cartridge_ram_end != -1)
         {
             return Err(PyValueError::new_err(
-                "Invalid cartridge RAM address range.",
+                "Cartridge RAM address bounds require cartridge RAM.",
+            ));
+        }
+        if cartridge_ram_size != 0
+            && (cartridge_ram_start >= RAM_START
+                || cartridge_ram_end < i32::from(cartridge_ram_start)
+                || cartridge_ram_end >= i32::from(RAM_START))
+        {
+            return Err(PyValueError::new_err(
+                "Cartridge RAM must be mapped below C000h.",
             ));
         }
 
