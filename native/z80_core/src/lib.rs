@@ -554,14 +554,14 @@ impl RustZ80Cpu {
             0 => {
                 let carry_in = self.f & FLAG_C;
                 let (result, carry) = match bit_index {
-                    0 => (value.rotate_left(1), value >> 7), // RLC
-                    1 => (value.rotate_right(1), value & 1),  // RRC
-                    2 => ((value << 1) | carry_in, value >> 7),     // RL
+                    0 => (value.rotate_left(1), value >> 7),          // RLC
+                    1 => (value.rotate_right(1), value & 1),          // RRC
+                    2 => ((value << 1) | carry_in, value >> 7),       // RL
                     3 => ((value >> 1) | (carry_in << 7), value & 1), // RR
-                    4 => (value << 1, value >> 7),                  // SLA
-                    5 => ((value >> 1) | (value & 0x80), value & 1), // SRA
-                    6 => ((value << 1) | 1, value >> 7),            // SLL (undocumented)
-                    _ => (value >> 1, value & 1),                   // SRL
+                    4 => (value << 1, value >> 7),                    // SLA
+                    5 => ((value >> 1) | (value & 0x80), value & 1),  // SRA
+                    6 => ((value << 1) | 1, value >> 7),              // SLL (undocumented)
+                    _ => (value >> 1, value & 1),                     // SRL
                 };
                 self.write_reg(py, register, result)?;
                 self.f = (result & 0xA8) | carry;
