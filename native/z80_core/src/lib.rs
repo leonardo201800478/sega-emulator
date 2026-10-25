@@ -516,8 +516,8 @@ impl RustZ80Cpu {
             0 => {
                 let carry_in = self.f & FLAG_C;
                 let (result, carry) = match bit_index {
-                    0 => ((value << 1) | (value >> 7), value >> 7), // RLC
-                    1 => ((value >> 1) | (value << 7), value & 1),  // RRC
+                    0 => (value.rotate_left(1), value >> 7), // RLC
+                    1 => (value.rotate_right(1), value & 1),  // RRC
                     2 => ((value << 1) | carry_in, value >> 7),     // RL
                     3 => ((value >> 1) | (carry_in << 7), value & 1), // RR
                     4 => (value << 1, value >> 7),                  // SLA
@@ -617,8 +617,8 @@ impl RustZ80Cpu {
             if operation == 0 {
                 let carry_in = self.f & FLAG_C;
                 let (result, carry) = match bit {
-                    0 => ((value << 1) | (value >> 7), value >> 7),
-                    1 => ((value >> 1) | (value << 7), value & 1),
+                    0 => (value.rotate_left(1), value >> 7),
+                    1 => (value.rotate_right(1), value & 1),
                     2 => ((value << 1) | carry_in, value >> 7),
                     3 => ((value >> 1) | (carry_in << 7), value & 1),
                     4 => (value << 1, value >> 7),
@@ -719,7 +719,7 @@ impl RustZ80Cpu {
                 Ok(15)
             }
             0x24 | 0x25 | 0x26 | 0x2C | 0x2D | 0x2E => {
-                let code = if matches!(opcode, 0x24 | 0x25 | 0x26) {
+                let code = if matches!(opcode, 0x24..=0x26) {
                     4
                 } else {
                     5
@@ -888,9 +888,9 @@ impl RustZ80Cpu {
                 let old_a = self.a;
                 let old_carry = self.f & FLAG_C;
                 let (result, carry) = match opcode {
-                    0x07 => ((old_a << 1) | (old_a >> 7), old_a >> 7),
+                    0x07 => (old_a.rotate_left(1), old_a >> 7),
                     0x17 => ((old_a << 1) | old_carry, old_a >> 7),
-                    0x0F => ((old_a >> 1) | (old_a << 7), old_a & 1),
+                    0x0F => (old_a.rotate_right(1), old_a & 1),
                     _ => ((old_a >> 1) | (old_carry << 7), old_a & 1),
                 };
                 self.a = result;
