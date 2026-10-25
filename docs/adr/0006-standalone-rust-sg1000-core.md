@@ -35,3 +35,10 @@ Migrar na seguinte ordem, mantendo cada etapa testável:
 ## Estado inicial
 
 A primeira fatia implementa o mapa de ROM/RAM em Rust puro. CPU, VDP, PSG, portas, scheduler e executável headless ainda precisam ser extraídos/implementados no novo crate. A extensão PyO3 existente permanece inalterada nesta etapa.
+## Progresso — primeira fatia de CPU puro Rust
+
+- Adicionado o contrato `CpuBus` para acesso a memória e portas sem dependência de Python.
+- Adicionados `Z80Registers` e `Z80` ao crate `sega-sg1000-core`, com uma fatia explícita de instruções base, contagem de T-states e erro para opcode ainda não implementado.
+- O workspace Rust inclui agora o contrato e a implementação inicial para que possam ser compilados/testados sem construir a extensão PyO3.
+- Esta fatia **não** substitui ainda a CPU do runtime nem torna Rust completo: prefixos, interrupções, demais opcodes, integração dos periféricos e scheduler continuam pendentes. Não habilitar como backend padrão até a migração e validação diferencial.
+- Validação focada prevista: compilação do workspace e os três testes unitários da nova fatia; sem executar a suíte extensa Python.
