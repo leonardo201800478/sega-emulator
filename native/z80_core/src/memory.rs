@@ -5,7 +5,6 @@ use pyo3::prelude::*;
 
 const ROM_WINDOW_SIZE: usize = 0xC000;
 const RAM_START: u16 = 0xC000;
-const ADDRESS_SPACE_SIZE: usize = 0x10000;
 
 #[pyclass(module = "sega_z80_core")]
 pub(crate) struct NativeMemoryBus {
