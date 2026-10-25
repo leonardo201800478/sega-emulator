@@ -9,6 +9,16 @@ import time
 from array import array
 from pathlib import Path
 
+from sega_emulator.frontend.controller_input import (
+    ACTIONS,
+    DEFAULT_GAMEPAD_BINDINGS,
+    JOYSTICK_ACTIONS,
+    SUPPORTED_BUTTONS,
+    ControllerInput,
+    ControllerInputConfig,
+    PlayerInputProfile,
+    joystick_value,
+)
 from sega_emulator.machine.sg1000 import SG1000Machine
 from sega_emulator.rom_loader import LoadedRom, list_rom_members, load_rom
 
@@ -25,13 +35,21 @@ def run(initial_path: Path | None = None) -> None:
         from PySide6.QtGui import QAction, QImage, QKeySequence, QPixmap
         from PySide6.QtWidgets import (
             QApplication,
+            QCheckBox,
+            QComboBox,
+            QDialog,
+            QDialogButtonBox,
+            QDoubleSpinBox,
             QFileDialog,
+            QFormLayout,
+            QFrame,
             QInputDialog,
             QLabel,
             QMainWindow,
             QMenu,
             QMessageBox,
             QStatusBar,
+            QTabWidget,
             QVBoxLayout,
             QWidget,
         )
@@ -58,17 +76,48 @@ def run(initial_path: Path | None = None) -> None:
     app.setOrganizationName("SegaEmulator")
     app.setApplicationName("SegaEmulator")
     settings = QSettings()
+    serialized_controller_config = settings.value("controller_config", "", type=str)
+    try:
+        controller_config = (
+            ControllerInputConfig.from_json(serialized_controller_config)
+            if serialized_controller_config
+            else ControllerInputConfig()
+        )
+    except ValueError:
+        logger.warning("Configuração de controles inválida; usando padrões.")
+        controller_config = ControllerInputConfig()
+    controller_input = ControllerInput(pygame, controller_config)
+
     window = QMainWindow()
-    window.setWindowTitle("Sega Emulator — SG-1000 (experimental)")
-    window.resize(800, 620)
+    window.setWindowTitle("Sega Emulator — SG-1000")
+    window.resize(1024, 768)
+    window.setMinimumSize(640, 480)
+    window.setStyleSheet(
+        "QMainWindow { background: #17191f; color: #e8eaf0; }"
+        "QMenuBar, QMenu { background: #222630; color: #e8eaf0; }"
+        "QMenuBar::item:selected, QMenu::item:selected { background: #39445a; }"
+        "QToolBar { background: #222630; border: 0; spacing: 8px; padding: 6px; }"
+        "QStatusBar { background: #222630; color: #b9c2d0; }"
+        "QLabel { color: #e8eaf0; }"
+        "QFrame#screenFrame { background: #090a0d; border: 1px solid #3b4252; "
+        "border-radius: 8px; }"
+        "QPushButton { padding: 6px 12px; }"
+    )
     view = QLabel("Abra uma ROM SG-1000 pelo menu Arquivo")
     view.setAlignment(Qt.AlignmentFlag.AlignCenter)
     view.setMinimumSize(256, 192)
     view.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-    view.setStyleSheet("background: #202020; color: #dddddd;")
+    view.setStyleSheet("background: #090a0d; color: #9aa4b2; border: 0;")
+    screen_frame = QFrame()
+    screen_frame.setObjectName("screenFrame")
+    screen_layout = QVBoxLayout(screen_frame)
+    screen_layout.setContentsMargins(8, 8, 8, 8)
+    screen_layout.addWidget(view)
     central = QWidget()
     layout = QVBoxLayout(central)
-    layout.addWidget(view)
+    layout.setContentsMargins(16, 16, 16, 16)
+    layout.setSpacing(12)
+    layout.addWidget(screen_frame)
     window.setCentralWidget(central)
     status = QStatusBar()
     window.setStatusBar(status)
@@ -78,31 +127,53 @@ def run(initial_path: Path | None = None) -> None:
     paused = False
     frame_count = 0
     pressed_keys: set[int] = set()
+    hold_was_pressed = False
     timer = QTimer(window)
     # Executa tão rápido quanto possível; mede-se a velocidade real.
     timer.setInterval(0)
 
     key_map = {
-        Qt.Key.Key_Up: 0,
-        Qt.Key.Key_Down: 1,
-        Qt.Key.Key_Left: 2,
-        Qt.Key.Key_Right: 3,
-        Qt.Key.Key_Z: 4,
-        Qt.Key.Key_Space: 4,
-        Qt.Key.Key_X: 5,
-        Qt.Key.Key_Return: 5,
-        Qt.Key.Key_Enter: 5,
+        Qt.Key.Key_Up: (1, "up"),
+        Qt.Key.Key_Down: (1, "down"),
+        Qt.Key.Key_Left: (1, "left"),
+        Qt.Key.Key_Right: (1, "right"),
+        Qt.Key.Key_Z: (1, "button1"),
+        Qt.Key.Key_Space: (1, "button1"),
+        Qt.Key.Key_X: (1, "button2"),
+        Qt.Key.Key_Return: (1, "button2"),
+        Qt.Key.Key_Enter: (1, "button2"),
+        Qt.Key.Key_P: (1, "hold"),
+        Qt.Key.Key_W: (2, "up"),
+        Qt.Key.Key_S: (2, "down"),
+        Qt.Key.Key_A: (2, "left"),
+        Qt.Key.Key_D: (2, "right"),
+        Qt.Key.Key_F: (2, "button1"),
+        Qt.Key.Key_G: (2, "button2"),
+        Qt.Key.Key_H: (2, "hold"),
     }
 
     def update_joystick() -> None:
+        nonlocal hold_was_pressed
         if machine is None:
+            hold_was_pressed = False
             return
-        value = 0xFF
+        actions = {1: set(), 2: set()}
         for key in pressed_keys:
-            bit = key_map.get(key)
-            if bit is not None:
-                value &= ~(1 << bit)
-        machine.set_joystick(1, value)
+            binding = key_map.get(key)
+            if binding is not None:
+                player, action = binding
+                actions[player].add(action)
+        gamepad_actions = controller_input.poll()
+        for player in (1, 2):
+            actions[player].update(gamepad_actions[player])
+            machine.set_joystick(
+                player, joystick_value(actions[player].intersection(JOYSTICK_ACTIONS))
+            )
+        hold_pressed = any("hold" in actions[player] for player in (1, 2))
+        if hold_pressed and not hold_was_pressed:
+            # The console Hold switch is an edge-triggered NMI, not a joystick bit.
+            machine.cpu.request_nmi()
+        hold_was_pressed = hold_pressed
 
     class KeyboardInputFilter(QObject):
         """Converte eventos Qt em bits de joystick SG-1000 ativos em nível baixo."""
@@ -151,6 +222,7 @@ def run(initial_path: Path | None = None) -> None:
         try:
             frame_started = time.perf_counter()
             phase_started = frame_started
+            update_joystick()
             machine.run_frame()
             samples = machine.drain_audio_samples()
             if samples and audio_channel is not None and pygame is not None:
@@ -401,6 +473,105 @@ def run(initial_path: Path | None = None) -> None:
             extra={"event": "machine_reset", "rom_sha256": loaded.sha256},
         )
 
+    def configure_controllers() -> None:
+        dialog = QDialog(window)
+        dialog.setWindowTitle("Configuração de controles")
+        dialog.resize(520, 480)
+        dialog_layout = QVBoxLayout(dialog)
+        tabs = QTabWidget()
+        dialog_layout.addWidget(tabs)
+        combos: dict[tuple[int, str], QComboBox] = {}
+        stick_checks: dict[int, QCheckBox] = {}
+        action_labels = {
+            "up": "Cima",
+            "down": "Baixo",
+            "left": "Esquerda",
+            "right": "Direita",
+            "button1": "Botão 1",
+            "button2": "Botão 2",
+            "hold": "SW / Hold (NMI)",
+        }
+        button_labels = {
+            "a": "A (sul)",
+            "b": "B (leste)",
+            "x": "X (oeste)",
+            "y": "Y (norte)",
+            "dpad_up": "D-pad cima",
+            "dpad_down": "D-pad baixo",
+            "dpad_left": "D-pad esquerda",
+            "dpad_right": "D-pad direita",
+            "leftshoulder": "Ombro esquerdo",
+            "rightshoulder": "Ombro direito",
+            "leftstick": "Clique analógico esquerdo",
+            "rightstick": "Clique analógico direito",
+            "back": "Voltar/Select",
+            "guide": "Guia/Home",
+            "start": "Start / Hold",
+            "misc1": "Botão auxiliar",
+            "paddle1": "Paddle 1",
+            "paddle2": "Paddle 2",
+            "paddle3": "Paddle 3",
+            "paddle4": "Paddle 4",
+            "touchpad": "Touchpad",
+        }
+        for player in (1, 2):
+            page = QWidget()
+            form = QFormLayout(page)
+            profile = controller_input.config.players[player]
+            for action in ACTIONS:
+                combo = QComboBox()
+                for button in SUPPORTED_BUTTONS:
+                    combo.addItem(button_labels[button], button)
+                selected = profile.gamepad_buttons.get(
+                    action, DEFAULT_GAMEPAD_BINDINGS[action]
+                )
+                combo.setCurrentIndex(max(0, combo.findData(selected)))
+                combos[(player, action)] = combo
+                form.addRow(action_labels[action], combo)
+            stick_check = QCheckBox("Usar analógico esquerdo como direcional")
+            stick_check.setChecked(profile.use_left_stick)
+            stick_checks[player] = stick_check
+            form.addRow("", stick_check)
+            tabs.addTab(page, f"Jogador {player}")
+        deadzone = QDoubleSpinBox()
+        deadzone.setRange(0.05, 0.80)
+        deadzone.setSingleStep(0.05)
+        deadzone.setDecimals(2)
+        deadzone.setValue(controller_input.config.deadzone)
+        dialog_layout.addWidget(QLabel("Zona morta do analógico"))
+        dialog_layout.addWidget(deadzone)
+        connected = controller_input.connected_names()
+        dialog_layout.addWidget(
+            QLabel(
+                "Controles detectados: "
+                + (", ".join(connected) if connected else "nenhum controle compatível")
+            )
+        )
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        dialog_layout.addWidget(buttons)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        profiles = {
+            player: PlayerInputProfile(
+                gamepad_buttons={
+                    action: str(combos[(player, action)].currentData())
+                    for action in ACTIONS
+                },
+                use_left_stick=stick_checks[player].isChecked(),
+            )
+            for player in (1, 2)
+        }
+        controller_input.config = ControllerInputConfig(
+            players=profiles, deadzone=deadzone.value()
+        )
+        settings.setValue("controller_config", controller_input.config.to_json())
+        update_joystick()
+        status.showMessage("Mapeamento de controles salvo.")
+
     file_menu = window.menuBar().addMenu("&Arquivo")
     open_action = QAction("Abrir ROM…", window)
     open_action.setShortcut(QKeySequence.StandardKey.Open)
@@ -420,11 +591,19 @@ def run(initial_path: Path | None = None) -> None:
     reset_action.setShortcut("F10")
     reset_action.triggered.connect(reset_machine)
     emu_menu.addAction(reset_action)
+    toolbar = window.addToolBar("Principal")
+    toolbar.setMovable(False)
+    toolbar.addAction(open_action)
+    toolbar.addAction(pause_action)
+    toolbar.addAction(reset_action)
 
     video_menu = window.menuBar().addMenu("&Vídeo")
     video_menu.addAction("Escala 2×", lambda: window.resize(600, 450))
     video_menu.addAction("Escala 3×", lambda: window.resize(800, 620))
     video_menu.addAction("Escala 4×", lambda: window.resize(1050, 800))
+
+    controls_menu = window.menuBar().addMenu("&Controles")
+    controls_menu.addAction("Configurar controles…", configure_controllers)
 
     def dump_vdp_snapshot() -> None:
         """Salva um snapshot pontual do VDP para investigar divergências gráficas."""
@@ -575,5 +754,7 @@ def run(initial_path: Path | None = None) -> None:
         open_rom(str(initial_path))
     window.show()
     app.exec()
+    controller_input.close()
     if pygame is not None:
         pygame.mixer.quit()
+        pygame.quit()
