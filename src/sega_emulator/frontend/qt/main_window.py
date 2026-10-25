@@ -102,7 +102,9 @@ class EmulatorMainWindow(QMainWindow):
         controls_menu.addAction("Dispositivos detectados", on_show_controllers)
 
         diagnostics_menu = self.menuBar().addMenu("&Diagnóstico")
-        diagnostics_menu.addAction("Capturar snapshot VDP (JSON + PNG)…", on_vdp_snapshot)
+        diagnostics_menu.addAction(
+            "Capturar snapshot VDP (JSON + PNG)…", on_vdp_snapshot
+        )
         diagnostics_menu.addAction("Abrir pasta de logs", on_open_logs)
         diagnostics_menu.addAction("Estado da máquina", on_show_machine_state)
 
@@ -110,7 +112,8 @@ class EmulatorMainWindow(QMainWindow):
         help_menu.addAction(
             "Sobre",
             lambda: self.status.showMessage(
-                "Sega Emulator — SG-1000; precisão e compatibilidade em validação.", 5000
+                "Sega Emulator — SG-1000; precisão e compatibilidade em validação.",
+                5000,
             ),
         )
 
