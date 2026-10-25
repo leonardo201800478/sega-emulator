@@ -468,6 +468,34 @@ impl NativeAudioSynchronizer {
     }
 }
 
+impl NativeSn76489 {
+    pub(crate) fn new_native(clock_hz: u64, sample_rate: u64) -> PyResult<Self> {
+        Self::new(clock_hz, sample_rate)
+    }
+}
+
+impl NativeAudioSynchronizer {
+    pub(crate) fn new_native(device: Py<NativeSn76489>) -> Self {
+        Self::new(device)
+    }
+
+    pub(crate) fn schedule_write_native(&mut self, tstate: u64, value: u8) -> PyResult<()> {
+        let tstate = i64::try_from(tstate)
+            .map_err(|_| PyValueError::new_err("tstate excede o intervalo suportado."))?;
+        self.schedule_write(tstate, i64::from(value))
+    }
+
+    pub(crate) fn advance_to_native(
+        &mut self,
+        py: Python<'_>,
+        target_tstate: u64,
+    ) -> PyResult<()> {
+        let target_tstate = i64::try_from(target_tstate)
+            .map_err(|_| PyValueError::new_err("target_tstate excede o intervalo suportado."))?;
+        self.advance_to(py, target_tstate)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::NativeSn76489;

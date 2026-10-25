@@ -263,6 +263,32 @@ impl NativeTms9918A {
     }
 }
 
+impl NativeTms9918A {
+    pub(crate) fn new_native() -> Self {
+        Self::new()
+    }
+
+    pub(crate) fn read_port_native(&mut self, port: u16) -> u8 {
+        self.read_port(i64::from(port))
+    }
+
+    pub(crate) fn write_port_native(&mut self, port: u16, value: u8) {
+        self.write_port(i64::from(port), i64::from(value));
+    }
+
+    pub(crate) fn advance_native(&mut self, tstates: u32) -> PyResult<()> {
+        self.advance(i64::from(tstates))
+    }
+
+    pub(crate) fn frame_number_native(&self) -> u64 {
+        self.frame_number
+    }
+
+    pub(crate) fn interrupt_pending_native(&self) -> bool {
+        (self.status & 0x80 != 0) && (self.registers[1] & 0x20 != 0)
+    }
+}
+
 fn display_mode(registers: &[u8]) -> u8 {
     ((registers[1] >> 4) & 1) | ((registers[1] >> 2) & 2) | (((registers[0] >> 1) & 1) << 2)
 }
