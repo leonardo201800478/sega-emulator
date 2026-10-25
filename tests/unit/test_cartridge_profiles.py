@@ -77,9 +77,7 @@ def test_castle_japan_uses_cartridge_ram_at_8000(monkeypatch) -> None:
 def test_english_logo_bomberman_sha256_selects_type_b_ram(monkeypatch) -> None:
     class FakeDigest:
         def hexdigest(self) -> str:
-            return (
-                "3eff3d6f1f74041f7b732455799d0978ab49724552ff2985f34b76478cd91721"
-            )
+            return "3eff3d6f1f74041f7b732455799d0978ab49724552ff2985f34b76478cd91721"
 
     monkeypatch.setattr(zlib, "crc32", lambda data: 0x12345678)
     monkeypatch.setattr("hashlib.sha256", lambda data: FakeDigest())
