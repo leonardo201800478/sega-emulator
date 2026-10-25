@@ -32,7 +32,8 @@ class _CartridgeMirrorBus:
             self._cartridge_ram
             and self._cartridge_ram_start <= address <= self._cartridge_ram_end
         ):
-            return self._cartridge_ram[(address - self._cartridge_ram_start) & self._cartridge_ram_mask]
+            offset = (address - self._cartridge_ram_start) & self._cartridge_ram_mask
+            return self._cartridge_ram[offset]
         if type(address) is int and 0 <= address < 0xC000:
             return self._rom_window[address]
         return self._bus.read(address)
@@ -48,9 +49,12 @@ class _CartridgeMirrorBus:
             self._cartridge_ram
             and self._cartridge_ram_start <= address <= self._cartridge_ram_end
         ):
-            if type(value) is not int or not 0 <= value <= 0xFF:
+            if type(value) is not int:
+                raise TypeError("O valor deve ser um inteiro.")
+            if not 0 <= value <= 0xFF:
                 raise ValueError("O valor deve estar entre 00h e FFh.")
-            self._cartridge_ram[(address - self._cartridge_ram_start) & self._cartridge_ram_mask] = value
+            offset = (address - self._cartridge_ram_start) & self._cartridge_ram_mask
+            self._cartridge_ram[offset] = value
             return
         if 0 <= address < 0xC000:
             return
