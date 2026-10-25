@@ -74,3 +74,24 @@ def test_video_scale_updates_window_size(qt_app, scale: int) -> None:
     assert window.width() == max(640, 256 * scale + 64)
     assert window.height() == max(480, 192 * scale + 128)
     window.close()
+
+
+
+def test_main_window_exposes_cpu_core_selector(qt_app) -> None:
+    called: list[str] = []
+    window = EmulatorMainWindow(
+        on_open_rom=lambda: None,
+        on_pause_resume=lambda: None,
+        on_reset=lambda: None,
+        on_configure_controls=lambda: None,
+        on_show_controllers=lambda: None,
+        on_vdp_snapshot=lambda: None,
+        on_open_logs=lambda: None,
+        on_show_machine_state=lambda: None,
+        on_video_scale=lambda scale: None,
+        on_select_cpu_core=lambda: called.append("select-core"),
+    )
+    assert window.select_cpu_core_action.isEnabled()
+    window.select_cpu_core_action.trigger()
+    assert called == ["select-core"]
+    window.close()
