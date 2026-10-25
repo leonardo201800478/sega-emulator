@@ -338,6 +338,13 @@ class FakeRawJoystick:
 
 
 class FakeRawControllerModule(FakeControllerModule):
+    def __init__(self, joystick_module: FakeRawJoystickModule) -> None:
+        super().__init__()
+        self.joystick_module = joystick_module
+
+    def get_count(self) -> int:
+        return self.joystick_module.get_count()
+
     def is_controller(self, index: int) -> bool:
         return False
 
