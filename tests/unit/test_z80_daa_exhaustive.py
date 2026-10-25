@@ -24,7 +24,10 @@ def _expected_daa(
     else:
         result = (accumulator + correction) & 0xFF
 
-    carry_out = carry or (not subtract and accumulator > 0x99)
+    # The pinned SingleStepTests/Z80 27.json vectors confirm that the
+    # A > 0x99 carry threshold also applies to invalid-BCD subtraction states.
+    # See upstream commit ebe1875d48f374bcfd4b505d8eb8ee751568b5f7.
+    carry_out = carry or accumulator > 0x99
     flags = (result & 0xA8) | (0x02 if subtract else 0)
     if result == 0:
         flags |= 0x40
