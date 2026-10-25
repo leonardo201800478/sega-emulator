@@ -149,7 +149,9 @@ def main() -> int:
     print(rendered)
     if args.output is not None:
         args.output.write_text(rendered + "\n", encoding="utf-8")
-    return 0 if rust_result.get("status") == "ok" else 2
+    if rust_result.get("status") != "ok":
+        return 2
+    return 0 if report.get("equivalence", {}).get("same_execution_signature") else 1
 
 
 if __name__ == "__main__":
