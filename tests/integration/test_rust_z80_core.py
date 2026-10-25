@@ -36,6 +36,16 @@ class PortBus:
         self.writes.append((address & 0xFFFF, value & 0xFF))
 
 
+class TimedPortBus(PortBus):
+    def __init__(self) -> None:
+        super().__init__()
+        self.timed_writes: list[tuple[int, int, int]] = []
+
+    def write_port_at(self, address: int, value: int, cycle: int) -> None:
+        self.timed_writes.append((address & 0xFFFF, value & 0xFF, cycle))
+        self.ports[address & 0xFFFF] = value & 0xFF
+
+
 def test_rust_core_matches_python_for_supported_instruction_sequence() -> None:
     RustZ80Cpu = _rust_cpu()
     program = bytes(
@@ -1190,3 +1200,43 @@ def test_rust_all_ed_opcodes_match_python(opcode: int) -> None:
     assert rust_bus.memory == python_bus.memory, f"ED {opcode:02X}: memory mismatch"
     assert rust_io.ports == python_io.ports, f"ED {opcode:02X}: port mismatch"
     assert rust_io.writes == python_io.writes, f"ED {opcode:02X}: I/O writes mismatch"
+
+
+@pytest.mark.parametrize(
+    ("program", "expected_port", "expected_value", "expected_offset", "bc", "hl"),
+    [
+        (bytes([0xD3, 0x10]), 0x6910, 0x69, 11, 0x1234, 0x2000),
+        (bytes([0xED, 0x41]), 0x1234, 0x12, 12, 0x1234, 0x2000),
+        (bytes([0xED, 0xA3]), 0x0120, 0xA6, 16, 0x0220, 0x1000),
+    ],
+)
+def test_rust_timestamped_output_matches_python(
+    program: bytes,
+    expected_port: int,
+    expected_value: int,
+    expected_offset: int,
+    bc: int,
+    hl: int,
+) -> None:
+    RustZ80Cpu = _rust_cpu()
+    python_bus = MemoryBus(program)
+    rust_bus = MemoryBus(program)
+    python_io = TimedPortBus()
+    rust_io = TimedPortBus()
+    python_bus.memory[0x1000] = rust_bus.memory[0x1000] = 0xA6
+    python_cpu = Z80Cpu(python_bus, python_io)
+    rust_cpu = RustZ80Cpu(rust_bus, rust_io)
+    for cpu in (python_cpu, rust_cpu):
+        cpu.a = 0x69
+        cpu.bc = bc
+        cpu.hl = hl
+
+    python_cycles = python_cpu.step()
+    rust_cycles = rust_cpu.step()
+    assert rust_cycles == python_cycles
+    expected_write = (expected_port, expected_value, expected_offset)
+    assert python_io.timed_writes == [expected_write]
+    assert rust_io.timed_writes == [expected_write]
+    assert rust_io.ports == python_io.ports
+    assert rust_bus.memory == python_bus.memory
+    _assert_rust_python_interrupt_state(python_cpu, rust_cpu)
