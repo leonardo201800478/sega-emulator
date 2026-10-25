@@ -68,6 +68,7 @@ class SDL3ControllerInput:
         self._player_ids: dict[int, int] = {}
         self._gamepad_ids: set[int] = set()
         self._joystick_ids: set[int] = set()
+        self._disconnect_detected = False
         if self._sdl is None:
             try:
                 import sdl3
@@ -132,6 +133,10 @@ class SDL3ControllerInput:
         self._sdl.SDL_PumpEvents()
         gamepad_ids = set(self._list_ids("SDL_GetGamepads"))
         joystick_ids = set(self._list_ids("SDL_GetJoysticks"))
+        previous_ids = self._gamepad_ids | self._joystick_ids
+        current_ids = gamepad_ids | joystick_ids
+        if previous_ids - current_ids:
+            self._disconnect_detected = True
         if gamepad_ids != self._gamepad_ids or joystick_ids != self._joystick_ids:
             self._close_handles()
             self._gamepad_ids = gamepad_ids
@@ -166,6 +171,12 @@ class SDL3ControllerInput:
             except AttributeError, OSError, RuntimeError:
                 names.append(f"Controle {instance_id}")
         return names
+
+    def consume_disconnect_event(self) -> bool:
+        """Retorna uma única vez se um dispositivo conectado foi removido."""
+        detected = self._disconnect_detected
+        self._disconnect_detected = False
+        return detected
 
     def _raw_pressed(self, joystick: Any, binding: str) -> bool:
         match = re.fullmatch(r"raw_button_(\d+)", binding)
@@ -291,6 +302,8 @@ class SDL3ControllerInput:
                                 actions.add("right")
         except AttributeError, OSError, RuntimeError, TypeError, ValueError:
             logger.exception("Erro ao consultar controles SDL3")
+            if self._gamepad_ids or self._joystick_ids:
+                self._disconnect_detected = True
             self._close_handles()
             self._gamepad_ids.clear()
             self._joystick_ids.clear()
