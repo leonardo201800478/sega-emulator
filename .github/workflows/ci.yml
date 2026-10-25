@@ -77,4 +77,4 @@ jobs:
           fi
           ruff check "${changed_python_files[@]}"
       - name: Run tests
-        run: pytest
+        run: python -m pytest
