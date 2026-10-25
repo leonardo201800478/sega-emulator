@@ -795,7 +795,8 @@ impl RustZ80Cpu {
                 Ok(if source == 6 { 19 } else { 8 })
             }
             0xE1 => {
-                self.set_index_value(prefix, self.pop_word(py)?);
+                let value = self.pop_word(py)?;
+                self.set_index_value(prefix, value);
                 Ok(14)
             }
             0xE3 => {
