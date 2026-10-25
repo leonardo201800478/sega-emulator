@@ -317,7 +317,7 @@ mod tests {
             0x36, 0x0F,       // LD (HL),0x0F
             0x3E, 0x01,       // LD A,1
         ]);
-        bus.0[6] = 0x86; // ADD A,(HL)
+        bus.0[7] = 0x86; // ADD A,(HL)
         let mut cpu = Z80::default();
 
         assert_eq!(cpu.step(&mut bus), Ok(10));
