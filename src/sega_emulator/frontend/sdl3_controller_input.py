@@ -120,7 +120,7 @@ class SDL3ControllerInput:
         for handle in self._joysticks.values():
             try:
                 self._sdl.SDL_CloseJoystick(handle)
-            except (AttributeError, OSError, RuntimeError):
+            except AttributeError, OSError, RuntimeError:
                 pass
         self._gamepads.clear()
         self._joysticks.clear()
@@ -163,7 +163,7 @@ class SDL3ControllerInput:
                 else:
                     name = self._sdl.SDL_GetJoystickName(self._joysticks[instance_id])
                 names.append(_decode_name(name) or f"Controle {instance_id}")
-            except (AttributeError, OSError, RuntimeError):
+            except AttributeError, OSError, RuntimeError:
                 names.append(f"Controle {instance_id}")
         return names
 
