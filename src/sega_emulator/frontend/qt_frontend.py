@@ -572,6 +572,7 @@ def run(initial_path: Path | None = None) -> None:
             "paddle4": "Paddle 4",
             "touchpad": "Touchpad",
         }
+
         def poll_gamepad_capture() -> None:
             nonlocal capture_target
             if capture_target is None:
