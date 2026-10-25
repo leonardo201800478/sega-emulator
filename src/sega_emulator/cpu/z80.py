@@ -512,9 +512,9 @@ class Z80Cpu:
         old_carry = bool(old_flags & 0x01)
 
         correction = 0
-        if old_half_carry or (not subtract and (accumulator & 0x0F) > 0x09):
+        if old_half_carry or (accumulator & 0x0F) > 0x09:
             correction |= 0x06
-        if old_carry or (not subtract and accumulator > 0x99):
+        if old_carry or accumulator > 0x99:
             correction |= 0x60
 
         if subtract:
