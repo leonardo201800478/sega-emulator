@@ -418,9 +418,9 @@ impl RustTMS9918A {
             }
             active.push((i, x, pat, (c & 15) as usize, sy));
         }
-        if let Some(fifth_index) = fifth.filter(|_| {
-            update_status && line < H && self.status & 0xc0 == 0
-        }) {
+        if let Some(fifth_index) =
+            fifth.filter(|_| update_status && line < H && self.status & 0xc0 == 0)
+        {
             self.status = (self.status & 0xa0) | 0x40 | fifth_index as u8;
         }
         let pb = ((r[6] & 7) as usize) << 11;
