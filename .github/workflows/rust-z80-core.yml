@@ -63,6 +63,8 @@ jobs:
           python -m ruff format --check src/sega_emulator/__main__.py src/sega_emulator/machine/sg1000.py src/sega_emulator/frontend/qt_frontend.py tests/integration/test_rust_z80_core.py tools/benchmarks/compare_cpu_cores.py
       - name: Test Python/Rust ALU and CPU parity
         run: python -m pytest tests/integration/test_z80_alu_rust_parity.py tests/integration/test_rust_z80_core.py -q
+      - name: Run full Python test suite
+        run: python -m pytest -q
       - name: Benchmark equivalent synthetic CPU workload
         run: python tools/benchmarks/compare_cpu_cores.py --synthetic-loop --warmup-frames 1 --frames 3 --repeats 1 --output rust-core-smoke-benchmark.json
       - uses: actions/upload-artifact@v4
