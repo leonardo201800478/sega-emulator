@@ -255,25 +255,23 @@ impl RustZ80Cpu {
     }
 
     fn write8(&self, py: Python<'_>, address: u16, value: u8) -> PyResult<()> {
-        self.bus
-            .bind(py)
-            .call_method1("write", (address, value))?;
+        self.bus.bind(py).call_method1("write", (address, value))?;
         Ok(())
     }
 
     fn read_port(&self, py: Python<'_>, address: u16) -> PyResult<u8> {
-        let io = self.io_bus.as_ref().ok_or_else(|| {
-            PyNotImplementedError::new_err("IN requires a configured I/O bus")
-        })?;
-        io.bind(py)
-            .call_method1("read_port", (address,))?
-            .extract()
+        let io = self
+            .io_bus
+            .as_ref()
+            .ok_or_else(|| PyNotImplementedError::new_err("IN requires a configured I/O bus"))?;
+        io.bind(py).call_method1("read_port", (address,))?.extract()
     }
 
     fn write_port(&self, py: Python<'_>, address: u16, value: u8) -> PyResult<()> {
-        let io = self.io_bus.as_ref().ok_or_else(|| {
-            PyNotImplementedError::new_err("OUT requires a configured I/O bus")
-        })?;
+        let io = self
+            .io_bus
+            .as_ref()
+            .ok_or_else(|| PyNotImplementedError::new_err("OUT requires a configured I/O bus"))?;
         io.bind(py).call_method1("write_port", (address, value))?;
         Ok(())
     }
@@ -343,11 +341,19 @@ impl RustZ80Cpu {
     }
 
     fn read_stack_pair(&self, code: u8) -> u16 {
-        if code == 3 { self.af() } else { self.read_pair(code) }
+        if code == 3 {
+            self.af()
+        } else {
+            self.read_pair(code)
+        }
     }
 
     fn write_stack_pair(&mut self, code: u8, value: u16) {
-        if code == 3 { self.set_af(value) } else { self.write_pair(code, value) }
+        if code == 3 {
+            self.set_af(value)
+        } else {
+            self.write_pair(code, value)
+        }
     }
 
     fn push_word(&mut self, py: Python<'_>, value: u16) -> PyResult<()> {
@@ -398,18 +404,30 @@ impl RustZ80Cpu {
     fn inc8(&mut self, value: u8) -> u8 {
         let result = value.wrapping_add(1);
         self.f = (self.f & FLAG_C) | (result & 0xA8);
-        if result == 0 { self.f |= FLAG_Z; }
-        if value & 0x0F == 0x0F { self.f |= FLAG_H; }
-        if value == 0x7F { self.f |= FLAG_PV; }
+        if result == 0 {
+            self.f |= FLAG_Z;
+        }
+        if value & 0x0F == 0x0F {
+            self.f |= FLAG_H;
+        }
+        if value == 0x7F {
+            self.f |= FLAG_PV;
+        }
         result
     }
 
     fn dec8(&mut self, value: u8) -> u8 {
         let result = value.wrapping_sub(1);
         self.f = (self.f & FLAG_C) | (result & 0xA8) | FLAG_N;
-        if result == 0 { self.f |= FLAG_Z; }
-        if value & 0x0F == 0 { self.f |= FLAG_H; }
-        if value == 0x80 { self.f |= FLAG_PV; }
+        if result == 0 {
+            self.f |= FLAG_Z;
+        }
+        if value & 0x0F == 0 {
+            self.f |= FLAG_H;
+        }
+        if value == 0x80 {
+            self.f |= FLAG_PV;
+        }
         result
     }
 
@@ -418,18 +436,17 @@ impl RustZ80Cpu {
         let result = u32::from(old) + u32::from(value);
         let word = result as u16;
         self.f = (self.f & 0xC4) | ((word >> 8) as u8 & 0x28);
-        if (old & 0x0FFF) + (value & 0x0FFF) > 0x0FFF { self.f |= FLAG_H; }
-        if result > 0xFFFF { self.f |= FLAG_C; }
+        if (old & 0x0FFF) + (value & 0x0FFF) > 0x0FFF {
+            self.f |= FLAG_H;
+        }
+        if result > 0xFFFF {
+            self.f |= FLAG_C;
+        }
         self.wz = old.wrapping_add(1);
         self.set_hl(word);
     }
 
-    fn execute_opcode(
-        &mut self,
-        py: Python<'_>,
-        opcode: u8,
-        opcode_pc: u16,
-    ) -> PyResult<u32> {
+    fn execute_opcode(&mut self, py: Python<'_>, opcode: u8, opcode_pc: u16) -> PyResult<u32> {
         if opcode == 0x00 {
             return Ok(4);
         }
@@ -442,7 +459,11 @@ impl RustZ80Cpu {
             let source = opcode & 7;
             let value = self.read_reg(py, source)?;
             self.write_reg(py, destination, value)?;
-            return Ok(if destination == 6 || source == 6 { 7 } else { 4 });
+            return Ok(if destination == 6 || source == 6 {
+                7
+            } else {
+                4
+            });
         }
         if opcode & 0xC7 == 0x06 {
             let register = (opcode >> 3) & 7;
@@ -484,10 +505,24 @@ impl RustZ80Cpu {
         }
 
         match opcode {
-            0x02 => { let address = self.bc(); self.write8(py, address, self.a)?; Ok(7) }
-            0x12 => { let address = self.de(); self.write8(py, address, self.a)?; Ok(7) }
-            0x0A => { self.a = self.read8(py, self.bc())?; Ok(7) }
-            0x1A => { self.a = self.read8(py, self.de())?; Ok(7) }
+            0x02 => {
+                let address = self.bc();
+                self.write8(py, address, self.a)?;
+                Ok(7)
+            }
+            0x12 => {
+                let address = self.de();
+                self.write8(py, address, self.a)?;
+                Ok(7)
+            }
+            0x0A => {
+                self.a = self.read8(py, self.bc())?;
+                Ok(7)
+            }
+            0x1A => {
+                self.a = self.read8(py, self.de())?;
+                Ok(7)
+            }
             0x03 | 0x13 | 0x23 | 0x33 => {
                 let pair = (opcode >> 4) & 3;
                 self.write_pair(pair, self.read_pair(pair).wrapping_add(1));
@@ -509,7 +544,9 @@ impl RustZ80Cpu {
                     self.pc = self.pc.wrapping_add_signed(i16::from(displacement));
                     self.wz = self.pc;
                     Ok(13)
-                } else { Ok(8) }
+                } else {
+                    Ok(8)
+                }
             }
             0x18 | 0x20 | 0x28 | 0x30 | 0x38 => {
                 let displacement = self.fetch8(py)? as i8;
@@ -565,9 +602,19 @@ impl RustZ80Cpu {
                 self.wz = self.pc;
                 Ok(10)
             }
-            0xE9 => { self.pc = self.hl(); Ok(4) }
-            0xF9 => { self.sp = self.hl(); Ok(6) }
-            0xC9 => { self.pc = self.pop_word(py)?; self.wz = self.pc; Ok(10) }
+            0xE9 => {
+                self.pc = self.hl();
+                Ok(4)
+            }
+            0xF9 => {
+                self.sp = self.hl();
+                Ok(6)
+            }
+            0xC9 => {
+                self.pc = self.pop_word(py)?;
+                self.wz = self.pc;
+                Ok(10)
+            }
             0xCD => {
                 let low = self.fetch8(py)?;
                 let high = self.fetch8(py)?;
@@ -600,14 +647,33 @@ impl RustZ80Cpu {
                 self.wz = address.wrapping_add(1);
                 Ok(11)
             }
-            0xF3 => { self.iff1 = false; self.iff2 = false; self.ei_delay = 0; Ok(4) }
-            0xFB => { self.iff1 = true; self.iff2 = true; self.ei_delay = 2; Ok(4) }
+            0xF3 => {
+                self.iff1 = false;
+                self.iff2 = false;
+                self.ei_delay = 0;
+                Ok(4)
+            }
+            0xFB => {
+                self.iff1 = true;
+                self.iff2 = true;
+                self.ei_delay = 2;
+                Ok(4)
+            }
             0xED => {
                 let sub = self.fetch_opcode(py)?;
                 match sub {
-                    0x46 | 0x4E | 0x66 | 0x6E => { self.interrupt_mode = 0; Ok(8) }
-                    0x56 | 0x76 => { self.interrupt_mode = 1; Ok(8) }
-                    0x5E | 0x7E => { self.interrupt_mode = 2; Ok(8) }
+                    0x46 | 0x4E | 0x66 | 0x6E => {
+                        self.interrupt_mode = 0;
+                        Ok(8)
+                    }
+                    0x56 | 0x76 => {
+                        self.interrupt_mode = 1;
+                        Ok(8)
+                    }
+                    0x5E | 0x7E => {
+                        self.interrupt_mode = 2;
+                        Ok(8)
+                    }
                     0x45 | 0x4D | 0x55 | 0x5D | 0x65 | 0x6D | 0x75 | 0x7D => {
                         self.pc = self.pop_word(py)?;
                         self.wz = self.pc;
@@ -630,7 +696,10 @@ impl RustZ80Cpu {
                 let low = self.fetch8(py)?;
                 let high = self.fetch8(py)?;
                 let target = u16::from_le_bytes([low, high]);
-                if self.condition((opcode >> 3) & 7) { self.pc = target; self.wz = target; }
+                if self.condition((opcode >> 3) & 7) {
+                    self.pc = target;
+                    self.wz = target;
+                }
                 Ok(10)
             }
             _ if opcode & 0xC7 == 0xC4 => {
@@ -642,14 +711,18 @@ impl RustZ80Cpu {
                     self.pc = target;
                     self.wz = target;
                     Ok(17)
-                } else { Ok(10) }
+                } else {
+                    Ok(10)
+                }
             }
             _ if opcode & 0xC7 == 0xC0 => {
                 if self.condition((opcode >> 3) & 7) {
                     self.pc = self.pop_word(py)?;
                     self.wz = self.pc;
                     Ok(11)
-                } else { Ok(5) }
+                } else {
+                    Ok(5)
+                }
             }
             _ => Err(PyNotImplementedError::new_err(format!(
                 "Rust Z80 core does not support opcode 0x{opcode:02X} at PC 0x{opcode_pc:04X}"
