@@ -57,7 +57,7 @@ Para usar o frontend Pygame:
 .\\.venv\\Scripts\\python.exe -m sega_emulator "C:\\caminho\\para\\jogo.sg" --ui pygame
 ```
 
-## Backend SG-1000 Rust experimental no Qt
+## Núcleo SG-1000 standalone em Rust (em desenvolvimento)\n\nO crate puro `native/sg1000_core` agora contém mapa de memória ROM/RAM, contrato de barramento, uma fatia inicial de instruções Z80 e uma máquina headless que conecta CPU e memória. A máquina executa ROMs sintéticas sem iniciar Python, mas ainda **não** representa o SG-1000 completo: VDP, PSG, I/O, interrupções e scheduler de dispositivos não estão integrados. A CPU suporta apenas instruções explicitamente implementadas e retorna erro para as demais; isso é um marco de extração, não um runtime para jogos comerciais.\n\n## Backend SG-1000 Rust experimental no Qt
 
 O frontend Qt permite alternar entre **Python (referência)** e **Rust (experimental)** em **Emulação → Selecionar núcleo Z80…**. A seleção fica persistida nas configurações Qt. Se houver uma ROM carregada, trocar de núcleo recria a máquina para começar em estado limpo.
 
