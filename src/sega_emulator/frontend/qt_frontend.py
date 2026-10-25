@@ -336,7 +336,9 @@ def run(
                 if not accepted:
                     return
                 candidate = load_rom(path, member_name=selected)
-            loaded_machine = SG1000Machine(candidate.data, cpu_core=selected_cpu_core, vdp_core=selected_vdp_core)
+            loaded_machine = SG1000Machine(
+                candidate.data, cpu_core=selected_cpu_core, vdp_core=selected_vdp_core
+            )
         except Exception as exc:
             logger.exception(
                 "Falha ao carregar ROM",
@@ -395,7 +397,9 @@ def run(
         nonlocal last_checkpoint_instructions, last_checkpoint_frame
         if loaded is None:
             return
-        machine = SG1000Machine(loaded.data, cpu_core=selected_cpu_core, vdp_core=selected_vdp_core)
+        machine = SG1000Machine(
+            loaded.data, cpu_core=selected_cpu_core, vdp_core=selected_vdp_core
+        )
         frame_count, paused = 0, False
         pressed_keys.clear()
         update_joystick()
