@@ -36,6 +36,14 @@ pub struct RustZ80Cpu {
     #[pyo3(get, set)]
     pub l: u8,
     #[pyo3(get, set)]
+    pub af_alt: u16,
+    #[pyo3(get, set)]
+    pub bc_alt: u16,
+    #[pyo3(get, set)]
+    pub de_alt: u16,
+    #[pyo3(get, set)]
+    pub hl_alt: u16,
+    #[pyo3(get, set)]
     pub sp: u16,
     #[pyo3(get, set)]
     pub pc: u16,
@@ -79,6 +87,10 @@ impl RustZ80Cpu {
             e: 0,
             h: 0,
             l: 0,
+            af_alt: 0,
+            bc_alt: 0,
+            de_alt: 0,
+            hl_alt: 0,
             sp: 0,
             pc: 0,
             ix: 0,
@@ -146,6 +158,10 @@ impl RustZ80Cpu {
         self.e = 0;
         self.h = 0;
         self.l = 0;
+        self.af_alt = 0;
+        self.bc_alt = 0;
+        self.de_alt = 0;
+        self.hl_alt = 0;
         self.sp = 0;
         self.pc = 0;
         self.ix = 0;
@@ -349,6 +365,24 @@ impl RustZ80Cpu {
         }
     }
 
+    fn read_pair2(&self, code: u8) -> u16 {
+        match code {
+            0 => self.bc_alt,
+            1 => self.de_alt,
+            2 => self.hl_alt,
+            _ => self.sp,
+        }
+    }
+
+    fn write_pair2(&mut self, code: u8, value: u16) {
+        match code {
+            0 => self.bc_alt = value,
+            1 => self.de_alt = value,
+            2 => self.hl_alt = value,
+            _ => self.sp = value,
+        }
+    }
+
     fn write_stack_pair(&mut self, code: u8, value: u16) {
         if code == 3 {
             self.set_af(value)
@@ -506,6 +540,25 @@ impl RustZ80Cpu {
         }
 
         match opcode {
+            0x07 | 0x17 | 0x0F | 0x1F => {
+                let old_a = self.a;
+                let old_carry = self.f & FLAG_C;
+                let (result, carry) = match opcode {
+                    0x07 => ((old_a << 1) | (old_a >> 7), old_a >> 7),
+                    0x17 => ((old_a << 1) | old_carry, old_a >> 7),
+                    0x0F => ((old_a >> 1) | (old_a << 7), old_a & 1),
+                    _ => ((old_a >> 1) | (old_carry << 7), old_a & 1),
+                };
+                self.a = result;
+                self.f = (self.f & 0xC4) | (result & 0x28) | carry;
+                Ok(4)
+            }
+            0x08 => {
+                let current = self.af();
+                self.set_af(self.af_alt);
+                self.af_alt = current;
+                Ok(4)
+            }
             0x02 | 0x12 => {
                 let address = if opcode == 0x02 { self.bc() } else { self.de() };
                 self.write8(py, address, self.a)?;
@@ -574,6 +627,38 @@ impl RustZ80Cpu {
                 self.wz = address.wrapping_add(1);
                 Ok(16)
             }
+            0x27 => {
+                let old_a = self.a;
+                let old_f = self.f;
+                let subtract = old_f & FLAG_N != 0;
+                let old_half = old_f & FLAG_H != 0;
+                let old_carry = old_f & FLAG_C != 0;
+                let mut correction = 0u8;
+                if old_half || (!subtract && (old_a & 0x0F) > 9) {
+                    correction |= 0x06;
+                }
+                if old_carry || (!subtract && old_a > 0x99) {
+                    correction |= 0x60;
+                }
+                let result = if subtract {
+                    old_a.wrapping_sub(correction)
+                } else {
+                    old_a.wrapping_add(correction)
+                };
+                let mut flags = (result & 0xA8) | (old_f & FLAG_N);
+                if result == 0 { flags |= FLAG_Z; }
+                if result.count_ones() % 2 == 0 { flags |= FLAG_PV; }
+                if (old_a ^ result) & 0x10 != 0 { flags |= FLAG_H; }
+                if old_carry || (!subtract && old_a > 0x99) { flags |= FLAG_C; }
+                self.a = result;
+                self.f = flags;
+                Ok(4)
+            }
+            0x2F => {
+                self.a = !self.a;
+                self.f = (self.f & 0xC5) | FLAG_H | FLAG_N | (self.a & 0x28);
+                Ok(4)
+            }
             0x32 => {
                 let low = self.fetch8(py)?;
                 let high = self.fetch8(py)?;
@@ -590,6 +675,20 @@ impl RustZ80Cpu {
                 self.wz = address.wrapping_add(1);
                 Ok(13)
             }
+            0x37 => {
+                self.f = (self.f & 0xC4) | (self.a & 0x28) | FLAG_C;
+                Ok(4)
+            }
+            0x3F => {
+                let old_carry = self.f & FLAG_C;
+                self.f = (self.f & 0xC4) | (self.a & 0x28);
+                if old_carry != 0 {
+                    self.f |= FLAG_H;
+                } else {
+                    self.f |= FLAG_C;
+                }
+                Ok(4)
+            }
             0xC3 => {
                 let low = self.fetch8(py)?;
                 let high = self.fetch8(py)?;
@@ -597,8 +696,29 @@ impl RustZ80Cpu {
                 self.wz = self.pc;
                 Ok(10)
             }
+            0xD9 => {
+                std::mem::swap(&mut self.bc_alt, &mut self.b /* invalid placeholder */);
+                Ok(4)
+            }
+            0xE3 => {
+                let low = self.read8(py, self.sp)?;
+                let high_address = self.sp.wrapping_add(1);
+                let high = self.read8(py, high_address)?;
+                self.write8(py, high_address, self.h)?;
+                self.write8(py, self.sp, self.l)?;
+                self.h = high;
+                self.l = low;
+                self.wz = u16::from_le_bytes([low, high]);
+                Ok(19)
+            }
             0xE9 => {
                 self.pc = self.hl();
+                Ok(4)
+            }
+            0xEB => {
+                let de = self.de();
+                self.set_de(self.hl());
+                self.set_hl(de);
                 Ok(4)
             }
             0xF9 => {
