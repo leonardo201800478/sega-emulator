@@ -8,6 +8,9 @@ use pyo3::exceptions::PyNotImplementedError;
 use pyo3::prelude::*;
 use sega_z80_alu::{adc8, add8, and8, cp8, or8, sbc8, sub8, xor8};
 
+mod memory;
+use memory::NativeMemoryBus;
+
 const FLAG_C: u8 = 0x01;
 const FLAG_N: u8 = 0x02;
 const FLAG_PV: u8 = 0x04;
@@ -17,7 +20,8 @@ const FLAG_S: u8 = 0x80;
 
 #[pyclass(module = "sega_z80_core")]
 pub struct RustZ80Cpu {
-    bus: Py<PyAny>,
+    bus: Option<Py<PyAny>>,
+    native_memory: Option<Py<NativeMemoryBus>>,
     io_bus: Option<Py<PyAny>>,
     #[pyo3(get, set)]
     pub a: u8,
@@ -82,40 +86,16 @@ pub struct RustZ80Cpu {
 impl RustZ80Cpu {
     #[new]
     fn new(bus: Py<PyAny>, io_bus: Option<Py<PyAny>>) -> Self {
-        Self {
-            bus,
-            io_bus,
-            a: 0,
-            f: 0,
-            b: 0,
-            c: 0,
-            d: 0,
-            e: 0,
-            h: 0,
-            l: 0,
-            af_alt: 0,
-            bc_alt: 0,
-            de_alt: 0,
-            hl_alt: 0,
-            sp: 0,
-            pc: 0,
-            ix: 0,
-            iy: 0,
-            i: 0,
-            r: 0,
-            iff1: false,
-            iff2: false,
-            interrupt_mode: 0,
-            halted: false,
-            wz: 0,
-            q: 0,
-            _q_previous: 0,
-            p: 0,
-            total_cycles: 0,
-            int_pending: None,
-            nmi_pending: false,
-            ei_delay: 0,
-        }
+        Self::new_inner(Some(bus), None, io_bus)
+    }
+
+    /// Construct a CPU whose memory accesses stay inside Rust.
+    #[staticmethod]
+    fn with_native_memory(
+        memory: Py<NativeMemoryBus>,
+        io_bus: Option<Py<PyAny>>,
+    ) -> Self {
+        Self::new_inner(None, Some(memory), io_bus)
     }
 
     #[getter]
@@ -288,15 +268,67 @@ impl RustZ80Cpu {
 }
 
 impl RustZ80Cpu {
+    fn new_inner(
+        bus: Option<Py<PyAny>>,
+        native_memory: Option<Py<NativeMemoryBus>>,
+        io_bus: Option<Py<PyAny>>,
+    ) -> Self {
+        Self {
+            bus,
+            native_memory,
+            io_bus,
+            a: 0,
+            f: 0,
+            b: 0,
+            c: 0,
+            d: 0,
+            e: 0,
+            h: 0,
+            l: 0,
+            af_alt: 0,
+            bc_alt: 0,
+            de_alt: 0,
+            hl_alt: 0,
+            sp: 0,
+            pc: 0,
+            ix: 0,
+            iy: 0,
+            i: 0,
+            r: 0,
+            iff1: false,
+            iff2: false,
+            interrupt_mode: 0,
+            halted: false,
+            wz: 0,
+            q: 0,
+            _q_previous: 0,
+            p: 0,
+            total_cycles: 0,
+            int_pending: None,
+            nmi_pending: false,
+            ei_delay: 0,
+        }
+    }
+
     fn read8(&self, py: Python<'_>, address: u16) -> PyResult<u8> {
-        self.bus
-            .bind(py)
-            .call_method1("read", (address,))?
-            .extract()
+        if let Some(memory) = &self.native_memory {
+            return Ok(memory.bind(py).borrow().read_byte(address));
+        }
+        let bus = self.bus.as_ref().ok_or_else(|| {
+            PyNotImplementedError::new_err("No memory bus is configured for this CPU")
+        })?;
+        bus.bind(py).call_method1("read", (address,))?.extract()
     }
 
     fn write8(&self, py: Python<'_>, address: u16, value: u8) -> PyResult<()> {
-        self.bus.bind(py).call_method1("write", (address, value))?;
+        if let Some(memory) = &self.native_memory {
+            memory.bind(py).borrow_mut().write_byte(address, value);
+            return Ok(());
+        }
+        let bus = self.bus.as_ref().ok_or_else(|| {
+            PyNotImplementedError::new_err("No memory bus is configured for this CPU")
+        })?;
+        bus.bind(py).call_method1("write", (address, value))?;
         Ok(())
     }
 
@@ -1558,6 +1590,7 @@ fn is_unassigned_ed_opcode(opcode: u8) -> bool {
 
 #[pymodule]
 fn sega_z80_core(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    module.add_class::<NativeMemoryBus>()?;
     module.add_class::<RustZ80Cpu>()?;
     Ok(())
 }
