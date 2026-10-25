@@ -27,7 +27,6 @@ def test_rust_backend_reports_missing_extension_clearly(monkeypatch) -> None:
         SG1000Machine(b"\x00", cpu_core="rust")
 
 
-
 def test_rust_backend_uses_native_memory_for_cpu_reads_and_writes() -> None:
     native_core = pytest.importorskip("sega_z80_core")
     rom = bytes(
