@@ -87,6 +87,6 @@ mod tests {
     #[test]
     fn undocumented_xy_flags_follow_the_result_for_add_and_sub() {
         assert_eq!(add8(0x00, 0x08).flags & 0x28, 0x08);
-        assert_eq!(sub8(0x00, 0x08).flags & 0x28, 0x20);
+        assert_eq!(sub8(0x00, 0x10).flags & 0x28, 0x20);
     }
 }
