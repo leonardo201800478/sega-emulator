@@ -12,6 +12,8 @@ from pathlib import Path
 from sega_emulator.frontend.controller_input import (
     ACTIONS,
     DEFAULT_GAMEPAD_BINDINGS,
+    DEFAULT_KEYBOARD_BINDINGS_P1,
+    DEFAULT_KEYBOARD_BINDINGS_P2,
     JOYSTICK_ACTIONS,
     SUPPORTED_BUTTONS,
     ControllerInput,
@@ -48,6 +50,7 @@ def run(initial_path: Path | None = None) -> None:
             QMainWindow,
             QMenu,
             QMessageBox,
+            QPushButton,
             QStatusBar,
             QTabWidget,
             QVBoxLayout,
@@ -132,25 +135,20 @@ def run(initial_path: Path | None = None) -> None:
     # Executa tão rápido quanto possível; mede-se a velocidade real.
     timer.setInterval(0)
 
-    key_map = {
-        Qt.Key.Key_Up: (1, "up"),
-        Qt.Key.Key_Down: (1, "down"),
-        Qt.Key.Key_Left: (1, "left"),
-        Qt.Key.Key_Right: (1, "right"),
-        Qt.Key.Key_Z: (1, "button1"),
-        Qt.Key.Key_Space: (1, "button1"),
-        Qt.Key.Key_X: (1, "button2"),
-        Qt.Key.Key_Return: (1, "button2"),
-        Qt.Key.Key_Enter: (1, "button2"),
-        Qt.Key.Key_P: (1, "hold"),
-        Qt.Key.Key_W: (2, "up"),
-        Qt.Key.Key_S: (2, "down"),
-        Qt.Key.Key_A: (2, "left"),
-        Qt.Key.Key_D: (2, "right"),
-        Qt.Key.Key_F: (2, "button1"),
-        Qt.Key.Key_G: (2, "button2"),
-        Qt.Key.Key_H: (2, "hold"),
-    }
+    def build_key_map() -> dict[int, tuple[int, str]]:
+        result: dict[int, tuple[int, str]] = {}
+        for player in (1, 2):
+            for action, key_name in controller_input.config.players[
+                player
+            ].keyboard_bindings.items():
+                sequence = QKeySequence.fromString(
+                    key_name, QKeySequence.SequenceFormat.PortableText
+                )
+                if not sequence.isEmpty():
+                    result[int(sequence[0])] = (player, action)
+        return result
+
+    key_map = build_key_map()
 
     def update_joystick() -> None:
         nonlocal hold_was_pressed
@@ -166,6 +164,16 @@ def run(initial_path: Path | None = None) -> None:
         gamepad_actions = controller_input.poll()
         for player in (1, 2):
             actions[player].update(gamepad_actions[player])
+            profile = controller_input.config.players[player]
+            # Turbo runs at 15 Hz on a nominal 60 Hz frame cadence: two frames
+            # pressed, two released. It affects both keyboard and gamepad input.
+            for action in ("button1", "button2"):
+                if (
+                    profile.turbo_buttons.get(action, False)
+                    and action in actions[player]
+                    and frame_count % 4 >= 2
+                ):
+                    actions[player].discard(action)
             machine.set_joystick(
                 player, joystick_value(actions[player].intersection(JOYSTICK_ACTIONS))
             )
@@ -481,7 +489,9 @@ def run(initial_path: Path | None = None) -> None:
         tabs = QTabWidget()
         dialog_layout.addWidget(tabs)
         combos: dict[tuple[int, str], QComboBox] = {}
+        key_buttons: dict[tuple[int, str], QPushButton] = {}
         stick_checks: dict[int, QCheckBox] = {}
+        turbo_checks: dict[tuple[int, str], QCheckBox] = {}
         action_labels = {
             "up": "Cima",
             "down": "Baixo",
@@ -527,7 +537,59 @@ def run(initial_path: Path | None = None) -> None:
                 )
                 combo.setCurrentIndex(max(0, combo.findData(selected)))
                 combos[(player, action)] = combo
-                form.addRow(action_labels[action], combo)
+                form.addRow(f"Controle — {action_labels[action]}", combo)
+                key_button = QPushButton(profile.keyboard_bindings[action])
+                key_button.setToolTip("Clique e pressione a tecla desejada.")
+                key_button.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+                key_button.key_name = profile.keyboard_bindings[action]
+
+                def begin_key_capture(
+                    button: QPushButton = key_button,
+                ) -> None:
+                    button.setText("Pressione uma tecla…")
+                    button.setProperty("capturing_key", True)
+                    button.setFocus()
+
+                def capture_key_press(
+                    event: QEvent,
+                    button: QPushButton = key_button,
+                ) -> None:
+                    if not button.property("capturing_key"):
+                        return
+                    key = event.key()
+                    if key in (
+                        Qt.Key.Key_Escape,
+                        Qt.Key.Key_Control,
+                        Qt.Key.Key_Shift,
+                        Qt.Key.Key_Alt,
+                        Qt.Key.Key_Meta,
+                    ):
+                        button.setText("Tecla inválida; tente novamente")
+                        return
+                    sequence = QKeySequence(key)
+                    key_name = sequence.toString(
+                        QKeySequence.SequenceFormat.PortableText
+                    )
+                    if not key_name:
+                        button.setText("Tecla inválida; tente novamente")
+                        return
+                    button.key_name = key_name
+                    button.setText(key_name)
+                    button.setProperty("capturing_key", False)
+                    event.accept()
+
+                key_button.clicked.connect(begin_key_capture)
+                key_button.keyPressEvent = capture_key_press
+                key_buttons[(player, action)] = key_button
+                form.addRow(f"Teclado — {action_labels[action]}", key_button)
+            turbo1 = QCheckBox("Turbo no Botão 1 (A por padrão)")
+            turbo1.setChecked(profile.turbo_buttons.get("button1", False))
+            turbo_checks[(player, "button1")] = turbo1
+            form.addRow("", turbo1)
+            turbo2 = QCheckBox("Turbo no Botão 2 (B por padrão)")
+            turbo2.setChecked(profile.turbo_buttons.get("button2", False))
+            turbo_checks[(player, "button2")] = turbo2
+            form.addRow("", turbo2)
             stick_check = QCheckBox("Usar analógico esquerdo como direcional")
             stick_check.setChecked(profile.use_left_stick)
             stick_checks[player] = stick_check
@@ -555,19 +617,37 @@ def run(initial_path: Path | None = None) -> None:
         dialog_layout.addWidget(buttons)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
-        profiles = {
-            player: PlayerInputProfile(
+        profiles: dict[int, PlayerInputProfile] = {}
+        for player in (1, 2):
+            keyboard_bindings = {
+                action: key_buttons[(player, action)].key_name
+                for action in ACTIONS
+            }
+            normalized_keys = [key.casefold() for key in keyboard_bindings.values()]
+            if len(normalized_keys) != len(set(normalized_keys)):
+                QMessageBox.warning(
+                    dialog,
+                    "Mapeamento inválido",
+                    f"O Jogador {player} atribuiu a mesma tecla a mais de uma ação.",
+                )
+                return
+            profiles[player] = PlayerInputProfile(
                 gamepad_buttons={
                     action: str(combos[(player, action)].currentData())
                     for action in ACTIONS
                 },
                 use_left_stick=stick_checks[player].isChecked(),
+                keyboard_bindings=keyboard_bindings,
+                turbo_buttons={
+                    action: turbo_checks[(player, action)].isChecked()
+                    for action in ("button1", "button2")
+                },
             )
-            for player in (1, 2)
-        }
         controller_input.config = ControllerInputConfig(
             players=profiles, deadzone=deadzone.value()
         )
+        key_map.clear()
+        key_map.update(build_key_map())
         settings.setValue("controller_config", controller_input.config.to_json())
         update_joystick()
         status.showMessage("Mapeamento de controles salvo.")
