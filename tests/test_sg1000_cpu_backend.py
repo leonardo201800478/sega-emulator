@@ -31,9 +31,14 @@ def test_rust_backend_uses_native_memory_for_cpu_reads_and_writes() -> None:
     native_core = pytest.importorskip("sega_z80_core")
     rom = bytes(
         [
-            0x3E, 0x5A,  # LD A, 5Ah
-            0x32, 0x00, 0xC0,  # LD (C000h), A
-            0x3A, 0x00, 0xC0,  # LD A, (C000h)
+            0x3E,
+            0x5A,  # LD A, 5Ah
+            0x32,
+            0x00,
+            0xC0,  # LD (C000h), A
+            0x3A,
+            0x00,
+            0xC0,  # LD A, (C000h)
             0x76,  # HALT
         ]
     )
