@@ -35,7 +35,7 @@ def test_rust_backend_executes_instructions_in_native_cpu_instance() -> None:
     from sega_z80_core import RustZ80Cpu
 
     # LD A,12h; INC A; NOP. Assert architectural effects, not just selection metadata.
-    machine = SG1000Machine(b"\x3E\x12\x3C\x00", cpu_core="rust")
+    machine = SG1000Machine(b"\x3e\x12\x3c\x00", cpu_core="rust")
     assert machine.cpu_core == "rust"
     assert isinstance(machine.cpu, RustZ80Cpu)
     assert machine.cpu.__class__.__module__ == rust_module.__name__
