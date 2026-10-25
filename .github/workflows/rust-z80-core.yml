@@ -73,7 +73,6 @@ jobs:
           python -c "import pathlib,sys,zlib; p=pathlib.Path(sys.argv[1]); b=p.read_bytes(); crc=zlib.crc32(b) & 0xFFFFFFFF; print(f'ROM size={len(b)} CRC32={crc:08X}'); assert len(b) == 0xC000 and crc == 0xAA8EA6EB, 'Unexpected Super Uwol ROM identity'" $rom
           Add-Content -Path $env:GITHUB_ENV -Value "SUPER_UWOL_ROM=$rom"
       - name: Compare Python and Rust on verified homebrew ROM
-        continue-on-error: true
         shell: pwsh
         run: python tools/benchmarks/compare_cpu_cores.py --rom "$env:SUPER_UWOL_ROM" --warmup-frames 30 --frames 120 --repeats 3 --output rust-core-super-uwol.json
       - name: Benchmark equivalent synthetic CPU workload
