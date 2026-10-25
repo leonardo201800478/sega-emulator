@@ -81,7 +81,7 @@ mod tests {
         let mut second = first.clone();
 
         assert_eq!(first.run_instructions(4), Ok(31));
-        assert_eq!(second.run_instructions(4), Ok(28));
+        assert_eq!(second.run_instructions(4), Ok(31));
         assert_eq!(first.cpu, second.cpu);
         assert_eq!(first.memory, second.memory);
         assert_eq!(first.cpu.registers.a, 0x42);
