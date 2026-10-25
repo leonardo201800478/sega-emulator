@@ -1115,6 +1115,7 @@ def test_rust_immediate_io_wz_wrap_semantics(opcode: int, expected_wz: int) -> N
     assert rust_cpu.wz == expected_wz
     assert rust_io.writes == python_io.writes
 
+
 def test_rust_daa_matches_python_for_all_input_combinations() -> None:
     """Cross-check all 2,048 A/N/H/C states against the Python reference."""
     RustZ80Cpu = _rust_cpu()
@@ -1142,7 +1143,12 @@ def test_rust_daa_matches_python_for_all_input_combinations() -> None:
                         f"DAA mismatch A={accumulator:02X} N={subtract} "
                         f"H={half_carry} C={carry}"
                     )
-                    assert (rust_cpu.pc, rust_cpu.r, rust_cpu.total_cycles, rust_cpu.q) == (
+                    assert (
+                        rust_cpu.pc,
+                        rust_cpu.r,
+                        rust_cpu.total_cycles,
+                        rust_cpu.q,
+                    ) == (
                         python_cpu.pc,
                         python_cpu.r,
                         python_cpu.total_cycles,
