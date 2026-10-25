@@ -5,8 +5,8 @@ from __future__ import annotations
 from sega_emulator.audio.sn76489 import SN76489
 from sega_emulator.bus.memory import SG1000Ram
 from sega_emulator.bus.memory_bus import SG1000MemoryBus
-from sega_emulator.machine.cartridge_profiles import cartridge_ram_size
 from sega_emulator.cpu.z80 import Z80Cpu
+from sega_emulator.machine.cartridge_profiles import cartridge_ram_size
 from sega_emulator.video.tms9918 import TMS9918A
 
 
