@@ -348,6 +348,11 @@ class FakeRawControllerModule(FakeControllerModule):
         return False
 
 
+class FakeMappedRawControllerModule(FakeRawControllerModule):
+    def is_controller(self, index: int) -> bool:
+        return True
+
+
 class FakeRawJoystickModule:
     def __init__(self, devices: list[FakeRawJoystick]) -> None:
         self.devices = devices
@@ -419,3 +424,23 @@ def test_unmapped_joystick_reconnect_refreshes_device_handles() -> None:
     joystick_backend.devices = [reconnected]
     assert inputs.poll()[1] == {"button1"}
     assert inputs.connected_names() == ["Reconnected device"]
+
+
+
+def test_mapped_controller_can_capture_raw_buttons_when_sdl_mapping_fails() -> None:
+    raw = FakeRawJoystick("Mapped but unreadable gamepad")
+    raw.buttons.add(5)
+    joystick_backend = FakeRawJoystickModule([raw])
+    controller_backend = FakeMappedRawControllerModule(joystick_backend)
+    inputs = ControllerInput(
+        SimpleNamespace(
+            _sdl2=SimpleNamespace(controller=controller_backend),
+            joystick=joystick_backend,
+        )
+    )
+    inputs.config.players[1] = PlayerInputProfile(
+        gamepad_buttons={"button1": "raw_button_5"}
+    )
+
+    assert inputs.read_pressed_button(1) == "raw_button_5"
+    assert inputs.poll()[1] == {"button1"}
