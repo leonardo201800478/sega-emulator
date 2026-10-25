@@ -48,8 +48,25 @@ def _run_once(rom: bytes, core: str, warmup_frames: int, frames: int) -> dict[st
         "final_registers": {
             name: getattr(machine.cpu, name)
             for name in (
-                "a", "f", "b", "c", "d", "e", "h", "l", "sp", "pc",
-                "ix", "iy", "i", "r", "wz", "iff1", "iff2", "interrupt_mode", "halted",
+                "a",
+                "f",
+                "b",
+                "c",
+                "d",
+                "e",
+                "h",
+                "l",
+                "sp",
+                "pc",
+                "ix",
+                "iy",
+                "i",
+                "r",
+                "wz",
+                "iff1",
+                "iff2",
+                "interrupt_mode",
+                "halted",
             )
         },
         "framebuffer_sha256": hashlib.sha256(machine.vdp.framebuffer).hexdigest(),
@@ -72,7 +89,9 @@ def main() -> int:
     parser.add_argument("--warmup-frames", type=int, default=30)
     parser.add_argument("--frames", type=int, default=120)
     parser.add_argument("--repeats", type=int, default=3)
-    parser.add_argument("--output", type=Path, default=None, help="optional JSON report path")
+    parser.add_argument(
+        "--output", type=Path, default=None, help="optional JSON report path"
+    )
     args = parser.parse_args()
 
     if args.warmup_frames < 0 or args.frames < 1 or args.repeats < 1:
@@ -100,9 +119,14 @@ def main() -> int:
         runs: list[dict[str, Any]] = []
         try:
             for _ in range(args.repeats):
-                runs.append(_run_once(rom, core, args.warmup_frames, args.frames))
+                runs.append(
+                    _run_once(rom, core, args.warmup_frames, args.frames)
+                )
         except Exception as exc:
-            report["cores"][core] = {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
+            report["cores"][core] = {
+                "status": "failed",
+                "error": f"{type(exc).__name__}: {exc}",
+            }
             if core == "python":
                 print(json.dumps(report, indent=2, ensure_ascii=False))
                 return 2
@@ -156,7 +180,10 @@ def main() -> int:
     else:
         report["equivalence"] = {
             "same_execution_signature": False,
-            "note": "Não foi possível comparar os dois núcleos; consulte o erro do núcleo Rust.",
+            "note": (
+                "Não foi possível comparar os dois núcleos; "
+                "consulte o erro do núcleo Rust."
+            ),
         }
 
     rendered = json.dumps(report, indent=2, ensure_ascii=False)
