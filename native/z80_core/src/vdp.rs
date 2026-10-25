@@ -587,11 +587,19 @@ fn render_multicolor(vram: &[u8], registers: &[u8], pixels: &mut [u8], backdrop:
     }
 }
 
+#[derive(Clone, Copy)]
+struct ActiveSprite {
+    x: i32,
+    pattern_number: u8,
+    color: u8,
+    raster_y: i32,
+}
+
 fn sprite_line_active(
     vram: &[u8],
     registers: &[u8],
     line: i32,
-) -> (Vec<(usize, i32, u8, u8, i32)>, Option<usize>) {
+) -> (Vec<ActiveSprite>, Option<usize>) {
     let attr_base = usize::from(registers[5] & 0x7F) << 7;
     let size: i32 = if registers[1] & 0x02 != 0 { 16 } else { 8 };
     let scale: i32 = if registers[1] & 0x01 != 0 { 2 } else { 1 };
@@ -622,7 +630,12 @@ fn sprite_line_active(
         if color_byte & 0x80 != 0 {
             x -= 32;
         }
-        active.push((index, x, pattern_number, color_byte & 0x0F, raster_y));
+        active.push(ActiveSprite {
+            x,
+            pattern_number,
+            color: color_byte & 0x0F,
+            raster_y,
+        });
     }
     (active, fifth_index)
 }
@@ -649,13 +662,14 @@ fn render_sprite_line(
     let scale: usize = if registers[1] & 0x01 != 0 { 2 } else { 1 };
     let mut occupied = HashSet::new();
     let mut visible = HashSet::new();
-    for (_, x, pattern_number, color, sprite_y) in active {
-        let source_y = ((line - sprite_y).rem_euclid(i32::from(LINES_PER_FRAME)) as usize) / scale;
+    for sprite in active {
+        let source_y =
+            ((line - sprite.raster_y).rem_euclid(i32::from(LINES_PER_FRAME)) as usize) / scale;
         for source_x in 0..size {
             let tile = if size == 16 {
-                usize::from(pattern_number & 0xFC) + (source_x / 8) * 2 + source_y / 8
+                usize::from(sprite.pattern_number & 0xFC) + (source_x / 8) * 2 + source_y / 8
             } else {
-                usize::from(pattern_number)
+                usize::from(sprite.pattern_number)
             };
             let address = pattern_base + tile * 8 + (source_y & 7);
             let pattern = vram[address & VRAM_MASK];
@@ -663,16 +677,16 @@ fn render_sprite_line(
                 continue;
             }
             for dx in 0..scale {
-                let px = x + (source_x * scale + dx) as i32;
+                let px = sprite.x + (source_x * scale + dx) as i32;
                 if !occupied.insert(px) && update_status {
                     *status |= 0x20;
                 }
                 if let Some(target) = pixels.as_deref_mut() {
                     if (0..SCREEN_WIDTH as i32).contains(&px)
-                        && color != 0
+                        && sprite.color != 0
                         && !visible.contains(&px)
                     {
-                        put_pixel(target, px, line, color);
+                        put_pixel(target, px, line, sprite.color);
                         visible.insert(px);
                     }
                 }
