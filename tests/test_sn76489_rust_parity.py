@@ -101,7 +101,7 @@ def test_native_audio_synchronizer_preserves_timestamp_and_write_order() -> None
 
     _assert_psg_state_matches(python_psg, rust_psg)
     assert rust_sync.current_tstate == python_sync.current_tstate
-    assert rust_sync.pending_events == tuple(
+    assert tuple(rust_sync.pending_events) == tuple(
         (event.tstate, event.value) for event in python_sync.pending_events
     )
     assert rust_psg.drain_samples() == python_psg.drain_samples()
