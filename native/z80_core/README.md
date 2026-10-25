@@ -14,8 +14,7 @@ maturin develop --features python-extension
 Set-Location ../..
 \`\`\`
 
-Choose the core from the Qt menu **Emulação → Núcleo da CPU**, or pass
-\`--cpu-core python\` / \`--cpu-core rust\` to the command line.
+Choose the core from the Qt menu **Emulação → Selecionar núcleo Z80…**. The Python core remains the default; Rust is explicitly experimental and partial.
 
 ## Current limitations
 
