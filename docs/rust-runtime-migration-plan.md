@@ -124,22 +124,24 @@ A meta final é manter apenas o frontend Qt em Python. O frontend Pygame/SDL e a
 
 A Fase 0 teve uma primeira revisão estática de contratos e consumidores. A Fase 1 começou nesta branch com:
 - `native/z80_core/src/memory.rs`: barramento nativo de ROM espelhada, RAM interna espelhada e RAM de cartucho configurável, com testes unitários Rust.
-- `native/z80_core/src/lib.rs`: novo construtor `RustZ80Cpu.with_native_memory`; o caminho nativo lê/escreve memória sem chamar métodos Python por acesso. O construtor antigo com barramento Python permanece para compatibilidade e testes diferenciais.
-- `src/sega_emulator/machine/sg1000.py`: o backend Rust passa a usar o barramento nativo; o backend Python permanece inalterado.
-- `tests/test_sg1000_cpu_backend.py`: teste de integração para instruções que escrevem e leem RAM através do backend Rust.
+- `native/z80_core/src/lib.rs`: construtor `RustZ80Cpu.with_native_memory`; o caminho nativo lê/escreve memória sem chamar métodos Python por acesso. O construtor antigo com barramento Python permanece para compatibilidade e testes diferenciais.
+- `native/z80_core/src/memory.rs`: ROM espelhada, RAM interna espelhada e RAM de cartucho configurável em Rust.
+- `native/z80_core/src/vdp.rs`: portas, registradores, VRAM, temporização raster, VBlank, status de sprites e renderização dos quatro modos gráficos modelados.
+- `src/sega_emulator/machine/sg1000.py`: o backend Rust passa a usar barramento e VDP nativos; o backend Python permanece inalterado.
+- `tests/test_sg1000_cpu_backend.py` e `tests/test_tms9918_rust_parity.py`: integração CPU/memória e comparação diferencial do VDP, incluindo modos gráficos, VBlank, overflow e colisões de sprites.
 
-**Limitação desta fatia:** o VDP, PSG, sincronização da máquina, I/O e laço de execução por instrução ainda são Python; I/O continua atravessando PyO3. Portanto, esta alteração não conclui a Fase 1 inteira nem satisfaz a meta final de runtime totalmente Rust.
+**Limitação desta fatia:** PSG, sincronização de áudio, arbitragem de I/O e laço de execução por instrução ainda são Python; I/O continua atravessando PyO3. O VDP nativo já está integrado, mas a máquina ainda coordena os componentes pelo laço Python. Portanto, esta alteração não conclui a migração nem satisfaz a meta final de runtime totalmente Rust.
 
 ### Validação automatizada
 
-No commit `85329fb92c49cf51f2699c0b69be946f899c4101`, o workflow Windows **Qt selectable Rust Z80 core** passou:
+No commit `4d8b669311826995474c33146fb7a0a8298f5828`, o workflow Windows **Qt selectable Rust Z80 core** passou:
 - `cargo fmt --check`: aprovado.
 - Clippy com `-D warnings`: aprovado.
-- Testes unitários Rust: 7 aprovados, nenhum falhou.
+- Testes unitários Rust: 7 aprovados no núcleo; 6 testes de integração/diferenciais do VDP foram adicionados à suíte Python.
 - Build Release e instalação da extensão PyO3: aprovados.
 - Ruff (lint e formatação Python): aprovado.
 - Testes direcionados Qt/backend Rust: 1.671 aprovados.
-- Suíte completa pytest: 2.317 aprovados.
+- Suíte completa pytest com a extensão nativa instalada: 2.323 aprovados em 8,70 s.
 - CI geral, validação funcional, integridade/determinismo, auditoria de desempenho/cobertura, diagnóstico de desempenho e auditoria diferencial SingleStepTests: aprovados.
 - A auditoria Z80 estendida ainda estava pendente no momento deste registro.
 
@@ -147,4 +149,4 @@ Esses resultados validam o incremento atual, não a migração completa nem prec
 
 ## Próximo passo
 
-Iniciar a fase de integração temporal nativa: portar para Rust a arbitragem de I/O e o estado temporal mínimo do VDP (contadores, status e condição de interrupção) junto com o laço da máquina. Só então permitir avanço em lotes, com limites alinhados aos eventos do hardware. A renderização completa do VDP e o PSG vêm depois, em fases próprias. Não agrupar instruções enquanto isso puder alterar a ordem dos eventos ou a entrega de interrupções.
+Iniciar a próxima fatia com PSG SN76489AN e sincronizador de áudio nativos, preservando a ordem dos writes por T-state. Em seguida, mover arbitragem de I/O e laço de execução para uma máquina Rust que coordene CPU, VDP e PSG. Só permitir avanço em lotes com limites alinhados aos eventos do hardware; não agrupar instruções se isso alterar a ordem dos eventos ou a entrega de interrupções.
