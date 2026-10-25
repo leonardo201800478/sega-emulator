@@ -164,6 +164,58 @@ def test_rust_core_fails_explicitly_on_assigned_but_unsupported_ed_opcode() -> N
         cpu.step()
 
 
+@pytest.mark.parametrize(
+    ("opcode", "expected_cycles"),
+    [
+        (0x07, 4),  # RLCA
+        (0x0F, 4),  # RRCA
+        (0x17, 4),  # RLA
+        (0x1F, 4),  # RRA
+        (0x27, 4),  # DAA
+        (0x2F, 4),  # CPL
+        (0x37, 4),  # SCF
+        (0x3F, 4),  # CCF
+        (0x08, 4),  # EX AF,AF'
+        (0xD9, 4),  # EXX
+        (0xE3, 19), # EX (SP),HL
+        (0xEB, 4),  # EX DE,HL
+    ],
+)
+def test_rust_base_misc_instructions_match_python(opcode: int, expected_cycles: int) -> None:
+    RustZ80Cpu = _rust_cpu()
+    program = bytes([opcode])
+    python_bus = MemoryBus(program)
+    rust_bus = MemoryBus(program)
+    python_bus.memory[0x3000:0x3002] = bytes([0xA5, 0x5A])
+    rust_bus.memory[0x3000:0x3002] = bytes([0xA5, 0x5A])
+    python_cpu = Z80Cpu(python_bus)
+    rust_cpu = RustZ80Cpu(rust_bus, None)
+
+    for cpu in (python_cpu, rust_cpu):
+        cpu.a = 0x91
+        cpu.f = 0x95
+        cpu.b, cpu.c = 0x12, 0x34
+        cpu.d, cpu.e = 0x56, 0x78
+        cpu.h, cpu.l = 0x9A, 0xBC
+        cpu.sp = 0x3000
+        cpu.af_alt = 0x2468
+        cpu.bc_alt = 0x1357
+        cpu.de_alt = 0xFEDC
+        cpu.hl_alt = 0xBEEF
+
+    python_cycles = python_cpu.step()
+    rust_cycles = rust_cpu.step()
+    attributes = (
+        "a", "f", "b", "c", "d", "e", "h", "l", "sp", "pc",
+        "af_alt", "bc_alt", "de_alt", "hl_alt", "wz", "r", "total_cycles",
+    )
+    assert python_cycles == rust_cycles == expected_cycles
+    assert {name: getattr(rust_cpu, name) for name in attributes} == {
+        name: getattr(python_cpu, name) for name in attributes
+    }
+    assert rust_bus.memory == python_bus.memory
+
+
 def test_rust_core_fails_explicitly_on_unsupported_opcode() -> None:
     RustZ80Cpu = _rust_cpu()
     bus = MemoryBus(bytes([0xDD]))
