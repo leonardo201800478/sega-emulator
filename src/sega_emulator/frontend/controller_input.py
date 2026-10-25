@@ -178,8 +178,12 @@ class ControllerInputConfig:
 
     players: dict[int, PlayerInputProfile] = field(
         default_factory=lambda: {
-            1: PlayerInputProfile(keyboard_bindings=DEFAULT_KEYBOARD_BINDINGS_P1.copy()),
-            2: PlayerInputProfile(keyboard_bindings=DEFAULT_KEYBOARD_BINDINGS_P2.copy()),
+            1: PlayerInputProfile(
+                keyboard_bindings=DEFAULT_KEYBOARD_BINDINGS_P1.copy()
+            ),
+            2: PlayerInputProfile(
+                keyboard_bindings=DEFAULT_KEYBOARD_BINDINGS_P2.copy()
+            ),
         }
     )
     deadzone: float = DEFAULT_DEADZONE
