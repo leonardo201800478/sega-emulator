@@ -505,22 +505,16 @@ impl RustZ80Cpu {
         }
 
         match opcode {
-            0x02 => {
-                let address = self.bc();
+            0x02 | 0x12 => {
+                let address = if opcode == 0x02 { self.bc() } else { self.de() };
                 self.write8(py, address, self.a)?;
+                self.wz = (u16::from(self.a) << 8) | (address.wrapping_add(1) & 0x00FF);
                 Ok(7)
             }
-            0x12 => {
-                let address = self.de();
-                self.write8(py, address, self.a)?;
-                Ok(7)
-            }
-            0x0A => {
-                self.a = self.read8(py, self.bc())?;
-                Ok(7)
-            }
-            0x1A => {
-                self.a = self.read8(py, self.de())?;
+            0x0A | 0x1A => {
+                let address = if opcode == 0x0A { self.bc() } else { self.de() };
+                self.a = self.read8(py, address)?;
+                self.wz = address.wrapping_add(1);
                 Ok(7)
             }
             0x03 | 0x13 | 0x23 | 0x33 => {
@@ -584,7 +578,7 @@ impl RustZ80Cpu {
                 let high = self.fetch8(py)?;
                 let address = u16::from_le_bytes([low, high]);
                 self.write8(py, address, self.a)?;
-                self.wz = address.wrapping_add(1);
+                self.wz = (u16::from(self.a) << 8) | (address.wrapping_add(1) & 0x00FF);
                 Ok(13)
             }
             0x3A => {
@@ -696,9 +690,9 @@ impl RustZ80Cpu {
                 let low = self.fetch8(py)?;
                 let high = self.fetch8(py)?;
                 let target = u16::from_le_bytes([low, high]);
+                self.wz = target;
                 if self.condition((opcode >> 3) & 7) {
                     self.pc = target;
-                    self.wz = target;
                 }
                 Ok(10)
             }
