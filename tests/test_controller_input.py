@@ -52,6 +52,12 @@ class FakeControllerModule:
     CONTROLLER_BUTTON_BACK = 12
     CONTROLLER_BUTTON_GUIDE = 13
     CONTROLLER_BUTTON_START = 14
+    CONTROLLER_BUTTON_MISC1 = 15
+    CONTROLLER_BUTTON_PADDLE1 = 16
+    CONTROLLER_BUTTON_PADDLE2 = 17
+    CONTROLLER_BUTTON_PADDLE3 = 18
+    CONTROLLER_BUTTON_PADDLE4 = 19
+    CONTROLLER_BUTTON_TOUCHPAD = 20
     CONTROLLER_AXIS_LEFTX = 0
     CONTROLLER_AXIS_LEFTY = 1
 
@@ -102,6 +108,7 @@ def test_controller_configuration_round_trip_and_validation() -> None:
     assert decoded.deadzone == pytest.approx(0.2)
     assert decoded.players[1].gamepad_buttons == {"button1": "x", "button2": "y"}
     assert decoded.players[1].use_left_stick is False
+    assert decoded.players[1].gamepad_buttons["hold"] == "start"
     with pytest.raises(ValueError, match="não suportada"):
         ControllerInputConfig.from_json('{"schema_version":99,"players":{}}')
 
@@ -121,6 +128,49 @@ def test_sdl_controllers_map_independently_to_two_players() -> None:
     assert actions[1] == {"button1", "right"}
     assert actions[2] == {"button2", "left"}
     assert inputs.connected_names() == ["Fake controller 0", "Fake controller 1"]
+
+
+def test_hold_switch_is_separate_from_the_six_joystick_lines() -> None:
+    backend = FakeControllerModule()
+    backend.devices[0].buttons.add(backend.CONTROLLER_BUTTON_START)
+    inputs = ControllerInput(SimpleNamespace(_sdl2=SimpleNamespace(controller=backend)))
+
+    actions = inputs.poll()
+
+    assert actions[1] == {"hold"}
+    # Hold is the console NMI switch, not one of the joystick port bits.
+    assert joystick_value(actions[1] & {"up", "down", "left", "right", "button1", "button2"}) == 0xFF
+
+    inputs.config.players[1].gamepad_buttons["hold"] = "back"
+    backend.devices[0].buttons.clear()
+    backend.devices[0].buttons.add(backend.CONTROLLER_BUTTON_BACK)
+    assert inputs.poll()[1] == {"hold"}
+
+
+def test_modern_auxiliary_gamepad_buttons_are_supported() -> None:
+    backend = FakeControllerModule()
+    backend.devices[0].buttons.update(
+        {
+            backend.CONTROLLER_BUTTON_MISC1,
+            backend.CONTROLLER_BUTTON_PADDLE1,
+            backend.CONTROLLER_BUTTON_PADDLE2,
+            backend.CONTROLLER_BUTTON_PADDLE3,
+            backend.CONTROLLER_BUTTON_PADDLE4,
+            backend.CONTROLLER_BUTTON_TOUCHPAD,
+        }
+    )
+    inputs = ControllerInput(SimpleNamespace(_sdl2=SimpleNamespace(controller=backend)))
+    profile = inputs.config.players[1]
+    profile.gamepad_buttons = {
+        "button1": "misc1",
+        "button2": "paddle1",
+        "up": "paddle2",
+        "down": "paddle3",
+        "left": "paddle4",
+        "right": "touchpad",
+    }
+
+    assert inputs.poll()[1] == {"button1", "button2", "up", "down", "left", "right"}
 
 
 def test_disconnected_controller_is_closed_and_does_not_keep_input_pressed() -> None:
