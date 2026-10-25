@@ -4,7 +4,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from sega_emulator.frontend.qt_frontend import _initialize_pygame_backend
 from sega_emulator.frontend.controller_input import (
     ControllerInput,
     ControllerInputConfig,
@@ -12,6 +11,7 @@ from sega_emulator.frontend.controller_input import (
     apply_turbo,
     joystick_value,
 )
+from sega_emulator.frontend.qt_frontend import _initialize_pygame_backend
 
 
 class FakeController:
