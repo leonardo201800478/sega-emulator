@@ -170,6 +170,6 @@ python tools/z80_opcode_matrix.py --json
 python -m pytest -q tests/unit/test_z80_opcode_matrix.py
 ```
 
-O JSON contém 1.792 células: 256 por espaço (base, CB, ED, DD, FD, DD-CB e FD-CB). Cada célula registra família, classificação arquitetural e caminho de implementação observado. Em DD/FD, o byte listado é o segundo byte após o prefixo. O estado de classificação não substitui evidência semântica: uma célula pode descrever ED-NOP ou prefixo ignorado, e instruções indexadas por metade IXH/IXL/IYH/IYL estão marcadas separadamente como não documentadas no Z80 clássico.
+O JSON contém 1.792 células: 256 por espaço (base, CB, ED, DD, FD, DD-CB e FD-CB). Cada célula registra família, classificação arquitetural, caminho de implementação, nível de evidência dos testes e lacuna conhecida. Em DD/FD, o byte listado é o segundo byte após o prefixo. O estado de classificação não substitui evidência semântica: uma célula pode descrever ED-NOP ou prefixo ignorado, e instruções indexadas por metade IXH/IXL/IYH/IYL estão marcadas separadamente como não documentadas no Z80 clássico.
 
 O workflow `Z80 Test Infrastructure Baseline` publica `opcode-classification-matrix.json` junto ao inventário dinâmico. A aceitação inicial é cobertura estrutural sem duplicatas (256 células por espaço), não conformidade funcional.
