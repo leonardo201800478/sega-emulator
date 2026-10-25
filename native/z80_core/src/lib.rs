@@ -161,7 +161,7 @@ impl RustZ80Cpu {
     fn reset(&mut self) {
         self.a = 0;
         self.f = 0;
-self.q = self.f;
+        self.q = self.f;
         self.b = 0;
         self.c = 0;
         self.d = 0;
@@ -437,24 +437,24 @@ impl RustZ80Cpu {
             self.a = result.value;
         }
         self.f = result.flags;
-self.q = self.f;
+        self.q = self.f;
     }
 
     fn inc8(&mut self, value: u8) -> u8 {
         let result = value.wrapping_add(1);
         self.f = (self.f & FLAG_C) | (result & 0xA8);
-self.q = self.f;
+        self.q = self.f;
         if result == 0 {
             self.f |= FLAG_Z;
-self.q = self.f;
+            self.q = self.f;
         }
         if value & 0x0F == 0x0F {
             self.f |= FLAG_H;
-self.q = self.f;
+            self.q = self.f;
         }
         if value == 0x7F {
             self.f |= FLAG_PV;
-self.q = self.f;
+            self.q = self.f;
         }
         result
     }
@@ -462,18 +462,18 @@ self.q = self.f;
     fn dec8(&mut self, value: u8) -> u8 {
         let result = value.wrapping_sub(1);
         self.f = (self.f & FLAG_C) | (result & 0xA8) | FLAG_N;
-self.q = self.f;
+        self.q = self.f;
         if result == 0 {
             self.f |= FLAG_Z;
-self.q = self.f;
+            self.q = self.f;
         }
         if value & 0x0F == 0 {
             self.f |= FLAG_H;
-self.q = self.f;
+            self.q = self.f;
         }
         if value == 0x80 {
             self.f |= FLAG_PV;
-self.q = self.f;
+            self.q = self.f;
         }
         result
     }
@@ -483,14 +483,14 @@ self.q = self.f;
         let result = u32::from(old) + u32::from(value);
         let word = result as u16;
         self.f = (self.f & 0xC4) | ((word >> 8) as u8 & 0x28);
-self.q = self.f;
+        self.q = self.f;
         if (old & 0x0FFF) + (value & 0x0FFF) > 0x0FFF {
             self.f |= FLAG_H;
-self.q = self.f;
+            self.q = self.f;
         }
         if result > 0xFFFF {
             self.f |= FLAG_C;
-self.q = self.f;
+            self.q = self.f;
         }
         self.wz = old.wrapping_add(1);
         self.set_hl(word);
@@ -536,7 +536,7 @@ self.q = self.f;
         }
         self.set_hl(result);
         self.f = flags;
-self.q = self.f;
+        self.q = self.f;
     }
 
     fn execute_cb(&mut self, py: Python<'_>, opcode: u8) -> PyResult<u32> {
@@ -561,14 +561,14 @@ self.q = self.f;
                 };
                 self.write_reg(py, register, result)?;
                 self.f = (result & 0xA8) | carry;
-self.q = self.f;
+                self.q = self.f;
                 if result == 0 {
                     self.f |= FLAG_Z;
-self.q = self.f;
+                    self.q = self.f;
                 }
                 if result.count_ones() & 1 == 0 {
                     self.f |= FLAG_PV;
-self.q = self.f;
+                    self.q = self.f;
                 }
             }
             1 => {
@@ -579,14 +579,14 @@ self.q = self.f;
                     value & 0x28
                 };
                 self.f = (self.f & FLAG_C) | FLAG_H | xy;
-self.q = self.f;
+                self.q = self.f;
                 if zero {
                     self.f |= FLAG_Z | FLAG_PV;
-self.q = self.f;
+                    self.q = self.f;
                 }
                 if bit_index == 7 && !zero {
                     self.f |= FLAG_S;
-self.q = self.f;
+                    self.q = self.f;
                 }
             }
             2 => self.write_reg(py, register, value & !(1 << bit_index))?,
@@ -671,28 +671,28 @@ self.q = self.f;
                     self.write_reg(py, register, result)?;
                 }
                 self.f = (result & 0xA8) | carry;
-self.q = self.f;
+                self.q = self.f;
                 if result == 0 {
                     self.f |= FLAG_Z;
-self.q = self.f;
+                    self.q = self.f;
                 }
                 if result.count_ones() & 1 == 0 {
                     self.f |= FLAG_PV;
-self.q = self.f;
+                    self.q = self.f;
                 }
                 return Ok(23);
             }
             if operation == 1 {
                 let zero = value & (1 << bit) == 0;
                 self.f = (self.f & FLAG_C) | FLAG_H | (((address >> 8) as u8) & 0x28);
-self.q = self.f;
+                self.q = self.f;
                 if zero {
                     self.f |= FLAG_Z | FLAG_PV;
-self.q = self.f;
+                    self.q = self.f;
                 }
                 if bit == 7 && !zero {
                     self.f |= FLAG_S;
-self.q = self.f;
+                    self.q = self.f;
                 }
                 return Ok(20);
             }
@@ -761,7 +761,7 @@ self.q = self.f;
                 }
                 self.set_index_value(prefix, result);
                 self.f = flags;
-self.q = self.f;
+                self.q = self.f;
                 self.wz = index.wrapping_add(1);
                 Ok(15)
             }
@@ -942,7 +942,7 @@ self.q = self.f;
                 };
                 self.a = result;
                 self.f = (self.f & 0xC4) | (result & 0x28) | carry;
-self.q = self.f;
+                self.q = self.f;
                 Ok(4)
             }
             0x08 => {
@@ -1052,13 +1052,13 @@ self.q = self.f;
                 }
                 self.a = result;
                 self.f = flags;
-self.q = self.f;
+                self.q = self.f;
                 Ok(4)
             }
             0x2F => {
                 self.a = !self.a;
                 self.f = (self.f & 0xC5) | FLAG_H | FLAG_N | (self.a & 0x28);
-self.q = self.f;
+                self.q = self.f;
                 Ok(4)
             }
             0x32 => {
@@ -1080,20 +1080,20 @@ self.q = self.f;
             0x37 => {
                 let undocumented = (self.a | (self._q_previous ^ self.f)) & 0x28;
                 self.f = (self.f & 0xC4) | undocumented | FLAG_C;
-self.q = self.f;
+                self.q = self.f;
                 Ok(4)
             }
             0x3F => {
                 let old_carry = self.f & FLAG_C;
                 let undocumented = (self.a | (self._q_previous ^ self.f)) & 0x28;
                 self.f = (self.f & 0xC4) | undocumented;
-self.q = self.f;
+                self.q = self.f;
                 if old_carry != 0 {
                     self.f |= FLAG_H;
-self.q = self.f;
+                    self.q = self.f;
                 } else {
                     self.f |= FLAG_C;
-self.q = self.f;
+                    self.q = self.f;
                 }
                 Ok(4)
             }
@@ -1234,14 +1234,14 @@ self.q = self.f;
                                 self.a = if sub == 0x57 { self.i } else { self.r };
                                 self.p = 1;
                                 self.f = (self.f & FLAG_C) | (self.a & 0xA8);
-self.q = self.f;
+                                self.q = self.f;
                                 if self.a == 0 {
                                     self.f |= FLAG_Z;
-self.q = self.f;
+                                    self.q = self.f;
                                 }
                                 if self.iff2 {
                                     self.f |= FLAG_PV;
-self.q = self.f;
+                                    self.q = self.f;
                                 }
                             }
                             _ => unreachable!(),
@@ -1257,14 +1257,14 @@ self.q = self.f;
                             self.write_reg(py, register, value)?;
                         }
                         self.f = (self.f & FLAG_C) | (value & 0xA8);
-self.q = self.f;
+                        self.q = self.f;
                         if value == 0 {
                             self.f |= FLAG_Z;
-self.q = self.f;
+                            self.q = self.f;
                         }
                         if value.count_ones() & 1 == 0 {
                             self.f |= FLAG_PV;
-self.q = self.f;
+                            self.q = self.f;
                         }
                         Ok(12)
                     }
@@ -1284,7 +1284,7 @@ self.q = self.f;
                         let result = sub8(0, self.a);
                         self.a = result.value;
                         self.f = result.flags;
-self.q = self.f;
+                        self.q = self.f;
                         Ok(8)
                     }
                     0x67 | 0x6F => {
@@ -1300,14 +1300,14 @@ self.q = self.f;
                         }
                         self.write8(py, address, new_memory)?;
                         self.f = (self.f & FLAG_C) | (self.a & 0xA8);
-self.q = self.f;
+                        self.q = self.f;
                         if self.a == 0 {
                             self.f |= FLAG_Z;
-self.q = self.f;
+                            self.q = self.f;
                         }
                         if self.a.count_ones() & 1 == 0 {
                             self.f |= FLAG_PV;
-self.q = self.f;
+                            self.q = self.f;
                         }
                         Ok(18)
                     }
@@ -1346,7 +1346,7 @@ self.q = self.f;
                             | if self.bc() != 0 { FLAG_PV } else { 0 }
                             | (adjusted & 0x08)
                             | ((adjusted & 0x02) << 4);
-self.q = self.f;
+                        self.q = self.f;
                         if matches!(sub, 0xB1 | 0xB9) && self.bc() != 0 && result != 0 {
                             self.pc = self.pc.wrapping_sub(2);
                             Ok(21)
@@ -1382,22 +1382,22 @@ self.q = self.f;
                         };
                         let sum = u16::from(value) + u16::from(addend);
                         self.f = self.b & 0xA8;
-self.q = self.f;
+                        self.q = self.f;
                         if self.b == 0 {
                             self.f |= FLAG_Z;
-self.q = self.f;
+                            self.q = self.f;
                         }
                         if value & 0x80 != 0 {
                             self.f |= FLAG_N;
-self.q = self.f;
+                            self.q = self.f;
                         }
                         if sum > 0xFF {
                             self.f |= FLAG_H | FLAG_C;
-self.q = self.f;
+                            self.q = self.f;
                         }
                         if ((sum as u8 & 7) ^ self.b).count_ones() & 1 == 0 {
                             self.f |= FLAG_PV;
-self.q = self.f;
+                            self.q = self.f;
                         }
                         if repeat && self.b != 0 {
                             self.pc = self.pc.wrapping_sub(2);
@@ -1421,7 +1421,7 @@ self.q = self.f;
                             | (if self.bc() != 0 { FLAG_PV } else { 0 })
                             | (sum & 0x08)
                             | ((sum & 0x02) << 4);
-self.q = self.f;
+                        self.q = self.f;
 
                         if matches!(sub, 0xB0 | 0xB8) && self.bc() != 0 {
                             self.pc = self.pc.wrapping_sub(2);
