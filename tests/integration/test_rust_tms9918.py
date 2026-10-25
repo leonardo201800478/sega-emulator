@@ -73,3 +73,13 @@ def test_rust_tms9918a_raster_and_vblank_match_python() -> None:
         assert native.status == reference.status
         assert native.consume_frame_ready() == reference.consume_frame_ready()
         assert native.framebuffer == reference.framebuffer
+
+
+def test_sg1000_machine_can_select_rust_vdp_independently() -> None:
+    RustTMS9918A = _rust_vdp()
+    from sega_emulator.machine.sg1000 import SG1000Machine
+
+    machine = SG1000Machine(b"\x00", vdp_core="rust")
+    assert isinstance(machine.vdp, RustTMS9918A)
+    assert machine.cpu_core == "python"
+    assert machine.vdp_core == "rust"
