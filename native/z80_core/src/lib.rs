@@ -1058,7 +1058,7 @@ impl RustZ80Cpu {
                 let old_half = old_f & FLAG_H != 0;
                 let old_carry = old_f & FLAG_C != 0;
                 let mut correction = 0u8;
-                if old_half || (!subtract && (old_a & 0x0F) > 9) {
+                if old_half || (old_a & 0x0F) > 9 {
                     correction |= 0x06;
                 }
                 if old_carry || old_a > 0x99 {
@@ -1079,7 +1079,7 @@ impl RustZ80Cpu {
                 if (old_a ^ result) & 0x10 != 0 {
                     flags |= FLAG_H;
                 }
-                if old_carry || (!subtract && old_a > 0x99) {
+                if old_carry || old_a > 0x99 {
                     flags |= FLAG_C;
                 }
                 self.a = result;
