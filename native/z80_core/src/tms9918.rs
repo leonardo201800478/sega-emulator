@@ -77,7 +77,7 @@ impl RustTMS9918A {
         let r = self.regs(py); self.status & 0x80 != 0 && r[1] & 0x20 != 0
     }
     fn reset(&mut self, py: Python<'_>, clear_vram: bool) {
-        self.regs_mut(py).fill(0);
+        { let mut regs = self.registers.bind(py); unsafe { regs.as_bytes_mut().fill(0); } }
         self.status = 0x1f; self.address = 0; self.read_buffer = 0; self.control_first = None;
         self.cycles_into_line = 0; self.scanline = 0; self.frame_number = 0;
         self.framebuffer.fill(0); self.working.fill(0); self.frame_ready = false;
@@ -104,7 +104,7 @@ impl RustTMS9918A {
             }
             0x81 => {
                 if let Some(first) = self.control_first.take() {
-                    if value & 0x80 != 0 { self.regs_mut(py)[(value & 7) as usize] = first; }
+                    if value & 0x80 != 0 { self.set_reg(py, (value & 7) as usize, first); }
                     else {
                         self.address = ((((value & 0x3f) as u16) << 8) | first as u16) & 0x3fff;
                         if value & 0x40 == 0 {
@@ -151,8 +151,8 @@ impl RustTMS9918A {
     }
 }
 impl RustTMS9918A {
-    fn regs<'a>(&self, py: Python<'a>) -> &'a [u8] { unsafe { self.registers.bind(py).as_bytes() } }
-    fn regs_mut<'a>(&self, py: Python<'a>) -> &'a mut [u8] { unsafe { self.registers.bind(py).as_bytes_mut() } }
+    fn regs(&self, py: Python<'_>) -> Vec<u8> { unsafe { self.registers.bind(py).as_bytes().to_vec() } }
+    fn set_reg(&self, py: Python<'_>, index: usize, value: u8) { unsafe { self.registers.bind(py).as_bytes_mut()[index] = value; } }
     fn vram_at(&self, py: Python<'_>, a: usize) -> u8 { unsafe { self.vram.bind(py).as_bytes()[a & 0x3fff] } }
     fn set_vram_at(&self, py: Python<'_>, a: usize, v: u8) { unsafe { self.vram.bind(py).as_bytes_mut()[a & 0x3fff] = v; } }
     fn display_mode(&self, py: Python<'_>) -> u8 {
