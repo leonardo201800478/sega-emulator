@@ -9,6 +9,7 @@ on:
       - "src/sega_emulator/machine/sg1000.py"
       - "src/sega_emulator/frontend/qt_frontend.py"
       - "tests/integration/test_rust_z80_core.py"
+      - "tests/integration/test_z80_alu_rust_parity.py"
       - "tools/benchmarks/compare_cpu_cores.py"
       - ".github/workflows/rust-z80-core.yml"
   push:
@@ -60,5 +61,5 @@ jobs:
         run: |
           python -m ruff check src/sega_emulator/__main__.py src/sega_emulator/machine/sg1000.py src/sega_emulator/frontend/qt_frontend.py tests/integration/test_rust_z80_core.py tools/benchmarks/compare_cpu_cores.py
           python -m ruff format --check src/sega_emulator/__main__.py src/sega_emulator/machine/sg1000.py src/sega_emulator/frontend/qt_frontend.py tests/integration/test_rust_z80_core.py tools/benchmarks/compare_cpu_cores.py
-      - name: Test Python/Rust instruction parity
-        run: python -m pytest tests/integration/test_rust_z80_core.py -q
+      - name: Test Python/Rust ALU and CPU parity
+        run: python -m pytest tests/integration/test_z80_alu_rust_parity.py tests/integration/test_rust_z80_core.py -q
