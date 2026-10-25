@@ -19,6 +19,8 @@ LLVM é infraestrutura de compilação, não uma linguagem de implementação de
 6. Preservar determinismo: CPU e dispositivos avançam sob scheduler/event model explícito. Apresentação e saída de áudio podem ser isoladas, mas não alteram clocks lógicos.
 7. Tratar precisão como propriedade comprovada. T-states nominais por instrução não são precisão de barramento ciclo a ciclo.
 8. Separar modo de fidelidade e modo de desempenho. Aproximações de modo rápido devem ser opt-in, declaradas e testadas. HLE é independente.
+9. Preparar multithreading por meio de ownership explícito, filas e pontos de sincronização, mas adiar paralelismo do estado lógico até o scheduler determinístico e o profiling justificarem a divisão. Threads periféricas para apresentação e saída podem ser usadas se não alterarem os clocks emulados.
+10. Para Mega Drive, Sega CD e 32X, representar múltiplas CPUs e recursos compartilhados por um modelo temporal explícito. Não assumir que cada CPU precisa de uma thread; a equivalência observável com a execução serial é requisito.
 
 ## Consequências
 
@@ -27,6 +29,7 @@ LLVM é infraestrutura de compilação, não uma linguagem de implementação de
 - Rust pode reduzir overhead, mas ganhos devem ser medidos; custo PyO3/Maturin e fronteiras também entram no benchmark.
 - LLVM aumenta custo de build/distribuição e pode não compensar em blocos curtos; compilação e steady-state devem ser reportados separadamente.
 - JIT exige limites de bloco, side exits, invalidação de código modificável e respeito a eventos de barramento/interrupção.
+- Multithreading acrescenta custos de sincronização e risco de data races; aplicar apenas a fronteiras medidas e sem alterar a ordem lógica dos eventos.
 - Nenhum sistema futuro (68000, Sega CD, 32X) será implementado antecipadamente neste marco; primeiro validar SG-1000 e componentes realmente reutilizáveis.
 
 ## Plano de validação
