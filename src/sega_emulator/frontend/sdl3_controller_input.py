@@ -130,7 +130,16 @@ class SDL3ControllerInput:
     def _sync_devices(self) -> None:
         if not self._initialized:
             return
+        # Pump OS events and explicitly refresh SDL3 device state before both
+        # enumerating devices and reading button/axis state. Some event-loop setups
+        # do not otherwise advance gamepad/joystick snapshots at the expected point.
         self._sdl.SDL_PumpEvents()
+        update_gamepads = getattr(self._sdl, "SDL_UpdateGamepads", None)
+        if callable(update_gamepads):
+            update_gamepads()
+        update_joysticks = getattr(self._sdl, "SDL_UpdateJoysticks", None)
+        if callable(update_joysticks):
+            update_joysticks()
         gamepad_ids = set(self._list_ids("SDL_GetGamepads"))
         joystick_ids = set(self._list_ids("SDL_GetJoysticks"))
         previous_ids = self._gamepad_ids | self._joystick_ids
