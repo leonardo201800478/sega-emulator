@@ -184,8 +184,7 @@ impl NativeTms9918A {
             self.registers[usize::from(value & 0x07)] = first;
             return;
         }
-        self.address = ((((value & 0x3F) as u16) << 8) | u16::from(first))
-            & VRAM_MASK as u16;
+        self.address = ((((value & 0x3F) as u16) << 8) | u16::from(first)) & VRAM_MASK as u16;
         if value & 0x40 != 0 {
             return;
         }
@@ -257,7 +256,10 @@ impl NativeTms9918A {
     }
 
     fn render_frame<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        PyBytes::new(py, &render_frame_bytes(&self.vram, &self.registers, self.status))
+        PyBytes::new(
+            py,
+            &render_frame_bytes(&self.vram, &self.registers, self.status),
+        )
     }
 }
 
@@ -323,7 +325,11 @@ fn render_scanline(
         let pattern_base = usize::from(registers[4] & 0x07) << 11;
         let text_row = y / 8;
         let glyph_row = y % 8;
-        let foreground = if registers[7] >> 4 != 0 { registers[7] >> 4 } else { backdrop };
+        let foreground = if registers[7] >> 4 != 0 {
+            registers[7] >> 4
+        } else {
+            backdrop
+        };
         for column in 0..40 {
             let character = vram[(name_base + text_row * 40 + column) & VRAM_MASK];
             let pattern = vram[(pattern_base + usize::from(character) * 8 + glyph_row) & VRAM_MASK];
@@ -349,9 +355,24 @@ fn render_scanline(
             let offset = section + usize::from(name) * 8 + row;
             let pattern = vram[(pattern_base + offset) & VRAM_MASK];
             let color = vram[(color_base + offset) & VRAM_MASK];
-            let foreground = if color >> 4 != 0 { color >> 4 } else { backdrop };
-            let background = if color & 0x0F != 0 { color & 0x0F } else { backdrop };
-            pattern_span(pixels, row_start + tile_x * 24, pattern, foreground, background, 8);
+            let foreground = if color >> 4 != 0 {
+                color >> 4
+            } else {
+                backdrop
+            };
+            let background = if color & 0x0F != 0 {
+                color & 0x0F
+            } else {
+                backdrop
+            };
+            pattern_span(
+                pixels,
+                row_start + tile_x * 24,
+                pattern,
+                foreground,
+                background,
+                8,
+            );
         }
     } else if mode == 2 {
         let name_base = usize::from(registers[2] & 0x0F) << 10;
@@ -361,8 +382,16 @@ fn render_scanline(
         for tile_x in 0..32 {
             let name = vram[(name_base + tile_y * 32 + tile_x) & VRAM_MASK];
             let pattern = vram[(pattern_base + usize::from(name) * 8 + pattern_row) & VRAM_MASK];
-            let left = if pattern >> 4 != 0 { pattern >> 4 } else { backdrop };
-            let right = if pattern & 0x0F != 0 { pattern & 0x0F } else { backdrop };
+            let left = if pattern >> 4 != 0 {
+                pattern >> 4
+            } else {
+                backdrop
+            };
+            let right = if pattern & 0x0F != 0 {
+                pattern & 0x0F
+            } else {
+                backdrop
+            };
             color_quarter(pixels, row_start + tile_x * 24, left);
             color_quarter(pixels, row_start + tile_x * 24 + 12, right);
         }
@@ -376,9 +405,24 @@ fn render_scanline(
             let name = vram[(name_base + tile_y * 32 + tile_x) & VRAM_MASK];
             let pattern = vram[(pattern_base + usize::from(name) * 8 + row) & VRAM_MASK];
             let color = vram[(color_base + usize::from(name) / 8) & VRAM_MASK];
-            let foreground = if color >> 4 != 0 { color >> 4 } else { backdrop };
-            let background = if color & 0x0F != 0 { color & 0x0F } else { backdrop };
-            pattern_span(pixels, row_start + tile_x * 24, pattern, foreground, background, 8);
+            let foreground = if color >> 4 != 0 {
+                color >> 4
+            } else {
+                backdrop
+            };
+            let background = if color & 0x0F != 0 {
+                color & 0x0F
+            } else {
+                backdrop
+            };
+            pattern_span(
+                pixels,
+                row_start + tile_x * 24,
+                pattern,
+                foreground,
+                background,
+                8,
+            );
         }
     }
     render_sprite_line(vram, registers, status, Some(pixels), y as i32, update_sprite_status);
@@ -430,9 +474,24 @@ fn render_graphics_i(vram: &[u8], registers: &[u8], pixels: &mut [u8], backdrop:
             let name = vram[(name_base + tile_y * 32 + tile_x) & VRAM_MASK];
             let pattern = vram[(pattern_base + usize::from(name) * 8 + row) & VRAM_MASK];
             let color = vram[(color_base + usize::from(name) / 8) & VRAM_MASK];
-            let foreground = if color >> 4 != 0 { color >> 4 } else { backdrop };
-            let background = if color & 0x0F != 0 { color & 0x0F } else { backdrop };
-            pattern_span(pixels, row_start + tile_x * 24, pattern, foreground, background, 8);
+            let foreground = if color >> 4 != 0 {
+                color >> 4
+            } else {
+                backdrop
+            };
+            let background = if color & 0x0F != 0 {
+                color & 0x0F
+            } else {
+                backdrop
+            };
+            pattern_span(
+                pixels,
+                row_start + tile_x * 24,
+                pattern,
+                foreground,
+                background,
+                8,
+            );
         }
     }
 }
@@ -450,9 +509,24 @@ fn render_graphics_ii(vram: &[u8], registers: &[u8], pixels: &mut [u8], backdrop
             let offset = section + usize::from(name) * 8 + row;
             let pattern = vram[(pattern_base + offset) & VRAM_MASK];
             let color = vram[(color_base + offset) & VRAM_MASK];
-            let foreground = if color >> 4 != 0 { color >> 4 } else { backdrop };
-            let background = if color & 0x0F != 0 { color & 0x0F } else { backdrop };
-            pattern_span(pixels, row_start + tile_x * 24, pattern, foreground, background, 8);
+            let foreground = if color >> 4 != 0 {
+                color >> 4
+            } else {
+                backdrop
+            };
+            let background = if color & 0x0F != 0 {
+                color & 0x0F
+            } else {
+                backdrop
+            };
+            pattern_span(
+                pixels,
+                row_start + tile_x * 24,
+                pattern,
+                foreground,
+                background,
+                8,
+            );
         }
     }
 }
@@ -460,7 +534,11 @@ fn render_graphics_ii(vram: &[u8], registers: &[u8], pixels: &mut [u8], backdrop
 fn render_text(vram: &[u8], registers: &[u8], pixels: &mut [u8], backdrop: u8) {
     let name_base = usize::from(registers[2] & 0x0F) << 10;
     let pattern_base = usize::from(registers[4] & 0x07) << 11;
-    let foreground = if registers[7] >> 4 != 0 { registers[7] >> 4 } else { backdrop };
+    let foreground = if registers[7] >> 4 != 0 {
+            registers[7] >> 4
+        } else {
+            backdrop
+        };
     for row in 0..24 {
         for column in 0..40 {
             let character = vram[(name_base + row * 40 + column) & VRAM_MASK];
@@ -491,8 +569,16 @@ fn render_multicolor(vram: &[u8], registers: &[u8], pixels: &mut [u8], backdrop:
                 let pattern_row = (y & 0x1C) >> 2;
                 let pattern =
                     vram[(pattern_base + usize::from(name) * 8 + pattern_row) & VRAM_MASK];
-                let left = if pattern >> 4 != 0 { pattern >> 4 } else { backdrop };
-                let right = if pattern & 0x0F != 0 { pattern & 0x0F } else { backdrop };
+                let left = if pattern >> 4 != 0 {
+                pattern >> 4
+            } else {
+                backdrop
+            };
+                let right = if pattern & 0x0F != 0 {
+                pattern & 0x0F
+            } else {
+                backdrop
+            };
                 let row_start = y * SCREEN_WIDTH * 3;
                 color_quarter(pixels, row_start + tile_x * 24, left);
                 color_quarter(pixels, row_start + tile_x * 24 + 12, right);
@@ -550,11 +636,7 @@ fn render_sprite_line(
     update_status: bool,
 ) {
     let (active, fifth_index) = sprite_line_active(vram, registers, line);
-    if update_status
-        && line < i32::from(VBLANK_LINE)
-        && *status & 0x80 == 0
-        && *status & 0x40 == 0
-    {
+    if update_status && line < i32::from(VBLANK_LINE) && *status & 0x80 == 0 && *status & 0x40 == 0 {
         if let Some(index) = fifth_index {
             *status = (*status & 0xA0) | 0x40 | index as u8;
         }
