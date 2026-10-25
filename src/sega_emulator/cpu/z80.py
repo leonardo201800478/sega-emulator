@@ -828,7 +828,8 @@ class Z80Cpu:
             self.pc = (self.pc - 2) & 0xFFFF
             self.wz = (self.pc + 1) & 0xFFFF
             return 21
-        self.wz = ((old_bc + direction) if input_direction else (self.bc + direction)) & 0xFFFF
+        wz_base = old_bc if input_direction else self.bc
+        self.wz = (wz_base + direction) & 0xFFFF
         return 16
 
     @staticmethod
