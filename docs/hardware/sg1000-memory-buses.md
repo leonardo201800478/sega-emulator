@@ -43,11 +43,13 @@ direta de `SG1000Machine`, com o VDP mantendo sua própria VRAM.
 
 O barramento base `SG1000MemoryBus` sozinho não espelha automaticamente uma
 ROM curta; essa política fica no adaptador privado usado por `SG1000Machine`.
-A seleção Type-B é baseada em uma lista explícita de CRC-32 conhecidos, não no
-tamanho da ROM. O perfil inicial inclui Bomberman Special (Taiwan), Magical Kid
-Wiz (Taiwan), The Castle [MSX] (Taiwan), Rally-X (Taiwan) e Road Fighter
-(Taiwan), conforme o catálogo de hardware do Genesis Plus GX. O CRC-32 do
-Bomberman Special é também registrado no catálogo de software do MAME. Essa
+A seleção Type-B é baseada em hashes explícitos, não no tamanho da ROM. O
+perfil inicial inclui Bomberman Special (Taiwan), Magical Kid Wiz (Taiwan), The
+Castle [MSX] (Taiwan), Rally-X (Taiwan) e Road Fighter (Taiwan), conforme o
+catálogo de hardware do Genesis Plus GX. O CRC-32 do Bomberman Special é também
+registrado no catálogo de software do MAME. Para contemplar a variante com
+logotipo em inglês usada na validação local, o perfil inclui seu SHA-256
+`3eff3d6f1f74041f7b732455799d0978ab49724552ff2985f34b76478cd91721`. Essa
 lista é uma base de compatibilidade observada, não um detector universal de
 mapeadores.
 
