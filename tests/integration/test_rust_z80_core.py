@@ -179,6 +179,81 @@ def test_rust_core_fails_explicitly_on_assigned_but_unsupported_ed_opcode() -> N
         cpu.step()
 
 
+@pytest.mark.parametrize("prefix", [0xDD, 0xFD])
+@pytest.mark.parametrize("opcode", range(0x40, 0xC0))
+def test_rust_indexed_register_and_alu_families_match_python(
+    prefix: int, opcode: int
+) -> None:
+    RustZ80Cpu = _rust_cpu()
+    uses_displacement = (
+        (0x40 <= opcode <= 0x7F and opcode != 0x76 and (opcode & 7 == 6 or (opcode >> 3) & 7 == 6))
+        or (0x80 <= opcode <= 0xBF and opcode & 7 == 6)
+    )
+    program = bytes([prefix, opcode, *([0x05] if uses_displacement else [])])
+    python_bus = MemoryBus(program)
+    rust_bus = MemoryBus(program)
+    python_bus.memory[0x2005] = rust_bus.memory[0x2005] = 0x96
+    python_cpu = Z80Cpu(python_bus)
+    rust_cpu = RustZ80Cpu(rust_bus, None)
+    for cpu in (python_cpu, rust_cpu):
+        cpu.a = 0x69
+        cpu.f = 0xA5
+        cpu.bc = 0x1234
+        cpu.de = 0x5678
+        cpu.hl = 0x2200
+        cpu.ix = 0x2000
+        cpu.iy = 0x2100
+        cpu.sp = 0x3000
+        cpu.wz = 0x2800
+
+    python_cycles = python_cpu.step()
+    rust_cycles = rust_cpu.step()
+    attributes = (
+        "a", "f", "b", "c", "d", "e", "h", "l", "sp", "pc",
+        "ix", "iy", "i", "r", "iff1", "iff2", "interrupt_mode",
+        "halted", "wz", "total_cycles",
+    )
+    assert rust_cycles == python_cycles
+    assert {name: getattr(rust_cpu, name) for name in attributes} == {
+        name: getattr(python_cpu, name) for name in attributes
+    }
+    assert rust_bus.memory == python_bus.memory
+
+
+@pytest.mark.parametrize("prefix", [0xDD, 0xFD])
+@pytest.mark.parametrize("cb_opcode", range(256))
+def test_rust_indexed_cb_opcode_family_matches_python(prefix: int, cb_opcode: int) -> None:
+    RustZ80Cpu = _rust_cpu()
+    program = bytes([prefix, 0xCB, 0x05, cb_opcode])
+    python_bus = MemoryBus(program)
+    rust_bus = MemoryBus(program)
+    python_bus.memory[0x2005] = rust_bus.memory[0x2005] = 0x96
+    python_cpu = Z80Cpu(python_bus)
+    rust_cpu = RustZ80Cpu(rust_bus, None)
+    for cpu in (python_cpu, rust_cpu):
+        cpu.a = 0x69
+        cpu.f = 0xA5
+        cpu.bc = 0x1234
+        cpu.de = 0x5678
+        cpu.hl = 0x2200
+        cpu.ix = 0x2000
+        cpu.iy = 0x2100
+        cpu.wz = 0x2800
+
+    python_cycles = python_cpu.step()
+    rust_cycles = rust_cpu.step()
+    attributes = (
+        "a", "f", "b", "c", "d", "e", "h", "l", "sp", "pc",
+        "ix", "iy", "i", "r", "iff1", "iff2", "interrupt_mode",
+        "halted", "wz", "total_cycles",
+    )
+    assert rust_cycles == python_cycles
+    assert {name: getattr(rust_cpu, name) for name in attributes} == {
+        name: getattr(python_cpu, name) for name in attributes
+    }
+    assert rust_bus.memory == python_bus.memory
+
+
 @pytest.mark.parametrize("opcode", range(256))
 def test_rust_cb_opcode_family_matches_python(opcode: int) -> None:
     RustZ80Cpu = _rust_cpu()
