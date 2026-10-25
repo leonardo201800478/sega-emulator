@@ -18,11 +18,11 @@ logger = logging.getLogger(__name__)
 Z80_CLOCK_HZ = 3_579_545
 
 
-def run(initial_path: Path | None = None) -> None:
+def run(initial_path: Path | None = None, cpu_core: str | None = None) -> None:
     """Abre a interface de teste com teclado, telemetria e logs de sessão."""
     try:
         from PySide6.QtCore import QEvent, QObject, QSettings, Qt, QTimer
-        from PySide6.QtGui import QAction, QImage, QKeySequence, QPixmap
+        from PySide6.QtGui import QAction, QActionGroup, QImage, QKeySequence, QPixmap
         from PySide6.QtWidgets import (
             QApplication,
             QFileDialog,
@@ -58,6 +58,9 @@ def run(initial_path: Path | None = None) -> None:
     app.setOrganizationName("SegaEmulator")
     app.setApplicationName("SegaEmulator")
     settings = QSettings()
+    selected_cpu_core = cpu_core or settings.value("cpu_core", "python", type=str)
+    if selected_cpu_core not in ("python", "rust"):
+        selected_cpu_core = "python"
     window = QMainWindow()
     window.setWindowTitle("Sega Emulator — SG-1000 (experimental)")
     window.resize(800, 620)
@@ -326,7 +329,7 @@ def run(initial_path: Path | None = None) -> None:
                 if not accepted:
                     return
                 candidate = load_rom(path, member_name=selected)
-            loaded_machine = SG1000Machine(candidate.data)
+            loaded_machine = SG1000Machine(candidate.data, cpu_core=selected_cpu_core)
         except Exception as exc:
             logger.exception(
                 "Falha ao carregar ROM",
@@ -385,7 +388,7 @@ def run(initial_path: Path | None = None) -> None:
         nonlocal last_checkpoint_instructions, last_checkpoint_frame
         if loaded is None:
             return
-        machine = SG1000Machine(loaded.data)
+        machine = SG1000Machine(loaded.data, cpu_core=selected_cpu_core)
         frame_count, paused = 0, False
         pressed_keys.clear()
         update_joystick()
@@ -420,6 +423,60 @@ def run(initial_path: Path | None = None) -> None:
     reset_action.setShortcut("F10")
     reset_action.triggered.connect(reset_machine)
     emu_menu.addAction(reset_action)
+
+    core_menu = emu_menu.addMenu("Núcleo da CPU")
+    core_group = QActionGroup(window)
+    core_group.setExclusive(True)
+    python_core_action = QAction("Python (referência)", window)
+    python_core_action.setCheckable(True)
+    python_core_action.setChecked(selected_cpu_core == "python")
+    rust_core_action = QAction("Rust (experimental)", window)
+    rust_core_action.setCheckable(True)
+    rust_core_action.setChecked(selected_cpu_core == "rust")
+    core_group.addAction(python_core_action)
+    core_group.addAction(rust_core_action)
+    core_menu.addAction(python_core_action)
+    core_menu.addAction(rust_core_action)
+
+    def select_cpu_core(core: str) -> None:
+        nonlocal selected_cpu_core
+        if core == selected_cpu_core:
+            return
+        if core == "rust":
+            try:
+                from sega_z80_core import RustZ80Cpu as _RustZ80Cpu  # noqa: F401
+            except ImportError:
+                QMessageBox.warning(
+                    window,
+                    "Núcleo Rust indisponível",
+                    "O núcleo Rust experimental não está instalado. Execute "
+                    "'maturin develop --features python-extension' em native/z80_core.",
+                )
+                python_core_action.setChecked(selected_cpu_core == "python")
+                rust_core_action.setChecked(selected_cpu_core == "rust")
+                return
+        previous_core = selected_cpu_core
+        selected_cpu_core = core
+        if loaded is not None:
+            try:
+                reset_machine()
+            except Exception as exc:
+                selected_cpu_core = previous_core
+                python_core_action.setChecked(selected_cpu_core == "python")
+                rust_core_action.setChecked(selected_cpu_core == "rust")
+                QMessageBox.warning(window, "Não foi possível trocar o núcleo", str(exc))
+                return
+        settings.setValue("cpu_core", selected_cpu_core)
+        status.showMessage(
+            f"Núcleo da CPU: {'Python (referência)' if core == 'python' else 'Rust (experimental)'}"
+        )
+        logger.info(
+            "Núcleo da CPU selecionado",
+            extra={"event": "cpu_core_selected", "cpu_core": selected_cpu_core},
+        )
+
+    python_core_action.triggered.connect(lambda checked=False: select_cpu_core("python"))
+    rust_core_action.triggered.connect(lambda checked=False: select_cpu_core("rust"))
 
     video_menu = window.menuBar().addMenu("&Vídeo")
     video_menu.addAction("Escala 2×", lambda: window.resize(600, 450))
