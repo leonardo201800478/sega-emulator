@@ -180,6 +180,61 @@ def test_rust_core_fails_explicitly_on_assigned_but_unsupported_ed_opcode() -> N
 
 
 @pytest.mark.parametrize("prefix", [0xDD, 0xFD])
+@pytest.mark.parametrize(
+    ("opcode", "operands"),
+    [
+        (0x21, (0x34, 0x12)),  # LD IX/IY,nn
+        (0x22, (0x00, 0x30)),  # LD (nn),IX/IY
+        (0x2A, (0x00, 0x30)),  # LD IX/IY,(nn)
+        (0x23, ()), (0x2B, ()),  # INC/DEC IX/IY
+        (0x09, ()), (0x19, ()), (0x29, ()), (0x39, ()),  # ADD IX/IY,rr
+        (0x24, ()), (0x25, ()), (0x26, (0x55,)),  # IXH/IYH
+        (0x2C, ()), (0x2D, ()), (0x2E, (0xAA,)),  # IXL/IYL
+        (0x34, (0x05,)), (0x35, (0x05,)),  # INC/DEC (IX/IY+d)
+        (0x36, (0x05, 0x77)),  # LD (IX/IY+d),n
+        (0xE1, ()), (0xE5, ()), (0xE3, ()),  # POP/PUSH/EX (SP),IX/IY
+        (0xE9, ()), (0xF9, ()),  # JP (IX/IY), LD SP,IX/IY
+        (0x00, ()),  # ignored prefix
+    ],
+)
+def test_rust_indexed_special_instructions_match_python(
+    prefix: int, opcode: int, operands: tuple[int, ...]
+) -> None:
+    RustZ80Cpu = _rust_cpu()
+    program = bytes([prefix, opcode, *operands])
+    python_bus = MemoryBus(program)
+    rust_bus = MemoryBus(program)
+    python_bus.memory[0x2005] = rust_bus.memory[0x2005] = 0x7F
+    python_bus.memory[0x3000:0x3002] = bytes([0x34, 0x12])
+    rust_bus.memory[0x3000:0x3002] = bytes([0x34, 0x12])
+    python_cpu = Z80Cpu(python_bus)
+    rust_cpu = RustZ80Cpu(rust_bus, None)
+    for cpu in (python_cpu, rust_cpu):
+        cpu.a = 0x69
+        cpu.f = 0xA5
+        cpu.bc = 0x1234
+        cpu.de = 0x5678
+        cpu.hl = 0x2200
+        cpu.ix = 0x2000
+        cpu.iy = 0x2100
+        cpu.sp = 0x3000
+        cpu.wz = 0x2800
+
+    python_cycles = python_cpu.step()
+    rust_cycles = rust_cpu.step()
+    attributes = (
+        "a", "f", "b", "c", "d", "e", "h", "l", "sp", "pc",
+        "ix", "iy", "i", "r", "iff1", "iff2", "interrupt_mode",
+        "halted", "wz", "total_cycles",
+    )
+    assert rust_cycles == python_cycles
+    assert {name: getattr(rust_cpu, name) for name in attributes} == {
+        name: getattr(python_cpu, name) for name in attributes
+    }
+    assert rust_bus.memory == python_bus.memory
+
+
+@pytest.mark.parametrize("prefix", [0xDD, 0xFD])
 @pytest.mark.parametrize("opcode", range(0x40, 0xC0))
 def test_rust_indexed_register_and_alu_families_match_python(
     prefix: int, opcode: int
