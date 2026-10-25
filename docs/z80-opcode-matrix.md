@@ -1,6 +1,6 @@
 # Matriz de cobertura do Z80
 
-**Revisão estática original:** `main` em `4bf3aae` (22/10/2026)  
+**Revisão atualizada:** `audit/z80-test-infrastructure` (matriz executável em evolução)  
 **Código-base:** `src/sega_emulator/cpu/z80.py`  
 **Testes consultados:** `tests/unit/test_z80.py`, `tests/unit/test_z80_alu_immediate.py` e `docs/z80-coverage.md`
 
@@ -13,7 +13,7 @@ Esta é uma **auditoria estática do despachante e dos testes existentes**, não
 | **I — Implementado** | O código possui um caminho de execução para a instrução/família. |
 | **P — Parcial / precisa de auditoria** | Existe implementação, mas a cobertura funcional ou diferencial é incompleta, ou há ressalvas de prefixo/flags. |
 | **A — Ausente como instrução própria** | O despachante não implementa essa instrução/codificação; pode lançar `UnsupportedOpcodeError`. |
-| **F — Fallback de prefixo** | O prefixo é tratado como ignorado para instruções que não usam o registrador indexado; isso não equivale a suportar a variante indexada. |
+| **F — Fallback de prefixo** | O prefixo é tratado como ignorado para instruções que não usam o registrador indexado; isso não equivale a suportar a variante indexada. |\n| **N — ED-NOP** | Byte ED não atribuído no Z80 clássico segue o fallback atual de 8 T-states; não é uma instrução semântica implementada. |
 
 ## 1. Espaço base — opcode sem prefixo
 
@@ -56,7 +56,7 @@ A tabela resume as famílias reconhecidas no método `step()`. O estado **P** é
 | `EB` | EX DE,HL | P | Caminho implementado. |
 | `F3,FB` | DI/EI | P | Atraso de reconhecimento e interação com interrupções. |
 | `F9` | LD SP,HL | P | Caminho implementado. |
-| Outros bytes base | Codificações não cobertas pelas famílias acima | A | Não há instrução base correspondente no despachante atual; execução pode lançar `UnsupportedOpcodeError`. |
+| Demais codificações base | Outras famílias base documentadas e bytes prefixados CB/DD/ED/FD | P | O inventário de despacho atual executa todos os 256 bytes base; isso não substitui a validação semântica por família. |
 
 **Nota de inventário:** os grupos acima são uma visão por famílias, não uma lista independente de 256 células verificadas automaticamente. Alguns opcodes de uma família têm variantes de registrador ou memória, portanto a cobertura por família não significa cobertura de todos os operandos.
 
@@ -95,9 +95,9 @@ O método `_execute_ed()` reconhece as seguintes codificações/padrões. Os byt
 | `A0,A8,B0,B8` | LDI/LDD/LDIR/LDDR | P | Flags não usuais, condição de repetição e limites. |
 | `A1,A9,B1,B9` | CPI/CPD/CPIR/CPDR | P | Flags, término antecipado e limites. |
 | `A2,AA,B2,BA,A3,AB,B3,BB` | INI/IND/INIR/INDR/OUTI/OUTD/OTIR/OTDR | P | Flags documentadas/não documentadas; os testes de carry adicionados são casos dirigidos. |
-| Outros bytes ED | Outros opcodes/aliases | A | Sem caminho de execução no despachante atual. |
+| Outros bytes ED | ED-NOP / byte sem operação atribuída | N | O código atual retorna 8 T-states; validar a política contra a documentação do Z80 clássico e manter variantes/clones fora do escopo. |
 
-**Política atual e lacuna de compatibilidade:** o núcleo lança `UnsupportedOpcodeError` para bytes ED não reconhecidos. Isso é uma política explícita de diagnóstico, não uma afirmação de que o Z80 físico necessariamente gera uma exceção. A documentação técnica de referência descreve muitos ED não listados como operações sem efeito equivalentes a dois NOPs, enquanto variantes e aliases não documentados podem depender da implementação/revisão do chip. Antes de trocar o comportamento, devemos decidir se o núcleo prioriza diagnóstico estrito ou compatibilidade com o Z80 clássico e adicionar testes específicos para a política escolhida. Referências: [Zilog Z80 CPU User Manual](https://www.zilog.com/docs/z80/um0080.pdf) e [resumo de opcodes não documentados](https://www.z80.info/decoding.htm).
+**Política atual confirmada no código:** bytes ED sem correspondência explícita retornam 8 T-states pelo fallback ED-NOP. A matriz distingue esses bytes de instruções ED reconhecidas; não se deve contar ED-NOP como implementação semântica de uma instrução. A classificação de aliases e extensões específicas de clones permanece uma decisão separada. Referências: [Zilog Z80 CPU User Manual](https://www.zilog.com/docs/z80/um0080.pdf) e [resumo de opcodes não documentados](https://www.z80.info/decoding.htm).
 
 ## 4. Prefixos DD e FD — IX/IY
 
@@ -132,7 +132,7 @@ Estas capacidades não são cobertas apenas pela matriz de opcode:
 
 ## 6. Resultado e próximos passos
 
-Esta revisão confirma **cobertura estática completa do espaço CB em termos de caminho de despacho**, subconjuntos explicitamente reconhecidos em ED e DD/FD, e um conjunto base incompleto. Não atribuí uma percentagem global porque isso exigiria uma regra explícita para contar aliases, prefixos ignorados, codificações não documentadas e combinações de operandos.
+Esta revisão confirma caminhos de despacho para todos os 256 bytes base, CB, ED, DD, FD, DD-CB e FD-CB no inventário atual. Isso não significa cobertura semântica completa: ED inclui bytes que caem em ED-NOP e DD/FD incluem prefixos ignorados. Não atribuí percentagem de correção porque seria necessário definir evidência por célula e validar os resultados contra oráculos independentes.
 
 Ordem recomendada para transformar a matriz em evidência automatizada:
 
@@ -157,4 +157,19 @@ O modo normal resume cada espaço e lista as codificações que lançam `Unsuppo
 
 **Limitações importantes:** cada combinação é executada apenas uma vez com operandos e estado inicial controlados. A classificação `executed` significa somente que a execução retornou sem exceção. Ela não valida o resultado semântico, as flags, os ciclos de barramento, o timing exato nem a equivalência com hardware. Prefixos repetidos e instruções que consomem operandos são smoke-tested, não exaustivamente validados. O inventário é uma ferramenta de triagem para encontrar falhas de despacho, não um teste de conformidade.
 
-**Limitação da auditoria:** a matriz funcional acima continua sendo uma avaliação estática. O novo inventário automatiza a triagem em runtime, mas os resultados reais ainda precisam ser executados no ambiente do projeto e revisados antes de atualizar percentuais ou marcar instruções como corretas.
+**Limitação da auditoria:** a matriz funcional acima continua sendo uma avaliação estática. O inventário de despacho e a matriz classificatória agora têm ferramentas executáveis, mas não provam equivalência com hardware. A matriz classificatória expande cada espaço em 256 células, distingue instruções documentadas, aliases, ED-NOP, substituições IX/IY e prefixos ignorados. Ela deve ser revisada junto ao código e aos testes, não usada sozinha como certificação de conformidade.
+
+
+## 8. Matriz classificatória executável (atualização da Etapa 2)
+
+A classificação detalhada por byte é gerada por `tools/z80_opcode_matrix.py` e validada por `tests/unit/test_z80_opcode_matrix.py`.
+
+```powershell
+python tools/z80_opcode_matrix.py
+python tools/z80_opcode_matrix.py --json
+python -m pytest -q tests/unit/test_z80_opcode_matrix.py
+```
+
+O JSON contém 1.792 células: 256 por espaço (base, CB, ED, DD, FD, DD-CB e FD-CB). Cada célula registra família, classificação arquitetural e caminho de implementação observado. Em DD/FD, o byte listado é o segundo byte após o prefixo. O estado de classificação não substitui evidência semântica: uma célula pode descrever ED-NOP ou prefixo ignorado, e instruções indexadas por metade IXH/IXL/IYH/IYL estão marcadas separadamente como não documentadas no Z80 clássico.
+
+O workflow `Z80 Test Infrastructure Baseline` publica `opcode-classification-matrix.json` junto ao inventário dinâmico. A aceitação inicial é cobertura estrutural sem duplicatas (256 células por espaço), não conformidade funcional.
