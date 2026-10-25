@@ -853,8 +853,12 @@ impl RustZ80Cpu {
                             0x57 | 0x5F => {
                                 self.a = if sub == 0x57 { self.i } else { self.r };
                                 self.f = (self.f & FLAG_C) | (self.a & 0xA8);
-                                if self.a == 0 { self.f |= FLAG_Z; }
-                                if self.iff2 { self.f |= FLAG_PV; }
+                                if self.a == 0 {
+                                    self.f |= FLAG_Z;
+                                }
+                                if self.iff2 {
+                                    self.f |= FLAG_PV;
+                                }
                             }
                             _ => unreachable!(),
                         }
@@ -869,8 +873,12 @@ impl RustZ80Cpu {
                             self.write_reg(py, register, value)?;
                         }
                         self.f = (self.f & FLAG_C) | (value & 0xA8);
-                        if value == 0 { self.f |= FLAG_Z; }
-                        if value.count_ones() & 1 == 0 { self.f |= FLAG_PV; }
+                        if value == 0 {
+                            self.f |= FLAG_Z;
+                        }
+                        if value.count_ones() & 1 == 0 {
+                            self.f |= FLAG_PV;
+                        }
                         Ok(12)
                     }
                     0x41 | 0x49 | 0x51 | 0x59 | 0x61 | 0x69 | 0x71 | 0x79 => {
@@ -900,8 +908,12 @@ impl RustZ80Cpu {
                         }
                         self.write8(py, address, new_memory)?;
                         self.f = (self.f & FLAG_C) | (self.a & 0xA8);
-                        if self.a == 0 { self.f |= FLAG_Z; }
-                        if self.a.count_ones() & 1 == 0 { self.f |= FLAG_PV; }
+                        if self.a == 0 {
+                            self.f |= FLAG_Z;
+                        }
+                        if self.a.count_ones() & 1 == 0 {
+                            self.f |= FLAG_PV;
+                        }
                         Ok(18)
                     }
                     0x46 | 0x4E | 0x66 | 0x6E => {
