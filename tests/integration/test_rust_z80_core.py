@@ -144,9 +144,10 @@ def test_rust_block_transfer_matches_python(
     assert rust_bus.memory == python_bus.memory
 
 
-def test_rust_unassigned_ed_opcode_matches_classic_z80_nop_behavior() -> None:
+@pytest.mark.parametrize("opcode", [0x00, 0x77, 0x7F, 0x80, 0xA4, 0xC0])
+def test_rust_unassigned_ed_opcode_matches_classic_z80_nop_behavior(opcode: int) -> None:
     RustZ80Cpu = _rust_cpu()
-    program = bytes([0xED, 0x00])
+    program = bytes([0xED, opcode])
     python_cpu = Z80Cpu(MemoryBus(program))
     rust_cpu = RustZ80Cpu(MemoryBus(program), None)
 
