@@ -17,6 +17,44 @@ pub(crate) struct NativeMemoryBus {
 
 #[pymethods]
 impl NativeMemoryBus {
+    #[new]
+    #[pyo3(signature = (cartridge_rom, internal_ram_size=1024, cartridge_ram_size=0, cartridge_ram_start=0, cartridge_ram_end=-1))]
+    fn new(
+        cartridge_rom: Vec<u8>,
+        internal_ram_size: usize,
+        cartridge_ram_size: usize,
+        cartridge_ram_start: u16,
+        cartridge_ram_end: i32,
+    ) -> PyResult<Self> {
+        Self::new_native(
+            cartridge_rom,
+            internal_ram_size,
+            cartridge_ram_size,
+            cartridge_ram_start,
+            cartridge_ram_end,
+        )
+    }
+
+    fn read(&self, address: u16) -> u8 {
+        self.read_byte(address)
+    }
+
+    fn write(&mut self, address: u16, value: u8) {
+        self.write_byte(address, value);
+    }
+
+    #[getter]
+    fn internal_ram_size(&self) -> usize {
+        self.ram.len()
+    }
+
+    #[getter]
+    fn cartridge_ram_size(&self) -> usize {
+        self.cartridge_ram.len()
+    }
+}
+
+impl NativeMemoryBus {
     pub(crate) fn new_native(
         cartridge_rom: Vec<u8>,
         internal_ram_size: usize,
