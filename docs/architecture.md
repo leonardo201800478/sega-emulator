@@ -4,7 +4,7 @@
 
 Construir uma base de emulação determinística, testável e evolutiva, começando pelo SG-1000. Componentes de hardware devem ser reutilizados entre consoles quando o hardware e os contratos forem realmente compatíveis. Reutilização não deve apagar diferenças entre revisões, mapas de memória, periféricos ou temporização.
 
-A implementação de referência começa em Python. Rust poderá ser adotado seletivamente após profiling e testes de equivalência, sem alterar os contratos observáveis dos componentes.
+A implementação de referência começa em Python e permanece como oráculo diferencial e fallback. Rust será adotado seletivamente para componentes críticos após testes de equivalência; LLVM ORC será apenas um backend JIT opcional de CPU, nunca a linguagem dos dispositivos. Consulte o [roteiro do núcleo nativo](architecture/native-core-roadmap.md) e o [ADR 0005](adr/0005-python-rust-llvm-architecture.md).
 
 ## Princípios
 
