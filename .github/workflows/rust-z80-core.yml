@@ -63,11 +63,26 @@ jobs:
           python -m ruff format --check src/sega_emulator/__main__.py src/sega_emulator/machine/sg1000.py src/sega_emulator/frontend/qt_frontend.py tests/integration/test_rust_z80_core.py tools/benchmarks/compare_cpu_cores.py
       - name: Test Python/Rust ALU and CPU parity
         run: python -m pytest tests/integration/test_z80_alu_rust_parity.py tests/integration/test_rust_z80_core.py -q
-      - name: Run full Python test suite
-        run: python -m pytest -q
+      - name: Download and verify Super Uwol homebrew ROM
+        shell: pwsh
+        run: |
+          $rom = Join-Path $env:RUNNER_TEMP "super-uwol.sg"
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/webrcade/webrcade-default-feed/b7bc8e1946aa67436bb296955d55bbf3f3841ba6/content/sms/mojon-twins--super-uwol.sg" -OutFile $rom
+          python -c "import pathlib,sys,zlib; p=pathlib.Path(sys.argv[1]); b=p.read_bytes(); crc=zlib.crc32(b) & 0xFFFFFFFF; print(f'ROM size={len(b)} CRC32={crc:08X}'); assert len(b) == 0xC000 and crc == 0xAA8EA6EB, 'Unexpected Super Uwol ROM identity'" $rom
+          Add-Content -Path $env:GITHUB_ENV -Value "SUPER_UWOL_ROM=$rom"
+      - name: Compare Python and Rust on verified homebrew ROM
+        continue-on-error: true
+        shell: pwsh
+        run: python tools/benchmarks/compare_cpu_cores.py --rom "$env:SUPER_UWOL_ROM" --warmup-frames 30 --frames 120 --repeats 3 --output rust-core-super-uwol.json
       - name: Benchmark equivalent synthetic CPU workload
         run: python tools/benchmarks/compare_cpu_cores.py --synthetic-loop --warmup-frames 1 --frames 3 --repeats 1 --output rust-core-smoke-benchmark.json
+      - name: Run full Python test suite
+        run: python -m pytest -q
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: rust-core-smoke-benchmark
-          path: rust-core-smoke-benchmark.json
+          name: rust-core-benchmark-reports
+          path: |
+            rust-core-smoke-benchmark.json
+            rust-core-super-uwol.json
+          if-no-files-found: warn
