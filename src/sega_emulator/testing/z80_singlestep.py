@@ -226,6 +226,18 @@ def run_vector(vector: dict[str, Any]) -> VectorResult:
         result.mismatches.append(f"erro ao executar vetor: {type(exc).__name__}: {exc}")
         return result
 
+    # SingleStepTests records one entry per T-state. Compare the aggregate
+    # count returned by step(); this does not validate bus-cycle ordering.
+    cycle_trace = vector.get("cycles")
+    if (
+        isinstance(cycle_trace, list)
+        and cycle_trace
+        and result.cycles_returned != len(cycle_trace)
+    ):
+        result.mismatches.append(
+            f"tstates: esperado {len(cycle_trace)}, obtido {result.cycles_returned}"
+        )
+
     for field_name, expected in final.items():
         if field_name in ("ram",):
             continue
