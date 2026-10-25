@@ -95,9 +95,55 @@ pub fn sbc8(lhs: u8, rhs: u8, carry_in: bool) -> AluResult {
     AluResult { value, flags }
 }
 
+/// Executes Z80 AND r, setting H and even-parity flags.
+pub fn and8(lhs: u8, rhs: u8) -> AluResult {
+    logic_result(lhs & rhs, FLAG_H)
+}
+
+/// Executes Z80 OR r.
+pub fn or8(lhs: u8, rhs: u8) -> AluResult {
+    logic_result(lhs | rhs, 0)
+}
+
+/// Executes Z80 XOR r.
+pub fn xor8(lhs: u8, rhs: u8) -> AluResult {
+    logic_result(lhs ^ rhs, 0)
+}
+
+fn logic_result(value: u8, extra_flags: u8) -> AluResult {
+    let mut flags = sign_zero_xy(value) | extra_flags;
+    if value.count_ones() % 2 == 0 {
+        flags |= FLAG_PV;
+    }
+    AluResult { value, flags }
+}
+
+/// Executes Z80 CP r: reports subtraction flags without changing A.
+/// Undocumented X/Y flags are copied from the operand, unlike SUB.
+pub fn cp8(lhs: u8, rhs: u8) -> AluResult {
+    let result = lhs.wrapping_sub(rhs);
+    let mut flags = (rhs & FLAG_XY) | FLAG_N;
+    if result & FLAG_S != 0 {
+        flags |= FLAG_S;
+    }
+    if result == 0 {
+        flags |= FLAG_Z;
+    }
+    if (lhs & 0x0f) < (rhs & 0x0f) {
+        flags |= FLAG_H;
+    }
+    if ((lhs ^ rhs) & (lhs ^ result) & FLAG_S) != 0 {
+        flags |= FLAG_PV;
+    }
+    if lhs < rhs {
+        flags |= FLAG_C;
+    }
+    AluResult { value: lhs, flags }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{adc8, add8, sbc8, sub8};
+    use super::{adc8, add8, and8, cp8, or8, sbc8, sub8, xor8};
 
     #[test]
     fn arithmetic_wraps_at_eight_bits() {
@@ -126,6 +172,25 @@ mod tests {
         assert_eq!(adc8(0x7f, 0x00, true).flags & 0x04, 0x04);
         assert_eq!(sbc8(0x00, 0x00, true).value, 0xff);
         assert_eq!(sbc8(0x80, 0x00, true).flags & 0x04, 0x04);
+    }
+
+
+    #[test]
+    fn logical_operations_set_result_parity_and_half_carry() {
+        assert_eq!(and8(0xf0, 0x0f).value, 0x00);
+        assert_eq!(and8(0xf0, 0x0f).flags & 0x54, 0x54);
+        assert_eq!(or8(0x80, 0x01).value, 0x81);
+        assert_eq!(or8(0x80, 0x01).flags & 0x84, 0x80);
+        assert_eq!(xor8(0xaa, 0xaa).value, 0x00);
+        assert_eq!(xor8(0xaa, 0xaa).flags & 0x44, 0x44);
+    }
+
+    #[test]
+    fn compare_preserves_accumulator_and_copies_xy_from_operand() {
+        let result = cp8(0x10, 0x28);
+        assert_eq!(result.value, 0x10);
+        assert_eq!(result.flags & 0x28, 0x28);
+        assert_eq!(result.flags & 0x13, 0x13);
     }
 
     #[test]
