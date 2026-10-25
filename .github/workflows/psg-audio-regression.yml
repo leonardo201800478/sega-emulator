@@ -1,0 +1,64 @@
+name: PSG Audio Regression Gate
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/sega_emulator/audio/**"
+      - "src/sega_emulator/machine/sg1000.py"
+      - "src/sega_emulator/cpu/z80.py"
+      - "src/sega_emulator/frontend/**"
+      - "tests/unit/test_sn76489.py"
+      - "tests/unit/test_audio_synchronization.py"
+      - "tests/unit/test_sg1000_machine.py"
+      - "pyproject.toml"
+      - ".github/workflows/psg-audio-regression.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: psg-audio-regression-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  psg-regression:
+    name: PSG timing, integration, frontends and full regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SDL_AUDIODRIVER: dummy
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install development and optional frontend dependencies
+        run: python -m pip install -e ".[dev,qt]"
+
+      - name: Run focused PSG and machine timing tests
+        run: >-
+          python -m pytest -q
+          tests/unit/test_sn76489.py
+          tests/unit/test_audio_synchronization.py
+          tests/unit/test_sg1000_machine.py
+
+      - name: Verify Qt and Pygame frontend imports and dummy audio mixer
+        run: |
+          python -c "import sega_emulator.frontend.qt_frontend; import sega_emulator.frontend.pygame_frontend; print('Frontend imports OK')"
+          python -c "import pygame; pygame.mixer.pre_init(frequency=44100, size=-16, channels=1, buffer=512); pygame.mixer.init(); assert pygame.mixer.get_init() is not None; print('Dummy audio mixer OK:', pygame.mixer.get_init()); pygame.mixer.quit()"
+
+      - name: Run complete test suite
+        run: python -m pytest -q
+
+      - name: Run Ruff lint and formatting checks
+        run: |
+          python -m ruff check .
+          python -m ruff format --check .
