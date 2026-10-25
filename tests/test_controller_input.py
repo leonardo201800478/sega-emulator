@@ -446,7 +446,6 @@ def test_mapped_controller_can_capture_raw_buttons_when_sdl_mapping_fails() -> N
     assert inputs.poll()[1] == {"button1"}
 
 
-
 def test_pygame_input_backend_survives_audio_mixer_initialization_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
