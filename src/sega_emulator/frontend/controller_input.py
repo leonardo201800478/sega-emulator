@@ -303,7 +303,7 @@ class ControllerInput:
                     self._joystick_module = pygame_module.joystick
                 if not self._joystick_module.get_init():
                     self._joystick_module.init()
-            except (AttributeError, RuntimeError):
+            except AttributeError, RuntimeError:
                 self._joystick_module = None
             try:
                 controller_module = getattr(
@@ -358,7 +358,7 @@ class ControllerInput:
         for index, joystick in self._raw_joysticks.items():
             try:
                 name = joystick.get_name()
-            except (AttributeError, IndexError, RuntimeError):
+            except AttributeError, IndexError, RuntimeError:
                 name = None
             names.append(str(name or f"Joystick {index + 1} (sem mapeamento)"))
         return names
@@ -391,7 +391,7 @@ class ControllerInput:
                     self._controllers.clear()
                     self._raw_joysticks.clear()
                     self._last_device_count = None
-            except (AttributeError, RuntimeError, TypeError):
+            except AttributeError, RuntimeError, TypeError:
                 pass
         module = self._controller_module
         joystick_module = self._joystick_module
@@ -432,7 +432,7 @@ class ControllerInput:
             if index not in self._controllers:
                 try:
                     self._controllers[index] = module.Controller(index)
-                except (IndexError, RuntimeError):
+                except IndexError, RuntimeError:
                     continue
         for index in list(self._raw_joysticks):
             joystick = self._raw_joysticks[index]
@@ -440,7 +440,11 @@ class ControllerInput:
                 attached = joystick.get_init()
             except (AttributeError, RuntimeError):
                 attached = False
-            if index not in valid_indices or index in controller_indices or not attached:
+            if (
+                index not in valid_indices
+                or index in controller_indices
+                or not attached
+            ):
                 try:
                     joystick.quit()
                 except (AttributeError, RuntimeError):
@@ -602,7 +606,12 @@ class ControllerInput:
                             actions.add("up")
                         elif y_value < 0:
                             actions.add("down")
-                if controller is not None and profile.use_left_stick and axis_x is not None and axis_y is not None:
+                if (
+                    controller is not None
+                    and profile.use_left_stick
+                    and axis_x is not None
+                    and axis_y is not None
+                ):
                     threshold = round(self.config.deadzone * 32767)
                     x_value = controller.get_axis(axis_x)
                     y_value = controller.get_axis(axis_y)
