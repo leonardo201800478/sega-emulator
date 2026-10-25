@@ -1,4 +1,3 @@
-
 [workspace]
 resolver = "3"
 exclude = [
@@ -7,8 +6,6 @@ exclude = [
 members = [
     "native/sg1000_core",
     "native/z80_alu",
-    "native/sg1000_core",
-    "native/sg1000_core",
 ]
 default-members = [
     "native/sg1000_core",
