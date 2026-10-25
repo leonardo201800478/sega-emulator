@@ -88,8 +88,12 @@ class PlayerInputProfile:
             for key, button in bindings.items()
         ):
             raise ValueError("gamepad_buttons deve mapear strings para strings.")
+        # Merge defaults so profiles saved before the Hold action was added
+        # retain their custom mappings while gaining the new SW/Hold binding.
+        merged_bindings = DEFAULT_GAMEPAD_BINDINGS.copy()
+        merged_bindings.update(bindings)
         return cls(
-            gamepad_buttons=dict(bindings),
+            gamepad_buttons=merged_bindings,
             use_left_stick=value.get("use_left_stick", True),
         )
 
