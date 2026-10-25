@@ -505,7 +505,6 @@ impl RustZ80Cpu {
         self.f = flags;
     }
 
-
     fn execute_cb(&mut self, py: Python<'_>, opcode: u8) -> PyResult<u32> {
         let register = opcode & 7;
         let operation = opcode >> 6;
@@ -518,13 +517,13 @@ impl RustZ80Cpu {
                 let carry_in = self.f & FLAG_C;
                 let (result, carry) = match bit_index {
                     0 => ((value << 1) | (value >> 7), value >> 7), // RLC
-                    1 => ((value >> 1) | (value << 7), value & 1), // RRC
-                    2 => ((value << 1) | carry_in, value >> 7), // RL
+                    1 => ((value >> 1) | (value << 7), value & 1),  // RRC
+                    2 => ((value << 1) | carry_in, value >> 7),     // RL
                     3 => ((value >> 1) | (carry_in << 7), value & 1), // RR
-                    4 => (value << 1, value >> 7), // SLA
+                    4 => (value << 1, value >> 7),                  // SLA
                     5 => ((value >> 1) | (value & 0x80), value & 1), // SRA
-                    6 => ((value << 1) | 1, value >> 7), // SLL (undocumented)
-                    _ => (value >> 1, value & 1), // SRL
+                    6 => ((value << 1) | 1, value >> 7),            // SLL (undocumented)
+                    _ => (value >> 1, value & 1),                   // SRL
                 };
                 self.write_reg(py, register, result)?;
                 self.f = (result & 0xA8) | carry;
@@ -599,12 +598,7 @@ impl RustZ80Cpu {
         Ok(())
     }
 
-    fn execute_indexed(
-        &mut self,
-        py: Python<'_>,
-        prefix: u8,
-        prefix_pc: u16,
-    ) -> PyResult<u32> {
+    fn execute_indexed(&mut self, py: Python<'_>, prefix: u8, prefix_pc: u16) -> PyResult<u32> {
         let opcode = self.fetch_opcode(py)?;
         if opcode == 0xDD || opcode == 0xFD {
             return Ok(self.execute_indexed(py, opcode, self.pc.wrapping_sub(1))? + 4);
@@ -693,7 +687,11 @@ impl RustZ80Cpu {
             0x23 | 0x2B => {
                 self.set_index_value(
                     prefix,
-                    if opcode == 0x23 { index.wrapping_add(1) } else { index.wrapping_sub(1) },
+                    if opcode == 0x23 {
+                        index.wrapping_add(1)
+                    } else {
+                        index.wrapping_sub(1)
+                    },
                 );
                 Ok(10)
             }
@@ -721,7 +719,11 @@ impl RustZ80Cpu {
                 Ok(15)
             }
             0x24 | 0x25 | 0x26 | 0x2C | 0x2D | 0x2E => {
-                let code = if matches!(opcode, 0x24 | 0x25 | 0x26) { 4 } else { 5 };
+                let code = if matches!(opcode, 0x24 | 0x25 | 0x26) {
+                    4
+                } else {
+                    5
+                };
                 if matches!(opcode, 0x26 | 0x2E) {
                     let value = self.fetch8(py)?;
                     self.write_index_reg(py, prefix, code, value, true)?;
@@ -742,7 +744,11 @@ impl RustZ80Cpu {
                 let address = index.wrapping_add_signed(i16::from(displacement));
                 self.wz = address;
                 let old = self.read8(py, address)?;
-                let value = if opcode == 0x34 { self.inc8(old) } else { self.dec8(old) };
+                let value = if opcode == 0x34 {
+                    self.inc8(old)
+                } else {
+                    self.dec8(old)
+                };
                 self.write8(py, address, value)?;
                 Ok(23)
             }
@@ -1201,7 +1207,11 @@ impl RustZ80Cpu {
                     0x41 | 0x49 | 0x51 | 0x59 | 0x61 | 0x69 | 0x71 | 0x79 => {
                         let register = (sub >> 3) & 7;
                         let port = self.bc();
-                        let value = if register == 6 { 0 } else { self.read_reg(py, register)? };
+                        let value = if register == 6 {
+                            0
+                        } else {
+                            self.read_reg(py, register)?
+                        };
                         self.write_port(py, port, value)?;
                         self.wz = port.wrapping_add(1);
                         Ok(12)
