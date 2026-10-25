@@ -301,8 +301,9 @@ class ControllerInput:
             try:
                 if self._joystick_module is None:
                     self._joystick_module = pygame_module.joystick
-                if not self._joystick_module.get_init():
-                    self._joystick_module.init()
+                joystick_module = self._joystick_module
+                if joystick_module is not None and not joystick_module.get_init():
+                    joystick_module.init()
             except AttributeError, RuntimeError:
                 self._joystick_module = None
             try:
@@ -399,8 +400,12 @@ class ControllerInput:
         joystick_module = self._joystick_module
         if module is None and joystick_module is None:
             return
-        count_source = module if module is not None else joystick_module
-        count = count_source.get_count()
+        if module is not None:
+            count = module.get_count()
+        else:
+            # The early return above guarantees that joystick_module is present.
+            assert joystick_module is not None
+            count = joystick_module.get_count()
         if self._last_device_count is not None and count != self._last_device_count:
             # SDL device indices can shift after unplugging a device. Reopen all
             # handles rather than accidentally retaining the old device at index 0.
@@ -430,12 +435,13 @@ class ControllerInput:
                 except AttributeError, RuntimeError:
                     pass
                 del self._controllers[index]
-        for index in sorted(controller_indices):
-            if index not in self._controllers:
-                try:
-                    self._controllers[index] = module.Controller(index)
-                except IndexError, RuntimeError:
-                    continue
+        if module is not None:
+            for index in sorted(controller_indices):
+                if index not in self._controllers:
+                    try:
+                        self._controllers[index] = module.Controller(index)
+                    except IndexError, RuntimeError:
+                        continue
         for index in list(self._raw_joysticks):
             joystick = self._raw_joysticks[index]
             try:
