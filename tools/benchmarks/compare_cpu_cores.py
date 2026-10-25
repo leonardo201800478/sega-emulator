@@ -62,7 +62,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Compare Python and experimental Rust Z80 cores on the same ROM."
     )
-    parser.add_argument("--rom", type=Path, required=True, help="ROM .sg/.rom/.bin or ZIP")
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--rom", type=Path, help="ROM .sg/.rom/.bin or ZIP")
+    source.add_argument(
+        "--synthetic-loop",
+        action="store_true",
+        help="use a deterministic synthetic ROM containing JP 0000h",
+    )
     parser.add_argument("--warmup-frames", type=int, default=30)
     parser.add_argument("--frames", type=int, default=120)
     parser.add_argument("--repeats", type=int, default=3)
@@ -72,10 +78,18 @@ def main() -> int:
     if args.warmup_frames < 0 or args.frames < 1 or args.repeats < 1:
         parser.error("warmup-frames deve ser >= 0; frames e repeats devem ser >= 1")
 
-    loaded = load_rom(args.rom)
+    if args.synthetic_loop:
+        rom = bytes((0xC3, 0x00, 0x00))
+        rom_name = "synthetic-jp-0000-loop"
+        rom_sha256 = hashlib.sha256(rom).hexdigest()
+    else:
+        loaded = load_rom(args.rom)
+        rom = loaded.data
+        rom_name = loaded.display_name
+        rom_sha256 = loaded.sha256
     report: dict[str, Any] = {
-        "rom_name": loaded.display_name,
-        "rom_sha256": loaded.sha256,
+        "rom_name": rom_name,
+        "rom_sha256": rom_sha256,
         "warmup_frames": args.warmup_frames,
         "frames_per_repeat": args.frames,
         "repeats": args.repeats,
@@ -86,7 +100,7 @@ def main() -> int:
         runs: list[dict[str, Any]] = []
         try:
             for _ in range(args.repeats):
-                runs.append(_run_once(loaded.data, core, args.warmup_frames, args.frames))
+                runs.append(_run_once(rom, core, args.warmup_frames, args.frames))
         except Exception as exc:
             report["cores"][core] = {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
             if core == "python":
