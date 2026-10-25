@@ -628,10 +628,18 @@ impl RustZ80Cpu {
                     old_a.wrapping_add(correction)
                 };
                 let mut flags = (result & 0xA8) | (old_f & FLAG_N);
-                if result == 0 { flags |= FLAG_Z; }
-                if result.count_ones() & 1 == 0 { flags |= FLAG_PV; }
-                if (old_a ^ result) & 0x10 != 0 { flags |= FLAG_H; }
-                if old_carry || (!subtract && old_a > 0x99) { flags |= FLAG_C; }
+                if result == 0 {
+                    flags |= FLAG_Z;
+                }
+                if result.count_ones() & 1 == 0 {
+                    flags |= FLAG_PV;
+                }
+                if (old_a ^ result) & 0x10 != 0 {
+                    flags |= FLAG_H;
+                }
+                if old_carry || (!subtract && old_a > 0x99) {
+                    flags |= FLAG_C;
+                }
                 self.a = result;
                 self.f = flags;
                 Ok(4)
