@@ -323,11 +323,7 @@ impl RustZ80Cpu {
         if let Some(offset) = cycle_offset {
             if let Ok(timed_write) = io.getattr("write_port_at") {
                 if timed_write.is_callable() {
-                    timed_write.call1((
-                        address,
-                        value,
-                        self.total_cycles.wrapping_add(offset),
-                    ))?;
+                    timed_write.call1((address, value, self.total_cycles.wrapping_add(offset)))?;
                     return Ok(());
                 }
             }
