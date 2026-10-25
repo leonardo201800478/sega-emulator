@@ -63,6 +63,12 @@ def test_ed_unassigned_bytes_match_current_ed_nop_policy() -> None:
     assert ed_family(0xFF)[2] == "ed-nop-fallback"
     assert ed_family(0xA0)[0] == "LDI"
     assert ed_family(0x4B)[0] == "LD rr,(nn)"
+    assert ed_family(0x44) == ("NEG", "documented", "ed-implemented")
+    assert ed_family(0x4C)[1] == "alias"
+    assert ed_family(0x4D) == ("RETI", "documented", "ed-implemented")
+    assert ed_family(0x45)[1] == "alias"
+    assert ed_family(0x46) == ("IM 0", "documented", "ed-implemented")
+    assert ed_family(0x4E)[1] == "alias"
     assert ed_family(0x71)[1] == "undocumented"
 
 
