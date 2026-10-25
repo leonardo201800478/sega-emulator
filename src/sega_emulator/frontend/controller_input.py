@@ -354,6 +354,12 @@ class ControllerInput:
                 except AttributeError, IndexError, RuntimeError, TypeError:
                     name = None
             names.append(str(name or f"Controle {index + 1}"))
+        for index, joystick in self._raw_joysticks.items():
+            try:
+                name = joystick.get_name()
+            except (AttributeError, IndexError, RuntimeError):
+                name = None
+            names.append(str(name or f"Joystick {index + 1} (sem mapeamento)"))
         return names
 
     def _sync_controllers(self) -> None:
