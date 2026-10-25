@@ -927,3 +927,43 @@ def test_rust_rst_updates_wz_to_return_address() -> None:
     _assert_rust_python_interrupt_state(python_cpu, rust_cpu)
     assert rust_cpu.pc == 0x0008
     assert rust_cpu.wz == 0x0001
+
+
+@pytest.mark.parametrize(
+    ("opcode", "a", "memory_value", "bc", "initial_wz", "expected_wz", "expected_pc"),
+    [
+        (0x6F, 0x12, 0x34, 2, 0x1000, 0x2001, 2),  # RLD
+        (0xA1, 0x34, 0x34, 2, 0x1000, 0x1001, 2),  # CPI
+        (0xB1, 0x34, 0x56, 2, 0x1000, 0x0001, 0),  # CPIR repeats
+        (0xB0, 0x12, 0x56, 2, 0x1000, 0x0001, 0),  # LDIR repeats
+    ],
+)
+def test_rust_wz_updates_for_ed_compare_transfer_and_nibble_ops(
+    opcode: int,
+    a: int,
+    memory_value: int,
+    bc: int,
+    initial_wz: int,
+    expected_wz: int,
+    expected_pc: int,
+) -> None:
+    RustZ80Cpu = _rust_cpu()
+    program = bytes([0xED, opcode])
+    python_bus = MemoryBus(program)
+    rust_bus = MemoryBus(program)
+    python_cpu = Z80Cpu(python_bus)
+    rust_cpu = RustZ80Cpu(rust_bus, None)
+    for cpu in (python_cpu, rust_cpu):
+        cpu.hl = 0x2000
+        cpu.de = 0x2100
+        cpu.bc = bc
+        cpu.a = a
+        cpu.wz = initial_wz
+        cpu.sp = 0x3000
+    python_bus.memory[0x2000] = rust_bus.memory[0x2000] = memory_value
+
+    assert python_cpu.step() == rust_cpu.step()
+    _assert_rust_python_interrupt_state(python_cpu, rust_cpu)
+    assert rust_cpu.wz == expected_wz
+    assert rust_cpu.pc == expected_pc
+    assert rust_bus.memory == python_bus.memory
