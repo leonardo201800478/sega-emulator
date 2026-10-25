@@ -366,6 +366,27 @@ class ControllerInput:
             if len(available_indices) >= player
         }
 
+    def read_pressed_button(self, player: int) -> str | None:
+        """Retorna o primeiro botão físico pressionado, para captura de mapeamento."""
+        if player not in (1, 2):
+            raise ValueError("player deve ser 1 ou 2.")
+        self._sync_controllers()
+        index = self._player_device_indices.get(player)
+        controller = self._controllers.get(index) if index is not None else None
+        module = self._controller_module
+        if controller is None or module is None:
+            return None
+        for button_name in SUPPORTED_BUTTONS:
+            constant = getattr(module, f"CONTROLLER_BUTTON_{button_name.upper()}", None)
+            if constant is None:
+                continue
+            try:
+                if controller.get_button(constant):
+                    return button_name
+            except (IndexError, RuntimeError):
+                return None
+        return None
+
     def poll(self) -> dict[int, set[str]]:
         event_module = getattr(self._pygame_module, "event", None)
         if event_module is not None:
