@@ -2,7 +2,7 @@
 //!
 //! This is a behavioral port of the existing Python model. Timing remains in
 //! nominal Z80 T-states; this does not model per-dot VRAM fetches or bus contention.
-use pyo3::exceptions::PyTypeError;
+use pyo3::exceptions::{PyTypeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyByteArray, PyBytes};
 
@@ -119,7 +119,7 @@ impl RustTMS9918A {
         }
     }
     fn advance(&mut self, py: Python<'_>, tstates: i64) -> PyResult<()> {
-        if tstates < 0 { return Err(PyTypeError::new_err("tstates must be a non-negative integer")); }
+        if tstates < 0 { return Err(PyValueError::new_err("tstates must be a non-negative integer")); }
         let mut remaining = tstates as u64;
         while remaining > 0 {
             let step = remaining.min((LINE_TSTATES - self.cycles_into_line) as u64) as u32;
