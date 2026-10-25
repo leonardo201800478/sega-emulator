@@ -1,34 +1,53 @@
-# Python
+# Python bytecode and package artifacts
 __pycache__/
 *.py[cod]
 *.pyd
 *.egg-info/
+.eggs/
+wheels/
+pip-wheel-metadata/
 dist/
 build/
-local-assets/roms_sg1000/
-local-assets/firmware/
 
 # Virtual environments
 .venv/
 venv/
 ENV/
+env/
 
-# Test and lint caches
+# Test, lint, type-check, and coverage caches
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
+.pyright/
+.hypothesis/
+.tox/
+.nox/
 .coverage
+.coverage.*
 htmlcov/
+
+# Local ROMs and firmware (never commit copyrighted/protected assets)
+local-assets/roms_sg1000/
+local-assets/firmware/
+
+# Runtime logs, snapshots, and generated diagnostics
 logs/
+*.log
+*.prof
+*.coverage
+runtime-diagnostic*.json
+*-audit-results*/
+z80-audit-results*/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
 
 # Editors and operating system
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
-
-# Local configuration and generated artifacts
-.env
-.env.*
-!.env.example
-*.log
-
+Desktop.ini
