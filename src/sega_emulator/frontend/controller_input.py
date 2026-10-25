@@ -368,7 +368,30 @@ class ControllerInput:
         if event_module is not None:
             try:
                 event_module.pump()
-            except (AttributeError, RuntimeError):
+                event_types = [
+                    getattr(self._pygame_module, name)
+                    for name in (
+                        "JOYDEVICEADDED",
+                        "JOYDEVICEREMOVED",
+                        "CONTROLLERDEVICEADDED",
+                        "CONTROLLERDEVICEREMOVED",
+                    )
+                    if getattr(self._pygame_module, name, None) is not None
+                ]
+                device_events = event_module.get(event_types) if event_types else []
+                if device_events:
+                    for device in (
+                        *self._controllers.values(),
+                        *self._raw_joysticks.values(),
+                    ):
+                        try:
+                            device.quit()
+                        except (AttributeError, RuntimeError):
+                            pass
+                    self._controllers.clear()
+                    self._raw_joysticks.clear()
+                    self._last_device_count = None
+            except (AttributeError, RuntimeError, TypeError):
                 pass
         module = self._controller_module
         joystick_module = self._joystick_module
