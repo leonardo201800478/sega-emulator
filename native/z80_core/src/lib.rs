@@ -1173,7 +1173,7 @@ impl RustZ80Cpu {
                 let port = self.fetch8(py)?;
                 let address = (u16::from(self.a) << 8) | u16::from(port);
                 self.write_port(py, address, self.a)?;
-                self.wz = address.wrapping_add(1);
+                self.wz = (address & 0xFF00) | u16::from(port.wrapping_add(1));
                 Ok(11)
             }
             0xDB => {
