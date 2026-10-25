@@ -55,9 +55,7 @@ class SN76489:
         self.clock_hz = clock_hz
         self.sample_rate = sample_rate
         self._sample_buffer_capacity = sample_rate * SAMPLE_BUFFER_SECONDS
-        self._pending_samples: deque[float] = deque(
-            maxlen=self._sample_buffer_capacity
-        )
+        self._pending_samples: deque[float] = deque(maxlen=self._sample_buffer_capacity)
         self._render_pending: deque[float] = deque()
         self.dropped_samples = 0
         self.reset()
