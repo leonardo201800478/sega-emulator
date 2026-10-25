@@ -29,17 +29,18 @@ Choose the core from the Qt menu **Emulação → Núcleo da CPU**, or pass
   behavior.
 - Unsupported instructions raise \`NotImplementedError\`. There is no silent
   fallback to Python, because that would make performance measurements invalid.
-- Indexed DD/FD and CB families, most ED instructions (including block compare and
-  block I/O), full Q/P-latch behavior,
-  and exhaustive interrupt edge cases remain incomplete.
+- The unprefixed CB family is implemented and has 256 per-opcode differential
+  test cases. Indexed DD/FD and DD/FD-CB families, the remaining ED instructions,
+  full Q/P-latch behavior, and exhaustive interrupt edge cases remain incomplete.
 - Bus and I/O accesses currently cross the Python/Rust boundary. Performance
   must be measured; the Rust backend is not assumed to be faster.
 
 ## Correctness gate
 
 Run the Python/Rust instruction-sequence parity tests and the existing CPU
-differential suites before expanding instruction coverage. Targeted parity cases now cover ED arithmetic, special-register operations,
-block transfer/compare/I/O, unassigned ED NOPs, and the added base miscellaneous
-instructions. The completion roadmap is tracked in
-[issue #55](https://github.com/leonardo201800478/sega-emulator/issues/55). A passing small
-sequence is not proof of full Z80 compatibility or cycle accuracy.
+differential suites before expanding instruction coverage. Targeted parity cases
+cover all 256 CB second-byte values, ED arithmetic and special-register operations,
+block transfer/compare/I/O, unassigned ED NOPs, and base miscellaneous instructions.
+The completion roadmap is tracked in
+[issue #55](https://github.com/leonardo201800478/sega-emulator/issues/55). A passing
+differential case is not proof of full Z80 compatibility or cycle accuracy.
