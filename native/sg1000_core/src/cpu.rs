@@ -5,6 +5,7 @@
 //! incremental and is not yet a complete Z80.
 
 use crate::bus::CpuBus;
+use sega_z80_alu::{adc8, add8, and8, cp8, or8, sbc8, sub8, xor8};
 
 const FLAG_C: u8 = 0x01;
 const FLAG_PV: u8 = 0x04;
@@ -155,6 +156,18 @@ impl Z80 {
                 self.registers.f = FLAG_Z | FLAG_PV;
                 4
             }
+            0x80..=0xBF => {
+                let source = opcode & 0x07;
+                let value = self.read_register(bus, source);
+                self.apply_alu_operation((opcode >> 3) & 0x07, value);
+                if source == 6 { 7 } else { 4 }
+            }
+            0xC6 | 0xCE | 0xD6 | 0xDE | 0xE6 | 0xEE | 0xF6 | 0xFE => {
+                let value = self.fetch8(bus);
+                let operation = (opcode >> 3) & 0x07;
+                self.apply_alu_operation(operation, value);
+                7
+            }
             0xC3 => {
                 self.registers.pc = self.fetch16(bus);
                 10
@@ -163,6 +176,26 @@ impl Z80 {
         };
         self.total_tstates += u64::from(cycles);
         Ok(cycles)
+    }
+
+    #[inline]
+    fn apply_alu_operation(&mut self, operation: u8, value: u8) {
+        let accumulator = self.registers.a;
+        let carry = self.registers.f & FLAG_C != 0;
+        let result = match operation {
+            0 => add8(accumulator, value),
+            1 => adc8(accumulator, value, carry),
+            2 => sub8(accumulator, value),
+            3 => sbc8(accumulator, value, carry),
+            4 => and8(accumulator, value),
+            5 => xor8(accumulator, value),
+            6 => or8(accumulator, value),
+            _ => cp8(accumulator, value),
+        };
+        if operation != 7 {
+            self.registers.a = result.value;
+        }
+        self.registers.f = result.flags;
     }
 
     #[inline]
@@ -252,6 +285,47 @@ mod tests {
             })
         );
         assert_eq!(cpu.registers.pc, 1);
+    }
+
+    #[test]
+    fn arithmetic_and_logic_instructions_update_accumulator_and_flags() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..8].copy_from_slice(&[
+            0x3E, 0x7F, // LD A,0x7F
+            0xC6, 0x01, // ADD A,1 -> 0x80, signed overflow
+            0xCE, 0x00, // ADC A,0 (carry is clear) -> 0x80
+            0xFE, 0x80, // CP 0x80 -> Z set, A preserved
+        ]);
+        let mut cpu = Z80::default();
+
+        assert_eq!(cpu.step(&mut bus), Ok(7));
+        assert_eq!(cpu.step(&mut bus), Ok(7));
+        assert_eq!(cpu.registers.a, 0x80);
+        assert_ne!(cpu.registers.f & FLAG_PV, 0);
+        assert_eq!(cpu.step(&mut bus), Ok(7));
+        assert_eq!(cpu.registers.a, 0x80);
+        assert_eq!(cpu.step(&mut bus), Ok(7));
+        assert_eq!(cpu.registers.a, 0x80);
+        assert_ne!(cpu.registers.f & FLAG_Z, 0);
+    }
+
+    #[test]
+    fn register_alu_operations_support_hl_memory_operand() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..6].copy_from_slice(&[
+            0x21, 0x00, 0xC0, // LD HL,0xC000
+            0x36, 0x0F,       // LD (HL),0x0F
+            0x3E, 0x01,       // LD A,1
+        ]);
+        bus.0[6] = 0x86; // ADD A,(HL)
+        let mut cpu = Z80::default();
+
+        assert_eq!(cpu.step(&mut bus), Ok(10));
+        assert_eq!(cpu.step(&mut bus), Ok(10));
+        assert_eq!(cpu.step(&mut bus), Ok(7));
+        assert_eq!(cpu.step(&mut bus), Ok(7));
+        assert_eq!(cpu.registers.a, 0x10);
+        assert_ne!(cpu.registers.f & FLAG_H, 0);
     }
 
     #[test]
