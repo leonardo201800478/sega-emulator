@@ -502,6 +502,15 @@ impl RustZ80Cpu {
                 self.add_hl(self.read_pair((opcode >> 4) & 3));
                 Ok(11)
             }
+            0x10 => {
+                let displacement = self.fetch8(py)? as i8;
+                self.b = self.b.wrapping_sub(1);
+                if self.b != 0 {
+                    self.pc = self.pc.wrapping_add_signed(i16::from(displacement));
+                    self.wz = self.pc;
+                    Ok(13)
+                } else { Ok(8) }
+            }
             0x18 | 0x20 | 0x28 | 0x30 | 0x38 => {
                 let displacement = self.fetch8(py)? as i8;
                 let take = opcode == 0x18 || self.condition((opcode >> 3) & 3);
@@ -538,7 +547,7 @@ impl RustZ80Cpu {
                 let high = self.fetch8(py)?;
                 let address = u16::from_le_bytes([low, high]);
                 self.write8(py, address, self.a)?;
-                self.wz = u16::from(self.a).wrapping_shl(8) | u16::from(low.wrapping_add(1));
+                self.wz = address.wrapping_add(1);
                 Ok(13)
             }
             0x3A => {
@@ -609,6 +618,13 @@ impl RustZ80Cpu {
                         "Rust Z80 core does not support ED opcode 0x{sub:02X} at PC 0x{opcode_pc:04X}"
                     ))),
                 }
+            }
+            _ if opcode & 0xC7 == 0xC7 => {
+                let target = u16::from(opcode & 0x38);
+                self.push_word(py, self.pc)?;
+                self.pc = target;
+                self.wz = target;
+                Ok(11)
             }
             _ if opcode & 0xC7 == 0xC2 => {
                 let low = self.fetch8(py)?;
