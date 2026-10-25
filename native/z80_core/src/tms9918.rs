@@ -76,6 +76,7 @@ impl RustTMS9918A {
     fn interrupt_pending(&self, py: Python<'_>) -> bool {
         let r = self.regs(py); self.status & 0x80 != 0 && r[1] & 0x20 != 0
     }
+    #[pyo3(signature = (clear_vram=false))]
     fn reset(&mut self, py: Python<'_>, clear_vram: bool) {
         { let mut regs = self.registers.bind(py); unsafe { regs.as_bytes_mut().fill(0); } }
         self.status = 0x1f; self.address = 0; self.read_buffer = 0; self.control_first = None;
@@ -117,10 +118,11 @@ impl RustTMS9918A {
             _ => {}
         }
     }
-    fn advance(&mut self, py: Python<'_>, tstates: u32) {
-        let mut remaining = tstates;
+    fn advance(&mut self, py: Python<'_>, tstates: i64) -> PyResult<()> {
+        if tstates < 0 { return Err(PyTypeError::new_err("tstates must be a non-negative integer")); }
+        let mut remaining = tstates as u64;
         while remaining > 0 {
-            let step = remaining.min(LINE_TSTATES - self.cycles_into_line);
+            let step = remaining.min((LINE_TSTATES - self.cycles_into_line) as u64) as u32;
             self.cycles_into_line += step; remaining -= step;
             if self.cycles_into_line == LINE_TSTATES {
                 self.cycles_into_line = 0;
@@ -138,6 +140,7 @@ impl RustTMS9918A {
                 }
             }
         }
+        Ok(())
     }
     fn consume_frame_ready(&mut self) -> bool { let v = self.frame_ready; self.frame_ready = false; v }
     fn render_frame(&mut self, py: Python<'_>) -> Bound<'_, PyBytes> {
