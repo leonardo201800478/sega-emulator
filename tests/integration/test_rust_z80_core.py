@@ -1114,3 +1114,37 @@ def test_rust_immediate_io_wz_wrap_semantics(opcode: int, expected_wz: int) -> N
     _assert_rust_python_interrupt_state(python_cpu, rust_cpu)
     assert rust_cpu.wz == expected_wz
     assert rust_io.writes == python_io.writes
+
+def test_rust_daa_matches_python_for_all_input_combinations() -> None:
+    """Cross-check all 2,048 A/N/H/C states against the Python reference."""
+    RustZ80Cpu = _rust_cpu()
+    python_bus = MemoryBus(bytes([0x27]))
+    rust_bus = MemoryBus(bytes([0x27]))
+    python_cpu = Z80Cpu(python_bus)
+    rust_cpu = RustZ80Cpu(rust_bus, None)
+
+    for accumulator in range(0x100):
+        for subtract in range(2):
+            for half_carry in range(2):
+                for carry in range(2):
+                    flags = 0xEC | (subtract << 1) | (half_carry << 4) | carry
+                    for cpu in (python_cpu, rust_cpu):
+                        cpu.a = accumulator
+                        cpu.f = flags
+                        cpu.pc = 0
+                        cpu.r = 0xFE
+                        cpu.total_cycles = 0
+                        cpu.q = 0
+                        cpu._q_previous = 0
+
+                    assert python_cpu.step() == rust_cpu.step() == 4
+                    assert (rust_cpu.a, rust_cpu.f) == (python_cpu.a, python_cpu.f), (
+                        f"DAA mismatch A={accumulator:02X} N={subtract} "
+                        f"H={half_carry} C={carry}"
+                    )
+                    assert (rust_cpu.pc, rust_cpu.r, rust_cpu.total_cycles, rust_cpu.q) == (
+                        python_cpu.pc,
+                        python_cpu.r,
+                        python_cpu.total_cycles,
+                        python_cpu.q,
+                    )
