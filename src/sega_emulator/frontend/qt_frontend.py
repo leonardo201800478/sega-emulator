@@ -14,12 +14,12 @@ from sega_emulator.frontend.controller_input import (
     DEFAULT_GAMEPAD_BINDINGS,
     JOYSTICK_ACTIONS,
     SUPPORTED_BUTTONS,
-    ControllerInput,
     ControllerInputConfig,
     PlayerInputProfile,
     apply_turbo,
     joystick_value,
 )
+from sega_emulator.frontend.sdl3_controller_input import SDL3ControllerInput
 from sega_emulator.machine.sg1000 import SG1000Machine
 from sega_emulator.rom_loader import LoadedRom, list_rom_members, load_rom
 
@@ -100,7 +100,15 @@ def run(initial_path: Path | None = None) -> None:
     except ValueError:
         logger.warning("Configuração de controles inválida; usando padrões.")
         controller_config = ControllerInputConfig()
-    controller_input = ControllerInput(pygame, controller_config)
+    controller_input = SDL3ControllerInput(controller_config)
+    logger.info(
+        "Backend de controles SDL3 inicializado",
+        extra={
+            "event": "sdl3_input_initialized",
+            "available": controller_input.available,
+            "devices": controller_input.connected_names(),
+        },
+    )
 
     window = QMainWindow()
     window.setWindowTitle("Sega Emulator — SG-1000")
