@@ -2,7 +2,14 @@ from __future__ import annotations
 
 from collections import Counter
 
-from tools.z80_opcode_matrix import build_matrix, base_family, cb_family, ed_family, indexed_family, indexed_cb_family
+from tools.z80_opcode_matrix import (
+    base_family,
+    build_matrix,
+    cb_family,
+    ed_family,
+    indexed_cb_family,
+    indexed_family,
+)
 
 
 def test_matrix_has_all_256_encodings_in_each_space() -> None:
@@ -18,10 +25,21 @@ def test_matrix_has_all_256_encodings_in_each_space() -> None:
 
 
 def test_base_prefix_bytes_are_classified_as_prefixes() -> None:
-    for opcode, name in ((0xCB, "PREFIX CB"), (0xDD, "PREFIX DD"),
-                         (0xED, "PREFIX ED"), (0xFD, "PREFIX FD")):
+    for opcode, name in (
+        (0xCB, "PREFIX CB"),
+        (0xDD, "PREFIX DD"),
+        (0xED, "PREFIX ED"),
+        (0xFD, "PREFIX FD"),
+    ):
         assert base_family(opcode)[0] == name
         assert base_family(opcode)[1] == "prefix"
+
+
+def test_absolute_load_store_families_are_distinguished() -> None:
+    assert base_family(0x22)[0] == "LD (nn),HL"
+    assert base_family(0x2A)[0] == "LD HL,(nn)"
+    assert base_family(0x32)[0] == "LD (nn),A"
+    assert base_family(0x3A)[0] == "LD A,(nn)"
 
 
 def test_cb_sll_is_separately_marked_undocumented() -> None:
@@ -38,6 +56,7 @@ def test_ed_unassigned_bytes_match_current_ed_nop_policy() -> None:
 
 def test_indexed_prefix_fallback_and_substitution_are_distinguished() -> None:
     assert indexed_family(0x21)[1] == "index-substitution"
+    assert indexed_family(0x24)[1] == "undocumented-index-half"
     assert indexed_family(0x46)[1] == "index-substitution"
     assert indexed_family(0x00)[1] == "ignored-prefix-fallback"
     assert indexed_family(0xCB)[1] == "indexed-cb-prefix"
