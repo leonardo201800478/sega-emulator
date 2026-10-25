@@ -86,7 +86,7 @@ def test_native_machine_routes_ports_and_steps_like_python() -> None:
 
 def test_native_machine_run_frame_matches_python_frame_loop() -> None:
     pytest.importorskip("sega_z80_core")
-    rom = b"\xC3\x00\x00"
+    rom = b"\xc3\x00\x00"
     reference = SG1000Machine(rom)
     native = SG1000Machine(rom, cpu_core="rust")
 
@@ -104,6 +104,6 @@ def test_native_machine_run_frame_matches_python_frame_loop() -> None:
 
 def test_native_machine_rejects_invalid_frame_step_limit() -> None:
     pytest.importorskip("sega_z80_core")
-    machine = SG1000Machine(b"\xC3\x00\x00", cpu_core="rust")
+    machine = SG1000Machine(b"\xc3\x00\x00", cpu_core="rust")
     with pytest.raises(ValueError, match="max_steps"):
         machine.run_frame(0)
