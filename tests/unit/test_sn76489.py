@@ -125,6 +125,50 @@ def test_noise_period_cache_tracks_rate_and_tone_three_writes() -> None:
     assert psg._noise_period == 0x10
 
 
+def test_tone_period_write_does_not_restart_active_countdown() -> None:
+    psg = SN76489()
+    psg.write(0x90)
+    psg.write(0x84)
+    psg.write(0x06)  # período inicial 0x064
+    psg._tone_counters[0] = 100
+    initial_output = psg._tone_outputs[0]
+
+    psg.write(0x88)
+    psg.write(0x00)  # novo período 8, sem reiniciar o contador ativo
+    assert psg.tone_periods[0] == 8
+    assert psg._tone_counters[0] == 100
+
+    for _ in range(99):
+        psg._tick_internal_clock()
+    assert psg._tone_outputs[0] == initial_output
+    psg._tick_internal_clock()
+    assert psg._tone_outputs[0] != initial_output
+
+
+def test_noise_rate_write_changes_next_reload_not_active_countdown() -> None:
+    psg = SN76489()
+    psg.write(0xE0)  # taxa fixa /512; divisor interno 16
+    psg._noise_counter = 16
+    psg._noise_counter_phase = 0
+    initial_lfsr = psg._lfsr
+
+    psg.write(0xE1)  # taxa fixa /1024; divisor interno 32
+    assert psg._noise_period == 32
+    assert psg._noise_counter == 32  # escrever o controle reinicia o gerador
+
+    # Já com um contador ativo, uma mudança de período só altera o próximo reload.
+    psg._noise_counter = 16
+    psg.write(0xE2)
+    assert psg._noise_period == 64
+    assert psg._noise_counter == 16
+    for _ in range(15):
+        psg._tick_internal_clock()
+    assert psg._lfsr == LFSR_SEED
+    psg._tick_internal_clock()
+    assert psg._noise_counter == 64
+    assert psg._lfsr == initial_lfsr or psg._lfsr != 0
+
+
 def test_sample_buffer_drops_oldest_samples_and_reports_count() -> None:
     psg = SN76489(clock_hz=1600, sample_rate=100)
     psg.advance_clocks(16 * 250)
