@@ -67,6 +67,22 @@ Esta tabela é um direcionamento de arquitetura, não uma afirmação de que ess
 6. **Mega Drive:** desenvolver e validar o núcleo 68000 e a interação entre CPUs antes de ampliar para Sega CD ou 32X.
 7. **Sega CD e 32X:** adicionar cada conjunto de hardware como expansão incremental da plataforma-base.
 
+## Núcleo Z80 Rust selecionável
+
+A implementação Python permanece como referência funcional. O núcleo Rust experimental
+é um backend separado, selecionável no menu de Emulação ou via `--cpu-core rust`.
+A primeira versão cobre apenas um subconjunto de instruções; opcodes não implementados
+devem falhar explicitamente, sem executar a mesma instrução silenciosamente em Python.
+Isso mantém as medições interpretáveis e torna a cobertura incompleta visível.
+
+O backend Rust recebe os contratos de memória e I/O da máquina SG-1000, mas ainda cruza
+a fronteira Python/Rust em acessos ao barramento. A seleção, portanto, não implica ganho
+de desempenho. O benchmark `tools/benchmarks/compare_cpu_cores.py` mede a mesma ROM nos
+dois backends e compara contadores, PC, framebuffer e áudio; speedup só é informado se
+ambos completarem a execução. Antes de ampliar a cobertura ou integrar o núcleo como
+padrão, exigir testes diferenciais por instrução, flags, ciclos nominais, interrupções
+e regressões de máquina.
+
 ## Critérios mínimos de conclusão de uma CPU
 
 - Cobertura documentada de todos os opcodes oficiais e prefixos aplicáveis ao modelo escolhido.
