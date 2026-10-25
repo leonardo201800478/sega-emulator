@@ -77,3 +77,25 @@ def test_native_vdp_raster_and_vblank_match_python() -> None:
     assert rust_vdp.interrupt_pending == python_vdp.interrupt_pending
     assert rust_vdp.framebuffer == python_vdp.framebuffer
     assert rust_vdp.consume_frame_ready() is python_vdp.consume_frame_ready()
+
+
+
+def test_native_vdp_sprite_composition_and_status_match_python() -> None:
+    native_core = pytest.importorskip("sega_z80_core")
+    python_vdp, rust_vdp = _configured_pair(native_core.NativeTms9918A)
+    sprites = b"".join(bytes((0, x, 1, 0x0F)) for x in (20, 22, 24, 26, 28))
+    sprites += b"\xD0\x00\x00\x00"
+
+    for vdp in (python_vdp, rust_vdp):
+        _write_register(vdp, 0, 0x00)
+        _write_register(vdp, 1, 0x40)
+        _write_register(vdp, 5, 0x1F)
+        _write_register(vdp, 6, 0x01)
+        _write_vram(vdp, 0x0808, b"\xFF" * 8)
+        _write_vram(vdp, 0x0F80, sprites)
+        vdp.advance(228 * 2)
+
+    assert rust_vdp.status == python_vdp.status
+    assert rust_vdp.status & 0x40
+    assert rust_vdp.status & 0x20
+    assert rust_vdp.render_frame() == python_vdp.render_frame()
