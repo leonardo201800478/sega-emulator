@@ -467,7 +467,10 @@ def run(initial_path: Path | None = None) -> None:
         except Exception as exc:
             logger.exception(
                 "Falha ao selecionar núcleo Z80",
-                extra={"event": "cpu_core_selection_failed", "cpu_core": requested_core},
+                extra={
+                    "event": "cpu_core_selection_failed",
+                    "cpu_core": requested_core,
+                },
             )
             QMessageBox.warning(
                 window,
@@ -483,13 +486,24 @@ def run(initial_path: Path | None = None) -> None:
             update_joystick()
         status.showMessage(
             "Núcleo Z80: "
-            + ("Python (referência)" if selected_cpu_core == "python" else "Rust (experimental/parcial)")
-            + (" — máquina reiniciada" if loaded is not None else " — aplicado à próxima ROM"),
+            + (
+                "Python (referência)"
+                if selected_cpu_core == "python"
+                else "Rust (experimental/parcial)"
+            )
+            + (
+                " — máquina reiniciada"
+                if loaded is not None
+                else " — aplicado à próxima ROM"
+            ),
             8000,
         )
         logger.info(
             "Núcleo Z80 selecionado",
-            extra={"event": "emulation_backend_selected", "cpu_core": selected_cpu_core},
+            extra={
+                "event": "emulation_backend_selected",
+                "cpu_core": selected_cpu_core,
+            },
         )
 
     def pause_resume() -> None:
