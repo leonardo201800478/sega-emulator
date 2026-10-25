@@ -243,14 +243,14 @@ impl Z80 {
     fn condition(&self, code: u8) -> bool {
         let flags = self.registers.f;
         match code & 0x07 {
-            0 => flags & FLAG_Z == 0, // NZ
-            1 => flags & FLAG_Z != 0, // Z
-            2 => flags & FLAG_C == 0, // NC
-            3 => flags & FLAG_C != 0, // C
+            0 => flags & FLAG_Z == 0,  // NZ
+            1 => flags & FLAG_Z != 0,  // Z
+            2 => flags & FLAG_C == 0,  // NC
+            3 => flags & FLAG_C != 0,  // C
             4 => flags & FLAG_PV == 0, // PO
             5 => flags & FLAG_PV != 0, // PE
-            6 => flags & FLAG_S == 0, // P
-            _ => flags & FLAG_S != 0, // M
+            6 => flags & FLAG_S == 0,  // P
+            _ => flags & FLAG_S != 0,  // M
         }
     }
 
