@@ -239,7 +239,7 @@ impl RustTMS9918A {
     fn render_frame<'py>(&mut self, py: Python<'py>) -> Bound<'py, PyBytes> {
         let backdrop = (self.regs(py)[7] & 0x0f) as usize;
         let mut pixels = vec![0; W * H * 3];
-        for p in pixels.chunks_exact_mut(3) {
+        for p in pixels.as_chunks_mut::<3>().0 {
             p.copy_from_slice(&PALETTE[backdrop]);
         }
         if self.regs(py)[1] & 0x40 != 0 {
@@ -289,7 +289,7 @@ impl RustTMS9918A {
         let backdrop = (r[7] & 15) as usize;
         let row = y * W * 3;
         if r[1] & 0x40 == 0 {
-            for p in pixels[row..row + W * 3].chunks_exact_mut(3) {
+            for p in pixels[row..row + W * 3].as_chunks_mut::<3>().0 {
                 p.copy_from_slice(&PALETTE[backdrop]);
             }
             return;
@@ -337,7 +337,7 @@ impl RustTMS9918A {
             let nb = ((r[2] & 15) as usize) << 10;
             let pb = ((r[4] & 4) as usize) << 11;
             let cb = ((r[3] & 0x80) as usize) << 6;
-            let off = ((y & 0xc0) << 5);
+            let off = (y & 0xc0) << 5;
             for tx in 0..32 {
                 let n = self.vram_at(py, nb + (y / 8) * 32 + tx) as usize;
                 let o = off + (n << 3) + (y & 7);
@@ -397,7 +397,7 @@ impl RustTMS9918A {
             if raw == 0xd0 {
                 break;
             }
-            let mut sy = ((raw as i32 + 1) & 255) as i32;
+            let mut sy = (raw as i32 + 1) & 255;
             if sy >= 0xe0 {
                 sy -= 256;
             }
@@ -418,8 +418,10 @@ impl RustTMS9918A {
             }
             active.push((i, x, pat, (c & 15) as usize, sy));
         }
-        if update_status && line < H && fifth.is_some() && self.status & 0xc0 == 0 {
-            self.status = (self.status & 0xa0) | 0x40 | fifth.unwrap() as u8;
+        if let Some(fifth_index) = fifth.filter(|_| {
+            update_status && line < H && self.status & 0xc0 == 0
+        }) {
+            self.status = (self.status & 0xa0) | 0x40 | fifth_index as u8;
         }
         let pb = ((r[6] & 7) as usize) << 11;
         let mut occupied: HashSet<i32> = HashSet::new();
@@ -444,12 +446,13 @@ impl RustTMS9918A {
                     }
                     if px >= 0 && (px as usize) < W {
                         let px = px as usize;
-                        if let Some(ref mut buf) = pixels {
-                            if color != 0 && !visible.contains(&px) {
-                                let o = (line * W + px) * 3;
-                                buf[o..o + 3].copy_from_slice(&PALETTE[color]);
-                                visible.insert(px);
-                            }
+                        if let Some(ref mut buf) = pixels
+                            && color != 0
+                            && !visible.contains(&px)
+                        {
+                            let o = (line * W + px) * 3;
+                            buf[o..o + 3].copy_from_slice(&PALETTE[color]);
+                            visible.insert(px);
                         }
                     }
                 }
