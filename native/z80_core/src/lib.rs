@@ -10,6 +10,8 @@ use sega_z80_alu::{adc8, add8, and8, cp8, or8, sbc8, sub8, xor8};
 
 mod memory;
 use memory::NativeMemoryBus;
+mod vdp;
+use vdp::NativeTms9918A;
 
 const FLAG_C: u8 = 0x01;
 const FLAG_N: u8 = 0x02;
@@ -1588,6 +1590,7 @@ fn is_unassigned_ed_opcode(opcode: u8) -> bool {
 #[pymodule]
 fn sega_z80_core(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<NativeMemoryBus>()?;
+    module.add_class::<NativeTms9918A>()?;
     module.add_class::<RustZ80Cpu>()?;
     Ok(())
 }
