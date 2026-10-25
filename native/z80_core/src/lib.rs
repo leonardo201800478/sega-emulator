@@ -463,6 +463,49 @@ impl RustZ80Cpu {
         self.set_hl(word);
     }
 
+    fn add_sub_hl(&mut self, value: u16, subtract: bool) {
+        let old = self.hl();
+        self.wz = old.wrapping_add(1);
+        let carry = u32::from(self.f & FLAG_C != 0);
+        let raw = if subtract {
+            i32::from(old) - i32::from(value) - carry as i32
+        } else {
+            i32::from(old) + i32::from(value) + carry as i32
+        };
+        let result = raw as u16;
+        let half = if subtract {
+            (old & 0x0FFF) < (value & 0x0FFF) + carry as u16
+        } else {
+            u32::from(old & 0x0FFF) + u32::from(value & 0x0FFF) + carry > 0x0FFF
+        };
+        let overflow = if subtract {
+            ((old ^ value) & (old ^ result) & 0x8000) != 0
+        } else {
+            (!(old ^ value) & (old ^ result) & 0x8000) != 0
+        };
+        let mut flags = ((result >> 8) as u8) & 0xA8;
+        if result == 0 {
+            flags |= FLAG_Z;
+        }
+        if half {
+            flags |= FLAG_H;
+        }
+        if overflow {
+            flags |= FLAG_PV;
+        }
+        if subtract {
+            flags |= FLAG_N;
+            if raw < 0 {
+                flags |= FLAG_C;
+            }
+        } else if raw > 0xFFFF {
+            flags |= FLAG_C;
+        }
+        self.set_hl(result);
+        self.f = flags;
+    }
+
+
     fn execute_opcode(&mut self, py: Python<'_>, opcode: u8, opcode_pc: u16) -> PyResult<u32> {
         if opcode == 0x00 {
             return Ok(4);
