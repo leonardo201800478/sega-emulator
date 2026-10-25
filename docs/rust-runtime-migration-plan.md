@@ -122,39 +122,46 @@ A meta final é manter apenas o frontend Qt em Python. O frontend Pygame/SDL e a
 
 ## Estado da execução — 25/10/2026
 
-A Fase 0 teve uma primeira revisão estática de contratos e consumidores. A Fase 1 está em andamento nesta branch:
+A Fase 0 foi registrada e as duas primeiras fatias de migração estão implementadas nesta série de PRs.
 
-- `native/z80_core/src/memory.rs`: barramento nativo com ROM espelhada, RAM interna espelhada e RAM de cartucho configurável, com testes unitários Rust.
-- `native/z80_core/src/lib.rs`: `RustZ80Cpu.with_native_memory`; o caminho nativo acessa a memória sem invocar métodos Python por byte. O CPU ainda mantém objetos PyO3 para memória e I/O, portanto isto ainda não é uma máquina Rust integral.
+### Fase 1 — componentes nativos
+
+- `native/z80_core/src/memory.rs`: barramento nativo com ROM espelhada, RAM interna espelhada e RAM de cartucho configurável.
 - `native/z80_core/src/vdp.rs`: portas, registradores, VRAM, temporização raster, VBlank, status de sprites e renderização dos quatro modos gráficos modelados.
-- `native/z80_core/src/audio.rs`: PSG SN76489AN e sincronizador de writes por T-state nativos.
-- `src/sega_emulator/machine/sg1000.py`: o backend Rust seleciona memória, VDP, PSG e sincronizador nativos; o backend Python permanece como referência.
-- `tests/test_sg1000_cpu_backend.py`, `tests/test_tms9918_rust_parity.py` e `tests/test_sn76489_rust_parity.py`: integração CPU/memória e comparações diferenciais de VDP, PSG e sincronização de áudio.
+- `native/z80_core/src/audio.rs`: PSG SN76489AN e sincronizador de writes por T-state.
+- `RustZ80Cpu.with_native_memory`: o caminho nativo acessa a memória sem invocar métodos Python por byte.
+- `tests/test_sg1000_cpu_backend.py`, `tests/test_tms9918_rust_parity.py` e `tests/test_sn76489_rust_parity.py`: integração CPU/memória e testes diferenciais de VDP, PSG e sincronização.
 
-### Limitações conhecidas
+### Fase 2 — coordenação nativa
 
-- O laço de execução da máquina e a arbitragem de I/O ainda são coordenados por Python; operações de porta da CPU ainda atravessam o objeto PyO3 de I/O.
-- Os getters `vram` e `registers` do VDP nativo retornam cópias. Leituras de diagnóstico funcionam, mas mutações feitas diretamente nessas cópias não alteram o estado nativo. A compatibilidade desse contrato precisa ser resolvida antes de tornar o backend Rust padrão.
-- A temporização ainda não é ciclo a ciclo: o avanço dos dispositivos usa T-states nominais e writes do VDP ainda não são enfileirados em uma linha temporal própria.
+A [PR #93](https://github.com/leonardo201800478/sega-emulator/pull/93) adiciona `native/z80_core/src/machine.rs`:
+
+- `NativeSG1000Machine` coordena `step` e `run_frame` em Rust.
+- `NativeSG1000Io` roteia portas para VDP, PSG e joystick; o Z80 chama o roteamento nativo diretamente, sem callback a métodos Python.
+- A API Python `SG1000Machine` mantém seus atributos e delega operações de máquina ao runtime Rust quando `cpu_core="rust"`.
+- `tests/test_sg1000_native_machine.py` compara instruções, portas, joystick, estado do PSG e execução de quadro com a referência Python.
 
 ### Validação automatizada
 
-Validado no commit `73792b21dbd6e1266a4a63a33a4d9285af267ea0` pelo workflow Windows **Qt selectable Rust Z80 core**:
+Workflow Windows **Qt selectable Rust Z80 core**, commit `7bb95c0f55dfeb0332b9a5ea6b3da54d1bdee43c`:
 
 - `cargo fmt --check`: aprovado.
 - Clippy com `-D warnings`: aprovado.
-- Testes unitários Rust: 7 aprovados no núcleo Z80/runtime.
+- Testes unitários Rust: 7 aprovados.
 - Build Release e instalação da extensão PyO3: aprovados.
-- Ruff (lint e formatação Python): aprovado.
-- Testes direcionados de Qt/backend Rust: 1.671 aprovados em 1,08 s.
-- Suíte completa pytest com a extensão nativa instalada: 2.326 aprovados em 4,71 s.
-- CI geral, agentes de validação funcional, integridade/determinismo, desempenho/cobertura, diagnóstico de desempenho e auditoria diferencial SingleStepTests: aprovados.
-- A auditoria Z80 estendida continuava em execução no momento deste registro; ela não substitui os testes específicos da migração de hardware.
+- Ruff e formatação Python: aprovados.
+- Testes direcionados Qt/backend Rust: **1.674 aprovados em 2,18 s**.
+- Suíte completa pytest com extensão nativa instalada: **2.329 aprovados em 9,00 s**.
+- CI geral e Performance Diagnostic: aprovados.
 
-O teste diferencial revelou que PyO3 converte `Vec<u8>` em `bytes`, ao contrário das listas Python usadas pela API de referência. Os getters `attenuations` e `_tone_outputs` foram alterados para expor listas de inteiros, e a suíte completa passou depois da correção. Isso confirma a importância de validar a API observável além dos valores internos.
+O teste diferencial da fase anterior identificou uma diferença de representação no PyO3 (`Vec<u8>` exposto como `bytes` em vez de lista de inteiros). Os getters do PSG foram ajustados para preservar o contrato esperado pela referência Python.
 
-Estes resultados validam esta fatia de migração; não provam precisão ciclo a ciclo nem que toda a coordenação do runtime já esteja em Rust.
+### Limitações conhecidas
+
+- A coordenação do laço e das portas está em Rust, mas os componentes ainda são objetos PyO3; o GIL continua adquirido durante o quadro. Esta fase não libera o GIL nem move todos os estados para structs Rust puros.
+- Os getters `vram` e `registers` do VDP retornam cópias; mutações nessas cópias não alteram o estado nativo.
+- A temporização usa T-states nominais e writes do VDP ainda não têm fila temporal própria. Não declarar precisão ciclo a ciclo.
 
 ## Próximo passo
 
-Abrir uma fatia separada para a máquina SG-1000 nativa: mover o despacho de I/O e o laço CPU–VDP–PSG para Rust, mantendo a API PyO3 na fronteira do frontend Qt. O modelo de sincronização deve preservar a ordem dos eventos e a entrega de interrupções. Antes de tornar o backend Rust padrão, resolver também o contrato de snapshots mutáveis de `vram` e `registers` e validar o comportamento em ROMs/homebrew de teste legalmente obtidas.
+Criar uma terceira fatia para remover handles PyO3 do caminho interno: CPU, barramento, VDP, PSG e sincronizador devem ser possuídos por uma estrutura Rust nativa, expondo snapshots e operações de alto nível ao Qt. Em seguida, avaliar a liberação do GIL durante `run_frame` com sincronização explícita. Antes de tornar Rust padrão, resolver o contrato dos snapshots e validar com homebrew/testes reproduzíveis.

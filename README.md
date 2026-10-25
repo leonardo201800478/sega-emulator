@@ -66,9 +66,10 @@ O backend Python permanece como padrão e referência de compatibilidade. Ao sel
 - núcleo Z80 e barramento de memória sem chamadas a métodos Python por leitura/escrita de byte;
 - mapa de ROM espelhada, RAM interna e RAM de cartucho por perfil;
 - VDP TMS9918A com portas, raster, VBlank, status de sprites e renderização dos modos gráficos modelados;
-- PSG SN76489AN e sincronização de writes de áudio por T-state.
+- PSG SN76489AN e sincronização de writes de áudio por T-state;
+- máquina SG-1000 nativa que coordena `step`, `run_frame`, portas de I/O, interrupções e avanço de CPU/VDP/PSG em Rust.
 
-**O runtime ainda não está integralmente em Rust.** O laço de execução da máquina e parte da arbitragem de I/O continuam coordenados por Python; as portas de I/O da CPU ainda atravessam a fronteira PyO3. O modelo temporal usa T-states nominais e não equivale a emulação ciclo a ciclo. A implementação Python permanece disponível como referência diferencial; não há fallback silencioso quando uma instrução Rust não é suportada.
+**O runtime ainda não é totalmente independente de Python internamente.** O frontend e a API de aplicação continuam em Python, e a máquina Rust coordena componentes encapsulados em objetos PyO3; o GIL permanece adquirido durante um quadro. A etapa atual elimina a coordenação Python por instrução e callbacks Python nas portas, mas ainda não move todos os estados para structs Rust puros nem libera o GIL. O modelo temporal usa T-states nominais e não equivale a emulação ciclo a ciclo. A implementação Python permanece disponível como referência diferencial; não há fallback silencioso quando uma instrução Rust não é suportada.
 
 Os getters `vram` e `registers` do VDP nativo retornam cópias para diagnóstico. Alterar diretamente essas cópias não altera o estado interno do VDP; use as portas modeladas para modificar o hardware. Esse contrato será revisto antes de tornar o backend Rust padrão.
 
@@ -83,7 +84,7 @@ Pop-Location
 
 Reabra o emulador e selecione **Emulação → Selecionar núcleo Z80… → Rust (experimental)**. Se a extensão não estiver instalada, a interface explica como instalá-la e preserva o backend anterior.
 
-A fatia da [PR #92](https://github.com/leonardo201800478/sega-emulator/pull/92) passou no workflow Windows no commit `73792b2`: `rustfmt`, Clippy, testes Rust, build Release, testes direcionados e regressão completa (2.326 testes aprovados). Isso valida os componentes cobertos, mas não demonstra compatibilidade universal, precisão ciclo a ciclo ou ganho de desempenho em todos os jogos.
+As fatias [PR #92](https://github.com/leonardo201800478/sega-emulator/pull/92) e [PR #93](https://github.com/leonardo201800478/sega-emulator/pull/93) passaram no workflow Windows. A PR #93 validou `rustfmt`, Clippy, testes Rust, build Release, **1.674 testes direcionados** e **2.329 testes de regressão** com a extensão instalada. Isso valida os caminhos cobertos, mas não demonstra compatibilidade universal, precisão ciclo a ciclo ou ganho de desempenho em todos os jogos.
 
 ## Diagnóstico headless
 
