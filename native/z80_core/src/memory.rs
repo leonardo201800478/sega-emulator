@@ -1,18 +1,12 @@
-//! Native SG-1000 cartridge and RAM mapping for the Rust Z80 runtime.
+//! PyO3 adapter for the Python-independent SG-1000 memory map.
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-
-const ROM_WINDOW_SIZE: usize = 0xC000;
-const RAM_START: u16 = 0xC000;
+use sega_sg1000_core::{MemoryConfig, Sg1000Memory};
 
 #[pyclass(module = "sega_z80_core")]
 pub(crate) struct NativeMemoryBus {
-    rom_window: Vec<u8>,
-    ram: Vec<u8>,
-    cartridge_ram: Vec<u8>,
-    cartridge_ram_start: u16,
-    cartridge_ram_end: u16,
+    memory: Sg1000Memory,
 }
 
 #[pymethods]
@@ -45,12 +39,12 @@ impl NativeMemoryBus {
 
     #[getter]
     fn internal_ram_size(&self) -> usize {
-        self.ram.len()
+        self.memory.internal_ram().len()
     }
 
     #[getter]
     fn cartridge_ram_size(&self) -> usize {
-        self.cartridge_ram.len()
+        self.memory.cartridge_ram().len()
     }
 }
 
@@ -62,88 +56,42 @@ impl NativeMemoryBus {
         cartridge_ram_start: u16,
         cartridge_ram_end: i32,
     ) -> PyResult<Self> {
-        if !(1..=ROM_WINDOW_SIZE).contains(&cartridge_rom.len()) {
-            return Err(PyValueError::new_err(
-                "A ROM must contain between 1 byte and 48 KiB.",
-            ));
-        }
-        if !matches!(internal_ram_size, 0x0400 | 0x2000) {
-            return Err(PyValueError::new_err(
-                "Internal RAM must be exactly 1 KiB or 8 KiB.",
-            ));
-        }
-        if cartridge_ram_size != 0 && !matches!(cartridge_ram_size, 0x0400 | 0x2000) {
-            return Err(PyValueError::new_err(
-                "Cartridge RAM must be empty, 1 KiB, or 8 KiB.",
-            ));
-        }
-        if cartridge_ram_size == 0 && (cartridge_ram_start != 0 || cartridge_ram_end != -1) {
-            return Err(PyValueError::new_err(
-                "Cartridge RAM address bounds require cartridge RAM.",
-            ));
-        }
-        if cartridge_ram_size != 0
-            && (cartridge_ram_start >= RAM_START
-                || cartridge_ram_end < i32::from(cartridge_ram_start)
-                || cartridge_ram_end >= i32::from(RAM_START))
-        {
-            return Err(PyValueError::new_err(
-                "Cartridge RAM must be mapped below C000h.",
-            ));
-        }
+        // Keep the Python adapter's existing -1 sentinel for "no cartridge RAM".
+        let (cartridge_ram_start, cartridge_ram_end) = if cartridge_ram_size == 0 {
+            if cartridge_ram_start != 0 || cartridge_ram_end != -1 {
+                return Err(PyValueError::new_err(
+                    "Cartridge RAM address bounds require cartridge RAM.",
+                ));
+            }
+            (0, 0)
+        } else {
+            if cartridge_ram_end < 0 || cartridge_ram_end > i32::from(u16::MAX) {
+                return Err(PyValueError::new_err(
+                    "Cartridge RAM must be mapped below C000h.",
+                ));
+            }
+            (cartridge_ram_start, cartridge_ram_end as u16)
+        };
 
-        let mut rom_window = Vec::with_capacity(ROM_WINDOW_SIZE);
-        while rom_window.len() < ROM_WINDOW_SIZE {
-            let remaining = ROM_WINDOW_SIZE - rom_window.len();
-            let take = remaining.min(cartridge_rom.len());
-            rom_window.extend_from_slice(&cartridge_rom[..take]);
-        }
-
-        Ok(Self {
-            rom_window,
-            ram: vec![0; internal_ram_size],
-            cartridge_ram: vec![0; cartridge_ram_size],
+        let config = MemoryConfig {
+            internal_ram_size,
+            cartridge_ram_size,
             cartridge_ram_start,
-            cartridge_ram_end: if cartridge_ram_end < 0 {
-                0
-            } else {
-                cartridge_ram_end as u16
-            },
-        })
+            cartridge_ram_end,
+        };
+        let memory = Sg1000Memory::new(&cartridge_rom, config)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?;
+        Ok(Self { memory })
     }
 
+    #[inline]
     pub(crate) fn read_byte(&self, address: u16) -> u8 {
-        if !self.cartridge_ram.is_empty()
-            && address >= self.cartridge_ram_start
-            && address <= self.cartridge_ram_end
-        {
-            let offset =
-                usize::from(address - self.cartridge_ram_start) & (self.cartridge_ram.len() - 1);
-            return self.cartridge_ram[offset];
-        }
-        if address < RAM_START {
-            return self.rom_window[usize::from(address)];
-        }
-        let offset = (usize::from(address) - usize::from(RAM_START)) & (self.ram.len() - 1);
-        self.ram[offset]
+        self.memory.read(address)
     }
 
+    #[inline]
     pub(crate) fn write_byte(&mut self, address: u16, value: u8) {
-        if !self.cartridge_ram.is_empty()
-            && address >= self.cartridge_ram_start
-            && address <= self.cartridge_ram_end
-        {
-            let offset =
-                usize::from(address - self.cartridge_ram_start) & (self.cartridge_ram.len() - 1);
-            self.cartridge_ram[offset] = value;
-            return;
-        }
-        if address < RAM_START {
-            // Cartridge ROM writes are ignored by this baseline mapper.
-            return;
-        }
-        let offset = (usize::from(address) - usize::from(RAM_START)) & (self.ram.len() - 1);
-        self.ram[offset] = value;
+        self.memory.write(address, value);
     }
 }
 
