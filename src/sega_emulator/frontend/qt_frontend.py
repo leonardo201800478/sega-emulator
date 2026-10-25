@@ -89,9 +89,7 @@ def run(initial_path: Path | None = None) -> None:
     settings = QSettings()
     preferences = FrontendPreferences.from_store(settings)
     pygame, audio_channel = (
-        _initialize_pygame_backend()
-        if preferences.audio_enabled
-        else (None, None)
+        _initialize_pygame_backend() if preferences.audio_enabled else (None, None)
     )
     serialized_controller_config = settings.value("controller_config", "", type=str)
     try:
