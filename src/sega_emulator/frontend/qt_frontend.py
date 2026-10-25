@@ -464,18 +464,21 @@ def run(initial_path: Path | None = None, cpu_core: str | None = None) -> None:
                 selected_cpu_core = previous_core
                 python_core_action.setChecked(selected_cpu_core == "python")
                 rust_core_action.setChecked(selected_cpu_core == "rust")
-                QMessageBox.warning(window, "Não foi possível trocar o núcleo", str(exc))
+                QMessageBox.warning(
+                    window, "Não foi possível trocar o núcleo", str(exc)
+                )
                 return
         settings.setValue("cpu_core", selected_cpu_core)
-        status.showMessage(
-            f"Núcleo da CPU: {'Python (referência)' if core == 'python' else 'Rust (experimental)'}"
-        )
+        core_label = "Python (referência)" if core == "python" else "Rust (experimental)"
+        status.showMessage(f"Núcleo da CPU: {core_label}")
         logger.info(
             "Núcleo da CPU selecionado",
             extra={"event": "cpu_core_selected", "cpu_core": selected_cpu_core},
         )
 
-    python_core_action.triggered.connect(lambda checked=False: select_cpu_core("python"))
+    python_core_action.triggered.connect(
+        lambda checked=False: select_cpu_core("python")
+    )
     rust_core_action.triggered.connect(lambda checked=False: select_cpu_core("rust"))
 
     video_menu = window.menuBar().addMenu("&Vídeo")
