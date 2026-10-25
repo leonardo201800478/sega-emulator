@@ -369,11 +369,13 @@ def test_unmapped_joystick_supports_raw_button_hat_and_axis_bindings() -> None:
             joystick=joystick_backend,
         )
     )
-    inputs.config.players[1].gamepad_buttons = {
-        "button1": "raw_button_3",
-        "up": "raw_hat_0_up",
-        "button2": "raw_axis_2_positive",
-    }
+    inputs.config.players[1] = PlayerInputProfile(
+        gamepad_buttons={
+            "button1": "raw_button_3",
+            "up": "raw_hat_0_up",
+            "button2": "raw_axis_2_positive",
+        }
+    )
 
     actions = inputs.poll()
 
@@ -394,7 +396,9 @@ def test_unmapped_joystick_reconnect_refreshes_device_handles() -> None:
             joystick=joystick_backend,
         )
     )
-    inputs.config.players[1].gamepad_buttons["button1"] = "raw_button_0"
+    inputs.config.players[1] = PlayerInputProfile(
+        gamepad_buttons={"button1": "raw_button_0"}
+    )
     assert inputs.poll()[1] == {"button1"}
 
     joystick_backend.devices = []
