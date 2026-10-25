@@ -44,6 +44,7 @@ def run(initial_path: Path | None = None) -> None:
             QFileDialog,
             QFormLayout,
             QFrame,
+            QHBoxLayout,
             QInputDialog,
             QLabel,
             QMainWindow,
@@ -532,9 +533,13 @@ def run(initial_path: Path | None = None) -> None:
         tabs = QTabWidget()
         dialog_layout.addWidget(tabs)
         combos: dict[tuple[int, str], QComboBox] = {}
+        gamepad_capture_buttons: dict[tuple[int, str], QPushButton] = {}
         key_buttons: dict[tuple[int, str], QPushButton] = {}
         stick_checks: dict[int, QCheckBox] = {}
         turbo_checks: dict[tuple[int, str], QCheckBox] = {}
+        capture_target: tuple[int, str] | None = None
+        capture_timer = QTimer(dialog)
+        capture_timer.setInterval(30)
         action_labels = {
             "up": "Cima",
             "down": "Baixo",
@@ -567,6 +572,41 @@ def run(initial_path: Path | None = None) -> None:
             "paddle4": "Paddle 4",
             "touchpad": "Touchpad",
         }
+        def poll_gamepad_capture() -> None:
+            nonlocal capture_target
+            if capture_target is None:
+                capture_timer.stop()
+                return
+            player, action = capture_target
+            button_name = controller_input.read_pressed_button(player)
+            if button_name is None:
+                return
+            combo = combos[(player, action)]
+            button_index = combo.findData(button_name)
+            if button_index >= 0:
+                combo.setCurrentIndex(button_index)
+                gamepad_capture_buttons[(player, action)].setText("Gravar")
+                status.showMessage(
+                    f"Controle do Jogador {player}: "
+                    f"{action_labels[action]} = {button_labels[button_name]}"
+                )
+            else:
+                gamepad_capture_buttons[(player, action)].setText("Gravar")
+            capture_target = None
+            capture_timer.stop()
+
+        def begin_gamepad_capture(player: int, action: str) -> None:
+            nonlocal capture_target
+            capture_target = (player, action)
+            gamepad_capture_buttons[(player, action)].setText("Pressione…")
+            status.showMessage(
+                f"Pressione o botão físico para {action_labels[action]} "
+                f"no controle do Jogador {player}."
+            )
+            capture_timer.start()
+
+        capture_timer.timeout.connect(poll_gamepad_capture)
+
         for player in (1, 2):
             page = QWidget()
             form = QFormLayout(page)
@@ -580,7 +620,22 @@ def run(initial_path: Path | None = None) -> None:
                 )
                 combo.setCurrentIndex(max(0, combo.findData(selected)))
                 combos[(player, action)] = combo
-                form.addRow(f"Controle — {action_labels[action]}", combo)
+                gamepad_row = QWidget()
+                gamepad_row_layout = QHBoxLayout(gamepad_row)
+                gamepad_row_layout.setContentsMargins(0, 0, 0, 0)
+                gamepad_row_layout.addWidget(combo, 1)
+                capture_button = QPushButton("Gravar")
+                capture_button.setToolTip(
+                    "Clique e pressione o botão físico que deseja atribuir."
+                )
+                gamepad_capture_buttons[(player, action)] = capture_button
+                capture_button.clicked.connect(
+                    lambda checked=False, p=player, a=action: begin_gamepad_capture(
+                        p, a
+                    )
+                )
+                gamepad_row_layout.addWidget(capture_button)
+                form.addRow(f"Controle — {action_labels[action]}", gamepad_row)
                 key_button = KeyCaptureButton(profile.keyboard_bindings[action])
                 key_buttons[(player, action)] = key_button
                 form.addRow(f"Teclado — {action_labels[action]}", key_button)
