@@ -15,7 +15,6 @@ import platform
 import statistics
 import sys
 import time
-
 from collections.abc import Callable
 
 from sega_emulator.cpu.z80 import Z80Cpu
