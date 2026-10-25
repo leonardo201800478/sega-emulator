@@ -12,12 +12,11 @@ from pathlib import Path
 from sega_emulator.frontend.controller_input import (
     ACTIONS,
     DEFAULT_GAMEPAD_BINDINGS,
-    DEFAULT_KEYBOARD_BINDINGS_P1,
-    DEFAULT_KEYBOARD_BINDINGS_P2,
     JOYSTICK_ACTIONS,
     SUPPORTED_BUTTONS,
     ControllerInput,
     ControllerInputConfig,
+    apply_turbo,
     PlayerInputProfile,
     joystick_value,
 )
@@ -166,15 +165,9 @@ def run(initial_path: Path | None = None) -> None:
         for player in (1, 2):
             actions[player].update(gamepad_actions[player])
             profile = controller_input.config.players[player]
-            # Turbo runs at 15 Hz on a nominal 60 Hz frame cadence: two frames
-            # pressed, two released. It affects both keyboard and gamepad input.
-            for action in ("button1", "button2"):
-                if (
-                    profile.turbo_buttons.get(action, False)
-                    and action in actions[player]
-                    and frame_count % 4 >= 2
-                ):
-                    actions[player].discard(action)
+            actions[player] = apply_turbo(
+                actions[player], profile.turbo_buttons, frame_count
+            )
             machine.set_joystick(
                 player, joystick_value(actions[player].intersection(JOYSTICK_ACTIONS))
             )
