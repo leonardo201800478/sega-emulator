@@ -246,9 +246,7 @@ def run(initial_path: Path | None = None) -> None:
             update_joystick()
             if controller_input.consume_disconnect_event():
                 paused = True
-                status.showMessage(
-                    "Emulação pausada: controle desconectado", 5000
-                )
+                status.showMessage("Emulação pausada: controle desconectado", 5000)
                 logger.warning(
                     "Emulação pausada após desconexão de controle",
                     extra={
