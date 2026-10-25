@@ -19,5 +19,5 @@ pub mod memory;
 pub use bus::CpuBus;
 pub use cpu::{CpuError, Z80, Z80Registers};
 
-pub use memory::{MemoryConfig, MemoryError, Sg1000Memory};
 pub use machine::{MachineError, Sg1000Machine};
+pub use memory::{MemoryConfig, MemoryError, Sg1000Memory};
