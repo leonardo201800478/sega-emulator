@@ -62,10 +62,7 @@ class AudioOutputConfig:
             )
         if not isinstance(self.pcm_format, PcmFormat):
             raise ValueError("pcm_format deve ser um PcmFormat válido.")
-        if (
-            type(self.output_channels) is not int
-            or self.output_channels not in (1, 2)
-        ):
+        if type(self.output_channels) is not int or self.output_channels not in (1, 2):
             raise ValueError("output_channels deve ser 1 (mono) ou 2 (estéreo).")
         if not isinstance(self.latency_profile, LatencyProfile):
             raise ValueError("latency_profile deve ser um LatencyProfile válido.")
