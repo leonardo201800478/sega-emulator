@@ -1,26 +1,41 @@
 # LLVM ORC JIT prototype
 
-This directory is an isolated toolchain smoke test for LLVM ORC. It does **not yet execute Z80 instructions** and is not connected to the emulator machine.
+This directory contains an isolated LLVM ORC smoke test and the first Z80
+basic-block translator slice. It is not yet connected to the SG-1000 machine
+and does not claim a performance improvement.
 
-## Purpose
+## Current translated subset
 
-Validate that the Windows build environment can create an LLVM ORC `LLJIT`, compile LLVM IR to host-native code, resolve a JIT symbol, and execute it. The next increment replaces the arithmetic smoke function with a Z80 basic-block translator.
+- NOP: 4 nominal T-states.
+- LD r,n: register destinations only, 7 nominal T-states.
+- LD r,r: register-to-register forms only, 4 nominal T-states.
+- HALT: 4 nominal T-states and terminates the block.
+
+Any instruction involving (HL), any other unsupported opcode, an empty block,
+or a truncated immediate returns a non-executable result. The caller must
+execute from the original PC using the interpreter; partial translated blocks
+are never returned as executable. The ABI is intentionally a small C++ state
+structure, not yet the Rust/PyO3 CPU state.
 
 ## Build on Windows
 
-Install an LLVM development distribution that includes CMake package files, a C++20 compiler compatible with that LLVM build, and CMake 3.25 or newer.
+Install an LLVM development distribution that includes CMake package files, a
+C++20 compiler compatible with that LLVM build, CMake 3.25 or newer, and Ninja.
 
-```powershell
-cmake -S native/llvm_jit -B build/llvm-jit -G Ninja -DLLVM_DIR="C:\Program Files\LLVM\lib\cmake\llvm"
-cmake --build build/llvm-jit --config Release
-ctest --test-dir build/llvm-jit -C Release --output-on-failure
-```
+    cmake -S native/llvm_jit -B build/llvm-jit -G Ninja -DLLVM_DIR="C:\Program Files\LLVM\lib\cmake\llvm"
+    cmake --build build/llvm-jit --config Release
+    ctest --test-dir build/llvm-jit -C Release --output-on-failure
 
-Adjust `LLVM_DIR` to the installation's actual CMake package directory. This smoke test must pass before implementing the Z80 translator.
+Adjust LLVM_DIR to the installation's actual CMake package directory.
 
-## Safety and correctness boundary
+## Correctness boundary
 
-- The Python Z80 remains the functional reference.
-- This test only validates LLVM's JIT infrastructure; it is not evidence of emulator performance or Z80 correctness.
-- The eventual translator must fall back to the interpreter for unsupported instructions and preserve observable memory/I/O behavior.
-- Any reduced timing precision belongs to an explicit opt-in `fast` mode.
+- The Python Z80 remains the functional reference; the Rust interpreter is a
+  second independent comparison target when its branch is integrated.
+- The current translator preserves nominal instruction costs for this subset,
+  but it does not model per-T-state bus activity or cycle-level device
+  interleaving.
+- The caller must end blocks before control flow, interrupts, observable I/O,
+  and memory operations not represented by the translator.
+- No self-modifying code, cache invalidation, emulator integration, or benchmark
+  claim is included in this first increment.
