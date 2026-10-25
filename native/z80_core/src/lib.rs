@@ -195,7 +195,7 @@ impl RustZ80Cpu {
                 self.iff1 = false;
                 self.iff2 = false;
                 self.increment_r();
-                let cycles = match self.interrupt_mode {
+                let cycles: u32 = match self.interrupt_mode {
                     0 if data_bus & 0xC7 == 0xC7 => {
                         self.push_word(py, self.pc)?;
                         self.pc = u16::from(data_bus & 0x38);
@@ -225,7 +225,7 @@ impl RustZ80Cpu {
                         )));
                     }
                 };
-                self.total_cycles += cycles;
+                self.total_cycles += u64::from(cycles);
                 return Ok(cycles);
             }
         }
