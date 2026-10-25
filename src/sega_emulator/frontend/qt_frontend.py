@@ -621,6 +621,8 @@ def run(initial_path: Path | None = None) -> None:
                 selected = profile.gamepad_buttons.get(
                     action, DEFAULT_GAMEPAD_BINDINGS[action]
                 )
+                if combo.findData(selected) < 0:
+                    combo.addItem(selected, selected)
                 combo.setCurrentIndex(max(0, combo.findData(selected)))
                 combos[(player, action)] = combo
                 gamepad_row = QWidget()
