@@ -10,7 +10,6 @@ on:
       - "src/sega_emulator/frontend/qt_frontend.py"
       - "tests/test_qt_*.py"
       - "tests/test_sg1000_cpu_backend.py"
-      - "tools/benchmarks/benchmark_z80_backends.py"
       - "tests/integration/test_rust_z80_core.py"
       - "tools/benchmarks/benchmark_z80_backends.py"
       - ".github/workflows/qt-rust-z80-core.yml"
