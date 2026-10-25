@@ -19,7 +19,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import sys
 import time
 from collections import Counter, defaultdict
@@ -205,7 +204,8 @@ def main() -> int:
         c = by_family[fam]
         pct = c["passed"] / c["_total"] * 100 if c["_total"] else 0
         lines.append(
-            f"| {fam} | {c['_files']} | {c['_files_with_failures']} | {c['_total']:,} | {c['passed']:,} | {pct:.2f} |"
+            f"| {fam} | {c['_files']} | {c['_files_with_failures']} | "
+            f"{c['_total']:,} | {c['passed']:,} | {pct:.2f} |"
         )
     lines.append("\n## Categorias de divergência (vetores afetados)\n")
     for k, v in by_cat.most_common():
