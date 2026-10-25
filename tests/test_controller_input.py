@@ -139,7 +139,12 @@ def test_hold_switch_is_separate_from_the_six_joystick_lines() -> None:
 
     assert actions[1] == {"hold"}
     # Hold is the console NMI switch, not one of the joystick port bits.
-    assert joystick_value(actions[1] & {"up", "down", "left", "right", "button1", "button2"}) == 0xFF
+    assert (
+        joystick_value(
+            actions[1] & {"up", "down", "left", "right", "button1", "button2"}
+        )
+        == 0xFF
+    )
 
     inputs.config.players[1].gamepad_buttons["hold"] = "back"
     backend.devices[0].buttons.clear()
