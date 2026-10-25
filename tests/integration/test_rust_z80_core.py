@@ -179,6 +179,48 @@ def test_rust_core_fails_explicitly_on_assigned_but_unsupported_ed_opcode() -> N
         cpu.step()
 
 
+@pytest.mark.parametrize("opcode", range(256))
+def test_rust_primary_opcode_map_matches_python(opcode: int) -> None:
+    RustZ80Cpu = _rust_cpu()
+    program = bytes([opcode, 0x00, 0x00, 0x00, 0x00, 0x00])
+    python_bus = MemoryBus(program)
+    rust_bus = MemoryBus(program)
+    python_io = PortBus()
+    rust_io = PortBus()
+    python_cpu = Z80Cpu(python_bus, python_io)
+    rust_cpu = RustZ80Cpu(rust_bus, rust_io)
+    for cpu in (python_cpu, rust_cpu):
+        cpu.a = 0x69
+        cpu.f = 0xA5
+        cpu.b, cpu.c = 0x12, 0x34
+        cpu.d, cpu.e = 0x56, 0x78
+        cpu.h, cpu.l = 0x20, 0x00
+        cpu.ix = 0x2100
+        cpu.iy = 0x2200
+        cpu.sp = 0x3000
+        cpu.af_alt = 0x2468
+        cpu.bc_alt = 0x1357
+        cpu.de_alt = 0xFEDC
+        cpu.hl_alt = 0xBEEF
+        cpu.wz = 0x2800
+
+    python_cycles = python_cpu.step()
+    rust_cycles = rust_cpu.step()
+    attributes = (
+        "a", "f", "b", "c", "d", "e", "h", "l", "sp", "pc",
+        "ix", "iy", "i", "r", "iff1", "iff2", "interrupt_mode",
+        "halted", "wz", "af_alt", "bc_alt", "de_alt", "hl_alt",
+        "total_cycles",
+    )
+    assert rust_cycles == python_cycles
+    assert {name: getattr(rust_cpu, name) for name in attributes} == {
+        name: getattr(python_cpu, name) for name in attributes
+    }
+    assert rust_bus.memory == python_bus.memory
+    assert rust_io.ports == python_io.ports
+    assert rust_io.writes == python_io.writes
+
+
 @pytest.mark.parametrize("prefix", [0xDD, 0xFD])
 @pytest.mark.parametrize(
     ("opcode", "operands"),
