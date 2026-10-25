@@ -795,6 +795,7 @@ def test_rust_ld_a_i_interrupt_p_latch_matches_python() -> None:
     [
         (0x00, 0x5A, 6, 0x0000, 0x00),  # IM 0 NOP: acknowledge + two T-states
         (0x06, 0x5A, 9, 0x0001, 0x5A),  # IM 0 LD B,n: operand comes from PC
+        (0xCB, 0x47, 10, 0x0001, 0x00),  # IM 0 prefix: CB second byte comes from PC
         (0xCF, 0x5A, 13, 0x0008, 0x00),  # IM 0 RST 08h
     ],
 )
