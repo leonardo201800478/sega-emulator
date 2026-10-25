@@ -56,9 +56,9 @@ class FakeSDL3:
         return b"fake error"
 
     def _ids(self, ids: list[int], count_pointer: object) -> object:
-        ctypes.cast(
-            count_pointer, ctypes.POINTER(ctypes.c_int)
-        ).contents.value = len(ids)
+        ctypes.cast(count_pointer, ctypes.POINTER(ctypes.c_int)).contents.value = len(
+            ids
+        )
         return (ctypes.c_int * len(ids))(*ids)
 
     def SDL_GetGamepads(self, count_pointer: object) -> object:
