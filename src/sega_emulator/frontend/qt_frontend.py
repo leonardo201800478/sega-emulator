@@ -789,7 +789,9 @@ def run(initial_path: Path | None = None) -> None:
     def show_controller_devices() -> None:
         """Mostra o estado do backend SDL3 e os dispositivos atualmente enumerados."""
         names = controller_input.connected_names()
-        devices_text = "\\n".join(f"• {name}" for name in names) or "Nenhum controle detectado."
+        devices_text = "\n".join(
+            f"• {name}" for name in names
+        ) or "Nenhum controle detectado."
         backend_state = "disponível" if controller_input.available else "indisponível"
         QMessageBox.information(
             window,
