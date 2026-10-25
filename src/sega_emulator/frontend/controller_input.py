@@ -107,9 +107,13 @@ class PlayerInputProfile:
             for key in self.keyboard_bindings.values()
         ):
             raise ValueError("Cada tecla deve ser um nome não vazio.")
-        normalized_keys = [key.strip().casefold() for key in self.keyboard_bindings.values()]
+        normalized_keys = [
+            key.strip().casefold() for key in self.keyboard_bindings.values()
+        ]
         if len(normalized_keys) != len(set(normalized_keys)):
-            raise ValueError("Uma tecla não pode estar atribuída a duas ações do mesmo jogador.")
+            raise ValueError(
+                "Uma tecla não pode estar atribuída a duas ações do mesmo jogador."
+            )
         if set(self.turbo_buttons) - TURBO_ACTIONS:
             raise ValueError("Turbo só pode ser configurado para button1 e button2.")
         if any(type(enabled) is not bool for enabled in self.turbo_buttons.values()):
