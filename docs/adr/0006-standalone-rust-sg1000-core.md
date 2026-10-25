@@ -42,3 +42,10 @@ A primeira fatia implementa o mapa de ROM/RAM em Rust puro. CPU, VDP, PSG, porta
 - O workspace Rust inclui agora o contrato e a implementação inicial para que possam ser compilados/testados sem construir a extensão PyO3.
 - Esta fatia **não** substitui ainda a CPU do runtime nem torna Rust completo: prefixos, interrupções, demais opcodes, integração dos periféricos e scheduler continuam pendentes. Não habilitar como backend padrão até a migração e validação diferencial.
 - Validação focada prevista: compilação do workspace e os três testes unitários da nova fatia; sem executar a suíte extensa Python.
+
+## Progresso — máquina headless inicial
+
+- Adicionado `Sg1000Machine`, que conecta o Z80 parcial ao mapa de memória por meio do contrato `CpuBus`.
+- A máquina pode executar um número fixo de instruções e reportar T-states nominais, sem carregar Python ou PyO3.
+- Testes unitários verificam execução de ROM sintética, escrita em RAM, determinismo entre duas instâncias e erro explícito para opcode não suportado.
+- Limitação mantida: VDP, PSG, portas SG-1000, interrupções e scheduler ainda não estão integrados; não usar como emulador completo.
