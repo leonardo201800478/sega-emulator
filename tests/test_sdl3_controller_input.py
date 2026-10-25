@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import ctypes
+import sys
 from types import SimpleNamespace
+
+import pytest
 
 from sega_emulator.frontend.controller_input import ControllerInputConfig
 from sega_emulator.frontend.sdl3_controller_input import SDL3ControllerInput
@@ -168,10 +171,10 @@ def test_sdl3_unmapped_joystick_uses_raw_buttons_axes_and_hat() -> None:
     assert inputs.poll()[1] == {"button1", "left", "right"}
 
 
-def test_sdl3_missing_dependency_is_a_safe_noop() -> None:
+def test_sdl3_missing_dependency_is_a_safe_noop(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(sys.modules, "sdl3", None)
     inputs = SDL3ControllerInput(sdl_module=None)
-    # The installed test environment may or may not contain PySDL3; this verifies
-    # the public contract only when construction failed to load the binding.
-    if not inputs.available:
-        assert inputs.poll() == {1: set(), 2: set()}
-        assert inputs.connected_names() == []
+
+    assert not inputs.available
+    assert inputs.poll() == {1: set(), 2: set()}
+    assert inputs.connected_names() == []
