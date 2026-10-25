@@ -56,7 +56,6 @@ def run(initial_path: Path | None = None) -> None:
     try:
         from PySide6.QtCore import QEvent, QObject, QSettings, Qt, QTimer
         from PySide6.QtGui import QImage, QKeySequence
-        from sega_emulator.frontend.qt.main_window import EmulatorMainWindow
         from PySide6.QtWidgets import (
             QApplication,
             QCheckBox,
@@ -76,6 +75,7 @@ def run(initial_path: Path | None = None) -> None:
             QVBoxLayout,
             QWidget,
         )
+        from sega_emulator.frontend.qt.main_window import EmulatorMainWindow
     except ImportError as exc:
         raise RuntimeError(
             'Interface Qt não instalada. Execute: python -m pip install -e ".[qt]"'
@@ -120,7 +120,6 @@ def run(initial_path: Path | None = None) -> None:
     )
     view = window.video_widget
     status = window.status
-    recent_rom_menu = window.recent_rom_menu
 
     machine: SG1000Machine | None = None
     loaded: LoadedRom | None = None
@@ -398,6 +397,7 @@ def run(initial_path: Path | None = None) -> None:
             return
 
         machine, loaded, frame_count, paused = loaded_machine, candidate, 0, False
+        window.set_rom_label(candidate.display_name)
         selected_path = str(Path(path).expanduser().resolve())
         settings.setValue("last_directory", str(Path(selected_path).parent))
         settings.setValue("last_rom", selected_path)
@@ -850,6 +850,7 @@ def run(initial_path: Path | None = None) -> None:
         )
 
     timer.timeout.connect(show_frame)
+    refresh_recent_rom_menu()
     if initial_path is not None:
         open_rom(str(initial_path))
     window.show()
