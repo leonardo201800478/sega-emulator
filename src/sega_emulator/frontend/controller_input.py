@@ -240,6 +240,20 @@ def joystick_value(actions: set[str] | frozenset[str]) -> int:
     return value
 
 
+def apply_turbo(
+    actions: set[str],
+    turbo_buttons: dict[str, bool],
+    frame_number: int,
+) -> set[str]:
+    """Aplica turbo de 15 Hz: dois frames ativos e dois inativos por ciclo."""
+    result = actions.copy()
+    if frame_number % 4 >= 2:
+        for action in TURBO_ACTIONS:
+            if turbo_buttons.get(action, False):
+                result.discard(action)
+    return result
+
+
 class ControllerInput:
     """Poller opcional SDL GameController; ausência de suporte/dispositivo é válida."""
 
