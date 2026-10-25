@@ -135,9 +135,25 @@ def ed_family(op: int) -> tuple[str, str, str]:
     return "ED-NOP / unassigned byte", "unassigned-classic-z80", "ed-nop-fallback"
 
 
-INDEXED_EXACT = {0x21, 0x22, 0x2A, 0x23, 0x2B, 0x09, 0x19, 0x29, 0x39,
-                  0xE1, 0xE5, 0xE3, 0xE9, 0xF9, 0x24, 0x25, 0x26, 0x2C,
-                  0x2D, 0x2E, 0x36, 0x34, 0x35}
+INDEXED_FAMILIES = {
+    0x21: "LD IX/IY,nn",
+    0x22: "LD (nn),IX/IY",
+    0x2A: "LD IX/IY,(nn)",
+    0x23: "INC IX/IY",
+    0x2B: "DEC IX/IY",
+    0x09: "ADD IX/IY,BC",
+    0x19: "ADD IX/IY,DE",
+    0x29: "ADD IX/IY,IX/IY",
+    0x39: "ADD IX/IY,SP",
+    0xE1: "POP IX/IY",
+    0xE5: "PUSH IX/IY",
+    0xE3: "EX (SP),IX/IY",
+    0xE9: "JP (IX/IY)",
+    0xF9: "LD SP,IX/IY",
+    0x36: "LD (IX/IY+d),n",
+    0x34: "INC (IX/IY+d)",
+    0x35: "DEC (IX/IY+d)",
+}
 
 
 def indexed_family(op: int) -> tuple[str, str]:
@@ -149,8 +165,8 @@ def indexed_family(op: int) -> tuple[str, str]:
         return "ignored DD/FD before ED instruction", "ignored-prefix-fallback"
     if op in (0x24, 0x25, 0x26, 0x2C, 0x2D, 0x2E):
         return "INC/DEC/LD IXH/IXL or IYH/IYL", "undocumented-index-half"
-    if op in INDEXED_EXACT:
-        return "IX/IY-specific instruction", "index-substitution"
+    if op in INDEXED_FAMILIES:
+        return INDEXED_FAMILIES[op], "index-substitution"
     if 0x40 <= op <= 0x7F and op != 0x76:
         if ((op >> 3) & 7) == 6 or (op & 7) == 6:
             return "LD r,(IX/IY+d) / LD (IX/IY+d),r", "index-substitution"
