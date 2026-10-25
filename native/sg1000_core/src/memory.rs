@@ -38,15 +38,17 @@ pub enum MemoryError {
 impl fmt::Display for MemoryError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidRomSize(size) => {
-                write!(f, "ROM size must be between 1 and {ROM_WINDOW_SIZE} bytes, got {size}")
-            }
+            Self::InvalidRomSize(size) => write!(
+                f,
+                "ROM size must be between 1 and {ROM_WINDOW_SIZE} bytes, got {size}"
+            ),
             Self::InvalidInternalRamSize(size) => {
                 write!(f, "internal RAM must be 1 KiB or 8 KiB, got {size}")
             }
-            Self::InvalidCartridgeRamSize(size) => {
-                write!(f, "cartridge RAM must be empty, 1 KiB, or 8 KiB, got {size}")
-            }
+            Self::InvalidCartridgeRamSize(size) => write!(
+                f,
+                "cartridge RAM must be empty, 1 KiB, or 8 KiB, got {size}"
+            ),
             Self::InvalidCartridgeRamRange => {
                 write!(f, "cartridge RAM range must be valid and below 0xC000")
             }
@@ -75,10 +77,14 @@ impl Sg1000Memory {
             return Err(MemoryError::InvalidRomSize(rom.len()));
         }
         if !matches!(config.internal_ram_size, INTERNAL_RAM_1K | RAM_8K) {
-            return Err(MemoryError::InvalidInternalRamSize(config.internal_ram_size));
+            return Err(MemoryError::InvalidInternalRamSize(
+                config.internal_ram_size,
+            ));
         }
         if !matches!(config.cartridge_ram_size, 0 | INTERNAL_RAM_1K | RAM_8K) {
-            return Err(MemoryError::InvalidCartridgeRamSize(config.cartridge_ram_size));
+            return Err(MemoryError::InvalidCartridgeRamSize(
+                config.cartridge_ram_size,
+            ));
         }
         if config.cartridge_ram_size == 0 {
             if config.cartridge_ram_start != 0 || config.cartridge_ram_end != 0 {
@@ -112,8 +118,8 @@ impl Sg1000Memory {
         if !self.cartridge_ram.is_empty()
             && (self.cartridge_ram_start..=self.cartridge_ram_end).contains(&address)
         {
-            let offset = usize::from(address - self.cartridge_ram_start)
-                & (self.cartridge_ram.len() - 1);
+            let offset =
+                usize::from(address - self.cartridge_ram_start) & (self.cartridge_ram.len() - 1);
             return self.cartridge_ram[offset];
         }
         if address < RAM_START {
@@ -128,8 +134,8 @@ impl Sg1000Memory {
         if !self.cartridge_ram.is_empty()
             && (self.cartridge_ram_start..=self.cartridge_ram_end).contains(&address)
         {
-            let offset = usize::from(address - self.cartridge_ram_start)
-                & (self.cartridge_ram.len() - 1);
+            let offset =
+                usize::from(address - self.cartridge_ram_start) & (self.cartridge_ram.len() - 1);
             self.cartridge_ram[offset] = value;
             return;
         }
