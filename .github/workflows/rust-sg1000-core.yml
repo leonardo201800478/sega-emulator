@@ -1,15 +1,20 @@
-name: Standalone Rust SG-1000 Core
+name: Rust SG-1000 Workspace
 
 on:
   pull_request:
     paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
       - "native/sg1000_core/**"
       - "native/z80_alu/**"
       - ".github/workflows/rust-sg1000-core.yml"
   push:
     branches:
+      - "main"
       - "feat/rust-standalone-sg1000-test"
     paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
       - "native/sg1000_core/**"
       - "native/z80_alu/**"
       - ".github/workflows/rust-sg1000-core.yml"
@@ -23,8 +28,8 @@ jobs:
         with:
           components: rustfmt, clippy
       - name: Rust formatting
-        run: cargo fmt --manifest-path native/sg1000_core/Cargo.toml --all -- --check
+        run: cargo fmt --workspace --all -- --check
       - name: Clippy
-        run: cargo clippy --manifest-path native/sg1000_core/Cargo.toml --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Unit tests
-        run: cargo test --manifest-path native/sg1000_core/Cargo.toml
+        run: cargo test --workspace --locked
