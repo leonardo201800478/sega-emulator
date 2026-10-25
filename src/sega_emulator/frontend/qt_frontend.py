@@ -837,7 +837,7 @@ def run(
             symbol = "RustZ80Cpu" if kind == "cpu" else "RustTMS9918A"
             try:
                 getattr(importlib.import_module("sega_z80_core"), symbol)
-            except (ImportError, AttributeError):
+            except ImportError, AttributeError:
                 QMessageBox.warning(
                     window,
                     "Backend Rust indisponível",
