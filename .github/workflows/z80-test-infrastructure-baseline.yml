@@ -36,7 +36,8 @@ jobs:
             tests/unit/test_z80_alu_exhaustive.py \
             tests/unit/test_z80_bit_flags_exhaustive.py \
             tests/unit/test_z80_daa_exhaustive.py \
-            tests/unit/test_z80_indexed_bit_flags.py
+            tests/unit/test_z80_indexed_bit_flags.py \
+            tests/unit/test_z80_opcode_matrix.py
 
       - name: Generate opcode dispatch inventory
         if: always()
@@ -60,6 +61,26 @@ jobs:
           errors = report.get("unexpected_errors", [])
           if errors:
               raise SystemExit(f"{len(errors)} unexpected opcode dispatch errors")
+          PY
+
+      - name: Generate opcode classification matrix
+        if: always()
+        run: |
+          python tools/z80_opcode_matrix.py --json > artifacts/z80/opcode-classification-matrix.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          report = json.loads(
+              Path("artifacts/z80/opcode-classification-matrix.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          assert report["cell_count"] == 1792, report["cell_count"]
+          assert all(count == 256 for count in report["counts_by_space"].values())
+          print(f"Opcode classification matrix: {report['cell_count']} cells")
+          for space, count in report["counts_by_space"].items():
+              print(f"{space}: {count}")
           PY
 
       - name: Upload Z80 baseline artifacts
