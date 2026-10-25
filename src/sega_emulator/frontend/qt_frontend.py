@@ -12,6 +12,7 @@ from pathlib import Path
 from sega_emulator.frontend.controller_input import (
     ACTIONS,
     DEFAULT_GAMEPAD_BINDINGS,
+    JOYSTICK_ACTIONS,
     SUPPORTED_BUTTONS,
     ControllerInput,
     ControllerInputConfig,
@@ -126,6 +127,7 @@ def run(initial_path: Path | None = None) -> None:
     paused = False
     frame_count = 0
     pressed_keys: set[int] = set()
+    hold_was_pressed = False
     timer = QTimer(window)
     # Executa tão rápido quanto possível; mede-se a velocidade real.
     timer.setInterval(0)
@@ -140,16 +142,20 @@ def run(initial_path: Path | None = None) -> None:
         Qt.Key.Key_X: (1, "button2"),
         Qt.Key.Key_Return: (1, "button2"),
         Qt.Key.Key_Enter: (1, "button2"),
+        Qt.Key.Key_P: (1, "hold"),
         Qt.Key.Key_W: (2, "up"),
         Qt.Key.Key_S: (2, "down"),
         Qt.Key.Key_A: (2, "left"),
         Qt.Key.Key_D: (2, "right"),
         Qt.Key.Key_F: (2, "button1"),
         Qt.Key.Key_G: (2, "button2"),
+        Qt.Key.Key_H: (2, "hold"),
     }
 
     def update_joystick() -> None:
+        nonlocal hold_was_pressed
         if machine is None:
+            hold_was_pressed = False
             return
         actions = {1: set(), 2: set()}
         for key in pressed_keys:
@@ -160,7 +166,14 @@ def run(initial_path: Path | None = None) -> None:
         gamepad_actions = controller_input.poll()
         for player in (1, 2):
             actions[player].update(gamepad_actions[player])
-            machine.set_joystick(player, joystick_value(actions[player]))
+            machine.set_joystick(
+                player, joystick_value(actions[player].intersection(JOYSTICK_ACTIONS))
+            )
+        hold_pressed = any("hold" in actions[player] for player in (1, 2))
+        if hold_pressed and not hold_was_pressed:
+            # The console Hold switch is an edge-triggered NMI, not a joystick bit.
+            machine.cpu.request_nmi()
+        hold_was_pressed = hold_pressed
 
     class KeyboardInputFilter(QObject):
         """Converte eventos Qt em bits de joystick SG-1000 ativos em nível baixo."""
@@ -476,6 +489,7 @@ def run(initial_path: Path | None = None) -> None:
             "right": "Direita",
             "button1": "Botão 1",
             "button2": "Botão 2",
+            "hold": "SW / Hold (NMI)",
         }
         button_labels = {
             "a": "A (sul)",
@@ -492,7 +506,13 @@ def run(initial_path: Path | None = None) -> None:
             "rightstick": "Clique analógico direito",
             "back": "Voltar/Select",
             "guide": "Guia/Home",
-            "start": "Start",
+            "start": "Start / Hold",
+            "misc1": "Botão auxiliar",
+            "paddle1": "Paddle 1",
+            "paddle2": "Paddle 2",
+            "paddle3": "Paddle 3",
+            "paddle4": "Paddle 4",
+            "touchpad": "Touchpad",
         }
         for player in (1, 2):
             page = QWidget()
