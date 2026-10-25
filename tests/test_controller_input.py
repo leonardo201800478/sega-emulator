@@ -108,7 +108,7 @@ def test_controller_configuration_round_trip_and_validation() -> None:
     assert decoded.deadzone == pytest.approx(0.2)
     assert decoded.players[1].gamepad_buttons == {"button1": "x", "button2": "y"}
     assert decoded.players[1].use_left_stick is False
-    assert decoded.players[1].gamepad_buttons["hold"] == "start"
+    assert decoded.players[2].gamepad_buttons["hold"] == "start"
     with pytest.raises(ValueError, match="não suportada"):
         ControllerInputConfig.from_json('{"schema_version":99,"players":{}}')
 
