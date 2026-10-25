@@ -23,6 +23,19 @@ def _rust_cpu():
     return native.RustZ80Cpu
 
 
+class PortBus:
+    def __init__(self) -> None:
+        self.ports: dict[int, int] = {}
+        self.writes: list[tuple[int, int]] = []
+
+    def read_port(self, address: int) -> int:
+        return self.ports.get(address & 0xFFFF, 0xA5)
+
+    def write_port(self, address: int, value: int) -> None:
+        self.ports[address & 0xFFFF] = value & 0xFF
+        self.writes.append((address & 0xFFFF, value & 0xFF))
+
+
 def test_rust_core_matches_python_for_supported_instruction_sequence() -> None:
     RustZ80Cpu = _rust_cpu()
     program = bytes(
@@ -231,6 +244,115 @@ def test_rust_base_misc_instructions_match_python(
         name: getattr(python_cpu, name) for name in attributes
     }
     assert rust_bus.memory == python_bus.memory
+
+
+@pytest.mark.parametrize(
+    ("opcode", "expected_cycles"),
+    [
+        (0x42, 15),  # SBC HL,BC
+        (0x4A, 15),  # ADC HL,BC
+        (0x43, 20),  # LD (nn),BC
+        (0x4B, 20),  # LD BC,(nn)
+        (0x44, 8),   # NEG
+        (0x47, 9),   # LD I,A
+        (0x4F, 9),   # LD R,A
+        (0x57, 9),   # LD A,I
+        (0x5F, 9),   # LD A,R
+        (0x67, 18),  # RRD
+        (0x6F, 18),  # RLD
+    ],
+)
+def test_rust_ed_arithmetic_and_special_ops_match_python(
+    opcode: int, expected_cycles: int
+) -> None:
+    RustZ80Cpu = _rust_cpu()
+    immediate = [0x00, 0x20] if opcode in (0x43, 0x4B) else []
+    program = bytes([0xED, opcode, *immediate])
+    python_bus = MemoryBus(program)
+    rust_bus = MemoryBus(program)
+    python_bus.memory[0x2000:0x2002] = bytes([0xCD, 0xAB])
+    rust_bus.memory[0x2000:0x2002] = bytes([0xCD, 0xAB])
+    python_cpu = Z80Cpu(python_bus)
+    rust_cpu = RustZ80Cpu(rust_bus, None)
+
+    for cpu in (python_cpu, rust_cpu):
+        cpu.a = 0x59
+        cpu.f = 0x15
+        cpu.bc = 0x1234
+        cpu.de = 0x5678
+        cpu.hl = 0x2000
+        cpu.sp = 0x3000
+        cpu.i = 0x81
+        cpu.r = 0x42
+        cpu.iff1 = True
+        cpu.iff2 = True
+
+    python_cycles = python_cpu.step()
+    rust_cycles = rust_cpu.step()
+    attributes = (
+        "a", "f", "b", "c", "d", "e", "h", "l", "sp", "pc",
+        "i", "r", "iff1", "iff2", "interrupt_mode", "wz", "total_cycles",
+    )
+    assert python_cycles == rust_cycles == expected_cycles
+    assert {name: getattr(rust_cpu, name) for name in attributes} == {
+        name: getattr(python_cpu, name) for name in attributes
+    }
+    assert rust_cpu.bc == python_cpu.bc
+    assert rust_cpu.de == python_cpu.de
+    assert rust_cpu.hl == python_cpu.hl
+    assert rust_bus.memory == python_bus.memory
+
+
+@pytest.mark.parametrize(
+    ("opcode", "expected_cycles"),
+    [
+        (0xA1, 16),  # CPI
+        (0xA9, 16),  # CPD
+        (0xB1, 21),  # CPIR repeats when not equal
+        (0xB9, 21),  # CPDR repeats when not equal
+    ],
+)
+def test_rust_ed_block_compare_matches_python(opcode: int, expected_cycles: int) -> None:
+    RustZ80Cpu = _rust_cpu()
+    program = bytes([0xED, opcode])
+    python_bus = MemoryBus(program)
+    rust_bus = MemoryBus(program)
+    python_bus.memory[0x1000] = rust_bus.memory[0x1000] = 0x11
+    python_cpu = Z80Cpu(python_bus)
+    rust_cpu = RustZ80Cpu(rust_bus, None)
+    for cpu in (python_cpu, rust_cpu):
+        cpu.a = 0x60
+        cpu.f = 0x01
+        cpu.hl = 0x1000
+        cpu.bc = 2
+
+    assert python_cpu.step() == rust_cpu.step() == expected_cycles
+    assert (rust_cpu.a, rust_cpu.f, rust_cpu.hl, rust_cpu.bc, rust_cpu.pc) == (
+        python_cpu.a, python_cpu.f, python_cpu.hl, python_cpu.bc, python_cpu.pc
+    )
+    assert rust_bus.memory == python_bus.memory
+
+
+def test_rust_ed_block_io_matches_python() -> None:
+    RustZ80Cpu = _rust_cpu()
+    program = bytes([0xED, 0xA2])  # INI
+    python_bus = MemoryBus(program)
+    rust_bus = MemoryBus(program)
+    python_io = PortBus()
+    rust_io = PortBus()
+    python_cpu = Z80Cpu(python_bus, python_io)
+    rust_cpu = RustZ80Cpu(rust_bus, rust_io)
+    for cpu in (python_cpu, rust_cpu):
+        cpu.bc = 0x0220
+        cpu.hl = 0x1000
+
+    assert python_cpu.step() == rust_cpu.step() == 16
+    assert (rust_cpu.b, rust_cpu.c, rust_cpu.f, rust_cpu.hl, rust_cpu.pc) == (
+        python_cpu.b, python_cpu.c, python_cpu.f, python_cpu.hl, python_cpu.pc
+    )
+    assert rust_bus.memory == python_bus.memory
+    assert rust_io.ports == python_io.ports
+    assert rust_io.writes == python_io.writes
 
 
 def test_rust_core_fails_explicitly_on_unsupported_opcode() -> None:
