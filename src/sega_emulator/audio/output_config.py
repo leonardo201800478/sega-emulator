@@ -2,6 +2,7 @@
 
 These settings describe the host output path, not the emulated console clock.
 """
+
 from __future__ import annotations
 
 from collections.abc import Mapping
