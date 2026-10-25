@@ -82,6 +82,20 @@ maturin develop --release --features python-extension
 Pop-Location
 ```
 
+Para compilar a extensão e abrir o emulador para teste manual em uma única etapa, use o script PowerShell (a partir da raiz do repositório, com `.venv` já criado e dependências `.[dev,qt,frontend]` instaladas):
+
+```powershell
+.\scripts\test-rust-in-game.ps1
+```
+
+Para abrir diretamente uma ROM local:
+
+```powershell
+.\scripts\test-rust-in-game.ps1 "C:\caminho\para\jogo.sg"
+```
+
+O script compila a extensão PyO3 em Release, verifica a importação de `NativeSG1000Machine` e abre o frontend Qt. Na interface, selecione **Emulação → Selecionar núcleo Z80… → Rust (experimental)**; a compilação sozinha não troca o backend selecionado nas configurações.
+
 Reabra o emulador e selecione **Emulação → Selecionar núcleo Z80… → Rust (experimental)**. Se a extensão não estiver instalada, a interface explica como instalá-la e preserva o backend anterior.
 
 As fatias [PR #92](https://github.com/leonardo201800478/sega-emulator/pull/92) e [PR #93](https://github.com/leonardo201800478/sega-emulator/pull/93) passaram no workflow Windows. A PR #93 validou `rustfmt`, Clippy, testes Rust, build Release, **1.674 testes direcionados** e **2.329 testes de regressão** com a extensão instalada. Isso valida os caminhos cobertos, mas não demonstra compatibilidade universal, precisão ciclo a ciclo ou ganho de desempenho em todos os jogos.
