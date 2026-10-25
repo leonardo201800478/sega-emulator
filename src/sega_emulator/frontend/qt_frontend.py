@@ -628,9 +628,7 @@ def run(initial_path: Path | None = None) -> None:
                 action: key_buttons[(player, action)].key_name
                 for action in ACTIONS
             }
-            normalized_keys = [
-                key.casefold() for key in keyboard_bindings.values()
-            ]
+            normalized_keys = [key.casefold() for key in keyboard_bindings.values()]
             if len(normalized_keys) != len(set(normalized_keys)):
                 QMessageBox.warning(
                     dialog,
