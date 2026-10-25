@@ -372,8 +372,8 @@ def test_unmapped_joystick_supports_raw_button_hat_and_axis_bindings() -> None:
     raw.buttons.add(3)
     raw.hats[0] = (0, 1)
     raw.axes[2] = 1.0
-    controller_backend = FakeRawControllerModule()
     joystick_backend = FakeRawJoystickModule([raw])
+    controller_backend = FakeRawControllerModule(joystick_backend)
     inputs = ControllerInput(
         SimpleNamespace(
             _sdl2=SimpleNamespace(controller=controller_backend),
@@ -398,8 +398,8 @@ def test_unmapped_joystick_supports_raw_button_hat_and_axis_bindings() -> None:
 def test_unmapped_joystick_reconnect_refreshes_device_handles() -> None:
     first = FakeRawJoystick("First device")
     first.buttons.add(0)
-    controller_backend = FakeRawControllerModule()
     joystick_backend = FakeRawJoystickModule([first])
+    controller_backend = FakeRawControllerModule(joystick_backend)
     inputs = ControllerInput(
         SimpleNamespace(
             _sdl2=SimpleNamespace(controller=controller_backend),
