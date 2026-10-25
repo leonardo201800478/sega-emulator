@@ -75,6 +75,42 @@ Gera uma medição-base sem instrumentação e um relatório JSON separado com t
 
 **Importante:** o perfil instrumentado tem overhead. Os tempos de funções aninhadas são inclusivos; não devem ser somados entre si nem usados como FPS normal. O hash do framebuffer permite localizar o primeiro quadro divergente em execuções comparáveis, mas não determina sozinho se a imagem está correta. A ROM não é copiada para o relatório.
 
+## Núcleo de CPU selecionável (experimental)
+
+O núcleo Python continua sendo a referência e o padrão. Há uma primeira implementação
+Rust selecionável para validar a arquitetura e medir o custo/benefício da execução
+nativa. **A cobertura Rust ainda é parcial**: instruções não implementadas geram erro
+explícito; não há fallback silencioso para Python, pois isso invalidaria a medição.
+
+Para compilar e instalar a extensão Rust no ambiente virtual ativo:
+
+```powershell
+python -m pip install maturin
+Push-Location native/z80_core
+maturin develop --features python-extension
+Pop-Location
+```
+
+Na interface Qt, escolha **Emulação → Núcleo da CPU → Python (referência)** ou
+**Rust (experimental)**. A seleção é persistida e, se uma ROM estiver carregada,
+reinicia a máquina para aplicar o núcleo. Também é possível escolher pelo terminal:
+
+```powershell
+.\\.venv\\Scripts\\python.exe -m sega_emulator "C:\\caminho\\para\\jogo.sg" --cpu-core python
+.\\.venv\\Scripts\\python.exe -m sega_emulator "C:\\caminho\\para\\jogo.sg" --cpu-core rust
+```
+
+Para medir os dois núcleos na mesma ROM, com aquecimento e múltiplas repetições:
+
+```powershell
+.\\.venv\\Scripts\\python.exe tools\\benchmarks\\compare_cpu_cores.py --rom "C:\\caminho\\para\\jogo.sg" --warmup-frames 30 --frames 120 --repeats 3 --output cpu-core-benchmark.json
+```
+
+O relatório registra tempo mediano, FPS, instruções/s, T-states, PC final, hashes
+de framebuffer e áudio. Só informa speedup quando ambos os núcleos completam a mesma
+execução; divergências ou opcodes não suportados ficam explícitos. A extensão ainda
+faz chamadas ao barramento Python, portanto não se presume que seja mais rápida.
+
 ## Snapshot do VDP durante o jogo
 
 Para investigar divergências visuais em uma cena real, execute a interface Qt com a ROM local e avance até a cena desejada. Pressione **F8** ou use **Diagnóstico → Capturar snapshot VDP (JSON + PNG)**. O emulador salva em `logs/vdp_snapshots/`:
