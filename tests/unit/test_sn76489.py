@@ -44,7 +44,7 @@ def test_noise_write_resets_fifteen_bit_lfsr_and_divider_phase() -> None:
     psg.write(0xE7)
     assert psg.noise_control == 7
     assert psg._lfsr == LFSR_SEED
-    assert psg._noise_counter == 0
+    assert psg._noise_counter == psg._noise_period
     assert psg._noise_counter_phase == 0
     assert psg._lfsr & ~LFSR_MASK == 0
 
