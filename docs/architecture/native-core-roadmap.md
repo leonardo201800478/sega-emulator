@@ -18,6 +18,7 @@ Reduzir o custo de execução e preparar a arquitetura para sistemas Sega poster
 6. **Núcleo determinístico:** CPU, barramento e dispositivos avançam sob scheduler/modelo de eventos explícito. Não separar CPU, VDP e PSG em threads independentes sem sincronização formal. Frontend, apresentação e saída de áudio podem usar buffers isolados sem alterar clocks lógicos.
 7. **ABI de fronteira grossa:** evitar chamadas Python↔Rust ou Rust↔JIT por opcode. Definir contrato nativo estreito e versionável para estado, execução de bloco e callbacks necessários.
 8. **Medição antes da promoção:** comparar cargas idênticas e equivalência; separar custos de compilação, inicialização, warm-up e execução steady-state.
+9. **Preparar multithreading sem paralelismo prematuro:** definir ownership de estado, filas e pontos de sincronização desde já, mas manter CPU, barramento, VDP e PSG no mesmo domínio lógico determinístico até que profiling e o scheduler provem que uma divisão é segura. Threads são uma opção, não uma exigência.
 
 ## Camadas-alvo
 
@@ -73,10 +74,13 @@ Reduzir o custo de execução e preparar a arquitetura para sistemas Sega poster
 
 **Gate:** equivalência digital nos casos cobertos e medição de latência/custo.
 
-### M5 — Scheduler e integração da máquina
+### M5 — Scheduler, integração e fronteiras de concorrência
 - Definir ordenação de eventos CPU–VDP–PSG, interrupções, I/O e estados de espera.
-- Integrar componentes sem paralelismo lógico implícito.
-- Testar execução por frame e por instrução separadamente, com determinismo e regressões visuais/sonoras.
+- Declarar ownership do estado mutável e os eventos que podem atravessar fronteiras entre threads.
+- Manter CPU, barramento, VDP e PSG serializados inicialmente; não usar uma thread por dispositivo como padrão.
+- Permitir threads para apresentação, saída de áudio e carregamento quando não alterarem diretamente o estado lógico emulado.
+- Definir filas/buffers, backpressure, encerramento e sincronização de frames sem deixar os clocks do host controlar clocks de hardware.
+- Testar execução por frame e por instrução, determinismo e regressões visuais/sonoras.
 
 **Gate:** estado final e assinaturas audiovisuais estáveis nos workloads aceitos.
 
@@ -105,6 +109,12 @@ Reduzir o custo de execução e preparar a arquitetura para sistemas Sega poster
 - **Modo rápido:** aproximações somente opt-in, enumeradas e testadas; não confundir com HLE.
 - **Fallback:** bloco não suportado deve sair antes de alterar estado ou usar side exits cuja semântica seja testada. Nunca reexecutar do PC original depois de efeitos parciais observáveis.
 - **Incerteza:** registrar hipóteses e pendências em vez de assumir comportamento não comprovado.
+
+## Estratégia multithread para sistemas posteriores
+
+Preparar paralelismo seguro agora não significa executá-lo em todos os componentes. No SG-1000, manter o estado lógico no scheduler determinístico e usar threads periféricas apenas quando isoladas e justificadas por profiling. No Mega Drive, Sega CD e 32X, modelar explicitamente a relação temporal entre CPUs e recursos compartilhados. Processadores emulados podem avançar em fatias independentes entre pontos de sincronização, mas acessos compartilhados, arbitragem e interrupções devem respeitar a ordem definida pelo modelo de hardware. Se a execução paralela não reproduzir os resultados observáveis da execução serial de referência, usar o caminho serial.
+
+A estratégia não autoriza paralelizar CPU/VDP/PSG antes de o scheduler e os benchmarks justificarem a mudança.
 
 ## Critérios globais de aceitação
 
