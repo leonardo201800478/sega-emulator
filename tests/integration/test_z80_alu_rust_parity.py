@@ -31,8 +31,7 @@ def test_rust_add_sub_adc_sbc_match_python_for_all_8_bit_operands() -> None:
         for rhs in range(256)
     ]
     input_text = "".join(
-        f"{operation} {lhs:02X} {rhs:02X}\n"
-        for operation, lhs, rhs in vectors
+        f"{operation} {lhs:02X} {rhs:02X}\n" for operation, lhs, rhs in vectors
     )
     completed = subprocess.run(
         [
