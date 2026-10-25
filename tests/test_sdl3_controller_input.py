@@ -73,6 +73,12 @@ class FakeSDL3:
     def SDL_PumpEvents(self) -> None:
         pass
 
+    def SDL_UpdateGamepads(self) -> None:
+        self.gamepad_updates = getattr(self, "gamepad_updates", 0) + 1
+
+    def SDL_UpdateJoysticks(self) -> None:
+        self.joystick_updates = getattr(self, "joystick_updates", 0) + 1
+
     def SDL_OpenGamepad(self, instance_id: int) -> object:
         return self.gamepads[instance_id]
 
@@ -126,6 +132,8 @@ def test_sdl3_mapped_gamepad_reads_buttons_and_dpad() -> None:
     assert inputs.available
     assert inputs.connected_names() == ["Fake SDL3 gamepad"]
     assert inputs.poll()[1] == {"button1", "right"}
+    assert sdl.gamepad_updates >= 1
+    assert sdl.joystick_updates >= 1
 
 
 def test_sdl3_hotplug_reopens_handles_and_clears_disconnected_input() -> None:
