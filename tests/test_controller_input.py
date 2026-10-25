@@ -276,7 +276,6 @@ def test_disconnected_controller_is_closed_and_does_not_keep_input_pressed() -> 
     assert actions[1] == set()
 
 
-
 def test_read_pressed_button_supports_gamepad_mapping_capture() -> None:
     backend = FakeControllerModule()
     inputs = ControllerInput(SimpleNamespace(_sdl2=SimpleNamespace(controller=backend)))
