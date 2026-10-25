@@ -6,9 +6,9 @@ The Castle (Japan) usa outro mapa: 8 KiB de RAM de cartucho em 8000h–BFFFh,
 enquanto a RAM interna permanece em 1 KiB.
 """
 
-from dataclasses import dataclass
 import hashlib
 import zlib
+from dataclasses import dataclass
 
 # CRC-32 dos dumps identificados como SYSTEM_SGII_RAM_EXT no Genesis Plus GX.
 # Referência: https://github.com/ekeeke/Genesis-Plus-GX/blob/master/core/cart_hw/sms_cart.c
