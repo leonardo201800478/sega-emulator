@@ -19,7 +19,7 @@ if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar Maturin." }
 Write-Host "==> Compilando o núcleo Rust SG-1000 usado pelo frontend (Release)"
 Push-Location (Join-Path $repoRoot "native\z80_core")
 try {
-    & $python -m maturin develop --release --features python-extension
+    & (Join-Path $repoRoot ".venv\Scripts\maturin.exe") develop --release --features python-extension
     if ($LASTEXITCODE -ne 0) { throw "Falha ao compilar/instalar a extensão Rust." }
 }
 finally {
