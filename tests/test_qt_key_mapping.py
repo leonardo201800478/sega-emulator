@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-pytest.importorskip("PySide6.QtCore")
+qt_core = pytest.importorskip("PySide6.QtCore")
 qt_gui = pytest.importorskip("PySide6.QtGui")
-from PySide6.QtCore import Qt
 
+Qt = qt_core.Qt
 QKeySequence = qt_gui.QKeySequence
 
 
