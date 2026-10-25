@@ -6,8 +6,8 @@ unit-tested without creating a QApplication.
 
 from __future__ import annotations
 
-from typing import Any, Protocol
 from dataclasses import dataclass
+from typing import Any, Protocol
 
 
 MIN_WINDOW_WIDTH = 640
