@@ -157,7 +157,16 @@ ED_ASSIGNED_EXACT = {
 }
 ED_NEG = {0x44, 0x4C, 0x54, 0x5C, 0x64, 0x6C, 0x74, 0x7C}
 ED_RETURN = {0x45, 0x4D, 0x55, 0x5D, 0x65, 0x6D, 0x75, 0x7D}
-ED_IM = {0x46: 0, 0x4E: 0, 0x66: 0, 0x6E: 0, 0x56: 1, 0x76: 1, 0x5E: 2, 0x7E: 2}
+ED_IM = {
+    0x46: 0,
+    0x4E: 0,
+    0x66: 0,
+    0x6E: 0,
+    0x56: 1,
+    0x76: 1,
+    0x5E: 2,
+    0x7E: 2,
+}
 
 
 def ed_family(op: int) -> tuple[str, str, str]:
@@ -165,11 +174,18 @@ def ed_family(op: int) -> tuple[str, str, str]:
     if op in ED_ASSIGNED_EXACT:
         return ED_ASSIGNED_EXACT[op], "documented", "ed-implemented"
     if op in ED_NEG:
+        if op == 0x44:
+            return "NEG", "documented", "ed-implemented"
         return "NEG (alias encoding)", "alias", "ed-implemented"
     if op in ED_RETURN:
-        return "RETN/RETI (alias encoding)", "alias", "ed-implemented"
+        if op == 0x4D:
+            return "RETI", "documented", "ed-implemented"
+        return "RETN (alias encoding)", "alias", "ed-implemented"
     if op in ED_IM:
-        return f"IM {ED_IM[op]} (alias encoding possible)", "alias", "ed-implemented"
+        canonical = {0x46, 0x56, 0x5E}
+        if op in canonical:
+            return f"IM {ED_IM[op]}", "documented", "ed-implemented"
+        return f"IM {ED_IM[op]} (alias encoding)", "alias", "ed-implemented"
     if op & 0xC7 == 0x40:
         return "IN r,(C)", "documented", "ed-implemented"
     if op == 0x71:
