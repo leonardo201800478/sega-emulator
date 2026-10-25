@@ -1,0 +1,260 @@
+//! First Python-independent Z80 execution slice.
+//!
+//! This module deliberately reports unsupported opcodes instead of silently
+//! delegating execution to the Python reference. The implementation is
+//! incremental and is not yet a complete Z80.
+
+use crate::bus::CpuBus;
+
+const FLAG_C: u8 = 0x01;
+const FLAG_PV: u8 = 0x04;
+const FLAG_H: u8 = 0x10;
+const FLAG_Z: u8 = 0x40;
+const FLAG_S: u8 = 0x80;
+const FLAG_XY: u8 = 0x28;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CpuError {
+    UnsupportedOpcode { opcode: u8, address: u16 },
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Z80Registers {
+    pub a: u8,
+    pub f: u8,
+    pub b: u8,
+    pub c: u8,
+    pub d: u8,
+    pub e: u8,
+    pub h: u8,
+    pub l: u8,
+    pub sp: u16,
+    pub pc: u16,
+}
+
+impl Z80Registers {
+    #[inline]
+    pub fn bc(&self) -> u16 {
+        u16::from_be_bytes([self.b, self.c])
+    }
+
+    #[inline]
+    pub fn de(&self) -> u16 {
+        u16::from_be_bytes([self.d, self.e])
+    }
+
+    #[inline]
+    pub fn hl(&self) -> u16 {
+        u16::from_be_bytes([self.h, self.l])
+    }
+
+    #[inline]
+    pub fn set_bc(&mut self, value: u16) {
+        [self.b, self.c] = value.to_be_bytes();
+    }
+
+    #[inline]
+    pub fn set_de(&mut self, value: u16) {
+        [self.d, self.e] = value.to_be_bytes();
+    }
+
+    #[inline]
+    pub fn set_hl(&mut self, value: u16) {
+        [self.h, self.l] = value.to_be_bytes();
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Z80 {
+    pub registers: Z80Registers,
+    pub halted: bool,
+    pub total_tstates: u64,
+}
+
+impl Default for Z80 {
+    fn default() -> Self {
+        Self {
+            registers: Z80Registers::default(),
+            halted: false,
+            total_tstates: 0,
+        }
+    }
+}
+
+impl Z80 {
+    pub fn reset(&mut self) {
+        self.registers = Z80Registers::default();
+        self.halted = false;
+        self.total_tstates = 0;
+    }
+
+    /// Execute one instruction and return its documented base T-state count.
+    ///
+    /// This first extraction slice covers common base instructions only.
+    /// Prefixes, interrupts, and all unimplemented opcodes return an explicit
+    /// error until their native implementation is migrated.
+    pub fn step<B: CpuBus>(&mut self, bus: &mut B) -> Result<u32, CpuError> {
+        if self.halted {
+            self.total_tstates += 4;
+            return Ok(4);
+        }
+
+        let address = self.registers.pc;
+        let opcode = self.fetch8(bus);
+        let cycles = match opcode {
+            0x00 => 4, // NOP
+            0x76 => {
+                self.halted = true;
+                4
+            }
+            0x01 | 0x11 | 0x21 | 0x31 => {
+                let value = self.fetch16(bus);
+                match opcode {
+                    0x01 => self.registers.set_bc(value),
+                    0x11 => self.registers.set_de(value),
+                    0x21 => self.registers.set_hl(value),
+                    _ => self.registers.sp = value,
+                }
+                10
+            }
+            0x06 | 0x0E | 0x16 | 0x1E | 0x26 | 0x2E | 0x36 | 0x3E => {
+                let value = self.fetch8(bus);
+                let destination = (opcode >> 3) & 0x07;
+                self.write_register(bus, destination, value);
+                if destination == 6 { 10 } else { 7 }
+            }
+            0x40..=0x7F => {
+                let destination = (opcode >> 3) & 0x07;
+                let source = opcode & 0x07;
+                let value = self.read_register(bus, source);
+                self.write_register(bus, destination, value);
+                if destination == 6 || source == 6 { 7 } else { 4 }
+            }
+            0x18 => {
+                let displacement = self.fetch8(bus) as i8;
+                self.registers.pc = self.registers.pc.wrapping_add_signed(i16::from(displacement));
+                12
+            }
+            0x3C => {
+                let old = self.registers.a;
+                let value = old.wrapping_add(1);
+                let carry = self.registers.f & FLAG_C;
+                let mut flags = value & (FLAG_S | FLAG_XY);
+                if value == 0 { flags |= FLAG_Z; }
+                if old & 0x0F == 0x0F { flags |= FLAG_H; }
+                if old == 0x7F { flags |= FLAG_PV; }
+                self.registers.a = value;
+                self.registers.f = flags | carry;
+                4
+            }
+            0xAF => {
+                self.registers.a = 0;
+                self.registers.f = FLAG_Z | FLAG_PV;
+                4
+            }
+            0xC3 => {
+                self.registers.pc = self.fetch16(bus);
+                10
+            }
+            _ => return Err(CpuError::UnsupportedOpcode { opcode, address }),
+        };
+        self.total_tstates += u64::from(cycles);
+        Ok(cycles)
+    }
+
+    #[inline]
+    fn fetch8<B: CpuBus>(&mut self, bus: &mut B) -> u8 {
+        let value = bus.read_memory(self.registers.pc);
+        self.registers.pc = self.registers.pc.wrapping_add(1);
+        value
+    }
+
+    #[inline]
+    fn fetch16<B: CpuBus>(&mut self, bus: &mut B) -> u16 {
+        let low = self.fetch8(bus);
+        let high = self.fetch8(bus);
+        u16::from_le_bytes([low, high])
+    }
+
+    #[inline]
+    fn read_register<B: CpuBus>(&mut self, bus: &mut B, code: u8) -> u8 {
+        match code {
+            0 => self.registers.b,
+            1 => self.registers.c,
+            2 => self.registers.d,
+            3 => self.registers.e,
+            4 => self.registers.h,
+            5 => self.registers.l,
+            6 => bus.read_memory(self.registers.hl()),
+            _ => self.registers.a,
+        }
+    }
+
+    #[inline]
+    fn write_register<B: CpuBus>(&mut self, bus: &mut B, code: u8, value: u8) {
+        match code {
+            0 => self.registers.b = value,
+            1 => self.registers.c = value,
+            2 => self.registers.d = value,
+            3 => self.registers.e = value,
+            4 => self.registers.h = value,
+            5 => self.registers.l = value,
+            6 => bus.write_memory(self.registers.hl(), value),
+            _ => self.registers.a = value,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{CpuError, Z80};
+    use crate::bus::CpuBus;
+
+    struct TestBus([u8; 0x10000]);
+
+    impl CpuBus for TestBus {
+        fn read_memory(&mut self, address: u16) -> u8 {
+            self.0[usize::from(address)]
+        }
+
+        fn write_memory(&mut self, address: u16, value: u8) {
+            self.0[usize::from(address)] = value;
+        }
+    }
+
+    #[test]
+    fn executes_load_jump_and_halt_without_python() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..7].copy_from_slice(&[0x3E, 0x42, 0x21, 0x00, 0xC0, 0x76, 0x00]);
+        let mut cpu = Z80::default();
+
+        assert_eq!(cpu.step(&mut bus), Ok(7));
+        assert_eq!(cpu.registers.a, 0x42);
+        assert_eq!(cpu.step(&mut bus), Ok(10));
+        assert_eq!(cpu.registers.hl(), 0xC000);
+        assert_eq!(cpu.step(&mut bus), Ok(4));
+        assert!(cpu.halted);
+        assert_eq!(cpu.total_tstates, 21);
+    }
+
+    #[test]
+    fn unsupported_opcodes_fail_explicitly_without_fallback() {
+        let mut bus = TestBus([0xDD; 0x10000]);
+        let mut cpu = Z80::default();
+        assert_eq!(
+            cpu.step(&mut bus),
+            Err(CpuError::UnsupportedOpcode { opcode: 0xDD, address: 0 })
+        );
+        assert_eq!(cpu.registers.pc, 1);
+    }
+
+    #[test]
+    fn relative_jump_uses_signed_displacement() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[0] = 0x18;
+        bus.0[1] = 0xFC;
+        let mut cpu = Z80::default();
+        assert_eq!(cpu.step(&mut bus), Ok(12));
+        assert_eq!(cpu.registers.pc, 0xFFFE);
+    }
+}
