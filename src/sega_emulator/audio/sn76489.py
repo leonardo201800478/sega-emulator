@@ -66,7 +66,7 @@ class SN76489:
         self.attenuations = [15, 15, 15, 15]
         self.noise_control = 0
         self._latched_register = 0
-        self._tone_counters = [0, 0, 0]
+        self._tone_counters = [1, 1, 1]
         self._tone_outputs = [1, 1, 1]
         self._noise_counter = 0
         self._noise_counter_phase = 0
@@ -74,6 +74,7 @@ class SN76489:
         self._clock_divider_phase = 0
         self._output_phase = 0
         self._noise_period = 0x10
+        self._noise_counter = self._noise_period
         self._pending_samples.clear()
         self._render_pending.clear()
         self.dropped_samples = 0
@@ -125,7 +126,7 @@ class SN76489:
 
     def _reset_noise_generator(self) -> None:
         self._lfsr = LFSR_SEED
-        self._noise_counter = 0
+        self._noise_counter = self._noise_period
         self._noise_counter_phase = 0
 
     def _shift_noise_register(self) -> None:
@@ -138,24 +139,30 @@ class SN76489:
 
     def _tick_internal_clock(self) -> None:
         for channel, period in enumerate(self.tone_periods):
-            # Hipótese de variante mantida explicitamente: períodos 0/1 ficam altos.
+            # Para esta variante, períodos 0/1 mantêm a saída em nível alto.
             if period <= 1:
                 self._tone_outputs[channel] = 1
-                self._tone_counters[channel] = 0
+                self._tone_counters[channel] = period
                 continue
-            self._tone_counters[channel] += 1
-            if self._tone_counters[channel] >= period:
-                self._tone_counters[channel] = 0
-                self._tone_outputs[channel] ^= 1
 
-        self._noise_counter += 1
-        if self._noise_counter >= self._noise_period:
-            self._noise_counter = 0
-            # O LFSR é acionado a cada segunda borda do divisor de ruído.
-            # Isso produz clock / 512, / 1024 e / 2048 nos três modos fixos.
+            # Contagem regressiva: uma escrita de período não reinicia o
+            # contador em andamento. O novo valor é usado no próximo reload.
+            if self._tone_counters[channel] > 1:
+                self._tone_counters[channel] -= 1
+            else:
+                self._tone_outputs[channel] ^= 1
+                self._tone_counters[channel] = period
+
+        # Alterar o divisor de ruído afeta o próximo reload, não encurta
+        # retroativamente a contagem que já está em andamento.
+        if self._noise_counter > 1:
+            self._noise_counter -= 1
+        else:
+            self._noise_counter = self._noise_period
+            # Um deslocamento do LFSR a cada segunda expiração do divisor.
             self._noise_counter_phase ^= 1
             if self._noise_counter_phase:
-                self._shift_noise_register()
+                self._shift_noise_register()()
 
     def advance_clocks(self, clocks: int) -> None:
         """Avança clocks de entrada e coloca as amostras novas no buffer limitado."""
