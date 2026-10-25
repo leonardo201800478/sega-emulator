@@ -1,7 +1,7 @@
 """Adaptador de vetores SingleStepTests para o núcleo Z80 do projeto.
 
-Executa um vetor de uma instrução com RAM plana de 64 KiB. Não compara os
-traços de barramento: Z80Cpu ainda expõe apenas T-states agregados.
+Executa um vetor de uma instrução com RAM plana de 64 KiB. Compara o total de
+T-states quando o vetor contém traço; não compara a ordem dos ciclos de barramento.
 """
 
 from __future__ import annotations
