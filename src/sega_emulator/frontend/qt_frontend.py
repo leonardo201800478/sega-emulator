@@ -837,7 +837,7 @@ def run(
             symbol = "RustZ80Cpu" if kind == "cpu" else "RustTMS9918A"
             try:
                 getattr(importlib.import_module("sega_z80_core"), symbol)
-            except (ImportError, AttributeError):
+            except ImportError, AttributeError:
                 QMessageBox.warning(
                     window,
                     "Backend Rust indisponível",
@@ -865,9 +865,7 @@ def run(
             actions = cpu_actions if kind == "cpu" else vdp_actions
             for name, action in actions.items():
                 action.setChecked(name == current)
-            QMessageBox.warning(
-                window, "Não foi possível trocar o backend", str(exc)
-            )
+            QMessageBox.warning(window, "Não foi possível trocar o backend", str(exc))
             return
 
         settings.setValue(f"{kind}_core", core)
