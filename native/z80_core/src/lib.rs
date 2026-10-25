@@ -317,6 +317,37 @@ impl RustZ80Cpu {
         Ok(())
     }
 
+    fn apply_repeat_block_xy_flags(&mut self) {
+        self.f = (self.f & !0x28) | (((self.pc >> 8) as u8) & 0x28);
+        self.q = self.f;
+    }
+
+    fn apply_repeat_block_io_flags(&mut self, value: u8) {
+        self.f = (self.f & !0x28) | (((self.pc >> 8) as u8) & 0x28);
+        let carry = self.f & FLAG_C != 0;
+        let mut pv = self.f & FLAG_PV != 0;
+        let half;
+        let parity_even = |number: u8| number.count_ones() & 1 == 0;
+
+        if carry {
+            if value & 0x80 != 0 {
+                pv = pv ^ parity_even(self.b.wrapping_sub(1) & 0x07) ^ true;
+                half = self.b & 0x0F == 0;
+            } else {
+                pv = pv ^ parity_even(self.b.wrapping_add(1) & 0x07) ^ true;
+                half = self.b & 0x0F == 0x0F;
+            }
+        } else {
+            pv = pv ^ parity_even(self.b & 0x07) ^ true;
+            half = false;
+        }
+
+        self.f = (self.f & !(FLAG_H | FLAG_PV))
+            | (if half { FLAG_H } else { 0 })
+            | (if pv { FLAG_PV } else { 0 });
+        self.q = self.f;
+    }
+
     fn fetch8(&mut self, py: Python<'_>) -> PyResult<u8> {
         let value = self.read8(py, self.pc)?;
         self.pc = self.pc.wrapping_add(1);
@@ -1353,6 +1384,7 @@ impl RustZ80Cpu {
                         if matches!(sub, 0xB1 | 0xB9) && self.bc() != 0 && result != 0 {
                             self.pc = self.pc.wrapping_sub(2);
                             self.wz = self.pc.wrapping_add(1);
+                            self.apply_repeat_block_xy_flags();
                             Ok(21)
                         } else {
                             Ok(16)
@@ -1374,7 +1406,9 @@ impl RustZ80Cpu {
                             value
                         } else {
                             let value = self.read8(py, self.hl())?;
-                            self.write_port(py, old_bc, value)?;
+                            let output_bc =
+                                (u16::from(self.b.wrapping_sub(1)) << 8) | u16::from(self.c);
+                            self.write_port(py, output_bc, value)?;
                             value
                         };
                         self.set_hl(self.hl().wrapping_add_signed(direction));
@@ -1406,6 +1440,7 @@ impl RustZ80Cpu {
                         if repeat && self.b != 0 {
                             self.pc = self.pc.wrapping_sub(2);
                             self.wz = self.pc.wrapping_add(1);
+                            self.apply_repeat_block_io_flags(value);
                             Ok(21)
                         } else {
                             self.wz = if input {
@@ -1436,6 +1471,7 @@ impl RustZ80Cpu {
                         if matches!(sub, 0xB0 | 0xB8) && self.bc() != 0 {
                             self.pc = self.pc.wrapping_sub(2);
                             self.wz = self.pc.wrapping_add(1);
+                            self.apply_repeat_block_xy_flags();
                             Ok(21)
                         } else {
                             Ok(16)
