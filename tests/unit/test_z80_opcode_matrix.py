@@ -16,8 +16,13 @@ def test_matrix_has_all_256_encodings_in_each_space() -> None:
     matrix = build_matrix()
     assert matrix["cell_count"] == 7 * 256
     assert matrix["counts_by_space"] == {
-        "base": 256, "CB": 256, "ED": 256, "DD": 256, "FD": 256,
-        "DD-CB": 256, "FD-CB": 256,
+        "base": 256,
+        "CB": 256,
+        "ED": 256,
+        "DD": 256,
+        "FD": 256,
+        "DD-CB": 256,
+        "FD-CB": 256,
     }
     counts = Counter((row["space"], row["opcode"]) for row in matrix["rows"])
     assert len(counts) == 7 * 256
@@ -48,7 +53,11 @@ def test_cb_sll_is_separately_marked_undocumented() -> None:
 
 
 def test_ed_unassigned_bytes_match_current_ed_nop_policy() -> None:
-    assert ed_family(0x00) == ("ED-NOP / unassigned byte", "unassigned-classic-z80", "ed-nop-fallback")
+    assert ed_family(0x00) == (
+        "ED-NOP / unassigned byte",
+        "unassigned-classic-z80",
+        "ed-nop-fallback",
+    )
     assert ed_family(0xFF)[2] == "ed-nop-fallback"
     assert ed_family(0xA0)[0] == "LDI"
     assert ed_family(0x4B)[0] == "LD rr,(nn)"
