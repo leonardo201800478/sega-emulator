@@ -29,6 +29,7 @@ env/
 .coverage
 .coverage.*
 htmlcov/
+native/
 
 # Local ROMs and firmware (never commit copyrighted/protected assets)
 local-assets/roms_sg1000/
