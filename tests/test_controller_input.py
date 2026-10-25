@@ -298,7 +298,6 @@ def test_read_pressed_button_rejects_invalid_player() -> None:
         inputs.read_pressed_button(3)
 
 
-
 class FakeRawJoystick:
     def __init__(self, name: str = "Raw gamepad") -> None:
         self.name = name
