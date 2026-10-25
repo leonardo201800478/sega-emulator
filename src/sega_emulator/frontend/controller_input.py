@@ -313,7 +313,7 @@ class ControllerInput:
             if callable(name_for_index):
                 try:
                     name = name_for_index(index)
-                except (IndexError, RuntimeError, TypeError):
+                except IndexError, RuntimeError, TypeError:
                     name = None
             if not name:
                 controller_name = getattr(controller, "name", None)
