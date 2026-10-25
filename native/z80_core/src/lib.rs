@@ -561,6 +561,263 @@ impl RustZ80Cpu {
         })
     }
 
+    fn index_value(&self, prefix: u8) -> u16 {
+        if prefix == 0xDD { self.ix } else { self.iy }
+    }
+
+    fn set_index_value(&mut self, prefix: u8, value: u16) {
+        if prefix == 0xDD {
+            self.ix = value;
+        } else {
+            self.iy = value;
+        }
+    }
+
+    fn read_index_reg(&self, py: Python<'_>, prefix: u8, code: u8, halves: bool) -> PyResult<u8> {
+        let index = self.index_value(prefix);
+        match (halves, code) {
+            (true, 4) => Ok((index >> 8) as u8),
+            (true, 5) => Ok(index as u8),
+            _ => self.read_reg(py, code),
+        }
+    }
+
+    fn write_index_reg(
+        &mut self,
+        py: Python<'_>,
+        prefix: u8,
+        code: u8,
+        value: u8,
+        halves: bool,
+    ) -> PyResult<()> {
+        let index = self.index_value(prefix);
+        match (halves, code) {
+            (true, 4) => self.set_index_value(prefix, (u16::from(value) << 8) | (index & 0x00FF)),
+            (true, 5) => self.set_index_value(prefix, (index & 0xFF00) | u16::from(value)),
+            _ => self.write_reg(py, code, value)?,
+        }
+        Ok(())
+    }
+
+    fn execute_indexed(
+        &mut self,
+        py: Python<'_>,
+        prefix: u8,
+        prefix_pc: u16,
+    ) -> PyResult<u32> {
+        let opcode = self.fetch_opcode(py)?;
+        if opcode == 0xDD || opcode == 0xFD {
+            return Ok(self.execute_indexed(py, opcode, self.pc.wrapping_sub(1))? + 4);
+        }
+        let index = self.index_value(prefix);
+
+        if opcode == 0xCB {
+            let displacement = self.fetch8(py)? as i8;
+            let cb_opcode = self.fetch8(py)?;
+            let address = index.wrapping_add_signed(i16::from(displacement));
+            self.wz = address;
+            let value = self.read8(py, address)?;
+            let operation = cb_opcode >> 6;
+            let bit = (cb_opcode >> 3) & 7;
+            let register = cb_opcode & 7;
+            if operation == 0 {
+                let carry_in = self.f & FLAG_C;
+                let (result, carry) = match bit {
+                    0 => ((value << 1) | (value >> 7), value >> 7),
+                    1 => ((value >> 1) | (value << 7), value & 1),
+                    2 => ((value << 1) | carry_in, value >> 7),
+                    3 => ((value >> 1) | (carry_in << 7), value & 1),
+                    4 => (value << 1, value >> 7),
+                    5 => ((value >> 1) | (value & 0x80), value & 1),
+                    6 => ((value << 1) | 1, value >> 7),
+                    _ => (value >> 1, value & 1),
+                };
+                self.write8(py, address, result)?;
+                if register != 6 {
+                    self.write_reg(py, register, result)?;
+                }
+                self.f = (result & 0xA8) | carry;
+                if result == 0 {
+                    self.f |= FLAG_Z;
+                }
+                if result.count_ones() & 1 == 0 {
+                    self.f |= FLAG_PV;
+                }
+                return Ok(23);
+            }
+            if operation == 1 {
+                let zero = value & (1 << bit) == 0;
+                self.f = (self.f & FLAG_C) | FLAG_H | (((address >> 8) as u8) & 0x28);
+                if zero {
+                    self.f |= FLAG_Z | FLAG_PV;
+                }
+                if bit == 7 && !zero {
+                    self.f |= FLAG_S;
+                }
+                return Ok(20);
+            }
+            let result = if operation == 2 {
+                value & !(1 << bit)
+            } else {
+                value | (1 << bit)
+            };
+            self.write8(py, address, result)?;
+            if register != 6 {
+                self.write_reg(py, register, result)?;
+            }
+            return Ok(23);
+        }
+
+        match opcode {
+            0x21 => {
+                let low = self.fetch8(py)?;
+                let high = self.fetch8(py)?;
+                self.set_index_value(prefix, u16::from_le_bytes([low, high]));
+                Ok(14)
+            }
+            0x22 | 0x2A => {
+                let low = self.fetch8(py)?;
+                let high = self.fetch8(py)?;
+                let address = u16::from_le_bytes([low, high]);
+                self.wz = address.wrapping_add(1);
+                if opcode == 0x22 {
+                    self.write8(py, address, index as u8)?;
+                    self.write8(py, address.wrapping_add(1), (index >> 8) as u8)?;
+                } else {
+                    let lo = self.read8(py, address)?;
+                    let hi = self.read8(py, address.wrapping_add(1))?;
+                    self.set_index_value(prefix, u16::from_le_bytes([lo, hi]));
+                }
+                Ok(20)
+            }
+            0x23 | 0x2B => {
+                self.set_index_value(
+                    prefix,
+                    if opcode == 0x23 { index.wrapping_add(1) } else { index.wrapping_sub(1) },
+                );
+                Ok(10)
+            }
+            0x09 | 0x19 | 0x29 | 0x39 => {
+                let code = (opcode >> 4) & 3;
+                let operand = match code {
+                    0 => self.bc(),
+                    1 => self.de(),
+                    2 => index,
+                    _ => self.sp,
+                };
+                let sum = u32::from(index) + u32::from(operand);
+                let result = sum as u16;
+                let mut flags = self.f & 0xC4;
+                flags |= ((result >> 8) as u8) & 0x28;
+                if (index & 0x0FFF) + (operand & 0x0FFF) > 0x0FFF {
+                    flags |= FLAG_H;
+                }
+                if sum > 0xFFFF {
+                    flags |= FLAG_C;
+                }
+                self.set_index_value(prefix, result);
+                self.f = flags;
+                self.wz = index.wrapping_add(1);
+                Ok(15)
+            }
+            0x24 | 0x25 | 0x26 | 0x2C | 0x2D | 0x2E => {
+                let code = if matches!(opcode, 0x24 | 0x25 | 0x26) { 4 } else { 5 };
+                if matches!(opcode, 0x26 | 0x2E) {
+                    let value = self.fetch8(py)?;
+                    self.write_index_reg(py, prefix, code, value, true)?;
+                    Ok(11)
+                } else {
+                    let old = self.read_index_reg(py, prefix, code, true)?;
+                    let value = if matches!(opcode, 0x24 | 0x2C) {
+                        self.inc8(old)
+                    } else {
+                        self.dec8(old)
+                    };
+                    self.write_index_reg(py, prefix, code, value, true)?;
+                    Ok(8)
+                }
+            }
+            0x34 | 0x35 => {
+                let displacement = self.fetch8(py)? as i8;
+                let address = index.wrapping_add_signed(i16::from(displacement));
+                self.wz = address;
+                let old = self.read8(py, address)?;
+                let value = if opcode == 0x34 { self.inc8(old) } else { self.dec8(old) };
+                self.write8(py, address, value)?;
+                Ok(23)
+            }
+            0x36 => {
+                let displacement = self.fetch8(py)? as i8;
+                let value = self.fetch8(py)?;
+                let address = index.wrapping_add_signed(i16::from(displacement));
+                self.wz = address;
+                self.write8(py, address, value)?;
+                Ok(19)
+            }
+            0x40..=0x7F if opcode != 0x76 => {
+                let destination = (opcode >> 3) & 7;
+                let source = opcode & 7;
+                if destination == 6 || source == 6 {
+                    let displacement = self.fetch8(py)? as i8;
+                    let address = index.wrapping_add_signed(i16::from(displacement));
+                    self.wz = address;
+                    if source == 6 {
+                        let value = self.read8(py, address)?;
+                        self.write_index_reg(py, prefix, destination, value, false)?;
+                    } else {
+                        let value = self.read_index_reg(py, prefix, source, false)?;
+                        self.write8(py, address, value)?;
+                    }
+                    Ok(19)
+                } else {
+                    let value = self.read_index_reg(py, prefix, source, true)?;
+                    self.write_index_reg(py, prefix, destination, value, true)?;
+                    Ok(8)
+                }
+            }
+            0x80..=0xBF => {
+                let source = opcode & 7;
+                let value = if source == 6 {
+                    let displacement = self.fetch8(py)? as i8;
+                    let address = index.wrapping_add_signed(i16::from(displacement));
+                    self.wz = address;
+                    self.read8(py, address)?
+                } else {
+                    self.read_index_reg(py, prefix, source, true)?
+                };
+                self.alu((opcode >> 3) & 7, value);
+                Ok(if source == 6 { 19 } else { 8 })
+            }
+            0xE1 => {
+                self.set_index_value(prefix, self.pop_word(py)?);
+                Ok(14)
+            }
+            0xE3 => {
+                let low = self.read8(py, self.sp)?;
+                let high_address = self.sp.wrapping_add(1);
+                let high = self.read8(py, high_address)?;
+                self.write8(py, high_address, (index >> 8) as u8)?;
+                self.write8(py, self.sp, index as u8)?;
+                self.set_index_value(prefix, u16::from_le_bytes([low, high]));
+                self.wz = u16::from_le_bytes([low, high]);
+                Ok(23)
+            }
+            0xE5 => {
+                self.push_word(py, index)?;
+                Ok(15)
+            }
+            0xE9 => {
+                self.pc = index;
+                Ok(8)
+            }
+            0xF9 => {
+                self.sp = index;
+                Ok(10)
+            }
+            _ => Ok(self.execute_opcode(py, opcode, prefix_pc.wrapping_add(1))? + 4),
+        }
+    }
+
     fn execute_opcode(&mut self, py: Python<'_>, opcode: u8, opcode_pc: u16) -> PyResult<u32> {
         if opcode == 0x00 {
             return Ok(4);
@@ -874,6 +1131,7 @@ impl RustZ80Cpu {
                 let sub = self.fetch_opcode(py)?;
                 self.execute_cb(py, sub)
             }
+            0xDD | 0xFD => self.execute_indexed(py, opcode, opcode_pc),
             0xED => {
                 let sub = self.fetch_opcode(py)?;
                 match sub {
