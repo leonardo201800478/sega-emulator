@@ -625,8 +625,7 @@ def run(initial_path: Path | None = None) -> None:
         profiles: dict[int, PlayerInputProfile] = {}
         for player in (1, 2):
             keyboard_bindings = {
-                action: key_buttons[(player, action)].key_name
-                for action in ACTIONS
+                action: key_buttons[(player, action)].key_name for action in ACTIONS
             }
             normalized_keys = [key.casefold() for key in keyboard_bindings.values()]
             if len(normalized_keys) != len(set(normalized_keys)):
