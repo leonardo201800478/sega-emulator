@@ -19,8 +19,10 @@ def test_entry_point_without_rom_opens_qt_frontend_without_starting_gui(
 
     calls: list[object] = []
 
-    def fake_run(rom: object, *, cpu_core: str | None = None) -> None:
-        calls.append((rom, cpu_core))
+    def fake_run(
+        rom: object, *, cpu_core: str | None = None, vdp_core: str | None = None
+    ) -> None:
+        calls.append((rom, cpu_core, vdp_core))
 
     frontend = ModuleType("sega_emulator.frontend.qt_frontend")
     frontend.run = fake_run
@@ -28,5 +30,5 @@ def test_entry_point_without_rom_opens_qt_frontend_without_starting_gui(
 
     main(["--log-dir", str(tmp_path)])
 
-    assert calls == [(None, None)]
+    assert calls == [(None, None, "python")]
     assert capsys.readouterr().out == ""
