@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from sega_emulator.audio.sn76489 import SN76489
-from sega_emulator.bus.memory import RAM_SIZE, SG1000Ram
+from sega_emulator.bus.memory import SG1000Ram
 from sega_emulator.bus.memory_bus import SG1000MemoryBus
+from sega_emulator.machine.cartridge_profiles import cartridge_ram_size
 from sega_emulator.cpu.z80 import Z80Cpu
 from sega_emulator.video.tms9918 import TMS9918A
 
@@ -47,7 +48,9 @@ class SG1000Machine:
         if not 1 <= len(cartridge_rom) <= 0xC000:
             raise ValueError("A ROM deve conter entre 1 byte e 48 KiB.")
         self.cartridge_rom = cartridge_rom
-        ram = SG1000Ram(bytes(RAM_SIZE))
+        ram_size = cartridge_ram_size(cartridge_rom)
+        self.ram_size = ram_size
+        ram = SG1000Ram(bytes(ram_size))
         base_bus = SG1000MemoryBus(ram, cartridge_rom)
         self.memory_bus = _CartridgeMirrorBus(base_bus, cartridge_rom)
         self.vdp = TMS9918A()
