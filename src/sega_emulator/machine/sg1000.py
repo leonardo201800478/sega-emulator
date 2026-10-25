@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import weakref
+
 from sega_emulator.audio.sn76489 import SN76489
 from sega_emulator.bus.memory import RAM_SIZE, SG1000Ram
 from sega_emulator.bus.memory_bus import SG1000MemoryBus
@@ -69,7 +71,7 @@ class SG1000Machine:
                     "O núcleo Rust experimental não está instalado. "
                     "Em native/z80_core, execute: maturin develop --features python-extension"
                 ) from exc
-            self.cpu = RustZ80Cpu(self.memory_bus, self)
+            self.cpu = RustZ80Cpu(self.memory_bus, weakref.proxy(self))
 
     def read_port(self, address: int) -> int:
         port = address & 0xFF
