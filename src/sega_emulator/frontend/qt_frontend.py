@@ -341,9 +341,7 @@ def run(initial_path: Path | None = None) -> None:
 
     def refresh_recent_rom_menu() -> None:
         recent_paths = settings.value("recent_roms", [], type=list)
-        valid_paths = [
-            str(path) for path in recent_paths if Path(str(path)).is_file()
-        ]
+        valid_paths = [str(path) for path in recent_paths if Path(str(path)).is_file()]
         window.set_recent_roms(
             valid_paths,
             on_select=lambda selected_path: open_rom(selected_path),
