@@ -143,20 +143,37 @@ class SN76489:
         self._lfsr = ((self._lfsr >> 1) | (feedback << 14)) & LFSR_MASK
 
     def _tick_internal_clock(self) -> None:
-        for channel, period in enumerate(self.tone_periods):
-            # Para esta variante, períodos 0/1 mantêm a saída em nível alto.
-            if period <= 1:
-                self._tone_outputs[channel] = 1
-                self._tone_counters[channel] = period
-                continue
+        # Desenrola os três canais no caminho quente, preservando a semântica
+        # de contagem regressiva: writes de período só afetam o próximo reload.
+        period = self.tone_periods[0]
+        if period <= 1:
+            self._tone_outputs[0] = 1
+            self._tone_counters[0] = period
+        elif self._tone_counters[0] > 1:
+            self._tone_counters[0] -= 1
+        else:
+            self._tone_outputs[0] ^= 1
+            self._tone_counters[0] = period
 
-            # Contagem regressiva: uma escrita de período não reinicia o
-            # contador em andamento. O novo valor é usado no próximo reload.
-            if self._tone_counters[channel] > 1:
-                self._tone_counters[channel] -= 1
-            else:
-                self._tone_outputs[channel] ^= 1
-                self._tone_counters[channel] = period
+        period = self.tone_periods[1]
+        if period <= 1:
+            self._tone_outputs[1] = 1
+            self._tone_counters[1] = period
+        elif self._tone_counters[1] > 1:
+            self._tone_counters[1] -= 1
+        else:
+            self._tone_outputs[1] ^= 1
+            self._tone_counters[1] = period
+
+        period = self.tone_periods[2]
+        if period <= 1:
+            self._tone_outputs[2] = 1
+            self._tone_counters[2] = period
+        elif self._tone_counters[2] > 1:
+            self._tone_counters[2] -= 1
+        else:
+            self._tone_outputs[2] ^= 1
+            self._tone_counters[2] = period
 
         # Alterar o divisor de ruído afeta o próximo reload, não encurta
         # retroativamente a contagem que já está em andamento.
@@ -211,10 +228,15 @@ class SN76489:
         return [self._pending_samples.popleft() for _ in range(count)]
 
     def _mix(self) -> float:
-        total = sum(
-            _ATTENUATION[self.attenuations[channel]]
-            * (1.0 if self._tone_outputs[channel] else -1.0)
-            for channel in range(TONE_CHANNELS)
+        # Evita generator/sum na mistura executada para cada amostra.
+        total = _ATTENUATION[self.attenuations[0]] * (
+            1.0 if self._tone_outputs[0] else -1.0
+        )
+        total += _ATTENUATION[self.attenuations[1]] * (
+            1.0 if self._tone_outputs[1] else -1.0
+        )
+        total += _ATTENUATION[self.attenuations[2]] * (
+            1.0 if self._tone_outputs[2] else -1.0
         )
         total += _ATTENUATION[self.attenuations[NOISE_CHANNEL]] * (
             1.0 if self._lfsr & 1 else -1.0
