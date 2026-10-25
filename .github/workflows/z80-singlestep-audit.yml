@@ -1,8 +1,13 @@
 name: Z80 SingleStepTests Differential Audit
 
 on:
+  push:
+    branches:
+      - audit/z80-test-infrastructure
   pull_request:
-    branches: [main]
+    branches:
+      - main
+      - feat/selectable-rust-z80-core
   workflow_dispatch:
 
 permissions:
