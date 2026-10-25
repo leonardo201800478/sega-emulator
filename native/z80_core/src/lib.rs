@@ -466,7 +466,7 @@ impl RustZ80Cpu {
     fn add_sub_hl(&mut self, value: u16, subtract: bool) {
         let old = self.hl();
         self.wz = old.wrapping_add(1);
-        let carry = u32::from(self.f & FLAG_C != 0);
+        let carry = if self.f & FLAG_C != 0 { 1 } else { 0 };
         let raw = if subtract {
             i32::from(old) - i32::from(value) - carry as i32
         } else {
