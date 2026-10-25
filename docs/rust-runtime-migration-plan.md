@@ -128,8 +128,23 @@ A Fase 0 teve uma primeira revisão estática de contratos e consumidores. A Fas
 - `src/sega_emulator/machine/sg1000.py`: o backend Rust passa a usar o barramento nativo; o backend Python permanece inalterado.
 - `tests/test_sg1000_cpu_backend.py`: teste de integração para instruções que escrevem e leem RAM através do backend Rust.
 
-**Limitação desta fatia:** o VDP, PSG, sincronização da máquina, I/O e laço de execução por instrução ainda são Python; I/O continua atravessando PyO3. Portanto, esta alteração não conclui a Fase 1 inteira nem satisfaz a meta final de runtime totalmente Rust. A revisão estática não substitui build nem testes executados.
+**Limitação desta fatia:** o VDP, PSG, sincronização da máquina, I/O e laço de execução por instrução ainda são Python; I/O continua atravessando PyO3. Portanto, esta alteração não conclui a Fase 1 inteira nem satisfaz a meta final de runtime totalmente Rust.
+
+### Validação automatizada
+
+No commit `85329fb92c49cf51f2699c0b69be946f899c4101`, o workflow Windows **Qt selectable Rust Z80 core** passou:
+- `cargo fmt --check`: aprovado.
+- Clippy com `-D warnings`: aprovado.
+- Testes unitários Rust: 7 aprovados, nenhum falhou.
+- Build Release e instalação da extensão PyO3: aprovados.
+- Ruff (lint e formatação Python): aprovado.
+- Testes direcionados Qt/backend Rust: 1.671 aprovados.
+- Suíte completa pytest: 2.317 aprovados.
+- CI geral, validação funcional, integridade/determinismo, auditoria de desempenho/cobertura, diagnóstico de desempenho e auditoria diferencial SingleStepTests: aprovados.
+- A auditoria Z80 estendida ainda estava pendente no momento deste registro.
+
+Esses resultados validam o incremento atual, não a migração completa nem precisão ciclo a ciclo.
 
 ## Próximo passo
 
-Executar CI de Rust e Python nesta PR e corrigir todas as falhas. Em seguida, migrar para Rust a arbitragem de I/O e o estado temporal mínimo do VDP (contadores, status e condição de interrupção) junto com o laço da máquina. Só então permitir avanço em lotes, com limites de execução alinhados aos eventos do hardware. A renderização completa do VDP e o PSG vêm depois, em fases próprias. Não agrupar instruções enquanto isso puder alterar a ordem dos eventos ou a entrega de interrupções.
+Iniciar a fase de integração temporal nativa: portar para Rust a arbitragem de I/O e o estado temporal mínimo do VDP (contadores, status e condição de interrupção) junto com o laço da máquina. Só então permitir avanço em lotes, com limites alinhados aos eventos do hardware. A renderização completa do VDP e o PSG vêm depois, em fases próprias. Não agrupar instruções enquanto isso puder alterar a ordem dos eventos ou a entrega de interrupções.
