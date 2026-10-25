@@ -2,7 +2,8 @@
 
 Os arquivos JSON são baixados pelo workflow, não versionados no repositório.
 O latch interno "p" (LD A,I/LD A,R e o erratum de INT) é modelado e comparado.
-O total de T-states é comparado com o comprimento de `cycles`; a ordem dos\nciclos não é comparada.
+O total de T-states é comparado com o comprimento de `cycles`; a ordem dos
+ciclos não é comparada.
 Divergências e estados ainda não suportados bloqueiam o workflow.
 """
 
@@ -200,8 +201,10 @@ def main() -> int:
                 "corpus": "SingleStepTests/Z80",
                 "upstream_commit": UPSTREAM_COMMIT,
                 "manifest": str(args.manifest),
-                "method": ("instruction state + RAM + aggregate T-state count; "
-                    "ordered bus-cycle traces not compared"),
+                "method": (
+                    "instruction state + RAM + aggregate T-state count; "
+                    "ordered bus-cycle traces not compared"
+                ),
                 "total_vectors": total_vectors,
                 "aggregate": dict(sorted(aggregate.items())),
                 "files": reports,
