@@ -11,6 +11,7 @@ from sega_emulator.frontend.controller_input import (
     apply_turbo,
     joystick_value,
 )
+from sega_emulator.frontend.qt_frontend import _initialize_pygame_backend
 
 
 class FakeController:
@@ -443,3 +444,55 @@ def test_mapped_controller_can_capture_raw_buttons_when_sdl_mapping_fails() -> N
 
     assert inputs.read_pressed_button(1) == "raw_button_5"
     assert inputs.poll()[1] == {"button1"}
+
+
+def test_pygame_input_backend_survives_audio_mixer_initialization_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class BrokenMixer:
+        def pre_init(self, **kwargs: object) -> None:
+            pass
+
+        def init(self) -> None:
+            raise RuntimeError("No audio device")
+
+        def Channel(self, index: int) -> object:
+            raise AssertionError("Channel must not be requested after mixer failure")
+
+    fake_pygame = SimpleNamespace(mixer=BrokenMixer())
+    monkeypatch.setitem(__import__("sys").modules, "pygame", fake_pygame)
+
+    pygame_backend, audio_channel = _initialize_pygame_backend()
+
+    assert pygame_backend is fake_pygame
+    assert audio_channel is None
+
+
+def test_pygame_input_backend_and_audio_initialize_independently(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    channel = object()
+
+    class WorkingMixer:
+        def pre_init(self, **kwargs: object) -> None:
+            assert kwargs == {
+                "frequency": 44_100,
+                "size": -16,
+                "channels": 1,
+                "buffer": 512,
+            }
+
+        def init(self) -> None:
+            pass
+
+        def Channel(self, index: int) -> object:
+            assert index == 0
+            return channel
+
+    fake_pygame = SimpleNamespace(mixer=WorkingMixer())
+    monkeypatch.setitem(__import__("sys").modules, "pygame", fake_pygame)
+
+    pygame_backend, audio_channel = _initialize_pygame_backend()
+
+    assert pygame_backend is fake_pygame
+    assert audio_channel is channel
