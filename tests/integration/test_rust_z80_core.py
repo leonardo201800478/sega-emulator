@@ -1073,3 +1073,29 @@ def test_rust_int_releases_halt_and_pushes_post_halt_pc() -> None:
     assert rust_cpu.pc == 0x0038
     assert rust_cpu.sp == 0x2FFE
     assert rust_bus.read(0x2FFE) | (rust_bus.read(0x2FFF) << 8) == 1
+
+
+@pytest.mark.parametrize(
+    ("opcode", "expected_wz"),
+    [
+        (0xD3, 0x1200),  # OUT (FFh),A wraps the low byte without carry
+        (0xDB, 0x1300),  # IN A,(FFh) increments the full address
+    ],
+)
+def test_rust_immediate_io_wz_wrap_semantics(opcode: int, expected_wz: int) -> None:
+    RustZ80Cpu = _rust_cpu()
+    program = bytes([opcode, 0xFF])
+    python_bus = MemoryBus(program)
+    rust_bus = MemoryBus(program)
+    python_io = PortBus()
+    rust_io = PortBus()
+    python_cpu = Z80Cpu(python_bus, python_io)
+    rust_cpu = RustZ80Cpu(rust_bus, rust_io)
+    for cpu in (python_cpu, rust_cpu):
+        cpu.a = 0x12
+        cpu.sp = 0x3000
+
+    assert python_cpu.step() == rust_cpu.step() == 11
+    _assert_rust_python_interrupt_state(python_cpu, rust_cpu)
+    assert rust_cpu.wz == expected_wz
+    assert rust_io.writes == python_io.writes
