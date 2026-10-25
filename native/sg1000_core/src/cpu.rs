@@ -314,8 +314,8 @@ mod tests {
         let mut bus = TestBus([0; 0x10000]);
         bus.0[..7].copy_from_slice(&[
             0x21, 0x00, 0xC0, // LD HL,0xC000
-            0x36, 0x0F,       // LD (HL),0x0F
-            0x3E, 0x01,       // LD A,1
+            0x36, 0x0F, // LD (HL),0x0F
+            0x3E, 0x01, // LD A,1
         ]);
         bus.0[7] = 0x86; // ADD A,(HL)
         let mut cpu = Z80::default();
