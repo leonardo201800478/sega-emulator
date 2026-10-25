@@ -47,6 +47,8 @@ def test_rust_backend_uses_native_memory_for_cpu_reads_and_writes() -> None:
 
     assert isinstance(machine.memory_bus, native_core.NativeMemoryBus)
     assert isinstance(machine.vdp, native_core.NativeTms9918A)
+    assert isinstance(machine.psg, native_core.NativeSn76489)
+    assert isinstance(machine.audio_sync, native_core.NativeAudioSynchronizer)
     machine.step()
     machine.step()
     machine.step()
