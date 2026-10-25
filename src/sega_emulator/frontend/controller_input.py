@@ -356,6 +356,8 @@ class ControllerInput:
                     name = None
             names.append(str(name or f"Controle {index + 1}"))
         for index, joystick in self._raw_joysticks.items():
+            if index in self._controllers:
+                continue
             try:
                 name = joystick.get_name()
             except AttributeError, IndexError, RuntimeError:
@@ -451,7 +453,7 @@ class ControllerInput:
                     pass
                 del self._raw_joysticks[index]
         if joystick_module is not None:
-            for index in sorted(valid_indices - controller_indices):
+            for index in sorted(valid_indices):
                 if index not in self._raw_joysticks:
                     try:
                         self._raw_joysticks[index] = joystick_module.Joystick(index)
@@ -486,7 +488,8 @@ class ControllerInput:
                     return button_name
             except IndexError, RuntimeError:
                 return None
-        return None
+        raw = self._raw_joysticks.get(index) if index is not None else None
+        return self._read_raw_pressed_input(raw) if raw is not None else None
 
     @staticmethod
     def _read_raw_pressed_input(joystick: Any) -> str | None:
@@ -582,7 +585,7 @@ class ControllerInput:
                         raw_joystick, button_name
                     ):
                         actions.add(action)
-                if raw_joystick is not None and profile.use_left_stick:
+                if raw_joystick is not None and controller is None and profile.use_left_stick:
                     threshold = self.config.deadzone
                     for axis_index in range(min(2, raw_joystick.get_numaxes())):
                         value = raw_joystick.get_axis(axis_index)
