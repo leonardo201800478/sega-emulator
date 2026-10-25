@@ -308,12 +308,31 @@ impl RustZ80Cpu {
         io.bind(py).call_method1("read_port", (address,))?.extract()
     }
 
-    fn write_port(&self, py: Python<'_>, address: u16, value: u8) -> PyResult<()> {
+    fn write_port(
+        &self,
+        py: Python<'_>,
+        address: u16,
+        value: u8,
+        cycle_offset: Option<u64>,
+    ) -> PyResult<()> {
         let io = self
             .io_bus
             .as_ref()
             .ok_or_else(|| PyNotImplementedError::new_err("OUT requires a configured I/O bus"))?;
-        io.bind(py).call_method1("write_port", (address, value))?;
+        let io = io.bind(py);
+        if let Some(offset) = cycle_offset {
+            if let Ok(timed_write) = io.getattr("write_port_at") {
+                if timed_write.is_callable() {
+                    timed_write.call1((
+                        address,
+                        value,
+                        self.total_cycles.wrapping_add(offset),
+                    ))?;
+                    return Ok(());
+                }
+            }
+        }
+        io.call_method1("write_port", (address, value))?;
         Ok(())
     }
 
@@ -1192,7 +1211,7 @@ impl RustZ80Cpu {
             0xD3 => {
                 let port = self.fetch8(py)?;
                 let address = (u16::from(self.a) << 8) | u16::from(port);
-                self.write_port(py, address, self.a)?;
+                self.write_port(py, address, self.a, Some(11))?;
                 self.wz = (address & 0xFF00) | u16::from(port.wrapping_add(1));
                 Ok(11)
             }
@@ -1301,7 +1320,7 @@ impl RustZ80Cpu {
                         } else {
                             self.read_reg(py, register)?
                         };
-                        self.write_port(py, port, value)?;
+                        self.write_port(py, port, value, Some(12))?;
                         self.wz = port.wrapping_add(1);
                         Ok(12)
                     }
@@ -1400,7 +1419,7 @@ impl RustZ80Cpu {
                             let value = self.read8(py, self.hl())?;
                             let output_bc =
                                 (u16::from(self.b.wrapping_sub(1)) << 8) | u16::from(self.c);
-                            self.write_port(py, output_bc, value)?;
+                            self.write_port(py, output_bc, value, Some(16))?;
                             value
                         };
                         self.set_hl(self.hl().wrapping_add_signed(direction));
