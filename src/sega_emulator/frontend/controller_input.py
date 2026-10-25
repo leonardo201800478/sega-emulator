@@ -383,7 +383,7 @@ class ControllerInput:
             try:
                 if controller.get_button(constant):
                     return button_name
-            except (IndexError, RuntimeError):
+            except IndexError, RuntimeError:
                 return None
         return None
 
