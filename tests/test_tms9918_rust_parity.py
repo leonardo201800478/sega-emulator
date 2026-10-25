@@ -79,7 +79,6 @@ def test_native_vdp_raster_and_vblank_match_python() -> None:
     assert rust_vdp.consume_frame_ready() is python_vdp.consume_frame_ready()
 
 
-
 def test_native_vdp_sprite_composition_and_status_match_python() -> None:
     native_core = pytest.importorskip("sega_z80_core")
     python_vdp, rust_vdp = _configured_pair(native_core.NativeTms9918A)
