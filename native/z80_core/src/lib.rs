@@ -440,6 +440,11 @@ impl RustZ80Cpu {
         }
     }
 
+    fn set_repeat_block_xy_flags(&mut self) {
+        self.f = (self.f & !0x28) | (((self.pc >> 8) as u8) & 0x28);
+        self.q = self.f;
+    }
+
     fn set_repeat_block_io_flags(&mut self, value: u8) {
         self.f = (self.f & !0x28) | (((self.pc >> 8) as u8) & 0x28);
         let carry = self.f & FLAG_C != 0;
@@ -1392,6 +1397,7 @@ impl RustZ80Cpu {
                         if matches!(sub, 0xB1 | 0xB9) && self.bc() != 0 && result != 0 {
                             self.pc = self.pc.wrapping_sub(2);
                             self.wz = self.pc.wrapping_add(1);
+                            self.set_repeat_block_xy_flags();
                             Ok(21)
                         } else {
                             Ok(16)
@@ -1474,6 +1480,7 @@ impl RustZ80Cpu {
                         if matches!(sub, 0xB0 | 0xB8) && self.bc() != 0 {
                             self.pc = self.pc.wrapping_sub(2);
                             self.wz = self.pc.wrapping_add(1);
+                            self.set_repeat_block_xy_flags();
                             Ok(21)
                         } else {
                             Ok(16)
