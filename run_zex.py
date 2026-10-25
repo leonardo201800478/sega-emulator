@@ -72,7 +72,6 @@ def main() -> int:
     tests_done = 0
     failures = 0
     start = time.perf_counter()
-    last_report = start
     steps = 0
 
     def emit(text: str) -> None:
