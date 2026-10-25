@@ -585,17 +585,17 @@ class ControllerInput:
                         raw_joystick, button_name
                     ):
                         actions.add(action)
-                if raw_joystick is not None and controller is None and profile.use_left_stick:
-                    threshold = self.config.deadzone
-                    for axis_index in range(min(2, raw_joystick.get_numaxes())):
-                        value = raw_joystick.get_axis(axis_index)
-                        if axis_index == 0:
-                            if value <= -threshold:
-                                actions.add("left")
-                            elif value >= threshold:
-                                actions.add("right")
-                        else:
-                            if value <= -threshold:
+                if raw_joystick is not None:
+                    if controller is None and profile.use_left_stick:
+                        threshold = self.config.deadzone
+                        for axis_index in range(min(2, raw_joystick.get_numaxes())):
+                            value = raw_joystick.get_axis(axis_index)
+                            if axis_index == 0:
+                                if value <= -threshold:
+                                    actions.add("left")
+                                elif value >= threshold:
+                                    actions.add("right")
+                            elif value <= -threshold:
                                 actions.add("up")
                             elif value >= threshold:
                                 actions.add("down")
