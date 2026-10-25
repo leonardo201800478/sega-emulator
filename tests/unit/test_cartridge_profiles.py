@@ -63,6 +63,8 @@ def test_castle_japan_uses_cartridge_ram_at_8000(monkeypatch) -> None:
     # The 16 KiB CPU window mirrors the physical 8 KiB cartridge RAM twice.
     assert machine.memory_bus.read(0x8000) == 0xA5
     assert machine.memory_bus.read(0x8001) == 0x5A
+    assert machine.memory_bus._read_for_cpu(0x8000) == 0xA5
+    assert machine.memory_bus._read_for_cpu(0x8001) == 0x5A
     assert machine.memory_bus.read(0xA000) == 0xA5
     assert machine.memory_bus.read(0xA001) == 0x5A
 
