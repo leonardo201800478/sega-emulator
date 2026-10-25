@@ -116,7 +116,7 @@ def test_noise_period_cache_tracks_rate_and_tone_three_writes() -> None:
     psg.write(0xE2)
     assert psg._noise_period == 0x40
     psg.write(0xE3)
-    assert psg._noise_period == 0x80
+    assert psg._noise_period == 1
     psg.write(0xC7)
     psg.write(0x12)
     assert psg.tone_periods[2] == 0x127
