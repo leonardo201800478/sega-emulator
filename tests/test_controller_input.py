@@ -168,7 +168,7 @@ def test_keyboard_mapping_and_turbo_options_round_trip() -> None:
 
 
 def test_keyboard_mapping_rejects_duplicate_keys_for_one_player() -> None:
-    with pytest.raises(ValueError, match="mesma tecla"):
+    with pytest.raises(ValueError, match="duas ações"):
         PlayerInputProfile(
             keyboard_bindings={
                 "up": "J",
