@@ -29,6 +29,28 @@ logger = logging.getLogger(__name__)
 Z80_CLOCK_HZ = 3_579_545
 
 
+def _initialize_pygame_backend() -> tuple[object | None, object | None]:
+    """Inicializa entrada SDL independentemente da disponibilidade do áudio."""
+    try:
+        import pygame as pygame_backend
+    except Exception as exc:
+        logger.warning("Backend Pygame indisponível: %s", exc)
+        return None, None
+
+    audio_channel = None
+    try:
+        pygame_backend.mixer.pre_init(
+            frequency=44_100, size=-16, channels=1, buffer=512
+        )
+        pygame_backend.mixer.init()
+        audio_channel = pygame_backend.mixer.Channel(0)
+    except Exception as exc:
+        # A falha do mixer não pode desativar joystick/controller do mesmo SDL.
+        logger.warning("Saída de áudio indisponível: %s", exc)
+
+    return pygame_backend, audio_channel
+
+
 def run(initial_path: Path | None = None) -> None:
     """Abre a interface de teste com teclado, telemetria e logs de sessão."""
     try:
@@ -62,19 +84,7 @@ def run(initial_path: Path | None = None) -> None:
             'Interface Qt não instalada. Execute: python -m pip install -e ".[qt]"'
         ) from exc
 
-    pygame = None
-    audio_channel = None
-    try:
-        import pygame as pygame_backend
-
-        pygame_backend.mixer.pre_init(
-            frequency=44_100, size=-16, channels=1, buffer=512
-        )
-        pygame_backend.mixer.init()
-        audio_channel = pygame_backend.mixer.Channel(0)
-        pygame = pygame_backend
-    except Exception as exc:
-        logger.warning("Saída de áudio indisponível: %s", exc)
+    pygame, audio_channel = _initialize_pygame_backend()
 
     app = QApplication.instance() or QApplication([])
     app.setOrganizationName("SegaEmulator")
