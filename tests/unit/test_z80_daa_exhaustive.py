@@ -14,9 +14,9 @@ def _expected_daa(
     accumulator: int, subtract: int, half_carry: int, carry: int
 ) -> tuple[int, int]:
     correction = 0
-    if half_carry or (not subtract and (accumulator & 0x0F) > 9):
+    if half_carry or (accumulator & 0x0F) > 9:
         correction |= 0x06
-    if carry or (not subtract and accumulator > 0x99):
+    if carry or accumulator > 0x99:
         correction |= 0x60
 
     if subtract:
@@ -24,7 +24,10 @@ def _expected_daa(
     else:
         result = (accumulator + correction) & 0xFF
 
-    carry_out = carry or (not subtract and accumulator > 0x99)
+    # The pinned SingleStepTests/Z80 27.json vectors confirm that the
+    # A > 0x99 carry threshold also applies to invalid-BCD subtraction states.
+    # See upstream commit ebe1875d48f374bcfd4b505d8eb8ee751568b5f7.
+    carry_out = carry or accumulator > 0x99
     flags = (result & 0xA8) | (0x02 if subtract else 0)
     if result == 0:
         flags |= 0x40
@@ -35,6 +38,16 @@ def _expected_daa(
     if carry_out:
         flags |= 0x01
     return result, flags
+
+
+def test_daa_subtract_applies_a_thresholds_when_h_and_c_are_clear() -> None:
+    ram = SG1000Ram(bytes(RAM_SIZE))
+    cpu = Z80Cpu(SG1000MemoryBus(ram, bytes([0x27])))
+    cpu.a = 0x9C
+    cpu.f = 0x22  # N=1, H=0, C=0
+
+    assert cpu.step() == 4
+    assert (cpu.a, cpu.f, cpu.q) == (0x36, 0x27, 0x27)
 
 
 def test_daa_results_flags_pc_r_and_cycles_for_all_input_combinations() -> None:

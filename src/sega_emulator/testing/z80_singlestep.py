@@ -1,7 +1,7 @@
 """Adaptador de vetores SingleStepTests para o núcleo Z80 do projeto.
 
-Executa um vetor de uma instrução com RAM plana de 64 KiB. Não compara os
-traços de barramento: Z80Cpu ainda expõe apenas T-states agregados.
+Executa um vetor de uma instrução com RAM plana de 64 KiB. Compara o total de
+T-states quando o vetor contém traço; não compara a ordem dos ciclos de barramento.
 """
 
 from __future__ import annotations
@@ -225,6 +225,18 @@ def run_vector(vector: dict[str, Any]) -> VectorResult:
         result.status = "error"
         result.mismatches.append(f"erro ao executar vetor: {type(exc).__name__}: {exc}")
         return result
+
+    # SingleStepTests records one entry per T-state. Compare the aggregate
+    # count returned by step(); this does not validate bus-cycle ordering.
+    cycle_trace = vector.get("cycles")
+    if (
+        isinstance(cycle_trace, list)
+        and cycle_trace
+        and result.cycles_returned != len(cycle_trace)
+    ):
+        result.mismatches.append(
+            f"tstates: esperado {len(cycle_trace)}, obtido {result.cycles_returned}"
+        )
 
     for field_name, expected in final.items():
         if field_name in ("ram",):
