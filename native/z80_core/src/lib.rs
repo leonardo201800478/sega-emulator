@@ -91,10 +91,7 @@ impl RustZ80Cpu {
 
     /// Construct a CPU whose memory accesses stay inside Rust.
     #[staticmethod]
-    fn with_native_memory(
-        memory: Py<NativeMemoryBus>,
-        io_bus: Option<Py<PyAny>>,
-    ) -> Self {
+    fn with_native_memory(memory: Py<NativeMemoryBus>, io_bus: Option<Py<PyAny>>) -> Self {
         Self::new_inner(None, Some(memory), io_bus)
     }
 
