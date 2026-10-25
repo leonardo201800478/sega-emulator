@@ -767,6 +767,7 @@ class Z80Cpu:
             if opcode in (0xB0, 0xB8) and self.bc:
                 self.pc = (self.pc - 2) & 0xFFFF
                 self.wz = (self.pc + 1) & 0xFFFF
+                self._set_repeat_block_xy_flags()
                 return 21
             return 16
         if opcode in (0xA1, 0xA9, 0xB1, 0xB9):
@@ -791,6 +792,7 @@ class Z80Cpu:
             if opcode in (0xB1, 0xB9) and self.bc and result:
                 self.pc = (self.pc - 2) & 0xFFFF
                 self.wz = (self.pc + 1) & 0xFFFF
+                self._set_repeat_block_xy_flags()
                 return 21
             return 16
         if opcode in (0xA2, 0xAA, 0xB2, 0xBA, 0xA3, 0xAB, 0xB3, 0xBB):
@@ -799,6 +801,10 @@ class Z80Cpu:
         # ED-NOP: dois fetches M1, incremento de R por fetch e 8 T-states.
         # Isso não cobre extensões específicas de clones/variantes.
         return 8
+
+    def _set_repeat_block_xy_flags(self) -> None:
+        """Use PC.11/PC.13 for F3/F5 on a repeating ED block iteration."""
+        self.f = (self.f & ~0x28) | ((self.pc >> 8) & 0x28)
 
     def _execute_block_io(self, opcode: int) -> int:
         """Executa INI/IND/INIR/INDR e OUTI/OUTD/OTIR/OTDR."""

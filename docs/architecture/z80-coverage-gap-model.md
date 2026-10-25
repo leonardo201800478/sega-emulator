@@ -83,3 +83,22 @@ These are three independent review tracks. The current tool connection does not 
 ## Next implementation slice
 
 Implement the semantic matrix and a targeted regression layer first. Avoid rewriting the CPU decoder until the matrix identifies a reproducible missing behavior or failing oracle case. This keeps changes small and prevents speculative rewrites.
+
+
+## Differential finding: repeating block-transfer/compare flags
+
+The pinned SingleStepTests/Z80 corpus exposed a repeat-iteration difference in
+`ED B0` (LDIR): when BC remains nonzero and PC is rewound to the instruction
+start, undocumented flags F3/F5 match PC bits 11/13 rather than the ordinary
+LDI/LDD data-sum rule. The same rule is applied to the corresponding repeating
+compare operations CPIR/CPDR, with regression tests for LDIR, LDDR, CPIR, and
+CPDR across several PC high-byte patterns.
+
+Evidence: [SingleStepTests/Z80](https://github.com/SingleStepTests/z80) at pinned
+commit `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7`, plus the [2026 discussion of
+non-terminating block-repeat flags](https://www.reddit.com/r/EmuDev/comments/1vkkk21/z80_proper_handling_of_undocumented_x_and_y_flags/).
+This is an observed compatibility rule from the differential vectors; it should
+not be generalized to every Z80 revision without hardware-specific evidence.
+
+The current change does not yet implement the additional undocumented flag
+changes reported for repeating block I/O instructions (INIR/INDR/OTIR/OTDR).
