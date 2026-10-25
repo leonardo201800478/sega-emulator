@@ -64,21 +64,11 @@ impl Z80Registers {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Z80 {
     pub registers: Z80Registers,
     pub halted: bool,
     pub total_tstates: u64,
-}
-
-impl Default for Z80 {
-    fn default() -> Self {
-        Self {
-            registers: Z80Registers::default(),
-            halted: false,
-            total_tstates: 0,
-        }
-    }
 }
 
 impl Z80 {
@@ -121,14 +111,22 @@ impl Z80 {
                 let value = self.fetch8(bus);
                 let destination = (opcode >> 3) & 0x07;
                 self.write_register(bus, destination, value);
-                if destination == 6 { 10 } else { 7 }
+                if destination == 6 {
+                    10
+                } else {
+                    7
+                }
             }
             0x40..=0x7F => {
                 let destination = (opcode >> 3) & 0x07;
                 let source = opcode & 0x07;
                 let value = self.read_register(bus, source);
                 self.write_register(bus, destination, value);
-                if destination == 6 || source == 6 { 7 } else { 4 }
+                if destination == 6 || source == 6 {
+                    7
+                } else {
+                    4
+                }
             }
             0x18 => {
                 let displacement = self.fetch8(bus) as i8;
@@ -140,9 +138,15 @@ impl Z80 {
                 let value = old.wrapping_add(1);
                 let carry = self.registers.f & FLAG_C;
                 let mut flags = value & (FLAG_S | FLAG_XY);
-                if value == 0 { flags |= FLAG_Z; }
-                if old & 0x0F == 0x0F { flags |= FLAG_H; }
-                if old == 0x7F { flags |= FLAG_PV; }
+                if value == 0 {
+                    flags |= FLAG_Z;
+                }
+                if old & 0x0F == 0x0F {
+                    flags |= FLAG_H;
+                }
+                if old == 0x7F {
+                    flags |= FLAG_PV;
+                }
                 self.registers.a = value;
                 self.registers.f = flags | carry;
                 4
