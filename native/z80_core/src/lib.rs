@@ -506,6 +506,61 @@ impl RustZ80Cpu {
     }
 
 
+    fn execute_cb(&mut self, py: Python<'_>, opcode: u8) -> PyResult<u32> {
+        let register = opcode & 7;
+        let operation = opcode >> 6;
+        let bit_index = (opcode >> 3) & 7;
+        let value = self.read_reg(py, register)?;
+        let memory = register == 6;
+
+        match operation {
+            0 => {
+                let carry_in = self.f & FLAG_C;
+                let (result, carry) = match bit_index {
+                    0 => ((value << 1) | (value >> 7), value >> 7), // RLC
+                    1 => ((value >> 1) | (value << 7), value & 1), // RRC
+                    2 => ((value << 1) | carry_in, value >> 7), // RL
+                    3 => ((value >> 1) | (carry_in << 7), value & 1), // RR
+                    4 => (value << 1, value >> 7), // SLA
+                    5 => ((value >> 1) | (value & 0x80), value & 1), // SRA
+                    6 => ((value << 1) | 1, value >> 7), // SLL (undocumented)
+                    _ => (value >> 1, value & 1), // SRL
+                };
+                self.write_reg(py, register, result)?;
+                self.f = (result & 0xA8) | carry;
+                if result == 0 {
+                    self.f |= FLAG_Z;
+                }
+                if result.count_ones() & 1 == 0 {
+                    self.f |= FLAG_PV;
+                }
+            }
+            1 => {
+                let zero = value & (1 << bit_index) == 0;
+                let xy = if memory {
+                    (self.wz >> 8) as u8 & 0x28
+                } else {
+                    value & 0x28
+                };
+                self.f = (self.f & FLAG_C) | FLAG_H | xy;
+                if zero {
+                    self.f |= FLAG_Z | FLAG_PV;
+                }
+                if bit_index == 7 && !zero {
+                    self.f |= FLAG_S;
+                }
+            }
+            2 => self.write_reg(py, register, value & !(1 << bit_index))?,
+            _ => self.write_reg(py, register, value | (1 << bit_index))?,
+        }
+
+        Ok(if memory {
+            if operation == 1 { 12 } else { 15 }
+        } else {
+            8
+        })
+    }
+
     fn execute_opcode(&mut self, py: Python<'_>, opcode: u8, opcode_pc: u16) -> PyResult<u32> {
         if opcode == 0x00 {
             return Ok(4);
@@ -814,6 +869,10 @@ impl RustZ80Cpu {
                 self.iff2 = true;
                 self.ei_delay = 2;
                 Ok(4)
+            }
+            0xCB => {
+                let sub = self.fetch_opcode(py)?;
+                self.execute_cb(py, sub)
             }
             0xED => {
                 let sub = self.fetch_opcode(py)?;
