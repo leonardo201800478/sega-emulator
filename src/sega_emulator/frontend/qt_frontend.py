@@ -16,8 +16,8 @@ from sega_emulator.frontend.controller_input import (
     SUPPORTED_BUTTONS,
     ControllerInput,
     ControllerInputConfig,
-    apply_turbo,
     PlayerInputProfile,
+    apply_turbo,
     joystick_value,
 )
 from sega_emulator.machine.sg1000 import SG1000Machine
