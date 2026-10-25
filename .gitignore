@@ -1,3 +1,6 @@
+# Rust build output (including nested crates such as native/z80_alu)
+**/target/
+
 # Python bytecode and package artifacts
 __pycache__/
 *.py[cod]
