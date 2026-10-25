@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::io::{self, BufRead};
 
-use sega_z80_alu::{adc8, add8, sbc8, sub8};
+use sega_z80_alu::{adc8, add8, and8, cp8, or8, sbc8, sub8, xor8};
 
 fn main() -> Result<(), Box<dyn Error>> {
     for line in io::stdin().lock().lines() {
@@ -25,6 +25,10 @@ fn main() -> Result<(), Box<dyn Error>> {
             "D1" => adc8(lhs, rhs, true),
             "B0" => sbc8(lhs, rhs, false),
             "B1" => sbc8(lhs, rhs, true),
+            "I" => and8(lhs, rhs),
+            "O" => or8(lhs, rhs),
+            "X" => xor8(lhs, rhs),
+            "C" => cp8(lhs, rhs),
             _ => return Err(format!("unsupported operation: {operation}").into()),
         };
         println!("{:02X} {:02X}", result.value, result.flags);
