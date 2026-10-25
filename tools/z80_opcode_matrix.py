@@ -30,12 +30,12 @@ def base_family(op: int) -> tuple[str, str]:
         if z == 1:
             return (f"LD {RP[p]},nn" if not q else f"ADD HL,{RP[p]}", "documented")
         if z == 2:
-            if p == 0:
+            if p in (0, 1):
                 name = "LD (BC/DE),A" if not q else "LD A,(BC/DE)"
-            elif p == 1:
-                name = "LD (nn),HL / LD HL,(nn)" if not q else "LD (nn),A / LD A,(nn)"
+            elif p == 2:
+                name = "LD (nn),HL" if not q else "LD HL,(nn)"
             else:
-                name = "LD (nn),HL / LD HL,(nn)" if not q else "LD (nn),A / LD A,(nn)"
+                name = "LD (nn),A" if not q else "LD A,(nn)"
             return name, "documented"
         if z == 3:
             return (f"{'INC' if not q else 'DEC'} {RP[p]}", "documented")
@@ -147,6 +147,8 @@ def indexed_family(op: int) -> tuple[str, str]:
         return "repeated DD/FD prefix; last prefix selects index", "repeated-prefix"
     if op == 0xED:
         return "ignored DD/FD before ED instruction", "ignored-prefix-fallback"
+    if op in (0x24, 0x25, 0x26, 0x2C, 0x2D, 0x2E):
+        return "INC/DEC/LD IXH/IXL or IYH/IYL", "undocumented-index-half"
     if op in INDEXED_EXACT:
         return "IX/IY-specific instruction", "index-substitution"
     if 0x40 <= op <= 0x7F and op != 0x76:
