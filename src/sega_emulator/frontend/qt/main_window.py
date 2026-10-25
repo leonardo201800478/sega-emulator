@@ -111,9 +111,12 @@ class EmulatorMainWindow(QMainWindow):
         controls_menu.addAction("Dispositivos detectados", on_show_controllers)
 
         diagnostics_menu = self.menuBar().addMenu("&Diagnóstico")
-        diagnostics_menu.addAction(
-            "Capturar snapshot VDP (JSON + PNG)…", on_vdp_snapshot
+        self.vdp_snapshot_action = QAction(
+            "Capturar snapshot VDP (JSON + PNG)…", self
         )
+        self.vdp_snapshot_action.setShortcut("F8")
+        self.vdp_snapshot_action.triggered.connect(on_vdp_snapshot)
+        diagnostics_menu.addAction(self.vdp_snapshot_action)
         diagnostics_menu.addAction("Abrir pasta de logs", on_open_logs)
         diagnostics_menu.addAction("Estado da máquina", on_show_machine_state)
 
