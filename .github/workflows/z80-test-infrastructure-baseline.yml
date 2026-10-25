@@ -29,16 +29,6 @@ jobs:
           python -m pip install -e .
           python -m pip install pytest ruff
 
-      - name: Capture Ruff-formatted matrix sources (temporary)
-        run: |
-          ruff format tools/z80_opcode_matrix.py tests/unit/test_z80_opcode_matrix.py
-          echo MATRIX_SCRIPT_BEGIN
-          cat tools/z80_opcode_matrix.py
-          echo MATRIX_SCRIPT_END
-          echo MATRIX_TEST_BEGIN
-          cat tests/unit/test_z80_opcode_matrix.py
-          echo MATRIX_TEST_END
-
       - name: Run focused Z80 regression tests
         run: |
           python -m pytest -q \
