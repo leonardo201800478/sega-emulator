@@ -31,6 +31,12 @@ def main(argv: Sequence[str] | None = None) -> None:
         help="executa N quadros sem abrir janela (para diagnóstico)",
     )
     parser.add_argument(
+        "--cpu-core",
+        choices=("python", "rust"),
+        default=None,
+        help="núcleo da CPU (python é referência; rust é experimental)",
+    )
+    parser.add_argument(
         "--ui",
         choices=("qt", "pygame"),
         default="qt",
@@ -55,7 +61,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         try:
             from sega_emulator.frontend.qt_frontend import run
 
-            run(args.rom)
+            run(args.rom, cpu_core=args.cpu_core)
         except (RuntimeError, ImportError) as exc:
             parser.error(str(exc))
         return
@@ -71,7 +77,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                 "rom_sha256": loaded.sha256,
             },
         )
-        machine = SG1000Machine(loaded.data)
+        machine = SG1000Machine(loaded.data, cpu_core=args.cpu_core or "python")
         logger.info(
             "Máquina criada",
             extra={
