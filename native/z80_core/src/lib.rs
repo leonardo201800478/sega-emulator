@@ -1247,7 +1247,7 @@ impl RustZ80Cpu {
                         let low = self.fetch8(py)?;
                         let high = self.fetch8(py)?;
                         let address = u16::from_le_bytes([low, high]);
-                        let value = self.read_stack_pair((sub >> 4) & 3);
+                        let value = self.read_pair((sub >> 4) & 3);
                         self.write8(py, address, value as u8)?;
                         self.write8(py, address.wrapping_add(1), (value >> 8) as u8)?;
                         self.wz = address.wrapping_add(1);
@@ -1259,7 +1259,7 @@ impl RustZ80Cpu {
                         let address = u16::from_le_bytes([low, high]);
                         let lo = self.read8(py, address)?;
                         let hi = self.read8(py, address.wrapping_add(1))?;
-                        self.write_stack_pair((sub >> 4) & 3, u16::from_le_bytes([lo, hi]));
+                        self.write_pair((sub >> 4) & 3, u16::from_le_bytes([lo, hi]));
                         self.wz = address.wrapping_add(1);
                         Ok(20)
                     }
