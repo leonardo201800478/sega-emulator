@@ -756,6 +756,8 @@ fn is_unassigned_ed_opcode(opcode: u8) -> bool {
     matches!(
         opcode,
         0x00..=0x3F
+            | 0x77
+            | 0x7F
             | 0x80..=0x9F
             | 0xA4..=0xA7
             | 0xAC..=0xAF
