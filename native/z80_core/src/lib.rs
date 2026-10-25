@@ -365,24 +365,6 @@ impl RustZ80Cpu {
         }
     }
 
-    fn read_pair2(&self, code: u8) -> u16 {
-        match code {
-            0 => self.bc_alt,
-            1 => self.de_alt,
-            2 => self.hl_alt,
-            _ => self.sp,
-        }
-    }
-
-    fn write_pair2(&mut self, code: u8, value: u16) {
-        match code {
-            0 => self.bc_alt = value,
-            1 => self.de_alt = value,
-            2 => self.hl_alt = value,
-            _ => self.sp = value,
-        }
-    }
-
     fn write_stack_pair(&mut self, code: u8, value: u16) {
         if code == 3 {
             self.set_af(value)
@@ -647,7 +629,7 @@ impl RustZ80Cpu {
                 };
                 let mut flags = (result & 0xA8) | (old_f & FLAG_N);
                 if result == 0 { flags |= FLAG_Z; }
-                if result.count_ones() % 2 == 0 { flags |= FLAG_PV; }
+                if result.count_ones() & 1 == 0 { flags |= FLAG_PV; }
                 if (old_a ^ result) & 0x10 != 0 { flags |= FLAG_H; }
                 if old_carry || (!subtract && old_a > 0x99) { flags |= FLAG_C; }
                 self.a = result;
