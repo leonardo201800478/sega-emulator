@@ -185,3 +185,21 @@ def test_sdl3_missing_dependency_is_a_safe_noop(
     assert not inputs.available
     assert inputs.poll() == {1: set(), 2: set()}
     assert inputs.connected_names() == []
+
+
+def test_sdl3_disconnect_event_is_reported_once_and_not_on_reconnect() -> None:
+    sdl = FakeSDL3()
+    inputs = SDL3ControllerInput(sdl_module=sdl)
+
+    assert not inputs.consume_disconnect_event()
+
+    sdl.gamepad_ids = []
+    sdl.joystick_ids = []
+    assert inputs.poll() == {1: set(), 2: set()}
+    assert inputs.consume_disconnect_event()
+    assert not inputs.consume_disconnect_event()
+
+    sdl.gamepad_ids = [10]
+    sdl.joystick_ids = [10]
+    assert inputs.poll()[1] == {"button1", "right"}
+    assert not inputs.consume_disconnect_event()
