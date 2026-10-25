@@ -469,7 +469,9 @@ def run(initial_path: Path | None = None, cpu_core: str | None = None) -> None:
                 )
                 return
         settings.setValue("cpu_core", selected_cpu_core)
-        core_label = "Python (referência)" if core == "python" else "Rust (experimental)"
+        core_label = (
+            "Python (referência)" if core == "python" else "Rust (experimental)"
+        )
         status.showMessage(f"Núcleo da CPU: {core_label}")
         logger.info(
             "Núcleo da CPU selecionado",
