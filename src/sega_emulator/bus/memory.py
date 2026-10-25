@@ -16,8 +16,6 @@ class SG1000Ram:
 
     def __init__(self, initial_data: bytes) -> None:
         """Cria RAM física de 1 KiB ou 8 KiB com estado inicial determinístico."""
-        if not isinstance(initial_data, bytes):
-            raise TypeError("initial_data deve ser bytes.")
         if len(initial_data) not in (RAM_SIZE, 0x2000):
             raise ValueError("A RAM deve conter exatamente 1 KiB ou 8 KiB.")
 
