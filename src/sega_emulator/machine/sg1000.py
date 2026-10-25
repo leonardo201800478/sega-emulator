@@ -6,14 +6,16 @@ from sega_emulator.audio.sn76489 import SN76489
 from sega_emulator.bus.memory import SG1000Ram
 from sega_emulator.bus.memory_bus import SG1000MemoryBus
 from sega_emulator.cpu.z80 import Z80Cpu
-from sega_emulator.machine.cartridge_profiles import cartridge_profile
+from sega_emulator.machine.cartridge_profiles import CartridgeProfile, cartridge_profile
 from sega_emulator.video.tms9918 import TMS9918A
 
 
 class _CartridgeMirrorBus:
     """Adapta o mapeamento linear atual para espelhamento comum de ROMs menores."""
 
-    def __init__(self, bus: SG1000MemoryBus, cartridge_rom: bytes, profile) -> None:
+    def __init__(
+        self, bus: SG1000MemoryBus, cartridge_rom: bytes, profile: CartridgeProfile
+    ) -> None:
         self._bus = bus
         # Expand the ROM window once so CPU fetches avoid per-read modulo work.
         rom_size = len(cartridge_rom)
@@ -39,7 +41,13 @@ class _CartridgeMirrorBus:
         return self._bus.read(address)
 
     def _read_for_cpu(self, address: int) -> int:
-        """Read a CPU fetch address already constrained to the 16-bit space."""
+        """Read a CPU address already constrained to the 16-bit space."""
+        if (
+            self._cartridge_ram
+            and self._cartridge_ram_start <= address <= self._cartridge_ram_end
+        ):
+            offset = (address - self._cartridge_ram_start) & self._cartridge_ram_mask
+            return self._cartridge_ram[offset]
         if address < 0xC000:
             return self._rom_window[address]
         return self._bus.read(address)
