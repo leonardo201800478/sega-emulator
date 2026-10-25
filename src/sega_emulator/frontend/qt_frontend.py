@@ -327,7 +327,8 @@ def run(initial_path: Path | None = None) -> None:
                             "rust_native_machine"
                             if machine.cpu_core == "rust"
                             and hasattr(machine, "native_machine")
-                            and type(machine.native_machine).__name__ == "NativeSG1000Machine"
+                            and type(machine.native_machine).__name__
+                            == "NativeSG1000Machine"
                             else "python_reference"
                             if machine.cpu_core == "python"
                             else "unexpected_backend_state"
@@ -347,7 +348,9 @@ def run(initial_path: Path | None = None) -> None:
                         },
                         "native_counters": (
                             {
-                                "instructions": machine.native_machine.total_instructions,
+                                "instructions": (
+                                    machine.native_machine.total_instructions
+                                ),
                                 "tstates": machine.native_machine.total_tstates,
                             }
                             if machine.cpu_core == "rust"
