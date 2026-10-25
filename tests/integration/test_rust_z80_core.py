@@ -1134,7 +1134,6 @@ def test_rust_daa_matches_python_for_all_input_combinations() -> None:
                         cpu.f = flags
                         cpu.pc = 0
                         cpu.r = 0xFE
-                        cpu.total_cycles = 0
                         cpu.q = 0
                         cpu._q_previous = 0
 
