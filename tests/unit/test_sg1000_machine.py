@@ -96,3 +96,44 @@ def test_machine_routes_psg_writes_and_advances_audio_clock() -> None:
     machine.step()
     assert machine.total_tstates > 0
     assert machine.drain_audio_samples() == []
+
+
+def test_cpu_psg_write_is_applied_at_nominal_io_write_edge() -> None:
+    # LD A,90h (7 T-states); OUT (40h),A (11 T-states).
+    machine = SG1000Machine(bytes((0x3E, 0x90, 0xD3, 0x40)))
+    observed: list[tuple[str, int]] = []
+    machine.psg.advance_clocks = lambda clocks: observed.append(("advance", clocks))
+    machine.psg.write = lambda value: observed.append(("write", value))
+
+    assert machine.step() == 7
+    assert machine.audio_sync.current_tstate == 7
+    assert machine.step() == 11
+
+    assert observed[-2:] == [("advance", 11), ("write", 0x90)]
+    assert machine.audio_sync.current_tstate == machine.total_tstates == 18
+
+
+def test_cpu_ed_out_write_is_applied_at_nominal_io_write_edge() -> None:
+    # OUT (C),B ocupa 12 T-states, incluindo o ciclo de I/O.
+    machine = SG1000Machine(bytes((0xED, 0x41)))
+    machine.cpu.bc = 0x9040
+    observed: list[tuple[str, int]] = []
+    machine.psg.advance_clocks = lambda clocks: observed.append(("advance", clocks))
+    machine.psg.write = lambda value: observed.append(("write", value))
+
+    assert machine.step() == 12
+    assert observed == [("advance", 12), ("write", 0x90)]
+
+
+def test_cpu_outi_write_is_applied_before_instruction_internal_tail() -> None:
+    # OUTI: 8 T-states de fetch + leitura de memória + ciclo de I/O + cauda.
+    machine = SG1000Machine(bytes((0xED, 0xA3)))
+    machine.cpu.bc = 0x0140
+    machine.cpu.hl = 0xC000
+    machine.memory_bus.write(0xC000, 0x90)
+    observed: list[tuple[str, int]] = []
+    machine.psg.advance_clocks = lambda clocks: observed.append(("advance", clocks))
+    machine.psg.write = lambda value: observed.append(("write", value))
+
+    assert machine.step() == 16
+    assert observed == [("advance", 16), ("write", 0x90)]

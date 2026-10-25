@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from sega_emulator.audio.sn76489 import SN76489
+from sega_emulator.audio.synchronization import AudioSynchronizer
 from sega_emulator.bus.memory import SG1000Ram
 from sega_emulator.bus.memory_bus import SG1000MemoryBus
 from sega_emulator.cpu.z80 import Z80Cpu
@@ -86,6 +87,7 @@ class SG1000Machine:
         self.memory_bus = _CartridgeMirrorBus(base_bus, cartridge_rom, profile)
         self.vdp = TMS9918A()
         self.psg = SN76489()
+        self.audio_sync = AudioSynchronizer(self.psg)
         self.joystick1 = 0xFF
         self.joystick2 = 0xFF
         self.total_instructions = 0
@@ -110,7 +112,19 @@ class SG1000Machine:
             self.vdp.write_port(vdp_port, value)
             return
         if 0x40 <= port <= 0x7F:
-            self.psg.write(value)
+            # Chamadas externas são efetivas no T-state atual da máquina.
+            self.audio_sync.schedule_write(self.total_tstates, value)
+            self.audio_sync.advance_to(self.total_tstates)
+
+    def write_port_at(self, address: int, value: int, tstate: int) -> None:
+        """Agenda uma escrita no PSG na borda temporal informada pela CPU."""
+        port = address & 0xFF
+        if 0x40 <= port <= 0x7F:
+            self.audio_sync.schedule_write(tstate, value)
+            return
+        # O VDP permanece no contrato legado até receber sua própria fila
+        # de eventos temporizados.
+        self.write_port(address, value)
 
     def set_joystick(self, player: int, value: int) -> None:
         if player not in (1, 2):
@@ -128,7 +142,7 @@ class SG1000Machine:
         self.total_instructions += 1
         self.total_tstates += cycles
         self.vdp.advance(cycles)
-        self.psg.advance_clocks(cycles)
+        self.audio_sync.advance_to(self.total_tstates)
         if self.vdp.status & 0x80 and self.vdp.registers[1] & 0x20:
             self.cpu.request_int()
         else:
@@ -150,7 +164,7 @@ class SG1000Machine:
         cpu_step = cpu.step
         execute_cpu_instruction = cpu._step_impl
         advance_vdp = vdp.advance
-        advance_psg = self.psg.advance_clocks
+        advance_audio = self.audio_sync.advance_to
         request_int = cpu.request_int
         clear_int = cpu.clear_int_request
         fast_cpu_loop = (
@@ -171,7 +185,7 @@ class SG1000Machine:
                     self.total_instructions += 1
                     self.total_tstates += cycles
                     advance_vdp(cycles)
-                    advance_psg(cycles)
+                    advance_audio(self.total_tstates)
                     if vdp.status & 0x80 and vdp.registers[1] & 0x20:
                         request_int()
                     else:
