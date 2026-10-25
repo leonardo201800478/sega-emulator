@@ -425,7 +425,14 @@ fn render_scanline(
             );
         }
     }
-    render_sprite_line(vram, registers, status, Some(pixels), y as i32, update_sprite_status);
+    render_sprite_line(
+        vram,
+        registers,
+        status,
+        Some(pixels),
+        y as i32,
+        update_sprite_status,
+    );
 }
 
 fn render_frame_bytes(vram: &[u8], registers: &[u8], status: u8) -> Vec<u8> {
