@@ -37,6 +37,12 @@ def main(argv: Sequence[str] | None = None) -> None:
         help="núcleo da CPU (python é referência; rust é experimental)",
     )
     parser.add_argument(
+        "--vdp-core",
+        choices=("python", "rust"),
+        default="python",
+        help="núcleo do VDP TMS9918A (python é referência; rust é experimental)",
+    )
+    parser.add_argument(
         "--ui",
         choices=("qt", "pygame"),
         default="qt",
@@ -77,7 +83,11 @@ def main(argv: Sequence[str] | None = None) -> None:
                 "rom_sha256": loaded.sha256,
             },
         )
-        machine = SG1000Machine(loaded.data, cpu_core=args.cpu_core or "python")
+        machine = SG1000Machine(
+            loaded.data,
+            cpu_core=args.cpu_core or "python",
+            vdp_core=args.vdp_core,
+        )
         logger.info(
             "Máquina criada",
             extra={
