@@ -6,7 +6,7 @@ import pytest
 
 pytest.importorskip("sega_z80_core")
 
-from sega_emulator.machine.sg1000 import SG1000Machine
+from sega_emulator.machine.sg1000 import SG1000Machine  # noqa: E402
 
 
 def test_rust_backend_instantiates_native_machine_and_devices() -> None:
