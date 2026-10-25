@@ -1,4 +1,4 @@
-"""Exhaustive differential check of the Rust ADD/SUB prototype against Python."""
+"""Exhaustive differential checks of the Rust ALU against the Python reference."""
 
 from __future__ import annotations
 
@@ -22,10 +22,11 @@ class _MemoryBus:
         self.memory[address & 0xFFFF] = value & 0xFF
 
 
-def test_rust_add_sub_match_python_for_all_8_bit_operands() -> None:
+def test_rust_add_sub_adc_sbc_match_python_for_all_8_bit_operands() -> None:
+    operations = ("A", "S", "D0", "D1", "B0", "B1")
     vectors = [
         (operation, lhs, rhs)
-        for operation in ("A", "S")
+        for operation in operations
         for lhs in range(256)
         for rhs in range(256)
     ]
@@ -57,16 +58,20 @@ def test_rust_add_sub_match_python_for_all_8_bit_operands() -> None:
     cpu = Z80Cpu(_MemoryBus())
     for index, (operation, lhs, rhs) in enumerate(vectors):
         cpu.a = lhs
-        cpu.f = 0
+        cpu.f = 1 if operation.endswith("1") else 0
         if operation == "A":
             cpu._add_a(rhs)
-        else:
+        elif operation == "S":
             cpu._sub_a(rhs)
+        elif operation.startswith("D"):
+            cpu._adc_a(rhs)
+        else:
+            cpu._sbc_a(rhs)
 
-        expected_value, expected_flags = (
+        rust_value, rust_flags = (
             int(part, 16) for part in actual_lines[index].split()
         )
-        assert (cpu.a, cpu.f) == (expected_value, expected_flags), (
+        assert (cpu.a, cpu.f) == (rust_value, rust_flags), (
             f"operation={operation} lhs=0x{lhs:02X} rhs=0x{rhs:02X}: "
-            f"Python={(cpu.a, cpu.f)!r}, Rust={(expected_value, expected_flags)!r}"
+            f"Python={(cpu.a, cpu.f)!r}, Rust={(rust_value, rust_flags)!r}"
         )
