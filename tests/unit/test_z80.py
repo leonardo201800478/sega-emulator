@@ -1877,6 +1877,7 @@ def test_ed_lddr_repeats_in_reverse_until_bc_zero() -> None:
     assert (cpu.hl, cpu.de, cpu.bc) == (0xC00F, 0xC01F, 0)
     assert cpu.bus.read(0xC020) == 0x56
 
+
 @pytest.mark.parametrize("opcode", [0xB0, 0xB8, 0xB1, 0xB9])
 @pytest.mark.parametrize("pc_high", [0x08, 0x20, 0x28])
 def test_ed_block_transfer_compare_repeat_xy_flags_come_from_pc(
