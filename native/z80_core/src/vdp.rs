@@ -326,10 +326,10 @@ fn render_scanline(
         let text_row = y / 8;
         let glyph_row = y % 8;
         let foreground = if registers[7] >> 4 != 0 {
-            registers[7] >> 4
-        } else {
-            backdrop
-        };
+        registers[7] >> 4
+    } else {
+        backdrop
+    };
         for column in 0..40 {
             let character = vram[(name_base + text_row * 40 + column) & VRAM_MASK];
             let pattern = vram[(pattern_base + usize::from(character) * 8 + glyph_row) & VRAM_MASK];
@@ -570,15 +570,15 @@ fn render_multicolor(vram: &[u8], registers: &[u8], pixels: &mut [u8], backdrop:
                 let pattern =
                     vram[(pattern_base + usize::from(name) * 8 + pattern_row) & VRAM_MASK];
                 let left = if pattern >> 4 != 0 {
-                pattern >> 4
-            } else {
-                backdrop
-            };
+                    pattern >> 4
+                } else {
+                    backdrop
+                };
                 let right = if pattern & 0x0F != 0 {
-                pattern & 0x0F
-            } else {
-                backdrop
-            };
+                    pattern & 0x0F
+                } else {
+                    backdrop
+                };
                 let row_start = y * SCREEN_WIDTH * 3;
                 color_quarter(pixels, row_start + tile_x * 24, left);
                 color_quarter(pixels, row_start + tile_x * 24 + 12, right);
