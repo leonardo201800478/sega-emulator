@@ -697,7 +697,15 @@ impl RustZ80Cpu {
                 Ok(10)
             }
             0xD9 => {
-                std::mem::swap(&mut self.bc_alt, &mut self.b /* invalid placeholder */);
+                let bc = self.bc();
+                let de = self.de();
+                let hl = self.hl();
+                self.set_bc(self.bc_alt);
+                self.set_de(self.de_alt);
+                self.set_hl(self.hl_alt);
+                self.bc_alt = bc;
+                self.de_alt = de;
+                self.hl_alt = hl;
                 Ok(4)
             }
             0xE3 => {
