@@ -485,11 +485,7 @@ impl NativeAudioSynchronizer {
         self.schedule_write(tstate, i64::from(value))
     }
 
-    pub(crate) fn advance_to_native(
-        &mut self,
-        py: Python<'_>,
-        target_tstate: u64,
-    ) -> PyResult<()> {
+    pub(crate) fn advance_to_native(&mut self, py: Python<'_>, target_tstate: u64) -> PyResult<()> {
         let target_tstate = i64::try_from(target_tstate)
             .map_err(|_| PyValueError::new_err("target_tstate excede o intervalo suportado."))?;
         self.advance_to(py, target_tstate)

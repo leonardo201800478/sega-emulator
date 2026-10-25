@@ -2,9 +2,7 @@
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 
-use super::{
-    NativeAudioSynchronizer, NativeMemoryBus, NativeSn76489, NativeTms9918A, RustZ80Cpu,
-};
+use super::{NativeAudioSynchronizer, NativeMemoryBus, NativeSn76489, NativeTms9918A, RustZ80Cpu};
 
 #[pyclass(module = "sega_z80_core")]
 pub(crate) struct NativeSG1000Io {
@@ -26,11 +24,7 @@ impl NativeSG1000Io {
         }
     }
 
-    pub(crate) fn read_port_native(
-        &mut self,
-        py: Python<'_>,
-        address: u16,
-    ) -> PyResult<u8> {
+    pub(crate) fn read_port_native(&mut self, py: Python<'_>, address: u16) -> PyResult<u8> {
         let port = address as u8;
         let vdp_port = port & 0xC1;
         if vdp_port == 0x80 || vdp_port == 0x81 {
@@ -238,10 +232,12 @@ impl NativeSG1000Machine {
         if (0x40..=0x7F).contains(&port) && !(0..=0xFF).contains(&value) {
             return Err(PyValueError::new_err("value deve ser um byte inteiro."));
         }
-        self.io_bus
-            .bind(py)
-            .borrow_mut()
-            .write_port_at_native(py, address as u16, value as u8, tstate as u64)
+        self.io_bus.bind(py).borrow_mut().write_port_at_native(
+            py,
+            address as u16,
+            value as u8,
+            tstate as u64,
+        )
     }
 
     fn set_joystick(&mut self, py: Python<'_>, player: i64, value: i64) -> PyResult<()> {
@@ -249,9 +245,7 @@ impl NativeSG1000Machine {
             return Err(PyValueError::new_err("player deve ser 1 ou 2."));
         }
         if !(0..=0xFF).contains(&value) {
-            return Err(PyValueError::new_err(
-                "value deve estar entre 00h e FFh.",
-            ));
+            return Err(PyValueError::new_err("value deve estar entre 00h e FFh."));
         }
         self.io_bus
             .bind(py)
@@ -297,10 +291,7 @@ impl NativeSG1000Machine {
             .bind(py)
             .borrow_mut()
             .set_current_tstate(self.total_tstates);
-        self.vdp
-            .bind(py)
-            .borrow_mut()
-            .advance_native(cycles)?;
+        self.vdp.bind(py).borrow_mut().advance_native(cycles)?;
         self.audio_sync
             .bind(py)
             .borrow_mut()
