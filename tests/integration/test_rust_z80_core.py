@@ -178,11 +178,24 @@ def test_rust_unassigned_ed_opcode_matches_classic_z80_nop_behavior(
     assert python_cpu.total_cycles == rust_cpu.total_cycles == 8
 
 
-def test_rust_core_fails_explicitly_on_assigned_but_unsupported_ed_opcode() -> None:
+def test_rust_ed_sbc_hl_bc_is_implemented() -> None:
     RustZ80Cpu = _rust_cpu()
-    cpu = RustZ80Cpu(MemoryBus(bytes([0xED, 0x42])), None)
-    with pytest.raises(NotImplementedError, match="does not support ED opcode 0x42"):
-        cpu.step()
+    program = bytes([0xED, 0x42])  # SBC HL,BC
+    python_cpu = Z80Cpu(MemoryBus(program))
+    rust_cpu = RustZ80Cpu(MemoryBus(program), None)
+    for cpu in (python_cpu, rust_cpu):
+        cpu.hl = 0x1000
+        cpu.bc = 0x0001
+        cpu.f = 0
+
+    assert python_cpu.step() == rust_cpu.step() == 15
+    assert (rust_cpu.hl, rust_cpu.f, rust_cpu.pc, rust_cpu.wz) == (
+        python_cpu.hl,
+        python_cpu.f,
+        python_cpu.pc,
+        python_cpu.wz,
+    )
+    assert rust_cpu.hl == 0x0FFF
 
 
 @pytest.mark.parametrize("opcode", range(256))
@@ -716,11 +729,13 @@ def test_rust_ed_block_io_matches_python() -> None:
     assert rust_io.writes == python_io.writes
 
 
-def test_rust_core_fails_explicitly_on_unsupported_opcode() -> None:
+def test_rust_core_rejects_invalid_interrupt_mode_explicitly() -> None:
     RustZ80Cpu = _rust_cpu()
-    bus = MemoryBus(bytes([0xDD]))
-    cpu = RustZ80Cpu(bus, None)
-    with pytest.raises(NotImplementedError, match="does not support opcode"):
+    cpu = RustZ80Cpu(MemoryBus(bytes([0x00])), None)
+    cpu.iff1 = True
+    cpu.interrupt_mode = 3
+    cpu.request_int(0xFF)
+    with pytest.raises(NotImplementedError, match="interrupt mode 3"):
         cpu.step()
 
 
