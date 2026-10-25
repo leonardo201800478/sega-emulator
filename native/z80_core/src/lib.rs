@@ -934,6 +934,77 @@ impl RustZ80Cpu {
                         self.iff1 = self.iff2;
                         Ok(14)
                     }
+                    // CPI/CPD/CPIR/CPDR: compare (HL) against A without changing A.
+                    0xA1 | 0xA9 | 0xB1 | 0xB9 => {
+                        let direction: i16 = if matches!(sub, 0xA9 | 0xB9) { -1 } else { 1 };
+                        let value = self.read8(py, self.hl())?;
+                        let result = self.a.wrapping_sub(value);
+                        let half = (self.a & 0x0F) < (value & 0x0F);
+                        self.set_hl(self.hl().wrapping_add_signed(direction));
+                        self.set_bc(self.bc().wrapping_sub(1));
+                        let adjusted = result.wrapping_sub(u8::from(half));
+                        self.f = (self.f & FLAG_C)
+                            | FLAG_N
+                            | (result & FLAG_S)
+                            | if result == 0 { FLAG_Z } else { 0 }
+                            | if half { FLAG_H } else { 0 }
+                            | if self.bc() != 0 { FLAG_PV } else { 0 }
+                            | (adjusted & 0x08)
+                            | ((adjusted & 0x02) << 4);
+                        if matches!(sub, 0xB1 | 0xB9) && self.bc() != 0 && result != 0 {
+                            self.pc = self.pc.wrapping_sub(2);
+                            Ok(21)
+                        } else {
+                            Ok(16)
+                        }
+                    }
+                    // INI/IND/INIR/INDR and OUTI/OUTD/OTIR/OTDR.
+                    0xA2 | 0xAA | 0xB2 | 0xBA | 0xA3 | 0xAB | 0xB3 | 0xBB => {
+                        let input = matches!(sub, 0xA2 | 0xAA | 0xB2 | 0xBA);
+                        let repeat = matches!(sub, 0xB2 | 0xBA | 0xB3 | 0xBB);
+                        let direction: i16 = if matches!(sub, 0xAA | 0xBA | 0xAB | 0xBB) {
+                            -1
+                        } else {
+                            1
+                        };
+                        let old_bc = self.bc();
+                        let value = if input {
+                            let value = self.read_port(py, old_bc)?;
+                            self.write8(py, self.hl(), value)?;
+                            value
+                        } else {
+                            let value = self.read8(py, self.hl())?;
+                            self.write_port(py, old_bc, value)?;
+                            value
+                        };
+                        self.set_hl(self.hl().wrapping_add_signed(direction));
+                        self.b = self.b.wrapping_sub(1);
+                        let addend = if input {
+                            self.c.wrapping_add_signed(direction as i8)
+                        } else {
+                            self.l
+                        };
+                        let sum = u16::from(value) + u16::from(addend);
+                        self.f = self.b & 0xA8;
+                        if self.b == 0 {
+                            self.f |= FLAG_Z;
+                        }
+                        if value & 0x80 != 0 {
+                            self.f |= FLAG_N;
+                        }
+                        if sum > 0xFF {
+                            self.f |= FLAG_H | FLAG_C;
+                        }
+                        if ((sum as u8 & 7) ^ self.b).count_ones() & 1 == 0 {
+                            self.f |= FLAG_PV;
+                        }
+                        if repeat && self.b != 0 {
+                            self.pc = self.pc.wrapping_sub(2);
+                            Ok(21)
+                        } else {
+                            Ok(16)
+                        }
+                    }
                     // LDI/LDD/LDIR/LDDR: copy one byte, move both pointers,
                     // decrement BC, and update only the documented transfer flags.
                     0xA0 | 0xA8 | 0xB0 | 0xB8 => {
