@@ -84,14 +84,14 @@ def test_native_vdp_sprite_composition_and_status_match_python() -> None:
     native_core = pytest.importorskip("sega_z80_core")
     python_vdp, rust_vdp = _configured_pair(native_core.NativeTms9918A)
     sprites = b"".join(bytes((0, x, 1, 0x0F)) for x in (20, 22, 24, 26, 28))
-    sprites += b"\xD0\x00\x00\x00"
+    sprites += b"\xd0\x00\x00\x00"
 
     for vdp in (python_vdp, rust_vdp):
         _write_register(vdp, 0, 0x00)
         _write_register(vdp, 1, 0x40)
         _write_register(vdp, 5, 0x1F)
         _write_register(vdp, 6, 0x01)
-        _write_vram(vdp, 0x0808, b"\xFF" * 8)
+        _write_vram(vdp, 0x0808, b"\xff" * 8)
         _write_vram(vdp, 0x0F80, sprites)
         vdp.advance(228 * 2)
 
