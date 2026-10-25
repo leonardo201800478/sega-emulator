@@ -150,7 +150,11 @@ class FrontendPreferences:
 def _bounded_int(value: Any, default: int, minimum: int, maximum: int) -> int:
     try:
         result = int(value)
-    except (TypeError, ValueError, OverflowError):
+    except TypeError:
+        return default
+    except ValueError:
+        return default
+    except OverflowError:
         return default
     return result if minimum <= result <= maximum else default
 
