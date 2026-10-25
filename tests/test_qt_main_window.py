@@ -48,6 +48,7 @@ def test_main_window_exposes_required_menus_and_shortcuts(qt_app) -> None:
     assert window.open_action.shortcut().toString() == "Ctrl+O"
     assert window.pause_action.shortcut().toString() == "F5"
     assert window.reset_action.shortcut().toString() == "F10"
+    assert window.vdp_snapshot_action.shortcut().toString() == "F8"
 
     window.pause_action.trigger()
     window.reset_action.trigger()
