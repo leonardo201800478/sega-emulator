@@ -14,12 +14,12 @@ from sega_emulator.frontend.controller_input import (
     DEFAULT_GAMEPAD_BINDINGS,
     JOYSTICK_ACTIONS,
     SUPPORTED_BUTTONS,
-    ControllerInput,
     ControllerInputConfig,
     PlayerInputProfile,
     apply_turbo,
     joystick_value,
 )
+from sega_emulator.frontend.sdl3_controller_input import SDL3ControllerInput
 from sega_emulator.machine.sg1000 import SG1000Machine
 from sega_emulator.rom_loader import LoadedRom, list_rom_members, load_rom
 
@@ -100,7 +100,15 @@ def run(initial_path: Path | None = None) -> None:
     except ValueError:
         logger.warning("Configuração de controles inválida; usando padrões.")
         controller_config = ControllerInputConfig()
-    controller_input = ControllerInput(pygame, controller_config)
+    controller_input = SDL3ControllerInput(controller_config)
+    logger.info(
+        "Backend de controles SDL3 inicializado",
+        extra={
+            "event": "sdl3_input_initialized",
+            "available": controller_input.available,
+            "devices": controller_input.connected_names(),
+        },
+    )
 
     window = QMainWindow()
     window.setWindowTitle("Sega Emulator — SG-1000")
@@ -228,7 +236,7 @@ def run(initial_path: Path | None = None) -> None:
     phase_max_ms = dict.fromkeys(phase_totals_ms, 0.0)
 
     def show_frame() -> None:
-        nonlocal frame_count, last_checkpoint_time, last_checkpoint_tstates
+        nonlocal paused, frame_count, last_checkpoint_time, last_checkpoint_tstates
         nonlocal last_checkpoint_instructions, last_checkpoint_frame
         if machine is None or paused:
             return
@@ -236,6 +244,17 @@ def run(initial_path: Path | None = None) -> None:
             frame_started = time.perf_counter()
             phase_started = frame_started
             update_joystick()
+            if controller_input.consume_disconnect_event():
+                paused = True
+                status.showMessage("Emulação pausada: controle desconectado", 5000)
+                logger.warning(
+                    "Emulação pausada após desconexão de controle",
+                    extra={
+                        "event": "controller_disconnected_pause",
+                        "frame": frame_count,
+                    },
+                )
+                return
             machine.run_frame()
             samples = machine.drain_audio_samples()
             if samples and audio_channel is not None and pygame is not None:
@@ -777,6 +796,21 @@ def run(initial_path: Path | None = None) -> None:
 
     controls_menu = window.menuBar().addMenu("&Controles")
     controls_menu.addAction("Configurar controles…", configure_controllers)
+
+    def show_controller_devices() -> None:
+        """Mostra o estado do backend SDL3 e os dispositivos atualmente enumerados."""
+        names = controller_input.connected_names()
+        devices_text = (
+            "\n".join(f"• {name}" for name in names) or "Nenhum controle detectado."
+        )
+        backend_state = "disponível" if controller_input.available else "indisponível"
+        QMessageBox.information(
+            window,
+            "Dispositivos SDL3",
+            f"Backend SDL3: {backend_state}\n\n{devices_text}",
+        )
+
+    controls_menu.addAction("Dispositivos detectados", show_controller_devices)
 
     def dump_vdp_snapshot() -> None:
         """Salva um snapshot pontual do VDP para investigar divergências gráficas."""
