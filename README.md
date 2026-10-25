@@ -57,6 +57,25 @@ Para usar o frontend Pygame:
 .\\.venv\\Scripts\\python.exe -m sega_emulator "C:\\caminho\\para\\jogo.sg" --ui pygame
 ```
 
+## Núcleo Z80 Rust experimental no Qt
+
+O frontend Qt permite alternar entre **Python (referência)** e **Rust (experimental — conjunto parcial)** em **Emulação → Selecionar núcleo Z80…**. A seleção é persistida nas configurações do Qt. Se houver uma ROM carregada, trocar o núcleo reinicia a máquina para que o novo backend comece em estado limpo.
+
+O backend Python continua sendo o padrão seguro. O núcleo Rust é deliberadamente parcial: instruções ainda não implementadas interrompem a emulação com erro explícito, sem fallback silencioso para Python. Portanto, use-o para validar compatibilidade e desempenho, não como garantia de que toda ROM funcionará.
+
+Para compilar e instalar a extensão no Windows/PowerShell, a partir da raiz do repositório e com o ambiente virtual ativado:
+
+```powershell
+python -m pip install maturin
+Push-Location native/z80_core
+maturin develop --features python-extension
+Pop-Location
+```
+
+Reabra o emulador e selecione **Emulação → Selecionar núcleo Z80… → Rust (experimental — conjunto parcial)**. Se a extensão não estiver instalada, a interface informa como instalá-la e mantém o backend anterior.
+
+A implementação completa em Rust segue em uma linha de trabalho separada, com testes diferenciais e validação próprios. Esta opção Qt usa o núcleo incremental recuperado e não depende de declarar concluída a validação do port completo.
+
 ## Diagnóstico headless
 
 ```powershell
