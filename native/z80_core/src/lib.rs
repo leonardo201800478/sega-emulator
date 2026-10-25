@@ -12,6 +12,8 @@ mod memory;
 use memory::NativeMemoryBus;
 mod vdp;
 use vdp::NativeTms9918A;
+mod audio;
+use audio::{NativeAudioSynchronizer, NativeSn76489};
 
 const FLAG_C: u8 = 0x01;
 const FLAG_N: u8 = 0x02;
@@ -1591,6 +1593,8 @@ fn is_unassigned_ed_opcode(opcode: u8) -> bool {
 fn sega_z80_core(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<NativeMemoryBus>()?;
     module.add_class::<NativeTms9918A>()?;
+    module.add_class::<NativeSn76489>()?;
+    module.add_class::<NativeAudioSynchronizer>()?;
     module.add_class::<RustZ80Cpu>()?;
     Ok(())
 }
