@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import ctypes
 import logging
+import re
 from typing import Any
 
 from sega_emulator.frontend.controller_input import (
@@ -71,7 +72,9 @@ class SDL3ControllerInput:
             try:
                 import sdl3
             except ImportError as exc:
-                logger.warning("PySDL3 indisponível; controles SDL3 desativados: %s", exc)
+                logger.warning(
+                    "PySDL3 indisponível; controles SDL3 desativados: %s", exc
+                )
                 return
             self._sdl = sdl3
         try:
@@ -165,8 +168,6 @@ class SDL3ControllerInput:
         return names
 
     def _raw_pressed(self, joystick: Any, binding: str) -> bool:
-        import re
-
         match = re.fullmatch(r"raw_button_(\d+)", binding)
         if match:
             return bool(self._sdl.SDL_GetJoystickButton(joystick, int(match[1])))
@@ -223,43 +224,62 @@ class SDL3ControllerInput:
                     for action, name in profile.gamepad_buttons.items():
                         if name in SUPPORTED_BUTTONS:
                             constant_name = _BUTTON_CONSTANTS.get(name)
-                            constant = getattr(self._sdl, constant_name, None) if constant_name else None
-                            if constant is not None and self._sdl.SDL_GetGamepadButton(gamepad, constant):
+                            constant = (
+                                getattr(self._sdl, constant_name, None)
+                                if constant_name
+                                else None
+                            )
+                            if constant is not None and self._sdl.SDL_GetGamepadButton(
+                                gamepad, constant
+                            ):
                                 actions.add(action)
                     if profile.use_left_stick:
                         threshold = round(self.config.deadzone * 32767)
-                        x = self._sdl.SDL_GetGamepadAxis(gamepad, getattr(self._sdl, _AXIS_X))
-                        y = self._sdl.SDL_GetGamepadAxis(gamepad, getattr(self._sdl, _AXIS_Y))
-                        if x <= -threshold:
+                        x = self._sdl.SDL_GetGamepadAxis(
+                            gamepad, getattr(self._sdl, _AXIS_X)
+                        )
+                        y = self._sdl.SDL_GetGamepadAxis(
+                            gamepad, getattr(self._sdl, _AXIS_Y)
+                        )
+                        if x < 0 and x <= -threshold:
                             actions.add("left")
-                        elif x >= threshold:
+                        elif x > 0 and x >= threshold:
                             actions.add("right")
-                        if y <= -threshold:
+                        if y < 0 and y <= -threshold:
                             actions.add("up")
-                        elif y >= threshold:
+                        elif y > 0 and y >= threshold:
                             actions.add("down")
                     # A mapped controller can still expose raw buttons/axes via its
                     # underlying joystick if a particular mapping omits controls.
-                    if any(name.startswith("raw_") for name in profile.gamepad_buttons.values()):
+                    if any(
+                        name.startswith("raw_")
+                        for name in profile.gamepad_buttons.values()
+                    ):
                         joystick = self._sdl.SDL_GetGamepadJoystick(gamepad)
                 if joystick is not None:
                     for action, binding in profile.gamepad_buttons.items():
-                        if binding.startswith("raw_") and self._raw_pressed(joystick, binding):
+                        if binding.startswith("raw_") and self._raw_pressed(
+                            joystick, binding
+                        ):
                             actions.add(action)
                     if profile.use_left_stick and gamepad is None:
                         threshold = round(self.config.deadzone * 32767)
-                        for axis in range(min(2, self._sdl.SDL_GetNumJoystickAxes(joystick))):
+                        for axis in range(
+                            min(2, self._sdl.SDL_GetNumJoystickAxes(joystick))
+                        ):
                             value = self._sdl.SDL_GetJoystickAxis(joystick, axis)
                             if axis == 0:
-                                if value <= -threshold:
+                                if value < 0 and value <= -threshold:
                                     actions.add("left")
-                                elif value >= threshold:
+                                elif value > 0 and value >= threshold:
                                     actions.add("right")
-                            elif value <= -threshold:
+                            elif value < 0 and value <= -threshold:
                                 actions.add("up")
-                            elif value >= threshold:
+                            elif value > 0 and value >= threshold:
                                 actions.add("down")
-                        for hat_index in range(self._sdl.SDL_GetNumJoystickHats(joystick)):
+                        for hat_index in range(
+                            self._sdl.SDL_GetNumJoystickHats(joystick)
+                        ):
                             hat = self._sdl.SDL_GetJoystickHat(joystick, hat_index)
                             if hat & _HAT_BITS["up"]:
                                 actions.add("up")
@@ -279,4 +299,14 @@ class SDL3ControllerInput:
     def close(self) -> None:
         if self._sdl is not None:
             self._close_handles()
+            if self._initialized:
+                flags = (
+                    self._sdl.SDL_INIT_EVENTS
+                    | self._sdl.SDL_INIT_GAMEPAD
+                    | self._sdl.SDL_INIT_JOYSTICK
+                )
+                try:
+                    self._sdl.SDL_QuitSubSystem(flags)
+                except AttributeError:
+                    logger.debug("PySDL3 não expõe SDL_QuitSubSystem neste binding")
         self._initialized = False
