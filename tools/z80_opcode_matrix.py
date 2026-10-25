@@ -243,6 +243,54 @@ def indexed_cb_family(op: int) -> tuple[str, str]:
     ), "documented"
 
 
+def validation_scope(space: str, path: str, arch: str) -> tuple[str, str]:
+    """Describe evidence level and next gap without overstating test coverage."""
+    if arch == "undocumented":
+        return (
+            "variant-specific behavior; separate policy required",
+            "Do not infer compatibility from dispatch alone.",
+        )
+    if path == "ed-nop-fallback":
+        return (
+            "fallback-policy tests exist",
+            "ED-NOP is not semantic implementation of an assigned instruction.",
+        )
+    if path in ("ignored-prefix-fallback", "repeated-prefix"):
+        return (
+            "targeted prefix tests exist",
+            "No exhaustive oracle for every prefix/opcode/state combination.",
+        )
+    if space == "base" and path != "base-decoder":
+        return (
+            "prefix dispatch; see the prefixed opcode space",
+            "Validate the delegated instruction in its own space.",
+        )
+    if space == "base":
+        return (
+            "family-level tests exist; per-opcode proof incomplete",
+            "Expand differential cases across operands and state boundaries.",
+        )
+    if space == "CB":
+        return (
+            "all-byte dispatch test plus selected semantic/flag tests",
+            "Compare results and flags for all operation/register combinations.",
+        )
+    if space == "ED":
+        return (
+            "targeted family tests; differential coverage incomplete",
+            "Validate flags, aliases, WZ, I/O side effects and nominal timing.",
+        )
+    if space in ("DD", "FD"):
+        return (
+            "selected IX/IY tests; differential coverage incomplete",
+            "Verify H/L substitution exceptions, displacement, flags and timing.",
+        )
+    return (
+        "all-byte dispatch test plus selected indexed-bit tests",
+        "Validate copy-to-register variants, flags and timing across all operations.",
+    )
+
+
 def build_matrix() -> dict[str, Any]:
     rows: list[dict[str, str]] = []
     for op in range(256):
@@ -255,6 +303,7 @@ def build_matrix() -> dict[str, Any]:
                 0xED: "ed-prefix",
                 0xFD: "fd-prefix",
             }[op]
+        validation, gap = validation_scope("base", path, arch)
         rows.append(
             {
                 "space": "base",
@@ -262,6 +311,8 @@ def build_matrix() -> dict[str, Any]:
                 "family": family,
                 "architecture_class": arch,
                 "implementation_path": path,
+                "validation_scope": validation,
+                "known_gap": gap,
             }
         )
     for space in ("CB", "ED", "DD", "FD", "DD-CB", "FD-CB"):
@@ -281,6 +332,7 @@ def build_matrix() -> dict[str, Any]:
             else:
                 family, arch = indexed_cb_family(op)
                 path = "indexed-cb-decoder"
+            validation, gap = validation_scope(space, path, arch)
             rows.append(
                 {
                     "space": space,
@@ -288,6 +340,8 @@ def build_matrix() -> dict[str, Any]:
                     "family": family,
                     "architecture_class": arch,
                     "implementation_path": path,
+                    "validation_scope": validation,
+                    "known_gap": gap,
                 }
             )
     counts = Counter(row["space"] for row in rows)
