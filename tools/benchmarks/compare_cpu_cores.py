@@ -49,7 +49,7 @@ def _run_once(rom: bytes, core: str, warmup_frames: int, frames: int) -> dict[st
             name: getattr(machine.cpu, name)
             for name in (
                 "a", "f", "b", "c", "d", "e", "h", "l", "sp", "pc",
-                "ix", "iy", "i", "r", "iff1", "iff2", "interrupt_mode", "halted",
+                "ix", "iy", "i", "r", "wz", "iff1", "iff2", "interrupt_mode", "halted",
             )
         },
         "framebuffer_sha256": hashlib.sha256(machine.vdp.framebuffer).hexdigest(),
