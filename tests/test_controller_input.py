@@ -296,3 +296,150 @@ def test_read_pressed_button_rejects_invalid_player() -> None:
     )
     with pytest.raises(ValueError, match="player deve ser 1 ou 2"):
         inputs.read_pressed_button(3)
+
+
+class FakeRawJoystick:
+    def __init__(self, name: str = "Raw gamepad") -> None:
+        self.name = name
+        self.buttons: set[int] = set()
+        self.axes: dict[int, float] = {}
+        self.hats: dict[int, tuple[int, int]] = {}
+        self.initialized = True
+        self.closed = False
+
+    def get_init(self) -> bool:
+        return self.initialized
+
+    def quit(self) -> None:
+        self.closed = True
+        self.initialized = False
+
+    def get_name(self) -> str:
+        return self.name
+
+    def get_numbuttons(self) -> int:
+        return 16
+
+    def get_button(self, button: int) -> bool:
+        return button in self.buttons
+
+    def get_numaxes(self) -> int:
+        return 4
+
+    def get_axis(self, axis: int) -> float:
+        return self.axes.get(axis, 0.0)
+
+    def get_numhats(self) -> int:
+        return 1
+
+    def get_hat(self, hat: int) -> tuple[int, int]:
+        return self.hats.get(hat, (0, 0))
+
+
+class FakeRawControllerModule(FakeControllerModule):
+    def __init__(self, joystick_module: FakeRawJoystickModule) -> None:
+        super().__init__()
+        self.joystick_module = joystick_module
+
+    def get_count(self) -> int:
+        return self.joystick_module.get_count()
+
+    def is_controller(self, index: int) -> bool:
+        return False
+
+
+class FakeMappedRawControllerModule(FakeRawControllerModule):
+    def is_controller(self, index: int) -> bool:
+        return True
+
+
+class FakeRawJoystickModule:
+    def __init__(self, devices: list[FakeRawJoystick]) -> None:
+        self.devices = devices
+        self.initialized = False
+
+    def get_init(self) -> bool:
+        return self.initialized
+
+    def init(self) -> None:
+        self.initialized = True
+
+    def get_count(self) -> int:
+        return len(self.devices)
+
+    def Joystick(self, index: int) -> FakeRawJoystick:
+        return self.devices[index]
+
+
+def test_unmapped_joystick_supports_raw_button_hat_and_axis_bindings() -> None:
+    raw = FakeRawJoystick()
+    raw.buttons.add(3)
+    raw.hats[0] = (0, 1)
+    raw.axes[2] = 1.0
+    joystick_backend = FakeRawJoystickModule([raw])
+    controller_backend = FakeRawControllerModule(joystick_backend)
+    inputs = ControllerInput(
+        SimpleNamespace(
+            _sdl2=SimpleNamespace(controller=controller_backend),
+            joystick=joystick_backend,
+        )
+    )
+    inputs.config.players[1] = PlayerInputProfile(
+        gamepad_buttons={
+            "button1": "raw_button_3",
+            "up": "raw_hat_0_up",
+            "button2": "raw_axis_2_positive",
+        }
+    )
+
+    actions = inputs.poll()
+
+    assert actions[1] == {"button1", "up", "button2"}
+    assert inputs.read_pressed_button(1) == "raw_button_3"
+    assert inputs.connected_names() == ["Raw gamepad"]
+
+
+def test_unmapped_joystick_reconnect_refreshes_device_handles() -> None:
+    first = FakeRawJoystick("First device")
+    first.buttons.add(0)
+    joystick_backend = FakeRawJoystickModule([first])
+    controller_backend = FakeRawControllerModule(joystick_backend)
+    inputs = ControllerInput(
+        SimpleNamespace(
+            _sdl2=SimpleNamespace(controller=controller_backend),
+            joystick=joystick_backend,
+        )
+    )
+    inputs.config.players[1] = PlayerInputProfile(
+        gamepad_buttons={"button1": "raw_button_0"}
+    )
+    assert inputs.poll()[1] == {"button1"}
+
+    joystick_backend.devices = []
+    assert inputs.poll()[1] == set()
+    assert first.closed
+
+    reconnected = FakeRawJoystick("Reconnected device")
+    reconnected.buttons.add(0)
+    joystick_backend.devices = [reconnected]
+    assert inputs.poll()[1] == {"button1"}
+    assert inputs.connected_names() == ["Reconnected device"]
+
+
+def test_mapped_controller_can_capture_raw_buttons_when_sdl_mapping_fails() -> None:
+    raw = FakeRawJoystick("Mapped but unreadable gamepad")
+    raw.buttons.add(5)
+    joystick_backend = FakeRawJoystickModule([raw])
+    controller_backend = FakeMappedRawControllerModule(joystick_backend)
+    inputs = ControllerInput(
+        SimpleNamespace(
+            _sdl2=SimpleNamespace(controller=controller_backend),
+            joystick=joystick_backend,
+        )
+    )
+    inputs.config.players[1] = PlayerInputProfile(
+        gamepad_buttons={"button1": "raw_button_5"}
+    )
+
+    assert inputs.read_pressed_button(1) == "raw_button_5"
+    assert inputs.poll()[1] == {"button1"}
