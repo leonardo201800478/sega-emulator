@@ -11,6 +11,11 @@
 /// Size of the Z80's logical address space.
 pub const SG1000_CPU_ADDRESS_SPACE_SIZE: usize = 0x1_0000;
 
+pub mod bus;
+pub mod cpu;
 pub mod memory;
+
+pub use bus::CpuBus;
+pub use cpu::{CpuError, Z80, Z80Registers};
 
 pub use memory::{MemoryConfig, MemoryError, Sg1000Memory};
