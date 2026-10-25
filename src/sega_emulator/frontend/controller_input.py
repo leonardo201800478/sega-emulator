@@ -320,7 +320,7 @@ class ControllerInput:
                 if callable(controller_name):
                     try:
                         controller_name = controller_name()
-                    except (RuntimeError, TypeError):
+                    except RuntimeError, TypeError:
                         controller_name = None
                 name = controller_name
             if not name and joystick_module is not None:
@@ -330,7 +330,7 @@ class ControllerInput:
                     joystick = joystick_module.Joystick(index)
                     name = joystick.get_name()
                     joystick.quit()
-                except (AttributeError, IndexError, RuntimeError, TypeError):
+                except AttributeError, IndexError, RuntimeError, TypeError:
                     name = None
             names.append(str(name or f"Controle {index + 1}"))
         return names
