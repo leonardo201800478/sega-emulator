@@ -137,6 +137,11 @@ def test_load_vectors_requires_a_json_array(tmp_path) -> None:
 
 
 def test_adapter_derives_io_read_value_from_single_step_cycle_trace() -> None:
+    # The full trace has 12 T-state entries; the last two encode the I/O read.
+    cycle_trace = [[0x4000, 0xED, "----"]] * 10 + [
+        [0x1234, None, "r--i"],
+        [0x1234, 0x56, "----"],
+    ]
     vector = {
         "name": "ED 40 IN B,(C) cycle-derived input fixture",
         "initial": {
@@ -152,10 +157,7 @@ def test_adapter_derives_io_read_value_from_single_step_cycle_trace() -> None:
             "wz": 0x1235,
             "ram": [[0x4000, 0xED], [0x4001, 0x40]],
         },
-        "cycles": [
-            [0x1234, None, "r--i"],
-            [0x1234, 0x56, "----"],
-        ],
+        "cycles": cycle_trace,
     }
 
     result = run_vector(vector)
