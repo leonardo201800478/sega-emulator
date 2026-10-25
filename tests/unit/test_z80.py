@@ -97,9 +97,9 @@ def _reference_daa(accumulator: int, flags: int) -> tuple[int, int]:
     carry = bool(flags & 0x01)
 
     correction = 0
-    if half_carry or (not subtract and (accumulator & 0x0F) > 9):
+    if half_carry or (accumulator & 0x0F) > 9:
         correction |= 0x06
-    if carry or (not subtract and accumulator > 0x99):
+    if carry or accumulator > 0x99:
         correction |= 0x60
 
     result = (accumulator - correction if subtract else accumulator + correction) & 0xFF
@@ -111,7 +111,7 @@ def _reference_daa(accumulator: int, flags: int) -> tuple[int, int]:
         output_flags |= 0x04
     if (accumulator ^ result) & 0x10:
         output_flags |= 0x10
-    if carry or (not subtract and accumulator > 0x99):
+    if carry or accumulator > 0x99:
         output_flags |= 0x01
     return result, output_flags
 
@@ -1758,7 +1758,7 @@ def test_ed_block_io_calculates_all_flags_at_carry_boundaries(opcode: int) -> No
         assert cpu.bus.read(0xC010) == value
         assert io.writes == []
     else:
-        assert io.writes == [(old_bc, value)]
+        assert io.writes == [((cpu.bc), value)]
 
 
 @pytest.mark.parametrize(
@@ -1795,7 +1795,27 @@ def test_ed_block_io_direction_data_and_repeat(
         assert cpu.bus.read(0xC010) == 0x81
         assert io.writes == []
     else:
-        assert io.writes == [(0x0234, 0x45)]
+        assert io.writes == [(0x0134, 0x45)]
+
+
+@pytest.mark.parametrize("opcode", [0xB2, 0xBA, 0xB3, 0xBB])
+@pytest.mark.parametrize("pc_high", [0x08, 0x20, 0x28])
+def test_ed_block_io_repeat_xy_flags_come_from_pc(opcode: int, pc_high: int) -> None:
+    pc = (pc_high << 8) | 0x40
+    io = FakeIOBus()
+    cpu = Z80Cpu(FlatMemoryBus(bytes([0x00])), io_bus=io)
+    cpu.pc = pc
+    cpu.bus.write(pc, 0xED)
+    cpu.bus.write(pc + 1, opcode)
+    cpu.b, cpu.c, cpu.hl = 2, 0x34, 0xC010
+    io.ports[0x0234] = 0x81
+    cpu.bus.write(0xC010, 0x45)
+
+    assert cpu.step() == 21
+    assert cpu.pc == pc
+    assert cpu.wz == (pc + 1) & 0xFFFF
+    assert cpu.f & 0x28 == (pc >> 8) & 0x28
+    assert cpu.q == cpu.f
 
 
 @pytest.mark.parametrize("opcode", [0xB2, 0xBA, 0xB3, 0xBB])
@@ -1856,6 +1876,27 @@ def test_ed_lddr_repeats_in_reverse_until_bc_zero() -> None:
     assert cpu.pc == 2
     assert (cpu.hl, cpu.de, cpu.bc) == (0xC00F, 0xC01F, 0)
     assert cpu.bus.read(0xC020) == 0x56
+
+
+@pytest.mark.parametrize("opcode", [0xB0, 0xB8, 0xB1, 0xB9])
+@pytest.mark.parametrize("pc_high", [0x08, 0x20, 0x28])
+def test_ed_block_transfer_compare_repeat_xy_flags_come_from_pc(
+    opcode: int, pc_high: int
+) -> None:
+    """F3/F5 use PC.11/PC.13 on non-terminating LDIR/LDDR/CPIR/CPDR iterations."""
+    pc = (pc_high << 8) | 0x40
+    cpu = Z80Cpu(FlatMemoryBus(bytes([0x00])))
+    cpu.pc = pc
+    cpu.bus.write(pc, 0xED)
+    cpu.bus.write(pc + 1, opcode)
+    cpu.hl, cpu.de, cpu.bc, cpu.a = 0xC010, 0xC020, 2, 0
+    cpu.bus.write(0xC010, 0x01)
+
+    assert cpu.step() == 21
+    assert cpu.pc == pc
+    assert cpu.wz == (pc + 1) & 0xFFFF
+    assert cpu.f & 0x28 == (pc >> 8) & 0x28
+    assert cpu.q == cpu.f
 
 
 @pytest.mark.parametrize(
