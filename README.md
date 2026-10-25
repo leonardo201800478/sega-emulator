@@ -111,6 +111,16 @@ de framebuffer e áudio. Só informa speedup quando ambos os núcleos completam 
 execução; divergências ou opcodes não suportados ficam explícitos. A extensão ainda
 faz chamadas ao barramento Python, portanto não se presume que seja mais rápida.
 
+Para uma medição inicial sem ROM externa, use um programa sintético que executa
+`JP 0000h`. Isso compara o custo do laço de CPU/barramento, mas **não representa
+desempenho de jogos**:
+
+```powershell
+.\\.venv\\Scripts\\python.exe tools\\benchmarks\\compare_cpu_cores.py --synthetic-loop --warmup-frames 1 --frames 120 --repeats 3 --output cpu-core-synthetic.json
+```
+
+O workflow Windows também publica um relatório curto dessa medição como artefato.
+
 ## Snapshot do VDP durante o jogo
 
 Para investigar divergências visuais em uma cena real, execute a interface Qt com a ROM local e avance até a cena desejada. Pressione **F8** ou use **Diagnóstico → Capturar snapshot VDP (JSON + PNG)**. O emulador salva em `logs/vdp_snapshots/`:
