@@ -132,4 +132,4 @@ A Fase 0 teve uma primeira revisão estática de contratos e consumidores. A Fas
 
 ## Próximo passo
 
-Executar CI de Rust e Python nesta PR, corrigir todas as falhas e medir novamente o benchmark local. Depois, migrar o I/O e o laço de execução para uma API de máquina Rust que avance múltiplas instruções por chamada, antes de portar VDP e PSG. Não alterar temporização de hardware sem testes diferenciais específicos.
+Executar CI de Rust e Python nesta PR e corrigir todas as falhas. Em seguida, migrar para Rust a arbitragem de I/O e o estado temporal mínimo do VDP (contadores, status e condição de interrupção) junto com o laço da máquina. Só então permitir avanço em lotes, com limites de execução alinhados aos eventos do hardware. A renderização completa do VDP e o PSG vêm depois, em fases próprias. Não agrupar instruções enquanto isso puder alterar a ordem dos eventos ou a entrega de interrupções.
