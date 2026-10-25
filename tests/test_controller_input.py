@@ -426,7 +426,6 @@ def test_unmapped_joystick_reconnect_refreshes_device_handles() -> None:
     assert inputs.connected_names() == ["Reconnected device"]
 
 
-
 def test_mapped_controller_can_capture_raw_buttons_when_sdl_mapping_fails() -> None:
     raw = FakeRawJoystick("Mapped but unreadable gamepad")
     raw.buttons.add(5)
