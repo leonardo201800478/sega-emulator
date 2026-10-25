@@ -89,7 +89,6 @@ class SG1000Machine:
         self.cartridge_ram_size = profile.cartridge_ram_size
         ram = SG1000Ram(bytes(profile.internal_ram_size))
         base_bus = SG1000MemoryBus(ram, cartridge_rom)
-        self.memory_bus = _CartridgeMirrorBus(base_bus, cartridge_rom, profile)
         self.vdp = TMS9918A()
         self.psg = SN76489()
         self.audio_sync = AudioSynchronizer(self.psg)
@@ -98,17 +97,28 @@ class SG1000Machine:
         self.total_instructions = 0
         self.total_tstates = 0
         if cpu_core == "python":
+            self.memory_bus = _CartridgeMirrorBus(base_bus, cartridge_rom, profile)
             self.cpu = Z80Cpu(self.memory_bus, self)
         else:
             try:
-                from sega_z80_core import RustZ80Cpu
+                from sega_z80_core import NativeMemoryBus, RustZ80Cpu
             except ImportError as exc:
                 raise RuntimeError(
                     "O núcleo Z80 Rust experimental não está instalado. "
                     "Instale com: python -m pip install maturin e "
                     "maturin develop --manifest-path native/z80_core/Cargo.toml"
                 ) from exc
-            self.cpu = RustZ80Cpu(self.memory_bus, weakref.proxy(self))
+            self.memory_bus = NativeMemoryBus(
+                cartridge_rom,
+                profile.internal_ram_size,
+                profile.cartridge_ram_size,
+                profile.cartridge_ram_start,
+                profile.cartridge_ram_end,
+            )
+            self.cpu = RustZ80Cpu.with_native_memory(
+                self.memory_bus,
+                weakref.proxy(self),
+            )
 
     def read_port(self, address: int) -> int:
         port = address & 0xFF
