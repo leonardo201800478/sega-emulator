@@ -467,6 +467,7 @@ impl RustZ80Cpu {
         self.f = (self.f & !(FLAG_H | FLAG_PV))
             | if half { FLAG_H } else { 0 }
             | if parity { FLAG_PV } else { 0 };
+        self.q = self.f;
     }
 
     fn alu(&mut self, operation: u8, value: u8) {
@@ -1443,6 +1444,7 @@ impl RustZ80Cpu {
                         if ((sum as u8 & 7) ^ self.b).count_ones() & 1 == 0 {
                             self.f |= FLAG_PV;
                         }
+                        self.q = self.f;
                         if repeat && self.b != 0 {
                             self.pc = self.pc.wrapping_sub(2);
                             self.wz = self.pc.wrapping_add(1);
