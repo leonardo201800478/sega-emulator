@@ -440,7 +440,10 @@ def run(initial_path: Path | None = None) -> None:
 
     def select_emulation_backend() -> None:
         nonlocal machine, selected_backend, frame_count, paused
-        choices = ["Python (runtime de referência)", "Rust (runtime nativo experimental)"]
+        choices = [
+            "Python (runtime de referência)",
+            "Rust (runtime nativo experimental)",
+        ]
         current = 0 if selected_backend == "python" else 1
         selected, accepted = QInputDialog.getItem(
             window,
@@ -467,10 +470,10 @@ def run(initial_path: Path | None = None) -> None:
             )
         except Exception as exc:
             logger.exception(
-                "Falha ao selecionar núcleo Z80",
+                "Falha ao selecionar backend de emulação",
                 extra={
-                    "event": "cpu_core_selection_failed",
-                    "cpu_core": requested_backend,
+                    "event": "emulation_backend_selection_failed",
+                    "emulation_backend": requested_backend,
                 },
             )
             QMessageBox.warning(
