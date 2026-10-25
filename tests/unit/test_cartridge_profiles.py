@@ -51,6 +51,27 @@ def test_standard_machine_keeps_1k_ram_mirroring(monkeypatch) -> None:
     assert machine.memory_bus.read(0xC800) == 0xA5
 
 
+def test_castle_japan_uses_cartridge_ram_at_8000(monkeypatch) -> None:
+    monkeypatch.setattr(zlib, "crc32", lambda data: 0x092F29D6)
+    machine = SG1000Machine(b"synthetic Castle ROM")
+
+    assert machine.ram_size == 0x0400
+    assert machine.cartridge_ram_size == 0x2000
+    machine.memory_bus.write(0x8000, 0xA5)
+    machine.memory_bus.write(0x8001, 0x5A)
+
+    # The 16 KiB CPU window mirrors the physical 8 KiB cartridge RAM twice.
+    assert machine.memory_bus.read(0x8000) == 0xA5
+    assert machine.memory_bus.read(0x8001) == 0x5A
+    assert machine.memory_bus.read(0xA000) == 0xA5
+    assert machine.memory_bus.read(0xA001) == 0x5A
+
+    # The system's internal RAM remains separate at C000h–FFFFh.
+    machine.memory_bus.write(0xC000, 0x3C)
+    assert machine.memory_bus.read(0xC000) == 0x3C
+    assert machine.memory_bus.read(0x8000) == 0xA5
+
+
 def test_english_logo_bomberman_sha256_selects_type_b_ram(monkeypatch) -> None:
     class FakeDigest:
         def hexdigest(self) -> str:
