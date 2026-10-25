@@ -675,9 +675,31 @@ impl RustZ80Cpu {
                         self.iff1 = self.iff2;
                         Ok(14)
                     }
-                    _ => Err(PyNotImplementedError::new_err(format!(
-                        "Rust Z80 core does not support ED opcode 0x{sub:02X} at PC 0x{opcode_pc:04X}"
-                    ))),
+                    // LDI/LDD/LDIR/LDDR: copy one byte, move both pointers,
+                    // decrement BC, and update only the documented transfer flags.
+                    0xA0 | 0xA8 | 0xB0 | 0xB8 => {
+                        let direction: i16 = if matches!(sub, 0xA8 | 0xB8) { -1 } else { 1 };
+                        let value = self.read8(py, self.hl())?;
+                        self.write8(py, self.de(), value)?;
+                        self.set_hl(self.hl().wrapping_add_signed(direction));
+                        self.set_de(self.de().wrapping_add_signed(direction));
+                        self.set_bc(self.bc().wrapping_sub(1));
+
+                        let sum = self.a.wrapping_add(value);
+                        self.f = (self.f & 0xC1)
+                            | if self.bc() != 0 { FLAG_PV } else { 0 }
+                            | (sum & 0x08)
+                            | ((sum & 0x02) << 4);
+
+                        if matches!(sub, 0xB0 | 0xB8) && self.bc() != 0 {
+                            self.pc = self.pc.wrapping_sub(2);
+                            Ok(21)
+                        } else {
+                            Ok(16)
+                        }
+                    }
+                    // Unassigned ED bytes are 8-T-state NOPs on the classic Z80.
+                    _ => Ok(8),
                 }
             }
             _ if opcode & 0xC7 == 0xC7 => {
