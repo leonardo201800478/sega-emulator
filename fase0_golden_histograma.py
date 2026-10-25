@@ -98,7 +98,9 @@ print(f"\n{n} instr, distinct opcode groups: {len(cnt)}")
 cum = 0
 for k, v in cnt.most_common(14):
     cum += v
-    print(f"  {k:5s} {v / n * 100:5.1f}%  cum {cum / n * 100:5.1f}%  avgT={T[k] / v:.1f}")
+    print(
+        f"  {k:5s} {v / n * 100:5.1f}%  cum {cum / n * 100:5.1f}%  avgT={T[k] / v:.1f}"
+    )
 pref = sum(v for k, v in cnt.items() if k[:2] in ("CB", "ED", "DD", "FD"))
 print(f"prefixed share: {pref / n * 100:.1f}%")
 
