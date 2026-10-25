@@ -234,17 +234,19 @@ impl RustZ80Cpu {
             self.iff1 = false;
             self.iff2 = false;
             self.increment_r();
+            if self.interrupt_mode == 0 {
+                // In IM 0, the interrupting device supplies the first opcode;
+                // any following operands or prefix bytes are fetched from PC.
+                // The acknowledge replaces M1 and costs two extra T-states.
+                let instruction_cycles = self.execute_opcode(py, data_bus, self.pc)?;
+                let cycles = instruction_cycles + 2;
+                self.total_cycles += u64::from(cycles);
+                if self.ei_delay > 0 {
+                    self.ei_delay -= 1;
+                }
+                return Ok(cycles);
+            }
             let cycles: u32 = match self.interrupt_mode {
-                0 if data_bus & 0xC7 == 0xC7 => {
-                    self.push_word(py, self.pc)?;
-                    self.pc = u16::from(data_bus & 0x38);
-                    13
-                }
-                0 => {
-                    return Err(PyNotImplementedError::new_err(format!(
-                        "Rust Z80 core does not support IM 0 acknowledge byte 0x{data_bus:02X}"
-                    )));
-                }
                 1 => {
                     self.push_word(py, self.pc)?;
                     self.pc = 0x0038;
