@@ -97,9 +97,9 @@ def _reference_daa(accumulator: int, flags: int) -> tuple[int, int]:
     carry = bool(flags & 0x01)
 
     correction = 0
-    if half_carry or (not subtract and (accumulator & 0x0F) > 9):
+    if half_carry or (accumulator & 0x0F) > 9:
         correction |= 0x06
-    if carry or (not subtract and accumulator > 0x99):
+    if carry or accumulator > 0x99:
         correction |= 0x60
 
     result = (accumulator - correction if subtract else accumulator + correction) & 0xFF
@@ -111,7 +111,7 @@ def _reference_daa(accumulator: int, flags: int) -> tuple[int, int]:
         output_flags |= 0x04
     if (accumulator ^ result) & 0x10:
         output_flags |= 0x10
-    if carry or (not subtract and accumulator > 0x99):
+    if carry or accumulator > 0x99:
         output_flags |= 0x01
     return result, output_flags
 
