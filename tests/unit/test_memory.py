@@ -4,6 +4,7 @@ import pytest
 
 from sega_emulator.bus.memory import RAM_SIZE, SG1000Ram
 
+
 @pytest.fixture
 def ram() -> SG1000Ram:
     """Fornece RAM com estado inicial determinístico."""
@@ -42,12 +43,14 @@ def test_ram_rejects_incorrect_initial_size() -> None:
     with pytest.raises(ValueError):
         SG1000Ram(bytes(RAM_SIZE - 1))
 
+
 @pytest.mark.parametrize("address", [0x0000, 0xBFFF])
 def test_ram_rejects_addresses_outside_ram(address: int) -> None:
     ram = SG1000Ram(bytes(RAM_SIZE))
 
     with pytest.raises(ValueError):
         ram.read(address)
+
 
 @pytest.mark.parametrize("value", [-1, 0x100])
 def test_ram_rejects_values_outside_byte_range(ram: SG1000Ram, value: int) -> None:
