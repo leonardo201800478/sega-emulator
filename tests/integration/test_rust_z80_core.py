@@ -833,3 +833,83 @@ def test_rust_im0_executes_interrupt_supplied_opcode(
         python_cpu.p,
         python_cpu.f,
     )
+
+
+def _assert_rust_python_interrupt_state(python_cpu: Z80Cpu, rust_cpu: object) -> None:
+    attributes = (
+        "a", "f", "b", "c", "d", "e", "h", "l", "sp", "pc",
+        "ix", "iy", "i", "r", "iff1", "iff2", "interrupt_mode",
+        "halted", "wz", "total_cycles", "q", "_q_previous", "p",
+    )
+    assert {name: getattr(rust_cpu, name) for name in attributes} == {
+        name: getattr(python_cpu, name) for name in attributes
+    }
+
+
+def test_rust_nmi_preempts_int_and_retn_restores_iff1() -> None:
+    RustZ80Cpu = _rust_cpu()
+    python_bus = MemoryBus(bytes([0x00]))
+    rust_bus = MemoryBus(bytes([0x00]))
+    python_bus.memory[0x0066:0x0068] = bytes([0xED, 0x45])  # RETN
+    rust_bus.memory[0x0066:0x0068] = bytes([0xED, 0x45])
+    python_cpu = Z80Cpu(python_bus)
+    rust_cpu = RustZ80Cpu(rust_bus, None)
+    for cpu in (python_cpu, rust_cpu):
+        cpu.sp = 0x3000
+        cpu.iff1 = True
+        cpu.iff2 = True
+        cpu.interrupt_mode = 1
+        cpu.request_int(0xFF)
+        cpu.request_nmi()
+
+    assert python_cpu.step() == rust_cpu.step() == 11
+    _assert_rust_python_interrupt_state(python_cpu, rust_cpu)
+    assert rust_cpu.pc == 0x0066
+    assert not rust_cpu.iff1 and rust_cpu.iff2
+
+    assert python_cpu.step() == rust_cpu.step() == 14  # RETN
+    _assert_rust_python_interrupt_state(python_cpu, rust_cpu)
+    assert rust_cpu.pc == 0x0000
+    assert rust_cpu.iff1 and rust_cpu.iff2
+
+    assert python_cpu.step() == rust_cpu.step() == 13  # deferred INT is still pending
+    _assert_rust_python_interrupt_state(python_cpu, rust_cpu)
+    assert rust_cpu.pc == 0x0038
+
+
+def test_rust_ei_defers_pending_int_until_after_next_instruction() -> None:
+    RustZ80Cpu = _rust_cpu()
+    program = bytes([0xFB, 0x00, 0x00])  # EI; NOP; next step accepts INT
+    python_cpu = Z80Cpu(MemoryBus(program))
+    rust_cpu = RustZ80Cpu(MemoryBus(program), None)
+    for cpu in (python_cpu, rust_cpu):
+        cpu.sp = 0x3000
+        cpu.interrupt_mode = 1
+        cpu.request_int(0xFF)
+
+    assert python_cpu.step() == rust_cpu.step() == 4  # EI
+    _assert_rust_python_interrupt_state(python_cpu, rust_cpu)
+    assert rust_cpu.iff1 and rust_cpu.iff2
+
+    assert python_cpu.step() == rust_cpu.step() == 4  # protected instruction
+    _assert_rust_python_interrupt_state(python_cpu, rust_cpu)
+    assert rust_cpu.pc == 2
+
+    assert python_cpu.step() == rust_cpu.step() == 13  # INT accepted now
+    _assert_rust_python_interrupt_state(python_cpu, rust_cpu)
+    assert rust_cpu.pc == 0x0038
+
+
+def test_rust_wz_is_updated_by_untaken_conditional_call() -> None:
+    RustZ80Cpu = _rust_cpu()
+    program = bytes([0xC4, 0x34, 0x12])  # CALL NZ,1234h; not taken when Z=1
+    python_cpu = Z80Cpu(MemoryBus(program))
+    rust_cpu = RustZ80Cpu(MemoryBus(program), None)
+    for cpu in (python_cpu, rust_cpu):
+        cpu.f = 0x40
+        cpu.sp = 0x3000
+
+    assert python_cpu.step() == rust_cpu.step() == 10
+    _assert_rust_python_interrupt_state(python_cpu, rust_cpu)
+    assert rust_cpu.pc == 3
+    assert rust_cpu.wz == 0x1234
