@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 
 from sega_emulator.frontend.qt.preferences import (
-    FrontendPreferences,
     MAX_RECENT_ROMS,
+    FrontendPreferences,
 )
 
 
