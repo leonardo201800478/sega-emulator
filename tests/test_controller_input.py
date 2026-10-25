@@ -22,6 +22,7 @@ class FakeController:
         self.axes = axes or {}
         self.is_attached = True
         self.closed = False
+        self.name = ""
 
     def attached(self) -> bool:
         return self.is_attached
@@ -78,6 +79,7 @@ class FakeControllerModule:
         return 0 <= index < len(self.devices)
 
     def Controller(self, index: int) -> FakeController:
+        self.devices[index].name = f"Fake controller {index}"
         return self.devices[index]
 
     def name_forindex(self, index: int) -> str:
@@ -110,8 +112,54 @@ def test_controller_configuration_round_trip_and_validation() -> None:
     assert decoded.players[1].gamepad_buttons["button2"] == "y"
     assert decoded.players[1].use_left_stick is False
     assert decoded.players[1].gamepad_buttons["hold"] == "start"
+    assert decoded.players[1].keyboard_bindings["button1"] == "Z"
+    assert decoded.players[2].keyboard_bindings["button1"] == "F"
+    assert decoded.players[1].turbo_buttons == {"button1": False, "button2": False}
     with pytest.raises(ValueError, match="não suportada"):
         ControllerInputConfig.from_json('{"schema_version":99,"players":{}}')
+
+
+def test_default_deadzone_is_fifteen_percent() -> None:
+    config = ControllerInputConfig()
+    assert config.deadzone == pytest.approx(0.15)
+
+
+def test_legacy_config_gets_keyboard_defaults_and_fifteen_percent_deadzone() -> None:
+    serialized = (
+        '{"schema_version":1,"players":{"1":{"gamepad_buttons":{"button1":"x"}},'
+        '"2":{"gamepad_buttons":{"button2":"y"}}}}'
+    )
+    config = ControllerInputConfig.from_json(serialized)
+    assert config.deadzone == pytest.approx(0.15)
+    assert config.players[1].keyboard_bindings["button1"] == "Z"
+    assert config.players[2].keyboard_bindings["button1"] == "F"
+    assert config.players[1].gamepad_buttons["button1"] == "x"
+    assert config.players[2].gamepad_buttons["button2"] == "y"
+
+
+def test_keyboard_mapping_and_turbo_options_round_trip() -> None:
+    config = ControllerInputConfig()
+    config.players[1].keyboard_bindings["button1"] = "J"
+    config.players[1].turbo_buttons["button1"] = True
+    config.players[2].keyboard_bindings["hold"] = "K"
+    config.players[2].turbo_buttons["button2"] = True
+
+    decoded = ControllerInputConfig.from_json(config.to_json())
+
+    assert decoded.players[1].keyboard_bindings["button1"] == "J"
+    assert decoded.players[1].turbo_buttons == {"button1": True, "button2": False}
+    assert decoded.players[2].keyboard_bindings["hold"] == "K"
+    assert decoded.players[2].turbo_buttons == {"button1": False, "button2": True}
+
+
+def test_keyboard_mapping_rejects_duplicate_keys_for_one_player() -> None:
+    with pytest.raises(ValueError, match="mesma tecla"):
+        PlayerInputProfile(
+            keyboard_bindings={
+                "up": "J",
+                "down": "j",
+            }
+        )
 
 
 def test_sdl_controllers_map_independently_to_two_players() -> None:
@@ -128,6 +176,13 @@ def test_sdl_controllers_map_independently_to_two_players() -> None:
 
     assert actions[1] == {"button1", "right"}
     assert actions[2] == {"button2", "left"}
+    assert inputs.connected_names() == ["Fake controller 0", "Fake controller 1"]
+
+
+def test_connected_names_supports_pygame_ce_without_name_forindex() -> None:
+    backend = FakeControllerModule()
+    backend.name_forindex = None
+    inputs = ControllerInput(SimpleNamespace(_sdl2=SimpleNamespace(controller=backend)))
     assert inputs.connected_names() == ["Fake controller 0", "Fake controller 1"]
 
 
