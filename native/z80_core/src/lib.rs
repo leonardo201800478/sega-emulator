@@ -320,13 +320,12 @@ impl RustZ80Cpu {
             .as_ref()
             .ok_or_else(|| PyNotImplementedError::new_err("OUT requires a configured I/O bus"))?;
         let io = io.bind(py);
-        if let Some(offset) = cycle_offset {
-            if let Ok(timed_write) = io.getattr("write_port_at") {
-                if timed_write.is_callable() {
-                    timed_write.call1((address, value, self.total_cycles.wrapping_add(offset)))?;
-                    return Ok(());
-                }
-            }
+        if let Some(offset) = cycle_offset
+            && let Ok(timed_write) = io.getattr("write_port_at")
+            && timed_write.is_callable()
+        {
+            timed_write.call1((address, value, self.total_cycles.wrapping_add(offset)))?;
+            return Ok(());
         }
         io.call_method1("write_port", (address, value))?;
         Ok(())
