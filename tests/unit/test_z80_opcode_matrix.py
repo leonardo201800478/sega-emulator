@@ -69,6 +69,7 @@ def test_ed_unassigned_bytes_match_current_ed_nop_policy() -> None:
     assert ed_family(0x45)[1] == "alias"
     assert ed_family(0x46) == ("IM 0", "documented", "ed-implemented")
     assert ed_family(0x4E)[1] == "alias"
+    assert ed_family(0x70) == ("IN (C)", "undocumented", "ed-implemented")
     assert ed_family(0x71)[1] == "undocumented"
 
 
@@ -76,6 +77,10 @@ def test_indexed_prefix_fallback_and_substitution_are_distinguished() -> None:
     assert indexed_family(0x21) == ("LD IX/IY,nn", "index-substitution")
     assert indexed_family(0x24)[1] == "undocumented-index-half"
     assert indexed_family(0x46)[1] == "index-substitution"
+    assert indexed_family(0x40)[1] == "ignored-prefix-fallback"
+    assert indexed_family(0x80)[1] == "ignored-prefix-fallback"
+    assert indexed_family(0x84)[1] == "index-substitution"
+    assert indexed_family(0x86)[1] == "index-substitution"
     assert indexed_family(0x00)[1] == "ignored-prefix-fallback"
     assert indexed_family(0xCB)[1] == "indexed-cb-prefix"
     assert indexed_family(0xDD)[1] == "repeated-prefix"
