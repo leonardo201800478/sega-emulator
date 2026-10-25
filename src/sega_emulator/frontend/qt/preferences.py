@@ -48,8 +48,7 @@ class FrontendPreferences:
         if len(self.recent_roms) > MAX_RECENT_ROMS:
             raise ValueError(f"recent_roms may contain at most {MAX_RECENT_ROMS} items")
         if any(
-            not isinstance(path, str) or not path.strip()
-            for path in self.recent_roms
+            not isinstance(path, str) or not path.strip() for path in self.recent_roms
         ):
             raise ValueError("recent_roms must contain non-empty path strings")
         if not isinstance(self.controller_config, str):
@@ -143,7 +142,7 @@ class FrontendPreferences:
 def _bounded_int(value: Any, default: int, minimum: int, maximum: int) -> int:
     try:
         result = int(value)
-    except (TypeError, ValueError, OverflowError):
+    except TypeError, ValueError, OverflowError:
         return default
     return result if minimum <= result <= maximum else default
 
