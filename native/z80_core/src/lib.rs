@@ -1511,8 +1511,12 @@ fn is_unassigned_ed_opcode(opcode: u8) -> bool {
     )
 }
 
+mod tms9918;
+use tms9918::RustTMS9918A;
+
 #[pymodule]
 fn sega_z80_core(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<RustZ80Cpu>()?;
+    module.add_class::<RustTMS9918A>()?;
     Ok(())
 }
