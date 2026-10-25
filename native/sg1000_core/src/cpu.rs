@@ -125,13 +125,54 @@ impl Z80 {
                     4
                 }
             }
-            0x18 => {
+            0x18 | 0x20 | 0x28 | 0x30 | 0x38 => {
                 let displacement = self.fetch8(bus) as i8;
-                self.registers.pc = self
-                    .registers
-                    .pc
-                    .wrapping_add_signed(i16::from(displacement));
-                12
+                if opcode == 0x18 || self.condition((opcode >> 3) & 0x03) {
+                    self.registers.pc = self
+                        .registers
+                        .pc
+                        .wrapping_add_signed(i16::from(displacement));
+                    12
+                } else {
+                    7
+                }
+            }
+            0xC5 | 0xD5 | 0xE5 | 0xF5 => {
+                let value = match (opcode >> 4) & 0x03 {
+                    0 => self.registers.bc(),
+                    1 => self.registers.de(),
+                    2 => self.registers.hl(),
+                    _ => u16::from_be_bytes([self.registers.a, self.registers.f]),
+                };
+                self.push16(bus, value);
+                11
+            }
+            0xC1 | 0xD1 | 0xE1 | 0xF1 => {
+                let value = self.pop16(bus);
+                match (opcode >> 4) & 0x03 {
+                    0 => self.registers.set_bc(value),
+                    1 => self.registers.set_de(value),
+                    2 => self.registers.set_hl(value),
+                    _ => [self.registers.a, self.registers.f] = value.to_be_bytes(),
+                }
+                10
+            }
+            0xC9 => {
+                self.registers.pc = self.pop16(bus);
+                10
+            }
+            0xCD => {
+                let target = self.fetch16(bus);
+                self.push16(bus, self.registers.pc);
+                self.registers.pc = target;
+                17
+            }
+            0xC2 | 0xCA | 0xD2 | 0xDA | 0xE2 | 0xEA | 0xF2 | 0xFA => {
+                let target = self.fetch16(bus);
+                if self.condition((opcode >> 3) & 0x07) {
+                    self.registers.pc = target;
+                }
+                10
             }
             0x3C => {
                 let old = self.registers.a;
@@ -196,6 +237,39 @@ impl Z80 {
             self.registers.a = result.value;
         }
         self.registers.f = result.flags;
+    }
+
+    #[inline]
+    fn condition(&self, code: u8) -> bool {
+        let flags = self.registers.f;
+        match code & 0x07 {
+            0 => flags & FLAG_Z == 0, // NZ
+            1 => flags & FLAG_Z != 0, // Z
+            2 => flags & FLAG_C == 0, // NC
+            3 => flags & FLAG_C != 0, // C
+            4 => flags & FLAG_PV == 0, // PO
+            5 => flags & FLAG_PV != 0, // PE
+            6 => flags & FLAG_S == 0, // P
+            _ => flags & FLAG_S != 0, // M
+        }
+    }
+
+    #[inline]
+    fn push16<B: CpuBus>(&mut self, bus: &mut B, value: u16) {
+        let [high, low] = value.to_be_bytes();
+        self.registers.sp = self.registers.sp.wrapping_sub(1);
+        bus.write_memory(self.registers.sp, high);
+        self.registers.sp = self.registers.sp.wrapping_sub(1);
+        bus.write_memory(self.registers.sp, low);
+    }
+
+    #[inline]
+    fn pop16<B: CpuBus>(&mut self, bus: &mut B) -> u16 {
+        let low = bus.read_memory(self.registers.sp);
+        self.registers.sp = self.registers.sp.wrapping_add(1);
+        let high = bus.read_memory(self.registers.sp);
+        self.registers.sp = self.registers.sp.wrapping_add(1);
+        u16::from_le_bytes([low, high])
     }
 
     #[inline]
@@ -326,6 +400,49 @@ mod tests {
         assert_eq!(cpu.step(&mut bus), Ok(7));
         assert_eq!(cpu.registers.a, 0x10);
         assert_ne!(cpu.registers.f & FLAG_H, 0);
+    }
+
+    #[test]
+    fn conditional_jumps_and_stack_calls_preserve_return_address() {
+        let mut bus = TestBus([0; 0x10000]);
+        // LD SP,0xD000; LD A,1; CP 1; JR NZ,+2 (not taken);
+        // CALL 0x0010; HALT; RET at 0x0010.
+        bus.0[..11].copy_from_slice(&[
+            0x31, 0x00, 0xD0, 0x3E, 0x01, 0xFE, 0x01, 0x20, 0x02, 0xCD, 0x10,
+        ]);
+        bus.0[11] = 0x00; // high byte of CALL target is fetched here
+        bus.0[12] = 0x76; // HALT return target
+        bus.0[0x10] = 0xC9; // RET
+        let mut cpu = Z80::default();
+
+        assert_eq!(cpu.step(&mut bus), Ok(10)); // LD SP
+        assert_eq!(cpu.step(&mut bus), Ok(7)); // LD A
+        assert_eq!(cpu.step(&mut bus), Ok(7)); // CP
+        assert_eq!(cpu.step(&mut bus), Ok(7)); // JR NZ not taken
+        assert_eq!(cpu.registers.pc, 9);
+        assert_eq!(cpu.step(&mut bus), Ok(17)); // CALL
+        assert_eq!(cpu.registers.pc, 0x0010);
+        assert_eq!(cpu.step(&mut bus), Ok(10)); // RET
+        assert_eq!(cpu.registers.pc, 12);
+        assert_eq!(cpu.registers.sp, 0xD000);
+        assert_eq!(cpu.step(&mut bus), Ok(4)); // HALT
+        assert!(cpu.halted);
+    }
+
+    #[test]
+    fn push_and_pop_register_pairs_round_trip() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..8].copy_from_slice(&[
+            0x31, 0x00, 0xD0, // LD SP,0xD000
+            0x01, 0x34, 0x12, // LD BC,0x1234
+            0xC5, 0xC1, // PUSH BC; POP BC
+        ]);
+        let mut cpu = Z80::default();
+        for expected in [10, 10, 11, 10] {
+            assert_eq!(cpu.step(&mut bus), Ok(expected));
+        }
+        assert_eq!(cpu.registers.bc(), 0x1234);
+        assert_eq!(cpu.registers.sp, 0xD000);
     }
 
     #[test]
