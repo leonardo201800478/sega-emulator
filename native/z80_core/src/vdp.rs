@@ -276,7 +276,10 @@ fn write_color(pixels: &mut [u8], offset: usize, color: u8) {
 fn fill_backdrop_line(pixels: &mut [u8], y: usize, backdrop: u8) {
     let start = y * SCREEN_WIDTH * 3;
     let color = PALETTE[usize::from(backdrop & 0x0F)];
-    for pixel in pixels[start..start + SCREEN_WIDTH * 3].as_chunks_mut::<3>().0 {
+    for pixel in pixels[start..start + SCREEN_WIDTH * 3]
+        .as_chunks_mut::<3>()
+        .0
+    {
         pixel.copy_from_slice(&color);
     }
 }
