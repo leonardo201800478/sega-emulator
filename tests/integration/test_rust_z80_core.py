@@ -104,8 +104,9 @@ def test_rust_block_transfer_matches_python(
     program = bytes([0xED, opcode])
     python_bus = MemoryBus(program)
     rust_bus = MemoryBus(program)
-    python_bus.memory[0x1000:0x1000 + byte_count] = bytes(range(0x41, 0x41 + byte_count))
-    rust_bus.memory[0x1000:0x1000 + byte_count] = bytes(range(0x41, 0x41 + byte_count))
+    source_data = bytes(range(0x41, 0x41 + byte_count))
+    python_bus.memory[0x1000 : 0x1000 + byte_count] = source_data
+    rust_bus.memory[0x1000 : 0x1000 + byte_count] = source_data
     python_cpu = Z80Cpu(python_bus)
     rust_cpu = RustZ80Cpu(rust_bus, None)
 
@@ -119,7 +120,20 @@ def test_rust_block_transfer_matches_python(
     python_cycles = python_cpu.step()
     rust_cycles = rust_cpu.step()
 
-    attributes = ("a", "f", "b", "c", "d", "e", "h", "l", "pc", "r", "wz", "total_cycles")
+    attributes = (
+        "a",
+        "f",
+        "b",
+        "c",
+        "d",
+        "e",
+        "h",
+        "l",
+        "pc",
+        "r",
+        "wz",
+        "total_cycles",
+    )
     assert python_cycles == rust_cycles == expected_cycles
     assert {name: getattr(rust_cpu, name) for name in attributes} == {
         name: getattr(python_cpu, name) for name in attributes
