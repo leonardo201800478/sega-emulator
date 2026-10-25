@@ -9,14 +9,15 @@ direta de `SG1000Machine`, com o VDP mantendo sua própria VRAM.
 
 ## Componentes presentes
 
-- `SG1000Ram` (`src/sega_emulator/bus/memory.py`): RAM física de 1 KiB
+- `SG1000Ram` (`src/sega_emulator/bus/memory.py`): RAM interna física de 1 KiB
   espelhada em `C000h–FFFFh` por padrão, ou 8 KiB para perfis Type-B
-  conhecidos de cartucho SG-1000 II com adaptador de expansão. A RAM é
+  conhecidos de cartucho SG-1000 II com adaptador de expansão. `The Castle (Japan)` mantém 1 KiB interno e recebe 8 KiB separados no mapa do cartucho. A RAM é
   inicializada com bytes zerados por convenção determinística do software; isso
   não afirma que a RAM real ligue zerada.
 - `cartridge_profiles.py`: reconhece por CRC-32 os cinco dumps catalogados
   pelo Genesis Plus GX como dependentes da expansão Type-B de 8 KiB, além do
-  SHA-256 da variante Bomberman English Logo usada na validação local. Dumps
+  SHA-256 da variante Bomberman English Logo. Reconhece também `The Castle
+  (Japan)` (CRC-32 `092F29D6`) como cartucho com 8 KiB em `8000h–BFFFh`. Dumps
   desconhecidos continuam usando 1 KiB; não inferimos hardware apenas pelo
   tamanho ou pelo fato de uma ROM ser não licenciada.
 - `SG1000MemoryBus` (`src/sega_emulator/bus/memory_bus.py`): mapeia ROM
@@ -45,9 +46,9 @@ direta de `SG1000Machine`, com o VDP mantendo sua própria VRAM.
 O barramento base `SG1000MemoryBus` sozinho não espelha automaticamente uma
 ROM curta; essa política fica no adaptador privado usado por `SG1000Machine`.
 A seleção Type-B é baseada em hashes explícitos, não no tamanho da ROM. O
-perfil inicial inclui Bomberman Special (Taiwan), Magical Kid Wiz (Taiwan), The
-Castle [MSX] (Taiwan), Rally-X (Taiwan) e Road Fighter (Taiwan), conforme o
-catálogo de hardware do Genesis Plus GX. O CRC-32 do Bomberman Special é também
+perfil inclui Bomberman Special (Taiwan), Magical Kid Wiz (Taiwan), The Castle
+[MSX] (Taiwan), Rally-X (Taiwan) e Road Fighter (Taiwan), conforme o catálogo
+de hardware do Genesis Plus GX. O CRC-32 do Bomberman Special é também
 registrado no catálogo de software do MAME. Para contemplar a variante com
 logotipo em inglês usada na validação local, o perfil inclui seu SHA-256
 `3eff3d6f1f74041f7b732455799d0978ab49724552ff2985f34b76478cd91721`. Essa
