@@ -114,8 +114,10 @@ def main() -> int:
                     f"testes OK: {tests_done}; ERROR: {failures}]"
                 )
                 return 3
-    print(f"\n[concluído em {time.perf_counter() - start:.0f}s; {steps:,} instruções; "
-          f"testes OK: {tests_done}; ERROR: {failures}]")
+    print(
+        f"\n[concluído em {time.perf_counter() - start:.0f}s; {steps:,} instruções; "
+        f"testes OK: {tests_done}; ERROR: {failures}]"
+    )
     return 1 if failures else 0
 
 
