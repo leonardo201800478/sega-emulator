@@ -113,7 +113,7 @@ def test_controller_configuration_round_trip_and_validation() -> None:
     assert decoded.players[1].use_left_stick is False
     assert decoded.players[1].gamepad_buttons["hold"] == "start"
     assert decoded.players[1].keyboard_bindings["button1"] == "Z"
-    assert decoded.players[2].keyboard_bindings["button1"] == "F"
+    assert decoded.players[2].keyboard_bindings["button1"] == "Z"
     assert decoded.players[1].turbo_buttons == {"button1": False, "button2": False}
     with pytest.raises(ValueError, match="não suportada"):
         ControllerInputConfig.from_json('{"schema_version":99,"players":{}}')
@@ -177,6 +177,18 @@ def test_sdl_controllers_map_independently_to_two_players() -> None:
     assert actions[1] == {"button1", "right"}
     assert actions[2] == {"button2", "left"}
     assert inputs.connected_names() == ["Fake controller 0", "Fake controller 1"]
+
+
+def test_analog_deadzone_filters_small_axis_drift() -> None:
+    backend = FakeControllerModule()
+    backend.devices[0].axes[backend.CONTROLLER_AXIS_LEFTX] = 4000
+    backend.devices[0].axes[backend.CONTROLLER_AXIS_LEFTY] = -4000
+    inputs = ControllerInput(SimpleNamespace(_sdl2=SimpleNamespace(controller=backend)))
+    assert inputs.poll()[1] == set()
+
+    backend.devices[0].axes[backend.CONTROLLER_AXIS_LEFTX] = 6000
+    backend.devices[0].axes[backend.CONTROLLER_AXIS_LEFTY] = -6000
+    assert inputs.poll()[1] == {"right", "up"}
 
 
 def test_connected_names_supports_pygame_ce_without_name_forindex() -> None:
