@@ -36,6 +36,7 @@ class EmulatorMainWindow(QMainWindow):
     ) -> None:
         super().__init__(parent)
         self._on_video_scale = on_video_scale
+        self._video_scale = 3
         self.setWindowTitle("Sega Emulator — SG-1000")
         self.resize(1024, 768)
         self.setMinimumSize(640, 480)
@@ -126,6 +127,7 @@ class EmulatorMainWindow(QMainWindow):
     def set_video_scale(self, scale: int) -> None:
         if scale not in (2, 3, 4):
             raise ValueError("video scale must be 2, 3, or 4")
+        self._video_scale = scale
         self.resize(256 * scale + 64, 192 * scale + 128)
 
     def set_recent_roms(
