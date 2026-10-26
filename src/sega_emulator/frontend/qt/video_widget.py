@@ -15,6 +15,7 @@ from PySide6.QtQml import QQmlComponent, QQmlImageProviderBase
 from PySide6.QtQuick import (
     QQuickImageProvider,
     QQuickView,
+    QQuickWindow,
     QSGRendererInterface,
 )
 from PySide6.QtWidgets import QLabel, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget
@@ -141,7 +142,7 @@ class VideoWidget(QWidget):
         """Request Vulkan before creating QQuickView and retain raster fallback."""
         try:
             # Qt documents that this must happen before the first QQuickWindow.
-            QQuickView.setGraphicsApi(QSGRendererInterface.GraphicsApi.Vulkan)
+            QQuickWindow.setGraphicsApi(QSGRendererInterface.GraphicsApi.Vulkan)
             quick_view = QQuickView()
             quick_view.setColor(QColor("#080b10"))
             quick_view.setResizeMode(QQuickView.ResizeMode.SizeRootObjectToView)
@@ -195,7 +196,7 @@ class VideoWidget(QWidget):
             actual_api = self._quick_view.rendererInterface().graphicsApi()
             if actual_api != QSGRendererInterface.GraphicsApi.Vulkan:
                 self._on_scene_graph_error(
-                    QQuickView.SceneGraphError.ContextNotAvailable,
+                    QQuickWindow.SceneGraphError.ContextNotAvailable,
                     f"Qt Quick inicializou com API gráfica inesperada: {actual_api}",
                 )
                 return
