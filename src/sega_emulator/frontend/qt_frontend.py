@@ -91,7 +91,7 @@ def _runtime_diagnostic(machine: SG1000Machine, rom_sha256: str) -> dict[str, ob
                 if isinstance(module, ModuleType)
                 and module.__name__.startswith("sega_z80_core")
                 and isinstance(getattr(module, "__file__", None), str)
-                and getattr(module, "__file__").endswith(extension_suffixes)
+                and module.__file__.endswith(extension_suffixes)
             }
         )
         diagnostic["native_module"] = sega_z80_core.__name__
