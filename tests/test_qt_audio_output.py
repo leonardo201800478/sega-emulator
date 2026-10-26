@@ -79,7 +79,6 @@ def test_downsampling_fir_rejects_frequencies_above_output_nyquist() -> None:
 
 def test_resampler_flush_is_empty_after_stream_reset() -> None:
     resampler = PcmResampler(48_000)
-    resampler.process([0.1] * 256)
-
-    assert resampler.flush()
+    assert resampler.process([0.1] * 256)
+    assert resampler.flush() == b""
     assert resampler.flush() == b""
