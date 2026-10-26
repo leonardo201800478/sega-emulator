@@ -83,7 +83,11 @@ class FramebufferImageProvider(QQuickImageProvider):
 
     def set_image(self, image: QImage | None) -> None:
         """Publish a detached image snapshot for the next scene-graph update."""
-        snapshot = QImage(image) if image is not None and not image.isNull() else QImage()
+        snapshot = (
+            QImage(image)
+            if image is not None and not image.isNull()
+            else QImage()
+        )
         with self._lock:
             self._image = snapshot
 
@@ -208,6 +212,7 @@ class VideoWidget(QWidget):
             logger.exception("Falha ao confirmar a API gráfica efetiva")
             self._vulkan_failed = True
             self._stack.setCurrentWidget(self._fallback)
+            self._quick_view.hide()
 
     def _on_scene_graph_error(self, error, message: str) -> None:
         """Switch to the known raster path if Vulkan cannot initialize."""
