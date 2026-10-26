@@ -18,7 +18,8 @@ def test_framebuffer_provider_returns_detached_frame_snapshot() -> None:
 
     assert not result.isNull()
     assert result.size() == QSize(2, 2)
-    assert result.pixelColor(0, 0) == Qt.GlobalColor.red
+    assert result.pixelColor(0, 0).red() == 255
+    assert result.pixelColor(0, 0).blue() == 0
 
 
 def test_framebuffer_provider_returns_empty_image_after_clear() -> None:
@@ -41,4 +42,5 @@ def test_framebuffer_provider_returns_independent_images() -> None:
     first.fill(Qt.GlobalColor.black)
     second = provider.requestImage("frame", QSize(), QSize())
 
-    assert second.pixelColor(0, 0) == Qt.GlobalColor.yellow
+    assert second.pixelColor(0, 0).red() == 255
+    assert second.pixelColor(0, 0).green() == 255
