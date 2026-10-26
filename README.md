@@ -6,7 +6,9 @@ Projeto de emulação de alta precisão com implementação de referência em Py
 
 - **CPU:** núcleo Z80 em auditoria diferencial; temporização ainda não é ciclo a ciclo.
 - **Máquina SG-1000:** CPU, ROM/RAM, VDP TMS9918A inicial e joystick em desenvolvimento.
-- **Interface experimental:** menus Qt 6/PySide6 para abrir ROMs, pausar/continuar, reiniciar, alterar escala e consultar diagnóstico. A entrada de controles usa backend SDL3/PySDL3; Pygame permanece separado para a saída de áudio.
+- **Frontend Qt 6/PySide6:** janela redesenhada, barra de ações, tela cheia, ROMs recentes, seleção do runtime, configuração de controles e diagnóstico. O núcleo de emulação continua sendo `SG1000Machine`; a interface não implementa uma máquina paralela.
+- **Configurações de áudio:** saída mono do PSG, ativação, volume, taxa do mixer (22,05/44,1/48 kHz) e buffer (256–2.048 amostras). A reamostragem afeta apenas a saída, não o clock lógico do hardware.
+- **Configurações de vídeo:** proporção 4:3 preservada, escala inteira preferencial e filtros nearest-neighbor/bilinear. Essas opções alteram a apresentação, não o framebuffer produzido pelo VDP.
 - **Carregador:** arquivos `.sg`, `.rom`, `.bin` e ROMs dentro de ZIP; ZIP com múltiplas ROMs exige seleção explícita.
 - **Diagnóstico:** logs JSONL/texto por sessão, SHA-256 da ROM, checkpoints de execução e stack traces.
 - **Áudio:** PSG SN76489AN integrado à máquina, com saída mono nos frontends Pygame e Qt; a fidelidade sonora contra hardware real continua pendente.
@@ -35,7 +37,7 @@ py -3.14 -m venv .venv
 
 A interface Qt abre sem ROM carregada. Use **Arquivo → Abrir ROM** para selecionar uma ROM local.
 
-Menus disponíveis: **Arquivo**, **Emulação** (pausar/continuar e reiniciar), **Vídeo** (escalas de teste), **Controles** (configuração dos gamepads), **Diagnóstico** (logs e estado da máquina) e **Ajuda**. A SDL3 enumera dispositivos a cada ciclo de entrada para reconhecer conexão/desconexão durante a sessão; controles sem mapeamento SDL são lidos pela API de joystick bruto quando possível. Se um controle conectado for removido durante a execução, a emulação é pausada antes do próximo frame para evitar continuar sem o dispositivo esperado. Use **Controles → Dispositivos detectados** para consultar a disponibilidade do backend e a lista atualizada; o log da sessão também registra o estado inicial.
+Menus disponíveis: **Arquivo**, **Emulação**, **Vídeo**, **Configurações → Áudio e vídeo**, **Configurações → Controles**, **Diagnóstico** e **Ajuda**. Em Áudio e vídeo, o buffer menor pode reduzir latência, mas aumenta o risco de estalos se o sistema não atender a tempo; buffers maiores privilegiam estabilidade. A saída do PSG é mono e o modelo digital ainda não reproduz toda a resposta analógica do hardware. A SDL3 enumera dispositivos a cada ciclo de entrada para reconhecer conexão/desconexão durante a sessão; controles sem mapeamento SDL são lidos pela API de joystick bruto quando possível. Se um controle conectado for removido durante a execução, a emulação é pausada antes do próximo frame para evitar continuar sem o dispositivo esperado. Use **Configurações → Controles → Dispositivos detectados** para consultar a disponibilidade do backend e a lista atualizada; o log da sessão também registra o estado inicial.
 
 Para iniciar diretamente uma ROM:
 
