@@ -41,6 +41,7 @@ def test_main_window_exposes_required_menus_and_shortcuts(qt_app) -> None:
         "&Arquivo",
         "&Emulação",
         "&Vídeo",
+        "&Som",
         "&Controles",
         "&Diagnóstico",
         "&Ajuda",
@@ -90,8 +91,11 @@ def test_main_window_exposes_emulation_backend_selector(qt_app) -> None:
         on_show_machine_state=lambda: None,
         on_video_scale=lambda scale: None,
         on_select_emulation_backend=lambda: called.append("select-backend"),
+        on_configure_psg=lambda: called.append("configure-psg"),
     )
     assert window.select_emulation_backend_action.isEnabled()
+    assert window.configure_psg_action.isEnabled()
     window.select_emulation_backend_action.trigger()
-    assert called == ["select-backend"]
+    window.configure_psg_action.trigger()
+    assert called == ["select-backend", "configure-psg"]
     window.close()
