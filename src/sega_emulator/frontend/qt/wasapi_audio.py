@@ -94,7 +94,9 @@ class WasapiAudioOutput:
             host_apis = self._sd.query_hostapis()
             devices = self._sd.query_devices()
         except Exception as exc:
-            raise RuntimeError(f"Falha ao enumerar dispositivos de áudio: {exc}") from exc
+            raise RuntimeError(
+                f"Falha ao enumerar dispositivos de áudio: {exc}"
+            ) from exc
 
         for host_index, host_api in enumerate(host_apis):
             if "wasapi" not in str(host_api.get("name", "")).casefold():
@@ -175,7 +177,9 @@ class WasapiAudioOutput:
             available = len(self._current_block) - self._current_offset
             count = min(required - written, available)
             start = self._current_offset
-            output[written : written + count] = self._current_block[start : start + count]
+            output[written : written + count] = self._current_block[
+                start : start + count
+            ]
             self._current_offset += count
             written += count
         if underflow_reported:
