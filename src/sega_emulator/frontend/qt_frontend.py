@@ -18,7 +18,7 @@ from sega_emulator.frontend.controller_input import (
     apply_turbo,
     joystick_value,
 )
-from sega_emulator.frontend.qt.audio_output import samples_to_pcm
+from sega_emulator.frontend.qt.audio_output import PcmResampler
 from sega_emulator.frontend.qt.frame_pacer import FramePacer
 from sega_emulator.frontend.qt.preferences import FrontendPreferences
 from sega_emulator.frontend.sdl3_controller_input import SDL3ControllerInput
@@ -179,6 +179,7 @@ def run(initial_path: Path | None = None) -> None:
     else:
         selected_backend = preferences.cpu_core
     pygame, audio_channel = _initialize_pygame_backend(preferences)
+    audio_resampler = PcmResampler(preferences.audio_sample_rate)
     serialized_controller_config = settings.value("controller_config", "", type=str)
     try:
         controller_config = (
@@ -341,7 +342,7 @@ def run(initial_path: Path | None = None) -> None:
             machine.run_frame()
             samples = machine.drain_audio_samples()
             if samples and audio_channel is not None and pygame is not None:
-                pcm = samples_to_pcm(samples, preferences.audio_sample_rate)
+                pcm = audio_resampler.process(samples)
                 sound = pygame.mixer.Sound(buffer=pcm)
                 if audio_channel.get_busy():
                     audio_channel.queue(sound)
