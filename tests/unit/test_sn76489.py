@@ -69,12 +69,22 @@ def test_tone_period_zero_and_one_follow_documented_sg1000_profile() -> None:
         assert all(sample > 0 for sample in psg.render(128))
 
 
-def test_tone_frequency_is_near_440_hz_at_ntsc_clock() -> None:
+@pytest.mark.parametrize("period", (127, 254, 511))
+def test_rendered_tone_frequency_matches_clock_and_divider(period: int) -> None:
+    """Check the measured fundamental against f = input_clock / (32 * period)."""
     psg = SN76489()
-    enable_tone_zero(psg, 0xFE)
-    samples = psg.render(11_025)
+    enable_tone_zero(psg, period)
+    samples = psg.render(22_050)  # 0.5 s, enough to resolve low-frequency periods.
     transitions = sum(a != b for a, b in zip(samples, samples[1:], strict=False))
-    assert 200 <= transitions <= 240
+
+    expected_frequency = psg.clock_hz / (2 * 16 * period)
+    measured_frequency = transitions * psg.sample_rate / (2 * (len(samples) - 1))
+
+    # Each missed/extra transition shifts the estimate by about 1 Hz over 0.5 s.
+    assert abs(measured_frequency - expected_frequency) <= 2.5, (
+        f"period={period}: expected {expected_frequency:.3f} Hz, "
+        f"measured {measured_frequency:.3f} Hz from {transitions} transitions"
+    )
 
 
 def test_rendering_in_chunks_matches_single_render() -> None:
