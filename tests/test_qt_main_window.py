@@ -116,4 +116,3 @@ def test_main_window_exposes_audio_video_settings(qt_app) -> None:
     window.audio_video_action.trigger()
     assert called == ["audio-video"]
     window.close()
-
