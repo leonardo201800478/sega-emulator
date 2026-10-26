@@ -246,7 +246,7 @@ A suíte automatizada aprovada não substitui os seguintes testes manuais. Marqu
 
 **Estado no momento da redação:** os testes automatizados locais estão aprovados segundo a saída fornecida; a abertura interativa do frontend e a validação com ROM/áudio físico ainda não foram confirmadas nesta conversa.
 
-## 10. Limitações e interpretação correta
+## 11. Limitações e interpretação correta
 
 - O frontend continua sendo uma aplicação Python/Qt integrada ao backend Rust, não um executável independente inteiramente escrito em Rust.
 - O backend é experimental; passar na suíte atual não prova compatibilidade universal com jogos.
@@ -255,7 +255,7 @@ A suíte automatizada aprovada não substitui os seguintes testes manuais. Marqu
 - O comando de import confirma a importabilidade do pacote Python, mas a seleção efetiva do backend deve ser confirmada em runtime.
 - Não foi criado nem versionado qualquer ROM comercial durante este processo.
 
-## 11. Sequência resumida para repetir a validação
+## 12. Sequência resumida para repetir a validação
 
 ```powershell
 # A partir da raiz, com .venv ativada
