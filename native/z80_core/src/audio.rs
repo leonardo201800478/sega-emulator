@@ -31,8 +31,7 @@ fn design_lowpass(clock_hz: u64, sample_rate: u64) -> Vec<f64> {
             (2.0 * PI * cutoff * offset).sin() / (PI * offset)
         };
         let position = index as f64 / (FILTER_TAPS - 1) as f64;
-        let window = 0.42 - 0.5 * (2.0 * PI * position).cos()
-            + 0.08 * (4.0 * PI * position).cos();
+        let window = 0.42 - 0.5 * (2.0 * PI * position).cos() + 0.08 * (4.0 * PI * position).cos();
         coefficients.push(ideal * window);
     }
     let total: f64 = coefficients.iter().sum();
