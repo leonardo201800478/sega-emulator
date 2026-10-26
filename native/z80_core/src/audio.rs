@@ -410,7 +410,8 @@ impl NativeSn76489 {
 
     fn filter_mix(&mut self) -> f64 {
         let taps = self.filter_coefficients.len();
-        self.filter_history[self.filter_position] = self.mix();
+        let current_sample = self.mix();
+        self.filter_history[self.filter_position] = current_sample;
         let mut total = 0.0;
         for index in 0..taps {
             let history_index = (self.filter_position + taps - index) % taps;
