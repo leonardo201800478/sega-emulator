@@ -692,8 +692,8 @@ def run(initial_path: Path | None = None) -> None:
             window,
             "Salvar gravação PSG VGM",
             (
-                str(Path(loaded.path).with_suffix(".vgm"))
-                if getattr(loaded, "path", None)
+                str(loaded.source_path.with_suffix(".vgm"))
+                if loaded.source_path
                 else str(Path.cwd() / "sg1000_capture.vgm")
             ),
             "VGM (*.vgm)",
