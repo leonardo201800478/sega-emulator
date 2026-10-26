@@ -1,9 +1,17 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QImage
+import importlib
 
-from sega_emulator.frontend.qt.video_widget import FramebufferImageProvider
+import pytest
+
+qtcore = pytest.importorskip("PySide6.QtCore")
+qtgui = pytest.importorskip("PySide6.QtGui")
+video_widget = importlib.import_module("sega_emulator.frontend.qt.video_widget")
+
+QSize = qtcore.QSize
+Qt = qtcore.Qt
+QImage = qtgui.QImage
+FramebufferImageProvider = video_widget.FramebufferImageProvider
 
 
 def test_framebuffer_provider_returns_detached_frame_snapshot() -> None:
