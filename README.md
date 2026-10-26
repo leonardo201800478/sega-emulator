@@ -9,7 +9,7 @@ Projeto de emulação de alta precisão com implementação de referência em Py
 - **Interface experimental:** menus Qt 6/PySide6 para abrir ROMs, pausar/continuar, reiniciar, alterar escala e consultar diagnóstico. A entrada de controles usa backend SDL3/PySDL3; Pygame permanece separado para a saída de áudio.
 - **Carregador:** arquivos `.sg`, `.rom`, `.bin` e ROMs dentro de ZIP; ZIP com múltiplas ROMs exige seleção explícita.
 - **Diagnóstico:** logs JSONL/texto por sessão, SHA-256 da ROM, checkpoints de execução e stack traces.
-- **Áudio:** PSG SN76489AN integrado à máquina, com saída mono nos frontends Pygame e Qt; a fidelidade sonora contra hardware real continua pendente.
+- **Áudio:** PSG SN76489AN integrado à máquina, com saída mono nos frontends Pygame e Qt; a fidelidade sonora contra hardware real continua pendente. Consulte o [roadmap de fidelidade do PSG e reutilização entre consoles Sega](docs/architecture/psg-fidelity-roadmap.md).
 
 ## Requisitos
 
