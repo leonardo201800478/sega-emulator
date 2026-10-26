@@ -48,10 +48,16 @@ O marco de qualidade justifica preparar um primeiro release público versionado,
 - a documentação e o changelog distingam comportamento observado, testes automatizados e limitações;
 - o release seja identificado como inicial/experimental, sem alegar precisão ciclo a ciclo nem validação universal.
 
+## Estado após a preparação da PR #113
+
+- A licença MIT foi adicionada em LICENSE e declarada nos metadados do pacote.
+- O diálogo Sobre do Qt foi atualizado com versão, escopo SG-1000, créditos tecnológicos, licença e aviso de projeto independente.
+- A tela cheia imersiva e um teste de UI foram adicionados na PR #113.
+- Os testes e workflows desta revisão ainda precisam ser executados no SHA candidato. Não há, neste documento, declaração de aprovação dos checks.
+
 ## Próximos passos
 
-1. Concluir o polimento da interface Qt e o modo imersivo de tela cheia.
-2. Escolher e aplicar a licença antes de publicar o release.
+1. Executar lint, formatação, suíte Python e os workflows aplicáveis no SHA final da PR.
+2. Validar manualmente o diálogo Sobre e o modo imersivo no Windows, incluindo saída com Esc e restauração da janela.
 3. Reproduzir e instrumentar os engasgos em sessões longas.
-4. Validar novamente no Windows após a integração da interface.
-5. Publicar release inicial após aprovação dos checks e confirmação dos metadados.
+4. Publicar o release inicial depois que os checks exigidos forem aprovados e os limites forem registrados nas notas.
