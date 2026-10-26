@@ -1,4 +1,4 @@
-""""Windows WASAPI PCM output for the Qt frontend.
+"""Windows WASAPI PCM output for the Qt frontend.
 
 The device is opened through PortAudio's WASAPI host API via sounddevice.
 The emulated PSG remains independent from this real-time output backend.
