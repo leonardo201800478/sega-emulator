@@ -1,3 +1,5 @@
+> **Estado em 2026-10-26:** este documento preserva o escopo e as limitações registradas no marco inicial de jogo executável. Ele é histórico, não uma descrição completa do runtime atual. O SG-1000 agora integra geração de áudio PSG, saída de áudio no frontend Qt e apresentação de vídeo; a avaliação manual recente foi satisfatória, com pequenos engasgos/sincronismo prolongado ainda em investigação. Consulte o [marco atual de áudio e vídeo](milestones/sg1000-audio-video-milestone-2026-10-26.md) e o [README](../README.md) para o estado vigente. A integração atual não significa precisão ciclo a ciclo nem equivalência certificada com hardware real.
+
 # SG-1000 — marco do primeiro jogo executável
 
 ## Objetivo
