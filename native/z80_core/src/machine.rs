@@ -1,7 +1,6 @@
 //! Native SG-1000 machine orchestration and I/O routing.
-use pyo3::exceptions::{PyNotImplementedError, PyRuntimeError, PyValueError};
+use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
-use sega_sg1000_core::{MemoryConfig, Sg1000Machine};
 
 use super::{NativeAudioSynchronizer, NativeMemoryBus, NativeSn76489, NativeTms9918A, RustZ80Cpu};
 
@@ -316,99 +315,5 @@ impl NativeSG1000Machine {
         Err(PyRuntimeError::new_err(
             "Limite de instruções excedido antes do próximo quadro.",
         ))
-    }
-}
-
-// Adapter for the Python/Qt diagnostic panel. This deliberately exposes only
-// the standalone CPU+memory slice; it is not the full video/audio machine.
-#[pyclass(module = "sega_z80_core")]
-pub(crate) struct StandaloneSG1000Core {
-    machine: Sg1000Machine,
-}
-
-#[pymethods]
-impl StandaloneSG1000Core {
-    #[new]
-    #[pyo3(signature = (cartridge_rom, internal_ram_size=1024, cartridge_ram_size=0, cartridge_ram_start=0, cartridge_ram_end=0))]
-    fn new(
-        cartridge_rom: Vec<u8>,
-        internal_ram_size: usize,
-        cartridge_ram_size: usize,
-        cartridge_ram_start: u16,
-        cartridge_ram_end: u16,
-    ) -> PyResult<Self> {
-        let config = MemoryConfig {
-            internal_ram_size,
-            cartridge_ram_size,
-            cartridge_ram_start,
-            cartridge_ram_end,
-        };
-        let machine = Sg1000Machine::new(&cartridge_rom, config)
-            .map_err(|error| PyValueError::new_err(error.to_string()))?;
-        Ok(Self { machine })
-    }
-
-    #[getter]
-    fn pc(&self) -> u16 {
-        self.machine.cpu.registers.pc
-    }
-
-    #[getter]
-    fn a(&self) -> u8 {
-        self.machine.cpu.registers.a
-    }
-
-    #[getter]
-    fn f(&self) -> u8 {
-        self.machine.cpu.registers.f
-    }
-
-    #[getter]
-    fn bc(&self) -> u16 {
-        self.machine.cpu.registers.bc()
-    }
-
-    #[getter]
-    fn de(&self) -> u16 {
-        self.machine.cpu.registers.de()
-    }
-
-    #[getter]
-    fn hl(&self) -> u16 {
-        self.machine.cpu.registers.hl()
-    }
-
-    #[getter]
-    fn sp(&self) -> u16 {
-        self.machine.cpu.registers.sp
-    }
-
-    #[getter]
-    fn halted(&self) -> bool {
-        self.machine.cpu.halted
-    }
-
-    #[getter]
-    fn total_tstates(&self) -> u64 {
-        self.machine.cpu.total_tstates
-    }
-
-    fn step(&mut self) -> PyResult<u32> {
-        self.machine
-            .step()
-            .map_err(|error| PyNotImplementedError::new_err(error.to_string()))
-    }
-
-    fn run_instructions(&mut self, count: i64) -> PyResult<u64> {
-        if count < 0 {
-            return Err(PyValueError::new_err("count must be non-negative"));
-        }
-        self.machine
-            .run_instructions(count as usize)
-            .map_err(|error| PyNotImplementedError::new_err(error.to_string()))
-    }
-
-    fn read_memory(&self, address: u16) -> u8 {
-        self.machine.read_memory(address)
     }
 }
