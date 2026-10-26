@@ -543,7 +543,9 @@ def run(initial_path: Path | None = None) -> None:
                 try:
                     pygame.mixer.quit()
                 except Exception:
-                    logger.exception("Falha ao encerrar mixer antes de reconfigurar áudio")
+                    logger.exception(
+                        "Falha ao encerrar mixer antes de reconfigurar áudio"
+                    )
             pygame, audio_channel = _initialize_pygame_backend(updated)
         elif audio_channel is not None:
             audio_channel.set_volume(updated.audio_volume / 100)
