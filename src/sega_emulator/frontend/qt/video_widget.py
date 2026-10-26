@@ -224,6 +224,7 @@ class VideoWidget(QWidget):
                 "graphics_message": message,
             },
         )
+        self._refresh_raster_fallback()
         self._stack.setCurrentWidget(self._fallback)
         if self._quick_view is not None:
             self._quick_view.hide()
@@ -254,7 +255,7 @@ class VideoWidget(QWidget):
 
     def set_framebuffer(self, image: QImage) -> None:
         """Publish a copy of the completed frame; the emulator may reuse its buffer."""
-        self._source_image = image.copy()
+        self._source_image = QImage(image)
         if self._image_provider is not None:
             self._image_provider.set_image(self._source_image)
         if self._qml_root is not None and not self._vulkan_failed:
@@ -262,7 +263,8 @@ class VideoWidget(QWidget):
             self._qml_root.setProperty(
                 "frameRevision", int(self._qml_root.property("frameRevision")) + 1
             )
-        self._refresh_raster_fallback()
+        if self._vulkan_failed or self._quick_container is None:
+            self._refresh_raster_fallback()
         if self._quick_container is not None and not self._vulkan_failed:
             self._stack.setCurrentWidget(self._quick_container)
         else:
