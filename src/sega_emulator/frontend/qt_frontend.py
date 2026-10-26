@@ -20,6 +20,7 @@ from sega_emulator.frontend.controller_input import (
     joystick_value,
 )
 from sega_emulator.frontend.qt.audio_output import PcmResampler
+from sega_emulator.frontend.qt.wasapi_audio import WasapiAudioOutput
 from sega_emulator.frontend.qt.frame_pacer import FramePacer
 from sega_emulator.frontend.qt.preferences import FrontendPreferences
 from sega_emulator.frontend.sdl3_controller_input import SDL3ControllerInput
@@ -98,41 +99,22 @@ def _runtime_diagnostic(machine: SG1000Machine, rom_sha256: str) -> dict[str, ob
     return diagnostic
 
 
-def _initialize_pygame_backend(
-    preferences: FrontendPreferences | None = None,
-) -> tuple[object | None, object | None]:
-    """Configura a saída SDL sem alterar os clocks internos da emulação.
-
-    O argumento opcional preserva o contrato usado pelos testes de integração
-    do backend legado; a interface passa as preferências explicitamente.
-    """
-    apply_volume = preferences is not None
-    preferences = preferences or FrontendPreferences()
-    try:
-        import pygame as pygame_backend
-    except Exception as exc:
-        logger.warning("Backend Pygame indisponível: %s", exc)
-        return None, None
-
+def _initialize_wasapi_backend(
+    preferences: FrontendPreferences,
+) -> WasapiAudioOutput | None:
+    """Open the Windows WASAPI output without tying audio to the frame loop."""
     if not preferences.audio_enabled:
-        return pygame_backend, None
+        return None
     try:
-        pygame_backend.mixer.pre_init(
-            frequency=preferences.audio_sample_rate,
-            size=-16,
-            channels=1,
-            buffer=preferences.audio_buffer_size,
+        return WasapiAudioOutput(
+            sample_rate=preferences.audio_sample_rate,
+            buffer_size=preferences.audio_buffer_size,
+            volume=preferences.audio_volume,
         )
-        pygame_backend.mixer.init()
-        audio_channel = pygame_backend.mixer.Channel(0)
-        if apply_volume:
-            audio_channel.set_volume(preferences.audio_volume / 100)
-        return pygame_backend, audio_channel
     except Exception as exc:
-        # Falha na saída de áudio não deve desativar vídeo ou controles.
-        logger.warning("Saída de áudio indisponível: %s", exc)
-        return pygame_backend, None
-
+        # Audio initialization failure must not disable video or input.
+        logger.warning("Saída WASAPI indisponível: %s", exc)
+        return None
 
 def run(initial_path: Path | None = None) -> None:
     """Abre a interface de teste com teclado, telemetria e logs de sessão."""
@@ -182,7 +164,7 @@ def run(initial_path: Path | None = None) -> None:
         settings.setValue("rust_backend_default_migrated", True)
     else:
         selected_backend = preferences.cpu_core
-    pygame, audio_channel = _initialize_pygame_backend(preferences)
+    audio_output = _initialize_wasapi_backend(preferences)
     audio_resampler = PcmResampler(preferences.audio_sample_rate)
     serialized_controller_config = settings.value("controller_config", "", type=str)
     try:
@@ -353,13 +335,9 @@ def run(initial_path: Path | None = None) -> None:
                 for event_tstate, event_value in psg_events:
                     vgm_recorder.record_write(event_tstate, event_value)
             samples = machine.drain_audio_samples()
-            if samples and audio_channel is not None and pygame is not None:
+            if samples and audio_output is not None:
                 pcm = audio_resampler.process(samples)
-                sound = pygame.mixer.Sound(buffer=pcm)
-                if audio_channel.get_busy():
-                    audio_channel.queue(sound)
-                else:
-                    audio_channel.play(sound)
+                audio_output.write_pcm(pcm)
             emulation_ms = (time.perf_counter() - phase_started) * 1000
             frame_count += 1
 
@@ -638,7 +616,7 @@ def run(initial_path: Path | None = None) -> None:
         )
 
     def configure_audio_video() -> None:
-        nonlocal preferences, pygame, audio_channel, audio_resampler
+        nonlocal preferences, audio_output, audio_resampler
         dialog = SettingsDialog(preferences, window)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
@@ -649,17 +627,15 @@ def run(initial_path: Path | None = None) -> None:
             or updated.audio_buffer_size != preferences.audio_buffer_size
         )
         if audio_device_changed:
-            if pygame is not None:
+            if audio_output is not None:
                 try:
-                    pygame.mixer.quit()
+                    audio_output.close()
                 except Exception:
-                    logger.exception(
-                        "Falha ao encerrar mixer antes de reconfigurar áudio"
-                    )
-            pygame, audio_channel = _initialize_pygame_backend(updated)
+                    logger.exception("Falha ao encerrar WASAPI antes de reconfigurar áudio")
+            audio_output = _initialize_wasapi_backend(updated)
             audio_resampler = PcmResampler(updated.audio_sample_rate)
-        elif audio_channel is not None:
-            audio_channel.set_volume(updated.audio_volume / 100)
+        elif audio_output is not None:
+            audio_output.set_volume(updated.audio_volume)
 
         preferences = updated
         view.set_filter_mode(preferences.video_filter)
@@ -1211,6 +1187,5 @@ def run(initial_path: Path | None = None) -> None:
     )
     preferences.save_to_store(settings)
     controller_input.close()
-    if pygame is not None:
-        pygame.mixer.quit()
-        pygame.quit()
+    if audio_output is not None:
+        audio_output.close()
