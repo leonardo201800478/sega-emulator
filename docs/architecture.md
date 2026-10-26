@@ -4,7 +4,19 @@
 
 Construir uma base de emulação determinística, testável e evolutiva, começando pelo SG-1000. Componentes de hardware devem ser reutilizados entre consoles quando o hardware e os contratos forem realmente compatíveis. Reutilização não deve apagar diferenças entre revisões, mapas de memória, periféricos ou temporização.
 
-A implementação de referência começa em Python. Rust poderá ser adotado seletivamente após profiling e testes de equivalência, sem alterar os contratos observáveis dos componentes.
+## Política de implementação (decisão adotada)
+
+Rust é a linguagem principal e definitiva para a lógica de hardware do emulador. Novos componentes críticos de CPU, barramento, memória, temporização, VDP, PSG, interrupções e scheduler devem ser implementados diretamente em Rust quando seus contratos e critérios de validação estiverem claros. Não é obrigatório criar primeiro uma versão Python nem portar cada componente duas vezes.
+
+Python permanece como linguagem do frontend Qt, configuração, ferramentas, automação, análise de resultados e testes. Uma implementação Python de referência é criada seletivamente quando reduz o risco de pesquisa de hardware ou fornece um oráculo independente útil; não manter dois núcleos completos por inércia. A integração de aplicação pode usar PyO3/Maturin, mantendo bindings finos e minimizando cópias e chamadas frequentes entre linguagens.
+
+Componentes ainda incertos podem ser prototipados em Python. Antes de torná-los definitivos em Rust, documentar contrato, evidências e vetores de teste; validar equivalência e determinismo. O código Rust deve ser a fonte oficial após a validação, salvo decisão arquitetural documentada em ADR.
+
+A migração é incremental: preservar o SG-1000 executável, contratos existentes e o backend de referência enquanto ele for necessário para testes. Não reescrever código estável sem benefício concreto. Não adicionar JIT nem paralelismo de hardware por antecipação; usar profiling e benchmarks reproduzíveis. A ordem temporal de CPU, VDP, PSG e barramento deve continuar determinística, sem paralelismo inseguro entre componentes sincronizados.
+
+Consulte [ADR 0007 — Política de desenvolvimento Rust-first](adr/0007-rust-first-development-policy.md) e [AGENTS.md](../AGENTS.md) para o fluxo de implementação, testes e workflows.
+
+## Princípios
 
 ## Princípios
 
