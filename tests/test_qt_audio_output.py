@@ -1,21 +1,26 @@
-"""Tests for PCM output conversion used by the Qt audio backend."""
+"""Tests for deterministic, anti-aliased PCM output conversion."""
 
 from __future__ import annotations
 
 from array import array
+import math
 
 import pytest
 
-from sega_emulator.frontend.qt.audio_output import samples_to_pcm
+from sega_emulator.frontend.qt.audio_output import PcmResampler, samples_to_pcm
+
+
+def _decode(pcm: bytes) -> list[int]:
+    decoded = array("h")
+    decoded.frombytes(pcm)
+    return list(decoded)
 
 
 def test_same_rate_preserves_sample_count_and_clamps_to_int16() -> None:
     samples = [-2.0, -0.5, 0.0, 0.5, 2.0]
 
-    pcm = samples_to_pcm(samples, 44_100)
+    decoded = _decode(samples_to_pcm(samples, 44_100))
 
-    decoded = array("h")
-    decoded.frombytes(pcm)
     assert len(decoded) == len(samples)
     assert decoded[0] == -32768
     assert decoded[1] < 0
@@ -39,3 +44,40 @@ def test_empty_samples_return_empty_pcm() -> None:
 def test_invalid_output_rate_is_rejected(rate: int) -> None:
     with pytest.raises(ValueError, match="output_rate"):
         samples_to_pcm([0.0], rate)
+
+
+def test_streaming_resampler_is_independent_of_block_boundaries() -> None:
+    samples = [0.4 * math.sin(index * 0.19) for index in range(4097)]
+    expected = samples_to_pcm(samples, 22_050)
+
+    resampler = PcmResampler(22_050)
+    chunks = [
+        resampler.process(samples[:137]),
+        resampler.process(samples[137:2048]),
+        resampler.process(samples[2048:]),
+        resampler.flush(),
+    ]
+
+    assert b"".join(chunks) == expected
+
+
+def test_downsampling_fir_rejects_frequencies_above_output_nyquist() -> None:
+    count = 8192
+    low_tone = [0.5 * math.sin(2 * math.pi * 0.10 * i) for i in range(count)]
+    high_tone = [0.5 * math.sin(2 * math.pi * 0.35 * i) for i in range(count)]
+
+    low_pcm = _decode(samples_to_pcm(low_tone, 22_050))
+    high_pcm = _decode(samples_to_pcm(high_tone, 22_050))
+    low_rms = math.sqrt(sum(sample * sample for sample in low_pcm[100:]) / len(low_pcm[100:]))
+    high_rms = math.sqrt(sum(sample * sample for sample in high_pcm[100:]) / len(high_pcm[100:]))
+
+    assert low_rms > 8_000
+    assert high_rms < low_rms * 0.03
+
+
+def test_resampler_flush_is_empty_after_stream_reset() -> None:
+    resampler = PcmResampler(48_000)
+    resampler.process([0.1] * 256)
+
+    assert resampler.flush()
+    assert resampler.flush() == b""
