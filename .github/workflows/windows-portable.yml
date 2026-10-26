@@ -1,0 +1,145 @@
+name: Windows Portable Package
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/windows-portable.yml"
+      - "pyproject.toml"
+      - "src/**"
+      - "native/z80_core/**"
+      - "native/z80_alu/**"
+      - "native/sg1000_core/**"
+      - "scripts/**"
+      - "docs/releases/portable-windows.md"
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-portable-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Build and smoke-test Windows x64 portable package
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Install application and packaging tools
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,qt]" maturin pyinstaller
+
+      - name: Build and install the optional Rust extension
+        shell: pwsh
+        run: |
+          Push-Location native/z80_core
+          maturin build --release --features python-extension --out dist
+          Pop-Location
+          $wheel = Get-ChildItem native/z80_core/dist/*.whl | Select-Object -First 1
+          if (-not $wheel) { throw "Maturin did not produce a wheel." }
+          python -m pip install $wheel.FullName
+          python -c "import sega_z80_core; print('Rust extension import: OK')"
+
+      - name: Validate imports before packaging
+        shell: pwsh
+        run: |
+          python -c "import PySide6, pygame, sounddevice, sdl3, sega_emulator; print('Application dependency imports: OK')"
+          python -m sega_emulator --help
+
+      - name: Build one-folder portable application
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --windowed --onedir --name SegaEmulator --paths src --collect-all PySide6 --collect-all pygame --collect-all sounddevice --collect-all sdl3 --hidden-import sega_z80_core src/sega_emulator/__main__.py
+
+      - name: Assemble portable distribution
+        shell: pwsh
+        run: |
+          $app = "dist/SegaEmulator"
+          if (-not (Test-Path "$app/SegaEmulator.exe")) {
+            throw "Packaged executable was not generated."
+          }
+          @'
+          Sega Emulator v0.1.0 — Portable Windows x64
+          ==========================================
+
+          Quick start
+          -----------
+          1. Extract the complete ZIP archive to a writable folder.
+          2. Run SegaEmulator.exe.
+          3. Select File > Open ROM and choose a legally obtained SG-1000 ROM.
+
+          Do not move SegaEmulator.exe out of this folder: the adjacent files
+          contain bundled runtime libraries and Qt plugins.
+
+          Notes
+          -----
+          - This is an early SG-1000 milestone; full hardware accuracy is not claimed.
+          - Occasional stuttering and long-session audio/video synchronization remain
+            under investigation.
+          - No commercial ROMs or BIOS files are included.
+          - See README.md and docs/releases/portable-windows.md in the source
+            repository for project scope, limitations, and license.
+          - MIT License. SEGA and SG-1000 are trademarks of their respective owners.
+          '@ | Set-Content -Encoding utf8 "$app/README-PORTABLE.txt"
+          Copy-Item LICENSE "$app/LICENSE.txt"
+          Compress-Archive -Path "$app/*" -DestinationPath "dist/SegaEmulator-Windows-x64-portable.zip" -Force
+
+      - name: Smoke-test packaged executable
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path "dist/SegaEmulator/SegaEmulator.exe").Path
+          $process = Start-Process -FilePath $exe -ArgumentList "--help" -Wait -PassThru
+          if ($process.ExitCode -ne 0) {
+            throw "Packaged executable smoke test failed with exit code $($process.ExitCode)."
+          }
+          if ((Get-Item "dist/SegaEmulator-Windows-x64-portable.zip").Length -le 1MB) {
+            throw "Portable archive is unexpectedly small; inspect packaging output."
+          }
+
+      - name: Upload portable ZIP for inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: SegaEmulator-Windows-x64-portable
+          path: dist/SegaEmulator-Windows-x64-portable.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  publish-release-asset:
+    name: Attach ZIP to the matching GitHub release
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download portable ZIP
+        uses: actions/download-artifact@v4
+        with:
+          name: SegaEmulator-Windows-x64-portable
+          path: release-assets
+
+      - name: Attach ZIP to release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${GITHUB_REF_NAME}" release-assets/SegaEmulator-Windows-x64-portable.zip --clobber
