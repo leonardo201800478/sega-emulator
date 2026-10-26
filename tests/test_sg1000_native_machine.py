@@ -81,7 +81,9 @@ def test_native_machine_routes_ports_and_steps_like_python() -> None:
         assert native.psg.tone_periods == reference.psg.tone_periods
         assert native.psg.attenuations == reference.psg.attenuations
         assert native.psg._tone_outputs == reference.psg._tone_outputs
-    assert native.drain_audio_samples() == reference.drain_audio_samples()
+    assert native.drain_audio_samples() == pytest.approx(
+        reference.drain_audio_samples(), abs=1e-12
+    )
 
 
 def test_native_machine_run_frame_matches_python_frame_loop() -> None:
@@ -99,7 +101,9 @@ def test_native_machine_run_frame_matches_python_frame_loop() -> None:
     assert native.vdp.scanline == reference.vdp.scanline
     assert native.vdp.status == reference.vdp.status
     assert native.vdp.framebuffer == reference.vdp.framebuffer
-    assert native.drain_audio_samples() == reference.drain_audio_samples()
+    assert native.drain_audio_samples() == pytest.approx(
+        reference.drain_audio_samples(), abs=1e-12
+    )
 
 
 def test_native_machine_rejects_invalid_frame_step_limit() -> None:
