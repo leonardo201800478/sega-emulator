@@ -1,3 +1,4 @@
+from sega_emulator.frontend.qt.wasapi_audio import WasapiAudioOutput
 """Janela Qt moderna para o frontend SG-1000; operações vêm por callbacks."""
 
 from __future__ import annotations
