@@ -177,3 +177,5 @@ ROMs comerciais e logs locais não devem ser incluídos no repositório. Use hom
 ## Relatório de validação do frontend Qt
 
 O histórico da implementação, os arquivos afetados, os resultados dos três agentes, os testes de áudio/vídeo, os itens ignorados e as limitações conhecidas estão documentados em [docs/validation/qt-frontend-pr98.md](docs/validation/qt-frontend-pr98.md). A PR #98 permanece em revisão; os testes automatizados não substituem a validação manual de áudio em hardware real.
+
+comando para iniciar o emulador compilado em RUST: python -c "from sega_emulator.frontend.qt_frontend import run; run()"
