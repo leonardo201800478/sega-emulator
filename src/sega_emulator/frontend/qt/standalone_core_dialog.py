@@ -6,8 +6,6 @@ the standalone crate does not yet implement VDP, PSG, or machine scheduling.
 
 from __future__ import annotations
 
-from sega_emulator.machine.cartridge_profiles import cartridge_profile
-
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import (
     QDialog,
@@ -18,6 +16,8 @@ from PySide6.QtWidgets import (
     QPushButton,
     QVBoxLayout,
 )
+
+from sega_emulator.machine.cartridge_profiles import cartridge_profile
 
 
 class StandaloneCoreDialog(QDialog):
