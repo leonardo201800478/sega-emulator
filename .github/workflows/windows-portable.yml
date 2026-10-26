@@ -72,7 +72,7 @@ jobs:
       - name: Build one-folder portable application
         shell: pwsh
         run: |
-          python -m PyInstaller --noconfirm --clean --windowed --onedir --name SegaEmulator --paths src --collect-all PySide6 --collect-all pygame --collect-all sounddevice --collect-all sdl3 --hidden-import sega_z80_core src/sega_emulator/__main__.py
+          python -m PyInstaller --noconfirm --clean --windowed --onedir --name SegaEmulator --paths src --collect-all pygame --collect-all sounddevice --collect-all sdl3 --hidden-import sega_z80_core src/sega_emulator/__main__.py
 
       - name: Assemble portable distribution
         shell: pwsh
