@@ -78,7 +78,9 @@ class SettingsDialog(QDialog):
         psg_form.addRow("Clock nominal:", QLabel("3.579.545 Hz (fixo)"))
         psg_form.addRow("Divisor interno:", QLabel("16 (fixo no modelo atual)"))
         psg_form.addRow("Canais:", QLabel("3 tons + 1 ruído; saída mono"))
-        psg_form.addRow("Antialiasing:", QLabel("FIR Blackman de 63 taps, ativo"))
+        psg_form.addRow(
+            "Tratamento da saída:", QLabel("Reamostragem linear no frontend; sem FIR no núcleo desta branch")
+        )
 
         volume_row = QWidget(psg_group)
         volume_layout = QHBoxLayout(volume_row)
@@ -97,9 +99,10 @@ class SettingsDialog(QDialog):
         psg_note = QLabel(
             "O ganho afeta somente as amostras reproduzidas; não altera os "
             "registradores nem o clock lógico. Clock, divisor, variante do chip e "
-            "filtro ainda são fixos no núcleo. O FIR é antialiasing digital, não "
-            "um modelo do circuito analógico real. Esses controles só serão "
-            "liberados quando houver implementação e testes diferenciais Python/Rust.",
+            "tratamento de saída do núcleo ainda não são configuráveis. A reamostragem "
+            "linear ocorre no frontend e não é um modelo do circuito analógico real. "
+            "Novos parâmetros só serão liberados quando houver implementação e "
+            "testes diferenciais Python/Rust.",
             psg_page,
         )
         psg_note.setWordWrap(True)
