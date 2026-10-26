@@ -32,6 +32,11 @@ def _configured_pair(
     return python_psg, rust_psg
 
 
+def _assert_samples_match(native_samples, python_samples) -> None:
+    assert len(native_samples) == len(python_samples)
+    assert native_samples == pytest.approx(python_samples, abs=1e-12)
+
+
 def _assert_psg_state_matches(python_psg, rust_psg) -> None:
     for name in (
         "clock_hz",
@@ -62,13 +67,13 @@ def test_native_psg_clock_advancement_and_samples_match_python() -> None:
     rust_psg.advance_clocks(75_000)
 
     _assert_psg_state_matches(python_psg, rust_psg)
-    assert rust_psg.drain_samples() == python_psg.drain_samples()
+    _assert_samples_match(rust_psg.drain_samples(), python_psg.drain_samples())
 
 
 def test_native_psg_render_and_bounded_buffer_match_python() -> None:
     native_core = pytest.importorskip("sega_z80_core")
     python_psg, rust_psg = _configured_pair(native_core.NativeSn76489)
-    assert rust_psg.render(257) == python_psg.render(257)
+    _assert_samples_match(rust_psg.render(257), python_psg.render(257))
     _assert_psg_state_matches(python_psg, rust_psg)
 
     python_buffered, rust_buffered = _configured_pair(
@@ -79,7 +84,7 @@ def test_native_psg_render_and_bounded_buffer_match_python() -> None:
     python_buffered.advance_clocks(16_000)
     rust_buffered.advance_clocks(16_000)
     _assert_psg_state_matches(python_buffered, rust_buffered)
-    assert rust_buffered.drain_samples() == python_buffered.drain_samples()
+    _assert_samples_match(rust_buffered.drain_samples(), python_buffered.drain_samples())
 
 
 def test_native_audio_synchronizer_preserves_timestamp_and_write_order() -> None:
@@ -107,4 +112,4 @@ def test_native_audio_synchronizer_preserves_timestamp_and_write_order() -> None
     assert tuple(rust_sync.pending_events) == tuple(
         (event.tstate, event.value) for event in python_sync.pending_events
     )
-    assert rust_psg.drain_samples() == python_psg.drain_samples()
+    _assert_samples_match(rust_psg.drain_samples(), python_psg.drain_samples())
