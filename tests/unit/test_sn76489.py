@@ -66,7 +66,8 @@ def test_tone_period_zero_and_one_follow_documented_sg1000_profile() -> None:
         psg.write(0x90)
         psg.write(0x80 | (period & 0x0F))
         assert psg._tone_outputs[0] == 1
-        assert all(sample > 0 for sample in psg.render(128))
+        samples = psg.render(512)
+        assert all(sample > 0 for sample in samples[256:])
 
 
 @pytest.mark.parametrize("period", (127, 254, 511))
@@ -74,7 +75,8 @@ def test_rendered_tone_frequency_matches_clock_and_divider(period: int) -> None:
     """Check the measured fundamental against f = input_clock / (32 * period)."""
     psg = SN76489()
     enable_tone_zero(psg, period)
-    samples = psg.render(22_050)  # 0.5 s, enough to resolve low-frequency periods.
+    # Discard startup response from the FIR, then measure a full 0.5 seconds.
+    samples = psg.render(1_024 + 22_050)[1_024:]
     transitions = sum(
         (a < 0.0) != (b < 0.0) for a, b in zip(samples, samples[1:], strict=False)
     )
