@@ -128,7 +128,8 @@ class EmulatorMainWindow(QMainWindow):
         else:
             self.standalone_core_action.setEnabled(False)
         self.standalone_core_action.setToolTip(
-            "Abre o diagnóstico experimental de CPU e memória do core Rust independente."
+            "Abre o diagnóstico experimental de CPU e memória do core Rust "
+            "independente."
         )
         diagnostics_menu.addAction(self.standalone_core_action)
 
