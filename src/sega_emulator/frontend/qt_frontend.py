@@ -97,8 +97,9 @@ def run(initial_path: Path | None = None) -> None:
         settings.setValue("rust_backend_default_migrated", True)
     else:
         selected_backend = preferences.cpu_core
+    audio_enabled_setting = preferences.audio_enabled
     pygame, audio_channel = (
-        _initialize_pygame_backend() if preferences.audio_enabled else (None, None)
+        _initialize_pygame_backend() if audio_enabled_setting else (None, None)
     )
     try:
         audio_gain_percent = max(
@@ -236,29 +237,29 @@ def run(initial_path: Path | None = None) -> None:
     phase_max_ms = dict.fromkeys(phase_totals_ms, 0.0)
 
     def configure_psg_settings() -> None:
-        nonlocal pygame, audio_channel, audio_gain_percent
+        nonlocal pygame, audio_channel, audio_gain_percent, audio_enabled_setting
         result = configure_psg(
             window,
             settings,
-            audio_enabled=audio_channel is not None,
+            audio_enabled=audio_enabled_setting,
             output_gain=audio_gain_percent,
         )
         if result is None:
             return
-        audio_enabled, audio_gain_percent = result
-        if audio_enabled and (pygame is None or audio_channel is None):
+        audio_enabled_setting, audio_gain_percent = result
+        if audio_enabled_setting and (pygame is None or audio_channel is None):
             pygame_backend, channel = _initialize_pygame_backend()
             if pygame_backend is not None:
                 pygame = pygame_backend
                 audio_channel = channel
-        elif not audio_enabled and pygame is not None:
+        elif not audio_enabled_setting and pygame is not None:
             try:
                 pygame.mixer.quit()
             except Exception:
                 logger.exception("Falha ao desativar a saída de áudio")
             audio_channel = None
         status.showMessage(
-            f"Configurações de som aplicadas: saída {'ativa' if audio_enabled else 'silenciada'}, "
+            f"Configurações de som aplicadas: saída {'ativa' if audio_enabled_setting else 'silenciada'}, "
             f"ganho {audio_gain_percent}%.",
             6000,
         )
@@ -266,7 +267,7 @@ def run(initial_path: Path | None = None) -> None:
             "Configurações de som alteradas",
             extra={
                 "event": "psg_output_settings_changed",
-                "audio_enabled": audio_enabled,
+                "audio_enabled": audio_enabled_setting,
                 "output_gain_percent": audio_gain_percent,
             },
         )
@@ -1013,7 +1014,7 @@ def run(initial_path: Path | None = None) -> None:
             if isinstance(path, str) and path.strip()
         )[:12],
         controller_config=controller_input.config.to_json(),
-        audio_enabled=preferences.audio_enabled,
+        audio_enabled=audio_enabled_setting,
         diagnostics_enabled=preferences.diagnostics_enabled,
         cpu_core=selected_backend,
     )
