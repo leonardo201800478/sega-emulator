@@ -107,6 +107,31 @@ jobs:
           Copy-Item LICENSE "$app/LICENSE.txt"
           Compress-Archive -Path "$app/*" -DestinationPath "dist/SegaEmulator-Windows-x64-portable.zip" -Force
 
+      - name: Report package size and largest bundled files
+        shell: pwsh
+        run: |
+          $app = "dist/SegaEmulator"
+          $files = @(Get-ChildItem $app -Recurse -File)
+          $totalBytes = ($files | Measure-Object -Property Length -Sum).Sum
+          $lines = [System.Collections.Generic.List[string]]::new()
+          $lines.Add("Sega Emulator portable package inventory")
+          $lines.Add("File count: $($files.Count)")
+          $lines.Add("Uncompressed bytes: $totalBytes")
+          $lines.Add(("Uncompressed MiB: {0:N2}" -f ($totalBytes / 1MB)))
+          $lines.Add("")
+          $lines.Add("Largest 25 files (bytes | relative path):")
+          foreach ($file in ($files | Sort-Object Length -Descending | Select-Object -First 25)) {
+            $relative = [System.IO.Path]::GetRelativePath((Resolve-Path $app).Path, $file.FullName)
+            $lines.Add(("{0} | {1}" -f $file.Length, $relative))
+          }
+          $archive = Get-Item "dist/SegaEmulator-Windows-x64-portable.zip"
+          $lines.Add("")
+          $lines.Add(("ZIP bytes: {0}" -f $archive.Length))
+          $lines.Add(("ZIP MiB: {0:N2}" -f ($archive.Length / 1MB)))
+          $report = "dist/package-size-report.txt"
+          $lines | Set-Content -Encoding utf8 $report
+          $lines | ForEach-Object { Write-Host $_ }
+
       - name: Smoke-test packaged CLI entry point
         shell: pwsh
         run: |
@@ -123,7 +148,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SegaEmulator-Windows-x64-portable
-          path: dist/SegaEmulator-Windows-x64-portable.zip
+          path: |
+            dist/SegaEmulator-Windows-x64-portable.zip
+            dist/package-size-report.txt
           if-no-files-found: error
           retention-days: 14
 
