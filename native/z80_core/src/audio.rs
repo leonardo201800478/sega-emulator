@@ -671,7 +671,7 @@ mod tests {
 
             assert!(
                 (measured_frequency - expected_frequency).abs() <= 2.5,
-                "period={period}: expected {expected_frequency:.3} Hz, measured                  {measured_frequency:.3} Hz from {transitions} transitions"
+                "period={period}: expected {expected_frequency:.3} Hz, measured {measured_frequency:.3} Hz from {transitions} transitions"
             );
         }
     }
