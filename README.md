@@ -1,6 +1,8 @@
 # Sega Emulator
 
-Projeto de emulação de alta precisão com implementação de referência em Python, começando pelo Sega SG-1000.
+Projeto de emulação de alta precisão para a família Sega. **Estratégia arquitetural oficial: núcleo de emulação em Rust; frontend Qt/PySide6 e ferramentas em Python.** A migração é incremental e guiada por contratos, testes diferenciais e CI, não por reescrita integral nem pela obrigação de manter dois runtimes completos.
+
+O primeiro marco é SG-1000; a expansão seguirá gradualmente para Master System/Game Gear, Mega Drive/Genesis, Sega CD e 32X. O Gearsystem é uma referência externa de estudo para SG-1000/SMS/Game Gear: https://github.com/drhelius/Gearsystem. Seu código declara GPL-3.0 e não deve ser copiado sem análise explícita da compatibilidade de licença.
 
 ## Estado atual
 
@@ -56,6 +58,16 @@ Para usar o frontend Pygame:
 ```powershell
 .\\.venv\\Scripts\\python.exe -m sega_emulator "C:\\caminho\\para\\jogo.sg" --ui pygame
 ```
+
+## Estratégia de linguagens e estado do runtime
+
+- **Rust é a implementação oficial do hardware:** CPU Z80, barramento/memória, I/O, VDP, PSG, sincronização e runtime da máquina.
+- **Python permanece na aplicação:** Qt/PySide6, configuração da UI, testes pytest, testes diferenciais, auditorias, ferramentas e benchmarks.
+- **Referência Python seletiva:** mantida temporariamente apenas quando contribui para pesquisa ou comparação. Não é objetivo manter dois emuladores completos. O backend Rust só passa a ser padrão após critérios funcionais e regressões aprovados.
+- **PyO3/Maturin são a fronteira de integração.** Chamadas Python por instrução/acesso a byte devem sair do caminho crítico. GIL e threads só serão alterados com modelo explícito de sincronização.
+- O crate `native/sg1000_core` é o destino standalone, ainda parcial. A extensão `native/z80_core` oferece integração experimental com Qt, mas a documentação técnica registra limitações temporais e de ownership. Não afirmar que já existe um núcleo SG-1000 completo ou precisão ciclo a ciclo.
+
+Decisão aprovada: [ADR 0007 — Rust-first para o núcleo](docs/adr/0007-rust-first-emulation-core.md). Plano incremental: [migração do runtime para Rust](docs/rust-runtime-migration-plan.md). Diretrizes para implementação e validação, inclusive workflows/agentes, estão em [.github/copilot-instructions.md](.github/copilot-instructions.md).
 
 ## Núcleo SG-1000 standalone em Rust (em desenvolvimento)\n\nO crate puro `native/sg1000_core` agora contém mapa de memória ROM/RAM, contrato de barramento, uma fatia inicial de instruções Z80 e uma máquina headless que conecta CPU e memória. A máquina executa ROMs sintéticas sem iniciar Python, mas ainda **não** representa o SG-1000 completo: VDP, PSG, I/O, interrupções e scheduler de dispositivos não estão integrados. A CPU suporta apenas instruções explicitamente implementadas e retorna erro para as demais; isso é um marco de extração, não um runtime para jogos comerciais.\n\n## Backend SG-1000 Rust experimental no Qt
 
