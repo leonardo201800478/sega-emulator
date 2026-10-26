@@ -205,7 +205,7 @@ python -c "from sega_emulator.frontend.qt_frontend import run; run()"
 
 ### Confirmar a seleção do backend Rust
 
-O frontend integra a máquina SG-1000 e permite selecionar o backend pelo menu **Emulação → Selecionar núcleo Z80…**. Escolha **Rust (runtime nativo experimental)** se não estiver selecionado. O código da branch inclui uma migração de preferências que define Rust como seleção inicial uma única vez, mas uma configuração já persistida pode influenciar a seleção atual.
+O frontend integra a máquina SG-1000 e permite selecionar o backend pelo menu **Emulação → Selecionar backend de emulação…**. Escolha **Rust (runtime nativo experimental)** se não estiver selecionado. O código da branch inclui uma migração de preferências que define Rust como seleção inicial uma única vez, mas uma configuração já persistida pode influenciar a seleção atual.
 
 A compilação por si só não garante que a sessão esteja usando Rust. Verifique a seleção exibida pela interface e observe mensagens de erro/logs. O backend Rust permanece experimental e pode não suportar todas as instruções Z80 necessárias para todas as ROMs.
 
