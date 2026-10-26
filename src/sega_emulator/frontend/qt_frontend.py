@@ -448,7 +448,7 @@ def run(initial_path: Path | None = None) -> None:
         selected, accepted = QInputDialog.getItem(
             window,
             "Backend de emulação",
-            "Escolha o runtime completo da máquina SG-1000. O backend Rust executa "
+            "Escolha o runtime completo da máquina SG-1000. Rust executa "
             "CPU, memória, VDP, PSG e I/O nativamente, mas o conjunto de instruções "
             "Z80 ainda é parcial; algumas ROMs podem falhar.",
             choices,

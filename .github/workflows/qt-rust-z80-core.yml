@@ -8,6 +8,7 @@ on:
   pull_request:
     paths:
       - "native/z80_core/**"
+      - "native/sg1000_core/**"
       - "native/z80_alu/**"
       - "src/sega_emulator/machine/sg1000.py"
       - "src/sega_emulator/frontend/qt/**"
