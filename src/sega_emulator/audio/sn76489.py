@@ -231,16 +231,17 @@ class SN76489:
         )
         for _ in range(internal_clocks):
             self._tick_internal_clock()
-            filtered_sample = self._filter_mix()
+            self._push_filter_sample()
             self._output_phase += self.sample_rate * CLOCK_DIVIDER
-            while self._output_phase >= self.clock_hz:
-                sample = filtered_sample
-                if sample_sink is self._pending_samples and len(sample_sink) == (
-                    self._sample_buffer_capacity
-                ):
-                    self.dropped_samples += 1
-                sample_sink.append(sample)
-                self._output_phase -= self.clock_hz
+            if self._output_phase >= self.clock_hz:
+                sample = self._filtered_output()
+                while self._output_phase >= self.clock_hz:
+                    if sample_sink is self._pending_samples and len(sample_sink) == (
+                        self._sample_buffer_capacity
+                    ):
+                        self.dropped_samples += 1
+                    sample_sink.append(sample)
+                    self._output_phase -= self.clock_hz
 
     def drain_samples(self, max_samples: int | None = None) -> list[float]:
         """Consome amostras geradas por advance_clocks(), em ordem FIFO.
@@ -276,14 +277,17 @@ class SN76489:
         )
         return total * 0.25
 
-    def _filter_mix(self) -> float:
-        """Filter each internal-clock mix before conversion to the output rate."""
+    def _push_filter_sample(self) -> None:
+        """Record every internal-clock mix value in the FIR history."""
         self._filter_history[self._filter_position] = self._mix()
+        self._filter_position = (self._filter_position + 1) % FILTER_TAPS
+
+    def _filtered_output(self) -> float:
+        """Evaluate the FIR only when an output sample is due."""
         total = 0.0
         for index, coefficient in enumerate(self._filter_coefficients):
-            history_index = (self._filter_position - index) % FILTER_TAPS
+            history_index = (self._filter_position - 1 - index) % FILTER_TAPS
             total += coefficient * self._filter_history[history_index]
-        self._filter_position = (self._filter_position + 1) % FILTER_TAPS
         return total
 
     def render(self, sample_count: int) -> list[float]:
