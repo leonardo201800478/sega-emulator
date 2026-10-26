@@ -245,23 +245,37 @@ impl Z80 {
                 }
                 10
             }
-            0x3C => {
-                let old = self.registers.a;
-                let value = old.wrapping_add(1);
+            0x04 | 0x0C | 0x14 | 0x1C | 0x24 | 0x2C | 0x34 | 0x3C
+            | 0x05 | 0x0D | 0x15 | 0x1D | 0x25 | 0x2D | 0x35 | 0x3D => {
+                let register = (opcode >> 3) & 0x07;
+                let decrement = opcode & 0x01 != 0;
+                let old = self.read_register(bus, register);
+                let value = if decrement {
+                    old.wrapping_sub(1)
+                } else {
+                    old.wrapping_add(1)
+                };
                 let carry = self.registers.f & FLAG_C;
-                let mut flags = value & (FLAG_S | FLAG_XY);
+                let mut flags = (value & (FLAG_S | FLAG_XY)) | carry;
                 if value == 0 {
                     flags |= FLAG_Z;
                 }
-                if old & 0x0F == 0x0F {
+                if if decrement {
+                    old & 0x0F == 0
+                } else {
+                    old & 0x0F == 0x0F
+                } {
                     flags |= FLAG_H;
                 }
-                if old == 0x7F {
+                if if decrement { old == 0x80 } else { old == 0x7F } {
                     flags |= FLAG_PV;
                 }
-                self.registers.a = value;
-                self.registers.f = flags | carry;
-                4
+                if decrement {
+                    flags |= 0x02; // N
+                }
+                self.write_register(bus, register, value);
+                self.registers.f = flags;
+                if register == 6 { 11 } else { 4 }
             }
             0xAF => {
                 self.registers.a = 0;
@@ -534,6 +548,41 @@ mod tests {
         }
         assert_eq!(cpu.registers.bc(), 0x1234);
         assert_eq!(cpu.registers.sp, 0xD000);
+    }
+
+    #[test]
+    fn eight_bit_increment_and_decrement_preserve_carry_and_set_edge_flags() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..8].copy_from_slice(&[
+            0x3E, 0x7F, // LD A,0x7F
+            0x37, // SCF is intentionally unsupported; test starts with carry via F below
+            0x3C, // INC A -> 0x80, overflow and half-carry
+            0x3D, // DEC A -> 0x7F, overflow and half-carry
+            0x21, 0x00, 0xC0, // LD HL,0xC000
+            0x34, // INC (HL)
+        ]);
+        let mut cpu = Z80::default();
+        cpu.registers.f = FLAG_C;
+
+        assert_eq!(cpu.step(&mut bus), Ok(7));
+        assert_eq!(cpu.registers.a, 0x7F);
+        // The unsupported SCF byte is not executed; move past it explicitly.
+        cpu.registers.pc = 3;
+        assert_eq!(cpu.step(&mut bus), Ok(4));
+        assert_eq!(cpu.registers.a, 0x80);
+        assert_ne!(cpu.registers.f & FLAG_PV, 0);
+        assert_ne!(cpu.registers.f & FLAG_H, 0);
+        assert_ne!(cpu.registers.f & FLAG_C, 0);
+        assert_eq!(cpu.step(&mut bus), Ok(4));
+        assert_eq!(cpu.registers.a, 0x7F);
+        assert_ne!(cpu.registers.f & FLAG_PV, 0);
+        assert_ne!(cpu.registers.f & FLAG_H, 0);
+        assert_ne!(cpu.registers.f & FLAG_C, 0);
+
+        cpu.registers.pc = 4;
+        assert_eq!(cpu.step(&mut bus), Ok(10));
+        assert_eq!(cpu.step(&mut bus), Ok(11));
+        assert_eq!(bus.0[0xC000], 1);
     }
 
     #[test]
