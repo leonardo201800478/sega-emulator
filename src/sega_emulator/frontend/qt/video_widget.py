@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from threading import Lock
 
-from PySide6.QtCore import QUrl, Qt
+from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QColor, QImage, QPixmap
 from PySide6.QtQml import QQmlComponent, QQmlImageProviderBase
 from PySide6.QtQuick import (
