@@ -8,6 +8,7 @@ import logging
 import time
 from pathlib import Path
 
+from sega_emulator.audio.vgm_recorder import VgmRecorder
 from sega_emulator.frontend.controller_input import (
     ACTIONS,
     DEFAULT_GAMEPAD_BINDINGS,
@@ -21,7 +22,6 @@ from sega_emulator.frontend.controller_input import (
 from sega_emulator.frontend.qt.audio_output import PcmResampler
 from sega_emulator.frontend.qt.frame_pacer import FramePacer
 from sega_emulator.frontend.qt.preferences import FrontendPreferences
-from sega_emulator.audio.vgm_recorder import VgmRecorder
 from sega_emulator.frontend.sdl3_controller_input import SDL3ControllerInput
 from sega_emulator.machine.sg1000 import SG1000Machine
 from sega_emulator.rom_loader import LoadedRom, list_rom_members, load_rom
@@ -680,14 +680,20 @@ def run(initial_path: Path | None = None) -> None:
     def start_vgm_recording() -> None:
         nonlocal vgm_output_path
         if machine is None or loaded is None:
-            QMessageBox.information(window, "Gravação VGM", "Carregue uma ROM antes de gravar.")
+            QMessageBox.information(
+                window, "Gravação VGM", "Carregue uma ROM antes de gravar."
+            )
             return
         if vgm_recorder.active:
             return
         path, _ = QFileDialog.getSaveFileName(
             window,
             "Salvar gravação PSG VGM",
-            str(Path(loaded.path).with_suffix(".vgm")) if getattr(loaded, "path", None) else str(Path.cwd() / "sg1000_capture.vgm"),
+            (
+                str(Path(loaded.path).with_suffix(".vgm"))
+                if getattr(loaded, "path", None)
+                else str(Path.cwd() / "sg1000_capture.vgm")
+            ),
             "VGM (*.vgm)",
         )
         if not path:
@@ -702,7 +708,11 @@ def run(initial_path: Path | None = None) -> None:
         status.showMessage("Gravando escritas do PSG em VGM…", 5000)
         logger.info(
             "Gravação VGM iniciada",
-            extra={"event": "vgm_recording_started", "path": str(vgm_output_path), "rom_sha256": loaded.sha256},
+            extra={
+                "event": "vgm_recording_started",
+                "path": str(vgm_output_path),
+                "rom_sha256": loaded.sha256,
+            },
         )
 
     def stop_vgm_recording() -> None:
@@ -718,10 +728,16 @@ def run(initial_path: Path | None = None) -> None:
             QMessageBox.warning(window, "Falha ao salvar VGM", str(exc))
             return
         window.set_vgm_recording(False)
-        status.showMessage(f"VGM salvo: {saved_path.name} ({event_count} escritas PSG)", 8000)
+        status.showMessage(
+            f"VGM salvo: {saved_path.name} ({event_count} escritas PSG)", 8000
+        )
         logger.info(
             "Gravação VGM salva",
-            extra={"event": "vgm_recording_saved", "path": str(saved_path), "psg_writes": event_count},
+            extra={
+                "event": "vgm_recording_saved",
+                "path": str(saved_path),
+                "psg_writes": event_count,
+            },
         )
         vgm_output_path = None
 
@@ -736,10 +752,10 @@ def run(initial_path: Path | None = None) -> None:
 
     def reset_machine() -> None:
         nonlocal machine, frame_count, paused
-        if vgm_recorder.active:
-            stop_vgm_recording()
         nonlocal last_checkpoint_time, last_checkpoint_tstates
         nonlocal last_checkpoint_instructions, last_checkpoint_frame
+        if vgm_recorder.active:
+            stop_vgm_recording()
         if loaded is None:
             return
         machine = SG1000Machine(loaded.data, cpu_core=selected_backend)
