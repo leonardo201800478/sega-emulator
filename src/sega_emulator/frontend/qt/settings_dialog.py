@@ -113,10 +113,16 @@ class SettingsDialog(QDialog):
     def _restore_defaults(self) -> None:
         defaults = FrontendPreferences()
         self.audio_enabled.setChecked(defaults.audio_enabled)
-        self.sample_rate.setCurrentIndex(self.sample_rate.findData(defaults.audio_sample_rate))
-        self.buffer_size.setCurrentIndex(self.buffer_size.findData(defaults.audio_buffer_size))
+        self.sample_rate.setCurrentIndex(
+            self.sample_rate.findData(defaults.audio_sample_rate)
+        )
+        self.buffer_size.setCurrentIndex(
+            self.buffer_size.findData(defaults.audio_buffer_size)
+        )
         self.volume.setValue(defaults.audio_volume)
-        self.video_filter.setCurrentIndex(self.video_filter.findData(defaults.video_filter))
+        self.video_filter.setCurrentIndex(
+            self.video_filter.findData(defaults.video_filter)
+        )
         self.integer_scale.setChecked(defaults.integer_scale)
 
     def preferences(self) -> FrontendPreferences:
