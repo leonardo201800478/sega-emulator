@@ -116,6 +116,7 @@ def _initialize_wasapi_backend(
         logger.warning("Saída WASAPI indisponível: %s", exc)
         return None
 
+
 def run(initial_path: Path | None = None) -> None:
     """Abre a interface de teste com teclado, telemetria e logs de sessão."""
     try:
@@ -631,7 +632,9 @@ def run(initial_path: Path | None = None) -> None:
                 try:
                     audio_output.close()
                 except Exception:
-                    logger.exception("Falha ao encerrar WASAPI antes de reconfigurar áudio")
+                    logger.exception(
+                        "Falha ao encerrar WASAPI antes de reconfigurar áudio"
+                    )
             audio_output = _initialize_wasapi_backend(updated)
             audio_resampler = PcmResampler(updated.audio_sample_rate)
         elif audio_output is not None:
