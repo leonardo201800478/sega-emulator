@@ -117,6 +117,15 @@ def _initialize_wasapi_backend(
         return None
 
 
+def _audio_output_warning(
+    preferences: FrontendPreferences, audio_output: WasapiAudioOutput | None
+) -> str | None:
+    """Describe an enabled audio backend that failed to initialize."""
+    if preferences.audio_enabled and audio_output is None:
+        return "Áudio WASAPI indisponível; consulte o log para detalhes."
+    return None
+
+
 def run(initial_path: Path | None = None) -> None:
     """Abre a interface de teste com teclado, telemetria e logs de sessão."""
     try:
@@ -208,6 +217,9 @@ def run(initial_path: Path | None = None) -> None:
     view.set_filter_mode(preferences.video_filter)
     view.set_integer_scale(preferences.integer_scale)
     status = window.status
+    audio_warning = _audio_output_warning(preferences, audio_output)
+    if audio_warning is not None:
+        status.showMessage(audio_warning)
 
     machine: SG1000Machine | None = None
     loaded: LoadedRom | None = None
@@ -644,7 +656,11 @@ def run(initial_path: Path | None = None) -> None:
         view.set_filter_mode(preferences.video_filter)
         view.set_integer_scale(preferences.integer_scale)
         preferences.save_to_store(settings)
-        status.showMessage("Configurações de áudio e vídeo aplicadas.", 5000)
+        audio_warning = _audio_output_warning(preferences, audio_output)
+        status.showMessage(
+            audio_warning or "Configurações de áudio e vídeo aplicadas.",
+            8000 if audio_warning is not None else 5000,
+        )
         logger.info(
             "Configurações de áudio e vídeo atualizadas",
             extra={
