@@ -3,8 +3,26 @@ name: Agent 2 - Integrity and Determinism
 on:
   pull_request:
     branches: [main]
+    paths:
+      - "src/**/*.py"
+      - "tests/**/*.py"
+      - "tools/**/*.py"
+      - "scripts/**/*.py"
+      - "pyproject.toml"
+      - "requirements*.txt"
+      - "setup.py"
+      - "setup.cfg"
   push:
     branches: [main]
+    paths:
+      - "src/**/*.py"
+      - "tests/**/*.py"
+      - "tools/**/*.py"
+      - "scripts/**/*.py"
+      - "pyproject.toml"
+      - "requirements*.txt"
+      - "setup.py"
+      - "setup.cfg"
   schedule:
     - cron: "47 5 * * *"
   workflow_dispatch:
