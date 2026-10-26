@@ -717,8 +717,19 @@ mod tests {
 
             let half_second_clocks = device.clock_hz / 2;
             device.advance_clocks_inner(half_second_clocks, false);
-            let samples: Vec<f64> = device.pending_samples.iter().copied().collect();
-            let transitions = samples.windows(2).filter(|pair| pair[0] != pair[1]).count();
+            // Ignore the FIR startup transient and measure zero crossings rather
+            // than every sample-value change; filtering makes adjacent samples
+            // differ even when no fundamental-frequency transition occurred.
+            let samples: Vec<f64> = device
+                .pending_samples
+                .iter()
+                .copied()
+                .skip(1_024)
+                .collect();
+            let transitions = samples
+                .windows(2)
+                .filter(|pair| (pair[0] < 0.0) != (pair[1] < 0.0))
+                .count();
             let expected_frequency = device.clock_hz as f64 / (32.0 * f64::from(period));
             let measured_frequency =
                 transitions as f64 * device.sample_rate as f64 / (2.0 * (samples.len() - 1) as f64);
