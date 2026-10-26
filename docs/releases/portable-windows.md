@@ -13,7 +13,7 @@ The workflow at .github/workflows/windows-portable.yml:
 3. Checks key dependency imports before packaging.
 4. Uses PyInstaller in one-folder mode and collects Qt, SDL3, pygame, and audio dependencies.
 5. Includes a portable readme and MIT license.
-6. Creates SegaEmulator-Windows-x64-portable.zip, then smoke-tests the packaged executable with --help.
+6. Creates SegaEmulator-Windows-x64-portable.zip, then starts the packaged GUI for a short smoke test.
 7. Uploads the ZIP as a CI artifact for pull requests and attaches it to an existing GitHub release when a v* tag build succeeds.
 
 ## Using the package
