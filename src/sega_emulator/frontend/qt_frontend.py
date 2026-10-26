@@ -500,6 +500,7 @@ def run(initial_path: Path | None = None) -> None:
             return
 
         machine, loaded, frame_count, paused = loaded_machine, candidate, 0, False
+        audio_resampler.reset()
         window.set_rom_label(candidate.display_name)
         selected_path = str(Path(path).expanduser().resolve())
         settings.setValue("last_directory", str(Path(selected_path).parent))
@@ -677,6 +678,7 @@ def run(initial_path: Path | None = None) -> None:
         if loaded is None:
             return
         machine = SG1000Machine(loaded.data, cpu_core=selected_backend)
+        audio_resampler.reset()
         frame_count, paused = 0, False
         frame_pacer.reset()
         pressed_keys.clear()
