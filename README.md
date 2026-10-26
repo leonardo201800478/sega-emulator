@@ -1,6 +1,6 @@
 # Sega Emulator
 
-Projeto de emulação de alta precisão com implementação de referência em Python, começando pelo Sega SG-1000.
+Projeto de emulação de alta precisão com núcleo de hardware prioritariamente em Rust e frontend/ferramentas em Python. O primeiro alvo é o Sega SG-1000; a arquitetura evolui incrementalmente para outras plataformas Sega.
 
 ## Estado atual
 
@@ -9,7 +9,7 @@ Projeto de emulação de alta precisão com implementação de referência em Py
 - **Interface experimental:** menus Qt 6/PySide6 para abrir ROMs, pausar/continuar, reiniciar, alterar escala e consultar diagnóstico. A entrada de controles usa backend SDL3/PySDL3; Pygame permanece separado para a saída de áudio.
 - **Carregador:** arquivos `.sg`, `.rom`, `.bin` e ROMs dentro de ZIP; ZIP com múltiplas ROMs exige seleção explícita.
 - **Diagnóstico:** logs JSONL/texto por sessão, SHA-256 da ROM, checkpoints de execução e stack traces.
-- **Áudio:** PSG SN76489AN integrado à máquina, com saída mono nos frontends Pygame e Qt; a fidelidade sonora contra hardware real continua pendente.
+- **Áudio:** PSG SN76489AN integrado à máquina, com saída mono nos frontends Pygame e Qt; a fidelidade sonora contra hardware real continua pendente. Consulte o [roadmap de fidelidade do PSG e reutilização entre consoles Sega](docs/architecture/psg-fidelity-roadmap.md).
 
 ## Requisitos
 
@@ -61,7 +61,7 @@ Para usar o frontend Pygame:
 
 O frontend Qt permite alternar entre **Python (referência)** e **Rust (experimental)** em **Emulação → Selecionar núcleo Z80…**. A seleção fica persistida nas configurações Qt. Se houver uma ROM carregada, trocar de núcleo recria a máquina para começar em estado limpo.
 
-O backend Python permanece como padrão e referência de compatibilidade. Ao selecionar Rust, a extensão nativa fornece:
+A política arquitetural é Rust como implementação definitiva do núcleo de hardware; o backend Python permanece disponível para referência diferencial e compatibilidade. O frontend Qt migra configurações antigas para Rust como seleção inicial. A extensão nativa fornece:
 
 - núcleo Z80 e barramento de memória sem chamadas a métodos Python por leitura/escrita de byte;
 - mapa de ROM espelhada, RAM interna e RAM de cartucho por perfil;
@@ -150,7 +150,10 @@ git diff --check
 
 ## Documentação
 
-- [Arquitetura multi-sistema](docs/architecture.md)
+- [Arquitetura multi-sistema e política Rust-first](docs/architecture.md)
+- [Instruções para agentes de código](AGENTS.md)
+- [Prompt de orientações do projeto (ChatGPT; menos de 8.000 caracteres)](docs/project-instructions-prompt.md)
+- [ADR 0007 — Política de desenvolvimento Rust-first](docs/adr/0007-rust-first-development-policy.md)
 - [Pesquisa de compatibilidade de hardware Sega](docs/research/hardware-compatibility-roadmap-2026-10.md)
 - [Notas de hardware SG-1000](docs/hardware/sg1000.md)
 - [Modelo e plano de fidelidade do VDP TMS9918A](docs/hardware/tms9918a-model.md)
