@@ -121,6 +121,39 @@ def test_main_window_exposes_audio_video_settings(qt_app) -> None:
     window.close()
 
 
+def test_main_window_exposes_vgm_recording_actions(qt_app) -> None:
+    called: list[str] = []
+    window = EmulatorMainWindow(
+        on_open_rom=lambda: None,
+        on_pause_resume=lambda: None,
+        on_reset=lambda: None,
+        on_configure_controls=lambda: None,
+        on_show_controllers=lambda: None,
+        on_vdp_snapshot=lambda: None,
+        on_open_logs=lambda: None,
+        on_show_machine_state=lambda: None,
+        on_video_scale=lambda scale: None,
+        on_start_vgm_recording=lambda: called.append("start"),
+        on_stop_vgm_recording=lambda: called.append("stop"),
+    )
+
+    assert window.start_vgm_recording_action.isEnabled()
+    assert not window.stop_vgm_recording_action.isEnabled()
+    window.start_vgm_recording_action.trigger()
+    assert called == ["start"]
+
+    window.set_vgm_recording(True)
+    assert not window.start_vgm_recording_action.isEnabled()
+    assert window.stop_vgm_recording_action.isEnabled()
+    window.stop_vgm_recording_action.trigger()
+    assert called == ["start", "stop"]
+
+    window.set_vgm_recording(False)
+    assert window.start_vgm_recording_action.isEnabled()
+    assert not window.stop_vgm_recording_action.isEnabled()
+    window.close()
+
+
 def test_persisted_window_dimensions_uses_normal_geometry_in_fullscreen(qt_app) -> None:
     window = EmulatorMainWindow(
         on_open_rom=lambda: None,
