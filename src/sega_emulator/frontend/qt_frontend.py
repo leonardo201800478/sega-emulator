@@ -123,7 +123,6 @@ def run(initial_path: Path | None = None) -> None:
         on_show_machine_state=lambda: show_machine_state(),
         on_video_scale=lambda scale: window.set_video_scale(scale),
         on_select_emulation_backend=lambda: select_emulation_backend(),
-        on_run_standalone_core=lambda: run_standalone_core(),
     )
     window.resize(preferences.window_width, preferences.window_height)
     window._video_scale = preferences.video_scale
@@ -439,33 +438,6 @@ def run(initial_path: Path | None = None) -> None:
         view.setFocus()
         timer.start()
 
-    def run_standalone_core() -> None:
-        if loaded is None:
-            QMessageBox.information(
-                window,
-                "Core Rust standalone",
-                "Abra uma ROM primeiro. O diagnóstico executa a ROM selecionada "
-                "no core independente de CPU/memória.",
-            )
-            return
-        try:
-            from sega_emulator.frontend.qt.standalone_core_dialog import (
-                StandaloneCoreDialog,
-            )
-
-            dialog = StandaloneCoreDialog(loaded.data, loaded.display_name, window)
-            dialog.exec()
-        except Exception as exc:
-            logger.exception(
-                "Falha ao abrir diagnóstico do core Rust standalone",
-                extra={"event": "standalone_core_dialog_failed"},
-            )
-            QMessageBox.warning(
-                window,
-                "Core Rust standalone indisponível",
-                str(exc),
-            )
-
     def select_emulation_backend() -> None:
         nonlocal machine, selected_backend, frame_count, paused
         choices = [
@@ -476,7 +448,7 @@ def run(initial_path: Path | None = None) -> None:
         selected, accepted = QInputDialog.getItem(
             window,
             "Backend de emulação",
-            "Escolha o runtime completo da máquina SG-1000. O backend Rust executa "
+            "Escolha o runtime completo da máquina SG-1000. Rust executa "
             "CPU, memória, VDP, PSG e I/O nativamente, mas o conjunto de instruções "
             "Z80 ainda é parcial; algumas ROMs podem falhar.",
             choices,
