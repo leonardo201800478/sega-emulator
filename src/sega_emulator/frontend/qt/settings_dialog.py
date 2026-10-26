@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QSlider,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -29,8 +30,12 @@ class SettingsDialog(QDialog):
         self.setMinimumWidth(440)
         self._initial = preferences
         root = QVBoxLayout(self)
+        tabs = QTabWidget(self)
+        root.addWidget(tabs)
 
-        audio_group = QGroupBox("Áudio — saída do PSG SN76489AN")
+        audio_page = QWidget(self)
+        audio_layout = QVBoxLayout(audio_page)
+        audio_group = QGroupBox("Saída de áudio do emulador")
         audio_form = QFormLayout(audio_group)
         self.audio_enabled = QCheckBox("Ativar saída de áudio")
         self.audio_enabled.setChecked(preferences.audio_enabled)
@@ -55,28 +60,56 @@ class SettingsDialog(QDialog):
         self.buffer_size.setCurrentIndex(max(0, index))
         audio_form.addRow("Buffer de saída", self.buffer_size)
 
-        volume_row = QWidget()
-        volume_layout = QHBoxLayout(volume_row)
-        volume_layout.setContentsMargins(0, 0, 0, 0)
-        self.volume = QSlider()
-        self.volume.setOrientation(Qt.Orientation.Horizontal)
-        self.volume.setRange(0, 100)
-        self.volume.setValue(preferences.audio_volume)
-        self.volume_label = QLabel(f"{preferences.audio_volume}%")
-        self.volume.valueChanged.connect(
-            lambda value: self.volume_label.setText(f"{value}%")
-        )
-        volume_layout.addWidget(self.volume, 1)
-        volume_layout.addWidget(self.volume_label)
-        audio_form.addRow("Volume de saída", volume_row)
         audio_note = QLabel(
             "A taxa e o buffer configuram somente a saída do Windows. "
             "Não alteram o clock do PSG nem aumentam a fidelidade do modelo digital."
         )
         audio_note.setWordWrap(True)
         audio_form.addRow(audio_note)
-        root.addWidget(audio_group)
+        audio_layout.addWidget(audio_group)
+        audio_layout.addStretch(1)
+        tabs.addTab(audio_page, "Saída de áudio")
 
+        psg_page = QWidget(self)
+        psg_layout = QVBoxLayout(psg_page)
+        psg_group = QGroupBox("PSG — Sega SG-1000 / SN76489AN")
+        psg_form = QFormLayout(psg_group)
+        psg_form.addRow("Perfil de hardware:", QLabel("SN76489AN do SG-1000"))
+        psg_form.addRow("Clock nominal:", QLabel("3.579.545 Hz (fixo)"))
+        psg_form.addRow("Divisor interno:", QLabel("16 (fixo no modelo atual)"))
+        psg_form.addRow("Canais:", QLabel("3 tons + 1 ruído; saída mono"))
+        psg_form.addRow("Antialiasing:", QLabel("FIR Blackman de 63 taps, ativo"))
+
+        volume_row = QWidget(psg_group)
+        volume_layout = QHBoxLayout(volume_row)
+        volume_layout.setContentsMargins(0, 0, 0, 0)
+        self.volume = QSlider(Qt.Orientation.Horizontal, volume_row)
+        self.volume.setRange(0, 100)
+        self.volume.setValue(preferences.audio_volume)
+        self.volume_label = QLabel(f"{preferences.audio_volume}%", volume_row)
+        self.volume.valueChanged.connect(
+            lambda value: self.volume_label.setText(f"{value}%")
+        )
+        volume_layout.addWidget(self.volume, 1)
+        volume_layout.addWidget(self.volume_label)
+        psg_form.addRow("Ganho da saída do PSG:", volume_row)
+
+        psg_note = QLabel(
+            "O ganho afeta somente as amostras reproduzidas; não altera os "
+            "registradores nem o clock lógico. Clock, divisor, variante do chip e "
+            "filtro ainda são fixos no núcleo. O FIR é antialiasing digital, não "
+            "um modelo do circuito analógico real. Esses controles só serão "
+            "liberados quando houver implementação e testes diferenciais Python/Rust.",
+            psg_page,
+        )
+        psg_note.setWordWrap(True)
+        psg_form.addRow(psg_note)
+        psg_layout.addWidget(psg_group)
+        psg_layout.addStretch(1)
+        tabs.addTab(psg_page, "PSG / Hardware")
+
+        video_page = QWidget(self)
+        video_layout = QVBoxLayout(video_page)
         video_group = QGroupBox("Vídeo")
         video_form = QFormLayout(video_group)
         self.video_filter = QComboBox()
@@ -96,7 +129,9 @@ class SettingsDialog(QDialog):
         )
         video_note.setWordWrap(True)
         video_form.addRow(video_note)
-        root.addWidget(video_group)
+        video_layout.addWidget(video_group)
+        video_layout.addStretch(1)
+        tabs.addTab(video_page, "Vídeo")
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok
