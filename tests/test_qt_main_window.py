@@ -12,7 +12,10 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from sega_emulator.frontend.qt.main_window import EmulatorMainWindow  # noqa: E402
+from sega_emulator.frontend.qt.main_window import (
+    EmulatorMainWindow,
+    persisted_window_dimensions,
+)  # noqa: E402
 
 
 @pytest.fixture
@@ -115,4 +118,47 @@ def test_main_window_exposes_audio_video_settings(qt_app) -> None:
     assert window.audio_video_action.isEnabled()
     window.audio_video_action.trigger()
     assert called == ["audio-video"]
+    window.close()
+
+
+
+def test_persisted_window_dimensions_uses_normal_geometry_in_fullscreen(qt_app) -> None:
+    window = EmulatorMainWindow(
+        on_open_rom=lambda: None,
+        on_pause_resume=lambda: None,
+        on_reset=lambda: None,
+        on_configure_controls=lambda: None,
+        on_show_controllers=lambda: None,
+        on_vdp_snapshot=lambda: None,
+        on_open_logs=lambda: None,
+        on_show_machine_state=lambda: None,
+        on_video_scale=lambda scale: None,
+    )
+    window.resize(900, 700)
+    window.show()
+    qt_app.processEvents()
+    expected = (window.width(), window.height())
+
+    window.showFullScreen()
+    qt_app.processEvents()
+    assert persisted_window_dimensions(window, 1180, 820) == expected
+
+    window.showNormal()
+    window.close()
+
+
+def test_persisted_window_dimensions_falls_back_for_invalid_geometry(qt_app) -> None:
+    window = EmulatorMainWindow(
+        on_open_rom=lambda: None,
+        on_pause_resume=lambda: None,
+        on_reset=lambda: None,
+        on_configure_controls=lambda: None,
+        on_show_controllers=lambda: None,
+        on_vdp_snapshot=lambda: None,
+        on_open_logs=lambda: None,
+        on_show_machine_state=lambda: None,
+        on_video_scale=lambda scale: None,
+    )
+    window.hide()
+    assert persisted_window_dimensions(window, 1180, 820) == (1180, 820)
     window.close()
