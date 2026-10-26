@@ -40,6 +40,7 @@ class SettingsDialog(QDialog):
         self.audio_enabled = QCheckBox("Ativar saída de áudio")
         self.audio_enabled.setChecked(preferences.audio_enabled)
         audio_form.addRow(self.audio_enabled)
+        audio_form.addRow("Backend de saída:", QLabel("WASAPI — modo compartilhado"))
 
         self.sample_rate = QComboBox()
         for rate in (22050, 44100, 48000):
