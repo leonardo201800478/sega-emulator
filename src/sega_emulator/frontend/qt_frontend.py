@@ -34,7 +34,6 @@ Z80_CLOCK_HZ = 3_579_545
 FRAME_PERIOD_SECONDS = (228 * 262) / Z80_CLOCK_HZ
 
 
-
 def _runtime_diagnostic(machine: SG1000Machine, rom_sha256: str) -> dict[str, object]:
     """Return verifiable identity of the loaded emulator runtime and native binary."""
     import os
