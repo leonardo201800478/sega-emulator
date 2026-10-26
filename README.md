@@ -69,24 +69,21 @@ Para usar o frontend Pygame:
 
 Decisão aprovada: [ADR 0007 — Rust-first para o núcleo](docs/adr/0007-rust-first-emulation-core.md). Plano incremental: [migração do runtime para Rust](docs/rust-runtime-migration-plan.md). Diretrizes para implementação e validação, inclusive workflows/agentes, estão em [.github/copilot-instructions.md](.github/copilot-instructions.md).
 
-## Núcleo SG-1000 standalone em Rust (em desenvolvimento)\n\nO crate puro `native/sg1000_core` agora contém mapa de memória ROM/RAM, contrato de barramento, uma fatia inicial de instruções Z80 e uma máquina headless que conecta CPU e memória. A máquina executa ROMs sintéticas sem iniciar Python, mas ainda **não** representa o SG-1000 completo: VDP, PSG, I/O, interrupções e scheduler de dispositivos não estão integrados. A CPU suporta apenas instruções explicitamente implementadas e retorna erro para as demais; isso é um marco de extração, não um runtime para jogos comerciais.\n\n## Backend SG-1000 Rust experimental no Qt
+## Núcleo SG-1000 standalone em Rust (em desenvolvimento)
 
-O frontend Qt permite alternar entre **Python (referência)** e **Rust (experimental)** em **Emulação → Selecionar núcleo Z80…**. A seleção fica persistida nas configurações Qt. Se houver uma ROM carregada, trocar de núcleo recria a máquina para começar em estado limpo.
+O crate puro `native/sg1000_core` é o destino do runtime independente de Python. Ele já contém contrato de barramento, memória ROM/RAM e uma fatia inicial de CPU Z80 e máquina headless; ainda **não** representa um SG-1000 completo. VDP, PSG, portas de I/O e scheduler precisam ser integrados/validados no crate standalone. Executar ROM sintética ou compilar não comprova compatibilidade com jogos.
 
-O backend Python permanece como padrão e referência de compatibilidade. Ao selecionar Rust, a extensão nativa fornece:
+## Backend Rust experimental no Qt
 
-- núcleo Z80 e barramento de memória sem chamadas a métodos Python por leitura/escrita de byte;
-- mapa de ROM espelhada, RAM interna e RAM de cartucho por perfil;
-- VDP TMS9918A com portas, raster, VBlank, status de sprites e renderização dos modos gráficos modelados;
-- PSG SN76489AN e sincronização de writes de áudio por T-state;
-- máquina SG-1000 nativa que coordena `step`, `run_frame`, portas de I/O, interrupções e avanço de CPU/VDP/PSG em Rust.
+A interface Qt permite selecionar o backend Z80 Python (referência) ou Rust (experimental). O runtime experimental já conecta CPU, memória e componentes de VDP/PSG em uma extensão PyO3, mas não equivale ao crate standalone completo. O frontend, configurações e API da aplicação continuam em Python.
 
-**O runtime ainda não é totalmente independente de Python internamente.** O frontend e a API de aplicação continuam em Python, e a máquina Rust coordena componentes encapsulados em objetos PyO3; o GIL permanece adquirido durante um quadro. A etapa atual elimina a coordenação Python por instrução e callbacks Python nas portas, mas ainda não move todos os estados para structs Rust puros nem libera o GIL. O modelo temporal usa T-states nominais e não equivale a emulação ciclo a ciclo. A implementação Python permanece disponível como referência diferencial; não há fallback silencioso quando uma instrução Rust não é suportada.
+Limitações que permanecem explícitas:
+- Parte da coordenação nativa usa objetos PyO3; o GIL permanece adquirido durante o quadro. A máquina ainda precisa migrar seus estados e dispositivos para estruturas Rust puras.
+- A temporização atual usa T-states nominais; isso não equivale a um modelo de cada ciclo de barramento nem comprova precisão ciclo a ciclo.
+- Getters de diagnóstico como `vram`/registradores podem retornar cópias; mutá-las não altera o estado interno.
+- Nenhum fallback para Python deve mascarar instruções/recursos não suportados no backend Rust.
 
-Os getters `vram` e `registers` do VDP nativo retornam cópias para diagnóstico. Alterar diretamente essas cópias não altera o estado interno do VDP; use as portas modeladas para modificar o hardware. Esse contrato será revisto antes de tornar o backend Rust padrão.
-
-Para compilar e instalar a extensão no Windows/PowerShell, com o ambiente virtual ativado e a partir da raiz do repositório:
-
+Para compilar e instalar a extensão no Windows/PowerShell, com o ambiente virtual e dependências instalados:
 ```powershell
 python -m pip install maturin
 Push-Location native/z80_core
@@ -94,23 +91,12 @@ maturin develop --release --features python-extension
 Pop-Location
 ```
 
-Para compilar a extensão e abrir o emulador para teste manual em uma única etapa, use o script PowerShell (a partir da raiz do repositório, com `.venv` já criado e dependências `.[dev,qt,frontend]` instaladas):
-
+Para compilar e abrir a interface:
 ```powershell
 .\scripts\test-rust-in-game.ps1
 ```
 
-Para abrir diretamente uma ROM local:
-
-```powershell
-.\scripts\test-rust-in-game.ps1 "C:\caminho\para\jogo.sg"
-```
-
-O script compila a extensão PyO3 em Release, verifica a importação de `NativeSG1000Machine` e abre o frontend Qt. Na interface, selecione **Emulação → Selecionar núcleo Z80… → Rust (experimental)**; a compilação sozinha não troca o backend selecionado nas configurações.
-
-Reabra o emulador e selecione **Emulação → Selecionar núcleo Z80… → Rust (experimental)**. Se a extensão não estiver instalada, a interface explica como instalá-la e preserva o backend anterior.
-
-As fatias [PR #92](https://github.com/leonardo201800478/sega-emulator/pull/92) e [PR #93](https://github.com/leonardo201800478/sega-emulator/pull/93) passaram no workflow Windows. A PR #93 validou `rustfmt`, Clippy, testes Rust, build Release, **1.674 testes direcionados** e **2.329 testes de regressão** com a extensão instalada. Isso valida os caminhos cobertos, mas não demonstra compatibilidade universal, precisão ciclo a ciclo ou ganho de desempenho em todos os jogos.
+Os resultados registrados nas PRs #92/#93 e no workflow Qt referem-se aos commits testados naquele momento, não ao HEAD atual. Sempre consulte o status de CI da revisão candidata antes de tratar os resultados históricos como atuais.
 
 ## Diagnóstico headless
 
