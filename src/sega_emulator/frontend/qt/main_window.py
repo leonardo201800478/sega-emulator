@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QLabel,
@@ -73,6 +74,7 @@ class EmulatorMainWindow(QMainWindow):
         self.video_widget.setObjectName("emulatorVideoSurface")
         screen = QWidget(self)
         layout = QVBoxLayout(screen)
+        self._central_layout = layout
         layout.setContentsMargins(18, 18, 18, 18)
         layout.setSpacing(12)
         layout.addWidget(self.video_widget, 1)
@@ -80,6 +82,8 @@ class EmulatorMainWindow(QMainWindow):
 
         self.status = QStatusBar(self)
         self.setStatusBar(self.status)
+        self._status_bar = self.status
+        self._fullscreen_ui_active = False
         self.rom_label = QLabel("Nenhuma ROM carregada")
         self.rom_label.setMinimumWidth(220)
         self.status.addPermanentWidget(self.rom_label)
@@ -94,9 +98,18 @@ class EmulatorMainWindow(QMainWindow):
         self.reset_action.setShortcut("F10")
         self.reset_action.triggered.connect(on_reset)
         self.fullscreen_action = QAction("Tela cheia", self)
-        self.fullscreen_action.setShortcut("Alt+Return")
+        self.fullscreen_action.setShortcuts(["F11", "Alt+Return"])
         self.fullscreen_action.setCheckable(True)
         self.fullscreen_action.toggled.connect(self._toggle_fullscreen)
+        self.exit_fullscreen_action = QAction("Sair da tela cheia", self)
+        self.exit_fullscreen_action.setShortcut("Escape")
+        self.exit_fullscreen_action.setShortcutContext(
+            Qt.ShortcutContext.WindowShortcut
+        )
+        self.exit_fullscreen_action.triggered.connect(
+            lambda: self._toggle_fullscreen(False)
+        )
+        self.addAction(self.exit_fullscreen_action)
 
         file_menu = self.menuBar().addMenu("&Arquivo")
         file_menu.addAction(self.open_action)
@@ -118,6 +131,7 @@ class EmulatorMainWindow(QMainWindow):
         emulation_menu.addAction(self.select_emulation_backend_action)
 
         toolbar = QToolBar("Principal", self)
+        self._main_toolbar = toolbar
         toolbar.setMovable(False)
         toolbar.setFloatable(False)
         toolbar.addAction(self.open_action)
@@ -180,8 +194,23 @@ class EmulatorMainWindow(QMainWindow):
         )
 
     def _toggle_fullscreen(self, enabled: bool) -> None:
+        """Use a game-only presentation in fullscreen and restore the full UI."""
+        if enabled == self._fullscreen_ui_active:
+            return
+        self._fullscreen_ui_active = enabled
+        self.menuBar().setVisible(not enabled)
+        self._main_toolbar.setVisible(not enabled)
+        self._status_bar.setVisible(not enabled)
+        if enabled:
+            self._central_layout.setContentsMargins(0, 0, 0, 0)
+            self._central_layout.setSpacing(0)
+        else:
+            self._central_layout.setContentsMargins(18, 18, 18, 18)
+            self._central_layout.setSpacing(12)
+        self.exit_fullscreen_action.setEnabled(enabled)
         if enabled:
             self.showFullScreen()
+            self.video_widget.setFocus()
         else:
             self.showNormal()
 
