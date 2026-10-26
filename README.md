@@ -154,6 +154,12 @@ O JSONL é destinado à análise automatizada; o log textual é para leitura rá
 git diff --check
 ```
 
+## Licença e créditos
+
+O Sega Emulator é distribuído sob a licença **MIT**. Consulte o arquivo [LICENSE](LICENSE) para os termos completos. O diálogo **Ajuda → Sobre o Sega Emulator** mostra a versão, o escopo atual do SG-1000, créditos tecnológicos e a licença.
+
+O projeto é independente e não é afiliado à SEGA. SEGA e SG-1000 são marcas de seus respectivos titulares. Consulte os créditos e as limitações técnicas neste README e nos documentos de arquitetura antes de interpretar resultados como evidência de fidelidade absoluta.
+
 ## Documentação
 
 - [Marco de qualidade do SG-1000 — áudio, vídeo, sincronismo e primeiro release](docs/milestones/sg1000-audio-video-milestone-2026-10-26.md)
