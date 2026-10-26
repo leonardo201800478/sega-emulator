@@ -6,11 +6,11 @@ Projeto de emulação de alta precisão com núcleo de hardware prioritariamente
 
 - **CPU:** núcleo Z80 em auditoria diferencial; temporização ainda não é ciclo a ciclo.
 - **Máquina SG-1000:** CPU, ROM/RAM, VDP TMS9918A inicial e joystick em desenvolvimento.
-- **Frontend Qt 6/PySide6:** janela redesenhada, barra de ações, tela cheia, ROMs recentes, seleção do runtime, configuração de controles e diagnóstico. O pacing limita a execução ao período nominal NTSC (~59,92 Hz) sem alterar os T-states lógicos; a UI continua usando `SG1000Machine`, sem máquina paralela.
-- **Configurações de áudio e vídeo:** saída mono do PSG, ativação, volume, taxa do mixer (22,05/44,1/48 kHz), buffer (256–2.048 amostras), filtro de vídeo e escala inteira preferencial. O FIR de 63 taps reduz aliasing digital; não representa a resposta analógica do chip.
+- **Frontend Qt 6/PySide6:** janela redesenhada, barra de ações, tela cheia, ROMs recentes, seleção do runtime, configuração de controles e diagnóstico. A superfície de vídeo solicita o backend Vulkan do Qt Quick, com fallback raster explícito se o driver não inicializar; a validação em Windows/GPU real permanece pendente. O pacing limita a execução ao período nominal NTSC (~59,92 Hz) sem alterar os T-states lógicos; a UI continua usando `SG1000Machine`, sem máquina paralela.
+- **Configurações de áudio e vídeo:** saída mono do PSG, ativação, volume, taxa do mixer (22,05/44,1/48 kHz), buffer (256–2.048 amostras), filtro de vídeo e escala inteira preferencial. O filtro de vídeo nearest/bilinear e a escala 4:3 são aplicados pela cena Qt Quick em Vulkan quando disponível; o caminho raster mantém a compatibilidade. O FIR de 63 taps reduz aliasing digital; não representa a resposta analógica do chip.
 - **Carregador:** arquivos `.sg`, `.rom`, `.bin` e ROMs dentro de ZIP; ZIP com múltiplas ROMs exige seleção explícita.
 - **Diagnóstico:** logs JSONL/texto por sessão, SHA-256 da ROM, checkpoints de execução e stack traces.
-- **Áudio:** PSG SN76489AN integrado à máquina, com saída mono nos frontends Pygame e Qt; a fidelidade sonora contra hardware real continua pendente: o FIR digital ainda precisa de validação independente e não simula a resposta analógica do chip. Consulte o [roadmap de fidelidade do PSG e reutilização entre consoles Sega](docs/architecture/psg-fidelity-roadmap.md).
+- **Áudio:** PSG SN76489AN integrado à máquina. O frontend Qt usa saída PCM mono por WASAPI compartilhado via PortAudio/sounddevice, com fila limitada e contadores de underrun/blocos descartados; o frontend Pygame continua disponível separadamente. A fidelidade sonora contra hardware real continua pendente: o FIR digital ainda precisa de validação independente e não simula a resposta analógica do chip. Consulte o [roadmap de fidelidade do PSG e reutilização entre consoles Sega](docs/architecture/psg-fidelity-roadmap.md) e o [contrato dos backends de saída](docs/architecture/audio-output-backends.md).
 - **Captura de áudio:** gravação dos comandos temporizados do SN76489 em VGM pelo menu Diagnóstico; consulte o [procedimento de captura VGM](docs/validation/vgm-psg-capture.md) e o [histórico de versões](CHANGELOG.md).
 
 ## Requisitos
@@ -157,6 +157,7 @@ git diff --check
 ## Documentação
 
 - [Arquitetura multi-sistema e política Rust-first](docs/architecture.md)
+- [Backends de apresentação de vídeo e validação Vulkan](docs/architecture/vulkan-presentation-qt-quick.md)
 - [Instruções para agentes de código](AGENTS.md)
 - [Prompt de orientações do projeto (ChatGPT; menos de 8.000 caracteres)](docs/project-instructions-prompt.md)
 - [ADR 0007 — Política de desenvolvimento Rust-first](docs/adr/0007-rust-first-development-policy.md)

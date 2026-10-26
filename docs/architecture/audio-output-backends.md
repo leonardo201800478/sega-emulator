@@ -1,10 +1,10 @@
 # Contrato de configuração para saída de áudio
 
-> Escopo desta PR: configurações validadas e serializáveis. Os backends WASAPI, XAudio2 e SDL3, o gerenciador de saída e a integração com a UI ainda **não estão implementados**; os itens abaixo são contratos e plano de trabalho, não capacidades já disponíveis.
+> Estado: o frontend Qt já possui um primeiro backend WASAPI compartilhado, usando a implementação WASAPI do PortAudio por meio de `sounddevice`. XAudio2 e SDL3 como backends de saída ainda não estão implementados. Esta fatia não é uma implementação COM/WASAPI direta em Rust e não valida latência em hardware Windows.
 
 ## Objetivo
 
-Definir um contrato de configuração validado e independente do dispositivo para uma futura saída WASAPI, XAudio2 ou SDL3. Esta PR não abre dispositivos nem entrega áudio físico. A saída futura não poderá alterar o estado determinístico do hardware emulado.
+Definir um contrato de configuração validado e independente do dispositivo para a saída de áudio. O backend WASAPI inicial já abre o dispositivo no frontend Qt; a configuração e os testes automatizados não substituem a validação física. Nenhum backend pode alterar o estado determinístico do hardware emulado.
 
 ## Separação de responsabilidades
 
@@ -17,9 +17,11 @@ A callback de áudio não deve executar emulação, acessar a interface gráfica
 
 ## Backends
 
-### WASAPI
+### WASAPI (Qt — implementação inicial)
 
-Backend nativo para Windows. O modo compartilhado é o padrão inicial por compatibilidade com outros aplicativos. Modo exclusivo e processamento orientado a eventos são opções avançadas quando o dispositivo e a implementação suportarem. Não assumir que um buffer mínimo funciona em todos os endpoints; validar a configuração e reportar o valor efetivo.
+O frontend Qt seleciona explicitamente o host API WASAPI por `sounddevice`/PortAudio e abre o dispositivo de saída padrão desse host em modo compartilhado, com conversão automática permitida. O produtor PCM usa uma fila limitada; a callback de saída apenas consome PCM e preenche lacunas com silêncio, sem executar a emulação. Blocos antigos podem ser descartados quando a fila fica cheia para evitar crescimento de latência. O backend conta callbacks com underrun e blocos descartados.
+
+**Limite de implementação:** o acesso à API Windows passa pelo host WASAPI do PortAudio; esta etapa não implementa diretamente as interfaces COM de WASAPI em Rust. Modo exclusivo, escolha de dispositivo pela UI, leitura das métricas na interface e validação física de latência/underrun permanecem pendentes. O valor configurado de buffer é solicitado ao backend, mas ainda não é apresentado como latência real medida.
 
 ### XAudio2
 
@@ -52,11 +54,12 @@ Portanto, cada perfil de console deverá especificar somente fatos sustentados p
 
 1. Formalizar este contrato e manter o núcleo PSG independente do dispositivo de áudio.
 2. Implementar configurações validadas e persistentes, incluindo perfil por console e preferências globais.
-3. Implementar WASAPI e medir latência/underruns no Windows; shared é o padrão inicial, exclusive opcional.
-4. Implementar SDL3 com binding compatível com Python 3.14 e validar empacotamento no Windows.
-5. Implementar XAudio2 por binding nativo verificável; medir estabilidade e latência.
-6. Integrar as opções na interface Qt, mostrando capacidades do dispositivo e a configuração efetiva.
-7. Executar testes de contrato sem hardware em CI e testes físicos separados no Windows.
+3. Validar o backend WASAPI/PortAudio em Windows real, incluindo underruns, encerramento, reconexão, formatos e latência medida.
+4. Se a necessidade de controle nativo justificar o custo, avaliar a migração do adaptador PortAudio para WASAPI direto em Rust, com ownership explícito e testes no mesmo SHA.
+5. Implementar SDL3 com binding compatível com Python 3.14 e validar empacotamento no Windows.
+6. Implementar XAudio2 por binding nativo verificável; medir estabilidade e latência.
+7. Integrar escolha de dispositivo e métricas na interface Qt, sem expor configurações não implementadas.
+8. Executar testes de contrato sem hardware em CI e testes físicos separados no Windows.
 
 ## Critérios de aceitação
 

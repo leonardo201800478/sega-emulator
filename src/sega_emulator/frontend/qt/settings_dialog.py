@@ -40,6 +40,7 @@ class SettingsDialog(QDialog):
         self.audio_enabled = QCheckBox("Ativar saída de áudio")
         self.audio_enabled.setChecked(preferences.audio_enabled)
         audio_form.addRow(self.audio_enabled)
+        audio_form.addRow("Backend de saída:", QLabel("WASAPI — modo compartilhado"))
 
         self.sample_rate = QComboBox()
         for rate in (22050, 44100, 48000):
@@ -112,6 +113,10 @@ class SettingsDialog(QDialog):
         video_layout = QVBoxLayout(video_page)
         video_group = QGroupBox("Vídeo")
         video_form = QFormLayout(video_group)
+        video_form.addRow(
+            "Backend de apresentação:",
+            QLabel("Vulkan (Qt Quick); fallback Qt raster se indisponível"),
+        )
         self.video_filter = QComboBox()
         self.video_filter.addItem("Nearest-neighbor — pixels nítidos", "nearest")
         self.video_filter.addItem("Bilinear — suavização", "bilinear")
