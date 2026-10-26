@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -58,7 +59,7 @@ class SettingsDialog(QDialog):
         volume_layout = QHBoxLayout(volume_row)
         volume_layout.setContentsMargins(0, 0, 0, 0)
         self.volume = QSlider()
-        self.volume.setOrientation(__import__("PySide6.QtCore", fromlist=["Qt"]).Qt.Orientation.Horizontal)
+        self.volume.setOrientation(Qt.Orientation.Horizontal)
         self.volume.setRange(0, 100)
         self.volume.setValue(preferences.audio_volume)
         self.volume_label = QLabel(f"{preferences.audio_volume}%")
