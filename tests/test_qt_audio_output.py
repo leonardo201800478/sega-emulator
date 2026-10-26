@@ -46,11 +46,12 @@ def test_invalid_output_rate_is_rejected(rate: int) -> None:
         samples_to_pcm([0.0], rate)
 
 
-def test_streaming_resampler_is_independent_of_block_boundaries() -> None:
+@pytest.mark.parametrize("rate", [22_050, 48_000])
+def test_streaming_resampler_is_independent_of_block_boundaries(rate: int) -> None:
     samples = [0.4 * math.sin(index * 0.19) for index in range(4097)]
-    expected = samples_to_pcm(samples, 22_050)
+    expected = samples_to_pcm(samples, rate)
 
-    resampler = PcmResampler(22_050)
+    resampler = PcmResampler(rate)
     chunks = [
         resampler.process(samples[:137]),
         resampler.process(samples[137:2048]),
