@@ -407,7 +407,7 @@ impl Z80 {
 
 #[cfg(test)]
 mod tests {
-    use super::{CpuError, FLAG_H, FLAG_PV, FLAG_Z, Z80};
+    use super::{CpuError, FLAG_C, FLAG_H, FLAG_PV, FLAG_Z, Z80};
     use crate::bus::CpuBus;
 
     struct TestBus([u8; 0x10000]);
@@ -538,7 +538,7 @@ mod tests {
     #[test]
     fn absolute_and_indirect_loads_transfer_bytes_in_little_endian_order() {
         let mut bus = TestBus([0; 0x10000]);
-        bus.0[..18].copy_from_slice(&[
+        bus.0[..19].copy_from_slice(&[
             0x01, 0x00, 0xC0, // LD BC,0xC000
             0x3E, 0x5A, // LD A,0x5A
             0x02, // LD (BC),A
@@ -548,7 +548,6 @@ mod tests {
             0x2A, 0x00, 0xC1, // LD HL,(0xC100)
             0x32, 0x02, // LD (0xC102),A (address high byte follows)
         ]);
-        bus.0[18] = 0xC1;
         let mut cpu = Z80::default();
 
         for expected in [10, 7, 7, 7, 10, 16, 16, 13] {
