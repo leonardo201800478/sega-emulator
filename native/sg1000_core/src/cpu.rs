@@ -94,6 +94,20 @@ impl Z80 {
         let opcode = self.fetch8(bus);
         let cycles = match opcode {
             0x00 => 4, // NOP
+            0xE9 => {
+                self.registers.pc = self.registers.hl();
+                4
+            }
+            0xEB => {
+                let de = self.registers.de();
+                self.registers.set_de(self.registers.hl());
+                self.registers.set_hl(de);
+                4
+            }
+            0xF9 => {
+                self.registers.sp = self.registers.hl();
+                6
+            }
             0x76 => {
                 self.halted = true;
                 4
@@ -628,6 +642,37 @@ mod tests {
         assert_eq!(cpu.registers.bc(), 0xFFFF);
         assert_ne!(cpu.registers.f & FLAG_H, 0);
         assert_eq!(cpu.registers.f & FLAG_C, 0);
+    }
+
+    #[test]
+    fn exchange_de_hl_load_sp_hl_and_jump_hl_execute_with_base_cycles() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..5].copy_from_slice(&[
+            0xEB, // EX DE,HL
+            0xF9, // LD SP,HL
+            0xE9, // JP (HL)
+            0x00, // target: NOP
+            0x76, // HALT
+        ]);
+        let mut cpu = Z80::default();
+        cpu.registers.set_de(0x1234);
+        cpu.registers.set_hl(0x4567);
+        cpu.registers.f = FLAG_C | FLAG_Z;
+
+        assert_eq!(cpu.step(&mut bus), Ok(4));
+        assert_eq!(cpu.registers.de(), 0x4567);
+        assert_eq!(cpu.registers.hl(), 0x1234);
+        assert_eq!(cpu.registers.f, FLAG_C | FLAG_Z);
+
+        assert_eq!(cpu.step(&mut bus), Ok(6));
+        assert_eq!(cpu.registers.sp, 0x1234);
+
+        assert_eq!(cpu.step(&mut bus), Ok(4));
+        assert_eq!(cpu.registers.pc, 0x1234);
+        // Jump to a mapped NOP at the new target to prove control flow.
+        bus.0[0x1234] = 0x00;
+        assert_eq!(cpu.step(&mut bus), Ok(4));
+        assert_eq!(cpu.registers.pc, 0x1235);
     }
 
     #[test]
