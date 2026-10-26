@@ -128,7 +128,9 @@ class FrontendPreferences:
             defaults.audio_buffer_size,
             (256, 512, 1024, 2048),
         )
-        volume = _bounded_int(store.value("audio_volume", defaults.audio_volume), 100, 0, 100)
+        volume = _bounded_int(
+            store.value("audio_volume", defaults.audio_volume), 100, 0, 100
+        )
         video_filter = store.value("video_filter", defaults.video_filter)
         if video_filter not in ("nearest", "bilinear"):
             video_filter = defaults.video_filter
