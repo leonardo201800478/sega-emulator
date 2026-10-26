@@ -29,8 +29,8 @@ class PcmResampler:
     """Reamostrador FIR sinc/Blackman com estado preservado entre blocos.
 
     A saída usa fase fracionária quantizada em 1/1024 de amostra e coeficientes
-    normalizados. A janela causalizada por look-ahead evita ler amostras futuras
-    inexistentes durante a reprodução em blocos; `flush` completa o último bloco
+    normalizados. O filtro simétrico é causalizado com atraso de grupo de 31
+    amostras, sem exigir amostras futuras entre blocos; `flush` completa a cauda
     com zeros. O estado do PSG e seus clocks não são alterados.
     """
 
@@ -49,7 +49,7 @@ class PcmResampler:
         self._buffer_start = 0
         self._available_count = 0
         self._real_input_count = 0
-        self._next_position = 0.0
+        self._next_position = -float(_FILTER_HALF)
         self._emitted_count = 0
 
     def _build_coefficients(self) -> tuple[tuple[float, ...], ...]:
@@ -106,7 +106,10 @@ class PcmResampler:
                     or self._emitted_count >= target_count
                 ):
                     break
-            elif self._next_position + _FILTER_HALF >= self._available_count:
+            elif (
+                self._next_position + _FILTER_HALF >= self._available_count
+                or self._emitted_count >= target_count
+            ):
                 break
 
             integer_position = math.floor(self._next_position)
