@@ -494,7 +494,16 @@ impl NativeAudioSynchronizer {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::NativeSn76489;
+
+    const WHITE_NOISE_GOLDEN_STATES: [u16; 32] = [
+        0x4000, 0x2000, 0x1000, 0x0800, 0x0400, 0x0200, 0x0100, 0x0080, 0x0040, 0x0020,
+        0x0010, 0x0008, 0x0004, 0x0002, 0x4001, 0x6000, 0x3000, 0x1800, 0x0C00, 0x0600,
+        0x0300, 0x0180, 0x00C0, 0x0060, 0x0030, 0x0018, 0x000C, 0x0006, 0x4003, 0x2001,
+        0x5000, 0x2800,
+    ];
 
     #[test]
     fn reset_and_repeated_advancement_are_deterministic() {
@@ -516,5 +525,128 @@ mod tests {
         assert_eq!(first.attenuations, [15; 4]);
         assert_eq!(first.pending_samples.len(), 0);
         assert_eq!(first.pending_samples, second.pending_samples);
+    }
+
+    #[test]
+    fn all_tone_period_register_values_round_trip() {
+        for channel in 0..3 {
+            for period in 0_u16..=0x03FF {
+                let mut device = NativeSn76489::new(3_579_545, 44_100).unwrap();
+                let register = (channel as u8) * 2;
+                device.write_inner(0x80 | (register << 4) | (period as u8 & 0x0F));
+                device.write_inner((period >> 4) as u8);
+                assert_eq!(device.tone_periods[channel], period);
+            }
+        }
+    }
+
+    #[test]
+    fn every_latch_register_and_nibble_is_decoded() {
+        for register in 0_u8..8 {
+            for nibble in 0_u8..16 {
+                let mut device = NativeSn76489::new(3_579_545, 44_100).unwrap();
+                device.write_inner(0x80 | (register << 4) | nibble);
+                assert_eq!(device.latched_register, register);
+                match register {
+                    0 | 2 | 4 => {
+                        assert_eq!(device.tone_periods[usize::from(register / 2)], u16::from(nibble));
+                    }
+                    1 | 3 | 5 | 7 => {
+                        assert_eq!(device.attenuations[usize::from(register / 2)], nibble);
+                    }
+                    6 => assert_eq!(device.noise_control, nibble & 0x07),
+                    _ => unreachable!("register is restricted to three bits"),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn white_noise_lfsr_matches_fixed_golden_vector() {
+        let mut device = NativeSn76489::new(3_579_545, 44_100).unwrap();
+        device.write_inner(0xE4);
+        for expected in WHITE_NOISE_GOLDEN_STATES {
+            assert_eq!(device.lfsr, expected);
+            device.shift_noise_register();
+        }
+    }
+
+    #[test]
+    fn white_noise_lfsr_visits_all_nonzero_fifteen_bit_states_once() {
+        let mut device = NativeSn76489::new(3_579_545, 44_100).unwrap();
+        device.write_inner(0xE4);
+        let mut seen = HashSet::with_capacity(0x7FFF);
+
+        for _ in 0..0x7FFF {
+            assert!(seen.insert(device.lfsr), "repeated LFSR state {:#06x}", device.lfsr);
+            assert!((1..=0x7FFF).contains(&device.lfsr));
+            device.shift_noise_register();
+        }
+
+        assert_eq!(seen.len(), 0x7FFF);
+        assert_eq!(device.lfsr, 0x4000);
+    }
+
+    #[test]
+    fn periodic_noise_lfsr_recycles_the_single_one_bit() {
+        let mut device = NativeSn76489::new(3_579_545, 44_100).unwrap();
+        device.write_inner(0xE0);
+        let mut states = Vec::with_capacity(15);
+
+        for _ in 0..15 {
+            states.push(device.lfsr);
+            device.shift_noise_register();
+        }
+
+        assert_eq!(states[0], 0x4000);
+        assert_eq!(states[14], 0x0001);
+        assert_eq!(device.lfsr, 0x4000);
+    }
+
+    #[test]
+    fn tone_counter_toggles_at_each_exhaustive_period_boundary() {
+        for channel in 0..3 {
+            for period in 2_u16..=0x03FF {
+                let mut device = NativeSn76489::new(3_579_545, 44_100).unwrap();
+                device.tone_periods[channel] = period;
+                device.tone_counters[channel] = period;
+                device.tone_outputs[channel] = 1;
+
+                for _ in 1..period {
+                    device.tick_internal_clock();
+                    assert_eq!(device.tone_outputs[channel], 1);
+                }
+                device.tick_internal_clock();
+                assert_eq!(device.tone_outputs[channel], 0);
+            }
+        }
+    }
+
+    #[test]
+    fn clock_advancement_is_invariant_under_chunking() {
+        let mut whole = NativeSn76489::new(3_579_545, 44_100).unwrap();
+        let mut chunked = NativeSn76489::new(3_579_545, 44_100).unwrap();
+        for device in [&mut whole, &mut chunked] {
+            device.write_inner(0x85);
+            device.write_inner(0x12);
+            device.write_inner(0x90);
+            device.write_inner(0xE5);
+            device.write_inner(0xF3);
+        }
+
+        whole.advance_clocks_inner(123_457, false);
+        chunked.advance_clocks_inner(12_345, false);
+        chunked.advance_clocks_inner(11_112, false);
+        chunked.advance_clocks_inner(100_000, false);
+
+        assert_eq!(chunked.tone_periods, whole.tone_periods);
+        assert_eq!(chunked.tone_counters, whole.tone_counters);
+        assert_eq!(chunked.tone_outputs, whole.tone_outputs);
+        assert_eq!(chunked.noise_counter, whole.noise_counter);
+        assert_eq!(chunked.noise_counter_phase, whole.noise_counter_phase);
+        assert_eq!(chunked.lfsr, whole.lfsr);
+        assert_eq!(chunked.clock_divider_phase, whole.clock_divider_phase);
+        assert_eq!(chunked.output_phase, whole.output_phase);
+        assert_eq!(chunked.pending_samples, whole.pending_samples);
     }
 }
