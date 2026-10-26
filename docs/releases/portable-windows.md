@@ -13,7 +13,7 @@ The workflow at .github/workflows/windows-portable.yml:
 3. Checks key dependency imports before packaging.
 4. Uses PyInstaller in one-folder mode and collects Qt, SDL3, pygame, and audio dependencies.
 5. Includes a portable readme and MIT license.
-6. Creates SegaEmulator-Windows-x64-portable.zip, then starts the packaged GUI for a short smoke test.
+6. Creates SegaEmulator-Windows-x64-portable.zip, then runs the packaged CLI entry point with --help as a non-interactive smoke test.
 7. Uploads the ZIP as a CI artifact for pull requests and attaches it to an existing GitHub release when a v* tag build succeeds.
 
 ## Using the package
@@ -34,4 +34,4 @@ The archive does not contain commercial ROMs or BIOS files.
 
 ## Known limitations
 
-The --help smoke test does not prove that the GUI, Qt Quick rendering backend, controller input, audio output, or ROM execution works on every target PC. A clean-machine manual test remains required. The emulator's documented timing and long-session audio/video synchronization limitations also apply to the portable build.
+The non-interactive --help smoke test does not prove that the GUI, Qt Quick rendering backend, controller input, audio output, or ROM execution works. The Windows CI runner's GUI startup test exited with Windows status 0xC0000005 (access violation), so GUI compatibility is explicitly not considered validated by CI and requires separate diagnosis/manual testing. A clean-machine manual test remains required. The emulator's documented timing and long-session audio/video synchronization limitations also apply to the portable build.
