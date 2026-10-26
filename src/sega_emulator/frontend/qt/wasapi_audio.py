@@ -170,7 +170,7 @@ class WasapiAudioOutput:
                     self._current_block = self._queue.get_nowait()
                     self._current_offset = 0
                 except queue.Empty:
-                    self.underrun_callbacks += 1
+                    underflow_reported = True
                     break
             available = len(self._current_block) - self._current_offset
             count = min(required - written, available)
@@ -178,6 +178,8 @@ class WasapiAudioOutput:
             output[written : written + count] = self._current_block[start : start + count]
             self._current_offset += count
             written += count
+        if underflow_reported:
+            self.underrun_callbacks += 1
 
     def close(self) -> None:
         """Stop and release the WASAPI stream; safe to call more than once."""
