@@ -11,6 +11,7 @@ pub(crate) struct NativeSG1000Io {
     joystick1: u8,
     joystick2: u8,
     current_tstate: u64,
+    psg_write_events: Vec<(u64, u8)>,
 }
 
 impl NativeSG1000Io {
@@ -21,7 +22,12 @@ impl NativeSG1000Io {
             joystick1: 0xFF,
             joystick2: 0xFF,
             current_tstate: 0,
+            psg_write_events: Vec::new(),
         }
+    }
+
+    fn drain_psg_write_events(&mut self) -> Vec<(u64, u8)> {
+        std::mem::take(&mut self.psg_write_events)
     }
 
     pub(crate) fn read_port_native(&mut self, py: Python<'_>, address: u16) -> PyResult<u8> {
@@ -58,6 +64,7 @@ impl NativeSG1000Io {
             return Ok(());
         }
         if (0x40..=0x7F).contains(&port) {
+            self.psg_write_events.push((tstate, value));
             self.audio_sync
                 .bind(py)
                 .borrow_mut()
@@ -238,6 +245,10 @@ impl NativeSG1000Machine {
             value as u8,
             tstate as u64,
         )
+    }
+
+    fn drain_psg_write_events(&mut self, py: Python<'_>) -> Vec<(u64, u8)> {
+        self.io_bus.bind(py).borrow_mut().drain_psg_write_events()
     }
 
     fn set_joystick(&mut self, py: Python<'_>, player: i64, value: i64) -> PyResult<()> {

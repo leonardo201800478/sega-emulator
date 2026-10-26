@@ -44,6 +44,8 @@ class EmulatorMainWindow(QMainWindow):
         on_video_scale: Callable[[int], None],
         on_select_emulation_backend: Callable[[], None] | None = None,
         on_configure_audio_video: Callable[[], None] | None = None,
+        on_start_vgm_recording: Callable[[], None] | None = None,
+        on_stop_vgm_recording: Callable[[], None] | None = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -150,6 +152,22 @@ class EmulatorMainWindow(QMainWindow):
         self.vdp_snapshot_action.setShortcut("F8")
         self.vdp_snapshot_action.triggered.connect(on_vdp_snapshot)
         diagnostics_menu.addAction(self.vdp_snapshot_action)
+        diagnostics_menu.addSeparator()
+        self.start_vgm_recording_action = QAction("Iniciar gravação PSG em VGM…", self)
+        self.start_vgm_recording_action.setShortcut("Ctrl+Shift+V")
+        if on_start_vgm_recording is not None:
+            self.start_vgm_recording_action.triggered.connect(on_start_vgm_recording)
+        else:
+            self.start_vgm_recording_action.setEnabled(False)
+        diagnostics_menu.addAction(self.start_vgm_recording_action)
+        self.stop_vgm_recording_action = QAction("Parar gravação VGM", self)
+        if on_stop_vgm_recording is not None:
+            self.stop_vgm_recording_action.triggered.connect(on_stop_vgm_recording)
+        else:
+            self.stop_vgm_recording_action.setEnabled(False)
+        self.stop_vgm_recording_action.setEnabled(False)
+        diagnostics_menu.addAction(self.stop_vgm_recording_action)
+        diagnostics_menu.addSeparator()
         diagnostics_menu.addAction("Abrir pasta de logs", on_open_logs)
         diagnostics_menu.addAction("Estado da máquina", on_show_machine_state)
 
@@ -177,6 +195,11 @@ class EmulatorMainWindow(QMainWindow):
                 self.fullscreen_action.blockSignals(True)
                 self.fullscreen_action.setChecked(self.isFullScreen())
                 self.fullscreen_action.blockSignals(False)
+
+    def set_vgm_recording(self, active: bool) -> None:
+        """Keep the VGM recording controls synchronized with recorder state."""
+        self.start_vgm_recording_action.setEnabled(not active)
+        self.stop_vgm_recording_action.setEnabled(active)
 
     def set_status_message(self, message: str, timeout_ms: int = 5000) -> None:
         self.status.showMessage(message, timeout_ms)

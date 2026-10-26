@@ -11,6 +11,7 @@ Projeto de emulação de alta precisão com núcleo de hardware prioritariamente
 - **Carregador:** arquivos `.sg`, `.rom`, `.bin` e ROMs dentro de ZIP; ZIP com múltiplas ROMs exige seleção explícita.
 - **Diagnóstico:** logs JSONL/texto por sessão, SHA-256 da ROM, checkpoints de execução e stack traces.
 - **Áudio:** PSG SN76489AN integrado à máquina, com saída mono nos frontends Pygame e Qt; a fidelidade sonora contra hardware real continua pendente: o FIR digital ainda precisa de validação independente e não simula a resposta analógica do chip. Consulte o [roadmap de fidelidade do PSG e reutilização entre consoles Sega](docs/architecture/psg-fidelity-roadmap.md).
+- **Captura de áudio:** gravação dos comandos temporizados do SN76489 em VGM pelo menu Diagnóstico; consulte o [procedimento de captura VGM](docs/validation/vgm-psg-capture.md) e o [histórico de versões](CHANGELOG.md).
 
 ## Requisitos
 

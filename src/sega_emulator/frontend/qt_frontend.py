@@ -8,6 +8,7 @@ import logging
 import time
 from pathlib import Path
 
+from sega_emulator.audio.vgm_recorder import VgmRecorder
 from sega_emulator.frontend.controller_input import (
     ACTIONS,
     DEFAULT_GAMEPAD_BINDINGS,
@@ -215,6 +216,8 @@ def run(initial_path: Path | None = None) -> None:
         on_video_scale=lambda scale: window.set_video_scale(scale),
         on_select_emulation_backend=lambda: select_emulation_backend(),
         on_configure_audio_video=lambda: configure_audio_video(),
+        on_start_vgm_recording=lambda: start_vgm_recording(),
+        on_stop_vgm_recording=lambda: stop_vgm_recording(),
     )
     window.resize(preferences.window_width, preferences.window_height)
     window._video_scale = preferences.video_scale
@@ -225,6 +228,8 @@ def run(initial_path: Path | None = None) -> None:
 
     machine: SG1000Machine | None = None
     loaded: LoadedRom | None = None
+    vgm_recorder = VgmRecorder()
+    vgm_output_path: Path | None = None
     paused = False
     frame_count = 0
     pressed_keys: set[int] = set()
@@ -343,6 +348,10 @@ def run(initial_path: Path | None = None) -> None:
                 )
                 return
             machine.run_frame()
+            psg_events = machine.drain_psg_write_events()
+            if vgm_recorder.active:
+                for event_tstate, event_value in psg_events:
+                    vgm_recorder.record_write(event_tstate, event_value)
             samples = machine.drain_audio_samples()
             if samples and audio_channel is not None and pygame is not None:
                 pcm = audio_resampler.process(samples)
@@ -502,6 +511,8 @@ def run(initial_path: Path | None = None) -> None:
             QMessageBox.warning(window, "Não foi possível abrir a ROM", str(exc))
             return
 
+        if vgm_recorder.active and not stop_vgm_recording():
+            return
         machine, loaded, frame_count, paused = loaded_machine, candidate, 0, False
         audio_resampler.reset()
         window.set_rom_label(candidate.display_name)
@@ -591,6 +602,8 @@ def run(initial_path: Path | None = None) -> None:
                 f"Não foi possível ativar o backend {requested_backend}: {exc}",
             )
             return
+        if vgm_recorder.active and not stop_vgm_recording():
+            return
         selected_backend = requested_backend
         settings.setValue("cpu_core", selected_backend)
         machine = replacement
@@ -666,6 +679,73 @@ def run(initial_path: Path | None = None) -> None:
             },
         )
 
+    def start_vgm_recording() -> None:
+        nonlocal vgm_output_path
+        if machine is None or loaded is None:
+            QMessageBox.information(
+                window, "Gravação VGM", "Carregue uma ROM antes de gravar."
+            )
+            return
+        if vgm_recorder.active:
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            window,
+            "Salvar gravação PSG VGM",
+            (
+                str(loaded.source_path.with_suffix(".vgm"))
+                if loaded.source_path
+                else str(Path.cwd() / "sg1000_capture.vgm")
+            ),
+            "VGM (*.vgm)",
+        )
+        if not path:
+            return
+        if not path.lower().endswith(".vgm"):
+            path += ".vgm"
+        # Discard queued events from before the recording start.
+        machine.drain_psg_write_events()
+        vgm_output_path = Path(path)
+        vgm_recorder.start(machine.total_tstates)
+        window.set_vgm_recording(True)
+        status.showMessage("Gravando escritas do PSG em VGM…", 5000)
+        logger.info(
+            "Gravação VGM iniciada",
+            extra={
+                "event": "vgm_recording_started",
+                "path": str(vgm_output_path),
+                "rom_sha256": loaded.sha256,
+            },
+        )
+
+    def stop_vgm_recording() -> bool:
+        nonlocal vgm_output_path
+        if not vgm_recorder.active:
+            return True
+        if machine is None or vgm_output_path is None:
+            return False
+        for event_tstate, event_value in machine.drain_psg_write_events():
+            vgm_recorder.record_write(event_tstate, event_value)
+        event_count = vgm_recorder.event_count
+        try:
+            saved_path = vgm_recorder.save(vgm_output_path, machine.total_tstates)
+        except (OSError, ValueError, RuntimeError) as exc:
+            QMessageBox.warning(window, "Falha ao salvar VGM", str(exc))
+            return False
+        window.set_vgm_recording(False)
+        status.showMessage(
+            f"VGM salvo: {saved_path.name} ({event_count} escritas PSG)", 8000
+        )
+        logger.info(
+            "Gravação VGM salva",
+            extra={
+                "event": "vgm_recording_saved",
+                "path": str(saved_path),
+                "psg_writes": event_count,
+            },
+        )
+        vgm_output_path = None
+        return True
+
     def pause_resume() -> None:
         nonlocal paused
         paused = not paused
@@ -679,6 +759,8 @@ def run(initial_path: Path | None = None) -> None:
         nonlocal machine, frame_count, paused
         nonlocal last_checkpoint_time, last_checkpoint_tstates
         nonlocal last_checkpoint_instructions, last_checkpoint_frame
+        if vgm_recorder.active and not stop_vgm_recording():
+            return
         if loaded is None:
             return
         machine = SG1000Machine(loaded.data, cpu_core=selected_backend)
@@ -1103,6 +1185,8 @@ def run(initial_path: Path | None = None) -> None:
         open_rom(str(initial_path))
     window.show()
     app.exec()
+    if vgm_recorder.active:
+        stop_vgm_recording()
     saved_width, saved_height = persisted_window_dimensions(
         window, preferences.window_width, preferences.window_height
     )
