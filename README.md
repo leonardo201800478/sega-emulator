@@ -157,6 +157,7 @@ git diff --check
 ## Documentação
 
 - [Arquitetura multi-sistema e política Rust-first](docs/architecture.md)
+- [Backends de apresentação de vídeo e validação Vulkan](docs/architecture/video-rendering-backends.md)
 - [Instruções para agentes de código](AGENTS.md)
 - [Prompt de orientações do projeto (ChatGPT; menos de 8.000 caracteres)](docs/project-instructions-prompt.md)
 - [ADR 0007 — Política de desenvolvimento Rust-first](docs/adr/0007-rust-first-development-policy.md)
