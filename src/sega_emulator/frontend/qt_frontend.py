@@ -622,7 +622,7 @@ def run(initial_path: Path | None = None) -> None:
         )
 
     def configure_audio_video() -> None:
-        nonlocal preferences, pygame, audio_channel
+        nonlocal preferences, pygame, audio_channel, audio_resampler
         dialog = SettingsDialog(preferences, window)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
@@ -641,6 +641,7 @@ def run(initial_path: Path | None = None) -> None:
                         "Falha ao encerrar mixer antes de reconfigurar áudio"
                     )
             pygame, audio_channel = _initialize_pygame_backend(updated)
+            audio_resampler = PcmResampler(updated.audio_sample_rate)
         elif audio_channel is not None:
             audio_channel.set_volume(updated.audio_volume / 100)
 
@@ -1099,9 +1100,12 @@ def run(initial_path: Path | None = None) -> None:
         open_rom(str(initial_path))
     window.show()
     app.exec()
+    saved_geometry = (
+        window.normalGeometry() if window.isFullScreen() else window.geometry()
+    )
     preferences = FrontendPreferences(
-        window_width=max(640, min(7680, window.width())),
-        window_height=max(480, min(4320, window.height())),
+        window_width=max(640, min(7680, saved_geometry.width())),
+        window_height=max(480, min(4320, saved_geometry.height())),
         video_scale=getattr(window, "_video_scale", preferences.video_scale),
         recent_roms=tuple(
             str(path)
