@@ -112,6 +112,10 @@ class SettingsDialog(QDialog):
         video_layout = QVBoxLayout(video_page)
         video_group = QGroupBox("Vídeo")
         video_form = QFormLayout(video_group)
+        video_form.addRow(
+            "Backend de apresentação:",
+            QLabel("Vulkan (Qt Quick); fallback Qt raster se indisponível"),
+        )
         self.video_filter = QComboBox()
         self.video_filter.addItem("Nearest-neighbor — pixels nítidos", "nearest")
         self.video_filter.addItem("Bilinear — suavização", "bilinear")
