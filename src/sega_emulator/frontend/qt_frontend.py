@@ -38,8 +38,10 @@ FRAME_PERIOD_SECONDS = (228 * 262) / Z80_CLOCK_HZ
 
 def _runtime_diagnostic(machine: SG1000Machine, rom_sha256: str) -> dict[str, object]:
     """Return verifiable identity of the loaded emulator runtime and native binary."""
+    import importlib.machinery
     import os
     import sys
+    from types import ModuleType
 
     diagnostic: dict[str, object] = {
         "backend_requested": machine.cpu_core,
@@ -80,14 +82,34 @@ def _runtime_diagnostic(machine: SG1000Machine, rom_sha256: str) -> dict[str, ob
     try:
         import sega_z80_core
 
-        binary_path = Path(sega_z80_core.__file__).resolve()
+        package_path = Path(sega_z80_core.__file__).resolve()
+        extension_suffixes = tuple(importlib.machinery.EXTENSION_SUFFIXES)
+        extension_paths = sorted(
+            {
+                str(Path(module.__file__).resolve())
+                for module in tuple(sys.modules.values())
+                if isinstance(module, ModuleType)
+                and module.__name__.startswith("sega_z80_core")
+                and isinstance(getattr(module, "__file__", None), str)
+                and getattr(module, "__file__").endswith(extension_suffixes)
+            }
+        )
         diagnostic["native_module"] = sega_z80_core.__name__
-        diagnostic["native_binary_path"] = str(binary_path)
-        diagnostic["native_binary_size"] = binary_path.stat().st_size
-        diagnostic["native_binary_sha256"] = hashlib.sha256(
-            binary_path.read_bytes()
-        ).hexdigest()
-        diagnostic["native_binary_mtime_ns"] = binary_path.stat().st_mtime_ns
+        diagnostic["native_package_path"] = str(package_path)
+        diagnostic["native_extension_paths"] = extension_paths
+        if extension_paths:
+            binary_path = Path(extension_paths[0])
+            diagnostic["native_binary_path"] = str(binary_path)
+            diagnostic["native_binary_size"] = binary_path.stat().st_size
+            diagnostic["native_binary_sha256"] = hashlib.sha256(
+                binary_path.read_bytes()
+            ).hexdigest()
+            diagnostic["native_binary_mtime_ns"] = binary_path.stat().st_mtime_ns
+        else:
+            diagnostic["native_binary_path"] = None
+            diagnostic["native_binary_inspection_error"] = (
+                "No loaded sega_z80_core extension module with a native binary path"
+            )
     except Exception as exc:
         diagnostic["native_binary_inspection_error"] = (
             type(exc).__name__ + ": " + str(exc)
