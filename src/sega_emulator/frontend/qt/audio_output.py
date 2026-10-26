@@ -62,9 +62,7 @@ class PcmResampler:
                 window = (
                     0.42
                     + 0.5 * math.cos(math.pi * distance / (_FILTER_HALF + 1))
-                    + 0.08 * math.cos(
-                        2 * math.pi * distance / (_FILTER_HALF + 1)
-                    )
+                    + 0.08 * math.cos(2 * math.pi * distance / (_FILTER_HALF + 1))
                 )
                 weight = self._cutoff * _sinc(self._cutoff * distance) * window
                 weights.append(weight)
@@ -98,7 +96,9 @@ class PcmResampler:
 
     def _emit(self, *, flushing: bool) -> bytes:
         output: list[float] = []
-        target_count = round(self._real_input_count * self.output_rate / PSG_SAMPLE_RATE)
+        target_count = round(
+            self._real_input_count * self.output_rate / PSG_SAMPLE_RATE
+        )
         while True:
             if flushing:
                 if (
@@ -120,7 +120,9 @@ class PcmResampler:
             for tap, coefficient in enumerate(coefficients):
                 source_index = integer_position + tap - _FILTER_HALF
                 if self._buffer_start <= source_index < self._available_count:
-                    value += self._buffer[source_index - self._buffer_start] * coefficient
+                    value += (
+                        self._buffer[source_index - self._buffer_start] * coefficient
+                    )
             output.append(value)
             self._emitted_count += 1
             self._next_position += self._step
