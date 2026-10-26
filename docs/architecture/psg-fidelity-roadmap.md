@@ -11,7 +11,7 @@ Decisões para esta etapa:
 - Não mudar o som padrão nem os clocks lógicos apenas para obter um resultado auditivamente mais agradável.
 - Não adicionar um passa-baixa arbitrário como se fosse uma característica comprovada do SN76489AN.
 - Separar **lógica digital do chip**, **reconstrução/reamostragem digital** e **resposta analógica da plataforma**.
-- Manter Python como referência legível e testar qualquer mudança equivalente no backend Rust. O runtime Rust permanece a via de desempenho preferencial; JIT fica fora do escopo enquanto os resultados medidos não demonstrarem necessidade.
+- Rust é a implementação definitiva do núcleo de hardware. Python é usado para protótipos e referências seletivas quando ajudam a estabelecer o comportamento esperado; não é obrigatório duplicar o PSG em Python antes de implementar em Rust. Mudanças devem ser cobertas por vetores de referência, testes determinísticos e, quando existir uma implementação Python equivalente, testes de paridade. JIT fica fora do escopo enquanto benchmarks não demonstrarem necessidade.
 - Não implementar todos os consoles nesta etapa. Primeiro corrigir e validar o perfil SG-1000; perfis Sega integrados são uma etapa seguinte.
 
 ## Evidências observadas no repositório
