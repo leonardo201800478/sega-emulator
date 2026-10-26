@@ -546,7 +546,7 @@ mod tests {
             0x21, 0x34, 0x12, // LD HL,0x1234
             0x22, 0x00, 0xC1, // LD (0xC100),HL
             0x2A, 0x00, 0xC1, // LD HL,(0xC100)
-            0x32, 0x02, // LD (0xC102),A (address high byte follows)
+            0x32, 0x02, 0xC1, // LD (0xC102),A
         ]);
         let mut cpu = Z80::default();
 
@@ -564,7 +564,7 @@ mod tests {
     #[test]
     fn sixteen_bit_increment_decrement_and_add_hl_update_registers_and_flags() {
         let mut bus = TestBus([0; 0x10000]);
-        bus.0[..16].copy_from_slice(&[
+        bus.0[..14].copy_from_slice(&[
             0x21, 0xFF, 0x0F, // LD HL,0x0FFF
             0x11, 0x01, 0x00, // LD DE,1
             0x19, // ADD HL,DE -> 0x1000, H set
