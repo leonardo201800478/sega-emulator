@@ -17,6 +17,16 @@ from PySide6.QtWidgets import (
 from sega_emulator.frontend.qt.video_widget import VideoWidget
 
 
+def persisted_window_dimensions(
+    window: QMainWindow, fallback_width: int, fallback_height: int
+) -> tuple[int, int]:
+    """Return windowed dimensions, even if the application exits fullscreen."""
+    geometry = window.normalGeometry() if window.isFullScreen() else window.geometry()
+    if not geometry.isValid():
+        return fallback_width, fallback_height
+    return geometry.width(), geometry.height()
+
+
 class EmulatorMainWindow(QMainWindow):
     """Interface de apresentação; o núcleo de emulação continua em SG1000Machine."""
 
