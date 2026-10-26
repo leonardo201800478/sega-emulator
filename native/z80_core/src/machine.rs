@@ -319,7 +319,6 @@ impl NativeSG1000Machine {
     }
 }
 
-
 // Adapter for the Python/Qt diagnostic panel. This deliberately exposes only
 // the standalone CPU+memory slice; it is not the full video/audio machine.
 #[pyclass(module = "sega_z80_core")]
@@ -395,7 +394,9 @@ impl StandaloneSG1000Core {
     }
 
     fn step(&mut self) -> PyResult<u32> {
-        self.machine.step().map_err(|error| PyNotImplementedError::new_err(error.to_string()))
+        self.machine
+            .step()
+            .map_err(|error| PyNotImplementedError::new_err(error.to_string()))
     }
 
     fn run_instructions(&mut self, count: i64) -> PyResult<u64> {
