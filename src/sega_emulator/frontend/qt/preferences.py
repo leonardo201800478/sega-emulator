@@ -36,7 +36,7 @@ class FrontendPreferences:
     controller_config: str = ""
     audio_enabled: bool = True
     diagnostics_enabled: bool = True
-    cpu_core: str = "python"
+    cpu_core: str = "rust"
 
     def __post_init__(self) -> None:
         if not MIN_WINDOW_WIDTH <= self.window_width <= MAX_WINDOW_WIDTH:
