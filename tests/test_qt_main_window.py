@@ -208,6 +208,7 @@ def test_fullscreen_hides_application_chrome_and_escape_restores_it(qt_app) -> N
         on_show_machine_state=lambda: None,
         on_video_scale=lambda scale: None,
     )
+    assert not window.exit_fullscreen_action.isEnabled()
     window.show()
     qt_app.processEvents()
 
