@@ -83,7 +83,7 @@ class FramebufferImageProvider(QQuickImageProvider):
 
     def set_image(self, image: QImage | None) -> None:
         """Publish a detached image snapshot for the next scene-graph update."""
-        snapshot = image.copy() if image is not None and not image.isNull() else QImage()
+        snapshot = QImage(image) if image is not None and not image.isNull() else QImage()
         with self._lock:
             self._image = snapshot
 
@@ -91,7 +91,7 @@ class FramebufferImageProvider(QQuickImageProvider):
         """Return a stable copy; Qt may call this method away from the UI thread."""
         del image_id, size, requested_size
         with self._lock:
-            return self._image.copy()
+            return QImage(self._image)
 
 
 class VideoWidget(QWidget):
@@ -183,7 +183,7 @@ class VideoWidget(QWidget):
             )
         except Exception:
             logger.exception(
-                "Não foi possível criar a superfície Vulkan; usando renderização Qt raster"
+                "Falha ao criar superfície Vulkan; usando renderização Qt raster"
             )
             self._vulkan_failed = True
             self._stack.setCurrentWidget(self._fallback)
