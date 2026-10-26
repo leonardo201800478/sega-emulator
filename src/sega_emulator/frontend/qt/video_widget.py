@@ -83,11 +83,7 @@ class FramebufferImageProvider(QQuickImageProvider):
 
     def set_image(self, image: QImage | None) -> None:
         """Publish a detached image snapshot for the next scene-graph update."""
-        snapshot = (
-            QImage(image)
-            if image is not None and not image.isNull()
-            else QImage()
-        )
+        snapshot = QImage(image) if image is not None and not image.isNull() else QImage()
         with self._lock:
             self._image = snapshot
 
