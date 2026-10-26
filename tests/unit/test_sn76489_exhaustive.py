@@ -256,6 +256,7 @@ def test_reset_clears_every_temporal_phase_and_pending_audio_queue() -> None:
     assert psg._noise_counter == 0x10
     assert psg._noise_counter_phase == 0
     assert psg._lfsr == LFSR_SEED
+    assert psg._noise_output == 0
     assert psg._clock_divider_phase == 0
     assert psg._output_phase == 0
     assert psg._noise_period == 0x10
