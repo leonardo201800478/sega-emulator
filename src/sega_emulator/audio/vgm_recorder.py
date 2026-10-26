@@ -104,5 +104,9 @@ class VgmRecorder:
     def save(self, path: str | Path, end_tstate: int) -> Path:
         output = Path(path)
         payload = self.encode(end_tstate)
-        output.write_bytes(payload)
+        try:
+            output.write_bytes(payload)
+        except OSError:
+            self._active = True
+            raise
         return output
