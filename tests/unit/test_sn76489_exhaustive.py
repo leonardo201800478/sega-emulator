@@ -293,11 +293,14 @@ def test_noise_mixer_outputs_the_bit_shifted_out_of_the_lfsr() -> None:
     psg.write(0xE0)  # Periodic mode: the seed's single one circulates through 15 bits.
     psg.write(0xF0)  # Make only the noise channel audible.
 
+    outgoing_bits = []
     observed = []
     for _ in range(15):
-        outgoing_bit = psg._lfsr & 1
+        outgoing_bits.append(psg._lfsr & 1)
         psg._shift_noise_register()
         observed.append(psg._mix())
 
-    expected = [-0.25] * 14 + [0.25]
-    assert observed == expected
+    expected_bits = [0] * 14 + [1]
+    expected_samples = [-0.25] * 14 + [0.25]
+    assert outgoing_bits == expected_bits
+    assert observed == expected_samples
