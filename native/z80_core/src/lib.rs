@@ -15,7 +15,7 @@ use vdp::NativeTms9918A;
 mod audio;
 use audio::{NativeAudioSynchronizer, NativeSn76489};
 mod machine;
-use machine::{NativeSG1000Io, NativeSG1000Machine};
+use machine::{NativeSG1000Io, NativeSG1000Machine, StandaloneSG1000Core};
 
 const FLAG_C: u8 = 0x01;
 const FLAG_N: u8 = 0x02;
@@ -1620,6 +1620,7 @@ fn sega_z80_core(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<NativeAudioSynchronizer>()?;
     module.add_class::<NativeSG1000Io>()?;
     module.add_class::<NativeSG1000Machine>()?;
+    module.add_class::<StandaloneSG1000Core>()?;
     module.add_class::<RustZ80Cpu>()?;
     Ok(())
 }
