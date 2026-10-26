@@ -499,10 +499,9 @@ mod tests {
     use super::NativeSn76489;
 
     const WHITE_NOISE_GOLDEN_STATES: [u16; 32] = [
-        0x4000, 0x2000, 0x1000, 0x0800, 0x0400, 0x0200, 0x0100, 0x0080, 0x0040, 0x0020,
-        0x0010, 0x0008, 0x0004, 0x0002, 0x4001, 0x6000, 0x3000, 0x1800, 0x0C00, 0x0600,
-        0x0300, 0x0180, 0x00C0, 0x0060, 0x0030, 0x0018, 0x000C, 0x0006, 0x4003, 0x2001,
-        0x5000, 0x2800,
+        0x4000, 0x2000, 0x1000, 0x0800, 0x0400, 0x0200, 0x0100, 0x0080, 0x0040, 0x0020, 0x0010,
+        0x0008, 0x0004, 0x0002, 0x4001, 0x6000, 0x3000, 0x1800, 0x0C00, 0x0600, 0x0300, 0x0180,
+        0x00C0, 0x0060, 0x0030, 0x0018, 0x000C, 0x0006, 0x4003, 0x2001, 0x5000, 0x2800,
     ];
 
     #[test]
@@ -549,7 +548,10 @@ mod tests {
                 assert_eq!(device.latched_register, register);
                 match register {
                     0 | 2 | 4 => {
-                        assert_eq!(device.tone_periods[usize::from(register / 2)], u16::from(nibble));
+                        assert_eq!(
+                            device.tone_periods[usize::from(register / 2)],
+                            u16::from(nibble)
+                        );
                     }
                     1 | 3 | 5 | 7 => {
                         assert_eq!(device.attenuations[usize::from(register / 2)], nibble);
@@ -578,7 +580,11 @@ mod tests {
         let mut seen = HashSet::with_capacity(0x7FFF);
 
         for _ in 0..0x7FFF {
-            assert!(seen.insert(device.lfsr), "repeated LFSR state {:#06x}", device.lfsr);
+            assert!(
+                seen.insert(device.lfsr),
+                "repeated LFSR state {:#06x}",
+                device.lfsr
+            );
             assert!((1..=0x7FFF).contains(&device.lfsr));
             device.shift_noise_register();
         }
