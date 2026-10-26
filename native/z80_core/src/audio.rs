@@ -654,6 +654,29 @@ mod tests {
     }
 
     #[test]
+    fn rendered_tone_frequency_matches_clock_and_divider() {
+        for period in [127_u16, 254, 511] {
+            let mut device = NativeSn76489::new(3_579_545, 44_100).unwrap();
+            device.write_inner(0x90);
+            device.write_inner(0x80 | (period as u8 & 0x0F));
+            device.write_inner((period >> 4) as u8);
+
+            let half_second_clocks = device.clock_hz / 2;
+            device.advance_clocks_inner(half_second_clocks, false);
+            let samples: Vec<f64> = device.pending_samples.iter().copied().collect();
+            let transitions = samples.windows(2).filter(|pair| pair[0] != pair[1]).count();
+            let expected_frequency = device.clock_hz as f64 / (32.0 * f64::from(period));
+            let measured_frequency = transitions as f64 * device.sample_rate as f64
+                / (2.0 * (samples.len() - 1) as f64);
+
+            assert!(
+                (measured_frequency - expected_frequency).abs() <= 2.5,
+                "period={period}: expected {expected_frequency:.3} Hz, measured                  {measured_frequency:.3} Hz from {transitions} transitions"
+            );
+        }
+    }
+
+    #[test]
     fn clock_advancement_is_invariant_under_chunking() {
         let mut whole = NativeSn76489::new(3_579_545, 44_100).unwrap();
         let mut chunked = NativeSn76489::new(3_579_545, 44_100).unwrap();
