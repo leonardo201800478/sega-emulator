@@ -33,6 +33,7 @@ class EmulatorMainWindow(QMainWindow):
         on_show_machine_state: Callable[[], None],
         on_video_scale: Callable[[int], None],
         on_select_emulation_backend: Callable[[], None] | None = None,
+        on_configure_psg: Callable[[], None] | None = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -109,6 +110,14 @@ class EmulatorMainWindow(QMainWindow):
                 lambda checked=False, selected=scale: self._on_video_scale(selected)
             )
             video_menu.addAction(action)
+
+        sound_menu = self.menuBar().addMenu("&Som")
+        self.configure_psg_action = QAction("Configurações do PSG…", self)
+        if on_configure_psg is not None:
+            self.configure_psg_action.triggered.connect(on_configure_psg)
+        else:
+            self.configure_psg_action.setEnabled(False)
+        sound_menu.addAction(self.configure_psg_action)
 
         controls_menu = self.menuBar().addMenu("&Controles")
         controls_menu.addAction("Configurar controles…", on_configure_controls)
