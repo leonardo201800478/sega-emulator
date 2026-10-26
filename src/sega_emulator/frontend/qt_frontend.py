@@ -29,26 +29,51 @@ logger = logging.getLogger(__name__)
 Z80_CLOCK_HZ = 3_579_545
 
 
-def _initialize_pygame_backend() -> tuple[object | None, object | None]:
-    """Inicializa entrada SDL independentemente da disponibilidade do áudio."""
+def _initialize_pygame_backend(
+    preferences: FrontendPreferences,
+) -> tuple[object | None, object | None]:
+    """Configura a saída SDL sem alterar os clocks internos da emulação."""
     try:
         import pygame as pygame_backend
     except Exception as exc:
         logger.warning("Backend Pygame indisponível: %s", exc)
         return None, None
 
-    audio_channel = None
+    if not preferences.audio_enabled:
+        return pygame_backend, None
     try:
         pygame_backend.mixer.pre_init(
-            frequency=44_100, size=-16, channels=1, buffer=512
+            frequency=preferences.audio_sample_rate,
+            size=-16,
+            channels=1,
+            buffer=preferences.audio_buffer_size,
         )
         pygame_backend.mixer.init()
         audio_channel = pygame_backend.mixer.Channel(0)
+        audio_channel.set_volume(preferences.audio_volume / 100)
+        return pygame_backend, audio_channel
     except Exception as exc:
-        # A falha do mixer não pode desativar joystick/controller do mesmo SDL.
+        # Falha na saída de áudio não deve desativar vídeo ou controles.
         logger.warning("Saída de áudio indisponível: %s", exc)
+        return pygame_backend, None
 
-    return pygame_backend, audio_channel
+
+def _samples_to_pcm(samples: list[float], output_rate: int) -> bytes:
+    """Converte o PSG de 44,1 kHz para a taxa da saída com interpolação linear."""
+    source_rate = 44_100
+    if not samples:
+        return b""
+    output_count = max(1, round(len(samples) * output_rate / source_rate))
+    pcm = array("h")
+    last_index = len(samples) - 1
+    for index in range(output_count):
+        position = index * source_rate / output_rate
+        left = min(int(position), last_index)
+        right = min(left + 1, last_index)
+        fraction = position - left
+        value = samples[left] + (samples[right] - samples[left]) * fraction
+        pcm.append(max(-32768, min(32767, round(value * 32767))))
+    return pcm.tobytes()
 
 
 def run(initial_path: Path | None = None) -> None:
@@ -78,6 +103,7 @@ def run(initial_path: Path | None = None) -> None:
 
         from sega_emulator.frontend.qt.main_window import EmulatorMainWindow
         from sega_emulator.frontend.qt.preferences import FrontendPreferences
+        from sega_emulator.frontend.qt.settings_dialog import SettingsDialog
     except ImportError as exc:
         raise RuntimeError(
             'Interface Qt não instalada. Execute: python -m pip install -e ".[qt]"'
@@ -96,9 +122,7 @@ def run(initial_path: Path | None = None) -> None:
         settings.setValue("rust_backend_default_migrated", True)
     else:
         selected_backend = preferences.cpu_core
-    pygame, audio_channel = (
-        _initialize_pygame_backend() if preferences.audio_enabled else (None, None)
-    )
+    pygame, audio_channel = _initialize_pygame_backend(preferences)
     serialized_controller_config = settings.value("controller_config", "", type=str)
     try:
         controller_config = (
@@ -130,10 +154,13 @@ def run(initial_path: Path | None = None) -> None:
         on_show_machine_state=lambda: show_machine_state(),
         on_video_scale=lambda scale: window.set_video_scale(scale),
         on_select_emulation_backend=lambda: select_emulation_backend(),
+        on_configure_audio_video=lambda: configure_audio_video(),
     )
     window.resize(preferences.window_width, preferences.window_height)
     window._video_scale = preferences.video_scale
     view = window.video_widget
+    view.set_filter_mode(preferences.video_filter)
+    view.set_integer_scale(preferences.integer_scale)
     status = window.status
 
     machine: SG1000Machine | None = None
@@ -250,10 +277,8 @@ def run(initial_path: Path | None = None) -> None:
             machine.run_frame()
             samples = machine.drain_audio_samples()
             if samples and audio_channel is not None and pygame is not None:
-                pcm = array(
-                    "h", (max(-32768, min(32767, round(s * 32767))) for s in samples)
-                )
-                sound = pygame.mixer.Sound(buffer=pcm.tobytes())
+                pcm = _samples_to_pcm(samples, preferences.audio_sample_rate)
+                sound = pygame.mixer.Sound(buffer=pcm)
                 if audio_channel.get_busy():
                     audio_channel.queue(sound)
                 else:
@@ -514,6 +539,45 @@ def run(initial_path: Path | None = None) -> None:
             extra={
                 "event": "emulation_backend_selected",
                 "emulation_backend": selected_backend,
+            },
+        )
+
+    def configure_audio_video() -> None:
+        nonlocal preferences, pygame, audio_channel
+        dialog = SettingsDialog(preferences, window)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        updated = dialog.preferences()
+        audio_device_changed = (
+            updated.audio_enabled != preferences.audio_enabled
+            or updated.audio_sample_rate != preferences.audio_sample_rate
+            or updated.audio_buffer_size != preferences.audio_buffer_size
+        )
+        if audio_device_changed:
+            if pygame is not None:
+                try:
+                    pygame.mixer.quit()
+                except Exception:
+                    logger.exception("Falha ao encerrar mixer antes de reconfigurar áudio")
+            pygame, audio_channel = _initialize_pygame_backend(updated)
+        elif audio_channel is not None:
+            audio_channel.set_volume(updated.audio_volume / 100)
+
+        preferences = updated
+        view.set_filter_mode(preferences.video_filter)
+        view.set_integer_scale(preferences.integer_scale)
+        preferences.save_to_store(settings)
+        status.showMessage("Configurações de áudio e vídeo aplicadas.", 5000)
+        logger.info(
+            "Configurações de áudio e vídeo atualizadas",
+            extra={
+                "event": "audio_video_settings_updated",
+                "audio_enabled": preferences.audio_enabled,
+                "audio_sample_rate": preferences.audio_sample_rate,
+                "audio_buffer_size": preferences.audio_buffer_size,
+                "audio_volume": preferences.audio_volume,
+                "video_filter": preferences.video_filter,
+                "integer_scale": preferences.integer_scale,
             },
         )
 
@@ -965,6 +1029,11 @@ def run(initial_path: Path | None = None) -> None:
         audio_enabled=preferences.audio_enabled,
         diagnostics_enabled=preferences.diagnostics_enabled,
         cpu_core=selected_backend,
+        audio_sample_rate=preferences.audio_sample_rate,
+        audio_buffer_size=preferences.audio_buffer_size,
+        audio_volume=preferences.audio_volume,
+        video_filter=preferences.video_filter,
+        integer_scale=preferences.integer_scale,
     )
     preferences.save_to_store(settings)
     controller_input.close()
