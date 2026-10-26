@@ -20,9 +20,9 @@ from sega_emulator.frontend.controller_input import (
     joystick_value,
 )
 from sega_emulator.frontend.qt.audio_output import PcmResampler
-from sega_emulator.frontend.qt.wasapi_audio import WasapiAudioOutput
 from sega_emulator.frontend.qt.frame_pacer import FramePacer
 from sega_emulator.frontend.qt.preferences import FrontendPreferences
+from sega_emulator.frontend.qt.wasapi_audio import WasapiAudioOutput
 from sega_emulator.frontend.sdl3_controller_input import SDL3ControllerInput
 from sega_emulator.machine.sg1000 import SG1000Machine
 from sega_emulator.rom_loader import LoadedRom, list_rom_members, load_rom
