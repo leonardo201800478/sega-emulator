@@ -76,8 +76,7 @@ def test_rendered_tone_frequency_matches_clock_and_divider(period: int) -> None:
     enable_tone_zero(psg, period)
     samples = psg.render(22_050)  # 0.5 s, enough to resolve low-frequency periods.
     transitions = sum(
-        (a < 0.0) != (b < 0.0)
-        for a, b in zip(samples, samples[1:], strict=False)
+        (a < 0.0) != (b < 0.0) for a, b in zip(samples, samples[1:], strict=False)
     )
 
     expected_frequency = psg.clock_hz / (2 * 16 * period)
