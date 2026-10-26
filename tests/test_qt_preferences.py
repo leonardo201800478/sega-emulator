@@ -29,6 +29,11 @@ def test_defaults_are_valid_and_stable() -> None:
     assert preferences.video_scale == 3
     assert preferences.recent_roms == ()
     assert preferences.audio_enabled is True
+    assert preferences.audio_sample_rate == 44_100
+    assert preferences.audio_buffer_size == 512
+    assert preferences.audio_volume == 100
+    assert preferences.video_filter == "nearest"
+    assert preferences.integer_scale is True
 
 
 @pytest.mark.parametrize(
