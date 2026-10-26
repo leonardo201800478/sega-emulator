@@ -19,7 +19,7 @@ NOISE_CHANNEL = 3
 LFSR_MASK = 0x7FFF
 LFSR_SEED = 0x4000
 SAMPLE_BUFFER_SECONDS = 1
-FILTER_TAPS = 127
+FILTER_TAPS = 63
 
 # Níveis nominais de atenuação em passos de aproximadamente 2 dB.
 _ATTENUATION = (
