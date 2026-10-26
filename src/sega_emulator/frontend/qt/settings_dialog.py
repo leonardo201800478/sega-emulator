@@ -79,7 +79,10 @@ class SettingsDialog(QDialog):
         psg_form.addRow("Divisor interno:", QLabel("16 (fixo no modelo atual)"))
         psg_form.addRow("Canais:", QLabel("3 tons + 1 ruído; saída mono"))
         psg_form.addRow(
-            "Tratamento da saída:", QLabel("Reamostragem linear no frontend; sem FIR no núcleo desta branch")
+            "Tratamento da saída:",
+            QLabel(
+                "Reamostragem linear no frontend; sem FIR no núcleo desta branch"
+            ),
         )
 
         volume_row = QWidget(psg_group)
