@@ -4,13 +4,13 @@ Projeto de emulação de alta precisão com núcleo de hardware prioritariamente
 
 ## Estado atual
 
-- **CPU:** núcleo Z80 em auditoria diferencial; temporização ainda não é ciclo a ciclo.
-- **Máquina SG-1000:** CPU, ROM/RAM, VDP TMS9918A inicial e joystick em desenvolvimento.
-- **Frontend Qt 6/PySide6:** janela redesenhada, barra de ações, tela cheia, ROMs recentes, seleção do runtime, configuração de controles e diagnóstico. A superfície de vídeo solicita o backend Vulkan do Qt Quick, com fallback raster explícito se o driver não inicializar; a validação em Windows/GPU real permanece pendente. O pacing limita a execução ao período nominal NTSC (~59,92 Hz) sem alterar os T-states lógicos; a UI continua usando `SG1000Machine`, sem máquina paralela.
+- **Marco SG-1000:** CPU, memória, I/O, VDP TMS9918A, PSG SN76489AN, entrada e runtime da máquina estão integrados no fluxo da aplicação. A validação funcional alcançada é satisfatória para o primeiro marco, mas não equivale a temporização ciclo a ciclo nem certifica todas as ROMs.
+- **CPU Z80:** execução por instrução com T-states nominais e auditoria diferencial contínua; ainda não é um modelo completo ciclo a ciclo de barramento.
+- **Frontend Qt 6/PySide6:** janela com menus, barra de ações, ROMs recentes, seleção do runtime, configurações e diagnóstico. O modo imersivo de tela cheia é dedicado ao jogo: oculta menus, barra de ações e status; F11/Alt+Enter alternam o modo e Esc retorna à janela. A superfície solicita Vulkan pelo Qt Quick e mantém fallback raster explícito se o driver não inicializar; a confirmação do backend efetivo deve ser feita nos logs da máquina de destino. O pacing usa o período nominal NTSC (~59,92 Hz) sem alterar os T-states lógicos.
 - **Configurações de áudio e vídeo:** saída mono do PSG, ativação, volume, taxa do mixer (22,05/44,1/48 kHz), buffer (256–2.048 amostras), filtro de vídeo e escala inteira preferencial. O filtro de vídeo nearest/bilinear e a escala 4:3 são aplicados pela cena Qt Quick em Vulkan quando disponível; o caminho raster mantém a compatibilidade. O FIR de 63 taps reduz aliasing digital; não representa a resposta analógica do chip.
 - **Carregador:** arquivos `.sg`, `.rom`, `.bin` e ROMs dentro de ZIP; ZIP com múltiplas ROMs exige seleção explícita.
 - **Diagnóstico:** logs JSONL/texto por sessão, SHA-256 da ROM, checkpoints de execução e stack traces.
-- **Áudio:** PSG SN76489AN integrado à máquina. O frontend Qt usa saída PCM mono por WASAPI compartilhado via PortAudio/sounddevice, com fila limitada e contadores de underrun/blocos descartados; o frontend Pygame continua disponível separadamente. A fidelidade sonora contra hardware real continua pendente: o FIR digital ainda precisa de validação independente e não simula a resposta analógica do chip. Consulte o [roadmap de fidelidade do PSG e reutilização entre consoles Sega](docs/architecture/psg-fidelity-roadmap.md) e o [contrato dos backends de saída](docs/architecture/audio-output-backends.md).
+- **Áudio:** PSG SN76489AN integrado e saída PCM mono do frontend Qt por WASAPI compartilhado via PortAudio/sounddevice. Em teste manual recente, o som foi considerado muito próximo ao Gearsystem, um marco de qualidade percebida importante para o SG-1000. Ainda investigamos pequenos engasgos e possível deriva de sincronismo durante sessões prolongadas; essa observação não é uma certificação contra hardware real. O FIR é filtragem digital e não modela a resposta analógica do chip. Consulte o [roadmap de fidelidade do PSG](docs/architecture/psg-fidelity-roadmap.md) e o [contrato dos backends de saída](docs/architecture/audio-output-backends.md).
 - **Captura de áudio:** gravação dos comandos temporizados do SN76489 em VGM pelo menu Diagnóstico; consulte o [procedimento de captura VGM](docs/validation/vgm-psg-capture.md) e o [histórico de versões](CHANGELOG.md).
 
 ## Requisitos
@@ -29,7 +29,7 @@ py -3.14 -m venv .venv
 .\\.venv\\Scripts\\python.exe -m pip install -e ".[dev,qt,frontend]"
 ```
 
-## Iniciar a interface experimental
+## Iniciar a interface Qt
 
 ```powershell
 .\\.venv\\Scripts\\python.exe -m sega_emulator
@@ -37,7 +37,7 @@ py -3.14 -m venv .venv
 
 A interface Qt abre sem ROM carregada. Use **Arquivo → Abrir ROM** para selecionar uma ROM local.
 
-Menus disponíveis: **Arquivo**, **Emulação**, **Vídeo**, **Configurações → Áudio e vídeo**, **Configurações → Controles**, **Diagnóstico** e **Ajuda**. Em Áudio e vídeo, a aba **Saída de áudio** controla ativação, taxa do mixer e buffer; **PSG / Hardware** exibe o perfil fixo do SN76489AN do SG-1000 e o ganho; **Vídeo** controla o filtro e a escala inteira. Clock, divisor e variante do chip permanecem fixos. O FIR é filtragem digital anti-aliasing, não um modelo analógico do hardware. A SDL3 enumera dispositivos a cada ciclo de entrada para reconhecer conexão/desconexão durante a sessão; controles sem mapeamento SDL são lidos pela API de joystick bruto quando possível. Se um controle conectado for removido durante a execução, a emulação é pausada antes do próximo frame para evitar continuar sem o dispositivo esperado. Use **Configurações → Controles → Dispositivos detectados** para consultar a disponibilidade do backend e a lista atualizada; o log da sessão também registra o estado inicial.
+Menus disponíveis: **Arquivo**, **Emulação**, **Vídeo**, **Configurações → Áudio e vídeo**, **Configurações → Controles**, **Diagnóstico** e **Ajuda**. Para jogar sem elementos da aplicação, use **Vídeo → Tela cheia** ou pressione **F11** / **Alt+Enter**; o modo imersivo remove menus, barra de ações, status e margens ao redor da imagem. Pressione **Esc** para voltar à janela normal. Em Áudio e vídeo, a aba **Saída de áudio** controla ativação, taxa do mixer e buffer; **PSG / Hardware** exibe o perfil fixo do SN76489AN do SG-1000 e o ganho; **Vídeo** controla o filtro e a escala inteira. Clock, divisor e variante do chip permanecem fixos. O FIR é filtragem digital anti-aliasing, não um modelo analógico do hardware. A SDL3 enumera dispositivos a cada ciclo de entrada para reconhecer conexão/desconexão durante a sessão; controles sem mapeamento SDL são lidos pela API de joystick bruto quando possível. Se um controle conectado for removido durante a execução, a emulação é pausada antes do próximo frame para evitar continuar sem o dispositivo esperado. Use **Configurações → Controles → Dispositivos detectados** para consultar a disponibilidade do backend e a lista atualizada; o log da sessão também registra o estado inicial.
 
 Para iniciar diretamente uma ROM:
 
@@ -59,9 +59,9 @@ Para usar o frontend Pygame:
 .\\.venv\\Scripts\\python.exe -m sega_emulator "C:\\caminho\\para\\jogo.sg" --ui pygame
 ```
 
-## Núcleo SG-1000 standalone em Rust (em desenvolvimento)
+## Estado do marco SG-1000 e primeiro release
 
-O crate puro `native/sg1000_core` agora contém mapa de memória ROM/RAM, contrato de barramento, uma fatia inicial de instruções Z80 e uma máquina headless que conecta CPU e memória. A máquina executa ROMs sintéticas sem iniciar Python, mas ainda **não** representa o SG-1000 completo: VDP, PSG, I/O, interrupções e scheduler de dispositivos não estão integrados. A CPU suporta apenas instruções explicitamente implementadas e retorna erro para as demais; isso é um marco de extração, não um runtime para jogos comerciais.
+O crate puro `native/sg1000_core` continua sendo uma extração experimental e parcial, distinta do runtime integrado usado pela aplicação. Ele ainda não representa sozinho o SG-1000 completo. Não confunda esse crate standalone com a máquina integrada no frontend Qt nem com uma alegação de fidelidade ciclo a ciclo.
 
 ## Backend SG-1000 Rust experimental no Qt
 
@@ -154,8 +154,16 @@ O JSONL é destinado à análise automatizada; o log textual é para leitura rá
 git diff --check
 ```
 
+## Licença e créditos
+
+O Sega Emulator é distribuído sob a licença **MIT**. Consulte o arquivo [LICENSE](LICENSE) para os termos completos. O diálogo **Ajuda → Sobre o Sega Emulator** mostra a versão, o escopo atual do SG-1000, créditos tecnológicos e a licença.
+
+O projeto é independente e não é afiliado à SEGA. SEGA e SG-1000 são marcas de seus respectivos titulares. Consulte os créditos e as limitações técnicas neste README e nos documentos de arquitetura antes de interpretar resultados como evidência de fidelidade absoluta.
+
 ## Documentação
 
+- [Marco de qualidade do SG-1000 — áudio, vídeo, sincronismo e primeiro release](docs/milestones/sg1000-audio-video-milestone-2026-10-26.md)
+- [Notas preliminares do release v0.1.0](docs/releases/v0.1.0.md)
 - [Arquitetura multi-sistema e política Rust-first](docs/architecture.md)
 - [Backends de apresentação de vídeo e validação Vulkan](docs/architecture/vulkan-presentation-qt-quick.md)
 - [Instruções para agentes de código](AGENTS.md)
@@ -173,11 +181,11 @@ git diff --check
 - [Auditoria técnica da CPU Z80](docs/z80-code-audit-2026-10-22.md)
 - [Plano de resolução das lacunas Z80](docs/z80-gap-resolution-plan.md)
 
-## Limitações e próximos passos
+## Limitações conhecidas e próximos passos
 
-1. Reproduzir e corrigir a renderização incorreta observada com ROM real.
-2. Validar a entrada de joystick com hardware e jogos compatíveis.
-3. Validar amostras, ruído e latência do PSG contra referências independentes e hardware real.
-4. Aumentar a precisão temporal CPU–VDP com regressões reproduzíveis.
+1. Investigar os pequenos engasgos e o possível descompasso que aparecem após sessões longas, medindo fila PCM, underruns/overflows, duração dos frames e deriva temporal antes de alterar o scheduler.
+2. Continuar a validação diferencial de vídeo e entrada com ROMs conhecidas, checkpoints reproduzíveis e referências independentes.
+3. Expandir a cobertura de CPU/VDP/PSG sem declarar precisão ciclo a ciclo enquanto o modelo de barramento não a sustentar.
+4. Validar a saída em diferentes dispositivos Windows e documentar as condições dos testes. A avaliação positiva atual é observacional e não substitui validação em hardware real.
 
 ROMs comerciais e logs locais não devem ser incluídos no repositório. Use homebrew ou cópias obtidas legalmente no ambiente local.

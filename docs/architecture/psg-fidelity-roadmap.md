@@ -1,3 +1,5 @@
+> **Atualização de estado — 2026-10-26:** em teste manual do desenvolvedor, a saída sonora do SG-1000 foi considerada muito próxima ao Gearsystem, representando um avanço de qualidade percebida. Isso não substitui validação quantitativa independente nem medição de hardware real. Pequenos engasgos e possível descompasso em sessões longas continuam pendentes; o plano imediato é medir ocupação da fila PCM, underruns/overflows, cadência de frames e deriva temporal antes de modificar a síntese ou o scheduler. Consulte o [registro do marco SG-1000](../milestones/sg1000-audio-video-milestone-2026-10-26.md).
+
 # Roadmap de fidelidade do PSG e reutilização de hardware Sega
 
 **Estado:** proposta técnica e inventário de lacunas, baseada em inspeção estática do código e pesquisa documental em 26/10/2026. Não é uma declaração de fidelidade validada contra hardware real.

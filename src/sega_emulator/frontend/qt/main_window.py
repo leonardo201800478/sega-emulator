@@ -4,16 +4,19 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
+    QMessageBox,
     QStatusBar,
     QToolBar,
     QVBoxLayout,
     QWidget,
 )
 
+from sega_emulator import __version__
 from sega_emulator.frontend.qt.video_widget import VideoWidget
 
 
@@ -63,9 +66,21 @@ class EmulatorMainWindow(QMainWindow):
             QToolBar { background: #171e2a; border: 0; spacing: 8px; padding: 9px; }
             QToolButton { color: #e7edf7; padding: 7px 12px; border-radius: 5px; }
             QToolButton:hover { background: #2d405b; }
+            QToolButton:pressed { background: #385579; }
+            QMenu { border: 1px solid #303b4d; padding: 5px; }
+            QMenu::item { padding: 6px 24px 6px 10px; border-radius: 4px; }
             QStatusBar { background: #171e2a; color: #aebbd0; }
+            QStatusBar::item { border: 0; }
             QLabel { color: #e7edf7; }
-            QPushButton { padding: 7px 12px; }
+            QPushButton {
+                padding: 8px 14px;
+                border: 1px solid #39475d;
+                border-radius: 6px;
+                background: #202a3a;
+            }
+            QPushButton:hover { background: #2d405b; }
+            QPushButton:pressed { background: #385579; }
+            QPushButton:disabled { color: #748197; background: #171e2a; }
             """
         )
 
@@ -73,6 +88,7 @@ class EmulatorMainWindow(QMainWindow):
         self.video_widget.setObjectName("emulatorVideoSurface")
         screen = QWidget(self)
         layout = QVBoxLayout(screen)
+        self._central_layout = layout
         layout.setContentsMargins(18, 18, 18, 18)
         layout.setSpacing(12)
         layout.addWidget(self.video_widget, 1)
@@ -80,6 +96,8 @@ class EmulatorMainWindow(QMainWindow):
 
         self.status = QStatusBar(self)
         self.setStatusBar(self.status)
+        self._status_bar = self.status
+        self._fullscreen_ui_active = False
         self.rom_label = QLabel("Nenhuma ROM carregada")
         self.rom_label.setMinimumWidth(220)
         self.status.addPermanentWidget(self.rom_label)
@@ -94,9 +112,19 @@ class EmulatorMainWindow(QMainWindow):
         self.reset_action.setShortcut("F10")
         self.reset_action.triggered.connect(on_reset)
         self.fullscreen_action = QAction("Tela cheia", self)
-        self.fullscreen_action.setShortcut("Alt+Return")
+        self.fullscreen_action.setShortcuts(["F11", "Alt+Return"])
         self.fullscreen_action.setCheckable(True)
         self.fullscreen_action.toggled.connect(self._toggle_fullscreen)
+        self.exit_fullscreen_action = QAction("Sair da tela cheia", self)
+        self.exit_fullscreen_action.setShortcut("Escape")
+        self.exit_fullscreen_action.setShortcutContext(
+            Qt.ShortcutContext.WindowShortcut
+        )
+        self.exit_fullscreen_action.setEnabled(False)
+        self.exit_fullscreen_action.triggered.connect(
+            lambda: self._toggle_fullscreen(False)
+        )
+        self.addAction(self.exit_fullscreen_action)
 
         file_menu = self.menuBar().addMenu("&Arquivo")
         file_menu.addAction(self.open_action)
@@ -118,6 +146,7 @@ class EmulatorMainWindow(QMainWindow):
         emulation_menu.addAction(self.select_emulation_backend_action)
 
         toolbar = QToolBar("Principal", self)
+        self._main_toolbar = toolbar
         toolbar.setMovable(False)
         toolbar.setFloatable(False)
         toolbar.addAction(self.open_action)
@@ -172,16 +201,51 @@ class EmulatorMainWindow(QMainWindow):
         diagnostics_menu.addAction("Estado da máquina", on_show_machine_state)
 
         help_menu = self.menuBar().addMenu("&Ajuda")
-        help_menu.addAction(
-            "Sobre",
-            lambda: self.status.showMessage(
-                "Sega Emulator — SG-1000 | frontend Qt em evolução.", 5000
-            ),
+        self.about_action = QAction("Sobre o Sega Emulator…", self)
+        self.about_action.triggered.connect(self._show_about)
+        help_menu.addAction(self.about_action)
+
+    def _show_about(self) -> None:
+        """Show project scope, version, credits, and license in a proper dialog."""
+        QMessageBox.about(
+            self,
+            "Sobre o Sega Emulator",
+            f"""
+            <h2>Sega Emulator</h2>
+            <p><b>Versão:</b> {__version__}</p>
+            <p><b>Marco atual:</b> SG-1000</p>
+            <p>Emulador independente com núcleo de hardware em Rust e
+            interface e ferramentas em Python/PySide6.</p>
+            <p><b>Escopo:</b> CPU Z80, memória e I/O, VDP TMS9918A,
+            PSG SN76489AN, entrada, temporização e apresentação audiovisual,
+            com limitações documentadas no repositório.</p>
+            <p><b>Créditos tecnológicos:</b> Rust, Python, Qt for Python
+            (PySide6), PyO3, SDL3 e PortAudio/sounddevice.</p>
+            <p><b>Licença:</b> MIT. Consulte o arquivo LICENSE incluído
+            na distribuição.</p>
+            <p><small>SEGA e SG-1000 são marcas de seus respectivos titulares.
+            Este é um projeto independente, sem afiliação oficial.</small></p>
+            """,
         )
 
     def _toggle_fullscreen(self, enabled: bool) -> None:
+        """Use a game-only presentation in fullscreen and restore the full UI."""
+        if enabled == self._fullscreen_ui_active:
+            return
+        self._fullscreen_ui_active = enabled
+        self.menuBar().setVisible(not enabled)
+        self._main_toolbar.setVisible(not enabled)
+        self._status_bar.setVisible(not enabled)
+        if enabled:
+            self._central_layout.setContentsMargins(0, 0, 0, 0)
+            self._central_layout.setSpacing(0)
+        else:
+            self._central_layout.setContentsMargins(18, 18, 18, 18)
+            self._central_layout.setSpacing(12)
+        self.exit_fullscreen_action.setEnabled(enabled)
         if enabled:
             self.showFullScreen()
+            self.video_widget.setFocus()
         else:
             self.showNormal()
 
