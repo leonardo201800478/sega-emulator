@@ -261,7 +261,6 @@ def test_drain_samples_respects_limit_and_fifo_order() -> None:
     assert psg.drain_samples() == []
 
 
-
 def test_antialias_filter_suppresses_tone_above_nyquist() -> None:
     """A 55.9 kHz tone should not fold into the audible band at 44.1 kHz."""
     aliased, in_band = SN76489(), SN76489()
