@@ -140,4 +140,7 @@ class StandaloneCoreDialog(QDialog):
         self.state_view.setPlainText("\n".join(lines))
 
     def _hex_bytes(self, start: int) -> str:
-        return " ".join(f"{self._machine.read_memory(start + offset):02X}" for offset in range(32))
+        return " ".join(
+            f"{self._machine.read_memory(start + offset):02X}"
+            for offset in range(32)
+        )
