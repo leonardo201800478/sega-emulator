@@ -120,6 +120,7 @@ class EmulatorMainWindow(QMainWindow):
         self.exit_fullscreen_action.setShortcutContext(
             Qt.ShortcutContext.WindowShortcut
         )
+        self.exit_fullscreen_action.setEnabled(False)
         self.exit_fullscreen_action.triggered.connect(
             lambda: self._toggle_fullscreen(False)
         )
