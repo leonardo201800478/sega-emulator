@@ -53,9 +53,7 @@ class FakeSoundDevice:
 
 def test_opens_default_wasapi_device_in_shared_mode() -> None:
     sounddevice = FakeSoundDevice()
-    output = WasapiAudioOutput(
-        48_000, 512, sounddevice_module=sounddevice
-    )
+    output = WasapiAudioOutput(48_000, 512, sounddevice_module=sounddevice)
 
     stream = sounddevice.streams[0]
     assert stream.started
