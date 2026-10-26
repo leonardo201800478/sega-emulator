@@ -6,6 +6,8 @@ the standalone crate does not yet implement VDP, PSG, or machine scheduling.
 
 from __future__ import annotations
 
+from sega_emulator.machine.cartridge_profiles import cartridge_profile
+
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import (
     QDialog,
@@ -33,7 +35,7 @@ class StandaloneCoreDialog(QDialog):
 
         self._rom = rom
         self._core_type = StandaloneSG1000Core
-        self._machine = StandaloneSG1000Core(rom)
+        self._machine = self._new_machine()
         self.setWindowTitle(f"Core Rust standalone — {rom_name}")
         self.resize(640, 520)
 
@@ -78,6 +80,16 @@ class StandaloneCoreDialog(QDialog):
         self.reset_button.clicked.connect(self.reset_machine)
         self._refresh_state()
 
+    def _new_machine(self):
+        profile = cartridge_profile(self._rom)
+        return self._core_type(
+            self._rom,
+            profile.internal_ram_size,
+            profile.cartridge_ram_size,
+            profile.cartridge_ram_start,
+            profile.cartridge_ram_end if profile.cartridge_ram_size else 0,
+        )
+
     def step_once(self) -> None:
         try:
             self._machine.step()
@@ -107,7 +119,7 @@ class StandaloneCoreDialog(QDialog):
         self._timer.stop()
         self.run_button.setText("Executar continuamente")
         try:
-            self._machine = self._core_type(self._rom)
+            self._machine = self._new_machine()
             self._refresh_state()
         except Exception as exc:
             self._report_execution_error(exc)
