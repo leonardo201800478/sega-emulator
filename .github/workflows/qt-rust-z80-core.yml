@@ -14,6 +14,7 @@ on:
       - "src/sega_emulator/frontend/qt/**"
       - "src/sega_emulator/frontend/qt_frontend.py"
       - "tests/test_qt_*.py"
+      - "tests/unit/test_vulkan_video_widget.py"
       - "tests/test_sg1000_cpu_backend.py"
       - "tests/test_sg1000_native_machine.py"
       - "tests/test_rust_runtime_selection.py"
@@ -67,7 +68,7 @@ jobs:
           python -m pip install $wheel.FullName
       - name: Lint and format Python
         run: |
-          python -m ruff check src/sega_emulator/machine/sg1000.py src/sega_emulator/frontend/qt/main_window.py src/sega_emulator/frontend/qt/preferences.py src/sega_emulator/frontend/qt_frontend.py tests/test_qt_main_window.py tests/test_qt_preferences.py tests/test_sg1000_cpu_backend.py tests/test_sg1000_native_machine.py tests/test_rust_runtime_selection.py tests/test_sn76489_rust_parity.py tests/integration/test_rust_z80_core.py
-          python -m ruff format --check src/sega_emulator/machine/sg1000.py src/sega_emulator/frontend/qt/main_window.py src/sega_emulator/frontend/qt/preferences.py src/sega_emulator/frontend/qt_frontend.py tests/test_qt_main_window.py tests/test_qt_preferences.py tests/test_sg1000_cpu_backend.py tests/test_sg1000_native_machine.py tests/test_rust_runtime_selection.py tests/test_sn76489_rust_parity.py tests/integration/test_rust_z80_core.py
+          python -m ruff check src/sega_emulator/machine/sg1000.py src/sega_emulator/frontend/qt/main_window.py src/sega_emulator/frontend/qt/preferences.py src/sega_emulator/frontend/qt/video_widget.py src/sega_emulator/frontend/qt_frontend.py tests/unit/test_vulkan_video_widget.py tests/test_qt_main_window.py tests/test_qt_preferences.py tests/test_sg1000_cpu_backend.py tests/test_sg1000_native_machine.py tests/test_rust_runtime_selection.py tests/test_sn76489_rust_parity.py tests/integration/test_rust_z80_core.py
+          python -m ruff format --check src/sega_emulator/machine/sg1000.py src/sega_emulator/frontend/qt/main_window.py src/sega_emulator/frontend/qt/preferences.py src/sega_emulator/frontend/qt/video_widget.py src/sega_emulator/frontend/qt_frontend.py tests/unit/test_vulkan_video_widget.py tests/test_qt_main_window.py tests/test_qt_preferences.py tests/test_sg1000_cpu_backend.py tests/test_sg1000_native_machine.py tests/test_rust_runtime_selection.py tests/test_sn76489_rust_parity.py tests/integration/test_rust_z80_core.py
       - name: Test Qt backend selection and Rust parity
-        run: python -m pytest tests/test_qt_main_window.py tests/test_qt_preferences.py tests/test_sg1000_cpu_backend.py tests/test_sg1000_native_machine.py tests/test_rust_runtime_selection.py tests/test_sn76489_rust_parity.py tests/integration/test_rust_z80_core.py -q
+        run: python -m pytest tests/unit/test_vulkan_video_widget.py tests/test_qt_main_window.py tests/test_qt_preferences.py tests/test_sg1000_cpu_backend.py tests/test_sg1000_native_machine.py tests/test_rust_runtime_selection.py tests/test_sn76489_rust_parity.py tests/integration/test_rust_z80_core.py -q
