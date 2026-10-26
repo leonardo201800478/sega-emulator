@@ -390,34 +390,40 @@ impl NativeSn76489 {
         self.clock_divider_phase = internal_total % CLOCK_DIVIDER;
         for _ in 0..internal_clocks {
             self.tick_internal_clock();
-            let filtered_sample = self.filter_mix();
+            self.push_filter_sample();
             self.output_phase += self.sample_rate * CLOCK_DIVIDER;
-            while self.output_phase >= self.clock_hz {
-                let sample = filtered_sample;
-                if render_sink {
-                    self.render_pending.push_back(sample);
-                } else {
-                    if self.pending_samples.len() == self.sample_buffer_capacity {
-                        self.pending_samples.pop_front();
-                        self.dropped_samples += 1;
+            if self.output_phase >= self.clock_hz {
+                let sample = self.filtered_output();
+                while self.output_phase >= self.clock_hz {
+                    if render_sink {
+                        self.render_pending.push_back(sample);
+                    } else {
+                        if self.pending_samples.len() == self.sample_buffer_capacity {
+                            self.pending_samples.pop_front();
+                            self.dropped_samples += 1;
+                        }
+                        self.pending_samples.push_back(sample);
                     }
-                    self.pending_samples.push_back(sample);
+                    self.output_phase -= self.clock_hz;
                 }
-                self.output_phase -= self.clock_hz;
             }
         }
     }
 
-    fn filter_mix(&mut self) -> f64 {
+    fn push_filter_sample(&mut self) {
         let taps = self.filter_coefficients.len();
         let current_sample = self.mix();
         self.filter_history[self.filter_position] = current_sample;
+        self.filter_position = (self.filter_position + 1) % taps;
+    }
+
+    fn filtered_output(&self) -> f64 {
+        let taps = self.filter_coefficients.len();
         let mut total = 0.0;
         for index in 0..taps {
-            let history_index = (self.filter_position + taps - index) % taps;
+            let history_index = (self.filter_position + taps - 1 - index) % taps;
             total += self.filter_coefficients[index] * self.filter_history[history_index];
         }
-        self.filter_position = (self.filter_position + 1) % taps;
         total
     }
 
