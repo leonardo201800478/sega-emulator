@@ -75,7 +75,10 @@ def test_rendered_tone_frequency_matches_clock_and_divider(period: int) -> None:
     psg = SN76489()
     enable_tone_zero(psg, period)
     samples = psg.render(22_050)  # 0.5 s, enough to resolve low-frequency periods.
-    transitions = sum(a != b for a, b in zip(samples, samples[1:], strict=False))
+    transitions = sum(
+        (a < 0.0) != (b < 0.0)
+        for a, b in zip(samples, samples[1:], strict=False)
+    )
 
     expected_frequency = psg.clock_hz / (2 * 16 * period)
     measured_frequency = transitions * psg.sample_rate / (2 * (len(samples) - 1))
@@ -257,3 +260,38 @@ def test_drain_samples_respects_limit_and_fifo_order() -> None:
     assert len(first) == 3
     assert len(rest) == 7
     assert psg.drain_samples() == []
+
+
+
+def test_antialias_filter_suppresses_tone_above_nyquist() -> None:
+    """A 55.9 kHz tone should not fold into the audible band at 44.1 kHz."""
+    aliased, in_band = SN76489(), SN76489()
+    enable_tone_zero(aliased, 2)
+    enable_tone_zero(in_band, 8)
+
+    high_tone = aliased.render(4096)[1024:]
+    audible_tone = in_band.render(4096)[1024:]
+    high_rms = (sum(sample * sample for sample in high_tone) / len(high_tone)) ** 0.5
+    audible_rms = (
+        sum(sample * sample for sample in audible_tone) / len(audible_tone)
+    ) ** 0.5
+
+    assert audible_rms > 0.2
+    assert high_rms < audible_rms * 0.1, (
+        f"out-of-band tone RMS {high_rms:.6f} was not sufficiently attenuated "
+        f"relative to in-band tone RMS {audible_rms:.6f}"
+    )
+
+
+def test_antialias_filter_state_is_reset_and_chunk_deterministic() -> None:
+    whole, chunked = SN76489(), SN76489()
+    for chip in (whole, chunked):
+        enable_tone_zero(chip, 8)
+    expected = whole.render(1024)
+    actual = chunked.render(127) + chunked.render(897)
+    assert actual == expected
+
+    chunked.reset()
+    assert chunked._filter_position == 0
+    assert chunked._filter_history == [0.0] * len(chunked._filter_history)
+    assert chunked.render(64) == SN76489().render(64)
