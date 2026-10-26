@@ -108,6 +108,76 @@ impl Z80 {
                 }
                 10
             }
+            0x02 | 0x12 => {
+                let address = if opcode == 0x02 {
+                    self.registers.bc()
+                } else {
+                    self.registers.de()
+                };
+                bus.write_memory(address, self.registers.a);
+                7
+            }
+            0x0A | 0x1A => {
+                let address = if opcode == 0x0A {
+                    self.registers.bc()
+                } else {
+                    self.registers.de()
+                };
+                self.registers.a = bus.read_memory(address);
+                7
+            }
+            0x22 | 0x32 => {
+                let address = self.fetch16(bus);
+                if opcode == 0x22 {
+                    let [low, high] = self.registers.hl().to_le_bytes();
+                    bus.write_memory(address, low);
+                    bus.write_memory(address.wrapping_add(1), high);
+                } else {
+                    bus.write_memory(address, self.registers.a);
+                }
+                13
+            }
+            0x2A | 0x3A => {
+                let address = self.fetch16(bus);
+                if opcode == 0x2A {
+                    let low = bus.read_memory(address);
+                    let high = bus.read_memory(address.wrapping_add(1));
+                    self.registers.set_hl(u16::from_le_bytes([low, high]));
+                    16
+                } else {
+                    self.registers.a = bus.read_memory(address);
+                    13
+                }
+            }
+            0x03 | 0x13 | 0x23 | 0x33 | 0x0B | 0x1B | 0x2B | 0x3B => {
+                let pair = (opcode >> 4) & 0x03;
+                let decrement = opcode & 0x08 != 0;
+                let value = self.read_register_pair(pair);
+                let value = if decrement {
+                    value.wrapping_sub(1)
+                } else {
+                    value.wrapping_add(1)
+                };
+                self.write_register_pair(pair, value);
+                6
+            }
+            0x09 | 0x19 | 0x29 | 0x39 => {
+                let value = self.read_register_pair((opcode >> 4) & 0x03);
+                let hl = self.registers.hl();
+                let result = u32::from(hl) + u32::from(value);
+                let result16 = result as u16;
+                let preserved = self.registers.f & (FLAG_S | FLAG_Z | FLAG_PV);
+                let mut flags = preserved | ((result16 >> 8) as u8 & FLAG_XY);
+                if (hl & 0x0FFF) + (value & 0x0FFF) > 0x0FFF {
+                    flags |= FLAG_H;
+                }
+                if result > u32::from(u16::MAX) {
+                    flags |= FLAG_C;
+                }
+                self.registers.set_hl(result16);
+                self.registers.f = flags;
+                11
+            }
             0x06 | 0x0E | 0x16 | 0x1E | 0x26 | 0x2E | 0x36 | 0x3E => {
                 let value = self.fetch8(bus);
                 let destination = (opcode >> 3) & 0x07;
@@ -217,6 +287,26 @@ impl Z80 {
         };
         self.total_tstates += u64::from(cycles);
         Ok(cycles)
+    }
+
+    #[inline]
+    fn read_register_pair(&self, code: u8) -> u16 {
+        match code & 0x03 {
+            0 => self.registers.bc(),
+            1 => self.registers.de(),
+            2 => self.registers.hl(),
+            _ => self.registers.sp,
+        }
+    }
+
+    #[inline]
+    fn write_register_pair(&mut self, code: u8, value: u16) {
+        match code & 0x03 {
+            0 => self.registers.set_bc(value),
+            1 => self.registers.set_de(value),
+            2 => self.registers.set_hl(value),
+            _ => self.registers.sp = value,
+        }
     }
 
     #[inline]
@@ -443,6 +533,57 @@ mod tests {
         }
         assert_eq!(cpu.registers.bc(), 0x1234);
         assert_eq!(cpu.registers.sp, 0xD000);
+    }
+
+    #[test]
+    fn absolute_and_indirect_loads_transfer_bytes_in_little_endian_order() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..18].copy_from_slice(&[
+            0x01, 0x00, 0xC0, // LD BC,0xC000
+            0x3E, 0x5A, // LD A,0x5A
+            0x02, // LD (BC),A
+            0x0A, // LD A,(BC)
+            0x21, 0x34, 0x12, // LD HL,0x1234
+            0x22, 0x00, 0xC1, // LD (0xC100),HL
+            0x2A, 0x00, 0xC1, // LD HL,(0xC100)
+            0x32, 0x02, // LD (0xC102),A (address high byte follows)
+        ]);
+        bus.0[18] = 0xC1;
+        let mut cpu = Z80::default();
+
+        for expected in [10, 7, 7, 7, 10, 16, 16, 13] {
+            assert_eq!(cpu.step(&mut bus), Ok(expected));
+        }
+        assert_eq!(bus.0[0xC000], 0x5A);
+        assert_eq!(cpu.registers.a, 0x5A);
+        assert_eq!(bus.0[0xC100], 0x34);
+        assert_eq!(bus.0[0xC101], 0x12);
+        assert_eq!(cpu.registers.hl(), 0x1234);
+        assert_eq!(bus.0[0xC102], 0x5A);
+    }
+
+    #[test]
+    fn sixteen_bit_increment_decrement_and_add_hl_update_registers_and_flags() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..16].copy_from_slice(&[
+            0x21, 0xFF, 0x0F, // LD HL,0x0FFF
+            0x11, 0x01, 0x00, // LD DE,1
+            0x19, // ADD HL,DE -> 0x1000, H set
+            0x23, // INC HL -> 0x1001
+            0x2B, // DEC HL -> 0x1000
+            0x01, 0xFF, 0xFF, // LD BC,0xFFFF
+            0x03, // INC BC -> 0
+            0x0B, // DEC BC -> 0xFFFF
+        ]);
+        let mut cpu = Z80::default();
+
+        for expected in [10, 10, 11, 6, 6, 10, 6, 6] {
+            assert_eq!(cpu.step(&mut bus), Ok(expected));
+        }
+        assert_eq!(cpu.registers.hl(), 0x1000);
+        assert_eq!(cpu.registers.bc(), 0xFFFF);
+        assert_ne!(cpu.registers.f & FLAG_H, 0);
+        assert_eq!(cpu.registers.f & FLAG_C, 0);
     }
 
     #[test]
