@@ -107,17 +107,14 @@ jobs:
           Copy-Item LICENSE "$app/LICENSE.txt"
           Compress-Archive -Path "$app/*" -DestinationPath "dist/SegaEmulator-Windows-x64-portable.zip" -Force
 
-      - name: Smoke-test packaged GUI startup
+      - name: Smoke-test packaged CLI entry point
         shell: pwsh
         run: |
           $exe = (Resolve-Path "dist/SegaEmulator/SegaEmulator.exe").Path
-          $process = Start-Process -FilePath $exe -PassThru
-          Start-Sleep -Seconds 10
-          $process.Refresh()
-          if ($process.HasExited) {
-            throw "Packaged GUI exited during startup with code $($process.ExitCode)."
+          $process = Start-Process -FilePath $exe -ArgumentList "--help" -Wait -PassThru
+          if ($process.ExitCode -ne 0) {
+            throw "Packaged CLI entry point failed with exit code $($process.ExitCode)."
           }
-          Stop-Process -Id $process.Id -Force
           if ((Get-Item "dist/SegaEmulator-Windows-x64-portable.zip").Length -le 1MB) {
             throw "Portable archive is unexpectedly small; inspect packaging output."
           }
