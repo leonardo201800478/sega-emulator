@@ -95,3 +95,25 @@ def test_main_window_exposes_emulation_backend_selector(qt_app) -> None:
     window.select_emulation_backend_action.trigger()
     assert called == ["select-backend"]
     window.close()
+
+
+
+def test_main_window_exposes_standalone_rust_core_diagnostics(qt_app) -> None:
+    called: list[str] = []
+    window = EmulatorMainWindow(
+        on_open_rom=lambda: None,
+        on_pause_resume=lambda: None,
+        on_reset=lambda: None,
+        on_configure_controls=lambda: None,
+        on_show_controllers=lambda: None,
+        on_vdp_snapshot=lambda: None,
+        on_open_logs=lambda: None,
+        on_show_machine_state=lambda: None,
+        on_video_scale=lambda scale: None,
+        on_run_standalone_core=lambda: called.append("standalone-core"),
+    )
+
+    assert window.standalone_core_action.isEnabled()
+    window.standalone_core_action.trigger()
+    assert called == ["standalone-core"]
+    window.close()
