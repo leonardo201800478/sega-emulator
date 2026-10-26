@@ -720,12 +720,7 @@ mod tests {
             // Ignore the FIR startup transient and measure zero crossings rather
             // than every sample-value change; filtering makes adjacent samples
             // differ even when no fundamental-frequency transition occurred.
-            let samples: Vec<f64> = device
-                .pending_samples
-                .iter()
-                .copied()
-                .skip(1_024)
-                .collect();
+            let samples: Vec<f64> = device.pending_samples.iter().copied().skip(1_024).collect();
             let transitions = samples
                 .windows(2)
                 .filter(|pair| (pair[0] < 0.0) != (pair[1] < 0.0))
