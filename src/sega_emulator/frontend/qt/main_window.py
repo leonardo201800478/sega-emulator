@@ -33,6 +33,7 @@ class EmulatorMainWindow(QMainWindow):
         on_show_machine_state: Callable[[], None],
         on_video_scale: Callable[[int], None],
         on_select_emulation_backend: Callable[[], None] | None = None,
+        on_run_standalone_core: Callable[[], None] | None = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -121,6 +122,15 @@ class EmulatorMainWindow(QMainWindow):
         diagnostics_menu.addAction(self.vdp_snapshot_action)
         diagnostics_menu.addAction("Abrir pasta de logs", on_open_logs)
         diagnostics_menu.addAction("Estado da máquina", on_show_machine_state)
+        self.standalone_core_action = QAction("Executar core Rust standalone…", self)
+        if on_run_standalone_core is not None:
+            self.standalone_core_action.triggered.connect(on_run_standalone_core)
+        else:
+            self.standalone_core_action.setEnabled(False)
+        self.standalone_core_action.setToolTip(
+            "Abre o diagnóstico experimental de CPU e memória do core Rust independente."
+        )
+        diagnostics_menu.addAction(self.standalone_core_action)
 
         help_menu = self.menuBar().addMenu("&Ajuda")
         help_menu.addAction(
