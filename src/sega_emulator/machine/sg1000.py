@@ -89,6 +89,7 @@ class SG1000Machine:
         self.joystick2 = 0xFF
         self.total_instructions = 0
         self.total_tstates = 0
+        self._psg_write_events: list[tuple[int, int]] = []
         if cpu_core == "python":
             ram = SG1000Ram(bytes(profile.internal_ram_size))
             base_bus = SG1000MemoryBus(ram, cartridge_rom)
@@ -144,6 +145,7 @@ class SG1000Machine:
             return
         if 0x40 <= port <= 0x7F:
             # Chamadas externas são efetivas no T-state atual da máquina.
+            self._psg_write_events.append((self.total_tstates, value))
             self.audio_sync.schedule_write(self.total_tstates, value)
             self.audio_sync.advance_to(self.total_tstates)
 
@@ -154,11 +156,23 @@ class SG1000Machine:
             return
         port = address & 0xFF
         if 0x40 <= port <= 0x7F:
+            self._psg_write_events.append((tstate, value))
             self.audio_sync.schedule_write(tstate, value)
             return
         # O VDP permanece no contrato legado até receber sua própria fila
         # de eventos temporizados.
         self.write_port(address, value)
+
+    def drain_psg_write_events(self) -> list[tuple[int, int]]:
+        """Retira escritas PSG temporizadas desde a última leitura (para VGM)."""
+        if self.cpu_core == "rust":
+            return [
+                (int(tstate), int(value))
+                for tstate, value in self.native_machine.drain_psg_write_events()
+            ]
+        events = self._psg_write_events
+        self._psg_write_events = []
+        return events
 
     def set_joystick(self, player: int, value: int) -> None:
         if player not in (1, 2):
