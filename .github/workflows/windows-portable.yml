@@ -13,6 +13,8 @@ on:
       - "scripts/**"
       - "docs/releases/portable-windows.md"
   push:
+    branches:
+      - "feat/windows-portable-release"
     tags:
       - "v*"
   workflow_dispatch:
