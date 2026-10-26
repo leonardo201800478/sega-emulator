@@ -1185,6 +1185,8 @@ def run(initial_path: Path | None = None) -> None:
         open_rom(str(initial_path))
     window.show()
     app.exec()
+    if vgm_recorder.active:
+        stop_vgm_recording()
     saved_width, saved_height = persisted_window_dimensions(
         window, preferences.window_width, preferences.window_height
     )
