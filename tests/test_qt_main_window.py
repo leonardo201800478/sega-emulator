@@ -194,3 +194,38 @@ def test_persisted_window_dimensions_falls_back_for_invalid_geometry(qt_app) -> 
     window.hide()
     assert persisted_window_dimensions(window, 1180, 820) == (1180, 820)
     window.close()
+
+
+def test_fullscreen_hides_application_chrome_and_escape_restores_it(qt_app) -> None:
+    window = EmulatorMainWindow(
+        on_open_rom=lambda: None,
+        on_pause_resume=lambda: None,
+        on_reset=lambda: None,
+        on_configure_controls=lambda: None,
+        on_show_controllers=lambda: None,
+        on_vdp_snapshot=lambda: None,
+        on_open_logs=lambda: None,
+        on_show_machine_state=lambda: None,
+        on_video_scale=lambda scale: None,
+    )
+    window.show()
+    qt_app.processEvents()
+
+    window.fullscreen_action.trigger()
+    qt_app.processEvents()
+    assert window.isFullScreen()
+    assert window.menuBar().isHidden()
+    assert window._main_toolbar.isHidden()
+    assert window.statusBar().isHidden()
+    assert window._central_layout.contentsMargins().left() == 0
+    assert window.exit_fullscreen_action.isEnabled()
+
+    window.exit_fullscreen_action.trigger()
+    qt_app.processEvents()
+    assert not window.isFullScreen()
+    assert not window.menuBar().isHidden()
+    assert not window._main_toolbar.isHidden()
+    assert not window.statusBar().isHidden()
+    assert window._central_layout.contentsMargins().left() == 18
+    assert not window.exit_fullscreen_action.isEnabled()
+    window.close()
