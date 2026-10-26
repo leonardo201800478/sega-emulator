@@ -19,6 +19,7 @@ from sega_emulator.frontend.controller_input import (
     joystick_value,
 )
 from sega_emulator.frontend.qt.audio_output import samples_to_pcm
+from sega_emulator.frontend.qt.frame_pacer import FramePacer
 from sega_emulator.frontend.qt.preferences import FrontendPreferences
 from sega_emulator.frontend.sdl3_controller_input import SDL3ControllerInput
 from sega_emulator.machine.sg1000 import SG1000Machine
@@ -28,6 +29,9 @@ logger = logging.getLogger(__name__)
 
 # Clock nominal do Z80 no SG-1000 NTSC: 10,738635 MHz / 3.
 Z80_CLOCK_HZ = 3_579_545
+
+# NTSC frame pacing estimate: 228 Z80 T-states per line, 262 lines.
+FRAME_PERIOD_SECONDS = (228 * 262) / Z80_CLOCK_HZ
 
 
 def _initialize_pygame_backend(
@@ -159,8 +163,11 @@ def run(initial_path: Path | None = None) -> None:
     pressed_keys: set[int] = set()
     hold_was_pressed = False
     timer = QTimer(window)
-    # Executa tão rápido quanto possível; mede-se a velocidade real.
-    timer.setInterval(0)
+    # O loop do emulador é limitado ao período nominal NTSC; o relógio lógico
+    # da máquina continua avançando exclusivamente pelos T-states emulados.
+    frame_pacer = FramePacer(FRAME_PERIOD_SECONDS)
+    timer.setTimerType(Qt.TimerType.PreciseTimer)
+    timer.setInterval(1)
 
     def build_key_map() -> dict[int, tuple[int, str]]:
         result: dict[int, tuple[int, str]] = {}
@@ -250,6 +257,8 @@ def run(initial_path: Path | None = None) -> None:
         nonlocal paused, frame_count, last_checkpoint_time, last_checkpoint_tstates
         nonlocal last_checkpoint_instructions, last_checkpoint_frame
         if machine is None or paused:
+            return
+        if not frame_pacer.should_run(time.perf_counter()):
             return
         try:
             frame_started = time.perf_counter()
@@ -460,6 +469,7 @@ def run(initial_path: Path | None = None) -> None:
             f"ROM: {candidate.display_name} | SHA-256: {candidate.sha256[:16]}…"
         )
         view.setFocus()
+        frame_pacer.reset()
         timer.start()
 
     def select_emulation_backend() -> None:
@@ -592,6 +602,7 @@ def run(initial_path: Path | None = None) -> None:
             return
         machine = SG1000Machine(loaded.data, cpu_core=selected_backend)
         frame_count, paused = 0, False
+        frame_pacer.reset()
         pressed_keys.clear()
         update_joystick()
         last_checkpoint_time = time.perf_counter()
