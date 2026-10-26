@@ -232,6 +232,8 @@ class VideoWidget(QWidget):
             self._fallback.installEventFilter(event_filter)
         if self._quick_container is not None:
             self._quick_container.installEventFilter(event_filter)
+        if self._quick_view is not None:
+            self._quick_view.installEventFilter(event_filter)
 
     def set_filter_mode(self, mode: str) -> None:
         if mode not in ("nearest", "bilinear"):
