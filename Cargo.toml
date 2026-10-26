@@ -1,0 +1,13 @@
+[workspace]
+resolver = "3"
+exclude = [
+    "native/z80_core",
+]
+members = [
+    "native/sg1000_core",
+    "native/z80_alu",
+]
+default-members = [
+    "native/sg1000_core",
+    "native/z80_alu",
+]

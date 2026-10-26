@@ -1,5 +1,9 @@
 name: Qt selectable Rust Z80 core
 
+concurrency:
+  group: qt-rust-z80-core-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 on:
   pull_request:
     paths:
@@ -30,6 +34,7 @@ on:
 jobs:
   windows:
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -38,20 +43,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.14"
+          cache: pip
       - name: Install project, Qt and Maturin
         run: python -m pip install -e ".[dev,qt]" maturin
       - name: Rust formatting
-        run: |
-          cargo fmt --manifest-path native/z80_alu/Cargo.toml --all -- --check
-          cargo fmt --manifest-path native/z80_core/Cargo.toml --all -- --check
+        run: cargo fmt --manifest-path native/z80_core/Cargo.toml --all -- --check
       - name: Rust Clippy
-        run: |
-          cargo clippy --manifest-path native/z80_alu/Cargo.toml --all-targets -- -D warnings
-          cargo clippy --manifest-path native/z80_core/Cargo.toml --all-targets -- -D warnings
+        run: cargo clippy --manifest-path native/z80_core/Cargo.toml --all-targets -- -D warnings
       - name: Rust unit tests
-        run: |
-          cargo test --manifest-path native/z80_alu/Cargo.toml
-          cargo test --manifest-path native/z80_core/Cargo.toml
+        run: cargo test --manifest-path native/z80_core/Cargo.toml
       - name: Build and install optional extension
         shell: pwsh
         run: |
@@ -66,5 +66,3 @@ jobs:
           python -m ruff format --check src/sega_emulator/machine/sg1000.py src/sega_emulator/frontend/qt/main_window.py src/sega_emulator/frontend/qt/preferences.py src/sega_emulator/frontend/qt_frontend.py tests/test_qt_main_window.py tests/test_qt_preferences.py tests/test_sg1000_cpu_backend.py tests/test_sg1000_native_machine.py tests/integration/test_rust_z80_core.py
       - name: Test Qt backend selection and Rust parity
         run: python -m pytest tests/test_qt_main_window.py tests/test_qt_preferences.py tests/test_sg1000_cpu_backend.py tests/test_sg1000_native_machine.py tests/integration/test_rust_z80_core.py -q
-      - name: Run full regression suite
-        run: python -m pytest -q

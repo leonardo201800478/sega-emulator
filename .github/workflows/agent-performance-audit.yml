@@ -3,6 +3,26 @@ name: Agent 3 - Performance and Coverage Audit
 on:
   pull_request:
     branches: [main]
+    paths:
+      - "src/**/*.py"
+      - "tests/**/*.py"
+      - "tools/**/*.py"
+      - "scripts/**/*.py"
+      - "pyproject.toml"
+      - "requirements*.txt"
+      - "setup.py"
+      - "setup.cfg"
+  push:
+    branches: [main]
+    paths:
+      - "src/**/*.py"
+      - "tests/**/*.py"
+      - "tools/**/*.py"
+      - "scripts/**/*.py"
+      - "pyproject.toml"
+      - "requirements*.txt"
+      - "setup.py"
+      - "setup.cfg"
   schedule:
     - cron: "17 6 * * 1"
   workflow_dispatch:

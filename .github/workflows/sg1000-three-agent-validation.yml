@@ -1,0 +1,72 @@
+name: SG-1000 - Three Agent Sequential Validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "native/sg1000_core/**"
+      - "native/z80_alu/**"
+      - ".github/workflows/rust-sg1000-core.yml"
+      - ".github/workflows/sg1000-three-agent-validation.yml"
+  push:
+    branches:
+      - main
+      - feat/rust-standalone-sg1000-test
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "native/sg1000_core/**"
+      - "native/z80_alu/**"
+      - ".github/workflows/rust-sg1000-core.yml"
+      - ".github/workflows/sg1000-three-agent-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sg1000-three-agent-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  agent-1-functional:
+    name: "Agent 1 - CPU instruction tests"
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run focused Z80 CPU tests
+        run: cargo test -p sega-sg1000-core cpu::tests --locked
+
+  agent-2-integrity:
+    name: "Agent 2 - Memory and deterministic machine"
+    needs: agent-1-functional
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test SG-1000 memory mapping
+        run: cargo test -p sega-sg1000-core memory::tests --locked
+      - name: Test headless execution and determinism
+        run: cargo test -p sega-sg1000-core machine::tests --locked
+
+  agent-3-coverage:
+    name: "Agent 3 - Workspace quality and complete Rust checks"
+    needs: agent-2-integrity
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Check Rust formatting
+        run: cargo fmt --all -- --check
+      - name: Run Clippy with warnings denied
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Run complete Rust workspace tests
+        run: cargo test --workspace --locked
