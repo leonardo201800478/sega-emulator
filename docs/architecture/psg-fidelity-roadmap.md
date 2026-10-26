@@ -16,15 +16,15 @@ Decisões para esta etapa:
 
 ## Evidências observadas no repositório
 
-A inspeção da main identificou os seguintes fatos:
+A inspeção do código atual identificou os seguintes fatos:
 
 1. src/sega_emulator/audio/sn76489.py e native/z80_core/src/audio.rs implementam um modelo de 15 bits, seed 0x4000, feedback branco a partir dos bits 0/1 e divisor de entrada por 16. Esse perfil é coerente com a família discreta SN76489AN documentada para SG-1000, mas **não deve ser reutilizado sem configuração para os PSGs integrados Sega**.
-2. A máquina emite amostras em 44,1 kHz capturando o estado discreto corrente nos ticks internos. Não há, nessa etapa de geração, filtro anti-aliasing de banda limitada nem modelo de resposta analógica.
-3. samples_to_pcm (quando usado pelo frontend Qt) aplica interpolação linear para adaptar a taxa de saída. A interpolação ocorre depois da geração das amostras de 44,1 kHz; portanto, não pode remover aliasing que já tenha sido introduzido na redução da taxa.
+2. A geração do PSG aplica um FIR passa-baixas Blackman de 63 taps à mistura digital nos ticks internos antes de emitir PCM a 44,1 kHz. O filtro reduz aliasing, mas não é um integrador de banda limitada nem um modelo da resposta analógica; a resposta de frequência ainda precisa de validação quantitativa independente.
+3. O frontend Qt usa `PcmResampler`, um reamostrador FIR sinc com janela Blackman de 63 taps e tabela determinística de 1.024 fases para adaptar o PCM de 44,1 kHz à taxa do mixer. O estado de fase e o histórico são preservados entre blocos; o teste espectral verifica a rejeição de uma senoide acima do Nyquist de saída ao reduzir para 22,05 kHz. A filtragem do núcleo PSG e a do reamostrador são etapas distintas. A curva analógica real do console continua sem validação por medição.
 4. A mistura aplica atenuação logarítmica aproximada de 2 dB por passo e soma quatro canais com normalização por quatro. Isso é uma aproximação digital plausível, mas não valida ganho, clipping ou a resposta elétrica de uma placa de console.
 5. O caminho Rust reproduz os contratos observáveis da implementação Python e tem testes diferenciais. Uma alteração no algoritmo de amostragem ou nos estados do chip deve manter essa paridade, ou atualizar explicitamente o contrato e os testes.
 
-A descrição de som metálico/estridente é consistente com aliasing e ausência de resposta de saída, mas ainda é uma **hipótese diagnóstica**, não prova de causa única. O volume percebido deve ser medido separadamente por pico, RMS e alinhamento de ganho.
+A descrição de som metálico/estridente é consistente com aliasing residual e ausência de modelo analógico de saída, mas ainda é uma **hipótese diagnóstica**, não prova de causa única. O volume percebido deve ser medido separadamente por pico, RMS e alinhamento de ganho.
 
 ## O que a documentação técnica sustenta
 
@@ -60,17 +60,17 @@ O ARES emite o PSG SG numa taxa próxima ao clock dividido por 16 e aplica um pa
 
 **Aceitação:** os mesmos vetores produzem resultados reproduzíveis em Python e Rust; testes detectam diferenças de frequência, ganho, estado e divisão em blocos.
 
-### Fase B — Reamostragem com controle de aliasing (P1)
+### Fase B — Reamostragem com controle de aliasing (P1; parcialmente implementada)
 
-**Objetivo:** reduzir o sinal de alta resolução para 44,1/48 kHz sem descartar transições sem filtragem.
+**Objetivo:** reduzir aliasing na conversão da mistura digital do PSG para PCM e manter comportamento determinístico entre blocos.
 
-- Definir uma representação de sinal fonte a cada tick interno do PSG, preservando a fase do divisor e os writes temporizados.
-- Implementar um reamostrador anti-aliasing stateful (por exemplo, FIR/polyphase ou uma alternativa medida e documentada). Não usar interpolação linear como filtro anti-aliasing do sinal fonte.
-- Manter estado do filtro entre frames e chamadas; o resultado deve ser independente de como o chamador divide os blocos.
-- Testar a resposta de frequência do reamostrador com sinais sintéticos e medir atenuação de componentes acima do Nyquist de saída.
-- Comparar custo CPU e latência antes de escolher número de taps, taxa interna e formato numérico. Medir também o caminho Rust real.
+- **Implementado:** FIR passa-baixas Blackman de 63 taps, com estado persistente e coeficientes determinados por clock e taxa PCM, nas implementações Python e Rust.
+- **Validado parcialmente:** testes determinísticos e de paridade Python/Rust, além de um teste sintético que compara energia de um tom acima de Nyquist com um tom dentro da banda. Isso demonstra uma regressão útil, mas não caracteriza completamente a resposta de frequência do filtro.
+- **Pendente:** medir ripple de banda passante, atenuação de banda rejeitada, resposta transitória e atraso; definir limites quantitativos a partir de uma especificação de teste independente.
+- **Pendente:** a conversão do frontend Qt para 22,05 kHz ainda usa interpolação linear a partir de 44,1 kHz e pode reintroduzir aliasing. Não tratar a configuração de 22,05 kHz como saída anti-aliasing validada.
+- Comparar custo de CPU e latência no caminho Rust real sem alterar os clocks lógicos da máquina.
 
-**Aceitação:** nenhuma alteração nos clocks lógicos; fase de áudio determinística; resposta de frequência documentada; aliasing acima da banda de saída atenuado por um limiar definido nos testes; ausência de descontinuidades artificiais nas fronteiras dos buffers.
+**Aceitação restante:** limites quantitativos de resposta de frequência definidos e aprovados; resultado independente da divisão em blocos; conversão para cada taxa de saída sem aliasing não controlado; nenhuma alteração nos clocks lógicos.
 
 ### Fase C — Modelo de saída SG-1000 baseado em evidência (P1)
 
@@ -112,7 +112,7 @@ O perfil deve expressar diferenças confirmadas como dados/configuração: largu
 | CPU Z80 | Núcleos Python/Rust e testes diferenciais existem; o estado atual de testes não demonstra todas as variantes, interrupções nem precisão ciclo a ciclo | Manter matriz de opcodes; testes de diagnóstico e ciclos; documentar cobertura e resultados por commit |
 | Barramento e scheduler | T-states nominais e alguns writes temporizados; ainda não equivalem a execução completa por ciclo de barramento | Definir modelo explícito de eventos e acessos temporais antes de alegar precisão ciclo a ciclo |
 | VDP SG-1000 | Implementações em evolução e testes de modos, raster/sprites; falta validação ampla contra padrões de hardware | Homebrew/test ROMs legais, testes diferenciais por modo, timing e snapshots comparáveis |
-| PSG SG-1000 | Mistura digital implementada; amostragem/saída analógica não modeladas com fidelidade validada | Fases A–C deste documento |
+| PSG SG-1000 | Mistura digital implementada; FIR Blackman de 63 taps reduz aliasing, mas a resposta de frequência e a saída analógica não foram validadas contra hardware | Quantificar resposta do FIR, corrigir aliasing na redução Qt para 22,05 kHz e buscar referência independente/hardware |
 | Frontend/áudio | Há caminhos de saída diferentes e adaptação de taxa; buffer e mixer podem afetar entrega, volume e latência | Medir o PCM antes do backend e o sinal entregue; testar underruns e configurações reais no Windows |
 | Máquina e determinismo | Backend Rust integra mais do runtime, mas é necessário preservar paridade após alterações em dispositivos | Testes diferenciais completos, snapshots/saídas determinísticas e benchmarks comparáveis |
 | Master System/Game Gear | Não tratar como sistemas prontos apenas por compartilharem Z80/PSG/VDP em parte | Só iniciar depois de perfil SG-1000 validado; implementar mapa de I/O, VDP, áudio e diferenças por plataforma |

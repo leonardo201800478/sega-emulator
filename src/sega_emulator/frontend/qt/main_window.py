@@ -1,4 +1,4 @@
-"""Main Qt window composition; emulator operations are injected as callbacks."""
+"""Janela Qt moderna para o frontend SG-1000; operações vêm por callbacks."""
 
 from __future__ import annotations
 
@@ -17,8 +17,18 @@ from PySide6.QtWidgets import (
 from sega_emulator.frontend.qt.video_widget import VideoWidget
 
 
+def persisted_window_dimensions(
+    window: QMainWindow, fallback_width: int, fallback_height: int
+) -> tuple[int, int]:
+    """Return windowed dimensions, even if the application exits fullscreen."""
+    geometry = window.normalGeometry() if window.isFullScreen() else window.geometry()
+    if not geometry.isValid():
+        return fallback_width, fallback_height
+    return geometry.width(), geometry.height()
+
+
 class EmulatorMainWindow(QMainWindow):
-    """Presentation-only window with stable actions and no machine ownership."""
+    """Interface de apresentação; o núcleo de emulação continua em SG1000Machine."""
 
     def __init__(
         self,
@@ -33,46 +43,58 @@ class EmulatorMainWindow(QMainWindow):
         on_show_machine_state: Callable[[], None],
         on_video_scale: Callable[[int], None],
         on_select_emulation_backend: Callable[[], None] | None = None,
+        on_configure_audio_video: Callable[[], None] | None = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
         self._on_video_scale = on_video_scale
         self._video_scale = 3
-        self.setWindowTitle("Sega Emulator — SG-1000")
-        self.resize(1024, 768)
-        self.setMinimumSize(640, 480)
+        self.setWindowTitle("Sega Emulator | SG-1000")
+        self.resize(1180, 820)
+        self.setMinimumSize(760, 560)
         self.setStyleSheet(
-            "QMainWindow { background: #17191f; color: #e8eaf0; }"
-            "QMenuBar, QMenu { background: #222630; color: #e8eaf0; }"
-            "QMenuBar::item:selected, QMenu::item:selected { background: #39445a; }"
-            "QToolBar { background: #222630; border: 0; spacing: 8px; padding: 6px; }"
-            "QStatusBar { background: #222630; color: #b9c2d0; }"
-            "QLabel { color: #e8eaf0; }"
-            "QPushButton { padding: 6px 12px; }"
+            """
+            QMainWindow, QWidget { background: #10141c; color: #e7edf7; }
+            QMenuBar, QMenu { background: #171e2a; color: #e7edf7; }
+            QMenuBar::item { padding: 7px 10px; }
+            QMenuBar::item:selected, QMenu::item:selected { background: #2d405b; }
+            QToolBar { background: #171e2a; border: 0; spacing: 8px; padding: 9px; }
+            QToolButton { color: #e7edf7; padding: 7px 12px; border-radius: 5px; }
+            QToolButton:hover { background: #2d405b; }
+            QStatusBar { background: #171e2a; color: #aebbd0; }
+            QLabel { color: #e7edf7; }
+            QPushButton { padding: 7px 12px; }
+            """
         )
 
         self.video_widget = VideoWidget(self)
+        self.video_widget.setObjectName("emulatorVideoSurface")
         screen = QWidget(self)
         layout = QVBoxLayout(screen)
-        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setContentsMargins(18, 18, 18, 18)
         layout.setSpacing(12)
-        layout.addWidget(self.video_widget)
+        layout.addWidget(self.video_widget, 1)
         self.setCentralWidget(screen)
 
         self.status = QStatusBar(self)
         self.setStatusBar(self.status)
         self.rom_label = QLabel("Nenhuma ROM carregada")
+        self.rom_label.setMinimumWidth(220)
         self.status.addPermanentWidget(self.rom_label)
 
         self.open_action = QAction("Abrir ROM…", self)
         self.open_action.setShortcut(QKeySequence.StandardKey.Open)
         self.open_action.triggered.connect(on_open_rom)
-        self.pause_action = QAction("Pausar/Continuar", self)
+        self.pause_action = QAction("Pausar / continuar", self)
         self.pause_action.setShortcut("F5")
         self.pause_action.triggered.connect(on_pause_resume)
         self.reset_action = QAction("Reiniciar máquina", self)
         self.reset_action.setShortcut("F10")
         self.reset_action.triggered.connect(on_reset)
+        self.fullscreen_action = QAction("Tela cheia", self)
+        self.fullscreen_action.setShortcut("Alt+Return")
+        self.fullscreen_action.setCheckable(True)
+        self.fullscreen_action.toggled.connect(self._toggle_fullscreen)
 
         file_menu = self.menuBar().addMenu("&Arquivo")
         file_menu.addAction(self.open_action)
@@ -83,34 +105,43 @@ class EmulatorMainWindow(QMainWindow):
         emulation_menu = self.menuBar().addMenu("&Emulação")
         emulation_menu.addAction(self.pause_action)
         emulation_menu.addAction(self.reset_action)
-        self.select_emulation_backend_action = QAction(
-            "Selecionar backend de emulação…", self
-        )
+        emulation_menu.addSeparator()
+        self.select_emulation_backend_action = QAction("Backend de emulação…", self)
         if on_select_emulation_backend is not None:
             self.select_emulation_backend_action.triggered.connect(
                 on_select_emulation_backend
             )
         else:
             self.select_emulation_backend_action.setEnabled(False)
-        emulation_menu.addSeparator()
         emulation_menu.addAction(self.select_emulation_backend_action)
 
         toolbar = QToolBar("Principal", self)
         toolbar.setMovable(False)
+        toolbar.setFloatable(False)
         toolbar.addAction(self.open_action)
         toolbar.addAction(self.pause_action)
         toolbar.addAction(self.reset_action)
+        toolbar.addSeparator()
+        toolbar.addAction(self.fullscreen_action)
         self.addToolBar(toolbar)
 
         video_menu = self.menuBar().addMenu("&Vídeo")
         for scale in (2, 3, 4):
-            action = QAction(f"Escala {scale}×", self)
+            action = QAction(f"Escala de janela {scale}×", self)
             action.triggered.connect(
                 lambda checked=False, selected=scale: self._on_video_scale(selected)
             )
             video_menu.addAction(action)
+        video_menu.addAction(self.fullscreen_action)
 
-        controls_menu = self.menuBar().addMenu("&Controles")
+        settings_menu = self.menuBar().addMenu("&Configurações")
+        self.audio_video_action = QAction("Áudio e vídeo…", self)
+        if on_configure_audio_video is not None:
+            self.audio_video_action.triggered.connect(on_configure_audio_video)
+        else:
+            self.audio_video_action.setEnabled(False)
+        settings_menu.addAction(self.audio_video_action)
+        controls_menu = settings_menu.addMenu("Controles")
         controls_menu.addAction("Configurar controles…", on_configure_controls)
         controls_menu.addAction("Dispositivos detectados", on_show_controllers)
 
@@ -126,10 +157,26 @@ class EmulatorMainWindow(QMainWindow):
         help_menu.addAction(
             "Sobre",
             lambda: self.status.showMessage(
-                "Sega Emulator — SG-1000; precisão e compatibilidade em validação.",
-                5000,
+                "Sega Emulator — SG-1000 | frontend Qt em evolução.", 5000
             ),
         )
+
+    def _toggle_fullscreen(self, enabled: bool) -> None:
+        if enabled:
+            self.showFullScreen()
+        else:
+            self.showNormal()
+
+    def changeEvent(self, event) -> None:
+        super().changeEvent(event)
+        # Keep the checkable action in sync when fullscreen is left with Escape.
+        if hasattr(self, "fullscreen_action"):
+            from PySide6.QtCore import QEvent
+
+            if event.type() == QEvent.Type.WindowStateChange:
+                self.fullscreen_action.blockSignals(True)
+                self.fullscreen_action.setChecked(self.isFullScreen())
+                self.fullscreen_action.blockSignals(False)
 
     def set_status_message(self, message: str, timeout_ms: int = 5000) -> None:
         self.status.showMessage(message, timeout_ms)
@@ -141,10 +188,7 @@ class EmulatorMainWindow(QMainWindow):
         if scale not in (2, 3, 4):
             raise ValueError("video scale must be 2, 3, or 4")
         self._video_scale = scale
-        self.resize(
-            max(640, 256 * scale + 64),
-            max(480, 192 * scale + 128),
-        )
+        self.resize(max(760, 256 * scale + 64), max(560, 192 * scale + 150))
 
     def set_recent_roms(
         self,

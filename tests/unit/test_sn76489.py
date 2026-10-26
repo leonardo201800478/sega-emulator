@@ -66,15 +66,29 @@ def test_tone_period_zero_and_one_follow_documented_sg1000_profile() -> None:
         psg.write(0x90)
         psg.write(0x80 | (period & 0x0F))
         assert psg._tone_outputs[0] == 1
-        assert all(sample > 0 for sample in psg.render(128))
+        samples = psg.render(512)
+        assert all(sample > 0 for sample in samples[256:])
 
 
-def test_tone_frequency_is_near_440_hz_at_ntsc_clock() -> None:
+@pytest.mark.parametrize("period", (127, 254, 511))
+def test_rendered_tone_frequency_matches_clock_and_divider(period: int) -> None:
+    """Check the measured fundamental against f = input_clock / (32 * period)."""
     psg = SN76489()
-    enable_tone_zero(psg, 0xFE)
-    samples = psg.render(11_025)
-    transitions = sum(a != b for a, b in zip(samples, samples[1:], strict=False))
-    assert 200 <= transitions <= 240
+    enable_tone_zero(psg, period)
+    # Discard startup response from the FIR, then measure a full 0.5 seconds.
+    samples = psg.render(1_024 + 22_050)[1_024:]
+    transitions = sum(
+        (a < 0.0) != (b < 0.0) for a, b in zip(samples, samples[1:], strict=False)
+    )
+
+    expected_frequency = psg.clock_hz / (2 * 16 * period)
+    measured_frequency = transitions * psg.sample_rate / (2 * (len(samples) - 1))
+
+    # Each missed/extra transition shifts the estimate by about 1 Hz over 0.5 s.
+    assert abs(measured_frequency - expected_frequency) <= 2.5, (
+        f"period={period}: expected {expected_frequency:.3f} Hz, "
+        f"measured {measured_frequency:.3f} Hz from {transitions} transitions"
+    )
 
 
 def test_rendering_in_chunks_matches_single_render() -> None:
@@ -247,3 +261,37 @@ def test_drain_samples_respects_limit_and_fifo_order() -> None:
     assert len(first) == 3
     assert len(rest) == 7
     assert psg.drain_samples() == []
+
+
+def test_antialias_filter_suppresses_tone_above_nyquist() -> None:
+    """A 55.9 kHz tone should not fold into the audible band at 44.1 kHz."""
+    aliased, in_band = SN76489(), SN76489()
+    enable_tone_zero(aliased, 2)
+    enable_tone_zero(in_band, 8)
+
+    high_tone = aliased.render(4096)[1024:]
+    audible_tone = in_band.render(4096)[1024:]
+    high_rms = (sum(sample * sample for sample in high_tone) / len(high_tone)) ** 0.5
+    audible_rms = (
+        sum(sample * sample for sample in audible_tone) / len(audible_tone)
+    ) ** 0.5
+
+    assert audible_rms > 0.2
+    assert high_rms < audible_rms * 0.1, (
+        f"out-of-band tone RMS {high_rms:.6f} was not sufficiently attenuated "
+        f"relative to in-band tone RMS {audible_rms:.6f}"
+    )
+
+
+def test_antialias_filter_state_is_reset_and_chunk_deterministic() -> None:
+    whole, chunked = SN76489(), SN76489()
+    for chip in (whole, chunked):
+        enable_tone_zero(chip, 8)
+    expected = whole.render(1024)
+    actual = chunked.render(127) + chunked.render(897)
+    assert actual == expected
+
+    chunked.reset()
+    assert chunked._filter_position == 0
+    assert chunked._filter_history == [0.0] * len(chunked._filter_history)
+    assert chunked.render(64) == SN76489().render(64)

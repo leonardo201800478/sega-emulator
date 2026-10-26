@@ -6,10 +6,11 @@ Projeto de emulação de alta precisão com núcleo de hardware prioritariamente
 
 - **CPU:** núcleo Z80 em auditoria diferencial; temporização ainda não é ciclo a ciclo.
 - **Máquina SG-1000:** CPU, ROM/RAM, VDP TMS9918A inicial e joystick em desenvolvimento.
-- **Interface experimental:** menus Qt 6/PySide6 para abrir ROMs, pausar/continuar, reiniciar, alterar escala e consultar diagnóstico. A entrada de controles usa backend SDL3/PySDL3; Pygame permanece separado para a saída de áudio.
+- **Frontend Qt 6/PySide6:** janela redesenhada, barra de ações, tela cheia, ROMs recentes, seleção do runtime, configuração de controles e diagnóstico. O pacing limita a execução ao período nominal NTSC (~59,92 Hz) sem alterar os T-states lógicos; a UI continua usando `SG1000Machine`, sem máquina paralela.
+- **Configurações de áudio e vídeo:** saída mono do PSG, ativação, volume, taxa do mixer (22,05/44,1/48 kHz), buffer (256–2.048 amostras), filtro de vídeo e escala inteira preferencial. O FIR de 63 taps reduz aliasing digital; não representa a resposta analógica do chip.
 - **Carregador:** arquivos `.sg`, `.rom`, `.bin` e ROMs dentro de ZIP; ZIP com múltiplas ROMs exige seleção explícita.
 - **Diagnóstico:** logs JSONL/texto por sessão, SHA-256 da ROM, checkpoints de execução e stack traces.
-- **Áudio:** PSG SN76489AN integrado à máquina, com saída mono nos frontends Pygame e Qt; a fidelidade sonora contra hardware real continua pendente. Consulte o [roadmap de fidelidade do PSG e reutilização entre consoles Sega](docs/architecture/psg-fidelity-roadmap.md).
+- **Áudio:** PSG SN76489AN integrado à máquina, com saída mono nos frontends Pygame e Qt; a fidelidade sonora contra hardware real continua pendente: o FIR digital ainda precisa de validação independente e não simula a resposta analógica do chip. Consulte o [roadmap de fidelidade do PSG e reutilização entre consoles Sega](docs/architecture/psg-fidelity-roadmap.md).
 
 ## Requisitos
 
@@ -35,7 +36,7 @@ py -3.14 -m venv .venv
 
 A interface Qt abre sem ROM carregada. Use **Arquivo → Abrir ROM** para selecionar uma ROM local.
 
-Menus disponíveis: **Arquivo**, **Emulação** (pausar/continuar e reiniciar), **Vídeo** (escalas de teste), **Controles** (configuração dos gamepads), **Diagnóstico** (logs e estado da máquina) e **Ajuda**. A SDL3 enumera dispositivos a cada ciclo de entrada para reconhecer conexão/desconexão durante a sessão; controles sem mapeamento SDL são lidos pela API de joystick bruto quando possível. Se um controle conectado for removido durante a execução, a emulação é pausada antes do próximo frame para evitar continuar sem o dispositivo esperado. Use **Controles → Dispositivos detectados** para consultar a disponibilidade do backend e a lista atualizada; o log da sessão também registra o estado inicial.
+Menus disponíveis: **Arquivo**, **Emulação**, **Vídeo**, **Configurações → Áudio e vídeo**, **Configurações → Controles**, **Diagnóstico** e **Ajuda**. Em Áudio e vídeo, a aba **Saída de áudio** controla ativação, taxa do mixer e buffer; **PSG / Hardware** exibe o perfil fixo do SN76489AN do SG-1000 e o ganho; **Vídeo** controla o filtro e a escala inteira. Clock, divisor e variante do chip permanecem fixos. O FIR é filtragem digital anti-aliasing, não um modelo analógico do hardware. A SDL3 enumera dispositivos a cada ciclo de entrada para reconhecer conexão/desconexão durante a sessão; controles sem mapeamento SDL são lidos pela API de joystick bruto quando possível. Se um controle conectado for removido durante a execução, a emulação é pausada antes do próximo frame para evitar continuar sem o dispositivo esperado. Use **Configurações → Controles → Dispositivos detectados** para consultar a disponibilidade do backend e a lista atualizada; o log da sessão também registra o estado inicial.
 
 Para iniciar diretamente uma ROM:
 
@@ -57,9 +58,13 @@ Para usar o frontend Pygame:
 .\\.venv\\Scripts\\python.exe -m sega_emulator "C:\\caminho\\para\\jogo.sg" --ui pygame
 ```
 
-## Núcleo SG-1000 standalone em Rust (em desenvolvimento)\n\nO crate puro `native/sg1000_core` agora contém mapa de memória ROM/RAM, contrato de barramento, uma fatia inicial de instruções Z80 e uma máquina headless que conecta CPU e memória. A máquina executa ROMs sintéticas sem iniciar Python, mas ainda **não** representa o SG-1000 completo: VDP, PSG, I/O, interrupções e scheduler de dispositivos não estão integrados. A CPU suporta apenas instruções explicitamente implementadas e retorna erro para as demais; isso é um marco de extração, não um runtime para jogos comerciais.\n\n## Backend SG-1000 Rust experimental no Qt
+## Núcleo SG-1000 standalone em Rust (em desenvolvimento)
 
-O frontend Qt permite alternar entre **Python (referência)** e **Rust (experimental)** em **Emulação → Selecionar núcleo Z80…**. A seleção fica persistida nas configurações Qt. Se houver uma ROM carregada, trocar de núcleo recria a máquina para começar em estado limpo.
+O crate puro `native/sg1000_core` agora contém mapa de memória ROM/RAM, contrato de barramento, uma fatia inicial de instruções Z80 e uma máquina headless que conecta CPU e memória. A máquina executa ROMs sintéticas sem iniciar Python, mas ainda **não** representa o SG-1000 completo: VDP, PSG, I/O, interrupções e scheduler de dispositivos não estão integrados. A CPU suporta apenas instruções explicitamente implementadas e retorna erro para as demais; isso é um marco de extração, não um runtime para jogos comerciais.
+
+## Backend SG-1000 Rust experimental no Qt
+
+O frontend Qt permite alternar entre **Python (referência)** e **Rust (experimental)** em **Emulação → Selecionar backend de emulação…**. A seleção fica persistida nas configurações Qt. Se houver uma ROM carregada, trocar de núcleo recria a máquina para começar em estado limpo.
 
 A política arquitetural é Rust como implementação definitiva do núcleo de hardware; o backend Python permanece disponível para referência diferencial e compatibilidade. O frontend Qt migra configurações antigas para Rust como seleção inicial. A extensão nativa fornece:
 
@@ -71,7 +76,7 @@ A política arquitetural é Rust como implementação definitiva do núcleo de h
 
 **O runtime ainda não é totalmente independente de Python internamente.** O frontend e a API de aplicação continuam em Python, e a máquina Rust coordena componentes encapsulados em objetos PyO3; o GIL permanece adquirido durante um quadro. A etapa atual elimina a coordenação Python por instrução e callbacks Python nas portas, mas ainda não move todos os estados para structs Rust puros nem libera o GIL. O modelo temporal usa T-states nominais e não equivale a emulação ciclo a ciclo. A implementação Python permanece disponível como referência diferencial; não há fallback silencioso quando uma instrução Rust não é suportada.
 
-Os getters `vram` e `registers` do VDP nativo retornam cópias para diagnóstico. Alterar diretamente essas cópias não altera o estado interno do VDP; use as portas modeladas para modificar o hardware. Esse contrato será revisto antes de tornar o backend Rust padrão.
+Os getters `vram` e `registers` do VDP nativo retornam cópias para diagnóstico. Alterar diretamente essas cópias não altera o estado interno do VDP; use as portas modeladas para modificar o hardware. O backend Rust é a seleção inicial padrão no Qt; as cópias retornadas são destinadas a diagnóstico.
 
 Para compilar e instalar a extensão no Windows/PowerShell, com o ambiente virtual ativado e a partir da raiz do repositório:
 
@@ -94,9 +99,9 @@ Para abrir diretamente uma ROM local:
 .\scripts\test-rust-in-game.ps1 "C:\caminho\para\jogo.sg"
 ```
 
-O script compila a extensão PyO3 em Release, verifica a importação de `NativeSG1000Machine` e abre o frontend Qt. Na interface, selecione **Emulação → Selecionar núcleo Z80… → Rust (experimental)**; a compilação sozinha não troca o backend selecionado nas configurações.
+O script compila a extensão PyO3 em Release, verifica a importação de `NativeSG1000Machine` e abre o frontend Qt. Na interface, selecione **Emulação → Selecionar backend de emulação… → Rust (experimental)**; a compilação sozinha não troca o backend selecionado nas configurações.
 
-Reabra o emulador e selecione **Emulação → Selecionar núcleo Z80… → Rust (experimental)**. Se a extensão não estiver instalada, a interface explica como instalá-la e preserva o backend anterior.
+Reabra o emulador e selecione **Emulação → Selecionar backend de emulação… → Rust (experimental)**. Se a extensão não estiver instalada, a interface explica como instalá-la e preserva o backend anterior.
 
 As fatias [PR #92](https://github.com/leonardo201800478/sega-emulator/pull/92) e [PR #93](https://github.com/leonardo201800478/sega-emulator/pull/93) passaram no workflow Windows. A PR #93 validou `rustfmt`, Clippy, testes Rust, build Release, **1.674 testes direcionados** e **2.329 testes de regressão** com a extensão instalada. Isso valida os caminhos cobertos, mas não demonstra compatibilidade universal, precisão ciclo a ciclo ou ganho de desempenho em todos os jogos.
 

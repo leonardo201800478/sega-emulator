@@ -9,6 +9,7 @@ dos writes de I/O feitos pela máquina.
 from __future__ import annotations
 
 from collections import deque
+from math import cos, pi, sin
 
 DEFAULT_CLOCK_HZ = 3_579_545
 DEFAULT_SAMPLE_RATE = 44_100
@@ -18,6 +19,7 @@ NOISE_CHANNEL = 3
 LFSR_MASK = 0x7FFF
 LFSR_SEED = 0x4000
 SAMPLE_BUFFER_SECONDS = 1
+FILTER_TAPS = 63
 
 # Níveis nominais de atenuação em passos de aproximadamente 2 dB.
 _ATTENUATION = (
@@ -40,6 +42,29 @@ _ATTENUATION = (
 )
 
 
+def _design_lowpass(clock_hz: int, sample_rate: int) -> tuple[float, ...]:
+    """Design a deterministic Blackman-windowed FIR anti-aliasing filter."""
+    internal_rate = clock_hz / CLOCK_DIVIDER
+    cutoff = 0.45 * min(1.0, sample_rate / internal_rate)
+    center = (FILTER_TAPS - 1) / 2
+    coefficients = []
+    for index in range(FILTER_TAPS):
+        offset = index - center
+        ideal = (
+            2.0 * cutoff
+            if offset == 0
+            else sin(2.0 * pi * cutoff * offset) / (pi * offset)
+        )
+        window = (
+            0.42
+            - 0.5 * cos(2.0 * pi * index / (FILTER_TAPS - 1))
+            + 0.08 * cos(4.0 * pi * index / (FILTER_TAPS - 1))
+        )
+        coefficients.append(ideal * window)
+    total = sum(coefficients)
+    return tuple(coefficient / total for coefficient in coefficients)
+
+
 class SN76489:
     """SN76489AN para SG-1000, com três tons, ruído e saída mono."""
 
@@ -55,6 +80,7 @@ class SN76489:
         self.clock_hz = clock_hz
         self.sample_rate = sample_rate
         self._sample_buffer_capacity = sample_rate * SAMPLE_BUFFER_SECONDS
+        self._filter_coefficients = _design_lowpass(clock_hz, sample_rate)
         self._pending_samples: deque[float] = deque(maxlen=self._sample_buffer_capacity)
         self._render_pending: deque[float] = deque()
         self.dropped_samples = 0
@@ -71,8 +97,11 @@ class SN76489:
         self._noise_counter = 0
         self._noise_counter_phase = 0
         self._lfsr = LFSR_SEED
+        self._noise_output = 0
         self._clock_divider_phase = 0
         self._output_phase = 0
+        self._filter_history = [0.0] * FILTER_TAPS
+        self._filter_position = 0
         self._noise_period = 0x10
         self._noise_counter = self._noise_period
         self._pending_samples.clear()
@@ -131,10 +160,13 @@ class SN76489:
 
     def _reset_noise_generator(self) -> None:
         self._lfsr = LFSR_SEED
+        self._noise_output = self._lfsr & 1
         self._noise_counter = self._noise_period
         self._noise_counter_phase = 0
 
     def _shift_noise_register(self) -> None:
+        # O bit que sai do LFSR alimenta a saída até o próximo deslocamento.
+        self._noise_output = self._lfsr & 1
         # Variante de 15 bits adotada para o SN76489AN do SG-1000.
         if self.noise_control & 0x04:
             feedback = (self._lfsr ^ (self._lfsr >> 1)) & 1
@@ -199,15 +231,17 @@ class SN76489:
         )
         for _ in range(internal_clocks):
             self._tick_internal_clock()
+            self._push_filter_sample()
             self._output_phase += self.sample_rate * CLOCK_DIVIDER
-            while self._output_phase >= self.clock_hz:
-                sample = self._mix()
-                if sample_sink is self._pending_samples and len(sample_sink) == (
-                    self._sample_buffer_capacity
-                ):
-                    self.dropped_samples += 1
-                sample_sink.append(sample)
-                self._output_phase -= self.clock_hz
+            if self._output_phase >= self.clock_hz:
+                sample = self._filtered_output()
+                while self._output_phase >= self.clock_hz:
+                    if sample_sink is self._pending_samples and len(sample_sink) == (
+                        self._sample_buffer_capacity
+                    ):
+                        self.dropped_samples += 1
+                    sample_sink.append(sample)
+                    self._output_phase -= self.clock_hz
 
     def drain_samples(self, max_samples: int | None = None) -> list[float]:
         """Consome amostras geradas por advance_clocks(), em ordem FIFO.
@@ -239,9 +273,22 @@ class SN76489:
             1.0 if self._tone_outputs[2] else -1.0
         )
         total += _ATTENUATION[self.attenuations[NOISE_CHANNEL]] * (
-            1.0 if self._lfsr & 1 else -1.0
+            1.0 if self._noise_output else -1.0
         )
         return total * 0.25
+
+    def _push_filter_sample(self) -> None:
+        """Record every internal-clock mix value in the FIR history."""
+        self._filter_history[self._filter_position] = self._mix()
+        self._filter_position = (self._filter_position + 1) % FILTER_TAPS
+
+    def _filtered_output(self) -> float:
+        """Evaluate the FIR only when an output sample is due."""
+        total = 0.0
+        for index, coefficient in enumerate(self._filter_coefficients):
+            history_index = (self._filter_position - 1 - index) % FILTER_TAPS
+            total += coefficient * self._filter_history[history_index]
+        return total
 
     def render(self, sample_count: int) -> list[float]:
         """Avança o chip e devolve exatamente sample_count amostras mono.

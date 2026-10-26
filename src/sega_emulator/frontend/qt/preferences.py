@@ -37,6 +37,11 @@ class FrontendPreferences:
     audio_enabled: bool = True
     diagnostics_enabled: bool = True
     cpu_core: str = "rust"
+    audio_sample_rate: int = 44_100
+    audio_buffer_size: int = 512
+    audio_volume: int = 100
+    video_filter: str = "nearest"
+    integer_scale: bool = True
 
     def __post_init__(self) -> None:
         if not MIN_WINDOW_WIDTH <= self.window_width <= MAX_WINDOW_WIDTH:
@@ -55,6 +60,16 @@ class FrontendPreferences:
             raise ValueError("controller_config must be serialized as text")
         if self.cpu_core not in ("python", "rust"):
             raise ValueError("cpu_core must be 'python' or 'rust'")
+        if self.audio_sample_rate not in (22_050, 44_100, 48_000):
+            raise ValueError("audio_sample_rate must be 22050, 44100, or 48000")
+        if self.audio_buffer_size not in (256, 512, 1024, 2048):
+            raise ValueError("audio_buffer_size must be 256, 512, 1024, or 2048")
+        if type(self.audio_volume) is not int or not 0 <= self.audio_volume <= 100:
+            raise ValueError("audio_volume must be an integer from 0 to 100")
+        if self.video_filter not in ("nearest", "bilinear"):
+            raise ValueError("video_filter must be 'nearest' or 'bilinear'")
+        if type(self.integer_scale) is not bool:
+            raise ValueError("integer_scale must be a bool")
 
     @classmethod
     def from_store(cls, store: SettingsStore) -> FrontendPreferences:
@@ -103,6 +118,25 @@ class FrontendPreferences:
         cpu_core = store.value("cpu_core", defaults.cpu_core)
         if cpu_core not in ("python", "rust"):
             cpu_core = defaults.cpu_core
+        sample_rate = _bounded_choice(
+            store.value("audio_sample_rate", defaults.audio_sample_rate),
+            defaults.audio_sample_rate,
+            (22_050, 44_100, 48_000),
+        )
+        buffer_size = _bounded_choice(
+            store.value("audio_buffer_size", defaults.audio_buffer_size),
+            defaults.audio_buffer_size,
+            (256, 512, 1024, 2048),
+        )
+        volume = _bounded_int(
+            store.value("audio_volume", defaults.audio_volume), 100, 0, 100
+        )
+        video_filter = store.value("video_filter", defaults.video_filter)
+        if video_filter not in ("nearest", "bilinear"):
+            video_filter = defaults.video_filter
+        integer_scale = _bool_value(
+            store.value("integer_scale", defaults.integer_scale), defaults.integer_scale
+        )
         return cls(
             window_width=width,
             window_height=height,
@@ -112,6 +146,11 @@ class FrontendPreferences:
             audio_enabled=audio_enabled,
             diagnostics_enabled=diagnostics_enabled,
             cpu_core=cpu_core,
+            audio_sample_rate=sample_rate,
+            audio_buffer_size=buffer_size,
+            audio_volume=volume,
+            video_filter=video_filter,
+            integer_scale=integer_scale,
         )
 
     def save_to_store(self, store: SettingsStore) -> None:
@@ -124,6 +163,11 @@ class FrontendPreferences:
         store.setValue("audio_enabled", self.audio_enabled)
         store.setValue("diagnostics_enabled", self.diagnostics_enabled)
         store.setValue("cpu_core", self.cpu_core)
+        store.setValue("audio_sample_rate", self.audio_sample_rate)
+        store.setValue("audio_buffer_size", self.audio_buffer_size)
+        store.setValue("audio_volume", self.audio_volume)
+        store.setValue("video_filter", self.video_filter)
+        store.setValue("integer_scale", self.integer_scale)
 
     def with_recent_rom(self, path: str) -> FrontendPreferences:
         """Return preferences with a ROM moved to the front of the history."""
@@ -144,6 +188,11 @@ class FrontendPreferences:
             audio_enabled=self.audio_enabled,
             diagnostics_enabled=self.diagnostics_enabled,
             cpu_core=self.cpu_core,
+            audio_sample_rate=self.audio_sample_rate,
+            audio_buffer_size=self.audio_buffer_size,
+            audio_volume=self.audio_volume,
+            video_filter=self.video_filter,
+            integer_scale=self.integer_scale,
         )
 
 

@@ -1,0 +1,54 @@
+name: PSG Exhaustive Regression
+
+on:
+  pull_request:
+    paths:
+      - "src/sega_emulator/audio/**"
+      - "native/z80_core/src/audio.rs"
+      - "tests/unit/test_sn76489.py"
+      - "tests/unit/test_sn76489_exhaustive.py"
+      - "tests/test_sn76489_rust_parity.py"
+      - ".github/workflows/psg-exhaustive.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  psg-regression:
+    name: PSG focused tests (Python 3.14)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout candidate revision
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Install project and development tools
+        run: python -m pip install -e ".[dev]"
+
+      - name: Check formatting of PSG test files
+        run: >-
+          ruff format --check
+          tests/unit/test_sn76489.py
+          tests/unit/test_sn76489_exhaustive.py
+          tests/test_sn76489_rust_parity.py
+
+      - name: Lint PSG test files
+        run: >-
+          ruff check
+          tests/unit/test_sn76489.py
+          tests/unit/test_sn76489_exhaustive.py
+          tests/test_sn76489_rust_parity.py
+
+      - name: Run PSG unit and parity tests
+        run: >-
+          python -m pytest -q
+          tests/unit/test_sn76489.py
+          tests/unit/test_sn76489_exhaustive.py
+          tests/test_sn76489_rust_parity.py
