@@ -97,7 +97,6 @@ def test_main_window_exposes_emulation_backend_selector(qt_app) -> None:
     window.close()
 
 
-
 def test_main_window_exposes_standalone_rust_core_diagnostics(qt_app) -> None:
     called: list[str] = []
     window = EmulatorMainWindow(
