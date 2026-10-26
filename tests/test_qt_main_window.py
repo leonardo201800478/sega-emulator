@@ -120,6 +120,7 @@ def test_main_window_exposes_audio_video_settings(qt_app) -> None:
     assert called == ["audio-video"]
     window.close()
 
+
 def test_persisted_window_dimensions_uses_normal_geometry_in_fullscreen(qt_app) -> None:
     window = EmulatorMainWindow(
         on_open_rom=lambda: None,
