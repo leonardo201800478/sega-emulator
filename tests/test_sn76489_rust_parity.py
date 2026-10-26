@@ -46,6 +46,7 @@ def _assert_psg_state_matches(python_psg, rust_psg) -> None:
         "_noise_counter",
         "_noise_counter_phase",
         "_lfsr",
+        "_noise_output",
         "_clock_divider_phase",
         "_output_phase",
         "_noise_period",
