@@ -163,6 +163,7 @@ O projeto é independente e não é afiliado à SEGA. SEGA e SG-1000 são marcas
 ## Documentação
 
 - [Marco de qualidade do SG-1000 — áudio, vídeo, sincronismo e primeiro release](docs/milestones/sg1000-audio-video-milestone-2026-10-26.md)
+- [Notas preliminares do release v0.1.0](docs/releases/v0.1.0.md)
 - [Arquitetura multi-sistema e política Rust-first](docs/architecture.md)
 - [Backends de apresentação de vídeo e validação Vulkan](docs/architecture/vulkan-presentation-qt-quick.md)
 - [Instruções para agentes de código](AGENTS.md)
