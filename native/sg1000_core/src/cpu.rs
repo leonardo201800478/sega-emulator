@@ -555,7 +555,6 @@ mod tests {
         let mut bus = TestBus([0; 0x10000]);
         bus.0[..8].copy_from_slice(&[
             0x3E, 0x7F, // LD A,0x7F
-            0x37, // SCF is intentionally unsupported; test starts with carry via F below
             0x3C, // INC A -> 0x80, overflow and half-carry
             0x3D, // DEC A -> 0x7F, overflow and half-carry
             0x21, 0x00, 0xC0, // LD HL,0xC000
@@ -566,8 +565,6 @@ mod tests {
 
         assert_eq!(cpu.step(&mut bus), Ok(7));
         assert_eq!(cpu.registers.a, 0x7F);
-        // The unsupported SCF byte is not executed; move past it explicitly.
-        cpu.registers.pc = 3;
         assert_eq!(cpu.step(&mut bus), Ok(4));
         assert_eq!(cpu.registers.a, 0x80);
         assert_ne!(cpu.registers.f & FLAG_PV, 0);
@@ -578,8 +575,6 @@ mod tests {
         assert_ne!(cpu.registers.f & FLAG_PV, 0);
         assert_ne!(cpu.registers.f & FLAG_H, 0);
         assert_ne!(cpu.registers.f & FLAG_C, 0);
-
-        cpu.registers.pc = 4;
         assert_eq!(cpu.step(&mut bus), Ok(10));
         assert_eq!(cpu.step(&mut bus), Ok(11));
         assert_eq!(bus.0[0xC000], 1);
