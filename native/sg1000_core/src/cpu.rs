@@ -132,10 +132,11 @@ impl Z80 {
                     let [low, high] = self.registers.hl().to_le_bytes();
                     bus.write_memory(address, low);
                     bus.write_memory(address.wrapping_add(1), high);
+                    16
                 } else {
                     bus.write_memory(address, self.registers.a);
+                    13
                 }
-                13
             }
             0x2A | 0x3A => {
                 let address = self.fetch16(bus);
