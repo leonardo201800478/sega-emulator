@@ -1,167 +1,109 @@
 # Plano de migração do runtime para Rust
 
-## Decisão
+## Decisão vigente
 
-O runtime de emulação do projeto será migrado incrementalmente de Python para Rust. A interface Qt/PySide6 permanece em Python. A migração será feita em fatias pequenas, cada uma compilável, testável e revisável; não haverá reescrita integral em um único commit.
+O núcleo de emulação seguirá **Rust-first**: Rust é a implementação oficial de CPU, barramento/memória, I/O, VDP, PSG, sincronização e runtime da máquina. Python continuará no frontend Qt/PySide6 e nas ferramentas. A migração é incremental; não é uma reescrita completa nem uma obrigação de portar tudo duas vezes.
 
-O objetivo é que a execução da emulação — CPU, barramentos, memória, dispositivos, sincronização e composição da máquina — ocorra em Rust sem chamadas Python por acesso de memória ou por instrução. PyO3 será a fronteira entre o runtime Rust e a interface Qt, não o mecanismo interno de comunicação entre componentes de hardware.
+O código Python de referência será mantido seletivamente enquanto facilitar a pesquisa de hardware ou permitir comparação de resultados. Após validar um componente, Rust passa a ser a implementação oficial. Não manter dois runtimes completos como estado final.
 
-## Estado inicial confirmado
+A extensão PyO3/Maturin é a fronteira entre o núcleo Rust e a UI, não o mecanismo de comunicação entre componentes. O caminho de emulação não deve depender de callbacks Python por instrução ou acesso a byte. Qualquer estratégia para liberar o GIL ou usar threads precisa de um modelo explícito de ownership, estado e sincronização.
 
-- `main` no commit `593c2dc8fdb1be55c548a3979d24b8d49c589b52`.
-- O núcleo Z80 Rust já existe em `native/z80_core`, com ALU separada em `native/z80_alu`.
-- A extensão PyO3 atual recebe objetos Python de barramento; portanto, o núcleo ainda pode cruzar a fronteira Rust/Python durante a execução. A migração deve eliminar essas chamadas do caminho crítico.
-- A máquina SG-1000 Python integra Z80, barramento/memória, TMS9918A, SN76489 e sincronização.
-- Baseline local informado nesta sessão: 2.317 testes aprovados; os quatro testes direcionados do backend Rust também passaram.
-- Benchmark sintético local anterior à migração nativa, com 100.000 instruções e 7 repetições: CPU isolada Rust 1,078× a velocidade Python; máquina completa Rust 0,95× (cerca de 5% mais lenta). O workload é `JP 0000h`, não representa desempenho de jogos. O usuário informou depois que o resultado melhorou após o build Release, mas não há uma saída numérica completa registrada aqui para atribuir um novo fator.
-- Esses resultados são evidência de throughput em carga sintética, não prova de compatibilidade universal, precisão ciclo a ciclo ou FPS em jogos.
+## Estado e evidência
 
-## Escopo
+O repositório inclui:
+- `native/sg1000_core`: crate standalone em evolução, sem dependência de Python/PyO3.
+- `native/z80_alu`: ALU reutilizável em Rust.
+- `native/z80_core`: núcleo/extensão compatível com PyO3.
+- Frontend Qt em Python e testes/harnesses de referência em Python.
 
-### Migrar para Rust
+A documentação histórica registra uma validação do workflow Windows no commit `7bb95c0f55dfeb0332b9a5ea6b3da54d1bdee43c`, incluindo fmt, Clippy, build Release, testes direcionados e suíte pytest. Esses números pertencem àquele commit e não são afirmação automática sobre HEAD atual. Confira o status do workflow para a revisão candidata antes de usar os resultados como evidência atual.
 
-- Runtime da CPU e estado de execução.
-- Barramento, mapa de memória, ROM/RAM e portas de I/O.
-- Máquina SG-1000 e sincronização temporal.
-- VDP TMS9918A: registradores, VRAM, status, interrupções e renderização.
-- PSG SN76489AN: registradores, divisores, tons, ruído, amostragem e estado determinístico.
-- Entrada e integração de periféricos.
-- Carregamento/validação de ROM, CLI/headless e lógica de sessão necessária ao runtime.
-- APIs de estado, reset, pause/step e diagnóstico necessárias à integração com a UI.
-- O frontend Pygame Python será descontinuado quando o Qt passar a consumir o runtime Rust; não manteremos dois frontends Python como objetivo final.
+O crate `native/sg1000_core` continua parcial: ainda é necessário integrar ou reimplementar em tipos Rust puros os dispositivos e o scheduler necessários para uma máquina SG-1000 standalone completa. Não considerar o marco concluído por compilar ou rodar ROM sintética.
 
-### Permanecer em Python
+## Destino arquitetural
 
-- Frontend Qt/PySide6, widgets, menus, janelas e ciclo de vida da UI.
-- Testes pytest, harnesses diferenciais, scripts de benchmark, auditorias e ferramentas de desenvolvimento, salvo quando um componente de execução exigir mudança.
-- Durante a migração, a implementação Python de referência permanece disponível apenas para testes diferenciais e comparação; não será chamada como fallback silencioso pelo runtime Rust.
+### Rust
+- CPU e estado de execução;
+- memória, barramento, mapeamento de cartucho e I/O;
+- máquina SG-1000 e scheduler/eventos temporais;
+- VDP TMS9918A, incluindo portas, registradores, VRAM, raster, sprites, status e framebuffer;
+- PSG SN76489AN, incluindo registradores, divisores, tons, ruído, atenuação, amostragem e sincronização;
+- entrada e demais componentes internos do hardware;
+- APIs de estado/reset/step/frame para o frontend.
 
-A meta final é manter apenas o frontend Qt em Python. O frontend Pygame/SDL e a CLI Python são caminhos de aplicação a retirar ou substituir por Rust; a saída de áudio e a entrada nativas serão ligadas ao runtime sem alterar os clocks lógicos. Essa consolidação ocorrerá depois de os contratos de hardware e a API Rust estarem estáveis.
+### Python
+- interface Qt/PySide6, menus, widgets, configuração e ciclo de vida da UI;
+- pytest, oráculos, harnesses diferenciais, scripts de auditoria e benchmark;
+- protótipos pequenos apenas quando diminuírem o custo de pesquisar comportamento desconhecido.
 
-## Sequência de implementação
+O frontend Pygame/SDL e caminhos de aplicação Python podem ser consolidados ou removidos apenas depois que Qt consumir com segurança a API Rust e a saída/entrada tiverem substitutos validados.
 
-### Fase 0 — Contratos e baseline
+## Fases e critérios
 
-- Inventariar módulos Python de runtime, dependências, contratos públicos e consumidores Qt/Pygame/CLI.
-- Fixar testes de referência para estado da CPU, memória, portas, quadros, estado do VDP e amostras do PSG.
-- Registrar quais testes são funcionais, diferenciais, determinísticos e de desempenho.
-- Não declarar precisão de ciclo a ciclo sem testes temporais específicos.
+### 0 — Baseline e contratos
+Inventariar módulos e consumidores; registrar estado dos testes; fixar vetores para CPU, memória, I/O, frame, VDP, PSG e entrada conforme suportados. Separar testes funcionais, diferenciais, temporais e desempenho.
 
-**Saída:** matriz de módulos, contratos e critérios de aceitação antes de alterar o comportamento.
+**Saída:** mapa de dependências, contratos observáveis e critérios de aceite.
 
-### Fase 1 — Núcleo Rust sem callbacks Python
+### 1 — CPU e barramento Rust puro
+Reutilizar o Z80 existente sem duplicar implementação; fazer o núcleo possuir estruturas Rust para estado de CPU, memória e I/O, sem acesso a objeto Python no caminho de instrução. Expor à UI apenas operações de alto nível.
 
-- Criar um crate de runtime Rust que possua CPU, memória/barramento e I/O nativamente.
-- Reutilizar o código Z80 Rust existente sem duplicar a implementação.
-- Substituir o acesso de barramento via `Py<PyAny>` por interfaces/tipos Rust nativos no caminho de execução.
-- Expor à UI uma API PyO3 de alto nível, como criação da máquina, `step/frame`, reset, estado e framebuffer.
-- Manter o backend Python como referência diferencial até a fase passar.
+**Aceitação:** testes de CPU/barramento e vetores de referência passam; estado e T-states observáveis comparáveis; nenhuma chamada Python por byte/instrução no caminho movido.
 
-**Aceitação:** mesma sequência de instruções e estado observável nos vetores de referência; nenhuma chamada Python por leitura/escrita de memória ou por instrução; testes Rust e Python de integração aprovados.
+### 2 — Máquina e scheduler
+Conectar CPU, memória e dispositivos por contratos Rust. Definir ordem de eventos, clocks, reset, interrupções e avanço do tempo explicitamente. Não confundir ciclos nominais com ciclos de barramento.
 
-### Fase 2 — Máquina e temporização SG-1000
+**Aceitação:** execução repetível, regressões e checkpoints determinísticos; diferenças temporais documentadas.
 
-- Migrar a composição da máquina e a agenda/sincronização de componentes.
-- Tornar explícitos os contratos de clocks, T-states e eventos sem presumir que ciclos nominais equivalem a ciclos de barramento.
-- Comparar estado e hashes determinísticos em checkpoints equivalentes.
+### 3 — VDP
+Migrar registradores, VRAM, portas, modos gráficos, status, interrupções e sprites. Preservar semântica durante extração; corrigir fidelidade em mudanças isoladas sempre que possível.
 
-**Aceitação:** execuções repetidas determinísticas e regressões aprovadas; desvios temporais documentados.
+**Aceitação:** testes de portas, incremento/wrap, tabelas, modos, sprites e snapshots de framebuffer reproduzíveis.
 
-### Fase 3 — VDP TMS9918A
+### 4 — PSG
+Migrar registradores, períodos, divisor, canais de tom, ruído/LFSR, atenuação, geração de amostras e sincronização com CPU.
 
-- Migrar registradores, VRAM, portas, status, modos gráficos, sprites e geração de framebuffer.
-- Preservar a semântica existente inicialmente; corrigir fidelidade em alterações separadas, sustentadas por testes.
-- Usar testes sintéticos e cenas homebrew; comparar snapshots com referências somente quando ROM/revisão, entradas e instante forem equivalentes.
+**Aceitação:** vetores digitais, frequências, formas de onda, ruído, amostras e determinismo. Separar efeitos analógicos da geração digital.
 
-**Aceitação:** testes por modo, registradores, wraparound de VRAM, status e sprites; regressões de framebuffer reproduzíveis.
+### 5 — Entrada, ROM e serviços
+Mover para Rust somente a lógica que pertence ao runtime; a seleção de arquivos fica na UI. Preservar formatos suportados, erros tipados, hashes e diagnóstico.
 
-### Fase 4 — PSG SN76489AN e áudio
+**Aceitação:** teste de formatos, erros, entradas e integridade com arquivos sintéticos/homebrew.
 
-- Migrar estado dos registradores, divisores, canais de tom, ruído/LFSR, atenuação, acumulação e buffer de amostras.
-- Separar geração digital, temporização e saída analógica/frontend.
-- Validar frequências, formas de onda, ruído, determinismo, buffer e regressões de amostras/espectro.
+### 6 — Frontend Qt fino
+Trocar dependência direta da máquina Python por API Rust de alto nível. Preservar pause, reset, configuração, input, apresentação, áudio e logs. Planejar separadamente responsividade e sincronização; não alterar clocks lógicos para compensar VSync/VRR.
 
-**Aceitação:** vetores de áudio reproduzíveis e sem mudanças silenciosas na cadência temporal.
+**Aceitação:** build/instalação Windows, teste de seleção de backend, abrir/executar/pausar/resetar, controle, vídeo, áudio e logs.
 
-### Fase 5 — Entrada, carregamento e serviços de runtime
+### 7 — Remoção seletiva da referência
+Só remover runtime Python quando os consumidores tiverem migrado e as regressões necessárias existirem. Manter pequenas referências de teste quando comprovadamente úteis.
 
-- Migrar a lógica de portas/joystick e contratos necessários à máquina.
-- Migrar carregamento e validação de ROM para uma biblioteca Rust com erros tipados; manter caminhos e seleção de arquivos na UI Qt.
-- Migrar logs/checkpoints necessários ao estado do runtime sem serializar ou compartilhar ROMs comerciais.
+**Aceitação:** instalação limpa, workspace Rust, extensão se usada, CI Python/Rust e integração Qt aprovados; nenhuma dependência de runtime Python dentro do núcleo oficial.
 
-**Aceitação:** compatibilidade dos formatos atualmente suportados e testes de erro, seleção e integridade.
+### 8 — Sistemas adicionais
+Reutilizar Z80 no Master System/Game Gear somente onde compatível. Desenvolver núcleo 68000 para Mega Drive e núcleos necessários para Sega CD/32X em projetos de hardware próprios, com testes e marcos separados.
 
-### Fase 6 — Qt como frontend Python fino
+## Regras de segurança
 
-- Trocar a dependência direta da máquina Python por uma API de alto nível da extensão Rust.
-- Manter a UI e o comportamento de pause, reset, seleção de núcleo/estado, entrada e apresentação.
-- Garantir que chamadas longas do runtime não bloqueiem desnecessariamente a UI; o modelo de threads será definido com sincronização explícita.
-- Não mudar clocks lógicos para compensar VSync, VRR ou buffering.
+1. Uma fase por PR, pequena e reversível.
+2. Evitar combinar mudança de linguagem e mudança de comportamento temporal na mesma alteração.
+3. Não aceitar ganho de velocidade com divergência funcional.
+4. Nenhum fallback silencioso para Python quando Rust não suporta operação.
+5. Benchmarks informam workload, build, aquecimento, repetições e mediana; não extrapolar instruções/s para FPS.
+6. Não versionar ROMs comerciais, BIOS, logs locais sensíveis ou build artifacts.
+7. Registrar incertezas e não afirmar precisão temporal não validada.
 
-**Aceitação:** smoke tests Qt e validação manual de abrir ROM, executar, pausar, resetar, entrada, vídeo, áudio e logs.
+## Validação pelo GitHub Actions
 
-### Fase 7 — Remoção do runtime Python
+Manter validadores complementares, sem workflows duplicados:
+- funcional: testes unitários e regressões;
+- integridade: imports, pacote e execução repetida;
+- cobertura/temporal: matriz de instruções, flags, ciclos e interrupções;
+- integração: máquina, VDP, PSG, entrada e Qt/PyO3 conforme escopo;
+- desempenho: benchmark controlado com baseline.
 
-- Remover caminhos de runtime Python somente após paridade suficiente e migração dos consumidores.
-- Manter referências Python sob `tests/reference` ou mecanismo equivalente apenas quando necessárias à validação diferencial.
-- Atualizar instalação, empacotamento, CI, documentação e matriz de plataformas.
-- Não remover a referência Python antes de haver evidência para substituí-la.
+Todos os resultados devem pertencer ao mesmo SHA candidato. Checks ignorados por path filters, falhas que impedem pytest e artefatos gerados apesar da falha não podem ser relatados como aprovação. Depois de corrigir uma falha, repetir checks afetados e regressões. Workflows são validadores de comandos reproduzíveis; chamá-los de “agentes” não implica que sejam agentes de IA.
 
-**Aceitação:** instalação limpa no Windows, build Rust Release, fmt/Clippy, testes Rust, pytest de integração, Ruff, smoke test Qt e benchmark comparável; nenhuma dependência de runtime em módulos Python de emulação fora da camada Qt.
+## Próxima etapa
 
-## Regras de segurança da migração
-
-1. Uma fase por PR, com mudanças pequenas e reversíveis.
-2. Nunca migrar e alterar a fidelidade de hardware na mesma mudança, salvo correção necessária demonstrada por teste.
-3. Python/Rust devem ser comparados com estado inicial, ROM/teste, sequência de entradas e limites de avanço equivalentes.
-4. Não aceitar ganho de velocidade se houver divergência funcional ou temporal.
-5. Nenhum fallback silencioso para Python quando o backend Rust não suportar uma operação.
-6. Não versionar ROMs comerciais, logs locais, perfis ou artefatos de build.
-7. Benchmarks devem informar carga, aquecimento, repetições, mediana e perfil de build; não extrapolar instruções/s diretamente para FPS.
-8. Cada PR deve informar arquivos alterados, testes realmente executados, limitações e próximo marco.
-
-## Estado da execução — 25/10/2026
-
-A Fase 0 foi registrada e as duas primeiras fatias de migração estão implementadas nesta série de PRs.
-
-### Fase 1 — componentes nativos
-
-- `native/z80_core/src/memory.rs`: barramento nativo com ROM espelhada, RAM interna espelhada e RAM de cartucho configurável.
-- `native/z80_core/src/vdp.rs`: portas, registradores, VRAM, temporização raster, VBlank, status de sprites e renderização dos quatro modos gráficos modelados.
-- `native/z80_core/src/audio.rs`: PSG SN76489AN e sincronizador de writes por T-state.
-- `RustZ80Cpu.with_native_memory`: o caminho nativo acessa a memória sem invocar métodos Python por byte.
-- `tests/test_sg1000_cpu_backend.py`, `tests/test_tms9918_rust_parity.py` e `tests/test_sn76489_rust_parity.py`: integração CPU/memória e testes diferenciais de VDP, PSG e sincronização.
-
-### Fase 2 — coordenação nativa
-
-A [PR #93](https://github.com/leonardo201800478/sega-emulator/pull/93) adiciona `native/z80_core/src/machine.rs`:
-
-- `NativeSG1000Machine` coordena `step` e `run_frame` em Rust.
-- `NativeSG1000Io` roteia portas para VDP, PSG e joystick; o Z80 chama o roteamento nativo diretamente, sem callback a métodos Python.
-- A API Python `SG1000Machine` mantém seus atributos e delega operações de máquina ao runtime Rust quando `cpu_core="rust"`.
-- `tests/test_sg1000_native_machine.py` compara instruções, portas, joystick, estado do PSG e execução de quadro com a referência Python.
-
-### Validação automatizada
-
-Workflow Windows **Qt selectable Rust Z80 core**, commit `7bb95c0f55dfeb0332b9a5ea6b3da54d1bdee43c`:
-
-- `cargo fmt --check`: aprovado.
-- Clippy com `-D warnings`: aprovado.
-- Testes unitários Rust: 7 aprovados.
-- Build Release e instalação da extensão PyO3: aprovados.
-- Ruff e formatação Python: aprovados.
-- Testes direcionados Qt/backend Rust: **1.674 aprovados em 2,18 s**.
-- Suíte completa pytest com extensão nativa instalada: **2.329 aprovados em 9,00 s**.
-- CI geral e Performance Diagnostic: aprovados.
-
-O teste diferencial da fase anterior identificou uma diferença de representação no PyO3 (`Vec<u8>` exposto como `bytes` em vez de lista de inteiros). Os getters do PSG foram ajustados para preservar o contrato esperado pela referência Python.
-
-### Limitações conhecidas
-
-- A coordenação do laço e das portas está em Rust, mas os componentes ainda são objetos PyO3; o GIL continua adquirido durante o quadro. Esta fase não libera o GIL nem move todos os estados para structs Rust puros.
-- Os getters `vram` e `registers` do VDP retornam cópias; mutações nessas cópias não alteram o estado nativo.
-- A temporização usa T-states nominais e writes do VDP ainda não têm fila temporal própria. Não declarar precisão ciclo a ciclo.
-
-## Próximo passo
-
-Criar uma terceira fatia para remover handles PyO3 do caminho interno: CPU, barramento, VDP, PSG e sincronizador devem ser possuídos por uma estrutura Rust nativa, expondo snapshots e operações de alto nível ao Qt. Em seguida, avaliar a liberação do GIL durante `run_frame` com sincronização explícita. Antes de tornar Rust padrão, resolver o contrato dos snapshots e validar com homebrew/testes reproduzíveis.
+Consolidar o crate standalone SG-1000 com CPU, memória, I/O, VDP, PSG e scheduler em estruturas Rust puras. Começar pelo inventário e pelos testes que faltam, mantendo a API existente e sem duplicar arquivos ou implementar sistemas futuros antes do marco atual.
