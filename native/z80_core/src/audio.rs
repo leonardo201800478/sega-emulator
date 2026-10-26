@@ -1,6 +1,7 @@
 //! Native SN76489AN PSG and timestamped audio-write synchronization.
 
 use std::collections::VecDeque;
+use std::f64::consts::PI;
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -11,10 +12,35 @@ const NOISE_CHANNEL: usize = 3;
 const LFSR_MASK: u16 = 0x7FFF;
 const LFSR_SEED: u16 = 0x4000;
 const SAMPLE_BUFFER_SECONDS: u64 = 1;
+const FILTER_TAPS: usize = 127;
 const ATTENUATION: [f64; 16] = [
     1.0, 0.794328, 0.630957, 0.501187, 0.398107, 0.316228, 0.251189, 0.199526, 0.158489, 0.125893,
     0.1, 0.079433, 0.063096, 0.050119, 0.039811, 0.0,
 ];
+
+fn design_lowpass(clock_hz: u64, sample_rate: u64) -> Vec<f64> {
+    let internal_rate = clock_hz as f64 / CLOCK_DIVIDER as f64;
+    let cutoff = 0.45 * (sample_rate as f64 / internal_rate).min(1.0);
+    let center = (FILTER_TAPS - 1) as f64 / 2.0;
+    let mut coefficients = Vec::with_capacity(FILTER_TAPS);
+    for index in 0..FILTER_TAPS {
+        let offset = index as f64 - center;
+        let ideal = if offset == 0.0 {
+            2.0 * cutoff
+        } else {
+            (2.0 * PI * cutoff * offset).sin() / (PI * offset)
+        };
+        let position = index as f64 / (FILTER_TAPS - 1) as f64;
+        let window = 0.42 - 0.5 * (2.0 * PI * position).cos()
+            + 0.08 * (4.0 * PI * position).cos();
+        coefficients.push(ideal * window);
+    }
+    let total: f64 = coefficients.iter().sum();
+    for coefficient in &mut coefficients {
+        *coefficient /= total;
+    }
+    coefficients
+}
 
 #[pyclass(module = "sega_z80_core")]
 pub(crate) struct NativeSn76489 {
@@ -37,6 +63,9 @@ pub(crate) struct NativeSn76489 {
     clock_divider_phase: u64,
     output_phase: u64,
     noise_period: u16,
+    filter_coefficients: Vec<f64>,
+    filter_history: Vec<f64>,
+    filter_position: usize,
 }
 
 #[pymethods]
@@ -56,6 +85,7 @@ impl NativeSn76489 {
         }
         let sample_buffer_capacity = usize::try_from(sample_rate * SAMPLE_BUFFER_SECONDS)
             .map_err(|_| PyValueError::new_err("sample_rate excede a capacidade suportada."))?;
+        let filter_coefficients = design_lowpass(clock_hz, sample_rate);
         let mut device = Self {
             clock_hz,
             sample_rate,
@@ -76,6 +106,9 @@ impl NativeSn76489 {
             clock_divider_phase: 0,
             output_phase: 0,
             noise_period: 0x10,
+            filter_history: vec![0.0; FILTER_TAPS],
+            filter_position: 0,
+            filter_coefficients,
         };
         device.reset_inner();
         Ok(device)
@@ -247,6 +280,8 @@ impl NativeSn76489 {
         self.noise_output = 0;
         self.clock_divider_phase = 0;
         self.output_phase = 0;
+        self.filter_history.fill(0.0);
+        self.filter_position = 0;
         self.noise_period = 0x10;
         self.noise_counter = self.noise_period;
         self.pending_samples.clear();
@@ -355,9 +390,10 @@ impl NativeSn76489 {
         self.clock_divider_phase = internal_total % CLOCK_DIVIDER;
         for _ in 0..internal_clocks {
             self.tick_internal_clock();
+            let filtered_sample = self.filter_mix();
             self.output_phase += self.sample_rate * CLOCK_DIVIDER;
             while self.output_phase >= self.clock_hz {
-                let sample = self.mix();
+                let sample = filtered_sample;
                 if render_sink {
                     self.render_pending.push_back(sample);
                 } else {
@@ -370,6 +406,18 @@ impl NativeSn76489 {
                 self.output_phase -= self.clock_hz;
             }
         }
+    }
+
+    fn filter_mix(&mut self) -> f64 {
+        let taps = self.filter_coefficients.len();
+        self.filter_history[self.filter_position] = self.mix();
+        let mut total = 0.0;
+        for index in 0..taps {
+            let history_index = (self.filter_position + taps - index) % taps;
+            total += self.filter_coefficients[index] * self.filter_history[history_index];
+        }
+        self.filter_position = (self.filter_position + 1) % taps;
+        total
     }
 
     fn mix(&self) -> f64 {
