@@ -162,7 +162,7 @@ class WasapiAudioOutput:
         )
         required = frames * 2
         output = memoryview(outdata).cast("B")
-        output[:] = b"\\x00" * required
+        output[:] = b"\x00" * required
         written = 0
         while written < required:
             if self._current_offset >= len(self._current_block):
