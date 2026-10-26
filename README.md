@@ -173,3 +173,7 @@ git diff --check
 4. Aumentar a precisão temporal CPU–VDP com regressões reproduzíveis.
 
 ROMs comerciais e logs locais não devem ser incluídos no repositório. Use homebrew ou cópias obtidas legalmente no ambiente local.
+
+## Relatório de validação do frontend Qt
+
+O histórico da implementação, os arquivos afetados, os resultados dos três agentes, os testes de áudio/vídeo, os itens ignorados e as limitações conhecidas estão documentados em [docs/validation/qt-frontend-pr98.md](docs/validation/qt-frontend-pr98.md). A PR #98 permanece em revisão; os testes automatizados não substituem a validação manual de áudio em hardware real.
