@@ -88,7 +88,14 @@ def run(initial_path: Path | None = None) -> None:
     app.setApplicationName("SegaEmulator")
     settings = QSettings()
     preferences = FrontendPreferences.from_store(settings)
-    selected_backend = preferences.cpu_core
+    # Migrate existing Qt profiles once so this release actually starts on the
+    # integrated Rust machine, even if an older run persisted Python as default.
+    if not settings.value("rust_backend_default_migrated", False, type=bool):
+        selected_backend = "rust"
+        settings.setValue("cpu_core", selected_backend)
+        settings.setValue("rust_backend_default_migrated", True)
+    else:
+        selected_backend = preferences.cpu_core
     pygame, audio_channel = (
         _initialize_pygame_backend() if preferences.audio_enabled else (None, None)
     )
