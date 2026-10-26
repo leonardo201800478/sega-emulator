@@ -13,7 +13,7 @@ The workflow at .github/workflows/windows-portable.yml:
 3. Checks key dependency imports before packaging.
 4. Uses PyInstaller in one-folder mode and collects Qt, SDL3, pygame, and audio dependencies.
 5. Includes a portable readme and MIT license.
-6. Creates SegaEmulator-Windows-x64-portable.zip, then runs the packaged CLI entry point with --help as a non-interactive smoke test.
+6. Creates SegaEmulator-Windows-x64-portable.zip and a package-size report (file count, uncompressed size, ZIP size, and the 25 largest files), then runs the packaged CLI entry point with --help as a non-interactive smoke test.
 7. Uploads the ZIP as a CI artifact for pull requests and attaches it to an existing GitHub release when a v* tag build succeeds.
 
 ## Using the package
@@ -30,8 +30,9 @@ The archive does not contain commercial ROMs or BIOS files.
 - PyInstaller produces dist/SegaEmulator/SegaEmulator.exe.
 - The packaged executable exits successfully for the CLI --help smoke test.
 - The ZIP contains the executable, runtime files, portable instructions, and license.
+- The CI artifact includes `package-size-report.txt` so package growth and large bundled dependencies can be audited before tuning collection rules.
 - A user validates launching the extracted application on a Windows machine outside the build environment before the package is advertised as broadly compatible.
 
 ## Known limitations
 
-The non-interactive --help smoke test does not prove that the GUI, Qt Quick rendering backend, controller input, audio output, or ROM execution works. The Windows CI runner's GUI startup test exited with Windows status 0xC0000005 (access violation), so GUI compatibility is explicitly not considered validated by CI and requires separate diagnosis/manual testing. A clean-machine manual test remains required. The emulator's documented timing and long-session audio/video synchronization limitations also apply to the portable build.
+The non-interactive --help smoke test does not prove that the GUI, Qt Quick rendering backend, controller input, audio output, or ROM execution works. The size report is a measurement baseline, not proof that the package is already minimal; reduce collected modules only after confirming their runtime use and rerunning the Windows smoke/manual tests. The Windows CI runner's GUI startup test exited with Windows status 0xC0000005 (access violation), so GUI compatibility is explicitly not considered validated by CI and requires separate diagnosis/manual testing. A clean-machine manual test remains required. The emulator's documented timing and long-session audio/video synchronization limitations also apply to the portable build.
