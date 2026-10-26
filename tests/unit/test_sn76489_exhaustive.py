@@ -285,3 +285,19 @@ def test_sample_count_is_rationally_determined_by_elapsed_clocks(
     expected_samples = (internal_ticks * sample_rate * 16) // clock_hz
     expected_samples = min(expected_samples, sample_rate)
     assert len(psg.drain_samples()) == expected_samples
+
+
+def test_noise_mixer_outputs_the_bit_shifted_out_of_the_lfsr() -> None:
+    """The mixer must see the outgoing LFSR bit, not the post-shift low bit."""
+    psg = SN76489()
+    psg.write(0xE0)  # Periodic mode: the seed's single one circulates through 15 bits.
+    psg.write(0xF0)  # Make only the noise channel audible.
+
+    observed = []
+    for _ in range(15):
+        outgoing_bit = psg._lfsr & 1
+        psg._shift_noise_register()
+        observed.append(psg._mix())
+
+    expected = [-0.25] * 14 + [0.25]
+    assert observed == expected
