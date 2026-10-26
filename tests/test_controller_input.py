@@ -11,7 +11,7 @@ from sega_emulator.frontend.controller_input import (
     apply_turbo,
     joystick_value,
 )
-from sega_emulator.frontend.qt_frontend import _initialize_pygame_backend
+from sega_emulator.frontend.qt_frontend import _initialize_wasapi_backend
 
 
 class FakeController:
@@ -446,53 +446,70 @@ def test_mapped_controller_can_capture_raw_buttons_when_sdl_mapping_fails() -> N
     assert inputs.poll()[1] == {"button1"}
 
 
-def test_pygame_input_backend_survives_audio_mixer_initialization_failure(
+def test_wasapi_audio_backend_respects_disabled_preference(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    class BrokenMixer:
-        def pre_init(self, **kwargs: object) -> None:
-            pass
+    def unexpected_output(**kwargs: object) -> object:
+        raise AssertionError("Audio output must not be opened when disabled")
 
-        def init(self) -> None:
-            raise RuntimeError("No audio device")
+    monkeypatch.setattr(
+        "sega_emulator.frontend.qt_frontend.WasapiAudioOutput",
+        unexpected_output,
+    )
+    preferences = SimpleNamespace(
+        audio_enabled=False,
+        audio_sample_rate=44_100,
+        audio_buffer_size=512,
+        audio_volume=100,
+    )
 
-        def Channel(self, index: int) -> object:
-            raise AssertionError("Channel must not be requested after mixer failure")
-
-    fake_pygame = SimpleNamespace(mixer=BrokenMixer())
-    monkeypatch.setitem(__import__("sys").modules, "pygame", fake_pygame)
-
-    pygame_backend, audio_channel = _initialize_pygame_backend()
-
-    assert pygame_backend is fake_pygame
-    assert audio_channel is None
+    assert _initialize_wasapi_backend(preferences) is None
 
 
-def test_pygame_input_backend_and_audio_initialize_independently(
+def test_wasapi_audio_backend_initializes_independently_of_controller_input(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    channel = object()
+    expected = object()
+    received: dict[str, object] = {}
 
-    class WorkingMixer:
-        def pre_init(self, **kwargs: object) -> None:
-            assert kwargs == {
-                "frequency": 44_100,
-                "size": -16,
-                "channels": 1,
-                "buffer": 512,
-            }
+    def fake_output(**kwargs: object) -> object:
+        received.update(kwargs)
+        return expected
 
-        def init(self) -> None:
-            pass
+    monkeypatch.setattr(
+        "sega_emulator.frontend.qt_frontend.WasapiAudioOutput",
+        fake_output,
+    )
+    preferences = SimpleNamespace(
+        audio_enabled=True,
+        audio_sample_rate=44_100,
+        audio_buffer_size=512,
+        audio_volume=75,
+    )
 
-        def Channel(self, index: int) -> object:
-            assert index == 0
-            return channel
+    assert _initialize_wasapi_backend(preferences) is expected
+    assert received == {
+        "sample_rate": 44_100,
+        "buffer_size": 512,
+        "volume": 75,
+    }
 
-    fake_pygame = SimpleNamespace(mixer=WorkingMixer())
-    monkeypatch.setitem(__import__("sys").modules, "pygame", fake_pygame)
 
-    pygame_backend, audio_channel = _initialize_pygame_backend()
+def test_wasapi_audio_initialization_failure_does_not_disable_frontend(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def broken_output(**kwargs: object) -> object:
+        raise RuntimeError("No audio device")
 
-    assert pygame_backend is fake_pygame
-    assert audio_channel is channel
+    monkeypatch.setattr(
+        "sega_emulator.frontend.qt_frontend.WasapiAudioOutput",
+        broken_output,
+    )
+    preferences = SimpleNamespace(
+        audio_enabled=True,
+        audio_sample_rate=44_100,
+        audio_buffer_size=512,
+        audio_volume=100,
+    )
+
+    assert _initialize_wasapi_backend(preferences) is None
