@@ -1,6 +1,7 @@
 //! Native SN76489AN PSG and timestamped audio-write synchronization.
 
 use std::collections::VecDeque;
+use std::f64::consts::PI;
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -11,10 +12,34 @@ const NOISE_CHANNEL: usize = 3;
 const LFSR_MASK: u16 = 0x7FFF;
 const LFSR_SEED: u16 = 0x4000;
 const SAMPLE_BUFFER_SECONDS: u64 = 1;
+const FILTER_TAPS: usize = 63;
 const ATTENUATION: [f64; 16] = [
     1.0, 0.794328, 0.630957, 0.501187, 0.398107, 0.316228, 0.251189, 0.199526, 0.158489, 0.125893,
     0.1, 0.079433, 0.063096, 0.050119, 0.039811, 0.0,
 ];
+
+fn design_lowpass(clock_hz: u64, sample_rate: u64) -> Vec<f64> {
+    let internal_rate = clock_hz as f64 / CLOCK_DIVIDER as f64;
+    let cutoff = 0.45 * (sample_rate as f64 / internal_rate).min(1.0);
+    let center = (FILTER_TAPS - 1) as f64 / 2.0;
+    let mut coefficients = Vec::with_capacity(FILTER_TAPS);
+    for index in 0..FILTER_TAPS {
+        let offset = index as f64 - center;
+        let ideal = if offset == 0.0 {
+            2.0 * cutoff
+        } else {
+            (2.0 * PI * cutoff * offset).sin() / (PI * offset)
+        };
+        let position = index as f64 / (FILTER_TAPS - 1) as f64;
+        let window = 0.42 - 0.5 * (2.0 * PI * position).cos() + 0.08 * (4.0 * PI * position).cos();
+        coefficients.push(ideal * window);
+    }
+    let total: f64 = coefficients.iter().sum();
+    for coefficient in &mut coefficients {
+        *coefficient /= total;
+    }
+    coefficients
+}
 
 #[pyclass(module = "sega_z80_core")]
 pub(crate) struct NativeSn76489 {
@@ -33,9 +58,13 @@ pub(crate) struct NativeSn76489 {
     noise_counter: u16,
     noise_counter_phase: u8,
     lfsr: u16,
+    noise_output: u8,
     clock_divider_phase: u64,
     output_phase: u64,
     noise_period: u16,
+    filter_coefficients: Vec<f64>,
+    filter_history: Vec<f64>,
+    filter_position: usize,
 }
 
 #[pymethods]
@@ -55,6 +84,7 @@ impl NativeSn76489 {
         }
         let sample_buffer_capacity = usize::try_from(sample_rate * SAMPLE_BUFFER_SECONDS)
             .map_err(|_| PyValueError::new_err("sample_rate excede a capacidade suportada."))?;
+        let filter_coefficients = design_lowpass(clock_hz, sample_rate);
         let mut device = Self {
             clock_hz,
             sample_rate,
@@ -71,9 +101,13 @@ impl NativeSn76489 {
             noise_counter: 0,
             noise_counter_phase: 0,
             lfsr: LFSR_SEED,
+            noise_output: 0,
             clock_divider_phase: 0,
             output_phase: 0,
             noise_period: 0x10,
+            filter_history: vec![0.0; FILTER_TAPS],
+            filter_position: 0,
+            filter_coefficients,
         };
         device.reset_inner();
         Ok(device)
@@ -148,6 +182,11 @@ impl NativeSn76489 {
     #[getter(_lfsr)]
     fn lfsr(&self) -> u16 {
         self.lfsr
+    }
+
+    #[getter(_noise_output)]
+    fn noise_output(&self) -> u8 {
+        self.noise_output
     }
 
     #[getter(_clock_divider_phase)]
@@ -237,8 +276,11 @@ impl NativeSn76489 {
         self.noise_counter = 0;
         self.noise_counter_phase = 0;
         self.lfsr = LFSR_SEED;
+        self.noise_output = 0;
         self.clock_divider_phase = 0;
         self.output_phase = 0;
+        self.filter_history.fill(0.0);
+        self.filter_position = 0;
         self.noise_period = 0x10;
         self.noise_counter = self.noise_period;
         self.pending_samples.clear();
@@ -302,11 +344,13 @@ impl NativeSn76489 {
 
     fn reset_noise_generator(&mut self) {
         self.lfsr = LFSR_SEED;
+        self.noise_output = (self.lfsr & 1) as u8;
         self.noise_counter = self.noise_period;
         self.noise_counter_phase = 0;
     }
 
     fn shift_noise_register(&mut self) {
+        self.noise_output = (self.lfsr & 1) as u8;
         let feedback = if self.noise_control & 0x04 != 0 {
             (self.lfsr ^ (self.lfsr >> 1)) & 1
         } else {
@@ -345,21 +389,41 @@ impl NativeSn76489 {
         self.clock_divider_phase = internal_total % CLOCK_DIVIDER;
         for _ in 0..internal_clocks {
             self.tick_internal_clock();
+            self.push_filter_sample();
             self.output_phase += self.sample_rate * CLOCK_DIVIDER;
-            while self.output_phase >= self.clock_hz {
-                let sample = self.mix();
-                if render_sink {
-                    self.render_pending.push_back(sample);
-                } else {
-                    if self.pending_samples.len() == self.sample_buffer_capacity {
-                        self.pending_samples.pop_front();
-                        self.dropped_samples += 1;
+            if self.output_phase >= self.clock_hz {
+                let sample = self.filtered_output();
+                while self.output_phase >= self.clock_hz {
+                    if render_sink {
+                        self.render_pending.push_back(sample);
+                    } else {
+                        if self.pending_samples.len() == self.sample_buffer_capacity {
+                            self.pending_samples.pop_front();
+                            self.dropped_samples += 1;
+                        }
+                        self.pending_samples.push_back(sample);
                     }
-                    self.pending_samples.push_back(sample);
+                    self.output_phase -= self.clock_hz;
                 }
-                self.output_phase -= self.clock_hz;
             }
         }
+    }
+
+    fn push_filter_sample(&mut self) {
+        let taps = self.filter_coefficients.len();
+        let current_sample = self.mix();
+        self.filter_history[self.filter_position] = current_sample;
+        self.filter_position = (self.filter_position + 1) % taps;
+    }
+
+    fn filtered_output(&self) -> f64 {
+        let taps = self.filter_coefficients.len();
+        let mut total = 0.0;
+        for index in 0..taps {
+            let history_index = (self.filter_position + taps - 1 - index) % taps;
+            total += self.filter_coefficients[index] * self.filter_history[history_index];
+        }
+        total
     }
 
     fn mix(&self) -> f64 {
@@ -370,7 +434,7 @@ impl NativeSn76489 {
         total += ATTENUATION[usize::from(self.attenuations[2])]
             * if self.tone_outputs[2] != 0 { 1.0 } else { -1.0 };
         total += ATTENUATION[usize::from(self.attenuations[NOISE_CHANNEL])]
-            * if self.lfsr & 1 != 0 { 1.0 } else { -1.0 };
+            * if self.noise_output != 0 { 1.0 } else { -1.0 };
         total * 0.25
     }
 }
@@ -494,7 +558,15 @@ impl NativeAudioSynchronizer {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
     use super::NativeSn76489;
+
+    const WHITE_NOISE_GOLDEN_STATES: [u16; 32] = [
+        0x4000, 0x2000, 0x1000, 0x0800, 0x0400, 0x0200, 0x0100, 0x0080, 0x0040, 0x0020, 0x0010,
+        0x0008, 0x0004, 0x0002, 0x4001, 0x6000, 0x3000, 0x1800, 0x0C00, 0x0600, 0x0300, 0x0180,
+        0x00C0, 0x0060, 0x0030, 0x0018, 0x000C, 0x0006, 0x4003, 0x2001, 0x5000, 0x2800,
+    ];
 
     #[test]
     fn reset_and_repeated_advancement_are_deterministic() {
@@ -509,6 +581,7 @@ mod tests {
         }
         assert_eq!(first.tone_periods, second.tone_periods);
         assert_eq!(first.lfsr, second.lfsr);
+        assert_eq!(first.noise_output, second.noise_output);
         assert_eq!(first.pending_samples, second.pending_samples);
         first.reset_inner();
         second.reset_inner();
@@ -516,5 +589,179 @@ mod tests {
         assert_eq!(first.attenuations, [15; 4]);
         assert_eq!(first.pending_samples.len(), 0);
         assert_eq!(first.pending_samples, second.pending_samples);
+    }
+
+    #[test]
+    fn all_tone_period_register_values_round_trip() {
+        for channel in 0..3 {
+            for period in 0_u16..=0x03FF {
+                let mut device = NativeSn76489::new(3_579_545, 44_100).unwrap();
+                let register = (channel as u8) * 2;
+                device.write_inner(0x80 | (register << 4) | (period as u8 & 0x0F));
+                device.write_inner((period >> 4) as u8);
+                assert_eq!(device.tone_periods[channel], period);
+            }
+        }
+    }
+
+    #[test]
+    fn every_latch_register_and_nibble_is_decoded() {
+        for register in 0_u8..8 {
+            for nibble in 0_u8..16 {
+                let mut device = NativeSn76489::new(3_579_545, 44_100).unwrap();
+                device.write_inner(0x80 | (register << 4) | nibble);
+                assert_eq!(device.latched_register, register);
+                match register {
+                    0 | 2 | 4 => {
+                        assert_eq!(
+                            device.tone_periods[usize::from(register / 2)],
+                            u16::from(nibble)
+                        );
+                    }
+                    1 | 3 | 5 | 7 => {
+                        assert_eq!(device.attenuations[usize::from(register / 2)], nibble);
+                    }
+                    6 => assert_eq!(device.noise_control, nibble & 0x07),
+                    _ => unreachable!("register is restricted to three bits"),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn white_noise_lfsr_matches_fixed_golden_vector() {
+        let mut device = NativeSn76489::new(3_579_545, 44_100).unwrap();
+        device.write_inner(0xE4);
+        for expected in WHITE_NOISE_GOLDEN_STATES {
+            assert_eq!(device.lfsr, expected);
+            device.shift_noise_register();
+        }
+    }
+
+    #[test]
+    fn white_noise_lfsr_visits_all_nonzero_fifteen_bit_states_once() {
+        let mut device = NativeSn76489::new(3_579_545, 44_100).unwrap();
+        device.write_inner(0xE4);
+        let mut seen = HashSet::with_capacity(0x7FFF);
+
+        for _ in 0..0x7FFF {
+            assert!(
+                seen.insert(device.lfsr),
+                "repeated LFSR state {:#06x}",
+                device.lfsr
+            );
+            assert!((1..=0x7FFF).contains(&device.lfsr));
+            device.shift_noise_register();
+        }
+
+        assert_eq!(seen.len(), 0x7FFF);
+        assert_eq!(device.lfsr, 0x4000);
+    }
+
+    #[test]
+    fn noise_mixer_outputs_the_bit_shifted_out_of_the_lfsr() {
+        let mut device = NativeSn76489::new(3_579_545, 44_100).unwrap();
+        device.write_inner(0xE0);
+        device.write_inner(0xF0);
+
+        for _ in 0..14 {
+            device.shift_noise_register();
+            assert_eq!(device.mix(), -0.25);
+        }
+        device.shift_noise_register();
+        assert_eq!(device.mix(), 0.25);
+    }
+
+    #[test]
+    fn periodic_noise_lfsr_recycles_the_single_one_bit() {
+        let mut device = NativeSn76489::new(3_579_545, 44_100).unwrap();
+        device.write_inner(0xE0);
+        let mut states = Vec::with_capacity(15);
+
+        for _ in 0..15 {
+            states.push(device.lfsr);
+            device.shift_noise_register();
+        }
+
+        assert_eq!(states[0], 0x4000);
+        assert_eq!(states[14], 0x0001);
+        assert_eq!(device.lfsr, 0x4000);
+    }
+
+    #[test]
+    fn tone_counter_toggles_at_each_exhaustive_period_boundary() {
+        for channel in 0..3 {
+            for period in 2_u16..=0x03FF {
+                let mut device = NativeSn76489::new(3_579_545, 44_100).unwrap();
+                device.tone_periods[channel] = period;
+                device.tone_counters[channel] = period;
+                device.tone_outputs[channel] = 1;
+
+                for _ in 1..period {
+                    device.tick_internal_clock();
+                    assert_eq!(device.tone_outputs[channel], 1);
+                }
+                device.tick_internal_clock();
+                assert_eq!(device.tone_outputs[channel], 0);
+            }
+        }
+    }
+
+    #[test]
+    fn rendered_tone_frequency_matches_clock_and_divider() {
+        for period in [127_u16, 254, 511] {
+            let mut device = NativeSn76489::new(3_579_545, 44_100).unwrap();
+            device.write_inner(0x90);
+            device.write_inner(0x80 | (period as u8 & 0x0F));
+            device.write_inner((period >> 4) as u8);
+
+            let half_second_clocks = device.clock_hz / 2;
+            device.advance_clocks_inner(half_second_clocks, false);
+            // Ignore the FIR startup transient and measure zero crossings rather
+            // than every sample-value change; filtering makes adjacent samples
+            // differ even when no fundamental-frequency transition occurred.
+            let samples: Vec<f64> = device.pending_samples.iter().copied().skip(1_024).collect();
+            let transitions = samples
+                .windows(2)
+                .filter(|pair| (pair[0] < 0.0) != (pair[1] < 0.0))
+                .count();
+            let expected_frequency = device.clock_hz as f64 / (32.0 * f64::from(period));
+            let measured_frequency =
+                transitions as f64 * device.sample_rate as f64 / (2.0 * (samples.len() - 1) as f64);
+
+            assert!(
+                (measured_frequency - expected_frequency).abs() <= 2.5,
+                "period={period}: expected {expected_frequency:.3} Hz, measured {measured_frequency:.3} Hz from {transitions} transitions"
+            );
+        }
+    }
+
+    #[test]
+    fn clock_advancement_is_invariant_under_chunking() {
+        let mut whole = NativeSn76489::new(3_579_545, 44_100).unwrap();
+        let mut chunked = NativeSn76489::new(3_579_545, 44_100).unwrap();
+        for device in [&mut whole, &mut chunked] {
+            device.write_inner(0x85);
+            device.write_inner(0x12);
+            device.write_inner(0x90);
+            device.write_inner(0xE5);
+            device.write_inner(0xF3);
+        }
+
+        whole.advance_clocks_inner(123_457, false);
+        chunked.advance_clocks_inner(12_345, false);
+        chunked.advance_clocks_inner(11_112, false);
+        chunked.advance_clocks_inner(100_000, false);
+
+        assert_eq!(chunked.tone_periods, whole.tone_periods);
+        assert_eq!(chunked.tone_counters, whole.tone_counters);
+        assert_eq!(chunked.tone_outputs, whole.tone_outputs);
+        assert_eq!(chunked.noise_counter, whole.noise_counter);
+        assert_eq!(chunked.noise_counter_phase, whole.noise_counter_phase);
+        assert_eq!(chunked.lfsr, whole.lfsr);
+        assert_eq!(chunked.noise_output, whole.noise_output);
+        assert_eq!(chunked.clock_divider_phase, whole.clock_divider_phase);
+        assert_eq!(chunked.output_phase, whole.output_phase);
+        assert_eq!(chunked.pending_samples, whole.pending_samples);
     }
 }
