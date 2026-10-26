@@ -31,9 +31,15 @@ Z80_CLOCK_HZ = 3_579_545
 
 
 def _initialize_pygame_backend(
-    preferences: FrontendPreferences,
+    preferences: FrontendPreferences | None = None,
 ) -> tuple[object | None, object | None]:
-    """Configura a saída SDL sem alterar os clocks internos da emulação."""
+    """Configura a saída SDL sem alterar os clocks internos da emulação.
+
+    O argumento opcional preserva o contrato usado pelos testes de integração
+    do backend legado; a interface passa as preferências explicitamente.
+    """
+    apply_volume = preferences is not None
+    preferences = preferences or FrontendPreferences()
     try:
         import pygame as pygame_backend
     except Exception as exc:
@@ -51,7 +57,8 @@ def _initialize_pygame_backend(
         )
         pygame_backend.mixer.init()
         audio_channel = pygame_backend.mixer.Channel(0)
-        audio_channel.set_volume(preferences.audio_volume / 100)
+        if apply_volume:
+            audio_channel.set_volume(preferences.audio_volume / 100)
         return pygame_backend, audio_channel
     except Exception as exc:
         # Falha na saída de áudio não deve desativar vídeo ou controles.
