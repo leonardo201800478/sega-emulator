@@ -205,7 +205,10 @@ def run(initial_path: Path | None = None) -> None:
                 key_event = event
                 key = key_event.key()
                 if key == Qt.Key.Key_Escape:
-                    window.close()
+                    if window.isFullScreen():
+                        window.fullscreen_action.setChecked(False)
+                    else:
+                        window.close()
                     return True
                 if key in key_map:
                     pressed_keys.add(key)
