@@ -4,7 +4,7 @@
 
 ## Objetivo
 
-Definir um contrato de configuração validado e independente do dispositivo para uma futura saída WASAPI, XAudio2 ou SDL3. Esta PR não abre dispositivos nem entrega áudio físico. A saída futura não poderá alterar o estado determinístico do hardware emulado.
+Definir um contrato de configuração validado e independente do dispositivo para a saída de áudio. O backend WASAPI inicial já abre o dispositivo no frontend Qt; a configuração e os testes automatizados não substituem a validação física. Nenhum backend pode alterar o estado determinístico do hardware emulado.
 
 ## Separação de responsabilidades
 
