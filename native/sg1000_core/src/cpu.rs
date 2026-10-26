@@ -317,7 +317,7 @@ impl Z80 {
 
 #[cfg(test)]
 mod tests {
-    use super::{CpuError, Z80, FLAG_H, FLAG_PV, FLAG_Z};
+    use super::{CpuError, FLAG_H, FLAG_PV, FLAG_Z, Z80};
     use crate::bus::CpuBus;
 
     struct TestBus([u8; 0x10000]);
