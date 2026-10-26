@@ -209,7 +209,29 @@ O frontend integra a máquina SG-1000 e permite selecionar o backend pelo menu *
 
 A compilação por si só não garante que a sessão esteja usando Rust. Verifique a seleção exibida pela interface e observe mensagens de erro/logs. O backend Rust permanece experimental e pode não suportar todas as instruções Z80 necessárias para todas as ROMs.
 
-## 9. Checklist de validação manual ainda pendente
+## 9. Correção do excesso de velocidade no frontend Qt
+
+Na revisão do sintoma de emulação acima de 600%, foi identificado no frontend Qt o agendamento sem limite:
+
+```python
+timer.setInterval(0)
+```
+
+Um `QTimer` com intervalo zero pede ao event loop para executar o callback assim que possível. Como cada callback executa um quadro inteiro com `machine.run_frame()`, a máquina avançava tão rápido quanto o computador conseguia processá-la; o indicador de velocidade refletia esse avanço acelerado.
+
+A correção adiciona `src/sega_emulator/frontend/qt/frame_pacer.py`, com a classe `FramePacer`, e altera o frontend para:
+
+- usar um timer Qt preciso de 1 ms para manter a responsividade do event loop;
+- permitir o início de um quadro apenas quando vence o prazo de pacing;
+- usar o período NTSC estimado por `(228 * 262) / Z80_CLOCK_HZ`, aproximadamente 59,92 quadros/s;
+- não executar rajadas de recuperação se um quadro ultrapassar o prazo;
+- reiniciar o prazo ao carregar ROM ou reinicializar a máquina.
+
+O pacing é aplicado na camada de apresentação/execução do frontend. Não modifica os T-states calculados pelo núcleo nem introduz atrasos artificiais entre instruções CPU/VDP/PSG. Se a máquina não conseguir concluir um quadro dentro do orçamento, a velocidade efetiva poderá ficar abaixo de 100%, em vez de executar em velocidade ilimitada.
+
+Foi acrescentado `tests/test_qt_frame_pacer.py` para verificar primeiro quadro imediato, prazo mínimo entre quadros, reset e ausência de rajadas de recuperação. Os testes ainda precisam ser executados no ambiente local/CI após esta alteração; não declarar o defeito resolvido definitivamente até confirmar o comportamento visual e a velocidade indicada no Windows.
+
+## 10. Checklist de validação manual ainda pendente
 
 A suíte automatizada aprovada não substitui os seguintes testes manuais. Marque cada item apenas após executá-lo no Windows.
 
