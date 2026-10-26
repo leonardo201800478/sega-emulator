@@ -157,9 +157,9 @@ class WasapiAudioOutput:
         status: Any,
     ) -> None:
         del time_info
-        if status and getattr(status, "output_underflow", False):
-            self.underrun_callbacks += 1
-
+        underflow_reported = bool(
+            status and getattr(status, "output_underflow", False)
+        )
         required = frames * 2
         output = memoryview(outdata).cast("B")
         output[:] = b"\\x00" * required
@@ -188,6 +188,14 @@ class WasapiAudioOutput:
             self._stream.stop()
         finally:
             self._stream.close()
+        logger.info(
+            "Saída WASAPI encerrada",
+            extra={
+                "event": "wasapi_output_closed",
+                "underrun_callbacks": self.underrun_callbacks,
+                "dropped_blocks": self.dropped_blocks,
+            },
+        )
 
     def __enter__(self) -> WasapiAudioOutput:
         return self
