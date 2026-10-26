@@ -10,7 +10,7 @@ import pytest  # noqa: E402
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtWidgets import QApplication  # noqa: E402
+from PySide6.QtWidgets import QApplication, QMessageBox  # noqa: E402
 
 from sega_emulator.frontend.qt.main_window import (
     EmulatorMainWindow,
@@ -228,4 +228,39 @@ def test_fullscreen_hides_application_chrome_and_escape_restores_it(qt_app) -> N
     assert not window.statusBar().isHidden()
     assert window._central_layout.contentsMargins().left() == 18
     assert not window.exit_fullscreen_action.isEnabled()
+    window.close()
+
+
+def test_about_dialog_shows_version_scope_credits_and_mit_license(
+    qt_app, monkeypatch
+) -> None:
+    shown: list[tuple[str, str, str]] = []
+
+    def capture_about(parent, title: str, text: str) -> None:
+        shown.append((title, text, parent.windowTitle()))
+
+    monkeypatch.setattr(QMessageBox, "about", capture_about)
+    window = EmulatorMainWindow(
+        on_open_rom=lambda: None,
+        on_pause_resume=lambda: None,
+        on_reset=lambda: None,
+        on_configure_controls=lambda: None,
+        on_show_controllers=lambda: None,
+        on_vdp_snapshot=lambda: None,
+        on_open_logs=lambda: None,
+        on_show_machine_state=lambda: None,
+        on_video_scale=lambda scale: None,
+    )
+
+    window.about_action.trigger()
+
+    assert len(shown) == 1
+    title, content, parent_title = shown[0]
+    assert title == "Sobre o Sega Emulator"
+    assert parent_title == "Sega Emulator | SG-1000"
+    assert "Versão:</b> 0.1.0" in content
+    assert "SG-1000" in content
+    assert "PySide6" in content
+    assert "Licença:</b> MIT" in content
+    assert "sem afiliação oficial" in content
     window.close()
