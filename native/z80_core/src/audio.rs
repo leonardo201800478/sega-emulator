@@ -33,6 +33,7 @@ pub(crate) struct NativeSn76489 {
     noise_counter: u16,
     noise_counter_phase: u8,
     lfsr: u16,
+    noise_output: u8,
     clock_divider_phase: u64,
     output_phase: u64,
     noise_period: u16,
@@ -71,6 +72,7 @@ impl NativeSn76489 {
             noise_counter: 0,
             noise_counter_phase: 0,
             lfsr: LFSR_SEED,
+            noise_output: 0,
             clock_divider_phase: 0,
             output_phase: 0,
             noise_period: 0x10,
@@ -148,6 +150,11 @@ impl NativeSn76489 {
     #[getter(_lfsr)]
     fn lfsr(&self) -> u16 {
         self.lfsr
+    }
+
+    #[getter(_noise_output)]
+    fn noise_output(&self) -> u8 {
+        self.noise_output
     }
 
     #[getter(_clock_divider_phase)]
@@ -237,6 +244,7 @@ impl NativeSn76489 {
         self.noise_counter = 0;
         self.noise_counter_phase = 0;
         self.lfsr = LFSR_SEED;
+        self.noise_output = 0;
         self.clock_divider_phase = 0;
         self.output_phase = 0;
         self.noise_period = 0x10;
@@ -302,11 +310,13 @@ impl NativeSn76489 {
 
     fn reset_noise_generator(&mut self) {
         self.lfsr = LFSR_SEED;
+        self.noise_output = (self.lfsr & 1) as u8;
         self.noise_counter = self.noise_period;
         self.noise_counter_phase = 0;
     }
 
     fn shift_noise_register(&mut self) {
+        self.noise_output = (self.lfsr & 1) as u8;
         let feedback = if self.noise_control & 0x04 != 0 {
             (self.lfsr ^ (self.lfsr >> 1)) & 1
         } else {
@@ -370,7 +380,7 @@ impl NativeSn76489 {
         total += ATTENUATION[usize::from(self.attenuations[2])]
             * if self.tone_outputs[2] != 0 { 1.0 } else { -1.0 };
         total += ATTENUATION[usize::from(self.attenuations[NOISE_CHANNEL])]
-            * if self.lfsr & 1 != 0 { 1.0 } else { -1.0 };
+            * if self.noise_output != 0 { 1.0 } else { -1.0 };
         total * 0.25
     }
 }
@@ -517,6 +527,7 @@ mod tests {
         }
         assert_eq!(first.tone_periods, second.tone_periods);
         assert_eq!(first.lfsr, second.lfsr);
+        assert_eq!(first.noise_output, second.noise_output);
         assert_eq!(first.pending_samples, second.pending_samples);
         first.reset_inner();
         second.reset_inner();
@@ -594,6 +605,20 @@ mod tests {
     }
 
     #[test]
+    fn noise_mixer_outputs_the_bit_shifted_out_of_the_lfsr() {
+        let mut device = NativeSn76489::new(3_579_545, 44_100).unwrap();
+        device.write_inner(0xE0);
+        device.write_inner(0xF0);
+
+        for _ in 0..14 {
+            device.shift_noise_register();
+            assert_eq!(device.mix(), -0.25);
+        }
+        device.shift_noise_register();
+        assert_eq!(device.mix(), 0.25);
+    }
+
+    #[test]
     fn periodic_noise_lfsr_recycles_the_single_one_bit() {
         let mut device = NativeSn76489::new(3_579_545, 44_100).unwrap();
         device.write_inner(0xE0);
@@ -651,6 +676,7 @@ mod tests {
         assert_eq!(chunked.noise_counter, whole.noise_counter);
         assert_eq!(chunked.noise_counter_phase, whole.noise_counter_phase);
         assert_eq!(chunked.lfsr, whole.lfsr);
+        assert_eq!(chunked.noise_output, whole.noise_output);
         assert_eq!(chunked.clock_divider_phase, whole.clock_divider_phase);
         assert_eq!(chunked.output_phase, whole.output_phase);
         assert_eq!(chunked.pending_samples, whole.pending_samples);
