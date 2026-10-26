@@ -511,8 +511,8 @@ def run(initial_path: Path | None = None) -> None:
             QMessageBox.warning(window, "Não foi possível abrir a ROM", str(exc))
             return
 
-        if vgm_recorder.active:
-            stop_vgm_recording()
+        if vgm_recorder.active and not stop_vgm_recording():
+            return
         machine, loaded, frame_count, paused = loaded_machine, candidate, 0, False
         audio_resampler.reset()
         window.set_rom_label(candidate.display_name)
@@ -601,6 +601,8 @@ def run(initial_path: Path | None = None) -> None:
                 "Runtime Rust indisponível",
                 f"Não foi possível ativar o backend {requested_backend}: {exc}",
             )
+            return
+        if vgm_recorder.active and not stop_vgm_recording():
             return
         selected_backend = requested_backend
         settings.setValue("cpu_core", selected_backend)
@@ -715,10 +717,12 @@ def run(initial_path: Path | None = None) -> None:
             },
         )
 
-    def stop_vgm_recording() -> None:
+    def stop_vgm_recording() -> bool:
         nonlocal vgm_output_path
-        if not vgm_recorder.active or machine is None or vgm_output_path is None:
-            return
+        if not vgm_recorder.active:
+            return True
+        if machine is None or vgm_output_path is None:
+            return False
         for event_tstate, event_value in machine.drain_psg_write_events():
             vgm_recorder.record_write(event_tstate, event_value)
         event_count = vgm_recorder.event_count
@@ -726,7 +730,7 @@ def run(initial_path: Path | None = None) -> None:
             saved_path = vgm_recorder.save(vgm_output_path, machine.total_tstates)
         except (OSError, ValueError, RuntimeError) as exc:
             QMessageBox.warning(window, "Falha ao salvar VGM", str(exc))
-            return
+            return False
         window.set_vgm_recording(False)
         status.showMessage(
             f"VGM salvo: {saved_path.name} ({event_count} escritas PSG)", 8000
@@ -740,6 +744,7 @@ def run(initial_path: Path | None = None) -> None:
             },
         )
         vgm_output_path = None
+        return True
 
     def pause_resume() -> None:
         nonlocal paused
@@ -754,8 +759,8 @@ def run(initial_path: Path | None = None) -> None:
         nonlocal machine, frame_count, paused
         nonlocal last_checkpoint_time, last_checkpoint_tstates
         nonlocal last_checkpoint_instructions, last_checkpoint_frame
-        if vgm_recorder.active:
-            stop_vgm_recording()
+        if vgm_recorder.active and not stop_vgm_recording():
+            return
         if loaded is None:
             return
         machine = SG1000Machine(loaded.data, cpu_core=selected_backend)
