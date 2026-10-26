@@ -85,3 +85,8 @@ O repositório contém caminhos de execução para as famílias base, CB, ED, DD
 - [Auditoria de cobertura da CPU Z80](z80-coverage.md): inventário de instruções e prefixos.
 
 Próxima tarefa técnica: validação diferencial da CPU Z80 contra uma suíte de referência confiável, com foco inicial em flags, operações ED de bloco, IX/IY, interrupções e temporização nominal. Corrigir primeiro as divergências reproduzíveis e documentar o que não puder ser validado.
+
+
+## Fidelidade de áudio e reutilização do PSG
+
+O modelo SN76489AN do SG-1000 tem um roadmap dedicado que separa lógica digital, reamostragem anti-aliasing e resposta analógica, além de registrar as diferenças necessárias para futuras variantes Master System, Game Gear e Mega Drive: [Roadmap de fidelidade do PSG e reutilização de hardware Sega](architecture/psg-fidelity-roadmap.md).
