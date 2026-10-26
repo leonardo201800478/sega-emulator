@@ -141,6 +141,5 @@ class StandaloneCoreDialog(QDialog):
 
     def _hex_bytes(self, start: int) -> str:
         return " ".join(
-            f"{self._machine.read_memory(start + offset):02X}"
-            for offset in range(32)
+            f"{self._machine.read_memory(start + offset):02X}" for offset in range(32)
         )
