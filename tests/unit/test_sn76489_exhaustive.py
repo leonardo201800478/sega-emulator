@@ -4,8 +4,6 @@ These tests establish internal contracts and fixed digital vectors. They do not
 claim hardware fidelity until the vectors are independently corroborated.
 """
 
-from __future__ import annotations
-
 import pytest
 
 from sega_emulator.audio.sn76489 import LFSR_MASK, LFSR_SEED, SN76489
