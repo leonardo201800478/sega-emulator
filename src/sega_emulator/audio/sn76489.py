@@ -71,6 +71,7 @@ class SN76489:
         self._noise_counter = 0
         self._noise_counter_phase = 0
         self._lfsr = LFSR_SEED
+        self._noise_output = 0
         self._clock_divider_phase = 0
         self._output_phase = 0
         self._noise_period = 0x10
@@ -131,10 +132,13 @@ class SN76489:
 
     def _reset_noise_generator(self) -> None:
         self._lfsr = LFSR_SEED
+        self._noise_output = self._lfsr & 1
         self._noise_counter = self._noise_period
         self._noise_counter_phase = 0
 
     def _shift_noise_register(self) -> None:
+        # O bit que sai do LFSR alimenta a saída até o próximo deslocamento.
+        self._noise_output = self._lfsr & 1
         # Variante de 15 bits adotada para o SN76489AN do SG-1000.
         if self.noise_control & 0x04:
             feedback = (self._lfsr ^ (self._lfsr >> 1)) & 1
@@ -239,7 +243,7 @@ class SN76489:
             1.0 if self._tone_outputs[2] else -1.0
         )
         total += _ATTENUATION[self.attenuations[NOISE_CHANNEL]] * (
-            1.0 if self._lfsr & 1 else -1.0
+            1.0 if self._noise_output else -1.0
         )
         return total * 0.25
 
