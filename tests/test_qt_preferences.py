@@ -57,6 +57,11 @@ def test_load_recovers_from_corrupt_or_legacy_values() -> None:
             "video_scale": 5,
             "recent_roms": [" game.sg ", "", "game.sg", None],
             "audio_enabled": "off",
+            "audio_sample_rate": 96000,
+            "audio_buffer_size": 300,
+            "audio_volume": 150,
+            "video_filter": "crt",
+            "integer_scale": "yes",
         }
     )
 
@@ -67,6 +72,11 @@ def test_load_recovers_from_corrupt_or_legacy_values() -> None:
     assert preferences.video_scale == 3
     assert preferences.recent_roms == ("game.sg",)
     assert preferences.audio_enabled is False
+    assert preferences.audio_sample_rate == 44_100
+    assert preferences.audio_buffer_size == 512
+    assert preferences.audio_volume == 100
+    assert preferences.video_filter == "nearest"
+    assert preferences.integer_scale is True
 
 
 def test_save_and_load_round_trip() -> None:
@@ -78,6 +88,11 @@ def test_save_and_load_round_trip() -> None:
         controller_config='{"players": {}}',
         audio_enabled=False,
         diagnostics_enabled=False,
+        audio_sample_rate=48_000,
+        audio_buffer_size=1024,
+        audio_volume=73,
+        video_filter="bilinear",
+        integer_scale=False,
     )
     settings = MemorySettings()
 
