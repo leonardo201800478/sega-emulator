@@ -1,6 +1,6 @@
 # Histórico de versões
 
-## Próximo release — SG-1000 inicial (em preparação)
+## v0.1.0 — Primeiro release SG-1000 (preparação)
 
 ### Marco de áudio e vídeo
 - Registra a avaliação manual de 2026-10-26: áudio e vídeo do SG-1000 alcançaram qualidade percebida satisfatória para o primeiro marco; o áudio foi considerado muito próximo ao Gearsystem.
@@ -14,7 +14,8 @@
 
 ### Preparação do primeiro release
 - Atualiza README e cria registro do marco SG-1000, incluindo evidências, limites conhecidos e plano de validação de estabilidade.
-- O release permanece pendente da escolha explícita da licença, atualização final da caixa Sobre e validação dos workflows no SHA candidato.
+- Adota licença MIT, declara os metadados de licença no pacote e atualiza a caixa Sobre com versão, escopo, créditos e aviso de independência.
+- A publicação continua condicionada à conclusão dos checks no SHA candidato e à revisão final; não se presume que testes locais ou CI tenham passado.
 
 
 ## Próxima versão — em desenvolvimento
