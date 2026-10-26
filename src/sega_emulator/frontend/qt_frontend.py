@@ -78,6 +78,7 @@ def run(initial_path: Path | None = None) -> None:
 
         from sega_emulator.frontend.qt.main_window import EmulatorMainWindow
         from sega_emulator.frontend.qt.preferences import FrontendPreferences
+        from sega_emulator.frontend.qt.psg_settings_dialog import configure_psg
     except ImportError as exc:
         raise RuntimeError(
             'Interface Qt não instalada. Execute: python -m pip install -e ".[qt]"'
@@ -99,6 +100,12 @@ def run(initial_path: Path | None = None) -> None:
     pygame, audio_channel = (
         _initialize_pygame_backend() if preferences.audio_enabled else (None, None)
     )
+    try:
+        audio_gain_percent = max(
+            0, min(200, int(settings.value("psg_output_gain_percent", 100)))
+        )
+    except (TypeError, ValueError, OverflowError):
+        audio_gain_percent = 100
     serialized_controller_config = settings.value("controller_config", "", type=str)
     try:
         controller_config = (
@@ -130,6 +137,7 @@ def run(initial_path: Path | None = None) -> None:
         on_show_machine_state=lambda: show_machine_state(),
         on_video_scale=lambda scale: window.set_video_scale(scale),
         on_select_emulation_backend=lambda: select_emulation_backend(),
+        on_configure_psg=lambda: configure_psg_settings(),
     )
     window.resize(preferences.window_width, preferences.window_height)
     window._video_scale = preferences.video_scale
@@ -227,6 +235,42 @@ def run(initial_path: Path | None = None) -> None:
     }
     phase_max_ms = dict.fromkeys(phase_totals_ms, 0.0)
 
+    def configure_psg_settings() -> None:
+        nonlocal pygame, audio_channel, audio_gain_percent
+        result = configure_psg(
+            window,
+            settings,
+            audio_enabled=audio_channel is not None,
+            output_gain=audio_gain_percent,
+        )
+        if result is None:
+            return
+        audio_enabled, audio_gain_percent = result
+        if audio_enabled and (pygame is None or audio_channel is None):
+            pygame_backend, channel = _initialize_pygame_backend()
+            if pygame_backend is not None:
+                pygame = pygame_backend
+                audio_channel = channel
+        elif not audio_enabled and pygame is not None:
+            try:
+                pygame.mixer.quit()
+            except Exception:
+                logger.exception("Falha ao desativar a saída de áudio")
+            audio_channel = None
+        status.showMessage(
+            f"Configurações de som aplicadas: saída {'ativa' if audio_enabled else 'silenciada'}, "
+            f"ganho {audio_gain_percent}%.",
+            6000,
+        )
+        logger.info(
+            "Configurações de som alteradas",
+            extra={
+                "event": "psg_output_settings_changed",
+                "audio_enabled": audio_enabled,
+                "output_gain_percent": audio_gain_percent,
+            },
+        )
+
     def show_frame() -> None:
         nonlocal paused, frame_count, last_checkpoint_time, last_checkpoint_tstates
         nonlocal last_checkpoint_instructions, last_checkpoint_frame
@@ -251,7 +295,14 @@ def run(initial_path: Path | None = None) -> None:
             samples = machine.drain_audio_samples()
             if samples and audio_channel is not None and pygame is not None:
                 pcm = array(
-                    "h", (max(-32768, min(32767, round(s * 32767))) for s in samples)
+                    "h",
+                    (
+                        max(
+                            -32768,
+                            min(32767, round(s * 32767 * audio_gain_percent / 100)),
+                        )
+                        for s in samples
+                    ),
                 )
                 sound = pygame.mixer.Sound(buffer=pcm.tobytes())
                 if audio_channel.get_busy():
