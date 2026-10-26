@@ -6,7 +6,7 @@ Projeto de emulação de alta precisão com implementação de referência em Py
 
 - **CPU:** núcleo Z80 em auditoria diferencial; temporização ainda não é ciclo a ciclo.
 - **Máquina SG-1000:** CPU, ROM/RAM, VDP TMS9918A inicial e joystick em desenvolvimento.
-- **Frontend Qt 6/PySide6:** janela redesenhada, barra de ações, tela cheia, ROMs recentes, seleção do runtime, configuração de controles e diagnóstico. O núcleo de emulação continua sendo `SG1000Machine`; a interface não implementa uma máquina paralela.
+- **Frontend Qt 6/PySide6:** janela redesenhada, barra de ações, tela cheia, ROMs recentes, seleção do runtime, configuração de controles e diagnóstico. A execução dos quadros é limitada ao período nominal NTSC (~59,92 Hz) para evitar emulação acelerada; o pacing não altera os T-states lógicos. O núcleo de emulação continua sendo `SG1000Machine`; a interface não implementa uma máquina paralela.
 - **Configurações de áudio:** saída mono do PSG, ativação, volume, taxa do mixer (22,05/44,1/48 kHz) e buffer (256–2.048 amostras). A reamostragem afeta apenas a saída, não o clock lógico do hardware.
 - **Configurações de vídeo:** proporção 4:3 preservada, escala inteira preferencial e filtros nearest-neighbor/bilinear. Essas opções alteram a apresentação, não o framebuffer produzido pelo VDP.
 - **Carregador:** arquivos `.sg`, `.rom`, `.bin` e ROMs dentro de ZIP; ZIP com múltiplas ROMs exige seleção explícita.
