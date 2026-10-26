@@ -6,7 +6,6 @@ import hashlib
 import json
 import logging
 import time
-from array import array
 from pathlib import Path
 
 from sega_emulator.frontend.controller_input import (
@@ -19,6 +18,8 @@ from sega_emulator.frontend.controller_input import (
     apply_turbo,
     joystick_value,
 )
+from sega_emulator.frontend.qt.audio_output import samples_to_pcm
+from sega_emulator.frontend.qt.preferences import FrontendPreferences
 from sega_emulator.frontend.sdl3_controller_input import SDL3ControllerInput
 from sega_emulator.machine.sg1000 import SG1000Machine
 from sega_emulator.rom_loader import LoadedRom, list_rom_members, load_rom
@@ -58,24 +59,6 @@ def _initialize_pygame_backend(
         return pygame_backend, None
 
 
-def _samples_to_pcm(samples: list[float], output_rate: int) -> bytes:
-    """Converte o PSG de 44,1 kHz para a taxa da saída com interpolação linear."""
-    source_rate = 44_100
-    if not samples:
-        return b""
-    output_count = max(1, round(len(samples) * output_rate / source_rate))
-    pcm = array("h")
-    last_index = len(samples) - 1
-    for index in range(output_count):
-        position = index * source_rate / output_rate
-        left = min(int(position), last_index)
-        right = min(left + 1, last_index)
-        fraction = position - left
-        value = samples[left] + (samples[right] - samples[left]) * fraction
-        pcm.append(max(-32768, min(32767, round(value * 32767))))
-    return pcm.tobytes()
-
-
 def run(initial_path: Path | None = None) -> None:
     """Abre a interface de teste com teclado, telemetria e logs de sessão."""
     try:
@@ -102,7 +85,6 @@ def run(initial_path: Path | None = None) -> None:
         )
 
         from sega_emulator.frontend.qt.main_window import EmulatorMainWindow
-        from sega_emulator.frontend.qt.preferences import FrontendPreferences
         from sega_emulator.frontend.qt.settings_dialog import SettingsDialog
     except ImportError as exc:
         raise RuntimeError(
@@ -277,7 +259,7 @@ def run(initial_path: Path | None = None) -> None:
             machine.run_frame()
             samples = machine.drain_audio_samples()
             if samples and audio_channel is not None and pygame is not None:
-                pcm = _samples_to_pcm(samples, preferences.audio_sample_rate)
+                pcm = samples_to_pcm(samples, preferences.audio_sample_rate)
                 sound = pygame.mixer.Sound(buffer=pcm)
                 if audio_channel.get_busy():
                     audio_channel.queue(sound)
