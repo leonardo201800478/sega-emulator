@@ -6,9 +6,9 @@ claim hardware fidelity until the vectors are independently corroborated.
 
 from __future__ import annotations
 
-from sega_emulator.audio.sn76489 import LFSR_MASK, LFSR_SEED, SN76489
-
 import pytest
+
+from sega_emulator.audio.sn76489 import LFSR_MASK, LFSR_SEED, SN76489
 
 
 # Fixed states calculated from the documented 15-bit SG-1000 feedback recurrence.
