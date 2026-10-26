@@ -95,5 +95,3 @@ def test_main_window_exposes_emulation_backend_selector(qt_app) -> None:
     window.select_emulation_backend_action.trigger()
     assert called == ["select-backend"]
     window.close()
-
-
