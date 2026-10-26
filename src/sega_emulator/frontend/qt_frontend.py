@@ -159,9 +159,9 @@ def run(initial_path: Path | None = None) -> None:
         )
 
         from sega_emulator.frontend.qt.main_window import (
-    EmulatorMainWindow,
-    persisted_window_dimensions,
-)
+            EmulatorMainWindow,
+            persisted_window_dimensions,
+        )
         from sega_emulator.frontend.qt.settings_dialog import SettingsDialog
     except ImportError as exc:
         raise RuntimeError(
