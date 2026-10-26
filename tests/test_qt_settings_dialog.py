@@ -10,7 +10,7 @@ import pytest  # noqa: E402
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtWidgets import QApplication  # noqa: E402
+from PySide6.QtWidgets import QApplication, QTabWidget  # noqa: E402
 
 from sega_emulator.frontend.qt.preferences import FrontendPreferences  # noqa: E402
 from sega_emulator.frontend.qt.settings_dialog import SettingsDialog  # noqa: E402
@@ -33,6 +33,13 @@ def test_dialog_loads_and_returns_audio_video_preferences(qt_app) -> None:
     )
     dialog = SettingsDialog(original)
 
+    tabs = dialog.findChild(QTabWidget)
+    assert tabs is not None
+    assert [tabs.tabText(index) for index in range(tabs.count())] == [
+        "Saída de áudio",
+        "PSG / Hardware",
+        "Vídeo",
+    ]
     assert dialog.audio_enabled.isChecked() is False
     assert dialog.sample_rate.currentData() == 48_000
     assert dialog.buffer_size.currentData() == 1024
