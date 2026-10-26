@@ -8,7 +8,6 @@ import pytest
 
 from sega_emulator.audio.sn76489 import LFSR_MASK, LFSR_SEED, SN76489
 
-
 # Fixed states calculated from the documented 15-bit SG-1000 feedback recurrence.
 # Kept literal so the test does not derive its expected values from the DUT.
 WHITE_NOISE_GOLDEN_STATES = (
