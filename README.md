@@ -150,6 +150,10 @@ O JSONL é destinado à análise automatizada; o log textual é para leitura rá
 git diff --check
 ```
 
+## Validação local do backend Rust + frontend Qt
+
+O procedimento completo de compilação da extensão PyO3/Maturin no Windows, comandos executados, resultados locais de testes e itens ainda pendentes de validação manual está em [docs/development/qt-rust-local-build-validation.md](docs/development/qt-rust-local-build-validation.md).
+
 ## Documentação
 
 - [Arquitetura multi-sistema](docs/architecture.md)
