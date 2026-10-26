@@ -62,19 +62,19 @@ class VideoWidget(QLabel):
         width_factor = available.width() // self.BASE_WIDTH
         height_factor = available.height() // self.BASE_HEIGHT
         factor = min(width_factor, height_factor)
+        transformation = (
+            Qt.TransformationMode.FastTransformation
+            if self._filter_mode == "nearest"
+            else Qt.TransformationMode.SmoothTransformation
+        )
         if self._integer_scale and factor >= 1:
             target = self._source_image.size() * factor
             scaled = QPixmap.fromImage(self._source_image).scaled(
                 target,
                 Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.FastTransformation,
+                transformation,
             )
         else:
-            transformation = (
-                Qt.TransformationMode.FastTransformation
-                if self._filter_mode == "nearest"
-                else Qt.TransformationMode.SmoothTransformation
-            )
             scaled = QPixmap.fromImage(self._source_image).scaled(
                 available,
                 Qt.AspectRatioMode.KeepAspectRatio,
