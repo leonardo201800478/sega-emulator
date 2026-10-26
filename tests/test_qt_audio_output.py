@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from array import array
 import math
+from array import array
 
 import pytest
 
@@ -68,8 +68,10 @@ def test_downsampling_fir_rejects_frequencies_above_output_nyquist() -> None:
 
     low_pcm = _decode(samples_to_pcm(low_tone, 22_050))
     high_pcm = _decode(samples_to_pcm(high_tone, 22_050))
-    low_rms = math.sqrt(sum(sample * sample for sample in low_pcm[100:]) / len(low_pcm[100:]))
-    high_rms = math.sqrt(sum(sample * sample for sample in high_pcm[100:]) / len(high_pcm[100:]))
+    low_tail = low_pcm[100:]
+    high_tail = high_pcm[100:]
+    low_rms = math.sqrt(sum(sample * sample for sample in low_tail) / len(low_tail))
+    high_rms = math.sqrt(sum(sample * sample for sample in high_tail) / len(high_tail))
 
     assert low_rms > 8_000
     assert high_rms < low_rms * 0.03
