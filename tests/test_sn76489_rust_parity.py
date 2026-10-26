@@ -84,7 +84,9 @@ def test_native_psg_render_and_bounded_buffer_match_python() -> None:
     python_buffered.advance_clocks(16_000)
     rust_buffered.advance_clocks(16_000)
     _assert_psg_state_matches(python_buffered, rust_buffered)
-    _assert_samples_match(rust_buffered.drain_samples(), python_buffered.drain_samples())
+    _assert_samples_match(
+        rust_buffered.drain_samples(), python_buffered.drain_samples()
+    )
 
 
 def test_native_audio_synchronizer_preserves_timestamp_and_write_order() -> None:
