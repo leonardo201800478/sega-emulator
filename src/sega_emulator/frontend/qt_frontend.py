@@ -158,7 +158,10 @@ def run(initial_path: Path | None = None) -> None:
             QWidget,
         )
 
-        from sega_emulator.frontend.qt.main_window import EmulatorMainWindow
+        from sega_emulator.frontend.qt.main_window import (
+    EmulatorMainWindow,
+    persisted_window_dimensions,
+)
         from sega_emulator.frontend.qt.settings_dialog import SettingsDialog
     except ImportError as exc:
         raise RuntimeError(
@@ -1100,12 +1103,12 @@ def run(initial_path: Path | None = None) -> None:
         open_rom(str(initial_path))
     window.show()
     app.exec()
-    saved_geometry = (
-        window.normalGeometry() if window.isFullScreen() else window.geometry()
+    saved_width, saved_height = persisted_window_dimensions(
+        window, preferences.window_width, preferences.window_height
     )
     preferences = FrontendPreferences(
-        window_width=max(640, min(7680, saved_geometry.width())),
-        window_height=max(480, min(4320, saved_geometry.height())),
+        window_width=max(640, min(7680, saved_width)),
+        window_height=max(480, min(4320, saved_height)),
         video_scale=getattr(window, "_video_scale", preferences.video_scale),
         recent_roms=tuple(
             str(path)
