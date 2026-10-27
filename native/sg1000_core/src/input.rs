@@ -57,12 +57,11 @@ pub enum ControllerBackend {
 
 /// Policy used by the host-side controller provider.
 ///
-/// The default is native-first: on Windows, use XInput for devices exposed by
-/// XInput, then DirectInput for legacy devices that cannot be read through
-/// XInput. SDL remains an explicit fallback/cross-platform backend. This is a
-/// selection policy, not a claim that one API is universally lower-latency for
-/// every controller; end-to-end latency depends on device, transport, driver,
-/// polling cadence, and the host event loop.
+/// The default is native-first: on Windows, use XInput for devices exposed
+/// by XInput. SDL3 is the implemented fallback and cross-platform backend.
+/// This is a selection policy, not a claim that one API is universally
+/// lower-latency for every controller; end-to-end latency depends on device,
+/// transport, driver, polling cadence, and the host event loop.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum ControllerBackendPreference {
     #[default]
