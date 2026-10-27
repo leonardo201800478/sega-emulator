@@ -119,8 +119,14 @@ mod tests {
         assert_eq!(
             io.drain_psg_write_events(),
             vec![
-                PsgWriteEvent { tstate: 12, value: 0x90 },
-                PsgWriteEvent { tstate: 12, value: 0x21 },
+                PsgWriteEvent {
+                    tstate: 12,
+                    value: 0x90
+                },
+                PsgWriteEvent {
+                    tstate: 12,
+                    value: 0x21
+                },
             ]
         );
         assert!(io.drain_psg_write_events().is_empty());
