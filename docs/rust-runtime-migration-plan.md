@@ -5,7 +5,7 @@
 ## Decisão arquitetural
 
 - O único runtime ativo de hardware SG-1000 é `native/sg1000_core`.
-- `native/z80_core` fornece a fronteira PyO3/Maturin e o adaptador fino `NativeSG1000Machine`. Seu harness `RustZ80Cpu` separado permanece apenas para testes Rust/PyO3 existentes; não é usado pela máquina integrada.
+- `native/z80_core` fornece a fronteira PyO3/Maturin e o adaptador fino `NativeSG1000Machine`. O harness Rust `RustZ80Cpu` separado permanece isolado e fora da máquina integrada. Os testes Python diferenciais que o exercitavam foram arquivados; removê-lo é uma limpeza futura separada.
 - `src/sega_emulator/machine/sg1000.py` resolve o perfil de cartucho e encaminha chamadas para a extensão. Não contém CPU, memória, VDP, PSG ou scheduler em Python, nem oferece seleção/fallback de backend.
 - Python ativo na aplicação fica restrito à interface Qt e backends de host, carregamento de ROMs/perfis, configuração/logging e integração fina. O frontend Pygame, runner headless, implementação Python de hardware, testes que dependiam dela e ferramentas relacionadas estão em `legacy/`.
 - Testes Python ativos são testes de aplicação/integração Qt/PyO3. A validação de hardware é feita pelos testes Rust e por oráculos independentes; o legado Python não é importado como runtime nem como oráculo ativo.
@@ -21,7 +21,7 @@
 
 ## Validação obrigatória
 
-No mesmo SHA candidato, executar os workflows ativos: Rust SG-1000 Workspace, SG-1000 Three Agent Sequential Validation, Qt Frontend Rebuild Validation, Qt selectable Rust Z80 core, UI and Controller Input Validation, Agent 1 Functional Validation, Agent 2 Integrity and Determinism e CI. Checks pulados não contam como aprovados.
+No mesmo SHA candidato, executar os workflows ativos: Rust SG-1000 Workspace, SG-1000 Three Agent Sequential Validation, Qt Frontend Rebuild Validation, Qt Rust SG-1000 runtime integration, UI and Controller Input Validation, Agent 1 Functional Validation, Agent 2 Integrity and Determinism e CI. Checks pulados não contam como aprovados.
 
 Comandos locais de referência:
 

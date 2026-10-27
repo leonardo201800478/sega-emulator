@@ -1,5 +1,5 @@
 # This workflow validates only the optional native/z80_core extension. SG-1000 workspace slices are validated by the Rust SG-1000 Workspace workflow.
-name: Qt selectable Rust Z80 core
+name: Qt Rust SG-1000 runtime integration
 
 concurrency:
   group: qt-rust-z80-core-${{ github.event.pull_request.number || github.ref }}
