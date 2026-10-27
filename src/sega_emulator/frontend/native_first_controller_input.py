@@ -234,15 +234,29 @@ class NativeFirstControllerInput:
         native: XInputControllerInput | None = None,
         fallback: Any | None = None,
     ) -> None:
-        self.config = config or ControllerInputConfig()
-        self.native = native or XInputControllerInput(self.config)
+        self._config = config or ControllerInputConfig()
+        self.native = native or XInputControllerInput(self._config)
         if fallback is None:
             from sega_emulator.frontend.sdl3_controller_input import SDL3ControllerInput
 
-            fallback = SDL3ControllerInput(self.config)
+            fallback = SDL3ControllerInput(self._config)
         self.fallback = fallback
+        self.fallback.config = self._config
+        self.native.config = self._config
         self._active_backend = "xinput" if self.native.connected_names() else "sdl"
         self._disconnect_pending = False
+
+    @property
+    def config(self) -> ControllerInputConfig:
+        return self._config
+
+    @config.setter
+    def config(self, value: ControllerInputConfig) -> None:
+        self._config = value
+        if hasattr(self, "native"):
+            self.native.config = value
+        if hasattr(self, "fallback"):
+            self.fallback.config = value
 
     @property
     def available(self) -> bool:
