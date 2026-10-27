@@ -1068,6 +1068,7 @@ mod tests {
         // Rendering additional sprites must not hide the hardware overflow index.
         assert_eq!(fifth, Some(4));
     }
+
     #[test]
     fn sprite_line_inspection_preserves_indices_and_overflow() {
         let mut vdp = Tms9918A::new();
@@ -1094,5 +1095,4 @@ mod tests {
         );
         assert_eq!(fifth, Some(4));
     }
-
 }
