@@ -4,6 +4,7 @@ import zlib
 
 from sega_emulator.machine.cartridge_profiles import (
     SG1000_II_RAM_EXT_TYPE_B_CRC32,
+    cartridge_profile,
     cartridge_ram_size,
 )
 from sega_emulator.machine.sg1000 import SG1000Machine
@@ -78,6 +79,26 @@ def test_castle_japan_uses_cartridge_ram_at_8000(monkeypatch) -> None:
     machine.memory_bus.write(0xC000, 0x3C)
     assert machine.memory_bus.read(0xC000) == 0x3C
     assert machine.memory_bus.read(0x8000) == 0xA5
+
+
+def test_dahjee_type_a_maps_expansion_ram_at_2000(monkeypatch) -> None:
+    monkeypatch.setattr(zlib, "crc32", lambda data: 0x223397A1)
+    profile = cartridge_profile(b"synthetic King's Valley ROM")
+
+    assert profile.internal_ram_size == 0x0400
+    assert profile.cartridge_ram_size == 0x2000
+    assert profile.cartridge_ram_start == 0x2000
+    assert profile.cartridge_ram_end == 0x3FFF
+
+
+def test_omv_othello_maps_2k_ram_at_8000(monkeypatch) -> None:
+    monkeypatch.setattr(zlib, "crc32", lambda data: 0xAF4F14BC)
+    profile = cartridge_profile(b"synthetic Othello ROM")
+
+    assert profile.internal_ram_size == 0x0400
+    assert profile.cartridge_ram_size == 0x0800
+    assert profile.cartridge_ram_start == 0x8000
+    assert profile.cartridge_ram_end == 0xBFFF
 
 
 def test_english_logo_bomberman_sha256_selects_type_b_ram(monkeypatch) -> None:
