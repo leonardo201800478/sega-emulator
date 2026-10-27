@@ -130,7 +130,7 @@ def test_native_first_provider_uses_sdl_when_no_xinput_device_exists() -> None:
 
 def test_native_first_provider_surfaces_xinput_disconnect_before_fallback() -> None:
     library = FakeXInputLibrary({0: (0x1000, 0, 0)})
-    native = XInputControllerInput(library=library)
+    native = XInputControllerInput(library=library, clock=FakeClock())
     fallback = FakeFallback()
     backend = NativeFirstControllerInput(native=native, fallback=fallback)
     assert backend.poll()[1] == {"button1"}
