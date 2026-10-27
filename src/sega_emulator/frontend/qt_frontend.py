@@ -132,7 +132,7 @@ def run(initial_path: Path | None = None) -> None:
     """Abre a interface de teste com teclado, telemetria e logs de sessão."""
     try:
         from PySide6.QtCore import QEvent, QObject, QSettings, Qt, QTimer
-        from PySide6.QtGui import QImage, QKeySequence
+        from PySide6.QtGui import QImage, QKeySequence, QSurfaceFormat
         from PySide6.QtWidgets import (
             QApplication,
             QCheckBox,
@@ -169,6 +169,14 @@ def run(initial_path: Path | None = None) -> None:
     settings = QSettings()
     preferences = FrontendPreferences.from_store(settings)
     video_driver = str(settings.value("video_driver", "auto"))
+    video_sync_mode = str(settings.value("video_sync_mode", "vsync"))
+    if video_sync_mode not in {"vsync", "vrr", "gsync", "off"}:
+        video_sync_mode = "vsync"
+        settings.setValue("video_sync_mode", video_sync_mode)
+    # Qt reads this before the first QQuickWindow. VRR/G-SYNC remain system/driver managed.
+    surface_format = QSurfaceFormat()
+    surface_format.setSwapInterval(0 if video_sync_mode == "off" else 1)
+    QSurfaceFormat.setDefaultFormat(surface_format)
     if video_driver not in {"auto", "vulkan", "d3d11", "d3d12", "raster"}:
         video_driver = "auto"
         settings.setValue("video_driver", video_driver)
@@ -220,6 +228,8 @@ def run(initial_path: Path | None = None) -> None:
         on_start_vgm_recording=lambda: start_vgm_recording(),
         on_stop_vgm_recording=lambda: stop_vgm_recording(),
         video_driver=video_driver,
+        video_sync_mode=video_sync_mode,
+        on_video_sync_mode=lambda mode: configure_video_sync_mode(mode),
     )
     window.resize(preferences.window_width, preferences.window_height)
     window._video_scale = preferences.video_scale
@@ -560,6 +570,34 @@ def run(initial_path: Path | None = None) -> None:
         view.setFocus()
         frame_pacer.reset()
         timer.start()
+
+    def configure_video_sync_mode(mode: str) -> None:
+        """Persist the presentation policy; Qt cannot toggle system VRR/G-SYNC."""
+        if mode not in {"vsync", "vrr", "gsync", "off"}:
+            raise ValueError("modo de sincronização de vídeo inválido")
+        settings.setValue("video_sync_mode", mode)
+        logger.info(
+            "Política de sincronização de vídeo alterada",
+            extra={
+                "event": "video_sync_mode_changed",
+                "video_sync_mode": mode,
+                "restart_required": True,
+                "system_vrr_or_gsync_not_toggled": mode in {"vrr", "gsync"},
+            },
+        )
+        descriptions = {
+            "vsync": "VSync selecionado",
+            "vrr": "VRR selecionado; confirme que está ativado no Windows/monitor",
+            "gsync": "G-SYNC selecionado; confirme a configuração no Painel NVIDIA",
+            "off": "Sincronização desativada; pode ocorrer tearing",
+        }
+        QMessageBox.information(
+            window,
+            "Sincronização de vídeo",
+            f"{descriptions[mode]}. Reinicie o emulador para aplicar a política. "
+            "VRR/G-SYNC dependem do monitor, Windows e driver e não podem ser "
+            "ativados diretamente pelo Qt.",
+        )
 
     def configure_drivers() -> None:
         nonlocal controller_input, audio_output, audio_resampler, preferences
