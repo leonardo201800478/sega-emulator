@@ -612,5 +612,4 @@ mod tests {
             super::PsgError::ZeroSampleRate
         );
     }
-
 }
