@@ -15,9 +15,11 @@ pub mod bus;
 pub mod cpu;
 pub mod machine;
 pub mod memory;
+pub mod psg;
 
 pub use bus::CpuBus;
 pub use cpu::{CpuError, Z80, Z80Registers};
 
 pub use machine::{MachineError, Sg1000Machine};
 pub use memory::{MemoryConfig, MemoryError, Sg1000Memory};
+pub use psg::{PsgError, Sn76489};
