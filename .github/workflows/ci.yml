@@ -44,7 +44,7 @@ jobs:
             exit $?
           fi
 
-          mapfile -d '' changed_python_files < <(git diff --name-only -z "$base_sha" "$head_sha" -- '*.py' ':!legacy/**')
+          mapfile -d '' changed_python_files < <(git diff --diff-filter=ACMRT --name-only -z "$base_sha" "$head_sha" -- '*.py' ':!legacy/**')
           if (("${#changed_python_files[@]}" == 0)); then
             echo "No changed Python files to format-check."
             exit 0
@@ -70,7 +70,7 @@ jobs:
             exit $?
           fi
 
-          mapfile -d '' changed_python_files < <(git diff --name-only -z "$base_sha" "$head_sha" -- '*.py' ':!legacy/**')
+          mapfile -d '' changed_python_files < <(git diff --diff-filter=ACMRT --name-only -z "$base_sha" "$head_sha" -- '*.py' ':!legacy/**')
           if (("${#changed_python_files[@]}" == 0)); then
             echo "No changed Python files to lint."
             exit 0
