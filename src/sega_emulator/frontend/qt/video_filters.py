@@ -161,12 +161,9 @@ def _apply_crt_effects(
         radial = 1.0 + strength * (xx * xx + yy * yy)
         source_x = np.rint(((xx * radial + 1.0) * 0.5) * (width - 1)).astype(np.int32)
         source_y = np.rint(((yy * radial + 1.0) * 0.5) * (height - 1)).astype(np.int32)
-        valid = (
-            (source_x >= 0)
-            & (source_x < width)
-            & (source_y >= 0)
-            & (source_y < height)
-        )
+        valid_x = (source_x >= 0) & (source_x < width)
+        valid_y = (source_y >= 0) & (source_y < height)
+        valid = valid_x & valid_y
         source_x = np.clip(source_x, 0, width - 1)
         source_y = np.clip(source_y, 0, height - 1)
         curved = np.zeros_like(out)
