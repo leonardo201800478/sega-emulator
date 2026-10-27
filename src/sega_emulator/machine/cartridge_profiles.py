@@ -28,6 +28,25 @@ SG1000_II_RAM_EXT_TYPE_B_SHA256 = frozenset(
     }
 )
 
+# Conversões MSX1 distribuídas por DahJee/Jumbo. O catálogo MAME declara
+# RAM total de 9.216 bytes (8 KiB de expansão + 1 KiB interno); o adaptador
+# documentado mapeia os 8 KiB em C000h–FFFFh.
+SG1000_DAHJEE_TYPE_A_CRC32 = frozenset(
+    {
+        0x223397A1,  # King's Valley (Taiwan)
+        0x281D2888,  # Knightmare (Taiwan)
+        0x2E7166D5,  # The Legend of Kage (Taiwan)
+        0xDF7CBFA5,  # Pippols (Taiwan)
+        0xE0816BB7,  # Star Soldier (Taiwan)
+        0x5CBD1163,  # Tank Battalion (Taiwan)
+        0xC550B4F0,  # TwinBee (Taiwan)
+    }
+)
+
+# Othello Multivision: perfil de catálogo inicial; slot precisa de validação
+# diferencial com MAME e ROM real antes de declarar compatibilidade.
+SG1000_OTHELLO_CRC32 = frozenset({0xAF4F14BC, 0x1D1A0CA3})
+
 # The Castle (Japan): RAM de cartucho, mapeada em 8000h–BFFFh.
 SG1000_THE_CASTLE_JAPAN_CRC32 = 0x092F29D6
 SG1000_II_RAM_EXT_TYPE_B_SIZE = 0x2000
@@ -57,6 +76,16 @@ def cartridge_profile(cartridge_rom: bytes) -> CartridgeProfile:
         or sha256 in SG1000_II_RAM_EXT_TYPE_B_SHA256
     ):
         return CartridgeProfile(internal_ram_size=SG1000_II_RAM_EXT_TYPE_B_SIZE)
+
+    if crc32 in SG1000_DAHJEE_TYPE_A_CRC32:
+        return CartridgeProfile(internal_ram_size=SG1000_II_RAM_EXT_TYPE_B_SIZE)
+
+    if crc32 in SG1000_OTHELLO_CRC32:
+        return CartridgeProfile(
+            cartridge_ram_size=0x0800,
+            cartridge_ram_start=0x8000,
+            cartridge_ram_end=0xBFFF,
+        )
 
     if crc32 == SG1000_THE_CASTLE_JAPAN_CRC32:
         return CartridgeProfile(
