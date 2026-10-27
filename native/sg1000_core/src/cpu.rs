@@ -103,6 +103,12 @@ pub struct Z80 {
     pub int_pending: Option<u8>,
     /// Opcode supplied by an IM 0 interrupt acknowledge; it does not consume PC.
     injected_opcode: Option<u8>,
+    /// Last flags value written by an instruction (Z80 Q latch).
+    pub q: u8,
+    q_previous: u8,
+    /// P/V latch used by the Z80 LD A,I/R interrupt edge case.
+    pub p: bool,
+    step_depth: bool,
     pub halted: bool,
     pub total_tstates: u64,
 }
@@ -123,6 +129,10 @@ impl Z80 {
         self.nmi_pending = false;
         self.int_pending = None;
         self.injected_opcode = None;
+        self.q = 0;
+        self.q_previous = 0;
+        self.p = false;
+        self.step_depth = false;
         self.halted = false;
         self.total_tstates = 0;
     }
@@ -203,12 +213,30 @@ impl Z80 {
     /// Prefixes, interrupts, and all unimplemented opcodes return an explicit
     /// error until their native implementation is migrated.
     pub fn step<B: CpuBus>(&mut self, bus: &mut B) -> Result<u32, CpuError> {
+        if self.step_depth {
+            return self.step_inner(bus);
+        }
+        self.q_previous = self.q;
+        self.q = 0;
+        self.step_depth = true;
+        let result = self.step_inner(bus);
+        self.step_depth = false;
+        result
+    }
+
+    fn step_inner<B: CpuBus>(&mut self, bus: &mut B) -> Result<u32, CpuError> {
         if self.nmi_pending {
+            self.p = false;
             return self.service_nmi(bus);
         }
         if self.int_pending.is_some() && self.iff1 && self.ei_delay == 0 {
+            if self.p {
+                self.set_flags(self.registers.f & !FLAG_PV);
+            }
+            self.p = false;
             return self.service_int(bus);
         }
+        self.p = false;
         if self.halted {
             self.r = (self.r & 0x80) | (self.r.wrapping_add(1) & 0x7F);
             self.total_tstates += 4;
@@ -230,6 +258,7 @@ impl Z80 {
             0x08 => {
                 std::mem::swap(&mut self.registers.a, &mut self.alternate.a);
                 std::mem::swap(&mut self.registers.f, &mut self.alternate.f);
+                self.q = self.registers.f;
                 4
             }
             0xD9 => {
@@ -292,9 +321,9 @@ impl Z80 {
                     _ => ((old_a >> 1) | (u8::from(old_carry) << 7), old_a & 0x01 != 0),
                 };
                 self.registers.a = result;
-                self.registers.f = (self.registers.f & (FLAG_S | FLAG_Z | FLAG_PV))
+                self.set_flags((self.registers.f & (FLAG_S | FLAG_Z | FLAG_PV))
                     | (result & FLAG_XY)
-                    | if carry { FLAG_C } else { 0 };
+                    | if carry { FLAG_C } else { 0 });
                 4
             }
             0x27 => {
@@ -329,28 +358,34 @@ impl Z80 {
                     flags |= FLAG_C;
                 }
                 self.registers.a = result;
-                self.registers.f = flags;
+                self.set_flags(flags);
                 4
             }
             0x2F => {
                 self.registers.a = !self.registers.a;
-                self.registers.f = (self.registers.f & (FLAG_S | FLAG_Z | FLAG_PV | FLAG_C))
+                self.set_flags((self.registers.f & (FLAG_S | FLAG_Z | FLAG_PV | FLAG_C))
                     | (self.registers.a & FLAG_XY)
                     | FLAG_H
-                    | FLAG_N;
+                    | FLAG_N);
                 4
             }
             0x37 => {
-                self.registers.f = (self.registers.f & (FLAG_S | FLAG_Z | FLAG_PV))
-                    | (self.registers.a & FLAG_XY)
-                    | FLAG_C;
+                let undocumented =
+                    (self.registers.a | (self.q_previous ^ self.registers.f)) & FLAG_XY;
+                self.set_flags(
+                    (self.registers.f & (FLAG_S | FLAG_Z | FLAG_PV)) | undocumented | FLAG_C,
+                );
                 4
             }
             0x3F => {
                 let old_carry = self.registers.f & FLAG_C != 0;
-                self.registers.f = (self.registers.f & (FLAG_S | FLAG_Z | FLAG_PV))
-                    | (self.registers.a & FLAG_XY)
-                    | if old_carry { FLAG_H } else { FLAG_C };
+                let undocumented =
+                    (self.registers.a | (self.q_previous ^ self.registers.f)) & FLAG_XY;
+                self.set_flags(
+                    (self.registers.f & (FLAG_S | FLAG_Z | FLAG_PV))
+                        | undocumented
+                        | if old_carry { FLAG_H } else { FLAG_C },
+                );
                 4
             }
             0xE9 => {
@@ -449,7 +484,7 @@ impl Z80 {
                     flags |= FLAG_C;
                 }
                 self.registers.set_hl(result16);
-                self.registers.f = flags;
+                self.set_flags(flags);
                 11
             }
             0x06 | 0x0E | 0x16 | 0x1E | 0x26 | 0x2E | 0x36 | 0x3E => {
@@ -510,7 +545,11 @@ impl Z80 {
                     0 => self.registers.set_bc(value),
                     1 => self.registers.set_de(value),
                     2 => self.registers.set_hl(value),
-                    _ => [self.registers.a, self.registers.f] = value.to_be_bytes(),
+                    _ => {
+                        let [accumulator, flags] = value.to_be_bytes();
+                        self.registers.a = accumulator;
+                        self.set_flags(flags);
+                    }
                 }
                 10
             }
@@ -578,12 +617,12 @@ impl Z80 {
                     flags |= 0x02; // N
                 }
                 self.write_register(bus, register, value);
-                self.registers.f = flags;
+                self.set_flags(flags);
                 if register == 6 { 11 } else { 4 }
             }
             0xAF => {
                 self.registers.a = 0;
-                self.registers.f = FLAG_Z | FLAG_PV;
+                self.set_flags(FLAG_Z | FLAG_PV);
                 4
             }
             0x80..=0xBF => {
@@ -685,7 +724,7 @@ impl Z80 {
                     flags |= FLAG_C;
                 }
                 self.set_index_value(prefix, result16);
-                self.registers.f = flags;
+                self.set_flags(flags);
                 self.wz = index.wrapping_add(1);
                 15
             }
@@ -834,7 +873,7 @@ impl Z80 {
                 if carry {
                     flags |= FLAG_C;
                 }
-                self.registers.f = flags;
+                self.set_flags(flags);
                 23
             }
             1 => {
@@ -847,7 +886,7 @@ impl Z80 {
                 if bit == 7 && !bit_clear {
                     flags |= FLAG_S;
                 }
-                self.registers.f = flags;
+                self.set_flags(flags);
                 20
             }
             2 | 3 => {
@@ -944,8 +983,14 @@ impl Z80 {
         if decrement {
             flags |= FLAG_N;
         }
-        self.registers.f = flags;
+        self.set_flags(flags);
         value
+    }
+
+    #[inline]
+    fn set_flags(&mut self, flags: u8) {
+        self.registers.f = flags;
+        self.q = flags;
     }
 
     /// Execute ED-prefixed Z80 instructions. Unassigned ED encodings are
@@ -970,7 +1015,8 @@ impl Z80 {
                 if self.iff2 {
                     flags |= FLAG_PV;
                 }
-                self.registers.f = flags;
+                self.set_flags(flags);
+                self.p = true;
                 9
             }
             op if op & 0xCF == 0x43 => {
@@ -1011,7 +1057,7 @@ impl Z80 {
                 if value.count_ones().is_multiple_of(2) {
                     flags |= FLAG_PV;
                 }
-                self.registers.f = flags;
+                self.set_flags(flags);
                 self.wz = port.wrapping_add(1);
                 12
             }
@@ -1031,7 +1077,7 @@ impl Z80 {
                 let value = self.registers.a;
                 let result = sub8(0, value);
                 self.registers.a = result.value;
-                self.registers.f = result.flags;
+                self.set_flags(result.flags);
                 8
             }
             op if op & 0xC7 == 0x45 => {
@@ -1116,7 +1162,7 @@ impl Z80 {
             }
         }
         self.registers.set_hl(result);
-        self.registers.f = flags;
+        self.set_flags(flags);
     }
 
     fn set_szp_xy_flags_preserving_carry(&mut self, value: u8) {
@@ -1127,7 +1173,7 @@ impl Z80 {
         if value.count_ones().is_multiple_of(2) {
             flags |= FLAG_PV;
         }
-        self.registers.f = flags;
+        self.set_flags(flags);
     }
 
     fn execute_block_transfer<B: CpuBus>(&mut self, bus: &mut B, opcode: u8) -> u32 {
@@ -1152,7 +1198,7 @@ impl Z80 {
         }
         flags |= sum & 0x08;
         flags |= (sum & 0x02) << 4;
-        self.registers.f = flags;
+        self.set_flags(flags);
         if (opcode == 0xB0 || opcode == 0xB8) && count != 0 {
             self.registers.pc = self.registers.pc.wrapping_sub(2);
             self.wz = self.registers.pc.wrapping_add(1);
@@ -1189,7 +1235,7 @@ impl Z80 {
         }
         flags |= adjusted & 0x08;
         flags |= (adjusted & 0x02) << 4;
-        self.registers.f = flags;
+        self.set_flags(flags);
         self.wz = self.wz.wrapping_add_signed(direction);
         if (opcode == 0xB1 || opcode == 0xB9) && count != 0 && result != 0 {
             self.registers.pc = self.registers.pc.wrapping_sub(2);
@@ -1243,7 +1289,7 @@ impl Z80 {
         if parity_arg.count_ones().is_multiple_of(2) {
             flags |= FLAG_PV;
         }
-        self.registers.f = flags;
+        self.set_flags(flags);
         if repeat && self.registers.b != 0 {
             self.registers.pc = self.registers.pc.wrapping_sub(2);
             self.wz = self.registers.pc.wrapping_add(1);
@@ -1286,7 +1332,7 @@ impl Z80 {
                 if carry {
                     flags |= FLAG_C;
                 }
-                self.registers.f = flags;
+                self.set_flags(flags);
                 self.write_register(bus, target, result);
             }
             1 => {
@@ -1305,7 +1351,7 @@ impl Z80 {
                     value & FLAG_XY
                 };
                 flags |= undocumented;
-                self.registers.f = flags;
+                self.set_flags(flags);
             }
             2 => self.write_register(bus, target, value & !(1_u8 << operation)),
             _ => self.write_register(bus, target, value | (1_u8 << operation)),
@@ -1355,7 +1401,7 @@ impl Z80 {
         if operation != 7 {
             self.registers.a = result.value;
         }
-        self.registers.f = result.flags;
+        self.set_flags(result.flags);
     }
 
     #[inline]
