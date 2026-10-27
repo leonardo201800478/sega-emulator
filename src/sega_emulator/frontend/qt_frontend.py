@@ -662,6 +662,14 @@ def run(initial_path: Path | None = None) -> None:
                 audio_volume=preferences.audio_volume,
                 video_filter=preferences.video_filter,
                 integer_scale=preferences.integer_scale,
+                sprite_limit_enabled=preferences.sprite_limit_enabled,
+                vsync_mode=preferences.vsync_mode,
+                vrr_mode=preferences.vrr_mode,
+                av_sync_mode=preferences.av_sync_mode,
+                crt_scanline_intensity=preferences.crt_scanline_intensity,
+                crt_scanline_thickness=preferences.crt_scanline_thickness,
+                crt_phosphor_mask=preferences.crt_phosphor_mask,
+                crt_curvature=preferences.crt_curvature,
             )
             audio_output = _initialize_wasapi_backend(updated_audio)
             audio_resampler = PcmResampler(updated_audio.audio_sample_rate)
