@@ -136,6 +136,27 @@ mod tests {
     }
 
     #[test]
+    fn slot_zero_preserves_bank_offset_after_fixed_vector_area() {
+        let mut bytes = vec![0; 4 * BANK_SIZE];
+        bytes[0x03FF] = 0x3F;
+        bytes[0x0400] = 0x40;
+        bytes[0x3FFF] = 0x4F;
+        bytes[3 * BANK_SIZE + 0x0400] = 0xD0;
+        bytes[3 * BANK_SIZE + 0x3FFF] = 0xDF;
+        let rom = CartridgeImage::new(bytes).unwrap();
+        let mut memory = SmsMemory::new(rom).unwrap();
+
+        assert_eq!(memory.read(0x03FF), 0x3F);
+        assert_eq!(memory.read(0x0400), 0x40);
+        assert_eq!(memory.read(0x3FFF), 0x4F);
+
+        memory.write(0xFFFD, 3);
+        assert_eq!(memory.read(0x03FF), 0x3F);
+        assert_eq!(memory.read(0x0400), 0xD0);
+        assert_eq!(memory.read(0x3FFF), 0xDF);
+    }
+
+    #[test]
     fn mirrors_work_ram_across_the_upper_address_window() {
         let mut memory = SmsMemory::new(patterned_rom(1)).unwrap();
         memory.write(0xC000, 0xA5);
