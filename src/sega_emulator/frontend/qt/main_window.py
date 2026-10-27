@@ -45,7 +45,7 @@ class EmulatorMainWindow(QMainWindow):
         on_open_logs: Callable[[], None],
         on_show_machine_state: Callable[[], None],
         on_video_scale: Callable[[int], None],
-        on_select_emulation_backend: Callable[[], None] | None = None,
+        on_configure_drivers: Callable[[], None] | None = None,
         on_configure_audio_video: Callable[[], None] | None = None,
         on_start_vgm_recording: Callable[[], None] | None = None,
         on_stop_vgm_recording: Callable[[], None] | None = None,
@@ -136,15 +136,6 @@ class EmulatorMainWindow(QMainWindow):
         emulation_menu.addAction(self.pause_action)
         emulation_menu.addAction(self.reset_action)
         emulation_menu.addSeparator()
-        self.select_emulation_backend_action = QAction("Backend de emulação…", self)
-        if on_select_emulation_backend is not None:
-            self.select_emulation_backend_action.triggered.connect(
-                on_select_emulation_backend
-            )
-        else:
-            self.select_emulation_backend_action.setEnabled(False)
-        emulation_menu.addAction(self.select_emulation_backend_action)
-
         toolbar = QToolBar("Principal", self)
         self._main_toolbar = toolbar
         toolbar.setMovable(False)
@@ -155,6 +146,14 @@ class EmulatorMainWindow(QMainWindow):
         toolbar.addSeparator()
         toolbar.addAction(self.fullscreen_action)
         self.addToolBar(toolbar)
+
+        drivers_menu = self.menuBar().addMenu("&Drivers")
+        self.configure_drivers_action = QAction("APIs de entrada, áudio e vídeo…", self)
+        if on_configure_drivers is not None:
+            self.configure_drivers_action.triggered.connect(on_configure_drivers)
+        else:
+            self.configure_drivers_action.setEnabled(False)
+        drivers_menu.addAction(self.configure_drivers_action)
 
         video_menu = self.menuBar().addMenu("&Vídeo")
         for scale in (2, 3, 4):

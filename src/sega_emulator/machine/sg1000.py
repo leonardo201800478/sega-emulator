@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from sega_emulator.audio.sn76489 import SN76489
-from sega_emulator.audio.synchronization import AudioSynchronizer
-from sega_emulator.bus.memory import SG1000Ram
-from sega_emulator.bus.memory_bus import SG1000MemoryBus
-from sega_emulator.cpu.z80 import Z80Cpu
+from typing import TYPE_CHECKING
+
 from sega_emulator.machine.cartridge_profiles import CartridgeProfile, cartridge_profile
-from sega_emulator.video.tms9918 import TMS9918A
+
+if TYPE_CHECKING:
+    from sega_emulator.bus.memory_bus import SG1000MemoryBus
 
 
 class _CartridgeMirrorBus:
@@ -91,6 +90,15 @@ class SG1000Machine:
         self.total_tstates = 0
         self._psg_write_events: list[tuple[int, int]] = []
         if cpu_core == "python":
+            # Keep the legacy Python machine isolated to differential/reference
+            # runs; the production Rust path does not import or instantiate it.
+            from sega_emulator.audio.sn76489 import SN76489
+            from sega_emulator.audio.synchronization import AudioSynchronizer
+            from sega_emulator.bus.memory import SG1000Ram
+            from sega_emulator.bus.memory_bus import SG1000MemoryBus
+            from sega_emulator.cpu.z80 import Z80Cpu
+            from sega_emulator.video.tms9918 import TMS9918A
+
             ram = SG1000Ram(bytes(profile.internal_ram_size))
             base_bus = SG1000MemoryBus(ram, cartridge_rom)
             self.vdp = TMS9918A()
@@ -217,6 +225,9 @@ class SG1000Machine:
             self.total_instructions = self.native_machine.total_instructions
             self.total_tstates = self.native_machine.total_tstates
             return steps
+        # The reference fast loop is loaded only for differential/Python runs.
+        from sega_emulator.cpu.z80 import Z80Cpu
+
         start_frame = self.vdp.frame_number
         steps = 0
         cpu = self.cpu
