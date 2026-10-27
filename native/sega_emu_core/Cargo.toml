@@ -9,5 +9,5 @@ name = "sega_emu_core"
 path = "src/lib.rs"
 
 [dependencies]
-sega-z80-alu = { path = "z80_alu" }
-sega-z80-bus = { path = "z80_bus" }
+sega-z80-alu = { path = "../z80_alu" }
+sega-z80-bus = { path = "../z80_bus" }
