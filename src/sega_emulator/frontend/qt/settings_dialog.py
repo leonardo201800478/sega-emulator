@@ -101,7 +101,7 @@ class SettingsDialog(QDialog):
             "registradores nem o clock lógico. Clock, divisor, variante do chip e "
             "filtro ainda são fixos no núcleo. O FIR é antialiasing digital, não "
             "um modelo do circuito analógico real. Esses controles só serão "
-            "liberados quando houver implementação e testes diferenciais Python/Rust.",
+            "liberados quando houver implementação e testes de regressão independentes no núcleo Rust.",
             psg_page,
         )
         psg_note.setWordWrap(True)

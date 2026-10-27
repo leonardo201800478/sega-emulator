@@ -1,4 +1,4 @@
-"""Integration checks that the selected Rust backend is the native SG-1000 machine."""
+"""Integration checks that the SG-1000 runtime is Rust-only."""
 
 from __future__ import annotations
 
@@ -16,10 +16,8 @@ def test_rust_backend_instantiates_native_machine_and_devices() -> None:
 
     assert type(machine.native_machine).__name__ == "NativeSG1000Machine"
     assert machine.cpu is not None
-    assert machine.memory_bus is machine.native_machine
     assert machine.vdp is not None
     assert machine.psg is not None
-    assert machine.audio_sync is machine.native_machine
 
 
 def test_rust_run_frame_executes_native_instruction_loop() -> None:

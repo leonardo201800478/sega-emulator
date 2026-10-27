@@ -58,16 +58,6 @@ class SG1000Machine:
         return self.native_machine.psg
 
     @property
-    def audio_sync(self):
-        """A máquina nativa possui a sincronização de áudio."""
-        return self.native_machine
-
-    @property
-    def memory_bus(self):
-        """A máquina nativa possui o barramento e o mapa de memória."""
-        return self.native_machine
-
-    @property
     def total_instructions(self) -> int:
         return int(self.native_machine.total_instructions)
 
