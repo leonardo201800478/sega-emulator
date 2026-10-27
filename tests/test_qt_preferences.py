@@ -40,7 +40,6 @@ def test_defaults_are_valid_and_stable() -> None:
     assert preferences.av_sync_mode == "low_latency"
     assert preferences.crt_scanline_intensity == 40
     assert preferences.crt_signal_mode == "rgb"
-    assert preferences.crt_signal_mode == "rgb"
 
 
 @pytest.mark.parametrize(
@@ -95,6 +94,7 @@ def test_load_recovers_from_corrupt_or_legacy_values() -> None:
     assert preferences.vrr_mode == "driver"
     assert preferences.av_sync_mode == "low_latency"
     assert preferences.crt_scanline_intensity == 40
+    assert preferences.crt_signal_mode == "rgb"
 
 
 def test_save_and_load_round_trip() -> None:
