@@ -70,7 +70,7 @@ class FakeFallback:
 def test_xinput_maps_buttons_and_left_stick_to_semantic_actions() -> None:
     # XInput A + D-pad right; left stick points up and right.
     library = FakeXInputLibrary({0: (0x1000 | 0x0008, 20000, 20000)})
-    backend = XInputControllerInput(library=library)
+    backend = XInputControllerInput(library=library, clock=FakeClock())
 
     assert backend.connected_names() == ["XInput controller 1"]
     assert backend.poll() == {1: {"button1", "right", "up"}, 2: set()}
@@ -97,7 +97,7 @@ def test_xinput_discovery_is_throttled_but_connected_slots_are_polled_each_frame
 
 def test_xinput_disconnect_releases_input_and_reports_one_edge() -> None:
     library = FakeXInputLibrary({0: (0x1000, 0, 0)})
-    backend = XInputControllerInput(library=library)
+    backend = XInputControllerInput(library=library, clock=FakeClock())
     assert backend.poll()[1] == {"button1"}
 
     library.states.clear()
@@ -108,7 +108,7 @@ def test_xinput_disconnect_releases_input_and_reports_one_edge() -> None:
 
 def test_native_first_provider_uses_xinput_before_sdl_and_does_not_double_poll() -> None:
     library = FakeXInputLibrary({0: (0x1000, 0, 0)})
-    native = XInputControllerInput(library=library)
+    native = XInputControllerInput(library=library, clock=FakeClock())
     fallback = FakeFallback()
     backend = NativeFirstControllerInput(native=native, fallback=fallback)
 
@@ -118,7 +118,7 @@ def test_native_first_provider_uses_xinput_before_sdl_and_does_not_double_poll()
 
 
 def test_native_first_provider_uses_sdl_when_no_xinput_device_exists() -> None:
-    native = XInputControllerInput(library=FakeXInputLibrary({}))
+    native = XInputControllerInput(library=FakeXInputLibrary({}), clock=FakeClock())
     fallback = FakeFallback()
     backend = NativeFirstControllerInput(native=native, fallback=fallback)
 
