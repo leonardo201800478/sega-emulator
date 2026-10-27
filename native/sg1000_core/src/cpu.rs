@@ -95,6 +95,18 @@ impl Z80 {
         let opcode = self.fetch8(bus);
         let cycles = match opcode {
             0x00 => 4, // NOP
+            0xD3 => {
+                let port_low = self.fetch8(bus);
+                let port = (u16::from(self.registers.a) << 8) | u16::from(port_low);
+                bus.write_port(port, self.registers.a);
+                11
+            }
+            0xDB => {
+                let port_low = self.fetch8(bus);
+                let port = (u16::from(self.registers.a) << 8) | u16::from(port_low);
+                self.registers.a = bus.read_port(port);
+                11
+            }
             0x07 | 0x0F | 0x17 | 0x1F => {
                 let old_a = self.registers.a;
                 let old_carry = self.registers.f & FLAG_C != 0;
