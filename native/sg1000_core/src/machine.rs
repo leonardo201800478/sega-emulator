@@ -195,6 +195,18 @@ impl Sg1000Machine {
         }
     }
 
+    /// Configure the TMS9918A four-sprites-per-line hardware limit.
+    ///
+    /// Disabling this is a diagnostic/nonstandard mode; the default remains
+    /// enabled to preserve the SG-1000 VDP behavior.
+    pub fn set_sprite_limit_enabled(&mut self, enabled: bool) {
+        self.vdp.set_sprite_limit_enabled(enabled);
+    }
+
+    pub fn sprite_limit_enabled(&self) -> bool {
+        self.vdp.sprite_limit_enabled()
+    }
+
     pub fn step(&mut self) -> Result<u32, MachineError> {
         self.sync_vdp_interrupt_line();
         let tstate = self.cpu.total_tstates;
