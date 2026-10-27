@@ -451,7 +451,9 @@ def run(initial_path: Path | None = None) -> None:
                         "frames_dropped": None,
                         "fps": round(fps, 3),
                         "speed_percent": round(speed_percent, 3),
-                        "speed_metric": "logical_tstates_per_second_over_nominal_z80_clock",
+                        "speed_metric": (
+                            "logical_tstates_per_second_over_nominal_z80_clock"
+                        ),
                         "frame_time_ms": frame_time_stats,
                         "frame_time_p50_ms": frame_time_stats["p50_ms"],
                         "frame_time_p95_ms": frame_time_stats["p95_ms"],
