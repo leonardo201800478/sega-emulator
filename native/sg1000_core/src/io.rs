@@ -1,9 +1,11 @@
 //! Python-independent SG-1000 input and port-I/O boundary.
 //!
-//! The controller aliases and PSG write range mirror the current Python
-//! machine contract. VDP port decoding remains deliberately unimplemented
-//! here until the native TMS9918A device is integrated; unknown reads return
-//! the existing open-bus placeholder (0xFF), not a hardware-accuracy claim.
+//! Logical controller snapshots are kept separately from the physical port
+//! encoding. SG-1000 port 0xDC carries player 1's six controls and player 2's
+//! Up/Down; port 0xDD carries player 2's Left/Right/Button 1/Button 2.
+//! Ports 0x00 and 0x01 remain logical aliases for compatibility with the
+//! existing machine contract. VDP port decoding remains deliberately
+//! unimplemented here; unrelated reads return the 0xFF placeholder.
 
 use std::fmt;
 
@@ -32,7 +34,7 @@ impl fmt::Display for IoError {
 
 impl std::error::Error for IoError {}
 
-/// Deterministic controller state and PSG port-write capture.
+/// Deterministic logical controller state and PSG port-write capture.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sg1000Io {
     joysticks: [u8; 2],
@@ -49,12 +51,20 @@ impl Default for Sg1000Io {
 }
 
 impl Sg1000Io {
-    /// Read controller aliases supported by the existing Python machine.
-    /// Unimplemented ports currently return the same placeholder value, 0xFF.
+    /// Read logical compatibility aliases or the modeled physical SG-1000
+    /// controller ports. Controller inputs are active-low.
     pub fn read_port(&self, address: u16) -> u8 {
+        let player_1 = self.joysticks[0];
+        let player_2 = self.joysticks[1];
         match address as u8 {
-            0x00 | 0xDC => self.joysticks[0],
-            0x01 | 0xDD => self.joysticks[1],
+            // Logical aliases retained for the existing host/API contract.
+            0x00 => player_1,
+            0x01 => player_2,
+            // Physical ports: DC has P1 bits 0..5 and P2 Up/Down at bits 6..7.
+            0xDC => (player_1 & 0x3F) | ((player_2 & 0x03) << 6),
+            // DD has P2 Left/Right/Button 1/Button 2 at bits 0..3.
+            // Remaining bits are held high in this model.
+            0xDD => 0xF0 | ((player_2 >> 2) & 0x0F),
             _ => 0xFF,
         }
     }
@@ -67,7 +77,9 @@ impl Sg1000Io {
         }
     }
 
-    /// Set the active-low byte presented by controller 1 or 2.
+    /// Set the active-low logical button byte for controller 1 or 2.
+    /// Physical port reads compose the controller bits according to the SG-1000
+    /// wiring; this method does not treat the logical byte as a physical port.
     pub fn set_joystick(&mut self, player: u8, value: u8) -> Result<(), IoError> {
         match player {
             1 => self.joysticks[0] = value,
@@ -88,25 +100,43 @@ mod tests {
     use super::{IoError, PsgWriteEvent, Sg1000Io};
 
     #[test]
-    fn controllers_default_to_unpressed_and_aliases_match() {
+    fn controllers_default_to_unpressed_and_ports_are_released() {
         let io = Sg1000Io::default();
         assert_eq!(io.read_port(0x00), 0xFF);
-        assert_eq!(io.read_port(0xDC), 0xFF);
         assert_eq!(io.read_port(0x01), 0xFF);
+        assert_eq!(io.read_port(0xDC), 0xFF);
         assert_eq!(io.read_port(0xDD), 0xFF);
     }
 
     #[test]
-    fn controller_updates_are_visible_through_both_aliases() {
+    fn logical_aliases_and_physical_ports_encode_controller_state() {
         let mut io = Sg1000Io::default();
         assert_eq!(io.set_joystick(1, 0xFE), Ok(()));
         assert_eq!(io.set_joystick(2, 0xFD), Ok(()));
         assert_eq!(io.read_port(0x00), 0xFE);
-        assert_eq!(io.read_port(0xDC), 0xFE);
         assert_eq!(io.read_port(0x01), 0xFD);
-        assert_eq!(io.read_port(0xDD), 0xFD);
+        // P1 Up is bit 0; P2 Down is bit 7 on physical port DC.
+        assert_eq!(io.read_port(0xDC), 0x7E);
+        // P2 Down is not represented in DD's low nibble.
+        assert_eq!(io.read_port(0xDD), 0xFF);
         assert_eq!(io.set_joystick(0, 0), Err(IoError::InvalidPlayer(0)));
         assert_eq!(io.set_joystick(3, 0), Err(IoError::InvalidPlayer(3)));
+    }
+
+    #[test]
+    fn player_two_directions_and_buttons_are_split_across_physical_ports() {
+        let mut io = Sg1000Io::default();
+        io.set_joystick(2, 0xFF & !(1 << 0)).unwrap(); // Up
+        assert_eq!(io.read_port(0xDC), 0xBF);
+        assert_eq!(io.read_port(0xDD), 0xFF);
+
+        io.set_joystick(2, 0xFF & !(1 << 2)).unwrap(); // Left
+        assert_eq!(io.read_port(0xDC), 0xFF);
+        assert_eq!(io.read_port(0xDD), 0xFE);
+
+        io.set_joystick(2, 0xFF & !(1 << 5)).unwrap(); // Button 2
+        assert_eq!(io.read_port(0xDC), 0xFF);
+        assert_eq!(io.read_port(0xDD), 0xF7);
     }
 
     #[test]
