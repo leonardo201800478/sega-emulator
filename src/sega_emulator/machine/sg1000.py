@@ -130,25 +130,13 @@ class SG1000Machine:
             self.cpu = self.native_machine.cpu
 
     def set_sprite_limit_enabled(self, enabled: bool) -> None:
-        """Configure the VDP sprite-per-line limit on the selected backend."""
+        """Configure o limite do VDP; o runtime de produção encaminha ao Rust."""
         if type(enabled) is not bool:
             raise TypeError("enabled deve ser bool.")
         if self.cpu_core == "python":
             self.vdp.set_sprite_limit_enabled(enabled)
             return
-        setter = getattr(self.native_machine, "set_sprite_limit_enabled", None)
-        if callable(setter):
-            setter(enabled)
-            return
-        vdp_setter = getattr(self.vdp, "set_sprite_limit_enabled", None)
-        if callable(vdp_setter):
-            vdp_setter(enabled)
-            return
-        raise RuntimeError(
-            "O runtime Rust atual ainda não expõe set_sprite_limit_enabled; "
-            "a opção está disponível no backend Python, mas não pode ser aplicada "
-            "com segurança ao backend Rust nesta versão."
-        )
+        self.native_machine.set_sprite_limit_enabled(enabled)
 
     def read_port(self, address: int) -> int:
         if self.cpu_core == "rust":

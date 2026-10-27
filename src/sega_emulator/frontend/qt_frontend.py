@@ -176,9 +176,7 @@ def run(initial_path: Path | None = None) -> None:
     # The production Qt frontend always runs the native Rust machine. Legacy
     # persisted "python" values are migrated unconditionally and are no longer
     # exposed as a selectable runtime.
-    selected_backend = "rust"
-    settings.setValue("cpu_core", selected_backend)
-    settings.setValue("rust_backend_default_migrated", True)
+    settings.setValue("cpu_core", "rust")
     audio_output = _initialize_wasapi_backend(preferences)
     audio_resampler = PcmResampler(preferences.audio_sample_rate)
     serialized_controller_config = settings.value("controller_config", "", type=str)
@@ -541,7 +539,7 @@ def run(initial_path: Path | None = None) -> None:
                 if not accepted:
                     return
                 candidate = load_rom(path, member_name=selected)
-            loaded_machine = SG1000Machine(candidate.data, cpu_core=selected_backend)
+            loaded_machine = SG1000Machine(candidate.data, cpu_core="rust")
             if not preferences.sprite_limit_enabled:
                 loaded_machine.set_sprite_limit_enabled(False)
         except Exception as exc:
@@ -872,7 +870,7 @@ def run(initial_path: Path | None = None) -> None:
             return
         if loaded is None:
             return
-        machine = SG1000Machine(loaded.data, cpu_core=selected_backend)
+        machine = SG1000Machine(loaded.data, cpu_core="rust")
         audio_resampler.reset()
         frame_count, paused = 0, False
         frame_pacer.reset()
@@ -1312,7 +1310,7 @@ def run(initial_path: Path | None = None) -> None:
         controller_config=controller_input.config.to_json(),
         audio_enabled=preferences.audio_enabled,
         diagnostics_enabled=preferences.diagnostics_enabled,
-        cpu_core=selected_backend,
+        cpu_core="rust",
         audio_sample_rate=preferences.audio_sample_rate,
         audio_buffer_size=preferences.audio_buffer_size,
         audio_volume=preferences.audio_volume,
