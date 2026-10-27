@@ -670,7 +670,6 @@ fn sprite_line_active(
     (active, fifth_index)
 }
 
-
 /// Inspect the sprite entries active on a raster line without modifying VDP state.
 ///
 /// The returned active entries preserve the hardware sprite index, X coordinate,
@@ -698,7 +697,6 @@ pub fn inspect_sprite_line(
         .collect();
     (entries, fifth_index)
 }
-
 
 fn render_sprite_line(
     vram: &[u8],
