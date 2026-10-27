@@ -78,8 +78,17 @@ impl SmsMemory {
 
     #[inline]
     fn read_bank(&self, bank: u8, offset: usize) -> u8 {
-        // An absent bank reads as 0xFF; never wrap an invalid bank to bank 0.
-        self.read_rom_offset(usize::from(bank) * BANK_SIZE + offset)
+        let bank_count = self.rom.len() / BANK_SIZE;
+        let bank = if self.rom.len() % BANK_SIZE == 0 && bank_count.is_power_of_two() {
+            // For power-of-two ROM sizes, unconnected high bank-address lines
+            // mirror the physical ROM. SMS Power documents this aliasing.
+            usize::from(bank) & (bank_count - 1)
+        } else {
+            // Non-power-of-two images need mapper-specific evidence; keep this
+            // slice deterministic rather than claiming hardware-accurate aliasing.
+            usize::from(bank)
+        };
+        self.read_rom_offset(bank * BANK_SIZE + offset)
     }
 
     #[inline]
@@ -183,9 +192,16 @@ mod tests {
     }
 
     #[test]
-    fn absent_rom_banks_read_as_ff_without_wrapping() {
+    fn power_of_two_rom_banks_mirror_when_bank_register_exceeds_size() {
         let mut memory = SmsMemory::new(patterned_rom(2)).unwrap();
         memory.write(0xFFFE, 0xFF);
+        assert_eq!(memory.read(0x4000), 1);
+    }
+
+    #[test]
+    fn non_power_of_two_rom_does_not_assume_bank_aliasing() {
+        let mut memory = SmsMemory::new(patterned_rom(3)).unwrap();
+        memory.write(0xFFFE, 3);
         assert_eq!(memory.read(0x4000), 0xFF);
     }
 
