@@ -121,7 +121,7 @@ impl Sg1000Machine {
             0x80 | 0x81 => self.vdp.write_port(address, value),
             _ => {
                 self.io.write_port_at(address, value, tstate);
-                if (address as u8) & 0xFF >= 0x40 && (address as u8) <= 0x7F {
+                if (0x40..=0x7F).contains(&(address as u8)) {
                     if tstate > self.psg_tstate {
                         self.psg.advance_clocks(tstate - self.psg_tstate);
                         self.psg_tstate = tstate;
