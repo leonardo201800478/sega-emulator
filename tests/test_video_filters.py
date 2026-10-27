@@ -6,7 +6,7 @@ import pytest
 
 np = pytest.importorskip("numpy")
 
-from sega_emulator.frontend.qt.video_filters import apply_video_filter_rgb
+from sega_emulator.frontend.qt.video_filters import apply_video_filter_rgb  # noqa: E402
 
 
 def test_nearest_and_bilinear_leave_source_pixels_unchanged() -> None:
