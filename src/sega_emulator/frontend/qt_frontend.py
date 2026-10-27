@@ -9,6 +9,9 @@ import time
 from pathlib import Path
 
 from sega_emulator.audio.vgm_recorder import VgmRecorder
+from sega_emulator.frontend.native_first_controller_input import (
+    NativeFirstControllerInput,
+)
 from sega_emulator.frontend.controller_input import (
     ACTIONS,
     DEFAULT_GAMEPAD_BINDINGS,
@@ -23,9 +26,6 @@ from sega_emulator.frontend.qt.audio_output import PcmResampler
 from sega_emulator.frontend.qt.frame_pacer import FramePacer
 from sega_emulator.frontend.qt.preferences import FrontendPreferences
 from sega_emulator.frontend.qt.wasapi_audio import WasapiAudioOutput
-from sega_emulator.frontend.native_first_controller_input import (
-    NativeFirstControllerInput,
-)
 from sega_emulator.machine.sg1000 import SG1000Machine
 from sega_emulator.rom_loader import LoadedRom, list_rom_members, load_rom
 
