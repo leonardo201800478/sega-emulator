@@ -74,11 +74,24 @@ impl ControllerFrame {
     pub const fn port_2(self) -> u8 {
         self.player_2.to_active_low_port()
     }
+
+    /// Latch both normalized controller bytes into the emulated machine.
+    ///
+    /// This is an explicit snapshot transfer: it performs no host polling and
+    /// does not invoke callbacks during CPU execution.
+    pub fn apply_to(
+        self,
+        machine: &mut crate::machine::Sg1000Machine,
+    ) -> Result<(), crate::io::IoError> {
+        machine.set_joystick(1, self.port_1())?;
+        machine.set_joystick(2, self.port_2())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{ControllerButtons, ControllerFrame};
+    use crate::{MemoryConfig, Sg1000Machine};
 
     #[test]
     fn no_buttons_pressed_is_all_bits_high() {
@@ -122,5 +135,21 @@ mod tests {
         };
         assert_eq!(frame.port_1(), 0xFE);
         assert_eq!(frame.port_2(), 0xEF);
+    }
+
+    #[test]
+    fn frame_latches_into_the_machine_controller_ports() {
+        let mut machine = Sg1000Machine::new(&[0x76], MemoryConfig::default()).unwrap();
+        let frame = ControllerFrame {
+            player_1: ControllerButtons { left: true, ..Default::default() },
+            player_2: ControllerButtons { button_2: true, ..Default::default() },
+        };
+
+        frame.apply_to(&mut machine).unwrap();
+
+        assert_eq!(machine.read_port(0x00), 0xFB);
+        assert_eq!(machine.read_port(0x01), 0xDF);
+        assert_eq!(machine.read_port(0xDC), 0xFB);
+        assert_eq!(machine.read_port(0xDD), 0xDF);
     }
 }
