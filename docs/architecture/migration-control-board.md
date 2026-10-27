@@ -21,7 +21,7 @@ A CI workflow only validates the commands it actually executes. A green Python w
 - [x] Migration plan recorded in `clean-architecture-migration.md`.
 - [ ] Enumerate every consumer of the current Python machine/device APIs.
 - [ ] Identify all Cargo manifests, lockfiles, Maturin configuration, scripts, and workflows that reference native paths.
-- [ ] Record baseline test status before changing runtime behavior.
+- [x] Record baseline test status before changing runtime behavior. The Rust SG-1000 workspace workflow passed on main SHA `632f2f69e7a9e6d9a81b19a4f994bb1ce42eb951` (Windows; fmt, Clippy, workspace tests): [run #131](https://github.com/leonardo201800478/sega-emulator/actions/runs/40442082201). This validates existing tests only, not full SG-1000 fidelity.
 
 ### Gate 1 — native crate layout
 - [ ] Relocate `z80_alu`, `z80_bus`, and PyO3 adapter with no source loss.
@@ -54,7 +54,9 @@ A CI workflow only validates the commands it actually executes. A green Python w
 - The shared crates and PyO3 adapter remain in their old directories.
 - The new `native/sega_emu_core/Cargo.toml` references nested shared-crate paths that do not exist yet; it must not be added to the workspace before the layout is made consistent.
 - The Rust SG-1000 and SMS crates remain partial. No fidelity or standalone-runtime acceptance is implied.
-- Test status for this baseline: **NOT RUN in this migration session**.
+- Baseline crate validation: **PASS** on main SHA `632f2f69e7a9e6d9a81b19a4f994bb1ce42eb951` via [Rust SG-1000 Workspace run #131](https://github.com/leonardo201800478/sega-emulator/actions/runs/40442082201): formatting, Clippy, and workspace tests succeeded. This run predates the migration branch's documentation-only commits and validates the same SG-1000 source blobs.
+- Scope limitation: `native/sg1000_core/src/machine.rs` explicitly states VDP, PSG, I/O and interrupt scheduling are not integrated. The crate is not yet a complete standalone emulator.
+- Do not move Python production cores to `legacy/` yet: the current application still depends on those modules, and the Rust crate does not replace all production contracts.
 
 ## Change log
 - 2026-10-27: Initial control board added. No source files moved and no tests claimed as passing.
