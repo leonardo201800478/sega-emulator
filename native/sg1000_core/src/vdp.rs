@@ -1035,6 +1035,7 @@ mod tests {
         let (active, fifth) =
             sprite_line_active(&vdp.vram, &vdp.registers, 0, vdp.sprite_limit_enabled());
         assert_eq!(active.len(), 5);
-        assert_eq!(fifth, None);
+        // Rendering additional sprites must not hide the hardware overflow index.
+        assert_eq!(fifth, Some(4));
     }
 }
