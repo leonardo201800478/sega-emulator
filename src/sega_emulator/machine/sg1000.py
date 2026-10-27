@@ -38,8 +38,8 @@ class SG1000Machine:
             cartridge_rom,
             profile.internal_ram_size,
             profile.cartridge_ram_size,
-            profile.cartridge_ram_start,
-            profile.cartridge_ram_end,
+            profile.cartridge_ram_start if profile.cartridge_ram_size else 0,
+            profile.cartridge_ram_end if profile.cartridge_ram_size else 0,
         )
 
     @property
