@@ -165,6 +165,10 @@ impl Z80 {
                 self.ei_delay = 1;
                 4
             }
+            0xCB => {
+                let extended_opcode = self.fetch8(bus);
+                self.execute_cb(bus, extended_opcode)
+            }
             0xD3 => {
                 let port_low = self.fetch8(bus);
                 let port = (u16::from(self.registers.a) << 8) | u16::from(port_low);
@@ -509,6 +513,59 @@ impl Z80 {
             self.ei_delay -= 1;
         }
         Ok(cycles)
+    }
+
+    /// Execute the complete CB-prefixed rotate/shift, BIT, RES and SET matrix.
+    /// T-state totals are instruction-level totals, not bus-phase timestamps.
+    fn execute_cb<B: CpuBus>(&mut self, bus: &mut B, opcode: u8) -> u32 {
+        let target = opcode & 0x07;
+        let group = opcode >> 6;
+        let operation = (opcode >> 3) & 0x07;
+        let value = self.read_register(bus, target);
+
+        match group {
+            0 => {
+                let old_carry = self.registers.f & FLAG_C != 0;
+                let (result, carry) = match operation {
+                    0 => (value.rotate_left(1), value & 0x80 != 0), // RLC
+                    1 => (value.rotate_right(1), value & 0x01 != 0), // RRC
+                    2 => ((value << 1) | u8::from(old_carry), value & 0x80 != 0), // RL
+                    3 => ((value >> 1) | (u8::from(old_carry) << 7), value & 1 != 0), // RR
+                    4 => (value << 1, value & 0x80 != 0), // SLA
+                    5 => ((value >> 1) | (value & 0x80), value & 1 != 0), // SRA
+                    6 => ((value << 1) | 1, value & 0x80 != 0), // undocumented SLL
+                    _ => (value >> 1, value & 1 != 0), // SRL
+                };
+                let mut flags = result & (FLAG_S | FLAG_XY);
+                if result == 0 { flags |= FLAG_Z; }
+                if result.count_ones().is_multiple_of(2) { flags |= FLAG_PV; }
+                if carry { flags |= FLAG_C; }
+                self.registers.f = flags;
+                self.write_register(bus, target, result);
+            }
+            1 => {
+                let mask = 1_u8 << operation;
+                let mut flags = (self.registers.f & FLAG_C) | FLAG_H;
+                let bit_clear = value & mask == 0;
+                if bit_clear { flags |= FLAG_Z | FLAG_PV; }
+                if operation == 7 && !bit_clear { flags |= FLAG_S; }
+                let undocumented = if target == 6 {
+                    (self.registers.hl() >> 8) as u8 & FLAG_XY
+                } else {
+                    value & FLAG_XY
+                };
+                flags |= undocumented;
+                self.registers.f = flags;
+            }
+            2 => self.write_register(bus, target, value & !(1_u8 << operation)),
+            _ => self.write_register(bus, target, value | (1_u8 << operation)),
+        }
+
+        if target == 6 {
+            if group == 1 { 12 } else { 15 }
+        } else {
+            8
+        }
     }
 
     #[inline]
@@ -970,6 +1027,33 @@ mod tests {
         assert_eq!(cpu.step(&mut bus), Ok(4));
         assert!(cpu.iff1 && cpu.iff2);
         assert_eq!(cpu.ei_delay, 1);
+    }
+
+    #[test]
+    fn cb_prefix_executes_rotate_bit_res_set_and_memory_forms() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..8].copy_from_slice(&[
+            0x06, 0x81, // LD B,0x81
+            0xCB, 0x00, // RLC B -> 0x03, carry
+            0xCB, 0x40, // BIT 0,B -> set
+            0x21, // next opcode is LD HL,nn
+        ]);
+        let mut cpu = Z80::default();
+        assert_eq!(cpu.step(&mut bus), Ok(7));
+        assert_eq!(cpu.step(&mut bus), Ok(8));
+        assert_eq!(cpu.registers.b, 0x03);
+        assert_ne!(cpu.registers.f & FLAG_C, 0);
+        assert_eq!(cpu.step(&mut bus), Ok(8));
+        assert_eq!(cpu.registers.f & (FLAG_H | FLAG_Z), FLAG_H);
+        assert_eq!(cpu.step(&mut bus), Ok(10));
+        assert_eq!(cpu.registers.hl(), 0x0000);
+
+        let mut memory_bus = TestBus([0; 0x10000]);
+        memory_bus.0[..5].copy_from_slice(&[0x21, 0x00, 0xC0, 0xCB, 0xC6]); // SET 0,(HL)
+        let mut memory_cpu = Z80::default();
+        assert_eq!(memory_cpu.step(&mut memory_bus), Ok(10));
+        assert_eq!(memory_cpu.step(&mut memory_bus), Ok(15));
+        assert_eq!(memory_bus.0[0xC000], 1);
     }
 
     #[test]
