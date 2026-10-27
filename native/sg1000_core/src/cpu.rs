@@ -794,7 +794,8 @@ impl Z80 {
             bus.write_port(output_port, value);
             value
         };
-        self.registers.set_hl(self.registers.hl().wrapping_add_signed(direction));
+        self.registers
+            .set_hl(self.registers.hl().wrapping_add_signed(direction));
         self.registers.b = self.registers.b.wrapping_sub(1);
         let low_term = if input {
             self.registers.c.wrapping_add_signed(direction as i8)
