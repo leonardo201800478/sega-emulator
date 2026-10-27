@@ -190,3 +190,8 @@ O projeto é independente e não é afiliado à SEGA. SEGA e SG-1000 são marcas
 4. Validar a saída em diferentes dispositivos Windows e documentar as condições dos testes. A avaliação positiva atual é observacional e não substitui validação em hardware real.
 
 ROMs comerciais e logs locais não devem ser incluídos no repositório. Use homebrew ou cópias obtidas legalmente no ambiente local.
+
+Compilacao e execucao rapida:
+cargo clean
+cargo build --workspace --release --locked
+python -m sega_emulator
