@@ -11,9 +11,7 @@ use sega_z80_alu::{adc8, add8, and8, cp8, or8, sbc8, sub8, xor8};
 mod memory;
 use memory::NativeMemoryBus;
 mod machine;
-use machine::{
-    NativeCpuSnapshot, NativePsgSnapshot, NativeSG1000Machine, NativeVdpSnapshot,
-};
+use machine::{NativeCpuSnapshot, NativePsgSnapshot, NativeSG1000Machine, NativeVdpSnapshot};
 
 const FLAG_C: u8 = 0x01;
 const FLAG_N: u8 = 0x02;
