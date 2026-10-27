@@ -551,7 +551,7 @@ mod tests {
         assert_eq!(cpu.registers.a, 0x0A);
         assert_eq!(cpu.step(&mut bus), Ok(4));
         assert_eq!(cpu.registers.a, 0x10);
-        assert_eq!(cpu.registers.f & FLAG_H, 0);
+        assert_ne!(cpu.registers.f & FLAG_H, 0);
         assert_eq!(cpu.registers.f & FLAG_C, 0);
     }
 
