@@ -10,6 +10,12 @@ const VRAM_SIZE: usize = 0x4000;
 const VRAM_MASK: usize = VRAM_SIZE - 1;
 const RGB_FRAME_SIZE: usize = SCREEN_WIDTH * SCREEN_HEIGHT * 3;
 
+/// One active sprite entry: hardware index, X, pattern, color nibble and raster Y.
+pub type SpriteLineEntry = (usize, i32, u8, u8, u16);
+
+/// Active entries for a raster line and the index reported for sprite overflow.
+pub type SpriteLineInspection = (Vec<SpriteLineEntry>, Option<usize>);
+
 const PALETTE: [[u8; 3]; 16] = [
     [0, 0, 0],
     [0, 0, 0],
@@ -680,7 +686,7 @@ pub fn inspect_sprite_line(
     registers: &[u8; 8],
     line: u16,
     sprite_limit_enabled: bool,
-) -> (Vec<(usize, i32, u8, u8, u16)>, Option<usize>) {
+) -> SpriteLineInspection {
     let (active, fifth_index) =
         sprite_line_active(vram, registers, i32::from(line), sprite_limit_enabled);
     let entries = active
@@ -776,7 +782,7 @@ fn render_sprites(
 
 #[cfg(test)]
 mod tests {
-    use super::{Tms9918A, sprite_line_active};
+    use super::{Tms9918A, inspect_sprite_line, sprite_line_active};
 
     #[test]
     fn reset_preserves_vram_unless_explicitly_cleared() {

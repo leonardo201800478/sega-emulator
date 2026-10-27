@@ -197,7 +197,7 @@ impl NativeVdpSnapshot {
         PyBytes::new(py, &self.registers)
     }
 
-    fn _sprite_line_active(&self, line: u16) -> (Vec<(usize, i32, u8, u8, u16)>, Option<usize>) {
+    fn _sprite_line_active(&self, line: u16) -> sega_sg1000_core::vdp::SpriteLineInspection {
         sega_sg1000_core::vdp::inspect_sprite_line(
             &self.vram,
             &self.registers,
