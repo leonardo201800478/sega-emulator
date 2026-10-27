@@ -48,12 +48,7 @@ impl From<PsgError> for MachineError {
     }
 }
 
-/// Incremental headless machine used to develop and validate the standalone core.
-///
-/// The CPU's immediate IN/OUT instructions route through a split-borrow bus
-/// adapter. The VDP and PSG advance from nominal instruction T-states.
-
-/// Split-borrow adapter that exposes all SG-1000 devices to one Z80 step.
+/// Internal split-borrow adapter that exposes SG-1000 devices to one Z80 step.
 struct Sg1000MachineBus<'a> {
     memory: &'a mut Sg1000Memory,
     io: &'a mut Sg1000Io,
@@ -96,6 +91,10 @@ impl CpuBus for Sg1000MachineBus<'_> {
     }
 }
 
+/// Incremental headless machine assembled from Python-independent Rust devices.
+///
+/// Immediate Z80 IN/OUT instructions route through the machine bus. The VDP
+/// and PSG advance at nominal instruction boundaries, not exact bus phases.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Sg1000Machine {
     pub cpu: Z80,
