@@ -49,6 +49,7 @@ class EmulatorMainWindow(QMainWindow):
         on_configure_audio_video: Callable[[], None] | None = None,
         on_start_vgm_recording: Callable[[], None] | None = None,
         on_stop_vgm_recording: Callable[[], None] | None = None,
+        video_driver: str = "auto",
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -84,7 +85,7 @@ class EmulatorMainWindow(QMainWindow):
             """
         )
 
-        self.video_widget = VideoWidget(self)
+        self.video_widget = VideoWidget(self, graphics_api=video_driver)
         self.video_widget.setObjectName("emulatorVideoSurface")
         screen = QWidget(self)
         layout = QVBoxLayout(screen)
@@ -163,7 +164,6 @@ class EmulatorMainWindow(QMainWindow):
             )
             video_menu.addAction(action)
         video_menu.addAction(self.fullscreen_action)
-
         settings_menu = self.menuBar().addMenu("&Configurações")
         self.audio_video_action = QAction("Áudio e vídeo…", self)
         if on_configure_audio_video is not None:

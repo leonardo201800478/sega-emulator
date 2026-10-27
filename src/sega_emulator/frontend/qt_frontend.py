@@ -168,6 +168,10 @@ def run(initial_path: Path | None = None) -> None:
     app.setApplicationName("SegaEmulator")
     settings = QSettings()
     preferences = FrontendPreferences.from_store(settings)
+    video_driver = str(settings.value("video_driver", "auto"))
+    if video_driver not in {"auto", "vulkan", "d3d11", "d3d12", "raster"}:
+        video_driver = "auto"
+        settings.setValue("video_driver", video_driver)
     # The production Qt frontend always runs the native Rust machine. Legacy
     # persisted "python" values are migrated unconditionally and are no longer
     # exposed as a selectable runtime.
@@ -215,6 +219,7 @@ def run(initial_path: Path | None = None) -> None:
         on_configure_audio_video=lambda: configure_audio_video(),
         on_start_vgm_recording=lambda: start_vgm_recording(),
         on_stop_vgm_recording=lambda: stop_vgm_recording(),
+        video_driver=video_driver,
     )
     window.resize(preferences.window_width, preferences.window_height)
     window._video_scale = preferences.video_scale
@@ -584,12 +589,19 @@ def run(initial_path: Path | None = None) -> None:
                 "A configuração anterior foi mantida.",
             )
             return
-        if not view.set_render_backend(video_driver):
+        current_video_driver = str(settings.value("video_driver", "auto"))
+        video_driver_changed = video_driver != current_video_driver
+        if (
+            not video_driver_changed
+            and video_driver in {"auto", "vulkan", "raster"}
+            and not view.set_render_backend(video_driver)
+        ):
             QMessageBox.warning(
                 window,
                 "Driver de vídeo indisponível",
-                "Vulkan não está disponível nesta sessão. Escolha Automático "
-                "ou Qt Raster; as demais configurações não foram aplicadas.",
+                "O backend gráfico selecionado não está disponível nesta sessão. "
+                "Escolha Automático ou Qt Raster; as demais configurações "
+                "não foram aplicadas.",
             )
             return
 
@@ -627,11 +639,16 @@ def run(initial_path: Path | None = None) -> None:
         preferences.save_to_store(settings)
 
         audio_warning = _audio_output_warning(preferences, audio_output)
+        restart_note = (
+            " Reinicie o emulador para aplicar a nova API gráfica."
+            if video_driver_changed
+            else ""
+        )
         message = (
             audio_warning
             or f"Drivers aplicados — input: {input_driver}, áudio: {audio_driver}, "
             f"vídeo: {video_driver}."
-        )
+        ) + restart_note
         status.showMessage(message, 8000)
         logger.info(
             "Drivers de entrada, áudio e vídeo atualizados",
@@ -640,6 +657,7 @@ def run(initial_path: Path | None = None) -> None:
                 "input_driver": input_driver,
                 "audio_driver": audio_driver,
                 "video_driver": video_driver,
+                "video_driver_restart_required": video_driver_changed,
                 "input_available": controller_input.available,
                 "audio_enabled": preferences.audio_enabled,
             },

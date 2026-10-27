@@ -11,9 +11,13 @@ import pytest  # noqa: E402
 pytest.importorskip("PySide6")
 
 from PySide6.QtGui import QImage  # noqa: E402
+from PySide6.QtQuick import QSGRendererInterface  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from sega_emulator.frontend.qt.video_widget import VideoWidget  # noqa: E402
+from sega_emulator.frontend.qt.video_widget import (  # noqa: E402
+    VideoWidget,
+    _graphics_api_for_mode,
+)
 
 
 @pytest.fixture
@@ -37,4 +41,34 @@ def test_unknown_video_driver_is_rejected(qt_app) -> None:
     widget = VideoWidget()
     with pytest.raises(ValueError, match="mode"):
         widget.set_render_backend("directx")
+    widget.close()
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected"),
+    [
+        ("auto", QSGRendererInterface.GraphicsApi.Vulkan),
+        ("vulkan", QSGRendererInterface.GraphicsApi.Vulkan),
+        ("d3d11", QSGRendererInterface.GraphicsApi.Direct3D11),
+        ("d3d12", QSGRendererInterface.GraphicsApi.Direct3D12),
+    ],
+)
+def test_native_graphics_api_mapping(mode, expected) -> None:
+    assert _graphics_api_for_mode(mode) == expected
+
+
+def test_raster_is_not_a_hardware_graphics_api() -> None:
+    with pytest.raises(ValueError, match="graphics API"):
+        _graphics_api_for_mode("raster")
+
+
+def test_raster_startup_displays_published_frame(qt_app) -> None:
+    widget = VideoWidget(graphics_api="raster")
+    widget.resize(768, 576)
+    frame = QImage(256, 192, QImage.Format.Format_RGB888)
+    frame.fill(0)
+    widget.set_framebuffer(frame)
+
+    assert widget._render_backend == "raster"
+    assert not widget._fallback.pixmap().isNull()
     widget.close()

@@ -31,7 +31,7 @@ def test_drivers_dialog_exposes_only_implemented_api_choices(qt_app) -> None:
     ] == ["wasapi", "disabled"]
     assert [
         dialog.video_combo.itemData(i) for i in range(dialog.video_combo.count())
-    ] == ["auto", "vulkan", "raster"]
+    ] == ["auto", "vulkan", "d3d11", "d3d12", "raster"]
     assert dialog.drivers() == ("auto", "wasapi", "auto")
     dialog.close()
 
