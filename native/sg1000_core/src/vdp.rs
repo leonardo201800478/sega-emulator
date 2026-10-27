@@ -612,6 +612,7 @@ fn render_multicolor(vram: &[u8], registers: &[u8], pixels: &mut [u8], backdrop:
 
 #[derive(Clone, Copy)]
 struct ActiveSprite {
+    index: usize,
     x: i32,
     pattern_number: u8,
     color: u8,
@@ -659,6 +660,7 @@ fn sprite_line_active(
             x -= 32;
         }
         active.push(ActiveSprite {
+            index,
             x,
             pattern_number,
             color: color_byte & 0x0F,
@@ -667,6 +669,36 @@ fn sprite_line_active(
     }
     (active, fifth_index)
 }
+
+
+/// Inspect the sprite entries active on a raster line without modifying VDP state.
+///
+/// The returned active entries preserve the hardware sprite index, X coordinate,
+/// pattern number, color nibble and wrapped raster Y. The second value is the
+/// index that sets the overflow flag, if a fifth active sprite is encountered.
+pub fn inspect_sprite_line(
+    vram: &[u8],
+    registers: &[u8; 8],
+    line: u16,
+    sprite_limit_enabled: bool,
+) -> (Vec<(usize, i32, u8, u8, u16)>, Option<usize>) {
+    let (active, fifth_index) =
+        sprite_line_active(vram, registers, i32::from(line), sprite_limit_enabled);
+    let entries = active
+        .into_iter()
+        .map(|sprite| {
+            (
+                sprite.index,
+                sprite.x,
+                sprite.pattern_number,
+                sprite.color,
+                sprite.raster_y as u16,
+            )
+        })
+        .collect();
+    (entries, fifth_index)
+}
+
 
 fn render_sprite_line(
     vram: &[u8],

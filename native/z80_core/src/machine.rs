@@ -128,26 +128,85 @@ impl NativeCpuSnapshot {
 
 #[pyclass(module = "sega_z80_core")]
 pub struct NativeVdpSnapshot {
-    #[pyo3(get)]
-    pub status: u8,
-    #[pyo3(get)]
-    pub scanline: u16,
-    #[pyo3(get)]
-    pub frame_number: u64,
-    #[pyo3(get)]
-    pub display_mode: u8,
-    #[pyo3(get)]
-    pub interrupt_pending: bool,
-    #[pyo3(get)]
-    pub sprite_limit_enabled: bool,
+    status: u8,
+    scanline: u16,
+    cycles_into_line: u16,
+    frame_number: u64,
+    display_mode: u8,
+    interrupt_pending: bool,
+    sprite_limit_enabled: bool,
+    registers: [u8; 8],
+    vram: Vec<u8>,
     framebuffer: Vec<u8>,
 }
 
 #[pymethods]
 impl NativeVdpSnapshot {
     #[getter]
+    fn status(&self) -> u8 {
+        self.status
+    }
+
+    #[getter]
+    fn scanline(&self) -> u16 {
+        self.scanline
+    }
+
+    #[getter(_cycles_into_line)]
+    fn cycles_into_line(&self) -> u16 {
+        self.cycles_into_line
+    }
+
+    #[getter]
+    fn frame_number(&self) -> u64 {
+        self.frame_number
+    }
+
+    #[getter]
+    fn display_mode(&self) -> u8 {
+        self.display_mode
+    }
+
+    #[getter(_display_mode)]
+    fn private_display_mode(&self) -> u8 {
+        self.display_mode
+    }
+
+    #[getter]
+    fn interrupt_pending(&self) -> bool {
+        self.interrupt_pending
+    }
+
+    #[getter]
+    fn sprite_limit_enabled(&self) -> bool {
+        self.sprite_limit_enabled
+    }
+
+    #[getter]
     fn framebuffer<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
         PyBytes::new(py, &self.framebuffer)
+    }
+
+    #[getter]
+    fn vram<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        PyBytes::new(py, &self.vram)
+    }
+
+    #[getter]
+    fn registers<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        PyBytes::new(py, &self.registers)
+    }
+
+    fn _sprite_line_active(
+        &self,
+        line: u16,
+    ) -> (Vec<(usize, i32, u8, u8, u16)>, Option<usize>) {
+        sega_sg1000_core::vdp::inspect_sprite_line(
+            &self.vram,
+            &self.registers,
+            line,
+            self.sprite_limit_enabled,
+        )
     }
 }
 
@@ -222,10 +281,13 @@ impl NativeSG1000Machine {
         NativeVdpSnapshot {
             status: vdp.status(),
             scanline: vdp.scanline(),
+            cycles_into_line: vdp.cycles_into_line(),
             frame_number: vdp.frame_number(),
             display_mode: vdp.display_mode(),
             interrupt_pending: vdp.interrupt_pending(),
             sprite_limit_enabled: vdp.sprite_limit_enabled(),
+            registers: *vdp.registers(),
+            vram: vdp.vram().to_vec(),
             framebuffer: vdp.framebuffer().to_vec(),
         }
     }
