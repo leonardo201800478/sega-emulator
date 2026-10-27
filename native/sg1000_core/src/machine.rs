@@ -14,19 +14,12 @@ use crate::{
 /// Nominal SG-1000 CPU T-state rate used by the existing default clock profile.
 const SG1000_CPU_CLOCK_HZ: u64 = 3_579_545;
 
-fn convert_tstates_to_psg_clocks(
-    tstates: u64,
-    psg_clock_hz: u64,
-    remainder: u64,
-) -> (u64, u64) {
+fn convert_tstates_to_psg_clocks(tstates: u64, psg_clock_hz: u64, remainder: u64) -> (u64, u64) {
     let denominator = u128::from(SG1000_CPU_CLOCK_HZ);
     let numerator = u128::from(tstates) * u128::from(psg_clock_hz) + u128::from(remainder);
     let clock_count = numerator / denominator;
     let next_remainder = (numerator % denominator) as u64;
-    (
-        clock_count.min(u128::from(u64::MAX)) as u64,
-        next_remainder,
-    )
+    (clock_count.min(u128::from(u64::MAX)) as u64, next_remainder)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
