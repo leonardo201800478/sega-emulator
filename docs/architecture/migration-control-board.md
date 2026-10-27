@@ -59,5 +59,6 @@ A CI workflow only validates the commands it actually executes. A green Python w
 - Do not move Python production cores to `legacy/` yet: the current application still depends on those modules, and the Rust crate does not replace all production contracts.
 
 ## Change log
+- 2026-10-27: Step 1 added a pure-Rust SG-1000 I/O boundary for controller aliases and timestamped PSG write capture. It is intentionally not a complete CPU-port/VDP/audio-scheduler integration; see `sg1000-rust-io-step1.md`.
 - 2026-10-27: Initial control board added. No source files moved and no tests claimed as passing.
 - 2026-10-27: Corrected the excluded shared-core scaffold's workspace registration and sibling dependency paths so the manifest can be validated independently.
