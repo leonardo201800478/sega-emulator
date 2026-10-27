@@ -1,4 +1,5 @@
 """Offscreen checks for the Qt raster/Vulkan presentation selector."""
+
 from __future__ import annotations
 
 import os
