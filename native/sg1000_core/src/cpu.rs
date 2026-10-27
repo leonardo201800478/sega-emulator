@@ -508,9 +508,6 @@ impl Z80 {
         if self.ei_delay > 0 && opcode != 0xFB {
             self.ei_delay -= 1;
         }
-        // The low seven bits of R increment on each opcode fetch. Prefix
-        // fetch sequencing is implemented with the prefixed opcode families.
-        self.r = (self.r & 0x80) | (self.r.wrapping_add(1) & 0x7F);
         Ok(cycles)
     }
 
