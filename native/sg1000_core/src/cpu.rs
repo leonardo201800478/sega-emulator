@@ -125,6 +125,7 @@ impl Z80 {
     /// error until their native implementation is migrated.
     pub fn step<B: CpuBus>(&mut self, bus: &mut B) -> Result<u32, CpuError> {
         if self.halted {
+            self.r = (self.r & 0x80) | (self.r.wrapping_add(1) & 0x7F);
             self.total_tstates += 4;
             return Ok(4);
         }
@@ -1442,6 +1443,47 @@ mod tests {
         assert_eq!(cpu.step(&mut bus), Ok(4));
         assert!(cpu.halted);
         assert_eq!(cpu.total_tstates, 21);
+        assert_eq!(cpu.r, 4);
+        assert_eq!(cpu.step(&mut bus), Ok(4));
+        assert_eq!(cpu.r, 5);
+        assert_eq!(cpu.total_tstates, 25);
+    }
+
+    #[test]
+    fn indexed_prefix_supports_ix_iy_displacements_and_indexed_cb() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..28].copy_from_slice(&[
+            0xDD, 0x21, 0x00, 0xC0, // LD IX,0xC000
+            0xDD, 0x26, 0x12, // LD IXH,0x12
+            0xDD, 0x2E, 0x34, // LD IXL,0x34
+            0xDD, 0x23, // INC IX -> 0x1235
+            0xFD, 0x21, 0x00, 0xC1, // LD IY,0xC100
+            0xFD, 0x36, 0x02, 0x5A, // LD (IY+2),0x5A
+            0xFD, 0xCB, 0x02, 0x46, // BIT 0,(IY+2)
+            0xDD, 0xCB, 0x02, 0xC6, // SET 0,(IX+2)
+        ]);
+        let mut cpu = Z80::default();
+
+        for expected in [14, 11, 11, 10, 14, 19, 20, 23] {
+            assert_eq!(cpu.step(&mut bus), Ok(expected));
+        }
+        assert_eq!(cpu.ix, 0x1235);
+        assert_eq!(cpu.iy, 0xC100);
+        assert_eq!(bus.0[0xC102], 0x5A);
+        assert_eq!(cpu.registers.f & (FLAG_H | FLAG_Z | FLAG_PV), FLAG_H | FLAG_Z | FLAG_PV);
+        assert_eq!(bus.0[0x1237], 1);
+        assert_eq!(cpu.r, 16);
+    }
+
+    #[test]
+    fn repeated_index_prefixes_are_counted_without_recursive_overflow() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..3].copy_from_slice(&[0xDD, 0xFD, 0x00]);
+        let mut cpu = Z80::default();
+        assert_eq!(cpu.step(&mut bus), Ok(12));
+        assert_eq!(cpu.registers.pc, 3);
+        assert_eq!(cpu.r, 3);
+        assert_eq!(cpu.total_tstates, 12);
     }
 
     #[test]
