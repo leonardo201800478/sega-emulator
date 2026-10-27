@@ -4,6 +4,7 @@ All emulated hardware state and execution live in `sega_sg1000_core`.
 This module only resolves the cartridge profile and forwards operations across
 the PyO3 boundary for the Qt frontend.
 """
+
 from __future__ import annotations
 
 from sega_emulator.machine.cartridge_profiles import cartridge_profile
