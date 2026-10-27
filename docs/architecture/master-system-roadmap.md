@@ -178,3 +178,10 @@ Foi criado o crate `native/sms_core` e adicionado ao workspace Rust, sem depend�
 **Limites conhecidos desta fatia:** não implementa SRAM de cartucho, variantes de mapper, CPU, I/O, VDP, PSG/FM nem scheduler. A rejeição de ROM maior que 4 MiB é específica do mapper Sega padrão implementado; a imagem continua preservada sem truncamento, e suporte maior exige outro mapper validado. O mapa de memória é inicial e precisa de revisão contra documentação técnica/oráculo independente antes de ser tratado como validado em hardware.
 
 **Validação após esta alteração:** os testes foram escritos, mas não foram executados localmente nesta sessão. Aguardar CI no SHA candidato e inspecionar os logs; não declarar aprovação até haver resultados.
+
+
+### Revisão técnica do mapa de memória
+
+A revisão da referência [SMS Power — Memory Map](https://www.smspower.org/Development/MemoryMap) e [SMS Power — Mappers](https://www.smspower.org/Development/Mappers) encontrou um detalhe que precisava ser explícito no código: os registradores `$FFFC-$FFFF` sobrepõem o espelhamento da RAM. Escritas devem alcançar o registrador de mapper e a cópia de RAM; leituras nesses endereços retornam a cópia da RAM. O registrador `$FFFC` é o controle do mapper, enquanto `$FFFD-$FFFF` selecionam os bancos. O código foi atualizado para modelar a sobreposição e adicionou um teste de regressão.
+
+O teste de formatação inicial passou após a correção de sintaxe, mas a execução de Clippy revelou `clippy::chunks_exact_to_as_chunks` no helper de ROM sintética. O helper foi reescrito com fatias indexadas, e a correção do mapper e do lint foi publicada no SHA seguinte. Aguardando nova execução do CI; compilação/testes locais continuam **NOT RUN**.
