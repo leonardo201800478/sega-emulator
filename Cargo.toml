@@ -2,6 +2,7 @@
 resolver = "3"
 exclude = [
     "native/z80_core",
+    "native/sega_emu_core",
 ]
 members = [
     "native/sg1000_core",
