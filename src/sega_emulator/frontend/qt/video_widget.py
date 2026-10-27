@@ -247,15 +247,10 @@ class VideoWidget(QWidget):
         """
         if mode not in {"auto", "vulkan", "raster"}:
             raise ValueError("mode deve ser 'auto', 'vulkan' ou 'raster'")
-        if mode == "vulkan" and (
-            self._vulkan_failed or self._quick_container is None
-        ):
+        if mode == "vulkan" and (self._vulkan_failed or self._quick_container is None):
             return False
         self._render_backend = mode
-        use_vulkan = (
-            mode == "vulkan"
-            or (mode == "auto" and not self._vulkan_failed)
-        )
+        use_vulkan = mode == "vulkan" or (mode == "auto" and not self._vulkan_failed)
         if use_vulkan and self._quick_container is not None:
             self._stack.setCurrentWidget(self._quick_container)
         else:
