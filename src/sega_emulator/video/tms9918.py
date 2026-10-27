@@ -379,7 +379,7 @@ class TMS9918A:
     def _sprite_line_active(
         self, line: int
     ) -> tuple[list[tuple[int, int, int, int, int]], int | None]:
-        """Return active sprites and the first excluded index for this line."""
+        """Retorna os quatro primeiros sprites ativos e o índice do quinto."""
         attr_base = (self.registers[5] & 0x7F) << 7
         size = 16 if self.registers[1] & 0x02 else 8
         scale = 2 if self.registers[1] & 0x01 else 1
