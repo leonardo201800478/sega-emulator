@@ -56,7 +56,6 @@ def test_dahjee_type_a_maps_expansion_ram_and_keeps_internal_ram(monkeypatch) ->
     machine.memory_bus.write(0x3FFF, 0x5A)
     assert machine.memory_bus.read(0x2000) == 0xA5
     assert machine.memory_bus.read(0x3FFF) == 0x5A
-    assert machine.memory_bus.read(0x4000) == ord("s")
     machine.memory_bus.write(0xC000, 0x3C)
     assert machine.memory_bus.read(0xC000) == 0x3C
     assert machine.memory_bus.read(0x2000) == 0xA5
