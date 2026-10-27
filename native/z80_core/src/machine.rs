@@ -1,197 +1,251 @@
-//! Native SG-1000 machine orchestration and I/O routing.
+//! Thin PyO3 adapter over the consolidated, Python-independent SG-1000 core.
+//!
+//! This module owns no CPU, memory, VDP or PSG implementation. It exposes
+//! snapshots and machine operations from sega_sg1000_core.
+
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
-
-use super::{NativeAudioSynchronizer, NativeMemoryBus, NativeSn76489, NativeTms9918A, RustZ80Cpu};
+use pyo3::types::PyBytes;
+use sega_sg1000_core::{MemoryConfig, Sg1000Machine};
 
 #[pyclass(module = "sega_z80_core")]
-pub(crate) struct NativeSG1000Io {
-    vdp: Py<NativeTms9918A>,
-    audio_sync: Py<NativeAudioSynchronizer>,
-    joystick1: u8,
-    joystick2: u8,
-    current_tstate: u64,
-    psg_write_events: Vec<(u64, u8)>,
+pub struct NativeCpuSnapshot {
+    #[pyo3(get)]
+    pub a: u8,
+    #[pyo3(get)]
+    pub f: u8,
+    #[pyo3(get)]
+    pub b: u8,
+    #[pyo3(get)]
+    pub c: u8,
+    #[pyo3(get)]
+    pub d: u8,
+    #[pyo3(get)]
+    pub e: u8,
+    #[pyo3(get)]
+    pub h: u8,
+    #[pyo3(get)]
+    pub l: u8,
+    #[pyo3(get)]
+    pub pc: u16,
+    #[pyo3(get)]
+    pub sp: u16,
+    #[pyo3(get)]
+    pub ix: u16,
+    #[pyo3(get)]
+    pub iy: u16,
+    #[pyo3(get)]
+    pub i: u8,
+    #[pyo3(get)]
+    pub r: u8,
+    #[pyo3(get)]
+    pub iff1: bool,
+    #[pyo3(get)]
+    pub iff2: bool,
+    #[pyo3(get)]
+    pub interrupt_mode: u8,
+    #[pyo3(get)]
+    pub halted: bool,
+    #[pyo3(get)]
+    pub wz: u16,
+    #[pyo3(get)]
+    pub q: u8,
+    #[pyo3(get)]
+    pub p: bool,
+    #[pyo3(get)]
+    pub total_tstates: u64,
+    #[pyo3(get)]
+    pub total_cycles: u64,
+    #[pyo3(get)]
+    pub af_alt: u16,
+    #[pyo3(get)]
+    pub bc_alt: u16,
+    #[pyo3(get)]
+    pub de_alt: u16,
+    #[pyo3(get)]
+    pub hl_alt: u16,
 }
 
-impl NativeSG1000Io {
-    fn new(vdp: Py<NativeTms9918A>, audio_sync: Py<NativeAudioSynchronizer>) -> Self {
+impl NativeCpuSnapshot {
+    fn from_machine(machine: &Sg1000Machine) -> Self {
+        let cpu = &machine.cpu;
+        let regs = cpu.registers;
+        let alt = cpu.alternate;
         Self {
-            vdp,
-            audio_sync,
-            joystick1: 0xFF,
-            joystick2: 0xFF,
-            current_tstate: 0,
-            psg_write_events: Vec::new(),
-        }
-    }
-
-    fn drain_psg_write_events(&mut self) -> Vec<(u64, u8)> {
-        std::mem::take(&mut self.psg_write_events)
-    }
-
-    pub(crate) fn read_port_native(&mut self, py: Python<'_>, address: u16) -> PyResult<u8> {
-        let port = address as u8;
-        let vdp_port = port & 0xC1;
-        if vdp_port == 0x80 || vdp_port == 0x81 {
-            return Ok(self
-                .vdp
-                .bind(py)
-                .borrow_mut()
-                .read_port_native(u16::from(vdp_port)));
-        }
-        match port {
-            0x00 | 0xDC => Ok(self.joystick1),
-            0x01 | 0xDD => Ok(self.joystick2),
-            _ => Ok(0xFF),
-        }
-    }
-
-    pub(crate) fn write_port_at_native(
-        &mut self,
-        py: Python<'_>,
-        address: u16,
-        value: u8,
-        tstate: u64,
-    ) -> PyResult<()> {
-        let port = address as u8;
-        let vdp_port = port & 0xC1;
-        if vdp_port == 0x80 || vdp_port == 0x81 {
-            self.vdp
-                .bind(py)
-                .borrow_mut()
-                .write_port_native(u16::from(vdp_port), value);
-            return Ok(());
-        }
-        if (0x40..=0x7F).contains(&port) {
-            self.psg_write_events.push((tstate, value));
-            self.audio_sync
-                .bind(py)
-                .borrow_mut()
-                .schedule_write_native(tstate, value)?;
-        }
-        Ok(())
-    }
-
-    fn write_port_current_native(
-        &mut self,
-        py: Python<'_>,
-        address: u16,
-        value: u8,
-    ) -> PyResult<()> {
-        let port = address as u8;
-        self.write_port_at_native(py, address, value, self.current_tstate)?;
-        if (0x40..=0x7F).contains(&port) {
-            self.audio_sync
-                .bind(py)
-                .borrow_mut()
-                .advance_to_native(py, self.current_tstate)?;
-        }
-        Ok(())
-    }
-
-    fn set_current_tstate(&mut self, tstate: u64) {
-        self.current_tstate = tstate;
-    }
-
-    fn set_joystick(&mut self, player: u8, value: u8) {
-        if player == 1 {
-            self.joystick1 = value;
-        } else {
-            self.joystick2 = value;
+            a: regs.a,
+            f: regs.f,
+            b: regs.b,
+            c: regs.c,
+            d: regs.d,
+            e: regs.e,
+            h: regs.h,
+            l: regs.l,
+            pc: regs.pc,
+            sp: regs.sp,
+            ix: cpu.ix,
+            iy: cpu.iy,
+            i: cpu.i,
+            r: cpu.r,
+            iff1: cpu.iff1,
+            iff2: cpu.iff2,
+            interrupt_mode: cpu.interrupt_mode,
+            halted: cpu.halted,
+            wz: cpu.wz,
+            q: cpu.q,
+            p: cpu.p,
+            total_tstates: cpu.total_tstates,
+            total_cycles: cpu.total_tstates,
+            af_alt: u16::from_be_bytes([alt.a, alt.f]),
+            bc_alt: u16::from_be_bytes([alt.b, alt.c]),
+            de_alt: u16::from_be_bytes([alt.d, alt.e]),
+            hl_alt: u16::from_be_bytes([alt.h, alt.l]),
         }
     }
 }
 
+#[pymethods]
+impl NativeCpuSnapshot {
+    #[getter]
+    fn af(&self) -> u16 {
+        u16::from_be_bytes([self.a, self.f])
+    }
+
+    #[getter]
+    fn bc(&self) -> u16 {
+        u16::from_be_bytes([self.b, self.c])
+    }
+
+    #[getter]
+    fn de(&self) -> u16 {
+        u16::from_be_bytes([self.d, self.e])
+    }
+
+    #[getter]
+    fn hl(&self) -> u16 {
+        u16::from_be_bytes([self.h, self.l])
+    }
+}
+
 #[pyclass(module = "sega_z80_core")]
-pub(crate) struct NativeSG1000Machine {
-    cpu: Py<RustZ80Cpu>,
-    memory_bus: Py<NativeMemoryBus>,
-    vdp: Py<NativeTms9918A>,
-    psg: Py<NativeSn76489>,
-    audio_sync: Py<NativeAudioSynchronizer>,
-    io_bus: Py<NativeSG1000Io>,
+pub struct NativeVdpSnapshot {
+    #[pyo3(get)]
+    pub status: u8,
+    #[pyo3(get)]
+    pub scanline: u16,
+    #[pyo3(get)]
+    pub frame_number: u64,
+    #[pyo3(get)]
+    pub display_mode: u8,
+    #[pyo3(get)]
+    pub interrupt_pending: bool,
+    #[pyo3(get)]
+    pub sprite_limit_enabled: bool,
+    framebuffer: Vec<u8>,
+}
+
+#[pymethods]
+impl NativeVdpSnapshot {
+    #[getter]
+    fn framebuffer<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        PyBytes::new(py, &self.framebuffer)
+    }
+}
+
+#[pyclass(module = "sega_z80_core")]
+pub struct NativePsgSnapshot {
+    tone_periods: [u16; 3],
+    attenuations: [u8; 4],
+    tone_outputs: [u8; 3],
+}
+
+#[pymethods]
+impl NativePsgSnapshot {
+    #[getter]
+    fn tone_periods(&self) -> (u16, u16, u16) {
+        (
+            self.tone_periods[0],
+            self.tone_periods[1],
+            self.tone_periods[2],
+        )
+    }
+
+    #[getter]
+    fn attenuations(&self) -> (u8, u8, u8, u8) {
+        (
+            self.attenuations[0],
+            self.attenuations[1],
+            self.attenuations[2],
+            self.attenuations[3],
+        )
+    }
+
+    #[getter(_tone_outputs)]
+    fn tone_outputs(&self) -> (u8, u8, u8) {
+        (
+            self.tone_outputs[0],
+            self.tone_outputs[1],
+            self.tone_outputs[2],
+        )
+    }
+}
+
+#[pyclass(module = "sega_z80_core")]
+pub struct NativeSG1000Machine {
+    machine: Sg1000Machine,
     total_instructions: u64,
-    total_tstates: u64,
 }
 
 #[pymethods]
 impl NativeSG1000Machine {
     #[new]
-    #[pyo3(signature = (cartridge_rom, internal_ram_size=1024, cartridge_ram_size=0, cartridge_ram_start=0, cartridge_ram_end=-1))]
     fn new(
-        py: Python<'_>,
-        cartridge_rom: Vec<u8>,
+        rom: Vec<u8>,
         internal_ram_size: usize,
         cartridge_ram_size: usize,
         cartridge_ram_start: u16,
-        cartridge_ram_end: i32,
+        cartridge_ram_end: u16,
     ) -> PyResult<Self> {
-        let memory_bus = Py::new(
-            py,
-            NativeMemoryBus::new_native(
-                cartridge_rom,
-                internal_ram_size,
-                cartridge_ram_size,
-                cartridge_ram_start,
-                cartridge_ram_end,
-            )?,
-        )?;
-        let vdp = Py::new(py, NativeTms9918A::new_native())?;
-        let psg = Py::new(py, NativeSn76489::new_native(3_579_545, 44_100)?)?;
-        let audio_sync = Py::new(py, NativeAudioSynchronizer::new_native(psg.clone_ref(py)))?;
-        let io_bus = Py::new(
-            py,
-            NativeSG1000Io::new(vdp.clone_ref(py), audio_sync.clone_ref(py)),
-        )?;
-        let cpu = Py::new(
-            py,
-            RustZ80Cpu::new_with_native_buses(memory_bus.clone_ref(py), io_bus.clone_ref(py)),
-        )?;
+        let config = MemoryConfig {
+            internal_ram_size,
+            cartridge_ram_size,
+            cartridge_ram_start,
+            cartridge_ram_end,
+        };
+        let machine = Sg1000Machine::new(&rom, config)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
         Ok(Self {
-            cpu,
-            memory_bus,
-            vdp,
-            psg,
-            audio_sync,
-            io_bus,
+            machine,
             total_instructions: 0,
-            total_tstates: 0,
         })
     }
 
     #[getter]
-    fn cpu(&self, py: Python<'_>) -> Py<RustZ80Cpu> {
-        self.cpu.clone_ref(py)
+    fn cpu(&self) -> NativeCpuSnapshot {
+        NativeCpuSnapshot::from_machine(&self.machine)
     }
 
     #[getter]
-    fn memory_bus(&self, py: Python<'_>) -> Py<NativeMemoryBus> {
-        self.memory_bus.clone_ref(py)
+    fn vdp(&self) -> NativeVdpSnapshot {
+        let vdp = &self.machine.vdp;
+        NativeVdpSnapshot {
+            status: vdp.status(),
+            scanline: vdp.scanline(),
+            frame_number: vdp.frame_number(),
+            display_mode: vdp.display_mode(),
+            interrupt_pending: vdp.interrupt_pending(),
+            sprite_limit_enabled: vdp.sprite_limit_enabled(),
+            framebuffer: vdp.framebuffer().to_vec(),
+        }
     }
 
     #[getter]
-    fn vdp(&self, py: Python<'_>) -> Py<NativeTms9918A> {
-        self.vdp.clone_ref(py)
-    }
-
-    fn set_sprite_limit_enabled(&mut self, py: Python<'_>, enabled: bool) {
-        self.vdp.bind(py).borrow_mut().set_sprite_limit_enabled(enabled);
-    }
-
-    #[getter]
-    fn sprite_limit_enabled(&self, py: Python<'_>) -> bool {
-        self.vdp.bind(py).borrow().sprite_limit_enabled()
-    }
-
-    #[getter]
-    fn psg(&self, py: Python<'_>) -> Py<NativeSn76489> {
-        self.psg.clone_ref(py)
-    }
-
-    #[getter]
-    fn audio_sync(&self, py: Python<'_>) -> Py<NativeAudioSynchronizer> {
-        self.audio_sync.clone_ref(py)
+    fn psg(&self) -> NativePsgSnapshot {
+        let psg = &self.machine.psg;
+        NativePsgSnapshot {
+            tone_periods: psg.tone_periods(),
+            attenuations: psg.attenuations(),
+            tone_outputs: psg.tone_outputs(),
+        }
     }
 
     #[getter]
@@ -201,139 +255,86 @@ impl NativeSG1000Machine {
 
     #[getter]
     fn total_tstates(&self) -> u64 {
-        self.total_tstates
+        self.machine.cpu.total_tstates
     }
 
     #[getter]
-    fn joystick1(&self, py: Python<'_>) -> PyResult<u8> {
-        Ok(self.io_bus.bind(py).borrow().joystick1)
+    fn sprite_limit_enabled(&self) -> bool {
+        self.machine.vdp.sprite_limit_enabled()
     }
 
-    #[getter]
-    fn joystick2(&self, py: Python<'_>) -> PyResult<u8> {
-        Ok(self.io_bus.bind(py).borrow().joystick2)
+    fn set_sprite_limit_enabled(&mut self, enabled: bool) {
+        self.machine.vdp.set_sprite_limit_enabled(enabled);
     }
 
-    fn read_port(&mut self, py: Python<'_>, address: i64) -> PyResult<u8> {
-        self.io_bus
-            .bind(py)
-            .borrow_mut()
-            .read_port_native(py, address as u16)
+    fn request_nmi(&mut self) {
+        self.machine.cpu.request_nmi();
     }
 
-    fn write_port(&mut self, py: Python<'_>, address: i64, value: i64) -> PyResult<()> {
-        let port = address as u8;
-        if (0x40..=0x7F).contains(&port) && !(0..=0xFF).contains(&value) {
-            return Err(PyValueError::new_err("value deve ser um byte inteiro."));
-        }
-        self.io_bus
-            .bind(py)
-            .borrow_mut()
-            .write_port_current_native(py, address as u16, value as u8)
+    fn read_memory(&self, address: u16) -> u8 {
+        self.machine.read_memory(address)
     }
 
-    fn write_port_at(
-        &mut self,
-        py: Python<'_>,
-        address: i64,
-        value: i64,
-        tstate: i64,
-    ) -> PyResult<()> {
-        if tstate < 0 {
-            return Err(PyValueError::new_err(
-                "tstate deve ser um inteiro não negativo.",
-            ));
-        }
-        let port = address as u8;
-        if (0x40..=0x7F).contains(&port) && !(0..=0xFF).contains(&value) {
-            return Err(PyValueError::new_err("value deve ser um byte inteiro."));
-        }
-        self.io_bus.bind(py).borrow_mut().write_port_at_native(
-            py,
-            address as u16,
-            value as u8,
-            tstate as u64,
-        )
+    fn read_port(&mut self, address: u16) -> u8 {
+        self.machine.read_port(address)
     }
 
-    fn drain_psg_write_events(&mut self, py: Python<'_>) -> Vec<(u64, u8)> {
-        self.io_bus.bind(py).borrow_mut().drain_psg_write_events()
+    fn write_port(&mut self, address: u16, value: u8) {
+        self.machine.write_port(address, value);
     }
 
-    fn set_joystick(&mut self, py: Python<'_>, player: i64, value: i64) -> PyResult<()> {
-        if !(1..=2).contains(&player) {
-            return Err(PyValueError::new_err("player deve ser 1 ou 2."));
-        }
-        if !(0..=0xFF).contains(&value) {
-            return Err(PyValueError::new_err("value deve estar entre 00h e FFh."));
-        }
-        self.io_bus
-            .bind(py)
-            .borrow_mut()
-            .set_joystick(player as u8, value as u8);
-        Ok(())
+    fn write_port_at(&mut self, address: u16, value: u8, tstate: u64) {
+        self.machine.write_port_at(address, value, tstate);
     }
 
-    fn step(&mut self, py: Python<'_>) -> PyResult<u32> {
-        self.step_inner(py)
+    fn set_joystick(&mut self, player: u8, value: u8) -> PyResult<()> {
+        self.machine
+            .set_joystick(player, value)
+            .map_err(|error| PyValueError::new_err(error.to_string()))
     }
 
-    #[pyo3(signature = (max_steps=100000))]
-    fn run_frame(&mut self, py: Python<'_>, max_steps: i64) -> PyResult<usize> {
-        if max_steps < 1 {
-            return Err(PyValueError::new_err(
-                "max_steps deve ser um inteiro positivo.",
-            ));
-        }
-        self.run_frame_inner(py, max_steps as usize)
+    fn drain_psg_write_events(&mut self) -> Vec<(u64, u8)> {
+        self.machine
+            .drain_psg_write_events()
+            .into_iter()
+            .map(|event| (event.tstate, event.value))
+            .collect()
     }
 
-    fn run_frames(&mut self, py: Python<'_>, count: i64) -> PyResult<usize> {
-        if count < 0 {
-            return Err(PyValueError::new_err(
-                "count deve ser um inteiro não negativo.",
-            ));
-        }
-        let mut total_steps = 0usize;
-        for _ in 0..count {
-            total_steps = total_steps.saturating_add(self.run_frame_inner(py, 100_000)?);
-        }
-        Ok(total_steps)
+    fn drain_audio_samples(&mut self, max_samples: Option<usize>) -> Vec<f64> {
+        self.machine.drain_audio_samples(max_samples)
     }
-}
 
-impl NativeSG1000Machine {
-    fn step_inner(&mut self, py: Python<'_>) -> PyResult<u32> {
-        let cycles = self.cpu.bind(py).borrow_mut().step(py)?;
-        self.total_instructions += 1;
-        self.total_tstates += u64::from(cycles);
-        self.io_bus
-            .bind(py)
-            .borrow_mut()
-            .set_current_tstate(self.total_tstates);
-        self.vdp.bind(py).borrow_mut().advance_native(cycles)?;
-        self.audio_sync
-            .bind(py)
-            .borrow_mut()
-            .advance_to_native(py, self.total_tstates)?;
-        if self.vdp.bind(py).borrow().interrupt_pending_native() {
-            self.cpu.bind(py).borrow_mut().request_int(0xFF);
-        } else {
-            self.cpu.bind(py).borrow_mut().clear_int_request();
-        }
+    fn step(&mut self) -> PyResult<u32> {
+        let cycles = self
+            .machine
+            .step()
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        self.total_instructions = self.total_instructions.saturating_add(1);
         Ok(cycles)
     }
 
-    fn run_frame_inner(&mut self, py: Python<'_>, max_steps: usize) -> PyResult<usize> {
-        let start_frame = self.vdp.bind(py).borrow().frame_number_native();
+    fn run_frame(&mut self, max_steps: usize) -> PyResult<usize> {
+        if max_steps == 0 {
+            return Err(PyValueError::new_err("max_steps must be positive"));
+        }
+        let start_frame = self.machine.vdp.frame_number();
         for steps in 1..=max_steps {
-            self.step_inner(py)?;
-            if self.vdp.bind(py).borrow().frame_number_native() != start_frame {
+            self.step()?;
+            if self.machine.vdp.frame_number() != start_frame {
                 return Ok(steps);
             }
         }
         Err(PyRuntimeError::new_err(
-            "Limite de instruções excedido antes do próximo quadro.",
+            "frame did not complete within max_steps",
         ))
+    }
+
+    fn run_frames(&mut self, count: usize) -> PyResult<usize> {
+        let mut total_steps = 0usize;
+        for _ in 0..count {
+            total_steps = total_steps.saturating_add(self.run_frame(100_000)?);
+        }
+        Ok(total_steps)
     }
 }

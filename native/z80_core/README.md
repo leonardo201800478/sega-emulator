@@ -29,3 +29,8 @@ The Qt frontend uses the Rust machine unconditionally. There is no user-facing P
 The Windows workflow `.github/workflows/qt-rust-z80-core.yml` runs Rust formatting, Clippy, Rust unit tests, Maturin extension build, Ruff, targeted Qt/backend and Python/Rust parity tests, and the full pytest suite. Check the current run result before treating a revision as validated.
 
 Targeted differential tests compare registers, flags, memory, I/O, cycle counts and auxiliary state with the Python reference. A passing differential suite is evidence for the tested cases, not proof of full Z80 compatibility or cycle accuracy. Manual validation with a legally obtained ROM and comparison against a pinned independent emulator remains recommended.
+
+
+## Architecture note
+
+The integrated SG-1000 machine binding is a thin PyO3 adapter over `native/sg1000_core`. It does not own alternate memory, VDP, PSG, or machine implementations. `RustZ80Cpu` remains an isolated legacy CPU differential harness and is not used by the integrated machine runtime.

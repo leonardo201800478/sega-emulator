@@ -10,12 +10,10 @@ use sega_z80_alu::{adc8, add8, and8, cp8, or8, sbc8, sub8, xor8};
 
 mod memory;
 use memory::NativeMemoryBus;
-mod vdp;
-use vdp::NativeTms9918A;
-mod audio;
-use audio::{NativeAudioSynchronizer, NativeSn76489};
 mod machine;
-use machine::{NativeSG1000Io, NativeSG1000Machine};
+use machine::{
+    NativeCpuSnapshot, NativePsgSnapshot, NativeSG1000Machine, NativeVdpSnapshot,
+};
 
 const FLAG_C: u8 = 0x01;
 const FLAG_N: u8 = 0x02;
@@ -29,7 +27,6 @@ pub struct RustZ80Cpu {
     bus: Option<Py<PyAny>>,
     native_memory: Option<Py<NativeMemoryBus>>,
     io_bus: Option<Py<PyAny>>,
-    native_io: Option<Py<NativeSG1000Io>>,
     #[pyo3(get, set)]
     pub a: u8,
     #[pyo3(get, set)]
@@ -272,15 +269,6 @@ impl RustZ80Cpu {
 }
 
 impl RustZ80Cpu {
-    pub(crate) fn new_with_native_buses(
-        memory: Py<NativeMemoryBus>,
-        native_io: Py<NativeSG1000Io>,
-    ) -> Self {
-        let mut cpu = Self::new_inner(None, Some(memory), None);
-        cpu.native_io = Some(native_io);
-        cpu
-    }
-
     fn new_inner(
         bus: Option<Py<PyAny>>,
         native_memory: Option<Py<NativeMemoryBus>>,
@@ -290,7 +278,6 @@ impl RustZ80Cpu {
             bus,
             native_memory,
             io_bus,
-            native_io: None,
             a: 0,
             f: 0,
             b: 0,
@@ -347,9 +334,6 @@ impl RustZ80Cpu {
     }
 
     fn read_port(&self, py: Python<'_>, address: u16) -> PyResult<u8> {
-        if let Some(io) = &self.native_io {
-            return io.bind(py).borrow_mut().read_port_native(py, address);
-        }
         let io = self
             .io_bus
             .as_ref()
@@ -364,13 +348,6 @@ impl RustZ80Cpu {
         value: u8,
         cycle_offset: Option<u64>,
     ) -> PyResult<()> {
-        if let Some(io) = &self.native_io {
-            let tstate = self.total_cycles.wrapping_add(cycle_offset.unwrap_or(0));
-            return io
-                .bind(py)
-                .borrow_mut()
-                .write_port_at_native(py, address, value, tstate);
-        }
         let io = self
             .io_bus
             .as_ref()
@@ -1615,11 +1592,10 @@ fn is_unassigned_ed_opcode(opcode: u8) -> bool {
 #[pymodule]
 fn sega_z80_core(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<NativeMemoryBus>()?;
-    module.add_class::<NativeTms9918A>()?;
-    module.add_class::<NativeSn76489>()?;
-    module.add_class::<NativeAudioSynchronizer>()?;
-    module.add_class::<NativeSG1000Io>()?;
     module.add_class::<NativeSG1000Machine>()?;
+    module.add_class::<NativeCpuSnapshot>()?;
+    module.add_class::<NativeVdpSnapshot>()?;
+    module.add_class::<NativePsgSnapshot>()?;
     module.add_class::<RustZ80Cpu>()?;
     Ok(())
 }

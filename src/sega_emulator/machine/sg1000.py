@@ -123,11 +123,65 @@ class SG1000Machine:
                 profile.cartridge_ram_start,
                 profile.cartridge_ram_end,
             )
-            self.vdp = self.native_machine.vdp
-            self.psg = self.native_machine.psg
-            self.audio_sync = self.native_machine.audio_sync
-            self.memory_bus = self.native_machine.memory_bus
-            self.cpu = self.native_machine.cpu
+            # The Rust machine owns live device state; properties below expose snapshots.
+
+
+    @property
+    def cpu(self):
+        if self.cpu_core == "rust":
+            return self.native_machine.cpu
+        return self._cpu
+
+    @cpu.setter
+    def cpu(self, value):
+        self._cpu = value
+
+    @property
+    def vdp(self):
+        if self.cpu_core == "rust":
+            return self.native_machine.vdp
+        return self._vdp
+
+    @vdp.setter
+    def vdp(self, value):
+        self._vdp = value
+
+    @property
+    def psg(self):
+        if self.cpu_core == "rust":
+            return self.native_machine.psg
+        return self._psg
+
+    @psg.setter
+    def psg(self, value):
+        self._psg = value
+
+    @property
+    def audio_sync(self):
+        if self.cpu_core == "rust":
+            return self.native_machine
+        return self._audio_sync
+
+    @audio_sync.setter
+    def audio_sync(self, value):
+        self._audio_sync = value
+
+    @property
+    def memory_bus(self):
+        if self.cpu_core == "rust":
+            return self.native_machine
+        return self._memory_bus
+
+    @memory_bus.setter
+    def memory_bus(self, value):
+        self._memory_bus = value
+
+    def request_nmi(self) -> None:
+        if self.cpu_core == "rust":
+            self.native_machine.request_nmi()
+        else:
+            self.cpu.request_nmi()
+
 
     def set_sprite_limit_enabled(self, enabled: bool) -> None:
         """Configure o limite do VDP; o runtime de produção encaminha ao Rust."""
@@ -223,6 +277,8 @@ class SG1000Machine:
 
     def drain_audio_samples(self, max_samples: int | None = None) -> list[float]:
         """Retira amostras mono produzidas pelo PSG desde a última leitura."""
+        if self.cpu_core == "rust":
+            return self.native_machine.drain_audio_samples(max_samples)
         return self.psg.drain_samples(max_samples)
 
     def run_frame(self, max_steps: int = 100_000) -> int:

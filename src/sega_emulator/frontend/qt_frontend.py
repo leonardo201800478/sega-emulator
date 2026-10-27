@@ -291,7 +291,7 @@ def run(initial_path: Path | None = None) -> None:
         hold_pressed = any("hold" in actions[player] for player in (1, 2))
         if hold_pressed and not hold_was_pressed:
             # The console Hold switch is an edge-triggered NMI, not a joystick bit.
-            machine.cpu.request_nmi()
+            machine.request_nmi()
         hold_was_pressed = hold_pressed
 
     class KeyboardInputFilter(QObject):
