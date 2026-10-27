@@ -18,8 +18,13 @@ from sega_emulator.rom_loader import list_rom_members, load_rom
 def main(argv: Sequence[str] | None = None) -> int:
     """Carrega uma ROM e abre a interface, ou executa em modo headless."""
     arguments = list(sys.argv[1:] if argv is None else argv)
-    parser = argparse.ArgumentParser(description="Emulador experimental Sega SG-1000", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--version", action="version", version="Sega Emulator SG-1000 0.1.0")
+    parser = argparse.ArgumentParser(
+        description="Emulador experimental Sega SG-1000",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "--version", action="version", version="Sega Emulator SG-1000 0.1.0"
+    )
     parser.add_argument(
         "rom",
         type=Path,
@@ -46,13 +51,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="diretório de logs da sessão (padrão: ./logs)",
     )
     parser.add_argument(
-        "--log-level", choices=("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"),
-        default="INFO", type=str.upper, help="nível mínimo dos logs",
+        "--log-level",
+        choices=("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"),
+        default="INFO",
+        type=str.upper,
+        help="nível mínimo dos logs",
     )
-    parser.add_argument("--list-roms", type=Path, metavar="ZIP",
-                        help="lista ROMs compatíveis dentro de um ZIP e encerra")
-    parser.add_argument("--summary-json", type=Path, metavar="ARQUIVO",
-                        help="grava resumo JSON da execução headless")
+    parser.add_argument(
+        "--list-roms",
+        type=Path,
+        metavar="ZIP",
+        help="lista ROMs compatíveis dentro de um ZIP e encerra",
+    )
+    parser.add_argument(
+        "--summary-json",
+        type=Path,
+        metavar="ARQUIVO",
+        help="grava resumo JSON da execução headless",
+    )
     args = parser.parse_args(arguments)
 
     if args.list_roms is not None:
@@ -60,8 +76,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             members = list_rom_members(args.list_roms)
         except ValueError as exc:
             parser.error(str(exc))
-        print(json.dumps({"zip": str(args.list_roms), "roms": members},
-                         ensure_ascii=False, indent=2))
+        print(
+            json.dumps(
+                {"zip": str(args.list_roms), "roms": members},
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
         return 0
     if args.headless_frames is not None and args.headless_frames < 1:
         parser.error("--headless-frames deve ser maior ou igual a 1")
@@ -160,7 +181,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(
                 f"Execução headless concluída: quadros={frame_delta}, "
                 f"instruções={instruction_delta}, PC=0x{machine.cpu.pc:04X}, "
-                f"T-states={tstates_delta}, velocidade={speed_percent:.2f}% do clock nominal, "
+                f"T-states={tstates_delta}, "
+                f"velocidade={speed_percent:.2f}% do clock nominal, "
                 f"duração={elapsed_seconds:.3f}s, ROM SHA-256={loaded.sha256}"
             )
             if args.summary_json is not None:
