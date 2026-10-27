@@ -1068,4 +1068,31 @@ mod tests {
         // Rendering additional sprites must not hide the hardware overflow index.
         assert_eq!(fifth, Some(4));
     }
+    #[test]
+    fn sprite_line_inspection_preserves_indices_and_overflow() {
+        let mut vdp = Tms9918A::new();
+        vdp.registers[5] = 0x20;
+        for index in 0..5 {
+            let offset = 0x1000 + index * 4;
+            vdp.vram[offset..offset + 4]
+                .copy_from_slice(&[0xFF, (index * 8) as u8, 0, 0x0F]);
+        }
+        vdp.vram[0x1000 + 5 * 4] = 0xD0;
+
+        let (active, fifth) = inspect_sprite_line(vdp.vram(), vdp.registers(), 0, true);
+        assert_eq!(
+            active.iter().map(|sprite| sprite.0).collect::<Vec<_>>(),
+            vec![0, 1, 2, 3]
+        );
+        assert_eq!(fifth, Some(4));
+
+        vdp.set_sprite_limit_enabled(false);
+        let (active, fifth) = inspect_sprite_line(vdp.vram(), vdp.registers(), 0, false);
+        assert_eq!(
+            active.iter().map(|sprite| sprite.0).collect::<Vec<_>>(),
+            vec![0, 1, 2, 3, 4]
+        );
+        assert_eq!(fifth, Some(4));
+    }
+
 }
