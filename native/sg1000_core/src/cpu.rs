@@ -1586,6 +1586,46 @@ mod tests {
     }
 
     #[test]
+    fn scf_uses_q_latch_for_undocumented_flag_bits() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..2].copy_from_slice(&[0x00, 0x37]); // NOP; SCF
+        let mut cpu = Z80::default();
+        cpu.registers.a = 0;
+        cpu.registers.f = FLAG_XY & 0x20;
+
+        assert_eq!(cpu.step(&mut bus), Ok(4));
+        assert_eq!(cpu.q, 0); // NOP does not write flags.
+        assert_eq!(cpu.step(&mut bus), Ok(4));
+        assert_eq!(cpu.registers.f, 0x21); // old F contributes bit 5 through Q.
+        assert_eq!(cpu.q, 0x21);
+    }
+
+    #[test]
+    fn ld_a_i_interrupt_edge_clears_pv_before_maskable_interrupt_service() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..3].copy_from_slice(&[0xED, 0x57, 0x00]); // LD A,I; NOP
+        let mut cpu = Z80 {
+            interrupt_mode: 1,
+            i: 0x80,
+            ..Z80::default()
+        };
+        cpu.registers.sp = 0xC100;
+        cpu.iff1 = true;
+        cpu.iff2 = true;
+
+        assert_eq!(cpu.step(&mut bus), Ok(9));
+        assert_eq!(cpu.registers.a, 0x80);
+        assert_ne!(cpu.registers.f & FLAG_PV, 0);
+        assert!(cpu.p);
+
+        cpu.request_int(0xFF);
+        assert_eq!(cpu.step(&mut bus), Ok(13));
+        assert_eq!(cpu.registers.pc, 0x0038);
+        assert_eq!(cpu.registers.f & FLAG_PV, 0);
+        assert!(!cpu.p);
+    }
+
+    #[test]
     fn nmi_pushes_pc_vectors_and_copies_iff1_to_iff2() {
         let mut bus = TestBus([0; 0x10000]);
         let mut cpu = Z80::default();
