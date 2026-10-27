@@ -247,7 +247,12 @@ impl Tms9918A {
     }
 
     pub fn render_frame(&self) -> Vec<u8> {
-        render_frame_bytes(&self.vram, &self.registers, self.status, self.sprite_limit_enabled)
+        render_frame_bytes(
+            &self.vram,
+            &self.registers,
+            self.status,
+            self.sprite_limit_enabled,
+        )
     }
 }
 
@@ -434,7 +439,12 @@ fn render_scanline(
     );
 }
 
-fn render_frame_bytes(vram: &[u8], registers: &[u8], status: u8, sprite_limit_enabled: bool) -> Vec<u8> {
+fn render_frame_bytes(
+    vram: &[u8],
+    registers: &[u8],
+    status: u8,
+    sprite_limit_enabled: bool,
+) -> Vec<u8> {
     let backdrop = registers[7] & 0x0F;
     let mut pixels = vec![0; RGB_FRAME_SIZE];
     for pixel in pixels.as_chunks_mut::<3>().0 {
@@ -455,7 +465,14 @@ fn render_frame_bytes(vram: &[u8], registers: &[u8], status: u8, sprite_limit_en
     }
     if mode != 1 {
         let mut status_copy = status;
-        render_sprites(vram, registers, &mut status_copy, &mut pixels, false, sprite_limit_enabled);
+        render_sprites(
+            vram,
+            registers,
+            &mut status_copy,
+            &mut pixels,
+            false,
+            sprite_limit_enabled,
+        );
     }
     pixels
 }
@@ -725,7 +742,7 @@ fn render_sprites(
 
 #[cfg(test)]
 mod tests {
-    use super::{sprite_line_active, Tms9918A};
+    use super::{Tms9918A, sprite_line_active};
 
     #[test]
     fn sprite_limit_can_be_disabled_for_diagnostic_rendering() {
@@ -740,7 +757,8 @@ mod tests {
         assert_eq!(fifth, Some(4));
 
         vdp.set_sprite_limit_enabled(false);
-        let (active, fifth) = sprite_line_active(&vdp.vram, &vdp.registers, 0, vdp.sprite_limit_enabled());
+        let (active, fifth) =
+            sprite_line_active(&vdp.vram, &vdp.registers, 0, vdp.sprite_limit_enabled());
         assert_eq!(active.len(), 5);
         assert_eq!(fifth, None);
     }
