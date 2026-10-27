@@ -10,6 +10,8 @@ from __future__ import annotations
 import logging
 from threading import Lock
 
+import numpy as np
+
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QColor, QImage, QPixmap
 from PySide6.QtQml import QQmlComponent, QQmlImageProviderBase
@@ -20,6 +22,8 @@ from PySide6.QtQuick import (
     QSGRendererInterface,
 )
 from PySide6.QtWidgets import QLabel, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget
+
+from sega_emulator.frontend.qt.video_filters import apply_video_filter_rgb
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +131,15 @@ class VideoWidget(QWidget):
                 "graphics_api must be auto, vulkan, d3d11, d3d12, or raster"
             )
         self._source_image: QImage | None = None
+        self._present_image: QImage | None = None
         self._filter_mode = "nearest"
+        self._crt_parameters = {
+            "scanline_intensity": 40,
+            "scanline_thickness": 50,
+            "phosphor_mask": 25,
+            "curvature": 0,
+            "signal_mode": "rgb",
+        }
         self._integer_scale = True
         self._graphics_failed = False
         self._graphics_api = graphics_api
@@ -304,11 +316,37 @@ class VideoWidget(QWidget):
         return True
 
     def set_filter_mode(self, mode: str) -> None:
-        if mode not in ("nearest", "bilinear"):
-            raise ValueError("mode deve ser 'nearest' ou 'bilinear'")
+        if mode not in ("nearest", "bilinear", "dither_blending", "crt_ntsc"):
+            raise ValueError("modo de filtro de vídeo inválido")
         self._filter_mode = mode
         self._apply_render_settings()
-        self._refresh_raster_fallback()
+        self._refresh_filtered_frame()
+
+    def set_crt_parameters(
+        self,
+        *,
+        scanline_intensity: int,
+        scanline_thickness: int,
+        phosphor_mask: int,
+        curvature: int,
+        signal_mode: str,
+    ) -> None:
+        """Configure presentation-only CRT effects and refresh the current frame."""
+        candidate = {
+            "scanline_intensity": scanline_intensity,
+            "scanline_thickness": scanline_thickness,
+            "phosphor_mask": phosphor_mask,
+            "curvature": curvature,
+            "signal_mode": signal_mode,
+        }
+        # Validate the complete setting set before mutating widget state.
+        apply_video_filter_rgb(
+            np.zeros((1, 1, 3), dtype=np.uint8),
+            "crt_ntsc",
+            **candidate,
+        )
+        self._crt_parameters = candidate
+        self._refresh_filtered_frame()
 
     def set_integer_scale(self, enabled: bool) -> None:
         if type(enabled) is not bool:
@@ -318,15 +356,11 @@ class VideoWidget(QWidget):
         self._refresh_raster_fallback()
 
     def set_framebuffer(self, image: QImage) -> None:
-        """Publish a copy of the completed frame; the emulator may reuse its buffer."""
+        """Publish a completed frame without modifying the emulator-owned buffer."""
         self._source_image = QImage(image)
-        if self._image_provider is not None:
-            self._image_provider.set_image(self._source_image)
+        self._refresh_filtered_frame()
         if self._qml_root is not None and not self._graphics_failed:
             self._qml_root.setProperty("hasFrame", True)
-            self._qml_root.setProperty(
-                "frameRevision", int(self._qml_root.property("frameRevision")) + 1
-            )
         if self._render_backend == "raster" or self._graphics_failed:
             self._refresh_raster_fallback()
             self._stack.setCurrentWidget(self._fallback)
@@ -339,6 +373,7 @@ class VideoWidget(QWidget):
         self, message: str = "Abra uma ROM SG-1000 pelo menu Arquivo"
     ) -> None:
         self._source_image = None
+        self._present_image = None
         if self._image_provider is not None:
             self._image_provider.set_image(None)
         if self._qml_root is not None:
@@ -356,30 +391,62 @@ class VideoWidget(QWidget):
     def _apply_render_settings(self) -> None:
         if self._qml_root is None:
             return
-        self._qml_root.setProperty("filterMode", self._filter_mode)
+        scale_filter = "bilinear" if self._filter_mode == "bilinear" else "nearest"
+        self._qml_root.setProperty("filterMode", scale_filter)
         self._qml_root.setProperty("integerScale", self._integer_scale)
 
-    def _refresh_raster_fallback(self) -> None:
+    def _refresh_filtered_frame(self) -> None:
         if self._source_image is None or self._source_image.isNull():
+            self._present_image = None
+            return
+        source = self._source_image.convertToFormat(QImage.Format.Format_RGB888)
+        width, height = source.width(), source.height()
+        stride = source.bytesPerLine()
+        raw = np.frombuffer(
+            source.constBits(), dtype=np.uint8, count=source.sizeInBytes()
+        ).reshape(height, stride)
+        rgb = raw[:, : width * 3].reshape(height, width, 3)
+        filtered = apply_video_filter_rgb(
+            rgb,
+            self._filter_mode,
+            **self._crt_parameters,
+        )
+        self._present_image = QImage(
+            filtered.data,
+            width,
+            height,
+            int(filtered.strides[0]),
+            QImage.Format.Format_RGB888,
+        ).copy()
+        if self._image_provider is not None:
+            self._image_provider.set_image(self._present_image)
+        if self._qml_root is not None and not self._graphics_failed:
+            self._qml_root.setProperty(
+                "frameRevision", int(self._qml_root.property("frameRevision")) + 1
+            )
+        self._refresh_raster_fallback()
+
+    def _refresh_raster_fallback(self) -> None:
+        if self._present_image is None or self._present_image.isNull():
             return
         available = self._fallback.contentsRect().size()
         width_factor = available.width() // self.BASE_WIDTH
         height_factor = available.height() // self.BASE_HEIGHT
         factor = min(width_factor, height_factor)
         transformation = (
-            Qt.TransformationMode.FastTransformation
-            if self._filter_mode == "nearest"
-            else Qt.TransformationMode.SmoothTransformation
+            Qt.TransformationMode.SmoothTransformation
+            if self._filter_mode == "bilinear"
+            else Qt.TransformationMode.FastTransformation
         )
         if self._integer_scale and factor >= 1:
-            target = self._source_image.size() * factor
-            scaled = QPixmap.fromImage(self._source_image).scaled(
+            target = self._present_image.size() * factor
+            scaled = QPixmap.fromImage(self._present_image).scaled(
                 target,
                 Qt.AspectRatioMode.KeepAspectRatio,
                 transformation,
             )
         else:
-            scaled = QPixmap.fromImage(self._source_image).scaled(
+            scaled = QPixmap.fromImage(self._present_image).scaled(
                 available,
                 Qt.AspectRatioMode.KeepAspectRatio,
                 transformation,
