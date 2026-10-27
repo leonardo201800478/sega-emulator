@@ -107,3 +107,24 @@ def test_cli_help_exposes_diagnostic_options(capsys):
         cli.main(["--help"])
     assert result.value.code == 0
     assert "--summary-json" in capsys.readouterr().out
+
+
+def test_cli_rejects_zero_headless_frames():
+    import sega_emulator.__main__ as cli
+
+    with pytest.raises(SystemExit) as result:
+        cli.main(["--headless-frames", "0"])
+    assert result.value.code == 2
+
+
+def test_cli_lists_roms_from_zip(tmp_path, capsys):
+    import sega_emulator.__main__ as cli
+
+    archive_path = tmp_path / "games.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("games/test.sg", bytes([0, 195, 0, 0]))
+        archive.writestr("readme.txt", "not a ROM")
+
+    assert cli.main(["--list-roms", str(archive_path)]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["roms"] == ["games/test.sg"]
