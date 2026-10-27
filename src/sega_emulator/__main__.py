@@ -71,7 +71,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                 "rom_sha256": loaded.sha256,
             },
         )
-        machine = SG1000Machine(loaded.data)
+        machine = SG1000Machine(loaded.data, cpu_core="rust")
         logger.info(
             "Máquina criada",
             extra={
@@ -83,23 +83,23 @@ def main(argv: Sequence[str] | None = None) -> None:
         if args.headless_frames is not None:
             if args.headless_frames < 0:
                 parser.error("--headless-frames não pode ser negativo")
-            steps = machine.run_frames(args.headless_frames)
+            machine.run_frames(args.headless_frames)
             logger.info(
                 "Execução headless concluída",
                 extra={
                     "event": "headless_complete",
                     "frame": machine.vdp.frame_number,
                     "pc": machine.cpu.pc,
-                    "instructions": steps,
-                    "tstates": machine.cpu.total_cycles,
+                    "instructions": machine.total_instructions,
+                    "tstates": machine.total_tstates,
                     "scanline": machine.vdp.scanline,
                     "status": machine.vdp.status,
                 },
             )
             print(
                 f"Execução headless concluída: quadros={machine.vdp.frame_number}, "
-                f"instruções={steps}, PC=0x{machine.cpu.pc:04X}, "
-                f"T-states={machine.cpu.total_cycles}, ROM SHA-256={loaded.sha256}"
+                f"instruções={machine.total_instructions}, PC=0x{machine.cpu.pc:04X}, "
+                f"T-states={machine.total_tstates}, ROM SHA-256={loaded.sha256}"
             )
             return
 

@@ -37,12 +37,14 @@ def test_main_window_exposes_required_menus_and_shortcuts(qt_app) -> None:
         on_open_logs=lambda: called.append("logs"),
         on_show_machine_state=lambda: called.append("state"),
         on_video_scale=lambda scale: called.append(f"scale:{scale}"),
+        on_configure_drivers=lambda: called.append("drivers"),
     )
 
     menu_titles = [action.text() for action in window.menuBar().actions()]
     assert menu_titles == [
         "&Arquivo",
         "&Emulação",
+        "&Drivers",
         "&Vídeo",
         "&Configurações",
         "&Diagnóstico",
@@ -80,7 +82,7 @@ def test_video_scale_updates_window_size(qt_app, scale: int) -> None:
     window.close()
 
 
-def test_main_window_exposes_emulation_backend_selector(qt_app) -> None:
+def test_main_window_exposes_drivers_menu_and_callback(qt_app) -> None:
     called: list[str] = []
     window = EmulatorMainWindow(
         on_open_rom=lambda: None,
@@ -92,11 +94,12 @@ def test_main_window_exposes_emulation_backend_selector(qt_app) -> None:
         on_open_logs=lambda: None,
         on_show_machine_state=lambda: None,
         on_video_scale=lambda scale: None,
-        on_select_emulation_backend=lambda: called.append("select-backend"),
+        on_configure_drivers=lambda: called.append("drivers"),
     )
-    assert window.select_emulation_backend_action.isEnabled()
-    window.select_emulation_backend_action.trigger()
-    assert called == ["select-backend"]
+    assert window.configure_drivers_action.isEnabled()
+    window.configure_drivers_action.trigger()
+    assert called == ["drivers"]
+    assert not hasattr(window, "select_emulation_backend_action")
     window.close()
 
 
