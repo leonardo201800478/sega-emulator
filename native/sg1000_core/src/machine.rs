@@ -306,7 +306,7 @@ impl Sg1000Machine {
 
 #[cfg(test)]
 mod tests {
-    use super::{Sg1000Machine, SG1000_CPU_CLOCK_HZ};
+    use super::{SG1000_CPU_CLOCK_HZ, Sg1000Machine};
     use crate::{IoError, MemoryConfig, PsgWriteEvent};
 
     #[test]
