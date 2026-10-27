@@ -1595,7 +1595,7 @@ mod tests {
         bus.0[..2].copy_from_slice(&[0x00, 0x37]); // NOP; SCF
         let mut cpu = Z80::default();
         cpu.registers.a = 0;
-        cpu.registers.f = FLAG_XY & 0x20;
+        cpu.registers.f = 0x20;
 
         assert_eq!(cpu.step(&mut bus), Ok(4));
         assert_eq!(cpu.q, 0); // NOP does not write flags.
