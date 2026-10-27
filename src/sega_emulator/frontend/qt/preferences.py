@@ -86,7 +86,12 @@ class FrontendPreferences:
             raise ValueError("vrr_mode must be driver, prefer, or off")
         if self.av_sync_mode not in ("low_latency", "audio_clock"):
             raise ValueError("av_sync_mode must be low_latency or audio_clock")
-        for field_name in ("crt_scanline_intensity", "crt_scanline_thickness", "crt_phosphor_mask", "crt_curvature"):
+        for field_name in (
+            "crt_scanline_intensity",
+            "crt_scanline_thickness",
+            "crt_phosphor_mask",
+            "crt_curvature",
+        ):
             value = getattr(self, field_name)
             if type(value) is not int or not 0 <= value <= 100:
                 raise ValueError(f"{field_name} must be an integer from 0 to 100")
@@ -172,8 +177,18 @@ class FrontendPreferences:
         if av_sync_mode not in ("low_latency", "audio_clock"):
             av_sync_mode = defaults.av_sync_mode
         crt_values = {
-            name: _bounded_int(store.value(name, getattr(defaults, name)), getattr(defaults, name), 0, 100)
-            for name in ("crt_scanline_intensity", "crt_scanline_thickness", "crt_phosphor_mask", "crt_curvature")
+            name: _bounded_int(
+                store.value(name, getattr(defaults, name)),
+                getattr(defaults, name),
+                0,
+                100,
+            )
+            for name in (
+                "crt_scanline_intensity",
+                "crt_scanline_thickness",
+                "crt_phosphor_mask",
+                "crt_curvature",
+            )
         }
         return cls(
             window_width=width,
