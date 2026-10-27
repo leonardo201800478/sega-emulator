@@ -121,8 +121,12 @@ class SettingsDialog(QDialog):
         self.video_filter = QComboBox()
         self.video_filter.addItem("Nativo / Nearest — pixels nítidos", "nearest")
         self.video_filter.addItem("Bilinear — suavização", "bilinear")
-        self.video_filter.addItem("Dither Blending — mistura seletiva de padrões", "dither_blending")
-        self.video_filter.addItem("CRT / NTSC — scanlines e sinal aproximado", "crt_ntsc")
+        self.video_filter.addItem(
+            "Dither Blending — mistura seletiva de padrões", "dither_blending"
+        )
+        self.video_filter.addItem(
+            "CRT / NTSC — scanlines e sinal aproximado", "crt_ntsc"
+        )
         index = self.video_filter.findData(preferences.video_filter)
         self.video_filter.setCurrentIndex(max(0, index))
         video_form.addRow("Filtro de escala", self.video_filter)
@@ -192,7 +196,9 @@ class SettingsDialog(QDialog):
         crt_form = QFormLayout(crt_group)
         self.crt_signal_mode = QComboBox()
         self.crt_signal_mode.addItem("RGB — sinal limpo", "rgb")
-        self.crt_signal_mode.addItem("Composite NTSC — crominância suavizada", "composite")
+        self.crt_signal_mode.addItem(
+            "Composite NTSC — crominância suavizada", "composite"
+        )
         self.crt_signal_mode.addItem("RF — sinal mais degradado (aproximação)", "rf")
         self.crt_signal_mode.setCurrentIndex(
             max(0, self.crt_signal_mode.findData(preferences.crt_signal_mode))
