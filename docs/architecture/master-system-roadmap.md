@@ -177,7 +177,7 @@ Foi criado o crate `native/sms_core` e adicionado ao workspace Rust, sem depend�
 - mapa inicial com mapper Sega padrão, três slots de ROM de 16 KiB, 1 KiB inicial fixo e 8 KiB de RAM espelhada;
 - testes unitários sintéticos para configuração, preservação de bytes, seleção de bancos, fronteiras de RAM e rejeição explícita de ROM maior que o alcance deste mapper.
 
-**Limites conhecidos desta fatia:** não implementa SRAM de cartucho, variantes de mapper, CPU, I/O, VDP, PSG/FM nem scheduler. A rejeição de ROM maior que 4 MiB é específica do mapper Sega padrão implementado; a imagem continua preservada sem truncamento, e suporte maior exige outro mapper validado. O mapa de memória é inicial e precisa de revisão contra documentação técnica/oráculo independente antes de ser tratado como validado em hardware.
+**Limites conhecidos desta fatia:** não implementa SRAM de cartucho, variantes de mapper, CPU, I/O, VDP, PSG/FM nem scheduler. A rejeição de ROM maior que 1 MiB é o limite superior conservador desta fatia, baseado na maior revisão conhecida do mapper Sega descrita pela documentação; revisões menores existem. A imagem continua preservada sem truncamento, e suporte maior exige outro mapper validado. O mapa de memória é inicial e precisa de revisão contra documentação técnica/oráculo independente antes de ser tratado como validado em hardware.
 
 **Validação após esta alteração:** os testes foram escritos, mas não foram executados localmente nesta sessão. Aguardar CI no SHA candidato e inspecionar os logs; não declarar aprovação até haver resultados.
 
