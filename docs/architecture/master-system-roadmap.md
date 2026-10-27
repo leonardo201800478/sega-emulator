@@ -1,69 +1,139 @@
 # Sega Master System — plano de implementação
 
-**Estado:** planejamento inicial; o núcleo SMS ainda não está implementado neste documento.
-**Base de trabalho:** branch `feat/rust-master-system-foundation`, criada a partir de `main` em `fec7a6d66e80693655d5295cb499ec3c572a02dc`.
+**Estado:** planejamento arquitetural; a implementação funcional SMS ainda não foi iniciada por este documento.  
+**Base de trabalho:** branch `feat/rust-master-system-foundation`, criada a partir de `main` em `fec7a6d66e80693655d5295cb499ec3c572a02dc`.  
 **Rastreabilidade:** [Issue #115](https://github.com/leonardo201800478/sega-emulator/issues/115).
 
-## Princípios
+## Objetivo e decisões fixas
 
-1. O SG-1000 existente permanece inalterado funcionalmente durante a introdução do SMS.
-2. Rust é a implementação oficial para novos componentes temporais e de hardware assim que os contratos e testes de aceitação estiverem definidos.
-3. Compartilhar código não significa compartilhar o perfil de hardware: diferenças devem ser explícitas por tipo/configuração, não por condicionais implícitas espalhadas.
-4. O VDP SMS (Mode 4) é um componente separado do TMS9918A usado no SG-1000. Compartilhar interfaces genéricas só é permitido quando não esconde diferenças de registradores, VRAM/CRAM, sprites, interrupções ou temporização.
-5. Não afirmar precisão ciclo a ciclo sem um modelo temporal de barramento e evidências independentes.
+1. O SG-1000 existente permanece funcionalmente inalterado.
+2. O núcleo SMS será um crate Rust independente; não dependerá de `sg1000_core` para reutilizar hardware. Componentes compartilhados devem vir de crates neutros e contratos validados.
+3. Preservar o renderer Vulkan já consolidado e a saída de áudio WASAPI que corrigiu o PSG. A integração será feita por interfaces de áudio/vídeo existentes, sem introduzir um segundo backend paralelo.
+4. O VDP SMS será próprio, distinto do TMS9918A do SG-1000. O renderer Vulkan apresenta o framebuffer; não define o comportamento do VDP.
+5. Implementar o YM2413/OPLL para perfis de hardware que realmente disponham de FM — em particular Master System japonês e Mark III com FM Unit. FM será uma capacidade de hardware configurável/detectável, não uma consequência automática de selecionar qualquer ROM japonesa.
+6. O limite físico padrão de sprites por linha permanecerá ativado. Uma opção de compatibilidade poderá desativá-lo; essa opção é uma melhoria não fiel ao hardware e deve ser identificada como tal.
+7. Região/território, padrão de vídeo (PAL/NTSC/SECAM quando aplicável), revisão/modelo de console e presença de FM são dimensões distintas. Não inferir uma dimensão cegamente a partir de outra.
+8. Não declarar precisão ciclo a ciclo até existir um modelo temporal de barramento e testes independentes que sustentem a afirmação.
+
+## Arquitetura de alto nível
+
+- `native/sms_core`: máquina SMS, mapper/cartucho, memória, I/O, VDP e integração temporal.
+- CPU Z80 e abstrações de áudio compartilhadas apenas depois da auditoria de cobertura e dos contratos; o núcleo SMS não deve importar `sg1000_core` para obter esses componentes.
+- PSG SN76489: reutilizar a implementação validada e o caminho de áudio existente, confirmando clock, divisor, perfil de chip e sincronização no SMS.
+- YM2413: componente FM separado, com temporização própria, estado de registradores e mixagem determinística com o PSG.
+- Vulkan: continuar como backend de apresentação. VDP gera os pixels e eventos de vídeo; Vulkan não deve implementar limites de sprites ou decisões de hardware.
+- WASAPI: continuar como backend de saída. PSG e FM produzem/amostram áudio a partir do tempo de emulação e entregam áudio mixado ao caminho existente, sem chamadas de áudio por instrução Python.
+- Qt/PySide6: adicionar menu `Sistema` para selecionar SG-1000 ou Master System. Os outros menus devem refletir capacidades do sistema ativo, mantendo opções comuns e ocultando/desabilitando opções incompatíveis através de metadados de capacidades, não de condicionais dispersas.
+
+## Contratos de configuração
+
+O estado efetivo da máquina deve ser explícito e persistível. Separar, no mínimo:
+
+- **Sistema:** SG-1000 ou Master System.
+- **Território/modelo:** por exemplo, japonês/domestic ou exportação; incluir diferenças de I/O e disponibilidade de FM.
+- **Padrão de vídeo:** NTSC/PAL e outros perfis apenas quando sustentados por documentação e testes.
+- **Capacidades de hardware:** FM YM2413 presente/ausente; demais diferenças de revisão somente quando necessárias e documentadas.
+- **Compatibilidade de vídeo:** limite de sprites por linha ativado por padrão; opção para desativá-lo.
+- **Cartucho:** tamanho original do arquivo, mapper identificado/selecionado, ROM/RAM de cartucho e persistência quando suportadas.
+
+Ao trocar de sistema, pausar e desmontar com segurança a máquina ativa, aplicar as preferências específicas do destino, atualizar menus/título/diagnósticos e limpar os estados temporais de áudio/vídeo/entrada. Não iniciar automaticamente a ROM anterior no outro console.
 
 ## Inventário inicial do repositório
 
 | Componente | Decisão inicial | Evidência/pendência |
 |---|---|---|
-| Z80 | Compartilhar a implementação somente após confirmar cobertura de instruções, estados de interrupção, T-states e contrato de barramento | O crate `native/sg1000_core` declara uma CPU Rust própria, mas o workspace puro atual tem lacunas de integração; o runtime Qt possui também uma extensão PyO3. Mapear ambos antes de escolher o caminho oficial SMS. |
-| Barramento/CPU bus | Reutilizar o contrato se os métodos e a semântica de acesso servirem ao SMS; adicionar portas e dispositivos por máquina | `native/sg1000_core/src/bus.rs` define acesso de memória e I/O com valores padrão. Não usar o comportamento padrão como modelo SMS final. |
-| RAM/ROM | Implementar um tipo SMS dedicado | O mapa de memória SMS, banking, RAM e mapeadores diferem do mapa SG-1000. |
-| PSG SN76489 | Candidato a compartilhamento após teste de contrato, clock/divisor e sincronização | Não assumir igualdade de perfil elétrico/temporização só por pertencer à mesma família de chip. |
-| VDP | Implementação SMS separada | SMS Mode 4, paleta CRAM, registradores, sprites, contadores e interrupções não são o TMS9918A do SG-1000. |
-| I/O e controles | Criar decodificador SMS próprio; compartilhar abstrações de entrada quando compatíveis | Portas e bits de status específicos devem ser verificados em documentação técnica. |
-| Scheduler | Compartilhar infraestrutura somente após explicitar relógios e ordem dos eventos | Primeiro alvo é determinismo e T-states nominais; acesso ciclo a ciclo será trabalho posterior com testes. |
-| Frontend | Preservar Qt/PySide6; integrar a máquina SMS em etapa posterior | Não modificar UI como parte da primeira fatia de memória. |
+| Z80 | Reutilizar somente após confirmar cobertura de instruções, estados de interrupção, T-states e contrato de barramento | O repositório contém uma CPU Rust no `native/sg1000_core` e também uma extensão PyO3 Z80. Auditar ambas antes de eleger o caminho oficial. |
+| Barramento | Contrato neutro somente se a semântica servir às duas máquinas | Os valores padrão de portas do contrato SG-1000 não são um modelo SMS suficiente. |
+| Memória/cartucho | Módulo SMS próprio e mapper explícito | Validar mapa, banking, boot/BIOS quando aplicável, cart RAM e registradores contra documentação técnica. |
+| PSG SN76489 | Reutilizar a implementação existente após testes de perfil e temporização | Preservar o caminho WASAPI já corrigido; não alterar a implementação SG-1000 sem regressões. |
+| YM2413 | Implementar/adotar componente compatível com licença verificada, isolado do PSG | Testar portas `0xF0`, `0xF1`, detecção/controle em `0xF2`, estado de registradores e coexistência/mute conforme o modelo. |
+| VDP | Implementação SMS separada | Mode 4, VRAM/CRAM, registradores, sprites, contadores, interrupções e diferenças regionais devem ser modelados explicitamente. |
+| Vulkan | Reutilizar o renderer existente | Confirmar contrato de framebuffer, pitch/format, dimensões dinâmicas e mudanças de resolução sem cópias grandes desnecessárias. |
+| WASAPI | Reutilizar o backend de áudio existente | Validar taxas de amostragem, bufferização, underruns, latência e mistura PSG/FM. |
+| I/O e controles | Decodificador SMS próprio | Verificar portas, bits, espelhamentos, território e efeitos do controle de FM. |
+| Scheduler | Infraestrutura neutra apenas após explicitar clocks e ordem dos eventos | Determinismo primeiro; refinamento temporal guiado por testes. |
+| Frontend | Qt/PySide6 com menu `Sistema` e menus dirigidos por capacidades | Guardar preferências por sistema e exibir claramente território, padrão de vídeo e capacidades opcionais. |
 
 ## Sequência de marcos
 
-### SMS-0 — inventário e contratos
+### SMS-0 — inventário, contratos e fontes
 
-- Confirmar qual implementação Z80 é completa e testada no `main` e quais instruções/interrupts ainda têm lacunas.
-- Identificar testes e workflows existentes que podem ser reutilizados sem assumir cobertura não comprovada.
-- Especificar perfil de máquina SMS, região/modelo inicial e política de ROM/mapper.
+- Inspecionar os runtimes Z80, PSG, Vulkan, WASAPI, preferências, carregamento de ROM, menus e workflows atuais antes de modificar código.
+- Documentar contratos de fronteira e identificar testes existentes.
+- Fixar referências independentes para memória/cartucho, temporização PAL/NTSC, VDP/sprites e YM2413; registrar para cada comportamento se é documentado, observado, inferido ou ainda hipótese.
+- Definir perfis de hardware e regras de configuração sem confundir território japonês com PAL/NTSC.
 
-### SMS-1 — memória e cartridge
+### SMS-1 — crate SMS, memória e cartucho
 
-Implementar em Rust um módulo isolado de memória SMS com ROM sintética e banking explícito. Critérios mínimos:
+Criar `native/sms_core` sem dependência de `sg1000_core`. Implementar memória/cartucho com ROMs sintéticas e testes fixos:
 
-- janelas ROM de 16 KiB e comportamento de banking;
-- RAM de 8 KiB e espelhamento conforme o mapa de endereços validado;
-- registradores de controle em `0xFFFC–0xFFFF` e seus efeitos observáveis;
-- limites, imagens ROM inválidas/curtas e comportamento de leitura/escrita em áreas não graváveis;
-- testes determinísticos com vetores fixos independentes da implementação.
+- janelas ROM, banking e registradores de controle conforme mapper/documentação validados;
+- RAM interna, espelhamento e cart RAM quando presentes;
+- limites, ROM vazia/curta, áreas não graváveis, banking inválido e ausência de mapper suportado;
+- tamanho de arquivo preservado sem truncamento e sem limite arbitrário de 8 MiB. A aceitação deve depender do tamanho representável e do mapper efetivamente implementado: não prometer suporte a cartuchos maiores do que o hardware/mapeador modelado;
+- testes de fronteira e determinismo.
 
-O valor inicial dos registradores, a região sempre mapeada e detalhes de banking devem ser confirmados contra documentação de hardware antes de fixar expectativas nos testes.
+Não codificar expectativas de banking ou valores de reset antes de confirmá-los com documentação e/ou vetores independentes.
 
-### SMS-2 — CPU e I/O
+### SMS-2 — CPU, barramento, território e I/O
 
-Conectar Z80 e memória por um barramento SMS. Implementar portas e leitura de controles com máscaras e espelhamentos documentados. Validar instruções, flags, PC, SP, T-states, portas e interrupções em checkpoints sintéticos.
+Conectar Z80, memória e I/O SMS. Testar instruções, flags, PC/SP, T-states, portas, interrupções, reset e perfis de território. Definir uma configuração de máquina explícita para que os mesmos bytes de ROM possam ser executados em perfis distintos sem estado global oculto.
 
-### SMS-3 — VDP Mode 4
+### SMS-3 — VDP Mode 4, dimensões e sprites
 
-Criar VDP SMS separado com VRAM, CRAM, registradores/portas, renderização Mode 4, sprites, status, VBlank/HBlank e interrupções. Avançar de renderização por scanline para granularidade temporal mais fina apenas quando os testes e a arquitetura exigirem.
+Implementar VDP SMS separado com VRAM, CRAM, portas/registradores, Mode 4, scroll, status, interrupções e sprites. Modelar os modos de vídeo e a contagem de linhas conforme o perfil de hardware; o tamanho do framebuffer deve ser dinâmico e compatível com o renderer Vulkan existente.
 
-### SMS-4 — PSG, scheduler e máquina integrada
+**Sprites por linha:**
+- modo padrão: respeitar o limite do hardware e sinalizar overflow/status como o VDP faria;
+- modo opcional “Desbloquear limite de sprites por linha”: processar sprites além do limite físico para reduzir flicker, marcado como não fiel ao hardware;
+- testar o limite, o primeiro sprite excedente, prioridades/ordem, colisões quando aplicáveis e leitura/limpeza dos flags de status;
+- não deixar a opção de compatibilidade alterar silenciosamente o modelo temporal ou o estado dos registradores físicos sem decisão documentada.
 
-Integrar PSG, CPU, VDP, I/O e scheduler com ordem de eventos determinística. Definir como o tempo avança e testar reset, repetibilidade, áudio e estado de vídeo em checkpoints equivalentes.
+### SMS-4 — perfis PAL/NTSC e scheduler determinístico
 
-### SMS-5 — integração Qt e diferencial
+Tratar PAL/NTSC como perfis temporais, não como mero multiplicador de FPS. Validar para cada perfil suportado:
 
-Expor a máquina pela fronteira PyO3 com operações por frame/bloco, sem callbacks Python por instrução/byte. Comparar com um oráculo independente, preferencialmente Gearsystem/Ares para checkpoints observáveis, respeitando licenças e sem copiar código GPL. Validar ROMs homebrew/sintéticas legalmente obtidas e registrar divergências desde o primeiro checkpoint.
+- clock do Z80 e relação de clocks entre CPU, VDP e áudio;
+- total de linhas por quadro, linhas ativas, períodos de blanking e dimensões de imagem;
+- geração e reconhecimento de VBlank/HBlank/IRQs, execução de CPU por linha/quadro e ordem dos eventos;
+- timestamps/amostras de PSG e FM, duração real do quadro e ausência de deriva acumulada;
+- determinismo após reset e em execuções repetidas.
+
+Usar constantes nomeadas e referências por perfil, evitando arredondamentos de frequência de quadro que causem deriva. Os valores numéricos finais devem vir de documentação confiável e testes, não de suposições.
+
+### SMS-5 — PSG, FM YM2413 e mixagem
+
+- Reutilizar PSG e WASAPI já existentes, após provar compatibilidade temporal do perfil SMS.
+- Adicionar YM2413/OPLL com registros e portas compatíveis, controle/detecção conforme hardware, clock, reset e comportamento de mute.
+- Permitir FM somente quando o perfil de hardware oferece esse chip; expor seleção manual/override de compatibilidade sem alterar silenciosamente o território do console.
+- Definir mixagem, ganhos e formato interno com testes de amostras determinísticas. Distinguir fidelidade digital do chip, temporização e características analógicas/níveis de saída.
+- Testar PSG apenas, FM apenas quando permitido, PSG+FM quando o hardware permite ambos, mute, reset, e jogos/ROMs sintéticas com escritas de registradores.
+
+### SMS-6 — Qt, menu Sistema e integração Vulkan/WASAPI
+
+- Adicionar menu `Sistema` com SG-1000 e Master System; manter o sistema ativo visível.
+- Dirigir os demais menus por capacidades declaradas pela máquina ativa. Não mostrar comandos de VDP/áudio inexistentes no sistema selecionado.
+- Manter preferências e ROMs recentes por sistema, sem misturar opções exclusivas.
+- Integrar o framebuffer SMS ao renderer Vulkan e o áudio mixado à saída WASAPI existentes.
+- Integrar via PyO3 em operações por bloco/frame, evitando callbacks Python por instrução/byte e cópias desnecessárias de buffers grandes.
+- Trocar sistema deve encerrar/pausar a instância anterior com segurança, zerar estado temporal e atualizar vídeo/áudio/controles/diagnósticos.
+
+### SMS-7 — diferencial, compatibilidade e aceitação
+
+Comparar com oráculo independente (por exemplo, Ares/Gearsystem e testes públicos pertinentes), sem copiar código ou materiais incompatíveis com a licença. Usar ROMs sintéticas/homebrew e materiais legalmente obtidos. Investigar a primeira divergência de CPU, portas, estado do VDP, framebuffer ou amostras.
+
+A matriz de aceitação deve incluir:
+- SG-1000 sem regressão;
+- SMS em perfis NTSC e PAL suportados;
+- território japonês com FM presente e perfil sem FM;
+- limite padrão e modo opcional de sprites;
+- ROMs pequenas, fronteiras de banking, ROMs acima de 8 MiB com mapper suportado e rejeição explícita de mapper não suportado;
+- repetibilidade, reset, áudio contínuo, dimensões de framebuffer e mudança de sistema;
+- regressões do frontend, Vulkan e WASAPI.
 
 ## Validação obrigatória
 
-Para cada fatia, registrar PASS / FAIL / BLOCKED / NOT RUN para os checks aplicáveis. No workspace Rust:
+Para cada fatia, registrar PASS / FAIL / BLOCKED / NOT RUN. Comandos Rust do workspace:
 
 ```powershell
 cargo fmt --all -- --check
@@ -71,13 +141,15 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
 ```
 
-Para mudanças na extensão PyO3, acrescentar build Release/Maturin e testes de integração do backend. Testes SG-1000 devem continuar passando. Benchmarks não substituem testes de correção; hashes iguais não provam fidelidade absoluta.
+Para a extensão PyO3, acrescentar build Release/Maturin e testes de integração. Executar testes SG-1000 após alterações em componentes compartilhados. Para mudanças em Python, executar `python -m pytest`, `python -m ruff check .` e `python -m ruff format --check .` conforme aplicável. Se um check anterior falhar e impedir o seguinte, marcar o check bloqueado como tal; não reportar aprovação não observada.
 
 ## Referências técnicas iniciais
 
-- SMS Power!, [Documents](https://www.smspower.org/Development/Documents): documentação técnica de hardware SMS/GG e documentos oficiais.
-- Charles MacDonald, [Sega Master System VDP documentation](https://www.smspower.org/Development/VDP-Index): portas, registradores, modos, sprites, temporização e interrupções.
-- [Nuked-SMS](https://github.com/nukeykt/Nuked-SMS): estudo de emulação com foco em precisão e evidência de chips; licença GPL-2.0, não copiar código sem análise de compatibilidade.
-- [Gearsystem](https://github.com/drhelius/Gearsystem): referência comparativa para SMS/GG/SG-1000; licença GPL-3.0, usar como oráculo/estudo sem derivação de código não autorizada.
+- SMS Power!, [Documents](https://www.smspower.org/Development/Documents): documentação técnica de hardware SMS/GG.
+- Charles MacDonald, [Sega Master System VDP documentation](https://www.smspower.org/Development/VDP-Index): VDP, modos, sprites, registradores, interrupções e temporização.
+- SMS Power!, [Audio Control Port](https://www.smspower.org/Development/AudioControlPort): controle e detecção de FM/PSG em hardware compatível.
+- SMS Power!, [YM2413](https://www.smspower.org/Development/YM2413): funcionamento do chip FM.
+- [Nuked-SMS](https://github.com/nukeykt/Nuked-SMS) e [Gearsystem](https://github.com/drhelius/Gearsystem): referências de estudo/teste; verificar licenças antes de reutilizar qualquer material.
+- [Mednafen SMS documentation](https://sources.debian.org/data/main/m/mednafen/1.32.1%2Bdfsg-3/Documentation/sms.html): referência comparativa de opções de território/FM; não substitui evidência de hardware.
 
-Essas referências orientam a investigação; não substituem inspeção dos arquivos atuais nem testes independentes do comportamento implementado.
+Essas referências orientam a investigação; cada comportamento implementado ainda precisa de uma fonte específica, testes e uma classificação clara de evidência.
