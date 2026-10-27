@@ -86,6 +86,18 @@ def test_native_machine_routes_ports_and_steps_like_python() -> None:
     )
 
 
+def test_native_machine_exposes_sprite_limit_control() -> None:
+    pytest.importorskip("sega_z80_core")
+    machine = SG1000Machine(bytes((0xC3, 0x00, 0x00)), cpu_core="rust")
+
+    assert machine.native_machine.sprite_limit_enabled is True
+    machine.set_sprite_limit_enabled(False)
+    assert machine.native_machine.sprite_limit_enabled is False
+    assert machine.vdp.sprite_limit_enabled is False
+    machine.set_sprite_limit_enabled(True)
+    assert machine.native_machine.sprite_limit_enabled is True
+
+
 def test_native_machine_run_frame_matches_python_frame_loop() -> None:
     pytest.importorskip("sega_z80_core")
     rom = b"\xc3\x00\x00"
