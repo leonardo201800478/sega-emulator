@@ -634,7 +634,7 @@ impl Z80 {
                     self.write_index_register(prefix, code, value, true);
                     11
                 } else {
-                    let old = self.read_index_register(prefix, code, true);
+                    let old = self.read_index_register(bus, prefix, code, true);
                     let value =
                         self.increment_decrement_value(old, opcode == 0x25 || opcode == 0x2D);
                     self.write_index_register(prefix, code, value, true);
