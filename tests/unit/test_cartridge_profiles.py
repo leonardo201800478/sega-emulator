@@ -6,7 +6,6 @@ import zlib
 
 from sega_emulator.machine.cartridge_profiles import (
     SG1000_II_RAM_EXT_TYPE_B_CRC32,
-    SG1000_II_RAM_EXT_TYPE_B_SHA256,
     SG1000_II_RAM_EXT_TYPE_B_SIZE,
     SG1000_INTERNAL_RAM_SIZE,
     SG1000_THE_CASTLE_JAPAN_CRC32,

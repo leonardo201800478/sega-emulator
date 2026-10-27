@@ -15,6 +15,7 @@ Instale dependências e a aplicação:
 ```powershell
 py -3.14 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev,qt]"
+.\.venv\Scripts\python.exe -m pip install maturin
 Push-Location native/z80_core
 maturin develop --release --features python-extension
 Pop-Location
