@@ -59,8 +59,8 @@ class FrontendPreferences:
             raise ValueError("recent_roms must contain non-empty path strings")
         if not isinstance(self.controller_config, str):
             raise ValueError("controller_config must be serialized as text")
-        if self.cpu_core not in ("python", "rust"):
-            raise ValueError("cpu_core must be 'python' or 'rust'")
+        if self.cpu_core != "rust":
+            raise ValueError("cpu_core must be 'rust'; the Qt runtime is Rust-only")
         if self.audio_sample_rate not in (22_050, 44_100, 48_000):
             raise ValueError("audio_sample_rate must be 22050, 44100, or 48000")
         if self.audio_buffer_size not in (256, 512, 1024, 2048):
@@ -118,9 +118,10 @@ class FrontendPreferences:
             store.value("diagnostics_enabled", defaults.diagnostics_enabled),
             defaults.diagnostics_enabled,
         )
-        cpu_core = store.value("cpu_core", defaults.cpu_core)
-        if cpu_core not in ("python", "rust"):
-            cpu_core = defaults.cpu_core
+        # Migrate legacy profiles that persisted the removed Python runtime.
+        cpu_core = "rust"
+        if store.value("cpu_core", defaults.cpu_core) != "rust":
+            store.setValue("cpu_core", "rust")
         sample_rate = _bounded_choice(
             store.value("audio_sample_rate", defaults.audio_sample_rate),
             defaults.audio_sample_rate,
