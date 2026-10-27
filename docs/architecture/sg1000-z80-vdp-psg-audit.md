@@ -11,6 +11,24 @@ Close the functional gaps in the native Rust SG-1000 machine by auditing the exi
 - `native/sg1000_core/src/vdp.rs` and `psg.rs` exist as native modules. Their existence and unit tests alone do not establish complete hardware behavior or cycle-level synchronization.
 - The current machine advances devices at instruction boundaries. Do not describe this as bus-cycle-accurate emulation; wait states, contention and sub-instruction event ordering require a separate explicit timing model.
 
+## Progress in the current PR branch
+
+The following implementation slices have been added, but this ledger remains open until independent coverage and integration gates pass on the final candidate SHA:
+
+- Z80 state now includes alternate AF/BC/DE/HL, IX/IY, I/R, IFF1/IFF2, interrupt mode, WZ/MEMPTR, EI delay, NMI and INT request state.
+- The primary opcode decoder is extended with the CB matrix, ED arithmetic/load/I/O/block families, and DD/FD index substitution, displacement, repeated-prefix and indexed-CB handling.
+- The refresh register increments on M1 opcode fetches and HALT refresh cycles.
+- NMI and maskable interrupt service paths cover NMI, IM 1, IM 2, and the common IM 0 RST/NOP acknowledge forms. Other IM 0 data-bus opcodes currently return an explicit error and remain a known limitation.
+- The machine synchronizes the VDP's enabled VBlank interrupt line to the Z80 INT request at instruction boundaries.
+
+### Known limitations that prevent a completion claim
+
+- The scheduler still advances devices at instruction boundaries; this is not bus-cycle-accurate emulation.
+- The new opcode families have focused unit regressions, but still require exhaustive independent vectors for all encodings, flag edge cases, prefix interactions and timing.
+- IM 0 does not yet execute every possible externally supplied opcode.
+- The VDP and PSG need the remaining independent behavior vectors listed below; existing unit tests alone do not prove full silicon fidelity.
+- A green Python SingleStepTests workflow is evidence for the Python adapter only unless the workflow explicitly executes the native Rust CPU. Do not present it as native Rust differential coverage.
+
 ## Workstreams
 
 ### CPU: documented Z80 instruction coverage
