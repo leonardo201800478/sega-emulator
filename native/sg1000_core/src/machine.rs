@@ -336,7 +336,7 @@ mod tests {
         let rom = [0x31, 0x00, 0xC1, 0x3E, 0x01, 0xC8];
         let mut not_taken = Sg1000Machine::new(&rom, MemoryConfig::default()).unwrap();
         assert_eq!(not_taken.run_instructions(3), Ok(22));
-        assert_eq!(not_taken.cpu.registers.pc, 5);
+        assert_eq!(not_taken.cpu.registers.pc, 6);
         assert_eq!(not_taken.cpu.registers.sp, 0xC100);
 
         let rom = [0x31, 0x00, 0xC1, 0xC4, 0x08, 0x00, 0x76, 0x00, 0x76];
