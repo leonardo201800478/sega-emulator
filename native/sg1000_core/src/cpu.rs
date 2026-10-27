@@ -8,6 +8,7 @@ use crate::bus::CpuBus;
 use sega_z80_alu::{adc8, add8, and8, cp8, or8, sbc8, sub8, xor8};
 
 const FLAG_C: u8 = 0x01;
+const FLAG_N: u8 = 0x02;
 const FLAG_PV: u8 = 0x04;
 const FLAG_H: u8 = 0x10;
 const FLAG_Z: u8 = 0x40;
@@ -94,6 +95,62 @@ impl Z80 {
         let opcode = self.fetch8(bus);
         let cycles = match opcode {
             0x00 => 4, // NOP
+            0x07 | 0x0F | 0x17 | 0x1F => {
+                let old_a = self.registers.a;
+                let old_carry = self.registers.f & FLAG_C != 0;
+                let (result, carry) = match opcode {
+                    0x07 => (old_a.rotate_left(1), old_a & 0x80 != 0),
+                    0x0F => (old_a.rotate_right(1), old_a & 0x01 != 0),
+                    0x17 => ((old_a << 1) | u8::from(old_carry), old_a & 0x80 != 0),
+                    _ => ((old_a >> 1) | (u8::from(old_carry) << 7), old_a & 0x01 != 0),
+                };
+                self.registers.a = result;
+                self.registers.f = (self.registers.f & (FLAG_S | FLAG_Z | FLAG_PV))
+                    | (result & FLAG_XY)
+                    | if carry { FLAG_C } else { 0 };
+                4
+            }
+            0x27 => {
+                let a = self.registers.a;
+                let old_flags = self.registers.f;
+                let subtract = old_flags & FLAG_N != 0;
+                let mut correction = 0u8;
+                let mut carry = old_flags & FLAG_C != 0;
+                if old_flags & FLAG_H != 0 || (!subtract && (a & 0x0F) > 9) {
+                    correction |= 0x06;
+                }
+                if carry || (!subtract && a > 0x99) {
+                    correction |= 0x60;
+                    carry = true;
+                }
+                let result = if subtract { a.wrapping_sub(correction) } else { a.wrapping_add(correction) };
+                let mut flags = (old_flags & FLAG_N) | (result & (FLAG_S | FLAG_XY));
+                if result == 0 { flags |= FLAG_Z; }
+                if result.count_ones().is_multiple_of(2) { flags |= FLAG_PV; }
+                if (a ^ result) & 0x10 != 0 { flags |= FLAG_H; }
+                if carry { flags |= FLAG_C; }
+                self.registers.a = result;
+                self.registers.f = flags;
+                4
+            }
+            0x2F => {
+                self.registers.a = !self.registers.a;
+                self.registers.f = (self.registers.f & (FLAG_S | FLAG_Z | FLAG_PV | FLAG_C))
+                    | (self.registers.a & FLAG_XY) | FLAG_H | FLAG_N;
+                4
+            }
+            0x37 => {
+                self.registers.f = (self.registers.f & (FLAG_S | FLAG_Z | FLAG_PV))
+                    | (self.registers.a & FLAG_XY) | FLAG_C;
+                4
+            }
+            0x3F => {
+                let old_carry = self.registers.f & FLAG_C != 0;
+                self.registers.f = (self.registers.f & (FLAG_S | FLAG_Z | FLAG_PV))
+                    | (self.registers.a & FLAG_XY)
+                    | if old_carry { FLAG_H } else { FLAG_C };
+                4
+            }
             0xE9 => {
                 self.registers.pc = self.registers.hl();
                 4
@@ -210,6 +267,16 @@ impl Z80 {
                     4
                 }
             }
+            0x10 => {
+                let displacement = self.fetch8(bus) as i8;
+                self.registers.b = self.registers.b.wrapping_sub(1);
+                if self.registers.b != 0 {
+                    self.registers.pc = self.registers.pc.wrapping_add_signed(i16::from(displacement));
+                    13
+                } else {
+                    8
+                }
+            }
             0x18 | 0x20 | 0x28 | 0x30 | 0x38 => {
                 let displacement = self.fetch8(bus) as i8;
                 if opcode == 0x18 || self.condition((opcode >> 3) & 0x03) {
@@ -311,6 +378,11 @@ impl Z80 {
             0xC3 => {
                 self.registers.pc = self.fetch16(bus);
                 10
+            }
+            opcode if opcode & 0xC7 == 0xC7 => {
+                self.push16(bus, self.registers.pc);
+                self.registers.pc = u16::from(opcode & 0x38);
+                11
             }
             _ => return Err(CpuError::UnsupportedOpcode { opcode, address }),
         };
@@ -449,6 +521,68 @@ mod tests {
         fn write_memory(&mut self, address: u16, value: u8) {
             self.0[usize::from(address)] = value;
         }
+    }
+
+    #[test]
+    fn accumulator_rotate_and_flag_control_opcodes_are_supported() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..6].copy_from_slice(&[0x3E, 0x81, 0x07, 0x2F, 0x37, 0x3F]);
+        let mut cpu = Z80::default();
+        assert_eq!(cpu.step(&mut bus), Ok(7));
+        assert_eq!(cpu.step(&mut bus), Ok(4));
+        assert_eq!(cpu.registers.a, 0x03);
+        assert_ne!(cpu.registers.f & FLAG_C, 0);
+        assert_eq!(cpu.step(&mut bus), Ok(4));
+        assert_eq!(cpu.registers.a, 0xFC);
+        assert_eq!(cpu.registers.f & (FLAG_H | FLAG_N), FLAG_H | FLAG_N);
+        assert_eq!(cpu.step(&mut bus), Ok(4));
+        assert_eq!(cpu.registers.f & (FLAG_H | FLAG_N | FLAG_C), FLAG_C);
+        assert_eq!(cpu.step(&mut bus), Ok(4));
+        assert_eq!(cpu.registers.f & (FLAG_H | FLAG_N | FLAG_C), FLAG_H);
+    }
+
+    #[test]
+    fn daa_corrects_bcd_addition() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..5].copy_from_slice(&[0x3E, 0x09, 0xC6, 0x01, 0x27]);
+        let mut cpu = Z80::default();
+        assert_eq!(cpu.step(&mut bus), Ok(7));
+        assert_eq!(cpu.step(&mut bus), Ok(7));
+        assert_eq!(cpu.registers.a, 0x0A);
+        assert_eq!(cpu.step(&mut bus), Ok(4));
+        assert_eq!(cpu.registers.a, 0x10);
+        assert_eq!(cpu.registers.f & FLAG_H, 0);
+        assert_eq!(cpu.registers.f & FLAG_C, 0);
+    }
+
+    #[test]
+    fn djnz_uses_taken_and_not_taken_timing() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..4].copy_from_slice(&[0x10, 0xFE, 0x10, 0x00]);
+        let mut cpu = Z80::default();
+        cpu.registers.b = 2;
+        assert_eq!(cpu.step(&mut bus), Ok(13));
+        assert_eq!(cpu.registers.b, 1);
+        assert_eq!(cpu.registers.pc, 0);
+        assert_eq!(cpu.step(&mut bus), Ok(13));
+        assert_eq!(cpu.registers.b, 0);
+        assert_eq!(cpu.registers.pc, 2);
+        assert_eq!(cpu.step(&mut bus), Ok(8));
+        assert_eq!(cpu.registers.b, 0xFF);
+        assert_eq!(cpu.registers.pc, 4);
+    }
+
+    #[test]
+    fn rst_pushes_return_address_and_jumps_to_vector() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[0] = 0xFF;
+        let mut cpu = Z80::default();
+        cpu.registers.sp = 0xD000;
+        assert_eq!(cpu.step(&mut bus), Ok(11));
+        assert_eq!(cpu.registers.pc, 0x0038);
+        assert_eq!(cpu.registers.sp, 0xCFFE);
+        assert_eq!(bus.0[0xCFFE], 0x01);
+        assert_eq!(bus.0[0xCFFF], 0x00);
     }
 
     #[test]
