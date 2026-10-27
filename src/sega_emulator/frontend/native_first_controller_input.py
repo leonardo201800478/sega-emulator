@@ -275,10 +275,14 @@ class NativeFirstControllerInput:
         if preference not in {"auto", "xinput", "sdl3"}:
             raise ValueError("preference must be auto, xinput, or sdl3")
         self.backend_preference = preference
-        self._active_backend = (
-            "xinput" if preference == "xinput" else "sdl" if preference == "sdl3"
-            else "xinput" if self.native.connected_names() else "sdl"
-        )
+        if preference == "xinput":
+            self._active_backend = "xinput"
+        elif preference == "sdl3":
+            self._active_backend = "sdl"
+        else:
+            self._active_backend = (
+                "xinput" if self.native.connected_names() else "sdl"
+            )
         self._disconnect_pending = False
 
     def _native_names(self) -> list[str]:
