@@ -30,7 +30,7 @@ Selecione e inspecione os workflows adequados:
 - `qt-rust-z80-core.yml`: build Maturin, extensão PyO3 e regressão Python/Qt.
 - `agent-functional-validation.yml`: qualidade e regressão Python.
 - `agent-integrity.yml`: imports, dependências e repetibilidade.
-- `agent-performance-audit.yml`: tempos de teste e inventário de opcodes.
+- `legacy/workflows/agent-performance-audit.yml`: workflow histórico arquivado, não executado.
 
 Verifique os filtros `paths`: um workflow pode não disparar para todos os arquivos Rust/Python. Acompanhe runs do commit exato e consulte logs/artefatos. “Agent 1/2/3” são jobs automatizados do GitHub Actions; não presuma que agentes de IA escreveram código. Relate testes locais, CI e verificações não executadas separadamente. Não afirme sucesso sem evidência.
 

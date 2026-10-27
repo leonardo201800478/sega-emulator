@@ -271,5 +271,3 @@ def apply_turbo(
             if turbo_buttons.get(action, False):
                 result.discard(action)
     return result
-
-

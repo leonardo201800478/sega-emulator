@@ -62,7 +62,7 @@ Execute apenas os comandos relevantes ao escopo, além dos checks completos exig
 - `.github/workflows/qt-rust-z80-core.yml`: build Maturin, extensão PyO3, testes Rust e regressão Python/Qt de integração.
 - `.github/workflows/agent-functional-validation.yml`: lint/formatação e testes da aplicação Qt/integração; não deve importar o hardware Python arquivado.
 - `.github/workflows/agent-integrity.yml`: compileall, dependências, repetibilidade da suíte e relatórios.
-- `.github/workflows/agent-performance-audit.yml`: durações da suíte e inventário de opcodes.
+- `legacy/workflows/agent-performance-audit.yml`: workflow histórico arquivado; não é executado.
 
 Ao concluir uma alteração:
 1. Identifique os workflows que realmente cobrem os arquivos e contratos modificados; não suponha que todos disparam por qualquer mudança (verifique os filtros `paths`).

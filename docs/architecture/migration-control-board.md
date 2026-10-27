@@ -21,7 +21,7 @@ A CI workflow only validates the commands it actually executes. A green Python w
 
 ### Gate 0 — inventory and contracts
 - [x] Migration plan recorded in `clean-architecture-migration.md`.
-- [ ] Enumerate every consumer of the current Python machine/device APIs.
+- [x] Enumerate and replace production consumers of the Python machine/device APIs.
 - [ ] Identify all Cargo manifests, lockfiles, Maturin configuration, scripts, and workflows that reference native paths.
 - [x] Record baseline test status before changing runtime behavior. The Rust SG-1000 workspace workflow passed on main SHA `632f2f69e7a9e6d9a81b19a4f994bb1ce42eb951` (Windows; fmt, Clippy, workspace tests): [run #131](https://github.com/leonardo201800478/sega-emulator/actions/runs/40442082201). This validates existing tests only, not full SG-1000 fidelity.
 

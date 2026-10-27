@@ -93,7 +93,7 @@ Manter `native/z80_core` como fronteira PyO3 enquanto a UI Qt depender dela; o h
 | `.github/workflows/sms-core-fast.yml` | Formatação global, Clippy e testes de `sega-sms-core` | Adequado para o alvo SMS rápido; não substitui os testes integrais de workspace. Já inclui `z80_bus`. |
 | `.github/workflows/qt-rust-z80-core.yml` | Formatação/Clippy/testes do crate excluído, build Release/Maturin, Ruff e pytest direcionado para Qt/backend/paridade | O filtro precisa acompanhar os crates upstream dos quais depende, inclusive `native/z80_bus/**` e mudanças de manifests/lock relevantes. O push está limitado a uma branch de desenvolvimento específica; a cobertura de PR é o caminho principal para revisão. |
 | `.github/workflows/ci.yml` | Ruff nos arquivos Python alterados em PR/push (ou projeto inteiro quando acionado manualmente conforme lógica do workflow) e `python -m pytest` | Não compila Rust nem constrói a extensão Maturin. |
-| `legacy/workflows/z80-extended-audit.yml` | Ruff/pytest completos, auditoria determinística e inventário de opcodes, com artefatos mesmo se passos anteriores falharem | Auditoria Python; não substitui build/testes Rust. Upload de artefatos com `if: always()` não significa aprovação. |
+| `legacy/workflows/z80-extended-audit.yml` | Workflow histórico preservado apenas para consulta | **Arquivado; não executa**. Os testes ativos do núcleo usam os workflows Rust e a integração Qt/PyO3.
 
 Consulte os arquivos de workflow para comandos exatos e estado do run do SHA candidato. Paths são parte do contrato de CI: todo arquivo consumido por um teste/build que pretenda validar alteração precisa ser incluído no filtro relevante, ou a validação correspondente deve ser deliberadamente global.
 

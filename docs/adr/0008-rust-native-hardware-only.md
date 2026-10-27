@@ -17,9 +17,9 @@
 ## Inventário inicial confirmado no repositório
 
 - Rust puro inicial: `native/sg1000_core/src/{bus,cpu,machine,memory}.rs` e `native/z80_alu/src/lib.rs`.
-- Adaptador/extensão Rust-Python existente: `native/z80_core/src/{audio,machine,memory,vdp}.rs`; continua sendo integração/compatibilidade até que suas dependências de hardware tenham sido absorvidas pelo núcleo Rust puro.
+- Adaptador/extensão PyO3 ativo: `native/z80_core/src/machine.rs` e a fronteira em `lib.rs`; `memory.rs` e `lib.rs` ainda mantêm um harness Rust Z80 legado para testes diferenciais, não usado pela máquina integrada. O VDP/PSG ativos vêm exclusivamente de `native/sg1000_core`.
 - Implementações Python de hardware arquivadas: `legacy/python_reference/src/sega_emulator/{cpu,bus,video,audio,machine}/`. `machine/cartridge_profiles.py` e `machine/sg1000.py` permanecem ativos apenas para resolução de perfil e fachada PyO3, sem lógica de hardware.
-- Módulos de áudio como `output_config.py`, `synchronization.py` e `vgm_recorder.py` precisam de análise de responsabilidade antes de qualquer movimentação: configuração, saída de dispositivo e ferramentas não são automaticamente lógica de hardware.
+- `audio/output_config.py` e `audio/vgm_recorder.py` permanecem ativos como integração de aplicação/Qt. `audio/synchronization.py` foi arquivado com o runtime Python anterior.
 
 Este inventário é inicial, não uma declaração de que cada arquivo está isolado ou pode ser movido sem refatoração. A lista completa de importadores e testes deve ser produzida por fase.
 
