@@ -5,14 +5,22 @@ version = 4
 [[package]]
 name = "sega-sms-core"
 version = "0.1.0"
+dependencies = [
+ "sega-z80-bus",
+]
 
 [[package]]
 name = "sega-sg1000-core"
 version = "0.1.0"
 dependencies = [
  "sega-z80-alu",
+ "sega-z80-bus",
 ]
 
 [[package]]
 name = "sega-z80-alu"
+version = "0.1.0"
+
+[[package]]
+name = "sega-z80-bus"
 version = "0.1.0"

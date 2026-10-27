@@ -260,3 +260,42 @@ mod tests {
         assert_eq!(memory.mapper_control(), 0x08);
     }
 }
+
+impl sega_z80_bus::CpuBus for SmsMemory {
+    #[inline]
+    fn read_memory(&mut self, address: u16) -> u8 {
+        self.read(address)
+    }
+
+    #[inline]
+    fn write_memory(&mut self, address: u16, value: u8) {
+        self.write(address, value);
+    }
+}
+
+#[cfg(test)]
+mod bus_contract_tests {
+    use super::SmsMemory;
+    use crate::CartridgeImage;
+    use sega_z80_bus::CpuBus;
+
+    #[test]
+    fn shared_bus_reads_cartridge_and_writes_mirrored_work_ram() {
+        let rom = CartridgeImage::new(vec![0xA5; 0x4000]).unwrap();
+        let mut memory = SmsMemory::new(rom).unwrap();
+
+        assert_eq!(memory.read_memory(0x0123), 0xA5);
+        memory.write_memory(0xC123, 0x5A);
+        assert_eq!(memory.read_memory(0xE123), 0x5A);
+    }
+
+    #[test]
+    fn shared_bus_defaults_to_open_bus_for_unimplemented_ports() {
+        let rom = CartridgeImage::new(vec![0x00; 0x4000]).unwrap();
+        let mut memory = SmsMemory::new(rom).unwrap();
+
+        assert_eq!(memory.read_port(0x00), 0xFF);
+        memory.write_port(0x00, 0x42);
+        assert_eq!(memory.read_memory(0x0000), 0x00);
+    }
+}
