@@ -187,7 +187,16 @@ impl Sg1000Machine {
     }
 
     /// Execute one CPU instruction and return its nominal base T-state count.
+    fn sync_vdp_interrupt_line(&mut self) {
+        if self.vdp.interrupt_pending() {
+            self.cpu.request_int(0xFF);
+        } else {
+            self.cpu.clear_int_request();
+        }
+    }
+
     pub fn step(&mut self) -> Result<u32, MachineError> {
+        self.sync_vdp_interrupt_line();
         let tstate = self.cpu.total_tstates;
         let cycles = {
             let mut bus = Sg1000MachineBus {
@@ -223,6 +232,7 @@ impl Sg1000Machine {
         if end_tstate > vdp_tstate {
             self.vdp.advance(end_tstate - vdp_tstate);
         }
+        self.sync_vdp_interrupt_line();
         loop {
             let next = self
                 .pending_psg_writes
@@ -508,6 +518,30 @@ mod tests {
         assert_eq!(call.cpu.registers.sp, 0xC0FE);
         assert_eq!(call.read_memory(0xC0FE), 6);
         assert_eq!(call.read_memory(0xC0FF), 0);
+    }
+
+    #[test]
+    fn vdp_vblank_interrupt_reaches_z80_and_clears_with_status_read() {
+        let mut rom = vec![0; 0x39];
+        rom[0x38] = 0x00; // NOP at the IM 1 vector
+        let mut machine = Sg1000Machine::new(&rom, MemoryConfig::default()).unwrap();
+        machine.cpu.registers.sp = 0xC100;
+        machine.cpu.iff1 = true;
+        machine.cpu.iff2 = true;
+        machine.cpu.interrupt_mode = 1;
+        machine.vdp.write_port(0x81, 0x20);
+        machine.vdp.write_port(0x81, 0x81);
+        machine.vdp.advance(228 * 192);
+        assert!(machine.vdp.interrupt_pending());
+
+        assert_eq!(machine.step(), Ok(13));
+        assert_eq!(machine.cpu.registers.pc, 0x0038);
+        assert_eq!(machine.cpu.registers.sp, 0xC0FE);
+        assert_eq!(machine.cpu.int_pending, Some(0xFF));
+
+        assert_ne!(machine.vdp.read_port(0x81) & 0x80, 0);
+        assert_eq!(machine.step(), Ok(4));
+        assert!(machine.cpu.int_pending.is_none());
     }
 
     #[test]
