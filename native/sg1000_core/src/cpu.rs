@@ -1617,6 +1617,32 @@ mod tests {
     }
 
     #[test]
+    fn every_primary_and_prefixed_encoding_is_classified_without_fallback_errors() {
+        for opcode in 0_u16..=255 {
+            let mut bus = TestBus([0; 0x10000]);
+            bus.0[0] = opcode as u8;
+            let mut cpu = Z80::default();
+            assert!(
+                cpu.step(&mut bus).is_ok(),
+                "primary opcode 0x{opcode:02X} returned an error"
+            );
+        }
+
+        for prefix in [0xCB, 0xED, 0xDD, 0xFD] {
+            for opcode in 0_u16..=255 {
+                let mut bus = TestBus([0; 0x10000]);
+                bus.0[0] = prefix;
+                bus.0[1] = opcode as u8;
+                let mut cpu = Z80::default();
+                assert!(
+                    cpu.step(&mut bus).is_ok(),
+                    "prefix 0x{prefix:02X} opcode 0x{opcode:02X} returned an error"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn indexed_prefix_supports_ix_iy_displacements_and_indexed_cb() {
         let mut bus = TestBus([0; 0x10000]);
         bus.0[..28].copy_from_slice(&[
