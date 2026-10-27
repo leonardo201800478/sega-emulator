@@ -30,7 +30,7 @@ SG1000_II_RAM_EXT_TYPE_B_SHA256 = frozenset(
 
 # Conversões MSX1 distribuídas por DahJee/Jumbo. O catálogo MAME declara
 # RAM adicional de 9.216 bytes no conjunto: 8 KiB de expansão + 1 KiB interno.
-# A janela de expansão mapeada aqui é 2000h–3FFFh; os hashes são do MAME.
+# O perfil seleciona a RAM de sistema expandida C000h–FFFFh; hashes do MAME.
 SG1000_DAHJEE_TYPE_A_CRC32 = frozenset(
     {
         0x223397A1,  # King's Valley / Jinzita
