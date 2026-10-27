@@ -6,7 +6,8 @@
 use std::fmt;
 
 use crate::{
-    CpuError, IoError, MemoryConfig, MemoryError, PsgError, PsgWriteEvent, Sg1000Io, Sg1000Memory, Sn76489, Tms9918A, Z80,
+    CpuError, IoError, MemoryConfig, MemoryError, PsgError, PsgWriteEvent, Sg1000Io, Sg1000Memory,
+    Sn76489, Tms9918A, Z80,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
