@@ -219,8 +219,10 @@ mod tests {
         machine.write_port_at(0x81, 0x40, 4);
         machine.write_port_at(0x80, 0xA5, 4);
         assert_eq!(machine.vdp.vram()[0], 0xA5);
-        machine.write_port_at(0x40, 0x90, machine.cpu.total_tstates);
-        assert_eq!(machine.drain_psg_write_events().len(), 1);
+        machine.write_port_at(0x40, 0x85, machine.cpu.total_tstates);
+        machine.write_port_at(0x40, 0x02, machine.cpu.total_tstates);
+        assert_eq!(machine.psg.tone_periods()[0], 0x25);
+        assert_eq!(machine.drain_psg_write_events().len(), 2);
     }
 
     #[test]
