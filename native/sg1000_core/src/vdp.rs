@@ -43,6 +43,7 @@ pub struct Tms9918A {
     framebuffer: Vec<u8>,
     working_framebuffer: Vec<u8>,
     frame_ready: bool,
+    sprite_limit_enabled: bool,
 }
 
 impl Tms9918A {
@@ -60,7 +61,17 @@ impl Tms9918A {
             framebuffer: vec![0; RGB_FRAME_SIZE],
             working_framebuffer: vec![0; RGB_FRAME_SIZE],
             frame_ready: false,
+            sprite_limit_enabled: true,
         }
+    }
+
+    /// Configure the SG-1000's four-sprites-per-scanline limit.
+    pub fn set_sprite_limit_enabled(&mut self, enabled: bool) {
+        self.sprite_limit_enabled = enabled;
+    }
+
+    pub fn sprite_limit_enabled(&self) -> bool {
+        self.sprite_limit_enabled
     }
 
     pub fn vram(&self) -> &[u8] {
@@ -198,6 +209,7 @@ impl Tms9918A {
                         &mut self.working_framebuffer,
                         usize::from(completed_line),
                         true,
+                        self.sprite_limit_enabled,
                     );
                 } else if completed_line < LINES_PER_FRAME
                     && self.registers[1] & 0x40 != 0
@@ -210,6 +222,7 @@ impl Tms9918A {
                         None,
                         i32::from(completed_line),
                         true,
+                        self.sprite_limit_enabled,
                     );
                 }
                 self.scanline += 1;
@@ -234,7 +247,7 @@ impl Tms9918A {
     }
 
     pub fn render_frame(&self) -> Vec<u8> {
-        render_frame_bytes(&self.vram, &self.registers, self.status)
+        render_frame_bytes(&self.vram, &self.registers, self.status, self.sprite_limit_enabled)
     }
 }
 
@@ -296,6 +309,7 @@ fn render_scanline(
     pixels: &mut [u8],
     y: usize,
     update_sprite_status: bool,
+    sprite_limit_enabled: bool,
 ) {
     let backdrop = registers[7] & 0x0F;
     if registers[1] & 0x40 == 0 {
@@ -416,10 +430,11 @@ fn render_scanline(
         Some(pixels),
         y as i32,
         update_sprite_status,
+        sprite_limit_enabled,
     );
 }
 
-fn render_frame_bytes(vram: &[u8], registers: &[u8], status: u8) -> Vec<u8> {
+fn render_frame_bytes(vram: &[u8], registers: &[u8], status: u8, sprite_limit_enabled: bool) -> Vec<u8> {
     let backdrop = registers[7] & 0x0F;
     let mut pixels = vec![0; RGB_FRAME_SIZE];
     for pixel in pixels.as_chunks_mut::<3>().0 {
@@ -440,7 +455,7 @@ fn render_frame_bytes(vram: &[u8], registers: &[u8], status: u8) -> Vec<u8> {
     }
     if mode != 1 {
         let mut status_copy = status;
-        render_sprites(vram, registers, &mut status_copy, &mut pixels, false);
+        render_sprites(vram, registers, &mut status_copy, &mut pixels, false, sprite_limit_enabled);
     }
     pixels
 }
@@ -590,6 +605,7 @@ fn sprite_line_active(
     vram: &[u8],
     registers: &[u8],
     line: i32,
+    sprite_limit_enabled: bool,
 ) -> (Vec<ActiveSprite>, Option<usize>) {
     let attr_base = usize::from(registers[5] & 0x7F) << 7;
     let size: i32 = if registers[1] & 0x02 != 0 { 16 } else { 8 };
@@ -614,7 +630,7 @@ fn sprite_line_active(
         if row >= size * scale {
             continue;
         }
-        if active.len() == 4 {
+        if sprite_limit_enabled && active.len() == 4 {
             fifth_index = Some(index);
             break;
         }
@@ -638,8 +654,9 @@ fn render_sprite_line(
     mut pixels: Option<&mut [u8]>,
     line: i32,
     update_status: bool,
+    sprite_limit_enabled: bool,
 ) {
-    let (active, fifth_index) = sprite_line_active(vram, registers, line);
+    let (active, fifth_index) = sprite_line_active(vram, registers, line, sprite_limit_enabled);
     if update_status
         && line < i32::from(VBLANK_LINE)
         && *status & 0x80 == 0
@@ -691,6 +708,7 @@ fn render_sprites(
     status: &mut u8,
     pixels: &mut [u8],
     update_status: bool,
+    sprite_limit_enabled: bool,
 ) {
     for line in 0..SCREEN_HEIGHT {
         render_sprite_line(
@@ -700,6 +718,7 @@ fn render_sprites(
             Some(&mut *pixels),
             line as i32,
             update_status,
+            sprite_limit_enabled,
         );
     }
 }
