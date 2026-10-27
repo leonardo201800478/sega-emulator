@@ -22,7 +22,7 @@ This is not a claim of cycle-accurate CPU/VDP/PSG synchronization. It also does 
 
 ## Native graphics API selection
 
-The Qt Quick scene graph must select its graphics API before the first `QQuickWindow` is created. The driver preference is therefore applied at application startup; changing it in the Drivers dialog persists the choice and requires an application restart. Supported choices are Vulkan, Direct3D 11, Direct3D 12, and Qt raster fallback. Vulkan remains the default. The Video menu offers VSync, VRR, G-SYNC and Off as persisted presentation-policy choices. VSync/Off request swap intervals of 1/0; VRR and G-SYNC are system-managed states and selecting them does not enable them in Windows or the NVIDIA Control Panel. Changes require restart and need Windows validation for each backend. The effective API is verified and logged after scene-graph initialization; initialization failure falls back to raster.
+The Qt Quick scene graph must select its graphics API before the first `QQuickWindow` is created. The driver preference is therefore applied at application startup; changing it in the Drivers dialog persists the choice and requires an application restart. Supported choices are Vulkan, Direct3D 11, Direct3D 12, and Qt raster fallback. Vulkan remains the default. The presentation-sync menu is intentionally deferred: the current Qt Quick backend abstraction does not provide a verified, uniform VSync/Off control across Vulkan, Direct3D 11 and Direct3D 12. VRR/G-SYNC are system-managed and cannot be enabled by the application. This PR does not expose a misleading toggle; presentation sync remains controlled by Qt, Windows and the graphics driver until backend-specific behavior can be implemented and validated. The effective API is verified and logged after scene-graph initialization; initialization failure falls back to raster.
 
 This intentionally uses Qt's existing native rendering backend rather than adding a second Rust swapchain behind a Qt Quick surface. The Rust hardware core remains independent of the graphics API. Qt's renderer abstraction is already part of the current frontend; bypassing it would require a separate native-window/swapchain integration and ownership/synchronization contract.
 
@@ -40,7 +40,8 @@ Official reference: [NVIDIA Reflex SDK](https://developer.nvidia.com/performance
 ## Acceptance criteria
 
 - FramePacer tests prove immediate first frame, fixed cadence under late callbacks, no catch-up bursts, reset behavior and invalid-period rejection.
-- Qt driver dialog lists only implemented choices and states that graphics API changes require restart.
+- Qt driver dialog lists the selectable graphics API choices and states that graphics API changes require restart.
+- Presentation-sync controls remain out of scope until effective per-backend VSync/Off behavior is implemented and validated; the UI must not imply unsupported control.
 - The requested API is set before creating the first Qt Quick window and the effective API is logged/checked.
 - Tests cover the mapping of persisted API names to Qt's API enums and the existing raster fallback.
 - Python formatting/lint/tests and relevant Qt offscreen tests pass on the exact PR SHA.
