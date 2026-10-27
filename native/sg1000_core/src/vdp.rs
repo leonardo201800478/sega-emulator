@@ -719,6 +719,52 @@ mod tests {
     }
 
     #[test]
+    fn control_latch_vram_read_ahead_and_address_wrap_are_deterministic() {
+        let mut vdp = Tms9918A::new();
+
+        // Register writes are committed only after the second control byte.
+        vdp.write_port(0x81, 0x20);
+        assert_eq!(vdp.registers[1], 0);
+        vdp.write_port(0x81, 0x81);
+        assert_eq!(vdp.registers[1], 0x20);
+
+        // Set the VRAM write address to 0x3FFF, then cross the 14-bit boundary.
+        vdp.write_port(0x81, 0xFF);
+        vdp.write_port(0x81, 0x7F);
+        assert_eq!(vdp.address(), 0x3FFF);
+        vdp.write_port(0x80, 0xA5);
+        assert_eq!(vdp.address(), 0);
+        vdp.write_port(0x80, 0x3C);
+        assert_eq!(vdp.address(), 1);
+
+        // A read command prefetches the addressed byte; port reads return the
+        // buffer first and then advance it to the following VRAM address.
+        vdp.write_port(0x81, 0xFF);
+        vdp.write_port(0x81, 0x3F);
+        assert_eq!(vdp.address(), 0);
+        assert_eq!(vdp.read_port(0x80), 0xA5);
+        assert_eq!(vdp.read_port(0x80), 0x3C);
+        assert_eq!(vdp.address(), 2);
+    }
+
+    #[test]
+    fn enabled_vblank_interrupt_is_level_asserted_until_status_is_read() {
+        let mut vdp = Tms9918A::new();
+        vdp.write_port(0x81, 0x20);
+        vdp.write_port(0x81, 0x81);
+        assert!(!vdp.interrupt_pending());
+
+        vdp.advance(228 * 192);
+        assert_ne!(vdp.status() & 0x80, 0);
+        assert!(vdp.interrupt_pending());
+
+        let status = vdp.read_port(0x81);
+        assert_ne!(status & 0x80, 0);
+        assert_eq!(vdp.status(), 0x1F);
+        assert!(!vdp.interrupt_pending());
+    }
+
+    #[test]
     fn vblank_and_frame_boundaries_follow_raster_clock() {
         let mut vdp = Tms9918A::new();
         vdp.advance(228 * 192 - 1);
