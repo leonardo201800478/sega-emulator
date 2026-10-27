@@ -6,7 +6,7 @@ Projeto de emulação de alta precisão com núcleo de hardware prioritariamente
 
 - **Marco SG-1000:** CPU, memória, I/O, VDP TMS9918A, PSG SN76489AN, entrada e runtime da máquina estão integrados no fluxo da aplicação. A validação funcional alcançada é satisfatória para o primeiro marco, mas não equivale a temporização ciclo a ciclo nem certifica todas as ROMs.
 - **CPU Z80:** execução por instrução com T-states nominais e auditoria diferencial contínua; ainda não é um modelo completo ciclo a ciclo de barramento.
-- **Frontend Qt 6/PySide6:** janela com menus, barra de ações, ROMs recentes, seleção do runtime, configurações e diagnóstico. O modo imersivo de tela cheia é dedicado ao jogo: oculta menus, barra de ações e status; F11/Alt+Enter alternam o modo e Esc retorna à janela. A superfície solicita Vulkan pelo Qt Quick e mantém fallback raster explícito se o driver não inicializar; a confirmação do backend efetivo deve ser feita nos logs da máquina de destino. O pacing usa o período nominal NTSC (~59,92 Hz) sem alterar os T-states lógicos.
+- **Frontend Qt 6/PySide6:** janela com menus, barra de ações, ROMs recentes, seleção de drivers de entrada/áudio/vídeo, configurações e diagnóstico. O modo imersivo de tela cheia é dedicado ao jogo: oculta menus, barra de ações e status; F11/Alt+Enter alternam o modo e Esc retorna à janela. A superfície solicita Vulkan pelo Qt Quick e mantém fallback raster explícito se o driver não inicializar; a confirmação do backend efetivo deve ser feita nos logs da máquina de destino. O pacing usa o período nominal NTSC (~59,92 Hz) sem alterar os T-states lógicos.
 - **Configurações de áudio e vídeo:** saída mono do PSG, ativação, volume, taxa do mixer (22,05/44,1/48 kHz), buffer (256–2.048 amostras), filtro de vídeo e escala inteira preferencial. O filtro de vídeo nearest/bilinear e a escala 4:3 são aplicados pela cena Qt Quick em Vulkan quando disponível; o caminho raster mantém a compatibilidade. O FIR de 63 taps reduz aliasing digital; não representa a resposta analógica do chip.
 - **Carregador:** arquivos `.sg`, `.rom`, `.bin` e ROMs dentro de ZIP; ZIP com múltiplas ROMs exige seleção explícita.
 - **Diagnóstico:** logs JSONL/texto por sessão, SHA-256 da ROM, checkpoints de execução e stack traces.
@@ -37,7 +37,7 @@ py -3.14 -m venv .venv
 
 A interface Qt abre sem ROM carregada. Use **Arquivo → Abrir ROM** para selecionar uma ROM local.
 
-Menus disponíveis: **Arquivo**, **Emulação**, **Vídeo**, **Configurações → Áudio e vídeo**, **Configurações → Controles**, **Diagnóstico** e **Ajuda**. Para jogar sem elementos da aplicação, use **Vídeo → Tela cheia** ou pressione **F11** / **Alt+Enter**; o modo imersivo remove menus, barra de ações, status e margens ao redor da imagem. Pressione **Esc** para voltar à janela normal. Em Áudio e vídeo, a aba **Saída de áudio** controla ativação, taxa do mixer e buffer; **PSG / Hardware** exibe o perfil fixo do SN76489AN do SG-1000 e o ganho; **Vídeo** controla o filtro e a escala inteira. Clock, divisor e variante do chip permanecem fixos. O FIR é filtragem digital anti-aliasing, não um modelo analógico do hardware. A SDL3 enumera dispositivos a cada ciclo de entrada para reconhecer conexão/desconexão durante a sessão; controles sem mapeamento SDL são lidos pela API de joystick bruto quando possível. Se um controle conectado for removido durante a execução, a emulação é pausada antes do próximo frame para evitar continuar sem o dispositivo esperado. Use **Configurações → Controles → Dispositivos detectados** para consultar a disponibilidade do backend e a lista atualizada; o log da sessão também registra o estado inicial.
+Menus disponíveis: **Arquivo**, **Emulação**, **Drivers**, **Vídeo**, **Configurações → Áudio e vídeo**, **Configurações → Controles**, **Diagnóstico** e **Ajuda**. Em **Drivers → APIs de entrada, áudio e vídeo**, selecione **Automático (XInput → SDL3)**, **XInput** ou **SDL3 Gamepad** para input; **PortAudio/WASAPI compartilhado** ou áudio desativado; e **Automático (Vulkan → Qt Raster)**, Vulkan ou Qt Raster para apresentação. As preferências são globais e persistentes. Os núcleos de cada console devem receber snapshots de input normalizados; nenhuma API do host deve ser chamada no caminho por instrução. Para jogar sem elementos da aplicação, use **Vídeo → Tela cheia** ou pressione **F11** / **Alt+Enter**; o modo imersivo remove menus, barra de ações, status e margens ao redor da imagem. Pressione **Esc** para voltar à janela normal. Em Áudio e vídeo, a aba **Saída de áudio** controla ativação, taxa do mixer e buffer; **PSG / Hardware** exibe o perfil fixo do SN76489AN do SG-1000 e o ganho; **Vídeo** controla o filtro e a escala inteira. Clock, divisor e variante do chip permanecem fixos. O FIR é filtragem digital anti-aliasing, não um modelo analógico do hardware. A SDL3 enumera dispositivos a cada ciclo de entrada para reconhecer conexão/desconexão durante a sessão; controles sem mapeamento SDL são lidos pela API de joystick bruto quando possível. Se um controle conectado for removido durante a execução, a emulação é pausada antes do próximo frame para evitar continuar sem o dispositivo esperado. Use **Configurações → Controles → Dispositivos detectados** para consultar a disponibilidade do backend e a lista atualizada; o log da sessão também registra o estado inicial.
 
 Para iniciar diretamente uma ROM:
 
@@ -63,11 +63,11 @@ Para usar o frontend Pygame:
 
 O crate puro `native/sg1000_core` continua sendo uma extração experimental e parcial, distinta do runtime integrado usado pela aplicação. Ele ainda não representa sozinho o SG-1000 completo. Não confunda esse crate standalone com a máquina integrada no frontend Qt nem com uma alegação de fidelidade ciclo a ciclo.
 
-## Backend SG-1000 Rust experimental no Qt
+## Runtime Rust do SG-1000 no Qt
 
-O frontend Qt permite alternar entre **Python (referência)** e **Rust (experimental)** em **Emulação → Selecionar backend de emulação…**. A seleção fica persistida nas configurações Qt. Se houver uma ROM carregada, trocar de núcleo recria a máquina para começar em estado limpo.
+O frontend Qt executa exclusivamente o runtime nativo Rust. A antiga opção de trocar para o runtime Python foi removida da interface e valores legados em QSettings são migrados para `rust` na inicialização. A implementação Python de referência permanece no repositório para testes diferenciais e desenvolvimento; ela não é uma opção de runtime na aplicação Qt.
 
-A política arquitetural é Rust como implementação definitiva do núcleo de hardware; o backend Python permanece disponível para referência diferencial e compatibilidade. O frontend Qt migra configurações antigas para Rust como seleção inicial. A extensão nativa fornece:
+A extensão nativa fornece:
 
 - núcleo Z80 e barramento de memória sem chamadas a métodos Python por leitura/escrita de byte;
 - mapa de ROM espelhada, RAM interna e RAM de cartucho por perfil;
@@ -77,7 +77,7 @@ A política arquitetural é Rust como implementação definitiva do núcleo de h
 
 **O runtime ainda não é totalmente independente de Python internamente.** O frontend e a API de aplicação continuam em Python, e a máquina Rust coordena componentes encapsulados em objetos PyO3; o GIL permanece adquirido durante um quadro. A etapa atual elimina a coordenação Python por instrução e callbacks Python nas portas, mas ainda não move todos os estados para structs Rust puros nem libera o GIL. O modelo temporal usa T-states nominais e não equivale a emulação ciclo a ciclo. A implementação Python permanece disponível como referência diferencial; não há fallback silencioso quando uma instrução Rust não é suportada.
 
-Os getters `vram` e `registers` do VDP nativo retornam cópias para diagnóstico. Alterar diretamente essas cópias não altera o estado interno do VDP; use as portas modeladas para modificar o hardware. O backend Rust é a seleção inicial padrão no Qt; as cópias retornadas são destinadas a diagnóstico.
+Os getters `vram` e `registers` do VDP nativo retornam cópias para diagnóstico. Alterar diretamente essas cópias não altera o estado interno do VDP; use as portas modeladas para modificar o hardware. O runtime Rust é obrigatório no Qt; as cópias retornadas são destinadas a diagnóstico.
 
 Para compilar e instalar a extensão no Windows/PowerShell, com o ambiente virtual ativado e a partir da raiz do repositório:
 
@@ -100,9 +100,9 @@ Para abrir diretamente uma ROM local:
 .\scripts\test-rust-in-game.ps1 "C:\caminho\para\jogo.sg"
 ```
 
-O script compila a extensão PyO3 em Release, verifica a importação de `NativeSG1000Machine` e abre o frontend Qt. Na interface, selecione **Emulação → Selecionar backend de emulação… → Rust (experimental)**; a compilação sozinha não troca o backend selecionado nas configurações.
+O script compila a extensão PyO3 em Release, verifica a importação de `NativeSG1000Machine` e abre o frontend Qt. A interface Qt usa o runtime Rust automaticamente; a compilação sozinha não comprova que uma ROM específica é compatível.
 
-Reabra o emulador e selecione **Emulação → Selecionar backend de emulação… → Rust (experimental)**. Se a extensão não estiver instalada, a interface explica como instalá-la e preserva o backend anterior.
+Se a extensão não estiver instalada, a interface informa que o runtime nativo é necessário e não faz fallback silencioso para o emulador Python.
 
 As fatias [PR #92](https://github.com/leonardo201800478/sega-emulator/pull/92) e [PR #93](https://github.com/leonardo201800478/sega-emulator/pull/93) passaram no workflow Windows. A PR #93 validou `rustfmt`, Clippy, testes Rust, build Release, **1.674 testes direcionados** e **2.329 testes de regressão** com a extensão instalada. Isso valida os caminhos cobertos, mas não demonstra compatibilidade universal, precisão ciclo a ciclo ou ganho de desempenho em todos os jogos.
 
