@@ -65,7 +65,7 @@ O crate puro `native/sg1000_core` continua sendo uma extração experimental e p
 
 ## Runtime Rust do SG-1000 no Qt
 
-O frontend Qt executa exclusivamente o runtime nativo Rust. A antiga opção de trocar para o runtime Python foi removida da interface e valores legados em QSettings são migrados para `rust` na inicialização. A implementação Python de referência permanece no repositório para testes diferenciais e desenvolvimento; ela não é uma opção de runtime na aplicação Qt.
+O frontend Qt executa exclusivamente o runtime nativo Rust. A antiga opção de trocar para o runtime Python foi removida da interface e valores legados em QSettings são migrados para `rust` na inicialização. A implementação Python de referência permanece no repositório para testes diferenciais e desenvolvimento; ela não é uma opção de runtime na aplicação Qt. O caminho Rust carrega esses módulos de referência de forma lazy: eles não são importados nem instanciados durante a execução normal do frontend Qt.
 
 A extensão nativa fornece:
 
