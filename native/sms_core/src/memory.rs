@@ -41,18 +41,14 @@ impl SmsMemory {
     pub fn read(&self, address: u16) -> u8 {
         match address {
             0x0000..=0x03FF => self.read_rom_offset(usize::from(address)),
-            0x0400..=0x3FFF => {
-                self.read_bank(self.bank_registers[0], usize::from(address))
-            }
+            0x0400..=0x3FFF => self.read_bank(self.bank_registers[0], usize::from(address))
             0x4000..=0x7FFF => {
                 self.read_bank(self.bank_registers[1], usize::from(address) - 0x4000)
             }
             0x8000..=0xBFFF => {
                 self.read_bank(self.bank_registers[2], usize::from(address) - 0x8000)
             }
-            0xC000..=0xFFFF => {
-                self.work_ram[usize::from(address - RAM_START) & (RAM_SIZE - 1)]
-            }
+            0xC000..=0xFFFF => self.work_ram[usize::from(address - RAM_START) & (RAM_SIZE - 1)],
         }
     }
 
