@@ -123,8 +123,7 @@ class SG1000Machine:
                 profile.cartridge_ram_start,
                 profile.cartridge_ram_end,
             )
-            # The Rust machine owns live device state; properties below expose snapshots.
-
+            # The Rust machine owns live device state; properties expose snapshots.
 
     @property
     def cpu(self):
@@ -181,7 +180,6 @@ class SG1000Machine:
             self.native_machine.request_nmi()
         else:
             self.cpu.request_nmi()
-
 
     def set_sprite_limit_enabled(self, enabled: bool) -> None:
         """Configure o limite do VDP; o runtime de produção encaminha ao Rust."""
