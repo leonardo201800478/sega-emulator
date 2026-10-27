@@ -128,3 +128,50 @@ def test_cli_lists_roms_from_zip(tmp_path, capsys):
     assert cli.main(["--list-roms", str(archive_path)]) == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["roms"] == ["games/test.sg"]
+
+
+def test_headless_cli_writes_json_metrics(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    import sega_emulator.__main__ as cli
+
+    rom_path = tmp_path / "test.sg"
+    rom_path.write_bytes(bytes([0, 195, 0, 0]))
+    report_path = tmp_path / "nested" / "summary.json"
+    loaded = SimpleNamespace(
+        data=rom_path.read_bytes(),
+        source_path=rom_path,
+        member_name=None,
+        sha256="a" * 64,
+        display_name=rom_path.name,
+    )
+
+    class FakeMachine:
+        def __init__(self, data, *, cpu_core):
+            assert cpu_core == "rust"
+            self.cpu = SimpleNamespace(pc=0x1234)
+            self.vdp = SimpleNamespace(frame_number=0, scanline=0, status=0)
+            self.total_instructions = 0
+            self.total_tstates = 0
+
+        def run_frames(self, frames):
+            self.vdp.frame_number += frames
+            self.total_instructions += frames * 10
+            self.total_tstates += frames * 59736
+
+    monkeypatch.setattr(cli, "configure_session_logging", lambda *args, **kwargs: None)
+    monkeypatch.setattr(cli, "load_rom", lambda path: loaded)
+    monkeypatch.setattr(cli, "SG1000Machine", FakeMachine)
+
+    assert cli.main([
+        str(rom_path), "--ui", "pygame", "--headless-frames", "2",
+        "--summary-json", str(report_path), "--log-dir", str(tmp_path / "logs"),
+    ]) == 0
+
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    assert report["schema_version"] == 1
+    assert report["measurement"]["frames"] == 2
+    assert report["measurement"]["instructions"] == 20
+    assert report["measurement"]["tstates"] == 119472
+    assert report["measurement"]["elapsed_seconds"] > 0
+    assert report["measurement"]["speed_percent_of_nominal_z80_clock"] > 0
