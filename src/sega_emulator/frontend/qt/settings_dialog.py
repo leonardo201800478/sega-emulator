@@ -126,21 +126,35 @@ class SettingsDialog(QDialog):
         video_form.addRow("Filtro de escala", self.video_filter)
 
         self.vsync_mode = QComboBox()
-        for label, value in (("Ligado — sincronização vertical", "on"), ("Desligado — menor latência, pode rasgar", "off"), ("Adaptativo — se suportado pelo backend", "adaptive")):
+        for label, value in (
+            ("Ligado — sincronização vertical", "on"),
+            ("Desligado — menor latência, pode rasgar", "off"),
+            ("Adaptativo — se suportado pelo backend", "adaptive"),
+        ):
             self.vsync_mode.addItem(label, value)
-        self.vsync_mode.setCurrentIndex(max(0, self.vsync_mode.findData(preferences.vsync_mode)))
+        self.vsync_mode.setCurrentIndex(
+            max(0, self.vsync_mode.findData(preferences.vsync_mode))
+        )
         video_form.addRow("VSync", self.vsync_mode)
 
         self.vrr_mode = QComboBox()
-        for label, value in (("Controlado pelo driver (recomendado)", "driver"), ("Preferir VRR — requer monitor/driver compatíveis", "prefer"), ("Não solicitar VRR", "off")):
+        for label, value in (
+            ("Controlado pelo driver (recomendado)", "driver"),
+            ("Preferir VRR — requer monitor/driver compatíveis", "prefer"),
+            ("Não solicitar VRR", "off"),
+        ):
             self.vrr_mode.addItem(label, value)
-        self.vrr_mode.setCurrentIndex(max(0, self.vrr_mode.findData(preferences.vrr_mode)))
+        self.vrr_mode.setCurrentIndex(
+            max(0, self.vrr_mode.findData(preferences.vrr_mode))
+        )
         video_form.addRow("VRR / G-Sync", self.vrr_mode)
 
         self.av_sync_mode = QComboBox()
         self.av_sync_mode.addItem("Baixa latência (atual)", "low_latency")
         self.av_sync_mode.addItem("Relógio de áudio (experimental)", "audio_clock")
-        self.av_sync_mode.setCurrentIndex(max(0, self.av_sync_mode.findData(preferences.av_sync_mode)))
+        self.av_sync_mode.setCurrentIndex(
+            max(0, self.av_sync_mode.findData(preferences.av_sync_mode))
+        )
         video_form.addRow("Sincronismo A/V", self.av_sync_mode)
 
         self.integer_scale = QCheckBox("Preferir escala inteira quando couber")
@@ -194,7 +208,11 @@ class SettingsDialog(QDialog):
         self.crt_curvature.setSuffix("%")
         self.crt_curvature.setValue(preferences.crt_curvature)
         crt_form.addRow("Curvatura da tela", self.crt_curvature)
-        crt_note = QLabel("Os parâmetros são persistidos, mas nenhum efeito CRT/NTSC, RF ou dithering é renderizado nesta PR. A implementação exige pipeline de filtro e testes de referência.")
+        crt_note = QLabel(
+            "Os parâmetros são persistidos, mas nenhum efeito CRT/NTSC, RF ou "
+            "dithering é renderizado nesta PR. A implementação exige pipeline de "
+            "filtro e testes de referência."
+        )
         crt_note.setWordWrap(True)
         crt_form.addRow(crt_note)
         crt_layout.addWidget(crt_group)
