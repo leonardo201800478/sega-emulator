@@ -10,7 +10,7 @@ from collections import deque
 from pathlib import Path
 
 from sega_emulator.audio.vgm_recorder import VgmRecorder
-from sega_emulator.frontend.controller_input import (
+from sega_emulator.frontend.controller_profiles import (
     ACTIONS,
     DEFAULT_GAMEPAD_BINDINGS,
     JOYSTICK_ACTIONS,

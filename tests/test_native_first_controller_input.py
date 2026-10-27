@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import ctypes
 
-from sega_emulator.frontend.controller_input import ControllerInputConfig
+from sega_emulator.frontend.controller_profiles import ControllerInputConfig
 from sega_emulator.frontend.native_first_controller_input import (
     NativeFirstControllerInput,
     XInputControllerInput,

@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from sega_emulator.frontend.controller_input import ControllerInputConfig
+from sega_emulator.frontend.controller_profiles import ControllerInputConfig
 from sega_emulator.frontend.sdl3_controller_input import SDL3ControllerInput
 
 

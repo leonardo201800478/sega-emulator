@@ -15,7 +15,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from sega_emulator.frontend.controller_input import (
+from sega_emulator.frontend.controller_profiles import (
     SUPPORTED_BUTTONS,
     ControllerInputConfig,
 )
