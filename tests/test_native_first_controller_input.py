@@ -141,3 +141,43 @@ def test_native_first_provider_surfaces_xinput_disconnect_before_fallback() -> N
     assert not backend.consume_disconnect_event()
     backend.close()
     assert fallback.closed
+
+
+
+def test_explicit_xinput_preference_does_not_fall_back_to_sdl() -> None:
+    native = XInputControllerInput(library=FakeXInputLibrary({}), clock=FakeClock())
+    fallback = FakeFallback()
+    backend = NativeFirstControllerInput(
+        native=native, fallback=fallback, backend_preference="xinput"
+    )
+
+    assert backend.connected_names() == []
+    assert backend.poll() == {1: set(), 2: set()}
+    assert backend.available
+    assert fallback.actions[1] == {"button2"}
+
+
+def test_explicit_sdl3_preference_bypasses_xinput() -> None:
+    native = XInputControllerInput(
+        library=FakeXInputLibrary({0: (0x1000, 0, 0)}), clock=FakeClock()
+    )
+    fallback = FakeFallback()
+    backend = NativeFirstControllerInput(
+        native=native, fallback=fallback, backend_preference="sdl3"
+    )
+
+    assert backend.connected_names() == ["SDL legacy pad"]
+    assert backend.poll() == {1: {"button2"}, 2: set()}
+
+
+def test_backend_preference_rejects_unknown_api() -> None:
+    backend = NativeFirstControllerInput(
+        native=XInputControllerInput(library=FakeXInputLibrary({}), clock=FakeClock()),
+        fallback=FakeFallback(),
+    )
+    try:
+        backend.set_backend_preference("directinput")
+    except ValueError as exc:
+        assert "preference" in str(exc)
+    else:
+        raise AssertionError("unknown input backend should be rejected")
