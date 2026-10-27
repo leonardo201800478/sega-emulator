@@ -948,8 +948,7 @@ mod tests {
         vdp.vram[0] = 0xFF; // Opaque row for pattern zero.
         for index in 0..5 {
             let offset = 0x1000 + index * 4;
-            vdp.vram[offset..offset + 4]
-                .copy_from_slice(&[0xFF, (index * 8) as u8, 0, 0x0F]);
+            vdp.vram[offset..offset + 4].copy_from_slice(&[0xFF, (index * 8) as u8, 0, 0x0F]);
         }
         vdp.vram[0x1000 + 5 * 4] = 0xD0;
 
