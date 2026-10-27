@@ -4,8 +4,8 @@
 //! delegating execution to the Python reference. The implementation is
 //! incremental and is not yet a complete Z80.
 
+use crate::alu::{adc8, add8, and8, cp8, or8, sbc8, sub8, xor8};
 use crate::bus::CpuBus;
-use sega_z80_alu::{adc8, add8, and8, cp8, or8, sbc8, sub8, xor8};
 
 const FLAG_C: u8 = 0x01;
 const FLAG_N: u8 = 0x02;
@@ -95,6 +95,18 @@ impl Z80 {
         let opcode = self.fetch8(bus);
         let cycles = match opcode {
             0x00 => 4, // NOP
+            0xD3 => {
+                let port_low = self.fetch8(bus);
+                let port = (u16::from(self.registers.a) << 8) | u16::from(port_low);
+                bus.write_port(port, self.registers.a);
+                11
+            }
+            0xDB => {
+                let port_low = self.fetch8(bus);
+                let port = (u16::from(self.registers.a) << 8) | u16::from(port_low);
+                self.registers.a = bus.read_port(port);
+                11
+            }
             0x07 | 0x0F | 0x17 | 0x1F => {
                 let old_a = self.registers.a;
                 let old_carry = self.registers.f & FLAG_C != 0;
@@ -326,6 +338,24 @@ impl Z80 {
                     _ => [self.registers.a, self.registers.f] = value.to_be_bytes(),
                 }
                 10
+            }
+            0xC4 | 0xCC | 0xD4 | 0xDC | 0xE4 | 0xEC | 0xF4 | 0xFC => {
+                let target = self.fetch16(bus);
+                if self.condition((opcode >> 3) & 0x07) {
+                    self.push16(bus, self.registers.pc);
+                    self.registers.pc = target;
+                    17
+                } else {
+                    10
+                }
+            }
+            0xC0 | 0xC8 | 0xD0 | 0xD8 | 0xE0 | 0xE8 | 0xF0 | 0xF8 => {
+                if self.condition((opcode >> 3) & 0x07) {
+                    self.registers.pc = self.pop16(bus);
+                    11
+                } else {
+                    5
+                }
             }
             0xC9 => {
                 self.registers.pc = self.pop16(bus);
