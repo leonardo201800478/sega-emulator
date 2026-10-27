@@ -119,8 +119,10 @@ class SettingsDialog(QDialog):
             QLabel("Vulkan (Qt Quick); fallback Qt raster se indisponível"),
         )
         self.video_filter = QComboBox()
-        self.video_filter.addItem("Nearest-neighbor — pixels nítidos", "nearest")
+        self.video_filter.addItem("Nativo / Nearest — pixels nítidos", "nearest")
         self.video_filter.addItem("Bilinear — suavização", "bilinear")
+        self.video_filter.addItem("Dither Blending — mistura seletiva de padrões", "dither_blending")
+        self.video_filter.addItem("CRT / NTSC — scanlines e sinal aproximado", "crt_ntsc")
         index = self.video_filter.findData(preferences.video_filter)
         self.video_filter.setCurrentIndex(max(0, index))
         video_form.addRow("Filtro de escala", self.video_filter)
@@ -172,11 +174,11 @@ class SettingsDialog(QDialog):
         video_form.addRow(self.sprite_limit_enabled)
 
         video_note = QLabel(
-            "A proporção 4:3 é preservada. Nearest e bilinear são os únicos filtros "
-            "visuais implementados. VSync ainda requer integração com o modo de "
-            "apresentação do backend; VRR/G-Sync depende do Windows, driver e monitor "
-            "e não é ativado por esta preferência. O relógio de áudio é experimental "
-            "e não altera o scheduler nesta etapa."
+            "Nearest e bilinear preservam os modos de referência. Dither Blending "
+            "mistura somente blocos 2x2 reconhecidos como xadrez. CRT/NTSC aplica "
+            "scanlines, máscara, curvatura e uma aproximação espacial de sinal; não "
+            "é uma simulação temporal ou eletricamente precisa de NTSC/RF. VSync e "
+            "VRR/G-Sync continuam dependendo do backend, driver e monitor."
         )
         video_note.setWordWrap(True)
         video_form.addRow(video_note)
@@ -186,8 +188,16 @@ class SettingsDialog(QDialog):
 
         crt_page = QWidget(self)
         crt_layout = QVBoxLayout(crt_page)
-        crt_group = QGroupBox("CRT / NTSC — controles preparatórios")
+        crt_group = QGroupBox("CRT / NTSC — efeitos de apresentação")
         crt_form = QFormLayout(crt_group)
+        self.crt_signal_mode = QComboBox()
+        self.crt_signal_mode.addItem("RGB — sinal limpo", "rgb")
+        self.crt_signal_mode.addItem("Composite NTSC — crominância suavizada", "composite")
+        self.crt_signal_mode.addItem("RF — sinal mais degradado (aproximação)", "rf")
+        self.crt_signal_mode.setCurrentIndex(
+            max(0, self.crt_signal_mode.findData(preferences.crt_signal_mode))
+        )
+        crt_form.addRow("Modelo de sinal", self.crt_signal_mode)
         self.crt_scanline_intensity = QSpinBox()
         self.crt_scanline_intensity.setRange(0, 100)
         self.crt_scanline_intensity.setSuffix("%")
@@ -209,9 +219,10 @@ class SettingsDialog(QDialog):
         self.crt_curvature.setValue(preferences.crt_curvature)
         crt_form.addRow("Curvatura da tela", self.crt_curvature)
         crt_note = QLabel(
-            "Os parâmetros são persistidos, mas nenhum efeito CRT/NTSC, RF ou "
-            "dithering é renderizado nesta PR. A implementação exige pipeline de "
-            "filtro e testes de referência."
+            "Composite e RF são aproximações espaciais determinísticas. Esta versão "
+            "não modela fase/subportadora por linha, artefatos temporais, sincronismo "
+            "de cor ou cadeia elétrica real. A curvatura remapeia pixels por CPU; "
+            "compare desempenho antes de usar em hardware lento."
         )
         crt_note.setWordWrap(True)
         crt_form.addRow(crt_note)
@@ -255,6 +266,9 @@ class SettingsDialog(QDialog):
         self.crt_scanline_thickness.setValue(defaults.crt_scanline_thickness)
         self.crt_phosphor_mask.setValue(defaults.crt_phosphor_mask)
         self.crt_curvature.setValue(defaults.crt_curvature)
+        self.crt_signal_mode.setCurrentIndex(
+            self.crt_signal_mode.findData(defaults.crt_signal_mode)
+        )
 
     def preferences(self) -> FrontendPreferences:
         """Return only settings edited by this dialog."""
@@ -281,4 +295,5 @@ class SettingsDialog(QDialog):
             crt_scanline_thickness=self.crt_scanline_thickness.value(),
             crt_phosphor_mask=self.crt_phosphor_mask.value(),
             crt_curvature=self.crt_curvature.value(),
+            crt_signal_mode=str(self.crt_signal_mode.currentData()),
         )
