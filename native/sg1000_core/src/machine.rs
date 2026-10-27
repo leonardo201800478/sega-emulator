@@ -212,7 +212,7 @@ impl Sg1000Machine {
                         self.psg.write(value);
                     }
                 }
-            },
+            }
         }
     }
 
