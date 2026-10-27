@@ -42,6 +42,7 @@ class FrontendPreferences:
     audio_volume: int = 100
     video_filter: str = "nearest"
     integer_scale: bool = True
+    sprite_limit_enabled: bool = True
 
     def __post_init__(self) -> None:
         if not MIN_WINDOW_WIDTH <= self.window_width <= MAX_WINDOW_WIDTH:
@@ -70,6 +71,8 @@ class FrontendPreferences:
             raise ValueError("video_filter must be 'nearest' or 'bilinear'")
         if type(self.integer_scale) is not bool:
             raise ValueError("integer_scale must be a bool")
+        if type(self.sprite_limit_enabled) is not bool:
+            raise ValueError("sprite_limit_enabled must be a bool")
 
     @classmethod
     def from_store(cls, store: SettingsStore) -> FrontendPreferences:
@@ -138,6 +141,10 @@ class FrontendPreferences:
         integer_scale = _bool_value(
             store.value("integer_scale", defaults.integer_scale), defaults.integer_scale
         )
+        sprite_limit_enabled = _bool_value(
+            store.value("sprite_limit_enabled", defaults.sprite_limit_enabled),
+            defaults.sprite_limit_enabled,
+        )
         return cls(
             window_width=width,
             window_height=height,
@@ -152,6 +159,7 @@ class FrontendPreferences:
             audio_volume=volume,
             video_filter=video_filter,
             integer_scale=integer_scale,
+            sprite_limit_enabled=sprite_limit_enabled,
         )
 
     def save_to_store(self, store: SettingsStore) -> None:
@@ -169,6 +177,7 @@ class FrontendPreferences:
         store.setValue("audio_volume", self.audio_volume)
         store.setValue("video_filter", self.video_filter)
         store.setValue("integer_scale", self.integer_scale)
+        store.setValue("sprite_limit_enabled", self.sprite_limit_enabled)
 
     def with_recent_rom(self, path: str) -> FrontendPreferences:
         """Return preferences with a ROM moved to the front of the history."""
@@ -194,6 +203,7 @@ class FrontendPreferences:
             audio_volume=self.audio_volume,
             video_filter=self.video_filter,
             integer_scale=self.integer_scale,
+            sprite_limit_enabled=self.sprite_limit_enabled,
         )
 
 

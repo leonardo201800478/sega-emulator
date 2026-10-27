@@ -34,6 +34,7 @@ def test_defaults_are_valid_and_stable() -> None:
     assert preferences.audio_volume == 100
     assert preferences.video_filter == "nearest"
     assert preferences.integer_scale is True
+    assert preferences.sprite_limit_enabled is True
 
 
 @pytest.mark.parametrize(
@@ -62,6 +63,7 @@ def test_load_recovers_from_corrupt_or_legacy_values() -> None:
             "audio_volume": 150,
             "video_filter": "crt",
             "integer_scale": "yes",
+            "sprite_limit_enabled": "off",
         }
     )
 
@@ -77,6 +79,7 @@ def test_load_recovers_from_corrupt_or_legacy_values() -> None:
     assert preferences.audio_volume == 100
     assert preferences.video_filter == "nearest"
     assert preferences.integer_scale is True
+    assert preferences.sprite_limit_enabled is False
 
 
 def test_save_and_load_round_trip() -> None:
@@ -93,6 +96,7 @@ def test_save_and_load_round_trip() -> None:
         audio_volume=73,
         video_filter="bilinear",
         integer_scale=False,
+        sprite_limit_enabled=False,
     )
     settings = MemorySettings()
 
