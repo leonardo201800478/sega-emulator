@@ -164,6 +164,7 @@ class SettingsDialog(QDialog):
             self.video_filter.findData(defaults.video_filter)
         )
         self.integer_scale.setChecked(defaults.integer_scale)
+        self.sprite_limit_enabled.setChecked(defaults.sprite_limit_enabled)
 
     def preferences(self) -> FrontendPreferences:
         """Return only settings edited by this dialog."""
@@ -182,4 +183,5 @@ class SettingsDialog(QDialog):
             audio_volume=self.volume.value(),
             video_filter=str(self.video_filter.currentData()),
             integer_scale=self.integer_scale.isChecked(),
+            sprite_limit_enabled=self.sprite_limit_enabled.isChecked(),
         )
