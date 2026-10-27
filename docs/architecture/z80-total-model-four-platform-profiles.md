@@ -3,7 +3,7 @@
 - **Status:** proposta técnica baseada nas fontes existentes; requisitos para implementação e validação, não declaração de que a CPU já esteja completa.
 - **Escopo:** SG-1000, Master System, Game Gear e Z80 auxiliar do Mega Drive/Genesis.
 - **Branch de documentação:** `docs/z80-total-model-four-platform-profiles`.
-- **Base auditada:** `main` em `fec7a6d66e80693655d5295cb499ec3c572a02dc`; PR #118 (`9a21adf0b9a75ce1d6c1dd50bc66bc171acc3623`) foi consultada separadamente e ainda é Draft.
+- **Base auditada:** `main` após o merge da PR #118 (`4263f3871a1729c16e643e98132c74221ad8feec`). A fatia de opcodes da #118 está integrada; o núcleo Z80 continua parcial.
 - **Linguagem oficial do núcleo:** Rust. Python fica para UI, ferramentas e oráculos diferenciais seletivos.
 
 ## 1. Decisão central
@@ -25,7 +25,7 @@ As frentes abaixo foram conduzidas como trilhas de análise paralelas a partir d
 - DD/FD pode ser prefixo efetivo, prefixo ignorado ou forma que substitui IX/IY. É necessário classificar cada encoding, não assumir que todo DD/FD altera H/L.
 - As formas indexadas com `(IX/IY+d)` têm exceções importantes: em operações específicas com memória indexada, os registradores H/L não significam automaticamente IXH/IXL ou IYH/IYL.
 - O espaço ED deve distinguir instruções atribuídas, aliases documentados e bytes não atribuídos; o comportamento NOP de ED não pode ser confundido com implementação de uma instrução.
-- O núcleo Rust atual declara explicitamente ser incremental e retorna `UnsupportedOpcode` para famílias ainda não implementadas. PR #118 adiciona apenas parte das instruções base (rotações do acumulador, DAA, CPL/SCF/CCF, DJNZ e RST); CB/DD/ED/FD, registradores alternativos e interrupções continuam pendentes no estado consultado.
+- O núcleo Rust continua incremental e retorna `UnsupportedOpcode` para famílias ainda não implementadas. A PR #118 integrou parte das instruções base (rotações do acumulador, DAA, CPL/SCF/CCF, DJNZ e RST); CB/DD/ED/FD, registradores alternativos e interrupções continuam pendentes.
 
 **Saída necessária:** matriz gerada e versionada de todos os espaços de opcode, com bytes/prefixos, mnemônico canônico, classificação, comprimento, T-states nominais, efeitos de estado e referência do oráculo.
 
@@ -189,7 +189,7 @@ Para `native/z80_core`, validar também o manifest path, build Release/Maturin e
 
 ## 7. Fases de implementação
 
-1. **Baseline e inventário:** fixar o SHA, fechar/registrar o estado da PR #118 e importar sua mudança só pelo fluxo normal de PR; inventariar o estado real do núcleo Rust e os oráculos existentes.
+1. **Baseline e inventário:** fixar o SHA de `main` após a integração da PR #118; inventariar o estado real do núcleo Rust e os oráculos existentes.
 2. **Contrato e estado completo:** definir tipos Rust para registradores, flags, interrupções, estado de execução, bus e resultado de step; preservar APIs estáveis.
 3. **Decoder/matriz semântica:** gerar matriz total e classificar cada encoding antes de preencher lacunas.
 4. **Instruções base e prefixos:** implementar famílias por fatias compiláveis com regressões para cada mudança; CB, ED, DD/FD e index-CB não devem ser tratados como um único megacommit.
