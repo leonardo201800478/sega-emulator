@@ -167,15 +167,15 @@ class SettingsDialog(QDialog):
         self.integer_scale.setChecked(preferences.integer_scale)
         video_form.addRow(self.integer_scale)
 
-        self.sprite_limit_enabled = QCheckBox(
-            "Limitar a quatro sprites por linha (modo hardware)"
+        self.sprite_limit_unlocked = QCheckBox(
+            "Destravar limite de sprites por linha (modo compatibilidade)"
         )
-        self.sprite_limit_enabled.setChecked(preferences.sprite_limit_enabled)
-        self.sprite_limit_enabled.setToolTip(
-            "Desative para diagnóstico visual; o comportamento deixa de seguir "
-            "o limite de sprites do SG-1000."
+        self.sprite_limit_unlocked.setChecked(not preferences.sprite_limit_enabled)
+        self.sprite_limit_unlocked.setToolTip(
+            "Ative para desenhar mais de quatro sprites na mesma linha. "
+            "O VDP continua registrando o status de overflow do hardware."
         )
-        video_form.addRow(self.sprite_limit_enabled)
+        video_form.addRow(self.sprite_limit_unlocked)
 
         video_note = QLabel(
             "Nearest e bilinear preservam os modos de referência. Dither Blending "
@@ -262,7 +262,7 @@ class SettingsDialog(QDialog):
             self.video_filter.findData(defaults.video_filter)
         )
         self.integer_scale.setChecked(defaults.integer_scale)
-        self.sprite_limit_enabled.setChecked(defaults.sprite_limit_enabled)
+        self.sprite_limit_unlocked.setChecked(not defaults.sprite_limit_enabled)
         self.vsync_mode.setCurrentIndex(self.vsync_mode.findData(defaults.vsync_mode))
         self.vrr_mode.setCurrentIndex(self.vrr_mode.findData(defaults.vrr_mode))
         self.av_sync_mode.setCurrentIndex(
@@ -293,7 +293,7 @@ class SettingsDialog(QDialog):
             audio_volume=self.volume.value(),
             video_filter=str(self.video_filter.currentData()),
             integer_scale=self.integer_scale.isChecked(),
-            sprite_limit_enabled=self.sprite_limit_enabled.isChecked(),
+            sprite_limit_enabled=not self.sprite_limit_unlocked.isChecked(),
             vsync_mode=str(self.vsync_mode.currentData()),
             vrr_mode=str(self.vrr_mode.currentData()),
             av_sync_mode=str(self.av_sync_mode.currentData()),
