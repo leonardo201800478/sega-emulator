@@ -42,6 +42,7 @@ class FrontendPreferences:
     audio_volume: int = 100
     video_filter: str = "nearest"
     integer_scale: bool = True
+    sprite_limit_enabled: bool = True
 
     def __post_init__(self) -> None:
         if not MIN_WINDOW_WIDTH <= self.window_width <= MAX_WINDOW_WIDTH:
@@ -58,8 +59,8 @@ class FrontendPreferences:
             raise ValueError("recent_roms must contain non-empty path strings")
         if not isinstance(self.controller_config, str):
             raise ValueError("controller_config must be serialized as text")
-        if self.cpu_core not in ("python", "rust"):
-            raise ValueError("cpu_core must be 'python' or 'rust'")
+        if self.cpu_core != "rust":
+            raise ValueError("cpu_core must be 'rust'; the Qt runtime is Rust-only")
         if self.audio_sample_rate not in (22_050, 44_100, 48_000):
             raise ValueError("audio_sample_rate must be 22050, 44100, or 48000")
         if self.audio_buffer_size not in (256, 512, 1024, 2048):
@@ -70,6 +71,8 @@ class FrontendPreferences:
             raise ValueError("video_filter must be 'nearest' or 'bilinear'")
         if type(self.integer_scale) is not bool:
             raise ValueError("integer_scale must be a bool")
+        if type(self.sprite_limit_enabled) is not bool:
+            raise ValueError("sprite_limit_enabled must be a bool")
 
     @classmethod
     def from_store(cls, store: SettingsStore) -> FrontendPreferences:
@@ -115,9 +118,10 @@ class FrontendPreferences:
             store.value("diagnostics_enabled", defaults.diagnostics_enabled),
             defaults.diagnostics_enabled,
         )
-        cpu_core = store.value("cpu_core", defaults.cpu_core)
-        if cpu_core not in ("python", "rust"):
-            cpu_core = defaults.cpu_core
+        # Migrate legacy profiles that persisted the removed Python runtime.
+        cpu_core = "rust"
+        if store.value("cpu_core", defaults.cpu_core) != "rust":
+            store.setValue("cpu_core", "rust")
         sample_rate = _bounded_choice(
             store.value("audio_sample_rate", defaults.audio_sample_rate),
             defaults.audio_sample_rate,
@@ -137,6 +141,10 @@ class FrontendPreferences:
         integer_scale = _bool_value(
             store.value("integer_scale", defaults.integer_scale), defaults.integer_scale
         )
+        sprite_limit_enabled = _bool_value(
+            store.value("sprite_limit_enabled", defaults.sprite_limit_enabled),
+            defaults.sprite_limit_enabled,
+        )
         return cls(
             window_width=width,
             window_height=height,
@@ -151,6 +159,7 @@ class FrontendPreferences:
             audio_volume=volume,
             video_filter=video_filter,
             integer_scale=integer_scale,
+            sprite_limit_enabled=sprite_limit_enabled,
         )
 
     def save_to_store(self, store: SettingsStore) -> None:
@@ -168,6 +177,7 @@ class FrontendPreferences:
         store.setValue("audio_volume", self.audio_volume)
         store.setValue("video_filter", self.video_filter)
         store.setValue("integer_scale", self.integer_scale)
+        store.setValue("sprite_limit_enabled", self.sprite_limit_enabled)
 
     def with_recent_rom(self, path: str) -> FrontendPreferences:
         """Return preferences with a ROM moved to the front of the history."""
@@ -193,6 +203,7 @@ class FrontendPreferences:
             audio_volume=self.audio_volume,
             video_filter=self.video_filter,
             integer_scale=self.integer_scale,
+            sprite_limit_enabled=self.sprite_limit_enabled,
         )
 
 

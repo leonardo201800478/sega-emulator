@@ -30,6 +30,7 @@ def test_dialog_loads_and_returns_audio_video_preferences(qt_app) -> None:
         audio_volume=65,
         video_filter="bilinear",
         integer_scale=False,
+        sprite_limit_enabled=False,
     )
     dialog = SettingsDialog(original)
 
@@ -46,6 +47,7 @@ def test_dialog_loads_and_returns_audio_video_preferences(qt_app) -> None:
     assert dialog.volume.value() == 65
     assert dialog.video_filter.currentData() == "bilinear"
     assert dialog.integer_scale.isChecked() is False
+    assert dialog.sprite_limit_enabled.isChecked() is False
 
     dialog.audio_enabled.setChecked(True)
     dialog.sample_rate.setCurrentIndex(dialog.sample_rate.findData(22_050))
@@ -53,6 +55,7 @@ def test_dialog_loads_and_returns_audio_video_preferences(qt_app) -> None:
     dialog.volume.setValue(40)
     dialog.video_filter.setCurrentIndex(dialog.video_filter.findData("nearest"))
     dialog.integer_scale.setChecked(True)
+    dialog.sprite_limit_enabled.setChecked(True)
 
     updated = dialog.preferences()
     assert updated.audio_enabled is True
@@ -61,6 +64,7 @@ def test_dialog_loads_and_returns_audio_video_preferences(qt_app) -> None:
     assert updated.audio_volume == 40
     assert updated.video_filter == "nearest"
     assert updated.integer_scale is True
+    assert updated.sprite_limit_enabled is True
     # Editing presentation settings must not switch the selected emulation core.
     assert updated.cpu_core == original.cpu_core
     dialog.close()
@@ -75,6 +79,7 @@ def test_restore_defaults_resets_audio_video_controls(qt_app) -> None:
             audio_volume=10,
             video_filter="bilinear",
             integer_scale=False,
+            sprite_limit_enabled=False,
         )
     )
 
@@ -87,4 +92,5 @@ def test_restore_defaults_resets_audio_video_controls(qt_app) -> None:
     assert dialog.volume.value() == defaults.audio_volume
     assert dialog.video_filter.currentData() == defaults.video_filter
     assert dialog.integer_scale.isChecked() is defaults.integer_scale
+    assert dialog.sprite_limit_enabled.isChecked() is defaults.sprite_limit_enabled
     dialog.close()

@@ -546,3 +546,25 @@ def test_put_pixel_masks_color_and_ignores_out_of_bounds_coordinates() -> None:
     vdp._put_pixel(pixels, 0, -1, 2)
     vdp._put_pixel(pixels, 0, SCREEN_HEIGHT, 2)
     assert bytes(pixels) == before
+
+
+def test_sprite_limit_can_be_disabled_without_reporting_fifth_sprite_overflow() -> None:
+    vdp = TMS9918A()
+    for index in range(5):
+        offset = index * 4
+        vdp.vram[offset : offset + 4] = bytes((0xFF, index * 8, 0, 0x0F))
+
+    active, fifth = vdp._sprite_line_active(0)
+    assert len(active) == 4
+    assert fifth == 4
+
+    vdp.set_sprite_limit_enabled(False)
+    active, fifth = vdp._sprite_line_active(0)
+    assert len(active) == 5
+    assert fifth is None
+
+
+def test_sprite_limit_setting_rejects_non_boolean_values() -> None:
+    vdp = TMS9918A()
+    with pytest.raises(TypeError, match="bool"):
+        vdp.set_sprite_limit_enabled(1)
