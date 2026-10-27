@@ -132,7 +132,7 @@ def run(initial_path: Path | None = None) -> None:
     """Abre a interface de teste com teclado, telemetria e logs de sessão."""
     try:
         from PySide6.QtCore import QEvent, QObject, QSettings, Qt, QTimer
-        from PySide6.QtGui import QImage, QKeySequence, QSurfaceFormat
+        from PySide6.QtGui import QImage, QKeySequence
         from PySide6.QtWidgets import (
             QApplication,
             QCheckBox,
@@ -173,10 +173,6 @@ def run(initial_path: Path | None = None) -> None:
     if video_sync_mode not in {"vsync", "vrr", "gsync", "off"}:
         video_sync_mode = "vsync"
         settings.setValue("video_sync_mode", video_sync_mode)
-    # Set before the first QQuickWindow; VRR/G-SYNC remain system-managed.
-    surface_format = QSurfaceFormat()
-    surface_format.setSwapInterval(0 if video_sync_mode == "off" else 1)
-    QSurfaceFormat.setDefaultFormat(surface_format)
     if video_driver not in {"auto", "vulkan", "d3d11", "d3d12", "raster"}:
         video_driver = "auto"
         settings.setValue("video_driver", video_driver)
@@ -581,7 +577,7 @@ def run(initial_path: Path | None = None) -> None:
             extra={
                 "event": "video_sync_mode_changed",
                 "video_sync_mode": mode,
-                "restart_required": True,
+                "restart_required": False,\n                "backend_sync_control_pending": True,
                 "system_vrr_or_gsync_not_toggled": mode in {"vrr", "gsync"},
             },
         )
@@ -594,7 +590,8 @@ def run(initial_path: Path | None = None) -> None:
         QMessageBox.information(
             window,
             "Sincronização de vídeo",
-            f"{descriptions[mode]}. Reinicie o emulador para aplicar a política. "
+            f"{descriptions[mode]}. A preferência foi salva. O controle efetivo "
+            "de VSync/Off ainda depende de implementação específica do backend Qt; "
             "VRR/G-SYNC dependem do monitor, Windows e driver e não podem ser "
             "ativados diretamente pelo Qt.",
         )
