@@ -58,7 +58,17 @@ A CI workflow only validates the commands it actually executes. A green Python w
 - Scope limitation: `native/sg1000_core/src/machine.rs` explicitly states VDP, PSG, I/O and interrupt scheduling are not integrated. The crate is not yet a complete standalone emulator.
 - Do not move Python production cores to `legacy/` yet: the current application still depends on those modules, and the Rust crate does not replace all production contracts.
 
+## Current migration status — PR #126
+
+- Branch: `refactor/sg1000-native-core-consolidation`.
+- The branch internalizes the Z80 ALU and restores the shared `sega-z80-bus` contract used by SG-1000 and SMS.
+- `sg1000_core/src/vdp.rs` is now Python-independent: TMS9918A state, VRAM/control ports, scanline/VBlank timing, framebuffer rendering, and sprite helpers live in Rust types.
+- `Sg1000Machine` advances the VDP and SN76489 from nominal instruction T-states; CPU `IN A,(n)` and `OUT (n),A` are wired through the machine bus.
+- The PSG default clock profile is configurable but provisional; instruction-boundary timing is not cycle-exact.
+- Remaining gate: complete the Z80 instruction/prefix/interrupt implementation, verify hardware clocks and VDP behavior with independent references, validate the extension boundary and run all required CI checks on the final candidate SHA. Do not merge or claim standalone completion until those checks pass.
+
 ## Change log
+- 2026-10-27: PR #126 expanded the native SG-1000 slice with a PyO3-free TMS9918A, VDP raster advancement, SN76489 clock/sample integration, and Z80 immediate IN/OUT routing. Validation is in progress; see `sg1000-native-consolidation.md`.
 - 2026-10-27: Step 1 added a pure-Rust SG-1000 I/O boundary for controller aliases and timestamped PSG write capture. It is intentionally not a complete CPU-port/VDP/audio-scheduler integration; see `sg1000-rust-io-step1.md`.
 - 2026-10-27: Initial control board added. No source files moved and no tests claimed as passing.
 - 2026-10-27: Corrected the excluded shared-core scaffold's workspace registration and sibling dependency paths so the manifest can be validated independently.
