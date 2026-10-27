@@ -73,6 +73,7 @@ struct Sg1000MachineBus<'a> {
     io: &'a mut Sg1000Io,
     vdp: &'a mut Tms9918A,
     pending_psg_writes: &'a mut Vec<PsgWriteEvent>,
+    pending_vdp_writes: &'a mut Vec<VdpWriteEvent>,
     tstate: u64,
 }
 
@@ -94,7 +95,15 @@ impl CpuBus for Sg1000MachineBus<'_> {
 
     fn write_port(&mut self, port: u16, value: u8) {
         match (port as u8) & 0xC1 {
-            0x80 | 0x81 => self.vdp.write_port(port, value),
+            0x80 | 0x81 => {
+                // This bus write is emitted by the native OUT (n),A opcode,
+                // whose nominal I/O edge is 11 T-states after instruction start.
+                self.pending_vdp_writes.push(VdpWriteEvent {
+                    tstate: self.tstate.saturating_add(11),
+                    address: port,
+                    value,
+                });
+            }
             _ => {
                 let is_psg_port = (0x40..=0x7F).contains(&(port as u8));
                 let write_tstate = if is_psg_port {
@@ -186,6 +195,7 @@ impl Sg1000Machine {
                 io: &mut self.io,
                 vdp: &mut self.vdp,
                 pending_psg_writes: &mut self.pending_psg_writes,
+                pending_vdp_writes: &mut self.pending_vdp_writes,
                 tstate,
             };
             self.cpu.step(&mut bus)?
@@ -430,6 +440,35 @@ mod tests {
         assert_eq!(whole.psg_clock_remainder, 0);
         assert_eq!(chunked.psg_clock_remainder, whole.psg_clock_remainder);
         assert_eq!(chunked.psg, whole.psg);
+    }
+
+    #[test]
+    fn cpu_out_vdp_writes_are_queued_at_the_nominal_io_edge() {
+        let mut machine = Sg1000Machine::new(&[0xD3, 0x81], MemoryConfig::default()).unwrap();
+        machine.cpu.registers.a = 0x00;
+
+        let cycles = {
+            let mut bus = super::Sg1000MachineBus {
+                memory: &mut machine.memory,
+                io: &mut machine.io,
+                vdp: &mut machine.vdp,
+                pending_psg_writes: &mut machine.pending_psg_writes,
+                pending_vdp_writes: &mut machine.pending_vdp_writes,
+                tstate: machine.cpu.total_tstates,
+            };
+            machine.cpu.step(&mut bus).unwrap()
+        };
+
+        assert_eq!(cycles, 11);
+        assert_eq!(machine.vdp.vram()[0], 0);
+        assert_eq!(
+            machine.pending_vdp_writes,
+            vec![super::VdpWriteEvent {
+                tstate: 11,
+                address: 0x0081,
+                value: 0x00,
+            }]
+        );
     }
 
     #[test]
