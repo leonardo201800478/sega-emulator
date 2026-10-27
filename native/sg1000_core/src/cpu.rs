@@ -597,7 +597,8 @@ impl Z80 {
                 15
             }
             0xE1 => {
-                self.set_index_value(prefix, self.pop16(bus));
+                let value = self.pop16(bus);
+                self.set_index_value(prefix, value);
                 14
             }
             0xE5 => {
