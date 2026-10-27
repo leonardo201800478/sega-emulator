@@ -23,7 +23,9 @@ pub mod vdp;
 
 pub use bus::CpuBus;
 pub use cpu::{CpuError, Z80};
-pub use input::{ControllerBackend, ControllerButtons, ControllerFrame};
+pub use input::{
+    ControllerBackend, ControllerBackendPreference, ControllerButtons, ControllerFrame,
+};
 pub use io::{IoError, PsgWriteEvent, Sg1000Io};
 pub use machine::{MachineError, Sg1000Machine};
 pub use memory::{MemoryConfig, MemoryError, Sg1000Memory};
