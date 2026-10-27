@@ -59,6 +59,21 @@ pub enum ControllerBackend {
     DirectInput,
 }
 
+/// Policy used by the host-side controller provider.
+///
+/// The default is native-first: on Windows, use XInput for devices exposed by
+/// XInput, then DirectInput for legacy devices that cannot be read through
+/// XInput. SDL remains an explicit fallback/cross-platform backend. This is a
+/// selection policy, not a claim that one API is universally lower-latency for
+/// every controller; end-to-end latency depends on device, transport, driver,
+/// polling cadence, and the host event loop.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum ControllerBackendPreference {
+    #[default]
+    NativeLowLatency,
+    Sdl,
+}
+
 /// A normalized snapshot for both SG-1000 controller ports.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct ControllerFrame {
@@ -90,8 +105,16 @@ impl ControllerFrame {
 
 #[cfg(test)]
 mod tests {
-    use super::{ControllerButtons, ControllerFrame};
+    use super::{ControllerBackendPreference, ControllerButtons, ControllerFrame};
     use crate::{MemoryConfig, Sg1000Machine};
+
+    #[test]
+    fn native_low_latency_is_the_default_backend_policy() {
+        assert_eq!(
+            ControllerBackendPreference::default(),
+            ControllerBackendPreference::NativeLowLatency
+        );
+    }
 
     #[test]
     fn no_buttons_pressed_is_all_bits_high() {
