@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QActionGroup, QKeySequence
+from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
@@ -50,8 +50,6 @@ class EmulatorMainWindow(QMainWindow):
         on_start_vgm_recording: Callable[[], None] | None = None,
         on_stop_vgm_recording: Callable[[], None] | None = None,
         video_driver: str = "auto",
-        video_sync_mode: str = "vsync",
-        on_video_sync_mode: Callable[[str], None] | None = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
@@ -166,32 +164,6 @@ class EmulatorMainWindow(QMainWindow):
             )
             video_menu.addAction(action)
         video_menu.addAction(self.fullscreen_action)
-        video_menu.addSeparator()
-        sync_menu = video_menu.addMenu("Sincronização de apresentação")
-        self.video_sync_group = QActionGroup(self)
-        self.video_sync_group.setExclusive(True)
-        self.video_sync_actions = {}
-        sync_options = (
-            ("VSync (sincronização vertical)", "vsync"),
-            ("VRR (requer suporte/ativação no sistema)", "vrr"),
-            ("G-SYNC (requer ativação no Painel NVIDIA)", "gsync"),
-            ("Desativado (pode causar tearing)", "off"),
-        )
-        for label, mode in sync_options:
-            action = QAction(label, self)
-            action.setCheckable(True)
-            action.setChecked(mode == video_sync_mode)
-            action.setData(mode)
-            self.video_sync_group.addAction(action)
-            sync_menu.addAction(action)
-            self.video_sync_actions[mode] = action
-            if on_video_sync_mode is not None:
-                action.triggered.connect(
-                    lambda checked=False, selected=mode: (
-                        on_video_sync_mode(selected) if checked else None
-                    )
-                )
-
         settings_menu = self.menuBar().addMenu("&Configurações")
         self.audio_video_action = QAction("Áudio e vídeo…", self)
         if on_configure_audio_video is not None:
