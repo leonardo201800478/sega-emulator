@@ -8,6 +8,7 @@
 /// Size of the Z80's logical address space.
 pub const SG1000_CPU_ADDRESS_SPACE_SIZE: usize = 0x1_0000;
 
+pub mod alu;
 pub mod bus;
 pub mod cpu;
 pub mod io;
