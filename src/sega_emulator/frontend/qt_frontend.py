@@ -577,7 +577,8 @@ def run(initial_path: Path | None = None) -> None:
             extra={
                 "event": "video_sync_mode_changed",
                 "video_sync_mode": mode,
-                "restart_required": False,\n                "backend_sync_control_pending": True,
+                "restart_required": False,
+                "backend_sync_control_pending": True,
                 "system_vrr_or_gsync_not_toggled": mode in {"vrr", "gsync"},
             },
         )
