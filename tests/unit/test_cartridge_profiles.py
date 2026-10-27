@@ -5,11 +5,11 @@ from __future__ import annotations
 import zlib
 
 from sega_emulator.machine.cartridge_profiles import (
+    SG1000_DAHJEE_TYPE_A_CRC32,
     SG1000_II_RAM_EXT_TYPE_B_CRC32,
     SG1000_II_RAM_EXT_TYPE_B_SIZE,
-    SG1000_DAHJEE_TYPE_A_CRC32,
-    SG1000_OTHELLO_CRC32,
     SG1000_INTERNAL_RAM_SIZE,
+    SG1000_OTHELLO_CRC32,
     SG1000_THE_CASTLE_JAPAN_CRC32,
     cartridge_profile,
     cartridge_ram_size,
