@@ -324,6 +324,31 @@ mod tests {
     }
 
     #[test]
+    fn conditional_call_and_return_follow_flags_and_stack_contract() {
+        let rom = [0x31, 0x00, 0xC1, 0xAF, 0xC8];
+        let mut taken = Sg1000Machine::new(&rom, MemoryConfig::default()).unwrap();
+        taken.memory.write(0xC100, 0x34);
+        taken.memory.write(0xC101, 0x12);
+        assert_eq!(taken.run_instructions(3), Ok(25));
+        assert_eq!(taken.cpu.registers.pc, 0x1234);
+        assert_eq!(taken.cpu.registers.sp, 0xC102);
+
+        let rom = [0x31, 0x00, 0xC1, 0x3E, 0x01, 0xC8];
+        let mut not_taken = Sg1000Machine::new(&rom, MemoryConfig::default()).unwrap();
+        assert_eq!(not_taken.run_instructions(3), Ok(22));
+        assert_eq!(not_taken.cpu.registers.pc, 5);
+        assert_eq!(not_taken.cpu.registers.sp, 0xC100);
+
+        let rom = [0x31, 0x00, 0xC1, 0xC4, 0x08, 0x00, 0x76, 0x00, 0x76];
+        let mut call = Sg1000Machine::new(&rom, MemoryConfig::default()).unwrap();
+        assert_eq!(call.run_instructions(2), Ok(27));
+        assert_eq!(call.cpu.registers.pc, 8);
+        assert_eq!(call.cpu.registers.sp, 0xC0FE);
+        assert_eq!(call.read_memory(0xC0FE), 6);
+        assert_eq!(call.read_memory(0xC0FF), 0);
+    }
+
+    #[test]
     fn unsupported_instruction_is_reported_to_caller() {
         let mut machine = Sg1000Machine::new(&[0xDD], MemoryConfig::default()).unwrap();
         assert!(machine.step().is_err());
