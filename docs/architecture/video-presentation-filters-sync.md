@@ -8,10 +8,14 @@ O VDP produz o framebuffer original. O pipeline de apresentação recebe somente
 
 - **Nativo / Nearest (implementado):** pixels sem suavização; referência de comparação digital.
 - **Bilinear (implementado):** interpolação na escala de apresentação.
-- **Dither Blending (planejado):** análise local de padrões alternados/xadrez; só combinar candidatos aprovados, nunca aplicar blur global. Testar xadrez, linhas, bordas, texto, sprites e gradientes.
-- **CRT / NTSC (planejado):** shader para backend acelerado e referência CPU para Raster. Scanlines, espessura, máscara de fósforo e curvatura são parâmetros de apresentação. Composite/RF só podem ser anunciados depois de validar a cadeia de sinal e efeitos temporais durante rolagem.
+- **Dither Blending (implementado):** detector conservador de padrões 2×2 em xadrez. Os pares diagonais precisam ser semelhantes e ter contraste entre si; somente tiles aceitos são substituídos pela média das quatro cores. Não há desfoque global. Padrões desalinhados com a grade de 2×2 podem não ser detectados.
+- **CRT / NTSC (implementado, aproximação espacial):** scanlines, máscara triádica de fósforo, curvatura e seleção RGB/Composite/RF. Composite usa um low-pass horizontal simples de crominância em espaço YIQ; RF acrescenta suavização de luminância e reduz crominância. A implementação é determinística e compartilhada pelos backends, via CPU/NumPy, sem shader específico.
 
-Os parâmetros CRT persistidos por esta PR são preparatórios e não modificam a imagem ainda. A UI deve explicitar isso.
+**Limitações do CRT/NTSC:** não modela subportadora e fase por linha, burst de cor, comb filtering temporal, persistência de fósforo, sincronismo, ruído RF aleatório ou a cadeia elétrica real. Composite/RF são efeitos visuais aproximados, não simulação fisicamente precisa. Curvatura pode criar bordas pretas. O caminho de filtro só recebe cópias RGB concluídas e nunca altera framebuffer, VDP, clocks ou estado da máquina.
+
+## Validação
+
+Os testes sintéticos cobrem xadrez, bordas sólidas, cópia do framebuffer, modos de sinal, scanlines, máscara, curvatura, determinismo e rejeição de parâmetros inválidos. A equivalência visual entre APIs gráficas e o custo no Windows ainda requer execução manual nos backends reais.
 
 ## Backends e sincronização
 
