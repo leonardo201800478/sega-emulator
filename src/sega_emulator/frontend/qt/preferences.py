@@ -43,6 +43,13 @@ class FrontendPreferences:
     video_filter: str = "nearest"
     integer_scale: bool = True
     sprite_limit_enabled: bool = True
+    vsync_mode: str = "on"
+    vrr_mode: str = "driver"
+    av_sync_mode: str = "low_latency"
+    crt_scanline_intensity: int = 40
+    crt_scanline_thickness: int = 50
+    crt_phosphor_mask: int = 25
+    crt_curvature: int = 0
 
     def __post_init__(self) -> None:
         if not MIN_WINDOW_WIDTH <= self.window_width <= MAX_WINDOW_WIDTH:
@@ -73,6 +80,16 @@ class FrontendPreferences:
             raise ValueError("integer_scale must be a bool")
         if type(self.sprite_limit_enabled) is not bool:
             raise ValueError("sprite_limit_enabled must be a bool")
+        if self.vsync_mode not in ("on", "off", "adaptive"):
+            raise ValueError("vsync_mode must be on, off, or adaptive")
+        if self.vrr_mode not in ("driver", "prefer", "off"):
+            raise ValueError("vrr_mode must be driver, prefer, or off")
+        if self.av_sync_mode not in ("low_latency", "audio_clock"):
+            raise ValueError("av_sync_mode must be low_latency or audio_clock")
+        for field_name in ("crt_scanline_intensity", "crt_scanline_thickness", "crt_phosphor_mask", "crt_curvature"):
+            value = getattr(self, field_name)
+            if type(value) is not int or not 0 <= value <= 100:
+                raise ValueError(f"{field_name} must be an integer from 0 to 100")
 
     @classmethod
     def from_store(cls, store: SettingsStore) -> FrontendPreferences:
@@ -145,6 +162,19 @@ class FrontendPreferences:
             store.value("sprite_limit_enabled", defaults.sprite_limit_enabled),
             defaults.sprite_limit_enabled,
         )
+        vsync_mode = store.value("vsync_mode", defaults.vsync_mode)
+        if vsync_mode not in ("on", "off", "adaptive"):
+            vsync_mode = defaults.vsync_mode
+        vrr_mode = store.value("vrr_mode", defaults.vrr_mode)
+        if vrr_mode not in ("driver", "prefer", "off"):
+            vrr_mode = defaults.vrr_mode
+        av_sync_mode = store.value("av_sync_mode", defaults.av_sync_mode)
+        if av_sync_mode not in ("low_latency", "audio_clock"):
+            av_sync_mode = defaults.av_sync_mode
+        crt_values = {
+            name: _bounded_int(store.value(name, getattr(defaults, name)), getattr(defaults, name), 0, 100)
+            for name in ("crt_scanline_intensity", "crt_scanline_thickness", "crt_phosphor_mask", "crt_curvature")
+        }
         return cls(
             window_width=width,
             window_height=height,
@@ -160,6 +190,10 @@ class FrontendPreferences:
             video_filter=video_filter,
             integer_scale=integer_scale,
             sprite_limit_enabled=sprite_limit_enabled,
+            vsync_mode=vsync_mode,
+            vrr_mode=vrr_mode,
+            av_sync_mode=av_sync_mode,
+            **crt_values,
         )
 
     def save_to_store(self, store: SettingsStore) -> None:
@@ -178,6 +212,13 @@ class FrontendPreferences:
         store.setValue("video_filter", self.video_filter)
         store.setValue("integer_scale", self.integer_scale)
         store.setValue("sprite_limit_enabled", self.sprite_limit_enabled)
+        store.setValue("vsync_mode", self.vsync_mode)
+        store.setValue("vrr_mode", self.vrr_mode)
+        store.setValue("av_sync_mode", self.av_sync_mode)
+        store.setValue("crt_scanline_intensity", self.crt_scanline_intensity)
+        store.setValue("crt_scanline_thickness", self.crt_scanline_thickness)
+        store.setValue("crt_phosphor_mask", self.crt_phosphor_mask)
+        store.setValue("crt_curvature", self.crt_curvature)
 
     def with_recent_rom(self, path: str) -> FrontendPreferences:
         """Return preferences with a ROM moved to the front of the history."""
@@ -204,6 +245,13 @@ class FrontendPreferences:
             video_filter=self.video_filter,
             integer_scale=self.integer_scale,
             sprite_limit_enabled=self.sprite_limit_enabled,
+            vsync_mode=self.vsync_mode,
+            vrr_mode=self.vrr_mode,
+            av_sync_mode=self.av_sync_mode,
+            crt_scanline_intensity=self.crt_scanline_intensity,
+            crt_scanline_thickness=self.crt_scanline_thickness,
+            crt_phosphor_mask=self.crt_phosphor_mask,
+            crt_curvature=self.crt_curvature,
         )
 
 
