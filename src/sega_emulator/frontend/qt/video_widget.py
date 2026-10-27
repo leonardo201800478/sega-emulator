@@ -123,7 +123,9 @@ class VideoWidget(QWidget):
     def __init__(self, parent=None, *, graphics_api: str = "vulkan") -> None:
         super().__init__(parent)
         if graphics_api not in {"auto", "vulkan", "d3d11", "d3d12", "raster"}:
-            raise ValueError("graphics_api must be auto, vulkan, d3d11, d3d12, or raster")
+            raise ValueError(
+                "graphics_api must be auto, vulkan, d3d11, d3d12, or raster"
+            )
         self._source_image: QImage | None = None
         self._filter_mode = "nearest"
         self._integer_scale = True

@@ -33,8 +33,6 @@ class FramePacer:
 
         # Keep a stable cadence relative to the original deadline. If a frame
         # missed one or more slots, skip them rather than issuing catch-up bursts.
-        missed_slots = math.floor(
-            (now - self._next_deadline) / self.period_seconds
-        ) + 1
+        missed_slots = math.floor((now - self._next_deadline) / self.period_seconds) + 1
         self._next_deadline += missed_slots * self.period_seconds
         return True
