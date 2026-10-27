@@ -5,14 +5,14 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-import pytest
+import pytest  # noqa: E402
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtGui import QImage
-from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QImage  # noqa: E402
+from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from sega_emulator.frontend.qt.video_widget import VideoWidget
+from sega_emulator.frontend.qt.video_widget import VideoWidget  # noqa: E402
 
 
 @pytest.fixture
