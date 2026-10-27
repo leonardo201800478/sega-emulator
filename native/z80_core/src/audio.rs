@@ -22,43 +22,81 @@ impl NativeSn76489 {
     }
 
     #[getter]
-    fn clock_hz(&self) -> u64 { self.inner.clock_hz() }
+    fn clock_hz(&self) -> u64 {
+        self.inner.clock_hz()
+    }
     #[getter]
-    fn sample_rate(&self) -> u64 { self.inner.sample_rate() }
+    fn sample_rate(&self) -> u64 {
+        self.inner.sample_rate()
+    }
     #[getter(_sample_buffer_capacity)]
-    fn sample_buffer_capacity(&self) -> usize { self.inner.sample_buffer_capacity() }
+    fn sample_buffer_capacity(&self) -> usize {
+        self.inner.sample_buffer_capacity()
+    }
     #[getter]
-    fn dropped_samples(&self) -> u64 { self.inner.dropped_samples() }
+    fn dropped_samples(&self) -> u64 {
+        self.inner.dropped_samples()
+    }
     #[getter]
-    fn tone_periods(&self) -> Vec<u16> { self.inner.tone_periods().to_vec() }
+    fn tone_periods(&self) -> Vec<u16> {
+        self.inner.tone_periods().to_vec()
+    }
     #[getter]
     fn attenuations(&self) -> Vec<u16> {
-        self.inner.attenuations().iter().map(|value| u16::from(*value)).collect()
+        self.inner
+            .attenuations()
+            .iter()
+            .map(|value| u16::from(*value))
+            .collect()
     }
     #[getter]
-    fn noise_control(&self) -> u8 { self.inner.noise_control() }
+    fn noise_control(&self) -> u8 {
+        self.inner.noise_control()
+    }
     #[getter(_latched_register)]
-    fn latched_register(&self) -> u8 { self.inner.latched_register() }
+    fn latched_register(&self) -> u8 {
+        self.inner.latched_register()
+    }
     #[getter(_tone_counters)]
-    fn tone_counters(&self) -> Vec<u16> { self.inner.tone_counters().to_vec() }
+    fn tone_counters(&self) -> Vec<u16> {
+        self.inner.tone_counters().to_vec()
+    }
     #[getter(_tone_outputs)]
     fn tone_outputs(&self) -> Vec<u16> {
-        self.inner.tone_outputs().iter().map(|value| u16::from(*value)).collect()
+        self.inner
+            .tone_outputs()
+            .iter()
+            .map(|value| u16::from(*value))
+            .collect()
     }
     #[getter(_noise_counter)]
-    fn noise_counter(&self) -> u16 { self.inner.noise_counter() }
+    fn noise_counter(&self) -> u16 {
+        self.inner.noise_counter()
+    }
     #[getter(_noise_counter_phase)]
-    fn noise_counter_phase(&self) -> u8 { self.inner.noise_counter_phase() }
+    fn noise_counter_phase(&self) -> u8 {
+        self.inner.noise_counter_phase()
+    }
     #[getter(_lfsr)]
-    fn lfsr(&self) -> u16 { self.inner.lfsr() }
+    fn lfsr(&self) -> u16 {
+        self.inner.lfsr()
+    }
     #[getter(_noise_output)]
-    fn noise_output(&self) -> u8 { self.inner.noise_output() }
+    fn noise_output(&self) -> u8 {
+        self.inner.noise_output()
+    }
     #[getter(_clock_divider_phase)]
-    fn clock_divider_phase(&self) -> u64 { self.inner.clock_divider_phase() }
+    fn clock_divider_phase(&self) -> u64 {
+        self.inner.clock_divider_phase()
+    }
     #[getter(_output_phase)]
-    fn output_phase(&self) -> u64 { self.inner.output_phase() }
+    fn output_phase(&self) -> u64 {
+        self.inner.output_phase()
+    }
     #[getter(_noise_period)]
-    fn noise_period(&self) -> u16 { self.inner.noise_period() }
+    fn noise_period(&self) -> u16 {
+        self.inner.noise_period()
+    }
 
     fn reset(&mut self) {
         self.inner.reset();
@@ -74,7 +112,9 @@ impl NativeSn76489 {
 
     fn advance_clocks(&mut self, clocks: i64) -> PyResult<()> {
         if clocks < 0 {
-            return Err(PyValueError::new_err("clocks deve ser um inteiro não negativo."));
+            return Err(PyValueError::new_err(
+                "clocks deve ser um inteiro não negativo.",
+            ));
         }
         self.inner.advance_clocks(clocks as u64);
         Ok(())
