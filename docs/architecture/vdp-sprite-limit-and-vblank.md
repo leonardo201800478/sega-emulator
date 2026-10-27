@@ -87,3 +87,7 @@ Esses valores constituem um perfil inicial de NTSC, não prova de precisão de c
 ## Fora de escopo desta especificação
 
 Não declara compatibilidade completa com todos os jogos, não define timings sem comprovação e não implementa ainda o VDP de Master System/Game Gear ou Mega Drive. As implementações futuras devem adicionar dados e testes específicos de cada família.
+
+## Implementação do modo sem limite no backend Rust
+
+A opção de compatibilidade altera a lista de sprites desenhados, mas não a avaliação de overflow do hardware. Mesmo com o limite de desenho desativado, o VDP continua registrando o primeiro sprite que excede os quatro por linha nos bits de overflow/índice de status. Essa separação é coberta por regressão no núcleo Rust: o quinto sprite pode aparecer no framebuffer, enquanto o status continua reportando índice 4. O comportamento de colisão continua sendo calculado sobre os sprites efetivamente avaliados/renderizados; fidelidade temporal por dot permanece fora do escopo atual.

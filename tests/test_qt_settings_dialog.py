@@ -48,7 +48,7 @@ def test_dialog_loads_and_returns_audio_video_preferences(qt_app) -> None:
     assert dialog.volume.value() == 65
     assert dialog.video_filter.currentData() == "bilinear"
     assert dialog.integer_scale.isChecked() is False
-    assert dialog.sprite_limit_enabled.isChecked() is False
+    assert dialog.sprite_limit_unlocked.isChecked() is True
     assert dialog.vsync_mode.currentData() == "on"
     assert dialog.vrr_mode.currentData() == "driver"
     assert dialog.av_sync_mode.currentData() == "low_latency"
@@ -62,7 +62,7 @@ def test_dialog_loads_and_returns_audio_video_preferences(qt_app) -> None:
     dialog.volume.setValue(40)
     dialog.video_filter.setCurrentIndex(dialog.video_filter.findData("dither_blending"))
     dialog.integer_scale.setChecked(True)
-    dialog.sprite_limit_enabled.setChecked(True)
+    dialog.sprite_limit_unlocked.setChecked(False)
     dialog.vsync_mode.setCurrentIndex(dialog.vsync_mode.findData("off"))
     dialog.vrr_mode.setCurrentIndex(dialog.vrr_mode.findData("prefer"))
     dialog.av_sync_mode.setCurrentIndex(dialog.av_sync_mode.findData("audio_clock"))
@@ -114,7 +114,9 @@ def test_restore_defaults_resets_audio_video_controls(qt_app) -> None:
     assert dialog.volume.value() == defaults.audio_volume
     assert dialog.video_filter.currentData() == defaults.video_filter
     assert dialog.integer_scale.isChecked() is defaults.integer_scale
-    assert dialog.sprite_limit_enabled.isChecked() is defaults.sprite_limit_enabled
+    assert dialog.sprite_limit_unlocked.isChecked() is (
+        not defaults.sprite_limit_enabled
+    )
     assert dialog.vsync_mode.currentData() == defaults.vsync_mode
     assert dialog.vrr_mode.currentData() == defaults.vrr_mode
     assert dialog.av_sync_mode.currentData() == defaults.av_sync_mode

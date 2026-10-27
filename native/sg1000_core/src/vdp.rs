@@ -647,9 +647,13 @@ fn sprite_line_active(
         if row >= size * scale {
             continue;
         }
-        if sprite_limit_enabled && active.len() == 4 {
+        // The overflow flag/index describe hardware evaluation, even when
+        // the compatibility renderer is allowed to draw every sprite.
+        if active.len() == 4 && fifth_index.is_none() {
             fifth_index = Some(index);
-            break;
+            if sprite_limit_enabled {
+                break;
+            }
         }
         if color_byte & 0x80 != 0 {
             x -= 32;
@@ -937,6 +941,33 @@ mod tests {
     }
 
     #[test]
+    fn disabling_sprite_limit_keeps_hardware_overflow_status_but_draws_fifth_sprite() {
+        let mut vdp = Tms9918A::new();
+        vdp.registers[1] = 0x40; // Display enabled; 8x8 sprites.
+        vdp.registers[5] = 0x20; // Sprite attributes at 0x1000.
+        vdp.vram[0] = 0xFF; // Opaque row for pattern zero.
+        for index in 0..5 {
+            let offset = 0x1000 + index * 4;
+            vdp.vram[offset..offset + 4].copy_from_slice(&[0xFF, (index * 8) as u8, 0, 0x0F]);
+        }
+        vdp.vram[0x1000 + 5 * 4] = 0xD0;
+
+        vdp.set_sprite_limit_enabled(false);
+        vdp.advance(228);
+
+        // The compatibility option changes drawing only, not observable status.
+        assert_ne!(vdp.status() & 0x40, 0);
+        assert_eq!(vdp.status() & 0x1F, 4);
+
+        let frame = vdp.render_frame();
+        let fifth_sprite_pixel = 32 * 3;
+        assert_eq!(
+            &frame[fifth_sprite_pixel..fifth_sprite_pixel + 3],
+            &[255, 255, 255]
+        );
+    }
+
+    #[test]
     fn sprite_overflow_and_collision_set_distinct_status_bits() {
         let mut overflow = Tms9918A::new();
         overflow.registers[1] = 0x40;
@@ -1004,6 +1035,7 @@ mod tests {
         let (active, fifth) =
             sprite_line_active(&vdp.vram, &vdp.registers, 0, vdp.sprite_limit_enabled());
         assert_eq!(active.len(), 5);
-        assert_eq!(fifth, None);
+        // Rendering additional sprites must not hide the hardware overflow index.
+        assert_eq!(fifth, Some(4));
     }
 }
