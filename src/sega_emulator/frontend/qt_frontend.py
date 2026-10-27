@@ -168,14 +168,12 @@ def run(initial_path: Path | None = None) -> None:
     app.setApplicationName("SegaEmulator")
     settings = QSettings()
     preferences = FrontendPreferences.from_store(settings)
-    # Migrate existing Qt profiles once so this release actually starts on the
-    # integrated Rust machine, even if an older run persisted Python as default.
-    if not settings.value("rust_backend_default_migrated", False, type=bool):
-        selected_backend = "rust"
-        settings.setValue("cpu_core", selected_backend)
-        settings.setValue("rust_backend_default_migrated", True)
-    else:
-        selected_backend = preferences.cpu_core
+    # The production Qt frontend always runs the native Rust machine. Legacy
+    # persisted "python" values are migrated unconditionally and are no longer
+    # exposed as a selectable runtime.
+    selected_backend = "rust"
+    settings.setValue("cpu_core", selected_backend)
+    settings.setValue("rust_backend_default_migrated", True)
     audio_output = _initialize_wasapi_backend(preferences)
     audio_resampler = PcmResampler(preferences.audio_sample_rate)
     serialized_controller_config = settings.value("controller_config", "", type=str)
@@ -188,7 +186,12 @@ def run(initial_path: Path | None = None) -> None:
     except ValueError:
         logger.warning("Configuração de controles inválida; usando padrões.")
         controller_config = ControllerInputConfig()
-    controller_input = NativeFirstControllerInput(controller_config)
+    input_driver = str(settings.value("input_driver", "auto"))
+    if input_driver not in {"auto", "xinput", "sdl3"}:
+        input_driver = "auto"
+    controller_input = NativeFirstControllerInput(
+        controller_config, backend_preference=input_driver
+    )
     logger.info(
         "Backend nativo-primeiro de controles inicializado",
         extra={
@@ -208,7 +211,7 @@ def run(initial_path: Path | None = None) -> None:
         on_open_logs=lambda: show_logs(),
         on_show_machine_state=lambda: show_machine_state(),
         on_video_scale=lambda scale: window.set_video_scale(scale),
-        on_select_emulation_backend=lambda: select_emulation_backend(),
+        on_configure_drivers=lambda: configure_drivers(),
         on_configure_audio_video=lambda: configure_audio_video(),
         on_start_vgm_recording=lambda: start_vgm_recording(),
         on_stop_vgm_recording=lambda: stop_vgm_recording(),
@@ -551,82 +554,92 @@ def run(initial_path: Path | None = None) -> None:
         frame_pacer.reset()
         timer.start()
 
-    def select_emulation_backend() -> None:
-        nonlocal machine, selected_backend, frame_count, paused
-        choices = [
-            "Python (runtime de referência)",
-            "Rust (runtime nativo experimental)",
-        ]
-        current = 0 if selected_backend == "python" else 1
-        selected, accepted = QInputDialog.getItem(
-            window,
-            "Backend de emulação",
-            "Escolha o runtime completo da máquina SG-1000. Rust executa "
-            "CPU, memória, VDP, PSG e I/O nativamente, mas o conjunto de instruções "
-            "Z80 ainda é parcial; algumas ROMs podem falhar.",
-            choices,
-            current,
-            False,
+    def configure_drivers() -> None:
+        nonlocal controller_input, audio_output, audio_resampler, preferences
+
+        from sega_emulator.frontend.qt.drivers_dialog import DriversDialog
+
+        dialog = DriversDialog(
+            input_driver=str(settings.value("input_driver", "auto")),
+            audio_driver=str(settings.value("audio_driver", "wasapi")),
+            video_driver=str(settings.value("video_driver", "auto")),
+            parent=window,
         )
-        if not accepted:
+        if dialog.exec() != QDialog.DialogCode.Accepted:
             return
-        requested_backend = "python" if selected == choices[0] else "rust"
-        if requested_backend == selected_backend:
-            return
-        try:
-            if requested_backend == "rust":
-                from sega_z80_core import NativeSG1000Machine  # noqa: F401
-            replacement = (
-                SG1000Machine(loaded.data, cpu_core=requested_backend)
-                if loaded is not None
-                else None
-            )
-        except Exception as exc:
-            logger.exception(
-                "Falha ao selecionar backend de emulação",
-                extra={
-                    "event": "emulation_backend_selection_failed",
-                    "emulation_backend": requested_backend,
-                },
-            )
+        input_driver, audio_driver, video_driver = dialog.drivers()
+
+        # Validate forced drivers before applying any of the new preferences.
+        if input_driver != "auto" and not (
+            controller_input.native.available
+            if input_driver == "xinput"
+            else bool(controller_input.fallback.available)
+        ):
             QMessageBox.warning(
                 window,
-                "Runtime Rust indisponível",
-                f"Não foi possível ativar o backend {requested_backend}: {exc}",
+                "Driver de input indisponível",
+                f"A API {input_driver} não está disponível neste sistema. "
+                "A configuração anterior foi mantida.",
             )
             return
-        if vgm_recorder.active and not stop_vgm_recording():
-            return
-        selected_backend = requested_backend
-        settings.setValue("cpu_core", selected_backend)
-        machine = replacement
-        frame_count, paused = 0, False
-        if machine is not None:
-            update_joystick()
-        status.showMessage(
-            "Backend de emulação: "
-            + (
-                "Python (runtime de referência)"
-                if selected_backend == "python"
-                else "Rust (runtime nativo experimental; Z80 parcial)"
+        if not view.set_render_backend(video_driver):
+            QMessageBox.warning(
+                window,
+                "Driver de vídeo indisponível",
+                "Vulkan não está disponível nesta sessão. Escolha Automático "
+                "ou Qt Raster; as demais configurações não foram aplicadas.",
             )
-            + (
-                " — máquina reiniciada"
-                if loaded is not None
-                else " — aplicado à próxima ROM"
-            ),
-            8000,
+            return
+
+        controller_input.set_backend_preference(input_driver)
+        settings.setValue("input_driver", input_driver)
+        settings.setValue("video_driver", video_driver)
+
+        audio_enabled = audio_driver != "disabled"
+        audio_changed = audio_enabled != preferences.audio_enabled
+        if audio_changed:
+            if audio_output is not None:
+                try:
+                    audio_output.close()
+                except Exception:
+                    logger.exception("Falha ao encerrar áudio ao trocar o driver")
+            updated_audio = FrontendPreferences(
+                window_width=preferences.window_width,
+                window_height=preferences.window_height,
+                video_scale=preferences.video_scale,
+                recent_roms=preferences.recent_roms,
+                controller_config=preferences.controller_config,
+                audio_enabled=audio_enabled,
+                diagnostics_enabled=preferences.diagnostics_enabled,
+                cpu_core="rust",
+                audio_sample_rate=preferences.audio_sample_rate,
+                audio_buffer_size=preferences.audio_buffer_size,
+                audio_volume=preferences.audio_volume,
+                video_filter=preferences.video_filter,
+                integer_scale=preferences.integer_scale,
+            )
+            audio_output = _initialize_wasapi_backend(updated_audio)
+            audio_resampler = PcmResampler(updated_audio.audio_sample_rate)
+            preferences = updated_audio
+        settings.setValue("audio_driver", audio_driver)
+        preferences.save_to_store(settings)
+
+        audio_warning = _audio_output_warning(preferences, audio_output)
+        message = (
+            audio_warning
+            or f"Drivers aplicados — input: {input_driver}, áudio: {audio_driver}, "
+            f"vídeo: {video_driver}."
         )
+        status.showMessage(message, 8000)
         logger.info(
-            "Backend de emulação selecionado",
+            "Drivers de entrada, áudio e vídeo atualizados",
             extra={
-                "event": "emulation_backend_selected",
-                "emulation_backend": selected_backend,
-                **(
-                    _runtime_diagnostic(machine, loaded.sha256)
-                    if machine is not None and loaded is not None
-                    else {"backend_effective": "pending_rom_load"}
-                ),
+                "event": "host_drivers_updated",
+                "input_driver": input_driver,
+                "audio_driver": audio_driver,
+                "video_driver": video_driver,
+                "input_available": controller_input.available,
+                "audio_enabled": preferences.audio_enabled,
             },
         )
 
