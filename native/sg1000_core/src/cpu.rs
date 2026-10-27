@@ -536,8 +536,8 @@ impl Z80 {
             }
             0x57 | 0x5F => {
                 self.registers.a = if opcode == 0x57 { self.i } else { self.r };
-                let mut flags = (self.registers.f & FLAG_C)
-                    | (self.registers.a & (FLAG_S | FLAG_XY));
+                let mut flags =
+                    (self.registers.f & FLAG_C) | (self.registers.a & (FLAG_S | FLAG_XY));
                 if self.registers.a == 0 {
                     flags |= FLAG_Z;
                 }
@@ -578,8 +578,7 @@ impl Z80 {
                 if register != 6 {
                     self.write_register(bus, register, value);
                 }
-                let mut flags = (self.registers.f & FLAG_C)
-                    | (value & (FLAG_S | FLAG_XY));
+                let mut flags = (self.registers.f & FLAG_C) | (value & (FLAG_S | FLAG_XY));
                 if value == 0 {
                     flags |= FLAG_Z;
                 }
@@ -706,12 +705,18 @@ impl Z80 {
     }
 
     fn execute_block_transfer<B: CpuBus>(&mut self, bus: &mut B, opcode: u8) -> u32 {
-        let direction = if opcode == 0xA8 || opcode == 0xB8 { -1_i16 } else { 1_i16 };
+        let direction = if opcode == 0xA8 || opcode == 0xB8 {
+            -1_i16
+        } else {
+            1_i16
+        };
         let address = self.registers.hl();
         let value = bus.read_memory(address);
         bus.write_memory(self.registers.de(), value);
-        self.registers.set_hl(address.wrapping_add_signed(direction));
-        self.registers.set_de(self.registers.de().wrapping_add_signed(direction));
+        self.registers
+            .set_hl(address.wrapping_add_signed(direction));
+        self.registers
+            .set_de(self.registers.de().wrapping_add_signed(direction));
         let count = self.registers.bc().wrapping_sub(1);
         self.registers.set_bc(count);
         let sum = self.registers.a.wrapping_add(value);
@@ -732,12 +737,17 @@ impl Z80 {
     }
 
     fn execute_block_compare<B: CpuBus>(&mut self, bus: &mut B, opcode: u8) -> u32 {
-        let direction = if opcode == 0xA9 || opcode == 0xB9 { -1_i16 } else { 1_i16 };
+        let direction = if opcode == 0xA9 || opcode == 0xB9 {
+            -1_i16
+        } else {
+            1_i16
+        };
         let value = bus.read_memory(self.registers.hl());
         let accumulator = self.registers.a;
         let result = accumulator.wrapping_sub(value);
         let half = (accumulator & 0x0F) < (value & 0x0F);
-        self.registers.set_hl(self.registers.hl().wrapping_add_signed(direction));
+        self.registers
+            .set_hl(self.registers.hl().wrapping_add_signed(direction));
         let count = self.registers.bc().wrapping_sub(1);
         self.registers.set_bc(count);
         let adjusted = result.wrapping_sub(u8::from(half));
@@ -779,8 +789,8 @@ impl Z80 {
             value
         } else {
             let value = bus.read_memory(self.registers.hl());
-            let output_port = (u16::from(self.registers.b.wrapping_sub(1)) << 8)
-                | u16::from(self.registers.c);
+            let output_port =
+                (u16::from(self.registers.b.wrapping_sub(1)) << 8) | u16::from(self.registers.c);
             bus.write_port(output_port, value);
             value
         };
