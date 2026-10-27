@@ -78,11 +78,8 @@ def cartridge_profile(cartridge_rom: bytes) -> CartridgeProfile:
         return CartridgeProfile(internal_ram_size=SG1000_II_RAM_EXT_TYPE_B_SIZE)
 
     if crc32 in SG1000_DAHJEE_TYPE_A_CRC32:
-        return CartridgeProfile(
-            cartridge_ram_size=SG1000_II_RAM_EXT_TYPE_B_SIZE,
-            cartridge_ram_start=0x2000,
-            cartridge_ram_end=0x3FFF,
-        )
+        # DahJee/Jumbo 8 KiB RAM adapter maps expanded system RAM at C000h–FFFFh.
+        return CartridgeProfile(internal_ram_size=SG1000_II_RAM_EXT_TYPE_B_SIZE)
 
     if crc32 in SG1000_OTHELLO_CRC32:
         return CartridgeProfile(
