@@ -16,7 +16,7 @@ Keep the emulated hardware runtime in Rust without PyO3 types in `native/sg1000_
 
 ## Timing contract
 
-CPU instructions currently return nominal base T-states. The machine advances video and audio at instruction boundaries. Z80 immediate IN/OUT are routed to ports using the high byte of A and immediate low byte, but the bus phase inside the instruction is not modeled. CPU `OUT (n),A` PSG writes are timestamped at the nominal 11-T-state instruction edge. CPU T-states are converted to configured PSG input clocks using the CPU/PSG clock ratio with a carried fractional remainder. Explicit future PSG and VDP port writes are queued and applied in timestamp order when the machine reaches/passes their nominal T-state; the VDP advances to each queued event before the write is applied.
+CPU instructions currently return nominal base T-states. The machine advances video and audio at instruction boundaries. Z80 immediate IN/OUT are routed to ports using the high byte of A and immediate low byte, but the bus phase inside the instruction is not modeled. CPU `OUT (n),A` writes to PSG and VDP ports are queued at the nominal 11-T-state I/O edge. CPU T-states are converted to configured PSG input clocks using the CPU/PSG clock ratio with a carried fractional remainder. Explicit future PSG and VDP port writes are queued and applied in timestamp order when the machine reaches/passes their nominal T-state; the VDP advances to each queued event before the write is applied.
 
 The default PSG clock and sample rate are initialization defaults, not proof of board-level clock fidelity. Use `Sg1000Machine::new_with_audio` to provide explicit clock/sample-rate values. Verify clock sources and timing behavior before making accuracy claims.
 
