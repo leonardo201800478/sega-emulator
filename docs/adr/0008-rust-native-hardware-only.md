@@ -1,0 +1,43 @@
+# ADR 0008 — Fronteira rígida: hardware em Rust, aplicação em Python
+
+- **Status:** aprovado para migração incremental.
+- **Data:** 2026-10-26.
+- **Escopo inicial:** SG-1000; não expandir para outros consoles antes da aceitação deste marco.
+
+## Decisão
+
+1. Todo comportamento de hardware em produção deve residir em Rust puro: CPU Z80/ALU, barramentos, memória, mapeamento de cartuchos, I/O, VDP, PSG, temporização, interrupções, scheduler e runtime da máquina.
+2. Python permanece somente na aplicação: Qt/PySide6, configuração, seleção/carregamento de arquivos, logging de aplicação, integração/orquestração de alto nível e ferramentas de desenvolvimento, auditoria, testes e benchmarks.
+3. PyO3/Maturin formam uma fronteira fina. O caminho crítico não deve executar callbacks Python por instrução/operação de hardware nem copiar grandes buffers repetidamente.
+4. Código Python que implementa hardware não é destino arquitetural. Quando substituído por Rust e depois de migrados seus consumidores, deve ser movido para `legacy/python_reference/` como consulta histórica, fora do pacote executável e fora dos imports da aplicação.
+5. Não mover ou apagar módulos antes de mapear seus imports, contratos públicos, consumidores, testes e ferramentas. A migração deve ocorrer em fatias compiláveis: implementar Rust, criar regressões/diferenciais, trocar consumidores, validar CI e somente então arquivar a implementação Python.
+6. Código legado arquivado é somente referência: não deve ser importado pelo runtime, empacotado como módulo ativo nem tratado como fonte oficial. Preservar o histórico Git e a proveniência dos arquivos.
+7. Não declarar o SG-1000 completo até que CPU, memória/barramento, I/O, VDP, PSG e scheduler estejam integrados e testados. Não declarar precisão ciclo a ciclo sem modelo temporal e evidências correspondentes.
+
+## Inventário inicial confirmado no repositório
+
+- Rust puro inicial: `native/sg1000_core/src/{bus,cpu,machine,memory}.rs` e `native/z80_alu/src/lib.rs`.
+- Adaptador/extensão Rust-Python existente: `native/z80_core/src/{audio,machine,memory,vdp}.rs`; continua sendo integração/compatibilidade até que suas dependências de hardware tenham sido absorvidas pelo núcleo Rust puro.
+- Implementações Python de hardware identificadas: `src/sega_emulator/cpu/z80.py`, `src/sega_emulator/cpu/z80_alu_sampling.py`, `src/sega_emulator/bus/{interfaces,memory,memory_bus}.py`, `src/sega_emulator/machine/{cartridge_profiles,sg1000}.py`, `src/sega_emulator/video/tms9918.py` e `src/sega_emulator/audio/sn76489.py`.
+- Módulos de áudio como `output_config.py`, `synchronization.py` e `vgm_recorder.py` precisam de análise de responsabilidade antes de qualquer movimentação: configuração, saída de dispositivo e ferramentas não são automaticamente lógica de hardware.
+
+Este inventário é inicial, não uma declaração de que cada arquivo está isolado ou pode ser movido sem refatoração. A lista completa de importadores e testes deve ser produzida por fase.
+
+## Ordem de migração e aceitação
+
+1. Auditar dependências, contratos e testes de CPU, ALU, barramento e memória.
+2. Completar e validar Z80 em Rust puro com vetores independentes, estados/flags, instruções, prefixos, interrupções e temporização suportada.
+3. Migrar mapa de memória, cartuchos e I/O para APIs Rust puras; integrar o runtime SG-1000 sem Python.
+4. Integrar VDP TMS9918A, PSG SN76489, temporização e scheduler determinístico.
+5. Trocar a aplicação para consumir o runtime via API de lote/fronteira PyO3; remover caminhos de hardware Python ativos.
+6. Arquivar implementações Python substituídas em `legacy/python_reference/` e confirmar que nenhum módulo de produção as importa.
+7. Executar `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked`, build Release/Maturin e testes de integração relevantes; validar workflows no SHA exato.
+8. Atualizar README, matriz de cobertura e limitações antes de marcar cada fatia concluída.
+
+## Restrições
+
+- Não remover a interface Qt nem as ferramentas Python.
+- Não mover código ativo apenas para satisfazer a organização de diretórios.
+- Não aceitar hashes iguais como prova absoluta de correção.
+- Não introduzir JIT ou paralelismo especulativo.
+- Não fazer merge sem revisão dos diffs e dos checks exigidos.
