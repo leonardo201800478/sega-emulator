@@ -6,6 +6,7 @@ import hashlib
 import json
 import logging
 import time
+from collections import deque
 from pathlib import Path
 
 from sega_emulator.audio.vgm_recorder import VgmRecorder
@@ -329,6 +330,14 @@ def run(initial_path: Path | None = None) -> None:
         "total_frame": 0.0,
     }
     phase_max_ms = dict.fromkeys(phase_totals_ms, 0.0)
+    frame_time_samples_ms: deque[float] = deque(maxlen=600)
+
+    def percentile(values: list[float], fraction: float) -> float:
+        if not values:
+            return 0.0
+        ordered = sorted(values)
+        index = min(len(ordered) - 1, max(0, int((len(ordered) - 1) * fraction + 0.5)))
+        return ordered[index]
 
     def show_frame() -> None:
         nonlocal paused, frame_count, last_checkpoint_time, last_checkpoint_tstates
@@ -379,6 +388,7 @@ def run(initial_path: Path | None = None) -> None:
             scale_ms = (time.perf_counter() - phase_started) * 1000
             set_pixmap_ms = scale_ms
             total_frame_ms = (time.perf_counter() - frame_started) * 1000
+            frame_time_samples_ms.append(total_frame_ms)
 
             phase_values = {
                 "emulation": emulation_ms,
@@ -398,8 +408,8 @@ def run(initial_path: Path | None = None) -> None:
             speed_percent = (tstates_delta / elapsed / Z80_CLOCK_HZ) * 100
             status.showMessage(
                 f"{loaded.display_name if loaded else 'Sem ROM'} | "
-                f"Quadro {frame_count} | {fps:.1f} FPS | "
-                f"Velocidade {speed_percent:.1f}% | "
+                f"Quadro {frame_count} | Envio à UI {fps:.1f} FPS | "
+                f"Velocidade lógica {speed_percent:.1f}% do clock nominal | "
                 f"EMU {emulation_ms:.1f} ms | QImage {image_copy_ms:.2f} ms | "
                 f"escala {scale_ms:.2f} ms | UI {set_pixmap_ms:.2f} ms | "
                 f"PC={machine.cpu.pc:04X}"
@@ -407,6 +417,13 @@ def run(initial_path: Path | None = None) -> None:
 
             if frame_count - last_checkpoint_frame >= 60:
                 measured_frames = frame_count - last_checkpoint_frame
+                measured_window_ms = elapsed * 1000
+                frame_samples = list(frame_time_samples_ms)
+                frame_time_stats = {
+                    "p50_ms": round(percentile(frame_samples, 0.50), 3),
+                    "p95_ms": round(percentile(frame_samples, 0.95), 3),
+                    "p99_ms": round(percentile(frame_samples, 0.99), 3),
+                }
                 phase_averages = {
                     phase: round(total / measured_frames, 3)
                     for phase, total in phase_totals_ms.items()
@@ -425,9 +442,17 @@ def run(initial_path: Path | None = None) -> None:
                         "instructions_total": machine.total_instructions,
                         "tstates": machine.total_tstates,
                         "tstates_delta": tstates_delta,
-                        "elapsed_ms": round(elapsed * 1000, 3),
+                        "elapsed_ms": round(measured_window_ms, 3),
+                        "measurement_window_ms": round(measured_window_ms, 3),
+                        "frames_presented": measured_frames,
+                        "frames_dropped": None,
                         "fps": round(fps, 3),
                         "speed_percent": round(speed_percent, 3),
+                        "speed_metric": "logical_tstates_per_second_over_nominal_z80_clock",
+                        "frame_time_ms": frame_time_stats,
+                        "frame_time_p50_ms": frame_time_stats["p50_ms"],
+                        "frame_time_p95_ms": frame_time_stats["p95_ms"],
+                        "frame_time_p99_ms": frame_time_stats["p99_ms"],
                         "phase_avg_ms": phase_averages,
                         "phase_max_ms": phase_maxima,
                         "scanline": machine.vdp.scanline,
