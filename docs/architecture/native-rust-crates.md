@@ -67,7 +67,7 @@ maturin build --release --features python-extension --out dist
 Pop-Location
 $wheel = Get-ChildItem native/z80_core/dist/*.whl | Select-Object -First 1
 python -m pip install $wheel.FullName
-python -m pytest tests/test_rust_runtime_selection.py tests/test_sg1000_native_machine.py tests/test_vgm_machine_integration.py tests/integration/test_rust_z80_core.py -q
+python -m pytest tests/test_rust_runtime_selection.py tests/test_sg1000_native_machine.py tests/test_vgm_machine_integration.py -q
 ```
 
 No Windows, o workflow `.github/workflows/qt-rust-z80-core.yml` também instala `.[dev,qt]`, constrói o wheel Release, instala-o e roda Ruff e um conjunto direcionado de testes Qt/backend/paridade. O caminho `maturin develop --release --features python-extension` descrito no README de raiz é uma alternativa para ambiente local de desenvolvimento.

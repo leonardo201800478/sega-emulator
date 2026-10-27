@@ -50,7 +50,7 @@ cargo clippy --manifest-path native/z80_core/Cargo.toml --all-targets -- -D warn
 cargo test --manifest-path native/z80_core/Cargo.toml
 python -m pip install maturin
 maturin develop --manifest-path native/z80_core/Cargo.toml --features python-extension --release
-python -m pytest tests/test_sg1000_native_machine.py tests/test_vgm_machine_integration.py tests/integration/test_rust_z80_core.py -q
+python -m pytest tests/test_sg1000_native_machine.py tests/test_vgm_machine_integration.py -q
 ```
 
 Execute apenas os comandos relevantes ao escopo, além dos checks completos exigidos pelo CI. Confirme os manifest paths e os comandos nos arquivos atuais antes de executar.
