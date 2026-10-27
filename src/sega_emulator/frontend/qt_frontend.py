@@ -668,6 +668,9 @@ def run(initial_path: Path | None = None) -> None:
             audio_output.set_volume(updated.audio_volume)
 
         preferences = updated
+        settings.setValue(
+            "audio_driver", "wasapi" if preferences.audio_enabled else "disabled"
+        )
         view.set_filter_mode(preferences.video_filter)
         view.set_integer_scale(preferences.integer_scale)
         preferences.save_to_store(settings)
@@ -1058,8 +1061,9 @@ def run(initial_path: Path | None = None) -> None:
         backend_state = "disponível" if controller_input.available else "indisponível"
         QMessageBox.information(
             window,
-            "Dispositivos SDL3",
-            f"Backend SDL3: {backend_state}\n\n{devices_text}",
+            "Dispositivos de controle",
+            f"Backend de input: {settings.value('input_driver', 'auto')} "
+            f"({backend_state})\n\n{devices_text}",
         )
 
     def dump_vdp_snapshot() -> None:
