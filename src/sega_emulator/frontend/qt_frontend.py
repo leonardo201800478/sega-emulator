@@ -19,11 +19,13 @@ from sega_emulator.frontend.controller_input import (
     apply_turbo,
     joystick_value,
 )
+from sega_emulator.frontend.native_first_controller_input import (
+    NativeFirstControllerInput,
+)
 from sega_emulator.frontend.qt.audio_output import PcmResampler
 from sega_emulator.frontend.qt.frame_pacer import FramePacer
 from sega_emulator.frontend.qt.preferences import FrontendPreferences
 from sega_emulator.frontend.qt.wasapi_audio import WasapiAudioOutput
-from sega_emulator.frontend.sdl3_controller_input import SDL3ControllerInput
 from sega_emulator.machine.sg1000 import SG1000Machine
 from sega_emulator.rom_loader import LoadedRom, list_rom_members, load_rom
 
@@ -186,11 +188,11 @@ def run(initial_path: Path | None = None) -> None:
     except ValueError:
         logger.warning("Configuração de controles inválida; usando padrões.")
         controller_config = ControllerInputConfig()
-    controller_input = SDL3ControllerInput(controller_config)
+    controller_input = NativeFirstControllerInput(controller_config)
     logger.info(
-        "Backend de controles SDL3 inicializado",
+        "Backend nativo-primeiro de controles inicializado",
         extra={
-            "event": "sdl3_input_initialized",
+            "event": "native_first_input_initialized",
             "available": controller_input.available,
             "devices": controller_input.connected_names(),
         },
