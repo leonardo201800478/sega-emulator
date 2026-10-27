@@ -11,6 +11,24 @@ use crate::{
     Sn76489, Tms9918A, Z80,
 };
 
+/// Nominal SG-1000 CPU T-state rate used by the existing default clock profile.
+const SG1000_CPU_CLOCK_HZ: u64 = 3_579_545;
+
+fn convert_tstates_to_psg_clocks(
+    tstates: u64,
+    psg_clock_hz: u64,
+    remainder: u64,
+) -> (u64, u64) {
+    let denominator = u128::from(SG1000_CPU_CLOCK_HZ);
+    let numerator = u128::from(tstates) * u128::from(psg_clock_hz) + u128::from(remainder);
+    let clock_count = numerator / denominator;
+    let next_remainder = (numerator % denominator) as u64;
+    (
+        clock_count.min(u128::from(u64::MAX)) as u64,
+        next_remainder,
+    )
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MachineError {
     Memory(MemoryError),
@@ -117,6 +135,7 @@ pub struct Sg1000Machine {
     pub vdp: Tms9918A,
     pub psg: Sn76489,
     psg_tstate: u64,
+    psg_clock_remainder: u64,
     pending_psg_writes: Vec<PsgWriteEvent>,
     pending_vdp_writes: Vec<VdpWriteEvent>,
 }
@@ -142,9 +161,27 @@ impl Sg1000Machine {
             vdp: Tms9918A::new(),
             psg: Sn76489::new(psg_clock_hz, sample_rate)?,
             psg_tstate: 0,
+            psg_clock_remainder: 0,
             pending_psg_writes: Vec::new(),
             pending_vdp_writes: Vec::new(),
         })
+    }
+
+    /// Advance the PSG to a nominal CPU T-state while preserving the fractional
+    /// phase when the configured PSG clock differs from the CPU clock.
+    fn advance_psg_to_tstate(&mut self, target_tstate: u64) {
+        if target_tstate <= self.psg_tstate {
+            return;
+        }
+        let delta_tstates = target_tstate - self.psg_tstate;
+        let (psg_clocks, remainder) = convert_tstates_to_psg_clocks(
+            delta_tstates,
+            self.psg.clock_hz(),
+            self.psg_clock_remainder,
+        );
+        self.psg_clock_remainder = remainder;
+        self.psg.advance_clocks(psg_clocks);
+        self.psg_tstate = target_tstate;
     }
 
     /// Execute one CPU instruction and return its nominal base T-state count.
@@ -195,16 +232,10 @@ impl Sg1000Machine {
                 break;
             };
             let event = self.pending_psg_writes.remove(index);
-            if event.tstate > self.psg_tstate {
-                self.psg.advance_clocks(event.tstate - self.psg_tstate);
-                self.psg_tstate = event.tstate;
-            }
+            self.advance_psg_to_tstate(event.tstate);
             self.psg.write(event.value);
         }
-        if end_tstate > self.psg_tstate {
-            self.psg.advance_clocks(end_tstate - self.psg_tstate);
-        }
-        self.psg_tstate = end_tstate;
+        self.advance_psg_to_tstate(end_tstate);
         Ok(cycles)
     }
 
@@ -250,10 +281,7 @@ impl Sg1000Machine {
                         self.pending_psg_writes
                             .push(PsgWriteEvent { tstate, value });
                     } else {
-                        if tstate > self.psg_tstate {
-                            self.psg.advance_clocks(tstate - self.psg_tstate);
-                            self.psg_tstate = tstate;
-                        }
+                        self.advance_psg_to_tstate(tstate);
                         self.psg.write(value);
                     }
                 }
@@ -392,6 +420,23 @@ mod tests {
         assert_eq!(machine.run_instructions(1), Ok(4));
         assert_eq!(machine.psg.tone_periods()[0], 5);
         assert_eq!(machine.psg_tstate, 8);
+    }
+
+    #[test]
+    fn psg_clock_ratio_and_fractional_phase_are_respected_across_chunks() {
+        let rom = [0x76];
+        let mut whole =
+            Sg1000Machine::new_with_audio(&rom, MemoryConfig::default(), 1_000_000, 100).unwrap();
+        let mut chunked = whole.clone();
+
+        whole.advance_psg_to_tstate(SG1000_CPU_CLOCK_HZ);
+        chunked.advance_psg_to_tstate(SG1000_CPU_CLOCK_HZ / 3);
+        chunked.advance_psg_to_tstate(SG1000_CPU_CLOCK_HZ);
+
+        assert_eq!(whole.psg.pending_sample_count(), 100);
+        assert_eq!(whole.psg_clock_remainder, 0);
+        assert_eq!(chunked.psg_clock_remainder, whole.psg_clock_remainder);
+        assert_eq!(chunked.psg, whole.psg);
     }
 
     #[test]
