@@ -114,7 +114,9 @@ def test_restore_defaults_resets_audio_video_controls(qt_app) -> None:
     assert dialog.volume.value() == defaults.audio_volume
     assert dialog.video_filter.currentData() == defaults.video_filter
     assert dialog.integer_scale.isChecked() is defaults.integer_scale
-    assert dialog.sprite_limit_unlocked.isChecked() is (not defaults.sprite_limit_enabled)
+    assert dialog.sprite_limit_unlocked.isChecked() is (
+        not defaults.sprite_limit_enabled
+    )
     assert dialog.vsync_mode.currentData() == defaults.vsync_mode
     assert dialog.vrr_mode.currentData() == defaults.vrr_mode
     assert dialog.av_sync_mode.currentData() == defaults.av_sync_mode
