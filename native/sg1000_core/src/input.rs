@@ -1,13 +1,13 @@
 //! Host-independent controller normalization for the SG-1000 core.
 //!
-//! SDL, XInput, and DirectInput adapters should translate their host-specific
-//! button/axis state into this type. This module deliberately has no OS, SDL,
-//! windowing, polling, or threading dependency, so the emulated machine stays
-//! deterministic and testable.
+//! SDL, XInput, and DirectInput adapters translate their host-specific state
+//! into this type. The module has no OS, SDL, windowing, polling, or threading
+//! dependency, so the emulated machine remains deterministic and testable.
 //!
-//! Port encoding used here: bits 0..=3 are Up, Down, Left, Right; bits 4..=5
-//! are Button 1 and Button 2. These six controls are active-low; bits 6..=7
-//! remain high. Backend adapters must not apply additional inversion.
+//! Each logical controller uses bits 0..=3 for Up, Down, Left, Right and bits
+//! 4..=5 for Button 1 and Button 2, all active-low. This is a logical snapshot,
+//! not a literal physical port byte: the SG-1000 wiring splits player 2 across
+//! ports 0xDC and 0xDD. Sg1000Io composes those physical reads.
 
 /// Host controller button state after backend-specific normalization.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -21,7 +21,7 @@ pub struct ControllerButtons {
 }
 
 impl ControllerButtons {
-    /// Encode pressed buttons as the SG-1000 active-low controller byte.
+    /// Encode pressed buttons as a logical active-low controller byte.
     ///
     /// A released control is represented by 1; a pressed control by 0.
     pub const fn to_active_low_port(self) -> u8 {
@@ -49,9 +49,6 @@ impl ControllerButtons {
 }
 
 /// The host API that supplied a normalized controller sample.
-///
-/// This is diagnostic metadata only; it does not make the core poll a host
-/// API. Concrete SDL/XInput/DirectInput adapters belong at the host boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ControllerBackend {
     Sdl,
@@ -74,7 +71,7 @@ pub enum ControllerBackendPreference {
     Sdl,
 }
 
-/// A normalized snapshot for both SG-1000 controller ports.
+/// A normalized snapshot for both SG-1000 controllers.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct ControllerFrame {
     pub player_1: ControllerButtons,
@@ -82,18 +79,21 @@ pub struct ControllerFrame {
 }
 
 impl ControllerFrame {
+    /// Return the logical active-low snapshot for player 1.
     pub const fn port_1(self) -> u8 {
         self.player_1.to_active_low_port()
     }
 
+    /// Return the logical active-low snapshot for player 2.
     pub const fn port_2(self) -> u8 {
         self.player_2.to_active_low_port()
     }
 
-    /// Latch both normalized controller bytes into the emulated machine.
+    /// Latch both normalized controller snapshots into the emulated machine.
     ///
     /// This is an explicit snapshot transfer: it performs no host polling and
-    /// does not invoke callbacks during CPU execution.
+    /// does not invoke callbacks during CPU execution. Sg1000Io composes the
+    /// physical DC/DD port layout when the CPU reads those ports.
     pub fn apply_to(
         self,
         machine: &mut crate::machine::Sg1000Machine,
@@ -124,7 +124,7 @@ mod tests {
     }
 
     #[test]
-    fn each_control_clears_only_its_active_low_bit() {
+    fn each_control_clears_only_its_active_low_logical_bit() {
         let cases = [
             (
                 ControllerButtons {
@@ -175,7 +175,7 @@ mod tests {
     }
 
     #[test]
-    fn simultaneous_buttons_compose_without_affecting_unused_bits() {
+    fn simultaneous_buttons_compose_without_affecting_unused_logical_bits() {
         let buttons = ControllerButtons {
             up: true,
             right: true,
@@ -187,7 +187,7 @@ mod tests {
     }
 
     #[test]
-    fn two_players_are_encoded_independently() {
+    fn two_players_are_encoded_independently_as_logical_snapshots() {
         let frame = ControllerFrame {
             player_1: ControllerButtons {
                 up: true,
@@ -203,7 +203,7 @@ mod tests {
     }
 
     #[test]
-    fn frame_latches_into_the_machine_controller_ports() {
+    fn frame_latches_into_logical_and_physical_controller_reads() {
         let mut machine = Sg1000Machine::new(&[0x76], MemoryConfig::default()).unwrap();
         let frame = ControllerFrame {
             player_1: ControllerButtons {
@@ -221,6 +221,6 @@ mod tests {
         assert_eq!(machine.read_port(0x00), 0xFB);
         assert_eq!(machine.read_port(0x01), 0xDF);
         assert_eq!(machine.read_port(0xDC), 0xFB);
-        assert_eq!(machine.read_port(0xDD), 0xDF);
+        assert_eq!(machine.read_port(0xDD), 0xF7);
     }
 }
