@@ -248,7 +248,9 @@ class SettingsDialog(QDialog):
         self.sprite_limit_enabled.setChecked(defaults.sprite_limit_enabled)
         self.vsync_mode.setCurrentIndex(self.vsync_mode.findData(defaults.vsync_mode))
         self.vrr_mode.setCurrentIndex(self.vrr_mode.findData(defaults.vrr_mode))
-        self.av_sync_mode.setCurrentIndex(self.av_sync_mode.findData(defaults.av_sync_mode))
+        self.av_sync_mode.setCurrentIndex(
+            self.av_sync_mode.findData(defaults.av_sync_mode)
+        )
         self.crt_scanline_intensity.setValue(defaults.crt_scanline_intensity)
         self.crt_scanline_thickness.setValue(defaults.crt_scanline_thickness)
         self.crt_phosphor_mask.setValue(defaults.crt_phosphor_mask)
