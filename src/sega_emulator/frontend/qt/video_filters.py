@@ -134,11 +134,13 @@ def _apply_crt_effects(
     height, width, _ = out.shape
 
     if scanline_intensity and scanline_thickness:
-        # Thickness controls the number of dark rows in a two-row scanline period.
-        rows_per_period = max(1, min(2, round(scanline_thickness / 50)))
-        line_rows = (np.arange(height) % 2) < rows_per_period
-        attenuation = (scanline_intensity / 100.0) * 0.65
-        out[line_rows, :, :] *= 1.0 - attenuation
+        # Use a four-row period and cap coverage below 100% so the maximum
+        # thickness never degenerates into a uniformly dark image.
+        rows_per_period = min(3, round(scanline_thickness * 3 / 100))
+        if rows_per_period:
+            line_rows = (np.arange(height) % 4) < rows_per_period
+            attenuation = (scanline_intensity / 100.0) * 0.65
+            out[line_rows, :, :] *= 1.0 - attenuation
 
     if phosphor_mask:
         strength = (phosphor_mask / 100.0) * 0.35
