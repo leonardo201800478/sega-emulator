@@ -1,12 +1,18 @@
-"""Testes dos perfis conhecidos de hardware de cartuchos SG-1000."""
+"""Tests for cartridge-profile metadata; hardware mapping is tested in Rust."""
+
+from __future__ import annotations
 
 import zlib
 
 from sega_emulator.machine.cartridge_profiles import (
     SG1000_II_RAM_EXT_TYPE_B_CRC32,
+    SG1000_II_RAM_EXT_TYPE_B_SHA256,
+    SG1000_II_RAM_EXT_TYPE_B_SIZE,
+    SG1000_INTERNAL_RAM_SIZE,
+    SG1000_THE_CASTLE_JAPAN_CRC32,
+    cartridge_profile,
     cartridge_ram_size,
 )
-from sega_emulator.machine.sg1000 import SG1000Machine
 
 
 def test_all_known_type_b_crcs_are_registered() -> None:
@@ -19,65 +25,31 @@ def test_all_known_type_b_crcs_are_registered() -> None:
     }
 
 
-def test_known_type_b_crc_selects_8k_ram(monkeypatch) -> None:
+def test_known_type_b_crc_selects_profile_metadata(monkeypatch) -> None:
     monkeypatch.setattr(zlib, "crc32", lambda data: 0x69FC1494)
-
+    profile = cartridge_profile(b"synthetic test ROM")
+    assert profile.internal_ram_size == SG1000_II_RAM_EXT_TYPE_B_SIZE
+    assert profile.cartridge_ram_size == 0
     assert cartridge_ram_size(b"synthetic test ROM") == 0x2000
 
 
-def test_unknown_cartridge_keeps_standard_1k_ram(monkeypatch) -> None:
+def test_unknown_cartridge_keeps_standard_profile(monkeypatch) -> None:
     monkeypatch.setattr(zlib, "crc32", lambda data: 0x12345678)
-
+    profile = cartridge_profile(b"synthetic test ROM")
+    assert profile.internal_ram_size == SG1000_INTERNAL_RAM_SIZE
+    assert profile.cartridge_ram_size == 0
+    assert profile.cartridge_ram_start == 0
+    assert profile.cartridge_ram_end == -1
     assert cartridge_ram_size(b"synthetic test ROM") == 0x0400
 
 
-def test_type_b_machine_maps_8k_ram_and_mirrors_second_8k(monkeypatch) -> None:
-    monkeypatch.setattr(zlib, "crc32", lambda data: 0x69FC1494)
-    machine = SG1000Machine(b"synthetic test ROM")
-
-    assert machine.ram_size == 0x2000
-    machine.memory_bus.write(0xC000, 0xA5)
-    machine.memory_bus.write(0xC800, 0x5A)
-
-    assert machine.memory_bus.read(0xC000) == 0xA5
-    assert machine.memory_bus.read(0xC800) == 0x5A
-    assert machine.memory_bus.read(0xE000) == 0xA5
-    assert machine.memory_bus.read(0xE800) == 0x5A
-
-
-def test_standard_machine_keeps_1k_ram_mirroring(monkeypatch) -> None:
-    monkeypatch.setattr(zlib, "crc32", lambda data: 0x12345678)
-    machine = SG1000Machine(b"synthetic test ROM")
-
-    assert machine.ram_size == 0x0400
-    machine.memory_bus.write(0xC000, 0xA5)
-
-    assert machine.memory_bus.read(0xC000) == 0xA5
-    assert machine.memory_bus.read(0xC400) == 0xA5
-    assert machine.memory_bus.read(0xC800) == 0xA5
-
-
-def test_castle_japan_uses_cartridge_ram_at_8000(monkeypatch) -> None:
-    monkeypatch.setattr(zlib, "crc32", lambda data: 0x092F29D6)
-    machine = SG1000Machine(b"synthetic Castle ROM")
-
-    assert machine.ram_size == 0x0400
-    assert machine.cartridge_ram_size == 0x2000
-    machine.memory_bus.write(0x8000, 0xA5)
-    machine.memory_bus.write(0x8001, 0x5A)
-
-    # The 16 KiB CPU window mirrors the physical 8 KiB cartridge RAM twice.
-    assert machine.memory_bus.read(0x8000) == 0xA5
-    assert machine.memory_bus.read(0x8001) == 0x5A
-    assert machine.memory_bus._read_for_cpu(0x8000) == 0xA5
-    assert machine.memory_bus._read_for_cpu(0x8001) == 0x5A
-    assert machine.memory_bus.read(0xA000) == 0xA5
-    assert machine.memory_bus.read(0xA001) == 0x5A
-
-    # The system's internal RAM remains separate at C000h–FFFFh.
-    machine.memory_bus.write(0xC000, 0x3C)
-    assert machine.memory_bus.read(0xC000) == 0x3C
-    assert machine.memory_bus.read(0x8000) == 0xA5
+def test_castle_japan_profile_selects_cartridge_ram_window(monkeypatch) -> None:
+    monkeypatch.setattr(zlib, "crc32", lambda data: SG1000_THE_CASTLE_JAPAN_CRC32)
+    profile = cartridge_profile(b"synthetic Castle ROM")
+    assert profile.internal_ram_size == SG1000_INTERNAL_RAM_SIZE
+    assert profile.cartridge_ram_size == SG1000_II_RAM_EXT_TYPE_B_SIZE
+    assert profile.cartridge_ram_start == 0x8000
+    assert profile.cartridge_ram_end == 0xBFFF
 
 
 def test_english_logo_bomberman_sha256_selects_type_b_ram(monkeypatch) -> None:
@@ -87,5 +59,4 @@ def test_english_logo_bomberman_sha256_selects_type_b_ram(monkeypatch) -> None:
 
     monkeypatch.setattr(zlib, "crc32", lambda data: 0x12345678)
     monkeypatch.setattr("hashlib.sha256", lambda data: FakeDigest())
-
-    assert cartridge_ram_size(b"English-logo test ROM") == 0x2000
+    assert cartridge_profile(b"English-logo test ROM").internal_ram_size == 0x2000
