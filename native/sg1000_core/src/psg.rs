@@ -166,6 +166,42 @@ impl Sn76489 {
         self.pending_samples.len()
     }
 
+    pub fn sample_buffer_capacity(&self) -> usize {
+        self.sample_buffer_capacity
+    }
+
+    pub fn latched_register(&self) -> u8 {
+        self.latched_register
+    }
+
+    pub fn tone_counters(&self) -> [u16; 3] {
+        self.tone_counters
+    }
+
+    pub fn tone_outputs(&self) -> [u8; 3] {
+        self.tone_outputs
+    }
+
+    pub fn noise_counter(&self) -> u16 {
+        self.noise_counter
+    }
+
+    pub fn noise_counter_phase(&self) -> u8 {
+        self.noise_counter_phase
+    }
+
+    pub fn noise_output(&self) -> u8 {
+        self.noise_output
+    }
+
+    pub fn clock_divider_phase(&self) -> u64 {
+        self.clock_divider_phase
+    }
+
+    pub fn output_phase(&self) -> u64 {
+        self.output_phase
+    }
+
     pub fn reset(&mut self) {
         self.reset_inner();
     }
