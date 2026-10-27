@@ -146,7 +146,7 @@ mod tests {
     fn mirrors_small_power_of_two_roms_across_the_16k_window() {
         let mut bytes = vec![0x12; 0x2000];
         bytes[0x1000..].fill(0x34);
-        let mut memory = SmsMemory::new(CartridgeImage::new(bytes).unwrap()).unwrap();
+        let memory = SmsMemory::new(CartridgeImage::new(bytes).unwrap()).unwrap();
 
         assert_eq!(memory.read(0x0000), 0x12);
         assert_eq!(memory.read(0x1000), 0x34);
