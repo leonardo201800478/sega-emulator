@@ -6,7 +6,7 @@
 use std::fmt;
 
 use crate::{
-    CpuError, IoError, MemoryConfig, MemoryError, PsgWriteEvent, Sg1000Io, Sg1000Memory, Z80,
+    CpuError, IoError, MemoryConfig, MemoryError, PsgWriteEvent, Sg1000Io, Sg1000Memory, Tms9918A, Z80,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,6 +48,7 @@ pub struct Sg1000Machine {
     pub cpu: Z80,
     pub memory: Sg1000Memory,
     pub io: Sg1000Io,
+    pub vdp: Tms9918A,
 }
 
 impl Sg1000Machine {
@@ -56,12 +57,15 @@ impl Sg1000Machine {
             cpu: Z80::default(),
             memory: Sg1000Memory::new(rom, memory_config)?,
             io: Sg1000Io::default(),
+            vdp: Tms9918A::new(),
         })
     }
 
     /// Execute one CPU instruction and return its nominal base T-state count.
     pub fn step(&mut self) -> Result<u32, MachineError> {
-        Ok(self.cpu.step(&mut self.memory)?)
+        let cycles = self.cpu.step(&mut self.memory)?;
+        self.vdp.advance(u64::from(cycles));
+        Ok(cycles)
     }
 
     /// Execute a fixed number of instructions and return elapsed nominal T-states.
@@ -78,13 +82,19 @@ impl Sg1000Machine {
     }
 
     /// Read the currently modeled controller/input ports.
-    pub fn read_port(&self, address: u16) -> u8 {
-        self.io.read_port(address)
+    pub fn read_port(&mut self, address: u16) -> u8 {
+        match (address as u8) & 0xC1 {
+            0x80 | 0x81 => self.vdp.read_port(address),
+            _ => self.io.read_port(address),
+        }
     }
 
     /// Capture a port write at an explicit nominal machine T-state.
     pub fn write_port_at(&mut self, address: u16, value: u8, tstate: u64) {
-        self.io.write_port_at(address, value, tstate);
+        match (address as u8) & 0xC1 {
+            0x80 | 0x81 => self.vdp.write_port(address, value),
+            _ => self.io.write_port_at(address, value, tstate),
+        }
     }
 
     /// Capture a port write at the CPU's current accumulated nominal T-state.
@@ -120,6 +130,7 @@ mod tests {
         assert_eq!(first.cpu, second.cpu);
         assert_eq!(first.memory, second.memory);
         assert_eq!(first.io, second.io);
+        assert_eq!(first.vdp, second.vdp);
         assert_eq!(first.cpu.registers.a, 0x42);
         assert_eq!(first.read_memory(0xC000), 0x99);
         assert!(first.cpu.halted);
@@ -155,6 +166,18 @@ mod tests {
             ]
         );
         assert!(machine.drain_psg_write_events().is_empty());
+    }
+
+    #[test]
+    fn vdp_ports_are_routed_and_machine_step_advances_video_timing() {
+        let mut machine = Sg1000Machine::new(&[0x00, 0x76], MemoryConfig::default()).unwrap();
+        assert_eq!(machine.vdp.scanline(), 0);
+        assert_eq!(machine.step(), Ok(4));
+        assert_eq!(machine.vdp.cycles_into_line(), 4);
+        machine.write_port_at(0x81, 0x00, 4);
+        machine.write_port_at(0x81, 0x40, 4);
+        machine.write_port_at(0x80, 0xA5, 4);
+        assert_eq!(machine.vdp.vram()[0], 0xA5);
     }
 
     #[test]
