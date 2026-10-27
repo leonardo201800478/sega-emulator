@@ -1,7 +1,7 @@
 //! Deterministic headless SG-1000 machine assembled from pure Rust components.
 //!
-//! CPU, memory and the first I/O/input boundary are integrated. VDP integration,
-//! PSG event consumption and a machine-wide device scheduler remain pending.
+//! CPU, memory, VDP raster timing, PSG sample generation and the first machine
+//! bus are integrated. Timing is still instruction-boundary based, not cycle-exact.
 
 use std::fmt;
 
@@ -50,9 +50,8 @@ impl From<PsgError> for MachineError {
 
 /// Incremental headless machine used to develop and validate the standalone core.
 ///
-/// The I/O boundary currently models controller aliases and captures PSG writes.
-/// It does not yet connect the CPU's IN/OUT instructions, a native VDP, or a
-/// machine-wide scheduler.
+/// The CPU's immediate IN/OUT instructions route through a split-borrow bus
+/// adapter. The VDP and PSG advance from nominal instruction T-states.
 
 /// Split-borrow adapter that exposes all SG-1000 devices to one Z80 step.
 struct Sg1000MachineBus<'a> {
@@ -302,6 +301,20 @@ mod tests {
         machine.write_port_at(0x40, 0x02, machine.cpu.total_tstates);
         assert_eq!(machine.psg.tone_periods()[0], 0x25);
         assert_eq!(machine.drain_psg_write_events().len(), 2);
+    }
+
+    #[test]
+    fn z80_in_reads_controller_and_out_updates_native_psg() {
+        let mut input = Sg1000Machine::new(&[0x3E, 0x00, 0xDB, 0xDC, 0x76], MemoryConfig::default()).unwrap();
+        input.set_joystick(1, 0xFE).unwrap();
+        assert_eq!(input.run_instructions(2), Ok(18));
+        assert_eq!(input.cpu.registers.a, 0xFE);
+
+        let rom = [0x3E, 0x85, 0xD3, 0x40, 0x3E, 0x02, 0xD3, 0x40, 0x76];
+        let mut output = Sg1000Machine::new(&rom, MemoryConfig::default()).unwrap();
+        assert_eq!(output.run_instructions(4), Ok(36));
+        assert_eq!(output.psg.tone_periods()[0], 0x25);
+        assert_eq!(output.drain_psg_write_events().len(), 2);
     }
 
     #[test]
