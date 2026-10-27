@@ -9,7 +9,6 @@ on:
       - "native/sg1000_core/**"
       - "native/z80_alu/**"
       - "native/z80_bus/**"
-      - "native/z80_bus/**"
       - ".github/workflows/rust-sg1000-core.yml"
       - ".github/workflows/sg1000-three-agent-validation.yml"
   push:
@@ -21,6 +20,7 @@ on:
       - "Cargo.lock"
       - "native/sg1000_core/**"
       - "native/z80_alu/**"
+      - "native/z80_bus/**"
       - ".github/workflows/rust-sg1000-core.yml"
       - ".github/workflows/sg1000-three-agent-validation.yml"
   workflow_dispatch:
