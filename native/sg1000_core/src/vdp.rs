@@ -1,7 +1,6 @@
 //! Native TMS9918A-compatible VDP for the SG-1000.
 use std::collections::HashSet;
 
-
 const SCREEN_WIDTH: usize = 256;
 const SCREEN_HEIGHT: usize = 192;
 const TSTATES_PER_LINE: u64 = 228;
@@ -64,37 +63,45 @@ impl Tms9918A {
         }
     }
 
-    pub fn vram(&self) -> &[u8] { &self.vram }
+    pub fn vram(&self) -> &[u8] {
+        &self.vram
+    }
 
-    pub fn vram_mut(&mut self) -> &mut [u8] { &mut self.vram }
+    pub fn vram_mut(&mut self) -> &mut [u8] {
+        &mut self.vram
+    }
 
-    pub fn registers(&self) -> &[u8; 8] { &self.registers }
+    pub fn registers(&self) -> &[u8; 8] {
+        &self.registers
+    }
 
-        pub fn status(&self) -> u8 {
+    pub fn status(&self) -> u8 {
         self.status
     }
 
-        pub fn address(&self) -> u16 {
+    pub fn address(&self) -> u16 {
         self.address
     }
 
-        pub fn read_buffer(&self) -> u8 {
+    pub fn read_buffer(&self) -> u8 {
         self.read_buffer
     }
 
-        pub fn scanline(&self) -> u16 {
+    pub fn scanline(&self) -> u16 {
         self.scanline
     }
 
-        pub fn cycles_into_line(&self) -> u16 {
+    pub fn cycles_into_line(&self) -> u16 {
         self.cycles_into_line
     }
 
-        pub fn frame_number(&self) -> u64 {
+    pub fn frame_number(&self) -> u64 {
         self.frame_number
     }
 
-        pub fn framebuffer(&self) -> &[u8] { &self.framebuffer }
+    pub fn framebuffer(&self) -> &[u8] {
+        &self.framebuffer
+    }
 
         pub fn display_mode(&self) -> u8 {
         display_mode(&self.registers)
