@@ -238,6 +238,12 @@ impl Tms9918A {
     }
 }
 
+impl Default for Tms9918A {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 fn display_mode(registers: &[u8]) -> u8 {
     ((registers[1] >> 4) & 1) | ((registers[1] >> 2) & 2) | (((registers[0] >> 1) & 1) << 2)
 }
