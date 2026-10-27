@@ -813,7 +813,7 @@ impl Z80 {
         if sum > 0xFF {
             flags |= FLAG_H | FLAG_C;
         }
-        let parity_arg = ((sum as u8 & 0x07) ^ self.registers.b) & 0xFF;
+        let parity_arg = (sum as u8 & 0x07) ^ self.registers.b;
         if parity_arg.count_ones().is_multiple_of(2) {
             flags |= FLAG_PV;
         }
@@ -1404,8 +1404,10 @@ mod tests {
     fn refresh_register_increments_for_m1_fetches_and_preserves_bit_seven() {
         let mut bus = TestBus([0; 0x10000]);
         bus.0[..4].copy_from_slice(&[0xCB, 0x00, 0x00, 0x00]);
-        let mut cpu = Z80::default();
-        cpu.r = 0xFE;
+        let mut cpu = Z80 {
+            r: 0xFE,
+            ..Z80::default()
+        };
 
         assert_eq!(cpu.step(&mut bus), Ok(8));
         assert_eq!(cpu.r, 0x80);
