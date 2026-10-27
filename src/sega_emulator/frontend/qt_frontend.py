@@ -640,7 +640,10 @@ def run(initial_path: Path | None = None) -> None:
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         updated = dialog.preferences()
-        if updated.sprite_limit_enabled != preferences.sprite_limit_enabled and machine is not None:
+        if (
+            updated.sprite_limit_enabled != preferences.sprite_limit_enabled
+            and machine is not None
+        ):
             try:
                 machine.set_sprite_limit_enabled(updated.sprite_limit_enabled)
             except (AttributeError, RuntimeError, TypeError) as exc:
