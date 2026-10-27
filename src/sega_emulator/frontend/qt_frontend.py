@@ -496,6 +496,8 @@ def run(initial_path: Path | None = None) -> None:
                     return
                 candidate = load_rom(path, member_name=selected)
             loaded_machine = SG1000Machine(candidate.data, cpu_core=selected_backend)
+            if not preferences.sprite_limit_enabled:
+                loaded_machine.set_sprite_limit_enabled(False)
         except Exception as exc:
             logger.exception(
                 "Falha ao carregar ROM",
@@ -581,6 +583,8 @@ def run(initial_path: Path | None = None) -> None:
                 if loaded is not None
                 else None
             )
+            if replacement is not None and not preferences.sprite_limit_enabled:
+                replacement.set_sprite_limit_enabled(False)
         except Exception as exc:
             logger.exception(
                 "Falha ao selecionar backend de emulação",
@@ -636,6 +640,16 @@ def run(initial_path: Path | None = None) -> None:
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         updated = dialog.preferences()
+        if updated.sprite_limit_enabled != preferences.sprite_limit_enabled and machine is not None:
+            try:
+                machine.set_sprite_limit_enabled(updated.sprite_limit_enabled)
+            except (AttributeError, RuntimeError, TypeError) as exc:
+                QMessageBox.warning(
+                    window,
+                    "Limite de sprites não aplicado",
+                    str(exc),
+                )
+                return
         audio_device_changed = (
             updated.audio_enabled != preferences.audio_enabled
             or updated.audio_sample_rate != preferences.audio_sample_rate
@@ -673,6 +687,7 @@ def run(initial_path: Path | None = None) -> None:
                 "audio_volume": preferences.audio_volume,
                 "video_filter": preferences.video_filter,
                 "integer_scale": preferences.integer_scale,
+                "sprite_limit_enabled": preferences.sprite_limit_enabled,
             },
         )
 
