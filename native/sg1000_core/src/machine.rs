@@ -5,7 +5,9 @@
 
 use std::fmt;
 
-use crate::{CpuError, IoError, MemoryConfig, MemoryError, PsgWriteEvent, Sg1000Io, Sg1000Memory, Z80};
+use crate::{
+    CpuError, IoError, MemoryConfig, MemoryError, PsgWriteEvent, Sg1000Io, Sg1000Memory, Z80,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MachineError {
@@ -142,8 +144,14 @@ mod tests {
         assert_eq!(
             machine.drain_psg_write_events(),
             vec![
-                PsgWriteEvent { tstate: 8, value: 0x90 },
-                PsgWriteEvent { tstate: 8, value: 0x23 },
+                PsgWriteEvent {
+                    tstate: 8,
+                    value: 0x90
+                },
+                PsgWriteEvent {
+                    tstate: 8,
+                    value: 0x23
+                },
             ]
         );
         assert!(machine.drain_psg_write_events().is_empty());
