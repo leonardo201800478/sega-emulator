@@ -127,7 +127,7 @@ impl Z80 {
         }
 
         let address = self.registers.pc;
-        let opcode = self.fetch8(bus);
+        let opcode = self.fetch_opcode(bus);
         let cycles = match opcode {
             0x00 => 4, // NOP
             0x08 => {
@@ -166,7 +166,7 @@ impl Z80 {
                 4
             }
             0xCB => {
-                let extended_opcode = self.fetch8(bus);
+                let extended_opcode = self.fetch_opcode(bus);
                 self.execute_cb(bus, extended_opcode)
             }
             0xD3 => {
@@ -659,6 +659,13 @@ impl Z80 {
     }
 
     #[inline]
+    fn fetch_opcode<B: CpuBus>(&mut self, bus: &mut B) -> u8 {
+        let opcode = self.fetch8(bus);
+        self.r = (self.r & 0x80) | (self.r.wrapping_add(1) & 0x7F);
+        opcode
+    }
+
+    #[inline]
     fn fetch16<B: CpuBus>(&mut self, bus: &mut B) -> u16 {
         let low = self.fetch8(bus);
         let high = self.fetch8(bus);
@@ -1036,6 +1043,21 @@ mod tests {
         assert_eq!(cpu.step(&mut bus), Ok(4));
         assert!(cpu.iff1 && cpu.iff2);
         assert_eq!(cpu.ei_delay, 1);
+    }
+
+    #[test]
+    fn refresh_register_increments_for_m1_fetches_and_preserves_bit_seven() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..4].copy_from_slice(&[0xCB, 0x00, 0x00, 0x00]);
+        let mut cpu = Z80::default();
+        cpu.r = 0xFE;
+
+        assert_eq!(cpu.step(&mut bus), Ok(8));
+        assert_eq!(cpu.r, 0x80);
+        assert_eq!(cpu.step(&mut bus), Ok(4));
+        assert_eq!(cpu.r, 0x81);
+        cpu.reset();
+        assert_eq!(cpu.r, 0);
     }
 
     #[test]
