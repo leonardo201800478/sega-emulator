@@ -396,8 +396,7 @@ mod tests {
 
     #[test]
     fn future_vdp_writes_are_deferred_until_the_machine_reaches_their_tstate() {
-        let mut machine =
-            Sg1000Machine::new(&[0x00, 0x00, 0x76], MemoryConfig::default()).unwrap();
+        let mut machine = Sg1000Machine::new(&[0x00, 0x00, 0x76], MemoryConfig::default()).unwrap();
         machine.write_port_at(0x81, 0x00, 8);
         machine.write_port_at(0x81, 0x40, 8);
         machine.write_port_at(0x80, 0xA5, 8);
