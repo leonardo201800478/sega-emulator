@@ -50,8 +50,12 @@ pub fn adc8(lhs: u8, rhs: u8, carry_in: bool) -> AluResult {
     if u16::from(lhs & 0x0f) + u16::from(rhs & 0x0f) + carry > 0x0f {
         flags |= FLAG_H;
     }
-    if (!(lhs ^ rhs) & (lhs ^ value) & FLAG_S) != 0 { flags |= FLAG_PV; }
-    if wide > u16::from(u8::MAX) { flags |= FLAG_C; }
+    if (!(lhs ^ rhs) & (lhs ^ value) & FLAG_S) != 0 {
+        flags |= FLAG_PV;
+    }
+    if wide > u16::from(u8::MAX) {
+        flags |= FLAG_C;
+    }
     AluResult { value, flags }
 }
 
@@ -80,7 +84,9 @@ pub fn sbc8(lhs: u8, rhs: u8, carry_in: bool) -> AluResult {
     if u16::from(lhs & 0x0f) < u16::from(rhs & 0x0f) + borrow {
         flags |= FLAG_H;
     }
-    if ((lhs ^ rhs) & (lhs ^ value) & FLAG_S) != 0 { flags |= FLAG_PV; }
+    if ((lhs ^ rhs) & (lhs ^ value) & FLAG_S) != 0 {
+        flags |= FLAG_PV;
+    }
     if u16::from(lhs) < subtrahend {
         flags |= FLAG_C;
     }
@@ -122,9 +128,15 @@ pub fn cp8(lhs: u8, rhs: u8) -> AluResult {
     if result == 0 {
         flags |= FLAG_Z;
     }
-    if (lhs & 0x0f) < (rhs & 0x0f) { flags |= FLAG_H; }
-    if ((lhs ^ rhs) & (lhs ^ result) & FLAG_S) != 0 { flags |= FLAG_PV; }
-    if lhs < rhs { flags |= FLAG_C; }
+    if (lhs & 0x0f) < (rhs & 0x0f) {
+        flags |= FLAG_H;
+    }
+    if ((lhs ^ rhs) & (lhs ^ result) & FLAG_S) != 0 {
+        flags |= FLAG_PV;
+    }
+    if lhs < rhs {
+        flags |= FLAG_C;
+    }
     AluResult { value: lhs, flags }
 }
 
