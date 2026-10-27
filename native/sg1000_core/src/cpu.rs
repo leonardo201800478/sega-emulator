@@ -625,7 +625,7 @@ impl Z80 {
                 10
             }
             0x24 | 0x25 | 0x26 | 0x2C | 0x2D | 0x2E => {
-                let code = if matches!(opcode, 0x24 | 0x25 | 0x26) {
+                let code = if matches!(opcode, 0x24..=0x26) {
                     4
                 } else {
                     5
