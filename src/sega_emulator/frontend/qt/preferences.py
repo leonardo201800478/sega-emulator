@@ -75,8 +75,15 @@ class FrontendPreferences:
             raise ValueError("audio_buffer_size must be 256, 512, 1024, or 2048")
         if type(self.audio_volume) is not int or not 0 <= self.audio_volume <= 100:
             raise ValueError("audio_volume must be an integer from 0 to 100")
-        if self.video_filter not in ("nearest", "bilinear", "dither_blending", "crt_ntsc"):
-            raise ValueError("video_filter must be nearest, bilinear, dither_blending, or crt_ntsc")
+        if self.video_filter not in (
+            "nearest",
+            "bilinear",
+            "dither_blending",
+            "crt_ntsc",
+        ):
+            raise ValueError(
+                "video_filter must be nearest, bilinear, dither_blending, or crt_ntsc"
+            )
         if type(self.integer_scale) is not bool:
             raise ValueError("integer_scale must be a bool")
         if type(self.sprite_limit_enabled) is not bool:
