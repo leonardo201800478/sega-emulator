@@ -108,6 +108,7 @@ class VideoWidget(QWidget):
         self._filter_mode = "nearest"
         self._integer_scale = True
         self._vulkan_failed = False
+        self._render_backend = "auto"
         self._quick_view = None
         self._quick_container = None
         self._qml_root = None
@@ -239,6 +240,29 @@ class VideoWidget(QWidget):
         if self._quick_view is not None:
             self._quick_view.installEventFilter(event_filter)
 
+    def set_render_backend(self, mode: str) -> bool:
+        """Select automatic Vulkan/raster, forced Vulkan, or forced Qt raster.
+
+        Returns False when Vulkan was explicitly requested but is unavailable.
+        """
+        if mode not in {"auto", "vulkan", "raster"}:
+            raise ValueError("mode deve ser 'auto', 'vulkan' ou 'raster'")
+        if mode == "vulkan" and (
+            self._vulkan_failed or self._quick_container is None
+        ):
+            return False
+        self._render_backend = mode
+        use_vulkan = (
+            mode == "vulkan"
+            or (mode == "auto" and not self._vulkan_failed)
+        )
+        if use_vulkan and self._quick_container is not None:
+            self._stack.setCurrentWidget(self._quick_container)
+        else:
+            self._refresh_raster_fallback()
+            self._stack.setCurrentWidget(self._fallback)
+        return True
+
     def set_filter_mode(self, mode: str) -> None:
         if mode not in ("nearest", "bilinear"):
             raise ValueError("mode deve ser 'nearest' ou 'bilinear'")
@@ -263,9 +287,10 @@ class VideoWidget(QWidget):
             self._qml_root.setProperty(
                 "frameRevision", int(self._qml_root.property("frameRevision")) + 1
             )
-        if self._vulkan_failed or self._quick_container is None:
+        if self._render_backend == "raster" or self._vulkan_failed:
             self._refresh_raster_fallback()
-        if self._quick_container is not None and not self._vulkan_failed:
+            self._stack.setCurrentWidget(self._fallback)
+        elif self._quick_container is not None:
             self._stack.setCurrentWidget(self._quick_container)
         else:
             self._stack.setCurrentWidget(self._fallback)
