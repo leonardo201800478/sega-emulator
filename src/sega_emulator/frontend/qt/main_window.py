@@ -214,7 +214,8 @@ class EmulatorMainWindow(QMainWindow):
             <p><b>Versão:</b> {__version__}</p>
             <p><b>Marco atual:</b> SG-1000</p>
             <p>Emulador independente com núcleo de hardware em Rust e
-            interface Qt/PySide6, carregadores de ROM/perfis e integração PyO3 em Python.</p>
+            interface Qt/PySide6, carregadores de ROM/perfis e integração
+            PyO3 em Python.</p>
             <p><b>Escopo:</b> CPU Z80, memória e I/O, VDP TMS9918A,
             PSG SN76489AN, entrada, temporização e apresentação audiovisual,
             com limitações documentadas no repositório.</p>
