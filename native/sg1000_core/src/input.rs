@@ -126,12 +126,48 @@ mod tests {
     #[test]
     fn each_control_clears_only_its_active_low_bit() {
         let cases = [
-            (ControllerButtons { up: true, ..Default::default() }, 0xFE),
-            (ControllerButtons { down: true, ..Default::default() }, 0xFD),
-            (ControllerButtons { left: true, ..Default::default() }, 0xFB),
-            (ControllerButtons { right: true, ..Default::default() }, 0xF7),
-            (ControllerButtons { button_1: true, ..Default::default() }, 0xEF),
-            (ControllerButtons { button_2: true, ..Default::default() }, 0xDF),
+            (
+                ControllerButtons {
+                    up: true,
+                    ..Default::default()
+                },
+                0xFE,
+            ),
+            (
+                ControllerButtons {
+                    down: true,
+                    ..Default::default()
+                },
+                0xFD,
+            ),
+            (
+                ControllerButtons {
+                    left: true,
+                    ..Default::default()
+                },
+                0xFB,
+            ),
+            (
+                ControllerButtons {
+                    right: true,
+                    ..Default::default()
+                },
+                0xF7,
+            ),
+            (
+                ControllerButtons {
+                    button_1: true,
+                    ..Default::default()
+                },
+                0xEF,
+            ),
+            (
+                ControllerButtons {
+                    button_2: true,
+                    ..Default::default()
+                },
+                0xDF,
+            ),
         ];
         for (buttons, expected) in cases {
             assert_eq!(buttons.to_active_low_port(), expected);
@@ -153,8 +189,14 @@ mod tests {
     #[test]
     fn two_players_are_encoded_independently() {
         let frame = ControllerFrame {
-            player_1: ControllerButtons { up: true, ..Default::default() },
-            player_2: ControllerButtons { button_1: true, ..Default::default() },
+            player_1: ControllerButtons {
+                up: true,
+                ..Default::default()
+            },
+            player_2: ControllerButtons {
+                button_1: true,
+                ..Default::default()
+            },
         };
         assert_eq!(frame.port_1(), 0xFE);
         assert_eq!(frame.port_2(), 0xEF);
@@ -164,8 +206,14 @@ mod tests {
     fn frame_latches_into_the_machine_controller_ports() {
         let mut machine = Sg1000Machine::new(&[0x76], MemoryConfig::default()).unwrap();
         let frame = ControllerFrame {
-            player_1: ControllerButtons { left: true, ..Default::default() },
-            player_2: ControllerButtons { button_2: true, ..Default::default() },
+            player_1: ControllerButtons {
+                left: true,
+                ..Default::default()
+            },
+            player_2: ControllerButtons {
+                button_2: true,
+                ..Default::default()
+            },
         };
 
         frame.apply_to(&mut machine).unwrap();
