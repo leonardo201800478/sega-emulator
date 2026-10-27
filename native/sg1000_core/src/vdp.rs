@@ -1,9 +1,6 @@
 //! Native TMS9918A-compatible VDP for the SG-1000.
 use std::collections::HashSet;
 
-use pyo3::exceptions::PyValueError;
-use pyo3::prelude::*;
-use pyo3::types::{PyByteArray, PyBytes};
 
 const SCREEN_WIDTH: usize = 256;
 const SCREEN_HEIGHT: usize = 192;
@@ -33,10 +30,10 @@ const PALETTE: [[u8; 3]; 16] = [
     [255, 255, 255],
 ];
 
-#[pyclass(module = "sega_z80_core")]
-pub(crate) struct NativeTms9918A {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Tms9918A {
     vram: Vec<u8>,
-    registers: Vec<u8>,
+    registers: [u8; 8],
     status: u8,
     address: u16,
     read_buffer: u8,
@@ -49,13 +46,11 @@ pub(crate) struct NativeTms9918A {
     frame_ready: bool,
 }
 
-#[pymethods]
-impl NativeTms9918A {
-    #[new]
-    fn new() -> Self {
+impl Tms9918A {
+    pub fn new() -> Self {
         Self {
             vram: vec![0; VRAM_SIZE],
-            registers: vec![0; 8],
+            registers: [0; 8],
             status: 0x1F,
             address: 0,
             read_buffer: 0,
@@ -69,63 +64,47 @@ impl NativeTms9918A {
         }
     }
 
-    #[getter]
-    fn vram<'py>(&self, py: Python<'py>) -> Bound<'py, PyByteArray> {
-        PyByteArray::new(py, &self.vram)
-    }
+    pub fn vram(&self) -> &[u8] { &self.vram }
 
-    #[getter]
-    fn registers<'py>(&self, py: Python<'py>) -> Bound<'py, PyByteArray> {
-        PyByteArray::new(py, &self.registers)
-    }
+    pub fn vram_mut(&mut self) -> &mut [u8] { &mut self.vram }
 
-    #[getter]
-    fn status(&self) -> u8 {
+    pub fn registers(&self) -> &[u8; 8] { &self.registers }
+
+        pub fn status(&self) -> u8 {
         self.status
     }
 
-    #[getter]
-    fn address(&self) -> u16 {
+        pub fn address(&self) -> u16 {
         self.address
     }
 
-    #[getter]
-    fn read_buffer(&self) -> u8 {
+        pub fn read_buffer(&self) -> u8 {
         self.read_buffer
     }
 
-    #[getter]
-    fn scanline(&self) -> u16 {
+        pub fn scanline(&self) -> u16 {
         self.scanline
     }
 
-    #[getter(_cycles_into_line)]
-    fn cycles_into_line(&self) -> u16 {
+        pub fn cycles_into_line(&self) -> u16 {
         self.cycles_into_line
     }
 
-    #[getter]
-    fn frame_number(&self) -> u64 {
+        pub fn frame_number(&self) -> u64 {
         self.frame_number
     }
 
-    #[getter]
-    fn framebuffer<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        PyBytes::new(py, &self.framebuffer)
-    }
+        pub fn framebuffer(&self) -> &[u8] { &self.framebuffer }
 
-    #[getter(_display_mode)]
-    fn display_mode(&self) -> u8 {
+        pub fn display_mode(&self) -> u8 {
         display_mode(&self.registers)
     }
 
-    #[getter]
-    fn interrupt_pending(&self) -> bool {
+        pub fn interrupt_pending(&self) -> bool {
         (self.status & 0x80 != 0) && (self.registers[1] & 0x20 != 0)
     }
 
-    #[pyo3(signature = (*, clear_vram=false))]
-    fn reset(&mut self, clear_vram: bool) -> PyResult<()> {
+        pub fn reset(&mut self, clear_vram: bool) {
         self.registers.fill(0);
         self.status = 0x1F;
         self.address = 0;
@@ -140,10 +119,9 @@ impl NativeTms9918A {
         if clear_vram {
             self.vram.fill(0);
         }
-        Ok(())
     }
 
-    fn read_port(&mut self, port: i64) -> u8 {
+    pub fn read_port(&mut self, port: u16) -> u8 {
         match (port as u8) & 0xC1 {
             0x80 => {
                 let value = self.read_buffer;
@@ -162,9 +140,8 @@ impl NativeTms9918A {
         }
     }
 
-    fn write_port(&mut self, port: i64, value: i64) {
+    pub fn write_port(&mut self, port: u16, value: u8) {
         let port = (port as u8) & 0xC1;
-        let value = value as u8;
         if port == 0x80 {
             let address = usize::from(self.address) & VRAM_MASK;
             self.vram[address] = value;
@@ -192,17 +169,12 @@ impl NativeTms9918A {
         self.address = self.address.wrapping_add(1) & VRAM_MASK as u16;
     }
 
-    fn advance(&mut self, tstates: i64) -> PyResult<()> {
-        if tstates < 0 {
-            return Err(PyValueError::new_err(
-                "tstates deve ser um inteiro não negativo.",
-            ));
-        }
-        let mut remaining = tstates as u64;
+    pub fn advance(&mut self, tstates: u64) {
+        let mut remaining = tstates;
         let cycles_to_line_end = TSTATES_PER_LINE - u64::from(self.cycles_into_line);
         if remaining < cycles_to_line_end {
             self.cycles_into_line += remaining as u16;
-            return Ok(());
+            return;
         }
         while remaining > 0 {
             let step = remaining.min(TSTATES_PER_LINE - u64::from(self.cycles_into_line));
@@ -246,46 +218,16 @@ impl NativeTms9918A {
                 }
             }
         }
-        Ok(())
     }
 
-    fn consume_frame_ready(&mut self) -> bool {
+    pub fn consume_frame_ready(&mut self) -> bool {
         let ready = self.frame_ready;
         self.frame_ready = false;
         ready
     }
 
-    fn render_frame<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        PyBytes::new(
-            py,
-            &render_frame_bytes(&self.vram, &self.registers, self.status),
-        )
-    }
-}
-
-impl NativeTms9918A {
-    pub(crate) fn new_native() -> Self {
-        Self::new()
-    }
-
-    pub(crate) fn read_port_native(&mut self, port: u16) -> u8 {
-        self.read_port(i64::from(port))
-    }
-
-    pub(crate) fn write_port_native(&mut self, port: u16, value: u8) {
-        self.write_port(i64::from(port), i64::from(value));
-    }
-
-    pub(crate) fn advance_native(&mut self, tstates: u32) -> PyResult<()> {
-        self.advance(i64::from(tstates))
-    }
-
-    pub(crate) fn frame_number_native(&self) -> u64 {
-        self.frame_number
-    }
-
-    pub(crate) fn interrupt_pending_native(&self) -> bool {
-        (self.status & 0x80 != 0) && (self.registers[1] & 0x20 != 0)
+    pub fn render_frame(&self) -> Vec<u8> {
+        render_frame_bytes(&self.vram, &self.registers, self.status)
     }
 }
 
@@ -751,30 +693,30 @@ fn render_sprites(
 
 #[cfg(test)]
 mod tests {
-    use super::NativeTms9918A;
+    use super::Tms9918A;
 
     #[test]
     fn reset_preserves_vram_unless_explicitly_cleared() {
-        let mut vdp = NativeTms9918A::new();
+        let mut vdp = Tms9918A::new();
         vdp.vram[0x123] = 0xA5;
-        vdp.reset(false).unwrap();
+        vdp.reset(false);
         assert_eq!(vdp.vram[0x123], 0xA5);
-        vdp.reset(true).unwrap();
+        vdp.reset(true);
         assert_eq!(vdp.vram[0x123], 0);
     }
 
     #[test]
     fn vblank_and_frame_boundaries_follow_raster_clock() {
-        let mut vdp = NativeTms9918A::new();
-        vdp.advance(228 * 192 - 1).unwrap();
+        let mut vdp = Tms9918A::new();
+        vdp.advance(228 * 192 - 1);
         assert_eq!(vdp.scanline, 191);
         assert_eq!(vdp.status & 0x80, 0);
-        vdp.advance(1).unwrap();
+        vdp.advance(1);
         assert_eq!(vdp.scanline, 192);
         assert_ne!(vdp.status & 0x80, 0);
         assert!(vdp.consume_frame_ready());
         assert!(!vdp.consume_frame_ready());
-        vdp.advance(228 * 70).unwrap();
+        vdp.advance(228 * 70);
         assert_eq!(vdp.frame_number, 1);
         assert_eq!(vdp.scanline, 0);
     }
