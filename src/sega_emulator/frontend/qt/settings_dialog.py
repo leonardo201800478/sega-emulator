@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QSlider,
+    QSpinBox,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -118,11 +119,49 @@ class SettingsDialog(QDialog):
             QLabel("Vulkan (Qt Quick); fallback Qt raster se indisponível"),
         )
         self.video_filter = QComboBox()
-        self.video_filter.addItem("Nearest-neighbor — pixels nítidos", "nearest")
+        self.video_filter.addItem("Nativo / Nearest — pixels nítidos", "nearest")
         self.video_filter.addItem("Bilinear — suavização", "bilinear")
+        self.video_filter.addItem(
+            "Dither Blending — mistura seletiva de padrões", "dither_blending"
+        )
+        self.video_filter.addItem(
+            "CRT / NTSC — scanlines e sinal aproximado", "crt_ntsc"
+        )
         index = self.video_filter.findData(preferences.video_filter)
         self.video_filter.setCurrentIndex(max(0, index))
-        video_form.addRow("Escala", self.video_filter)
+        video_form.addRow("Filtro de escala", self.video_filter)
+
+        self.vsync_mode = QComboBox()
+        for label, value in (
+            ("Ligado — sincronização vertical", "on"),
+            ("Desligado — menor latência, pode rasgar", "off"),
+            ("Adaptativo — se suportado pelo backend", "adaptive"),
+        ):
+            self.vsync_mode.addItem(label, value)
+        self.vsync_mode.setCurrentIndex(
+            max(0, self.vsync_mode.findData(preferences.vsync_mode))
+        )
+        video_form.addRow("VSync", self.vsync_mode)
+
+        self.vrr_mode = QComboBox()
+        for label, value in (
+            ("Controlado pelo driver (recomendado)", "driver"),
+            ("Preferir VRR — requer monitor/driver compatíveis", "prefer"),
+            ("Não solicitar VRR", "off"),
+        ):
+            self.vrr_mode.addItem(label, value)
+        self.vrr_mode.setCurrentIndex(
+            max(0, self.vrr_mode.findData(preferences.vrr_mode))
+        )
+        video_form.addRow("VRR / G-Sync", self.vrr_mode)
+
+        self.av_sync_mode = QComboBox()
+        self.av_sync_mode.addItem("Baixa latência (atual)", "low_latency")
+        self.av_sync_mode.addItem("Relógio de áudio (experimental)", "audio_clock")
+        self.av_sync_mode.setCurrentIndex(
+            max(0, self.av_sync_mode.findData(preferences.av_sync_mode))
+        )
+        video_form.addRow("Sincronismo A/V", self.av_sync_mode)
 
         self.integer_scale = QCheckBox("Preferir escala inteira quando couber")
         self.integer_scale.setChecked(preferences.integer_scale)
@@ -139,14 +178,63 @@ class SettingsDialog(QDialog):
         video_form.addRow(self.sprite_limit_enabled)
 
         video_note = QLabel(
-            "A proporção 4:3 é preservada. A escala inteira reduz artefatos "
-            "de interpolação; o modo bilinear suaviza a imagem, mas pode borrar pixels."
+            "Nearest e bilinear preservam os modos de referência. Dither Blending "
+            "mistura somente blocos 2x2 reconhecidos como xadrez. CRT/NTSC aplica "
+            "scanlines, máscara, curvatura e uma aproximação espacial de sinal; não "
+            "é uma simulação temporal ou eletricamente precisa de NTSC/RF. VSync e "
+            "VRR/G-Sync continuam dependendo do backend, driver e monitor."
         )
         video_note.setWordWrap(True)
         video_form.addRow(video_note)
         video_layout.addWidget(video_group)
         video_layout.addStretch(1)
         tabs.addTab(video_page, "Vídeo")
+
+        crt_page = QWidget(self)
+        crt_layout = QVBoxLayout(crt_page)
+        crt_group = QGroupBox("CRT / NTSC — efeitos de apresentação")
+        crt_form = QFormLayout(crt_group)
+        self.crt_signal_mode = QComboBox()
+        self.crt_signal_mode.addItem("RGB — sinal limpo", "rgb")
+        self.crt_signal_mode.addItem(
+            "Composite NTSC — crominância suavizada", "composite"
+        )
+        self.crt_signal_mode.addItem("RF — sinal mais degradado (aproximação)", "rf")
+        self.crt_signal_mode.setCurrentIndex(
+            max(0, self.crt_signal_mode.findData(preferences.crt_signal_mode))
+        )
+        crt_form.addRow("Modelo de sinal", self.crt_signal_mode)
+        self.crt_scanline_intensity = QSpinBox()
+        self.crt_scanline_intensity.setRange(0, 100)
+        self.crt_scanline_intensity.setSuffix("%")
+        self.crt_scanline_intensity.setValue(preferences.crt_scanline_intensity)
+        crt_form.addRow("Intensidade das scanlines", self.crt_scanline_intensity)
+        self.crt_scanline_thickness = QSpinBox()
+        self.crt_scanline_thickness.setRange(0, 100)
+        self.crt_scanline_thickness.setSuffix("%")
+        self.crt_scanline_thickness.setValue(preferences.crt_scanline_thickness)
+        crt_form.addRow("Espessura das scanlines", self.crt_scanline_thickness)
+        self.crt_phosphor_mask = QSpinBox()
+        self.crt_phosphor_mask.setRange(0, 100)
+        self.crt_phosphor_mask.setSuffix("%")
+        self.crt_phosphor_mask.setValue(preferences.crt_phosphor_mask)
+        crt_form.addRow("Máscara de fósforo", self.crt_phosphor_mask)
+        self.crt_curvature = QSpinBox()
+        self.crt_curvature.setRange(0, 100)
+        self.crt_curvature.setSuffix("%")
+        self.crt_curvature.setValue(preferences.crt_curvature)
+        crt_form.addRow("Curvatura da tela", self.crt_curvature)
+        crt_note = QLabel(
+            "Composite e RF são aproximações espaciais determinísticas. Esta versão "
+            "não modela fase/subportadora por linha, artefatos temporais, sincronismo "
+            "de cor ou cadeia elétrica real. A curvatura remapeia pixels por CPU; "
+            "compare desempenho antes de usar em hardware lento."
+        )
+        crt_note.setWordWrap(True)
+        crt_form.addRow(crt_note)
+        crt_layout.addWidget(crt_group)
+        crt_layout.addStretch(1)
+        tabs.addTab(crt_page, "CRT / NTSC")
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok
@@ -175,6 +263,18 @@ class SettingsDialog(QDialog):
         )
         self.integer_scale.setChecked(defaults.integer_scale)
         self.sprite_limit_enabled.setChecked(defaults.sprite_limit_enabled)
+        self.vsync_mode.setCurrentIndex(self.vsync_mode.findData(defaults.vsync_mode))
+        self.vrr_mode.setCurrentIndex(self.vrr_mode.findData(defaults.vrr_mode))
+        self.av_sync_mode.setCurrentIndex(
+            self.av_sync_mode.findData(defaults.av_sync_mode)
+        )
+        self.crt_scanline_intensity.setValue(defaults.crt_scanline_intensity)
+        self.crt_scanline_thickness.setValue(defaults.crt_scanline_thickness)
+        self.crt_phosphor_mask.setValue(defaults.crt_phosphor_mask)
+        self.crt_curvature.setValue(defaults.crt_curvature)
+        self.crt_signal_mode.setCurrentIndex(
+            self.crt_signal_mode.findData(defaults.crt_signal_mode)
+        )
 
     def preferences(self) -> FrontendPreferences:
         """Return only settings edited by this dialog."""
@@ -194,4 +294,12 @@ class SettingsDialog(QDialog):
             video_filter=str(self.video_filter.currentData()),
             integer_scale=self.integer_scale.isChecked(),
             sprite_limit_enabled=self.sprite_limit_enabled.isChecked(),
+            vsync_mode=str(self.vsync_mode.currentData()),
+            vrr_mode=str(self.vrr_mode.currentData()),
+            av_sync_mode=str(self.av_sync_mode.currentData()),
+            crt_scanline_intensity=self.crt_scanline_intensity.value(),
+            crt_scanline_thickness=self.crt_scanline_thickness.value(),
+            crt_phosphor_mask=self.crt_phosphor_mask.value(),
+            crt_curvature=self.crt_curvature.value(),
+            crt_signal_mode=str(self.crt_signal_mode.currentData()),
         )

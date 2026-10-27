@@ -226,6 +226,13 @@ def run(initial_path: Path | None = None) -> None:
     window._video_scale = preferences.video_scale
     view = window.video_widget
     view.set_filter_mode(preferences.video_filter)
+    view.set_crt_parameters(
+        scanline_intensity=preferences.crt_scanline_intensity,
+        scanline_thickness=preferences.crt_scanline_thickness,
+        phosphor_mask=preferences.crt_phosphor_mask,
+        curvature=preferences.crt_curvature,
+        signal_mode=preferences.crt_signal_mode,
+    )
     view.set_integer_scale(preferences.integer_scale)
     status = window.status
     audio_warning = _audio_output_warning(preferences, audio_output)
@@ -662,6 +669,15 @@ def run(initial_path: Path | None = None) -> None:
                 audio_volume=preferences.audio_volume,
                 video_filter=preferences.video_filter,
                 integer_scale=preferences.integer_scale,
+                sprite_limit_enabled=preferences.sprite_limit_enabled,
+                vsync_mode=preferences.vsync_mode,
+                vrr_mode=preferences.vrr_mode,
+                av_sync_mode=preferences.av_sync_mode,
+                crt_scanline_intensity=preferences.crt_scanline_intensity,
+                crt_scanline_thickness=preferences.crt_scanline_thickness,
+                crt_phosphor_mask=preferences.crt_phosphor_mask,
+                crt_curvature=preferences.crt_curvature,
+                crt_signal_mode=preferences.crt_signal_mode,
             )
             audio_output = _initialize_wasapi_backend(updated_audio)
             audio_resampler = PcmResampler(updated_audio.audio_sample_rate)
@@ -736,6 +752,13 @@ def run(initial_path: Path | None = None) -> None:
             "audio_driver", "wasapi" if preferences.audio_enabled else "disabled"
         )
         view.set_filter_mode(preferences.video_filter)
+        view.set_crt_parameters(
+            scanline_intensity=preferences.crt_scanline_intensity,
+            scanline_thickness=preferences.crt_scanline_thickness,
+            phosphor_mask=preferences.crt_phosphor_mask,
+            curvature=preferences.crt_curvature,
+            signal_mode=preferences.crt_signal_mode,
+        )
         view.set_integer_scale(preferences.integer_scale)
         preferences.save_to_store(settings)
         audio_warning = _audio_output_warning(preferences, audio_output)
@@ -754,6 +777,14 @@ def run(initial_path: Path | None = None) -> None:
                 "video_filter": preferences.video_filter,
                 "integer_scale": preferences.integer_scale,
                 "sprite_limit_enabled": preferences.sprite_limit_enabled,
+                "vsync_mode": preferences.vsync_mode,
+                "vrr_mode": preferences.vrr_mode,
+                "av_sync_mode": preferences.av_sync_mode,
+                "crt_scanline_intensity": preferences.crt_scanline_intensity,
+                "crt_scanline_thickness": preferences.crt_scanline_thickness,
+                "crt_phosphor_mask": preferences.crt_phosphor_mask,
+                "crt_curvature": preferences.crt_curvature,
+                "crt_signal_mode": preferences.crt_signal_mode,
             },
         )
 
