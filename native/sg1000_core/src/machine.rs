@@ -53,8 +53,7 @@ struct Sg1000MachineBus<'a> {
     memory: &'a mut Sg1000Memory,
     io: &'a mut Sg1000Io,
     vdp: &'a mut Tms9918A,
-    psg: &'a mut Sn76489,
-    psg_tstate: &'a mut u64,
+    pending_psg_writes: &'a mut Vec<PsgWriteEvent>,
     tstate: u64,
 }
 
@@ -78,13 +77,20 @@ impl CpuBus for Sg1000MachineBus<'_> {
         match (port as u8) & 0xC1 {
             0x80 | 0x81 => self.vdp.write_port(port, value),
             _ => {
-                self.io.write_port_at(port, value, self.tstate);
-                if (0x40..=0x7F).contains(&(port as u8)) {
-                    if self.tstate > *self.psg_tstate {
-                        self.psg.advance_clocks(self.tstate - *self.psg_tstate);
-                        *self.psg_tstate = self.tstate;
-                    }
-                    self.psg.write(value);
+                let is_psg_port = (0x40..=0x7F).contains(&(port as u8));
+                let write_tstate = if is_psg_port {
+                    // OUT (n),A takes 11 T-states; capture the PSG write at
+                    // the nominal end-of-instruction I/O edge, not its start.
+                    self.tstate.saturating_add(11)
+                } else {
+                    self.tstate
+                };
+                self.io.write_port_at(port, value, write_tstate);
+                if is_psg_port {
+                    self.pending_psg_writes.push(PsgWriteEvent {
+                        tstate: write_tstate,
+                        value,
+                    });
                 }
             }
         }
@@ -139,8 +145,7 @@ impl Sg1000Machine {
                 memory: &mut self.memory,
                 io: &mut self.io,
                 vdp: &mut self.vdp,
-                psg: &mut self.psg,
-                psg_tstate: &mut self.psg_tstate,
+                pending_psg_writes: &mut self.pending_psg_writes,
                 tstate,
             };
             self.cpu.step(&mut bus)?
@@ -320,7 +325,19 @@ mod tests {
         let mut output = Sg1000Machine::new(&rom, MemoryConfig::default()).unwrap();
         assert_eq!(output.run_instructions(4), Ok(36));
         assert_eq!(output.psg.tone_periods()[0], 0x25);
-        assert_eq!(output.drain_psg_write_events().len(), 2);
+        assert_eq!(
+            output.drain_psg_write_events(),
+            vec![
+                PsgWriteEvent {
+                    tstate: 18,
+                    value: 0x85,
+                },
+                PsgWriteEvent {
+                    tstate: 36,
+                    value: 0x02,
+                },
+            ]
+        );
     }
 
     #[test]
