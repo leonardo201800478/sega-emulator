@@ -11,7 +11,6 @@ import logging
 from threading import Lock
 
 import numpy as np
-
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QColor, QImage, QPixmap
 from PySide6.QtQml import QQmlComponent, QQmlImageProviderBase
