@@ -14,7 +14,10 @@
 use crate::{CartridgeImage, SmsCoreError};
 
 const BANK_SIZE: usize = 0x4000;
-const MAX_BANKS: usize = 256;
+// SMS Power documents up to six significant bank bits (1 MiB) among known
+// Sega mapper revisions; smaller revisions exist. Do not infer 4 MiB support
+// merely from the width of the software-visible register.
+const MAX_BANKS: usize = 64;
 const MAX_ROM_SIZE: usize = BANK_SIZE * MAX_BANKS;
 const RAM_SIZE: usize = 0x2000;
 const RAM_START: u16 = 0xC000;
