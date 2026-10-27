@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from sega_emulator.machine.cartridge_profiles import CartridgeProfile, cartridge_profile
+
+if TYPE_CHECKING:
+    from sega_emulator.bus.memory_bus import SG1000MemoryBus
 
 
 class _CartridgeMirrorBus:
@@ -220,6 +225,9 @@ class SG1000Machine:
             self.total_instructions = self.native_machine.total_instructions
             self.total_tstates = self.native_machine.total_tstates
             return steps
+        # The reference fast loop is loaded only for differential/Python runs.
+        from sega_emulator.cpu.z80 import Z80Cpu
+
         start_frame = self.vdp.frame_number
         steps = 0
         cpu = self.cpu
