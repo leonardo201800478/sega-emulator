@@ -99,7 +99,16 @@ impl SmsMemory {
 
     #[inline]
     fn read_rom_offset(&self, offset: usize) -> u8 {
-        self.rom.bytes().get(offset).copied().unwrap_or(0xFF)
+        let rom_size = self.rom.len();
+        // Small power-of-two ROMs (for example 8 KiB images) leave address
+        // lines unconnected and mirror through the 16 KiB CPU window.
+        // For non-power-of-two images, do not invent aliasing behavior.
+        let physical_offset = if rom_size.is_power_of_two() {
+            offset & (rom_size - 1)
+        } else {
+            offset
+        };
+        self.rom.bytes().get(physical_offset).copied().unwrap_or(0xFF)
     }
 
     pub fn work_ram(&self) -> &[u8] {
@@ -127,6 +136,20 @@ mod tests {
             bytes[start..start + BANK_SIZE].fill(bank as u8);
         }
         CartridgeImage::new(bytes).unwrap()
+    }
+
+    #[test]
+    fn mirrors_small_power_of_two_roms_across_the_16k_window() {
+        let mut bytes = vec![0x12; 0x2000];
+        bytes[0x1000..].fill(0x34);
+        let mut memory = SmsMemory::new(CartridgeImage::new(bytes).unwrap()).unwrap();
+
+        assert_eq!(memory.read(0x0000), 0x12);
+        assert_eq!(memory.read(0x1000), 0x34);
+        assert_eq!(memory.read(0x2000), 0x12);
+        assert_eq!(memory.read(0x3000), 0x34);
+        assert_eq!(memory.read(0x4000), 0x12);
+        assert_eq!(memory.read(0x5000), 0x34);
     }
 
     #[test]
