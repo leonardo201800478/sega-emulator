@@ -673,8 +673,7 @@ fn render_sprite_line(
     update_status: bool,
     sprite_limit_enabled: bool,
 ) {
-    let (active, fifth_index) =
-        sprite_line_active(vram, registers, line, sprite_limit_enabled);
+    let (active, fifth_index) = sprite_line_active(vram, registers, line, sprite_limit_enabled);
     if update_status
         && line < i32::from(VBLANK_LINE)
         && *status & 0x80 == 0
@@ -994,8 +993,7 @@ mod tests {
         let mut vdp = Tms9918A::new();
         for index in 0..5 {
             let offset = index * 4;
-            vdp.vram[offset..offset + 4]
-                .copy_from_slice(&[0xFF, (index * 8) as u8, 0, 0x0F]);
+            vdp.vram[offset..offset + 4].copy_from_slice(&[0xFF, (index * 8) as u8, 0, 0x0F]);
         }
 
         let (active, fifth) = sprite_line_active(&vdp.vram, &vdp.registers, 0, true);
@@ -1008,5 +1006,4 @@ mod tests {
         assert_eq!(active.len(), 5);
         assert_eq!(fifth, None);
     }
-
 }
