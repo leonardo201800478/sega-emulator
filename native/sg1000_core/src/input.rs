@@ -1,6 +1,6 @@
 //! Host-independent controller normalization for the SG-1000 core.
 //!
-//! SDL, XInput, and DirectInput adapters translate their host-specific state
+//! XInput and SDL adapters translate their host-specific state
 //! into this type. The module has no OS, SDL, windowing, polling, or threading
 //! dependency, so the emulated machine remains deterministic and testable.
 //!
@@ -53,7 +53,6 @@ impl ControllerButtons {
 pub enum ControllerBackend {
     Sdl,
     XInput,
-    DirectInput,
 }
 
 /// Policy used by the host-side controller provider.
