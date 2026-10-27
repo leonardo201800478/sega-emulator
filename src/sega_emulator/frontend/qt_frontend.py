@@ -173,7 +173,7 @@ def run(initial_path: Path | None = None) -> None:
     if video_sync_mode not in {"vsync", "vrr", "gsync", "off"}:
         video_sync_mode = "vsync"
         settings.setValue("video_sync_mode", video_sync_mode)
-    # Qt reads this before the first QQuickWindow. VRR/G-SYNC remain system/driver managed.
+    # Set before the first QQuickWindow; VRR/G-SYNC remain system-managed.
     surface_format = QSurfaceFormat()
     surface_format.setSwapInterval(0 if video_sync_mode == "off" else 1)
     QSurfaceFormat.setDefaultFormat(surface_format)
