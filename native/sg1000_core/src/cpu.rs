@@ -66,9 +66,35 @@ impl Z80Registers {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Z80AlternateRegisters {
+    pub a: u8,
+    pub f: u8,
+    pub b: u8,
+    pub c: u8,
+    pub d: u8,
+    pub e: u8,
+    pub h: u8,
+    pub l: u8,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Z80 {
     pub registers: Z80Registers,
+    /// Alternate AF/BC/DE/HL bank selected by EX AF,AF' and EXX.
+    pub alternate: Z80AlternateRegisters,
+    /// Index registers used by DD/FD-prefixed instructions.
+    pub ix: u16,
+    pub iy: u16,
+    /// Memory refresh and interrupt vector registers.
+    pub i: u8,
+    pub r: u8,
+    pub iff1: bool,
+    pub iff2: bool,
+    /// Interrupt mode 0, 1 or 2.
+    pub interrupt_mode: u8,
+    /// EI inhibits maskable interrupt acceptance for the following instruction.
+    pub ei_delay: u8,
     pub halted: bool,
     pub total_tstates: u64,
 }
@@ -76,6 +102,15 @@ pub struct Z80 {
 impl Z80 {
     pub fn reset(&mut self) {
         self.registers = Z80Registers::default();
+        self.alternate = Z80AlternateRegisters::default();
+        self.ix = 0;
+        self.iy = 0;
+        self.i = 0;
+        self.r = 0;
+        self.iff1 = false;
+        self.iff2 = false;
+        self.interrupt_mode = 0;
+        self.ei_delay = 0;
         self.halted = false;
         self.total_tstates = 0;
     }
@@ -95,6 +130,41 @@ impl Z80 {
         let opcode = self.fetch8(bus);
         let cycles = match opcode {
             0x00 => 4, // NOP
+            0x08 => {
+                std::mem::swap(&mut self.registers.a, &mut self.alternate.a);
+                std::mem::swap(&mut self.registers.f, &mut self.alternate.f);
+                4
+            }
+            0xD9 => {
+                std::mem::swap(&mut self.registers.b, &mut self.alternate.b);
+                std::mem::swap(&mut self.registers.c, &mut self.alternate.c);
+                std::mem::swap(&mut self.registers.d, &mut self.alternate.d);
+                std::mem::swap(&mut self.registers.e, &mut self.alternate.e);
+                std::mem::swap(&mut self.registers.h, &mut self.alternate.h);
+                std::mem::swap(&mut self.registers.l, &mut self.alternate.l);
+                4
+            }
+            0xE3 => {
+                let low = bus.read_memory(self.registers.sp);
+                let high = bus.read_memory(self.registers.sp.wrapping_add(1));
+                let old_hl = self.registers.hl().to_le_bytes();
+                bus.write_memory(self.registers.sp, old_hl[0]);
+                bus.write_memory(self.registers.sp.wrapping_add(1), old_hl[1]);
+                self.registers.set_hl(u16::from_le_bytes([low, high]));
+                19
+            }
+            0xF3 => {
+                self.iff1 = false;
+                self.iff2 = false;
+                self.ei_delay = 0;
+                4
+            }
+            0xFB => {
+                self.iff1 = true;
+                self.iff2 = true;
+                self.ei_delay = 1;
+                4
+            }
             0xD3 => {
                 let port_low = self.fetch8(bus);
                 let port = (u16::from(self.registers.a) << 8) | u16::from(port_low);
@@ -435,6 +505,12 @@ impl Z80 {
             _ => return Err(CpuError::UnsupportedOpcode { opcode, address }),
         };
         self.total_tstates += u64::from(cycles);
+        if self.ei_delay > 0 && opcode != 0xFB {
+            self.ei_delay -= 1;
+        }
+        // The low seven bits of R increment on each opcode fetch. Prefix
+        // fetch sequencing is implemented with the prefixed opcode families.
+        self.r = (self.r & 0x80) | (self.r.wrapping_add(1) & 0x7F);
         Ok(cycles)
     }
 
@@ -855,6 +931,48 @@ mod tests {
         bus.0[0x1234] = 0x00;
         assert_eq!(cpu.step(&mut bus), Ok(4));
         assert_eq!(cpu.registers.pc, 0x1235);
+    }
+
+
+    #[test]
+    fn exchange_alternate_register_banks_and_af_preserves_values() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..2].copy_from_slice(&[0x08, 0xD9]);
+        let mut cpu = Z80::default();
+        cpu.registers.a = 0x12;
+        cpu.registers.f = 0xA5;
+        cpu.alternate.a = 0x34;
+        cpu.alternate.f = 0x56;
+        cpu.registers.set_bc(0x1234);
+        cpu.alternate.b = 0xAB;
+        cpu.alternate.c = 0xCD;
+
+        assert_eq!(cpu.step(&mut bus), Ok(4)); // EX AF,AF'
+        assert_eq!((cpu.registers.a, cpu.registers.f), (0x34, 0x56));
+        assert_eq!((cpu.alternate.a, cpu.alternate.f), (0x12, 0xA5));
+        assert_eq!(cpu.step(&mut bus), Ok(4)); // EXX
+        assert_eq!(cpu.registers.bc(), 0xABCD);
+        assert_eq!((cpu.alternate.b, cpu.alternate.c), (0x12, 0x34));
+    }
+
+    #[test]
+    fn exchange_stack_hl_and_di_ei_update_state() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..3].copy_from_slice(&[0xE3, 0xF3, 0xFB]);
+        let mut cpu = Z80::default();
+        cpu.registers.sp = 0xC000;
+        cpu.registers.set_hl(0x1234);
+        bus.0[0xC000] = 0xCD;
+        bus.0[0xC001] = 0xAB;
+
+        assert_eq!(cpu.step(&mut bus), Ok(19));
+        assert_eq!(cpu.registers.hl(), 0xABCD);
+        assert_eq!((bus.0[0xC000], bus.0[0xC001]), (0x34, 0x12));
+        assert_eq!(cpu.step(&mut bus), Ok(4));
+        assert!(!cpu.iff1 && !cpu.iff2);
+        assert_eq!(cpu.step(&mut bus), Ok(4));
+        assert!(cpu.iff1 && cpu.iff2);
+        assert_eq!(cpu.ei_delay, 1);
     }
 
     #[test]
