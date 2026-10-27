@@ -48,6 +48,14 @@ impl From<PsgError> for MachineError {
     }
 }
 
+/// A VDP port write requested at a future nominal machine T-state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct VdpWriteEvent {
+    tstate: u64,
+    address: u16,
+    value: u8,
+}
+
 /// Internal split-borrow adapter that exposes SG-1000 devices to one Z80 step.
 struct Sg1000MachineBus<'a> {
     memory: &'a mut Sg1000Memory,
@@ -110,6 +118,7 @@ pub struct Sg1000Machine {
     pub psg: Sn76489,
     psg_tstate: u64,
     pending_psg_writes: Vec<PsgWriteEvent>,
+    pending_vdp_writes: Vec<VdpWriteEvent>,
 }
 
 impl Sg1000Machine {
@@ -134,6 +143,7 @@ impl Sg1000Machine {
             psg: Sn76489::new(psg_clock_hz, sample_rate)?,
             psg_tstate: 0,
             pending_psg_writes: Vec::new(),
+            pending_vdp_writes: Vec::new(),
         })
     }
 
@@ -150,8 +160,29 @@ impl Sg1000Machine {
             };
             self.cpu.step(&mut bus)?
         };
-        self.vdp.advance(u64::from(cycles));
         let end_tstate = self.cpu.total_tstates;
+        let mut vdp_tstate = tstate;
+        loop {
+            let next = self
+                .pending_vdp_writes
+                .iter()
+                .enumerate()
+                .filter(|(_, event)| event.tstate <= end_tstate)
+                .min_by_key(|(_, event)| event.tstate)
+                .map(|(index, _)| index);
+            let Some(index) = next else {
+                break;
+            };
+            let event = self.pending_vdp_writes.remove(index);
+            if event.tstate > vdp_tstate {
+                self.vdp.advance(event.tstate - vdp_tstate);
+                vdp_tstate = event.tstate;
+            }
+            self.vdp.write_port(event.address, event.value);
+        }
+        if end_tstate > vdp_tstate {
+            self.vdp.advance(end_tstate - vdp_tstate);
+        }
         loop {
             let next = self
                 .pending_psg_writes
@@ -201,7 +232,17 @@ impl Sg1000Machine {
     /// Capture a port write at an explicit nominal machine T-state.
     pub fn write_port_at(&mut self, address: u16, value: u8, tstate: u64) {
         match (address as u8) & 0xC1 {
-            0x80 | 0x81 => self.vdp.write_port(address, value),
+            0x80 | 0x81 => {
+                if tstate > self.cpu.total_tstates {
+                    self.pending_vdp_writes.push(VdpWriteEvent {
+                        tstate,
+                        address,
+                        value,
+                    });
+                } else {
+                    self.vdp.write_port(address, value);
+                }
+            }
             _ => {
                 self.io.write_port_at(address, value, tstate);
                 if (0x40..=0x7F).contains(&(address as u8)) {
@@ -351,6 +392,21 @@ mod tests {
         assert_eq!(machine.run_instructions(1), Ok(4));
         assert_eq!(machine.psg.tone_periods()[0], 5);
         assert_eq!(machine.psg_tstate, 8);
+    }
+
+    #[test]
+    fn future_vdp_writes_are_deferred_until_the_machine_reaches_their_tstate() {
+        let mut machine =
+            Sg1000Machine::new(&[0x00, 0x00, 0x76], MemoryConfig::default()).unwrap();
+        machine.write_port_at(0x81, 0x00, 8);
+        machine.write_port_at(0x81, 0x40, 8);
+        machine.write_port_at(0x80, 0xA5, 8);
+
+        assert_eq!(machine.vdp.vram()[0], 0);
+        assert_eq!(machine.run_instructions(1), Ok(4));
+        assert_eq!(machine.vdp.vram()[0], 0);
+        assert_eq!(machine.run_instructions(1), Ok(4));
+        assert_eq!(machine.vdp.vram()[0], 0xA5);
     }
 
     #[test]
