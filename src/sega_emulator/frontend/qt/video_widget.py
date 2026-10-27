@@ -1,7 +1,8 @@
-"""Vulkan-backed Qt Quick video surface with a raster fallback.
+"""Qt Quick video surface using Vulkan, Direct3D 11/12, or raster presentation.
 
 The emulator owns the framebuffer. This module only presents copies of completed
-frames and never reads or modifies VDP state.
+frames and never reads or modifies VDP state. Graphics API selection must happen
+before the first QQuickWindow is created.
 """
 
 from __future__ import annotations
@@ -21,6 +22,23 @@ from PySide6.QtQuick import (
 from PySide6.QtWidgets import QLabel, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget
 
 logger = logging.getLogger(__name__)
+
+
+def _graphics_api_for_mode(mode: str):
+    """Map a persisted backend name to Qt's native graphics API enum."""
+    api_map = {
+        "auto": QSGRendererInterface.GraphicsApi.Vulkan,
+        "vulkan": QSGRendererInterface.GraphicsApi.Vulkan,
+        "d3d11": QSGRendererInterface.GraphicsApi.Direct3D11,
+        "d3d12": QSGRendererInterface.GraphicsApi.Direct3D12,
+    }
+    try:
+        return api_map[mode]
+    except KeyError as exc:
+        raise ValueError(
+            "graphics API must be 'auto', 'vulkan', 'd3d11', 'd3d12', or 'raster'"
+        ) from exc
+
 
 _QML_SOURCE = """
 import QtQuick
@@ -102,12 +120,18 @@ class VideoWidget(QWidget):
     BASE_WIDTH = 256
     BASE_HEIGHT = 192
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, parent=None, *, graphics_api: str = "vulkan") -> None:
         super().__init__(parent)
+        if graphics_api not in {"auto", "vulkan", "d3d11", "d3d12", "raster"}:
+            raise ValueError("graphics_api must be auto, vulkan, d3d11, d3d12, or raster")
         self._source_image: QImage | None = None
         self._filter_mode = "nearest"
         self._integer_scale = True
-        self._vulkan_failed = False
+        self._graphics_failed = False
+        self._graphics_api = graphics_api
+        self._expected_graphics_api = (
+            None if graphics_api == "raster" else _graphics_api_for_mode(graphics_api)
+        )
         self._render_backend = "auto"
         self._quick_view = None
         self._quick_container = None
@@ -139,13 +163,20 @@ class VideoWidget(QWidget):
         layout.setSpacing(0)
         layout.addWidget(self._stack)
 
-        self._initialize_vulkan_view()
+        self._initialize_graphics_view()
 
-    def _initialize_vulkan_view(self) -> None:
-        """Request Vulkan before creating QQuickView and retain raster fallback."""
+    def _initialize_graphics_view(self) -> None:
+        """Create Qt Quick using the selected native API, with raster fallback."""
+        if self._graphics_api == "raster":
+            self._stack.setCurrentWidget(self._fallback)
+            logger.info(
+                "Renderização Qt raster selecionada",
+                extra={"event": "video_api_initialized", "graphics_api": "raster"},
+            )
+            return
         try:
-            # Qt documents that this must happen before the first QQuickWindow.
-            QQuickWindow.setGraphicsApi(QSGRendererInterface.GraphicsApi.Vulkan)
+            # Qt requires the API to be selected before the first QQuickWindow.
+            QQuickWindow.setGraphicsApi(self._expected_graphics_api)
             quick_view = QQuickView()
             quick_view.setColor(QColor("#080b10"))
             quick_view.setResizeMode(QQuickView.ResizeMode.SizeRootObjectToView)
@@ -181,46 +212,54 @@ class VideoWidget(QWidget):
             self.setFocusProxy(container)
             self._apply_render_settings()
             logger.info(
-                "Superfície de vídeo Vulkan criada; aguardando inicialização do driver",
-                extra={"event": "vulkan_video_surface_created"},
+                "Superfície Qt Quick criada; aguardando inicialização do driver",
+                extra={
+                    "event": "video_surface_created",
+                    "graphics_api_requested": self._graphics_api,
+                },
             )
         except Exception:
             logger.exception(
-                "Falha ao criar superfície Vulkan; usando renderização Qt raster"
+                "Falha ao criar superfície %s; usando renderização Qt raster",
+                self._graphics_api,
             )
-            self._vulkan_failed = True
+            self._graphics_failed = True
             self._stack.setCurrentWidget(self._fallback)
 
     def _on_scene_graph_initialized(self) -> None:
-        """Verify the API actually selected by Qt Quick after initialization."""
+        """Verify the actual Qt Quick API against the requested native API."""
         if self._quick_view is None:
             return
         try:
             actual_api = self._quick_view.rendererInterface().graphicsApi()
-            if actual_api != QSGRendererInterface.GraphicsApi.Vulkan:
+            if actual_api != self._expected_graphics_api:
                 self._on_scene_graph_error(
                     QQuickWindow.SceneGraphError.ContextNotAvailable,
                     f"Qt Quick inicializou com API gráfica inesperada: {actual_api}",
                 )
                 return
             logger.info(
-                "Renderização Vulkan inicializada",
-                extra={"event": "vulkan_video_initialized", "graphics_api": "Vulkan"},
+                "Renderização Qt Quick inicializada",
+                extra={
+                    "event": "video_api_initialized",
+                    "graphics_api_requested": self._graphics_api,
+                    "graphics_api_effective": str(actual_api),
+                },
             )
         except Exception:
             logger.exception("Falha ao confirmar a API gráfica efetiva")
-            self._vulkan_failed = True
+            self._graphics_failed = True
             self._stack.setCurrentWidget(self._fallback)
             self._quick_view.hide()
 
     def _on_scene_graph_error(self, error, message: str) -> None:
         """Switch to the known raster path if Vulkan cannot initialize."""
-        self._vulkan_failed = True
+        self._graphics_failed = True
         logger.error(
-            "Vulkan indisponível; usando saída Qt raster: %s",
+            "API gráfica indisponível; usando saída Qt raster: %s",
             message,
             extra={
-                "event": "vulkan_video_fallback",
+                "event": "graphics_video_fallback",
                 "graphics_error": str(error),
                 "graphics_message": message,
             },
@@ -247,10 +286,14 @@ class VideoWidget(QWidget):
         """
         if mode not in {"auto", "vulkan", "raster"}:
             raise ValueError("mode deve ser 'auto', 'vulkan' ou 'raster'")
-        if mode == "vulkan" and (self._vulkan_failed or self._quick_container is None):
+        if mode == "vulkan" and (
+            self._graphics_api not in {"auto", "vulkan"}
+            or self._graphics_failed
+            or self._quick_container is None
+        ):
             return False
         self._render_backend = mode
-        use_vulkan = mode == "vulkan" or (mode == "auto" and not self._vulkan_failed)
+        use_vulkan = mode == "vulkan" or (mode == "auto" and not self._graphics_failed)
         if use_vulkan and self._quick_container is not None:
             self._stack.setCurrentWidget(self._quick_container)
         else:
@@ -277,12 +320,12 @@ class VideoWidget(QWidget):
         self._source_image = QImage(image)
         if self._image_provider is not None:
             self._image_provider.set_image(self._source_image)
-        if self._qml_root is not None and not self._vulkan_failed:
+        if self._qml_root is not None and not self._graphics_failed:
             self._qml_root.setProperty("hasFrame", True)
             self._qml_root.setProperty(
                 "frameRevision", int(self._qml_root.property("frameRevision")) + 1
             )
-        if self._render_backend == "raster" or self._vulkan_failed:
+        if self._render_backend == "raster" or self._graphics_failed:
             self._refresh_raster_fallback()
             self._stack.setCurrentWidget(self._fallback)
         elif self._quick_container is not None:

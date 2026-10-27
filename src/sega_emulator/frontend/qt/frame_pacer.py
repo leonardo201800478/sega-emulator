@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 
 class FramePacer:
     """Limit frame starts to a target period without catch-up bursts.
@@ -23,7 +25,16 @@ class FramePacer:
 
     def should_run(self, now: float) -> bool:
         """Return whether a frame may start at the supplied monotonic time."""
-        if self._next_deadline is not None and now < self._next_deadline:
+        if self._next_deadline is None:
+            self._next_deadline = now + self.period_seconds
+            return True
+        if now < self._next_deadline:
             return False
-        self._next_deadline = now + self.period_seconds
+
+        # Keep a stable cadence relative to the original deadline. If a frame
+        # missed one or more slots, skip them rather than issuing catch-up bursts.
+        missed_slots = math.floor(
+            (now - self._next_deadline) / self.period_seconds
+        ) + 1
+        self._next_deadline += missed_slots * self.period_seconds
         return True

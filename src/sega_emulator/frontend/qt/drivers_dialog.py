@@ -27,6 +27,8 @@ AUDIO_DRIVERS = (
 VIDEO_DRIVERS = (
     ("Automático (Vulkan → Qt Raster)", "auto"),
     ("Vulkan (Qt Quick)", "vulkan"),
+    ("Direct3D 11 (Qt Quick)", "d3d11"),
+    ("Direct3D 12 (Qt Quick)", "d3d12"),
     ("Qt Raster", "raster"),
 )
 
@@ -57,7 +59,8 @@ class DriversDialog(QDialog):
         note = QLabel(
             "As escolhas são persistidas globalmente. O núcleo recebe snapshots "
             "normalizados de input; nenhuma API do sistema é chamada por instrução. "
-            "Somente APIs implementadas nesta versão são listadas."
+            "A API gráfica é definida na inicialização do Qt Quick: mudanças entre "
+            "Vulkan, Direct3D 11, Direct3D 12 e raster exigem reiniciar o emulador."
         )
         note.setWordWrap(True)
         layout.addWidget(note)
