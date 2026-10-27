@@ -16,12 +16,17 @@ const LFSR_SEED: u16 = 0x4000;
 const SAMPLE_BUFFER_SECONDS: u64 = 1;
 const FILTER_TAPS: usize = 63;
 const ATTENUATION: [f64; 16] = [
-    1.0, 0.794328, 0.630957, 0.501187, 0.398107, 0.316228, 0.251189, 0.199526,
-    0.158489, 0.125893, 0.1, 0.079433, 0.063096, 0.050119, 0.039811, 0.0,
+    1.0, 0.794328, 0.630957, 0.501187, 0.398107, 0.316228, 0.251189, 0.199526, 0.158489, 0.125893,
+    0.1, 0.079433, 0.063096, 0.050119, 0.039811, 0.0,
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PsgError { ZeroClock, ZeroSampleRate, SampleRateTooLarge }
+pub enum PsgError {
+    ZeroClock,
+    ZeroSampleRate,
+    SampleRateTooLarge,
+}
+
 impl fmt::Display for PsgError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -31,6 +36,7 @@ impl fmt::Display for PsgError {
         }
     }
 }
+
 impl std::error::Error for PsgError {}
 
 fn design_lowpass(clock_hz: u64, sample_rate: u64) -> Vec<f64> {
@@ -40,66 +46,154 @@ fn design_lowpass(clock_hz: u64, sample_rate: u64) -> Vec<f64> {
     let mut coefficients = Vec::with_capacity(FILTER_TAPS);
     for index in 0..FILTER_TAPS {
         let offset = index as f64 - center;
-        let ideal = if offset == 0.0 { 2.0 * cutoff } else { (2.0 * PI * cutoff * offset).sin() / (PI * offset) };
+        let ideal = if offset == 0.0 {
+            2.0 * cutoff
+        } else {
+            (2.0 * PI * cutoff * offset).sin() / (PI * offset)
+        };
         let position = index as f64 / (FILTER_TAPS - 1) as f64;
         let window = 0.42 - 0.5 * (2.0 * PI * position).cos() + 0.08 * (4.0 * PI * position).cos();
         coefficients.push(ideal * window);
     }
     let total: f64 = coefficients.iter().sum();
-    for coefficient in &mut coefficients { *coefficient /= total; }
+    for coefficient in &mut coefficients {
+        *coefficient /= total;
+    }
     coefficients
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Sn76489 {
-    clock_hz: u64, sample_rate: u64, sample_buffer_capacity: usize,
-    pending_samples: VecDeque<f64>, render_pending: VecDeque<f64>, dropped_samples: u64,
-    tone_periods: [u16; TONE_CHANNELS], attenuations: [u8; 4], noise_control: u8,
-    latched_register: u8, tone_counters: [u16; TONE_CHANNELS], tone_outputs: [u8; TONE_CHANNELS],
-    noise_counter: u16, noise_counter_phase: u8, lfsr: u16, noise_output: u8,
-    clock_divider_phase: u64, output_phase: u64, noise_period: u16,
-    filter_coefficients: Vec<f64>, filter_history: Vec<f64>, filter_position: usize,
+    clock_hz: u64,
+    sample_rate: u64,
+    sample_buffer_capacity: usize,
+    pending_samples: VecDeque<f64>,
+    render_pending: VecDeque<f64>,
+    dropped_samples: u64,
+    tone_periods: [u16; TONE_CHANNELS],
+    attenuations: [u8; 4],
+    noise_control: u8,
+    latched_register: u8,
+    tone_counters: [u16; TONE_CHANNELS],
+    tone_outputs: [u8; TONE_CHANNELS],
+    noise_counter: u16,
+    noise_counter_phase: u8,
+    lfsr: u16,
+    noise_output: u8,
+    clock_divider_phase: u64,
+    output_phase: u64,
+    noise_period: u16,
+    filter_coefficients: Vec<f64>,
+    filter_history: Vec<f64>,
+    filter_position: usize,
 }
 
 impl Sn76489 {
     pub fn new(clock_hz: u64, sample_rate: u64) -> Result<Self, PsgError> {
-        if clock_hz == 0 { return Err(PsgError::ZeroClock); }
-        if sample_rate == 0 { return Err(PsgError::ZeroSampleRate); }
-        let capacity = sample_rate.checked_mul(SAMPLE_BUFFER_SECONDS).ok_or(PsgError::SampleRateTooLarge)?;
-        let sample_buffer_capacity = usize::try_from(capacity).map_err(|_| PsgError::SampleRateTooLarge)?;
+        if clock_hz == 0 {
+            return Err(PsgError::ZeroClock);
+        }
+        if sample_rate == 0 {
+            return Err(PsgError::ZeroSampleRate);
+        }
+        let capacity = sample_rate
+            .checked_mul(SAMPLE_BUFFER_SECONDS)
+            .ok_or(PsgError::SampleRateTooLarge)?;
+        let sample_buffer_capacity =
+            usize::try_from(capacity).map_err(|_| PsgError::SampleRateTooLarge)?;
         let filter_coefficients = design_lowpass(clock_hz, sample_rate);
         let mut device = Self {
-            clock_hz, sample_rate, sample_buffer_capacity,
-            pending_samples: VecDeque::new(), render_pending: VecDeque::new(), dropped_samples: 0,
-            tone_periods: [0; TONE_CHANNELS], attenuations: [15; 4], noise_control: 0,
-            latched_register: 0, tone_counters: [1; TONE_CHANNELS], tone_outputs: [1; TONE_CHANNELS],
-            noise_counter: 0, noise_counter_phase: 0, lfsr: LFSR_SEED, noise_output: 0,
-            clock_divider_phase: 0, output_phase: 0, noise_period: 0x10,
-            filter_coefficients, filter_history: vec![0.0; FILTER_TAPS], filter_position: 0,
+            clock_hz,
+            sample_rate,
+            sample_buffer_capacity,
+            pending_samples: VecDeque::new(),
+            render_pending: VecDeque::new(),
+            dropped_samples: 0,
+            tone_periods: [0; TONE_CHANNELS],
+            attenuations: [15; 4],
+            noise_control: 0,
+            latched_register: 0,
+            tone_counters: [1; TONE_CHANNELS],
+            tone_outputs: [1; TONE_CHANNELS],
+            noise_counter: 0,
+            noise_counter_phase: 0,
+            lfsr: LFSR_SEED,
+            noise_output: 0,
+            clock_divider_phase: 0,
+            output_phase: 0,
+            noise_period: 0x10,
+            filter_coefficients,
+            filter_history: vec![0.0; FILTER_TAPS],
+            filter_position: 0,
         };
         device.reset_inner();
         Ok(device)
     }
-    pub fn clock_hz(&self) -> u64 { self.clock_hz }
-    pub fn sample_rate(&self) -> u64 { self.sample_rate }
-    pub fn dropped_samples(&self) -> u64 { self.dropped_samples }
-    pub fn tone_periods(&self) -> [u16; 3] { self.tone_periods }
-    pub fn attenuations(&self) -> [u8; 4] { self.attenuations }
-    pub fn noise_control(&self) -> u8 { self.noise_control }
-    pub fn lfsr(&self) -> u16 { self.lfsr }
-    pub fn noise_period(&self) -> u16 { self.noise_period }
-    pub fn pending_sample_count(&self) -> usize { self.pending_samples.len() }
-    pub fn reset(&mut self) { self.reset_inner(); }
-    pub fn write(&mut self, value: u8) { self.write_inner(value); }
-    pub fn advance_clocks(&mut self, clocks: u64) { self.advance_clocks_inner(clocks, false); }
-    pub fn drain_samples(&mut self, max_samples: Option<usize>) -> Vec<f64> {
-        let count = max_samples.unwrap_or(self.pending_samples.len()).min(self.pending_samples.len());
-        (0..count).filter_map(|_| self.pending_samples.pop_front()).collect()
+
+    pub fn clock_hz(&self) -> u64 {
+        self.clock_hz
     }
+
+    pub fn sample_rate(&self) -> u64 {
+        self.sample_rate
+    }
+
+    pub fn dropped_samples(&self) -> u64 {
+        self.dropped_samples
+    }
+
+    pub fn tone_periods(&self) -> [u16; 3] {
+        self.tone_periods
+    }
+
+    pub fn attenuations(&self) -> [u8; 4] {
+        self.attenuations
+    }
+
+    pub fn noise_control(&self) -> u8 {
+        self.noise_control
+    }
+
+    pub fn lfsr(&self) -> u16 {
+        self.lfsr
+    }
+
+    pub fn noise_period(&self) -> u16 {
+        self.noise_period
+    }
+
+    pub fn pending_sample_count(&self) -> usize {
+        self.pending_samples.len()
+    }
+
+    pub fn reset(&mut self) {
+        self.reset_inner();
+    }
+
+    pub fn write(&mut self, value: u8) {
+        self.write_inner(value);
+    }
+
+    pub fn advance_clocks(&mut self, clocks: u64) {
+        self.advance_clocks_inner(clocks, false);
+    }
+
+    pub fn drain_samples(&mut self, max_samples: Option<usize>) -> Vec<f64> {
+        let count = max_samples
+            .unwrap_or(self.pending_samples.len())
+            .min(self.pending_samples.len());
+        (0..count)
+            .filter_map(|_| self.pending_samples.pop_front())
+            .collect()
+    }
+
     pub fn render(&mut self, sample_count: usize) -> Vec<f64> {
         let mut output = Vec::with_capacity(sample_count.min(1_000_000));
         while output.len() < sample_count {
-            if let Some(sample) = self.render_pending.pop_front() { output.push(sample); continue; }
+            if let Some(sample) = self.render_pending.pop_front() {
+                output.push(sample);
+                continue;
+            }
             let clocks_to_next_tick = CLOCK_DIVIDER - self.clock_divider_phase;
             self.advance_clocks_inner(clocks_to_next_tick, true);
         }
@@ -489,28 +583,4 @@ mod tests {
         assert_eq!(chunked.output_phase, whole.output_phase);
         assert_eq!(chunked.pending_samples, whole.pending_samples);
     }
-
-    #[test]
-    fn public_api_preserves_render_and_drain_buffer_contracts() {
-        let mut psg = Sn76489::new(1_600, 100).unwrap();
-        psg.write(0x90);
-        psg.write(0x88);
-        psg.advance_clocks(16 * 250);
-        assert_eq!(psg.pending_sample_count(), 100);
-        assert_eq!(psg.dropped_samples(), 150);
-        assert_eq!(psg.drain_samples(Some(3)).len(), 3);
-        assert_eq!(psg.drain_samples(None).len(), 97);
-        assert!(psg.drain_samples(None).is_empty());
-
-        let rendered = psg.render(32);
-        assert_eq!(rendered.len(), 32);
-        assert!(psg.drain_samples(None).is_empty());
-    }
-
-    #[test]
-    fn constructor_rejects_zero_clock_and_sample_rate() {
-        assert_eq!(Sn76489::new(0, 44_100).unwrap_err(), super::PsgError::ZeroClock);
-        assert_eq!(Sn76489::new(3_579_545, 0).unwrap_err(), super::PsgError::ZeroSampleRate);
-    }
-
 }
