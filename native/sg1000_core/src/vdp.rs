@@ -103,15 +103,15 @@ impl Tms9918A {
         &self.framebuffer
     }
 
-        pub fn display_mode(&self) -> u8 {
+    pub fn display_mode(&self) -> u8 {
         display_mode(&self.registers)
     }
 
-        pub fn interrupt_pending(&self) -> bool {
+    pub fn interrupt_pending(&self) -> bool {
         (self.status & 0x80 != 0) && (self.registers[1] & 0x20 != 0)
     }
 
-        pub fn reset(&mut self, clear_vram: bool) {
+    pub fn reset(&mut self, clear_vram: bool) {
         self.registers.fill(0);
         self.status = 0x1F;
         self.address = 0;
