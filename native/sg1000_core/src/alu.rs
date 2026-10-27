@@ -29,9 +29,15 @@ pub fn add8(lhs: u8, rhs: u8) -> AluResult {
     let wide = u16::from(lhs) + u16::from(rhs);
     let value = wide as u8;
     let mut flags = sign_zero_xy(value);
-    if (lhs & 0x0f) + (rhs & 0x0f) > 0x0f { flags |= FLAG_H; }
-    if (!(lhs ^ rhs) & (lhs ^ value) & FLAG_S) != 0 { flags |= FLAG_PV; }
-    if wide > u16::from(u8::MAX) { flags |= FLAG_C; }
+    if (lhs & 0x0f) + (rhs & 0x0f) > 0x0f {
+        flags |= FLAG_H;
+    }
+    if (!(lhs ^ rhs) & (lhs ^ value) & FLAG_S) != 0 {
+        flags |= FLAG_PV;
+    }
+    if wide > u16::from(u8::MAX) {
+        flags |= FLAG_C;
+    }
     AluResult { value, flags }
 }
 
@@ -41,7 +47,9 @@ pub fn adc8(lhs: u8, rhs: u8, carry_in: bool) -> AluResult {
     let wide = u16::from(lhs) + u16::from(rhs) + carry;
     let value = wide as u8;
     let mut flags = sign_zero_xy(value);
-    if u16::from(lhs & 0x0f) + u16::from(rhs & 0x0f) + carry > 0x0f { flags |= FLAG_H; }
+    if u16::from(lhs & 0x0f) + u16::from(rhs & 0x0f) + carry > 0x0f {
+        flags |= FLAG_H;
+    }
     if (!(lhs ^ rhs) & (lhs ^ value) & FLAG_S) != 0 { flags |= FLAG_PV; }
     if wide > u16::from(u8::MAX) { flags |= FLAG_C; }
     AluResult { value, flags }
@@ -51,9 +59,15 @@ pub fn adc8(lhs: u8, rhs: u8, carry_in: bool) -> AluResult {
 pub fn sub8(lhs: u8, rhs: u8) -> AluResult {
     let value = lhs.wrapping_sub(rhs);
     let mut flags = sign_zero_xy(value) | FLAG_N;
-    if (lhs & 0x0f) < (rhs & 0x0f) { flags |= FLAG_H; }
-    if ((lhs ^ rhs) & (lhs ^ value) & FLAG_S) != 0 { flags |= FLAG_PV; }
-    if lhs < rhs { flags |= FLAG_C; }
+    if (lhs & 0x0f) < (rhs & 0x0f) {
+        flags |= FLAG_H;
+    }
+    if ((lhs ^ rhs) & (lhs ^ value) & FLAG_S) != 0 {
+        flags |= FLAG_PV;
+    }
+    if lhs < rhs {
+        flags |= FLAG_C;
+    }
     AluResult { value, flags }
 }
 
@@ -63,25 +77,37 @@ pub fn sbc8(lhs: u8, rhs: u8, carry_in: bool) -> AluResult {
     let subtrahend = u16::from(rhs) + borrow;
     let value = lhs.wrapping_sub(rhs).wrapping_sub(u8::from(carry_in));
     let mut flags = sign_zero_xy(value) | FLAG_N;
-    if u16::from(lhs & 0x0f) < u16::from(rhs & 0x0f) + borrow { flags |= FLAG_H; }
+    if u16::from(lhs & 0x0f) < u16::from(rhs & 0x0f) + borrow {
+        flags |= FLAG_H;
+    }
     if ((lhs ^ rhs) & (lhs ^ value) & FLAG_S) != 0 { flags |= FLAG_PV; }
-    if u16::from(lhs) < subtrahend { flags |= FLAG_C; }
+    if u16::from(lhs) < subtrahend {
+        flags |= FLAG_C;
+    }
     AluResult { value, flags }
 }
 
 /// Executes Z80 AND r, setting H and even-parity flags.
-pub fn and8(lhs: u8, rhs: u8) -> AluResult { logic_result(lhs & rhs, FLAG_H) }
+pub fn and8(lhs: u8, rhs: u8) -> AluResult {
+    logic_result(lhs & rhs, FLAG_H)
+}
 
 /// Executes Z80 OR r.
-pub fn or8(lhs: u8, rhs: u8) -> AluResult { logic_result(lhs | rhs, 0) }
+pub fn or8(lhs: u8, rhs: u8) -> AluResult {
+    logic_result(lhs | rhs, 0)
+}
 
 /// Executes Z80 XOR r.
-pub fn xor8(lhs: u8, rhs: u8) -> AluResult { logic_result(lhs ^ rhs, 0) }
+pub fn xor8(lhs: u8, rhs: u8) -> AluResult {
+    logic_result(lhs ^ rhs, 0)
+}
 
 #[inline]
 fn logic_result(value: u8, extra_flags: u8) -> AluResult {
     let mut flags = sign_zero_xy(value) | extra_flags;
-    if value.count_ones().is_multiple_of(2) { flags |= FLAG_PV; }
+    if value.count_ones().is_multiple_of(2) {
+        flags |= FLAG_PV;
+    }
     AluResult { value, flags }
 }
 
@@ -90,8 +116,12 @@ fn logic_result(value: u8, extra_flags: u8) -> AluResult {
 pub fn cp8(lhs: u8, rhs: u8) -> AluResult {
     let result = lhs.wrapping_sub(rhs);
     let mut flags = (rhs & FLAG_XY) | FLAG_N;
-    if result & FLAG_S != 0 { flags |= FLAG_S; }
-    if result == 0 { flags |= FLAG_Z; }
+    if result & FLAG_S != 0 {
+        flags |= FLAG_S;
+    }
+    if result == 0 {
+        flags |= FLAG_Z;
+    }
     if (lhs & 0x0f) < (rhs & 0x0f) { flags |= FLAG_H; }
     if ((lhs ^ rhs) & (lhs ^ result) & FLAG_S) != 0 { flags |= FLAG_PV; }
     if lhs < rhs { flags |= FLAG_C; }
