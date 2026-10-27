@@ -143,7 +143,6 @@ def test_native_first_provider_surfaces_xinput_disconnect_before_fallback() -> N
     assert fallback.closed
 
 
-
 def test_explicit_xinput_preference_does_not_fall_back_to_sdl() -> None:
     native = XInputControllerInput(library=FakeXInputLibrary({}), clock=FakeClock())
     fallback = FakeFallback()
