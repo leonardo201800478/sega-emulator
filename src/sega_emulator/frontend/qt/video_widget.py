@@ -134,7 +134,7 @@ class VideoWidget(QWidget):
         self._expected_graphics_api = (
             None if graphics_api == "raster" else _graphics_api_for_mode(graphics_api)
         )
-        self._render_backend = "auto"
+        self._render_backend = "raster" if graphics_api == "raster" else "auto"
         self._quick_view = None
         self._quick_container = None
         self._qml_root = None
@@ -255,7 +255,7 @@ class VideoWidget(QWidget):
             self._quick_view.hide()
 
     def _on_scene_graph_error(self, error, message: str) -> None:
-        """Switch to the known raster path if Vulkan cannot initialize."""
+        """Switch to the known raster path if the selected graphics API fails."""
         self._graphics_failed = True
         logger.error(
             "API gráfica indisponível; usando saída Qt raster: %s",

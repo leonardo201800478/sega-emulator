@@ -60,3 +60,15 @@ def test_native_graphics_api_mapping(mode, expected) -> None:
 def test_raster_is_not_a_hardware_graphics_api() -> None:
     with pytest.raises(ValueError, match="graphics API"):
         _graphics_api_for_mode("raster")
+
+
+def test_raster_startup_displays_published_frame(qt_app) -> None:
+    widget = VideoWidget(graphics_api="raster")
+    widget.resize(768, 576)
+    frame = QImage(256, 192, QImage.Format.Format_RGB888)
+    frame.fill(0)
+    widget.set_framebuffer(frame)
+
+    assert widget._render_backend == "raster"
+    assert not widget._fallback.pixmap().isNull()
+    widget.close()
