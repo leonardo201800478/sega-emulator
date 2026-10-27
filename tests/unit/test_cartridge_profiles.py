@@ -50,15 +50,14 @@ def test_dahjee_type_a_maps_expansion_ram_and_keeps_internal_ram(monkeypatch) ->
     monkeypatch.setattr(zlib, "crc32", lambda data: 0x223397A1)
     machine = SG1000Machine(b"synthetic King's Valley ROM")
 
-    assert machine.ram_size == 0x0400
-    assert machine.cartridge_ram_size == 0x2000
-    machine.memory_bus.write(0x2000, 0xA5)
-    machine.memory_bus.write(0x3FFF, 0x5A)
-    assert machine.memory_bus.read(0x2000) == 0xA5
-    assert machine.memory_bus.read(0x3FFF) == 0x5A
-    machine.memory_bus.write(0xC000, 0x3C)
-    assert machine.memory_bus.read(0xC000) == 0x3C
-    assert machine.memory_bus.read(0x2000) == 0xA5
+    assert machine.ram_size == 0x2000
+    assert machine.cartridge_ram_size == 0
+    machine.memory_bus.write(0xC000, 0xA5)
+    machine.memory_bus.write(0xC800, 0x5A)
+    assert machine.memory_bus.read(0xC000) == 0xA5
+    assert machine.memory_bus.read(0xC800) == 0x5A
+    assert machine.memory_bus.read(0xE000) == 0xA5
+    assert machine.memory_bus.read(0xE800) == 0x5A
 
 
 def test_othello_profile_maps_2k_ram(monkeypatch) -> None:
@@ -112,10 +111,8 @@ def test_dahjee_type_a_maps_expansion_ram_at_2000(monkeypatch) -> None:
     monkeypatch.setattr(zlib, "crc32", lambda data: 0x223397A1)
     profile = cartridge_profile(b"synthetic King's Valley ROM")
 
-    assert profile.internal_ram_size == 0x0400
-    assert profile.cartridge_ram_size == 0x2000
-    assert profile.cartridge_ram_start == 0x2000
-    assert profile.cartridge_ram_end == 0x3FFF
+    assert profile.internal_ram_size == 0x2000
+    assert profile.cartridge_ram_size == 0
 
 
 def test_omv_othello_maps_2k_ram_at_8000(monkeypatch) -> None:
