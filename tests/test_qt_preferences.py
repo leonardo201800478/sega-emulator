@@ -35,6 +35,10 @@ def test_defaults_are_valid_and_stable() -> None:
     assert preferences.video_filter == "nearest"
     assert preferences.integer_scale is True
     assert preferences.sprite_limit_enabled is True
+    assert preferences.vsync_mode == "on"
+    assert preferences.vrr_mode == "driver"
+    assert preferences.av_sync_mode == "low_latency"
+    assert preferences.crt_scanline_intensity == 40
 
 
 @pytest.mark.parametrize(
@@ -64,6 +68,10 @@ def test_load_recovers_from_corrupt_or_legacy_values() -> None:
             "video_filter": "crt",
             "integer_scale": "yes",
             "sprite_limit_enabled": "off",
+            "vsync_mode": "invalid",
+            "vrr_mode": "invalid",
+            "av_sync_mode": "invalid",
+            "crt_scanline_intensity": 101,
         }
     )
 
@@ -80,6 +88,10 @@ def test_load_recovers_from_corrupt_or_legacy_values() -> None:
     assert preferences.video_filter == "nearest"
     assert preferences.integer_scale is True
     assert preferences.sprite_limit_enabled is False
+    assert preferences.vsync_mode == "on"
+    assert preferences.vrr_mode == "driver"
+    assert preferences.av_sync_mode == "low_latency"
+    assert preferences.crt_scanline_intensity == 40
 
 
 def test_save_and_load_round_trip() -> None:
@@ -97,6 +109,13 @@ def test_save_and_load_round_trip() -> None:
         video_filter="bilinear",
         integer_scale=False,
         sprite_limit_enabled=False,
+        vsync_mode="adaptive",
+        vrr_mode="prefer",
+        av_sync_mode="audio_clock",
+        crt_scanline_intensity=55,
+        crt_scanline_thickness=60,
+        crt_phosphor_mask=30,
+        crt_curvature=5,
     )
     settings = MemorySettings()
 
