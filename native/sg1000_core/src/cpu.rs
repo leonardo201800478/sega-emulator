@@ -527,11 +527,7 @@ impl Z80 {
 
     /// Execute DD/FD-prefixed instructions for IX/IY. Prefixes that do not
     /// affect an instruction are ignored while retaining their extra M1 cost.
-    fn execute_indexed<B: CpuBus>(
-        &mut self,
-        bus: &mut B,
-        prefix: u8,
-    ) -> Result<u32, CpuError> {
+    fn execute_indexed<B: CpuBus>(&mut self, bus: &mut B, prefix: u8) -> Result<u32, CpuError> {
         let opcode = self.fetch_opcode(bus);
         if opcode == 0xDD || opcode == 0xFD {
             let cycles = self.execute_indexed(bus, opcode)?;
@@ -628,14 +624,19 @@ impl Z80 {
                 10
             }
             0x24 | 0x25 | 0x26 | 0x2C | 0x2D | 0x2E => {
-                let code = if matches!(opcode, 0x24 | 0x25 | 0x26) { 4 } else { 5 };
+                let code = if matches!(opcode, 0x24 | 0x25 | 0x26) {
+                    4
+                } else {
+                    5
+                };
                 if opcode == 0x26 || opcode == 0x2E {
                     let value = self.fetch8(bus);
                     self.write_index_register(prefix, code, value, true);
                     11
                 } else {
                     let old = self.read_index_register(prefix, code, true);
-                    let value = self.increment_decrement_value(old, opcode == 0x25 || opcode == 0x2D);
+                    let value =
+                        self.increment_decrement_value(old, opcode == 0x25 || opcode == 0x2D);
                     self.write_index_register(prefix, code, value, true);
                     8
                 }
@@ -709,12 +710,7 @@ impl Z80 {
         Ok(cycles)
     }
 
-    fn execute_indexed_cb<B: CpuBus>(
-        &mut self,
-        bus: &mut B,
-        address: u16,
-        opcode: u8,
-    ) -> u32 {
+    fn execute_indexed_cb<B: CpuBus>(&mut self, bus: &mut B, address: u16, opcode: u8) -> u32 {
         let register = opcode & 7;
         let operation = opcode >> 6;
         let bit = (opcode >> 3) & 7;
@@ -751,7 +747,8 @@ impl Z80 {
             }
             1 => {
                 let bit_clear = value & (1 << bit) == 0;
-                let mut flags = (self.registers.f & FLAG_C) | FLAG_H | ((address >> 8) as u8 & FLAG_XY);
+                let mut flags =
+                    (self.registers.f & FLAG_C) | FLAG_H | ((address >> 8) as u8 & FLAG_XY);
                 if bit_clear {
                     flags |= FLAG_Z | FLAG_PV;
                 }
@@ -832,13 +829,21 @@ impl Z80 {
     }
 
     fn increment_decrement_value(&mut self, old: u8, decrement: bool) -> u8 {
-        let value = if decrement { old.wrapping_sub(1) } else { old.wrapping_add(1) };
+        let value = if decrement {
+            old.wrapping_sub(1)
+        } else {
+            old.wrapping_add(1)
+        };
         let carry = self.registers.f & FLAG_C;
         let mut flags = (value & (FLAG_S | FLAG_XY)) | carry;
         if value == 0 {
             flags |= FLAG_Z;
         }
-        if if decrement { old & 0x0F == 0 } else { old & 0x0F == 0x0F } {
+        if if decrement {
+            old & 0x0F == 0
+        } else {
+            old & 0x0F == 0x0F
+        } {
             flags |= FLAG_H;
         }
         if if decrement { old == 0x80 } else { old == 0x7F } {
