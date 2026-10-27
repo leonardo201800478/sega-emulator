@@ -261,7 +261,6 @@ mod tests {
     }
 }
 
-
 impl sega_z80_bus::CpuBus for SmsMemory {
     #[inline]
     fn read_memory(&mut self, address: u16) -> u8 {
