@@ -39,6 +39,8 @@ def test_defaults_are_valid_and_stable() -> None:
     assert preferences.vrr_mode == "driver"
     assert preferences.av_sync_mode == "low_latency"
     assert preferences.crt_scanline_intensity == 40
+    assert preferences.crt_signal_mode == "rgb"
+    assert preferences.crt_signal_mode == "rgb"
 
 
 @pytest.mark.parametrize(
@@ -65,7 +67,8 @@ def test_load_recovers_from_corrupt_or_legacy_values() -> None:
             "audio_sample_rate": 96000,
             "audio_buffer_size": 300,
             "audio_volume": 150,
-            "video_filter": "crt",
+            "video_filter": "unknown",
+            "crt_signal_mode": "invalid",
             "integer_scale": "yes",
             "sprite_limit_enabled": "off",
             "vsync_mode": "invalid",
@@ -106,7 +109,7 @@ def test_save_and_load_round_trip() -> None:
         audio_sample_rate=48_000,
         audio_buffer_size=1024,
         audio_volume=73,
-        video_filter="bilinear",
+        video_filter="crt_ntsc",
         integer_scale=False,
         sprite_limit_enabled=False,
         vsync_mode="adaptive",
@@ -116,6 +119,7 @@ def test_save_and_load_round_trip() -> None:
         crt_scanline_thickness=60,
         crt_phosphor_mask=30,
         crt_curvature=5,
+        crt_signal_mode="composite",
     )
     settings = MemorySettings()
 
