@@ -46,6 +46,34 @@ def test_type_b_machine_maps_8k_ram_and_mirrors_second_8k(monkeypatch) -> None:
     assert machine.memory_bus.read(0xE800) == 0x5A
 
 
+def test_dahjee_type_a_maps_expansion_ram_and_keeps_internal_ram(monkeypatch) -> None:
+    monkeypatch.setattr(zlib, "crc32", lambda data: 0x223397A1)
+    machine = SG1000Machine(b"synthetic King's Valley ROM")
+
+    assert machine.ram_size == 0x0400
+    assert machine.cartridge_ram_size == 0x2000
+    machine.memory_bus.write(0x2000, 0xA5)
+    machine.memory_bus.write(0x3FFF, 0x5A)
+    assert machine.memory_bus.read(0x2000) == 0xA5
+    assert machine.memory_bus.read(0x3FFF) == 0x5A
+    assert machine.memory_bus.read(0x4000) == ord("s")
+    machine.memory_bus.write(0xC000, 0x3C)
+    assert machine.memory_bus.read(0xC000) == 0x3C
+    assert machine.memory_bus.read(0x2000) == 0xA5
+
+
+def test_othello_profile_maps_2k_ram(monkeypatch) -> None:
+    monkeypatch.setattr(zlib, "crc32", lambda data: 0xAF4F14BC)
+    machine = SG1000Machine(b"synthetic Othello ROM")
+
+    assert machine.cartridge_ram_size == 0x0800
+    machine.memory_bus.write(0x8000, 0xA5)
+    machine.memory_bus.write(0x87FF, 0x5A)
+    assert machine.memory_bus.read(0x8000) == 0xA5
+    assert machine.memory_bus.read(0x8800) == 0xA5
+    assert machine.memory_bus.read(0x8FFF) == 0x5A
+
+
 def test_standard_machine_keeps_1k_ram_mirroring(monkeypatch) -> None:
     monkeypatch.setattr(zlib, "crc32", lambda data: 0x12345678)
     machine = SG1000Machine(b"synthetic test ROM")
