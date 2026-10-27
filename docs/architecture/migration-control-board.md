@@ -65,7 +65,8 @@ A CI workflow only validates the commands it actually executes. A green Python w
 - `sg1000_core/src/vdp.rs` is now Python-independent: TMS9918A state, VRAM/control ports, scanline/VBlank timing, framebuffer rendering, and sprite helpers live in Rust types.
 - `Sg1000Machine` advances the VDP and SN76489 from nominal instruction T-states; CPU `IN A,(n)` and `OUT (n),A` are wired through the machine bus.
 - The PSG default clock profile is configurable but provisional; instruction-boundary timing is not cycle-exact.
-- Remaining gate: complete the Z80 instruction/prefix/interrupt implementation, verify hardware clocks and VDP behavior with independent references, validate the extension boundary and run all required CI checks on the final candidate SHA. Do not merge or claim standalone completion until those checks pass.
+- PR #126 acceptance is an incremental Rust slice: native-core regressions, workspace quality checks, determinism checks, and review on the final candidate SHA. This PR does not complete Gate 2.
+- The standalone gate remains open until the Z80 instruction/prefix/interrupt implementation is complete, hardware clocks and VDP behavior are checked against independent references, and the PyO3/Qt boundary passes Release/Maturin and parity validation. Do not claim standalone completion or move Python production cores to `legacy/` before those gates pass.
 
 ## Change log
 - 2026-10-27: PR #126 expanded the native SG-1000 slice with a PyO3-free TMS9918A, VDP raster advancement, SN76489 clock/sample integration, and Z80 immediate IN/OUT routing. Validation is in progress; see `sg1000-native-consolidation.md`.
