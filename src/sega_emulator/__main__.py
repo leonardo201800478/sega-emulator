@@ -139,8 +139,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             summary = {
                 "schema_version": 1,
                 "mode": "headless",
-                "rom": {"path": str(loaded.source_path), "member": loaded.member_name,
-                        "sha256": loaded.sha256, "size_bytes": len(loaded.data)},
+                "rom": {
+                    "path": str(loaded.source_path),
+                    "member": loaded.member_name,
+                    "sha256": loaded.sha256,
+                    "size_bytes": len(loaded.data),
+                },
                 "measurement": {
                     "elapsed_seconds": round(elapsed_seconds, 9),
                     "frames": frame_delta,
@@ -151,15 +155,26 @@ def main(argv: Sequence[str] | None = None) -> int:
                     "tstates_total": machine.total_tstates,
                     "speed_percent_of_nominal_z80_clock": round(speed_percent, 6),
                 },
-                "state": {"frame": machine.vdp.frame_number, "pc": machine.cpu.pc,
-                          "scanline": machine.vdp.scanline, "status": machine.vdp.status},
+                "state": {
+                    "frame": machine.vdp.frame_number,
+                    "pc": machine.cpu.pc,
+                    "scanline": machine.vdp.scanline,
+                    "status": machine.vdp.status,
+                },
             }
-            logger.info("Métricas da execução headless", extra={
-                "event": "headless_metrics", "elapsed_ms": round(elapsed_seconds * 1000, 3),
-                "frame": frame_delta, "instructions": instruction_delta,
-                "tstates": tstates_delta, "fps": summary["measurement"]["frames_per_second"],
-                "speed_percent": round(speed_percent, 6), "rom_sha256": loaded.sha256,
-            })
+            logger.info(
+                "Métricas da execução headless",
+                extra={
+                    "event": "headless_metrics",
+                    "elapsed_ms": round(elapsed_seconds * 1000, 3),
+                    "frame": frame_delta,
+                    "instructions": instruction_delta,
+                    "tstates": tstates_delta,
+                    "fps": summary["measurement"]["frames_per_second"],
+                    "speed_percent": round(speed_percent, 6),
+                    "rom_sha256": loaded.sha256,
+                },
+            )
             if args.summary_json is not None:
                 args.summary_json.parent.mkdir(parents=True, exist_ok=True)
                 args.summary_json.write_text(
