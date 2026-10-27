@@ -131,6 +131,9 @@ impl Z80 {
 
         let address = self.registers.pc;
         let opcode = self.fetch_opcode(bus);
+        if opcode == 0xDD || opcode == 0xFD {
+            return self.execute_indexed(bus, opcode);
+        }
         let cycles = match opcode {
             0x00 => 4, // NOP
             0x08 => {
@@ -520,6 +523,332 @@ impl Z80 {
             self.ei_delay -= 1;
         }
         Ok(cycles)
+    }
+
+    /// Execute DD/FD-prefixed instructions for IX/IY. Prefixes that do not
+    /// affect an instruction are ignored while retaining their extra M1 cost.
+    fn execute_indexed<B: CpuBus>(
+        &mut self,
+        bus: &mut B,
+        prefix: u8,
+    ) -> Result<u32, CpuError> {
+        let opcode = self.fetch_opcode(bus);
+        if opcode == 0xDD || opcode == 0xFD {
+            let cycles = self.execute_indexed(bus, opcode)?;
+            self.total_tstates += 4;
+            return Ok(cycles + 4);
+        }
+
+        let index = if prefix == 0xDD { self.ix } else { self.iy };
+        let cycles = match opcode {
+            0xCB => {
+                let displacement = self.fetch8(bus) as i8;
+                let cb_opcode = self.fetch8(bus);
+                let address = index.wrapping_add_signed(i16::from(displacement));
+                self.wz = address;
+                self.execute_indexed_cb(bus, address, cb_opcode)
+            }
+            0x21 => {
+                let value = self.fetch16(bus);
+                self.set_index_value(prefix, value);
+                14
+            }
+            0x22 | 0x2A => {
+                let address = self.fetch16(bus);
+                self.wz = address.wrapping_add(1);
+                if opcode == 0x22 {
+                    let [low, high] = index.to_le_bytes();
+                    bus.write_memory(address, low);
+                    bus.write_memory(address.wrapping_add(1), high);
+                } else {
+                    let low = bus.read_memory(address);
+                    let high = bus.read_memory(address.wrapping_add(1));
+                    self.set_index_value(prefix, u16::from_le_bytes([low, high]));
+                }
+                20
+            }
+            0x23 | 0x2B => {
+                self.set_index_value(
+                    prefix,
+                    if opcode == 0x23 {
+                        index.wrapping_add(1)
+                    } else {
+                        index.wrapping_sub(1)
+                    },
+                );
+                10
+            }
+            0x09 | 0x19 | 0x29 | 0x39 => {
+                let pair_code = (opcode >> 4) & 3;
+                let operand = if pair_code == 2 {
+                    index
+                } else {
+                    self.read_register_pair(pair_code)
+                };
+                let result = u32::from(index) + u32::from(operand);
+                let result16 = result as u16;
+                let mut flags = self.registers.f & (FLAG_S | FLAG_Z | FLAG_PV);
+                flags |= ((result16 >> 8) as u8) & FLAG_XY;
+                if u32::from(index & 0x0FFF) + u32::from(operand & 0x0FFF) > 0x0FFF {
+                    flags |= FLAG_H;
+                }
+                if result > u32::from(u16::MAX) {
+                    flags |= FLAG_C;
+                }
+                self.set_index_value(prefix, result16);
+                self.registers.f = flags;
+                self.wz = index.wrapping_add(1);
+                15
+            }
+            0xE1 => {
+                self.set_index_value(prefix, self.pop16(bus));
+                14
+            }
+            0xE5 => {
+                self.push16(bus, index);
+                15
+            }
+            0xE3 => {
+                let low = bus.read_memory(self.registers.sp);
+                let high_address = self.registers.sp.wrapping_add(1);
+                let high = bus.read_memory(high_address);
+                let [old_low, old_high] = index.to_le_bytes();
+                bus.write_memory(high_address, old_high);
+                bus.write_memory(self.registers.sp, old_low);
+                self.set_index_value(prefix, u16::from_le_bytes([low, high]));
+                self.wz = u16::from_le_bytes([low, high]);
+                23
+            }
+            0xE9 => {
+                self.registers.pc = index;
+                8
+            }
+            0xF9 => {
+                self.registers.sp = index;
+                10
+            }
+            0x24 | 0x25 | 0x26 | 0x2C | 0x2D | 0x2E => {
+                let code = if matches!(opcode, 0x24 | 0x25 | 0x26) { 4 } else { 5 };
+                if opcode == 0x26 || opcode == 0x2E {
+                    let value = self.fetch8(bus);
+                    self.write_index_register(prefix, code, value, true);
+                    11
+                } else {
+                    let old = self.read_index_register(prefix, code, true);
+                    let value = self.increment_decrement_value(old, opcode == 0x25 || opcode == 0x2D);
+                    self.write_index_register(prefix, code, value, true);
+                    8
+                }
+            }
+            0x34 | 0x35 => {
+                let displacement = self.fetch8(bus) as i8;
+                let address = index.wrapping_add_signed(i16::from(displacement));
+                self.wz = address;
+                let old = bus.read_memory(address);
+                let value = self.increment_decrement_value(old, opcode == 0x35);
+                bus.write_memory(address, value);
+                23
+            }
+            0x36 => {
+                let displacement = self.fetch8(bus) as i8;
+                let value = self.fetch8(bus);
+                let address = index.wrapping_add_signed(i16::from(displacement));
+                self.wz = address;
+                bus.write_memory(address, value);
+                19
+            }
+            0x40..=0x7F if opcode != 0x76 => {
+                let destination = (opcode >> 3) & 7;
+                let source = opcode & 7;
+                if destination == 6 || source == 6 {
+                    let displacement = self.fetch8(bus) as i8;
+                    let address = index.wrapping_add_signed(i16::from(displacement));
+                    self.wz = address;
+                    if source == 6 {
+                        let value = bus.read_memory(address);
+                        self.write_index_register(prefix, destination, value, false);
+                    } else {
+                        let value = self.read_index_register(bus, prefix, source, false);
+                        bus.write_memory(address, value);
+                    }
+                    19
+                } else {
+                    let value = self.read_index_register(bus, prefix, source, true);
+                    self.write_index_register(prefix, destination, value, true);
+                    8
+                }
+            }
+            0x80..=0xBF => {
+                let source = opcode & 7;
+                let value = if source == 6 {
+                    let displacement = self.fetch8(bus) as i8;
+                    let address = index.wrapping_add_signed(i16::from(displacement));
+                    self.wz = address;
+                    bus.read_memory(address)
+                } else {
+                    self.read_index_register(bus, prefix, source, true)
+                };
+                self.apply_alu_operation((opcode >> 3) & 7, value);
+                if source == 6 { 19 } else { 8 }
+            }
+            _ => {
+                // Rewind the already-read opcode and its refresh increment so
+                // the base decoder handles this unaffected instruction once.
+                self.registers.pc = self.registers.pc.wrapping_sub(1);
+                self.r = (self.r & 0x80) | (self.r.wrapping_sub(1) & 0x7F);
+                let base_cycles = self.step(bus)?;
+                self.total_tstates += 4;
+                return Ok(base_cycles + 4);
+            }
+        };
+
+        self.total_tstates += u64::from(cycles);
+        if self.ei_delay > 0 {
+            self.ei_delay -= 1;
+        }
+        Ok(cycles)
+    }
+
+    fn execute_indexed_cb<B: CpuBus>(
+        &mut self,
+        bus: &mut B,
+        address: u16,
+        opcode: u8,
+    ) -> u32 {
+        let register = opcode & 7;
+        let operation = opcode >> 6;
+        let bit = (opcode >> 3) & 7;
+        let value = bus.read_memory(address);
+        match operation {
+            0 => {
+                let carry_in = self.registers.f & FLAG_C != 0;
+                let (result, carry) = match bit {
+                    0 => (value.rotate_left(1), value & 0x80 != 0),
+                    1 => (value.rotate_right(1), value & 1 != 0),
+                    2 => ((value << 1) | u8::from(carry_in), value & 0x80 != 0),
+                    3 => ((value >> 1) | (u8::from(carry_in) << 7), value & 1 != 0),
+                    4 => (value << 1, value & 0x80 != 0),
+                    5 => ((value >> 1) | (value & 0x80), value & 1 != 0),
+                    6 => ((value << 1) | 1, value & 0x80 != 0),
+                    _ => (value >> 1, value & 1 != 0),
+                };
+                bus.write_memory(address, result);
+                if register != 6 {
+                    self.write_register(bus, register, result);
+                }
+                let mut flags = result & (FLAG_S | FLAG_XY);
+                if result == 0 {
+                    flags |= FLAG_Z;
+                }
+                if result.count_ones().is_multiple_of(2) {
+                    flags |= FLAG_PV;
+                }
+                if carry {
+                    flags |= FLAG_C;
+                }
+                self.registers.f = flags;
+                23
+            }
+            1 => {
+                let bit_clear = value & (1 << bit) == 0;
+                let mut flags = (self.registers.f & FLAG_C) | FLAG_H | ((address >> 8) as u8 & FLAG_XY);
+                if bit_clear {
+                    flags |= FLAG_Z | FLAG_PV;
+                }
+                if bit == 7 && !bit_clear {
+                    flags |= FLAG_S;
+                }
+                self.registers.f = flags;
+                20
+            }
+            2 | 3 => {
+                let result = if operation == 2 {
+                    value & !(1 << bit)
+                } else {
+                    value | (1 << bit)
+                };
+                bus.write_memory(address, result);
+                if register != 6 {
+                    self.write_register(bus, register, result);
+                }
+                23
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn index_value(&self, prefix: u8) -> u16 {
+        if prefix == 0xDD { self.ix } else { self.iy }
+    }
+
+    fn set_index_value(&mut self, prefix: u8, value: u16) {
+        if prefix == 0xDD {
+            self.ix = value;
+        } else {
+            self.iy = value;
+        }
+    }
+
+    fn read_index_register<B: CpuBus>(
+        &mut self,
+        bus: &mut B,
+        prefix: u8,
+        code: u8,
+        halves: bool,
+    ) -> u8 {
+        let index = self.index_value(prefix);
+        match (halves, code) {
+            (true, 4) => (index >> 8) as u8,
+            (true, 5) => index as u8,
+            _ => self.read_register(bus, code),
+        }
+    }
+
+    fn write_index_register(&mut self, prefix: u8, code: u8, value: u8, halves: bool) {
+        let index = self.index_value(prefix);
+        match (halves, code) {
+            (true, 4) => self.set_index_value(prefix, (u16::from(value) << 8) | (index & 0x00FF)),
+            (true, 5) => self.set_index_value(prefix, (index & 0xFF00) | u16::from(value)),
+            _ => {
+                // The only non-index destinations reaching this path are H/L;
+                // memory operands are handled separately by the indexed decoder.
+                if code == 4 {
+                    self.registers.h = value;
+                } else if code == 5 {
+                    self.registers.l = value;
+                } else if code == 7 {
+                    self.registers.a = value;
+                } else if code == 0 {
+                    self.registers.b = value;
+                } else if code == 1 {
+                    self.registers.c = value;
+                } else if code == 2 {
+                    self.registers.d = value;
+                } else if code == 3 {
+                    self.registers.e = value;
+                }
+            }
+        }
+    }
+
+    fn increment_decrement_value(&mut self, old: u8, decrement: bool) -> u8 {
+        let value = if decrement { old.wrapping_sub(1) } else { old.wrapping_add(1) };
+        let carry = self.registers.f & FLAG_C;
+        let mut flags = (value & (FLAG_S | FLAG_XY)) | carry;
+        if value == 0 {
+            flags |= FLAG_Z;
+        }
+        if if decrement { old & 0x0F == 0 } else { old & 0x0F == 0x0F } {
+            flags |= FLAG_H;
+        }
+        if if decrement { old == 0x80 } else { old == 0x7F } {
+            flags |= FLAG_PV;
+        }
+        if decrement {
+            flags |= FLAG_N;
+        }
+        self.registers.f = flags;
+        value
     }
 
     /// Execute ED-prefixed Z80 instructions. Unassigned ED encodings are
@@ -1017,7 +1346,7 @@ impl Z80 {
 
 #[cfg(test)]
 mod tests {
-    use super::{CpuError, FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_Z, Z80};
+    use super::{FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_Z, Z80};
     use crate::bus::CpuBus;
 
     struct TestBus([u8; 0x10000]);
@@ -1110,17 +1439,13 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_opcodes_fail_explicitly_without_fallback() {
-        let mut bus = TestBus([0xDD; 0x10000]);
+    fn ignored_index_prefix_executes_base_instruction_with_prefix_cycles() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..2].copy_from_slice(&[0xDD, 0x00]);
         let mut cpu = Z80::default();
-        assert_eq!(
-            cpu.step(&mut bus),
-            Err(CpuError::UnsupportedOpcode {
-                opcode: 0xDD,
-                address: 0
-            })
-        );
-        assert_eq!(cpu.registers.pc, 1);
+        assert_eq!(cpu.step(&mut bus), Ok(8));
+        assert_eq!(cpu.registers.pc, 2);
+        assert_eq!(cpu.r, 2);
     }
 
     #[test]
