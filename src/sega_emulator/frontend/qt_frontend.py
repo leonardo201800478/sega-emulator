@@ -336,7 +336,10 @@ def run(initial_path: Path | None = None) -> None:
         if not values:
             return 0.0
         ordered = sorted(values)
-        index = min(len(ordered) - 1, max(0, int((len(ordered) - 1) * fraction + 0.5)))
+        index = min(
+            len(ordered) - 1,
+            max(0, int((len(ordered) - 1) * fraction + 0.5)),
+        )
         return ordered[index]
 
     def show_frame() -> None:
@@ -459,6 +462,7 @@ def run(initial_path: Path | None = None) -> None:
                         "status": machine.vdp.status,
                     },
                 )
+                frame_time_samples_ms.clear()
                 last_checkpoint_time = now
                 last_checkpoint_tstates = machine.total_tstates
                 last_checkpoint_instructions = machine.total_instructions
