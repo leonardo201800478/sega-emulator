@@ -196,6 +196,23 @@ mod tests {
     }
 
     #[test]
+    fn maps_2k_omv_ram_with_mirroring() {
+        let config = MemoryConfig {
+            cartridge_ram_size: 0x0800,
+            cartridge_ram_start: 0x8000,
+            cartridge_ram_end: 0xBFFF,
+            ..MemoryConfig::default()
+        };
+        let mut memory = Sg1000Memory::new(&[0x55], config).unwrap();
+        memory.write(0x8000, 0xA7);
+        memory.write(0x87FF, 0x5C);
+        assert_eq!(memory.read(0x8000), 0xA7);
+        assert_eq!(memory.read(0x8800), 0xA7);
+        assert_eq!(memory.read(0x8FFF), 0x5C);
+        assert_eq!(memory.read(0x0000), 0x55);
+    }
+
+    #[test]
     fn rejects_invalid_rom_and_ram_layouts() {
         assert_eq!(
             Sg1000Memory::new(&[], MemoryConfig::default()).unwrap_err(),
