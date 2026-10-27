@@ -321,9 +321,11 @@ impl Z80 {
                     _ => ((old_a >> 1) | (u8::from(old_carry) << 7), old_a & 0x01 != 0),
                 };
                 self.registers.a = result;
-                self.set_flags((self.registers.f & (FLAG_S | FLAG_Z | FLAG_PV))
-                    | (result & FLAG_XY)
-                    | if carry { FLAG_C } else { 0 });
+                self.set_flags(
+                    (self.registers.f & (FLAG_S | FLAG_Z | FLAG_PV))
+                        | (result & FLAG_XY)
+                        | if carry { FLAG_C } else { 0 },
+                );
                 4
             }
             0x27 => {
@@ -363,10 +365,12 @@ impl Z80 {
             }
             0x2F => {
                 self.registers.a = !self.registers.a;
-                self.set_flags((self.registers.f & (FLAG_S | FLAG_Z | FLAG_PV | FLAG_C))
-                    | (self.registers.a & FLAG_XY)
-                    | FLAG_H
-                    | FLAG_N);
+                self.set_flags(
+                    (self.registers.f & (FLAG_S | FLAG_Z | FLAG_PV | FLAG_C))
+                        | (self.registers.a & FLAG_XY)
+                        | FLAG_H
+                        | FLAG_N,
+                );
                 4
             }
             0x37 => {
