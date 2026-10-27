@@ -82,7 +82,10 @@ impl Sg1000Memory {
                 config.internal_ram_size,
             ));
         }
-        if !matches!(config.cartridge_ram_size, 0 | INTERNAL_RAM_1K | RAM_2K | RAM_8K) {
+        if !matches!(
+            config.cartridge_ram_size,
+            0 | INTERNAL_RAM_1K | RAM_2K | RAM_8K
+        ) {
             return Err(MemoryError::InvalidCartridgeRamSize(
                 config.cartridge_ram_size,
             ));
