@@ -73,6 +73,7 @@ Criar `native/sms_core` sem dependência de `sg1000_core`. Implementar memória/
 - tamanho de arquivo preservado sem truncamento e sem limite arbitrário de 8 MiB. A aceitação deve depender do tamanho representável e do mapper efetivamente implementado: não prometer suporte a cartuchos maiores do que o hardware/mapeador modelado;
 - testes de fronteira e determinismo.
 - para ROMs com tamanho em múltiplos de 16 KiB e quantidade de bancos potência de dois, selecionar bancos além do tamanho físico deve reproduzir o aliasing dos bits de endereço não conectados; imagens com quantidade não potência de dois mantêm fallback determinístico `0xFF`, ainda sem alegação de equivalência com hardware para esses bancos.
+- o estado inicial do mapper (`FFFC=00`, bancos `[0,1,2]`) corresponde ao perfil documentado do 315-5235; outras revisões podem ter registradores indefinidos ou reset diferente. O construtor atual escolhe esse perfil determinístico provisório, sem alegar universalidade.
 
 Não codificar expectativas de banking ou valores de reset antes de confirmá-los com documentação e/ou vetores independentes.
 
