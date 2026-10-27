@@ -2,9 +2,14 @@
 //!
 //! The standard mapper exposes three 16 KiB slots. The first 1 KiB at
 //! 0000-03FF is fixed to ROM bank 0; writes at FFFD-FFFF select the bank
-//! visible in the remaining slot 0, slot 1, and slot 2 respectively. This
-//! initial slice does not model cartridge SRAM or mapper variants; it reports
-//! ROMs beyond the 256-bank addressable range rather than truncating them.
+//! visible in the remaining slots. Writes at FFFC configure cartridge RAM
+//! mapping. Mapper register writes also reach mirrored work RAM, and reads
+//! from those addresses return the RAM copy.
+//!
+//! Reference: https://www.smspower.org/Development/Mappers
+//! Reference: https://www.smspower.org/Development/MemoryMap
+//! This initial slice does not model cartridge SRAM or mapper variants. ROMs
+//! beyond the standard mapper's 256-bank range are rejected, never truncated.
 
 use crate::{CartridgeImage, SmsCoreError};
 
@@ -17,6 +22,7 @@ const RAM_START: u16 = 0xC000;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SmsMemory {
     rom: CartridgeImage,
+    mapper_control: u8,
     bank_registers: [u8; 3],
     work_ram: [u8; RAM_SIZE],
 }
@@ -32,6 +38,7 @@ impl SmsMemory {
 
         Ok(Self {
             rom,
+            mapper_control: 0,
             bank_registers: [0, 1, 2],
             work_ram: [0; RAM_SIZE],
         })
@@ -54,13 +61,17 @@ impl SmsMemory {
 
     #[inline]
     pub fn write(&mut self, address: u16, value: u8) {
+        // Work RAM is mirrored through FFFF. Mapper writes update both the
+        // mapper register and the RAM mirror at the same logical address.
+        if address >= RAM_START {
+            self.work_ram[usize::from(address - RAM_START) & (RAM_SIZE - 1)] = value;
+        }
+
         match address {
+            0xFFFC => self.mapper_control = value,
             0xFFFD => self.bank_registers[0] = value,
             0xFFFE => self.bank_registers[1] = value,
             0xFFFF => self.bank_registers[2] = value,
-            0xC000..=0xFFFF => {
-                self.work_ram[usize::from(address - RAM_START) & (RAM_SIZE - 1)] = value;
-            }
             _ => {}
         }
     }
@@ -83,6 +94,10 @@ impl SmsMemory {
     pub fn selected_banks(&self) -> [u8; 3] {
         self.bank_registers
     }
+
+    pub fn mapper_control(&self) -> u8 {
+        self.mapper_control
+    }
 }
 
 #[cfg(test)]
@@ -92,8 +107,9 @@ mod tests {
 
     fn patterned_rom(bank_count: usize) -> CartridgeImage {
         let mut bytes = vec![0; bank_count * BANK_SIZE];
-        for (bank, chunk) in bytes.chunks_exact_mut(BANK_SIZE).enumerate() {
-            chunk.fill(bank as u8);
+        for bank in 0..bank_count {
+            let start = bank * BANK_SIZE;
+            bytes[start..start + BANK_SIZE].fill(bank as u8);
         }
         CartridgeImage::new(bytes).unwrap()
     }
@@ -131,6 +147,21 @@ mod tests {
     }
 
     #[test]
+    fn mapper_register_writes_also_update_the_ram_mirror() {
+        let mut memory = SmsMemory::new(patterned_rom(4)).unwrap();
+
+        memory.write(0xFFFC, 0x08);
+        assert_eq!(memory.mapper_control(), 0x08);
+        assert_eq!(memory.read(0xDFFC), 0x08);
+        assert_eq!(memory.read(0xFFFC), 0x08);
+
+        memory.write(0xFFFD, 3);
+        assert_eq!(memory.selected_banks()[0], 3);
+        assert_eq!(memory.read(0xDFFD), 3);
+        assert_eq!(memory.read(0xFFFD), 3);
+    }
+
+    #[test]
     fn absent_rom_banks_read_as_ff_without_wrapping() {
         let mut memory = SmsMemory::new(patterned_rom(2)).unwrap();
         memory.write(0xFFFE, 0xFF);
@@ -150,11 +181,12 @@ mod tests {
     }
 
     #[test]
-    fn ignores_writes_to_rom_and_mapper_registers_are_at_fixed_addresses() {
+    fn ignores_rom_writes_and_only_mapper_registers_change_mapper_state() {
         let mut memory = SmsMemory::new(patterned_rom(3)).unwrap();
         memory.write(0x0000, 0x99);
         assert_eq!(memory.read(0x0000), 0);
         memory.write(0xFFFC, 0x08);
         assert_eq!(memory.selected_banks(), [0, 1, 2]);
+        assert_eq!(memory.mapper_control(), 0x08);
     }
 }
