@@ -21,9 +21,7 @@ class FakeXInputLibrary:
         if sample is None:
             return 1167  # ERROR_DEVICE_NOT_CONNECTED
         buttons, thumb_x, thumb_y = sample
-        state = ctypes.cast(
-            state_pointer, ctypes.POINTER(XInputState)
-        ).contents
+        state = ctypes.cast(state_pointer, ctypes.POINTER(XInputState)).contents
         state.dwPacketNumber = len(self.calls)
         state.Gamepad.wButtons = buttons
         state.Gamepad.sThumbLX = thumb_x
@@ -77,7 +75,9 @@ def test_xinput_maps_buttons_and_left_stick_to_semantic_actions() -> None:
     assert backend.read_pressed_button(1) == "dpad_right"
 
 
-def test_xinput_discovery_is_throttled_but_connected_slots_are_polled_each_frame() -> None:
+def test_xinput_discovery_is_throttled_but_connected_slots_are_polled_each_frame() -> (
+    None
+):
     clock = FakeClock()
     library = FakeXInputLibrary({0: (0x1000, 0, 0)})
     backend = XInputControllerInput(library=library, clock=clock)
@@ -106,7 +106,9 @@ def test_xinput_disconnect_releases_input_and_reports_one_edge() -> None:
     assert not backend.consume_disconnect_event()
 
 
-def test_native_first_provider_uses_xinput_before_sdl_and_does_not_double_poll() -> None:
+def test_native_first_provider_uses_xinput_before_sdl_and_does_not_double_poll() -> (
+    None
+):
     library = FakeXInputLibrary({0: (0x1000, 0, 0)})
     native = XInputControllerInput(library=library, clock=FakeClock())
     fallback = FakeFallback()
