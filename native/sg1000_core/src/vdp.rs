@@ -832,6 +832,75 @@ mod tests {
     }
 
     #[test]
+    fn transparent_and_offscreen_sprite_pixels_still_trigger_collision() {
+        let mut transparent = Tms9918A::new();
+        transparent.registers[1] = 0x40;
+        transparent.registers[5] = 0x20;
+        transparent.vram[0] = 0x80;
+        transparent.vram[0x1000] = 0;
+        transparent.vram[0x1001] = 0;
+        transparent.vram[0x1002] = 0;
+        transparent.vram[0x1003] = 0;
+        transparent.vram[0x1004] = 0;
+        transparent.vram[0x1005] = 0;
+        transparent.vram[0x1006] = 0;
+        transparent.vram[0x1007] = 4;
+        transparent.vram[0x1008] = 0xD0;
+        transparent.advance(228 * 2);
+        assert_ne!(transparent.status() & 0x20, 0);
+
+        let frame = transparent.render_frame();
+        let first_visible_line = 256 * 3;
+        assert_eq!(
+            &frame[first_visible_line..first_visible_line + 3],
+            &[84, 85, 237]
+        );
+
+        let mut offscreen = Tms9918A::new();
+        offscreen.registers[1] = 0x40;
+        offscreen.registers[5] = 0x20;
+        offscreen.vram[0] = 0x80;
+        for index in 0..2 {
+            let offset = 0x1000 + index * 4;
+            offscreen.vram[offset] = 0;
+            offscreen.vram[offset + 1] = 0;
+            offscreen.vram[offset + 2] = 0;
+            offscreen.vram[offset + 3] = 0x80 | if index == 0 { 0 } else { 4 };
+        }
+        offscreen.vram[0x1000 + 2 * 4] = 0xD0;
+        offscreen.advance(228 * 2);
+        assert_ne!(offscreen.status() & 0x20, 0);
+    }
+
+    #[test]
+    fn sprite_y_wrap_exposes_the_correct_pattern_row_at_the_top_edge() {
+        let mut y_255 = Tms9918A::new();
+        y_255.registers[1] = 0x40;
+        y_255.registers[5] = 0x20;
+        y_255.vram[0] = 0x80;
+        y_255.vram[0x1000] = 0xFF;
+        y_255.vram[0x1001] = 0;
+        y_255.vram[0x1002] = 0;
+        y_255.vram[0x1003] = 4;
+        y_255.vram[0x1004] = 0xD0;
+        y_255.advance(228 * 192);
+        assert_eq!(&y_255.framebuffer()[..3], &[84, 85, 237]);
+
+        let mut y_254 = Tms9918A::new();
+        y_254.registers[1] = 0x40;
+        y_254.registers[5] = 0x20;
+        y_254.vram[0] = 0;
+        y_254.vram[1] = 0x80;
+        y_254.vram[0x1000] = 0xFE;
+        y_254.vram[0x1001] = 0;
+        y_254.vram[0x1002] = 0;
+        y_254.vram[0x1003] = 4;
+        y_254.vram[0x1004] = 0xD0;
+        y_254.advance(228 * 192);
+        assert_eq!(&y_254.framebuffer()[..3], &[84, 85, 237]);
+    }
+
+    #[test]
     fn sprite_overflow_and_collision_set_distinct_status_bits() {
         let mut overflow = Tms9918A::new();
         overflow.registers[1] = 0x40;
