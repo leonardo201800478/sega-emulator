@@ -1349,6 +1349,47 @@ mod tests {
     }
 
     #[test]
+    fn ed_prefix_loads_special_registers_arithmetic_and_block_transfer() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..16].copy_from_slice(&[
+            0xED, 0x47, // LD I,A
+            0xED, 0x57, // LD A,I
+            0xED, 0x44, // NEG
+            0xED, 0x43, 0x00, 0xC0, // LD (0xC000),BC
+            0xED, 0x4B, 0x00, 0xC0, // LD BC,(0xC000)
+            0xED, 0xA0, // LDI
+        ]);
+        let mut cpu = Z80::default();
+        cpu.registers.a = 0x80;
+        cpu.iff2 = true;
+        cpu.registers.set_bc(0x1234);
+
+        assert_eq!(cpu.step(&mut bus), Ok(9));
+        assert_eq!(cpu.i, 0x80);
+        assert_eq!(cpu.step(&mut bus), Ok(9));
+        assert_eq!(cpu.registers.a, 0x80);
+        assert_ne!(cpu.registers.f & FLAG_PV, 0);
+        assert_eq!(cpu.step(&mut bus), Ok(8));
+        assert_eq!(cpu.registers.a, 0x80);
+        assert_ne!(cpu.registers.f & FLAG_N, 0);
+
+        assert_eq!(cpu.step(&mut bus), Ok(20));
+        assert_eq!((bus.0[0xC000], bus.0[0xC001]), (0x34, 0x12));
+        assert_eq!(cpu.step(&mut bus), Ok(20));
+        assert_eq!(cpu.registers.bc(), 0x1234);
+
+        cpu.registers.set_hl(0xC100);
+        cpu.registers.set_de(0xC200);
+        cpu.registers.set_bc(1);
+        bus.0[0xC100] = 0x5A;
+        assert_eq!(cpu.step(&mut bus), Ok(16));
+        assert_eq!(bus.0[0xC200], 0x5A);
+        assert_eq!(cpu.registers.bc(), 0);
+        assert_eq!(cpu.registers.hl(), 0xC101);
+        assert_eq!(cpu.registers.de(), 0xC201);
+    }
+
+    #[test]
     fn refresh_register_increments_for_m1_fetches_and_preserves_bit_seven() {
         let mut bus = TestBus([0; 0x10000]);
         bus.0[..4].copy_from_slice(&[0xCB, 0x00, 0x00, 0x00]);
