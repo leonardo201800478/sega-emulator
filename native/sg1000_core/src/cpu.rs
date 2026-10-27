@@ -93,6 +93,8 @@ pub struct Z80 {
     pub iff2: bool,
     /// Interrupt mode 0, 1 or 2.
     pub interrupt_mode: u8,
+    /// Internal WZ/MEMPTR latch used by selected flag and control instructions.
+    pub wz: u16,
     /// EI inhibits maskable interrupt acceptance for the following instruction.
     pub ei_delay: u8,
     pub halted: bool,
@@ -110,6 +112,7 @@ impl Z80 {
         self.iff1 = false;
         self.iff2 = false;
         self.interrupt_mode = 0;
+        self.wz = 0;
         self.ei_delay = 0;
         self.halted = false;
         self.total_tstates = 0;
@@ -168,6 +171,10 @@ impl Z80 {
             0xCB => {
                 let extended_opcode = self.fetch_opcode(bus);
                 self.execute_cb(bus, extended_opcode)
+            }
+            0xED => {
+                let extended_opcode = self.fetch_opcode(bus);
+                self.execute_ed(bus, extended_opcode)
             }
             0xD3 => {
                 let port_low = self.fetch8(bus);
@@ -513,6 +520,302 @@ impl Z80 {
             self.ei_delay -= 1;
         }
         Ok(cycles)
+    }
+
+    /// Execute ED-prefixed Z80 instructions. Unassigned ED encodings are
+    /// documented as two-byte NOPs on the classic Z80.
+    fn execute_ed<B: CpuBus>(&mut self, bus: &mut B, opcode: u8) -> u32 {
+        match opcode {
+            0x47 => {
+                self.i = self.registers.a;
+                9
+            }
+            0x4F => {
+                self.r = self.registers.a;
+                9
+            }
+            0x57 | 0x5F => {
+                self.registers.a = if opcode == 0x57 { self.i } else { self.r };
+                let mut flags = (self.registers.f & FLAG_C)
+                    | (self.registers.a & (FLAG_S | FLAG_XY));
+                if self.registers.a == 0 {
+                    flags |= FLAG_Z;
+                }
+                if self.iff2 {
+                    flags |= FLAG_PV;
+                }
+                self.registers.f = flags;
+                9
+            }
+            op if op & 0xCF == 0x43 => {
+                let address = self.fetch16(bus);
+                let [low, high] = self.read_register_pair((op >> 4) & 3).to_le_bytes();
+                bus.write_memory(address, low);
+                bus.write_memory(address.wrapping_add(1), high);
+                self.wz = address.wrapping_add(1);
+                20
+            }
+            op if op & 0xCF == 0x4B => {
+                let address = self.fetch16(bus);
+                let low = bus.read_memory(address);
+                let high = bus.read_memory(address.wrapping_add(1));
+                self.write_register_pair((op >> 4) & 3, u16::from_le_bytes([low, high]));
+                self.wz = address.wrapping_add(1);
+                20
+            }
+            op if op & 0xCF == 0x4A => {
+                self.adc_sbc_hl(self.read_register_pair((op >> 4) & 3), false);
+                15
+            }
+            op if op & 0xCF == 0x42 => {
+                self.adc_sbc_hl(self.read_register_pair((op >> 4) & 3), true);
+                15
+            }
+            op if op & 0xC7 == 0x40 => {
+                let register = (op >> 3) & 7;
+                let port = self.registers.bc();
+                let value = bus.read_port(port);
+                if register != 6 {
+                    self.write_register(bus, register, value);
+                }
+                let mut flags = (self.registers.f & FLAG_C)
+                    | (value & (FLAG_S | FLAG_XY));
+                if value == 0 {
+                    flags |= FLAG_Z;
+                }
+                if value.count_ones().is_multiple_of(2) {
+                    flags |= FLAG_PV;
+                }
+                self.registers.f = flags;
+                self.wz = port.wrapping_add(1);
+                12
+            }
+            op if op & 0xC7 == 0x41 => {
+                let register = (op >> 3) & 7;
+                let port = self.registers.bc();
+                let value = if register == 6 {
+                    0
+                } else {
+                    self.read_register(bus, register)
+                };
+                bus.write_port(port, value);
+                self.wz = port.wrapping_add(1);
+                12
+            }
+            op if op & 0xC7 == 0x44 => {
+                let value = self.registers.a;
+                let result = sub8(0, value);
+                self.registers.a = result.value;
+                self.registers.f = result.flags;
+                8
+            }
+            op if op & 0xC7 == 0x45 => {
+                self.registers.pc = self.pop16(bus);
+                self.iff1 = self.iff2;
+                self.wz = self.registers.pc;
+                14
+            }
+            0x46 | 0x4E | 0x66 | 0x6E => {
+                self.interrupt_mode = 0;
+                8
+            }
+            0x56 | 0x76 => {
+                self.interrupt_mode = 1;
+                8
+            }
+            0x5E | 0x7E => {
+                self.interrupt_mode = 2;
+                8
+            }
+            0x67 | 0x6F => {
+                let address = self.registers.hl();
+                let memory_value = bus.read_memory(address);
+                let accumulator = self.registers.a;
+                let new_memory;
+                if opcode == 0x67 {
+                    new_memory = ((accumulator & 0x0F) << 4) | (memory_value >> 4);
+                    self.registers.a = (accumulator & 0xF0) | (memory_value & 0x0F);
+                } else {
+                    new_memory = (memory_value << 4) | (accumulator & 0x0F);
+                    self.registers.a = (accumulator & 0xF0) | (memory_value >> 4);
+                }
+                bus.write_memory(address, new_memory);
+                self.wz = address.wrapping_add(1);
+                self.set_szp_xy_flags_preserving_carry(self.registers.a);
+                18
+            }
+            0xA0 | 0xA8 | 0xB0 | 0xB8 => self.execute_block_transfer(bus, opcode),
+            0xA1 | 0xA9 | 0xB1 | 0xB9 => self.execute_block_compare(bus, opcode),
+            0xA2 | 0xAA | 0xB2 | 0xBA | 0xA3 | 0xAB | 0xB3 | 0xBB => {
+                self.execute_block_io(bus, opcode)
+            }
+            _ => 8,
+        }
+    }
+
+    fn adc_sbc_hl(&mut self, operand: u16, subtract: bool) {
+        let lhs = self.registers.hl();
+        let carry = u32::from(self.registers.f & FLAG_C != 0);
+        let rhs = u32::from(operand);
+        let lhs32 = u32::from(lhs);
+        let result32 = if subtract {
+            lhs32.wrapping_sub(rhs + carry)
+        } else {
+            lhs32 + rhs + carry
+        };
+        let result = result32 as u16;
+        let mut flags = ((result >> 8) as u8) & (FLAG_S | FLAG_XY);
+        if result == 0 {
+            flags |= FLAG_Z;
+        }
+        if subtract {
+            flags |= FLAG_N;
+            if (lhs & 0x0FFF) < ((operand & 0x0FFF) + carry as u16) {
+                flags |= FLAG_H;
+            }
+            if ((lhs ^ operand) & (lhs ^ result) & 0x8000) != 0 {
+                flags |= FLAG_PV;
+            }
+            if lhs32 < rhs + carry {
+                flags |= FLAG_C;
+            }
+        } else {
+            if u32::from(lhs & 0x0FFF) + u32::from(operand & 0x0FFF) + carry > 0x0FFF {
+                flags |= FLAG_H;
+            }
+            if (!(lhs ^ operand) & (lhs ^ result) & 0x8000) != 0 {
+                flags |= FLAG_PV;
+            }
+            if result32 > u32::from(u16::MAX) {
+                flags |= FLAG_C;
+            }
+        }
+        self.registers.set_hl(result);
+        self.registers.f = flags;
+    }
+
+    fn set_szp_xy_flags_preserving_carry(&mut self, value: u8) {
+        let mut flags = (self.registers.f & FLAG_C) | (value & (FLAG_S | FLAG_XY));
+        if value == 0 {
+            flags |= FLAG_Z;
+        }
+        if value.count_ones().is_multiple_of(2) {
+            flags |= FLAG_PV;
+        }
+        self.registers.f = flags;
+    }
+
+    fn execute_block_transfer<B: CpuBus>(&mut self, bus: &mut B, opcode: u8) -> u32 {
+        let direction = if opcode == 0xA8 || opcode == 0xB8 { -1_i16 } else { 1_i16 };
+        let address = self.registers.hl();
+        let value = bus.read_memory(address);
+        bus.write_memory(self.registers.de(), value);
+        self.registers.set_hl(address.wrapping_add_signed(direction));
+        self.registers.set_de(self.registers.de().wrapping_add_signed(direction));
+        let count = self.registers.bc().wrapping_sub(1);
+        self.registers.set_bc(count);
+        let sum = self.registers.a.wrapping_add(value);
+        let mut flags = self.registers.f & (FLAG_S | FLAG_Z | FLAG_C);
+        if count != 0 {
+            flags |= FLAG_PV;
+        }
+        flags |= sum & 0x08;
+        flags |= (sum & 0x02) << 4;
+        self.registers.f = flags;
+        if (opcode == 0xB0 || opcode == 0xB8) && count != 0 {
+            self.registers.pc = self.registers.pc.wrapping_sub(2);
+            self.wz = self.registers.pc.wrapping_add(1);
+            21
+        } else {
+            16
+        }
+    }
+
+    fn execute_block_compare<B: CpuBus>(&mut self, bus: &mut B, opcode: u8) -> u32 {
+        let direction = if opcode == 0xA9 || opcode == 0xB9 { -1_i16 } else { 1_i16 };
+        let value = bus.read_memory(self.registers.hl());
+        let accumulator = self.registers.a;
+        let result = accumulator.wrapping_sub(value);
+        let half = (accumulator & 0x0F) < (value & 0x0F);
+        self.registers.set_hl(self.registers.hl().wrapping_add_signed(direction));
+        let count = self.registers.bc().wrapping_sub(1);
+        self.registers.set_bc(count);
+        let adjusted = result.wrapping_sub(u8::from(half));
+        let mut flags = (self.registers.f & FLAG_C) | FLAG_N | (result & FLAG_S);
+        if result == 0 {
+            flags |= FLAG_Z;
+        }
+        if half {
+            flags |= FLAG_H;
+        }
+        if count != 0 {
+            flags |= FLAG_PV;
+        }
+        flags |= adjusted & 0x08;
+        flags |= (adjusted & 0x02) << 4;
+        self.registers.f = flags;
+        self.wz = self.wz.wrapping_add_signed(direction);
+        if (opcode == 0xB1 || opcode == 0xB9) && count != 0 && result != 0 {
+            self.registers.pc = self.registers.pc.wrapping_sub(2);
+            self.wz = self.registers.pc.wrapping_add(1);
+            21
+        } else {
+            16
+        }
+    }
+
+    fn execute_block_io<B: CpuBus>(&mut self, bus: &mut B, opcode: u8) -> u32 {
+        let input = matches!(opcode, 0xA2 | 0xAA | 0xB2 | 0xBA);
+        let repeat = matches!(opcode, 0xB2 | 0xBA | 0xB3 | 0xBB);
+        let direction = if matches!(opcode, 0xAA | 0xBA | 0xAB | 0xBB) {
+            -1_i16
+        } else {
+            1_i16
+        };
+        let old_bc = self.registers.bc();
+        let value = if input {
+            let value = bus.read_port(old_bc);
+            bus.write_memory(self.registers.hl(), value);
+            value
+        } else {
+            let value = bus.read_memory(self.registers.hl());
+            let output_port = (u16::from(self.registers.b.wrapping_sub(1)) << 8)
+                | u16::from(self.registers.c);
+            bus.write_port(output_port, value);
+            value
+        };
+        self.registers.set_hl(self.registers.hl().wrapping_add_signed(direction));
+        self.registers.b = self.registers.b.wrapping_sub(1);
+        let low_term = if input {
+            self.registers.c.wrapping_add_signed(direction as i8)
+        } else {
+            self.registers.l
+        };
+        let sum = u16::from(value) + u16::from(low_term);
+        let mut flags = self.registers.b & (FLAG_S | FLAG_XY);
+        if self.registers.b == 0 {
+            flags |= FLAG_Z;
+        }
+        if value & 0x80 != 0 {
+            flags |= FLAG_N;
+        }
+        if sum > 0xFF {
+            flags |= FLAG_H | FLAG_C;
+        }
+        let parity_arg = ((sum as u8 & 0x07) ^ self.registers.b) & 0xFF;
+        if parity_arg.count_ones().is_multiple_of(2) {
+            flags |= FLAG_PV;
+        }
+        self.registers.f = flags;
+        if repeat && self.registers.b != 0 {
+            self.registers.pc = self.registers.pc.wrapping_sub(2);
+            self.wz = self.registers.pc.wrapping_add(1);
+            21
+        } else {
+            let wz_base = if input { old_bc } else { self.registers.bc() };
+            self.wz = wz_base.wrapping_add_signed(direction);
+            16
+        }
     }
 
     /// Execute the complete CB-prefixed rotate/shift, BIT, RES and SET matrix.
