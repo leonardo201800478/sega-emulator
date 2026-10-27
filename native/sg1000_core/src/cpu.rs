@@ -564,10 +564,10 @@ mod tests {
         assert_eq!(cpu.step(&mut bus), Ok(13));
         assert_eq!(cpu.registers.b, 1);
         assert_eq!(cpu.registers.pc, 0);
-        assert_eq!(cpu.step(&mut bus), Ok(13));
+        assert_eq!(cpu.step(&mut bus), Ok(8));
         assert_eq!(cpu.registers.b, 0);
         assert_eq!(cpu.registers.pc, 2);
-        assert_eq!(cpu.step(&mut bus), Ok(8));
+        assert_eq!(cpu.step(&mut bus), Ok(13));
         assert_eq!(cpu.registers.b, 0xFF);
         assert_eq!(cpu.registers.pc, 4);
     }
