@@ -122,7 +122,9 @@ impl NativeSn76489 {
 
     #[pyo3(signature = (max_samples=None))]
     fn drain_samples(&mut self, max_samples: Option<i64>) -> PyResult<Vec<f64>> {
-        if let Some(count) = max_samples && count < 0 {
+        if let Some(count) = max_samples
+            && count < 0
+        {
             return Err(PyValueError::new_err(
                 "max_samples deve ser None ou inteiro não negativo.",
             ));
@@ -191,7 +193,9 @@ impl NativeAudioSynchronizer {
                 "Não é possível agendar uma escrita no passado.",
             ));
         }
-        if let Some((last_tstate, _)) = self.events.back() && tstate < *last_tstate {
+        if let Some((last_tstate, _)) = self.events.back()
+            && tstate < *last_tstate
+        {
             return Err(PyValueError::new_err(
                 "Os eventos devem ser agendados em ordem cronológica.",
             ));
@@ -252,11 +256,7 @@ impl NativeAudioSynchronizer {
         self.schedule_write(tstate, i64::from(value))
     }
 
-    pub(crate) fn advance_to_native(
-        &mut self,
-        py: Python<'_>,
-        target_tstate: u64,
-    ) -> PyResult<()> {
+    pub(crate) fn advance_to_native(&mut self, py: Python<'_>, target_tstate: u64) -> PyResult<()> {
         let target_tstate = i64::try_from(target_tstate)
             .map_err(|_| PyValueError::new_err("tstate excede o intervalo suportado."))?;
         self.advance_to(py, target_tstate)
