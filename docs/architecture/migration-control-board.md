@@ -55,7 +55,7 @@ A CI workflow only validates the commands it actually executes. A green Python w
 - `native/sega_emu_core` remains a scaffold outside the root workspace; its path dependencies now point to the existing sibling crates. The shared-crate relocation is still pending.
 - The Rust SG-1000 and SMS crates remain partial. No fidelity or standalone-runtime acceptance is implied.
 - Baseline crate validation: **PASS** on main SHA `632f2f69e7a9e6d9a81b19a4f994bb1ce42eb951` via [Rust SG-1000 Workspace run #131](https://github.com/leonardo201800478/sega-emulator/actions/runs/40442082201): formatting, Clippy, and workspace tests succeeded; logs show 22 SG-1000 tests passed, plus 15 SMS and 7 Z80 ALU tests. This run predates the migration branch's documentation-only commits and validates the same SG-1000 source blobs.
-- Scope limitation: `native/sg1000_core/src/machine.rs` explicitly states VDP, PSG, I/O and interrupt scheduling are not integrated. The crate is not yet a complete standalone emulator.
+- Historical baseline note (before PR #126): VDP, PSG and machine-wide scheduling were not integrated. The current status is recorded below; the crate is still not a complete standalone emulator.
 - Do not move Python production cores to `legacy/` yet: the current application still depends on those modules, and the Rust crate does not replace all production contracts.
 
 ## Current migration status — PR #126
@@ -69,7 +69,7 @@ A CI workflow only validates the commands it actually executes. A green Python w
 - The standalone gate remains open until the Z80 instruction/prefix/interrupt implementation is complete, hardware clocks and VDP behavior are checked against independent references, and the PyO3/Qt boundary passes Release/Maturin and parity validation. Do not claim standalone completion or move Python production cores to `legacy/` before those gates pass.
 
 ## Change log
-- 2026-10-27: PR #126 expanded the native SG-1000 slice with a PyO3-free TMS9918A, VDP raster advancement, SN76489 clock/sample integration, and Z80 immediate IN/OUT routing. Validation is in progress; see `sg1000-native-consolidation.md`.
+- 2026-10-27: PR #126 expanded the native SG-1000 slice with a PyO3-free TMS9918A, VDP raster advancement, SN76489 clock/sample integration, and Z80 immediate IN/OUT routing. Candidate SHA `f35a368a73de888ed9ffcf357174d73f0ea65f1c` passed the Rust workspace, Python CI, SMS fast validation, Z80 differential/extended audits, and sequential SG-1000 validation; see `sg1000-native-consolidation.md`.
 - 2026-10-27: Step 1 added a pure-Rust SG-1000 I/O boundary for controller aliases and timestamped PSG write capture. It is intentionally not a complete CPU-port/VDP/audio-scheduler integration; see `sg1000-rust-io-step1.md`.
 - 2026-10-27: Initial control board added. No source files moved and no tests claimed as passing.
 - 2026-10-27: Corrected the excluded shared-core scaffold's workspace registration and sibling dependency paths so the manifest can be validated independently.
