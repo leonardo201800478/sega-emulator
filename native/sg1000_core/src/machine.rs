@@ -325,8 +325,7 @@ mod tests {
 
     #[test]
     fn future_psg_write_is_applied_at_its_nominal_machine_tstate() {
-        let mut machine =
-            Sg1000Machine::new(&[0x00, 0x00, 0x76], MemoryConfig::default()).unwrap();
+        let mut machine = Sg1000Machine::new(&[0x00, 0x00, 0x76], MemoryConfig::default()).unwrap();
         machine.write_port_at(0x40, 0x85, 8);
         assert_eq!(machine.psg.tone_periods()[0], 0);
 
