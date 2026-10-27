@@ -625,11 +625,7 @@ impl Z80 {
                 10
             }
             0x24 | 0x25 | 0x26 | 0x2C | 0x2D | 0x2E => {
-                let code = if matches!(opcode, 0x24..=0x26) {
-                    4
-                } else {
-                    5
-                };
+                let code = if matches!(opcode, 0x24..=0x26) { 4 } else { 5 };
                 if opcode == 0x26 || opcode == 0x2E {
                     let value = self.fetch8(bus);
                     self.write_index_register(prefix, code, value, true);
