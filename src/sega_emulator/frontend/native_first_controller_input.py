@@ -280,9 +280,7 @@ class NativeFirstControllerInput:
         elif preference == "sdl3":
             self._active_backend = "sdl"
         else:
-            self._active_backend = (
-                "xinput" if self.native.connected_names() else "sdl"
-            )
+            self._active_backend = "xinput" if self.native.connected_names() else "sdl"
         self._disconnect_pending = False
 
     def _native_names(self) -> list[str]:
