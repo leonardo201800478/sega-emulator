@@ -79,7 +79,7 @@ def _load_xinput() -> Any | None:
             function.argtypes = [ctypes.c_uint, ctypes.POINTER(XInputState)]
             function.restype = ctypes.c_uint
             return library
-        except (AttributeError, OSError):
+        except AttributeError, OSError:
             continue
     return None
 
@@ -113,7 +113,7 @@ class XInputControllerInput:
         state = XInputState()
         try:
             result = int(self._library.XInputGetState(slot, ctypes.byref(state)))
-        except (AttributeError, OSError, TypeError, ValueError):
+        except AttributeError, OSError, TypeError, ValueError:
             logger.exception("Falha ao consultar XInput no slot %s", slot)
             return None
         return state if result == ERROR_SUCCESS else None
