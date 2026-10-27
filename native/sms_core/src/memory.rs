@@ -79,7 +79,7 @@ impl SmsMemory {
     #[inline]
     fn read_bank(&self, bank: u8, offset: usize) -> u8 {
         let bank_count = self.rom.len() / BANK_SIZE;
-        let bank = if self.rom.len() % BANK_SIZE == 0 && bank_count.is_power_of_two() {
+        let bank = if self.rom.len().is_multiple_of(BANK_SIZE) && bank_count.is_power_of_two() {
             // For power-of-two ROM sizes, unconnected high bank-address lines
             // mirror the physical ROM. SMS Power documents this aliasing.
             usize::from(bank) & (bank_count - 1)
