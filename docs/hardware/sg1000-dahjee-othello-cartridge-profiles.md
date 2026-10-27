@@ -2,7 +2,7 @@
 
 ## Scope and evidence
 
-The MAME SG-1000 software list (hash/sg1000.xml) identifies the seven attached DahJee/Jumbo conversions below with slot dahjee_typea and a RAM data area of 9,216 bytes. The working hardware interpretation is 8 KiB expansion RAM plus the machine's standard 1 KiB internal RAM; the MAME data-area size alone does not prove a single contiguous 9 KiB memory window.
+The MAME SG-1000 software list (hash/sg1000.xml) identifies the seven attached DahJee/Jumbo conversions below with slot dahjee_typea and a RAM data area of 9,216 bytes. The MAME data area reports 9,216 bytes (8 KiB expansion plus 1 KiB base RAM). The DahJee/Jumbo adapter documentation says the adapter maps 8 KiB over C000h–FFFFh, with software avoiding the overlap with the original RAM. The emulator profile therefore selects the existing 8 KiB system-RAM map rather than inventing a separate 9 KiB cartridge window.
 
 | ROM | MAME CRC32 | MAME SHA-1 | Expected profile |
 |---|---:|---|---|
@@ -20,7 +20,7 @@ Source: https://github.com/mamedev/mame/blob/master/hash/sg1000.xml
 ## Implemented in this branch
 
 - Python cartridge profile selection by the MAME CRC32 values for the seven Type-A ROMs.
-- Type-A expansion RAM configured as 8 KiB at 0x2000–0x3FFF, leaving the machine's internal RAM at 0xC000–0xFFFF independent.
+- Type-A profile selects the 8 KiB system-RAM map at 0xC000–0xFFFF, consistent with the DahJee/Jumbo RAM adapter documentation.
 - Othello profile selected by its catalog CRC32, with 2 KiB RAM mirrored through the 0x8000–0xBFFF slot window. The Taiwan Othello catalog CRC is also recognized.
 - Native Rust memory accepts 2 KiB cartridge RAM and includes a mapping regression test.
 - The native Rust machine exposes the VDP sprite-limit setter and getter, with a unit test for toggling the setting.
