@@ -97,6 +97,10 @@ pub struct Z80 {
     pub wz: u16,
     /// EI inhibits maskable interrupt acceptance for the following instruction.
     pub ei_delay: u8,
+    /// Latched non-maskable interrupt request.
+    pub nmi_pending: bool,
+    /// Maskable INT request and the external data-bus byte for acknowledge.
+    pub int_pending: Option<u8>,
     pub halted: bool,
     pub total_tstates: u64,
 }
@@ -114,8 +118,85 @@ impl Z80 {
         self.interrupt_mode = 0;
         self.wz = 0;
         self.ei_delay = 0;
+        self.nmi_pending = false;
+        self.int_pending = None;
         self.halted = false;
         self.total_tstates = 0;
+    }
+
+    /// Latch a non-maskable interrupt; it is serviced at the next step boundary.
+    pub fn request_nmi(&mut self) {
+        self.nmi_pending = true;
+    }
+
+    /// Latch a maskable interrupt and the byte supplied by the external data bus.
+    pub fn request_int(&mut self, data_bus: u8) {
+        self.int_pending = Some(data_bus);
+    }
+
+    /// Clear a maskable request when the external INT line is deasserted.
+    pub fn clear_int_request(&mut self) {
+        self.int_pending = None;
+    }
+
+    fn service_nmi<B: CpuBus>(&mut self, bus: &mut B) -> Result<u32, CpuError> {
+        self.nmi_pending = false;
+        self.halted = false;
+        self.r = (self.r & 0x80) | (self.r.wrapping_add(1) & 0x7F);
+        self.iff2 = self.iff1;
+        self.iff1 = false;
+        self.push16(bus, self.registers.pc);
+        self.registers.pc = 0x0066;
+        self.wz = self.registers.pc;
+        self.total_tstates += 11;
+        Ok(11)
+    }
+
+    fn service_int<B: CpuBus>(&mut self, bus: &mut B) -> Result<u32, CpuError> {
+        let data_bus = self.int_pending.take().unwrap_or(0xFF);
+        let return_address = self.registers.pc;
+        self.halted = false;
+        self.r = (self.r & 0x80) | (self.r.wrapping_add(1) & 0x7F);
+        self.iff1 = false;
+        self.iff2 = false;
+
+        let cycles = match self.interrupt_mode {
+            0 if data_bus & 0xC7 == 0xC7 => {
+                self.push16(bus, return_address);
+                self.registers.pc = u16::from(data_bus & 0x38);
+                13
+            }
+            0 if data_bus == 0x00 => 6,
+            0 => {
+                return Err(CpuError::UnsupportedOpcode {
+                    opcode: data_bus,
+                    address: return_address,
+                });
+            }
+            1 => {
+                self.push16(bus, return_address);
+                self.registers.pc = 0x0038;
+                13
+            }
+            2 => {
+                self.push16(bus, return_address);
+                let vector = (u16::from(self.i) << 8) | u16::from(data_bus);
+                let low = bus.read_memory(vector);
+                let high = bus.read_memory(vector.wrapping_add(1));
+                self.registers.pc = u16::from_le_bytes([low, high]);
+                self.wz = self.registers.pc;
+                19
+            }
+            _ => {
+                self.interrupt_mode = 0;
+                return Err(CpuError::UnsupportedOpcode {
+                    opcode: data_bus,
+                    address: return_address,
+                });
+            }
+        };
+        self.total_tstates += u64::from(cycles);
+        Ok(cycles)
     }
 
     /// Execute one instruction and return its documented base T-state count.
@@ -124,6 +205,12 @@ impl Z80 {
     /// Prefixes, interrupts, and all unimplemented opcodes return an explicit
     /// error until their native implementation is migrated.
     pub fn step<B: CpuBus>(&mut self, bus: &mut B) -> Result<u32, CpuError> {
+        if self.nmi_pending {
+            return self.service_nmi(bus);
+        }
+        if self.int_pending.is_some() && self.iff1 && self.ei_delay == 0 {
+            return self.service_int(bus);
+        }
         if self.halted {
             self.r = (self.r & 0x80) | (self.r.wrapping_add(1) & 0x7F);
             self.total_tstates += 4;
@@ -1447,6 +1534,86 @@ mod tests {
         assert_eq!(cpu.step(&mut bus), Ok(4));
         assert_eq!(cpu.r, 4);
         assert_eq!(cpu.total_tstates, 25);
+    }
+
+    #[test]
+    fn nmi_pushes_pc_vectors_and_copies_iff1_to_iff2() {
+        let mut bus = TestBus([0; 0x10000]);
+        let mut cpu = Z80::default();
+        cpu.registers.pc = 0x1234;
+        cpu.registers.sp = 0xC100;
+        cpu.iff1 = true;
+        cpu.iff2 = false;
+        cpu.request_nmi();
+
+        assert_eq!(cpu.step(&mut bus), Ok(11));
+        assert_eq!(cpu.registers.pc, 0x0066);
+        assert_eq!(cpu.registers.sp, 0xC0FE);
+        assert_eq!((bus.0[0xC0FE], bus.0[0xC0FF]), (0x34, 0x12));
+        assert!(!cpu.iff1);
+        assert!(cpu.iff2);
+        assert!(!cpu.nmi_pending);
+    }
+
+    #[test]
+    fn maskable_interrupt_modes_zero_one_and_two_use_their_vectors() {
+        let mut bus = TestBus([0; 0x10000]);
+
+        let mut im0 = Z80::default();
+        im0.registers.pc = 0x1234;
+        im0.registers.sp = 0xC100;
+        im0.iff1 = true;
+        im0.iff2 = true;
+        im0.request_int(0xCF); // external RST 08h
+        assert_eq!(im0.step(&mut bus), Ok(13));
+        assert_eq!(im0.registers.pc, 0x0008);
+        assert_eq!((bus.0[0xC0FE], bus.0[0xC0FF]), (0x34, 0x12));
+
+        let mut im1 = Z80 {
+            interrupt_mode: 1,
+            ..Z80::default()
+        };
+        im1.registers.pc = 0x5678;
+        im1.registers.sp = 0xC200;
+        im1.iff1 = true;
+        im1.iff2 = true;
+        im1.request_int(0xFF);
+        assert_eq!(im1.step(&mut bus), Ok(13));
+        assert_eq!(im1.registers.pc, 0x0038);
+        assert_eq!((bus.0[0xC1FE], bus.0[0xC1FF]), (0x78, 0x56));
+
+        let mut im2 = Z80 {
+            interrupt_mode: 2,
+            i: 0x20,
+            ..Z80::default()
+        };
+        im2.registers.pc = 0x9ABC;
+        im2.registers.sp = 0xC300;
+        im2.iff1 = true;
+        im2.iff2 = true;
+        im2.request_int(0xFF);
+        bus.0[0x20FF] = 0x78;
+        bus.0[0x2100] = 0x56;
+        assert_eq!(im2.step(&mut bus), Ok(19));
+        assert_eq!(im2.registers.pc, 0x5678);
+        assert_eq!((bus.0[0xC2FE], bus.0[0xC2FF]), (0xBC, 0x9A));
+    }
+
+    #[test]
+    fn ei_delay_defers_maskable_interrupt_until_one_following_instruction() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..3].copy_from_slice(&[0xFB, 0x00, 0x76]);
+        let mut cpu = Z80::default();
+        cpu.request_int(0xFF);
+
+        assert_eq!(cpu.step(&mut bus), Ok(4)); // EI
+        assert_eq!(cpu.registers.pc, 1);
+        assert_eq!(cpu.step(&mut bus), Ok(4)); // one instruction after EI
+        assert_eq!(cpu.registers.pc, 2);
+        assert_eq!(cpu.step(&mut bus), Ok(13)); // INT accepted before HALT
+        assert_eq!(cpu.registers.pc, 0x0038);
+        assert!(!cpu.iff1);
+        assert!(cpu.int_pending.is_none());
     }
 
     #[test]
