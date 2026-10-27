@@ -339,6 +339,24 @@ impl Z80 {
                 }
                 10
             }
+            0xC4 | 0xCC | 0xD4 | 0xDC | 0xE4 | 0xEC | 0xF4 | 0xFC => {
+                let target = self.fetch16(bus);
+                if self.condition((opcode >> 3) & 0x07) {
+                    self.push16(bus, self.registers.pc);
+                    self.registers.pc = target;
+                    17
+                } else {
+                    10
+                }
+            }
+            0xC0 | 0xC8 | 0xD0 | 0xD8 | 0xE0 | 0xE8 | 0xF0 | 0xF8 => {
+                if self.condition((opcode >> 3) & 0x07) {
+                    self.registers.pc = self.pop16(bus);
+                    11
+                } else {
+                    5
+                }
+            }
             0xC9 => {
                 self.registers.pc = self.pop16(bus);
                 10
