@@ -73,9 +73,16 @@ class TMS9918A:
         self._cycles_into_line = 0
         self.scanline = 0
         self.frame_number = 0
+        self.sprite_limit_enabled = True
         self.framebuffer = bytes(SCREEN_WIDTH * SCREEN_HEIGHT * 3)
         self._working_framebuffer = bytearray(SCREEN_WIDTH * SCREEN_HEIGHT * 3)
         self._frame_ready = False
+
+    def set_sprite_limit_enabled(self, enabled: bool) -> None:
+        """Enable or disable the four-sprites-per-scanline hardware limit."""
+        if type(enabled) is not bool:
+            raise TypeError("enabled deve ser bool.")
+        self.sprite_limit_enabled = enabled
 
     def reset(self, *, clear_vram: bool = False) -> None:
         """Reinicia registradores e temporização sem apagar VRAM por padrão.
@@ -372,7 +379,7 @@ class TMS9918A:
     def _sprite_line_active(
         self, line: int
     ) -> tuple[list[tuple[int, int, int, int, int]], int | None]:
-        """Retorna os quatro primeiros sprites ativos e o índice do quinto."""
+        """Return active sprites and the first excluded index for this line."""
         attr_base = (self.registers[5] & 0x7F) << 7
         size = 16 if self.registers[1] & 0x02 else 8
         scale = 2 if self.registers[1] & 0x01 else 1
@@ -393,7 +400,7 @@ class TMS9918A:
             if row >= size * scale:
                 continue
 
-            if len(active) == 4:
+            if self.sprite_limit_enabled and len(active) == 4:
                 fifth_index = index
                 break
             if color_byte & 0x80:
