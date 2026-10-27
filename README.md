@@ -106,6 +106,19 @@ Se a extensão não estiver instalada, a interface informa que o runtime nativo 
 
 As fatias [PR #92](https://github.com/leonardo201800478/sega-emulator/pull/92) e [PR #93](https://github.com/leonardo201800478/sega-emulator/pull/93) passaram no workflow Windows. A PR #93 validou `rustfmt`, Clippy, testes Rust, build Release, **1.674 testes direcionados** e **2.329 testes de regressão** com a extensão instalada. Isso valida os caminhos cobertos, mas não demonstra compatibilidade universal, precisão ciclo a ciclo ou ganho de desempenho em todos os jogos.
 
+### Opções da CLI
+
+```powershell
+.\.venv\Scripts\python.exe -m sega_emulator --help
+.\.venv\Scripts\python.exe -m sega_emulator --version
+.\.venv\Scripts\python.exe -m sega_emulator --list-roms ".\roms\colecao.zip"
+.\.venv\Scripts\python.exe -m sega_emulator ".\roms\jogo.sg" --headless-frames 600 --ui pygame --summary-json ".\logs\headless-summary.json" --log-level DEBUG
+```
+
+`--summary-json` exige `--headless-frames`. O relatório inclui SHA-256 e tamanho da ROM, duração, quadros, FPS da execução headless, instruções, T-states e velocidade relativa ao clock nominal Z80 de 3.579.545 Hz. A velocidade headless mede throughput e pode exceder 100%, pois não é limitada pelo pacing gráfico. `--list-roms` lista membros suportados de ZIPs sem extrair conteúdo.
+
+No frontend Qt, **Velocidade lógica** compara T-states processados por segundo com o clock nominal. **Envio à UI (FPS)** mede a taxa de quadros enviados ao widget; não mede diretamente a apresentação física do monitor. Os logs incluem a janela de medição e p50/p95/p99 do tempo de processamento do quadro no lado da aplicação. Quadros descartados pelo compositor e underruns WASAPI permanecem não medidos sem contadores nativos confiáveis.
+
 ## Diagnóstico headless
 
 ```powershell
