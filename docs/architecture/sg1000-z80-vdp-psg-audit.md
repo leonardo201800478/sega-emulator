@@ -18,14 +18,14 @@ The following implementation slices have been added, but this ledger remains ope
 - Z80 state now includes alternate AF/BC/DE/HL, IX/IY, I/R, IFF1/IFF2, interrupt mode, WZ/MEMPTR, EI delay, NMI and INT request state.
 - The primary opcode decoder is extended with the CB matrix, ED arithmetic/load/I/O/block families, and DD/FD index substitution, displacement, repeated-prefix and indexed-CB handling.
 - The refresh register increments on M1 opcode fetches and HALT refresh cycles.
-- NMI and maskable interrupt service paths cover NMI, IM 1, IM 2, and the common IM 0 RST/NOP acknowledge forms. Other IM 0 data-bus opcodes currently return an explicit error and remain a known limitation.
+- NMI and maskable interrupt service cover IM 0/1/2. IM 0 injects the external opcode into the common decoder and fetches any operands from the current PC.
 - The machine synchronizes the VDP's enabled VBlank interrupt line to the Z80 INT request at instruction boundaries.
 
 ### Known limitations that prevent a completion claim
 
 - The scheduler still advances devices at instruction boundaries; this is not bus-cycle-accurate emulation.
-- The new opcode families have focused unit regressions, but still require exhaustive independent vectors for all encodings, flag edge cases, prefix interactions and timing.
-- IM 0 does not yet execute every possible externally supplied opcode.
+- The primary matrix and CB/ED/DD/FD families have encoding-classification coverage and focused regressions, but still require exhaustive independent vectors for flags, prefix interactions and timing.
+- IM 0 opcode injection still needs additional independent edge-case vectors for prefixes, HALT and acknowledge timing.
 - The VDP and PSG need the remaining independent behavior vectors listed below; existing unit tests alone do not prove full silicon fidelity.
 - A green Python SingleStepTests workflow is evidence for the Python adapter only unless the workflow explicitly executes the native Rust CPU. Do not present it as native Rust differential coverage.
 
