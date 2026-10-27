@@ -342,6 +342,16 @@ mod tests {
     use crate::{IoError, MemoryConfig, PsgWriteEvent};
 
     #[test]
+    fn machine_exposes_sprite_limit_toggle() {
+        let mut machine = Sg1000Machine::new(&[0x76], MemoryConfig::default()).unwrap();
+        assert!(machine.sprite_limit_enabled());
+        machine.set_sprite_limit_enabled(false);
+        assert!(!machine.sprite_limit_enabled());
+        machine.set_sprite_limit_enabled(true);
+        assert!(machine.sprite_limit_enabled());
+    }
+
+    #[test]
     fn headless_machine_runs_rom_and_writes_ram_deterministically() {
         let rom = [0x3E, 0x42, 0x21, 0x00, 0xC0, 0x36, 0x99, 0x76];
         let mut first = Sg1000Machine::new(&rom, MemoryConfig::default()).unwrap();
