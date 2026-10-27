@@ -15,6 +15,7 @@ pub mod io;
 pub mod machine;
 pub mod memory;
 pub mod psg;
+pub mod vdp;
 
 pub use bus::CpuBus;
 pub use cpu::{CpuError, Z80};
@@ -22,3 +23,4 @@ pub use io::{IoError, PsgWriteEvent, Sg1000Io};
 pub use machine::{MachineError, Sg1000Machine};
 pub use memory::{MemoryConfig, MemoryError, Sg1000Memory};
 pub use psg::{PsgError, Sn76489};
+pub use vdp::Tms9918A;
