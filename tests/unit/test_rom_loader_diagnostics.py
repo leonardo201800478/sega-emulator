@@ -97,3 +97,13 @@ def test_session_logging_writes_json_lines(tmp_path):
     assert records[1]["event"] == "rom_loaded"
     assert records[1]["rom_sha256"] == "abc123"
     assert records[1]["frame"] == 4
+
+
+
+def test_cli_help_exposes_diagnostic_options(capsys):
+    import sega_emulator.__main__ as cli
+
+    with pytest.raises(SystemExit) as result:
+        cli.main(["--help"])
+    assert result.value.code == 0
+    assert "--summary-json" in capsys.readouterr().out
