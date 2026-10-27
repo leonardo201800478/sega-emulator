@@ -489,4 +489,28 @@ mod tests {
         assert_eq!(chunked.output_phase, whole.output_phase);
         assert_eq!(chunked.pending_samples, whole.pending_samples);
     }
+
+    #[test]
+    fn public_api_preserves_render_and_drain_buffer_contracts() {
+        let mut psg = Sn76489::new(1_600, 100).unwrap();
+        psg.write(0x90);
+        psg.write(0x88);
+        psg.advance_clocks(16 * 250);
+        assert_eq!(psg.pending_sample_count(), 100);
+        assert_eq!(psg.dropped_samples(), 150);
+        assert_eq!(psg.drain_samples(Some(3)).len(), 3);
+        assert_eq!(psg.drain_samples(None).len(), 97);
+        assert!(psg.drain_samples(None).is_empty());
+
+        let rendered = psg.render(32);
+        assert_eq!(rendered.len(), 32);
+        assert!(psg.drain_samples(None).is_empty());
+    }
+
+    #[test]
+    fn constructor_rejects_zero_clock_and_sample_rate() {
+        assert_eq!(Sn76489::new(0, 44_100).unwrap_err(), super::PsgError::ZeroClock);
+        assert_eq!(Sn76489::new(3_579_545, 0).unwrap_err(), super::PsgError::ZeroSampleRate);
+    }
+
 }
