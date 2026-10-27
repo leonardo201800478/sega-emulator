@@ -528,13 +528,15 @@ impl Z80 {
     /// Execute DD/FD-prefixed instructions for IX/IY. Prefixes that do not
     /// affect an instruction are ignored while retaining their extra M1 cost.
     fn execute_indexed<B: CpuBus>(&mut self, bus: &mut B, prefix: u8) -> Result<u32, CpuError> {
-        let opcode = self.fetch_opcode(bus);
-        if opcode == 0xDD || opcode == 0xFD {
-            let cycles = self.execute_indexed(bus, opcode)?;
-            self.total_tstates += 4;
-            return Ok(cycles + 4);
+        let mut active_prefix = prefix;
+        let mut opcode = self.fetch_opcode(bus);
+        let mut extra_prefix_cycles = 0_u32;
+        while opcode == 0xDD || opcode == 0xFD {
+            active_prefix = opcode;
+            extra_prefix_cycles += 4;
+            opcode = self.fetch_opcode(bus);
         }
-
+        let prefix = active_prefix;
         let index = if prefix == 0xDD { self.ix } else { self.iy };
         let cycles = match opcode {
             0xCB => {
@@ -695,16 +697,18 @@ impl Z80 {
                 self.registers.pc = self.registers.pc.wrapping_sub(1);
                 self.r = (self.r & 0x80) | (self.r.wrapping_sub(1) & 0x7F);
                 let base_cycles = self.step(bus)?;
-                self.total_tstates += 4;
-                return Ok(base_cycles + 4);
+                let prefix_cycles = 4 + extra_prefix_cycles;
+                self.total_tstates += u64::from(prefix_cycles);
+                return Ok(base_cycles + prefix_cycles);
             }
         };
 
-        self.total_tstates += u64::from(cycles);
+        let total_cycles = cycles + extra_prefix_cycles;
+        self.total_tstates += u64::from(total_cycles);
         if self.ei_delay > 0 {
             self.ei_delay -= 1;
         }
-        Ok(cycles)
+        Ok(total_cycles)
     }
 
     fn execute_indexed_cb<B: CpuBus>(&mut self, bus: &mut B, address: u16, opcode: u8) -> u32 {
