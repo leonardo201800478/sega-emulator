@@ -128,6 +128,16 @@ class SettingsDialog(QDialog):
         self.integer_scale.setChecked(preferences.integer_scale)
         video_form.addRow(self.integer_scale)
 
+        self.sprite_limit_enabled = QCheckBox(
+            "Limitar a quatro sprites por linha (modo hardware)"
+        )
+        self.sprite_limit_enabled.setChecked(preferences.sprite_limit_enabled)
+        self.sprite_limit_enabled.setToolTip(
+            "Desative para diagnóstico visual; o comportamento deixa de seguir "
+            "o limite de sprites do SG-1000."
+        )
+        video_form.addRow(self.sprite_limit_enabled)
+
         video_note = QLabel(
             "A proporção 4:3 é preservada. A escala inteira reduz artefatos "
             "de interpolação; o modo bilinear suaviza a imagem, mas pode borrar pixels."
