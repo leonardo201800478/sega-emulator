@@ -61,7 +61,7 @@ def test_headless_summary_contains_measured_metrics(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     rom_path = tmp_path / "test.sg"
-    rom_path.write_bytes(b"\x00\xC3\x00\x00")
+    rom_path.write_bytes(b"\x00\xc3\x00\x00")
     report_path = tmp_path / "nested" / "summary.json"
     loaded = SimpleNamespace(
         data=rom_path.read_bytes(),
