@@ -33,14 +33,14 @@ A CI workflow only validates the commands it actually executes. A green Python w
 - [ ] Build the extension in Release mode and prove the imported extension path.
 
 ### Gate 2 — standalone SG-1000 runtime
-- [ ] CPU, memory/bus, I/O, VDP, PSG/audio, and scheduler integrated as pure Rust types independent of PyO3.
+- [x] CPU, memory/bus, I/O, VDP, PSG/audio, and machine coordination are Rust types independent of PyO3.
 - [ ] Add independent regression vectors before behavior fixes.
 - [ ] Compare CPU/flags/PC/SP/cycles, memory/I/O, VDP state/framebuffer, PSG samples, and repeatability.
 - [ ] No Python callbacks in instruction, memory-byte, pixel, or sample loops.
 
 ### Gate 3 — production boundary and legacy isolation
-- [ ] Qt/PySide6 uses only the thin native API for emulation.
-- [ ] Missing native runtime fails explicitly; no silent Python-core fallback.
+- [x] Qt/PySide6 uses only the thin native API for emulation.
+- [x] Missing native runtime fails explicitly; no silent Python-core fallback.
 - [x] Moved old Python cores into `legacy/python_reference/` after replacing production imports.
 - [x] Active tests/workflows do not import `legacy/`; the legacy tree is excluded from the package.
 - [x] Pygame is archived; Qt is the only active GUI.
@@ -60,15 +60,12 @@ A CI workflow only validates the commands it actually executes. A green Python w
 - Historical baseline note (before PR #126): VDP, PSG and machine-wide scheduling were not integrated. The current status is recorded below; the crate is still not a complete standalone emulator.
 - **Status atualizado:** Python production cores are archived; the Qt application uses the Rust-only facade. Cycle-accurate timing remains an open fidelity goal.
 
-## Current migration status — PR #126
-
-- Branch: `refactor/sg1000-native-core-consolidation`.
-- The branch internalizes the Z80 ALU and restores the shared `sega-z80-bus` contract used by SG-1000 and SMS.
-- `sg1000_core/src/vdp.rs` is now Python-independent: TMS9918A state, VRAM/control ports, scanline/VBlank timing, framebuffer rendering, and sprite helpers live in Rust types.
-- `Sg1000Machine` advances the VDP and SN76489 from nominal instruction T-states; CPU `IN A,(n)` and `OUT (n),A` are wired through the machine bus.
-- The PSG default clock profile is configurable but provisional; instruction-boundary timing is not cycle-exact.
-- PR #126 acceptance is an incremental Rust slice: native-core regressions, workspace quality checks, determinism checks, and review on the final candidate SHA. This PR does not complete Gate 2.
-- The standalone gate remains open until the Z80 instruction/prefix/interrupt implementation is complete, hardware clocks and VDP behavior are checked against independent references, and the PyO3/Qt boundary passes Release/Maturin and parity validation. Do not claim standalone completion or move Python production cores to `legacy/` before those gates pass.
+- **PR:** [#139 — Bind PyO3 SG-1000 runtime to consolidated Rust core](https://github.com/leonardo201800478/sega-emulator/pull/139), open and Draft at the time of this update.
+- **Architecture:** the Qt application uses a Rust-only PyO3 facade; CPU, memory/map, I/O, VDP, PSG and machine coordination are implemented in `native/sg1000_core`.
+- **Legacy isolation:** Python hardware implementation, dependent tests/tools and Python-only audit workflows live under `legacy/`, outside the installed package and active test/workflow paths.
+- **Validation still required:** all applicable workflows must pass on the same candidate SHA; Release/Maturin build and Qt integration must be verified; the eight ROMs from issue #136 and comparison against ARES remain untested in this PR.
+- **Fidelity boundary:** execution advances by instruction with nominal T-states. The crate is not declared cycle-accurate or universally compatible.
+- Shared crate relocation and future platforms are separate scope; do not expand this PR into SMS/Game Gear or later consoles.
 
 ## Change log
 - 2026-10-27: PR #126 expanded the native SG-1000 slice with a PyO3-free TMS9918A, VDP raster advancement, SN76489 clock/sample integration, and Z80 immediate IN/OUT routing. Before merge, verify the Rust workspace, Python CI, SMS fast validation, Z80 differential/extended audits, Qt backend validation, and sequential SG-1000 validation on the same final candidate SHA; see `sg1000-native-consolidation.md`.

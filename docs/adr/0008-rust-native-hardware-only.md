@@ -30,13 +30,13 @@ Este inventário é inicial, não uma declaração de que cada arquivo está iso
 3. **Concluído para o SG-1000:** mapa de memória, cartucho e I/O são delegados ao núcleo Rust via fachada PyO3.
 4. Integrar VDP TMS9918A, PSG SN76489, temporização e scheduler determinístico.
 5. **Concluído para o SG-1000:** aplicação Qt usa a fachada PyO3 e não possui caminho ativo de hardware Python.
-6. Arquivar implementações Python substituídas em `legacy/python_reference/` e confirmar que nenhum módulo de produção as importa.
+6. **Concluído para o SG-1000:** implementações Python substituídas foram arquivadas em `legacy/python_reference/`; imports ativos não as utilizam.
 7. Executar `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked`, build Release/Maturin e testes de integração relevantes; validar workflows no SHA exato.
 8. Atualizar README, matriz de cobertura e limitações antes de marcar cada fatia concluída.
 
 ## Restrições
 
-- Não remover a interface Qt nem as ferramentas Python.
+- Não remover a interface Qt nem os testes de integração Qt/PyO3. Ferramentas Python que dependiam do runtime antigo foram arquivadas.
 - Não mover código ativo apenas para satisfazer a organização de diretórios.
 - Não aceitar hashes iguais como prova absoluta de correção.
 - Não introduzir JIT ou paralelismo especulativo.
