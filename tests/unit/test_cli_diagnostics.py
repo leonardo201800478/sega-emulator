@@ -70,14 +70,25 @@ def test_headless_summary_contains_measured_metrics(
         sha256="a" * 64,
         display_name=rom_path.name,
     )
-    monkeypatch.setattr(cli, "configure_session_logging", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        cli, "configure_session_logging", lambda *args, **kwargs: None
+    )
     monkeypatch.setattr(cli, "load_rom", lambda path: loaded)
     monkeypatch.setattr(cli, "SG1000Machine", FakeMachine)
 
-    result = cli.main([
-        str(rom_path), "--ui", "pygame", "--headless-frames", "2",
-        "--summary-json", str(report_path), "--log-dir", str(tmp_path / "logs"),
-    ])
+    result = cli.main(
+        [
+            str(rom_path),
+            "--ui",
+            "pygame",
+            "--headless-frames",
+            "2",
+            "--summary-json",
+            str(report_path),
+            "--log-dir",
+            str(tmp_path / "logs"),
+        ]
+    )
 
     assert result == 0
     report = json.loads(report_path.read_text(encoding="utf-8"))
