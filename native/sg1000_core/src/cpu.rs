@@ -1470,7 +1470,10 @@ mod tests {
         assert_eq!(cpu.ix, 0x1235);
         assert_eq!(cpu.iy, 0xC100);
         assert_eq!(bus.0[0xC102], 0x5A);
-        assert_eq!(cpu.registers.f & (FLAG_H | FLAG_Z | FLAG_PV), FLAG_H | FLAG_Z | FLAG_PV);
+        assert_eq!(
+            cpu.registers.f & (FLAG_H | FLAG_Z | FLAG_PV),
+            FLAG_H | FLAG_Z | FLAG_PV
+        );
         assert_eq!(bus.0[0x1237], 1);
         assert_eq!(cpu.r, 16);
     }
