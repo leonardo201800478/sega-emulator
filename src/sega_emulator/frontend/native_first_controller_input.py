@@ -233,7 +233,11 @@ class NativeFirstControllerInput:
         *,
         native: XInputControllerInput | None = None,
         fallback: Any | None = None,
+        backend_preference: str = "auto",
     ) -> None:
+        if backend_preference not in {"auto", "xinput", "sdl3"}:
+            raise ValueError("backend_preference must be auto, xinput, or sdl3")
+        self.backend_preference = backend_preference
         self._config = config or ControllerInputConfig()
         self.native = native or XInputControllerInput(self._config)
         if fallback is None:
@@ -260,17 +264,42 @@ class NativeFirstControllerInput:
 
     @property
     def available(self) -> bool:
+        if self.backend_preference == "xinput":
+            return self.native.available
+        if self.backend_preference == "sdl3":
+            return bool(self.fallback.available)
         return self.native.available or bool(self.fallback.available)
+
+    def set_backend_preference(self, preference: str) -> None:
+        """Switch the host input API without changing the normalized core contract."""
+        if preference not in {"auto", "xinput", "sdl3"}:
+            raise ValueError("preference must be auto, xinput, or sdl3")
+        self.backend_preference = preference
+        self._active_backend = (
+            "xinput" if preference == "xinput" else "sdl" if preference == "sdl3"
+            else "xinput" if self.native.connected_names() else "sdl"
+        )
+        self._disconnect_pending = False
 
     def _native_names(self) -> list[str]:
         return self.native.connected_names()
 
     def connected_names(self) -> list[str]:
+        if self.backend_preference == "xinput":
+            return self._native_names()
+        if self.backend_preference == "sdl3":
+            return self.fallback.connected_names()
         native_names = self._native_names()
         return native_names if native_names else self.fallback.connected_names()
 
     def poll(self) -> dict[int, set[str]]:
         previous_backend = self._active_backend
+        if self.backend_preference == "xinput":
+            self._active_backend = "xinput"
+            return self.native.poll()
+        if self.backend_preference == "sdl3":
+            self._active_backend = "sdl"
+            return self.fallback.poll()
         native_names = self._native_names()
         if native_names:
             actions = self.native.poll()
@@ -287,6 +316,10 @@ class NativeFirstControllerInput:
         return self.fallback.poll()
 
     def consume_disconnect_event(self) -> bool:
+        if self.backend_preference == "xinput":
+            return self.native.consume_disconnect_event()
+        if self.backend_preference == "sdl3":
+            return self.fallback.consume_disconnect_event()
         if self._disconnect_pending:
             self._disconnect_pending = False
             # Clear the underlying native edge too, so it is not reported twice.
@@ -297,6 +330,10 @@ class NativeFirstControllerInput:
         return self.fallback.consume_disconnect_event()
 
     def read_pressed_button(self, player: int) -> str | None:
+        if self.backend_preference == "xinput":
+            return self.native.read_pressed_button(player)
+        if self.backend_preference == "sdl3":
+            return self.fallback.read_pressed_button(player)
         if self._native_names():
             return self.native.read_pressed_button(player)
         return self.fallback.read_pressed_button(player)
