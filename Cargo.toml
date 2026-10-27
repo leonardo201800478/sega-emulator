@@ -6,8 +6,10 @@ exclude = [
 members = [
     "native/sg1000_core",
     "native/z80_alu",
+    "native/sms_core",
 ]
 default-members = [
     "native/sg1000_core",
     "native/z80_alu",
+    "native/sms_core",
 ]
