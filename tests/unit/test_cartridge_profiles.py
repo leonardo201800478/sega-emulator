@@ -36,8 +36,13 @@ def test_known_type_b_crc_selects_profile_metadata(monkeypatch) -> None:
 
 def test_dahjee_type_a_crcs_select_expanded_system_ram(monkeypatch) -> None:
     assert SG1000_DAHJEE_TYPE_A_CRC32 == {
-        0x223397A1, 0x281D2888, 0x2E7166D5, 0xDF7CBFA5,
-        0xE0816BB7, 0x5CBD1163, 0xC550B4F0,
+        0x223397A1,
+        0x281D2888,
+        0x2E7166D5,
+        0xDF7CBFA5,
+        0xE0816BB7,
+        0x5CBD1163,
+        0xC550B4F0,
     }
     monkeypatch.setattr(zlib, "crc32", lambda data: 0x223397A1)
     profile = cartridge_profile(b"synthetic King's Valley ROM")
