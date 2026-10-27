@@ -126,15 +126,15 @@ mod tests {
     #[test]
     fn player_two_directions_and_buttons_are_split_across_physical_ports() {
         let mut io = Sg1000Io::default();
-        io.set_joystick(2, 0xFF & !(1 << 0)).unwrap(); // Up
+        io.set_joystick(2, !(1 << 0)).unwrap(); // Up
         assert_eq!(io.read_port(0xDC), 0xBF);
         assert_eq!(io.read_port(0xDD), 0xFF);
 
-        io.set_joystick(2, 0xFF & !(1 << 2)).unwrap(); // Left
+        io.set_joystick(2, !(1 << 2)).unwrap(); // Left
         assert_eq!(io.read_port(0xDC), 0xFF);
         assert_eq!(io.read_port(0xDD), 0xFE);
 
-        io.set_joystick(2, 0xFF & !(1 << 5)).unwrap(); // Button 2
+        io.set_joystick(2, !(1 << 5)).unwrap(); // Button 2
         assert_eq!(io.read_port(0xDC), 0xFF);
         assert_eq!(io.read_port(0xDD), 0xF7);
     }
