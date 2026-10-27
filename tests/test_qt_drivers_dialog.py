@@ -1,4 +1,5 @@
 """Tests for the global host-driver selector."""
+
 from __future__ import annotations
 
 import os
