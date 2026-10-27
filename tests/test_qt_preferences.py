@@ -141,7 +141,6 @@ def test_explicit_invalid_cpu_core_is_rejected() -> None:
         FrontendPreferences(cpu_core="native")
 
 
-
 def test_legacy_python_runtime_preference_is_migrated_to_rust() -> None:
     settings = MemorySettings({"cpu_core": "python"})
     preferences = FrontendPreferences.from_store(settings)
