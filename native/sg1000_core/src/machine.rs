@@ -6,13 +6,14 @@
 use std::fmt;
 
 use crate::{
-    CpuError, IoError, MemoryConfig, MemoryError, PsgWriteEvent, Sg1000Io, Sg1000Memory, Tms9918A, Z80,
+    CpuError, IoError, MemoryConfig, MemoryError, PsgError, PsgWriteEvent, Sg1000Io, Sg1000Memory, Sn76489, Tms9918A, Z80,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MachineError {
     Memory(MemoryError),
     Cpu(CpuError),
+    Audio(PsgError),
 }
 
 impl fmt::Display for MachineError {
@@ -20,6 +21,7 @@ impl fmt::Display for MachineError {
         match self {
             Self::Memory(error) => write!(f, "SG-1000 memory initialization failed: {error}"),
             Self::Cpu(error) => write!(f, "Z80 execution failed: {error:?}"),
+            Self::Audio(error) => write!(f, "SG-1000 PSG initialization failed: {error}"),
         }
     }
 }
@@ -38,26 +40,48 @@ impl From<CpuError> for MachineError {
     }
 }
 
+impl From<PsgError> for MachineError {
+    fn from(error: PsgError) -> Self {
+        Self::Audio(error)
+    }
+}
+
 /// Incremental headless machine used to develop and validate the standalone core.
 ///
 /// The I/O boundary currently models controller aliases and captures PSG writes.
 /// It does not yet connect the CPU's IN/OUT instructions, a native VDP, or a
 /// machine-wide scheduler.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Sg1000Machine {
     pub cpu: Z80,
     pub memory: Sg1000Memory,
     pub io: Sg1000Io,
     pub vdp: Tms9918A,
+    pub psg: Sn76489,
+    psg_tstate: u64,
 }
 
 impl Sg1000Machine {
     pub fn new(rom: &[u8], memory_config: MemoryConfig) -> Result<Self, MachineError> {
+        Self::new_with_audio(rom, memory_config, 3_579_545, 44_100)
+    }
+
+    /// Construct a machine with an explicit PSG master clock and output rate.
+    /// The default clock profile is a provisional SG-1000 nominal clock; verify
+    /// against board-level documentation before treating timing as hardware-exact.
+    pub fn new_with_audio(
+        rom: &[u8],
+        memory_config: MemoryConfig,
+        psg_clock_hz: u64,
+        sample_rate: u64,
+    ) -> Result<Self, MachineError> {
         Ok(Self {
             cpu: Z80::default(),
             memory: Sg1000Memory::new(rom, memory_config)?,
             io: Sg1000Io::default(),
             vdp: Tms9918A::new(),
+            psg: Sn76489::new(psg_clock_hz, sample_rate)?,
+            psg_tstate: 0,
         })
     }
 
@@ -65,6 +89,8 @@ impl Sg1000Machine {
     pub fn step(&mut self) -> Result<u32, MachineError> {
         let cycles = self.cpu.step(&mut self.memory)?;
         self.vdp.advance(u64::from(cycles));
+        self.psg.advance_clocks(u64::from(cycles));
+        self.psg_tstate = self.psg_tstate.saturating_add(u64::from(cycles));
         Ok(cycles)
     }
 
@@ -93,7 +119,16 @@ impl Sg1000Machine {
     pub fn write_port_at(&mut self, address: u16, value: u8, tstate: u64) {
         match (address as u8) & 0xC1 {
             0x80 | 0x81 => self.vdp.write_port(address, value),
-            _ => self.io.write_port_at(address, value, tstate),
+            _ => {
+                self.io.write_port_at(address, value, tstate);
+                if (address as u8) & 0xFF >= 0x40 && (address as u8) <= 0x7F {
+                    if tstate > self.psg_tstate {
+                        self.psg.advance_clocks(tstate - self.psg_tstate);
+                        self.psg_tstate = tstate;
+                    }
+                    self.psg.write(value);
+                }
+            },
         }
     }
 
@@ -111,6 +146,11 @@ impl Sg1000Machine {
 
     pub fn drain_psg_write_events(&mut self) -> Vec<PsgWriteEvent> {
         self.io.drain_psg_write_events()
+    }
+
+    /// Drain generated mono audio samples for the host audio backend.
+    pub fn drain_audio_samples(&mut self, max_samples: Option<usize>) -> Vec<f64> {
+        self.psg.drain_samples(max_samples)
     }
 }
 
@@ -131,6 +171,7 @@ mod tests {
         assert_eq!(first.memory, second.memory);
         assert_eq!(first.io, second.io);
         assert_eq!(first.vdp, second.vdp);
+        assert_eq!(first.psg, second.psg);
         assert_eq!(first.cpu.registers.a, 0x42);
         assert_eq!(first.read_memory(0xC000), 0x99);
         assert!(first.cpu.halted);
@@ -178,6 +219,8 @@ mod tests {
         machine.write_port_at(0x81, 0x40, 4);
         machine.write_port_at(0x80, 0xA5, 4);
         assert_eq!(machine.vdp.vram()[0], 0xA5);
+        machine.write_port_at(0x40, 0x90, machine.cpu.total_tstates);
+        assert_eq!(machine.drain_psg_write_events().len(), 1);
     }
 
     #[test]
