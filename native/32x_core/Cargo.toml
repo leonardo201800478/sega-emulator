@@ -1,0 +1,11 @@
+[package]
+name = "sega-32x-core"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "sega_32x_core"
+path = "src/lib.rs"
+
+[dependencies]
