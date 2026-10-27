@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "native/sms_core/**"
+      - "native/z80_bus/**"
+      - "native/z80_bus/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/sms-core-fast.yml"
