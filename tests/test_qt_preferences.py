@@ -143,3 +143,15 @@ def test_invalid_saved_cpu_core_falls_back_to_rust() -> None:
 def test_explicit_invalid_cpu_core_is_rejected() -> None:
     with pytest.raises(ValueError, match="cpu_core"):
         FrontendPreferences(cpu_core="native")
+
+
+def test_legacy_python_runtime_preference_is_migrated_to_rust() -> None:
+    settings = MemorySettings({"cpu_core": "python"})
+    preferences = FrontendPreferences.from_store(settings)
+    assert preferences.cpu_core == "rust"
+    assert settings.values["cpu_core"] == "rust"
+
+
+def test_python_runtime_cannot_be_selected_in_preferences() -> None:
+    with pytest.raises(ValueError, match="Rust-only"):
+        FrontendPreferences(cpu_core="python")
