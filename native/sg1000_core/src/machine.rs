@@ -5,6 +5,7 @@
 
 use std::fmt;
 
+use crate::CpuBus;
 use crate::{
     CpuError, IoError, MemoryConfig, MemoryError, PsgError, PsgWriteEvent, Sg1000Io, Sg1000Memory,
     Sn76489, Tms9918A, Z80,
@@ -52,6 +53,50 @@ impl From<PsgError> for MachineError {
 /// The I/O boundary currently models controller aliases and captures PSG writes.
 /// It does not yet connect the CPU's IN/OUT instructions, a native VDP, or a
 /// machine-wide scheduler.
+
+/// Split-borrow adapter that exposes all SG-1000 devices to one Z80 step.
+struct Sg1000MachineBus<'a> {
+    memory: &'a mut Sg1000Memory,
+    io: &'a mut Sg1000Io,
+    vdp: &'a mut Tms9918A,
+    psg: &'a mut Sn76489,
+    psg_tstate: &'a mut u64,
+    tstate: u64,
+}
+
+impl CpuBus for Sg1000MachineBus<'_> {
+    fn read_memory(&mut self, address: u16) -> u8 {
+        self.memory.read(address)
+    }
+
+    fn write_memory(&mut self, address: u16, value: u8) {
+        self.memory.write(address, value);
+    }
+
+    fn read_port(&mut self, port: u16) -> u8 {
+        match (port as u8) & 0xC1 {
+            0x80 | 0x81 => self.vdp.read_port(port),
+            _ => self.io.read_port(port),
+        }
+    }
+
+    fn write_port(&mut self, port: u16, value: u8) {
+        match (port as u8) & 0xC1 {
+            0x80 | 0x81 => self.vdp.write_port(port, value),
+            _ => {
+                self.io.write_port_at(port, value, self.tstate);
+                if (0x40..=0x7F).contains(&(port as u8)) {
+                    if self.tstate > *self.psg_tstate {
+                        self.psg.advance_clocks(self.tstate - *self.psg_tstate);
+                        *self.psg_tstate = self.tstate;
+                    }
+                    self.psg.write(value);
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Sg1000Machine {
     pub cpu: Z80,
@@ -88,10 +133,21 @@ impl Sg1000Machine {
 
     /// Execute one CPU instruction and return its nominal base T-state count.
     pub fn step(&mut self) -> Result<u32, MachineError> {
-        let cycles = self.cpu.step(&mut self.memory)?;
+        let tstate = self.cpu.total_tstates;
+        let cycles = {
+            let mut bus = Sg1000MachineBus {
+                memory: &mut self.memory,
+                io: &mut self.io,
+                vdp: &mut self.vdp,
+                psg: &mut self.psg,
+                psg_tstate: &mut self.psg_tstate,
+                tstate,
+            };
+            self.cpu.step(&mut bus)?
+        };
         self.vdp.advance(u64::from(cycles));
         self.psg.advance_clocks(u64::from(cycles));
-        self.psg_tstate = self.psg_tstate.saturating_add(u64::from(cycles));
+        self.psg_tstate = self.cpu.total_tstates;
         Ok(cycles)
     }
 
