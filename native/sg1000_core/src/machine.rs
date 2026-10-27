@@ -511,8 +511,9 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_instruction_is_reported_to_caller() {
-        let mut machine = Sg1000Machine::new(&[0xDD], MemoryConfig::default()).unwrap();
-        assert!(machine.step().is_err());
+    fn ignored_index_prefix_advances_machine_with_documented_cycles() {
+        let mut machine = Sg1000Machine::new(&[0xDD, 0x00], MemoryConfig::default()).unwrap();
+        assert_eq!(machine.step(), Ok(8));
+        assert_eq!(machine.cpu.registers.pc, 2);
     }
 }
