@@ -105,6 +105,7 @@ pub struct Sg1000Machine {
     pub vdp: Tms9918A,
     pub psg: Sn76489,
     psg_tstate: u64,
+    pending_psg_writes: Vec<PsgWriteEvent>,
 }
 
 impl Sg1000Machine {
@@ -128,6 +129,7 @@ impl Sg1000Machine {
             vdp: Tms9918A::new(),
             psg: Sn76489::new(psg_clock_hz, sample_rate)?,
             psg_tstate: 0,
+            pending_psg_writes: Vec::new(),
         })
     }
 
@@ -146,8 +148,24 @@ impl Sg1000Machine {
             self.cpu.step(&mut bus)?
         };
         self.vdp.advance(u64::from(cycles));
-        self.psg.advance_clocks(u64::from(cycles));
-        self.psg_tstate = self.cpu.total_tstates;
+        let end_tstate = self.cpu.total_tstates;
+        loop {
+            let next = self.pending_psg_writes.iter().enumerate()
+                .filter(|(_, event)| event.tstate <= end_tstate)
+                .min_by_key(|(_, event)| event.tstate)
+                .map(|(index, _)| index);
+            let Some(index) = next else { break; };
+            let event = self.pending_psg_writes.remove(index);
+            if event.tstate > self.psg_tstate {
+                self.psg.advance_clocks(event.tstate - self.psg_tstate);
+                self.psg_tstate = event.tstate;
+            }
+            self.psg.write(event.value);
+        }
+        if end_tstate > self.psg_tstate {
+            self.psg.advance_clocks(end_tstate - self.psg_tstate);
+        }
+        self.psg_tstate = end_tstate;
         Ok(cycles)
     }
 
@@ -179,11 +197,15 @@ impl Sg1000Machine {
             _ => {
                 self.io.write_port_at(address, value, tstate);
                 if (0x40..=0x7F).contains(&(address as u8)) {
-                    if tstate > self.psg_tstate {
-                        self.psg.advance_clocks(tstate - self.psg_tstate);
-                        self.psg_tstate = tstate;
+                    if tstate > self.cpu.total_tstates {
+                        self.pending_psg_writes.push(PsgWriteEvent { tstate, value });
+                    } else {
+                        if tstate > self.psg_tstate {
+                            self.psg.advance_clocks(tstate - self.psg_tstate);
+                            self.psg_tstate = tstate;
+                        }
+                        self.psg.write(value);
                     }
-                    self.psg.write(value);
                 }
             },
         }
