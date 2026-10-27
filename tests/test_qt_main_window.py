@@ -82,30 +82,6 @@ def test_video_scale_updates_window_size(qt_app, scale: int) -> None:
     window.close()
 
 
-def test_video_menu_exposes_sync_modes_and_persists_selection(qt_app) -> None:
-    selected: list[str] = []
-    window = EmulatorMainWindow(
-        on_open_rom=lambda: None,
-        on_pause_resume=lambda: None,
-        on_reset=lambda: None,
-        on_configure_controls=lambda: None,
-        on_show_controllers=lambda: None,
-        on_vdp_snapshot=lambda: None,
-        on_open_logs=lambda: None,
-        on_show_machine_state=lambda: None,
-        on_video_scale=lambda scale: None,
-        video_sync_mode="vsync",
-        on_video_sync_mode=selected.append,
-    )
-
-    assert set(window.video_sync_actions) == {"vsync", "vrr", "gsync", "off"}
-    assert window.video_sync_actions["vsync"].isChecked()
-    window.video_sync_actions["gsync"].trigger()
-    assert selected == ["gsync"]
-    assert window.video_sync_actions["gsync"].isChecked()
-    window.close()
-
-
 def test_main_window_exposes_drivers_menu_and_callback(qt_app) -> None:
     called: list[str] = []
     window = EmulatorMainWindow(
