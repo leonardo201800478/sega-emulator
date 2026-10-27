@@ -123,12 +123,24 @@ impl Z80 {
                     correction |= 0x60;
                     carry = true;
                 }
-                let result = if subtract { a.wrapping_sub(correction) } else { a.wrapping_add(correction) };
+                let result = if subtract {
+                    a.wrapping_sub(correction)
+                } else {
+                    a.wrapping_add(correction)
+                };
                 let mut flags = (old_flags & FLAG_N) | (result & (FLAG_S | FLAG_XY));
-                if result == 0 { flags |= FLAG_Z; }
-                if result.count_ones().is_multiple_of(2) { flags |= FLAG_PV; }
-                if (a ^ result) & 0x10 != 0 { flags |= FLAG_H; }
-                if carry { flags |= FLAG_C; }
+                if result == 0 {
+                    flags |= FLAG_Z;
+                }
+                if result.count_ones().is_multiple_of(2) {
+                    flags |= FLAG_PV;
+                }
+                if (a ^ result) & 0x10 != 0 {
+                    flags |= FLAG_H;
+                }
+                if carry {
+                    flags |= FLAG_C;
+                }
                 self.registers.a = result;
                 self.registers.f = flags;
                 4
@@ -136,12 +148,15 @@ impl Z80 {
             0x2F => {
                 self.registers.a = !self.registers.a;
                 self.registers.f = (self.registers.f & (FLAG_S | FLAG_Z | FLAG_PV | FLAG_C))
-                    | (self.registers.a & FLAG_XY) | FLAG_H | FLAG_N;
+                    | (self.registers.a & FLAG_XY)
+                    | FLAG_H
+                    | FLAG_N;
                 4
             }
             0x37 => {
                 self.registers.f = (self.registers.f & (FLAG_S | FLAG_Z | FLAG_PV))
-                    | (self.registers.a & FLAG_XY) | FLAG_C;
+                    | (self.registers.a & FLAG_XY)
+                    | FLAG_C;
                 4
             }
             0x3F => {
@@ -271,7 +286,10 @@ impl Z80 {
                 let displacement = self.fetch8(bus) as i8;
                 self.registers.b = self.registers.b.wrapping_sub(1);
                 if self.registers.b != 0 {
-                    self.registers.pc = self.registers.pc.wrapping_add_signed(i16::from(displacement));
+                    self.registers.pc = self
+                        .registers
+                        .pc
+                        .wrapping_add_signed(i16::from(displacement));
                     13
                 } else {
                     8
@@ -508,7 +526,7 @@ impl Z80 {
 
 #[cfg(test)]
 mod tests {
-    use super::{CpuError, FLAG_C, FLAG_H, FLAG_PV, FLAG_Z, Z80};
+    use super::{CpuError, FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_Z, Z80};
     use crate::bus::CpuBus;
 
     struct TestBus([u8; 0x10000]);
