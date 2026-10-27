@@ -101,6 +101,8 @@ pub struct Z80 {
     pub nmi_pending: bool,
     /// Maskable INT request and the external data-bus byte for acknowledge.
     pub int_pending: Option<u8>,
+    /// Opcode supplied by an IM 0 interrupt acknowledge; it does not consume PC.
+    injected_opcode: Option<u8>,
     pub halted: bool,
     pub total_tstates: u64,
 }
@@ -120,6 +122,7 @@ impl Z80 {
         self.ei_delay = 0;
         self.nmi_pending = false;
         self.int_pending = None;
+        self.injected_opcode = None;
         self.halted = false;
         self.total_tstates = 0;
     }
@@ -161,17 +164,13 @@ impl Z80 {
         self.iff2 = false;
 
         let cycles = match self.interrupt_mode {
-            0 if data_bus & 0xC7 == 0xC7 => {
-                self.push16(bus, return_address);
-                self.registers.pc = u16::from(data_bus & 0x38);
-                13
-            }
-            0 if data_bus == 0x00 => 6,
             0 => {
-                return Err(CpuError::UnsupportedOpcode {
-                    opcode: data_bus,
-                    address: return_address,
-                });
+                // IM 0 executes the externally supplied byte as the first
+                // opcode fetch. Operands, if any, are fetched from the current PC.
+                self.injected_opcode = Some(data_bus);
+                let instruction_cycles = self.step(bus)?;
+                self.total_tstates += 2;
+                return Ok(instruction_cycles + 2);
             }
             1 => {
                 self.push16(bus, return_address);
@@ -188,7 +187,6 @@ impl Z80 {
                 19
             }
             _ => {
-                self.interrupt_mode = 0;
                 return Err(CpuError::UnsupportedOpcode {
                     opcode: data_bus,
                     address: return_address,
@@ -218,7 +216,12 @@ impl Z80 {
         }
 
         let address = self.registers.pc;
-        let opcode = self.fetch_opcode(bus);
+        let opcode = if let Some(injected) = self.injected_opcode.take() {
+            self.r = (self.r & 0x80) | (self.r.wrapping_add(1) & 0x7F);
+            injected
+        } else {
+            self.fetch_opcode(bus)
+        };
         if opcode == 0xDD || opcode == 0xFD {
             return self.execute_indexed(bus, opcode);
         }
@@ -1597,6 +1600,25 @@ mod tests {
         assert_eq!(im2.step(&mut bus), Ok(19));
         assert_eq!(im2.registers.pc, 0x5678);
         assert_eq!((bus.0[0xC2FE], bus.0[0xC2FF]), (0xBC, 0x9A));
+    }
+
+    #[test]
+    fn im0_executes_an_external_call_opcode_and_fetches_operands_from_pc() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[0x1234] = 0x78;
+        bus.0[0x1235] = 0x56;
+        let mut cpu = Z80::default();
+        cpu.registers.pc = 0x1234;
+        cpu.registers.sp = 0xC100;
+        cpu.iff1 = true;
+        cpu.iff2 = true;
+        cpu.request_int(0xCD); // CALL nn supplied by the interrupting device
+
+        assert_eq!(cpu.step(&mut bus), Ok(19));
+        assert_eq!(cpu.registers.pc, 0x5678);
+        assert_eq!(cpu.registers.sp, 0xC0FE);
+        assert_eq!((bus.0[0xC0FE], bus.0[0xC0FF]), (0x36, 0x12));
+        assert_eq!(cpu.total_tstates, 19);
     }
 
     #[test]
