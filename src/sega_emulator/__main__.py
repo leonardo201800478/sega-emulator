@@ -83,7 +83,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         if args.headless_frames is not None:
             if args.headless_frames < 0:
                 parser.error("--headless-frames não pode ser negativo")
-            steps = machine.run_frames(args.headless_frames)
+            machine.run_frames(args.headless_frames)
             logger.info(
                 "Execução headless concluída",
                 extra={
