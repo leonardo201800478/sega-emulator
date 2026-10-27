@@ -49,22 +49,30 @@ controller state to be updated through its event/update mechanism.
 2. The adapter creates a `ControllerFrame` from
    `native/sg1000_core/src/input.rs`.
 3. The host integration applies `frame.apply_to(&mut machine)`, which latches
-   both controller bytes through the existing `Sg1000Machine::set_joystick`
+   the logical snapshots through the existing `Sg1000Machine::set_joystick`
    interface.
-4. CPU port reads observe the latest latched state. Identical snapshots must
-   produce identical machine input state.
+4. `Sg1000Io` composes the physical port reads: `0xDC` contains player 1's
+   Up/Down/Left/Right/Button 1/Button 2 on bits 0–5 and player 2's Up/Down on
+   bits 6–7; `0xDD` contains player 2's Left/Right/Button 1/Button 2 on bits
+   0–3. Bits are active-low. The logical aliases `0x00` and `0x01` are
+   retained for compatibility with the host-facing machine contract.
 
-## Normalized port contract
+## Normalized input contract
 
-The first implementation defines six semantic controls: Up, Down, Left,
-Right, Button 1, and Button 2. Bits 0–5 are active-low in that order; bits 6–7
-remain high. The released state is `0xFF`. Backend adapters normalize each
-backend to pressed=true and must not invert the active-low byte a second time.
+Each logical controller has six semantic controls: Up, Down, Left, Right,
+Button 1, and Button 2. Bits 0–5 are active-low in that order in the normalized
+snapshot; the released state is `0xFF`. This normalized byte is not itself the
+physical byte read at both `0xDC` and `0xDD`: player 2 is split across those
+two hardware ports. Backend adapters normalize each backend to pressed=true
+and must not apply active-low inversion a second time.
 
-This bit assignment remains provisional until cross-checked against the
-existing Python implementation and independent SG-1000 hardware/reference
-documentation. Do not treat the proposed mapping as final hardware truth before
-that verification.
+The logical control order is grounded in SG-1000 controller pinouts and
+independent port descriptions:
+- https://consolemods.org/wiki/SG-1000:Connector_Pinouts
+- https://nicole.express/2023/neo-geo-eat-your-heart-out.html
+
+The remaining I/O bits are held high by this model. This does not claim that
+every console control signal or board revision has been modeled.
 
 ## Backend-specific requirements
 
@@ -87,8 +95,8 @@ that verification.
 
 ## Acceptance gates
 
-- Verify the port-bit layout against the existing Python implementation and
-  reliable independent SG-1000 documentation/tests.
+- Cross-check the normalized logical button order against the Python reference
+  and independent SG-1000 port documentation/tests.
 - Implement XInput-first native selection on Windows, DirectInput legacy
   fallback, and an SDL cross-platform/explicit backend.
 - Test synthetic backend samples, each button, chords, disconnect/reconnect,
@@ -106,8 +114,8 @@ that verification.
 
 ## Current scope of PR #127
 
-This PR introduces the Rust normalization contract, the default native-first
-policy, and deterministic tests. It does **not** yet implement actual SDL
-polling, XInput API calls, or DirectInput COM enumeration. Those adapters and
-the frontend integration must be implemented and validated before this PR can
-be considered complete.
+This PR adds the Rust logical snapshot contract, the default native-first
+policy, physical port composition, and deterministic tests. It does **not**
+yet implement actual SDL polling, XInput API calls, or DirectInput COM
+enumeration. Those adapters and the frontend integration must be implemented
+and validated before this PR can be considered complete.
