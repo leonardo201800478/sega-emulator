@@ -484,6 +484,36 @@ mod tests {
     }
 
     #[test]
+    fn noise_rate_selects_fixed_dividers_or_tracks_tone_three() {
+        let mut device = Sn76489::new(3_579_545, 44_100).unwrap();
+        for (control, expected) in [(0_u8, 0x10_u16), (1, 0x20), (2, 0x40)] {
+            device.write_inner(0xE0 | control);
+            assert_eq!(device.noise_period, expected);
+        }
+
+        device.write_inner(0xE3);
+        assert_eq!(device.noise_period, 1);
+        device.write_inner(0xC3); // tone channel 3 period low nibble = 3
+        device.write_inner(0x12); // period high bits = 0x12
+        assert_eq!(device.tone_periods[2], 0x123);
+        assert_eq!(device.noise_period, 0x123);
+    }
+
+    #[test]
+    fn attenuation_zero_is_full_scale_and_fifteen_mutes_each_channel() {
+        let mut device = Sn76489::new(3_579_545, 44_100).unwrap();
+        device.attenuations = [0, 15, 15, 15];
+        device.tone_outputs = [1; 3];
+        device.noise_output = 1;
+        assert_eq!(device.mix(), 0.25);
+
+        device.attenuations[0] = 1;
+        assert!((device.mix() - 0.198582).abs() < 0.000001);
+        device.attenuations[0] = 15;
+        assert_eq!(device.mix(), 0.0);
+    }
+
+    #[test]
     fn white_noise_lfsr_matches_fixed_golden_vector() {
         let mut device = Sn76489::new(3_579_545, 44_100).unwrap();
         device.write_inner(0xE4);
