@@ -743,7 +743,7 @@ fn render_sprites(
 
 #[cfg(test)]
 mod tests {
-    use super::Tms9918A;
+    use super::{Tms9918A, sprite_line_active};
 
     #[test]
     fn reset_preserves_vram_unless_explicitly_cleared() {
