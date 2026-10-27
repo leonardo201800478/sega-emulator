@@ -1,3 +1,5 @@
+> **Estado vigente (2026-10-27):** runtime SG-1000 ativo em Rust. O hardware Python antigo e os testes/ferramentas que dependiam dele estão arquivados em `legacy/python_reference/` e não devem ser executados/importados. Este documento preserva observações históricas; comandos apontando para os caminhos arquivados não são comandos ativos.
+
 # Revisão da matriz de opcodes Z80
 
 **Data:** 2026-10-24  
@@ -25,12 +27,12 @@ Esta é uma correção da **classificação da matriz**, não uma correção com
 
 ## Testes de regressão adicionados
 
-`tests/unit/test_z80_opcode_matrix.py` agora verifica explicitamente as classificações de `0x24`, `0x44`, `0x65` e `0x84`, além de manter a distinção entre substituição indexada de memória e prefixo DD/FD ignorado.
+`legacy/python_reference/tests/unit/test_z80_opcode_matrix.py` agora verifica explicitamente as classificações de `0x24`, `0x44`, `0x65` e `0x84`, além de manter a distinção entre substituição indexada de memória e prefixo DD/FD ignorado.
 
 Comandos para reprodução:
 
 ```powershell
-python -m pytest -q tests/unit/test_z80_opcode_matrix.py
+python -m pytest -q legacy/python_reference/tests/unit/test_z80_opcode_matrix.py
 python tools/z80_opcode_matrix.py --json
 ```
 

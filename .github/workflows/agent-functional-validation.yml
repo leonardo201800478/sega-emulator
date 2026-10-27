@@ -5,9 +5,8 @@ on:
     branches: [main]
     paths:
       - "src/**/*.py"
+      - "src/sega_emulator/**/*.py"
       - "tests/**/*.py"
-      - "tools/**/*.py"
-      - "scripts/**/*.py"
       - "pyproject.toml"
       - "requirements*.txt"
       - "setup.py"
@@ -16,9 +15,8 @@ on:
     branches: [main]
     paths:
       - "src/**/*.py"
+      - "src/sega_emulator/**/*.py"
       - "tests/**/*.py"
-      - "tools/**/*.py"
-      - "scripts/**/*.py"
       - "pyproject.toml"
       - "requirements*.txt"
       - "setup.py"

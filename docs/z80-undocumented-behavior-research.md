@@ -1,3 +1,5 @@
+> **Estado vigente (2026-10-27):** o hardware SG-1000 ativo está em Rust. Implementações Python anteriores e ferramentas que dependiam delas foram arquivadas em `legacy/` e não fazem parte do runtime ou da validação ativa. Trechos que descrevem o estado anterior são históricos.
+
 # Pesquisa comparativa: comportamentos Z80 pouco documentados
 
 **Data:** 22/10/2026  
@@ -151,7 +153,7 @@ A lista histórica do MEKA é um índice útil para ampliar a matriz: aliases de
 **Plano:**
 - Gerar uma matriz de entradas de A × N × H × C, cobrindo combinações válidas e inválidas, e comparar A/F resultantes.
 - Testar overflow, half-carry, paridade e preservação/alteração de carry.
-- Usar algoritmo legível em Python inicialmente; otimização ou tabela só depois de equivalência comprovada.
+- Implementar o algoritmo legível em Rust; otimização ou tabelas só depois de equivalência comprovada com vetores independentes.
 - Manter testes de referência separados dos testes unitários de cada helper.
 
 ## Estratégia de validação recomendada

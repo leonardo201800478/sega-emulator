@@ -1,8 +1,10 @@
+> **Atualização de estado (2026-10-27):** o hardware SG-1000 ativo é Rust-only. A implementação Python antiga e ferramentas/testes que dependiam dela estão em `legacy/python_reference/`; não fazem parte do runtime e os comandos históricos abaixo não são caminhos de execução ativos.
+
 # TMS9918A — modelo, evidências e plano de fidelidade
 
 ## Escopo real desta etapa
 
-O núcleo `TMS9918A` está em Python e mantém 16 KiB de VRAM, oito registradores
+O núcleo ativo `Tms9918A` está em Rust (`native/sg1000_core/src/vdp.rs`) e mantém 16 KiB de VRAM, oito registradores
 de controle, registrador de status, portas com aliases, buffer de leitura,
 endereçamento de 14 bits, quatro modos gráficos documentados, sprites e um
 relógio raster nominal. A imagem RGB24 é construída linha a linha e publicada

@@ -44,7 +44,7 @@ SG-1000 é o primeiro adaptador. Master System/Game Gear, Mega Drive/Genesis, Se
 
 ## Runtime de emulação
 
-Qt, execução headless e frontend Pygame usam somente o runtime Rust. A implementação Python de referência fica disponível no código de desenvolvimento para testes diferenciais, mas não pode ser selecionada como runtime de produção nem receber fallback silencioso. A extensão Rust ausente ou uma instrução não suportada deve produzir um erro explícito.
+Qt é a única interface gráfica ativa e usa exclusivamente o runtime Rust. Pygame e execução headless pela CLI não são caminhos do pacote ativo. Implementações Python de hardware estão arquivadas e não podem ser importadas. Se a extensão Rust não estiver instalada ou uma operação não for suportada, a aplicação deve informar o erro explicitamente.
 
 ## Validação necessária
 

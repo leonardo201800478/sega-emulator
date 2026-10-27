@@ -1,3 +1,5 @@
+> **Estado vigente (2026-10-27):** hardware SG-1000 ativo exclusivamente em Rust. O código Python antigo de hardware, os testes/ferramentas dependentes e os workflows históricos foram arquivados sob `legacy/`; não são importados nem executados pelo projeto ativo. Este documento mantém observações históricas quando indicadas.
+
 # Auditoria geral do código
 
 **Data:** 22/10/2026  
@@ -17,11 +19,11 @@ Na revisão estática dos módulos listados abaixo, não foi confirmado um defei
 
 - `src/sega_emulator/__init__.py`: versão do pacote.
 - `src/sega_emulator/__main__.py`: ponto de entrada.
-- `src/sega_emulator/bus/interfaces.py`: protocolo estrutural de barramento.
-- `src/sega_emulator/bus/memory.py`: armazenamento e espelhamento da RAM.
-- `src/sega_emulator/bus/memory_bus.py`: mapeamento inicial de ROM/RAM e validações.
-- `src/sega_emulator/cpu/z80.py`: registradores, flags, helpers e decodificação do subconjunto Z80.
-- `tests/test_smoke.py`, `tests/unit/test_memory.py`, `tests/unit/test_memory_bus.py`, `tests/unit/test_memory_bus_interface.py` e `tests/unit/test_z80.py`.
+- `legacy/python_reference/src/sega_emulator/bus/interfaces.py`: protocolo estrutural de barramento.
+- `legacy/python_reference/src/sega_emulator/bus/memory.py`: armazenamento e espelhamento da RAM.
+- `legacy/python_reference/src/sega_emulator/bus/memory_bus.py`: mapeamento inicial de ROM/RAM e validações.
+- `legacy/python_reference/src/sega_emulator/cpu/z80.py`: registradores, flags, helpers e decodificação do subconjunto Z80.
+- `tests/test_smoke.py`, `legacy/python_reference/tests/unit/test_memory.py`, `legacy/python_reference/tests/unit/test_memory_bus.py`, `legacy/python_reference/tests/unit/test_memory_bus_interface.py` e `legacy/python_reference/tests/unit/test_z80.py`.
 - `pyproject.toml`, `.gitignore`, `README.md`, `docs/architecture.md`, `docs/hardware/sg1000.md`, `docs/z80-coverage.md` e `docs/firmware-inventory.md`.
 
 ## Achados e prioridades

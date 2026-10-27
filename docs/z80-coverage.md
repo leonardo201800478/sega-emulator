@@ -1,8 +1,10 @@
+> **Atualização de estado (2026-10-27):** o hardware SG-1000 ativo é Rust-only. A implementação Python antiga e ferramentas/testes que dependiam dela estão em `legacy/python_reference/`; não fazem parte do runtime e os comandos históricos abaixo não são caminhos de execução ativos.
+
 # Auditoria de cobertura da CPU Z80
 
 ## Finalidade e método
 
-Este documento registra a cobertura observável em `src/sega_emulator/cpu/z80.py` na revisão auditada e orienta a implementação incremental. “Implementado” significa que há um caminho de execução no código; não significa que todos os flags, tempos de barramento, variantes não documentadas ou comportamentos de interrupção tenham sido validados contra hardware.
+Este documento registra a cobertura histórica da implementação Python arquivada em `legacy/python_reference/src/sega_emulator/cpu/z80.py`. Não descreve a implementação ativa; o runtime Z80 atual é Rust. “Implementado” significa que há um caminho de execução no código; não significa que todos os flags, tempos de barramento, variantes não documentadas ou comportamentos de interrupção tenham sido validados contra hardware.
 
 Fontes de referência para o inventário e os ciclos:
 - [Zilog — Z80 CPU User Manual (UM008011)](https://www.zilog.com/docs/z80/um0080.pdf): referência primária para instruções documentadas, operações, flags e tempos nominais.
@@ -61,7 +63,7 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 | `A8–AF` — XOR r | Implementado — cobertura inicial | Registros e (HL); verificar flags em casos variados. |
 | `B0–B7` — OR r | Implementado — cobertura inicial | Registros e (HL); verificar flags em casos variados. |
 | `B8–BF` — CP r | Implementado — cobertura inicial | Não altera A; bits X/Y são tratados a partir do operando. |
-| `C6, CE, D6, DE, E6, EE, F6, FE` — ALU imediata | Implementado — validado exaustivamente por testes sintéticos | ADD, ADC, SUB, SBC, AND, XOR, OR e CP com 7 T-states nominais. `tests/unit/test_z80_alu_immediate.py` percorre todos os pares A/n e ambos os estados de carry para ADC/SBC, verificando resultado, flags, PC, R e ciclos nominais. Isso não substitui comparação com hardware ou exercitador independente. |
+| `C6, CE, D6, DE, E6, EE, F6, FE` — ALU imediata | Implementado — validado exaustivamente por testes sintéticos | ADD, ADC, SUB, SBC, AND, XOR, OR e CP com 7 T-states nominais. `legacy/python_reference/tests/unit/test_z80_alu_immediate.py` percorre todos os pares A/n e ambos os estados de carry para ADC/SBC, verificando resultado, flags, PC, R e ciclos nominais. Isso não substitui comparação com hardware ou exercitador independente. |
 | `C3` — JP nn | Implementado — cobertura inicial | Salto absoluto incondicional. |
 | `C2, CA, D2, DA, E2, EA, F2, FA` — JP cc,nn | Implementado — cobertura inicial | Oito condições NZ, Z, NC, C, PO, PE, P e M; testes de ramos tomados/não tomados. |
 | `C5, D5, E5, F5` — PUSH qq | Implementado — cobertura inicial | BC, DE, HL e AF; verificar ordem de acesso e tempos de barramento em fase futura. |
@@ -163,7 +165,7 @@ Essa execução confirma os testes presentes no repositório nesse commit, não 
 
 ## Auditoria estática do código — 22/10/2026
 
-A leitura direta de `src/sega_emulator/cpu/z80.py` e `tests/unit/test_z80.py` identificou lacunas de arquitetura e validação que devem ser tratadas separadamente de “opcode implementado”. Ver [auditoria técnica completa](z80-code-audit-2026-10-22.md).
+A auditoria histórica da implementação Python identificou lacunas de arquitetura e validação separadas de “opcode implementado”. As lacunas ainda relevantes devem ser verificadas no núcleo Rust com vetores independentes. Ver [auditoria técnica completa](z80-code-audit-2026-10-22.md).
 
 Prioridades confirmadas:
 1. **Temporização:** os ciclos ainda são contabilizados por instrução; os acessos ao barramento não são agendados em T-states.
@@ -188,7 +190,7 @@ Esta matriz é um inventário de implementação e validação, não uma certifi
 
 ## Validação exaustiva ALU de 8 bits
 
-`tests/unit/test_z80_alu_exhaustive.py` percorre todos os pares de operandos de 8 bits para ADD, ADC, SUB, SBC, CP, AND, XOR e OR, incluindo os dois estados de carry para ADC/SBC. Também percorre todos os valores de byte e carry inicial para INC/DEC, verificando resultado, flags e preservação de C. Para 16 bits, `ADD HL,BC`, `ADC HL,BC` e `SBC HL,BC` são verificados em combinações de valores-limite (incluindo fronteiras de byte, nibble, sinal e wraparound) e 256 pares determinísticos adicionais. O teste compara resultados e flags com fórmulas de referência independentes dos helpers da CPU e verifica os T-states nominais.
+`legacy/python_reference/tests/unit/test_z80_alu_exhaustive.py` percorre todos os pares de operandos de 8 bits para ADD, ADC, SUB, SBC, CP, AND, XOR e OR, incluindo os dois estados de carry para ADC/SBC. Também percorre todos os valores de byte e carry inicial para INC/DEC, verificando resultado, flags e preservação de C. Para 16 bits, `ADD HL,BC`, `ADC HL,BC` e `SBC HL,BC` são verificados em combinações de valores-limite (incluindo fronteiras de byte, nibble, sinal e wraparound) e 256 pares determinísticos adicionais. O teste compara resultados e flags com fórmulas de referência independentes dos helpers da CPU e verifica os T-states nominais.
 
 A cobertura de 8 bits é exaustiva para as famílias citadas; a cobertura de 16 bits é direcionada e amostrada, não exaustiva. Os testes sintéticos não equivalem a uma comparação com silício real nem comprovam precisão temporal global. O CP verifica também que o acumulador não é alterado e que X/Y derivam do operando.
 
@@ -200,38 +202,19 @@ Esta é uma verificação de cobertura de decodificação, não de correção se
 
 
 
-## Validação ALU de 16 bits com progresso e paralelismo
+## Auditoria ALU de 16 bits arquivada
 
-Para investigações demoradas, existe o utilitário opcional `scripts/validate_z80_alu_16bit.py`. Ele valida a execução real da CPU para `ADD HL,BC`, `ADC HL,BC` e `SBC HL,BC`, comparando resultado, flags e T-states nominais com fórmulas independentes. O processo principal exibe percentual, valores HL concluídos, tempo decorrido e estimativa restante; os casos são distribuídos entre processos para usar vários núcleos sem depender do GIL do CPython.
-
-Exemplos no PowerShell, a partir da raiz do repositório:
-
-```powershell
-# Amostra mínima, útil para verificar o arranque do utilitário
-.\\.venv\\Scripts\\python.exe scripts/validate_z80_alu_16bit.py --left-count 1 --chunk-size 1
-
-# Amostragem distribuída por todo o domínio de HL, incluindo fronteiras
-.\\.venv\\Scripts\\python.exe scripts/validate_z80_alu_16bit.py --left-count 1024 --sampling distributed --chunk-size 1
-
-# Modo sequencial legado: os primeiros N valores de HL
-.\\.venv\\Scripts\\python.exe scripts/validate_z80_alu_16bit.py --left-count 16 --sampling sequential --chunk-size 1
-```
-
-`--sampling sequential` mantém o comportamento legado e testa HL de 0 até N-1. `--sampling distributed` seleciona valores determinísticos espalhados por todo o domínio de 16 bits; para amostras de pelo menos 64 valores, também inclui fronteiras importantes para carry, half-carry, sinal e wraparound. Com `--left-count 1024 --sampling distributed`, cada um dos 1.024 valores HL é combinado com todos os 65.536 valores BC, para até **335.544.320 verificações de instrução**. Essa quantidade levou cerca de 3m29s no ambiente Windows registrado pelo usuário, mas o tempo varia por máquina; reduza `--left-count` se a estimativa local ultrapassar cinco minutos.
-
-`--full` percorre todos os 65.536 valores HL e, portanto, todos os pares de 16 bits. Equivale a cerca de **21,47 bilhões de verificações de instrução** e não deve ser executado como parte da rotina limitada a cinco minutos. O utilitário é separado do pytest padrão. O paralelismo é por processos, não por threads, porque o teste é CPU-bound e threads Python normalmente não aceleram esse trabalho sob o GIL do CPython.
-
-Os testes unitários de `tests/unit/test_z80_alu_sampling.py` verificam a seleção, a distribuição, as fronteiras e o determinismo sem executar a varredura aritmética prolongada.
+O utilitário Python e os testes que dependiam da CPU Python foram movidos para `legacy/python_reference/`. Os comandos e tempos históricos não fazem parte da rotina ativa de validação. A cobertura vigente deve ser exercitada por testes Rust, vetores independentes e workflows ativos.
 
 ## Validação exaustiva de DAA
 
-`tests/unit/test_z80_daa_exhaustive.py` percorre todas as **2.048 combinações** do acumulador de 8 bits e dos flags de entrada N, H e C. Um oráculo separado calcula o ajuste decimal e os flags S/Z/Y/H/X/PV/N/C esperados, verificando também o PC, o incremento e o wrap do registrador R, e os 4 T-states nominais. Os flags de entrada que não participam da regra DAA são semeados intencionalmente para verificar que o resultado os recalcula.
+`legacy/python_reference/tests/unit/test_z80_daa_exhaustive.py` percorre todas as **2.048 combinações** do acumulador de 8 bits e dos flags de entrada N, H e C. Um oráculo separado calcula o ajuste decimal e os flags S/Z/Y/H/X/PV/N/C esperados, verificando também o PC, o incremento e o wrap do registrador R, e os 4 T-states nominais. Os flags de entrada que não participam da regra DAA são semeados intencionalmente para verificar que o resultado os recalcula.
 
 Este teste é uma validação sintética exaustiva do domínio de entrada modelado, não uma comparação com silício real nem prova de precisão ciclo a ciclo. Qualquer divergência deve ser investigada contra o manual Zilog e uma referência independente antes de alterar a implementação.
 
 ## Validação exaustiva de BIT no prefixo CB
 
-O arquivo `tests/unit/test_z80_bit_flags_exhaustive.py` verifica as flags de `BIT b,r` e `BIT b,(HL)` com um oráculo sintético para as flags documentadas e uma hipótese explícita para os bits X/Y não documentados:
+O arquivo `legacy/python_reference/tests/unit/test_z80_bit_flags_exhaustive.py` verifica as flags de `BIT b,r` e `BIT b,(HL)` com um oráculo sintético para as flags documentadas e uma hipótese explícita para os bits X/Y não documentados:
 
 - `BIT b,B`: 2.048 estados (256 valores × 8 bits × 2 estados de carry).
 - `BIT b,(HL)`: 16.384 estados (256 valores × 8 bits × 2 estados de carry × 4 padrões do byte alto de WZ/MEMPTR).
@@ -242,7 +225,7 @@ O arquivo `tests/unit/test_z80_bit_flags_exhaustive.py` verifica as flags de `BI
 
 ## Validação de BIT indexado (DDCB/FDCB)
 
-O arquivo `tests/unit/test_z80_indexed_bit_flags.py` acrescenta:
+O arquivo `legacy/python_reference/tests/unit/test_z80_indexed_bit_flags.py` acrescenta:
 
 - 32.768 estados sintéticos no total para `BIT b,(IX+d)` e `BIT b,(IY+d)` (16.384 por prefixo), cobrindo os 256 valores, oito posições de bit, ambos os estados de carry e quatro padrões do byte alto do endereço efetivo.
 - Cobertura dos 256 valores de deslocamento (0x00–0xFF) para IX e IY em quatro padrões do byte alto do endereço efetivo, além de casos direcionados de wrap de 16 bits; PC, R e 20 T-states nominais são verificados.

@@ -1,3 +1,5 @@
+> **Estado vigente (2026-10-27):** hardware SG-1000 ativo exclusivamente em Rust (`native/sg1000_core`). A aplicação Qt usa uma fachada Python fina para PyO3 e carregadores de ROM/perfil. Implementações de hardware Python, ferramentas e testes que dependiam delas foram arquivados sob `legacy/` e não são executados pelo projeto ativo. Descrições de estados anteriores neste documento são históricas, não instruções atuais.
+
 # SG-1000 collaborative hardware workstreams
 
 This work is coordinated across three independently reviewable workstreams. They share one machine-level contract; no component may invent timing, status semantics, or device clocks independently.
@@ -28,7 +30,7 @@ This work is coordinated across three independently reviewable workstreams. They
 
 ## Shared integration contract
 
-- Rust remains authoritative for the standalone machine; Python/PySide6 owns settings, orchestration, logs, and test tooling.
+- Rust remains authoritative for the standalone machine; Python/PySide6 owns the Qt UI, host integration, ROM/profile loading and application logging; the machine facade only forwards to Rust.
 - No independent per-device wall-clock timers or threads.
 - Preserve remainders when converting machine T-states to PSG clocks; split execution windows must produce the same state and audio samples as a single equivalent window.
 - Record documented behavior, measured/reference behavior, inference, and unresolved hypotheses separately.
@@ -38,6 +40,6 @@ This work is coordinated across three independently reviewable workstreams. They
 ## Current coordination state
 
 - CPU work continues on PR #129; this stacked change does not claim all Z80 opcodes or interrupt modes are complete.
-- Python reference VDP and native Rust VDP gain a configurable per-line sprite limit.
-- Qt preferences persist the setting and apply it to the active machine. The Python backend is wired end-to-end. If the installed Rust/PyO3 runtime does not expose the setter, the UI must report that limitation instead of silently claiming the setting was applied; exposing the option through the native binding is a remaining integration gate.
+- The Rust VDP exposes a configurable per-line sprite limit; the former Python VDP is archived.
+- Qt preferences persist the setting and apply it to the active machine. The Qt UI forwards the setting to the Rust binding. The Python hardware backend has been removed from the active package.
 - VDP/PSG timing and full CPU/device synchronization remain instruction-boundary based until timestamped bus-cycle evidence proves otherwise.

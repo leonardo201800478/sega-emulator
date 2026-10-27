@@ -41,6 +41,6 @@ References:
 
 - Unit-test each active-low bit, button chords, two-player isolation, logical aliases and physical port composition.
 - Test XInput button/axis mapping, XInput slot discovery throttling, disconnect/reconnect, SDL fallback, configuration updates and one-shot disconnect events using injected fake APIs.
-- Run Windows Rust formatting, Clippy and workspace tests, plus Python formatting/lint/tests and the existing Z80 differential/robustness workflows.
+- Run Windows Rust formatting, Clippy and workspace tests, plus Python formatting/lint and Qt integration tests. Python hardware differential/robustness workflows are archived.
 - Physical input latency benchmarking is a separate hardware-dependent validation. It must specify controller, connection transport, frame rate, warmup, workload, repetitions, median and spread; API naming alone is not evidence of lower latency.
 - No dedicated input thread without profiling and an explicit ownership/synchronization model.

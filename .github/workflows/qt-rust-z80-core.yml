@@ -1,5 +1,5 @@
 # This workflow validates only the optional native/z80_core extension. SG-1000 workspace slices are validated by the Rust SG-1000 Workspace workflow.
-name: Qt selectable Rust Z80 core
+name: Qt Rust SG-1000 runtime integration
 
 concurrency:
   group: qt-rust-z80-core-${{ github.event.pull_request.number || github.ref }}
@@ -11,12 +11,24 @@ on:
       - "native/z80_core/**"
       - "native/z80_core/Cargo.toml"
       - "native/z80_core/Cargo.lock"
+      - "native/sg1000_core/**"
+      - "src/sega_emulator/machine/sg1000.py"
+      - "src/sega_emulator/frontend/qt_frontend.py"
+      - "tests/test_sg1000_native_machine.py"
+      - "tests/test_rust_runtime_selection.py"
+      - "tests/test_vgm_machine_integration.py"
   push:
     branches: ["feat/qt-rust-z80-available"]
     paths:
       - "native/z80_core/**"
       - "native/z80_core/Cargo.toml"
       - "native/z80_core/Cargo.lock"
+      - "native/sg1000_core/**"
+      - "src/sega_emulator/machine/sg1000.py"
+      - "src/sega_emulator/frontend/qt_frontend.py"
+      - "tests/test_sg1000_native_machine.py"
+      - "tests/test_rust_runtime_selection.py"
+      - "tests/test_vgm_machine_integration.py"
 
 jobs:
   windows:
@@ -49,7 +61,7 @@ jobs:
           python -m pip install $wheel.FullName
       - name: Lint and format Python
         run: |
-          python -m ruff check src/sega_emulator/machine/sg1000.py src/sega_emulator/frontend/qt/main_window.py src/sega_emulator/frontend/qt/preferences.py src/sega_emulator/frontend/qt/video_widget.py src/sega_emulator/frontend/qt/settings_dialog.py src/sega_emulator/frontend/qt_frontend.py tests/unit/test_vulkan_video_widget.py tests/test_qt_main_window.py tests/test_qt_preferences.py tests/test_sg1000_cpu_backend.py tests/test_sg1000_native_machine.py tests/test_rust_runtime_selection.py tests/test_sn76489_rust_parity.py tests/integration/test_rust_z80_core.py
-          python -m ruff format --check src/sega_emulator/machine/sg1000.py src/sega_emulator/frontend/qt/main_window.py src/sega_emulator/frontend/qt/preferences.py src/sega_emulator/frontend/qt/video_widget.py src/sega_emulator/frontend/qt/settings_dialog.py src/sega_emulator/frontend/qt_frontend.py tests/unit/test_vulkan_video_widget.py tests/test_qt_main_window.py tests/test_qt_preferences.py tests/test_sg1000_cpu_backend.py tests/test_sg1000_native_machine.py tests/test_rust_runtime_selection.py tests/test_sn76489_rust_parity.py tests/integration/test_rust_z80_core.py
-      - name: Test Qt backend selection and Rust parity
-        run: python -m pytest tests/unit/test_vulkan_video_widget.py tests/test_qt_main_window.py tests/test_qt_preferences.py tests/test_sg1000_cpu_backend.py tests/test_sg1000_native_machine.py tests/test_rust_runtime_selection.py tests/test_sn76489_rust_parity.py tests/integration/test_rust_z80_core.py -q
+          python -m ruff check src/sega_emulator/machine/sg1000.py src/sega_emulator/__main__.py src/sega_emulator/frontend/qt/main_window.py src/sega_emulator/frontend/qt/preferences.py src/sega_emulator/frontend/qt/video_widget.py src/sega_emulator/frontend/qt/settings_dialog.py src/sega_emulator/frontend/qt_frontend.py tests/unit/test_vulkan_video_widget.py tests/test_qt_main_window.py tests/test_qt_preferences.py tests/test_sg1000_native_machine.py tests/test_rust_runtime_selection.py tests/test_vgm_machine_integration.py
+          python -m ruff format --check src/sega_emulator/machine/sg1000.py src/sega_emulator/__main__.py src/sega_emulator/frontend/qt/main_window.py src/sega_emulator/frontend/qt/preferences.py src/sega_emulator/frontend/qt/video_widget.py src/sega_emulator/frontend/qt/settings_dialog.py src/sega_emulator/frontend/qt_frontend.py tests/unit/test_vulkan_video_widget.py tests/test_qt_main_window.py tests/test_qt_preferences.py tests/test_sg1000_native_machine.py tests/test_rust_runtime_selection.py tests/test_vgm_machine_integration.py
+      - name: Test Qt integration and Rust-only runtime
+        run: python -m pytest tests/unit/test_vulkan_video_widget.py tests/test_qt_main_window.py tests/test_qt_preferences.py tests/test_sg1000_native_machine.py tests/test_rust_runtime_selection.py -q

@@ -10,7 +10,7 @@ from collections import deque
 from pathlib import Path
 
 from sega_emulator.audio.vgm_recorder import VgmRecorder
-from sega_emulator.frontend.controller_input import (
+from sega_emulator.frontend.controller_profiles import (
     ACTIONS,
     DEFAULT_GAMEPAD_BINDINGS,
     JOYSTICK_ACTIONS,
@@ -45,30 +45,16 @@ def _runtime_diagnostic(machine: SG1000Machine, rom_sha256: str) -> dict[str, ob
     import sys
 
     diagnostic: dict[str, object] = {
-        "backend_requested": machine.cpu_core,
+        "backend_requested": "rust",
         "machine_type": type(machine).__module__ + "." + type(machine).__qualname__,
         "cpu_type": type(machine.cpu).__module__ + "." + type(machine.cpu).__qualname__,
-        "memory_bus_type": (
-            type(machine.memory_bus).__module__
-            + "."
-            + type(machine.memory_bus).__qualname__
-        ),
         "vdp_type": type(machine.vdp).__module__ + "." + type(machine.vdp).__qualname__,
         "psg_type": type(machine.psg).__module__ + "." + type(machine.psg).__qualname__,
-        "audio_sync_type": (
-            type(machine.audio_sync).__module__
-            + "."
-            + type(machine.audio_sync).__qualname__
-        ),
         "rom_sha256": rom_sha256,
         "python_executable": sys.executable,
         "python_version": sys.version,
         "process_id": os.getpid(),
     }
-    if machine.cpu_core != "rust":
-        diagnostic["backend_effective"] = "python_reference"
-        return diagnostic
-
     native = getattr(machine, "native_machine", None)
     diagnostic["backend_effective"] = (
         "rust_native_machine"
@@ -176,9 +162,7 @@ def run(initial_path: Path | None = None) -> None:
     # The production Qt frontend always runs the native Rust machine. Legacy
     # persisted "python" values are migrated unconditionally and are no longer
     # exposed as a selectable runtime.
-    selected_backend = "rust"
-    settings.setValue("cpu_core", selected_backend)
-    settings.setValue("rust_backend_default_migrated", True)
+    settings.setValue("cpu_core", "rust")
     audio_output = _initialize_wasapi_backend(preferences)
     audio_resampler = PcmResampler(preferences.audio_sample_rate)
     serialized_controller_config = settings.value("controller_config", "", type=str)
@@ -293,7 +277,7 @@ def run(initial_path: Path | None = None) -> None:
         hold_pressed = any("hold" in actions[player] for player in (1, 2))
         if hold_pressed and not hold_was_pressed:
             # The console Hold switch is an edge-triggered NMI, not a joystick bit.
-            machine.cpu.request_nmi()
+            machine.request_nmi()
         hold_was_pressed = hold_pressed
 
     class KeyboardInputFilter(QObject):
@@ -541,7 +525,7 @@ def run(initial_path: Path | None = None) -> None:
                 if not accepted:
                     return
                 candidate = load_rom(path, member_name=selected)
-            loaded_machine = SG1000Machine(candidate.data, cpu_core=selected_backend)
+            loaded_machine = SG1000Machine(candidate.data)
             if not preferences.sprite_limit_enabled:
                 loaded_machine.set_sprite_limit_enabled(False)
         except Exception as exc:
@@ -663,7 +647,6 @@ def run(initial_path: Path | None = None) -> None:
                 controller_config=preferences.controller_config,
                 audio_enabled=audio_enabled,
                 diagnostics_enabled=preferences.diagnostics_enabled,
-                cpu_core="rust",
                 audio_sample_rate=preferences.audio_sample_rate,
                 audio_buffer_size=preferences.audio_buffer_size,
                 audio_volume=preferences.audio_volume,
@@ -872,7 +855,7 @@ def run(initial_path: Path | None = None) -> None:
             return
         if loaded is None:
             return
-        machine = SG1000Machine(loaded.data, cpu_core=selected_backend)
+        machine = SG1000Machine(loaded.data)
         audio_resampler.reset()
         frame_count, paused = 0, False
         frame_pacer.reset()
@@ -1312,7 +1295,6 @@ def run(initial_path: Path | None = None) -> None:
         controller_config=controller_input.config.to_json(),
         audio_enabled=preferences.audio_enabled,
         diagnostics_enabled=preferences.diagnostics_enabled,
-        cpu_core=selected_backend,
         audio_sample_rate=preferences.audio_sample_rate,
         audio_buffer_size=preferences.audio_buffer_size,
         audio_volume=preferences.audio_volume,

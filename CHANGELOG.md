@@ -22,7 +22,7 @@
 
 ### Diagnóstico de áudio / PSG
 - Adiciona gravação de comandos do SN76489 em arquivo VGM 1.71 pelo menu **Diagnóstico**.
-- Registra valores escritos no PSG com timestamps do clock da máquina, tanto no backend Python quanto no runtime Rust.
+- Registra valores escritos no PSG com timestamps do clock da máquina, no runtime Rust; a implementação Python anterior está arquivada e não é executada.
 - A gravação é destinada à análise dos comandos de áudio e à comparação com capturas do Gearsystem; não altera a síntese nem os filtros de áudio.
 - Validação automatizada adicionada para cabeçalho, temporização, intervalos longos, escrita de arquivo e ações do menu Qt.
 

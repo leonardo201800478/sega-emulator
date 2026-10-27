@@ -1,3 +1,5 @@
+> **Atualização de estado (2026-10-27):** o hardware SG-1000 ativo é Rust-only. A implementação Python antiga e ferramentas/testes que dependiam dela estão em `legacy/python_reference/`; não fazem parte do runtime e os comandos históricos abaixo não são caminhos de execução ativos.
+
 # Plano de fechamento das lacunas do Z80
 
 **Data:** 23/10/2026  
@@ -15,11 +17,11 @@ A solução recomendada é **não reescrever o núcleo nem começar imediatament
 
 Segundo a documentação e os arquivos presentes em \`main\`:
 
-- \`tests/unit/test_z80_alu_exhaustive.py\`: varredura exaustiva de operandos de 8 bits para ADD/ADC/SUB/SBC/CP/AND/XOR/OR e INC/DEC, com oráculo sintético independente dos helpers da CPU.
-- \`tests/unit/test_z80_daa_exhaustive.py\`: 2.048 combinações modeladas de A/N/H/C para DAA.
-- \`tests/unit/test_z80_bit_flags_exhaustive.py\`: cobertura exaustiva do domínio de entrada modelado para BIT não indexado.
-- \`tests/unit/test_z80_indexed_bit_flags.py\`: cobertura sintética extensa para BIT indexado, com hipótese explícita para X/Y.
-- \`tests/unit/test_z80_alu_sampling.py\` e \`scripts/validate_z80_alu_16bit.py\`: amostragem determinística de operações de 16 bits; a varredura completa de todos os pares continua sendo uma tarefa longa.
+- \`legacy/python_reference/tests/unit/test_z80_alu_exhaustive.py\`: varredura exaustiva de operandos de 8 bits para ADD/ADC/SUB/SBC/CP/AND/XOR/OR e INC/DEC, com oráculo sintético independente dos helpers da CPU.
+- \`legacy/python_reference/tests/unit/test_z80_daa_exhaustive.py\`: 2.048 combinações modeladas de A/N/H/C para DAA.
+- \`legacy/python_reference/tests/unit/test_z80_bit_flags_exhaustive.py\`: cobertura exaustiva do domínio de entrada modelado para BIT não indexado.
+- \`legacy/python_reference/tests/unit/test_z80_indexed_bit_flags.py\`: cobertura sintética extensa para BIT indexado, com hipótese explícita para X/Y.
+- \`legacy/python_reference/tests/unit/test_z80_alu_sampling.py\` e \`legacy/python_reference/scripts/validate_z80_alu_16bit.py\`: amostragem determinística de operações de 16 bits; a varredura completa de todos os pares continua sendo uma tarefa longa.
 - \`docs/z80-coverage.md\`: matriz de decodificação ED, testes de I/O de bloco e casos de repetição LDIR/LDDR/CPIR/CPDR.
 
 Esses artefatos reduzem o risco funcional, mas são testes sintéticos: não comprovam por si sós equivalência com silício, variantes NMOS/CMOS nem temporização ciclo a ciclo. Os resultados históricos descritos na documentação devem ser distinguidos de qualquer nova execução.
@@ -102,7 +104,7 @@ O evento deve carregar endereço, direção, valor quando conhecido, classe de c
 O harness deve:
 1. registrar origem, licença, versão/commit e hash do arquivo de teste;
 2. inicializar PC, SP, registradores, flags, memória, I/O e interrupções de forma determinística;
-3. executar um caso no núcleo Python e no oráculo selecionado;
+3. executar um caso no núcleo Rust contra vetor/oráculo independente (os testes do núcleo Python foram arquivados);
 4. comparar estado final, memória, I/O e ciclos que ambos realmente exponham;
 5. parar no primeiro desvio e salvar caso mínimo reproduzível;
 6. não equiparar ausência de traço temporal no oráculo a equivalência de barramento.
@@ -175,7 +177,7 @@ Foi acrescentado `test_reset_clears_cpu_state_and_pending_interrupts_without_cle
 
 ## 5. Adaptador SingleStepTests implementado
 
-O módulo `src/sega_emulator/testing/z80_singlestep.py` implementa a primeira versão do adaptador para os vetores JSON de [SingleStepTests/z80](https://github.com/SingleStepTests/z80). Ele usa uma RAM plana de 64 KiB e um barramento de I/O de teste, sem alterar o mapa de memória físico do SG-1000.
+O módulo `legacy/python_reference/src/sega_emulator/testing/z80_singlestep.py` implementa a primeira versão do adaptador para os vetores JSON de [SingleStepTests/z80](https://github.com/SingleStepTests/z80). Ele usa uma RAM plana de 64 KiB e um barramento de I/O de teste, sem alterar o mapa de memória físico do SG-1000.
 
 ### Executar
 
@@ -206,11 +208,11 @@ python -m sega_emulator.testing.z80_singlestep caminho\para\v1\00.json --limit 2
 
 ## 6. Auditoria diferencial exploratória com corpus externo
 
-O workflow `.github/workflows/z80-singlestep-audit.yml` baixa, durante a execução, 11 arquivos JSON selecionados de [SingleStepTests/Z80](https://github.com/SingleStepTests/z80), sempre da revisão upstream fixa `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7` (commit assinado e verificado pelo GitHub). A revisão está registrada em [SingleStepTests/Z80 commit](https://github.com/SingleStepTests/z80/commit/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7). O corpus não é copiado como código-fonte para o repositório do emulador; os arquivos baixados e o relatório JSON são preservados como artefato da execução por 30 dias.
+O workflow `legacy/workflows/z80-singlestep-audit.yml` baixa, durante a execução, 11 arquivos JSON selecionados de [SingleStepTests/Z80](https://github.com/SingleStepTests/z80), sempre da revisão upstream fixa `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7` (commit assinado e verificado pelo GitHub). A revisão está registrada em [SingleStepTests/Z80 commit](https://github.com/SingleStepTests/z80/commit/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7). O corpus não é copiado como código-fonte para o repositório do emulador; os arquivos baixados e o relatório JSON são preservados como artefato da execução por 30 dias.
 
-O manifesto `tools/audits/singlestep-corpus-manifest.json` registra o commit, a licença MIT com URL imutável e o SHA-256 e tamanho em bytes esperados para cada arquivo. O verificador `tools/audits/verify_singlestep_corpus.py` valida todos os arquivos baixados antes da auditoria. Se um hash, tamanho ou arquivo não corresponder ao manifesto, o workflow falha antes de executar os vetores. O relatório inclui a revisão upstream e os hashes correspondentes. Assim, alterações futuras na branch `main` do corpus não alteram silenciosamente os dados usados pelo teste.
+O manifesto `legacy/python_reference/tools/audits/singlestep-corpus-manifest.json` registra o commit, a licença MIT com URL imutável e o SHA-256 e tamanho em bytes esperados para cada arquivo. O verificador `legacy/python_reference/tools/audits/verify_singlestep_corpus.py` valida todos os arquivos baixados antes da auditoria. Se um hash, tamanho ou arquivo não corresponder ao manifesto, o workflow falha antes de executar os vetores. O relatório inclui a revisão upstream e os hashes correspondentes. Assim, alterações futuras na branch `main` do corpus não alteram silenciosamente os dados usados pelo teste.
 
-O script `tools/audits/run_singlestep_corpus.py` carrega e compara o campo interno `p`, agora modelado no núcleo como o latch de `LD A,I`/`LD A,R`. Ele registra separadamente casos aprovados, divergentes e não suportados. Divergências e estados não suportados fazem o workflow falhar, enquanto o artefato é preservado para diagnóstico.
+O script `legacy/python_reference/tools/audits/run_singlestep_corpus.py` carrega e compara o campo interno `p`, agora modelado no núcleo como o latch de `LD A,I`/`LD A,R`. Ele registra separadamente casos aprovados, divergentes e não suportados. Divergências e estados não suportados fazem o workflow falhar, enquanto o artefato é preservado para diagnóstico.
 
 **Limitação essencial:** o teste compara estado arquitetural representado e RAM, mas não compara o array `cycles` do corpus. Portanto, mesmo um vetor aprovado não demonstra precisão ciclo a ciclo nem equivalência de barramento. O workflow bloqueia regressões nos campos modelados, mas não é uma certificação geral nem uma prova independente de conformidade com silício.
 
@@ -225,7 +227,7 @@ A primeira execução com os vetores de I/O expôs divergências no registrador 
 - `OUT (n),A`: WZ precisava preservar o byte alto do endereço da porta e incrementar apenas o byte baixo, inclusive no wrap de `FFh` para `00h`.
 - `IN r,(C)` e `OUT (C),r`: WZ precisava receber `BC + 1`, usando o BC anterior à instrução, inclusive quando a leitura altera B.
 
-Esses comportamentos foram corrigidos em `src/sega_emulator/cpu/z80.py`, com testes de regressão para leitura de I/O derivada do traço, atualização de WZ e wrap do byte baixo. A execução seguinte eliminou as divergências nos 11 arquivos selecionados. Naquela execução inicial, 5.599 vetores foram excluídos por `p`; a implementação posterior passou a modelar esse latch e executou o subconjunto expandido sem exclusões. Os traços ciclo a ciclo continuam fora da comparação.
+Esses comportamentos foram corrigidos em `legacy/python_reference/src/sega_emulator/cpu/z80.py`, com testes de regressão para leitura de I/O derivada do traço, atualização de WZ e wrap do byte baixo. A execução seguinte eliminou as divergências nos 11 arquivos selecionados. Naquela execução inicial, 5.599 vetores foram excluídos por `p`; a implementação posterior passou a modelar esse latch e executou o subconjunto expandido sem exclusões. Os traços ciclo a ciclo continuam fora da comparação.
 
 O artefato JSON e os vetores usados ficam no workflow [Z80 SingleStepTests Differential Audit](https://github.com/leonardo201800478/sega-emulator/actions/workflows/z80-singlestep-audit.yml), por 30 dias.
 

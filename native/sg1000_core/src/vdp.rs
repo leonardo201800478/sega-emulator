@@ -10,6 +10,12 @@ const VRAM_SIZE: usize = 0x4000;
 const VRAM_MASK: usize = VRAM_SIZE - 1;
 const RGB_FRAME_SIZE: usize = SCREEN_WIDTH * SCREEN_HEIGHT * 3;
 
+/// One active sprite entry: hardware index, X, pattern, color nibble and raster Y.
+pub type SpriteLineEntry = (usize, i32, u8, u8, u16);
+
+/// Active entries for a raster line and the index reported for sprite overflow.
+pub type SpriteLineInspection = (Vec<SpriteLineEntry>, Option<usize>);
+
 const PALETTE: [[u8; 3]; 16] = [
     [0, 0, 0],
     [0, 0, 0],
@@ -612,6 +618,7 @@ fn render_multicolor(vram: &[u8], registers: &[u8], pixels: &mut [u8], backdrop:
 
 #[derive(Clone, Copy)]
 struct ActiveSprite {
+    index: usize,
     x: i32,
     pattern_number: u8,
     color: u8,
@@ -659,6 +666,7 @@ fn sprite_line_active(
             x -= 32;
         }
         active.push(ActiveSprite {
+            index,
             x,
             pattern_number,
             color: color_byte & 0x0F,
@@ -666,6 +674,34 @@ fn sprite_line_active(
         });
     }
     (active, fifth_index)
+}
+
+/// Inspect the sprite entries active on a raster line without modifying VDP state.
+///
+/// The returned active entries preserve the hardware sprite index, X coordinate,
+/// pattern number, color nibble and wrapped raster Y. The second value is the
+/// index that sets the overflow flag, if a fifth active sprite is encountered.
+pub fn inspect_sprite_line(
+    vram: &[u8],
+    registers: &[u8; 8],
+    line: u16,
+    sprite_limit_enabled: bool,
+) -> SpriteLineInspection {
+    let (active, fifth_index) =
+        sprite_line_active(vram, registers, i32::from(line), sprite_limit_enabled);
+    let entries = active
+        .into_iter()
+        .map(|sprite| {
+            (
+                sprite.index,
+                sprite.x,
+                sprite.pattern_number,
+                sprite.color,
+                sprite.raster_y as u16,
+            )
+        })
+        .collect();
+    (entries, fifth_index)
 }
 
 fn render_sprite_line(
@@ -746,7 +782,7 @@ fn render_sprites(
 
 #[cfg(test)]
 mod tests {
-    use super::{Tms9918A, sprite_line_active};
+    use super::{Tms9918A, inspect_sprite_line, sprite_line_active};
 
     #[test]
     fn reset_preserves_vram_unless_explicitly_cleared() {
@@ -1036,6 +1072,32 @@ mod tests {
             sprite_line_active(&vdp.vram, &vdp.registers, 0, vdp.sprite_limit_enabled());
         assert_eq!(active.len(), 5);
         // Rendering additional sprites must not hide the hardware overflow index.
+        assert_eq!(fifth, Some(4));
+    }
+
+    #[test]
+    fn sprite_line_inspection_preserves_indices_and_overflow() {
+        let mut vdp = Tms9918A::new();
+        vdp.registers[5] = 0x20;
+        for index in 0..5 {
+            let offset = 0x1000 + index * 4;
+            vdp.vram[offset..offset + 4].copy_from_slice(&[0xFF, (index * 8) as u8, 0, 0x0F]);
+        }
+        vdp.vram[0x1000 + 5 * 4] = 0xD0;
+
+        let (active, fifth) = inspect_sprite_line(vdp.vram(), vdp.registers(), 0, true);
+        assert_eq!(
+            active.iter().map(|sprite| sprite.0).collect::<Vec<_>>(),
+            vec![0, 1, 2, 3]
+        );
+        assert_eq!(fifth, Some(4));
+
+        vdp.set_sprite_limit_enabled(false);
+        let (active, fifth) = inspect_sprite_line(vdp.vram(), vdp.registers(), 0, false);
+        assert_eq!(
+            active.iter().map(|sprite| sprite.0).collect::<Vec<_>>(),
+            vec![0, 1, 2, 3, 4]
+        );
         assert_eq!(fifth, Some(4));
     }
 }

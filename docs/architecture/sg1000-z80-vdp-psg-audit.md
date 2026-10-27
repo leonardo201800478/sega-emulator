@@ -1,3 +1,5 @@
+> **Estado vigente (2026-10-27):** o hardware SG-1000 ativo está em Rust. Implementações Python anteriores e ferramentas que dependiam delas foram arquivadas em `legacy/` e não fazem parte do runtime ou da validação ativa. Trechos que descrevem o estado anterior são históricos.
+
 # SG-1000 Z80, VDP and PSG: audit and completion plan
 
 ## Purpose

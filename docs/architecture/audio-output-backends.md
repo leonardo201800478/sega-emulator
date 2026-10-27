@@ -1,3 +1,5 @@
+> **Estado vigente (2026-10-27):** hardware SG-1000 ativo exclusivamente em Rust (`native/sg1000_core`). A aplicação Qt usa uma fachada Python fina para PyO3 e carregadores de ROM/perfil. Implementações de hardware Python, ferramentas e testes que dependiam delas foram arquivados sob `legacy/` e não são executados pelo projeto ativo. Descrições de estados anteriores neste documento são históricas, não instruções atuais.
+
 # Contrato de configuração para saída de áudio
 
 > Estado: o frontend Qt já possui um primeiro backend WASAPI compartilhado, usando a implementação WASAPI do PortAudio por meio de `sounddevice`. XAudio2 e SDL3 como backends de saída ainda não estão implementados. Esta fatia não é uma implementação COM/WASAPI direta em Rust e não valida latência em hardware Windows.
@@ -29,7 +31,7 @@ Backend nativo Windows orientado a jogos, com grafo de vozes e buffers dinâmico
 
 ### SDL3
 
-Backend multiplataforma baseado em dispositivos e fluxos de áudio SDL3. Deve ser implementado com uma binding SDL3 real e versionada. Não reutilizar o mixer SDL2 do Pygame como se fosse SDL3: o frontend atual depende de pygame-ce, que fornece a integração SDL2.
+Backend multiplataforma baseado em dispositivos e fluxos de áudio SDL3. Deve ser implementado com uma binding SDL3 real e versionada. Não reutilizar o mixer SDL2 do Pygame como se fosse SDL3: o frontend Pygame foi removido do pacote ativo; a interface suportada é Qt/PySide6.
 
 ## Configurações expostas
 
@@ -56,7 +58,7 @@ Portanto, cada perfil de console deverá especificar somente fatos sustentados p
 2. Implementar configurações validadas e persistentes, incluindo perfil por console e preferências globais.
 3. Validar o backend WASAPI/PortAudio em Windows real, incluindo underruns, encerramento, reconexão, formatos e latência medida.
 4. Se a necessidade de controle nativo justificar o custo, avaliar a migração do adaptador PortAudio para WASAPI direto em Rust, com ownership explícito e testes no mesmo SHA.
-5. Implementar SDL3 com binding compatível com Python 3.14 e validar empacotamento no Windows.
+5. Manter a integração de áudio do frontend Qt separada do hardware PSG Rust e validar o wheel/driver no Windows.
 6. Implementar XAudio2 por binding nativo verificável; medir estabilidade e latência.
 7. Integrar escolha de dispositivo e métricas na interface Qt, sem expor configurações não implementadas.
 8. Executar testes de contrato sem hardware em CI e testes físicos separados no Windows.

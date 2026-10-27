@@ -1,8 +1,10 @@
+> **Estado vigente (2026-10-27):** hardware SG-1000 ativo exclusivamente em Rust. O código Python antigo de hardware, os testes/ferramentas dependentes e os workflows históricos foram arquivados sob `legacy/`; não são importados nem executados pelo projeto ativo. Este documento mantém observações históricas quando indicadas.
+
 # Arquitetura dos crates Rust nativos
 
 ## Objetivo e escopo
 
-Este documento descreve a organização real dos crates Rust no commit de referência desta alteração. Distingue o workspace principal dos crates usados pela aplicação Qt e da extensão experimental PyO3. Não é uma declaração de completude funcional nem de precisão ciclo a ciclo.
+Este documento descreve a organização real dos crates Rust no commit de referência desta alteração. Distingue o workspace principal dos crates usados pela aplicação Qt e da extensão experimental PyO3. Não é uma declaração de completude funcional nem de precisão ciclo a ciclo. O hardware ativo do SG-1000 é Rust-only; Python fornece a UI Qt, carregadores e a fronteira de aplicação.
 
 ## Visão geral
 
@@ -12,7 +14,7 @@ Este documento descreve a organização real dos crates Rust no commit de refer�
 | `native/sms_core` (`sega-sms-core`) | Biblioteca de máquina específica do Master System | Sim | Inicial/parcial: configurações, imagem de cartucho e memória/mapa. CPU, I/O, VDP, áudio e scheduler ainda não estão implementados como runtime completo. Depende de `sega-z80-bus`. |
 | `native/z80_alu` (`sega-z80-alu`) | Biblioteca compartilhada de primitivas ALU Z80 e executável de vetores | Sim | Consumida pelo SG-1000 e pela extensão experimental. Não é um runtime Z80 completo: não decodifica instruções nem modela ciclos/barramento. |
 | `native/z80_bus` (`sega-z80-bus`) | Contrato compartilhado de acesso à memória e portas para um Z80 | Sim | Dependência de SG-1000 e SMS. É hardware-neutral, mas a implementação de mapa e dispositivos pertence a cada máquina. Os valores padrão de portas são placeholders, não especificação física universal. |
-| `native/z80_core` (`sega-z80-core`) | Biblioteca Rust/PyO3, `cdylib`/ `rlib`, usada como backend experimental selecionável no frontend | **Não** | Excluída explicitamente do workspace principal. Tem `Cargo.toml`, `Cargo.lock` e configuração Maturin próprios. Depende de `sega-z80-alu` e `sega-sg1000-core`; fornece integração Rust/Python para a máquina SG-1000, sem substituir a API de aplicação Python. |
+| `native/z80_core` (`sega-z80-core`) | Biblioteca Rust/PyO3, `cdylib`/ `rlib`, usada como adaptador obrigatório entre a UI Qt e o núcleo Rust consolidado | **Não** | Excluída explicitamente do workspace principal. Tem `Cargo.toml`, `Cargo.lock` e configuração Maturin próprios. Depende de `sega-z80-alu` e `sega-sg1000-core`; fornece integração Rust/Python para a máquina SG-1000, sem substituir a API de aplicação Python. |
 
 Os nomes de pacote e os nomes dos módulos importáveis não são idênticos em todos os casos: por exemplo, `sega-z80-bus` expõe o crate Rust `sega_z80_bus`.
 
@@ -65,22 +67,22 @@ maturin build --release --features python-extension --out dist
 Pop-Location
 $wheel = Get-ChildItem native/z80_core/dist/*.whl | Select-Object -First 1
 python -m pip install $wheel.FullName
-python -m pytest tests/test_rust_runtime_selection.py tests/test_sg1000_cpu_backend.py tests/test_sg1000_native_machine.py tests/integration/test_rust_z80_core.py -q
+python -m pytest tests/test_rust_runtime_selection.py tests/test_sg1000_native_machine.py tests/test_vgm_machine_integration.py -q
 ```
 
 No Windows, o workflow `.github/workflows/qt-rust-z80-core.yml` também instala `.[dev,qt]`, constrói o wheel Release, instala-o e roda Ruff e um conjunto direcionado de testes Qt/backend/paridade. O caminho `maturin develop --release --features python-extension` descrito no README de raiz é uma alternativa para ambiente local de desenvolvimento.
 
 ## Seleção do backend na aplicação Qt
 
-O código de `src/sega_emulator/machine/sg1000.py` recebe `cpu_core="python"` ou `cpu_core="rust"`. No caminho Rust, importa `NativeSG1000Machine` de `sega_z80_core`; o frontend Qt persiste a preferência `cpu_core` e apresenta uma ação para seleção do backend. Logo, `native/z80_core` tem consumidor de aplicação real e workflow de validação específico.
+`src/sega_emulator/machine/sg1000.py` é uma fachada fina e Rust-only que importa `NativeSG1000Machine` de `sega_z80_core`; não aceita seletor de backend nem contém lógica de hardware. Preferências antigas de `cpu_core` são migradas para `rust` e não selecionam outro runtime.
 
 Papéis distintos:
 
-- **Python:** frontend Qt/PySide6, configuração, carregamento de ROM, logs, ferramentas, pytest e implementação de referência/diferencial.
+- **Python:** frontend Qt/PySide6 e backends de host, carregamento de ROM/perfis, configuração/logging, fachada PyO3 e ferramentas/testes que exercitam Rust. Implementações de hardware antigas estão em `legacy/python_reference/` e não são usadas.
 - **Rust standalone do workspace:** crates progressivamente independentes para componentes e máquinas, com tipos Rust e contratos explicitados.
-- **Rust/PyO3 experimental:** caminho de execução opcional da aplicação atual; fronteira de integração, não o alvo arquitetural definitivo para organizar hardware.
+- **Rust/PyO3:** adaptador de integração da aplicação Qt; o estado e a execução do hardware pertencem a `native/sg1000_core`.
 
-Não remover `native/z80_core` até que uma alternativa Rust nativa tenha substituído suas responsabilidades de execução e integração, com testes de aceitação e migração verificável do frontend.
+Manter `native/z80_core` como fronteira PyO3 enquanto a UI Qt depender dela; o hardware não deve voltar a ser implementado nesse crate nem em Python.
 
 ## Papel dos workflows atuais
 
@@ -91,7 +93,7 @@ Não remover `native/z80_core` até que uma alternativa Rust nativa tenha substi
 | `.github/workflows/sms-core-fast.yml` | Formatação global, Clippy e testes de `sega-sms-core` | Adequado para o alvo SMS rápido; não substitui os testes integrais de workspace. Já inclui `z80_bus`. |
 | `.github/workflows/qt-rust-z80-core.yml` | Formatação/Clippy/testes do crate excluído, build Release/Maturin, Ruff e pytest direcionado para Qt/backend/paridade | O filtro precisa acompanhar os crates upstream dos quais depende, inclusive `native/z80_bus/**` e mudanças de manifests/lock relevantes. O push está limitado a uma branch de desenvolvimento específica; a cobertura de PR é o caminho principal para revisão. |
 | `.github/workflows/ci.yml` | Ruff nos arquivos Python alterados em PR/push (ou projeto inteiro quando acionado manualmente conforme lógica do workflow) e `python -m pytest` | Não compila Rust nem constrói a extensão Maturin. |
-| `.github/workflows/z80-extended-audit.yml` | Ruff/pytest completos, auditoria determinística e inventário de opcodes, com artefatos mesmo se passos anteriores falharem | Auditoria Python; não substitui build/testes Rust. Upload de artefatos com `if: always()` não significa aprovação. |
+| `legacy/workflows/z80-extended-audit.yml` | Workflow histórico preservado apenas para consulta | **Arquivado; não executa**. Os testes ativos do núcleo usam os workflows Rust e a integração Qt/PyO3.
 
 Consulte os arquivos de workflow para comandos exatos e estado do run do SHA candidato. Paths são parte do contrato de CI: todo arquivo consumido por um teste/build que pretenda validar alteração precisa ser incluído no filtro relevante, ou a validação correspondente deve ser deliberadamente global.
 

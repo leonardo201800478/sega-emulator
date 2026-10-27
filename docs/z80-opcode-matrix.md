@@ -1,8 +1,10 @@
+> **Estado vigente (2026-10-27):** runtime SG-1000 ativo em Rust. O hardware Python antigo e os testes/ferramentas que dependiam dele estão arquivados em `legacy/python_reference/` e não devem ser executados/importados. Este documento preserva observações históricas; comandos apontando para os caminhos arquivados não são comandos ativos.
+
 # Matriz de cobertura do Z80
 
 **Revisão atualizada:** `audit/z80-test-infrastructure` (matriz executável em evolução)  
-**Código-base:** `src/sega_emulator/cpu/z80.py`  
-**Testes consultados:** `tests/unit/test_z80.py`, `tests/unit/test_z80_alu_immediate.py` e `docs/z80-coverage.md`
+**Código-base:** `legacy/python_reference/src/sega_emulator/cpu/z80.py`  
+**Testes consultados:** `legacy/python_reference/tests/unit/test_z80.py`, `legacy/python_reference/tests/unit/test_z80_alu_immediate.py` e `docs/z80-coverage.md`
 
 ## Como interpretar esta matriz
 
@@ -149,7 +151,7 @@ Foi adicionado `tools/z80_opcode_inventory.py`, que executa um único passo isol
 Execute a partir da raiz do repositório:
 
 ```powershell
-python tools/z80_opcode_inventory.py
+(histórico arquivado: `legacy/python_reference/tools/z80_opcode_inventory.py`)
 python tools/z80_opcode_inventory.py --json
 ```
 
@@ -162,12 +164,12 @@ O modo normal resume cada espaço e lista as codificações que lançam `Unsuppo
 
 ## 8. Matriz classificatória executável (atualização da Etapa 2)
 
-A classificação detalhada por byte é gerada por `tools/z80_opcode_matrix.py` e validada por `tests/unit/test_z80_opcode_matrix.py`.
+A classificação detalhada por byte é gerada por `tools/z80_opcode_matrix.py` e validada por `legacy/python_reference/tests/unit/test_z80_opcode_matrix.py`.
 
 ```powershell
-python tools/z80_opcode_matrix.py
+(histórico arquivado: `legacy/python_reference/tools/z80_opcode_matrix.py`)
 python tools/z80_opcode_matrix.py --json
-python -m pytest -q tests/unit/test_z80_opcode_matrix.py
+Os testes Python da matriz foram arquivados; use os testes Rust do núcleo e os workflows ativos.
 ```
 
 O JSON contém 1.792 células: 256 por espaço (base, CB, ED, DD, FD, DD-CB e FD-CB). Cada célula registra família, classificação arquitetural, caminho de implementação, nível de evidência dos testes e lacuna conhecida. Em DD/FD, o byte listado é o segundo byte após o prefixo. O estado de classificação não substitui evidência semântica: uma célula pode descrever ED-NOP ou prefixo ignorado, e instruções indexadas por metade IXH/IXL/IYH/IYL estão marcadas separadamente como não documentadas no Z80 clássico.

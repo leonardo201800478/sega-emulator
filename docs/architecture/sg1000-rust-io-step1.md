@@ -1,8 +1,10 @@
+> **Estado vigente (2026-10-27):** o hardware SG-1000 ativo está em Rust. Implementações Python anteriores e ferramentas que dependiam delas foram arquivadas em `legacy/` e não fazem parte do runtime ou da validação ativa. Trechos que descrevem o estado anterior são históricos.
+
 # SG-1000 Rust I/O boundary — Step 1
 
 ## Goal
 
-Move the currently observable host-input and port-write boundary into plain Rust types without relocating Python production modules or claiming the SG-1000 runtime is complete.
+Move the currently observable host-input and port-write boundary into plain Rust types without claiming cycle-accurate timing; the Python hardware modules are now archived.
 
 ## Included in this slice
 
@@ -19,7 +21,7 @@ Move the currently observable host-input and port-write boundary into plain Rust
 - Captured PSG events are not yet consumed by a native audio synchronizer.
 - The timestamp passed by the caller is a nominal machine T-state. This is not cycle-exact I/O bus timing.
 - Unknown port reads returning `0xFF` preserve the current placeholder behavior; they are not asserted as a universal hardware fact.
-- No Python production module is moved to `legacy/` in this step.
+- Historical note: this step preceded the archive migration; the Python hardware modules are now under `legacy/python_reference/`.
 
 ## Acceptance evidence
 

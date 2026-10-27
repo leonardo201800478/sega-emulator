@@ -1,3 +1,5 @@
+> **Estado vigente (2026-10-27):** o hardware SG-1000 ativo está em Rust. Implementações Python anteriores e ferramentas que dependiam delas foram arquivadas em `legacy/` e não fazem parte do runtime ou da validação ativa. Trechos que descrevem o estado anterior são históricos.
+
 # Clean Architecture — plano de consolidação
 
 ## Objetivo
@@ -85,6 +87,6 @@ Os testes de referência podem importar explicitamente esse namespace. O pacote 
 
 ## Estado observado na criação deste plano
 
-O branch ainda contém `native/z80_alu`, `native/z80_bus` e `native/z80_core` nos caminhos antigos. O `Cargo.toml` raiz não inclui os novos crates de plataforma. `native/sg1000_core` e `native/sms_core` são parciais; o caminho de execução Rust/PyO3 existente ainda é experimental e algumas APIs públicas expõem objetos de dispositivos para a UI. Por isso, mover os módulos Python para fora do pacote de produção antes de completar a API Rust quebraria consumidores existentes. A movimentação do legado deve ocorrer junto à substituição explícita desses contratos, e não como uma renomeação isolada.
+**Status atualizado:** o SG-1000 ativo já usa a fachada Rust-only e o código Python de hardware foi arquivado. A validação ainda deve confirmar build Release/Maturin, integração Qt e compatibilidade real de ROMs. O modelo temporal não é ciclo a ciclo.
 
 Nenhum teste é declarado aprovado por este documento. A validação é feita no SHA candidato pelos workflows e pelos comandos acima.

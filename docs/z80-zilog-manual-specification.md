@@ -1,3 +1,5 @@
+> **Estado vigente (2026-10-27):** o hardware SG-1000 ativo está em Rust. Implementações Python anteriores e ferramentas que dependiam delas foram arquivadas em `legacy/` e não fazem parte do runtime ou da validação ativa. Trechos que descrevem o estado anterior são históricos.
+
 # Especificação documental do Z80 — manuais ZiLOG
 
 **Projeto:** Sega Emulator — Emulação de Alta Precisão  
@@ -61,7 +63,7 @@ Não inferir o timing de toda instrução a partir de um fetch genérico: cada o
 
 ### 4.2 Sinais documentados
 
-O manual descreve CLK, A0–A15, D0–D7, MREQ, IORQ, RD, WR, M1, RFSH, WAIT, HALT, INT, NMI, RESET, BUSRQ e BUSACK. O núcleo Python pode abstrair pinos inicialmente, mas a arquitetura deve permitir representar seus efeitos temporais relevantes.
+O manual descreve CLK, A0–A15, D0–D7, MREQ, IORQ, RD, WR, M1, RFSH, WAIT, HALT, INT, NMI, RESET, BUSRQ e BUSACK. O núcleo Rust pode abstrair pinos quando isso for sustentado pelo modelo inicial, mas a arquitetura deve permitir representar seus efeitos temporais relevantes.
 
 - MREQ/RD/WR: seleção e controle de leitura/escrita de memória.
 - IORQ: ciclo de entrada/saída e participação em sequências de acknowledge.

@@ -5,8 +5,8 @@ Estas regras orientam agentes de programação e revisores que trabalhem neste r
 ## Prioridade do projeto
 
 - Primeiro estabilizar e validar o SG-1000. Evoluir depois para Master System/Game Gear, Mega Drive/Genesis, Sega CD e 32X, sem implementar todas as plataformas ao mesmo tempo.
-- Rust é a implementação definitiva do núcleo de hardware. Python é usado no frontend Qt, ferramentas, automação, análise e protótipos/referências seletivos.
-- Não duplique componentes completos em Python e Rust por padrão. Prototipe em Python quando houver incerteza técnica ou ganho real de testabilidade; depois valide a implementação Rust e mantenha apenas a referência necessária.
+- Todo o hardware e runtime de emulação ativo devem ser implementados em Rust. Python de produção fica restrito à interface Qt e seus adaptadores de host, carregamento de ROMs/perfis e integração fina com PyO3. Ferramentas/testes Python são infraestrutura e nunca podem executar implementações de hardware em `legacy/`.
+- Não crie nem mantenha implementações de hardware em Python no caminho ativo. Implementações antigas foram arquivadas em `legacy/python_reference/` exclusivamente para consulta e não devem ser importadas por código, testes ou workflows ativos.
 - Não adicione JIT nem paralelismo entre componentes temporais por antecipação.
 
 ## Antes de alterar
@@ -50,7 +50,7 @@ cargo clippy --manifest-path native/z80_core/Cargo.toml --all-targets -- -D warn
 cargo test --manifest-path native/z80_core/Cargo.toml
 python -m pip install maturin
 maturin develop --manifest-path native/z80_core/Cargo.toml --features python-extension --release
-python -m pytest tests/test_sg1000_cpu_backend.py tests/test_sg1000_native_machine.py tests/integration/test_rust_z80_core.py -q
+python -m pytest tests/test_sg1000_native_machine.py tests/test_vgm_machine_integration.py -q
 ```
 
 Execute apenas os comandos relevantes ao escopo, além dos checks completos exigidos pelo CI. Confirme os manifest paths e os comandos nos arquivos atuais antes de executar.
@@ -60,9 +60,9 @@ Execute apenas os comandos relevantes ao escopo, além dos checks completos exig
 - `.github/workflows/sg1000-three-agent-validation.yml`: sequência de jobs para instruções Z80, mapa de memória/determinismo e qualidade/testes completos do workspace Rust SG-1000.
 - `.github/workflows/rust-sg1000-core.yml`: fmt, Clippy e testes do workspace Rust.
 - `.github/workflows/qt-rust-z80-core.yml`: build Maturin, extensão PyO3, testes Rust e regressão Python/Qt de integração.
-- `.github/workflows/agent-functional-validation.yml`: lint/formatação e suíte Python funcional.
+- `.github/workflows/agent-functional-validation.yml`: lint/formatação e testes da aplicação Qt/integração; não deve importar o hardware Python arquivado.
 - `.github/workflows/agent-integrity.yml`: compileall, dependências, repetibilidade da suíte e relatórios.
-- `.github/workflows/agent-performance-audit.yml`: durações da suíte e inventário de opcodes.
+- `legacy/workflows/agent-performance-audit.yml`: workflow histórico arquivado; não é executado.
 
 Ao concluir uma alteração:
 1. Identifique os workflows que realmente cobrem os arquivos e contratos modificados; não suponha que todos disparam por qualquer mudança (verifique os filtros `paths`).

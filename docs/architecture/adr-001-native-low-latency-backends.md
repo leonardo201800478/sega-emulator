@@ -1,3 +1,5 @@
+> **Estado vigente (2026-10-27):** hardware SG-1000 ativo exclusivamente em Rust (`native/sg1000_core`). A aplicação Qt usa uma fachada Python fina para PyO3 e carregadores de ROM/perfil. Implementações de hardware Python, ferramentas e testes que dependiam delas foram arquivados sob `legacy/` e não são executados pelo projeto ativo. Descrições de estados anteriores neste documento são históricas, não instruções atuais.
+
 # ADR-001 — Backends nativos com foco em acurácia, desempenho e baixa latência
 
 - **Status:** Proposto para implementação incremental
@@ -161,7 +163,7 @@ Não centralizar essas dependências em sg1000_core. Usar crates host separados 
 - Vulkan oferece controle, mas sincronização incorreta pode introduzir stutter, corrupção ou deadlocks. D3D11/D3D12 não devem ser implementados antes de haver testes de compatibilidade que os justifiquem.
 - Um backend “mais nativo” não garante menor latência: filas de áudio, compositor, driver, vsync e buffers em voo podem dominar o resultado.
 - A fronteira atual de SG-1000 ainda está incompleta. Esta ADR não declara que o runtime standalone, VDP, scheduler ou apresentação nativa já existam.
-- Não mover cores Python para legacy/ até que a API Rust cubra os contratos de produção e os gates existentes sejam satisfeitos.
+- **Estado atualizado:** os cores Python de hardware foram movidos para `legacy/python_reference/`; não são importados pelo runtime, testes ou workflows ativos. Não reativar esse caminho.
 
 ## Próximo passo
 
