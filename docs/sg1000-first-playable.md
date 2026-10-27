@@ -1,3 +1,5 @@
+> **Estado vigente (2026-10-27):** hardware SG-1000 ativo exclusivamente em Rust. O código Python antigo de hardware, os testes/ferramentas dependentes e os workflows históricos foram arquivados sob `legacy/`; não são importados nem executados pelo projeto ativo. Este documento mantém observações históricas quando indicadas.
+
 > **Estado em 2026-10-26:** este documento preserva o escopo e as limitações registradas no marco inicial de jogo executável. Ele é histórico, não uma descrição completa do runtime atual. O SG-1000 agora integra geração de áudio PSG, saída de áudio no frontend Qt e apresentação de vídeo; a avaliação manual recente foi satisfatória, com pequenos engasgos/sincronismo prolongado ainda em investigação. Consulte o [marco atual de áudio e vídeo](milestones/sg1000-audio-video-milestone-2026-10-26.md) e o [README](../README.md) para o estado vigente. A integração atual não significa precisão ciclo a ciclo nem equivalência certificada com hardware real.
 
 # SG-1000 — marco do primeiro jogo executável
@@ -15,21 +17,21 @@ mostrar o vídeo e receber entrada do jogador. O áudio fica explicitamente fora
   status/VBlank, relógio por linhas e renderização por software de Graphics I, Graphics II,
   texto, multicolor e sprites.
 - Portas iniciais de joystick 1/2 (leitura ativa em nível baixo).
-- Frontend Pygame opcional, com janela 3x e mapeamento de teclado.
-- Modo headless para validar o avanço de quadros com uma ROM sintética.
+- Interface Qt/PySide6 como única GUI ativa.
+- Testes de integração do runtime Rust validam o avanço de quadros com ROM sintética.
 
 ## Executar no Windows
 
 Instale o pacote com o frontend opcional:
 
 ```powershell
-python -m pip install -e ".[dev,frontend]"
+python -m pip install -e ".[dev,qt]"
 python -m sega_emulator "C:\caminho\para\jogo.rom"
 ```
 
 Controles iniciais: setas direcionais, Z/Space para botão 1, X/Enter para botão 2 e Esc para sair.
 
-Teste headless, sem Pygame:
+Teste de integração Rust (com a extensão instalada):
 
 ```powershell
 python -m sega_emulator "C:\caminho\para\homebrew.rom" --headless-frames 600
@@ -40,13 +42,13 @@ python -m sega_emulator "C:\caminho\para\homebrew.rom" --headless-frames 600
 Gere uma ROM própria de 8 KiB que configura o VDP e mostra um padrão de teste:
 
 ```powershell
-python tools/create_sg1000_demo_rom.py --output sg1000-demo.rom
+Gerador de ROM sintética arquivado: `legacy/python_reference/tools/create_sg1000_demo_rom.py`.
 python -m sega_emulator .\sg1000-demo.rom
 ```
 
 Essa ROM valida o caminho CPU → I/O → VDP → framebuffer; não substitui a execução de um jogo real. O padrão esperado usa pixels verdes e cinza sobre o backdrop azul; se a janela abrir em preto ou sem padrão, registre o estado e o hash da ROM gerada. O gerador imprime o SHA-256 para identificar exatamente o artefato testado.
 
-Use `--headless-frames 0` para validar o caminho e o tamanho da ROM sem executar a CPU. Cada quadro executado é limitado por avanço de frame do VDP; a instrução que cruza a borda pode ultrapassar o orçamento nominal por alguns T-states.
+O teste de integração usa a extensão Rust e verifica o avanço do quadro. O modelo temporal continua baseado em instruções e T-states nominais.
 
 Não distribua ROMs comerciais. Use homebrew ou dumps legalmente obtidos.
 

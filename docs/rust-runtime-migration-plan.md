@@ -1,8 +1,10 @@
+> **Atualização de estado (2026-10-27):** o hardware SG-1000 ativo é Rust-only. A implementação Python antiga e ferramentas/testes que dependiam dela estão em `legacy/python_reference/`; não fazem parte do runtime e os comandos históricos abaixo não são caminhos de execução ativos.
+
 # Plano de migração do runtime para Rust
 
 ## Decisão
 
-O runtime de emulação do projeto será migrado incrementalmente de Python para Rust. A interface Qt/PySide6 permanece em Python. A migração será feita em fatias pequenas, cada uma compilável, testável e revisável; não haverá reescrita integral em um único commit.
+**Estado atualizado (2026-10-27):** a migração do runtime SG-1000 para Rust foi aplicada na PR #140 (ainda em revisão). A interface Qt/PySide6 e os carregadores de ROM/perfis permanecem em Python; o hardware ativo está em `native/sg1000_core`.
 
 O objetivo é que a execução da emulação — CPU, barramentos, memória, dispositivos, sincronização e composição da máquina — ocorra em Rust sem chamadas Python por acesso de memória ou por instrução. PyO3 será a fronteira entre o runtime Rust e a interface Qt, não o mecanismo interno de comunicação entre componentes de hardware.
 
@@ -10,8 +12,8 @@ O objetivo é que a execução da emulação — CPU, barramentos, memória, dis
 
 - `main` no commit `593c2dc8fdb1be55c548a3979d24b8d49c589b52`.
 - O núcleo Z80 Rust já existe em `native/z80_core`, com ALU separada em `native/z80_alu`.
-- A extensão PyO3 atual recebe objetos Python de barramento; portanto, o núcleo ainda pode cruzar a fronteira Rust/Python durante a execução. A migração deve eliminar essas chamadas do caminho crítico.
-- A máquina SG-1000 Python integra Z80, barramento/memória, TMS9918A, SN76489 e sincronização.
+- A extensão PyO3 atual encaminha operações para a máquina Rust consolidada; não recebe um barramento Python por acesso de memória. O GIL continua presente na fronteira de chamadas da aplicação.
+- A antiga máquina SG-1000 Python integrava Z80, barramento/memória, TMS9918A, SN76489 e sincronização; foi arquivada em `legacy/python_reference/`.
 - Baseline local informado nesta sessão: 2.317 testes aprovados; os quatro testes direcionados do backend Rust também passaram.
 - Benchmark sintético local anterior à migração nativa, com 100.000 instruções e 7 repetições: CPU isolada Rust 1,078× a velocidade Python; máquina completa Rust 0,95× (cerca de 5% mais lenta). O workload é `JP 0000h`, não representa desempenho de jogos. O usuário informou depois que o resultado melhorou após o build Release, mas não há uma saída numérica completa registrada aqui para atribuir um novo fator.
 - Esses resultados são evidência de throughput em carga sintética, não prova de compatibilidade universal, precisão ciclo a ciclo ou FPS em jogos.
@@ -36,7 +38,7 @@ O objetivo é que a execução da emulação — CPU, barramentos, memória, dis
 - Testes pytest, harnesses diferenciais, scripts de benchmark, auditorias e ferramentas de desenvolvimento, salvo quando um componente de execução exigir mudança.
 - Durante a migração, a implementação Python de referência permanece disponível apenas para testes diferenciais e comparação; não será chamada como fallback silencioso pelo runtime Rust.
 
-A meta final é manter apenas o frontend Qt em Python. O frontend Pygame/SDL e a CLI Python são caminhos de aplicação a retirar ou substituir por Rust; a saída de áudio e a entrada nativas serão ligadas ao runtime sem alterar os clocks lógicos. Essa consolidação ocorrerá depois de os contratos de hardware e a API Rust estarem estáveis.
+A interface Qt é a única interface gráfica ativa. O frontend Pygame e a execução headless pela CLI foram arquivados; a CLI ativa limita-se a iniciar Qt e carregar/listar ROMs.
 
 ## Sequência de implementação
 

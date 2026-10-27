@@ -1,3 +1,5 @@
+> **Atualização de estado (2026-10-27):** o hardware SG-1000 ativo é Rust-only. A implementação Python antiga e ferramentas/testes que dependiam dela estão em `legacy/python_reference/`; não fazem parte do runtime e os comandos históricos abaixo não são caminhos de execução ativos.
+
 # Registro de otimização de desempenho — 24/10/2026
 
 ## Objetivo

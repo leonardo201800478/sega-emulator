@@ -1,3 +1,5 @@
+> **Atualização de estado (2026-10-27):** o hardware SG-1000 ativo é Rust-only. A implementação Python antiga e ferramentas/testes que dependiam dela estão em `legacy/python_reference/`; não fazem parte do runtime e os comandos históricos abaixo não são caminhos de execução ativos.
+
 # Plano de fechamento das lacunas do Z80
 
 **Data:** 23/10/2026  
@@ -102,7 +104,7 @@ O evento deve carregar endereço, direção, valor quando conhecido, classe de c
 O harness deve:
 1. registrar origem, licença, versão/commit e hash do arquivo de teste;
 2. inicializar PC, SP, registradores, flags, memória, I/O e interrupções de forma determinística;
-3. executar um caso no núcleo Python e no oráculo selecionado;
+3. executar um caso no núcleo Rust contra vetor/oráculo independente (os testes do núcleo Python foram arquivados);
 4. comparar estado final, memória, I/O e ciclos que ambos realmente exponham;
 5. parar no primeiro desvio e salvar caso mínimo reproduzível;
 6. não equiparar ausência de traço temporal no oráculo a equivalência de barramento.

@@ -1,3 +1,5 @@
+> **Estado vigente (2026-10-27):** hardware SG-1000 ativo exclusivamente em Rust. O código Python antigo de hardware, os testes/ferramentas dependentes e os workflows históricos foram arquivados sob `legacy/`; não são importados nem executados pelo projeto ativo. Este documento mantém observações históricas quando indicadas.
+
 # Arquitetura dos crates Rust nativos
 
 ## Objetivo e escopo
@@ -65,7 +67,7 @@ maturin build --release --features python-extension --out dist
 Pop-Location
 $wheel = Get-ChildItem native/z80_core/dist/*.whl | Select-Object -First 1
 python -m pip install $wheel.FullName
-python -m pytest tests/test_rust_runtime_selection.py tests/test_sg1000_cpu_backend.py tests/test_sg1000_native_machine.py tests/integration/test_rust_z80_core.py -q
+python -m pytest tests/test_rust_runtime_selection.py tests/test_sg1000_native_machine.py tests/test_vgm_machine_integration.py tests/integration/test_rust_z80_core.py -q
 ```
 
 No Windows, o workflow `.github/workflows/qt-rust-z80-core.yml` também instala `.[dev,qt]`, constrói o wheel Release, instala-o e roda Ruff e um conjunto direcionado de testes Qt/backend/paridade. O caminho `maturin develop --release --features python-extension` descrito no README de raiz é uma alternativa para ambiente local de desenvolvimento.
@@ -91,7 +93,7 @@ Manter `native/z80_core` como fronteira PyO3 enquanto a UI Qt depender dela; o h
 | `.github/workflows/sms-core-fast.yml` | Formatação global, Clippy e testes de `sega-sms-core` | Adequado para o alvo SMS rápido; não substitui os testes integrais de workspace. Já inclui `z80_bus`. |
 | `.github/workflows/qt-rust-z80-core.yml` | Formatação/Clippy/testes do crate excluído, build Release/Maturin, Ruff e pytest direcionado para Qt/backend/paridade | O filtro precisa acompanhar os crates upstream dos quais depende, inclusive `native/z80_bus/**` e mudanças de manifests/lock relevantes. O push está limitado a uma branch de desenvolvimento específica; a cobertura de PR é o caminho principal para revisão. |
 | `.github/workflows/ci.yml` | Ruff nos arquivos Python alterados em PR/push (ou projeto inteiro quando acionado manualmente conforme lógica do workflow) e `python -m pytest` | Não compila Rust nem constrói a extensão Maturin. |
-| `.github/workflows/z80-extended-audit.yml` | Ruff/pytest completos, auditoria determinística e inventário de opcodes, com artefatos mesmo se passos anteriores falharem | Auditoria Python; não substitui build/testes Rust. Upload de artefatos com `if: always()` não significa aprovação. |
+| `legacy/workflows/z80-extended-audit.yml` | Ruff/pytest completos, auditoria determinística e inventário de opcodes, com artefatos mesmo se passos anteriores falharem | Auditoria Python; não substitui build/testes Rust. Upload de artefatos com `if: always()` não significa aprovação. |
 
 Consulte os arquivos de workflow para comandos exatos e estado do run do SHA candidato. Paths são parte do contrato de CI: todo arquivo consumido por um teste/build que pretenda validar alteração precisa ser incluído no filtro relevante, ou a validação correspondente deve ser deliberadamente global.
 

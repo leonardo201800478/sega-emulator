@@ -1,3 +1,5 @@
+> **Estado vigente (2026-10-27):** runtime SG-1000 ativo em Rust. O hardware Python antigo e os testes/ferramentas que dependiam dele estão arquivados em `legacy/python_reference/` e não devem ser executados/importados. Este documento preserva observações históricas; comandos apontando para os caminhos arquivados não são comandos ativos.
+
 # Consolidação da auditoria e dos testes do Z80 — 2026-10-25
 
 ## Resumo executivo

@@ -1,3 +1,5 @@
+> **Estado vigente (2026-10-27):** hardware SG-1000 ativo exclusivamente em Rust (`native/sg1000_core`). A aplicação Qt usa uma fachada Python fina para PyO3 e carregadores de ROM/perfil. Implementações de hardware Python, ferramentas e testes que dependiam delas foram arquivados sob `legacy/` e não são executados pelo projeto ativo. Descrições de estados anteriores neste documento são históricas, não instruções atuais.
+
 > **Atualização de estado — 2026-10-26:** em teste manual do desenvolvedor, a saída sonora do SG-1000 foi considerada muito próxima ao Gearsystem, representando um avanço de qualidade percebida. Isso não substitui validação quantitativa independente nem medição de hardware real. Pequenos engasgos e possível descompasso em sessões longas continuam pendentes; o plano imediato é medir ocupação da fila PCM, underruns/overflows, cadência de frames e deriva temporal antes de modificar a síntese ou o scheduler. Consulte o [registro do marco SG-1000](../milestones/sg1000-audio-video-milestone-2026-10-26.md).
 
 # Roadmap de fidelidade do PSG e reutilização de hardware Sega
@@ -13,7 +15,7 @@ Decisões para esta etapa:
 - Não mudar o som padrão nem os clocks lógicos apenas para obter um resultado auditivamente mais agradável.
 - Não adicionar um passa-baixa arbitrário como se fosse uma característica comprovada do SN76489AN.
 - Separar **lógica digital do chip**, **reconstrução/reamostragem digital** e **resposta analógica da plataforma**.
-- Rust é a implementação definitiva do núcleo de hardware. Python é usado para protótipos e referências seletivas quando ajudam a estabelecer o comportamento esperado; não é obrigatório duplicar o PSG em Python antes de implementar em Rust. Mudanças devem ser cobertas por vetores de referência, testes determinísticos e, quando existir uma implementação Python equivalente, testes de paridade. JIT fica fora do escopo enquanto benchmarks não demonstrarem necessidade.
+- Rust é a implementação definitiva do núcleo de hardware. Python não implementa o PSG ativo. As referências Python anteriores estão arquivadas. Mudanças devem ser cobertas por vetores independentes, testes determinísticos em Rust e comparação com documentação/capturas quando disponíveis. JIT fica fora do escopo enquanto benchmarks não demonstrarem necessidade.
 - Não implementar todos os consoles nesta etapa. Primeiro corrigir e validar o perfil SG-1000; perfis Sega integrados são uma etapa seguinte.
 
 ## Evidências observadas no repositório
@@ -24,7 +26,7 @@ A inspeção do código atual identificou os seguintes fatos:
 2. A geração do PSG aplica um FIR passa-baixas Blackman de 63 taps à mistura digital nos ticks internos antes de emitir PCM a 44,1 kHz. O filtro reduz aliasing, mas não é um integrador de banda limitada nem um modelo da resposta analógica; a resposta de frequência ainda precisa de validação quantitativa independente.
 3. O frontend Qt usa `PcmResampler`, um reamostrador FIR sinc com janela Blackman de 63 taps e tabela determinística de 1.024 fases para adaptar o PCM de 44,1 kHz à taxa do mixer. O estado de fase e o histórico são preservados entre blocos; o teste espectral verifica a rejeição de uma senoide acima do Nyquist de saída ao reduzir para 22,05 kHz. A filtragem do núcleo PSG e a do reamostrador são etapas distintas. A curva analógica real do console continua sem validação por medição.
 4. A mistura aplica atenuação logarítmica aproximada de 2 dB por passo e soma quatro canais com normalização por quatro. Isso é uma aproximação digital plausível, mas não valida ganho, clipping ou a resposta elétrica de uma placa de console.
-5. O caminho Rust reproduz os contratos observáveis da implementação Python e tem testes diferenciais. Uma alteração no algoritmo de amostragem ou nos estados do chip deve manter essa paridade, ou atualizar explicitamente o contrato e os testes.
+5. O caminho Rust é a implementação oficial. Alterações no algoritmo de amostragem/estados do chip devem manter os contratos documentados e os testes Rust; o legado Python não é oráculo ativo.
 
 A descrição de som metálico/estridente é consistente com aliasing residual e ausência de modelo analógico de saída, mas ainda é uma **hipótese diagnóstica**, não prova de causa única. O volume percebido deve ser medido separadamente por pico, RMS e alinhamento de ganho.
 
@@ -60,14 +62,14 @@ O ARES emite o PSG SG numa taxa próxima ao clock dividido por 16 e aplica um pa
 - Fixar a origem de cada expectativa: documentação, código de referência independente ou captura de hardware. Não converter testes de paridade Python/Rust em alegação de fidelidade absoluta.
 - Preservar capturas de áudio apenas quando legalmente obtidas, com metadados da cadeia de captura; não incluir ROMs comerciais.
 
-**Aceitação:** os mesmos vetores produzem resultados reproduzíveis em Python e Rust; testes detectam diferenças de frequência, ganho, estado e divisão em blocos.
+**Aceitação vigente:** os mesmos vetores independentes produzem resultados determinísticos em Rust; testes detectam diferenças de frequência, ganho, estado e divisão em blocos.
 
 ### Fase B — Reamostragem com controle de aliasing (P1; parcialmente implementada)
 
 **Objetivo:** reduzir aliasing na conversão da mistura digital do PSG para PCM e manter comportamento determinístico entre blocos.
 
-- **Implementado:** FIR passa-baixas Blackman de 63 taps, com estado persistente e coeficientes determinados por clock e taxa PCM, nas implementações Python e Rust.
-- **Validado parcialmente:** testes determinísticos e de paridade Python/Rust, além de um teste sintético que compara energia de um tom acima de Nyquist com um tom dentro da banda. Isso demonstra uma regressão útil, mas não caracteriza completamente a resposta de frequência do filtro.
+- **Implementado:** FIR passa-baixas Blackman de 63 taps, com estado persistente e coeficientes determinados por clock e taxa PCM, na implementação Rust ativa; o código Python anterior está arquivado.
+- **Validado parcialmente:** testes determinísticos em Rust, além de um teste sintético que compara energia de um tom acima de Nyquist com um tom dentro da banda. Isso demonstra uma regressão útil, mas não caracteriza completamente a resposta de frequência do filtro.
 - **Pendente:** medir ripple de banda passante, atenuação de banda rejeitada, resposta transitória e atraso; definir limites quantitativos a partir de uma especificação de teste independente.
 - **Pendente:** a conversão do frontend Qt para 22,05 kHz ainda usa interpolação linear a partir de 44,1 kHz e pode reintroduzir aliasing. Não tratar a configuração de 22,05 kHz como saída anti-aliasing validada.
 - Comparar custo de CPU e latência no caminho Rust real sem alterar os clocks lógicos da máquina.
@@ -111,7 +113,7 @@ O perfil deve expressar diferenças confirmadas como dados/configuração: largu
 
 | Subsistema | Estado observado / lacuna | Próximo marco verificável |
 |---|---|---|
-| CPU Z80 | Núcleos Python/Rust e testes diferenciais existem; o estado atual de testes não demonstra todas as variantes, interrupções nem precisão ciclo a ciclo | Manter matriz de opcodes; testes de diagnóstico e ciclos; documentar cobertura e resultados por commit |
+| CPU Z80 | Runtime ativo Rust; testes Python de referência arquivados. A cobertura ainda não demonstra todas as variantes, interrupções nem precisão ciclo a ciclo | Manter matriz de opcodes; testes de diagnóstico e ciclos; documentar cobertura e resultados por commit |
 | Barramento e scheduler | T-states nominais e alguns writes temporizados; ainda não equivalem a execução completa por ciclo de barramento | Definir modelo explícito de eventos e acessos temporais antes de alegar precisão ciclo a ciclo |
 | VDP SG-1000 | Implementações em evolução e testes de modos, raster/sprites; falta validação ampla contra padrões de hardware | Homebrew/test ROMs legais, testes diferenciais por modo, timing e snapshots comparáveis |
 | PSG SG-1000 | Mistura digital implementada; FIR Blackman de 63 taps reduz aliasing, mas a resposta de frequência e a saída analógica não foram validadas contra hardware | Quantificar resposta do FIR, corrigir aliasing na redução Qt para 22,05 kHz e buscar referência independente/hardware |

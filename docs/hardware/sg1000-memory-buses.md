@@ -1,3 +1,5 @@
+> **Atualização de estado (2026-10-27):** o hardware SG-1000 ativo é Rust-only. A implementação Python antiga e ferramentas/testes que dependiam dela estão em `legacy/python_reference/`; não fazem parte do runtime e os comandos históricos abaixo não são caminhos de execução ativos.
+
 # SG-1000 — memória, portas e integração inicial
 
 ## Escopo
@@ -34,8 +36,7 @@ direta de `SG1000Machine`, com o VDP mantendo sua própria VRAM.
 - `TMS9918A` (`src/sega_emulator/video/tms9918.py`): mantém 16 KiB de VRAM,
   registradores, portas de dados/controle, status, framebuffer e renderização
   por software dos modos implementados nesta etapa.
-- Frontend Pygame opcional: apresenta o framebuffer e converte teclado em bits
-  de entrada; o modo headless permite executar quadros sem abrir janela.
+- Interface ativa: Qt/PySide6 apresenta o framebuffer e converte entrada de host em snapshots para o runtime Rust. O frontend Pygame e o runner headless da CLI foram arquivados.
 
 ## Mapa de memória atual
 
@@ -85,7 +86,7 @@ regionais. Não reutilizar automaticamente o mapa de portas do Master System.
 - Uma instrução pode atravessar uma fronteira de scanline ou quadro. Portanto,
   eventos do VDP não estão alinhados a cada T-state nem a cada acesso ao
   barramento.
-- O modo headless e os testes sintéticos verificam o caminho de execução, mas
+- Os testes sintéticos do núcleo Rust verificam o caminho de execução, mas
   não provam compatibilidade com jogos comerciais nem precisão de ciclo.
 - O PSG não está integrado; não há sincronização audiovisual nem saída de som.
 

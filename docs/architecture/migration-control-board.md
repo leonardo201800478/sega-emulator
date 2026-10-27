@@ -1,3 +1,5 @@
+> **Estado vigente (2026-10-27):** hardware SG-1000 ativo exclusivamente em Rust. O código Python antigo de hardware, os testes/ferramentas dependentes e os workflows históricos foram arquivados sob `legacy/`; não são importados nem executados pelo projeto ativo. Este documento mantém observações históricas quando indicadas.
+
 # Migration control board — Clean Architecture
 
 This board is the source of truth for migration sequencing and evidence. GitHub Actions are validators, not autonomous AI reviewers. A phase advances only when its evidence is recorded against the same candidate SHA.
@@ -39,9 +41,9 @@ A CI workflow only validates the commands it actually executes. A green Python w
 ### Gate 3 — production boundary and legacy isolation
 - [ ] Qt/PySide6 uses only the thin native API for emulation.
 - [ ] Missing native runtime fails explicitly; no silent Python-core fallback.
-- [ ] Move old Python cores into `legacy/python_reference/sega_emulator_reference/` only after all production imports are replaced.
-- [ ] Tests import legacy reference modules explicitly; distribution excludes legacy.
-- [ ] Decide and document whether Pygame is migrated to the same API or classified as legacy.
+- [x] Moved old Python cores into `legacy/python_reference/` after replacing production imports.
+- [x] Active tests/workflows do not import `legacy/`; the legacy tree is excluded from the package.
+- [x] Pygame is archived; Qt is the only active GUI.
 
 ### Gate 4 — later platforms
 - [ ] Start SMS/Game Gear only after Gate 2 and Gate 3 pass for SG-1000.
@@ -56,7 +58,7 @@ A CI workflow only validates the commands it actually executes. A green Python w
 - The Rust SG-1000 and SMS crates remain partial. No fidelity or standalone-runtime acceptance is implied.
 - Baseline crate validation: **PASS** on main SHA `632f2f69e7a9e6d9a81b19a4f994bb1ce42eb951` via [Rust SG-1000 Workspace run #131](https://github.com/leonardo201800478/sega-emulator/actions/runs/40442082201): formatting, Clippy, and workspace tests succeeded; logs show 22 SG-1000 tests passed, plus 15 SMS and 7 Z80 ALU tests. This run predates the migration branch's documentation-only commits and validates the same SG-1000 source blobs.
 - Historical baseline note (before PR #126): VDP, PSG and machine-wide scheduling were not integrated. The current status is recorded below; the crate is still not a complete standalone emulator.
-- Do not move Python production cores to `legacy/` yet: the current application still depends on those modules, and the Rust crate does not replace all production contracts.
+- **Status atualizado:** Python production cores are archived; the Qt application uses the Rust-only facade. Cycle-accurate timing remains an open fidelity goal.
 
 ## Current migration status — PR #126
 

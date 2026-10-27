@@ -1,10 +1,12 @@
+> **Estado vigente (2026-10-27):** runtime SG-1000 ativo em Rust. O hardware Python antigo e os testes/ferramentas que dependiam dele estão arquivados em `legacy/python_reference/` e não devem ser executados/importados. Este documento preserva observações históricas; comandos apontando para os caminhos arquivados não são comandos ativos.
+
 # Modelo total do Z80 em Rust — núcleo comum e quatro perfis de plataforma
 
 - **Status:** proposta técnica baseada nas fontes existentes; requisitos para implementação e validação, não declaração de que a CPU já esteja completa.
 - **Escopo:** SG-1000, Master System, Game Gear e Z80 auxiliar do Mega Drive/Genesis.
 - **Branch de documentação:** `docs/z80-total-model-four-platform-profiles`.
 - **Base auditada:** `main` após o merge da PR #118 (`4263f3871a1729c16e643e98132c74221ad8feec`). A fatia de opcodes da #118 está integrada; o núcleo Z80 continua parcial.
-- **Linguagem oficial do núcleo:** Rust. Python fica para UI, ferramentas e oráculos diferenciais seletivos.
+- **Linguagem oficial do núcleo:** Rust. Python fica para UI, carregamento de ROM/perfis, fachada PyO3 e infraestrutura de testes/ferramentas que valida Rust; os oráculos de hardware Python estão arquivados.
 
 ## 1. Decisão central
 
@@ -148,7 +150,7 @@ O critério de completude será semântico, não apenas “todos os bytes execut
 | Determinismo | Estado serializado, reinício, execução repetida, checkpoints e mesma saída com mesma sequência de eventos |
 | Integração | Cada perfil, interrupções de dispositivos, acesso à memória/I/O e sincronização com o scheduler da máquina |
 
-Cada célula da matriz precisa indicar: `documented`, `observed-by-oracle`, `inferred`, `hypothesis` ou `not-implemented`; fonte/revisão; teste de referência; resultado no Rust; e diferença conhecida em relação ao modelo Python.
+Cada célula da matriz precisa indicar: `documented`, `observed-by-oracle`, `inferred`, `hypothesis` ou `not-implemented`; fonte/revisão; teste de referência; resultado no Rust; e diferença conhecida em relação ao comportamento documentado/oráculo independente.
 
 ## 6. Política de testes e evidência
 
@@ -172,7 +174,7 @@ Cada célula da matriz precisa indicar: `documented`, `observed-by-oracle`, `inf
 ### Camada 4 — integração por perfil
 - Testes de CPU com barramento de teste e testes com barramento de plataforma.
 - ROMs sintéticas/homebrew e entradas determinísticas.
-- Checkpoints comparáveis entre Python de referência e Rust durante a migração.
+- Checkpoints determinísticos do runtime Rust contra vetores/oráculos independentes; referências Python antigas não são executadas.
 - Mesma sequência de entradas/eventos deve gerar estados e hashes repetíveis; hashes iguais não substituem comparação de estados nem provam correção absoluta.
 
 ### CI e comandos
@@ -196,7 +198,7 @@ Para `native/z80_core`, validar também o manifest path, build Release/Maturin e
 5. **Flags/estado oculto/interrupções:** validar Q/WZ, R, EI-delay, HALT, IM0/1/2, NMI e block instructions com oráculos rastreáveis.
 6. **Temporização e barramento:** ampliar de contagem nominal para eventos ordenados, sem afirmar precisão que ainda não foi demonstrada.
 7. **Perfis de plataforma:** validar SG-1000 primeiro; depois Master System, Game Gear e Genesis em trilhas separadas, reutilizando o núcleo e acrescentando testes de integração próprios.
-8. **Migração oficial:** depois da paridade e critérios de aceitação, fazer Rust ser a implementação oficial e arquivar a referência Python seletiva. Não remover o Python de hardware antes de os consumidores e regressões relevantes estarem cobertos.
+8. **Migração oficial (SG-1000):** Rust é a única implementação ativa; as referências Python foram arquivadas após remover consumidores de produção.
 
 ## 8. Critérios de “modelo total”
 

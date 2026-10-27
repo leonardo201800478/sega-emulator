@@ -5,6 +5,11 @@ on:
     branches: [main]
     paths:
       - "src/sega_emulator/frontend/qt/**"
+      - "src/sega_emulator/machine/sg1000.py"
+      - "src/sega_emulator/__main__.py"
+      - "tests/test_sg1000_native_machine.py"
+      - "tests/test_rust_runtime_selection.py"
+      - "tests/test_vgm_machine_integration.py"
       - "src/sega_emulator/frontend/qt_frontend.py"
       - "src/sega_emulator/frontend/controller_input.py"
       - "src/sega_emulator/frontend/sdl3_controller_input.py"

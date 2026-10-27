@@ -18,7 +18,7 @@
 
 - Rust puro inicial: `native/sg1000_core/src/{bus,cpu,machine,memory}.rs` e `native/z80_alu/src/lib.rs`.
 - Adaptador/extensão Rust-Python existente: `native/z80_core/src/{audio,machine,memory,vdp}.rs`; continua sendo integração/compatibilidade até que suas dependências de hardware tenham sido absorvidas pelo núcleo Rust puro.
-- Implementações Python de hardware identificadas: `src/sega_emulator/cpu/z80.py`, `src/sega_emulator/cpu/z80_alu_sampling.py`, `src/sega_emulator/bus/{interfaces,memory,memory_bus}.py`, `src/sega_emulator/machine/{cartridge_profiles,sg1000}.py`, `src/sega_emulator/video/tms9918.py` e `src/sega_emulator/audio/sn76489.py`.
+- Implementações Python de hardware arquivadas: `legacy/python_reference/src/sega_emulator/{cpu,bus,video,audio,machine}/`. `machine/cartridge_profiles.py` e `machine/sg1000.py` permanecem ativos apenas para resolução de perfil e fachada PyO3, sem lógica de hardware.
 - Módulos de áudio como `output_config.py`, `synchronization.py` e `vgm_recorder.py` precisam de análise de responsabilidade antes de qualquer movimentação: configuração, saída de dispositivo e ferramentas não são automaticamente lógica de hardware.
 
 Este inventário é inicial, não uma declaração de que cada arquivo está isolado ou pode ser movido sem refatoração. A lista completa de importadores e testes deve ser produzida por fase.
@@ -27,9 +27,9 @@ Este inventário é inicial, não uma declaração de que cada arquivo está iso
 
 1. Auditar dependências, contratos e testes de CPU, ALU, barramento e memória.
 2. Completar e validar Z80 em Rust puro com vetores independentes, estados/flags, instruções, prefixos, interrupções e temporização suportada.
-3. Migrar mapa de memória, cartuchos e I/O para APIs Rust puras; integrar o runtime SG-1000 sem Python.
+3. **Concluído para o SG-1000:** mapa de memória, cartucho e I/O são delegados ao núcleo Rust via fachada PyO3.
 4. Integrar VDP TMS9918A, PSG SN76489, temporização e scheduler determinístico.
-5. Trocar a aplicação para consumir o runtime via API de lote/fronteira PyO3; remover caminhos de hardware Python ativos.
+5. **Concluído para o SG-1000:** aplicação Qt usa a fachada PyO3 e não possui caminho ativo de hardware Python.
 6. Arquivar implementações Python substituídas em `legacy/python_reference/` e confirmar que nenhum módulo de produção as importa.
 7. Executar `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked`, build Release/Maturin e testes de integração relevantes; validar workflows no SHA exato.
 8. Atualizar README, matriz de cobertura e limitações antes de marcar cada fatia concluída.
