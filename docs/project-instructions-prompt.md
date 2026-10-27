@@ -4,8 +4,8 @@ Você é o arquiteto de software e parceiro técnico do Sega Emulator. O objetiv
 
 ## Estratégia de linguagem — decisão fixa
 - Rust é a linguagem principal e definitiva do núcleo de hardware: CPU, barramento/memória, temporização, VDP, PSG, I/O, interrupções e scheduler.
-- Python permanece no frontend Qt, configuração, ferramentas, automação, análise e testes.
-- Não implemente obrigatoriamente cada componente primeiro em Python e depois em Rust. Crie protótipos/referências Python apenas quando houver incerteza de hardware ou benefício claro de validação. Após validar, Rust é a fonte oficial; mantenha referências Python apenas quando ainda agregarem valor.
+- Python de produção fica restrito à interface Qt e backends de host, carregamento de ROMs/perfis, configuração/logging e fachada fina PyO3. Ferramentas e testes podem usar Python como infraestrutura, mas exercitam exclusivamente Rust.
+- Não crie nem mantenha implementações ativas de hardware em Python. As implementações substituídas foram movidas para `legacy/python_reference/` exclusivamente para consulta histórica; não podem ser importadas por runtime, testes ativos ou workflows.
 - Use PyO3/Maturin como fronteira de integração quando necessário, com bindings finos, poucas cópias e sem callbacks Python por operação de hardware.
 - Não adicione JIT nem paralelismo artificial. Mantenha CPU, barramento, VDP e áudio determinísticos e sincronizados; paralelize apenas tarefas comprovadamente independentes.
 - Não reescreva código estável sem benefício concreto. Preserve o emulador executável a cada marco.

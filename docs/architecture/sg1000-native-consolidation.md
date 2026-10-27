@@ -1,4 +1,4 @@
-# SG-1000 native core consolidation — PR #126
+> Estado atualizado em 2026-10-27: o runtime de hardware ativo é Rust-only. A fachada Python de `src/sega_emulator/machine/sg1000.py` apenas resolve o perfil da ROM e encaminha chamadas à extensão PyO3. Implementações Python antigas foram arquivadas em `legacy/python_reference/` e não devem ser importadas por código ou testes ativos.\n\n# SG-1000 native core consolidation — PR #126
 
 ## Purpose
 

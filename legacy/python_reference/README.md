@@ -1,13 +1,3 @@
-# Referências legadas Python — somente consulta
+# Referências Python arquivadas
 
-Este diretório é o destino das implementações de hardware em Python **depois** que cada responsabilidade tiver sido substituída por Rust e seus consumidores migrados.
-
-Regras:
-- Nunca importar módulos daqui pelo pacote executável `src/sega_emulator`.
-- Nunca tratar esta implementação como fonte oficial de comportamento.
-- Preservar avisos de proveniência/licença e o histórico Git ao arquivar arquivos.
-- Manter somente material que ainda agregue valor à pesquisa, à validação diferencial ou à investigação de regressões.
-- Cada movimentação deve ser acompanhada de busca por imports, ajustes dos testes e execução dos checks aplicáveis.
-- Não arquivar configuração da interface, logs da aplicação, carregamento de arquivos ou ferramentas Python que continuam sendo responsabilidades legítimas do frontend.
-
-O diretório é apenas a área de destino da migração. Nenhuma implementação ativa foi movida nesta etapa documental; os módulos atuais continuam no local original até serem substituídos e validados individualmente.
+As implementações antigas de hardware, testes diferenciais dependentes delas, ferramentas e scripts relacionados foram movidos para esta árvore. São somente material de consulta: não constituem runtime, não são um oráculo ativo e não devem ser importados ou executados no desenvolvimento normal. Novos testes devem validar `native/sg1000_core` e a integração PyO3/Qt.

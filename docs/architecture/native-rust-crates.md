@@ -2,7 +2,7 @@
 
 ## Objetivo e escopo
 
-Este documento descreve a organização real dos crates Rust no commit de referência desta alteração. Distingue o workspace principal dos crates usados pela aplicação Qt e da extensão experimental PyO3. Não é uma declaração de completude funcional nem de precisão ciclo a ciclo.
+Este documento descreve a organização real dos crates Rust no commit de referência desta alteração. Distingue o workspace principal dos crates usados pela aplicação Qt e da extensão experimental PyO3. Não é uma declaração de completude funcional nem de precisão ciclo a ciclo. O hardware ativo do SG-1000 é Rust-only; Python fornece a UI Qt, carregadores e a fronteira de aplicação.
 
 ## Visão geral
 
@@ -12,7 +12,7 @@ Este documento descreve a organização real dos crates Rust no commit de refer�
 | `native/sms_core` (`sega-sms-core`) | Biblioteca de máquina específica do Master System | Sim | Inicial/parcial: configurações, imagem de cartucho e memória/mapa. CPU, I/O, VDP, áudio e scheduler ainda não estão implementados como runtime completo. Depende de `sega-z80-bus`. |
 | `native/z80_alu` (`sega-z80-alu`) | Biblioteca compartilhada de primitivas ALU Z80 e executável de vetores | Sim | Consumida pelo SG-1000 e pela extensão experimental. Não é um runtime Z80 completo: não decodifica instruções nem modela ciclos/barramento. |
 | `native/z80_bus` (`sega-z80-bus`) | Contrato compartilhado de acesso à memória e portas para um Z80 | Sim | Dependência de SG-1000 e SMS. É hardware-neutral, mas a implementação de mapa e dispositivos pertence a cada máquina. Os valores padrão de portas são placeholders, não especificação física universal. |
-| `native/z80_core` (`sega-z80-core`) | Biblioteca Rust/PyO3, `cdylib`/ `rlib`, usada como backend experimental selecionável no frontend | **Não** | Excluída explicitamente do workspace principal. Tem `Cargo.toml`, `Cargo.lock` e configuração Maturin próprios. Depende de `sega-z80-alu` e `sega-sg1000-core`; fornece integração Rust/Python para a máquina SG-1000, sem substituir a API de aplicação Python. |
+| `native/z80_core` (`sega-z80-core`) | Biblioteca Rust/PyO3, `cdylib`/ `rlib`, usada como adaptador obrigatório entre a UI Qt e o núcleo Rust consolidado | **Não** | Excluída explicitamente do workspace principal. Tem `Cargo.toml`, `Cargo.lock` e configuração Maturin próprios. Depende de `sega-z80-alu` e `sega-sg1000-core`; fornece integração Rust/Python para a máquina SG-1000, sem substituir a API de aplicação Python. |
 
 Os nomes de pacote e os nomes dos módulos importáveis não são idênticos em todos os casos: por exemplo, `sega-z80-bus` expõe o crate Rust `sega_z80_bus`.
 
@@ -72,15 +72,15 @@ No Windows, o workflow `.github/workflows/qt-rust-z80-core.yml` também instala 
 
 ## Seleção do backend na aplicação Qt
 
-O código de `src/sega_emulator/machine/sg1000.py` recebe `cpu_core="python"` ou `cpu_core="rust"`. No caminho Rust, importa `NativeSG1000Machine` de `sega_z80_core`; o frontend Qt persiste a preferência `cpu_core` e apresenta uma ação para seleção do backend. Logo, `native/z80_core` tem consumidor de aplicação real e workflow de validação específico.
+`src/sega_emulator/machine/sg1000.py` é uma fachada fina e Rust-only que importa `NativeSG1000Machine` de `sega_z80_core`; não aceita seletor de backend nem contém lógica de hardware. Preferências antigas de `cpu_core` são migradas para `rust` e não selecionam outro runtime.
 
 Papéis distintos:
 
-- **Python:** frontend Qt/PySide6, configuração, carregamento de ROM, logs, ferramentas, pytest e implementação de referência/diferencial.
+- **Python:** frontend Qt/PySide6 e backends de host, carregamento de ROM/perfis, configuração/logging, fachada PyO3 e ferramentas/testes que exercitam Rust. Implementações de hardware antigas estão em `legacy/python_reference/` e não são usadas.
 - **Rust standalone do workspace:** crates progressivamente independentes para componentes e máquinas, com tipos Rust e contratos explicitados.
-- **Rust/PyO3 experimental:** caminho de execução opcional da aplicação atual; fronteira de integração, não o alvo arquitetural definitivo para organizar hardware.
+- **Rust/PyO3:** adaptador de integração da aplicação Qt; o estado e a execução do hardware pertencem a `native/sg1000_core`.
 
-Não remover `native/z80_core` até que uma alternativa Rust nativa tenha substituído suas responsabilidades de execução e integração, com testes de aceitação e migração verificável do frontend.
+Manter `native/z80_core` como fronteira PyO3 enquanto a UI Qt depender dela; o hardware não deve voltar a ser implementado nesse crate nem em Python.
 
 ## Papel dos workflows atuais
 

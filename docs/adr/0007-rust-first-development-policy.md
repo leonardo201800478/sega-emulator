@@ -8,14 +8,14 @@
 
 O projeto começou com Python como implementação de referência e agora possui um runtime nativo Rust integrado ao frontend Python por PyO3. A experiência de desenvolvimento e o desempenho observado justificam definir uma estratégia estável, evitando que cada componente seja implementado integralmente duas vezes.
 
-A arquitetura deve continuar acessível para desenvolvimento, determinística, testável e funcional a cada marco. A decisão não declara que o hardware atualmente modelado já possui precisão ciclo a ciclo nem que todo o estado da máquina já está em Rust puro.
+A arquitetura deve continuar determinística, testável e funcional a cada marco. O hardware SG-1000 ativo é implementado em Rust; a aplicação Qt usa uma fachada PyO3 fina. A decisão não declara precisão ciclo a ciclo.
 
 ## Decisão
 
 1. **Rust é a linguagem principal do núcleo de hardware.** Novos componentes de CPU, barramento, memória, temporização, VDP, PSG, I/O, interrupções e scheduler devem ser implementados diretamente em Rust quando o contrato funcional e os critérios de aceitação estiverem claros.
-2. **Python continua no frontend e nas ferramentas.** Qt/PySide, configuração, carregamento/orquestração da aplicação, scripts de desenvolvimento, análise, automação e testes podem permanecer em Python.
-3. **Python de referência é seletivo, não obrigatório.** Criar protótipos Python quando o comportamento de hardware ainda for incerto ou quando uma implementação independente melhorar a validação. Não criar uma segunda implementação completa por rotina; remover ou congelar protótipos após a migração quando deixarem de agregar valor.
-4. **Rust passa a ser a fonte oficial do componente após validação.** Manter contratos explícitos, vetores de teste reutilizáveis e testes de equivalência quando houver duas implementações. Não assumir tradução automática entre linguagens.
+2. **Python não implementa hardware ativo.** A aplicação Python fica restrita à interface Qt e seus backends de host, carregamento de ROMs/perfis, configuração/logging e fachada PyO3. Testes e ferramentas podem usar Python como infraestrutura, mas exercitam Rust e não importam o código em `legacy/`.
+3. **Referências Python antigas são somente arquivo.** As implementações substituídas estão em `legacy/python_reference/`, fora do pacote executável. Não criar novas referências Python de hardware nem usá-las como oráculo em testes ativos.
+4. **Rust é a única fonte ativa do hardware.** Manter contratos explícitos, vetores independentes e regressões Rust. Não importar implementações arquivadas para equivalência automática.
 5. **Bindings PyO3/Maturin devem ser finos.** Evitar callbacks Python por operação de hardware, cópias desnecessárias e travessias repetidas da fronteira Rust/Python. A evolução para structs Rust puros e eventual liberação do GIL exige mudanças explícitas, seguras e testadas.
 6. **Determinismo antes de paralelismo.** CPU, barramento, VDP e áudio devem seguir um modelo temporal explícito. Não executar componentes temporalmente acoplados em paralelo sem um modelo de sincronização demonstrável.
 7. **Sem JIT por antecipação.** Profiling e benchmarks representativos devem preceder otimizações adicionais. Ganhos reportados precisam de metodologia reproduzível antes de serem apresentados como resultados gerais.

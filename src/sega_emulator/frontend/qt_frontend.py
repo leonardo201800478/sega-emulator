@@ -539,7 +539,7 @@ def run(initial_path: Path | None = None) -> None:
                 if not accepted:
                     return
                 candidate = load_rom(path, member_name=selected)
-            loaded_machine = SG1000Machine(candidate.data, cpu_core="rust")
+            loaded_machine = SG1000Machine(candidate.data)
             if not preferences.sprite_limit_enabled:
                 loaded_machine.set_sprite_limit_enabled(False)
         except Exception as exc:
@@ -661,7 +661,6 @@ def run(initial_path: Path | None = None) -> None:
                 controller_config=preferences.controller_config,
                 audio_enabled=audio_enabled,
                 diagnostics_enabled=preferences.diagnostics_enabled,
-                cpu_core="rust",
                 audio_sample_rate=preferences.audio_sample_rate,
                 audio_buffer_size=preferences.audio_buffer_size,
                 audio_volume=preferences.audio_volume,
@@ -870,7 +869,7 @@ def run(initial_path: Path | None = None) -> None:
             return
         if loaded is None:
             return
-        machine = SG1000Machine(loaded.data, cpu_core="rust")
+        machine = SG1000Machine(loaded.data)
         audio_resampler.reset()
         frame_count, paused = 0, False
         frame_pacer.reset()
@@ -1310,7 +1309,6 @@ def run(initial_path: Path | None = None) -> None:
         controller_config=controller_input.config.to_json(),
         audio_enabled=preferences.audio_enabled,
         diagnostics_enabled=preferences.diagnostics_enabled,
-        cpu_core="rust",
         audio_sample_rate=preferences.audio_sample_rate,
         audio_buffer_size=preferences.audio_buffer_size,
         audio_volume=preferences.audio_volume,

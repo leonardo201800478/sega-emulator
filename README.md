@@ -1,6 +1,6 @@
 # Sega Emulator
 
-Projeto de emulação de alta precisão com núcleo de hardware prioritariamente em Rust e frontend/ferramentas em Python. O primeiro alvo é o Sega SG-1000; a arquitetura evolui incrementalmente para outras plataformas Sega.
+Projeto de emulação de alta precisão com hardware ativo implementado em Rust. Python na aplicação fica restrito à interface Qt, carregamento de ROMs/perfis e integração fina com o runtime nativo; ferramentas e testes são infraestrutura, não um runtime de emulação. O primeiro alvo é o Sega SG-1000.
 
 ## Estado atual
 
@@ -26,7 +26,7 @@ Na raiz do repositório:
 ```powershell
 py -3.14 -m venv .venv
 .\\.venv\\Scripts\\python.exe -m pip install --upgrade pip
-.\\.venv\\Scripts\\python.exe -m pip install -e ".[dev,qt,frontend]"
+.\\.venv\\Scripts\\python.exe -m pip install -e ".[dev,qt]"
 ```
 
 ## Iniciar a interface Qt
@@ -53,29 +53,25 @@ Também é possível apontar para um ZIP:
 
 Se o ZIP contiver várias ROMs compatíveis, a interface permite selecionar explicitamente o membro. O conteúdo não é extraído automaticamente.
 
-Para usar o frontend Pygame:
-
-```powershell
-.\\.venv\\Scripts\\python.exe -m sega_emulator "C:\\caminho\\para\\jogo.sg" --ui pygame
-```
-
 ## Estado do marco SG-1000 e primeiro release
 
-O crate puro `native/sg1000_core` continua sendo uma extração experimental e parcial, distinta do runtime integrado usado pela aplicação. Ele ainda não representa sozinho o SG-1000 completo. Não confunda esse crate standalone com a máquina integrada no frontend Qt nem com uma alegação de fidelidade ciclo a ciclo.
+`native/sg1000_core` é o núcleo oficial de hardware SG-1000 em Rust puro. `native/z80_core` é a fronteira PyO3/Maturin; a máquina integrada delega CPU, memória, I/O, VDP, PSG e execução ao núcleo Rust. Isso não implica precisão ciclo a ciclo: o modelo temporal continua baseado em instruções e T-states nominais.
 
-## Runtime Rust do SG-1000 no Qt
+## Runtime SG-1000 — arquitetura vigente
 
-O frontend Qt executa exclusivamente o runtime nativo Rust. A antiga opção de trocar para o runtime Python foi removida da interface e valores legados em QSettings são migrados para `rust` na inicialização. A implementação Python de referência permanece no repositório para testes diferenciais e desenvolvimento; não é uma opção de runtime de produção. Qt, execução headless e frontend Pygame iniciam a máquina com Rust. O caminho Rust carrega os módulos de hardware Python de forma lazy: eles não são importados nem instanciados durante uma sessão Rust normal.
+O frontend Qt usa uma fachada Python fina que encaminha as operações para `NativeSG1000Machine`, implementada sobre `native/sg1000_core`. Não há seleção de backend Python nem fallback para emulação Python. As implementações antigas de CPU, memória/barramento, VDP, PSG, sincronização e máquina foram movidas para `legacy/python_reference/`: ficam fora do pacote executável e não devem ser importadas por aplicação, testes ou workflows ativos.
 
-A extensão nativa fornece:
+O hardware ativo em Rust inclui:
+- CPU Z80 e ALU;
+- memória, ROM espelhada, RAM interna e RAM de cartucho configurada por perfil;
+- barramento e portas de I/O;
+- VDP TMS9918A, raster, VBlank, status e renderização;
+- PSG SN76489AN, eventos temporizados e geração de amostras digitais;
+- entrada, interrupções e coordenação da máquina.
 
-- núcleo Z80 e barramento de memória sem chamadas a métodos Python por leitura/escrita de byte;
-- mapa de ROM espelhada, RAM interna e RAM de cartucho por perfil;
-- VDP TMS9918A com portas, raster, VBlank, status de sprites e renderização dos modos gráficos modelados;
-- PSG SN76489AN e sincronização de writes de áudio por T-state;
-- máquina SG-1000 nativa que coordena `step`, `run_frame`, portas de I/O, interrupções e avanço de CPU/VDP/PSG em Rust.
+Python de produção fica restrito à interface Qt e backends de host, carregamento de ROMs e perfis de cartucho, configuração/logging de aplicação e a fachada de integração. Ferramentas/testes Python devem validar Rust; não podem usar as implementações em `legacy/` como runtime ou oráculo ativo.
 
-**O runtime ainda não é totalmente independente de Python internamente.** O frontend e a API de aplicação continuam em Python, e a máquina Rust coordena componentes encapsulados em objetos PyO3; o GIL permanece adquirido durante um quadro. A etapa atual elimina a coordenação Python por instrução e callbacks Python nas portas, mas ainda não move todos os estados para structs Rust puros nem libera o GIL. O modelo temporal usa T-states nominais e não equivale a emulação ciclo a ciclo. A implementação Python permanece disponível como referência diferencial; não há fallback silencioso quando uma instrução Rust não é suportada.
+PyO3 expõe snapshots e operações da máquina. O GIL permanece adquirido durante as chamadas da extensão; isso não implica callbacks por instrução nem precisão ciclo a ciclo. O modelo temporal atual é baseado em instruções e T-states nominais.
 
 Os getters `vram` e `registers` do VDP nativo retornam cópias para diagnóstico. Alterar diretamente essas cópias não altera o estado interno do VDP; use as portas modeladas para modificar o hardware. O runtime Rust é obrigatório no Qt; as cópias retornadas são destinadas a diagnóstico.
 
@@ -102,40 +98,21 @@ Para abrir diretamente uma ROM local:
 
 O script compila a extensão PyO3 em Release, verifica a importação de `NativeSG1000Machine` e abre o frontend Qt. A interface Qt usa o runtime Rust automaticamente; a compilação sozinha não comprova que uma ROM específica é compatível.
 
-Se a extensão não estiver instalada, a interface informa que o runtime nativo é necessário e não faz fallback silencioso para o emulador Python.
+Se a extensão não estiver instalada, a interface informa que o runtime nativo é necessário e encerra a inicialização; não existe fallback para emulação Python.
 
 As fatias [PR #92](https://github.com/leonardo201800478/sega-emulator/pull/92) e [PR #93](https://github.com/leonardo201800478/sega-emulator/pull/93) passaram no workflow Windows. A PR #93 validou `rustfmt`, Clippy, testes Rust, build Release, **1.674 testes direcionados** e **2.329 testes de regressão** com a extensão instalada. Isso valida os caminhos cobertos, mas não demonstra compatibilidade universal, precisão ciclo a ciclo ou ganho de desempenho em todos os jogos.
 
-### Opções da CLI
+### Opções de carregamento
 
 ```powershell
 .\.venv\Scripts\python.exe -m sega_emulator --help
 .\.venv\Scripts\python.exe -m sega_emulator --version
 .\.venv\Scripts\python.exe -m sega_emulator --list-roms ".\roms\colecao.zip"
-.\.venv\Scripts\python.exe -m sega_emulator ".\roms\jogo.sg" --headless-frames 600 --ui pygame --summary-json ".\logs\headless-summary.json" --log-level DEBUG
 ```
 
-`--summary-json` exige `--headless-frames`. O relatório inclui SHA-256 e tamanho da ROM, duração, quadros, FPS da execução headless, instruções, T-states e velocidade relativa ao clock nominal Z80 de 3.579.545 Hz. A velocidade headless mede throughput e pode exceder 100%, pois não é limitada pelo pacing gráfico. `--list-roms` lista membros suportados de ZIPs sem extrair conteúdo.
+A CLI abre a interface Qt, aceita uma ROM opcional e lista membros compatíveis de um ZIP sem extraí-los. Não há frontend Pygame nem runner headless no pacote ativo.
 
 No frontend Qt, **Velocidade lógica** compara T-states processados por segundo com o clock nominal. **Envio à UI (FPS)** mede a taxa de quadros enviados ao widget; não mede diretamente a apresentação física do monitor. Os logs incluem a janela de medição e p50/p95/p99 do tempo de processamento do quadro no lado da aplicação. Quadros descartados pelo compositor e underruns WASAPI permanecem não medidos sem contadores nativos confiáveis.
-
-## Diagnóstico headless
-
-```powershell
-.\\.venv\\Scripts\\python.exe -m sega_emulator "C:\\caminho\\para\\jogo.sg" --headless-frames 600
-```
-
-O comando informa quadro, PC, instruções, T-states e SHA-256. Isso não prova, por si só, compatibilidade visual ou de jogabilidade.
-
-### Perfil detalhado por fase (novo)
-
-Gera uma medição-base sem instrumentação e um relatório JSON separado com tempos inclusivos de CPU, avanço do VDP, rasterização por linha, composição de sprites e escrita de pixels. O JSON inclui FPS-base, tempos por quadro instrumentado, contadores por modo de vídeo, estado dos registradores e SHA-256 do framebuffer por quadro.
-
-```powershell
-.\\.venv\\Scripts\\python.exe tools\\benchmarks\\runtime_diagnostics.py --rom "C:\\caminho\\para\\jogo.sg" --warmup-frames 30 --frames 120 --output runtime-diagnostic.json
-```
-
-**Importante:** o perfil instrumentado tem overhead. Os tempos de funções aninhadas são inclusivos; não devem ser somados entre si nem usados como FPS normal. O hash do framebuffer permite localizar o primeiro quadro divergente em execuções comparáveis, mas não determina sozinho se a imagem está correta. A ROM não é copiada para o relatório.
 
 ## Snapshot do VDP durante o jogo
 
@@ -205,7 +182,6 @@ O projeto é independente e não é afiliado à SEGA. SEGA e SG-1000 são marcas
 
 ROMs comerciais e logs locais não devem ser incluídos no repositório. Use homebrew ou cópias obtidas legalmente no ambiente local.
 
-Compilacao e execucao rapida:
-cargo clean
+Compilação e execução rápida:
 cargo build --workspace --release --locked
 python -m sega_emulator

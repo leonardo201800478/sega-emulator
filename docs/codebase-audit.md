@@ -1,4 +1,4 @@
-# Auditoria geral do código
+> **Atualização de arquitetura (2026-10-27):** este documento contém observações históricas do inventário anterior à consolidação. O estado vigente é definido por ADR 0008: hardware SG-1000 ativo em Rust, fachada Python fina para Qt/PyO3 e implementações antigas de hardware movidas para `legacy/python_reference/`, sem imports ativos. Não use descrições históricas abaixo como estado atual sem revalidar o código.\n\n# Auditoria geral do código
 
 **Data:** 22/10/2026  
 **Branch de revisão:** `docs/codebase-audit-2026-10`  

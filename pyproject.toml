@@ -7,7 +7,7 @@ name = "sega-emulator"
 version = "0.1.0"
 license = "MIT"
 license-files = ["LICENSE"]
-description = "Reference emulator core for Sega systems, starting with SG-1000."
+description = "Sega emulator application with Rust-native hardware cores."
 readme = "README.md"
 requires-python = ">=3.14,<3.15"
 dependencies = []
@@ -17,13 +17,9 @@ dev = [
     "pytest==9.1.1",
     "ruff==0.17.1",
 ]
-frontend = [
-    "pygame-ce>=2.5.3,<3.0",
-]
 qt = [
     "PySide6>=6.8,<7",
     "numpy>=2.3,<3",
-    "pygame-ce>=2.5.3,<3.0",
     "PySDL3==0.9.12b1",
     "sounddevice>=0.5.3,<1.0",
 ]
@@ -40,8 +36,7 @@ pythonpath = ["."]
 addopts = "-ra"
 
 [tool.ruff]
-# Ruff does not format notebook JSON as a standalone source file in this project.
-extend-exclude = ["tools/audits/*.ipynb"]
+extend-exclude = ["legacy/**", "tools/audits/*.ipynb"]
 target-version = "py314"
 line-length = 88
 src = ["src", "tests"]
