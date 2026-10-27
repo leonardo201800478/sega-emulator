@@ -108,7 +108,11 @@ impl SmsMemory {
         } else {
             offset
         };
-        self.rom.bytes().get(physical_offset).copied().unwrap_or(0xFF)
+        self.rom
+            .bytes()
+            .get(physical_offset)
+            .copied()
+            .unwrap_or(0xFF)
     }
 
     pub fn work_ram(&self) -> &[u8] {
