@@ -36,6 +36,9 @@ impl SmsMemory {
             });
         }
 
+        // Deterministic startup profile matching the documented 315-5235
+        // power-up values. Other Sega mapper revisions may leave registers
+        // undefined or reset them differently; model selection is not yet exposed.
         Ok(Self {
             rom,
             mapper_control: 0,
