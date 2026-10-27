@@ -16,7 +16,7 @@ Keep the emulated hardware runtime in Rust without PyO3 types in `native/sg1000_
 
 ## Timing contract
 
-CPU instructions currently return nominal base T-states. The machine advances video and audio at instruction boundaries. Z80 immediate IN/OUT are routed to ports using the high byte of A and immediate low byte, but the bus phase inside the instruction is not modeled. PSG writes scheduled at future nominal T-states are applied at the first machine step that reaches/passes that timestamp, advancing the PSG to the event before applying it.
+CPU instructions currently return nominal base T-states. The machine advances video and audio at instruction boundaries. Z80 immediate IN/OUT are routed to ports using the high byte of A and immediate low byte, but the bus phase inside the instruction is not modeled. CPU `OUT (n),A` PSG writes are timestamped at the nominal 11-T-state instruction edge. Explicit future PSG and VDP port writes are queued and applied in timestamp order when the machine reaches/passes their nominal T-state; the VDP advances to each queued event before the write is applied.
 
 The default PSG clock and sample rate are initialization defaults, not proof of board-level clock fidelity. Use `Sg1000Machine::new_with_audio` to provide explicit clock/sample-rate values. Verify clock sources and timing behavior before making accuracy claims.
 
@@ -32,4 +32,4 @@ This PR is an incremental port, not a completed standalone emulator:
 
 ## Current evidence
 
-The GitHub workspace workflow initially failed on formatting; fixes were pushed and validation reruns are in progress. Do not treat queued, cancelled, skipped, or failed checks as PASS. No merge is authorized by this document.
+Validation is determined by GitHub checks and review on the final candidate SHA; queued, cancelled, skipped, or failed checks are not PASS. This document records an incremental native-core slice only. A merge of this slice does not authorize declaring the SG-1000 standalone gate complete; the CPU, hardware-reference, and PyO3/Qt integration gates above remain open.
