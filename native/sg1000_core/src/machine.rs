@@ -149,11 +149,16 @@ impl Sg1000Machine {
         self.vdp.advance(u64::from(cycles));
         let end_tstate = self.cpu.total_tstates;
         loop {
-            let next = self.pending_psg_writes.iter().enumerate()
+            let next = self
+                .pending_psg_writes
+                .iter()
+                .enumerate()
                 .filter(|(_, event)| event.tstate <= end_tstate)
                 .min_by_key(|(_, event)| event.tstate)
                 .map(|(index, _)| index);
-            let Some(index) = next else { break; };
+            let Some(index) = next else {
+                break;
+            };
             let event = self.pending_psg_writes.remove(index);
             if event.tstate > self.psg_tstate {
                 self.psg.advance_clocks(event.tstate - self.psg_tstate);
@@ -197,7 +202,8 @@ impl Sg1000Machine {
                 self.io.write_port_at(address, value, tstate);
                 if (0x40..=0x7F).contains(&(address as u8)) {
                     if tstate > self.cpu.total_tstates {
-                        self.pending_psg_writes.push(PsgWriteEvent { tstate, value });
+                        self.pending_psg_writes
+                            .push(PsgWriteEvent { tstate, value });
                     } else {
                         if tstate > self.psg_tstate {
                             self.psg.advance_clocks(tstate - self.psg_tstate);
@@ -305,7 +311,8 @@ mod tests {
 
     #[test]
     fn z80_in_reads_controller_and_out_updates_native_psg() {
-        let mut input = Sg1000Machine::new(&[0x3E, 0x00, 0xDB, 0xDC, 0x76], MemoryConfig::default()).unwrap();
+        let mut input =
+            Sg1000Machine::new(&[0x3E, 0x00, 0xDB, 0xDC, 0x76], MemoryConfig::default()).unwrap();
         input.set_joystick(1, 0xFE).unwrap();
         assert_eq!(input.run_instructions(2), Ok(18));
         assert_eq!(input.cpu.registers.a, 0xFE);
