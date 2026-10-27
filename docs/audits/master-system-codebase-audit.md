@@ -52,7 +52,7 @@ A decisão central é criar um crate SMS independente. Não implementar o Master
 - src/sega_emulator/frontend/qt/wasapi_audio.py: saída PCM limitada, callback não executa hardware.
 - src/sega_emulator/frontend/qt/preferences.py: preferências validadas sem perfil de sistema, território, padrão de vídeo ou FM.
 - src/sega_emulator/rom_loader.py: limite SG-1000 de 48 KiB; não mudar globalmente para acomodar SMS.
-- src/sega_emulator/audio/synchronization.py: sincronização de eventos PSG com timestamps nominais.
+- legacy/python_reference/src/sega_emulator/audio/synchronization.py: sincronização de eventos PSG com timestamps nominais.
 
 ## Lacunas críticas
 

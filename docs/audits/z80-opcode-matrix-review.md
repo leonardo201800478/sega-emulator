@@ -27,12 +27,12 @@ Esta é uma correção da **classificação da matriz**, não uma correção com
 
 ## Testes de regressão adicionados
 
-`tests/unit/test_z80_opcode_matrix.py` agora verifica explicitamente as classificações de `0x24`, `0x44`, `0x65` e `0x84`, além de manter a distinção entre substituição indexada de memória e prefixo DD/FD ignorado.
+`legacy/python_reference/tests/unit/test_z80_opcode_matrix.py` agora verifica explicitamente as classificações de `0x24`, `0x44`, `0x65` e `0x84`, além de manter a distinção entre substituição indexada de memória e prefixo DD/FD ignorado.
 
 Comandos para reprodução:
 
 ```powershell
-python -m pytest -q tests/unit/test_z80_opcode_matrix.py
+python -m pytest -q legacy/python_reference/tests/unit/test_z80_opcode_matrix.py
 python tools/z80_opcode_matrix.py --json
 ```
 

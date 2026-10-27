@@ -3,8 +3,8 @@
 # Matriz de cobertura do Z80
 
 **Revisão atualizada:** `audit/z80-test-infrastructure` (matriz executável em evolução)  
-**Código-base:** `src/sega_emulator/cpu/z80.py`  
-**Testes consultados:** `tests/unit/test_z80.py`, `tests/unit/test_z80_alu_immediate.py` e `docs/z80-coverage.md`
+**Código-base:** `legacy/python_reference/src/sega_emulator/cpu/z80.py`  
+**Testes consultados:** `legacy/python_reference/tests/unit/test_z80.py`, `legacy/python_reference/tests/unit/test_z80_alu_immediate.py` e `docs/z80-coverage.md`
 
 ## Como interpretar esta matriz
 
@@ -164,7 +164,7 @@ O modo normal resume cada espaço e lista as codificações que lançam `Unsuppo
 
 ## 8. Matriz classificatória executável (atualização da Etapa 2)
 
-A classificação detalhada por byte é gerada por `tools/z80_opcode_matrix.py` e validada por `tests/unit/test_z80_opcode_matrix.py`.
+A classificação detalhada por byte é gerada por `tools/z80_opcode_matrix.py` e validada por `legacy/python_reference/tests/unit/test_z80_opcode_matrix.py`.
 
 ```powershell
 (histórico arquivado: `legacy/python_reference/tools/z80_opcode_matrix.py`)

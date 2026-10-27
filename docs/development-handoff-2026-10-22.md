@@ -47,10 +47,10 @@ No avanço para `d6228f2`, o Git informou 10 arquivos alterados:
 - `docs/codebase-audit.md`
 - `docs/z80-coverage.md`
 - `src/sega_emulator/__main__.py`
-- `src/sega_emulator/bus/interfaces.py`
-- `src/sega_emulator/cpu/z80.py`
+- `legacy/python_reference/src/sega_emulator/bus/interfaces.py`
+- `legacy/python_reference/src/sega_emulator/cpu/z80.py`
 - `tests/test_smoke.py`
-- `tests/unit/test_z80.py`
+- `legacy/python_reference/tests/unit/test_z80.py`
 
 O workflow de CI executa Ruff format check, Ruff lint e pytest em Python 3.14 no GitHub Actions.
 
@@ -60,7 +60,7 @@ O workflow de CI executa Ruff format check, Ruff lint e pytest em Python 3.14 no
 - Implementação de referência em Python, com módulos de CPU, barramento/memória e testes.
 - RAM com 1 KiB de armazenamento físico e espelhamento conforme os testes atuais.
 - Barramento inicial com ROM de cartucho somente leitura e RAM.
-- Contratos de barramento lógico em `src/sega_emulator/bus/interfaces.py`, incluindo contrato de I/O separado.
+- Contratos de barramento lógico em `legacy/python_reference/src/sega_emulator/bus/interfaces.py`, incluindo contrato de I/O separado.
 - Entrada do pacote ainda informa o estado de scaffold: a máquina SG-1000 completa não está integrada.
 
 ### CPU Z80

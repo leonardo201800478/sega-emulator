@@ -1,3 +1,5 @@
+> **Atualização de estado (2026-10-27):** este registro descreve auditorias de workflows antigas. Os workflows de auditoria que dependiam do runtime Python foram movidos para `legacy/workflows/` e não são executados. Os workflows ativos de validação são `ci.yml`, `agent-functional-validation.yml`, `agent-integrity.yml`, `rust-sg1000-core.yml`, `qt-rust-z80-core.yml`, `qt-frontend-validation.yml`, `ui-controller-validation.yml`, `sg1000-three-agent-validation.yml` e `sms-core-fast.yml`.
+
 # Auditoria dos workflows e plano de recuperação de validação
 
 **Data da inspeção:** 2026-10-24  
@@ -10,7 +12,7 @@
 - PRs #19 e #21 tiveram CI e auditoria estendida concluídos com sucesso nos commits inspecionados.
 - PRs #23 a #27 tiveram falhas no passo `ruff format --check .`; nesse fluxo, os passos posteriores da job de qualidade foram ignorados. Portanto, os testes de pytest desses commits não foram validados por esses runs.
 - A auditoria estendida da PR #18 chegou a executar a varredura prolongada e terminou com falha de robustez. O relatório final registrou 97.629.696 casos, 17.367.013 ocorrências `runtime_exception` e 799.950 ocorrências `unsupported_opcode`. Esses números são contagens de eventos, não necessariamente bugs únicos. A amostra retida e as categorias precisam ser examinadas antes de atribuir causa.
-- O workflow da PR #18 também registrou falhas independentes de estilo: formatação em `tests/unit/test_z80.py` e no notebook diferencial; lint em `tools/audits/z80_long_stress_audit.py` e no notebook.
+- O workflow da PR #18 também registrou falhas independentes de estilo: formatação em `legacy/python_reference/tests/unit/test_z80.py` e no notebook diferencial; lint em `legacy/python_reference/tools/audits/z80_long_stress_audit.py` e no notebook.
 - A PR #27 contém somente documentação da auditoria de VRAM; não executou testes específicos da VRAM.
 
 ## 2. Execuções observadas
@@ -34,14 +36,14 @@ Os resultados são históricos dos commits listados, não uma afirmação sobre 
 ### 3.1 Ruff format
 
 O log da auditoria estendida da PR #18 identificou:
-- `tests/unit/test_z80.py`: o arquivo seria reformado perto do teste `test_reset_clears_cpu_state_without_replacing_buses`;
-- `z80-q-scf-ccf-mainline/tools/audits/z80_q_scf_ccf_differential_audit.ipynb`: células de inicialização, verificação de estilo e seleção do CSV de referência;
+- `legacy/python_reference/tests/unit/test_z80.py`: o arquivo seria reformado perto do teste `test_reset_clears_cpu_state_without_replacing_buses`;
+- `z80-q-scf-ccf-mainline/legacy/python_reference/tools/audits/z80_q_scf_ccf_differential_audit.ipynb`: células de inicialização, verificação de estilo e seleção do CSV de referência;
 - em runs mais recentes das PRs #25–#27, a célula que define `reference_name` continuou sendo apontada.
 
 ### 3.2 Ruff check
 
 O log da auditoria estendida da PR #18 reportou quatro erros:
-- E501: linha longa no resumo final de `tools/audits/z80_long_stress_audit.py`;
+- E501: linha longa no resumo final de `legacy/python_reference/tools/audits/z80_long_stress_audit.py`;
 - F401: import `json` não utilizado no notebook;
 - E501: comentário longo na célula que executa os vetores SCF/CCF;
 - E501: comentário longo na célula de upload do CSV.

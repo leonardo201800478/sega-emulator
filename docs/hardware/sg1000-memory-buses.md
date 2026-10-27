@@ -11,7 +11,7 @@ direta de `SG1000Machine`, com o VDP mantendo sua própria VRAM.
 
 ## Componentes presentes
 
-- `SG1000Ram` (`src/sega_emulator/bus/memory.py`): RAM interna física de 1 KiB
+- `SG1000Ram` (`legacy/python_reference/src/sega_emulator/bus/memory.py`): RAM interna física de 1 KiB
   espelhada em `C000h–FFFFh` por padrão, ou 8 KiB para perfis Type-B
   conhecidos de cartucho SG-1000 II com adaptador de expansão. `The Castle
   (Japan)` mantém 1 KiB interno e recebe 8 KiB separados no mapa do cartucho. A RAM é
@@ -23,7 +23,7 @@ direta de `SG1000Machine`, com o VDP mantendo sua própria VRAM.
   (Japan)` (CRC-32 `092F29D6`) como cartucho com 8 KiB em `8000h–BFFFh`. Dumps
   desconhecidos continuam usando 1 KiB; não inferimos hardware apenas pelo
   tamanho ou pelo fato de uma ROM ser não licenciada.
-- `SG1000MemoryBus` (`src/sega_emulator/bus/memory_bus.py`): mapeia ROM
+- `SG1000MemoryBus` (`legacy/python_reference/src/sega_emulator/bus/memory_bus.py`): mapeia ROM
   linear e RAM. Rejeita escrita em ROM e endereços não mapeados.
 - `_CartridgeMirrorBus` (`src/sega_emulator/machine/sg1000.py`): adaptador
   privado que espelha a ROM fornecida ao longo da região de cartucho por módulo
@@ -33,7 +33,7 @@ direta de `SG1000Machine`, com o VDP mantendo sua própria VRAM.
 - `SG1000Machine`: conecta CPU Z80, barramento de memória, VDP e entradas
   iniciais de joystick. Avança o VDP após cada instrução usando os T-states
   nominais retornados pela CPU.
-- `TMS9918A` (`src/sega_emulator/video/tms9918.py`): mantém 16 KiB de VRAM,
+- `TMS9918A` (`legacy/python_reference/src/sega_emulator/video/tms9918.py`): mantém 16 KiB de VRAM,
   registradores, portas de dados/controle, status, framebuffer e renderização
   por software dos modos implementados nesta etapa.
 - Interface ativa: Qt/PySide6 apresenta o framebuffer e converte entrada de host em snapshots para o runtime Rust. O frontend Pygame e o runner headless da CLI foram arquivados.
@@ -92,10 +92,10 @@ regionais. Não reutilizar automaticamente o mapa de portas do Master System.
 
 ## Testes existentes e lacunas
 
-Os testes em `tests/unit/test_sg1000_machine.py` verificam avanço de quadro,
+Os testes em `legacy/python_reference/tests/unit/test_sg1000_machine.py` verificam avanço de quadro,
 espelhamento de uma ROM pequena, entradas iniciais de joystick, escrita nos
 registradores do VDP e uma ROM de diagnóstico gerada localmente.
-Os testes em `tests/unit/test_tms9918.py` cobrem operações de VRAM, registradores,
+Os testes em `legacy/python_reference/tests/unit/test_tms9918.py` cobrem operações de VRAM, registradores,
 status/VBlank e o framebuffer de diagnóstico.
 
 Antes de declarar compatibilidade ampliada, ainda é necessário adicionar ou
