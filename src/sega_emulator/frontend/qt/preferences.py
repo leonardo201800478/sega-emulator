@@ -50,6 +50,7 @@ class FrontendPreferences:
     crt_scanline_thickness: int = 50
     crt_phosphor_mask: int = 25
     crt_curvature: int = 0
+    crt_signal_mode: str = "rgb"
 
     def __post_init__(self) -> None:
         if not MIN_WINDOW_WIDTH <= self.window_width <= MAX_WINDOW_WIDTH:
@@ -74,8 +75,8 @@ class FrontendPreferences:
             raise ValueError("audio_buffer_size must be 256, 512, 1024, or 2048")
         if type(self.audio_volume) is not int or not 0 <= self.audio_volume <= 100:
             raise ValueError("audio_volume must be an integer from 0 to 100")
-        if self.video_filter not in ("nearest", "bilinear"):
-            raise ValueError("video_filter must be 'nearest' or 'bilinear'")
+        if self.video_filter not in ("nearest", "bilinear", "dither_blending", "crt_ntsc"):
+            raise ValueError("video_filter must be nearest, bilinear, dither_blending, or crt_ntsc")
         if type(self.integer_scale) is not bool:
             raise ValueError("integer_scale must be a bool")
         if type(self.sprite_limit_enabled) is not bool:
@@ -86,6 +87,8 @@ class FrontendPreferences:
             raise ValueError("vrr_mode must be driver, prefer, or off")
         if self.av_sync_mode not in ("low_latency", "audio_clock"):
             raise ValueError("av_sync_mode must be low_latency or audio_clock")
+        if self.crt_signal_mode not in ("rgb", "composite", "rf"):
+            raise ValueError("crt_signal_mode must be rgb, composite, or rf")
         for field_name in (
             "crt_scanline_intensity",
             "crt_scanline_thickness",
@@ -158,8 +161,11 @@ class FrontendPreferences:
             store.value("audio_volume", defaults.audio_volume), 100, 0, 100
         )
         video_filter = store.value("video_filter", defaults.video_filter)
-        if video_filter not in ("nearest", "bilinear"):
+        if video_filter not in ("nearest", "bilinear", "dither_blending", "crt_ntsc"):
             video_filter = defaults.video_filter
+        crt_signal_mode = store.value("crt_signal_mode", defaults.crt_signal_mode)
+        if crt_signal_mode not in ("rgb", "composite", "rf"):
+            crt_signal_mode = defaults.crt_signal_mode
         integer_scale = _bool_value(
             store.value("integer_scale", defaults.integer_scale), defaults.integer_scale
         )
@@ -208,6 +214,7 @@ class FrontendPreferences:
             vsync_mode=vsync_mode,
             vrr_mode=vrr_mode,
             av_sync_mode=av_sync_mode,
+            crt_signal_mode=crt_signal_mode,
             **crt_values,
         )
 
@@ -234,6 +241,7 @@ class FrontendPreferences:
         store.setValue("crt_scanline_thickness", self.crt_scanline_thickness)
         store.setValue("crt_phosphor_mask", self.crt_phosphor_mask)
         store.setValue("crt_curvature", self.crt_curvature)
+        store.setValue("crt_signal_mode", self.crt_signal_mode)
 
     def with_recent_rom(self, path: str) -> FrontendPreferences:
         """Return preferences with a ROM moved to the front of the history."""
@@ -267,6 +275,7 @@ class FrontendPreferences:
             crt_scanline_thickness=self.crt_scanline_thickness,
             crt_phosphor_mask=self.crt_phosphor_mask,
             crt_curvature=self.crt_curvature,
+            crt_signal_mode=self.crt_signal_mode,
         )
 
 
