@@ -5,7 +5,7 @@
 //! incremental and is not yet a complete Z80.
 
 use crate::bus::CpuBus;
-use sega_z80_alu::{adc8, add8, and8, cp8, or8, sbc8, sub8, xor8};
+use crate::alu::{adc8, add8, and8, cp8, or8, sbc8, sub8, xor8};
 
 const FLAG_C: u8 = 0x01;
 const FLAG_N: u8 = 0x02;
