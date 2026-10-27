@@ -52,7 +52,7 @@ A CI workflow only validates the commands it actually executes. A green Python w
 - Baseline SHA: `2e93350d2a27dd0f37671ccca1df11b5b6654a55`
 - No PR exists at this baseline.
 - The shared crates and PyO3 adapter remain in their old directories.
-- The new `native/sega_emu_core/Cargo.toml` references nested shared-crate paths that do not exist yet; it must not be added to the workspace before the layout is made consistent.
+- `native/sega_emu_core` remains a scaffold outside the root workspace; its path dependencies now point to the existing sibling crates. The shared-crate relocation is still pending.
 - The Rust SG-1000 and SMS crates remain partial. No fidelity or standalone-runtime acceptance is implied.
 - Baseline crate validation: **PASS** on main SHA `632f2f69e7a9e6d9a81b19a4f994bb1ce42eb951` via [Rust SG-1000 Workspace run #131](https://github.com/leonardo201800478/sega-emulator/actions/runs/40442082201): formatting, Clippy, and workspace tests succeeded; logs show 22 SG-1000 tests passed, plus 15 SMS and 7 Z80 ALU tests. This run predates the migration branch's documentation-only commits and validates the same SG-1000 source blobs.
 - Scope limitation: `native/sg1000_core/src/machine.rs` explicitly states VDP, PSG, I/O and interrupt scheduling are not integrated. The crate is not yet a complete standalone emulator.
@@ -60,3 +60,4 @@ A CI workflow only validates the commands it actually executes. A green Python w
 
 ## Change log
 - 2026-10-27: Initial control board added. No source files moved and no tests claimed as passing.
+- 2026-10-27: Corrected the excluded shared-core scaffold's workspace registration and sibling dependency paths so the manifest can be validated independently.
