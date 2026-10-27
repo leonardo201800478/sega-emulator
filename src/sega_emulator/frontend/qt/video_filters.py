@@ -119,11 +119,7 @@ def _apply_signal_approximation(frame: RgbFrame, mode: str) -> RgbFrame:
 
 def _horizontal_lowpass(channel: NDArray[np.float32]) -> NDArray[np.float32]:
     padded = np.pad(channel, ((0, 0), (1, 1)), mode="edge")
-    return (
-        padded[:, :-2] * 0.25
-        + padded[:, 1:-1] * 0.5
-        + padded[:, 2:] * 0.25
-    )
+    return padded[:, :-2] * 0.25 + padded[:, 1:-1] * 0.5 + padded[:, 2:] * 0.25
 
 
 def _apply_crt_effects(
@@ -163,12 +159,7 @@ def _apply_crt_effects(
         radial = 1.0 + strength * (xx * xx + yy * yy)
         source_x = np.rint(((xx * radial + 1.0) * 0.5) * (width - 1)).astype(np.int32)
         source_y = np.rint(((yy * radial + 1.0) * 0.5) * (height - 1)).astype(np.int32)
-        valid = (
-            (source_x >= 0)
-            & (source_x < width)
-            & (source_y >= 0)
-            & (source_y < height)
-        )
+        valid = (source_x >= 0) & (source_x < width) & (source_y >= 0) & (source_y < height)
         source_x = np.clip(source_x, 0, width - 1)
         source_y = np.clip(source_y, 0, height - 1)
         curved = np.zeros_like(out)
