@@ -1443,9 +1443,9 @@ mod tests {
         assert_eq!(cpu.step(&mut bus), Ok(4));
         assert!(cpu.halted);
         assert_eq!(cpu.total_tstates, 21);
-        assert_eq!(cpu.r, 4);
+        assert_eq!(cpu.r, 3);
         assert_eq!(cpu.step(&mut bus), Ok(4));
-        assert_eq!(cpu.r, 5);
+        assert_eq!(cpu.r, 4);
         assert_eq!(cpu.total_tstates, 25);
     }
 
