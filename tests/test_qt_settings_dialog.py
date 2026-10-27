@@ -40,6 +40,7 @@ def test_dialog_loads_and_returns_audio_video_preferences(qt_app) -> None:
         "Saída de áudio",
         "PSG / Hardware",
         "Vídeo",
+        "CRT / NTSC",
     ]
     assert dialog.audio_enabled.isChecked() is False
     assert dialog.sample_rate.currentData() == 48_000
@@ -48,6 +49,9 @@ def test_dialog_loads_and_returns_audio_video_preferences(qt_app) -> None:
     assert dialog.video_filter.currentData() == "bilinear"
     assert dialog.integer_scale.isChecked() is False
     assert dialog.sprite_limit_enabled.isChecked() is False
+    assert dialog.vsync_mode.currentData() == "on"
+    assert dialog.vrr_mode.currentData() == "driver"
+    assert dialog.av_sync_mode.currentData() == "low_latency"
 
     dialog.audio_enabled.setChecked(True)
     dialog.sample_rate.setCurrentIndex(dialog.sample_rate.findData(22_050))
@@ -56,6 +60,10 @@ def test_dialog_loads_and_returns_audio_video_preferences(qt_app) -> None:
     dialog.video_filter.setCurrentIndex(dialog.video_filter.findData("nearest"))
     dialog.integer_scale.setChecked(True)
     dialog.sprite_limit_enabled.setChecked(True)
+    dialog.vsync_mode.setCurrentIndex(dialog.vsync_mode.findData("off"))
+    dialog.vrr_mode.setCurrentIndex(dialog.vrr_mode.findData("prefer"))
+    dialog.av_sync_mode.setCurrentIndex(dialog.av_sync_mode.findData("audio_clock"))
+    dialog.crt_scanline_intensity.setValue(55)
 
     updated = dialog.preferences()
     assert updated.audio_enabled is True
@@ -65,6 +73,10 @@ def test_dialog_loads_and_returns_audio_video_preferences(qt_app) -> None:
     assert updated.video_filter == "nearest"
     assert updated.integer_scale is True
     assert updated.sprite_limit_enabled is True
+    assert updated.vsync_mode == "off"
+    assert updated.vrr_mode == "prefer"
+    assert updated.av_sync_mode == "audio_clock"
+    assert updated.crt_scanline_intensity == 55
     # Editing presentation settings must not switch the selected emulation core.
     assert updated.cpu_core == original.cpu_core
     dialog.close()
@@ -80,6 +92,10 @@ def test_restore_defaults_resets_audio_video_controls(qt_app) -> None:
             video_filter="bilinear",
             integer_scale=False,
             sprite_limit_enabled=False,
+            vsync_mode="off",
+            vrr_mode="prefer",
+            av_sync_mode="audio_clock",
+            crt_scanline_intensity=80,
         )
     )
 
@@ -93,4 +109,8 @@ def test_restore_defaults_resets_audio_video_controls(qt_app) -> None:
     assert dialog.video_filter.currentData() == defaults.video_filter
     assert dialog.integer_scale.isChecked() is defaults.integer_scale
     assert dialog.sprite_limit_enabled.isChecked() is defaults.sprite_limit_enabled
+    assert dialog.vsync_mode.currentData() == defaults.vsync_mode
+    assert dialog.vrr_mode.currentData() == defaults.vrr_mode
+    assert dialog.av_sync_mode.currentData() == defaults.av_sync_mode
+    assert dialog.crt_scanline_intensity.value() == defaults.crt_scanline_intensity
     dialog.close()
