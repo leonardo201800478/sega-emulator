@@ -531,15 +531,21 @@ impl Z80 {
                     1 => (value.rotate_right(1), value & 0x01 != 0), // RRC
                     2 => ((value << 1) | u8::from(old_carry), value & 0x80 != 0), // RL
                     3 => ((value >> 1) | (u8::from(old_carry) << 7), value & 1 != 0), // RR
-                    4 => (value << 1, value & 0x80 != 0), // SLA
+                    4 => (value << 1, value & 0x80 != 0),           // SLA
                     5 => ((value >> 1) | (value & 0x80), value & 1 != 0), // SRA
-                    6 => ((value << 1) | 1, value & 0x80 != 0), // undocumented SLL
-                    _ => (value >> 1, value & 1 != 0), // SRL
+                    6 => ((value << 1) | 1, value & 0x80 != 0),     // undocumented SLL
+                    _ => (value >> 1, value & 1 != 0),              // SRL
                 };
                 let mut flags = result & (FLAG_S | FLAG_XY);
-                if result == 0 { flags |= FLAG_Z; }
-                if result.count_ones().is_multiple_of(2) { flags |= FLAG_PV; }
-                if carry { flags |= FLAG_C; }
+                if result == 0 {
+                    flags |= FLAG_Z;
+                }
+                if result.count_ones().is_multiple_of(2) {
+                    flags |= FLAG_PV;
+                }
+                if carry {
+                    flags |= FLAG_C;
+                }
                 self.registers.f = flags;
                 self.write_register(bus, target, result);
             }
@@ -547,8 +553,12 @@ impl Z80 {
                 let mask = 1_u8 << operation;
                 let mut flags = (self.registers.f & FLAG_C) | FLAG_H;
                 let bit_clear = value & mask == 0;
-                if bit_clear { flags |= FLAG_Z | FLAG_PV; }
-                if operation == 7 && !bit_clear { flags |= FLAG_S; }
+                if bit_clear {
+                    flags |= FLAG_Z | FLAG_PV;
+                }
+                if operation == 7 && !bit_clear {
+                    flags |= FLAG_S;
+                }
                 let undocumented = if target == 6 {
                     (self.registers.hl() >> 8) as u8 & FLAG_XY
                 } else {
@@ -986,7 +996,6 @@ mod tests {
         assert_eq!(cpu.step(&mut bus), Ok(4));
         assert_eq!(cpu.registers.pc, 0x1235);
     }
-
 
     #[test]
     fn exchange_alternate_register_banks_and_af_preserves_values() {
