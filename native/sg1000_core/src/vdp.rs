@@ -719,6 +719,224 @@ mod tests {
     }
 
     #[test]
+    fn control_latch_vram_read_ahead_and_address_wrap_are_deterministic() {
+        let mut vdp = Tms9918A::new();
+
+        // Register writes are committed only after the second control byte.
+        vdp.write_port(0x81, 0x20);
+        assert_eq!(vdp.registers[1], 0);
+        vdp.write_port(0x81, 0x81);
+        assert_eq!(vdp.registers[1], 0x20);
+
+        // Set the VRAM write address to 0x3FFF, then cross the 14-bit boundary.
+        vdp.write_port(0x81, 0xFF);
+        vdp.write_port(0x81, 0x7F);
+        assert_eq!(vdp.address(), 0x3FFF);
+        vdp.write_port(0x80, 0xA5);
+        assert_eq!(vdp.address(), 0);
+        vdp.write_port(0x80, 0x3C);
+        assert_eq!(vdp.address(), 1);
+
+        // A read command prefetches the addressed byte; port reads return the
+        // buffer first and then advance it to the following VRAM address.
+        vdp.write_port(0x81, 0xFF);
+        vdp.write_port(0x81, 0x3F);
+        assert_eq!(vdp.address(), 0);
+        assert_eq!(vdp.read_port(0x80), 0xA5);
+        assert_eq!(vdp.read_port(0x80), 0x3C);
+        assert_eq!(vdp.address(), 2);
+    }
+
+    #[test]
+    fn enabled_vblank_interrupt_is_level_asserted_until_status_is_read() {
+        let mut vdp = Tms9918A::new();
+        vdp.write_port(0x81, 0x20);
+        vdp.write_port(0x81, 0x81);
+        assert!(!vdp.interrupt_pending());
+
+        vdp.advance(228 * 192);
+        assert_ne!(vdp.status() & 0x80, 0);
+        assert!(vdp.interrupt_pending());
+
+        let status = vdp.read_port(0x81);
+        assert_ne!(status & 0x80, 0);
+        assert_eq!(vdp.status(), 0x1F);
+        assert!(!vdp.interrupt_pending());
+    }
+
+    #[test]
+    fn supported_display_modes_match_fixed_pixels_and_raster_output() {
+        let check_mode = |mut vdp: Tms9918A,
+                          foreground_x: usize,
+                          foreground: [u8; 3],
+                          background_x: usize,
+                          background: [u8; 3]| {
+            let frame = vdp.render_frame();
+            let foreground_offset = foreground_x * 3;
+            let background_offset = background_x * 3;
+            assert_eq!(
+                &frame[foreground_offset..foreground_offset + 3],
+                &foreground[..]
+            );
+            assert_eq!(
+                &frame[background_offset..background_offset + 3],
+                &background[..]
+            );
+            vdp.advance(228 * 192);
+            assert_eq!(vdp.framebuffer(), frame.as_slice());
+        };
+
+        // Graphics I: pattern bits select foreground/background colors.
+        let mut graphics_i = Tms9918A::new();
+        graphics_i.registers[1] = 0x40;
+        graphics_i.registers[2] = 0x01;
+        graphics_i.registers[3] = 0x01;
+        graphics_i.registers[4] = 0x01;
+        graphics_i.registers[7] = 0x41;
+        graphics_i.vram[0x400] = 1;
+        graphics_i.vram[0x808] = 0x80;
+        graphics_i.vram[0x40] = 0x42;
+        check_mode(graphics_i, 0, [84, 85, 237], 1, [33, 200, 66]);
+
+        // Text: the 40-column glyph area begins at x=8 and uses six pixels.
+        let mut text = Tms9918A::new();
+        text.registers[1] = 0x50;
+        text.registers[2] = 0x01;
+        text.registers[4] = 0x01;
+        text.registers[7] = 0x41;
+        text.vram[0x400] = 1;
+        text.vram[0x808] = 0x80;
+        check_mode(text, 8, [84, 85, 237], 9, [0, 0, 0]);
+
+        // Multicolor: each nibble paints a four-pixel horizontal quarter.
+        let mut multicolor = Tms9918A::new();
+        multicolor.registers[1] = 0x48;
+        multicolor.registers[2] = 0x01;
+        multicolor.registers[4] = 0x01;
+        multicolor.registers[7] = 0x01;
+        multicolor.vram[0x400] = 1;
+        multicolor.vram[0x808] = 0x42;
+        check_mode(multicolor, 0, [84, 85, 237], 4, [33, 200, 66]);
+
+        // Graphics II uses the pattern and color tables for the active section.
+        let mut graphics_ii = Tms9918A::new();
+        graphics_ii.registers[0] = 0x02;
+        graphics_ii.registers[1] = 0x40;
+        graphics_ii.registers[2] = 0x01;
+        graphics_ii.registers[3] = 0x80;
+        graphics_ii.registers[7] = 0x01;
+        graphics_ii.vram[0x400] = 1;
+        graphics_ii.vram[8] = 0x80;
+        graphics_ii.vram[0x2008] = 0x42;
+        check_mode(graphics_ii, 0, [84, 85, 237], 1, [33, 200, 66]);
+    }
+
+    #[test]
+    fn transparent_and_offscreen_sprite_pixels_still_trigger_collision() {
+        let mut transparent = Tms9918A::new();
+        transparent.registers[1] = 0x40;
+        transparent.registers[5] = 0x20;
+        transparent.vram[0] = 0x80;
+        transparent.vram[0x1000] = 0;
+        transparent.vram[0x1001] = 0;
+        transparent.vram[0x1002] = 0;
+        transparent.vram[0x1003] = 0;
+        transparent.vram[0x1004] = 0;
+        transparent.vram[0x1005] = 0;
+        transparent.vram[0x1006] = 0;
+        transparent.vram[0x1007] = 4;
+        transparent.vram[0x1008] = 0xD0;
+        transparent.advance(228 * 2);
+        assert_ne!(transparent.status() & 0x20, 0);
+
+        let frame = transparent.render_frame();
+        let first_visible_line = 256 * 3;
+        assert_eq!(
+            &frame[first_visible_line..first_visible_line + 3],
+            &[84, 85, 237]
+        );
+
+        let mut offscreen = Tms9918A::new();
+        offscreen.registers[1] = 0x40;
+        offscreen.registers[5] = 0x20;
+        offscreen.vram[0] = 0x80;
+        for index in 0..2 {
+            let offset = 0x1000 + index * 4;
+            offscreen.vram[offset] = 0;
+            offscreen.vram[offset + 1] = 0;
+            offscreen.vram[offset + 2] = 0;
+            offscreen.vram[offset + 3] = 0x80 | if index == 0 { 0 } else { 4 };
+        }
+        offscreen.vram[0x1000 + 2 * 4] = 0xD0;
+        offscreen.advance(228 * 2);
+        assert_ne!(offscreen.status() & 0x20, 0);
+    }
+
+    #[test]
+    fn sprite_y_wrap_exposes_the_correct_pattern_row_at_the_top_edge() {
+        let mut y_255 = Tms9918A::new();
+        y_255.registers[1] = 0x40;
+        y_255.registers[5] = 0x20;
+        y_255.vram[0] = 0x80;
+        y_255.vram[0x1000] = 0xFF;
+        y_255.vram[0x1001] = 0;
+        y_255.vram[0x1002] = 0;
+        y_255.vram[0x1003] = 4;
+        y_255.vram[0x1004] = 0xD0;
+        y_255.advance(228 * 192);
+        assert_eq!(&y_255.framebuffer()[..3], &[84, 85, 237]);
+
+        let mut y_254 = Tms9918A::new();
+        y_254.registers[1] = 0x40;
+        y_254.registers[5] = 0x20;
+        y_254.vram[0] = 0;
+        y_254.vram[1] = 0x80;
+        y_254.vram[0x1000] = 0xFE;
+        y_254.vram[0x1001] = 0;
+        y_254.vram[0x1002] = 0;
+        y_254.vram[0x1003] = 4;
+        y_254.vram[0x1004] = 0xD0;
+        y_254.advance(228 * 192);
+        assert_eq!(&y_254.framebuffer()[..3], &[84, 85, 237]);
+    }
+
+    #[test]
+    fn sprite_overflow_and_collision_set_distinct_status_bits() {
+        let mut overflow = Tms9918A::new();
+        overflow.registers[1] = 0x40;
+        overflow.registers[5] = 0x20;
+        overflow.vram[0] = 0x80;
+        for index in 0..5 {
+            let offset = 0x1000 + index * 4;
+            overflow.vram[offset] = 0;
+            overflow.vram[offset + 1] = (index * 8) as u8;
+            overflow.vram[offset + 2] = 0;
+            overflow.vram[offset + 3] = 4;
+        }
+        overflow.vram[0x1000 + 5 * 4] = 0xD0;
+        overflow.advance(228 * 2);
+        assert_ne!(overflow.status() & 0x40, 0);
+        assert_eq!(overflow.status() & 0x1F, 4);
+        assert_eq!(overflow.status() & 0x20, 0);
+
+        let mut collision = Tms9918A::new();
+        collision.registers[1] = 0x40;
+        collision.registers[5] = 0x20;
+        collision.vram[0] = 0x80;
+        for index in 0..2 {
+            let offset = 0x1000 + index * 4;
+            collision.vram[offset] = 0;
+            collision.vram[offset + 1] = 0;
+            collision.vram[offset + 2] = 0;
+            collision.vram[offset + 3] = 4;
+        }
+        collision.vram[0x1000 + 2 * 4] = 0xD0;
+        collision.advance(228 * 2);
+        assert_ne!(collision.status() & 0x20, 0);
+        assert_eq!(collision.status() & 0x40, 0);
+    }
+
+    #[test]
     fn vblank_and_frame_boundaries_follow_raster_clock() {
         let mut vdp = Tms9918A::new();
         vdp.advance(228 * 192 - 1);
