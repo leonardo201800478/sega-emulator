@@ -725,7 +725,25 @@ fn render_sprites(
 
 #[cfg(test)]
 mod tests {
-    use super::Tms9918A;
+    use super::{sprite_line_active, Tms9918A};
+
+    #[test]
+    fn sprite_limit_can_be_disabled_for_diagnostic_rendering() {
+        let mut vdp = Tms9918A::new();
+        for index in 0..5 {
+            let offset = index * 4;
+            vdp.vram[offset..offset + 4].copy_from_slice(&[0xFF, (index * 8) as u8, 0, 0x0F]);
+        }
+
+        let (active, fifth) = sprite_line_active(&vdp.vram, &vdp.registers, 0, true);
+        assert_eq!(active.len(), 4);
+        assert_eq!(fifth, Some(4));
+
+        vdp.set_sprite_limit_enabled(false);
+        let (active, fifth) = sprite_line_active(&vdp.vram, &vdp.registers, 0, vdp.sprite_limit_enabled());
+        assert_eq!(active.len(), 5);
+        assert_eq!(fifth, None);
+    }
 
     #[test]
     fn reset_preserves_vram_unless_explicitly_cleared() {
