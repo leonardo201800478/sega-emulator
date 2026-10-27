@@ -600,7 +600,8 @@ def run(initial_path: Path | None = None) -> None:
                 window,
                 "Driver de vídeo indisponível",
                 "O backend gráfico selecionado não está disponível nesta sessão. "
-                "Escolha Automático ou Qt Raster; as demais configurações não foram aplicadas.",
+                "Escolha Automático ou Qt Raster; as demais configurações "
+                "não foram aplicadas.",
             )
             return
 

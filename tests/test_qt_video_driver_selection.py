@@ -11,13 +11,13 @@ import pytest  # noqa: E402
 pytest.importorskip("PySide6")
 
 from PySide6.QtGui import QImage  # noqa: E402
+from PySide6.QtQuick import QSGRendererInterface  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
 from sega_emulator.frontend.qt.video_widget import (  # noqa: E402
     VideoWidget,
     _graphics_api_for_mode,
 )
-from PySide6.QtQuick import QSGRendererInterface  # noqa: E402
 
 
 @pytest.fixture
