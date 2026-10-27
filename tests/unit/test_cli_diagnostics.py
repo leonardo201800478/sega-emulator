@@ -49,7 +49,7 @@ def test_list_roms_prints_supported_zip_members(
 ) -> None:
     archive_path = tmp_path / "games.zip"
     with zipfile.ZipFile(archive_path, "w") as archive:
-        archive.writestr("games/test.sg", b"\x00\xC3\x00\x00")
+        archive.writestr("games/test.sg", b"\x00\xc3\x00\x00")
         archive.writestr("readme.txt", "not a ROM")
 
     assert cli.main(["--list-roms", str(archive_path)]) == 0
@@ -70,9 +70,7 @@ def test_headless_summary_contains_measured_metrics(
         sha256="a" * 64,
         display_name=rom_path.name,
     )
-    monkeypatch.setattr(
-        cli, "configure_session_logging", lambda *args, **kwargs: None
-    )
+    monkeypatch.setattr(cli, "configure_session_logging", lambda *args, **kwargs: None)
     monkeypatch.setattr(cli, "load_rom", lambda path: loaded)
     monkeypatch.setattr(cli, "SG1000Machine", FakeMachine)
 
