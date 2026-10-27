@@ -7,6 +7,8 @@ import zlib
 from sega_emulator.machine.cartridge_profiles import (
     SG1000_II_RAM_EXT_TYPE_B_CRC32,
     SG1000_II_RAM_EXT_TYPE_B_SIZE,
+    SG1000_DAHJEE_TYPE_A_CRC32,
+    SG1000_OTHELLO_CRC32,
     SG1000_INTERNAL_RAM_SIZE,
     SG1000_THE_CASTLE_JAPAN_CRC32,
     cartridge_profile,
@@ -30,6 +32,27 @@ def test_known_type_b_crc_selects_profile_metadata(monkeypatch) -> None:
     assert profile.internal_ram_size == SG1000_II_RAM_EXT_TYPE_B_SIZE
     assert profile.cartridge_ram_size == 0
     assert cartridge_ram_size(b"synthetic test ROM") == 0x2000
+
+
+def test_dahjee_type_a_crcs_select_expanded_system_ram(monkeypatch) -> None:
+    assert SG1000_DAHJEE_TYPE_A_CRC32 == {
+        0x223397A1, 0x281D2888, 0x2E7166D5, 0xDF7CBFA5,
+        0xE0816BB7, 0x5CBD1163, 0xC550B4F0,
+    }
+    monkeypatch.setattr(zlib, "crc32", lambda data: 0x223397A1)
+    profile = cartridge_profile(b"synthetic King's Valley ROM")
+    assert profile.internal_ram_size == 0x2000
+    assert profile.cartridge_ram_size == 0
+
+
+def test_othello_catalog_crc_selects_2k_cartridge_ram(monkeypatch) -> None:
+    assert SG1000_OTHELLO_CRC32 == {0xAF4F14BC, 0x1D1A0CA3}
+    monkeypatch.setattr(zlib, "crc32", lambda data: 0xAF4F14BC)
+    profile = cartridge_profile(b"synthetic Othello ROM")
+    assert profile.internal_ram_size == SG1000_INTERNAL_RAM_SIZE
+    assert profile.cartridge_ram_size == 0x0800
+    assert profile.cartridge_ram_start == 0x8000
+    assert profile.cartridge_ram_end == 0xBFFF
 
 
 def test_unknown_cartridge_keeps_standard_profile(monkeypatch) -> None:

@@ -5,6 +5,7 @@ use std::fmt;
 const ROM_WINDOW_SIZE: usize = 0xC000;
 const RAM_START: u16 = 0xC000;
 const INTERNAL_RAM_1K: usize = 0x0400;
+const RAM_2K: usize = 0x0800;
 const RAM_8K: usize = 0x2000;
 
 /// Memory layout selected by the cartridge profile.
@@ -47,7 +48,7 @@ impl fmt::Display for MemoryError {
             }
             Self::InvalidCartridgeRamSize(size) => write!(
                 f,
-                "cartridge RAM must be empty, 1 KiB, or 8 KiB, got {size}"
+                "cartridge RAM must be empty, 1 KiB, 2 KiB, or 8 KiB, got {size}"
             ),
             Self::InvalidCartridgeRamRange => {
                 write!(f, "cartridge RAM range must be valid and below 0xC000")
@@ -81,7 +82,7 @@ impl Sg1000Memory {
                 config.internal_ram_size,
             ));
         }
-        if !matches!(config.cartridge_ram_size, 0 | INTERNAL_RAM_1K | RAM_8K) {
+        if !matches!(config.cartridge_ram_size, 0 | INTERNAL_RAM_1K | RAM_2K | RAM_8K) {
             return Err(MemoryError::InvalidCartridgeRamSize(
                 config.cartridge_ram_size,
             ));
@@ -192,6 +193,23 @@ mod tests {
         assert_eq!(memory.read(0xA000), 0xA7);
         assert_eq!(memory.read(0x0000), 0x55);
         assert_eq!(memory.read(0xC000), 0x00);
+    }
+
+    #[test]
+    fn maps_2k_omv_ram_with_mirroring() {
+        let config = MemoryConfig {
+            cartridge_ram_size: 0x0800,
+            cartridge_ram_start: 0x8000,
+            cartridge_ram_end: 0xBFFF,
+            ..MemoryConfig::default()
+        };
+        let mut memory = Sg1000Memory::new(&[0x55], config).unwrap();
+        memory.write(0x8000, 0xA7);
+        memory.write(0x87FF, 0x5C);
+        assert_eq!(memory.read(0x8000), 0xA7);
+        assert_eq!(memory.read(0x8800), 0xA7);
+        assert_eq!(memory.read(0x8FFF), 0x5C);
+        assert_eq!(memory.read(0x0000), 0x55);
     }
 
     #[test]
