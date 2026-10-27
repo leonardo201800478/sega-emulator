@@ -7,7 +7,7 @@ concurrency:
 
 on:
   pull_request:
-    paths: &qt_rust_z80_core_paths
+    paths:
       - "native/z80_core/**"
       - "native/z80_core/Cargo.toml"
       - "native/z80_core/Cargo.lock"
@@ -25,7 +25,22 @@ on:
       - ".github/workflows/qt-rust-z80-core.yml"
   push:
     branches: ["feat/qt-rust-z80-available"]
-    paths: *qt_rust_z80_core_paths
+    paths:
+      - "native/z80_core/**"
+      - "native/z80_core/Cargo.toml"
+      - "native/z80_core/Cargo.lock"
+      - "pyproject.toml"
+      - "src/sega_emulator/machine/sg1000.py"
+      - "src/sega_emulator/frontend/qt/**"
+      - "src/sega_emulator/frontend/qt_frontend.py"
+      - "tests/unit/test_vulkan_video_widget.py"
+      - "tests/test_qt_*.py"
+      - "tests/test_sg1000_cpu_backend.py"
+      - "tests/test_sg1000_native_machine.py"
+      - "tests/test_rust_runtime_selection.py"
+      - "tests/test_sn76489_rust_parity.py"
+      - "tests/integration/test_rust_z80_core.py"
+      - ".github/workflows/qt-rust-z80-core.yml"
 
 jobs:
   windows:
