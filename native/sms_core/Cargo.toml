@@ -1,0 +1,11 @@
+[package]
+name = "sega-sms-core"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "sega_sms_core"
+path = "src/lib.rs"
+
+[dependencies]
