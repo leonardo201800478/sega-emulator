@@ -153,3 +153,14 @@ Para a extensão PyO3, acrescentar build Release/Maturin e testes de integraçã
 - [Mednafen SMS documentation](https://sources.debian.org/data/main/m/mednafen/1.32.1%2Bdfsg-3/Documentation/sms.html): referência comparativa de opções de território/FM; não substitui evidência de hardware.
 
 Essas referências orientam a investigação; cada comportamento implementado ainda precisa de uma fonte específica, testes e uma classificação clara de evidência.
+
+## Auditoria e modelo do código existente
+
+Antes de iniciar a implementação funcional, foram registrados os resultados da inspeção remota da base SG-1000:
+
+- [Auditoria do código-base para Master System](../audits/master-system-codebase-audit.md): componentes existentes, dependências, limites reais, riscos e estado de validação.
+- [Modelo arquitetural do core Master System](master-system-code-model.md): dependências permitidas, estrutura proposta, contratos, fronteiras PyO3/Vulkan/WASAPI e sequência de implementação.
+
+A auditoria confirma que o core Rust standalone SG-1000 é parcial; o runtime PyO3 tem maior cobertura Z80, mas está acoplado à memória/VDP/I/O SG-1000. O loader atual limita ROMs a 48 KiB e o frontend de vídeo assume 256×192. Esses limites devem ser resolvidos com contratos específicos SMS, sem alterar a política SG-1000 globalmente.
+
+**Validação:** leitura remota de arquivos concluída; compilação, testes Rust/Python e validação manual não foram executados nesta etapa.
