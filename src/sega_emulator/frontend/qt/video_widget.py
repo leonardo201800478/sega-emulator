@@ -399,25 +399,29 @@ class VideoWidget(QWidget):
         if self._source_image is None or self._source_image.isNull():
             self._present_image = None
             return
-        source = self._source_image.convertToFormat(QImage.Format.Format_RGB888)
-        width, height = source.width(), source.height()
-        stride = source.bytesPerLine()
-        raw = np.frombuffer(
-            source.constBits(), dtype=np.uint8, count=source.sizeInBytes()
-        ).reshape(height, stride)
-        rgb = raw[:, : width * 3].reshape(height, width, 3)
-        filtered = apply_video_filter_rgb(
-            rgb,
-            self._filter_mode,
-            **self._crt_parameters,
-        )
-        self._present_image = QImage(
-            filtered.data,
-            width,
-            height,
-            int(filtered.strides[0]),
-            QImage.Format.Format_RGB888,
-        ).copy()
+        if self._filter_mode in {"nearest", "bilinear"}:
+            # Keep the established fast path unchanged for the reference filters.
+            self._present_image = QImage(self._source_image)
+        else:
+            source = self._source_image.convertToFormat(QImage.Format.Format_RGB888)
+            width, height = source.width(), source.height()
+            stride = source.bytesPerLine()
+            raw = np.frombuffer(
+                source.constBits(), dtype=np.uint8, count=source.sizeInBytes()
+            ).reshape(height, stride)
+            rgb = raw[:, : width * 3].reshape(height, width, 3)
+            filtered = apply_video_filter_rgb(
+                rgb,
+                self._filter_mode,
+                **self._crt_parameters,
+            )
+            self._present_image = QImage(
+                filtered.data,
+                width,
+                height,
+                int(filtered.strides[0]),
+                QImage.Format.Format_RGB888,
+            ).copy()
         if self._image_provider is not None:
             self._image_provider.set_image(self._present_image)
         if self._qml_root is not None and not self._graphics_failed:
