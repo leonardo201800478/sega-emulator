@@ -162,11 +162,7 @@ pub struct NativePsgSnapshot {
 impl NativePsgSnapshot {
     #[getter]
     fn tone_periods(&self) -> (u16, u16, u16) {
-        (
-            self.tone_periods[0],
-            self.tone_periods[1],
-            self.tone_periods[2],
-        )
+        (self.tone_periods[0], self.tone_periods[1], self.tone_periods[2])
     }
 
     #[getter]
@@ -181,11 +177,7 @@ impl NativePsgSnapshot {
 
     #[getter(_tone_outputs)]
     fn tone_outputs(&self) -> (u8, u8, u8) {
-        (
-            self.tone_outputs[0],
-            self.tone_outputs[1],
-            self.tone_outputs[2],
-        )
+        (self.tone_outputs[0], self.tone_outputs[1], self.tone_outputs[2])
     }
 }
 
