@@ -1,25 +1,23 @@
 //! Standalone, Python-independent SG-1000 emulation core.
 //!
-//! This crate is the extraction target for the Rust runtime. Keep device state
-//! and scheduling logic in plain Rust types; Python bindings belong in the
-//! separate `sega-z80-core` PyO3 adapter crate until the frontend is migrated.
-//!
-//! The crate is intentionally built incrementally. The first slice establishes
-//! deterministic cartridge/RAM mapping and its contract; CPU, VDP, PSG, I/O,
-//! and machine scheduling are added as separately tested migrations.
+//! Device state and scheduling logic belong in plain Rust types; Python
+//! bindings belong in the separate PyO3 adapter until the frontend migrates.
+//! This crate is being built incrementally; its public machine is not yet a
+//! complete standalone emulator.
 
 /// Size of the Z80's logical address space.
 pub const SG1000_CPU_ADDRESS_SPACE_SIZE: usize = 0x1_0000;
 
 pub mod bus;
 pub mod cpu;
+pub mod io;
 pub mod machine;
 pub mod memory;
 pub mod psg;
 
 pub use bus::CpuBus;
-pub use cpu::{CpuError, Z80, Z80Registers};
-
+pub use cpu::{CpuError, Z80};
+pub use io::{IoError, PsgWriteEvent, Sg1000Io};
 pub use machine::{MachineError, Sg1000Machine};
 pub use memory::{MemoryConfig, MemoryError, Sg1000Memory};
 pub use psg::{PsgError, Sn76489};
