@@ -23,7 +23,8 @@ Fabricante ou package diferentes não provam uma diferença semântica. Uma dive
 
 **Evidência disponível:**
 - A documentação técnica de placa consultada identifica o NEC D780C-1 como CPU em uma placa SG-1000 e registra um exemplar de placa posterior com Sharp LH0080A.
-- A mesma descrição registra que o clock é derivado do subsistema de vídeo e que o sinal /WAIT vem do chip de som.
+- O inventário de placa baseado em diagramas redessinados de Enri informa que, na configuração NTSC comum, o TMS9918A fornece o clock de CPU de **3,579545 MHz**. Referências secundárias listam **3,546893 MHz** para PAL; a placa 171-5078 possui espaço para TMS9929 e circuito de clock dedicado, portanto não se deve assumir a mesma fonte/divisor em todas as revisões.
+- O mesmo diagrama identifica a saída READY do SN76489 ligada ao sinal ativo-baixo `/WAIT` da CPU; a descrição técnica relata até 32 clocks para aceitar um comando de som. Isso sustenta a existência da ligação, mas a duração elétrica exata e o momento em que WAIT é amostrado ainda exigem validação temporal.
 - A família D780C é amplamente identificada como compatível com o Z80; a equivalência funcional detalhada de comportamentos não documentados ainda deve ser validada, não presumida.
 
 **Modelo proposto:**
@@ -32,7 +33,7 @@ Fabricante ou package diferentes não provam uma diferença semântica. Uma dive
 - Núcleo Z80 semântico comum por padrão; adicionar política de silício específica somente se testes diferenciais demonstrarem diferença.
 - O sinal WAIT deve pertencer ao modelo temporal/barramento da plataforma, não a uma regra hard-coded dentro do decoder.
 
-**Falta confirmar:** revisão exata de placa, designação completa da peça (incluindo hífen/sufixo), tolerância/clock real, forma de geração de WAIT e quaisquer diferenças de instrução ou timing observadas entre os fabricantes.
+**Falta confirmar:** a associação exata entre cada revisão de placa e a peça CPU; tolerância do oscilador; detalhes de clock para placas com VDP diferente/circuito dedicado; polaridade e forma de onda de WAIT no circuito real, ponto de amostragem por ciclo e extensão efetiva dos waits; quaisquer diferenças de instrução ou timing observadas entre NEC e Sharp.
 
 ### 2. Master System — Zilog Z80A / NEC D780C-1 e variações de placa
 
@@ -83,7 +84,7 @@ Fabricante ou package diferentes não provam uma diferença semântica. Uma dive
 
 ## Frequência: modelar a fonte, não uma constante universal
 
-“3,58 MHz” é uma aproximação útil para muitas variantes NTSC, não um valor literal universal para todos os consoles, regiões e revisões. O clock de CPU deve derivar do oscilador/divisor documentado para a placa específica, preservando a razão de fase em relação aos demais subsistemas. Não codificar `3_580_000` como constante comum a todos os perfis.
+“3,58 MHz” é uma aproximação útil, não um valor literal universal para todos os consoles, regiões e revisões. Para o SG-1000, as referências consultadas apontam 3,579545 MHz em placas NTSC com clock derivado do TMS9918A e 3,546893 MHz como referência PAL; a placa 171-5078 prevê clock dedicado em configurações com TMS9929. Esses números devem ser tratados como valores de referência por configuração, ainda sujeitos a confirmação contra esquema/BOM da revisão concreta. O clock de CPU deve derivar do oscilador/divisor documentado para a placa específica, preservando a razão de fase em relação aos demais subsistemas. Não codificar `3_580_000` como constante comum a todos os perfis.
 
 O modelo temporal deve guardar, quando conhecido:
 - frequência do oscilador da placa;
@@ -149,7 +150,9 @@ Este exemplo define a intenção do contrato, não código Rust já adicionado o
 - Sega Master System service manuals e BOMs reunidos por SMS Power: https://www.smspower.org/Development/SegaMasterSystemServiceManual e https://www.smspower.org/Development/PALMasterSystemM4POWERBASEPAL837-6097 — identificam Z80A, NEC D780C-1 e Zilog Z0840004PSC em placas específicas.
 
 ### Referências de placas (fontes secundárias, úteis para localização de peças; não substituir BOM/manual)
-- SG-1000 board inventory: https://retrotechwiki.com/Sega_SG-1000 — identifica D780C-1 e um exemplar Sharp LH0080A.
+- SG-1000 board inventory: https://retrotechwiki.com/Sega_SG-1000 — identifica D780C-1, um exemplar Sharp LH0080A, clock de 3,579545 MHz derivado do TMS9918A e /WAIT associado ao READY do SN76489; é fonte secundária baseada em diagramas de placa redessinados.
+- SG-1000 model/board revisions: https://consolemods.org/wiki/SG-1000%3ASG-1000_Model_Differences — descreve revisões 171-5078 com suporte a TMS9929 e footprint para circuito de clock dedicado.
+- Sega official SG-1000 specification: https://www.sega.jp/history/hard/sg1000/ — especifica Z-80A a 3,58 MHz como resumo de produto, sem distinguir todas as revisões/regiões.
 - Game Gear board/revision inventory: https://consolemods.org/wiki/Game_Gear%3AGame_Gear_Model_Differences e https://consoleartisan.com/reference/game-gear/ — identifica ASICs 315-5535 e 315-5682 por revisão.
 - Mega Drive board inventory: https://segaretro.org/Sega_Mega_Drive_PCB_revisions e https://retroisle.com/others/segamegadrive/techdetail.php — inventaria Z80 discreto e ASICs de revisões posteriores.
 - Genesis ASIC summary: https://github.com/user-none/emmd/blob/main/docs/vdp_reference.md — lista 315-5960 e 315-6123 como integrações GOAC e distingue 315-5313 como VDP.
@@ -159,6 +162,8 @@ Este exemplo define a intenção do contrato, não código Rust já adicionado o
 | Afirmação | Estado |
 |---|---|
 | SG-1000 usou NEC D780C-1; há placa com Sharp LH0080A | Confirmado por inventário de placa secundário; revisão e detalhes de silício ainda requerem BOM/fonte primária |
+| SG-1000 NTSC usa 3,579545 MHz derivados do TMS9918A e /WAIT recebe READY do SN76489 | Documentado em inventário secundário baseado em diagrama de circuito; confirmar a forma de onda/temporização exata em esquema primário ou traço de hardware |
+| SG-1000 PAL usa 3,546893 MHz em todas as revisões | Não confirmado como universal; revisão 171-5078 permite TMS9929 e circuito de clock dedicado; configurar por placa, não apenas por rótulo regional |
 | Master System usou NEC D780C-1 e Zilog Z80/Z80A em revisões | Confirmado por documentação/listagens de placas específicas |
 | Game Gear VA0 tem Z80A discreto e VA1 integra CPU+VDP+SCA | Confirmado por manual de serviço |
 | Game Gear ASIC VA1 = 315-5535 | Confirmado por inventários de revisão; confirmar marcação/placa ao selecionar uma revisão concreta |
