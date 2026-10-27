@@ -129,7 +129,8 @@ mod tests {
         memory.write(0xC000, 0xA5);
         assert_eq!(memory.read(0xC000), 0xA5);
         assert_eq!(memory.read(0xE000), 0xA5);
-        assert_eq!(memory.read(0xFFFF), 0xA5);
+        memory.write(0xDFFF, 0x5A);
+        assert_eq!(memory.read(0xFFFF), 0x5A);
         assert_eq!(memory.work_ram().len(), RAM_SIZE);
     }
 
