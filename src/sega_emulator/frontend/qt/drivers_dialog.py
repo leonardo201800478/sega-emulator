@@ -3,6 +3,7 @@
 Only implemented drivers are offered. Preferences are stored by the Qt frontend;
 the emulated hardware core receives normalized input and completed audio/video data.
 """
+
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
