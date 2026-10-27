@@ -15,18 +15,20 @@ Close the functional gaps in the native Rust SG-1000 machine by auditing the exi
 
 The following implementation slices have been added, but this ledger remains open until independent coverage and integration gates pass on the final candidate SHA:
 
-- Z80 state now includes alternate AF/BC/DE/HL, IX/IY, I/R, IFF1/IFF2, interrupt mode, WZ/MEMPTR, EI delay, NMI and INT request state.
+- Z80 state now includes alternate AF/BC/DE/HL, IX/IY, I/R, IFF1/IFF2, interrupt mode, WZ/MEMPTR, EI delay, NMI/INT requests, Q latch and the P/V interrupt edge latch.
 - The primary opcode decoder is extended with the CB matrix, ED arithmetic/load/I/O/block families, and DD/FD index substitution, displacement, repeated-prefix and indexed-CB handling.
-- The refresh register increments on M1 opcode fetches and HALT refresh cycles.
+- The refresh register increments on M1 opcode fetches and HALT refresh cycles; SCF/CCF use the Q latch, and the LD A,I/R interrupt edge behavior is modeled.
 - NMI and maskable interrupt service cover IM 0/1/2. IM 0 injects the external opcode into the common decoder and fetches any operands from the current PC.
 - The machine synchronizes the VDP's enabled VBlank interrupt line to the Z80 INT request at instruction boundaries.
+- VDP regressions cover control latching, VRAM read-ahead/address wrap, all four display modes, raster/framebuffer agreement, VBlank/status effects, sprite overflow/collision, transparency, offscreen collision and Y-coordinate wrap.
+- PSG regressions cover noise-rate selection including tone-3 linkage, attenuation/mute behavior, fixed LFSR vectors, period/frequency calculations and chunking determinism.
 
 ### Known limitations that prevent a completion claim
 
 - The scheduler still advances devices at instruction boundaries; this is not bus-cycle-accurate emulation.
 - The primary matrix and CB/ED/DD/FD families have encoding-classification coverage and focused regressions, but still require exhaustive independent vectors for flags, prefix interactions and timing.
 - IM 0 opcode injection still needs additional independent edge-case vectors for prefixes, HALT and acknowledge timing.
-- The VDP and PSG need the remaining independent behavior vectors listed below; existing unit tests alone do not prove full silicon fidelity.
+- The VDP and PSG now have focused fixed-vector regressions, but need remaining independent vectors for all mode/address combinations, sprite priority/size/magnification, status edge cases, PSG clock/LFSR variants and audio pipeline behavior; unit tests alone do not prove full silicon fidelity.
 - A green Python SingleStepTests workflow is evidence for the Python adapter only unless the workflow explicitly executes the native Rust CPU. Do not present it as native Rust differential coverage.
 
 ## Workstreams
@@ -64,6 +66,12 @@ Implement in independently reviewable slices, retaining explicit errors until ea
 - Test event timestamps and CPU/VDP/PSG advancement over split and unsplit execution windows.
 - Add integration vectors covering ROM/RAM mapping, mirrored or unmapped regions, controller I/O, VDP ports, PSG writes, frame output and audio samples.
 - Keep the frontend/Qt/PyO3 boundary out of per-instruction execution; expose batch/frame-level APIs only.
+
+## Primary hardware references
+
+- **Texas Instruments, TMS9918A/TMS9928A/TMS9929A Video Display Processors Data Manual (1982)** — [PDF mirror of the original TI manual](https://computers.baffa.tec.br/pages/datasheet/TMS9918A_TMS9928A_TMS9929A_Video_Display_Processors_Data_Manual_Nov82.pdf). Relevant sections: 2.1.2–2.1.6 (register protocol, VRAM, status and interrupt), 2.3 (status flags), 2.4 (display modes) and 2.4.5 (sprites).
+- **Texas Instruments, SN76489AN Data Sheet** — [PDF mirror](https://map.grauw.nl/resources/sound/texas_instruments_sn76489an.pdf) and [text-extracted copy](https://computers.baffa.tec.br/pages/datasheet/76489.pdf). Relevant sections: tone-divider equation, attenuation table, noise feedback/rate selection, register protocol and data transfer.
+- The PDFs are original manufacturer documents hosted on third-party mirrors; the host is not the manufacturer. Use these manuals as the primary behavioral reference and record any variant-specific differences separately.
 
 ## Independent validation
 
