@@ -7,7 +7,7 @@
 //! independent vectors and bus-level validation.
 
 use crate::alu::{adc8, add8, and8, cp8, or8, sbc8, sub8, xor8};
-use crate::bus::CpuBus;
+use crate::bus::{CpuBus, Z80BusEvent, Z80BusEventKind};
 
 const FLAG_C: u8 = 0x01;
 const FLAG_N: u8 = 0x02;
@@ -114,6 +114,9 @@ pub struct Z80 {
     step_depth: bool,
     pub halted: bool,
     pub total_tstates: u64,
+    /// PC of the outermost instruction step, used to avoid reporting incomplete
+    /// traces when an ED block opcode follows an ignored DD/FD prefix.
+    instruction_start_pc: u16,
 }
 
 impl Z80 {
@@ -138,6 +141,7 @@ impl Z80 {
         self.step_depth = false;
         self.halted = false;
         self.total_tstates = 0;
+        self.instruction_start_pc = 0;
     }
 
     /// Latch a non-maskable interrupt; it is serviced at the next step boundary.
@@ -221,6 +225,7 @@ impl Z80 {
         if self.step_depth {
             return self.step_inner(bus);
         }
+        self.instruction_start_pc = self.registers.pc;
         self.q_previous = self.q;
         self.q = 0;
         self.step_depth = true;
@@ -1208,19 +1213,65 @@ impl Z80 {
         self.set_flags(flags);
     }
 
+    #[inline]
+    fn emit_timing_event<B: CpuBus>(
+        &self,
+        bus: &mut B,
+        instruction_pc: u16,
+        tstate_offset: u32,
+        kind: Z80BusEventKind,
+        address: Option<u16>,
+        data: Option<u8>,
+        duration_tstates: u8,
+    ) {
+        bus.observe_timing_event(Z80BusEvent {
+            instruction_pc,
+            tstate_offset,
+            kind,
+            address,
+            data,
+            duration_tstates,
+        });
+    }
+
     fn execute_block_transfer<B: CpuBus>(&mut self, bus: &mut B, opcode: u8) -> u32 {
         let direction = if opcode == 0xA8 || opcode == 0xB8 {
             -1_i16
         } else {
             1_i16
         };
+        let instruction_pc = self.registers.pc.wrapping_sub(2);
+        let trace_enabled = self.instruction_start_pc == instruction_pc;
+        if trace_enabled {
+            self.emit_timing_event(
+                bus, instruction_pc, 0, Z80BusEventKind::OpcodeFetch,
+                Some(instruction_pc), Some(0xED), 4,
+            );
+            self.emit_timing_event(
+                bus, instruction_pc, 4, Z80BusEventKind::OpcodeFetch,
+                Some(instruction_pc.wrapping_add(1)), Some(opcode), 4,
+            );
+        }
         let address = self.registers.hl();
         let value = bus.read_memory(address);
-        bus.write_memory(self.registers.de(), value);
+        if trace_enabled {
+            self.emit_timing_event(
+                bus, instruction_pc, 8, Z80BusEventKind::MemoryRead,
+                Some(address), Some(value), 3,
+            );
+        }
+        let destination = self.registers.de();
+        bus.write_memory(destination, value);
+        if trace_enabled {
+            self.emit_timing_event(
+                bus, instruction_pc, 11, Z80BusEventKind::MemoryWrite,
+                Some(destination), Some(value), 5,
+            );
+        }
         self.registers
             .set_hl(address.wrapping_add_signed(direction));
         self.registers
-            .set_de(self.registers.de().wrapping_add_signed(direction));
+            .set_de(destination.wrapping_add_signed(direction));
         let count = self.registers.bc().wrapping_sub(1);
         self.registers.set_bc(count);
         let sum = self.registers.a.wrapping_add(value);
@@ -1235,6 +1286,12 @@ impl Z80 {
             self.wz = self.registers.pc.wrapping_add(1);
             flags = (flags & !FLAG_XY) | (((self.registers.pc >> 8) as u8) & FLAG_XY);
             self.set_flags(flags);
+            if trace_enabled {
+                self.emit_timing_event(
+                    bus, instruction_pc, 16, Z80BusEventKind::Internal,
+                    None, None, 5,
+                );
+            }
             21
         } else {
             self.set_flags(flags);
@@ -1248,12 +1305,35 @@ impl Z80 {
         } else {
             1_i16
         };
-        let value = bus.read_memory(self.registers.hl());
+        let instruction_pc = self.registers.pc.wrapping_sub(2);
+        let trace_enabled = self.instruction_start_pc == instruction_pc;
+        if trace_enabled {
+            self.emit_timing_event(
+                bus, instruction_pc, 0, Z80BusEventKind::OpcodeFetch,
+                Some(instruction_pc), Some(0xED), 4,
+            );
+            self.emit_timing_event(
+                bus, instruction_pc, 4, Z80BusEventKind::OpcodeFetch,
+                Some(instruction_pc.wrapping_add(1)), Some(opcode), 4,
+            );
+        }
+        let address = self.registers.hl();
+        let value = bus.read_memory(address);
+        if trace_enabled {
+            self.emit_timing_event(
+                bus, instruction_pc, 8, Z80BusEventKind::MemoryRead,
+                Some(address), Some(value), 3,
+            );
+            self.emit_timing_event(
+                bus, instruction_pc, 11, Z80BusEventKind::Internal,
+                None, None, 5,
+            );
+        }
         let accumulator = self.registers.a;
         let result = accumulator.wrapping_sub(value);
         let half = (accumulator & 0x0F) < (value & 0x0F);
         self.registers
-            .set_hl(self.registers.hl().wrapping_add_signed(direction));
+            .set_hl(address.wrapping_add_signed(direction));
         let count = self.registers.bc().wrapping_sub(1);
         self.registers.set_bc(count);
         let adjusted = result.wrapping_sub(u8::from(half));
@@ -1274,6 +1354,12 @@ impl Z80 {
             self.wz = self.registers.pc.wrapping_add(1);
             flags = (flags & !FLAG_XY) | (((self.registers.pc >> 8) as u8) & FLAG_XY);
             self.set_flags(flags);
+            if trace_enabled {
+                self.emit_timing_event(
+                    bus, instruction_pc, 16, Z80BusEventKind::Internal,
+                    None, None, 5,
+                );
+            }
             21
         } else {
             self.wz = self.wz.wrapping_add_signed(direction);

@@ -1,13 +1,13 @@
 # Contrato temporal do barramento Z80 — Fase 10
 
-**Estado:** contrato arquitetural proposto; instrumentação de runtime pendente.  
+**Estado:** contrato definido e trace M-cycle-level inicial implementado para instruções ED de transferência/comparação sem prefixos DD/FD; amostras de pinos por T-state, waits e scheduler permanecem pendentes.  
 **Base auditada:** main em 05cb8259dfaaea5844c3290945301c88ec0fdc54.  
 **Escopo:** modelo determinístico de T-states, ciclos de máquina, acessos ao barramento, waits e eventos de interrupção.  
 **Não declarar:** TEMPORAL_PASS até que os traces sejam produzidos pelo runtime e comparados com uma referência fixada.
 
 ## 1. Diagnóstico do contrato atual
 
-O núcleo SMS mantém Z80::total_tstates e retorna uma contagem agregada por chamada de step. A implementação executa leituras e escritas através de CpuBus, mas o trait em native/z80_bus/src/lib.rs só define leitura/escrita de memória e portas; ele não descreve M-cycles, amostras de barramento por T-state, waits ou timestamps. Portanto, a sequência de acessos em código não equivale a um trace temporal validado.
+O núcleo SMS mantém Z80::total_tstates e retorna uma contagem agregada por chamada de step. O trait CpuBus agora oferece um observador opcional de eventos temporais lógicos. A primeira fatia emite eventos M-cycle-level para as oito instruções ED de transferência/comparação sem prefixos DD/FD; não emite amostras de pinos por T-state e não controla o scheduler. A sequência ainda não equivale a um trace de hardware validado.
 
 O teste externo raxoft/z80test e os vetores SingleStepTests usados atualmente continuam valiosos para semântica e contagem agregada. Uma duração correta não demonstra que endereço, dados e sinais foram apresentados nos instantes corretos.
 
@@ -67,10 +67,10 @@ O trace de M-cycles não substitui as amostras por T-state quando o critério ex
 
 ## 5. Plano de implementação incremental
 
-1. Adicionar tipos de trace e contrato de observação em native/z80_bus, sem afirmar que todos os caminhos já emitem eventos.
-2. Instrumentar fetch M1 e acessos de memória com uma única linha temporal, mantendo um modo de trace reproduzível em testes.
-3. Instrumentar as oito instruções ED de transferência/comparação como primeira fatia: LDI/LDD/LDIR/LDDR e CPI/CPD/CPIR/CPDR. Usar as decomposições documentadas acima e comparar amostras externas disponíveis; registrar limitações quando a referência não cobre um caso.
-4. Instrumentar progressivamente CB, ED, DD/FD, indexed-CB, I/O e acesso à pilha, incluindo prefixos ignorados/repetidos, HALT e entrada de interrupções.
+1. Implementado: tipos de trace e observador opcional em native/z80_bus; o callback padrão não altera o runtime.
+2. Implementado parcialmente: a primeira fatia emite eventos M-cycle-level para LDI/LDD/LDIR/LDDR e CPI/CPD/CPIR/CPDR sem prefixos DD/FD. A posição temporal é relativa à instrução e a duração vem do manual.
+3. Pendente: comparar os eventos gerados com traces externos automatizados e registrar a primeira divergência.
+4. Instrumentar progressivamente CB, demais ED, DD/FD, indexed-CB, I/O e acesso à pilha, incluindo prefixos ignorados/repetidos, HALT e entrada de interrupções.
 5. Integrar waits e avanço dos dispositivos ao scheduler do SMS, sem callbacks Python por instrução.
 6. Executar regressões de semântica e temporização, z80full/z80ccf, comparação de traces e testes de determinismo no SHA candidato exato.
 7. Após integração, repetir os checks pós-merge. Checks ausentes ou resultados agregados isolados não constituem aprovação temporal.
