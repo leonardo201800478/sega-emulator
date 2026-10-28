@@ -192,3 +192,10 @@ O teste de formatação inicial passou após a correção de sintaxe, mas a exec
 ## Modelo completo do Z80 e perfis SMS
 
 A modelagem de ISA, registradores auxiliares, flags, prefixos, interrupções, níveis de fidelidade temporal, matriz de testes e perfis de plataforma (exportação americana, doméstico japonês com FM quando presente e Master System III brasileiro) está especificada em [Modelo Z80 para o Sega Master System](z80-sms-platform-model.md). Esse documento é um contrato de trabalho, não uma declaração de implementação concluída. A presença de FM deve ser estabelecida por variante física, não inferida exclusivamente pela região.
+
+
+## Estado da implementação Z80 (PR #143)
+
+A branch de trabalho agora contém uma cópia independente de `alu.rs` e `cpu.rs` sob `native/sms_core/src`, exportada pela API pública do crate e conectada ao contrato neutro `sega-z80-bus`. O código SG-1000 não foi alterado. Foram incluídos os testes existentes da CPU copiados junto com o módulo, uma matriz de classificação de todos os opcodes base/prefixados e um teste adicional que percorre todos os 256 opcodes DDCB/FDCB para IX e IY. Um teste de integração executa instruções carregadas de um cartucho sintético e verifica leitura/escrita da RAM do SMS.
+
+**Limite:** esses testes demonstram cobertura de execução/classificação e integração básica, não correção integral de todas as flags, timings ou acessos de barramento. Os checks do GitHub Actions devem passar no SHA candidato antes de aceitar esta fatia. CPU, I/O real, VDP, PSG/FM e scheduler ainda não formam uma máquina SMS completa.
