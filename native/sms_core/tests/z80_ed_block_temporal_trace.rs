@@ -378,7 +378,6 @@ fn ldi_mcycle_trace_matches_pinned_singlestep_bus_samples() {
     );
 }
 
-
 macro_rules! single_step_cycles {
     ($(($address:expr, $data:expr, $signals:literal)),+ $(,)?) => {
         [
@@ -398,13 +397,17 @@ fn assert_external_mcycle_trace(
     samples: &[SingleStepCycle],
     is_transfer: bool,
 ) {
-    let pc = samples[0].address.expect("pinned opcode fetch has an address");
+    let pc = samples[0]
+        .address
+        .expect("pinned opcode fetch has an address");
     assert_eq!(samples[2].data, Some(0xED));
     assert_eq!(samples[6].data, Some(opcode));
     let hl = samples[8].address.expect("pinned data read has an address");
     let value = samples[10].data.expect("pinned data read samples a value");
     let de = if is_transfer {
-        samples[11].address.expect("pinned data write has an address")
+        samples[11]
+            .address
+            .expect("pinned data write has an address")
     } else {
         0
     };
@@ -434,7 +437,9 @@ fn assert_external_mcycle_trace(
     cpu.registers.set_hl(hl);
     cpu.registers.set_de(de);
 
-    let tstates = cpu.step(&mut bus).expect("pinned ED block instruction executes");
+    let tstates = cpu
+        .step(&mut bus)
+        .expect("pinned ED block instruction executes");
     assert_eq!(tstates, samples.len() as u32);
     assert_eq!(
         cpu.registers.pc,
@@ -480,24 +485,10 @@ fn assert_external_mcycle_trace(
             5,
         ));
     } else {
-        expected.push(event(
-            pc,
-            11,
-            Z80BusEventKind::Internal,
-            None,
-            None,
-            5,
-        ));
+        expected.push(event(pc, 11, Z80BusEventKind::Internal, None, None, 5));
     }
     if repeats {
-        expected.push(event(
-            pc,
-            16,
-            Z80BusEventKind::Internal,
-            None,
-            None,
-            5,
-        ));
+        expected.push(event(pc, 16, Z80BusEventKind::Internal, None, None, 5));
     }
     assert_eq!(bus.events, expected);
     assert_eq!(
@@ -507,10 +498,11 @@ fn assert_external_mcycle_trace(
             .sum::<u32>(),
         samples.len() as u32
     );
-    assert!(bus
-        .events
-        .windows(2)
-        .all(|pair| pair[0].end_tstate() == pair[1].tstate_offset));
+    assert!(
+        bus.events
+            .windows(2)
+            .all(|pair| pair[0].end_tstate() == pair[1].tstate_offset)
+    );
 }
 
 #[test]
@@ -537,7 +529,6 @@ fn cpi_mcycle_trace_matches_pinned_singlestep_bus_samples() {
     assert_external_mcycle_trace(0xA1, 0x14, 0x5877, &samples, false);
 }
 
-
 #[test]
 fn ldd_mcycle_trace_matches_pinned_singlestep_bus_samples() {
     // SingleStepTests/Z80 vector ED A8 0000 at commit ebe1875d48f374bcfd4b505d8eb8ee751568b5f7.
@@ -562,7 +553,6 @@ fn ldd_mcycle_trace_matches_pinned_singlestep_bus_samples() {
     assert_external_mcycle_trace(0xA8, 0x87, 0x4D61, &samples, true);
 }
 
-
 #[test]
 fn cpd_mcycle_trace_matches_pinned_singlestep_bus_samples() {
     // SingleStepTests/Z80 vector ED A9 0000 at commit ebe1875d48f374bcfd4b505d8eb8ee751568b5f7.
@@ -586,7 +576,6 @@ fn cpd_mcycle_trace_matches_pinned_singlestep_bus_samples() {
     ];
     assert_external_mcycle_trace(0xA9, 0xF5, 0x97AC, &samples, false);
 }
-
 
 #[test]
 fn ldir_mcycle_trace_matches_pinned_singlestep_bus_samples() {
@@ -617,7 +606,6 @@ fn ldir_mcycle_trace_matches_pinned_singlestep_bus_samples() {
     assert_external_mcycle_trace(0xB0, 0xB2, 0x98EA, &samples, true);
 }
 
-
 #[test]
 fn cpir_mcycle_trace_matches_pinned_singlestep_bus_samples() {
     // SingleStepTests/Z80 vector ED B1 0000 at commit ebe1875d48f374bcfd4b505d8eb8ee751568b5f7.
@@ -647,7 +635,6 @@ fn cpir_mcycle_trace_matches_pinned_singlestep_bus_samples() {
     assert_external_mcycle_trace(0xB1, 0xA3, 0x1495, &samples, false);
 }
 
-
 #[test]
 fn lddr_mcycle_trace_matches_pinned_singlestep_bus_samples() {
     // SingleStepTests/Z80 vector ED B8 035E at commit ebe1875d48f374bcfd4b505d8eb8ee751568b5f7.
@@ -676,7 +663,6 @@ fn lddr_mcycle_trace_matches_pinned_singlestep_bus_samples() {
     ];
     assert_external_mcycle_trace(0xB8, 0xCA, 0x0000, &samples, true);
 }
-
 
 #[test]
 fn cpdr_mcycle_trace_matches_pinned_singlestep_bus_samples() {
