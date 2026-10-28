@@ -97,7 +97,6 @@ fn ldir_final_iteration_does_not_repeat_and_clears_pv() {
     assert_eq!(cpu.registers.f, 0x61); // preserved Z/C plus undocumented Y.
 }
 
-
 #[test]
 fn ldd_wraps_hl_and_de_across_zero() {
     let mut bus = FlatBus::default();
@@ -370,4 +369,3 @@ fn cpdr_repeats_on_nonmatch_and_uses_repeat_pc_for_xy() {
     assert_eq!(cpu.registers.bc(), 0x0001);
     assert_eq!(cpu.registers.f, FLAG_S | FLAG_N | FLAG_PV | 0x28);
 }
-
