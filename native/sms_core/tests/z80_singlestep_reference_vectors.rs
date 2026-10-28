@@ -7890,7 +7890,6 @@ fn singlestep_ed_b9_additional_0001() {
     );
 }
 
-
 #[test]
 fn singlestep_expanded_opcode_11_vector_0000() {
     run_vector(
