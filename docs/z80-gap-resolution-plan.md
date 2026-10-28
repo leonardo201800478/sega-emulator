@@ -242,3 +242,17 @@ Após fixar a revisão upstream e validar o manifesto SHA-256, a auditoria difer
 - **DD:** LD B,(IX+d), complementando LD IX,nn com leitura indexada.
 
 Os vetores adicionais seguem no mesmo commit upstream imutável e cada arquivo tem tamanho e SHA-256 fixados no manifesto. Esta etapa amplia a amostragem por família, mas **não equivale à cobertura integral dos 256 opcodes de cada espaço**; também não compara os traços de barramento ciclo a ciclo. O estado `p` deixou de ser motivo de exclusão: o executor carrega e compara o latch, incluindo o erratum de INT mascarável.
+
+
+## Ordem de execução permanente (2026-10-28)
+
+Este plano deve seguir a [Política permanente de desenvolvimento, fidelidade e entrega](development-and-validation-policy.md), sem recomeçar trabalho validado:
+
+1. Confirmar HEAD/PR/workflows atuais e reler a CPU Rust SMS, os testes independentes e a matriz publicada.
+2. Atualizar a matriz de lacunas distinguindo implementação, teste de referência e validação efetivamente executada.
+3. Completar as lacunas funcionais em fatias compiláveis; executar testes rápidos por fatia.
+4. Após cada grupo de funcionalidades, executar validação abrangente curta, corrigir divergências e repetir regressões.
+5. Executar os testes longos e registrar PASS/FAIL/BLOCKED/NOT RUN antes de liberar o componente.
+6. Continuar para o próximo componente do SMS. A campanha completa de temporização ciclo a ciclo ocorrerá quando CPU, memória/barramento, I/O, VDP, PSG e scheduler estiverem integrados e funcionais.
+
+Não adiar regressões baratas nem ignorar falhas conhecidas. Não declarar completude por mera cobertura de decoder, nem precisão ciclo a ciclo por T-states agregados. Preparar desde já os contratos de eventos temporais necessários.

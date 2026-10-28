@@ -84,3 +84,18 @@ Ao concluir uma alteração:
 Informe objetivo, arquivos alterados, branch/PR e commits com links, testes realmente executados e resultados, checks CI do commit, limitações, validações não executadas e próximo passo. Nunca diga que arquivos foram alterados, testes executados ou merge realizado sem evidências.
 
 Se o usuário disser “prossiga”, continue do último estado confirmado sem reiniciar a análise nem ampliar o escopo automaticamente.
+
+
+## Política permanente obrigatória — implementação, validação e entrega
+
+Leia também [Política permanente de desenvolvimento, fidelidade e entrega](docs/development-and-validation-policy.md). Ela é normativa para todas as tarefas, não apenas para o Z80.
+
+- Em cada componente, siga: inventário do HEAD atual → implementação das lacunas reais → testes rápidos por fatia → validação abrangente curta → testes longos → próximo componente. A campanha completa de temporização ciclo a ciclo fica para a integração da máquina SMS completa, mas os contratos temporais necessários devem ser preparados desde o início.
+- O objetivo é a máxima fidelidade demonstrável, não apenas compilar ou reconhecer opcodes. Separar IMPLEMENTED, QUICK_PASS, SHORT_PASS, LONG_PASS, INTEGRATION_PENDING e TEMPORAL_PASS; não promover estado sem evidência.
+- Use no máximo três agentes de IA simultâneos, com funções distintas. Jobs do GitHub Actions são validadores automatizados, não agentes de IA.
+- Consulte documentação técnica oficial atual na web e código de emuladores abertos apenas para estudar lógica e arquitetura. Não copie código/testes/assets sem análise explícita de licença, procedência e compatibilidade; prefira implementação independente.
+- Rust nativo é obrigatório para todo runtime de emulação. Python fica para Qt/PySide6, integração, ferramentas, testes, auditorias e automação.
+- Avalie Vulkan/D3D11/D3D12, WASAPI, SDL3, XInput e APIs de host conforme necessidade e métricas reais de latência/compatibilidade; não introduza todas por padrão nem invoque APIs de host por instrução de CPU.
+- Mantenha GUI moderna, diagnósticos e logs úteis, com instrumentação seletiva e sem registrar ROMs comerciais.
+- Para mudanças que afetem execução de jogos, o merge em `main` exige checks aplicáveis no SHA candidato e evidência in-game reproduzível. Se o teste depender do mantenedor e não puder ser executado, marque BLOCKED/PENDING; não declare sucesso.
+- Use branch e PR para mudanças não triviais. Não publique diretamente em `main`; faça merge apenas após autorização e gates aplicáveis.

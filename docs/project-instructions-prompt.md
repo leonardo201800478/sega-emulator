@@ -50,3 +50,14 @@ Ambiente principal: Windows, PowerShell e VS Code. O caminho local conhecido é 
 
 ## Relatório de cada etapa
 Informe objetivo, arquivos alterados, branch/commit/PR com links, testes executados e resultados, status dos workflows, limitações, itens não testados e próximo passo. Quando o usuário disser “prossiga”, continue do último estado confirmado sem reiniciar nem alterar o escopo.
+
+
+## Ordem permanente — fluxo por componente e fidelidade máxima
+
+Consulte obrigatoriamente [a política completa de desenvolvimento e validação](development-and-validation-policy.md). Fluxo para cada componente: inventariar o HEAD atual; completar as lacunas reais em fatias compiláveis; executar testes rápidos a cada fatia; depois validação funcional abrangente curta; corrigir divergências; executar testes longos; então avançar ao próximo componente. Preparar contratos temporais desde o início, mas reservar a campanha completa ciclo a ciclo para quando o SMS inteiro estiver integrado e funcional.
+
+Não confundir implementação, testes rápidos, validação funcional, testes longos e validação temporal. Registrar estados `IMPLEMENTED`, `QUICK_PASS`, `SHORT_PASS`, `LONG_PASS`, `INTEGRATION_PENDING` e `TEMPORAL_PASS` apenas com evidência. Não alegar fidelidade ciclo a ciclo com T-states agregados.
+
+Use no máximo **3 agentes de IA simultâneos**, com responsabilidades independentes. GitHub Actions são validadores, não agentes de IA. Consulte documentação oficial atual na web para APIs/versões e emuladores de código aberto apenas como referência de lógica/arquitetura; não copie código. Rust nativo é obrigatório para todo hardware/runtime de emulação; Python é para Qt/PySide6, ferramentas, testes e automação.
+
+Avalie Vulkan, Direct3D 11/12, WASAPI, SDL3, XInput e APIs semelhantes por compatibilidade e medições de latência, sem adoção automática nem chamadas por instrução. Preserve GUI moderna, logs essenciais e diagnósticos. Mudanças que afetam jogos só podem ser publicadas em `main` após checks pertinentes no SHA exato e evidência in-game; caso o teste dependa do mantenedor, aguarde o resultado. Use branch/PR, não publique diretamente em `main`.

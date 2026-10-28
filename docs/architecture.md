@@ -102,3 +102,16 @@ Próxima tarefa técnica: validação diferencial da CPU Z80 contra uma suíte d
 ## Fidelidade de áudio e reutilização do PSG
 
 O modelo SN76489AN do SG-1000 tem um roadmap dedicado que separa lógica digital, reamostragem anti-aliasing e resposta analógica, além de registrar as diferenças necessárias para futuras variantes Master System, Game Gear e Mega Drive: [Roadmap de fidelidade do PSG e reutilização de hardware Sega](architecture/psg-fidelity-roadmap.md).
+
+
+## Fluxo permanente de implementação e validação
+
+O procedimento obrigatório para cada componente está definido em [Política permanente de desenvolvimento, fidelidade e entrega](development-and-validation-policy.md). Resumo:
+
+1. Inventariar código, contratos, testes, documentação e SHA atual; não duplicar trabalho concluído.
+2. Implementar as lacunas reais em Rust, em fatias pequenas e compiláveis, com fidelidade máxima sustentada por evidências.
+3. Executar testes rápidos por fatia, validação funcional abrangente curta e depois testes longos, corrigindo divergências entre as fases.
+4. Só então avançar ao próximo componente.
+5. Preparar desde o início contratos de tempo e eventos de barramento, mas reservar a campanha completa de temporização ciclo a ciclo para a integração da máquina SMS completa e funcional.
+
+A implementação, a validação funcional e a validação temporal são estados separados. Uma CPU que executa todos os opcodes ou retorna T-states nominais não é, por isso, semanticamente exaustiva nem ciclo a ciclo. O projeto usa no máximo três agentes de IA simultâneos; CI continua sendo validação automatizada independente. Todo runtime de hardware ativo é Rust; Python serve ao frontend Qt/PySide6 e à infraestrutura de testes/ferramentas.
