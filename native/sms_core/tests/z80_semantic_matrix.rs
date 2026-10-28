@@ -51,7 +51,7 @@ fn is_assigned_ed(opcode: u8) -> bool {
                     | 0x6E | 0x6F | 0x70 | 0x71 | 0x72 | 0x73 | 0x74 | 0x75 | 0x76
                     | 0x77 | 0x78 | 0x79 | 0x7A | 0x7B | 0x7C | 0x7D | 0x7E | 0x7F
             )
-    ) && opcode != 0x77 || matches!(
+    ) && opcode != 0x77 && opcode != 0x7F || matches!(
         opcode,
         0xA0 | 0xA1 | 0xA2 | 0xA3 | 0xA8 | 0xA9 | 0xAA | 0xAB | 0xB0 | 0xB1
             | 0xB2 | 0xB3 | 0xB8 | 0xB9 | 0xBA | 0xBB
@@ -86,7 +86,9 @@ struct FlatBus {
 
 impl Default for FlatBus {
     fn default() -> Self {
-        Self { memory: vec![0; 0x1_0000].into_boxed_slice() }
+        Self {
+            memory: vec![0; 0x1_0000].into_boxed_slice(),
+        }
     }
 }
 
@@ -138,7 +140,10 @@ fn every_encoding_in_every_opcode_space_has_an_explicit_classification() {
 
     assert_eq!(total, 7 * 256, "all opcode spaces must be enumerated");
     assert_eq!(ed_assigned, 78, "keep assigned ED encodings explicit");
-    assert_eq!(ed_fallback, 178, "unassigned ED bytes must be classified as fallback");
+    assert_eq!(
+        ed_fallback, 178,
+        "unassigned ED bytes must be classified as fallback"
+    );
 }
 
 #[test]
