@@ -2724,8 +2724,8 @@ mod tests {
         assert_eq!(ini.registers.b, 1);
         assert_eq!(ini.registers.hl(), 0xC101);
         assert_eq!(
-            ini.registers.f & (FLAG_Z | FLAG_N | FLAG_C),
-            FLAG_N | FLAG_C
+            ini.registers.f & (FLAG_Z | FLAG_N | FLAG_H | FLAG_C),
+            FLAG_N | FLAG_H | FLAG_C
         );
 
         let mut inir_bus = TestIoBus::default();
