@@ -428,8 +428,7 @@ impl Z80 {
                     self.registers.de()
                 };
                 bus.write_memory(address, self.registers.a);
-                self.wz = (u16::from(self.registers.a) << 8)
-                    | (address.wrapping_add(1) & 0x00FF);
+                self.wz = (u16::from(self.registers.a) << 8) | (address.wrapping_add(1) & 0x00FF);
                 7
             }
             0x0A | 0x1A => {
