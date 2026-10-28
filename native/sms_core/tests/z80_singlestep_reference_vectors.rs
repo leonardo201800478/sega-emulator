@@ -139,6 +139,29 @@ impl CpuBus for FlatBus {
     }
 }
 
+
+fn run_vector_with_memory(
+    name: &str,
+    initial: State,
+    expected: State,
+    bytes: &[(u16, u8)],
+    expected_writes: &[(u16, u8)],
+    tstates: u32,
+) {
+    let mut bus = FlatBus::default();
+    for &(address, value) in bytes {
+        bus.memory[usize::from(address)] = value;
+    }
+    let mut cpu = Z80::default();
+    initial.apply(&mut cpu);
+    assert_eq!(cpu.step(&mut bus), Ok(tstates), "{name}: T-states");
+    assert_eq!(cpu.total_tstates, u64::from(tstates), "{name}: accumulated T-states");
+    expected.assert_matches(&cpu, name);
+    for &(address, value) in expected_writes {
+        assert_eq!(bus.memory[usize::from(address)], value, "{name}: memory[{address:#06x}]");
+    }
+}
+
 fn run_vector(name: &str, initial: State, expected: State, bytes: &[(u16, u8)], tstates: u32) {
     let mut bus = FlatBus::default();
     for &(address, value) in bytes {
@@ -3197,5 +3220,181 @@ fn singlestep_expanded_opcode_fd_21_vector_0000() {
         },
         &[(34183, 253), (34184, 33), (34185, 56), (34186, 33)],
         14,
+    );
+}
+
+// Additional pinned SingleStepTests vectors: base control-flow, direct memory,
+// and block transfer/repeat instructions. Upstream fixture revision is MIT-licensed.
+
+#[test]
+fn singlestep_full_01_vector_0000() {
+    run_vector_with_memory(
+        "SingleStepTests 01 0000",
+        State {
+            pc: 58878, sp: 12870, a: 81, f: 243,
+            b: 100, c: 162, d: 165, e: 189,
+            h: 149, l: 112, i: 9, r: 86,
+            ix: 25547, iy: 30450, wz: 11589,
+            af_alt: 48331, bc_alt: 14039, de_alt: 64413, hl_alt: 36944,
+            im: 2, p: false, q: 0,
+            iff1: false, iff2: true, ei_delay: 1,
+        },
+        State {
+            pc: 58881, sp: 12870, a: 81, f: 243,
+            b: 16, c: 222, d: 165, e: 189,
+            h: 149, l: 112, i: 9, r: 87,
+            ix: 25547, iy: 30450, wz: 11589,
+            af_alt: 48331, bc_alt: 14039, de_alt: 64413, hl_alt: 36944,
+            im: 2, p: false, q: 0,
+            iff1: false, iff2: true, ei_delay: 0,
+        },
+        &[(58878, 1), (58879, 222), (58880, 16)],
+        &[(58878, 1), (58879, 222), (58880, 16)],
+        10,
+    );
+}
+
+
+#[test]
+fn singlestep_full_02_vector_0000() {
+    run_vector_with_memory(
+        "SingleStepTests 02 0000",
+        State {
+            pc: 17818, sp: 16123, a: 162, f: 158,
+            b: 138, c: 30, d: 250, e: 254,
+            h: 4, l: 181, i: 223, r: 15,
+            ix: 52317, iy: 54730, wz: 41029,
+            af_alt: 799, bc_alt: 25204, de_alt: 54176, hl_alt: 40653,
+            im: 0, p: false, q: 0,
+            iff1: true, iff2: true, ei_delay: 0,
+        },
+        State {
+            pc: 17819, sp: 16123, a: 162, f: 158,
+            b: 138, c: 30, d: 250, e: 254,
+            h: 4, l: 181, i: 223, r: 16,
+            ix: 52317, iy: 54730, wz: 41503,
+            af_alt: 799, bc_alt: 25204, de_alt: 54176, hl_alt: 40653,
+            im: 0, p: false, q: 0,
+            iff1: true, iff2: true, ei_delay: 0,
+        },
+        &[(17818, 2), (35358, 0)],
+        &[(17818, 2), (35358, 162)],
+        7,
+    );
+}
+
+
+#[test]
+fn singlestep_full_10_vector_0000() {
+    run_vector_with_memory(
+        "SingleStepTests 10 0000",
+        State {
+            pc: 60194, sp: 23090, a: 209, f: 83,
+            b: 116, c: 173, d: 202, e: 52,
+            h: 93, l: 19, i: 80, r: 6,
+            ix: 29118, iy: 15537, wz: 25331,
+            af_alt: 4012, bc_alt: 19524, de_alt: 36914, hl_alt: 1118,
+            im: 0, p: true, q: 0,
+            iff1: true, iff2: false, ei_delay: 0,
+        },
+        State {
+            pc: 60134, sp: 23090, a: 209, f: 83,
+            b: 115, c: 173, d: 202, e: 52,
+            h: 93, l: 19, i: 80, r: 7,
+            ix: 29118, iy: 15537, wz: 60134,
+            af_alt: 4012, bc_alt: 19524, de_alt: 36914, hl_alt: 1118,
+            im: 0, p: false, q: 0,
+            iff1: true, iff2: false, ei_delay: 0,
+        },
+        &[(60194, 16), (60195, 194)],
+        &[(60194, 16), (60195, 194)],
+        13,
+    );
+}
+
+
+#[test]
+fn singlestep_full_18_vector_0000() {
+    run_vector_with_memory(
+        "SingleStepTests 18 0000",
+        State {
+            pc: 24335, sp: 62307, a: 55, f: 105,
+            b: 96, c: 251, d: 252, e: 147,
+            h: 160, l: 108, i: 236, r: 21,
+            ix: 51617, iy: 49375, wz: 47658,
+            af_alt: 48678, bc_alt: 18572, de_alt: 24070, hl_alt: 39501,
+            im: 2, p: false, q: 0,
+            iff1: true, iff2: false, ei_delay: 0,
+        },
+        State {
+            pc: 24390, sp: 62307, a: 55, f: 105,
+            b: 96, c: 251, d: 252, e: 147,
+            h: 160, l: 108, i: 236, r: 22,
+            ix: 51617, iy: 49375, wz: 24390,
+            af_alt: 48678, bc_alt: 18572, de_alt: 24070, hl_alt: 39501,
+            im: 2, p: false, q: 0,
+            iff1: true, iff2: false, ei_delay: 0,
+        },
+        &[(24335, 24), (24336, 53)],
+        &[(24335, 24), (24336, 53)],
+        12,
+    );
+}
+
+
+#[test]
+fn singlestep_full_20_vector_0000() {
+    run_vector_with_memory(
+        "SingleStepTests 20 0000",
+        State {
+            pc: 51803, sp: 46840, a: 202, f: 39,
+            b: 82, c: 233, d: 63, e: 156,
+            h: 15, l: 171, i: 95, r: 103,
+            ix: 51562, iy: 15142, wz: 32654,
+            af_alt: 32213, bc_alt: 44686, de_alt: 62046, hl_alt: 9804,
+            im: 2, p: false, q: 39,
+            iff1: false, iff2: false, ei_delay: 1,
+        },
+        State {
+            pc: 51781, sp: 46840, a: 202, f: 39,
+            b: 82, c: 233, d: 63, e: 156,
+            h: 15, l: 171, i: 95, r: 104,
+            ix: 51562, iy: 15142, wz: 51781,
+            af_alt: 32213, bc_alt: 44686, de_alt: 62046, hl_alt: 9804,
+            im: 2, p: false, q: 0,
+            iff1: false, iff2: false, ei_delay: 0,
+        },
+        &[(51803, 32), (51804, 232)],
+        &[(51803, 32), (51804, 232)],
+        12,
+    );
+}
+
+
+#[test]
+fn singlestep_full_32_vector_0000() {
+    run_vector_with_memory(
+        "SingleStepTests 32 0000",
+        State {
+            pc: 44256, sp: 31253, a: 151, f: 197,
+            b: 56, c: 238, d: 87, e: 143,
+            h: 152, l: 254, i: 159, r: 25,
+            ix: 53035, iy: 28568, wz: 9526,
+            af_alt: 23868, bc_alt: 60257, de_alt: 37320, hl_alt: 51898,
+            im: 0, p: true, q: 197,
+            iff1: true, iff2: false, ei_delay: 1,
+        },
+        State {
+            pc: 44259, sp: 31253, a: 151, f: 197,
+            b: 56, c: 238, d: 87, e: 143,
+            h: 152, l: 254, i: 159, r: 26,
+            ix: 53035, iy: 28568, wz: 38790,
+            af_alt: 23868, bc_alt: 60257, de_alt: 37320, hl_alt: 51898,
+            im: 0, p: false, q: 0,
+            iff1: true, iff2: false, ei_delay: 0,
+        },
+        &[(44256, 50), (44257, 133), (44258, 200), (51333, 0)],
+        &[(44256, 50), (44257, 133), (44258, 200), (51333, 151)],
+        13,
     );
 }
