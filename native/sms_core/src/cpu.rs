@@ -2879,4 +2879,83 @@ mod tests {
         assert_eq!(cpdr.registers.bc(), 1);
         assert_eq!(cpdr.registers.f & FLAG_Z, FLAG_Z);
     }
+
+
+    #[test]
+    fn ed_adc_sbc_hl_decode_all_four_register_pairs() {
+        for (opcode, expected) in [
+            (0x4A, 0x1001),
+            (0x5A, 0x1002),
+            (0x6A, 0x2000),
+            (0x7A, 0x1004),
+            (0x42, 0x0FFF),
+            (0x52, 0x0FFE),
+            (0x62, 0x0000),
+            (0x72, 0x0FFC),
+        ] {
+            let mut bus = TestBus([0; 0x10000]);
+            bus.0[..2].copy_from_slice(&[0xED, opcode]);
+            let mut cpu = Z80::default();
+            cpu.registers.set_bc(1);
+            cpu.registers.set_de(2);
+            cpu.registers.set_hl(0x1000);
+            cpu.registers.sp = 4;
+            assert_eq!(cpu.step(&mut bus), Ok(15), "ED {opcode:02X}");
+            assert_eq!(cpu.registers.hl(), expected, "ED {opcode:02X}");
+        }
+    }
+
+    #[test]
+    fn ed_decrement_block_io_variants_update_hl_and_ports() {
+        let mut ind_bus = TestIoBus::default();
+        ind_bus.memory[..2].copy_from_slice(&[0xED, 0xAA]);
+        ind_bus.port_value = 0x80;
+        let mut ind = Z80::default();
+        ind.registers.set_bc(0x0205);
+        ind.registers.set_hl(0xC100);
+        assert_eq!(ind.step(&mut ind_bus), Ok(16));
+        assert_eq!(ind_bus.port_reads, vec![0x0205]);
+        assert_eq!(ind_bus.memory[0xC100], 0x80);
+        assert_eq!(ind.registers.b, 1);
+        assert_eq!(ind.registers.hl(), 0xC0FF);
+        assert_eq!(ind.registers.pc, 2);
+
+        let mut indr_bus = TestIoBus::default();
+        indr_bus.memory[..2].copy_from_slice(&[0xED, 0xBA]);
+        indr_bus.port_value = 0x80;
+        let mut indr = Z80::default();
+        indr.registers.set_bc(0x0205);
+        indr.registers.set_hl(0xC100);
+        assert_eq!(indr.step(&mut indr_bus), Ok(21));
+        assert_eq!(indr_bus.port_reads, vec![0x0205]);
+        assert_eq!(indr_bus.memory[0xC100], 0x80);
+        assert_eq!(indr.registers.b, 1);
+        assert_eq!(indr.registers.hl(), 0xC0FF);
+        assert_eq!(indr.registers.pc, 0);
+
+        let mut outd_bus = TestIoBus::default();
+        outd_bus.memory[..2].copy_from_slice(&[0xED, 0xAB]);
+        outd_bus.memory[0xC100] = 0x5A;
+        let mut outd = Z80::default();
+        outd.registers.set_bc(0x0207);
+        outd.registers.set_hl(0xC100);
+        assert_eq!(outd.step(&mut outd_bus), Ok(16));
+        assert_eq!(outd_bus.port_writes, vec![(0x0107, 0x5A)]);
+        assert_eq!(outd.registers.b, 1);
+        assert_eq!(outd.registers.hl(), 0xC0FF);
+        assert_eq!(outd.registers.pc, 2);
+
+        let mut otdr_bus = TestIoBus::default();
+        otdr_bus.memory[..2].copy_from_slice(&[0xED, 0xBB]);
+        otdr_bus.memory[0xC100] = 0xA5;
+        let mut otdr = Z80::default();
+        otdr.registers.set_bc(0x0207);
+        otdr.registers.set_hl(0xC100);
+        assert_eq!(otdr.step(&mut otdr_bus), Ok(21));
+        assert_eq!(otdr_bus.port_writes, vec![(0x0107, 0xA5)]);
+        assert_eq!(otdr.registers.b, 1);
+        assert_eq!(otdr.registers.hl(), 0xC0FF);
+        assert_eq!(otdr.registers.pc, 0);
+    }
+
 }
