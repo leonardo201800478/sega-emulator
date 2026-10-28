@@ -199,3 +199,21 @@ A modelagem de ISA, registradores auxiliares, flags, prefixos, interrupções, n
 A branch de trabalho agora contém uma cópia independente de `alu.rs` e `cpu.rs` sob `native/sms_core/src`, exportada pela API pública do crate e conectada ao contrato neutro `sega-z80-bus`. O código SG-1000 não foi alterado. Foram incluídos os testes existentes da CPU copiados junto com o módulo, uma matriz de classificação de todos os opcodes base/prefixados e um teste adicional que percorre todos os 256 opcodes DDCB/FDCB para IX e IY. Um teste de integração executa instruções carregadas de um cartucho sintético e verifica leitura/escrita da RAM do SMS.
 
 **Limite:** esses testes demonstram cobertura de execução/classificação e integração básica, não correção integral de todas as flags, timings ou acessos de barramento. Os checks do GitHub Actions devem passar no SHA candidato antes de aceitar esta fatia. CPU, I/O real, VDP, PSG/FM e scheduler ainda não formam uma máquina SMS completa.
+
+
+### Validação da fatia Z80 — atualização em 2026-10-28
+
+SHA validado: `e5a86c58c689d2f309a99e837d8ef95abe699764` (branch da PR #143).
+
+- **PASS —** `cargo fmt --all -- --check` (workflow SMS Z80 Platform Validation).
+- **PASS —** `cargo clippy --workspace --all-targets --locked -- -D warnings`.
+- **PASS —** `cargo test --workspace --locked`.
+- **PASS —** workflow SMS Core Fast Validation: 52 testes unitários do crate SMS, 1 teste de integração do cartucho/RAM e 1 teste de referência exaustivo da ALU; sem falhas.
+- **PASS —** workflow CI geral no mesmo SHA.
+- **PASS —** teste de referência cobre ADD/ADC/SUB/SBC/CP/AND/OR/XOR para todos os 65.536 pares de operandos, incluindo carry/borrow onde aplicável. O oráculo usa equações separadas, mas ainda é um modelo algébrico interno, não uma captura direta de hardware.
+
+**Revisão semântica — resultado parcial:** os testes existentes cobrem grupos base/prefixados, flags de operações selecionadas, DAA, registrador R, WZ/Q em casos específicos, interrupções, prefixos indexados e timings nominais. A nova prova exaustiva valida as funções da ALU, não toda a integração de cada opcode nem os ciclos de barramento. O nível temporal continua **A (T-states nominais por instrução)**; não há alegação de precisão M-cycle/T-state.
+
+**Próxima auditoria independente:** integrar um runner pequeno e reprodutível para vetores públicos SingleStepTests/Z80, respeitando a licença MIT do conjunto e mantendo fixtures/versionamento rastreáveis. Começar por flags não documentadas, WZ/MEMPTR, Q, prefixos, estados finais e, separadamente, sequência de barramento. Não importar código de outro emulador para o runtime SMS. Esse trabalho é gate de uma futura declaração de conformidade da CPU, não deve ser confundido com a aprovação da fatia de integração desta PR.
+
+**Limite de plataforma:** os perfis e a capacidade FM permanecem configuração/modelagem; o crate SMS ainda não integra I/O, VDP, PSG/YM2413 ou scheduler e não é uma máquina completa executável.
