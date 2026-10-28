@@ -2259,26 +2259,19 @@ mod tests {
     // nominal-T-state oracle and guards the documented ED-NOP fallback.
     #[test]
     fn all_256_ed_encodings_match_nominal_cycle_vectors() {
-        const EXPECTED_TSTATES: [u8; 256] = [
-         8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,
-         8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,
-         8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,
-         8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,
-        12, 12, 15, 20,  8, 14,  8,  9, 12, 12, 15, 20,  8, 14,  8,  9,
-        12, 12, 15, 20,  8, 14,  8,  9, 12, 12, 15, 20,  8, 14,  8,  9,
-        12, 12, 15, 20,  8, 14,  8, 18, 12, 12, 15, 20,  8, 14,  8, 18,
-        12, 12, 15, 20,  8, 14,  8,  8, 12, 12, 15, 20,  8, 14,  8,  8,
-         8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,
-         8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,
-        16, 16, 16, 16,  8,  8,  8,  8, 16, 16, 16, 16,  8,  8,  8,  8,
-        16, 16, 16, 16,  8,  8,  8,  8, 16, 16, 16, 16,  8,  8,  8,  8,
-         8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,
-         8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,
-         8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,
-         8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8
-        ];
-
         for opcode in 0_u8..=u8::MAX {
+            let expected_tstates = match opcode {
+                0x40 | 0x48 | 0x50 | 0x58 | 0x60 | 0x68 | 0x70 | 0x78 | 0x41 | 0x49 | 0x51
+                | 0x59 | 0x61 | 0x69 | 0x71 | 0x79 => 12,
+                0x43 | 0x53 | 0x63 | 0x73 | 0x4B | 0x5B | 0x6B | 0x7B => 20,
+                0x4A | 0x5A | 0x6A | 0x7A | 0x42 | 0x52 | 0x62 | 0x72 => 15,
+                0x47 | 0x4F | 0x57 | 0x5F => 9,
+                0x45 | 0x4D | 0x55 | 0x5D | 0x65 | 0x6D | 0x75 | 0x7D => 14,
+                0x67 | 0x6F => 18,
+                0xA0 | 0xA8 | 0xB0 | 0xB8 | 0xA1 | 0xA9 | 0xB1 | 0xB9 | 0xA2 | 0xAA | 0xB2
+                | 0xBA | 0xA3 | 0xAB | 0xB3 | 0xBB => 16,
+                _ => 8,
+            };
             let mut bus = TestBus([0; 0x10000]);
             bus.0[0] = 0xED;
             bus.0[1] = opcode;
@@ -2306,12 +2299,12 @@ mod tests {
             let result = cpu.step(&mut bus);
             assert_eq!(
                 result,
-                Ok(u32::from(EXPECTED_TSTATES[usize::from(opcode)])),
+                Ok(expected_tstates),
                 "ED {opcode:02X}: unexpected result / nominal T-states"
             );
             assert_eq!(
                 cpu.total_tstates,
-                u64::from(EXPECTED_TSTATES[usize::from(opcode)]),
+                u64::from(expected_tstates),
                 "ED {opcode:02X}: total_tstates disagrees with returned duration"
             );
 
