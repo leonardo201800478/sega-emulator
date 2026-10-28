@@ -4,7 +4,7 @@
 
 - Repositório: `leonardo201800478/sega-emulator`
 - Base desta auditoria: `53db203732524e824e670073772cb4cb082937a9`
-- Corpus independente: [SingleStepTests/Z80](https://github.com/SingleStepTests/z80/tree/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7), commit fixado `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7`, licença MIT.
+- Corpus externo de referência: [SingleStepTests/Z80](https://github.com/SingleStepTests/z80/tree/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7), commit fixado `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7`, licença MIT. **Não é um oráculo independente de Ares**: o README upstream declara que os vetores foram criados traduzindo o núcleo Z80 do Ares e corrigindo alguns bugs.
 - Suíte de referência Rust: **162 vetores** — 108 vetores gerais em `z80_singlestep_reference_vectors.rs` e 54 vetores de I/O em bloco em `z80_ed_block_io_reference_vectors.rs` (16 da PR #184, 14 da PR #186 e 24 da PR #187). Os 16 novos vetores passaram sem falhas no SHA integrado `5f39196967a0603185d2dd886711682319f1e381`.
 - Este documento separa explicitamente **classificação/execução sem erro** de **correção semântica comparada a um oráculo**.
 
@@ -28,6 +28,10 @@
 - O código foi integrado pela PR #187 no SHA `c226ddfccd6961ecf63d8751bc9edf10d2465a9b`. Os workflows disparados no SHA de merge devem ser acompanhados separadamente; o resultado do candidato não deve ser confundido com um resultado pós-merge.
 - A cobertura de referência agora tem 162 vetores contabilizados (108 gerais + 16 iniciais + 14 de fronteira + 24 das demais instruções de I/O em bloco). A contagem descreve vetores versionados, não cobertura combinatória de todos os opcodes/estados.
 
+## Proveniência e independência do corpus
+
+O README do corpus SingleStepTests/Z80 no commit fixado informa que os vetores foram criados por tradução do núcleo Z80 do Ares, seguida de correções de bugs. Portanto, os vetores são externos ao repositório Sega Emulator e úteis para regressão/diferencial, mas **não contam como oráculo de implementação independente do Ares**. A linhagem comum reduz a força da evidência quando o comportamento comparado também veio do Ares. Fonte: [README no commit fixado](https://github.com/SingleStepTests/z80/blob/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7/README.MD).
+
 ## Níveis de evidência
 
 | Nível | O que o teste verifica | O que não prova |
@@ -39,7 +43,7 @@
 
 ## Matriz por espaço de opcode
 
-| Espaço | Classificação exercitada | Vetores semânticos independentes observados | Lacuna principal |
+| Espaço | Classificação exercitada | Vetores semânticos de referência observados | Lacuna principal |
 |---|---|---|---|
 | Base `00–FF` | Todos os 256 bytes passam pelo teste `every_primary_and_prefixed_encoding_is_classified_without_fallback_errors`. | NOP; loads; INC/DEC; aritmética; saltos relativos/absolutos/condicionais; CALL/RET/RST; pilha; troca de bancos; flags e `DAA`; loads indiretos; `LD (nn),A`; `EX (SP),HL`; `JP (HL)`; `LD SP,HL`; `DJNZ`. | A maioria dos 256 opcodes ainda não tem vários vetores por condição, limite e valor de entrada. |
 | `CB` | Os 256 segundos bytes são executados no teste de classificação. | `RLC B`, `RLC (HL)`, `BIT 7,(HL)`, `BIT 0,(HL)`, `RES 0,(HL)`. | Cobertura semântica esparsa para RLC/RRC/RL/RR/SLA/SRA/SLL/SRL, BIT, RES e SET em todos os destinos. |
