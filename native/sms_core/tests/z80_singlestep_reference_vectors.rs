@@ -433,8 +433,8 @@ fn singlestep_expanded_08_vector_0000() {
             im: 1,
             p: false,
             q: 0,
-            iff1: 1,
-            iff2: 0,
+            iff1: true,
+            iff2: false,
             ei_delay: 1,
         },
         State {
@@ -460,15 +460,14 @@ fn singlestep_expanded_08_vector_0000() {
             im: 1,
             p: false,
             q: 0,
-            iff1: 1,
-            iff2: 0,
+            iff1: true,
+            iff2: false,
             ei_delay: 0,
         },
         &[(16701, 8)],
         4,
     );
 }
-
 
 #[test]
 fn singlestep_expanded_27_vector_0000() {
@@ -497,8 +496,8 @@ fn singlestep_expanded_27_vector_0000() {
             im: 1,
             p: false,
             q: 78,
-            iff1: 1,
-            iff2: 0,
+            iff1: true,
+            iff2: false,
             ei_delay: 1,
         },
         State {
@@ -524,15 +523,14 @@ fn singlestep_expanded_27_vector_0000() {
             im: 1,
             p: false,
             q: 135,
-            iff1: 1,
-            iff2: 0,
+            iff1: true,
+            iff2: false,
             ei_delay: 0,
         },
         &[(15698, 39)],
         4,
     );
 }
-
 
 #[test]
 fn singlestep_expanded_37_vector_0000() {
@@ -561,8 +559,8 @@ fn singlestep_expanded_37_vector_0000() {
             im: 0,
             p: true,
             q: 0,
-            iff1: 0,
-            iff2: 1,
+            iff1: false,
+            iff2: true,
             ei_delay: 0,
         },
         State {
@@ -588,15 +586,14 @@ fn singlestep_expanded_37_vector_0000() {
             im: 0,
             p: false,
             q: 45,
-            iff1: 0,
-            iff2: 1,
+            iff1: false,
+            iff2: true,
             ei_delay: 0,
         },
         &[(17964, 55)],
         4,
     );
 }
-
 
 #[test]
 fn singlestep_expanded_80_vector_0000() {
@@ -625,8 +622,8 @@ fn singlestep_expanded_80_vector_0000() {
             im: 0,
             p: false,
             q: 0,
-            iff1: 0,
-            iff2: 1,
+            iff1: false,
+            iff2: true,
             ei_delay: 0,
         },
         State {
@@ -652,15 +649,14 @@ fn singlestep_expanded_80_vector_0000() {
             im: 0,
             p: false,
             q: 172,
-            iff1: 0,
-            iff2: 1,
+            iff1: false,
+            iff2: true,
             ei_delay: 0,
         },
         &[(51399, 128)],
         4,
     );
 }
-
 
 #[test]
 fn singlestep_expanded_c6_vector_0000() {
@@ -689,8 +685,8 @@ fn singlestep_expanded_c6_vector_0000() {
             im: 0,
             p: true,
             q: 0,
-            iff1: 0,
-            iff2: 0,
+            iff1: false,
+            iff2: false,
             ei_delay: 1,
         },
         State {
@@ -716,15 +712,14 @@ fn singlestep_expanded_c6_vector_0000() {
             im: 0,
             p: false,
             q: 5,
-            iff1: 0,
-            iff2: 0,
+            iff1: false,
+            iff2: false,
             ei_delay: 0,
         },
         &[(59846, 198), (59847, 145)],
         7,
     );
 }
-
 
 #[test]
 fn singlestep_expanded_dd_21_vector_0000() {
@@ -753,8 +748,8 @@ fn singlestep_expanded_dd_21_vector_0000() {
             im: 1,
             p: false,
             q: 0,
-            iff1: 1,
-            iff2: 1,
+            iff1: true,
+            iff2: true,
             ei_delay: 1,
         },
         State {
@@ -780,15 +775,14 @@ fn singlestep_expanded_dd_21_vector_0000() {
             im: 1,
             p: false,
             q: 0,
-            iff1: 1,
-            iff2: 1,
+            iff1: true,
+            iff2: true,
             ei_delay: 0,
         },
         &[(10017, 221), (10018, 33), (10019, 131), (10020, 191)],
         14,
     );
 }
-
 
 #[test]
 fn singlestep_expanded_ed_4a_vector_0000() {
@@ -817,8 +811,8 @@ fn singlestep_expanded_ed_4a_vector_0000() {
             im: 1,
             p: true,
             q: 0,
-            iff1: 0,
-            iff2: 0,
+            iff1: false,
+            iff2: false,
             ei_delay: 1,
         },
         State {
@@ -844,15 +838,14 @@ fn singlestep_expanded_ed_4a_vector_0000() {
             im: 1,
             p: false,
             q: 168,
-            iff1: 0,
-            iff2: 0,
+            iff1: false,
+            iff2: false,
             ei_delay: 0,
         },
         &[(43229, 237), (43230, 74)],
         15,
     );
 }
-
 
 #[test]
 fn singlestep_expanded_cb_7e_vector_0000() {
@@ -881,8 +874,8 @@ fn singlestep_expanded_cb_7e_vector_0000() {
             im: 0,
             p: true,
             q: 0,
-            iff1: 0,
-            iff2: 1,
+            iff1: false,
+            iff2: true,
             ei_delay: 1,
         },
         State {
@@ -908,8 +901,8 @@ fn singlestep_expanded_cb_7e_vector_0000() {
             im: 0,
             p: false,
             q: 92,
-            iff1: 0,
-            iff2: 1,
+            iff1: false,
+            iff2: true,
             ei_delay: 0,
         },
         &[(22449, 97), (22767, 203), (22768, 126)],
