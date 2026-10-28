@@ -369,3 +369,22 @@ fn cpdr_repeats_on_nonmatch_and_uses_repeat_pc_for_xy() {
     assert_eq!(cpu.registers.bc(), 0x0001);
     assert_eq!(cpu.registers.f, FLAG_S | FLAG_N | FLAG_PV | 0x28);
 }
+
+#[test]
+fn cpdr_with_zero_initial_bc_wraps_counter_and_repeats_on_nonmatch() {
+    let mut bus = FlatBus::default();
+    program(&mut bus, 0xB9);
+    bus.memory[0xFFFF] = 0x20;
+
+    let mut cpu = Z80::default();
+    cpu.registers.a = 0x10;
+    cpu.registers.set_hl(0xFFFF);
+    cpu.registers.set_bc(0x0000);
+
+    assert_eq!(cpu.step(&mut bus), Ok(21));
+    assert_eq!(cpu.registers.pc, 0x0000);
+    assert_eq!(cpu.wz, 0x0001);
+    assert_eq!(cpu.registers.hl(), 0xFFFE);
+    assert_eq!(cpu.registers.bc(), 0xFFFF);
+    assert_eq!(cpu.registers.f, FLAG_S | FLAG_N | FLAG_PV);
+}
