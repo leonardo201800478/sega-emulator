@@ -21,9 +21,9 @@ impl CpuBus for TestBus {
 #[test]
 fn indexed_cb_rotate_and_shift_fixed_vectors_cover_all_eight_operations() {
     // DD/FD CB 00 z: indexed memory rotate/shift operations, with z=6
-    // selecting memory only. Expected results and documented flags are fixed
-    // vectors, not outputs captured from another emulator. F3/F5 are checked
-    // from the result byte as observed Z80 behavior; this test does not claim
+    // selecting memory only. Expected results and flags are fixed reference
+    // vectors, not outputs captured from another emulator. SLL and F3/F5 rely
+    // on observed undocumented Z80 behavior; this test does not claim
     // independent differential or cycle-by-cycle bus validation.
     //
     // Fields: operation y, input byte, initial carry, result, expected F.
