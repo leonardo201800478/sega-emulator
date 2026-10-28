@@ -114,9 +114,6 @@ pub struct Z80 {
     step_depth: bool,
     pub halted: bool,
     pub total_tstates: u64,
-    /// PC of the outermost instruction step, used to avoid reporting incomplete
-    /// traces when an ED block opcode follows an ignored DD/FD prefix.
-    instruction_start_pc: u16,
 }
 
 impl Z80 {
@@ -141,7 +138,6 @@ impl Z80 {
         self.step_depth = false;
         self.halted = false;
         self.total_tstates = 0;
-        self.instruction_start_pc = 0;
     }
 
     /// Latch a non-maskable interrupt; it is serviced at the next step boundary.
@@ -225,7 +221,6 @@ impl Z80 {
         if self.step_depth {
             return self.step_inner(bus);
         }
-        self.instruction_start_pc = self.registers.pc;
         self.q_previous = self.q;
         self.q = 0;
         self.step_depth = true;
@@ -254,7 +249,8 @@ impl Z80 {
         }
 
         let address = self.registers.pc;
-        let opcode = if let Some(injected) = self.injected_opcode.take() {
+        let injected_opcode = self.injected_opcode.take();
+        let opcode = if let Some(injected) = injected_opcode {
             self.r = (self.r & 0x80) | (self.r.wrapping_add(1) & 0x7F);
             injected
         } else {
@@ -308,7 +304,7 @@ impl Z80 {
             }
             0xED => {
                 let extended_opcode = self.fetch_opcode(bus);
-                self.execute_ed(bus, extended_opcode)
+                self.execute_ed(bus, extended_opcode, injected_opcode.is_none())
             }
             0xD3 => {
                 let port_low = self.fetch8(bus);
@@ -1031,7 +1027,12 @@ impl Z80 {
 
     /// Execute ED-prefixed Z80 instructions. Unassigned ED encodings are
     /// documented as two-byte NOPs on the classic Z80.
-    fn execute_ed<B: CpuBus>(&mut self, bus: &mut B, opcode: u8) -> u32 {
+    fn execute_ed<B: CpuBus>(
+        &mut self,
+        bus: &mut B,
+        opcode: u8,
+        trace_unprefixed: bool,
+    ) -> u32 {
         match opcode {
             0x47 => {
                 self.i = self.registers.a;
@@ -1151,8 +1152,12 @@ impl Z80 {
                 self.set_szp_xy_flags_preserving_carry(self.registers.a);
                 18
             }
-            0xA0 | 0xA8 | 0xB0 | 0xB8 => self.execute_block_transfer(bus, opcode),
-            0xA1 | 0xA9 | 0xB1 | 0xB9 => self.execute_block_compare(bus, opcode),
+            0xA0 | 0xA8 | 0xB0 | 0xB8 => {
+                self.execute_block_transfer(bus, opcode, trace_unprefixed)
+            },
+            0xA1 | 0xA9 | 0xB1 | 0xB9 => {
+                self.execute_block_compare(bus, opcode, trace_unprefixed)
+            },
             0xA2 | 0xAA | 0xB2 | 0xBA | 0xA3 | 0xAB | 0xB3 | 0xBB => {
                 self.execute_block_io(bus, opcode)
             }
@@ -1234,14 +1239,18 @@ impl Z80 {
         });
     }
 
-    fn execute_block_transfer<B: CpuBus>(&mut self, bus: &mut B, opcode: u8) -> u32 {
+    fn execute_block_transfer<B: CpuBus>(
+        &mut self,
+        bus: &mut B,
+        opcode: u8,
+        trace_enabled: bool,
+    ) -> u32 {
         let direction = if opcode == 0xA8 || opcode == 0xB8 {
             -1_i16
         } else {
             1_i16
         };
         let instruction_pc = self.registers.pc.wrapping_sub(2);
-        let trace_enabled = self.instruction_start_pc == instruction_pc;
         if trace_enabled {
             self.emit_timing_event(
                 bus,
@@ -1324,14 +1333,18 @@ impl Z80 {
         }
     }
 
-    fn execute_block_compare<B: CpuBus>(&mut self, bus: &mut B, opcode: u8) -> u32 {
+    fn execute_block_compare<B: CpuBus>(
+        &mut self,
+        bus: &mut B,
+        opcode: u8,
+        trace_enabled: bool,
+    ) -> u32 {
         let direction = if opcode == 0xA9 || opcode == 0xB9 {
             -1_i16
         } else {
             1_i16
         };
         let instruction_pc = self.registers.pc.wrapping_sub(2);
-        let trace_enabled = self.instruction_start_pc == instruction_pc;
         if trace_enabled {
             self.emit_timing_event(
                 bus,
