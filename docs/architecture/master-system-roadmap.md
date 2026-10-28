@@ -187,3 +187,8 @@ Foi criado o crate `native/sms_core` e adicionado ao workspace Rust, sem depend�
 A revisão da referência [SMS Power — Memory Map](https://www.smspower.org/Development/MemoryMap) e [SMS Power — Mappers](https://www.smspower.org/Development/Mappers) encontrou um detalhe que precisava ser explícito no código: os registradores `$FFFC-$FFFF` sobrepõem o espelhamento da RAM. Escritas devem alcançar o registrador de mapper e a cópia de RAM; leituras nesses endereços retornam a cópia da RAM. O registrador `$FFFC` é o controle do mapper, enquanto `$FFFD-$FFFF` selecionam os bancos. O código foi atualizado para modelar a sobreposição e adicionou um teste de regressão.
 
 O teste de formatação inicial passou após a correção de sintaxe, mas a execução de Clippy revelou `clippy::chunks_exact_to_as_chunks` no helper de ROM sintética. O helper foi reescrito com fatias indexadas, e a correção do mapper e do lint foi publicada no SHA seguinte. Aguardando nova execução do CI; compilação/testes locais continuam **NOT RUN**.
+
+
+## Modelo completo do Z80 e perfis SMS
+
+A modelagem de ISA, registradores auxiliares, flags, prefixos, interrupções, níveis de fidelidade temporal, matriz de testes e perfis de plataforma (exportação americana, doméstico japonês com FM quando presente e Master System III brasileiro) está especificada em [Modelo Z80 para o Sega Master System](z80-sms-platform-model.md). Esse documento é um contrato de trabalho, não uma declaração de implementação concluída. A presença de FM deve ser estabelecida por variante física, não inferida exclusivamente pela região.
