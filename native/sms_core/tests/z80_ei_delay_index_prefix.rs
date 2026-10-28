@@ -50,3 +50,21 @@ fn ei_delay_expires_after_ignored_index_prefix_instruction_before_int_acceptance
     assert_eq!(cpu.total_tstates, 25);
     assert_eq!(cpu.int_pending, None);
 }
+
+#[test]
+fn djnz_wraps_pc_and_decrements_zero_to_ff_at_address_boundary() {
+    let mut bus = TestBus::default();
+    bus.0[0xFFFE..].copy_from_slice(&[0x10, 0xFE]); // DJNZ -2
+
+    let mut cpu = Z80::default();
+    cpu.registers.pc = 0xFFFE;
+    cpu.registers.b = 0x00;
+    cpu.registers.f = 0xD7;
+
+    assert_eq!(cpu.step(&mut bus), Ok(13));
+    assert_eq!(cpu.registers.b, 0xFF);
+    assert_eq!(cpu.registers.pc, 0xFFFE);
+    assert_eq!(cpu.registers.f, 0xD7, "DJNZ preserves flags");
+    assert_eq!(cpu.r, 1);
+    assert_eq!(cpu.total_tstates, 13);
+}
