@@ -304,7 +304,8 @@ impl Z80 {
             }
             0xED => {
                 let extended_opcode = self.fetch_opcode(bus);
-                self.execute_ed(bus, extended_opcode, injected_opcode.is_none())
+                let trace_enabled = injected_opcode.is_none() && bus.timing_trace_enabled();
+                self.execute_ed(bus, extended_opcode, trace_enabled)
             }
             0xD3 => {
                 let port_low = self.fetch8(bus);
@@ -1027,7 +1028,7 @@ impl Z80 {
 
     /// Execute ED-prefixed Z80 instructions. Unassigned ED encodings are
     /// documented as two-byte NOPs on the classic Z80.
-    fn execute_ed<B: CpuBus>(&mut self, bus: &mut B, opcode: u8, trace_unprefixed: bool) -> u32 {
+    fn execute_ed<B: CpuBus>(&mut self, bus: &mut B, opcode: u8, trace_enabled: bool) -> u32 {
         match opcode {
             0x47 => {
                 self.i = self.registers.a;
@@ -1147,8 +1148,8 @@ impl Z80 {
                 self.set_szp_xy_flags_preserving_carry(self.registers.a);
                 18
             }
-            0xA0 | 0xA8 | 0xB0 | 0xB8 => self.execute_block_transfer(bus, opcode, trace_unprefixed),
-            0xA1 | 0xA9 | 0xB1 | 0xB9 => self.execute_block_compare(bus, opcode, trace_unprefixed),
+            0xA0 | 0xA8 | 0xB0 | 0xB8 => self.execute_block_transfer(bus, opcode, trace_enabled),
+            0xA1 | 0xA9 | 0xB1 | 0xB9 => self.execute_block_compare(bus, opcode, trace_enabled),
             0xA2 | 0xAA | 0xB2 | 0xBA | 0xA3 | 0xAB | 0xB3 | 0xBB => {
                 self.execute_block_io(bus, opcode)
             }

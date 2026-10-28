@@ -25,6 +25,10 @@ impl CpuBus for TraceBus {
         self.memory[usize::from(address)] = value;
     }
 
+    fn timing_trace_enabled(&self) -> bool {
+        true
+    }
+
     fn observe_timing_event(&mut self, event: Z80BusEvent) {
         self.events.push(event);
     }

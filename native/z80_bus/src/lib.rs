@@ -82,6 +82,11 @@ pub trait CpuBus {
 
     fn write_port(&mut self, _port: u16, _value: u8) {}
 
+    /// Opt in to timing trace generation. False keeps the normal path allocation-free.
+    fn timing_trace_enabled(&self) -> bool {
+        false
+    }
+
     /// Observe an instrumented timing event. The default is allocation-free and
     /// has no effect on emulation; this hook is not yet emitted by every opcode.
     fn observe_timing_event(&mut self, _event: Z80BusEvent) {}
@@ -92,7 +97,23 @@ pub trait CpuBus {
 
 #[cfg(test)]
 mod tests {
-    use super::{Z80BusEvent, Z80BusEventKind};
+    use super::{CpuBus, Z80BusEvent, Z80BusEventKind};
+
+    struct PlainBus;
+
+    impl CpuBus for PlainBus {
+        fn read_memory(&mut self, _address: u16) -> u8 {
+            0
+        }
+
+        fn write_memory(&mut self, _address: u16, _value: u8) {}
+    }
+
+    #[test]
+    fn timing_trace_is_disabled_by_default() {
+        assert!(!PlainBus.timing_trace_enabled());
+    }
+
 
     #[test]
     fn event_end_tstate_matches_the_next_mcycle_boundary() {

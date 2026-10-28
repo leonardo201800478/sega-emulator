@@ -62,7 +62,7 @@ O trace de M-cycles não substitui as amostras por T-state quando o critério ex
 4. **Waits explícitos:** waits aumentam a duração e aparecem no trace; não podem ser ocultados dentro de um total final.
 5. **Interrupções como eventos temporais:** NMI, INT, acknowledge, fetches, refresh e acessos à pilha precisam de ordem observável e reproduzível.
 6. **Repetição correta:** LDIR/LDDR/CPIR/CPDR devem produzir traces por iteração, inclusive quando BC inicial é zero e sofre wrap para FFFF.
-7. **Instrumentação opcional:** a coleta de trace pode ser desativada no caminho normal, sem alterar estado arquitetural, contagem de ciclos ou comportamento emulado.
+7. **Instrumentação opcional:** a coleta de trace exige opt-in do barramento; por padrão não gera eventos nem amostras e não altera estado arquitetural, contagem de ciclos ou comportamento emulado.
 8. **Primeira divergência:** comparações devem apontar o primeiro T-state/evento divergente, não somente o hash final ou a duração total.
 
 ## 5. Plano de implementação incremental
