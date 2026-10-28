@@ -1,4 +1,4 @@
-//! Exhaustive semantic regressions for the register-target CB instruction space.
+//! Exhaustive semantic regressions for register and (HL) CB instruction targets.
 //!
 //! The expected values below are computed from the documented Z80 operation
 //! definitions, not from the production ALU helpers. They cover every byte
