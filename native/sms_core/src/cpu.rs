@@ -1418,7 +1418,6 @@ impl Z80 {
         }
     }
 
-
     fn execute_block_transfer<B: CpuBus>(
         &mut self,
         bus: &mut B,
@@ -1505,13 +1504,7 @@ impl Z80 {
                     duration_tstates: 5,
                 },
             );
-            Self::emit_memory_write_tstate_samples(
-                bus,
-                instruction_pc,
-                11,
-                destination,
-                value,
-            );
+            Self::emit_memory_write_tstate_samples(bus, instruction_pc, 11, destination, value);
         }
         self.registers
             .set_hl(address.wrapping_add_signed(direction));
