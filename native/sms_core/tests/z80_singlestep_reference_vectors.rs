@@ -3398,3 +3398,178 @@ fn singlestep_full_32_vector_0000() {
         13,
     );
 }
+
+// Indexed, bit-operation, and ED block instruction vectors.
+
+#[test]
+fn singlestep_full_ed_a0_vector_0000() {
+    run_vector_with_memory(
+        "SingleStepTests ed a0 0000",
+        State {
+            pc: 52793, sp: 2396, a: 74, f: 243,
+            b: 237, c: 207, d: 218, e: 67,
+            h: 231, l: 101, i: 162, r: 20,
+            ix: 30062, iy: 9194, wz: 21852,
+            af_alt: 40850, bc_alt: 36044, de_alt: 46518, hl_alt: 61744,
+            im: 0, p: false, q: 243,
+            iff1: true, iff2: true, ei_delay: 1,
+        },
+        State {
+            pc: 52795, sp: 2396, a: 74, f: 229,
+            b: 237, c: 206, d: 218, e: 68,
+            h: 231, l: 102, i: 162, r: 22,
+            ix: 30062, iy: 9194, wz: 21852,
+            af_alt: 40850, bc_alt: 36044, de_alt: 46518, hl_alt: 61744,
+            im: 0, p: false, q: 229,
+            iff1: true, iff2: true, ei_delay: 0,
+        },
+        &[(52793, 237), (52794, 160), (55875, 0), (59237, 232)],
+        &[(52793, 237), (52794, 160), (55875, 232), (59237, 232)],
+        16,
+    );
+}
+
+
+#[test]
+fn singlestep_full_ed_b0_vector_0000() {
+    run_vector_with_memory(
+        "SingleStepTests ed b0 0000",
+        State {
+            pc: 11557, sp: 4041, a: 178, f: 34,
+            b: 152, c: 234, d: 91, e: 84,
+            h: 208, l: 123, i: 116, r: 115,
+            ix: 3003, iy: 63854, wz: 45431,
+            af_alt: 22811, bc_alt: 42083, de_alt: 24379, hl_alt: 63981,
+            im: 2, p: true, q: 34,
+            iff1: true, iff2: false, ei_delay: 0,
+        },
+        State {
+            pc: 11557, sp: 4041, a: 178, f: 44,
+            b: 152, c: 233, d: 91, e: 85,
+            h: 208, l: 124, i: 116, r: 117,
+            ix: 3003, iy: 63854, wz: 11558,
+            af_alt: 22811, bc_alt: 42083, de_alt: 24379, hl_alt: 63981,
+            im: 2, p: false, q: 44,
+            iff1: true, iff2: false, ei_delay: 0,
+        },
+        &[(11557, 237), (11558, 176), (23380, 0), (53371, 137)],
+        &[(11557, 237), (11558, 176), (23380, 137), (53371, 137)],
+        21,
+    );
+}
+
+
+#[test]
+fn singlestep_full_dd_21_vector_0000() {
+    run_vector_with_memory(
+        "SingleStepTests dd 21 0000",
+        State {
+            pc: 10017, sp: 36761, a: 250, f: 127,
+            b: 150, c: 193, d: 17, e: 185,
+            h: 114, l: 72, i: 1, r: 31,
+            ix: 21557, iy: 55124, wz: 61761,
+            af_alt: 50243, bc_alt: 5300, de_alt: 55419, hl_alt: 59805,
+            im: 1, p: false, q: 0,
+            iff1: true, iff2: true, ei_delay: 1,
+        },
+        State {
+            pc: 10021, sp: 36761, a: 250, f: 127,
+            b: 150, c: 193, d: 17, e: 185,
+            h: 114, l: 72, i: 1, r: 33,
+            ix: 49027, iy: 55124, wz: 61761,
+            af_alt: 50243, bc_alt: 5300, de_alt: 55419, hl_alt: 59805,
+            im: 1, p: false, q: 0,
+            iff1: true, iff2: true, ei_delay: 0,
+        },
+        &[(10017, 221), (10018, 33), (10019, 131), (10020, 191)],
+        &[(10017, 221), (10018, 33), (10019, 131), (10020, 191)],
+        14,
+    );
+}
+
+
+#[test]
+fn singlestep_full_fd_21_vector_0000() {
+    run_vector_with_memory(
+        "SingleStepTests fd 21 0000",
+        State {
+            pc: 34183, sp: 302, a: 161, f: 112,
+            b: 222, c: 19, d: 88, e: 209,
+            h: 133, l: 176, i: 141, r: 52,
+            ix: 34704, iy: 22859, wz: 61920,
+            af_alt: 60349, bc_alt: 3274, de_alt: 54911, hl_alt: 56768,
+            im: 2, p: true, q: 112,
+            iff1: false, iff2: false, ei_delay: 0,
+        },
+        State {
+            pc: 34187, sp: 302, a: 161, f: 112,
+            b: 222, c: 19, d: 88, e: 209,
+            h: 133, l: 176, i: 141, r: 54,
+            ix: 34704, iy: 8504, wz: 61920,
+            af_alt: 60349, bc_alt: 3274, de_alt: 54911, hl_alt: 56768,
+            im: 2, p: false, q: 0,
+            iff1: false, iff2: false, ei_delay: 0,
+        },
+        &[(34183, 253), (34184, 33), (34185, 56), (34186, 33)],
+        &[(34183, 253), (34184, 33), (34185, 56), (34186, 33)],
+        14,
+    );
+}
+
+
+#[test]
+fn singlestep_full_cb_06_vector_0000() {
+    run_vector_with_memory(
+        "SingleStepTests cb 06 0000",
+        State {
+            pc: 55186, sp: 8975, a: 32, f: 108,
+            b: 197, c: 214, d: 98, e: 106,
+            h: 140, l: 155, i: 46, r: 16,
+            ix: 55033, iy: 50548, wz: 46301,
+            af_alt: 64022, bc_alt: 22006, de_alt: 59909, hl_alt: 13657,
+            im: 2, p: true, q: 0,
+            iff1: true, iff2: true, ei_delay: 0,
+        },
+        State {
+            pc: 55188, sp: 8975, a: 32, f: 40,
+            b: 197, c: 214, d: 98, e: 106,
+            h: 140, l: 155, i: 46, r: 18,
+            ix: 55033, iy: 50548, wz: 46301,
+            af_alt: 64022, bc_alt: 22006, de_alt: 59909, hl_alt: 13657,
+            im: 2, p: false, q: 40,
+            iff1: true, iff2: true, ei_delay: 0,
+        },
+        &[(35995, 21), (55186, 203), (55187, 6)],
+        &[(35995, 42), (55186, 203), (55187, 6)],
+        15,
+    );
+}
+
+
+#[test]
+fn singlestep_full_cb_c6_vector_0000() {
+    run_vector_with_memory(
+        "SingleStepTests cb c6 0000",
+        State {
+            pc: 17742, sp: 2941, a: 175, f: 212,
+            b: 219, c: 182, d: 206, e: 107,
+            h: 162, l: 184, i: 29, r: 79,
+            ix: 38367, iy: 23919, wz: 8403,
+            af_alt: 65315, bc_alt: 7912, de_alt: 17163, hl_alt: 51313,
+            im: 1, p: false, q: 212,
+            iff1: true, iff2: false, ei_delay: 1,
+        },
+        State {
+            pc: 17744, sp: 2941, a: 175, f: 212,
+            b: 219, c: 182, d: 206, e: 107,
+            h: 162, l: 184, i: 29, r: 81,
+            ix: 38367, iy: 23919, wz: 8403,
+            af_alt: 65315, bc_alt: 7912, de_alt: 17163, hl_alt: 51313,
+            im: 1, p: false, q: 0,
+            iff1: true, iff2: false, ei_delay: 0,
+        },
+        &[(17742, 203), (17743, 198), (41656, 179)],
+        &[(17742, 203), (17743, 198), (41656, 179)],
+        15,
+    );
+}
