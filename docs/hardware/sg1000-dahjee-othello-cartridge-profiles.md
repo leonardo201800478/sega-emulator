@@ -43,6 +43,13 @@ The Othello map remains a separate implementation profile; its successful manual
 - The Castle (Japan) remains a separate 8 KiB cartridge-RAM profile at 8000h–BFFFh.
 - Unknown ROMs retain the standard SG-1000 memory profile.
 
+## Integration and milestone record
+
+- Final Type-A RAM-map fix integrated into `main` by [PR #141](https://github.com/leonardo201800478/sega-emulator/pull/141), merge commit `f51c0fac8dfd850a761e65de48709a2e7002d11d`.
+- Investigation issue [#136](https://github.com/leonardo201800478/sega-emulator/issues/136) closed as completed.
+- Maintainer-reported manual functional result: PASS 8/8 — King's Valley (Taiwan), Knightmare (Taiwan), The Legend of Kage (Taiwan), Othello (Japan), Pippols (Taiwan), Star Soldier (Taiwan), Tank Battalion (Taiwan), and TwinBee (Taiwan).
+- The maintainer reports other previously working SG-1000 games continue to work as before. This is a report from the maintainer's test environment, not a full catalog sweep.
+
 ## Validation status
 
 - [x] Profile selection tests cover the known DahJee/Jumbo Type-A CRCs.
@@ -57,4 +64,4 @@ The Othello map remains a separate implementation profile; its successful manual
 - [ ] Differential comparison against Genesis Plus GX/MAME or Ares: NOT RUN.
 - [ ] Python Ruff, compileall, and pip check acceptance commands: NOT RUN in this local validation session.
 
-The manual functional result is based on the maintainer's local testing; the supplied session log records eight ROM-load events and confirms `rust_native_machine` as the effective runtime. It is not an independently reproduced differential test. No commercial ROMs are stored in the repository.
+The manual functional result is based on the maintainer's local testing; the supplied session log records eight ROM-load events and confirms `rust_native_machine` as the effective runtime. It is not an independently reproduced differential test. The merge commit's GitHub Actions runs were not confirmed in the available query. No commercial ROMs are stored in the repository.

@@ -2,6 +2,28 @@
 
 Projeto de emulação de alta precisão com hardware ativo implementado em Rust. Python na aplicação fica restrito à interface Qt, carregamento de ROMs/perfis e integração fina com o runtime nativo; ferramentas e testes são infraestrutura, não um runtime de emulação. O primeiro alvo é o Sega SG-1000.
 
+## Marco SG-1000 — concluído no escopo funcional validado (2026-10-28)
+
+A correção final do mapeamento de RAM dos cartuchos DahJee/Jumbo Type A foi integrada à `main` pela [PR #141](https://github.com/leonardo201800478/sega-emulator/pull/141), no commit de merge `f51c0fac8dfd850a761e65de48709a2e7002d11d`. O issue de investigação [#136](https://github.com/leonardo201800478/sega-emulator/issues/136) foi encerrado como concluído.
+
+**Compatibilidade funcional manual — PASS, conforme relato do mantenedor:**
+- King's Valley (Taiwan)
+- Knightmare (Taiwan)
+- The Legend of Kage (Taiwan)
+- Othello (Japan)
+- Pippols (Taiwan)
+- Star Soldier (Taiwan)
+- Tank Battalion (Taiwan)
+- TwinBee (Taiwan)
+
+O mantenedor relata que os oito jogos executaram corretamente após a correção e que os demais jogos anteriormente funcionais continuam operando normalmente. A alteração mapeia 8 KiB de RAM externa Type A em `0x2000–0x3FFF`, preservando a RAM interna de 1 KiB em `0xC000–0xFFFF`; o perfil de Othello permanece separado.
+
+**Checks locais registrados na PR #141 — PASS:** build Release da extensão via Maturin, 114 testes Rust, 192 testes Python, `cargo fmt --all -- --check` e `cargo clippy --workspace --all-targets -- -D warnings`.
+
+**Limites da evidência:** testes diferenciais contra Genesis Plus GX/MAME/Ares e os checks `ruff check`, `ruff format --check`, `compileall` e `pip check` ficaram **NOT RUN** nesta validação. A consulta das execuções de workflow para o commit de merge não retornou runs; CI para esse SHA está **NOT VERIFIED**. Este marco registra compatibilidade funcional observada manualmente, não compatibilidade universal, precisão ciclo a ciclo ou equivalência comprovada com hardware real. Nenhuma ROM comercial foi adicionada ao repositório.
+
+Detalhes técnicos e testes: [perfis de RAM DahJee/Jumbo e Othello](docs/hardware/sg1000-dahjee-othello-cartridge-profiles.md). O próximo marco é o Master System em Rust, mantendo as regressões SG-1000 como requisito.
+
 ## Estado atual
 
 - **Marco SG-1000:** CPU, memória, I/O, VDP TMS9918A, PSG SN76489AN, entrada e runtime da máquina estão integrados no fluxo da aplicação. A validação funcional alcançada é satisfatória para o primeiro marco, mas não equivale a temporização ciclo a ciclo nem certifica todas as ROMs.
