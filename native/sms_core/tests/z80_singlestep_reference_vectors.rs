@@ -5932,7 +5932,10 @@ fn singlestep_expanded_opcode_ed_b2_vector_0002() {
         },
         &[(33887, 237), (33888, 178), (47424, 0)],
         &[(33887, 237), (33888, 178), (47424, 188)],
-        PortEffects { initial: &[(45826, 188)], expected: &[] },
+        PortEffects {
+            initial: &[(45826, 188)],
+            expected: &[],
+        },
         21,
     );
 }
@@ -6125,7 +6128,10 @@ fn singlestep_repeat_opcode_ed_ba_vector_0000() {
         },
         &[(18294, 237), (18295, 186), (50359, 0)],
         &[(18294, 237), (18295, 186), (50359, 81)],
-        PortEffects { initial: &[(25094, 81)], expected: &[] },
+        PortEffects {
+            initial: &[(25094, 81)],
+            expected: &[],
+        },
         21,
     );
 }
@@ -6190,7 +6196,10 @@ fn singlestep_repeat_opcode_ed_b3_vector_0000() {
         },
         &[(24118, 237), (24119, 179), (63128, 29)],
         &[(24118, 237), (24119, 179), (63128, 29)],
-        PortEffects { initial: &[], expected: &[(18666, 29)] },
+        PortEffects {
+            initial: &[],
+            expected: &[(18666, 29)],
+        },
         21,
     );
 }
@@ -6255,7 +6264,10 @@ fn singlestep_repeat_opcode_ed_bb_vector_0000() {
         },
         &[(4700, 213), (56671, 237), (56672, 187)],
         &[(4700, 213), (56671, 237), (56672, 187)],
-        PortEffects { initial: &[], expected: &[(57504, 213)] },
+        PortEffects {
+            initial: &[],
+            expected: &[(57504, 213)],
+        },
         21,
     );
 }
