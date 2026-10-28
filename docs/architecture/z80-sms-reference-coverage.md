@@ -167,3 +167,10 @@ A auditoria semântica global da issue [#158](https://github.com/leonardo2018004
 - A revisão do inventário de testes confirmou que `native/sms_core/tests/z80_cb_exhaustive_semantics.rs` já exercita exaustivamente as 256 codificações CB por família/destino: rotate/shift para todos os valores e entradas de carry; BIT para todos os bits, valores e carry; RES/SET para todos os bits/valores e padrões de flags, tanto em registradores como em `(HL)`.
 - A matriz CSV foi atualizada nas 256 linhas `CB`, de `sparse_reference_vectors` para `exhaustive_internal_model`. Isso corrige uma divergência documental: a evidência não é apenas esparsa para CB.
 - O estado continua limitado: o teste usa um modelo matemático interno, não um oráculo independente de hardware; `TEMPORAL_PASS` não é declarado. A cobertura de ED, indexed-CB, prefixos e integração permanece sujeita às lacunas específicas já registradas.
+
+## Cobertura ampliada — indexed-CB rotate/shift (PR candidata, 2026-10-28)
+
+- A suíte `native/sms_core/tests/z80_indexed_cb_exhaustive_rotate_shift.rs` percorre os oito grupos rotate/shift do indexed-CB (RLC, RRC, RL, RR, SLA, SRA, SLL e SRL), todos os 256 valores de entrada, ambos os estados de carry e ambos os prefixos DD/FD, na forma somente memória (campo z=6): 8.192 execuções dirigidas.
+- Cada caso verifica resultado na memória, flags S/Z/H/PV/N/C e XY por fórmula de referência, PC, R, WZ, preservação de IX/IY e 23 T-states nominais. A fórmula de referência é independente dos helpers de produção, mas continua sendo um modelo derivado da definição da instrução, não um oráculo de hardware.
+- A matriz CSV reclassifica somente as 16 codificações de destino memória (8 operações por prefixo) para `exhaustive_internal_model`. Os destinos que também copiam o resultado para B/C/D/E/H/L/A continuam com cobertura por vetores fixos em teste separado; não são declarados exaustivos.
+- O teste não registra eventos de barramento ordenados por T-state; `TEMPORAL_PASS` permanece não declarado. Os resultados dos workflows serão associados ao SHA candidato após a execução.
