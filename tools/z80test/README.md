@@ -61,3 +61,5 @@ python tools/z80test/run_sms_z80test.py --work-dir path/to/work
 Use `--work-dir` to preserve fetched sources and generated artifacts for
 diagnosis. Do not commit generated binaries or commercial ROMs. Preserve
 upstream license and attribution if upstream material is ever incorporated.
+
+Third-party licensing and attribution for the adapted temporary print shim are recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
