@@ -13,7 +13,7 @@ fn szxy(value: u8) -> u8 {
 }
 
 fn even_parity(value: u8) -> bool {
-    value.count_ones() % 2 == 0
+    value.count_ones().is_multiple_of(2)
 }
 
 fn reference_add(lhs: u8, rhs: u8, carry: bool) -> (u8, u8) {
@@ -40,7 +40,7 @@ fn reference_sub(lhs: u8, rhs: u8, borrow: bool, compare: bool) -> (u8, u8) {
     let signed = i32::from(lhs as i8) - i32::from(rhs as i8) - borrow_i;
     let mut flags = (if compare { rhs & XY } else { result & XY })
         | (result & S)
-        | if result == 0 { Z } else { 0 }
+        | (if result == 0 { Z } else { 0 })
         | N;
     if u16::from(lhs & 0x0f) < u16::from(rhs & 0x0f) + borrow_i as u16 {
         flags |= H;
@@ -80,25 +80,45 @@ fn exhaustive_alu_results_and_flags_match_independent_arithmetic_model() {
         for rhs in 0_u8..=u8::MAX {
             let expected = reference_add(lhs, rhs, false);
             let actual = add8(lhs, rhs);
-            assert_eq!((actual.value, actual.flags), expected, "ADD lhs={lhs:#04x} rhs={rhs:#04x}");
+            assert_eq!(
+                (actual.value, actual.flags),
+                expected,
+                "ADD lhs={lhs:#04x} rhs={rhs:#04x}"
+            );
 
             for carry in [false, true] {
                 let expected = reference_add(lhs, rhs, carry);
                 let actual = adc8(lhs, rhs, carry);
-                assert_eq!((actual.value, actual.flags), expected, "ADC lhs={lhs:#04x} rhs={rhs:#04x} carry={carry}");
+                assert_eq!(
+                    (actual.value, actual.flags),
+                    expected,
+                    "ADC lhs={lhs:#04x} rhs={rhs:#04x} carry={carry}"
+                );
 
                 let expected = reference_sub(lhs, rhs, carry, false);
                 let actual = sbc8(lhs, rhs, carry);
-                assert_eq!((actual.value, actual.flags), expected, "SBC lhs={lhs:#04x} rhs={rhs:#04x} borrow={carry}");
+                assert_eq!(
+                    (actual.value, actual.flags),
+                    expected,
+                    "SBC lhs={lhs:#04x} rhs={rhs:#04x} borrow={carry}"
+                );
             }
 
             let expected = reference_sub(lhs, rhs, false, false);
             let actual = sub8(lhs, rhs);
-            assert_eq!((actual.value, actual.flags), expected, "SUB lhs={lhs:#04x} rhs={rhs:#04x}");
+            assert_eq!(
+                (actual.value, actual.flags),
+                expected,
+                "SUB lhs={lhs:#04x} rhs={rhs:#04x}"
+            );
 
             let expected = reference_sub(lhs, rhs, false, true);
             let actual = cp8(lhs, rhs);
-            assert_eq!((actual.value, actual.flags), expected, "CP lhs={lhs:#04x} rhs={rhs:#04x}");
+            assert_eq!(
+                (actual.value, actual.flags),
+                expected,
+                "CP lhs={lhs:#04x} rhs={rhs:#04x}"
+            );
 
             for operation in 0..3 {
                 let expected = reference_logic(lhs, rhs, operation);
@@ -108,7 +128,11 @@ fn exhaustive_alu_results_and_flags_match_independent_arithmetic_model() {
                     2 => or8(lhs, rhs),
                     _ => unreachable!(),
                 };
-                assert_eq!((actual.value, actual.flags), expected, "logic op={operation} lhs={lhs:#04x} rhs={rhs:#04x}");
+                assert_eq!(
+                    (actual.value, actual.flags),
+                    expected,
+                    "logic op={operation} lhs={lhs:#04x} rhs={rhs:#04x}"
+                );
             }
         }
     }
