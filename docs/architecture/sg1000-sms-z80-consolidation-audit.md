@@ -30,16 +30,29 @@ Os testes unitários do SMS já cobrem as áreas que aparecem no conjunto do SG-
 
 As duas diferenças rejeitadas são evidência de que copiar código do SG-1000 sem comparar com o oráculo pode introduzir regressões.
 
-## Validação observada no SHA inicial do candidato
+## Validação observada
 
-SHA inicial: `5184db70345bfcf9356bc16723893b2448774f37`.
+### SHA inicial com diferenças SG-1000 portadas sem auditoria
 
-- **PASS:** Rust formatting.
+SHA `5184db70345bfcf9356bc16723893b2448774f37`.
+
+- **PASS:** Rust formatting, Workspace Clippy e workflow de qualidade.
+- **FAIL:** testes do workspace e validação focada SMS por duas divergências nos vetores independentes: `08 0000` (Q) e `27 0000` (DAA).
+- Resultado: as duas alterações comportamentais foram revertidas; os vetores foram preservados como regressões.
+
+### Candidato corretivo com vetores ampliados
+
+SHA validado: `6f0fd7d81b1536bbfb5f8e36825591a2362711ae`.
+
+- **PASS:** `cargo fmt --all -- --check` via workflow Rust Formatting.
 - **PASS:** Workspace Clippy.
-- **PASS:** workflow de qualidade geral.
-- **FAIL:** testes de workspace e validação focada SMS, ambos por duas divergências nos vetores independentes: `08 0000` (Q) e `27 0000` (DAA).
-- **NOT RUN / pendente:** validação do novo commit corretivo, pois esses resultados pertencem ao SHA anterior.
-- **NOT PROVEN:** cobertura semântica completa do Z80 e precisão temporal ciclo a ciclo. Os testes de matriz atuais verificam estados selecionados e T-states agregados, não um trace temporal completo do barramento.
+- **PASS:** Workspace Rust tests.
+- **PASS:** SMS focused format, lint and tests.
+- **PASS:** workflow geral CI/quality.
+- A suíte de referência SingleStepTests passou com **57 testes aprovados e 1 ignorado**. O caso ignorado continua sendo `ED B1` (CPIR), devido a divergência de flags não documentadas ainda em investigação.
+- Foram acrescentados 10 vetores independentes para `DI`, `EI`, `IM 0/1/2`, `LD I,A`, `LD R,A`, `LD A,I`, `LD A,R` e `RETI`.
+- **SKIPPED:** revisão automática Sourcery, por limite de orçamento do serviço; isso não é aprovação nem falha de código.
+- **NOT PROVEN:** completude semântica do Z80 e precisão temporal ciclo a ciclo. Os vetores verificam estado arquitetural e T-states agregados, não trace temporal completo do barramento.
 
 ## Critérios para continuar a mescla
 
