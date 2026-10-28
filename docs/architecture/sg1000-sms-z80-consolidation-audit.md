@@ -40,19 +40,29 @@ SHA `5184db70345bfcf9356bc16723893b2448774f37`.
 - **FAIL:** testes do workspace e validação focada SMS por duas divergências nos vetores independentes: `08 0000` (Q) e `27 0000` (DAA).
 - Resultado: as duas alterações comportamentais foram revertidas; os vetores foram preservados como regressões.
 
-### Candidato corretivo com vetores ampliados
+### Consolidação e expansão de vetores
 
-SHA validado: `6f0fd7d81b1536bbfb5f8e36825591a2362711ae`.
+PR #160 foi integrada em `84dc09e0ba7b14153ad5f5b26809a072cb116faa`; PR #161 foi integrada em `160eba417b7852a81c89aaed260d137117da675b`.
 
-- **PASS:** `cargo fmt --all -- --check` via workflow Rust Formatting.
-- **PASS:** Workspace Clippy.
-- **PASS:** Workspace Rust tests.
-- **PASS:** SMS focused format, lint and tests.
-- **PASS:** workflow geral CI/quality.
-- A suíte de referência SingleStepTests passou com **57 testes aprovados e 1 ignorado**. O caso ignorado continua sendo `ED B1` (CPIR), devido a divergência de flags não documentadas ainda em investigação.
-- Foram acrescentados 10 vetores independentes para `DI`, `EI`, `IM 0/1/2`, `LD I,A`, `LD R,A`, `LD A,I`, `LD A,R` e `RETI`.
+No candidato da PR #160, SHA `6f0fd7d81b1536bbfb5f8e36825591a2362711ae`:
+- **PASS:** Rust formatting, Workspace Clippy, Workspace Rust tests, SMS focused format/lint/tests e workflow geral CI/quality.
+- A suíte de referência SingleStepTests passou com **57 testes aprovados e 1 ignorado**.
+- Foram acrescentados 10 vetores para `DI`, `EI`, `IM 0/1/2`, `LD I,A`, `LD R,A`, `LD A,I`, `LD A,R` e `RETI`.
+
+A PR #161 adicionou um helper que compara também os bytes finais de RAM e nove vetores de escrita/leitura de memória, pilha, troca em `(SP)`, `LDI` e store indexado. Eles revelaram duas falhas reais de WZ/MEMPTR no SMS:
+1. **`LD (nn),A` (`0x32`):** WZ deve combinar A no byte alto com o byte baixo do endereço seguinte. O valor anterior era apenas o endereço incrementado.
+2. **`EX (SP),HL` (`0xE3`):** WZ deve receber a palavra carregada da pilha e trocada com HL; a implementação deixava o WZ anterior.
+
+As duas correções foram aplicadas e os vetores passaram nos workflows da PR #161 antes da integração.
+
+Na PR #162, SHA candidato `3d0f5ee0197d9481104740c90c4889fd67f2cd8f`:
+- **PASS:** Rust formatting, Workspace Clippy, Workspace Rust tests, SMS focused format/lint/tests e workflow geral CI/quality.
+- A suíte de referência SingleStepTests passou com **76 testes aprovados e 1 ignorado**.
+- Foram acrescentados mais 10 vetores para `LD (BC),A`, `LD A,(BC)`, `LD (DE),A`, `LD A,(DE)`, `ADD HL,DE`, `LD A,(nn)`, `JP (HL)`, `LD SP,HL`, `EX DE,HL` e `DJNZ`.
+- O caso ignorado continua sendo `ED B1` (CPIR), devido à divergência de flags não documentadas em investigação.
 - **SKIPPED:** revisão automática Sourcery, por limite de orçamento do serviço; isso não é aprovação nem falha de código.
-- **NOT PROVEN:** completude semântica do Z80 e precisão temporal ciclo a ciclo. Os vetores verificam estado arquitetural e T-states agregados, não trace temporal completo do barramento.
+
+Esses resultados confirmam os checks nos SHAs candidatos informados, não a completude total da CPU. A suite verifica estado arquitetural, T-states agregados e os endereços de RAM explicitamente listados pelos vetores; não compara trace temporal completo do barramento.
 
 ## Critérios para continuar a mescla
 
