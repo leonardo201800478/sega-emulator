@@ -50,6 +50,24 @@ fn run_cb(opcode: u8, value: u8, flags: u8) -> (Z80, FlatBus, u32) {
     (cpu, bus, cycles)
 }
 
+fn run_cb_memory(opcode: u8, value: u8, flags: u8) -> (Z80, FlatBus, u32) {
+    let mut bus = FlatBus::default();
+    bus.memory[0] = 0xCB;
+    bus.memory[1] = opcode;
+    bus.memory[0x8000] = value;
+
+    let mut cpu = Z80::default();
+    cpu.registers.set_hl(0x8000);
+    cpu.registers.f = flags;
+    // BIT (HL) takes undocumented X/Y flags from the existing WZ high byte
+    // on the target NMOS-compatible behavior modeled by this core.
+    cpu.wz = 0xA800;
+    let cycles = cpu
+        .step(&mut bus)
+        .unwrap_or_else(|error| panic!("CB {opcode:02X} failed: {error:?}"));
+    (cpu, bus, cycles)
+}
+
 fn even_parity(value: u8) -> bool {
     value.count_ones().is_multiple_of(2)
 }
@@ -170,6 +188,113 @@ fn cb_res_and_set_register_b_are_exhaustive_and_preserve_all_flags() {
                     );
                     assert_eq!(cycles, 8, "CB {opcode:02X} register timing");
                     assert_eq!(cpu.registers.pc, 2, "CB {opcode:02X} PC");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn cb_rotate_and_shift_hl_memory_are_exhaustive_for_all_values_and_carry_inputs() {
+    for operation in 0_u8..8 {
+        for value in u8::MIN..=u8::MAX {
+            for carry_in in [false, true] {
+                let initial_flags = if carry_in { FLAG_C } else { 0 };
+                let opcode = (operation << 3) | 6; // target (HL)
+                let (cpu, bus, cycles) = run_cb_memory(opcode, value, initial_flags);
+                let (expected_value, carry_out) =
+                    rotate_shift_reference(operation, value, carry_in);
+
+                let mut expected_flags = expected_value & (FLAG_S | FLAG_XY);
+                if expected_value == 0 {
+                    expected_flags |= FLAG_Z;
+                }
+                if even_parity(expected_value) {
+                    expected_flags |= FLAG_PV;
+                }
+                if carry_out {
+                    expected_flags |= FLAG_C;
+                }
+
+                assert_eq!(
+                    bus.memory[0x8000], expected_value,
+                    "CB {opcode:02X}, (HL)={value:02X}, carry_in={carry_in}"
+                );
+                assert_eq!(
+                    cpu.registers.f, expected_flags,
+                    "CB {opcode:02X} flags, (HL)={value:02X}, carry_in={carry_in}"
+                );
+                assert_eq!(cycles, 15, "CB {opcode:02X} memory timing");
+                assert_eq!(cpu.registers.pc, 2, "CB {opcode:02X} PC");
+                assert_eq!(cpu.wz, 0xA800, "CB {opcode:02X} must preserve WZ");
+            }
+        }
+    }
+}
+
+#[test]
+fn cb_bit_hl_memory_is_exhaustive_for_every_bit_value_and_carry_input() {
+    for bit in 0_u8..8 {
+        for value in u8::MIN..=u8::MAX {
+            for carry_in in [false, true] {
+                let opcode = 0x40 | (bit << 3) | 6; // BIT bit,(HL)
+                let initial_flags = if carry_in { FLAG_C } else { 0 };
+                let (cpu, bus, cycles) = run_cb_memory(opcode, value, initial_flags);
+                let bit_clear = value & (1_u8 << bit) == 0;
+
+                let mut expected_flags = FLAG_H | (0xA8 & FLAG_XY);
+                if carry_in {
+                    expected_flags |= FLAG_C;
+                }
+                if bit_clear {
+                    expected_flags |= FLAG_Z | FLAG_PV;
+                }
+                if bit == 7 && !bit_clear {
+                    expected_flags |= FLAG_S;
+                }
+
+                assert_eq!(
+                    bus.memory[0x8000], value,
+                    "CB {opcode:02X} must not modify (HL)={value:02X}"
+                );
+                assert_eq!(
+                    cpu.registers.f, expected_flags,
+                    "CB {opcode:02X}, (HL)={value:02X}, carry_in={carry_in}"
+                );
+                assert_eq!(cycles, 12, "CB {opcode:02X} BIT memory timing");
+                assert_eq!(cpu.registers.pc, 2, "CB {opcode:02X} PC");
+                assert_eq!(cpu.wz, 0xA800, "CB {opcode:02X} must preserve WZ");
+            }
+        }
+    }
+}
+
+#[test]
+fn cb_res_and_set_hl_memory_are_exhaustive_and_preserve_all_flags() {
+    for group in [0x80_u8, 0xC0_u8] {
+        for bit in 0_u8..8 {
+            for value in u8::MIN..=u8::MAX {
+                for initial_flags in [0x00, 0xFF, 0xA5, 0x5A] {
+                    let opcode = group | (bit << 3) | 6; // RES/SET bit,(HL)
+                    let (cpu, bus, cycles) = run_cb_memory(opcode, value, initial_flags);
+                    let mask = 1_u8 << bit;
+                    let expected_value = if group == 0x80 {
+                        value & !mask
+                    } else {
+                        value | mask
+                    };
+
+                    assert_eq!(
+                        bus.memory[0x8000], expected_value,
+                        "CB {opcode:02X}, (HL)={value:02X}"
+                    );
+                    assert_eq!(
+                        cpu.registers.f, initial_flags,
+                        "CB {opcode:02X} must preserve F={initial_flags:02X}"
+                    );
+                    assert_eq!(cycles, 15, "CB {opcode:02X} memory timing");
+                    assert_eq!(cpu.registers.pc, 2, "CB {opcode:02X} PC");
+                    assert_eq!(cpu.wz, 0xA800, "CB {opcode:02X} must preserve WZ");
                 }
             }
         }
