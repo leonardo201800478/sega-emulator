@@ -61,7 +61,7 @@ Os números são os retornos agregados atuais do núcleo. Não representam um tr
 
 A suíte de referência `native/sms_core/tests/z80_singlestep_reference_vectors.rs` contém vetores fixos para todas as oito codificações: ED A0, A1, A8, A9, B0, B1, B8 e B9. Os dois vetores acrescentados nesta PR são `ED B8 0000` ([fonte fixada](https://github.com/SingleStepTests/z80/blob/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7/v1/ed%20b8.json)) e `ED B9 0000` ([fonte fixada](https://github.com/SingleStepTests/z80/blob/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7/v1/ed%20b9.json)). Há, portanto, pelo menos um estado externo por codificação, mas isso não é cobertura combinatória e o corpus não é independente do Ares.
 
-A suíte de regressão `native/sms_core/tests/z80_ed_block_transfer_compare_boundaries.rs` cobre todas as oito codificações com casos dirigidos adicionais, incluindo:
+A suíte de regressão `native/sms_core/tests/z80_ed_block_transfer_compare_boundaries.rs` contém 16 casos dirigidos que cobrem todas as oito codificações, incluindo:
 
 - wraparound de HL/DE e endereços de memória;
 - BC inicial zero e decremento para FFFF;
@@ -70,7 +70,7 @@ A suíte de regressão `native/sms_core/tests/z80_ed_block_transfer_compare_boun
 - preservação de flags documentadas e casos de H/PV;
 - bits X/Y no resultado de comparação ajustado e no caminho de repetição.
 
-Os casos do arquivo de fronteiras são invariantes calculados manualmente. Os vetores ED B8/B9 são vetores diferenciais fixos do corpus, com um único estado cada; a ancestralidade comum ao Ares reduz sua independência como oráculo. Os testes desta PR ainda precisam de execução CI no SHA candidato.
+Os 16 casos do arquivo de fronteiras são invariantes calculados manualmente. Os vetores ED B8/B9 são vetores diferenciais fixos do corpus, com um único estado cada; a ancestralidade comum ao Ares reduz sua independência como oráculo. Os testes desta PR ainda precisam de execução CI no SHA candidato.
 
 ## 5. Lacunas para fechar
 
