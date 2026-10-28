@@ -1762,9 +1762,11 @@ mod tests {
             for opcode in 0_u16..=255 {
                 let mut bus = TestBus([0; 0x10000]);
                 bus.0[..4].copy_from_slice(&[prefix, 0xCB, 0x00, opcode as u8]);
-                let mut cpu = Z80::default();
-                cpu.ix = 0xC000;
-                cpu.iy = 0xC000;
+                let mut cpu = Z80 {
+                    ix: 0xC000,
+                    iy: 0xC000,
+                    ..Z80::default()
+                };
                 bus.0[0xC000] = 0xA5;
                 assert!(
                     cpu.step(&mut bus).is_ok(),
