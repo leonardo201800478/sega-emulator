@@ -20,7 +20,7 @@ A matriz contabiliza **78 bytes ED atribuídos** e **178 bytes ED não atribuíd
 
 Para DD/FD, a classificação diferencia instruções que substituem HL por IX/IY, operações com H/L ou (HL), as quatro formas especiais `LD H/L,(IX/IY+d)` e `LD (IX/IY+d),H/L` que usam os registradores H/L reais, prefixos aninhados e opcodes que ignoram o prefixo. A lista é uma classificação de opcodes para direcionar a validação; não é, isoladamente, prova da semântica executada pelo decoder.
 
-**Interpretação obrigatória:** esse gate prova enumeração, classificação conforme o inventário e ausência de falha de dispatch nos estados de teste escolhidos. Não prova que a instrução produziu os registradores, flags, efeitos de memória/I/O ou T-states corretos. Os testes `z80_indexed_semantics.rs` e `z80_expanded_opcode_matrix.rs` fornecem evidência semântica direcionada, mas ainda não cobrem todas as formas DD/FD, prefixos repetidos e exceções.
+**Interpretação obrigatória:** esse gate prova enumeração, classificação conforme o inventário e ausência de falha de dispatch nos estados de teste escolhidos. Não prova que a instrução produziu os registradores, flags, efeitos de memória/I/O ou T-states corretos.
 
 ## 2. Matriz de evidência semântica por família
 
@@ -36,8 +36,8 @@ Os estados abaixo descrevem a evidência versionada no repositório, não uma ce
 | Saltos, JR/DJNZ, CALL/RET/RST | `z80_expanded_opcode_matrix.rs`, `z80_singlestep_reference_vectors.rs` | PARCIAL | Todas as condições tomadas/não tomadas, deslocamentos -128/+127, wraparound e efeitos WZ |
 | Pilha, PUSH/POP e EX (SP),HL | `z80_expanded_opcode_matrix.rs`, `z80_memory_integration.rs` | PARCIAL | SP em 0000/FFFF, ordem dos acessos e todas as combinações de registradores |
 | EX AF,AF' / EXX e bancos alternativos | `z80_singlestep_reference_vectors.rs`, `z80_expanded_opcode_matrix.rs` | DIRECIONADA | Sequências combinadas com flags Q/P e alternância repetida |
-| IX/IY, deslocamentos e H/L | `z80_indexed_semantics.rs`, `z80_indexed_displacement_boundaries.rs`, `z80_index_pair_semantics.rs`, `z80_expanded_opcode_matrix.rs` | PARCIAL — vetores dirigidos para limites -128/+127, LD IX/IY,nn, INC IX/DEC IY e acesso a IXH/IYL | Cobertura completa de formas indexadas, wraparound sistemático, exceções H/L, prefixos repetidos e DD-CB/FD-CB semânticos |
-| DD-CB / FD-CB | `z80_indexed_semantics.rs`, `z80_expanded_opcode_matrix.rs` | PARCIAL | Todas as 256 formas por prefixo, destino de registrador, flags e WZ; o smoke gate não basta |
+| IX/IY, deslocamentos e H/L | `z80_indexed_semantics.rs`, `z80_indexed_displacement_boundaries.rs`, `z80_index_pair_semantics.rs`, `z80_indexed_prefix_wraparound.rs`, `z80_expanded_opcode_matrix.rs` | PARCIAL — vetores dirigidos de limites, par indexado, prefixos repetidos e wraparound | Matriz completa de formas indexadas, todas as exceções H/L e todas as combinações de prefixos |
+| DD-CB / FD-CB | `z80_indexed_semantics.rs`, `z80_indexed_cb_semantics.rs`, `z80_expanded_opcode_matrix.rs` | PARCIAL — RLC com destino em registrador e RES em memória verificados | Todas as 256 formas por prefixo, BIT flags/WZ, destinos de registrador e semântica completa |
 | ED: aritmética de 16 bits e transferências absolutas | `z80_singlestep_reference_vectors.rs`, `z80_expanded_opcode_matrix.rs` | PARCIAL | Cada forma e par de registradores, carry/half-carry/overflow e wraparound |
 | ED: I/R, LD A,I/R, IM e RETN/RETI | `z80_interrupt_semantics.rs`, `z80_singlestep_reference_vectors.rs` | DIRECIONADA | Interações de interrupção e estado interno em todas as fronteiras |
 | LDI/LDD/LDIR/LDDR e CPI/CPD/CPIR/CPDR | `z80_ed_block_transfer_compare_boundaries.rs`, `z80_singlestep_reference_vectors.rs` | SHORT_PASS no escopo exercitado | Estados iniciais exaustivos e confirmação independente de flags não documentadas |
@@ -45,7 +45,7 @@ Os estados abaixo descrevem a evidência versionada no repositório, não uma ce
 | INT IM 0/1/2 | `z80_interrupt_semantics.rs` | DIRECIONADA | Todos os bytes fornecidos pelo barramento, fronteiras EI e sequência ordenada de acknowledge |
 | NMI, HALT, EI/DI | `z80_nmi_halt_semantics.rs`, `z80_interrupt_semantics.rs` | DIRECIONADA | Interleavings de requests, HALT com R, aceitação imediatamente antes/depois de EI |
 | Flags X/Y, Q/P, WZ/MEMPTR e R | Vários testes de referência e interrupção acima | PARCIAL / dependente da família | Especificar cada regra e a proveniência; não extrapolar um vetor para todas as instruções |
-| Prefixos repetidos e aliases não documentados | Gate de classificação + decoder | CLASSIFICAÇÃO, NÃO SEMÂNTICA | Fixar comportamento de cada combinação com documentação ou oráculo identificado |
+| Prefixos repetidos e aliases não documentados | `z80_indexed_prefix_wraparound.rs` + gate de classificação | DIRECIONADA em prefixos DD/DD e DD/FD | Fixar comportamento de cada combinação com documentação ou oráculo identificado |
 | T-states nominais | Vetores de referência e retornos de `step()` | PARCIAL | Ampliar por forma e condição tomada/não tomada |
 | M-cycles, traces de barramento e T-states ordenados | Nenhum trace completo validado no contrato atual | PENDENTE | Definir trace, eventos e waits; não alegar ciclo a ciclo |
 
@@ -61,10 +61,10 @@ Cada novo vetor externo deve registrar URL, commit, licença e proveniência. O 
 
 - [x] Os sete espaços de opcode continuam enumerados integralmente.
 - [x] DD/FD distinguem formas index-sensitive, exceções H/L, prefixos ignorados e prefixos aninhados.
-- [x] A classificação verifica exemplos positivos e negativos explícitos.
-- [x] A documentação separa classificação de prova semântica.
-- [x] Vetores DD/FD verificam deslocamentos assinados extremos (-128 e +127), resultado em registrador, preservação de flags, PC, R e T-states agregados.
-- [x] Vetores adicionais verificam LD IX/IY,nn, INC IX, DEC IY e LD A,IXH/IYL, incluindo preservação de HL, flags e T-states agregados.
+- [x] Vetores dirigidos verificam deslocamentos assinados extremos, par indexado e registradores de índice altos/baixos.
+- [x] Vetores DD-CB/FD-CB verificam efeito de memória, destino em registrador, flags e contadores arquiteturais em casos direcionados.
+- [x] Prefixos DD repetidos e sequência DD/FD verificam precedência do último prefixo, PC, R e T-states agregados.
+- [x] Um vetor de deslocamento negativo verifica wraparound do endereço efetivo para FFFF.
 - [ ] CI, SMS Core Fast Validation e SMS Z80 Platform Validation no SHA candidato.
-- [ ] Revisão independente da classificação DD/FD e das contagens.
-- [ ] Fechamento das lacunas semânticas remanescentes — não declarado concluído por esta PR.
+- [ ] Revisão independente das semânticas e contagens.
+- [ ] Fechamento das lacunas remanescentes — não declarado concluído por esta atualização.
