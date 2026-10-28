@@ -102,19 +102,13 @@ fn ed_adc_sbc_hl_sweeps_every_lhs_and_boundary_rhs_with_both_carry_inputs() {
             bus.memory[0] = 0xED;
             bus.memory[1] = opcode;
 
-            let rhs_count = if pair_code == 2 {
-                1
+            let rhs_values: &[u16] = if pair_code == 2 {
+                &[0]
             } else {
-                RHS_BOUNDARIES.len()
+                &RHS_BOUNDARIES
             };
 
-            for rhs_index in 0..rhs_count {
-                let fixed_rhs = if pair_code == 2 {
-                    0
-                } else {
-                    RHS_BOUNDARIES[rhs_index]
-                };
-
+            for fixed_rhs in rhs_values.iter().copied() {
                 for lhs in u16::MIN..=u16::MAX {
                     for carry in [false, true] {
                         let rhs = if pair_code == 2 { lhs } else { fixed_rhs };
