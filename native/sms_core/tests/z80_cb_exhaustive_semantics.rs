@@ -15,7 +15,6 @@ const FLAG_Z: u8 = 0x40;
 const FLAG_S: u8 = 0x80;
 const FLAG_XY: u8 = 0x28;
 
-#[derive(Default)]
 struct FlatBus {
     memory: Box<[u8]>,
 }
