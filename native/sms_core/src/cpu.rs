@@ -1553,7 +1553,7 @@ impl Z80 {
 
 #[cfg(test)]
 mod tests {
-    use super::{FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_Z, Z80};
+    use super::{FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_S, FLAG_Z, Z80};
     use crate::bus::CpuBus;
 
     struct TestBus([u8; 0x10000]);
@@ -2802,7 +2802,11 @@ mod tests {
             assert_eq!(cpu.registers.e, expected_e, "IN ED {opcode:02X}");
             assert_eq!(cpu.registers.h, expected_h, "IN ED {opcode:02X}");
             assert_eq!(cpu.registers.l, expected_l, "IN ED {opcode:02X}");
-            assert_eq!(cpu.registers.f & 0xFF, 0xA4, "IN ED {opcode:02X}: S/XY/PV from 0xA5");
+            assert_eq!(
+                cpu.registers.f & 0xFF,
+                0xA4,
+                "IN ED {opcode:02X}: S/XY/PV from 0xA5"
+            );
         }
 
         for (opcode, value) in [
