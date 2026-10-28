@@ -141,7 +141,10 @@ fn ld_a_r_covers_every_initial_r_carry_iff2_and_initial_flag_pattern() {
                     cpu.wz = 0xABCD;
 
                     assert_eq!(cpu.step(&mut bus), Ok(9), "ED 5F");
-                    assert_eq!(cpu.registers.a, expected_r, "LD A,R initial R={initial_r:02X}");
+                    assert_eq!(
+                        cpu.registers.a, expected_r,
+                        "LD A,R initial R={initial_r:02X}"
+                    );
                     assert_eq!(
                         cpu.registers.f,
                         flags_for_load_a(expected_r, carry, iff2),
