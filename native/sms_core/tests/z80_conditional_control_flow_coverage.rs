@@ -77,9 +77,20 @@ fn conditional_jr_covers_taken_and_not_taken_paths() {
 
             let cycles = cpu.step(&mut bus).expect("conditional JR must execute");
 
-            assert_eq!(cycles, if condition_true { 12 } else { 7 }, "opcode={opcode:02X}");
-            assert_eq!(cpu.registers.pc, if condition_true { 0 } else { 2 }, "opcode={opcode:02X}");
-            assert_eq!(cpu.registers.f, flags, "opcode={opcode:02X}: flags must be preserved");
+            assert_eq!(
+                cycles,
+                if condition_true { 12 } else { 7 },
+                "opcode={opcode:02X}"
+            );
+            assert_eq!(
+                cpu.registers.pc,
+                if condition_true { 0 } else { 2 },
+                "opcode={opcode:02X}"
+            );
+            assert_eq!(
+                cpu.registers.f, flags,
+                "opcode={opcode:02X}: flags must be preserved"
+            );
         }
     }
 }
@@ -96,9 +107,19 @@ fn conditional_jp_covers_all_conditions_without_changing_flags() {
             cpu.registers.sp = 0xBEEF;
 
             assert_eq!(cpu.step(&mut bus), Ok(10), "opcode={opcode:02X}");
-            assert_eq!(cpu.registers.pc, if condition_true { 0x1234 } else { 3 }, "opcode={opcode:02X}");
-            assert_eq!(cpu.registers.f, flags, "opcode={opcode:02X}: flags must be preserved");
-            assert_eq!(cpu.registers.sp, 0xBEEF, "opcode={opcode:02X}: JP must preserve SP");
+            assert_eq!(
+                cpu.registers.pc,
+                if condition_true { 0x1234 } else { 3 },
+                "opcode={opcode:02X}"
+            );
+            assert_eq!(
+                cpu.registers.f, flags,
+                "opcode={opcode:02X}: flags must be preserved"
+            );
+            assert_eq!(
+                cpu.registers.sp, 0xBEEF,
+                "opcode={opcode:02X}: JP must preserve SP"
+            );
         }
     }
 }
@@ -119,8 +140,15 @@ fn conditional_call_covers_both_paths_and_stack_write_order() {
                 Ok(if condition_true { 17 } else { 10 }),
                 "opcode={opcode:02X}"
             );
-            assert_eq!(cpu.registers.pc, if condition_true { 0x1234 } else { 3 }, "opcode={opcode:02X}");
-            assert_eq!(cpu.registers.f, flags, "opcode={opcode:02X}: flags must be preserved");
+            assert_eq!(
+                cpu.registers.pc,
+                if condition_true { 0x1234 } else { 3 },
+                "opcode={opcode:02X}"
+            );
+            assert_eq!(
+                cpu.registers.f, flags,
+                "opcode={opcode:02X}: flags must be preserved"
+            );
             if condition_true {
                 assert_eq!(cpu.registers.sp, 0x8FFE, "opcode={opcode:02X}");
                 assert_eq!(bus.writes, [(0x8FFF, 0x00), (0x8FFE, 0x03)], "opcode={opcode:02X}");
@@ -128,7 +156,10 @@ fn conditional_call_covers_both_paths_and_stack_write_order() {
                 assert_eq!(bus.memory[0x8FFF], 0x00);
             } else {
                 assert_eq!(cpu.registers.sp, 0x9000, "opcode={opcode:02X}");
-                assert!(bus.writes.is_empty(), "opcode={opcode:02X}: untaken CALL must not write stack");
+                assert!(
+                    bus.writes.is_empty(),
+                    "opcode={opcode:02X}: untaken CALL must not write stack"
+                );
             }
         }
     }
@@ -152,14 +183,28 @@ fn conditional_ret_covers_both_paths_and_stack_read_order() {
                 Ok(if condition_true { 11 } else { 5 }),
                 "opcode={opcode:02X}"
             );
-            assert_eq!(cpu.registers.pc, if condition_true { 0x1234 } else { 1 }, "opcode={opcode:02X}");
-            assert_eq!(cpu.registers.f, flags, "opcode={opcode:02X}: flags must be preserved");
+            assert_eq!(
+                cpu.registers.pc,
+                if condition_true { 0x1234 } else { 1 },
+                "opcode={opcode:02X}"
+            );
+            assert_eq!(
+                cpu.registers.f, flags,
+                "opcode={opcode:02X}: flags must be preserved"
+            );
             if condition_true {
                 assert_eq!(cpu.registers.sp, 0x8002, "opcode={opcode:02X}");
-                assert!(bus.reads.ends_with(&[0x8000, 0x8001]), "opcode={opcode:02X}: stack must be read low byte first");
+                assert!(
+                    bus.reads.ends_with(&[0x8000, 0x8001]),
+                    "opcode={opcode:02X}: stack must be read low byte first"
+                );
             } else {
                 assert_eq!(cpu.registers.sp, 0x8000, "opcode={opcode:02X}");
-                assert_eq!(bus.reads, [0], "opcode={opcode:02X}: untaken RET must not read stack");
+                assert_eq!(
+                    bus.reads,
+                    [0],
+                    "opcode={opcode:02X}: untaken RET must not read stack"
+                );
             }
             assert!(bus.writes.is_empty());
         }
@@ -168,9 +213,7 @@ fn conditional_ret_covers_both_paths_and_stack_read_order() {
 
 #[test]
 fn djnz_covers_taken_and_not_taken_paths_without_changing_flags() {
-    for (initial_b, expected_b, expected_pc, expected_cycles) in
-        [(2, 1, 0, 13), (1, 0, 2, 8)]
-    {
+    for (initial_b, expected_b, expected_pc, expected_cycles) in [(2, 1, 0, 13), (1, 0, 2, 8)] {
         let mut bus = TraceBus::default();
         bus.memory[..2].copy_from_slice(&[0x10, 0xFE]);
         let mut cpu = Z80::default();
@@ -203,8 +246,15 @@ fn conditional_jr_wraparound_and_signed_displacement_boundaries() {
         cpu.registers.pc = 0xFFFE;
         cpu.registers.f = 0; // NZ is true.
 
-        assert_eq!(cpu.step(&mut bus), Ok(12), "displacement={displacement:02X}");
-        assert_eq!(cpu.registers.pc, expected_pc, "displacement={displacement:02X}");
+        assert_eq!(
+            cpu.step(&mut bus),
+            Ok(12),
+            "displacement={displacement:02X}"
+        );
+        assert_eq!(
+            cpu.registers.pc, expected_pc,
+            "displacement={displacement:02X}"
+        );
     }
 }
 
