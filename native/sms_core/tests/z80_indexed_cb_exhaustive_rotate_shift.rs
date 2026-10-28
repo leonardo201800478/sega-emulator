@@ -49,14 +49,14 @@ fn reference_rotate_shift(operation: u8, value: u8, carry_in: bool) -> (u8, bool
         4 => (value.wrapping_shl(1), value & 0x80 != 0), // SLA
         5 => ((value >> 1) | (value & 0x80), value & 0x01 != 0), // SRA
         6 => (value.wrapping_shl(1) | 1, value & 0x80 != 0), // SLL, undocumented
-        _ => (value >> 1, value & 0x01 != 0), // SRL
+        _ => (value >> 1, value & 0x01 != 0),           // SRL
     }
 }
 
 #[test]
 fn indexed_cb_rotate_shift_memory_is_exhaustive_for_all_values_and_carry_inputs() {
     for prefix in [0xDD_u8, 0xFD] {
-        let index = if prefix == 0xDD { 0xC100_u16 } else { 0xD200_u16 };
+        let index = if prefix == 0xDD {\n            0xC100_u16\n        } else {\n            0xD200_u16\n        };
         let address = index.wrapping_add(1);
 
         for operation in 0_u8..8 {
@@ -89,7 +89,7 @@ fn indexed_cb_rotate_shift_memory_is_exhaustive_for_all_values_and_carry_inputs(
                     }
 
                     assert_eq!(cpu.step(&mut bus), Ok(23), "{context}");
-                    assert_eq!(bus.memory[usize::from(address)], expected_value, "{context}");
+                    assert_eq!(\n                        bus.memory[usize::from(address)],\n                        expected_value,\n                        "{context}"\n                    );
                     assert_eq!(cpu.registers.f, expected_flags, "{context}: flags");
                     assert_eq!(cpu.registers.pc, 4, "{context}: PC");
                     assert_eq!(cpu.r, 2, "{context}: R");
