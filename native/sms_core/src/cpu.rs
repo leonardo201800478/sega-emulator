@@ -7,7 +7,7 @@
 //! independent vectors and bus-level validation.
 
 use crate::alu::{adc8, add8, and8, cp8, or8, sbc8, sub8, xor8};
-use crate::bus::CpuBus;
+use crate::bus::{CpuBus, Z80BusEvent, Z80BusEventKind};
 
 const FLAG_C: u8 = 0x01;
 const FLAG_N: u8 = 0x02;
@@ -249,7 +249,8 @@ impl Z80 {
         }
 
         let address = self.registers.pc;
-        let opcode = if let Some(injected) = self.injected_opcode.take() {
+        let injected_opcode = self.injected_opcode.take();
+        let opcode = if let Some(injected) = injected_opcode {
             self.r = (self.r & 0x80) | (self.r.wrapping_add(1) & 0x7F);
             injected
         } else {
@@ -303,7 +304,7 @@ impl Z80 {
             }
             0xED => {
                 let extended_opcode = self.fetch_opcode(bus);
-                self.execute_ed(bus, extended_opcode)
+                self.execute_ed(bus, extended_opcode, injected_opcode.is_none())
             }
             0xD3 => {
                 let port_low = self.fetch8(bus);
@@ -1026,7 +1027,7 @@ impl Z80 {
 
     /// Execute ED-prefixed Z80 instructions. Unassigned ED encodings are
     /// documented as two-byte NOPs on the classic Z80.
-    fn execute_ed<B: CpuBus>(&mut self, bus: &mut B, opcode: u8) -> u32 {
+    fn execute_ed<B: CpuBus>(&mut self, bus: &mut B, opcode: u8, trace_unprefixed: bool) -> u32 {
         match opcode {
             0x47 => {
                 self.i = self.registers.a;
@@ -1146,8 +1147,8 @@ impl Z80 {
                 self.set_szp_xy_flags_preserving_carry(self.registers.a);
                 18
             }
-            0xA0 | 0xA8 | 0xB0 | 0xB8 => self.execute_block_transfer(bus, opcode),
-            0xA1 | 0xA9 | 0xB1 | 0xB9 => self.execute_block_compare(bus, opcode),
+            0xA0 | 0xA8 | 0xB0 | 0xB8 => self.execute_block_transfer(bus, opcode, trace_unprefixed),
+            0xA1 | 0xA9 | 0xB1 | 0xB9 => self.execute_block_compare(bus, opcode, trace_unprefixed),
             0xA2 | 0xAA | 0xB2 | 0xBA | 0xA3 | 0xAB | 0xB3 | 0xBB => {
                 self.execute_block_io(bus, opcode)
             }
@@ -1208,19 +1209,81 @@ impl Z80 {
         self.set_flags(flags);
     }
 
-    fn execute_block_transfer<B: CpuBus>(&mut self, bus: &mut B, opcode: u8) -> u32 {
+    #[inline]
+    fn emit_timing_event<B: CpuBus>(bus: &mut B, event: Z80BusEvent) {
+        bus.observe_timing_event(event);
+    }
+
+    fn execute_block_transfer<B: CpuBus>(
+        &mut self,
+        bus: &mut B,
+        opcode: u8,
+        trace_enabled: bool,
+    ) -> u32 {
         let direction = if opcode == 0xA8 || opcode == 0xB8 {
             -1_i16
         } else {
             1_i16
         };
+        let instruction_pc = self.registers.pc.wrapping_sub(2);
+        if trace_enabled {
+            Self::emit_timing_event(
+                bus,
+                Z80BusEvent {
+                    instruction_pc,
+                    tstate_offset: 0,
+                    kind: Z80BusEventKind::OpcodeFetch,
+                    address: Some(instruction_pc),
+                    data: Some(0xED),
+                    duration_tstates: 4,
+                },
+            );
+            Self::emit_timing_event(
+                bus,
+                Z80BusEvent {
+                    instruction_pc,
+                    tstate_offset: 4,
+                    kind: Z80BusEventKind::OpcodeFetch,
+                    address: Some(instruction_pc.wrapping_add(1)),
+                    data: Some(opcode),
+                    duration_tstates: 4,
+                },
+            );
+        }
         let address = self.registers.hl();
         let value = bus.read_memory(address);
-        bus.write_memory(self.registers.de(), value);
+        if trace_enabled {
+            Self::emit_timing_event(
+                bus,
+                Z80BusEvent {
+                    instruction_pc,
+                    tstate_offset: 8,
+                    kind: Z80BusEventKind::MemoryRead,
+                    address: Some(address),
+                    data: Some(value),
+                    duration_tstates: 3,
+                },
+            );
+        }
+        let destination = self.registers.de();
+        bus.write_memory(destination, value);
+        if trace_enabled {
+            Self::emit_timing_event(
+                bus,
+                Z80BusEvent {
+                    instruction_pc,
+                    tstate_offset: 11,
+                    kind: Z80BusEventKind::MemoryWrite,
+                    address: Some(destination),
+                    data: Some(value),
+                    duration_tstates: 5,
+                },
+            );
+        }
         self.registers
             .set_hl(address.wrapping_add_signed(direction));
         self.registers
-            .set_de(self.registers.de().wrapping_add_signed(direction));
+            .set_de(destination.wrapping_add_signed(direction));
         let count = self.registers.bc().wrapping_sub(1);
         self.registers.set_bc(count);
         let sum = self.registers.a.wrapping_add(value);
@@ -1235,6 +1298,19 @@ impl Z80 {
             self.wz = self.registers.pc.wrapping_add(1);
             flags = (flags & !FLAG_XY) | (((self.registers.pc >> 8) as u8) & FLAG_XY);
             self.set_flags(flags);
+            if trace_enabled {
+                Self::emit_timing_event(
+                    bus,
+                    Z80BusEvent {
+                        instruction_pc,
+                        tstate_offset: 16,
+                        kind: Z80BusEventKind::Internal,
+                        address: Some(destination),
+                        data: None,
+                        duration_tstates: 5,
+                    },
+                );
+            }
             21
         } else {
             self.set_flags(flags);
@@ -1242,18 +1318,73 @@ impl Z80 {
         }
     }
 
-    fn execute_block_compare<B: CpuBus>(&mut self, bus: &mut B, opcode: u8) -> u32 {
+    fn execute_block_compare<B: CpuBus>(
+        &mut self,
+        bus: &mut B,
+        opcode: u8,
+        trace_enabled: bool,
+    ) -> u32 {
         let direction = if opcode == 0xA9 || opcode == 0xB9 {
             -1_i16
         } else {
             1_i16
         };
-        let value = bus.read_memory(self.registers.hl());
+        let instruction_pc = self.registers.pc.wrapping_sub(2);
+        if trace_enabled {
+            Self::emit_timing_event(
+                bus,
+                Z80BusEvent {
+                    instruction_pc,
+                    tstate_offset: 0,
+                    kind: Z80BusEventKind::OpcodeFetch,
+                    address: Some(instruction_pc),
+                    data: Some(0xED),
+                    duration_tstates: 4,
+                },
+            );
+            Self::emit_timing_event(
+                bus,
+                Z80BusEvent {
+                    instruction_pc,
+                    tstate_offset: 4,
+                    kind: Z80BusEventKind::OpcodeFetch,
+                    address: Some(instruction_pc.wrapping_add(1)),
+                    data: Some(opcode),
+                    duration_tstates: 4,
+                },
+            );
+        }
+        let address = self.registers.hl();
+        let value = bus.read_memory(address);
+        if trace_enabled {
+            Self::emit_timing_event(
+                bus,
+                Z80BusEvent {
+                    instruction_pc,
+                    tstate_offset: 8,
+                    kind: Z80BusEventKind::MemoryRead,
+                    address: Some(address),
+                    data: Some(value),
+                    duration_tstates: 3,
+                },
+            );
+            Self::emit_timing_event(
+                bus,
+                Z80BusEvent {
+                    instruction_pc,
+                    tstate_offset: 11,
+                    kind: Z80BusEventKind::Internal,
+                    address: Some(address),
+                    data: None,
+                    duration_tstates: 5,
+                },
+            );
+        }
         let accumulator = self.registers.a;
         let result = accumulator.wrapping_sub(value);
         let half = (accumulator & 0x0F) < (value & 0x0F);
         self.registers
-            .set_hl(self.registers.hl().wrapping_add_signed(direction));
+            .set_hl(address.wrapping_add_signed(direction));
         let count = self.registers.bc().wrapping_sub(1);
         self.registers.set_bc(count);
         let adjusted = result.wrapping_sub(u8::from(half));
@@ -1274,6 +1405,19 @@ impl Z80 {
             self.wz = self.registers.pc.wrapping_add(1);
             flags = (flags & !FLAG_XY) | (((self.registers.pc >> 8) as u8) & FLAG_XY);
             self.set_flags(flags);
+            if trace_enabled {
+                Self::emit_timing_event(
+                    bus,
+                    Z80BusEvent {
+                        instruction_pc,
+                        tstate_offset: 16,
+                        kind: Z80BusEventKind::Internal,
+                        address: Some(address),
+                        data: None,
+                        duration_tstates: 5,
+                    },
+                );
+            }
             21
         } else {
             self.wz = self.wz.wrapping_add_signed(direction);
