@@ -1,3 +1,4 @@
+> **Marco funcional SG-1000 (2026-10-28):** concluído no escopo validado pelo mantenedor. PR [#141](https://github.com/leonardo201800478/sega-emulator/pull/141) integrada à `main` no commit `f51c0fac8dfd850a761e65de48709a2e7002d11d`; issue [#136](https://github.com/leonardo201800478/sega-emulator/issues/136) fechado. O mantenedor reportou PASS manual para os oito jogos afetados e informou que os demais jogos continuam funcionando como antes. Testes diferenciais e alguns checks Python continuam NOT RUN; workflows para o SHA de merge não foram confirmados. Isso não declara precisão ciclo a ciclo nem compatibilidade universal.
 > **Estado vigente (2026-10-27):** hardware SG-1000 ativo exclusivamente em Rust. O código Python antigo de hardware, os testes/ferramentas dependentes e os workflows históricos foram arquivados sob `legacy/`; não são importados nem executados pelo projeto ativo. Este documento mantém observações históricas quando indicadas.
 
 # Migration control board — Clean Architecture
@@ -60,15 +61,16 @@ A CI workflow only validates the commands it actually executes. A green Python w
 - Historical baseline note (before PR #126): VDP, PSG and machine-wide scheduling were not integrated. The current status is recorded below; the crate is still not a complete standalone emulator.
 - **Status atualizado:** Python production cores are archived; the Qt application uses the Rust-only facade. Cycle-accurate timing remains an open fidelity goal.
 
-- **PR:** [#139 — Bind PyO3 SG-1000 runtime to consolidated Rust core](https://github.com/leonardo201800478/sega-emulator/pull/139), open and Draft at the time of this update.
+- **Historical snapshot (2026-10-27):** [PR #139 — Bind PyO3 SG-1000 runtime to consolidated Rust core](https://github.com/leonardo201800478/sega-emulator/pull/139) was open and Draft at that time; this line records the state then, not the current PR state.
 - **Architecture:** the Qt application uses a Rust-only PyO3 facade; CPU, memory/map, I/O, VDP, PSG and machine coordination are implemented in `native/sg1000_core`.
 - **Legacy isolation:** Python hardware implementation, dependent tests/tools and Python-only audit workflows live under `legacy/`, outside the installed package and active test/workflow paths.
-- **Validation still required:** all applicable workflows must pass on the same candidate SHA; Release/Maturin build and Qt integration must be verified; the eight ROMs from issue #136 and comparison against ARES remain untested in this PR.
+- **Validation still required:** all applicable workflows must pass on the same candidate SHA; Release/Maturin build and Qt integration must be verified; the eight ROMs from issue #136 and comparison against ARES remained untested at that historical PR snapshot. The eight-game manual result was later reported by the maintainer and recorded on 2026-10-28; differential comparison remains NOT RUN.
 - **Fidelity boundary:** execution advances by instruction with nominal T-states. The crate is not declared cycle-accurate or universally compatible.
 - Shared crate relocation and future platforms are separate scope; do not expand this PR into SMS/Game Gear or later consoles.
 
 ## Change log
 - 2026-10-27: PR #126 expanded the native SG-1000 slice with a PyO3-free TMS9918A, VDP raster advancement, SN76489 clock/sample integration, and Z80 immediate IN/OUT routing. Before merge, verify the Rust workspace, Python CI, SMS fast validation, Z80 differential/extended audits, Qt backend validation, and sequential SG-1000 validation on the same final candidate SHA; see `sg1000-native-consolidation.md`.
 - 2026-10-27: Step 1 added a pure-Rust SG-1000 I/O boundary for controller aliases and timestamped PSG write capture. It is intentionally not a complete CPU-port/VDP/audio-scheduler integration; see `sg1000-rust-io-step1.md`.
+- 2026-10-28: SG-1000 functional milestone recorded after PR #141 merged into main. The eight-game manual result is maintainer-reported; differential testing and additional Python checks remain NOT RUN. The Master System is the next milestone; preserve SG-1000 regressions.
 - 2026-10-27: Initial control board added. No source files moved and no tests claimed as passing.
 - 2026-10-27: Corrected the excluded shared-core scaffold's workspace registration and sibling dependency paths so the manifest can be validated independently.
