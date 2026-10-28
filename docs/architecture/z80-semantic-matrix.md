@@ -36,7 +36,7 @@ Os estados abaixo descrevem a evidência versionada no repositório, não uma ce
 | Saltos, JR/DJNZ, CALL/RET/RST | `z80_expanded_opcode_matrix.rs`, `z80_singlestep_reference_vectors.rs` | PARCIAL | Todas as condições tomadas/não tomadas, deslocamentos -128/+127, wraparound e efeitos WZ |
 | Pilha, PUSH/POP e EX (SP),HL | `z80_expanded_opcode_matrix.rs`, `z80_memory_integration.rs` | PARCIAL | SP em 0000/FFFF, ordem dos acessos e todas as combinações de registradores |
 | EX AF,AF' / EXX e bancos alternativos | `z80_singlestep_reference_vectors.rs`, `z80_expanded_opcode_matrix.rs` | DIRECIONADA | Sequências combinadas com flags Q/P e alternância repetida |
-| IX/IY, deslocamentos e H/L | `z80_indexed_semantics.rs`, `z80_expanded_opcode_matrix.rs` | PARCIAL — classificação DD/FD refinada; vetores dirigidos | Matriz completa de substituição, exceções H/L com (IX/IY+d), deslocamentos extremos e prefixos repetidos |
+| IX/IY, deslocamentos e H/L | `z80_indexed_semantics.rs`, `z80_indexed_displacement_boundaries.rs`, `z80_index_pair_semantics.rs`, `z80_expanded_opcode_matrix.rs` | PARCIAL — vetores dirigidos para limites -128/+127, LD IX/IY,nn, INC IX/DEC IY e acesso a IXH/IYL | Cobertura completa de formas indexadas, wraparound sistemático, exceções H/L, prefixos repetidos e DD-CB/FD-CB semânticos |
 | DD-CB / FD-CB | `z80_indexed_semantics.rs`, `z80_expanded_opcode_matrix.rs` | PARCIAL | Todas as 256 formas por prefixo, destino de registrador, flags e WZ; o smoke gate não basta |
 | ED: aritmética de 16 bits e transferências absolutas | `z80_singlestep_reference_vectors.rs`, `z80_expanded_opcode_matrix.rs` | PARCIAL | Cada forma e par de registradores, carry/half-carry/overflow e wraparound |
 | ED: I/R, LD A,I/R, IM e RETN/RETI | `z80_interrupt_semantics.rs`, `z80_singlestep_reference_vectors.rs` | DIRECIONADA | Interações de interrupção e estado interno em todas as fronteiras |
@@ -63,6 +63,8 @@ Cada novo vetor externo deve registrar URL, commit, licença e proveniência. O 
 - [x] DD/FD distinguem formas index-sensitive, exceções H/L, prefixos ignorados e prefixos aninhados.
 - [x] A classificação verifica exemplos positivos e negativos explícitos.
 - [x] A documentação separa classificação de prova semântica.
+- [x] Vetores DD/FD verificam deslocamentos assinados extremos (-128 e +127), resultado em registrador, preservação de flags, PC, R e T-states agregados.
+- [x] Vetores adicionais verificam LD IX/IY,nn, INC IX, DEC IY e LD A,IXH/IYL, incluindo preservação de HL, flags e T-states agregados.
 - [ ] CI, SMS Core Fast Validation e SMS Z80 Platform Validation no SHA candidato.
 - [ ] Revisão independente da classificação DD/FD e das contagens.
 - [ ] Fechamento das lacunas semânticas remanescentes — não declarado concluído por esta PR.
