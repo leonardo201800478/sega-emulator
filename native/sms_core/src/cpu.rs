@@ -2523,8 +2523,10 @@ mod tests {
         ] {
             let mut bus = TestBus([0; 0x10000]);
             bus.0[..2].copy_from_slice(&[0xED, opcode]);
-            let mut cpu = Z80::default();
-            cpu.interrupt_mode = 2;
+            let mut cpu = Z80 {
+                interrupt_mode: 2,
+                ..Z80::default()
+            };
             assert_eq!(cpu.step(&mut bus), Ok(8), "ED {opcode:02X}");
             assert_eq!(cpu.interrupt_mode, mode, "ED {opcode:02X}");
             assert_eq!(cpu.registers.pc, 2);
@@ -2569,9 +2571,11 @@ mod tests {
 
         let mut bus = TestBus([0; 0x10000]);
         bus.0[..2].copy_from_slice(&[0xED, 0x57]);
-        let mut cpu = Z80::default();
-        cpu.i = 0;
-        cpu.iff2 = false;
+        let mut cpu = Z80 {
+            i: 0,
+            iff2: false,
+            ..Z80::default()
+        };
         cpu.registers.f = FLAG_C;
         assert_eq!(cpu.step(&mut bus), Ok(9));
         assert_eq!(cpu.registers.a, 0);
@@ -2623,10 +2627,7 @@ mod tests {
         assert_eq!(ldi.registers.hl(), 0xC101);
         assert_eq!(ldi.registers.de(), 0xC201);
         assert_eq!(ldi.registers.bc(), 1);
-        assert_eq!(
-            ldi.registers.f,
-            FLAG_S | FLAG_Z | FLAG_C | FLAG_PV | 0x08
-        );
+        assert_eq!(ldi.registers.f, FLAG_S | FLAG_Z | FLAG_C | FLAG_PV | 0x08);
 
         let mut ldd_bus = TestBus([0; 0x10000]);
         ldd_bus.0[..2].copy_from_slice(&[0xED, 0xA8]);
@@ -2803,11 +2804,7 @@ mod tests {
             assert_eq!(cpu.registers.e, expected_e, "IN ED {opcode:02X}");
             assert_eq!(cpu.registers.h, expected_h, "IN ED {opcode:02X}");
             assert_eq!(cpu.registers.l, expected_l, "IN ED {opcode:02X}");
-            assert_eq!(
-                cpu.registers.f,
-                0xA4,
-                "IN ED {opcode:02X}: S/XY/PV from 0xA5"
-            );
+            assert_eq!(cpu.registers.f, 0xA4, "IN ED {opcode:02X}: S/XY/PV from 0xA5");
         }
 
         for (opcode, value) in [
