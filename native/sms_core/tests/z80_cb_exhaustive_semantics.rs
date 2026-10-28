@@ -51,19 +51,21 @@ fn run_cb(opcode: u8, value: u8, flags: u8) -> (Z80, FlatBus, u32) {
 }
 
 fn even_parity(value: u8) -> bool {
-    value.count_ones() % 2 == 0
+    value.count_ones().is_multiple_of(2)
 }
 
 fn rotate_shift_reference(operation: u8, value: u8, carry_in: bool) -> (u8, bool) {
     match operation {
         0 => (value.rotate_left(1), value & 0x80 != 0), // RLC
         1 => (value.rotate_right(1), value & 0x01 != 0), // RRC
-        2 => (value.wrapping_shl(1) | u8::from(carry_in), value & 0x80 != 0), // RL
+        2 => (value.wrapping_shl(1) | u8::from(carry_in),
+            value & 0x80 != 0,
+        ), // RL
         3 => ((value >> 1) | (u8::from(carry_in) << 7), value & 0x01 != 0), // RR
         4 => (value.wrapping_shl(1), value & 0x80 != 0), // SLA
         5 => ((value >> 1) | (value & 0x80), value & 0x01 != 0), // SRA
         6 => (value.wrapping_shl(1) | 1, value & 0x80 != 0), // SLL, undocumented
-        _ => (value >> 1, value & 0x01 != 0), // SRL
+        _ => (value >> 1, value & 0x01 != 0),           // SRL
     }
 }
 
