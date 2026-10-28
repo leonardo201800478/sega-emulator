@@ -19,7 +19,7 @@ fn szxy(value: u8) -> u8 {
 }
 
 fn parity(value: u8) -> bool {
-    value.count_ones() % 2 == 0
+    value.count_ones().is_multiple_of(2)
 }
 
 fn reference_add(lhs: u8, rhs: u8, carry: bool) -> (u8, u8) {
