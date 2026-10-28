@@ -158,7 +158,7 @@ fn dd_fd_classification_distinguishes_indexed_forms_and_ignored_prefixes() {
         let mut counts = [0usize; 4];
         for opcode in u8::MIN..=u8::MAX {
             match classify(space, opcode) {
-                Classification::Prefix => {}
+                Classification::Prefix => counts[3] += 1,
                 Classification::IndexSensitive => counts[0] += 1,
                 Classification::IndexedMemoryUsesRealHl => counts[1] += 1,
                 Classification::IgnoredIndexPrefix => counts[2] += 1,
@@ -169,6 +169,7 @@ fn dd_fd_classification_distinguishes_indexed_forms_and_ignored_prefixes() {
         assert_eq!(counts[0], 81, "{space:?}: index-sensitive encodings");
         assert_eq!(counts[1], 4, "{space:?}: H/L memory exceptions");
         assert_eq!(counts[2], 167, "{space:?}: ignored index prefixes");
+        assert_eq!(counts[3], 4, "{space:?}: nested prefix bytes");
     }
 
     assert_eq!(classify(Space::Dd, 0x65), Classification::IndexSensitive);
