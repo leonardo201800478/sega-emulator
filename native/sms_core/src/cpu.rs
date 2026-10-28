@@ -2844,8 +2844,7 @@ mod tests {
             if opcode == 0x47 {
                 assert_eq!(cpu.i, 0xD3);
             } else {
-                assert_eq!(cpu.r & 0x7F, 0x02, "ED 4F increments refresh during fetch");
-                assert_eq!(cpu.r & 0x80, 0x00);
+                assert_eq!(cpu.r, 0xD3, "LD R,A copies all eight bits");
             }
             assert_eq!(cpu.registers.f, 0xA5, "ED {opcode:02X}: flags unchanged");
         }
