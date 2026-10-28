@@ -63,7 +63,10 @@ fn indexed_bit_flags_and_wz_match_published_reference_vectors() {
         assert_eq!(cpu.registers.pc, 4, "{context}");
         assert_eq!(cpu.r, 2, "{context}");
         assert_eq!(cpu.wz, address, "{context}: MEMPTR must latch IX/IY+d");
-        assert_eq!(cpu.registers.f, expected_flags, "{context}: fixed flag oracle");
+        assert_eq!(
+            cpu.registers.f, expected_flags,
+            "{context}: fixed flag oracle"
+        );
         assert_eq!(cpu.ix, old_ix, "{context}: IX unchanged");
         assert_eq!(cpu.iy, old_iy, "{context}: IY unchanged");
         assert_eq!(
