@@ -69,7 +69,7 @@ O trace de M-cycles não substitui as amostras por T-state quando o critério ex
 
 1. Implementado: tipos de trace e observador opcional em native/z80_bus; o callback padrão não altera o runtime.
 2. Implementado parcialmente: a primeira fatia emite eventos M-cycle-level para LDI/LDD/LDIR/LDDR e CPI/CPD/CPIR/CPDR sem prefixos DD/FD. A posição temporal é relativa à instrução e a duração vem do manual.
-3. Implementado parcialmente: um teste compara a sequência M-cycle-level de LDI com as 16 amostras do vetor SingleStepTests/Z80 ED A0 0000 fixado; o teste valida endereços/dados nos pontos de amostragem, duração agregada e contiguidade dos eventos. Pendente: estender a comparação aos outros sete opcodes, preservar a primeira divergência e comparar sinais por T-state.
+3. Implementado parcialmente: oito testes comparam a sequência M-cycle-level de LDI/LDD/LDIR/LDDR e CPI/CPD/CPIR/CPDR com vetores fixados do corpus SingleStepTests/Z80. Eles validam endereços/dados nos pontos de amostragem, duração agregada, sinais selecionados e contiguidade dos eventos. Pendente: comparar sinais por T-state, modelar refresh/waits e registrar a primeira divergência de um trace pin-level.
 4. Instrumentar progressivamente CB, demais ED, DD/FD, indexed-CB, I/O e acesso à pilha, incluindo prefixos ignorados/repetidos, HALT e entrada de interrupções.
 5. Integrar waits e avanço dos dispositivos ao scheduler do SMS, sem callbacks Python por instrução.
 6. Executar regressões de semântica e temporização, z80full/z80ccf, comparação de traces e testes de determinismo no SHA candidato exato.
