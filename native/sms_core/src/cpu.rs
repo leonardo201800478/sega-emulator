@@ -2253,7 +2253,6 @@ mod tests {
         assert_eq!(cpu.registers.pc, 0xFFFE);
     }
 
-
     // Exhaustive ED-space regression. This is intentionally separate from the
     // semantic vectors below: it checks every second byte against an explicit
     // nominal-T-state oracle and guards the documented ED-NOP fallback.
@@ -2291,7 +2290,10 @@ mod tests {
             bus.0[0xD001] = 0;
 
             // Block-I/O termination depends on B, not the full BC value.
-            if matches!(opcode, 0xA2 | 0xAA | 0xB2 | 0xBA | 0xA3 | 0xAB | 0xB3 | 0xBB) {
+            if matches!(
+                opcode,
+                0xA2 | 0xAA | 0xB2 | 0xBA | 0xA3 | 0xAB | 0xB3 | 0xBB
+            ) {
                 cpu.registers.b = 1;
                 cpu.registers.c = 0;
             }
@@ -2308,10 +2310,15 @@ mod tests {
                 "ED {opcode:02X}: total_tstates disagrees with returned duration"
             );
 
-            let expected_pc = if matches!(opcode,
-                0x43 | 0x53 | 0x63 | 0x73 | 0x4B | 0x5B | 0x6B | 0x7B) {
+            let expected_pc = if matches!(
+                opcode,
+                0x43 | 0x53 | 0x63 | 0x73 | 0x4B | 0x5B | 0x6B | 0x7B
+            ) {
                 4
-            } else if matches!(opcode, 0x45 | 0x4D | 0x55 | 0x5D | 0x65 | 0x6D | 0x75 | 0x7D) {
+            } else if matches!(
+                opcode,
+                0x45 | 0x4D | 0x55 | 0x5D | 0x65 | 0x6D | 0x75 | 0x7D
+            ) {
                 0 // RETN/RETI aliases pop the seeded return address at SP.
             } else {
                 2
@@ -2355,5 +2362,4 @@ mod tests {
             assert_eq!(cpu.total_tstates, 8, "ED {opcode:02X}: total_tstates");
         }
     }
-
 }
