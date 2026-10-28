@@ -171,25 +171,26 @@ impl Z80 {
         let data_bus = self.int_pending.take().unwrap_or(0xFF);
         let return_address = self.registers.pc;
         self.halted = false;
-        self.r = (self.r & 0x80) | (self.r.wrapping_add(1) & 0x7F);
         self.iff1 = false;
         self.iff2 = false;
 
         let cycles = match self.interrupt_mode {
             0 => {
-                // IM 0 executes the externally supplied byte as the first
-                // opcode fetch. Operands, if any, are fetched from the current PC.
+                // The injected opcode is consumed as the acknowledge M1 cycle;
+                // step_inner performs its single R increment for that fetch.
                 self.injected_opcode = Some(data_bus);
                 let instruction_cycles = self.step(bus)?;
                 self.total_tstates += 2;
                 return Ok(instruction_cycles + 2);
             }
             1 => {
+                self.r = (self.r & 0x80) | (self.r.wrapping_add(1) & 0x7F);
                 self.push16(bus, return_address);
                 self.registers.pc = 0x0038;
                 13
             }
             2 => {
+                self.r = (self.r & 0x80) | (self.r.wrapping_add(1) & 0x7F);
                 self.push16(bus, return_address);
                 let vector = (u16::from(self.i) << 8) | u16::from(data_bus);
                 let low = bus.read_memory(vector);
