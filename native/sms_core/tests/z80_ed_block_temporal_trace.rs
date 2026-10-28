@@ -101,7 +101,7 @@ fn expected_transfer_trace(
         5,
     ));
     if repeat {
-        expected.push(event(0, 16, Z80BusEventKind::Internal, None, None, 5));
+        expected.push(event(0, 16, Z80BusEventKind::Internal, Some(de), None, 5));
     }
     expected
 }
@@ -116,9 +116,9 @@ fn expected_compare_trace(opcode: u8, hl: u16, value: u8, repeat: bool) -> Vec<Z
         Some(value),
         3,
     ));
-    expected.push(event(0, 11, Z80BusEventKind::Internal, None, None, 5));
+    expected.push(event(0, 11, Z80BusEventKind::Internal, Some(hl), None, 5));
     if repeat {
-        expected.push(event(0, 16, Z80BusEventKind::Internal, None, None, 5));
+        expected.push(event(0, 16, Z80BusEventKind::Internal, Some(hl), None, 5));
     }
     expected
 }
@@ -485,10 +485,10 @@ fn assert_external_mcycle_trace(
             5,
         ));
     } else {
-        expected.push(event(pc, 11, Z80BusEventKind::Internal, None, None, 5));
+        expected.push(event(pc, 11, Z80BusEventKind::Internal, samples[11].address, None, 5));
     }
     if repeats {
-        expected.push(event(pc, 16, Z80BusEventKind::Internal, None, None, 5));
+        expected.push(event(pc, 16, Z80BusEventKind::Internal, samples[16].address, None, 5));
     }
     assert_eq!(bus.events, expected);
     assert_eq!(

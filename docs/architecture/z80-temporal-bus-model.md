@@ -48,7 +48,7 @@ Cada M-cycle deve poder ser reconstruído com:
 
 - tipo de ciclo;
 - T-state inicial e duração;
-- endereço/dados aplicáveis;
+- endereço/dados aplicáveis; ciclos internos podem manter o último endereço observado, que deve ser preservado quando a referência o define;
 - wait states efetivamente inseridos;
 - relação com a instrução e com o evento que o iniciou.
 
