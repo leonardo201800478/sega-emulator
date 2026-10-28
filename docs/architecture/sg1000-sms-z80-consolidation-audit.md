@@ -86,6 +86,12 @@ Na PR #165, SHA candidato `57d4f78c30afca019de94789c24716ad17bf7744`:
 - Os vetores `INDR` e `OTDR` revelaram que, nas repetições de bloco de I/O, não basta sobrescrever X/Y: PV/H também sofrem efeitos dos T-states extras. A correção agora aplica a fórmula dependente de carry e do bit 7 do byte transferido; todos os cinco vetores passaram.
 - Fonte independente complementar para esses efeitos não documentados: https://www.reddit.com/r/EmuDev/comments/1vkkk21/z80_proper_handling_of_undocumented_x_and_y_flags/ e https://github.com/hoglet67/Z80Decoder/wiki/Undocumented-Flags. Os detalhes de hardware ainda devem ser distinguidos de comportamento documentado pelo fabricante.
 
+Na PR #166, SHA candidato `d41fc28872b6ba7f1fb2aa18d849a61f7c9c97d4`:
+- **PASS:** Rust formatting, Workspace Clippy, Workspace Rust tests, SMS focused format/lint/tests e workflow geral CI/quality.
+- A suíte SingleStepTests passou com **98 testes aprovados e nenhum ignorado**.
+- Foram acrescentados quatro vetores independentes para `BIT b,(IX+d)`/`BIT b,(IY+d)` nas formas `DD CB` e `FD CB`. Eles verificam que WZ/MEMPTR recebe o endereço efetivo e que as flags XY de BIT refletem o byte alto esperado; a matriz anterior só garantia que todas as codificações indexadas eram aceitas sem erro.
+- Esses vetores cobrem casos BIT; ainda não substituem vetores semânticos para todas as 512 codificações DDCB/FDCB nem testes de trace temporal.
+
 Esses resultados confirmam os checks nos SHAs candidatos informados, não a completude total da CPU. A suite verifica estado arquitetural, T-states agregados e os endereços de RAM explicitamente listados pelos vetores; não compara trace temporal completo do barramento.
 
 ## Critérios para continuar a mescla
