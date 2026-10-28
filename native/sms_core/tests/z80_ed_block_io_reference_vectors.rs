@@ -1,0 +1,1240 @@
+//! Additional directed block-I/O differential vectors from SingleStepTests/Z80.
+//!
+//! Source corpus: https://github.com/SingleStepTests/z80/tree/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7/v1
+//! Upstream license: MIT (see upstream LICENSE at the pinned commit).
+//! These selected vectors broaden initial-state coverage for ED B2 (INIR) and
+//! ED BB (OTDR), including undocumented flags, repeat behavior, WZ, refresh R,
+//! memory writes, and I/O port effects. Upstream cycle-trace length is compared
+//! as aggregate T-states only; ordered bus events are not compared.
+//!
+//! These vectors are independent of the implementation's directed unit tests,
+//! but do not constitute physical-hardware evidence or exhaustive state coverage.
+
+use sega_sms_core::{CpuBus, Z80};
+
+#[derive(Clone, Copy)]
+struct State {
+    pc: u16,
+    sp: u16,
+    a: u8,
+    f: u8,
+    b: u8,
+    c: u8,
+    d: u8,
+    e: u8,
+    h: u8,
+    l: u8,
+    i: u8,
+    r: u8,
+    ix: u16,
+    iy: u16,
+    wz: u16,
+    af_alt: u16,
+    bc_alt: u16,
+    de_alt: u16,
+    hl_alt: u16,
+    im: u8,
+    p: bool,
+    q: u8,
+    iff1: bool,
+    iff2: bool,
+    ei_delay: u8,
+}
+
+impl State {
+    fn apply(self, cpu: &mut Z80) {
+        cpu.registers.pc = self.pc;
+        cpu.registers.sp = self.sp;
+        cpu.registers.a = self.a;
+        cpu.registers.f = self.f;
+        cpu.registers.b = self.b;
+        cpu.registers.c = self.c;
+        cpu.registers.d = self.d;
+        cpu.registers.e = self.e;
+        cpu.registers.h = self.h;
+        cpu.registers.l = self.l;
+        cpu.i = self.i;
+        cpu.r = self.r;
+        cpu.ix = self.ix;
+        cpu.iy = self.iy;
+        cpu.wz = self.wz;
+        [cpu.alternate.a, cpu.alternate.f] = self.af_alt.to_be_bytes();
+        [cpu.alternate.b, cpu.alternate.c] = self.bc_alt.to_be_bytes();
+        [cpu.alternate.d, cpu.alternate.e] = self.de_alt.to_be_bytes();
+        [cpu.alternate.h, cpu.alternate.l] = self.hl_alt.to_be_bytes();
+        cpu.interrupt_mode = self.im;
+        cpu.p = self.p;
+        cpu.q = self.q;
+        cpu.iff1 = self.iff1;
+        cpu.iff2 = self.iff2;
+        cpu.ei_delay = self.ei_delay;
+    }
+
+    fn assert_matches(self, cpu: &Z80, name: &str) {
+        assert_eq!(cpu.registers.pc, self.pc, "{name}: PC");
+        assert_eq!(cpu.registers.sp, self.sp, "{name}: SP");
+        assert_eq!((cpu.registers.a, cpu.registers.f), (self.a, self.f), "{name}: AF");
+        assert_eq!((cpu.registers.b, cpu.registers.c), (self.b, self.c), "{name}: BC");
+        assert_eq!((cpu.registers.d, cpu.registers.e), (self.d, self.e), "{name}: DE");
+        assert_eq!((cpu.registers.h, cpu.registers.l), (self.h, self.l), "{name}: HL");
+        assert_eq!((cpu.i, cpu.r), (self.i, self.r), "{name}: IR");
+        assert_eq!((cpu.ix, cpu.iy), (self.ix, self.iy), "{name}: IX/IY");
+        assert_eq!(cpu.wz, self.wz, "{name}: WZ");
+        assert_eq!(
+            u16::from_be_bytes([cpu.alternate.a, cpu.alternate.f]),
+            self.af_alt,
+            "{name}: AF'"
+        );
+        assert_eq!(
+            u16::from_be_bytes([cpu.alternate.b, cpu.alternate.c]),
+            self.bc_alt,
+            "{name}: BC'"
+        );
+        assert_eq!(
+            u16::from_be_bytes([cpu.alternate.d, cpu.alternate.e]),
+            self.de_alt,
+            "{name}: DE'"
+        );
+        assert_eq!(
+            u16::from_be_bytes([cpu.alternate.h, cpu.alternate.l]),
+            self.hl_alt,
+            "{name}: HL'"
+        );
+        assert_eq!(cpu.interrupt_mode, self.im, "{name}: IM");
+        assert_eq!(cpu.p, self.p, "{name}: P latch");
+        assert_eq!(cpu.q, self.q, "{name}: Q latch");
+        assert_eq!(cpu.iff1, self.iff1, "{name}: IFF1");
+        assert_eq!(cpu.iff2, self.iff2, "{name}: IFF2");
+        assert_eq!(cpu.ei_delay, self.ei_delay, "{name}: EI delay");
+    }
+}
+
+struct FlatBus {
+    memory: Box<[u8]>,
+    ports: Box<[u8]>,
+}
+
+impl Default for FlatBus {
+    fn default() -> Self {
+        Self {
+            memory: vec![0; 0x1_0000].into_boxed_slice(),
+            ports: vec![0; 0x1_0000].into_boxed_slice(),
+        }
+    }
+}
+
+impl CpuBus for FlatBus {
+    fn read_memory(&mut self, address: u16) -> u8 {
+        self.memory[usize::from(address)]
+    }
+
+    fn write_memory(&mut self, address: u16, value: u8) {
+        self.memory[usize::from(address)] = value;
+    }
+
+    fn read_port(&mut self, address: u16) -> u8 {
+        self.ports[usize::from(address)]
+    }
+
+    fn write_port(&mut self, address: u16, value: u8) {
+        self.ports[usize::from(address)] = value;
+    }
+}
+
+fn run_vector(
+    name: &str,
+    initial: State,
+    expected: State,
+    initial_memory: &[(u16, u8)],
+    expected_memory: &[(u16, u8)],
+    initial_ports: &[(u16, u8)],
+    expected_ports: &[(u16, u8)],
+    tstates: u32,
+) {
+    let mut bus = FlatBus::default();
+    for &(address, value) in initial_memory {
+        bus.memory[usize::from(address)] = value;
+    }
+    for &(address, value) in initial_ports {
+        bus.ports[usize::from(address)] = value;
+    }
+    let mut cpu = Z80::default();
+    initial.apply(&mut cpu);
+    assert_eq!(cpu.step(&mut bus), Ok(tstates), "{name}: T-states");
+    assert_eq!(
+        cpu.total_tstates,
+        u64::from(tstates),
+        "{name}: accumulated T-states"
+    );
+    expected.assert_matches(&cpu, name);
+    for &(address, value) in expected_memory {
+        assert_eq!(
+            bus.memory[usize::from(address)],
+            value,
+            "{name}: RAM[{address:04X}]"
+        );
+    }
+    for &(address, value) in expected_ports {
+        assert_eq!(
+            bus.ports[usize::from(address)],
+            value,
+            "{name}: PORT[{address:04X}]"
+        );
+    }
+}
+
+#[test]
+fn reference_ed_b2_0000() {
+    run_vector(
+        "ED B2 0000",
+        State {
+        pc: 0x7BD7,
+        sp: 0x5BDC,
+        a: 0x27,
+        f: 0x74,
+        b: 0x6D,
+        c: 0x9D,
+        d: 0xAA,
+        e: 0x9D,
+        h: 0x13,
+        l: 0xB2,
+        i: 0x02,
+        r: 0x2E,
+        ix: 0x0A2E,
+        iy: 0x5C93,
+        wz: 0x538A,
+        af_alt: 0x7E51,
+        bc_alt: 0xDB77,
+        de_alt: 0x02C2,
+        hl_alt: 0xD4E2,
+        im: 0x02,
+        p: true,
+        q: 0x74,
+        iff1: false,
+        iff2: true,
+        ei_delay: 1,
+    },
+        State {
+        pc: 0x7BD7,
+        sp: 0x5BDC,
+        a: 0x27,
+        f: 0x29,
+        b: 0x6C,
+        c: 0x9D,
+        d: 0xAA,
+        e: 0x9D,
+        h: 0x13,
+        l: 0xB3,
+        i: 0x02,
+        r: 0x30,
+        ix: 0x0A2E,
+        iy: 0x5C93,
+        wz: 0x7BD8,
+        af_alt: 0x7E51,
+        bc_alt: 0xDB77,
+        de_alt: 0x02C2,
+        hl_alt: 0xD4E2,
+        im: 0x02,
+        p: false,
+        q: 0x29,
+        iff1: false,
+        iff2: true,
+        ei_delay: 0,
+    },
+        &[(0x13B2, 0x00), (0x7BD7, 0xED), (0x7BD8, 0xB2)],
+        &[(0x13B2, 0x76), (0x7BD7, 0xED), (0x7BD8, 0xB2)],
+        &[(0x6D9D, 0x76)],
+        &[],
+        21,
+    );
+}
+
+#[test]
+fn reference_ed_b2_0001() {
+    run_vector(
+        "ED B2 0001",
+        State {
+        pc: 0x361D,
+        sp: 0xA3B9,
+        a: 0x81,
+        f: 0x1B,
+        b: 0x32,
+        c: 0x37,
+        d: 0x19,
+        e: 0x6F,
+        h: 0x42,
+        l: 0xE9,
+        i: 0xF8,
+        r: 0x54,
+        ix: 0x6AAC,
+        iy: 0x5892,
+        wz: 0x4F98,
+        af_alt: 0x023C,
+        bc_alt: 0xCDE2,
+        de_alt: 0x4981,
+        hl_alt: 0xF083,
+        im: 0x00,
+        p: true,
+        q: 0x00,
+        iff1: false,
+        iff2: true,
+        ei_delay: 1,
+    },
+        State {
+        pc: 0x361D,
+        sp: 0xA3B9,
+        a: 0x81,
+        f: 0x22,
+        b: 0x31,
+        c: 0x37,
+        d: 0x19,
+        e: 0x6F,
+        h: 0x42,
+        l: 0xEA,
+        i: 0xF8,
+        r: 0x56,
+        ix: 0x6AAC,
+        iy: 0x5892,
+        wz: 0x361E,
+        af_alt: 0x023C,
+        bc_alt: 0xCDE2,
+        de_alt: 0x4981,
+        hl_alt: 0xF083,
+        im: 0x00,
+        p: false,
+        q: 0x22,
+        iff1: false,
+        iff2: true,
+        ei_delay: 0,
+    },
+        &[(0x361D, 0xED), (0x361E, 0xB2), (0x42E9, 0x00)],
+        &[(0x361D, 0xED), (0x361E, 0xB2), (0x42E9, 0x9A)],
+        &[(0x3237, 0x9A)],
+        &[],
+        21,
+    );
+}
+
+#[test]
+fn reference_ed_b2_0002() {
+    run_vector(
+        "ED B2 0002",
+        State {
+        pc: 0x845F,
+        sp: 0x9DDC,
+        a: 0x83,
+        f: 0xBB,
+        b: 0xB3,
+        c: 0x02,
+        d: 0x0E,
+        e: 0x27,
+        h: 0xB9,
+        l: 0x40,
+        i: 0x5E,
+        r: 0x56,
+        ix: 0xB0AF,
+        iy: 0x3869,
+        wz: 0x813B,
+        af_alt: 0x7B6D,
+        bc_alt: 0xD491,
+        de_alt: 0x9D04,
+        hl_alt: 0xC95B,
+        im: 0x00,
+        p: false,
+        q: 0xBB,
+        iff1: true,
+        iff2: false,
+        ei_delay: 1,
+    },
+        State {
+        pc: 0x845F,
+        sp: 0x9DDC,
+        a: 0x83,
+        f: 0x86,
+        b: 0xB2,
+        c: 0x02,
+        d: 0x0E,
+        e: 0x27,
+        h: 0xB9,
+        l: 0x41,
+        i: 0x5E,
+        r: 0x58,
+        ix: 0xB0AF,
+        iy: 0x3869,
+        wz: 0x8460,
+        af_alt: 0x7B6D,
+        bc_alt: 0xD491,
+        de_alt: 0x9D04,
+        hl_alt: 0xC95B,
+        im: 0x00,
+        p: false,
+        q: 0x86,
+        iff1: true,
+        iff2: false,
+        ei_delay: 0,
+    },
+        &[(0x845F, 0xED), (0x8460, 0xB2), (0xB940, 0x00)],
+        &[(0x845F, 0xED), (0x8460, 0xB2), (0xB940, 0xBC)],
+        &[(0xB302, 0xBC)],
+        &[],
+        21,
+    );
+}
+
+#[test]
+fn reference_ed_b2_0003() {
+    run_vector(
+        "ED B2 0003",
+        State {
+        pc: 0x8B51,
+        sp: 0x8233,
+        a: 0xA2,
+        f: 0x4C,
+        b: 0xD5,
+        c: 0x16,
+        d: 0xE7,
+        e: 0xD4,
+        h: 0x4A,
+        l: 0x2E,
+        i: 0x24,
+        r: 0x08,
+        ix: 0xB2E0,
+        iy: 0x7058,
+        wz: 0x71BB,
+        af_alt: 0xC9F7,
+        bc_alt: 0x243E,
+        de_alt: 0xAE77,
+        hl_alt: 0x1672,
+        im: 0x00,
+        p: false,
+        q: 0x00,
+        iff1: true,
+        iff2: true,
+        ei_delay: 1,
+    },
+        State {
+        pc: 0x8B51,
+        sp: 0x8233,
+        a: 0xA2,
+        f: 0x8C,
+        b: 0xD4,
+        c: 0x16,
+        d: 0xE7,
+        e: 0xD4,
+        h: 0x4A,
+        l: 0x2F,
+        i: 0x24,
+        r: 0x0A,
+        ix: 0xB2E0,
+        iy: 0x7058,
+        wz: 0x8B52,
+        af_alt: 0xC9F7,
+        bc_alt: 0x243E,
+        de_alt: 0xAE77,
+        hl_alt: 0x1672,
+        im: 0x00,
+        p: false,
+        q: 0x8C,
+        iff1: true,
+        iff2: true,
+        ei_delay: 0,
+    },
+        &[(0x4A2E, 0x00), (0x8B51, 0xED), (0x8B52, 0xB2)],
+        &[(0x4A2E, 0x1A), (0x8B51, 0xED), (0x8B52, 0xB2)],
+        &[(0xD516, 0x1A)],
+        &[],
+        21,
+    );
+}
+
+#[test]
+fn reference_ed_b2_0004() {
+    run_vector(
+        "ED B2 0004",
+        State {
+        pc: 0x07C2,
+        sp: 0xC40F,
+        a: 0x8E,
+        f: 0x34,
+        b: 0x59,
+        c: 0xF1,
+        d: 0x78,
+        e: 0xFE,
+        h: 0x14,
+        l: 0x62,
+        i: 0x7E,
+        r: 0x4B,
+        ix: 0xF91E,
+        iy: 0x50EA,
+        wz: 0x407A,
+        af_alt: 0x9D88,
+        bc_alt: 0x2B1A,
+        de_alt: 0x2331,
+        hl_alt: 0xF7DA,
+        im: 0x00,
+        p: false,
+        q: 0x00,
+        iff1: true,
+        iff2: false,
+        ei_delay: 0,
+    },
+        State {
+        pc: 0x07C2,
+        sp: 0xC40F,
+        a: 0x8E,
+        f: 0x05,
+        b: 0x58,
+        c: 0xF1,
+        d: 0x78,
+        e: 0xFE,
+        h: 0x14,
+        l: 0x63,
+        i: 0x7E,
+        r: 0x4D,
+        ix: 0xF91E,
+        iy: 0x50EA,
+        wz: 0x07C3,
+        af_alt: 0x9D88,
+        bc_alt: 0x2B1A,
+        de_alt: 0x2331,
+        hl_alt: 0xF7DA,
+        im: 0x00,
+        p: false,
+        q: 0x05,
+        iff1: true,
+        iff2: false,
+        ei_delay: 0,
+    },
+        &[(0x07C2, 0xED), (0x07C3, 0xB2), (0x1462, 0x00)],
+        &[(0x07C2, 0xED), (0x07C3, 0xB2), (0x1462, 0x31)],
+        &[(0x59F1, 0x31)],
+        &[],
+        21,
+    );
+}
+
+#[test]
+fn reference_ed_b2_0005() {
+    run_vector(
+        "ED B2 0005",
+        State {
+        pc: 0x609E,
+        sp: 0xFAFA,
+        a: 0xA7,
+        f: 0x9B,
+        b: 0x17,
+        c: 0x75,
+        d: 0x59,
+        e: 0xFB,
+        h: 0x22,
+        l: 0x92,
+        i: 0x78,
+        r: 0x2B,
+        ix: 0x7F68,
+        iy: 0x35AA,
+        wz: 0x91A1,
+        af_alt: 0xB938,
+        bc_alt: 0x1C8C,
+        de_alt: 0xB882,
+        hl_alt: 0xB2E6,
+        im: 0x01,
+        p: false,
+        q: 0x00,
+        iff1: false,
+        iff2: true,
+        ei_delay: 1,
+    },
+        State {
+        pc: 0x609E,
+        sp: 0xFAFA,
+        a: 0xA7,
+        f: 0x20,
+        b: 0x16,
+        c: 0x75,
+        d: 0x59,
+        e: 0xFB,
+        h: 0x22,
+        l: 0x93,
+        i: 0x78,
+        r: 0x2D,
+        ix: 0x7F68,
+        iy: 0x35AA,
+        wz: 0x609F,
+        af_alt: 0xB938,
+        bc_alt: 0x1C8C,
+        de_alt: 0xB882,
+        hl_alt: 0xB2E6,
+        im: 0x01,
+        p: false,
+        q: 0x20,
+        iff1: false,
+        iff2: true,
+        ei_delay: 0,
+    },
+        &[(0x2292, 0x00), (0x609E, 0xED), (0x609F, 0xB2)],
+        &[(0x2292, 0x2A), (0x609E, 0xED), (0x609F, 0xB2)],
+        &[(0x1775, 0x2A)],
+        &[],
+        21,
+    );
+}
+
+#[test]
+fn reference_ed_b2_0006() {
+    run_vector(
+        "ED B2 0006",
+        State {
+        pc: 0x9D9B,
+        sp: 0x35F7,
+        a: 0x6A,
+        f: 0x66,
+        b: 0x3E,
+        c: 0xD9,
+        d: 0xF3,
+        e: 0x0F,
+        h: 0x18,
+        l: 0x47,
+        i: 0xCE,
+        r: 0x42,
+        ix: 0xB7D9,
+        iy: 0xA6F4,
+        wz: 0xEB00,
+        af_alt: 0xAD0A,
+        bc_alt: 0xA8DC,
+        de_alt: 0x79FF,
+        hl_alt: 0x5CD0,
+        im: 0x01,
+        p: false,
+        q: 0x66,
+        iff1: true,
+        iff2: false,
+        ei_delay: 0,
+    },
+        State {
+        pc: 0x9D9B,
+        sp: 0x35F7,
+        a: 0x6A,
+        f: 0x0D,
+        b: 0x3D,
+        c: 0xD9,
+        d: 0xF3,
+        e: 0x0F,
+        h: 0x18,
+        l: 0x48,
+        i: 0xCE,
+        r: 0x44,
+        ix: 0xB7D9,
+        iy: 0xA6F4,
+        wz: 0x9D9C,
+        af_alt: 0xAD0A,
+        bc_alt: 0xA8DC,
+        de_alt: 0x79FF,
+        hl_alt: 0x5CD0,
+        im: 0x01,
+        p: false,
+        q: 0x0D,
+        iff1: true,
+        iff2: false,
+        ei_delay: 0,
+    },
+        &[(0x1847, 0x00), (0x9D9B, 0xED), (0x9D9C, 0xB2)],
+        &[(0x1847, 0x6A), (0x9D9B, 0xED), (0x9D9C, 0xB2)],
+        &[(0x3ED9, 0x6A)],
+        &[],
+        21,
+    );
+}
+
+#[test]
+fn reference_ed_b2_0007() {
+    run_vector(
+        "ED B2 0007",
+        State {
+        pc: 0x5F7E,
+        sp: 0xC927,
+        a: 0xE5,
+        f: 0x5D,
+        b: 0xFF,
+        c: 0xD8,
+        d: 0x07,
+        e: 0x97,
+        h: 0xA0,
+        l: 0x2C,
+        i: 0xB7,
+        r: 0x74,
+        ix: 0x1CE4,
+        iy: 0xEF95,
+        wz: 0x6E1D,
+        af_alt: 0x17EF,
+        bc_alt: 0x03CE,
+        de_alt: 0x3F93,
+        hl_alt: 0xE9B4,
+        im: 0x00,
+        p: true,
+        q: 0x5D,
+        iff1: false,
+        iff2: true,
+        ei_delay: 0,
+    },
+        State {
+        pc: 0x5F7E,
+        sp: 0xC927,
+        a: 0xE5,
+        f: 0x8B,
+        b: 0xFE,
+        c: 0xD8,
+        d: 0x07,
+        e: 0x97,
+        h: 0xA0,
+        l: 0x2D,
+        i: 0xB7,
+        r: 0x76,
+        ix: 0x1CE4,
+        iy: 0xEF95,
+        wz: 0x5F7F,
+        af_alt: 0x17EF,
+        bc_alt: 0x03CE,
+        de_alt: 0x3F93,
+        hl_alt: 0xE9B4,
+        im: 0x00,
+        p: false,
+        q: 0x8B,
+        iff1: false,
+        iff2: true,
+        ei_delay: 0,
+    },
+        &[(0x5F7E, 0xED), (0x5F7F, 0xB2), (0xA02C, 0x00)],
+        &[(0x5F7E, 0xED), (0x5F7F, 0xB2), (0xA02C, 0xAC)],
+        &[(0xFFD8, 0xAC)],
+        &[],
+        21,
+    );
+}
+
+#[test]
+fn reference_ed_bb_0000() {
+    run_vector(
+        "ED BB 0000",
+        State {
+        pc: 0xDD5F,
+        sp: 0xCB30,
+        a: 0x34,
+        f: 0x44,
+        b: 0xE1,
+        c: 0xA0,
+        d: 0x97,
+        e: 0x82,
+        h: 0x12,
+        l: 0x5C,
+        i: 0x9E,
+        r: 0x37,
+        ix: 0x19B4,
+        iy: 0xE007,
+        wz: 0xB47B,
+        af_alt: 0xD140,
+        bc_alt: 0x9144,
+        de_alt: 0xBF99,
+        hl_alt: 0x9731,
+        im: 0x01,
+        p: true,
+        q: 0x44,
+        iff1: false,
+        iff2: true,
+        ei_delay: 1,
+    },
+        State {
+        pc: 0xDD5F,
+        sp: 0xCB30,
+        a: 0x34,
+        f: 0x9F,
+        b: 0xE0,
+        c: 0xA0,
+        d: 0x97,
+        e: 0x82,
+        h: 0x12,
+        l: 0x5B,
+        i: 0x9E,
+        r: 0x39,
+        ix: 0x19B4,
+        iy: 0xE007,
+        wz: 0xDD60,
+        af_alt: 0xD140,
+        bc_alt: 0x9144,
+        de_alt: 0xBF99,
+        hl_alt: 0x9731,
+        im: 0x01,
+        p: false,
+        q: 0x9F,
+        iff1: false,
+        iff2: true,
+        ei_delay: 0,
+    },
+        &[(0x125C, 0xD5), (0xDD5F, 0xED), (0xDD60, 0xBB)],
+        &[(0x125C, 0xD5), (0xDD5F, 0xED), (0xDD60, 0xBB)],
+        &[],
+        &[(0xE0A0, 0xD5)],
+        21,
+    );
+}
+
+#[test]
+fn reference_ed_bb_0001() {
+    run_vector(
+        "ED BB 0001",
+        State {
+        pc: 0x52BF,
+        sp: 0xF4F3,
+        a: 0xFA,
+        f: 0x51,
+        b: 0xCF,
+        c: 0xB8,
+        d: 0xCF,
+        e: 0x3C,
+        h: 0xF0,
+        l: 0x13,
+        i: 0xC4,
+        r: 0x45,
+        ix: 0xE22F,
+        iy: 0x5E9D,
+        wz: 0xABC0,
+        af_alt: 0x444F,
+        bc_alt: 0x0BFF,
+        de_alt: 0x824C,
+        hl_alt: 0x50B9,
+        im: 0x01,
+        p: false,
+        q: 0x00,
+        iff1: true,
+        iff2: false,
+        ei_delay: 1,
+    },
+        State {
+        pc: 0x52BF,
+        sp: 0xF4F3,
+        a: 0xFA,
+        f: 0x86,
+        b: 0xCE,
+        c: 0xB8,
+        d: 0xCF,
+        e: 0x3C,
+        h: 0xF0,
+        l: 0x12,
+        i: 0xC4,
+        r: 0x47,
+        ix: 0xE22F,
+        iy: 0x5E9D,
+        wz: 0x52C0,
+        af_alt: 0x444F,
+        bc_alt: 0x0BFF,
+        de_alt: 0x824C,
+        hl_alt: 0x50B9,
+        im: 0x01,
+        p: false,
+        q: 0x86,
+        iff1: true,
+        iff2: false,
+        ei_delay: 0,
+    },
+        &[(0x52BF, 0xED), (0x52C0, 0xBB), (0xF013, 0xA2)],
+        &[(0x52BF, 0xED), (0x52C0, 0xBB), (0xF013, 0xA2)],
+        &[],
+        &[(0xCEB8, 0xA2)],
+        21,
+    );
+}
+
+#[test]
+fn reference_ed_bb_0002() {
+    run_vector(
+        "ED BB 0002",
+        State {
+        pc: 0x50EA,
+        sp: 0xFE53,
+        a: 0x12,
+        f: 0x3C,
+        b: 0x26,
+        c: 0x83,
+        d: 0xD1,
+        e: 0xD2,
+        h: 0x12,
+        l: 0xD1,
+        i: 0x8E,
+        r: 0x7B,
+        ix: 0xC56E,
+        iy: 0x8CB7,
+        wz: 0xAFFA,
+        af_alt: 0xD537,
+        bc_alt: 0x7135,
+        de_alt: 0x5B7B,
+        hl_alt: 0xACFE,
+        im: 0x02,
+        p: true,
+        q: 0x3C,
+        iff1: false,
+        iff2: true,
+        ei_delay: 0,
+    },
+        State {
+        pc: 0x50EA,
+        sp: 0xFE53,
+        a: 0x12,
+        f: 0x07,
+        b: 0x25,
+        c: 0x83,
+        d: 0xD1,
+        e: 0xD2,
+        h: 0x12,
+        l: 0xD0,
+        i: 0x8E,
+        r: 0x7D,
+        ix: 0xC56E,
+        iy: 0x8CB7,
+        wz: 0x50EB,
+        af_alt: 0xD537,
+        bc_alt: 0x7135,
+        de_alt: 0x5B7B,
+        hl_alt: 0xACFE,
+        im: 0x02,
+        p: false,
+        q: 0x07,
+        iff1: false,
+        iff2: true,
+        ei_delay: 0,
+    },
+        &[(0x12D1, 0x83), (0x50EA, 0xED), (0x50EB, 0xBB)],
+        &[(0x12D1, 0x83), (0x50EA, 0xED), (0x50EB, 0xBB)],
+        &[],
+        &[(0x2583, 0x83)],
+        21,
+    );
+}
+
+#[test]
+fn reference_ed_bb_0003() {
+    run_vector(
+        "ED BB 0003",
+        State {
+        pc: 0x7D6C,
+        sp: 0x1112,
+        a: 0x84,
+        f: 0xFD,
+        b: 0xFC,
+        c: 0x6A,
+        d: 0x28,
+        e: 0x24,
+        h: 0xD6,
+        l: 0xAA,
+        i: 0x9F,
+        r: 0x51,
+        ix: 0x98CB,
+        iy: 0xEC76,
+        wz: 0x2FAC,
+        af_alt: 0xC4A7,
+        bc_alt: 0xE229,
+        de_alt: 0xCFD1,
+        hl_alt: 0x82FF,
+        im: 0x01,
+        p: true,
+        q: 0x00,
+        iff1: false,
+        iff2: false,
+        ei_delay: 0,
+    },
+        State {
+        pc: 0x7D6C,
+        sp: 0x1112,
+        a: 0x84,
+        f: 0xAD,
+        b: 0xFB,
+        c: 0x6A,
+        d: 0x28,
+        e: 0x24,
+        h: 0xD6,
+        l: 0xA9,
+        i: 0x9F,
+        r: 0x53,
+        ix: 0x98CB,
+        iy: 0xEC76,
+        wz: 0x7D6D,
+        af_alt: 0xC4A7,
+        bc_alt: 0xE229,
+        de_alt: 0xCFD1,
+        hl_alt: 0x82FF,
+        im: 0x01,
+        p: false,
+        q: 0xAD,
+        iff1: false,
+        iff2: false,
+        ei_delay: 0,
+    },
+        &[(0x7D6C, 0xED), (0x7D6D, 0xBB), (0xD6AA, 0x7D)],
+        &[(0x7D6C, 0xED), (0x7D6D, 0xBB), (0xD6AA, 0x7D)],
+        &[],
+        &[(0xFB6A, 0x7D)],
+        21,
+    );
+}
+
+#[test]
+fn reference_ed_bb_0004() {
+    run_vector(
+        "ED BB 0004",
+        State {
+        pc: 0x0BE5,
+        sp: 0x1BBC,
+        a: 0x0C,
+        f: 0x19,
+        b: 0x14,
+        c: 0xA5,
+        d: 0xA8,
+        e: 0x8E,
+        h: 0xD9,
+        l: 0xAE,
+        i: 0x0B,
+        r: 0x59,
+        ix: 0x17A7,
+        iy: 0x22D3,
+        wz: 0x8BEB,
+        af_alt: 0x02EA,
+        bc_alt: 0x1CE7,
+        de_alt: 0xBC76,
+        hl_alt: 0x992A,
+        im: 0x00,
+        p: false,
+        q: 0x19,
+        iff1: false,
+        iff2: false,
+        ei_delay: 1,
+    },
+        State {
+        pc: 0x0BE5,
+        sp: 0x1BBC,
+        a: 0x0C,
+        f: 0x0C,
+        b: 0x13,
+        c: 0xA5,
+        d: 0xA8,
+        e: 0x8E,
+        h: 0xD9,
+        l: 0xAD,
+        i: 0x0B,
+        r: 0x5B,
+        ix: 0x17A7,
+        iy: 0x22D3,
+        wz: 0x0BE6,
+        af_alt: 0x02EA,
+        bc_alt: 0x1CE7,
+        de_alt: 0xBC76,
+        hl_alt: 0x992A,
+        im: 0x00,
+        p: false,
+        q: 0x0C,
+        iff1: false,
+        iff2: false,
+        ei_delay: 0,
+    },
+        &[(0x0BE5, 0xED), (0x0BE6, 0xBB), (0xD9AE, 0x27)],
+        &[(0x0BE5, 0xED), (0x0BE6, 0xBB), (0xD9AE, 0x27)],
+        &[],
+        &[(0x13A5, 0x27)],
+        21,
+    );
+}
+
+#[test]
+fn reference_ed_bb_0005() {
+    run_vector(
+        "ED BB 0005",
+        State {
+        pc: 0x6D99,
+        sp: 0x5B72,
+        a: 0x3E,
+        f: 0x78,
+        b: 0xA8,
+        c: 0x31,
+        d: 0xE0,
+        e: 0xED,
+        h: 0x2D,
+        l: 0xEF,
+        i: 0xB2,
+        r: 0x5E,
+        ix: 0xB220,
+        iy: 0x78EB,
+        wz: 0x8798,
+        af_alt: 0x8F4F,
+        bc_alt: 0x8F8F,
+        de_alt: 0x7A03,
+        hl_alt: 0x4DF6,
+        im: 0x02,
+        p: true,
+        q: 0x00,
+        iff1: true,
+        iff2: false,
+        ei_delay: 1,
+    },
+        State {
+        pc: 0x6D99,
+        sp: 0x5B72,
+        a: 0x3E,
+        f: 0xA9,
+        b: 0xA7,
+        c: 0x31,
+        d: 0xE0,
+        e: 0xED,
+        h: 0x2D,
+        l: 0xEE,
+        i: 0xB2,
+        r: 0x60,
+        ix: 0xB220,
+        iy: 0x78EB,
+        wz: 0x6D9A,
+        af_alt: 0x8F4F,
+        bc_alt: 0x8F8F,
+        de_alt: 0x7A03,
+        hl_alt: 0x4DF6,
+        im: 0x02,
+        p: false,
+        q: 0xA9,
+        iff1: true,
+        iff2: false,
+        ei_delay: 0,
+    },
+        &[(0x2DEF, 0x37), (0x6D99, 0xED), (0x6D9A, 0xBB)],
+        &[(0x2DEF, 0x37), (0x6D99, 0xED), (0x6D9A, 0xBB)],
+        &[],
+        &[(0xA731, 0x37)],
+        21,
+    );
+}
+
+#[test]
+fn reference_ed_bb_0006() {
+    run_vector(
+        "ED BB 0006",
+        State {
+        pc: 0xC92E,
+        sp: 0x362A,
+        a: 0x17,
+        f: 0x65,
+        b: 0xA4,
+        c: 0xDC,
+        d: 0x13,
+        e: 0xEA,
+        h: 0x25,
+        l: 0x79,
+        i: 0x71,
+        r: 0x2F,
+        ix: 0x9EE0,
+        iy: 0x8F54,
+        wz: 0x7B79,
+        af_alt: 0x33F9,
+        bc_alt: 0xB020,
+        de_alt: 0x9150,
+        hl_alt: 0xB67F,
+        im: 0x00,
+        p: true,
+        q: 0x00,
+        iff1: false,
+        iff2: true,
+        ei_delay: 1,
+    },
+        State {
+        pc: 0xC92E,
+        sp: 0x362A,
+        a: 0x17,
+        f: 0x8F,
+        b: 0xA3,
+        c: 0xDC,
+        d: 0x13,
+        e: 0xEA,
+        h: 0x25,
+        l: 0x78,
+        i: 0x71,
+        r: 0x31,
+        ix: 0x9EE0,
+        iy: 0x8F54,
+        wz: 0xC92F,
+        af_alt: 0x33F9,
+        bc_alt: 0xB020,
+        de_alt: 0x9150,
+        hl_alt: 0xB67F,
+        im: 0x00,
+        p: false,
+        q: 0x8F,
+        iff1: false,
+        iff2: true,
+        ei_delay: 0,
+    },
+        &[(0x2579, 0xBC), (0xC92E, 0xED), (0xC92F, 0xBB)],
+        &[(0x2579, 0xBC), (0xC92E, 0xED), (0xC92F, 0xBB)],
+        &[],
+        &[(0xA3DC, 0xBC)],
+        21,
+    );
+}
+
+#[test]
+fn reference_ed_bb_0007() {
+    run_vector(
+        "ED BB 0007",
+        State {
+        pc: 0x5100,
+        sp: 0x7BB8,
+        a: 0xBC,
+        f: 0x22,
+        b: 0x2A,
+        c: 0xEB,
+        d: 0xB9,
+        e: 0x04,
+        h: 0x5E,
+        l: 0x6B,
+        i: 0x71,
+        r: 0x40,
+        ix: 0x73FD,
+        iy: 0xEC21,
+        wz: 0xB038,
+        af_alt: 0x57DA,
+        bc_alt: 0x50AA,
+        de_alt: 0xE018,
+        hl_alt: 0xF8EF,
+        im: 0x01,
+        p: true,
+        q: 0x22,
+        iff1: false,
+        iff2: true,
+        ei_delay: 0,
+    },
+        State {
+        pc: 0x5100,
+        sp: 0x7BB8,
+        a: 0xBC,
+        f: 0x04,
+        b: 0x29,
+        c: 0xEB,
+        d: 0xB9,
+        e: 0x04,
+        h: 0x5E,
+        l: 0x6A,
+        i: 0x71,
+        r: 0x42,
+        ix: 0x73FD,
+        iy: 0xEC21,
+        wz: 0x5101,
+        af_alt: 0x57DA,
+        bc_alt: 0x50AA,
+        de_alt: 0xE018,
+        hl_alt: 0xF8EF,
+        im: 0x01,
+        p: false,
+        q: 0x04,
+        iff1: false,
+        iff2: true,
+        ei_delay: 0,
+    },
+        &[(0x5100, 0xED), (0x5101, 0xBB), (0x5E6B, 0x34)],
+        &[(0x5100, 0xED), (0x5101, 0xBB), (0x5E6B, 0x34)],
+        &[],
+        &[(0x29EB, 0x34)],
+        21,
+    );
+}
