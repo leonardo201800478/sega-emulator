@@ -706,3 +706,39 @@ fn cpdr_mcycle_trace_matches_pinned_singlestep_bus_samples() {
     ];
     assert_external_mcycle_trace(0xB9, 0x2F, 0x2BD9, &samples, false);
 }
+
+
+#[test]
+fn ldir_trace_omits_repeat_cycle_when_bc_decrements_to_zero() {
+    let (cycles, pc, events) = run_trace(0xB0, 0x10, 0x2000, 0x3000, 1, 0x5A);
+    assert_eq!(cycles, 16);
+    assert_eq!(pc, 2);
+    assert_eq!(
+        events,
+        expected_transfer_trace(0xB0, 0x2000, 0x3000, 0x5A, false)
+    );
+}
+
+#[test]
+fn cpir_trace_stops_when_accumulator_matches_memory() {
+    let (cycles, pc, events) = run_trace(0xB1, 0x5A, 0x2000, 0, 2, 0x5A);
+    assert_eq!(cycles, 16);
+    assert_eq!(pc, 2);
+    assert_eq!(events, expected_compare_trace(0xB1, 0x2000, 0x5A, false));
+}
+
+#[test]
+fn cpdr_trace_stops_when_bc_decrements_to_zero_even_without_match() {
+    let (cycles, pc, events) = run_trace(0xB9, 0x10, 0x2000, 0, 1, 0x5A);
+    assert_eq!(cycles, 16);
+    assert_eq!(pc, 2);
+    assert_eq!(events, expected_compare_trace(0xB9, 0x2000, 0x5A, false));
+}
+
+#[test]
+fn cpir_trace_repeats_after_zero_bc_wraps_to_ffff() {
+    let (cycles, pc, events) = run_trace(0xB1, 0x10, 0x2000, 0, 0, 0x5A);
+    assert_eq!(cycles, 21);
+    assert_eq!(pc, 0);
+    assert_eq!(events, expected_compare_trace(0xB1, 0x2000, 0x5A, true));
+}
