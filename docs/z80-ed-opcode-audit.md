@@ -171,3 +171,15 @@ Os valores devolvidos pelo handler não codificam uma sequência de M1, leituras
 4. Código auditado: [`native/sms_core/src/cpu.rs`](https://github.com/leonardo201800478/sega-emulator/blob/main/native/sms_core/src/cpu.rs), função `execute_ed()` e testes no mesmo arquivo.
 
 **Conclusão atualizada:** os 256 segundos bytes ED têm testes de execução/ciclos/PC; os 178 bytes de fallback têm testes do contrato ED-NOP; e todas as 78 codificações explícitas têm pelo menos um vetor semântico dirigido por família. Os workflows passaram no SHA indicado. Ainda não há evidência suficiente para declarar validação semântica exaustiva ou diferencial do espaço ED: faltam matrizes combinatórias mais profundas, resolução dos conflitos de referência, oráculo independente automatizado e validação em hardware/ROM externa. A precisão ciclo a ciclo continua pendente.
+
+
+## Evidência diferencial adicional após PR #184 — 2026-10-28
+
+A PR [#184](https://github.com/leonardo201800478/sega-emulator/pull/184) adicionou 16 vetores fixos do corpus [SingleStepTests/Z80](https://github.com/SingleStepTests/z80/tree/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7/v1), commit upstream `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7`, sob licença MIT:
+
+- 8 estados iniciais para `ED B2` (INIR).
+- 8 estados iniciais para `ED BB` (OTDR).
+- Comparação de registradores principais/alternativos, flags, WZ/MEMPTR, R, latches P/Q, IFF1/IFF2, modo de interrupção, atraso de EI, bytes de RAM afetados, efeitos de portas e T-states agregados.
+- Resultado: **16/16 vetores aprovados** no SHA integrado `5f39196967a0603185d2dd886711682319f1e381`. Os workflows CI, SMS Core Fast Validation e SMS Z80 Platform Validation passaram nesse SHA.
+
+Esta evidência amplia a cobertura de estados para duas famílias de I/O em bloco, mas não resolve por si só a divergência de flags de I/O em bloco entre referências documentais, não prova comportamento de hardware e não valida a ordem dos eventos de barramento. Permanecem necessárias matrizes mais profundas para outras famílias ED, estados de borda (incluindo B=0 e wraparound), e validação temporal antes de qualquer declaração de precisão ciclo a ciclo.

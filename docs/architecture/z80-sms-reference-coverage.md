@@ -5,8 +5,15 @@
 - Repositório: `leonardo201800478/sega-emulator`
 - Base desta auditoria: `53db203732524e824e670073772cb4cb082937a9`
 - Corpus independente: [SingleStepTests/Z80](https://github.com/SingleStepTests/z80/tree/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7), commit fixado `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7`, licença MIT.
-- Suíte `native/sms_core/tests/z80_singlestep_reference_vectors.rs`: 108 testes de vetor. O candidato da PR #168 passou nos workflows Rust e SMS com 108 testes aprovados, nenhum ignorado.
+- Suíte de referência Rust: **124 vetores** — 108 vetores gerais em `z80_singlestep_reference_vectors.rs` e 16 vetores adicionais de I/O em bloco em `z80_ed_block_io_reference_vectors.rs` (PR #184). Os 16 novos vetores passaram sem falhas no SHA integrado `5f39196967a0603185d2dd886711682319f1e381`.
 - Este documento separa explicitamente **classificação/execução sem erro** de **correção semântica comparada a um oráculo**.
+
+## Atualização de validação — 2026-10-28 (PR #184)
+
+- Integrados 8 vetores `ED B2` (INIR) e 8 vetores `ED BB` (OTDR) do corpus fixado SingleStepTests/Z80.
+- Os vetores comparam estado final dos registradores principais e alternativos, flags, `WZ/MEMPTR`, `R`, `P/Q`, IFF1/IFF2, IM, atraso de EI, RAM alterada, portas de I/O e contagem agregada de T-states.
+- Resultado no SHA de merge `5f39196967a0603185d2dd886711682319f1e381`: 16/16 vetores novos passaram; CI, SMS Core Fast Validation e SMS Z80 Platform Validation passaram.
+- Os testes usam o comprimento do traço externo como total de T-states, mas não comparam eventos de barramento ordenados. Não constituem evidência de hardware nem cobertura combinatória completa.
 
 ## Níveis de evidência
 
@@ -23,7 +30,7 @@
 |---|---|---|---|
 | Base `00–FF` | Todos os 256 bytes passam pelo teste `every_primary_and_prefixed_encoding_is_classified_without_fallback_errors`. | NOP; loads; INC/DEC; aritmética; saltos relativos/absolutos/condicionais; CALL/RET/RST; pilha; troca de bancos; flags e `DAA`; loads indiretos; `LD (nn),A`; `EX (SP),HL`; `JP (HL)`; `LD SP,HL`; `DJNZ`. | A maioria dos 256 opcodes ainda não tem vários vetores por condição, limite e valor de entrada. |
 | `CB` | Os 256 segundos bytes são executados no teste de classificação. | `RLC B`, `RLC (HL)`, `BIT 7,(HL)`, `BIT 0,(HL)`, `RES 0,(HL)`. | Cobertura semântica esparsa para RLC/RRC/RL/RR/SLA/SRA/SLL/SRL, BIT, RES e SET em todos os destinos. |
-| `ED` | Os 256 segundos bytes são executados no teste de classificação. | SBC/ADC HL; loads indiretos de pares; NEG; RETN/RETI; IM 0/1/2; loads de I/R; LDI/LDD/CPI/CPD; LDIR/LDDR/CPIR/CPDR; INI/IND/OUTI/OUTD e variantes repetidas; IN/OUT por C. | Muitas formas ED, incluindo aliases e opcodes não documentados, ainda carecem de vetores de referência. |
+| `ED` | Os 256 segundos bytes são executados no teste de classificação. | SBC/ADC HL; loads indiretos de pares; NEG; RETN/RETI; IM 0/1/2; loads de I/R; LDI/LDD/CPI/CPD; LDIR/LDDR/CPIR/CPDR; INI/IND/OUTI/OUTD e variantes repetidas; IN/OUT por C. Os vetores externos agora incluem oito estados adicionais de INIR e oito de OTDR. | Muitas formas ED e várias condições/estados por opcode ainda carecem de vetores; a validação não é combinatória. |
 | `DD`/`FD` | Os 256 bytes seguintes a cada prefixo são executados no teste de classificação. | `LD IX/IY,nn`; `LD A,(IX+d)`; `LD (IX+d),n`; indexed-CB e casos de BIT. | Instruções indexadas de 16 bits, substituições de H/L, prefixos repetidos e combinações de prefixos precisam de mais vetores semânticos. |
 | `DD CB d op`/`FD CB d op` | As 256 codificações de cada prefixo indexado são exercitadas no teste `every_indexed_cb_encoding_is_classified_for_ix_and_iy`. | Quatro vetores independentes BIT em `(IX+d)`/`(IY+d)`, incluindo WZ e flags XY. | Rotates/shifts, RES e SET com escrita de memória e cópia opcional para registrador ainda precisam de vetores semânticos. |
 
