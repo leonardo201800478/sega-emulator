@@ -34,9 +34,9 @@ Pendências sem defeito confirmado nesta fase:
 - [x] Registrar os dois erros de rótulo da matriz separadamente de defeitos do decoder.
 - [x] Definir regressões fixas independentes para os exemplos BCD documentados.
 - [x] Registrar as lacunas de cobertura e não equiparar classificação a conformidade.
-- [ ] Obter resultados verdes de CI, SMS Core Fast Validation e SMS Z80 Platform Validation no SHA final que contém os vetores fixos.
-- [ ] Revisar os resultados da suíte externa no SHA final e confirmar que não houve falhas/timeout.
-- [ ] Integrar PRs somente após revisão dos checks no SHA candidato; não faz parte desta auditoria fazer merge automático.
+- O estado dos checks é deliberadamente consultado na aba **Checks** da [PR #201](https://github.com/leonardo201800478/sega-emulator/pull/201), sempre no HEAD atual. Resultados de SHAs anteriores não são transferíveis.
+- A suíte externa deve reportar zero falhas e terminar sem timeout no mesmo SHA em que os vetores fixos estão presentes.
+- A integração permanece separada desta auditoria: não fazer merge automático; exigir revisão dos checks no SHA candidato.
 
 ## Referências
 
