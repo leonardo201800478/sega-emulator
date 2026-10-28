@@ -230,7 +230,11 @@ fn expected_inc_dec(value: u8, decrement: bool, carry_in: bool) -> (u8, u8) {
     } {
         flags |= FLAG_H;
     }
-    let overflow = if decrement { value == 0x80 } else { value == 0x7F };
+    let overflow = if decrement {
+        value == 0x80
+    } else {
+        value == 0x7F
+    };
     if overflow {
         flags |= FLAG_PV;
     }
