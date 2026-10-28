@@ -1874,6 +1874,44 @@ mod tests {
     }
 
     #[test]
+    fn repeated_index_prefix_orders_consume_bytes_and_count_nominal_cycles() {
+        for bytes in [
+            [0xDD, 0xDD, 0x00],
+            [0xFD, 0xFD, 0x00],
+            [0xDD, 0xFD, 0x00],
+            [0xFD, 0xDD, 0x00],
+        ] {
+            let mut bus = TestBus([0; 0x10000]);
+            bus.0[..bytes.len()].copy_from_slice(&bytes);
+            let mut cpu = Z80::default();
+
+            assert_eq!(cpu.step(&mut bus), Ok(12), "bytes: {bytes:02X?}");
+            assert_eq!(cpu.registers.pc, 3, "bytes: {bytes:02X?}");
+            assert_eq!(cpu.r, 3, "bytes: {bytes:02X?}");
+            assert_eq!(cpu.total_tstates, 12, "bytes: {bytes:02X?}");
+        }
+    }
+
+    #[test]
+    fn last_repeated_index_prefix_selects_ix_or_iy() {
+        for (bytes, expected_ix, expected_iy) in [
+            ([0xDD, 0xFD, 0x21, 0x34, 0x12], 0x0000, 0x1234),
+            ([0xFD, 0xDD, 0x21, 0x78, 0x56], 0x5678, 0x0000),
+        ] {
+            let mut bus = TestBus([0; 0x10000]);
+            bus.0[..bytes.len()].copy_from_slice(&bytes);
+            let mut cpu = Z80::default();
+
+            assert_eq!(cpu.step(&mut bus), Ok(18), "bytes: {bytes:02X?}");
+            assert_eq!(cpu.registers.pc, 5, "bytes: {bytes:02X?}");
+            assert_eq!(cpu.r, 3, "bytes: {bytes:02X?}");
+            assert_eq!(cpu.ix, expected_ix, "bytes: {bytes:02X?}");
+            assert_eq!(cpu.iy, expected_iy, "bytes: {bytes:02X?}");
+            assert_eq!(cpu.total_tstates, 18, "bytes: {bytes:02X?}");
+        }
+    }
+
+    #[test]
     fn ignored_index_prefix_executes_base_instruction_with_prefix_cycles() {
         let mut bus = TestBus([0; 0x10000]);
         bus.0[..2].copy_from_slice(&[0xDD, 0x00]);
