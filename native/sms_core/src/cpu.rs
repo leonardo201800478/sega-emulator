@@ -1289,7 +1289,6 @@ impl Z80 {
             1_i16
         };
         let old_bc = self.registers.bc();
-        let old_b = self.registers.b;
         let value = if input {
             let value = bus.read_port(old_bc);
             bus.write_memory(self.registers.hl(), value);
@@ -1320,8 +1319,7 @@ impl Z80 {
         if sum > 0xFF {
             flags |= FLAG_H | FLAG_C;
         }
-        let parity_b = if input { old_b } else { self.registers.b };
-        let parity_arg = (sum as u8 & 0x07) ^ parity_b;
+        let parity_arg = (sum as u8 & 0x07) ^ self.registers.b;
         if parity_arg.count_ones().is_multiple_of(2) {
             flags |= FLAG_PV;
         }
@@ -1329,6 +1327,35 @@ impl Z80 {
             self.registers.pc = self.registers.pc.wrapping_sub(2);
             self.wz = self.registers.pc.wrapping_add(1);
             flags = (flags & !FLAG_XY) | (((self.registers.pc >> 8) as u8) & FLAG_XY);
+
+            let carry = flags & FLAG_C != 0;
+            let parity_value = if carry {
+                if value & 0x80 != 0 {
+                    self.registers.b.wrapping_sub(1) & 0x07
+                } else {
+                    self.registers.b.wrapping_add(1) & 0x07
+                }
+            } else {
+                self.registers.b & 0x07
+            };
+            let parity = parity_value.count_ones().is_multiple_of(2);
+            if (flags & FLAG_PV != 0) ^ parity ^ true {
+                flags |= FLAG_PV;
+            } else {
+                flags &= !FLAG_PV;
+            }
+            if carry {
+                let half = if value & 0x80 != 0 {
+                    self.registers.b & 0x0F == 0
+                } else {
+                    self.registers.b & 0x0F == 0x0F
+                };
+                if half {
+                    flags |= FLAG_H;
+                } else {
+                    flags &= !FLAG_H;
+                }
+            }
             self.set_flags(flags);
             21
         } else {
