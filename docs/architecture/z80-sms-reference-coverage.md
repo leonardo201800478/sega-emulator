@@ -147,3 +147,11 @@ As três PRs não alteraram o runtime de produção. A validação é relativa a
 Este lote caracteriza as ordens `DD FD`, `FD DD` e `FD FD` antes de indexed-CB; os testes preexistentes cobrem `DD DD`, prefixos isolados, H/L versus IXH/IXL/IYH/IYL, deslocamentos e wraparound. A cobertura é dirigida, não uma prova exaustiva de todas as sequências de prefixos.
 
 A auditoria semântica global da issue [#158](https://github.com/leonardo201800478/sega-emulator/issues/158) e a auditoria de estado/interrupções/temporalidade da issue [#159](https://github.com/leonardo201800478/sega-emulator/issues/159) permanecem abertas. `TEMPORAL_PASS` continua **NOT DECLARED**: os testes verificam T-states agregados, não traces de barramento ordenados por ciclo.
+
+## Atualização — prefixos DD/FD ignorados antes de ED e HALT (PR #217, 2026-10-28)
+
+- A revisão manual do caminho de fallback em `execute_indexed` identificou que o decoder lia o byte seguinte a DD/FD para classificá-lo e, quando não era uma instrução indexada, recuava PC/R e invocava o decoder base. O decoder base lia novamente o mesmo byte, duplicando a chamada a `CpuBus::read_memory` para o opcode já observado.
+- A correção proposta entrega o opcode já lido ao decoder base via `injected_opcode`, sem um segundo acesso à memória nem incremento de PC adicional. O estado de R é ajustado para que o decoder base contabilize o fetch M1 uma única vez.
+- O teste `native/sms_core/tests/z80_ignored_index_prefix_ed_halt.rs` cobre DD ED 47, FD ED 47, DD 76 e FD 76. Ele verifica a sequência de endereços lidos, estado de I/flags, PC, R incluindo preservação do bit 7, HALT e T-states nominais.
+- Esta atualização descreve a mudança candidata da PR #217. Os workflows do SHA candidato precisam passar antes do merge; os resultados serão registrados após a validação.
+- O rastreamento registra chamadas abstratas ao barramento, não eventos temporizados por T-state. Não declara `TEMPORAL_PASS`; as issues #158 e #159 continuam abertas.
