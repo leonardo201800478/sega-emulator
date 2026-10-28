@@ -155,6 +155,17 @@ Critérios de aceitação antes de modificar o executor:
 
 Próxima implementação recomendada: começar com testes determinísticos para os caminhos condicionais e os limites de PC/SP, sem alterar o decoder até que uma falha reproduzível seja demonstrada. Registrar primeiro a lacuna e a aceitação; depois, implementar uma correção mínima somente se os testes revelarem divergência.
 
+### Execução da primeira fatia de testes
+
+A PR [#229 — testes de caminhos condicionais e limites](https://github.com/leonardo201800478/sega-emulator/pull/229) foi aberta sem alterações no runtime, a partir de `main` em `9a0d424cf610d8cecb4818b1a9bc9fbc4572dbef`. HEAD candidato consultado: `78553c9f6a78b408c14efc3d00ca0113ec580e42`.
+
+- **PASS:** [SMS Core Fast Validation](https://github.com/leonardo201800478/sega-emulator/actions/runs/40790980771), incluindo formatação, lint e testes direcionados do núcleo SMS.
+- **PASS:** [CI geral](https://github.com/leonardo201800478/sega-emulator/actions/runs/40790980752).
+- **PASS:** Rust formatting, Workspace Clippy e Workspace Rust tests no workflow [SMS Z80 Platform Validation](https://github.com/leonardo201800478/sega-emulator/actions/runs/40790980785).
+- **PENDING:** suíte externa completa Z80 no mesmo workflow; não contar como PASS até concluir.
+- A execução rápida registrou os sete novos testes como aprovados. Nenhum defeito funcional do executor foi identificado nem corrigido nesta fatia.
+- A PR permanece aberta; não houve merge.
+
 ## 7. Prompt para continuar em um novo chat
 
 Use o prompt abaixo como instrução de retomada. Ele está intencionalmente restrito ao Z80 puro.
