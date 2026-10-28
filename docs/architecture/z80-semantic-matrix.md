@@ -75,7 +75,7 @@ Cada novo vetor externo deve registrar URL, commit, licença e proveniência. O 
 - [x] O runtime não foi alterado nesta atualização; qualquer correção futura depende de divergência reproduzível contra evidência independente.
 - [x] Prefixos DD repetidos e sequência DD/FD verificam precedência do último prefixo, PC, R e T-states agregados.
 - [x] Um vetor de deslocamento negativo verifica wraparound do endereço efetivo para FFFF.
-- [x] CI, SMS Core Fast Validation e SMS Z80 Platform Validation passaram no SHA candidato `98a11f5ed5d498ce96f92c23a7ce748d1baa501d`.
+- [x] CI, SMS Core Fast Validation e SMS Z80 Platform Validation passaram em um candidato anterior da PR #197; o status do SHA atual deve ser confirmado pelos checks vinculados à PR.
 - [ ] Executar comparação diferencial com um segundo núcleo independente ou em hardware; a referência documental adicionada não satisfaz esse critério.
 - [ ] Revisão independente das semânticas e contagens.
 - [ ] Fechamento das lacunas remanescentes — não declarado concluído por esta atualização.
