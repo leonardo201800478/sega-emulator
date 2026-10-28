@@ -251,3 +251,6 @@ Base externa fixada: [SingleStepTests/Z80](https://github.com/SingleStepTests/z8
 O harness compara registradores e latches expostos, PC/SP e T-states agregados por instrução. **Limitação mantida:** a memória final após escritas não é comparada ainda; por isso, os casos que escrevem em RAM verificam estado arquitetural e temporização agregada, não o efeito completo na memória. As listas de ciclos do corpus não são usadas para validar a ordem de transações de barramento.
 
 Esta ampliação é incremental e não equivale à cobertura total do conjunto Z80: o upstream contém milhares de ficheiros/vetores e inclui comportamentos que exigem suporte de harness para ciclos, interrupções e memória. Continuar por famílias, adicionando comparação de RAM antes de considerar validadas instruções que escrevem memória.
+
+
+**Achados adicionais desta ampliação:** vetores fixos revelaram que LD (BC),A / LD A,(BC), ADD HL,BC, DJNZ/JR, JP, RET e CALL não atualizavam WZ/MEMPTR como o corpus fixado esperava. Foram adicionadas atualizações explícitas ao core SMS e mantidos os vetores como regressões. Um vetor CPIR (ED B1) revela divergência ainda não resolvida na flag não documentada X; o teste fica explicitamente ignorado, com motivo, até a regra ser confrontada com evidência independente adicional. Não considerar esse caso aprovado.
