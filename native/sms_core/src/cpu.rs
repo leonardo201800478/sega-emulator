@@ -2465,7 +2465,7 @@ mod tests {
         adc.registers.f = FLAG_C;
         assert_eq!(adc.step(&mut adc_bus), Ok(15));
         assert_eq!(adc.registers.hl(), 0x1000);
-        assert_eq!(adc.registers.f & 0xFF, FLAG_H);
+        assert_eq!(adc.registers.f, FLAG_H);
         assert_eq!(adc.wz, 0x1000);
 
         let mut overflow_bus = TestBus([0; 0x10000]);
@@ -2476,7 +2476,7 @@ mod tests {
         overflow.registers.f = FLAG_C;
         assert_eq!(overflow.step(&mut overflow_bus), Ok(15));
         assert_eq!(overflow.registers.hl(), 0x8000);
-        assert_eq!(overflow.registers.f & 0xFF, 0x94); // S, H, P/V
+        assert_eq!(overflow.registers.f, 0x94); // S, H, P/V
 
         let mut sbc_bus = TestBus([0; 0x10000]);
         sbc_bus.0[..2].copy_from_slice(&[0xED, 0x42]); // SBC HL,BC
@@ -2486,7 +2486,7 @@ mod tests {
         sbc.registers.f = FLAG_C;
         assert_eq!(sbc.step(&mut sbc_bus), Ok(15));
         assert_eq!(sbc.registers.hl(), 0xFFFF);
-        assert_eq!(sbc.registers.f & 0xFF, 0xBB); // S, N, H, C, undocumented XY
+        assert_eq!(sbc.registers.f, 0xBB); // S, N, H, C, undocumented XY
     }
 
     #[test]
@@ -2499,7 +2499,7 @@ mod tests {
             cpu.registers.a = 0x80;
             assert_eq!(cpu.step(&mut bus), Ok(8), "ED {opcode:02X}");
             assert_eq!(cpu.registers.a, 0x80, "ED {opcode:02X}");
-            assert_eq!(cpu.registers.f & 0xFF, 0x87, "ED {opcode:02X}");
+            assert_eq!(cpu.registers.f, 0x87, "ED {opcode:02X}");
             let result = (cpu.registers.a, cpu.registers.f);
             if let Some(expected) = reference {
                 assert_eq!(result, expected, "NEG alias ED {opcode:02X}");
@@ -2552,17 +2552,19 @@ mod tests {
 
     #[test]
     fn ed_ld_a_i_and_ld_a_r_update_flags_and_preserve_carry() {
-        for (opcode, source) in [(0x57, 0xA8_u8), (0x5F, 0xA8_u8)] {
+        for (opcode, source) in [(0x57, 0xA8_u8), (0x5F, 0xAA_u8)] {
             let mut bus = TestBus([0; 0x10000]);
             bus.0[..2].copy_from_slice(&[0xED, opcode]);
-            let mut cpu = Z80::default();
-            cpu.i = 0xA8;
-            cpu.r = 0xA8;
-            cpu.iff2 = true;
+            let mut cpu = Z80 {
+                i: 0xA8,
+                r: 0xA8,
+                iff2: true,
+                ..Z80::default()
+            };
             cpu.registers.f = FLAG_C;
             assert_eq!(cpu.step(&mut bus), Ok(9), "ED {opcode:02X}");
             assert_eq!(cpu.registers.a, source);
-            assert_eq!(cpu.registers.f & 0xFF, 0xAD); // S, undocumented XY, P/V, C
+            assert_eq!(cpu.registers.f, 0xAD); // S, undocumented XY, P/V, C
         }
 
         let mut bus = TestBus([0; 0x10000]);
@@ -2573,7 +2575,7 @@ mod tests {
         cpu.registers.f = FLAG_C;
         assert_eq!(cpu.step(&mut bus), Ok(9));
         assert_eq!(cpu.registers.a, 0);
-        assert_eq!(cpu.registers.f & 0xFF, FLAG_Z | FLAG_C);
+        assert_eq!(cpu.registers.f, FLAG_Z | FLAG_C);
     }
 
     #[test]
@@ -2588,7 +2590,7 @@ mod tests {
         assert_eq!(rrd.step(&mut rrd_bus), Ok(18));
         assert_eq!(rrd.registers.a, 0x14);
         assert_eq!(rrd_bus.0[0xC000], 0x23);
-        assert_eq!(rrd.registers.f & 0xFF, FLAG_C | FLAG_PV);
+        assert_eq!(rrd.registers.f, FLAG_C | FLAG_PV);
         assert_eq!(rrd.wz, 0xC001);
 
         let mut rld_bus = TestBus([0; 0x10000]);
@@ -2601,7 +2603,7 @@ mod tests {
         assert_eq!(rld.step(&mut rld_bus), Ok(18));
         assert_eq!(rld.registers.a, 0x13);
         assert_eq!(rld_bus.0[0xC000], 0x42);
-        assert_eq!(rld.registers.f & 0xFF, FLAG_C);
+        assert_eq!(rld.registers.f, FLAG_C);
         assert_eq!(rld.wz, 0xC001);
     }
 
@@ -2622,7 +2624,7 @@ mod tests {
         assert_eq!(ldi.registers.de(), 0xC201);
         assert_eq!(ldi.registers.bc(), 1);
         assert_eq!(
-            ldi.registers.f & 0xFF,
+            ldi.registers.f,
             FLAG_S | FLAG_Z | FLAG_C | FLAG_PV | 0x08
         );
 
@@ -2678,7 +2680,7 @@ mod tests {
         assert_eq!(cpi.registers.hl(), 0xC101);
         assert_eq!(cpi.registers.bc(), 0);
         assert_eq!(cpi.registers.a, 0x3B);
-        assert_eq!(cpi.registers.f & 0xFF, FLAG_C | FLAG_Z | FLAG_N);
+        assert_eq!(cpi.registers.f, FLAG_C | FLAG_Z | FLAG_N);
 
         let mut cpir_bus = TestBus([0; 0x10000]);
         cpir_bus.0[..2].copy_from_slice(&[0xED, 0xB1]);
@@ -2713,11 +2715,11 @@ mod tests {
         ini_bus.memory[..2].copy_from_slice(&[0xED, 0xA2]);
         ini_bus.port_value = 0x80;
         let mut ini = Z80::default();
-        ini.registers.set_bc(0x0205);
+        ini.registers.set_bc(0x02FA);
         ini.registers.set_hl(0xC100);
         ini.registers.f = FLAG_C;
         assert_eq!(ini.step(&mut ini_bus), Ok(16));
-        assert_eq!(ini_bus.port_reads, vec![0x0205]);
+        assert_eq!(ini_bus.port_reads, vec![0x02FA]);
         assert_eq!(ini_bus.memory[0xC100], 0x80);
         assert_eq!(ini.registers.b, 1);
         assert_eq!(ini.registers.hl(), 0xC101);
@@ -2802,7 +2804,7 @@ mod tests {
             assert_eq!(cpu.registers.h, expected_h, "IN ED {opcode:02X}");
             assert_eq!(cpu.registers.l, expected_l, "IN ED {opcode:02X}");
             assert_eq!(
-                cpu.registers.f & 0xFF,
+                cpu.registers.f,
                 0xA4,
                 "IN ED {opcode:02X}: S/XY/PV from 0xA5"
             );
