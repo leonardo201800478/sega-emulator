@@ -137,7 +137,7 @@ Este registro consolida o estado observado após a integração de `05cb8259dfaa
 - `docs/architecture/z80-sms-reference-coverage.md` registra 172 vetores SingleStepTests/Z80. O próprio upstream declara que o corpus foi traduzido do núcleo Z80 do Ares e corrigido; portanto, ele não é um oráculo independente de uma implementação derivada de Ares.
 - A cobertura indexed-CB de rotate/shift foi ampliada com testes dirigidos e varreduras do modelo interno. Esses testes não comparam eventos de barramento ordenados por T-state.
 - O corpus externo `raxoft/z80test` é uma linha de evidência distinta, mas seu alvo original é ZX Spectrum e o harness SMS usa memória plana, substitui a saída de vídeo e simula portas. Cada discrepância exige triagem de variante/harness antes de ser classificada como bug do core.
-- O registro anterior de execução completa (2026-10-24) foi de 1.556.612 casos aprovados e 47.388 falhos, de 1.604.000 contabilizados (97,046%). Esse resultado é baseline histórico, não resultado do SHA atual; os casos falhos não podem ser ignorados nem atribuídos automaticamente ao core.
+- Um registro histórico separado menciona 1.604.000 vetores (1.556.612 aprovados e 47.388 falhos; 97,046%) em 2026-10-24. Esse número **não** corresponde aos 204 testes reportados pelo `raxoft/z80test`; a referência ao run/artifact original ainda precisa ser recuperada, portanto esse baseline fica **NOT VERIFIED** até ser vinculado a evidência consultável.
 
 ### Gate de conclusão da auditoria semântica
 
@@ -155,7 +155,9 @@ Este registro consolida o estado observado após a integração de `05cb8259dfaa
 - Inventário de codificações: **IMPLEMENTED**.
 - Correção semântica global: **NOT PASS**; evidência incompleta.
 - Baseline externo anterior: **SHORT_PASS histórico**, com 47.388 falhas ainda por triagem.
-- Reexecução completa no SHA candidato deste registro: **NOT RUN** até os workflows terminarem.
+- `raxoft/z80test` no SHA candidato `59ee21fd55184f77443431bf71ab7a10209fea74`: **PASS** no workflow [SMS Z80 Platform Validation](https://github.com/leonardo201800478/sega-emulator/actions/runs/40773702379). `z80full`: 188.022.588 instruções, 1.132.230.280 T-states agregados, 204 testes reportados, 0 falhas. `z80ccf`: 88.340.467 instruções, 602.728.667 T-states agregados, 204 testes reportados, 0 falhas. Esses contadores não equivalem a 1,604 milhão de vetores por opcode nem validam barramento ciclo a ciclo.
+- `cargo fmt --all -- --check`, Clippy do workspace e `cargo test --workspace --locked`: **PASS** no mesmo SHA pelo workflow acima; CI/quality também **PASS** no [run 40773702436](https://github.com/leonardo201800478/sega-emulator/actions/runs/40773702436).
+- Reexecução do corpus separado de 1.604.000 vetores: **NOT RUN / artefato original não identificado nesta sessão**.
 - Validação por eventos de barramento em T-state: **NOT RUN**.
 - Liberação do gate Z80A/SG-1000: **BLOCKED**.
 
