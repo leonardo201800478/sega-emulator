@@ -44,7 +44,7 @@ fn reference_sub(lhs: u8, rhs: u8, borrow: bool, compare: bool) -> (u8, u8) {
     let borrow_in = i32::from(borrow);
     let value = lhs.wrapping_sub(rhs).wrapping_sub(u8::from(borrow));
     let signed = i32::from(lhs as i8) - i32::from(rhs as i8) - borrow_in;
-    let mut flags = if compare { rhs & XY } else { value & XY } | N;
+    let mut flags = (if compare { rhs & XY } else { value & XY }) | N;
     if value == 0 {
         flags |= Z;
     }
