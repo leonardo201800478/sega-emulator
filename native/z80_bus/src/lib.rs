@@ -36,6 +36,38 @@ impl Z80BusEvent {
     }
 }
 
+
+/// Phase label inferred for an instrumented Z80 T-state sample.
+///
+/// The pinned SingleStepTests corpus exposes address/data and RD/WR/MREQ/IORQ
+/// samples; it does not expose every physical Z80 control pin. Refresh is a
+/// phase label inferred from the documented M1 sequence, not a sampled RFSH pin.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Z80TStatePhase {
+    OpcodeFetch,
+    Refresh,
+    MemoryRead,
+    MemoryWrite,
+    Internal,
+}
+
+/// One deterministic address/data/control sample at an instruction-relative T-state.
+///
+/// Boolean control fields mean asserted, independent of the electrical active-low
+/// representation. This initial model covers only selected ED block instructions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Z80TStateSample {
+    pub instruction_pc: u16,
+    pub tstate_offset: u32,
+    pub phase: Z80TStatePhase,
+    pub address: Option<u16>,
+    pub data: Option<u8>,
+    pub rd: bool,
+    pub wr: bool,
+    pub mreq: bool,
+    pub iorq: bool,
+}
+
 /// Memory and port access available to a Z80 implementation.
 ///
 /// Default port behavior represents an unimplemented/open bus placeholder,
@@ -54,6 +86,9 @@ pub trait CpuBus {
     /// Observe an instrumented timing event. The default is allocation-free and
     /// has no effect on emulation; this hook is not yet emitted by every opcode.
     fn observe_timing_event(&mut self, _event: Z80BusEvent) {}
+
+    /// Observe a T-state sample. The default is a no-op and does not advance the machine scheduler.
+    fn observe_tstate_sample(&mut self, _sample: Z80TStateSample) {}
 }
 
 #[cfg(test)]

@@ -2,4 +2,4 @@
 //!
 //! The CPU is shared only at the trait boundary. Memory maps and device port
 //! decoding remain owned by the SMS machine.
-pub use sega_z80_bus::{CpuBus, Z80BusEvent, Z80BusEventKind};
+pub use sega_z80_bus::{CpuBus, Z80BusEvent, Z80BusEventKind, Z80TStatePhase, Z80TStateSample};
