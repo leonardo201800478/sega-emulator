@@ -131,16 +131,39 @@ fn indexed_cb_bit_res_set_cover_all_bit_indices_destinations_and_wz() {
                         assert_eq!(cpu.registers.pc, 4, "{context}");
                         assert_eq!(cpu.r, 2, "{context}");
                         assert_eq!(cpu.wz, address, "{context}");
-                        assert_eq!(cpu.ix, if prefix == 0xDD { index } else { 0x1111 }, "{context}");
-                        assert_eq!(cpu.iy, if prefix == 0xFD { index } else { 0x2222 }, "{context}");
+                        assert_eq!(
+                            cpu.ix,
+                            if prefix == 0xDD { index } else { 0x1111 },
+                            "{context}"
+                        );
+                        assert_eq!(
+                            cpu.iy,
+                            if prefix == 0xFD { index } else { 0x2222 },
+                            "{context}"
+                        );
                         assert_eq!(bus.0[usize::from(address)], result, "{context}");
 
                         if operation == 1 {
-                            assert_eq!(cpu.registers.f, expected_bit_flags(before_flags, initial_value, bit, address), "{context}");
-                            assert_eq!(general_registers(&cpu), before_registers, "{context}: BIT must not write a register");
-                            assert_eq!(bus.0[usize::from(address)], initial_value, "{context}: BIT must not write memory");
+                            assert_eq!(
+                                cpu.registers.f,
+                                expected_bit_flags(before_flags, initial_value, bit, address),
+                                "{context}"
+                            );
+                            assert_eq!(
+                                general_registers(&cpu),
+                                before_registers,
+                                "{context}: BIT must not write a register"
+                            );
+                            assert_eq!(
+                                bus.0[usize::from(address)],
+                                initial_value,
+                                "{context}: BIT must not write memory"
+                            );
                         } else {
-                            assert_eq!(cpu.registers.f, before_flags, "{context}: RES/SET preserve flags");
+                            assert_eq!(
+                                cpu.registers.f, before_flags,
+                                "{context}: RES/SET preserve flags"
+                            );
                             let mut expected_registers = before_registers;
                             if destination != 6 {
                                 let mut expected_cpu = Z80::default();
@@ -153,9 +176,17 @@ fn indexed_cb_bit_res_set_cover_all_bit_indices_destinations_and_wz() {
                                 expected_cpu.registers.l = before_registers[6];
                                 write_register(&mut expected_cpu, destination, result);
                                 expected_registers = general_registers(&expected_cpu);
-                                assert_eq!(read_register(&cpu, destination), result, "{context}: register destination");
+                                assert_eq!(
+                                    read_register(&cpu, destination),
+                                    result,
+                                    "{context}: register destination"
+                                );
                             }
-                            assert_eq!(general_registers(&cpu), expected_registers, "{context}: unrelated registers must be preserved");
+                            assert_eq!(
+                                general_registers(&cpu),
+                                expected_registers,
+                                "{context}: unrelated registers must be preserved"
+                            );
                         }
                     }
                 }
