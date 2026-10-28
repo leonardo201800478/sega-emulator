@@ -368,6 +368,6 @@ fn cpdr_repeats_on_nonmatch_and_uses_repeat_pc_for_xy() {
     assert_eq!(cpu.wz, 0x2801);
     assert_eq!(cpu.registers.hl(), 0x3FFF);
     assert_eq!(cpu.registers.bc(), 0x0001);
-    assert_eq!(cpu.registers.f, FLAG_S | FLAG_N | FLAG_PV);
+    assert_eq!(cpu.registers.f, FLAG_S | FLAG_N | FLAG_PV | 0x28);
 }
 
