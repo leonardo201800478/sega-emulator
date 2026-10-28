@@ -53,7 +53,7 @@ pub enum Z80TStatePhase {
 /// One deterministic address/data/control sample at an instruction-relative T-state.
 ///
 /// Boolean control fields mean asserted, independent of the electrical active-low
-/// representation. This initial model covers only selected ED block instructions.
+/// representation. RD/WR/MREQ/IORQ follow the pinned corpus's simplified access profile, not a physical half-clock waveform. This initial model covers only selected ED block instructions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Z80TStateSample {
     pub instruction_pc: u16,
