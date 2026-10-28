@@ -1,0 +1,161 @@
+# Auditoria do Z80 puro — estado, evidências e continuidade
+
+**Base inspecionada:** `main` / commit `9a0d424cf610d8cecb4818b1a9bc9fbc4572dbef` (merge da PR #226).
+**Escopo desta auditoria:** CPU Z80 implementada em Rust no `native/sms_core`, sua ALU, contrato mínimo de barramento, testes unitários/diferenciais e instrumentação de trace. Não avaliar a prontidão da máquina SMS nem bloquear a auditoria da CPU por dispositivos SMS ainda não implementados.
+**Natureza:** auditoria estática do código remoto e das evidências de CI já disponíveis no histórico. Não afirmar que todos os comandos foram executados localmente nesta sessão.
+
+## 1. Decisão de escopo
+
+“Z80 puro” significa testar a CPU isolada de VDP, PSG, mapper SMS, portas específicas do SMS e scheduler da máquina. Os testes podem fornecer um barramento de teste determinístico com memória e I/O simulados. A CPU não deve depender de dispositivos da máquina para demonstrar semântica de instrução.
+
+O barramento é relevante somente como contrato de observação e para verificar chamadas/ordem de acesso da CPU. O trace M-cycle-level recentemente adicionado é parte da CPU/barramento e deve ser validado separadamente de qualquer integração de hardware.
+
+## 2. Arquivos e componentes examinados
+
+- `native/sms_core/src/cpu.rs`: decoder/executor Z80 ativo no SMS, estado dos registradores, flags, prefixos, interrupções, contagem nominal de T-states e trace inicial.
+- `native/sms_core/src/alu.rs`: operações aritméticas/lógicas auxiliares da CPU.
+- `native/sms_core/src/bus.rs`: contrato `CpuBus` e eventos observáveis.
+- `native/sms_core/tests/z80_ed_block_temporal_trace.rs`: testes de trace das oito instruções ED de transferência/comparação.
+- `docs/architecture/z80-opcode-space-completion-audit.md`: inventário semântico anterior, cujo cabeçalho cita outra base; seus números são contexto histórico e devem ser reconciliados com o código no SHA atual antes de tratá-los como contagem atual.
+- `docs/architecture/z80-temporal-bus-model.md`: contrato temporal e limites conhecidos.
+- `docs/architecture/z80-coverage-gap-model.md`: matriz histórica de lacunas e critérios de aceitação; parte dela refere-se ao runtime Python legado e a branches/SHA anteriores, portanto não é evidência direta do runtime Rust atual.
+
+Links de código na base auditada:
+- [CPU](https://github.com/leonardo201800478/sega-emulator/blob/9a0d424cf610d8cecb4818b1a9bc9fbc4572dbef/native/sms_core/src/cpu.rs)
+- [ALU](https://github.com/leonardo201800478/sega-emulator/blob/9a0d424cf610d8cecb4818b1a9bc9fbc4572dbef/native/sms_core/src/alu.rs)
+- [Barramento Z80](https://github.com/leonardo201800478/sega-emulator/blob/9a0d424cf610d8cecb4818b1a9bc9fbc4572dbef/native/sms_core/src/bus.rs)
+- [Testes de trace ED](https://github.com/leonardo201800478/sega-emulator/blob/9a0d424cf610d8cecb4818b1a9bc9fbc4572dbef/native/sms_core/tests/z80_ed_block_temporal_trace.rs)
+
+## 3. O que está implementado ou já tem evidência
+
+### 3.1 Runtime e decoder
+
+- O núcleo SMS contém um executor Z80 Rust consolidado, com famílias de instruções base e espaços de prefixo CB, ED, DD/FD e DDCB/FDCB.
+- A CPU mantém estado além dos registradores primários, incluindo registradores alternativos, IX/IY, I/R, IFF1/IFF2, modo de interrupção, HALT e estado auxiliar usado para comportamentos como WZ/MEMPTR e flags dependentes do histórico.
+- O contrato da CPU retorna T-states nominais por instrução. Isso permite testar duração agregada, mas não prova os instantes reais de cada acesso ao barramento.
+- Há testes direcionados para diversas famílias e casos de borda. A existência de um caminho de decodificação para um byte não prova que todas as combinações de estado de entrada estejam corretas.
+
+### 3.2 Trace temporal inicial
+
+- Foi adicionado observador opcional de eventos ao contrato do barramento.
+- A primeira fatia registra eventos em nível de M-cycle para LDI, LDD, LDIR, LDDR, CPI, CPD, CPIR e CPDR, sem prefixos DD/FD.
+- A suíte dedicada inclui casos de terminação por BC chegando a zero, término de CPIR por igualdade e wraparound de BC=0 para FFFF quando a repetição prossegue.
+- A documentação delimita corretamente que não há amostras completas de pinos por T-state, modelagem completa de WAIT/refresh, integração com scheduler nem validação temporal de todo o conjunto de instruções.
+
+### 3.3 Evidências de CI pré-merge da PR #226
+
+No SHA candidato `1f941122ae6763caff4a46b8523af154ef742623`, os seguintes workflows foram registrados como aprovados:
+- SMS Core Fast Validation — run [40780745233](https://github.com/leonardo201800478/sega-emulator/actions/runs/40780745233).
+- CI — run [40780745373](https://github.com/leonardo201800478/sega-emulator/actions/runs/40780745373).
+- SMS Z80 Platform Validation — run [40780745207](https://github.com/leonardo201800478/sega-emulator/actions/runs/40780745207).
+- Rust SG-1000 Workspace — run [40780745212](https://github.com/leonardo201800478/sega-emulator/actions/runs/40780745212).
+- SG-1000 — Three Agent Sequential Validation — run [40780745369](https://github.com/leonardo201800478/sega-emulator/actions/runs/40780745369).
+
+Esses são resultados do SHA candidato da PR, não uma alegação de que todos os checks foram novamente executados no merge commit. Para o merge SHA `9a0d424cf610d8cecb4818b1a9bc9fbc4572dbef`, a consulta realizada nesta auditoria não retornou workflow runs associados nem status combinados; logo, os checks pós-merge ficam **NOT VERIFIED** nesta rodada. Não inferir PASS ou FAIL a partir da ausência de resultados.
+
+O check Sourcery da PR foi ignorado/skipped; não deve ser contado como aprovação nem como revisão humana.
+
+## 4. Limites e melhorias prioritárias
+
+### P0 — fechar a validade semântica por família
+
+1. Gerar uma matriz versionada dos 256 bytes do espaço base, CB, ED, DD, FD, DDCB e FDCB.
+2. Para cada codificação, classificar: instrução documentada, alias, prefixo ignorado, operação não atribuída/ED-NOP, ou comportamento específico de variante. Não contar “executou sem erro” como semântica correta.
+3. Ligar cada caso a expectativas de estado: registradores, flags S/Z/Y/H/X/PV/N/C, PC/SP, WZ/MEMPTR, Q/P quando aplicável, R, memória, I/O e T-states nominais.
+4. Identificar instruções com fallback intencional e testar o fallback explicitamente; detectar quedas acidentais para o decoder base em instruções sensíveis a IX/IY.
+5. Cobrir os casos de H/L versus IXH/IXL/IYH/IYL, especialmente exceções envolvendo `(IX/IY+d)`.
+
+### P0 — vetores diferenciais confiáveis
+
+1. Auditar procedência, SHA, esquema e licença do corpus externo fixado; preservar a versão e os hashes usados.
+2. Medir cobertura por família e condição, não apenas quantidade total de vetores.
+3. Comparar campo a campo e reportar o primeiro desvio com opcode, estado inicial, estado esperado/obtido e endereço.
+4. Classificar a independência do oráculo. O corpus SingleStepTests tem ancestralidade no núcleo Z80 do Ares; é útil, mas não é prova independente de hardware.
+5. Acrescentar vetores para todos os modos de interrupção, atraso de EI, NMI/INT, HALT, wraparound, pilha, flags e estados ocultos em sequências curtas.
+6. Manter fixtures pequenos e legalmente obtidos; não adicionar ROMs comerciais.
+
+### P1 — semântica das flags e estado oculto
+
+- Varredura sistemática das operações ALU, DAA, INC/DEC, aritmética 16-bit, rotações/shifts, BIT, RLD/RRD e instruções indexadas.
+- Verificar preservação/alteração de cada flag, incluindo X/Y não documentadas, carry de entrada, half-carry, overflow/paridade e N.
+- Validar WZ/MEMPTR, Q, estado P, refresh R e registradores alternativos em sequências de instruções, não apenas em execuções isoladas.
+- Separar fatos documentados, observações de oráculo, inferências e hipóteses específicas de variante.
+
+### P1 — interrupções e instruções de bloco
+
+- Verificar acceptance boundary de INT/NMI, EI delay, IFF1/IFF2, modos IM0/1/2, acknowledge, stack e refresh.
+- Cobrir LDI/LDD/LDIR/LDDR, CPI/CPD/CPIR/CPDR e também I/O em bloco INI/IND/INIR/INDR/OUTI/OUTD/OTIR/OTDR.
+- Para instruções repetitivas, testar cada iteração, BC=0, igualdade, término por flags, wraparound e efeito de interrupções entre iterações.
+
+### P1 — temporização e trace do barramento
+
+- Não declarar precisão ciclo a ciclo com base na soma nominal de T-states.
+- Expandir gradualmente o trace: fetch/M1, leituras/escritas, I/O, acknowledge, refresh, posição temporal, endereço/dados opcionais e waits, quando sustentados por documentação.
+- A primeira fase de oito instruções ED precisa ser confrontada com o corpus fixado, mas esse corpus tem ancestralidade comum e não constitui prova física.
+- Adicionar testes que comprovem que ativar/desativar o observador não muda o estado, o resultado ou a duração nominal da CPU.
+- Testar continuidade temporal, ausência de eventos duplicados, wraparound e ordenação determinística.
+
+### P2 — processo, cobertura e rastreabilidade
+
+- Reconciliar os documentos históricos cujo SHA de auditoria difere da base atual.
+- Gerar relatório reproduzível de cobertura de opcode a partir dos testes realmente executados.
+- Distinguir estados `IMPLEMENTED`, `QUICK_PASS`, `SHORT_PASS`, `LONG_PASS`, `INTEGRATION_PENDING` e `TEMPORAL_PASS`.
+- Fazer cada PR pequena, com critérios de aceitação explícitos e checks relevantes no SHA candidato exato.
+- Não reescrever a CPU nem extrair um crate compartilhado apenas por preferência; exigir benefício demonstrável e regressões equivalentes.
+
+## 5. Critérios de aceitação para declarar a CPU Z80 pura validada
+
+A validação do Z80 puro pode avançar independentemente da máquina SMS, usando barramento de teste. Para declarar uma etapa aprovada, exigir:
+1. matriz de codificações e aliases versionada;
+2. testes semânticos por família, não só smoke tests;
+3. vetores diferenciais com provenance/SHA e resultado campo a campo;
+4. cobertura explícita de flags, estados ocultos, interrupções e wraparound;
+5. testes determinísticos de memória/I/O e da ordem de acesso observável;
+6. fmt, Clippy e testes Rust pertinentes no SHA candidato;
+7. status dos workflows do SHA exato documentado como PASS/FAIL/BLOCKED/NOT RUN;
+8. limitações remanescentes registradas; nunca chamar de TEMPORAL_PASS sem validação de trace temporal apropriada.
+
+## 6. Estado desta auditoria
+
+- **IMPLEMENTED:** executor Z80 Rust e trace M-cycle-level inicial para oito instruções ED sem prefixos DD/FD.
+- **SHORT_PASS:** workflows pré-merge citados acima passaram no SHA candidato.
+- **NOT VERIFIED:** checks pós-merge no SHA `9a0d424cf610d8cecb4818b1a9bc9fbc4572dbef`, pois a consulta não retornou runs/status.
+- **INTEGRATION_PENDING:** não é bloqueio para validar a CPU isolada; refere-se à máquina SMS, fora do escopo atual.
+- **TEMPORAL_PASS:** não declarado.
+- **Conclusão:** não há evidência suficiente para declarar o Z80 integralmente validado. A próxima tarefa deve fechar lacunas semânticas com testes isolados, começando por inventariar os testes atuais e seus resultados no SHA remoto real.
+
+## 7. Prompt para continuar em um novo chat
+
+Use o prompt abaixo como instrução de retomada. Ele está intencionalmente restrito ao Z80 puro.
+
+```text
+Projeto: Sega Emulator — auditoria e validação do Z80 puro.
+
+Repositório oficial: https://github.com/leonardo201800478/sega-emulator
+Último SHA conhecido: 9a0d424cf610d8cecb4818b1a9bc9fbc4572dbef (merge da PR #226).
+Documento de continuidade: docs/architecture/z80-pure-core-audit-and-next-chat.md.
+
+OBJETIVO
+Validar somente a CPU Z80 Rust isolada. NÃO tentar completar ou auditar a máquina SMS, VDP, PSG, mapper, frontend ou scheduler. Use um barramento de teste determinístico, mocks e vetores externos para testar CPU, ALU, flags, registradores, interrupções, memória/I/O observável, ciclos nominais e trace da CPU.
+
+MÉTODO OBRIGATÓRIO
+1. Consulte o GitHub antes de agir. Confirme branch main, SHA real, PRs abertas, árvore, histórico, arquivos, testes e workflows. O SHA acima é apenas ponto de partida, não uma suposição de HEAD atual.
+2. Leia o documento de auditoria e as fontes/testes atuais. Reconcilie documentação que menciona SHAs anteriores.
+3. Inventarie os espaços base, CB, ED, DD, FD, DDCB e FDCB e classifique cada codificação como instrução, alias, prefixo ignorado, fallback intencional ou lacuna.
+4. Defina critérios de aceitação antes de alterar código. Não reescreva o núcleo nem duplique implementações.
+5. Priorize a cobertura semântica: registradores, flags S/Z/Y/H/X/PV/N/C, PC/SP, WZ/MEMPTR, Q/P, R, bancos alternativos, wraparound, memória/I/O, interrupções, HALT e instruções ED em bloco.
+6. Use vetores fixos e um oráculo de procedência documentada. O corpus SingleStepTests/Z80 usado pelo projeto tem ancestralidade no Ares; não o descreva como evidência independente de hardware. Preserve SHA e hashes.
+7. Para qualquer falha, registre o primeiro desvio: opcode, estado inicial, esperado, obtido, campo divergente e fixture mínima. Faça uma correção pequena e um teste de regressão por vez.
+8. Avalie separadamente contagem nominal de T-states e trace M-cycle-level. Não declare precisão ciclo a ciclo por causa de contagens agregadas. O trace inicial cobre LDI/LDD/LDIR/LDDR/CPI/CPD/CPIR/CPDR sem DD/FD; waits, refresh/pinos por T-state e validação temporal ampla continuam pendentes.
+9. Execute os checks Rust pertinentes: cargo fmt --all -- --check; cargo clippy --workspace --all-targets --locked -- -D warnings; cargo test --workspace --locked. Confirme se o workspace inclui o crate testado; execute explicitamente testes específicos que possam estar fora dele. Não diga que executou algo sem evidência.
+10. Verifique os workflows no SHA candidato exato. PASS, FAIL, BLOCKED e NOT RUN devem ser separados; checks ausentes/skipped não são PASS.
+11. Use branch e PR para alterações não triviais. Nunca edite main diretamente, faça force-push, resete mudanças destrutivamente ou faça merge sem autorização e critérios cumpridos.
+12. Mantenha a máquina SMS fora do escopo. A falta de VDP/PSG/scheduler não pode impedir testes isolados da CPU.
+13. Atualize este documento ou a documentação dedicada com o que foi implementado, testes, resultados, SHA, evidências, limitações e próximo passo.
+
+ESTADOS DE VALIDAÇÃO
+Use IMPLEMENTED, QUICK_PASS, SHORT_PASS, LONG_PASS, INTEGRATION_PENDING e TEMPORAL_PASS. Não use TEMPORAL_PASS sem evidência adequada de traces temporais.
+
+PRÓXIMO PASSO
+Após verificar o HEAD remoto, inventarie os testes de CPU/ALU e os vetores disponíveis no SHA atual; produza uma matriz de cobertura real por família/opcode/condição e identifique a primeira lacuna de maior impacto. Não faça mudanças antes de mostrar os critérios de aceitação e a evidência da lacuna.
+```
