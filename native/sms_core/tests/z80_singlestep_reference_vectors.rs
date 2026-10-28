@@ -911,7 +911,6 @@ fn singlestep_expanded_cb_7e_vector_0000() {
     );
 }
 
-
 #[test]
 fn singlestep_expanded_opcode_01_vector_0000() {
     run_vector(
