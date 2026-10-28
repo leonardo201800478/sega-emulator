@@ -36,7 +36,6 @@ impl Z80BusEvent {
     }
 }
 
-
 /// Phase label inferred for an instrumented Z80 T-state sample.
 ///
 /// The pinned SingleStepTests corpus exposes address/data and RD/WR/MREQ/IORQ
