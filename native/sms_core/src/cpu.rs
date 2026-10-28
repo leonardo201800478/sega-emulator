@@ -443,7 +443,7 @@ impl Z80 {
             }
             0x22 | 0x32 => {
                 let address = self.fetch16(bus);
-                if opcode == 0x22 {
+                let tstates = if opcode == 0x22 {
                     let [low, high] = self.registers.hl().to_le_bytes();
                     bus.write_memory(address, low);
                     bus.write_memory(address.wrapping_add(1), high);
@@ -451,11 +451,13 @@ impl Z80 {
                 } else {
                     bus.write_memory(address, self.registers.a);
                     13
-                }
+                };
+                self.wz = address.wrapping_add(1);
+                tstates
             }
             0x2A | 0x3A => {
                 let address = self.fetch16(bus);
-                if opcode == 0x2A {
+                let tstates = if opcode == 0x2A {
                     let low = bus.read_memory(address);
                     let high = bus.read_memory(address.wrapping_add(1));
                     self.registers.set_hl(u16::from_le_bytes([low, high]));
@@ -463,7 +465,9 @@ impl Z80 {
                 } else {
                     self.registers.a = bus.read_memory(address);
                     13
-                }
+                };
+                self.wz = address.wrapping_add(1);
+                tstates
             }
             0x03 | 0x13 | 0x23 | 0x33 | 0x0B | 0x1B | 0x2B | 0x3B => {
                 let pair = (opcode >> 4) & 0x03;
