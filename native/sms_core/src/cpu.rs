@@ -278,7 +278,9 @@ impl Z80 {
                 let old_hl = self.registers.hl().to_le_bytes();
                 bus.write_memory(self.registers.sp, old_hl[0]);
                 bus.write_memory(self.registers.sp.wrapping_add(1), old_hl[1]);
-                self.registers.set_hl(u16::from_le_bytes([low, high]));
+                let exchanged = u16::from_le_bytes([low, high]);
+                self.registers.set_hl(exchanged);
+                self.wz = exchanged;
                 19
             }
             0xF3 => {
@@ -453,7 +455,12 @@ impl Z80 {
                     bus.write_memory(address, self.registers.a);
                     13
                 };
-                self.wz = address.wrapping_add(1);
+                self.wz = if opcode == 0x32 {
+                    (u16::from(self.registers.a) << 8)
+                        | (address.wrapping_add(1) & 0x00FF)
+                } else {
+                    address.wrapping_add(1)
+                };
                 tstates
             }
             0x2A | 0x3A => {
