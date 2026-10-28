@@ -1,0 +1,66 @@
+name: SMS Z80 Platform Validation
+
+on:
+  pull_request:
+    paths:
+      - "native/sg1000_core/src/cpu.rs"
+      - "native/z80_alu/**"
+      - "native/z80_bus/**"
+      - "native/sms_core/**"
+      - "docs/architecture/z80-sms-platform-model.md"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/sms-z80-platform-validation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "native/sg1000_core/src/cpu.rs"
+      - "native/z80_alu/**"
+      - "native/z80_bus/**"
+      - "native/sms_core/**"
+      - "docs/architecture/z80-sms-platform-model.md"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/sms-z80-platform-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sms-z80-platform-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  format:
+    name: Rust formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Check workspace formatting
+        run: cargo fmt --all -- --check
+
+  lint:
+    name: Workspace Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Lint all workspace targets
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+  tests:
+    name: Workspace Rust tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run all workspace tests
+        run: cargo test --workspace --locked
