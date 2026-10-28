@@ -410,3 +410,60 @@ fn cpdr_match_stops_before_counter_reaches_zero() {
     assert_eq!(cpu.wz, 0x1FFF);
     assert_eq!(cpu.registers.f, FLAG_C | FLAG_Z | FLAG_N | FLAG_PV);
 }
+
+#[test]
+fn cpir_match_stops_when_zero_initial_bc_wraps_to_ffff() {
+    let mut bus = FlatBus::default();
+    program(&mut bus, 0xB1);
+    bus.memory[0x4000] = 0x42;
+
+    let mut cpu = Z80::default();
+    cpu.registers.a = 0x42;
+    cpu.registers.set_hl(0x4000);
+    cpu.registers.set_bc(0x0000);
+
+    assert_eq!(cpu.step(&mut bus), Ok(16));
+    assert_eq!(cpu.registers.pc, 0x0002);
+    assert_eq!(cpu.registers.hl(), 0x4001);
+    assert_eq!(cpu.registers.bc(), 0xFFFF);
+    assert_eq!(cpu.registers.f, FLAG_Z | FLAG_N | FLAG_PV);
+}
+
+#[test]
+fn cpdr_match_stops_when_zero_initial_bc_wraps_to_ffff() {
+    let mut bus = FlatBus::default();
+    program(&mut bus, 0xB9);
+    bus.memory[0x4000] = 0x42;
+
+    let mut cpu = Z80::default();
+    cpu.registers.a = 0x42;
+    cpu.registers.set_hl(0x4000);
+    cpu.registers.set_bc(0x0000);
+
+    assert_eq!(cpu.step(&mut bus), Ok(16));
+    assert_eq!(cpu.registers.pc, 0x0002);
+    assert_eq!(cpu.registers.hl(), 0x3FFF);
+    assert_eq!(cpu.registers.bc(), 0xFFFF);
+    assert_eq!(cpu.registers.f, FLAG_Z | FLAG_N | FLAG_PV);
+}
+
+#[test]
+fn ldir_repeat_wraps_program_counter_from_zero_to_ffff_region() {
+    let mut bus = FlatBus::default();
+    program_at(&mut bus, 0xFFFE, 0xB0);
+    bus.memory[0x4000] = 0xA5;
+
+    let mut cpu = Z80::default();
+    cpu.registers.pc = 0xFFFE;
+    cpu.registers.set_hl(0x4000);
+    cpu.registers.set_de(0x5000);
+    cpu.registers.set_bc(0x0002);
+
+    assert_eq!(cpu.step(&mut bus), Ok(21));
+    assert_eq!(cpu.registers.pc, 0xFFFE);
+    assert_eq!(cpu.wz, 0xFFFF);
+    assert_eq!(cpu.registers.hl(), 0x4001);
+    assert_eq!(cpu.registers.de(), 0x5001);
+    assert_eq!(cpu.registers.bc(), 0x0001);
+    assert_eq!(bus.memory[0x5000], 0xA5);
+}
