@@ -159,5 +159,5 @@ A auditoria semântica global da issue [#158](https://github.com/leonardo2018004
 ## Próxima lacuna em validação — H/L com operando indexado em memória
 
 - A matriz identifica as formas `LD H,(IX/IY+d)`, `LD L,(IX/IY+d)`, `LD (IX/IY+d),H` e `LD (IX/IY+d),L` como casos especiais: o registrador H/L não é substituído por IXH/IXL ou IYH/IYL quando o outro operando é memória indexada.
-- A PR em andamento adiciona testes dirigidos para as quatro formas com IX e IY, verificando registradores, memória, PC, R, WZ e T-states nominais. O resultado do SHA candidato será registrado após os workflows terminarem.
+- A PR #218 adiciona testes dirigidos para as quatro formas com IX e IY, verificando registradores, memória, PC, R, WZ e T-states nominais. No SHA candidato de código `ab990bff88922cb9040b60cb51e2de0aab36167f`, os três workflows passaram: [CI/quality](https://github.com/leonardo201800478/sega-emulator/actions/runs/40762750980), [SMS Core Fast Validation](https://github.com/leonardo201800478/sega-emulator/actions/runs/40762750973) e [SMS Z80 Platform Validation](https://github.com/leonardo201800478/sega-emulator/actions/runs/40762750997). O commit documental seguinte exige sua própria validação no SHA final da PR.
 - Estes testes verificam semântica selecionada; não constituem oráculo independente de hardware nem validação temporal por T-state.
