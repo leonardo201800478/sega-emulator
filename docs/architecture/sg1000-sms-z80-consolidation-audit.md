@@ -98,6 +98,12 @@ Na PR #167, SHA candidato `714e5c1432e57fb8ae3e048edf4b531b939166bc`:
 - Foram adicionados seis vetores para os caminhos não repetidos `LDD`, `CPD`, `INI`, `IND`, `OUTI` e `OUTD`. Os testes de I/O inicializam valores de porta a partir dos ciclos do oráculo e verificam as escritas nas portas.
 - Esses casos ampliam a verificação de bloco, mas não constituem cobertura exaustiva de todas as condições de flags, endereços de I/O ou estados de interrupção.
 
+Na PR #168, SHA candidato `02bc6a0b219e002b4eed532fbb97d89fa97e1268`:
+- **PASS:** Rust formatting, Workspace Clippy, Workspace Rust tests, SMS focused format/lint/tests e workflow geral CI/quality.
+- A suíte SingleStepTests passou com **108 testes aprovados e nenhum ignorado**.
+- Foram adicionados quatro vetores para `IN B,(C)`, `OUT (C),B`, `IN (C)` e `OUT (C),0`, incluindo formas não documentadas. Os testes verificam os dados de entrada e saída de portas fornecidos pelo oráculo, além do estado arquitetural.
+- A cobertura agora inclui casos de I/O direto e instruções de bloco, mas não todos os endereços/valores de portas nem todas as variantes não documentadas.
+
 Esses resultados confirmam os checks nos SHAs candidatos informados, não a completude total da CPU. A suite verifica estado arquitetural, T-states agregados e os endereços de RAM explicitamente listados pelos vetores; não compara trace temporal completo do barramento.
 
 ## Critérios para continuar a mescla
