@@ -2883,7 +2883,6 @@ mod tests {
         assert_eq!(cpdr.registers.f & FLAG_Z, FLAG_Z);
     }
 
-
     #[test]
     fn ed_adc_sbc_hl_decode_all_four_register_pairs() {
         for (opcode, expected) in [
@@ -2960,5 +2959,4 @@ mod tests {
         assert_eq!(otdr.registers.hl(), 0xC0FF);
         assert_eq!(otdr.registers.pc, 0);
     }
-
 }
