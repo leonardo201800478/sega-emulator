@@ -71,6 +71,14 @@ Na PR #163, SHA candidato `85384bd67b76ed364b7ecb4861ae6120b3adf36e`:
   4. `POP AF`: a carga de F não deve atualizar o latch Q como se flags fossem calculadas.
 - **SKIPPED:** revisão automática Sourcery, por limite de orçamento do serviço; isso não é aprovação nem falha de código.
 
+Na PR #164, SHA candidato `afcc1264ce722fa7d142d90ee73b09457c78c618`:
+- **PASS:** Rust formatting, Workspace Clippy, Workspace Rust tests, SMS focused format/lint/tests e workflow geral CI/quality.
+- A suíte SingleStepTests passou com **89 testes aprovados e nenhum ignorado**; o vetor CPIR que estava ignorado foi reativado.
+- O vetor `ED B1 0000` mostrou que, em uma iteração repetida de CPIR, as flags X/Y vêm do byte alto do PC depois de recuar dois bytes, não do resultado ajustado da comparação. A correção foi generalizada para LDIR/LDDR, CPIR/CPDR e instruções de bloco de I/O repetidas.
+- O novo vetor `ED B0 0001` valida a mesma regra em LDIR. O vetor `ED B2 0002` encontrou ainda um erro de PV no INIR: o cálculo de paridade do caminho de entrada precisa usar o B anterior ao decremento; a correção passou no vetor.
+- Evidência externa consultada: o manual independente *The Undocumented Z80 Documented* descreve os flags de CPI/CPIR e os efeitos de instruções de bloco; o wiki do Z80Decoder registra efeitos de flags não documentadas em operações de bloco interrompidas. O vetor SingleStepTests fixado fornece a expectativa executável usada pelos testes: https://github.com/SingleStepTests/z80/tree/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7.
+- **SKIPPED:** revisão automática Sourcery, por limite de orçamento do serviço.
+
 Esses resultados confirmam os checks nos SHAs candidatos informados, não a completude total da CPU. A suite verifica estado arquitetural, T-states agregados e os endereços de RAM explicitamente listados pelos vetores; não compara trace temporal completo do barramento.
 
 ## Critérios para continuar a mescla
