@@ -245,32 +245,60 @@ fn expected_inc_dec(value: u8, decrement: bool, carry_in: bool) -> (u8, u8) {
 }
 
 #[test]
-fn inc_dec_register_flags_match_every_byte_and_carry_state() {
+fn inc_dec_register_and_memory_forms_match_every_byte_and_carry_state() {
     let mut bus = TestBus::default();
     let mut cpu = Z80::default();
 
-    for (opcode, decrement) in [(0x04, false), (0x05, true)] {
-        bus.0[0] = opcode;
-        for value in 0_u8..=u8::MAX {
-            for carry_in in [false, true] {
-                let (expected_value, expected_flags) = expected_inc_dec(value, decrement, carry_in);
-                cpu.registers.b = value;
-                cpu.registers.f = 0xFE | if carry_in { FLAG_C } else { 0 };
-                cpu.registers.pc = 0;
+    for (base_opcode, decrement) in [(0x04_u8, false), (0x05_u8, true)] {
+        for register in 0_u8..=7 {
+            let opcode = base_opcode | (register << 3);
+            bus.0[0] = opcode;
+            for value in 0_u8..=u8::MAX {
+                for carry_in in [false, true] {
+                    let (expected_value, expected_flags) =
+                        expected_inc_dec(value, decrement, carry_in);
+                    match register {
+                        0 => cpu.registers.b = value,
+                        1 => cpu.registers.c = value,
+                        2 => cpu.registers.d = value,
+                        3 => cpu.registers.e = value,
+                        4 => cpu.registers.h = value,
+                        5 => cpu.registers.l = value,
+                        6 => {
+                            cpu.registers.set_hl(0xC000);
+                            bus.0[0xC000] = value;
+                        }
+                        7 => cpu.registers.a = value,
+                        _ => unreachable!("register code is three bits"),
+                    }
+                    cpu.registers.f = 0xFE | if carry_in { FLAG_C } else { 0 };
+                    cpu.registers.pc = 0;
 
-                assert_eq!(
-                    cpu.step(&mut bus),
-                    Ok(4),
-                    "opcode={opcode:02X} B={value:02X}"
-                );
-                assert_eq!(
-                    cpu.registers.b, expected_value,
-                    "opcode={opcode:02X} B={value:02X}: value"
-                );
-                assert_eq!(
-                    cpu.registers.f, expected_flags,
-                    "opcode={opcode:02X} B={value:02X} C={carry_in}: flags"
-                );
+                    assert_eq!(
+                        cpu.step(&mut bus),
+                        Ok(if register == 6 { 11 } else { 4 }),
+                        "opcode={opcode:02X} register={register} value={value:02X}"
+                    );
+                    let actual_value = match register {
+                        0 => cpu.registers.b,
+                        1 => cpu.registers.c,
+                        2 => cpu.registers.d,
+                        3 => cpu.registers.e,
+                        4 => cpu.registers.h,
+                        5 => cpu.registers.l,
+                        6 => bus.0[0xC000],
+                        7 => cpu.registers.a,
+                        _ => unreachable!("register code is three bits"),
+                    };
+                    assert_eq!(
+                        actual_value, expected_value,
+                        "opcode={opcode:02X} register={register} value={value:02X}: value"
+                    );
+                    assert_eq!(
+                        cpu.registers.f, expected_flags,
+                        "opcode={opcode:02X} register={register} value={value:02X} C={carry_in}: flags"
+                    );
+                }
             }
         }
     }
