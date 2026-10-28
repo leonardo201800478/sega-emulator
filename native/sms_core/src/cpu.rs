@@ -1244,28 +1244,48 @@ impl Z80 {
         let trace_enabled = self.instruction_start_pc == instruction_pc;
         if trace_enabled {
             self.emit_timing_event(
-                bus, instruction_pc, 0, Z80BusEventKind::OpcodeFetch,
-                Some(instruction_pc), Some(0xED), 4,
+                bus,
+                instruction_pc,
+                0,
+                Z80BusEventKind::OpcodeFetch,
+                Some(instruction_pc),
+                Some(0xED),
+                4,
             );
             self.emit_timing_event(
-                bus, instruction_pc, 4, Z80BusEventKind::OpcodeFetch,
-                Some(instruction_pc.wrapping_add(1)), Some(opcode), 4,
+                bus,
+                instruction_pc,
+                4,
+                Z80BusEventKind::OpcodeFetch,
+                Some(instruction_pc.wrapping_add(1)),
+                Some(opcode),
+                4,
             );
         }
         let address = self.registers.hl();
         let value = bus.read_memory(address);
         if trace_enabled {
             self.emit_timing_event(
-                bus, instruction_pc, 8, Z80BusEventKind::MemoryRead,
-                Some(address), Some(value), 3,
+                bus,
+                instruction_pc,
+                8,
+                Z80BusEventKind::MemoryRead,
+                Some(address),
+                Some(value),
+                3,
             );
         }
         let destination = self.registers.de();
         bus.write_memory(destination, value);
         if trace_enabled {
             self.emit_timing_event(
-                bus, instruction_pc, 11, Z80BusEventKind::MemoryWrite,
-                Some(destination), Some(value), 5,
+                bus,
+                instruction_pc,
+                11,
+                Z80BusEventKind::MemoryWrite,
+                Some(destination),
+                Some(value),
+                5,
             );
         }
         self.registers
@@ -1288,8 +1308,13 @@ impl Z80 {
             self.set_flags(flags);
             if trace_enabled {
                 self.emit_timing_event(
-                    bus, instruction_pc, 16, Z80BusEventKind::Internal,
-                    None, None, 5,
+                    bus,
+                    instruction_pc,
+                    16,
+                    Z80BusEventKind::Internal,
+                    None,
+                    None,
+                    5,
                 );
             }
             21
@@ -1309,24 +1334,44 @@ impl Z80 {
         let trace_enabled = self.instruction_start_pc == instruction_pc;
         if trace_enabled {
             self.emit_timing_event(
-                bus, instruction_pc, 0, Z80BusEventKind::OpcodeFetch,
-                Some(instruction_pc), Some(0xED), 4,
+                bus,
+                instruction_pc,
+                0,
+                Z80BusEventKind::OpcodeFetch,
+                Some(instruction_pc),
+                Some(0xED),
+                4,
             );
             self.emit_timing_event(
-                bus, instruction_pc, 4, Z80BusEventKind::OpcodeFetch,
-                Some(instruction_pc.wrapping_add(1)), Some(opcode), 4,
+                bus,
+                instruction_pc,
+                4,
+                Z80BusEventKind::OpcodeFetch,
+                Some(instruction_pc.wrapping_add(1)),
+                Some(opcode),
+                4,
             );
         }
         let address = self.registers.hl();
         let value = bus.read_memory(address);
         if trace_enabled {
             self.emit_timing_event(
-                bus, instruction_pc, 8, Z80BusEventKind::MemoryRead,
-                Some(address), Some(value), 3,
+                bus,
+                instruction_pc,
+                8,
+                Z80BusEventKind::MemoryRead,
+                Some(address),
+                Some(value),
+                3,
             );
             self.emit_timing_event(
-                bus, instruction_pc, 11, Z80BusEventKind::Internal,
-                None, None, 5,
+                bus,
+                instruction_pc,
+                11,
+                Z80BusEventKind::Internal,
+                None,
+                None,
+                5,
             );
         }
         let accumulator = self.registers.a;
@@ -1356,8 +1401,13 @@ impl Z80 {
             self.set_flags(flags);
             if trace_enabled {
                 self.emit_timing_event(
-                    bus, instruction_pc, 16, Z80BusEventKind::Internal,
-                    None, None, 5,
+                    bus,
+                    instruction_pc,
+                    16,
+                    Z80BusEventKind::Internal,
+                    None,
+                    None,
+                    5,
                 );
             }
             21
