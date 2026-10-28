@@ -32,7 +32,8 @@ def patch_print_module(path: Path) -> None:
     # Adapted from upstream print.asm (MIT). Keep print/printhl because upstream
     # CALLs embed NUL-terminated strings in-line; replace display-only routines.
     path.write_text(
-        """; Headless CPU test shim based on Patrik Rak's MIT-licensed z80test print.asm.
+        """; Headless CPU test shim based on Patrik Rak's
+; MIT-licensed z80test print.asm.
 ; Upstream: https://github.com/raxoft/z80test/blob/c490c0ca94f1021509f8bd656b413861bd7cfb41/src/print.asm
 ; Copyright (c) 2012-2023 Patrik Rak.
 
