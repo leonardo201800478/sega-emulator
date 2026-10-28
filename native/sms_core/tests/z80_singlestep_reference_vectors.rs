@@ -2,9 +2,10 @@
 //!
 //! Source: https://github.com/SingleStepTests/z80/tree/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7/v1
 //! Upstream commit: ebe1875d48f374bcfd4b505d8eb8ee751568b5f7 (MIT).
-//! These are the first fixed vectors from 00.json, 06.json, cb%2000.json,
-//! and ed%2044.json. They compare architectural state and aggregate T-states;
-//! they do not compare the ordering of individual bus cycles.
+//! These are fixed first vectors from 00.json, 06.json, 08.json, 27.json,
+//! 37.json, 80.json, c6.json, cb%2000.json, cb%207e.json, dd%2021.json,
+//! ed%2044.json, and ed%204a.json. They compare architectural state and
+//! aggregate T-states; they do not compare the ordering of individual bus cycles.
 
 use sega_sms_core::{CpuBus, Z80};
 
