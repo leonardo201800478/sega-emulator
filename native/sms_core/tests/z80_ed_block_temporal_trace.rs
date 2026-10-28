@@ -707,7 +707,6 @@ fn cpdr_mcycle_trace_matches_pinned_singlestep_bus_samples() {
     assert_external_mcycle_trace(0xB9, 0x2F, 0x2BD9, &samples, false);
 }
 
-
 #[test]
 fn ldir_trace_omits_repeat_cycle_when_bc_decrements_to_zero() {
     let (cycles, pc, events) = run_trace(0xB0, 0x10, 0x2000, 0x3000, 1, 0x5A);
