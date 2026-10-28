@@ -166,21 +166,25 @@ fn run_vector(name: &str, initial: State, expected: State, bytes: &[(u16, u8)], 
     expected.assert_matches(&cpu, name);
 }
 
+struct PortEffects<'a> {
+    initial: &'a [(u16, u8)],
+    expected: &'a [(u16, u8)],
+}
+
 fn run_vector_with_memory_and_ports(
     name: &str,
     initial: State,
     expected: State,
     initial_bytes: &[(u16, u8)],
     expected_memory: &[(u16, u8)],
-    initial_ports: &[(u16, u8)],
-    expected_ports: &[(u16, u8)],
+    ports: PortEffects<'_>,
     tstates: u32,
 ) {
     let mut bus = FlatBus::default();
     for &(address, value) in initial_bytes {
         bus.memory[usize::from(address)] = value;
     }
-    for &(address, value) in initial_ports {
+    for &(address, value) in ports.initial {
         bus.ports[usize::from(address)] = value;
     }
     let mut cpu = Z80::default();
@@ -199,7 +203,7 @@ fn run_vector_with_memory_and_ports(
             "{name}: RAM[{address:04X}]"
         );
     }
-    for &(address, value) in expected_ports {
+    for &(address, value) in ports.expected {
         assert_eq!(
             bus.ports[usize::from(address)],
             value,
@@ -5928,8 +5932,7 @@ fn singlestep_expanded_opcode_ed_b2_vector_0002() {
         },
         &[(33887, 237), (33888, 178), (47424, 0)],
         &[(33887, 237), (33888, 178), (47424, 188)],
-        &[(45826, 188)],
-        &[],
+        PortEffects { initial: &[(45826, 188)], expected: &[] },
         21,
     );
 }
@@ -6122,8 +6125,7 @@ fn singlestep_repeat_opcode_ed_ba_vector_0000() {
         },
         &[(18294, 237), (18295, 186), (50359, 0)],
         &[(18294, 237), (18295, 186), (50359, 81)],
-        &[(25094, 81)],
-        &[],
+        PortEffects { initial: &[(25094, 81)], expected: &[] },
         21,
     );
 }
@@ -6188,8 +6190,7 @@ fn singlestep_repeat_opcode_ed_b3_vector_0000() {
         },
         &[(24118, 237), (24119, 179), (63128, 29)],
         &[(24118, 237), (24119, 179), (63128, 29)],
-        &[],
-        &[(18666, 29)],
+        PortEffects { initial: &[], expected: &[(18666, 29)] },
         21,
     );
 }
@@ -6254,8 +6255,7 @@ fn singlestep_repeat_opcode_ed_bb_vector_0000() {
         },
         &[(4700, 213), (56671, 237), (56672, 187)],
         &[(4700, 213), (56671, 237), (56672, 187)],
-        &[],
-        &[(57504, 213)],
+        PortEffects { initial: &[], expected: &[(57504, 213)] },
         21,
     );
 }
