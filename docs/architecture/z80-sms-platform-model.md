@@ -126,3 +126,38 @@ Estas frentes são revisões técnicas separadas e não substituem checks automa
 3. **Frente C — plataformas/oráculos/CI:** verificar fontes para modelos americano/japonês/Tec Toy, confirmar presença de FM por variante, preparar testes diferenciais e garantir que workflows validem o SHA candidato.
 
 Cada frente deve entregar: arquivos/áreas examinados, evidências e fontes, riscos, casos de teste faltantes e recomendação PASS/FAIL/BLOCKED/NOT RUN. Não alegar execução de agente externo sem prova de que foi executado.
+
+## Registro de auditoria Z80 — continuidade em 2026-10-28
+
+Este registro consolida o estado observado após a integração de `05cb8259dfaaea5844c3290945301c88ec0fdc54`. Não altera o contrato da CPU nem converte evidência anterior em aprovação do SHA atual.
+
+### Evidências atuais e limites
+
+- A matriz `docs/architecture/z80-sms-opcode-matrix.csv` enumera 1.792 codificações fixas (256 por espaço BASE, CB, ED, DD, FD, DDCB e FDCB) e 11 classes de sequências de prefixos. Enumeração completa não significa semântica completa.
+- `docs/architecture/z80-sms-reference-coverage.md` registra 172 vetores SingleStepTests/Z80. O próprio upstream declara que o corpus foi traduzido do núcleo Z80 do Ares e corrigido; portanto, ele não é um oráculo independente de uma implementação derivada de Ares.
+- A cobertura indexed-CB de rotate/shift foi ampliada com testes dirigidos e varreduras do modelo interno. Esses testes não comparam eventos de barramento ordenados por T-state.
+- O corpus externo `raxoft/z80test` é uma linha de evidência distinta, mas seu alvo original é ZX Spectrum e o harness SMS usa memória plana, substitui a saída de vídeo e simula portas. Cada discrepância exige triagem de variante/harness antes de ser classificada como bug do core.
+- O registro anterior de execução completa (2026-10-24) foi de 1.556.612 casos aprovados e 47.388 falhos, de 1.604.000 contabilizados (97,046%). Esse resultado é baseline histórico, não resultado do SHA atual; os casos falhos não podem ser ignorados nem atribuídos automaticamente ao core.
+
+### Gate de conclusão da auditoria semântica
+
+1. Executar `z80full` e `z80ccf` no SHA candidato atual, preservando logs/artefatos e o limite de instruções declarado.
+2. Comparar contadores e resultados com o baseline histórico e agrupar falhas por teste/opcode/família, registrando a primeira divergência reproduzível e a classificação: bug do core, hipótese de variante, limitação do harness, teste inválido ou pendente.
+3. Resolver ou justificar individualmente cada discrepância relevante; nenhuma falha pode ser removida/ignoradas apenas para obter um resultado verde.
+4. Completar os vetores faltantes por famílias e estados de fronteira identificados na matriz, priorizando ED/bloco, prefixos, WZ/Q/R e interrupções. Fixar a procedência e a licença de cada oráculo.
+5. Validar os cenários de reset, HALT, EI delay, NMI, INT IM0/1/2, IFF1/IFF2, wraparound de PC/SP e estado de refresh nos testes dirigidos.
+6. Executar formatação, Clippy, testes Rust do workspace e workflows aplicáveis no SHA candidato exato; separar resultados de candidato e pós-merge.
+7. Manter o nível temporal em **Nível A — T-states nominais por instrução** até existir contrato e regressão de eventos de barramento ordenados. Não declarar `TEMPORAL_PASS` com base apenas na duração agregada.
+8. Manter o gate do Z80A do SG-1000 bloqueado até todos os critérios da PR #157 serem comprovados.
+
+### Estado de execução deste registro
+
+- Inventário de codificações: **IMPLEMENTED**.
+- Correção semântica global: **NOT PASS**; evidência incompleta.
+- Baseline externo anterior: **SHORT_PASS histórico**, com 47.388 falhas ainda por triagem.
+- Reexecução completa no SHA candidato deste registro: **NOT RUN** até os workflows terminarem.
+- Validação por eventos de barramento em T-state: **NOT RUN**.
+- Liberação do gate Z80A/SG-1000: **BLOCKED**.
+
+Este documento só será atualizado para promover um estado após evidência verificável do SHA e dos artefatos correspondentes.
+
