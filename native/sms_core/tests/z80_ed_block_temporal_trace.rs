@@ -211,22 +211,86 @@ fn ldi_mcycle_trace_matches_pinned_singlestep_bus_samples() {
     // SingleStepTests/Z80 vector ED A0 0000 at commit
     // ebe1875d48f374bcfd4b505d8eb8ee751568b5f7.
     let samples = [
-        SingleStepCycle { address: Some(0xCE39), data: None, signals: "----" },
-        SingleStepCycle { address: Some(0xCE39), data: None, signals: "r-m-" },
-        SingleStepCycle { address: Some(0xA214), data: Some(0xED), signals: "----" },
-        SingleStepCycle { address: Some(0xA214), data: None, signals: "----" },
-        SingleStepCycle { address: Some(0xCE3A), data: None, signals: "----" },
-        SingleStepCycle { address: Some(0xCE3A), data: None, signals: "r-m-" },
-        SingleStepCycle { address: Some(0xA215), data: Some(0xA0), signals: "----" },
-        SingleStepCycle { address: Some(0xA215), data: None, signals: "----" },
-        SingleStepCycle { address: Some(0xE765), data: None, signals: "----" },
-        SingleStepCycle { address: Some(0xE765), data: None, signals: "r-m-" },
-        SingleStepCycle { address: Some(0xE765), data: Some(0xE8), signals: "----" },
-        SingleStepCycle { address: Some(0xDA43), data: None, signals: "----" },
-        SingleStepCycle { address: Some(0xDA43), data: Some(0xE8), signals: "-wm-" },
-        SingleStepCycle { address: Some(0xDA43), data: None, signals: "----" },
-        SingleStepCycle { address: Some(0xDA43), data: None, signals: "----" },
-        SingleStepCycle { address: Some(0xDA43), data: None, signals: "----" },
+        SingleStepCycle {
+            address: Some(0xCE39),
+            data: None,
+            signals: "----",
+        },
+        SingleStepCycle {
+            address: Some(0xCE39),
+            data: None,
+            signals: "r-m-",
+        },
+        SingleStepCycle {
+            address: Some(0xA214),
+            data: Some(0xED),
+            signals: "----",
+        },
+        SingleStepCycle {
+            address: Some(0xA214),
+            data: None,
+            signals: "----",
+        },
+        SingleStepCycle {
+            address: Some(0xCE3A),
+            data: None,
+            signals: "----",
+        },
+        SingleStepCycle {
+            address: Some(0xCE3A),
+            data: None,
+            signals: "r-m-",
+        },
+        SingleStepCycle {
+            address: Some(0xA215),
+            data: Some(0xA0),
+            signals: "----",
+        },
+        SingleStepCycle {
+            address: Some(0xA215),
+            data: None,
+            signals: "----",
+        },
+        SingleStepCycle {
+            address: Some(0xE765),
+            data: None,
+            signals: "----",
+        },
+        SingleStepCycle {
+            address: Some(0xE765),
+            data: None,
+            signals: "r-m-",
+        },
+        SingleStepCycle {
+            address: Some(0xE765),
+            data: Some(0xE8),
+            signals: "----",
+        },
+        SingleStepCycle {
+            address: Some(0xDA43),
+            data: None,
+            signals: "----",
+        },
+        SingleStepCycle {
+            address: Some(0xDA43),
+            data: Some(0xE8),
+            signals: "-wm-",
+        },
+        SingleStepCycle {
+            address: Some(0xDA43),
+            data: None,
+            signals: "----",
+        },
+        SingleStepCycle {
+            address: Some(0xDA43),
+            data: None,
+            signals: "----",
+        },
+        SingleStepCycle {
+            address: Some(0xDA43),
+            data: None,
+            signals: "----",
+        },
     ];
 
     assert_eq!(samples.len(), 16);
@@ -267,25 +331,44 @@ fn ldi_mcycle_trace_matches_pinned_singlestep_bus_samples() {
     let instruction_pc = 0xCE39;
     let expected = vec![
         event(
-            instruction_pc, 0, Z80BusEventKind::OpcodeFetch,
-            samples[0].address, samples[2].data, 4,
+            instruction_pc,
+            0,
+            Z80BusEventKind::OpcodeFetch,
+            samples[0].address,
+            samples[2].data,
+            4,
         ),
         event(
-            instruction_pc, 4, Z80BusEventKind::OpcodeFetch,
-            samples[4].address, samples[6].data, 4,
+            instruction_pc,
+            4,
+            Z80BusEventKind::OpcodeFetch,
+            samples[4].address,
+            samples[6].data,
+            4,
         ),
         event(
-            instruction_pc, 8, Z80BusEventKind::MemoryRead,
-            samples[8].address, samples[10].data, 3,
+            instruction_pc,
+            8,
+            Z80BusEventKind::MemoryRead,
+            samples[8].address,
+            samples[10].data,
+            3,
         ),
         event(
-            instruction_pc, 11, Z80BusEventKind::MemoryWrite,
-            samples[11].address, samples[12].data, 5,
+            instruction_pc,
+            11,
+            Z80BusEventKind::MemoryWrite,
+            samples[11].address,
+            samples[12].data,
+            5,
         ),
     ];
     assert_eq!(bus.events, expected);
     assert_eq!(
-        expected.iter().map(|e| u32::from(e.duration_tstates)).sum::<u32>(),
+        expected
+            .iter()
+            .map(|e| u32::from(e.duration_tstates))
+            .sum::<u32>(),
         samples.len() as u32
     );
 }
