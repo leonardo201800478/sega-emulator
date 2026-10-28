@@ -181,6 +181,7 @@ O projeto é independente e não é afiliado à SEGA. SEGA e SG-1000 são marcas
 - [Arquitetura dos crates Rust nativos, dependências e limites de CI](docs/architecture/native-rust-crates.md)
 - [Backends de apresentação de vídeo e validação Vulkan](docs/architecture/vulkan-presentation-qt-quick.md)
 - [Instruções para agentes de código](AGENTS.md)
+- [Política permanente de desenvolvimento, fidelidade e entrega](docs/development-and-validation-policy.md)
 - [Prompt de orientações do projeto (ChatGPT; menos de 8.000 caracteres)](docs/project-instructions-prompt.md)
 - [ADR 0007 — Política de desenvolvimento Rust-first](docs/adr/0007-rust-first-development-policy.md)
 - [Pesquisa de compatibilidade de hardware Sega](docs/research/hardware-compatibility-roadmap-2026-10.md)
