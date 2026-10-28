@@ -157,21 +157,25 @@ impl CpuBus for FlatBus {
     }
 }
 
+struct Effects<'a> {
+    initial_memory: &'a [(u16, u8)],
+    expected_memory: &'a [(u16, u8)],
+    initial_ports: &'a [(u16, u8)],
+    expected_ports: &'a [(u16, u8)],
+}
+
 fn run_vector(
     name: &str,
     initial: State,
     expected: State,
-    initial_memory: &[(u16, u8)],
-    expected_memory: &[(u16, u8)],
-    initial_ports: &[(u16, u8)],
-    expected_ports: &[(u16, u8)],
+    effects: Effects<'_>,
     tstates: u32,
 ) {
     let mut bus = FlatBus::default();
-    for &(address, value) in initial_memory {
+    for &(address, value) in effects.initial_memory {
         bus.memory[usize::from(address)] = value;
     }
-    for &(address, value) in initial_ports {
+    for &(address, value) in effects.initial_ports {
         bus.ports[usize::from(address)] = value;
     }
     let mut cpu = Z80::default();
@@ -183,14 +187,14 @@ fn run_vector(
         "{name}: accumulated T-states"
     );
     expected.assert_matches(&cpu, name);
-    for &(address, value) in expected_memory {
+    for &(address, value) in effects.expected_memory {
         assert_eq!(
             bus.memory[usize::from(address)],
             value,
             "{name}: RAM[{address:04X}]"
         );
     }
-    for &(address, value) in expected_ports {
+    for &(address, value) in effects.expected_ports {
         assert_eq!(
             bus.ports[usize::from(address)],
             value,
@@ -257,10 +261,12 @@ fn reference_ed_b2_0000() {
             iff2: true,
             ei_delay: 0,
         },
-        &[(0x13B2, 0x00), (0x7BD7, 0xED), (0x7BD8, 0xB2)],
-        &[(0x13B2, 0x76), (0x7BD7, 0xED), (0x7BD8, 0xB2)],
-        &[(0x6D9D, 0x76)],
-        &[],
+        Effects {
+            initial_memory: &[(0x13B2, 0x00), (0x7BD7, 0xED), (0x7BD8, 0xB2)],
+            expected_memory: &[(0x13B2, 0x76), (0x7BD7, 0xED), (0x7BD8, 0xB2)],
+            initial_ports: &[(0x6D9D, 0x76)],
+            expected_ports: &[],
+        },
         21,
     );
 }
@@ -323,10 +329,12 @@ fn reference_ed_b2_0001() {
             iff2: true,
             ei_delay: 0,
         },
-        &[(0x361D, 0xED), (0x361E, 0xB2), (0x42E9, 0x00)],
-        &[(0x361D, 0xED), (0x361E, 0xB2), (0x42E9, 0x9A)],
-        &[(0x3237, 0x9A)],
-        &[],
+        Effects {
+            initial_memory: &[(0x361D, 0xED), (0x361E, 0xB2), (0x42E9, 0x00)],
+            expected_memory: &[(0x361D, 0xED), (0x361E, 0xB2), (0x42E9, 0x9A)],
+            initial_ports: &[(0x3237, 0x9A)],
+            expected_ports: &[],
+        },
         21,
     );
 }
@@ -389,10 +397,12 @@ fn reference_ed_b2_0002() {
             iff2: false,
             ei_delay: 0,
         },
-        &[(0x845F, 0xED), (0x8460, 0xB2), (0xB940, 0x00)],
-        &[(0x845F, 0xED), (0x8460, 0xB2), (0xB940, 0xBC)],
-        &[(0xB302, 0xBC)],
-        &[],
+        Effects {
+            initial_memory: &[(0x845F, 0xED), (0x8460, 0xB2), (0xB940, 0x00)],
+            expected_memory: &[(0x845F, 0xED), (0x8460, 0xB2), (0xB940, 0xBC)],
+            initial_ports: &[(0xB302, 0xBC)],
+            expected_ports: &[],
+        },
         21,
     );
 }
@@ -455,10 +465,12 @@ fn reference_ed_b2_0003() {
             iff2: true,
             ei_delay: 0,
         },
-        &[(0x4A2E, 0x00), (0x8B51, 0xED), (0x8B52, 0xB2)],
-        &[(0x4A2E, 0x1A), (0x8B51, 0xED), (0x8B52, 0xB2)],
-        &[(0xD516, 0x1A)],
-        &[],
+        Effects {
+            initial_memory: &[(0x4A2E, 0x00), (0x8B51, 0xED), (0x8B52, 0xB2)],
+            expected_memory: &[(0x4A2E, 0x1A), (0x8B51, 0xED), (0x8B52, 0xB2)],
+            initial_ports: &[(0xD516, 0x1A)],
+            expected_ports: &[],
+        },
         21,
     );
 }
@@ -521,10 +533,12 @@ fn reference_ed_b2_0004() {
             iff2: false,
             ei_delay: 0,
         },
-        &[(0x07C2, 0xED), (0x07C3, 0xB2), (0x1462, 0x00)],
-        &[(0x07C2, 0xED), (0x07C3, 0xB2), (0x1462, 0x31)],
-        &[(0x59F1, 0x31)],
-        &[],
+        Effects {
+            initial_memory: &[(0x07C2, 0xED), (0x07C3, 0xB2), (0x1462, 0x00)],
+            expected_memory: &[(0x07C2, 0xED), (0x07C3, 0xB2), (0x1462, 0x31)],
+            initial_ports: &[(0x59F1, 0x31)],
+            expected_ports: &[],
+        },
         21,
     );
 }
@@ -587,10 +601,12 @@ fn reference_ed_b2_0005() {
             iff2: true,
             ei_delay: 0,
         },
-        &[(0x2292, 0x00), (0x609E, 0xED), (0x609F, 0xB2)],
-        &[(0x2292, 0x2A), (0x609E, 0xED), (0x609F, 0xB2)],
-        &[(0x1775, 0x2A)],
-        &[],
+        Effects {
+            initial_memory: &[(0x2292, 0x00), (0x609E, 0xED), (0x609F, 0xB2)],
+            expected_memory: &[(0x2292, 0x2A), (0x609E, 0xED), (0x609F, 0xB2)],
+            initial_ports: &[(0x1775, 0x2A)],
+            expected_ports: &[],
+        },
         21,
     );
 }
@@ -653,10 +669,12 @@ fn reference_ed_b2_0006() {
             iff2: false,
             ei_delay: 0,
         },
-        &[(0x1847, 0x00), (0x9D9B, 0xED), (0x9D9C, 0xB2)],
-        &[(0x1847, 0x6A), (0x9D9B, 0xED), (0x9D9C, 0xB2)],
-        &[(0x3ED9, 0x6A)],
-        &[],
+        Effects {
+            initial_memory: &[(0x1847, 0x00), (0x9D9B, 0xED), (0x9D9C, 0xB2)],
+            expected_memory: &[(0x1847, 0x6A), (0x9D9B, 0xED), (0x9D9C, 0xB2)],
+            initial_ports: &[(0x3ED9, 0x6A)],
+            expected_ports: &[],
+        },
         21,
     );
 }
@@ -719,10 +737,12 @@ fn reference_ed_b2_0007() {
             iff2: true,
             ei_delay: 0,
         },
-        &[(0x5F7E, 0xED), (0x5F7F, 0xB2), (0xA02C, 0x00)],
-        &[(0x5F7E, 0xED), (0x5F7F, 0xB2), (0xA02C, 0xAC)],
-        &[(0xFFD8, 0xAC)],
-        &[],
+        Effects {
+            initial_memory: &[(0x5F7E, 0xED), (0x5F7F, 0xB2), (0xA02C, 0x00)],
+            expected_memory: &[(0x5F7E, 0xED), (0x5F7F, 0xB2), (0xA02C, 0xAC)],
+            initial_ports: &[(0xFFD8, 0xAC)],
+            expected_ports: &[],
+        },
         21,
     );
 }
@@ -785,10 +805,12 @@ fn reference_ed_bb_0000() {
             iff2: true,
             ei_delay: 0,
         },
-        &[(0x125C, 0xD5), (0xDD5F, 0xED), (0xDD60, 0xBB)],
-        &[(0x125C, 0xD5), (0xDD5F, 0xED), (0xDD60, 0xBB)],
-        &[],
-        &[(0xE0A0, 0xD5)],
+        Effects {
+            initial_memory: &[(0x125C, 0xD5), (0xDD5F, 0xED), (0xDD60, 0xBB)],
+            expected_memory: &[(0x125C, 0xD5), (0xDD5F, 0xED), (0xDD60, 0xBB)],
+            initial_ports: &[],
+            expected_ports: &[(0xE0A0, 0xD5)],
+        },
         21,
     );
 }
@@ -851,10 +873,12 @@ fn reference_ed_bb_0001() {
             iff2: false,
             ei_delay: 0,
         },
-        &[(0x52BF, 0xED), (0x52C0, 0xBB), (0xF013, 0xA2)],
-        &[(0x52BF, 0xED), (0x52C0, 0xBB), (0xF013, 0xA2)],
-        &[],
-        &[(0xCEB8, 0xA2)],
+        Effects {
+            initial_memory: &[(0x52BF, 0xED), (0x52C0, 0xBB), (0xF013, 0xA2)],
+            expected_memory: &[(0x52BF, 0xED), (0x52C0, 0xBB), (0xF013, 0xA2)],
+            initial_ports: &[],
+            expected_ports: &[(0xCEB8, 0xA2)],
+        },
         21,
     );
 }
@@ -917,10 +941,12 @@ fn reference_ed_bb_0002() {
             iff2: true,
             ei_delay: 0,
         },
-        &[(0x12D1, 0x83), (0x50EA, 0xED), (0x50EB, 0xBB)],
-        &[(0x12D1, 0x83), (0x50EA, 0xED), (0x50EB, 0xBB)],
-        &[],
-        &[(0x2583, 0x83)],
+        Effects {
+            initial_memory: &[(0x12D1, 0x83), (0x50EA, 0xED), (0x50EB, 0xBB)],
+            expected_memory: &[(0x12D1, 0x83), (0x50EA, 0xED), (0x50EB, 0xBB)],
+            initial_ports: &[],
+            expected_ports: &[(0x2583, 0x83)],
+        },
         21,
     );
 }
@@ -983,10 +1009,12 @@ fn reference_ed_bb_0003() {
             iff2: false,
             ei_delay: 0,
         },
-        &[(0x7D6C, 0xED), (0x7D6D, 0xBB), (0xD6AA, 0x7D)],
-        &[(0x7D6C, 0xED), (0x7D6D, 0xBB), (0xD6AA, 0x7D)],
-        &[],
-        &[(0xFB6A, 0x7D)],
+        Effects {
+            initial_memory: &[(0x7D6C, 0xED), (0x7D6D, 0xBB), (0xD6AA, 0x7D)],
+            expected_memory: &[(0x7D6C, 0xED), (0x7D6D, 0xBB), (0xD6AA, 0x7D)],
+            initial_ports: &[],
+            expected_ports: &[(0xFB6A, 0x7D)],
+        },
         21,
     );
 }
@@ -1049,10 +1077,12 @@ fn reference_ed_bb_0004() {
             iff2: false,
             ei_delay: 0,
         },
-        &[(0x0BE5, 0xED), (0x0BE6, 0xBB), (0xD9AE, 0x27)],
-        &[(0x0BE5, 0xED), (0x0BE6, 0xBB), (0xD9AE, 0x27)],
-        &[],
-        &[(0x13A5, 0x27)],
+        Effects {
+            initial_memory: &[(0x0BE5, 0xED), (0x0BE6, 0xBB), (0xD9AE, 0x27)],
+            expected_memory: &[(0x0BE5, 0xED), (0x0BE6, 0xBB), (0xD9AE, 0x27)],
+            initial_ports: &[],
+            expected_ports: &[(0x13A5, 0x27)],
+        },
         21,
     );
 }
@@ -1115,10 +1145,12 @@ fn reference_ed_bb_0005() {
             iff2: false,
             ei_delay: 0,
         },
-        &[(0x2DEF, 0x37), (0x6D99, 0xED), (0x6D9A, 0xBB)],
-        &[(0x2DEF, 0x37), (0x6D99, 0xED), (0x6D9A, 0xBB)],
-        &[],
-        &[(0xA731, 0x37)],
+        Effects {
+            initial_memory: &[(0x2DEF, 0x37), (0x6D99, 0xED), (0x6D9A, 0xBB)],
+            expected_memory: &[(0x2DEF, 0x37), (0x6D99, 0xED), (0x6D9A, 0xBB)],
+            initial_ports: &[],
+            expected_ports: &[(0xA731, 0x37)],
+        },
         21,
     );
 }
@@ -1181,10 +1213,12 @@ fn reference_ed_bb_0006() {
             iff2: true,
             ei_delay: 0,
         },
-        &[(0x2579, 0xBC), (0xC92E, 0xED), (0xC92F, 0xBB)],
-        &[(0x2579, 0xBC), (0xC92E, 0xED), (0xC92F, 0xBB)],
-        &[],
-        &[(0xA3DC, 0xBC)],
+        Effects {
+            initial_memory: &[(0x2579, 0xBC), (0xC92E, 0xED), (0xC92F, 0xBB)],
+            expected_memory: &[(0x2579, 0xBC), (0xC92E, 0xED), (0xC92F, 0xBB)],
+            initial_ports: &[],
+            expected_ports: &[(0xA3DC, 0xBC)],
+        },
         21,
     );
 }
@@ -1247,10 +1281,12 @@ fn reference_ed_bb_0007() {
             iff2: true,
             ei_delay: 0,
         },
-        &[(0x5100, 0xED), (0x5101, 0xBB), (0x5E6B, 0x34)],
-        &[(0x5100, 0xED), (0x5101, 0xBB), (0x5E6B, 0x34)],
-        &[],
-        &[(0x29EB, 0x34)],
+        Effects {
+            initial_memory: &[(0x5100, 0xED), (0x5101, 0xBB), (0x5E6B, 0x34)],
+            expected_memory: &[(0x5100, 0xED), (0x5101, 0xBB), (0x5E6B, 0x34)],
+            initial_ports: &[],
+            expected_ports: &[(0x29EB, 0x34)],
+        },
         21,
     );
 }
