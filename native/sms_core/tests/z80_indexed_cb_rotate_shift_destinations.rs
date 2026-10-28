@@ -48,16 +48,15 @@ fn indexed_cb_rotate_shift_copies_results_to_all_ordinary_register_destinations(
     ];
 
     for prefix in [0xDD_u8, 0xFD_u8] {
-        let address = if prefix == 0xDD { 0xC100_u16 } else { 0xD200_u16 };
+        let address = if prefix == 0xDD {
+            0xC100_u16
+        } else {
+            0xD200_u16
+        };
         for (operation, input, carry_in, expected_value, expected_flags) in cases {
             for destination in 0..8_u8 {
                 let mut bus = TestBus::default();
-                bus.0[..4].copy_from_slice(&[
-                    prefix,
-                    0xCB,
-                    0x00,
-                    (operation << 3) | destination,
-                ]);
+                bus.0[..4].copy_from_slice(&[prefix, 0xCB, 0x00, (operation << 3) | destination]);
                 bus.0[usize::from(address)] = input;
 
                 let mut cpu = Z80::default();
@@ -107,7 +106,7 @@ fn indexed_cb_rotate_shift_copies_results_to_all_ordinary_register_destinations(
                     3 => expected_registers[4] = expected_value, // E
                     4 => expected_registers[5] = expected_value, // H, not IXH/IYH
                     5 => expected_registers[6] = expected_value, // L, not IXL/IYL
-                    6 => {} // memory-only form
+                    6 => {}                                      // memory-only form
                     7 => expected_registers[0] = expected_value, // A
                     _ => unreachable!(),
                 }
