@@ -64,3 +64,17 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Run all workspace tests
         run: cargo test --workspace --locked
+
+  external-conformance:
+    name: Pinned external Z80 conformance suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install build prerequisites
+        run: sudo apt-get update && sudo apt-get install --yes cmake g++
+      - name: Run upstream Z80 full conformance suite
+        run: python3 tools/z80test/run_sms_z80test.py --variant z80full --max-steps 250000000
+      - name: Run upstream Z80 SCF/CCF flag conformance suite
+        run: python3 tools/z80test/run_sms_z80test.py --variant z80ccf --max-steps 250000000
