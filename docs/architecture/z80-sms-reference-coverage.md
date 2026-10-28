@@ -5,7 +5,7 @@
 - Repositório: `leonardo201800478/sega-emulator`
 - Base desta auditoria: `53db203732524e824e670073772cb4cb082937a9`
 - Corpus independente: [SingleStepTests/Z80](https://github.com/SingleStepTests/z80/tree/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7), commit fixado `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7`, licença MIT.
-- Suíte de referência Rust: **138 vetores** — 108 vetores gerais em `z80_singlestep_reference_vectors.rs` e 16 vetores adicionais de I/O em bloco em `z80_ed_block_io_reference_vectors.rs` (PR #184). Os 16 novos vetores passaram sem falhas no SHA integrado `5f39196967a0603185d2dd886711682319f1e381`.
+- Suíte de referência Rust: **162 vetores** — 108 vetores gerais em `z80_singlestep_reference_vectors.rs` e 54 vetores de I/O em bloco em `z80_ed_block_io_reference_vectors.rs` (16 da PR #184, 14 da PR #186 e 24 da PR #187). Os 16 novos vetores passaram sem falhas no SHA integrado `5f39196967a0603185d2dd886711682319f1e381`.
 - Este documento separa explicitamente **classificação/execução sem erro** de **correção semântica comparada a um oráculo**.
 
 ## Atualização de validação — 2026-10-28 (PR #184)
@@ -20,6 +20,13 @@
 - Adiciona 7 vetores para INIR (`ED B2`) e 7 para OTDR (`ED BB`) do mesmo corpus fixado.
 - Casos selecionados cobrem `B=0` (decremento com wrap para `FF`), limites do byte baixo/alto de `HL` e valores extremos das flags de entrada.
 - O objetivo é aumentar a diversidade de estado de entrada para flags e efeitos de memória/I/O, não alegar cobertura de todos os endereços de 16 bits nem de todas as combinações de flags.
+
+## Cobertura ampliada das oito instruções de I/O em bloco — PR #187
+
+- Adicionados 24 vetores do corpus fixado SingleStepTests/Z80: 4 para cada uma das instruções `INI` (`ED A2`), `OUTI` (`ED A3`), `IND` (`ED AA`), `OUTD` (`ED AB`), `OTIR` (`ED B3`) e `INDR` (`ED BA`).
+- A seleção inclui estado ordinário, `B=0`, `L=FF` e `F=FF`, quando disponível na família. Os 24/24 vetores passaram no SHA candidato `e09967f12076366db13f5eea52178afca51af994`; os checks Rust, Clippy, formatação, SMS focado e qualidade concluíram com sucesso.
+- O código foi integrado pela PR #187 no SHA `c226ddfccd6961ecf63d8751bc9edf10d2465a9b`. Os workflows disparados no SHA de merge devem ser acompanhados separadamente; o resultado do candidato não deve ser confundido com um resultado pós-merge.
+- A cobertura de referência agora tem 162 vetores contabilizados (108 gerais + 16 iniciais + 14 de fronteira + 24 das demais instruções de I/O em bloco). A contagem descreve vetores versionados, não cobertura combinatória de todos os opcodes/estados.
 
 ## Níveis de evidência
 
