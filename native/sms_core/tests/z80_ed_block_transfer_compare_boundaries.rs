@@ -97,6 +97,29 @@ fn ldir_final_iteration_does_not_repeat_and_clears_pv() {
     assert_eq!(cpu.registers.f, 0x61); // preserved Z/C plus undocumented Y.
 }
 
+
+#[test]
+fn ldd_wraps_hl_and_de_across_zero() {
+    let mut bus = FlatBus::default();
+    program_at(&mut bus, 0x0100, 0xA8);
+    bus.memory[0x0000] = 0x5A;
+
+    let mut cpu = Z80::default();
+    cpu.registers.pc = 0x0100;
+    cpu.registers.a = 0x00;
+    cpu.registers.set_hl(0x0000);
+    cpu.registers.set_de(0xFFFF);
+    cpu.registers.set_bc(0x0001);
+
+    assert_eq!(cpu.step(&mut bus), Ok(16));
+    assert_eq!(bus.memory[0xFFFF], 0x5A);
+    assert_eq!(cpu.registers.pc, 0x0102);
+    assert_eq!(cpu.registers.hl(), 0xFFFF);
+    assert_eq!(cpu.registers.de(), 0xFFFE);
+    assert_eq!(cpu.registers.bc(), 0x0000);
+    assert_eq!(cpu.registers.f, 0x28); // X/Y from A + transferred byte.
+}
+
 #[test]
 fn lddr_repeats_when_bc_wraps_from_zero() {
     let mut bus = FlatBus::default();
