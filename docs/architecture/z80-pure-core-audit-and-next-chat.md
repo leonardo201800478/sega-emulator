@@ -115,14 +115,45 @@ A validação do Z80 puro pode avançar independentemente da máquina SMS, usand
 7. status dos workflows do SHA exato documentado como PASS/FAIL/BLOCKED/NOT RUN;
 8. limitações remanescentes registradas; nunca chamar de TEMPORAL_PASS sem validação de trace temporal apropriada.
 
-## 6. Estado desta auditoria
+## 6. Estado desta auditoria e inventário atualizado (2026-10-28)
 
-- **IMPLEMENTED:** executor Z80 Rust e trace M-cycle-level inicial para oito instruções ED sem prefixos DD/FD.
-- **SHORT_PASS:** workflows pré-merge citados acima passaram no SHA candidato.
-- **NOT VERIFIED:** checks pós-merge no SHA `9a0d424cf610d8cecb4818b1a9bc9fbc4572dbef`, pois a consulta não retornou runs/status.
-- **INTEGRATION_PENDING:** não é bloqueio para validar a CPU isolada; refere-se à máquina SMS, fora do escopo atual.
+### Base e CI
+
+- **Base remota confirmada:** `main` em `9a0d424cf610d8cecb4818b1a9bc9fbc4572dbef`.
+- **PASS no SHA exato:** [CI geral](https://github.com/leonardo201800478/sega-emulator/actions/runs/40781212247), [SMS Z80 Platform Validation](https://github.com/leonardo201800478/sega-emulator/actions/runs/40781212283), [SMS Core Fast Validation](https://github.com/leonardo201800478/sega-emulator/actions/runs/40781212259), [Rust SG-1000 Workspace](https://github.com/leonardo201800478/sega-emulator/actions/runs/40781212268) e [SG-1000 — Three Agent Sequential Validation](https://github.com/leonardo201800478/sega-emulator/actions/runs/40781212255).
+- Os checks consultados no SHA exato incluem Rust formatting, Workspace Rust tests, Workspace Clippy e Pinned external Z80 conformance suite; todos retornaram `success`.
+- **Limite:** esses resultados validam os checks executados, não a conformidade semântica completa do Z80. Não foram executados comandos locais nesta sessão.
+- **IMPLEMENTED:** executor Z80 Rust consolidado em `native/sms_core`; não criar um runtime duplicado.
 - **TEMPORAL_PASS:** não declarado.
-- **Conclusão:** não há evidência suficiente para declarar o Z80 integralmente validado. A próxima tarefa deve fechar lacunas semânticas com testes isolados, começando por inventariar os testes atuais e seus resultados no SHA remoto real.
+
+### Inventário real da matriz versionada
+
+O arquivo `docs/architecture/z80-sms-opcode-matrix.csv` no SHA auditado contém 1.803 registros: 256 para cada um dos sete espaços BASE, CB, ED, DD, FD, DDCB e FDCB, mais 11 sequências de prefixos. Os rótulos atuais de evidência semântica totalizam:
+
+| Rótulo da matriz | Registros |
+|---|---:|
+| `exhaustive_internal_model` | 376 |
+| `sparse_selected_vectors` | 365 |
+| `sparse_reference_vectors` | 1.008 |
+| Outras categorias | 54 |
+| `temporal_evidence = NOT_VERIFIED` | 1.803 |
+
+A matriz ED classifica 78 bytes como atribuídos e 178 como fallback ED-NOP. A matriz semântica descreve a cobertura dos grupos como parcial/direcionada em várias famílias. Esses rótulos são inventário de evidência, não certificação de comportamento correto. A presença de um vetor para uma codificação não garante cobertura dos dois caminhos condicionais, dos limites de estado ou de todos os efeitos laterais.
+
+### Lacuna prioritária identificada
+
+A primeira fatia de maior impacto proposta é a **cobertura dos caminhos condicionais de controle de fluxo**. Na matriz, `DJNZ`, `JR NZ/Z/NC/C` e as famílias condicionais `JP`, `CALL` e `RET` estão marcadas com evidência esparsa. Isso demonstra uma lacuna de evidência, não um defeito funcional já confirmado.
+
+Critérios de aceitação antes de modificar o executor:
+
+1. Cobrir condição tomada e não tomada para cada condição de `JR`, `JP`, `CALL` e `RET`, além dos dois caminhos de `DJNZ`.
+2. Comparar `PC`, `SP`, flags preservadas, conteúdo/ordem da pilha e T-states nominais.
+3. Cobrir deslocamentos relativos `-128`, `-1`, `0`, `+1`, `+127` e wraparound de PC.
+4. Cobrir SP próximo de `0000` e `FFFF` em CALL/RET, incluindo wraparound e ordem de bytes.
+5. Usar expectativas fixas, documentar procedência dos vetores externos e separar resultados de modelos internos dos resultados de oráculos externos. SingleStepTests/Z80 tem ancestralidade no Ares e não é prova independente de hardware.
+6. Rodar testes direcionados e os checks Rust pertinentes no SHA candidato exato; não transferir resultados de SHAs anteriores.
+
+Próxima implementação recomendada: começar com testes determinísticos para os caminhos condicionais e os limites de PC/SP, sem alterar o decoder até que uma falha reproduzível seja demonstrada. Registrar primeiro a lacuna e a aceitação; depois, implementar uma correção mínima somente se os testes revelarem divergência.
 
 ## 7. Prompt para continuar em um novo chat
 
