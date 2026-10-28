@@ -58,7 +58,8 @@ fn rotate_shift_reference(operation: u8, value: u8, carry_in: bool) -> (u8, bool
     match operation {
         0 => (value.rotate_left(1), value & 0x80 != 0), // RLC
         1 => (value.rotate_right(1), value & 0x01 != 0), // RRC
-        2 => (value.wrapping_shl(1) | u8::from(carry_in),
+        2 => (
+            value.wrapping_shl(1) | u8::from(carry_in),
             value & 0x80 != 0,
         ), // RL
         3 => ((value >> 1) | (u8::from(carry_in) << 7), value & 0x01 != 0), // RR
