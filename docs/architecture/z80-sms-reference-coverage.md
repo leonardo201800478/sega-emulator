@@ -12,7 +12,7 @@
 
 - Integrados 8 vetores `ED B2` (INIR) e 8 vetores `ED BB` (OTDR) do corpus fixado SingleStepTests/Z80.
 - Os vetores comparam estado final dos registradores principais e alternativos, flags, `WZ/MEMPTR`, `R`, `P/Q`, IFF1/IFF2, IM, atraso de EI, RAM alterada, portas de I/O e contagem agregada de T-states.
-- Resultado no SHA de merge `5f39196967a0603185d2dd886711682319f1e381`: 16/16 vetores iniciais passaram; CI, SMS Core Fast Validation e SMS Z80 Platform Validation passaram. A PR #186 adiciona mais 14 vetores de fronteira para `B=0`, `L=00/FF`, `H=00/FF` e `F=00/FF`; a validação desses novos casos fica condicionada aos workflows da PR.
+- Resultado no SHA de merge `5f39196967a0603185d2dd886711682319f1e381`: 16/16 vetores iniciais passaram; CI, SMS Core Fast Validation e SMS Z80 Platform Validation passaram. A PR #186 adiciona mais 14 vetores de fronteira para `B=0`, `L=00/FF`, `H=00/FF` e `F=00/FF`; os 14/14 passaram no SHA candidato `4ea8675f824a30ea34947fa51dfc4b47c349ed91`, com formatação, Clippy, testes do workspace, testes focados SMS e qualidade verdes.
 - Os testes usam o comprimento do traço externo como total de T-states, mas não comparam eventos de barramento ordenados. Não constituem evidência de hardware nem cobertura combinatória completa.
 
 ## Ampliação de casos de fronteira — PR #186
