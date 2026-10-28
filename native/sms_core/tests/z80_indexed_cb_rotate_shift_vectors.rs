@@ -26,8 +26,8 @@ fn indexed_cb_rotate_and_shift_fixed_vectors_cover_all_eight_operations() {
     // from the result byte as observed Z80 behavior; this test does not claim
     // independent differential or cycle-by-cycle bus validation.
     //
-    // Fields: operation x, input byte, initial carry, result, expected F.
-    // x=0..7: RLC, RRC, RL, RR, SLA, SRA, SLL, SRL.
+    // Fields: operation y, input byte, initial carry, result, expected F.
+    // y=0..7: RLC, RRC, RL, RR, SLA, SRA, SLL, SRL.
     let cases = [
         (0_u8, 0x84_u8, false, 0x09_u8, 0x0D_u8),
         (1, 0x03, false, 0x81, 0x85),
@@ -44,7 +44,7 @@ fn indexed_cb_rotate_and_shift_fixed_vectors_cover_all_eight_operations() {
             let index = if prefix == 0xDD { 0xC100_u16 } else { 0xD200_u16 };
             let address = index;
             let mut bus = TestBus::default();
-            bus.0[..4].copy_from_slice(&[prefix, 0xCB, 0x00, (operation << 6) | 0x06]);
+            bus.0[..4].copy_from_slice(&[prefix, 0xCB, 0x00, (operation << 3) | 0x06]);
             bus.0[usize::from(address)] = input;
 
             let mut cpu = Z80 {
@@ -84,10 +84,7 @@ fn indexed_cb_rotate_and_shift_fixed_vectors_cover_all_eight_operations() {
                 expected_value,
                 "{context}: memory result"
             );
-            assert_eq!(
-                cpu.registers.f, expected_flags,
-                "{context}: flags"
-            );
+            assert_eq!(cpu.registers.f, expected_flags, "{context}: flags");
             assert_eq!(
                 [
                     cpu.registers.a,
