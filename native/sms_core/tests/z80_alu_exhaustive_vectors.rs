@@ -433,3 +433,68 @@ fn accumulator_rotates_match_all_accumulators_and_initial_flag_states() {
         }
     }
 }
+
+#[test]
+fn cpl_scf_and_ccf_flags_match_all_accumulator_flag_and_q_xy_states() {
+    let mut bus = TestBus::default();
+    let mut cpu = Z80::default();
+
+    // CPL does not depend on the Q latch. Exhaust every A/F combination.
+    bus.0[0] = 0x2F;
+    for accumulator in 0_u8..=u8::MAX {
+        for old_flags in 0_u8..=u8::MAX {
+            let expected_a = !accumulator;
+            let expected_f = (old_flags & (FLAG_S | FLAG_Z | FLAG_PV | FLAG_C))
+                | (expected_a & FLAG_XY)
+                | FLAG_H
+                | FLAG_N;
+            cpu.registers.a = accumulator;
+            cpu.registers.f = old_flags;
+            cpu.registers.pc = 0;
+            cpu.q = 0;
+
+            assert_eq!(cpu.step(&mut bus), Ok(4), "CPL A={accumulator:02X} F={old_flags:02X}");
+            assert_eq!(cpu.registers.a, expected_a, "CPL accumulator");
+            assert_eq!(cpu.registers.f, expected_f, "CPL flags A={accumulator:02X} F={old_flags:02X}");
+        }
+    }
+
+    // SCF/CCF expose the Q-latch-dependent undocumented X/Y behavior.
+    // Q's X/Y projection has four states; its other bits cannot affect these formulas.
+    for (opcode, complement_carry) in [(0x37_u8, false), (0x3F_u8, true)] {
+        bus.0[0] = opcode;
+        for accumulator in 0_u8..=u8::MAX {
+            for old_flags in 0_u8..=u8::MAX {
+                for q_xy in [0_u8, FLAG_X, FLAG_Y, FLAG_XY] {
+                    let undocumented = (accumulator | (q_xy ^ old_flags)) & FLAG_XY;
+                    let old_carry = old_flags & FLAG_C != 0;
+                    let carry_or_half = if complement_carry && old_carry {
+                        FLAG_H
+                    } else {
+                        FLAG_C
+                    };
+                    let expected_f =
+                        (old_flags & FLAG_SZPV) | undocumented | carry_or_half;
+                    cpu.registers.a = accumulator;
+                    cpu.registers.f = old_flags;
+                    cpu.registers.pc = 0;
+                    cpu.q = q_xy;
+
+                    assert_eq!(
+                        cpu.step(&mut bus),
+                        Ok(4),
+                        "opcode={opcode:02X} A={accumulator:02X} F={old_flags:02X} Qxy={q_xy:02X}"
+                    );
+                    assert_eq!(
+                        cpu.registers.a, accumulator,
+                        "opcode={opcode:02X}: accumulator must be preserved"
+                    );
+                    assert_eq!(
+                        cpu.registers.f, expected_f,
+                        "opcode={opcode:02X} A={accumulator:02X} F={old_flags:02X} Qxy={q_xy:02X}"
+                    );
+                }
+            }
+        }
+    }
+}
