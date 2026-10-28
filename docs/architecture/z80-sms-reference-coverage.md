@@ -109,3 +109,17 @@ A matriz enumerada por codificação está em [z80-sms-opcode-matrix.csv](z80-sm
 - **TEMPORAL_PASS:** não declarado.
 
 O CSV é uma base de auditoria e planejamento, não um certificado de completude semântica. Para concluir a auditoria global, cada família ainda precisa de vetores fixos por opcode/forma, estados de fronteira, referência/procedência e regressão no SHA candidato exato.
+
+
+## Atualização — destinos DDCB/FDCB (PR #211, 2026-10-28)
+
+- A PR #211 foi integrada no SHA `90b446d768b6c534487151457f3d56fa5d6d5a39`; arquivo de teste: `native/sms_core/tests/z80_indexed_cb_rotate_shift_destinations.rs`.
+- A nova suíte percorre as oito operações rotate/shift (`RLC`, `RRC`, `RL`, `RR`, `SLA`, `SRA`, `SLL`, `SRL`), os dois prefixos `DD CB`/`FD CB` e todos os oito destinos codificados (`B,C,D,E,H,L,(IX/IY+d),A`). Os casos verificam valor escrito na memória, cópia para o registrador selecionado, flags, PC, R, WZ, T-states nominais e preservação do índice não selecionado.
+- O teste usa os mesmos vetores fixos de resultado/flags já existentes em `z80_indexed_cb_rotate_shift_vectors.rs`; amplia a cobertura dos destinos, mas **não cria um oráculo independente novo** e **não valida a ordem dos eventos de barramento ciclo a ciclo**.
+- Os testes já existentes em `z80_indexed_cb_bit_res_set_wz.rs` percorrem BIT/RES/SET, bits e destinos codificados para IX/IY, incluindo preservação de flags em RES/SET. Com a PR #211, a lacuna registrada anteriormente para destinos de rotate/shift indexados foi coberta por testes dirigidos.
+- Checks no SHA candidato `2ec52ca7b2f169709bb5f5880fc5a5113a77abec`: CI/quality PASS; SMS Core Fast Validation PASS; SMS Z80 Platform Validation PASS; Rust formatting PASS; Workspace Clippy PASS; Workspace Rust tests PASS; suíte externa fixada de conformidade Z80 PASS. A checagem Sourcery foi SKIPPED por limite de uso e não conta como revisão aprovada.
+- O merge não modifica código de produção. O SHA integrado de `main` é `90b446d768b6c534487151457f3d56fa5d6d5a39`.
+
+### Limite do marco
+
+Este avanço fecha a lacuna específica de destinos das operações rotate/shift indexadas, não a auditoria semântica global. A issue [#158 — matriz completa de opcodes e semântica](https://github.com/leonardo201800478/sega-emulator/issues/158) permanece aberta: faltam vetores semânticos para várias famílias/condições e estados de fronteira. A issue [#159 — interrupções, estado e temporalidade](https://github.com/leonardo201800478/sega-emulator/issues/159) também permanece aberta. `TEMPORAL_PASS` não é declarado, pois nenhum trace ordenado de barramento foi comparado ciclo a ciclo.
