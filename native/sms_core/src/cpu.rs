@@ -1289,6 +1289,7 @@ impl Z80 {
             1_i16
         };
         let old_bc = self.registers.bc();
+        let old_b = self.registers.b;
         let value = if input {
             let value = bus.read_port(old_bc);
             bus.write_memory(self.registers.hl(), value);
@@ -1319,7 +1320,12 @@ impl Z80 {
         if sum > 0xFF {
             flags |= FLAG_H | FLAG_C;
         }
-        let parity_arg = (sum as u8 & 0x07) ^ self.registers.b;
+        let parity_b = if input {
+            old_b
+        } else {
+            self.registers.b
+        };
+        let parity_arg = (sum as u8 & 0x07) ^ parity_b;
         if parity_arg.count_ones().is_multiple_of(2) {
             flags |= FLAG_PV;
         }
