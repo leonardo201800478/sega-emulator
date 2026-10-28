@@ -210,3 +210,18 @@ A [PR #187](https://github.com/leonardo201800478/sega-emulator/pull/187) adicion
 A seleção abrange casos ordinários, `B=0`, `L=FF` e `F=FF` quando disponível. Cada vetor compara estado final da CPU, flags, WZ, memória/portas e T-states agregados. **24/24 passaram** no SHA candidato `e09967f12076366db13f5eea52178afca51af994`, incluindo formatação Rust, Clippy, testes do workspace, testes focados SMS e qualidade. A PR foi integrada no SHA `c226ddfccd6961ecf63d8751bc9edf10d2465a9b`; os workflows do SHA de merge são uma validação distinta e devem ser verificados separadamente.
 
 Com as PRs #184, #186 e #187, a suíte dedicada de I/O em bloco contém 54 vetores (16 + 14 + 24), cobrindo as oito formas básicas/repetidas por meio de testes locais dirigidos e vetores diferenciais para todas as famílias. Isso não resolve a divergência de referências sobre flags de I/O em bloco, não valida a ordem dos eventos de barramento e não é evidência de hardware físico nem de precisão ciclo a ciclo.
+
+
+## Proveniência do corpus e divergência documental de flags — revisão 2026-10-28
+
+### Proveniência
+
+O README do corpus SingleStepTests/Z80 no commit fixado `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7` declara que os testes foram criados traduzindo o núcleo Z80 do Ares e depois corrigindo alguns bugs ([README upstream fixado](https://github.com/SingleStepTests/z80/blob/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7/README.MD)). Portanto, estes vetores são externos e úteis para regressão, mas **não são um oráculo independente do Ares**. Não se deve inferir independência só porque os dados estão num repositório separado.
+
+### Flags de I/O em bloco: o que as fontes realmente dizem
+
+- O manual oficial ZiLOG **Z80 CPU User Manual UM008011-0816** declara, nas descrições de INI, INIR, IND e INDR, que C não é afetado; S, H e P/V são desconhecidos; N é definido; e Z depende do resultado do decremento de B ([manual oficial, seção INI/INIR/IND/INDR](https://www.zilog.com/docs/z80/um0080.pdf)). Para OUTI/OTIR/OUTD/OTDR, consultar as descrições correspondentes no mesmo manual. A documentação do fabricante não especifica as fórmulas não documentadas como comportamento garantido.
+- *The Undocumented Z80 Documented* descreve um modelo de flags mais específico: C/H derivados do carry da soma do byte transferido com o valor de C±1 para INx ou com L atualizado para OUTx; P/V baseado na paridade de uma expressão que inclui o byte baixo e B; N copiado do bit 7 do byte transferido. Essa é uma referência secundária de comportamento não documentado, não uma garantia de fabricante ([documento](https://z80.info/zip/z80-documented.pdf)).
+- A implementação atual segue essa fórmula secundária para flags de I/O em bloco. Os vetores SingleStepTests existentes passam, mas sua ancestralidade em Ares impede tratá-los como confirmação independente dessa mesma fórmula.
+
+**Conclusão de engenharia:** manter o comportamento atual para não introduzir uma regressão especulativa, mas rotular as fórmulas como hipótese de compatibilidade para a variante-alvo, não como comportamento universal demonstrado. Para resolver a questão, precisamos de um exercitador de hardware/ROM independente com procedência verificável, ou de um segundo oráculo sem ancestralidade comum conhecida, e vetores discriminantes para C/H/PV em INI/IND/OUTI/OUTD e suas variantes repetidas. Nenhum teste atual prova a resposta do silício físico.
