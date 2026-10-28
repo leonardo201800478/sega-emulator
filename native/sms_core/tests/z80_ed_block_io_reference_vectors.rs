@@ -164,13 +164,7 @@ struct Effects<'a> {
     expected_ports: &'a [(u16, u8)],
 }
 
-fn run_vector(
-    name: &str,
-    initial: State,
-    expected: State,
-    effects: Effects<'_>,
-    tstates: u32,
-) {
+fn run_vector(name: &str, initial: State, expected: State, effects: Effects<'_>, tstates: u32) {
     let mut bus = FlatBus::default();
     for &(address, value) in effects.initial_memory {
         bus.memory[usize::from(address)] = value;
