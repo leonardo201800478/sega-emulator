@@ -572,8 +572,15 @@ fn daa_matches_documented_packed_bcd_add_and_subtract_examples() {
         cpu.registers.f = input_f;
         cpu.registers.pc = 0;
 
-        assert_eq!(cpu.step(&mut bus), Ok(4), "DAA A={input_a:02X} F={input_f:02X}");
-        assert_eq!(cpu.registers.a, expected_a, "DAA A={input_a:02X}: accumulator");
+        assert_eq!(
+            cpu.step(&mut bus),
+            Ok(4),
+            "DAA A={input_a:02X} F={input_f:02X}"
+        );
+        assert_eq!(
+            cpu.registers.a, expected_a,
+            "DAA A={input_a:02X}: accumulator"
+        );
         assert_eq!(cpu.registers.f, expected_f, "DAA A={input_a:02X}: flags");
     }
 }
