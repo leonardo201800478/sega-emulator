@@ -76,9 +76,18 @@ def find_assembler(build: Path) -> Path:
 def run_image(image: Path, max_steps: int) -> None:
     run(
         [
-            "cargo", "run", "--locked", "--release", "-p", "sega-sms-core",
-            "--bin", "z80test_runner", "--", str(image.resolve()),
-            "--max-steps", str(max_steps),
+            "cargo",
+            "run",
+            "--locked",
+            "--release",
+            "-p",
+            "sega-sms-core",
+            "--bin",
+            "z80test_runner",
+            "--",
+            str(image.resolve()),
+            "--max-steps",
+            str(max_steps),
         ],
         cwd=ROOT,
     )
@@ -88,8 +97,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--variant", choices=VARIANTS, default="z80full")
     parser.add_argument("--max-steps", type=int, default=250_000_000)
-    parser.add_argument("--work-dir", type=Path, help="preserve fetched sources and build output")
-    parser.add_argument("--image", type=Path, help="run an existing raw image assembled at ORG 0x8000")
+    parser.add_argument(
+        "--work-dir", type=Path, help="preserve fetched sources and build output"
+    )
+    parser.add_argument(
+        "--image", type=Path, help="run an existing raw image assembled at ORG 0x8000"
+    )
     args = parser.parse_args()
     if args.max_steps <= 0:
         parser.error("--max-steps must be positive")
@@ -113,7 +126,16 @@ def main() -> int:
         checkout(Z80TEST_REPO, Z80TEST_SHA, suite)
         checkout(SJASM_REPO, SJASM_SHA, assembler_source)
         run(["cmake", "-S", str(assembler_source), "-B", str(assembler_build)])
-        run(["cmake", "--build", str(assembler_build), "--config", "Release", "--parallel"])
+        run(
+            [
+                "cmake",
+                "--build",
+                str(assembler_build),
+                "--config",
+                "Release",
+                "--parallel",
+            ]
+        )
         assembler = find_assembler(assembler_build)
 
         source_dir = suite / "src"
