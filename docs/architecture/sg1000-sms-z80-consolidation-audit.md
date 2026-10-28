@@ -75,9 +75,16 @@ Na PR #164, SHA candidato `afcc1264ce722fa7d142d90ee73b09457c78c618`:
 - **PASS:** Rust formatting, Workspace Clippy, Workspace Rust tests, SMS focused format/lint/tests e workflow geral CI/quality.
 - A suíte SingleStepTests passou com **89 testes aprovados e nenhum ignorado**; o vetor CPIR que estava ignorado foi reativado.
 - O vetor `ED B1 0000` mostrou que, em uma iteração repetida de CPIR, as flags X/Y vêm do byte alto do PC depois de recuar dois bytes, não do resultado ajustado da comparação. A correção foi generalizada para LDIR/LDDR, CPIR/CPDR e instruções de bloco de I/O repetidas.
-- O novo vetor `ED B0 0001` valida a mesma regra em LDIR. O vetor `ED B2 0002` encontrou ainda um erro de PV no INIR: o cálculo de paridade do caminho de entrada precisa usar o B anterior ao decremento; a correção passou no vetor.
+- O vetor `ED B0 0001` valida a mesma regra em LDIR. Os vetores `ED B2 0002` e `ED BA 0000` mostraram que flags de bloco de I/O repetido também exigem ajuste de PV/H durante os T-states adicionais; a implementação agora aplica a regra condicional ao carry e ao bit 7 do byte transferido. O vetor `ED B2 0002` passou após corrigir a fórmula base de PV para usar o B pós-decremento e, em seguida, aplicar o ajuste da repetição.
 - Evidência externa consultada: o manual independente *The Undocumented Z80 Documented* descreve os flags de CPI/CPIR e os efeitos de instruções de bloco; o wiki do Z80Decoder registra efeitos de flags não documentadas em operações de bloco interrompidas. O vetor SingleStepTests fixado fornece a expectativa executável usada pelos testes: https://github.com/SingleStepTests/z80/tree/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7.
 - **SKIPPED:** revisão automática Sourcery, por limite de orçamento do serviço.
+
+Na PR #165, SHA candidato `57d4f78c30afca019de94789c24716ad17bf7744`:
+- **PASS:** Rust formatting, Workspace Clippy, Workspace Rust tests, SMS focused format/lint/tests e workflow geral CI/quality.
+- A suíte SingleStepTests passou com **94 testes aprovados e nenhum ignorado**.
+- Foram adicionados vetores para `LDDR`, `CPDR`, `INDR`, `OTIR` e `OTDR`; o harness compara também portas de entrada/saída.
+- Os vetores `INDR` e `OTDR` revelaram que, nas repetições de bloco de I/O, não basta sobrescrever X/Y: PV/H também sofrem efeitos dos T-states extras. A correção agora aplica a fórmula dependente de carry e do bit 7 do byte transferido; todos os cinco vetores passaram.
+- Fonte independente complementar para esses efeitos não documentados: https://www.reddit.com/r/EmuDev/comments/1vkkk21/z80_proper_handling_of_undocumented_x_and_y_flags/ e https://github.com/hoglet67/Z80Decoder/wiki/Undocumented-Flags. Os detalhes de hardware ainda devem ser distinguidos de comportamento documentado pelo fabricante.
 
 Esses resultados confirmam os checks nos SHAs candidatos informados, não a completude total da CPU. A suite verifica estado arquitetural, T-states agregados e os endereços de RAM explicitamente listados pelos vetores; não compara trace temporal completo do barramento.
 
