@@ -99,7 +99,7 @@ fn ld_a_i_covers_every_i_value_carry_iff2_and_initial_flag_pattern() {
                 for initial_flags in FLAG_PATTERNS {
                     cpu.registers.pc = 0;
                     cpu.registers.a = 0xC3;
-                    cpu.registers.f = initial_flags;
+                    cpu.registers.f = (initial_flags & !FLAG_C) | if carry { FLAG_C } else { 0 };
                     cpu.i = value;
                     cpu.r = 0x7E;
                     cpu.iff2 = iff2;
@@ -134,7 +134,7 @@ fn ld_a_r_covers_every_initial_r_carry_iff2_and_initial_flag_pattern() {
                     let expected_r = increment_r(increment_r(initial_r));
                     cpu.registers.pc = 0;
                     cpu.registers.a = 0xC3;
-                    cpu.registers.f = initial_flags;
+                    cpu.registers.f = (initial_flags & !FLAG_C) | if carry { FLAG_C } else { 0 };
                     cpu.i = 0x34;
                     cpu.r = initial_r;
                     cpu.iff2 = iff2;
