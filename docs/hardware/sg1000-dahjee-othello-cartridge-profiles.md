@@ -33,7 +33,7 @@ Othello uses a different 2 KiB RAM mapper. The Genesis Plus GX game list labels 
 | Othello (Japan) | af4f14bc | Othello 2 KiB RAM |
 | Othello (Taiwan) | 1d1a0ca3 | Othello 2 KiB RAM |
 
-The 2 KiB window is modeled as a candidate pending differential execution of the ROMs against an independent emulator.
+The Othello map remains a separate implementation profile; its successful manual run is recorded below, but has not been differentially compared with another emulator.
 
 ## Implementation
 
@@ -48,9 +48,13 @@ The 2 KiB window is modeled as a candidate pending differential execution of the
 - [x] Profile selection tests cover the known DahJee/Jumbo Type-A CRCs.
 - [x] Native Rust memory test covers Type-A RAM writes, boundaries, ROM-window separation, and unchanged 1 KiB internal RAM.
 - [x] Othello has a synthetic test for its 2 KiB mirrored window.
-- [ ] Full Rust and Python acceptance suites for this corrective change: NOT RUN in this editing session.
-- [ ] Actual boot/gameplay of the eight issue #136 ROMs: NOT RUN.
+- [x] Full local Rust workspace tests: 114 passed, 0 failed.
+- [x] Full local Python pytest suite: 192 passed, 0 failed.
+- [x] `cargo fmt --all -- --check`: PASS.
+- [x] `cargo clippy --workspace --all-targets -- -D warnings`: PASS.
+- [x] Native Python extension rebuilt locally with Maturin for CPython 3.14 on Windows x64.
+- [x] Maintainer manual functional report: all eight issue #136 games ran correctly in the local emulator.
 - [ ] Differential comparison against Genesis Plus GX/MAME or Ares: NOT RUN.
-- [ ] Othello slot behavior confirmed against the MAME implementation and actual ROM execution: NOT RUN.
+- [ ] Python Ruff, compileall, and pip check acceptance commands: NOT RUN in this local validation session.
 
-Do not declare the games compatible based on profile-selection or synthetic memory tests alone. No commercial ROMs are stored in the repository.
+The manual functional result is based on the maintainer's local testing; the supplied session log records eight ROM-load events and confirms `rust_native_machine` as the effective runtime. It is not an independently reproduced differential test. No commercial ROMs are stored in the repository.
