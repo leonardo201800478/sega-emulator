@@ -59,7 +59,7 @@ Os números são os retornos agregados atuais do núcleo. Não representam um tr
 
 ## 4. Evidência no repositório
 
-A suíte de referência `native/sms_core/tests/z80_singlestep_reference_vectors.rs` contém vetores fixos para todas as oito codificações: ED A0, A1, A8, A9, B0, B1, B8 e B9. Os dois vetores acrescentados nesta PR são `ED B8 0000` ([fonte fixada](https://github.com/SingleStepTests/z80/blob/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7/v1/ed%20b8.json)) e `ED B9 0000` ([fonte fixada](https://github.com/SingleStepTests/z80/blob/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7/v1/ed%20b9.json)). Há, portanto, pelo menos um estado externo por codificação, mas isso não é cobertura combinatória e o corpus não é independente do Ares.
+A suíte de referência `native/sms_core/tests/z80_singlestep_reference_vectors.rs` agora contém dois vetores fixos para cada uma das oito codificações ED A0, A1, A8, A9, B0, B1, B8 e B9. Esta PR acrescenta dez vetores do corpus fixado: ED B8 0000 ([fonte](https://github.com/SingleStepTests/z80/blob/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7/v1/ed%20b8.json)), ED B9 0000 ([fonte](https://github.com/SingleStepTests/z80/blob/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7/v1/ed%20b9.json)) e um estado adicional por instrução ([arquivos de origem](https://github.com/SingleStepTests/z80/tree/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7/v1)). Há pelo menos dois estados por codificação, mas isso não é cobertura combinatória e o corpus não é independente do Ares.
 
 A suíte de regressão `native/sms_core/tests/z80_ed_block_transfer_compare_boundaries.rs` contém 16 casos dirigidos que cobrem todas as oito codificações, incluindo:
 
@@ -70,13 +70,13 @@ A suíte de regressão `native/sms_core/tests/z80_ed_block_transfer_compare_boun
 - preservação de flags documentadas e casos de H/PV;
 - bits X/Y no resultado de comparação ajustado e no caminho de repetição.
 
-Os 16 casos do arquivo de fronteiras são invariantes calculados manualmente. Os vetores ED B8/B9 são vetores diferenciais fixos do corpus, com um único estado cada; a ancestralidade comum ao Ares reduz sua independência como oráculo. Os testes desta PR ainda precisam de execução CI no SHA candidato.
+Os 16 casos do arquivo de fronteiras são invariantes calculados manualmente. Os vetores diferenciais externos têm dois estados por codificação, mas a ancestralidade comum ao Ares reduz sua independência como oráculo. Os testes desta PR precisam passar no SHA candidato exato.
 
 ## 5. Lacunas para fechar
 
 | Lacuna | Evidência necessária |
 |---|---|
-| LDDR e CPDR | Ampliar para vários estados por instrução: repetição, término, BC=0, flags, WZ e limites de PC/HL/DE |
+| LDDR e CPDR | Acrescentar estados de término por correspondência, BC=0/1, flags, WZ e limites de PC/HL/DE; CPDR ainda requer mais vetores externos de término |
 | Flags X/Y | Vetores que discriminem o resultado ajustado, o PC alto e os limites de PC |
 | Aritmética de comparação | Casos de igualdade, desigualdade, meia-subtração, resultado 00/7F/80/FF e preservação de C |
 | Contador e endereços | BC=0000/0001/0002/FFFF; HL/DE em 0000/FFFF; destino/origem coincidentes |
