@@ -2252,4 +2252,115 @@ mod tests {
         assert_eq!(cpu.step(&mut bus), Ok(12));
         assert_eq!(cpu.registers.pc, 0xFFFE);
     }
+
+
+    // Exhaustive ED-space regression. This is intentionally separate from the
+    // semantic vectors below: it checks every second byte against an explicit
+    // nominal-T-state oracle and guards the documented ED-NOP fallback.
+    #[test]
+    fn all_256_ed_encodings_match_nominal_cycle_vectors() {
+        const EXPECTED_TSTATES: [u8; 256] = [
+         8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,
+         8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,
+         8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,
+         8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,
+        12, 12, 15, 20,  8, 14,  8,  9, 12, 12, 15, 20,  8, 14,  8,  9,
+        12, 12, 15, 20,  8, 14,  8,  9, 12, 12, 15, 20,  8, 14,  8,  9,
+        12, 12, 15, 20,  8, 14,  8, 18, 12, 12, 15, 20,  8, 14,  8, 18,
+        12, 12, 15, 20,  8, 14,  8,  8, 12, 12, 15, 20,  8, 14,  8,  8,
+         8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,
+         8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,
+        16, 16, 16, 16,  8,  8,  8,  8, 16, 16, 16, 16,  8,  8,  8,  8,
+        16, 16, 16, 16,  8,  8,  8,  8, 16, 16, 16, 16,  8,  8,  8,  8,
+         8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,
+         8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,
+         8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,
+         8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8,  8
+        ];
+
+        for opcode in 0_u8..=u8::MAX {
+            let mut bus = TestBus([0; 0x10000]);
+            bus.0[0] = 0xED;
+            bus.0[1] = opcode;
+            // Absolute word-transfer instructions consume a 16-bit operand.
+            bus.0[2] = 0x00;
+            bus.0[3] = 0xC2;
+
+            let mut cpu = Z80::default();
+            cpu.registers.a = 0;
+            cpu.registers.f = FLAG_C;
+            cpu.registers.set_bc(1);
+            cpu.registers.set_de(0xC100);
+            cpu.registers.set_hl(0xC000);
+            cpu.registers.sp = 0xD000;
+            bus.0[0xC000] = 0;
+            bus.0[0xD000] = 0;
+            bus.0[0xD001] = 0;
+
+            // Block-I/O termination depends on B, not the full BC value.
+            if matches!(opcode, 0xA2 | 0xAA | 0xB2 | 0xBA | 0xA3 | 0xAB | 0xB3 | 0xBB) {
+                cpu.registers.b = 1;
+                cpu.registers.c = 0;
+            }
+
+            let result = cpu.step(&mut bus);
+            assert_eq!(
+                result,
+                Ok(u32::from(EXPECTED_TSTATES[usize::from(opcode)])),
+                "ED {opcode:02X}: unexpected result / nominal T-states"
+            );
+            assert_eq!(
+                cpu.total_tstates,
+                u64::from(EXPECTED_TSTATES[usize::from(opcode)]),
+                "ED {opcode:02X}: total_tstates disagrees with returned duration"
+            );
+
+            let expected_pc = if matches!(opcode,
+                0x43 | 0x53 | 0x63 | 0x73 | 0x4B | 0x5B | 0x6B | 0x7B) {
+                4
+            } else if matches!(opcode, 0x45 | 0x4D | 0x55 | 0x5D | 0x65 | 0x6D | 0x75 | 0x7D) {
+                0 // RETN/RETI aliases pop the seeded return address at SP.
+            } else {
+                2
+            };
+            assert_eq!(cpu.registers.pc, expected_pc, "ED {opcode:02X}: PC");
+        }
+    }
+
+    #[test]
+    fn every_ed_fallback_encoding_is_an_eight_tstate_no_op() {
+        const EXPLICIT: [u8; 78] = [0x47, 0x4f, 0x57, 0x5f, 0x43, 0x53, 0x63, 0x73, 0x4b, 0x5b, 0x6b, 0x7b, 0x4a, 0x5a, 0x6a, 0x7a, 0x42, 0x52, 0x62, 0x72, 0x40, 0x48, 0x50, 0x58, 0x60, 0x68, 0x70, 0x78, 0x41, 0x49, 0x51, 0x59, 0x61, 0x69, 0x71, 0x79, 0x44, 0x4c, 0x54, 0x5c, 0x64, 0x6c, 0x74, 0x7c, 0x45, 0x4d, 0x55, 0x5d, 0x65, 0x6d, 0x75, 0x7d, 0x46, 0x4e, 0x66, 0x6e, 0x56, 0x76, 0x5e, 0x7e, 0x67, 0x6f, 0xa0, 0xa8, 0xb0, 0xb8, 0xa1, 0xa9, 0xb1, 0xb9, 0xa2, 0xaa, 0xb2, 0xba, 0xa3, 0xab, 0xb3, 0xbb];
+
+        for opcode in 0_u8..=u8::MAX {
+            if EXPLICIT.contains(&opcode) {
+                continue;
+            }
+
+            let mut bus = TestBus([0; 0x10000]);
+            bus.0[0] = 0xED;
+            bus.0[1] = opcode;
+            let mut cpu = Z80::default();
+            cpu.registers.a = 0xA5;
+            cpu.registers.f = 0x5A;
+            cpu.registers.b = 0x12;
+            cpu.registers.c = 0x34;
+            cpu.registers.d = 0x56;
+            cpu.registers.e = 0x78;
+            cpu.registers.h = 0x9A;
+            cpu.registers.l = 0xBC;
+            cpu.registers.sp = 0xD000;
+            let before = cpu.registers;
+
+            assert_eq!(cpu.step(&mut bus), Ok(8), "ED {opcode:02X}");
+            assert_eq!(cpu.registers.a, before.a, "ED {opcode:02X}: A");
+            assert_eq!(cpu.registers.f, before.f, "ED {opcode:02X}: F");
+            assert_eq!(cpu.registers.bc(), before.bc(), "ED {opcode:02X}: BC");
+            assert_eq!(cpu.registers.de(), before.de(), "ED {opcode:02X}: DE");
+            assert_eq!(cpu.registers.hl(), before.hl(), "ED {opcode:02X}: HL");
+            assert_eq!(cpu.registers.sp, before.sp, "ED {opcode:02X}: SP");
+            assert_eq!(cpu.registers.pc, 2, "ED {opcode:02X}: PC");
+            assert_eq!(cpu.total_tstates, 8, "ED {opcode:02X}: total_tstates");
+        }
+    }
+
 }
