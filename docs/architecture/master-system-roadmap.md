@@ -254,3 +254,12 @@ Esta ampliação é incremental e não equivale à cobertura total do conjunto Z
 
 
 **Achados adicionais desta ampliação:** vetores fixos revelaram que LD (BC),A / LD A,(BC), ADD HL,BC, DJNZ/JR, JP, RET e CALL não atualizavam WZ/MEMPTR como o corpus fixado esperava. Foram adicionadas atualizações explícitas ao core SMS e mantidos os vetores como regressões. Um vetor CPIR (ED B1) revela divergência ainda não resolvida na flag não documentada X; o teste fica explicitamente ignorado, com motivo, até a regra ser confrontada com evidência independente adicional. Não considerar esse caso aprovado.
+
+
+### Auditoria diferencial Z80 — segunda expansão de vetores (PR em preparação)
+
+A amostra SingleStepTests/Z80 permanece fixada no commit MIT `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7`. Esta etapa adiciona 18 casos de instruções (além dos 12 existentes): LD BC,nn; LD (BC),A; DJNZ; JR/JR NZ; LD (nn),A; LDI/LDIR; LD IX/IY,nn; RLC (HL); SET 0,(HL); ADC/SBC HL,rr; LD (nn),BC; RETN; LD IX/IY,d. O caso LD IX,nn também repete um vetor já existente para verificar o novo helper de RAM, portanto não representa uma nova combinação de opcode.
+
+Os vetores novos comparam os registradores/estado arquitetural representados pelo core, T-states agregados e, por meio de um helper dedicado, endereços/valores de memória escritos quando o fixture os especifica. Isso melhora a observabilidade de instruções com efeitos de memória; não compara ainda cada transação temporal do barramento nem valida todos os 1.000 vetores por arquivo do upstream.
+
+**Limites e próximos gates:** a expansão é representativa, não cobertura total. Ainda é necessário executar e classificar os casos no CI, corrigir divergências confirmadas, ampliar sistematicamente todos os opcodes e variantes de prefixos, testar interrupções e wraparound, e desenvolver uma camada temporal para ciclos de barramento. O corpus upstream tem muitos arquivos de vetores e não deve ser importado integralmente sem avaliação de tamanho/licença/viabilidade. Não declarar “Z80 100% modelado” apenas pela contagem de vetores.
