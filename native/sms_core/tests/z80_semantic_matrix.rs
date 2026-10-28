@@ -80,9 +80,14 @@ fn classify(space: Space, opcode: u8) -> Classification {
     }
 }
 
-#[derive(Default)]
 struct FlatBus {
-    memory: Box<[u8; 0x1_0000]>,
+    memory: Box<[u8]>,
+}
+
+impl Default for FlatBus {
+    fn default() -> Self {
+        Self { memory: vec![0; 0x1_0000].into_boxed_slice() }
+    }
 }
 
 impl CpuBus for FlatBus {
