@@ -2407,7 +2407,6 @@ mod tests {
         }
     }
 
-
     // Directed ED semantic vectors based on the instruction operations and
     // documented flag behavior in Zilog UM008011-0816 (Z80 CPU User Manual).
     // These complement the exhaustive dispatch/timing sweep; they are not a
