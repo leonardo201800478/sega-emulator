@@ -504,3 +504,47 @@ fn cpl_scf_and_ccf_flags_match_all_accumulator_flag_and_q_xy_states() {
         }
     }
 }
+
+#[test]
+fn neg_matches_all_accumulator_and_initial_flag_states() {
+    let mut bus = TestBus::default();
+    bus.0[..2].copy_from_slice(&[0xED, 0x44]); // NEG
+    let mut cpu = Z80::default();
+
+    for accumulator in 0_u8..=u8::MAX {
+        let expected_a = 0_u8.wrapping_sub(accumulator);
+        let mut expected_f = (expected_a & (FLAG_S | FLAG_XY)) | FLAG_N;
+        if expected_a == 0 {
+            expected_f |= FLAG_Z;
+        }
+        if accumulator & 0x0F != 0 {
+            expected_f |= FLAG_H;
+        }
+        if accumulator == 0x80 {
+            expected_f |= FLAG_PV;
+        }
+        if accumulator != 0 {
+            expected_f |= FLAG_C;
+        }
+
+        for old_flags in 0_u8..=u8::MAX {
+            cpu.registers.a = accumulator;
+            cpu.registers.f = old_flags;
+            cpu.registers.pc = 0;
+
+            assert_eq!(
+                cpu.step(&mut bus),
+                Ok(8),
+                "NEG A={accumulator:02X} F={old_flags:02X}"
+            );
+            assert_eq!(
+                cpu.registers.a, expected_a,
+                "NEG A={accumulator:02X} F={old_flags:02X}: accumulator"
+            );
+            assert_eq!(
+                cpu.registers.f, expected_f,
+                "NEG A={accumulator:02X} F={old_flags:02X}: flags"
+            );
+        }
+    }
+}
