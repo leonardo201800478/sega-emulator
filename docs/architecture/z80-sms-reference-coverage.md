@@ -123,3 +123,27 @@ O CSV é uma base de auditoria e planejamento, não um certificado de completude
 ### Limite do marco
 
 Este avanço fecha a lacuna específica de destinos das operações rotate/shift indexadas, não a auditoria semântica global. A issue [#158 — matriz completa de opcodes e semântica](https://github.com/leonardo201800478/sega-emulator/issues/158) permanece aberta: faltam vetores semânticos para várias famílias/condições e estados de fronteira. A issue [#159 — interrupções, estado e temporalidade](https://github.com/leonardo201800478/sega-emulator/issues/159) também permanece aberta. `TEMPORAL_PASS` não é declarado, pois nenhum trace ordenado de barramento foi comparado ciclo a ciclo.
+
+## Atualização — combinações de prefixos DD/FD antes de indexed-CB (2026-10-28)
+
+As PRs #213, #214 e #215 adicionam regressões dirigidas para as combinações de prefixos mistos/repetidos tratadas neste lote:
+
+- **PR #213**, merge SHA `83107526ee70d5cebee85936d07b5a4989d06d61`: `DD FD CB d op`, verificando que o último prefixo seleciona IY.
+- **PR #214**, merge SHA `0ec28fd92f8ebb8c4dc757556bee7d76c29f3c51`: `FD DD CB d op`, verificando que o último prefixo seleciona IX.
+- **PR #215**, merge SHA `fdc8dc813dd8348a365c7c268e2c405ea1a0878c`: `FD FD CB d op`, verificando que prefixo FD repetido mantém IY selecionado e adiciona o custo nominal do prefixo redundante.
+
+Cada vetor verifica resultado RLC, flags, escrita de memória, cópia opcional para B, preservação de IX/IY, WZ, PC, R e T-states nominais. O custo esperado dos casos com um prefixo redundante é 27 T-states (23 do indexed-CB + 4 do prefixo adicional). Os testes são vetores dirigidos no próprio repositório, não novas fontes independentes de comportamento de hardware.
+
+### Checks nos SHAs candidatos
+
+- PR #213, candidato `f5649e385bb44d19896c34fc050aeee0fabb65c5`: CI/quality PASS ([run](https://github.com/leonardo201800478/sega-emulator/actions/runs/40759032750)); SMS Core Fast Validation PASS ([run](https://github.com/leonardo201800478/sega-emulator/actions/runs/40759032344)); SMS Z80 Platform Validation PASS ([run](https://github.com/leonardo201800478/sega-emulator/actions/runs/40759032202)).
+- PR #214, candidato `5a9c0e3ef8d9b78a5a938fb11ecb6b84af3f87d4`: CI PASS ([run](https://github.com/leonardo201800478/sega-emulator/actions/runs/40759647321)); SMS Core Fast Validation PASS ([run](https://github.com/leonardo201800478/sega-emulator/actions/runs/40759647671)); SMS Z80 Platform Validation PASS ([run](https://github.com/leonardo201800478/sega-emulator/actions/runs/40759647430)).
+- PR #215, candidato `e1813dfce166dd2530087b576f41b8db29cb146e`: CI PASS ([run](https://github.com/leonardo201800478/sega-emulator/actions/runs/40759988440)); SMS Core Fast Validation PASS ([run](https://github.com/leonardo201800478/sega-emulator/actions/runs/40759988266)); SMS Z80 Platform Validation PASS ([run](https://github.com/leonardo201800478/sega-emulator/actions/runs/40759988572)).
+
+As três PRs não alteraram o runtime de produção. A validação é relativa aos SHAs candidatos listados; os workflows do SHA de merge mais recente devem ser acompanhados separadamente. A revisão técnica foi registrada como comentário manual, sem Sourcery, GitHub AI ou Codex; não houve aprovação formal por um revisor independente.
+
+### Limite e próximo passo
+
+Este lote caracteriza as ordens `DD FD`, `FD DD` e `FD FD` antes de indexed-CB; os testes preexistentes cobrem `DD DD`, prefixos isolados, H/L versus IXH/IXL/IYH/IYL, deslocamentos e wraparound. A cobertura é dirigida, não uma prova exaustiva de todas as sequências de prefixos.
+
+A auditoria semântica global da issue [#158](https://github.com/leonardo201800478/sega-emulator/issues/158) e a auditoria de estado/interrupções/temporalidade da issue [#159](https://github.com/leonardo201800478/sega-emulator/issues/159) permanecem abertas. `TEMPORAL_PASS` continua **NOT DECLARED**: os testes verificam T-states agregados, não traces de barramento ordenados por ciclo.
