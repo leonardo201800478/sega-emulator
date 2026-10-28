@@ -15,7 +15,7 @@ pub mod memory;
 
 pub use bus::CpuBus;
 pub use cartridge::CartridgeImage;
-pub use cpu::{CpuError, Z80};
 pub use config::{FmHardware, SmsMachineConfig, SpriteLimitMode, Territory, VideoStandard};
+pub use cpu::{CpuError, Z80};
 pub use error::SmsCoreError;
 pub use memory::SmsMemory;
