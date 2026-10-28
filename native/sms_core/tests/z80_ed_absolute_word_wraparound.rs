@@ -73,7 +73,11 @@ fn ed_absolute_word_stores_wrap_little_endian_writes_at_ffff_to_0000() {
 
         assert_eq!(cpu.step(&mut bus), Ok(20), "ED {opcode:02X}");
         assert_eq!(bus.memory[0xFFFF], value as u8, "ED {opcode:02X} low byte");
-        assert_eq!(bus.memory[0x0000], (value >> 8) as u8, "ED {opcode:02X} high byte");
+        assert_eq!(
+            bus.memory[0x0000],
+            (value >> 8) as u8,
+            "ED {opcode:02X} high byte"
+        );
         assert_eq!(cpu.wz, 0x0000, "ED {opcode:02X} WZ wraparound");
         assert_eq!(cpu.registers.pc, PROGRAM + 4, "ED {opcode:02X} PC");
     }
