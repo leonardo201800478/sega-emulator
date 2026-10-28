@@ -179,7 +179,7 @@ fn cpir_with_zero_initial_bc_wraps_counter_and_repeats_on_nonmatch() {
     assert_eq!(cpu.wz, 0x0001);
     assert_eq!(cpu.registers.hl(), 0x0000);
     assert_eq!(cpu.registers.bc(), 0xFFFF);
-    assert_eq!(cpu.registers.f, FLAG_S | FLAG_N | FLAG_PV);
+    assert_eq!(cpu.registers.f, FLAG_S | FLAG_N | FLAG_PV | 0x28);
 }
 
 #[test]
