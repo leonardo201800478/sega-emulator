@@ -3263,7 +3263,6 @@ fn singlestep_expanded_opcode_f3_vector_0000() {
     );
 }
 
-
 #[test]
 fn singlestep_expanded_opcode_fb_vector_0000() {
     run_vector(
@@ -3326,7 +3325,6 @@ fn singlestep_expanded_opcode_fb_vector_0000() {
         4,
     );
 }
-
 
 #[test]
 fn singlestep_expanded_opcode_ed_46_vector_0000() {
@@ -3391,7 +3389,6 @@ fn singlestep_expanded_opcode_ed_46_vector_0000() {
     );
 }
 
-
 #[test]
 fn singlestep_expanded_opcode_ed_56_vector_0000() {
     run_vector(
@@ -3454,7 +3451,6 @@ fn singlestep_expanded_opcode_ed_56_vector_0000() {
         8,
     );
 }
-
 
 #[test]
 fn singlestep_expanded_opcode_ed_5e_vector_0000() {
@@ -3519,7 +3515,6 @@ fn singlestep_expanded_opcode_ed_5e_vector_0000() {
     );
 }
 
-
 #[test]
 fn singlestep_expanded_opcode_ed_47_vector_0000() {
     run_vector(
@@ -3582,7 +3577,6 @@ fn singlestep_expanded_opcode_ed_47_vector_0000() {
         9,
     );
 }
-
 
 #[test]
 fn singlestep_expanded_opcode_ed_4f_vector_0000() {
@@ -3647,7 +3641,6 @@ fn singlestep_expanded_opcode_ed_4f_vector_0000() {
     );
 }
 
-
 #[test]
 fn singlestep_expanded_opcode_ed_57_vector_0000() {
     run_vector(
@@ -3711,7 +3704,6 @@ fn singlestep_expanded_opcode_ed_57_vector_0000() {
     );
 }
 
-
 #[test]
 fn singlestep_expanded_opcode_ed_5f_vector_0000() {
     run_vector(
@@ -3774,7 +3766,6 @@ fn singlestep_expanded_opcode_ed_5f_vector_0000() {
         9,
     );
 }
-
 
 #[test]
 fn singlestep_expanded_opcode_ed_4d_vector_0000() {
