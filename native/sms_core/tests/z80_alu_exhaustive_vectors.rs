@@ -453,9 +453,16 @@ fn cpl_scf_and_ccf_flags_match_all_accumulator_flag_and_q_xy_states() {
             cpu.registers.pc = 0;
             cpu.q = 0;
 
-            assert_eq!(cpu.step(&mut bus), Ok(4), "CPL A={accumulator:02X} F={old_flags:02X}");
+            assert_eq!(
+                cpu.step(&mut bus),
+                Ok(4),
+                "CPL A={accumulator:02X} F={old_flags:02X}"
+            );
             assert_eq!(cpu.registers.a, expected_a, "CPL accumulator");
-            assert_eq!(cpu.registers.f, expected_f, "CPL flags A={accumulator:02X} F={old_flags:02X}");
+            assert_eq!(
+                cpu.registers.f, expected_f,
+                "CPL flags A={accumulator:02X} F={old_flags:02X}"
+            );
         }
     }
 
@@ -473,8 +480,7 @@ fn cpl_scf_and_ccf_flags_match_all_accumulator_flag_and_q_xy_states() {
                     } else {
                         FLAG_C
                     };
-                    let expected_f =
-                        (old_flags & FLAG_SZPV) | undocumented | carry_or_half;
+                    let expected_f = (old_flags & FLAG_SZPV) | undocumented | carry_or_half;
                     cpu.registers.a = accumulator;
                     cpu.registers.f = old_flags;
                     cpu.registers.pc = 0;
