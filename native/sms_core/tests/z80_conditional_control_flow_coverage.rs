@@ -151,7 +151,11 @@ fn conditional_call_covers_both_paths_and_stack_write_order() {
             );
             if condition_true {
                 assert_eq!(cpu.registers.sp, 0x8FFE, "opcode={opcode:02X}");
-                assert_eq!(bus.writes, [(0x8FFF, 0x00), (0x8FFE, 0x03)], "opcode={opcode:02X}");
+                assert_eq!(
+                    bus.writes,
+                    [(0x8FFF, 0x00), (0x8FFE, 0x03)],
+                    "opcode={opcode:02X}"
+                );
                 assert_eq!(bus.memory[0x8FFE], 0x03);
                 assert_eq!(bus.memory[0x8FFF], 0x00);
             } else {
