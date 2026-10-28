@@ -279,21 +279,12 @@ fn expected_daa(accumulator: u8, old_flags: u8) -> (u8, u8) {
     let mut correction = 0_u8;
     let mut carry_out = carry_in;
 
-    if !subtract {
-        if half_carry || accumulator & 0x0F > 9 {
-            correction |= 0x06;
-        }
-        if carry_in || accumulator > 0x99 {
-            correction |= 0x60;
-            carry_out = true;
-        }
-    } else {
-        if half_carry {
-            correction |= 0x06;
-        }
-        if carry_in {
-            correction |= 0x60;
-        }
+    if half_carry || (accumulator & 0x0F) > 9 {
+        correction |= 0x06;
+    }
+    if carry_in || accumulator > 0x99 {
+        correction |= 0x60;
+        carry_out = true;
     }
 
     let result = if subtract {
