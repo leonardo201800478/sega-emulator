@@ -485,10 +485,24 @@ fn assert_external_mcycle_trace(
             5,
         ));
     } else {
-        expected.push(event(pc, 11, Z80BusEventKind::Internal, samples[11].address, None, 5));
+        expected.push(event(
+            pc,
+            11,
+            Z80BusEventKind::Internal,
+            samples[11].address,
+            None,
+            5,
+        ));
     }
     if repeats {
-        expected.push(event(pc, 16, Z80BusEventKind::Internal, samples[16].address, None, 5));
+        expected.push(event(
+            pc,
+            16,
+            Z80BusEventKind::Internal,
+            samples[16].address,
+            None,
+            5,
+        ));
     }
     assert_eq!(bus.events, expected);
     assert_eq!(
