@@ -28,9 +28,10 @@ SG1000_II_RAM_EXT_TYPE_B_SHA256 = frozenset(
     }
 )
 
-# Conversões MSX1 distribuídas por DahJee/Jumbo. O catálogo MAME declara
-# RAM total de 9.216 bytes (8 KiB de expansão + 1 KiB interno); o adaptador
-# documentado mapeia os 8 KiB em C000h–FFFFh.
+# Conversões MSX1 distribuídas por DahJee/Jumbo (mapper Type A).
+# O Genesis Plus GX identifica esses dumps por CRC e mapeia a RAM externa
+# de 8 KiB em 2000h–3FFFh. Não confundir com RAM interna em C000h–FFFFh
+# nem com a janela de RAM própria de cartuchos como Othello.
 SG1000_DAHJEE_TYPE_A_CRC32 = frozenset(
     {
         0x223397A1,  # King's Valley (Taiwan)
@@ -42,6 +43,9 @@ SG1000_DAHJEE_TYPE_A_CRC32 = frozenset(
         0xC550B4F0,  # TwinBee (Taiwan)
     }
 )
+SG1000_DAHJEE_TYPE_A_RAM_SIZE = 0x2000
+SG1000_DAHJEE_TYPE_A_RAM_START = 0x2000
+SG1000_DAHJEE_TYPE_A_RAM_END = 0x3FFF
 
 # Othello Multivision: perfil de catálogo inicial; slot precisa de validação
 # diferencial com MAME e ROM real antes de declarar compatibilidade.
@@ -78,7 +82,11 @@ def cartridge_profile(cartridge_rom: bytes) -> CartridgeProfile:
         return CartridgeProfile(internal_ram_size=SG1000_II_RAM_EXT_TYPE_B_SIZE)
 
     if crc32 in SG1000_DAHJEE_TYPE_A_CRC32:
-        return CartridgeProfile(internal_ram_size=SG1000_II_RAM_EXT_TYPE_B_SIZE)
+        return CartridgeProfile(
+            cartridge_ram_size=SG1000_DAHJEE_TYPE_A_RAM_SIZE,
+            cartridge_ram_start=SG1000_DAHJEE_TYPE_A_RAM_START,
+            cartridge_ram_end=SG1000_DAHJEE_TYPE_A_RAM_END,
+        )
 
     if crc32 in SG1000_OTHELLO_CRC32:
         return CartridgeProfile(
