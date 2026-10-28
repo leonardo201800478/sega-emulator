@@ -139,7 +139,6 @@ impl CpuBus for FlatBus {
     }
 }
 
-
 fn run_vector(name: &str, initial: State, expected: State, bytes: &[(u16, u8)], tstates: u32) {
     let mut bus = FlatBus::default();
     for &(address, value) in bytes {
