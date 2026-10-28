@@ -108,7 +108,14 @@ fn expected_transfer_trace(
 
 fn expected_compare_trace(opcode: u8, hl: u16, value: u8, repeat: bool) -> Vec<Z80BusEvent> {
     let mut expected = fetch_events(opcode).to_vec();
-    expected.push(event(0, 8, Z80BusEventKind::MemoryRead, Some(hl), Some(value), 3));
+    expected.push(event(
+        0,
+        8,
+        Z80BusEventKind::MemoryRead,
+        Some(hl),
+        Some(value),
+        3,
+    ));
     expected.push(event(0, 11, Z80BusEventKind::Internal, None, None, 5));
     if repeat {
         expected.push(event(0, 16, Z80BusEventKind::Internal, None, None, 5));
@@ -165,10 +172,7 @@ fn cpi_trace_contains_the_read_and_five_tstate_internal_cycle() {
     let (cycles, pc, events) = run_trace(0xA1, 0x5A, 0x2000, 0, 1, 0x5A);
     assert_eq!(cycles, 16);
     assert_eq!(pc, 2);
-    assert_eq!(
-        events,
-        expected_compare_trace(0xA1, 0x2000, 0x5A, false)
-    );
+    assert_eq!(events, expected_compare_trace(0xA1, 0x2000, 0x5A, false));
 }
 
 #[test]
@@ -176,10 +180,7 @@ fn cpd_trace_uses_the_decrementing_instruction_encoding() {
     let (cycles, pc, events) = run_trace(0xA9, 0x11, 0x2000, 0, 1, 0x22);
     assert_eq!(cycles, 16);
     assert_eq!(pc, 2);
-    assert_eq!(
-        events,
-        expected_compare_trace(0xA9, 0x2000, 0x22, false)
-    );
+    assert_eq!(events, expected_compare_trace(0xA9, 0x2000, 0x22, false));
 }
 
 #[test]
@@ -187,10 +188,7 @@ fn cpir_trace_adds_repeat_cycle_for_nonmatching_value_and_nonzero_count() {
     let (cycles, pc, events) = run_trace(0xB1, 0x00, 0x2000, 0, 2, 0x11);
     assert_eq!(cycles, 21);
     assert_eq!(pc, 0);
-    assert_eq!(
-        events,
-        expected_compare_trace(0xB1, 0x2000, 0x11, true)
-    );
+    assert_eq!(events, expected_compare_trace(0xB1, 0x2000, 0x11, true));
 }
 
 #[test]
@@ -198,8 +196,5 @@ fn cpdr_trace_adds_repeat_cycle_for_nonmatching_value_and_nonzero_count() {
     let (cycles, pc, events) = run_trace(0xB9, 0x11, 0x2000, 0, 2, 0x22);
     assert_eq!(cycles, 21);
     assert_eq!(pc, 0);
-    assert_eq!(
-        events,
-        expected_compare_trace(0xB9, 0x2000, 0x22, true)
-    );
+    assert_eq!(events, expected_compare_trace(0xB9, 0x2000, 0x22, true));
 }
