@@ -86,3 +86,26 @@ O vetor CPIR anteriormente ignorado foi reativado. No SHA candidato da PR #164, 
 ## Conclusão
 
 A maior parte do trabalho de CPU/ALU que existia no SG-1000 já estava presente no SMS. A mescla correta preservou os aprimoramentos específicos do SMS e usou vetores independentes para identificar falhas reais. Os 108 vetores aprovados são um avanço verificável, mas **não** equivalem a cobertura semântica completa nem a precisão ciclo a ciclo.
+
+
+## Inventário completo de codificações — revisão de 2026-10-28
+
+A matriz enumerada por codificação está em [z80-sms-opcode-matrix.csv](z80-sms-opcode-matrix.csv). O arquivo contém **1.792 registros**, um para cada byte final nos sete espaços fixos: BASE, CB, ED, DD, FD, DDCB e FDCB (256 entradas por espaço).
+
+### Como interpretar os estados
+
+- `decoder path present; classification test only`: o encoding é reconhecido pelo caminho de decoder/classificação. Isso **não** certifica resultados, flags, efeitos de memória, PC/SP, WZ/MEMPTR, Q, R ou T-states.
+- `exhaustive_internal_model`: a família ALU indicada tem varredura exaustiva por modelo matemático no candidato da PR #201; não equivale a oráculo físico.
+- `selected_unit_and_reference_vectors` / `sparse_reference_vectors`: há testes selecionados, mas não cobertura semântica completa por opcode e estado.
+- `NOT_VERIFIED` na coluna temporal significa que não há prova por eventos de barramento ordenados a cada T-state. A contagem nominal agregada não muda isso.
+- Os resultados `z80full` e `z80ccf` são resultados agregados da suíte externa, sem atribuição individual de PASS por opcode no relatório do harness.
+### Revisão de aceitação
+
+- **Inventário dos espaços fixos:** completo como enumeração, 1.792 linhas.
+- **Classificação semântica individual de todas as codificações:** ainda não demonstrada. ED não atribuído/aliases e contextos DD/FD exigem confirmação por evidência de alvo e testes de sequência.
+- **Correção semântica global:** **NOT PASS**; não se infere da classificação nem dos resultados agregados da suíte externa.
+- **Etapa 2 (ALU/flags): SHORT_PASS** no candidato da PR #201 `fca5adc0b4baef1c8acb6369d2d4a992405adb25`. Workflows: [CI/quality](https://github.com/leonardo201800478/sega-emulator/actions/runs/40740205428), [SMS Core Fast Validation](https://github.com/leonardo201800478/sega-emulator/actions/runs/40740205236), [SMS Z80 Platform Validation](https://github.com/leonardo201800478/sega-emulator/actions/runs/40740205501).
+- **Etapas 3–10:** não concluídas nesta alteração.
+- **TEMPORAL_PASS:** não declarado.
+
+O CSV é uma base de auditoria e planejamento, não um certificado de completude semântica. Para concluir a auditoria global, cada família ainda precisa de vetores fixos por opcode/forma, estados de fronteira, referência/procedência e regressão no SHA candidato exato.
