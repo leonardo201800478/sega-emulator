@@ -36,13 +36,39 @@ impl CpuBus for FlatBus {
     }
 }
 
+fn set_register_target(cpu: &mut Z80, target: u8, value: u8) {
+    match target & 7 {
+        0 => cpu.registers.b = value,
+        1 => cpu.registers.c = value,
+        2 => cpu.registers.d = value,
+        3 => cpu.registers.e = value,
+        4 => cpu.registers.h = value,
+        5 => cpu.registers.l = value,
+        6 => unreachable!("memory target uses run_cb_memory"),
+        _ => cpu.registers.a = value,
+    }
+}
+
+fn get_register_target(cpu: &Z80, target: u8) -> u8 {
+    match target & 7 {
+        0 => cpu.registers.b,
+        1 => cpu.registers.c,
+        2 => cpu.registers.d,
+        3 => cpu.registers.e,
+        4 => cpu.registers.h,
+        5 => cpu.registers.l,
+        6 => unreachable!("memory target uses run_cb_memory"),
+        _ => cpu.registers.a,
+    }
+}
+
 fn run_cb(opcode: u8, value: u8, flags: u8) -> (Z80, FlatBus, u32) {
     let mut bus = FlatBus::default();
     bus.memory[0] = 0xCB;
     bus.memory[1] = opcode;
 
     let mut cpu = Z80::default();
-    cpu.registers.b = value;
+    set_register_target(&mut cpu, opcode & 7, value);
     cpu.registers.f = flags;
     let cycles = cpu
         .step(&mut bus)
@@ -89,12 +115,13 @@ fn rotate_shift_reference(operation: u8, value: u8, carry_in: bool) -> (u8, bool
 }
 
 #[test]
-fn cb_rotate_and_shift_register_b_are_exhaustive_for_all_values_and_carry_inputs() {
+fn cb_rotate_and_shift_all_register_targets_are_exhaustive_for_all_values_and_carry_inputs() {
     for operation in 0_u8..8 {
+        for target in [0_u8, 1, 2, 3, 4, 5, 7] {
         for value in u8::MIN..=u8::MAX {
             for carry_in in [false, true] {
                 let initial_flags = if carry_in { FLAG_C } else { 0 };
-                let opcode = operation << 3; // target B
+                let opcode = (operation << 3) | target;
                 let (cpu, _, cycles) = run_cb(opcode, value, initial_flags);
                 let (expected_value, carry_out) =
                     rotate_shift_reference(operation, value, carry_in);
@@ -111,26 +138,28 @@ fn cb_rotate_and_shift_register_b_are_exhaustive_for_all_values_and_carry_inputs
                 }
 
                 assert_eq!(
-                    cpu.registers.b, expected_value,
-                    "CB {opcode:02X}, B={value:02X}, carry_in={carry_in}"
+                    get_register_target(&cpu, target), expected_value,
+                    "CB {opcode:02X}, target={target}, value={value:02X}, carry_in={carry_in}"
                 );
                 assert_eq!(
                     cpu.registers.f, expected_flags,
-                    "CB {opcode:02X} flags, B={value:02X}, carry_in={carry_in}"
+                    "CB {opcode:02X} flags, target={target}, value={value:02X}, carry_in={carry_in}"
                 );
                 assert_eq!(cycles, 8, "CB {opcode:02X} register timing");
                 assert_eq!(cpu.registers.pc, 2, "CB {opcode:02X} PC");
             }
         }
+        }
     }
 }
 
 #[test]
-fn cb_bit_register_b_is_exhaustive_for_every_bit_value_and_carry_input() {
+fn cb_bit_all_register_targets_are_exhaustive_for_every_bit_value_and_carry_input() {
     for bit in 0_u8..8 {
+        for target in [0_u8, 1, 2, 3, 4, 5, 7] {
         for value in u8::MIN..=u8::MAX {
             for carry_in in [false, true] {
-                let opcode = 0x40 | (bit << 3); // BIT bit,B
+                let opcode = 0x40 | (bit << 3) | target; // BIT bit,r
                 let initial_flags = if carry_in { FLAG_C } else { 0 };
                 let (cpu, _, cycles) = run_cb(opcode, value, initial_flags);
                 let bit_clear = value & (1_u8 << bit) == 0;
@@ -147,29 +176,31 @@ fn cb_bit_register_b_is_exhaustive_for_every_bit_value_and_carry_input() {
                 }
 
                 assert_eq!(
-                    cpu.registers.b, value,
-                    "CB {opcode:02X} must not modify B={value:02X}"
+                    get_register_target(&cpu, target), value,
+                    "CB {opcode:02X} must not modify target={target}, value={value:02X}"
                 );
                 assert_eq!(
                     cpu.registers.f, expected_flags,
-                    "CB {opcode:02X}, B={value:02X}, carry_in={carry_in}"
+                    "CB {opcode:02X}, target={target}, value={value:02X}, carry_in={carry_in}"
                 );
                 assert_eq!(cycles, 8, "CB {opcode:02X} register timing");
                 assert_eq!(cpu.registers.pc, 2, "CB {opcode:02X} PC");
             }
         }
+        }
     }
 }
 
 #[test]
-fn cb_res_and_set_register_b_are_exhaustive_and_preserve_all_flags() {
+fn cb_res_and_set_all_register_targets_are_exhaustive_and_preserve_all_flags() {
     // Distinctive flag patterns include all bits set, all bits clear, and
     // alternating patterns, catching accidental flag writes in RES/SET.
     for group in [0x80_u8, 0xC0_u8] {
         for bit in 0_u8..8 {
-            for value in u8::MIN..=u8::MAX {
-                for initial_flags in [0x00, 0xFF, 0xA5, 0x5A] {
-                    let opcode = group | (bit << 3); // RES/SET bit,B
+            for target in [0_u8, 1, 2, 3, 4, 5, 7] {
+                for value in u8::MIN..=u8::MAX {
+                    for initial_flags in [0x00, 0xFF, 0xA5, 0x5A] {
+                    let opcode = group | (bit << 3) | target; // RES/SET bit,r
                     let (cpu, _, cycles) = run_cb(opcode, value, initial_flags);
                     let mask = 1_u8 << bit;
                     let expected_value = if group == 0x80 {
@@ -179,8 +210,8 @@ fn cb_res_and_set_register_b_are_exhaustive_and_preserve_all_flags() {
                     };
 
                     assert_eq!(
-                        cpu.registers.b, expected_value,
-                        "CB {opcode:02X}, B={value:02X}"
+                        get_register_target(&cpu, target), expected_value,
+                        "CB {opcode:02X}, target={target}, value={value:02X}"
                     );
                     assert_eq!(
                         cpu.registers.f, initial_flags,
@@ -188,6 +219,7 @@ fn cb_res_and_set_register_b_are_exhaustive_and_preserve_all_flags() {
                     );
                     assert_eq!(cycles, 8, "CB {opcode:02X} register timing");
                     assert_eq!(cpu.registers.pc, 2, "CB {opcode:02X} PC");
+                    }
                 }
             }
         }
