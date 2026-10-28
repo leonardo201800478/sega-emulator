@@ -41,18 +41,20 @@ fn indexed_cb_rotate_and_shift_fixed_vectors_cover_all_eight_operations() {
 
     for prefix in [0xDD_u8, 0xFD_u8] {
         for (operation, input, carry_in, expected_value, expected_flags) in cases {
-            let index = if prefix == 0xDD { 0xC100_u16 } else { 0xD200_u16 };
+            let index = if prefix == 0xDD {
+                0xC100_u16
+            } else {
+                0xD200_u16
+            };
             let address = index;
             let mut bus = TestBus::default();
             bus.0[..4].copy_from_slice(&[prefix, 0xCB, 0x00, (operation << 3) | 0x06]);
             bus.0[usize::from(address)] = input;
 
-            let mut cpu = Z80 {
-                ix: if prefix == 0xDD { index } else { 0x1357 },
-                iy: if prefix == 0xFD { index } else { 0x2468 },
-                wz: 0xBEEF,
-                ..Z80::default()
-            };
+            let mut cpu = Z80::default();
+            cpu.ix = if prefix == 0xDD { index } else { 0x1357 };
+            cpu.iy = if prefix == 0xFD { index } else { 0x2468 };
+            cpu.wz = 0xBEEF;
             cpu.registers.f = if carry_in { 0x01 } else { 0x00 };
             cpu.registers.a = 0xA5;
             cpu.registers.b = 0x11;
