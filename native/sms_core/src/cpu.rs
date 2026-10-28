@@ -1567,7 +1567,7 @@ mod tests {
             self.0[usize::from(address)] = value;
         }
     }
- 
+
     struct TestIoBus {
         memory: [u8; 0x10000],
         port_value: u8,
@@ -2439,7 +2439,11 @@ mod tests {
             load_bus.0[0xC200] = 0xCD;
             load_bus.0[0xC201] = 0xAB;
             let mut load_cpu = Z80::default();
-            assert_eq!(load_cpu.step(&mut load_bus), Ok(20), "load ED {load_opcode:02X}");
+            assert_eq!(
+                load_cpu.step(&mut load_bus),
+                Ok(20),
+                "load ED {load_opcode:02X}"
+            );
             let actual = match pair {
                 0 => load_cpu.registers.bc(),
                 1 => load_cpu.registers.de(),
@@ -2509,8 +2513,14 @@ mod tests {
     #[test]
     fn ed_interrupt_mode_aliases_select_the_documented_mode() {
         for (opcode, mode) in [
-            (0x46, 0), (0x4E, 0), (0x66, 0), (0x6E, 0),
-            (0x56, 1), (0x76, 1), (0x5E, 2), (0x7E, 2),
+            (0x46, 0),
+            (0x4E, 0),
+            (0x66, 0),
+            (0x6E, 0),
+            (0x56, 1),
+            (0x76, 1),
+            (0x5E, 2),
+            (0x7E, 2),
         ] {
             let mut bus = TestBus([0; 0x10000]);
             bus.0[..2].copy_from_slice(&[0xED, opcode]);
@@ -2612,7 +2622,10 @@ mod tests {
         assert_eq!(ldi.registers.hl(), 0xC101);
         assert_eq!(ldi.registers.de(), 0xC201);
         assert_eq!(ldi.registers.bc(), 1);
-        assert_eq!(ldi.registers.f & 0xFF, FLAG_S | FLAG_Z | FLAG_C | FLAG_PV | 0x08);
+        assert_eq!(
+            ldi.registers.f & 0xFF,
+            FLAG_S | FLAG_Z | FLAG_C | FLAG_PV | 0x08
+        );
 
         let mut ldd_bus = TestBus([0; 0x10000]);
         ldd_bus.0[..2].copy_from_slice(&[0xED, 0xA8]);
@@ -2709,7 +2722,10 @@ mod tests {
         assert_eq!(ini_bus.memory[0xC100], 0x80);
         assert_eq!(ini.registers.b, 1);
         assert_eq!(ini.registers.hl(), 0xC101);
-        assert_eq!(ini.registers.f & (FLAG_Z | FLAG_N | FLAG_C), FLAG_N | FLAG_C);
+        assert_eq!(
+            ini.registers.f & (FLAG_Z | FLAG_N | FLAG_C),
+            FLAG_N | FLAG_C
+        );
 
         let mut inir_bus = TestIoBus::default();
         inir_bus.memory[..2].copy_from_slice(&[0xED, 0xB2]);
@@ -2749,7 +2765,17 @@ mod tests {
 
     #[test]
     fn ed_in_out_register_forms_use_bc_port_and_expected_data() {
-        for (opcode, initial_a, expected_a, expected_b, expected_c, expected_d, expected_e, expected_h, expected_l) in [
+        for (
+            opcode,
+            initial_a,
+            expected_a,
+            expected_b,
+            expected_c,
+            expected_d,
+            expected_e,
+            expected_h,
+            expected_l,
+        ) in [
             (0x40, 0x11, 0x11, 0xA5, 0x07, 0x33, 0x44, 0xC1, 0x00),
             (0x48, 0x11, 0x11, 0x33, 0xA5, 0x33, 0x44, 0xC1, 0x00),
             (0x50, 0x11, 0x11, 0x33, 0x07, 0xA5, 0x44, 0xC1, 0x00),
@@ -2780,8 +2806,14 @@ mod tests {
         }
 
         for (opcode, value) in [
-            (0x41, 0x33), (0x49, 0x07), (0x51, 0x33), (0x59, 0x44),
-            (0x61, 0xC1), (0x69, 0x00), (0x71, 0x00), (0x79, 0x11),
+            (0x41, 0x33),
+            (0x49, 0x07),
+            (0x51, 0x33),
+            (0x59, 0x44),
+            (0x61, 0xC1),
+            (0x69, 0x00),
+            (0x71, 0x00),
+            (0x79, 0x11),
         ] {
             let mut bus = TestIoBus::default();
             bus.memory[..2].copy_from_slice(&[0xED, opcode]);
@@ -2791,7 +2823,11 @@ mod tests {
             cpu.registers.set_de(0x3344);
             cpu.registers.set_hl(0xC100);
             assert_eq!(cpu.step(&mut bus), Ok(12), "OUT ED {opcode:02X}");
-            assert_eq!(bus.port_writes, vec![(0x3307, value)], "OUT ED {opcode:02X}");
+            assert_eq!(
+                bus.port_writes,
+                vec![(0x3307, value)],
+                "OUT ED {opcode:02X}"
+            );
             assert_eq!(cpu.registers.f, 0, "OUT ED {opcode:02X}: flags preserved");
         }
     }
@@ -2842,5 +2878,4 @@ mod tests {
         assert_eq!(cpdr.registers.bc(), 1);
         assert_eq!(cpdr.registers.f & FLAG_Z, FLAG_Z);
     }
-
 }
