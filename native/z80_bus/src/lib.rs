@@ -28,6 +28,14 @@ pub struct Z80BusEvent {
     pub duration_tstates: u8,
 }
 
+impl Z80BusEvent {
+    /// T-state offset immediately after this logical M-cycle event.
+    #[inline]
+    pub const fn end_tstate(&self) -> u32 {
+        self.tstate_offset + self.duration_tstates as u32
+    }
+}
+
 /// Memory and port access available to a Z80 implementation.
 ///
 /// Default port behavior represents an unimplemented/open bus placeholder,

@@ -371,4 +371,8 @@ fn ldi_mcycle_trace_matches_pinned_singlestep_bus_samples() {
             .sum::<u32>(),
         samples.len() as u32
     );
+    assert!(bus
+        .events
+        .windows(2)
+        .all(|pair| pair[0].end_tstate() == pair[1].tstate_offset));
 }
