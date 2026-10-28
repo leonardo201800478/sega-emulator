@@ -69,7 +69,10 @@ fn all_neg_aliases_are_exhaustive_for_accumulator_and_initial_flag_patterns() {
                 cpu.wz = 0x4567;
 
                 let result = 0_u8.wrapping_sub(accumulator);
-                let mut expected_flags = szp_xy_flags(result) | FLAG_N;
+                let mut expected_flags = (result & (FLAG_S | FLAG_XY)) | FLAG_N;
+                if result == 0 {
+                    expected_flags |= FLAG_Z;
+                }
                 if accumulator & 0x0F != 0 {
                     expected_flags |= FLAG_H;
                 }
@@ -81,7 +84,10 @@ fn all_neg_aliases_are_exhaustive_for_accumulator_and_initial_flag_patterns() {
                 }
 
                 assert_eq!(cpu.step(&mut bus), Ok(8), "ED {opcode:02X}");
-                assert_eq!(cpu.registers.a, result, "ED {opcode:02X} A={accumulator:02X}");
+                assert_eq!(
+                    cpu.registers.a, result,
+                    "ED {opcode:02X} A={accumulator:02X}"
+                );
                 assert_eq!(
                     cpu.registers.f, expected_flags,
                     "ED {opcode:02X} flags, A={accumulator:02X}, F={flags:02X}"
