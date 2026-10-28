@@ -456,8 +456,7 @@ impl Z80 {
                     13
                 };
                 self.wz = if opcode == 0x32 {
-                    (u16::from(self.registers.a) << 8)
-                        | (address.wrapping_add(1) & 0x00FF)
+                    (u16::from(self.registers.a) << 8) | (address.wrapping_add(1) & 0x00FF)
                 } else {
                     address.wrapping_add(1)
                 };
