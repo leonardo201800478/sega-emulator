@@ -20,6 +20,7 @@ struct Vector {
 struct FlatBus {
     memory: Box<[u8]>,
 }
+
 impl Default for FlatBus {
     fn default() -> Self {
         Self {
@@ -27,10 +28,12 @@ impl Default for FlatBus {
         }
     }
 }
+
 impl CpuBus for FlatBus {
     fn read_memory(&mut self, address: u16) -> u8 {
         self.memory[usize::from(address)]
     }
+
     fn write_memory(&mut self, address: u16, value: u8) {
         self.memory[usize::from(address)] = value;
     }
@@ -100,9 +103,16 @@ fn assert_state(s: StateData, cpu: &Z80, name: &str) {
         assert_eq!(actual[i], s[i], "{name}: {}", labels[i]);
     }
 }
+
+macro_rules! vector_list {
+    ($($vector:expr),* $(,)?) => {
+        &[$($vector),*]
+    };
+}
+
 #[test]
 fn singlestep_expanded_opcode_matrix_and_memory_effects() {
-    let vectors: &[Vector] = &[
+    let vectors: &[Vector] = vector_list! {
         Vector {
             name: "01 0000",
             initial: [
@@ -1385,7 +1395,7 @@ fn singlestep_expanded_opcode_matrix_and_memory_effects() {
             ],
             tstates: 12,
         },
-    ];
+    };
     for vector in vectors {
         let mut bus = FlatBus::default();
         for &(address, value) in vector.initial_ram {
