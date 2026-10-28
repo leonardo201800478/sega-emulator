@@ -1863,6 +1863,79 @@ mod tests {
     }
 
     #[test]
+    fn indexed_memory_forms_use_h_l_not_index_halves() {
+        // DD 66 d: LD H,(IX+d) targets H, not IXH.
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..3].copy_from_slice(&[0xDD, 0x66, 0x02]);
+        bus.0[0xC002] = 0x5A;
+        let mut cpu = Z80 {
+            ix: 0xC000,
+            registers: Z80Registers {
+                h: 0x11,
+                ..Z80Registers::default()
+            },
+            ..Z80::default()
+        };
+
+        assert_eq!(cpu.step(&mut bus), Ok(19));
+        assert_eq!(cpu.registers.h, 0x5A);
+        assert_eq!(cpu.ix, 0xC000);
+        assert_eq!(cpu.registers.pc, 3);
+        assert_eq!(cpu.r, 2);
+        assert_eq!(cpu.total_tstates, 19);
+
+        // FD 74 d: LD (IY+d),H writes H, not IYH.
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..3].copy_from_slice(&[0xFD, 0x74, 0xFF]);
+        let mut cpu = Z80 {
+            iy: 0xC100,
+            registers: Z80Registers {
+                h: 0x42,
+                ..Z80Registers::default()
+            },
+            ..Z80::default()
+        };
+
+        assert_eq!(cpu.step(&mut bus), Ok(19));
+        assert_eq!(bus.0[0xC0FF], 0x42);
+        assert_eq!(cpu.iy, 0xC100);
+        assert_eq!(cpu.registers.pc, 3);
+        assert_eq!(cpu.r, 2);
+        assert_eq!(cpu.total_tstates, 19);
+    }
+
+    #[test]
+    fn indexed_register_only_forms_substitute_ixh_ixl_and_iyh_iyl() {
+        // DD 65: LD IXH,IXL. Unlike indexed-memory forms, both halves are substituted.
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..2].copy_from_slice(&[0xDD, 0x65]);
+        let mut cpu = Z80 {
+            ix: 0x1234,
+            ..Z80::default()
+        };
+
+        assert_eq!(cpu.step(&mut bus), Ok(8));
+        assert_eq!(cpu.ix, 0x3434);
+        assert_eq!(cpu.registers.pc, 2);
+        assert_eq!(cpu.r, 2);
+        assert_eq!(cpu.total_tstates, 8);
+
+        // FD 6D: LD IYH,IYL.
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..2].copy_from_slice(&[0xFD, 0x6D]);
+        let mut cpu = Z80 {
+            iy: 0x5678,
+            ..Z80::default()
+        };
+
+        assert_eq!(cpu.step(&mut bus), Ok(8));
+        assert_eq!(cpu.iy, 0x7878);
+        assert_eq!(cpu.registers.pc, 2);
+        assert_eq!(cpu.r, 2);
+        assert_eq!(cpu.total_tstates, 8);
+    }
+
+    #[test]
     fn repeated_index_prefixes_are_counted_without_recursive_overflow() {
         let mut bus = TestBus([0; 0x10000]);
         bus.0[..3].copy_from_slice(&[0xDD, 0xFD, 0x00]);
