@@ -1,10 +1,10 @@
-//! Native Z80 instruction engine for the standalone Master System core.
+//! Consolidated native Z80 instruction engine for the Master System core.
 //!
-//! This is an independent SMS-owned copy of the Rust implementation used by
-//! the SG-1000 core. The SG-1000 source is intentionally left untouched.
-//! Execution reports nominal instruction T-states; it does not claim
-//! cycle-by-cycle bus accuracy. Opcode coverage and semantics require
-//! independent vectors and the SMS-specific bus integration tests.
+//! This implementation merges the SG-1000 CPU work with SMS-specific fixes
+//! for WZ/MEMPTR tracking and indexed-CB coverage. The SG-1000 source remains
+//! unchanged. Execution reports nominal instruction T-states; it does not
+//! claim cycle-by-cycle bus accuracy. Semantic coverage still requires
+//! independent vectors and bus-level validation.
 
 use crate::alu::{adc8, add8, and8, cp8, or8, sbc8, sub8, xor8};
 use crate::bus::CpuBus;
@@ -209,11 +209,12 @@ impl Z80 {
         Ok(cycles)
     }
 
-    /// Execute one instruction and return its documented base T-state count.
+    /// Execute one instruction and return its nominal instruction T-state count.
     ///
-    /// This first extraction slice covers common base instructions only.
-    /// Prefixes, interrupts, and all unimplemented opcodes return an explicit
-    /// error until their native implementation is migrated.
+    /// Base, CB, ED, DD/FD and indexed-CB decoding plus NMI/INT entry are
+    /// implemented here, but semantic completeness is established only by
+    /// independent vectors. Returned T-states are aggregate instruction
+    /// counts; this interface does not model ordered, per-T-state bus events.
     pub fn step<B: CpuBus>(&mut self, bus: &mut B) -> Result<u32, CpuError> {
         if self.step_depth {
             return self.step_inner(bus);
