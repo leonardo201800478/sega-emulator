@@ -37,14 +37,14 @@ Os estados abaixo descrevem a evidência versionada no repositório, não uma ce
 | Pilha, PUSH/POP e EX (SP),HL | `z80_expanded_opcode_matrix.rs`, `z80_memory_integration.rs` | PARCIAL | SP em 0000/FFFF, ordem dos acessos e todas as combinações de registradores |
 | EX AF,AF' / EXX e bancos alternativos | `z80_singlestep_reference_vectors.rs`, `z80_expanded_opcode_matrix.rs` | DIRECIONADA | Sequências combinadas com flags Q/P e alternância repetida |
 | IX/IY, deslocamentos e H/L | `z80_indexed_semantics.rs`, `z80_indexed_displacement_boundaries.rs`, `z80_index_pair_semantics.rs`, `z80_indexed_prefix_wraparound.rs`, `z80_expanded_opcode_matrix.rs` | PARCIAL — vetores dirigidos de limites, par indexado, prefixos repetidos e wraparound | Matriz completa de formas indexadas, todas as exceções H/L e todas as combinações de prefixos |
-| DD-CB / FD-CB | `z80_indexed_cb_semantics.rs`, `z80_indexed_cb_bit_res_set_wz.rs`, `z80_expanded_opcode_matrix.rs` | DIRECIONADA — todos os índices de bit e campos de destino para BIT/RES/SET sob DD e FD, com estado, memória, flags, PC, R, WZ e T-states agregados | Semântica completa das famílias de rotação/shift, validação diferencial independente de WZ/MEMPTR e traces temporais; vetores dirigidos não provam conformance total |
+| DD-CB / FD-CB | `z80_indexed_cb_semantics.rs`, `z80_indexed_cb_bit_res_set_wz.rs`, `z80_indexed_cb_reference_vectors.rs`, `z80_expanded_opcode_matrix.rs` | DIRECIONADA — BIT/RES/SET cobertos; vetores fixos de BIT indexado conferem flags X/Y com o byte alto do endereço efetivo e WZ com IX/IY+d | Semântica completa das famílias de rotação/shift, execução diferencial contra um segundo núcleo ou hardware e traces temporais; fontes documentais não equivalem a execução de oráculo independente |
 | ED: aritmética de 16 bits e transferências absolutas | `z80_singlestep_reference_vectors.rs`, `z80_expanded_opcode_matrix.rs` | PARCIAL | Cada forma e par de registradores, carry/half-carry/overflow e wraparound |
 | ED: I/R, LD A,I/R, IM e RETN/RETI | `z80_interrupt_semantics.rs`, `z80_singlestep_reference_vectors.rs` | DIRECIONADA | Interações de interrupção e estado interno em todas as fronteiras |
 | LDI/LDD/LDIR/LDDR e CPI/CPD/CPIR/CPDR | `z80_ed_block_transfer_compare_boundaries.rs`, `z80_singlestep_reference_vectors.rs` | SHORT_PASS no escopo exercitado | Estados iniciais exaustivos e confirmação independente de flags não documentadas |
 | INI/IND/OUTI/OUTD e formas repetitivas | `z80_ed_block_io_reference_vectors.rs` | SHORT_PASS no escopo exercitado | Independência do oráculo e sequência temporal real de portas |
 | INT IM 0/1/2 | `z80_interrupt_semantics.rs` | DIRECIONADA | Todos os bytes fornecidos pelo barramento, fronteiras EI e sequência ordenada de acknowledge |
 | NMI, HALT, EI/DI | `z80_nmi_halt_semantics.rs`, `z80_interrupt_semantics.rs` | DIRECIONADA | Interleavings de requests, HALT com R, aceitação imediatamente antes/depois de EI |
-| Flags X/Y, Q/P, WZ/MEMPTR e R | `z80_indexed_cb_bit_res_set_wz.rs` verifica WZ=IX/IY+d em BIT/RES/SET e flags X/Y de BIT indexado a partir do byte alto do endereço efetivo; demais famílias têm vetores próprios | PARCIAL / dependente da família | Obter confirmação diferencial independente para WZ e flags não documentadas, por família e variante de CPU; não extrapolar estes vetores para todas as instruções |
+| Flags X/Y, Q/P, WZ/MEMPTR e R | `z80_indexed_cb_reference_vectors.rs` compara oito casos fixos de BIT indexado com valores esperados documentados externamente; `z80_indexed_cb_bit_res_set_wz.rs` amplia a matriz de estado | PARCIAL / dependente da família | Executar uma implementação de oráculo separada ou teste em hardware; ampliar a outros usos de WZ e variantes de CPU |
 | Prefixos repetidos e aliases não documentados | `z80_indexed_prefix_wraparound.rs` + gate de classificação | DIRECIONADA em prefixos DD/DD e DD/FD | Fixar comportamento de cada combinação com documentação ou oráculo identificado |
 | T-states nominais | Vetores de referência e retornos de `step()` | PARCIAL | Ampliar por forma e condição tomada/não tomada |
 | M-cycles, traces de barramento e T-states ordenados | Nenhum trace completo validado no contrato atual | PENDENTE | Definir trace, eventos e waits; não alegar ciclo a ciclo |
@@ -57,6 +57,13 @@ Uma linha só pode receber **SHORT_PASS** quando o conjunto de testes direcionad
 
 Cada novo vetor externo deve registrar URL, commit, licença e proveniência. O corpus SingleStepTests/Z80 está fixado em `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7`, mas seu README informa ancestralidade no núcleo Z80 do Ares. Ele é útil para regressão diferencial, não um oráculo independente do Ares.
 
+### Fontes para os vetores BIT indexados (sem importar código de terceiros)
+
+- **Manual do fabricante:** Zilog, *Z80 CPU User Manual*, documento `UM008011-0816`, pp. 247–249; cópia de referência fornecida no projeto (`um0080.pdf`). Define BIT `b,(IX/IY+d)`, 20 T-states, H=1, N=0, C preservado e memória inalterada; declara S e P/V como desconhecidos. URL de referência: https://www.zilog.com/docs/z80/um0080.pdf.
+- **Comportamento não documentado:** Sean Young, *The Undocumented Z80 Documented*, versão 0.4, §4.1: para BIT indexado, F3/F5 derivam dos bits 3/5 do byte alto do endereço efetivo; descreve também S, Z, H, P/V, N e C observados. URL: https://z80.info/zip/z80-documented.pdf. Licença explícita não verificada; nenhum texto ou código-fonte foi copiado para o runtime.
+- **WZ/MEMPTR:** redcode/Z80 Wiki, página “MEMPTR”, revisão exibida em 2026-01-07; lista BIT/RES/SET indexados com WZ = XY + deslocamento. URL: https://github.com/redcode/Z80/wiki/MEMPTR. Hash de commit e licença da página wiki não expostos pela fonte consultada; usada como referência factual, não como código importado.
+- **Limite da evidência:** os oito valores esperados são vetores fixos derivados dessas referências, não resultado de execução de outro emulador nem de CPU física. A confirmação diferencial executável contra um segundo núcleo independente continua pendente.
+
 ## 4. Aceitação desta atualização
 
 - [x] Os sete espaços de opcode continuam enumerados integralmente.
@@ -64,9 +71,11 @@ Cada novo vetor externo deve registrar URL, commit, licença e proveniência. O 
 - [x] Vetores dirigidos verificam deslocamentos assinados extremos, par indexado e registradores de índice altos/baixos.
 - [x] Vetores DD-CB/FD-CB verificam efeito de memória, destino em registrador, flags e contadores arquiteturais em casos direcionados.
 - [x] `z80_indexed_cb_bit_res_set_wz.rs` cobre BIT/RES/SET para os 8 índices de bit, os 8 campos de destino e DD/FD, com dados 00/FF; verifica destino de registrador, memória, flags, WZ, PC, R e T-states agregados.
+- [x] `z80_indexed_cb_reference_vectors.rs` verifica oito resultados fixos para BIT indexado, cobrindo todas as combinações de F3/F5 no byte alto, ambos os prefixos, flags, WZ, PC, R, memória e T-states; fontes e limites estão registrados.
 - [x] O runtime não foi alterado nesta atualização; qualquer correção futura depende de divergência reproduzível contra evidência independente.
 - [x] Prefixos DD repetidos e sequência DD/FD verificam precedência do último prefixo, PC, R e T-states agregados.
 - [x] Um vetor de deslocamento negativo verifica wraparound do endereço efetivo para FFFF.
 - [x] CI, SMS Core Fast Validation e SMS Z80 Platform Validation passaram no SHA candidato `98a11f5ed5d498ce96f92c23a7ce748d1baa501d`.
+- [ ] Executar comparação diferencial com um segundo núcleo independente ou em hardware; a referência documental adicionada não satisfaz esse critério.
 - [ ] Revisão independente das semânticas e contagens.
 - [ ] Fechamento das lacunas remanescentes — não declarado concluído por esta atualização.
