@@ -242,3 +242,31 @@ Essas alterações são sustentadas pela comparação com os vetores fixados; n�
 - O runtime SG-1000 não foi alterado.
 
 **Próximo gate:** ampliar o corpus por classes de instrução, incluir vetores para ED block operations, prefixos indexados, wraparound, flags X/Y, interrupções e comparação de efeitos de memória. Para cada divergência, preservar um caso mínimo reproduzível e distinguir discrepância do core, limitação do harness e divergência entre o modelo do corpus e a evidência documental/hardware. Ainda não existe validação de ciclo de barramento nem máquina SMS standalone completa.
+
+
+### Expansão de vetores Z80 — PR de cobertura adicional
+
+Base externa fixada: [SingleStepTests/Z80](https://github.com/SingleStepTests/z80/tree/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7/v1), commit `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7`, licença MIT. Foram adicionados 12 vetores iniciais adicionais para LD rr,nn; LD (BC),A; INC/DEC de pares e registradores; RLCA; ADD HL,BC; DJNZ; JR e JR NZ. Os vetores são fixtures fixas; nenhum corpus massivo é incorporado ao repositório.
+
+O harness compara registradores e latches expostos, PC/SP e T-states agregados por instrução. **Limitação mantida:** a memória final após escritas não é comparada ainda; por isso, os casos que escrevem em RAM verificam estado arquitetural e temporização agregada, não o efeito completo na memória. As listas de ciclos do corpus não são usadas para validar a ordem de transações de barramento.
+
+Esta ampliação é incremental e não equivale à cobertura total do conjunto Z80: o upstream contém milhares de ficheiros/vetores e inclui comportamentos que exigem suporte de harness para ciclos, interrupções e memória. Continuar por famílias, adicionando comparação de RAM antes de considerar validadas instruções que escrevem memória.
+
+
+**Achados adicionais desta ampliação:** vetores fixos revelaram que LD (BC),A / LD A,(BC), ADD HL,BC, DJNZ/JR, JP, RET e CALL não atualizavam WZ/MEMPTR como o corpus fixado esperava. Foram adicionadas atualizações explícitas ao core SMS e mantidos os vetores como regressões. Um vetor CPIR (ED B1) revela divergência ainda não resolvida na flag não documentada X; o teste fica explicitamente ignorado, com motivo, até a regra ser confrontada com evidência independente adicional. Não considerar esse caso aprovado.
+
+
+### Auditoria diferencial Z80 — segunda expansão de vetores (PR em preparação)
+
+A amostra SingleStepTests/Z80 permanece fixada no commit MIT `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7`. Esta etapa adiciona 18 casos de instruções (além dos 12 existentes): LD BC,nn; LD (BC),A; DJNZ; JR/JR NZ; LD (nn),A; LDI/LDIR; LD IX/IY,nn; RLC (HL); SET 0,(HL); ADC/SBC HL,rr; LD (nn),BC; RETN; LD IX/IY,d. O caso LD IX,nn também repete um vetor já existente para verificar o novo helper de RAM, portanto não representa uma nova combinação de opcode.
+
+Os vetores integrados comparam os registradores/estado arquitetural representados pelo core e os T-states agregados. As fixtures fornecem os bytes de RAM iniciais, mas o harness atual não verifica sistematicamente todos os bytes finais escritos; esse é um gate pendente para validar por completo as instruções com efeitos de memória. Também não compara cada transação temporal do barramento nem valida todos os vetores do upstream.
+
+**Limites e próximos gates:** a expansão é representativa, não cobertura total. Ainda é necessário executar e classificar os casos no CI, corrigir divergências confirmadas, ampliar sistematicamente todos os opcodes e variantes de prefixos, testar interrupções e wraparound, e desenvolver uma camada temporal para ciclos de barramento. O corpus upstream tem muitos arquivos de vetores e não deve ser importado integralmente sem avaliação de tamanho/licença/viabilidade. Não declarar “Z80 100% modelado” apenas pela contagem de vetores.
+
+
+### Estado validado da cobertura vetorial — PR #146
+
+A suite de referência foi ampliada para 48 testes nomeados no arquivo `native/sms_core/tests/z80_singlestep_reference_vectors.rs`, cobrindo instruções base, acesso à memória, saltos/chamadas/retornos, CB, ED, transferências em bloco, aritmética de 16 bits e prefixos DD/FD. Há um caso CPIR explicitamente ignorado devido a divergência em flag não documentada; ele não conta como aprovado.
+
+**Limites de validação:** os vetores comparam estado arquitetural e T-states agregados. Embora os bytes iniciais de RAM sejam carregados a partir das fixtures, a comparação sistemática da RAM final ainda não está integrada nesta revisão. A sequência temporal dos ciclos de barramento também não é validada. O core segue como modelo de instruções com T-states nominais, não como implementação Z80 cycle-accurate. O runtime SG-1000 permanece intocado.
