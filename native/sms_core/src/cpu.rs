@@ -103,7 +103,8 @@ pub struct Z80 {
     pub nmi_pending: bool,
     /// Maskable INT request and the external data-bus byte for acknowledge.
     pub int_pending: Option<u8>,
-    /// Opcode supplied by an IM 0 interrupt acknowledge; it does not consume PC.
+    /// Opcode already consumed by an interrupt acknowledge or prefix decoder.
+    /// It is executed without another memory fetch or PC increment.
     injected_opcode: Option<u8>,
     /// Last flags value written by an instruction (Z80 Q latch).
     pub q: u8,
@@ -852,10 +853,10 @@ impl Z80 {
                 if source == 6 { 19 } else { 8 }
             }
             _ => {
-                // Rewind the already-read opcode and its refresh increment so
-                // the base decoder handles this unaffected instruction once.
-                self.registers.pc = self.registers.pc.wrapping_sub(1);
+                // Hand the already-fetched opcode to the base decoder without
+                // issuing a second memory read for the same instruction byte.
                 self.r = (self.r & 0x80) | (self.r.wrapping_sub(1) & 0x7F);
+                self.injected_opcode = Some(opcode);
                 let base_cycles = self.step(bus)?;
                 let prefix_cycles = 4 + extra_prefix_cycles;
                 self.total_tstates += u64::from(prefix_cycles);
