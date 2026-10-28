@@ -5,15 +5,21 @@
 - Repositório: `leonardo201800478/sega-emulator`
 - Base desta auditoria: `53db203732524e824e670073772cb4cb082937a9`
 - Corpus independente: [SingleStepTests/Z80](https://github.com/SingleStepTests/z80/tree/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7), commit fixado `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7`, licença MIT.
-- Suíte de referência Rust: **124 vetores** — 108 vetores gerais em `z80_singlestep_reference_vectors.rs` e 16 vetores adicionais de I/O em bloco em `z80_ed_block_io_reference_vectors.rs` (PR #184). Os 16 novos vetores passaram sem falhas no SHA integrado `5f39196967a0603185d2dd886711682319f1e381`.
+- Suíte de referência Rust: **138 vetores** — 108 vetores gerais em `z80_singlestep_reference_vectors.rs` e 16 vetores adicionais de I/O em bloco em `z80_ed_block_io_reference_vectors.rs` (PR #184). Os 16 novos vetores passaram sem falhas no SHA integrado `5f39196967a0603185d2dd886711682319f1e381`.
 - Este documento separa explicitamente **classificação/execução sem erro** de **correção semântica comparada a um oráculo**.
 
 ## Atualização de validação — 2026-10-28 (PR #184)
 
 - Integrados 8 vetores `ED B2` (INIR) e 8 vetores `ED BB` (OTDR) do corpus fixado SingleStepTests/Z80.
 - Os vetores comparam estado final dos registradores principais e alternativos, flags, `WZ/MEMPTR`, `R`, `P/Q`, IFF1/IFF2, IM, atraso de EI, RAM alterada, portas de I/O e contagem agregada de T-states.
-- Resultado no SHA de merge `5f39196967a0603185d2dd886711682319f1e381`: 16/16 vetores novos passaram; CI, SMS Core Fast Validation e SMS Z80 Platform Validation passaram.
+- Resultado no SHA de merge `5f39196967a0603185d2dd886711682319f1e381`: 16/16 vetores iniciais passaram; CI, SMS Core Fast Validation e SMS Z80 Platform Validation passaram. A PR #186 adiciona mais 14 vetores de fronteira para `B=0`, `L=00/FF`, `H=00/FF` e `F=00/FF`; os 14/14 passaram no SHA candidato `4ea8675f824a30ea34947fa51dfc4b47c349ed91`, com formatação, Clippy, testes do workspace, testes focados SMS e qualidade verdes.
 - Os testes usam o comprimento do traço externo como total de T-states, mas não comparam eventos de barramento ordenados. Não constituem evidência de hardware nem cobertura combinatória completa.
+
+## Ampliação de casos de fronteira — PR #186
+
+- Adiciona 7 vetores para INIR (`ED B2`) e 7 para OTDR (`ED BB`) do mesmo corpus fixado.
+- Casos selecionados cobrem `B=0` (decremento com wrap para `FF`), limites do byte baixo/alto de `HL` e valores extremos das flags de entrada.
+- O objetivo é aumentar a diversidade de estado de entrada para flags e efeitos de memória/I/O, não alegar cobertura de todos os endereços de 16 bits nem de todas as combinações de flags.
 
 ## Níveis de evidência
 
