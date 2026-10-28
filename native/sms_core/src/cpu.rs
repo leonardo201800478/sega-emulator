@@ -2804,7 +2804,10 @@ mod tests {
             assert_eq!(cpu.registers.e, expected_e, "IN ED {opcode:02X}");
             assert_eq!(cpu.registers.h, expected_h, "IN ED {opcode:02X}");
             assert_eq!(cpu.registers.l, expected_l, "IN ED {opcode:02X}");
-            assert_eq!(cpu.registers.f, 0xA4, "IN ED {opcode:02X}: S/XY/PV from 0xA5");
+            assert_eq!(
+                cpu.registers.f, 0xA4,
+                "IN ED {opcode:02X}: S/XY/PV from 0xA5"
+            );
         }
 
         for (opcode, value) in [
