@@ -217,3 +217,28 @@ SHA validado: `e5a86c58c689d2f309a99e837d8ef95abe699764` (branch da PR #143).
 **Próxima auditoria independente:** integrar um runner pequeno e reprodutível para vetores públicos SingleStepTests/Z80, respeitando a licença MIT do conjunto e mantendo fixtures/versionamento rastreáveis. Começar por flags não documentadas, WZ/MEMPTR, Q, prefixos, estados finais e, separadamente, sequência de barramento. Não importar código de outro emulador para o runtime SMS. Esse trabalho é gate de uma futura declaração de conformidade da CPU, não deve ser confundido com a aprovação da fatia de integração desta PR.
 
 **Limite de plataforma:** os perfis e a capacidade FM permanecem configuração/modelagem; o crate SMS ainda não integra I/O, VDP, PSG/YM2413 ou scheduler e não é uma máquina completa executável.
+
+
+### Auditoria diferencial Z80 — vetores ampliados (PR #145)
+
+Base de referência: [SingleStepTests/Z80](https://github.com/SingleStepTests/z80/tree/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7/v1), commit upstream fixado `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7`, licença MIT. Foram fixados 12 vetores no teste de integração `native/sms_core/tests/z80_singlestep_reference_vectors.rs`, sem importar o corpus completo nem adicionar dependências.
+
+A amostra cobre NOP, LD B,n, EX AF,AF', DAA, SCF, ADD A,B, ADD A,n, RLC B, BIT 7,(HL), LD IX,nn, NEG e ADC HL,BC. Cada vetor verifica o estado arquitetural representado pelo core e os T-states agregados; a sequência temporal de ciclos de barramento não é comparada.
+
+**Divergências encontradas e corrigidas pelos vetores:**
+- EX AF,AF': o latch Q era forçado para F após a troca; a instrução agora deixa Q no estado limpo iniciado pelo limite de instrução.
+- DAA: o caminho de correção alta ignorava A > $99 em modo de subtração; foi ajustada a seleção da correção para reproduzir o vetor de referência.
+- BIT 7,(HL): os bits não documentados X/Y agora usam o byte alto de WZ conforme a referência fixada.
+- ADC/SBC HL,rr: WZ agora recebe o HL anterior incrementado em um antes da operação.
+
+Essas alterações são sustentadas pela comparação com os vetores fixados; não devem ser descritas como prova absoluta de comportamento em todo modelo/revisão Z80. Os vetores de referência são uma fonte externa independente, mas a cobertura atual é deliberadamente pequena.
+
+**Validação no SHA candidato final desta PR:**
+- **PASS** — `cargo fmt --all -- --check`.
+- **PASS** — `cargo clippy --workspace --all-targets --locked -- -D warnings`.
+- **PASS** — `cargo test --workspace --locked`.
+- **PASS** — validação focada SMS: 52 testes unitários, 1 teste ALU, 1 teste de integração de memória/cartucho e 12 vetores SingleStepTests.
+- **PASS** — CI geral.
+- O runtime SG-1000 não foi alterado.
+
+**Próximo gate:** ampliar o corpus por classes de instrução, incluir vetores para ED block operations, prefixos indexados, wraparound, flags X/Y, interrupções e comparação de efeitos de memória. Para cada divergência, preservar um caso mínimo reproduzível e distinguir discrepância do core, limitação do harness e divergência entre o modelo do corpus e a evidência documental/hardware. Ainda não existe validação de ciclo de barramento nem máquina SMS standalone completa.
