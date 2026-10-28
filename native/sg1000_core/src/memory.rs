@@ -199,6 +199,27 @@ mod tests {
     }
 
     #[test]
+    fn maps_dahjee_type_a_external_ram_at_2000_to_3fff() {
+        let config = MemoryConfig {
+            cartridge_ram_size: 0x2000,
+            cartridge_ram_start: 0x2000,
+            cartridge_ram_end: 0x3FFF,
+            ..MemoryConfig::default()
+        };
+        let mut memory = Sg1000Memory::new(&[0x55], config).unwrap();
+
+        memory.write(0x2000, 0xA7);
+        memory.write(0x3FFF, 0x5C);
+
+        assert_eq!(memory.read(0x2000), 0xA7);
+        assert_eq!(memory.read(0x3FFF), 0x5C);
+        assert_eq!(memory.read(0x4000), 0x55);
+        assert_eq!(memory.read(0xC000), 0x00);
+        assert_eq!(memory.internal_ram().len(), 0x0400);
+        assert_eq!(memory.cartridge_ram().len(), 0x2000);
+    }
+
+    #[test]
     fn maps_2k_omv_ram_with_mirroring() {
         let config = MemoryConfig {
             cartridge_ram_size: 0x0800,
