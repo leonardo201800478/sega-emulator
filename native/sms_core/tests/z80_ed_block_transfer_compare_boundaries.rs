@@ -44,9 +44,13 @@ impl CpuBus for FlatBus {
     }
 }
 
+fn program_at(bus: &mut FlatBus, address: u16, opcode: u8) {
+    bus.memory[usize::from(address)] = 0xED;
+    bus.memory[usize::from(address.wrapping_add(1))] = opcode;
+}
+
 fn program(bus: &mut FlatBus, opcode: u8) {
-    bus.memory[0] = 0xED;
-    bus.memory[1] = opcode;
+    program_at(bus, 0, opcode);
 }
 
 #[test]
@@ -96,18 +100,19 @@ fn ldir_final_iteration_does_not_repeat_and_clears_pv() {
 #[test]
 fn lddr_repeats_when_bc_wraps_from_zero() {
     let mut bus = FlatBus::default();
-    program(&mut bus, 0xB8);
+    program_at(&mut bus, 0x0100, 0xB8);
     bus.memory[0x0000] = 0x01;
 
     let mut cpu = Z80::default();
+    cpu.registers.pc = 0x0100;
     cpu.registers.a = 0;
     cpu.registers.set_hl(0x0000);
     cpu.registers.set_de(0x8000);
     cpu.registers.set_bc(0x0000);
 
     assert_eq!(cpu.step(&mut bus), Ok(21));
-    assert_eq!(cpu.registers.pc, 0x0000);
-    assert_eq!(cpu.wz, 0x0001);
+    assert_eq!(cpu.registers.pc, 0x0100);
+    assert_eq!(cpu.wz, 0x0101);
     assert_eq!(cpu.registers.hl(), 0xFFFF);
     assert_eq!(cpu.registers.de(), 0x7FFF);
     assert_eq!(cpu.registers.bc(), 0xFFFF);
@@ -157,10 +162,11 @@ fn cpir_with_zero_initial_bc_wraps_counter_and_repeats_on_nonmatch() {
 #[test]
 fn cpd_decrements_hl_across_zero_and_finishes_when_bc_reaches_zero() {
     let mut bus = FlatBus::default();
-    program(&mut bus, 0xA9);
+    program_at(&mut bus, 0x0100, 0xA9);
     bus.memory[0x0000] = 0x20;
 
     let mut cpu = Z80::default();
+    cpu.registers.pc = 0x0100;
     cpu.registers.a = 0x10;
     cpu.registers.f = FLAG_C;
     cpu.registers.set_hl(0x0000);
@@ -168,7 +174,7 @@ fn cpd_decrements_hl_across_zero_and_finishes_when_bc_reaches_zero() {
     cpu.wz = 0x2345;
 
     assert_eq!(cpu.step(&mut bus), Ok(16));
-    assert_eq!(cpu.registers.pc, 0x0002);
+    assert_eq!(cpu.registers.pc, 0x0102);
     assert_eq!(cpu.registers.hl(), 0xFFFF);
     assert_eq!(cpu.registers.bc(), 0x0000);
     assert_eq!(cpu.wz, 0x2344);
@@ -178,10 +184,11 @@ fn cpd_decrements_hl_across_zero_and_finishes_when_bc_reaches_zero() {
 #[test]
 fn cpdr_match_stops_repeat_and_decrements_wz() {
     let mut bus = FlatBus::default();
-    program(&mut bus, 0xB9);
+    program_at(&mut bus, 0x0100, 0xB9);
     bus.memory[0x0000] = 0x7F;
 
     let mut cpu = Z80::default();
+    cpu.registers.pc = 0x0100;
     cpu.registers.a = 0x7F;
     cpu.registers.f = FLAG_C;
     cpu.registers.set_hl(0x0000);
@@ -189,7 +196,7 @@ fn cpdr_match_stops_repeat_and_decrements_wz() {
     cpu.wz = 0x2000;
 
     assert_eq!(cpu.step(&mut bus), Ok(16));
-    assert_eq!(cpu.registers.pc, 0x0002);
+    assert_eq!(cpu.registers.pc, 0x0102);
     assert_eq!(cpu.registers.hl(), 0xFFFF);
     assert_eq!(cpu.registers.bc(), 0x0000);
     assert_eq!(cpu.wz, 0x1FFF);
