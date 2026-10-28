@@ -92,6 +92,12 @@ Na PR #166, SHA candidato `d41fc28872b6ba7f1fb2aa18d849a61f7c9c97d4`:
 - Foram acrescentados quatro vetores independentes para `BIT b,(IX+d)`/`BIT b,(IY+d)` nas formas `DD CB` e `FD CB`. Eles verificam que WZ/MEMPTR recebe o endereço efetivo e que as flags XY de BIT refletem o byte alto esperado; a matriz anterior só garantia que todas as codificações indexadas eram aceitas sem erro.
 - Esses vetores cobrem casos BIT; ainda não substituem vetores semânticos para todas as 512 codificações DDCB/FDCB nem testes de trace temporal.
 
+Na PR #167, SHA candidato `714e5c1432e57fb8ae3e048edf4b531b939166bc`:
+- **PASS:** Rust formatting, Workspace Clippy, Workspace Rust tests, SMS focused format/lint/tests e workflow geral CI/quality.
+- A suíte SingleStepTests passou com **104 testes aprovados e nenhum ignorado**.
+- Foram adicionados seis vetores para os caminhos não repetidos `LDD`, `CPD`, `INI`, `IND`, `OUTI` e `OUTD`. Os testes de I/O inicializam valores de porta a partir dos ciclos do oráculo e verificam as escritas nas portas.
+- Esses casos ampliam a verificação de bloco, mas não constituem cobertura exaustiva de todas as condições de flags, endereços de I/O ou estados de interrupção.
+
 Esses resultados confirmam os checks nos SHAs candidatos informados, não a completude total da CPU. A suite verifica estado arquitetural, T-states agregados e os endereços de RAM explicitamente listados pelos vetores; não compara trace temporal completo do barramento.
 
 ## Critérios para continuar a mescla
