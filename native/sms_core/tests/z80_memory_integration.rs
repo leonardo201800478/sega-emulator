@@ -1,4 +1,4 @@
-use sega_sms_core::{CartridgeImage, SmsMemory, Z80};
+use sega_sms_core::{CartridgeImage, CpuBus, SmsMemory, Z80};
 
 #[test]
 fn native_z80_executes_cartridge_code_and_accesses_sms_work_ram() {
