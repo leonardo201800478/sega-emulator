@@ -2483,7 +2483,7 @@ mod tests {
         sbc.registers.f = FLAG_C;
         assert_eq!(sbc.step(&mut sbc_bus), Ok(15));
         assert_eq!(sbc.registers.hl(), 0xFFFF);
-        assert_eq!(sbc.registers.f & 0xFF, 0xBB); // S, N, H, P/V, C, undocumented XY
+        assert_eq!(sbc.registers.f & 0xFF, 0xBB); // S, N, H, C, undocumented XY
     }
 
     #[test]
@@ -2592,7 +2592,7 @@ mod tests {
         assert_eq!(rld.step(&mut rld_bus), Ok(18));
         assert_eq!(rld.registers.a, 0x13);
         assert_eq!(rld_bus.0[0xC000], 0x42);
-        assert_eq!(rld.registers.f & 0xFF, FLAG_C | 0x28);
+        assert_eq!(rld.registers.f & 0xFF, FLAG_C);
         assert_eq!(rld.wz, 0xC001);
     }
 
@@ -2776,6 +2776,7 @@ mod tests {
             assert_eq!(cpu.registers.e, expected_e, "IN ED {opcode:02X}");
             assert_eq!(cpu.registers.h, expected_h, "IN ED {opcode:02X}");
             assert_eq!(cpu.registers.l, expected_l, "IN ED {opcode:02X}");
+            assert_eq!(cpu.registers.f & 0xFF, 0xA4, "IN ED {opcode:02X}: S/XY/PV from 0xA5");
         }
 
         for (opcode, value) in [
@@ -2791,7 +2792,55 @@ mod tests {
             cpu.registers.set_hl(0xC100);
             assert_eq!(cpu.step(&mut bus), Ok(12), "OUT ED {opcode:02X}");
             assert_eq!(bus.port_writes, vec![(0x3307, value)], "OUT ED {opcode:02X}");
+            assert_eq!(cpu.registers.f, 0, "OUT ED {opcode:02X}: flags preserved");
         }
+    }
+
+    #[test]
+    fn ed_ld_i_a_and_ld_r_a_copy_accumulator_without_touching_flags() {
+        for opcode in [0x47, 0x4F] {
+            let mut bus = TestBus([0; 0x10000]);
+            bus.0[..2].copy_from_slice(&[0xED, opcode]);
+            let mut cpu = Z80::default();
+            cpu.registers.a = 0xD3;
+            cpu.registers.f = 0xA5;
+            assert_eq!(cpu.step(&mut bus), Ok(9), "ED {opcode:02X}");
+            if opcode == 0x47 {
+                assert_eq!(cpu.i, 0xD3);
+            } else {
+                assert_eq!(cpu.r & 0x7F, 0x02, "ED 4F increments refresh during fetch");
+                assert_eq!(cpu.r & 0x80, 0x00);
+            }
+            assert_eq!(cpu.registers.f, 0xA5, "ED {opcode:02X}: flags unchanged");
+        }
+    }
+
+    #[test]
+    fn ed_cpd_decrements_hl_and_cpdr_stops_on_match() {
+        let mut cpd_bus = TestBus([0; 0x10000]);
+        cpd_bus.0[..2].copy_from_slice(&[0xED, 0xA9]);
+        cpd_bus.0[0xC100] = 0x10;
+        let mut cpd = Z80::default();
+        cpd.registers.a = 0x20;
+        cpd.registers.set_hl(0xC100);
+        cpd.registers.set_bc(2);
+        assert_eq!(cpd.step(&mut cpd_bus), Ok(16));
+        assert_eq!(cpd.registers.hl(), 0xC0FF);
+        assert_eq!(cpd.registers.bc(), 1);
+        assert_ne!(cpd.registers.f & FLAG_N, 0);
+
+        let mut cpdr_bus = TestBus([0; 0x10000]);
+        cpdr_bus.0[..2].copy_from_slice(&[0xED, 0xB9]);
+        cpdr_bus.0[0xC101] = 0x50;
+        let mut cpdr = Z80::default();
+        cpdr.registers.a = 0x50;
+        cpdr.registers.set_hl(0xC101);
+        cpdr.registers.set_bc(2);
+        assert_eq!(cpdr.step(&mut cpdr_bus), Ok(16));
+        assert_eq!(cpdr.registers.pc, 2);
+        assert_eq!(cpdr.registers.hl(), 0xC100);
+        assert_eq!(cpdr.registers.bc(), 1);
+        assert_eq!(cpdr.registers.f & FLAG_Z, FLAG_Z);
     }
 
 }
