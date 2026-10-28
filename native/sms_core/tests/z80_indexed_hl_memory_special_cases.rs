@@ -18,7 +18,7 @@ impl CpuBus for TestBus {
     }
 }
 
-fn run_indexed_hl_memory_case(
+struct IndexedHlMemoryCase {
     prefix: u8,
     opcode: u8,
     displacement: u8,
@@ -28,7 +28,20 @@ fn run_indexed_hl_memory_case(
     expected_h: u8,
     expected_l: u8,
     expected_memory: u8,
-) {
+}
+
+fn run_indexed_hl_memory_case(case: IndexedHlMemoryCase) {
+    let IndexedHlMemoryCase {
+        prefix,
+        opcode,
+        displacement,
+        initial_h,
+        initial_l,
+        initial_memory,
+        expected_h,
+        expected_l,
+        expected_memory,
+    } = case;
     let mut bus = TestBus::default();
     bus.0[..3].copy_from_slice(&[prefix, opcode, displacement]);
     let address = 0xC100_u16.wrapping_add_signed(i16::from(displacement as i8));
@@ -67,12 +80,52 @@ fn run_indexed_hl_memory_case(
 fn indexed_memory_loads_and_stores_use_plain_h_l_not_index_halves() {
     for prefix in [0xDD, 0xFD] {
         // LD H,(IX/IY+d): destination is plain H, not IXH/IYH.
-        run_indexed_hl_memory_case(prefix, 0x66, 1, 0x11, 0x22, 0xA5, 0xA5, 0x22, 0xA5);
+        run_indexed_hl_memory_case(IndexedHlMemoryCase {
+            prefix,
+            opcode: 0x66,
+            displacement: 1,
+            initial_h: 0x11,
+            initial_l: 0x22,
+            initial_memory: 0xA5,
+            expected_h: 0xA5,
+            expected_l: 0x22,
+            expected_memory: 0xA5,
+        });
         // LD L,(IX/IY+d): destination is plain L, not IXL/IYL.
-        run_indexed_hl_memory_case(prefix, 0x6E, 2, 0x11, 0x22, 0xB6, 0x11, 0xB6, 0xB6);
+        run_indexed_hl_memory_case(IndexedHlMemoryCase {
+            prefix,
+            opcode: 0x6E,
+            displacement: 2,
+            initial_h: 0x11,
+            initial_l: 0x22,
+            initial_memory: 0xB6,
+            expected_h: 0x11,
+            expected_l: 0xB6,
+            expected_memory: 0xB6,
+        });
         // LD (IX/IY+d),H: source is plain H, not IXH/IYH.
-        run_indexed_hl_memory_case(prefix, 0x74, 1, 0x5A, 0x22, 0xCC, 0x5A, 0x22, 0x5A);
+        run_indexed_hl_memory_case(IndexedHlMemoryCase {
+            prefix,
+            opcode: 0x74,
+            displacement: 1,
+            initial_h: 0x5A,
+            initial_l: 0x22,
+            initial_memory: 0xCC,
+            expected_h: 0x5A,
+            expected_l: 0x22,
+            expected_memory: 0x5A,
+        });
         // LD (IX/IY+d),L: source is plain L, not IXL/IYL.
-        run_indexed_hl_memory_case(prefix, 0x75, 2, 0x11, 0x6B, 0xCC, 0x11, 0x6B, 0x6B);
+        run_indexed_hl_memory_case(IndexedHlMemoryCase {
+            prefix,
+            opcode: 0x75,
+            displacement: 2,
+            initial_h: 0x11,
+            initial_l: 0x6B,
+            initial_memory: 0xCC,
+            expected_h: 0x11,
+            expected_l: 0x6B,
+            expected_memory: 0x6B,
+        });
     }
 }
