@@ -53,14 +53,13 @@ fn signed_byte(value: u8) -> i16 {
     }
 }
 
-fn expected_arithmetic(
-    operation: ArithmeticOp,
-    lhs: u8,
-    rhs: u8,
-    carry_in: bool,
-) -> (u8, u8) {
+fn expected_arithmetic(operation: ArithmeticOp, lhs: u8, rhs: u8, carry_in: bool) -> (u8, u8) {
     let has_carry_in = matches!(operation, ArithmeticOp::Adc | ArithmeticOp::Sbc);
-    let carry = if has_carry_in && carry_in { 1_i16 } else { 0_i16 };
+    let carry = if has_carry_in && carry_in {
+        1_i16
+    } else {
+        0_i16
+    };
 
     if matches!(operation, ArithmeticOp::Add | ArithmeticOp::Adc) {
         let unsigned_sum = u16::from(lhs) + u16::from(rhs) + u16::from(carry as u8);
@@ -231,7 +230,8 @@ fn expected_inc_dec(value: u8, decrement: bool, carry_in: bool) -> (u8, u8) {
     } {
         flags |= FLAG_H;
     }
-    if if decrement { value == 0x80 } else { value == 0x7F } {
+    let overflow = if decrement { value == 0x80 } else { value == 0x7F };
+    if overflow {
         flags |= FLAG_PV;
     }
     if decrement {
@@ -249,13 +249,16 @@ fn inc_dec_register_flags_match_every_byte_and_carry_state() {
         bus.0[0] = opcode;
         for value in 0_u8..=u8::MAX {
             for carry_in in [false, true] {
-                let (expected_value, expected_flags) =
-                    expected_inc_dec(value, decrement, carry_in);
+                let (expected_value, expected_flags) = expected_inc_dec(value, decrement, carry_in);
                 cpu.registers.b = value;
                 cpu.registers.f = 0xFE | if carry_in { FLAG_C } else { 0 };
                 cpu.registers.pc = 0;
 
-                assert_eq!(cpu.step(&mut bus), Ok(4), "opcode={opcode:02X} B={value:02X}");
+                assert_eq!(
+                    cpu.step(&mut bus),
+                    Ok(4),
+                    "opcode={opcode:02X} B={value:02X}"
+                );
                 assert_eq!(
                     cpu.registers.b, expected_value,
                     "opcode={opcode:02X} B={value:02X}: value"
@@ -357,8 +360,14 @@ fn daa_matches_reference_for_every_accumulator_and_nhc_combination() {
 fn expected_accumulator_rotate(opcode: u8, accumulator: u8, old_flags: u8) -> (u8, u8) {
     let carry_in = old_flags & FLAG_C != 0;
     let (result, carry_out) = match opcode {
-        0x07 => (accumulator.wrapping_shl(1) | (accumulator >> 7), accumulator & FLAG_S != 0),
-        0x0F => ((accumulator >> 1) | accumulator.wrapping_shl(7), accumulator & FLAG_C != 0),
+        0x07 => (
+            accumulator.wrapping_shl(1) | (accumulator >> 7),
+            accumulator & FLAG_S != 0,
+        ),
+        0x0F => (
+            (accumulator >> 1) | accumulator.wrapping_shl(7),
+            accumulator & FLAG_C != 0,
+        ),
         0x17 => (
             accumulator.wrapping_shl(1) | u8::from(carry_in),
             accumulator & FLAG_S != 0,
@@ -369,9 +378,7 @@ fn expected_accumulator_rotate(opcode: u8, accumulator: u8, old_flags: u8) -> (u
         ),
         _ => unreachable!("only accumulator rotates are included"),
     };
-    let flags = (old_flags & FLAG_SZPV)
-        | (result & FLAG_XY)
-        | if carry_out { FLAG_C } else { 0 };
+    let flags = (old_flags & FLAG_SZPV) | (result & FLAG_XY) | if carry_out { FLAG_C } else { 0 };
     (result, flags)
 }
 
