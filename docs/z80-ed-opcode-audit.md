@@ -194,3 +194,19 @@ A PR [#186](https://github.com/leonardo201800478/sega-emulator/pull/186) adicion
 - Cada caso verifica estado final, RAM/portas e T-states agregados a partir do vetor de referência.
 
 **Estado de validação:** 14/14 vetores passaram no SHA candidato `4ea8675f824a30ea34947fa51dfc4b47c349ed91`; formatação Rust, Clippy, testes do workspace, testes focados SMS e workflow de qualidade passaram. Eles ampliam a diversidade de estados, mas não são prova de comportamento de hardware, não cobrem todos os valores de `HL` (incluindo `0000` e `FFFF` exatos) e não comparam a ordem temporal dos eventos de barramento.
+
+
+## Cobertura diferencial ampliada de I/O em bloco — PR #187
+
+A [PR #187](https://github.com/leonardo201800478/sega-emulator/pull/187) adicionou 24 vetores fixos de SingleStepTests/Z80 (commit upstream `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7`, MIT), quatro por opcode:
+
+- `ED A2` — INI
+- `ED A3` — OUTI
+- `ED AA` — IND
+- `ED AB` — OUTD
+- `ED B3` — OTIR
+- `ED BA` — INDR
+
+A seleção abrange casos ordinários, `B=0`, `L=FF` e `F=FF` quando disponível. Cada vetor compara estado final da CPU, flags, WZ, memória/portas e T-states agregados. **24/24 passaram** no SHA candidato `e09967f12076366db13f5eea52178afca51af994`, incluindo formatação Rust, Clippy, testes do workspace, testes focados SMS e qualidade. A PR foi integrada no SHA `c226ddfccd6961ecf63d8751bc9edf10d2465a9b`; os workflows do SHA de merge são uma validação distinta e devem ser verificados separadamente.
+
+Com as PRs #184, #186 e #187, a suíte dedicada de I/O em bloco contém 54 vetores (16 + 14 + 24), cobrindo as oito formas básicas/repetidas por meio de testes locais dirigidos e vetores diferenciais para todas as famílias. Isso não resolve a divergência de referências sobre flags de I/O em bloco, não valida a ordem dos eventos de barramento e não é evidência de hardware físico nem de precisão ciclo a ciclo.
