@@ -388,3 +388,25 @@ fn cpdr_with_zero_initial_bc_wraps_counter_and_repeats_on_nonmatch() {
     assert_eq!(cpu.registers.bc(), 0xFFFF);
     assert_eq!(cpu.registers.f, FLAG_S | FLAG_N | FLAG_PV);
 }
+
+#[test]
+fn cpdr_match_stops_before_counter_reaches_zero() {
+    let mut bus = FlatBus::default();
+    program_at(&mut bus, 0x0100, 0xB9);
+    bus.memory[0x4000] = 0x7F;
+
+    let mut cpu = Z80::default();
+    cpu.registers.pc = 0x0100;
+    cpu.registers.a = 0x7F;
+    cpu.registers.f = FLAG_C;
+    cpu.registers.set_hl(0x4000);
+    cpu.registers.set_bc(0x0002);
+    cpu.wz = 0x2000;
+
+    assert_eq!(cpu.step(&mut bus), Ok(16));
+    assert_eq!(cpu.registers.pc, 0x0102);
+    assert_eq!(cpu.registers.hl(), 0x3FFF);
+    assert_eq!(cpu.registers.bc(), 0x0001);
+    assert_eq!(cpu.wz, 0x1FFF);
+    assert_eq!(cpu.registers.f, FLAG_C | FLAG_Z | FLAG_N | FLAG_PV);
+}
