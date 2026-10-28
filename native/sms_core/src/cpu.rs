@@ -260,7 +260,6 @@ impl Z80 {
             0x08 => {
                 std::mem::swap(&mut self.registers.a, &mut self.alternate.a);
                 std::mem::swap(&mut self.registers.f, &mut self.alternate.f);
-                self.q = self.registers.f;
                 4
             }
             0xD9 => {
@@ -339,7 +338,7 @@ impl Z80 {
                 if old_flags & FLAG_H != 0 || (!subtract && (a & 0x0F) > 9) {
                     correction |= 0x06;
                 }
-                if carry || (!subtract && a > 0x99) {
+                if carry || a > 0x99 {
                     correction |= 0x60;
                     carry = true;
                 }
@@ -1132,6 +1131,7 @@ impl Z80 {
 
     fn adc_sbc_hl(&mut self, operand: u16, subtract: bool) {
         let lhs = self.registers.hl();
+        self.wz = lhs.wrapping_add(1);
         let carry = u32::from(self.registers.f & FLAG_C != 0);
         let rhs = u32::from(operand);
         let lhs32 = u32::from(lhs);
@@ -1352,7 +1352,7 @@ impl Z80 {
                     flags |= FLAG_S;
                 }
                 let undocumented = if target == 6 {
-                    (self.registers.hl() >> 8) as u8 & FLAG_XY
+                    (self.wz >> 8) as u8 & FLAG_XY
                 } else {
                     value & FLAG_XY
                 };
