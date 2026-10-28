@@ -120,12 +120,14 @@ impl State {
 
 struct FlatBus {
     memory: Box<[u8]>,
+    ports: Box<[u8]>,
 }
 
 impl Default for FlatBus {
     fn default() -> Self {
         Self {
             memory: vec![0; 0x1_0000].into_boxed_slice(),
+            ports: vec![0; 0x1_0000].into_boxed_slice(),
         }
     }
 }
@@ -137,6 +139,14 @@ impl CpuBus for FlatBus {
 
     fn write_memory(&mut self, address: u16, value: u8) {
         self.memory[usize::from(address)] = value;
+    }
+
+    fn read_port(&mut self, address: u16) -> u8 {
+        self.ports[usize::from(address)]
+    }
+
+    fn write_port(&mut self, address: u16, value: u8) {
+        self.ports[usize::from(address)] = value;
     }
 }
 
@@ -154,6 +164,40 @@ fn run_vector(name: &str, initial: State, expected: State, bytes: &[(u16, u8)], 
         "{name}: accumulated T-states"
     );
     expected.assert_matches(&cpu, name);
+}
+
+fn run_vector_with_memory_and_ports(
+    name: &str,
+    initial: State,
+    expected: State,
+    initial_bytes: &[(u16, u8)],
+    expected_memory: &[(u16, u8)],
+    initial_ports: &[(u16, u8)],
+    tstates: u32,
+) {
+    let mut bus = FlatBus::default();
+    for &(address, value) in initial_bytes {
+        bus.memory[usize::from(address)] = value;
+    }
+    for &(address, value) in initial_ports {
+        bus.ports[usize::from(address)] = value;
+    }
+    let mut cpu = Z80::default();
+    initial.apply(&mut cpu);
+    assert_eq!(cpu.step(&mut bus), Ok(tstates), "{name}: T-states");
+    assert_eq!(
+        cpu.total_tstates,
+        u64::from(tstates),
+        "{name}: accumulated T-states"
+    );
+    expected.assert_matches(&cpu, name);
+    for &(address, value) in expected_memory {
+        assert_eq!(
+            bus.memory[usize::from(address)],
+            value,
+            "{name}: RAM[{address:04X}]"
+        );
+    }
 }
 
 fn run_vector_with_memory(
@@ -5812,6 +5856,71 @@ fn singlestep_expanded_opcode_ed_b0_vector_0001() {
         },
         &[(4564, 237), (4565, 176), (22400, 0), (23873, 46)],
         &[(4564, 237), (4565, 176), (22400, 46), (23873, 46)],
+        21,
+    );
+}
+
+#[test]
+fn singlestep_expanded_opcode_ed_b2_vector_0002() {
+    run_vector_with_memory_and_ports(
+        "SingleStepTests ED B2 0002",
+        State {
+            pc: 33887,
+            sp: 40412,
+            a: 131,
+            f: 187,
+            b: 179,
+            c: 2,
+            d: 14,
+            e: 39,
+            h: 185,
+            l: 64,
+            i: 94,
+            r: 86,
+            ix: 45231,
+            iy: 14441,
+            wz: 33083,
+            af_alt: 31597,
+            bc_alt: 54417,
+            de_alt: 40196,
+            hl_alt: 51547,
+            im: 0,
+            p: false,
+            q: 187,
+            iff1: true,
+            iff2: false,
+            ei_delay: 1,
+        },
+        State {
+            pc: 33887,
+            sp: 40412,
+            a: 131,
+            f: 134,
+            b: 178,
+            c: 2,
+            d: 14,
+            e: 39,
+            h: 185,
+            l: 65,
+            i: 94,
+            r: 88,
+            ix: 45231,
+            iy: 14441,
+            wz: 33888,
+            af_alt: 31597,
+            bc_alt: 54417,
+            de_alt: 40196,
+            hl_alt: 51547,
+            im: 0,
+            p: false,
+            q: 134,
+            iff1: true,
+            iff2: false,
+            ei_delay: 0,
+        },
+        &[(33887, 237), (33888, 178), (47424, 0)],
+        &[(33887, 237), (33888, 178), (47424, 188)],
+        &[(45826, 188)],
         21,
     );
 }
