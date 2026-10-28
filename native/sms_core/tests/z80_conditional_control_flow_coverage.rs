@@ -93,11 +93,12 @@ fn conditional_jp_covers_all_conditions_without_changing_flags() {
             let mut cpu = Z80::default();
             let flags = flags_for_condition(condition as u8, condition_true);
             cpu.registers.f = flags;
+            cpu.registers.sp = 0xBEEF;
 
             assert_eq!(cpu.step(&mut bus), Ok(10), "opcode={opcode:02X}");
             assert_eq!(cpu.registers.pc, if condition_true { 0x1234 } else { 3 }, "opcode={opcode:02X}");
             assert_eq!(cpu.registers.f, flags, "opcode={opcode:02X}: flags must be preserved");
-            assert_eq!(cpu.registers.sp, 0xFFFF);
+            assert_eq!(cpu.registers.sp, 0xBEEF, "opcode={opcode:02X}: JP must preserve SP");
         }
     }
 }
