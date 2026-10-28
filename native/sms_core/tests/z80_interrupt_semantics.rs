@@ -19,6 +19,26 @@ impl CpuBus for TestBus {
 }
 
 #[test]
+fn im0_prefix_acknowledge_reads_following_opcode_and_operands_from_memory() {
+    // The device supplies DD during acknowledge; the next opcode and nn
+    // bytes are fetched from the current PC as usual.
+    let mut bus = TestBus::default();
+    bus.0[0x1234..0x1237].copy_from_slice(&[0x21, 0x78, 0x56]);
+    let mut cpu = Z80::default();
+    cpu.registers.pc = 0x1234;
+    cpu.r = 0x85;
+    cpu.iff1 = true;
+    cpu.iff2 = true;
+    cpu.request_int(0xDD);
+
+    assert_eq!(cpu.step(&mut bus), Ok(16));
+    assert_eq!(cpu.ix, 0x5678);
+    assert_eq!(cpu.registers.pc, 0x1237);
+    assert_eq!(cpu.r, 0x87);
+    assert_eq!(cpu.total_tstates, 16);
+}
+
+#[test]
 fn interrupt_acknowledge_increments_r_once_in_each_interrupt_mode() {
     // IM 0: the external opcode is the acknowledge M1 fetch. It must not
     // increment R once in service_int and again when the injected opcode runs.
