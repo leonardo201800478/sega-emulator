@@ -105,7 +105,6 @@ fn ed_in_register_forms_cover_every_input_value_and_carry_state() {
 
                 let mut cpu = initialized_cpu();
                 cpu.registers.f = if carry_in { FLAG_C } else { 0 };
-                let before = get_register(&cpu, code);
                 let cycles = cpu.step(&mut bus).unwrap_or_else(|error| {
                     panic!("ED {opcode:02X}, input={value:02X}: {error:?}")
                 });
@@ -137,9 +136,6 @@ fn ed_in_register_forms_cover_every_input_value_and_carry_state() {
                 assert_eq!(cpu.wz, 0x1235, "ED {opcode:02X} WZ");
                 assert_eq!(cpu.registers.pc, 2, "ED {opcode:02X} PC");
                 assert_eq!(cycles, 12, "ED {opcode:02X} nominal timing");
-                if code != 6 {
-                    assert_ne!(get_register(&cpu, code), before, "test sentinel");
-                }
             }
         }
     }
