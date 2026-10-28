@@ -36,7 +36,11 @@ impl CpuBus for FlatBus {
 
     fn read_port(&mut self, address: u16) -> u8 {
         self.port_reads += 1;
-        if address & 0x00ff == 0x00fe { 0xbf } else { 0xff }
+        if address & 0x00ff == 0x00fe {
+            0xbf
+        } else {
+            0xff
+        }
     }
 
     fn write_port(&mut self, _address: u16, _value: u8) {}
@@ -60,7 +64,9 @@ fn parse_args() -> Result<(PathBuf, u64), String> {
             return Err(format!("unexpected argument: {argument}"));
         }
         let value = args.next().ok_or("--max-steps requires an integer")?;
-        max_steps = value.parse().map_err(|_| format!("invalid --max-steps value: {value}"))?;
+        max_steps = value
+            .parse()
+            .map_err(|_| format!("invalid --max-steps value: {value}"))?;
         if max_steps == 0 {
             return Err("--max-steps must be greater than zero".to_owned());
         }
@@ -114,14 +120,20 @@ fn run(image_path: PathBuf, max_steps: u64) -> Result<(), String> {
         }
 
         cpu.step(&mut bus).map_err(|error| {
-            format!("CPU error at PC={:04X} after {steps} instructions: {error:?}", cpu.registers.pc)
+            format!(
+                "CPU error at PC={:04X} after {steps} instructions: {error:?}",
+                cpu.registers.pc
+            )
         })?;
         steps += 1;
     }
 
     Err(format!(
         "instruction budget exhausted: max_steps={max_steps}, PC={:04X}, SP={:04X}, T-states={}, elapsed_ms={}",
-        cpu.registers.pc, cpu.registers.sp, cpu.total_tstates, started.elapsed().as_millis()
+        cpu.registers.pc,
+        cpu.registers.sp,
+        cpu.total_tstates,
+        started.elapsed().as_millis()
     ))
 }
 
