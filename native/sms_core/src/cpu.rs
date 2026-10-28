@@ -209,11 +209,12 @@ impl Z80 {
         Ok(cycles)
     }
 
-    /// Execute one instruction and return its documented base T-state count.
+    /// Execute one instruction and return its nominal instruction T-state count.
     ///
-    /// This first extraction slice covers common base instructions only.
-    /// Prefixes, interrupts, and all unimplemented opcodes return an explicit
-    /// error until their native implementation is migrated.
+    /// Base, CB, ED, DD/FD and indexed-CB decoding plus NMI/INT entry are
+    /// implemented here, but semantic completeness is established only by
+    /// independent vectors. Returned T-states are aggregate instruction
+    /// counts; this interface does not model ordered, per-T-state bus events.
     pub fn step<B: CpuBus>(&mut self, bus: &mut B) -> Result<u32, CpuError> {
         if self.step_depth {
             return self.step_inner(bus);
