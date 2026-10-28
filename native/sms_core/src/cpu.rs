@@ -342,7 +342,7 @@ impl Z80 {
                 if old_flags & FLAG_H != 0 || (!subtract && (a & 0x0F) > 9) {
                     correction |= 0x06;
                 }
-                if carry || a > 0x99 {
+                if carry || (!subtract && a > 0x99) {
                     correction |= 0x60;
                     carry = true;
                 }
