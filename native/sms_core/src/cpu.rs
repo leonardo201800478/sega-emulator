@@ -1228,12 +1228,14 @@ impl Z80 {
         }
         flags |= sum & 0x08;
         flags |= (sum & 0x02) << 4;
-        self.set_flags(flags);
         if (opcode == 0xB0 || opcode == 0xB8) && count != 0 {
             self.registers.pc = self.registers.pc.wrapping_sub(2);
             self.wz = self.registers.pc.wrapping_add(1);
+            flags = (flags & !FLAG_XY) | (((self.registers.pc >> 8) as u8) & FLAG_XY);
+            self.set_flags(flags);
             21
         } else {
+            self.set_flags(flags);
             16
         }
     }
@@ -1265,13 +1267,15 @@ impl Z80 {
         }
         flags |= adjusted & 0x08;
         flags |= (adjusted & 0x02) << 4;
-        self.set_flags(flags);
-        self.wz = self.wz.wrapping_add_signed(direction);
         if (opcode == 0xB1 || opcode == 0xB9) && count != 0 && result != 0 {
             self.registers.pc = self.registers.pc.wrapping_sub(2);
             self.wz = self.registers.pc.wrapping_add(1);
+            flags = (flags & !FLAG_XY) | (((self.registers.pc >> 8) as u8) & FLAG_XY);
+            self.set_flags(flags);
             21
         } else {
+            self.wz = self.wz.wrapping_add_signed(direction);
+            self.set_flags(flags);
             16
         }
     }
@@ -1319,20 +1323,20 @@ impl Z80 {
         if parity_arg.count_ones().is_multiple_of(2) {
             flags |= FLAG_PV;
         }
-        self.set_flags(flags);
         if repeat && self.registers.b != 0 {
             self.registers.pc = self.registers.pc.wrapping_sub(2);
             self.wz = self.registers.pc.wrapping_add(1);
+            flags = (flags & !FLAG_XY) | (((self.registers.pc >> 8) as u8) & FLAG_XY);
+            self.set_flags(flags);
             21
         } else {
+            self.set_flags(flags);
             let wz_base = if input { old_bc } else { self.registers.bc() };
             self.wz = wz_base.wrapping_add_signed(direction);
             16
         }
     }
 
-    /// Execute the complete CB-prefixed rotate/shift, BIT, RES and SET matrix.
-    /// T-state totals are instruction-level totals, not bus-phase timestamps.
     fn execute_cb<B: CpuBus>(&mut self, bus: &mut B, opcode: u8) -> u32 {
         let target = opcode & 0x07;
         let group = opcode >> 6;
