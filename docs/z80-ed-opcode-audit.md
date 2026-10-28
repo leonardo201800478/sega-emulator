@@ -193,4 +193,4 @@ A PR [#186](https://github.com/leonardo201800478/sega-emulator/pull/186) adicion
 - Inclui `B=0`, limites `L=00/FF`, `H=00/FF` e valores iniciais extremos de F (`00/FF`).
 - Cada caso verifica estado final, RAM/portas e T-states agregados a partir do vetor de referência.
 
-**Estado de validação:** os vetores foram selecionados e publicados em branch/PR; os resultados só devem ser declarados aprovados após os workflows concluírem no SHA candidato exato. Eles ampliam a diversidade de estados, mas não são prova de comportamento de hardware, não cobrem todos os valores de `HL` (incluindo `0000` e `FFFF` exatos) e não comparam a ordem temporal dos eventos de barramento.
+**Estado de validação:** 14/14 vetores passaram no SHA candidato `4ea8675f824a30ea34947fa51dfc4b47c349ed91`; formatação Rust, Clippy, testes do workspace, testes focados SMS e workflow de qualidade passaram. Eles ampliam a diversidade de estados, mas não são prova de comportamento de hardware, não cobrem todos os valores de `HL` (incluindo `0000` e `FFFF` exatos) e não comparam a ordem temporal dos eventos de barramento.
