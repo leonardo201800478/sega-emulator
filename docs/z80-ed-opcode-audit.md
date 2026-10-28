@@ -183,3 +183,14 @@ A PR [#184](https://github.com/leonardo201800478/sega-emulator/pull/184) adicion
 - Resultado: **16/16 vetores aprovados** no SHA integrado `5f39196967a0603185d2dd886711682319f1e381`. Os workflows CI, SMS Core Fast Validation e SMS Z80 Platform Validation passaram nesse SHA.
 
 Esta evidência amplia a cobertura de estados para duas famílias de I/O em bloco, mas não resolve por si só a divergência de flags de I/O em bloco entre referências documentais, não prova comportamento de hardware e não valida a ordem dos eventos de barramento. Permanecem necessárias matrizes mais profundas para outras famílias ED, estados de borda (incluindo B=0 e wraparound), e validação temporal antes de qualquer declaração de precisão ciclo a ciclo.
+
+
+## Vetores de fronteira adicionais — PR #186
+
+A PR [#186](https://github.com/leonardo201800478/sega-emulator/pull/186) adiciona 14 casos do mesmo commit fixado SingleStepTests/Z80:
+
+- 7 estados para INIR (`ED B2`) e 7 para OTDR (`ED BB`).
+- Inclui `B=0`, limites `L=00/FF`, `H=00/FF` e valores iniciais extremos de F (`00/FF`).
+- Cada caso verifica estado final, RAM/portas e T-states agregados a partir do vetor de referência.
+
+**Estado de validação:** os vetores foram selecionados e publicados em branch/PR; os resultados só devem ser declarados aprovados após os workflows concluírem no SHA candidato exato. Eles ampliam a diversidade de estados, mas não são prova de comportamento de hardware, não cobrem todos os valores de `HL` (incluindo `0000` e `FFFF` exatos) e não comparam a ordem temporal dos eventos de barramento.
