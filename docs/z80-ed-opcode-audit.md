@@ -11,7 +11,7 @@
 | Segundo bytes possíveis após ED | 256 |
 | Codificações tratadas por famílias explícitas no despachante | 78 |
 | Codificações que caem no fallback ED-NOP | 178 |
-| Famílias documentadas com implementação explícita | 14 grupos abaixo |
+| Famílias/codificações com implementação explícita | agrupadas na tabela abaixo |
 | Validação diferencial contra hardware/oráculo independente nesta auditoria | **Não executada** |
 | Precisão ciclo a ciclo / traço ordenado de barramento | **Não implementada por esta interface** |
 
