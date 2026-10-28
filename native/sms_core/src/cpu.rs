@@ -569,13 +569,15 @@ impl Z80 {
                     _ => {
                         let [accumulator, flags] = value.to_be_bytes();
                         self.registers.a = accumulator;
-                        self.set_flags(flags);
+                        // POP AF loads F but does not set the Z80 Q latch.
+                        self.registers.f = flags;
                     }
                 }
                 10
             }
             0xC4 | 0xCC | 0xD4 | 0xDC | 0xE4 | 0xEC | 0xF4 | 0xFC => {
                 let target = self.fetch16(bus);
+                self.wz = target;
                 if self.condition((opcode >> 3) & 0x07) {
                     self.push16(bus, self.registers.pc);
                     self.registers.pc = target;
@@ -606,6 +608,7 @@ impl Z80 {
             }
             0xC2 | 0xCA | 0xD2 | 0xDA | 0xE2 | 0xEA | 0xF2 | 0xFA => {
                 let target = self.fetch16(bus);
+                self.wz = target;
                 if self.condition((opcode >> 3) & 0x07) {
                     self.registers.pc = target;
                 }
@@ -669,6 +672,7 @@ impl Z80 {
             opcode if opcode & 0xC7 == 0xC7 => {
                 self.push16(bus, self.registers.pc);
                 self.registers.pc = u16::from(opcode & 0x38);
+                self.wz = self.registers.pc;
                 11
             }
             _ => return Err(CpuError::UnsupportedOpcode { opcode, address }),

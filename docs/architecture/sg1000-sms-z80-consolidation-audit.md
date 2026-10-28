@@ -57,9 +57,18 @@ As duas correções foram aplicadas e os vetores passaram nos workflows da PR #1
 
 Na PR #162, SHA candidato `3d0f5ee0197d9481104740c90c4889fd67f2cd8f`:
 - **PASS:** Rust formatting, Workspace Clippy, Workspace Rust tests, SMS focused format/lint/tests e workflow geral CI/quality.
-- A suíte de referência SingleStepTests passou com **76 testes aprovados e 1 ignorado**.
-- Foram acrescentados mais 10 vetores para `LD (BC),A`, `LD A,(BC)`, `LD (DE),A`, `LD A,(DE)`, `ADD HL,DE`, `LD A,(nn)`, `JP (HL)`, `LD SP,HL`, `EX DE,HL` e `DJNZ`.
-- O caso ignorado continua sendo `ED B1` (CPIR), devido à divergência de flags não documentadas em investigação.
+- A suíte de referência passou com **76 testes aprovados e 1 ignorado**.
+- Foram acrescentados 10 vetores para `LD (BC),A`, `LD A,(BC)`, `LD (DE),A`, `LD A,(DE)`, `ADD HL,DE`, `LD A,(nn)`, `JP (HL)`, `LD SP,HL`, `EX DE,HL` e `DJNZ`.
+
+Na PR #163, SHA candidato `85384bd67b76ed364b7ecb4861ae6120b3adf36e`:
+- **PASS:** Rust formatting, Workspace Clippy, Workspace Rust tests, SMS focused format/lint/tests e workflow geral CI/quality.
+- A suíte de referência passou com **86 testes aprovados e 1 ignorado**.
+- Foram acrescentados 10 vetores para `RST 00`, `JP NZ,nn`, `CALL NZ,nn`, `RET NZ`, `POP AF`, `PUSH AF`, `EXX`, `JR C` não tomado, `BIT 0,(HL)` e `RES 0,(HL)`.
+- Os vetores identificaram e orientaram quatro correções adicionais:
+  1. `JP cc,nn`: WZ recebe o alvo independentemente do resultado da condição.
+  2. `CALL cc,nn`: WZ recebe o alvo mesmo quando a chamada não ocorre.
+  3. `RST`: WZ recebe o endereço do vetor.
+  4. `POP AF`: a carga de F não deve atualizar o latch Q como se flags fossem calculadas.
 - **SKIPPED:** revisão automática Sourcery, por limite de orçamento do serviço; isso não é aprovação nem falha de código.
 
 Esses resultados confirmam os checks nos SHAs candidatos informados, não a completude total da CPU. A suite verifica estado arquitetural, T-states agregados e os endereços de RAM explicitamente listados pelos vetores; não compara trace temporal completo do barramento.
