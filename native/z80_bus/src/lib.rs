@@ -114,7 +114,6 @@ mod tests {
         assert!(!PlainBus.timing_trace_enabled());
     }
 
-
     #[test]
     fn event_end_tstate_matches_the_next_mcycle_boundary() {
         let fetch = Z80BusEvent {
