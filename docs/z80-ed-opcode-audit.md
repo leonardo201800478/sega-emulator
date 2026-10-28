@@ -12,12 +12,12 @@
 | Codificações tratadas por famílias explícitas no despachante | 78 |
 | Codificações que caem no fallback ED-NOP | 178 |
 | Famílias/codificações com implementação explícita | agrupadas na tabela abaixo |
-| Validação diferencial contra hardware/oráculo independente nesta auditoria | **Não executada** |
+| Codificações explícitas com ao menos um vetor semântico dirigido | 78/78 bytes cobertos por famílias, com profundidade desigual por condição |\n| Validação diferencial automatizada contra hardware/oráculo independente | **Não executada** |
 | Precisão ciclo a ciclo / traço ordenado de barramento | **Não implementada por esta interface** |
 
 A contagem de 78 considera as codificações distintas explicitamente reconhecidas pelos padrões e casos do `match`; inclui aliases de NEG, RETN/RETI e IM. As outras 178 codificações retornam 8 T-states pelo `_ => 8` final. Isso caracteriza um fallback funcional no código, não prova de que cada byte reservado seja um NOP em toda variante de CPU.
 
-O teste `every_primary_and_prefixed_encoding_is_classified_without_fallback_errors` percorre os 256 bytes ED e exige que `step()` não retorne erro. Como `execute_ed()` aceita bytes não reconhecidos pelo fallback, esse teste prova **aceitação estrutural**, não semântica, flags, memória, I/O, PC/R ou ciclos corretos para cada byte.
+O teste `every_primary_and_prefixed_encoding_is_classified_without_fallback_errors` continua sendo apenas um smoke test geral. A nova cobertura adiciona `all_256_ed_encodings_match_nominal_cycle_vectors`, que percorre cada segundo byte ED com uma expectativa de T-states, PC e total acumulado, e `every_ed_fallback_encoding_is_an_eight_tstate_no_op`, que verifica os 178 bytes do fallback. Esses testes comprovam execução e o contrato testado; não demonstram, sozinhos, que todos os resultados semânticos correspondem a silício.
 
 ## 2. Inventário das codificações explícitas
 
@@ -25,26 +25,26 @@ Os tempos listados são os retornados atualmente pelo núcleo (T-states nominais
 
 | Segundo byte ED | Instrução / família | Efeito implementado observado no código | T-states nominais | Evidência e lacunas |
 |---|---|---|---:|---|
-| `47` | LD I,A | Copia A para I | 9 | Há caso dentro do teste ED combinado; faltam vetores independentes específicos |
-| `4F` | LD R,A | Copia A para R | 9 | Sem teste dedicado encontrado nesta inspeção |
-| `57`, `5F` | LD A,I / LD A,R | Copia I/R para A; mantém C, atualiza S/Z/PV/X/Y e usa IFF2 para PV; arma estado interno `p` para a borda de interrupção | 9 | LD A,I é coberto indiretamente por teste de interrupção; falta matriz de flags completa para ambos |
-| `43, 53, 63, 73` | LD (nn),BC/DE/HL/SP | Escreve palavra em little-endian; WZ recebe nn+1 | 20 | Teste sintético cobre BC; DE/HL/SP, wrap e ordem por todos os pares ainda precisam de vetores dirigidos |
-| `4B, 5B, 6B, 7B` | LD BC/DE/HL/SP,(nn) | Lê palavra little-endian; WZ recebe nn+1 | 20 | Teste sintético cobre BC; faltam combinações e wrap |
-| `4A, 5A, 6A, 7A` | ADC HL,BC/DE/HL/SP | Usa carry de entrada e atualiza HL e flags aritméticas de 16 bits | 15 | Há helpers compartilhados; falta matriz ED completa independente |
-| `42, 52, 62, 72` | SBC HL,BC/DE/HL/SP | Usa borrow/carry de entrada e atualiza HL e flags aritméticas de 16 bits | 15 | Há helpers compartilhados; falta matriz ED completa independente |
-| `40,48,50,58,60,68,70,78` | IN r,(C) | Lê porta BC; destino código 6 descarta o valor; atualiza S/Z/PV/X/Y e preserva C; WZ=BC+1 | 12 | Sem matriz completa de valores/portas; IN (C) não altera registrador, mas altera flags |
-| `41,49,51,59,61,69,71,79` | OUT (C),r / OUT (C),0 | Escreve registrador para porta BC; código 6 escreve zero | 12 | `OUT (C),0` requer decisão/validação por variante; sem teste completo de saída de I/O |
-| `44,4C,54,5C,64,6C,74,7C` | NEG e aliases | Calcula 0−A usando helper de subtração e atualiza A/F | 8 | Um caso `ED 44` no teste combinado; aliases e fronteiras de flags não testados individualmente |
-| `45,4D,55,5D,65,6D,75,7D` | RETN / RETI / aliases | Todos executam pop de PC, copiam IFF2 para IFF1 e atualizam WZ | 14 | Existe teste sintético dos oito aliases para PC/SP/F/IFFs/R. O modelo não emite evento externo distinto para RETI/daisy chain |
-| `46,4E,66,6E` | IM 0 / aliases | Define modo de interrupção 0 | 8 | Testes dos modos de interrupção cobrem os modos; expandir validação por alias |
-| `56,76` | IM 1 | Define modo de interrupção 1 | 8 | Testes de INT cobrem IM1; alias específico não tem teste isolado |
-| `5E,7E` | IM 2 | Define modo de interrupção 2 | 8 | Testes de INT cobrem IM2; alias específico não tem teste isolado |
-| `67` | RRD | Troca nibbles entre A e (HL) segundo a operação RRD | 18 | Sem teste dedicado encontrado nesta inspeção |
-| `6F` | RLD | Troca nibbles entre A e (HL) segundo a operação RLD | 18 | Sem teste dedicado encontrado nesta inspeção |
-| `A0,A8,B0,B8` | LDI/LDD/LDIR/LDDR | Transfere byte (HL)→(DE), ajusta HL/DE/BC e flags; formas repetitivas recuam PC e retornam 21 T quando continuam | 16 / 21 | Um caso LDI é coberto no teste combinado; flags X/Y, término, repetição, limites e estado intermediário precisam de matriz diferencial |
-| `A1,A9,B1,B9` | CPI/CPD/CPIR/CPDR | Compara A com (HL), ajusta HL/BC e flags; formas repetitivas continuam enquanto BC≠0 e A≠valor | 16 / 21 | Sem cobertura completa observada; flags X/Y e WZ merecem prioridade |
-| `A2,AA,B2,BA` | INI/IND/INIR/INDR | Lê porta BC, escreve em (HL), ajusta HL/B, calcula flags e repete conforme B | 16 / 21 | Falta validação independente de I/O, flags, porta e ordem de acesso |
-| `A3,AB,B3,BB` | OUTI/OUTD/OTIR/OTDR | Lê (HL), escreve em porta baseada no B decrementado e C, ajusta HL/B, calcula flags e repete conforme B | 16 / 21 | Falta validação independente de porta, flags, ordem de acesso e comportamento de repetição |
+| `47` | LD I,A | Copia A para I | 9 | Vetor dirigido para LD I,A e LD R,A; faltam valores de fronteira adicionais |
+| `4F` | LD R,A | Copia A para R | 9 | Vetor dirigido confirma cópia dos oito bits de A; faltam casos adicionais |
+| `57`, `5F` | LD A,I / LD A,R | Copia I/R para A; mantém C, atualiza S/Z/PV/X/Y e usa IFF2 para PV; arma estado interno `p` para a borda de interrupção | 9 | Vetores dirigidos para I=0, I=0xA8, R com incremento de fetch, IFF2 e C; faltam mais combinações de interrupção |
+| `43, 53, 63, 73` | LD (nn),BC/DE/HL/SP | Escreve palavra em little-endian; WZ recebe nn+1 | 20 | Vetores dirigidos para BC/DE/HL/SP e ordem little-endian; wrap de endereço ainda pendente |
+| `4B, 5B, 6B, 7B` | LD BC/DE/HL/SP,(nn) | Lê palavra little-endian; WZ recebe nn+1 | 20 | Vetores dirigidos para BC/DE/HL/SP e WZ; wrap de endereço ainda pendente |
+| `4A, 5A, 6A, 7A` | ADC HL,BC/DE/HL/SP | Usa carry de entrada e atualiza HL e flags aritméticas de 16 bits | 15 | Todos os pares cobertos por vetores dirigidos; overflow, half-carry e carry de entrada têm casos específicos, mas não é varredura combinatória |
+| `42, 52, 62, 72` | SBC HL,BC/DE/HL/SP | Usa borrow/carry de entrada e atualiza HL e flags aritméticas de 16 bits | 15 | Todos os pares cobertos por vetores dirigidos; borrow e fronteiras aritméticas têm casos específicos, mas não é varredura combinatória |
+| `40,48,50,58,60,68,70,78` | IN r,(C) | Lê porta BC; destino código 6 descarta o valor; atualiza S/Z/PV/X/Y e preserva C; WZ=BC+1 | 12 | Teste com bus de I/O verifica os oito destinos, endereço BC e flags para valor 0xA5; falta varredura de valores/estados |
+| `41,49,51,59,61,69,71,79` | OUT (C),r / OUT (C),0 | Escreve registrador para porta BC; código 6 escreve zero | 12 | Teste com bus de I/O verifica os oito valores/endereços e preservação de flags; `OUT (C),0` permanece dependente da variante-alvo |
+| `44,4C,54,5C,64,6C,74,7C` | NEG e aliases | Calcula 0−A usando helper de subtração e atualiza A/F | 8 | Os oito aliases são comparados com A=0x80; faltam os demais valores de fronteira |
+| `45,4D,55,5D,65,6D,75,7D` | RETN / RETI / aliases | Todos executam pop de PC, copiam IFF2 para IFF1 e atualizam WZ | 14 | Vetores dirigidos percorrem os oito aliases, PC/SP e cópia IFF2→IFF1. O modelo não emite evento externo distinto para RETI/daisy chain |
+| `46,4E,66,6E` | IM 0 / aliases | Define modo de interrupção 0 | 8 | Todos os aliases IM 0 têm vetor dirigido |
+| `56,76` | IM 1 | Define modo de interrupção 1 | 8 | Ambos os aliases têm vetor dirigido; integração com INT também tem teste existente |
+| `5E,7E` | IM 2 | Define modo de interrupção 2 | 8 | Ambos os aliases têm vetor dirigido; integração com INT também tem teste existente |
+| `67` | RRD | Troca nibbles entre A e (HL) segundo a operação RRD | 18 | Vetor dirigido verifica A, memória, flags e WZ |
+| `6F` | RLD | Troca nibbles entre A e (HL) segundo a operação RLD | 18 | Vetor dirigido verifica A, memória, flags e WZ |
+| `A0,A8,B0,B8` | LDI/LDD/LDIR/LDDR | Transfere byte (HL)→(DE), ajusta HL/DE/BC e flags; formas repetitivas recuam PC e retornam 21 T quando continuam | 16 / 21 | Vetores dirigidos cobrem as quatro formas, direção, contador, flags selecionadas, repetição e término; limites e todas as flags ainda pendentes |
+| `A1,A9,B1,B9` | CPI/CPD/CPIR/CPDR | Compara A com (HL), ajusta HL/BC e flags; formas repetitivas continuam enquanto BC≠0 e A≠valor | 16 / 21 | Vetores dirigidos cobrem as quatro formas, decremento, match e continuação; flags X/Y/WZ e fronteiras de BC ainda pendentes |
+| `A2,AA,B2,BA` | INI/IND/INIR/INDR | Lê porta BC, escreve em (HL), ajusta HL/B, calcula flags e repete conforme B | 16 / 21 | Vetores dirigidos cobrem as quatro formas, endereço de porta, memória, decremento/incremento e repetição; flags não documentadas exigem validação de hardware |
+| `A3,AB,B3,BB` | OUTI/OUTD/OTIR/OTDR | Lê (HL), escreve em porta baseada no B decrementado e C, ajusta HL/B, calcula flags e repete conforme B | 16 / 21 | Vetores dirigidos cobrem as quatro formas, endereço/valor de saída, direção e repetição; flags não documentadas exigem validação de hardware |
 
 **Nota sobre aliases:** os padrões de NEG e RETN/RETI reconhecem oito bytes cada e executam um mesmo corpo. Para RETI, o núcleo não distingue a semântica externa de sinalização de fim de interrupção usada por controladores com daisy chain. A equivalência interna de retorno não prova equivalência do comportamento externo.
 
@@ -116,24 +116,48 @@ IN/OUT por BC tem caminho explícito, mas a interface `CpuBus` não representa f
 
 Os valores devolvidos pelo handler não codificam uma sequência de M1, leituras/escritas de memória, I/O, refresh ou wait states. A auditoria não encontrou um modelo de eventos ordenados dentro de `execute_ed()`. Portanto, mesmo valores nominais que coincidam com o manual não comprovam a temporização física.
 
-## 5. Matriz de testes e evidência atual
+## 5. Matriz de testes e evidência no SHA candidato
 
-| Área | Evidência encontrada no código | Classificação honesta |
+**SHA de código validado:** `e9776e705d0ff55bfc701a933ff7bea2d70c1974` (branch `test/exhaustive-z80-ed-opcodes`, PR #183).  
+**Escopo do resultado:** regressão determinística em CI; sem hardware físico, ROM de teste externa executada, nem comparação automatizada diferencial.
+
+| Área | Teste/evidência | Resultado |
 |---|---|---|
-| Aceitação dos 256 bytes ED | `every_primary_and_prefixed_encoding_is_classified_without_fallback_errors` percorre ED junto aos demais prefixos | **Cobertura estrutural**, não valida semântica |
-| LD I,A; LD A,I; NEG; LD (nn),BC; LD BC,(nn); LDI | `ed_prefix_loads_special_registers_arithmetic_and_block_transfer` | **Teste sintético dirigido parcial** |
-| RETN/RETI aliases | `test_retn_reti_aliases_restore_iff1_from_iff2` (registrado na documentação de cobertura) | **Teste sintético de estado**, sem sinal externo RETI |
-| IM 0/1/2 | `maskable_interrupt_modes_zero_one_and_two_use_their_vectors` | **Teste sintético de integração de interrupção**, não cobertura total dos aliases ED |
-| Flags e semântica de cada opcode ED | Não foi localizada uma matriz independente que valide cada entrada, estado inicial e saída | **INTEGRATION_PENDING / validação diferencial pendente** |
-| Temporização ciclo a ciclo | A API retorna T-states nominais por instrução | **TEMPORAL_PASS não atingido** |
+| Todos os 256 segundos bytes ED | `all_256_ed_encodings_match_nominal_cycle_vectors`: resultado, T-states retornados/acumulados e PC esperado por byte | **PASS** |
+| Os 178 bytes que usam fallback | `every_ed_fallback_encoding_is_an_eight_tstate_no_op`: 8 T-states, PC=2 e ausência de alterações nos registradores principais testados | **PASS** |
+| Transferência absoluta de palavras | `ed_absolute_word_loads_and_stores_cover_all_register_pairs`: BC/DE/HL/SP, little-endian e WZ | **PASS** |
+| ADC/SBC HL | `ed_adc_sbc_hl_vectors_cover_signed_overflow_half_carry_and_borrow` e `ed_adc_sbc_hl_decode_all_four_register_pairs`: todos os pares e casos aritméticos discriminantes | **PASS** |
+| Registradores especiais e flags | `ed_ld_i_a_and_ld_r_a_copy_accumulator_without_touching_flags`, `ed_ld_a_i_and_ld_a_r_update_flags_and_preserve_carry` | **PASS** |
+| NEG, IM e RETN/RETI | `ed_neg_aliases_produce_identical_results_and_flags`, `ed_interrupt_mode_aliases_select_the_documented_mode`, `ed_retn_reti_aliases_restore_iff1_and_pop_return_address` | **PASS** |
+| IN/OUT por BC | `ed_in_out_register_forms_use_bc_port_and_expected_data`: todos os destinos/fontes, endereço BC, flags de IN e saída zero do modelo | **PASS** |
+| RRD/RLD | `ed_rrd_rld_match_nibble_transfer_and_documented_flags`: nibbles, A, memória, flags e WZ | **PASS** |
+| LDI/LDD/LDIR/LDDR | `ed_block_transfer_vectors_check_copy_direction_counter_flags_and_repeat` | **PASS** |
+| CPI/CPD/CPIR/CPDR | `ed_block_compare_vectors_check_match_stop_repeat_and_flags`, `ed_cpd_decrements_hl_and_cpdr_stops_on_match` | **PASS** |
+| INI/IND/INIR/INDR e OUTI/OUTD/OTIR/OTDR | `ed_block_io_vectors_check_ports_memory_counter_and_repeat`, `ed_decrement_block_io_variants_update_hl_and_ports`: todos os oito opcodes, direção e endereços/valores de I/O | **PASS** |
+| Rust workspace | `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked` via workflows | **PASS** |
+| Núcleo SMS focado | formatação, lint e testes focados no SMS Core via workflow | **PASS** |
+| CI Python | formatação, lint e pytest do workflow geral | **PASS** |
 
-Os nomes de teste acima foram identificados por inspeção do código/documentação; esta auditoria não executou `cargo test` nem workflows. Não declarar PASS de execução com base apenas na existência dos testes.
+### Workflows no SHA `e9776e705d0ff55bfc701a933ff7bea2d70c1974`
+
+- [SMS Z80 Platform Validation](https://github.com/leonardo201800478/sega-emulator/actions/runs/40636388858) — **PASS**.
+- [SMS Core Fast Validation](https://github.com/leonardo201800478/sega-emulator/actions/runs/40636388894) — **PASS**.
+- [CI](https://github.com/leonardo201800478/sega-emulator/actions/runs/40636388836) — **PASS**.
+
+### Limites e conflitos de referência
+
+- Os 256 bytes agora têm um vetor de execução/ciclos/PC; isso não é o mesmo que 256 validações semânticas exaustivas para todos os valores possíveis de registradores, flags, memória e estado de interrupção.
+- Cada uma das 78 codificações explícitas está coberta por ao menos um vetor dirigido em sua família, mas vários vetores cobrem apenas um ou poucos estados iniciais. Falta uma comparação diferencial automatizada contra um oráculo independente com procedência/licença verificadas.
+- Os 178 bytes de fallback são testados conforme a política atual de ED-NOP do Z80 clássico. A validação não demonstra que todos os clones/variantes tenham comportamento idêntico.
+- Há uma divergência relevante sobre flags de I/O de bloco: o manual ZiLOG UM008011-0816 descreve C como não afetado em INI/OUTI, enquanto *The Undocumented Z80 Documented* descreve C/H derivados do carry da soma de dados/endereço. O vetor INI discrimina o comportamento C/H implementado com base na referência secundária. Isso deve permanecer identificado como hipótese de compatibilidade NMOS até comparação com ROM independente/hardware; não é prova universal para clones.
+- `OUT (C),0` é testado como saída de zero no modelo atual, mas fontes secundárias registram variação entre lotes/implementações de Z80. Essa escolha precisa permanecer vinculada à variante-alvo.
+- Não há validação de traços ordenados de barramento, wait states ou precisão ciclo a ciclo. Os números verificados são T-states nominais agregados.
 
 ## 6. Critérios para fechar a auditoria ED
 
-1. Manter um vetor fixo por codificação explícita, cobrindo registradores, memória/I/O, PC, SP, F, IFFs, R, WZ e duração nominal aplicável.
+1. Expandir vetores fixos por codificação explícita para cobrir registradores, memória/I/O, PC, SP, F, IFFs, R, WZ e duração nominal aplicável em múltiplos estados iniciais.
 2. Para instruções paramétricas, adicionar fronteiras e estados iniciais discriminantes; para blocos repetitivos, testar iteração que continua e a última iteração.
-3. Validar aliases separadamente e documentar a variante-alvo.
+3. Expandir casos de fronteira para cada alias e documentar a variante-alvo; os aliases básicos já têm cobertura dirigida.
 4. Comparar com ao menos um oráculo independente de procedência/licença verificadas e, quando possível, com uma segunda referência sem ancestralidade comum conhecida.
 5. Para bytes fallback, manter teste estrutural separado da decisão de compatibilidade. Confirmar a política de ED-NOP contra documentação e variante; não tratar fallback como instrução documentada sem fonte.
 6. Executar e registrar checks no SHA candidato exato: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings`, `cargo test --workspace --locked`, workflows pertinentes e seus logs.
@@ -143,7 +167,7 @@ Os nomes de teste acima foram identificados por inspeção do código/documenta�
 
 1. ZiLOG, **Z80 CPU User Manual**, UM008011-0816 (2016), especialmente tabela de opcodes e descrições individuais de instruções ED, flags e temporização. [PDF oficial](https://www.zilog.com/docs/z80/um0080.pdf).
 2. ZiLOG, **Z80 Family CPU User Manual** (2001), usado no projeto como comparação histórica; conferir visualmente o PDF quando a extração textual estiver corrompida.
-3. [Z80.info — The Undocumented Z80 Documented](https://z80.info/zip/z80-documented.pdf), referência secundária para comportamentos não documentados; não substitui a fonte primária nem a identificação de variante.
+3. [Z80.info — The Undocumented Z80 Documented](https://z80.info/zip/z80-documented.pdf), referência secundária para comportamentos não documentados; não substitui a fonte primária nem a identificação de variante. Há divergência explícita com a tabela simplificada do manual ZiLOG para flags de I/O de bloco; a documentação acima registra essa incerteza.
 4. Código auditado: [`native/sms_core/src/cpu.rs`](https://github.com/leonardo201800478/sega-emulator/blob/main/native/sms_core/src/cpu.rs), função `execute_ed()` e testes no mesmo arquivo.
 
-**Conclusão:** a implementação atual reconhece explicitamente 78 dos 256 segundos bytes ED e encaminha os outros 178 para um retorno de 8 T-states. Há cobertura sintética para alguns caminhos importantes, mas não evidência suficiente para declarar o espaço ED semanticamente validado. A prioridade é transformar a matriz acima em vetores discriminantes e diferencialmente verificados, sem ampliar o escopo para temporização ciclo a ciclo antes de fechar a semântica funcional.
+**Conclusão atualizada:** os 256 segundos bytes ED têm testes de execução/ciclos/PC; os 178 bytes de fallback têm testes do contrato ED-NOP; e todas as 78 codificações explícitas têm pelo menos um vetor semântico dirigido por família. Os workflows passaram no SHA indicado. Ainda não há evidência suficiente para declarar validação semântica exaustiva ou diferencial do espaço ED: faltam matrizes combinatórias mais profundas, resolução dos conflitos de referência, oráculo independente automatizado e validação em hardware/ROM externa. A precisão ciclo a ciclo continua pendente.
