@@ -1,6 +1,6 @@
 # Matriz semântica executável do Z80 — SMS
 
-**Base:** branch `audit/z80-executable-semantic-matrix`, criada a partir de `ed1aee7c8f9c80feafbd4019699c5a9e52872886`.
+**Base:** branch `audit/z80-prefix-classification-matrix`, criada a partir de `280aabdb4a0567e5238da9bf1eb971ad5d594c85`.
 **Propósito:** ligar cada família semântica aos testes existentes e impedir que a cobertura de dispatch seja confundida com correção semântica.
 **Limite:** esta matriz é um gate incremental. Não declara completude semântica do Z80, compatibilidade universal com clones nem precisão temporal.
 
@@ -13,12 +13,14 @@ O teste `native/sms_core/tests/z80_semantic_matrix.rs` enumera 7 espaços × 256
 | Base | Instrução base ou prefixo CB/DD/ED/FD |
 | CB | Família CB atribuída |
 | ED | Instrução ED atribuída ou fallback para byte não atribuído |
-| DD / FD | Candidato à semântica IX/IY, prefixo aninhado, ou prefixo ignorável conforme o decoder |
+| DD / FD | 81 formas index-sensitive, 4 exceções de memória que usam H/L reais, 167 formas que ignoram o prefixo e 4 bytes de prefixo |
 | DD-CB / FD-CB | Família indexed-CB |
 
 A matriz contabiliza **78 bytes ED atribuídos** e **178 bytes ED não atribuídos**, para os quais o runtime atual segue o fallback ED-NOP. O teste também executa um passo para cada codificação em cada espaço e exige que a CPU retorne T-states agregados positivos sem `UnsupportedOpcode`.
 
-**Interpretação obrigatória:** esse gate prova enumeração, classificação conforme o inventário e ausência de falha de dispatch nos estados de teste escolhidos. Não prova que a instrução produziu os registradores, flags, efeitos de memória/I/O ou T-states corretos. Em particular, os espaços DD/FD incluem instruções que ignoram o prefixo; o candidato não é automaticamente uma nova operação indexada.
+Para DD/FD, a classificação diferencia instruções que substituem HL por IX/IY, operações com H/L ou (HL), as quatro formas especiais `LD H/L,(IX/IY+d)` e `LD (IX/IY+d),H/L` que usam os registradores H/L reais, prefixos aninhados e opcodes que ignoram o prefixo. A lista é uma classificação de opcodes para direcionar a validação; não é, isoladamente, prova da semântica executada pelo decoder.
+
+**Interpretação obrigatória:** esse gate prova enumeração, classificação conforme o inventário e ausência de falha de dispatch nos estados de teste escolhidos. Não prova que a instrução produziu os registradores, flags, efeitos de memória/I/O ou T-states corretos. Os testes `z80_indexed_semantics.rs` e `z80_expanded_opcode_matrix.rs` fornecem evidência semântica direcionada, mas ainda não cobrem todas as formas DD/FD, prefixos repetidos e exceções.
 
 ## 2. Matriz de evidência semântica por família
 
@@ -34,7 +36,7 @@ Os estados abaixo descrevem a evidência versionada no repositório, não uma ce
 | Saltos, JR/DJNZ, CALL/RET/RST | `z80_expanded_opcode_matrix.rs`, `z80_singlestep_reference_vectors.rs` | PARCIAL | Todas as condições tomadas/não tomadas, deslocamentos -128/+127, wraparound e efeitos WZ |
 | Pilha, PUSH/POP e EX (SP),HL | `z80_expanded_opcode_matrix.rs`, `z80_memory_integration.rs` | PARCIAL | SP em 0000/FFFF, ordem dos acessos e todas as combinações de registradores |
 | EX AF,AF' / EXX e bancos alternativos | `z80_singlestep_reference_vectors.rs`, `z80_expanded_opcode_matrix.rs` | DIRECIONADA | Sequências combinadas com flags Q/P e alternância repetida |
-| IX/IY, deslocamentos e H/L | `z80_indexed_semantics.rs`, `z80_expanded_opcode_matrix.rs` | PARCIAL | Matriz completa de substituição, exceções H/L com (IX/IY+d), deslocamentos extremos e prefixos repetidos |
+| IX/IY, deslocamentos e H/L | `z80_indexed_semantics.rs`, `z80_expanded_opcode_matrix.rs` | PARCIAL — classificação DD/FD refinada; vetores dirigidos | Matriz completa de substituição, exceções H/L com (IX/IY+d), deslocamentos extremos e prefixos repetidos |
 | DD-CB / FD-CB | `z80_indexed_semantics.rs`, `z80_expanded_opcode_matrix.rs` | PARCIAL | Todas as 256 formas por prefixo, destino de registrador, flags e WZ; o smoke gate não basta |
 | ED: aritmética de 16 bits e transferências absolutas | `z80_singlestep_reference_vectors.rs`, `z80_expanded_opcode_matrix.rs` | PARCIAL | Cada forma e par de registradores, carry/half-carry/overflow e wraparound |
 | ED: I/R, LD A,I/R, IM e RETN/RETI | `z80_interrupt_semantics.rs`, `z80_singlestep_reference_vectors.rs` | DIRECIONADA | Interações de interrupção e estado interno em todas as fronteiras |
@@ -55,13 +57,12 @@ Uma linha só pode receber **SHORT_PASS** quando o conjunto de testes direcionad
 
 Cada novo vetor externo deve registrar URL, commit, licença e proveniência. O corpus SingleStepTests/Z80 está fixado em `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7`, mas seu README informa ancestralidade no núcleo Z80 do Ares. Ele é útil para regressão diferencial, não um oráculo independente do Ares.
 
-## 4. Aceitação do gate desta PR
+## 4. Aceitação desta atualização
 
-- [x] As sete áreas de opcode estão enumeradas explicitamente.
-- [x] Cada área percorre todos os 256 bytes.
-- [x] Os bytes ED atribuídos e o fallback são contados separadamente.
-- [x] O smoke gate exige retorno sem `UnsupportedOpcode` e T-states agregados positivos.
-- [x] A documentação separa classificação, evidência semântica e precisão temporal.
-- [ ] Testes executados no SHA candidato — executar via GitHub Actions antes de merge.
-- [ ] Revisão independente da classificação ED e da matriz documental.
-- [ ] Fechamento das lacunas semânticas remanescentes — trabalho posterior, não declarado concluído por esta PR.
+- [x] Os sete espaços de opcode continuam enumerados integralmente.
+- [x] DD/FD distinguem formas index-sensitive, exceções H/L, prefixos ignorados e prefixos aninhados.
+- [x] A classificação verifica exemplos positivos e negativos explícitos.
+- [x] A documentação separa classificação de prova semântica.
+- [ ] CI, SMS Core Fast Validation e SMS Z80 Platform Validation no SHA candidato.
+- [ ] Revisão independente da classificação DD/FD e das contagens.
+- [ ] Fechamento das lacunas semânticas remanescentes — não declarado concluído por esta PR.
