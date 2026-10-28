@@ -339,10 +339,10 @@ impl Z80 {
                 let subtract = old_flags & FLAG_N != 0;
                 let mut correction = 0u8;
                 let mut carry = old_flags & FLAG_C != 0;
-                if old_flags & FLAG_H != 0 || (!subtract && (a & 0x0F) > 9) {
+                if old_flags & FLAG_H != 0 || (a & 0x0F) > 9 {
                     correction |= 0x06;
                 }
-                if carry || (!subtract && a > 0x99) {
+                if carry || a > 0x99 {
                     correction |= 0x60;
                     carry = true;
                 }
