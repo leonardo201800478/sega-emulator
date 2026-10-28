@@ -81,37 +81,69 @@ fn exhaustive_add_adc_sub_sbc_and_cp_match_reference_equations() {
             let (lhs, rhs) = (lhs as u8, rhs as u8);
             let expected_add = reference_add(lhs, rhs, false);
             let actual_add = add8(lhs, rhs);
-            assert_eq!((actual_add.value, actual_add.flags), expected_add, "ADD {lhs:02X},{rhs:02X}");
+            assert_eq!(
+                (actual_add.value, actual_add.flags),
+                expected_add,
+                "ADD {lhs:02X},{rhs:02X}"
+            );
 
             let expected_sub = reference_sub(lhs, rhs, false, false);
             let actual_sub = sub8(lhs, rhs);
-            assert_eq!((actual_sub.value, actual_sub.flags), expected_sub, "SUB {lhs:02X},{rhs:02X}");
+            assert_eq!(
+                (actual_sub.value, actual_sub.flags),
+                expected_sub,
+                "SUB {lhs:02X},{rhs:02X}"
+            );
 
             let expected_cp = reference_sub(lhs, rhs, false, true);
             let actual_cp = cp8(lhs, rhs);
-            assert_eq!((actual_cp.value, actual_cp.flags), expected_cp, "CP {lhs:02X},{rhs:02X}");
+            assert_eq!(
+                (actual_cp.value, actual_cp.flags),
+                expected_cp,
+                "CP {lhs:02X},{rhs:02X}"
+            );
 
             for carry in [false, true] {
                 let expected_adc = reference_add(lhs, rhs, carry);
                 let actual_adc = adc8(lhs, rhs, carry);
-                assert_eq!((actual_adc.value, actual_adc.flags), expected_adc, "ADC {lhs:02X},{rhs:02X}, carry={carry}");
+                assert_eq!(
+                    (actual_adc.value, actual_adc.flags),
+                    expected_adc,
+                    "ADC {lhs:02X},{rhs:02X}, carry={carry}"
+                );
 
                 let expected_sbc = reference_sub(lhs, rhs, carry, false);
                 let actual_sbc = sbc8(lhs, rhs, carry);
-                assert_eq!((actual_sbc.value, actual_sbc.flags), expected_sbc, "SBC {lhs:02X},{rhs:02X}, borrow={carry}");
+                assert_eq!(
+                    (actual_sbc.value, actual_sbc.flags),
+                    expected_sbc,
+                    "SBC {lhs:02X},{rhs:02X}, borrow={carry}"
+                );
             }
 
             let expected_and = reference_logic(lhs & rhs, true);
             let actual_and = and8(lhs, rhs);
-            assert_eq!((actual_and.value, actual_and.flags), expected_and, "AND {lhs:02X},{rhs:02X}");
+            assert_eq!(
+                (actual_and.value, actual_and.flags),
+                expected_and,
+                "AND {lhs:02X},{rhs:02X}"
+            );
 
             let expected_or = reference_logic(lhs | rhs, false);
             let actual_or = or8(lhs, rhs);
-            assert_eq!((actual_or.value, actual_or.flags), expected_or, "OR {lhs:02X},{rhs:02X}");
+            assert_eq!(
+                (actual_or.value, actual_or.flags),
+                expected_or,
+                "OR {lhs:02X},{rhs:02X}"
+            );
 
             let expected_xor = reference_logic(lhs ^ rhs, false);
             let actual_xor = xor8(lhs, rhs);
-            assert_eq!((actual_xor.value, actual_xor.flags), expected_xor, "XOR {lhs:02X},{rhs:02X}");
+            assert_eq!(
+                (actual_xor.value, actual_xor.flags),
+                expected_xor,
+                "XOR {lhs:02X},{rhs:02X}"
+            );
         }
     }
 }
