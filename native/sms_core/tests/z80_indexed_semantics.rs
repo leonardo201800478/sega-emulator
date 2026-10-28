@@ -61,9 +61,9 @@ fn indexed_memory_forms_use_h_l_while_register_only_forms_use_index_halves() {
     assert_eq!(cpu.r, 2);
     assert_eq!(cpu.total_tstates, 8);
 
-    // FD 6D: LD IYH,IYL.
+    // FD 65: LD IYH,IYL.
     let mut bus = TestBus::default();
-    bus.0[..2].copy_from_slice(&[0xFD, 0x6D]);
+    bus.0[..2].copy_from_slice(&[0xFD, 0x65]);
     let mut cpu = Z80::default();
     cpu.iy = 0x5678;
 
