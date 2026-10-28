@@ -260,6 +260,13 @@ Esta ampliação é incremental e não equivale à cobertura total do conjunto Z
 
 A amostra SingleStepTests/Z80 permanece fixada no commit MIT `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7`. Esta etapa adiciona 18 casos de instruções (além dos 12 existentes): LD BC,nn; LD (BC),A; DJNZ; JR/JR NZ; LD (nn),A; LDI/LDIR; LD IX/IY,nn; RLC (HL); SET 0,(HL); ADC/SBC HL,rr; LD (nn),BC; RETN; LD IX/IY,d. O caso LD IX,nn também repete um vetor já existente para verificar o novo helper de RAM, portanto não representa uma nova combinação de opcode.
 
-Os vetores novos comparam os registradores/estado arquitetural representados pelo core, T-states agregados e, por meio de um helper dedicado, endereços/valores de memória escritos quando o fixture os especifica. Isso melhora a observabilidade de instruções com efeitos de memória; não compara ainda cada transação temporal do barramento nem valida todos os 1.000 vetores por arquivo do upstream.
+Os vetores integrados comparam os registradores/estado arquitetural representados pelo core e os T-states agregados. As fixtures fornecem os bytes de RAM iniciais, mas o harness atual não verifica sistematicamente todos os bytes finais escritos; esse é um gate pendente para validar por completo as instruções com efeitos de memória. Também não compara cada transação temporal do barramento nem valida todos os vetores do upstream.
 
 **Limites e próximos gates:** a expansão é representativa, não cobertura total. Ainda é necessário executar e classificar os casos no CI, corrigir divergências confirmadas, ampliar sistematicamente todos os opcodes e variantes de prefixos, testar interrupções e wraparound, e desenvolver uma camada temporal para ciclos de barramento. O corpus upstream tem muitos arquivos de vetores e não deve ser importado integralmente sem avaliação de tamanho/licença/viabilidade. Não declarar “Z80 100% modelado” apenas pela contagem de vetores.
+
+
+### Estado validado da cobertura vetorial — PR #146
+
+A suite de referência foi ampliada para 48 testes nomeados no arquivo `native/sms_core/tests/z80_singlestep_reference_vectors.rs`, cobrindo instruções base, acesso à memória, saltos/chamadas/retornos, CB, ED, transferências em bloco, aritmética de 16 bits e prefixos DD/FD. Há um caso CPIR explicitamente ignorado devido a divergência em flag não documentada; ele não conta como aprovado.
+
+**Limites de validação:** os vetores comparam estado arquitetural e T-states agregados. Embora os bytes iniciais de RAM sejam carregados a partir das fixtures, a comparação sistemática da RAM final ainda não está integrada nesta revisão. A sequência temporal dos ciclos de barramento também não é validada. O core segue como modelo de instruções com T-states nominais, não como implementação Z80 cycle-accurate. O runtime SG-1000 permanece intocado.
