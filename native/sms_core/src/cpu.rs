@@ -1,10 +1,10 @@
-//! Native Z80 instruction engine for the standalone Master System core.
+//! Consolidated native Z80 instruction engine for the Master System core.
 //!
-//! This is an independent SMS-owned copy of the Rust implementation used by
-//! the SG-1000 core. The SG-1000 source is intentionally left untouched.
-//! Execution reports nominal instruction T-states; it does not claim
-//! cycle-by-cycle bus accuracy. Opcode coverage and semantics require
-//! independent vectors and the SMS-specific bus integration tests.
+//! This implementation merges the SG-1000 CPU work with SMS-specific fixes
+//! for WZ/MEMPTR tracking and indexed-CB coverage. The SG-1000 source remains
+//! unchanged. Execution reports nominal instruction T-states; it does not
+//! claim cycle-by-cycle bus accuracy. Semantic coverage still requires
+//! independent vectors and bus-level validation.
 
 use crate::alu::{adc8, add8, and8, cp8, or8, sbc8, sub8, xor8};
 use crate::bus::CpuBus;
@@ -260,6 +260,7 @@ impl Z80 {
             0x08 => {
                 std::mem::swap(&mut self.registers.a, &mut self.alternate.a);
                 std::mem::swap(&mut self.registers.f, &mut self.alternate.f);
+                self.q = self.registers.f;
                 4
             }
             0xD9 => {
@@ -338,7 +339,7 @@ impl Z80 {
                 if old_flags & FLAG_H != 0 || (!subtract && (a & 0x0F) > 9) {
                     correction |= 0x06;
                 }
-                if carry || a > 0x99 {
+                if carry || (!subtract && a > 0x99) {
                     correction |= 0x60;
                     carry = true;
                 }
@@ -1556,6 +1557,20 @@ mod tests {
     }
 
     #[test]
+    fn daa_with_subtract_flag_does_not_apply_addition_only_correction() {
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..1].copy_from_slice(&[0x27]); // DAA
+        let mut cpu = Z80::default();
+        cpu.registers.a = 0x9A;
+        cpu.registers.f = FLAG_N; // subtract path, H=0 and C=0
+
+        assert_eq!(cpu.step(&mut bus), Ok(4));
+        assert_eq!(cpu.registers.a, 0x9A);
+        assert_ne!(cpu.registers.f & FLAG_N, 0);
+        assert_eq!(cpu.registers.f & FLAG_C, 0);
+    }
+
+    #[test]
     fn djnz_uses_taken_and_not_taken_timing() {
         let mut bus = TestBus([0; 0x10000]);
         bus.0[..4].copy_from_slice(&[0x10, 0xFE, 0x10, 0x00]);
@@ -2049,6 +2064,7 @@ mod tests {
 
         assert_eq!(cpu.step(&mut bus), Ok(4)); // EX AF,AF'
         assert_eq!((cpu.registers.a, cpu.registers.f), (0x34, 0x56));
+        assert_eq!(cpu.q, 0x56);
         assert_eq!((cpu.alternate.a, cpu.alternate.f), (0x12, 0xA5));
         assert_eq!(cpu.step(&mut bus), Ok(4)); // EXX
         assert_eq!(cpu.registers.bc(), 0xABCD);
