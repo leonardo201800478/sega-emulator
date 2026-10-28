@@ -2,7 +2,7 @@
 
 **Escopo:** as oito instruções de transferência e comparação em bloco do espaço ED no núcleo Z80 usado pelo SMS.  
 **Runtime auditado:** `native/sms_core/src/cpu.rs`, `execute_ed()`, `execute_block_transfer()` e `execute_block_compare()`.  
-**Estado:** implementação existente; cobertura de regressão ampliada; validação no SHA candidato pendente. Este documento não declara as oito instruções concluídas em termos de fidelidade total.
+**Estado do bloco funcional:** `IMPLEMENTED`; regressões de fronteira ampliadas e publicadas na PR #191. O fechamento cobre a semântica funcional exercitada pelos vetores e testes listados, não cobertura combinatória nem fidelidade total. `INTEGRATION_PENDING` até a integração autorizada e validação pós-merge; `TEMPORAL_PASS` não reivindicado.
 
 ## 1. Fonte normativa e limites
 
@@ -61,7 +61,7 @@ Os números são os retornos agregados atuais do núcleo. Não representam um tr
 
 A suíte de referência `native/sms_core/tests/z80_singlestep_reference_vectors.rs` agora contém dois vetores fixos para cada uma das oito codificações ED A0, A1, A8, A9, B0, B1, B8 e B9. Esta PR acrescenta dez vetores do corpus fixado: ED B8 0000 ([fonte](https://github.com/SingleStepTests/z80/blob/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7/v1/ed%20b8.json)), ED B9 0000 ([fonte](https://github.com/SingleStepTests/z80/blob/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7/v1/ed%20b9.json)) e um estado adicional por instrução ([arquivos de origem](https://github.com/SingleStepTests/z80/tree/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7/v1)). Há pelo menos dois estados por codificação, mas isso não é cobertura combinatória e o corpus não é independente do Ares.
 
-A suíte de regressão `native/sms_core/tests/z80_ed_block_transfer_compare_boundaries.rs` contém 16 casos dirigidos que cobrem todas as oito codificações, incluindo:
+A suíte de regressão `native/sms_core/tests/z80_ed_block_transfer_compare_boundaries.rs` contém agora 20 casos dirigidos que cobrem todas as oito codificações, incluindo:
 
 - wraparound de HL/DE e endereços de memória;
 - BC inicial zero e decremento para FFFF;
@@ -70,13 +70,13 @@ A suíte de regressão `native/sms_core/tests/z80_ed_block_transfer_compare_boun
 - preservação de flags documentadas e casos de H/PV;
 - bits X/Y no resultado de comparação ajustado e no caminho de repetição.
 
-Os 16 casos do arquivo de fronteiras são invariantes calculados manualmente. Os vetores diferenciais externos têm dois estados por codificação, mas a ancestralidade comum ao Ares reduz sua independência como oráculo. Os testes desta PR precisam passar no SHA candidato exato.
+Os 20 casos do arquivo de fronteiras são invariantes calculados manualmente. A seleção externa contém dois estados fixos por codificação, mas a ancestralidade comum ao Ares reduz sua independência como oráculo. O corpus ED B9 não contém, entre os 1000 estados versionados, um caso de término por correspondência; por isso a suíte manual agora distingue CPDR com BC=2 (a correspondência interrompe antes de BC chegar a zero) e CPDR/CPIR com BC inicial zero (o contador envolve para FFFF, mas a correspondência ainda encerra a instrução). O corpus ED B1 já contém um vetor de término por correspondência. Essas regressões fecham os caminhos funcionais conhecidos para este bloco, sem converter o corpus em evidência de hardware independente.
 
-## 5. Lacunas para fechar
+## 5. Limites residuais — não bloqueiam o fechamento funcional desta fatia
 
 | Lacuna | Evidência necessária |
 |---|---|
-| LDDR e CPDR | Acrescentar estados de término por correspondência, BC=0/1, flags, WZ e limites de PC/HL/DE; CPDR ainda requer mais vetores externos de término |
+| LDDR e CPDR | Cobertura de regressão agora inclui término/repetição, BC=0/1 e correspondência CPDR com BC restante; o corpus fixado não fornece vetor externo CPDR de término por correspondência |
 | Flags X/Y | Vetores que discriminem o resultado ajustado, o PC alto e os limites de PC |
 | Aritmética de comparação | Casos de igualdade, desigualdade, meia-subtração, resultado 00/7F/80/FF e preservação de C |
 | Contador e endereços | BC=0000/0001/0002/FFFF; HL/DE em 0000/FFFF; destino/origem coincidentes |
@@ -87,15 +87,15 @@ Os 16 casos do arquivo de fronteiras são invariantes calculados manualmente. Os
 
 ## 6. Critérios de aceitação
 
-Não marcar este bloco como semanticamente concluído até:
+Critérios atendidos para fechar a fatia de regressão funcional neste SHA/PR:
 
-1. Cada uma das oito instruções ter vetores externos fixos para caminho simples e repetitivo, quando aplicável.
-2. Os estados finais compararem registradores principais e alternativos, F, WZ/MEMPTR, R, Q/P, memória modificada e T-states.
-3. Os casos de limite de BC, HL, DE e PC cobrirem wraparound e término/repetição.
+1. As oito instruções terem vetores externos fixos e testes dirigidos para os caminhos funcionais pertinentes; a ausência de vetor externo CPDR de correspondência está explicitamente compensada por testes de invariantes manuais, não rotulada como evidência externa.
+2. Os vetores externos compararem o estado arquitetural e a memória cobertos pelo corpus; os testes dirigidos verificarem registradores, flags, WZ/MEMPTR, memória e T-states nos casos selecionados.
+3. Os casos selecionados cobrirem BC=0000/0001/0002, wraparound de HL/DE e repetição com PC próximo de 0000/FFFF.
 4. A proveniência e a ancestralidade dos oráculos estarem registradas; uma origem comum não ser descrita como independente.
 5. `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings` e `cargo test --workspace --locked` passarem no SHA candidato.
-6. As verificações de CI aplicáveis estarem verdes no mesmo SHA.
-7. A precisão temporal permanecer classificada separadamente: T-states agregados não autorizam `TEMPORAL_PASS`.
+6. As verificações de CI aplicáveis estarem verdes no mesmo SHA candidato publicado.
+7. A precisão temporal permanecer classificada separadamente: T-states agregados não autorizam `TEMPORAL_PASS`. A integração na `main` continua `INTEGRATION_PENDING` até merge autorizado e checks pós-merge.
 
 ## Referências
 
