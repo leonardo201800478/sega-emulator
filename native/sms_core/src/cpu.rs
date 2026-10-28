@@ -1757,6 +1757,24 @@ mod tests {
     }
 
     #[test]
+    fn every_indexed_cb_encoding_is_classified_for_ix_and_iy() {
+        for prefix in [0xDD, 0xFD] {
+            for opcode in 0_u16..=255 {
+                let mut bus = TestBus([0; 0x10000]);
+                bus.0[..4].copy_from_slice(&[prefix, 0xCB, 0x00, opcode as u8]);
+                let mut cpu = Z80::default();
+                cpu.ix = 0xC000;
+                cpu.iy = 0xC000;
+                bus.0[0xC000] = 0xA5;
+                assert!(
+                    cpu.step(&mut bus).is_ok(),
+                    "indexed prefix 0x{prefix:02X}, CB opcode 0x{opcode:02X} returned an error"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn indexed_prefix_supports_ix_iy_displacements_and_indexed_cb() {
         let mut bus = TestBus([0; 0x10000]);
         bus.0[..28].copy_from_slice(&[
