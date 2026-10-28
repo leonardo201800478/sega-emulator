@@ -7,8 +7,11 @@
 //! memory writes, and I/O port effects. Upstream cycle-trace length is compared
 //! as aggregate T-states only; ordered bus events are not compared.
 //!
-//! These vectors are independent of the implementation's directed unit tests,
-//! but do not constitute physical-hardware evidence or exhaustive state coverage.
+//! These vectors are distinct from the implementation's directed unit tests,
+//! but the upstream README says the corpus was translated from Ares' Z80 core.
+//! Therefore, they are not an independent implementation oracle of Ares-derived
+//! behavior. They also do not constitute physical-hardware evidence or exhaustive
+//! state coverage.
 
 use sega_sms_core::{CpuBus, Z80};
 
