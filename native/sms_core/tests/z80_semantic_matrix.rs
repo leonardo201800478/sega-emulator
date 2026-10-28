@@ -38,24 +38,12 @@ const SPACES: [Space; 7] = [
 ];
 
 fn is_assigned_ed(opcode: u8) -> bool {
-    matches!(
-        opcode,
-        0x40..=0x7F
-            if matches!(
-                opcode,
-                0x40 | 0x41 | 0x42 | 0x43 | 0x44 | 0x45 | 0x46 | 0x47 | 0x48 | 0x49
-                    | 0x4A | 0x4B | 0x4C | 0x4D | 0x4E | 0x4F | 0x50 | 0x51 | 0x52
-                    | 0x53 | 0x54 | 0x55 | 0x56 | 0x57 | 0x58 | 0x59 | 0x5A | 0x5B
-                    | 0x5C | 0x5D | 0x5E | 0x5F | 0x60 | 0x61 | 0x62 | 0x63 | 0x64
-                    | 0x65 | 0x66 | 0x67 | 0x68 | 0x69 | 0x6A | 0x6B | 0x6C | 0x6D
-                    | 0x6E | 0x6F | 0x70 | 0x71 | 0x72 | 0x73 | 0x74 | 0x75 | 0x76
-                    | 0x77 | 0x78 | 0x79 | 0x7A | 0x7B | 0x7C | 0x7D | 0x7E | 0x7F
-            )
-    ) && opcode != 0x77 && opcode != 0x7F || matches!(
-        opcode,
-        0xA0 | 0xA1 | 0xA2 | 0xA3 | 0xA8 | 0xA9 | 0xAA | 0xAB | 0xB0 | 0xB1
-            | 0xB2 | 0xB3 | 0xB8 | 0xB9 | 0xBA | 0xBB
-    )
+    matches!(opcode, 0x40..=0x76 | 0x78..=0x7E)
+        || matches!(
+            opcode,
+            0xA0 | 0xA1 | 0xA2 | 0xA3 | 0xA8 | 0xA9 | 0xAA | 0xAB | 0xB0 | 0xB1
+                | 0xB2 | 0xB3 | 0xB8 | 0xB9 | 0xBA | 0xBB
+        )
 }
 
 fn classify(space: Space, opcode: u8) -> Classification {
@@ -164,9 +152,13 @@ fn every_opcode_space_encoding_executes_one_step_without_unsupported_opcode() {
             let cycles = cpu.step(&mut bus).unwrap_or_else(|error| {
                 panic!("{space:?} opcode {opcode:02X} was not dispatched: {error:?}")
             });
-            assert!(cycles > 0, "{space:?} opcode {opcode:02X} returned zero T-states");
+            assert!(
+                cycles > 0,
+                "{space:?} opcode {opcode:02X} returned zero T-states"
+            );
             assert_eq!(
-                cpu.total_tstates, u64::from(cycles),
+                cpu.total_tstates,
+                u64::from(cycles),
                 "{space:?} opcode {opcode:02X} must account for its aggregate T-states"
             );
         }
