@@ -73,10 +73,26 @@ impl State {
     fn assert_matches(self, cpu: &Z80, name: &str) {
         assert_eq!(cpu.registers.pc, self.pc, "{name}: PC");
         assert_eq!(cpu.registers.sp, self.sp, "{name}: SP");
-        assert_eq!((cpu.registers.a, cpu.registers.f), (self.a, self.f), "{name}: AF");
-        assert_eq!((cpu.registers.b, cpu.registers.c), (self.b, self.c), "{name}: BC");
-        assert_eq!((cpu.registers.d, cpu.registers.e), (self.d, self.e), "{name}: DE");
-        assert_eq!((cpu.registers.h, cpu.registers.l), (self.h, self.l), "{name}: HL");
+        assert_eq!(
+            (cpu.registers.a, cpu.registers.f),
+            (self.a, self.f),
+            "{name}: AF"
+        );
+        assert_eq!(
+            (cpu.registers.b, cpu.registers.c),
+            (self.b, self.c),
+            "{name}: BC"
+        );
+        assert_eq!(
+            (cpu.registers.d, cpu.registers.e),
+            (self.d, self.e),
+            "{name}: DE"
+        );
+        assert_eq!(
+            (cpu.registers.h, cpu.registers.l),
+            (self.h, self.l),
+            "{name}: HL"
+        );
         assert_eq!((cpu.i, cpu.r), (self.i, self.r), "{name}: IR");
         assert_eq!((cpu.ix, cpu.iy), (self.ix, self.iy), "{name}: IX/IY");
         assert_eq!(cpu.wz, self.wz, "{name}: WZ");
