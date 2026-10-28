@@ -1027,12 +1027,7 @@ impl Z80 {
 
     /// Execute ED-prefixed Z80 instructions. Unassigned ED encodings are
     /// documented as two-byte NOPs on the classic Z80.
-    fn execute_ed<B: CpuBus>(
-        &mut self,
-        bus: &mut B,
-        opcode: u8,
-        trace_unprefixed: bool,
-    ) -> u32 {
+    fn execute_ed<B: CpuBus>(&mut self, bus: &mut B, opcode: u8, trace_unprefixed: bool) -> u32 {
         match opcode {
             0x47 => {
                 self.i = self.registers.a;
@@ -1152,12 +1147,8 @@ impl Z80 {
                 self.set_szp_xy_flags_preserving_carry(self.registers.a);
                 18
             }
-            0xA0 | 0xA8 | 0xB0 | 0xB8 => {
-                self.execute_block_transfer(bus, opcode, trace_unprefixed)
-            },
-            0xA1 | 0xA9 | 0xB1 | 0xB9 => {
-                self.execute_block_compare(bus, opcode, trace_unprefixed)
-            },
+            0xA0 | 0xA8 | 0xB0 | 0xB8 => self.execute_block_transfer(bus, opcode, trace_unprefixed),
+            0xA1 | 0xA9 | 0xB1 | 0xB9 => self.execute_block_compare(bus, opcode, trace_unprefixed),
             0xA2 | 0xAA | 0xB2 | 0xBA | 0xA3 | 0xAB | 0xB3 | 0xBB => {
                 self.execute_block_io(bus, opcode)
             }
@@ -1219,24 +1210,8 @@ impl Z80 {
     }
 
     #[inline]
-    fn emit_timing_event<B: CpuBus>(
-        &self,
-        bus: &mut B,
-        instruction_pc: u16,
-        tstate_offset: u32,
-        kind: Z80BusEventKind,
-        address: Option<u16>,
-        data: Option<u8>,
-        duration_tstates: u8,
-    ) {
-        bus.observe_timing_event(Z80BusEvent {
-            instruction_pc,
-            tstate_offset,
-            kind,
-            address,
-            data,
-            duration_tstates,
-        });
+    fn emit_timing_event<B: CpuBus>(bus: &mut B, event: Z80BusEvent) {
+        bus.observe_timing_event(event);
     }
 
     fn execute_block_transfer<B: CpuBus>(
@@ -1252,49 +1227,57 @@ impl Z80 {
         };
         let instruction_pc = self.registers.pc.wrapping_sub(2);
         if trace_enabled {
-            self.emit_timing_event(
+            Self::emit_timing_event(
                 bus,
-                instruction_pc,
-                0,
-                Z80BusEventKind::OpcodeFetch,
-                Some(instruction_pc),
-                Some(0xED),
-                4,
+                Z80BusEvent {
+                    instruction_pc,
+                    tstate_offset: 0,
+                    kind: Z80BusEventKind::OpcodeFetch,
+                    address: Some(instruction_pc),
+                    data: Some(0xED),
+                    duration_tstates: 4,
+                },
             );
-            self.emit_timing_event(
+            Self::emit_timing_event(
                 bus,
-                instruction_pc,
-                4,
-                Z80BusEventKind::OpcodeFetch,
-                Some(instruction_pc.wrapping_add(1)),
-                Some(opcode),
-                4,
+                Z80BusEvent {
+                    instruction_pc,
+                    tstate_offset: 4,
+                    kind: Z80BusEventKind::OpcodeFetch,
+                    address: Some(instruction_pc.wrapping_add(1)),
+                    data: Some(opcode),
+                    duration_tstates: 4,
+                },
             );
         }
         let address = self.registers.hl();
         let value = bus.read_memory(address);
         if trace_enabled {
-            self.emit_timing_event(
+            Self::emit_timing_event(
                 bus,
-                instruction_pc,
-                8,
-                Z80BusEventKind::MemoryRead,
-                Some(address),
-                Some(value),
-                3,
+                Z80BusEvent {
+                    instruction_pc,
+                    tstate_offset: 8,
+                    kind: Z80BusEventKind::MemoryRead,
+                    address: Some(address),
+                    data: Some(value),
+                    duration_tstates: 3,
+                },
             );
         }
         let destination = self.registers.de();
         bus.write_memory(destination, value);
         if trace_enabled {
-            self.emit_timing_event(
+            Self::emit_timing_event(
                 bus,
-                instruction_pc,
-                11,
-                Z80BusEventKind::MemoryWrite,
-                Some(destination),
-                Some(value),
-                5,
+                Z80BusEvent {
+                    instruction_pc,
+                    tstate_offset: 11,
+                    kind: Z80BusEventKind::MemoryWrite,
+                    address: Some(destination),
+                    data: Some(value),
+                    duration_tstates: 5,
+                },
             );
         }
         self.registers
@@ -1316,14 +1299,16 @@ impl Z80 {
             flags = (flags & !FLAG_XY) | (((self.registers.pc >> 8) as u8) & FLAG_XY);
             self.set_flags(flags);
             if trace_enabled {
-                self.emit_timing_event(
+                Self::emit_timing_event(
                     bus,
-                    instruction_pc,
-                    16,
-                    Z80BusEventKind::Internal,
-                    None,
-                    None,
-                    5,
+                    Z80BusEvent {
+                        instruction_pc,
+                        tstate_offset: 16,
+                        kind: Z80BusEventKind::Internal,
+                        address: None,
+                        data: None,
+                        duration_tstates: 5,
+                    },
                 );
             }
             21
@@ -1346,45 +1331,53 @@ impl Z80 {
         };
         let instruction_pc = self.registers.pc.wrapping_sub(2);
         if trace_enabled {
-            self.emit_timing_event(
+            Self::emit_timing_event(
                 bus,
-                instruction_pc,
-                0,
-                Z80BusEventKind::OpcodeFetch,
-                Some(instruction_pc),
-                Some(0xED),
-                4,
+                Z80BusEvent {
+                    instruction_pc,
+                    tstate_offset: 0,
+                    kind: Z80BusEventKind::OpcodeFetch,
+                    address: Some(instruction_pc),
+                    data: Some(0xED),
+                    duration_tstates: 4,
+                },
             );
-            self.emit_timing_event(
+            Self::emit_timing_event(
                 bus,
-                instruction_pc,
-                4,
-                Z80BusEventKind::OpcodeFetch,
-                Some(instruction_pc.wrapping_add(1)),
-                Some(opcode),
-                4,
+                Z80BusEvent {
+                    instruction_pc,
+                    tstate_offset: 4,
+                    kind: Z80BusEventKind::OpcodeFetch,
+                    address: Some(instruction_pc.wrapping_add(1)),
+                    data: Some(opcode),
+                    duration_tstates: 4,
+                },
             );
         }
         let address = self.registers.hl();
         let value = bus.read_memory(address);
         if trace_enabled {
-            self.emit_timing_event(
+            Self::emit_timing_event(
                 bus,
-                instruction_pc,
-                8,
-                Z80BusEventKind::MemoryRead,
-                Some(address),
-                Some(value),
-                3,
+                Z80BusEvent {
+                    instruction_pc,
+                    tstate_offset: 8,
+                    kind: Z80BusEventKind::MemoryRead,
+                    address: Some(address),
+                    data: Some(value),
+                    duration_tstates: 3,
+                },
             );
-            self.emit_timing_event(
+            Self::emit_timing_event(
                 bus,
-                instruction_pc,
-                11,
-                Z80BusEventKind::Internal,
-                None,
-                None,
-                5,
+                Z80BusEvent {
+                    instruction_pc,
+                    tstate_offset: 11,
+                    kind: Z80BusEventKind::Internal,
+                    address: None,
+                    data: None,
+                    duration_tstates: 5,
+                },
             );
         }
         let accumulator = self.registers.a;
@@ -1413,14 +1406,16 @@ impl Z80 {
             flags = (flags & !FLAG_XY) | (((self.registers.pc >> 8) as u8) & FLAG_XY);
             self.set_flags(flags);
             if trace_enabled {
-                self.emit_timing_event(
+                Self::emit_timing_event(
                     bus,
-                    instruction_pc,
-                    16,
-                    Z80BusEventKind::Internal,
-                    None,
-                    None,
-                    5,
+                    Z80BusEvent {
+                        instruction_pc,
+                        tstate_offset: 16,
+                        kind: Z80BusEventKind::Internal,
+                        address: None,
+                        data: None,
+                        duration_tstates: 5,
+                    },
                 );
             }
             21
