@@ -23,7 +23,9 @@ enum Classification {
     AssignedCbInstruction,
     AssignedEdInstruction,
     UnassignedEdFallback,
-    IndexSpaceCandidate,
+    IndexSensitive,
+    IndexedMemoryUsesRealHl,
+    IgnoredIndexPrefix,
     IndexedCbInstruction,
 }
 
@@ -45,6 +47,24 @@ fn is_assigned_ed(opcode: u8) -> bool {
         )
 }
 
+fn is_index_sensitive(opcode: u8) -> bool {
+    if matches!(
+        opcode,
+        0x09 | 0x19 | 0x21..=0x26 | 0x29..=0x2E | 0x34..=0x36 | 0x39
+            | 0xE1 | 0xE3 | 0xE5 | 0xE9 | 0xF9
+    ) {
+        return true;
+    }
+
+    if (0x40..=0x7F).contains(&opcode) && opcode != 0x76 {
+        let destination = (opcode >> 3) & 0x07;
+        let source = opcode & 0x07;
+        return matches!(destination, 4..=6) || matches!(source, 4..=6);
+    }
+
+    (0x80..=0xBF).contains(&opcode) && matches!(opcode & 0x07, 4..=6)
+}
+
 fn classify(space: Space, opcode: u8) -> Classification {
     match space {
         Space::Base => match opcode {
@@ -54,15 +74,14 @@ fn classify(space: Space, opcode: u8) -> Classification {
         Space::Cb => Classification::AssignedCbInstruction,
         Space::Ed if is_assigned_ed(opcode) => Classification::AssignedEdInstruction,
         Space::Ed => Classification::UnassignedEdFallback,
-        Space::Dd | Space::Fd => {
-            // DD/FD can substitute IX/IY, be ignored, or introduce another
-            // prefix. Per-opcode semantics are documented in the companion matrix.
-            if matches!(opcode, 0xCB | 0xDD | 0xED | 0xFD) {
-                Classification::Prefix
-            } else {
-                Classification::IndexSpaceCandidate
-            }
-        }
+        Space::Dd | Space::Fd => match opcode {
+            0xCB | 0xDD | 0xED | 0xFD => Classification::Prefix,
+            // When indexed memory is paired with H/L, these forms use the
+            // ordinary H/L registers rather than IXH/IXL or IYH/IYL.
+            0x66 | 0x6E | 0x74 | 0x75 => Classification::IndexedMemoryUsesRealHl,
+            _ if is_index_sensitive(opcode) => Classification::IndexSensitive,
+            _ => Classification::IgnoredIndexPrefix,
+        },
         Space::DdCb | Space::FdCb => Classification::IndexedCbInstruction,
     }
 }
@@ -131,6 +150,46 @@ fn every_encoding_in_every_opcode_space_has_an_explicit_classification() {
         ed_fallback, 178,
         "unassigned ED bytes must be classified as fallback"
     );
+}
+
+#[test]
+fn dd_fd_classification_distinguishes_indexed_forms_and_ignored_prefixes() {
+    for space in [Space::Dd, Space::Fd] {
+        let mut counts = [0usize; 4];
+        for opcode in u8::MIN..=u8::MAX {
+            match classify(space, opcode) {
+                Classification::Prefix => counts[3] += 1,
+                Classification::IndexSensitive => counts[0] += 1,
+                Classification::IndexedMemoryUsesRealHl => counts[1] += 1,
+                Classification::IgnoredIndexPrefix => counts[2] += 1,
+                _ => panic!("{space:?} opcode {opcode:02X} has an invalid classification"),
+            }
+        }
+
+        assert_eq!(counts[0], 81, "{space:?}: index-sensitive encodings");
+        assert_eq!(counts[1], 4, "{space:?}: H/L memory exceptions");
+        assert_eq!(counts[2], 167, "{space:?}: ignored index prefixes");
+        assert_eq!(counts[3], 4, "{space:?}: nested prefix bytes");
+    }
+
+    assert_eq!(classify(Space::Dd, 0x65), Classification::IndexSensitive);
+    assert_eq!(
+        classify(Space::Fd, 0x66),
+        Classification::IndexedMemoryUsesRealHl
+    );
+    assert_eq!(
+        classify(Space::Dd, 0x74),
+        Classification::IndexedMemoryUsesRealHl
+    );
+    assert_eq!(
+        classify(Space::Fd, 0x41),
+        Classification::IgnoredIndexPrefix
+    );
+    assert_eq!(
+        classify(Space::Dd, 0x76),
+        Classification::IgnoredIndexPrefix
+    );
+    assert_eq!(classify(Space::Dd, 0xCB), Classification::Prefix);
 }
 
 #[test]
