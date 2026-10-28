@@ -55,3 +55,31 @@ pub trait CpuBus {
     /// has no effect on emulation; this hook is not yet emitted by every opcode.
     fn observe_timing_event(&mut self, _event: Z80BusEvent) {}
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{Z80BusEvent, Z80BusEventKind};
+
+    #[test]
+    fn event_end_tstate_matches_the_next_mcycle_boundary() {
+        let fetch = Z80BusEvent {
+            instruction_pc: 0xC000,
+            tstate_offset: 0,
+            kind: Z80BusEventKind::OpcodeFetch,
+            address: Some(0xC000),
+            data: Some(0xED),
+            duration_tstates: 4,
+        };
+        let next_fetch = Z80BusEvent {
+            instruction_pc: 0xC000,
+            tstate_offset: 4,
+            kind: Z80BusEventKind::OpcodeFetch,
+            address: Some(0xC001),
+            data: Some(0xA0),
+            duration_tstates: 4,
+        };
+
+        assert_eq!(fetch.end_tstate(), next_fetch.tstate_offset);
+        assert_eq!(next_fetch.end_tstate(), 8);
+    }
+}
