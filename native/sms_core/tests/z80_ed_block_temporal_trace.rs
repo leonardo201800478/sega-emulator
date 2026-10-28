@@ -219,8 +219,14 @@ fn assert_tstate_samples_match(
 ) {
     assert_eq!(actual.len(), expected.len());
     for (index, (actual, expected)) in actual.iter().zip(expected).enumerate() {
-        assert_eq!(actual.tstate_offset, index as u32, "offset at T-state {index}");
-        assert_eq!(actual.address, expected.address, "address at T-state {index}");
+        assert_eq!(
+            actual.tstate_offset, index as u32,
+            "offset at T-state {index}"
+        );
+        assert_eq!(
+            actual.address, expected.address,
+            "address at T-state {index}"
+        );
         assert_eq!(actual.data, expected.data, "data at T-state {index}");
         let flags = [
             if actual.rd { 'r' } else { '-' },
@@ -229,7 +235,11 @@ fn assert_tstate_samples_match(
             if actual.iorq { 'i' } else { '-' },
         ];
         let actual_signals: String = flags.iter().copied().collect();
-        assert_eq!(actual_signals.as_str(), expected.signals, "signals at T-state {index}");
+        assert_eq!(
+            actual_signals.as_str(),
+            expected.signals,
+            "signals at T-state {index}"
+        );
         let expected_phase = match index {
             0 | 1 | 4 | 5 => Z80TStatePhase::OpcodeFetch,
             2 | 3 | 6 | 7 => Z80TStatePhase::Refresh,
