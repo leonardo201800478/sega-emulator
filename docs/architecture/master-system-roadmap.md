@@ -242,3 +242,12 @@ Essas alterações são sustentadas pela comparação com os vetores fixados; n�
 - O runtime SG-1000 não foi alterado.
 
 **Próximo gate:** ampliar o corpus por classes de instrução, incluir vetores para ED block operations, prefixos indexados, wraparound, flags X/Y, interrupções e comparação de efeitos de memória. Para cada divergência, preservar um caso mínimo reproduzível e distinguir discrepância do core, limitação do harness e divergência entre o modelo do corpus e a evidência documental/hardware. Ainda não existe validação de ciclo de barramento nem máquina SMS standalone completa.
+
+
+### Expansão de vetores Z80 — PR de cobertura adicional
+
+Base externa fixada: [SingleStepTests/Z80](https://github.com/SingleStepTests/z80/tree/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7/v1), commit `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7`, licença MIT. Foram adicionados 12 vetores iniciais adicionais para LD rr,nn; LD (BC),A; INC/DEC de pares e registradores; RLCA; ADD HL,BC; DJNZ; JR e JR NZ. Os vetores são fixtures fixas; nenhum corpus massivo é incorporado ao repositório.
+
+O harness compara registradores e latches expostos, PC/SP e T-states agregados por instrução. **Limitação mantida:** a memória final após escritas não é comparada ainda; por isso, os casos que escrevem em RAM verificam estado arquitetural e temporização agregada, não o efeito completo na memória. As listas de ciclos do corpus não são usadas para validar a ordem de transações de barramento.
+
+Esta ampliação é incremental e não equivale à cobertura total do conjunto Z80: o upstream contém milhares de ficheiros/vetores e inclui comportamentos que exigem suporte de harness para ciclos, interrupções e memória. Continuar por famílias, adicionando comparação de RAM antes de considerar validadas instruções que escrevem memória.
