@@ -428,6 +428,8 @@ impl Z80 {
                     self.registers.de()
                 };
                 bus.write_memory(address, self.registers.a);
+                self.wz = (u16::from(self.registers.a) << 8)
+                    | (address.wrapping_add(1) & 0x00FF);
                 7
             }
             0x0A | 0x1A => {
@@ -437,6 +439,7 @@ impl Z80 {
                     self.registers.de()
                 };
                 self.registers.a = bus.read_memory(address);
+                self.wz = address.wrapping_add(1);
                 7
             }
             0x22 | 0x32 => {
@@ -480,6 +483,7 @@ impl Z80 {
                 let hl = self.registers.hl();
                 let result = u32::from(hl) + u32::from(value);
                 let result16 = result as u16;
+                self.wz = hl.wrapping_add(1);
                 let preserved = self.registers.f & (FLAG_S | FLAG_Z | FLAG_PV);
                 let mut flags = preserved | ((result16 >> 8) as u8 & FLAG_XY);
                 if (hl & 0x0FFF) + (value & 0x0FFF) > 0x0FFF {
@@ -517,6 +521,7 @@ impl Z80 {
                         .registers
                         .pc
                         .wrapping_add_signed(i16::from(displacement));
+                    self.wz = self.registers.pc;
                     13
                 } else {
                     8
@@ -529,6 +534,7 @@ impl Z80 {
                         .registers
                         .pc
                         .wrapping_add_signed(i16::from(displacement));
+                    self.wz = self.registers.pc;
                     12
                 } else {
                     7
@@ -578,12 +584,14 @@ impl Z80 {
             }
             0xC9 => {
                 self.registers.pc = self.pop16(bus);
+                self.wz = self.registers.pc;
                 10
             }
             0xCD => {
                 let target = self.fetch16(bus);
                 self.push16(bus, self.registers.pc);
                 self.registers.pc = target;
+                self.wz = target;
                 17
             }
             0xC2 | 0xCA | 0xD2 | 0xDA | 0xE2 | 0xEA | 0xF2 | 0xFA => {
@@ -643,7 +651,9 @@ impl Z80 {
                 7
             }
             0xC3 => {
-                self.registers.pc = self.fetch16(bus);
+                let target = self.fetch16(bus);
+                self.registers.pc = target;
+                self.wz = target;
                 10
             }
             opcode if opcode & 0xC7 == 0xC7 => {
