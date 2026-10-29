@@ -262,9 +262,7 @@ class RomLibraryDialog(QDialog):
         self.rom_list.setWrapping(False)
         self.rom_list.setResizeMode(QListWidget.ResizeMode.Adjust)
         self.rom_list.setMovement(QListWidget.Movement.Static)
-        self.rom_list.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAsNeeded
-        )
+        self.rom_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.rom_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.rom_list.itemSelectionChanged.connect(self._update_launch_state)
         self.rom_list.itemDoubleClicked.connect(lambda item: self._launch_selected())
@@ -311,9 +309,7 @@ class RomLibraryDialog(QDialog):
         saved = self.settings.value(f"rom_directories/{system}", [], type=list)
         if saved:
             return [
-                str(Path(value).expanduser())
-                for value in saved
-                if str(value).strip()
+                str(Path(value).expanduser()) for value in saved if str(value).strip()
             ]
         documents = QStandardPaths.writableLocation(
             QStandardPaths.StandardLocation.DocumentsLocation
