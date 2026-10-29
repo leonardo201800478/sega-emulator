@@ -14,10 +14,21 @@ def _machine() -> NativeSMSMachine:
     # Program: set tone channel 0 and loop forever.
     rom = bytes(
         [
-            0x3E, 0x90, 0xD3, 0x7F,
-            0x3E, 0x85, 0xD3, 0x7F,
-            0x3E, 0x12, 0xD3, 0x7F,
-            0xC3, 0x00, 0x00,
+            0x3E,
+            0x90,
+            0xD3,
+            0x7F,
+            0x3E,
+            0x85,
+            0xD3,
+            0x7F,
+            0x3E,
+            0x12,
+            0xD3,
+            0x7F,
+            0xC3,
+            0x00,
+            0x00,
         ]
     )
     return NativeSMSMachine(rom, 44_100, False)
