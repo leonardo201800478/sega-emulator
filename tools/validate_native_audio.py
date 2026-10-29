@@ -14,11 +14,11 @@ from __future__ import annotations
 import argparse
 import csv
 import math
-import pathlib
 import statistics
 import struct
 import sys
 import time
+from pathlib import Path
 
 from sega_emulator.frontend.qt.wasapi_audio import NativeAudioOutput
 
@@ -86,7 +86,7 @@ def _percentile(values: list[float], percentile: float) -> float:
     return ordered[max(0, index)]
 
 
-def _write_trace(path: pathlib.Path, rows: list[dict[str, int | float | str]]) -> None:
+def _write_trace(path: Path, rows: list[dict[str, int | float | str]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fields = (
         "backend",
