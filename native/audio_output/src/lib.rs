@@ -232,7 +232,7 @@ fn run_wasapi_worker(
         let mut audio_client = device
             .get_iaudioclient()
             .map_err(|error| error.to_string())?;
-        let format = WaveFormat::new(16, 16, &SampleType::Int, sample_rate, 1, None);
+        let format = WaveFormat::new(16, 16, &SampleType::Int, sample_rate as usize, 1, None);
         let block_align = format.get_blockalign() as usize;
         let (default_period, _minimum_period) = audio_client
             .get_device_period()
