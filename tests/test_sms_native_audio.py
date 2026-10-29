@@ -77,7 +77,6 @@ def test_sms_pal_profile_selects_pal_psg_clock() -> None:
     assert machine.psg_clock_hz == 3_546_895
 
 
-
 def test_sms_python_adapter_drains_pcm_without_changing_tstates() -> None:
     machine = SMSMachine(
         bytes(
