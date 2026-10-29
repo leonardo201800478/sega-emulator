@@ -119,6 +119,7 @@ def test_open_library_uses_cached_index_without_starting_scan(
     qt_app, settings, tmp_path, monkeypatch
 ):
     dialog = RomLibraryDialog(settings)
+    dialog._index_path = tmp_path / "library-index.json"
     rom_path = tmp_path / "cached.sms"
     rom_path.write_bytes(b"cached rom")
     from sega_emulator.rom_library import RomEntry, RomLibrary
