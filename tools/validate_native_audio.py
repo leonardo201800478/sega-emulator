@@ -132,7 +132,7 @@ def _run_backend(
             write_started = time.monotonic()
             output.write_pcm(pcm)
             write_duration = time.monotonic() - write_started
-            work_duration = cycle_start * 0 + generation_duration + write_duration
+            work_duration = generation_duration + write_duration
 
             generation_ms.append(generation_duration * 1000.0)
             write_ms.append(write_duration * 1000.0)
@@ -173,11 +173,9 @@ def _run_backend(
     elapsed = time.monotonic() - started
     if trace_csv is not None and rows:
         try:
-            trace_path = trace_csv
-            if trace_csv.stem and len((trace_csv.parent / f"{trace_csv.stem}_{backend}{trace_csv.suffix}").name) > 0:
-                trace_path = trace_csv.with_name(
-                    f"{trace_csv.stem}_{backend}{trace_csv.suffix}"
-                )
+            trace_path = trace_csv.with_name(
+                f"{trace_csv.stem}_{backend}{trace_csv.suffix}"
+            )
             _write_trace(trace_path, rows)
             print(f"Trace de ciclos salvo em: {trace_path}")
         except OSError as exc:
@@ -250,7 +248,7 @@ def main() -> int:
     if args.queue_blocks not in {2, 4, 8}:
         parser.error("--queue-blocks deve ser 2, 4 ou 8")
     if not 20.0 <= args.frequency <= 10_000.0:
-        parser.error("--frequency deve estar entre 20 and 10000 Hz")
+        parser.error("--frequency deve estar entre 20 e 10000 Hz")
 
     backends = ("wasapi", "xaudio2") if args.backend == "both" else (args.backend,)
     results = [
