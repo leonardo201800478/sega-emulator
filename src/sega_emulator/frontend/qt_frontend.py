@@ -815,12 +815,12 @@ def run(initial_path: Path | None = None) -> None:
                     str(exc),
                 )
                 return
-        if updated.audio_enabled and selected_audio_driver == "disabled":
-            selected_audio_driver = "wasapi"
         audio_device_changed = (
             updated.audio_enabled != preferences.audio_enabled
             or updated.audio_sample_rate != preferences.audio_sample_rate
             or updated.audio_buffer_size != preferences.audio_buffer_size
+            or updated.audio_balance != preferences.audio_balance
+            or updated.audio_queue_blocks != preferences.audio_queue_blocks
             or (
                 updated.audio_enabled
                 and selected_audio_driver != "disabled"
