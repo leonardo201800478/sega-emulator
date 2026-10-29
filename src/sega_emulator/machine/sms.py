@@ -6,10 +6,10 @@ only validates inputs and forwards operations across the PyO3 boundary.
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 import hashlib
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 
 from sega_emulator.rom_loader import LoadedRom
 
