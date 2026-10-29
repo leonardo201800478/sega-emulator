@@ -3,6 +3,7 @@
 //! This is an instruction-stepping machine shell, not a complete console:
 //! VDP, PSG/FM, interrupt generation, and a frame scheduler remain absent.
 
+use crate::SmsCoreError;
 use crate::bus::CpuBus;
 use crate::cartridge::CartridgeImage;
 use crate::config::SmsMachineConfig;
@@ -10,22 +11,16 @@ use crate::cpu::{CpuError, Z80};
 use crate::input::{ControllerButtons, SmsInputState};
 use crate::io::{SmsIo, SmsIoError};
 use crate::memory::SmsMemory;
-use crate::SmsCoreError;
 
 /// Lens selection latched by writes to the SegaScope address range $FFF8-$FFFB.
 ///
 /// It reports the hardware latch only; stereoscopic image generation and
 /// frame-synchronized host shutter output require the future VDP/scheduler.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SegaScopeLens {
+    #[default]
     Right,
     Left,
-}
-
-impl Default for SegaScopeLens {
-    fn default() -> Self {
-        Self::Right
-    }
 }
 
 /// Observable state of the SegaScope left/right shutter control latch.
@@ -61,7 +56,11 @@ impl<'a> SmsMachineBus<'a> {
         io: &'a mut SmsIo,
         sega_scope: &'a mut SegaScopeState,
     ) -> Self {
-        Self { memory, io, sega_scope }
+        Self {
+            memory,
+            io,
+            sega_scope,
+        }
     }
 }
 
@@ -124,11 +123,7 @@ impl SmsMachine {
     /// The returned T-state count is nominal instruction timing, not cycle-exact
     /// machine timing.
     pub fn step(&mut self) -> Result<u32, CpuError> {
-        let mut bus = SmsMachineBus::new(
-            &mut self.memory,
-            &mut self.io,
-            &mut self.sega_scope,
-        );
+        let mut bus = SmsMachineBus::new(&mut self.memory, &mut self.io, &mut self.sega_scope);
         self.cpu.step(&mut bus)
     }
 
@@ -191,7 +186,9 @@ mod tests {
     #[test]
     fn cpu_fetches_cartridge_rom_and_uses_the_same_mapper_memory_for_ram() {
         // LD A,$42; LD ($C000),A; LD A,($C000); LD ($C001),A
-        let rom = [0x3E, 0x42, 0x32, 0x00, 0xC0, 0x3A, 0x00, 0xC0, 0x32, 0x01, 0xC0];
+        let rom = [
+            0x3E, 0x42, 0x32, 0x00, 0xC0, 0x3A, 0x00, 0xC0, 0x32, 0x01, 0xC0,
+        ];
         let mut machine = SmsMachine::new(rom.to_vec()).unwrap();
         for _ in 0..4 {
             machine.step().unwrap();
@@ -206,7 +203,15 @@ mod tests {
         // IN A,($DC) reads (A << 8) | $DC; decoder uses the low byte.
         let rom = [0xDB, 0xDC];
         let mut machine = SmsMachine::new(rom.to_vec()).unwrap();
-        machine.set_controller(1, ControllerButtons { up: true, ..Default::default() }).unwrap();
+        machine
+            .set_controller(
+                1,
+                ControllerButtons {
+                    up: true,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
         machine.step().unwrap();
         assert_eq!(machine.cpu().registers.a & 1, 0);
     }
@@ -214,10 +219,10 @@ mod tests {
     #[test]
     fn mouse_trigger_reaches_the_same_active_low_sms_button_bit() {
         let mut machine = SmsMachine::new(vec![0x00]).unwrap();
-        machine.set_light_phaser_player(Some(1)).unwrap();
         let mut input = SmsInputState::default();
         input.set_light_phaser_aim(100, 70, true);
         machine.set_input(input).unwrap();
+        machine.set_light_phaser_player(Some(1)).unwrap();
         assert_eq!(machine.read_port(0xDC) & 0x10, 0);
     }
 
@@ -229,6 +234,6 @@ mod tests {
         machine.step().unwrap();
         assert_eq!(machine.sega_scope().lens(), SegaScopeLens::Left);
         assert_eq!(machine.read_memory(0xFFF8), 0x01);
-        assert_eq!(machine.read_memory(0xCFF8), 0x01);
+        assert_eq!(machine.read_memory(0xDFF8), 0x01);
     }
 }

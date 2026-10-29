@@ -120,17 +120,33 @@ impl SmsIo {
         let p2 = self.input.player_2;
         let mut value = 0xFF;
 
-        if p1.up { value &= !(1 << 0); }
-        if p1.down { value &= !(1 << 1); }
-        if p1.left { value &= !(1 << 2); }
-        if p1.right { value &= !(1 << 3); }
-        if p1.button_1 || (self.input.light_phaser_player == Some(1)
-            && self.input.light_phaser.trigger_pressed) {
+        if p1.up {
+            value &= !(1 << 0);
+        }
+        if p1.down {
+            value &= !(1 << 1);
+        }
+        if p1.left {
+            value &= !(1 << 2);
+        }
+        if p1.right {
+            value &= !(1 << 3);
+        }
+        if p1.button_1
+            || (self.input.light_phaser_player == Some(1)
+                && self.input.light_phaser.trigger_pressed)
+        {
             value &= !(1 << 4);
         }
-        if p1.button_2 { value &= !(1 << 5); }
-        if p2.up { value &= !(1 << 6); }
-        if p2.down { value &= !(1 << 7); }
+        if p1.button_2 {
+            value &= !(1 << 5);
+        }
+        if p2.up {
+            value &= !(1 << 6);
+        }
+        if p2.down {
+            value &= !(1 << 7);
+        }
         value
     }
 
@@ -138,22 +154,29 @@ impl SmsIo {
         let p2 = self.input.player_2;
         let mut value = 0xFF;
 
-        if p2.left { value &= !(1 << 0); }
-        if p2.right { value &= !(1 << 1); }
-        if p2.button_1 || (self.input.light_phaser_player == Some(2)
-            && self.input.light_phaser.trigger_pressed) {
+        if p2.left {
+            value &= !(1 << 0);
+        }
+        if p2.right {
+            value &= !(1 << 1);
+        }
+        if p2.button_1
+            || (self.input.light_phaser_player == Some(2)
+                && self.input.light_phaser.trigger_pressed)
+        {
             value &= !(1 << 2);
         }
-        if p2.button_2 { value &= !(1 << 3); }
-        if self.input.reset_pressed { value &= !(1 << 4); }
+        if p2.button_2 {
+            value &= !(1 << 3);
+        }
+        if self.input.reset_pressed {
+            value &= !(1 << 4);
+        }
         // CONT is present on the standard 8-bit console and reads high.
         // SMS II/Japanese variants may differ; no model selection exists yet.
         value |= 1 << 5;
 
-        for (player, direction_bit, level_bit, input_bit) in [
-            (1, 1, 5, 6),
-            (2, 3, 7, 7),
-        ] {
+        for (player, direction_bit, level_bit, input_bit) in [(1, 1, 5, 6), (2, 3, 7, 7)] {
             let is_input = self.io_control & (1 << direction_bit) != 0;
             let level = self.io_control & (1 << level_bit) != 0;
             let light_pulse = self.input.light_phaser_player == Some(player)
@@ -198,12 +221,23 @@ mod tests {
         let mut io = SmsIo::default();
         io.set_controller(
             1,
-            ControllerButtons { up: true, button_1: true, ..Default::default() },
-        ).unwrap();
+            ControllerButtons {
+                up: true,
+                button_1: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
         io.set_controller(
             2,
-            ControllerButtons { down: true, left: true, button_2: true, ..Default::default() },
-        ).unwrap();
+            ControllerButtons {
+                down: true,
+                left: true,
+                button_2: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
         assert_eq!(io.read_port(0xDC), 0x6E);
         assert_eq!(io.read_port(0xDD), 0xF6);
     }
@@ -226,14 +260,15 @@ mod tests {
     #[test]
     fn mouse_light_phaser_trigger_maps_to_controller_button_one() {
         let mut io = SmsIo::default();
-        io.set_light_phaser_player(Some(1)).unwrap();
         let mut input = SmsInputState::default();
         input.set_light_phaser_aim(160, 100, true);
         io.set_input(input).unwrap();
+        io.set_light_phaser_player(Some(1)).unwrap();
         assert_eq!(io.read_port(0xDC) & (1 << 4), 0);
         assert_ne!(io.read_port(0xDD) & (1 << 6), 0);
         input.set_light_pulse(true);
-        io.set_input(input);
+        io.set_input(input).unwrap();
+        io.set_light_phaser_player(Some(1)).unwrap();
         assert_eq!(io.read_port(0xDD) & (1 << 6), 0);
     }
 
