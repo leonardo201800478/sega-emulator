@@ -14,6 +14,12 @@ const FRAME_SIZE: usize = STRIDE * SMS_VDP_MAX_HEIGHT;
 const VBLANK: u8 = 0x80;
 const OVERFLOW: u8 = 0x40;
 const COLLISION: u8 = 0x20;
+const TMS_PALETTE: [[u8; 3]; 16] = [
+    [0, 0, 0], [0, 0, 0], [33, 200, 66], [94, 220, 120],
+    [84, 85, 237], [125, 118, 252], [212, 82, 77], [66, 235, 245],
+    [252, 85, 84], [255, 121, 120], [212, 193, 84], [230, 206, 128],
+    [33, 176, 59], [201, 91, 186], [204, 204, 204], [255, 255, 255],
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SmsVdpEye {
@@ -257,8 +263,8 @@ impl SmsVdp {
 
     /// SMS VDP data ($BE) and control/status ($BF) ports.
     pub fn read_port(&mut self, port: u16) -> u8 {
-        match port as u8 {
-            0xBE => {
+        match (port as u8) & 0xC1 {
+            0x80 => {
                 let value = self.read_buffer;
                 self.read_buffer = self.vram[usize::from(self.address) & 0x3FFF];
                 self.address = self.address.wrapping_add(1) & 0x3FFF;
@@ -266,7 +272,7 @@ impl SmsVdp {
                 self.cram_write = false;
                 value
             }
-            0xBF => {
+            0x81 => {
                 let value = self.status;
                 self.status = 0;
                 self.line_irq_pending = false;
@@ -417,6 +423,127 @@ fn put_pixel(frame: &mut [u8], x: usize, y: usize, rgb: [u8; 3]) {
     }
 }
 
+
+fn tms_rgb(color: u8) -> [u8; 3] {
+    TMS_PALETTE[usize::from(color & 0x0F)]
+}
+fn tms_pixel(frame: &mut [u8], x: usize, y: usize, color: u8) {
+    if x < SMS_VDP_WIDTH && y < SMS_VDP_MAX_HEIGHT {
+        let i = (y * SMS_VDP_WIDTH + x) * 3;
+        frame[i..i + 3].copy_from_slice(&tms_rgb(color));
+    }
+}
+fn tms_span(frame: &mut [u8], x: usize, y: usize, bits: u8, fg: u8, bg: u8, width: usize) {
+    for bit in 0..width {
+        tms_pixel(frame, x + bit, y, if bits & (0x80 >> bit) != 0 { fg } else { bg });
+    }
+}
+fn tms_quarter(frame: &mut [u8], x: usize, y: usize, color: u8) {
+    for dx in 0..4 { tms_pixel(frame, x + dx, y, color); }
+}
+
+fn render_legacy_scanline(
+    vram: &[u8], regs: &[u8; 16], status: &mut u8, frame: &mut [u8],
+    y: usize, unlocked: bool,
+) {
+    let backdrop = regs[7] & 0x0F;
+    for x in 0..SMS_VDP_WIDTH { tms_pixel(frame, x, y, backdrop); }
+    if regs[1] & 0x40 == 0 { return; }
+    let mode = ((regs[1] >> 4) & 1) | ((regs[1] >> 2) & 2) | (((regs[0] >> 1) & 1) << 2);
+    let names = usize::from(regs[2] & 0x0F) << 10;
+    let patterns = usize::from(regs[4] & 0x07) << 11;
+
+    if mode == 1 {
+        let fg = if regs[7] >> 4 != 0 { regs[7] >> 4 } else { backdrop };
+        for col in 0..40 {
+            let ch = vram[(names + (y / 8) * 40 + col) & 0x3FFF];
+            let bits = vram[(patterns + usize::from(ch) * 8 + (y & 7)) & 0x3FFF];
+            tms_span(frame, 8 + col * 6, y, bits, fg, backdrop, 6);
+        }
+        return;
+    }
+    if mode == 2 {
+        for col in 0..32 {
+            let ch = vram[(names + (y / 8) * 32 + col) & 0x3FFF];
+            let bits = vram[(patterns + usize::from(ch) * 8 + ((y & 0x1C) >> 2)) & 0x3FFF];
+            tms_quarter(frame, col * 8, y, if bits >> 4 != 0 { bits >> 4 } else { backdrop });
+            tms_quarter(frame, col * 8 + 4, y, if bits & 0x0F != 0 { bits & 0x0F } else { backdrop });
+        }
+    } else if mode == 4 {
+        let pat_base = usize::from(regs[4] & 0x04) << 11;
+        let color_base = usize::from(regs[3] & 0x80) << 6;
+        for col in 0..32 {
+            let ch = vram[(names + (y / 8) * 32 + col) & 0x3FFF];
+            let offset = ((y & 0xC0) << 5) + usize::from(ch) * 8 + (y & 7);
+            let bits = vram[(pat_base + offset) & 0x3FFF];
+            let colors = vram[(color_base + offset) & 0x3FFF];
+            let fg = if colors >> 4 != 0 { colors >> 4 } else { backdrop };
+            let bg = if colors & 0x0F != 0 { colors & 0x0F } else { backdrop };
+            tms_span(frame, col * 8, y, bits, fg, bg, 8);
+        }
+    } else {
+        let color_base = (usize::from(regs[3]) << 6) & 0x3FC0;
+        for col in 0..32 {
+            let ch = vram[(names + (y / 8) * 32 + col) & 0x3FFF];
+            let bits = vram[(patterns + usize::from(ch) * 8 + (y & 7)) & 0x3FFF];
+            let colors = vram[(color_base + usize::from(ch) / 8) & 0x3FFF];
+            let fg = if colors >> 4 != 0 { colors >> 4 } else { backdrop };
+            let bg = if colors & 0x0F != 0 { colors & 0x0F } else { backdrop };
+            tms_span(frame, col * 8, y, bits, fg, bg, 8);
+        }
+    }
+    render_legacy_sprites(vram, regs, status, frame, y, unlocked);
+}
+
+fn render_legacy_sprites(
+    vram: &[u8], regs: &[u8; 16], status: &mut u8, frame: &mut [u8], y: usize, unlocked: bool,
+) {
+    let table = (usize::from(regs[5] & 0x7F) << 7) & 0x3F80;
+    let pattern_base = usize::from(regs[6] & 0x07) << 11;
+    let size = if regs[1] & 0x02 != 0 { 16 } else { 8 };
+    let zoom = if regs[1] & 0x01 != 0 { 2 } else { 1 };
+    let mut active: Vec<(usize, i32, usize, u8, usize)> = Vec::with_capacity(32);
+    for index in 0..32 {
+        let at = (table + index * 4) & 0x3FFF;
+        let raw_y = vram[at];
+        if raw_y == 0xD0 { break; }
+        let mut sy = i32::from(raw_y.wrapping_add(1));
+        if sy >= 0xE0 { sy -= 0x100; }
+        if (y as i32) < sy || (y as i32) >= sy + (size * zoom) as i32 { continue; }
+        if active.len() == 4 && *status & OVERFLOW == 0 {
+            *status = (*status & !0x1F) | OVERFLOW | (index as u8 & 0x1F);
+        }
+        if active.len() >= 4 && !unlocked { break; }
+        let mut sx = i32::from(vram[at + 1]);
+        let attr = vram[at + 3];
+        if attr & 0x80 != 0 { sx -= 32; }
+        let pattern = usize::from(vram[at + 2]);
+        let row = ((y as i32 - sy) / zoom as i32) as usize;
+        active.push((index, sx, pattern, attr & 0x0F, row));
+    }
+
+    let mut occupied = [false; SMS_VDP_WIDTH];
+    let mut drawn = [false; SMS_VDP_WIDTH];
+    for (_index, sx, pattern, color, row) in active {
+        if color == 0 { continue; }
+        for source_x in 0..size {
+            let tile = if size == 16 {
+                (pattern & 0xFC) + (source_x / 8) * 2 + row / 8
+            } else { pattern };
+            let at = (pattern_base + tile * 8 + (row & 7)) & 0x3FFF;
+            if vram[at] & (0x80 >> (source_x & 7)) == 0 { continue; }
+            for dx in 0..zoom {
+                let x = sx + (source_x * zoom + dx) as i32;
+                if !(0..SMS_VDP_WIDTH as i32).contains(&x) { continue; }
+                let x = x as usize;
+                if occupied[x] { *status |= COLLISION; }
+                occupied[x] = true;
+                if !drawn[x] { tms_pixel(frame, x, y, color); drawn[x] = true; }
+            }
+        }
+    }
+}
+
 fn render_scanline(
     vram: &[u8],
     cram: &[u8; CRAM_SIZE],
@@ -426,12 +553,15 @@ fn render_scanline(
     y: usize,
     hardware_sprite_limit: bool,
 ) {
+    if regs[0] & 0x04 == 0 {
+        render_legacy_scanline(vram, regs, status, frame, y, hardware_sprite_limit);
+        return;
+    }
     let backdrop = palette_rgb(cram, 16 + (regs[7] & 0x0F));
     for x in 0..SMS_VDP_WIDTH {
         put_pixel(frame, x, y, backdrop);
     }
-    // Legacy TMS modes are not yet rendered; only SMS Mode 4 is active here.
-    if regs[0] & 0x04 == 0 || regs[1] & 0x40 == 0 {
+    if regs[1] & 0x40 == 0 {
         return;
     }
     let height = if regs[1] & 0x08 != 0 {

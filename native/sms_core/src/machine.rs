@@ -85,18 +85,22 @@ impl CpuBus for SmsMachineBus<'_> {
     }
 
     fn read_port(&mut self, port: u16) -> u8 {
-        match port as u8 {
-            0xBE | 0xBF => self.vdp.read_port(port),
-            0x7E => self.vdp.read_v_counter(),
-            0x7F => self.vdp.read_h_counter(),
-            _ => self.io.read_port(port),
+        if matches!((port as u8) & 0xC1, 0x80 | 0x81) {
+            self.vdp.read_port(port)
+        } else {
+            match port as u8 {
+                0x7E => self.vdp.read_v_counter(),
+                0x7F => self.vdp.read_h_counter(),
+                _ => self.io.read_port(port),
+            }
         }
     }
 
     fn write_port(&mut self, port: u16, value: u8) {
-        match port as u8 {
-            0xBE | 0xBF => self.vdp.write_port(port, value),
-            _ => self.io.write_port(port, value),
+        if matches!((port as u8) & 0xC1, 0x80 | 0x81) {
+            self.vdp.write_port(port, value);
+        } else {
+            self.io.write_port(port, value);
         }
     }
 }
