@@ -13,7 +13,7 @@ use std::time::Duration;
 use std::collections::VecDeque;
 #[cfg(windows)]
 use wasapi::{
-    DeviceEnumerator, Direction, SampleType, StreamMode, WaveFormat, initialize_mta,
+    DeviceEnumerator, Direction, SampleType, StreamMode, WaveFormat, deinitialize, initialize_mta,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -197,6 +197,16 @@ impl Drop for NativeWasapiOutput {
 }
 
 #[cfg(windows)]
+#[cfg(windows)]
+struct ComApartment;
+
+#[cfg(windows)]
+impl Drop for ComApartment {
+    fn drop(&mut self) {
+        deinitialize();
+    }
+}
+
 fn run_wasapi_worker(
     receiver: mpsc::Receiver<Vec<u8>>,
     ready: mpsc::SyncSender<Result<(), String>>,
@@ -205,8 +215,13 @@ fn run_wasapi_worker(
     sample_rate: u32,
     buffer_size: u32,
 ) {
-    let setup = (|| -> Result<_, String> {
-        initialize_mta().ok().map_err(|error| error.to_string())?;
+    if let Err(error) = initialize_mta().ok() {
+        let _ = ready.send(Err(error.to_string()));
+        return;
+    }
+    let _com_apartment = ComApartment;
+
+    let setup = (|| {
         let enumerator = DeviceEnumerator::new().map_err(|error| error.to_string())?;
         let device = enumerator
             .get_default_device(&Direction::Render)
