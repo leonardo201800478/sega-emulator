@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import logging
 import queue
-from array import array
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -25,7 +24,6 @@ class WasapiAudioOutput:
         self,
         sample_rate: int,
         buffer_size: int,
-        volume: int = 100,
         *,
         queue_blocks: int = 8,
         sounddevice_module: Any | None = None,
@@ -34,8 +32,6 @@ class WasapiAudioOutput:
             raise ValueError("sample_rate deve ser um inteiro positivo")
         if type(buffer_size) is not int or buffer_size <= 0:
             raise ValueError("buffer_size deve ser um inteiro positivo")
-        if type(volume) is not int or not 0 <= volume <= 100:
-            raise ValueError("volume deve estar entre 0 e 100")
         if type(queue_blocks) is not int or queue_blocks < 1:
             raise ValueError("queue_blocks deve ser um inteiro positivo")
 
@@ -50,7 +46,6 @@ class WasapiAudioOutput:
         self._sd = sounddevice_module
         self.sample_rate = sample_rate
         self.buffer_size = buffer_size
-        self._volume = volume / 100.0
         self._queue: queue.Queue[bytes] = queue.Queue(maxsize=queue_blocks)
         self._current_block = b""
         self._current_offset = 0
@@ -122,13 +117,6 @@ class WasapiAudioOutput:
         if len(pcm) % 2:
             raise ValueError("PCM16 deve conter um número par de bytes")
 
-        if self._volume != 1.0:
-            samples = array("h")
-            samples.frombytes(pcm)
-            for index, sample in enumerate(samples):
-                samples[index] = max(-32768, min(32767, round(sample * self._volume)))
-            pcm = samples.tobytes()
-
         try:
             self._queue.put_nowait(pcm)
         except queue.Full:
@@ -142,12 +130,6 @@ class WasapiAudioOutput:
                 self._queue.put_nowait(pcm)
             except queue.Full:
                 self.dropped_blocks += 1
-
-    def set_volume(self, volume: int) -> None:
-        """Set output gain without touching PSG state or clocks."""
-        if type(volume) is not int or not 0 <= volume <= 100:
-            raise ValueError("volume deve estar entre 0 e 100")
-        self._volume = volume / 100.0
 
     def _callback(
         self,
