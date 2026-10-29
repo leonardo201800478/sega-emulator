@@ -7,7 +7,10 @@ Rust-backed SG-1000 runtime.
 
 from __future__ import annotations
 
+from difflib import SequenceMatcher
+from hashlib import sha256
 from pathlib import Path
+import re
 from threading import Event
 
 from PySide6.QtCore import (
@@ -30,6 +33,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QMenu,
     QMessageBox,
     QProgressBar,
     QPushButton,
@@ -299,6 +303,8 @@ class RomLibraryDialog(QDialog):
         self.rom_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.rom_list.itemSelectionChanged.connect(self._update_launch_state)
         self.rom_list.itemDoubleClicked.connect(lambda item: self._launch_selected())
+        self.rom_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.rom_list.customContextMenuRequested.connect(self._show_rom_context_menu)
         library_layout.addWidget(self.rom_list, 1)
 
         self.status_label = QLabel(translate("scan_not_run", self.language))
@@ -483,21 +489,64 @@ class RomLibraryDialog(QDialog):
 
     def _render_entries(self, entries: tuple[RomEntry, ...]) -> None:
         self.rom_list.clear()
-        art_directory = self.box_art_directory_edit.text().strip()
+        art_directory = Path(self.box_art_directory_edit.text().strip())
         for entry in entries:
+            rom_path = Path(entry.path)
             item = QListWidgetItem(f"{entry.name}\n{_format_size(entry.size)}")
             item.setSizeHint(QSize(176, 236))
             item.setData(Qt.ItemDataRole.UserRole, entry.path)
             item.setToolTip(f"{entry.path}\nSHA-256: {entry.sha256}")
-            cover = (
-                _find_box_art(Path(entry.path), Path(art_directory))
-                if art_directory
-                else None
+            override = self._manual_box_art_for(rom_path)
+            cover = override if override is not None else (
+                _find_box_art(rom_path, art_directory) if str(art_directory) else None
             )
             if cover is not None:
                 item.setIcon(QIcon(str(cover)))
-                item.setText(f"{Path(entry.name).stem}\\n{_format_size(entry.size)}")
+                item.setText(f"{rom_path.stem}\n{_format_size(entry.size)}")
+                item.setToolTip(f"{entry.path}\nCapa: {cover}\nSHA-256: {entry.sha256}")
             self.rom_list.addItem(item)
+
+    def _manual_box_art_key(self, rom_path: Path) -> str:
+        system = self.selected_system or "unknown"
+        identity = sha256(str(rom_path.expanduser().resolve()).casefold().encode("utf-8")).hexdigest()
+        return f"box_art_overrides/{system}/{identity}"
+
+    def _manual_box_art_for(self, rom_path: Path) -> Path | None:
+        saved = str(self.settings.value(self._manual_box_art_key(rom_path), "")).strip()
+        image = Path(saved) if saved else None
+        return image if image is not None and image.is_file() else None
+
+    def _show_rom_context_menu(self, position) -> None:
+        item = self.rom_list.itemAt(position)
+        if item is None:
+            return
+        self.rom_list.setCurrentItem(item)
+        menu = QMenu(self.rom_list)
+        choose_action = menu.addAction("Selecionar imagem da capa…")
+        remove_action = menu.addAction("Remover capa escolhida manualmente")
+        rom_path = Path(str(item.data(Qt.ItemDataRole.UserRole)))
+        remove_action.setEnabled(self._manual_box_art_for(rom_path) is not None)
+        selected = menu.exec(self.rom_list.mapToGlobal(position))
+        if selected == choose_action:
+            self._choose_box_art(rom_path)
+        elif selected == remove_action:
+            self.settings.remove(self._manual_box_art_key(rom_path))
+            self._render_entries(self._entries)
+
+    def _choose_box_art(self, rom_path: Path) -> None:
+        configured = self.box_art_directory_edit.text().strip()
+        start_directory = Path(configured) if configured and Path(configured).is_dir() else rom_path.parent
+        selected, _ = QFileDialog.getOpenFileName(
+            self,
+            "Selecionar imagem da capa",
+            str(start_directory),
+            "Imagens (*.png *.jpg *.jpeg *.webp *.bmp *.gif *.tif *.tiff *.avif *.heic *.svg *.ico);;Todos os arquivos (*)",
+        )
+        if not selected:
+            return
+        image = Path(selected).expanduser().resolve()
+        self.settings.setValue(self._manual_box_art_key(rom_path), str(image))
+        self._render_entries(self._entries)
 
     def _scan_failed(self, message: str) -> None:
         self._finish_scan()
@@ -555,8 +604,16 @@ _COMMON_IMAGE_SUFFIXES = {
 }
 
 
+def _normalize_art_name(value: str) -> str:
+    """Normalize ROM/art names while ignoring region tags and LaunchBox art suffixes."""
+    value = re.sub(r"\\s+-\\s+(?:box\\s*[- ]\\s*)?front.*$", "", value, flags=re.IGNORECASE)
+    value = re.sub(r"\\[[^]]*\\]|\\([^)]*\\)", " ", value)
+    value = re.sub(r"[^a-z0-9]+", " ", value.casefold())
+    return " ".join(value.split())
+
+
 def _find_box_art(rom_path: Path, art_directory: Path) -> Path | None:
-    """Find an image whose filename stem matches the ROM stem, case-insensitively."""
+    """Find a recursively stored cover by exact or conservative fuzzy name matching."""
     if not art_directory.is_dir():
         return None
     try:
@@ -569,19 +626,30 @@ def _find_box_art(rom_path: Path, art_directory: Path) -> Path | None:
     except ImportError:
         supported = set()
     allowed = _COMMON_IMAGE_SUFFIXES | supported
-    target_stem = rom_path.stem.casefold()
+    target = _normalize_art_name(rom_path.stem)
+    if not target:
+        return None
     try:
-        candidates = (
+        candidates = [
             path
             for path in art_directory.rglob("*")
-            if path.is_file()
-            and path.suffix.casefold() in allowed
-            and path.stem.casefold() == target_stem
-        )
-        return min(
-            candidates,
-            key=lambda path: (path.suffix.casefold(), str(path).casefold()),
-            default=None,
-        )
+            if path.is_file() and path.suffix.casefold() in allowed
+        ]
     except OSError:
         return None
+
+    scored: list[tuple[float, str, Path]] = []
+    for path in candidates:
+        candidate = _normalize_art_name(path.stem)
+        if not candidate:
+            continue
+        score = SequenceMatcher(None, target, candidate).ratio()
+        if target == candidate:
+            score = 1.0
+        # Require a conservative threshold so unrelated games are not auto-matched.
+        if score >= 0.68:
+            scored.append((score, str(path).casefold(), path))
+    if not scored:
+        return None
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    return scored[0][2]
