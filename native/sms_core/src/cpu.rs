@@ -119,6 +119,9 @@ pub struct Z80 {
     opcode_trace_len: u8,
     opcode_trace_truncated: bool,
     capture_opcode_trace: bool,
+    instruction_trace_bytes: [u8; 8],
+    instruction_trace_len: u8,
+    instruction_trace_truncated: bool,
 }
 
 impl Z80 {
@@ -148,6 +151,9 @@ impl Z80 {
         self.opcode_trace_len = 0;
         self.opcode_trace_truncated = false;
         self.capture_opcode_trace = false;
+        self.instruction_trace_bytes = [0; 8];
+        self.instruction_trace_len = 0;
+        self.instruction_trace_truncated = false;
     }
 
     /// Latch a non-maskable interrupt; it is serviced at the next step boundary.
@@ -238,6 +244,9 @@ impl Z80 {
             self.opcode_trace_bytes = [0; 8];
             self.opcode_trace_len = 0;
             self.opcode_trace_truncated = false;
+            self.instruction_trace_bytes = [0; 8];
+            self.instruction_trace_len = 0;
+            self.instruction_trace_truncated = false;
             self.capture_opcode_trace = true;
             self.instruction_count
         } else {
@@ -314,6 +323,20 @@ impl Z80 {
     }
 
     #[inline]
+    fn record_instruction_byte_for_trace(&mut self, byte: u8) {
+        if !self.capture_opcode_trace {
+            return;
+        }
+        let index = usize::from(self.instruction_trace_len);
+        if index < self.instruction_trace_bytes.len() {
+            self.instruction_trace_bytes[index] = byte;
+            self.instruction_trace_len += 1;
+        } else {
+            self.instruction_trace_truncated = true;
+        }
+    }
+
+    #[inline]
     fn record_opcode_for_trace(&mut self, opcode: u8) {
         if !self.capture_opcode_trace {
             return;
@@ -350,6 +373,7 @@ impl Z80 {
         let injected_opcode = self.injected_opcode.take();
         let opcode = if let Some(injected) = injected_opcode {
             self.r = (self.r & 0x80) | (self.r.wrapping_add(1) & 0x7F);
+            self.record_instruction_byte_for_trace(injected);
             self.record_opcode_for_trace(injected);
             injected
         } else {
@@ -2000,6 +2024,7 @@ impl Z80 {
     #[inline]
     fn fetch8<B: CpuBus>(&mut self, bus: &mut B) -> u8 {
         let value = bus.read_memory(self.registers.pc);
+        self.record_instruction_byte_for_trace(value);
         self.registers.pc = self.registers.pc.wrapping_add(1);
         value
     }
