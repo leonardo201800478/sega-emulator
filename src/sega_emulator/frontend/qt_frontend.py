@@ -113,7 +113,10 @@ def _audio_output_warning(
 ) -> str | None:
     """Describe an enabled native audio backend that failed to initialize."""
     if preferences.audio_enabled and backend != "disabled" and audio_output is None:
-        return f"Áudio {backend} indisponível; consulte o log para detalhes."
+        backend_label = {"wasapi": "WASAPI", "xaudio2": "XAudio2"}.get(
+            backend, backend
+        )
+        return f"Áudio {backend_label} indisponível; consulte o log para detalhes."
     return None
 
 
