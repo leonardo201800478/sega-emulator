@@ -69,7 +69,46 @@ class SettingsDialog(QDialog):
             self.buffer_size.addItem(label, samples)
         index = self.buffer_size.findData(preferences.audio_buffer_size)
         self.buffer_size.setCurrentIndex(max(0, index))
-        audio_form.addRow("Buffer de saída", self.buffer_size)
+        audio_form.addRow("Buffer / bloco PCM", self.buffer_size)
+
+        self.queue_blocks = QComboBox()
+        for blocks, label in (
+            (2, "2 blocos — menor fila"),
+            (4, "4 blocos — recomendado"),
+            (8, "8 blocos — maior tolerância a atrasos"),
+        ):
+            self.queue_blocks.addItem(label, blocks)
+        self.queue_blocks.setCurrentIndex(
+            max(0, self.queue_blocks.findData(preferences.audio_queue_blocks))
+        )
+        audio_form.addRow(
+            "Profundidade da fila:",
+            self.queue_blocks,
+        )
+
+        self.balance = QSlider(Qt.Orientation.Horizontal)
+        self.balance.setRange(-100, 100)
+        self.balance.setValue(preferences.audio_balance)
+        self.balance_label = QLabel()
+        self.balance.valueChanged.connect(self._update_balance_label)
+        balance_row = QWidget(audio_group)
+        balance_layout = QHBoxLayout(balance_row)
+        balance_layout.setContentsMargins(0, 0, 0, 0)
+        balance_layout.addWidget(QLabel("Esquerda"))
+        balance_layout.addWidget(self.balance, 1)
+        balance_layout.addWidget(QLabel("Direita"))
+        balance_layout.addWidget(self.balance_label)
+        audio_form.addRow("Balanço L/R:", balance_row)
+        self._update_balance_label(preferences.audio_balance)
+
+        self.latency_label = QLabel()
+        self.latency_label.setWordWrap(True)
+        audio_form.addRow("Estimativa de fila:", self.latency_label)
+        self.sample_rate.currentIndexChanged.connect(self._update_latency_label)
+        self.buffer_size.currentIndexChanged.connect(self._update_latency_label)
+        self.queue_blocks.currentIndexChanged.connect(self._update_latency_label)
+        self._audio_backend = audio_backend
+        self._update_latency_label()
 
         audio_note = QLabel(
             "A taxa e o buffer configuram somente a saída do Windows. No modo "
