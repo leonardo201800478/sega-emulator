@@ -141,3 +141,51 @@ Requisitos:
 ## Estado inicial
 
 Esta PR registra o escopo e os critérios de aceitação. Ela não afirma que qualquer funcionalidade descrita já foi implementada ou testada. A implementação deverá ocorrer em commits pequenos nesta branch, com testes e evidências atualizados antes de solicitar revisão final.
+
+
+## 9. Biblioteca de ROMs e scanner (requisitos confirmados)
+
+Decisões confirmadas pelo usuário para a primeira experiência da biblioteca:
+
+- **Entrada do aplicativo:** mostrar a splashscreen e depois o seletor de sistemas; não iniciar uma ROM automaticamente.
+- **Navegação:** biblioteca de cada sistema em carrossel horizontal, com arte do jogo selecionado em destaque.
+- **Scanner:** executar atualização incremental ao abrir a biblioteca e oferecer varredura completa manual.
+- **Subpastas:** incluídas por padrão na descoberta recursiva.
+- **Capas:** provedor externo opcional, configurável e desativável; a biblioteca deve continuar utilizável sem conexão ou provedor configurado.
+
+### Diretórios por sistema
+
+Cada sistema terá um ou mais diretórios ROM independentes e editáveis nas configurações. Sugerir diretórios iniciais separados (por exemplo, `ROMs/SG-1000/`, `ROMs/Master System/`, `ROMs/Game Gear/`, `ROMs/Mega Drive/`, `ROMs/Sega CD/` e `ROMs/32X/`), sem presumir que existam no computador. Não misturar resultados entre sistemas e não mover, renomear ou apagar arquivos de ROM.
+
+### Contrato do scanner
+
+- A atualização incremental identifica arquivos adicionados, removidos ou alterados e atualiza o índice local sem reler desnecessariamente toda a biblioteca.
+- A varredura completa manual reconcilia o índice com os diretórios configurados e apresenta progresso, contagem e erros recuperáveis.
+- A descoberta de arquivo não equivale a validação de ROM. Verificar formato/sistema apenas com regras implementadas e documentadas; indicar arquivos desconhecidos ou incompatíveis sem classificá-los falsamente como válidos.
+- Duplicatas podem ser reportadas por hash de conteúdo, sem apagar arquivos.
+- Metadados mínimos: caminho, tamanho, extensão, sistema atribuído e estado da última análise. Região/confiança só quando houver regra verificável para aquele formato.
+- Erros de acesso, caminhos ausentes e arquivos ilegíveis devem ser visíveis e não interromper a varredura inteira quando for possível continuar.
+- Guardar índice e cache em diretório de dados da aplicação, fora da árvore de ROMs; permitir reconstrução do índice.
+- O scanner não deve bloquear a interface Qt. Executar trabalho de I/O em worker controlado, com cancelamento/encerramento seguro e atualizações de progresso na thread da interface.
+- O provedor de capas é uma integração opcional separada: respeitar limites, licenças e termos do provedor, cache local e privacidade; nunca baixar ou enviar dados sem configuração/consentimento. A biblioteca não pode depender de capas remotas para abrir um jogo.
+- Não incluir ROMs comerciais, BIOS, imagens de capas de terceiros sem licença, nem caminhos pessoais nos commits ou logs versionados.
+
+### Fluxo da biblioteca e aceitação
+
+1. Splashscreen -> seletor de sistemas -> biblioteca do sistema selecionado.
+2. A biblioteca abre sem iniciar a emulação; uma seleção só inicia após ação explícita do usuário.
+3. Carrossel navegável por teclado e gamepad, com foco visível, seleção estável e retorno consistente.
+4. Abertura da biblioteca dispara atualização incremental; a varredura completa permanece uma ação manual explícita.
+5. Usuário pode configurar múltiplos diretórios por sistema, habilitar/desabilitar caminhos e abrir o diretório no sistema operacional.
+6. Testes cobrem subpastas, extensões desconhecidas, arquivos duplicados, remoção/alteração, caminhos inexistentes, permissões negadas, cancelamento, ausência de rede/provedor e biblioteca sem capas.
+7. Scanner e provedor não carregam nem executam ROMs. O início do jogo usa o contrato existente de carregamento do núcleo Rust e fica desabilitado para sistemas sem integração funcional.
+8. Validar persistência de diretórios e índice, atualização incremental idempotente e resposta da UI durante varreduras grandes; nenhuma validação é considerada executada até haver logs de teste no SHA candidato.
+
+### Ordem de implementação atualizada
+
+1. Inventariar os contratos existentes de descoberta/carregamento de ROM, preferências Qt, threads e integração Rust.
+2. Definir modelo de dados e testes para diretórios por sistema e índice local.
+3. Implementar scanner recursivo com atualização incremental, progresso, cancelamento e varredura completa manual.
+4. Integrar splashscreen, seletor e carrossel sem iniciar automaticamente a emulação.
+5. Acrescentar capas locais/importação e só depois um adaptador de provedor externo opcional.
+6. Validar regressões Qt/Python e workflows no SHA exato; registrar limitações de sistemas ainda não integrados.
