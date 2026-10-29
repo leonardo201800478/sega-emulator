@@ -28,21 +28,26 @@ def test_dialog_loads_and_returns_audio_video_preferences(qt_app) -> None:
         audio_sample_rate=48_000,
         audio_buffer_size=1024,
         audio_volume=65,
+        audio_balance=-35,
+        audio_queue_blocks=8,
         video_filter="bilinear",
         integer_scale=False,
         sprite_limit_enabled=False,
     )
-    dialog = SettingsDialog(original)
+    dialog = SettingsDialog(original, audio_backend="wasapi")
 
     tabs = dialog.findChild(QTabWidget)
     assert tabs is not None
     assert [tabs.tabText(index) for index in range(tabs.count())] == [
         "Saída de áudio",
         "PSG / Modelo",
+        "Guia de som",
         "Vídeo",
         "CRT / NTSC",
     ]
-    assert dialog.audio_enabled.isChecked() is False
+    assert dialog.balance.value() == -35
+    assert dialog.queue_blocks.currentData() == 8
+    assert "Fila PCM nominal" in dialog.latency_label.text()
     assert dialog.sample_rate.currentData() == 48_000
     assert dialog.buffer_size.currentData() == 1024
     assert dialog.volume.value() == 65
@@ -56,7 +61,8 @@ def test_dialog_loads_and_returns_audio_video_preferences(qt_app) -> None:
     assert dialog.video_filter.findData("dither_blending") >= 0
     assert dialog.video_filter.findData("crt_ntsc") >= 0
 
-    dialog.audio_enabled.setChecked(True)
+    dialog.balance.setValue(0)
+    dialog.queue_blocks.setCurrentIndex(dialog.queue_blocks.findData(2))
     dialog.sample_rate.setCurrentIndex(dialog.sample_rate.findData(22_050))
     dialog.buffer_size.setCurrentIndex(dialog.buffer_size.findData(256))
     dialog.volume.setValue(40)
@@ -74,6 +80,8 @@ def test_dialog_loads_and_returns_audio_video_preferences(qt_app) -> None:
     assert updated.audio_sample_rate == 22_050
     assert updated.audio_buffer_size == 256
     assert updated.audio_volume == 40
+    assert updated.audio_balance == 0
+    assert updated.audio_queue_blocks == 2
     assert updated.video_filter == "dither_blending"
     assert updated.integer_scale is True
     assert updated.sprite_limit_enabled is True
