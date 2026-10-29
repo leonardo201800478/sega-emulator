@@ -481,6 +481,7 @@ impl NativeXAudio2Output {
         if pcm.is_empty() {
             return Ok(());
         }
+        let pcm = mono_pcm16_to_stereo(&pcm);
         #[cfg(windows)]
         {
             if self.shutdown.load(Ordering::Acquire) {
