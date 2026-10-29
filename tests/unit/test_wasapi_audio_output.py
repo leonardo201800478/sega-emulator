@@ -18,11 +18,13 @@ class FakeNativeOutput:
         self.dropped_block_count = 2
         self.blocks = []
         self.closed = False
+        self.close_calls = 0
 
     def write_pcm(self, pcm):
         self.blocks.append(pcm)
 
     def close(self):
+        self.close_calls += 1
         self.closed = True
 
 
@@ -107,3 +109,32 @@ def test_rejects_unimplemented_backend_before_native_open(native_outputs):
     with pytest.raises(ValueError, match="Backend"):
         NativeAudioOutput(48_000, 512, backend="sdl3")
     assert native_outputs == []
+
+
+
+def test_close_is_idempotent_and_logs_session_metrics(native_outputs, caplog) -> None:
+    with caplog.at_level("INFO", logger="sega_emulator.frontend.qt.wasapi_audio"):
+        output = NativeAudioOutput(
+            48_000, 512, backend="xaudio2", queue_blocks=4, balance=-20
+        )
+        output.close()
+        output.close()
+
+    native = native_outputs[0]
+    assert native.close_calls == 1
+    initialized = next(
+        record
+        for record in caplog.records
+        if record.message == "Native audio backend initialized"
+    )
+    assert initialized.audio_backend == "xaudio2"
+    assert initialized.audio_sample_rate == 48_000
+    assert initialized.audio_balance == -20
+    metrics = [
+        record
+        for record in caplog.records
+        if record.message == "Native audio backend session metrics"
+    ]
+    assert len(metrics) == 1
+    assert metrics[0].audio_underruns == 3
+    assert metrics[0].audio_dropped_blocks == 2
