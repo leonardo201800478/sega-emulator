@@ -260,7 +260,7 @@ class RomLibraryDialog(QDialog):
             button = QToolButton()
             button.setText(
                 label
-                if system == "sg1000"
+                if system in {"sg1000", "master_system"}
                 else f"{label}\n{translate('planned', self.language)}"
             )
             button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
@@ -276,7 +276,7 @@ class RomLibraryDialog(QDialog):
                 "border-color: #42d8ff; } "
                 "QToolButton:disabled { color: #71819a; background: #101a2a; }"
             )
-            supported = system == "sg1000"
+            supported = system in {"sg1000", "master_system"}
             button.setEnabled(supported)
             button.setToolTip(
                 translate("integrated_core", self.language)
