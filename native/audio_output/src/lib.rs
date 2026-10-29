@@ -1,8 +1,12 @@
 //! Native Windows audio output. Qt/Python owns configuration only.
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, mpsc};
+use std::sync::Arc;
+#[cfg(windows)]
+use std::sync::mpsc;
+#[cfg(windows)]
 use std::thread::{self, JoinHandle};
+#[cfg(windows)]
 use std::time::Duration;
 
 #[cfg(windows)]
