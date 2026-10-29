@@ -299,6 +299,36 @@ class SettingsDialog(QDialog):
         )
         root.addWidget(buttons)
 
+    def _update_balance_label(self, value: int) -> None:
+        if value == 0:
+            text = "Centro (L/R iguais)"
+        elif value < 0:
+            text = f"L {100 + value}% / R 100%"
+        else:
+            text = f"L 100% / R {100 - value}%"
+        self.balance_label.setText(text)
+
+    def _update_latency_label(self, *_args) -> None:
+        rate = int(self.sample_rate.currentData())
+        buffer_samples = int(self.buffer_size.currentData())
+        queue_blocks = int(self.queue_blocks.currentData())
+        queue_ms = buffer_samples * queue_blocks * 1000 / rate
+        if self._audio_backend == "wasapi":
+            text = (
+                f"Fila PCM nominal: {queue_ms:.1f} ms antes do dispositivo. "
+                "O Windows pode adicionar seu próprio período/buffer; latência "
+                "ponta a ponta não foi medida."
+            )
+        elif self._audio_backend == "xaudio2":
+            text = (
+                f"Fila PCM nominal: {queue_ms:.1f} ms. Inclui apenas os blocos "
+                "enfileirados pela aplicação, não o dispositivo nem a latência "
+                "ponta a ponta."
+            )
+        else:
+            text = "Áudio desativado; estimativa indisponível até selecionar WASAPI ou XAudio2."
+        self.latency_label.setText(text)
+
     def _restore_defaults(self) -> None:
         defaults = FrontendPreferences()
         self.audio_enabled.setChecked(defaults.audio_enabled)
