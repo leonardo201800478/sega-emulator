@@ -38,7 +38,7 @@ def test_dialog_loads_and_returns_audio_video_preferences(qt_app) -> None:
     assert tabs is not None
     assert [tabs.tabText(index) for index in range(tabs.count())] == [
         "Saída de áudio",
-        "PSG / Hardware",
+        "PSG / Modelo",
         "Vídeo",
         "CRT / NTSC",
     ]
