@@ -635,3 +635,49 @@ fn run_xaudio2_worker(
         engine.StopEngine();
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wasapi_rejects_invalid_configuration_before_device_access() {
+        assert!(matches!(
+            NativeWasapiOutput::new(0, 512, 4),
+            Err(AudioOutputError::InvalidSampleRate)
+        ));
+        assert!(matches!(
+            NativeWasapiOutput::new(44_100, 0, 4),
+            Err(AudioOutputError::InvalidBufferSize)
+        ));
+        assert!(matches!(
+            NativeWasapiOutput::new(44_100, 16_385, 4),
+            Err(AudioOutputError::InvalidBufferSize)
+        ));
+        assert!(matches!(
+            NativeWasapiOutput::new(44_100, 512, 0),
+            Err(AudioOutputError::InvalidQueueCapacity)
+        ));
+    }
+
+    #[test]
+    fn xaudio2_rejects_invalid_configuration_before_device_access() {
+        assert!(matches!(
+            NativeXAudio2Output::new(0, 512, 4),
+            Err(AudioOutputError::InvalidSampleRate)
+        ));
+        assert!(matches!(
+            NativeXAudio2Output::new(44_100, 0, 4),
+            Err(AudioOutputError::InvalidBufferSize)
+        ));
+        assert!(matches!(
+            NativeXAudio2Output::new(44_100, 16_385, 4),
+            Err(AudioOutputError::InvalidBufferSize)
+        ));
+        assert!(matches!(
+            NativeXAudio2Output::new(44_100, 512, 0),
+            Err(AudioOutputError::InvalidQueueCapacity)
+        ));
+    }
+}
