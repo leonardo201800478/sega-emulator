@@ -2,7 +2,7 @@
 
 # Contrato de configuração para saída de áudio
 
-> Estado: nesta branch, o frontend Qt usa uma fachada PyO3 para o backend WASAPI compartilhado implementado em Rust via crate wasapi. O fluxo é event-driven e usa uma fila limitada. XAudio2 e SDL3 como backends de saída ainda não estão implementados. A implementação precisa passar CI e validação física de estabilidade, reconexão e latência em Windows antes de ser considerada validada.
+> Estado: nesta branch, o frontend Qt usa uma fachada PyO3 para o backend WASAPI compartilhado implementado em Rust via crate wasapi. O fluxo é event-driven e usa uma fila limitada. SDL3 como backend de saída ainda não está implementado. WASAPI e XAudio2 precisam passar CI e validação física de estabilidade, reconexão e latência em Windows antes de serem considerados validados.
 
 ## Objetivo
 
@@ -25,9 +25,11 @@ A Qt cria e controla a fachada PyO3; a inicialização COM, enumeração do disp
 
 **Limites de validação:** esta implementação ainda não foi certificada em dispositivo Windows real. A política atual descarta o novo bloco quando a fila limitada está cheia; a contagem de blocos descartados e underruns é mantida no backend Rust. O valor de buffer configurado é uma solicitação de período, sujeito ao mínimo aceito pelo dispositivo. Reconexão/hot-plug, latência efetiva, estabilidade em sessões longas e fallback explícito ainda precisam de testes no Windows. O backend não executa emulação nem chama Python na thread de áudio.
 
-### XAudio2
+### XAudio2 (backend nativo Rust — primeira implementação)
 
-Backend nativo Windows orientado a jogos, com grafo de vozes e buffers dinâmicos. Deve usar uma implementação mantida e testável da API nativa; não tratar um pacote Python de nome semelhante como binding de XAudio2 sem confirmar sua finalidade. A taxa da voz de origem e a taxa do dispositivo são conceitos separados, e conversões devem ser contabilizadas.
+A Qt seleciona o backend por meio da fachada PyO3. O worker Rust cria o engine XAudio2, a mastering voice e uma source voice mono PCM16; submete buffers que permanecem vivos até o engine informar que foram consumidos. A fila de entrada é limitada, e a aplicação mede blocos descartados e episódios de underrun. A implementação usa polling de estado em uma thread Rust dedicada; ainda precisa de avaliação de CPU/latência e de um mecanismo de notificação mais eficiente se as medições justificarem.
+
+**Limites de validação:** compilação Windows, dispositivo padrão, remoção/reconexão, encerramento e estabilidade prolongada ainda precisam ser verificados no SHA final. Não declarar equivalência de latência com WASAPI sem medições equivalentes.
 
 ### SDL3
 
@@ -35,7 +37,7 @@ Backend multiplataforma baseado em dispositivos e fluxos de áudio SDL3. Deve se
 
 ## Configurações expostas
 
-- Backend atualmente implementado: WASAPI compartilhado nativo em Rust. XAudio2 e SDL3 são metas futuras e não devem aparecer como opções selecionáveis até estarem implementados e testados.
+- Backends atualmente selecionáveis: WASAPI compartilhado nativo em Rust e XAudio2 nativo em Rust. SDL3 é uma meta futura e não deve aparecer como opção selecionável até estar implementado e testado.
 - Dispositivo de saída: padrão do sistema ou dispositivo escolhido.
 - Frequência PCM: 22050, 32000, 44100, 48000, 88200 ou 96000 Hz, apenas se suportada.
 - Formato: PCM signed 16-bit, PCM 24-bit quando suportado, ou float 32-bit quando suportado.
@@ -57,7 +59,7 @@ Portanto, cada perfil de console deverá especificar somente fatos sustentados p
 1. Formalizar este contrato e manter o núcleo PSG independente do dispositivo de áudio.
 2. Implementar configurações validadas e persistentes, incluindo perfil por console e preferências globais.
 3. Validar o backend WASAPI nativo em Windows real, incluindo underruns, encerramento, reconexão, formatos e latência medida.
-4. Implementar o backend XAudio2 nativo em Rust como alternativa explícita, com ownership dos buffers e testes no mesmo SHA.
+4. Validar o backend XAudio2 nativo em Rust como alternativa explícita, incluindo ownership dos buffers, uso de CPU e testes no mesmo SHA.
 5. Manter a integração de áudio do frontend Qt separada do hardware PSG Rust e validar o wheel/driver no Windows.
 6. Implementar XAudio2 por binding nativo verificável; medir estabilidade e latência.
 7. Integrar escolha de dispositivo e métricas na interface Qt, sem expor configurações não implementadas.
