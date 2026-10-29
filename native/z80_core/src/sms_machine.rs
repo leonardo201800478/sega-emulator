@@ -117,7 +117,7 @@ mod tests {
 
     #[test]
     fn draining_audio_does_not_change_cpu_timing() {
-        let mut machine = NativeSMSMachine::new(vec![0; 16], 44_100, false).unwrap();
+        let mut machine = NativeSMSMachine::new(vec![0; 16], false).unwrap();
         for _ in 0..100 {
             machine.step().unwrap();
         }
