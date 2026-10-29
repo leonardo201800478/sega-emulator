@@ -473,6 +473,7 @@ impl NativeXAudio2Output {
                     dropped_blocks,
                     sample_rate,
                     buffer_size,
+                    balance,
                 }),
                 Ok(Err(message)) => {
                     shutdown.store(true, Ordering::Release);
@@ -507,7 +508,7 @@ impl NativeXAudio2Output {
         if pcm.is_empty() {
             return Ok(());
         }
-        let pcm = mono_pcm16_to_stereo(&pcm);
+        let pcm = mono_pcm16_to_stereo(&pcm, self.balance);
         #[cfg(windows)]
         {
             if self.shutdown.load(Ordering::Acquire) {
