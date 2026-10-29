@@ -827,7 +827,8 @@ fn render_scanline(
 #[cfg(test)]
 mod tests {
     use super::{
-        FRAME_SIZE, OVERFLOW, SMS_VDP_WIDTH, SmsVdp, StereoPresentation, TMS_PALETTE,
+        COLLISION, FRAME_SIZE, OVERFLOW, SMS_VDP_WIDTH, SmsVdp, StereoPresentation, TMS_PALETTE,
+        VBLANK,
         render_legacy_scanline, render_legacy_sprites, render_scanline,
     };
     use crate::config::{SpriteLimitMode, VideoStandard};
