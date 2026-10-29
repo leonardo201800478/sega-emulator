@@ -92,3 +92,56 @@ def test_supported_system_rom_can_be_launched_from_library(
     assert dialog.selected_system == system
     assert dialog.result() == dialog.DialogCode.Accepted
     dialog.close()
+
+
+def test_rom_library_search_filters_by_name_and_path(qt_app, settings, tmp_path):
+    dialog = RomLibraryDialog(settings)
+    for name in ("Sonic.sms", "Alex Kidd.sms", "Phantasy Star.sms"):
+        item = QListWidgetItem(name)
+        item.setData(Qt.ItemDataRole.UserRole, str(tmp_path / name))
+        dialog.rom_list.addItem(item)
+
+    dialog.search_edit.setText("sonic")
+
+    assert not dialog.rom_list.item(0).isHidden()
+    assert dialog.rom_list.item(1).isHidden()
+    assert dialog.rom_list.item(2).isHidden()
+
+    dialog.search_edit.setText(str(tmp_path / "Alex"))
+
+    assert dialog.rom_list.item(0).isHidden()
+    assert not dialog.rom_list.item(1).isHidden()
+    assert dialog.rom_list.item(2).isHidden()
+    dialog.close()
+
+
+def test_open_library_uses_cached_index_without_starting_scan(
+    qt_app, settings, tmp_path, monkeypatch
+):
+    dialog = RomLibraryDialog(settings)
+    rom_path = tmp_path / "cached.sms"
+    rom_path.write_bytes(b"cached rom")
+    from sega_emulator.rom_library import RomEntry, RomLibrary
+
+    library = RomLibrary(dialog._index_path)
+    library._entries["master_system"][str(rom_path)] = RomEntry(
+        system="master_system",
+        path=str(rom_path),
+        name=rom_path.name,
+        size=10,
+        mtime_ns=1,
+        sha256="0" * 64,
+        suffix=".sms",
+    )
+    library._save_index()
+
+    def fail_if_scanned(*args, **kwargs):
+        raise AssertionError("Opening a system must not start a filesystem scan")
+
+    monkeypatch.setattr(dialog, "_start_scan", fail_if_scanned)
+    dialog._open_library("master_system")
+
+    assert dialog.rom_list.count() == 1
+    assert dialog.rom_list.item(0).text().startswith("cached.sms")
+    assert "Atualizar biblioteca" in dialog.status_label.text()
+    dialog.close()
