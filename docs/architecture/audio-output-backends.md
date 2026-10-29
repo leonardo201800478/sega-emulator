@@ -85,3 +85,18 @@ Portanto, cada perfil de console deverá especificar somente fatos sustentados p
 - Microsoft, [XAudio2 sample-rate conversions](https://learn.microsoft.com/en-us/windows/win32/xaudio2/xaudio2-sample-rate-conversions).
 - SDL, [SDL_AudioStream](https://wiki.libsdl.org/SDL3/SDL_AudioStream).
 - Microsoft, [WASAPI low-latency audio](https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/low-latency-audio).
+
+
+## Procedimento de validação física no Windows
+
+Após compilar/instalar a extensão nativa Release, execute no diretório raiz:
+
+```powershell
+python tools/validate_native_audio.py --backend both --seconds 8
+```
+
+O utilitário emite um tom senoidal de baixo volume pelo backend selecionado e registra taxa/tamanho solicitados, underruns e blocos descartados. Repita com `--backend wasapi` e `--backend xaudio2` separadamente se precisar isolar uma falha. Os contadores e o tempo do teste não medem latência ponta a ponta nem provam, sozinhos, que o som foi audível.
+
+Para cada backend, registrar manualmente: versão do Windows; dispositivo de saída e driver; backend ativo; taxa/formato efetivos informados pelo sistema, se disponíveis; configuração solicitada; som audível sem cortes/distorção; contadores antes/depois; encerramento sem travar. Repetir durante uma sessão longa e, quando for seguro, desconectar/reconectar o dispositivo ou alternar a saída padrão para verificar recuperação. Não provocar remoção de dispositivo durante uso crítico nem presumir que a recuperação ocorreu sem observar a saída.
+
+Critério mínimo: a inicialização e o encerramento devem completar; o tom deve ser audível; não deve haver falha contínua nem aumento persistente de underruns/descarte em carga normal. Toda medição de latência precisa indicar método, dispositivo, backend e configurações efetivas. Esta validação manual complementa — não substitui — CI, testes de determinismo e testes automatizados.
