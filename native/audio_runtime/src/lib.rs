@@ -142,7 +142,8 @@ impl PcmResampler {
     }
 
     fn emit(&mut self, flushing: bool) -> Vec<u8> {
-        let target = (self.real as f64 * self.rate as f64 / INPUT_RATE as f64).round_ties_even() as usize;
+        let target =
+            (self.real as f64 * self.rate as f64 / INPUT_RATE as f64).round_ties_even() as usize;
         let mut output = Vec::new();
 
         loop {
