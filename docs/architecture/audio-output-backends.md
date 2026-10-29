@@ -2,7 +2,7 @@
 
 # Contrato de configuração para saída de áudio
 
-> Estado: o frontend Qt já possui um primeiro backend WASAPI compartilhado, usando a implementação WASAPI do PortAudio por meio de `sounddevice`. XAudio2 e SDL3 como backends de saída ainda não estão implementados. Esta fatia não é uma implementação COM/WASAPI direta em Rust e não valida latência em hardware Windows.
+> Estado: nesta branch, o frontend Qt usa uma fachada PyO3 para o backend WASAPI compartilhado implementado em Rust via crate wasapi. O fluxo é event-driven e usa uma fila limitada. XAudio2 e SDL3 como backends de saída ainda não estão implementados. A implementação precisa passar CI e validação física de estabilidade, reconexão e latência em Windows antes de ser considerada validada.
 
 ## Objetivo
 
@@ -19,11 +19,11 @@ A callback de áudio não deve executar emulação, acessar a interface gráfica
 
 ## Backends
 
-### WASAPI (Qt — implementação inicial)
+### WASAPI (backend nativo Rust — primeira implementação)
 
-O frontend Qt seleciona explicitamente o host API WASAPI por `sounddevice`/PortAudio e abre o dispositivo de saída padrão desse host em modo compartilhado, com conversão automática permitida. O produtor PCM usa uma fila limitada; a callback de saída apenas consome PCM e preenche lacunas com silêncio, sem executar a emulação. Blocos antigos podem ser descartados quando a fila fica cheia para evitar crescimento de latência. O backend conta callbacks com underrun e blocos descartados.
+A Qt cria e controla a fachada PyO3; a inicialização COM, enumeração do dispositivo padrão, stream compartilhado event-driven, fila PCM limitada, preenchimento de underruns com silêncio e encerramento ocorrem em Rust (native/audio_output). A taxa de amostragem e o tamanho de buffer são configurações de saída e não alteram o clock do PSG.
 
-**Limite de implementação:** o acesso à API Windows passa pelo host WASAPI do PortAudio; esta etapa não implementa diretamente as interfaces COM de WASAPI em Rust. Modo exclusivo, escolha de dispositivo pela UI, leitura das métricas na interface e validação física de latência/underrun permanecem pendentes. O valor configurado de buffer é solicitado ao backend, mas ainda não é apresentado como latência real medida.
+**Limites de validação:** esta implementação ainda não foi certificada em dispositivo Windows real. A política atual descarta o novo bloco quando a fila limitada está cheia; a contagem de blocos descartados e underruns é mantida no backend Rust. O valor de buffer configurado é uma solicitação de período, sujeito ao mínimo aceito pelo dispositivo. Reconexão/hot-plug, latência efetiva, estabilidade em sessões longas e fallback explícito ainda precisam de testes no Windows. O backend não executa emulação nem chama Python na thread de áudio.
 
 ### XAudio2
 
