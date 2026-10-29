@@ -13,7 +13,10 @@ pub mod cpu;
 pub mod error;
 pub mod memory;
 
-pub use bus::{CpuBus, Z80BusEvent, Z80BusEventKind, Z80CpuSnapshot, Z80InstructionOutcome, Z80InstructionTrace, Z80TStatePhase, Z80TStateSample};
+pub use bus::{
+    CpuBus, Z80BusEvent, Z80BusEventKind, Z80CpuSnapshot, Z80InstructionOutcome,
+    Z80InstructionTrace, Z80TStatePhase, Z80TStateSample,
+};
 pub use cartridge::CartridgeImage;
 pub use config::{FmHardware, SmsMachineConfig, SpriteLimitMode, Territory, VideoStandard};
 pub use cpu::{CpuError, Z80};
