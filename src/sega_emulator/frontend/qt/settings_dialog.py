@@ -63,10 +63,10 @@ class SettingsDialog(QDialog):
 
         self.buffer_size = QComboBox()
         for samples, label in (
-            (256, "256 amostras — menor latência"),
+            (256, "256 amostras — menor buffer solicitado"),
             (512, "512 amostras — equilibrado"),
-            (1024, "1.024 amostras — mais estável"),
-            (2048, "2.048 amostras — maior tolerância"),
+            (1024, "1.024 amostras — maior tolerância"),
+            (2048, "2.048 amostras — buffer maior"),
         ):
             self.buffer_size.addItem(label, samples)
         index = self.buffer_size.findData(preferences.audio_buffer_size)
@@ -74,8 +74,10 @@ class SettingsDialog(QDialog):
         audio_form.addRow("Buffer de saída", self.buffer_size)
 
         audio_note = QLabel(
-            "A taxa e o buffer configuram somente a saída do Windows. "
-            "Não alteram o clock do PSG nem aumentam a fidelidade do modelo digital."
+            "A taxa e o buffer configuram somente a saída do Windows. No modo "
+            "compartilhado, o Windows determina o período efetivo; o buffer é uma "
+            "solicitação, não uma medição de latência. Nada disso altera o clock "
+            "do PSG nem aumenta a fidelidade do modelo digital."
         )
         audio_note.setWordWrap(True)
         audio_form.addRow(audio_note)
