@@ -22,7 +22,6 @@ from pathlib import Path
 
 from sega_emulator.frontend.qt.wasapi_audio import NativeAudioOutput
 
-
 # Original short chiptune motif. Frequencies are equal-tempered notes; None is
 # a rest. This is a host-output listening test, not a Master System PSG test.
 _MELODY_HZ: tuple[float | None, ...] = (
@@ -114,7 +113,7 @@ def _run_backend(
     seconds: int,
     frequency: float,
     signal: str,
-    trace_csv: pathlib.Path | None,
+    trace_csv: Path | None,
 ) -> bool:
     block_period = buffer_size / sample_rate
     print(
@@ -287,7 +286,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--trace-csv",
-        type=pathlib.Path,
+        type=Path,
         default=None,
         help=(
             "salva os tempos por ciclo em CSV; com backend=both cria "
