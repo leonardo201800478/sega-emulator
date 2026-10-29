@@ -619,11 +619,13 @@ fn run_xaudio2_worker(
         }
         let engine = engine.ok_or_else(|| "XAudio2Create returned no engine".to_owned())?;
         let mut mastering_voice: Option<IXAudio2MasteringVoice> = None;
+        // The source voice is stereo PCM16. Keep the mastering voice stereo too;
+        // declaring it mono forces a downmix and defeats the output balance control.
         unsafe {
             engine
                 .CreateMasteringVoice(
                     &mut mastering_voice,
-                    1,
+                    2,
                     sample_rate,
                     0,
                     PCWSTR::null(),
