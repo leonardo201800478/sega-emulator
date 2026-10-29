@@ -98,7 +98,6 @@ def _initialize_wasapi_backend(
         return WasapiAudioOutput(
             sample_rate=preferences.audio_sample_rate,
             buffer_size=preferences.audio_buffer_size,
-            volume=preferences.audio_volume,
         )
     except Exception as exc:
         # Audio initialization failure must not disable video or input.
@@ -179,7 +178,7 @@ def run(initial_path: Path | None = None) -> None:
     # exposed as a selectable runtime.
     settings.setValue("cpu_core", "rust")
     audio_output = _initialize_wasapi_backend(preferences)
-    audio_resampler = PcmResampler(preferences.audio_sample_rate)
+    audio_resampler = PcmResampler(preferences.audio_sample_rate, preferences.audio_volume)
     serialized_controller_config = settings.value("controller_config", "", type=str)
     try:
         controller_config = (
@@ -712,7 +711,7 @@ def run(initial_path: Path | None = None) -> None:
                 crt_signal_mode=preferences.crt_signal_mode,
             )
             audio_output = _initialize_wasapi_backend(updated_audio)
-            audio_resampler = PcmResampler(updated_audio.audio_sample_rate)
+            audio_resampler = PcmResampler(updated_audio.audio_sample_rate, updated_audio.audio_volume)
             preferences = updated_audio
         settings.setValue("audio_driver", audio_driver)
         preferences.save_to_store(settings)
@@ -775,9 +774,9 @@ def run(initial_path: Path | None = None) -> None:
                         "Falha ao encerrar WASAPI antes de reconfigurar áudio"
                     )
             audio_output = _initialize_wasapi_backend(updated)
-            audio_resampler = PcmResampler(updated.audio_sample_rate)
-        elif audio_output is not None:
-            audio_output.set_volume(updated.audio_volume)
+            audio_resampler = PcmResampler(updated.audio_sample_rate, updated.audio_volume)
+        else:
+            audio_resampler.set_volume(updated.audio_volume)
 
         preferences = updated
         settings.setValue(
