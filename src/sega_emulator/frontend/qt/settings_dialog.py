@@ -331,7 +331,6 @@ class SettingsDialog(QDialog):
 
     def _restore_defaults(self) -> None:
         defaults = FrontendPreferences()
-        self.audio_enabled.setChecked(defaults.audio_enabled)
         self.sample_rate.setCurrentIndex(
             self.sample_rate.findData(defaults.audio_sample_rate)
         )
@@ -339,6 +338,8 @@ class SettingsDialog(QDialog):
             self.buffer_size.findData(defaults.audio_buffer_size)
         )
         self.volume.setValue(defaults.audio_volume)
+        self.balance.setValue(defaults.audio_balance)
+        self.queue_blocks.setCurrentIndex(self.queue_blocks.findData(defaults.audio_queue_blocks))
         self.video_filter.setCurrentIndex(
             self.video_filter.findData(defaults.video_filter)
         )
@@ -366,12 +367,14 @@ class SettingsDialog(QDialog):
             video_scale=old.video_scale,
             recent_roms=old.recent_roms,
             controller_config=old.controller_config,
-            audio_enabled=self.audio_enabled.isChecked(),
+            audio_enabled=self._audio_backend != "disabled",
             diagnostics_enabled=old.diagnostics_enabled,
             cpu_core=old.cpu_core,
             audio_sample_rate=int(self.sample_rate.currentData()),
             audio_buffer_size=int(self.buffer_size.currentData()),
             audio_volume=self.volume.value(),
+            audio_balance=self.balance.value(),
+            audio_queue_blocks=int(self.queue_blocks.currentData()),
             video_filter=str(self.video_filter.currentData()),
             integer_scale=self.integer_scale.isChecked(),
             sprite_limit_enabled=not self.sprite_limit_unlocked.isChecked(),
