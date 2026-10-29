@@ -130,7 +130,7 @@ impl NativeWasapiOutput {
     }
 
     pub fn write_pcm(&self, pcm: Vec<u8>) -> Result<(), AudioOutputError> {
-        if pcm.len() % 2 != 0 {
+        if pcm.len() % 2 != 0 || pcm.len() > u32::MAX as usize {
             return Err(AudioOutputError::InvalidPcmBlock);
         }
         if pcm.is_empty() {
@@ -557,7 +557,7 @@ fn run_xaudio2_worker(
                     None,
                 )
                 .map_err(|error| error.to_string())?;
-            engine.start_engine().map_err(|error| error.to_string())?;
+            engine.StartEngine().map_err(|error| error.to_string())?;
         }
         let source_voice = source_voice
             .ok_or_else(|| "XAudio2 did not create a source voice".to_owned())?;
