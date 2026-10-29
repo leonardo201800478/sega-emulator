@@ -482,7 +482,7 @@ fn render_scanline(
             color |= ((vram[(p + plane) & 0x3FFF] >> (7 - px)) & 1) << plane;
         }
         let palette = if name & (1 << 11) != 0 { 16 } else { 0 };
-        bg_color[x] = (palette + color) as u8;
+        bg_color[x] = palette + color;
         bg_priority[x] = name & (1 << 12) != 0 && color != 0;
         put_pixel(frame, x, y, palette_rgb(cram, bg_color[x]));
     }
@@ -502,7 +502,7 @@ fn render_scanline(
         } else {
             i32::from(raw_y) + 1
         };
-        if (y as i32) < sy || (y as i32) >= sy + (sprite_height * zoom) as i32 {
+        if (y as i32) < sy || (y as i32) >= sy + (sprite_height * zoom) {
             continue;
         }
         let attr = (sat + 0x80 + index * 2) & 0x3FFF;
@@ -514,7 +514,7 @@ fn render_scanline(
         if sprite_height == 16 {
             tile &= !1;
         }
-        let row = ((y as i32 - sy) / zoom as i32) as usize;
+        let row = ((y as i32 - sy) / zoom) as usize;
         active.push((index, sx, tile, row));
     }
     if active.len() > 8 && *status & OVERFLOW == 0 {
@@ -545,7 +545,7 @@ fn render_scanline(
                 continue;
             }
             for zx in 0..zoom {
-                let x = sx + (px * zoom + zx) as i32;
+                let x = sx + (px * zoom + zx);
                 if !(0..SMS_VDP_WIDTH as i32).contains(&x) {
                     continue;
                 }
