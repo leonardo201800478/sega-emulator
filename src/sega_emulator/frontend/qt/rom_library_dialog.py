@@ -15,8 +15,8 @@ from PySide6.QtCore import (
     QRunnable,
     QSettings,
     QStandardPaths,
-    QThreadPool,
     Qt,
+    QThreadPool,
     Signal,
 )
 from PySide6.QtWidgets import (
@@ -38,10 +38,10 @@ from PySide6.QtWidgets import (
 
 from sega_emulator.rom_library import (
     DEFAULT_DIRECTORY_NAMES,
+    SUPPORTED_SYSTEMS,
     RomEntry,
     RomLibrary,
     ScanResult,
-    SUPPORTED_SYSTEMS,
 )
 
 SYSTEM_LABELS = {
