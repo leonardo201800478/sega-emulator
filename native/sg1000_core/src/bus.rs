@@ -354,7 +354,6 @@ mod tests {
     }
 }
 
-
 /// SG-1000 memory adapter for the local Z80 bus contract.
 impl CpuBus for crate::Sg1000Memory {
     #[inline]
