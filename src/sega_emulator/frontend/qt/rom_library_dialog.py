@@ -23,7 +23,7 @@ from PySide6.QtCore import (
     QThreadPool,
     Signal,
 )
-from PySide6.QtGui import QIcon, QKeySequence, QShortcut
+from PySide6.QtGui import QIcon, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
@@ -196,11 +196,28 @@ class RomLibraryDialog(QDialog):
         )
         subtitle.setObjectName("subtitle")
         subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        assets_directory = Path(__file__).parent / "assets" / "systems"
+        artwork_row = QHBoxLayout()
+        artwork_row.setSpacing(10)
+        for system in SUPPORTED_SYSTEMS:
+            artwork = QLabel(self.splash_page)
+            pixmap = QPixmap(str(assets_directory / f"{system}.svg"))
+            artwork.setPixmap(
+                pixmap.scaled(
+                    QSize(132, 74),
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+            )
+            artwork.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            artwork_row.addWidget(artwork)
         self.continue_button = QPushButton(translate("enter_library", self.language))
         self.continue_button.clicked.connect(self._show_systems)
         splash.addWidget(title)
         splash.addWidget(subtitle)
-        splash.addSpacing(28)
+        splash.addSpacing(18)
+        splash.addLayout(artwork_row)
+        splash.addSpacing(18)
         splash.addWidget(self.continue_button, alignment=Qt.AlignmentFlag.AlignCenter)
         self.scraper_settings_button = QPushButton(
             translate("scraper_settings", self.language)
