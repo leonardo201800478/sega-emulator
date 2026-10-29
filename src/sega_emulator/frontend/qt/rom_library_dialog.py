@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QStackedWidget,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -218,12 +219,34 @@ class RomLibraryDialog(QDialog):
         system_subtitle = QLabel(translate("systems_unavailable", self.language))
         system_subtitle.setObjectName("subtitle")
         system_layout.addWidget(system_subtitle)
+        system_layout.addStretch(1)
         grid = QGridLayout()
-        self.system_buttons: dict[str, QPushButton] = {}
+        grid.setHorizontalSpacing(14)
+        grid.setVerticalSpacing(14)
+        self.system_buttons: dict[str, QToolButton] = {}
+        assets_directory = Path(__file__).parent / "assets" / "systems"
         for index, system in enumerate(SUPPORTED_SYSTEMS):
             label = SYSTEM_LABELS[system]
-            button = QPushButton(f"▣\n{label}")
-            button.setMinimumHeight(115)
+            button = QToolButton()
+            button.setText(
+                label if system == "sg1000" else f"{label}\n{translate('planned', self.language)}"
+            )
+            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
+            button.setIcon(QIcon(str(assets_directory / f"{system}.svg")))
+            button.setIconSize(QSize(220, 118))
+            button.setMinimumSize(220, 166)
+            button.setSizePolicy(
+                button.sizePolicy().Policy.Expanding,
+                button.sizePolicy().Policy.Fixed,
+            )
+            button.setStyleSheet(
+                "QToolButton { background: #14233b; border: 1px solid #31547c; "
+                "border-radius: 10px; padding: 10px; font-size: 14px; "
+                "font-weight: 600; } "
+                "QToolButton:hover:enabled { background: #203c60; "
+                "border-color: #42d8ff; } "
+                "QToolButton:disabled { color: #71819a; background: #101a2a; }"
+            )
             supported = system == "sg1000"
             button.setEnabled(supported)
             button.setToolTip(
@@ -235,11 +258,10 @@ class RomLibraryDialog(QDialog):
                 button.clicked.connect(
                     lambda checked=False, selected=system: self._open_library(selected)
                 )
-            else:
-                button.setText(f"▣\n{label}\n{translate('planned', self.language)}")
             self.system_buttons[system] = button
             grid.addWidget(button, index // 3, index % 3)
         system_layout.addLayout(grid)
+        system_layout.addStretch(1)
         back_to_splash = QPushButton(translate("back", self.language))
         back_to_splash.clicked.connect(self._show_splash)
         system_layout.addWidget(back_to_splash, alignment=Qt.AlignmentFlag.AlignLeft)
