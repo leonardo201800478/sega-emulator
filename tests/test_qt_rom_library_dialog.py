@@ -64,6 +64,7 @@ def test_master_system_is_available_but_unimplemented_systems_remain_disabled(
 
     assert dialog.system_buttons["sg1000"].isEnabled()
     assert dialog.system_buttons["master_system"].isEnabled()
+    assert dialog.system_buttons["master_system"].text() == "Master System"
     assert not dialog.system_buttons["game_gear"].isEnabled()
     assert not dialog.system_buttons["mega_drive"].isEnabled()
     dialog.close()
