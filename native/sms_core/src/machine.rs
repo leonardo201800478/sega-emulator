@@ -62,7 +62,7 @@ pub struct SmsMachineBus<'a> {
 }
 
 impl<'a> SmsMachineBus<'a> {
-    pub fn new(
+    fn new(
         memory: &'a mut SmsMemory,
         io: &'a mut SmsIo,
         sega_scope: &'a mut SegaScopeState,
@@ -318,7 +318,7 @@ impl SmsMachine {
 
 #[cfg(test)]
 mod tests {
-    use super::{SegaScopeLens, SmsMachine};
+    use super::{PsgVariant, SegaScopeLens, SmsMachine};
     use crate::input::{ControllerButtons, SmsInputState};
 
     #[test]
