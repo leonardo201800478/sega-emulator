@@ -223,111 +223,149 @@ fn run_wasapi_worker(
         return;
     }
     let _com_apartment = ComApartment;
+    let mut first_start = true;
 
-    let setup = (|| {
-        let enumerator = DeviceEnumerator::new().map_err(|error| error.to_string())?;
-        let device = enumerator
-            .get_default_device(&Direction::Render)
-            .map_err(|error| error.to_string())?;
-        let mut audio_client = device
-            .get_iaudioclient()
-            .map_err(|error| error.to_string())?;
-        let format = WaveFormat::new(16, 16, &SampleType::Int, sample_rate as usize, 1, None);
-        let block_align = format.get_blockalign() as usize;
-        let (default_period, _minimum_period) = audio_client
-            .get_device_period()
-            .map_err(|error| error.to_string())?;
-        let requested_period = (buffer_size as u64 * 10_000_000 / sample_rate as u64) as i64;
-        let mode = StreamMode::EventsShared {
-            autoconvert: true,
-            buffer_duration_hns: requested_period.max(default_period),
-        };
-        audio_client
-            .initialize_client(&format, &Direction::Render, &mode)
-            .map_err(|error| error.to_string())?;
-        let event = audio_client
-            .set_get_eventhandle()
-            .map_err(|error| error.to_string())?;
-        let render_client = audio_client
-            .get_audiorenderclient()
-            .map_err(|error| error.to_string())?;
-        let initial_buffer_frames = audio_client
-            .get_buffer_size()
-            .map_err(|error| error.to_string())? as usize;
-        Ok((
-            audio_client,
-            event,
-            render_client,
-            block_align,
-            initial_buffer_frames,
-        ))
-    })();
-
-    let (audio_client, event, render_client, block_align, initial_buffer_frames) = match setup {
-        Ok(state) => state,
-        Err(message) => {
-            let _ = ready.send(Err(message));
-            return;
-        }
-    };
-
-    let mut pending = VecDeque::<u8>::with_capacity(buffer_size as usize * block_align * 8);
-    pending.resize(initial_buffer_frames.saturating_mul(block_align), 0);
-    if render_client
-        .write_to_device_from_deque(initial_buffer_frames, &mut pending, None)
-        .is_err()
-    {
-        let _ = ready.send(Err("failed to prime the WASAPI render buffer".to_owned()));
-        return;
-    }
-    if let Err(error) = audio_client.start_stream() {
-        let _ = ready.send(Err(error.to_string()));
-        return;
-    }
-    let _ = ready.send(Ok(()));
+    // Re-enumerate and reopen the default render endpoint after stream loss.
+    // The first initialization failure is reported to the constructor; later
+    // failures retry until shutdown or the producer closes the queue.
     loop {
         if shutdown.load(Ordering::Acquire) {
             break;
         }
-        if event.wait_for_event(1000).is_err() {
-            // A failed WASAPI event wait indicates a stopped or disconnected stream.
-            break;
-        }
 
-        let frames = match audio_client.get_available_space_in_frames() {
-            Ok(frames) => frames as usize,
-            Err(_) => break,
-        };
-        if frames == 0 {
-            continue;
-        }
-        let required = frames.saturating_mul(block_align);
-        let mut disconnected = false;
-        while pending.len() < required {
-            match receiver.try_recv() {
-                Ok(block) => pending.extend(block),
-                Err(mpsc::TryRecvError::Empty) => {
-                    pending.resize(required, 0);
-                    underruns.fetch_add(1, Ordering::Relaxed);
-                    break;
+        let setup = (|| {
+            let enumerator = DeviceEnumerator::new().map_err(|error| error.to_string())?;
+            let device = enumerator
+                .get_default_device(&Direction::Render)
+                .map_err(|error| error.to_string())?;
+            let mut audio_client = device
+                .get_iaudioclient()
+                .map_err(|error| error.to_string())?;
+            let format =
+                WaveFormat::new(16, 16, &SampleType::Int, sample_rate as usize, 1, None);
+            let block_align = format.get_blockalign() as usize;
+            let (default_period, _minimum_period) = audio_client
+                .get_device_period()
+                .map_err(|error| error.to_string())?;
+            let requested_period =
+                (buffer_size as u64 * 10_000_000 / sample_rate as u64) as i64;
+            let mode = StreamMode::EventsShared {
+                autoconvert: true,
+                buffer_duration_hns: requested_period.max(default_period),
+            };
+            audio_client
+                .initialize_client(&format, &Direction::Render, &mode)
+                .map_err(|error| error.to_string())?;
+            let event = audio_client
+                .set_get_eventhandle()
+                .map_err(|error| error.to_string())?;
+            let render_client = audio_client
+                .get_audiorenderclient()
+                .map_err(|error| error.to_string())?;
+            let initial_buffer_frames = audio_client
+                .get_buffer_size()
+                .map_err(|error| error.to_string())? as usize;
+            Ok((
+                audio_client,
+                event,
+                render_client,
+                block_align,
+                initial_buffer_frames,
+            ))
+        })();
+
+        let (audio_client, event, render_client, block_align, initial_buffer_frames) =
+            match setup {
+                Ok(state) => state,
+                Err(message) => {
+                    if first_start {
+                        let _ = ready.send(Err(message));
+                        return;
+                    }
+                    thread::sleep(Duration::from_millis(250));
+                    continue;
                 }
-                Err(mpsc::TryRecvError::Disconnected) => {
-                    disconnected = true;
-                    break;
-                }
-            }
-        }
-        if disconnected || shutdown.load(Ordering::Acquire) {
-            break;
-        }
+            };
+
+        let mut pending = VecDeque::<u8>::with_capacity(
+            buffer_size as usize * block_align * 8,
+        );
+        pending.resize(initial_buffer_frames.saturating_mul(block_align), 0);
         if render_client
-            .write_to_device_from_deque(frames, &mut pending, None)
+            .write_to_device_from_deque(initial_buffer_frames, &mut pending, None)
             .is_err()
         {
+            if first_start {
+                let _ = ready.send(Err(
+                    "failed to prime the WASAPI render buffer".to_owned(),
+                ));
+                return;
+            }
+            thread::sleep(Duration::from_millis(250));
+            continue;
+        }
+        if let Err(error) = audio_client.start_stream() {
+            if first_start {
+                let _ = ready.send(Err(error.to_string()));
+                return;
+            }
+            thread::sleep(Duration::from_millis(250));
+            continue;
+        }
+        if first_start {
+            let _ = ready.send(Ok(()));
+            first_start = false;
+        }
+
+        let mut disconnected = false;
+        loop {
+            if shutdown.load(Ordering::Acquire) {
+                break;
+            }
+            if event.wait_for_event(1000).is_err() {
+                // A failed event wait usually means that the endpoint stopped.
+                break;
+            }
+
+            let frames = match audio_client.get_available_space_in_frames() {
+                Ok(frames) => frames as usize,
+                Err(_) => break,
+            };
+            if frames == 0 {
+                continue;
+            }
+            let required = frames.saturating_mul(block_align);
+            while pending.len() < required {
+                match receiver.try_recv() {
+                    Ok(block) => pending.extend(block),
+                    Err(mpsc::TryRecvError::Empty) => {
+                        pending.resize(required, 0);
+                        underruns.fetch_add(1, Ordering::Relaxed);
+                        break;
+                    }
+                    Err(mpsc::TryRecvError::Disconnected) => {
+                        disconnected = true;
+                        break;
+                    }
+                }
+            }
+            if disconnected || shutdown.load(Ordering::Acquire) {
+                break;
+            }
+            if render_client
+                .write_to_device_from_deque(frames, &mut pending, None)
+                .is_err()
+            {
+                break;
+            }
+        }
+
+        let _ = audio_client.stop_stream();
+        if shutdown.load(Ordering::Acquire) || disconnected {
             break;
         }
+        thread::sleep(Duration::from_millis(250));
     }
-    let _ = audio_client.stop_stream();
 }
 
 #[cfg(windows)]
