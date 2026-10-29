@@ -37,6 +37,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QSizePolicy,
     QStackedWidget,
     QToolButton,
     QVBoxLayout,
@@ -236,8 +237,7 @@ class RomLibraryDialog(QDialog):
             button.setIconSize(QSize(220, 118))
             button.setMinimumSize(220, 166)
             button.setSizePolicy(
-                button.sizePolicy().Policy.Expanding,
-                button.sizePolicy().Policy.Fixed,
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
             )
             button.setStyleSheet(
                 "QToolButton { background: #14233b; border: 1px solid #31547c; "
