@@ -26,10 +26,22 @@ from sega_emulator.frontend.qt.wasapi_audio import NativeAudioOutput
 # Original short chiptune motif. Frequencies are equal-tempered notes; None is
 # a rest. This is a host-output listening test, not a Master System PSG test.
 _MELODY_HZ: tuple[float | None, ...] = (
-    523.25, 659.25, 783.99, 659.25,
-    587.33, 698.46, 880.00, 698.46,
-    523.25, 659.25, 783.99, 1046.50,
-    783.99, 659.25, 587.33, None,
+    523.25,
+    659.25,
+    783.99,
+    659.25,
+    587.33,
+    698.46,
+    880.00,
+    698.46,
+    523.25,
+    659.25,
+    783.99,
+    1046.50,
+    783.99,
+    659.25,
+    587.33,
+    None,
 )
 _MELODY_BPM = 120.0
 
@@ -58,9 +70,9 @@ def _pcm_block(
         if current_frequency is None:
             samples.append(0)
             continue
-        phase = (
-            2.0 * math.pi * current_frequency * cycle_sample / sample_rate
-        ) % (2.0 * math.pi)
+        phase = (2.0 * math.pi * current_frequency * cycle_sample / sample_rate) % (
+            2.0 * math.pi
+        )
         samples.append(round(amplitude * math.sin(phase)))
 
     return struct.pack(f"<{count}h", *samples)
@@ -154,9 +166,7 @@ def _run_backend(
                 intervals_ms.append((cycle_start - previous_cycle_start) * 1000.0)
 
             generation_started = time.monotonic()
-            pcm = _pcm_block(
-                sample_rate, frequency, sample_index, buffer_size, signal
-            )
+            pcm = _pcm_block(sample_rate, frequency, sample_index, buffer_size, signal)
             generation_duration = time.monotonic() - generation_started
 
             write_started = time.monotonic()
@@ -209,7 +219,11 @@ def _run_backend(
             _write_trace(trace_path, rows)
             print(f"Trace de ciclos salvo em: {trace_path}")
         except OSError as exc:
-            failure = f"{failure}\nFAIL: gravação do trace CSV: {exc}" if failure else f"FAIL: gravação do trace CSV: {exc}"
+            failure = (
+                f"{failure}\nFAIL: gravação do trace CSV: {exc}"
+                if failure
+                else f"FAIL: gravação do trace CSV: {exc}"
+            )
 
     if failure:
         print(failure)
