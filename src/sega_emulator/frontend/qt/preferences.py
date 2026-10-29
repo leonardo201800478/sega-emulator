@@ -37,7 +37,7 @@ class FrontendPreferences:
     audio_enabled: bool = True
     diagnostics_enabled: bool = False
     cpu_core: str = "rust"
-    audio_sample_rate: int = 44_100
+    audio_sample_rate: int = 48_000
     audio_buffer_size: int = 512
     audio_volume: int = 80
     audio_balance: int = 0
