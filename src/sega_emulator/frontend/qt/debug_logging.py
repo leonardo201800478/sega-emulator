@@ -10,9 +10,9 @@ import logging
 import queue
 import threading
 import time
+from collections.abc import Callable
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from collections.abc import Callable
 
 from sega_emulator.diagnostics import JsonLineFormatter
 
