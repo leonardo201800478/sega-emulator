@@ -355,7 +355,7 @@ mod tests {
 }
 
 
-//! SG-1000 memory adapter for the local Z80 bus contract.
+/// SG-1000 memory adapter for the local Z80 bus contract.
 impl CpuBus for crate::Sg1000Memory {
     #[inline]
     fn read_memory(&mut self, address: u16) -> u8 {
