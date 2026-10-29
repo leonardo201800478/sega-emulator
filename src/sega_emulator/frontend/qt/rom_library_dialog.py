@@ -23,7 +23,7 @@ from PySide6.QtCore import (
     QThreadPool,
     Signal,
 )
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
@@ -285,8 +285,14 @@ class RomLibraryDialog(QDialog):
         )
         self.box_art_browse_button = QPushButton("Selecionar pasta de capas")
         self.box_art_browse_button.clicked.connect(self._browse_box_art_directory)
+        self.refresh_box_art_button = QPushButton("Atualizar imagens")
+        self.refresh_box_art_button.setToolTip(
+            "Reexaminar as capas locais e atualizar as imagens da biblioteca (F5)."
+        )
+        self.refresh_box_art_button.clicked.connect(self._refresh_box_art)
         box_art_row.addWidget(self.box_art_directory_edit, 1)
         box_art_row.addWidget(self.box_art_browse_button)
+        box_art_row.addWidget(self.refresh_box_art_button)
         library_layout.addLayout(box_art_row)
 
         self.rom_list = QListWidget()
@@ -305,6 +311,8 @@ class RomLibraryDialog(QDialog):
         self.rom_list.itemDoubleClicked.connect(lambda item: self._launch_selected())
         self.rom_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.rom_list.customContextMenuRequested.connect(self._show_rom_context_menu)
+        self._refresh_box_art_shortcut = QShortcut(QKeySequence.StandardKey.Refresh, self)
+        self._refresh_box_art_shortcut.activated.connect(self._refresh_box_art)
         library_layout.addWidget(self.rom_list, 1)
 
         self.status_label = QLabel(translate("scan_not_run", self.language))
@@ -509,6 +517,28 @@ class RomLibraryDialog(QDialog):
                 )
             self.rom_list.addItem(item)
 
+    def _refresh_box_art(self) -> None:
+        """Re-scan local artwork and redraw covers without rescanning ROM files."""
+        configured = self.box_art_directory_edit.text().strip()
+        if configured:
+            directory = Path(configured).expanduser()
+            if not directory.is_dir():
+                QMessageBox.warning(
+                    self,
+                    "Pasta de capas indisponível",
+                    f"A pasta configurada não existe ou não está acessível:\n{directory}",
+                )
+                return
+            if self.selected_system is not None:
+                self.settings.setValue(
+                    f"box_art_directories/{self.selected_system}",
+                    str(directory.resolve()),
+                )
+        self._render_entries(self._entries)
+        self.status_label.setText(
+            f"Imagens atualizadas · {len(self._entries)} jogo(s) na biblioteca"
+        )
+
     def _manual_box_art_key(self, rom_path: Path) -> str:
         system = self.selected_system or "unknown"
         normalized_path = str(rom_path.expanduser().resolve()).casefold()
@@ -524,6 +554,9 @@ class RomLibraryDialog(QDialog):
 
     def _show_rom_context_menu(self, position) -> None:
         item = self.rom_list.itemAt(position)
+        if item is None:
+            index = self.rom_list.indexAt(position)
+            item = self.rom_list.item(index.row()) if index.isValid() else None
         if item is None:
             return
         self.rom_list.setCurrentItem(item)
