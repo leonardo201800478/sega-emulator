@@ -35,7 +35,7 @@ class FrontendPreferences:
     recent_roms: tuple[str, ...] = ()
     controller_config: str = ""
     audio_enabled: bool = True
-    diagnostics_enabled: bool = True
+    diagnostics_enabled: bool = False
     cpu_core: str = "rust"
     audio_sample_rate: int = 44_100
     audio_buffer_size: int = 512
@@ -146,10 +146,9 @@ class FrontendPreferences:
             store.value("audio_enabled", defaults.audio_enabled),
             defaults.audio_enabled,
         )
-        diagnostics_enabled = _bool_value(
-            store.value("diagnostics_enabled", defaults.diagnostics_enabled),
-            defaults.diagnostics_enabled,
-        )
+        # Detailed logging is session-only and opt-in from the Debug tab.
+        # Do not silently re-enable heavy logs on the next application launch.
+        diagnostics_enabled = False
         # Migrate legacy profiles that persisted the removed Python runtime.
         cpu_core = "rust"
         if store.value("cpu_core", defaults.cpu_core) != "rust":
@@ -233,7 +232,7 @@ class FrontendPreferences:
         store.setValue("recent_roms", list(self.recent_roms))
         store.setValue("controller_config", self.controller_config)
         store.setValue("audio_enabled", self.audio_enabled)
-        store.setValue("diagnostics_enabled", self.diagnostics_enabled)
+        store.setValue("diagnostics_enabled", False)
         store.setValue("cpu_core", self.cpu_core)
         store.setValue("audio_sample_rate", self.audio_sample_rate)
         store.setValue("audio_buffer_size", self.audio_buffer_size)

@@ -48,3 +48,18 @@ Toda mudança de comportamento deve trazer testes antes ou junto da implementaç
 - `fmt`, Clippy e build aprovados para os crates afetados.
 - Workflow GitHub Actions aplicável concluído com sucesso, ou limitação claramente reportada.
 - README e documentação refletem o estado real, sem declarar capacidades não validadas.
+
+
+## Aditivo — fluxo obrigatório de completude e validação (2026-10-28)
+
+A decisão Rust-first permanece vigente e passa a ser executada com o fluxo obrigatório descrito em [Política permanente de desenvolvimento, fidelidade e entrega](../development-and-validation-policy.md):
+
+1. Inventariar o estado real do componente no HEAD atual.
+2. Completar lacunas funcionais com fatias compiláveis em Rust, sem reescrita integral por padrão.
+3. Rodar checks rápidos por fatia; depois validação independente abrangente curta e, após corrigir divergências, testes longos.
+4. Liberar o componente para o próximo marco somente com critérios e evidências registrados.
+5. Reservar a campanha completa de temporização ciclo a ciclo para a máquina SMS integrada, mantendo desde o início os contratos necessários para eventos de barramento e sincronização.
+
+O projeto limita a três agentes de IA simultâneos. A pesquisa deve priorizar documentação técnica oficial e usar código de emuladores abertos para consulta de lógica/arquitetura, sem cópia de código. Toda emulação ativa continua em Rust; Python permanece em Qt/PySide6, ferramentas e testes. APIs de host de baixo nível são escolhidas por evidência e medição, não por adoção especulativa.
+
+Para alterações que afetem gameplay, o merge em `main` exige checks pertinentes no SHA candidato e evidência de teste in-game; caso não esteja disponível no ambiente de automação, o gate fica pendente até confirmação do mantenedor.

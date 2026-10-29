@@ -135,26 +135,41 @@ def run(initial_path: Path | None = None) -> None:
             QMessageBox,
             QPushButton,
             QScrollArea,
+            QStyle,
             QTabWidget,
             QVBoxLayout,
             QWidget,
         )
 
+        from sega_emulator.frontend.qt.debug_logging import (
+            DebugLogController,
+            install_silent_default_logging,
+        )
         from sega_emulator.frontend.qt.main_window import (
             EmulatorMainWindow,
             persisted_window_dimensions,
         )
+        from sega_emulator.frontend.qt.rom_library_dialog import RomLibraryDialog
         from sega_emulator.frontend.qt.settings_dialog import SettingsDialog
     except ImportError as exc:
         raise RuntimeError(
             'Interface Qt não instalada. Execute: python -m pip install -e ".[qt]"'
         ) from exc
 
+    install_silent_default_logging()
     app = QApplication.instance() or QApplication([])
     app.setOrganizationName("SegaEmulator")
     app.setApplicationName("SegaEmulator")
+    if app.windowIcon().isNull():
+        app.setWindowIcon(
+            app.style().standardIcon(QStyle.StandardPixmap.SP_ComputerIcon)
+        )
     settings = QSettings()
     preferences = FrontendPreferences.from_store(settings)
+    ui_language = str(settings.value("ui_language", "pt-BR"))
+    if ui_language not in {"pt-BR", "en", "es", "it", "fr"}:
+        ui_language = "pt-BR"
+        settings.setValue("ui_language", ui_language)
     video_driver = str(settings.value("video_driver", "auto"))
     if video_driver not in {"auto", "vulkan", "d3d11", "d3d12", "raster"}:
         video_driver = "auto"
@@ -205,7 +220,41 @@ def run(initial_path: Path | None = None) -> None:
         on_start_vgm_recording=lambda: start_vgm_recording(),
         on_stop_vgm_recording=lambda: stop_vgm_recording(),
         video_driver=video_driver,
+        language=ui_language,
     )
+    debug_logger = DebugLogController(
+        log_dir=Path("logs"),
+        on_lines=window.debug_lines_ready.emit,
+    )
+
+    def set_debug_logging(enabled: bool) -> None:
+        if enabled:
+            if debug_logger.start():
+                window.set_debug_status(
+                    f"Captura ativa em thread separada. Arquivo JSONL: "
+                    f"{debug_logger.log_path}. Fila limitada a "
+                    f"{debug_logger.queue_capacity} eventos; eventos descartados "
+                    f"serão contabilizados."
+                )
+            else:
+                window.debug_logging_checkbox.blockSignals(True)
+                window.debug_logging_checkbox.setChecked(False)
+                window.debug_logging_checkbox.blockSignals(False)
+                window.set_debug_status(
+                    "Não foi possível iniciar a captura: o gravador anterior "
+                    "ainda está encerrando. Tente novamente em instantes."
+                )
+        else:
+            debug_logger.stop()
+            window.set_debug_status(
+                "Encerramento da captura solicitado. "
+                f"Eventos descartados por fila cheia nesta sessão: "
+                f"{debug_logger.dropped_records}."
+            )
+
+    window.debug_logging_toggled.connect(set_debug_logging)
+    app.aboutToQuit.connect(debug_logger.stop)
+
     window.resize(preferences.window_width, preferences.window_height)
     window._video_scale = preferences.video_scale
     view = window.video_widget
@@ -1276,8 +1325,22 @@ def run(initial_path: Path | None = None) -> None:
     refresh_recent_rom_menu()
     if initial_path is not None:
         open_rom(str(initial_path))
+    else:
+        # Start in the library; only an explicit selection launches a ROM.
+        # Keep the library independent in the taskbar and within the Windows
+        # work area; fullscreen is reserved for explicit gameplay.
+        library_dialog = RomLibraryDialog(settings)
+        library_dialog.setWindowIcon(app.windowIcon())
+        library_dialog.showNormal()
+        if (
+            library_dialog.exec() == QDialog.DialogCode.Accepted
+            and library_dialog.selected_rom is not None
+        ):
+            open_rom(str(library_dialog.selected_rom))
     window.show()
     app.exec()
+    debug_logger.stop()
+    debug_logger.wait(1.5)
     if vgm_recorder.active:
         stop_vgm_recording()
     saved_width, saved_height = persisted_window_dimensions(

@@ -126,3 +126,76 @@ Estas frentes são revisões técnicas separadas e não substituem checks automa
 3. **Frente C — plataformas/oráculos/CI:** verificar fontes para modelos americano/japonês/Tec Toy, confirmar presença de FM por variante, preparar testes diferenciais e garantir que workflows validem o SHA candidato.
 
 Cada frente deve entregar: arquivos/áreas examinados, evidências e fontes, riscos, casos de teste faltantes e recomendação PASS/FAIL/BLOCKED/NOT RUN. Não alegar execução de agente externo sem prova de que foi executado.
+
+## Registro de auditoria Z80 — continuidade em 2026-10-28
+
+Este registro consolida o estado observado após a integração de `05cb8259dfaaea5844c3290945301c88ec0fdc54`. Não altera o contrato da CPU nem converte evidência anterior em aprovação do SHA atual.
+
+### Evidências atuais e limites
+
+- A matriz `docs/architecture/z80-sms-opcode-matrix.csv` enumera 1.792 codificações fixas (256 por espaço BASE, CB, ED, DD, FD, DDCB e FDCB) e 11 classes de sequências de prefixos. Enumeração completa não significa semântica completa.
+- `docs/architecture/z80-sms-reference-coverage.md` registra 172 vetores SingleStepTests/Z80. O próprio upstream declara que o corpus foi traduzido do núcleo Z80 do Ares e corrigido; portanto, ele não é um oráculo independente de uma implementação derivada de Ares.
+- A cobertura indexed-CB de rotate/shift foi ampliada com testes dirigidos e varreduras do modelo interno. Esses testes não comparam eventos de barramento ordenados por T-state.
+- O corpus externo `raxoft/z80test` é uma linha de evidência distinta, mas seu alvo original é ZX Spectrum e o harness SMS usa memória plana, substitui a saída de vídeo e simula portas. Cada discrepância exige triagem de variante/harness antes de ser classificada como bug do core.
+- Um registro histórico separado menciona 1.604.000 vetores (1.556.612 aprovados e 47.388 falhos; 97,046%) em 2026-10-24. Esse número **não** corresponde aos 204 testes reportados pelo `raxoft/z80test`; a referência ao run/artifact original ainda precisa ser recuperada, portanto esse baseline fica **NOT VERIFIED** até ser vinculado a evidência consultável.
+
+### Gate de conclusão da auditoria semântica
+
+1. Executar `z80full` e `z80ccf` no SHA candidato atual, preservando logs/artefatos e o limite de instruções declarado.
+2. Comparar contadores e resultados com o baseline histórico e agrupar falhas por teste/opcode/família, registrando a primeira divergência reproduzível e a classificação: bug do core, hipótese de variante, limitação do harness, teste inválido ou pendente.
+3. Resolver ou justificar individualmente cada discrepância relevante; nenhuma falha pode ser removida/ignoradas apenas para obter um resultado verde.
+4. Completar os vetores faltantes por famílias e estados de fronteira identificados na matriz, priorizando ED/bloco, prefixos, WZ/Q/R e interrupções. Fixar a procedência e a licença de cada oráculo.
+5. Validar os cenários de reset, HALT, EI delay, NMI, INT IM0/1/2, IFF1/IFF2, wraparound de PC/SP e estado de refresh nos testes dirigidos.
+6. Executar formatação, Clippy, testes Rust do workspace e workflows aplicáveis no SHA candidato exato; separar resultados de candidato e pós-merge.
+7. Manter o nível temporal em **Nível A — T-states nominais por instrução** até existir contrato e regressão de eventos de barramento ordenados. Não declarar `TEMPORAL_PASS` com base apenas na duração agregada.
+8. Manter o gate do Z80A do SG-1000 bloqueado até todos os critérios da PR #157 serem comprovados.
+
+### Estado de execução deste registro
+
+- Inventário de codificações: **IMPLEMENTED**.
+- Correção semântica global: **NOT PASS**; evidência incompleta.
+- Baseline externo anterior: **SHORT_PASS histórico**, com 47.388 falhas ainda por triagem.
+- `raxoft/z80test` no SHA candidato `59ee21fd55184f77443431bf71ab7a10209fea74`: **PASS** no workflow [SMS Z80 Platform Validation](https://github.com/leonardo201800478/sega-emulator/actions/runs/40773702379). `z80full`: 188.022.588 instruções, 1.132.230.280 T-states agregados, 204 testes reportados, 0 falhas. `z80ccf`: 88.340.467 instruções, 602.728.667 T-states agregados, 204 testes reportados, 0 falhas. Esses contadores não equivalem a 1,604 milhão de vetores por opcode nem validam barramento ciclo a ciclo.
+- `cargo fmt --all -- --check`, Clippy do workspace e `cargo test --workspace --locked`: **PASS** no mesmo SHA pelo workflow acima; CI/quality também **PASS** no [run 40773702436](https://github.com/leonardo201800478/sega-emulator/actions/runs/40773702436).
+- Reexecução do corpus separado de 1.604.000 vetores: **NOT RUN / artefato original não identificado nesta sessão**.
+- Validação por eventos de barramento em T-state: **NOT RUN**.
+- Liberação do gate Z80A/SG-1000: **BLOCKED**.
+
+Este documento só será atualizado para promover um estado após evidência verificável do SHA e dos artefatos correspondentes.
+
+
+
+## Estado efetivo no repositório — 2026-10-29
+
+Este documento permanece um contrato de arquitetura, não uma certificação. O executor Z80 Rust ativo no SMS e os testes de controle de fluxo e trace ED estão integrados na `main` em `a662b7256ed5b92d06fd33875e4031b932e25945`. A máquina SMS completa, sua integração de dispositivos e a precisão temporal integral continuam sendo gates separados da semântica isolada da CPU.
+
+
+
+## Estado consolidado após as PRs #227–#229 — 2026-10-29
+
+**SHA de `main` verificado após os merges:** `a662b7256ed5b92d06fd33875e4031b932e25945`.  
+**CI da `main` nesse SHA:** PASS — [workflow 40792001983](https://github.com/leonardo201800478/sega-emulator/actions/runs/40792001983).  
+**Limite:** o CI verde comprova apenas os checks executados pelo workflow; não certifica completude global do Z80 nem fidelidade física/ciclo a ciclo.
+
+### Mudanças integradas
+
+- **PR #227**, candidato `d4447db5f0dce9a2ecde9e50c97f39b10ce8da17`, merge `28da159634aa60b9a804f3bd7f781ccf82f3e1cf`: trace por T-state para LDI/LDD/LDIR/LDDR e CPI/CPD/CPIR/CPDR sem prefixos DD/FD, além de trace M-cycle associado. Validação de plataforma no candidato: [run 40782245521](https://github.com/leonardo201800478/sega-emulator/actions/runs/40782245521) — PASS.
+- **PR #229**, candidato `56cf4743bf0f05660f21a798de72e19afcfab34a`, merge `7b6fef3300c753c2b089f6b0dd287f8120b9f93f`: testes determinísticos para JR, JP, CALL, RET e DJNZ condicionais, caminhos tomados/não tomados, fronteiras de deslocamento, wraparound de PC/SP, ordem de acesso à pilha e T-states nominais; correção de `RET cc` para atualizar WZ/MEMPTR com o endereço de retorno somente quando a condição é tomada. [Fast Validation](https://github.com/leonardo201800478/sega-emulator/actions/runs/40791517040), [CI](https://github.com/leonardo201800478/sega-emulator/actions/runs/40791516982) e [SMS Z80 Platform Validation](https://github.com/leonardo201800478/sega-emulator/actions/runs/40791516943) — PASS no candidato exato.
+- **PR #228**, candidato documental `a2c0850c20232c95a5210a39fbd53cc7aeb5101e`, merge `a662b7256ed5b92d06fd33875e4031b932e25945`: auditoria de continuidade incorporada; [CI documental](https://github.com/leonardo201800478/sega-emulator/actions/runs/40791436529) — PASS.
+
+### Estado técnico depois dos merges
+
+| Área | Estado | Limite/evidência |
+|---|---|---|
+| Executor Z80 Rust em `native/sms_core` | IMPLEMENTED | Caminho ativo consolidado; não significa que todos os estados de todas as instruções estejam provados. |
+| Testes de controle de fluxo condicional | IMPLEMENTED; SHORT_PASS no candidato #229 | Cobertura adicionada às famílias JR/JP/CALL/RET/DJNZ e aos limites declarados; não é prova combinatória de todos os estados. |
+| Trace ED de bloco | IMPLEMENTED; SHORT_PASS no candidato #227 | Restrito às oito instruções indicadas e ao perfil de observação documentado. |
+| Classificação dos espaços de opcode | IMPLEMENTED | Enumeração/classificação não equivale à correção semântica integral. |
+| Semântica global, flags não documentadas, Q/P, WZ, interrupções e aliases | INCOMPLETO / auditoria contínua | Exigir vetores discriminantes e proveniência explicitada por família. |
+| Integração temporal com scheduler/dispositivos SMS | INTEGRATION_PENDING | A instrumentação atual não controla o scheduler nem representa todos os pinos/esperas. |
+| Fidelidade ciclo a ciclo integral | TEMPORAL_PASS NÃO DECLARADO | Não há evidência para afirmar cobertura temporal completa ou equivalência física. |
+
+### Proveniência e regras de interpretação
+
+O corpus SingleStepTests/Z80 fixado em `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7` tem ancestralidade no núcleo Z80 do Ares; é útil para regressão, mas não é um oráculo independente de hardware. Separar sempre comportamento descrito pelo manual ZiLOG, comportamento documentado por referências de terceiros, observação em emuladores e hipótese ainda não comprovada. Não promover um estado de validação com base apenas no número de opcodes enumerados ou no CI geral.
+

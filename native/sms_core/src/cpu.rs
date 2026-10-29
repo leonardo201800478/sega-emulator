@@ -1,13 +1,16 @@
-//! Native Z80 instruction engine for the standalone Master System core.
+//! Consolidated native Z80 instruction engine for the Master System core.
 //!
-//! This is an independent SMS-owned copy of the Rust implementation used by
-//! the SG-1000 core. The SG-1000 source is intentionally left untouched.
-//! Execution reports nominal instruction T-states; it does not claim
-//! cycle-by-cycle bus accuracy. Opcode coverage and semantics require
-//! independent vectors and the SMS-specific bus integration tests.
+//! This implementation merges the SG-1000 CPU work with SMS-specific fixes
+//! for WZ/MEMPTR tracking and indexed-CB coverage. The SG-1000 source remains
+//! unchanged. Execution reports nominal instruction T-states; it does not
+//! claim cycle-by-cycle bus accuracy. Semantic coverage still requires
+//! independent vectors and bus-level validation.
 
 use crate::alu::{adc8, add8, and8, cp8, or8, sbc8, sub8, xor8};
-use crate::bus::CpuBus;
+use crate::bus::{
+    CpuBus, Z80BusEvent, Z80BusEventKind, Z80CpuSnapshot, Z80InstructionOutcome,
+    Z80InstructionTrace, Z80TStatePhase, Z80TStateSample,
+};
 
 const FLAG_C: u8 = 0x01;
 const FLAG_N: u8 = 0x02;
@@ -103,7 +106,8 @@ pub struct Z80 {
     pub nmi_pending: bool,
     /// Maskable INT request and the external data-bus byte for acknowledge.
     pub int_pending: Option<u8>,
-    /// Opcode supplied by an IM 0 interrupt acknowledge; it does not consume PC.
+    /// Opcode already consumed by an interrupt acknowledge or prefix decoder.
+    /// It is executed without another memory fetch or PC increment.
     injected_opcode: Option<u8>,
     /// Last flags value written by an instruction (Z80 Q latch).
     pub q: u8,
@@ -113,6 +117,14 @@ pub struct Z80 {
     step_depth: bool,
     pub halted: bool,
     pub total_tstates: u64,
+    instruction_count: u64,
+    opcode_trace_bytes: [u8; 8],
+    opcode_trace_len: u8,
+    opcode_trace_truncated: bool,
+    capture_opcode_trace: bool,
+    instruction_trace_bytes: [u8; 8],
+    instruction_trace_len: u8,
+    instruction_trace_truncated: bool,
 }
 
 impl Z80 {
@@ -137,6 +149,14 @@ impl Z80 {
         self.step_depth = false;
         self.halted = false;
         self.total_tstates = 0;
+        self.instruction_count = 0;
+        self.opcode_trace_bytes = [0; 8];
+        self.opcode_trace_len = 0;
+        self.opcode_trace_truncated = false;
+        self.capture_opcode_trace = false;
+        self.instruction_trace_bytes = [0; 8];
+        self.instruction_trace_len = 0;
+        self.instruction_trace_truncated = false;
     }
 
     /// Latch a non-maskable interrupt; it is serviced at the next step boundary.
@@ -171,25 +191,26 @@ impl Z80 {
         let data_bus = self.int_pending.take().unwrap_or(0xFF);
         let return_address = self.registers.pc;
         self.halted = false;
-        self.r = (self.r & 0x80) | (self.r.wrapping_add(1) & 0x7F);
         self.iff1 = false;
         self.iff2 = false;
 
         let cycles = match self.interrupt_mode {
             0 => {
-                // IM 0 executes the externally supplied byte as the first
-                // opcode fetch. Operands, if any, are fetched from the current PC.
+                // The injected opcode is consumed as the acknowledge M1 cycle;
+                // step_inner performs its single R increment for that fetch.
                 self.injected_opcode = Some(data_bus);
                 let instruction_cycles = self.step(bus)?;
                 self.total_tstates += 2;
                 return Ok(instruction_cycles + 2);
             }
             1 => {
+                self.r = (self.r & 0x80) | (self.r.wrapping_add(1) & 0x7F);
                 self.push16(bus, return_address);
                 self.registers.pc = 0x0038;
                 13
             }
             2 => {
+                self.r = (self.r & 0x80) | (self.r.wrapping_add(1) & 0x7F);
                 self.push16(bus, return_address);
                 let vector = (u16::from(self.i) << 8) | u16::from(data_bus);
                 let low = bus.read_memory(vector);
@@ -209,21 +230,127 @@ impl Z80 {
         Ok(cycles)
     }
 
-    /// Execute one instruction and return its documented base T-state count.
+    /// Execute one instruction and return its nominal instruction T-state count.
     ///
-    /// This first extraction slice covers common base instructions only.
-    /// Prefixes, interrupts, and all unimplemented opcodes return an explicit
-    /// error until their native implementation is migrated.
+    /// Base, CB, ED, DD/FD and indexed-CB decoding plus NMI/INT entry are
+    /// implemented here, but semantic completeness is established only by
+    /// independent vectors. Returned T-states are aggregate instruction
+    /// counts; this interface does not model ordered, per-T-state bus events.
     pub fn step<B: CpuBus>(&mut self, bus: &mut B) -> Result<u32, CpuError> {
         if self.step_depth {
             return self.step_inner(bus);
         }
+
+        let trace_enabled = bus.instruction_trace_enabled();
+        let instruction_index = if trace_enabled {
+            self.instruction_count = self.instruction_count.wrapping_add(1);
+            self.opcode_trace_bytes = [0; 8];
+            self.opcode_trace_len = 0;
+            self.opcode_trace_truncated = false;
+            self.instruction_trace_bytes = [0; 8];
+            self.instruction_trace_len = 0;
+            self.instruction_trace_truncated = false;
+            self.capture_opcode_trace = true;
+            self.instruction_count
+        } else {
+            self.capture_opcode_trace = false;
+            0
+        };
+        let before = trace_enabled.then(|| self.trace_snapshot());
+
         self.q_previous = self.q;
         self.q = 0;
         self.step_depth = true;
         let result = self.step_inner(bus);
         self.step_depth = false;
+
+        if let Some(before) = before {
+            let outcome = match &result {
+                Ok(_) => Z80InstructionOutcome::Completed,
+                Err(CpuError::UnsupportedOpcode { opcode, address }) => {
+                    Z80InstructionOutcome::UnsupportedOpcode {
+                        opcode: *opcode,
+                        address: *address,
+                    }
+                }
+            };
+            let trace = Z80InstructionTrace {
+                instruction_index,
+                opcode_bytes: self.opcode_trace_bytes,
+                opcode_len: self.opcode_trace_len,
+                opcode_bytes_truncated: self.opcode_trace_truncated,
+                instruction_bytes: self.instruction_trace_bytes,
+                instruction_len: self.instruction_trace_len,
+                instruction_bytes_truncated: self.instruction_trace_truncated,
+                tstates: result.as_ref().ok().copied(),
+                outcome,
+                before,
+                after: self.trace_snapshot(),
+            };
+            self.capture_opcode_trace = false;
+            bus.observe_instruction_trace(trace);
+        } else {
+            self.capture_opcode_trace = false;
+        }
         result
+    }
+
+    fn trace_snapshot(&self) -> Z80CpuSnapshot {
+        Z80CpuSnapshot {
+            af: u16::from_be_bytes([self.registers.a, self.registers.f]),
+            bc: self.registers.bc(),
+            de: self.registers.de(),
+            hl: self.registers.hl(),
+            af_alt: u16::from_be_bytes([self.alternate.a, self.alternate.f]),
+            bc_alt: u16::from_be_bytes([self.alternate.b, self.alternate.c]),
+            de_alt: u16::from_be_bytes([self.alternate.d, self.alternate.e]),
+            hl_alt: u16::from_be_bytes([self.alternate.h, self.alternate.l]),
+            ix: self.ix,
+            iy: self.iy,
+            pc: self.registers.pc,
+            sp: self.registers.sp,
+            i: self.i,
+            r: self.r,
+            iff1: self.iff1,
+            iff2: self.iff2,
+            interrupt_mode: self.interrupt_mode,
+            wz: self.wz,
+            ei_delay: self.ei_delay,
+            nmi_pending: self.nmi_pending,
+            int_pending: self.int_pending,
+            q: self.q,
+            p: self.p,
+            halted: self.halted,
+            total_tstates: self.total_tstates,
+        }
+    }
+
+    #[inline]
+    fn record_instruction_byte_for_trace(&mut self, byte: u8) {
+        if !self.capture_opcode_trace {
+            return;
+        }
+        let index = usize::from(self.instruction_trace_len);
+        if index < self.instruction_trace_bytes.len() {
+            self.instruction_trace_bytes[index] = byte;
+            self.instruction_trace_len += 1;
+        } else {
+            self.instruction_trace_truncated = true;
+        }
+    }
+
+    #[inline]
+    fn record_opcode_for_trace(&mut self, opcode: u8) {
+        if !self.capture_opcode_trace {
+            return;
+        }
+        let index = usize::from(self.opcode_trace_len);
+        if index < self.opcode_trace_bytes.len() {
+            self.opcode_trace_bytes[index] = opcode;
+            self.opcode_trace_len += 1;
+        } else {
+            self.opcode_trace_truncated = true;
+        }
     }
 
     fn step_inner<B: CpuBus>(&mut self, bus: &mut B) -> Result<u32, CpuError> {
@@ -246,8 +373,11 @@ impl Z80 {
         }
 
         let address = self.registers.pc;
-        let opcode = if let Some(injected) = self.injected_opcode.take() {
+        let injected_opcode = self.injected_opcode.take();
+        let opcode = if let Some(injected) = injected_opcode {
             self.r = (self.r & 0x80) | (self.r.wrapping_add(1) & 0x7F);
+            self.record_instruction_byte_for_trace(injected);
+            self.record_opcode_for_trace(injected);
             injected
         } else {
             self.fetch_opcode(bus)
@@ -277,7 +407,9 @@ impl Z80 {
                 let old_hl = self.registers.hl().to_le_bytes();
                 bus.write_memory(self.registers.sp, old_hl[0]);
                 bus.write_memory(self.registers.sp.wrapping_add(1), old_hl[1]);
-                self.registers.set_hl(u16::from_le_bytes([low, high]));
+                let exchanged = u16::from_le_bytes([low, high]);
+                self.registers.set_hl(exchanged);
+                self.wz = exchanged;
                 19
             }
             0xF3 => {
@@ -298,7 +430,8 @@ impl Z80 {
             }
             0xED => {
                 let extended_opcode = self.fetch_opcode(bus);
-                self.execute_ed(bus, extended_opcode)
+                let trace_enabled = injected_opcode.is_none() && bus.timing_trace_enabled();
+                self.execute_ed(bus, extended_opcode, trace_enabled)
             }
             0xD3 => {
                 let port_low = self.fetch8(bus);
@@ -335,7 +468,7 @@ impl Z80 {
                 let subtract = old_flags & FLAG_N != 0;
                 let mut correction = 0u8;
                 let mut carry = old_flags & FLAG_C != 0;
-                if old_flags & FLAG_H != 0 || (!subtract && (a & 0x0F) > 9) {
+                if old_flags & FLAG_H != 0 || (a & 0x0F) > 9 {
                     correction |= 0x06;
                 }
                 if carry || a > 0x99 {
@@ -452,7 +585,11 @@ impl Z80 {
                     bus.write_memory(address, self.registers.a);
                     13
                 };
-                self.wz = address.wrapping_add(1);
+                self.wz = if opcode == 0x32 {
+                    (u16::from(self.registers.a) << 8) | (address.wrapping_add(1) & 0x00FF)
+                } else {
+                    address.wrapping_add(1)
+                };
                 tstates
             }
             0x2A | 0x3A => {
@@ -562,13 +699,15 @@ impl Z80 {
                     _ => {
                         let [accumulator, flags] = value.to_be_bytes();
                         self.registers.a = accumulator;
-                        self.set_flags(flags);
+                        // POP AF loads F but does not set the Z80 Q latch.
+                        self.registers.f = flags;
                     }
                 }
                 10
             }
             0xC4 | 0xCC | 0xD4 | 0xDC | 0xE4 | 0xEC | 0xF4 | 0xFC => {
                 let target = self.fetch16(bus);
+                self.wz = target;
                 if self.condition((opcode >> 3) & 0x07) {
                     self.push16(bus, self.registers.pc);
                     self.registers.pc = target;
@@ -580,6 +719,7 @@ impl Z80 {
             0xC0 | 0xC8 | 0xD0 | 0xD8 | 0xE0 | 0xE8 | 0xF0 | 0xF8 => {
                 if self.condition((opcode >> 3) & 0x07) {
                     self.registers.pc = self.pop16(bus);
+                    self.wz = self.registers.pc;
                     11
                 } else {
                     5
@@ -599,6 +739,7 @@ impl Z80 {
             }
             0xC2 | 0xCA | 0xD2 | 0xDA | 0xE2 | 0xEA | 0xF2 | 0xFA => {
                 let target = self.fetch16(bus);
+                self.wz = target;
                 if self.condition((opcode >> 3) & 0x07) {
                     self.registers.pc = target;
                 }
@@ -662,6 +803,7 @@ impl Z80 {
             opcode if opcode & 0xC7 == 0xC7 => {
                 self.push16(bus, self.registers.pc);
                 self.registers.pc = u16::from(opcode & 0x38);
+                self.wz = self.registers.pc;
                 11
             }
             _ => return Err(CpuError::UnsupportedOpcode { opcode, address }),
@@ -840,10 +982,10 @@ impl Z80 {
                 if source == 6 { 19 } else { 8 }
             }
             _ => {
-                // Rewind the already-read opcode and its refresh increment so
-                // the base decoder handles this unaffected instruction once.
-                self.registers.pc = self.registers.pc.wrapping_sub(1);
+                // Hand the already-fetched opcode to the base decoder without
+                // issuing a second memory read for the same instruction byte.
                 self.r = (self.r & 0x80) | (self.r.wrapping_sub(1) & 0x7F);
+                self.injected_opcode = Some(opcode);
                 let base_cycles = self.step(bus)?;
                 let prefix_cycles = 4 + extra_prefix_cycles;
                 self.total_tstates += u64::from(prefix_cycles);
@@ -1013,7 +1155,7 @@ impl Z80 {
 
     /// Execute ED-prefixed Z80 instructions. Unassigned ED encodings are
     /// documented as two-byte NOPs on the classic Z80.
-    fn execute_ed<B: CpuBus>(&mut self, bus: &mut B, opcode: u8) -> u32 {
+    fn execute_ed<B: CpuBus>(&mut self, bus: &mut B, opcode: u8, trace_enabled: bool) -> u32 {
         match opcode {
             0x47 => {
                 self.i = self.registers.a;
@@ -1133,8 +1275,8 @@ impl Z80 {
                 self.set_szp_xy_flags_preserving_carry(self.registers.a);
                 18
             }
-            0xA0 | 0xA8 | 0xB0 | 0xB8 => self.execute_block_transfer(bus, opcode),
-            0xA1 | 0xA9 | 0xB1 | 0xB9 => self.execute_block_compare(bus, opcode),
+            0xA0 | 0xA8 | 0xB0 | 0xB8 => self.execute_block_transfer(bus, opcode, trace_enabled),
+            0xA1 | 0xA9 | 0xB1 | 0xB9 => self.execute_block_compare(bus, opcode, trace_enabled),
             0xA2 | 0xAA | 0xB2 | 0xBA | 0xA3 | 0xAB | 0xB3 | 0xBB => {
                 self.execute_block_io(bus, opcode)
             }
@@ -1195,19 +1337,307 @@ impl Z80 {
         self.set_flags(flags);
     }
 
-    fn execute_block_transfer<B: CpuBus>(&mut self, bus: &mut B, opcode: u8) -> u32 {
+    #[inline]
+    fn emit_timing_event<B: CpuBus>(bus: &mut B, event: Z80BusEvent) {
+        bus.observe_timing_event(event);
+    }
+
+    #[inline]
+    fn emit_tstate_sample<B: CpuBus>(bus: &mut B, sample: Z80TStateSample) {
+        bus.observe_tstate_sample(sample);
+    }
+
+    fn emit_m1_tstate_samples<B: CpuBus>(
+        bus: &mut B,
+        instruction_pc: u16,
+        tstate_offset: u32,
+        fetch_address: u16,
+        opcode: u8,
+        refresh_address: u16,
+    ) {
+        let samples = [
+            Z80TStateSample {
+                instruction_pc,
+                tstate_offset,
+                phase: Z80TStatePhase::OpcodeFetch,
+                address: Some(fetch_address),
+                data: None,
+                rd: false,
+                wr: false,
+                mreq: false,
+                iorq: false,
+            },
+            Z80TStateSample {
+                instruction_pc,
+                tstate_offset: tstate_offset + 1,
+                phase: Z80TStatePhase::OpcodeFetch,
+                address: Some(fetch_address),
+                data: None,
+                rd: true,
+                wr: false,
+                mreq: true,
+                iorq: false,
+            },
+            Z80TStateSample {
+                instruction_pc,
+                tstate_offset: tstate_offset + 2,
+                phase: Z80TStatePhase::Refresh,
+                address: Some(refresh_address),
+                data: Some(opcode),
+                rd: false,
+                wr: false,
+                mreq: false,
+                iorq: false,
+            },
+            Z80TStateSample {
+                instruction_pc,
+                tstate_offset: tstate_offset + 3,
+                phase: Z80TStatePhase::Refresh,
+                address: Some(refresh_address),
+                data: None,
+                rd: false,
+                wr: false,
+                mreq: false,
+                iorq: false,
+            },
+        ];
+        for sample in samples {
+            Self::emit_tstate_sample(bus, sample);
+        }
+    }
+
+    fn emit_memory_read_tstate_samples<B: CpuBus>(
+        bus: &mut B,
+        instruction_pc: u16,
+        tstate_offset: u32,
+        address: u16,
+        value: u8,
+    ) {
+        let samples = [
+            Z80TStateSample {
+                instruction_pc,
+                tstate_offset,
+                phase: Z80TStatePhase::MemoryRead,
+                address: Some(address),
+                data: None,
+                rd: false,
+                wr: false,
+                mreq: false,
+                iorq: false,
+            },
+            Z80TStateSample {
+                instruction_pc,
+                tstate_offset: tstate_offset + 1,
+                phase: Z80TStatePhase::MemoryRead,
+                address: Some(address),
+                data: None,
+                rd: true,
+                wr: false,
+                mreq: true,
+                iorq: false,
+            },
+            Z80TStateSample {
+                instruction_pc,
+                tstate_offset: tstate_offset + 2,
+                phase: Z80TStatePhase::MemoryRead,
+                address: Some(address),
+                data: Some(value),
+                rd: false,
+                wr: false,
+                mreq: false,
+                iorq: false,
+            },
+        ];
+        for sample in samples {
+            Self::emit_tstate_sample(bus, sample);
+        }
+    }
+
+    fn emit_memory_write_tstate_samples<B: CpuBus>(
+        bus: &mut B,
+        instruction_pc: u16,
+        tstate_offset: u32,
+        address: u16,
+        value: u8,
+    ) {
+        let samples = [
+            Z80TStateSample {
+                instruction_pc,
+                tstate_offset,
+                phase: Z80TStatePhase::MemoryWrite,
+                address: Some(address),
+                data: None,
+                rd: false,
+                wr: false,
+                mreq: false,
+                iorq: false,
+            },
+            Z80TStateSample {
+                instruction_pc,
+                tstate_offset: tstate_offset + 1,
+                phase: Z80TStatePhase::MemoryWrite,
+                address: Some(address),
+                data: Some(value),
+                rd: false,
+                wr: true,
+                mreq: true,
+                iorq: false,
+            },
+            Z80TStateSample {
+                instruction_pc,
+                tstate_offset: tstate_offset + 2,
+                phase: Z80TStatePhase::MemoryWrite,
+                address: Some(address),
+                data: None,
+                rd: false,
+                wr: false,
+                mreq: false,
+                iorq: false,
+            },
+            Z80TStateSample {
+                instruction_pc,
+                tstate_offset: tstate_offset + 3,
+                phase: Z80TStatePhase::MemoryWrite,
+                address: Some(address),
+                data: None,
+                rd: false,
+                wr: false,
+                mreq: false,
+                iorq: false,
+            },
+            Z80TStateSample {
+                instruction_pc,
+                tstate_offset: tstate_offset + 4,
+                phase: Z80TStatePhase::MemoryWrite,
+                address: Some(address),
+                data: None,
+                rd: false,
+                wr: false,
+                mreq: false,
+                iorq: false,
+            },
+        ];
+        for sample in samples {
+            Self::emit_tstate_sample(bus, sample);
+        }
+    }
+
+    fn emit_internal_tstate_samples<B: CpuBus>(
+        bus: &mut B,
+        instruction_pc: u16,
+        tstate_offset: u32,
+        held_address: u16,
+    ) {
+        for offset in 0..5 {
+            Self::emit_tstate_sample(
+                bus,
+                Z80TStateSample {
+                    instruction_pc,
+                    tstate_offset: tstate_offset + offset,
+                    phase: Z80TStatePhase::Internal,
+                    address: Some(held_address),
+                    data: None,
+                    rd: false,
+                    wr: false,
+                    mreq: false,
+                    iorq: false,
+                },
+            );
+        }
+    }
+
+    fn execute_block_transfer<B: CpuBus>(
+        &mut self,
+        bus: &mut B,
+        opcode: u8,
+        trace_enabled: bool,
+    ) -> u32 {
         let direction = if opcode == 0xA8 || opcode == 0xB8 {
             -1_i16
         } else {
             1_i16
         };
+        let instruction_pc = self.registers.pc.wrapping_sub(2);
+        if trace_enabled {
+            Self::emit_timing_event(
+                bus,
+                Z80BusEvent {
+                    instruction_pc,
+                    tstate_offset: 0,
+                    kind: Z80BusEventKind::OpcodeFetch,
+                    address: Some(instruction_pc),
+                    data: Some(0xED),
+                    duration_tstates: 4,
+                },
+            );
+            Self::emit_timing_event(
+                bus,
+                Z80BusEvent {
+                    instruction_pc,
+                    tstate_offset: 4,
+                    kind: Z80BusEventKind::OpcodeFetch,
+                    address: Some(instruction_pc.wrapping_add(1)),
+                    data: Some(opcode),
+                    duration_tstates: 4,
+                },
+            );
+            let first_refresh_address =
+                (u16::from(self.i) << 8) | u16::from(self.r.wrapping_sub(2) & 0x7F);
+            let second_refresh_address =
+                (u16::from(self.i) << 8) | u16::from(self.r.wrapping_sub(1) & 0x7F);
+            Self::emit_m1_tstate_samples(
+                bus,
+                instruction_pc,
+                0,
+                instruction_pc,
+                0xED,
+                first_refresh_address,
+            );
+            Self::emit_m1_tstate_samples(
+                bus,
+                instruction_pc,
+                4,
+                instruction_pc.wrapping_add(1),
+                opcode,
+                second_refresh_address,
+            );
+        }
         let address = self.registers.hl();
         let value = bus.read_memory(address);
-        bus.write_memory(self.registers.de(), value);
+        if trace_enabled {
+            Self::emit_timing_event(
+                bus,
+                Z80BusEvent {
+                    instruction_pc,
+                    tstate_offset: 8,
+                    kind: Z80BusEventKind::MemoryRead,
+                    address: Some(address),
+                    data: Some(value),
+                    duration_tstates: 3,
+                },
+            );
+            Self::emit_memory_read_tstate_samples(bus, instruction_pc, 8, address, value);
+        }
+        let destination = self.registers.de();
+        bus.write_memory(destination, value);
+        if trace_enabled {
+            Self::emit_timing_event(
+                bus,
+                Z80BusEvent {
+                    instruction_pc,
+                    tstate_offset: 11,
+                    kind: Z80BusEventKind::MemoryWrite,
+                    address: Some(destination),
+                    data: Some(value),
+                    duration_tstates: 5,
+                },
+            );
+            Self::emit_memory_write_tstate_samples(bus, instruction_pc, 11, destination, value);
+        }
         self.registers
             .set_hl(address.wrapping_add_signed(direction));
         self.registers
-            .set_de(self.registers.de().wrapping_add_signed(direction));
+            .set_de(destination.wrapping_add_signed(direction));
         let count = self.registers.bc().wrapping_sub(1);
         self.registers.set_bc(count);
         let sum = self.registers.a.wrapping_add(value);
@@ -1217,28 +1647,121 @@ impl Z80 {
         }
         flags |= sum & 0x08;
         flags |= (sum & 0x02) << 4;
-        self.set_flags(flags);
         if (opcode == 0xB0 || opcode == 0xB8) && count != 0 {
             self.registers.pc = self.registers.pc.wrapping_sub(2);
             self.wz = self.registers.pc.wrapping_add(1);
+            flags = (flags & !FLAG_XY) | (((self.registers.pc >> 8) as u8) & FLAG_XY);
+            self.set_flags(flags);
+            if trace_enabled {
+                Self::emit_timing_event(
+                    bus,
+                    Z80BusEvent {
+                        instruction_pc,
+                        tstate_offset: 16,
+                        kind: Z80BusEventKind::Internal,
+                        address: Some(destination),
+                        data: None,
+                        duration_tstates: 5,
+                    },
+                );
+                Self::emit_internal_tstate_samples(bus, instruction_pc, 16, destination);
+            }
             21
         } else {
+            self.set_flags(flags);
             16
         }
     }
 
-    fn execute_block_compare<B: CpuBus>(&mut self, bus: &mut B, opcode: u8) -> u32 {
+    fn execute_block_compare<B: CpuBus>(
+        &mut self,
+        bus: &mut B,
+        opcode: u8,
+        trace_enabled: bool,
+    ) -> u32 {
         let direction = if opcode == 0xA9 || opcode == 0xB9 {
             -1_i16
         } else {
             1_i16
         };
-        let value = bus.read_memory(self.registers.hl());
+        let instruction_pc = self.registers.pc.wrapping_sub(2);
+        if trace_enabled {
+            Self::emit_timing_event(
+                bus,
+                Z80BusEvent {
+                    instruction_pc,
+                    tstate_offset: 0,
+                    kind: Z80BusEventKind::OpcodeFetch,
+                    address: Some(instruction_pc),
+                    data: Some(0xED),
+                    duration_tstates: 4,
+                },
+            );
+            Self::emit_timing_event(
+                bus,
+                Z80BusEvent {
+                    instruction_pc,
+                    tstate_offset: 4,
+                    kind: Z80BusEventKind::OpcodeFetch,
+                    address: Some(instruction_pc.wrapping_add(1)),
+                    data: Some(opcode),
+                    duration_tstates: 4,
+                },
+            );
+            let first_refresh_address =
+                (u16::from(self.i) << 8) | u16::from(self.r.wrapping_sub(2) & 0x7F);
+            let second_refresh_address =
+                (u16::from(self.i) << 8) | u16::from(self.r.wrapping_sub(1) & 0x7F);
+            Self::emit_m1_tstate_samples(
+                bus,
+                instruction_pc,
+                0,
+                instruction_pc,
+                0xED,
+                first_refresh_address,
+            );
+            Self::emit_m1_tstate_samples(
+                bus,
+                instruction_pc,
+                4,
+                instruction_pc.wrapping_add(1),
+                opcode,
+                second_refresh_address,
+            );
+        }
+        let address = self.registers.hl();
+        let value = bus.read_memory(address);
+        if trace_enabled {
+            Self::emit_timing_event(
+                bus,
+                Z80BusEvent {
+                    instruction_pc,
+                    tstate_offset: 8,
+                    kind: Z80BusEventKind::MemoryRead,
+                    address: Some(address),
+                    data: Some(value),
+                    duration_tstates: 3,
+                },
+            );
+            Self::emit_memory_read_tstate_samples(bus, instruction_pc, 8, address, value);
+            Self::emit_timing_event(
+                bus,
+                Z80BusEvent {
+                    instruction_pc,
+                    tstate_offset: 11,
+                    kind: Z80BusEventKind::Internal,
+                    address: Some(address),
+                    data: None,
+                    duration_tstates: 5,
+                },
+            );
+            Self::emit_internal_tstate_samples(bus, instruction_pc, 11, address);
+        }
         let accumulator = self.registers.a;
         let result = accumulator.wrapping_sub(value);
         let half = (accumulator & 0x0F) < (value & 0x0F);
         self.registers
-            .set_hl(self.registers.hl().wrapping_add_signed(direction));
+            .set_hl(address.wrapping_add_signed(direction));
         let count = self.registers.bc().wrapping_sub(1);
         self.registers.set_bc(count);
         let adjusted = result.wrapping_sub(u8::from(half));
@@ -1254,13 +1777,29 @@ impl Z80 {
         }
         flags |= adjusted & 0x08;
         flags |= (adjusted & 0x02) << 4;
-        self.set_flags(flags);
-        self.wz = self.wz.wrapping_add_signed(direction);
         if (opcode == 0xB1 || opcode == 0xB9) && count != 0 && result != 0 {
             self.registers.pc = self.registers.pc.wrapping_sub(2);
             self.wz = self.registers.pc.wrapping_add(1);
+            flags = (flags & !FLAG_XY) | (((self.registers.pc >> 8) as u8) & FLAG_XY);
+            self.set_flags(flags);
+            if trace_enabled {
+                Self::emit_timing_event(
+                    bus,
+                    Z80BusEvent {
+                        instruction_pc,
+                        tstate_offset: 16,
+                        kind: Z80BusEventKind::Internal,
+                        address: Some(address),
+                        data: None,
+                        duration_tstates: 5,
+                    },
+                );
+                Self::emit_internal_tstate_samples(bus, instruction_pc, 16, address);
+            }
             21
         } else {
+            self.wz = self.wz.wrapping_add_signed(direction);
+            self.set_flags(flags);
             16
         }
     }
@@ -1308,20 +1847,49 @@ impl Z80 {
         if parity_arg.count_ones().is_multiple_of(2) {
             flags |= FLAG_PV;
         }
-        self.set_flags(flags);
         if repeat && self.registers.b != 0 {
             self.registers.pc = self.registers.pc.wrapping_sub(2);
             self.wz = self.registers.pc.wrapping_add(1);
+            flags = (flags & !FLAG_XY) | (((self.registers.pc >> 8) as u8) & FLAG_XY);
+
+            let carry = flags & FLAG_C != 0;
+            let parity_value = if carry {
+                if value & 0x80 != 0 {
+                    self.registers.b.wrapping_sub(1) & 0x07
+                } else {
+                    self.registers.b.wrapping_add(1) & 0x07
+                }
+            } else {
+                self.registers.b & 0x07
+            };
+            let parity = parity_value.count_ones().is_multiple_of(2);
+            if (flags & FLAG_PV != 0) ^ parity ^ true {
+                flags |= FLAG_PV;
+            } else {
+                flags &= !FLAG_PV;
+            }
+            if carry {
+                let half = if value & 0x80 != 0 {
+                    self.registers.b & 0x0F == 0
+                } else {
+                    self.registers.b & 0x0F == 0x0F
+                };
+                if half {
+                    flags |= FLAG_H;
+                } else {
+                    flags &= !FLAG_H;
+                }
+            }
+            self.set_flags(flags);
             21
         } else {
+            self.set_flags(flags);
             let wz_base = if input { old_bc } else { self.registers.bc() };
             self.wz = wz_base.wrapping_add_signed(direction);
             16
         }
     }
 
-    /// Execute the complete CB-prefixed rotate/shift, BIT, RES and SET matrix.
-    /// T-state totals are instruction-level totals, not bus-phase timestamps.
     fn execute_cb<B: CpuBus>(&mut self, bus: &mut B, opcode: u8) -> u32 {
         let target = opcode & 0x07;
         let group = opcode >> 6;
@@ -1459,6 +2027,7 @@ impl Z80 {
     #[inline]
     fn fetch8<B: CpuBus>(&mut self, bus: &mut B) -> u8 {
         let value = bus.read_memory(self.registers.pc);
+        self.record_instruction_byte_for_trace(value);
         self.registers.pc = self.registers.pc.wrapping_add(1);
         value
     }
@@ -1466,6 +2035,7 @@ impl Z80 {
     #[inline]
     fn fetch_opcode<B: CpuBus>(&mut self, bus: &mut B) -> u8 {
         let opcode = self.fetch8(bus);
+        self.record_opcode_for_trace(opcode);
         self.r = (self.r & 0x80) | (self.r.wrapping_add(1) & 0x7F);
         opcode
     }
@@ -1508,7 +2078,7 @@ impl Z80 {
 
 #[cfg(test)]
 mod tests {
-    use super::{FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_Z, Z80};
+    use super::{FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_S, FLAG_Z, Z80};
     use crate::bus::CpuBus;
 
     struct TestBus([u8; 0x10000]);
@@ -1520,6 +2090,43 @@ mod tests {
 
         fn write_memory(&mut self, address: u16, value: u8) {
             self.0[usize::from(address)] = value;
+        }
+    }
+
+    struct TestIoBus {
+        memory: [u8; 0x10000],
+        port_value: u8,
+        port_reads: Vec<u16>,
+        port_writes: Vec<(u16, u8)>,
+    }
+
+    impl Default for TestIoBus {
+        fn default() -> Self {
+            Self {
+                memory: [0; 0x10000],
+                port_value: 0xFF,
+                port_reads: Vec::new(),
+                port_writes: Vec::new(),
+            }
+        }
+    }
+
+    impl CpuBus for TestIoBus {
+        fn read_memory(&mut self, address: u16) -> u8 {
+            self.memory[usize::from(address)]
+        }
+
+        fn write_memory(&mut self, address: u16, value: u8) {
+            self.memory[usize::from(address)] = value;
+        }
+
+        fn read_port(&mut self, port: u16) -> u8 {
+            self.port_reads.push(port);
+            self.port_value
+        }
+
+        fn write_port(&mut self, port: u16, value: u8) {
+            self.port_writes.push((port, value));
         }
     }
 
@@ -1827,6 +2434,44 @@ mod tests {
         assert_eq!(cpu.registers.pc, 3);
         assert_eq!(cpu.r, 3);
         assert_eq!(cpu.total_tstates, 12);
+    }
+
+    #[test]
+    fn repeated_index_prefix_orders_consume_bytes_and_count_nominal_cycles() {
+        for bytes in [
+            [0xDD, 0xDD, 0x00],
+            [0xFD, 0xFD, 0x00],
+            [0xDD, 0xFD, 0x00],
+            [0xFD, 0xDD, 0x00],
+        ] {
+            let mut bus = TestBus([0; 0x10000]);
+            bus.0[..bytes.len()].copy_from_slice(&bytes);
+            let mut cpu = Z80::default();
+
+            assert_eq!(cpu.step(&mut bus), Ok(12), "bytes: {bytes:02X?}");
+            assert_eq!(cpu.registers.pc, 3, "bytes: {bytes:02X?}");
+            assert_eq!(cpu.r, 3, "bytes: {bytes:02X?}");
+            assert_eq!(cpu.total_tstates, 12, "bytes: {bytes:02X?}");
+        }
+    }
+
+    #[test]
+    fn last_repeated_index_prefix_selects_ix_or_iy() {
+        for (bytes, expected_ix, expected_iy) in [
+            ([0xDD, 0xFD, 0x21, 0x34, 0x12], 0x0000, 0x1234),
+            ([0xFD, 0xDD, 0x21, 0x78, 0x56], 0x5678, 0x0000),
+        ] {
+            let mut bus = TestBus([0; 0x10000]);
+            bus.0[..bytes.len()].copy_from_slice(&bytes);
+            let mut cpu = Z80::default();
+
+            assert_eq!(cpu.step(&mut bus), Ok(18), "bytes: {bytes:02X?}");
+            assert_eq!(cpu.registers.pc, 5, "bytes: {bytes:02X?}");
+            assert_eq!(cpu.r, 3, "bytes: {bytes:02X?}");
+            assert_eq!(cpu.ix, expected_ix, "bytes: {bytes:02X?}");
+            assert_eq!(cpu.iy, expected_iy, "bytes: {bytes:02X?}");
+            assert_eq!(cpu.total_tstates, 18, "bytes: {bytes:02X?}");
+        }
     }
 
     #[test]
@@ -2168,5 +2813,675 @@ mod tests {
         let mut cpu = Z80::default();
         assert_eq!(cpu.step(&mut bus), Ok(12));
         assert_eq!(cpu.registers.pc, 0xFFFE);
+    }
+
+    // Exhaustive ED-space regression. This is intentionally separate from the
+    // semantic vectors below: it checks every second byte against an explicit
+    // nominal-T-state oracle and guards the documented ED-NOP fallback.
+    #[test]
+    fn all_256_ed_encodings_match_nominal_cycle_vectors() {
+        for opcode in 0_u8..=u8::MAX {
+            let expected_tstates = match opcode {
+                0x40 | 0x48 | 0x50 | 0x58 | 0x60 | 0x68 | 0x70 | 0x78 | 0x41 | 0x49 | 0x51
+                | 0x59 | 0x61 | 0x69 | 0x71 | 0x79 => 12,
+                0x43 | 0x53 | 0x63 | 0x73 | 0x4B | 0x5B | 0x6B | 0x7B => 20,
+                0x4A | 0x5A | 0x6A | 0x7A | 0x42 | 0x52 | 0x62 | 0x72 => 15,
+                0x47 | 0x4F | 0x57 | 0x5F => 9,
+                0x45 | 0x4D | 0x55 | 0x5D | 0x65 | 0x6D | 0x75 | 0x7D => 14,
+                0x67 | 0x6F => 18,
+                0xA0 | 0xA8 | 0xB0 | 0xB8 | 0xA1 | 0xA9 | 0xB1 | 0xB9 | 0xA2 | 0xAA | 0xB2
+                | 0xBA | 0xA3 | 0xAB | 0xB3 | 0xBB => 16,
+                _ => 8,
+            };
+            let mut bus = TestBus([0; 0x10000]);
+            bus.0[0] = 0xED;
+            bus.0[1] = opcode;
+            // Absolute word-transfer instructions consume a 16-bit operand.
+            bus.0[2] = 0x00;
+            bus.0[3] = 0xC2;
+
+            let mut cpu = Z80::default();
+            cpu.registers.a = 0;
+            cpu.registers.f = FLAG_C;
+            cpu.registers.set_bc(1);
+            cpu.registers.set_de(0xC100);
+            cpu.registers.set_hl(0xC000);
+            cpu.registers.sp = 0xD000;
+            bus.0[0xC000] = 0;
+            bus.0[0xD000] = 0;
+            bus.0[0xD001] = 0;
+
+            // Block-I/O termination depends on B, not the full BC value.
+            if matches!(
+                opcode,
+                0xA2 | 0xAA | 0xB2 | 0xBA | 0xA3 | 0xAB | 0xB3 | 0xBB
+            ) {
+                cpu.registers.b = 1;
+                cpu.registers.c = 0;
+            }
+
+            let result = cpu.step(&mut bus);
+            assert_eq!(
+                result,
+                Ok(expected_tstates),
+                "ED {opcode:02X}: unexpected result / nominal T-states"
+            );
+            assert_eq!(
+                cpu.total_tstates,
+                u64::from(expected_tstates),
+                "ED {opcode:02X}: total_tstates disagrees with returned duration"
+            );
+
+            let expected_pc = if matches!(
+                opcode,
+                0x43 | 0x53 | 0x63 | 0x73 | 0x4B | 0x5B | 0x6B | 0x7B
+            ) {
+                4
+            } else if matches!(
+                opcode,
+                0x45 | 0x4D | 0x55 | 0x5D | 0x65 | 0x6D | 0x75 | 0x7D
+            ) {
+                0 // RETN/RETI aliases pop the seeded return address at SP.
+            } else {
+                2
+            };
+            assert_eq!(cpu.registers.pc, expected_pc, "ED {opcode:02X}: PC");
+        }
+    }
+
+    #[test]
+    fn every_ed_fallback_encoding_is_an_eight_tstate_no_op() {
+        const EXPLICIT: [u8; 78] = [
+            0x47, 0x4f, 0x57, 0x5f, 0x43, 0x53, 0x63, 0x73, 0x4b, 0x5b, 0x6b, 0x7b, 0x4a, 0x5a,
+            0x6a, 0x7a, 0x42, 0x52, 0x62, 0x72, 0x40, 0x48, 0x50, 0x58, 0x60, 0x68, 0x70, 0x78,
+            0x41, 0x49, 0x51, 0x59, 0x61, 0x69, 0x71, 0x79, 0x44, 0x4c, 0x54, 0x5c, 0x64, 0x6c,
+            0x74, 0x7c, 0x45, 0x4d, 0x55, 0x5d, 0x65, 0x6d, 0x75, 0x7d, 0x46, 0x4e, 0x66, 0x6e,
+            0x56, 0x76, 0x5e, 0x7e, 0x67, 0x6f, 0xa0, 0xa8, 0xb0, 0xb8, 0xa1, 0xa9, 0xb1, 0xb9,
+            0xa2, 0xaa, 0xb2, 0xba, 0xa3, 0xab, 0xb3, 0xbb,
+        ];
+
+        for opcode in 0_u8..=u8::MAX {
+            if EXPLICIT.contains(&opcode) {
+                continue;
+            }
+
+            let mut bus = TestBus([0; 0x10000]);
+            bus.0[0] = 0xED;
+            bus.0[1] = opcode;
+            let mut cpu = Z80::default();
+            cpu.registers.a = 0xA5;
+            cpu.registers.f = 0x5A;
+            cpu.registers.b = 0x12;
+            cpu.registers.c = 0x34;
+            cpu.registers.d = 0x56;
+            cpu.registers.e = 0x78;
+            cpu.registers.h = 0x9A;
+            cpu.registers.l = 0xBC;
+            cpu.registers.sp = 0xD000;
+            let before = cpu.registers;
+
+            assert_eq!(cpu.step(&mut bus), Ok(8), "ED {opcode:02X}");
+            assert_eq!(cpu.registers.a, before.a, "ED {opcode:02X}: A");
+            assert_eq!(cpu.registers.f, before.f, "ED {opcode:02X}: F");
+            assert_eq!(cpu.registers.bc(), before.bc(), "ED {opcode:02X}: BC");
+            assert_eq!(cpu.registers.de(), before.de(), "ED {opcode:02X}: DE");
+            assert_eq!(cpu.registers.hl(), before.hl(), "ED {opcode:02X}: HL");
+            assert_eq!(cpu.registers.sp, before.sp, "ED {opcode:02X}: SP");
+            assert_eq!(cpu.registers.pc, 2, "ED {opcode:02X}: PC");
+            assert_eq!(cpu.total_tstates, 8, "ED {opcode:02X}: total_tstates");
+        }
+    }
+
+    // Directed ED semantic vectors based on the instruction operations and
+    // documented flag behavior in Zilog UM008011-0816 (Z80 CPU User Manual).
+    // These complement the exhaustive dispatch/timing sweep; they are not a
+    // substitute for hardware-derived tests of undocumented flags or bus phases.
+    #[test]
+    fn ed_absolute_word_loads_and_stores_cover_all_register_pairs() {
+        for (store_opcode, load_opcode, pair) in [
+            (0x43, 0x4B, 0_u8), // BC
+            (0x53, 0x5B, 1_u8), // DE
+            (0x63, 0x6B, 2_u8), // HL
+            (0x73, 0x7B, 3_u8), // SP
+        ] {
+            let mut bus = TestBus([0; 0x10000]);
+            bus.0[..4].copy_from_slice(&[0xED, store_opcode, 0x00, 0xC2]);
+            let mut cpu = Z80::default();
+            cpu.registers.set_bc(0x1234);
+            cpu.registers.set_de(0x2345);
+            cpu.registers.set_hl(0x3456);
+            cpu.registers.sp = 0x4567;
+            let expected = [0x1234_u16, 0x2345, 0x3456, 0x4567][usize::from(pair)];
+
+            assert_eq!(cpu.step(&mut bus), Ok(20), "store ED {store_opcode:02X}");
+            assert_eq!(bus.0[0xC200], expected as u8);
+            assert_eq!(bus.0[0xC201], (expected >> 8) as u8);
+            assert_eq!(cpu.registers.pc, 4);
+
+            let mut load_bus = TestBus([0; 0x10000]);
+            load_bus.0[..4].copy_from_slice(&[0xED, load_opcode, 0x00, 0xC2]);
+            load_bus.0[0xC200] = 0xCD;
+            load_bus.0[0xC201] = 0xAB;
+            let mut load_cpu = Z80::default();
+            assert_eq!(
+                load_cpu.step(&mut load_bus),
+                Ok(20),
+                "load ED {load_opcode:02X}"
+            );
+            let actual = match pair {
+                0 => load_cpu.registers.bc(),
+                1 => load_cpu.registers.de(),
+                2 => load_cpu.registers.hl(),
+                _ => load_cpu.registers.sp,
+            };
+            assert_eq!(actual, 0xABCD, "load ED {load_opcode:02X}");
+            assert_eq!(load_cpu.wz, 0xC201);
+            assert_eq!(load_cpu.registers.pc, 4);
+        }
+    }
+
+    #[test]
+    fn ed_adc_sbc_hl_vectors_cover_signed_overflow_half_carry_and_borrow() {
+        let mut adc_bus = TestBus([0; 0x10000]);
+        adc_bus.0[..2].copy_from_slice(&[0xED, 0x4A]); // ADC HL,BC
+        let mut adc = Z80::default();
+        adc.registers.set_hl(0x0FFF);
+        adc.registers.set_bc(0);
+        adc.registers.f = FLAG_C;
+        assert_eq!(adc.step(&mut adc_bus), Ok(15));
+        assert_eq!(adc.registers.hl(), 0x1000);
+        assert_eq!(adc.registers.f, FLAG_H);
+        assert_eq!(adc.wz, 0x1000);
+
+        let mut overflow_bus = TestBus([0; 0x10000]);
+        overflow_bus.0[..2].copy_from_slice(&[0xED, 0x4A]);
+        let mut overflow = Z80::default();
+        overflow.registers.set_hl(0x7FFF);
+        overflow.registers.set_bc(0);
+        overflow.registers.f = FLAG_C;
+        assert_eq!(overflow.step(&mut overflow_bus), Ok(15));
+        assert_eq!(overflow.registers.hl(), 0x8000);
+        assert_eq!(overflow.registers.f, 0x94); // S, H, P/V
+
+        let mut sbc_bus = TestBus([0; 0x10000]);
+        sbc_bus.0[..2].copy_from_slice(&[0xED, 0x42]); // SBC HL,BC
+        let mut sbc = Z80::default();
+        sbc.registers.set_hl(0x0000);
+        sbc.registers.set_bc(0);
+        sbc.registers.f = FLAG_C;
+        assert_eq!(sbc.step(&mut sbc_bus), Ok(15));
+        assert_eq!(sbc.registers.hl(), 0xFFFF);
+        assert_eq!(sbc.registers.f, 0xBB); // S, N, H, C, undocumented XY
+    }
+
+    #[test]
+    fn ed_neg_aliases_produce_identical_results_and_flags() {
+        let mut reference: Option<(u8, u8)> = None;
+        for opcode in [0x44, 0x4C, 0x54, 0x5C, 0x64, 0x6C, 0x74, 0x7C] {
+            let mut bus = TestBus([0; 0x10000]);
+            bus.0[..2].copy_from_slice(&[0xED, opcode]);
+            let mut cpu = Z80::default();
+            cpu.registers.a = 0x80;
+            assert_eq!(cpu.step(&mut bus), Ok(8), "ED {opcode:02X}");
+            assert_eq!(cpu.registers.a, 0x80, "ED {opcode:02X}");
+            assert_eq!(cpu.registers.f, 0x87, "ED {opcode:02X}");
+            let result = (cpu.registers.a, cpu.registers.f);
+            if let Some(expected) = reference {
+                assert_eq!(result, expected, "NEG alias ED {opcode:02X}");
+            } else {
+                reference = Some(result);
+            }
+        }
+    }
+
+    #[test]
+    fn ed_interrupt_mode_aliases_select_the_documented_mode() {
+        for (opcode, mode) in [
+            (0x46, 0),
+            (0x4E, 0),
+            (0x66, 0),
+            (0x6E, 0),
+            (0x56, 1),
+            (0x76, 1),
+            (0x5E, 2),
+            (0x7E, 2),
+        ] {
+            let mut bus = TestBus([0; 0x10000]);
+            bus.0[..2].copy_from_slice(&[0xED, opcode]);
+            let mut cpu = Z80 {
+                interrupt_mode: 2,
+                ..Z80::default()
+            };
+            assert_eq!(cpu.step(&mut bus), Ok(8), "ED {opcode:02X}");
+            assert_eq!(cpu.interrupt_mode, mode, "ED {opcode:02X}");
+            assert_eq!(cpu.registers.pc, 2);
+        }
+    }
+
+    #[test]
+    fn ed_retn_reti_aliases_restore_iff1_and_pop_return_address() {
+        for opcode in [0x45, 0x4D, 0x55, 0x5D, 0x65, 0x6D, 0x75, 0x7D] {
+            let mut bus = TestBus([0; 0x10000]);
+            bus.0[..2].copy_from_slice(&[0xED, opcode]);
+            bus.0[0xD000] = 0x34;
+            bus.0[0xD001] = 0x12;
+            let mut cpu = Z80::default();
+            cpu.registers.sp = 0xD000;
+            cpu.iff1 = false;
+            cpu.iff2 = true;
+            assert_eq!(cpu.step(&mut bus), Ok(14), "ED {opcode:02X}");
+            assert_eq!(cpu.registers.pc, 0x1234, "ED {opcode:02X}");
+            assert_eq!(cpu.registers.sp, 0xD002, "ED {opcode:02X}");
+            assert!(cpu.iff1, "ED {opcode:02X}: IFF1 should copy IFF2");
+            assert!(cpu.iff2, "ED {opcode:02X}: IFF2 must remain unchanged");
+        }
+    }
+
+    #[test]
+    fn ed_ld_a_i_and_ld_a_r_update_flags_and_preserve_carry() {
+        for (opcode, source) in [(0x57, 0xA8_u8), (0x5F, 0xAA_u8)] {
+            let mut bus = TestBus([0; 0x10000]);
+            bus.0[..2].copy_from_slice(&[0xED, opcode]);
+            let mut cpu = Z80 {
+                i: 0xA8,
+                r: 0xA8,
+                iff2: true,
+                ..Z80::default()
+            };
+            cpu.registers.f = FLAG_C;
+            assert_eq!(cpu.step(&mut bus), Ok(9), "ED {opcode:02X}");
+            assert_eq!(cpu.registers.a, source);
+            assert_eq!(cpu.registers.f, 0xAD); // S, undocumented XY, P/V, C
+        }
+
+        let mut bus = TestBus([0; 0x10000]);
+        bus.0[..2].copy_from_slice(&[0xED, 0x57]);
+        let mut cpu = Z80 {
+            i: 0,
+            iff2: false,
+            ..Z80::default()
+        };
+        cpu.registers.f = FLAG_C;
+        assert_eq!(cpu.step(&mut bus), Ok(9));
+        assert_eq!(cpu.registers.a, 0);
+        assert_eq!(cpu.registers.f, FLAG_Z | FLAG_C);
+    }
+
+    #[test]
+    fn ed_rrd_rld_match_nibble_transfer_and_documented_flags() {
+        let mut rrd_bus = TestBus([0; 0x10000]);
+        rrd_bus.0[..2].copy_from_slice(&[0xED, 0x67]);
+        rrd_bus.0[0xC000] = 0x34;
+        let mut rrd = Z80::default();
+        rrd.registers.a = 0x12;
+        rrd.registers.set_hl(0xC000);
+        rrd.registers.f = FLAG_C | FLAG_N | FLAG_H;
+        assert_eq!(rrd.step(&mut rrd_bus), Ok(18));
+        assert_eq!(rrd.registers.a, 0x14);
+        assert_eq!(rrd_bus.0[0xC000], 0x23);
+        assert_eq!(rrd.registers.f, FLAG_C | FLAG_PV);
+        assert_eq!(rrd.wz, 0xC001);
+
+        let mut rld_bus = TestBus([0; 0x10000]);
+        rld_bus.0[..2].copy_from_slice(&[0xED, 0x6F]);
+        rld_bus.0[0xC000] = 0x34;
+        let mut rld = Z80::default();
+        rld.registers.a = 0x12;
+        rld.registers.set_hl(0xC000);
+        rld.registers.f = FLAG_C | FLAG_N | FLAG_H;
+        assert_eq!(rld.step(&mut rld_bus), Ok(18));
+        assert_eq!(rld.registers.a, 0x13);
+        assert_eq!(rld_bus.0[0xC000], 0x42);
+        assert_eq!(rld.registers.f, FLAG_C);
+        assert_eq!(rld.wz, 0xC001);
+    }
+
+    #[test]
+    fn ed_block_transfer_vectors_check_copy_direction_counter_flags_and_repeat() {
+        let mut ldi_bus = TestBus([0; 0x10000]);
+        ldi_bus.0[..2].copy_from_slice(&[0xED, 0xA0]);
+        ldi_bus.0[0xC100] = 0x28;
+        let mut ldi = Z80::default();
+        ldi.registers.a = 0x10;
+        ldi.registers.f = FLAG_S | FLAG_Z | FLAG_C | FLAG_H | FLAG_N;
+        ldi.registers.set_hl(0xC100);
+        ldi.registers.set_de(0xC200);
+        ldi.registers.set_bc(2);
+        assert_eq!(ldi.step(&mut ldi_bus), Ok(16));
+        assert_eq!(ldi_bus.0[0xC200], 0x28);
+        assert_eq!(ldi.registers.hl(), 0xC101);
+        assert_eq!(ldi.registers.de(), 0xC201);
+        assert_eq!(ldi.registers.bc(), 1);
+        assert_eq!(ldi.registers.f, FLAG_S | FLAG_Z | FLAG_C | FLAG_PV | 0x08);
+
+        let mut ldd_bus = TestBus([0; 0x10000]);
+        ldd_bus.0[..2].copy_from_slice(&[0xED, 0xA8]);
+        ldd_bus.0[0xC101] = 0x5A;
+        let mut ldd = Z80::default();
+        ldd.registers.set_hl(0xC101);
+        ldd.registers.set_de(0xC201);
+        ldd.registers.set_bc(1);
+        assert_eq!(ldd.step(&mut ldd_bus), Ok(16));
+        assert_eq!(ldd_bus.0[0xC201], 0x5A);
+        assert_eq!(ldd.registers.hl(), 0xC100);
+        assert_eq!(ldd.registers.de(), 0xC200);
+        assert_eq!(ldd.registers.bc(), 0);
+
+        let mut ldir_bus = TestBus([0; 0x10000]);
+        ldir_bus.0[..2].copy_from_slice(&[0xED, 0xB0]);
+        ldir_bus.0[0xC100] = 0x77;
+        let mut ldir = Z80::default();
+        ldir.registers.set_hl(0xC100);
+        ldir.registers.set_de(0xC200);
+        ldir.registers.set_bc(2);
+        assert_eq!(ldir.step(&mut ldir_bus), Ok(21));
+        assert_eq!(ldir.registers.pc, 0);
+        assert_eq!(ldir.registers.bc(), 1);
+        assert_eq!(ldir_bus.0[0xC200], 0x77);
+
+        let mut lddr_bus = TestBus([0; 0x10000]);
+        lddr_bus.0[..2].copy_from_slice(&[0xED, 0xB8]);
+        lddr_bus.0[0xC101] = 0x66;
+        let mut lddr = Z80::default();
+        lddr.registers.set_hl(0xC101);
+        lddr.registers.set_de(0xC201);
+        lddr.registers.set_bc(1);
+        assert_eq!(lddr.step(&mut lddr_bus), Ok(16));
+        assert_eq!(lddr.registers.pc, 2);
+        assert_eq!(lddr.registers.bc(), 0);
+        assert_eq!(lddr_bus.0[0xC201], 0x66);
+    }
+
+    #[test]
+    fn ed_block_compare_vectors_check_match_stop_repeat_and_flags() {
+        let mut cpi_bus = TestBus([0; 0x10000]);
+        cpi_bus.0[..2].copy_from_slice(&[0xED, 0xA1]);
+        cpi_bus.0[0xC100] = 0x3B;
+        let mut cpi = Z80::default();
+        cpi.registers.a = 0x3B;
+        cpi.registers.f = FLAG_C;
+        cpi.registers.set_hl(0xC100);
+        cpi.registers.set_bc(1);
+        assert_eq!(cpi.step(&mut cpi_bus), Ok(16));
+        assert_eq!(cpi.registers.hl(), 0xC101);
+        assert_eq!(cpi.registers.bc(), 0);
+        assert_eq!(cpi.registers.a, 0x3B);
+        assert_eq!(cpi.registers.f, FLAG_C | FLAG_Z | FLAG_N);
+
+        let mut cpir_bus = TestBus([0; 0x10000]);
+        cpir_bus.0[..2].copy_from_slice(&[0xED, 0xB1]);
+        cpir_bus.0[0xC100] = 0x10;
+        let mut cpir = Z80::default();
+        cpir.registers.a = 0x50;
+        cpir.registers.set_hl(0xC100);
+        cpir.registers.set_bc(2);
+        assert_eq!(cpir.step(&mut cpir_bus), Ok(21));
+        assert_eq!(cpir.registers.pc, 0);
+        assert_eq!(cpir.registers.hl(), 0xC101);
+        assert_eq!(cpir.registers.bc(), 1);
+        assert_eq!(cpir.registers.f & (FLAG_N | FLAG_PV), FLAG_N | FLAG_PV);
+
+        let mut cpdr_bus = TestBus([0; 0x10000]);
+        cpdr_bus.0[..2].copy_from_slice(&[0xED, 0xB9]);
+        cpdr_bus.0[0xC101] = 0x50;
+        let mut cpdr = Z80::default();
+        cpdr.registers.a = 0x50;
+        cpdr.registers.set_hl(0xC101);
+        cpdr.registers.set_bc(2);
+        assert_eq!(cpdr.step(&mut cpdr_bus), Ok(16));
+        assert_eq!(cpdr.registers.pc, 2);
+        assert_eq!(cpdr.registers.hl(), 0xC100);
+        assert_eq!(cpdr.registers.bc(), 1);
+        assert_eq!(cpdr.registers.f & FLAG_Z, FLAG_Z);
+    }
+
+    #[test]
+    fn ed_block_io_vectors_check_ports_memory_counter_and_repeat() {
+        let mut ini_bus = TestIoBus::default();
+        ini_bus.memory[..2].copy_from_slice(&[0xED, 0xA2]);
+        ini_bus.port_value = 0x80;
+        let mut ini = Z80::default();
+        ini.registers.set_bc(0x02FA);
+        ini.registers.set_hl(0xC100);
+        ini.registers.f = FLAG_C;
+        assert_eq!(ini.step(&mut ini_bus), Ok(16));
+        assert_eq!(ini_bus.port_reads, vec![0x02FA]);
+        assert_eq!(ini_bus.memory[0xC100], 0x80);
+        assert_eq!(ini.registers.b, 1);
+        assert_eq!(ini.registers.hl(), 0xC101);
+        assert_eq!(
+            ini.registers.f & (FLAG_Z | FLAG_N | FLAG_H | FLAG_C),
+            FLAG_N | FLAG_H | FLAG_C
+        );
+
+        let mut inir_bus = TestIoBus::default();
+        inir_bus.memory[..2].copy_from_slice(&[0xED, 0xB2]);
+        inir_bus.port_value = 0x12;
+        let mut inir = Z80::default();
+        inir.registers.set_bc(0x0205);
+        inir.registers.set_hl(0xC100);
+        assert_eq!(inir.step(&mut inir_bus), Ok(21));
+        assert_eq!(inir_bus.port_reads, vec![0x0205]);
+        assert_eq!(inir.registers.b, 1);
+        assert_eq!(inir.registers.hl(), 0xC101);
+        assert_eq!(inir.registers.pc, 0);
+
+        let mut outi_bus = TestIoBus::default();
+        outi_bus.memory[..2].copy_from_slice(&[0xED, 0xA3]);
+        outi_bus.memory[0xC100] = 0x5A;
+        let mut outi = Z80::default();
+        outi.registers.set_bc(0x0207);
+        outi.registers.set_hl(0xC100);
+        assert_eq!(outi.step(&mut outi_bus), Ok(16));
+        assert_eq!(outi_bus.port_writes, vec![(0x0107, 0x5A)]);
+        assert_eq!(outi.registers.b, 1);
+        assert_eq!(outi.registers.hl(), 0xC101);
+
+        let mut otir_bus = TestIoBus::default();
+        otir_bus.memory[..2].copy_from_slice(&[0xED, 0xB3]);
+        otir_bus.memory[0xC100] = 0xA5;
+        let mut otir = Z80::default();
+        otir.registers.set_bc(0x0207);
+        otir.registers.set_hl(0xC100);
+        assert_eq!(otir.step(&mut otir_bus), Ok(21));
+        assert_eq!(otir_bus.port_writes, vec![(0x0107, 0xA5)]);
+        assert_eq!(otir.registers.b, 1);
+        assert_eq!(otir.registers.hl(), 0xC101);
+        assert_eq!(otir.registers.pc, 0);
+    }
+
+    #[test]
+    fn ed_in_out_register_forms_use_bc_port_and_expected_data() {
+        for (
+            opcode,
+            initial_a,
+            expected_a,
+            expected_b,
+            expected_c,
+            expected_d,
+            expected_e,
+            expected_h,
+            expected_l,
+        ) in [
+            (0x40, 0x11, 0x11, 0xA5, 0x07, 0x33, 0x44, 0xC1, 0x00),
+            (0x48, 0x11, 0x11, 0x33, 0xA5, 0x33, 0x44, 0xC1, 0x00),
+            (0x50, 0x11, 0x11, 0x33, 0x07, 0xA5, 0x44, 0xC1, 0x00),
+            (0x58, 0x11, 0x11, 0x33, 0x07, 0x33, 0xA5, 0xC1, 0x00),
+            (0x60, 0x11, 0x11, 0x33, 0x07, 0x33, 0x44, 0xA5, 0x00),
+            (0x68, 0x11, 0x11, 0x33, 0x07, 0x33, 0x44, 0xC1, 0xA5),
+            (0x70, 0x11, 0x11, 0x33, 0x07, 0x33, 0x44, 0xC1, 0x00),
+            (0x78, 0x11, 0xA5, 0x33, 0x07, 0x33, 0x44, 0xC1, 0x00),
+        ] {
+            let mut bus = TestIoBus::default();
+            bus.memory[..2].copy_from_slice(&[0xED, opcode]);
+            bus.port_value = 0xA5;
+            let mut cpu = Z80::default();
+            cpu.registers.a = initial_a;
+            cpu.registers.set_bc(0x3307);
+            cpu.registers.set_de(0x3344);
+            cpu.registers.set_hl(0xC100);
+            assert_eq!(cpu.step(&mut bus), Ok(12), "IN ED {opcode:02X}");
+            assert_eq!(bus.port_reads, vec![0x3307], "IN ED {opcode:02X}");
+            assert_eq!(cpu.registers.a, expected_a, "IN ED {opcode:02X}");
+            assert_eq!(cpu.registers.b, expected_b, "IN ED {opcode:02X}");
+            assert_eq!(cpu.registers.c, expected_c, "IN ED {opcode:02X}");
+            assert_eq!(cpu.registers.d, expected_d, "IN ED {opcode:02X}");
+            assert_eq!(cpu.registers.e, expected_e, "IN ED {opcode:02X}");
+            assert_eq!(cpu.registers.h, expected_h, "IN ED {opcode:02X}");
+            assert_eq!(cpu.registers.l, expected_l, "IN ED {opcode:02X}");
+            assert_eq!(
+                cpu.registers.f, 0xA4,
+                "IN ED {opcode:02X}: S/XY/PV from 0xA5"
+            );
+        }
+
+        for (opcode, value) in [
+            (0x41, 0x33),
+            (0x49, 0x07),
+            (0x51, 0x33),
+            (0x59, 0x44),
+            (0x61, 0xC1),
+            (0x69, 0x00),
+            (0x71, 0x00),
+            (0x79, 0x11),
+        ] {
+            let mut bus = TestIoBus::default();
+            bus.memory[..2].copy_from_slice(&[0xED, opcode]);
+            let mut cpu = Z80::default();
+            cpu.registers.a = 0x11;
+            cpu.registers.set_bc(0x3307);
+            cpu.registers.set_de(0x3344);
+            cpu.registers.set_hl(0xC100);
+            assert_eq!(cpu.step(&mut bus), Ok(12), "OUT ED {opcode:02X}");
+            assert_eq!(
+                bus.port_writes,
+                vec![(0x3307, value)],
+                "OUT ED {opcode:02X}"
+            );
+            assert_eq!(cpu.registers.f, 0, "OUT ED {opcode:02X}: flags preserved");
+        }
+    }
+
+    #[test]
+    fn ed_ld_i_a_and_ld_r_a_copy_accumulator_without_touching_flags() {
+        for opcode in [0x47, 0x4F] {
+            let mut bus = TestBus([0; 0x10000]);
+            bus.0[..2].copy_from_slice(&[0xED, opcode]);
+            let mut cpu = Z80::default();
+            cpu.registers.a = 0xD3;
+            cpu.registers.f = 0xA5;
+            assert_eq!(cpu.step(&mut bus), Ok(9), "ED {opcode:02X}");
+            if opcode == 0x47 {
+                assert_eq!(cpu.i, 0xD3);
+            } else {
+                assert_eq!(cpu.r, 0xD3, "LD R,A copies all eight bits");
+            }
+            assert_eq!(cpu.registers.f, 0xA5, "ED {opcode:02X}: flags unchanged");
+        }
+    }
+
+    #[test]
+    fn ed_cpd_decrements_hl_and_cpdr_stops_on_match() {
+        let mut cpd_bus = TestBus([0; 0x10000]);
+        cpd_bus.0[..2].copy_from_slice(&[0xED, 0xA9]);
+        cpd_bus.0[0xC100] = 0x10;
+        let mut cpd = Z80::default();
+        cpd.registers.a = 0x20;
+        cpd.registers.set_hl(0xC100);
+        cpd.registers.set_bc(2);
+        assert_eq!(cpd.step(&mut cpd_bus), Ok(16));
+        assert_eq!(cpd.registers.hl(), 0xC0FF);
+        assert_eq!(cpd.registers.bc(), 1);
+        assert_ne!(cpd.registers.f & FLAG_N, 0);
+
+        let mut cpdr_bus = TestBus([0; 0x10000]);
+        cpdr_bus.0[..2].copy_from_slice(&[0xED, 0xB9]);
+        cpdr_bus.0[0xC101] = 0x50;
+        let mut cpdr = Z80::default();
+        cpdr.registers.a = 0x50;
+        cpdr.registers.set_hl(0xC101);
+        cpdr.registers.set_bc(2);
+        assert_eq!(cpdr.step(&mut cpdr_bus), Ok(16));
+        assert_eq!(cpdr.registers.pc, 2);
+        assert_eq!(cpdr.registers.hl(), 0xC100);
+        assert_eq!(cpdr.registers.bc(), 1);
+        assert_eq!(cpdr.registers.f & FLAG_Z, FLAG_Z);
+    }
+
+    #[test]
+    fn ed_adc_sbc_hl_decode_all_four_register_pairs() {
+        for (opcode, expected) in [
+            (0x4A, 0x1001),
+            (0x5A, 0x1002),
+            (0x6A, 0x2000),
+            (0x7A, 0x1004),
+            (0x42, 0x0FFF),
+            (0x52, 0x0FFE),
+            (0x62, 0x0000),
+            (0x72, 0x0FFC),
+        ] {
+            let mut bus = TestBus([0; 0x10000]);
+            bus.0[..2].copy_from_slice(&[0xED, opcode]);
+            let mut cpu = Z80::default();
+            cpu.registers.set_bc(1);
+            cpu.registers.set_de(2);
+            cpu.registers.set_hl(0x1000);
+            cpu.registers.sp = 4;
+            assert_eq!(cpu.step(&mut bus), Ok(15), "ED {opcode:02X}");
+            assert_eq!(cpu.registers.hl(), expected, "ED {opcode:02X}");
+        }
+    }
+
+    #[test]
+    fn ed_decrement_block_io_variants_update_hl_and_ports() {
+        let mut ind_bus = TestIoBus::default();
+        ind_bus.memory[..2].copy_from_slice(&[0xED, 0xAA]);
+        ind_bus.port_value = 0x80;
+        let mut ind = Z80::default();
+        ind.registers.set_bc(0x0205);
+        ind.registers.set_hl(0xC100);
+        assert_eq!(ind.step(&mut ind_bus), Ok(16));
+        assert_eq!(ind_bus.port_reads, vec![0x0205]);
+        assert_eq!(ind_bus.memory[0xC100], 0x80);
+        assert_eq!(ind.registers.b, 1);
+        assert_eq!(ind.registers.hl(), 0xC0FF);
+        assert_eq!(ind.registers.pc, 2);
+
+        let mut indr_bus = TestIoBus::default();
+        indr_bus.memory[..2].copy_from_slice(&[0xED, 0xBA]);
+        indr_bus.port_value = 0x80;
+        let mut indr = Z80::default();
+        indr.registers.set_bc(0x0205);
+        indr.registers.set_hl(0xC100);
+        assert_eq!(indr.step(&mut indr_bus), Ok(21));
+        assert_eq!(indr_bus.port_reads, vec![0x0205]);
+        assert_eq!(indr_bus.memory[0xC100], 0x80);
+        assert_eq!(indr.registers.b, 1);
+        assert_eq!(indr.registers.hl(), 0xC0FF);
+        assert_eq!(indr.registers.pc, 0);
+
+        let mut outd_bus = TestIoBus::default();
+        outd_bus.memory[..2].copy_from_slice(&[0xED, 0xAB]);
+        outd_bus.memory[0xC100] = 0x5A;
+        let mut outd = Z80::default();
+        outd.registers.set_bc(0x0207);
+        outd.registers.set_hl(0xC100);
+        assert_eq!(outd.step(&mut outd_bus), Ok(16));
+        assert_eq!(outd_bus.port_writes, vec![(0x0107, 0x5A)]);
+        assert_eq!(outd.registers.b, 1);
+        assert_eq!(outd.registers.hl(), 0xC0FF);
+        assert_eq!(outd.registers.pc, 2);
+
+        let mut otdr_bus = TestIoBus::default();
+        otdr_bus.memory[..2].copy_from_slice(&[0xED, 0xBB]);
+        otdr_bus.memory[0xC100] = 0xA5;
+        let mut otdr = Z80::default();
+        otdr.registers.set_bc(0x0207);
+        otdr.registers.set_hl(0xC100);
+        assert_eq!(otdr.step(&mut otdr_bus), Ok(21));
+        assert_eq!(otdr_bus.port_writes, vec![(0x0107, 0xA5)]);
+        assert_eq!(otdr.registers.b, 1);
+        assert_eq!(otdr.registers.hl(), 0xC0FF);
+        assert_eq!(otdr.registers.pc, 0);
     }
 }

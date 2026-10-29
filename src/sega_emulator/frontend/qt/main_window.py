@@ -4,19 +4,24 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
+    QCheckBox,
     QLabel,
     QMainWindow,
     QMessageBox,
+    QPlainTextEdit,
+    QPushButton,
     QStatusBar,
+    QTabWidget,
     QToolBar,
     QVBoxLayout,
     QWidget,
 )
 
 from sega_emulator import __version__
+from sega_emulator.frontend.qt.localization import translate
 from sega_emulator.frontend.qt.video_widget import VideoWidget
 
 
@@ -32,6 +37,9 @@ def persisted_window_dimensions(
 
 class EmulatorMainWindow(QMainWindow):
     """Interface de apresentação; o núcleo de emulação continua em SG1000Machine."""
+
+    debug_logging_toggled = Signal(bool)
+    debug_lines_ready = Signal(str)
 
     def __init__(
         self,
@@ -50,12 +58,14 @@ class EmulatorMainWindow(QMainWindow):
         on_start_vgm_recording: Callable[[], None] | None = None,
         on_stop_vgm_recording: Callable[[], None] | None = None,
         video_driver: str = "auto",
+        language: str = "pt-BR",
         parent=None,
     ) -> None:
         super().__init__(parent)
         self._on_video_scale = on_video_scale
+        self._language = language
         self._video_scale = 3
-        self.setWindowTitle("Sega Emulator | SG-1000")
+        self.setWindowTitle(translate("main_title", language))
         self.resize(1180, 820)
         self.setMinimumSize(760, 560)
         self.setStyleSheet(
@@ -93,30 +103,59 @@ class EmulatorMainWindow(QMainWindow):
         layout.setContentsMargins(18, 18, 18, 18)
         layout.setSpacing(12)
         layout.addWidget(self.video_widget, 1)
-        self.setCentralWidget(screen)
+
+        self.central_tabs = QTabWidget(self)
+        self.central_tabs.setObjectName("mainContentTabs")
+        self.central_tabs.addTab(screen, translate("tab_emulator", language))
+
+        debug_page = QWidget(self)
+        debug_layout = QVBoxLayout(debug_page)
+        self.debug_logging_checkbox = QCheckBox(translate("debug_enable", language))
+        self.debug_logging_checkbox.setObjectName("debugLoggingEnabled")
+        self.debug_logging_checkbox.setToolTip(translate("debug_tooltip", language))
+        debug_layout.addWidget(self.debug_logging_checkbox)
+        self.debug_status_label = QLabel(translate("debug_disabled", language))
+        self.debug_status_label.setObjectName("debugLoggingStatus")
+        self.debug_status_label.setWordWrap(True)
+        debug_layout.addWidget(self.debug_status_label)
+        self.debug_output = QPlainTextEdit(debug_page)
+        self.debug_output.setObjectName("debugLogOutput")
+        self.debug_output.setReadOnly(True)
+        self.debug_output.setMaximumBlockCount(2000)
+        self.debug_output.setPlaceholderText(translate("debug_placeholder", language))
+        debug_layout.addWidget(self.debug_output, 1)
+        clear_debug_button = QPushButton(translate("debug_clear", language), debug_page)
+        clear_debug_button.clicked.connect(self.debug_output.clear)
+        debug_layout.addWidget(clear_debug_button)
+        self.central_tabs.addTab(debug_page, translate("tab_debug", language))
+        self.setCentralWidget(self.central_tabs)
+        self.debug_logging_checkbox.toggled.connect(self.debug_logging_toggled.emit)
+        self.debug_lines_ready.connect(self.append_debug_lines)
 
         self.status = QStatusBar(self)
         self.setStatusBar(self.status)
         self._status_bar = self.status
         self._fullscreen_ui_active = False
-        self.rom_label = QLabel("Nenhuma ROM carregada")
+        self.rom_label = QLabel(translate("rom_none", language))
         self.rom_label.setMinimumWidth(220)
         self.status.addPermanentWidget(self.rom_label)
 
-        self.open_action = QAction("Abrir ROM…", self)
+        self.open_action = QAction(translate("action_open_rom", language), self)
         self.open_action.setShortcut(QKeySequence.StandardKey.Open)
         self.open_action.triggered.connect(on_open_rom)
-        self.pause_action = QAction("Pausar / continuar", self)
+        self.pause_action = QAction(translate("action_pause", language), self)
         self.pause_action.setShortcut("F5")
         self.pause_action.triggered.connect(on_pause_resume)
-        self.reset_action = QAction("Reiniciar máquina", self)
+        self.reset_action = QAction(translate("action_reset", language), self)
         self.reset_action.setShortcut("F10")
         self.reset_action.triggered.connect(on_reset)
-        self.fullscreen_action = QAction("Tela cheia", self)
+        self.fullscreen_action = QAction(translate("action_fullscreen", language), self)
         self.fullscreen_action.setShortcuts(["F11", "Alt+Return"])
         self.fullscreen_action.setCheckable(True)
         self.fullscreen_action.toggled.connect(self._toggle_fullscreen)
-        self.exit_fullscreen_action = QAction("Sair da tela cheia", self)
+        self.exit_fullscreen_action = QAction(
+            translate("action_exit_fullscreen", language), self
+        )
         self.exit_fullscreen_action.setShortcut("Escape")
         self.exit_fullscreen_action.setShortcutContext(
             Qt.ShortcutContext.WindowShortcut
@@ -127,17 +166,17 @@ class EmulatorMainWindow(QMainWindow):
         )
         self.addAction(self.exit_fullscreen_action)
 
-        file_menu = self.menuBar().addMenu("&Arquivo")
+        file_menu = self.menuBar().addMenu(translate("menu_file", language))
         file_menu.addAction(self.open_action)
-        self.recent_rom_menu = file_menu.addMenu("ROMs recentes")
+        self.recent_rom_menu = file_menu.addMenu(translate("menu_recent", language))
         file_menu.addSeparator()
-        file_menu.addAction("Sair", self.close)
+        file_menu.addAction(translate("action_exit", language), self.close)
 
-        emulation_menu = self.menuBar().addMenu("&Emulação")
+        emulation_menu = self.menuBar().addMenu(translate("menu_emulation", language))
         emulation_menu.addAction(self.pause_action)
         emulation_menu.addAction(self.reset_action)
         emulation_menu.addSeparator()
-        toolbar = QToolBar("Principal", self)
+        toolbar = QToolBar(translate("toolbar_main", language), self)
         self._main_toolbar = toolbar
         toolbar.setMovable(False)
         toolbar.setFloatable(False)
@@ -148,7 +187,7 @@ class EmulatorMainWindow(QMainWindow):
         toolbar.addAction(self.fullscreen_action)
         self.addToolBar(toolbar)
 
-        drivers_menu = self.menuBar().addMenu("&Drivers")
+        drivers_menu = self.menuBar().addMenu(translate("menu_drivers", language))
         self.configure_drivers_action = QAction("APIs de entrada, áudio e vídeo…", self)
         if on_configure_drivers is not None:
             self.configure_drivers_action.triggered.connect(on_configure_drivers)
@@ -156,7 +195,7 @@ class EmulatorMainWindow(QMainWindow):
             self.configure_drivers_action.setEnabled(False)
         drivers_menu.addAction(self.configure_drivers_action)
 
-        video_menu = self.menuBar().addMenu("&Vídeo")
+        video_menu = self.menuBar().addMenu(translate("menu_video", language))
         for scale in (2, 3, 4):
             action = QAction(f"Escala de janela {scale}×", self)
             action.triggered.connect(
@@ -164,7 +203,7 @@ class EmulatorMainWindow(QMainWindow):
             )
             video_menu.addAction(action)
         video_menu.addAction(self.fullscreen_action)
-        settings_menu = self.menuBar().addMenu("&Configurações")
+        settings_menu = self.menuBar().addMenu(translate("menu_settings", language))
         self.audio_video_action = QAction("Áudio e vídeo…", self)
         if on_configure_audio_video is not None:
             self.audio_video_action.triggered.connect(on_configure_audio_video)
@@ -175,7 +214,9 @@ class EmulatorMainWindow(QMainWindow):
         controls_menu.addAction("Configurar controles…", on_configure_controls)
         controls_menu.addAction("Dispositivos detectados", on_show_controllers)
 
-        diagnostics_menu = self.menuBar().addMenu("&Diagnóstico")
+        diagnostics_menu = self.menuBar().addMenu(
+            translate("menu_diagnostics", language)
+        )
         self.vdp_snapshot_action = QAction("Capturar snapshot VDP (JSON + PNG)…", self)
         self.vdp_snapshot_action.setShortcut("F8")
         self.vdp_snapshot_action.triggered.connect(on_vdp_snapshot)
@@ -199,10 +240,19 @@ class EmulatorMainWindow(QMainWindow):
         diagnostics_menu.addAction("Abrir pasta de logs", on_open_logs)
         diagnostics_menu.addAction("Estado da máquina", on_show_machine_state)
 
-        help_menu = self.menuBar().addMenu("&Ajuda")
+        help_menu = self.menuBar().addMenu(translate("menu_help", language))
         self.about_action = QAction("Sobre o Sega Emulator…", self)
         self.about_action.triggered.connect(self._show_about)
         help_menu.addAction(self.about_action)
+
+    def append_debug_lines(self, text: str) -> None:
+        """Append a bounded batch of log lines delivered by the writer thread."""
+        if text:
+            self.debug_output.appendPlainText(text)
+
+    def set_debug_status(self, text: str) -> None:
+        """Update the user-visible state of the optional diagnostic collector."""
+        self.debug_status_label.setText(text)
 
     def _show_about(self) -> None:
         """Show project scope, version, credits, and license in a proper dialog."""
@@ -233,6 +283,9 @@ class EmulatorMainWindow(QMainWindow):
         if enabled == self._fullscreen_ui_active:
             return
         self._fullscreen_ui_active = enabled
+        if enabled:
+            self.central_tabs.setCurrentWidget(self.central_tabs.widget(0))
+        self.central_tabs.tabBar().setVisible(not enabled)
         self.menuBar().setVisible(not enabled)
         self._main_toolbar.setVisible(not enabled)
         self._status_bar.setVisible(not enabled)

@@ -51,6 +51,20 @@ py -3.14 -m venv .venv
 .\\.venv\\Scripts\\python.exe -m pip install -e ".[dev,qt]"
 ```
 
+## Executar e depurar pelo VS Code (Windows)
+
+Abra a **raiz do repositório** no VS Code. O projeto fornece configurações em `.vscode/launch.json` e tarefas em `.vscode/tasks.json`.
+
+Requisitos: Windows x64, Python 3.14 x64, Rust stable e Visual Studio Build Tools com a carga de trabalho **Desenvolvimento para desktop com C++** (MSVC).
+
+1. No VS Code, execute **Terminal → Run Task… → Sega Emulator: Create Python 3.14 venv** uma vez.
+2. Execute **Terminal → Run Task… → Sega Emulator: Install development dependencies**.
+3. Pressione **F5** e escolha **Sega Emulator: Qt (desenvolvimento)**. A tarefa prévia compila e instala o runtime Rust/PyO3 em Release; em seguida o debugger inicia o módulo `sega_emulator`.
+4. Para abrir uma ROM local, escolha **Sega Emulator: Qt com ROM** e informe o caminho completo quando solicitado.
+5. Para os testes Qt direcionados, execute **Terminal → Run Task… → Sega Emulator: Run Qt tests**.
+
+Se a compilação nativa falhar, consulte o primeiro erro de Rust/MSVC no terminal. O frontend ativo exige o runtime Rust; não há fallback de emulação em Python. Use apenas ROMs que você tenha direito de executar. A tarefa de testes usa Qt offscreen e não abre uma janela interativa.
+
 ## Iniciar a interface Qt
 
 ```powershell
@@ -181,6 +195,7 @@ O projeto é independente e não é afiliado à SEGA. SEGA e SG-1000 são marcas
 - [Arquitetura dos crates Rust nativos, dependências e limites de CI](docs/architecture/native-rust-crates.md)
 - [Backends de apresentação de vídeo e validação Vulkan](docs/architecture/vulkan-presentation-qt-quick.md)
 - [Instruções para agentes de código](AGENTS.md)
+- [Política permanente de desenvolvimento, fidelidade e entrega](docs/development-and-validation-policy.md)
 - [Prompt de orientações do projeto (ChatGPT; menos de 8.000 caracteres)](docs/project-instructions-prompt.md)
 - [ADR 0007 — Política de desenvolvimento Rust-first](docs/adr/0007-rust-first-development-policy.md)
 - [Pesquisa de compatibilidade de hardware Sega](docs/research/hardware-compatibility-roadmap-2026-10.md)

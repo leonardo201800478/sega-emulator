@@ -1,0 +1,36 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Sega Emulator: Qt (desenvolvimento)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "sega_emulator",
+      "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": false,
+      "preLaunchTask": "Sega Emulator: Build Rust runtime (Release)"
+    },
+    {
+      "name": "Sega Emulator: Qt com ROM",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "sega_emulator",
+      "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": ["${input:romPath}"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": false,
+      "preLaunchTask": "Sega Emulator: Build Rust runtime (Release)"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "romPath",
+      "type": "promptString",
+      "description": "Caminho completo de uma ROM SG-1000 obtida legalmente",
+      "default": "C:\\caminho\\para\\jogo.sg"
+    }
+  ]
+}
