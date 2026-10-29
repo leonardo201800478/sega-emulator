@@ -87,9 +87,9 @@ impl NativeWasapiOutput {
         self.inner.dropped_block_count()
     }
 
-    fn write_pcm(&self, pcm: Vec<u8>) -> PyResult<()> {
+    fn write_pcm(&self, pcm: &Bound<'_, PyBytes>) -> PyResult<()> {
         self.inner
-            .write_pcm(pcm)
+            .write_pcm(pcm.as_bytes().to_vec())
             .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
     }
 
