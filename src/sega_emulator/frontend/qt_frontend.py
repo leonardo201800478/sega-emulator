@@ -615,7 +615,9 @@ def run(initial_path: Path | None = None) -> None:
                     "Fallback automático de região SMS após falha no primeiro quadro",
                     extra={
                         "event": "sms_region_fallback",
-                        "failed_region": sms_region_attempts[sms_region_attempt_index - 1],
+                        "failed_region": sms_region_attempts[
+                            sms_region_attempt_index - 1
+                        ],
                         "next_region": active_sms_region,
                         "attempt_index": sms_region_attempt_index,
                     },
