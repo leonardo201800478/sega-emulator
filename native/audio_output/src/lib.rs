@@ -335,3 +335,301 @@ fn run_wasapi_worker(
     }
     let _ = audio_client.stop_stream();
 }
+
+
+#[cfg(windows)]
+use windows::core::PCWSTR;
+#[cfg(windows)]
+use windows::Win32::Media::Audio::{WAVEFORMATEX, WAVE_FORMAT_PCM};
+#[cfg(windows)]
+use windows::Win32::Media::Audio::XAudio2::{
+    AUDIO_STREAM_CATEGORY, IXAudio2, IXAudio2MasteringVoice, IXAudio2SourceVoice,
+    IXAudio2VoiceCallback, XAUDIO2_BUFFER, XAUDIO2_VOICE_STATE,
+    XAudio2CreateWithVersionInfo,
+};
+
+/// Native XAudio2 output using Rust-owned source buffers and a bounded producer queue.
+pub struct NativeXAudio2Output {
+    #[cfg(windows)]
+    sender: Option<mpsc::SyncSender<Vec<u8>>>,
+    #[cfg(windows)]
+    worker: Option<JoinHandle<()>>,
+    shutdown: Arc<AtomicBool>,
+    underruns: Arc<AtomicU64>,
+    dropped_blocks: Arc<AtomicU64>,
+    sample_rate: u32,
+    buffer_size: u32,
+}
+
+impl NativeXAudio2Output {
+    pub fn new(
+        sample_rate: u32,
+        buffer_size: u32,
+        queue_blocks: usize,
+    ) -> Result<Self, AudioOutputError> {
+        if sample_rate == 0 {
+            return Err(AudioOutputError::InvalidSampleRate);
+        }
+        if buffer_size == 0 {
+            return Err(AudioOutputError::InvalidBufferSize);
+        }
+        if queue_blocks == 0 {
+            return Err(AudioOutputError::InvalidQueueCapacity);
+        }
+
+        #[cfg(windows)]
+        {
+            let (sender, receiver) = mpsc::sync_channel(queue_blocks);
+            let (ready_sender, ready_receiver) = mpsc::sync_channel(1);
+            let shutdown = Arc::new(AtomicBool::new(false));
+            let underruns = Arc::new(AtomicU64::new(0));
+            let dropped_blocks = Arc::new(AtomicU64::new(0));
+            let worker_shutdown = Arc::clone(&shutdown);
+            let worker_underruns = Arc::clone(&underruns);
+            let worker = thread::Builder::new()
+                .name("sega-xaudio2-output".to_owned())
+                .spawn(move || {
+                    run_xaudio2_worker(
+                        receiver,
+                        ready_sender,
+                        worker_shutdown,
+                        worker_underruns,
+                        sample_rate,
+                        queue_blocks,
+                    );
+                })
+                .map_err(|error| AudioOutputError::Device(error.to_string()))?;
+
+            match ready_receiver.recv_timeout(Duration::from_secs(5)) {
+                Ok(Ok(())) => Ok(Self {
+                    sender: Some(sender),
+                    worker: Some(worker),
+                    shutdown,
+                    underruns,
+                    dropped_blocks,
+                    sample_rate,
+                    buffer_size,
+                }),
+                Ok(Err(message)) => {
+                    shutdown.store(true, Ordering::Release);
+                    drop(sender);
+                    let _ = worker.join();
+                    Err(AudioOutputError::Device(message))
+                }
+                Err(error) => {
+                    shutdown.store(true, Ordering::Release);
+                    drop(sender);
+                    let _ = worker.join();
+                    Err(AudioOutputError::Device(format!(
+                        "XAudio2 initialization timed out: {error}"
+                    )))
+                }
+            }
+        }
+
+        #[cfg(not(windows))]
+        {
+            let _ = queue_blocks;
+            Err(AudioOutputError::Device(
+                "native XAudio2 output is available only on Windows".to_owned(),
+            ))
+        }
+    }
+
+    pub fn write_pcm(&self, pcm: Vec<u8>) -> Result<(), AudioOutputError> {
+        if pcm.len() % 2 != 0 {
+            return Err(AudioOutputError::InvalidPcmBlock);
+        }
+        if pcm.is_empty() {
+            return Ok(());
+        }
+        #[cfg(windows)]
+        {
+            if self.shutdown.load(Ordering::Acquire) {
+                return Err(AudioOutputError::WorkerStopped);
+            }
+            let sender = self.sender.as_ref().ok_or(AudioOutputError::WorkerStopped)?;
+            match sender.try_send(pcm) {
+                Ok(()) => Ok(()),
+                Err(mpsc::TrySendError::Full(_block)) => {
+                    self.dropped_blocks.fetch_add(1, Ordering::Relaxed);
+                    Ok(())
+                }
+                Err(mpsc::TrySendError::Disconnected(_block)) => {
+                    Err(AudioOutputError::WorkerStopped)
+                }
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            let _ = pcm;
+            Err(AudioOutputError::Device(
+                "native XAudio2 output is available only on Windows".to_owned(),
+            ))
+        }
+    }
+
+    pub fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+
+    pub fn buffer_size(&self) -> u32 {
+        self.buffer_size
+    }
+
+    pub fn underrun_count(&self) -> u64 {
+        self.underruns.load(Ordering::Relaxed)
+    }
+
+    pub fn dropped_block_count(&self) -> u64 {
+        self.dropped_blocks.load(Ordering::Relaxed)
+    }
+
+    pub fn close(&mut self) {
+        self.shutdown.store(true, Ordering::Release);
+        #[cfg(windows)]
+        {
+            drop(self.sender.take());
+            if let Some(worker) = self.worker.take() {
+                let _ = worker.join();
+            }
+        }
+    }
+}
+
+impl Drop for NativeXAudio2Output {
+    fn drop(&mut self) {
+        self.close();
+    }
+}
+
+#[cfg(windows)]
+fn run_xaudio2_worker(
+    receiver: mpsc::Receiver<Vec<u8>>,
+    ready: mpsc::SyncSender<Result<(), String>>,
+    shutdown: Arc<AtomicBool>,
+    underruns: Arc<AtomicU64>,
+    sample_rate: u32,
+    max_queued_buffers: usize,
+) {
+    let setup = (|| {
+        let mut engine: Option<IXAudio2> = None;
+        unsafe {
+            XAudio2CreateWithVersionInfo(&mut engine, 0, u32::MAX, 0)
+                .map_err(|error| error.to_string())?;
+        }
+        let engine = engine.ok_or_else(|| "XAudio2Create returned no engine".to_owned())?;
+        let mut mastering_voice: Option<IXAudio2MasteringVoice> = None;
+        unsafe {
+            engine
+                .CreateMasteringVoice(
+                    &mut mastering_voice,
+                    1,
+                    sample_rate,
+                    0,
+                    PCWSTR::null(),
+                    None,
+                    AUDIO_STREAM_CATEGORY(0),
+                )
+                .map_err(|error| error.to_string())?;
+        }
+        let mastering_voice = mastering_voice
+            .ok_or_else(|| "XAudio2 did not create a mastering voice".to_owned())?;
+        let format = WAVEFORMATEX {
+            wFormatTag: WAVE_FORMAT_PCM,
+            nChannels: 1,
+            nSamplesPerSec: sample_rate,
+            nAvgBytesPerSec: sample_rate.saturating_mul(2),
+            nBlockAlign: 2,
+            wBitsPerSample: 16,
+            cbSize: 0,
+        };
+        let mut source_voice: Option<IXAudio2SourceVoice> = None;
+        unsafe {
+            engine
+                .CreateSourceVoice(
+                    &mut source_voice,
+                    &format,
+                    0,
+                    2.0,
+                    None::<&IXAudio2VoiceCallback>,
+                    None,
+                    None,
+                )
+                .map_err(|error| error.to_string())?;
+            engine.start_engine().map_err(|error| error.to_string())?;
+        }
+        let source_voice = source_voice
+            .ok_or_else(|| "XAudio2 did not create a source voice".to_owned())?;
+        unsafe {
+            source_voice
+                .Start(0, 0)
+                .map_err(|error| error.to_string())?;
+        }
+        Ok((engine, mastering_voice, source_voice))
+    })();
+
+    let (engine, _mastering_voice, source_voice) = match setup {
+        Ok(state) => state,
+        Err(message) => {
+            let _ = ready.send(Err(message));
+            return;
+        }
+    };
+    let _ = ready.send(Ok(()));
+
+    let mut submitted = VecDeque::<Vec<u8>>::with_capacity(max_queued_buffers);
+    let mut was_underrun = false;
+    loop {
+        if shutdown.load(Ordering::Acquire) {
+            break;
+        }
+
+        let mut state = XAUDIO2_VOICE_STATE::default();
+        unsafe {
+            source_voice.GetState(&mut state, 0);
+        }
+        while submitted.len() > state.BuffersQueued as usize {
+            submitted.pop_front();
+        }
+
+        let mut submitted_new = false;
+        while submitted.len() < max_queued_buffers {
+            match receiver.try_recv() {
+                Ok(block) => {
+                    submitted.push_back(block);
+                    let block = submitted.back().expect("just inserted XAudio2 block");
+                    let mut buffer = XAUDIO2_BUFFER::default();
+                    buffer.AudioBytes = block.len().min(u32::MAX as usize) as u32;
+                    buffer.pAudioData = block.as_ptr();
+                    let result = unsafe { source_voice.SubmitSourceBuffer(&buffer, None) };
+                    if result.is_err() {
+                        submitted.pop_back();
+                        break;
+                    }
+                    submitted_new = true;
+                }
+                Err(mpsc::TryRecvError::Empty) => break,
+                Err(mpsc::TryRecvError::Disconnected) => break,
+            }
+        }
+
+        let mut current_state = XAUDIO2_VOICE_STATE::default();
+        unsafe {
+            source_voice.GetState(&mut current_state, 0);
+        }
+        let is_underrun = current_state.BuffersQueued == 0 && !submitted_new;
+        if is_underrun && !was_underrun {
+            underruns.fetch_add(1, Ordering::Relaxed);
+        }
+        was_underrun = is_underrun;
+        thread::sleep(Duration::from_millis(2));
+    }
+
+    unsafe {
+        let _ = source_voice.Stop(0, 0);
+        let _ = source_voice.FlushSourceBuffers();
+        source_voice.DestroyVoice();
+        engine.StopEngine();
+    }
+}
