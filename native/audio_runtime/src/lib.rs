@@ -205,8 +205,10 @@ mod tests {
         let mut resampler = PcmResampler::new(INPUT_RATE, 100).unwrap();
         let bytes = resampler.process(&[-2.0, -1.0, 0.0, 1.0, 2.0]);
         let values: Vec<i16> = bytes
-            .chunks_exact(2)
-            .map(|bytes| i16::from_le_bytes([bytes[0], bytes[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|bytes| i16::from_le_bytes(*bytes))
             .collect();
         assert_eq!(values, vec![-32768, -32767, 0, 32767, 32767]);
 
