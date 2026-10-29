@@ -816,6 +816,100 @@ mod tests {
         let _ = v.read_port(0xBF);
         assert!(!v.interrupt_pending());
     }
+
+    #[test]
+    fn legacy_graphics_i_uses_the_tms_palette_and_pattern_color_table() {
+        let mut v = SmsVdp::default();
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x01;
+        v.registers[3] = 0x01;
+        v.registers[4] = 0x01;
+        v.registers[7] = 0x01;
+        v.vram[0x400] = 1;
+        v.vram[0x808] = 0x80;
+        v.vram[0x40] = 0x42;
+        let mut status = 0x1F;
+        let mut frame = vec![0; FRAME_SIZE];
+        render_legacy_scanline(&v.vram, &v.registers, &mut status, &mut frame, 0, false);
+        assert_eq!(&frame[0..3], &TMS_PALETTE[4]);
+        assert_eq!(&frame[3..6], &TMS_PALETTE[2]);
+    }
+
+    #[test]
+    fn sms_mode4_renders_cram_palette_entries_from_4bpp_tiles() {
+        let mut v = SmsVdp::default();
+        v.registers[0] = 0x04;
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.cram[1] = 0x03;
+        v.vram[0x3800] = 0;
+        v.vram[0x3801] = 0;
+        v.vram[0] = 0x80;
+        let mut status = 0x1F;
+        render_scanline(
+            &v.vram,
+            &v.cram,
+            &v.registers,
+            &mut status,
+            &mut v.working_framebuffer,
+            0,
+            true,
+            true,
+        );
+        assert_eq!(&v.working_framebuffer[0..3], &[255, 0, 0]);
+        assert_eq!(&v.working_framebuffer[3..6], &[0, 0, 0]);
+    }
+
+    #[test]
+    fn unlocked_mode4_draws_sprite_nine_but_keeps_hardware_overflow_flag() {
+        let mut v = SmsVdp::default();
+        v.registers[0] = 0x04;
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[5] = 0x7E;
+        v.cram[17] = 0x03;
+        v.vram[0x20] = 0x80;
+        for index in 0..9 {
+            v.vram[0x3F00 + index] = 0;
+            let attr = 0x3F80 + index * 2;
+            v.vram[attr] = if index == 8 { 50 } else { 10 };
+            v.vram[attr + 1] = 1;
+        }
+        v.vram[0x3F09] = 0xD0;
+        let mut status = 0x1F;
+        render_scanline(
+            &v.vram, &v.cram, &v.registers, &mut status,
+            &mut v.working_framebuffer, 1, true, true,
+        );
+        assert_ne!(status & OVERFLOW, 0);
+        assert_eq!(status & 0x1F, 8);
+        let x50 = (SMS_VDP_WIDTH + 50) * 3;
+        assert_eq!(&v.working_framebuffer[x50..x50 + 3], &[0, 0, 0]);
+
+        let mut unlocked = v.clone();
+        unlocked.status = 0x1F;
+        unlocked.working_framebuffer.fill(0);
+        let (vram, cram, regs, status, frame) = (
+            &unlocked.vram,
+            &unlocked.cram,
+            &unlocked.registers,
+            &mut unlocked.status,
+            &mut unlocked.working_framebuffer,
+        );
+        render_scanline(vram, cram, regs, status, frame, 1, true, false);
+        assert_ne!(*status & OVERFLOW, 0);
+        assert_eq!(&frame[x50..x50 + 3], &[255, 0, 0]);
+    }
+
+    #[test]
+    fn vdp_ports_are_mirrored_by_the_low_address_decode() {
+        let mut v = SmsVdp::default();
+        v.write_port(0x9F, 0x03);
+        v.write_port(0x9F, 0xC0);
+        v.write_port(0x9E, 0x3F);
+        assert_eq!(v.cram()[3], 0x3F);
+    }
+
     #[test]
     fn framebuffer_is_rgb24() {
         let v = SmsVdp::default();
