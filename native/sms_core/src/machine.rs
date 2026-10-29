@@ -369,7 +369,6 @@ mod tests {
         assert_eq!(machine.cpu().registers.a & 1, 0);
     }
 
-
     #[test]
     fn vdp_vertical_and_horizontal_counter_ports_are_mirrored() {
         let mut machine = SmsMachine::new(vec![0x00]).unwrap();
