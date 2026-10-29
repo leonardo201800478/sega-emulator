@@ -134,13 +134,13 @@ impl CpuBus for SmsMachineBus<'_> {
             self.vdp.write_port(port, value);
         } else {
             self.io.write_port(port, value);
-            if (0x40..=0x7F).contains(&(port as u8)) {
-                if let Some(pending) = self.pending_psg_writes.as_mut() {
-                    pending.push(SmsPsgWriteEvent {
-                        tstate: self.tstate.saturating_add(11),
-                        value,
-                    });
-                }
+            if (0x40..=0x7F).contains(&(port as u8))
+                && let Some(pending) = self.pending_psg_writes.as_mut()
+            {
+                pending.push(SmsPsgWriteEvent {
+                    tstate: self.tstate.saturating_add(11),
+                    value,
+                });
             }
         }
     }
