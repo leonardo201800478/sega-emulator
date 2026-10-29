@@ -11,7 +11,7 @@ import pytest
 pytest.importorskip("PySide6")
 
 from PySide6.QtCore import QSettings, QSize, Qt  # noqa: E402
-from PySide6.QtWidgets import QApplication  # noqa: E402
+from PySide6.QtWidgets import QApplication, QListWidgetItem  # noqa: E402
 
 from sega_emulator.frontend.qt.rom_library_dialog import RomLibraryDialog  # noqa: E402
 
@@ -67,4 +67,26 @@ def test_master_system_is_available_but_unimplemented_systems_remain_disabled(
     assert dialog.system_buttons["master_system"].text() == "Master System"
     assert not dialog.system_buttons["game_gear"].isEnabled()
     assert not dialog.system_buttons["mega_drive"].isEnabled()
+    dialog.close()
+
+
+@pytest.mark.parametrize("system", ["sg1000", "master_system"])
+def test_supported_system_rom_can_be_launched_from_library(qt_app, settings, tmp_path, system):
+    dialog = RomLibraryDialog(settings)
+    rom_path = tmp_path / ("game.sms" if system == "master_system" else "game.sg")
+    rom_path.write_bytes(b"test rom")
+    dialog.selected_system = system
+    item = QListWidgetItem(rom_path.name)
+    item.setData(Qt.ItemDataRole.UserRole, str(rom_path))
+    dialog.rom_list.addItem(item)
+    item.setSelected(True)
+    dialog._update_launch_state()
+
+    assert dialog.launch_button.isEnabled()
+
+    dialog._launch_selected()
+
+    assert dialog.selected_rom == rom_path
+    assert dialog.selected_system == system
+    assert dialog.result() == dialog.DialogCode.Accepted
     dialog.close()
