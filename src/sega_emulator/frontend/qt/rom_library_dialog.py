@@ -141,7 +141,7 @@ class RomLibraryDialog(QDialog):
                 border-image: url("$BACKGROUND_IMAGE") 0 0 0 0 stretch stretch;
                 color: #e9f2ff;
             }
-            QWidget {{ background: transparent; color: #e9f2ff; }}
+            QWidget { background: transparent; color: #e9f2ff; }
             QLabel#heroTitle { color: #66d9ff; font-size: 30px; font-weight: 700; }
             QLabel#subtitle { color: #9bb3d2; font-size: 14px; }
             QPushButton {
