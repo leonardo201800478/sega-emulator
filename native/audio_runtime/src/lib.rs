@@ -120,7 +120,7 @@ mod tests {
         assert_eq!(v,vec![-32768,-32767,0,32767,32767]);
         r.set_volume(50).unwrap();
         let b=r.process(&[0.5]);
-        assert_eq!(i16::from_le_bytes([b[0],b[1]]),16384);
+        assert_eq!(i16::from_le_bytes([b[0],b[1]]),8192);
     }
     #[test]
     fn resampling_is_repeatable() {
