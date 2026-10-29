@@ -1,7 +1,7 @@
 //! SMS CPU/memory/I/O integration boundary.
 //!
-//! This is an instruction-stepping machine shell, not a complete console:
-//! VDP, PSG/FM, interrupt generation, and a frame scheduler remain absent.
+//! Instruction-stepping SMS machine with cartridge, VDP, and native PSG.
+//! FM synthesis and a cycle-exact machine scheduler remain separate milestones.
 
 use crate::SmsCoreError;
 use crate::bus::CpuBus;
@@ -336,6 +336,7 @@ impl SmsMachine {
 #[cfg(test)]
 mod tests {
     use super::{SegaScopeLens, SmsMachine};
+    use crate::config::{SmsMachineConfig, VideoStandard};
     use crate::input::{ControllerButtons, SmsInputState};
 
     #[test]
@@ -381,6 +382,46 @@ mod tests {
         }
         assert_eq!(machine.vdp().registers()[1], 0x40);
         assert!(machine.vdp().cycles_into_line() > 0);
+    }
+
+    #[test]
+    fn cpu_out_routes_psg_register_writes_to_independent_sms_core() {
+        // LD A,$90; OUT ($7F),A; LD A,$85; OUT ($7F),A;
+        // LD A,$12; OUT ($7F),A
+        let rom = [
+            0x3E, 0x90, 0xD3, 0x7F, 0x3E, 0x85, 0xD3, 0x7F, 0x3E, 0x12, 0xD3, 0x7F,
+        ];
+        let mut machine = SmsMachine::new(rom.to_vec()).unwrap();
+        for _ in 0..6 {
+            machine.step().unwrap();
+        }
+        assert_eq!(machine.psg().tone_periods()[0], 0x125);
+        assert_eq!(machine.psg().attenuations()[0], 0);
+        assert_eq!(machine.psg().clock_hz(), 3_579_545);
+    }
+
+    #[test]
+    fn pal_clock_and_generated_audio_samples_are_native_and_deterministic() {
+        let config = SmsMachineConfig {
+            video_standard: VideoStandard::Pal,
+            ..SmsMachineConfig::default()
+        };
+        let rom = [
+            0x3E, 0x90, 0xD3, 0x7F, 0x3E, 0x85, 0xD3, 0x7F, 0x3E, 0x12, 0xD3, 0x7F,
+            0xC3, 0x00, 0x00,
+        ];
+        let mut first = SmsMachine::with_audio(rom.to_vec(), config, 44_100).unwrap();
+        let mut second = first.clone();
+        assert_eq!(first.psg().clock_hz(), 3_546_895);
+        for _ in 0..10_000 {
+            first.step().unwrap();
+            second.step().unwrap();
+        }
+        let first_samples = first.drain_audio_samples(None);
+        let second_samples = second.drain_audio_samples(None);
+        assert_eq!(first_samples, second_samples);
+        assert!(!first_samples.is_empty());
+        assert!(first_samples.iter().any(|sample| sample.abs() > 0.001));
     }
 
     #[test]
