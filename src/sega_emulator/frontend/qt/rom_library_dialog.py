@@ -696,7 +696,6 @@ def _format_size(size: int) -> str:
     return f"{size / (1024 * 1024):.1f} MiB"
 
 
-
 # Prefer common formats, then formats supported by the installed Qt image plugins.
 _COMMON_IMAGE_SUFFIXES = {
     ".png",
