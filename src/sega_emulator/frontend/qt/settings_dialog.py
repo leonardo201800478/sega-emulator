@@ -34,7 +34,7 @@ class SettingsDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Configurações de áudio e vídeo")
-        self.setMinimumWidth(440)
+        self.setMinimumWidth(600)
         self._initial = preferences
         root = QVBoxLayout(self)
         tabs = QTabWidget(self)
