@@ -305,8 +305,12 @@ impl SmsVdp {
     pub fn read_v_counter(&self) -> u8 {
         let line = self.scanline;
         match (self.video_standard, self.visible_height()) {
-            (VideoStandard::Ntsc | VideoStandard::Unknown, 192) if line >= 219 => 0xD5_u8.wrapping_add((line - 219) as u8),
-            (VideoStandard::Ntsc | VideoStandard::Unknown, 224) if line >= 235 => 0xE5_u8.wrapping_add((line - 235) as u8),
+            (VideoStandard::Ntsc | VideoStandard::Unknown, 192) if line >= 219 => {
+                0xD5_u8.wrapping_add((line - 219) as u8)
+            },
+            (VideoStandard::Ntsc | VideoStandard::Unknown, 224) if line >= 235 => {
+                0xE5_u8.wrapping_add((line - 235) as u8)
+            },
             (VideoStandard::Pal, 192) if line >= 243 => 0xBA_u8.wrapping_add((line - 243) as u8),
             _ => line as u8,
         }
@@ -790,7 +794,7 @@ fn render_scanline(
 #[cfg(test)]
 mod tests {
     use super::{
-        FRAME_SIZE, OVERFLOW, SMS_VDP_WIDTH, TMS_PALETTE, SmsVdp, StereoPresentation,
+        FRAME_SIZE, OVERFLOW, SMS_VDP_WIDTH, SmsVdp, StereoPresentation, TMS_PALETTE,
         render_legacy_scanline, render_scanline,
     };
     use crate::config::{SpriteLimitMode, VideoStandard};
