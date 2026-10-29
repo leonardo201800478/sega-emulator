@@ -2,7 +2,10 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use sega_audio_runtime::PcmResampler;
-use sega_audio_output::NativeWasapiOutput as RustWasapiOutput;
+use sega_audio_output::{
+    NativeWasapiOutput as RustWasapiOutput,
+    NativeXAudio2Output as RustXAudio2Output,
+};
 
 #[pyclass]
 pub struct NativePcmResampler {
@@ -63,6 +66,52 @@ impl NativeWasapiOutput {
     #[pyo3(signature = (sample_rate, buffer_size, queue_blocks=8))]
     fn new(sample_rate: u32, buffer_size: u32, queue_blocks: usize) -> PyResult<Self> {
         let inner = RustWasapiOutput::new(sample_rate, buffer_size, queue_blocks)
+            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?;
+        Ok(Self { inner })
+    }
+
+    #[getter]
+    fn sample_rate(&self) -> u32 {
+        self.inner.sample_rate()
+    }
+
+    #[getter]
+    fn buffer_size(&self) -> u32 {
+        self.inner.buffer_size()
+    }
+
+    #[getter]
+    fn underrun_count(&self) -> u64 {
+        self.inner.underrun_count()
+    }
+
+    #[getter]
+    fn dropped_block_count(&self) -> u64 {
+        self.inner.dropped_block_count()
+    }
+
+    fn write_pcm(&self, pcm: &Bound<'_, PyBytes>) -> PyResult<()> {
+        self.inner
+            .write_pcm(pcm.as_bytes().to_vec())
+            .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
+    }
+
+    fn close(&mut self) {
+        self.inner.close();
+    }
+}
+
+#[pyclass]
+pub struct NativeXAudio2Output {
+    inner: RustXAudio2Output,
+}
+
+#[pymethods]
+impl NativeXAudio2Output {
+    #[new]
+    #[pyo3(signature = (sample_rate, buffer_size, queue_blocks=8))]
+    fn new(sample_rate: u32, buffer_size: u32, queue_blocks: usize) -> PyResult<Self> {
+        let inner = RustXAudio2Output::new(sample_rate, buffer_size, queue_blocks)
             .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?;
         Ok(Self { inner })
     }
