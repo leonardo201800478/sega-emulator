@@ -63,18 +63,18 @@ jobs:
       - name: Rust formatting — native audio output
         run: cargo fmt --manifest-path native/audio_output/Cargo.toml -- --check
       - name: Rust Clippy — native audio output
-        run: cargo clippy --manifest-path native/audio_output/Cargo.toml --all-targets -- -D warnings
+        run: cargo clippy --manifest-path native/audio_output/Cargo.toml --all-targets --locked -- -D warnings
       - name: Rust tests — native audio output
-        run: cargo test --manifest-path native/audio_output/Cargo.toml
+        run: cargo test --manifest-path native/audio_output/Cargo.toml --locked
       - name: Rust Clippy
-        run: cargo clippy --manifest-path native/z80_core/Cargo.toml --all-targets -- -D warnings
+        run: cargo clippy --manifest-path native/z80_core/Cargo.toml --all-targets --locked -- -D warnings
       - name: Rust unit tests
-        run: cargo test --manifest-path native/z80_core/Cargo.toml
+        run: cargo test --manifest-path native/z80_core/Cargo.toml --locked
       - name: Build and install optional extension
         shell: pwsh
         run: |
           Push-Location native/z80_core
-          maturin build --release --features python-extension --out dist
+          maturin build --locked --release --features python-extension --out dist
           Pop-Location
           $wheel = Get-ChildItem native/z80_core/dist/*.whl | Select-Object -First 1
           python -m pip install $wheel.FullName
