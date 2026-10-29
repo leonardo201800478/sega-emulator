@@ -41,6 +41,17 @@ impl std::fmt::Display for AudioOutputError {
 
 impl std::error::Error for AudioOutputError {}
 
+/// Expand mono signed PCM16 to interleaved stereo, duplicating each sample.
+/// The emulated PSG remains mono; channel routing is handled only at the output boundary.
+fn mono_pcm16_to_stereo(pcm: &[u8]) -> Vec<u8> {
+    let mut stereo = Vec::with_capacity(pcm.len().saturating_mul(2));
+    for sample in pcm.chunks_exact(2) {
+        stereo.extend_from_slice(sample);
+        stereo.extend_from_slice(sample);
+    }
+    stereo
+}
+
 /// Bounded producer queue and event-driven WASAPI consumer owned entirely by Rust.
 pub struct NativeWasapiOutput {
     #[cfg(windows)]
@@ -130,12 +141,13 @@ impl NativeWasapiOutput {
     }
 
     pub fn write_pcm(&mut self, pcm: Vec<u8>) -> Result<(), AudioOutputError> {
-        if !pcm.len().is_multiple_of(2) || pcm.len() > u32::MAX as usize {
+        if !pcm.len().is_multiple_of(2) || pcm.len() > (u32::MAX as usize / 2) {
             return Err(AudioOutputError::InvalidPcmBlock);
         }
         if pcm.is_empty() {
             return Ok(());
         }
+        let pcm = mono_pcm16_to_stereo(&pcm);
         #[cfg(windows)]
         {
             if self.shutdown.load(Ordering::Acquire) {
@@ -241,7 +253,7 @@ fn run_wasapi_worker(
             let mut audio_client = device
                 .get_iaudioclient()
                 .map_err(|error| error.to_string())?;
-            let format = WaveFormat::new(16, 16, &SampleType::Int, sample_rate as usize, 1, None);
+            let format = WaveFormat::new(16, 16, &SampleType::Int, sample_rate as usize, 2, None);
             let block_align = format.get_blockalign() as usize;
             let (default_period, _minimum_period) = audio_client
                 .get_device_period()
@@ -463,7 +475,7 @@ impl NativeXAudio2Output {
     }
 
     pub fn write_pcm(&mut self, pcm: Vec<u8>) -> Result<(), AudioOutputError> {
-        if !pcm.len().is_multiple_of(2) || pcm.len() > u32::MAX as usize {
+        if !pcm.len().is_multiple_of(2) || pcm.len() > (u32::MAX as usize / 2) {
             return Err(AudioOutputError::InvalidPcmBlock);
         }
         if pcm.is_empty() {
@@ -478,7 +490,7 @@ impl NativeXAudio2Output {
                 .producer
                 .as_mut()
                 .ok_or(AudioOutputError::WorkerStopped)?;
-            let max_block_bytes = (self.buffer_size as usize).saturating_mul(2).max(2);
+            let max_block_bytes = (self.buffer_size as usize).saturating_mul(4).max(4);
             for block in pcm.chunks(max_block_bytes) {
                 if producer.is_abandoned() {
                     return Err(AudioOutputError::WorkerStopped);
@@ -574,10 +586,10 @@ fn run_xaudio2_worker(
             mastering_voice.ok_or_else(|| "XAudio2 did not create a mastering voice".to_owned())?;
         let format = WAVEFORMATEX {
             wFormatTag: WAVE_FORMAT_PCM as u16,
-            nChannels: 1,
+            nChannels: 2,
             nSamplesPerSec: sample_rate,
-            nAvgBytesPerSec: sample_rate.saturating_mul(2),
-            nBlockAlign: 2,
+            nAvgBytesPerSec: sample_rate.saturating_mul(4),
+            nBlockAlign: 4,
             wBitsPerSample: 16,
             cbSize: 0,
         };
@@ -675,6 +687,23 @@ fn run_xaudio2_worker(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mono_pcm16_is_duplicated_to_left_and_right_stereo_channels() {
+        let mono = [
+            0x34, 0x12, // +0x1234
+            0x00, 0x80, // -32768
+            0xff, 0x7f, // +32767
+        ];
+        assert_eq!(
+            mono_pcm16_to_stereo(&mono),
+            [
+                0x34, 0x12, 0x34, 0x12,
+                0x00, 0x80, 0x00, 0x80,
+                0xff, 0x7f, 0xff, 0x7f,
+            ]
+        );
+    }
 
     #[test]
     fn wasapi_rejects_invalid_configuration_before_device_access() {
