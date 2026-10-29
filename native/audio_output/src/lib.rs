@@ -179,9 +179,7 @@ impl NativeWasapiOutput {
     }
 
     pub fn close(&mut self) {
-        if self.shutdown.swap(true, Ordering::AcqRel) {
-            return;
-        }
+        self.shutdown.store(true, Ordering::Release);
         #[cfg(windows)]
         {
             self.sender.take();
@@ -283,11 +281,11 @@ fn run_wasapi_worker(
             break;
         }
         if event.wait_for_event(1000).is_err() {
-            if shutdown.load(Ordering::Acquire) {
+            if !shutdown.load(Ordering::Acquire) {
+                // A failed WASAPI event wait indicates a stopped or disconnected stream.
                 break;
             }
-            underruns.fetch_add(1, Ordering::Relaxed);
-            continue;
+            break;
         }
 
         let frames = match audio_client.get_available_space_in_frames() {
