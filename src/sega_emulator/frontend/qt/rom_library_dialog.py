@@ -133,9 +133,15 @@ class RomLibraryDialog(QDialog):
         )
         self.resize(1180, 780)
         self.setMinimumSize(900, 600)
+        self._assets_directory = Path(__file__).parent / "assets"
+        background_image = (self._assets_directory / "background.svg").as_posix()
         self.setStyleSheet(
-            """
-            QDialog, QWidget { background: #0c1424; color: #e9f2ff; }
+            f"""
+            QDialog {{
+                border-image: url("{background_image}") 0 0 0 0 stretch stretch;
+                color: #e9f2ff;
+            }}
+            QWidget {{ background: transparent; color: #e9f2ff; }}
             QLabel#heroTitle { color: #66d9ff; font-size: 30px; font-weight: 700; }
             QLabel#subtitle { color: #9bb3d2; font-size: 14px; }
             QPushButton {
@@ -185,6 +191,12 @@ class RomLibraryDialog(QDialog):
         root.addWidget(self.pages, 1)
 
         self.splash_page = QWidget()
+        self.splash_page.setObjectName("splashPage")
+        splash_image = (self._assets_directory / "splash_hero.svg").as_posix()
+        self.splash_page.setStyleSheet(
+            f"QWidget#splashPage {{ "
+            f"border-image: url(\"{splash_image}\") 0 0 0 0 stretch stretch; }}"
+        )
         splash = QVBoxLayout(self.splash_page)
         splash.addStretch(1)
         title = QLabel("SEGA EMULATOR", self.splash_page)
@@ -196,7 +208,7 @@ class RomLibraryDialog(QDialog):
         )
         subtitle.setObjectName("subtitle")
         subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        assets_directory = Path(__file__).parent / "assets" / "systems"
+        assets_directory = self._assets_directory / "systems"
         artwork_row = QHBoxLayout()
         artwork_row.setSpacing(10)
         for system in SUPPORTED_SYSTEMS:
@@ -242,7 +254,7 @@ class RomLibraryDialog(QDialog):
         grid.setHorizontalSpacing(14)
         grid.setVerticalSpacing(14)
         self.system_buttons: dict[str, QToolButton] = {}
-        assets_directory = Path(__file__).parent / "assets" / "systems"
+        assets_directory = self._assets_directory / "systems"
         for index, system in enumerate(SUPPORTED_SYSTEMS):
             label = SYSTEM_LABELS[system]
             button = QToolButton()
