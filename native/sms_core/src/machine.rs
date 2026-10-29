@@ -11,6 +11,7 @@ use crate::cpu::{CpuError, Z80};
 use crate::input::{ControllerButtons, SmsInputState};
 use crate::io::{SmsIo, SmsIoError};
 use crate::memory::SmsMemory;
+use crate::psg::Sn76489;
 use crate::vdp::{SmsVdp, SmsVdpEye, StereoPresentation};
 
 /// Lens selection latched by writes to the SegaScope address range $FFF8-$FFFB.
@@ -44,12 +45,20 @@ impl SegaScopeState {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct SmsPsgWriteEvent {
+    tstate: u64,
+    value: u8,
+}
+
 /// SMS-owned implementation of the hardware-neutral Z80 memory/I/O contract.
 pub struct SmsMachineBus<'a> {
     memory: &'a mut SmsMemory,
     io: &'a mut SmsIo,
     sega_scope: &'a mut SegaScopeState,
     vdp: &'a mut SmsVdp,
+    pending_psg_writes: Option<&'a mut Vec<SmsPsgWriteEvent>>,
+    tstate: u64,
 }
 
 impl<'a> SmsMachineBus<'a> {
@@ -64,6 +73,26 @@ impl<'a> SmsMachineBus<'a> {
             io,
             sega_scope,
             vdp,
+            pending_psg_writes: None,
+            tstate: 0,
+        }
+    }
+
+    fn with_psg_queue(
+        memory: &'a mut SmsMemory,
+        io: &'a mut SmsIo,
+        sega_scope: &'a mut SegaScopeState,
+        vdp: &'a mut SmsVdp,
+        pending_psg_writes: &'a mut Vec<SmsPsgWriteEvent>,
+        tstate: u64,
+    ) -> Self {
+        Self {
+            memory,
+            io,
+            sega_scope,
+            vdp,
+            pending_psg_writes: Some(pending_psg_writes),
+            tstate,
         }
     }
 }
@@ -101,17 +130,30 @@ impl CpuBus for SmsMachineBus<'_> {
             self.vdp.write_port(port, value);
         } else {
             self.io.write_port(port, value);
+            if (0x40..=0x7F).contains(&(port as u8))
+                && let Some(pending) = self.pending_psg_writes.as_mut()
+            {
+                pending.push(SmsPsgWriteEvent {
+                    // Nominal edge for immediate OUT (n),A; full bus-phase
+                    // timing is a separate temporal-accuracy milestone.
+                    tstate: self.tstate.saturating_add(11),
+                    value,
+                });
+            }
         }
     }
 }
 
 /// Instruction-stepping SMS core with cartridge mapper, work RAM and controller I/O.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SmsMachine {
     cpu: Z80,
     memory: SmsMemory,
     io: SmsIo,
     vdp: SmsVdp,
+    psg: Sn76489,
+    psg_tstate: u64,
+    pending_psg_writes: Vec<SmsPsgWriteEvent>,
     sega_scope: SegaScopeState,
     config: SmsMachineConfig,
 }
@@ -126,18 +168,40 @@ impl SmsMachine {
         rom: impl Into<Vec<u8>>,
         config: SmsMachineConfig,
     ) -> Result<Self, SmsCoreError> {
+        Self::with_audio(rom, config, 44_100)
+    }
+
+    /// Construct an SMS machine with a native PSG sample rate.
+    pub fn with_audio(
+        rom: impl Into<Vec<u8>>,
+        config: SmsMachineConfig,
+        sample_rate: u64,
+    ) -> Result<Self, SmsCoreError> {
         let cartridge = CartridgeImage::new(rom)?;
         let memory = SmsMemory::new(cartridge)?;
         let mut cpu = Z80::default();
         cpu.reset();
+        let vdp = SmsVdp::new(config.video_standard, config.sprite_limit);
+        let psg = Sn76489::new(vdp.system_clock_hz(), sample_rate)?;
         Ok(Self {
             cpu,
             memory,
             io: SmsIo::new(config.territory),
-            vdp: SmsVdp::new(config.video_standard, config.sprite_limit),
+            vdp,
+            psg,
+            psg_tstate: 0,
+            pending_psg_writes: Vec::new(),
             sega_scope: SegaScopeState::default(),
             config,
         })
+    }
+
+    fn advance_psg_to_tstate(&mut self, target_tstate: u64) {
+        if target_tstate <= self.psg_tstate {
+            return;
+        }
+        self.psg.advance_clocks(target_tstate - self.psg_tstate);
+        self.psg_tstate = target_tstate;
     }
 
     /// Execute one Z80 instruction through the SMS-owned memory and I/O bus.
@@ -145,16 +209,36 @@ impl SmsMachine {
     /// The returned T-state count is nominal instruction timing, not cycle-exact
     /// machine timing.
     pub fn step(&mut self) -> Result<u32, CpuError> {
+        let start_tstate = self.cpu.total_tstates;
         let cycles = {
-            let mut bus = SmsMachineBus::new(
+            let mut bus = SmsMachineBus::with_psg_queue(
                 &mut self.memory,
                 &mut self.io,
                 &mut self.sega_scope,
                 &mut self.vdp,
+                &mut self.pending_psg_writes,
+                start_tstate,
             );
             self.cpu.step(&mut bus)?
         };
+        let end_tstate = self.cpu.total_tstates;
         self.vdp.advance(u64::from(cycles));
+        loop {
+            let next = self
+                .pending_psg_writes
+                .iter()
+                .enumerate()
+                .filter(|(_, event)| event.tstate <= end_tstate)
+                .min_by_key(|(_, event)| event.tstate)
+                .map(|(index, _)| index);
+            let Some(index) = next else {
+                break;
+            };
+            let event = self.pending_psg_writes.remove(index);
+            self.advance_psg_to_tstate(event.tstate);
+            self.psg.write(event.value);
+        }
+        self.advance_psg_to_tstate(end_tstate);
         self.io.set_light_pulse(self.vdp.light_pulse_active());
         if self.vdp.interrupt_pending() {
             self.cpu.request_int(0xFF);
@@ -207,6 +291,15 @@ impl SmsMachine {
 
     pub fn io(&self) -> &SmsIo {
         &self.io
+    }
+
+    pub fn psg(&self) -> &Sn76489 {
+        &self.psg
+    }
+
+    /// Drain generated mono samples for a host audio backend or diagnostics.
+    pub fn drain_audio_samples(&mut self, max_samples: Option<usize>) -> Vec<f64> {
+        self.psg.drain_samples(max_samples)
     }
 
     pub fn vdp(&self) -> &SmsVdp {
