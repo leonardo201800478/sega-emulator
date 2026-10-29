@@ -82,7 +82,7 @@ impl PcmResampler {
             start: 0,
             available: 0,
             real: 0,
-            next: -(HALF as f64),
+            next: 0.0,
             emitted: 0,
         })
     }
@@ -108,7 +108,7 @@ impl PcmResampler {
         self.start = 0;
         self.available = 0;
         self.real = 0;
-        self.next = -(HALF as f64);
+        self.next = 0.0;
         self.emitted = 0;
     }
 
@@ -230,6 +230,30 @@ mod tests {
         }
         actual.extend(chunked.flush());
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn resampler_preserves_output_length_and_does_not_start_one_half_filter_early() {
+        let input = vec![1.0; 2048];
+
+        for rate in [22_050, 44_100, 48_000] {
+            let mut resampler = PcmResampler::new(rate, 100).unwrap();
+            let mut pcm = resampler.process(&input);
+            pcm.extend(resampler.flush());
+
+            let expected_samples =
+                (input.len() as f64 * rate as f64 / INPUT_RATE as f64).round_ties_even()
+                    as usize;
+            assert_eq!(pcm.len(), expected_samples * 2);
+
+            let first_sample = i16::from_le_bytes([pcm[0], pcm[1]]);
+            if rate != INPUT_RATE {
+                assert!(
+                    first_sample > 10_000,
+                    "FIR output should be centered on the first input sample; rate={rate}, first={first_sample}"
+                );
+            }
+        }
     }
 
     #[test]
