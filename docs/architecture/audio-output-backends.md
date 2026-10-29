@@ -35,7 +35,7 @@ Backend multiplataforma baseado em dispositivos e fluxos de áudio SDL3. Deve se
 
 ## Configurações expostas
 
-- Backend: WASAPI, XAudio2 ou SDL3.
+- Backend atualmente implementado: WASAPI compartilhado nativo em Rust. XAudio2 e SDL3 são metas futuras e não devem aparecer como opções selecionáveis até estarem implementados e testados.
 - Dispositivo de saída: padrão do sistema ou dispositivo escolhido.
 - Frequência PCM: 22050, 32000, 44100, 48000, 88200 ou 96000 Hz, apenas se suportada.
 - Formato: PCM signed 16-bit, PCM 24-bit quando suportado, ou float 32-bit quando suportado.
@@ -56,8 +56,8 @@ Portanto, cada perfil de console deverá especificar somente fatos sustentados p
 
 1. Formalizar este contrato e manter o núcleo PSG independente do dispositivo de áudio.
 2. Implementar configurações validadas e persistentes, incluindo perfil por console e preferências globais.
-3. Validar o backend WASAPI/PortAudio em Windows real, incluindo underruns, encerramento, reconexão, formatos e latência medida.
-4. Se a necessidade de controle nativo justificar o custo, avaliar a migração do adaptador PortAudio para WASAPI direto em Rust, com ownership explícito e testes no mesmo SHA.
+3. Validar o backend WASAPI nativo em Windows real, incluindo underruns, encerramento, reconexão, formatos e latência medida.
+4. Implementar o backend XAudio2 nativo em Rust como alternativa explícita, com ownership dos buffers e testes no mesmo SHA.
 5. Manter a integração de áudio do frontend Qt separada do hardware PSG Rust e validar o wheel/driver no Windows.
 6. Implementar XAudio2 por binding nativo verificável; medir estabilidade e latência.
 7. Integrar escolha de dispositivo e métricas na interface Qt, sem expor configurações não implementadas.
@@ -77,4 +77,4 @@ Portanto, cada perfil de console deverá especificar somente fatos sustentados p
 - Microsoft, [XAudio2 Introduction](https://learn.microsoft.com/en-us/windows/win32/xaudio2/xaudio2-introduction).
 - Microsoft, [XAudio2 sample-rate conversions](https://learn.microsoft.com/en-us/windows/win32/xaudio2/xaudio2-sample-rate-conversions).
 - SDL, [SDL_AudioStream](https://wiki.libsdl.org/SDL3/SDL_AudioStream).
-- python-sounddevice, [Platform-specific settings / WASAPI](https://python-sounddevice.readthedocs.io/en/0.5.3/api/platform-specific-settings.html).
+- Microsoft, [WASAPI low-latency audio](https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/low-latency-audio).
