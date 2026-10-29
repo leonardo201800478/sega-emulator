@@ -113,13 +113,15 @@ def _run_backend(
     seconds: int,
     frequency: float,
     signal: str,
+    balance: int,
     trace_csv: Path | None,
 ) -> bool:
     block_period = buffer_size / sample_rate
     print(
         f"\nBackend={backend}; taxa solicitada={sample_rate} Hz; "
         f"bloco={buffer_size} amostras ({block_period * 1000:.3f} ms); "
-        f"fila={queue_blocks}; duração={seconds}s; sinal={signal}"
+        f"fila={queue_blocks}; duração={seconds}s; sinal={signal}; "
+        f"balanço={balance}"
     )
     try:
         output = NativeAudioOutput(
@@ -127,7 +129,7 @@ def _run_backend(
             buffer_size,
             backend=backend,
             queue_blocks=queue_blocks,
-            balance=0,
+            balance=balance,
         )
     except Exception as exc:
         print(f"FAIL: inicialização: {type(exc).__name__}: {exc}")
@@ -279,6 +281,12 @@ def main() -> int:
     parser.add_argument("--queue-blocks", type=int, default=4)
     parser.add_argument("--frequency", type=float, default=440.0)
     parser.add_argument(
+        "--balance",
+        type=int,
+        default=0,
+        help="balanço de saída: -100 (esquerda), 0 (centro), 100 (direita)",
+    )
+    parser.add_argument(
         "--signal",
         choices=("tone", "melody"),
         default="tone",
@@ -305,6 +313,8 @@ def main() -> int:
         parser.error("--queue-blocks deve ser 2, 4 ou 8")
     if not 20.0 <= args.frequency <= 10_000.0:
         parser.error("--frequency deve estar entre 20 e 10000 Hz")
+    if not -100 <= args.balance <= 100:
+        parser.error("--balance deve estar entre -100 e 100")
 
     backends = ("wasapi", "xaudio2") if args.backend == "both" else (args.backend,)
     results = [
@@ -316,6 +326,7 @@ def main() -> int:
             args.seconds,
             args.frequency,
             args.signal,
+            args.balance,
             args.trace_csv,
         )
         for backend in backends
