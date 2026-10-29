@@ -251,10 +251,7 @@ fn djnz_covers_taken_and_not_taken_paths_without_changing_flags() {
         assert_eq!(cpu.step(&mut bus), Ok(expected_cycles));
         assert_eq!(cpu.registers.b, expected_b);
         assert_eq!(cpu.registers.pc, expected_pc);
-        assert_eq!(
-            cpu.wz,
-            if expected_b != 0 { expected_pc } else { 0xA55A }
-        );
+        assert_eq!(cpu.wz, if expected_b != 0 { expected_pc } else { 0xA55A });
         assert_eq!(cpu.registers.f, flags);
     }
 }
