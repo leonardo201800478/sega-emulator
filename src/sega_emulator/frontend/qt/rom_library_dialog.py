@@ -434,7 +434,8 @@ class RomLibraryDialog(QDialog):
             )
         else:
             self.status_label.setText(
-                "Biblioteca ainda não indexada. Use Atualizar biblioteca para buscar ROMs."
+                "Biblioteca ainda não indexada. "
+                "Use Atualizar biblioteca para buscar ROMs."
             )
         self.progress_bar.setValue(0)
         self.pages.setCurrentWidget(self.library_page)
