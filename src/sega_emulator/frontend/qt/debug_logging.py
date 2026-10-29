@@ -36,6 +36,15 @@ class _BoundedQueueHandler(logging.Handler):
             self._on_drop()
 
 
+def install_silent_default_logging(
+    logger: logging.Logger | None = None,
+) -> None:
+    """Suppress default console logging unless the user opts into Debug capture."""
+    target = logger if logger is not None else logging.getLogger()
+    if not target.handlers:
+        target.addHandler(logging.NullHandler())
+
+
 class DebugLogController:
     """Session-scoped opt-in logger with a bounded queue and rotating JSONL file."""
 

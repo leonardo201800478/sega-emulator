@@ -140,17 +140,21 @@ def run(initial_path: Path | None = None) -> None:
             QWidget,
         )
 
+        from sega_emulator.frontend.qt.debug_logging import (
+            DebugLogController,
+            install_silent_default_logging,
+        )
         from sega_emulator.frontend.qt.main_window import (
             EmulatorMainWindow,
             persisted_window_dimensions,
         )
         from sega_emulator.frontend.qt.settings_dialog import SettingsDialog
-        from sega_emulator.frontend.qt.debug_logging import DebugLogController
     except ImportError as exc:
         raise RuntimeError(
             'Interface Qt não instalada. Execute: python -m pip install -e ".[qt]"'
         ) from exc
 
+    install_silent_default_logging()
     app = QApplication.instance() or QApplication([])
     app.setOrganizationName("SegaEmulator")
     app.setApplicationName("SegaEmulator")

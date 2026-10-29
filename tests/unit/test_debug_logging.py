@@ -46,3 +46,15 @@ def test_debug_logging_queue_capacity_is_validated(tmp_path) -> None:
         assert "queue_capacity" in str(exc)
     else:
         raise AssertionError("queue_capacity=0 must be rejected")
+
+
+
+def test_silent_default_logging_uses_null_handler_without_existing_handlers() -> None:
+    from logging import Logger, NullHandler
+
+    from sega_emulator.frontend.qt.debug_logging import install_silent_default_logging
+
+    target = Logger("test.silent.default")
+    install_silent_default_logging(target)
+    assert len(target.handlers) == 1
+    assert isinstance(target.handlers[0], NullHandler)
