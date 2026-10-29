@@ -1211,7 +1211,7 @@ mod tests {
         v.registers[5] = 0x7E;
         v.cram[1] = 0x03;
         v.cram[2] = 0x0C;
-        v.cram[3] = 0x30;
+        v.cram[4] = 0x30;
         for col in 0..32 {
             v.vram[0x3800 + col * 2] = 0;
             v.vram[0x3800 + col * 2 + 1] = 0;
