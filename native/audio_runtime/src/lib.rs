@@ -142,8 +142,7 @@ impl PcmResampler {
     }
 
     fn emit(&mut self, flushing: bool) -> Vec<u8> {
-        let target =
-            (self.real as f64 * self.rate as f64 / INPUT_RATE as f64).round() as usize;
+        let target = (self.real as f64 * self.rate as f64 / INPUT_RATE as f64).round() as usize;
         let mut output = Vec::new();
 
         loop {
@@ -151,23 +150,17 @@ impl PcmResampler {
                 if self.next >= self.real as f64 || self.emitted >= target {
                     break;
                 }
-            } else if self.next + HALF as f64 >= self.available as f64
-                || self.emitted >= target
-            {
+            } else if self.next + HALF as f64 >= self.available as f64 || self.emitted >= target {
                 break;
             }
 
             let base = self.next.floor() as isize;
-            let phase =
-                (((self.next - base as f64) * PHASES as f64) as usize).min(PHASES - 1);
+            let phase = (((self.next - base as f64) * PHASES as f64) as usize).min(PHASES - 1);
             let mut value = 0.0;
             for (index, coefficient) in self.coefficients[phase].iter().enumerate() {
                 let source_index = base + index as isize - HALF;
-                if source_index >= self.start as isize
-                    && source_index < self.available as isize
-                {
-                    value +=
-                        self.buffer[source_index as usize - self.start] * coefficient;
+                if source_index >= self.start as isize && source_index < self.available as isize {
+                    value += self.buffer[source_index as usize - self.start] * coefficient;
                 }
             }
             output.extend_from_slice(&self.pcm16(value).to_le_bytes());
@@ -223,9 +216,7 @@ mod tests {
 
     #[test]
     fn resampling_is_repeatable() {
-        let input: Vec<f64> = (0..2048)
-            .map(|index| (index as f64 * 0.03).sin())
-            .collect();
+        let input: Vec<f64> = (0..2048).map(|index| (index as f64 * 0.03).sin()).collect();
         let mut whole = PcmResampler::new(48_000, 100).unwrap();
         let mut chunked = PcmResampler::new(48_000, 100).unwrap();
         let expected = [whole.process(&input), whole.flush()].concat();
