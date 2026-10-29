@@ -1,6 +1,6 @@
 # Plano: evolução da experiência Qt multissistema
 
-- **Estado:** planejamento inicial; implementação ainda não iniciada.
+- **Estado:** implementação incremental em andamento; biblioteca inicial, seletor de provedor e catálogo de idiomas já estão no branch.
 - **Branch de trabalho:** `feat/qt-multisystem-experience`
 - **Base auditada:** `cb4de9350233c7e98b9d5a72befc57000de6ba28`
 - **Escopo:** frontend Qt/PySide6, integração de entrada, apresentação de vídeo e contratos de seleção/configuração por sistema.
@@ -198,3 +198,20 @@ Cada sistema terá um ou mais diretórios ROM independentes e editáveis nas con
 - **Limite intencional:** apenas SG-1000 pode iniciar a emulação nesta tela. Os outros cinco sistemas aparecem desabilitados até haver integração funcional com o núcleo e o carregador.
 - **Ainda não implementado:** arte final/splash em imagem, capas de jogos/provedor externo, retorno à biblioteca depois de fechar uma sessão, tema claro/escuro completo e testes de interação visual no Windows.
 - **Validação:** os workflows de CI foram disparados no SHA candidato e seus resultados precisam ser conferidos antes de classificar esta fatia como aprovada. Não há PASS local declarado.
+
+
+## Fatia implementada: preferências de scraper e idiomas
+
+- O diálogo de configuração permite selecionar **ScreenScraper**, **TheGamesDB**, **IGDB** ou nenhum provedor.
+- A seleção do provedor, a consulta automática opcional, o idioma da interface e o idioma preferido dos metadados são persistidos em `QSettings`.
+- O fluxo inicial da biblioteca e o diálogo de scraper têm catálogo inicial em português (Brasil), inglês, espanhol, italiano e francês. A janela principal e os demais diálogos ainda precisam ser internacionalizados; portanto, não declarar a tradução completa do aplicativo.
+- Os links apontam para os sites/documentação oficiais de cada serviço. O link do ScreenScraper usa o domínio oficial francês; não se inventa um parâmetro de idioma que a documentação não confirme.
+- **ScreenScraper:** a documentação oficial informa que a integração de aplicativos exige credenciais de desenvolvedor emitidas após contato com a equipe; as credenciais do usuário (SSID/senha) são adicionais. A API documenta parâmetros `devid`, `devpassword`, `softname`, `ssid` e `sspassword`. Fontes: [WebAPI oficial](https://www.screenscraper.fr/webapi2.php) e [portal oficial](https://www.screenscraper.fr/).
+- Os campos de credenciais são somente uma interface preliminar. Nesta fatia, segredos **não são enviados nem persistidos**. Antes da consulta real, implementar adaptadores, limites de taxa/cache, erros e armazenamento seguro via cofre de credenciais do sistema operacional. Não embutir segredos de desenvolvedor no repositório.
+- TheGamesDB e IGDB também têm somente seleção e links nesta fatia; os adaptadores de API ainda não foram implementados. A opção de provedor não deve ser descrita como scraping remoto funcional até que isso seja concluído.
+- O idioma selecionado passa a valer ao reabrir a biblioteca/aplicativo. Tradução completa da janela de emulação, configurações e mensagens de runtime é uma etapa pendente.
+
+### Validação específica pendente
+
+- Testes Qt offscreen para a lista de provedores, persistência de idioma/preferências e ausência de persistência de segredos.
+- CI precisa executar os testes novos no SHA candidato. Ainda não há evidência de teste visual no Windows nem chamadas reais às APIs.
