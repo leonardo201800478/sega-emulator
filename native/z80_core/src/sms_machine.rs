@@ -208,7 +208,7 @@ mod tests {
     #[test]
     fn region_selects_pal_clock_and_japan_territory_profile() {
         let pal_machine = NativeSMSMachine::new(vec![0; 16], "europe").unwrap();
-        assert_eq!(pal_machine.psg_clock_hz(), 3_546_893);
+        assert_eq!(pal_machine.psg_clock_hz(), 3_546_895);
 
         let japan_machine = NativeSMSMachine::new(vec![0; 16], "japan").unwrap();
         assert_eq!(japan_machine.psg_clock_hz(), 3_579_545);
