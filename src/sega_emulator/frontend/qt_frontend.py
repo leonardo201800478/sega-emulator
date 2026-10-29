@@ -440,6 +440,7 @@ def run(initial_path: Path | None = None) -> None:
             last_checkpoint_time, \
             last_checkpoint_tstates
         nonlocal last_checkpoint_instructions, last_checkpoint_frame
+        nonlocal machine, frame_pacer, sms_region_attempt_index, active_sms_region
         if machine is None or paused:
             return
         if not frame_pacer.should_run(time.perf_counter()):
