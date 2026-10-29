@@ -22,6 +22,7 @@ INPUT_DRIVERS = (
 )
 AUDIO_DRIVERS = (
     ("WASAPI nativo (Rust)", "wasapi"),
+    ("XAudio2 nativo (Rust)", "xaudio2"),
     ("Áudio desativado", "disabled"),
 )
 VIDEO_DRIVERS = (
