@@ -206,6 +206,20 @@ mod tests {
     }
 
     #[test]
+    fn region_selects_pal_clock_and_japan_territory_profile() {
+        let pal_machine = NativeSMSMachine::new(vec![0; 16], "europe").unwrap();
+        assert_eq!(pal_machine.psg_clock_hz(), 3_546_893);
+
+        let japan_machine = NativeSMSMachine::new(vec![0; 16], "japan").unwrap();
+        assert_eq!(japan_machine.psg_clock_hz(), 3_579_545);
+    }
+
+    #[test]
+    fn unsupported_region_is_rejected() {
+        assert!(NativeSMSMachine::new(vec![0; 16], "automatic").is_err());
+    }
+
+    #[test]
     fn draining_audio_does_not_change_cpu_timing() {
         let mut machine = NativeSMSMachine::new(vec![0; 16], false).unwrap();
         for _ in 0..100 {
