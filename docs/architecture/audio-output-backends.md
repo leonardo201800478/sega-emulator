@@ -41,18 +41,17 @@ A Qt seleciona o backend por meio da fachada PyO3. O worker Rust cria o engine X
 
 Backend multiplataforma baseado em dispositivos e fluxos de áudio SDL3. Deve ser implementado com uma binding SDL3 real e versionada. Não reutilizar o mixer SDL2 do Pygame como se fosse SDL3: o frontend Pygame foi removido do pacote ativo; a interface suportada é Qt/PySide6.
 
-## Configurações expostas
+## Configurações expostas no Qt
 
-- Backends atualmente selecionáveis: WASAPI compartilhado nativo em Rust e XAudio2 nativo em Rust. SDL3 é uma meta futura e não deve aparecer como opção selecionável até estar implementado e testado.
-- Dispositivo de saída: padrão do sistema ou dispositivo escolhido.
-- Frequência PCM: 22050, 32000, 44100, 48000, 88200 ou 96000 Hz, apenas se suportada.
-- Formato: PCM signed 16-bit, PCM 24-bit quando suportado, ou float 32-bit quando suportado.
-- Canais de saída: mono ou estéreo; duplicar mono para estéreo é uma operação da saída, não uma mudança no chip.
-- Perfil de latência: estável, equilibrado ou baixa latência; buffer manual quando a API permitir.
-- WASAPI: compartilhado/exclusivo e conversão automática em modo compartilhado quando exposta pelo backend.
-- Fallback: habilitado/desabilitado, com mensagem explícita e registro da configuração realmente aberta.
+- Backend selecionado em um único lugar: Drivers → WASAPI compartilhado, XAudio2 ou áudio desativado. A janela de áudio apenas mostra o backend ativo; não duplica a seleção nem mantém um checkbox de habilitação concorrente.
+- Taxa PCM de saída: 22050, 44100 ou 48000 Hz. Padrão recomendado: 48000 Hz para compatibilidade comum com o mixer do Windows; isso é uma escolha de saída moderna, não uma propriedade histórica do console.
+- Volume de saída: 0–100%, padrão 80% para manter margem de headroom.
+- Balanço L/R: -100 (esquerda) a +100 (direita), padrão 0. O PSG mono é duplicado para os dois canais e o balanço atenua o canal oposto no limite de saída Rust.
+- WASAPI compartilhado: período solicitado configurável por buffer de 256, 512, 1024 ou 2048 amostras, padrão 512. O Windows controla o período efetivo e pode converter a taxa/formato para o dispositivo.
+- XAudio2: tamanho do bloco PCM configurável com os mesmos valores e profundidade da fila de 2, 4 ou 8 blocos, padrão 4. A estimativa nominal da fila não inclui a latência do dispositivo.
+- Ambos: fila de entrada de 2, 4 ou 8 blocos. A legenda e a estimativa de tempo são específicas do backend; não representam latência ponta a ponta medida.
 
-A UI deve desabilitar opções incompatíveis com o backend ativo, exibir erros de abertura e mostrar a configuração efetiva. Não alterar silenciosamente a frequência, o formato ou o modo selecionado sem comunicar o fallback.
+A UI não expõe seleção de dispositivo, modo exclusivo, PCM 24-bit, float32, filtros analógicos ou formatos alternativos porque esses recursos ainda não são configuráveis nos backends ativos. A janela mostra estimativas nominais e informa que latência efetiva, underruns, reconexão e estabilidade prolongada exigem validação em Windows real. O áudio desativado é escolhido exclusivamente no seletor de backend.
 
 ## Padrões por console
 
