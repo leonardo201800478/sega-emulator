@@ -648,13 +648,12 @@ def run(initial_path: Path | None = None) -> None:
         timer.start()
 
     def configure_drivers() -> None:
-        nonlocal (
-            controller_input,
-            audio_output,
-            audio_resampler,
-            preferences,
-            selected_audio_driver,
-        )
+        nonlocal \
+            controller_input, \
+            audio_output, \
+            audio_resampler, \
+            preferences, \
+            selected_audio_driver
 
         from sega_emulator.frontend.qt.drivers_dialog import DriversDialog
 
