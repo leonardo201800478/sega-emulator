@@ -3,10 +3,10 @@
 //! This module owns no CPU, memory, VDP or PSG implementation. It exposes
 //! snapshots and machine operations from sega_sg1000_core.
 
+use crate::audio::NativePcmResampler;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
-use crate::audio::NativePcmResampler;
 use sega_sg1000_core::{MemoryConfig, Sg1000Machine};
 
 #[pyclass(module = "sega_z80_core")]
