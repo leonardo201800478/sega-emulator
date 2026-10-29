@@ -748,8 +748,7 @@ mod sms_variant_tests {
 
     #[test]
     fn sms_periodic_noise_repeats_over_16_bits() {
-        let mut psg =
-            Sn76489::new_with_variant(3_579_545, 44_100, PsgVariant::Sms).unwrap();
+        let mut psg = Sn76489::new_with_variant(3_579_545, 44_100, PsgVariant::Sms).unwrap();
         psg.write(0xE0);
         for _ in 0..15 {
             psg.shift_noise_register();
