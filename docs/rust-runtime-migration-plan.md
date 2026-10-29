@@ -5,7 +5,7 @@
 ## Decisão arquitetural
 
 - O único runtime ativo de hardware SG-1000 é `native/sg1000_core`.
-- `native/z80_core` fornece a fronteira PyO3/Maturin e o adaptador fino `NativeSG1000Machine`. O harness Rust `RustZ80Cpu` separado permanece isolado e fora da máquina integrada. Os testes Python diferenciais que o exercitavam foram arquivados; removê-lo é uma limpeza futura separada.
+- `native/z80_core` fornece somente a fronteira PyO3/Maturin e o adaptador fino `NativeSG1000Machine`. O executor redundante `RustZ80Cpu` e o adaptador de memória `NativeMemoryBus` foram removidos da extensão; a CPU e o mapa de memória ativos pertencem a `native/sg1000_core`. A ALU standalone permanece disponível como oráculo diferencial independente enquanto a matriz semântica completa não estiver validada.
 - `src/sega_emulator/machine/sg1000.py` resolve o perfil de cartucho e encaminha chamadas para a extensão. Não contém CPU, memória, VDP, PSG ou scheduler em Python, nem oferece seleção/fallback de backend.
 - Python ativo na aplicação fica restrito à interface Qt e backends de host, carregamento de ROMs/perfis, configuração/logging e integração fina. O frontend Pygame, runner headless, implementação Python de hardware, testes que dependiam dela e ferramentas relacionadas estão em `legacy/`.
 - Testes Python ativos são testes de aplicação/integração Qt/PyO3. A validação de hardware é feita pelos testes Rust e por oráculos independentes; o legado Python não é importado como runtime nem como oráculo ativo.
