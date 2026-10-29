@@ -58,6 +58,10 @@ jobs:
           cache: pip
       - name: Install project, Qt and Maturin
         run: python -m pip install -e ".[dev,qt]" maturin
+      - name: Generate native dependency lockfiles for review
+        run: |
+          cargo generate-lockfile --manifest-path native/z80_core/Cargo.toml
+          cargo generate-lockfile --manifest-path native/audio_output/Cargo.toml
       - name: Rust formatting
         run: cargo fmt --manifest-path native/z80_core/Cargo.toml --all -- --check
       - name: Rust formatting — native audio output
