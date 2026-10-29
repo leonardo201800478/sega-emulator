@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from threading import Event
 
@@ -25,7 +24,7 @@ def test_recursive_scan_indexes_candidates_and_duplicate_hashes(tmp_path: Path) 
 
     assert len(result.entries) == 2
     assert result.added == 2
-    assert result.duplicate_groups == ((str(first.resolve()), str(second.resolve())),)
+    assert result.duplicate_groups == (tuple(sorted((str(first.resolve()), str(second.resolve()))),),)
     assert library.entries("mega_drive") == result.entries
 
 

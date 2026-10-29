@@ -149,6 +149,7 @@ def run(initial_path: Path | None = None) -> None:
             persisted_window_dimensions,
         )
         from sega_emulator.frontend.qt.settings_dialog import SettingsDialog
+        from sega_emulator.frontend.qt.rom_library_dialog import RomLibraryDialog
     except ImportError as exc:
         raise RuntimeError(
             'Interface Qt não instalada. Execute: python -m pip install -e ".[qt]"'
@@ -1314,6 +1315,15 @@ def run(initial_path: Path | None = None) -> None:
     refresh_recent_rom_menu()
     if initial_path is not None:
         open_rom(str(initial_path))
+    else:
+        # Start in the library; only an explicit selection launches a ROM.
+        library_dialog = RomLibraryDialog(settings, parent=window)
+        library_dialog.showFullScreen()
+        if (
+            library_dialog.exec() == QDialog.DialogCode.Accepted
+            and library_dialog.selected_rom is not None
+        ):
+            open_rom(str(library_dialog.selected_rom))
     window.show()
     app.exec()
     debug_logger.stop()
