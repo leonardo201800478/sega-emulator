@@ -616,10 +616,12 @@ _COMMON_IMAGE_SUFFIXES = {
 
 
 def _normalize_art_name(value: str) -> str:
-    """Normalize ROM/art names, ignoring region tags and LaunchBox art suffixes."""
+    """Normalize ROM/art names, ignoring regions and LaunchBox image numbering."""
     value = re.sub(
         r"\s+-\s+(?:box\s*[- ]\s*)?front.*$", "", value, flags=re.IGNORECASE
     )
+    # LaunchBox commonly appends -01, -02, etc. to alternative scans of one cover.
+    value = re.sub(r"-\d{2,3}$", "", value.strip())
     value = re.sub(r"\[[^]]*\]|\([^)]*\)", " ", value)
     value = re.sub(r"[^a-z0-9]+", " ", value.casefold())
     return " ".join(value.split())
