@@ -116,13 +116,16 @@ def test_box_art_does_not_match_a_different_filename(tmp_path: Path) -> None:
     assert _find_box_art(rom, art_root) is None
 
 
-def test_system_selector_uses_packaged_artwork_and_only_enables_sg1000(
+def test_system_selector_enables_integrated_systems_and_uses_packaged_artwork(
     qt_app, settings
 ) -> None:
     dialog = RomLibraryDialog(settings)
 
     assert dialog.system_buttons["sg1000"].isEnabled()
-    assert not dialog.system_buttons["master_system"].isEnabled()
+    assert dialog.system_buttons["master_system"].isEnabled()
+    assert dialog.system_buttons["master_system"].text() == "Master System"
+    for system in ("game_gear", "mega_drive", "sega_cd", "32x"):
+        assert not dialog.system_buttons[system].isEnabled()
     for system, button in dialog.system_buttons.items():
         assert not button.icon().isNull(), f"Missing system artwork: {system}"
 

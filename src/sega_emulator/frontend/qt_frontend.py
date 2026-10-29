@@ -28,6 +28,7 @@ from sega_emulator.frontend.qt.frame_pacer import FramePacer
 from sega_emulator.frontend.qt.preferences import FrontendPreferences
 from sega_emulator.frontend.qt.wasapi_audio import NativeAudioOutput
 from sega_emulator.machine.sg1000 import SG1000Machine
+from sega_emulator.machine.sms import SMSMachine, load_sms_rom
 from sega_emulator.rom_loader import LoadedRom, list_rom_members, load_rom
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,7 @@ Z80_CLOCK_HZ = 3_579_545
 FRAME_PERIOD_SECONDS = (228 * 262) / Z80_CLOCK_HZ
 
 
-def _runtime_diagnostic(machine: SG1000Machine, rom_sha256: str) -> dict[str, object]:
+def _runtime_diagnostic(machine: object, rom_sha256: str) -> dict[str, object]:
     """Return verifiable identity of the loaded emulator runtime and native binary."""
     import os
     import sys
@@ -49,7 +50,11 @@ def _runtime_diagnostic(machine: SG1000Machine, rom_sha256: str) -> dict[str, ob
         "machine_type": type(machine).__module__ + "." + type(machine).__qualname__,
         "cpu_type": type(machine.cpu).__module__ + "." + type(machine.cpu).__qualname__,
         "vdp_type": type(machine.vdp).__module__ + "." + type(machine.vdp).__qualname__,
-        "psg_type": type(machine.psg).__module__ + "." + type(machine.psg).__qualname__,
+        "psg_type": (
+            type(machine.psg).__module__ + "." + type(machine.psg).__qualname__
+            if hasattr(machine, "psg")
+            else "native_sms_psg"
+        ),
         "rom_sha256": rom_sha256,
         "python_executable": sys.executable,
         "python_version": sys.version,
@@ -58,7 +63,8 @@ def _runtime_diagnostic(machine: SG1000Machine, rom_sha256: str) -> dict[str, ob
     native = getattr(machine, "native_machine", None)
     diagnostic["backend_effective"] = (
         "rust_native_machine"
-        if native is not None and type(native).__name__ == "NativeSG1000Machine"
+        if native is not None
+        and type(native).__name__ in {"NativeSG1000Machine", "NativeSMSMachine"}
         else "unexpected_backend_state"
     )
     diagnostic["native_machine_type"] = (
@@ -84,7 +90,11 @@ def _runtime_diagnostic(machine: SG1000Machine, rom_sha256: str) -> dict[str, ob
     if native is not None:
         diagnostic["native_instruction_count"] = native.total_instructions
         diagnostic["native_tstates"] = native.total_tstates
-        diagnostic["native_vdp_frame"] = native.vdp.frame_number
+        diagnostic["native_vdp_frame"] = (
+            native.frame_number
+            if hasattr(native, "frame_number")
+            else native.vdp.frame_number
+        )
     return diagnostic
 
 
@@ -271,6 +281,10 @@ def run(initial_path: Path | None = None) -> None:
     app.aboutToQuit.connect(debug_logger.stop)
 
     window.resize(preferences.window_width, preferences.window_height)
+    saved_window_state = str(settings.value("window_state", "normal"))
+    if saved_window_state not in {"normal", "maximized", "fullscreen"}:
+        saved_window_state = "normal"
+    window._saved_window_state = saved_window_state
     window._video_scale = preferences.video_scale
     view = window.video_widget
     view.set_filter_mode(preferences.video_filter)
@@ -289,8 +303,9 @@ def run(initial_path: Path | None = None) -> None:
     if audio_warning is not None:
         status.showMessage(audio_warning)
 
-    machine: SG1000Machine | None = None
+    machine: SG1000Machine | SMSMachine | None = None
     loaded: LoadedRom | None = None
+    active_system = "sg1000"
     vgm_recorder = VgmRecorder()
     vgm_output_path: Path | None = None
     paused = False
@@ -337,12 +352,16 @@ def run(initial_path: Path | None = None) -> None:
             actions[player] = apply_turbo(
                 actions[player], profile.turbo_buttons, frame_count
             )
-            machine.set_joystick(
-                player, joystick_value(actions[player].intersection(JOYSTICK_ACTIONS))
-            )
+            if active_system == "master_system":
+                machine.set_controller_actions(player, actions[player])
+            else:
+                machine.set_joystick(
+                    player,
+                    joystick_value(actions[player].intersection(JOYSTICK_ACTIONS)),
+                )
         hold_pressed = any("hold" in actions[player] for player in (1, 2))
-        if hold_pressed and not hold_was_pressed:
-            # The console Hold switch is an edge-triggered NMI, not a joystick bit.
+        if active_system == "sg1000" and hold_pressed and not hold_was_pressed:
+            # The SG-1000 Hold switch is an edge-triggered NMI, not a joystick bit.
             machine.request_nmi()
         hold_was_pressed = hold_pressed
 
@@ -454,10 +473,11 @@ def run(initial_path: Path | None = None) -> None:
             frame_count += 1
 
             phase_started = time.perf_counter()
+            frame_height = int(getattr(machine.vdp, "visible_height", 192))
             image = QImage(
                 machine.vdp.framebuffer,
                 256,
-                192,
+                frame_height,
                 256 * 3,
                 QImage.Format.Format_RGB888,
             ).copy()
@@ -578,27 +598,47 @@ def run(initial_path: Path | None = None) -> None:
         settings.setValue("recent_roms", [])
         refresh_recent_rom_menu()
 
-    def open_rom(path: str | None = None) -> None:
-        nonlocal machine, loaded, frame_count, paused
+    def open_rom(path: str | None = None, system: str | None = None) -> None:
+        nonlocal machine, loaded, frame_count, paused, active_system
         nonlocal last_checkpoint_time, last_checkpoint_tstates
         nonlocal last_checkpoint_instructions, last_checkpoint_frame
         if not path:
             path, _ = QFileDialog.getOpenFileName(
                 window,
-                "Abrir ROM SG-1000",
+                "Abrir ROM do sistema selecionado",
                 str(settings.value("last_directory", str(Path.cwd()))),
-                "ROMs SG-1000 (*.sg *.zip *.rom *.bin);;Todos os arquivos (*)",
+                "ROMs Master System (*.sms *.rom *.bin *.zip);;"
+                "ROMs SG-1000 (*.sg *.rom *.bin *.zip);;Todos os arquivos (*)",
             )
         if not path:
             return
+        requested_system = system or (
+            "master_system" if Path(path).suffix.casefold() == ".sms" else active_system
+        )
+        if requested_system not in {"sg1000", "master_system"}:
+            QMessageBox.information(
+                window,
+                "Sistema ainda não integrado",
+                "Este sistema ainda não pode executar ROMs.",
+            )
+            return
         try:
             try:
-                candidate = load_rom(path)
+                candidate = (
+                    load_sms_rom(path)
+                    if requested_system == "master_system"
+                    else load_rom(path)
+                )
             except ValueError as error:
                 if Path(path).suffix.lower() != ".zip" or "várias ROMs" not in str(
                     error
                 ):
                     raise
+                if requested_system == "master_system":
+                    raise ValueError(
+                        "O ZIP contém várias ROMs; extraia ou selecione "
+                        "uma ROM SMS individual."
+                    ) from error
                 members = list_rom_members(path)
                 selected, accepted = QInputDialog.getItem(
                     window,
@@ -611,9 +651,12 @@ def run(initial_path: Path | None = None) -> None:
                 if not accepted:
                     return
                 candidate = load_rom(path, member_name=selected)
-            loaded_machine = SG1000Machine(candidate.data)
-            if not preferences.sprite_limit_enabled:
-                loaded_machine.set_sprite_limit_enabled(False)
+            if requested_system == "master_system":
+                loaded_machine = SMSMachine(candidate.data)
+            else:
+                loaded_machine = SG1000Machine(candidate.data)
+                if not preferences.sprite_limit_enabled:
+                    loaded_machine.set_sprite_limit_enabled(False)
         except Exception as exc:
             logger.exception(
                 "Falha ao carregar ROM",
@@ -625,6 +668,7 @@ def run(initial_path: Path | None = None) -> None:
         if vgm_recorder.active and not stop_vgm_recording():
             return
         machine, loaded, frame_count, paused = loaded_machine, candidate, 0, False
+        active_system = requested_system
         audio_resampler.reset()
         window.set_rom_label(candidate.display_name)
         selected_path = str(Path(path).expanduser().resolve())
@@ -887,6 +931,14 @@ def run(initial_path: Path | None = None) -> None:
 
     def start_vgm_recording() -> None:
         nonlocal vgm_output_path
+        if active_system == "master_system":
+            QMessageBox.information(
+                window,
+                "Gravação VGM",
+                "A captura VGM temporizada do PSG ainda não está integrada "
+                "ao núcleo SMS.",
+            )
+            return
         if machine is None or loaded is None:
             QMessageBox.information(
                 window, "Gravação VGM", "Carregue uma ROM antes de gravar."
@@ -969,7 +1021,11 @@ def run(initial_path: Path | None = None) -> None:
             return
         if loaded is None:
             return
-        machine = SG1000Machine(loaded.data)
+        machine = (
+            SMSMachine(loaded.data)
+            if active_system == "master_system"
+            else SG1000Machine(loaded.data)
+        )
         audio_resampler.reset()
         frame_count, paused = 0, False
         frame_pacer.reset()
@@ -1277,6 +1333,14 @@ def run(initial_path: Path | None = None) -> None:
             )
             return
 
+        if active_system != "sg1000":
+            QMessageBox.information(
+                window,
+                "Snapshot VDP",
+                "O snapshot detalhado ainda está disponível apenas para "
+                "o VDP do SG-1000.",
+            )
+            return
         vdp = machine.vdp
         attr_base = (vdp.registers[5] & 0x7F) << 7
         sprites = []
@@ -1411,13 +1475,24 @@ def run(initial_path: Path | None = None) -> None:
             library_dialog.exec() == QDialog.DialogCode.Accepted
             and library_dialog.selected_rom is not None
         ):
-            open_rom(str(library_dialog.selected_rom))
-    window.show()
+            open_rom(str(library_dialog.selected_rom), library_dialog.selected_system)
+    if window._saved_window_state == "fullscreen":
+        window.fullscreen_action.setChecked(True)
+    elif window._saved_window_state == "maximized":
+        window.showMaximized()
+    else:
+        window.showNormal()
     app.exec()
     debug_logger.stop()
     debug_logger.wait(1.5)
     if vgm_recorder.active:
         stop_vgm_recording()
+    if window.isFullScreen():
+        settings.setValue("window_state", "fullscreen")
+    elif window.isMaximized():
+        settings.setValue("window_state", "maximized")
+    else:
+        settings.setValue("window_state", "normal")
     saved_width, saved_height = persisted_window_dimensions(
         window, preferences.window_width, preferences.window_height
     )
