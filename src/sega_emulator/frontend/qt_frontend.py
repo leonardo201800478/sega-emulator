@@ -718,6 +718,7 @@ def run(initial_path: Path | None = None) -> None:
         audio_changed = (
             audio_enabled != preferences.audio_enabled
             or audio_driver != selected_audio_driver
+            or (audio_enabled and audio_output is None)
         )
         if audio_changed:
             if audio_output is not None:
@@ -811,6 +812,11 @@ def run(initial_path: Path | None = None) -> None:
             updated.audio_enabled != preferences.audio_enabled
             or updated.audio_sample_rate != preferences.audio_sample_rate
             or updated.audio_buffer_size != preferences.audio_buffer_size
+            or (
+                updated.audio_enabled
+                and selected_audio_driver != "disabled"
+                and audio_output is None
+            )
         )
         if audio_device_changed:
             if audio_output is not None:
