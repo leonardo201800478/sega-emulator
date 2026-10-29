@@ -131,3 +131,11 @@ O corpus SingleStepTests/Z80 fixado em `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7
 
 
 **Gate temporal ainda aberto:** ampliar o modelo a outras instruções somente com critérios e vetores fixos; diferenciar amostras de barramento de T-states nominais; incluir waits, refresh/M1, I/O, acknowledge de interrupção e ordenação de eventos quando o contrato e as fontes estiverem definidos; testar que a instrumentação desativada não altera o estado funcional. Não declarar `TEMPORAL_PASS` nesta fase.
+
+## 8. Diagnóstico arquitetural por instrução
+
+A instrumentação opcional `Z80InstructionTrace` registra um JSONL determinístico por chamada externa de `Z80::step`: índice sequencial desde reset, bytes de opcode/prefixo (até oito, com indicador de truncamento), resultado, T-states agregados e snapshots antes/depois de AF/BC/DE/HL, bancos alternativos, IX/IY, PC/SP, I/R, IFF1/IFF2, modo de interrupção, WZ, atraso de EI, pedidos de interrupção, Q/P, HALT e contador absoluto de T-states. Erros `UnsupportedOpcode` são registrados como resultado explícito.
+
+O coletor é opt-in via `CpuBus::instruction_trace_enabled`; sem opt-in, o núcleo não formata JSON nem chama o callback de diagnóstico. O host deve persistir cada linha em arquivo local e manter limites de tamanho/rotação; logs podem crescer rapidamente e não devem entrar no Git, especialmente se incluírem conteúdo de ROM. O registro de instrução não substitui os eventos M-cycle/T-state existentes, cuja cobertura continua restrita às oito instruções ED documentadas acima.
+
+**Limites deliberados:** o registro não é um trace de todos os acessos de memória/I/O e não atribui um offset T-state a cada acesso. Não declarar precisão temporal global. Repetições de PC/estado e ciclos agregados poderão ser analisados offline para localizar loops; um estado repetido não prova sozinho um loop incorreto. Os ED não atribuídos documentados como NOP devem ser classificados como comportamento definido, não como opcode ausente. O callback do núcleo oferece a interface de coleta; a integração do sink de arquivo ao caminho de execução real do SMS e a campanha de testes in-game permanecem `INTEGRATION_PENDING`.
