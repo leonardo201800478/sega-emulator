@@ -1,5 +1,14 @@
 # Histórico de versões
 
+## Estado de desenvolvimento — 2026-10-29
+
+- Integra a consolidação do Z80 SG-1000 pela [PR #157](https://github.com/leonardo201800478/sega-emulator/pull/157), commit `5d29b1790aa7e8d7af47de9ee2563a1c978b62d7`.
+- O candidato `baa56568ca2ccbb3963b86207c49fb12f32ab342` passou nos seis workflows listados na PR; o mantenedor confirmou testes manuais de jogos SG-1000 sem regressões perceptíveis.
+- A PR alterou cinco arquivos, nenhum sob `native/sms_core/`. A precisão temporal ciclo a ciclo do SG-1000 não foi declarada.
+- O foco de desenvolvimento seguinte é concluir o core SMS: auditoria da matriz de opcodes/semântica ([#158](https://github.com/leonardo201800478/sega-emulator/issues/158)) e auditoria de interrupções/temporalidade ([#159](https://github.com/leonardo201800478/sega-emulator/issues/159)).
+
+# Histórico de versões
+
 ## v0.1.0 — Primeiro release SG-1000 (preparação)
 
 ### Marco de áudio e vídeo
