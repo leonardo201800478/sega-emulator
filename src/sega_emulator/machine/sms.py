@@ -183,6 +183,8 @@ def load_sms_rom(path: str | Path) -> LoadedRom:
                 raise ValueError(
                     "Formato SMS não suportado. Use .sms, .rom, .bin ou ZIP."
                 )
+            if source.stat().st_size > 0x100000:
+                raise ValueError("A ROM SMS excede o limite atual de 1 MiB.")
             data = source.read_bytes()
             name = source.name
             member_name = None
