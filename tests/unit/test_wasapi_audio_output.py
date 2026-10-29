@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from sega_emulator.frontend.qt.wasapi_audio import WasapiAudioOutput
+from sega_emulator.frontend.qt.wasapi_audio import NativeAudioOutput, WasapiAudioOutput
 
 
 class FakeNativeOutput:
@@ -37,7 +37,10 @@ def native_outputs(monkeypatch):
     monkeypatch.setitem(
         sys.modules,
         "sega_z80_core",
-        SimpleNamespace(NativeWasapiOutput=factory),
+        SimpleNamespace(
+            NativeWasapiOutput=factory,
+            NativeXAudio2Output=factory,
+        ),
     )
     return instances
 
@@ -87,3 +90,17 @@ def test_invalid_configuration_fails_before_native_open(
 ):
     with pytest.raises(ValueError, match=message):
         WasapiAudioOutput(sample_rate, buffer_size, queue_blocks=queue_blocks)
+
+
+def test_selects_native_xaudio2_when_requested(native_outputs):
+    output = NativeAudioOutput(48_000, 512, backend="xaudio2")
+    native = native_outputs[0]
+    assert native.sample_rate == 48_000
+    assert native.buffer_size == 512
+    output.close()
+
+
+def test_rejects_unimplemented_backend_before_native_open(native_outputs):
+    with pytest.raises(ValueError, match="Backend"):
+        NativeAudioOutput(48_000, 512, backend="sdl3")
+    assert native_outputs == []
