@@ -17,14 +17,24 @@ pub struct NativeSMSMachine {
 #[pymethods]
 impl NativeSMSMachine {
     #[new]
-    #[pyo3(signature = (rom, pal=false))]
-    fn new(rom: Vec<u8>, pal: bool) -> PyResult<Self> {
+    #[pyo3(signature = (rom, pal=false, region=None))]
+    fn new(rom: Vec<u8>, pal: bool, region: Option<&str>) -> PyResult<Self> {
+        // Keep the legacy positional `pal` argument compatible; an explicit
+        // region profile takes precedence and also selects territory.
+        let region = region.unwrap_or(if pal { "europe" } else { "usa" });
+        let (territory, video_standard) = match region {
+            "usa" => (sega_sms_core::Territory::Export, VideoStandard::Ntsc),
+            "europe" => (sega_sms_core::Territory::Export, VideoStandard::Pal),
+            "japan" => (sega_sms_core::Territory::Japan, VideoStandard::Ntsc),
+            _ => {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "region deve ser usa, europe ou japan",
+                ));
+            }
+        };
         let config = SmsMachineConfig {
-            video_standard: if pal {
-                VideoStandard::Pal
-            } else {
-                VideoStandard::Ntsc
-            },
+            territory,
+            video_standard,
             ..SmsMachineConfig::default()
         };
         // The shared native resampler consumes a deterministic 44.1 kHz PSG stream.
@@ -194,15 +204,29 @@ mod tests {
 
     #[test]
     fn sms_adapter_uses_native_psg_and_reports_configured_clock() {
-        let machine = NativeSMSMachine::new(vec![0; 16], false).unwrap();
+        let machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa")).unwrap();
         assert_eq!(machine.psg_sample_rate(), 44_100);
         assert_eq!(machine.psg_clock_hz(), 3_579_545);
         assert_eq!(machine.total_tstates(), 0);
     }
 
     #[test]
+    fn region_selects_pal_clock_and_japan_territory_profile() {
+        let pal_machine = NativeSMSMachine::new(vec![0; 16], false, Some("europe")).unwrap();
+        assert_eq!(pal_machine.psg_clock_hz(), 3_546_895);
+
+        let japan_machine = NativeSMSMachine::new(vec![0; 16], false, Some("japan")).unwrap();
+        assert_eq!(japan_machine.psg_clock_hz(), 3_579_545);
+    }
+
+    #[test]
+    fn unsupported_region_is_rejected() {
+        assert!(NativeSMSMachine::new(vec![0; 16], false, Some("automatic")).is_err());
+    }
+
+    #[test]
     fn draining_audio_does_not_change_cpu_timing() {
-        let mut machine = NativeSMSMachine::new(vec![0; 16], false).unwrap();
+        let mut machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa")).unwrap();
         for _ in 0..100 {
             machine.step().unwrap();
         }
@@ -213,7 +237,7 @@ mod tests {
 
     #[test]
     fn frame_runner_advances_native_vdp_and_exposes_frame_state() {
-        let mut machine = NativeSMSMachine::new(vec![0; 16], false).unwrap();
+        let mut machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa")).unwrap();
         assert_eq!(machine.frame_number(), 0);
         let steps = machine.run_frame(100_000).unwrap();
         assert!(steps > 0 && steps <= 100_000);
@@ -224,7 +248,7 @@ mod tests {
 
     #[test]
     fn controller_rejects_unknown_player() {
-        let mut machine = NativeSMSMachine::new(vec![0; 16], false).unwrap();
+        let mut machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa")).unwrap();
         assert!(
             machine
                 .set_controller(3, false, false, false, false, false, false)

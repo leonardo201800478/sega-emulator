@@ -33,7 +33,7 @@ def _machine() -> NativeSMSMachine:
             0x00,
         ]
     )
-    return NativeSMSMachine(rom, False)
+    return NativeSMSMachine(rom, region="usa")
 
 
 def test_sms_binding_uses_native_psg_and_ntsc_clock() -> None:
@@ -72,7 +72,7 @@ def test_sms_audio_pcm_is_deterministic_and_drain_does_not_change_timing() -> No
 
 
 def test_sms_pal_profile_selects_pal_psg_clock() -> None:
-    machine = NativeSMSMachine(bytes([0x00]), True)
+    machine = NativeSMSMachine(bytes([0x00]), region="europe")
     assert machine.psg_sample_rate == 44_100
     assert machine.psg_clock_hz == 3_546_895
 
@@ -115,7 +115,7 @@ def test_sms_python_adapter_drains_pcm_without_changing_tstates() -> None:
 
 
 def test_sms_frame_runner_exposes_native_framebuffer_and_controller() -> None:
-    machine = NativeSMSMachine(bytes([0x00]) * 16, False)
+    machine = NativeSMSMachine(bytes([0x00]) * 16, region="usa")
     assert machine.frame_number == 0
     steps = machine.run_frame(100_000)
     assert 0 < steps <= 100_000
