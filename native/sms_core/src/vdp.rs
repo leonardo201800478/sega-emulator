@@ -318,6 +318,12 @@ impl SmsVdp {
                 0xE5_u8.wrapping_add((line - 235) as u8)
             }
             (VideoStandard::Pal, 192) if line >= 243 => 0xBA_u8.wrapping_add((line - 243) as u8),
+            (VideoStandard::Pal, 224) if line >= 259 => {
+                0xCA_u8.wrapping_add((line - 259) as u8)
+            }
+            (VideoStandard::Pal, 240) if line >= 267 => {
+                0xD2_u8.wrapping_add((line - 267) as u8)
+            }
             _ => line as u8,
         }
     }
@@ -1328,6 +1334,33 @@ mod tests {
         let mut v = SmsVdp::new(VideoStandard::Unknown, SpriteLimitMode::HardwareLimit);
         v.scanline = 219;
         assert_eq!(v.read_v_counter(), 0xD5);
+    }
+
+
+    #[test]
+    fn pal_224_line_counter_has_documented_wrap_sequence() {
+        let mut v = SmsVdp::new(VideoStandard::Pal, SpriteLimitMode::HardwareLimit);
+        reg(&mut v, 1, 0x10);
+        v.scanline = 256;
+        assert_eq!(v.read_v_counter(), 0x00);
+        v.scanline = 258;
+        assert_eq!(v.read_v_counter(), 0x02);
+        v.scanline = 259;
+        assert_eq!(v.read_v_counter(), 0xCA);
+        v.scanline = 312;
+        assert_eq!(v.read_v_counter(), 0xFF);
+    }
+
+    #[test]
+    fn pal_240_line_counter_has_documented_wrap_sequence() {
+        let mut v = SmsVdp::new(VideoStandard::Pal, SpriteLimitMode::HardwareLimit);
+        reg(&mut v, 1, 0x08);
+        v.scanline = 266;
+        assert_eq!(v.read_v_counter(), 0x0A);
+        v.scanline = 267;
+        assert_eq!(v.read_v_counter(), 0xD2);
+        v.scanline = 312;
+        assert_eq!(v.read_v_counter(), 0xFF);
     }
 
     #[test]
