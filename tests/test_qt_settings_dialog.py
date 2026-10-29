@@ -47,7 +47,7 @@ def test_dialog_loads_and_returns_audio_video_preferences(qt_app) -> None:
     ]
     assert dialog.balance.value() == -35
     assert dialog.queue_blocks.currentData() == 8
-    assert "Fila PCM nominal" in dialog.latency_label.text()
+    assert "Período WASAPI solicitado" in dialog.latency_label.text()
     assert dialog.sample_rate.currentData() == 48_000
     assert dialog.buffer_size.currentData() == 1024
     assert dialog.volume.value() == 65
