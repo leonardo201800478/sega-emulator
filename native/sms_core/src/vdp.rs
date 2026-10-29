@@ -1117,7 +1117,6 @@ mod tests {
         assert_eq!(&v.working_framebuffer[8 * 3..8 * 3 + 3], &[255, 0, 0]);
     }
 
-
     #[test]
     fn sms_mode4_horizontal_fine_scroll_matches_source_pixel_offsets() {
         for scroll in [0_u8, 1, 7, 8, 255] {
