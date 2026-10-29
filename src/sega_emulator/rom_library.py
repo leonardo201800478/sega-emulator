@@ -181,7 +181,9 @@ class RomLibrary:
         before = dict(previous)
         current: dict[str, RomEntry] = {}
         added = updated = unchanged = 0
-        ordered_paths = sorted(candidates.values(), key=lambda path: str(path).casefold())
+        ordered_paths = sorted(
+            candidates.values(), key=lambda path: str(path).casefold()
+        )
         total = len(ordered_paths)
 
         for index, path in enumerate(ordered_paths, start=1):
@@ -225,7 +227,9 @@ class RomLibrary:
         cancelled = cancel is not None and cancel.is_set()
         if cancelled:
             # Cancellation must not drop entries which have not been visited yet.
-            current.update({key: value for key, value in before.items() if key not in current})
+            current.update(
+                {key: value for key, value in before.items() if key not in current}
+            )
             removed = 0
         else:
             scoped_before = {
@@ -256,7 +260,9 @@ class RomLibrary:
         duplicate_groups = _find_duplicate_groups(current.values())
         return ScanResult(
             system=system,
-            entries=tuple(sorted(current.values(), key=lambda entry: entry.name.casefold())),
+            entries=tuple(
+                sorted(current.values(), key=lambda entry: entry.name.casefold())
+            ),
             added=added,
             updated=updated,
             removed=removed,
@@ -278,7 +284,7 @@ class RomLibrary:
                     entry.path: entry
                     for entry in (RomEntry.from_dict(record) for record in records)
                 }
-        except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        except OSError, ValueError, TypeError, KeyError, AttributeError:
             # A missing/corrupt index is recoverable: the next scan rebuilds it.
             self._entries = {system: {} for system in SUPPORTED_SYSTEMS}
 
