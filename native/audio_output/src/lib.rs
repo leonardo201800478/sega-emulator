@@ -44,7 +44,7 @@ impl std::error::Error for AudioOutputError {}
 /// Bounded producer queue and event-driven WASAPI consumer owned entirely by Rust.
 pub struct NativeWasapiOutput {
     #[cfg(windows)]
-    sender: Option<mpsc::SyncSender<Vec<u8>>>,
+    producer: Option<rtrb::Producer<Vec<u8>>>,
     #[cfg(windows)]
     worker: Option<JoinHandle<()>>,
     shutdown: Arc<AtomicBool>,
@@ -72,7 +72,7 @@ impl NativeWasapiOutput {
 
         #[cfg(windows)]
         {
-            let (sender, receiver) = mpsc::sync_channel(queue_blocks);
+            let (producer, consumer) = rtrb::RingBuffer::<Vec<u8>>::new(queue_blocks);
             let (ready_sender, ready_receiver) = mpsc::sync_channel(1);
             let shutdown = Arc::new(AtomicBool::new(false));
             let underruns = Arc::new(AtomicU64::new(0));
@@ -83,7 +83,7 @@ impl NativeWasapiOutput {
                 .name("sega-wasapi-output".to_owned())
                 .spawn(move || {
                     run_wasapi_worker(
-                        receiver,
+                        consumer,
                         ready_sender,
                         worker_shutdown,
                         worker_underruns,
@@ -95,7 +95,7 @@ impl NativeWasapiOutput {
 
             match ready_receiver.recv_timeout(Duration::from_secs(5)) {
                 Ok(Ok(())) => Ok(Self {
-                    sender: Some(sender),
+                    producer: Some(producer),
                     worker: Some(worker),
                     shutdown,
                     underruns,
@@ -105,13 +105,13 @@ impl NativeWasapiOutput {
                 }),
                 Ok(Err(message)) => {
                     shutdown.store(true, Ordering::Release);
-                    drop(sender);
+                    drop(producer);
                     let _ = worker.join();
                     Err(AudioOutputError::Device(message))
                 }
                 Err(error) => {
                     shutdown.store(true, Ordering::Release);
-                    drop(sender);
+                    drop(producer);
                     let _ = worker.join();
                     Err(AudioOutputError::Device(format!(
                         "audio worker initialization timed out: {error}"
@@ -129,7 +129,7 @@ impl NativeWasapiOutput {
         }
     }
 
-    pub fn write_pcm(&self, pcm: Vec<u8>) -> Result<(), AudioOutputError> {
+    pub fn write_pcm(&mut self, pcm: Vec<u8>) -> Result<(), AudioOutputError> {
         if !pcm.len().is_multiple_of(2) || pcm.len() > u32::MAX as usize {
             return Err(AudioOutputError::InvalidPcmBlock);
         }
@@ -141,17 +141,17 @@ impl NativeWasapiOutput {
             if self.shutdown.load(Ordering::Acquire) {
                 return Err(AudioOutputError::WorkerStopped);
             }
-            let sender = self
-                .sender
-                .as_ref()
+            let producer = self
+                .producer
+                .as_mut()
                 .ok_or(AudioOutputError::WorkerStopped)?;
-            match sender.try_send(pcm) {
+            match producer.push(pcm) {
                 Ok(()) => Ok(()),
-                Err(mpsc::TrySendError::Full(_block)) => {
+                Err(rtrb::PushError::Full(_block)) => {
                     self.dropped_blocks.fetch_add(1, Ordering::Relaxed);
                     Ok(())
                 }
-                Err(mpsc::TrySendError::Disconnected(_block)) => {
+                Err(rtrb::PushError::Disconnected(_block)) => {
                     Err(AudioOutputError::WorkerStopped)
                 }
             }
@@ -185,7 +185,7 @@ impl NativeWasapiOutput {
         self.shutdown.store(true, Ordering::Release);
         #[cfg(windows)]
         {
-            drop(self.sender.take());
+            drop(self.producer.take());
             if let Some(worker) = self.worker.take() {
                 let _ = worker.join();
             }
@@ -211,7 +211,7 @@ impl Drop for ComApartment {
 
 #[cfg(windows)]
 fn run_wasapi_worker(
-    receiver: mpsc::Receiver<Vec<u8>>,
+    consumer: rtrb::Consumer<Vec<u8>>,
     ready: mpsc::SyncSender<Result<(), String>>,
     shutdown: Arc<AtomicBool>,
     underruns: Arc<AtomicU64>,
@@ -336,14 +336,14 @@ fn run_wasapi_worker(
             }
             let required = frames.saturating_mul(block_align);
             while pending.len() < required {
-                match receiver.try_recv() {
+                match consumer.pop() {
                     Ok(block) => pending.extend(block),
-                    Err(mpsc::TryRecvError::Empty) => {
+                    Err(rtrb::PopError::Empty) => {
                         pending.resize(required, 0);
                         underruns.fetch_add(1, Ordering::Relaxed);
                         break;
                     }
-                    Err(mpsc::TryRecvError::Disconnected) => {
+                    Err(rtrb::PopError::Disconnected) => {
                         disconnected = true;
                         break;
                     }
@@ -383,7 +383,7 @@ use windows::core::PCWSTR;
 /// Native XAudio2 output using Rust-owned source buffers and a bounded producer queue.
 pub struct NativeXAudio2Output {
     #[cfg(windows)]
-    sender: Option<mpsc::SyncSender<Vec<u8>>>,
+    producer: Option<rtrb::Producer<Vec<u8>>>,
     #[cfg(windows)]
     worker: Option<JoinHandle<()>>,
     shutdown: Arc<AtomicBool>,
@@ -411,7 +411,7 @@ impl NativeXAudio2Output {
 
         #[cfg(windows)]
         {
-            let (sender, receiver) = mpsc::sync_channel(queue_blocks);
+            let (producer, consumer) = rtrb::RingBuffer::<Vec<u8>>::new(queue_blocks);
             let (ready_sender, ready_receiver) = mpsc::sync_channel(1);
             let shutdown = Arc::new(AtomicBool::new(false));
             let underruns = Arc::new(AtomicU64::new(0));
@@ -422,7 +422,7 @@ impl NativeXAudio2Output {
                 .name("sega-xaudio2-output".to_owned())
                 .spawn(move || {
                     run_xaudio2_worker(
-                        receiver,
+                        consumer,
                         ready_sender,
                         worker_shutdown,
                         worker_underruns,
@@ -434,7 +434,7 @@ impl NativeXAudio2Output {
 
             match ready_receiver.recv_timeout(Duration::from_secs(5)) {
                 Ok(Ok(())) => Ok(Self {
-                    sender: Some(sender),
+                    producer: Some(producer),
                     worker: Some(worker),
                     shutdown,
                     underruns,
@@ -444,13 +444,13 @@ impl NativeXAudio2Output {
                 }),
                 Ok(Err(message)) => {
                     shutdown.store(true, Ordering::Release);
-                    drop(sender);
+                    drop(producer);
                     let _ = worker.join();
                     Err(AudioOutputError::Device(message))
                 }
                 Err(error) => {
                     shutdown.store(true, Ordering::Release);
-                    drop(sender);
+                    drop(producer);
                     let _ = worker.join();
                     Err(AudioOutputError::Device(format!(
                         "XAudio2 initialization timed out: {error}"
@@ -468,7 +468,7 @@ impl NativeXAudio2Output {
         }
     }
 
-    pub fn write_pcm(&self, pcm: Vec<u8>) -> Result<(), AudioOutputError> {
+    pub fn write_pcm(&mut self, pcm: Vec<u8>) -> Result<(), AudioOutputError> {
         if !pcm.len().is_multiple_of(2) || pcm.len() > u32::MAX as usize {
             return Err(AudioOutputError::InvalidPcmBlock);
         }
@@ -480,18 +480,18 @@ impl NativeXAudio2Output {
             if self.shutdown.load(Ordering::Acquire) {
                 return Err(AudioOutputError::WorkerStopped);
             }
-            let sender = self
-                .sender
-                .as_ref()
+            let producer = self
+                .producer
+                .as_mut()
                 .ok_or(AudioOutputError::WorkerStopped)?;
             let max_block_bytes = (self.buffer_size as usize).saturating_mul(2).max(2);
             for block in pcm.chunks(max_block_bytes) {
-                match sender.try_send(block.to_vec()) {
+                match producer.push(block.to_vec()) {
                     Ok(()) => {}
-                    Err(mpsc::TrySendError::Full(_block)) => {
+                    Err(rtrb::PushError::Full(_block)) => {
                         self.dropped_blocks.fetch_add(1, Ordering::Relaxed);
                     }
-                    Err(mpsc::TrySendError::Disconnected(_block)) => {
+                    Err(rtrb::PushError::Disconnected(_block)) => {
                         return Err(AudioOutputError::WorkerStopped);
                     }
                 }
@@ -527,7 +527,7 @@ impl NativeXAudio2Output {
         self.shutdown.store(true, Ordering::Release);
         #[cfg(windows)]
         {
-            drop(self.sender.take());
+            drop(self.producer.take());
             if let Some(worker) = self.worker.take() {
                 let _ = worker.join();
             }
@@ -543,7 +543,7 @@ impl Drop for NativeXAudio2Output {
 
 #[cfg(windows)]
 fn run_xaudio2_worker(
-    receiver: mpsc::Receiver<Vec<u8>>,
+    consumer: rtrb::Consumer<Vec<u8>>,
     ready: mpsc::SyncSender<Result<(), String>>,
     shutdown: Arc<AtomicBool>,
     underruns: Arc<AtomicU64>,
@@ -638,7 +638,7 @@ fn run_xaudio2_worker(
 
         let mut submitted_new = false;
         while submitted.len() < max_queued_buffers {
-            match receiver.try_recv() {
+            match consumer.pop() {
                 Ok(block) => {
                     submitted.push_back(block);
                     let block = submitted.back().expect("just inserted XAudio2 block");
@@ -654,8 +654,7 @@ fn run_xaudio2_worker(
                     }
                     submitted_new = true;
                 }
-                Err(mpsc::TryRecvError::Empty) => break,
-                Err(mpsc::TryRecvError::Disconnected) => break,
+                Err(_) => break,
             }
         }
 
