@@ -445,11 +445,14 @@ class RomLibraryDialog(QDialog):
         for index in range(self.rom_list.count()):
             item = self.rom_list.item(index)
             path = str(item.data(Qt.ItemDataRole.UserRole) or "")
-            item.setHidden(
+            hidden = (
                 bool(normalized)
                 and normalized not in item.text().casefold()
                 and normalized not in path.casefold()
             )
+            item.setHidden(hidden)
+            if hidden and item.isSelected():
+                item.setSelected(False)
         self._update_launch_state()
 
     def _directories_for(self, system: str) -> list[str]:
