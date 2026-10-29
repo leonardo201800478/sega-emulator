@@ -4,13 +4,17 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
+    QCheckBox,
     QLabel,
     QMainWindow,
     QMessageBox,
+    QPlainTextEdit,
+    QPushButton,
     QStatusBar,
+    QTabWidget,
     QToolBar,
     QVBoxLayout,
     QWidget,
@@ -32,6 +36,9 @@ def persisted_window_dimensions(
 
 class EmulatorMainWindow(QMainWindow):
     """Interface de apresentação; o núcleo de emulação continua em SG1000Machine."""
+
+    debug_logging_toggled = Signal(bool)
+    debug_lines_ready = Signal(str)
 
     def __init__(
         self,
@@ -93,7 +100,44 @@ class EmulatorMainWindow(QMainWindow):
         layout.setContentsMargins(18, 18, 18, 18)
         layout.setSpacing(12)
         layout.addWidget(self.video_widget, 1)
-        self.setCentralWidget(screen)
+
+        self.central_tabs = QTabWidget(self)
+        self.central_tabs.setObjectName("mainContentTabs")
+        self.central_tabs.addTab(screen, "Emulador")
+
+        debug_page = QWidget(self)
+        debug_layout = QVBoxLayout(debug_page)
+        self.debug_logging_checkbox = QCheckBox(
+            "Ativar captura de logs detalhados (gera arquivos locais)"
+        )
+        self.debug_logging_checkbox.setObjectName("debugLoggingEnabled")
+        self.debug_logging_checkbox.setToolTip(
+            "Desativado por padrão. A gravação ocorre em uma thread separada "
+            "e usa uma fila limitada."
+        )
+        debug_layout.addWidget(self.debug_logging_checkbox)
+        self.debug_status_label = QLabel(
+            "Captura desativada. Nenhum arquivo de log detalhado será criado."
+        )
+        self.debug_status_label.setObjectName("debugLoggingStatus")
+        self.debug_status_label.setWordWrap(True)
+        debug_layout.addWidget(self.debug_status_label)
+        self.debug_output = QPlainTextEdit(debug_page)
+        self.debug_output.setObjectName("debugLogOutput")
+        self.debug_output.setReadOnly(True)
+        self.debug_output.setMaximumBlockCount(2000)
+        self.debug_output.setPlaceholderText(
+            "Ative a captura para visualizar os eventos. "
+            "O buffer visual mantém no máximo 2.000 linhas."
+        )
+        debug_layout.addWidget(self.debug_output, 1)
+        clear_debug_button = QPushButton("Limpar visualização", debug_page)
+        clear_debug_button.clicked.connect(self.debug_output.clear)
+        debug_layout.addWidget(clear_debug_button)
+        self.central_tabs.addTab(debug_page, "Debug")
+        self.setCentralWidget(self.central_tabs)
+        self.debug_logging_checkbox.toggled.connect(self.debug_logging_toggled.emit)
+        self.debug_lines_ready.connect(self.append_debug_lines)
 
         self.status = QStatusBar(self)
         self.setStatusBar(self.status)
@@ -204,6 +248,15 @@ class EmulatorMainWindow(QMainWindow):
         self.about_action.triggered.connect(self._show_about)
         help_menu.addAction(self.about_action)
 
+    def append_debug_lines(self, text: str) -> None:
+        """Append a bounded batch of log lines delivered by the writer thread."""
+        if text:
+            self.debug_output.appendPlainText(text)
+
+    def set_debug_status(self, text: str) -> None:
+        """Update the user-visible state of the optional diagnostic collector."""
+        self.debug_status_label.setText(text)
+
     def _show_about(self) -> None:
         """Show project scope, version, credits, and license in a proper dialog."""
         QMessageBox.about(
@@ -233,6 +286,9 @@ class EmulatorMainWindow(QMainWindow):
         if enabled == self._fullscreen_ui_active:
             return
         self._fullscreen_ui_active = enabled
+        if enabled:
+            self.central_tabs.setCurrentWidget(self.central_tabs.widget(0))
+        self.central_tabs.tabBar().setVisible(not enabled)
         self.menuBar().setVisible(not enabled)
         self._main_toolbar.setVisible(not enabled)
         self._status_bar.setVisible(not enabled)

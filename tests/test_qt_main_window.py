@@ -54,6 +54,10 @@ def test_main_window_exposes_required_menus_and_shortcuts(qt_app) -> None:
     assert window.pause_action.shortcut().toString() == "F5"
     assert window.reset_action.shortcut().toString() == "F10"
     assert window.vdp_snapshot_action.shortcut().toString() == "F8"
+    assert window.central_tabs.count() == 2
+    assert window.central_tabs.tabText(0) == "Emulador"
+    assert window.central_tabs.tabText(1) == "Debug"
+    assert not window.debug_logging_checkbox.isChecked()
 
     window.pause_action.trigger()
     window.reset_action.trigger()
