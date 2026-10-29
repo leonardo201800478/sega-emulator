@@ -48,11 +48,7 @@ impl NativePcmResampler {
         self.inner.reset();
     }
 
-    fn process<'py>(
-        &mut self,
-        py: Python<'py>,
-        samples: Vec<f64>,
-    ) -> Bound<'py, PyBytes> {
+    fn process<'py>(&mut self, py: Python<'py>, samples: Vec<f64>) -> Bound<'py, PyBytes> {
         PyBytes::new(py, &self.inner.process(&samples))
     }
 
