@@ -6,8 +6,6 @@ only validates inputs and forwards operations across the PyO3 boundary.
 
 from __future__ import annotations
 
-from sega_emulator.frontend.qt.audio_output import PcmResampler
-
 
 class SMSMachine:
     """Instruction-stepping SMS machine with native PSG audio output."""
@@ -79,11 +77,12 @@ class SMSMachine:
             raise ValueError("max_samples deve ser um inteiro não negativo ou None.")
         return list(self.native_machine.drain_audio_samples(max_samples))
 
-    def drain_audio_pcm(self, resampler: PcmResampler) -> bytes:
+    def drain_audio_pcm(self, resampler: object) -> bytes:
         """Drain native PSG samples and convert them to PCM16 in Rust."""
-        if not isinstance(resampler, PcmResampler):
-            raise TypeError("resampler deve ser um PcmResampler nativo.")
-        return bytes(self.native_machine.drain_audio_pcm(resampler._native))
+        native_resampler = getattr(resampler, "_native", None)
+        if native_resampler is None:
+            raise TypeError("resampler deve encapsular o processador PCM nativo.")
+        return bytes(self.native_machine.drain_audio_pcm(native_resampler))
 
     def discard_audio_samples(self) -> None:
         """Discard pending native PSG samples when output is disabled."""
