@@ -7,10 +7,10 @@ Rust-backed SG-1000 runtime.
 
 from __future__ import annotations
 
+import re
 from difflib import SequenceMatcher
 from hashlib import sha256
 from pathlib import Path
-import re
 from threading import Event
 
 from PySide6.QtCore import (
@@ -503,16 +503,21 @@ class RomLibraryDialog(QDialog):
             if cover is not None:
                 item.setIcon(QIcon(str(cover)))
                 item.setText(f"{rom_path.stem}\n{_format_size(entry.size)}")
-                item.setToolTip(f"{entry.path}\nCapa: {cover}\nSHA-256: {entry.sha256}")
+                item.setToolTip(
+                    f"{entry.path}\nCapa: {cover}\nSHA-256: {entry.sha256}"
+                )
             self.rom_list.addItem(item)
 
     def _manual_box_art_key(self, rom_path: Path) -> str:
         system = self.selected_system or "unknown"
-        identity = sha256(str(rom_path.expanduser().resolve()).casefold().encode("utf-8")).hexdigest()
+        normalized_path = str(rom_path.expanduser().resolve()).casefold()
+        identity = sha256(normalized_path.encode("utf-8")).hexdigest()
         return f"box_art_overrides/{system}/{identity}"
 
     def _manual_box_art_for(self, rom_path: Path) -> Path | None:
-        saved = str(self.settings.value(self._manual_box_art_key(rom_path), "")).strip()
+        saved = str(
+            self.settings.value(self._manual_box_art_key(rom_path), "")
+        ).strip()
         image = Path(saved) if saved else None
         return image if image is not None and image.is_file() else None
 
@@ -535,12 +540,17 @@ class RomLibraryDialog(QDialog):
 
     def _choose_box_art(self, rom_path: Path) -> None:
         configured = self.box_art_directory_edit.text().strip()
-        start_directory = Path(configured) if configured and Path(configured).is_dir() else rom_path.parent
+        start_directory = (
+            Path(configured)
+            if configured and Path(configured).is_dir()
+            else rom_path.parent
+        )
+        image_filter = (
+            "Imagens (*.png *.jpg *.jpeg *.webp *.bmp *.gif *.tif *.tiff "
+            "*.avif *.heic *.svg *.ico);;Todos os arquivos (*)"
+        )
         selected, _ = QFileDialog.getOpenFileName(
-            self,
-            "Selecionar imagem da capa",
-            str(start_directory),
-            "Imagens (*.png *.jpg *.jpeg *.webp *.bmp *.gif *.tif *.tiff *.avif *.heic *.svg *.ico);;Todos os arquivos (*)",
+            self, "Selecionar imagem da capa", str(start_directory), image_filter
         )
         if not selected:
             return
@@ -605,8 +615,10 @@ _COMMON_IMAGE_SUFFIXES = {
 
 
 def _normalize_art_name(value: str) -> str:
-    """Normalize ROM/art names while ignoring region tags and LaunchBox art suffixes."""
-    value = re.sub(r"\s+-\s+(?:box\s*[- ]\s*)?front.*$", "", value, flags=re.IGNORECASE)
+    """Normalize ROM/art names, ignoring region tags and LaunchBox art suffixes."""
+    value = re.sub(
+        r"\s+-\s+(?:box\s*[- ]\s*)?front.*$", "", value, flags=re.IGNORECASE
+    )
     value = re.sub(r"\[[^]]*\]|\([^)]*\)", " ", value)
     value = re.sub(r"[^a-z0-9]+", " ", value.casefold())
     return " ".join(value.split())
