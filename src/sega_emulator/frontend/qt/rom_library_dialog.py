@@ -345,6 +345,13 @@ class RomLibraryDialog(QDialog):
         box_art_row.addWidget(self.refresh_box_art_button)
         library_layout.addLayout(box_art_row)
 
+        self.search_edit = QLineEdit()
+        self.search_edit.setObjectName("romLibrarySearch")
+        self.search_edit.setPlaceholderText("Buscar ROM por nome ou caminho…")
+        self.search_edit.setClearButtonEnabled(True)
+        self.search_edit.textChanged.connect(self._apply_search)
+        library_layout.addWidget(self.search_edit)
+
         self.rom_list = QListWidget()
         self.rom_list.setViewMode(QListWidget.ViewMode.IconMode)
         self.rom_list.setFlow(QListWidget.Flow.LeftToRight)
@@ -415,8 +422,35 @@ class RomLibraryDialog(QDialog):
         self.library_title.setText(f"{SYSTEM_LABELS[system]} — Biblioteca")
         self.directory_edit.setText(";".join(self._directories_for(system)))
         self.box_art_directory_edit.setText(self._box_art_directory_for(system))
+        self.search_edit.clear()
+        # Display the persisted index only. Filesystem scanning happens only
+        # after the user explicitly requests an update or a full scan.
+        self._entries = RomLibrary(self._index_path).entries(system)
+        self._render_entries(self._entries)
+        if self._entries:
+            self.status_label.setText(
+                f"{len(self._entries)} ROM(s) no índice local. "
+                "Use Atualizar biblioteca para detectar alterações."
+            )
+        else:
+            self.status_label.setText(
+                "Biblioteca ainda não indexada. Use Atualizar biblioteca para buscar ROMs."
+            )
+        self.progress_bar.setValue(0)
         self.pages.setCurrentWidget(self.library_page)
-        self._start_scan(full=False)
+        self._update_launch_state()
+
+    def _apply_search(self, query: str) -> None:
+        normalized = query.strip().casefold()
+        for index in range(self.rom_list.count()):
+            item = self.rom_list.item(index)
+            path = str(item.data(Qt.ItemDataRole.UserRole) or "")
+            item.setHidden(
+                bool(normalized)
+                and normalized not in item.text().casefold()
+                and normalized not in path.casefold()
+            )
+        self._update_launch_state()
 
     def _directories_for(self, system: str) -> list[str]:
         saved = self.settings.value(f"rom_directories/{system}", [], type=list)
@@ -574,6 +608,7 @@ class RomLibraryDialog(QDialog):
                 item.setText(f"{rom_path.stem}\n{_format_size(entry.size)}")
                 item.setToolTip(f"{entry.path}\nCapa: {cover}\nSHA-256: {entry.sha256}")
             self.rom_list.addItem(item)
+        self._apply_search(self.search_edit.text())
 
     def _refresh_box_art(self) -> None:
         """Re-scan local artwork and redraw covers without rescanning ROM files."""
