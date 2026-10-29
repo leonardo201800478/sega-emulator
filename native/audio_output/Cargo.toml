@@ -10,3 +10,5 @@ path = "src/lib.rs"
 
 [target.'cfg(windows)'.dependencies]
 wasapi = "0.26"
+
+[workspace]
