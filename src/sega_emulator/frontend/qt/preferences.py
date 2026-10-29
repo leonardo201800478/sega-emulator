@@ -77,6 +77,10 @@ class FrontendPreferences:
             raise ValueError("audio_buffer_size must be 256, 512, 1024, or 2048")
         if type(self.audio_volume) is not int or not 0 <= self.audio_volume <= 100:
             raise ValueError("audio_volume must be an integer from 0 to 100")
+        if type(self.audio_balance) is not int or not -100 <= self.audio_balance <= 100:
+            raise ValueError("audio_balance must be an integer from -100 to 100")
+        if type(self.audio_queue_blocks) is not int or self.audio_queue_blocks not in (2, 4, 8):
+            raise ValueError("audio_queue_blocks must be 2, 4, or 8")
         if self.video_filter not in (
             "nearest",
             "bilinear",
@@ -166,7 +170,15 @@ class FrontendPreferences:
             (256, 512, 1024, 2048),
         )
         volume = _bounded_int(
-            store.value("audio_volume", defaults.audio_volume), 100, 0, 100
+            store.value("audio_volume", defaults.audio_volume), defaults.audio_volume, 0, 100
+        )
+        balance = _bounded_int(
+            store.value("audio_balance", defaults.audio_balance), defaults.audio_balance, -100, 100
+        )
+        queue_blocks = _bounded_choice(
+            store.value("audio_queue_blocks", defaults.audio_queue_blocks),
+            defaults.audio_queue_blocks,
+            (2, 4, 8),
         )
         video_filter = store.value("video_filter", defaults.video_filter)
         if video_filter not in ("nearest", "bilinear", "dither_blending", "crt_ntsc"):
@@ -216,6 +228,8 @@ class FrontendPreferences:
             audio_sample_rate=sample_rate,
             audio_buffer_size=buffer_size,
             audio_volume=volume,
+            audio_balance=balance,
+            audio_queue_blocks=queue_blocks,
             video_filter=video_filter,
             integer_scale=integer_scale,
             sprite_limit_enabled=sprite_limit_enabled,
@@ -239,6 +253,8 @@ class FrontendPreferences:
         store.setValue("audio_sample_rate", self.audio_sample_rate)
         store.setValue("audio_buffer_size", self.audio_buffer_size)
         store.setValue("audio_volume", self.audio_volume)
+        store.setValue("audio_balance", self.audio_balance)
+        store.setValue("audio_queue_blocks", self.audio_queue_blocks)
         store.setValue("video_filter", self.video_filter)
         store.setValue("integer_scale", self.integer_scale)
         store.setValue("sprite_limit_enabled", self.sprite_limit_enabled)
@@ -273,6 +289,8 @@ class FrontendPreferences:
             audio_sample_rate=self.audio_sample_rate,
             audio_buffer_size=self.audio_buffer_size,
             audio_volume=self.audio_volume,
+            audio_balance=self.audio_balance,
+            audio_queue_blocks=self.audio_queue_blocks,
             video_filter=self.video_filter,
             integer_scale=self.integer_scale,
             sprite_limit_enabled=self.sprite_limit_enabled,
