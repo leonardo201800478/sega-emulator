@@ -38,7 +38,7 @@ class SMSMachine:
 
         self.cartridge_rom = cartridge_rom
         self.region = region
-        self.native_machine = NativeSMSMachine(cartridge_rom, region)
+        self.native_machine = NativeSMSMachine(cartridge_rom, region=region)
 
     @property
     def cpu(self):
