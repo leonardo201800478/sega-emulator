@@ -32,8 +32,8 @@ jobs:
           cmake --build "$RUNNER_TEMP/wla-dx-build" --parallel 2
           cmake --install "$RUNNER_TEMP/wla-dx-build"
           echo "$RUNNER_TEMP/wla-install/bin" >> "$GITHUB_PATH"
-          "$RUNNER_TEMP/wla-install/bin/wla-z80" --help
-          "$RUNNER_TEMP/wla-install/bin/wlalink" --help || true
+          test -x "$RUNNER_TEMP/wla-install/bin/wla-z80"
+          test -x "$RUNNER_TEMP/wla-install/bin/wlalink"
 
       - name: Inventory ROMs and compile known WLA-DX projects
         shell: bash
