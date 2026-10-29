@@ -93,6 +93,11 @@ impl SmsIo {
         self.io_control
     }
 
+    /// Update the TH light-sensor line from the VDP's raster event.
+    pub fn set_light_pulse(&mut self, active: bool) {
+        self.input.set_light_pulse(active);
+    }
+
     /// Read the decoded port using its low eight address bits.
     pub fn read_port(&self, port: u16) -> u8 {
         let port = port as u8;

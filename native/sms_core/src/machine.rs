@@ -11,6 +11,7 @@ use crate::cpu::{CpuError, Z80};
 use crate::input::{ControllerButtons, SmsInputState};
 use crate::io::{SmsIo, SmsIoError};
 use crate::memory::SmsMemory;
+use crate::vdp::{SmsVdp, SmsVdpEye, StereoPresentation};
 
 /// Lens selection latched by writes to the SegaScope address range $FFF8-$FFFB.
 ///
@@ -48,6 +49,7 @@ pub struct SmsMachineBus<'a> {
     memory: &'a mut SmsMemory,
     io: &'a mut SmsIo,
     sega_scope: &'a mut SegaScopeState,
+    vdp: &'a mut SmsVdp,
 }
 
 impl<'a> SmsMachineBus<'a> {
@@ -55,11 +57,13 @@ impl<'a> SmsMachineBus<'a> {
         memory: &'a mut SmsMemory,
         io: &'a mut SmsIo,
         sega_scope: &'a mut SegaScopeState,
+        vdp: &'a mut SmsVdp,
     ) -> Self {
         Self {
             memory,
             io,
             sega_scope,
+            vdp,
         }
     }
 }
@@ -73,15 +77,31 @@ impl CpuBus for SmsMachineBus<'_> {
         self.memory.write(address, value);
         if (0xFFF8..=0xFFFB).contains(&address) {
             self.sega_scope.write_latch(value);
+            self.vdp.set_stereo_eye(match self.sega_scope.lens() {
+                SegaScopeLens::Left => SmsVdpEye::Left,
+                SegaScopeLens::Right => SmsVdpEye::Right,
+            });
         }
     }
 
     fn read_port(&mut self, port: u16) -> u8 {
-        self.io.read_port(port)
+        if matches!((port as u8) & 0xC1, 0x80 | 0x81) {
+            self.vdp.read_port(port)
+        } else {
+            match port as u8 {
+                0x7E => self.vdp.read_v_counter(),
+                0x7F => self.vdp.read_h_counter(),
+                _ => self.io.read_port(port),
+            }
+        }
     }
 
     fn write_port(&mut self, port: u16, value: u8) {
-        self.io.write_port(port, value);
+        if matches!((port as u8) & 0xC1, 0x80 | 0x81) {
+            self.vdp.write_port(port, value);
+        } else {
+            self.io.write_port(port, value);
+        }
     }
 }
 
@@ -91,6 +111,7 @@ pub struct SmsMachine {
     cpu: Z80,
     memory: SmsMemory,
     io: SmsIo,
+    vdp: SmsVdp,
     sega_scope: SegaScopeState,
     config: SmsMachineConfig,
 }
@@ -113,6 +134,7 @@ impl SmsMachine {
             cpu,
             memory,
             io: SmsIo::new(config.territory),
+            vdp: SmsVdp::new(config.video_standard, config.sprite_limit),
             sega_scope: SegaScopeState::default(),
             config,
         })
@@ -123,8 +145,23 @@ impl SmsMachine {
     /// The returned T-state count is nominal instruction timing, not cycle-exact
     /// machine timing.
     pub fn step(&mut self) -> Result<u32, CpuError> {
-        let mut bus = SmsMachineBus::new(&mut self.memory, &mut self.io, &mut self.sega_scope);
-        self.cpu.step(&mut bus)
+        let cycles = {
+            let mut bus = SmsMachineBus::new(
+                &mut self.memory,
+                &mut self.io,
+                &mut self.sega_scope,
+                &mut self.vdp,
+            );
+            self.cpu.step(&mut bus)?
+        };
+        self.vdp.advance(u64::from(cycles));
+        self.io.set_light_pulse(self.vdp.light_pulse_active());
+        if self.vdp.interrupt_pending() {
+            self.cpu.request_int(0xFF);
+        } else {
+            self.cpu.clear_int_request();
+        }
+        Ok(cycles)
     }
 
     pub fn reset_cpu(&mut self) {
@@ -140,11 +177,24 @@ impl SmsMachine {
     }
 
     pub fn set_input(&mut self, input: SmsInputState) -> Result<(), SmsIoError> {
-        self.io.set_input(input)
+        self.io.set_input(input)?;
+        self.vdp.set_light_phaser_input(
+            input.light_phaser.x,
+            input.light_phaser.y,
+            input.light_phaser.trigger_pressed && input.light_phaser_player.is_some(),
+        );
+        Ok(())
     }
 
     pub fn set_light_phaser_player(&mut self, player: Option<u8>) -> Result<(), SmsIoError> {
-        self.io.set_light_phaser_player(player)
+        self.io.set_light_phaser_player(player)?;
+        let input = self.io.input();
+        self.vdp.set_light_phaser_input(
+            input.light_phaser.x,
+            input.light_phaser.y,
+            input.light_phaser.trigger_pressed && player.is_some(),
+        );
+        Ok(())
     }
 
     pub fn cpu(&self) -> &Z80 {
@@ -157,6 +207,18 @@ impl SmsMachine {
 
     pub fn io(&self) -> &SmsIo {
         &self.io
+    }
+
+    pub fn vdp(&self) -> &SmsVdp {
+        &self.vdp
+    }
+
+    pub fn vdp_mut(&mut self) -> &mut SmsVdp {
+        &mut self.vdp
+    }
+
+    pub fn set_stereo_presentation(&mut self, mode: StereoPresentation) {
+        self.vdp.set_stereo_presentation(mode);
     }
 
     pub fn sega_scope(&self) -> SegaScopeState {
@@ -214,6 +276,18 @@ mod tests {
             .unwrap();
         machine.step().unwrap();
         assert_eq!(machine.cpu().registers.a & 1, 0);
+    }
+
+    #[test]
+    fn cpu_out_routes_sms_vdp_ports_and_advances_raster() {
+        // LD A,$40; OUT ($BF),A; LD A,$81; OUT ($BF),A writes R1=$40.
+        let rom = [0x3E, 0x40, 0xD3, 0xBF, 0x3E, 0x81, 0xD3, 0xBF];
+        let mut machine = SmsMachine::new(rom.to_vec()).unwrap();
+        for _ in 0..4 {
+            machine.step().unwrap();
+        }
+        assert_eq!(machine.vdp().registers()[1], 0x40);
+        assert!(machine.vdp().cycles_into_line() > 0);
     }
 
     #[test]

@@ -15,6 +15,7 @@ pub mod input;
 pub mod io;
 pub mod machine;
 pub mod memory;
+pub mod vdp;
 
 pub use bus::{
     CpuBus, Z80BusEvent, Z80BusEventKind, Z80CpuSnapshot, Z80InstructionOutcome,
@@ -28,3 +29,6 @@ pub use input::{ControllerButtons, LightPhaserState, SmsInputState};
 pub use io::{SmsIo, SmsIoError};
 pub use machine::{SegaScopeLens, SegaScopeState, SmsMachine, SmsMachineBus};
 pub use memory::SmsMemory;
+pub use vdp::{
+    SMS_VDP_MAX_HEIGHT, SMS_VDP_WIDTH, SmsRasterPosition, SmsVdp, SmsVdpEye, StereoPresentation,
+};
