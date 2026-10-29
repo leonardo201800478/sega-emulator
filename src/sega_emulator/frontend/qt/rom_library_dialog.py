@@ -1,8 +1,7 @@
 """Full-screen startup flow and horizontal ROM carousel for the Qt frontend.
 
 The browser discovers candidate files only. Launching a game is delegated to the
-existing frontend callback, which still validates the ROM through the current
-Rust-backed SG-1000 runtime.
+frontend callback, which selects the native runtime for the chosen system.
 """
 
 from __future__ import annotations
@@ -674,13 +673,14 @@ class RomLibraryDialog(QDialog):
 
     def _update_launch_state(self) -> None:
         selected = bool(self.rom_list.selectedItems())
+        supported_runtime = self.selected_system in {"sg1000", "master_system"}
         self.launch_button.setEnabled(
-            selected and self.selected_system == "sg1000" and self._scan_task is None
+            selected and supported_runtime and self._scan_task is None
         )
 
     def _launch_selected(self) -> None:
         items = self.rom_list.selectedItems()
-        if not items or self.selected_system != "sg1000":
+        if not items or self.selected_system not in {"sg1000", "master_system"}:
             return
         path = items[0].data(Qt.ItemDataRole.UserRole)
         if path:
