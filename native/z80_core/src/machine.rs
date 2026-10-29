@@ -6,6 +6,7 @@
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
+use crate::audio::NativePcmResampler;
 use sega_sg1000_core::{MemoryConfig, Sg1000Machine};
 
 #[pyclass(module = "sega_z80_core")]
@@ -362,6 +363,19 @@ impl NativeSG1000Machine {
 
     fn drain_audio_samples(&mut self, max_samples: Option<usize>) -> Vec<f64> {
         self.machine.drain_audio_samples(max_samples)
+    }
+
+    fn drain_audio_pcm<'py>(
+        &mut self,
+        py: Python<'py>,
+        mut resampler: PyRefMut<'_, NativePcmResampler>,
+    ) -> Bound<'py, PyBytes> {
+        let samples = self.machine.drain_audio_samples(None);
+        PyBytes::new(py, &resampler.process_native(&samples))
+    }
+
+    fn discard_audio_samples(&mut self) {
+        let _ = self.machine.drain_audio_samples(None);
     }
 
     fn step(&mut self) -> PyResult<u32> {
