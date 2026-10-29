@@ -198,10 +198,10 @@ name = "sega-z80-core"
 version = "0.1.0"
 dependencies = [
  "pyo3",
- "sega-sms-core",
  "sega-audio-output",
  "sega-audio-runtime",
  "sega-sg1000-core",
+ "sega-sms-core",
 ]
 
 [[package]]
