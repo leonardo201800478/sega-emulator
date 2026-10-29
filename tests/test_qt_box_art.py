@@ -45,6 +45,37 @@ def test_box_art_matches_rom_stem_case_insensitively_and_recursively(
     assert _find_box_art(rom, art_root) == cover
 
 
+def test_box_art_matches_launchbox_front_art_with_approximate_name(tmp_path: Path) -> None:
+    rom = tmp_path / "roms" / "Sonic The Hedgehog (Japan).zip"
+    art_root = tmp_path / "art"
+    nested = art_root / "Box - Front" / "Mega Drive"
+    nested.mkdir(parents=True)
+    rom.parent.mkdir()
+    rom.write_bytes(b"rom")
+    cover = nested / "Sonic Hedgehog - Box - Front.png"
+    cover.write_bytes(b"placeholder image bytes")
+
+    assert _find_box_art(rom, art_root) == cover
+
+
+def test_manual_box_art_override_is_saved_per_rom_and_system(
+    qt_app, settings, tmp_path: Path
+) -> None:
+    dialog = RomLibraryDialog(settings)
+    rom = tmp_path / "Sonic The Hedgehog (Japan).zip"
+    cover = tmp_path / "cover.png"
+    rom.write_bytes(b"rom")
+    cover.write_bytes(b"image")
+    dialog.selected_system = "sg1000"
+
+    settings.setValue(dialog._manual_box_art_key(rom), str(cover))
+
+    assert dialog._manual_box_art_for(rom) == cover
+    dialog.selected_system = "master_system"
+    assert dialog._manual_box_art_for(rom) is None
+    dialog.close()
+
+
 def test_box_art_does_not_match_a_different_filename(tmp_path: Path) -> None:
     rom = tmp_path / "game.sg"
     art_root = tmp_path / "art"
