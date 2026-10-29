@@ -122,7 +122,7 @@ class RomLibraryDialog(QDialog):
         self._scan_cancel: Event | None = None
         self._scan_task: _ScanTask | None = None
         self._entries: tuple[RomEntry, ...] = ()
-        # Cover discovery is opt-in; rendering only consumes this explicit-refresh cache.
+        # Cover discovery is opt-in; rendering uses this refresh cache.
         self._box_art_matches: dict[str, Path] = {}
         self.language = str(settings.value("ui_language", "pt-BR"))
         self.setWindowTitle(translate("app_title", self.language))
