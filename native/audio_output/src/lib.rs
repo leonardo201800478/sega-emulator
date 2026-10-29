@@ -151,9 +151,7 @@ impl NativeWasapiOutput {
                     self.dropped_blocks.fetch_add(1, Ordering::Relaxed);
                     Ok(())
                 }
-                Err(rtrb::PushError::Disconnected(_block)) => {
-                    Err(AudioOutputError::WorkerStopped)
-                }
+                Err(rtrb::PushError::Disconnected(_block)) => Err(AudioOutputError::WorkerStopped),
             }
         }
         #[cfg(not(windows))]
@@ -241,14 +239,12 @@ fn run_wasapi_worker(
             let mut audio_client = device
                 .get_iaudioclient()
                 .map_err(|error| error.to_string())?;
-            let format =
-                WaveFormat::new(16, 16, &SampleType::Int, sample_rate as usize, 1, None);
+            let format = WaveFormat::new(16, 16, &SampleType::Int, sample_rate as usize, 1, None);
             let block_align = format.get_blockalign() as usize;
             let (default_period, _minimum_period) = audio_client
                 .get_device_period()
                 .map_err(|error| error.to_string())?;
-            let requested_period =
-                (buffer_size as u64 * 10_000_000 / sample_rate as u64) as i64;
+            let requested_period = (buffer_size as u64 * 10_000_000 / sample_rate as u64) as i64;
             let mode = StreamMode::EventsShared {
                 autoconvert: true,
                 buffer_duration_hns: requested_period.max(default_period),
@@ -264,7 +260,8 @@ fn run_wasapi_worker(
                 .map_err(|error| error.to_string())?;
             let initial_buffer_frames = audio_client
                 .get_buffer_size()
-                .map_err(|error| error.to_string())? as usize;
+                .map_err(|error| error.to_string())?
+                as usize;
             Ok((
                 audio_client,
                 event,
@@ -274,8 +271,7 @@ fn run_wasapi_worker(
             ))
         })();
 
-        let (audio_client, event, render_client, block_align, initial_buffer_frames) =
-            match setup {
+        let (audio_client, event, render_client, block_align, initial_buffer_frames) = match setup {
                 Ok(state) => state,
                 Err(message) => {
                     if first_start {
@@ -287,18 +283,14 @@ fn run_wasapi_worker(
                 }
             };
 
-        let mut pending = VecDeque::<u8>::with_capacity(
-            buffer_size as usize * block_align * 8,
-        );
+        let mut pending = VecDeque::<u8>::with_capacity(buffer_size as usize * block_align * 8);
         pending.resize(initial_buffer_frames.saturating_mul(block_align), 0);
         if render_client
             .write_to_device_from_deque(initial_buffer_frames, &mut pending, None)
             .is_err()
         {
             if first_start {
-                let _ = ready.send(Err(
-                    "failed to prime the WASAPI render buffer".to_owned(),
-                ));
+                let _ = ready.send(Err("failed to prime the WASAPI render buffer".to_owned()));
                 return;
             }
             thread::sleep(Duration::from_millis(250));
