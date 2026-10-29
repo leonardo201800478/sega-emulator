@@ -51,6 +51,8 @@ def test_defaults_are_valid_and_stable() -> None:
         ("window_width", 200),
         ("window_height", 200),
         ("video_scale", 5),
+        ("audio_balance", 101),
+        ("audio_queue_blocks", 3),
     ],
 )
 def test_rejects_invalid_explicit_preferences(field: str, value: int) -> None:
