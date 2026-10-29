@@ -14,11 +14,11 @@ from __future__ import annotations
 import argparse
 import csv
 import math
-from pathlib import Path
 import statistics
 import struct
 import sys
 import time
+from pathlib import Path
 
 from sega_emulator.frontend.qt.wasapi_audio import NativeAudioOutput
 
