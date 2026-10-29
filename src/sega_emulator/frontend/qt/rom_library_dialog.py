@@ -310,7 +310,11 @@ class RomLibraryDialog(QDialog):
     def _directories_for(self, system: str) -> list[str]:
         saved = self.settings.value(f"rom_directories/{system}", [], type=list)
         if saved:
-            return [str(Path(value).expanduser()) for value in saved if str(value).strip()]
+            return [
+                str(Path(value).expanduser())
+                for value in saved
+                if str(value).strip()
+            ]
         documents = QStandardPaths.writableLocation(
             QStandardPaths.StandardLocation.DocumentsLocation
         )
@@ -319,9 +323,15 @@ class RomLibraryDialog(QDialog):
 
     def _browse_directory(self) -> None:
         current = self.directory_edit.text().split(";")[0].strip()
-        chosen = QFileDialog.getExistingDirectory(self, "Selecionar diretório de ROMs", current)
+        chosen = QFileDialog.getExistingDirectory(
+            self, "Selecionar diretório de ROMs", current
+        )
         if chosen:
-            values = [value.strip() for value in self.directory_edit.text().split(";") if value.strip()]
+            values = [
+                value.strip()
+                for value in self.directory_edit.text().split(";")
+                if value.strip()
+            ]
             if chosen not in values:
                 values.append(chosen)
             self.directory_edit.setText(";".join(values))
