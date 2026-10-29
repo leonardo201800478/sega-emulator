@@ -272,16 +272,16 @@ fn run_wasapi_worker(
         })();
 
         let (audio_client, event, render_client, block_align, initial_buffer_frames) = match setup {
-                Ok(state) => state,
-                Err(message) => {
-                    if first_start {
-                        let _ = ready.send(Err(message));
-                        return;
-                    }
-                    thread::sleep(Duration::from_millis(250));
-                    continue;
+            Ok(state) => state,
+            Err(message) => {
+                if first_start {
+                    let _ = ready.send(Err(message));
+                    return;
                 }
-            };
+                thread::sleep(Duration::from_millis(250));
+                continue;
+            }
+        };
 
         let mut pending = VecDeque::<u8>::with_capacity(buffer_size as usize * block_align * 8);
         pending.resize(initial_buffer_frames.saturating_mul(block_align), 0);
