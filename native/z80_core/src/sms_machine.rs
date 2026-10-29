@@ -17,8 +17,8 @@ pub struct NativeSMSMachine {
 #[pymethods]
 impl NativeSMSMachine {
     #[new]
-    #[pyo3(signature = (rom, sample_rate=44_100, pal=false))]
-    fn new(rom: Vec<u8>, sample_rate: u64, pal: bool) -> PyResult<Self> {
+    #[pyo3(signature = (rom, pal=false))]
+    fn new(rom: Vec<u8>, pal: bool) -> PyResult<Self> {
         let config = SmsMachineConfig {
             video_standard: if pal {
                 VideoStandard::Pal
@@ -27,7 +27,8 @@ impl NativeSMSMachine {
             },
             ..SmsMachineConfig::default()
         };
-        let machine = SmsMachine::with_audio(rom, config, sample_rate)
+        // The shared native resampler consumes a deterministic 44.1 kHz PSG stream.
+        let machine = SmsMachine::with_audio(rom, config, 44_100)
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
         Ok(Self {
             machine,
