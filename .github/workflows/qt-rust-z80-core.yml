@@ -8,6 +8,13 @@ concurrency:
 on:
   pull_request:
     paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "native/audio_runtime/**"
+      - "src/sega_emulator/frontend/qt/audio_output.py"
+      - "src/sega_emulator/frontend/qt/wasapi_audio.py"
+      - "tests/test_qt_audio_output.py"
+      - "tests/unit/test_wasapi_audio_output.py"
       - "native/z80_core/**"
       - "native/z80_core/Cargo.toml"
       - "native/z80_core/Cargo.lock"
@@ -61,7 +68,7 @@ jobs:
           python -m pip install $wheel.FullName
       - name: Lint and format Python
         run: |
-          python -m ruff check src/sega_emulator/machine/sg1000.py src/sega_emulator/__main__.py src/sega_emulator/frontend/qt/main_window.py src/sega_emulator/frontend/qt/preferences.py src/sega_emulator/frontend/qt/video_widget.py src/sega_emulator/frontend/qt/settings_dialog.py src/sega_emulator/frontend/qt_frontend.py tests/unit/test_vulkan_video_widget.py tests/test_qt_main_window.py tests/test_qt_preferences.py tests/test_sg1000_native_machine.py tests/test_rust_runtime_selection.py tests/test_vgm_machine_integration.py
+          python -m ruff check src/sega_emulator/machine/sg1000.py src/sega_emulator/__main__.py src/sega_emulator/frontend/qt/main_window.py src/sega_emulator/frontend/qt/preferences.py src/sega_emulator/frontend/qt/video_widget.py src/sega_emulator/frontend/qt/settings_dialog.py src/sega_emulator/frontend/qt_frontend.py src/sega_emulator/frontend/qt/audio_output.py src/sega_emulator/frontend/qt/wasapi_audio.py tests/test_qt_audio_output.py tests/unit/test_wasapi_audio_output.py tests/unit/test_vulkan_video_widget.py tests/test_qt_main_window.py tests/test_qt_preferences.py tests/test_sg1000_native_machine.py tests/test_rust_runtime_selection.py tests/test_vgm_machine_integration.py
           python -m ruff format --check src/sega_emulator/machine/sg1000.py src/sega_emulator/__main__.py src/sega_emulator/frontend/qt/main_window.py src/sega_emulator/frontend/qt/preferences.py src/sega_emulator/frontend/qt/video_widget.py src/sega_emulator/frontend/qt/settings_dialog.py src/sega_emulator/frontend/qt_frontend.py tests/unit/test_vulkan_video_widget.py tests/test_qt_main_window.py tests/test_qt_preferences.py tests/test_sg1000_native_machine.py tests/test_rust_runtime_selection.py tests/test_vgm_machine_integration.py
       - name: Test Qt integration and Rust-only runtime
-        run: python -m pytest tests/unit/test_vulkan_video_widget.py tests/test_qt_main_window.py tests/test_qt_preferences.py tests/test_sg1000_native_machine.py tests/test_rust_runtime_selection.py -q
+        run: python -m pytest tests/unit/test_vulkan_video_widget.py tests/test_qt_main_window.py tests/test_qt_preferences.py tests/test_sg1000_native_machine.py tests/test_rust_runtime_selection.py tests/test_qt_audio_output.py tests/unit/test_wasapi_audio_output.py -q
