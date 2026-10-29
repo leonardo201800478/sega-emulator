@@ -20,12 +20,12 @@ from PySide6.QtCore import (
     QThreadPool,
     Signal,
 )
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
     QGridLayout,
     QHBoxLayout,
-    QIcon,
     QLabel,
     QLineEdit,
     QListWidget,
