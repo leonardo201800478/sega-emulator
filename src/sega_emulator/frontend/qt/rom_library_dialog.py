@@ -207,7 +207,9 @@ class RomLibraryDialog(QDialog):
             supported = system == "sg1000"
             button.setEnabled(supported)
             button.setToolTip(
-                "Núcleo integrado" if supported else "Planejado — núcleo ainda não integrado"
+                "Núcleo integrado"
+                if supported
+                else "Planejado — núcleo ainda não integrado"
             )
             if supported:
                 button.clicked.connect(
