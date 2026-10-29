@@ -1,4 +1,5 @@
 """Thin Qt lifecycle facade over the native Rust WASAPI output."""
+
 from __future__ import annotations
 
 
