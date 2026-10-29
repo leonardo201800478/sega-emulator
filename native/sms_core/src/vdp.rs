@@ -1255,7 +1255,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn status_port_sets_reserved_low_bits_and_clears_status_flags() {
         let mut v = SmsVdp::default();
