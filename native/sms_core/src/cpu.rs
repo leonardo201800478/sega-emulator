@@ -7,7 +7,7 @@
 //! independent vectors and bus-level validation.
 
 use crate::alu::{adc8, add8, and8, cp8, or8, sbc8, sub8, xor8};
-use crate::bus::{CpuBus, Z80BusEvent, Z80BusEventKind, Z80TStatePhase, Z80TStateSample};
+use crate::bus::{CpuBus, Z80BusEvent, Z80BusEventKind, Z80CpuSnapshot, Z80InstructionOutcome, Z80InstructionTrace, Z80TStatePhase, Z80TStateSample};
 
 const FLAG_C: u8 = 0x01;
 const FLAG_N: u8 = 0x02;
@@ -114,6 +114,11 @@ pub struct Z80 {
     step_depth: bool,
     pub halted: bool,
     pub total_tstates: u64,
+    instruction_count: u64,
+    opcode_trace_bytes: [u8; 8],
+    opcode_trace_len: u8,
+    opcode_trace_truncated: bool,
+    capture_opcode_trace: bool,
 }
 
 impl Z80 {
@@ -138,6 +143,11 @@ impl Z80 {
         self.step_depth = false;
         self.halted = false;
         self.total_tstates = 0;
+        self.instruction_count = 0;
+        self.opcode_trace_bytes = [0; 8];
+        self.opcode_trace_len = 0;
+        self.opcode_trace_truncated = false;
+        self.capture_opcode_trace = false;
     }
 
     /// Latch a non-maskable interrupt; it is serviced at the next step boundary.
@@ -221,12 +231,92 @@ impl Z80 {
         if self.step_depth {
             return self.step_inner(bus);
         }
+
+        let trace_enabled = bus.instruction_trace_enabled();
+        let instruction_index = self.instruction_count.wrapping_add(1);
+        self.instruction_count = instruction_index;
+        let before = trace_enabled.then(|| self.trace_snapshot());
+        self.opcode_trace_bytes = [0; 8];
+        self.opcode_trace_len = 0;
+        self.opcode_trace_truncated = false;
+        self.capture_opcode_trace = trace_enabled;
+
         self.q_previous = self.q;
         self.q = 0;
         self.step_depth = true;
         let result = self.step_inner(bus);
         self.step_depth = false;
+
+        if let Some(before) = before {
+            let outcome = match &result {
+                Ok(_) => Z80InstructionOutcome::Completed,
+                Err(CpuError::UnsupportedOpcode { opcode, address }) => {
+                    Z80InstructionOutcome::UnsupportedOpcode {
+                        opcode: *opcode,
+                        address: *address,
+                    }
+                }
+            };
+            let trace = Z80InstructionTrace {
+                instruction_index,
+                opcode_bytes: self.opcode_trace_bytes,
+                opcode_len: self.opcode_trace_len,
+                opcode_bytes_truncated: self.opcode_trace_truncated,
+                tstates: result.as_ref().ok().copied(),
+                outcome,
+                before,
+                after: self.trace_snapshot(),
+            };
+            self.capture_opcode_trace = false;
+            bus.observe_instruction_trace(trace);
+        } else {
+            self.capture_opcode_trace = false;
+        }
         result
+    }
+
+    fn trace_snapshot(&self) -> Z80CpuSnapshot {
+        Z80CpuSnapshot {
+            af: u16::from_be_bytes([self.registers.a, self.registers.f]),
+            bc: self.registers.bc(),
+            de: self.registers.de(),
+            hl: self.registers.hl(),
+            af_alt: u16::from_be_bytes([self.alternate.a, self.alternate.f]),
+            bc_alt: u16::from_be_bytes([self.alternate.b, self.alternate.c]),
+            de_alt: u16::from_be_bytes([self.alternate.d, self.alternate.e]),
+            hl_alt: u16::from_be_bytes([self.alternate.h, self.alternate.l]),
+            ix: self.ix,
+            iy: self.iy,
+            pc: self.registers.pc,
+            sp: self.registers.sp,
+            i: self.i,
+            r: self.r,
+            iff1: self.iff1,
+            iff2: self.iff2,
+            interrupt_mode: self.interrupt_mode,
+            wz: self.wz,
+            ei_delay: self.ei_delay,
+            nmi_pending: self.nmi_pending,
+            int_pending: self.int_pending,
+            q: self.q,
+            p: self.p,
+            halted: self.halted,
+            total_tstates: self.total_tstates,
+        }
+    }
+
+    #[inline]
+    fn record_opcode_for_trace(&mut self, opcode: u8) {
+        if !self.capture_opcode_trace {
+            return;
+        }
+        let index = usize::from(self.opcode_trace_len);
+        if index < self.opcode_trace_bytes.len() {
+            self.opcode_trace_bytes[index] = opcode;
+            self.opcode_trace_len += 1;
+        } else {
+            self.opcode_trace_truncated = true;
+        }
     }
 
     fn step_inner<B: CpuBus>(&mut self, bus: &mut B) -> Result<u32, CpuError> {
@@ -252,6 +342,7 @@ impl Z80 {
         let injected_opcode = self.injected_opcode.take();
         let opcode = if let Some(injected) = injected_opcode {
             self.r = (self.r & 0x80) | (self.r.wrapping_add(1) & 0x7F);
+            self.record_opcode_for_trace(injected);
             injected
         } else {
             self.fetch_opcode(bus)
@@ -1908,6 +1999,7 @@ impl Z80 {
     #[inline]
     fn fetch_opcode<B: CpuBus>(&mut self, bus: &mut B) -> u8 {
         let opcode = self.fetch8(bus);
+        self.record_opcode_for_trace(opcode);
         self.r = (self.r & 0x80) | (self.r.wrapping_add(1) & 0x7F);
         opcode
     }
