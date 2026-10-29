@@ -59,7 +59,8 @@ def test_crc32_plus_size_is_supported_when_stronger_hashes_missing(
     path.write_text(
         f"""<datafile><header><name>Sega - Master System - Mark III</name></header>
 <game name="Legacy"><release region="JPN"/>
-<rom name="legacy.sms" size="{len(payload)}" crc="{zlib.crc32(payload) & 0xFFFFFFFF:08x}"/>
+<rom name="legacy.sms" size="{len(payload)}"
+     crc="{zlib.crc32(payload) & 0xFFFFFFFF:08x}"/>
 </game></datafile>""",
         encoding="utf-8",
     )

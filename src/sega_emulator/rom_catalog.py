@@ -324,7 +324,8 @@ def inspect_disc_media(path: str | Path) -> DiscMediaDescriptor:
                 break
         if not referenced:
             raise ValueError(
-                "Arquivo .bin isolado: não há CUE que o identifique como faixa de disco."
+                "Arquivo .bin isolado: não há CUE que o identifique "
+                "como faixa de disco."
             )
         return DiscMediaDescriptor("sega_cd", "bin_track", source, (source,), True)
 
