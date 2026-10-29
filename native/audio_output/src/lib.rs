@@ -340,7 +340,7 @@ fn run_wasapi_worker(
 #[cfg(windows)]
 use windows::core::PCWSTR;
 #[cfg(windows)]
-use windows::Win32::Media::Audio::{WAVEFORMATEX, WAVE_FORMAT_PCM};
+use windows::Win32::Media::Audio::{AudioCategory_GameEffects, WAVEFORMATEX, WAVE_FORMAT_PCM};
 #[cfg(windows)]
 use windows::Win32::Media::Audio::XAudio2::{
     AUDIO_STREAM_CATEGORY, IXAudio2, IXAudio2MasteringVoice, IXAudio2SourceVoice,
@@ -449,16 +449,19 @@ impl NativeXAudio2Output {
                 return Err(AudioOutputError::WorkerStopped);
             }
             let sender = self.sender.as_ref().ok_or(AudioOutputError::WorkerStopped)?;
-            match sender.try_send(pcm) {
-                Ok(()) => Ok(()),
-                Err(mpsc::TrySendError::Full(_block)) => {
-                    self.dropped_blocks.fetch_add(1, Ordering::Relaxed);
-                    Ok(())
-                }
-                Err(mpsc::TrySendError::Disconnected(_block)) => {
-                    Err(AudioOutputError::WorkerStopped)
+            let max_block_bytes = (self.buffer_size as usize).saturating_mul(2).max(2);
+            for block in pcm.chunks(max_block_bytes) {
+                match sender.try_send(block.to_vec()) {
+                    Ok(()) => {}
+                    Err(mpsc::TrySendError::Full(_block)) => {
+                        self.dropped_blocks.fetch_add(1, Ordering::Relaxed);
+                    }
+                    Err(mpsc::TrySendError::Disconnected(_block)) => {
+                        return Err(AudioOutputError::WorkerStopped);
+                    }
                 }
             }
+            Ok(())
         }
         #[cfg(not(windows))]
         {
@@ -529,7 +532,7 @@ fn run_xaudio2_worker(
                     0,
                     PCWSTR::null(),
                     None,
-                    AUDIO_STREAM_CATEGORY(0),
+                    AudioCategory_GameEffects,
                 )
                 .map_err(|error| error.to_string())?;
         }
