@@ -15,6 +15,7 @@ from PySide6.QtCore import (
     QRunnable,
     QSettings,
     QStandardPaths,
+    QSize,
     Qt,
     QThreadPool,
     Signal,
@@ -117,6 +118,13 @@ class RomLibraryDialog(QDialog):
         self._entries: tuple[RomEntry, ...] = ()
         self.language = str(settings.value("ui_language", "pt-BR"))
         self.setWindowTitle(translate("app_title", self.language))
+        self.setWindowFlags(
+            Qt.WindowType.Window
+            | Qt.WindowType.WindowMinimizeButtonHint
+            | Qt.WindowType.WindowMaximizeButtonHint
+            | Qt.WindowType.WindowCloseButtonHint
+        )
+        self.resize(1180, 780)
         self.setMinimumSize(900, 600)
         self.setStyleSheet(
             """
@@ -135,8 +143,7 @@ class RomLibraryDialog(QDialog):
             }
             QListWidget::item {
                 background: #14233b; border: 1px solid #31547c;
-                border-radius: 8px; padding: 14px; margin: 6px;
-                min-width: 145px; min-height: 105px;
+                border-radius: 8px; padding: 6px; margin: 4px;
             }
             QListWidget::item:selected {
                 border: 2px solid #42d8ff; background: #203c60;
@@ -265,11 +272,15 @@ class RomLibraryDialog(QDialog):
         self.rom_list = QListWidget()
         self.rom_list.setViewMode(QListWidget.ViewMode.IconMode)
         self.rom_list.setFlow(QListWidget.Flow.LeftToRight)
-        self.rom_list.setWrapping(False)
+        self.rom_list.setWrapping(True)
         self.rom_list.setResizeMode(QListWidget.ResizeMode.Adjust)
         self.rom_list.setMovement(QListWidget.Movement.Static)
-        self.rom_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self.rom_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.rom_list.setGridSize(QSize(184, 244))
+        self.rom_list.setIconSize(QSize(148, 184))
+        self.rom_list.setWordWrap(True)
+        self.rom_list.setUniformItemSizes(True)
+        self.rom_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.rom_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.rom_list.itemSelectionChanged.connect(self._update_launch_state)
         self.rom_list.itemDoubleClicked.connect(lambda item: self._launch_selected())
         library_layout.addWidget(self.rom_list, 1)
@@ -332,7 +343,8 @@ class RomLibraryDialog(QDialog):
             QStandardPaths.StandardLocation.DocumentsLocation
         )
         base = Path(documents) if documents else Path.home() / "Documents"
-        return [str(base / "ROMs" / DEFAULT_DIRECTORY_NAMES[system])]
+        default_directory = base / "ROMs" / DEFAULT_DIRECTORY_NAMES[system]
+        return [str(default_directory)] if default_directory.is_dir() else []
 
     def _browse_directory(self) -> None:
         current = self.directory_edit.text().split(";")[0].strip()
@@ -340,23 +352,38 @@ class RomLibraryDialog(QDialog):
             self, "Selecionar diretório de ROMs", current
         )
         if chosen:
+            # Discard stale/nonexistent roots so they do not trigger the same
+            # warning on every scan after the user selects a valid directory.
             values = [
                 value.strip()
                 for value in self.directory_edit.text().split(";")
-                if value.strip()
+                if value.strip() and Path(value.strip()).expanduser().is_dir()
             ]
-            if chosen not in values:
-                values.append(chosen)
+            chosen_path = str(Path(chosen).expanduser().resolve())
+            if chosen_path not in values:
+                values.append(chosen_path)
             self.directory_edit.setText(";".join(values))
 
     def _start_scan(self, *, full: bool) -> None:
         if self._scan_task is not None or self.selected_system is None:
             return
         directories = tuple(
-            Path(value.strip()).expanduser()
+            Path(value.strip()).expanduser().resolve()
             for value in self.directory_edit.text().split(";")
-            if value.strip()
+            if value.strip() and Path(value.strip()).expanduser().is_dir()
         )
+        if not directories:
+            self.status_label.setText(
+                "Selecione um diretório de ROMs existente antes de escanear."
+            )
+            QMessageBox.information(
+                self,
+                translate("scan_warnings", self.language),
+                "O diretório padrão não existe. Use “Adicionar pasta” para selecionar "
+                "a pasta real das ROMs; o caminho será salvo para as próximas sessões.",
+            )
+            return
+        self.directory_edit.setText(";".join(str(path) for path in directories))
         self.settings.setValue(
             f"rom_directories/{self.selected_system}",
             [str(path) for path in directories],
