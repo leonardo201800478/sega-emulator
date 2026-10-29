@@ -234,13 +234,13 @@ fn run_wasapi_worker(
             .map_err(|error| error.to_string())?;
         let format = WaveFormat::new(16, 16, &SampleType::Int, sample_rate, 1, None);
         let block_align = format.get_blockalign() as usize;
-        let (_, minimum_period) = audio_client
+        let (default_period, _minimum_period) = audio_client
             .get_device_period()
             .map_err(|error| error.to_string())?;
         let requested_period = (buffer_size as u64 * 10_000_000 / sample_rate as u64) as i64;
         let mode = StreamMode::EventsShared {
             autoconvert: true,
-            buffer_duration_hns: requested_period.max(minimum_period),
+            buffer_duration_hns: requested_period.max(default_period),
         };
         audio_client
             .initialize_client(&format, &Direction::Render, &mode)
