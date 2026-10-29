@@ -130,7 +130,7 @@ impl NativeWasapiOutput {
     }
 
     pub fn write_pcm(&self, pcm: Vec<u8>) -> Result<(), AudioOutputError> {
-        if pcm.len() % 2 != 0 || pcm.len() > u32::MAX as usize {
+        if !pcm.len().is_multiple_of(2) || pcm.len() > u32::MAX as usize {
             return Err(AudioOutputError::InvalidPcmBlock);
         }
         if pcm.is_empty() {
@@ -263,7 +263,7 @@ fn run_wasapi_worker(
         ))
     })();
 
-    let (mut audio_client, event, render_client, block_align, initial_buffer_frames) = match setup {
+    let (audio_client, event, render_client, block_align, initial_buffer_frames) = match setup {
         Ok(state) => state,
         Err(message) => {
             let _ = ready.send(Err(message));
@@ -604,9 +604,11 @@ fn run_xaudio2_worker(
                 Ok(block) => {
                     submitted.push_back(block);
                     let block = submitted.back().expect("just inserted XAudio2 block");
-                    let mut buffer = XAUDIO2_BUFFER::default();
-                    buffer.AudioBytes = block.len() as u32;
-                    buffer.pAudioData = block.as_ptr();
+                    let buffer = XAUDIO2_BUFFER {
+                        AudioBytes: block.len() as u32,
+                        pAudioData: block.as_ptr(),
+                        ..Default::default()
+                    };
                     let result = unsafe { source_voice.SubmitSourceBuffer(&buffer, None) };
                     if result.is_err() {
                         submitted.pop_back();
