@@ -1,3 +1,8 @@
+## Estado SMS — 2026-10-29
+- Publica fotografia técnica do SMS na base `b4a85c82b1d975a126f1dcbd3084dac51249b398`, após integração do runtime nativo Rust à aplicação Qt/PySide6.
+- Registra separadamente os subsistemas implementados e as lacunas de Z80, VDP raster, scheduler temporal, FM/YM2413 e validação Windows.
+- Não transfere resultados de testes/workflows de SHAs anteriores para a nova base; validações desta documentação permanecem NOT RUN.
+
 # Histórico de versões
 
 ## Limpeza arquitetural — extensão PyO3
