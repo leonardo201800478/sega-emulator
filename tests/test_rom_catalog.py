@@ -51,7 +51,9 @@ def test_unknown_rom_is_not_guessed(tmp_path: Path) -> None:
     assert result.regions == ()
 
 
-def test_crc32_plus_size_is_supported_when_stronger_hashes_missing(tmp_path: Path) -> None:
+def test_crc32_plus_size_is_supported_when_stronger_hashes_missing(
+    tmp_path: Path,
+) -> None:
     payload = b"legacy dat entry"
     path = tmp_path / "legacy.dat"
     path.write_text(

@@ -105,7 +105,9 @@ def _read_dat(path: Path) -> list[DatRom]:
     header_name = header.findtext("name", "") if header is not None else ""
     system = _system_for_dat(header_name.strip())
     if system is None:
-        raise ValueError(f"Sistema não reconhecido no cabeçalho do DAT: {header_name!r}")
+        raise ValueError(
+            f"Sistema não reconhecido no cabeçalho do DAT: {header_name!r}"
+        )
 
     entries: list[DatRom] = []
     for game in root.findall("game"):
@@ -146,7 +148,9 @@ class RomCatalog:
     """Lazy, in-memory index of the DAT files found in a directory."""
 
     def __init__(self, dat_directory: str | Path | None = None) -> None:
-        self.dat_directory = Path(dat_directory) if dat_directory else default_dat_directory()
+        self.dat_directory = (
+            Path(dat_directory) if dat_directory else default_dat_directory()
+        )
         self._loaded = False
         self._entries: tuple[DatRom, ...] = ()
         self._by_sha1: dict[tuple[int, str], list[DatRom]] = {}
@@ -170,7 +174,9 @@ class RomCatalog:
             self._index_entries()
             self._loaded = True
             return
-        for path in sorted(self.dat_directory.glob("*.dat"), key=lambda item: item.name.casefold()):
+        for path in sorted(
+            self.dat_directory.glob("*.dat"), key=lambda item: item.name.casefold()
+        ):
             entries.extend(_read_dat(path))
         self._entries = tuple(entries)
         self._index_entries()
@@ -220,7 +226,9 @@ class RomCatalog:
 
         unique_systems = {entry.system for entry in matches}
         unique_games = {(entry.system, entry.game_name) for entry in matches}
-        regions = tuple(sorted({region for entry in matches for region in entry.regions}))
+        regions = tuple(
+            sorted({region for entry in matches for region in entry.regions})
+        )
         first = matches[0]
         return CatalogIdentification(
             status="matched" if len(unique_systems) == 1 else "ambiguous",
@@ -229,7 +237,9 @@ class RomCatalog:
             rom_name=first.rom_name if len(matches) == 1 else None,
             regions=regions,
             matched_by=matched_by,
-            dat_name=first.dat_name if len({entry.dat_name for entry in matches}) == 1 else None,
+            dat_name=first.dat_name
+            if len({entry.dat_name for entry in matches}) == 1
+            else None,
             candidates=tuple(matches),
         )
 
@@ -261,8 +271,13 @@ class RomCatalog:
             matched_by = "crc32+size"
         if not matches:
             return CatalogIdentification(
-                status="not_catalogued", system=None, game_name=None, rom_name=None,
-                regions=(), matched_by=None, dat_name=None,
+                status="not_catalogued",
+                system=None,
+                game_name=None,
+                rom_name=None,
+                regions=(),
+                matched_by=None,
+                dat_name=None,
             )
         systems = {entry.system for entry in matches}
         games = {(entry.system, entry.game_name) for entry in matches}
@@ -290,7 +305,9 @@ def inspect_disc_media(path: str | Path) -> DiscMediaDescriptor:
     if suffix not in DISC_SUFFIXES and suffix != ".bin":
         raise ValueError("Mídia de disco não suportada; use .iso, .cue, .bin ou .chd.")
     if suffix == ".bin":
-        cue_candidates = sorted(source.parent.glob("*.cue"), key=lambda item: item.name.casefold())
+        cue_candidates = sorted(
+            source.parent.glob("*.cue"), key=lambda item: item.name.casefold()
+        )
         referenced = False
         for cue in cue_candidates:
             try:
@@ -304,14 +321,19 @@ def inspect_disc_media(path: str | Path) -> DiscMediaDescriptor:
                 referenced = True
                 break
         if not referenced:
-            raise ValueError("Arquivo .bin isolado: não há CUE que o identifique como faixa de disco.")
+            raise ValueError(
+                "Arquivo .bin isolado: não há CUE que o identifique como faixa de disco."
+            )
         return DiscMediaDescriptor("sega_cd", "bin_track", source, (source,), True)
 
     if suffix in {".iso", ".chd"}:
         exists = source.is_file()
         return DiscMediaDescriptor(
-            "sega_cd", "iso" if suffix == ".iso" else "chd", source,
-            (source,) if exists else (), exists,
+            "sega_cd",
+            "iso" if suffix == ".iso" else "chd",
+            source,
+            (source,) if exists else (),
+            exists,
             () if exists else ("Arquivo de imagem não encontrado.",),
         )
 
@@ -319,15 +341,26 @@ def inspect_disc_media(path: str | Path) -> DiscMediaDescriptor:
         cue_text = source.read_text(encoding="utf-8-sig", errors="replace")
     except OSError as exc:
         raise ValueError(f"Não foi possível ler CUE '{source}': {exc}") from exc
-    references = [quoted or unquoted for quoted, unquoted, _kind in CUE_FILE_PATTERN.findall(cue_text)]
+    references = [
+        quoted or unquoted
+        for quoted, unquoted, _kind in CUE_FILE_PATTERN.findall(cue_text)
+    ]
     if not references:
         return DiscMediaDescriptor(
-            "sega_cd", "cue_bin", source, (), False,
+            "sega_cd",
+            "cue_bin",
+            source,
+            (),
+            False,
             ("CUE não contém diretivas FILE reconhecíveis.",),
         )
     data_files = tuple((source.parent / name).resolve() for name in references)
     missing = tuple(str(item) for item in data_files if not item.is_file())
     return DiscMediaDescriptor(
-        "sega_cd", "cue_bin", source, data_files, not missing,
+        "sega_cd",
+        "cue_bin",
+        source,
+        data_files,
+        not missing,
         tuple(f"Faixa referenciada ausente: {item}" for item in missing),
     )
