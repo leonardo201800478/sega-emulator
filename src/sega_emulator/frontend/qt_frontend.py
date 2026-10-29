@@ -715,7 +715,6 @@ def run(initial_path: Path | None = None) -> None:
                 sms_region_attempt_index = 0
                 active_sms_region = "usa"
                 frame_pacer = FramePacer(FRAME_PERIOD_SECONDS)
-            else:
                 loaded_machine = SG1000Machine(candidate.data)
                 if not preferences.sprite_limit_enabled:
                     loaded_machine.set_sprite_limit_enabled(False)
