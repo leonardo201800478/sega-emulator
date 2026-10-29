@@ -274,7 +274,6 @@ def test_about_dialog_shows_version_scope_credits_and_mit_license(
     window.close()
 
 
-
 @pytest.mark.parametrize(
     ("language", "expected_file_menu"),
     [
@@ -285,7 +284,9 @@ def test_about_dialog_shows_version_scope_credits_and_mit_license(
         ("fr", "&Fichier"),
     ],
 )
-def test_main_window_localizes_navigation(qt_app, language, expected_file_menu) -> None:
+def test_main_window_localizes_navigation(
+    qt_app, language, expected_file_menu
+) -> None:
     window = EmulatorMainWindow(
         on_open_rom=lambda: None,
         on_pause_resume=lambda: None,
