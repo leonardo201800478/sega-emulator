@@ -776,39 +776,29 @@ def run(initial_path: Path | None = None) -> None:
         timer.start()
 
     def configure_region(region: str) -> None:
-        nonlocal region_preference, machine, frame_pacer, frame_count
-        nonlocal sms_region_attempts, sms_region_attempt_index, active_sms_region
+        nonlocal region_preference
         region_preference = normalize_sms_region_preference(region)
         settings.setValue("sms_region_preference", region_preference)
-        sms_region_attempts = sms_region_candidates(region_preference)
-        sms_region_attempt_index = 0
-        active_sms_region = sms_region_attempts[0]
         if active_system == "master_system" and loaded is not None:
-            if vgm_recorder.active and not stop_vgm_recording():
-                return
-            machine = SMSMachine(loaded.data, region=active_sms_region)
-            frame_pacer = FramePacer(sms_frame_period_seconds(active_sms_region))
-            frame_pacer.reset()
-            audio_resampler.reset()
-            frame_count = 0
+            reset_machine()
             status.showMessage(
-                f"Região SMS: {region_preference} — iniciando em {active_sms_region.upper()}",
+                f"Região SMS: {region_preference} — iniciando em "
+                f"{sms_region_candidates(region_preference)[0].upper()}",
                 6000,
-            )
-            logger.info(
-                "Preferência de região SMS alterada",
-                extra={
-                    "event": "sms_region_preference_changed",
-                    "preference": region_preference,
-                    "first_region": active_sms_region,
-                    "fallback_order": list(sms_region_attempts),
-                },
             )
         else:
             status.showMessage(
                 f"Preferência de região SMS salva: {region_preference}.",
                 5000,
             )
+        logger.info(
+            "Preferência de região SMS alterada",
+            extra={
+                "event": "sms_region_preference_changed",
+                "preference": region_preference,
+                "fallback_order": list(sms_region_candidates(region_preference)),
+            },
+        )
 
     def configure_drivers() -> None:
         nonlocal \
