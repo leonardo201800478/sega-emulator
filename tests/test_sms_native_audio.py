@@ -6,9 +6,7 @@ import pytest
 
 pytest.importorskip("sega_z80_core")
 
-from sega_z80_core import NativeSMSMachine
-
-from sega_emulator.frontend.qt.audio_output import PcmResampler
+from sega_z80_core import NativePcmResampler, NativeSMSMachine
 
 
 def _machine() -> NativeSMSMachine:
@@ -60,8 +58,8 @@ def test_sms_audio_pcm_is_deterministic_and_drain_does_not_change_timing() -> No
 
     left_tstates = left.total_tstates
     right_tstates = right.total_tstates
-    left_pcm = left.drain_audio_pcm(PcmResampler(48_000, 100))
-    right_pcm = right.drain_audio_pcm(PcmResampler(48_000, 100))
+    left_pcm = left.drain_audio_pcm(NativePcmResampler(48_000, 100))
+    right_pcm = right.drain_audio_pcm(NativePcmResampler(48_000, 100))
 
     assert left_pcm
     assert len(left_pcm) % 2 == 0
