@@ -593,6 +593,7 @@ impl Z80 {
             0xC0 | 0xC8 | 0xD0 | 0xD8 | 0xE0 | 0xE8 | 0xF0 | 0xF8 => {
                 if self.condition((opcode >> 3) & 0x07) {
                     self.registers.pc = self.pop16(bus);
+                    self.wz = self.registers.pc;
                     11
                 } else {
                     5
