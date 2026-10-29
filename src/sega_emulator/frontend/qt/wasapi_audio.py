@@ -36,6 +36,7 @@ class NativeAudioOutput:
         *,
         backend: str = "wasapi",
         queue_blocks: int = 4,
+        balance: int = 0,
     ) -> None:
         if type(sample_rate) is not int or sample_rate <= 0:
             raise ValueError("sample_rate deve ser um inteiro positivo")
@@ -43,10 +44,12 @@ class NativeAudioOutput:
             raise ValueError("buffer_size deve ser um inteiro positivo")
         if type(queue_blocks) is not int or queue_blocks < 1:
             raise ValueError("queue_blocks deve ser um inteiro positivo")
+        if type(balance) is not int or not -100 <= balance <= 100:
+            raise ValueError("balance deve ser um inteiro entre -100 e 100")
         if backend not in {"wasapi", "xaudio2"}:
             raise ValueError(f"Backend de áudio inválido: {backend}")
         self.backend = backend
-        self._native = _native_type(backend)(sample_rate, buffer_size, queue_blocks)
+        self._native = _native_type(backend)(sample_rate, buffer_size, queue_blocks, balance)
 
     @property
     def sample_rate(self) -> int:
