@@ -111,7 +111,6 @@ def test_rejects_unimplemented_backend_before_native_open(native_outputs):
     assert native_outputs == []
 
 
-
 def test_close_is_idempotent_and_logs_session_metrics(native_outputs, caplog) -> None:
     with caplog.at_level("INFO", logger="sega_emulator.frontend.qt.wasapi_audio"):
         output = NativeAudioOutput(
