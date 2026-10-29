@@ -80,15 +80,22 @@ jobs:
             local output_file="$4"
             local reference_file="$5"
             mkdir -p "$build_dir"
-            (
+            printf '[objects]\nobject.o\n' > "$build_dir/linkfile"
+            if ! (
               cd "$source_dir"
               "$RUNNER_TEMP/wla-install/bin/wla-z80" -o "$GITHUB_WORKSPACE/$build_dir/object.o" "$source_file"
-            )
-            printf '[objects]\nobject.o\n' > "$build_dir/linkfile"
-            (
-              cd "$build_dir"
+              cd "$GITHUB_WORKSPACE/$build_dir"
               "$RUNNER_TEMP/wla-install/bin/wlalink" -d -r -v -s linkfile "$output_file"
-            )
+            ); then
+              {
+                echo
+                echo "## Build: $source_file"
+                echo
+                echo "- Status: **FAIL** — assembler/linker rejected this source with the current inferred recipe."
+                echo "- This is not treated as an emulator test failure; investigate the original build configuration before changing the source."
+              } >> "$report"
+              return 0
+            fi
             local built_sha reference_sha
             built_sha="$(sha256sum "$build_dir/$output_file" | cut -d ' ' -f 1)"
             reference_sha="$(sha256sum "$reference_file" | cut -d ' ' -f 1)"
