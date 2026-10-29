@@ -1,3 +1,5 @@
+> **Atualização de estado — 2026-10-29:** o foco ativo passou a ser concluir o core SMS. O Z80 consolidado foi integrado na `main` pela PR #157 (merge `5d29b1790aa7e8d7af47de9ee2563a1c978b62d7`), sem alterar `native/sms_core/`. Isso não certifica o SMS: a CPU SMS continua sujeita a auditoria de cobertura semântica e temporal. Próximos gates: [issue #158 — matriz de opcodes](https://github.com/leonardo201800478/sega-emulator/issues/158) e [issue #159 — interrupções/temporalidade](https://github.com/leonardo201800478/sega-emulator/issues/159). Preservar o SG-1000 e executar os checks no SHA candidato de cada mudança.
+
 # Sega Master System — plano de implementação
 
 **Estado do documento:** plano arquitetural inicial; não é fotografia completa do runtime atual. Consulte a atualização Z80/SMS no final para o estado posterior às PRs #227–#229.  
