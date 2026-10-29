@@ -161,6 +161,10 @@ def run(initial_path: Path | None = None) -> None:
     app.setApplicationName("SegaEmulator")
     settings = QSettings()
     preferences = FrontendPreferences.from_store(settings)
+    ui_language = str(settings.value("ui_language", "pt-BR"))
+    if ui_language not in {"pt-BR", "en", "es", "it", "fr"}:
+        ui_language = "pt-BR"
+        settings.setValue("ui_language", ui_language)
     video_driver = str(settings.value("video_driver", "auto"))
     if video_driver not in {"auto", "vulkan", "d3d11", "d3d12", "raster"}:
         video_driver = "auto"
@@ -211,6 +215,7 @@ def run(initial_path: Path | None = None) -> None:
         on_start_vgm_recording=lambda: start_vgm_recording(),
         on_stop_vgm_recording=lambda: stop_vgm_recording(),
         video_driver=video_driver,
+        language=ui_language,
     )
     debug_logger = DebugLogController(
         log_dir=Path("logs"),
