@@ -397,7 +397,12 @@ def run(initial_path: Path | None = None) -> None:
         return ordered[index]
 
     def show_frame() -> None:
-        nonlocal audio_output, paused, frame_count, last_checkpoint_time, last_checkpoint_tstates
+        nonlocal \
+            audio_output, \
+            paused, \
+            frame_count, \
+            last_checkpoint_time, \
+            last_checkpoint_tstates
         nonlocal last_checkpoint_instructions, last_checkpoint_frame
         if machine is None or paused:
             return
