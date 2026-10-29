@@ -291,8 +291,8 @@ impl SmsVdp {
                 value
             }
             0x81 => {
-                let value = self.status;
-                self.status = 0x1F;
+                let value = self.status | 0x1F;
+                self.status = 0;
                 self.line_irq_pending = false;
                 self.control_first = None;
                 value
@@ -393,7 +393,8 @@ impl SmsVdp {
         self.control_first = None;
         if self.cram_write {
             self.cram[usize::from(self.address & 0x1F)] = value & 0x3F;
-            self.address = self.address.wrapping_add(1) & 0x1F;
+            self.read_buffer = value;
+            self.address = self.address.wrapping_add(1) & 0x3FFF;
         } else {
             let address = usize::from(self.address) & 0x3FFF;
             self.vram[address] = value;
@@ -407,6 +408,7 @@ impl SmsVdp {
             return;
         };
         if value & 0xC0 == 0x80 {
+            self.address = ((u16::from(value & 0x3F) << 8) | u16::from(first)) & 0x3FFF;
             let register = usize::from(value & 0x0F);
             if register <= 10 {
                 self.registers[register] = first;
@@ -435,7 +437,6 @@ impl SmsVdp {
             0x40 => self.cram_write = false,
             0xC0 => {
                 self.cram_write = true;
-                self.address &= 0x1F;
             }
             _ => self.cram_write = false,
         }
@@ -1204,7 +1205,7 @@ mod tests {
     }
 
     #[test]
-    fn sms_mode4_extended_mode_d0_is_not_sprite_terminator_and_y_wrap_starts_at_f0() {
+    fn sms_mode4_extended_mode_d0_is_not_sprite_terminator_and_d1_stays_visible() {
         let mut v = SmsVdp::default();
         v.registers[0] = 0x04;
         v.registers[1] = 0x50;
@@ -1252,6 +1253,38 @@ mod tests {
             &frame[(210 * SMS_VDP_WIDTH + 30) * 3..(210 * SMS_VDP_WIDTH + 30) * 3 + 3],
             &[255, 0, 0]
         );
+    }
+
+
+    #[test]
+    fn status_port_sets_reserved_low_bits_and_clears_status_flags() {
+        let mut v = SmsVdp::default();
+        v.status = VBLANK | OVERFLOW | COLLISION;
+        let status = v.read_port(0xBF);
+        assert_eq!(status, 0xFF);
+        assert_eq!(v.status(), 0);
+        assert!(!v.interrupt_pending());
+    }
+
+    #[test]
+    fn cram_write_wraps_palette_index_but_keeps_fourteen_bit_address() {
+        let mut v = SmsVdp::default();
+        addr(&mut v, 0x001F, 0xC0);
+        v.write_port(0xBE, 0xFF);
+        assert_eq!(v.cram()[0x1F], 0x3F);
+        assert_eq!(v.address(), 0x0020);
+        v.write_port(0xBE, 0x12);
+        assert_eq!(v.cram()[0], 0x12);
+        assert_eq!(v.address(), 0x0021);
+        assert_eq!(v.read_port(0xBE), 0x12);
+    }
+
+    #[test]
+    fn register_write_command_updates_vdp_address_register() {
+        let mut v = SmsVdp::default();
+        reg(&mut v, 8, 0xA5);
+        assert_eq!(v.registers()[8], 0xA5);
+        assert_eq!(v.address(), 0x08A5);
     }
 
     #[test]
