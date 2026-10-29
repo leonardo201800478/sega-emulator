@@ -359,8 +359,9 @@ class SettingsDialog(QDialog):
                 "um período maior; latência ponta a ponta não medida."
             )
         elif self._audio_backend == "xaudio2":
+            queue_ms = buffer_samples * queue_blocks * 1000 / rate
             text = (
-                f"Fila PCM nominal: {queue_ms:.1f} ms. Inclui apenas os blocos "
+                f"Fila XAudio2 nominal: ~{queue_ms:.1f} ms. Inclui apenas os blocos "
                 "enfileirados pela aplicação, não o dispositivo nem a latência "
                 "ponta a ponta."
             )
