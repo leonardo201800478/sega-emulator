@@ -147,12 +147,9 @@ class SettingsDialog(QDialog):
         psg_form.addRow("Antialiasing:", QLabel("FIR Blackman de 63 taps, ativo"))
 
         psg_note = QLabel(
-            "O ganho afeta somente as amostras reproduzidas; não altera os "
-            "registradores nem o clock lógico. Clock, divisor, variante do chip e "
-            "filtro ainda são fixos no núcleo. O FIR é antialiasing digital, não "
-            "um modelo do circuito analógico real. Esses controles só serão "
-            "liberados quando houver implementação e testes de regressão "
-            "independentes no núcleo Rust.",
+            "Clock, divisor, variante do chip e filtro digital são propriedades "
+            "do modelo atual, não controles de saída. O FIR de 63 taps é "
+            "antialiasing digital; não representa o circuito analógico real.",
             psg_page,
         )
         psg_note.setWordWrap(True)
