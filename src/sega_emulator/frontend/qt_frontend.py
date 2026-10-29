@@ -972,6 +972,8 @@ def run(initial_path: Path | None = None) -> None:
             event.accept()
 
     def configure_controllers() -> None:
+        from sega_emulator.frontend.qt.sms_input_settings import SmsInputSettingsPage
+
         dialog = QDialog(window)
         dialog.setWindowTitle("Configuração de controles")
         dialog.resize(680, 640)
@@ -1106,6 +1108,13 @@ def run(initial_path: Path | None = None) -> None:
             scroll.setWidgetResizable(True)
             scroll.setWidget(page)
             tabs.addTab(scroll, f"Jogador {player}")
+
+        sms_input_page = SmsInputSettingsPage(settings, dialog)
+        sms_scroll = QScrollArea()
+        sms_scroll.setWidgetResizable(True)
+        sms_scroll.setWidget(sms_input_page)
+        tabs.addTab(sms_scroll, "Master System / Light Phaser")
+
         deadzone = QDoubleSpinBox()
         deadzone.setRange(0.05, 0.80)
         deadzone.setSingleStep(0.05)
@@ -1178,6 +1187,7 @@ def run(initial_path: Path | None = None) -> None:
         key_map.clear()
         key_map.update(build_key_map())
         settings.setValue("controller_config", controller_input.config.to_json())
+        sms_input_page.save_settings(settings)
         update_joystick()
         status.showMessage("Mapeamento de controles salvo.")
 
