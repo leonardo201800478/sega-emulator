@@ -1,5 +1,12 @@
 # Sega Emulator
 
+> **Estado do projeto — 29/10/2026:** o marco funcional SG-1000 foi validado manualmente pelo mantenedor e a consolidação da CPU Z80 SG-1000 foi integrada na `main` pela [PR #157](https://github.com/leonardo201800478/sega-emulator/pull/157), commit `5d29b1790aa7e8d7af47de9ee2563a1c978b62d7`. Os seis workflows do SHA candidato `baa56568ca2ccbb3963b86207c49fb12f32ab342` passaram; o mantenedor confirmou jogos SG-1000 funcionais sem regressões perceptíveis. A precisão ciclo a ciclo **não** está concluída.
+>
+> **Prioridade de desenvolvimento atual: concluir o core Sega Master System (SMS).** As próximas atividades estão registradas nas auditorias [#158 — matriz de opcodes/semântica](https://github.com/leonardo201800478/sega-emulator/issues/158) e [#159 — interrupções/estado/temporalidade](https://github.com/leonardo201800478/sega-emulator/issues/159). A cobertura de dispatch não equivale a correção semântica completa; o SMS ainda requer auditoria sistemática e vetores independentes. Não declarar `TEMPORAL_PASS` sem comparação de traces temporais adequados.
+>
+> **Fonte da verdade:** código, branch, SHA e checks do GitHub. Documentos de auditoria histórica abaixo podem descrever snapshots antigos; use a data/base declarada em cada documento e o estado corrente desta seção antes de interpretar suas conclusões.
+
+
 Projeto de emulação de alta precisão com hardware ativo implementado em Rust. Python na aplicação fica restrito à interface Qt, carregamento de ROMs/perfis e integração fina com o runtime nativo; ferramentas e testes são infraestrutura, não um runtime de emulação. O primeiro alvo é o Sega SG-1000.
 
 ## Marco SG-1000 — concluído no escopo funcional validado (2026-10-28)
