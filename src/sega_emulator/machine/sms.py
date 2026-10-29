@@ -6,6 +6,8 @@ only validates inputs and forwards operations across the PyO3 boundary.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 
 class SMSMachine:
     """Instruction-stepping SMS machine with native PSG audio output."""
@@ -31,6 +33,14 @@ class SMSMachine:
 
         self.cartridge_rom = cartridge_rom
         self.native_machine = NativeSMSMachine(cartridge_rom, pal)
+
+    @property
+    def cpu(self):
+        return SimpleNamespace(pc=int(self.native_machine.pc))
+
+    @property
+    def vdp(self):
+        return _SMSVdpSnapshot(self.native_machine)
 
     @property
     def total_instructions(self) -> int:
@@ -87,3 +97,53 @@ class SMSMachine:
     def discard_audio_samples(self) -> None:
         """Discard pending native PSG samples when output is disabled."""
         self.native_machine.discard_audio_samples()
+
+
+    def run_frame(self, max_steps: int = 100_000) -> int:
+        if type(max_steps) is not int or max_steps < 1:
+            raise ValueError("max_steps deve ser um inteiro positivo.")
+        return int(self.native_machine.run_frame(max_steps))
+
+    def set_controller_actions(self, player: int, actions: set[str]) -> None:
+        if player not in (1, 2):
+            raise ValueError("player deve ser 1 ou 2.")
+        self.native_machine.set_controller(
+            player,
+            "up" in actions,
+            "down" in actions,
+            "left" in actions,
+            "right" in actions,
+            "button1" in actions,
+            "button2" in actions,
+        )
+
+    def drain_psg_write_events(self) -> list[tuple[int, int]]:
+        # SMS VGM event capture is not wired to the native timestamped bus yet.
+        return []
+
+
+class _SMSVdpSnapshot:
+    """Read-only view of native SMS VDP state required by Qt presentation."""
+
+    def __init__(self, native_machine) -> None:
+        self._native_machine = native_machine
+
+    @property
+    def framebuffer(self) -> bytes:
+        return bytes(self._native_machine.framebuffer)
+
+    @property
+    def frame_number(self) -> int:
+        return int(self._native_machine.frame_number)
+
+    @property
+    def scanline(self) -> int:
+        return int(self._native_machine.scanline)
+
+    @property
+    def status(self) -> int:
+        return int(self._native_machine.vdp_status)
+
+    @property
+    def visible_height(self) -> int:
+        return int(self._native_machine.visible_height)
