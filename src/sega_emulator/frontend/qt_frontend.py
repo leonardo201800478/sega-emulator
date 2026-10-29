@@ -397,7 +397,7 @@ def run(initial_path: Path | None = None) -> None:
         return ordered[index]
 
     def show_frame() -> None:
-        nonlocal paused, frame_count, last_checkpoint_time, last_checkpoint_tstates
+        nonlocal audio_output, paused, frame_count, last_checkpoint_time, last_checkpoint_tstates
         nonlocal last_checkpoint_instructions, last_checkpoint_frame
         if machine is None or paused:
             return
@@ -426,7 +426,20 @@ def run(initial_path: Path | None = None) -> None:
             if audio_output is not None:
                 pcm = machine.drain_audio_pcm(audio_resampler)
                 if pcm:
-                    audio_output.write_pcm(pcm)
+                    try:
+                        audio_output.write_pcm(pcm)
+                    except RuntimeError as exc:
+                        logger.warning(
+                            "Saída de áudio %s falhou durante a sessão: %s",
+                            selected_audio_driver,
+                            exc,
+                        )
+                        audio_output.close()
+                        audio_output = None
+                        status.showMessage(
+                            "Saída de áudio indisponível; a emulação continua sem som.",
+                            8000,
+                        )
             else:
                 machine.discard_audio_samples()
             emulation_ms = (time.perf_counter() - phase_started) * 1000
