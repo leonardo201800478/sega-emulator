@@ -48,7 +48,6 @@ def test_debug_logging_queue_capacity_is_validated(tmp_path) -> None:
         raise AssertionError("queue_capacity=0 must be rejected")
 
 
-
 def test_silent_default_logging_uses_null_handler_without_existing_handlers() -> None:
     from logging import Logger, NullHandler
 
