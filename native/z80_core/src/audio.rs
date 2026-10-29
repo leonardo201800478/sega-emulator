@@ -66,7 +66,7 @@ pub struct NativeWasapiOutput {
 impl NativeWasapiOutput {
     #[new]
     #[pyo3(signature = (sample_rate, buffer_size, queue_blocks=4, balance=0))]
-    fn new(sample_rate: u32, buffer_size: u32, queue_blocks: usize) -> PyResult<Self> {
+    fn new(sample_rate: u32, buffer_size: u32, queue_blocks: usize, balance: i8) -> PyResult<Self> {
         let inner = RustWasapiOutput::new(sample_rate, buffer_size, queue_blocks)
             .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?;
         Ok(Self {
