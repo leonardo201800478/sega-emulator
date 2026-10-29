@@ -25,7 +25,13 @@ from sega_emulator.frontend.qt.preferences import FrontendPreferences
 class SettingsDialog(QDialog):
     """Editor de configurações de saída, sem alterar clocks da máquina emulada."""
 
-    def __init__(self, preferences: FrontendPreferences, parent=None) -> None:
+    def __init__(
+        self,
+        preferences: FrontendPreferences,
+        parent=None,
+        *,
+        audio_backend: str = "wasapi",
+    ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Configurações de áudio e vídeo")
         self.setMinimumWidth(440)
@@ -41,7 +47,12 @@ class SettingsDialog(QDialog):
         self.audio_enabled = QCheckBox("Ativar saída de áudio")
         self.audio_enabled.setChecked(preferences.audio_enabled)
         audio_form.addRow(self.audio_enabled)
-        audio_form.addRow("Backend de saída:", QLabel("WASAPI — modo compartilhado"))
+        backend_label = {
+            "wasapi": "WASAPI nativo — modo compartilhado (Rust)",
+            "xaudio2": "XAudio2 nativo (Rust)",
+            "disabled": "Áudio desativado",
+        }.get(audio_backend, "Backend desconhecido")
+        audio_form.addRow("Backend de saída:", QLabel(backend_label))
 
         self.sample_rate = QComboBox()
         for rate in (22050, 44100, 48000):
