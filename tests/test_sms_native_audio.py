@@ -6,8 +6,9 @@ import pytest
 
 pytest.importorskip("sega_z80_core")
 
-from sega_emulator.frontend.qt.audio_output import PcmResampler
 from sega_z80_core import NativeSMSMachine
+
+from sega_emulator.frontend.qt.audio_output import PcmResampler
 
 
 def _machine() -> NativeSMSMachine:
