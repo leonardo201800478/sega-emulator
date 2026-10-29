@@ -100,6 +100,8 @@ def _initialize_audio_backend(
             sample_rate=preferences.audio_sample_rate,
             buffer_size=preferences.audio_buffer_size,
             backend=backend,
+            queue_blocks=preferences.audio_queue_blocks,
+            balance=preferences.audio_balance,
         )
     except Exception as exc:
         logger.warning("Saída de áudio %s indisponível: %s", backend, exc)
