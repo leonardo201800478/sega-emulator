@@ -36,6 +36,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from sega_emulator.frontend.qt.localization import translate
+from sega_emulator.frontend.qt.scraper_settings_dialog import ScraperSettingsDialog
 from sega_emulator.rom_library import (
     DEFAULT_DIRECTORY_NAMES,
     SUPPORTED_SYSTEMS,
@@ -113,7 +115,8 @@ class RomLibraryDialog(QDialog):
         self._scan_cancel: Event | None = None
         self._scan_task: _ScanTask | None = None
         self._entries: tuple[RomEntry, ...] = ()
-        self.setWindowTitle("Sega Emulator — Biblioteca")
+        self.language = str(settings.value("ui_language", "pt-BR"))
+        self.setWindowTitle(translate("app_title", self.language))
         self.setMinimumSize(900, 600)
         self.setStyleSheet(
             """
@@ -174,27 +177,34 @@ class RomLibraryDialog(QDialog):
         title.setObjectName("heroTitle")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         subtitle = QLabel(
-            "Uma biblioteca para a história dos consoles Sega",
+            translate("splash_subtitle", self.language),
             self.splash_page,
         )
         subtitle.setObjectName("subtitle")
         subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.continue_button = QPushButton("Entrar na biblioteca  →")
+        self.continue_button = QPushButton(translate("enter_library", self.language))
         self.continue_button.clicked.connect(self._show_systems)
         splash.addWidget(title)
         splash.addWidget(subtitle)
         splash.addSpacing(28)
         splash.addWidget(self.continue_button, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.scraper_settings_button = QPushButton(
+            translate("scraper_settings", self.language)
+        )
+        self.scraper_settings_button.clicked.connect(self._open_scraper_settings)
+        splash.addWidget(
+            self.scraper_settings_button, alignment=Qt.AlignmentFlag.AlignCenter
+        )
         splash.addStretch(1)
         self.pages.addWidget(self.splash_page)
 
         self.system_page = QWidget()
         system_layout = QVBoxLayout(self.system_page)
-        system_title = QLabel("Escolha o sistema")
+        system_title = QLabel(translate("choose_system", self.language))
         system_title.setObjectName("heroTitle")
         system_layout.addWidget(system_title)
         system_subtitle = QLabel(
-            "Os sistemas sem integração funcional permanecem indisponíveis."
+            translate("systems_unavailable", self.language)
         )
         system_subtitle.setObjectName("subtitle")
         system_layout.addWidget(system_subtitle)
@@ -207,20 +217,20 @@ class RomLibraryDialog(QDialog):
             supported = system == "sg1000"
             button.setEnabled(supported)
             button.setToolTip(
-                "Núcleo integrado"
+                translate("integrated_core", self.language)
                 if supported
-                else "Planejado — núcleo ainda não integrado"
+                else translate("planned_core", self.language)
             )
             if supported:
                 button.clicked.connect(
                     lambda checked=False, selected=system: self._open_library(selected)
                 )
             else:
-                button.setText(f"▣\n{label}\n(planejado)")
+                button.setText(f"▣\n{label}\n{translate('planned', self.language)}")
             self.system_buttons[system] = button
             grid.addWidget(button, index // 3, index % 3)
         system_layout.addLayout(grid)
-        back_to_splash = QPushButton("← Voltar")
+        back_to_splash = QPushButton(translate("back", self.language))
         back_to_splash.clicked.connect(self._show_splash)
         system_layout.addWidget(back_to_splash, alignment=Qt.AlignmentFlag.AlignLeft)
         self.pages.addWidget(self.system_page)
@@ -228,10 +238,10 @@ class RomLibraryDialog(QDialog):
         self.library_page = QWidget()
         library_layout = QVBoxLayout(self.library_page)
         header = QHBoxLayout()
-        self.library_title = QLabel("Biblioteca")
+        self.library_title = QLabel(translate("library", self.language))
         self.library_title.setObjectName("heroTitle")
         header.addWidget(self.library_title, 1)
-        self.back_systems_button = QPushButton("← Sistemas")
+        self.back_systems_button = QPushButton(translate("systems", self.language))
         self.back_systems_button.clicked.connect(self._show_systems)
         header.addWidget(self.back_systems_button)
         library_layout.addLayout(header)
@@ -239,16 +249,16 @@ class RomLibraryDialog(QDialog):
         directory_row = QHBoxLayout()
         self.directory_edit = QLineEdit()
         self.directory_edit.setPlaceholderText(
-            "Diretórios separados por ponto e vírgula"
+            translate("directories_placeholder", self.language)
         )
         self.directory_edit.setToolTip(
-            "Informe um ou mais diretórios; subpastas são incluídas automaticamente."
+            translate("directories_tooltip", self.language)
         )
-        self.browse_button = QPushButton("Adicionar pasta…")
+        self.browse_button = QPushButton(translate("add_folder", self.language))
         self.browse_button.clicked.connect(self._browse_directory)
-        self.scan_button = QPushButton("Atualizar biblioteca")
+        self.scan_button = QPushButton(translate("update_library", self.language))
         self.scan_button.clicked.connect(lambda: self._start_scan(full=False))
-        self.full_scan_button = QPushButton("Varredura completa")
+        self.full_scan_button = QPushButton(translate("full_scan", self.language))
         self.full_scan_button.clicked.connect(lambda: self._start_scan(full=True))
         directory_row.addWidget(self.directory_edit, 1)
         directory_row.addWidget(self.browse_button)
@@ -268,7 +278,7 @@ class RomLibraryDialog(QDialog):
         self.rom_list.itemDoubleClicked.connect(lambda item: self._launch_selected())
         library_layout.addWidget(self.rom_list, 1)
 
-        self.status_label = QLabel("A biblioteca ainda não foi examinada.")
+        self.status_label = QLabel(translate("scan_not_run", self.language))
         self.status_label.setWordWrap(True)
         library_layout.addWidget(self.status_label)
         self.progress_bar = QProgressBar()
@@ -277,13 +287,13 @@ class RomLibraryDialog(QDialog):
         library_layout.addWidget(self.progress_bar)
 
         footer = QHBoxLayout()
-        self.cancel_scan_button = QPushButton("Cancelar varredura")
+        self.cancel_scan_button = QPushButton(translate("cancel_scan", self.language))
         self.cancel_scan_button.clicked.connect(self._cancel_scan)
         self.cancel_scan_button.setEnabled(False)
-        self.launch_button = QPushButton("Iniciar jogo selecionado")
+        self.launch_button = QPushButton(translate("launch_game", self.language))
         self.launch_button.setEnabled(False)
         self.launch_button.clicked.connect(self._launch_selected)
-        close_button = QPushButton("Fechar")
+        close_button = QPushButton(translate("close", self.language))
         close_button.clicked.connect(self.reject)
         footer.addWidget(self.cancel_scan_button)
         footer.addStretch(1)
@@ -291,6 +301,17 @@ class RomLibraryDialog(QDialog):
         footer.addWidget(self.launch_button)
         library_layout.addLayout(footer)
         self.pages.addWidget(self.library_page)
+
+    def _open_scraper_settings(self) -> None:
+        dialog = ScraperSettingsDialog(self.settings, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            new_language = str(self.settings.value("ui_language", "pt-BR"))
+            if new_language != self.language:
+                QMessageBox.information(
+                    self,
+                    translate("scraper_title", new_language),
+                    "O idioma será aplicado ao reabrir a biblioteca.",
+                )
 
     def _show_splash(self) -> None:
         self.pages.setCurrentWidget(self.splash_page)
@@ -362,7 +383,9 @@ class RomLibraryDialog(QDialog):
         self.launch_button.setEnabled(False)
         self.progress_bar.setRange(0, 0)
         self.status_label.setText(
-            "Executando varredura completa…" if full else "Atualizando a biblioteca…"
+            translate("full_scanning", self.language)
+            if full
+            else translate("updating", self.language)
         )
         self._pool.start(task)
 
@@ -398,7 +421,7 @@ class RomLibraryDialog(QDialog):
         if result.errors:
             QMessageBox.warning(
                 self,
-                "Avisos do scanner",
+                translate("scan_warnings", self.language),
                 "\n".join(
                     f"{error.path}: {error.message}" for error in result.errors[:8]
                 ),
@@ -406,8 +429,8 @@ class RomLibraryDialog(QDialog):
 
     def _scan_failed(self, message: str) -> None:
         self._finish_scan()
-        self.status_label.setText(f"Falha na varredura: {message}")
-        QMessageBox.warning(self, "Falha no scanner", message)
+        self.status_label.setText(f"{translate('scan_failure', self.language)}: {message}")
+        QMessageBox.warning(self, translate("scan_failure", self.language), message)
 
     def _finish_scan(self) -> None:
         self._scan_task = None
@@ -422,7 +445,7 @@ class RomLibraryDialog(QDialog):
         if self._scan_cancel is not None:
             self._scan_cancel.set()
             self.cancel_scan_button.setEnabled(False)
-            self.status_label.setText("Cancelamento solicitado…")
+            self.status_label.setText(translate("cancel_requested", self.language))
 
     def _update_launch_state(self) -> None:
         selected = bool(self.rom_list.selectedItems())
