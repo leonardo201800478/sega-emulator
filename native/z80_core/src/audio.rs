@@ -148,9 +148,14 @@ pub struct NativeXAudio2Output {
 #[pymethods]
 impl NativeXAudio2Output {
     #[new]
-    #[pyo3(signature = (sample_rate, buffer_size, queue_blocks=8))]
+    #[pyo3(signature = (sample_rate, buffer_size, queue_blocks=8, balance=0))]
     fn new(sample_rate: u32, buffer_size: u32, queue_blocks: usize) -> PyResult<Self> {
-        let inner = RustXAudio2Output::new(sample_rate, buffer_size, queue_blocks)
+        let inner = RustXAudio2Output::new_with_balance(
+            sample_rate,
+            buffer_size,
+            queue_blocks,
+            balance,
+        )
             .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?;
         Ok(Self {
             inner: Mutex::new(inner),
