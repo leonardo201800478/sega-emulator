@@ -63,10 +63,8 @@ def _runtime_diagnostic(machine: object, rom_sha256: str) -> dict[str, object]:
     native = getattr(machine, "native_machine", None)
     diagnostic["backend_effective"] = (
         "rust_native_machine"
-        if native is not None and type(native).__name__ in {
-            "NativeSG1000Machine",
-            "NativeSMSMachine",
-        }
+        if native is not None
+        and type(native).__name__ in {"NativeSG1000Machine", "NativeSMSMachine"}
         else "unexpected_backend_state"
     )
     diagnostic["native_machine_type"] = (
@@ -611,9 +609,7 @@ def run(initial_path: Path | None = None) -> None:
         if not path:
             return
         requested_system = system or (
-            "master_system"
-            if Path(path).suffix.casefold() == ".sms"
-            else active_system
+            "master_system" if Path(path).suffix.casefold() == ".sms" else active_system
         )
         if requested_system not in {"sg1000", "master_system"}:
             QMessageBox.information(
@@ -638,7 +634,7 @@ def run(initial_path: Path | None = None) -> None:
                     raise ValueError(
                         "O ZIP contém várias ROMs; extraia ou selecione "
                         "uma ROM SMS individual."
-                    )
+                    ) from error
                 members = list_rom_members(path)
                 selected, accepted = QInputDialog.getItem(
                     window,
