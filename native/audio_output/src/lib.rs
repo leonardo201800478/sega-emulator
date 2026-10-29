@@ -1,7 +1,7 @@
 //! Native Windows audio output. Qt/Python owns configuration only.
 
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 #[cfg(windows)]
 use std::sync::mpsc;
 #[cfg(windows)]
@@ -141,7 +141,10 @@ impl NativeWasapiOutput {
             if self.shutdown.load(Ordering::Acquire) {
                 return Err(AudioOutputError::WorkerStopped);
             }
-            let sender = self.sender.as_ref().ok_or(AudioOutputError::WorkerStopped)?;
+            let sender = self
+                .sender
+                .as_ref()
+                .ok_or(AudioOutputError::WorkerStopped)?;
             match sender.try_send(pcm) {
                 Ok(()) => Ok(()),
                 Err(mpsc::TrySendError::Full(_block)) => {
@@ -229,20 +232,12 @@ fn run_wasapi_worker(
         let mut audio_client = device
             .get_iaudioclient()
             .map_err(|error| error.to_string())?;
-        let format = WaveFormat::new(
-            16,
-            16,
-            &SampleType::Int,
-            sample_rate,
-            1,
-            None,
-        );
+        let format = WaveFormat::new(16, 16, &SampleType::Int, sample_rate, 1, None);
         let block_align = format.get_blockalign() as usize;
         let (_, minimum_period) = audio_client
             .get_device_period()
             .map_err(|error| error.to_string())?;
-        let requested_period =
-            (buffer_size as u64 * 10_000_000 / sample_rate as u64) as i64;
+        let requested_period = (buffer_size as u64 * 10_000_000 / sample_rate as u64) as i64;
         let mode = StreamMode::EventsShared {
             autoconvert: true,
             buffer_duration_hns: requested_period.max(minimum_period),
@@ -268,14 +263,13 @@ fn run_wasapi_worker(
         ))
     })();
 
-    let (mut audio_client, event, render_client, block_align, initial_buffer_frames) =
-        match setup {
-            Ok(state) => state,
-            Err(message) => {
-                let _ = ready.send(Err(message));
-                return;
-            }
-        };
+    let (mut audio_client, event, render_client, block_align, initial_buffer_frames) = match setup {
+        Ok(state) => state,
+        Err(message) => {
+            let _ = ready.send(Err(message));
+            return;
+        }
+    };
 
     let mut pending = VecDeque::<u8>::with_capacity(buffer_size as usize * block_align * 8);
     pending.resize(initial_buffer_frames.saturating_mul(block_align), 0);
@@ -335,7 +329,6 @@ fn run_wasapi_worker(
     }
     let _ = audio_client.stop_stream();
 }
-
 
 #[cfg(windows)]
 use windows::core::PCWSTR;
@@ -526,7 +519,7 @@ fn run_xaudio2_worker(
                 XAUDIO2_DEFAULT_PROCESSOR,
                 NTDDI_WIN10_RS5,
             )
-                .map_err(|error| error.to_string())?;
+            .map_err(|error| error.to_string())?;
         }
         let engine = engine.ok_or_else(|| "XAudio2Create returned no engine".to_owned())?;
         let mut mastering_voice: Option<IXAudio2MasteringVoice> = None;
@@ -543,8 +536,8 @@ fn run_xaudio2_worker(
                 )
                 .map_err(|error| error.to_string())?;
         }
-        let mastering_voice = mastering_voice
-            .ok_or_else(|| "XAudio2 did not create a mastering voice".to_owned())?;
+        let mastering_voice =
+            mastering_voice.ok_or_else(|| "XAudio2 did not create a mastering voice".to_owned())?;
         let format = WAVEFORMATEX {
             wFormatTag: WAVE_FORMAT_PCM as u16,
             nChannels: 1,
@@ -569,8 +562,8 @@ fn run_xaudio2_worker(
                 .map_err(|error| error.to_string())?;
             engine.StartEngine().map_err(|error| error.to_string())?;
         }
-        let source_voice = source_voice
-            .ok_or_else(|| "XAudio2 did not create a source voice".to_owned())?;
+        let source_voice =
+            source_voice.ok_or_else(|| "XAudio2 did not create a source voice".to_owned())?;
         unsafe {
             source_voice
                 .Start(0, 0)
