@@ -644,7 +644,7 @@ def run(initial_path: Path | None = None) -> None:
         timer.start()
 
     def configure_drivers() -> None:
-        nonlocal controller_input, audio_output, audio_resampler, preferences
+        nonlocal controller_input, audio_output, audio_resampler, preferences, selected_audio_driver
 
         from sega_emulator.frontend.qt.drivers_dialog import DriversDialog
 
@@ -692,7 +692,10 @@ def run(initial_path: Path | None = None) -> None:
         settings.setValue("video_driver", video_driver)
 
         audio_enabled = audio_driver != "disabled"
-        audio_changed = audio_enabled != preferences.audio_enabled
+        audio_changed = (
+            audio_enabled != preferences.audio_enabled
+            or audio_driver != selected_audio_driver
+        )
         if audio_changed:
             if audio_output is not None:
                 try:
@@ -727,10 +730,11 @@ def run(initial_path: Path | None = None) -> None:
                 updated_audio.audio_sample_rate, updated_audio.audio_volume
             )
             preferences = updated_audio
+        selected_audio_driver = audio_driver
         settings.setValue("audio_driver", audio_driver)
         preferences.save_to_store(settings)
 
-        audio_warning = _audio_output_warning(preferences, audio_output)
+        audio_warning = _audio_output_warning(preferences, audio_output, selected_audio_driver)
         restart_note = (
             " Reinicie o emulador para aplicar a nova API gráfica."
             if video_driver_changed
@@ -756,8 +760,10 @@ def run(initial_path: Path | None = None) -> None:
         )
 
     def configure_audio_video() -> None:
-        nonlocal preferences, audio_output, audio_resampler
-        dialog = SettingsDialog(preferences, window)
+        nonlocal preferences, audio_output, audio_resampler, selected_audio_driver
+        dialog = SettingsDialog(
+            preferences, window, audio_backend=selected_audio_driver
+        )
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         updated = dialog.preferences()
@@ -774,6 +780,8 @@ def run(initial_path: Path | None = None) -> None:
                     str(exc),
                 )
                 return
+        if updated.audio_enabled and selected_audio_driver == "disabled":
+            selected_audio_driver = "wasapi"
         audio_device_changed = (
             updated.audio_enabled != preferences.audio_enabled
             or updated.audio_sample_rate != preferences.audio_sample_rate
@@ -785,7 +793,7 @@ def run(initial_path: Path | None = None) -> None:
                     audio_output.close()
                 except Exception:
                     logger.exception(
-                        "Falha ao encerrar WASAPI antes de reconfigurar áudio"
+                        "Falha ao encerrar o backend de áudio antes de reconfigurar"
                     )
             audio_output = _initialize_audio_backend(updated, selected_audio_driver)
             audio_resampler = PcmResampler(
@@ -795,9 +803,7 @@ def run(initial_path: Path | None = None) -> None:
             audio_resampler.set_volume(updated.audio_volume)
 
         preferences = updated
-        settings.setValue(
-            "audio_driver", "wasapi" if preferences.audio_enabled else "disabled"
-        )
+        settings.setValue("audio_driver", selected_audio_driver)
         view.set_filter_mode(preferences.video_filter)
         view.set_crt_parameters(
             scanline_intensity=preferences.crt_scanline_intensity,
@@ -818,6 +824,7 @@ def run(initial_path: Path | None = None) -> None:
             extra={
                 "event": "audio_video_settings_updated",
                 "audio_enabled": preferences.audio_enabled,
+                "audio_driver": selected_audio_driver,
                 "audio_sample_rate": preferences.audio_sample_rate,
                 "audio_buffer_size": preferences.audio_buffer_size,
                 "audio_volume": preferences.audio_volume,
