@@ -145,13 +145,15 @@ impl NativeWasapiOutput {
                 .producer
                 .as_mut()
                 .ok_or(AudioOutputError::WorkerStopped)?;
+            if producer.is_abandoned() {
+                return Err(AudioOutputError::WorkerStopped);
+            }
             match producer.push(pcm) {
                 Ok(()) => Ok(()),
                 Err(rtrb::PushError::Full(_block)) => {
                     self.dropped_blocks.fetch_add(1, Ordering::Relaxed);
                     Ok(())
                 }
-                Err(rtrb::PushError::Disconnected(_block)) => Err(AudioOutputError::WorkerStopped),
             }
         }
         #[cfg(not(windows))]
@@ -216,7 +218,7 @@ fn run_wasapi_worker(
     sample_rate: u32,
     buffer_size: u32,
 ) {
-    if let Err(error) = initialize_mta() {
+    if let Err(error) = initialize_mta().ok() {
         let _ = ready.send(Err(error.to_string()));
         return;
     }
@@ -331,12 +333,12 @@ fn run_wasapi_worker(
                 match consumer.pop() {
                     Ok(block) => pending.extend(block),
                     Err(rtrb::PopError::Empty) => {
+                        if consumer.is_abandoned() {
+                            disconnected = true;
+                            break;
+                        }
                         pending.resize(required, 0);
                         underruns.fetch_add(1, Ordering::Relaxed);
-                        break;
-                    }
-                    Err(rtrb::PopError::Disconnected) => {
-                        disconnected = true;
                         break;
                     }
                 }
@@ -478,13 +480,13 @@ impl NativeXAudio2Output {
                 .ok_or(AudioOutputError::WorkerStopped)?;
             let max_block_bytes = (self.buffer_size as usize).saturating_mul(2).max(2);
             for block in pcm.chunks(max_block_bytes) {
+                if producer.is_abandoned() {
+                    return Err(AudioOutputError::WorkerStopped);
+                }
                 match producer.push(block.to_vec()) {
                     Ok(()) => {}
                     Err(rtrb::PushError::Full(_block)) => {
                         self.dropped_blocks.fetch_add(1, Ordering::Relaxed);
-                    }
-                    Err(rtrb::PushError::Disconnected(_block)) => {
-                        return Err(AudioOutputError::WorkerStopped);
                     }
                 }
             }
