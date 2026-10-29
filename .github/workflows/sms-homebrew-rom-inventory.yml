@@ -1,4 +1,4 @@
-name: SMS Homebrew ROM Inventory
+name: SMS Homebrew ROM Inventory and WLA-DX Builds
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 jobs:
-  inventory:
+  inventory-and-build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout candidate SHA
@@ -19,62 +19,128 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Inventory homebrew ROMs and build inputs
+      - name: Install WLA-DX
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes cmake build-essential git
+          git clone --depth 1 https://github.com/vhelin/wla-dx.git "$RUNNER_TEMP/wla-dx"
+          cmake -S "$RUNNER_TEMP/wla-dx" -B "$RUNNER_TEMP/wla-dx-build" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/wla-install"
+          cmake --build "$RUNNER_TEMP/wla-dx-build" --parallel 2
+          cmake --install "$RUNNER_TEMP/wla-dx-build"
+          echo "$RUNNER_TEMP/wla-install/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/wla-install/bin/wla-z80" --help
+          "$RUNNER_TEMP/wla-install/bin/wlalink" --help || true
+
+      - name: Inventory ROMs and compile known WLA-DX projects
         shell: bash
         run: |
           set -euo pipefail
           root="local-assets/sms_test_roms"
           test -d "$root" || { echo "::error::Missing $root"; exit 1; }
-          mkdir -p build/sms-homebrew-inventory
-          report="build/sms-homebrew-inventory/inventory.md"
-          json="build/sms-homebrew-inventory/inventory.json"
+          mkdir -p build/sms-homebrew-validation "$root/.ci-build/pfr" "$root/.ci-build/cycle-counter"
+          report="build/sms-homebrew-validation/report.md"
+          json="build/sms-homebrew-validation/inventory.json"
 
           {
-            echo "# SMS homebrew test corpus inventory"
+            echo "# SMS homebrew validation corpus"
             echo
-            echo "Candidate SHA: `$GITHUB_SHA`"
+            echo "Candidate SHA: $GITHUB_SHA"
             echo
-            echo "| Kind | Path | SHA-256 | Bytes | Build metadata |"
-            echo "|---|---|---|---:|---|"
+            echo "| Kind | Path | SHA-256 | Bytes |"
+            echo "|---|---|---|---:|"
           } > "$report"
           printf '{"candidate_sha":"%s","files":[' "$GITHUB_SHA" > "$json"
           first=1
           count=0
           while IFS= read -r -d '' file; do
-            rel="${file#"$root"/}"
-            kind="other"
             case "${file,,}" in
               *.sms|*.gg|*.sg|*.bin|*.rom) kind="rom-binary" ;;
               *.asm|*.s|*.z80|*.inc) kind="assembly-source" ;;
-              */makefile|*/gnumakefile|*.mk) kind="make-manifest" ;;
-              */cmakelists.txt) kind="cmake-manifest" ;;
-              *.link) kind="wla-link-manifest" ;;
-              *.toml) kind="toml-manifest" ;;
+              *) kind="other" ;;
             esac
+            rel="${file#"$root"/}"
             sha="$(sha256sum "$file" | cut -d ' ' -f 1)"
             bytes="$(wc -c < "$file" | tr -d ' ')"
-            metadata="-"
-            case "$kind" in
-              rom-binary) metadata="prebuilt image; execution harness not assumed" ;;
-              wla-link-manifest) metadata="inspect object/source list before compiling" ;;
-              make-manifest) metadata="candidate for make-based build" ;;
-              cmake-manifest) metadata="candidate for CMake build" ;;
-            esac
-            printf '| %s | `%s` | `%s` | %s | %s |\n' "$kind" "$rel" "$sha" "$bytes" "$metadata" >> "$report"
+            printf '| %s | `%s` | `%s` | %s |\n' "$kind" "$rel" "$sha" "$bytes" >> "$report"
             if (( first )); then first=0; else printf ',' >> "$json"; fi
             printf '{"path":"%s","kind":"%s","sha256":"%s","bytes":%s}' "$rel" "$kind" "$sha" "$bytes" >> "$json"
             ((count+=1))
-          done < <(find "$root" -type f -print0 | sort -z)
+          done < <(find "$root" -type f ! -path "$root/.ci-build/*" -print0 | sort -z)
           printf '],"count":%s}\n' "$count" >> "$json"
           test "$count" -gt 0 || { echo "::error::No files found under $root"; exit 1; }
-          cat "$report"
-          echo
-          echo "Inventory found $count files. This stage deliberately does not guess assembler flags or compile incomplete source trees."
 
-      - name: Upload inventory report
+          build_wla_project() {
+            local source_dir="$1"
+            local source_file="$2"
+            local build_dir="$3"
+            local output_file="$4"
+            local reference_file="$5"
+            mkdir -p "$build_dir"
+            (
+              cd "$source_dir"
+              "$RUNNER_TEMP/wla-install/bin/wla-z80" -o "$GITHUB_WORKSPACE/$build_dir/object.o" "$source_file"
+            )
+            printf '[objects]\nobject.o\n' > "$build_dir/linkfile"
+            (
+              cd "$build_dir"
+              "$RUNNER_TEMP/wla-install/bin/wlalink" -drvs linkfile "$output_file"
+            )
+            local built_sha reference_sha
+            built_sha="$(sha256sum "$build_dir/$output_file" | cut -d ' ' -f 1)"
+            reference_sha="$(sha256sum "$reference_file" | cut -d ' ' -f 1)"
+            {
+              echo
+              echo "## Build: $source_file"
+              echo
+              echo "- Assembler: WLA-DX `wla-z80`"
+              echo "- Result: `$build_dir/$output_file`"
+              echo "- Built SHA-256: `$built_sha`"
+              echo "- Reference SHA-256: `$reference_sha`"
+              if [[ "$built_sha" == "$reference_sha" ]]; then
+                echo "- Binary comparison: **MATCH**"
+              else
+                echo "- Binary comparison: **DIFFERENT** (build succeeded; investigate tool/version/options before interpreting)"
+              fi
+            } >> "$report"
+          }
+
+          build_wla_project \
+            "$root" \
+            "PFR_Detect200.asm" \
+            "$root/.ci-build/pfr" \
+            "PFR_Detect200.rebuilt.sms" \
+            "$root/PFR_Detect200.sms"
+
+          build_wla_project \
+            "$root/SMSCycleCounter-SMS-1.0" \
+            "demo.asm" \
+            "$root/.ci-build/cycle-counter" \
+            "output.rebuilt.sms" \
+            "$root/SMSCycleCounter-SMS-1.0/output.sms"
+
+          {
+            echo
+            echo "## Source projects not built in this pass"
+            echo
+            echo "- `testmain.asm`: references `colours.inc` and `Phantasy Star decompressors.inc`, which are not present in the current corpus; build is blocked until those source dependencies are supplied or the intended configuration is documented."
+            echo "- `VCounterTest-SMS-1.00/TEST.ASM`: its supplied batch file invokes TASM80, a different assembler/toolchain. It is not silently treated as WLA-DX source."
+            echo "- `porttest.asm` and `bgtest.asm`: use legacy TASM-style syntax; no reproducible build recipe/toolchain is currently supplied."
+            echo
+            echo "Existing prebuilt ROMs remain available for execution tests. Compilation success and hash equality are separate evidence from emulator correctness."
+          } >> "$report"
+
+          cat "$report"
+
+      - name: Upload inventory, build results, and rebuilt ROMs
         uses: actions/upload-artifact@v4
         with:
-          name: sms-homebrew-rom-inventory
-          path: build/sms-homebrew-inventory/
+          name: sms-homebrew-validation
+          path: |
+            build/sms-homebrew-validation/
+            local-assets/sms_test_roms/.ci-build/
           if-no-files-found: error
           retention-days: 7
