@@ -34,7 +34,7 @@ class NativeAudioOutput:
         buffer_size: int,
         *,
         backend: str = "wasapi",
-        queue_blocks: int = 8,
+        queue_blocks: int = 4,
     ) -> None:
         if type(sample_rate) is not int or sample_rate <= 0:
             raise ValueError("sample_rate deve ser um inteiro positivo")
