@@ -55,3 +55,16 @@ def test_rom_browser_uses_fixed_wrapping_grid_cells(qt_app, settings):
         == Qt.ScrollBarPolicy.ScrollBarAsNeeded
     )
     dialog.close()
+
+
+def test_master_system_is_available_but_unimplemented_systems_remain_disabled(
+    qt_app, settings
+):
+    dialog = RomLibraryDialog(settings)
+
+    assert dialog.system_buttons["sg1000"].isEnabled()
+    assert dialog.system_buttons["master_system"].isEnabled()
+    assert dialog.system_buttons["master_system"].text() == "Master System"
+    assert not dialog.system_buttons["game_gear"].isEnabled()
+    assert not dialog.system_buttons["mega_drive"].isEnabled()
+    dialog.close()
