@@ -343,7 +343,7 @@ use windows::core::PCWSTR;
 use windows::Win32::Media::Audio::{AudioCategory_GameEffects, WAVEFORMATEX, WAVE_FORMAT_PCM};
 #[cfg(windows)]
 use windows::Win32::Media::Audio::XAudio2::{
-    AUDIO_STREAM_CATEGORY, IXAudio2, IXAudio2MasteringVoice, IXAudio2SourceVoice,
+    IXAudio2, IXAudio2MasteringVoice, IXAudio2SourceVoice,
     IXAudio2VoiceCallback, XAUDIO2_BUFFER, XAUDIO2_VOICE_STATE,
     XAudio2CreateWithVersionInfo,
 };
