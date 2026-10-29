@@ -238,7 +238,9 @@ class RomLibraryDialog(QDialog):
 
         directory_row = QHBoxLayout()
         self.directory_edit = QLineEdit()
-        self.directory_edit.setPlaceholderText("Diretórios separados por ponto e vírgula")
+        self.directory_edit.setPlaceholderText(
+            "Diretórios separados por ponto e vírgula"
+        )
         self.directory_edit.setToolTip(
             "Informe um ou mais diretórios; subpastas são incluídas automaticamente."
         )
