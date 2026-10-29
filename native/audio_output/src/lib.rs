@@ -57,7 +57,7 @@ fn mono_pcm16_to_stereo(pcm: &[u8], balance: i8) -> Vec<u8> {
     } else {
         100
     };
-    for sample in pcm.chunks_exact(2) {
+    for sample in pcm.as_chunks::<2>().0 {
         let value = i16::from_le_bytes([sample[0], sample[1]]) as i32;
         let left = ((value * left_gain) / 100).clamp(i16::MIN as i32, i16::MAX as i32) as i16;
         let right = ((value * right_gain) / 100).clamp(i16::MIN as i32, i16::MAX as i32) as i16;
@@ -597,6 +597,12 @@ fn run_xaudio2_worker(
     sample_rate: u32,
     max_queued_buffers: usize,
 ) {
+    if let Err(error) = initialize_mta() {
+        let _ = ready.send(Err(error.to_string()));
+        return;
+    }
+    let _com_apartment = ComApartment;
+
     let setup = (|| {
         let mut engine: Option<IXAudio2> = None;
         unsafe {
@@ -737,7 +743,7 @@ mod tests {
             0xff, 0x7f, // +32767
         ];
         assert_eq!(
-            mono_pcm16_to_stereo(&mono),
+            mono_pcm16_to_stereo(&mono, 0),
             [
                 0x34, 0x12, 0x34, 0x12, 0x00, 0x80, 0x00, 0x80, 0xff, 0x7f, 0xff, 0x7f,
             ]
