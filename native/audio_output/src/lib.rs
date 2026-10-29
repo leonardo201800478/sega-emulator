@@ -597,7 +597,7 @@ fn run_xaudio2_worker(
     sample_rate: u32,
     max_queued_buffers: usize,
 ) {
-    if let Err(error) = initialize_mta() {
+    if let Err(error) = initialize_mta().ok() {
         let _ = ready.send(Err(error.to_string()));
         return;
     }
