@@ -189,8 +189,9 @@ class SettingsDialog(QDialog):
             "FIDELIDADE E DETERMINISMO\n"
             "Volume, balanço, taxa PCM e buffers afetam apenas a saída no host; "
             "não alteram clocks, registradores, T-states nem o estado determinístico "
-            "do PSG. A estimativa de latência é nominal, não uma medição ponta a ponta. "
-            "Latência real, underruns e reconexão exigem testes em hardware Windows. "
+            "do PSG. A estimativa de latência é nominal, não uma medição "
+            "ponta a ponta. Latência real, underruns e reconexão exigem testes "
+            "em hardware Windows. "
             "Modo exclusivo, seleção de dispositivo, formatos alternativos e efeitos "
             "analógicos não são expostos porque ainda não são configuráveis."
         )
@@ -366,7 +367,10 @@ class SettingsDialog(QDialog):
                 "ponta a ponta."
             )
         else:
-            text = "Áudio desativado; estimativa indisponível até selecionar WASAPI ou XAudio2."
+            text = (
+                "Áudio desativado; estimativa indisponível até selecionar "
+                "WASAPI ou XAudio2."
+            )
         self.latency_label.setText(text)
 
     def _restore_defaults(self) -> None:
