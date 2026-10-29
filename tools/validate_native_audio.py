@@ -23,19 +23,50 @@ from pathlib import Path
 from sega_emulator.frontend.qt.wasapi_audio import NativeAudioOutput
 
 
-def _tone_block(
-    sample_rate: int, frequency: float, start_sample: int, count: int
+# Original short chiptune motif. Frequencies are equal-tempered notes; None is
+# a rest. This is a host-output listening test, not a Master System PSG test.
+_MELODY_HZ: tuple[float | None, ...] = (
+    523.25, 659.25, 783.99, 659.25,
+    587.33, 698.46, 880.00, 698.46,
+    523.25, 659.25, 783.99, 1046.50,
+    783.99, 659.25, 587.33, None,
+)
+_MELODY_BPM = 120.0
+
+
+def _pcm_block(
+    sample_rate: int,
+    frequency: float,
+    start_sample: int,
+    count: int,
+    signal: str,
 ) -> bytes:
-    amplitude = 0.15 * 32767
-    samples = (
-        round(
-            amplitude
-            * math.sin(
-                2.0 * math.pi * frequency * (start_sample + offset) / sample_rate
-            )
-        )
-        for offset in range(count)
-    )
+    amplitude = 0.10 * 32767
+    samples: list[int] = []
+    samples_per_note = sample_rate * 60.0 / _MELODY_BPM
+    phase = 0.0
+    previous_frequency: float | None = None
+
+    for offset in range(count):
+        absolute_sample = start_sample + offset
+        if signal == "melody":
+            note_index = int(absolute_sample / samples_per_note) % len(_MELODY_HZ)
+            current_frequency = _MELODY_HZ[note_index]
+        else:
+            current_frequency = frequency
+
+        if current_frequency is None:
+            samples.append(0)
+            previous_frequency = None
+            continue
+        if previous_frequency != current_frequency:
+            phase = 0.0
+        samples.append(round(amplitude * math.sin(phase)))
+        phase += 2.0 * math.pi * current_frequency / sample_rate
+        if phase >= 2.0 * math.pi:
+            phase %= 2.0 * math.pi
+        previous_frequency = current_frequency
+
     return struct.pack(f"<{count}h", *samples)
 
 
@@ -74,13 +105,14 @@ def _run_backend(
     queue_blocks: int,
     seconds: int,
     frequency: float,
+    signal: str,
     trace_csv: Path | None,
 ) -> bool:
     block_period = buffer_size / sample_rate
     print(
         f"\nBackend={backend}; taxa solicitada={sample_rate} Hz; "
         f"bloco={buffer_size} amostras ({block_period * 1000:.3f} ms); "
-        f"fila={queue_blocks}; duração={seconds}s"
+        f"fila={queue_blocks}; duração={seconds}s; sinal={signal}"
     )
     try:
         output = NativeAudioOutput(
@@ -126,7 +158,9 @@ def _run_backend(
                 intervals_ms.append((cycle_start - previous_cycle_start) * 1000.0)
 
             generation_started = time.monotonic()
-            pcm = _tone_block(sample_rate, frequency, sample_index, buffer_size)
+            pcm = _pcm_block(
+                sample_rate, frequency, sample_index, buffer_size, signal
+            )
             generation_duration = time.monotonic() - generation_started
 
             write_started = time.monotonic()
@@ -217,7 +251,10 @@ def _run_backend(
         f"máximo total={max(work_ms, default=0.0):.3f}; "
         f"período-alvo={block_period * 1000:.3f}"
     )
-    print("Confirme auditivamente que o tom foi reproduzido sem cortes ou distorção.")
+    print(
+        "Confirme auditivamente a melodia/sinal sem cortes, estalos ou distorção; "
+        "este teste não executa o PSG emulado."
+    )
     return True
 
 
@@ -231,6 +268,12 @@ def main() -> int:
     parser.add_argument("--buffer-size", type=int, default=512)
     parser.add_argument("--queue-blocks", type=int, default=4)
     parser.add_argument("--frequency", type=float, default=440.0)
+    parser.add_argument(
+        "--signal",
+        choices=("tone", "melody"),
+        default="tone",
+        help="tom senoidal de referência ou melodia chiptune original",
+    )
     parser.add_argument(
         "--trace-csv",
         type=Path,
@@ -259,6 +302,7 @@ def main() -> int:
             args.queue_blocks,
             args.seconds,
             args.frequency,
+            args.signal,
             args.trace_csv,
         )
         for backend in backends
