@@ -366,5 +366,3 @@ mod tests {
         assert_eq!(next_fetch.end_tstate(), 8);
     }
 }
-
-
