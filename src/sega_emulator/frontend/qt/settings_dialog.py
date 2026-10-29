@@ -158,6 +158,35 @@ class SettingsDialog(QDialog):
         psg_layout.addStretch(1)
         tabs.addTab(psg_page, "PSG / Modelo")
 
+        guide_page = QWidget(self)
+        guide_layout = QVBoxLayout(guide_page)
+        guide = QLabel(
+            "PADRÕES RECOMENDADOS\n"
+            "Taxa PCM: 48.000 Hz como ponto de partida comum no Windows.\n"
+            "Volume: 80% para manter margem de headroom.\n"
+            "Balanço: centro (0); sinal mono duplicado igualmente em L/R.\n"
+            "Buffer/bloco: 512 amostras; fila: 4 blocos.\n\n"
+            "WASAPI COMPARTILHADO\n"
+            "O período configurado é uma solicitação. O Windows e o driver "
+            "determinam o período efetivo e podem converter o formato. A fila "
+            "exibida não inclui buffers internos do sistema.\n\n"
+            "XAUDIO2\n"
+            "O tamanho do bloco e a profundidade da fila controlam o áudio "
+            "mantido pela aplicação. Aumentar a fila tende a tolerar atrasos, "
+            "mas pode aumentar o atraso de reprodução. Usa o dispositivo padrão.\n\n"
+            "FIDELIDADE E DETERMINISMO\n"
+            "Volume, balanço, taxa PCM e buffers afetam apenas a saída no host; "
+            "não alteram clocks, registradores, T-states nem o estado determinístico "
+            "do PSG. A estimativa de latência é nominal, não uma medição ponta a ponta. "
+            "Latência real, underruns e reconexão exigem testes em hardware Windows. "
+            "Modo exclusivo, seleção de dispositivo, formatos alternativos e efeitos "
+            "analógicos não são expostos porque ainda não são configuráveis."
+        )
+        guide.setWordWrap(True)
+        guide_layout.addWidget(guide)
+        guide_layout.addStretch(1)
+        tabs.addTab(guide_page, "Guia de som")
+
         video_page = QWidget(self)
         video_layout = QVBoxLayout(video_page)
         video_group = QGroupBox("Vídeo")
