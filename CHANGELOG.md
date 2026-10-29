@@ -1,5 +1,12 @@
 # Histórico de versões
 
+## Limpeza arquitetural — extensão PyO3
+- Remove o executor Z80 independente `RustZ80Cpu` e o adaptador `NativeMemoryBus` não utilizados pela máquina integrada.
+- Mantém `native/z80_core` como fronteira PyO3/Maturin para `NativeSG1000Machine`, cujo hardware ativo permanece em `native/sg1000_core`.
+- Remove a dependência direta desnecessária de `sega-z80-alu` da extensão; a ALU standalone permanece como oráculo diferencial separado.
+- Acrescenta teste de integração para impedir que os símbolos removidos voltem a ser exportados.
+- Validação de build e testes fica condicionada aos workflows desta PR; nenhum resultado é presumido.
+
 ## v0.1.0 — Primeiro release SG-1000 (preparação)
 
 ### Marco de áudio e vídeo
