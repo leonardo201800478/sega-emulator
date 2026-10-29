@@ -1,11 +1,11 @@
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
-use std::sync::Mutex;
 use sega_audio_output::{
     NativeWasapiOutput as RustWasapiOutput, NativeXAudio2Output as RustXAudio2Output,
 };
 use sega_audio_runtime::PcmResampler;
+use std::sync::Mutex;
 
 #[pyclass]
 pub struct NativePcmResampler {
@@ -69,7 +69,9 @@ impl NativeWasapiOutput {
     fn new(sample_rate: u32, buffer_size: u32, queue_blocks: usize) -> PyResult<Self> {
         let inner = RustWasapiOutput::new(sample_rate, buffer_size, queue_blocks)
             .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?;
-        Ok(Self { inner: Mutex::new(inner) })
+        Ok(Self {
+            inner: Mutex::new(inner),
+        })
     }
 
     #[getter]
@@ -77,7 +79,9 @@ impl NativeWasapiOutput {
         self.inner
             .lock()
             .map(|inner| inner.sample_rate())
-            .map_err(|_| pyo3::exceptions::PyRuntimeError::new_err("native audio output lock poisoned"))
+            .map_err(|_| {
+                pyo3::exceptions::PyRuntimeError::new_err("native audio output lock poisoned")
+            })
     }
 
     #[getter]
