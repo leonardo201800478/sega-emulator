@@ -3,7 +3,7 @@
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
-use sega_sms_core::{SmsMachine, SmsMachineConfig, VideoStandard};
+use sega_sms_core::{ControllerButtons, SmsMachine, SmsMachineConfig, VideoStandard};
 
 use crate::audio::NativePcmResampler;
 
@@ -47,6 +47,36 @@ impl NativeSMSMachine {
     }
 
     #[getter]
+    fn pc(&self) -> u16 {
+        self.machine.cpu().registers.pc
+    }
+
+    #[getter]
+    fn frame_number(&self) -> u64 {
+        self.machine.vdp().frame_number()
+    }
+
+    #[getter]
+    fn visible_height(&self) -> u16 {
+        self.machine.vdp().visible_height()
+    }
+
+    #[getter]
+    fn scanline(&self) -> u16 {
+        self.machine.vdp().scanline()
+    }
+
+    #[getter]
+    fn vdp_status(&self) -> u8 {
+        self.machine.vdp().status()
+    }
+
+    #[getter]
+    fn framebuffer<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        PyBytes::new(py, self.machine.vdp().framebuffer())
+    }
+
+    #[getter]
     fn psg_clock_hz(&self) -> u64 {
         self.machine.psg().clock_hz()
     }
@@ -75,6 +105,59 @@ impl NativeSMSMachine {
             .map_err(|error| PyRuntimeError::new_err(format!("SMS CPU step failed: {error:?}")))?;
         self.total_instructions = self.total_instructions.saturating_add(1);
         Ok(cycles)
+    }
+
+    /// Advance instruction-stepped SMS hardware until the VDP frame counter changes.
+    ///
+    /// This is nominal instruction timing, not cycle-exact bus scheduling.
+    #[pyo3(signature = (max_steps=100_000))]
+    fn run_frame(&mut self, max_steps: usize) -> PyResult<usize> {
+        if max_steps == 0 {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "max_steps deve ser positivo",
+            ));
+        }
+        let initial_frame = self.machine.vdp().frame_number();
+        for steps in 1..=max_steps {
+            self.step()?;
+            if self.machine.vdp().frame_number() != initial_frame {
+                return Ok(steps);
+            }
+        }
+        Err(PyRuntimeError::new_err(
+            "SMS não concluiu um quadro dentro do limite de instruções",
+        ))
+    }
+
+    #[pyo3(signature = (player, up, down, left, right, button_1, button_2))]
+    fn set_controller(
+        &mut self,
+        player: u8,
+        up: bool,
+        down: bool,
+        left: bool,
+        right: bool,
+        button_1: bool,
+        button_2: bool,
+    ) -> PyResult<()> {
+        if !matches!(player, 1 | 2) {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "player deve ser 1 ou 2",
+            ));
+        }
+        self.machine
+            .set_controller(
+                player,
+                ControllerButtons {
+                    up,
+                    down,
+                    left,
+                    right,
+                    button_1,
+                    button_2,
+                },
+            )
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
     fn drain_audio_samples(&mut self, max_samples: Option<usize>) -> Vec<f64> {
@@ -124,5 +207,31 @@ mod tests {
         let before = machine.total_tstates();
         let _ = machine.drain_audio_samples(None);
         assert_eq!(machine.total_tstates(), before);
+    }
+
+    #[test]
+    fn frame_runner_advances_native_vdp_and_exposes_frame_state() {
+        let mut machine = NativeSMSMachine::new(vec![0; 16], false).unwrap();
+        assert_eq!(machine.frame_number(), 0);
+        let steps = machine.run_frame(100_000).unwrap();
+        assert!(steps > 0 && steps <= 100_000);
+        assert_eq!(machine.frame_number(), 1);
+        assert_eq!(machine.visible_height(), 192);
+        assert!(machine.total_tstates() > 0);
+    }
+
+    #[test]
+    fn controller_rejects_unknown_player() {
+        let mut machine = NativeSMSMachine::new(vec![0; 16], false).unwrap();
+        assert!(
+            machine
+                .set_controller(3, false, false, false, false, false, false)
+                .is_err()
+        );
+        assert!(
+            machine
+                .set_controller(1, true, false, false, false, true, false)
+                .is_ok()
+        );
     }
 }
