@@ -31,7 +31,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-"sega_emulator.frontend.qt" = ["assets/systems/*.svg"]
+"sega_emulator.frontend.qt" = ["assets/*.svg", "assets/systems/*.svg"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
