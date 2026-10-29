@@ -120,7 +120,7 @@ def run(initial_path: Path | None = None) -> None:
     try:
         from PySide6.QtCore import QEvent, QObject, QSettings, Qt, QTimer
         from PySide6.QtGui import QImage, QKeySequence
-        from PySide6.QtWidgets import (
+        from PySide6.QtGui import QIcon\n        from PySide6.QtWidgets import (
             QApplication,
             QCheckBox,
             QComboBox,
