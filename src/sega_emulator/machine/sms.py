@@ -19,13 +19,13 @@ class SMSMachine:
 
     cpu_core = "rust"
 
-    def __init__(self, cartridge_rom: bytes, *, pal: bool = False) -> None:
+    def __init__(self, cartridge_rom: bytes, *, region: str = "usa") -> None:
         if not isinstance(cartridge_rom, bytes):
             raise TypeError("cartridge_rom deve ser bytes.")
         if not cartridge_rom:
             raise ValueError("A ROM do Master System não pode estar vazia.")
-        if type(pal) is not bool:
-            raise TypeError("pal deve ser bool.")
+        if region not in {"usa", "europe", "japan"}:
+            raise ValueError("region deve ser usa, europe ou japan.")
 
         try:
             from sega_z80_core import NativeSMSMachine
@@ -37,7 +37,8 @@ class SMSMachine:
             ) from exc
 
         self.cartridge_rom = cartridge_rom
-        self.native_machine = NativeSMSMachine(cartridge_rom, pal)
+        self.region = region
+        self.native_machine = NativeSMSMachine(cartridge_rom, region)
 
     @property
     def cpu(self):
