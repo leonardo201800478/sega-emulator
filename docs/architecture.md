@@ -1,3 +1,5 @@
+> **Estado atual — 2026-10-29:** consulte também a [auditoria geral do projeto e documentação](audits/project-status-documentation-audit-2026-10-29.md). A PR #157 consolidou o Z80 do SG-1000 e foi mesclada em `main` no commit `5d29b1790aa7e8d7af47de9ee2563a1c978b62d7`. O foco atual é concluir o core SMS por meio das auditorias [#158](https://github.com/leonardo201800478/sega-emulator/issues/158) e [#159](https://github.com/leonardo201800478/sega-emulator/issues/159). A CPU Z80 ainda não é declarada semanticamente completa e a precisão temporal ciclo a ciclo continua pendente.
+
 # Arquitetura de emulação multi-sistema
 
 ## Objetivo
