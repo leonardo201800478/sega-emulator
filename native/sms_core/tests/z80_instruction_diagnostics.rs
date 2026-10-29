@@ -45,7 +45,8 @@ fn instruction_trace_captures_opcode_register_state_and_aggregate_cycles() {
 
     let trace = bus.traces[0];
     assert_eq!(trace.instruction_index, 1);
-    assert_eq!(trace.opcode_bytes[..usize::from(trace.opcode_len)], [0x3E]);
+    assert_eq!(&trace.opcode_bytes[..usize::from(trace.opcode_len)], &[0x3E]);
+    assert_eq!(&trace.instruction_bytes[..usize::from(trace.instruction_len)], &[0x3E, 0x42]);
     assert!(!trace.opcode_bytes_truncated);
     assert_eq!(trace.tstates, Some(7));
     assert_eq!(trace.before.pc, 0);
@@ -68,7 +69,8 @@ fn instruction_trace_records_prefix_bytes_in_decoder_order() {
 
     assert_eq!(cpu.step(&mut bus), Ok(16));
     let trace = bus.traces[0];
-    assert_eq!(trace.opcode_bytes[..usize::from(trace.opcode_len)], [0xED, 0xA0]);
+    assert_eq!(&trace.opcode_bytes[..usize::from(trace.opcode_len)], &[0xED, 0xA0]);
+    assert_eq!(&trace.instruction_bytes[..usize::from(trace.instruction_len)], &[0xED, 0xA0]);
     assert_eq!(bus.memory[0x200], 0x5A);
     assert_eq!(trace.after.hl, 0x101);
     assert_eq!(trace.after.de, 0x201);
