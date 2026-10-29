@@ -1117,6 +1117,138 @@ mod tests {
         assert_eq!(&v.working_framebuffer[8 * 3..8 * 3 + 3], &[255, 0, 0]);
     }
 
+
+    #[test]
+    fn sms_mode4_horizontal_fine_scroll_matches_source_pixel_offsets() {
+        for scroll in [0_u8, 1, 7, 8, 255] {
+            let mut v = SmsVdp::default();
+            v.registers[0] = 0x04;
+            v.registers[1] = 0x40;
+            v.registers[2] = 0x0E;
+            v.registers[5] = 0x7E;
+            v.registers[8] = scroll;
+            v.cram[1] = 0x03;
+            for row in 0..8 {
+                v.vram[row * 4] = 0x80;
+            }
+            for row in 0..28 {
+                for col in 0..32 {
+                    v.vram[0x3800 + row * 64 + col * 2] = 0;
+                    v.vram[0x3800 + row * 64 + col * 2 + 1] = 0;
+                }
+            }
+            v.vram[0x3F00] = 0xD0;
+            let mut status = 0x1F;
+            render_scanline(
+                &v.vram,
+                &v.cram,
+                &v.registers,
+                &mut status,
+                &mut v.working_framebuffer,
+                0,
+                true,
+            );
+            for x in 0..32 {
+                let source_x = (x + 0x100 - usize::from(scroll)) & 0xFF;
+                let expected = if source_x & 7 == 0 {
+                    [255, 0, 0]
+                } else {
+                    [0, 0, 0]
+                };
+                assert_eq!(
+                    &v.working_framebuffer[x * 3..x * 3 + 3],
+                    &expected,
+                    "R8={scroll}, screen x={x}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sms_mode4_horizontal_scroll_is_fixed_for_the_first_sixteen_lines() {
+        let mut v = SmsVdp::default();
+        v.registers[0] = 0x44;
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[5] = 0x7E;
+        v.registers[8] = 8;
+        v.cram[1] = 0x03;
+        for row in 0..8 {
+            v.vram[row * 4] = 0x80;
+        }
+        for row in 0..28 {
+            v.vram[0x3800 + row * 64 + 31 * 2] = 2;
+        }
+        v.vram[0x3F00] = 0xD0;
+        let mut status = 0x1F;
+        for y in [0, 15, 16] {
+            render_scanline(
+                &v.vram,
+                &v.cram,
+                &v.registers,
+                &mut status,
+                &mut v.working_framebuffer,
+                y,
+                true,
+            );
+        }
+        assert_eq!(&v.working_framebuffer[0..3], &[255, 0, 0]);
+        assert_eq!(
+            &v.working_framebuffer[15 * SMS_VDP_WIDTH * 3..15 * SMS_VDP_WIDTH * 3 + 3],
+            &[255, 0, 0]
+        );
+        assert_eq!(
+            &v.working_framebuffer[16 * SMS_VDP_WIDTH * 3..16 * SMS_VDP_WIDTH * 3 + 3],
+            &[0, 0, 0]
+        );
+    }
+
+    #[test]
+    fn sms_mode4_192_line_vertical_scroll_wrap_boundaries_are_223_224_and_255() {
+        let mut v = SmsVdp::default();
+        v.registers[0] = 0x04;
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[5] = 0x7E;
+        v.cram[1] = 0x03;
+        v.cram[2] = 0x0C;
+        v.cram[3] = 0x30;
+        for col in 0..32 {
+            v.vram[0x3800 + col * 2] = 0;
+            v.vram[0x3800 + col * 2 + 1] = 0;
+            v.vram[0x3840 + col * 2] = 0;
+            v.vram[0x3840 + col * 2 + 1] = 0;
+            v.vram[0x38C0 + col * 2] = 2;
+            v.vram[0x38C0 + col * 2 + 1] = 0;
+            v.vram[0x3EC0 + col * 2] = 1;
+            v.vram[0x3EC0 + col * 2 + 1] = 0;
+        }
+        for row in 0..8 {
+            v.vram[row * 4] = 0xFF;
+            v.vram[32 + row * 4 + 1] = 0xFF;
+            v.vram[64 + row * 4 + 2] = 0xFF;
+        }
+        v.vram[0x3F00] = 0xD0;
+        let mut status = 0x1F;
+        for (scroll, expected) in [
+            (223_u8, [0, 255, 0]),
+            (224_u8, [255, 0, 0]),
+            (255_u8, [0, 0, 255]),
+        ] {
+            v.registers[9] = scroll;
+            render_scanline(
+                &v.vram,
+                &v.cram,
+                &v.registers,
+                &mut status,
+                &mut v.working_framebuffer,
+                0,
+                true,
+            );
+            assert_eq!(&v.working_framebuffer[0..3], &expected, "R9={scroll}");
+        }
+    }
+
     #[test]
     fn sms_mode4_vertical_scroll_lock_starts_at_column_24() {
         let mut v = SmsVdp::default();
