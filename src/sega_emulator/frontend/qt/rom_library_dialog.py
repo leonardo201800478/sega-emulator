@@ -195,7 +195,7 @@ class RomLibraryDialog(QDialog):
         splash_image = (self._assets_directory / "splash_hero.svg").as_posix()
         self.splash_page.setStyleSheet(
             f"QWidget#splashPage {{ "
-            f"border-image: url(\"{splash_image}\") 0 0 0 0 stretch stretch; }}"
+            f'border-image: url("{splash_image}") 0 0 0 0 stretch stretch; }}'
         )
         splash = QVBoxLayout(self.splash_page)
         splash.addStretch(1)
@@ -267,9 +267,7 @@ class RomLibraryDialog(QDialog):
             button.setIcon(QIcon(str(assets_directory / f"{system}.svg")))
             button.setIconSize(QSize(220, 118))
             button.setMinimumSize(220, 166)
-            button.setSizePolicy(
-                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
-            )
+            button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             button.setStyleSheet(
                 "QToolButton { background: #14233b; border: 1px solid #31547c; "
                 "border-radius: 10px; padding: 10px; font-size: 14px; "
