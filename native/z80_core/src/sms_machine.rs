@@ -26,9 +26,11 @@ impl NativeSMSMachine {
             "usa" => (sega_sms_core::Territory::Export, VideoStandard::Ntsc),
             "europe" => (sega_sms_core::Territory::Export, VideoStandard::Pal),
             "japan" => (sega_sms_core::Territory::Japan, VideoStandard::Ntsc),
-            _ => return Err(pyo3::exceptions::PyValueError::new_err(
-                "region deve ser usa, europe ou japan",
-            )),
+            _ => {
+                return Err(pyo3::exceptions::PyValueError::new_err(
+                    "region deve ser usa, europe ou japan",
+                ));
+            }
         };
         let config = SmsMachineConfig {
             territory,
