@@ -373,7 +373,7 @@ impl SmsVdp {
             self.control_first = Some(value);
             return;
         };
-        if value & 0x80 != 0 {
+        if value & 0xC0 == 0x80 {
             let register = usize::from(value & 0x0F);
             if register <= 10 {
                 self.registers[register] = first;
