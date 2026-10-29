@@ -1,0 +1,72 @@
+{
+  "source": "Generated studio-style Sega console composite",
+  "format": "PNG RGBA with transparent background",
+  "assets": {
+    "sg1000.png": {
+      "dimensions": [
+        485,
+        420
+      ],
+      "bytes": 222898,
+      "alpha": [
+        0,
+        255
+      ]
+    },
+    "master_system.png": {
+      "dimensions": [
+        502,
+        420
+      ],
+      "bytes": 229044,
+      "alpha": [
+        0,
+        255
+      ]
+    },
+    "game_gear.png": {
+      "dimensions": [
+        499,
+        420
+      ],
+      "bytes": 205985,
+      "alpha": [
+        0,
+        255
+      ]
+    },
+    "mega_drive.png": {
+      "dimensions": [
+        514,
+        420
+      ],
+      "bytes": 268838,
+      "alpha": [
+        0,
+        255
+      ]
+    },
+    "sega_cd.png": {
+      "dimensions": [
+        496,
+        420
+      ],
+      "bytes": 225917,
+      "alpha": [
+        0,
+        255
+      ]
+    },
+    "32x.png": {
+      "dimensions": [
+        457,
+        420
+      ],
+      "bytes": 213416,
+      "alpha": [
+        0,
+        255
+      ]
+    }
+  }
+}

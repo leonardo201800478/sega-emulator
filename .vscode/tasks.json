@@ -1,0 +1,40 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Sega Emulator: Create Python 3.14 venv",
+      "type": "process",
+      "command": "py",
+      "args": ["-3.14", "-m", "venv", ".venv"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Sega Emulator: Install development dependencies",
+      "type": "process",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "pip", "install", "-e", ".[dev,qt]", "maturin>=1.9,<2"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Sega Emulator: Build Rust runtime (Release)",
+      "type": "process",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "maturin", "develop", "--release", "--features", "python-extension"],
+      "options": { "cwd": "${workspaceFolder}\\native\\z80_core" },
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "Sega Emulator: Run Qt tests",
+      "type": "process",
+      "command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+      "args": ["-m", "pytest", "-q", "tests/test_qt_main_window.py", "tests/test_qt_scraper_settings.py", "tests/test_rom_library.py"],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": { "QT_QPA_PLATFORM": "offscreen", "SDL_AUDIODRIVER": "dummy" }
+      },
+      "problemMatcher": []
+    }
+  ]
+}

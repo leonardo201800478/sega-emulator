@@ -272,3 +272,31 @@ def test_about_dialog_shows_version_scope_credits_and_mit_license(
     assert "Licença:</b> MIT" in content
     assert "sem afiliação oficial" in content
     window.close()
+
+
+@pytest.mark.parametrize(
+    ("language", "expected_file_menu"),
+    [
+        ("pt-BR", "&Arquivo"),
+        ("en", "&File"),
+        ("es", "&Archivo"),
+        ("it", "&File"),
+        ("fr", "&Fichier"),
+    ],
+)
+def test_main_window_localizes_navigation(qt_app, language, expected_file_menu) -> None:
+    window = EmulatorMainWindow(
+        on_open_rom=lambda: None,
+        on_pause_resume=lambda: None,
+        on_reset=lambda: None,
+        on_configure_controls=lambda: None,
+        on_show_controllers=lambda: None,
+        on_vdp_snapshot=lambda: None,
+        on_open_logs=lambda: None,
+        on_show_machine_state=lambda: None,
+        on_video_scale=lambda scale: None,
+        language=language,
+    )
+    assert window.menuBar().actions()[0].text() == expected_file_menu
+    assert window.windowTitle() == "Sega Emulator | SG-1000"
+    window.close()
