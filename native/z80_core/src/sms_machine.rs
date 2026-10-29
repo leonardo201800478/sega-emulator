@@ -129,6 +129,8 @@ impl NativeSMSMachine {
         ))
     }
 
+    // Preserve a flat, explicit Python-facing controller API; the booleans map directly to SMS input lines.
+    #[allow(clippy::too_many_arguments)]
     #[pyo3(signature = (player, up, down, left, right, button_1, button_2))]
     fn set_controller(
         &mut self,
