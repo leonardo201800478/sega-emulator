@@ -102,6 +102,8 @@ def test_restore_defaults_resets_audio_video_controls(qt_app) -> None:
             audio_sample_rate=48_000,
             audio_buffer_size=2048,
             audio_volume=10,
+            audio_balance=90,
+            audio_queue_blocks=8,
             video_filter="bilinear",
             integer_scale=False,
             sprite_limit_enabled=False,
@@ -120,6 +122,8 @@ def test_restore_defaults_resets_audio_video_controls(qt_app) -> None:
     assert dialog.sample_rate.currentData() == defaults.audio_sample_rate
     assert dialog.buffer_size.currentData() == defaults.audio_buffer_size
     assert dialog.volume.value() == defaults.audio_volume
+    assert dialog.balance.value() == defaults.audio_balance
+    assert dialog.queue_blocks.currentData() == defaults.audio_queue_blocks
     assert dialog.video_filter.currentData() == defaults.video_filter
     assert dialog.integer_scale.isChecked() is defaults.integer_scale
     assert dialog.sprite_limit_unlocked.isChecked() is (
