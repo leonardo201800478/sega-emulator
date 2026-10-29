@@ -2,7 +2,7 @@
 
 Run from the repository root after installing the Qt/native extension:
     python tools/validate_native_audio.py --backend both
-    python tools/validate_native_audio.py --backend both --seconds 60 --trace-csv audio-timing.csv
+    python tools/validate_native_audio.py --backend both --trace-csv timing.csv
 
 The low-volume tone validates host output only; it does not execute or modify
 emulated hardware state. Timing rows measure the Python PCM producer cadence and
@@ -14,11 +14,11 @@ from __future__ import annotations
 import argparse
 import csv
 import math
+from pathlib import Path
 import statistics
 import struct
 import sys
 import time
-from pathlib import Path
 
 from sega_emulator.frontend.qt.wasapi_audio import NativeAudioOutput
 
@@ -233,7 +233,8 @@ def _run_backend(
     print(
         f"Saída solicitada: {output.sample_rate} Hz / {output.buffer_size} amostras; "
         f"tempo decorrido={elapsed:.2f}s; ciclos={cycle}; "
-        f"amostras produzidas={sample_index}; taxa média do produtor={effective_rate:.1f} amostras/s"
+        f"amostras produzidas={sample_index}; "
+        f"taxa média do produtor={effective_rate:.1f} amostras/s"
     )
     print(
         f"Underruns={underruns}; blocos descartados={dropped}; "
@@ -288,7 +289,10 @@ def main() -> int:
         "--trace-csv",
         type=Path,
         default=None,
-        help="salva os tempos por ciclo em CSV; com backend=both cria um arquivo por backend",
+        help=(
+            "salva os tempos por ciclo em CSV; com backend=both cria "
+            "um arquivo por backend"
+        ),
     )
     args = parser.parse_args()
 
