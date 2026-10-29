@@ -7,13 +7,14 @@ use pyo3::prelude::*;
 
 mod audio;
 mod machine;
-use audio::{NativePcmResampler, NativeWasapiOutput};
+use audio::{NativePcmResampler, NativeWasapiOutput, NativeXAudio2Output};
 use machine::{NativeCpuSnapshot, NativePsgSnapshot, NativeSG1000Machine, NativeVdpSnapshot};
 
 #[pymodule]
 fn sega_z80_core(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<NativePcmResampler>()?;
     module.add_class::<NativeWasapiOutput>()?;
+    module.add_class::<NativeXAudio2Output>()?;
     module.add_class::<NativeSG1000Machine>()?;
     module.add_class::<NativeCpuSnapshot>()?;
     module.add_class::<NativeVdpSnapshot>()?;
