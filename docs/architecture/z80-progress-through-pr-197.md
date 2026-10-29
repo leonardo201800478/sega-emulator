@@ -225,3 +225,10 @@ O corpus SingleStepTests/Z80 fixado em `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7
 
 
 As PRs #227–#229 não demonstram a conclusão semântica global do Z80. O trabalho subsequente deve preservar o método incremental e vincular cada novo estado de validação ao SHA candidato e aos workflows efetivamente concluídos.
+
+
+## Atualização de estado — 2026-10-29 (após PR #157)
+
+A [PR #157](https://github.com/leonardo201800478/sega-emulator/pull/157) foi integrada em `main` no commit `5d29b1790aa7e8d7af47de9ee2563a1c978b62d7`. Ela consolidou a CPU Z80 no SG-1000 e **não modificou arquivos de `native/sms_core/`**. Os seis workflows associados ao candidato `baa56568ca2ccbb3963b86207c49fb12f32ab342` passaram. O mantenedor confirmou execução manual de jogos SG-1000 sem regressões perceptíveis.
+
+Essa mudança não fecha a auditoria semântica SMS nem demonstra precisão ciclo a ciclo. O trabalho SMS segue nas issues [#158](https://github.com/leonardo201800478/sega-emulator/issues/158) e [#159](https://github.com/leonardo201800478/sega-emulator/issues/159). A classificação dos espaços de opcode e os vetores existentes são evidência parcial, não prova de completude. Os documentos e números acima das seções históricas permanecem associados às bases/SHA que cada seção identifica.
