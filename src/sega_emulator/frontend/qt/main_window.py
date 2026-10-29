@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtGui import QAction, QActionGroup, QKeySequence
 from PySide6.QtWidgets import (
     QCheckBox,
     QLabel,
@@ -54,6 +54,8 @@ class EmulatorMainWindow(QMainWindow):
         on_show_machine_state: Callable[[], None],
         on_video_scale: Callable[[int], None],
         on_configure_drivers: Callable[[], None] | None = None,
+        on_configure_region: Callable[[str], None] | None = None,
+        region_preference: str = "auto",
         on_configure_audio_video: Callable[[], None] | None = None,
         on_start_vgm_recording: Callable[[], None] | None = None,
         on_stop_vgm_recording: Callable[[], None] | None = None,
@@ -175,6 +177,30 @@ class EmulatorMainWindow(QMainWindow):
         emulation_menu = self.menuBar().addMenu(translate("menu_emulation", language))
         emulation_menu.addAction(self.pause_action)
         emulation_menu.addAction(self.reset_action)
+        emulation_menu.addSeparator()
+        region_menu = emulation_menu.addMenu("Região do Master System")
+        self.region_action_group = QActionGroup(self)
+        self.region_action_group.setExclusive(True)
+        self.region_actions: dict[str, QAction] = {}
+        for region, label in (
+            ("auto", "Automático (EUA → Europa → Japão)"),
+            ("usa", "EUA (NTSC)"),
+            ("europe", "Europa (PAL)"),
+            ("japan", "Japão (NTSC)"),
+        ):
+            action = QAction(label, self)
+            action.setCheckable(True)
+            action.setData(region)
+            action.setChecked(region == region_preference)
+            self.region_action_group.addAction(action)
+            region_menu.addAction(action)
+            self.region_actions[region] = action
+            if on_configure_region is not None:
+                action.triggered.connect(
+                    lambda checked=False, selected=region: on_configure_region(selected)
+                )
+            else:
+                action.setEnabled(False)
         emulation_menu.addSeparator()
         toolbar = QToolBar(translate("toolbar_main", language), self)
         self._main_toolbar = toolbar
