@@ -789,7 +789,10 @@ fn render_scanline(
 
 #[cfg(test)]
 mod tests {
-    use super::{SMS_VDP_WIDTH, SmsVdp, StereoPresentation};
+    use super::{
+        FRAME_SIZE, OVERFLOW, SMS_VDP_WIDTH, TMS_PALETTE, SmsVdp, StereoPresentation,
+        render_legacy_scanline, render_scanline,
+    };
     use crate::config::{SpriteLimitMode, VideoStandard};
     fn reg(v: &mut SmsVdp, i: u8, value: u8) {
         v.write_port(0xBF, value);
