@@ -61,6 +61,8 @@ pub struct SmsVdp {
     vram: Vec<u8>,
     cram: [u8; CRAM_SIZE],
     registers: [u8; 16],
+    latched_scroll_y: u8,
+    pending_scroll_y: Option<u8>,
     status: u8,
     address: u16,
     read_buffer: u8,
@@ -93,6 +95,8 @@ impl SmsVdp {
             vram: vec![0; VRAM_SIZE],
             cram: [0; CRAM_SIZE],
             registers: [0; 16],
+            latched_scroll_y: 0,
+            pending_scroll_y: None,
             status: 0,
             address: 0,
             read_buffer: 0,
@@ -251,6 +255,8 @@ impl SmsVdp {
     pub fn reset(&mut self, clear_vram: bool) {
         self.cram.fill(0);
         self.registers.fill(0);
+        self.latched_scroll_y = 0;
+        self.pending_scroll_y = None;
         self.status = 0;
         self.address = 0;
         self.read_buffer = 0;
@@ -340,10 +346,12 @@ impl SmsVdp {
         self.light_h_counter = None;
         let height = self.visible_height();
         if line < height {
+            let mut render_registers = self.registers;
+            render_registers[9] = self.latched_scroll_y;
             render_scanline(
                 &self.vram,
                 &self.cram,
-                &self.registers,
+                &render_registers,
                 &mut self.status,
                 &mut self.working_framebuffer,
                 usize::from(line),
@@ -362,6 +370,9 @@ impl SmsVdp {
         }
         self.scanline += 1;
         if self.scanline == height {
+            if let Some(scroll_y) = self.pending_scroll_y.take() {
+                self.latched_scroll_y = scroll_y;
+            }
             self.status |= VBLANK;
             self.frame_ready = true;
             self.framebuffer.clone_from(&self.working_framebuffer);
@@ -399,6 +410,14 @@ impl SmsVdp {
             let register = usize::from(value & 0x0F);
             if register <= 10 {
                 self.registers[register] = first;
+                if register == 9 {
+                    if self.scanline < self.visible_height() {
+                        self.pending_scroll_y = Some(first);
+                    } else {
+                        self.latched_scroll_y = first;
+                        self.pending_scroll_y = None;
+                    }
+                }
                 if register == 10 {
                     self.line_counter = first;
                 }
@@ -726,10 +745,10 @@ fn render_scanline(
     let mut active: Vec<(usize, i32, usize, usize)> = Vec::with_capacity(64);
     for index in 0..64 {
         let raw_y = vram[(sat + index) & 0x3FFF];
-        if raw_y == 0xD0 {
+        if raw_y == 0xD0 && height == 192 {
             break;
         }
-        let sy = if raw_y >= 0xD1 {
+        let sy = if raw_y >= 0xF0 {
             i32::from(raw_y) - 255
         } else {
             i32::from(raw_y) + 1
@@ -1154,6 +1173,61 @@ mod tests {
             true,
         );
         assert_eq!(&v.working_framebuffer[0..3], &[0, 0, 0]);
+    }
+
+
+    #[test]
+    fn sms_mode4_r9_written_during_active_display_latches_after_active_period() {
+        let mut v = SmsVdp::default();
+        v.registers[0] = 0x04;
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[5] = 0x7E;
+        v.cram[1] = 0x03;
+        v.cram[2] = 0x0C;
+        for col in 0..32 {
+            v.vram[0x3840 + col * 2] = 1;
+            v.vram[0x3840 + col * 2 + 1] = 0;
+        }
+        for row in 0..8 {
+            v.vram[row * 4] = 0xFF;
+            v.vram[32 + row * 4 + 1] = 0xFF;
+        }
+        v.vram[0x3F00] = 0xD0;
+        reg(&mut v, 9, 8);
+
+        v.advance(228 * 192);
+        assert_eq!(&v.framebuffer()[0..3], &[255, 0, 0]);
+
+        v.advance(228 * (262 - 192));
+        v.advance(228 * 192);
+        assert_eq!(&v.framebuffer()[0..3], &[0, 255, 0]);
+    }
+
+    #[test]
+    fn sms_mode4_extended_mode_d0_is_not_sprite_terminator_and_y_wrap_starts_at_f0() {
+        let mut v = SmsVdp::default();
+        v.registers[0] = 0x04;
+        v.registers[1] = 0x50;
+        v.registers[2] = 0x0E;
+        v.registers[5] = 0x7E;
+        v.cram[17] = 0x03;
+        v.vram[0x20] = 0x80;
+        v.vram[0x3F00] = 0xD0;
+        v.vram[0x3F01] = 0xD1;
+        v.vram[0x3F80] = 10;
+        v.vram[0x3F81] = 1;
+        v.vram[0x3F82] = 30;
+        v.vram[0x3F83] = 1;
+        let mut status = 0x1F;
+        let mut frame = vec![0; FRAME_SIZE];
+
+        render_scanline(&v.vram, &v.cram, &v.registers, &mut status, &mut frame, 209, true);
+        assert_eq!(&frame[(209 * SMS_VDP_WIDTH + 10) * 3..(209 * SMS_VDP_WIDTH + 10) * 3 + 3], &[255, 0, 0]);
+        assert_eq!(&frame[(209 * SMS_VDP_WIDTH + 30) * 3..(209 * SMS_VDP_WIDTH + 30) * 3 + 3], &[0, 0, 0]);
+
+        render_scanline(&v.vram, &v.cram, &v.registers, &mut status, &mut frame, 210, true);
+        assert_eq!(&frame[(210 * SMS_VDP_WIDTH + 30) * 3..(210 * SMS_VDP_WIDTH + 30) * 3 + 3], &[255, 0, 0]);
     }
 
     #[test]
