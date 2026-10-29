@@ -286,7 +286,7 @@ impl SmsVdp {
             }
             0x81 => {
                 let value = self.status;
-                self.status = 0;
+                self.status = 0x1F;
                 self.line_irq_pending = false;
                 self.control_first = None;
                 value
@@ -295,9 +295,9 @@ impl SmsVdp {
         }
     }
     pub fn write_port(&mut self, port: u16, value: u8) {
-        match port as u8 {
-            0xBE => self.write_data(value),
-            0xBF => self.write_control(value),
+        match (port as u8) & 0xC1 {
+            0x80 => self.write_data(value),
+            0x81 => self.write_control(value),
             _ => {}
         }
     }
