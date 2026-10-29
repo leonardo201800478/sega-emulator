@@ -182,7 +182,7 @@ impl NativeWasapiOutput {
         self.shutdown.store(true, Ordering::Release);
         #[cfg(windows)]
         {
-            self.sender.take();
+            drop(self.sender.take());
             if let Some(worker) = self.worker.take() {
                 let _ = worker.join();
             }
@@ -197,7 +197,6 @@ impl Drop for NativeWasapiOutput {
 }
 
 #[cfg(windows)]
-#[cfg(windows)]
 struct ComApartment;
 
 #[cfg(windows)]
@@ -207,6 +206,7 @@ impl Drop for ComApartment {
     }
 }
 
+#[cfg(windows)]
 fn run_wasapi_worker(
     receiver: mpsc::Receiver<Vec<u8>>,
     ready: mpsc::SyncSender<Result<(), String>>,
@@ -296,10 +296,7 @@ fn run_wasapi_worker(
             break;
         }
         if event.wait_for_event(1000).is_err() {
-            if !shutdown.load(Ordering::Acquire) {
-                // A failed WASAPI event wait indicates a stopped or disconnected stream.
-                break;
-            }
+            // A failed WASAPI event wait indicates a stopped or disconnected stream.
             break;
         }
 
