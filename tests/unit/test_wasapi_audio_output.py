@@ -9,10 +9,11 @@ from sega_emulator.frontend.qt.wasapi_audio import NativeAudioOutput, WasapiAudi
 
 
 class FakeNativeOutput:
-    def __init__(self, sample_rate, buffer_size, queue_blocks):
+    def __init__(self, sample_rate, buffer_size, queue_blocks, balance=0):
         self.sample_rate = sample_rate
         self.buffer_size = buffer_size
         self.queue_blocks = queue_blocks
+        self.balance = balance
         self.underrun_count = 3
         self.dropped_block_count = 2
         self.blocks = []
@@ -29,8 +30,8 @@ class FakeNativeOutput:
 def native_outputs(monkeypatch):
     instances = []
 
-    def factory(sample_rate, buffer_size, queue_blocks):
-        instance = FakeNativeOutput(sample_rate, buffer_size, queue_blocks)
+    def factory(sample_rate, buffer_size, queue_blocks, balance=0):
+        instance = FakeNativeOutput(sample_rate, buffer_size, queue_blocks, balance)
         instances.append(instance)
         return instance
 
@@ -52,6 +53,7 @@ def test_constructs_native_wasapi_output(native_outputs):
     assert native.sample_rate == 48_000
     assert native.buffer_size == 512
     assert native.queue_blocks == 6
+    assert native.balance == 0
     assert output.sample_rate == 48_000
     assert output.buffer_size == 512
     output.close()
@@ -93,10 +95,11 @@ def test_invalid_configuration_fails_before_native_open(
 
 
 def test_selects_native_xaudio2_when_requested(native_outputs):
-    output = NativeAudioOutput(48_000, 512, backend="xaudio2")
+    output = NativeAudioOutput(48_000, 512, backend="xaudio2", balance=25)
     native = native_outputs[0]
     assert native.sample_rate == 48_000
     assert native.buffer_size == 512
+    assert native.balance == 25
     output.close()
 
 
