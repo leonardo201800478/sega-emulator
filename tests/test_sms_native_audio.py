@@ -82,10 +82,21 @@ def test_sms_python_adapter_drains_pcm_without_changing_tstates() -> None:
     machine = SMSMachine(
         bytes(
             [
-                0x3E, 0x90, 0xD3, 0x7F,
-                0x3E, 0x85, 0xD3, 0x7F,
-                0x3E, 0x12, 0xD3, 0x7F,
-                0xC3, 0x00, 0x00,
+                0x3E,
+                0x90,
+                0xD3,
+                0x7F,
+                0x3E,
+                0x85,
+                0xD3,
+                0x7F,
+                0x3E,
+                0x12,
+                0xD3,
+                0x7F,
+                0xC3,
+                0x00,
+                0x00,
             ]
         )
     )
