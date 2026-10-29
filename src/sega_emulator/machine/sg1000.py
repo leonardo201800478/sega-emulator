@@ -102,7 +102,7 @@ class SG1000Machine:
         return list(self.native_machine.drain_audio_samples(max_samples))
 
     def drain_audio_pcm(self, resampler: object) -> bytes:
-        """Drain and convert PSG audio inside the Rust runtime without a Python sample list."""
+        """Drain PSG audio and convert it in Rust without a Python sample list."""
         native_resampler = getattr(resampler, "_native", None)
         if native_resampler is None:
             raise TypeError("resampler deve encapsular o processador PCM nativo")
