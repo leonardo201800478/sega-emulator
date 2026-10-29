@@ -205,4 +205,22 @@ mod tests {
         let _ = machine.drain_audio_samples(None);
         assert_eq!(machine.total_tstates(), before);
     }
+
+    #[test]
+    fn frame_runner_advances_native_vdp_and_exposes_frame_state() {
+        let mut machine = NativeSMSMachine::new(vec![0; 16], false).unwrap();
+        assert_eq!(machine.frame_number(), 0);
+        let steps = machine.run_frame(100_000).unwrap();
+        assert!(steps > 0 && steps <= 100_000);
+        assert_eq!(machine.frame_number(), 1);
+        assert_eq!(machine.visible_height(), 192);
+        assert!(machine.total_tstates() > 0);
+    }
+
+    #[test]
+    fn controller_rejects_unknown_player() {
+        let mut machine = NativeSMSMachine::new(vec![0; 16], false).unwrap();
+        assert!(machine.set_controller(3, false, false, false, false, false, false).is_err());
+        assert!(machine.set_controller(1, true, false, false, false, true, false).is_ok());
+    }
 }
