@@ -1,4 +1,5 @@
 """Thin Qt lifecycle facade over native Rust Windows audio outputs."""
+
 from __future__ import annotations
 
 
