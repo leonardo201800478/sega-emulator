@@ -57,12 +57,32 @@ pub struct SmsMachineBus<'a> {
     io: &'a mut SmsIo,
     sega_scope: &'a mut SegaScopeState,
     vdp: &'a mut SmsVdp,
-    pending_psg_writes: &'a mut Vec<SmsPsgWriteEvent>,
+    pending_psg_writes: Option<&'a mut Vec<SmsPsgWriteEvent>>,
     tstate: u64,
 }
 
 impl<'a> SmsMachineBus<'a> {
-    fn new(
+    /// Construct a bus without a machine-owned PSG event queue.
+    ///
+    /// This retains the original public bus-construction contract. The full
+    /// SMS machine uses `with_psg_queue` so PSG writes can be timestamped.
+    pub fn new(
+        memory: &'a mut SmsMemory,
+        io: &'a mut SmsIo,
+        sega_scope: &'a mut SegaScopeState,
+        vdp: &'a mut SmsVdp,
+    ) -> Self {
+        Self {
+            memory,
+            io,
+            sega_scope,
+            vdp,
+            pending_psg_writes: None,
+            tstate: 0,
+        }
+    }
+
+    fn with_psg_queue(
         memory: &'a mut SmsMemory,
         io: &'a mut SmsIo,
         sega_scope: &'a mut SegaScopeState,
@@ -75,7 +95,7 @@ impl<'a> SmsMachineBus<'a> {
             io,
             sega_scope,
             vdp,
-            pending_psg_writes,
+            pending_psg_writes: Some(pending_psg_writes),
             tstate,
         }
     }
@@ -115,10 +135,12 @@ impl CpuBus for SmsMachineBus<'_> {
         } else {
             self.io.write_port(port, value);
             if (0x40..=0x7F).contains(&(port as u8)) {
-                self.pending_psg_writes.push(SmsPsgWriteEvent {
-                    tstate: self.tstate.saturating_add(11),
-                    value,
-                });
+                if let Some(pending) = self.pending_psg_writes.as_mut() {
+                    pending.push(SmsPsgWriteEvent {
+                        tstate: self.tstate.saturating_add(11),
+                        value,
+                    });
+                }
             }
         }
     }
@@ -194,7 +216,7 @@ impl SmsMachine {
     pub fn step(&mut self) -> Result<u32, CpuError> {
         let tstate = self.cpu.total_tstates;
         let cycles = {
-            let mut bus = SmsMachineBus::new(
+            let mut bus = SmsMachineBus::with_psg_queue(
                 &mut self.memory,
                 &mut self.io,
                 &mut self.sega_scope,
