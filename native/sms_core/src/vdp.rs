@@ -795,7 +795,7 @@ fn render_scanline(
 mod tests {
     use super::{
         FRAME_SIZE, OVERFLOW, SMS_VDP_WIDTH, SmsVdp, StereoPresentation, TMS_PALETTE,
-        render_legacy_scanline, render_scanline,
+        render_legacy_scanline, render_legacy_sprites, render_scanline,
     };
     use crate::config::{SpriteLimitMode, VideoStandard};
     fn reg(v: &mut SmsVdp, i: u8, value: u8) {
@@ -1007,6 +1007,33 @@ mod tests {
         v.write_port(0x9F, 0xC0);
         v.write_port(0x9E, 0x3F);
         assert_eq!(v.cram()[3], 0x3F);
+    }
+
+    #[test]
+    fn legacy_sprite_limit_is_four_and_unlock_draws_the_fifth_sprite() {
+        let mut v = SmsVdp::default();
+        v.registers[5] = 0x7F;
+        v.vram[8] = 0x80;
+        for index in 0..5 {
+            let attr = 0x3F80 + index * 4;
+            v.vram[attr] = 0;
+            v.vram[attr + 1] = if index == 4 { 50 } else { 10 };
+            v.vram[attr + 2] = 1;
+            v.vram[attr + 3] = 4;
+        }
+        v.vram[0x3F80 + 5 * 4] = 0xD0;
+        let mut status = 0x1F;
+        let mut frame = vec![0; FRAME_SIZE];
+        render_legacy_sprites(&v.vram, &v.registers, &mut status, &mut frame, 1, false);
+        assert_ne!(status & OVERFLOW, 0);
+        assert_eq!(status & 0x1F, 4);
+        let x50 = (SMS_VDP_WIDTH + 50) * 3;
+        assert_eq!(&frame[x50..x50 + 3], &[0, 0, 0]);
+
+        status = 0x1F;
+        frame.fill(0);
+        render_legacy_sprites(&v.vram, &v.registers, &mut status, &mut frame, 1, true);
+        assert_eq!(&frame[x50..x50 + 3], &TMS_PALETTE[4]);
     }
 
     #[test]
