@@ -131,7 +131,7 @@ impl Z80InstructionTrace {
     pub fn write_json_line(&self, out: &mut impl core::fmt::Write) -> core::fmt::Result {
         write!(
             out,
-            "{\"instruction_index\":{},\"opcode_bytes\":[",
+            "{{\"instruction_index\":{},\"opcode_bytes\":[",
             self.instruction_index
         )?;
         for (index, byte) in self.opcode_bytes[..usize::from(self.opcode_len)]
@@ -207,7 +207,8 @@ fn write_snapshot_json(
         state.wz,
         state.ei_delay,
         state.nmi_pending,
-        state.int_pending
+        state
+            .int_pending
             .map_or_else(|| "null".to_owned(), |v| v.to_string()),
         state.q,
         state.p,
