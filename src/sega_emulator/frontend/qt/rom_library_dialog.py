@@ -203,9 +203,7 @@ class RomLibraryDialog(QDialog):
         system_title = QLabel(translate("choose_system", self.language))
         system_title.setObjectName("heroTitle")
         system_layout.addWidget(system_title)
-        system_subtitle = QLabel(
-            translate("systems_unavailable", self.language)
-        )
+        system_subtitle = QLabel(translate("systems_unavailable", self.language))
         system_subtitle.setObjectName("subtitle")
         system_layout.addWidget(system_subtitle)
         grid = QGridLayout()
@@ -251,9 +249,7 @@ class RomLibraryDialog(QDialog):
         self.directory_edit.setPlaceholderText(
             translate("directories_placeholder", self.language)
         )
-        self.directory_edit.setToolTip(
-            translate("directories_tooltip", self.language)
-        )
+        self.directory_edit.setToolTip(translate("directories_tooltip", self.language))
         self.browse_button = QPushButton(translate("add_folder", self.language))
         self.browse_button.clicked.connect(self._browse_directory)
         self.scan_button = QPushButton(translate("update_library", self.language))
@@ -429,7 +425,9 @@ class RomLibraryDialog(QDialog):
 
     def _scan_failed(self, message: str) -> None:
         self._finish_scan()
-        self.status_label.setText(f"{translate('scan_failure', self.language)}: {message}")
+        self.status_label.setText(
+            f"{translate('scan_failure', self.language)}: {message}"
+        )
         QMessageBox.warning(self, translate("scan_failure", self.language), message)
 
     def _finish_scan(self) -> None:
