@@ -39,7 +39,9 @@ class FrontendPreferences:
     cpu_core: str = "rust"
     audio_sample_rate: int = 44_100
     audio_buffer_size: int = 512
-    audio_volume: int = 100
+    audio_volume: int = 80
+    audio_balance: int = 0
+    audio_queue_blocks: int = 4
     video_filter: str = "nearest"
     integer_scale: bool = True
     sprite_limit_enabled: bool = True
