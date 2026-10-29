@@ -1175,7 +1175,6 @@ mod tests {
         assert_eq!(&v.working_framebuffer[0..3], &[0, 0, 0]);
     }
 
-
     #[test]
     fn sms_mode4_r9_written_during_active_display_latches_after_active_period() {
         let mut v = SmsVdp::default();
@@ -1222,12 +1221,37 @@ mod tests {
         let mut status = 0x1F;
         let mut frame = vec![0; FRAME_SIZE];
 
-        render_scanline(&v.vram, &v.cram, &v.registers, &mut status, &mut frame, 209, true);
-        assert_eq!(&frame[(209 * SMS_VDP_WIDTH + 10) * 3..(209 * SMS_VDP_WIDTH + 10) * 3 + 3], &[255, 0, 0]);
-        assert_eq!(&frame[(209 * SMS_VDP_WIDTH + 30) * 3..(209 * SMS_VDP_WIDTH + 30) * 3 + 3], &[0, 0, 0]);
+        render_scanline(
+            &v.vram,
+            &v.cram,
+            &v.registers,
+            &mut status,
+            &mut frame,
+            209,
+            true,
+        );
+        assert_eq!(
+            &frame[(209 * SMS_VDP_WIDTH + 10) * 3..(209 * SMS_VDP_WIDTH + 10) * 3 + 3],
+            &[255, 0, 0]
+        );
+        assert_eq!(
+            &frame[(209 * SMS_VDP_WIDTH + 30) * 3..(209 * SMS_VDP_WIDTH + 30) * 3 + 3],
+            &[0, 0, 0]
+        );
 
-        render_scanline(&v.vram, &v.cram, &v.registers, &mut status, &mut frame, 210, true);
-        assert_eq!(&frame[(210 * SMS_VDP_WIDTH + 30) * 3..(210 * SMS_VDP_WIDTH + 30) * 3 + 3], &[255, 0, 0]);
+        render_scanline(
+            &v.vram,
+            &v.cram,
+            &v.registers,
+            &mut status,
+            &mut frame,
+            210,
+            true,
+        );
+        assert_eq!(
+            &frame[(210 * SMS_VDP_WIDTH + 30) * 3..(210 * SMS_VDP_WIDTH + 30) * 3 + 3],
+            &[255, 0, 0]
+        );
     }
 
     #[test]
