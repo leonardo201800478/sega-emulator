@@ -11,7 +11,7 @@ Este documento descreve a organização real dos crates Rust no commit de refer�
 | Caminho | Papel | Workspace raiz? | Estado e dependências |
 |---|---|---:|---|
 | `native/sg1000_core` (`sega-sg1000-core`) | Biblioteca standalone específica do SG-1000: memória, CPU Z80 e estrutura inicial de máquina | Sim | Parcial e incremental. Depende de `sega-z80-alu` e `sega-z80-bus`. Não equivale sozinho ao runtime integral usado pela aplicação Qt. |
-| `native/sms_core` (`sega-sms-core`) | Biblioteca de máquina específica do Master System | Sim | Inicial/parcial: configurações, imagem de cartucho e memória/mapa. CPU, I/O, VDP, áudio e scheduler ainda não estão implementados como runtime completo. Depende de `sega-z80-bus`. |
+| `native/sms_core` (`sega-sms-core`) | Biblioteca de máquina específica do Master System | Sim | Parcial: configurações, cartucho/memória e executor Z80 Rust ativo com ALU, contrato de barramento e trace temporal restrito. I/O, VDP, áudio e scheduler ainda não formam um runtime SMS completo. Depende de `sega-z80-bus`. |
 | `native/z80_alu` (`sega-z80-alu`) | Biblioteca compartilhada de primitivas ALU Z80 e executável de vetores | Sim | Consumida pelo SG-1000 e pela extensão experimental. Não é um runtime Z80 completo: não decodifica instruções nem modela ciclos/barramento. |
 | `native/z80_bus` (`sega-z80-bus`) | Contrato compartilhado de acesso à memória e portas para um Z80 | Sim | Dependência de SG-1000 e SMS. É hardware-neutral, mas a implementação de mapa e dispositivos pertence a cada máquina. Os valores padrão de portas são placeholders, não especificação física universal. |
 | `native/z80_core` (`sega-z80-core`) | Biblioteca Rust/PyO3, `cdylib`/ `rlib`, usada como adaptador obrigatório entre a UI Qt e o núcleo Rust consolidado | **Não** | Excluída explicitamente do workspace principal. Tem `Cargo.toml`, `Cargo.lock` e configuração Maturin próprios. Depende de `sega-z80-alu` e `sega-sg1000-core`; fornece integração Rust/Python para a máquina SG-1000, sem substituir a API de aplicação Python. |
@@ -125,3 +125,41 @@ O repositório possui uma entrada de diretório vazia `native/z80_alu/target` ap
 - Crates: manifestos em `native/{sg1000_core,sms_core,z80_alu,z80_bus,z80_core}/Cargo.toml`.
 - Integração Qt: `src/sega_emulator/machine/sg1000.py`, preferências/frontend Qt e `.github/workflows/qt-rust-z80-core.yml`.
 - Política de implementação: `docs/architecture.md`, `docs/adr/0007-rust-first-development-policy.md`.
+
+
+## Atualização do estado dos crates Z80/SMS — 2026-10-29
+
+A descrição inicial de `native/sms_core` como contendo apenas configuração/cartucho/memória está desatualizada para o SHA atual. O crate contém o executor Z80 Rust ativo do SMS, ALU integrada, contrato de barramento e instrumentação temporal limitada; isso ainda não equivale a uma máquina SMS integral nem à validação temporal completa. `native/z80_core` permanece fora do workspace raiz e deve ser tratado como caminho separado, não como um segundo runtime de hardware ativo por padrão.
+
+
+
+## Estado consolidado após as PRs #227–#229 — 2026-10-29
+
+**SHA de `main` verificado após os merges:** `a662b7256ed5b92d06fd33875e4031b932e25945`.  
+**CI da `main` nesse SHA:** PASS — [workflow 40792001983](https://github.com/leonardo201800478/sega-emulator/actions/runs/40792001983).  
+**Limite:** o CI verde comprova apenas os checks executados pelo workflow; não certifica completude global do Z80 nem fidelidade física/ciclo a ciclo.
+
+### Mudanças integradas
+
+- **PR #227**, candidato `d4447db5f0dce9a2ecde9e50c97f39b10ce8da17`, merge `28da159634aa60b9a804f3bd7f781ccf82f3e1cf`: trace por T-state para LDI/LDD/LDIR/LDDR e CPI/CPD/CPIR/CPDR sem prefixos DD/FD, além de trace M-cycle associado. Validação de plataforma no candidato: [run 40782245521](https://github.com/leonardo201800478/sega-emulator/actions/runs/40782245521) — PASS.
+- **PR #229**, candidato `56cf4743bf0f05660f21a798de72e19afcfab34a`, merge `7b6fef3300c753c2b089f6b0dd287f8120b9f93f`: testes determinísticos para JR, JP, CALL, RET e DJNZ condicionais, caminhos tomados/não tomados, fronteiras de deslocamento, wraparound de PC/SP, ordem de acesso à pilha e T-states nominais; correção de `RET cc` para atualizar WZ/MEMPTR com o endereço de retorno somente quando a condição é tomada. [Fast Validation](https://github.com/leonardo201800478/sega-emulator/actions/runs/40791517040), [CI](https://github.com/leonardo201800478/sega-emulator/actions/runs/40791516982) e [SMS Z80 Platform Validation](https://github.com/leonardo201800478/sega-emulator/actions/runs/40791516943) — PASS no candidato exato.
+- **PR #228**, candidato documental `a2c0850c20232c95a5210a39fbd53cc7aeb5101e`, merge `a662b7256ed5b92d06fd33875e4031b932e25945`: auditoria de continuidade incorporada; [CI documental](https://github.com/leonardo201800478/sega-emulator/actions/runs/40791436529) — PASS.
+
+### Estado técnico depois dos merges
+
+| Área | Estado | Limite/evidência |
+|---|---|---|
+| Executor Z80 Rust em `native/sms_core` | IMPLEMENTED | Caminho ativo consolidado; não significa que todos os estados de todas as instruções estejam provados. |
+| Testes de controle de fluxo condicional | IMPLEMENTED; SHORT_PASS no candidato #229 | Cobertura adicionada às famílias JR/JP/CALL/RET/DJNZ e aos limites declarados; não é prova combinatória de todos os estados. |
+| Trace ED de bloco | IMPLEMENTED; SHORT_PASS no candidato #227 | Restrito às oito instruções indicadas e ao perfil de observação documentado. |
+| Classificação dos espaços de opcode | IMPLEMENTED | Enumeração/classificação não equivale à correção semântica integral. |
+| Semântica global, flags não documentadas, Q/P, WZ, interrupções e aliases | INCOMPLETO / auditoria contínua | Exigir vetores discriminantes e proveniência explicitada por família. |
+| Integração temporal com scheduler/dispositivos SMS | INTEGRATION_PENDING | A instrumentação atual não controla o scheduler nem representa todos os pinos/esperas. |
+| Fidelidade ciclo a ciclo integral | TEMPORAL_PASS NÃO DECLARADO | Não há evidência para afirmar cobertura temporal completa ou equivalência física. |
+
+### Proveniência e regras de interpretação
+
+O corpus SingleStepTests/Z80 fixado em `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7` tem ancestralidade no núcleo Z80 do Ares; é útil para regressão, mas não é um oráculo independente de hardware. Separar sempre comportamento descrito pelo manual ZiLOG, comportamento documentado por referências de terceiros, observação em emuladores e hipótese ainda não comprovada. Não promover um estado de validação com base apenas no número de opcodes enumerados ou no CI geral.
+
+
+Para validar o workspace principal, usar os comandos Rust registrados acima e verificar o SHA exato. Como `native/z80_core` é excluído do workspace, sua compilação/testes e integração PyO3/Maturin exigem checks explícitos próprios quando houver alterações nele. Nenhuma das PRs #227–#229 justifica ativar um segundo runtime Python de hardware.

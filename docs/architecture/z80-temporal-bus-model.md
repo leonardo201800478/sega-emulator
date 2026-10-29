@@ -1,7 +1,7 @@
 # Contrato temporal do barramento Z80 — Fase 10
 
 **Estado:** contrato definido; trace M-cycle-level e amostras por T-state implementados para as oito instruções ED de transferência/comparação sem prefixos DD/FD. A amostragem cobre endereço/dados e RD/WR/MREQ/IORQ, com fase de refresh inferida; waits, todos os pinos Z80 e scheduler permanecem pendentes.  
-**Base auditada:** main em 05cb8259dfaaea5844c3290945301c88ec0fdc54.  
+**Base auditada originalmente:** main em `05cb8259dfaaea5844c3290945301c88ec0fdc54`; consulte a atualização pós-merge ao final para o estado corrente.  
 **Escopo:** modelo determinístico de T-states, ciclos de máquina, acessos ao barramento, waits e eventos de interrupção.  
 **Não declarar:** TEMPORAL_PASS até que os traces sejam produzidos pelo runtime e comparados com uma referência fixada.
 
@@ -93,3 +93,41 @@ O fechamento funcional das instruções de bloco e os testes externos de instru�
 - ZiLOG, *Z80 CPU User Manual*, UM008011-0816, 08/2016, pp. 7–10, 130, 132, 138–140.
 - SingleStepTests/Z80, corpus fixado em ebe1875d48f374bcfd4b505d8eb8ee751568b5f7, README e arquivos de traces sob v1/.
 - native/z80_bus/src/lib.rs e native/sms_core/src/cpu.rs no baseline identificado no cabeçalho.
+
+
+## Atualização de estado — pós-merge #227
+
+A Fase 10 descrita acima deve ser lida como uma fatia limitada, não como modelo temporal completo. A PR #227 integrou trace por T-state para oito instruções ED de transferência/comparação sem DD/FD, com endereço/dados e RD/WR/MREQ/IORQ no perfil definido pelo teste. O trace é passivo: não avança o scheduler, não injeta wait states e não modela todos os pinos Z80 nem as transições sub-T-state do manual.
+
+
+
+## Estado consolidado após as PRs #227–#229 — 2026-10-29
+
+**SHA de `main` verificado após os merges:** `a662b7256ed5b92d06fd33875e4031b932e25945`.  
+**CI da `main` nesse SHA:** PASS — [workflow 40792001983](https://github.com/leonardo201800478/sega-emulator/actions/runs/40792001983).  
+**Limite:** o CI verde comprova apenas os checks executados pelo workflow; não certifica completude global do Z80 nem fidelidade física/ciclo a ciclo.
+
+### Mudanças integradas
+
+- **PR #227**, candidato `d4447db5f0dce9a2ecde9e50c97f39b10ce8da17`, merge `28da159634aa60b9a804f3bd7f781ccf82f3e1cf`: trace por T-state para LDI/LDD/LDIR/LDDR e CPI/CPD/CPIR/CPDR sem prefixos DD/FD, além de trace M-cycle associado. Validação de plataforma no candidato: [run 40782245521](https://github.com/leonardo201800478/sega-emulator/actions/runs/40782245521) — PASS.
+- **PR #229**, candidato `56cf4743bf0f05660f21a798de72e19afcfab34a`, merge `7b6fef3300c753c2b089f6b0dd287f8120b9f93f`: testes determinísticos para JR, JP, CALL, RET e DJNZ condicionais, caminhos tomados/não tomados, fronteiras de deslocamento, wraparound de PC/SP, ordem de acesso à pilha e T-states nominais; correção de `RET cc` para atualizar WZ/MEMPTR com o endereço de retorno somente quando a condição é tomada. [Fast Validation](https://github.com/leonardo201800478/sega-emulator/actions/runs/40791517040), [CI](https://github.com/leonardo201800478/sega-emulator/actions/runs/40791516982) e [SMS Z80 Platform Validation](https://github.com/leonardo201800478/sega-emulator/actions/runs/40791516943) — PASS no candidato exato.
+- **PR #228**, candidato documental `a2c0850c20232c95a5210a39fbd53cc7aeb5101e`, merge `a662b7256ed5b92d06fd33875e4031b932e25945`: auditoria de continuidade incorporada; [CI documental](https://github.com/leonardo201800478/sega-emulator/actions/runs/40791436529) — PASS.
+
+### Estado técnico depois dos merges
+
+| Área | Estado | Limite/evidência |
+|---|---|---|
+| Executor Z80 Rust em `native/sms_core` | IMPLEMENTED | Caminho ativo consolidado; não significa que todos os estados de todas as instruções estejam provados. |
+| Testes de controle de fluxo condicional | IMPLEMENTED; SHORT_PASS no candidato #229 | Cobertura adicionada às famílias JR/JP/CALL/RET/DJNZ e aos limites declarados; não é prova combinatória de todos os estados. |
+| Trace ED de bloco | IMPLEMENTED; SHORT_PASS no candidato #227 | Restrito às oito instruções indicadas e ao perfil de observação documentado. |
+| Classificação dos espaços de opcode | IMPLEMENTED | Enumeração/classificação não equivale à correção semântica integral. |
+| Semântica global, flags não documentadas, Q/P, WZ, interrupções e aliases | INCOMPLETO / auditoria contínua | Exigir vetores discriminantes e proveniência explicitada por família. |
+| Integração temporal com scheduler/dispositivos SMS | INTEGRATION_PENDING | A instrumentação atual não controla o scheduler nem representa todos os pinos/esperas. |
+| Fidelidade ciclo a ciclo integral | TEMPORAL_PASS NÃO DECLARADO | Não há evidência para afirmar cobertura temporal completa ou equivalência física. |
+
+### Proveniência e regras de interpretação
+
+O corpus SingleStepTests/Z80 fixado em `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7` tem ancestralidade no núcleo Z80 do Ares; é útil para regressão, mas não é um oráculo independente de hardware. Separar sempre comportamento descrito pelo manual ZiLOG, comportamento documentado por referências de terceiros, observação em emuladores e hipótese ainda não comprovada. Não promover um estado de validação com base apenas no número de opcodes enumerados ou no CI geral.
+
+
+**Gate temporal ainda aberto:** ampliar o modelo a outras instruções somente com critérios e vetores fixos; diferenciar amostras de barramento de T-states nominais; incluir waits, refresh/M1, I/O, acknowledge de interrupção e ordenação de eventos quando o contrato e as fontes estiverem definidos; testar que a instrumentação desativada não altera o estado funcional. Não declarar `TEMPORAL_PASS` nesta fase.
