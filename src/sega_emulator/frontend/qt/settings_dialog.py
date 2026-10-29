@@ -379,7 +379,9 @@ class SettingsDialog(QDialog):
         )
         self.volume.setValue(defaults.audio_volume)
         self.balance.setValue(defaults.audio_balance)
-        self.queue_blocks.setCurrentIndex(self.queue_blocks.findData(defaults.audio_queue_blocks))
+        self.queue_blocks.setCurrentIndex(
+            self.queue_blocks.findData(defaults.audio_queue_blocks)
+        )
         self.video_filter.setCurrentIndex(
             self.video_filter.findData(defaults.video_filter)
         )
