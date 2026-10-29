@@ -7,7 +7,10 @@
 //! independent vectors and bus-level validation.
 
 use crate::alu::{adc8, add8, and8, cp8, or8, sbc8, sub8, xor8};
-use crate::bus::{CpuBus, Z80BusEvent, Z80BusEventKind, Z80CpuSnapshot, Z80InstructionOutcome, Z80InstructionTrace, Z80TStatePhase, Z80TStateSample};
+use crate::bus::{
+    CpuBus, Z80BusEvent, Z80BusEventKind, Z80CpuSnapshot, Z80InstructionOutcome,
+    Z80InstructionTrace, Z80TStatePhase, Z80TStateSample,
+};
 
 const FLAG_C: u8 = 0x01;
 const FLAG_N: u8 = 0x02;
