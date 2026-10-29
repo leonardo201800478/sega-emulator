@@ -260,7 +260,7 @@ class RomLibraryDialog(QDialog):
             button = QToolButton()
             button.setText(
                 label
-                if system == "sg1000"
+                if system in {"sg1000", "master_system"}
                 else f"{label}\n{translate('planned', self.language)}"
             )
             button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
