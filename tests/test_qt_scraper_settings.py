@@ -49,7 +49,9 @@ def test_translation_falls_back_to_portuguese_for_unknown_language() -> None:
     assert translate("missing_key", "unknown") == "missing_key"
 
 
-def test_scraper_dialog_exposes_three_providers_and_local_only(qt_app, settings) -> None:
+def test_scraper_dialog_exposes_three_providers_and_local_only(
+    qt_app, settings
+) -> None:
     dialog = ScraperSettingsDialog(settings)
     values = [
         dialog.provider_combo.itemData(index)
