@@ -773,6 +773,10 @@ mod tests {
             NativeWasapiOutput::new(44_100, 512, 0),
             Err(AudioOutputError::InvalidQueueCapacity)
         ));
+        assert!(matches!(
+            NativeWasapiOutput::new_with_balance(44_100, 512, 4, 101),
+            Err(AudioOutputError::InvalidBalance)
+        ));
     }
 
     #[test]
@@ -792,6 +796,10 @@ mod tests {
         assert!(matches!(
             NativeXAudio2Output::new(44_100, 512, 0),
             Err(AudioOutputError::InvalidQueueCapacity)
+        ));
+        assert!(matches!(
+            NativeXAudio2Output::new_with_balance(44_100, 512, 4, -101),
+            Err(AudioOutputError::InvalidBalance)
         ));
     }
 }
