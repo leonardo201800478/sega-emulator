@@ -67,6 +67,106 @@ pub struct Z80TStateSample {
     pub iorq: bool,
 }
 
+/// Compact, complete architectural snapshot emitted around one CPU step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Z80CpuSnapshot {
+    pub af: u16,
+    pub bc: u16,
+    pub de: u16,
+    pub hl: u16,
+    pub af_alt: u16,
+    pub bc_alt: u16,
+    pub de_alt: u16,
+    pub hl_alt: u16,
+    pub ix: u16,
+    pub iy: u16,
+    pub pc: u16,
+    pub sp: u16,
+    pub i: u8,
+    pub r: u8,
+    pub iff1: bool,
+    pub iff2: bool,
+    pub interrupt_mode: u8,
+    pub wz: u16,
+    pub ei_delay: u8,
+    pub nmi_pending: bool,
+    pub int_pending: Option<u8>,
+    pub q: u8,
+    pub p: bool,
+    pub halted: bool,
+    pub total_tstates: u64,
+}
+
+/// Outcome captured by the instruction diagnostic stream.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Z80InstructionOutcome {
+    Completed,
+    UnsupportedOpcode { opcode: u8, address: u16 },
+}
+
+/// Deterministic per-step record. It describes architectural state, not pin-level
+/// timing; detailed bus timing remains available only for explicitly instrumented
+/// instruction families.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Z80InstructionTrace {
+    /// One-based step sequence since reset, including HALT and interrupt entry.
+    pub instruction_index: u64,
+    /// Opcode/prefix bytes fetched by the decoder. Immediate operands are not included.
+    pub opcode_bytes: [u8; 8],
+    pub opcode_len: u8,
+    pub opcode_bytes_truncated: bool,
+    /// Aggregate nominal T-states, or None when execution returned an error.
+    pub tstates: Option<u32>,
+    pub outcome: Z80InstructionOutcome,
+    pub before: Z80CpuSnapshot,
+    pub after: Z80CpuSnapshot,
+}
+
+impl Z80InstructionTrace {
+    /// Write one deterministic JSON Lines record without adding a runtime dependency.
+    pub fn write_json_line(&self, out: &mut impl core::fmt::Write) -> core::fmt::Result {
+        write!(out, "{\"instruction_index\":{},\"opcode_bytes\":[", self.instruction_index)?;
+        for (index, byte) in self.opcode_bytes[..usize::from(self.opcode_len)].iter().enumerate() {
+            if index != 0 {
+                out.write_str(",")?;
+            }
+            write!(out, "\"{byte:02X}\"")?;
+        }
+        let outcome = match self.outcome {
+            Z80InstructionOutcome::Completed => "\"completed\"".to_owned(),
+            Z80InstructionOutcome::UnsupportedOpcode { opcode, address } => {
+                format!("{{\"kind\":\"unsupported_opcode\",\"opcode\":\"{opcode:02X}\",\"address\":{address}}}")
+            }
+        };
+        write!(
+            out,
+            "],\"opcode_bytes_truncated\":{},\"tstates\":{},\"outcome\":{},\"before\":",
+            self.opcode_bytes_truncated,
+            self.tstates.map_or_else(|| "null".to_owned(), |v| v.to_string()),
+            outcome
+        )?;
+        write_snapshot_json(out, self.before)?;
+        out.write_str(",\"after\":")?;
+        write_snapshot_json(out, self.after)?;
+        out.write_str("}")
+    }
+}
+
+fn write_snapshot_json(
+    out: &mut impl core::fmt::Write,
+    state: Z80CpuSnapshot,
+) -> core::fmt::Result {
+    write!(
+        out,
+        "{{\"af\":{},\"bc\":{},\"de\":{},\"hl\":{},\"af_alt\":{},\"bc_alt\":{},\"de_alt\":{},\"hl_alt\":{},\"ix\":{},\"iy\":{},\"pc\":{},\"sp\":{},\"i\":{},\"r\":{},\"iff1\":{},\"iff2\":{},\"interrupt_mode\":{},\"wz\":{},\"ei_delay\":{},\"nmi_pending\":{},\"int_pending\":{},\"q\":{},\"p\":{},\"halted\":{},\"total_tstates\":{}}}",
+        state.af, state.bc, state.de, state.hl, state.af_alt, state.bc_alt, state.de_alt, state.hl_alt,
+        state.ix, state.iy, state.pc, state.sp, state.i, state.r, state.iff1, state.iff2,
+        state.interrupt_mode, state.wz, state.ei_delay, state.nmi_pending,
+        state.int_pending.map_or_else(|| "null".to_owned(), |v| v.to_string()),
+        state.q, state.p, state.halted, state.total_tstates
+    )
+}
+
 /// Memory and port access available to a Z80 implementation.
 ///
 /// Default port behavior represents an unimplemented/open bus placeholder,
@@ -87,6 +187,15 @@ pub trait CpuBus {
         false
     }
 
+    /// Opt in to deterministic per-instruction architectural diagnostics.
+    /// Disabled by default; the CPU does not allocate or format logs itself.
+    fn instruction_trace_enabled(&self) -> bool {
+        false
+    }
+
+    /// Receive one record after each outer CPU step when diagnostics are enabled.
+    fn observe_instruction_trace(&mut self, _trace: Z80InstructionTrace) {}
+
     /// Observe an instrumented timing event. The default is allocation-free and
     /// has no effect on emulation; this hook is not yet emitted by every opcode.
     fn observe_timing_event(&mut self, _event: Z80BusEvent) {}
@@ -97,7 +206,7 @@ pub trait CpuBus {
 
 #[cfg(test)]
 mod tests {
-    use super::{CpuBus, Z80BusEvent, Z80BusEventKind};
+    use super::{CpuBus, Z80BusEvent, Z80BusEventKind, Z80CpuSnapshot, Z80InstructionOutcome, Z80InstructionTrace};
 
     struct PlainBus;
 
@@ -107,6 +216,32 @@ mod tests {
         }
 
         fn write_memory(&mut self, _address: u16, _value: u8) {}
+    }
+
+    #[test]
+    fn instruction_trace_json_is_single_line_and_keeps_missing_values_null() {
+        let state = Z80CpuSnapshot {
+            af: 0x1234, bc: 0, de: 0, hl: 0, af_alt: 0, bc_alt: 0, de_alt: 0, hl_alt: 0,
+            ix: 0, iy: 0, pc: 0xC002, sp: 0xFFFF, i: 0, r: 1, iff1: false, iff2: false,
+            interrupt_mode: 1, wz: 0, ei_delay: 0, nmi_pending: false, int_pending: None,
+            q: 0, p: false, halted: false, total_tstates: 7,
+        };
+        let trace = Z80InstructionTrace {
+            instruction_index: 1,
+            opcode_bytes: [0x3E, 0, 0, 0, 0, 0, 0, 0],
+            opcode_len: 1,
+            opcode_bytes_truncated: false,
+            tstates: Some(7),
+            outcome: Z80InstructionOutcome::Completed,
+            before: Z80CpuSnapshot { pc: 0xC000, total_tstates: 0, ..state },
+            after: state,
+        };
+        let mut line = String::new();
+        trace.write_json_line(&mut line).expect("format JSONL");
+        assert!(line.starts_with("{\"instruction_index\":1,"));
+        assert!(line.contains("\"opcode_bytes\":[\"3E\"]"));
+        assert!(line.contains("\"int_pending\":null"));
+        assert!(!line.contains('\n'));
     }
 
     #[test]
