@@ -63,7 +63,10 @@ def _runtime_diagnostic(machine: object, rom_sha256: str) -> dict[str, object]:
     native = getattr(machine, "native_machine", None)
     diagnostic["backend_effective"] = (
         "rust_native_machine"
-        if native is not None and type(native).__name__ in {"NativeSG1000Machine", "NativeSMSMachine"}
+        if native is not None and type(native).__name__ in {
+            "NativeSG1000Machine",
+            "NativeSMSMachine",
+        }
         else "unexpected_backend_state"
     )
     diagnostic["native_machine_type"] = (
@@ -90,7 +93,9 @@ def _runtime_diagnostic(machine: object, rom_sha256: str) -> dict[str, object]:
         diagnostic["native_instruction_count"] = native.total_instructions
         diagnostic["native_tstates"] = native.total_tstates
         diagnostic["native_vdp_frame"] = (
-            native.frame_number if hasattr(native, "frame_number") else native.vdp.frame_number
+            native.frame_number
+            if hasattr(native, "frame_number")
+            else native.vdp.frame_number
         )
     return diagnostic
 
@@ -349,7 +354,8 @@ def run(initial_path: Path | None = None) -> None:
                 machine.set_controller_actions(player, actions[player])
             else:
                 machine.set_joystick(
-                    player, joystick_value(actions[player].intersection(JOYSTICK_ACTIONS))
+                    player,
+                    joystick_value(actions[player].intersection(JOYSTICK_ACTIONS)),
                 )
         hold_pressed = any("hold" in actions[player] for player in (1, 2))
         if active_system == "sg1000" and hold_pressed and not hold_was_pressed:
@@ -599,24 +605,40 @@ def run(initial_path: Path | None = None) -> None:
                 window,
                 "Abrir ROM do sistema selecionado",
                 str(settings.value("last_directory", str(Path.cwd()))),
-                "ROMs Master System (*.sms *.rom *.bin *.zip);;ROMs SG-1000 (*.sg *.rom *.bin *.zip);;Todos os arquivos (*)",
+                "ROMs Master System (*.sms *.rom *.bin *.zip);;"
+                "ROMs SG-1000 (*.sg *.rom *.bin *.zip);;Todos os arquivos (*)",
             )
         if not path:
             return
-        requested_system = system or ("master_system" if Path(path).suffix.casefold() == ".sms" else active_system)
+        requested_system = system or (
+            "master_system"
+            if Path(path).suffix.casefold() == ".sms"
+            else active_system
+        )
         if requested_system not in {"sg1000", "master_system"}:
-            QMessageBox.information(window, "Sistema ainda não integrado", "Este sistema ainda não pode executar ROMs.")
+            QMessageBox.information(
+                window,
+                "Sistema ainda não integrado",
+                "Este sistema ainda não pode executar ROMs.",
+            )
             return
         try:
             try:
-                candidate = load_sms_rom(path) if requested_system == "master_system" else load_rom(path)
+                candidate = (
+                    load_sms_rom(path)
+                    if requested_system == "master_system"
+                    else load_rom(path)
+                )
             except ValueError as error:
                 if Path(path).suffix.lower() != ".zip" or "várias ROMs" not in str(
                     error
                 ):
                     raise
                 if requested_system == "master_system":
-                    raise ValueError("O ZIP contém várias ROMs; extraia ou selecione uma ROM SMS individual.")
+                    raise ValueError(
+                        "O ZIP contém várias ROMs; extraia ou selecione "
+                        "uma ROM SMS individual."
+                    )
                 members = list_rom_members(path)
                 selected, accepted = QInputDialog.getItem(
                     window,
@@ -910,7 +932,12 @@ def run(initial_path: Path | None = None) -> None:
     def start_vgm_recording() -> None:
         nonlocal vgm_output_path
         if active_system == "master_system":
-            QMessageBox.information(window, "Gravação VGM", "A captura VGM temporizada do PSG ainda não está integrada ao núcleo SMS.")
+            QMessageBox.information(
+                window,
+                "Gravação VGM",
+                "A captura VGM temporizada do PSG ainda não está integrada "
+                "ao núcleo SMS.",
+            )
             return
         if machine is None or loaded is None:
             QMessageBox.information(
@@ -1307,7 +1334,12 @@ def run(initial_path: Path | None = None) -> None:
             return
 
         if active_system != "sg1000":
-            QMessageBox.information(window, "Snapshot VDP", "O snapshot detalhado ainda está disponível apenas para o VDP do SG-1000.")
+            QMessageBox.information(
+                window,
+                "Snapshot VDP",
+                "O snapshot detalhado ainda está disponível apenas para "
+                "o VDP do SG-1000.",
+            )
             return
         vdp = machine.vdp
         attr_base = (vdp.registers[5] & 0x7F) << 7
