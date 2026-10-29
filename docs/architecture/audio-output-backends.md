@@ -23,7 +23,7 @@ A callback de áudio não deve executar emulação, acessar a interface gráfica
 
 A Qt cria e controla a fachada PyO3; a inicialização COM, enumeração do dispositivo padrão, stream compartilhado event-driven, fila PCM limitada, preenchimento de underruns com silêncio e encerramento ocorrem em Rust (native/audio_output). A taxa de amostragem e o tamanho de buffer são configurações de saída e não alteram o clock do PSG.
 
-**Limites de validação:** esta implementação ainda não foi certificada em dispositivo Windows real. A política atual descarta o novo bloco quando a fila limitada está cheia; a contagem de blocos descartados e underruns é mantida no backend Rust. O valor de buffer configurado é uma solicitação de período, sujeito ao mínimo aceito pelo dispositivo. Reconexão/hot-plug, latência efetiva, estabilidade em sessões longas e fallback explícito ainda precisam de testes no Windows. O backend não executa emulação nem chama Python na thread de áudio.
+**Limites de validação:** esta implementação ainda não foi certificada em dispositivo Windows real. A política atual descarta o novo bloco quando a fila limitada está cheia; a contagem de blocos descartados e underruns é mantida no backend Rust. O tamanho configurado é uma solicitação de duração do buffer; no modo compartilhado, o Windows determina o período efetivo e a latência real ainda não foi medida. Reconexão/hot-plug, latência efetiva, estabilidade em sessões longas e fallback explícito ainda precisam de testes no Windows. O backend não executa emulação nem chama Python na thread de áudio.
 
 ### XAudio2 (backend nativo Rust — primeira implementação)
 
