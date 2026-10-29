@@ -83,7 +83,7 @@ jobs:
       - name: Build and install native Rust extension
         shell: bash
         run: |
-          maturin build --manifest-path native/z80_core/Cargo.toml --release --features python-extension --out native/z80_core/dist
+          maturin build --locked --manifest-path native/z80_core/Cargo.toml --release --features python-extension --out native/z80_core/dist
           python -m pip install native/z80_core/dist/*.whl
       - name: Run tests
         run: python -m pytest
