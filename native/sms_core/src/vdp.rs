@@ -1336,7 +1336,6 @@ mod tests {
         assert_eq!(v.read_v_counter(), 0xD5);
     }
 
-
     #[test]
     fn pal_224_line_counter_has_documented_wrap_sequence() {
         let mut v = SmsVdp::new(VideoStandard::Pal, SpriteLimitMode::HardwareLimit);
