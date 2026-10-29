@@ -46,6 +46,12 @@ def test_rom_browser_uses_fixed_wrapping_grid_cells(qt_app, settings):
     assert dialog.rom_list.isWrapping() is True
     assert dialog.rom_list.gridSize() == QSize(184, 244)
     assert dialog.rom_list.iconSize() == QSize(148, 184)
-    assert dialog.rom_list.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-    assert dialog.rom_list.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAsNeeded
+    assert (
+        dialog.rom_list.horizontalScrollBarPolicy()
+        == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+    )
+    assert (
+        dialog.rom_list.verticalScrollBarPolicy()
+        == Qt.ScrollBarPolicy.ScrollBarAsNeeded
+    )
     dialog.close()
