@@ -2,18 +2,23 @@
 
 Run from the repository root after installing the Qt/native extension:
     python tools/validate_native_audio.py --backend both
+    python tools/validate_native_audio.py --backend both --seconds 60 --trace-csv audio-timing.csv
 
 The low-volume tone validates host output only; it does not execute or modify
-emulated hardware state.
+emulated hardware state. Timing rows measure the Python PCM producer cadence and
+write-call duration, not device presentation latency or emulated CPU T-states.
 """
 
 from __future__ import annotations
 
 import argparse
+import csv
 import math
+import statistics
 import struct
 import sys
 import time
+from pathlib import Path
 
 from sega_emulator.frontend.qt.wasapi_audio import NativeAudioOutput
 
@@ -34,6 +39,34 @@ def _tone_block(
     return struct.pack(f"<{count}h", *samples)
 
 
+def _percentile(values: list[float], percentile: float) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    index = min(len(ordered) - 1, math.ceil(percentile * len(ordered)) - 1)
+    return ordered[max(0, index)]
+
+
+def _write_trace(path: Path, rows: list[dict[str, int | float | str]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fields = (
+        "backend",
+        "cycle",
+        "sample_index",
+        "scheduled_start_s",
+        "actual_start_s",
+        "start_interval_ms",
+        "schedule_lateness_ms",
+        "pcm_generation_ms",
+        "write_pcm_ms",
+        "producer_work_ms",
+    )
+    with path.open("w", newline="", encoding="utf-8") as trace_file:
+        writer = csv.DictWriter(trace_file, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def _run_backend(
     backend: str,
     sample_rate: int,
@@ -41,10 +74,13 @@ def _run_backend(
     queue_blocks: int,
     seconds: int,
     frequency: float,
+    trace_csv: Path | None,
 ) -> bool:
+    block_period = buffer_size / sample_rate
     print(
         f"\nBackend={backend}; taxa solicitada={sample_rate} Hz; "
-        f"bloco={buffer_size} amostras; fila={queue_blocks}; duração={seconds}s"
+        f"bloco={buffer_size} amostras ({block_period * 1000:.3f} ms); "
+        f"fila={queue_blocks}; duração={seconds}s"
     )
     try:
         output = NativeAudioOutput(
@@ -60,15 +96,70 @@ def _run_backend(
 
     started = time.monotonic()
     sample_index = 0
+    cycle = 0
+    previous_cycle_start: float | None = None
     failure: str | None = None
     underruns = 0
     dropped = 0
+    rows: list[dict[str, int | float | str]] = []
+    intervals_ms: list[float] = []
+    lateness_ms: list[float] = []
+    generation_ms: list[float] = []
+    write_ms: list[float] = []
+    work_ms: list[float] = []
+    late_cycles = 0
+
     try:
-        while time.monotonic() - started < seconds:
+        while True:
+            scheduled_start = started + sample_index / sample_rate
+            now = time.monotonic()
+            if now < scheduled_start:
+                time.sleep(scheduled_start - now)
+            cycle_start = time.monotonic()
+            if cycle_start - started >= seconds:
+                break
+
+            lateness = max(0.0, cycle_start - scheduled_start)
+            if lateness > block_period:
+                late_cycles += 1
+            if previous_cycle_start is not None:
+                intervals_ms.append((cycle_start - previous_cycle_start) * 1000.0)
+
+            generation_started = time.monotonic()
             pcm = _tone_block(sample_rate, frequency, sample_index, buffer_size)
+            generation_duration = time.monotonic() - generation_started
+
+            write_started = time.monotonic()
             output.write_pcm(pcm)
+            write_duration = time.monotonic() - write_started
+            work_duration = cycle_start * 0 + generation_duration + write_duration
+
+            generation_ms.append(generation_duration * 1000.0)
+            write_ms.append(write_duration * 1000.0)
+            work_ms.append(work_duration * 1000.0)
+            lateness_ms.append(lateness * 1000.0)
+            rows.append(
+                {
+                    "backend": backend,
+                    "cycle": cycle,
+                    "sample_index": sample_index,
+                    "scheduled_start_s": scheduled_start - started,
+                    "actual_start_s": cycle_start - started,
+                    "start_interval_ms": (
+                        (cycle_start - previous_cycle_start) * 1000.0
+                        if previous_cycle_start is not None
+                        else 0.0
+                    ),
+                    "schedule_lateness_ms": lateness * 1000.0,
+                    "pcm_generation_ms": generation_duration * 1000.0,
+                    "write_pcm_ms": write_duration * 1000.0,
+                    "producer_work_ms": work_duration * 1000.0,
+                }
+            )
+            previous_cycle_start = cycle_start
             sample_index += buffer_size
-            time.sleep(buffer_size / sample_rate)
+            cycle += 1
+
         underruns = output.underrun_callbacks
         dropped = output.dropped_blocks
     except Exception as exc:
@@ -79,15 +170,54 @@ def _run_backend(
         close_failure = f"FAIL: encerramento: {type(exc).__name__}: {exc}"
         failure = f"{failure}\n{close_failure}" if failure else close_failure
 
+    elapsed = time.monotonic() - started
+    if trace_csv is not None and rows:
+        try:
+            trace_path = trace_csv
+            if trace_csv.stem and len((trace_csv.parent / f"{trace_csv.stem}_{backend}{trace_csv.suffix}").name) > 0:
+                trace_path = trace_csv.with_name(
+                    f"{trace_csv.stem}_{backend}{trace_csv.suffix}"
+                )
+            _write_trace(trace_path, rows)
+            print(f"Trace de ciclos salvo em: {trace_path}")
+        except OSError as exc:
+            failure = f"{failure}\nFAIL: gravação do trace CSV: {exc}" if failure else f"FAIL: gravação do trace CSV: {exc}"
+
     if failure:
         print(failure)
         return False
 
-    elapsed = time.monotonic() - started
+    effective_rate = sample_index / elapsed if elapsed > 0 else 0.0
     print(
         f"Saída solicitada: {output.sample_rate} Hz / {output.buffer_size} amostras; "
-        f"tempo decorrido={elapsed:.2f}s; underruns={underruns}; "
-        f"blocos descartados={dropped}"
+        f"tempo decorrido={elapsed:.2f}s; ciclos={cycle}; "
+        f"amostras produzidas={sample_index}; taxa média do produtor={effective_rate:.1f} amostras/s"
+    )
+    print(
+        f"Underruns={underruns}; blocos descartados={dropped}; "
+        f"ciclos atrasados >1 bloco={late_cycles}/{cycle}"
+    )
+    print(
+        "Intervalo entre ciclos (ms): "
+        f"mediana={statistics.median(intervals_ms) if intervals_ms else 0.0:.3f}; "
+        f"p95={_percentile(intervals_ms, 0.95):.3f}; "
+        f"p99={_percentile(intervals_ms, 0.99):.3f}; "
+        f"máximo={max(intervals_ms, default=0.0):.3f}"
+    )
+    print(
+        "Atraso de início vs. agenda (ms): "
+        f"mediana={statistics.median(lateness_ms) if lateness_ms else 0.0:.3f}; "
+        f"p95={_percentile(lateness_ms, 0.95):.3f}; "
+        f"p99={_percentile(lateness_ms, 0.99):.3f}; "
+        f"máximo={max(lateness_ms, default=0.0):.3f}"
+    )
+    print(
+        "Tempo por ciclo (ms): "
+        f"geração PCM p95={_percentile(generation_ms, 0.95):.3f}; "
+        f"write_pcm p95={_percentile(write_ms, 0.95):.3f}; "
+        f"trabalho total p95={_percentile(work_ms, 0.95):.3f}; "
+        f"máximo total={max(work_ms, default=0.0):.3f}; "
+        f"período-alvo={block_period * 1000:.3f}"
     )
     print("Confirme auditivamente que o tom foi reproduzido sem cortes ou distorção.")
     return True
@@ -103,6 +233,12 @@ def main() -> int:
     parser.add_argument("--buffer-size", type=int, default=512)
     parser.add_argument("--queue-blocks", type=int, default=4)
     parser.add_argument("--frequency", type=float, default=440.0)
+    parser.add_argument(
+        "--trace-csv",
+        type=Path,
+        default=None,
+        help="salva os tempos por ciclo em CSV; com backend=both cria um arquivo por backend",
+    )
     args = parser.parse_args()
 
     if not 1 <= args.seconds <= 300:
@@ -114,7 +250,7 @@ def main() -> int:
     if args.queue_blocks not in {2, 4, 8}:
         parser.error("--queue-blocks deve ser 2, 4 ou 8")
     if not 20.0 <= args.frequency <= 10_000.0:
-        parser.error("--frequency deve estar entre 20 e 10000 Hz")
+        parser.error("--frequency deve estar entre 20 and 10000 Hz")
 
     backends = ("wasapi", "xaudio2") if args.backend == "both" else (args.backend,)
     results = [
@@ -125,6 +261,7 @@ def main() -> int:
             args.queue_blocks,
             args.seconds,
             args.frequency,
+            args.trace_csv,
         )
         for backend in backends
     ]
