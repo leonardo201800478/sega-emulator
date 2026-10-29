@@ -539,7 +539,7 @@ fn run_xaudio2_worker(
         let mastering_voice = mastering_voice
             .ok_or_else(|| "XAudio2 did not create a mastering voice".to_owned())?;
         let format = WAVEFORMATEX {
-            wFormatTag: WAVE_FORMAT_PCM,
+            wFormatTag: WAVE_FORMAT_PCM as u16,
             nChannels: 1,
             nSamplesPerSec: sample_rate,
             nAvgBytesPerSec: sample_rate.saturating_mul(2),
