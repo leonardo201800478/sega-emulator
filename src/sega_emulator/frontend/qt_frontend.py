@@ -281,6 +281,10 @@ def run(initial_path: Path | None = None) -> None:
     app.aboutToQuit.connect(debug_logger.stop)
 
     window.resize(preferences.window_width, preferences.window_height)
+    saved_window_state = str(settings.value("window_state", "normal"))
+    if saved_window_state not in {"normal", "maximized", "fullscreen"}:
+        saved_window_state = "normal"
+    window._saved_window_state = saved_window_state
     window._video_scale = preferences.video_scale
     view = window.video_widget
     view.set_filter_mode(preferences.video_filter)
@@ -1472,12 +1476,23 @@ def run(initial_path: Path | None = None) -> None:
             and library_dialog.selected_rom is not None
         ):
             open_rom(str(library_dialog.selected_rom), library_dialog.selected_system)
-    window.show()
+    if window._saved_window_state == "fullscreen":
+        window.fullscreen_action.setChecked(True)
+    elif window._saved_window_state == "maximized":
+        window.showMaximized()
+    else:
+        window.showNormal()
     app.exec()
     debug_logger.stop()
     debug_logger.wait(1.5)
     if vgm_recorder.active:
         stop_vgm_recording()
+    if window.isFullScreen():
+        settings.setValue("window_state", "fullscreen")
+    elif window.isMaximized():
+        settings.setValue("window_state", "maximized")
+    else:
+        settings.setValue("window_state", "normal")
     saved_width, saved_height = persisted_window_dimensions(
         window, preferences.window_width, preferences.window_height
     )
