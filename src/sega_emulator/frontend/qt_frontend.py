@@ -420,10 +420,12 @@ def run(initial_path: Path | None = None) -> None:
             if vgm_recorder.active:
                 for event_tstate, event_value in psg_events:
                     vgm_recorder.record_write(event_tstate, event_value)
-            samples = machine.drain_audio_samples()
-            if samples and audio_output is not None:
-                pcm = audio_resampler.process(samples)
-                audio_output.write_pcm(pcm)
+            if audio_output is not None:
+                pcm = machine.drain_audio_pcm(audio_resampler)
+                if pcm:
+                    audio_output.write_pcm(pcm)
+            else:
+                machine.discard_audio_samples()
             emulation_ms = (time.perf_counter() - phase_started) * 1000
             frame_count += 1
 
