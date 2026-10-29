@@ -112,9 +112,7 @@ class EmulatorMainWindow(QMainWindow):
         debug_layout = QVBoxLayout(debug_page)
         self.debug_logging_checkbox = QCheckBox(translate("debug_enable", language))
         self.debug_logging_checkbox.setObjectName("debugLoggingEnabled")
-        self.debug_logging_checkbox.setToolTip(
-            translate("debug_tooltip", language)
-        )
+        self.debug_logging_checkbox.setToolTip(translate("debug_tooltip", language))
         debug_layout.addWidget(self.debug_logging_checkbox)
         self.debug_status_label = QLabel(translate("debug_disabled", language))
         self.debug_status_label.setObjectName("debugLoggingStatus")
@@ -126,9 +124,7 @@ class EmulatorMainWindow(QMainWindow):
         self.debug_output.setMaximumBlockCount(2000)
         self.debug_output.setPlaceholderText(translate("debug_placeholder", language))
         debug_layout.addWidget(self.debug_output, 1)
-        clear_debug_button = QPushButton(
-            translate("debug_clear", language), debug_page
-        )
+        clear_debug_button = QPushButton(translate("debug_clear", language), debug_page)
         clear_debug_button.clicked.connect(self.debug_output.clear)
         debug_layout.addWidget(clear_debug_button)
         self.central_tabs.addTab(debug_page, translate("tab_debug", language))
@@ -157,7 +153,9 @@ class EmulatorMainWindow(QMainWindow):
         self.fullscreen_action.setShortcuts(["F11", "Alt+Return"])
         self.fullscreen_action.setCheckable(True)
         self.fullscreen_action.toggled.connect(self._toggle_fullscreen)
-        self.exit_fullscreen_action = QAction(translate("action_exit_fullscreen", language), self)
+        self.exit_fullscreen_action = QAction(
+            translate("action_exit_fullscreen", language), self
+        )
         self.exit_fullscreen_action.setShortcut("Escape")
         self.exit_fullscreen_action.setShortcutContext(
             Qt.ShortcutContext.WindowShortcut
@@ -216,7 +214,9 @@ class EmulatorMainWindow(QMainWindow):
         controls_menu.addAction("Configurar controles…", on_configure_controls)
         controls_menu.addAction("Dispositivos detectados", on_show_controllers)
 
-        diagnostics_menu = self.menuBar().addMenu(translate("menu_diagnostics", language))
+        diagnostics_menu = self.menuBar().addMenu(
+            translate("menu_diagnostics", language)
+        )
         self.vdp_snapshot_action = QAction("Capturar snapshot VDP (JSON + PNG)…", self)
         self.vdp_snapshot_action.setShortcut("F8")
         self.vdp_snapshot_action.triggered.connect(on_vdp_snapshot)
