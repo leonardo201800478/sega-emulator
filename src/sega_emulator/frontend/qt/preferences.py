@@ -79,7 +79,11 @@ class FrontendPreferences:
             raise ValueError("audio_volume must be an integer from 0 to 100")
         if type(self.audio_balance) is not int or not -100 <= self.audio_balance <= 100:
             raise ValueError("audio_balance must be an integer from -100 to 100")
-        if type(self.audio_queue_blocks) is not int or self.audio_queue_blocks not in (2, 4, 8):
+        if type(self.audio_queue_blocks) is not int or self.audio_queue_blocks not in (
+            2,
+            4,
+            8,
+        ):
             raise ValueError("audio_queue_blocks must be 2, 4, or 8")
         if self.video_filter not in (
             "nearest",
@@ -170,10 +174,16 @@ class FrontendPreferences:
             (256, 512, 1024, 2048),
         )
         volume = _bounded_int(
-            store.value("audio_volume", defaults.audio_volume), defaults.audio_volume, 0, 100
+            store.value("audio_volume", defaults.audio_volume),
+            defaults.audio_volume,
+            0,
+            100,
         )
         balance = _bounded_int(
-            store.value("audio_balance", defaults.audio_balance), defaults.audio_balance, -100, 100
+            store.value("audio_balance", defaults.audio_balance),
+            defaults.audio_balance,
+            -100,
+            100,
         )
         queue_blocks = _bounded_choice(
             store.value("audio_queue_blocks", defaults.audio_queue_blocks),
