@@ -116,7 +116,6 @@ class EmulatorMainWindow(QMainWindow):
         self.debug_logging_checkbox.setObjectName("debugLoggingEnabled")
         self.debug_logging_checkbox.setToolTip(
             translate("debug_tooltip", language)
-            "e usa uma fila limitada."
         )
         debug_layout.addWidget(self.debug_logging_checkbox)
         self.debug_status_label = QLabel(
@@ -131,7 +130,6 @@ class EmulatorMainWindow(QMainWindow):
         self.debug_output.setMaximumBlockCount(2000)
         self.debug_output.setPlaceholderText(
             translate("debug_placeholder", language)
-            "O buffer visual mantém no máximo 2.000 linhas."
         )
         debug_layout.addWidget(self.debug_output, 1)
         clear_debug_button = QPushButton(translate("debug_clear", language), debug_page)
