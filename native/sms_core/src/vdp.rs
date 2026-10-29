@@ -696,10 +696,10 @@ fn render_scanline(
     let pattern_base = 0;
     let mut bg_color = [0_u8; SMS_VDP_WIDTH];
     let mut bg_priority = [false; SMS_VDP_WIDTH];
-    let backdrop = 16 + usize::from(regs[7] & 0x0F);
+    let backdrop = 16_u8 + (regs[7] & 0x0F);
     for x in 0..SMS_VDP_WIDTH {
         if regs[0] & 0x20 != 0 && x < 8 {
-            bg_color[x] = backdrop as u8;
+            bg_color[x] = backdrop;
             put_pixel(frame, x, y, palette_rgb(cram, backdrop));
             continue;
         }
@@ -711,7 +711,7 @@ fn render_scanline(
         // The SMS VDP blanks the leading fine-scroll pixels with the
         // backdrop instead of wrapping the last name-table column into view.
         if x < (hs & 7) {
-            bg_color[x] = backdrop as u8;
+            bg_color[x] = backdrop;
             put_pixel(frame, x, y, palette_rgb(cram, backdrop));
             continue;
         }
