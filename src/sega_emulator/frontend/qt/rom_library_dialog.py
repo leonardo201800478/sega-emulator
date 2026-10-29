@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QGridLayout,
     QHBoxLayout,
+    QIcon,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -269,6 +270,21 @@ class RomLibraryDialog(QDialog):
         directory_row.addWidget(self.full_scan_button)
         library_layout.addLayout(directory_row)
 
+        box_art_row = QHBoxLayout()
+        self.box_art_directory_edit = QLineEdit()
+        self.box_art_directory_edit.setPlaceholderText(
+            "Pasta local de box arts (nome da imagem igual ao nome da ROM)"
+        )
+        self.box_art_directory_edit.setToolTip(
+            "Cada sistema possui sua própria pasta de capas. As imagens são associadas "
+            "pelo nome do arquivo, sem a extensão."
+        )
+        self.box_art_browse_button = QPushButton("Selecionar pasta de capas")
+        self.box_art_browse_button.clicked.connect(self._browse_box_art_directory)
+        box_art_row.addWidget(self.box_art_directory_edit, 1)
+        box_art_row.addWidget(self.box_art_browse_button)
+        library_layout.addLayout(box_art_row)
+
         self.rom_list = QListWidget()
         self.rom_list.setViewMode(QListWidget.ViewMode.IconMode)
         self.rom_list.setFlow(QListWidget.Flow.LeftToRight)
@@ -330,6 +346,7 @@ class RomLibraryDialog(QDialog):
         self.selected_system = system
         self.library_title.setText(f"{SYSTEM_LABELS[system]} — Biblioteca")
         self.directory_edit.setText(";".join(self._directories_for(system)))
+        self.box_art_directory_edit.setText(self._box_art_directory_for(system))
         self.pages.setCurrentWidget(self.library_page)
         self._start_scan(full=False)
 
@@ -345,6 +362,25 @@ class RomLibraryDialog(QDialog):
         base = Path(documents) if documents else Path.home() / "Documents"
         default_directory = base / "ROMs" / DEFAULT_DIRECTORY_NAMES[system]
         return [str(default_directory)] if default_directory.is_dir() else []
+
+    def _box_art_directory_for(self, system: str) -> str:
+        return str(self.settings.value(f"box_art_directories/{system}", ""))
+
+    def _browse_box_art_directory(self) -> None:
+        if self.selected_system is None:
+            return
+        current = self.box_art_directory_edit.text().strip()
+        chosen = QFileDialog.getExistingDirectory(
+            self, "Selecionar pasta de box arts", current
+        )
+        if not chosen:
+            return
+        directory = Path(chosen).expanduser().resolve()
+        self.box_art_directory_edit.setText(str(directory))
+        self.settings.setValue(
+            f"box_art_directories/{self.selected_system}", str(directory)
+        )
+        self._render_entries(self._entries)
 
     def _browse_directory(self) -> None:
         current = self.directory_edit.text().split(";")[0].strip()
@@ -450,6 +486,20 @@ class RomLibraryDialog(QDialog):
                 ),
             )
 
+    def _render_entries(self, entries: tuple[RomEntry, ...]) -> None:
+        self.rom_list.clear()
+        art_directory = self.box_art_directory_edit.text().strip()
+        for entry in entries:
+            item = QListWidgetItem(f"{entry.name}\\n{_format_size(entry.size)}")
+            item.setSizeHint(QSize(176, 236))
+            item.setData(Qt.ItemDataRole.UserRole, entry.path)
+            item.setToolTip(f"{entry.path}\\nSHA-256: {entry.sha256}")
+            cover = _find_box_art(Path(entry.path), Path(art_directory)) if art_directory else None
+            if cover is not None:
+                item.setIcon(QIcon(str(cover)))
+                item.setText(f"{Path(entry.name).stem}\\n{_format_size(entry.size)}")
+            self.rom_list.addItem(item)
+
     def _scan_failed(self, message: str) -> None:
         self._finish_scan()
         self.status_label.setText(
@@ -494,3 +544,41 @@ def _format_size(size: int) -> str:
     if size < 1024 * 1024:
         return f"{size / 1024:.1f} KiB"
     return f"{size / (1024 * 1024):.1f} MiB"
+
+
+
+# Prefer common formats, then formats supported by the installed Qt image plugins.
+_COMMON_IMAGE_SUFFIXES = {
+    ".png", ".jpg", ".jpeg", ".jpe", ".jfif", ".webp", ".bmp", ".dib",
+    ".gif", ".tif", ".tiff", ".ico", ".icns", ".avif", ".heic", ".heif",
+    ".jp2", ".j2k", ".jpf", ".jpx", ".jpm", ".mj2", ".pbm", ".pgm",
+    ".ppm", ".pnm", ".xbm", ".xpm", ".svg", ".svgz", ".dds", ".tga",
+}
+
+
+def _find_box_art(rom_path: Path, art_directory: Path) -> Path | None:
+    """Find an image whose filename stem matches the ROM stem, case-insensitively."""
+    if not art_directory.is_dir():
+        return None
+    try:
+        from PySide6.QtGui import QImageReader
+
+        supported = {
+            f".{bytes(suffix).decode('ascii', errors='ignore').casefold()}"
+            for suffix in QImageReader.supportedImageFormats()
+        }
+    except ImportError:
+        supported = set()
+    allowed = _COMMON_IMAGE_SUFFIXES | supported
+    target_stem = rom_path.stem.casefold()
+    try:
+        candidates = (
+            path
+            for path in art_directory.rglob("*")
+            if path.is_file()
+            and path.suffix.casefold() in allowed
+            and path.stem.casefold() == target_stem
+        )
+        return min(candidates, key=lambda path: (path.suffix.casefold(), str(path).casefold()), default=None)
+    except OSError:
+        return None
