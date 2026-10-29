@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 
 def _native_type(backend: str):
     try:
@@ -26,6 +28,9 @@ def _native_type(backend: str):
         ) from exc
 
 
+logger = logging.getLogger(__name__)
+
+
 class NativeAudioOutput:
     """Control a Rust-owned output stream; Python does no audio processing."""
 
@@ -47,6 +52,15 @@ class NativeAudioOutput:
             raise ValueError(f"Backend de áudio inválido: {backend}")
         self.backend = backend
         self._native = _native_type(backend)(sample_rate, buffer_size, queue_blocks)
+        self._closed = False
+        logger.info(
+            "Native audio backend initialized",
+            extra={
+                "audio_backend": backend,
+                "audio_sample_rate": self.sample_rate,
+                "audio_buffer_size_requested": self.buffer_size,
+            },
+        )
 
     @property
     def sample_rate(self) -> int:
@@ -70,7 +84,20 @@ class NativeAudioOutput:
         self._native.write_pcm(pcm)
 
     def close(self) -> None:
+        if self._closed:
+            return
+        logger.info(
+            "Native audio backend session metrics",
+            extra={
+                "audio_backend": self.backend,
+                "audio_sample_rate": self.sample_rate,
+                "audio_buffer_size_requested": self.buffer_size,
+                "audio_underruns": self.underrun_callbacks,
+                "audio_dropped_blocks": self.dropped_blocks,
+            },
+        )
         self._native.close()
+        self._closed = True
 
     def __enter__(self) -> NativeAudioOutput:
         return self
