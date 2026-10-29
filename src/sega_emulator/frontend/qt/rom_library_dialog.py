@@ -489,7 +489,8 @@ class RomLibraryDialog(QDialog):
 
     def _render_entries(self, entries: tuple[RomEntry, ...]) -> None:
         self.rom_list.clear()
-        art_directory = Path(self.box_art_directory_edit.text().strip())
+        art_directory_text = self.box_art_directory_edit.text().strip()
+        art_directory = Path(art_directory_text) if art_directory_text else None
         for entry in entries:
             rom_path = Path(entry.path)
             item = QListWidgetItem(f"{entry.name}\n{_format_size(entry.size)}")
@@ -498,7 +499,7 @@ class RomLibraryDialog(QDialog):
             item.setToolTip(f"{entry.path}\nSHA-256: {entry.sha256}")
             override = self._manual_box_art_for(rom_path)
             cover = override if override is not None else (
-                _find_box_art(rom_path, art_directory) if str(art_directory) else None
+                _find_box_art(rom_path, art_directory) if art_directory is not None else None
             )
             if cover is not None:
                 item.setIcon(QIcon(str(cover)))
