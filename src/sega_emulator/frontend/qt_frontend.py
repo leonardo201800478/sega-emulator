@@ -89,7 +89,9 @@ def _runtime_diagnostic(machine: object, rom_sha256: str) -> dict[str, object]:
     if native is not None:
         diagnostic["native_instruction_count"] = native.total_instructions
         diagnostic["native_tstates"] = native.total_tstates
-        diagnostic["native_vdp_frame"] = native.vdp.frame_number
+        diagnostic["native_vdp_frame"] = (
+            native.frame_number if hasattr(native, "frame_number") else native.vdp.frame_number
+        )
     return diagnostic
 
 
@@ -992,7 +994,11 @@ def run(initial_path: Path | None = None) -> None:
             return
         if loaded is None:
             return
-        machine = SG1000Machine(loaded.data)
+        machine = (
+            SMSMachine(loaded.data)
+            if active_system == "master_system"
+            else SG1000Machine(loaded.data)
+        )
         audio_resampler.reset()
         frame_count, paused = 0, False
         frame_pacer.reset()
