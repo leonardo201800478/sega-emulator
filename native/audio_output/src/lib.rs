@@ -442,7 +442,10 @@ impl NativeXAudio2Output {
             if self.shutdown.load(Ordering::Acquire) {
                 return Err(AudioOutputError::WorkerStopped);
             }
-            let sender = self.sender.as_ref().ok_or(AudioOutputError::WorkerStopped)?;
+            let sender = self
+                .sender
+                .as_ref()
+                .ok_or(AudioOutputError::WorkerStopped)?;
             let max_block_bytes = (self.buffer_size as usize).saturating_mul(2).max(2);
             for block in pcm.chunks(max_block_bytes) {
                 match sender.try_send(block.to_vec()) {
@@ -635,7 +638,6 @@ fn run_xaudio2_worker(
         engine.StopEngine();
     }
 }
-
 
 #[cfg(test)]
 mod tests {
