@@ -1,0 +1,80 @@
+name: SMS Homebrew ROM Inventory
+
+on:
+  pull_request:
+    paths:
+      - "local-assets/sms_test_roms/**"
+      - ".github/workflows/sms-homebrew-rom-inventory.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout candidate SHA
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Inventory homebrew ROMs and build inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="local-assets/sms_test_roms"
+          test -d "$root" || { echo "::error::Missing $root"; exit 1; }
+          mkdir -p build/sms-homebrew-inventory
+          report="build/sms-homebrew-inventory/inventory.md"
+          json="build/sms-homebrew-inventory/inventory.json"
+
+          {
+            echo "# SMS homebrew test corpus inventory"
+            echo
+            echo "Candidate SHA: `$GITHUB_SHA`"
+            echo
+            echo "| Kind | Path | SHA-256 | Bytes | Build metadata |"
+            echo "|---|---|---|---:|---|"
+          } > "$report"
+          printf '{"candidate_sha":"%s","files":[' "$GITHUB_SHA" > "$json"
+          first=1
+          count=0
+          while IFS= read -r -d '' file; do
+            rel="${file#"$root"/}"
+            kind="other"
+            case "${file,,}" in
+              *.sms|*.gg|*.sg|*.bin|*.rom) kind="rom-binary" ;;
+              *.asm|*.s|*.z80|*.inc) kind="assembly-source" ;;
+              */makefile|*/gnumakefile|*.mk) kind="make-manifest" ;;
+              */cmakelists.txt) kind="cmake-manifest" ;;
+              *.link) kind="wla-link-manifest" ;;
+              *.toml) kind="toml-manifest" ;;
+            esac
+            sha="$(sha256sum "$file" | cut -d ' ' -f 1)"
+            bytes="$(wc -c < "$file" | tr -d ' ')"
+            metadata="-"
+            case "$kind" in
+              rom-binary) metadata="prebuilt image; execution harness not assumed" ;;
+              wla-link-manifest) metadata="inspect object/source list before compiling" ;;
+              make-manifest) metadata="candidate for make-based build" ;;
+              cmake-manifest) metadata="candidate for CMake build" ;;
+            esac
+            printf '| %s | `%s` | `%s` | %s | %s |\n' "$kind" "$rel" "$sha" "$bytes" "$metadata" >> "$report"
+            if (( first )); then first=0; else printf ',' >> "$json"; fi
+            printf '{"path":"%s","kind":"%s","sha256":"%s","bytes":%s}' "$rel" "$kind" "$sha" "$bytes" >> "$json"
+            ((count+=1))
+          done < <(find "$root" -type f -print0 | sort -z)
+          printf '],"count":%s}\n' "$count" >> "$json"
+          test "$count" -gt 0 || { echo "::error::No files found under $root"; exit 1; }
+          cat "$report"
+          echo
+          echo "Inventory found $count files. This stage deliberately does not guess assembler flags or compile incomplete source trees."
+
+      - name: Upload inventory report
+        uses: actions/upload-artifact@v4
+        with:
+          name: sms-homebrew-rom-inventory
+          path: build/sms-homebrew-inventory/
+          if-no-files-found: error
+          retention-days: 7
