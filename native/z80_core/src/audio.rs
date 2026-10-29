@@ -29,7 +29,8 @@ impl NativePcmResampler {
     }
 
     fn set_volume(&mut self, volume: u8) -> PyResult<()> {
-        self.inner.set_volume(volume)
+        self.inner
+            .set_volume(volume)
             .map_err(|err| PyValueError::new_err(err.to_string()))
     }
 
@@ -37,7 +38,11 @@ impl NativePcmResampler {
         self.inner.reset();
     }
 
-    fn process<'py>(&mut self, py: Python<'py>, samples: Vec<f64>) -> Bound<'py, PyBytes> {
+    fn process<'py>(
+        &mut self,
+        py: Python<'py>,
+        samples: Vec<f64>,
+    ) -> Bound<'py, PyBytes> {
         PyBytes::new(py, &self.inner.process(&samples))
     }
 
