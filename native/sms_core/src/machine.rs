@@ -162,8 +162,7 @@ impl SmsMachine {
         let mut cpu = Z80::default();
         cpu.reset();
         let vdp = SmsVdp::new(config.video_standard, config.sprite_limit);
-        let psg =
-            Sn76489::new_with_variant(vdp.system_clock_hz(), sample_rate, PsgVariant::Sms)?;
+        let psg = Sn76489::new_with_variant(vdp.system_clock_hz(), sample_rate, PsgVariant::Sms)?;
         Ok(Self {
             cpu,
             memory,

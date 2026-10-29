@@ -130,7 +130,10 @@ impl Sn76489 {
             tone_outputs: [1; TONE_CHANNELS],
             noise_counter: 0,
             noise_counter_phase: 0,
-            lfsr: match variant { PsgVariant::Sg1000 => 0x4000, PsgVariant::Sms => 0x8000 },
+            lfsr: match variant {
+                PsgVariant::Sg1000 => 0x4000,
+                PsgVariant::Sms => 0x8000,
+            },
             noise_output: 0,
             clock_divider_phase: 0,
             output_phase: 0,
@@ -726,8 +729,7 @@ mod sms_variant_tests {
 
     #[test]
     fn sms_profile_uses_16_bit_lfsr_and_sms_taps() {
-        let mut psg =
-            Sn76489::new_with_variant(3_579_545, 44_100, PsgVariant::Sms).unwrap();
+        let mut psg = Sn76489::new_with_variant(3_579_545, 44_100, PsgVariant::Sms).unwrap();
         assert_eq!(psg.variant(), PsgVariant::Sms);
         assert_eq!(psg.lfsr(), 0x8000);
         psg.write(0xE4);
