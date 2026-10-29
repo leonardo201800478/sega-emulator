@@ -242,8 +242,7 @@ mod tests {
             pcm.extend(resampler.flush());
 
             let expected_samples =
-                (input.len() as f64 * rate as f64 / INPUT_RATE as f64).round_ties_even()
-                    as usize;
+                (input.len() as f64 * rate as f64 / INPUT_RATE as f64).round_ties_even() as usize;
             assert_eq!(pcm.len(), expected_samples * 2);
 
             let first_sample = i16::from_le_bytes([pcm[0], pcm[1]]);
