@@ -61,6 +61,8 @@ pub struct SmsVdp {
     vram: Vec<u8>,
     cram: [u8; CRAM_SIZE],
     registers: [u8; 16],
+    latched_scroll_y: u8,
+    pending_scroll_y: Option<u8>,
     status: u8,
     address: u16,
     read_buffer: u8,
@@ -93,6 +95,8 @@ impl SmsVdp {
             vram: vec![0; VRAM_SIZE],
             cram: [0; CRAM_SIZE],
             registers: [0; 16],
+            latched_scroll_y: 0,
+            pending_scroll_y: None,
             status: 0,
             address: 0,
             read_buffer: 0,
@@ -251,6 +255,8 @@ impl SmsVdp {
     pub fn reset(&mut self, clear_vram: bool) {
         self.cram.fill(0);
         self.registers.fill(0);
+        self.latched_scroll_y = 0;
+        self.pending_scroll_y = None;
         self.status = 0;
         self.address = 0;
         self.read_buffer = 0;
@@ -286,7 +292,7 @@ impl SmsVdp {
             }
             0x81 => {
                 let value = self.status;
-                self.status = 0x1F;
+                self.status = 0;
                 self.line_irq_pending = false;
                 self.control_first = None;
                 value
@@ -312,6 +318,8 @@ impl SmsVdp {
                 0xE5_u8.wrapping_add((line - 235) as u8)
             }
             (VideoStandard::Pal, 192) if line >= 243 => 0xBA_u8.wrapping_add((line - 243) as u8),
+            (VideoStandard::Pal, 224) if line >= 259 => 0xCA_u8.wrapping_add((line - 259) as u8),
+            (VideoStandard::Pal, 240) if line >= 267 => 0xD2_u8.wrapping_add((line - 267) as u8),
             _ => line as u8,
         }
     }
@@ -340,10 +348,12 @@ impl SmsVdp {
         self.light_h_counter = None;
         let height = self.visible_height();
         if line < height {
+            let mut render_registers = self.registers;
+            render_registers[9] = self.latched_scroll_y;
             render_scanline(
                 &self.vram,
                 &self.cram,
-                &self.registers,
+                &render_registers,
                 &mut self.status,
                 &mut self.working_framebuffer,
                 usize::from(line),
@@ -362,6 +372,9 @@ impl SmsVdp {
         }
         self.scanline += 1;
         if self.scanline == height {
+            if let Some(scroll_y) = self.pending_scroll_y.take() {
+                self.latched_scroll_y = scroll_y;
+            }
             self.status |= VBLANK;
             self.frame_ready = true;
             self.framebuffer.clone_from(&self.working_framebuffer);
@@ -382,7 +395,8 @@ impl SmsVdp {
         self.control_first = None;
         if self.cram_write {
             self.cram[usize::from(self.address & 0x1F)] = value & 0x3F;
-            self.address = self.address.wrapping_add(1) & 0x1F;
+            self.read_buffer = value;
+            self.address = self.address.wrapping_add(1) & 0x3FFF;
         } else {
             let address = usize::from(self.address) & 0x3FFF;
             self.vram[address] = value;
@@ -396,9 +410,18 @@ impl SmsVdp {
             return;
         };
         if value & 0xC0 == 0x80 {
+            self.address = ((u16::from(value & 0x3F) << 8) | u16::from(first)) & 0x3FFF;
             let register = usize::from(value & 0x0F);
             if register <= 10 {
                 self.registers[register] = first;
+                if register == 9 {
+                    if self.scanline < self.visible_height() {
+                        self.pending_scroll_y = Some(first);
+                    } else {
+                        self.latched_scroll_y = first;
+                        self.pending_scroll_y = None;
+                    }
+                }
                 if register == 10 {
                     self.line_counter = first;
                 }
@@ -416,7 +439,6 @@ impl SmsVdp {
             0x40 => self.cram_write = false,
             0xC0 => {
                 self.cram_write = true;
-                self.address &= 0x1F;
             }
             _ => self.cram_write = false,
         }
@@ -674,8 +696,11 @@ fn render_scanline(
     let pattern_base = 0;
     let mut bg_color = [0_u8; SMS_VDP_WIDTH];
     let mut bg_priority = [false; SMS_VDP_WIDTH];
+    let backdrop = 16_u8 + (regs[7] & 0x0F);
     for x in 0..SMS_VDP_WIDTH {
         if regs[0] & 0x20 != 0 && x < 8 {
+            bg_color[x] = backdrop;
+            put_pixel(frame, x, y, palette_rgb(cram, backdrop));
             continue;
         }
         let hs = if regs[0] & 0x40 != 0 && y < 16 {
@@ -683,12 +708,19 @@ fn render_scanline(
         } else {
             usize::from(regs[8])
         };
-        let vs = if regs[0] & 0x80 != 0 && x >= 248 {
+        // The SMS VDP blanks the leading fine-scroll pixels with the
+        // backdrop instead of wrapping the last name-table column into view.
+        if x < (hs & 7) {
+            bg_color[x] = backdrop;
+            put_pixel(frame, x, y, palette_rgb(cram, backdrop));
+            continue;
+        }
+        let vs = if regs[0] & 0x80 != 0 && x >= 192 {
             0
         } else {
             usize::from(regs[9])
         };
-        let sx = (x + hs) & 0xFF;
+        let sx = (x + 0x100 - hs) & 0xFF;
         // The standard 192-line mode scrolls through a 224-line name table;
         // extended 224/240-line modes use the full 256-line address range.
         let raw_sy = y + vs;
@@ -726,10 +758,10 @@ fn render_scanline(
     let mut active: Vec<(usize, i32, usize, usize)> = Vec::with_capacity(64);
     for index in 0..64 {
         let raw_y = vram[(sat + index) & 0x3FFF];
-        if raw_y == 0xD0 {
+        if raw_y == 0xD0 && height == 192 {
             break;
         }
-        let sy = if raw_y >= 0xD1 {
+        let sy = if raw_y >= 0xF0 {
             i32::from(raw_y) - 255
         } else {
             i32::from(raw_y) + 1
@@ -782,6 +814,9 @@ fn render_scanline(
                     continue;
                 }
                 let x = x as usize;
+                if regs[0] & 0x20 != 0 && x < 8 {
+                    continue;
+                }
                 if occupied[x] {
                     *status |= COLLISION;
                 }
@@ -804,8 +839,8 @@ fn render_scanline(
 #[cfg(test)]
 mod tests {
     use super::{
-        FRAME_SIZE, OVERFLOW, SMS_VDP_WIDTH, SmsVdp, StereoPresentation, TMS_PALETTE,
-        render_legacy_scanline, render_legacy_sprites, render_scanline,
+        COLLISION, FRAME_SIZE, OVERFLOW, SMS_VDP_WIDTH, SmsVdp, StereoPresentation, TMS_PALETTE,
+        VBLANK, render_legacy_scanline, render_legacy_sprites, render_scanline,
     };
     use crate::config::{SpriteLimitMode, VideoStandard};
     fn reg(v: &mut SmsVdp, i: u8, value: u8) {
@@ -1065,6 +1100,379 @@ mod tests {
     }
 
     #[test]
+    fn sms_mode4_horizontal_scroll_uses_subtractive_source_coordinates() {
+        let mut v = SmsVdp::default();
+        v.registers[0] = 0x04;
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[5] = 0x7E;
+        v.registers[8] = 8;
+        v.cram[1] = 0x03;
+        // Source column 31 is blank; source column 0 starts with red.
+        v.vram[0x3800 + 31 * 2] = 2;
+        v.vram[0x3800 + 31 * 2 + 1] = 0;
+        v.vram[0] = 0x80;
+        v.vram[0x3F00] = 0xD0;
+        let mut status = 0x1F;
+        render_scanline(
+            &v.vram,
+            &v.cram,
+            &v.registers,
+            &mut status,
+            &mut v.working_framebuffer,
+            0,
+            true,
+        );
+        assert_eq!(&v.working_framebuffer[0..3], &[0, 0, 0]);
+        assert_eq!(&v.working_framebuffer[8 * 3..8 * 3 + 3], &[255, 0, 0]);
+    }
+
+    #[test]
+    fn sms_mode4_horizontal_fine_scroll_matches_source_pixel_offsets() {
+        for scroll in [0_u8, 1, 7, 8, 255] {
+            let mut v = SmsVdp::default();
+            v.registers[0] = 0x04;
+            v.registers[1] = 0x40;
+            v.registers[2] = 0x0E;
+            v.registers[5] = 0x7E;
+            v.registers[8] = scroll;
+            v.cram[1] = 0x03;
+            for row in 0..8 {
+                v.vram[row * 4] = 0x80;
+            }
+            for row in 0..28 {
+                for col in 0..32 {
+                    v.vram[0x3800 + row * 64 + col * 2] = 0;
+                    v.vram[0x3800 + row * 64 + col * 2 + 1] = 0;
+                }
+            }
+            v.vram[0x3F00] = 0xD0;
+            let mut status = 0x1F;
+            render_scanline(
+                &v.vram,
+                &v.cram,
+                &v.registers,
+                &mut status,
+                &mut v.working_framebuffer,
+                0,
+                true,
+            );
+            for x in 0..32 {
+                let source_x = (x + 0x100 - usize::from(scroll)) & 0xFF;
+                let expected = if source_x & 7 == 0 {
+                    [255, 0, 0]
+                } else {
+                    [0, 0, 0]
+                };
+                assert_eq!(
+                    &v.working_framebuffer[x * 3..x * 3 + 3],
+                    &expected,
+                    "R8={scroll}, screen x={x}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sms_mode4_fine_scroll_leading_pixels_use_backdrop_not_wrapped_column() {
+        let mut v = SmsVdp::default();
+        v.registers[0] = 0x04;
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[5] = 0x7E;
+        v.registers[7] = 1;
+        v.registers[8] = 3;
+        v.cram[1] = 0x03;
+        v.cram[17] = 0x0C;
+        v.vram[0x3800 + 31 * 2] = 1;
+        v.vram[32] = 0xFF;
+        v.vram[0] = 0x80;
+        v.vram[0x3F00] = 0xD0;
+        let mut status = 0;
+        render_scanline(
+            &v.vram,
+            &v.cram,
+            &v.registers,
+            &mut status,
+            &mut v.working_framebuffer,
+            0,
+            true,
+        );
+        let backdrop = super::palette_rgb(&v.cram, 17);
+        let source_zero = super::palette_rgb(&v.cram, 1);
+        for x in 0..3 {
+            assert_eq!(
+                &v.working_framebuffer[x * 3..x * 3 + 3],
+                &backdrop,
+                "leading fine-scroll pixel x={x}"
+            );
+        }
+        assert_eq!(
+            &v.working_framebuffer[3 * 3..3 * 3 + 3],
+            &source_zero,
+            "first non-blanked pixel must map to source x=0"
+        );
+    }
+
+    #[test]
+    fn sms_mode4_horizontal_scroll_is_fixed_for_the_first_sixteen_lines() {
+        let mut v = SmsVdp::default();
+        v.registers[0] = 0x44;
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[5] = 0x7E;
+        v.registers[8] = 8;
+        v.cram[1] = 0x03;
+        for row in 0..8 {
+            v.vram[row * 4] = 0x80;
+        }
+        for row in 0..28 {
+            v.vram[0x3800 + row * 64 + 31 * 2] = 2;
+        }
+        v.vram[0x3F00] = 0xD0;
+        let mut status = 0x1F;
+        for y in [0, 15, 16] {
+            render_scanline(
+                &v.vram,
+                &v.cram,
+                &v.registers,
+                &mut status,
+                &mut v.working_framebuffer,
+                y,
+                true,
+            );
+        }
+        assert_eq!(&v.working_framebuffer[0..3], &[255, 0, 0]);
+        assert_eq!(
+            &v.working_framebuffer[15 * SMS_VDP_WIDTH * 3..15 * SMS_VDP_WIDTH * 3 + 3],
+            &[255, 0, 0]
+        );
+        assert_eq!(
+            &v.working_framebuffer[16 * SMS_VDP_WIDTH * 3..16 * SMS_VDP_WIDTH * 3 + 3],
+            &[0, 0, 0]
+        );
+    }
+
+    #[test]
+    fn sms_mode4_192_line_vertical_scroll_wrap_boundaries_are_223_224_and_255() {
+        let mut v = SmsVdp::default();
+        v.registers[0] = 0x04;
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[5] = 0x7E;
+        v.cram[1] = 0x03;
+        v.cram[2] = 0x0C;
+        v.cram[4] = 0x30;
+        for col in 0..32 {
+            v.vram[0x3800 + col * 2] = 0;
+            v.vram[0x3800 + col * 2 + 1] = 0;
+            v.vram[0x3840 + col * 2] = 0;
+            v.vram[0x3840 + col * 2 + 1] = 0;
+            v.vram[0x38C0 + col * 2] = 2;
+            v.vram[0x38C0 + col * 2 + 1] = 0;
+            v.vram[0x3EC0 + col * 2] = 1;
+            v.vram[0x3EC0 + col * 2 + 1] = 0;
+        }
+        for row in 0..8 {
+            v.vram[row * 4] = 0xFF;
+            v.vram[32 + row * 4 + 1] = 0xFF;
+            v.vram[64 + row * 4 + 2] = 0xFF;
+        }
+        v.vram[0x3F00] = 0xD0;
+        let mut status = 0x1F;
+        for (scroll, expected) in [
+            (223_u8, [0, 255, 0]),
+            (224_u8, [255, 0, 0]),
+            (255_u8, [0, 0, 255]),
+        ] {
+            v.registers[9] = scroll;
+            render_scanline(
+                &v.vram,
+                &v.cram,
+                &v.registers,
+                &mut status,
+                &mut v.working_framebuffer,
+                0,
+                true,
+            );
+            assert_eq!(&v.working_framebuffer[0..3], &expected, "R9={scroll}");
+        }
+    }
+
+    #[test]
+    fn sms_mode4_vertical_scroll_lock_starts_at_column_24() {
+        let mut v = SmsVdp::default();
+        v.registers[0] = 0x84;
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[5] = 0x7E;
+        v.registers[9] = 8;
+        v.cram[1] = 0x03;
+        v.cram[2] = 0x0C;
+        for col in 0..32 {
+            v.vram[0x3800 + col * 2] = 0;
+            v.vram[0x3800 + col * 2 + 1] = 0;
+            v.vram[0x3840 + col * 2] = 1;
+            v.vram[0x3840 + col * 2 + 1] = 0;
+        }
+        for row in 0..8 {
+            v.vram[row * 4] = 0xFF;
+            v.vram[32 + row * 4 + 1] = 0xFF;
+        }
+        v.vram[0x3F00] = 0xD0;
+        let mut status = 0x1F;
+        render_scanline(
+            &v.vram,
+            &v.cram,
+            &v.registers,
+            &mut status,
+            &mut v.working_framebuffer,
+            0,
+            true,
+        );
+        assert_eq!(&v.working_framebuffer[0..3], &[0, 255, 0]);
+        assert_eq!(&v.working_framebuffer[192 * 3..192 * 3 + 3], &[255, 0, 0]);
+    }
+
+    #[test]
+    fn sms_mode4_left_column_mask_also_masks_sprites() {
+        let mut v = SmsVdp::default();
+        v.registers[0] = 0x24;
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[5] = 0x7E;
+        v.cram[17] = 0x03;
+        v.vram[0x20] = 0x80;
+        v.vram[0x3F00] = 0;
+        v.vram[0x3F01] = 0xD0;
+        v.vram[0x3F80] = 0;
+        v.vram[0x3F81] = 1;
+        let mut status = 0x1F;
+        render_scanline(
+            &v.vram,
+            &v.cram,
+            &v.registers,
+            &mut status,
+            &mut v.working_framebuffer,
+            1,
+            true,
+        );
+        assert_eq!(&v.working_framebuffer[0..3], &[0, 0, 0]);
+    }
+
+    #[test]
+    fn sms_mode4_r9_written_during_active_display_latches_after_active_period() {
+        let mut v = SmsVdp::default();
+        v.registers[0] = 0x04;
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[5] = 0x7E;
+        v.cram[1] = 0x03;
+        v.cram[2] = 0x0C;
+        for col in 0..32 {
+            v.vram[0x3840 + col * 2] = 1;
+            v.vram[0x3840 + col * 2 + 1] = 0;
+        }
+        for row in 0..8 {
+            v.vram[row * 4] = 0xFF;
+            v.vram[32 + row * 4 + 1] = 0xFF;
+        }
+        v.vram[0x3F00] = 0xD0;
+        reg(&mut v, 9, 8);
+
+        v.advance(228 * 192);
+        assert_eq!(&v.framebuffer()[0..3], &[255, 0, 0]);
+
+        v.advance(228 * (262 - 192));
+        v.advance(228 * 192);
+        assert_eq!(&v.framebuffer()[0..3], &[0, 255, 0]);
+    }
+
+    #[test]
+    fn sms_mode4_extended_mode_d0_is_not_sprite_terminator_and_d1_stays_visible() {
+        let mut v = SmsVdp::default();
+        v.registers[0] = 0x04;
+        v.registers[1] = 0x50;
+        v.registers[2] = 0x0E;
+        v.registers[5] = 0x7E;
+        v.cram[17] = 0x03;
+        v.vram[0x20] = 0x80;
+        v.vram[0x3F00] = 0xD0;
+        v.vram[0x3F01] = 0xD1;
+        v.vram[0x3F80] = 10;
+        v.vram[0x3F81] = 1;
+        v.vram[0x3F82] = 30;
+        v.vram[0x3F83] = 1;
+        let mut status = 0x1F;
+        let mut frame = vec![0; FRAME_SIZE];
+
+        render_scanline(
+            &v.vram,
+            &v.cram,
+            &v.registers,
+            &mut status,
+            &mut frame,
+            209,
+            true,
+        );
+        assert_eq!(
+            &frame[(209 * SMS_VDP_WIDTH + 10) * 3..(209 * SMS_VDP_WIDTH + 10) * 3 + 3],
+            &[255, 0, 0]
+        );
+        assert_eq!(
+            &frame[(209 * SMS_VDP_WIDTH + 30) * 3..(209 * SMS_VDP_WIDTH + 30) * 3 + 3],
+            &[0, 0, 0]
+        );
+
+        render_scanline(
+            &v.vram,
+            &v.cram,
+            &v.registers,
+            &mut status,
+            &mut frame,
+            210,
+            true,
+        );
+        assert_eq!(
+            &frame[(210 * SMS_VDP_WIDTH + 30) * 3..(210 * SMS_VDP_WIDTH + 30) * 3 + 3],
+            &[255, 0, 0]
+        );
+    }
+
+    #[test]
+    fn status_port_preserves_sprite_index_and_clears_status_flags() {
+        let mut v = SmsVdp {
+            status: VBLANK | OVERFLOW | COLLISION | 0x0A,
+            ..SmsVdp::default()
+        };
+        let status = v.read_port(0xBF);
+        assert_eq!(status, 0xEA);
+        assert_eq!(v.status(), 0);
+        assert!(!v.interrupt_pending());
+    }
+
+    #[test]
+    fn cram_write_wraps_palette_index_but_keeps_fourteen_bit_address() {
+        let mut v = SmsVdp::default();
+        addr(&mut v, 0x001F, 0xC0);
+        v.write_port(0xBE, 0xFF);
+        assert_eq!(v.cram()[0x1F], 0x3F);
+        assert_eq!(v.address(), 0x0020);
+        v.write_port(0xBE, 0x12);
+        assert_eq!(v.cram()[0], 0x12);
+        assert_eq!(v.address(), 0x0021);
+        assert_eq!(v.read_port(0xBE), 0x12);
+    }
+
+    #[test]
+    fn register_write_command_updates_vdp_address_register() {
+        let mut v = SmsVdp::default();
+        reg(&mut v, 8, 0xA5);
+        assert_eq!(v.registers()[8], 0xA5);
+        assert_eq!(v.address(), 0x08A5);
+    }
+
+    #[test]
     fn vdp_ports_are_mirrored_by_the_low_address_decode() {
         let mut v = SmsVdp::default();
         v.write_port(0x9F, 0x03);
@@ -1105,6 +1513,32 @@ mod tests {
         let mut v = SmsVdp::new(VideoStandard::Unknown, SpriteLimitMode::HardwareLimit);
         v.scanline = 219;
         assert_eq!(v.read_v_counter(), 0xD5);
+    }
+
+    #[test]
+    fn pal_224_line_counter_has_documented_wrap_sequence() {
+        let mut v = SmsVdp::new(VideoStandard::Pal, SpriteLimitMode::HardwareLimit);
+        reg(&mut v, 1, 0x10);
+        v.scanline = 256;
+        assert_eq!(v.read_v_counter(), 0x00);
+        v.scanline = 258;
+        assert_eq!(v.read_v_counter(), 0x02);
+        v.scanline = 259;
+        assert_eq!(v.read_v_counter(), 0xCA);
+        v.scanline = 312;
+        assert_eq!(v.read_v_counter(), 0xFF);
+    }
+
+    #[test]
+    fn pal_240_line_counter_has_documented_wrap_sequence() {
+        let mut v = SmsVdp::new(VideoStandard::Pal, SpriteLimitMode::HardwareLimit);
+        reg(&mut v, 1, 0x08);
+        v.scanline = 266;
+        assert_eq!(v.read_v_counter(), 0x0A);
+        v.scanline = 267;
+        assert_eq!(v.read_v_counter(), 0xD2);
+        v.scanline = 312;
+        assert_eq!(v.read_v_counter(), 0xFF);
     }
 
     #[test]
