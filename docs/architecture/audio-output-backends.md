@@ -33,7 +33,7 @@ A Qt cria e controla a fachada PyO3; a inicialização COM, enumeração do disp
 
 ### XAudio2 (backend nativo Rust — primeira implementação)
 
-A Qt seleciona o backend por meio da fachada PyO3. O worker Rust cria o engine XAudio2, a mastering voice e uma source voice mono PCM16; submete buffers que permanecem vivos até o engine informar que foram consumidos. A fila de entrada é limitada, e a aplicação mede blocos descartados e episódios de underrun. A implementação usa polling de estado em uma thread Rust dedicada; ainda precisa de avaliação de CPU/latência e de um mecanismo de notificação mais eficiente se as medições justificarem.
+A Qt seleciona o backend por meio da fachada PyO3. O worker Rust cria o engine XAudio2, a mastering voice e uma source voice estéreo PCM16; submete buffers que permanecem vivos até o engine informar que foram consumidos. A fila de entrada é limitada, e a aplicação mede blocos descartados e episódios de underrun. A implementação usa polling de estado em uma thread Rust dedicada; ainda precisa de avaliação de CPU/latência e de um mecanismo de notificação mais eficiente se as medições justificarem.
 
 **Limites de validação:** compilação Windows, dispositivo padrão, remoção/reconexão, encerramento e estabilidade prolongada ainda precisam ser verificados no SHA final. Não declarar equivalência de latência com WASAPI sem medições equivalentes.
 
