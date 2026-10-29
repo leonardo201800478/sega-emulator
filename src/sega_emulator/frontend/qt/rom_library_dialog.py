@@ -14,10 +14,10 @@ from PySide6.QtCore import (
     QObject,
     QRunnable,
     QSettings,
-    Signal,
     QStandardPaths,
-    Qt,
     QThreadPool,
+    Qt,
+    Signal,
 )
 from PySide6.QtWidgets import (
     QDialog,
