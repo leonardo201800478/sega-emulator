@@ -331,17 +331,16 @@ fn run_wasapi_worker(
 }
 
 #[cfg(windows)]
-use windows::core::PCWSTR;
+use windows::Win32::Media::Audio::XAudio2::{
+    IXAudio2, IXAudio2MasteringVoice, IXAudio2SourceVoice, IXAudio2VoiceCallback, XAUDIO2_BUFFER,
+    XAUDIO2_DEFAULT_PROCESSOR, XAUDIO2_VOICE_STATE, XAudio2CreateWithVersionInfo,
+};
 #[cfg(windows)]
-use windows::Win32::Media::Audio::{AudioCategory_GameEffects, WAVEFORMATEX, WAVE_FORMAT_PCM};
+use windows::Win32::Media::Audio::{AudioCategory_GameEffects, WAVE_FORMAT_PCM, WAVEFORMATEX};
 #[cfg(windows)]
 use windows::Win32::System::SystemInformation::NTDDI_WIN10_RS5;
 #[cfg(windows)]
-use windows::Win32::Media::Audio::XAudio2::{
-    IXAudio2, IXAudio2MasteringVoice, IXAudio2SourceVoice,
-    IXAudio2VoiceCallback, XAUDIO2_BUFFER, XAUDIO2_VOICE_STATE,
-    XAudio2CreateWithVersionInfo, XAUDIO2_DEFAULT_PROCESSOR,
-};
+use windows::core::PCWSTR;
 
 /// Native XAudio2 output using Rust-owned source buffers and a bounded producer queue.
 pub struct NativeXAudio2Output {
