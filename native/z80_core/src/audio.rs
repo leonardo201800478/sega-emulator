@@ -12,6 +12,12 @@ pub struct NativePcmResampler {
     inner: PcmResampler,
 }
 
+impl NativePcmResampler {
+    pub(crate) fn process_native(&mut self, samples: &[f64]) -> Vec<u8> {
+        self.inner.process(samples)
+    }
+}
+
 #[pymethods]
 impl NativePcmResampler {
     #[new]
