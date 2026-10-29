@@ -29,5 +29,5 @@ pub use input::{
 pub use io::{IoError, PsgWriteEvent, Sg1000Io};
 pub use machine::{MachineError, Sg1000Machine};
 pub use memory::{MemoryConfig, MemoryError, Sg1000Memory};
-pub use psg::{PsgError, Sn76489};
+pub use psg::{PsgError, PsgVariant, Sn76489};
 pub use vdp::Tms9918A;

@@ -4,6 +4,12 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
+[dependencies]
+sega-sn76489 = { path = "../sn76489" }
+
+[dependencies]
+sega-sn76489 = { path = "../sn76489" }
+
 [lib]
 name = "sega_sg1000_core"
 path = "src/lib.rs"
