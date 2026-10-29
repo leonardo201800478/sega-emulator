@@ -8,7 +8,7 @@ use sega_sms_core::{SmsMachine, SmsMachineConfig, VideoStandard};
 use crate::audio::NativePcmResampler;
 
 /// Thin Python boundary; the SMS machine, PSG and sample generation stay in Rust.
-#[pyclass]
+#[pyclass(module = "sega_z80_core")]
 pub struct NativeSMSMachine {
     machine: SmsMachine,
     total_instructions: u64,
@@ -72,7 +72,7 @@ impl NativeSMSMachine {
         let cycles = self
             .machine
             .step()
-            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+            .map_err(|error| PyRuntimeError::new_err(format!("SMS CPU step failed: {error:?}")))?;
         self.total_instructions = self.total_instructions.saturating_add(1);
         Ok(cycles)
     }
@@ -109,7 +109,7 @@ mod tests {
 
     #[test]
     fn sms_adapter_uses_native_psg_and_reports_configured_clock() {
-        let machine = NativeSMSMachine::new(vec![0; 16], 44_100, false).unwrap();
+        let machine = NativeSMSMachine::new(vec![0; 16], false).unwrap();
         assert_eq!(machine.psg_sample_rate(), 44_100);
         assert_eq!(machine.psg_clock_hz(), 3_579_545);
         assert_eq!(machine.total_tstates(), 0);
