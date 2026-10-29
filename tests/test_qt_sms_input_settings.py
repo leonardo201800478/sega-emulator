@@ -11,8 +11,9 @@ import pytest
 pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QApplication, QWidget  # noqa: E402
-
-from sega_emulator.frontend.qt.sms_input_settings import SmsInputSettingsPage  # noqa: E402
+from sega_emulator.frontend.qt.sms_input_settings import (  # noqa: E402
+    SmsInputSettingsPage,
+)
 
 
 class FakeSettings:
