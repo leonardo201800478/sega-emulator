@@ -8,6 +8,9 @@ pytest.importorskip("sega_z80_core")
 
 from sega_z80_core import NativePcmResampler, NativeSMSMachine
 
+from sega_emulator.frontend.qt.audio_output import PcmResampler
+from sega_emulator.machine import SMSMachine
+
 
 def _machine() -> NativeSMSMachine:
     # Program: set tone channel 0 and loop forever.
@@ -72,3 +75,30 @@ def test_sms_pal_profile_selects_pal_psg_clock() -> None:
     machine = NativeSMSMachine(bytes([0x00]), True)
     assert machine.psg_sample_rate == 44_100
     assert machine.psg_clock_hz == 3_546_895
+
+
+
+def test_sms_python_adapter_drains_pcm_without_changing_tstates() -> None:
+    machine = SMSMachine(
+        bytes(
+            [
+                0x3E, 0x90, 0xD3, 0x7F,
+                0x3E, 0x85, 0xD3, 0x7F,
+                0x3E, 0x12, 0xD3, 0x7F,
+                0xC3, 0x00, 0x00,
+            ]
+        )
+    )
+    resampler = PcmResampler(48_000, 100)
+
+    for _ in range(10_000):
+        machine.step()
+
+    before = machine.total_tstates
+    pcm = machine.drain_audio_pcm(resampler)
+
+    assert pcm
+    assert len(pcm) % 2 == 0
+    assert machine.psg_sample_rate == 44_100
+    assert machine.psg_clock_hz == 3_579_545
+    assert machine.total_tstates == before
