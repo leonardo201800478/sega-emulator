@@ -431,7 +431,7 @@ impl NativeXAudio2Output {
     }
 
     pub fn write_pcm(&self, pcm: Vec<u8>) -> Result<(), AudioOutputError> {
-        if pcm.len() % 2 != 0 || pcm.len() > u32::MAX as usize {
+        if !pcm.len().is_multiple_of(2) || pcm.len() > u32::MAX as usize {
             return Err(AudioOutputError::InvalidPcmBlock);
         }
         if pcm.is_empty() {
