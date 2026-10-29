@@ -136,11 +136,11 @@ class RomLibraryDialog(QDialog):
         self._assets_directory = Path(__file__).parent / "assets"
         background_image = (self._assets_directory / "background.svg").as_posix()
         self.setStyleSheet(
-            f"""
-            QDialog {{
-                border-image: url("{background_image}") 0 0 0 0 stretch stretch;
+            """
+            QDialog {
+                border-image: url("$BACKGROUND_IMAGE") 0 0 0 0 stretch stretch;
                 color: #e9f2ff;
-            }}
+            }
             QWidget {{ background: transparent; color: #e9f2ff; }}
             QLabel#heroTitle { color: #66d9ff; font-size: 30px; font-weight: 700; }
             QLabel#subtitle { color: #9bb3d2; font-size: 14px; }
@@ -170,7 +170,7 @@ class RomLibraryDialog(QDialog):
                 border-radius: 5px; text-align: center; min-height: 16px;
             }
             QProgressBar::chunk { background: #28b7e8; border-radius: 4px; }
-            """
+            """.replace("$BACKGROUND_IMAGE", background_image)
         )
         self._build_pages()
         self._show_splash()
