@@ -8,5 +8,3 @@ publish = false
 name = "sega_sg1000_core"
 path = "src/lib.rs"
 
-[dependencies]
-sega-z80-bus = { path = "../z80_bus" }
