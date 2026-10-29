@@ -76,6 +76,34 @@ def test_manual_box_art_override_is_saved_per_rom_and_system(
     dialog.close()
 
 
+def test_box_art_matches_launchbox_numbered_filename_and_prefers_first_variant(
+    tmp_path: Path,
+) -> None:
+    rom = tmp_path / "roms" / "007 James Bond (Japan) (En,Ja).zip"
+    art_root = tmp_path / "art" / "Box - Front" / "Japan"
+    art_root.mkdir(parents=True)
+    rom.parent.mkdir()
+    rom.write_bytes(b"rom")
+    first = art_root / "007 James Bond-01.jpg"
+    second = art_root / "007 James Bond-02.jpg"
+    first.write_bytes(b"first")
+    second.write_bytes(b"second")
+
+    assert _find_box_art(rom, art_root.parent) == first
+
+
+def test_box_art_matches_punctuation_variants(tmp_path: Path) -> None:
+    rom = tmp_path / "roms" / "C_Sol! (Japan).zip"
+    art_root = tmp_path / "art" / "Japan"
+    art_root.mkdir(parents=True)
+    rom.parent.mkdir()
+    rom.write_bytes(b"rom")
+    cover = art_root / "C So!-01.jpg"
+    cover.write_bytes(b"image")
+
+    assert _find_box_art(rom, art_root.parent) == cover
+
+
 def test_box_art_does_not_match_a_different_filename(tmp_path: Path) -> None:
     rom = tmp_path / "game.sg"
     art_root = tmp_path / "art"
