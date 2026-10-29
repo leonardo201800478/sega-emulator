@@ -24,7 +24,7 @@ def qt_app():
 
 def test_dialog_loads_and_returns_audio_video_preferences(qt_app) -> None:
     original = FrontendPreferences(
-        audio_enabled=False,
+        audio_enabled=True,
         audio_sample_rate=48_000,
         audio_buffer_size=1024,
         audio_volume=65,
