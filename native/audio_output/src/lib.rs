@@ -47,8 +47,16 @@ impl std::error::Error for AudioOutputError {}
 /// The emulated PSG remains mono; channel routing is handled only at the output boundary.
 fn mono_pcm16_to_stereo(pcm: &[u8], balance: i8) -> Vec<u8> {
     let mut stereo = Vec::with_capacity(pcm.len().saturating_mul(2));
-    let left_gain = if balance > 0 { 100 - balance as i32 } else { 100 };
-    let right_gain = if balance < 0 { 100 + balance as i32 } else { 100 };
+    let left_gain = if balance > 0 {
+        100 - balance as i32
+    } else {
+        100
+    };
+    let right_gain = if balance < 0 {
+        100 + balance as i32
+    } else {
+        100
+    };
     for sample in pcm.chunks_exact(2) {
         let value = i16::from_le_bytes([sample[0], sample[1]]) as i32;
         let left = ((value * left_gain) / 100).clamp(i16::MIN as i32, i16::MAX as i32) as i16;
@@ -731,9 +739,7 @@ mod tests {
         assert_eq!(
             mono_pcm16_to_stereo(&mono),
             [
-                0x34, 0x12, 0x34, 0x12,
-                0x00, 0x80, 0x00, 0x80,
-                0xff, 0x7f, 0xff, 0x7f,
+                0x34, 0x12, 0x34, 0x12, 0x00, 0x80, 0x00, 0x80, 0xff, 0x7f, 0xff, 0x7f,
             ]
         );
     }
