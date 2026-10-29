@@ -114,14 +114,11 @@ impl CpuBus for SmsMachineBus<'_> {
     }
 
     fn read_port(&mut self, port: u16) -> u8 {
-        if matches!((port as u8) & 0xC1, 0x80 | 0x81) {
-            self.vdp.read_port(port)
-        } else {
-            match port as u8 {
-                0x7E => self.vdp.read_v_counter(),
-                0x7F => self.vdp.read_h_counter(),
-                _ => self.io.read_port(port),
-            }
+        match (port as u8) & 0xC1 {
+            0x80 | 0x81 => self.vdp.read_port(port),
+            0x40 => self.vdp.read_v_counter(),
+            0x41 => self.vdp.read_h_counter(),
+            _ => self.io.read_port(port),
         }
     }
 
@@ -370,6 +367,25 @@ mod tests {
             .unwrap();
         machine.step().unwrap();
         assert_eq!(machine.cpu().registers.a & 1, 0);
+    }
+
+
+    #[test]
+    fn vdp_vertical_and_horizontal_counter_ports_are_mirrored() {
+        let mut machine = SmsMachine::new(vec![0x00]).unwrap();
+        machine.vdp.advance(228 * 219 + 11);
+        let mut bus = SmsMachineBus::new(
+            &mut machine.memory,
+            &mut machine.io,
+            &mut machine.sega_scope,
+            &mut machine.vdp,
+        );
+        assert_eq!(bus.read_port(0x40), 0xD5);
+        assert_eq!(bus.read_port(0x42), 0xD5);
+        assert_eq!(bus.read_port(0x7E), 0xD5);
+        let h_counter = bus.read_port(0x7F);
+        assert_eq!(bus.read_port(0x41), h_counter);
+        assert_eq!(bus.read_port(0x43), h_counter);
     }
 
     #[test]
