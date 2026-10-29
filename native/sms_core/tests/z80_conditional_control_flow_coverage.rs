@@ -181,6 +181,7 @@ fn conditional_ret_covers_both_paths_and_stack_read_order() {
             cpu.registers.sp = 0x8000;
             let flags = flags_for_condition(condition as u8, condition_true);
             cpu.registers.f = flags;
+            cpu.wz = 0xA55A;
 
             assert_eq!(
                 cpu.step(&mut bus),
@@ -191,6 +192,11 @@ fn conditional_ret_covers_both_paths_and_stack_read_order() {
                 cpu.registers.pc,
                 if condition_true { 0x1234 } else { 1 },
                 "opcode={opcode:02X}"
+            );
+            assert_eq!(
+                cpu.wz,
+                if condition_true { 0x1234 } else { 0xA55A },
+                "opcode={opcode:02X}: WZ changes to return target only when RET condition is true"
             );
             assert_eq!(
                 cpu.registers.f, flags,
