@@ -36,3 +36,11 @@ def test_sms_loader_rejects_zip_with_multiple_candidates(tmp_path):
 
     with pytest.raises(ValueError, match="várias ROMs"):
         load_sms_rom(archive_path)
+
+
+def test_sms_loader_rejects_oversized_rom(tmp_path):
+    rom = tmp_path / "oversized.sms"
+    rom.write_bytes(bytes([0x00]) * (0x100000 + 1))
+
+    with pytest.raises(ValueError, match="excede o limite"):
+        load_sms_rom(rom)
