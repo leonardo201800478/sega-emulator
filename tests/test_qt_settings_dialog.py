@@ -95,7 +95,6 @@ def test_dialog_loads_and_returns_audio_video_preferences(qt_app) -> None:
     dialog.close()
 
 
-
 def test_latency_help_is_specific_to_selected_backend(qt_app) -> None:
     wasapi = SettingsDialog(FrontendPreferences(), audio_backend="wasapi")
     xaudio2 = SettingsDialog(FrontendPreferences(), audio_backend="xaudio2")
