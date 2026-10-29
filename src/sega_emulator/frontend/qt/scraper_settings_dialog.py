@@ -165,9 +165,7 @@ class ScraperSettingsDialog(QDialog):
         self.credentials_widget.setVisible(is_screenscraper)
         self.show_passwords.setVisible(is_screenscraper)
         self.credentials_label.setText(
-            translate("credentials_notice", self.language)
-            if is_screenscraper
-            else ""
+            translate("credentials_notice", self.language) if is_screenscraper else ""
         )
         self.provider_link.setEnabled(provider in PROVIDER_URLS)
 
@@ -178,9 +176,7 @@ class ScraperSettingsDialog(QDialog):
             QDesktopServices.openUrl(QUrl(url))
 
     def _toggle_password_visibility(self, visible: bool) -> None:
-        mode = (
-            QLineEdit.EchoMode.Normal if visible else QLineEdit.EchoMode.Password
-        )
+        mode = QLineEdit.EchoMode.Normal if visible else QLineEdit.EchoMode.Password
         self.developer_password_edit.setEchoMode(mode)
         self.password_edit.setEchoMode(mode)
 
