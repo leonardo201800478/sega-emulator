@@ -87,7 +87,7 @@ jobs:
             printf '[objects]\nobject.o\n' > "$build_dir/linkfile"
             (
               cd "$build_dir"
-              "$RUNNER_TEMP/wla-install/bin/wlalink" -drvs linkfile "$output_file"
+              "$RUNNER_TEMP/wla-install/bin/wlalink" -d -r -v -s linkfile "$output_file"
             )
             local built_sha reference_sha
             built_sha="$(sha256sum "$build_dir/$output_file" | cut -d ' ' -f 1)"
