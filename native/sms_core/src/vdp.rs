@@ -305,8 +305,8 @@ impl SmsVdp {
     pub fn read_v_counter(&self) -> u8 {
         let line = self.scanline;
         match (self.video_standard, self.visible_height()) {
-            (VideoStandard::Ntsc, 192) if line >= 219 => 0xD5_u8.wrapping_add((line - 219) as u8),
-            (VideoStandard::Ntsc, 224) if line >= 235 => 0xE5_u8.wrapping_add((line - 235) as u8),
+            (VideoStandard::Ntsc | VideoStandard::Unknown, 192) if line >= 219 => 0xD5_u8.wrapping_add((line - 219) as u8),
+            (VideoStandard::Ntsc | VideoStandard::Unknown, 224) if line >= 235 => 0xE5_u8.wrapping_add((line - 235) as u8),
             (VideoStandard::Pal, 192) if line >= 243 => 0xBA_u8.wrapping_add((line - 243) as u8),
             _ => line as u8,
         }
@@ -1002,6 +1002,13 @@ mod tests {
         v.write_port(0x9F, 0xC0);
         v.write_port(0x9E, 0x3F);
         assert_eq!(v.cram()[3], 0x3F);
+    }
+
+    #[test]
+    fn unknown_video_standard_uses_the_ntsc_counter_profile() {
+        let mut v = SmsVdp::new(VideoStandard::Unknown, SpriteLimitMode::HardwareLimit);
+        v.scanline = 219;
+        assert_eq!(v.read_v_counter(), 0xD5);
     }
 
     #[test]
