@@ -43,11 +43,16 @@ impl std::error::Error for AudioOutputError {}
 
 /// Expand mono signed PCM16 to interleaved stereo, duplicating each sample.
 /// The emulated PSG remains mono; channel routing is handled only at the output boundary.
-fn mono_pcm16_to_stereo(pcm: &[u8]) -> Vec<u8> {
+fn mono_pcm16_to_stereo(pcm: &[u8], balance: i8) -> Vec<u8> {
     let mut stereo = Vec::with_capacity(pcm.len().saturating_mul(2));
+    let left_gain = if balance > 0 { 100 - balance as i32 } else { 100 };
+    let right_gain = if balance < 0 { 100 + balance as i32 } else { 100 };
     for sample in pcm.chunks_exact(2) {
-        stereo.extend_from_slice(sample);
-        stereo.extend_from_slice(sample);
+        let value = i16::from_le_bytes([sample[0], sample[1]]) as i32;
+        let left = ((value * left_gain) / 100).clamp(i16::MIN as i32, i16::MAX as i32) as i16;
+        let right = ((value * right_gain) / 100).clamp(i16::MIN as i32, i16::MAX as i32) as i16;
+        stereo.extend_from_slice(&left.to_le_bytes());
+        stereo.extend_from_slice(&right.to_le_bytes());
     }
     stereo
 }
@@ -63,6 +68,8 @@ pub struct NativeWasapiOutput {
     dropped_blocks: Arc<AtomicU64>,
     sample_rate: u32,
     buffer_size: u32,
+    balance: i8,
+    balance: i8,
 }
 
 impl NativeWasapiOutput {
@@ -70,6 +77,15 @@ impl NativeWasapiOutput {
         sample_rate: u32,
         buffer_size: u32,
         queue_blocks: usize,
+    ) -> Result<Self, AudioOutputError> {
+        Self::new_with_balance(sample_rate, buffer_size, queue_blocks, 0)
+    }
+
+    pub fn new_with_balance(
+        sample_rate: u32,
+        buffer_size: u32,
+        queue_blocks: usize,
+        balance: i8,
     ) -> Result<Self, AudioOutputError> {
         if sample_rate == 0 {
             return Err(AudioOutputError::InvalidSampleRate);
@@ -113,6 +129,7 @@ impl NativeWasapiOutput {
                     dropped_blocks,
                     sample_rate,
                     buffer_size,
+                    balance,
                 }),
                 Ok(Err(message)) => {
                     shutdown.store(true, Ordering::Release);
@@ -147,7 +164,7 @@ impl NativeWasapiOutput {
         if pcm.is_empty() {
             return Ok(());
         }
-        let pcm = mono_pcm16_to_stereo(&pcm);
+        let pcm = mono_pcm16_to_stereo(&pcm, self.balance);
         #[cfg(windows)]
         {
             if self.shutdown.load(Ordering::Acquire) {
@@ -404,6 +421,15 @@ impl NativeXAudio2Output {
         sample_rate: u32,
         buffer_size: u32,
         queue_blocks: usize,
+    ) -> Result<Self, AudioOutputError> {
+        Self::new_with_balance(sample_rate, buffer_size, queue_blocks, 0)
+    }
+
+    pub fn new_with_balance(
+        sample_rate: u32,
+        buffer_size: u32,
+        queue_blocks: usize,
+        balance: i8,
     ) -> Result<Self, AudioOutputError> {
         if sample_rate == 0 {
             return Err(AudioOutputError::InvalidSampleRate);
@@ -703,6 +729,23 @@ mod tests {
                 0x00, 0x80, 0x00, 0x80,
                 0xff, 0x7f, 0xff, 0x7f,
             ]
+        );
+    }
+
+    #[test]
+    fn mono_pcm16_balance_routes_samples_to_both_channels() {
+        let mono = [0x00, 0x40, 0x00, 0xc0];
+        assert_eq!(
+            mono_pcm16_to_stereo(&mono, 0),
+            [0x00, 0x40, 0x00, 0x40, 0x00, 0xc0, 0x00, 0xc0]
+        );
+        assert_eq!(
+            mono_pcm16_to_stereo(&mono, 100),
+            [0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0xc0]
+        );
+        assert_eq!(
+            mono_pcm16_to_stereo(&mono, -100),
+            [0x00, 0x40, 0x00, 0x00, 0x00, 0xc0, 0x00, 0x00]
         );
     }
 
