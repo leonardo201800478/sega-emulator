@@ -37,6 +37,7 @@ def test_main_window_exposes_required_menus_and_shortcuts(qt_app) -> None:
         on_open_logs=lambda: called.append("logs"),
         on_show_machine_state=lambda: called.append("state"),
         on_video_scale=lambda scale: called.append(f"scale:{scale}"),
+        on_change_system=lambda: called.append("change-system"),
         on_configure_drivers=lambda: called.append("drivers"),
     )
 
@@ -53,6 +54,8 @@ def test_main_window_exposes_required_menus_and_shortcuts(qt_app) -> None:
     assert window.open_action.shortcut().toString() == "Ctrl+O"
     assert window.pause_action.shortcut().toString() == "F5"
     assert window.reset_action.shortcut().toString() == "F10"
+    assert window.change_system_action.isEnabled()
+    assert window.change_system_action.objectName() == "changeSystemAction"
     assert window.vdp_snapshot_action.shortcut().toString() == "F8"
     assert window.central_tabs.count() == 2
     assert window.central_tabs.tabText(0) == "Emulador"
@@ -61,7 +64,8 @@ def test_main_window_exposes_required_menus_and_shortcuts(qt_app) -> None:
 
     window.pause_action.trigger()
     window.reset_action.trigger()
-    assert called == ["pause", "reset"]
+    window.change_system_action.trigger()
+    assert called == ["pause", "reset", "change-system"]
     window.close()
 
 
