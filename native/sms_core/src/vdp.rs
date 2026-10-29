@@ -291,7 +291,7 @@ impl SmsVdp {
                 value
             }
             0x81 => {
-                let value = self.status | 0x1F;
+                let value = self.status;
                 self.status = 0;
                 self.line_irq_pending = false;
                 self.control_first = None;
@@ -696,8 +696,11 @@ fn render_scanline(
     let pattern_base = 0;
     let mut bg_color = [0_u8; SMS_VDP_WIDTH];
     let mut bg_priority = [false; SMS_VDP_WIDTH];
+    let backdrop = 16 + usize::from(regs[7] & 0x0F);
     for x in 0..SMS_VDP_WIDTH {
         if regs[0] & 0x20 != 0 && x < 8 {
+            bg_color[x] = backdrop as u8;
+            put_pixel(frame, x, y, palette_rgb(cram, backdrop));
             continue;
         }
         let hs = if regs[0] & 0x40 != 0 && y < 16 {
@@ -705,6 +708,13 @@ fn render_scanline(
         } else {
             usize::from(regs[8])
         };
+        // The SMS VDP blanks the leading fine-scroll pixels with the
+        // backdrop instead of wrapping the last name-table column into view.
+        if x < (hs & 7) {
+            bg_color[x] = backdrop as u8;
+            put_pixel(frame, x, y, palette_rgb(cram, backdrop));
+            continue;
+        }
         let vs = if regs[0] & 0x80 != 0 && x >= 192 {
             0
         } else {
@@ -1163,6 +1173,48 @@ mod tests {
         }
     }
 
+
+    #[test]
+    fn sms_mode4_fine_scroll_leading_pixels_use_backdrop_not_wrapped_column() {
+        let mut v = SmsVdp::default();
+        v.registers[0] = 0x04;
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[5] = 0x7E;
+        v.registers[7] = 1;
+        v.registers[8] = 3;
+        v.cram[1] = 0x03;
+        v.cram[17] = 0x0C;
+        v.vram[0x3800 + 31 * 2] = 1;
+        v.vram[32] = 0xFF;
+        v.vram[0] = 0x80;
+        v.vram[0x3F00] = 0xD0;
+        let mut status = 0;
+        render_scanline(
+            &v.vram,
+            &v.cram,
+            &v.registers,
+            &mut status,
+            &mut v.working_framebuffer,
+            0,
+            true,
+        );
+        let backdrop = super::palette_rgb(&v.cram, 17);
+        let source_zero = super::palette_rgb(&v.cram, 1);
+        for x in 0..3 {
+            assert_eq!(
+                &v.working_framebuffer[x * 3..x * 3 + 3],
+                &backdrop,
+                "leading fine-scroll pixel x={x}"
+            );
+        }
+        assert_eq!(
+            &v.working_framebuffer[3 * 3..3 * 3 + 3],
+            &source_zero,
+            "first non-blanked pixel must map to source x=0"
+        );
+    }
+
     #[test]
     fn sms_mode4_horizontal_scroll_is_fixed_for_the_first_sixteen_lines() {
         let mut v = SmsVdp::default();
@@ -1389,13 +1441,13 @@ mod tests {
     }
 
     #[test]
-    fn status_port_sets_reserved_low_bits_and_clears_status_flags() {
+    fn status_port_preserves_sprite_index_and_clears_status_flags() {
         let mut v = SmsVdp {
-            status: VBLANK | OVERFLOW | COLLISION,
+            status: VBLANK | OVERFLOW | COLLISION | 0x0A,
             ..SmsVdp::default()
         };
         let status = v.read_port(0xBF);
-        assert_eq!(status, 0xFF);
+        assert_eq!(status, 0xEA);
         assert_eq!(v.status(), 0);
         assert!(!v.interrupt_pending());
     }
