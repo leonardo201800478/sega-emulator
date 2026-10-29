@@ -44,9 +44,7 @@ class SettingsDialog(QDialog):
         audio_layout = QVBoxLayout(audio_page)
         audio_group = QGroupBox("Saída de áudio do emulador")
         audio_form = QFormLayout(audio_group)
-        self.audio_enabled = QCheckBox("Ativar saída de áudio")
-        self.audio_enabled.setChecked(preferences.audio_enabled)
-        audio_form.addRow(self.audio_enabled)
+        # Audio enable/disable is controlled only by DriversDialog's backend selector.
         backend_label = {
             "wasapi": "WASAPI nativo — modo compartilhado (Rust)",
             "xaudio2": "XAudio2 nativo (Rust)",
