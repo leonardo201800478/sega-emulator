@@ -218,7 +218,7 @@ fn run_wasapi_worker(
     sample_rate: u32,
     buffer_size: u32,
 ) {
-    if let Err(error) = initialize_mta().ok() {
+    if let Err(error) = initialize_mta() {
         let _ = ready.send(Err(error.to_string()));
         return;
     }
