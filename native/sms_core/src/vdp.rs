@@ -1067,7 +1067,6 @@ mod tests {
         assert_eq!(&frame[x50..x50 + 3], &[255, 0, 0]);
     }
 
-
     #[test]
     fn sms_mode4_horizontal_scroll_uses_subtractive_source_coordinates() {
         let mut v = SmsVdp::default();
