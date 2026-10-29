@@ -249,6 +249,7 @@ def run(initial_path: Path | None = None) -> None:
         on_open_logs=lambda: show_logs(),
         on_show_machine_state=lambda: show_machine_state(),
         on_video_scale=lambda scale: window.set_video_scale(scale),
+        on_change_system=lambda: choose_system(),
         on_configure_drivers=lambda: configure_drivers(),
         on_configure_region=lambda region: configure_region(region),
         region_preference=region_preference,
@@ -732,6 +733,7 @@ def run(initial_path: Path | None = None) -> None:
             return
         machine, loaded, frame_count, paused = loaded_machine, candidate, 0, False
         active_system = requested_system
+        window.set_active_system(active_system)
         audio_resampler.reset()
         window.set_rom_label(candidate.display_name)
         selected_path = str(Path(path).expanduser().resolve())
@@ -775,6 +777,18 @@ def run(initial_path: Path | None = None) -> None:
         view.setFocus()
         frame_pacer.reset()
         timer.start()
+
+    def choose_system() -> None:
+        """Open the library on demand and switch runtime after explicit selection."""
+        library_dialog = RomLibraryDialog(settings, parent=window)
+        library_dialog.setWindowIcon(app.windowIcon())
+        library_dialog.showNormal()
+        if (
+            library_dialog.exec() == QDialog.DialogCode.Accepted
+            and library_dialog.selected_rom is not None
+            and library_dialog.selected_system is not None
+        ):
+            open_rom(str(library_dialog.selected_rom), library_dialog.selected_system)
 
     def configure_region(region: str) -> None:
         nonlocal region_preference
