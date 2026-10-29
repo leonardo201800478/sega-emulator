@@ -129,8 +129,15 @@ pub struct Z80InstructionTrace {
 impl Z80InstructionTrace {
     /// Write one deterministic JSON Lines record without adding a runtime dependency.
     pub fn write_json_line(&self, out: &mut impl core::fmt::Write) -> core::fmt::Result {
-        write!(out, "{\"instruction_index\":{},\"opcode_bytes\":[", self.instruction_index)?;
-        for (index, byte) in self.opcode_bytes[..usize::from(self.opcode_len)].iter().enumerate() {
+        write!(
+            out,
+            "{\"instruction_index\":{},\"opcode_bytes\":[",
+            self.instruction_index
+        )?;
+        for (index, byte) in self.opcode_bytes[..usize::from(self.opcode_len)]
+            .iter()
+            .enumerate()
+        {
             if index != 0 {
                 out.write_str(",")?;
             }
@@ -139,19 +146,31 @@ impl Z80InstructionTrace {
         let outcome = match self.outcome {
             Z80InstructionOutcome::Completed => "\"completed\"".to_owned(),
             Z80InstructionOutcome::UnsupportedOpcode { opcode, address } => {
-                format!("{{\"kind\":\"unsupported_opcode\",\"opcode\":\"{opcode:02X}\",\"address\":{address}}}")
+                format!(
+                    "{{\"kind\":\"unsupported_opcode\",\"opcode\":\"{opcode:02X}\",\"address\":{address}}}"
+                )
             }
         };
-        write!(out, "],\"opcode_bytes_truncated\":{},\"instruction_bytes\":[", self.opcode_bytes_truncated)?;
-        for (index, byte) in self.instruction_bytes[..usize::from(self.instruction_len)].iter().enumerate() {
-            if index != 0 { out.write_str(",")?; }
+        write!(
+            out,
+            "],\"opcode_bytes_truncated\":{},\"instruction_bytes\":[",
+            self.opcode_bytes_truncated
+        )?;
+        for (index, byte) in self.instruction_bytes[..usize::from(self.instruction_len)]
+            .iter()
+            .enumerate()
+        {
+            if index != 0 {
+                out.write_str(",")?;
+            }
             write!(out, "\"{byte:02X}\"")?;
         }
         write!(
             out,
             "],\"instruction_bytes_truncated\":{},\"tstates\":{},\"outcome\":{},\"before\":",
             self.instruction_bytes_truncated,
-            self.tstates.map_or_else(|| "null".to_owned(), |v| v.to_string()),
+            self.tstates
+                .map_or_else(|| "null".to_owned(), |v| v.to_string()),
             outcome
         )?;
         write_snapshot_json(out, self.before)?;
@@ -168,11 +187,32 @@ fn write_snapshot_json(
     write!(
         out,
         "{{\"af\":{},\"bc\":{},\"de\":{},\"hl\":{},\"af_alt\":{},\"bc_alt\":{},\"de_alt\":{},\"hl_alt\":{},\"ix\":{},\"iy\":{},\"pc\":{},\"sp\":{},\"i\":{},\"r\":{},\"iff1\":{},\"iff2\":{},\"interrupt_mode\":{},\"wz\":{},\"ei_delay\":{},\"nmi_pending\":{},\"int_pending\":{},\"q\":{},\"p\":{},\"halted\":{},\"total_tstates\":{}}}",
-        state.af, state.bc, state.de, state.hl, state.af_alt, state.bc_alt, state.de_alt, state.hl_alt,
-        state.ix, state.iy, state.pc, state.sp, state.i, state.r, state.iff1, state.iff2,
-        state.interrupt_mode, state.wz, state.ei_delay, state.nmi_pending,
-        state.int_pending.map_or_else(|| "null".to_owned(), |v| v.to_string()),
-        state.q, state.p, state.halted, state.total_tstates
+        state.af,
+        state.bc,
+        state.de,
+        state.hl,
+        state.af_alt,
+        state.bc_alt,
+        state.de_alt,
+        state.hl_alt,
+        state.ix,
+        state.iy,
+        state.pc,
+        state.sp,
+        state.i,
+        state.r,
+        state.iff1,
+        state.iff2,
+        state.interrupt_mode,
+        state.wz,
+        state.ei_delay,
+        state.nmi_pending,
+        state.int_pending
+            .map_or_else(|| "null".to_owned(), |v| v.to_string()),
+        state.q,
+        state.p,
+        state.halted,
+        state.total_tstates
     )
 }
 
@@ -215,7 +255,10 @@ pub trait CpuBus {
 
 #[cfg(test)]
 mod tests {
-    use super::{CpuBus, Z80BusEvent, Z80BusEventKind, Z80CpuSnapshot, Z80InstructionOutcome, Z80InstructionTrace};
+    use super::{
+        CpuBus, Z80BusEvent, Z80BusEventKind, Z80CpuSnapshot, Z80InstructionOutcome,
+        Z80InstructionTrace,
+    };
 
     struct PlainBus;
 
@@ -230,10 +273,31 @@ mod tests {
     #[test]
     fn instruction_trace_json_is_single_line_and_keeps_missing_values_null() {
         let state = Z80CpuSnapshot {
-            af: 0x1234, bc: 0, de: 0, hl: 0, af_alt: 0, bc_alt: 0, de_alt: 0, hl_alt: 0,
-            ix: 0, iy: 0, pc: 0xC002, sp: 0xFFFF, i: 0, r: 1, iff1: false, iff2: false,
-            interrupt_mode: 1, wz: 0, ei_delay: 0, nmi_pending: false, int_pending: None,
-            q: 0, p: false, halted: false, total_tstates: 7,
+            af: 0x1234,
+            bc: 0,
+            de: 0,
+            hl: 0,
+            af_alt: 0,
+            bc_alt: 0,
+            de_alt: 0,
+            hl_alt: 0,
+            ix: 0,
+            iy: 0,
+            pc: 0xC002,
+            sp: 0xFFFF,
+            i: 0,
+            r: 1,
+            iff1: false,
+            iff2: false,
+            interrupt_mode: 1,
+            wz: 0,
+            ei_delay: 0,
+            nmi_pending: false,
+            int_pending: None,
+            q: 0,
+            p: false,
+            halted: false,
+            total_tstates: 7,
         };
         let trace = Z80InstructionTrace {
             instruction_index: 1,
@@ -245,7 +309,11 @@ mod tests {
             instruction_bytes_truncated: false,
             tstates: Some(7),
             outcome: Z80InstructionOutcome::Completed,
-            before: Z80CpuSnapshot { pc: 0xC000, total_tstates: 0, ..state },
+            before: Z80CpuSnapshot {
+                pc: 0xC000,
+                total_tstates: 0,
+                ..state
+            },
             after: state,
         };
         let mut line = String::new();
