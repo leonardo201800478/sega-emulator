@@ -17,14 +17,19 @@ pub struct NativeSMSMachine {
 #[pymethods]
 impl NativeSMSMachine {
     #[new]
-    #[pyo3(signature = (rom, pal=false))]
-    fn new(rom: Vec<u8>, pal: bool) -> PyResult<Self> {
+    #[pyo3(signature = (rom, region="usa"))]
+    fn new(rom: Vec<u8>, region: &str) -> PyResult<Self> {
+        let (territory, video_standard) = match region {
+            "usa" => (sega_sms_core::Territory::Export, VideoStandard::Ntsc),
+            "europe" => (sega_sms_core::Territory::Export, VideoStandard::Pal),
+            "japan" => (sega_sms_core::Territory::Japan, VideoStandard::Ntsc),
+            _ => return Err(pyo3::exceptions::PyValueError::new_err(
+                "region deve ser usa, europe ou japan",
+            )),
+        };
         let config = SmsMachineConfig {
-            video_standard: if pal {
-                VideoStandard::Pal
-            } else {
-                VideoStandard::Ntsc
-            },
+            territory,
+            video_standard,
             ..SmsMachineConfig::default()
         };
         // The shared native resampler consumes a deterministic 44.1 kHz PSG stream.
@@ -194,7 +199,7 @@ mod tests {
 
     #[test]
     fn sms_adapter_uses_native_psg_and_reports_configured_clock() {
-        let machine = NativeSMSMachine::new(vec![0; 16], false).unwrap();
+        let machine = NativeSMSMachine::new(vec![0; 16], "usa").unwrap();
         assert_eq!(machine.psg_sample_rate(), 44_100);
         assert_eq!(machine.psg_clock_hz(), 3_579_545);
         assert_eq!(machine.total_tstates(), 0);
