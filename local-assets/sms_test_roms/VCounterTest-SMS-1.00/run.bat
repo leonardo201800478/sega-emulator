@@ -1,1 +1,0 @@
-smd -lc test.sms
