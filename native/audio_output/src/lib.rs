@@ -453,6 +453,9 @@ impl NativeXAudio2Output {
         if queue_blocks == 0 || queue_blocks > 64 {
             return Err(AudioOutputError::InvalidQueueCapacity);
         }
+        if !(-100..=100).contains(&balance) {
+            return Err(AudioOutputError::InvalidBalance);
+        }
 
         #[cfg(windows)]
         {
