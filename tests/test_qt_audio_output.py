@@ -7,6 +7,8 @@ from array import array
 
 import pytest
 
+pytest.importorskip("sega_z80_core")
+
 from sega_emulator.frontend.qt.audio_output import PcmResampler, samples_to_pcm
 
 
