@@ -146,3 +146,71 @@ def test_open_library_uses_cached_index_without_starting_scan(
     assert dialog.rom_list.item(0).text().startswith("cached.sms")
     assert "Atualizar biblioteca" in dialog.status_label.text()
     dialog.close()
+
+
+def test_render_entries_never_scans_box_art_implicitly(
+    qt_app, settings, tmp_path, monkeypatch
+):
+    dialog = RomLibraryDialog(settings)
+    rom_path = tmp_path / "cached.sms"
+    rom_path.write_bytes(b"cached rom")
+    from sega_emulator.rom_library import RomEntry
+
+    entry = RomEntry(
+        system="master_system",
+        path=str(rom_path),
+        name=rom_path.name,
+        size=10,
+        mtime_ns=1,
+        sha256="0" * 64,
+        suffix=".sms",
+    )
+    dialog.selected_system = "master_system"
+    dialog.box_art_directory_edit.setText(str(tmp_path))
+
+    def fail_if_scanned(*args, **kwargs):
+        raise AssertionError("Rendering ROM entries must not scan cover directories")
+
+    monkeypatch.setattr(
+        "sega_emulator.frontend.qt.rom_library_dialog._find_box_art",
+        fail_if_scanned,
+    )
+    dialog._render_entries((entry,))
+
+    assert dialog.rom_list.count() == 1
+    assert dialog.rom_list.item(0).icon().isNull()
+    dialog.close()
+
+
+def test_explicit_cover_refresh_discovers_local_artwork(
+    qt_app, settings, tmp_path, monkeypatch
+):
+    dialog = RomLibraryDialog(settings)
+    rom_path = tmp_path / "Sonic.sms"
+    cover_path = tmp_path / "Sonic.png"
+    rom_path.write_bytes(b"rom")
+    cover_path.write_bytes(b"placeholder")
+    from sega_emulator.rom_library import RomEntry
+
+    entry = RomEntry(
+        system="master_system",
+        path=str(rom_path),
+        name=rom_path.name,
+        size=3,
+        mtime_ns=1,
+        sha256="0" * 64,
+        suffix=".sms",
+    )
+    dialog.selected_system = "master_system"
+    dialog._entries = (entry,)
+    dialog.box_art_directory_edit.setText(str(tmp_path))
+    monkeypatch.setattr(
+        "sega_emulator.frontend.qt.rom_library_dialog._find_box_art",
+        lambda rom, directory: cover_path,
+    )
+
+    dialog._refresh_box_art()
+
+    assert dialog._box_art_matches[str(rom_path)] == cover_path
+    assert "1 capa(s) encontrada(s)" in dialog.status_label.text()
+    dialog.close()

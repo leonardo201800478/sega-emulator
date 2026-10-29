@@ -53,6 +53,7 @@ class EmulatorMainWindow(QMainWindow):
         on_open_logs: Callable[[], None],
         on_show_machine_state: Callable[[], None],
         on_video_scale: Callable[[int], None],
+        on_change_system: Callable[[], None] | None = None,
         on_configure_drivers: Callable[[], None] | None = None,
         on_configure_region: Callable[[str], None] | None = None,
         region_preference: str = "auto",
@@ -151,6 +152,12 @@ class EmulatorMainWindow(QMainWindow):
         self.reset_action = QAction(translate("action_reset", language), self)
         self.reset_action.setShortcut("F10")
         self.reset_action.triggered.connect(on_reset)
+        self.change_system_action = QAction("Mudar sistema/ROM…", self)
+        self.change_system_action.setObjectName("changeSystemAction")
+        if on_change_system is not None:
+            self.change_system_action.triggered.connect(on_change_system)
+        else:
+            self.change_system_action.setEnabled(False)
         self.fullscreen_action = QAction(translate("action_fullscreen", language), self)
         self.fullscreen_action.setShortcuts(["F11", "Alt+Return"])
         self.fullscreen_action.setCheckable(True)
@@ -207,8 +214,10 @@ class EmulatorMainWindow(QMainWindow):
         toolbar.setMovable(False)
         toolbar.setFloatable(False)
         toolbar.addAction(self.open_action)
+        toolbar.addAction(self.change_system_action)
         toolbar.addAction(self.pause_action)
         toolbar.addAction(self.reset_action)
+        toolbar.addAction(region_menu.menuAction())
         toolbar.addSeparator()
         toolbar.addAction(self.fullscreen_action)
         self.addToolBar(toolbar)
@@ -349,6 +358,13 @@ class EmulatorMainWindow(QMainWindow):
 
     def set_rom_label(self, label: str) -> None:
         self.rom_label.setText(label)
+
+    def set_active_system(self, system: str) -> None:
+        """Reflect the currently loaded hardware system in the window title."""
+        labels = {"sg1000": "SG-1000", "master_system": "Master System"}
+        if system not in labels:
+            raise ValueError("unsupported active system")
+        self.setWindowTitle(f"Sega Emulator | {labels[system]}")
 
     def set_video_scale(self, scale: int) -> None:
         if scale not in (2, 3, 4):
