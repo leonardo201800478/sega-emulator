@@ -174,3 +174,41 @@ A auditoria semântica global da issue [#158](https://github.com/leonardo2018004
 - Cada caso verifica resultado na memória, flags S/Z/H/PV/N/C e XY por fórmula de referência, PC, R, WZ, preservação de IX/IY e 23 T-states nominais. A fórmula de referência é independente dos helpers de produção, mas continua sendo um modelo derivado da definição da instrução, não um oráculo de hardware.
 - A matriz CSV reclassifica somente as 16 codificações de destino memória (8 operações por prefixo) para `exhaustive_internal_model`. Os destinos que também copiam o resultado para B/C/D/E/H/L/A continuam com cobertura por vetores fixos em teste separado; não são declarados exaustivos.
 - No SHA candidato `e76d5c6a6de45fdfe9c1280b2f6e83d073c5cda5`, passaram [CI/quality](https://github.com/leonardo201800478/sega-emulator/actions/runs/40767657068), [SMS Core Fast Validation](https://github.com/leonardo201800478/sega-emulator/actions/runs/40767657190) e [SMS Z80 Platform Validation](https://github.com/leonardo201800478/sega-emulator/actions/runs/40767657171). Após o merge, os três workflows também passaram no SHA `236a9b9e5e2958122f0ac3bdff3f281c02794c4b`: [CI/quality](https://github.com/leonardo201800478/sega-emulator/actions/runs/40767897310), [SMS Core Fast Validation](https://github.com/leonardo201800478/sega-emulator/actions/runs/40767897285) e [SMS Z80 Platform Validation](https://github.com/leonardo201800478/sega-emulator/actions/runs/40767897306). O teste não registra eventos de barramento ordenados por T-state; `TEMPORAL_PASS` permanece não declarado.
+
+
+## Atualização da cobertura — pós-merge #227–#229
+
+A contagem de vetores e a lista de testes da seção histórica correspondem ao snapshot explicitado no cabeçalho. Não atualizar a contagem histórica retroativamente sem recontar os arquivos reais no SHA corrente. A PR #229 adicionou um arquivo dedicado de cobertura condicional; a PR #227 acrescentou testes de trace para oito instruções ED. Essas adições devem ser contadas separadamente dos vetores SingleStepTests, pois os testes condicionais usam expectativas fixas locais e os traces ED comparam o perfil de amostragem documentado.
+
+
+
+## Estado consolidado após as PRs #227–#229 — 2026-10-29
+
+**SHA de `main` verificado após os merges:** `a662b7256ed5b92d06fd33875e4031b932e25945`.  
+**CI da `main` nesse SHA:** PASS — [workflow 40792001983](https://github.com/leonardo201800478/sega-emulator/actions/runs/40792001983).  
+**Limite:** o CI verde comprova apenas os checks executados pelo workflow; não certifica completude global do Z80 nem fidelidade física/ciclo a ciclo.
+
+### Mudanças integradas
+
+- **PR #227**, candidato `d4447db5f0dce9a2ecde9e50c97f39b10ce8da17`, merge `28da159634aa60b9a804f3bd7f781ccf82f3e1cf`: trace por T-state para LDI/LDD/LDIR/LDDR e CPI/CPD/CPIR/CPDR sem prefixos DD/FD, além de trace M-cycle associado. Validação de plataforma no candidato: [run 40782245521](https://github.com/leonardo201800478/sega-emulator/actions/runs/40782245521) — PASS.
+- **PR #229**, candidato `56cf4743bf0f05660f21a798de72e19afcfab34a`, merge `7b6fef3300c753c2b089f6b0dd287f8120b9f93f`: testes determinísticos para JR, JP, CALL, RET e DJNZ condicionais, caminhos tomados/não tomados, fronteiras de deslocamento, wraparound de PC/SP, ordem de acesso à pilha e T-states nominais; correção de `RET cc` para atualizar WZ/MEMPTR com o endereço de retorno somente quando a condição é tomada. [Fast Validation](https://github.com/leonardo201800478/sega-emulator/actions/runs/40791517040), [CI](https://github.com/leonardo201800478/sega-emulator/actions/runs/40791516982) e [SMS Z80 Platform Validation](https://github.com/leonardo201800478/sega-emulator/actions/runs/40791516943) — PASS no candidato exato.
+- **PR #228**, candidato documental `a2c0850c20232c95a5210a39fbd53cc7aeb5101e`, merge `a662b7256ed5b92d06fd33875e4031b932e25945`: auditoria de continuidade incorporada; [CI documental](https://github.com/leonardo201800478/sega-emulator/actions/runs/40791436529) — PASS.
+
+### Estado técnico depois dos merges
+
+| Área | Estado | Limite/evidência |
+|---|---|---|
+| Executor Z80 Rust em `native/sms_core` | IMPLEMENTED | Caminho ativo consolidado; não significa que todos os estados de todas as instruções estejam provados. |
+| Testes de controle de fluxo condicional | IMPLEMENTED; SHORT_PASS no candidato #229 | Cobertura adicionada às famílias JR/JP/CALL/RET/DJNZ e aos limites declarados; não é prova combinatória de todos os estados. |
+| Trace ED de bloco | IMPLEMENTED; SHORT_PASS no candidato #227 | Restrito às oito instruções indicadas e ao perfil de observação documentado. |
+| Classificação dos espaços de opcode | IMPLEMENTED | Enumeração/classificação não equivale à correção semântica integral. |
+| Semântica global, flags não documentadas, Q/P, WZ, interrupções e aliases | INCOMPLETO / auditoria contínua | Exigir vetores discriminantes e proveniência explicitada por família. |
+| Integração temporal com scheduler/dispositivos SMS | INTEGRATION_PENDING | A instrumentação atual não controla o scheduler nem representa todos os pinos/esperas. |
+| Fidelidade ciclo a ciclo integral | TEMPORAL_PASS NÃO DECLARADO | Não há evidência para afirmar cobertura temporal completa ou equivalência física. |
+
+### Proveniência e regras de interpretação
+
+O corpus SingleStepTests/Z80 fixado em `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7` tem ancestralidade no núcleo Z80 do Ares; é útil para regressão, mas não é um oráculo independente de hardware. Separar sempre comportamento descrito pelo manual ZiLOG, comportamento documentado por referências de terceiros, observação em emuladores e hipótese ainda não comprovada. Não promover um estado de validação com base apenas no número de opcodes enumerados ou no CI geral.
+
+
+**Pendência de auditoria:** recontar os vetores gerais e de I/O em bloco no checkout de `a662b7256ed5b92d06fd33875e4031b932e25945`, verificar hashes/proveniência do corpus e gerar uma matriz atualizada que não misture testes locais, vetores externos e samples temporais.
