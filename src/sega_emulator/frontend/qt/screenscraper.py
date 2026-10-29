@@ -68,7 +68,9 @@ def lookup_rom(
     """Look up one ROM using ScreenScraper's documented jeuInfos API."""
     rom_path = Path(path)
     if not credentials.developer_id.strip() or not credentials.developer_password:
-        raise ScreenScraperError("Configure as credenciais de desenvolvedor do ScreenScraper.")
+        raise ScreenScraperError(
+            "Configure as credenciais de desenvolvedor do ScreenScraper."
+        )
 
     crc, md5, sha1, size = _file_hashes(rom_path)
     params = {
@@ -107,7 +109,9 @@ def lookup_rom(
         raise ScreenScraperError(f"ScreenScraper: {error_text}")
     game = next((node for node in root.iter() if _local_name(node.tag) == "jeu"), None)
     if game is None or not game.attrib.get("id"):
-        raise ScreenScraperError("O ScreenScraper não encontrou correspondência para esta ROM.")
+        raise ScreenScraperError(
+            "O ScreenScraper não encontrou correspondência para esta ROM."
+        )
 
     title = _localized_title(game, language) or rom_path.stem
     metadata: dict[str, str] = {"title": title, "game_id": game.attrib["id"]}
@@ -147,7 +151,9 @@ def download_cover(url: str, destination: str | Path) -> Path:
     if len(payload) > 12 * 1024 * 1024:
         raise ScreenScraperError("A imagem de capa excede o limite de 12 MiB.")
     if not payload.startswith((b"\\x89PNG\\r\\n\\x1a\\n", b"\\xff\\xd8\\xff", b"RIFF")):
-        raise ScreenScraperError("O servidor não retornou uma imagem PNG, JPEG ou WebP válida.")
+        raise ScreenScraperError(
+            "O servidor não retornou uma imagem PNG, JPEG ou WebP válida."
+        )
     temporary = target.with_suffix(target.suffix + ".tmp")
     temporary.write_bytes(payload)
     temporary.replace(target)
