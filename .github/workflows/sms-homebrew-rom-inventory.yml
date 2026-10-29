@@ -103,10 +103,10 @@ jobs:
               echo
               echo "## Build: $source_file"
               echo
-              printf '%s\\n' '- Assembler: WLA-DX `wla-z80`'
-              printf -- '- Result: `%s`\\n' "$build_dir/$output_file"
-              printf -- '- Built SHA-256: `%s`\\n' "$built_sha"
-              printf -- '- Reference SHA-256: `%s`\\n' "$reference_sha"
+              printf '%s\n' '- Assembler: WLA-DX `wla-z80`'
+              printf -- '- Result: `%s`\n' "$build_dir/$output_file"
+              printf -- '- Built SHA-256: `%s`\n' "$built_sha"
+              printf -- '- Reference SHA-256: `%s`\n' "$reference_sha"
               if [[ "$built_sha" == "$reference_sha" ]]; then
                 echo "- Binary comparison: **MATCH**"
               else
@@ -133,9 +133,9 @@ jobs:
             echo
             echo "## Source projects not built in this pass"
             echo
-            printf '%s\\n' '- `testmain.asm`: references `colours.inc` and `Phantasy Star decompressors.inc`, which are not present in the current corpus; build is blocked until those source dependencies are supplied or the intended configuration is documented.'
-            printf '%s\\n' '- `VCounterTest-SMS-1.00/TEST.ASM`: its supplied batch file invokes TASM80, a different assembler/toolchain. It is not silently treated as WLA-DX source.'
-            printf '%s\\n' '- `porttest.asm` and `bgtest.asm`: use legacy TASM-style syntax; no reproducible build recipe/toolchain is currently supplied.'
+            printf '%s\n' '- `testmain.asm`: references `colours.inc` and `Phantasy Star decompressors.inc`, which are not present in the current corpus; build is blocked until those source dependencies are supplied or the intended configuration is documented.'
+            printf '%s\n' '- `VCounterTest-SMS-1.00/TEST.ASM`: its supplied batch file invokes TASM80, a different assembler/toolchain. It is not silently treated as WLA-DX source.'
+            printf '%s\n' '- `porttest.asm` and `bgtest.asm`: use legacy TASM-style syntax; no reproducible build recipe/toolchain is currently supplied.'
             echo
             echo "Existing prebuilt ROMs remain available for execution tests. Compilation success and hash equality are separate evidence from emulator correctness."
           } >> "$report"
@@ -150,4 +150,5 @@ jobs:
             build/sms-homebrew-validation/
             local-assets/sms_test_roms/.ci-build/
           if-no-files-found: error
-          retention-days: 7\n          include-hidden-files: true
+          retention-days: 7
+          include-hidden-files: true
