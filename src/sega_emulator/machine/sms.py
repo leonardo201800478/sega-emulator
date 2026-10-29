@@ -180,7 +180,9 @@ def load_sms_rom(path: str | Path) -> LoadedRom:
                 member_name = item.filename
         else:
             if source.suffix.casefold() not in allowed:
-                raise ValueError("Formato SMS não suportado. Use .sms, .rom, .bin ou ZIP.")
+                raise ValueError(
+                    "Formato SMS não suportado. Use .sms, .rom, .bin ou ZIP."
+                )
             data = source.read_bytes()
             name = source.name
             member_name = None
