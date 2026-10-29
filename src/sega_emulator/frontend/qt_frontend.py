@@ -825,7 +825,9 @@ def run(initial_path: Path | None = None) -> None:
         )
         view.set_integer_scale(preferences.integer_scale)
         preferences.save_to_store(settings)
-        audio_warning = _audio_output_warning(preferences, audio_output, selected_audio_driver)
+        audio_warning = _audio_output_warning(
+            preferences, audio_output, selected_audio_driver
+        )
         status.showMessage(
             audio_warning or "Configurações de áudio e vídeo aplicadas.",
             8000 if audio_warning is not None else 5000,
