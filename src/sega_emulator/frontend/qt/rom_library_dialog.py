@@ -122,6 +122,8 @@ class RomLibraryDialog(QDialog):
         self._scan_cancel: Event | None = None
         self._scan_task: _ScanTask | None = None
         self._entries: tuple[RomEntry, ...] = ()
+        # Cover discovery is opt-in; rendering only consumes this explicit-refresh cache.
+        self._box_art_matches: dict[str, Path] = {}
         self.language = str(settings.value("ui_language", "pt-BR"))
         self.setWindowTitle(translate("app_title", self.language))
         self.setWindowFlags(
@@ -426,6 +428,7 @@ class RomLibraryDialog(QDialog):
         # Display the persisted index only. Filesystem scanning happens only
         # after the user explicitly requests an update or a full scan.
         self._entries = RomLibrary(self._index_path).entries(system)
+        self._box_art_matches = {}
         self._render_entries(self._entries)
         if self._entries:
             self.status_label.setText(
@@ -589,8 +592,6 @@ class RomLibraryDialog(QDialog):
 
     def _render_entries(self, entries: tuple[RomEntry, ...]) -> None:
         self.rom_list.clear()
-        art_directory_text = self.box_art_directory_edit.text().strip()
-        art_directory = Path(art_directory_text) if art_directory_text else None
         for entry in entries:
             rom_path = Path(entry.path)
             item = QListWidgetItem(f"{entry.name}\n{_format_size(entry.size)}")
@@ -598,15 +599,7 @@ class RomLibraryDialog(QDialog):
             item.setData(Qt.ItemDataRole.UserRole, entry.path)
             item.setToolTip(f"{entry.path}\nSHA-256: {entry.sha256}")
             override = self._manual_box_art_for(rom_path)
-            cover = (
-                override
-                if override is not None
-                else (
-                    _find_box_art(rom_path, art_directory)
-                    if art_directory is not None
-                    else None
-                )
-            )
+            cover = override or self._box_art_matches.get(entry.path)
             if cover is not None:
                 item.setIcon(QIcon(str(cover)))
                 item.setText(f"{rom_path.stem}\n{_format_size(entry.size)}")
@@ -632,9 +625,17 @@ class RomLibraryDialog(QDialog):
                     f"box_art_directories/{self.selected_system}",
                     str(directory.resolve()),
                 )
+        matches: dict[str, Path] = {}
+        if configured:
+            for entry in self._entries:
+                cover = _find_box_art(Path(entry.path), directory)
+                if cover is not None:
+                    matches[entry.path] = cover
+        self._box_art_matches = matches
         self._render_entries(self._entries)
         self.status_label.setText(
-            f"Imagens atualizadas · {len(self._entries)} jogo(s) na biblioteca"
+            f"Imagens atualizadas · {len(matches)} capa(s) encontrada(s) · "
+            f"{len(self._entries)} jogo(s) na biblioteca"
         )
 
     def _manual_box_art_key(self, rom_path: Path) -> str:
