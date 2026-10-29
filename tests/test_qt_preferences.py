@@ -30,9 +30,11 @@ def test_defaults_are_valid_and_stable() -> None:
     assert preferences.recent_roms == ()
     assert preferences.audio_enabled is True
     assert preferences.diagnostics_enabled is False
-    assert preferences.audio_sample_rate == 44_100
+    assert preferences.audio_sample_rate == 48_000
     assert preferences.audio_buffer_size == 512
-    assert preferences.audio_volume == 100
+    assert preferences.audio_volume == 80
+    assert preferences.audio_balance == 0
+    assert preferences.audio_queue_blocks == 4
     assert preferences.video_filter == "nearest"
     assert preferences.integer_scale is True
     assert preferences.sprite_limit_enabled is True
@@ -49,6 +51,8 @@ def test_defaults_are_valid_and_stable() -> None:
         ("window_width", 200),
         ("window_height", 200),
         ("video_scale", 5),
+        ("audio_balance", 101),
+        ("audio_queue_blocks", 3),
     ],
 )
 def test_rejects_invalid_explicit_preferences(field: str, value: int) -> None:
@@ -67,6 +71,8 @@ def test_load_recovers_from_corrupt_or_legacy_values() -> None:
             "audio_sample_rate": 96000,
             "audio_buffer_size": 300,
             "audio_volume": 150,
+            "audio_balance": 150,
+            "audio_queue_blocks": 3,
             "video_filter": "unknown",
             "crt_signal_mode": "invalid",
             "integer_scale": "yes",
@@ -85,9 +91,11 @@ def test_load_recovers_from_corrupt_or_legacy_values() -> None:
     assert preferences.video_scale == 3
     assert preferences.recent_roms == ("game.sg",)
     assert preferences.audio_enabled is False
-    assert preferences.audio_sample_rate == 44_100
+    assert preferences.audio_sample_rate == 48_000
     assert preferences.audio_buffer_size == 512
-    assert preferences.audio_volume == 100
+    assert preferences.audio_volume == 80
+    assert preferences.audio_balance == 0
+    assert preferences.audio_queue_blocks == 4
     assert preferences.video_filter == "nearest"
     assert preferences.integer_scale is True
     assert preferences.sprite_limit_enabled is False
@@ -110,6 +118,8 @@ def test_save_and_load_round_trip() -> None:
         audio_sample_rate=48_000,
         audio_buffer_size=1024,
         audio_volume=73,
+        audio_balance=-25,
+        audio_queue_blocks=8,
         video_filter="crt_ntsc",
         integer_scale=False,
         sprite_limit_enabled=False,

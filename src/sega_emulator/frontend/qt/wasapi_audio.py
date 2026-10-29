@@ -1,206 +1,117 @@
-"""Windows WASAPI PCM output for the Qt frontend.
-
-The device is opened through PortAudio's WASAPI host API via sounddevice.
-The emulated PSG remains independent from this real-time output backend.
-"""
+"""Thin Qt lifecycle facade over native Rust Windows audio outputs."""
 
 from __future__ import annotations
 
 import logging
-import queue
-from array import array
-from typing import Any
+
+
+def _native_type(backend: str):
+    try:
+        import sega_z80_core
+    except ImportError as exc:
+        raise RuntimeError(
+            "O runtime de áudio Rust não está instalado. Compile native/z80_core "
+            "com Maturin e a feature python-extension."
+        ) from exc
+
+    native_name = {
+        "wasapi": "NativeWasapiOutput",
+        "xaudio2": "NativeXAudio2Output",
+    }.get(backend)
+    if native_name is None:
+        raise ValueError(f"Backend de áudio inválido: {backend}")
+    try:
+        return getattr(sega_z80_core, native_name)
+    except AttributeError as exc:
+        raise RuntimeError(
+            f"O backend nativo {backend} não está presente na extensão Rust."
+        ) from exc
+
 
 logger = logging.getLogger(__name__)
 
 
-class WasapiAudioOutput:
-    """Bounded, mono PCM16 output stream using the Windows WASAPI host API.
-
-    PCM is queued by the emulation/UI thread. PortAudio's callback only drains
-    queued bytes and fills shortages with silence; it never runs emulation.
-    """
+class NativeAudioOutput:
+    """Control a Rust-owned output stream; Python does no audio processing."""
 
     def __init__(
         self,
         sample_rate: int,
         buffer_size: int,
-        volume: int = 100,
         *,
-        queue_blocks: int = 8,
-        sounddevice_module: Any | None = None,
+        backend: str = "wasapi",
+        queue_blocks: int = 4,
+        balance: int = 0,
     ) -> None:
         if type(sample_rate) is not int or sample_rate <= 0:
             raise ValueError("sample_rate deve ser um inteiro positivo")
         if type(buffer_size) is not int or buffer_size <= 0:
             raise ValueError("buffer_size deve ser um inteiro positivo")
-        if type(volume) is not int or not 0 <= volume <= 100:
-            raise ValueError("volume deve estar entre 0 e 100")
         if type(queue_blocks) is not int or queue_blocks < 1:
             raise ValueError("queue_blocks deve ser um inteiro positivo")
-
-        if sounddevice_module is None:
-            try:
-                import sounddevice as sounddevice_module
-            except ImportError as exc:
-                raise RuntimeError(
-                    "Saída WASAPI indisponível: instale a dependência sounddevice."
-                ) from exc
-
-        self._sd = sounddevice_module
-        self.sample_rate = sample_rate
-        self.buffer_size = buffer_size
-        self._volume = volume / 100.0
-        self._queue: queue.Queue[bytes] = queue.Queue(maxsize=queue_blocks)
-        self._current_block = b""
-        self._current_offset = 0
-        self.underrun_callbacks = 0
-        self.dropped_blocks = 0
+        if type(balance) is not int or not -100 <= balance <= 100:
+            raise ValueError("balance deve ser um inteiro entre -100 e 100")
+        if backend not in {"wasapi", "xaudio2"}:
+            raise ValueError(f"Backend de áudio inválido: {backend}")
+        self.backend = backend
+        self._native = _native_type(backend)(
+            sample_rate, buffer_size, queue_blocks, balance
+        )
         self._closed = False
-
-        device = self._find_wasapi_default_output()
-        try:
-            extra_settings = self._sd.WasapiSettings(
-                exclusive=False,
-                auto_convert=True,
-            )
-            self._stream = self._sd.RawOutputStream(
-                samplerate=sample_rate,
-                blocksize=buffer_size,
-                device=device,
-                channels=1,
-                dtype="int16",
-                callback=self._callback,
-                extra_settings=extra_settings,
-            )
-            self._stream.start()
-        except Exception as exc:
-            raise RuntimeError(f"Não foi possível abrir a saída WASAPI: {exc}") from exc
-
         logger.info(
-            "Saída WASAPI aberta",
+            "Native audio backend initialized",
             extra={
-                "event": "wasapi_output_opened",
-                "device_index": device,
-                "sample_rate": sample_rate,
-                "buffer_size": buffer_size,
-                "shared_mode": True,
+                "audio_backend": backend,
+                "audio_sample_rate": self.sample_rate,
+                "audio_buffer_size_requested": self.buffer_size,
+                "audio_queue_blocks_requested": queue_blocks,
+                "audio_balance": balance,
             },
         )
 
-    def _find_wasapi_default_output(self) -> int:
-        """Resolve the default output device specifically from the WASAPI host."""
-        try:
-            host_apis = self._sd.query_hostapis()
-            devices = self._sd.query_devices()
-        except Exception as exc:
-            raise RuntimeError(
-                f"Falha ao enumerar dispositivos de áudio: {exc}"
-            ) from exc
+    @property
+    def sample_rate(self) -> int:
+        return int(self._native.sample_rate)
 
-        for host_index, host_api in enumerate(host_apis):
-            if "wasapi" not in str(host_api.get("name", "")).casefold():
-                continue
-            device_index = host_api.get("default_output_device", -1)
-            if isinstance(device_index, int) and device_index >= 0:
-                if device_index < len(devices):
-                    return device_index
-            for index, device in enumerate(devices):
-                if (
-                    device.get("hostapi") == host_index
-                    and device.get("max_output_channels", 0) > 0
-                ):
-                    return index
-        raise RuntimeError(
-            "O host WASAPI não foi encontrado ou não possui dispositivo de saída."
-        )
+    @property
+    def buffer_size(self) -> int:
+        return int(self._native.buffer_size)
+
+    @property
+    def underrun_callbacks(self) -> int:
+        return int(self._native.underrun_count)
+
+    @property
+    def dropped_blocks(self) -> int:
+        return int(self._native.dropped_block_count)
 
     def write_pcm(self, pcm: bytes) -> None:
-        """Queue one mono signed-16-bit PCM block without waiting for the device."""
-        if self._closed or not pcm:
-            return
-        if len(pcm) % 2:
-            raise ValueError("PCM16 deve conter um número par de bytes")
-
-        if self._volume != 1.0:
-            samples = array("h")
-            samples.frombytes(pcm)
-            for index, sample in enumerate(samples):
-                samples[index] = max(-32768, min(32767, round(sample * self._volume)))
-            pcm = samples.tobytes()
-
-        try:
-            self._queue.put_nowait(pcm)
-        except queue.Full:
-            # Prefer recent audio to unbounded latency after a slow frame.
-            try:
-                self._queue.get_nowait()
-                self.dropped_blocks += 1
-            except queue.Empty:
-                pass
-            try:
-                self._queue.put_nowait(pcm)
-            except queue.Full:
-                self.dropped_blocks += 1
-
-    def set_volume(self, volume: int) -> None:
-        """Set output gain without touching PSG state or clocks."""
-        if type(volume) is not int or not 0 <= volume <= 100:
-            raise ValueError("volume deve estar entre 0 e 100")
-        self._volume = volume / 100.0
-
-    def _callback(
-        self,
-        outdata: Any,
-        frames: int,
-        time_info: Any,
-        status: Any,
-    ) -> None:
-        del time_info
-        underflow_reported = bool(status and getattr(status, "output_underflow", False))
-        required = frames * 2
-        output = memoryview(outdata).cast("B")
-        output[:] = b"\x00" * required
-        written = 0
-        while written < required:
-            if self._current_offset >= len(self._current_block):
-                try:
-                    self._current_block = self._queue.get_nowait()
-                    self._current_offset = 0
-                except queue.Empty:
-                    underflow_reported = True
-                    break
-            available = len(self._current_block) - self._current_offset
-            count = min(required - written, available)
-            start = self._current_offset
-            output[written : written + count] = self._current_block[
-                start : start + count
-            ]
-            self._current_offset += count
-            written += count
-        if underflow_reported:
-            self.underrun_callbacks += 1
+        if not isinstance(pcm, bytes):
+            raise TypeError("pcm deve ser bytes PCM16")
+        self._native.write_pcm(pcm)
 
     def close(self) -> None:
-        """Stop and release the WASAPI stream; safe to call more than once."""
         if self._closed:
             return
-        self._closed = True
-        try:
-            self._stream.stop()
-        finally:
-            self._stream.close()
         logger.info(
-            "Saída WASAPI encerrada",
+            "Native audio backend session metrics",
             extra={
-                "event": "wasapi_output_closed",
-                "underrun_callbacks": self.underrun_callbacks,
-                "dropped_blocks": self.dropped_blocks,
+                "audio_backend": self.backend,
+                "audio_sample_rate": self.sample_rate,
+                "audio_buffer_size_requested": self.buffer_size,
+                "audio_underruns": self.underrun_callbacks,
+                "audio_dropped_blocks": self.dropped_blocks,
             },
         )
+        self._native.close()
+        self._closed = True
 
-    def __enter__(self) -> WasapiAudioOutput:
+    def __enter__(self) -> NativeAudioOutput:
         return self
 
-    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
+    def __exit__(self, exc_type, exc, traceback) -> None:
         self.close()
+
+
+# Backward-compatible import name for callers that only use the default backend.
+WasapiAudioOutput = NativeAudioOutput

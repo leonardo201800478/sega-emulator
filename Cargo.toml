@@ -3,16 +3,19 @@ resolver = "3"
 exclude = [
     "native/z80_core",
     "native/sega_emu_core",
+    "native/audio_output",
 ]
 members = [
     "native/sg1000_core",
     "native/sms_core",
     "native/z80_alu",
     "native/z80_bus",
+    "native/audio_runtime",
 ]
 default-members = [
     "native/sg1000_core",
     "native/sms_core",
     "native/z80_alu",
     "native/z80_bus",
+    "native/audio_runtime",
 ]

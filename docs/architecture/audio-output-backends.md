@@ -2,11 +2,17 @@
 
 # Contrato de configuração para saída de áudio
 
-> Estado: o frontend Qt já possui um primeiro backend WASAPI compartilhado, usando a implementação WASAPI do PortAudio por meio de `sounddevice`. XAudio2 e SDL3 como backends de saída ainda não estão implementados. Esta fatia não é uma implementação COM/WASAPI direta em Rust e não valida latência em hardware Windows.
+> Estado: nesta branch, o frontend Qt usa uma fachada PyO3 para o backend WASAPI compartilhado implementado em Rust via crate wasapi. O fluxo é event-driven e usa uma fila limitada. SDL3 como backend de saída ainda não está implementado. WASAPI e XAudio2 precisam passar CI e validação física de estabilidade, reconexão e latência em Windows antes de serem considerados validados.
 
 ## Objetivo
 
 Definir um contrato de configuração validado e independente do dispositivo para a saída de áudio. O backend WASAPI inicial já abre o dispositivo no frontend Qt; a configuração e os testes automatizados não substituem a validação física. Nenhum backend pode alterar o estado determinístico do hardware emulado.
+
+## Integração atual dos núcleos
+
+- **SG-1000:** o frontend Qt usa `SG1000Machine.drain_audio_pcm()` e encaminha PCM16 para o backend nativo WASAPI/XAudio2. Quando a saída está desativada ou falha, as amostras pendentes são descartadas sem alterar T-states.
+- **Master System:** `NativeSMSMachine` gera amostras PSG no núcleo Rust e expõe `drain_audio_pcm()` pela extensão PyO3. A fachada `SMSMachine` em `sega_emulator.machine.sms` permite usar o mesmo `PcmResampler` nativo e a mesma saída WASAPI/XAudio2. A integração do áudio à futura execução de frames/interface de gameplay do SMS continua pendente; a interface Qt atual ainda inicia apenas SG-1000.
+- Ambos os caminhos usam a mesma taxa de entrada PCM do adaptador (44,1 kHz), e a taxa de saída configurada não altera clocks, registradores nem T-states do núcleo.
 
 ## Separação de responsabilidades
 
@@ -19,32 +25,33 @@ A callback de áudio não deve executar emulação, acessar a interface gráfica
 
 ## Backends
 
-### WASAPI (Qt — implementação inicial)
+### WASAPI (backend nativo Rust — primeira implementação)
 
-O frontend Qt seleciona explicitamente o host API WASAPI por `sounddevice`/PortAudio e abre o dispositivo de saída padrão desse host em modo compartilhado, com conversão automática permitida. O produtor PCM usa uma fila limitada; a callback de saída apenas consome PCM e preenche lacunas com silêncio, sem executar a emulação. Blocos antigos podem ser descartados quando a fila fica cheia para evitar crescimento de latência. O backend conta callbacks com underrun e blocos descartados.
+A Qt cria e controla a fachada PyO3; a inicialização COM, enumeração do dispositivo padrão, stream compartilhado event-driven, fila PCM limitada, preenchimento de underruns com silêncio e encerramento ocorrem em Rust (native/audio_output). A taxa de amostragem e o tamanho de buffer são configurações de saída e não alteram o clock do PSG.
 
-**Limite de implementação:** o acesso à API Windows passa pelo host WASAPI do PortAudio; esta etapa não implementa diretamente as interfaces COM de WASAPI em Rust. Modo exclusivo, escolha de dispositivo pela UI, leitura das métricas na interface e validação física de latência/underrun permanecem pendentes. O valor configurado de buffer é solicitado ao backend, mas ainda não é apresentado como latência real medida.
+**Limites de validação:** esta implementação ainda não foi certificada em dispositivo Windows real. A política atual descarta o novo bloco quando a fila limitada está cheia; a contagem de blocos descartados e underruns é mantida no backend Rust. O tamanho configurado é uma solicitação de duração do buffer; no modo compartilhado, o Windows determina o período efetivo e a latência real ainda não foi medida. Reconexão/hot-plug, latência efetiva, estabilidade em sessões longas e fallback explícito ainda precisam de testes no Windows. O backend não executa emulação nem chama Python na thread de áudio.
 
-### XAudio2
+### XAudio2 (backend nativo Rust — primeira implementação)
 
-Backend nativo Windows orientado a jogos, com grafo de vozes e buffers dinâmicos. Deve usar uma implementação mantida e testável da API nativa; não tratar um pacote Python de nome semelhante como binding de XAudio2 sem confirmar sua finalidade. A taxa da voz de origem e a taxa do dispositivo são conceitos separados, e conversões devem ser contabilizadas.
+A Qt seleciona o backend por meio da fachada PyO3. O worker Rust cria o engine XAudio2, a mastering voice e uma source voice estéreo PCM16; submete buffers que permanecem vivos até o engine informar que foram consumidos. A fila de entrada é limitada, e a aplicação mede blocos descartados e episódios de underrun. A implementação usa polling de estado em uma thread Rust dedicada; ainda precisa de avaliação de CPU/latência e de um mecanismo de notificação mais eficiente se as medições justificarem.
+
+**Limites de validação:** compilação Windows, dispositivo padrão, remoção/reconexão, encerramento e estabilidade prolongada ainda precisam ser verificados no SHA final. Não declarar equivalência de latência com WASAPI sem medições equivalentes.
 
 ### SDL3
 
 Backend multiplataforma baseado em dispositivos e fluxos de áudio SDL3. Deve ser implementado com uma binding SDL3 real e versionada. Não reutilizar o mixer SDL2 do Pygame como se fosse SDL3: o frontend Pygame foi removido do pacote ativo; a interface suportada é Qt/PySide6.
 
-## Configurações expostas
+## Configurações expostas no Qt
 
-- Backend: WASAPI, XAudio2 ou SDL3.
-- Dispositivo de saída: padrão do sistema ou dispositivo escolhido.
-- Frequência PCM: 22050, 32000, 44100, 48000, 88200 ou 96000 Hz, apenas se suportada.
-- Formato: PCM signed 16-bit, PCM 24-bit quando suportado, ou float 32-bit quando suportado.
-- Canais de saída: mono ou estéreo; duplicar mono para estéreo é uma operação da saída, não uma mudança no chip.
-- Perfil de latência: estável, equilibrado ou baixa latência; buffer manual quando a API permitir.
-- WASAPI: compartilhado/exclusivo e conversão automática em modo compartilhado quando exposta pelo backend.
-- Fallback: habilitado/desabilitado, com mensagem explícita e registro da configuração realmente aberta.
+- Backend selecionado em um único lugar: Drivers → WASAPI compartilhado, XAudio2 ou áudio desativado. A janela de áudio apenas mostra o backend ativo; não duplica a seleção nem mantém um checkbox de habilitação concorrente.
+- Taxa PCM de saída: 22050, 44100 ou 48000 Hz. Padrão recomendado: 48000 Hz para compatibilidade comum com o mixer do Windows; isso é uma escolha de saída moderna, não uma propriedade histórica do console.
+- Volume de saída: 0–100%, padrão 80% para manter margem de headroom.
+- Balanço L/R: -100 (esquerda) a +100 (direita), padrão 0. O PSG mono é duplicado para os dois canais e o balanço atenua o canal oposto no limite de saída Rust.
+- WASAPI compartilhado: período solicitado configurável por buffer de 256, 512, 1024 ou 2048 amostras, padrão 512. O Windows controla o período efetivo e pode converter a taxa/formato para o dispositivo.
+- XAudio2: tamanho do bloco PCM configurável com os mesmos valores e profundidade da fila de 2, 4 ou 8 blocos, padrão 4. A estimativa nominal da fila não inclui a latência do dispositivo.
+- Ambos: fila de entrada de 2, 4 ou 8 blocos. A legenda e a estimativa de tempo são específicas do backend; não representam latência ponta a ponta medida.
 
-A UI deve desabilitar opções incompatíveis com o backend ativo, exibir erros de abertura e mostrar a configuração efetiva. Não alterar silenciosamente a frequência, o formato ou o modo selecionado sem comunicar o fallback.
+A UI não expõe seleção de dispositivo, modo exclusivo, PCM 24-bit, float32, filtros analógicos ou formatos alternativos porque esses recursos ainda não são configuráveis nos backends ativos. A janela mostra estimativas nominais e informa que latência efetiva, underruns, reconexão e estabilidade prolongada exigem validação em Windows real. O áudio desativado é escolhido exclusivamente no seletor de backend.
 
 ## Padrões por console
 
@@ -56,8 +63,8 @@ Portanto, cada perfil de console deverá especificar somente fatos sustentados p
 
 1. Formalizar este contrato e manter o núcleo PSG independente do dispositivo de áudio.
 2. Implementar configurações validadas e persistentes, incluindo perfil por console e preferências globais.
-3. Validar o backend WASAPI/PortAudio em Windows real, incluindo underruns, encerramento, reconexão, formatos e latência medida.
-4. Se a necessidade de controle nativo justificar o custo, avaliar a migração do adaptador PortAudio para WASAPI direto em Rust, com ownership explícito e testes no mesmo SHA.
+3. Validar o backend WASAPI nativo em Windows real, incluindo underruns, encerramento, reconexão, formatos e latência medida.
+4. Validar o backend XAudio2 nativo em Rust como alternativa explícita, incluindo ownership dos buffers, uso de CPU e testes no mesmo SHA.
 5. Manter a integração de áudio do frontend Qt separada do hardware PSG Rust e validar o wheel/driver no Windows.
 6. Implementar XAudio2 por binding nativo verificável; medir estabilidade e latência.
 7. Integrar escolha de dispositivo e métricas na interface Qt, sem expor configurações não implementadas.
@@ -77,4 +84,19 @@ Portanto, cada perfil de console deverá especificar somente fatos sustentados p
 - Microsoft, [XAudio2 Introduction](https://learn.microsoft.com/en-us/windows/win32/xaudio2/xaudio2-introduction).
 - Microsoft, [XAudio2 sample-rate conversions](https://learn.microsoft.com/en-us/windows/win32/xaudio2/xaudio2-sample-rate-conversions).
 - SDL, [SDL_AudioStream](https://wiki.libsdl.org/SDL3/SDL_AudioStream).
-- python-sounddevice, [Platform-specific settings / WASAPI](https://python-sounddevice.readthedocs.io/en/0.5.3/api/platform-specific-settings.html).
+- Microsoft, [WASAPI low-latency audio](https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/low-latency-audio).
+
+
+## Procedimento de validação física no Windows
+
+Após compilar/instalar a extensão nativa Release, execute no diretório raiz:
+
+```powershell
+python tools/validate_native_audio.py --backend both --seconds 8
+```
+
+O utilitário emite um tom senoidal de baixo volume pelo backend selecionado e registra taxa/tamanho solicitados, underruns e blocos descartados. Repita com `--backend wasapi` e `--backend xaudio2` separadamente se precisar isolar uma falha. Os contadores e o tempo do teste não medem latência ponta a ponta nem provam, sozinhos, que o som foi audível.
+
+Para cada backend, registrar manualmente: versão do Windows; dispositivo de saída e driver; backend ativo; taxa/formato efetivos informados pelo sistema, se disponíveis; configuração solicitada; som audível sem cortes/distorção; contadores antes/depois; encerramento sem travar. Repetir durante uma sessão longa e, quando for seguro, desconectar/reconectar o dispositivo ou alternar a saída padrão para verificar recuperação. Não provocar remoção de dispositivo durante uso crítico nem presumir que a recuperação ocorreu sem observar a saída.
+
+Critério mínimo: a inicialização e o encerramento devem completar; o tom deve ser audível; não deve haver falha contínua nem aumento persistente de underruns/descarte em carga normal. Toda medição de latência precisa indicar método, dispositivo, backend e configurações efetivas. Esta validação manual complementa — não substitui — CI, testes de determinismo e testes automatizados.

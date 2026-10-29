@@ -1,0 +1,11 @@
+[package]
+name = "sega-audio-runtime"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "sega_audio_runtime"
+path = "src/lib.rs"
+
+[dependencies]

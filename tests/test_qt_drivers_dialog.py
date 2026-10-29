@@ -28,7 +28,7 @@ def test_drivers_dialog_exposes_only_implemented_api_choices(qt_app) -> None:
     ] == ["auto", "xinput", "sdl3"]
     assert [
         dialog.audio_combo.itemData(i) for i in range(dialog.audio_combo.count())
-    ] == ["wasapi", "disabled"]
+    ] == ["wasapi", "xaudio2", "disabled"]
     assert [
         dialog.video_combo.itemData(i) for i in range(dialog.video_combo.count())
     ] == ["auto", "vulkan", "d3d11", "d3d12", "raster"]

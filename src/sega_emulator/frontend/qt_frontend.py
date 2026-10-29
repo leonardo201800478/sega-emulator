@@ -26,7 +26,7 @@ from sega_emulator.frontend.native_first_controller_input import (
 from sega_emulator.frontend.qt.audio_output import PcmResampler
 from sega_emulator.frontend.qt.frame_pacer import FramePacer
 from sega_emulator.frontend.qt.preferences import FrontendPreferences
-from sega_emulator.frontend.qt.wasapi_audio import WasapiAudioOutput
+from sega_emulator.frontend.qt.wasapi_audio import NativeAudioOutput
 from sega_emulator.machine.sg1000 import SG1000Machine
 from sega_emulator.rom_loader import LoadedRom, list_rom_members, load_rom
 
@@ -88,30 +88,35 @@ def _runtime_diagnostic(machine: SG1000Machine, rom_sha256: str) -> dict[str, ob
     return diagnostic
 
 
-def _initialize_wasapi_backend(
+def _initialize_audio_backend(
     preferences: FrontendPreferences,
-) -> WasapiAudioOutput | None:
-    """Open the Windows WASAPI output without tying audio to the frame loop."""
-    if not preferences.audio_enabled:
+    backend: str,
+) -> NativeAudioOutput | None:
+    """Open the selected native Rust output without tying it to the frame loop."""
+    if not preferences.audio_enabled or backend == "disabled":
         return None
     try:
-        return WasapiAudioOutput(
+        return NativeAudioOutput(
             sample_rate=preferences.audio_sample_rate,
             buffer_size=preferences.audio_buffer_size,
-            volume=preferences.audio_volume,
+            backend=backend,
+            queue_blocks=preferences.audio_queue_blocks,
+            balance=preferences.audio_balance,
         )
     except Exception as exc:
-        # Audio initialization failure must not disable video or input.
-        logger.warning("Saída WASAPI indisponível: %s", exc)
+        logger.warning("Saída de áudio %s indisponível: %s", backend, exc)
         return None
 
 
 def _audio_output_warning(
-    preferences: FrontendPreferences, audio_output: WasapiAudioOutput | None
+    preferences: FrontendPreferences,
+    audio_output: NativeAudioOutput | None,
+    backend: str = "wasapi",
 ) -> str | None:
-    """Describe an enabled audio backend that failed to initialize."""
-    if preferences.audio_enabled and audio_output is None:
-        return "Áudio WASAPI indisponível; consulte o log para detalhes."
+    """Describe an enabled native audio backend that failed to initialize."""
+    if preferences.audio_enabled and backend != "disabled" and audio_output is None:
+        backend_label = {"wasapi": "WASAPI", "xaudio2": "XAudio2"}.get(backend, backend)
+        return f"Áudio {backend_label} indisponível; consulte o log para detalhes."
     return None
 
 
@@ -178,8 +183,18 @@ def run(initial_path: Path | None = None) -> None:
     # persisted "python" values are migrated unconditionally and are no longer
     # exposed as a selectable runtime.
     settings.setValue("cpu_core", "rust")
-    audio_output = _initialize_wasapi_backend(preferences)
-    audio_resampler = PcmResampler(preferences.audio_sample_rate)
+    selected_audio_driver = str(settings.value("audio_driver", "wasapi"))
+    if selected_audio_driver not in {"wasapi", "xaudio2", "disabled"}:
+        selected_audio_driver = "wasapi"
+        settings.setValue("audio_driver", selected_audio_driver)
+    backend_audio_enabled = selected_audio_driver != "disabled"
+    if preferences.audio_enabled != backend_audio_enabled:
+        settings.setValue("audio_enabled", backend_audio_enabled)
+        preferences = FrontendPreferences.from_store(settings)
+    audio_output = _initialize_audio_backend(preferences, selected_audio_driver)
+    audio_resampler = PcmResampler(
+        preferences.audio_sample_rate, preferences.audio_volume
+    )
     serialized_controller_config = settings.value("controller_config", "", type=str)
     try:
         controller_config = (
@@ -268,7 +283,9 @@ def run(initial_path: Path | None = None) -> None:
     )
     view.set_integer_scale(preferences.integer_scale)
     status = window.status
-    audio_warning = _audio_output_warning(preferences, audio_output)
+    audio_warning = _audio_output_warning(
+        preferences, audio_output, selected_audio_driver
+    )
     if audio_warning is not None:
         status.showMessage(audio_warning)
 
@@ -383,7 +400,12 @@ def run(initial_path: Path | None = None) -> None:
         return ordered[index]
 
     def show_frame() -> None:
-        nonlocal paused, frame_count, last_checkpoint_time, last_checkpoint_tstates
+        nonlocal \
+            audio_output, \
+            paused, \
+            frame_count, \
+            last_checkpoint_time, \
+            last_checkpoint_tstates
         nonlocal last_checkpoint_instructions, last_checkpoint_frame
         if machine is None or paused:
             return
@@ -409,10 +431,25 @@ def run(initial_path: Path | None = None) -> None:
             if vgm_recorder.active:
                 for event_tstate, event_value in psg_events:
                     vgm_recorder.record_write(event_tstate, event_value)
-            samples = machine.drain_audio_samples()
-            if samples and audio_output is not None:
-                pcm = audio_resampler.process(samples)
-                audio_output.write_pcm(pcm)
+            if audio_output is not None:
+                pcm = machine.drain_audio_pcm(audio_resampler)
+                if pcm:
+                    try:
+                        audio_output.write_pcm(pcm)
+                    except RuntimeError as exc:
+                        logger.warning(
+                            "Saída de áudio %s falhou durante a sessão: %s",
+                            selected_audio_driver,
+                            exc,
+                        )
+                        audio_output.close()
+                        audio_output = None
+                        status.showMessage(
+                            "Saída de áudio indisponível; a emulação continua sem som.",
+                            8000,
+                        )
+            else:
+                machine.discard_audio_samples()
             emulation_ms = (time.perf_counter() - phase_started) * 1000
             frame_count += 1
 
@@ -633,7 +670,12 @@ def run(initial_path: Path | None = None) -> None:
         timer.start()
 
     def configure_drivers() -> None:
-        nonlocal controller_input, audio_output, audio_resampler, preferences
+        nonlocal \
+            controller_input, \
+            audio_output, \
+            audio_resampler, \
+            preferences, \
+            selected_audio_driver
 
         from sega_emulator.frontend.qt.drivers_dialog import DriversDialog
 
@@ -681,7 +723,11 @@ def run(initial_path: Path | None = None) -> None:
         settings.setValue("video_driver", video_driver)
 
         audio_enabled = audio_driver != "disabled"
-        audio_changed = audio_enabled != preferences.audio_enabled
+        audio_changed = (
+            audio_enabled != preferences.audio_enabled
+            or audio_driver != selected_audio_driver
+            or (audio_enabled and audio_output is None)
+        )
         if audio_changed:
             if audio_output is not None:
                 try:
@@ -699,6 +745,8 @@ def run(initial_path: Path | None = None) -> None:
                 audio_sample_rate=preferences.audio_sample_rate,
                 audio_buffer_size=preferences.audio_buffer_size,
                 audio_volume=preferences.audio_volume,
+                audio_balance=preferences.audio_balance,
+                audio_queue_blocks=preferences.audio_queue_blocks,
                 video_filter=preferences.video_filter,
                 integer_scale=preferences.integer_scale,
                 sprite_limit_enabled=preferences.sprite_limit_enabled,
@@ -711,13 +759,18 @@ def run(initial_path: Path | None = None) -> None:
                 crt_curvature=preferences.crt_curvature,
                 crt_signal_mode=preferences.crt_signal_mode,
             )
-            audio_output = _initialize_wasapi_backend(updated_audio)
-            audio_resampler = PcmResampler(updated_audio.audio_sample_rate)
+            audio_output = _initialize_audio_backend(updated_audio, audio_driver)
+            audio_resampler = PcmResampler(
+                updated_audio.audio_sample_rate, updated_audio.audio_volume
+            )
             preferences = updated_audio
+        selected_audio_driver = audio_driver
         settings.setValue("audio_driver", audio_driver)
         preferences.save_to_store(settings)
 
-        audio_warning = _audio_output_warning(preferences, audio_output)
+        audio_warning = _audio_output_warning(
+            preferences, audio_output, selected_audio_driver
+        )
         restart_note = (
             " Reinicie o emulador para aplicar a nova API gráfica."
             if video_driver_changed
@@ -743,8 +796,10 @@ def run(initial_path: Path | None = None) -> None:
         )
 
     def configure_audio_video() -> None:
-        nonlocal preferences, audio_output, audio_resampler
-        dialog = SettingsDialog(preferences, window)
+        nonlocal preferences, audio_output, audio_resampler, selected_audio_driver
+        dialog = SettingsDialog(
+            preferences, window, audio_backend=selected_audio_driver
+        )
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         updated = dialog.preferences()
@@ -765,6 +820,13 @@ def run(initial_path: Path | None = None) -> None:
             updated.audio_enabled != preferences.audio_enabled
             or updated.audio_sample_rate != preferences.audio_sample_rate
             or updated.audio_buffer_size != preferences.audio_buffer_size
+            or updated.audio_balance != preferences.audio_balance
+            or updated.audio_queue_blocks != preferences.audio_queue_blocks
+            or (
+                updated.audio_enabled
+                and selected_audio_driver != "disabled"
+                and audio_output is None
+            )
         )
         if audio_device_changed:
             if audio_output is not None:
@@ -772,17 +834,17 @@ def run(initial_path: Path | None = None) -> None:
                     audio_output.close()
                 except Exception:
                     logger.exception(
-                        "Falha ao encerrar WASAPI antes de reconfigurar áudio"
+                        "Falha ao encerrar o backend de áudio antes de reconfigurar"
                     )
-            audio_output = _initialize_wasapi_backend(updated)
-            audio_resampler = PcmResampler(updated.audio_sample_rate)
-        elif audio_output is not None:
-            audio_output.set_volume(updated.audio_volume)
+            audio_output = _initialize_audio_backend(updated, selected_audio_driver)
+            audio_resampler = PcmResampler(
+                updated.audio_sample_rate, updated.audio_volume
+            )
+        else:
+            audio_resampler.set_volume(updated.audio_volume)
 
         preferences = updated
-        settings.setValue(
-            "audio_driver", "wasapi" if preferences.audio_enabled else "disabled"
-        )
+        settings.setValue("audio_driver", selected_audio_driver)
         view.set_filter_mode(preferences.video_filter)
         view.set_crt_parameters(
             scanline_intensity=preferences.crt_scanline_intensity,
@@ -793,7 +855,9 @@ def run(initial_path: Path | None = None) -> None:
         )
         view.set_integer_scale(preferences.integer_scale)
         preferences.save_to_store(settings)
-        audio_warning = _audio_output_warning(preferences, audio_output)
+        audio_warning = _audio_output_warning(
+            preferences, audio_output, selected_audio_driver
+        )
         status.showMessage(
             audio_warning or "Configurações de áudio e vídeo aplicadas.",
             8000 if audio_warning is not None else 5000,
@@ -803,6 +867,7 @@ def run(initial_path: Path | None = None) -> None:
             extra={
                 "event": "audio_video_settings_updated",
                 "audio_enabled": preferences.audio_enabled,
+                "audio_driver": selected_audio_driver,
                 "audio_sample_rate": preferences.audio_sample_rate,
                 "audio_buffer_size": preferences.audio_buffer_size,
                 "audio_volume": preferences.audio_volume,
@@ -1371,6 +1436,8 @@ def run(initial_path: Path | None = None) -> None:
         audio_sample_rate=preferences.audio_sample_rate,
         audio_buffer_size=preferences.audio_buffer_size,
         audio_volume=preferences.audio_volume,
+        audio_balance=preferences.audio_balance,
+        audio_queue_blocks=preferences.audio_queue_blocks,
         video_filter=preferences.video_filter,
         integer_scale=preferences.integer_scale,
     )

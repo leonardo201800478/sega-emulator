@@ -1,0 +1,18 @@
+[package]
+name = "sega-audio-output"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "sega_audio_output"
+path = "src/lib.rs"
+
+[dependencies]
+rtrb = "0.3"
+
+[target.'cfg(windows)'.dependencies]
+wasapi = "0.26"
+windows = { version = "0.62.2", features = ["Win32_Media_Audio", "Win32_Media_Audio_XAudio2", "Win32_Media_Multimedia", "Win32_Foundation", "Win32_System_SystemInformation"] }
+
+[workspace]

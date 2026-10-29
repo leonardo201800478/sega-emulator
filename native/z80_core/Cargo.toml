@@ -15,3 +15,6 @@ python-extension = ["pyo3/extension-module"]
 [dependencies]
 pyo3 = "0.27"
 sega-sg1000-core = { path = "../sg1000_core" }
+sega-sms-core = { path = "../sms_core" }
+sega-audio-runtime = { path = "../audio_runtime" }
+sega-audio-output = { path = "../audio_output" }

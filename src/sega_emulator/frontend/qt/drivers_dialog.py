@@ -21,7 +21,8 @@ INPUT_DRIVERS = (
     ("SDL3 Gamepad", "sdl3"),
 )
 AUDIO_DRIVERS = (
-    ("PortAudio / WASAPI compartilhado", "wasapi"),
+    ("WASAPI nativo (Rust)", "wasapi"),
+    ("XAudio2 nativo (Rust)", "xaudio2"),
     ("Áudio desativado", "disabled"),
 )
 VIDEO_DRIVERS = (
@@ -46,7 +47,7 @@ class DriversDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Drivers — APIs de entrada, áudio e vídeo")
-        self.setMinimumWidth(520)
+        self.setMinimumWidth(560)
         layout = QVBoxLayout(self)
         form = QFormLayout()
         self.input_combo = self._combo(INPUT_DRIVERS, input_driver)

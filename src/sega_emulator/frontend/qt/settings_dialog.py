@@ -25,11 +25,18 @@ from sega_emulator.frontend.qt.preferences import FrontendPreferences
 class SettingsDialog(QDialog):
     """Editor de configurações de saída, sem alterar clocks da máquina emulada."""
 
-    def __init__(self, preferences: FrontendPreferences, parent=None) -> None:
+    def __init__(
+        self,
+        preferences: FrontendPreferences,
+        parent=None,
+        *,
+        audio_backend: str = "wasapi",
+    ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Configurações de áudio e vídeo")
-        self.setMinimumWidth(440)
+        self.setMinimumWidth(600)
         self._initial = preferences
+        self._audio_backend = audio_backend
         root = QVBoxLayout(self)
         tabs = QTabWidget(self)
         root.addWidget(tabs)
@@ -38,10 +45,13 @@ class SettingsDialog(QDialog):
         audio_layout = QVBoxLayout(audio_page)
         audio_group = QGroupBox("Saída de áudio do emulador")
         audio_form = QFormLayout(audio_group)
-        self.audio_enabled = QCheckBox("Ativar saída de áudio")
-        self.audio_enabled.setChecked(preferences.audio_enabled)
-        audio_form.addRow(self.audio_enabled)
-        audio_form.addRow("Backend de saída:", QLabel("WASAPI — modo compartilhado"))
+        # Audio enable/disable is controlled only by DriversDialog's backend selector.
+        backend_label = {
+            "wasapi": "WASAPI nativo — modo compartilhado (Rust)",
+            "xaudio2": "XAudio2 nativo (Rust)",
+            "disabled": "Áudio desativado",
+        }.get(audio_backend, "Backend desconhecido")
+        audio_form.addRow("Backend de saída:", QLabel(backend_label))
 
         self.sample_rate = QComboBox()
         for rate in (22050, 44100, 48000):
@@ -52,19 +62,85 @@ class SettingsDialog(QDialog):
 
         self.buffer_size = QComboBox()
         for samples, label in (
-            (256, "256 amostras — menor latência"),
+            (256, "256 amostras — menor buffer solicitado"),
             (512, "512 amostras — equilibrado"),
-            (1024, "1.024 amostras — mais estável"),
-            (2048, "2.048 amostras — maior tolerância"),
+            (1024, "1.024 amostras — maior tolerância"),
+            (2048, "2.048 amostras — buffer maior"),
         ):
             self.buffer_size.addItem(label, samples)
         index = self.buffer_size.findData(preferences.audio_buffer_size)
         self.buffer_size.setCurrentIndex(max(0, index))
-        audio_form.addRow("Buffer de saída", self.buffer_size)
+        audio_form.addRow(
+            "Período solicitado (WASAPI)"
+            if audio_backend == "wasapi"
+            else "Tamanho do bloco PCM (XAudio2)"
+            if audio_backend == "xaudio2"
+            else "Buffer / bloco PCM",
+            self.buffer_size,
+        )
+
+        self.queue_blocks = QComboBox()
+        for blocks, label in (
+            (2, "2 blocos — menor fila"),
+            (4, "4 blocos — recomendado"),
+            (8, "8 blocos — maior tolerância a atrasos"),
+        ):
+            self.queue_blocks.addItem(label, blocks)
+        self.queue_blocks.setCurrentIndex(
+            max(0, self.queue_blocks.findData(preferences.audio_queue_blocks))
+        )
+        audio_form.addRow(
+            "Fila PCM pré-endpoint (WASAPI)"
+            if audio_backend == "wasapi"
+            else "Buffers enfileirados (XAudio2)"
+            if audio_backend == "xaudio2"
+            else "Profundidade da fila",
+            self.queue_blocks,
+        )
+
+        self.volume = QSlider(Qt.Orientation.Horizontal)
+        self.volume.setRange(0, 100)
+        self.volume.setValue(preferences.audio_volume)
+        self.volume_label = QLabel(f"{preferences.audio_volume}%")
+        self.volume.valueChanged.connect(
+            lambda value: self.volume_label.setText(f"{value}%")
+        )
+        volume_row = QWidget(audio_group)
+        volume_layout = QHBoxLayout(volume_row)
+        volume_layout.setContentsMargins(0, 0, 0, 0)
+        volume_layout.addWidget(self.volume, 1)
+        volume_layout.addWidget(self.volume_label)
+        audio_form.addRow("Volume de saída:", volume_row)
+
+        self.balance = QSlider(Qt.Orientation.Horizontal)
+        self.balance.setRange(-100, 100)
+        self.balance.setValue(preferences.audio_balance)
+        self.balance_label = QLabel()
+        self.balance.valueChanged.connect(self._update_balance_label)
+        balance_row = QWidget(audio_group)
+        balance_layout = QHBoxLayout(balance_row)
+        balance_layout.setContentsMargins(0, 0, 0, 0)
+        balance_layout.addWidget(QLabel("Esquerda"))
+        balance_layout.addWidget(self.balance, 1)
+        balance_layout.addWidget(QLabel("Direita"))
+        balance_layout.addWidget(self.balance_label)
+        audio_form.addRow("Balanço L/R:", balance_row)
+        self._update_balance_label(preferences.audio_balance)
+
+        self.latency_label = QLabel()
+        self.latency_label.setWordWrap(True)
+        audio_form.addRow("Estimativa de fila:", self.latency_label)
+        self.sample_rate.currentIndexChanged.connect(self._update_latency_label)
+        self.buffer_size.currentIndexChanged.connect(self._update_latency_label)
+        self.queue_blocks.currentIndexChanged.connect(self._update_latency_label)
+        self._audio_backend = audio_backend
+        self._update_latency_label()
 
         audio_note = QLabel(
-            "A taxa e o buffer configuram somente a saída do Windows. "
-            "Não alteram o clock do PSG nem aumentam a fidelidade do modelo digital."
+            "A taxa e o buffer configuram somente a saída do Windows. No modo "
+            "compartilhado, o Windows determina o período efetivo; o buffer é uma "
+            "solicitação, não uma medição de latência. Nada disso altera o clock "
+            "do PSG nem aumenta a fidelidade do modelo digital."
         )
         audio_note.setWordWrap(True)
         audio_form.addRow(audio_note)
@@ -82,34 +158,47 @@ class SettingsDialog(QDialog):
         psg_form.addRow("Canais:", QLabel("3 tons + 1 ruído; saída mono"))
         psg_form.addRow("Antialiasing:", QLabel("FIR Blackman de 63 taps, ativo"))
 
-        volume_row = QWidget(psg_group)
-        volume_layout = QHBoxLayout(volume_row)
-        volume_layout.setContentsMargins(0, 0, 0, 0)
-        self.volume = QSlider(Qt.Orientation.Horizontal, volume_row)
-        self.volume.setRange(0, 100)
-        self.volume.setValue(preferences.audio_volume)
-        self.volume_label = QLabel(f"{preferences.audio_volume}%", volume_row)
-        self.volume.valueChanged.connect(
-            lambda value: self.volume_label.setText(f"{value}%")
-        )
-        volume_layout.addWidget(self.volume, 1)
-        volume_layout.addWidget(self.volume_label)
-        psg_form.addRow("Ganho da saída do PSG:", volume_row)
-
         psg_note = QLabel(
-            "O ganho afeta somente as amostras reproduzidas; não altera os "
-            "registradores nem o clock lógico. Clock, divisor, variante do chip e "
-            "filtro ainda são fixos no núcleo. O FIR é antialiasing digital, não "
-            "um modelo do circuito analógico real. Esses controles só serão "
-            "liberados quando houver implementação e testes de regressão "
-            "independentes no núcleo Rust.",
+            "Clock, divisor, variante do chip e filtro digital são propriedades "
+            "do modelo atual, não controles de saída. O FIR de 63 taps é "
+            "antialiasing digital; não representa o circuito analógico real.",
             psg_page,
         )
         psg_note.setWordWrap(True)
         psg_form.addRow(psg_note)
         psg_layout.addWidget(psg_group)
         psg_layout.addStretch(1)
-        tabs.addTab(psg_page, "PSG / Hardware")
+        tabs.addTab(psg_page, "PSG / Modelo")
+
+        guide_page = QWidget(self)
+        guide_layout = QVBoxLayout(guide_page)
+        guide = QLabel(
+            "PADRÕES RECOMENDADOS\n"
+            "Taxa PCM: 48.000 Hz como ponto de partida comum no Windows.\n"
+            "Volume: 80% para manter margem de headroom.\n"
+            "Balanço: centro (0); sinal mono duplicado igualmente em L/R.\n"
+            "Buffer/bloco: 512 amostras; fila: 4 blocos.\n\n"
+            "WASAPI COMPARTILHADO\n"
+            "O período configurado é uma solicitação. O Windows e o driver "
+            "determinam o período efetivo e podem converter o formato. A fila "
+            "exibida não inclui buffers internos do sistema.\n\n"
+            "XAUDIO2\n"
+            "O tamanho do bloco e a profundidade da fila controlam o áudio "
+            "mantido pela aplicação. Aumentar a fila tende a tolerar atrasos, "
+            "mas pode aumentar o atraso de reprodução. Usa o dispositivo padrão.\n\n"
+            "FIDELIDADE E DETERMINISMO\n"
+            "Volume, balanço, taxa PCM e buffers afetam apenas a saída no host; "
+            "não alteram clocks, registradores, T-states nem o estado determinístico "
+            "do PSG. A estimativa de latência é nominal, não uma medição "
+            "ponta a ponta. Latência real, underruns e reconexão exigem testes "
+            "em hardware Windows. "
+            "Modo exclusivo, seleção de dispositivo, formatos alternativos e efeitos "
+            "analógicos não são expostos porque ainda não são configuráveis."
+        )
+        guide.setWordWrap(True)
+        guide_layout.addWidget(guide)
+        guide_layout.addStretch(1)
+        tabs.addTab(guide_page, "Guia de som")
 
         video_page = QWidget(self)
         video_layout = QVBoxLayout(video_page)
@@ -249,9 +338,43 @@ class SettingsDialog(QDialog):
         )
         root.addWidget(buttons)
 
+    def _update_balance_label(self, value: int) -> None:
+        if value == 0:
+            text = "Centro (L/R iguais)"
+        elif value < 0:
+            text = f"L {100 + value}% / R 100%"
+        else:
+            text = f"L 100% / R {100 - value}%"
+        self.balance_label.setText(text)
+
+    def _update_latency_label(self, *_args) -> None:
+        rate = int(self.sample_rate.currentData())
+        buffer_samples = int(self.buffer_size.currentData())
+        queue_blocks = int(self.queue_blocks.currentData())
+        requested_period_ms = buffer_samples * 1000 / rate
+        if self._audio_backend == "wasapi":
+            text = (
+                f"Período WASAPI solicitado: ~{requested_period_ms:.1f} ms. "
+                f"A fila de entrada comporta {queue_blocks} blocos PCM, mas o "
+                "tamanho de cada bloco varia por frame. O Windows pode escolher "
+                "um período maior; latência ponta a ponta não medida."
+            )
+        elif self._audio_backend == "xaudio2":
+            queue_ms = buffer_samples * queue_blocks * 1000 / rate
+            text = (
+                f"Fila XAudio2 nominal: ~{queue_ms:.1f} ms. Inclui apenas os blocos "
+                "enfileirados pela aplicação, não o dispositivo nem a latência "
+                "ponta a ponta."
+            )
+        else:
+            text = (
+                "Áudio desativado; estimativa indisponível até selecionar "
+                "WASAPI ou XAudio2."
+            )
+        self.latency_label.setText(text)
+
     def _restore_defaults(self) -> None:
         defaults = FrontendPreferences()
-        self.audio_enabled.setChecked(defaults.audio_enabled)
         self.sample_rate.setCurrentIndex(
             self.sample_rate.findData(defaults.audio_sample_rate)
         )
@@ -259,6 +382,10 @@ class SettingsDialog(QDialog):
             self.buffer_size.findData(defaults.audio_buffer_size)
         )
         self.volume.setValue(defaults.audio_volume)
+        self.balance.setValue(defaults.audio_balance)
+        self.queue_blocks.setCurrentIndex(
+            self.queue_blocks.findData(defaults.audio_queue_blocks)
+        )
         self.video_filter.setCurrentIndex(
             self.video_filter.findData(defaults.video_filter)
         )
@@ -286,12 +413,14 @@ class SettingsDialog(QDialog):
             video_scale=old.video_scale,
             recent_roms=old.recent_roms,
             controller_config=old.controller_config,
-            audio_enabled=self.audio_enabled.isChecked(),
+            audio_enabled=self._audio_backend != "disabled",
             diagnostics_enabled=old.diagnostics_enabled,
             cpu_core=old.cpu_core,
             audio_sample_rate=int(self.sample_rate.currentData()),
             audio_buffer_size=int(self.buffer_size.currentData()),
             audio_volume=self.volume.value(),
+            audio_balance=self.balance.value(),
+            audio_queue_blocks=int(self.queue_blocks.currentData()),
             video_filter=str(self.video_filter.currentData()),
             integer_scale=self.integer_scale.isChecked(),
             sprite_limit_enabled=not self.sprite_limit_unlocked.isChecked(),
