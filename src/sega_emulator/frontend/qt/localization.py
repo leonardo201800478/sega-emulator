@@ -255,7 +255,6 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
 }
 
 
-
 _MAIN_WINDOW_TRANSLATIONS: dict[str, dict[str, str]] = {
     "pt-BR": {
         "main_title": "Sega Emulator | SG-1000",
@@ -388,6 +387,8 @@ _MAIN_WINDOW_TRANSLATIONS: dict[str, dict[str, str]] = {
         "menu_help": "&Aide",
     },
 }
+
+
 def translate(key: str, language: str = "pt-BR") -> str:
     """Translate a UI key, safely falling back to Brazilian Portuguese."""
     selected = _TRANSLATIONS.get(language, _TRANSLATIONS["pt-BR"])
