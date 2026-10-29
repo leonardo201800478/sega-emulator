@@ -35,7 +35,20 @@ DEFAULT_DIRECTORY_NAMES = {
 
 # These suffixes identify possible library entries, not validated ROM formats.
 CANDIDATE_SUFFIXES = frozenset(
-    {".sg", ".sms", ".gg", ".md", ".gen", ".32x", ".rom", ".bin", ".iso", ".cue", ".chd", ".zip"}
+    {
+        ".sg",
+        ".sms",
+        ".gg",
+        ".md",
+        ".gen",
+        ".32x",
+        ".rom",
+        ".bin",
+        ".iso",
+        ".cue",
+        ".chd",
+        ".zip",
+    }
 )
 
 ProgressCallback = Callable[[int, int, str], None]
@@ -142,6 +155,7 @@ class RomLibrary:
 
         candidates: dict[str, Path] = {}
         errors = list(root_errors)
+        completed_roots: list[Path] = []
         for root in roots:
             if not root.exists():
                 errors.append(ScanError(str(root), "Diretório não encontrado."))
@@ -158,6 +172,8 @@ class RomLibrary:
                             candidates[str(resolved)] = resolved
                         except (OSError, RuntimeError) as exc:
                             errors.append(ScanError(str(path), str(exc)))
+                            raise OSError(f"Não foi possível resolver {path}") from exc
+                completed_roots.append(root)
             except OSError as exc:
                 errors.append(ScanError(str(root), str(exc)))
 
@@ -215,12 +231,24 @@ class RomLibrary:
             scoped_before = {
                 key: entry
                 for key, entry in before.items()
-                if _is_under_any_root(Path(key), roots)
+                if _is_under_any_root(Path(key), completed_roots)
             }
             removed = len(set(scoped_before) - set(current))
-            # Preserve cached entries outside roots that were scanned this time.
+            # Keep cache entries under missing/inaccessible roots; transient disk or
+            # permission failures must not erase the user's library index.
+            protected_roots = [root for root in roots if root not in completed_roots]
+            protected_before = {
+                key: value
+                for key, value in before.items()
+                if _is_under_any_root(Path(key), protected_roots)
+            }
+            current.update(protected_before)
             current.update(
-                {key: value for key, value in before.items() if key not in scoped_before}
+                {
+                    key: value
+                    for key, value in before.items()
+                    if key not in scoped_before and key not in protected_before
+                }
             )
 
         self._entries[system] = current
@@ -293,7 +321,9 @@ def _is_under_any_root(path: Path, roots: list[Path]) -> bool:
     return False
 
 
-def _find_duplicate_groups(entries: Iterable[RomEntry]) -> tuple[tuple[str, ...], ...]:
+def _find_duplicate_groups(
+    entries: Iterable[RomEntry],
+) -> tuple[tuple[str, ...], ...]:
     by_hash: dict[str, list[str]] = defaultdict(list)
     for entry in entries:
         by_hash[entry.sha256].append(entry.path)
