@@ -1,20 +1,12 @@
-//! Experimental native Z80 execution core.
+//! PyO3 adapter for the integrated, Python-independent SG-1000 Rust machine.
 //!
-//! This first selectable increment intentionally supports a subset of the
-//! Python reference core. Unsupported opcodes fail explicitly; they never
-//! fall back silently to Python.
+//! CPU execution and hardware state live in `sega_sg1000_core`; this crate
+//! exposes the machine and immutable snapshots to the Qt/Python application.
 
 use pyo3::prelude::*;
 
 mod machine;
 use machine::{NativeCpuSnapshot, NativePsgSnapshot, NativeSG1000Machine, NativeVdpSnapshot};
-
-const FLAG_C: u8 = 0x01;
-const FLAG_N: u8 = 0x02;
-const FLAG_PV: u8 = 0x04;
-const FLAG_H: u8 = 0x10;
-const FLAG_Z: u8 = 0x40;
-const FLAG_S: u8 = 0x80;
 
 #[pymodule]
 fn sega_z80_core(module: &Bound<'_, PyModule>) -> PyResult<()> {
