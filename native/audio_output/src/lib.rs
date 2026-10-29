@@ -71,7 +71,6 @@ pub struct NativeWasapiOutput {
     sample_rate: u32,
     buffer_size: u32,
     balance: i8,
-    balance: i8,
 }
 
 impl NativeWasapiOutput {
@@ -419,6 +418,7 @@ pub struct NativeXAudio2Output {
     dropped_blocks: Arc<AtomicU64>,
     sample_rate: u32,
     buffer_size: u32,
+    balance: i8,
 }
 
 impl NativeXAudio2Output {
