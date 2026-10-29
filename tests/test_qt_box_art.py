@@ -64,8 +64,12 @@ def test_box_art_folder_is_persisted_per_system(qt_app, settings, tmp_path: Path
     # Exercise the same persistence contract used by the folder-picker callback.
     dialog.box_art_directory_edit.setText(str(art_dir))
     settings.setValue("box_art_directories/sg1000", str(art_dir))
-    settings.setValue("box_art_directories/master_system", str(tmp_path / "sms-covers"))
+    settings.setValue(
+        "box_art_directories/master_system", str(tmp_path / "sms-covers")
+    )
 
     assert dialog._box_art_directory_for("sg1000") == str(art_dir)
-    assert dialog._box_art_directory_for("master_system") == str(tmp_path / "sms-covers")
+    assert dialog._box_art_directory_for("master_system") == str(
+        tmp_path / "sms-covers"
+    )
     dialog.close()
