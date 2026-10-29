@@ -86,6 +86,20 @@ class SettingsDialog(QDialog):
             self.queue_blocks,
         )
 
+        self.volume = QSlider(Qt.Orientation.Horizontal)
+        self.volume.setRange(0, 100)
+        self.volume.setValue(preferences.audio_volume)
+        self.volume_label = QLabel(f"{preferences.audio_volume}%")
+        self.volume.valueChanged.connect(
+            lambda value: self.volume_label.setText(f"{value}%")
+        )
+        volume_row = QWidget(audio_group)
+        volume_layout = QHBoxLayout(volume_row)
+        volume_layout.setContentsMargins(0, 0, 0, 0)
+        volume_layout.addWidget(self.volume, 1)
+        volume_layout.addWidget(self.volume_label)
+        audio_form.addRow("Volume de saída:", volume_row)
+
         self.balance = QSlider(Qt.Orientation.Horizontal)
         self.balance.setRange(-100, 100)
         self.balance.setValue(preferences.audio_balance)
@@ -131,20 +145,6 @@ class SettingsDialog(QDialog):
         psg_form.addRow("Divisor interno:", QLabel("16 (fixo no modelo atual)"))
         psg_form.addRow("Canais:", QLabel("3 tons + 1 ruído; saída mono"))
         psg_form.addRow("Antialiasing:", QLabel("FIR Blackman de 63 taps, ativo"))
-
-        volume_row = QWidget(psg_group)
-        volume_layout = QHBoxLayout(volume_row)
-        volume_layout.setContentsMargins(0, 0, 0, 0)
-        self.volume = QSlider(Qt.Orientation.Horizontal, volume_row)
-        self.volume.setRange(0, 100)
-        self.volume.setValue(preferences.audio_volume)
-        self.volume_label = QLabel(f"{preferences.audio_volume}%", volume_row)
-        self.volume.valueChanged.connect(
-            lambda value: self.volume_label.setText(f"{value}%")
-        )
-        volume_layout.addWidget(self.volume, 1)
-        volume_layout.addWidget(self.volume_label)
-        psg_form.addRow("Ganho da saída do PSG:", volume_row)
 
         psg_note = QLabel(
             "O ganho afeta somente as amostras reproduzidas; não altera os "
