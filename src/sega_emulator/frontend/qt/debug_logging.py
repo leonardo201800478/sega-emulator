@@ -12,7 +12,7 @@ import threading
 import time
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 
 from sega_emulator.diagnostics import JsonLineFormatter
 

@@ -31,7 +31,9 @@ def test_debug_logging_is_opt_in_and_writes_jsonl_off_thread(tmp_path) -> None:
     controller.wait(2.0)
 
     assert path.exists()
-    records = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    records = [
+        json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()
+    ]
     assert any(record["message"] == "diagnostic event" for record in records)
     assert any("diagnostic event" in batch for batch in lines)
     assert root.level == original_level
