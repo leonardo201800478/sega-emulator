@@ -140,6 +140,10 @@ def run(initial_path: Path | None = None) -> None:
             QWidget,
         )
 
+        from sega_emulator.frontend.qt.debug_logging import (
+            DebugLogController,
+            install_silent_default_logging,
+        )
         from sega_emulator.frontend.qt.main_window import (
             EmulatorMainWindow,
             persisted_window_dimensions,
@@ -150,6 +154,7 @@ def run(initial_path: Path | None = None) -> None:
             'Interface Qt não instalada. Execute: python -m pip install -e ".[qt]"'
         ) from exc
 
+    install_silent_default_logging()
     app = QApplication.instance() or QApplication([])
     app.setOrganizationName("SegaEmulator")
     app.setApplicationName("SegaEmulator")
@@ -206,6 +211,39 @@ def run(initial_path: Path | None = None) -> None:
         on_stop_vgm_recording=lambda: stop_vgm_recording(),
         video_driver=video_driver,
     )
+    debug_logger = DebugLogController(
+        log_dir=Path("logs"),
+        on_lines=window.debug_lines_ready.emit,
+    )
+
+    def set_debug_logging(enabled: bool) -> None:
+        if enabled:
+            if debug_logger.start():
+                window.set_debug_status(
+                    f"Captura ativa em thread separada. Arquivo JSONL: "
+                    f"{debug_logger.log_path}. Fila limitada a "
+                    f"{debug_logger.queue_capacity} eventos; eventos descartados "
+                    f"serão contabilizados."
+                )
+            else:
+                window.debug_logging_checkbox.blockSignals(True)
+                window.debug_logging_checkbox.setChecked(False)
+                window.debug_logging_checkbox.blockSignals(False)
+                window.set_debug_status(
+                    "Não foi possível iniciar a captura: o gravador anterior "
+                    "ainda está encerrando. Tente novamente em instantes."
+                )
+        else:
+            debug_logger.stop()
+            window.set_debug_status(
+                "Encerramento da captura solicitado. "
+                f"Eventos descartados por fila cheia nesta sessão: "
+                f"{debug_logger.dropped_records}."
+            )
+
+    window.debug_logging_toggled.connect(set_debug_logging)
+    app.aboutToQuit.connect(debug_logger.stop)
+
     window.resize(preferences.window_width, preferences.window_height)
     window._video_scale = preferences.video_scale
     view = window.video_widget
@@ -1278,6 +1316,8 @@ def run(initial_path: Path | None = None) -> None:
         open_rom(str(initial_path))
     window.show()
     app.exec()
+    debug_logger.stop()
+    debug_logger.wait(1.5)
     if vgm_recorder.active:
         stop_vgm_recording()
     saved_width, saved_height = persisted_window_dimensions(
