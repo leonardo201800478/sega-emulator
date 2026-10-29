@@ -1,11 +1,10 @@
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
-use sega_audio_runtime::PcmResampler;
 use sega_audio_output::{
-    NativeWasapiOutput as RustWasapiOutput,
-    NativeXAudio2Output as RustXAudio2Output,
+    NativeWasapiOutput as RustWasapiOutput, NativeXAudio2Output as RustXAudio2Output,
 };
+use sega_audio_runtime::PcmResampler;
 
 #[pyclass]
 pub struct NativePcmResampler {
