@@ -225,12 +225,14 @@ fn run_wasapi_worker(
             None,
         );
         let block_align = format.get_blockalign() as usize;
-        let (default_period, _) = audio_client
+        let (_, minimum_period) = audio_client
             .get_device_period()
             .map_err(|error| error.to_string())?;
+        let requested_period =
+            (buffer_size as u64 * 10_000_000 / sample_rate as u64) as i64;
         let mode = StreamMode::EventsShared {
             autoconvert: true,
-            buffer_duration_hns: default_period,
+            buffer_duration_hns: requested_period.max(minimum_period),
         };
         audio_client
             .initialize_client(&format, &Direction::Render, &mode)
@@ -241,24 +243,41 @@ fn run_wasapi_worker(
         let render_client = audio_client
             .get_audiorenderclient()
             .map_err(|error| error.to_string())?;
-        audio_client
-            .start_stream()
-            .map_err(|error| error.to_string())?;
-        Ok((audio_client, event, render_client, block_align))
+        let initial_buffer_frames = audio_client
+            .get_buffer_size()
+            .map_err(|error| error.to_string())? as usize;
+        Ok((
+            audio_client,
+            event,
+            render_client,
+            block_align,
+            initial_buffer_frames,
+        ))
     })();
 
-    let (mut audio_client, event, render_client, block_align) = match setup {
-        Ok(state) => {
-            let _ = ready.send(Ok(()));
-            state
-        }
-        Err(message) => {
-            let _ = ready.send(Err(message));
-            return;
-        }
-    };
+    let (mut audio_client, event, render_client, block_align, initial_buffer_frames) =
+        match setup {
+            Ok(state) => state,
+            Err(message) => {
+                let _ = ready.send(Err(message));
+                return;
+            }
+        };
 
     let mut pending = VecDeque::<u8>::with_capacity(buffer_size as usize * block_align * 8);
+    pending.resize(initial_buffer_frames.saturating_mul(block_align), 0);
+    if render_client
+        .write_to_device_from_deque(initial_buffer_frames, &mut pending, None)
+        .is_err()
+    {
+        let _ = ready.send(Err("failed to prime the WASAPI render buffer".to_owned()));
+        return;
+    }
+    if let Err(error) = audio_client.start_stream() {
+        let _ = ready.send(Err(error.to_string()));
+        return;
+    }
+    let _ = ready.send(Ok(()));
     loop {
         if shutdown.load(Ordering::Acquire) {
             break;
