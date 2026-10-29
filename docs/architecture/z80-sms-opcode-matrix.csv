@@ -8,7 +8,7 @@
 "BASE","06","LD B,n","documented_or_context_dependent","decoder path present; classification test only","sparse_selected_vectors","NOT_VERIFIED",""
 "BASE","07","RLCA","documented_or_context_dependent","decoder path present; classification test only","exhaustive_internal_model","NOT_VERIFIED",""
 "BASE","08","EX AF,AF'","documented_or_context_dependent","decoder path present; classification test only","sparse_selected_vectors","NOT_VERIFIED",""
-"BASE","09","ADD HL,BC","documented_or_context_dependent","decoder path present; classification test only","sparse_selected_vectors","NOT_VERIFIED",""
+"BASE","09","ADD HL,BC","documented_or_context_dependent","decoder path present; classification test only","one_pinned_reference_vector","NOT_VERIFIED","SingleStepTests/Z80 v1/09.json vector 09 0000 at ebe1875d48f374bcfd4b505d8eb8ee751568b5f7; architectural state and aggregate T-states only"
 "BASE","0A","LD A,(BC)","documented_or_context_dependent","decoder path present; classification test only","sparse_selected_vectors","NOT_VERIFIED",""
 "BASE","0B","DEC BC","documented_or_context_dependent","decoder path present; classification test only","exhaustive_internal_model","NOT_VERIFIED",""
 "BASE","0C","INC C","documented_or_context_dependent","decoder path present; classification test only","exhaustive_internal_model","NOT_VERIFIED",""
