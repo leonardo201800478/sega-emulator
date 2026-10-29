@@ -1,9 +1,10 @@
-"""Physical smoke test for the native Rust WASAPI and XAudio2 outputs.
+"""Physical smoke test for native Rust WASAPI and XAudio2 outputs.
 
 Run from the repository root after installing the Qt/native extension:
     python tools/validate_native_audio.py --backend both
-The tone is low-volume and is generated only for host-output validation; it does
-not execute or modify emulated hardware state.
+
+The low-volume tone validates host output only; it does not execute or modify
+emulated hardware state.
 """
 
 from __future__ import annotations
@@ -17,10 +18,17 @@ import time
 from sega_emulator.frontend.qt.wasapi_audio import NativeAudioOutput
 
 
-def _tone_block(sample_rate: int, frequency: float, start_sample: int, count: int) -> bytes:
+def _tone_block(
+    sample_rate: int, frequency: float, start_sample: int, count: int
+) -> bytes:
     amplitude = 0.15 * 32767
     samples = (
-        round(amplitude * math.sin(2.0 * math.pi * frequency * (start_sample + offset) / sample_rate))
+        round(
+            amplitude
+            * math.sin(
+                2.0 * math.pi * frequency * (start_sample + offset) / sample_rate
+            )
+        )
         for offset in range(count)
     )
     return struct.pack(f"<{count}h", *samples)
@@ -47,7 +55,7 @@ def _run_backend(
             balance=0,
         )
     except Exception as exc:
-        print(f"FAIL: inicialização do backend: {type(exc).__name__}: {exc}")
+        print(f"FAIL: inicialização: {type(exc).__name__}: {exc}")
         return False
 
     started = time.monotonic()
