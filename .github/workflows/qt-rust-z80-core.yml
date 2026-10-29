@@ -79,7 +79,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: native-audio-cargo-lock
-          path: native/z80_core/Cargo.lock
+          path: |
+            native/z80_core/Cargo.lock
+            native/audio_output/Cargo.lock
           if-no-files-found: error
       - name: Lint and format Python
         run: |
