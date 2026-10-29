@@ -116,7 +116,7 @@ def test_restore_defaults_resets_audio_video_controls(qt_app) -> None:
     dialog._restore_defaults()
 
     defaults = FrontendPreferences()
-    assert dialog.audio_enabled.isChecked() is defaults.audio_enabled
+    assert dialog.preferences().audio_enabled is True
     assert dialog.sample_rate.currentData() == defaults.audio_sample_rate
     assert dialog.buffer_size.currentData() == defaults.audio_buffer_size
     assert dialog.volume.value() == defaults.audio_volume
