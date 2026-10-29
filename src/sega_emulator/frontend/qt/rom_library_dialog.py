@@ -230,7 +230,9 @@ class RomLibraryDialog(QDialog):
             label = SYSTEM_LABELS[system]
             button = QToolButton()
             button.setText(
-                label if system == "sg1000" else f"{label}\n{translate('planned', self.language)}"
+                label
+                if system == "sg1000"
+                else f"{label}\n{translate('planned', self.language)}"
             )
             button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
             button.setIcon(QIcon(str(assets_directory / f"{system}.svg")))
@@ -544,9 +546,7 @@ class RomLibraryDialog(QDialog):
             if cover is not None:
                 item.setIcon(QIcon(str(cover)))
                 item.setText(f"{rom_path.stem}\n{_format_size(entry.size)}")
-                item.setToolTip(
-                    f"{entry.path}\nCapa: {cover}\nSHA-256: {entry.sha256}"
-                )
+                item.setToolTip(f"{entry.path}\nCapa: {cover}\nSHA-256: {entry.sha256}")
             self.rom_list.addItem(item)
 
     def _refresh_box_art(self) -> None:
@@ -579,9 +579,7 @@ class RomLibraryDialog(QDialog):
         return f"box_art_overrides/{system}/{identity}"
 
     def _manual_box_art_for(self, rom_path: Path) -> Path | None:
-        saved = str(
-            self.settings.value(self._manual_box_art_key(rom_path), "")
-        ).strip()
+        saved = str(self.settings.value(self._manual_box_art_key(rom_path), "")).strip()
         image = Path(saved) if saved else None
         return image if image is not None and image.is_file() else None
 
@@ -674,10 +672,38 @@ def _format_size(size: int) -> str:
 
 # Prefer common formats, then formats supported by the installed Qt image plugins.
 _COMMON_IMAGE_SUFFIXES = {
-    ".png", ".jpg", ".jpeg", ".jpe", ".jfif", ".webp", ".bmp", ".dib",
-    ".gif", ".tif", ".tiff", ".ico", ".icns", ".avif", ".heic", ".heif",
-    ".jp2", ".j2k", ".jpf", ".jpx", ".jpm", ".mj2", ".pbm", ".pgm",
-    ".ppm", ".pnm", ".xbm", ".xpm", ".svg", ".svgz", ".dds", ".tga",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".jpe",
+    ".jfif",
+    ".webp",
+    ".bmp",
+    ".dib",
+    ".gif",
+    ".tif",
+    ".tiff",
+    ".ico",
+    ".icns",
+    ".avif",
+    ".heic",
+    ".heif",
+    ".jp2",
+    ".j2k",
+    ".jpf",
+    ".jpx",
+    ".jpm",
+    ".mj2",
+    ".pbm",
+    ".pgm",
+    ".ppm",
+    ".pnm",
+    ".xbm",
+    ".xpm",
+    ".svg",
+    ".svgz",
+    ".dds",
+    ".tga",
 }
 
 
