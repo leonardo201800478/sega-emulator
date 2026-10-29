@@ -7,6 +7,11 @@ only validates inputs and forwards operations across the PyO3 boundary.
 from __future__ import annotations
 
 from types import SimpleNamespace
+import hashlib
+import zipfile
+from pathlib import Path
+
+from sega_emulator.rom_loader import LoadedRom
 
 
 class SMSMachine:
@@ -147,3 +152,49 @@ class _SMSVdpSnapshot:
     @property
     def visible_height(self) -> int:
         return int(self._native_machine.visible_height)
+
+
+def load_sms_rom(path: str | Path) -> LoadedRom:
+    """Load a local SMS cartridge image without applying the SG-1000 size limit."""
+    source = Path(path).expanduser()
+    allowed = {".sms", ".rom", ".bin"}
+    try:
+        if source.suffix.casefold() == ".zip":
+            with zipfile.ZipFile(source) as archive:
+                candidates = [
+                    item for item in archive.infolist()
+                    if not item.is_dir()
+                    and Path(item.filename).suffix.casefold() in allowed
+                ]
+                if not candidates:
+                    raise ValueError("O ZIP não contém ROM .sms, .rom ou .bin.")
+                if len(candidates) != 1:
+                    raise ValueError(
+                        "O ZIP contém várias ROMs; selecione uma ROM SMS individual."
+                    )
+                item = candidates[0]
+                if item.file_size > 0x100000:
+                    raise ValueError("A ROM SMS excede o limite atual de 1 MiB.")
+                data = archive.read(item)
+                name = Path(item.filename).name
+                member_name = item.filename
+        else:
+            if source.suffix.casefold() not in allowed:
+                raise ValueError("Formato SMS não suportado. Use .sms, .rom, .bin ou ZIP.")
+            data = source.read_bytes()
+            name = source.name
+            member_name = None
+    except (OSError, zipfile.BadZipFile) as exc:
+        raise ValueError(f"Não foi possível ler a ROM SMS '{source}': {exc}") from exc
+
+    if not data:
+        raise ValueError("A ROM do Master System está vazia.")
+    if len(data) > 0x100000:
+        raise ValueError("A ROM SMS excede o limite atual de 1 MiB.")
+    return LoadedRom(
+        data=data,
+        display_name=name,
+        source_path=source,
+        member_name=member_name,
+        sha256=hashlib.sha256(data).hexdigest(),
+    )
