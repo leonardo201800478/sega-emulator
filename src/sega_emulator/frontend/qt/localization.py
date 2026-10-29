@@ -255,7 +255,90 @@ _TRANSLATIONS: dict[str, dict[str, str]] = {
 }
 
 
+
+_MAIN_WINDOW_TRANSLATIONS: dict[str, dict[str, str]] = {
+    "pt-BR": {
+        "main_title": "Sega Emulator | SG-1000", "tab_emulator": "Emulador", "tab_debug": "Debug",
+        "debug_enable": "Ativar captura de logs detalhados (gera arquivos locais)",
+        "debug_tooltip": "Desativado por padrão. A gravação ocorre em uma thread separada e usa uma fila limitada.",
+        "debug_disabled": "Captura desativada. Nenhum arquivo de log detalhado será criado.",
+        "debug_placeholder": "Ative a captura para visualizar os eventos. O buffer visual mantém no máximo 2.000 linhas.",
+        "debug_clear": "Limpar visualização", "rom_none": "Nenhuma ROM carregada",
+        "action_open_rom": "Abrir ROM…", "action_pause": "Pausar / continuar",
+        "action_reset": "Reiniciar máquina", "action_fullscreen": "Tela cheia",
+        "action_exit_fullscreen": "Sair da tela cheia", "menu_file": "&Arquivo",
+        "menu_recent": "ROMs recentes", "action_exit": "Sair", "menu_emulation": "&Emulação",
+        "toolbar_main": "Principal", "menu_drivers": "&Drivers",
+        "menu_video": "&Vídeo", "menu_settings": "&Configurações",
+        "menu_diagnostics": "&Diagnóstico", "menu_help": "&Ajuda",
+    },
+    "en": {
+        "main_title": "Sega Emulator | SG-1000", "tab_emulator": "Emulator", "tab_debug": "Debug",
+        "debug_enable": "Enable detailed log capture (creates local files)",
+        "debug_tooltip": "Off by default. Recording runs on a separate thread with a bounded queue.",
+        "debug_disabled": "Capture disabled. No detailed log file will be created.",
+        "debug_placeholder": "Enable capture to view events. The visual buffer keeps at most 2,000 lines.",
+        "debug_clear": "Clear view", "rom_none": "No ROM loaded",
+        "action_open_rom": "Open ROM…", "action_pause": "Pause / resume",
+        "action_reset": "Reset machine", "action_fullscreen": "Fullscreen",
+        "action_exit_fullscreen": "Exit fullscreen", "menu_file": "&File",
+        "menu_recent": "Recent ROMs", "action_exit": "Exit", "menu_emulation": "&Emulation",
+        "toolbar_main": "Main", "menu_drivers": "&Drivers",
+        "menu_video": "&Video", "menu_settings": "&Settings",
+        "menu_diagnostics": "&Diagnostics", "menu_help": "&Help",
+    },
+    "es": {
+        "main_title": "Sega Emulator | SG-1000", "tab_emulator": "Emulador", "tab_debug": "Depuración",
+        "debug_enable": "Activar captura detallada de registros (crea archivos locales)",
+        "debug_tooltip": "Desactivada por defecto. La grabación usa un hilo separado y una cola limitada.",
+        "debug_disabled": "Captura desactivada. No se creará ningún archivo de registro detallado.",
+        "debug_placeholder": "Active la captura para ver eventos. El búfer visual conserva hasta 2.000 líneas.",
+        "debug_clear": "Limpiar vista", "rom_none": "Ninguna ROM cargada",
+        "action_open_rom": "Abrir ROM…", "action_pause": "Pausar / continuar",
+        "action_reset": "Reiniciar máquina", "action_fullscreen": "Pantalla completa",
+        "action_exit_fullscreen": "Salir de pantalla completa", "menu_file": "&Archivo",
+        "menu_recent": "ROM recientes", "action_exit": "Salir", "menu_emulation": "&Emulación",
+        "toolbar_main": "Principal", "menu_drivers": "&Controladores",
+        "menu_video": "&Vídeo", "menu_settings": "&Configuración",
+        "menu_diagnostics": "&Diagnóstico", "menu_help": "A&yuda",
+    },
+    "it": {
+        "main_title": "Sega Emulator | SG-1000", "tab_emulator": "Emulatore", "tab_debug": "Debug",
+        "debug_enable": "Attiva acquisizione dettagliata dei log (crea file locali)",
+        "debug_tooltip": "Disattivata per impostazione predefinita. La registrazione usa un thread separato e una coda limitata.",
+        "debug_disabled": "Acquisizione disattivata. Non verrà creato alcun file di log dettagliato.",
+        "debug_placeholder": "Attiva l'acquisizione per visualizzare gli eventi. Il buffer conserva al massimo 2.000 righe.",
+        "debug_clear": "Pulisci visualizzazione", "rom_none": "Nessuna ROM caricata",
+        "action_open_rom": "Apri ROM…", "action_pause": "Pausa / riprendi",
+        "action_reset": "Riavvia macchina", "action_fullscreen": "Schermo intero",
+        "action_exit_fullscreen": "Esci dallo schermo intero", "menu_file": "&File",
+        "menu_recent": "ROM recenti", "action_exit": "Esci", "menu_emulation": "&Emulazione",
+        "toolbar_main": "Principale", "menu_drivers": "&Driver",
+        "menu_video": "&Video", "menu_settings": "&Impostazioni",
+        "menu_diagnostics": "&Diagnostica", "menu_help": "&Aiuto",
+    },
+    "fr": {
+        "main_title": "Sega Emulator | SG-1000", "tab_emulator": "Émulateur", "tab_debug": "Diagnostic",
+        "debug_enable": "Activer la capture détaillée des journaux (crée des fichiers locaux)",
+        "debug_tooltip": "Désactivée par défaut. L'enregistrement utilise un thread séparé et une file limitée.",
+        "debug_disabled": "Capture désactivée. Aucun fichier de journal détaillé ne sera créé.",
+        "debug_placeholder": "Activez la capture pour voir les événements. Le tampon conserve au maximum 2 000 lignes.",
+        "debug_clear": "Effacer l'affichage", "rom_none": "Aucune ROM chargée",
+        "action_open_rom": "Ouvrir une ROM…", "action_pause": "Pause / reprendre",
+        "action_reset": "Réinitialiser la machine", "action_fullscreen": "Plein écran",
+        "action_exit_fullscreen": "Quitter le plein écran", "menu_file": "&Fichier",
+        "menu_recent": "ROM récentes", "action_exit": "Quitter", "menu_emulation": "&Émulation",
+        "toolbar_main": "Principal", "menu_drivers": "&Pilotes",
+        "menu_video": "&Vidéo", "menu_settings": "&Paramètres",
+        "menu_diagnostics": "&Diagnostic", "menu_help": "&Aide",
+    },
+}
+
 def translate(key: str, language: str = "pt-BR") -> str:
     """Translate a UI key, safely falling back to Brazilian Portuguese."""
     selected = _TRANSLATIONS.get(language, _TRANSLATIONS["pt-BR"])
+    if key in _MAIN_WINDOW_TRANSLATIONS.get(language, {}):
+        return _MAIN_WINDOW_TRANSLATIONS[language][key]
+    if key in _MAIN_WINDOW_TRANSLATIONS["pt-BR"]:
+        return _MAIN_WINDOW_TRANSLATIONS["pt-BR"][key]
     return selected.get(key, _TRANSLATIONS["pt-BR"].get(key, key))
