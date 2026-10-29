@@ -47,7 +47,7 @@ class DriversDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Drivers — APIs de entrada, áudio e vídeo")
-        self.setMinimumWidth(520)
+        self.setMinimumWidth(560)
         layout = QVBoxLayout(self)
         form = QFormLayout()
         self.input_combo = self._combo(INPUT_DRIVERS, input_driver)
