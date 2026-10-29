@@ -110,17 +110,13 @@ class EmulatorMainWindow(QMainWindow):
 
         debug_page = QWidget(self)
         debug_layout = QVBoxLayout(debug_page)
-        self.debug_logging_checkbox = QCheckBox(
-            translate("debug_enable", language)
-        )
+        self.debug_logging_checkbox = QCheckBox(translate("debug_enable", language))
         self.debug_logging_checkbox.setObjectName("debugLoggingEnabled")
         self.debug_logging_checkbox.setToolTip(
             translate("debug_tooltip", language)
         )
         debug_layout.addWidget(self.debug_logging_checkbox)
-        self.debug_status_label = QLabel(
-            translate("debug_disabled", language)
-        )
+        self.debug_status_label = QLabel(translate("debug_disabled", language))
         self.debug_status_label.setObjectName("debugLoggingStatus")
         self.debug_status_label.setWordWrap(True)
         debug_layout.addWidget(self.debug_status_label)
@@ -128,11 +124,11 @@ class EmulatorMainWindow(QMainWindow):
         self.debug_output.setObjectName("debugLogOutput")
         self.debug_output.setReadOnly(True)
         self.debug_output.setMaximumBlockCount(2000)
-        self.debug_output.setPlaceholderText(
-            translate("debug_placeholder", language)
-        )
+        self.debug_output.setPlaceholderText(translate("debug_placeholder", language))
         debug_layout.addWidget(self.debug_output, 1)
-        clear_debug_button = QPushButton(translate("debug_clear", language), debug_page)
+        clear_debug_button = QPushButton(
+            translate("debug_clear", language), debug_page
+        )
         clear_debug_button.clicked.connect(self.debug_output.clear)
         debug_layout.addWidget(clear_debug_button)
         self.central_tabs.addTab(debug_page, translate("tab_debug", language))
