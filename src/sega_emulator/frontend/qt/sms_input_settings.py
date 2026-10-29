@@ -51,9 +51,7 @@ class _ControllerLayout(QWidget):
             painter.setPen(QPen(QColor("#f0a3a8"), 1))
             painter.drawEllipse(QRectF(x, 55, 30, 30))
             painter.setPen(QPen(QColor("#ffffff")))
-            painter.drawText(
-                QRectF(x, 55, 30, 30), Qt.AlignmentFlag.AlignCenter, label
-            )
+            painter.drawText(QRectF(x, 55, 30, 30), Qt.AlignmentFlag.AlignCenter, label)
 
         painter.setPen(QPen(QColor("#d5dce7")))
         painter.drawText(
@@ -263,11 +261,9 @@ def _setting_bool(settings, key: str, default: bool) -> bool:
     return default
 
 
-def _setting_int(
-    settings, key: str, default: int, minimum: int, maximum: int
-) -> int:
+def _setting_int(settings, key: str, default: int, minimum: int, maximum: int) -> int:
     try:
         value = int(settings.value(key, default))
-    except (TypeError, ValueError, OverflowError):
+    except TypeError, ValueError, OverflowError:
         return default
     return value if minimum <= value <= maximum else default
