@@ -350,12 +350,13 @@ class SettingsDialog(QDialog):
         rate = int(self.sample_rate.currentData())
         buffer_samples = int(self.buffer_size.currentData())
         queue_blocks = int(self.queue_blocks.currentData())
-        queue_ms = buffer_samples * queue_blocks * 1000 / rate
+        requested_period_ms = buffer_samples * 1000 / rate
         if self._audio_backend == "wasapi":
             text = (
-                f"Fila PCM nominal: {queue_ms:.1f} ms antes do dispositivo. "
-                "O Windows pode adicionar seu próprio período/buffer; latência "
-                "ponta a ponta não foi medida."
+                f"Período WASAPI solicitado: ~{requested_period_ms:.1f} ms. "
+                f"A fila de entrada comporta {queue_blocks} blocos PCM, mas o "
+                "tamanho de cada bloco varia por frame. O Windows pode escolher "
+                "um período maior; latência ponta a ponta não medida."
             )
         elif self._audio_backend == "xaudio2":
             text = (
