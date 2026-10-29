@@ -289,7 +289,9 @@ class RomCatalog:
             rom_name=first.rom_name if len(matches) == 1 else None,
             regions=tuple(sorted({r for entry in matches for r in entry.regions})),
             matched_by=matched_by,
-            dat_name=first.dat_name if len({entry.dat_name for entry in matches}) == 1 else None,
+            dat_name=first.dat_name
+            if len({entry.dat_name for entry in matches}) == 1
+            else None,
             candidates=tuple(matches),
         )
 
