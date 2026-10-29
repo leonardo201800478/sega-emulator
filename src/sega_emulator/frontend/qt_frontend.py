@@ -120,7 +120,8 @@ def run(initial_path: Path | None = None) -> None:
     try:
         from PySide6.QtCore import QEvent, QObject, QSettings, Qt, QTimer
         from PySide6.QtGui import QImage, QKeySequence
-        from PySide6.QtGui import QIcon\n        from PySide6.QtWidgets import (
+        from PySide6.QtGui import QIcon
+        from PySide6.QtWidgets import (
             QApplication,
             QCheckBox,
             QComboBox,
@@ -135,6 +136,7 @@ def run(initial_path: Path | None = None) -> None:
             QMessageBox,
             QPushButton,
             QScrollArea,
+            QStyle,
             QTabWidget,
             QVBoxLayout,
             QWidget,
@@ -159,6 +161,10 @@ def run(initial_path: Path | None = None) -> None:
     app = QApplication.instance() or QApplication([])
     app.setOrganizationName("SegaEmulator")
     app.setApplicationName("SegaEmulator")
+    if app.windowIcon().isNull():
+        app.setWindowIcon(
+            app.style().standardIcon(QStyle.StandardPixmap.SP_ComputerIcon)
+        )
     settings = QSettings()
     preferences = FrontendPreferences.from_store(settings)
     ui_language = str(settings.value("ui_language", "pt-BR"))
@@ -1322,8 +1328,11 @@ def run(initial_path: Path | None = None) -> None:
         open_rom(str(initial_path))
     else:
         # Start in the library; only an explicit selection launches a ROM.
-        library_dialog = RomLibraryDialog(settings, parent=window)
-        library_dialog.showFullScreen()
+        # Keep the library independent in the taskbar and within the Windows
+        # work area; fullscreen is reserved for explicit gameplay.
+        library_dialog = RomLibraryDialog(settings)
+        library_dialog.setWindowIcon(app.windowIcon())
+        library_dialog.showNormal()
         if (
             library_dialog.exec() == QDialog.DialogCode.Accepted
             and library_dialog.selected_rom is not None
