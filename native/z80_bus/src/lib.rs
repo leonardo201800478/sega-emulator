@@ -111,10 +111,14 @@ pub enum Z80InstructionOutcome {
 pub struct Z80InstructionTrace {
     /// One-based step sequence since reset, including HALT and interrupt entry.
     pub instruction_index: u64,
-    /// Opcode/prefix bytes fetched by the decoder. Immediate operands are not included.
+    /// Opcode/prefix bytes fetched by the decoder, excluding immediate operands.
     pub opcode_bytes: [u8; 8],
     pub opcode_len: u8,
     pub opcode_bytes_truncated: bool,
+    /// Instruction-stream bytes, including immediate operands and displacements.
+    pub instruction_bytes: [u8; 8],
+    pub instruction_len: u8,
+    pub instruction_bytes_truncated: bool,
     /// Aggregate nominal T-states, or None when execution returned an error.
     pub tstates: Option<u32>,
     pub outcome: Z80InstructionOutcome,
@@ -138,10 +142,15 @@ impl Z80InstructionTrace {
                 format!("{{\"kind\":\"unsupported_opcode\",\"opcode\":\"{opcode:02X}\",\"address\":{address}}}")
             }
         };
+        write!(out, "],\"opcode_bytes_truncated\":{},\"instruction_bytes\":[", self.opcode_bytes_truncated)?;
+        for (index, byte) in self.instruction_bytes[..usize::from(self.instruction_len)].iter().enumerate() {
+            if index != 0 { out.write_str(",")?; }
+            write!(out, "\"{byte:02X}\"")?;
+        }
         write!(
             out,
-            "],\"opcode_bytes_truncated\":{},\"tstates\":{},\"outcome\":{},\"before\":",
-            self.opcode_bytes_truncated,
+            "],\"instruction_bytes_truncated\":{},\"tstates\":{},\"outcome\":{},\"before\":",
+            self.instruction_bytes_truncated,
             self.tstates.map_or_else(|| "null".to_owned(), |v| v.to_string()),
             outcome
         )?;
@@ -231,6 +240,9 @@ mod tests {
             opcode_bytes: [0x3E, 0, 0, 0, 0, 0, 0, 0],
             opcode_len: 1,
             opcode_bytes_truncated: false,
+            instruction_bytes: [0x3E, 0x42, 0, 0, 0, 0, 0, 0],
+            instruction_len: 2,
+            instruction_bytes_truncated: false,
             tstates: Some(7),
             outcome: Z80InstructionOutcome::Completed,
             before: Z80CpuSnapshot { pc: 0xC000, total_tstates: 0, ..state },
