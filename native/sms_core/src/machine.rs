@@ -332,7 +332,7 @@ impl SmsMachine {
 
 #[cfg(test)]
 mod tests {
-    use super::{SegaScopeLens, SmsMachine};
+    use super::{SegaScopeLens, SmsMachine, SmsMachineBus};
     use crate::config::{SmsMachineConfig, VideoStandard};
     use crate::input::{ControllerButtons, SmsInputState};
 
