@@ -389,7 +389,9 @@ class RomLibraryDialog(QDialog):
             QMessageBox.warning(
                 self,
                 "Avisos do scanner",
-                "\n".join(f"{error.path}: {error.message}" for error in result.errors[:8]),
+                "\n".join(
+                    f"{error.path}: {error.message}" for error in result.errors[:8]
+                ),
             )
 
     def _scan_failed(self, message: str) -> None:
