@@ -114,6 +114,19 @@ def test_box_art_does_not_match_a_different_filename(tmp_path: Path) -> None:
     assert _find_box_art(rom, art_root) is None
 
 
+def test_system_selector_uses_packaged_artwork_and_only_enables_sg1000(
+    qt_app, settings
+) -> None:
+    dialog = RomLibraryDialog(settings)
+
+    assert dialog.system_buttons["sg1000"].isEnabled()
+    assert not dialog.system_buttons["master_system"].isEnabled()
+    for system, button in dialog.system_buttons.items():
+        assert not button.icon().isNull(), f"Missing system artwork: {system}"
+
+    dialog.close()
+
+
 def test_box_art_folder_is_persisted_per_system(qt_app, settings, tmp_path: Path):
     dialog = RomLibraryDialog(settings)
     dialog.selected_system = "sg1000"
