@@ -69,7 +69,14 @@ class SettingsDialog(QDialog):
             self.buffer_size.addItem(label, samples)
         index = self.buffer_size.findData(preferences.audio_buffer_size)
         self.buffer_size.setCurrentIndex(max(0, index))
-        audio_form.addRow("Buffer / bloco PCM", self.buffer_size)
+        audio_form.addRow(
+            "Período solicitado (WASAPI)"
+            if audio_backend == "wasapi"
+            else "Tamanho do bloco PCM (XAudio2)"
+            if audio_backend == "xaudio2"
+            else "Buffer / bloco PCM",
+            self.buffer_size,
+        )
 
         self.queue_blocks = QComboBox()
         for blocks, label in (
@@ -82,7 +89,11 @@ class SettingsDialog(QDialog):
             max(0, self.queue_blocks.findData(preferences.audio_queue_blocks))
         )
         audio_form.addRow(
-            "Profundidade da fila:",
+            "Fila PCM pré-endpoint (WASAPI)"
+            if audio_backend == "wasapi"
+            else "Buffers enfileirados (XAudio2)"
+            if audio_backend == "xaudio2"
+            else "Profundidade da fila",
             self.queue_blocks,
         )
 
