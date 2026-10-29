@@ -1173,7 +1173,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn sms_mode4_fine_scroll_leading_pixels_use_backdrop_not_wrapped_column() {
         let mut v = SmsVdp::default();
