@@ -347,7 +347,7 @@ use windows::Win32::System::SystemInformation::NTDDI_WIN10_RS5;
 use windows::Win32::Media::Audio::XAudio2::{
     IXAudio2, IXAudio2MasteringVoice, IXAudio2SourceVoice,
     IXAudio2VoiceCallback, XAUDIO2_BUFFER, XAUDIO2_VOICE_STATE,
-    XAudio2CreateWithVersionInfo,
+    XAudio2CreateWithVersionInfo, XAUDIO2_DEFAULT_PROCESSOR,
 };
 
 /// Native XAudio2 output using Rust-owned source buffers and a bounded producer queue.
@@ -520,7 +520,12 @@ fn run_xaudio2_worker(
     let setup = (|| {
         let mut engine: Option<IXAudio2> = None;
         unsafe {
-            XAudio2CreateWithVersionInfo(&mut engine, 0, 1, NTDDI_WIN10_RS5)
+            XAudio2CreateWithVersionInfo(
+                &mut engine,
+                0,
+                XAUDIO2_DEFAULT_PROCESSOR,
+                NTDDI_WIN10_RS5,
+            )
                 .map_err(|error| error.to_string())?;
         }
         let engine = engine.ok_or_else(|| "XAudio2Create returned no engine".to_owned())?;
