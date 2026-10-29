@@ -71,7 +71,9 @@ def test_master_system_is_available_but_unimplemented_systems_remain_disabled(
 
 
 @pytest.mark.parametrize("system", ["sg1000", "master_system"])
-def test_supported_system_rom_can_be_launched_from_library(qt_app, settings, tmp_path, system):
+def test_supported_system_rom_can_be_launched_from_library(
+    qt_app, settings, tmp_path, system
+):
     dialog = RomLibraryDialog(settings)
     rom_path = tmp_path / ("game.sms" if system == "master_system" else "game.sg")
     rom_path.write_bytes(b"test rom")
