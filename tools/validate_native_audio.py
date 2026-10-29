@@ -44,28 +44,24 @@ def _pcm_block(
     amplitude = 0.10 * 32767
     samples: list[int] = []
     samples_per_note = sample_rate * 60.0 / _MELODY_BPM
-    phase = 0.0
-    previous_frequency: float | None = None
-
     for offset in range(count):
         absolute_sample = start_sample + offset
         if signal == "melody":
             note_index = int(absolute_sample / samples_per_note) % len(_MELODY_HZ)
             current_frequency = _MELODY_HZ[note_index]
+            note_start = int(note_index * samples_per_note)
+            cycle_sample = absolute_sample - note_start
         else:
             current_frequency = frequency
+            cycle_sample = absolute_sample
 
         if current_frequency is None:
             samples.append(0)
-            previous_frequency = None
             continue
-        if previous_frequency != current_frequency:
-            phase = 0.0
+        phase = (
+            2.0 * math.pi * current_frequency * cycle_sample / sample_rate
+        ) % (2.0 * math.pi)
         samples.append(round(amplitude * math.sin(phase)))
-        phase += 2.0 * math.pi * current_frequency / sample_rate
-        if phase >= 2.0 * math.pi:
-            phase %= 2.0 * math.pi
-        previous_frequency = current_frequency
 
     return struct.pack(f"<{count}h", *samples)
 
