@@ -318,12 +318,8 @@ impl SmsVdp {
                 0xE5_u8.wrapping_add((line - 235) as u8)
             }
             (VideoStandard::Pal, 192) if line >= 243 => 0xBA_u8.wrapping_add((line - 243) as u8),
-            (VideoStandard::Pal, 224) if line >= 259 => {
-                0xCA_u8.wrapping_add((line - 259) as u8)
-            }
-            (VideoStandard::Pal, 240) if line >= 267 => {
-                0xD2_u8.wrapping_add((line - 267) as u8)
-            }
+            (VideoStandard::Pal, 224) if line >= 259 => 0xCA_u8.wrapping_add((line - 259) as u8),
+            (VideoStandard::Pal, 240) if line >= 267 => 0xD2_u8.wrapping_add((line - 267) as u8),
             _ => line as u8,
         }
     }
@@ -834,8 +830,7 @@ fn render_scanline(
 mod tests {
     use super::{
         COLLISION, FRAME_SIZE, OVERFLOW, SMS_VDP_WIDTH, SmsVdp, StereoPresentation, TMS_PALETTE,
-        VBLANK,
-        render_legacy_scanline, render_legacy_sprites, render_scanline,
+        VBLANK, render_legacy_scanline, render_legacy_sprites, render_scanline,
     };
     use crate::config::{SpriteLimitMode, VideoStandard};
     fn reg(v: &mut SmsVdp, i: u8, value: u8) {
