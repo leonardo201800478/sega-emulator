@@ -459,12 +459,7 @@ class RomLibraryDialog(QDialog):
             self._scan_failed("O scanner retornou um resultado inválido.")
             return
         self._entries = result.entries
-        self.rom_list.clear()
-        for entry in self._entries:
-            item = QListWidgetItem(f"▣\n{entry.name}\n{_format_size(entry.size)}")
-            item.setData(Qt.ItemDataRole.UserRole, entry.path)
-            item.setToolTip(f"{entry.path}\nSHA-256: {entry.sha256}")
-            self.rom_list.addItem(item)
+        self._render_entries(self._entries)
         summary = (
             f"{len(result.entries)} arquivo(s) candidato(s) · "
             f"+{result.added} novo(s) · {result.updated} alterado(s) · "
@@ -490,10 +485,10 @@ class RomLibraryDialog(QDialog):
         self.rom_list.clear()
         art_directory = self.box_art_directory_edit.text().strip()
         for entry in entries:
-            item = QListWidgetItem(f"{entry.name}\\n{_format_size(entry.size)}")
+            item = QListWidgetItem(f"{entry.name}\n{_format_size(entry.size)}")
             item.setSizeHint(QSize(176, 236))
             item.setData(Qt.ItemDataRole.UserRole, entry.path)
-            item.setToolTip(f"{entry.path}\\nSHA-256: {entry.sha256}")
+            item.setToolTip(f"{entry.path}\nSHA-256: {entry.sha256}")
             cover = (
                 _find_box_art(Path(entry.path), Path(art_directory))
                 if art_directory
