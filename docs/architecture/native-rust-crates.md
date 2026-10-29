@@ -10,10 +10,10 @@ Este documento descreve a organização real dos crates Rust no commit de refer�
 
 | Caminho | Papel | Workspace raiz? | Estado e dependências |
 |---|---|---:|---|
-| `native/sg1000_core` (`sega-sg1000-core`) | Biblioteca standalone específica do SG-1000: memória, CPU Z80 e estrutura inicial de máquina | Sim | Parcial e incremental. Depende de `sega-z80-alu` e `sega-z80-bus`. Não equivale sozinho ao runtime integral usado pela aplicação Qt. |
+| `native/sg1000_core` (`sega-sg1000-core`) | Biblioteca standalone do SG-1000: CPU Z80, memória, dispositivos e máquina | Sim | Runtime de hardware ativo e Python-independent; usa ALU e contrato de barramento locais. A extensão PyO3 é necessária para a aplicação Qt. |
 | `native/sms_core` (`sega-sms-core`) | Biblioteca de máquina específica do Master System | Sim | Parcial: configurações, cartucho/memória e executor Z80 Rust ativo com ALU, contrato de barramento e trace temporal restrito. I/O, VDP, áudio e scheduler ainda não formam um runtime SMS completo. Depende de `sega-z80-bus`. |
 | `native/z80_alu` (`sega-z80-alu`) | ALU independente e executável de vetores para validação diferencial | Sim | Oráculo auxiliar; não é dependência do runtime SG-1000, SMS ou da extensão PyO3 ativa. Não é um runtime Z80 completo. |
-| `native/z80_bus` (`sega-z80-bus`) | Contrato compartilhado de acesso à memória e portas para um Z80 | Sim | Dependência de SG-1000 e SMS. É hardware-neutral, mas a implementação de mapa e dispositivos pertence a cada máquina. Os valores padrão de portas são placeholders, não especificação física universal. |
+| `native/z80_bus` (`sega-z80-bus`) | Contrato compartilhado de acesso à memória e portas para um Z80 | Sim | Dependência do SMS. O SG-1000 mantém seu contrato de barramento local. É hardware-neutral; valores padrão de portas são placeholders, não especificação física universal. |
 | `native/z80_core` (`sega-z80-core`) | Biblioteca Rust/PyO3, `cdylib`/`rlib`, usada como adaptador obrigatório entre a UI Qt e o núcleo Rust consolidado | **Não** | Excluída explicitamente do workspace principal. Tem `Cargo.toml`, `Cargo.lock` e configuração Maturin próprios. Depende de `sega-sg1000-core`; contém apenas a ponte para a máquina SG-1000, sem executor Z80 ou mapa de memória duplicados. |
 
 Os nomes de pacote e os nomes dos módulos importáveis não são idênticos em todos os casos: por exemplo, `sega-z80-bus` expõe o crate Rust `sega_z80_bus`.
