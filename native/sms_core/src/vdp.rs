@@ -949,7 +949,6 @@ mod tests {
             &mut v.working_framebuffer,
             0,
             true,
-            true,
         );
         assert_eq!(&v.working_framebuffer[0..3], &[255, 0, 0]);
         assert_eq!(&v.working_framebuffer[3..6], &[0, 0, 0]);
@@ -980,7 +979,6 @@ mod tests {
             &mut v.working_framebuffer,
             1,
             true,
-            true,
         );
         assert_ne!(status & OVERFLOW, 0);
         assert_eq!(status & 0x1F, 8);
@@ -997,7 +995,7 @@ mod tests {
             &mut unlocked.status,
             &mut unlocked.working_framebuffer,
         );
-        render_scanline(vram, cram, regs, status, frame, 1, true, false);
+        render_scanline(vram, cram, regs, status, frame, 1, false);
         assert_ne!(*status & OVERFLOW, 0);
         assert_eq!(&frame[x50..x50 + 3], &[255, 0, 0]);
     }
