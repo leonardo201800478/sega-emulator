@@ -25,7 +25,7 @@ impl NativePcmResampler {
     fn new(output_rate: u32, volume: u8) -> PyResult<Self> {
         let inner = PcmResampler::new(output_rate, volume)
             .map_err(|err| PyValueError::new_err(err.to_string()))?;
-        Ok(Self { inner: Mutex::new(inner) })
+        Ok(Self { inner })
     }
 
     #[getter]
@@ -133,36 +133,54 @@ impl NativeXAudio2Output {
     fn new(sample_rate: u32, buffer_size: u32, queue_blocks: usize) -> PyResult<Self> {
         let inner = RustXAudio2Output::new(sample_rate, buffer_size, queue_blocks)
             .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))?;
-        Ok(Self { inner })
+        Ok(Self { inner: Mutex::new(inner) })
     }
 
     #[getter]
-    fn sample_rate(&self) -> u32 {
-        self.inner.sample_rate()
+    fn sample_rate(&self) -> PyResult<u32> {
+        self.inner
+            .lock()
+            .map(|inner| inner.sample_rate())
+            .map_err(|_| pyo3::exceptions::PyRuntimeError::new_err("native audio output lock poisoned"))
     }
 
     #[getter]
-    fn buffer_size(&self) -> u32 {
-        self.inner.buffer_size()
+    fn buffer_size(&self) -> PyResult<u32> {
+        self.inner
+            .lock()
+            .map(|inner| inner.buffer_size())
+            .map_err(|_| pyo3::exceptions::PyRuntimeError::new_err("native audio output lock poisoned"))
     }
 
     #[getter]
-    fn underrun_count(&self) -> u64 {
-        self.inner.underrun_count()
+    fn underrun_count(&self) -> PyResult<u64> {
+        self.inner
+            .lock()
+            .map(|inner| inner.underrun_count())
+            .map_err(|_| pyo3::exceptions::PyRuntimeError::new_err("native audio output lock poisoned"))
     }
 
     #[getter]
-    fn dropped_block_count(&self) -> u64 {
-        self.inner.dropped_block_count()
+    fn dropped_block_count(&self) -> PyResult<u64> {
+        self.inner
+            .lock()
+            .map(|inner| inner.dropped_block_count())
+            .map_err(|_| pyo3::exceptions::PyRuntimeError::new_err("native audio output lock poisoned"))
     }
 
     fn write_pcm(&mut self, pcm: &Bound<'_, PyBytes>) -> PyResult<()> {
         self.inner
+            .lock()
+            .map_err(|_| pyo3::exceptions::PyRuntimeError::new_err("native audio output lock poisoned"))?
             .write_pcm(pcm.as_bytes().to_vec())
             .map_err(|error| pyo3::exceptions::PyRuntimeError::new_err(error.to_string()))
     }
 
-    fn close(&mut self) {
-        self.inner.close();
+    fn close(&mut self) -> PyResult<()> {
+        self.inner
+            .lock()
+            .map_err(|_| pyo3::exceptions::PyRuntimeError::new_err("native audio output lock poisoned"))?
+            .close();
+        Ok(())
     }
 }
