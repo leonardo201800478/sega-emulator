@@ -279,7 +279,9 @@ def run(initial_path: Path | None = None) -> None:
     )
     view.set_integer_scale(preferences.integer_scale)
     status = window.status
-    audio_warning = _audio_output_warning(preferences, audio_output, selected_audio_driver)
+    audio_warning = _audio_output_warning(
+        preferences, audio_output, selected_audio_driver
+    )
     if audio_warning is not None:
         status.showMessage(audio_warning)
 
@@ -646,7 +648,13 @@ def run(initial_path: Path | None = None) -> None:
         timer.start()
 
     def configure_drivers() -> None:
-        nonlocal controller_input, audio_output, audio_resampler, preferences, selected_audio_driver
+        nonlocal (
+            controller_input,
+            audio_output,
+            audio_resampler,
+            preferences,
+            selected_audio_driver,
+        )
 
         from sega_emulator.frontend.qt.drivers_dialog import DriversDialog
 
@@ -736,7 +744,9 @@ def run(initial_path: Path | None = None) -> None:
         settings.setValue("audio_driver", audio_driver)
         preferences.save_to_store(settings)
 
-        audio_warning = _audio_output_warning(preferences, audio_output, selected_audio_driver)
+        audio_warning = _audio_output_warning(
+            preferences, audio_output, selected_audio_driver
+        )
         restart_note = (
             " Reinicie o emulador para aplicar a nova API gráfica."
             if video_driver_changed
