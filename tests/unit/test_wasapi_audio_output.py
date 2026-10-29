@@ -91,23 +91,20 @@ def test_callback_drains_pcm_across_callbacks_and_silences_shortage() -> None:
     output.close()
 
 
-def test_volume_is_applied_before_audio_callback() -> None:
-    sounddevice = FakeSoundDevice()
-    output = WasapiAudioOutput(44_100, 4, 50, sounddevice_module=sounddevice)
-    output.write_pcm((1000).to_bytes(2, "little", signed=True))
+def test_pcm_reaches_device_callback_without_python_side_gain() -> None:
+    output = WasapiAudioOutput(44_100, 4, sounddevice_module=FakeSoundDevice())
+    pcm = (1000).to_bytes(2, "little", signed=True)
+    output.write_pcm(pcm)
     target = bytearray(2)
     output._callback(target, 1, None, None)
-    assert int.from_bytes(target, "little", signed=True) == 500
-    output.set_volume(0)
+    assert target == pcm
     output.close()
 
 
-def test_rejects_invalid_pcm_and_volume() -> None:
+def test_rejects_invalid_pcm_block() -> None:
     output = WasapiAudioOutput(44_100, 4, sounddevice_module=FakeSoundDevice())
     with pytest.raises(ValueError, match="par de bytes"):
         output.write_pcm(b"\x01")
-    with pytest.raises(ValueError, match="volume"):
-        output.set_volume(101)
     output.close()
 
 
