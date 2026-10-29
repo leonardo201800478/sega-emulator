@@ -7,11 +7,18 @@ Rust-backed SG-1000 runtime.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from pathlib import Path
 from threading import Event
 
-from PySide6.QtCore import QObject, QRunnable, QSettings, Signal, QStandardPaths, Qt, QThreadPool
+from PySide6.QtCore import (
+    QObject,
+    QRunnable,
+    QSettings,
+    Signal,
+    QStandardPaths,
+    Qt,
+    QThreadPool,
+)
 from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
