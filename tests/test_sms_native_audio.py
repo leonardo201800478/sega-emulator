@@ -112,3 +112,26 @@ def test_sms_python_adapter_drains_pcm_without_changing_tstates() -> None:
     assert machine.psg_sample_rate == 44_100
     assert machine.psg_clock_hz == 3_579_545
     assert machine.total_tstates == before
+
+
+def test_sms_frame_runner_exposes_native_framebuffer_and_controller() -> None:
+    machine = NativeSMSMachine(bytes([0x00]) * 16, False)
+    assert machine.frame_number == 0
+    steps = machine.run_frame(100_000)
+    assert 0 < steps <= 100_000
+    assert machine.frame_number == 1
+    assert machine.visible_height == 192
+    assert len(machine.framebuffer) == 256 * 192 * 3
+    assert machine.total_tstates > 0
+    machine.set_controller(1, True, False, False, False, True, False)
+    with pytest.raises(ValueError):
+        machine.set_controller(3, False, False, False, False, False, False)
+
+
+def test_sms_adapter_exposes_qt_frame_and_controller_contract() -> None:
+    machine = SMSMachine(bytes([0x00]) * 16)
+    machine.run_frame()
+    assert len(machine.vdp.framebuffer) == 256 * 192 * 3
+    assert machine.vdp.frame_number == 1
+    assert machine.vdp.visible_height == 192
+    machine.set_controller_actions(1, {"up", "button1"})
