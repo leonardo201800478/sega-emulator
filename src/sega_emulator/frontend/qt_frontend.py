@@ -29,6 +29,11 @@ from sega_emulator.frontend.qt.preferences import FrontendPreferences
 from sega_emulator.frontend.qt.wasapi_audio import NativeAudioOutput
 from sega_emulator.machine.sg1000 import SG1000Machine
 from sega_emulator.machine.sms import SMSMachine, load_sms_rom
+from sega_emulator.machine.sms_region import (
+    normalize_sms_region_preference,
+    sms_frame_period_seconds,
+    sms_region_candidates,
+)
 from sega_emulator.rom_loader import LoadedRom, list_rom_members, load_rom
 
 logger = logging.getLogger(__name__)
@@ -181,6 +186,10 @@ def run(initial_path: Path | None = None) -> None:
         )
     settings = QSettings()
     preferences = FrontendPreferences.from_store(settings)
+    region_preference = normalize_sms_region_preference(
+        settings.value("sms_region_preference", "auto")
+    )
+    settings.setValue("sms_region_preference", region_preference)
     ui_language = str(settings.value("ui_language", "pt-BR"))
     if ui_language not in {"pt-BR", "en", "es", "it", "fr"}:
         ui_language = "pt-BR"
@@ -241,6 +250,8 @@ def run(initial_path: Path | None = None) -> None:
         on_show_machine_state=lambda: show_machine_state(),
         on_video_scale=lambda scale: window.set_video_scale(scale),
         on_configure_drivers=lambda: configure_drivers(),
+        on_configure_region=lambda region: configure_region(region),
+        region_preference=region_preference,
         on_configure_audio_video=lambda: configure_audio_video(),
         on_start_vgm_recording=lambda: start_vgm_recording(),
         on_stop_vgm_recording=lambda: stop_vgm_recording(),
@@ -316,6 +327,9 @@ def run(initial_path: Path | None = None) -> None:
     # O loop do emulador é limitado ao período nominal NTSC; o relógio lógico
     # da máquina continua avançando exclusivamente pelos T-states emulados.
     frame_pacer = FramePacer(FRAME_PERIOD_SECONDS)
+    sms_region_attempts: tuple[str, ...] = ("usa", "europe", "japan")
+    sms_region_attempt_index = 0
+    active_sms_region = "usa"
     timer.setTimerType(Qt.TimerType.PreciseTimer)
     timer.setInterval(1)
 
@@ -569,7 +583,38 @@ def run(initial_path: Path | None = None) -> None:
                 for phase in phase_totals_ms:
                     phase_totals_ms[phase] = 0.0
                     phase_max_ms[phase] = 0.0
-        except Exception:
+        except Exception as exc:
+            if (
+                active_system == "master_system"
+                and region_preference == "auto"
+                and frame_count == 0
+                and sms_region_attempt_index + 1 < len(sms_region_attempts)
+                and isinstance(exc, RuntimeError)
+                and "não concluiu um quadro" in str(exc)
+                and loaded is not None
+            ):
+                sms_region_attempt_index += 1
+                active_sms_region = sms_region_attempts[sms_region_attempt_index]
+                machine = SMSMachine(loaded.data, region=active_sms_region)
+                frame_pacer = FramePacer(sms_frame_period_seconds(active_sms_region))
+                frame_pacer.reset()
+                audio_resampler.reset()
+                status.showMessage(
+                    f"Primeira inicialização não concluiu quadro; tentando região "
+                    f"{active_sms_region.upper()} ({sms_region_attempt_index + 1}/"
+                    f"{len(sms_region_attempts)})",
+                    8000,
+                )
+                logger.warning(
+                    "Fallback automático de região SMS após falha no primeiro quadro",
+                    extra={
+                        "event": "sms_region_fallback",
+                        "failed_region": sms_region_attempts[sms_region_attempt_index - 1],
+                        "next_region": active_sms_region,
+                        "attempt_index": sms_region_attempt_index,
+                    },
+                )
+                return
             logger.exception(
                 "Falha durante execução de quadro",
                 extra={
@@ -600,6 +645,8 @@ def run(initial_path: Path | None = None) -> None:
 
     def open_rom(path: str | None = None, system: str | None = None) -> None:
         nonlocal machine, loaded, frame_count, paused, active_system
+        nonlocal frame_pacer, sms_region_attempts, sms_region_attempt_index
+        nonlocal active_sms_region
         nonlocal last_checkpoint_time, last_checkpoint_tstates
         nonlocal last_checkpoint_instructions, last_checkpoint_frame
         if not path:
@@ -652,7 +699,16 @@ def run(initial_path: Path | None = None) -> None:
                     return
                 candidate = load_rom(path, member_name=selected)
             if requested_system == "master_system":
-                loaded_machine = SMSMachine(candidate.data)
+                sms_region_attempts = sms_region_candidates(region_preference)
+                sms_region_attempt_index = 0
+                active_sms_region = sms_region_attempts[0]
+                loaded_machine = SMSMachine(candidate.data, region=active_sms_region)
+                frame_pacer = FramePacer(sms_frame_period_seconds(active_sms_region))
+            else:
+                sms_region_attempts = ("usa", "europe", "japan")
+                sms_region_attempt_index = 0
+                active_sms_region = "usa"
+                frame_pacer = FramePacer(FRAME_PERIOD_SECONDS)
             else:
                 loaded_machine = SG1000Machine(candidate.data)
                 if not preferences.sprite_limit_enabled:
@@ -712,6 +768,41 @@ def run(initial_path: Path | None = None) -> None:
         view.setFocus()
         frame_pacer.reset()
         timer.start()
+
+    def configure_region(region: str) -> None:
+        nonlocal region_preference, machine, frame_pacer
+        nonlocal sms_region_attempts, sms_region_attempt_index, active_sms_region
+        region_preference = normalize_sms_region_preference(region)
+        settings.setValue("sms_region_preference", region_preference)
+        sms_region_attempts = sms_region_candidates(region_preference)
+        sms_region_attempt_index = 0
+        active_sms_region = sms_region_attempts[0]
+        if active_system == "master_system" and loaded is not None:
+            if vgm_recorder.active and not stop_vgm_recording():
+                return
+            machine = SMSMachine(loaded.data, region=active_sms_region)
+            frame_pacer = FramePacer(sms_frame_period_seconds(active_sms_region))
+            frame_pacer.reset()
+            audio_resampler.reset()
+            frame_count = 0
+            status.showMessage(
+                f"Região SMS: {region_preference} — iniciando em {active_sms_region.upper()}",
+                6000,
+            )
+            logger.info(
+                "Preferência de região SMS alterada",
+                extra={
+                    "event": "sms_region_preference_changed",
+                    "preference": region_preference,
+                    "first_region": active_sms_region,
+                    "fallback_order": list(sms_region_attempts),
+                },
+            )
+        else:
+            status.showMessage(
+                f"Preferência de região SMS salva: {region_preference}.",
+                5000,
+            )
 
     def configure_drivers() -> None:
         nonlocal \
@@ -1014,18 +1105,23 @@ def run(initial_path: Path | None = None) -> None:
         )
 
     def reset_machine() -> None:
-        nonlocal machine, frame_count, paused
+        nonlocal machine, frame_count, paused, frame_pacer
+        nonlocal sms_region_attempts, sms_region_attempt_index, active_sms_region
         nonlocal last_checkpoint_time, last_checkpoint_tstates
         nonlocal last_checkpoint_instructions, last_checkpoint_frame
         if vgm_recorder.active and not stop_vgm_recording():
             return
         if loaded is None:
             return
-        machine = (
-            SMSMachine(loaded.data)
-            if active_system == "master_system"
-            else SG1000Machine(loaded.data)
-        )
+        if active_system == "master_system":
+            sms_region_attempts = sms_region_candidates(region_preference)
+            sms_region_attempt_index = 0
+            active_sms_region = sms_region_attempts[0]
+            machine = SMSMachine(loaded.data, region=active_sms_region)
+            frame_pacer = FramePacer(sms_frame_period_seconds(active_sms_region))
+        else:
+            machine = SG1000Machine(loaded.data)
+            frame_pacer = FramePacer(FRAME_PERIOD_SECONDS)
         audio_resampler.reset()
         frame_count, paused = 0, False
         frame_pacer.reset()
