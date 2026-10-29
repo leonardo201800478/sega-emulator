@@ -72,4 +72,5 @@ def test_sms_audio_pcm_is_deterministic_and_drain_does_not_change_timing() -> No
 
 def test_sms_pal_profile_selects_pal_psg_clock() -> None:
     machine = NativeSMSMachine(bytes([0x00]), True)
+    assert machine.psg_sample_rate == 44_100
     assert machine.psg_clock_hz == 3_546_895
