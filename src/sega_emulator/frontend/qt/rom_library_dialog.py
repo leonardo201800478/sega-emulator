@@ -14,8 +14,8 @@ from PySide6.QtCore import (
     QObject,
     QRunnable,
     QSettings,
-    QStandardPaths,
     QSize,
+    QStandardPaths,
     Qt,
     QThreadPool,
     Signal,
@@ -494,7 +494,11 @@ class RomLibraryDialog(QDialog):
             item.setSizeHint(QSize(176, 236))
             item.setData(Qt.ItemDataRole.UserRole, entry.path)
             item.setToolTip(f"{entry.path}\\nSHA-256: {entry.sha256}")
-            cover = _find_box_art(Path(entry.path), Path(art_directory)) if art_directory else None
+            cover = (
+                _find_box_art(Path(entry.path), Path(art_directory))
+                if art_directory
+                else None
+            )
             if cover is not None:
                 item.setIcon(QIcon(str(cover)))
                 item.setText(f"{Path(entry.name).stem}\\n{_format_size(entry.size)}")
@@ -579,6 +583,10 @@ def _find_box_art(rom_path: Path, art_directory: Path) -> Path | None:
             and path.suffix.casefold() in allowed
             and path.stem.casefold() == target_stem
         )
-        return min(candidates, key=lambda path: (path.suffix.casefold(), str(path).casefold()), default=None)
+        return min(
+            candidates,
+            key=lambda path: (path.suffix.casefold(), str(path).casefold()),
+            default=None,
+        )
     except OSError:
         return None
