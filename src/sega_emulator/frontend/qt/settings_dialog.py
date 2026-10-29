@@ -159,7 +159,7 @@ class SettingsDialog(QDialog):
         psg_form.addRow(psg_note)
         psg_layout.addWidget(psg_group)
         psg_layout.addStretch(1)
-        tabs.addTab(psg_page, "PSG / Hardware")
+        tabs.addTab(psg_page, "PSG / Modelo")
 
         video_page = QWidget(self)
         video_layout = QVBoxLayout(video_page)
