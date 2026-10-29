@@ -187,8 +187,9 @@ def run(initial_path: Path | None = None) -> None:
     if selected_audio_driver not in {"wasapi", "xaudio2", "disabled"}:
         selected_audio_driver = "wasapi"
         settings.setValue("audio_driver", selected_audio_driver)
-    if selected_audio_driver == "disabled" and preferences.audio_enabled:
-        settings.setValue("audio_enabled", False)
+    backend_audio_enabled = selected_audio_driver != "disabled"
+    if preferences.audio_enabled != backend_audio_enabled:
+        settings.setValue("audio_enabled", backend_audio_enabled)
         preferences = FrontendPreferences.from_store(settings)
     audio_output = _initialize_audio_backend(preferences, selected_audio_driver)
     audio_resampler = PcmResampler(
