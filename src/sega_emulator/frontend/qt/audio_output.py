@@ -4,6 +4,7 @@ The resampler, filtering, gain and PCM16 conversion are implemented in the
 Rust audio runtime and exposed by the PyO3 extension. This module contains no
 DSP implementation.
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence
