@@ -519,7 +519,12 @@ def run(initial_path: Path | None = None) -> None:
             elapsed = max(now - last_checkpoint_time, 1e-9)
             tstates_delta = machine.total_tstates - last_checkpoint_tstates
             fps = (frame_count - last_checkpoint_frame) / elapsed
-            speed_percent = (tstates_delta / elapsed / Z80_CLOCK_HZ) * 100
+            nominal_clock_hz = (
+                3_546_893
+                if active_system == "master_system" and active_sms_region == "europe"
+                else Z80_CLOCK_HZ
+            )
+            speed_percent = (tstates_delta / elapsed / nominal_clock_hz) * 100
             status.showMessage(
                 f"{loaded.display_name if loaded else 'Sem ROM'} | "
                 f"Quadro {frame_count} | Envio à UI {fps:.1f} FPS | "
@@ -770,7 +775,7 @@ def run(initial_path: Path | None = None) -> None:
         timer.start()
 
     def configure_region(region: str) -> None:
-        nonlocal region_preference, machine, frame_pacer
+        nonlocal region_preference, machine, frame_pacer, frame_count
         nonlocal sms_region_attempts, sms_region_attempt_index, active_sms_region
         region_preference = normalize_sms_region_preference(region)
         settings.setValue("sms_region_preference", region_preference)
