@@ -305,13 +305,17 @@ class RomLibraryDialog(QDialog):
         self.rom_list.setIconSize(QSize(148, 184))
         self.rom_list.setWordWrap(True)
         self.rom_list.setUniformItemSizes(True)
-        self.rom_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.rom_list.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
         self.rom_list.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.rom_list.itemSelectionChanged.connect(self._update_launch_state)
         self.rom_list.itemDoubleClicked.connect(lambda item: self._launch_selected())
         self.rom_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.rom_list.customContextMenuRequested.connect(self._show_rom_context_menu)
-        self._refresh_box_art_shortcut = QShortcut(QKeySequence.StandardKey.Refresh, self)
+        self._refresh_box_art_shortcut = QShortcut(
+            QKeySequence.StandardKey.Refresh, self
+        )
         self._refresh_box_art_shortcut.activated.connect(self._refresh_box_art)
         library_layout.addWidget(self.rom_list, 1)
 
@@ -506,8 +510,14 @@ class RomLibraryDialog(QDialog):
             item.setData(Qt.ItemDataRole.UserRole, entry.path)
             item.setToolTip(f"{entry.path}\nSHA-256: {entry.sha256}")
             override = self._manual_box_art_for(rom_path)
-            cover = override if override is not None else (
-                _find_box_art(rom_path, art_directory) if art_directory is not None else None
+            cover = (
+                override
+                if override is not None
+                else (
+                    _find_box_art(rom_path, art_directory)
+                    if art_directory is not None
+                    else None
+                )
             )
             if cover is not None:
                 item.setIcon(QIcon(str(cover)))
@@ -526,7 +536,8 @@ class RomLibraryDialog(QDialog):
                 QMessageBox.warning(
                     self,
                     "Pasta de capas indisponível",
-                    f"A pasta configurada não existe ou não está acessível:\n{directory}",
+                    "A pasta configurada não existe ou não está acessível:\n"
+                    f"{directory}",
                 )
                 return
             if self.selected_system is not None:
@@ -651,7 +662,10 @@ _COMMON_IMAGE_SUFFIXES = {
 def _normalize_art_name(value: str) -> str:
     """Normalize ROM/art names, ignoring regions and LaunchBox image numbering."""
     value = re.sub(
-        r"\s+-\s+(?:box\s*[- ]\s*)?front.*$", "", value, flags=re.IGNORECASE
+        r"\s+-\s+(?:box\s*[- ]\s*)?front.*$",
+        "",
+        value,
+        flags=re.IGNORECASE,
     )
     # LaunchBox commonly appends -01, -02, etc. to alternative scans of one cover.
     value = re.sub(r"-\d{2,3}$", "", value.strip())
