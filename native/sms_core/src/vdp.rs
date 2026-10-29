@@ -646,7 +646,7 @@ fn render_scanline(
     hardware_sprite_limit: bool,
 ) {
     if regs[0] & 0x04 == 0 {
-        render_legacy_scanline(vram, regs, status, frame, y, hardware_sprite_limit);
+        render_legacy_scanline(vram, regs, status, frame, y, !hardware_sprite_limit);
         return;
     }
     let backdrop = palette_rgb(cram, 16 + (regs[7] & 0x0F));
