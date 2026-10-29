@@ -26,7 +26,7 @@ from sega_emulator.frontend.native_first_controller_input import (
 from sega_emulator.frontend.qt.audio_output import PcmResampler
 from sega_emulator.frontend.qt.frame_pacer import FramePacer
 from sega_emulator.frontend.qt.preferences import FrontendPreferences
-from sega_emulator.frontend.qt.wasapi_audio import WasapiAudioOutput
+from sega_emulator.frontend.qt.wasapi_audio import NativeAudioOutput
 from sega_emulator.machine.sg1000 import SG1000Machine
 from sega_emulator.rom_loader import LoadedRom, list_rom_members, load_rom
 
@@ -88,29 +88,32 @@ def _runtime_diagnostic(machine: SG1000Machine, rom_sha256: str) -> dict[str, ob
     return diagnostic
 
 
-def _initialize_wasapi_backend(
+def _initialize_audio_backend(
     preferences: FrontendPreferences,
-) -> WasapiAudioOutput | None:
-    """Open the Windows WASAPI output without tying audio to the frame loop."""
-    if not preferences.audio_enabled:
+    backend: str,
+) -> NativeAudioOutput | None:
+    """Open the selected native Rust output without tying it to the frame loop."""
+    if not preferences.audio_enabled or backend == "disabled":
         return None
     try:
-        return WasapiAudioOutput(
+        return NativeAudioOutput(
             sample_rate=preferences.audio_sample_rate,
             buffer_size=preferences.audio_buffer_size,
+            backend=backend,
         )
     except Exception as exc:
-        # Audio initialization failure must not disable video or input.
-        logger.warning("Saída WASAPI indisponível: %s", exc)
+        logger.warning("Saída de áudio %s indisponível: %s", backend, exc)
         return None
 
 
 def _audio_output_warning(
-    preferences: FrontendPreferences, audio_output: WasapiAudioOutput | None
+    preferences: FrontendPreferences,
+    audio_output: NativeAudioOutput | None,
+    backend: str,
 ) -> str | None:
-    """Describe an enabled audio backend that failed to initialize."""
-    if preferences.audio_enabled and audio_output is None:
-        return "Áudio WASAPI indisponível; consulte o log para detalhes."
+    """Describe an enabled native audio backend that failed to initialize."""
+    if preferences.audio_enabled and backend != "disabled" and audio_output is None:
+        return f"Áudio {backend} indisponível; consulte o log para detalhes."
     return None
 
 
@@ -177,7 +180,14 @@ def run(initial_path: Path | None = None) -> None:
     # persisted "python" values are migrated unconditionally and are no longer
     # exposed as a selectable runtime.
     settings.setValue("cpu_core", "rust")
-    audio_output = _initialize_wasapi_backend(preferences)
+    selected_audio_driver = str(settings.value("audio_driver", "wasapi"))
+    if selected_audio_driver not in {"wasapi", "xaudio2", "disabled"}:
+        selected_audio_driver = "wasapi"
+        settings.setValue("audio_driver", selected_audio_driver)
+    if selected_audio_driver == "disabled" and preferences.audio_enabled:
+        settings.setValue("audio_enabled", False)
+        preferences = FrontendPreferences.from_store(settings)
+    audio_output = _initialize_audio_backend(preferences, selected_audio_driver)
     audio_resampler = PcmResampler(
         preferences.audio_sample_rate, preferences.audio_volume
     )
@@ -269,7 +279,7 @@ def run(initial_path: Path | None = None) -> None:
     )
     view.set_integer_scale(preferences.integer_scale)
     status = window.status
-    audio_warning = _audio_output_warning(preferences, audio_output)
+    audio_warning = _audio_output_warning(preferences, audio_output, selected_audio_driver)
     if audio_warning is not None:
         status.showMessage(audio_warning)
 
@@ -712,7 +722,7 @@ def run(initial_path: Path | None = None) -> None:
                 crt_curvature=preferences.crt_curvature,
                 crt_signal_mode=preferences.crt_signal_mode,
             )
-            audio_output = _initialize_wasapi_backend(updated_audio)
+            audio_output = _initialize_audio_backend(updated_audio, audio_driver)
             audio_resampler = PcmResampler(
                 updated_audio.audio_sample_rate, updated_audio.audio_volume
             )
@@ -777,7 +787,7 @@ def run(initial_path: Path | None = None) -> None:
                     logger.exception(
                         "Falha ao encerrar WASAPI antes de reconfigurar áudio"
                     )
-            audio_output = _initialize_wasapi_backend(updated)
+            audio_output = _initialize_audio_backend(updated, selected_audio_driver)
             audio_resampler = PcmResampler(
                 updated.audio_sample_rate, updated.audio_volume
             )
