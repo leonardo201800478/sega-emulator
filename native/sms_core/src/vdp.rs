@@ -1259,8 +1259,10 @@ mod tests {
 
     #[test]
     fn status_port_sets_reserved_low_bits_and_clears_status_flags() {
-        let mut v = SmsVdp::default();
-        v.status = VBLANK | OVERFLOW | COLLISION;
+        let mut v = SmsVdp {
+            status: VBLANK | OVERFLOW | COLLISION,
+            ..SmsVdp::default()
+        };
         let status = v.read_port(0xBF);
         assert_eq!(status, 0xFF);
         assert_eq!(v.status(), 0);
