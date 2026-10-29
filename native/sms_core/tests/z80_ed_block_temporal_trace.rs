@@ -1,8 +1,9 @@
-use sega_sms_core::{CpuBus, Z80, Z80BusEvent, Z80BusEventKind};
+use sega_sms_core::{CpuBus, Z80, Z80BusEvent, Z80BusEventKind, Z80TStatePhase, Z80TStateSample};
 
 struct TraceBus {
     memory: Box<[u8]>,
     events: Vec<Z80BusEvent>,
+    tstate_samples: Vec<Z80TStateSample>,
 }
 
 impl Default for TraceBus {
@@ -10,6 +11,7 @@ impl Default for TraceBus {
         Self {
             memory: vec![0; 0x1_0000].into_boxed_slice(),
             events: Vec::new(),
+            tstate_samples: Vec::new(),
         }
     }
 }
@@ -23,8 +25,16 @@ impl CpuBus for TraceBus {
         self.memory[usize::from(address)] = value;
     }
 
+    fn timing_trace_enabled(&self) -> bool {
+        true
+    }
+
     fn observe_timing_event(&mut self, event: Z80BusEvent) {
         self.events.push(event);
+    }
+
+    fn observe_tstate_sample(&mut self, sample: Z80TStateSample) {
+        self.tstate_samples.push(sample);
     }
 }
 
@@ -206,6 +216,45 @@ struct SingleStepCycle {
     signals: &'static str,
 }
 
+fn assert_tstate_samples_match(
+    actual: &[Z80TStateSample],
+    expected: &[SingleStepCycle],
+    is_transfer: bool,
+) {
+    assert_eq!(actual.len(), expected.len());
+    for (index, (actual, expected)) in actual.iter().zip(expected).enumerate() {
+        assert_eq!(
+            actual.tstate_offset, index as u32,
+            "offset at T-state {index}"
+        );
+        assert_eq!(
+            actual.address, expected.address,
+            "address at T-state {index}"
+        );
+        assert_eq!(actual.data, expected.data, "data at T-state {index}");
+        let flags = [
+            if actual.rd { 'r' } else { '-' },
+            if actual.wr { 'w' } else { '-' },
+            if actual.mreq { 'm' } else { '-' },
+            if actual.iorq { 'i' } else { '-' },
+        ];
+        let actual_signals: String = flags.iter().copied().collect();
+        assert_eq!(
+            actual_signals.as_str(),
+            expected.signals,
+            "signals at T-state {index}"
+        );
+        let expected_phase = match index {
+            0 | 1 | 4 | 5 => Z80TStatePhase::OpcodeFetch,
+            2 | 3 | 6 | 7 => Z80TStatePhase::Refresh,
+            8..=10 => Z80TStatePhase::MemoryRead,
+            11..=15 if is_transfer => Z80TStatePhase::MemoryWrite,
+            _ => Z80TStatePhase::Internal,
+        };
+        assert_eq!(actual.phase, expected_phase, "phase at T-state {index}");
+    }
+}
+
 #[test]
 fn ldi_mcycle_trace_matches_pinned_singlestep_bus_samples() {
     // SingleStepTests/Z80 vector ED A0 0000 at commit
@@ -321,6 +370,7 @@ fn ldi_mcycle_trace_matches_pinned_singlestep_bus_samples() {
     cpu.q = 0xF3;
 
     assert_eq!(cpu.step(&mut bus).expect("pinned LDI executes"), 16);
+    assert_tstate_samples_match(&bus.tstate_samples, &samples, true);
     assert_eq!(cpu.registers.pc, 0xCE3B);
     assert_eq!(cpu.registers.bc(), 0xEDCE);
     assert_eq!(cpu.registers.de(), 0xDA44);
@@ -394,6 +444,8 @@ fn assert_external_mcycle_trace(
     opcode: u8,
     accumulator: u8,
     bc: u16,
+    i: u8,
+    r: u8,
     samples: &[SingleStepCycle],
     is_transfer: bool,
 ) {
@@ -433,6 +485,8 @@ fn assert_external_mcycle_trace(
     let mut cpu = Z80::default();
     cpu.registers.pc = pc;
     cpu.registers.a = accumulator;
+    cpu.i = i;
+    cpu.r = r;
     cpu.registers.set_bc(bc);
     cpu.registers.set_hl(hl);
     cpu.registers.set_de(de);
@@ -440,6 +494,7 @@ fn assert_external_mcycle_trace(
     let tstates = cpu
         .step(&mut bus)
         .expect("pinned ED block instruction executes");
+    assert_tstate_samples_match(&bus.tstate_samples, samples, is_transfer);
     assert_eq!(tstates, samples.len() as u32);
     assert_eq!(
         cpu.registers.pc,
@@ -540,7 +595,7 @@ fn cpi_mcycle_trace_matches_pinned_singlestep_bus_samples() {
         (Some(0x723D), None, "----"),
         (Some(0x723D), None, "----"),
     ];
-    assert_external_mcycle_trace(0xA1, 0x14, 0x5877, &samples, false);
+    assert_external_mcycle_trace(0xA1, 0x14, 0x5877, 0x79, 0x49, &samples, false);
 }
 
 #[test]
@@ -564,7 +619,7 @@ fn ldd_mcycle_trace_matches_pinned_singlestep_bus_samples() {
         (Some(0xFF85), None, "----"),
         (Some(0xFF85), None, "----"),
     ];
-    assert_external_mcycle_trace(0xA8, 0x87, 0x4D61, &samples, true);
+    assert_external_mcycle_trace(0xA8, 0x87, 0x4D61, 0xE3, 0x6E, &samples, true);
 }
 
 #[test]
@@ -588,7 +643,7 @@ fn cpd_mcycle_trace_matches_pinned_singlestep_bus_samples() {
         (Some(0xBA2A), None, "----"),
         (Some(0xBA2A), None, "----"),
     ];
-    assert_external_mcycle_trace(0xA9, 0xF5, 0x97AC, &samples, false);
+    assert_external_mcycle_trace(0xA9, 0xF5, 0x97AC, 0x6A, 0x50, &samples, false);
 }
 
 #[test]
@@ -617,7 +672,7 @@ fn ldir_mcycle_trace_matches_pinned_singlestep_bus_samples() {
         (Some(0x5B54), None, "----"),
         (Some(0x5B54), None, "----"),
     ];
-    assert_external_mcycle_trace(0xB0, 0xB2, 0x98EA, &samples, true);
+    assert_external_mcycle_trace(0xB0, 0xB2, 0x98EA, 0x74, 0x73, &samples, true);
 }
 
 #[test]
@@ -646,7 +701,7 @@ fn cpir_mcycle_trace_matches_pinned_singlestep_bus_samples() {
         (Some(0xBFF6), None, "----"),
         (Some(0xBFF6), None, "----"),
     ];
-    assert_external_mcycle_trace(0xB1, 0xA3, 0x1495, &samples, false);
+    assert_external_mcycle_trace(0xB1, 0xA3, 0x1495, 0xFC, 0x12, &samples, false);
 }
 
 #[test]
@@ -675,7 +730,7 @@ fn lddr_mcycle_trace_matches_pinned_singlestep_bus_samples() {
         (Some(0xAC08), None, "----"),
         (Some(0xAC08), None, "----"),
     ];
-    assert_external_mcycle_trace(0xB8, 0xCA, 0x0000, &samples, true);
+    assert_external_mcycle_trace(0xB8, 0xCA, 0x0000, 0x80, 0x62, &samples, true);
 }
 
 #[test]
@@ -704,7 +759,7 @@ fn cpdr_mcycle_trace_matches_pinned_singlestep_bus_samples() {
         (Some(0x20AB), None, "----"),
         (Some(0x20AB), None, "----"),
     ];
-    assert_external_mcycle_trace(0xB9, 0x2F, 0x2BD9, &samples, false);
+    assert_external_mcycle_trace(0xB9, 0x2F, 0x2BD9, 0x12, 0x3C, &samples, false);
 }
 
 #[test]

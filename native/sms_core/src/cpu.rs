@@ -7,7 +7,7 @@
 //! independent vectors and bus-level validation.
 
 use crate::alu::{adc8, add8, and8, cp8, or8, sbc8, sub8, xor8};
-use crate::bus::{CpuBus, Z80BusEvent, Z80BusEventKind};
+use crate::bus::{CpuBus, Z80BusEvent, Z80BusEventKind, Z80TStatePhase, Z80TStateSample};
 
 const FLAG_C: u8 = 0x01;
 const FLAG_N: u8 = 0x02;
@@ -304,7 +304,8 @@ impl Z80 {
             }
             0xED => {
                 let extended_opcode = self.fetch_opcode(bus);
-                self.execute_ed(bus, extended_opcode, injected_opcode.is_none())
+                let trace_enabled = injected_opcode.is_none() && bus.timing_trace_enabled();
+                self.execute_ed(bus, extended_opcode, trace_enabled)
             }
             0xD3 => {
                 let port_low = self.fetch8(bus);
@@ -1027,7 +1028,7 @@ impl Z80 {
 
     /// Execute ED-prefixed Z80 instructions. Unassigned ED encodings are
     /// documented as two-byte NOPs on the classic Z80.
-    fn execute_ed<B: CpuBus>(&mut self, bus: &mut B, opcode: u8, trace_unprefixed: bool) -> u32 {
+    fn execute_ed<B: CpuBus>(&mut self, bus: &mut B, opcode: u8, trace_enabled: bool) -> u32 {
         match opcode {
             0x47 => {
                 self.i = self.registers.a;
@@ -1147,8 +1148,8 @@ impl Z80 {
                 self.set_szp_xy_flags_preserving_carry(self.registers.a);
                 18
             }
-            0xA0 | 0xA8 | 0xB0 | 0xB8 => self.execute_block_transfer(bus, opcode, trace_unprefixed),
-            0xA1 | 0xA9 | 0xB1 | 0xB9 => self.execute_block_compare(bus, opcode, trace_unprefixed),
+            0xA0 | 0xA8 | 0xB0 | 0xB8 => self.execute_block_transfer(bus, opcode, trace_enabled),
+            0xA1 | 0xA9 | 0xB1 | 0xB9 => self.execute_block_compare(bus, opcode, trace_enabled),
             0xA2 | 0xAA | 0xB2 | 0xBA | 0xA3 | 0xAB | 0xB3 | 0xBB => {
                 self.execute_block_io(bus, opcode)
             }
@@ -1214,6 +1215,210 @@ impl Z80 {
         bus.observe_timing_event(event);
     }
 
+    #[inline]
+    fn emit_tstate_sample<B: CpuBus>(bus: &mut B, sample: Z80TStateSample) {
+        bus.observe_tstate_sample(sample);
+    }
+
+    fn emit_m1_tstate_samples<B: CpuBus>(
+        bus: &mut B,
+        instruction_pc: u16,
+        tstate_offset: u32,
+        fetch_address: u16,
+        opcode: u8,
+        refresh_address: u16,
+    ) {
+        let samples = [
+            Z80TStateSample {
+                instruction_pc,
+                tstate_offset,
+                phase: Z80TStatePhase::OpcodeFetch,
+                address: Some(fetch_address),
+                data: None,
+                rd: false,
+                wr: false,
+                mreq: false,
+                iorq: false,
+            },
+            Z80TStateSample {
+                instruction_pc,
+                tstate_offset: tstate_offset + 1,
+                phase: Z80TStatePhase::OpcodeFetch,
+                address: Some(fetch_address),
+                data: None,
+                rd: true,
+                wr: false,
+                mreq: true,
+                iorq: false,
+            },
+            Z80TStateSample {
+                instruction_pc,
+                tstate_offset: tstate_offset + 2,
+                phase: Z80TStatePhase::Refresh,
+                address: Some(refresh_address),
+                data: Some(opcode),
+                rd: false,
+                wr: false,
+                mreq: false,
+                iorq: false,
+            },
+            Z80TStateSample {
+                instruction_pc,
+                tstate_offset: tstate_offset + 3,
+                phase: Z80TStatePhase::Refresh,
+                address: Some(refresh_address),
+                data: None,
+                rd: false,
+                wr: false,
+                mreq: false,
+                iorq: false,
+            },
+        ];
+        for sample in samples {
+            Self::emit_tstate_sample(bus, sample);
+        }
+    }
+
+    fn emit_memory_read_tstate_samples<B: CpuBus>(
+        bus: &mut B,
+        instruction_pc: u16,
+        tstate_offset: u32,
+        address: u16,
+        value: u8,
+    ) {
+        let samples = [
+            Z80TStateSample {
+                instruction_pc,
+                tstate_offset,
+                phase: Z80TStatePhase::MemoryRead,
+                address: Some(address),
+                data: None,
+                rd: false,
+                wr: false,
+                mreq: false,
+                iorq: false,
+            },
+            Z80TStateSample {
+                instruction_pc,
+                tstate_offset: tstate_offset + 1,
+                phase: Z80TStatePhase::MemoryRead,
+                address: Some(address),
+                data: None,
+                rd: true,
+                wr: false,
+                mreq: true,
+                iorq: false,
+            },
+            Z80TStateSample {
+                instruction_pc,
+                tstate_offset: tstate_offset + 2,
+                phase: Z80TStatePhase::MemoryRead,
+                address: Some(address),
+                data: Some(value),
+                rd: false,
+                wr: false,
+                mreq: false,
+                iorq: false,
+            },
+        ];
+        for sample in samples {
+            Self::emit_tstate_sample(bus, sample);
+        }
+    }
+
+    fn emit_memory_write_tstate_samples<B: CpuBus>(
+        bus: &mut B,
+        instruction_pc: u16,
+        tstate_offset: u32,
+        address: u16,
+        value: u8,
+    ) {
+        let samples = [
+            Z80TStateSample {
+                instruction_pc,
+                tstate_offset,
+                phase: Z80TStatePhase::MemoryWrite,
+                address: Some(address),
+                data: None,
+                rd: false,
+                wr: false,
+                mreq: false,
+                iorq: false,
+            },
+            Z80TStateSample {
+                instruction_pc,
+                tstate_offset: tstate_offset + 1,
+                phase: Z80TStatePhase::MemoryWrite,
+                address: Some(address),
+                data: Some(value),
+                rd: false,
+                wr: true,
+                mreq: true,
+                iorq: false,
+            },
+            Z80TStateSample {
+                instruction_pc,
+                tstate_offset: tstate_offset + 2,
+                phase: Z80TStatePhase::MemoryWrite,
+                address: Some(address),
+                data: None,
+                rd: false,
+                wr: false,
+                mreq: false,
+                iorq: false,
+            },
+            Z80TStateSample {
+                instruction_pc,
+                tstate_offset: tstate_offset + 3,
+                phase: Z80TStatePhase::MemoryWrite,
+                address: Some(address),
+                data: None,
+                rd: false,
+                wr: false,
+                mreq: false,
+                iorq: false,
+            },
+            Z80TStateSample {
+                instruction_pc,
+                tstate_offset: tstate_offset + 4,
+                phase: Z80TStatePhase::MemoryWrite,
+                address: Some(address),
+                data: None,
+                rd: false,
+                wr: false,
+                mreq: false,
+                iorq: false,
+            },
+        ];
+        for sample in samples {
+            Self::emit_tstate_sample(bus, sample);
+        }
+    }
+
+    fn emit_internal_tstate_samples<B: CpuBus>(
+        bus: &mut B,
+        instruction_pc: u16,
+        tstate_offset: u32,
+        held_address: u16,
+    ) {
+        for offset in 0..5 {
+            Self::emit_tstate_sample(
+                bus,
+                Z80TStateSample {
+                    instruction_pc,
+                    tstate_offset: tstate_offset + offset,
+                    phase: Z80TStatePhase::Internal,
+                    address: Some(held_address),
+                    data: None,
+                    rd: false,
+                    wr: false,
+                    mreq: false,
+                    iorq: false,
+                },
+            );
+        }
+    }
+
     fn execute_block_transfer<B: CpuBus>(
         &mut self,
         bus: &mut B,
@@ -1249,6 +1454,26 @@ impl Z80 {
                     duration_tstates: 4,
                 },
             );
+            let first_refresh_address =
+                (u16::from(self.i) << 8) | u16::from(self.r.wrapping_sub(2) & 0x7F);
+            let second_refresh_address =
+                (u16::from(self.i) << 8) | u16::from(self.r.wrapping_sub(1) & 0x7F);
+            Self::emit_m1_tstate_samples(
+                bus,
+                instruction_pc,
+                0,
+                instruction_pc,
+                0xED,
+                first_refresh_address,
+            );
+            Self::emit_m1_tstate_samples(
+                bus,
+                instruction_pc,
+                4,
+                instruction_pc.wrapping_add(1),
+                opcode,
+                second_refresh_address,
+            );
         }
         let address = self.registers.hl();
         let value = bus.read_memory(address);
@@ -1264,6 +1489,7 @@ impl Z80 {
                     duration_tstates: 3,
                 },
             );
+            Self::emit_memory_read_tstate_samples(bus, instruction_pc, 8, address, value);
         }
         let destination = self.registers.de();
         bus.write_memory(destination, value);
@@ -1279,6 +1505,7 @@ impl Z80 {
                     duration_tstates: 5,
                 },
             );
+            Self::emit_memory_write_tstate_samples(bus, instruction_pc, 11, destination, value);
         }
         self.registers
             .set_hl(address.wrapping_add_signed(direction));
@@ -1310,6 +1537,7 @@ impl Z80 {
                         duration_tstates: 5,
                     },
                 );
+                Self::emit_internal_tstate_samples(bus, instruction_pc, 16, destination);
             }
             21
         } else {
@@ -1353,6 +1581,26 @@ impl Z80 {
                     duration_tstates: 4,
                 },
             );
+            let first_refresh_address =
+                (u16::from(self.i) << 8) | u16::from(self.r.wrapping_sub(2) & 0x7F);
+            let second_refresh_address =
+                (u16::from(self.i) << 8) | u16::from(self.r.wrapping_sub(1) & 0x7F);
+            Self::emit_m1_tstate_samples(
+                bus,
+                instruction_pc,
+                0,
+                instruction_pc,
+                0xED,
+                first_refresh_address,
+            );
+            Self::emit_m1_tstate_samples(
+                bus,
+                instruction_pc,
+                4,
+                instruction_pc.wrapping_add(1),
+                opcode,
+                second_refresh_address,
+            );
         }
         let address = self.registers.hl();
         let value = bus.read_memory(address);
@@ -1368,6 +1616,7 @@ impl Z80 {
                     duration_tstates: 3,
                 },
             );
+            Self::emit_memory_read_tstate_samples(bus, instruction_pc, 8, address, value);
             Self::emit_timing_event(
                 bus,
                 Z80BusEvent {
@@ -1379,6 +1628,7 @@ impl Z80 {
                     duration_tstates: 5,
                 },
             );
+            Self::emit_internal_tstate_samples(bus, instruction_pc, 11, address);
         }
         let accumulator = self.registers.a;
         let result = accumulator.wrapping_sub(value);
@@ -1417,6 +1667,7 @@ impl Z80 {
                         duration_tstates: 5,
                     },
                 );
+                Self::emit_internal_tstate_samples(bus, instruction_pc, 16, address);
             }
             21
         } else {
