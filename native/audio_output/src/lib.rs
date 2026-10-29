@@ -63,10 +63,10 @@ impl NativeWasapiOutput {
         if sample_rate == 0 {
             return Err(AudioOutputError::InvalidSampleRate);
         }
-        if buffer_size == 0 {
+        if buffer_size == 0 || buffer_size > 16_384 {
             return Err(AudioOutputError::InvalidBufferSize);
         }
-        if queue_blocks == 0 {
+        if queue_blocks == 0 || queue_blocks > 64 {
             return Err(AudioOutputError::InvalidQueueCapacity);
         }
 
@@ -602,7 +602,7 @@ fn run_xaudio2_worker(
                     submitted.push_back(block);
                     let block = submitted.back().expect("just inserted XAudio2 block");
                     let mut buffer = XAUDIO2_BUFFER::default();
-                    buffer.AudioBytes = block.len().min(u32::MAX as usize) as u32;
+                    buffer.AudioBytes = block.len() as u32;
                     buffer.pAudioData = block.as_ptr();
                     let result = unsafe { source_voice.SubmitSourceBuffer(&buffer, None) };
                     if result.is_err() {
