@@ -21,7 +21,7 @@ INPUT_DRIVERS = (
     ("SDL3 Gamepad", "sdl3"),
 )
 AUDIO_DRIVERS = (
-    ("PortAudio / WASAPI compartilhado", "wasapi"),
+    ("WASAPI nativo (Rust)", "wasapi"),
     ("Áudio desativado", "disabled"),
 )
 VIDEO_DRIVERS = (
