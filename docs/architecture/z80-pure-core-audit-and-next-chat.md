@@ -162,8 +162,9 @@ A PR [#229 — testes de caminhos condicionais e limites](https://github.com/leo
 - **PASS:** [SMS Core Fast Validation](https://github.com/leonardo201800478/sega-emulator/actions/runs/40790980771), incluindo formatação, lint e testes direcionados do núcleo SMS.
 - **PASS:** [CI geral](https://github.com/leonardo201800478/sega-emulator/actions/runs/40790980752).
 - **PASS:** Rust formatting, Workspace Clippy e Workspace Rust tests no workflow [SMS Z80 Platform Validation](https://github.com/leonardo201800478/sega-emulator/actions/runs/40790980785).
-- **PENDING:** suíte externa completa Z80 no mesmo workflow; não contar como PASS até concluir.
-- A execução rápida registrou os sete novos testes como aprovados. Nenhum defeito funcional do executor foi identificado nem corrigido nesta fatia.
+- **PASS:** suíte externa completa Z80 no mesmo workflow; o job também executou a suíte SCF/CCF. O log reportou 204 testes, 0 falhas, 88.340.467 instruções e 602.728.667 T-states para o teste CCF. Isso é evidência de execução dessa suíte, não prova independente de hardware.
+- Os sete testes novos passaram na validação rápida. A revisão dos efeitos laterais revelou uma lacuna adicional em `RET cc`: quando a condição é verdadeira, o executor atualiza PC/SP mas não WZ/MEMPTR. A tabela externa de MEMPTR lista `RET Z` como atualizando MEMPTR com o valor de retorno da pilha quando Z é verdadeiro (https://github.com/redcode/Z80/wiki/MEMPTR; consulta em 2026-10-29). O manual Zilog documenta a operação arquitetural de RET cc, mas não especifica o latch não documentado.
+- A PR #229 foi ampliada com uma regressão que inicializa WZ com sentinela e exige que WZ receba o destino quando RET cc é tomado e permaneça igual quando não é tomado. A correção mínima atribui `self.wz = self.registers.pc` apenas no caminho tomado. **Essa alteração aguarda CI no SHA `b2576d1a418b79454bcd9be031508f9ecd957775`; os checks verdes do SHA anterior não a validam.**
 - A PR permanece aberta; não houve merge.
 
 ## 7. Prompt para continuar em um novo chat
