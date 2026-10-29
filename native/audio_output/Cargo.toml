@@ -1,0 +1,12 @@
+[package]
+name = "sega-audio-output"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "sega_audio_output"
+path = "src/lib.rs"
+
+[target.'cfg(windows)'.dependencies]
+wasapi = "0.26"
