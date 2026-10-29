@@ -8,6 +8,12 @@
 
 Definir um contrato de configuração validado e independente do dispositivo para a saída de áudio. O backend WASAPI inicial já abre o dispositivo no frontend Qt; a configuração e os testes automatizados não substituem a validação física. Nenhum backend pode alterar o estado determinístico do hardware emulado.
 
+## Integração atual dos núcleos
+
+- **SG-1000:** o frontend Qt usa `SG1000Machine.drain_audio_pcm()` e encaminha PCM16 para o backend nativo WASAPI/XAudio2. Quando a saída está desativada ou falha, as amostras pendentes são descartadas sem alterar T-states.
+- **Master System:** `NativeSMSMachine` gera amostras PSG no núcleo Rust e expõe `drain_audio_pcm()` pela extensão PyO3. A fachada `SMSMachine` em `sega_emulator.machine.sms` permite usar o mesmo `PcmResampler` nativo e a mesma saída WASAPI/XAudio2. A integração do áudio à futura execução de frames/interface de gameplay do SMS continua pendente; a interface Qt atual ainda inicia apenas SG-1000.
+- Ambos os caminhos usam a mesma taxa de entrada PCM do adaptador (44,1 kHz), e a taxa de saída configurada não altera clocks, registradores nem T-states do núcleo.
+
 ## Separação de responsabilidades
 
 1. **Núcleo de áudio do console:** registradores, divisores, osciladores, ruído, mistura digital e clocks documentados para o chip emulado.
