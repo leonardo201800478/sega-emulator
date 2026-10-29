@@ -15,7 +15,7 @@ SMS_REGION_LABELS = {
 # replace the emulated VDP's own timing.
 _SMS_FRAME_PERIODS = {
     "usa": (228 * 262) / 3_579_545,
-    "europe": (228 * 312) / 3_546_893,
+    "europe": (228 * 313) / 3_546_895,
     "japan": (228 * 262) / 3_579_545,
 }
 
