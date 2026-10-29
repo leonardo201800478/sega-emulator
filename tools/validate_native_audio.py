@@ -60,6 +60,9 @@ def _run_backend(
 
     started = time.monotonic()
     sample_index = 0
+    failure: str | None = None
+    underruns = 0
+    dropped = 0
     try:
         while time.monotonic() - started < seconds:
             pcm = _tone_block(sample_rate, frequency, sample_index, buffer_size)
@@ -69,14 +72,16 @@ def _run_backend(
         underruns = output.underrun_callbacks
         dropped = output.dropped_blocks
     except Exception as exc:
-        print(f"FAIL: escrita PCM: {type(exc).__name__}: {exc}")
+        failure = f"FAIL: escrita PCM: {type(exc).__name__}: {exc}"
+    try:
+        output.close()
+    except Exception as exc:
+        close_failure = f"FAIL: encerramento: {type(exc).__name__}: {exc}"
+        failure = f"{failure}\n{close_failure}" if failure else close_failure
+
+    if failure:
+        print(failure)
         return False
-    finally:
-        try:
-            output.close()
-        except Exception as exc:
-            print(f"FAIL: encerramento: {type(exc).__name__}: {exc}")
-            return False
 
     elapsed = time.monotonic() - started
     print(
