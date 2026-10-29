@@ -668,7 +668,10 @@ fn render_scanline(
     } else {
         (usize::from(regs[2] & 0x0C) << 10) | 0x0700
     };
-    let pattern_base = usize::from(regs[4] & 0x04) << 11;
+    // In SMS Mode 4, background tile indices address the 512-tile pattern
+    // space directly. Register 4's base bits apply to legacy TMS9918 modes,
+    // not this renderer.
+    let pattern_base = 0;
     let mut bg_color = [0_u8; SMS_VDP_WIDTH];
     let mut bg_priority = [false; SMS_VDP_WIDTH];
     for x in 0..SMS_VDP_WIDTH {
@@ -686,7 +689,14 @@ fn render_scanline(
             usize::from(regs[9])
         };
         let sx = (x + hs) & 0xFF;
-        let sy = (y + vs) & 0xFF;
+        // The standard 192-line mode scrolls through a 224-line name table;
+        // extended 224/240-line modes use the full 256-line address range.
+        let raw_sy = y + vs;
+        let sy = if height == 192 && raw_sy >= 224 {
+            raw_sy - 224
+        } else {
+            raw_sy & 0xFF
+        };
         let entry = (name_base + (sy / 8) * 64 + (sx / 8) * 2) & 0x3FFF;
         let name = u16::from(vram[entry]) | (u16::from(vram[(entry + 1) & 0x3FFF]) << 8);
         let tile = usize::from(name & 0x01FF);
@@ -952,6 +962,60 @@ mod tests {
         );
         assert_eq!(&v.working_framebuffer[0..3], &[255, 0, 0]);
         assert_eq!(&v.working_framebuffer[3..6], &[0, 0, 0]);
+    }
+
+    #[test]
+    fn sms_mode4_background_tile_index_is_not_offset_by_register_four() {
+        let mut v = SmsVdp::default();
+        v.registers[0] = 0x04;
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[4] = 0x04;
+        v.cram[1] = 0x03;
+        v.vram[0x3800] = 1;
+        v.vram[0x3801] = 0;
+        v.vram[0x20] = 0x80;
+        let mut status = 0x1F;
+        render_scanline(
+            &v.vram,
+            &v.cram,
+            &v.registers,
+            &mut status,
+            &mut v.working_framebuffer,
+            0,
+            true,
+        );
+        assert_eq!(&v.working_framebuffer[0..3], &[255, 0, 0]);
+    }
+
+    #[test]
+    fn sms_mode4_192_line_vertical_scroll_wraps_at_224_lines() {
+        let mut v = SmsVdp::default();
+        v.registers[0] = 0x04;
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[9] = 224;
+        v.cram[1] = 0x03;
+        v.cram[2] = 0x0C;
+        v.vram[0x3800] = 1;
+        v.vram[0x3801] = 0;
+        // If the renderer incorrectly wraps at 256, y=224 selects this row
+        // from $3F00 instead of wrapping to the first name-table row.
+        v.vram[0x3F00] = 2;
+        v.vram[0x3F01] = 0;
+        v.vram[0x20] = 0x80;
+        v.vram[0x40] = 0x80;
+        let mut status = 0x1F;
+        render_scanline(
+            &v.vram,
+            &v.cram,
+            &v.registers,
+            &mut status,
+            &mut v.working_framebuffer,
+            0,
+            true,
+        );
+        assert_eq!(&v.working_framebuffer[0..3], &[255, 0, 0]);
     }
 
     #[test]
