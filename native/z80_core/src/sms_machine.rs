@@ -107,6 +107,9 @@ impl NativeSMSMachine {
         Ok(cycles)
     }
 
+    /// Advance instruction-stepped SMS hardware until the VDP frame counter changes.
+    ///
+    /// This is nominal instruction timing, not cycle-exact bus scheduling.
     #[pyo3(signature = (max_steps=100_000))]
     fn run_frame(&mut self, max_steps: usize) -> PyResult<usize> {
         if max_steps == 0 {
