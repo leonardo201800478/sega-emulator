@@ -189,3 +189,12 @@ Cada sistema terá um ou mais diretórios ROM independentes e editáveis nas con
 4. Integrar splashscreen, seletor e carrossel sem iniciar automaticamente a emulação.
 5. Acrescentar capas locais/importação e só depois um adaptador de provedor externo opcional.
 6. Validar regressões Qt/Python e workflows no SHA exato; registrar limitações de sistemas ainda não integrados.
+
+
+## 10. Implementação inicial em andamento
+
+- **Implementado no branch (ainda aguardando CI):** índice local de ROMs por sistema em `src/sega_emulator/rom_library.py`, com descoberta recursiva, hashes SHA-256, detecção de duplicatas, atualização incremental, varredura completa, progresso, cancelamento e recuperação do índice.
+- **Implementado no branch (ainda aguardando CI):** diálogo Qt de inicialização com splash textual provisória, seletor de sistemas com disponibilidade explícita e biblioteca em carrossel horizontal; a biblioteca é aberta antes do emulador quando não há ROM passada pela linha de comando.
+- **Limite intencional:** apenas SG-1000 pode iniciar a emulação nesta tela. Os outros cinco sistemas aparecem desabilitados até haver integração funcional com o núcleo e o carregador.
+- **Ainda não implementado:** arte final/splash em imagem, capas de jogos/provedor externo, retorno à biblioteca depois de fechar uma sessão, tema claro/escuro completo e testes de interação visual no Windows.
+- **Validação:** os workflows de CI foram disparados no SHA candidato e seus resultados precisam ser conferidos antes de classificar esta fatia como aprovada. Não há PASS local declarado.
