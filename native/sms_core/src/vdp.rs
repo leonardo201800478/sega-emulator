@@ -1,6 +1,6 @@
 //! SMS VDP (315-5124/315-5246 family), implemented independently from SG-1000.
- //! Deterministic scanline model: Mode 4, VRAM/CRAM, scroll, sprites, IRQ, light-gun
- //! click injection and standard-monitor SegaScope output. Not dot-cycle exact.
+//! Deterministic scanline model: Mode 4, VRAM/CRAM, scroll, sprites, IRQ, light-gun
+//! click injection and standard-monitor SegaScope output. Not dot-cycle exact.
 
 use crate::config::{SpriteLimitMode, VideoStandard};
 
@@ -16,11 +16,16 @@ const OVERFLOW: u8 = 0x40;
 const COLLISION: u8 = 0x20;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum SmsVdpEye { #[default] Right, Left }
+pub enum SmsVdpEye {
+    #[default]
+    Right,
+    Left,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum StereoPresentation {
-    #[default] Alternating,
+    #[default]
+    Alternating,
     AnaglyphRedCyan,
     SideBySide,
 }
@@ -79,7 +84,9 @@ impl SmsVdp {
         }
     }
 
-    pub fn video_standard(&self) -> VideoStandard { self.video_standard }
+    pub fn video_standard(&self) -> VideoStandard  {
+        self.video_standard
+    }
     pub fn system_clock_hz(&self) -> u64 {
         match self.video_standard {
             VideoStandard::Pal => 3_546_895,
@@ -90,7 +97,9 @@ impl SmsVdp {
         match self.video_standard { VideoStandard::Pal => 313, _ => 262 }
     }
     pub fn visible_height(&self) -> u16 {
-        if self.registers[1] & 0x08 != 0 { 240 }
+        if self.registers[1] & 0x08 != 0 {
+            240
+        }
         else if self.registers[1] & 0x10 != 0 { 224 }
         else { 192 }
     }
@@ -98,19 +107,45 @@ impl SmsVdp {
         SmsRasterPosition { line: self.scanline, tstates_into_line: self.tstates_into_line,
             visible_height: self.visible_height(), total_lines: self.total_lines() }
     }
-    pub fn frame_number(&self) -> u64 { self.frame_number }
-    pub fn vram(&self) -> &[u8] { &self.vram }
-    pub fn cram(&self) -> &[u8; CRAM_SIZE] { &self.cram }
-    pub fn registers(&self) -> &[u8; 16] { &self.registers }
-    pub fn status(&self) -> u8 { self.status }
-    pub fn address(&self) -> u16 { self.address }
-    pub fn scanline(&self) -> u16 { self.scanline }
-    pub fn cycles_into_line(&self) -> u16 { self.tstates_into_line }
-    pub fn sprite_limit_mode(&self) -> SpriteLimitMode { self.sprite_limit }
-    pub fn set_sprite_limit_mode(&mut self, mode: SpriteLimitMode) { self.sprite_limit = mode; }
-    pub fn set_stereo_eye(&mut self, eye: SmsVdpEye) { self.stereo_eye = eye; }
-    pub fn set_stereo_presentation(&mut self, mode: StereoPresentation) { self.stereo_presentation = mode; }
-    pub fn light_pulse_active(&self) -> bool { self.light_pulse }
+    pub fn frame_number(&self) -> u64  {
+        self.frame_number
+    }
+    pub fn vram(&self) -> &[u8]  {
+        &self.vram
+    }
+    pub fn cram(&self) -> &[u8; CRAM_SIZE]  {
+        &self.cram
+    }
+    pub fn registers(&self) -> &[u8; 16]  {
+        &self.registers
+    }
+    pub fn status(&self) -> u8  {
+        self.status
+    }
+    pub fn address(&self) -> u16  {
+        self.address
+    }
+    pub fn scanline(&self) -> u16  {
+        self.scanline
+    }
+    pub fn cycles_into_line(&self) -> u16  {
+        self.tstates_into_line
+    }
+    pub fn sprite_limit_mode(&self) -> SpriteLimitMode  {
+        self.sprite_limit
+    }
+    pub fn set_sprite_limit_mode(&mut self, mode: SpriteLimitMode) {
+        self.sprite_limit = mode;
+    }
+    pub fn set_stereo_eye(&mut self, eye: SmsVdpEye) {
+        self.stereo_eye = eye;
+    }
+    pub fn set_stereo_presentation(&mut self, mode: StereoPresentation) {
+        self.stereo_presentation = mode;
+    }
+    pub fn light_pulse_active(&self) -> bool  {
+        self.light_pulse
+    }
 
     /// The host supplies logical SMS coordinates. A click creates a synthetic
     /// raster event; it does not claim to simulate the physical photodiode.
@@ -118,7 +153,9 @@ impl SmsVdp {
         self.light_x = x.min(255);
         self.light_y = y.min(239);
         self.light_trigger = trigger_pressed;
-        if !trigger_pressed { self.light_pulse = false; self.light_h_counter = None; }
+        if !trigger_pressed {
+            self.light_pulse = false; self.light_h_counter = None;
+        }
     }
 
     pub fn interrupt_pending(&self) -> bool {
@@ -169,7 +206,9 @@ impl SmsVdp {
         self.light_pulse = false; self.light_h_counter = None;
         self.framebuffer.fill(0); self.working_framebuffer.fill(0);
         self.left_frame.fill(0); self.right_frame.fill(0);
-        if clear_vram { self.vram.fill(0); }
+        if clear_vram {
+            self.vram.fill(0);
+        }
     }
 
     /// SMS VDP data ($BE) and control/status ($BF) ports.
@@ -265,7 +304,9 @@ impl SmsVdp {
             let register = usize::from(value & 0x0F);
             if register <= 10 {
                 self.registers[register] = first;
-                if register == 10 { self.line_counter = first; }
+                if register == 10 {
+                    self.line_counter = first;
+                }
             }
             self.cram_write = false; return;
         }
@@ -279,7 +320,9 @@ impl SmsVdp {
     }
 }
 impl Default for SmsVdp {
-    fn default() -> Self { Self::new(VideoStandard::Ntsc, SpriteLimitMode::HardwareLimit) }
+    fn default() -> Self  {
+        Self::new(VideoStandard::Ntsc, SpriteLimitMode::HardwareLimit)
+    }
 }
 
 fn palette_rgb(cram: &[u8; CRAM_SIZE], index: u8) -> [u8; 3] {
@@ -295,9 +338,13 @@ fn put_pixel(frame: &mut [u8], x: usize, y: usize, rgb: [u8; 3]) {
 fn render_scanline(vram: &[u8], cram: &[u8; CRAM_SIZE], regs: &[u8; 16],
     status: &mut u8, frame: &mut [u8], y: usize, hardware_sprite_limit: bool) {
     let backdrop = palette_rgb(cram, 16 + (regs[7] & 0x0F));
-    for x in 0..SMS_VDP_WIDTH { put_pixel(frame, x, y, backdrop); }
+    for x in 0..SMS_VDP_WIDTH {
+        put_pixel(frame, x, y, backdrop);
+    }
     // Legacy TMS modes are not yet rendered; only SMS Mode 4 is active here.
-    if regs[0] & 0x04 == 0 || regs[1] & 0x40 == 0 { return; }
+    if regs[0] & 0x04 == 0 || regs[1] & 0x40 == 0 {
+        return;
+    }
     let height = if regs[1] & 0x08 != 0 { 240 } else if regs[1] & 0x10 != 0 { 224 } else { 192 };
     let name_base = if height == 192 { usize::from(regs[2] & 0x0E) << 10 }
         else { (usize::from(regs[2] & 0x0C) << 10) | 0x0700 };
@@ -305,7 +352,9 @@ fn render_scanline(vram: &[u8], cram: &[u8; CRAM_SIZE], regs: &[u8; 16],
     let mut bg_color = [0_u8; SMS_VDP_WIDTH];
     let mut bg_priority = [false; SMS_VDP_WIDTH];
     for x in 0..SMS_VDP_WIDTH {
-        if regs[0] & 0x20 != 0 && x < 8 { continue; }
+        if regs[0] & 0x20 != 0 && x < 8 {
+            continue;
+        }
         let hs = if regs[0] & 0x40 != 0 && y < 16 { 0 } else { usize::from(regs[8]) };
         let vs = if regs[0] & 0x80 != 0 && x >= 248 { 0 } else { usize::from(regs[9]) };
         let sx = (x + hs) & 0xFF; let sy = (y + vs) & 0xFF;
@@ -313,11 +362,17 @@ fn render_scanline(vram: &[u8], cram: &[u8; CRAM_SIZE], regs: &[u8; 16],
         let name = u16::from(vram[entry]) | (u16::from(vram[(entry + 1) & 0x3FFF]) << 8);
         let tile = usize::from(name & 0x01FF);
         let mut px = sx & 7; let mut py = sy & 7;
-        if name & (1 << 9) != 0 { px = 7 - px; }
-        if name & (1 << 10) != 0 { py = 7 - py; }
+        if name & (1 << 9) != 0 {
+            px = 7 - px;
+        }
+        if name & (1 << 10) != 0 {
+            py = 7 - py;
+        }
         let p = (pattern_base + tile * 32 + py * 4) & 0x3FFF;
         let mut color = 0_u8;
-        for plane in 0..4 { color |= ((vram[(p + plane) & 0x3FFF] >> (7 - px)) & 1) << plane; }
+        for plane in 0..4 {
+            color |= ((vram[(p + plane) & 0x3FFF] >> (7 - px)) & 1) << plane;
+        }
         let palette = if name & (1 << 11) != 0 { 16 } else { 0 };
         bg_color[x] = (palette + color) as u8;
         bg_priority[x] = name & (1 << 12) != 0 && color != 0;
@@ -331,13 +386,19 @@ fn render_scanline(vram: &[u8], cram: &[u8; CRAM_SIZE], regs: &[u8; 16],
     let mut active: Vec<(usize, i32, usize, usize)> = Vec::with_capacity(64);
     for index in 0..64 {
         let raw_y = vram[(sat + index) & 0x3FFF];
-        if raw_y == 0xD0 { break; }
+        if raw_y == 0xD0 {
+            break;
+        }
         let sy = if raw_y >= 0xD1 { i32::from(raw_y) - 255 } else { i32::from(raw_y) + 1 };
-        if (y as i32) < sy || (y as i32) >= sy + (sprite_height * zoom) as i32 { continue; }
+        if (y as i32) < sy || (y as i32) >= sy + (sprite_height * zoom) as i32 {
+            continue;
+        }
         let attr = (sat + 0x80 + index * 2) & 0x3FFF;
         let mut sx = i32::from(vram[attr]); if regs[0] & 0x08 != 0 { sx -= 8; }
         let mut tile = usize::from(vram[(attr + 1) & 0x3FFF]);
-        if sprite_height == 16 { tile &= !1; }
+        if sprite_height == 16 {
+            tile &= !1;
+        }
         let row = ((y as i32 - sy) / zoom as i32) as usize;
         active.push((index, sx, tile, row));
     }
@@ -354,15 +415,25 @@ fn render_scanline(vram: &[u8], cram: &[u8; CRAM_SIZE], regs: &[u8; 16],
         let p = (sprite_pattern + tile_row * 32 + py * 4) & 0x3FFF;
         for px in 0..8 {
             let mut color = 0_u8;
-            for plane in 0..4 { color |= ((vram[(p + plane) & 0x3FFF] >> (7 - px)) & 1) << plane; }
-            if color == 0 { continue; }
+            for plane in 0..4 {
+                color |= ((vram[(p + plane) & 0x3FFF] >> (7 - px)) & 1) << plane;
+            }
+            if color == 0 {
+                continue;
+            }
             for zx in 0..zoom {
                 let x = sx + (px * zoom + zx) as i32;
-                if !(0..SMS_VDP_WIDTH as i32).contains(&x) { continue; }
+                if !(0..SMS_VDP_WIDTH as i32).contains(&x) {
+                    continue;
+                }
                 let x = x as usize;
-                if occupied[x] { *status |= COLLISION; }
+                if occupied[x] {
+                    *status |= COLLISION;
+                }
                 occupied[x] = true;
-                if sprite_rgb[x].is_none() { sprite_rgb[x] = Some(palette_rgb(cram, 16 + color)); }
+                if sprite_rgb[x].is_none() {
+                    sprite_rgb[x] = Some(palette_rgb(cram, 16 + color));
+                }
             }
         }
     }
@@ -377,64 +448,82 @@ fn render_scanline(vram: &[u8], cram: &[u8; CRAM_SIZE], regs: &[u8; 16],
 mod tests {
     use super::{SmsVdp, StereoPresentation, SMS_VDP_WIDTH};
     use crate::config::{SpriteLimitMode, VideoStandard};
-    fn reg(v: &mut SmsVdp, i: u8, value: u8) { v.write_port(0xBF, value); v.write_port(0xBF, 0x80 | i); }
+    fn reg(v: &mut SmsVdp, i: u8, value: u8) {
+        v.write_port(0xBF, value);
+        v.write_port(0xBF, 0x80 | i);
+    }
     fn addr(v: &mut SmsVdp, a: u16, mode: u8) {
         v.write_port(0xBF, a as u8);
         v.write_port(0xBF, ((a >> 8) as u8 & 0x3F) | mode);
     }
-    #[test] fn owns_16k_vram_and_32_byte_cram() {
+    #[test]
+    fn owns_16k_vram_and_32_byte_cram() {
         let v = SmsVdp::default(); assert_eq!(v.vram().len(), 0x4000); assert_eq!(v.cram().len(), 0x20);
     }
-    #[test] fn control_register_vram_write_and_wrap() {
+    #[test]
+    fn control_register_vram_write_and_wrap() {
         let mut v = SmsVdp::default(); reg(&mut v, 1, 0x40); assert_eq!(v.registers()[1], 0x40);
         addr(&mut v, 0x3FFF, 0x40); v.write_port(0xBE, 0xA5); v.write_port(0xBE, 0x5A);
         assert_eq!(v.vram()[0x3FFF], 0xA5); assert_eq!(v.vram()[0], 0x5A); assert_eq!(v.address(), 1);
     }
-    #[test] fn cram_is_six_bit_and_separate_from_vram() {
+    #[test]
+    fn cram_is_six_bit_and_separate_from_vram() {
         let mut v = SmsVdp::default(); addr(&mut v, 3, 0xC0); v.write_port(0xBE, 0xFF);
         assert_eq!(v.cram()[3], 0x3F); assert_eq!(v.vram()[3], 0);
     }
-    #[test] fn read_ahead_and_vblank_irq_clear_on_status_read() {
+    #[test]
+    fn read_ahead_and_vblank_irq_clear_on_status_read() {
         let mut v = SmsVdp::default(); addr(&mut v, 0x1234, 0x40); v.write_port(0xBE, 0x71);
         addr(&mut v, 0x1234, 0); assert_eq!(v.read_port(0xBE), 0x71);
         reg(&mut v, 1, 0x20); v.advance(228 * 192); assert!(v.interrupt_pending());
         assert_ne!(v.read_port(0xBF) & 0x80, 0); assert!(!v.interrupt_pending());
     }
-    #[test] fn regional_clocks_and_raster_lengths_are_distinct() {
+    #[test]
+    fn regional_clocks_and_raster_lengths_are_distinct() {
         let n = SmsVdp::new(VideoStandard::Ntsc, SpriteLimitMode::HardwareLimit);
         let p = SmsVdp::new(VideoStandard::Pal, SpriteLimitMode::HardwareLimit);
         assert_eq!((n.total_lines(), n.system_clock_hz()), (262, 3_579_545));
         assert_eq!((p.total_lines(), p.system_clock_hz()), (313, 3_546_895));
     }
-    #[test] fn extended_modes_expose_224_and_240_line_framebuffers() {
+    #[test]
+    fn extended_modes_expose_224_and_240_line_framebuffers() {
         let mut v = SmsVdp::default(); reg(&mut v, 1, 0x10); assert_eq!(v.visible_height(), 224);
         reg(&mut v, 1, 0x08); assert_eq!(v.visible_height(), 240);
         assert_eq!(v.framebuffer().len(), 256 * 240 * 3);
     }
-    #[test] fn unlocked_sprite_policy_is_configurable() {
+    #[test]
+    fn unlocked_sprite_policy_is_configurable() {
         let mut v = SmsVdp::default(); assert_eq!(v.sprite_limit_mode(), SpriteLimitMode::HardwareLimit);
         v.set_sprite_limit_mode(SpriteLimitMode::UnlockedCompatibility);
         assert_eq!(v.sprite_limit_mode(), SpriteLimitMode::UnlockedCompatibility);
     }
-    #[test] fn mouse_click_is_qualified_by_raster_line() {
+    #[test]
+    fn mouse_click_is_qualified_by_raster_line() {
         let mut v = SmsVdp::default(); v.set_light_phaser_input(120, 45, true); v.advance(228 * 46);
         assert!(v.light_pulse_active()); assert_eq!(v.read_h_counter(), 0x08 + 60);
         v.set_light_phaser_input(120, 45, false); assert!(!v.light_pulse_active());
     }
-    #[test] fn stereo_output_modes_have_expected_dimensions() {
+    #[test]
+    fn stereo_output_modes_have_expected_dimensions() {
         let mut v = SmsVdp::default(); v.set_stereo_presentation(StereoPresentation::SideBySide);
         let (w,h,frame)=v.presented_framebuffer(); assert_eq!((w,h,frame.len()), (512,192,512*192*3));
         v.set_stereo_presentation(StereoPresentation::AnaglyphRedCyan);
         assert_eq!(v.presented_framebuffer().0, SMS_VDP_WIDTH);
     }
-    #[test] fn advance_is_chunking_invariant() {
+    #[test]
+    fn advance_is_chunking_invariant() {
         let mut a=SmsVdp::default(); let mut b=SmsVdp::default();
         a.advance(228*262*3+17); b.advance(228*100); b.advance(228*162+17); b.advance(228*262*2);
         assert_eq!(a.raster_position(), b.raster_position()); assert_eq!(a.frame_number(), b.frame_number());
     }
-    #[test] fn line_counter_reloads_from_register_ten() {
+    #[test]
+    fn line_counter_reloads_from_register_ten() {
         let mut v=SmsVdp::default(); reg(&mut v,0,0x14); reg(&mut v,10,1); v.advance(228*2);
         assert!(v.interrupt_pending()); let _=v.read_port(0xBF); assert!(!v.interrupt_pending());
     }
-    #[test] fn framebuffer_is_rgb24() { let v=SmsVdp::default(); assert_eq!(v.framebuffer().len(), SMS_VDP_WIDTH*192*3); }
+    #[test]
+    fn framebuffer_is_rgb24() {
+        let v=SmsVdp::default();
+        assert_eq!(v.framebuffer().len(), SMS_VDP_WIDTH*192*3);
+    }
 }

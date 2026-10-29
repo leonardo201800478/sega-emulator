@@ -279,7 +279,9 @@ mod tests {
         // LD A,$40; OUT ($BF),A; LD A,$81; OUT ($BF),A writes R1=$40.
         let rom = [0x3E, 0x40, 0xD3, 0xBF, 0x3E, 0x81, 0xD3, 0xBF];
         let mut machine = SmsMachine::new(rom.to_vec()).unwrap();
-        for _ in 0..4 { machine.step().unwrap(); }
+        for _ in 0..4 {
+            machine.step().unwrap();
+        }
         assert_eq!(machine.vdp().registers()[1], 0x40);
         assert!(machine.vdp().cycles_into_line() > 0);
     }
