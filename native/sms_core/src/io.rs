@@ -54,8 +54,15 @@ impl SmsIo {
         self.input
     }
 
-    pub fn set_input(&mut self, input: SmsInputState) {
+    pub fn set_input(&mut self, input: SmsInputState) -> Result<(), SmsIoError> {
+        if let Some(player) = input.light_phaser_player
+            && player != 1
+            && player != 2
+        {
+            return Err(SmsIoError::InvalidPlayer(player));
+        }
         self.input = input;
+        Ok(())
     }
 
     pub fn set_controller(
@@ -212,7 +219,7 @@ mod tests {
     #[test]
     fn japanese_sms_does_not_read_back_output_th_levels() {
         let mut io = SmsIo::new(Territory::Japan);
-        io.write_port(0x3F, 0xDD);
+        io.write_port(0x3F, 0xFD);
         assert_eq!(io.read_port(0xDD) & 0x40, 0);
     }
 
@@ -222,7 +229,7 @@ mod tests {
         io.set_light_phaser_player(Some(1)).unwrap();
         let mut input = SmsInputState::default();
         input.set_light_phaser_aim(160, 100, true);
-        io.set_input(input);
+        io.set_input(input).unwrap();
         assert_eq!(io.read_port(0xDC) & (1 << 4), 0);
         assert_ne!(io.read_port(0xDD) & (1 << 6), 0);
         input.set_light_pulse(true);

@@ -5,7 +5,7 @@
 
 use crate::bus::CpuBus;
 use crate::cartridge::CartridgeImage;
-use crate::config::{SmsMachineConfig, Territory};
+use crate::config::SmsMachineConfig;
 use crate::cpu::{CpuError, Z80};
 use crate::input::{ControllerButtons, SmsInputState};
 use crate::io::{SmsIo, SmsIoError};
@@ -110,14 +110,10 @@ impl SmsMachine {
         let memory = SmsMemory::new(cartridge)?;
         let mut cpu = Z80::default();
         cpu.reset();
-        let territory = match config.territory {
-            Territory::Japan => Territory::Japan,
-            Territory::Export | Territory::Unknown => Territory::Export,
-        };
         Ok(Self {
             cpu,
             memory,
-            io: SmsIo::new(territory),
+            io: SmsIo::new(config.territory),
             sega_scope: SegaScopeState::default(),
             config,
         })
@@ -148,8 +144,8 @@ impl SmsMachine {
         self.io.set_controller(player, buttons)
     }
 
-    pub fn set_input(&mut self, input: SmsInputState) {
-        self.io.set_input(input);
+    pub fn set_input(&mut self, input: SmsInputState) -> Result<(), SmsIoError> {
+        self.io.set_input(input)
     }
 
     pub fn set_light_phaser_player(&mut self, player: Option<u8>) -> Result<(), SmsIoError> {
@@ -221,7 +217,7 @@ mod tests {
         machine.set_light_phaser_player(Some(1)).unwrap();
         let mut input = SmsInputState::default();
         input.set_light_phaser_aim(100, 70, true);
-        machine.set_input(input);
+        machine.set_input(input).unwrap();
         assert_eq!(machine.read_port(0xDC) & 0x10, 0);
     }
 
