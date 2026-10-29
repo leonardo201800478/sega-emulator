@@ -32,7 +32,7 @@ def _machine() -> NativeSMSMachine:
             0x00,
         ]
     )
-    return NativeSMSMachine(rom, 44_100, False)
+    return NativeSMSMachine(rom, False)
 
 
 def test_sms_binding_uses_native_psg_and_ntsc_clock() -> None:
@@ -71,5 +71,5 @@ def test_sms_audio_pcm_is_deterministic_and_drain_does_not_change_timing() -> No
 
 
 def test_sms_pal_profile_selects_pal_psg_clock() -> None:
-    machine = NativeSMSMachine(bytes([0x00]), 44_100, True)
+    machine = NativeSMSMachine(bytes([0x00]), True)
     assert machine.psg_clock_hz == 3_546_895
