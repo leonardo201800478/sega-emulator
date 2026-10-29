@@ -103,7 +103,6 @@ class SMSMachine:
         """Discard pending native PSG samples when output is disabled."""
         self.native_machine.discard_audio_samples()
 
-
     def run_frame(self, max_steps: int = 100_000) -> int:
         if type(max_steps) is not int or max_steps < 1:
             raise ValueError("max_steps deve ser um inteiro positivo.")
@@ -162,7 +161,8 @@ def load_sms_rom(path: str | Path) -> LoadedRom:
         if source.suffix.casefold() == ".zip":
             with zipfile.ZipFile(source) as archive:
                 candidates = [
-                    item for item in archive.infolist()
+                    item
+                    for item in archive.infolist()
                     if not item.is_dir()
                     and Path(item.filename).suffix.casefold() in allowed
                 ]
