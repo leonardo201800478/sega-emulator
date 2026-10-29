@@ -91,8 +91,10 @@ fn instruction_trace_records_prefix_bytes_in_decoder_order() {
 
 #[test]
 fn instruction_trace_is_opt_in_and_does_not_change_execution() {
-    let mut bus = DiagnosticBus::default();
-    bus.enabled = false;
+    let mut bus = DiagnosticBus {
+        enabled: false,
+        ..DiagnosticBus::default()
+    };
     bus.memory[0] = 0x00;
     let mut cpu = Z80::default();
 
