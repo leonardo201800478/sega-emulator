@@ -80,8 +80,12 @@ def test_downsampling_fir_rejects_frequencies_above_output_nyquist() -> None:
     assert high_rms < low_rms * 0.03
 
 
-def test_resampler_flush_is_empty_after_stream_reset() -> None:
+def test_resampler_flush_drains_tail_and_reset_clears_stream() -> None:
     resampler = PcmResampler(48_000)
     assert resampler.process([0.1] * 256)
+    assert resampler.flush()
     assert resampler.flush() == b""
+
+    assert resampler.process([0.1] * 256)
+    resampler.reset()
     assert resampler.flush() == b""
