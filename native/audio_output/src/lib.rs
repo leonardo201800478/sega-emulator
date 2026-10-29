@@ -21,6 +21,7 @@ pub enum AudioOutputError {
     InvalidSampleRate,
     InvalidBufferSize,
     InvalidQueueCapacity,
+    InvalidBalance,
     InvalidPcmBlock,
     Device(String),
     WorkerStopped,
@@ -32,6 +33,7 @@ impl std::fmt::Display for AudioOutputError {
             Self::InvalidSampleRate => write!(f, "sample_rate must be positive"),
             Self::InvalidBufferSize => write!(f, "buffer_size must be positive"),
             Self::InvalidQueueCapacity => write!(f, "queue_blocks must be positive"),
+            Self::InvalidBalance => write!(f, "balance must be between -100 and 100"),
             Self::InvalidPcmBlock => write!(f, "PCM16 blocks must contain an even byte count"),
             Self::Device(message) => write!(f, "WASAPI output failed: {message}"),
             Self::WorkerStopped => write!(f, "WASAPI output worker has stopped"),
@@ -95,6 +97,9 @@ impl NativeWasapiOutput {
         }
         if queue_blocks == 0 || queue_blocks > 64 {
             return Err(AudioOutputError::InvalidQueueCapacity);
+        }
+        if !(-100..=100).contains(&balance) {
+            return Err(AudioOutputError::InvalidBalance);
         }
 
         #[cfg(windows)]
