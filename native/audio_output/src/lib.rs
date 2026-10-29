@@ -364,10 +364,10 @@ impl NativeXAudio2Output {
         if sample_rate == 0 {
             return Err(AudioOutputError::InvalidSampleRate);
         }
-        if buffer_size == 0 {
+        if buffer_size == 0 || buffer_size > 16_384 {
             return Err(AudioOutputError::InvalidBufferSize);
         }
-        if queue_blocks == 0 {
+        if queue_blocks == 0 || queue_blocks > 64 {
             return Err(AudioOutputError::InvalidQueueCapacity);
         }
 
