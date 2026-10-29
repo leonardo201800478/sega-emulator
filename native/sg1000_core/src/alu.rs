@@ -1,7 +1,8 @@
-//! Native Z80 ALU used by the SMS-owned Z80 implementation.
+//! Native Z80 ALU used by the SG-1000 CPU implementation.
 //!
-//! This module is part of the Python-independent machine core. This module is copied independently from the SG-1000 implementation so that
-//! SMS work cannot regress the SG-1000 core.
+//! This module is part of the Python-independent machine core. The standalone
+//! `sega-z80-alu` crate remains temporarily available as a differential oracle
+//! until the CPU migration is validated across the full instruction matrix.
 
 /// Result of an 8-bit arithmetic operation and the Z80 flag register.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
