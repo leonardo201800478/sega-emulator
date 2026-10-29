@@ -211,7 +211,7 @@ impl Drop for ComApartment {
 
 #[cfg(windows)]
 fn run_wasapi_worker(
-    consumer: rtrb::Consumer<Vec<u8>>,
+    mut consumer: rtrb::Consumer<Vec<u8>>,
     ready: mpsc::SyncSender<Result<(), String>>,
     shutdown: Arc<AtomicBool>,
     underruns: Arc<AtomicU64>,
@@ -543,7 +543,7 @@ impl Drop for NativeXAudio2Output {
 
 #[cfg(windows)]
 fn run_xaudio2_worker(
-    consumer: rtrb::Consumer<Vec<u8>>,
+    mut consumer: rtrb::Consumer<Vec<u8>>,
     ready: mpsc::SyncSender<Result<(), String>>,
     shutdown: Arc<AtomicBool>,
     underruns: Arc<AtomicU64>,
