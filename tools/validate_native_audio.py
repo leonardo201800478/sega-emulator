@@ -14,11 +14,11 @@ from __future__ import annotations
 import argparse
 import csv
 import math
+import pathlib
 import statistics
 import struct
 import sys
 import time
-from pathlib import Path
 
 from sega_emulator.frontend.qt.wasapi_audio import NativeAudioOutput
 
@@ -114,7 +114,7 @@ def _run_backend(
     seconds: int,
     frequency: float,
     signal: str,
-    trace_csv: Path | None,
+    trace_csv: pathlib.Path | None,
 ) -> bool:
     block_period = buffer_size / sample_rate
     print(
@@ -287,7 +287,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--trace-csv",
-        type=Path,
+        type=pathlib.Path,
         default=None,
         help=(
             "salva os tempos por ciclo em CSV; com backend=both cria "
