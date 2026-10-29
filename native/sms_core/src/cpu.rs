@@ -233,13 +233,18 @@ impl Z80 {
         }
 
         let trace_enabled = bus.instruction_trace_enabled();
-        let instruction_index = self.instruction_count.wrapping_add(1);
-        self.instruction_count = instruction_index;
+        let instruction_index = if trace_enabled {
+            self.instruction_count = self.instruction_count.wrapping_add(1);
+            self.opcode_trace_bytes = [0; 8];
+            self.opcode_trace_len = 0;
+            self.opcode_trace_truncated = false;
+            self.capture_opcode_trace = true;
+            self.instruction_count
+        } else {
+            self.capture_opcode_trace = false;
+            0
+        };
         let before = trace_enabled.then(|| self.trace_snapshot());
-        self.opcode_trace_bytes = [0; 8];
-        self.opcode_trace_len = 0;
-        self.opcode_trace_truncated = false;
-        self.capture_opcode_trace = trace_enabled;
 
         self.q_previous = self.q;
         self.q = 0;
