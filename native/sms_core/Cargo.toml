@@ -10,5 +10,4 @@ path = "src/lib.rs"
 
 [dependencies]
 sega-sn76489 = { path = "../sn76489" }
-sega-sn76489 = { path = "../sn76489" }
 sega-z80-bus = { path = "../z80_bus" }

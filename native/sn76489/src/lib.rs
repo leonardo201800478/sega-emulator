@@ -59,7 +59,11 @@ fn design_lowpass(clock_hz: u64, sample_rate: u64) -> Vec<f64> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum PsgVariant { #[default] Sg1000, Sms }
+pub enum PsgVariant {
+    #[default]
+    Sg1000,
+    Sms,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Sn76489 {
@@ -93,7 +97,11 @@ impl Sn76489 {
         Self::new_with_variant(clock_hz, sample_rate, PsgVariant::Sg1000)
     }
 
-    pub fn new_with_variant(clock_hz: u64, sample_rate: u64, variant: PsgVariant) -> Result<Self, PsgError> {
+    pub fn new_with_variant(
+        clock_hz: u64,
+        sample_rate: u64,
+        variant: PsgVariant,
+    ) -> Result<Self, PsgError> {
         if clock_hz == 0 {
             return Err(PsgError::ZeroClock);
         }
@@ -135,7 +143,9 @@ impl Sn76489 {
         Ok(device)
     }
 
-    pub fn variant(&self) -> PsgVariant { self.variant }
+    pub fn variant(&self) -> PsgVariant {
+        self.variant
+    }
 
     pub fn clock_hz(&self) -> u64 {
         self.clock_hz
@@ -321,8 +331,19 @@ impl Sn76489 {
         };
     }
 
-    fn lfsr_seed(&self) -> u16 { match self.variant { PsgVariant::Sg1000 => 0x4000, PsgVariant::Sms => 0x8000 } }
-    fn lfsr_mask(&self) -> u16 { match self.variant { PsgVariant::Sg1000 => 0x7FFF, PsgVariant::Sms => 0xFFFF } }
+    fn lfsr_seed(&self) -> u16 {
+        match self.variant {
+            PsgVariant::Sg1000 => 0x4000,
+            PsgVariant::Sms => 0x8000,
+        }
+    }
+
+    fn lfsr_mask(&self) -> u16 {
+        match self.variant {
+            PsgVariant::Sg1000 => 0x7FFF,
+            PsgVariant::Sms => 0xFFFF,
+        }
+    }
 
     fn reset_noise_generator(&mut self) {
         self.lfsr = self.lfsr_seed();
@@ -340,8 +361,13 @@ impl Sn76489 {
                 // SG-1000 discrete SN76489AN: taps 0 and 1, feedback into bit 14.
                 PsgVariant::Sg1000 => (self.lfsr ^ (self.lfsr >> 1)) & 1,
             }
-        } else { self.lfsr & 1 };
-        let feedback_bit = match self.variant { PsgVariant::Sg1000 => 14, PsgVariant::Sms => 15 };
+        } else {
+            self.lfsr & 1
+        };
+        let feedback_bit = match self.variant {
+            PsgVariant::Sg1000 => 14,
+            PsgVariant::Sms => 15,
+        };
         self.lfsr = ((self.lfsr >> 1) | (feedback << feedback_bit)) & self.lfsr_mask();
     }
 
@@ -696,20 +722,45 @@ mod tests {
 
 #[cfg(test)]
 mod sms_variant_tests {
- use super::{PsgVariant,Sn76489};
- #[test] fn sms_profile_uses_16_bit_lfsr_and_sms_taps() {
-  let mut p=Sn76489::new_with_variant(3_579_545,44_100,PsgVariant::Sms).unwrap();
-  assert_eq!(p.variant(),PsgVariant::Sms); assert_eq!(p.lfsr(),0x8000); p.write(0xE4);
-  for expected in [0x8000,0x4000,0x2000,0x1000,0x0800] { assert_eq!(p.lfsr(),expected); p.shift_noise_register(); }
-  for _ in 0..7 { p.shift_noise_register(); } assert_eq!(p.lfsr(),0x0008);
-  p.shift_noise_register(); assert_eq!(p.lfsr(),0x8004);
- }
- #[test] fn sms_periodic_noise_repeats_over_16_bits() {
-  let mut p=Sn76489::new_with_variant(3_579_545,44_100,PsgVariant::Sms).unwrap(); p.write(0xE0);
-  for _ in 0..15 { p.shift_noise_register(); } assert_eq!(p.lfsr(),1);
-  p.shift_noise_register(); assert_eq!(p.lfsr(),0x8000);
- }
- #[test] fn default_constructor_preserves_sg1000_profile() {
-  let p=Sn76489::new(3_579_545,44_100).unwrap(); assert_eq!(p.variant(),PsgVariant::Sg1000); assert_eq!(p.lfsr(),0x4000);
- }
+    use super::{PsgVariant, Sn76489};
+
+    #[test]
+    fn sms_profile_uses_16_bit_lfsr_and_sms_taps() {
+        let mut psg =
+            Sn76489::new_with_variant(3_579_545, 44_100, PsgVariant::Sms).unwrap();
+        assert_eq!(psg.variant(), PsgVariant::Sms);
+        assert_eq!(psg.lfsr(), 0x8000);
+        psg.write(0xE4);
+
+        for expected in [0x8000, 0x4000, 0x2000, 0x1000, 0x0800] {
+            assert_eq!(psg.lfsr(), expected);
+            psg.shift_noise_register();
+        }
+        for _ in 0..7 {
+            psg.shift_noise_register();
+        }
+        assert_eq!(psg.lfsr(), 0x0008);
+        psg.shift_noise_register();
+        assert_eq!(psg.lfsr(), 0x8004);
+    }
+
+    #[test]
+    fn sms_periodic_noise_repeats_over_16_bits() {
+        let mut psg =
+            Sn76489::new_with_variant(3_579_545, 44_100, PsgVariant::Sms).unwrap();
+        psg.write(0xE0);
+        for _ in 0..15 {
+            psg.shift_noise_register();
+        }
+        assert_eq!(psg.lfsr(), 1);
+        psg.shift_noise_register();
+        assert_eq!(psg.lfsr(), 0x8000);
+    }
+
+    #[test]
+    fn default_constructor_preserves_sg1000_profile() {
+        let psg = Sn76489::new(3_579_545, 44_100).unwrap();
+        assert_eq!(psg.variant(), PsgVariant::Sg1000);
+        assert_eq!(psg.lfsr(), 0x4000);
+    }
 }

@@ -46,7 +46,10 @@ impl SegaScopeState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct SmsPsgWriteEvent { tstate: u64, value: u8 }
+struct SmsPsgWriteEvent {
+    tstate: u64,
+    value: u8,
+}
 
 /// SMS-owned implementation of the hardware-neutral Z80 memory/I/O contract.
 pub struct SmsMachineBus<'a> {
@@ -112,7 +115,10 @@ impl CpuBus for SmsMachineBus<'_> {
         } else {
             self.io.write_port(port, value);
             if (0x40..=0x7F).contains(&(port as u8)) {
-                self.pending_psg_writes.push(SmsPsgWriteEvent { tstate: self.tstate.saturating_add(11), value });
+                self.pending_psg_writes.push(SmsPsgWriteEvent {
+                    tstate: self.tstate.saturating_add(11),
+                    value,
+                });
             }
         }
     }
@@ -138,22 +144,46 @@ impl SmsMachine {
         Self::with_config(rom, SmsMachineConfig::default())
     }
 
-    pub fn with_config(rom: impl Into<Vec<u8>>, config: SmsMachineConfig) -> Result<Self, SmsCoreError> {
+    pub fn with_config(
+        rom: impl Into<Vec<u8>>,
+        config: SmsMachineConfig,
+    ) -> Result<Self, SmsCoreError> {
         Self::with_audio(rom, config, 44_100)
     }
+
     /// Construct an SMS machine with an explicit host sample rate.
-    pub fn with_audio(rom: impl Into<Vec<u8>>, config: SmsMachineConfig, sample_rate: u64) -> Result<Self, SmsCoreError> {
+    pub fn with_audio(
+        rom: impl Into<Vec<u8>>,
+        config: SmsMachineConfig,
+        sample_rate: u64,
+    ) -> Result<Self, SmsCoreError> {
         let cartridge = CartridgeImage::new(rom)?;
         let memory = SmsMemory::new(cartridge)?;
-        let mut cpu = Z80::default(); cpu.reset();
+        let mut cpu = Z80::default();
+        cpu.reset();
         let vdp = SmsVdp::new(config.video_standard, config.sprite_limit);
-        let psg = Sn76489::new_with_variant(vdp.system_clock_hz(), sample_rate, PsgVariant::Sms)?;
-        Ok(Self { cpu, memory, io: SmsIo::new(config.territory), vdp, psg, psg_tstate: 0, pending_psg_writes: Vec::new(), sega_scope: SegaScopeState::default(), config })
+        let psg =
+            Sn76489::new_with_variant(vdp.system_clock_hz(), sample_rate, PsgVariant::Sms)?;
+        Ok(Self {
+            cpu,
+            memory,
+            io: SmsIo::new(config.territory),
+            vdp,
+            psg,
+            psg_tstate: 0,
+            pending_psg_writes: Vec::new(),
+            sega_scope: SegaScopeState::default(),
+            config,
+        })
     }
+
     /// Advance the PSG in the same regional clock domain as the SMS Z80.
+    ///
     /// This uses nominal instruction T-states, not cycle-exact bus timing.
     fn advance_psg_to_tstate(&mut self, target_tstate: u64) {
-        if target_tstate <= self.psg_tstate { return; }
+        if target_tstate <= self.psg_tstate {
+            return;
+        }
         self.psg.advance_clocks(target_tstate - self.psg_tstate);
         self.psg_tstate = target_tstate;
     }
@@ -165,14 +195,29 @@ impl SmsMachine {
     pub fn step(&mut self) -> Result<u32, CpuError> {
         let tstate = self.cpu.total_tstates;
         let cycles = {
-            let mut bus = SmsMachineBus::new(&mut self.memory, &mut self.io, &mut self.sega_scope, &mut self.vdp, &mut self.pending_psg_writes, tstate);
+            let mut bus = SmsMachineBus::new(
+                &mut self.memory,
+                &mut self.io,
+                &mut self.sega_scope,
+                &mut self.vdp,
+                &mut self.pending_psg_writes,
+                tstate,
+            );
             self.cpu.step(&mut bus)?
         };
         let end_tstate = self.cpu.total_tstates;
         self.vdp.advance(u64::from(cycles));
         loop {
-            let next = self.pending_psg_writes.iter().enumerate().filter(|(_, event)| event.tstate <= end_tstate).min_by_key(|(_, event)| event.tstate).map(|(index, _)| index);
-            let Some(index) = next else { break; };
+            let next = self
+                .pending_psg_writes
+                .iter()
+                .enumerate()
+                .filter(|(_, event)| event.tstate <= end_tstate)
+                .min_by_key(|(_, event)| event.tstate)
+                .map(|(index, _)| index);
+            let Some(index) = next else {
+                break;
+            };
             let event = self.pending_psg_writes.remove(index);
             self.advance_psg_to_tstate(event.tstate);
             self.psg.write(event.value);
@@ -232,10 +277,14 @@ impl SmsMachine {
         &self.io
     }
 
-    pub fn psg(&self) -> &Sn76489 { &self.psg }
+    pub fn psg(&self) -> &Sn76489 {
+        &self.psg
+    }
 
     /// Drain generated mono PSG samples for the host audio backend.
-    pub fn drain_audio_samples(&mut self, max_samples: Option<usize>) -> Vec<f64> { self.psg.drain_samples(max_samples) }
+    pub fn drain_audio_samples(&mut self, max_samples: Option<usize>) -> Vec<f64> {
+        self.psg.drain_samples(max_samples)
+    }
 
     pub fn vdp(&self) -> &SmsVdp {
         &self.vdp
@@ -322,7 +371,9 @@ mod tests {
     fn cpu_out_routes_psg_writes_and_selects_sms_noise_hardware() {
         let rom = [0x3E, 0x85, 0xD3, 0x7F, 0x3E, 0x02, 0xD3, 0x7F];
         let mut machine = SmsMachine::new(rom.to_vec()).unwrap();
-        for _ in 0..4 { machine.step().unwrap(); }
+        for _ in 0..4 {
+            machine.step().unwrap();
+        }
         assert_eq!(machine.psg().variant(), PsgVariant::Sms);
         assert_eq!(machine.psg().tone_periods()[0], 0x25);
         assert_eq!(machine.psg().clock_hz(), 3_579_545);
@@ -331,7 +382,10 @@ mod tests {
     #[test]
     fn pal_sms_uses_pal_psg_clock_and_audio_samples_are_drainable() {
         use crate::config::{SmsMachineConfig, VideoStandard};
-        let config = SmsMachineConfig { video_standard: VideoStandard::Pal, ..SmsMachineConfig::default() };
+        let config = SmsMachineConfig {
+            video_standard: VideoStandard::Pal,
+            ..SmsMachineConfig::default()
+        };
         let mut machine = SmsMachine::with_audio(vec![0x00], config, 44_100).unwrap();
         assert_eq!(machine.psg().clock_hz(), 3_546_895);
         machine.advance_psg_to_tstate(35_469);

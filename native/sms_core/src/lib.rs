@@ -1,9 +1,9 @@
 //! Standalone, Python-independent Sega Master System core.
 //!
 //! The SMS-owned Z80 instruction engine, standard cartridge mapper/work RAM,
-//! and initial CPU-to-memory/I/O integration are present. VDP, audio, full
-//! interrupt behavior and the machine scheduler remain separate milestones;
-//! this crate does not yet represent a complete runnable console.
+//! and CPU-to-memory/I/O integration are present, including scanline VDP and
+//! SN76489 audio generation. FM synthesis and cycle-exact scheduling remain
+//! separate milestones; the host audio path still requires integration.
 
 pub mod alu;
 pub mod bus;
@@ -30,7 +30,6 @@ pub use input::{ControllerButtons, LightPhaserState, SmsInputState};
 pub use io::{SmsIo, SmsIoError};
 pub use machine::{SegaScopeLens, SegaScopeState, SmsMachine, SmsMachineBus};
 pub use memory::SmsMemory;
-pub use psg::{PsgError, PsgVariant, Sn76489};
 pub use psg::{PsgError, PsgVariant, Sn76489};
 pub use vdp::{
     SMS_VDP_MAX_HEIGHT, SMS_VDP_WIDTH, SmsRasterPosition, SmsVdp, SmsVdpEye, StereoPresentation,
