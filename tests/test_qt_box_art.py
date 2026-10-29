@@ -45,7 +45,9 @@ def test_box_art_matches_rom_stem_case_insensitively_and_recursively(
     assert _find_box_art(rom, art_root) == cover
 
 
-def test_box_art_matches_launchbox_front_art_with_approximate_name(tmp_path: Path) -> None:
+def test_box_art_matches_launchbox_front_art_with_approximate_name(
+    tmp_path: Path,
+) -> None:
     rom = tmp_path / "roms" / "Sonic The Hedgehog (Japan).zip"
     art_root = tmp_path / "art"
     nested = art_root / "Box - Front" / "Mega Drive"
