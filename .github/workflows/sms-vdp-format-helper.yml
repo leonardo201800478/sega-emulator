@@ -1,6 +1,11 @@
 name: Temporary SMS VDP formatter artifact
 
 on:
+  push:
+    branches: ["feature/sms-vdp-mode4"]
+    paths:
+      - "native/sms_core/src/**"
+      - ".github/workflows/sms-vdp-format-helper.yml"
   pull_request:
     paths:
       - "native/sms_core/src/**"
