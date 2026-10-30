@@ -125,8 +125,8 @@ def resolve_sms_region_profile(
         header_family = "export"
     else:
         header_family = None
-    catalog_profile, release_regions, ambiguous, catalog_error = (
-        _catalog_video_profile(rom, catalog)
+    catalog_profile, release_regions, ambiguous, catalog_error = _catalog_video_profile(
+        rom, catalog
     )
 
     if normalized != "auto":
