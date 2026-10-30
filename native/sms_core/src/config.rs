@@ -12,6 +12,9 @@ pub enum Territory {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VideoStandard {
     Ntsc,
+    /// Brazil PAL-M: NTSC-like 525/60 timing with a distinct regional profile.
+    /// The RGB framebuffer does not model composite PAL-M chroma encoding.
+    PalM,
     Pal,
     Unknown,
 }
