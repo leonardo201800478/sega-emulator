@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import sys
 import zlib
 from dataclasses import dataclass
 from pathlib import Path
@@ -106,8 +107,11 @@ class DiscMediaDescriptor:
 
 
 def default_dat_directory() -> Path:
-    """Return the repository's root-level dats directory."""
-    return Path(__file__).resolve().parents[2] / "dats"
+    """Find versioned DATs in a source checkout or installed application."""
+    source_directory = Path(__file__).resolve().parents[2] / "dats"
+    if source_directory.is_dir():
+        return source_directory
+    return Path(sys.prefix) / "share" / "sega-emulator" / "dats"
 
 
 def _normalize_hash(value: str | None) -> str | None:
