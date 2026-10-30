@@ -39,7 +39,6 @@ CUE_FILE_PATTERN = re.compile(
 )
 
 
-
 _DAT_REGION_NAME_ALIASES = {
     "japan": "JPN",
     "usa": "USA",
