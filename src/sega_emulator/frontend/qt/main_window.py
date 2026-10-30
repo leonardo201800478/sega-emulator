@@ -352,7 +352,7 @@ class EmulatorMainWindow(QMainWindow):
                 self.fullscreen_action.blockSignals(False)
 
     def set_pause_state(self, paused: bool, *, enabled: bool) -> None:
-        """Update the toolbar/menu pause label and availability for the loaded session."""
+        """Update the pause label and availability for the loaded session."""
         label = "action_resume" if paused else "action_pause"
         self.pause_action.setText(translate(label, self._language))
         self.pause_action.setEnabled(enabled)

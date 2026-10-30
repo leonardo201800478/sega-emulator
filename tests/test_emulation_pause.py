@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from sega_emulator.frontend.qt.focus_pause import EmulationPauseController, FocusPauseController
+from sega_emulator.frontend.qt.focus_pause import (
+    EmulationPauseController,
+    FocusPauseController,
+)
 
 
 class FakeTimer:
