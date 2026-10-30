@@ -114,7 +114,7 @@ def test_md5_only_record_can_be_identified() -> None:
 
 def test_crc32_or_same_size_is_never_used_as_hardware_identity() -> None:
     payload = b"synthetic unknown image"
-    record = _record(b"different payload")
+    record = _record(b"synthetic known image")
     result = SmsHardwareCatalog((record,)).identify_bytes(payload)
 
     assert result.status is SmsHardwareMatchStatus.NOT_CATALOGUED
@@ -253,3 +253,13 @@ def test_peripheral_families_are_independent_and_cannot_be_duplicated() -> None:
 def test_identify_bytes_rejects_non_bytes_input() -> None:
     with pytest.raises(TypeError, match="data must be bytes"):
         SmsHardwareCatalog().identify_bytes(bytearray(b"not bytes"))
+
+
+def test_metadata_snapshot_rejects_mutable_peripheral_collections() -> None:
+    joypad = SmsPeripheralMetadata(
+        peripheral=SmsPeripheral.JOYPAD,
+        state=_evidence(PeripheralState.REQUIRED),
+    )
+
+    with pytest.raises(TypeError, match="peripherals must be a tuple"):
+        SmsHardwareMetadata(peripherals=[joypad])
