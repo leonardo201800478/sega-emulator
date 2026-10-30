@@ -137,12 +137,18 @@ A BIOS deve ser parte do caminho de inicialização do cartucho/máquina, não u
 - **QUICK_PASS / SHORT_PASS / LONG_PASS:** NOT RUN — ainda não há execução confirmada no SHA candidato.
 - **CI:** NOT RUN / sem checks publicados para o SHA candidato consultado.
 
+### Fatia 2 — boot no core Rust e fronteira PyO3
+
+- **IMPLEMENTED:** BIOS opcional de 8 KiB recebida pelo construtor da máquina; tamanho inválido é rejeitado.
+- **IMPLEMENTED:** overlay dos primeiros 1 KiB em `$0000-$03FF`; restante da janela continua vindo do cartucho.
+- **IMPLEMENTED:** latch `$3E` controla overlay da BIOS (bit 3), RAM interna (bit 4) e slot de cartucho (bit 6).
+- **IMPLEMENTED:** sem BIOS, o estado inicial preserva boot direto do cartucho; reset restaura o perfil inicial.
+- **IMPLEMENTED:** PyO3 aceita `bios=None` sem alterar os parâmetros antigos `rom`, `pal` e `region`; adaptador Python encaminha bytes opcionais.
+- **QUICK_PASS / SHORT_PASS / LONG_PASS:** aguardando CI no SHA candidato; não executado localmente.
+
 ### Fatias pendentes
 
 - **INTEGRATION_PENDING:** SIM.
-- **Core Rust:** BIOS opcional, overlay de memória e latch de controle `$3E` ainda não implementados.
-- **PyO3/Qt:** caminho de firmware persistente, seleção regional e apresentação de diagnóstico ainda não implementados.
-- **Boot real com BIOS:** PENDING; requer validação local no Windows com arquivos do usuário.
-- **Compatibilidade sem BIOS:** precisa de regressão automatizada após integração do core.
-- **Distribuição de BIOS pelo projeto:** proibida/não pretendida.
+- **Qt/configuração:** caminho persistente de firmware, seleção regional a partir do scanner e apresentação de diagnóstico ainda não implementados.
+- **Boot real com BIOS:** PENDING; requer validação local no Windows com firmware do usuário.
 - **TEMPORAL_PASS:** não aplicável a esta funcionalidade.
