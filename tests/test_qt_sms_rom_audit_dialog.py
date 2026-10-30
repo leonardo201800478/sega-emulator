@@ -31,7 +31,7 @@ def test_sms_audit_dialog_exposes_folder_and_runtime_controls(qt_app):
     assert dialog.recursive_check.isChecked()
     assert dialog.frames_spin.value() == 120
     assert dialog.timeout_spin.value() == 5.0
-    assert dialog.results_table.columnCount() == 6
+    assert dialog.results_table.columnCount() == 7
     assert dialog.start_button.isEnabled()
     assert not dialog.cancel_button.isEnabled()
     dialog.close()
