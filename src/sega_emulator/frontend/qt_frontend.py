@@ -1316,7 +1316,7 @@ def run(initial_path: Path | None = None) -> None:
             "right": "Direita",
             "button1": "Botão 1",
             "button2": "Botão 2",
-            "hold": "SW / Hold (NMI)",
+            "hold": "PAUSE / Hold (NMI)",
         }
         button_labels = {
             "a": "A (sul)",
