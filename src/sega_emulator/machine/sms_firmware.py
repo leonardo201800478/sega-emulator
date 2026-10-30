@@ -335,7 +335,15 @@ def sms_bios_region_for_rom(
             return None
         return header_family
 
-    return sms_bios_region_from_catalog(rom, catalog)
+    dat_family = _sms_bios_region_from_dat_candidates(
+        identification.candidates,
+        require_bios_entry=False,
+    )
+    if dat_family is SmsFirmwareRegion.JAPAN:
+        return "japan"
+    if dat_family is SmsFirmwareRegion.EXPORT_US_EU:
+        return "usa"
+    return None
 
 
 def load_sms_bios(
