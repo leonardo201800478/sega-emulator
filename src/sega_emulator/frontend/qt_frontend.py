@@ -24,8 +24,8 @@ from sega_emulator.frontend.native_first_controller_input import (
     NativeFirstControllerInput,
 )
 from sega_emulator.frontend.qt.audio_output import PcmResampler
-from sega_emulator.frontend.qt.frame_pacer import FramePacer
 from sega_emulator.frontend.qt.focus_pause import FocusPauseController
+from sega_emulator.frontend.qt.frame_pacer import FramePacer
 from sega_emulator.frontend.qt.preferences import FrontendPreferences
 from sega_emulator.frontend.qt.wasapi_audio import NativeAudioOutput
 from sega_emulator.machine.sg1000 import SG1000Machine
