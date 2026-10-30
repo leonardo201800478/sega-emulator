@@ -406,9 +406,7 @@ def run(initial_path: Path | None = None) -> None:
 
     def pause_state_changed(is_paused: bool) -> None:
         window.set_pause_state(is_paused, enabled=machine is not None)
-        status.showMessage(
-            "Emulação pausada" if is_paused else "Emulação em execução"
-        )
+        status.showMessage("Emulação pausada" if is_paused else "Emulação em execução")
         logger.info(
             "Estado de pausa alterado",
             extra={"event": "pause_changed", "paused": is_paused},
