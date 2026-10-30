@@ -119,8 +119,12 @@ selecionam a família de BIOS japonesa. Regiões de exportação `USA`, `EUR`,
 `BRA` e `AUS` selecionam a família compartilhada de BIOS de exportação
 US/EU. Brazil é território de exportação com padrão PAL-M; essa classificação
 seleciona somente a família da BIOS e não escolhe temporização Europe/PAL.
-Entradas mistas (por exemplo, Japan + Brazil), regiões sem mapeamento comprovado,
-ROMs desconhecidas e colisões entre sistemas não escolhem BIOS automaticamente. A seleção de firmware exige correspondência SHA-1 ou MD5;
+Se um header reconhecido e um DAT exato contradisserem o grupo regional (por
+exemplo, header Export com release Japan), a seleção automática é recusada.
+Registros Korea/Taiwan também não são reduzidos automaticamente às famílias
+Japan ou Export, pois exigem perfis de console próprios. Entradas mistas,
+regiões sem mapeamento comprovado, ROMs desconhecidas e colisões entre sistemas
+não escolhem BIOS automaticamente. A seleção de firmware exige correspondência SHA-1 ou MD5;
 o fallback CRC-32 + tamanho do catálogo não é forte o bastante para escolher BIOS. Os DATs identificam releases; não determinam PAL/NTSC nem
 substituem a preferência de vídeo do console.
 
