@@ -19,10 +19,7 @@ def pep440_version(version: str) -> str:
     match = VERSION_PATTERN.fullmatch(version)
     if match is None:
         raise ValueError(f"Unsupported VERSION value: {version!r}")
-    base = (
-        f"{match.group('major')}.{match.group('minor')}."
-        f"{match.group('patch')}"
-    )
+    base = f"{match.group('major')}.{match.group('minor')}.{match.group('patch')}"
     dev = match.group("dev")
     return f"{base}.dev{dev}" if dev is not None else base
 
@@ -66,9 +63,7 @@ def validate_versions() -> list[str]:
         if not name:
             errors.append(f"{path.relative_to(ROOT)}: missing [package].name")
         elif actual != version:
-            errors.append(
-                f"{path.relative_to(ROOT)}: expected {version}, got {actual}"
-            )
+            errors.append(f"{path.relative_to(ROOT)}: expected {version}, got {actual}")
         else:
             cargo_versions[name] = version
 
