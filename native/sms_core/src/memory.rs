@@ -93,7 +93,7 @@ impl SmsMemory {
                 } else {
                     self.work_ram[usize::from(address - RAM_START) & (RAM_SIZE - 1)]
                 }
-            },
+            }
         }
     }
 
