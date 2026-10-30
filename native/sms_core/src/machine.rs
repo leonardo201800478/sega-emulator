@@ -392,6 +392,21 @@ mod tests {
     }
 
     #[test]
+    fn cpu_reset_restores_bios_overlay_after_firmware_disabled_it() {
+        let mut bios = vec![0x3E, 0x08, 0xD3, 0x3E];
+        bios.resize(0x2000, 0x00);
+        let mut machine = SmsMachine::with_bios(
+            vec![0xC3; 0x4000], Some(bios), SmsMachineConfig::default()
+        ).unwrap();
+        machine.step().unwrap();
+        machine.step().unwrap();
+        assert!(!machine.memory().bios_enabled());
+        machine.reset_cpu();
+        assert!(machine.memory().bios_enabled());
+        assert_eq!(machine.read_memory(0), 0x3E);
+    }
+
+    #[test]
     fn machine_without_bios_preserves_direct_cartridge_boot() {
         let machine = SmsMachine::new(vec![0xA7; 0x4000]).unwrap();
         assert!(!machine.memory().bios_enabled());
