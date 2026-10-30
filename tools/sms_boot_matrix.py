@@ -41,8 +41,44 @@ BIOS_CASES = (
 )
 
 
+def _is_bcd(value: int) -> bool:
+    """Return whether both nibbles encode decimal digits."""
+    return value >> 4 <= 9 and value & 0x0F <= 9
+
+
+def _has_codemasters_header(rom: bytes) -> bool:
+    """Recognize the Codemasters $7FE0 header and its build metadata."""
+    if len(rom) < 0x8000 or len(rom) % 0x4000:
+        return False
+    if rom[0x7FF0:0x7FF8] != b"TMR SEGA":
+        return False
+
+    header = rom[0x7FE0:0x7FF0]
+    if (
+        header[0] != len(rom) // 0x4000
+        or not all(_is_bcd(value) for value in header[1:6])
+        or any(header[10:16])
+    ):
+        return False
+
+    day = (header[1] >> 4) * 10 + (header[1] & 0x0F)
+    month = (header[2] >> 4) * 10 + (header[2] & 0x0F)
+    hour = (header[4] >> 4) * 10 + (header[4] & 0x0F)
+    minute = (header[5] >> 4) * 10 + (header[5] & 0x0F)
+    checksum = int.from_bytes(header[6:8], "little")
+    complement = int.from_bytes(header[8:10], "little")
+    return (
+        1 <= day <= 31
+        and 1 <= month <= 12
+        and hour <= 23
+        and minute <= 59
+        and (checksum + complement) & 0xFFFF == 0
+    )
+
+
 def _header_diagnostics(rom: bytes) -> dict[str, Any]:
     """Check the documented export-BIOS header, region, and checksum rules."""
+    mapper = "codemasters" if _has_codemasters_header(rom) else "sega"
     for offset in SMS_HEADER_OFFSETS:
         header = rom[offset : offset + 16]
         if len(header) != 16 or header[:8] != b"TMR SEGA":
@@ -66,12 +102,19 @@ def _header_diagnostics(rom: bytes) -> dict[str, Any]:
             "size_code": size_code,
             "declared_size": declared_size,
             "actual_size": len(rom),
+            "mapper": mapper,
             "checksum": checksum,
             "calculated_checksum": calculated,
             "export_v1_3_header_acceptance": (
-                header[15] >> 4 == 4
+                mapper == "sega"
+                and header[15] >> 4 == 4
                 and calculated is not None
                 and calculated == checksum
+            ),
+            "export_v1_3_mapper_note": (
+                "Codemasters mapper: the standard BIOS checksum path is unreliable."
+                if mapper == "codemasters"
+                else None
             ),
         }
 
@@ -140,6 +183,7 @@ def _run_case(
     frames: int,
     post_handoff_frames: int,
     capture_dir: Path,
+    mapper: str,
 ) -> dict[str, Any]:
     """Execute a cartridge with or without BIOS and record its boot transition."""
     machine = SMSMachine(rom_data, region=region, bios=bios_data)
@@ -178,6 +222,8 @@ def _run_case(
         outcome = "DIRECT_BOOT_FRAME_ADVANCE" if frames_run == frames else "INCOMPLETE"
         if outcome == "DIRECT_BOOT_FRAME_ADVANCE" and not visual_activity:
             outcome = "DIRECT_BOOT_BLANK_FRAME"
+    elif handoff_frame is None and mapper == "codemasters" and bios_name == "export_v1_3":
+        outcome = "BIOS_MAPPER_CHECKSUM_UNRELIABLE"
     elif handoff_frame is None:
         outcome = "NO_BIOS_HANDOFF"
     elif (frames_after_handoff or 0) < post_handoff_frames:
@@ -191,6 +237,7 @@ def _run_case(
         "rom": rom_name,
         "rom_sha256": hashlib.sha256(rom_data).hexdigest(),
         "bios": bios_name,
+        "mapper": mapper,
         "bios_sha256": (
             hashlib.sha256(bios_data).hexdigest() if bios_data is not None else None
         ),
@@ -212,8 +259,68 @@ def _run_case(
     }
 
 
+def _run_bios_startup(
+    *,
+    bios_name: str,
+    bios_data: bytes,
+    region: str,
+    frames: int,
+    capture_dir: Path,
+) -> dict[str, Any]:
+    """Verify that one real BIOS executes and renders with no cartridge present."""
+    empty_cartridge = bytes([0xFF]) * 0x8000
+    machine = SMSMachine(empty_cartridge, region=region, bios=bios_data)
+    frames_run = 0
+    execution_error = None
+    try:
+        for frame_index in range(frames):
+            machine.run_frame()
+            frames_run = frame_index + 1
+    except Exception as exc:
+        execution_error = f"{type(exc).__name__}: {exc}"
+
+    framebuffer = bytes(machine.vdp.framebuffer)
+    visible_height = int(machine.vdp.visible_height)
+    frame_metrics = _frame_metrics(framebuffer)
+    visual_activity = (
+        frame_metrics["non_black_pixels"] > 0
+        and frame_metrics["unique_rgb_colors"] > 1
+    )
+    capture_path = capture_dir / f"bios_only__{bios_name}__{region}.ppm"
+    _write_ppm(capture_path, framebuffer, visible_height)
+    if execution_error is not None:
+        outcome = "BIOS_STARTUP_EXECUTION_ERROR"
+    elif frames_run != frames:
+        outcome = "BIOS_STARTUP_INCOMPLETE"
+    else:
+        outcome = "BIOS_STARTUP_VISIBLE" if visual_activity else "BIOS_STARTUP_BLANK"
+
+    return {
+        "rom": "NO_CARTRIDGE",
+        "rom_sha256": hashlib.sha256(empty_cartridge).hexdigest(),
+        "bios": bios_name,
+        "bios_sha256": hashlib.sha256(bios_data).hexdigest(),
+        "mapper": None,
+        "region": region,
+        "outcome": outcome,
+        "frames_run": frames_run,
+        "handoff_frame": None,
+        "frames_after_handoff": None,
+        "bios_still_enabled": machine.bios_enabled,
+        "pc": machine.cpu.pc,
+        "instructions": machine.total_instructions,
+        "tstates": machine.total_tstates,
+        "frame_number": machine.vdp.frame_number,
+        "visible_height": visible_height,
+        "framebuffer": frame_metrics,
+        "visual_activity": visual_activity,
+        "capture_path": str(capture_path.resolve()),
+        "execution_error": execution_error,
+    }
+
+
 def main() -> int:
-    """Parse local inputs and execute six-game BIOS/direct-boot combinations."""
+    """Parse local inputs and execute BIOS, six-game, and direct-boot cases."""
     parser = argparse.ArgumentParser(
         description=(
             "Run each supplied SMS ROM with the three recognized BIOS revisions "
@@ -290,6 +397,17 @@ def main() -> int:
     preflight: list[dict[str, Any]] = []
     catalog = RomCatalog()
 
+    for bios_name, bios_region, console_region in BIOS_CASES:
+        results.append(
+            _run_bios_startup(
+                bios_name=bios_name,
+                bios_data=bios_payloads[bios_region],
+                region=console_region,
+                frames=args.frames,
+                capture_dir=capture_dir,
+            )
+        )
+
     for rom_path in args.rom:
         loaded = load_sms_rom(rom_path)
         header = _header_diagnostics(loaded.data)
@@ -317,6 +435,7 @@ def main() -> int:
                     frames=args.frames,
                     post_handoff_frames=args.post_handoff_frames,
                     capture_dir=capture_dir,
+                    mapper=header["mapper"],
                 )
             )
 
@@ -330,12 +449,14 @@ def main() -> int:
                 frames=args.frames,
                 post_handoff_frames=0,
                 capture_dir=capture_dir,
+                mapper=header["mapper"],
             )
         )
 
     report = {
         "schema_version": 1,
         "method": "native Rust SMS runtime through the installed PyO3 extension",
+        "case_count": len(results),
         "rom_and_bios_bytes_included": False,
         "frames_limit": args.frames,
         "post_handoff_frames": args.post_handoff_frames,
@@ -377,7 +498,12 @@ def main() -> int:
         0
         if all(
             result["outcome"]
-            in {"BIOS_HANDOFF_AND_POSTRUN", "DIRECT_BOOT_FRAME_ADVANCE"}
+            in {
+                "BIOS_HANDOFF_AND_POSTRUN",
+                "BIOS_MAPPER_CHECKSUM_UNRELIABLE",
+                "BIOS_STARTUP_VISIBLE",
+                "DIRECT_BOOT_FRAME_ADVANCE",
+            }
             for result in results
         )
         else 1
