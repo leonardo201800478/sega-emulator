@@ -362,6 +362,7 @@ def run(initial_path: Path | None = None) -> None:
     frame_count = 0
     pressed_keys: set[int] = set()
     hold_was_pressed = False
+    console_pause_was_pressed = False
     timer = QTimer(window)
     # O loop do emulador é limitado ao período nominal NTSC; o relógio lógico
     # da máquina continua avançando exclusivamente pelos T-states emulados.
@@ -388,9 +389,10 @@ def run(initial_path: Path | None = None) -> None:
     key_map = build_key_map()
 
     def update_joystick() -> None:
-        nonlocal hold_was_pressed
+        nonlocal hold_was_pressed, console_pause_was_pressed
         if machine is None:
             hold_was_pressed = False
+            console_pause_was_pressed = False
             return
         actions = {1: set(), 2: set()}
         for key in pressed_keys:
@@ -412,6 +414,12 @@ def run(initial_path: Path | None = None) -> None:
                     player,
                     joystick_value(actions[player].intersection(JOYSTICK_ACTIONS)),
                 )
+        console_pause_pressed = active_system == "master_system" and any(
+            "console_pause" in actions[player] for player in (1, 2)
+        )
+        if console_pause_pressed and not console_pause_was_pressed:
+            machine.request_console_pause()
+        console_pause_was_pressed = console_pause_pressed
         hold_pressed = any("hold" in actions[player] for player in (1, 2))
         if active_system == "sg1000" and hold_pressed and not hold_was_pressed:
             # The SG-1000 Hold switch is an edge-triggered NMI, not a joystick bit.
@@ -1313,6 +1321,7 @@ def run(initial_path: Path | None = None) -> None:
             "button1": "Botão 1",
             "button2": "Botão 2",
             "hold": "SW / Hold (NMI)",
+            "console_pause": "Pause do console (SMS / NMI)",
         }
         button_labels = {
             "a": "A (sul)",
