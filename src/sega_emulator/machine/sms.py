@@ -85,6 +85,10 @@ class SMSMachine:
         """Execute one Z80 instruction and return its nominal T-state count."""
         return int(self.native_machine.step())
 
+    def request_nmi(self) -> None:
+        """Assert the SMS console Pause switch through the Z80 NMI input."""
+        self.native_machine.request_nmi()
+
     def read_memory(self, address: int) -> int:
         if type(address) is not int or not 0 <= address <= 0xFFFF:
             raise ValueError("address deve estar entre 0000h e FFFFh.")

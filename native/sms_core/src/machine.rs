@@ -273,6 +273,11 @@ impl SmsMachine {
         self.memory.reset_control_port();
     }
 
+    /// Latch the Master System console Pause switch as a Z80 non-maskable interrupt.
+    pub fn request_nmi(&mut self) {
+        self.cpu.request_nmi();
+    }
+
     pub fn set_controller(
         &mut self,
         player: u8,
@@ -374,6 +379,20 @@ mod tests {
         assert_eq!(machine.cpu().registers.a, 0x42);
         assert_eq!(machine.read_memory(0xC000), 0x42);
         assert_eq!(machine.read_memory(0xC001), 0x42);
+    }
+
+    #[test]
+    fn console_pause_switch_enters_the_z80_nmi_vector() {
+        // Initialize a safe stack before asserting the physical Pause/NMI input.
+        let mut machine = SmsMachine::new(vec![0x31, 0xF0, 0xDF, 0x00]).unwrap();
+        machine.step().unwrap();
+        assert_eq!(machine.cpu().registers.sp, 0xDFF0);
+
+        machine.request_nmi();
+
+        assert_eq!(machine.step().unwrap(), 11);
+        assert_eq!(machine.cpu().registers.pc, 0x0066);
+        assert_eq!(machine.cpu().registers.sp, 0xDFEE);
     }
 
     #[test]

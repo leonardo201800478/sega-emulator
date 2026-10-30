@@ -152,6 +152,11 @@ impl NativeSMSMachine {
         Ok(cycles)
     }
 
+    /// Assert the SMS console Pause switch, which is wired to the Z80 NMI input.
+    fn request_nmi(&mut self) {
+        self.machine.request_nmi();
+    }
+
     /// Advance instruction-stepped SMS hardware until the VDP frame counter changes.
     ///
     /// This is nominal instruction timing, not cycle-exact bus scheduling.
@@ -273,6 +278,21 @@ mod tests {
         };
         assert!(machine.bios_enabled());
         assert_eq!(machine.read_memory(0), 0x3E);
+    }
+
+    #[test]
+    fn console_pause_is_exposed_as_a_z80_non_maskable_interrupt() {
+        let mut machine = NativeSMSMachine::new(
+            vec![0x31, 0xF0, 0xDF, 0x00],
+            false,
+            Some("usa"),
+            None,
+        )
+        .unwrap();
+        machine.step().unwrap();
+        machine.request_nmi();
+        assert_eq!(machine.step().unwrap(), 11);
+        assert_eq!(machine.pc(), 0x0066);
     }
 
     #[test]
