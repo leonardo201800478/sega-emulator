@@ -157,10 +157,8 @@ def test_restore_defaults_resets_audio_video_controls(qt_app) -> None:
 
 
 def test_firmware_scan_is_explicit_and_reports_unknown_files(qt_app, tmp_path):
-    (tmp_path / "unknown-firmware.bin").write_bytes(b"\\x00" * 0x2000)
-    dialog = SettingsDialog(
-        FrontendPreferences(firmware_directory=str(tmp_path))
-    )
+    (tmp_path / "unknown-firmware.bin").write_bytes(b"\x00" * 0x2000)
+    dialog = SettingsDialog(FrontendPreferences(firmware_directory=str(tmp_path)))
 
     assert dialog.firmware_scan_status.text() == "Nenhuma varredura realizada."
     dialog._scan_firmware_directory()
