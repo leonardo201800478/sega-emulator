@@ -579,10 +579,19 @@ mod tests {
         assert_eq!(machine.read_memory(0xFFF8), 0x01);
         assert_eq!(machine.read_memory(0xDFF8), 0x01);
     }
+
     #[test]
     fn console_pause_requests_nmi_without_changing_controller_lines() {
         let mut machine = SmsMachine::new(vec![0x00; 0x4000]).unwrap();
-        machine.set_controller(1, ControllerButtons { button_1: true, ..Default::default() }).unwrap();
+        machine
+            .set_controller(
+                1,
+                ControllerButtons {
+                    button_1: true,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
         let controller_before = machine.read_port(0xDC);
         machine.request_console_pause();
         assert!(machine.cpu().nmi_pending);
