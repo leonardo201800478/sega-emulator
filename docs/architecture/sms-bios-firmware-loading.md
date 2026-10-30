@@ -18,7 +18,7 @@ Os hashes abaixo foram calculados localmente a partir dos arquivos anexados. Os 
 |---|---:|---|---|
 | `[BIOS] Sega Master System (Japan) (v2.1).sms` | 8.192 bytes | `67846e26764bd862f19179294347f7353a4166b62ac4198a5ec32933b7da486e` | Master System Japan |
 | `[BIOS] Sega Master System (USA, Europe) (v1.3).sms` | 8.192 bytes | `477617917a12a30f9f43844909dc2de6e6a617430f5c9a36306c86414a670d50` | Master System export (USA/Europe) |
-| `[BIOS] Sega Master System (Europe) (v2.0).sms` | 8.192 bytes | `1eb16fc06ceaf05651d7cfd69d1713e6ddccc4349a511f6fd17e037d71f9d85b` | Master System Europe / export |
+| `[BIOS] Sega Master System (Europe) (v2.0).sms` | 8.192 bytes | `1eb16fc06ceaf05651d7cfd69d1713e6ddccc4349a511f6fd17e037d71f9d85b` | Master System Europe (distinct v2.0) |
 
 **Resultado importante:** USA/Europe v1.3 é a imagem compartilhada de exportação; Europe v2.0 é uma BIOS europeia distinta e não deve ser selecionada para USA/Brazil. Para Europe, v2.0 tem preferência; se ausente, a imagem compartilhada v1.3 é fallback. Japan v2.1 permanece na família japonesa. A seleção de BIOS não altera o perfil PAL/PAL-M/NTSC.
 
@@ -119,13 +119,13 @@ A BIOS deve ser parte do caminho de inicialização do cartucho/máquina, não u
 
 ## Uso do DAT na seleção da BIOS SMS
 
-A inicialização SMS prioriza a preferência regional manual e, em seguida, um
-cabeçalho `TMR SEGA` válido. Se ambos não resolverem o território, consulta o
-`RomCatalog` por hash e tamanho. Somente correspondências inequívocas com região exclusivamente `JPN`
-selecionam a família de BIOS japonesa. Regiões de exportação `USA`, `EUR`,
-`BRA` e `AUS` selecionam a família compartilhada de BIOS de exportação
-US/EU. Brazil é território de exportação com padrão PAL-M; essa classificação
-seleciona somente a família da BIOS e não escolhe temporização Europe/PAL.
+A inicialização SMS prioriza a preferência regional manual e, no modo
+automático, usa o perfil territorial já resolvido pelo cabeçalho e pelo DAT.
+Uma identidade DAT exclusivamente `EUR` pode selecionar a BIOS Europe v2.0;
+USA, Brazil, Australia e releases export compartilhadas selecionam a BIOS
+USA/Europe v1.3. Europe usa v1.3 como fallback quando v2.0 não está instalada.
+Brazil é território de exportação com padrão PAL-M; essa classificação não
+escolhe temporização Europe/PAL.
 Se um header reconhecido e um DAT exato contradisserem o grupo regional (por
 exemplo, header Export com release Japan), a seleção automática é recusada.
 Registros Korea/Taiwan também não são reduzidos automaticamente às famílias
