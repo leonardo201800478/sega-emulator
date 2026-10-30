@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from sega_emulator.rom_catalog import RomCatalog
+
 from sega_emulator.machine.sms_firmware import (
     SMS_BIOS_SIZE,
     SmsFirmwareDirectoryStatus,
@@ -10,6 +12,7 @@ from sega_emulator.machine.sms_firmware import (
     load_sms_bios,
     scan_sms_firmware_directory,
     sms_bios_region_from_cartridge,
+    sms_bios_region_from_catalog,
 )
 
 JP_SHA256 = "67846e26764bd862f19179294347f7353a4166b62ac4198a5ec32933b7da486e"
@@ -151,3 +154,49 @@ def test_cartridge_header_locations_are_checked_from_largest_to_smallest():
     rom[0x1FF0:0x1FF8] = b"TMR SEGA"
     rom[0x1FFF] = 0x3C
     assert sms_bios_region_from_cartridge(bytes(rom)) == "japan"
+
+
+def _write_sms_dat(directory, payload, regions, *, game_name="Fixture"):
+    import hashlib
+    import zlib
+
+    releases = "".join(f'<release name="Fixture" region="{region}"/>' for region in regions)
+    (directory / "sms.dat").write_text(
+        f'''<datafile><header><name>Sega - Master System - Mark III</name></header>
+        <game name="{game_name}">{releases}
+        <rom name="fixture.sms" size="{len(payload)}"
+             crc="{zlib.crc32(payload) & 0xFFFFFFFF:08x}"
+             md5="{hashlib.md5(payload).hexdigest()}"
+             sha1="{hashlib.sha1(payload).hexdigest()}"/>
+        </game></datafile>''',
+        encoding="utf-8",
+    )
+
+
+def test_dat_fallback_selects_japan_bios_for_exact_japan_only_match(tmp_path):
+    payload = b"synthetic-japan-rom"
+    _write_sms_dat(tmp_path, payload, ("JPN",))
+    assert sms_bios_region_from_catalog(payload, RomCatalog(tmp_path)) == "japan"
+
+
+def test_dat_fallback_selects_export_bios_for_exact_usa_europe_match(tmp_path):
+    payload = b"synthetic-export-rom"
+    _write_sms_dat(tmp_path, payload, ("USA", "EUR"))
+    assert sms_bios_region_from_catalog(payload, RomCatalog(tmp_path)) == "usa"
+
+
+def test_dat_fallback_refuses_mixed_japan_and_export_releases(tmp_path):
+    payload = b"synthetic-mixed-region-rom"
+    _write_sms_dat(tmp_path, payload, ("JPN", "USA"))
+    assert sms_bios_region_from_catalog(payload, RomCatalog(tmp_path)) is None
+
+
+def test_dat_fallback_refuses_regions_without_known_bios_mapping(tmp_path):
+    payload = b"synthetic-korea-rom"
+    _write_sms_dat(tmp_path, payload, ("KOR",))
+    assert sms_bios_region_from_catalog(payload, RomCatalog(tmp_path)) is None
+
+
+def test_dat_fallback_does_not_identify_uncatalogued_rom(tmp_path):
+    _write_sms_dat(tmp_path, b"known", ("USA",))
+    assert sms_bios_region_from_catalog(b"unknown", RomCatalog(tmp_path)) is None
