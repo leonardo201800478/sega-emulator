@@ -62,6 +62,7 @@ A camada de OSD deverá respeitar ambos os caminhos e não alterar o backend gr�
 - PR #282 — BIOS SMS e identificação DAT: https://github.com/leonardo201800478/sega-emulator/pull/282
 - PR #267 — seleção automática de região: https://github.com/leonardo201800478/sega-emulator/pull/267
 - PR #280 — pesquisa de mappers e roadmap de hardware: https://github.com/leonardo201800478/sega-emulator/pull/280
+- PR #287 — implementação da resolução regional determinística e perfil PAL-M, empilhada sobre a PR #282: https://github.com/leonardo201800478/sega-emulator/pull/287
 
 Este documento define a camada integradora. Não substitui nem duplica a pesquisa detalhada de mappers da PR #280.
 
