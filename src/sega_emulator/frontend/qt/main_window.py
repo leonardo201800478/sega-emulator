@@ -190,10 +190,11 @@ class EmulatorMainWindow(QMainWindow):
         self.region_action_group.setExclusive(True)
         self.region_actions: dict[str, QAction] = {}
         for region, label in (
-            ("auto", "Automático (EUA → Europa → Japão)"),
+            ("auto", "Automático (header/DAT; padrão EUA)"),
             ("usa", "EUA (NTSC)"),
             ("europe", "Europa (PAL)"),
             ("japan", "Japão (NTSC)"),
+            ("brazil", "Brasil (PAL-M)"),
         ):
             action = QAction(label, self)
             action.setCheckable(True)
