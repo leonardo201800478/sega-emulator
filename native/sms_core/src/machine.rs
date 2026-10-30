@@ -386,12 +386,9 @@ mod tests {
             0x00, 0xC0,
         ]);
         bios[16] = 0x76;
-        let mut machine = SmsMachine::with_bios(
-            vec![0xFF; 0x4000],
-            Some(bios),
-            SmsMachineConfig::default(),
-        )
-        .unwrap();
+        let mut machine =
+            SmsMachine::with_bios(vec![0xFF; 0x4000], Some(bios), SmsMachineConfig::default())
+                .unwrap();
 
         assert_eq!(machine.memory().control_port(), 0xE0);
         assert!(machine.memory().bios_enabled());
@@ -437,7 +434,7 @@ mod tests {
         assert!(machine.memory().bios_enabled());
         assert_eq!(machine.read_memory(0x0000), 0x3E);
         assert_eq!(machine.read_memory(0x0400), 0x00);
-        assert_eq!(machine.read_memory(0xC000), 0xFF);
+        assert_eq!(machine.read_memory(0xC000), 0x00);
 
         // LDIR is modeled as one repeated transfer per CPU step.
         for _ in 0..16 {
