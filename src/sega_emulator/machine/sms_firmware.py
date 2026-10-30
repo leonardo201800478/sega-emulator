@@ -307,9 +307,9 @@ def sms_bios_region_for_rom(
 ) -> str | None:
     """Resolve BIOS territory from header and exact DAT evidence.
 
-    A recognized header distinguishes Japan from Export only. A unique Europe
-    DAT identity refines Export to Europe so the Europe v2.0 BIOS can be
-    preferred. Ambiguous/mixed identities retain the shared export default.
+    A recognized header distinguishes Japan from Export only. A unanimous,
+    exact DAT identity may refine Export to Europe so the Europe v2.0 BIOS can
+    be preferred. Ambiguous/mixed identities retain the shared export default.
     """
     if not isinstance(rom, bytes):
         raise TypeError("rom deve ser bytes.")
@@ -331,6 +331,10 @@ def sms_bios_region_for_rom(
     if regions & {"KOR", "TAI"}:
         return None
 
+    dat_family = _sms_bios_region_from_dat_candidates(
+        identification.candidates,
+        require_bios_entry=False,
+    )
     export_regions = {"USA", "EUR", "BRA", "AUS"}
     if header_family == "japan":
         if regions & export_regions:
@@ -340,16 +344,12 @@ def sms_bios_region_for_rom(
     if header_family == "usa":
         if "JPN" in regions:
             return None
-        if regions == {"EUR"}:
+        if dat_family is SmsFirmwareRegion.EUROPE:
             return "europe"
-        if regions == {"BRA"}:
-            return "brazil"
+        if dat_family is SmsFirmwareRegion.EXPORT_US_EU:
+            return "brazil" if regions == {"BRA"} else "usa"
         return "usa"
 
-    dat_family = _sms_bios_region_from_dat_candidates(
-        identification.candidates,
-        require_bios_entry=False,
-    )
     if dat_family is SmsFirmwareRegion.JAPAN:
         return "japan"
     if dat_family is SmsFirmwareRegion.EUROPE:
