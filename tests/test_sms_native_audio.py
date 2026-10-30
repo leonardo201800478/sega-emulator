@@ -127,8 +127,6 @@ def test_sms_frame_runner_exposes_native_framebuffer_and_controller() -> None:
     with pytest.raises(ValueError):
         machine.set_controller(3, False, False, False, False, False, False)
 
-
-
 def test_sms_pause_button_latches_one_nmi_per_press_in_native_binding() -> None:
     rom = bytearray([0x00] * 0x4000)
     rom[:3] = bytes([0xC3, 0x00, 0x01])  # JP $0100
