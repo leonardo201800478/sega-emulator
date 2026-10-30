@@ -110,6 +110,17 @@ A BIOS deve ser parte do caminho de inicialização do cartucho/máquina, não u
 - `IN_USE`: firmware selecionado e carregado na máquina.
 - `FALLBACK_NO_BIOS`: modo de compatibilidade selecionado sem BIOS.
 
+## Uso do DAT na seleção da BIOS SMS
+
+A inicialização SMS prioriza a preferência regional manual e, em seguida, um
+cabeçalho `TMR SEGA` válido. Se ambos não resolverem o território, consulta o
+`RomCatalog` por hash e tamanho. Somente correspondências inequívocas com regiões
+exclusivamente `JPN` ou exclusivamente `USA`/`EUR` podem selecionar a família de
+BIOS japonesa ou de exportação, respectivamente. Entradas mistas, regiões sem
+mapeamento comprovado, ROMs desconhecidas e colisões entre sistemas não escolhem
+BIOS automaticamente. Os DATs identificam releases; não determinam PAL/NTSC nem
+substituem a preferência de vídeo do console.
+
 ## Critérios de aceitação
 
 ### Validação de metadados e armazenamento
