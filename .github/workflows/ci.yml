@@ -85,5 +85,7 @@ jobs:
         run: |
           maturin build --locked --manifest-path native/z80_core/Cargo.toml --release --features python-extension --out native/z80_core/dist
           python -m pip install native/z80_core/dist/*.whl
+      - name: Smoke-test SMS boot matrix CLI
+        run: python tools/sms_boot_matrix.py --help
       - name: Run tests
         run: python -m pytest
