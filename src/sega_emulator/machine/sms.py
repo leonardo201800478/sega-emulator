@@ -131,6 +131,12 @@ class SMSMachine:
             "button2" in actions,
         )
 
+    def set_pause_button(self, pressed: bool) -> None:
+        """Set the dedicated SMS console PAUSE button level."""
+        if type(pressed) is not bool:
+            raise TypeError("pressed deve ser bool.")
+        self.native_machine.set_pause_button(pressed)
+
     def drain_psg_write_events(self) -> list[tuple[int, int]]:
         # SMS VGM event capture is not wired to the native timestamped bus yet.
         return []

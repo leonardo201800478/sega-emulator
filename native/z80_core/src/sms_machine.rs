@@ -206,6 +206,11 @@ impl NativeSMSMachine {
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
+    /// Set the dedicated console PAUSE button level; a rising edge requests one NMI.
+    fn set_pause_button(&mut self, pressed: bool) {
+        self.machine.set_pause_button(pressed);
+    }
+
     fn drain_audio_samples(&mut self, max_samples: Option<usize>) -> Vec<f64> {
         self.machine.drain_audio_samples(max_samples)
     }
