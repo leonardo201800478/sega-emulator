@@ -45,6 +45,7 @@ fn build_sms_machine(
         .map_err(|error| SmsMachineBuildError::Machine(error.to_string()))
 }
 
+#[derive(Debug)]
 enum SmsMachineBuildError {
     InvalidRegion(&'static str),
     Machine(String),
