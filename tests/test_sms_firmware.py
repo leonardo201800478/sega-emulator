@@ -54,11 +54,12 @@ def test_known_hashes_classify_japan_and_shared_export_image(tmp_path):
     (tmp_path / "jp-with-arbitrary-name.data").write_bytes(b"J" * SMS_BIOS_SIZE)
     (tmp_path / "export.bin").write_bytes(b"E" * SMS_BIOS_SIZE)
 
+    from types import SimpleNamespace
+
     with patch("sega_emulator.machine.sms_firmware.hashlib.sha256") as sha256:
-        sha256.side_effect = [
-            type("Digest", (), {"hexdigest": lambda self: JP_SHA256})(),
-            type("Digest", (), {"hexdigest": lambda self: EXPORT_SHA256})(),
-        ]
+        sha256.side_effect = lambda data: SimpleNamespace(
+            hexdigest=lambda: JP_SHA256 if data.startswith(b"J") else EXPORT_SHA256
+        )
         result = scan_sms_firmware_directory(tmp_path)
 
     by_name = {item.path.name: item for item in result.files}
