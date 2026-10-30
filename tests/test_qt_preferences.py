@@ -199,7 +199,6 @@ def test_python_runtime_cannot_be_selected_in_preferences() -> None:
         FrontendPreferences(cpu_core="python")
 
 
-
 @pytest.mark.parametrize("value", [None, "invalid", [], 2])
 def test_invalid_saved_sms_bios_boot_preference_defaults_to_enabled(value) -> None:
     settings = MemorySettings({"sms_bios_boot_enabled": value})
