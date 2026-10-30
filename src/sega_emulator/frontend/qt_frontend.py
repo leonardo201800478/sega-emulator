@@ -838,7 +838,7 @@ def run(initial_path: Path | None = None) -> None:
             reset_machine()
             status.showMessage(
                 f"Região SMS: {region_preference} — iniciando em "
-                f"{sms_region_candidates(region_preference)[0].upper()}",
+                f"{sms_region_attempts[0].upper()}",
                 6000,
             )
         else:
@@ -851,7 +851,7 @@ def run(initial_path: Path | None = None) -> None:
             extra={
                 "event": "sms_region_preference_changed",
                 "preference": region_preference,
-                "fallback_order": list(sms_region_candidates(region_preference)),
+                "fallback_order": list(sms_region_attempts),
             },
         )
 
