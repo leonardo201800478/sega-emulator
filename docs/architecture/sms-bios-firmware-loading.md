@@ -1,7 +1,7 @@
 # Projeto: carregamento nativo de BIOS do Sega Master System
 
 **Data:** 2026-10-29  
-**Base observada:** `main` em `fad306e7461878201fe7dcf447ffe7e81e417ff3`  
+**Base observada:** `main` em `0a6e77c2f01b87692accd033525197eb8812707b` (PR #279 integrada)  
 **Status:** IMPLEMENTED / CI_PENDING / REAL_BIOS_BOOT_PENDING. O scanner por SHA-256, a configuração persistente da pasta, a seleção regional, o encaminhamento Qt/PyO3 e o boot pelo core Rust estão conectados. A validação com BIOS real permanece dependente de arquivos locais do usuário e teste manual; CI deve ser avaliado no SHA candidato mais recente.
 
 ## Objetivo
@@ -94,6 +94,7 @@ A BIOS deve ser parte do caminho de inicialização do cartucho/máquina, não u
 - A BIOS fica habilitada no power-on. O core modela o perfil inicial `$F3` (BIOS ativa; cartucho e RAM interna desabilitados) e o perfil pós-BIOS de cartucho `$AB` (BIOS desabilitada; cartucho e RAM interna habilitados).
 - O fluxo sintético de aceitação habilita RAM mantendo BIOS, copia um pequeno stub para RAM, desabilita BIOS/habilita cartucho e transfere execução ao endereço zero do cartucho.
 - A BIOS de 8 KiB fornecida pelo usuário só ocupa o overlay de 1 KiB em `$0000-$03FF`; os bytes restantes não são expostos por esse overlay. O slot do cartucho continua sujeito ao latch de memória.
+- A arbitragem elétrica quando BIOS e cartucho são habilitados simultaneamente difere entre SMS e SMS 2 (precedência/AND nas referências consultadas); esse caso não é exercitado pelo fluxo de boot implementado, que mantém os slots mutuamente selecionados. A modelagem explícita dessa sobreposição permanece uma limitação, não um comportamento declarado como validado.
 
 **Não assumir que a BIOS deve estar sempre mapeada ou sempre obrigatória.** O perfil de inicialização e a transferência de controle devem respeitar o latch e a ordem observada nos documentos técnicos citados.
 
