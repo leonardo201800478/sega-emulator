@@ -6,13 +6,13 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-import pytest
+import pytest  # noqa: E402
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication  # noqa: E402
 
-from sega_emulator.frontend.qt.sms_rom_audit_dialog import SmsRomAuditDialog
+from sega_emulator.frontend.qt.sms_rom_audit_dialog import SmsRomAuditDialog  # noqa: E402
 
 
 @pytest.fixture
