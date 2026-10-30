@@ -19,6 +19,7 @@ from sega_emulator.frontend.controller_profiles import (
     PlayerInputProfile,
     apply_turbo,
     joystick_value,
+    is_rising_edge,
 )
 from sega_emulator.frontend.native_first_controller_input import (
     NativeFirstControllerInput,
@@ -417,7 +418,7 @@ def run(initial_path: Path | None = None) -> None:
         console_pause_pressed = active_system == "master_system" and any(
             "console_pause" in actions[player] for player in (1, 2)
         )
-        if console_pause_pressed and not console_pause_was_pressed:
+        if is_rising_edge(console_pause_pressed, console_pause_was_pressed):
             machine.request_console_pause()
         console_pause_was_pressed = console_pause_pressed
         hold_pressed = any("hold" in actions[player] for player in (1, 2))
