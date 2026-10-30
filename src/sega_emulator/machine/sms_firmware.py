@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from sega_emulator.rom_catalog import RomCatalog
+from sega_emulator.rom_catalog import CatalogIdentification, DatRom, RomCatalog
 
 SMS_BIOS_SIZE = 0x2000
 
@@ -74,6 +74,33 @@ _KNOWN_BIOS: dict[str, SmsFirmwareRegion] = {
 }
 
 
+
+def _sms_bios_region_from_dat_candidates(
+    candidates: tuple[DatRom, ...],
+    *,
+    require_bios_entry: bool,
+) -> SmsFirmwareRegion | None:
+    """Resolve only unanimous, known SMS BIOS families from DAT metadata."""
+    if not candidates:
+        return None
+
+    resolved: set[SmsFirmwareRegion] = set()
+    for candidate in candidates:
+        if require_bios_entry and not candidate.game_name.casefold().startswith(
+            "[bios] sega master system"
+        ):
+            return None
+        regions = set(candidate.regions)
+        if regions and regions <= {"JPN"}:
+            resolved.add(SmsFirmwareRegion.JAPAN)
+        elif regions and regions <= {"USA", "EUR"}:
+            resolved.add(SmsFirmwareRegion.EXPORT_US_EU)
+        else:
+            return None
+
+    return next(iter(resolved)) if len(resolved) == 1 else None
+
+
 def _read_sms_bios_candidate(path: Path) -> bytes:
     """Read at most one byte beyond the supported BIOS size."""
     with path.open("rb") as stream:
@@ -82,6 +109,8 @@ def _read_sms_bios_candidate(path: Path) -> bytes:
 
 def scan_sms_firmware_directory(
     directory: str | Path | None,
+    *,
+    catalog: RomCatalog | None = None,
 ) -> SmsFirmwareScan:
     """Scan a user-selected directory and identify known BIOS files by SHA-256.
 
@@ -108,6 +137,7 @@ def scan_sms_firmware_directory(
 
     scanned: list[SmsFirmwareFile] = []
     recognized: dict[str, list[int]] = {}
+    active_catalog = catalog
     for candidate in candidates:
         try:
             size = candidate.stat().st_size
@@ -151,13 +181,33 @@ def scan_sms_firmware_directory(
             continue
 
         region = _KNOWN_BIOS.get(digest)
+        catalog_diagnostic = None
+        if region is None:
+            if active_catalog is None:
+                active_catalog = RomCatalog()
+            try:
+                identification = active_catalog.identify_bytes(data, suffix=".sms")
+            except ValueError as exc:
+                identification = None
+                catalog_diagnostic = (
+                    f"DAT lookup failed: {exc.__class__.__name__}."
+                )
+            if identification is not None:
+                if identification.matched_by in {"sha1", "md5"}:
+                    region = _sms_bios_region_from_dat_candidates(
+                        identification.candidates,
+                        require_bios_entry=True,
+                    )
+
         if region is None:
             status = SmsFirmwareFileStatus.NOT_FOUND
         elif region is SmsFirmwareRegion.JAPAN:
             status = SmsFirmwareFileStatus.VALID_JAPAN
         else:
             status = SmsFirmwareFileStatus.VALID_EXPORT_US_EU
-        scanned.append(SmsFirmwareFile(candidate, size, digest, region, status))
+        scanned.append(
+            SmsFirmwareFile(candidate, size, digest, region, status, catalog_diagnostic)
+        )
         if region is not None:
             recognized.setdefault(digest, []).append(len(scanned) - 1)
 
@@ -219,28 +269,25 @@ def sms_bios_region_from_catalog(
         identification.status != "matched"
         or identification.system != "master_system"
         or identification.matched_by not in {"sha1", "md5"}
-        or not identification.candidates
     ):
         return None
 
-    candidate_regions: set[str | None] = set()
-    for candidate in identification.candidates:
-        regions = set(candidate.regions)
-        if regions and regions <= {"JPN"}:
-            candidate_regions.add("japan")
-        elif regions and regions <= {"USA", "EUR"}:
-            candidate_regions.add("usa")
-        else:
-            candidate_regions.add(None)
-
-    if len(candidate_regions) != 1:
-        return None
-    return next(iter(candidate_regions))
+    region = _sms_bios_region_from_dat_candidates(
+        identification.candidates,
+        require_bios_entry=False,
+    )
+    if region is SmsFirmwareRegion.JAPAN:
+        return "japan"
+    if region is SmsFirmwareRegion.EXPORT_US_EU:
+        return "usa"
+    return None
 
 
 def load_sms_bios(
     directory: str | Path | None,
     region: str,
+    *,
+    catalog: RomCatalog | None = None,
 ) -> bytes | None:
     """Load a known BIOS matching the active console territory.
 
@@ -252,7 +299,7 @@ def load_sms_bios(
     expected_region = (
         SmsFirmwareRegion.JAPAN if region == "japan" else SmsFirmwareRegion.EXPORT_US_EU
     )
-    scan = scan_sms_firmware_directory(directory)
+    scan = scan_sms_firmware_directory(directory, catalog=catalog)
     selected = next(
         (
             item
