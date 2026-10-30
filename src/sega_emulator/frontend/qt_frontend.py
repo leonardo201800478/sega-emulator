@@ -177,6 +177,7 @@ def run(initial_path: Path | None = None) -> None:
         )
         from sega_emulator.frontend.qt.rom_library_dialog import RomLibraryDialog
         from sega_emulator.frontend.qt.settings_dialog import SettingsDialog
+        from sega_emulator.frontend.qt.sms_rom_audit_dialog import SmsRomAuditDialog
     except ImportError as exc:
         raise RuntimeError(
             'Interface Qt não instalada. Execute: python -m pip install -e ".[qt]"'
@@ -302,6 +303,7 @@ def run(initial_path: Path | None = None) -> None:
         on_vdp_snapshot=lambda: dump_vdp_snapshot(),
         on_open_logs=lambda: show_logs(),
         on_show_machine_state=lambda: show_machine_state(),
+        on_audit_sms_roms=lambda: audit_sms_roms(),
         on_video_scale=lambda scale: window.set_video_scale(scale),
         on_change_system=lambda: choose_system(),
         on_configure_drivers=lambda: configure_drivers(),
@@ -1662,6 +1664,18 @@ def run(initial_path: Path | None = None) -> None:
                 f"Linha: {machine.vdp.scanline}"
             ),
         )
+
+    def audit_sms_roms() -> None:
+        """Audit a folder of SMS ROMs through the configured native Rust runtime."""
+
+        def create_audit_machine(rom_data: bytes) -> SMSMachine:
+            resolution = resolve_sms_region_profile(
+                region_preference, rom_data, sms_rom_catalog
+            )
+            return create_sms_machine(rom_data, resolution.region)
+
+        dialog = SmsRomAuditDialog(create_audit_machine, parent=window)
+        dialog.exec()
 
     timer.timeout.connect(show_frame)
     refresh_recent_rom_menu()
