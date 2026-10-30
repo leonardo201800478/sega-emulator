@@ -44,7 +44,6 @@ def test_joystick_active_low_bits_match_sg1000_input_contract() -> None:
         joystick_value({"unknown"})
 
 
-
 def test_console_pause_is_persisted_but_never_becomes_a_joystick_bit() -> None:
     config = ControllerInputConfig()
     decoded = ControllerInputConfig.from_json(config.to_json())
@@ -66,7 +65,6 @@ def test_legacy_profiles_gain_console_pause_default_without_losing_bindings() ->
     assert legacy.gamepad_buttons["console_pause"] == "back"
     assert legacy.keyboard_bindings["up"] == "I"
     assert legacy.keyboard_bindings["console_pause"] == "Pause"
-
 
 
 def test_console_pause_is_edge_triggered_for_press_hold_release_press() -> None:
