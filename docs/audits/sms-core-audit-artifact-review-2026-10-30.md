@@ -13,11 +13,11 @@
 |---|---|---|
 | `AUDITORIA_SMS_CORE.md` | Disponível, 6.543 bytes | Relatório narrativo de CPU Z80 e VDP |
 | `z80_opcodes_audit.json` | Disponível, 251.732 bytes | 1.452 registros de opcode/prefixo |
-| `z80_opcodes_audit.csv` | Não localizado entre os arquivos fornecidos | Não foi reconstruído a partir do JSON |
-| `vdp_audit.csv` | Não localizado entre os arquivos fornecidos | A tabela completa de 50 itens não pôde ser auditada registro a registro |
+| `z80_opcodes_audit.csv` | Recebido em 2026-10-30 | 1.452 registros, 7 colunas; validado estruturalmente |
+| `vdp_audit.csv` | Recebido em 2026-10-30 | 50 registros, 6 colunas; revisados individualmente |
 | Manuais Zilog em PDF | Anexados na conversa | Referências para arquitetura/timing do Z80; não especificam os latches do VDP Sega |
 
-A ausência dos dois CSVs é uma limitação material: o relatório afirma que eles contêm a matriz integral, mas esta revisão não presume nem inventa seus registros. A auditoria VDP abaixo cobre somente os itens descritos no Markdown e as verificações possíveis no código.
+Os dois CSVs originais foram recebidos posteriormente e incorporados nesta revisão. A matriz VDP de 50 registros foi conferida linha a linha; a matriz Z80 foi validada estruturalmente e comparada com as classificações e observações declaradas. Isso não equivale a executar cada opcode contra um oráculo semântico independente.
 
 ## 1. Integridade estrutural do JSON de opcodes
 
@@ -132,7 +132,7 @@ Os itens sobre quirk SMS1, colisão de sprites sob a máscara, primeiro byte do 
 
 1. **Ares sem commit fixado:** `master` é móvel. A auditoria deve registrar SHA, caminhos e trechos/linhas exatos do ares usados em cada comparação.
 2. **Sem identificação completa da base SMS_CORE no relatório original:** registrar commit SHA e blob SHA por arquivo, em vez de apenas contagem de linhas.
-3. **CSV ausentes:** sem `z80_opcodes_audit.csv` e `vdp_audit.csv`, parte da matriz não é reproduzível.
+3. **Proveniência dos CSVs:** os arquivos foram recebidos em 2026-10-30; o relatório de origem ainda não fixa hashes dos CSVs nem o SHA exato do ares usado na comparação.
 4. **Status ambíguo:** `IMPLEMENTADO` não diferencia decoder presente, semântica testada, timing nominal conferido e validação independente.
 5. **T-states em texto livre:** valores como `17/10`, `12/7` e `20/23` não codificam qual condição seleciona cada duração; a tabela precisa de campo de condição/estado e referência.
 6. **Escopo incompleto da matriz de opcodes:** estados de reset, NMI/INT, EI delay, HALT e WZ não cabem como linhas comuns de opcode sem uma matriz complementar.
@@ -141,7 +141,7 @@ Os itens sobre quirk SMS1, colisão de sprites sob a máscara, primeiro byte do 
 ## 7. Prioridades e critérios de aceitação
 
 ### P0 — tornar a auditoria reproduzível
-- Anexar ou localizar os dois CSVs originais.
+- [x] Receber e validar os dois CSVs originais.
 - Fixar SHA do SMS_CORE e SHA do ares.
 - Associar cada divergência a arquivo, símbolo, trecho/linha, evidência e teste.
 - Separar status de implementação, teste semântico, timing nominal e precisão temporal.
@@ -165,12 +165,100 @@ Os itens sobre quirk SMS1, colisão de sprites sob a máscara, primeiro byte do 
 ### Critérios de encerramento desta revisão
 - Integridade estrutural do JSON: **PASS**.
 - Confronto estático dos itens C1–C7 com código: **PASS**, com ressalvas de hardware acima.
-- Confronto estático dos principais itens VDP: **PASS**, limitado ao relatório narrativo disponível.
-- CSVs completos de opcode e VDP: **BLOCKED — não fornecidos/localizados**.
+- Confronto registro a registro da matriz VDP (50 itens): **PASS**, com divergências e extensões classificadas.
+- Integridade estrutural da matriz Z80 CSV (1.452 itens): **PASS**; semântica individual dos 1.452 opcodes: **NOT RUN**.
 - Execução de testes/build nesta revisão: **NOT RUN**.
 - Teste em hardware/oráculo independente: **NOT RUN**.
 - `TEMPORAL_PASS`: **NÃO DECLARADO**.
 
 ## 8. Próximo passo
 
-Depois de disponibilizar os CSVs, executar a revisão linha a linha das 50 entradas VDP e das 1.452 entradas Z80, cruzando cada registro com o decoder atual e uma referência ares fixada por SHA. Em seguida, abrir PRs pequenas de correção apenas para divergências confirmadas por vetores independentes. Esta PR não altera o runtime e não declara que a fidelidade Z80/VDP está concluída.
+Os CSVs agora estão disponíveis. O próximo passo é fixar SHA do ares e cruzar as 1.452 entradas Z80 com o decoder e as 50 entradas VDP com os caminhos de produção, convertendo divergências priorizadas em vetores independentes. Esta PR não altera o runtime e não declara que a fidelidade Z80/VDP está concluída.
+
+
+## 9. Revisão dos CSVs recebidos em 2026-10-30
+
+### 9.1 Z80 — CSV de 1.452 registros
+
+- Dimensão: 1.452 linhas × 7 colunas (`prefix`, `opcode`, `mnemonic`, `tstates_impl`, `status`, `vs_ares`, `notes`).
+- Todos os 1.452 registros usam `status=IMPLEMENTADO`; esse rótulo não expressa cobertura de teste.
+- Distribuição de prefixos: base 256, CB 256, ED 256, DD 86, FD 86, DDCB 256, FDCB 256.
+- `vs_ares`: 1.448 `=`, duas `DIFERE (menor)` e duas `= (ares: NOP)`.
+- 843 linhas têm observações.
+- As duas divergências explícitas são base D3 `OUT (n),A` e DB `IN A,(n)`, ambas por WZ não atualizado no SMS_CORE.
+- A matriz registra duas entradas ED (77/7F) como NOP no ares e no SMS_CORE.
+
+**Ressalva de cobertura:** 1.452 linhas não são 1.452 instruções semanticamente independentes. DD/FD só enumeram 86 formas específicas; DDCB/FDCB cobrem espaços próprios; a base inclui prefixos. A matriz também não codifica NMI/INT, EI delay, HALT, reset e estado WZ como cenários de máquina. O CSV foi verificado quanto à estrutura e aos dados declarados; não foi executado um teste semântico independente para cada linha.
+
+### 9.2 VDP — matriz completa de 50 itens
+
+| # | Área | Item | Resultado declarado | Severidade |
+|---:|---|---|---|---|
+| 1 | Porta | $BE leitura (dados) | DIVERGE | média |
+| 2 | Porta | $BE escrita (dados) | IGUAL | — |
+| 3 | Porta | $BF leitura (status) | DIVERGE (bits 4..0: 0x00 vs 0x1F) | baixa |
+| 4 | Porta | $BF escrita, 1º byte | DIVERGE | média |
+| 5 | Porta | $BF escrita, 2º byte | IGUAL (exceto 1º byte) | — |
+| 6 | Porta | Espelhamento de portas | IGUAL em efeito | — |
+| 7 | Comando | code 0 (leitura VRAM) | IGUAL | — |
+| 8 | Comando | code 1 (escrita VRAM) | IGUAL | — |
+| 9 | Comando | code 2 (escrita registrador) | IGUAL | — |
+| 10 | Comando | code 3 (escrita CRAM) | IGUAL | — |
+| 11 | Registrador | R0 bit0 (sync externo) | AUSENTE (sem efeito visual) | baixa |
+| 12 | Registrador | R0 bit1 (M2) | DIVERGE | alta |
+| 13 | Registrador | R0 bit2 (M4) | IGUAL | — |
+| 14 | Registrador | R0 bit3 (sprite shift -8) | IGUAL | — |
+| 15 | Registrador | R0 bit4 (IRQ de linha) | DIVERGE | média |
+| 16 | Registrador | R0 bit5 (máscara coluna esq.) | DIVERGE | média |
+| 17 | Registrador | R0 bit6 (trava H-scroll linhas 0-15) | IGUAL | — |
+| 18 | Registrador | R0 bit7 (trava V-scroll colunas 24-31) | DIVERGE (SMS_CORE segue doc de hardware) | baixa |
+| 19 | Registrador | R1 bit0/1 (zoom/tamanho sprite) | IGUAL | — |
+| 20 | Registrador | R1 bit3 (M3) / bit4 (M1) | DIVERGE | alta |
+| 21 | Registrador | R1 bit5 (IRQ de frame) | DIVERGE | média |
+| 22 | Registrador | R1 bit6 (display) | DIVERGE | baixa |
+| 23 | Registrador | R2 (name table) | IGUAL (sem quirk SMS1) | baixa |
+| 24 | Registrador | R3/R4/R6 (TMS e sprite pattern) | IGUAL (Graphics II difere, ver abaixo) | — |
+| 25 | Registrador | R5 (SAT) | IGUAL | — |
+| 26 | Registrador | R7 (backdrop) | IGUAL | — |
+| 27 | Registrador | R8 (scroll X) | DIVERGE (escrita no meio da linha) | baixa |
+| 28 | Registrador | R9 (scroll Y) | DIVERGE | média |
+| 29 | Registrador | R10 (contador de linha) | DIVERGE | alta |
+| 30 | Temporização | Linha | DIVERGE (modelo) | — |
+| 31 | Temporização | Total de linhas | IGUAL | — |
+| 32 | Temporização | IRQ de frame (VBLANK) | DIVERGE (SMS_CORE 1 linha/228 T antes) | alta |
+| 33 | Temporização | IRQ de linha | DIVERGE (SMS_CORE 1 linha depois) | alta |
+| 34 | Contador | V-counter NTSC 192/224 | IGUAL | — |
+| 35 | Contador | V-counter PAL 192/224 | IGUAL | — |
+| 36 | Contador | V-counter PAL 240 | DIVERGE (ares fora por 1) | baixa |
+| 37 | Contador | H-counter | DIVERGE | baixa |
+| 38 | Vídeo | Mode 4 BG (tile 32B, flip, paleta, prioridade) | IGUAL | — |
+| 39 | Vídeo | Wrap vertical 192 linhas | IGUAL | — |
+| 40 | Vídeo | Pixels iniciais do fine-scroll | IGUAL | — |
+| 41 | Sprites | Mode 4 – 64 sprites, 8/linha, Y>=F0 negativo, D0 só em 192 | IGUAL | — |
+| 42 | Sprites | Overflow (flag + índice do 9º) | IGUAL | — |
+| 43 | Sprites | Modo 'unlocked' (sem limite) | EXTENSÃO do SMS_CORE | — |
+| 44 | Sprites | Colisão | IGUAL (exceto R0 bit5, R1 bit6) | — |
+| 45 | Legado | Graphics I | IGUAL | — |
+| 46 | Legado | Graphics II | DIVERGE | baixa |
+| 47 | Legado | Text e Multicolor | EXTENSÃO do SMS_CORE | — |
+| 48 | Legado | Sprites TMS (4/linha) | IGUAL | — |
+| 49 | Cor | CRAM 6 bits → RGB | DIVERGE (apresentação) | baixa |
+| 50 | Extras | Light Phaser, SegaScope 3D, anaglyph/side-by-side | EXTENSÃO | — |
+
+A contagem literal de resultados é: 21 `IGUAL`, 12 `DIVERGE`, 2 extensões rotuladas `EXTENSÃO do SMS_CORE`, 1 extensão rotulada `EXTENSÃO`, e 14 classificações qualificadas (por exemplo, divergência específica ou igualdade com ressalva). Portanto, não se deve resumir esta coluna como "20 divergências" sem explicitar a regra de agrupamento.
+
+### 9.3 R10 — reavaliação após inspeção do glue CPU↔VDP
+
+A linha 29 identifica R10 como divergência alta: a escrita em R10 altera `registers[10]` e, no código original, também atribui imediatamente `line_counter = first`. Já `complete_scanline()` recarrega o contador no underflow com o valor atual de R10; o wrap do quadro também recarrega R10.
+
+Em `SmsMachine::step()`, a sequência é: executar uma instrução Z80, avançar o VDP pelo total nominal de T-states da instrução, então consultar `vdp.interrupt_pending()` e atualizar `cpu.request_int(0xFF)`. Assim, a CPU só começa a aceitar/servir o IRQ em um passo posterior. Isso torna plausível que um handler altere R10 depois que o VDP já recarregou o contador no underflow.
+
+**Hipótese a testar:** uma escrita em R10 durante o handler deve alterar o valor da próxima recarga, sem reiniciar o countdown que já está em andamento. Esta hipótese foi promovida a teste de regressão na PR #274. A correção proposta remove somente a atribuição imediata em `write_control`; as recargas no underflow e no wrap do quadro permanecem. O resultado ainda depende do CI e de teste com ROM/trace; não é prova de comportamento físico.
+
+### 9.4 Contagens e limites desta revisão
+
+- VDP: 50/50 linhas lidas; todas as áreas e severidades preservadas.
+- Z80: 1.452/1.452 linhas lidas; estrutura, distribuição e divergências declaradas verificadas.
+- Ares: SHA de referência ainda não fixado; os valores `vs_ares` continuam sendo comparações declaradas no CSV, não reproduções independentes.
+- ROM de paralaxe: não executada; nenhum nome de jogo foi fornecido.
+- Build/testes locais desta revisão: NOT RUN. Os workflows da PR #274 são a evidência de CI aplicável ao código alterado.
