@@ -66,14 +66,14 @@ Os blobs consultados no GitHub foram:
 
 | Arquivo | Linhas retornadas | Blob SHA |
 |---|---:|---|
-| `native/sms_core/src/cpu.rs` | 3.488 | `a8d358e2c3e28064d204da96e281cd324811f1ee` |
-| `native/sms_core/src/alu.rs` | 199 | `84bb9ce76c4235533b3fb4888619301c06a01216` |
-| `native/sms_core/src/bus.rs` | 9 | `478a8983515ca5165b6cf10aef787cd541254391` |
-| `native/sms_core/src/vdp.rs` | 1.703 | `61676594275ad3c330437f4f1ede5793af3a0211` |
-| `native/z80_bus/src/lib.rs` | 356 | `c6f4ef5f52b30504209a1c5d07d2b397f9256026` |
-| `native/sms_core/src/machine.rs` | 464 | `2cda762a9fc2d0f4a1bdfa513e7d59fbeaaab890` |
+| `native/sms_core/src/cpu.rs` | 3.487 | `a8d358e2c3e28064d204da96e281cd324811f1ee` |
+| `native/sms_core/src/alu.rs` | 198 | `84bb9ce76c4235533b3fb4888619301c06a01216` |
+| `native/sms_core/src/bus.rs` | 8 | `478a8983515ca5165b6cf10aef787cd541254391` |
+| `native/sms_core/src/vdp.rs` | 1.702 | `61676594275ad3c330437f4f1ede5793af3a0211` |
+| `native/z80_bus/src/lib.rs` | 355 | `c6f4ef5f52b30504209a1c5d07d2b397f9256026` |
+| `native/sms_core/src/machine.rs` | 463 | `2cda762a9fc2d0f4a1bdfa513e7d59fbeaaab890` |
 
-O relatório fornecido informa 3.487/198/8/1.702 linhas para os quatro arquivos principais. A diferença uniforme de uma linha não é, isoladamente, evidência de alteração semântica: pode decorrer da convenção de contagem da quebra de linha final. O relatório original não fixa blob SHAs dos arquivos nem um SHA de commit do ares, portanto a reprodução histórica exata da comparação ainda precisa ser formalizada.
+A contagem normalizada de linhas reais confirma exatamente os valores do relatório para os quatro arquivos principais: 3.487/198/8/1.702. O relatório original não fixa blob SHAs dos arquivos nem um SHA de commit do ares, portanto a reprodução histórica exata da comparação ainda precisa ser formalizada.
 
 **Observação arquitetural importante:** `native/sms_core/src/bus.rs` é uma fachada de poucas linhas; os contratos `Z80BusEvent`, `Z80TStateSample` e snapshots estão em `native/z80_bus/src/lib.rs`. Uma auditoria de barramento que leia apenas `sms_core/src/bus.rs` é incompleta.
 
