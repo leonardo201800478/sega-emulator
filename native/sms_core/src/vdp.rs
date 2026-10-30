@@ -292,16 +292,6 @@ impl SmsVdp {
             }
             0x81 => {
                 let value = self.status;
-                eprintln!(
-                    "F{} L{} T{} STATUS={:#04x} LINE_PENDING={} R10={} COUNT={}",
-                    self.frame_number,
-                    self.scanline,
-                    self.tstates_into_line,
-                    value,
-                    self.line_irq_pending,
-                    self.registers[10],
-                    self.line_counter
-                );
                 self.status = 0;
                 self.line_irq_pending = false;
                 self.control_first = None;
@@ -374,14 +364,6 @@ impl SmsVdp {
                 self.light_h_counter = Some(0x08 + (self.light_x / 2) as u8);
             }
             if self.line_counter == 0 {
-                eprintln!(
-                    "F{} L{} T{} LINE-IRQ R10={} COUNT={}",
-                    self.frame_number,
-                    line,
-                    self.tstates_into_line,
-                    self.registers[10],
-                    self.line_counter
-                );
                 self.line_irq_pending = true;
                 self.line_counter = self.registers[10];
             } else {
@@ -390,14 +372,6 @@ impl SmsVdp {
         }
         self.scanline += 1;
         if self.scanline == height {
-            eprintln!(
-                "F{} L{} T{} VBLANK status_before={:#04x} line_pending={}",
-                self.frame_number,
-                self.scanline,
-                self.tstates_into_line,
-                self.status,
-                self.line_irq_pending
-            );
             if let Some(scroll_y) = self.pending_scroll_y.take() {
                 self.latched_scroll_y = scroll_y;
             }
@@ -440,12 +414,6 @@ impl SmsVdp {
             let register = usize::from(value & 0x0F);
             if register <= 10 {
                 self.registers[register] = first;
-                if matches!(register, 8..=10) {
-                    eprintln!(
-                        "F{} L{} T{} R{}={:#04x}",
-                        self.frame_number, self.scanline, self.tstates_into_line, register, first
-                    );
-                }
                 if register == 9 {
                     if self.scanline < self.visible_height() {
                         self.pending_scroll_y = Some(first);
