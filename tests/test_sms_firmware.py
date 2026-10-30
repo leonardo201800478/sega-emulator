@@ -249,8 +249,9 @@ def test_firmware_scanner_accepts_verified_sms_bios_from_dat(tmp_path):
 
     result = scan_sms_firmware_directory(tmp_path, catalog=RomCatalog(tmp_path))
 
-    assert result.files[0].region is SmsFirmwareRegion.JAPAN
-    assert result.files[0].status is SmsFirmwareFileStatus.VALID_JAPAN
+    firmware = next(item for item in result.files if item.path.name == "firmware.bin")
+    assert firmware.region is SmsFirmwareRegion.JAPAN
+    assert firmware.status is SmsFirmwareFileStatus.VALID_JAPAN
 
 
 def test_firmware_scanner_does_not_accept_an_ordinary_game_as_bios(tmp_path):
@@ -265,8 +266,9 @@ def test_firmware_scanner_does_not_accept_an_ordinary_game_as_bios(tmp_path):
 
     result = scan_sms_firmware_directory(tmp_path, catalog=RomCatalog(tmp_path))
 
-    assert result.files[0].region is None
-    assert result.files[0].status is SmsFirmwareFileStatus.NOT_FOUND
+    game = next(item for item in result.files if item.path.name == "game.bin")
+    assert game.region is None
+    assert game.status is SmsFirmwareFileStatus.NOT_FOUND
 
 
 def test_firmware_scanner_accepts_export_bios_from_dat_and_loads_it(tmp_path):
