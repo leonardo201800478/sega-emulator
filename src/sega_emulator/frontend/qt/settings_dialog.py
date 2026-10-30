@@ -354,7 +354,8 @@ class SettingsDialog(QDialog):
             "Ativado: carrega a BIOS regional antes de entregar o controle "
             "ao cartucho. "
             "Desativado: ignora a BIOS e inicia diretamente pelo cartucho. "
-            "A alteração vale no próximo carregamento ou reinício do jogo."
+            "A alteração vale no próximo carregamento de uma ROM SMS; para "
+            "aplicá-la ao jogo atual, feche e carregue a ROM novamente."
         )
         firmware_form.addRow(self.sms_bios_boot_enabled)
         scan_firmware = QPushButton("Verificar BIOS agora", firmware_group)
@@ -367,8 +368,8 @@ class SettingsDialog(QDialog):
             "A BIOS é opcional e deve ser obtida e instalada pelo usuário. "
             "O emulador identifica os arquivos por SHA-256, aceita nomes "
             "arbitrários e não baixa nem distribui firmware. A opção acima controla "
-            "se a BIOS será usada no próximo boot; a verificação manual continua "
-            "disponível mesmo quando o boot por BIOS está desativado."
+            "se a BIOS será usada no próximo carregamento de uma ROM SMS; a "
+            "verificação manual continua disponível mesmo com o boot desativado."
         )
         firmware_note.setWordWrap(True)
         firmware_form.addRow(firmware_note)
