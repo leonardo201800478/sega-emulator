@@ -115,3 +115,12 @@ O procedimento obrigatório para cada componente está definido em [Política pe
 5. Preparar desde o início contratos de tempo e eventos de barramento, mas reservar a campanha completa de temporização ciclo a ciclo para a integração da máquina SMS completa e funcional.
 
 A implementação, a validação funcional e a validação temporal são estados separados. Uma CPU que executa todos os opcodes ou retorna T-states nominais não é, por isso, semanticamente exaustiva nem ciclo a ciclo. O projeto usa no máximo três agentes de IA simultâneos; CI continua sendo validação automatizada independente. Todo runtime de hardware ativo é Rust; Python serve ao frontend Qt/PySide6 e à infraestrutura de testes/ferramentas.
+
+## SMS cartridge mappers and game-specific hardware
+
+The current SMS cartridge implementation and the staged plan for ROM-only cartridges, Sega SRAM, Codemasters, Korean/MSX/Nemesis/Janggun mappers, multicarts, FM audio and peripherals are documented in:
+
+- [SMS cartridge mapper and game-compatibility roadmap](architecture/sms-cartridge-mapper-roadmap.md)
+- [Special SMS mappers and known game families — research inventory](hardware/sms-special-mappers-research.md)
+
+The research inventory is not an implementation specification by itself. Use the roadmap's source hierarchy, explicit uncertainty labels, deterministic synthetic tests and license boundary before changing the Rust runtime.
