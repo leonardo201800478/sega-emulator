@@ -12,11 +12,11 @@ import json
 import time
 import zipfile
 import zlib
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event
-from typing import Callable
 
 SMS_ROM_SUFFIXES = frozenset({".sms", ".rom", ".bin"})
 ZIP_SUFFIX = ".zip"
