@@ -104,6 +104,10 @@ Próxima tarefa técnica: validação diferencial da CPU Z80 contra uma suíte d
 O modelo SN76489AN do SG-1000 tem um roadmap dedicado que separa lógica digital, reamostragem anti-aliasing e resposta analógica, além de registrar as diferenças necessárias para futuras variantes Master System, Game Gear e Mega Drive: [Roadmap de fidelidade do PSG e reutilização de hardware Sega](architecture/psg-fidelity-roadmap.md).
 
 
+## Catálogo de ROM, metadados e OSD SMS
+
+O modelo de identificação regional, catálogo técnico de hardware, metadados de save/FM/periféricos e OSD do Master System está especificado em [SMS ROM metadata, compatibilidade de hardware e OSD](architecture/sms-rom-metadata-and-osd.md). O documento está em estado DESIGN / NOT IMPLEMENTED e separa identidade da ROM, perfil de console, padrão de vídeo e estado de compatibilidade.
+
 ## Fluxo permanente de implementação e validação
 
 O procedimento obrigatório para cada componente está definido em [Política permanente de desenvolvimento, fidelidade e entrega](development-and-validation-policy.md). Resumo:
