@@ -93,7 +93,7 @@ A BIOS deve ser parte do caminho de inicialização do cartucho/máquina, não u
 - Os bits são ativos em nível baixo: bit 7 expansão, bit 6 cartucho, bit 5 card, bit 4 RAM interna, bit 3 BIOS e bit 2 I/O.
 - A BIOS fica habilitada no power-on. O core modela o perfil inicial `$F3` (BIOS ativa; cartucho e RAM interna desabilitados) e o perfil pós-BIOS de cartucho `$AB` (BIOS desabilitada; cartucho e RAM interna habilitados).
 - O fluxo sintético de aceitação habilita RAM mantendo BIOS, copia um pequeno stub para RAM, desabilita BIOS/habilita cartucho e transfere execução ao endereço zero do cartucho.
-- A BIOS de 8 KiB fornecida pelo usuário só ocupa o mapeamento integral de 8 KiB em `$0000-$1FFF`; os bytes restantes não são expostos por esse overlay. O slot do cartucho continua sujeito ao latch de memória.
+- A BIOS de 8 KiB fornecida pelo usuário é mapeada integralmente em `$0000-$1FFF`; fora dessa janela, o slot de cartucho continua sujeito ao latch de memória. O slot do cartucho continua sujeito ao latch de memória.
 - A arbitragem elétrica quando BIOS e cartucho são habilitados simultaneamente difere entre SMS e SMS 2 (precedência/AND nas referências consultadas); esse caso não é exercitado pelo fluxo de boot implementado, que mantém os slots mutuamente selecionados. A modelagem explícita dessa sobreposição permanece uma limitação, não um comportamento declarado como validado.
 
 **Não assumir que a BIOS deve estar sempre mapeada ou sempre obrigatória.** O perfil de inicialização e a transferência de controle devem respeitar o latch e a ordem observada nos documentos técnicos citados.
