@@ -122,7 +122,7 @@ Add only when a verified dump or a reproducible regression target exists:
 - 4 PAK All Action
 - Iratahack flash emulation
 
-The 128 Hap investigation should be the first candidate for this phase if its local SHA-256, size, bank layout and mapper writes confirm the Korean 2000 XOR 1F variant. The PR #262 hypothesis is not proof.
+The 128 Hap investigation should be the first candidate for this phase. The inspected Gearsystem database revision `6032d9d722707ce08ccac2462b021b77173ab1d4` lists `128 Hap (KR)` with CRC-32 `0xBA5EC0E3` and mapper `Korean 2000 XOR 1F`. This is a useful independent lead, not proof that the user's local dump is identical: confirm its exact size and SHA-256, reproduce the register writes, and test the mapper with synthetic banks before implementing it. The PR #262 hypothesis is not proof.
 
 ## 6. Game-specific hardware that is not a mapper
 
@@ -170,11 +170,11 @@ Primary hardware references:
 
 Independent implementation/reference database:
 
-- [Gearsystem game database](https://github.com/drhelius/Gearsystem/blob/master/src/game_db.h)
-- [Gearsystem Sega mapper reference](https://github.com/drhelius/Gearsystem/blob/master/src/SegaMemoryRule.cpp)
-- [Gearsystem Codemasters mapper reference](https://github.com/drhelius/Gearsystem/blob/master/src/CodemastersMemoryRule.cpp)
-- [Gearsystem mapper implementations](https://github.com/drhelius/Gearsystem/tree/master/src)
-- [Gearsystem license](https://github.com/drhelius/Gearsystem/blob/master/LICENSE) — GPL-3.0-or-later.
+- [Gearsystem game database](https://github.com/drhelius/Gearsystem/blob/6032d9d722707ce08ccac2462b021b77173ab1d4/src/game_db.h)
+- [Gearsystem Sega mapper reference](https://github.com/drhelius/Gearsystem/blob/6032d9d722707ce08ccac2462b021b77173ab1d4/src/SegaMemoryRule.cpp)
+- [Gearsystem Codemasters mapper reference](https://github.com/drhelius/Gearsystem/blob/6032d9d722707ce08ccac2462b021b77173ab1d4/src/CodemastersMemoryRule.cpp)
+- [Gearsystem mapper implementations](https://github.com/drhelius/Gearsystem/tree/6032d9d722707ce08ccac2462b021b77173ab1d4/src)
+- [Gearsystem license](https://github.com/drhelius/Gearsystem/blob/6032d9d722707ce08ccac2462b021b77173ab1d4/LICENSE) — GPL-3.0-or-later.
 
 Gearsystem is useful for cross-checking game database entries and observed mapper behavior. Its source is GPL-3.0-or-later; do not copy or port implementation code into this MIT-licensed project without a separate license/provenance review. Reimplement behavior independently from hardware documentation and tests.
 
