@@ -4,7 +4,7 @@
 //! FM synthesis and a cycle-exact machine scheduler remain separate milestones.
 
 use crate::SmsCoreError;
-use crate::bus::CpuBus;
+use crate::bus::{CpuBus, Z80InstructionTrace};
 use crate::cartridge::CartridgeImage;
 use crate::config::SmsMachineConfig;
 use crate::cpu::{CpuError, Z80};
@@ -58,6 +58,8 @@ pub struct SmsMachineBus<'a> {
     sega_scope: &'a mut SegaScopeState,
     vdp: &'a mut SmsVdp,
     pending_psg_writes: Option<&'a mut Vec<SmsPsgWriteEvent>>,
+    pending_instruction_traces: Option<&'a mut Vec<Z80InstructionTrace>>,
+    instruction_trace_limit: usize,
     tstate: u64,
 }
 
@@ -74,6 +76,8 @@ impl<'a> SmsMachineBus<'a> {
             sega_scope,
             vdp,
             pending_psg_writes: None,
+            pending_instruction_traces: None,
+            instruction_trace_limit: 0,
             tstate: 0,
         }
     }
@@ -84,6 +88,8 @@ impl<'a> SmsMachineBus<'a> {
         sega_scope: &'a mut SegaScopeState,
         vdp: &'a mut SmsVdp,
         pending_psg_writes: &'a mut Vec<SmsPsgWriteEvent>,
+        pending_instruction_traces: Option<&'a mut Vec<Z80InstructionTrace>>,
+        instruction_trace_limit: usize,
         tstate: u64,
     ) -> Self {
         Self {
@@ -92,12 +98,26 @@ impl<'a> SmsMachineBus<'a> {
             sega_scope,
             vdp,
             pending_psg_writes: Some(pending_psg_writes),
+            pending_instruction_traces,
+            instruction_trace_limit,
             tstate,
         }
     }
 }
 
 impl CpuBus for SmsMachineBus<'_> {
+    fn instruction_trace_enabled(&self) -> bool {
+        self.instruction_trace_limit > 0 && self.pending_instruction_traces.is_some()
+    }
+
+    fn observe_instruction_trace(&mut self, trace: Z80InstructionTrace) {
+        if let Some(traces) = self.pending_instruction_traces.as_mut()
+            && traces.len() < self.instruction_trace_limit
+        {
+            traces.push(trace);
+        }
+    }
+
     fn read_memory(&mut self, address: u16) -> u8 {
         self.memory.read(address)
     }
@@ -156,6 +176,8 @@ pub struct SmsMachine {
     psg: Sn76489,
     psg_tstate: u64,
     pending_psg_writes: Vec<SmsPsgWriteEvent>,
+    instruction_traces: Vec<Z80InstructionTrace>,
+    instruction_trace_limit: usize,
     sega_scope: SegaScopeState,
     config: SmsMachineConfig,
 }
@@ -211,6 +233,8 @@ impl SmsMachine {
             psg,
             psg_tstate: 0,
             pending_psg_writes: Vec::new(),
+            instruction_traces: Vec::new(),
+            instruction_trace_limit: 0,
             sega_scope: SegaScopeState::default(),
             config,
         })
@@ -230,6 +254,9 @@ impl SmsMachine {
     /// machine timing.
     pub fn step(&mut self) -> Result<u32, CpuError> {
         let start_tstate = self.cpu.total_tstates;
+        let trace_limit = self.instruction_trace_limit;
+        let trace_buffer = (trace_limit > self.instruction_traces.len())
+            .then_some(&mut self.instruction_traces);
         let cycles = {
             let mut bus = SmsMachineBus::with_psg_queue(
                 &mut self.memory,
@@ -237,6 +264,8 @@ impl SmsMachine {
                 &mut self.sega_scope,
                 &mut self.vdp,
                 &mut self.pending_psg_writes,
+                trace_buffer,
+                trace_limit,
                 start_tstate,
             );
             self.cpu.step(&mut bus)?
@@ -300,6 +329,25 @@ impl SmsMachine {
             input.light_phaser.trigger_pressed && player.is_some(),
         );
         Ok(())
+    }
+
+    /// Capture a bounded number of architectural instruction traces.
+    ///
+    /// Diagnostics are opt-in and disabled again after the requested number
+    /// of records has been collected. The limit is capped to avoid unbounded
+    /// memory use in frontend-driven sessions.
+    pub fn enable_instruction_trace(&mut self, max_instructions: usize) -> usize {
+        let limit = max_instructions.min(4096);
+        self.instruction_traces.clear();
+        self.instruction_traces.reserve(limit);
+        self.instruction_trace_limit = limit;
+        limit
+    }
+
+    /// Stop capture and return the collected deterministic instruction records.
+    pub fn drain_instruction_traces(&mut self) -> Vec<Z80InstructionTrace> {
+        self.instruction_trace_limit = 0;
+        std::mem::take(&mut self.instruction_traces)
     }
 
     pub fn cpu(&self) -> &Z80 {
