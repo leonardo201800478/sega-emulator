@@ -54,9 +54,7 @@ def test_known_hashes_classify_japan_and_shared_export_image(tmp_path):
     (tmp_path / "jp-with-arbitrary-name.data").write_bytes(b"J" * SMS_BIOS_SIZE)
     (tmp_path / "export.bin").write_bytes(b"E" * SMS_BIOS_SIZE)
 
-    with patch(
-        "sega_emulator.machine.sms_firmware.hashlib.sha256"
-    ) as sha256:
+    with patch("sega_emulator.machine.sms_firmware.hashlib.sha256") as sha256:
         sha256.side_effect = [
             type("Digest", (), {"hexdigest": lambda self: JP_SHA256})(),
             type("Digest", (), {"hexdigest": lambda self: EXPORT_SHA256})(),
@@ -69,13 +67,8 @@ def test_known_hashes_classify_japan_and_shared_export_image(tmp_path):
         by_name["jp-with-arbitrary-name.data"].status
         is SmsFirmwareFileStatus.VALID_JAPAN
     )
-    assert (
-        by_name["export.bin"].region is SmsFirmwareRegion.EXPORT_US_EU
-    )
-    assert (
-        by_name["export.bin"].status
-        is SmsFirmwareFileStatus.VALID_EXPORT_US_EU
-    )
+    assert by_name["export.bin"].region is SmsFirmwareRegion.EXPORT_US_EU
+    assert by_name["export.bin"].status is SmsFirmwareFileStatus.VALID_EXPORT_US_EU
 
 
 def test_export_and_japan_signatures_are_unique_catalog_entries():
@@ -84,10 +77,7 @@ def test_export_and_japan_signatures_are_unique_catalog_entries():
     from sega_emulator.machine import sms_firmware
 
     assert sms_firmware._KNOWN_BIOS[JP_SHA256] is SmsFirmwareRegion.JAPAN
-    assert (
-        sms_firmware._KNOWN_BIOS[EXPORT_SHA256]
-        is SmsFirmwareRegion.EXPORT_US_EU
-    )
+    assert sms_firmware._KNOWN_BIOS[EXPORT_SHA256] is SmsFirmwareRegion.EXPORT_US_EU
     assert len(sms_firmware._KNOWN_BIOS) == 2
 
 
@@ -99,18 +89,12 @@ def test_duplicate_recognized_hashes_are_not_reported_as_conflicts(tmp_path):
     data = b"\xA5" * SMS_BIOS_SIZE
     (tmp_path / "first.bin").write_bytes(data)
     (tmp_path / "renamed.rom").write_bytes(data)
-    with patch(
-        "sega_emulator.machine.sms_firmware.hashlib.sha256"
-    ) as sha256:
+    with patch("sega_emulator.machine.sms_firmware.hashlib.sha256") as sha256:
         sha256.return_value.hexdigest.return_value = EXPORT_SHA256
         result = scan_sms_firmware_directory(tmp_path)
 
     assert len(result.files) == 2
     assert all(
-        item.status is SmsFirmwareFileStatus.DUPLICATE_HASH
-        for item in result.files
+        item.status is SmsFirmwareFileStatus.DUPLICATE_HASH for item in result.files
     )
-    assert all(
-        item.region is SmsFirmwareRegion.EXPORT_US_EU
-        for item in result.files
-    )
+    assert all(item.region is SmsFirmwareRegion.EXPORT_US_EU for item in result.files)
