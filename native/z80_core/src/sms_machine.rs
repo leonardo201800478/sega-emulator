@@ -240,7 +240,7 @@ mod tests {
 
     #[test]
     fn draining_audio_does_not_change_cpu_timing() {
-        let mut machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa")).unwrap();
+        let mut machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa"), None).unwrap();
         for _ in 0..100 {
             machine.step().unwrap();
         }
@@ -251,7 +251,7 @@ mod tests {
 
     #[test]
     fn frame_runner_advances_native_vdp_and_exposes_frame_state() {
-        let mut machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa")).unwrap();
+        let mut machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa"), None).unwrap();
         assert_eq!(machine.frame_number(), 0);
         let steps = machine.run_frame(100_000).unwrap();
         assert!(steps > 0 && steps <= 100_000);
@@ -262,7 +262,7 @@ mod tests {
 
     #[test]
     fn controller_rejects_unknown_player() {
-        let mut machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa")).unwrap();
+        let mut machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa"), None).unwrap();
         assert!(
             machine
                 .set_controller(3, false, false, false, false, false, false)
