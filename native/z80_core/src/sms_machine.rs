@@ -263,7 +263,10 @@ mod tests {
 
     #[test]
     fn unsupported_region_is_rejected_without_initializing_python() {
-        assert!(sms_region_profile(Some("automatic"), false).is_err());
+        assert!(matches!(
+            build_sms_machine(vec![0; 16], false, Some("automatic"), None),
+            Err(SmsMachineBuildError::InvalidRegion(_))
+        ));
     }
 
     #[test]
