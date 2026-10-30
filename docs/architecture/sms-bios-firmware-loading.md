@@ -1,7 +1,7 @@
 # Projeto: carregamento nativo de BIOS do Sega Master System
 
 **Data:** 2026-10-29  
-**Base observada:** `main` em `b4a85c82b1d975a126f1dcbd3084dac51249b398`  
+**Base observada:** `main` em `fad306e7461878201fe7dcf447ffe7e81e417ff3`  
 **Status:** SPECIFICATION / IMPLEMENTATION_PENDING. Esta PR inicial fixa contratos, hashes e critérios; o runtime ainda não foi alterado.
 
 ## Objetivo
@@ -127,9 +127,22 @@ A BIOS deve ser parte do caminho de inicialização do cartucho/máquina, não u
 
 ## Status desta PR
 
-- **IMPLEMENTED:** especificação e hashes dos arquivos fornecidos.
-- **QUICK_PASS / SHORT_PASS / LONG_PASS:** NOT RUN — esta fatia é documental.
+### Fatia 1 — catálogo e scanner Python
+
+- **IMPLEMENTED:** metadados SHA-256 para JP e imagem compartilhada US/EU.
+- **IMPLEMENTED:** scanner explícito de diretório, sem varredura automática no startup.
+- **IMPLEMENTED:** nomes/extensões arbitrários, validação de 8 KiB, diagnóstico de leitura/tamanho e identificação por conteúdo.
+- **IMPLEMENTED:** detecção de múltiplos arquivos com o mesmo hash conhecido.
+- **IMPLEMENTED:** testes sintéticos que substituem o digest; nenhum binário de BIOS é armazenado no Git.
+- **QUICK_PASS / SHORT_PASS / LONG_PASS:** NOT RUN — ainda não há execução confirmada no SHA candidato.
+- **CI:** NOT RUN / sem checks publicados para o SHA candidato consultado.
+
+### Fatias pendentes
+
 - **INTEGRATION_PENDING:** SIM.
-- **Boot real com BIOS:** PENDING.
+- **Core Rust:** BIOS opcional, overlay de memória e latch de controle `$3E` ainda não implementados.
+- **PyO3/Qt:** caminho de firmware persistente, seleção regional e apresentação de diagnóstico ainda não implementados.
+- **Boot real com BIOS:** PENDING; requer validação local no Windows com arquivos do usuário.
+- **Compatibilidade sem BIOS:** precisa de regressão automatizada após integração do core.
 - **Distribuição de BIOS pelo projeto:** proibida/não pretendida.
-- **TEMPORAL_PASS:** não aplicável a esta fatia.
+- **TEMPORAL_PASS:** não aplicável a esta funcionalidade.
