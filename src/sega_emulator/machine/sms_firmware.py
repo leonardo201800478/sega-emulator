@@ -20,6 +20,7 @@ class SmsFirmwareRegion(StrEnum):
     """Known regional identity of an SMS BIOS image."""
 
     JAPAN = "japan"
+    EUROPE = "europe"
     EXPORT_US_EU = "export_us_eu"
 
 
@@ -27,6 +28,7 @@ class SmsFirmwareFileStatus(StrEnum):
     """Validation result for one file found in the selected directory."""
 
     VALID_JAPAN = "valid_japan"
+    VALID_EUROPE = "valid_europe"
     VALID_EXPORT_US_EU = "valid_export_us_eu"
     DUPLICATE_HASH = "duplicate_hash"
     NOT_FOUND = "not_found"
@@ -72,7 +74,7 @@ _KNOWN_BIOS: dict[str, SmsFirmwareRegion] = {
         SmsFirmwareRegion.EXPORT_US_EU
     ),
     "1eb16fc06ceaf05651d7cfd69d1713e6ddccc4349a511f6fd17e037d71f9d85b": (
-        SmsFirmwareRegion.EXPORT_US_EU
+        SmsFirmwareRegion.EUROPE
     ),
 }
 
@@ -98,10 +100,12 @@ def _sms_bios_region_from_dat_candidates(
         regions = set(candidate.regions)
         if regions and regions <= {"JPN"}:
             resolved.add(SmsFirmwareRegion.JAPAN)
+        elif regions == {"EUR"}:
+            # A Europe-only DAT identity may select the distinct v2.0 image.
+            resolved.add(SmsFirmwareRegion.EUROPE)
         elif regions and regions <= {"USA", "EUR", "BRA", "AUS"}:
-            # These territories are all non-Japanese SMS export markets.
-            # Brazil uses PAL-M timing, but that does not imply a European
-            # video profile; this mapping selects only the shared export BIOS.
+            # Multi-territory export releases use the shared v1.3 family.
+            # Brazil's PAL-M timing remains independent from BIOS identity.
             resolved.add(SmsFirmwareRegion.EXPORT_US_EU)
         else:
             return None
@@ -214,6 +218,8 @@ def scan_sms_firmware_directory(
             status = SmsFirmwareFileStatus.NOT_FOUND
         elif region is SmsFirmwareRegion.JAPAN:
             status = SmsFirmwareFileStatus.VALID_JAPAN
+        elif region is SmsFirmwareRegion.EUROPE:
+            status = SmsFirmwareFileStatus.VALID_EUROPE
         else:
             status = SmsFirmwareFileStatus.VALID_EXPORT_US_EU
         scanned.append(
@@ -265,13 +271,10 @@ def sms_bios_region_from_catalog(
     rom: bytes,
     catalog: RomCatalog,
 ) -> str | None:
-    """Resolve BIOS territory from an exact SMS DAT match when the ROM header is absent.
+    """Resolve BIOS territory from an exact SMS DAT match.
 
-    No-Intro release regions are not video-standard metadata. An exact,
-    unambiguous Japan-only DAT identity selects the Japanese BIOS family.
-    USA, Europe, Brazil, and Australia release territories select the shared
-    export BIOS family. Brazil still requires a separate PAL-M video profile.
-    Mixed, unknown, non-SMS, and uncatalogued identities return None.
+    Europe-only identities remain distinct from the shared USA/Europe v1.3
+    firmware. Mixed export identities are deliberately conservative.
     """
     if not isinstance(rom, bytes):
         raise TypeError("rom deve ser bytes.")
@@ -290,8 +293,11 @@ def sms_bios_region_from_catalog(
     )
     if region is SmsFirmwareRegion.JAPAN:
         return "japan"
+    if region is SmsFirmwareRegion.EUROPE:
+        return "europe"
     if region is SmsFirmwareRegion.EXPORT_US_EU:
-        return "usa"
+        regions = set(identification.regions)
+        return "brazil" if regions == {"BRA"} else "usa"
     return None
 
 
@@ -299,13 +305,11 @@ def sms_bios_region_for_rom(
     rom: bytes,
     catalog: RomCatalog,
 ) -> str | None:
-    """Resolve an automatic BIOS family from header and exact DAT evidence.
+    """Resolve BIOS territory from header and exact DAT evidence.
 
-    A recognized TMR SEGA header is the primary source. An exact SHA-1/MD5
-    DAT match may confirm it, refine the generic Export group, or expose a
-    conflict. Korean and Taiwan releases are deliberately not collapsed into
-    the Japanese or US/EU BIOS families because their console variants need
-    separate hardware profiles. DAT failures do not prevent header-based boot.
+    A recognized header distinguishes Japan from Export only. A unique Europe
+    DAT identity refines Export to Europe so the Europe v2.0 BIOS can be
+    preferred. Ambiguous/mixed identities retain the shared export default.
     """
     if not isinstance(rom, bytes):
         raise TypeError("rom deve ser bytes.")
@@ -331,12 +335,16 @@ def sms_bios_region_for_rom(
     if header_family == "japan":
         if regions & export_regions:
             return None
-        return header_family
+        return "japan"
 
     if header_family == "usa":
         if "JPN" in regions:
             return None
-        return header_family
+        if regions == {"EUR"}:
+            return "europe"
+        if regions == {"BRA"}:
+            return "brazil"
+        return "usa"
 
     dat_family = _sms_bios_region_from_dat_candidates(
         identification.candidates,
@@ -344,8 +352,10 @@ def sms_bios_region_for_rom(
     )
     if dat_family is SmsFirmwareRegion.JAPAN:
         return "japan"
+    if dat_family is SmsFirmwareRegion.EUROPE:
+        return "europe"
     if dat_family is SmsFirmwareRegion.EXPORT_US_EU:
-        return "usa"
+        return "brazil" if regions == {"BRA"} else "usa"
     return None
 
 
@@ -355,32 +365,44 @@ def load_sms_bios(
     *,
     catalog: RomCatalog | None = None,
 ) -> bytes | None:
-    """Load a known BIOS matching the active console territory.
+    """Load a known BIOS compatible with the resolved console territory.
 
-    Selection is content-based. The selected file is revalidated after the scan
-    to avoid loading bytes that changed between discovery and machine creation.
+    Europe prefers its distinct v2.0 image and falls back to the shared
+    USA/Europe v1.3 image. USA and Brazil never select the Europe-only image.
+    The selected file is revalidated immediately before machine creation.
     """
     if region not in {"japan", "usa", "europe", "brazil"}:
         raise ValueError("region deve ser usa, europe, japan ou brazil.")
-    # Brazil uses the export BIOS family, but its PAL-M video profile is
-    # resolved independently by the SMS machine configuration.
-    expected_region = (
-        SmsFirmwareRegion.JAPAN if region == "japan" else SmsFirmwareRegion.EXPORT_US_EU
-    )
+
+    if region == "japan":
+        preferred_regions = (SmsFirmwareRegion.JAPAN,)
+    elif region == "europe":
+        preferred_regions = (
+            SmsFirmwareRegion.EUROPE,
+            SmsFirmwareRegion.EXPORT_US_EU,
+        )
+    else:
+        preferred_regions = (SmsFirmwareRegion.EXPORT_US_EU,)
+
     scan = scan_sms_firmware_directory(directory, catalog=catalog)
-    selected = next(
-        (
-            item
-            for item in scan.files
-            if item.region is expected_region
-            and item.status
-            in {
-                SmsFirmwareFileStatus.VALID_JAPAN,
-                SmsFirmwareFileStatus.VALID_EXPORT_US_EU,
-            }
-        ),
-        None,
-    )
+    status_for_region = {
+        SmsFirmwareRegion.JAPAN: SmsFirmwareFileStatus.VALID_JAPAN,
+        SmsFirmwareRegion.EUROPE: SmsFirmwareFileStatus.VALID_EUROPE,
+        SmsFirmwareRegion.EXPORT_US_EU: SmsFirmwareFileStatus.VALID_EXPORT_US_EU,
+    }
+    selected = None
+    for expected_region in preferred_regions:
+        selected = next(
+            (
+                item
+                for item in scan.files
+                if item.region is expected_region
+                and item.status is status_for_region[expected_region]
+            ),
+            None,
+        )
+        if selected is not None:
+            break
     if selected is None:
         return None
 
