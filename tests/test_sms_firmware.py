@@ -7,6 +7,7 @@ from sega_emulator.machine.sms_firmware import (
     SmsFirmwareDirectoryStatus,
     SmsFirmwareFileStatus,
     SmsFirmwareRegion,
+    load_sms_bios,
     scan_sms_firmware_directory,
 )
 
@@ -95,7 +96,31 @@ def test_duplicate_recognized_hashes_are_not_reported_as_conflicts(tmp_path):
         result = scan_sms_firmware_directory(tmp_path)
 
     assert len(result.files) == 2
-    assert all(
-        item.status is SmsFirmwareFileStatus.DUPLICATE_HASH for item in result.files
-    )
+    assert result.files[0].status is SmsFirmwareFileStatus.VALID_EXPORT_US_EU
+    assert result.files[1].status is SmsFirmwareFileStatus.DUPLICATE_HASH
     assert all(item.region is SmsFirmwareRegion.EXPORT_US_EU for item in result.files)
+
+
+def test_load_sms_bios_selects_only_the_active_territory_and_revalidates(tmp_path):
+    from unittest.mock import patch
+
+    (tmp_path / "japan.bin").write_bytes(b"J" * SMS_BIOS_SIZE)
+    (tmp_path / "export.bin").write_bytes(b"E" * SMS_BIOS_SIZE)
+
+    def digest(data):
+        value = JP_SHA256 if data.startswith(b"J") else EXPORT_SHA256
+        return type("Digest", (), {"hexdigest": lambda self: value})()
+
+    with patch("sega_emulator.machine.sms_firmware.hashlib.sha256", side_effect=digest):
+        assert load_sms_bios(tmp_path, "japan") == b"J" * SMS_BIOS_SIZE
+        assert load_sms_bios(tmp_path, "usa") == b"E" * SMS_BIOS_SIZE
+        assert load_sms_bios(tmp_path, "europe") == b"E" * SMS_BIOS_SIZE
+
+
+def test_load_sms_bios_returns_none_when_only_incompatible_region_exists(tmp_path):
+    from unittest.mock import patch
+
+    (tmp_path / "japan.bin").write_bytes(b"J" * SMS_BIOS_SIZE)
+    with patch("sega_emulator.machine.sms_firmware.hashlib.sha256") as sha256:
+        sha256.return_value.hexdigest.return_value = JP_SHA256
+        assert load_sms_bios(tmp_path, "usa") is None
