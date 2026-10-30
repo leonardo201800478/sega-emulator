@@ -72,9 +72,7 @@ class FieldEvidence(Generic[T]):
             self.source is MetadataSource.UNKNOWN
             or self.confidence is MetadataConfidence.UNKNOWN
         ):
-            raise ValueError(
-                "Known values require an explicit source and confidence."
-            )
+            raise ValueError("Known values require an explicit source and confidence.")
         if not self.source_reference or not self.source_reference.strip():
             raise ValueError("Known values require a non-empty source reference.")
         if self.source_revision is not None and not self.source_revision.strip():
@@ -206,9 +204,7 @@ class SmsMapperMetadata:
 
     identifier: FieldEvidence[str] = field(default_factory=FieldEvidence.unknown)
     bank_count: FieldEvidence[int] = field(default_factory=FieldEvidence.unknown)
-    bank_size_bytes: FieldEvidence[int] = field(
-        default_factory=FieldEvidence.unknown
-    )
+    bank_size_bytes: FieldEvidence[int] = field(default_factory=FieldEvidence.unknown)
 
     def __post_init__(self) -> None:
         if self.identifier.value is not None and not self.identifier.value.strip():
@@ -229,6 +225,8 @@ class SmsHardwareMetadata:
     save: SmsSaveMetadata = field(default_factory=SmsSaveMetadata)
 
     def __post_init__(self) -> None:
+        if not isinstance(self.peripherals, tuple):
+            raise TypeError("peripherals must be a tuple.")
         kinds = [item.peripheral for item in self.peripherals]
         if len(kinds) != len(set(kinds)):
             raise ValueError("A peripheral may appear only once per hardware record.")
@@ -252,7 +250,9 @@ class SmsHardwareRecord:
         if self.sha1 is None and self.md5 is None:
             raise ValueError("A hardware record requires SHA-1 or MD5.")
         if self.sha1 is not None and not _SHA1_PATTERN.fullmatch(self.sha1):
-            raise ValueError("sha1 must be a lowercase 40-character hexadecimal digest.")
+            raise ValueError(
+                "sha1 must be a lowercase 40-character hexadecimal digest."
+            )
         if self.md5 is not None and not _MD5_PATTERN.fullmatch(self.md5):
             raise ValueError("md5 must be a lowercase 32-character hexadecimal digest.")
 
@@ -275,11 +275,23 @@ class SmsHardwareIdentification:
     candidates: tuple[SmsHardwareRecord, ...] = ()
 
     def __post_init__(self) -> None:
+        if not isinstance(self.candidates, tuple):
+            raise TypeError("candidates must be a tuple.")
         if self.status is SmsHardwareMatchStatus.MATCHED:
             if self.metadata is None or len(self.candidates) != 1:
                 raise ValueError("A matched result requires exactly one record.")
         elif self.metadata is not None:
             raise ValueError("Ambiguous/unknown results cannot expose a winner.")
+        elif (
+            self.status is SmsHardwareMatchStatus.AMBIGUOUS
+            and len(self.candidates) < 2
+        ):
+            raise ValueError("An ambiguous result requires multiple candidates.")
+        elif (
+            self.status is SmsHardwareMatchStatus.NOT_CATALOGUED
+            and self.candidates
+        ):
+            raise ValueError("An unknown result cannot contain candidates.")
 
 
 class SmsHardwareCatalog:
