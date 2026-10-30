@@ -422,9 +422,6 @@ impl SmsVdp {
                         self.pending_scroll_y = None;
                     }
                 }
-                if register == 10 {
-                    self.line_counter = first;
-                }
             }
             self.cram_write = false;
             return;
@@ -955,6 +952,36 @@ mod tests {
         assert!(v.interrupt_pending());
         let _ = v.read_port(0xBF);
         assert!(!v.interrupt_pending());
+    }
+
+    #[test]
+    fn mid_irq_r10_write_changes_next_reload_not_active_countdown() {
+        let mut v = SmsVdp::default();
+        reg(&mut v, 0, 0x14);
+        reg(&mut v, 10, 63);
+        // Model the counter after frame-start initialization. The first
+        // line IRQ occurs after the 64th visible scanline.
+        v.line_counter = 63;
+        v.advance(228 * 64);
+        assert!(v.interrupt_pending());
+
+        // The interrupt handler changes the reload value. The countdown
+        // already reloaded at underflow and must remain at 63 for this period.
+        let _ = v.read_port(0xBF);
+        reg(&mut v, 10, 47);
+        assert_eq!(v.line_counter, 63);
+
+        v.advance(228 * 63);
+        assert!(!v.interrupt_pending());
+        v.advance(228);
+        assert!(v.interrupt_pending());
+
+        // The new reload value applies at the next underflow: 48 lines.
+        let _ = v.read_port(0xBF);
+        v.advance(228 * 47);
+        assert!(!v.interrupt_pending());
+        v.advance(228);
+        assert!(v.interrupt_pending());
     }
 
     #[test]
