@@ -27,9 +27,63 @@ const RAM_START: u16 = 0xC000;
 const BIOS_POWER_ON_CONTROL: u8 = 0xE0;
 const CARTRIDGE_BOOT_CONTROL: u8 = 0xAB;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MapperKind {
+    Sega,
+    Codemasters,
+}
+
+fn is_bcd(value: u8) -> bool {
+    value >> 4 <= 9 && value & 0x0F <= 9
+}
+
+/// Detect the Codemasters header at $7FE0 without relying on the Sega checksum.
+///
+/// The bank count, BCD build timestamp, checksum/complement pair and zeroed
+/// reserved bytes form a narrow signature. This avoids treating arbitrary
+/// homebrew metadata (for example SDSC) as a Codemasters mapper.
+fn has_codemasters_header(rom: &[u8]) -> bool {
+    if rom.len() < 0x8000 || !rom.len().is_multiple_of(BANK_SIZE) {
+        return false;
+    }
+
+    let header = &rom[0x7FE0..0x7FF0];
+    if usize::from(header[0]) != rom.len() / BANK_SIZE
+        || !header[1..6].iter().copied().all(is_bcd)
+        || header[10..].iter().any(|value| *value != 0)
+    {
+        return false;
+    }
+
+    let day = (header[1] >> 4) * 10 + (header[1] & 0x0F);
+    let month = (header[2] >> 4) * 10 + (header[2] & 0x0F);
+    let hour = (header[4] >> 4) * 10 + (header[4] & 0x0F);
+    let minute = (header[5] >> 4) * 10 + (header[5] & 0x0F);
+    if !(1..=31).contains(&day)
+        || !(1..=12).contains(&month)
+        || hour > 23
+        || minute > 59
+    {
+        return false;
+    }
+
+    let checksum = u16::from_le_bytes([header[6], header[7]]);
+    let complement = u16::from_le_bytes([header[8], header[9]]);
+    checksum.wrapping_add(complement) == 0
+}
+
+fn detect_mapper(rom: &CartridgeImage) -> MapperKind {
+    if has_codemasters_header(rom.bytes()) {
+        MapperKind::Codemasters
+    } else {
+        MapperKind::Sega
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SmsMemory {
     rom: CartridgeImage,
+    mapper: MapperKind,
     mapper_control: u8,
     bank_registers: [u8; 3],
     work_ram: [u8; RAM_SIZE],
@@ -59,6 +113,12 @@ impl SmsMemory {
             });
         }
 
+        let mapper = detect_mapper(&rom);
+        let bank_registers = match mapper {
+            MapperKind::Sega => [0, 1, 2],
+            MapperKind::Codemasters => [0, 1, 0],
+        };
+
         // Power-on with BIOS: BIOS and work RAM enabled; cartridge, card and
         // expansion slots disabled. Without BIOS, emulate the normal post-BIOS
         // cartridge profile so legacy direct boot remains available.
@@ -69,8 +129,9 @@ impl SmsMemory {
         };
         Ok(Self {
             rom,
+            mapper,
             mapper_control: 0,
-            bank_registers: [0, 1, 2],
+            bank_registers,
             work_ram: [0; RAM_SIZE],
             bios: bios.map(Vec::into_boxed_slice),
             control_port,
@@ -92,8 +153,13 @@ impl SmsMemory {
         // are enabled. SMS 2 has a distinct wired-AND behavior and is not the
         // hardware profile modeled by this core.
         match address {
-            0x0000..=0x03FF => self.read_rom_offset(usize::from(address)),
-            0x0400..=0x3FFF => self.read_bank(self.bank_registers[0], usize::from(address)),
+            0x0000..=0x3FFF => {
+                if self.mapper == MapperKind::Sega && address <= 0x03FF {
+                    self.read_rom_offset(usize::from(address))
+                } else {
+                    self.read_bank(self.bank_registers[0], usize::from(address))
+                }
+            }
             0x4000..=0x7FFF => {
                 self.read_bank(self.bank_registers[1], usize::from(address) - 0x4000)
             }
@@ -121,12 +187,20 @@ impl SmsMemory {
         // The mapper registers belong to the cartridge slot. A BIOS-only
         // power-on profile must not mutate a disabled cartridge mapper.
         if self.control_port & 0x40 == 0 {
-            match address {
-                0xFFFC => self.mapper_control = value,
-                0xFFFD => self.bank_registers[0] = value,
-                0xFFFE => self.bank_registers[1] = value,
-                0xFFFF => self.bank_registers[2] = value,
-                _ => {}
+            match self.mapper {
+                MapperKind::Sega => match address {
+                    0xFFFC => self.mapper_control = value,
+                    0xFFFD => self.bank_registers[0] = value,
+                    0xFFFE => self.bank_registers[1] = value,
+                    0xFFFF => self.bank_registers[2] = value,
+                    _ => {}
+                },
+                MapperKind::Codemasters => match address {
+                    0x0000..=0x3FFF => self.bank_registers[0] = value,
+                    0x4000..=0x7FFF => self.bank_registers[1] = value,
+                    0x8000..=0xBFFF => self.bank_registers[2] = value,
+                    _ => {}
+                },
             }
         }
     }
@@ -319,6 +393,79 @@ mod tests {
                 max_size: MAX_ROM_SIZE,
             }
         );
+    }
+
+    fn codemasters_rom(bank_count: usize) -> CartridgeImage {
+        let mut bytes = vec![0; bank_count * BANK_SIZE];
+        for bank in 0..bank_count {
+            let start = bank * BANK_SIZE;
+            bytes[start..start + BANK_SIZE].fill(bank as u8);
+        }
+
+        let header = [
+            bank_count as u8,
+            0x31,
+            0x08,
+            0x93,
+            0x10,
+            0x59,
+            0xC5,
+            0x1B,
+            0x3B,
+            0xE4,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ];
+        bytes[0x7FE0..0x7FF0].copy_from_slice(&header);
+        bytes[0x7FF0..0x7FF8].copy_from_slice(b"TMR SEGA");
+        CartridgeImage::new(bytes).unwrap()
+    }
+
+    #[test]
+    fn codemasters_header_selects_its_three_slot_mapper() {
+        let mut memory = SmsMemory::new(codemasters_rom(16)).unwrap();
+
+        assert_eq!(memory.bank_registers, [0, 1, 0]);
+        assert_eq!(memory.read(0x0000), 0);
+        assert_eq!(memory.read(0x4000), 1);
+        assert_eq!(memory.read(0x8000), 0);
+
+        // Codemasters has no fixed first 1 KiB and decodes writes throughout
+        // each 16 KiB slot, unlike the standard Sega mapper.
+        memory.write(0x0000, 5);
+        memory.write(0x4000, 6);
+        memory.write(0x8000, 7);
+
+        assert_eq!(memory.read(0x0000), 5);
+        assert_eq!(memory.read(0x4000), 6);
+        assert_eq!(memory.read(0x8000), 7);
+    }
+
+    #[test]
+    fn codemasters_mapper_registers_stay_disabled_during_bios_power_on() {
+        let mut memory =
+            SmsMemory::with_bios(codemasters_rom(16), Some(vec![0xA5; 0x2000])).unwrap();
+
+        memory.write(0x4000, 7);
+
+        assert_eq!(memory.bank_registers, [0, 1, 0]);
+        assert_eq!(memory.control_port, BIOS_POWER_ON_CONTROL);
+    }
+
+    #[test]
+    fn invalid_codemasters_metadata_keeps_the_sega_mapper() {
+        let mut rom = codemasters_rom(16);
+        let mut bytes = rom.bytes().to_vec();
+        bytes[0x7FE9] ^= 0x01;
+        rom = CartridgeImage::new(bytes).unwrap();
+        let memory = SmsMemory::new(rom).unwrap();
+
+        assert_eq!(memory.mapper, MapperKind::Sega);
+        assert_eq!(memory.selected_banks(), [0, 1, 2]);
     }
 
     #[test]
