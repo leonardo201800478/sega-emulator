@@ -243,6 +243,10 @@ A persistência em arquivo deverá ficar na fronteira da aplicação (`SaveRamSt
 
 O mapper deve ser identificado independentemente da região. Usar o roadmap de mappers existente como base de pesquisa e implementar variantes em fatias independentes.
 
+A família de BIOS é resolvida separadamente do padrão de vídeo. A política de identificação DAT implementada na PR #282 usa correspondências SHA-1/MD5 inequívocas: `JPN` seleciona a família japonesa; `USA`, `EUR`, `BRA` e `AUS` selecionam a imagem compartilhada da família de exportação US/EU. Assim, uma ROM Brazil ou Europe + Brazil pode selecionar a BIOS de exportação, mas isso **não** seleciona Europe/PAL. Brazil continua exigindo perfil PAL-M, com temporização NTSC-like. Regiões coreanas e combinações mistas Japan + Export não escolhem automaticamente uma família.
+
+O cabeçalho TMR SEGA continua sendo a primeira fonte para o grupo Japan/Export; DAT exato complementa a escolha quando o cabeçalho não resolve a família. DAT de release não substitui o perfil de console nem prova o padrão de vídeo.
+
 A política de BIOS deve considerar o perfil real de console e a identidade do cartucho. ROM não identificada conforme §4.2 sempre inicia sem BIOS, mesmo se uma BIOS local existir. Não escolher firmware por nome de arquivo ou por região presumida.
 
 ## 6. OSD — contrato visual e funcional
