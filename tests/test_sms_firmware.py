@@ -77,10 +77,7 @@ def test_known_hashes_classify_japan_and_export_revisions(tmp_path):
     assert by_name["japan.sms"].region is SmsFirmwareRegion.JAPAN
     assert by_name["japan.sms"].status is SmsFirmwareFileStatus.VALID_JAPAN
     assert by_name["usa-v1.3.sms"].region is SmsFirmwareRegion.EXPORT_US_EU
-    assert (
-        by_name["usa-v1.3.sms"].status
-        is SmsFirmwareFileStatus.VALID_EXPORT_US_EU
-    )
+    assert by_name["usa-v1.3.sms"].status is SmsFirmwareFileStatus.VALID_EXPORT_US_EU
     assert by_name["europe-v2.0.sms"].region is SmsFirmwareRegion.EUROPE
     assert by_name["europe-v2.0.sms"].status is SmsFirmwareFileStatus.VALID_EUROPE
 
@@ -90,10 +87,7 @@ def test_known_bios_signatures_map_to_their_compatible_families():
 
     assert sms_firmware._KNOWN_BIOS[JP_SHA256] is SmsFirmwareRegion.JAPAN
     assert sms_firmware._KNOWN_BIOS[EXPORT_SHA256] is SmsFirmwareRegion.EXPORT_US_EU
-    assert (
-        sms_firmware._KNOWN_BIOS[EUROPE_V2_SHA256]
-        is SmsFirmwareRegion.EUROPE
-    )
+    assert sms_firmware._KNOWN_BIOS[EUROPE_V2_SHA256] is SmsFirmwareRegion.EUROPE
     assert len(sms_firmware._KNOWN_BIOS) == 3
 
 
