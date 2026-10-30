@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-
 from sega_emulator.machine.sms_firmware import (
     SMS_BIOS_SIZE,
     SmsFirmwareDirectoryStatus,
@@ -14,16 +12,6 @@ from sega_emulator.machine.sms_firmware import (
 
 JP_SHA256 = "67846e26764bd862f19179294347f7353a4166b62ac4198a5ec32933b7da486e"
 EXPORT_SHA256 = "477617917a12a30f9f43844909dc2de6e6a617430f5c9a36306c86414a670d50"
-
-
-def _fixture_for_digest(digest: str, prefix: bytes) -> bytes:
-    """Create test-only content matching no copyrighted firmware image.
-
-    The metadata constants are tested independently; this helper is not used to
-    manufacture a matching digest or to simulate a BIOS binary.
-    """
-    assert hashlib.sha256(prefix).hexdigest() != digest
-    return prefix
 
 
 def test_unconfigured_and_missing_directories_are_reported(tmp_path):
