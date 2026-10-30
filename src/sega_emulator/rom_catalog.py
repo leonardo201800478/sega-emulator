@@ -39,6 +39,32 @@ CUE_FILE_PATTERN = re.compile(
 )
 
 
+
+_DAT_REGION_NAME_ALIASES = {
+    "japan": "JPN",
+    "usa": "USA",
+    "europe": "EUR",
+    "brazil": "BRA",
+    "korea": "KOR",
+    "taiwan": "TAI",
+    "australia": "AUS",
+    "asia": "ASI",
+    "portugal": "POR",
+    "world": "WORLD",
+}
+
+
+def _regions_from_game_name(game_name: str) -> tuple[str, ...]:
+    """Extract only recognized No-Intro territory labels from title groups."""
+    regions = {
+        code
+        for group in re.findall(r"\(([^()]*)\)", game_name)
+        for label in group.split(",")
+        if (code := _DAT_REGION_NAME_ALIASES.get(label.strip().casefold()))
+    }
+    return tuple(sorted(regions))
+
+
 @dataclass(frozen=True, slots=True)
 class DatRom:
     system: str
@@ -121,7 +147,7 @@ def _read_dat(path: Path) -> list[DatRom]:
                     if (region := release.get("region", "").strip())
                 }
             )
-        )
+        ) or _regions_from_game_name(game_name)
         for rom in game.findall("rom"):
             try:
                 size = int(rom.get("size", ""))
