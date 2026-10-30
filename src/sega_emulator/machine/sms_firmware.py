@@ -72,6 +72,12 @@ _KNOWN_BIOS: dict[str, SmsFirmwareRegion] = {
 }
 
 
+def _read_sms_bios_candidate(path: Path) -> bytes:
+    """Read at most one byte beyond the supported BIOS size."""
+    with path.open("rb") as stream:
+        return stream.read(SMS_BIOS_SIZE + 1)
+
+
 def scan_sms_firmware_directory(
     directory: str | Path | None,
 ) -> SmsFirmwareScan:
@@ -102,8 +108,7 @@ def scan_sms_firmware_directory(
     recognized: dict[str, list[int]] = {}
     for candidate in candidates:
         try:
-            data = candidate.read_bytes()
-            size = len(data)
+            size = candidate.stat().st_size
             if size != SMS_BIOS_SIZE:
                 scanned.append(
                     SmsFirmwareFile(
@@ -113,6 +118,19 @@ def scan_sms_firmware_directory(
                         None,
                         SmsFirmwareFileStatus.INVALID_FILE,
                         f"Expected {SMS_BIOS_SIZE} bytes; found {size}.",
+                    )
+                )
+                continue
+            data = _read_sms_bios_candidate(candidate)
+            if len(data) != SMS_BIOS_SIZE:
+                scanned.append(
+                    SmsFirmwareFile(
+                        candidate,
+                        len(data),
+                        None,
+                        None,
+                        SmsFirmwareFileStatus.INVALID_FILE,
+                        f"Expected {SMS_BIOS_SIZE} bytes; found {len(data)}.",
                     )
                 )
                 continue
@@ -142,16 +160,88 @@ def scan_sms_firmware_directory(
             recognized.setdefault(digest, []).append(len(scanned) - 1)
 
     for indexes in recognized.values():
-        if len(indexes) > 1:
-            for index in indexes:
-                item = scanned[index]
-                scanned[index] = SmsFirmwareFile(
-                    item.path,
-                    item.size,
-                    item.sha256,
-                    item.region,
-                    SmsFirmwareFileStatus.DUPLICATE_HASH,
-                    "Another file has the same recognized firmware hash.",
-                )
+        # Keep the first deterministic match selectable; only later paths are
+        # duplicates of that same validated firmware image.
+        for index in indexes[1:]:
+            item = scanned[index]
+            scanned[index] = SmsFirmwareFile(
+                item.path,
+                item.size,
+                item.sha256,
+                item.region,
+                SmsFirmwareFileStatus.DUPLICATE_HASH,
+                "Another file has the same recognized firmware hash.",
+            )
 
     return SmsFirmwareScan(root, SmsFirmwareDirectoryStatus.READY, tuple(scanned))
+
+
+def sms_bios_region_from_cartridge(rom: bytes) -> str | None:
+    """Infer SMS BIOS territory from a known Sega cartridge header.
+
+    The high nibble at header byte 15 identifies SMS Japan (3) or SMS Export
+    (4). Unknown/missing headers deliberately return None so automatic mode
+    never selects a potentially incompatible BIOS by guesswork.
+    """
+    if not isinstance(rom, bytes):
+        raise TypeError("rom deve ser bytes.")
+    for offset in (0x7FF0, 0x3FF0, 0x1FF0):
+        end = offset + 16
+        if len(rom) < end or rom[offset : offset + 8] != b"TMR SEGA":
+            continue
+        region_code = rom[offset + 15] >> 4
+        if region_code == 0x3:
+            return "japan"
+        if region_code == 0x4:
+            return "usa"
+        return None
+    return None
+
+
+def load_sms_bios(
+    directory: str | Path | None,
+    region: str,
+) -> bytes | None:
+    """Load a known BIOS matching the active console territory.
+
+    Selection is content-based. The selected file is revalidated after the scan
+    to avoid loading bytes that changed between discovery and machine creation.
+    """
+    if region not in {"japan", "usa", "europe"}:
+        raise ValueError("region deve ser usa, europe ou japan.")
+    expected_region = (
+        SmsFirmwareRegion.JAPAN if region == "japan" else SmsFirmwareRegion.EXPORT_US_EU
+    )
+    scan = scan_sms_firmware_directory(directory)
+    selected = next(
+        (
+            item
+            for item in scan.files
+            if item.region is expected_region
+            and item.status
+            in {
+                SmsFirmwareFileStatus.VALID_JAPAN,
+                SmsFirmwareFileStatus.VALID_EXPORT_US_EU,
+            }
+        ),
+        None,
+    )
+    if selected is None:
+        return None
+
+    try:
+        data = _read_sms_bios_candidate(selected.path)
+    except OSError as exc:
+        raise ValueError(
+            f"Não foi possível carregar a BIOS SMS '{selected.path.name}': "
+            f"{exc.__class__.__name__}."
+        ) from exc
+    if (
+        len(data) != SMS_BIOS_SIZE
+        or hashlib.sha256(data).hexdigest() != selected.sha256
+    ):
+        raise ValueError(
+            f"A BIOS SMS '{selected.path.name}' mudou após a verificação; "
+            "execute uma nova varredura."
+        )
+    return data

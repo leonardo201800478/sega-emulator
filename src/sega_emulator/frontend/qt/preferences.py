@@ -34,6 +34,7 @@ class FrontendPreferences:
     video_scale: int = 3
     recent_roms: tuple[str, ...] = ()
     controller_config: str = ""
+    firmware_directory: str = ""
     audio_enabled: bool = True
     diagnostics_enabled: bool = False
     cpu_core: str = "rust"
@@ -69,6 +70,8 @@ class FrontendPreferences:
             raise ValueError("recent_roms must contain non-empty path strings")
         if not isinstance(self.controller_config, str):
             raise ValueError("controller_config must be serialized as text")
+        if not isinstance(self.firmware_directory, str):
+            raise ValueError("firmware_directory must be a path string")
         if self.cpu_core != "rust":
             raise ValueError("cpu_core must be 'rust'; the Qt runtime is Rust-only")
         if self.audio_sample_rate not in (22_050, 44_100, 48_000):
@@ -152,6 +155,10 @@ class FrontendPreferences:
         controller_config = store.value("controller_config", "")
         if not isinstance(controller_config, str):
             controller_config = ""
+        firmware_directory = store.value("firmware_directory", "")
+        if not isinstance(firmware_directory, str):
+            firmware_directory = ""
+        firmware_directory = firmware_directory.strip()
         audio_enabled = _bool_value(
             store.value("audio_enabled", defaults.audio_enabled),
             defaults.audio_enabled,
@@ -232,6 +239,7 @@ class FrontendPreferences:
             video_scale=scale,
             recent_roms=recent,
             controller_config=controller_config,
+            firmware_directory=firmware_directory,
             audio_enabled=audio_enabled,
             diagnostics_enabled=diagnostics_enabled,
             cpu_core=cpu_core,
@@ -257,6 +265,7 @@ class FrontendPreferences:
         store.setValue("video_scale", self.video_scale)
         store.setValue("recent_roms", list(self.recent_roms))
         store.setValue("controller_config", self.controller_config)
+        store.setValue("firmware_directory", self.firmware_directory)
         store.setValue("audio_enabled", self.audio_enabled)
         store.setValue("diagnostics_enabled", False)
         store.setValue("cpu_core", self.cpu_core)
@@ -293,6 +302,7 @@ class FrontendPreferences:
             video_scale=self.video_scale,
             recent_roms=recent[:MAX_RECENT_ROMS],
             controller_config=self.controller_config,
+            firmware_directory=self.firmware_directory,
             audio_enabled=self.audio_enabled,
             diagnostics_enabled=self.diagnostics_enabled,
             cpu_core=self.cpu_core,

@@ -21,6 +21,10 @@ const MAX_BANKS: usize = 64;
 const MAX_ROM_SIZE: usize = BANK_SIZE * MAX_BANKS;
 const RAM_SIZE: usize = 0x2000;
 const RAM_START: u16 = 0xC000;
+// SMS memory-control latch values grounded in the documented power-on and
+// post-BIOS cartridge profiles (Charles MacDonald hardware notes).
+const BIOS_POWER_ON_CONTROL: u8 = 0xF3;
+const CARTRIDGE_BOOT_CONTROL: u8 = 0xAB;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SmsMemory {
@@ -28,10 +32,18 @@ pub struct SmsMemory {
     mapper_control: u8,
     bank_registers: [u8; 3],
     work_ram: [u8; RAM_SIZE],
+    bios: Option<Box<[u8]>>,
+    control_port: u8,
 }
 
 impl SmsMemory {
     pub fn new(rom: CartridgeImage) -> Result<Self, SmsCoreError> {
+        Self::with_bios(rom, None)
+    }
+
+    /// Construct memory with an optional user-supplied 8 KiB SMS BIOS.
+    /// Only the first 1 KiB is overlaid at $0000-$03FF while BIOS is enabled.
+    pub fn with_bios(rom: CartridgeImage, bios: Option<Vec<u8>>) -> Result<Self, SmsCoreError> {
         if rom.len() > MAX_ROM_SIZE {
             return Err(SmsCoreError::RomTooLargeForSegaMapper {
                 size: rom.len(),
@@ -39,19 +51,42 @@ impl SmsMemory {
             });
         }
 
-        // Deterministic startup profile matching the documented 315-5235
-        // power-up values. Other Sega mapper revisions may leave registers
-        // undefined or reset them differently; model selection is not yet exposed.
+        if bios.as_ref().is_some_and(|image| image.len() != 0x2000) {
+            return Err(SmsCoreError::InvalidBiosSize {
+                size: bios.as_ref().map_or(0, Vec::len),
+                expected: 0x2000,
+            });
+        }
+
+        // Power-on with BIOS: BIOS slot enabled, cartridge/card/expansion and
+        // work RAM disabled. Without BIOS, emulate the normal post-BIOS
+        // cartridge profile so legacy direct boot remains available.
+        let control_port = if bios.is_some() {
+            BIOS_POWER_ON_CONTROL
+        } else {
+            CARTRIDGE_BOOT_CONTROL
+        };
         Ok(Self {
             rom,
             mapper_control: 0,
             bank_registers: [0, 1, 2],
             work_ram: [0; RAM_SIZE],
+            bios: bios.map(Vec::into_boxed_slice),
+            control_port,
         })
     }
 
     #[inline]
     pub fn read(&self, address: u16) -> u8 {
+        if address <= 0x03FF && self.bios.is_some() && self.control_port & 0x08 == 0 {
+            return self
+                .bios
+                .as_ref()
+                .map_or(0xFF, |bios| bios[usize::from(address)]);
+        }
+        if address <= 0xBFFF && self.control_port & 0x40 != 0 {
+            return 0xFF;
+        }
         match address {
             0x0000..=0x03FF => self.read_rom_offset(usize::from(address)),
             0x0400..=0x3FFF => self.read_bank(self.bank_registers[0], usize::from(address)),
@@ -61,7 +96,13 @@ impl SmsMemory {
             0x8000..=0xBFFF => {
                 self.read_bank(self.bank_registers[2], usize::from(address) - 0x8000)
             }
-            0xC000..=0xFFFF => self.work_ram[usize::from(address - RAM_START) & (RAM_SIZE - 1)],
+            0xC000..=0xFFFF => {
+                if self.control_port & 0x10 != 0 {
+                    0xFF
+                } else {
+                    self.work_ram[usize::from(address - RAM_START) & (RAM_SIZE - 1)]
+                }
+            }
         }
     }
 
@@ -69,16 +110,20 @@ impl SmsMemory {
     pub fn write(&mut self, address: u16, value: u8) {
         // Work RAM is mirrored through FFFF. Mapper writes update both the
         // mapper register and the RAM mirror at the same logical address.
-        if address >= RAM_START {
+        if address >= RAM_START && self.control_port & 0x10 == 0 {
             self.work_ram[usize::from(address - RAM_START) & (RAM_SIZE - 1)] = value;
         }
 
-        match address {
-            0xFFFC => self.mapper_control = value,
-            0xFFFD => self.bank_registers[0] = value,
-            0xFFFE => self.bank_registers[1] = value,
-            0xFFFF => self.bank_registers[2] = value,
-            _ => {}
+        // The mapper registers belong to the cartridge slot. A BIOS-only
+        // power-on profile must not mutate a disabled cartridge mapper.
+        if self.control_port & 0x40 == 0 {
+            match address {
+                0xFFFC => self.mapper_control = value,
+                0xFFFD => self.bank_registers[0] = value,
+                0xFFFE => self.bank_registers[1] = value,
+                0xFFFF => self.bank_registers[2] = value,
+                _ => {}
+            }
         }
     }
 
@@ -125,6 +170,28 @@ impl SmsMemory {
 
     pub fn mapper_control(&self) -> u8 {
         self.mapper_control
+    }
+
+    /// Apply the SMS memory-control latch written through I/O port $3E.
+    #[inline]
+    pub fn write_control_port(&mut self, value: u8) {
+        self.control_port = value;
+    }
+
+    pub fn reset_control_port(&mut self) {
+        self.control_port = if self.bios.is_some() {
+            BIOS_POWER_ON_CONTROL
+        } else {
+            CARTRIDGE_BOOT_CONTROL
+        };
+    }
+
+    pub fn control_port(&self) -> u8 {
+        self.control_port
+    }
+
+    pub fn bios_enabled(&self) -> bool {
+        self.bios.is_some() && self.control_port & 0x08 == 0
     }
 }
 
@@ -246,6 +313,89 @@ mod tests {
             SmsCoreError::RomTooLargeForSegaMapper {
                 size: MAX_ROM_SIZE + 1,
                 max_size: MAX_ROM_SIZE,
+            }
+        );
+    }
+
+    #[test]
+    fn bios_overlays_only_the_first_kib_and_can_be_disabled() {
+        let rom = patterned_rom(2);
+        let mut bios = vec![0xA5; 0x2000];
+        bios[0x03FF] = 0x5A;
+        let mut memory = SmsMemory::with_bios(rom, Some(bios)).unwrap();
+        assert!(memory.bios_enabled());
+        assert_eq!(memory.read(0x0000), 0xA5);
+        assert_eq!(memory.read(0x03FF), 0x5A);
+        assert_eq!(
+            memory.read(0x0400),
+            0xFF,
+            "cartridge slot is disabled in the BIOS power-on profile"
+        );
+        memory.write_control_port(0x08);
+        assert!(!memory.bios_enabled());
+        assert_eq!(memory.read(0x0000), 0x00);
+        assert_eq!(memory.read(0x0400), 0x00);
+    }
+
+    #[test]
+    fn bios_power_on_profile_matches_sms_slot_and_ram_latches() {
+        let memory = SmsMemory::with_bios(patterned_rom(1), Some(vec![0xA5; 0x2000])).unwrap();
+        assert_eq!(memory.control_port(), 0xF3);
+        assert!(memory.bios_enabled());
+        assert_eq!(memory.read(0x0000), 0xA5);
+        assert_eq!(memory.read(0x0400), 0xFF);
+        assert_eq!(memory.read(0xC000), 0xFF);
+    }
+
+    #[test]
+    fn cartridge_boot_profile_matches_post_bios_slot_and_ram_latches() {
+        let memory = SmsMemory::new(patterned_rom(1)).unwrap();
+        assert_eq!(memory.control_port(), 0xAB);
+        assert!(!memory.bios_enabled());
+        assert_eq!(memory.read(0x0000), 0x00);
+        assert_eq!(memory.read(0xC000), 0x00);
+    }
+
+    #[test]
+    fn cartridge_slot_disable_returns_open_bus_without_disabling_work_ram() {
+        let mut memory = SmsMemory::with_bios(patterned_rom(1), Some(vec![0xA5; 0x2000])).unwrap();
+        memory.write_control_port(0x40);
+        assert_eq!(memory.read(0x0400), 0xFF);
+        assert_eq!(memory.read(0xC000), 0x00);
+        assert_eq!(memory.read(0x0000), 0xA5);
+    }
+
+    #[test]
+    fn disabled_cartridge_slot_does_not_receive_mapper_register_writes() {
+        let mut memory = SmsMemory::with_bios(patterned_rom(3), Some(vec![0xA5; 0x2000])).unwrap();
+        assert_eq!(memory.selected_banks(), [0, 1, 2]);
+        memory.write(0xFFFD, 0x07);
+        assert_eq!(memory.selected_banks(), [0, 1, 2]);
+
+        memory.write_control_port(0xAB);
+        memory.write(0xFFFD, 0x07);
+        assert_eq!(memory.selected_banks(), [0x07, 1, 2]);
+    }
+
+    #[test]
+    fn memory_control_port_can_disable_and_reenable_work_ram() {
+        let mut memory = SmsMemory::new(patterned_rom(1)).unwrap();
+        memory.write(0xC000, 0x5A);
+        memory.write_control_port(0x18);
+        assert_eq!(memory.read(0xC000), 0xFF);
+        memory.write(0xC000, 0xA5);
+        memory.write_control_port(0x08);
+        assert_eq!(memory.read(0xC000), 0x5A);
+    }
+
+    #[test]
+    fn rejects_bios_with_wrong_size() {
+        let error = SmsMemory::with_bios(patterned_rom(1), Some(vec![0x00; 0x400])).unwrap_err();
+        assert_eq!(
+            error,
+            SmsCoreError::InvalidBiosSize {
+                size: 0x400,
+                expected: 0x2000
             }
         );
     }

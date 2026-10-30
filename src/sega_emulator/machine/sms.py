@@ -15,15 +15,19 @@ from sega_emulator.rom_loader import LoadedRom
 
 
 class SMSMachine:
-    """Instruction-stepping SMS machine with native PSG audio output."""
+    """Instruction-stepping SMS machine with native PSG and optional BIOS boot."""
 
     cpu_core = "rust"
 
-    def __init__(self, cartridge_rom: bytes, *, region: str = "usa") -> None:
+    def __init__(
+        self, cartridge_rom: bytes, *, region: str = "usa", bios: bytes | None = None
+    ) -> None:
         if not isinstance(cartridge_rom, bytes):
             raise TypeError("cartridge_rom deve ser bytes.")
         if not cartridge_rom:
             raise ValueError("A ROM do Master System não pode estar vazia.")
+        if bios is not None and (not isinstance(bios, bytes) or len(bios) != 0x2000):
+            raise ValueError("A BIOS SMS deve conter exatamente 8192 bytes.")
         if region not in {"usa", "europe", "japan"}:
             raise ValueError("region deve ser usa, europe ou japan.")
 
@@ -38,7 +42,8 @@ class SMSMachine:
 
         self.cartridge_rom = cartridge_rom
         self.region = region
-        self.native_machine = NativeSMSMachine(cartridge_rom, region=region)
+        self.bios = bios
+        self.native_machine = NativeSMSMachine(cartridge_rom, region=region, bios=bios)
 
     @property
     def cpu(self):
@@ -47,6 +52,10 @@ class SMSMachine:
     @property
     def vdp(self):
         return _SMSVdpSnapshot(self.native_machine)
+
+    @property
+    def bios_enabled(self) -> bool:
+        return bool(self.native_machine.bios_enabled)
 
     @property
     def total_instructions(self) -> int:

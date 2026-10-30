@@ -8,6 +8,7 @@ from sega_emulator.machine.sms_region import (
     normalize_sms_region_preference,
     sms_frame_period_seconds,
     sms_region_candidates,
+    sms_region_candidates_for_rom,
 )
 
 
@@ -39,3 +40,30 @@ def test_pal_frame_pacing_is_slower_than_ntsc():
 def test_unknown_concrete_region_is_rejected():
     with pytest.raises(ValueError, match="region"):
         sms_frame_period_seconds("auto")
+
+
+def test_automatic_region_candidates_follow_trusted_sms_header():
+    japanese = bytearray(0x8000)
+    japanese[0x7FF0:0x7FF8] = b"TMR SEGA"
+    japanese[0x7FFF] = 0x3C
+    export = bytearray(0x8000)
+    export[0x7FF0:0x7FF8] = b"TMR SEGA"
+    export[0x7FFF] = 0x4C
+
+    assert sms_region_candidates_for_rom("auto", bytes(japanese)) == ("japan",)
+    assert sms_region_candidates_for_rom("auto", bytes(export)) == ("usa", "europe")
+
+
+def test_unknown_header_keeps_legacy_auto_order_without_guessing():
+    assert sms_region_candidates_for_rom("auto", b"\x00" * 0x8000) == (
+        "usa",
+        "europe",
+        "japan",
+    )
+
+
+def test_manual_region_preference_overrides_cartridge_header():
+    japanese = bytearray(0x8000)
+    japanese[0x7FF0:0x7FF8] = b"TMR SEGA"
+    japanese[0x7FFF] = 0x3C
+    assert sms_region_candidates_for_rom("europe", bytes(japanese)) == ("europe",)
