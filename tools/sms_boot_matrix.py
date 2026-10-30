@@ -224,7 +224,7 @@ def main() -> int:
         "--rom",
         action="append",
         required=True,
-        help="Path to one .sms/.rom/.bin file or ZIP containing exactly one ROM; repeat per game.",
+        help="Path to one SMS ROM or a ZIP with exactly one ROM; repeat per game.",
     )
     parser.add_argument(
         "--bios-dir", required=True, help="Directory containing the three BIOS files."

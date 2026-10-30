@@ -462,7 +462,7 @@ def run(initial_path: Path | None = None) -> None:
                 )
         hold_pressed = any("hold" in actions[player] for player in (1, 2))
         if hold_pressed and not hold_was_pressed:
-            # SG-1000 Hold and the SMS console Pause switch are edge-triggered NMI inputs.
+            # SG-1000 Hold and SMS Pause are edge-triggered NMI inputs.
             machine.request_nmi()
         hold_was_pressed = hold_pressed
 
