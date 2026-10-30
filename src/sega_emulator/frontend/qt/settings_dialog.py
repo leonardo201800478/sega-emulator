@@ -351,7 +351,8 @@ class SettingsDialog(QDialog):
         )
         self.sms_bios_boot_enabled.setChecked(preferences.sms_bios_boot_enabled)
         self.sms_bios_boot_enabled.setToolTip(
-            "Ativado: carrega a BIOS regional antes de entregar o controle ao cartucho. "
+            "Ativado: carrega a BIOS regional antes de entregar o controle "
+            "ao cartucho. "
             "Desativado: ignora a BIOS e inicia diretamente pelo cartucho. "
             "A alteração vale no próximo carregamento ou reinício do jogo."
         )
