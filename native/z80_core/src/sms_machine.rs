@@ -7,6 +7,23 @@ use sega_sms_core::{ControllerButtons, SmsMachine, SmsMachineConfig, VideoStanda
 
 use crate::audio::NativePcmResampler;
 
+/// Resolve the territory and video standard without constructing Python errors.
+///
+/// Keeping this policy independent of PyO3 also makes it safe to unit-test in
+/// Rust's parallel test harness, where no Python interpreter is guaranteed.
+fn sms_region_profile(
+    region: Option<&str>,
+    pal: bool,
+) -> Result<(sega_sms_core::Territory, VideoStandard), &'static str> {
+    let region = region.unwrap_or(if pal { "europe" } else { "usa" });
+    match region {
+        "usa" => Ok((sega_sms_core::Territory::Export, VideoStandard::Ntsc)),
+        "europe" => Ok((sega_sms_core::Territory::Export, VideoStandard::Pal)),
+        "japan" => Ok((sega_sms_core::Territory::Japan, VideoStandard::Ntsc)),
+        _ => Err("region deve ser usa, europe ou japan"),
+    }
+}
+
 /// Thin Python boundary; the SMS machine, PSG and sample generation stay in Rust.
 #[pyclass(module = "sega_z80_core")]
 pub struct NativeSMSMachine {
@@ -21,17 +38,8 @@ impl NativeSMSMachine {
     fn new(rom: Vec<u8>, pal: bool, region: Option<&str>, bios: Option<Vec<u8>>) -> PyResult<Self> {
         // Keep the legacy positional `pal` argument compatible; an explicit
         // region profile takes precedence and also selects territory.
-        let region = region.unwrap_or(if pal { "europe" } else { "usa" });
-        let (territory, video_standard) = match region {
-            "usa" => (sega_sms_core::Territory::Export, VideoStandard::Ntsc),
-            "europe" => (sega_sms_core::Territory::Export, VideoStandard::Pal),
-            "japan" => (sega_sms_core::Territory::Japan, VideoStandard::Ntsc),
-            _ => {
-                return Err(pyo3::exceptions::PyValueError::new_err(
-                    "region deve ser usa, europe ou japan",
-                ));
-            }
-        };
+        let (territory, video_standard) =
+            sms_region_profile(region, pal).map_err(pyo3::exceptions::PyValueError::new_err)?;
         let config = SmsMachineConfig {
             territory,
             video_standard,
@@ -234,8 +242,8 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_region_is_rejected() {
-        assert!(NativeSMSMachine::new(vec![0; 16], false, Some("automatic"), None).is_err());
+    fn unsupported_region_is_rejected_without_initializing_python() {
+        assert!(sms_region_profile(Some("automatic"), false).is_err());
     }
 
     #[test]
