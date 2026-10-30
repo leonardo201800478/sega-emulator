@@ -59,8 +59,8 @@ impl SmsMemory {
             });
         }
 
-        // Power-on with BIOS: BIOS slot enabled, cartridge/card/expansion and
-        // work RAM disabled. Without BIOS, emulate the normal post-BIOS
+        // Power-on with BIOS: BIOS and work RAM enabled; cartridge, card and
+        // expansion slots disabled. Without BIOS, emulate the normal post-BIOS
         // cartridge profile so legacy direct boot remains available.
         let control_port = if bios.is_some() {
             BIOS_POWER_ON_CONTROL
@@ -79,15 +79,18 @@ impl SmsMemory {
 
     #[inline]
     pub fn read(&self, address: u16) -> u8 {
-        if address <= 0x1FFF && self.bios.is_some() && self.control_port & 0x08 == 0 {
-            return self
-                .bios
-                .as_ref()
-                .map_or(0xFF, |bios| bios[usize::from(address)]);
-        }
         if address <= 0xBFFF && self.control_port & 0x40 != 0 {
+            if address <= 0x1FFF && self.bios.is_some() && self.control_port & 0x08 == 0 {
+                return self
+                    .bios
+                    .as_ref()
+                    .map_or(0xFF, |bios| bios[usize::from(address)]);
+            }
             return 0xFF;
         }
+        // On the original SMS, the cartridge wins if both cartridge and BIOS
+        // are enabled. SMS 2 has a distinct wired-AND behavior and is not the
+        // hardware profile modeled by this core.
         match address {
             0x0000..=0x03FF => self.read_rom_offset(usize::from(address)),
             0x0400..=0x3FFF => self.read_bank(self.bank_registers[0], usize::from(address)),
@@ -357,11 +360,11 @@ mod tests {
     }
 
     #[test]
-    fn bios_has_priority_when_bios_and_cartridge_slots_are_both_enabled() {
+    fn cartridge_has_priority_when_bios_and_cartridge_slots_are_both_enabled() {
         let mut memory =
             SmsMemory::with_bios(patterned_rom(1), Some(vec![0xA5; 0x2000])).unwrap();
         memory.write_control_port(0xA0); // BIOS + cartridge + work RAM enabled.
-        assert_eq!(memory.read(0x0000), 0xA5);
+        assert_eq!(memory.read(0x0000), 0x00);
         assert_eq!(memory.read(0x2000), 0x00);
     }
 
