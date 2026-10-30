@@ -109,9 +109,7 @@ def discover_sms_rom_targets(
         if suffix in SMS_ROM_SUFFIXES:
             try:
                 size = path.stat().st_size
-                targets.append(
-                    SmsRomAuditTarget(path, path.name, declared_size=size)
-                )
+                targets.append(SmsRomAuditTarget(path, path.name, declared_size=size))
             except OSError as exc:
                 targets.append(
                     SmsRomAuditTarget(
@@ -125,8 +123,7 @@ def discover_sms_rom_targets(
                         (index, info)
                         for index, info in enumerate(archive.infolist())
                         if not info.is_dir()
-                        and Path(info.filename).suffix.casefold()
-                        in SMS_ROM_SUFFIXES
+                        and Path(info.filename).suffix.casefold() in SMS_ROM_SUFFIXES
                     ]
                     if not candidates:
                         targets.append(
@@ -162,9 +159,7 @@ def read_sms_rom_target(target: SmsRomAuditTarget) -> bytes:
     if target.read_error:
         raise ValueError(target.read_error)
     if target.declared_size is not None and target.declared_size > MAX_SMS_ROM_SIZE:
-        raise ValueError(
-            f"ROM excede o limite atual de {MAX_SMS_ROM_SIZE} bytes."
-        )
+        raise ValueError(f"ROM excede o limite atual de {MAX_SMS_ROM_SIZE} bytes.")
     if target.member_index is not None:
         with zipfile.ZipFile(target.source_path) as archive:
             infos = archive.infolist()
@@ -259,9 +254,7 @@ def run_sms_rom_audit(
                 if time.perf_counter() >= deadline:
                     status = "TIMEOUT"
                     error_type = "PerRomTimeout"
-                    details = (
-                        f"Limite de {timeout_seconds:.2f}s atingido entre frames."
-                    )
+                    details = f"Limite de {timeout_seconds:.2f}s atingido entre frames."
                     break
                 machine.run_frame(max_steps=max_steps_per_frame)
                 current_frame = int(machine.vdp.frame_number)
@@ -305,7 +298,13 @@ def run_sms_rom_audit(
                             "A CPU/VDP executou, mas não houve evidência visual "
                             "suficiente para confirmar o boot."
                         )
-        except (OSError, ValueError, zipfile.BadZipFile, RuntimeError, zlib.error) as exc:
+        except (
+            OSError,
+            ValueError,
+            zipfile.BadZipFile,
+            RuntimeError,
+            zlib.error,
+        ) as exc:
             error_type = type(exc).__name__
             details = str(exc)
             status = (
