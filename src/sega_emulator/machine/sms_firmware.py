@@ -170,6 +170,28 @@ def scan_sms_firmware_directory(
     return SmsFirmwareScan(root, SmsFirmwareDirectoryStatus.READY, tuple(scanned))
 
 
+def sms_bios_region_from_cartridge(rom: bytes) -> str | None:
+    """Infer SMS BIOS territory from a known Sega cartridge header.
+
+    The high nibble at header byte 15 identifies SMS Japan (3) or SMS Export
+    (4). Unknown/missing headers deliberately return None so automatic mode
+    never selects a potentially incompatible BIOS by guesswork.
+    """
+    if not isinstance(rom, bytes):
+        raise TypeError("rom deve ser bytes.")
+    for offset in (0x7FF0, 0x3FF0, 0x1FF0):
+        end = offset + 16
+        if len(rom) < end or rom[offset : offset + 8] != b"TMR SEGA":
+            continue
+        region_code = rom[offset + 15] >> 4
+        if region_code == 0x3:
+            return "japan"
+        if region_code == 0x4:
+            return "usa"
+        return None
+    return None
+
+
 def load_sms_bios(
     directory: str | Path | None,
     region: str,
