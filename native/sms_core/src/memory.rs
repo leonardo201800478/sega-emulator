@@ -357,7 +357,7 @@ mod tests {
     }
 
     #[test]
-    fn cartridge_slot_disable_returns_open_bus_without_disabling_work_ram {
+    fn cartridge_slot_disable_returns_open_bus_without_disabling_work_ram() {
         let mut memory = SmsMemory::with_bios(patterned_rom(1), Some(vec![0xA5; 0x2000])).unwrap();
         memory.write_control_port(0x40);
         assert_eq!(memory.read(0x0400), 0xFF);
