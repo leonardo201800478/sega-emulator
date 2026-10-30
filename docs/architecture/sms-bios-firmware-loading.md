@@ -114,11 +114,13 @@ A BIOS deve ser parte do caminho de inicialização do cartucho/máquina, não u
 
 A inicialização SMS prioriza a preferência regional manual e, em seguida, um
 cabeçalho `TMR SEGA` válido. Se ambos não resolverem o território, consulta o
-`RomCatalog` por hash e tamanho. Somente correspondências inequívocas com regiões
-exclusivamente `JPN` ou exclusivamente `USA`/`EUR` podem selecionar a família de
-BIOS japonesa ou de exportação, respectivamente. Entradas mistas, regiões sem
-mapeamento comprovado, ROMs desconhecidas e colisões entre sistemas não escolhem
-BIOS automaticamente. A seleção de firmware exige correspondência SHA-1 ou MD5;
+`RomCatalog` por hash e tamanho. Somente correspondências inequívocas com região exclusivamente `JPN`
+selecionam a família de BIOS japonesa. Regiões de exportação `USA`, `EUR`,
+`BRA` e `AUS` selecionam a família compartilhada de BIOS de exportação
+US/EU. Brazil é território de exportação com padrão PAL-M; essa classificação
+seleciona somente a família da BIOS e não escolhe temporização Europe/PAL.
+Entradas mistas (por exemplo, Japan + Brazil), regiões sem mapeamento comprovado,
+ROMs desconhecidas e colisões entre sistemas não escolhem BIOS automaticamente. A seleção de firmware exige correspondência SHA-1 ou MD5;
 o fallback CRC-32 + tamanho do catálogo não é forte o bastante para escolher BIOS. Os DATs identificam releases; não determinam PAL/NTSC nem
 substituem a preferência de vídeo do console.
 
