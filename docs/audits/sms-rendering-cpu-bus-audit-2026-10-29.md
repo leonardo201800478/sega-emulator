@@ -132,3 +132,115 @@ A solução deve preservar o executor Z80 funcional e ampliar o contrato de form
 - Testes Rust: `NOT RUN` — nenhuma alteração de runtime; não foi executado build local nem solicitado workflow específico nesta entrega documental.
 - Teste em emulador: `NOT RUN`.
 - `TEMPORAL_PASS`: não declarado.
+
+
+## 9. Inventário detalhado dos caminhos temporais Z80
+
+**Revisão de código:** branch `audit/sms-cpu-bus-rendering-2026-10-29`, head auditado `2dc984e5277d8f7d132226279655f4dcebb3ecc1`.  
+**Fontes de implementação:** `native/sms_core/src/cpu.rs`, `native/z80_bus/src/lib.rs`, `native/sms_core/src/machine.rs`.  
+**Escopo:** classificação estrutural dos caminhos existentes; não é uma declaração de cobertura ciclo a ciclo.
+
+### 9.1 Matriz de cobertura
+
+| Caminho | Implementação observada | Temporização disponível | Estado da evidência |
+|---|---|---|---|
+| Opcode fetch / M1 | `fetch_opcode → fetch8 → CpuBus::read_memory`; incrementa R | Contagem nominal; M1/T-state samples somente nos ED block instrumentados | Sem trace geral |
+| Immediate/operand fetch | `fetch8/fetch16`, leituras de memória sequenciais | Incluído na duração nominal da instrução | Sem timestamp/evento geral |
+| Base register-only | Decodificação base, operações internas de registrador/ALU | Contagem nominal por caminho | Sem sequência de M-cycles |
+| Base memory read/write | `read_register/write_register` e acessos diretos em instruções | Contagem nominal por caminho | Sem posição temporal do acesso |
+| Stack PUSH/POP/CALL/RET/RST | `push16/pop16` e caminhos explícitos de pilha | Leituras/escritas funcionais e ciclos nominais | Ordem funcional observável; sem timestamp de barramento |
+| EX (SP),HL | Duas leituras e duas escritas diretas na pilha | Duração nominal | Sem fases temporais por acesso |
+| CB | `fetch_opcode` do segundo byte e `execute_cb`; memória via registrador código 6 | Duração nominal | Sem trace temporal CB |
+| ED não bloco | `execute_ed`: I/R, 16-bit loads, ADC/SBC HL, IN/OUT (C), RETN/RETI, IM, RRD/RLD etc. | Duração nominal | Sem trace temporal geral ED |
+| ED block transfer | LDI/LDD/LDIR/LDDR | Eventos e samples instrumentados | Trace de subconjunto |
+| ED block compare | CPI/CPD/CPIR/CPDR | Eventos e samples instrumentados | Trace de subconjunto |
+| ED block I/O | INI/IND/INIR/INDR/OUTI/OUTD/OTIR/OTDR | Acesso funcional a porta/memória e ciclos nominais | Sem trace temporal no teste especializado |
+| DD/FD | `execute_indexed`, prefixos repetidos, IX/IY, deslocamentos e operações indexadas | Contagem nominal, incluindo custo extra de prefixos | Sem trace temporal DD/FD |
+| DDCB/FDCB | Fetch displacement/opcode e `execute_indexed_cb` | Contagem nominal | Sem trace temporal indexado-CB |
+| HALT | Passo retido, incrementa R e soma 4 T-states | 4 T-states agregados por passo | Sem ciclo M1/refresh observado |
+| NMI | Limpa HALT, salva PC, vetor 0x0066 | 11 T-states agregados | Sem sequência de acknowledge/stack temporizada |
+| INT IM 0 | Injeta byte fornecido pelo barramento e executa decoder; acrescenta 2 T-states | Contagem nominal derivada do opcode injetado | Sem acknowledge IORQ/M1 temporal |
+| INT IM 1 | Salva PC e vetor 0x0038 | 13 T-states agregados | Sem sequência temporal |
+| INT IM 2 | Salva PC, lê vetor em (I:data_bus) e vetor+1 | 19 T-states agregados | Leituras funcionais sem timestamp |
+| I/O base `IN A,(n)/OUT (n),A` | `read_port/write_port` com porta formada por A e imediato | 11 T-states nominais | Sem evento I/O temporal |
+| I/O ED `IN r,(C)/OUT (C),r` e block I/O | Acesso funcional por `CpuBus` | 12 T-states nominais para IN/OUT (C); bloco usa seus caminhos próprios | Sem trace IORQ/M-cycle |
+| WAIT / contention | Não há retorno de wait states pelo contrato `CpuBus` atual | Não modelado como extensão do ciclo | Pendente |
+| Refresh e pinos físicos | R é atualizado; amostras do corpus têm fase Refresh inferida | Somente no subconjunto instrumentado e perfil simplificado | Não equivale a amostragem física completa |
+
+### 9.2 Interpretação da matriz
+
+- A CPU possui cobertura funcional ampla e vários testes semânticos, mas o retorno de `step()` continua sendo uma duração nominal agregada.
+- Os acessos diretos ao `CpuBus` preservam a ordem programática das leituras/escritas, mas não informam quando cada acesso ocorre dentro dos T-states da instrução.
+- Os eventos `Z80BusEvent` e `Z80TStateSample` são observacionais. A própria documentação de `native/z80_bus/src/lib.rs` afirma que não são callback do scheduler nem amostragem física completa.
+- A instrumentação temporal especializada é acionada no caminho ED e cobre LDI/LDD/LDIR/LDDR/CPI/CPD/CPIR/CPDR. Não se deve inferir cobertura para ED block I/O, CB, DD/FD, interrupções ou instruções base.
+- A implementação de IM 0 executa o byte de acknowledge como opcode injetado; isso não demonstra que o ciclo de acknowledge físico esteja temporizado ou que seus sinais estejam modelados.
+- A matriz classifica o que o código oferece. Não certifica a exatidão de cada valor nominal de ciclos para todas as combinações de prefixo, interrupção ou estado.
+
+### 9.3 Manual Zilog: aplicação e limite
+
+O manual UM008011-0816 fundamenta a distinção entre M-cycle, T-state, fetch M1, ciclos de memória/I/O, acknowledge, refresh e WAIT. Para qualquer ampliação, os diagramas de timing específicos do ciclo devem ser transcritos para vetores com referência de página/figura e revisão do manual.
+
+O manual Zilog descreve o Z80, não a interface elétrica/temporização particular entre CPU e VDP do Master System. Os tempos de latch, contenção e visibilidade de escrita no VDP precisam de documentação Sega específica e/ou evidência independente de hardware. Não se atribuem aqui offsets de barramento a instruções não instrumentadas.
+
+## 10. Contrato mínimo proposto para a próxima etapa
+
+A auditoria recomenda evoluir o contrato em etapas, sem reescrever o decoder Z80:
+
+1. **Relógio mestre:** um único contador monotônico por máquina. A CPU reporta consumo temporal; dispositivos avançam até o próximo evento antes de observar a transação seguinte.
+2. **Transação explícita:** tipo (M1/fetch, memória read/write, I/O read/write, acknowledge, refresh ou interno), endereço, dados, instante de início e duração. Os campos opcionais devem representar sinais realmente não dirigidos, não valores inventados.
+3. **Sem dupla contagem:** escolher um único proprietário da duração. Preferência: CPU emite fases/micro-operações temporizadas e o scheduler contabiliza sua duração; `total_tstates` passa a ser derivado do relógio mestre, não somado novamente por fora.
+4. **WAIT e contenção:** o dispositivo/barramento pode estender a transação com wait states explícitos. A extensão incrementa o relógio uma vez e desloca eventos posteriores.
+5. **Ordenação determinística:** em empate de timestamp, definir prioridade estável e documentada para conclusão de transação, mutação de dispositivo, IRQ/NMI e amostragem. Não assumir prioridade sem fonte para o hardware.
+6. **Dispositivos:** VDP, PSG, IO e linha de interrupção avançam até o instante do evento antes de aplicar a operação; IRQ é recalculada nas bordas documentadas.
+7. **Modo de diagnóstico:** traces detalhados devem ser opcionais e sem alocação/custo relevante quando desativados; a semântica funcional não pode depender de observadores.
+8. **Compatibilidade incremental:** manter `CpuBus` funcional ou introduzir uma camada adaptadora temporária, com testes equivalentes de estado final e contagem agregada antes de migrar famílias de instruções.
+9. **Evidência:** cada família migrada recebe vetores fixos de sequência, offsets, duração, estado final e primeira divergência; oráculos e ancestralidade são documentados.
+
+Este é um contrato arquitetural proposto, não uma especificação final de sinais nem uma implementação aprovada. A ordem entre CPU/VDP deve ser fechada somente após auditoria dos latches do VDP.
+
+## 11. Critérios para encerrar esta auditoria documental
+
+| Critério | Resultado |
+|---|---|
+| Verificar branch, base e SHA remoto | PASS — base `main` `756666ae6216d8466f40259c11c345bbc1921848`; head da auditoria `2dc984e5277d8f7d132226279655f4dcebb3ecc1` |
+| Inventariar fetch, memória, pilha, CB/ED/DD/FD, HALT, NMI/INT e I/O | PASS — matriz da seção 9 |
+| Distinguir ciclos agregados, eventos lógicos e samples T-state | PASS — seções 2 e 9 |
+| Classificar WAIT, refresh e limitações dos pinos | PASS — sem alegar implementação inexistente |
+| Propor contrato mínimo de scheduler sem dupla contagem | PASS — seção 10 |
+| Confirmar latches e raster VDP com fontes Sega | NOT RUN — fora do escopo desta fatia; etapa seguinte |
+| Executar novos testes locais nesta auditoria | NOT RUN |
+| Validar PR head por GitHub Actions | PASS — workflow CI #2382, SHA `2dc984e5277d8f7d132226279655f4dcebb3ecc1` |
+| Teste visual em hardware/emulador e oráculo independente CPU+VDP | NOT RUN |
+| Declarar `TEMPORAL_PASS` | NÃO — não alcançado |
+
+### 11.1 Detalhe verificável do CI da PR
+
+Workflow: [CI run #2382](https://github.com/leonardo201800478/sega-emulator/actions/runs/40979085538)  
+Job: `quality`, concluído em `2026-10-30T00:21:12Z`, conclusão `success`.  
+SHA executado: `2dc984e5277d8f7d132226279655f4dcebb3ecc1`.
+
+Passos reportados como concluídos com sucesso:
+- Checkout;
+- configuração Rust e Python;
+- instalação do projeto e ferramentas;
+- check de formatação;
+- lint;
+- build e instalação da extensão Rust nativa;
+- execução da etapa de testes.
+
+O workflow não substitui evidência visual de execução do SMS, nem demonstra precisão temporal ciclo a ciclo. A etapa de testes do CI passou no commit auditado, mas esta auditoria não afirma que testes adicionais foram executados localmente.
+
+## 12. Conclusão e próximo marco
+
+**Auditoria documental CPU/barramento: CONCLUÍDA.** O inventário confirmou a separação entre execução funcional, contagem nominal agregada e instrumentação temporal parcial. A principal lacuna não é a ausência de operações de memória/I/O, mas a falta de um contrato geral que posicione essas operações no tempo e permita que os dispositivos SMS avancem em ordem determinística.
+
+**Runtime: inalterado nesta auditoria.** Não se deve implementar scheduler ou inserir offsets presumidos com base apenas nos totais nominais.
+
+**Próxima etapa recomendada:** auditoria independente dos registradores/latches e do raster do VDP SMS, usando fontes Sega específicas e testes sintéticos. Só após esse estudo deve ser consolidada a ordem temporal CPU↔VDP e aberta uma PR de runtime pequena.
+
+Estados finais desta auditoria:
+- Execução funcional Z80: `IMPLEMENTED` (não equivale a certificação semântica total).
+- Cobertura de trace temporal ED selecionada: `IMPLEMENTED` no escopo explicitado.
+- Validação CI do SHA da auditoria: `SHORT_PASS` para o job executado.
+- Scheduler mestre integrado: `INTEGRATION_PENDING`.
+- Precisão temporal ciclo a ciclo: `TEMPORAL_PASS` não declarado.
