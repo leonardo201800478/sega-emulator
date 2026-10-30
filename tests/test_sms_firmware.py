@@ -200,3 +200,18 @@ def test_dat_fallback_refuses_regions_without_known_bios_mapping(tmp_path):
 def test_dat_fallback_does_not_identify_uncatalogued_rom(tmp_path):
     _write_sms_dat(tmp_path, b"known", ("USA",))
     assert sms_bios_region_from_catalog(b"unknown", RomCatalog(tmp_path)) is None
+
+
+def test_dat_fallback_refuses_crc32_only_identity(tmp_path):
+    import zlib
+
+    payload = b"crc-only-sms-rom"
+    (tmp_path / "sms.dat").write_text(
+        f'''<datafile><header><name>Sega - Master System - Mark III</name></header>
+        <game name="CRC only"><release region="USA"/>
+        <rom name="fixture.sms" size="{len(payload)}"
+             crc="{zlib.crc32(payload) & 0xFFFFFFFF:08x}"/>
+        </game></datafile>''',
+        encoding="utf-8",
+    )
+    assert sms_bios_region_from_catalog(payload, RomCatalog(tmp_path)) is None
