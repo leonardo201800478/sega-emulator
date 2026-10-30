@@ -1749,5 +1749,4 @@ mod tests {
         // This is a model-characterization assertion, not a hardware oracle.
         assert_eq!(&v.working_framebuffer[0..3], &[0, 255, 0]);
     }
-
 }
