@@ -264,10 +264,11 @@ def sms_bios_region_from_catalog(
 ) -> str | None:
     """Resolve BIOS territory from an exact SMS DAT match when the ROM header is absent.
 
-    No-Intro release regions are not video-standard metadata. Only an exact,
-    unambiguous Japan-only or USA/Europe-only DAT identity is used to choose
-    the corresponding BIOS family. Mixed, unknown, non-SMS, and uncatalogued
-    identities deliberately return None.
+    No-Intro release regions are not video-standard metadata. An exact,
+    unambiguous Japan-only DAT identity selects the Japanese BIOS family.
+    USA, Europe, Brazil, and Australia release territories select the shared
+    export BIOS family. Brazil still requires a separate PAL-M video profile.
+    Mixed, unknown, non-SMS, and uncatalogued identities return None.
     """
     if not isinstance(rom, bytes):
         raise TypeError("rom deve ser bytes.")
