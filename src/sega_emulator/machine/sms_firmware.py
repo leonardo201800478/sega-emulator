@@ -63,12 +63,15 @@ class SmsFirmwareScan:
     files: tuple[SmsFirmwareFile, ...]
 
 
-# US and Europe share the same known image; keep one signature with two aliases.
+# Known revisions are identified independently, then mapped to the compatible BIOS family.
 _KNOWN_BIOS: dict[str, SmsFirmwareRegion] = {
     "67846e26764bd862f19179294347f7353a4166b62ac4198a5ec32933b7da486e": (
         SmsFirmwareRegion.JAPAN
     ),
     "477617917a12a30f9f43844909dc2de6e6a617430f5c9a36306c86414a670d50": (
+        SmsFirmwareRegion.EXPORT_US_EU
+    ),
+    "1eb16fc06ceaf05651d7cfd69d1713e6ddccc4349a511f6fd17e037d71f9d85b": (
         SmsFirmwareRegion.EXPORT_US_EU
     ),
 }
