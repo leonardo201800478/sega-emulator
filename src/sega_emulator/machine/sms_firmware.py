@@ -65,7 +65,7 @@ class SmsFirmwareScan:
     files: tuple[SmsFirmwareFile, ...]
 
 
-# Known revisions are identified independently, then mapped to the compatible BIOS family.
+# Identify each revision independently, then map it to its compatible BIOS family.
 _KNOWN_BIOS: dict[str, SmsFirmwareRegion] = {
     "67846e26764bd862f19179294347f7353a4166b62ac4198a5ec32933b7da486e": (
         SmsFirmwareRegion.JAPAN
