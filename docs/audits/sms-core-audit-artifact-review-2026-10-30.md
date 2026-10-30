@@ -3,7 +3,7 @@
 ## Estado, escopo e proveniência
 
 **Tipo:** auditoria estática dos artefatos fornecidos e confronto com o código remoto.  
-**Base de código consultada:** branch `main`; SHA-base observado na base da PR #271: `756666ae6216d8466f40259c11c345bbc1921848`.  
+**Base de código consultada:** branch `main`; SHA-base da PR #273: `151eae75c8851aeb9cdbc056d99cfa093013e46c`. A PR #271 estava baseada no SHA anterior `756666ae6216d8466f40259c11c345bbc1921848`; `main` avançou seis commits antes da criação desta revisão.  
 **Runtime alterado:** não.  
 **Build/testes executados nesta revisão:** não; as conclusões abaixo são inspeção de fontes e validação estrutural do JSON, não um `QUICK_PASS` do runtime.
 
