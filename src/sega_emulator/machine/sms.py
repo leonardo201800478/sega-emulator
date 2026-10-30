@@ -81,11 +81,19 @@ class SMSMachine:
     def psg_attenuations(self) -> tuple[int, int, int, int]:
         return tuple(self.native_machine.psg_attenuations)
 
-    def enable_instruction_trace(self, max_instructions: int = 256) -> int:
-        """Capture a bounded number of native Z80 instruction snapshots."""
+    def enable_instruction_trace(
+        self, max_instructions: int = 256, *, start_after_instructions: int = 0
+    ) -> int:
+        """Capture a bounded native Z80 trace, optionally after a fixed step count."""
         if type(max_instructions) is not int or not 1 <= max_instructions <= 4096:
             raise ValueError("max_instructions deve estar entre 1 e 4096.")
-        return int(self.native_machine.enable_instruction_trace(max_instructions))
+        if type(start_after_instructions) is not int or start_after_instructions < 0:
+            raise ValueError("start_after_instructions deve ser não negativo.")
+        return int(
+            self.native_machine.enable_instruction_trace(
+                max_instructions, start_after_instructions
+            )
+        )
 
     def drain_instruction_trace_json(self) -> str:
         """Return CPU snapshots as JSON Lines; records include executed ROM bytes."""
