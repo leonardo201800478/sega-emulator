@@ -72,6 +72,12 @@ _KNOWN_BIOS: dict[str, SmsFirmwareRegion] = {
 }
 
 
+def _read_sms_bios_candidate(path: Path) -> bytes:
+    """Read at most one byte beyond the supported BIOS size."""
+    with path.open("rb") as stream:
+        return stream.read(SMS_BIOS_SIZE + 1)
+
+
 def scan_sms_firmware_directory(
     directory: str | Path | None,
 ) -> SmsFirmwareScan:
@@ -115,7 +121,7 @@ def scan_sms_firmware_directory(
                     )
                 )
                 continue
-            data = candidate.read_bytes()
+            data = _read_sms_bios_candidate(candidate)
             if len(data) != SMS_BIOS_SIZE:
                 scanned.append(
                     SmsFirmwareFile(
@@ -224,7 +230,7 @@ def load_sms_bios(
         return None
 
     try:
-        data = selected.path.read_bytes()
+        data = _read_sms_bios_candidate(selected.path)
     except OSError as exc:
         raise ValueError(
             f"Não foi possível carregar a BIOS SMS '{selected.path.name}': "
