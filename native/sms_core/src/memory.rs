@@ -347,7 +347,7 @@ mod tests {
         assert_eq!(memory.control_port(), 0xF3);
         assert!(memory.bios_enabled());
         assert_eq!(memory.read(0x0000), 0xA5);
-        assert_eq!(memory.read(0x0400), 0xFF);
+        assert_eq!(memory.read(0x0400), 0xA5);
         assert_eq!(memory.read(0xC000), 0xFF);
     }
 
@@ -364,7 +364,11 @@ mod tests {
     fn cartridge_slot_disable_returns_open_bus_without_disabling_work_ram() {
         let mut memory = SmsMemory::with_bios(patterned_rom(1), Some(vec![0xA5; 0x2000])).unwrap();
         memory.write_control_port(0x40);
-        assert_eq!(memory.read(0x0400), 0xA5, "BIOS remains mapped while its disable bit is clear");
+        assert_eq!(
+            memory.read(0x0400),
+            0xA5,
+            "BIOS remains mapped while its disable bit is clear"
+        );
         assert_eq!(memory.read(0xC000), 0x00);
         assert_eq!(memory.read(0x0000), 0xA5);
     }
