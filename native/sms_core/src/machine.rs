@@ -376,12 +376,13 @@ mod tests {
     #[test]
     fn cpu_executes_bios_and_disables_overlay_through_port_3e() {
         // BIOS: LD A,$08; OUT ($3E),A. This disables BIOS overlay.
-        let bios = vec![0x3E, 0x08, 0xD3, 0x3E].into_iter()
-            .chain(std::iter::repeat_n(0x00, 0x2000 - 4)).collect();
+        let bios = vec![0x3E, 0x08, 0xD3, 0x3E]
+            .into_iter()
+            .chain(std::iter::repeat_n(0x00, 0x2000 - 4))
+            .collect();
         let cartridge = vec![0xC3; 0x4000];
-        let mut machine = SmsMachine::with_bios(
-            cartridge, Some(bios), SmsMachineConfig::default()
-        ).unwrap();
+        let mut machine =
+            SmsMachine::with_bios(cartridge, Some(bios), SmsMachineConfig::default()).unwrap();
         assert!(machine.memory().bios_enabled());
         assert_eq!(machine.read_memory(0x0000), 0x3E);
         machine.step().unwrap();
@@ -395,9 +396,9 @@ mod tests {
     fn cpu_reset_restores_bios_overlay_after_firmware_disabled_it() {
         let mut bios = vec![0x3E, 0x08, 0xD3, 0x3E];
         bios.resize(0x2000, 0x00);
-        let mut machine = SmsMachine::with_bios(
-            vec![0xC3; 0x4000], Some(bios), SmsMachineConfig::default()
-        ).unwrap();
+        let mut machine =
+            SmsMachine::with_bios(vec![0xC3; 0x4000], Some(bios), SmsMachineConfig::default())
+                .unwrap();
         machine.step().unwrap();
         machine.step().unwrap();
         assert!(!machine.memory().bios_enabled());
