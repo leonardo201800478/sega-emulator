@@ -266,6 +266,13 @@ def run_sms_rom_audit(
                 machine.run_frame(max_steps=max_steps_per_frame)
                 current_frame = int(machine.vdp.frame_number)
                 frames_advanced = current_frame - initial_frame
+                if time.perf_counter() >= deadline:
+                    status = "TIMEOUT"
+                    error_type = "PerRomTimeout"
+                    details = (
+                        f"Limite de {timeout_seconds:.2f}s excedido durante um frame."
+                    )
+                    break
                 if frames_advanced < 1:
                     status = "FRAME_NOT_ADVANCING"
                     error_type = "FrameCounterStalled"
