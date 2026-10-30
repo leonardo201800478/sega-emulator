@@ -74,7 +74,6 @@ _KNOWN_BIOS: dict[str, SmsFirmwareRegion] = {
 }
 
 
-
 def _sms_bios_region_from_dat_candidates(
     candidates: tuple[DatRom, ...],
     *,
@@ -89,9 +88,7 @@ def _sms_bios_region_from_dat_candidates(
         if candidate.system != "master_system":
             return None
         if require_bios_entry and (
-            not candidate.game_name.casefold().startswith(
-                "[bios] sega master system"
-            )
+            not candidate.game_name.casefold().startswith("[bios] sega master system")
             or candidate.status != "verified"
         ):
             return None
@@ -195,9 +192,7 @@ def scan_sms_firmware_directory(
                 identification = active_catalog.identify_bytes(data, suffix=".sms")
             except ValueError as exc:
                 identification = None
-                catalog_diagnostic = (
-                    f"DAT lookup failed: {exc.__class__.__name__}."
-                )
+                catalog_diagnostic = f"DAT lookup failed: {exc.__class__.__name__}."
             if identification is not None:
                 if (
                     identification.status == "matched"
