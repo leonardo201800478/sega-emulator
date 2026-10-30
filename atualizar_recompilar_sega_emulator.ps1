@@ -1,11 +1,13 @@
 param(
-    [Parameter(Position = 0)]
-    [string]$RomPath
+    [string]$RomPath,
+    [switch]$Full,
+    [switch]$Launch
 )
 
 $ErrorActionPreference = "Stop"
-$ExpectedMainSha = "8cf488d18774ad3ecb3e14c08d21e2a7b5f75f39"
 $RepoRoot = (Get-Location).Path
+$VenvPython = Join-Path $RepoRoot ".venv\Scripts\python.exe"
+$VenvMaturin = Join-Path $RepoRoot ".venv\Scripts\maturin.exe"
 
 function Invoke-Checked {
     param(
@@ -16,103 +18,103 @@ function Invoke-Checked {
     Write-Host "`n==> $Step" -ForegroundColor Cyan
     & $File @Arguments
     if ($LASTEXITCODE -ne 0) {
-        throw "Falha em '$Step' (exit code $LASTEXITCODE). Execucao interrompida."
+        throw "Falha em '$Step' (exit code $LASTEXITCODE)."
     }
 }
 
 if (-not (Test-Path (Join-Path $RepoRoot ".git")) -or
     -not (Test-Path (Join-Path $RepoRoot "Cargo.toml"))) {
-    throw "Execute este script com o diretorio atual na raiz do repositorio sega-emulator."
+    throw "Execute na raiz do repositorio sega-emulator."
 }
 
 $Branch = (& git branch --show-current).Trim()
-if ($Branch -ne "main") {
-    throw "A branch atual e '$Branch'. Mude manualmente para main apos preservar seu trabalho; o script nao troca branches."
+if ($LASTEXITCODE -ne 0 -or $Branch -ne "main") {
+    throw "A branch atual e '$Branch'. Este atualizador sincroniza somente main; preserve seu trabalho e mude de branch manualmente."
 }
 
-$StatusLines = @(& git status --porcelain --untracked-files=all)
-
-if ($LASTEXITCODE -ne 0) {
-    throw "Nao foi possivel verificar o estado do Git."
+$Status = @(& git status --porcelain --untracked-files=all)
+if ($LASTEXITCODE -ne 0) { throw "Nao foi possivel verificar o Git." }
+if ($Status.Count -gt 0) {
+    $Status | ForEach-Object { Write-Host $_ -ForegroundColor Yellow }
+    throw "Arvore de trabalho nao esta limpa. Nada foi alterado; preserve/commite seu trabalho antes do pull."
 }
 
-$Dirty = @(
-    $StatusLines | Where-Object {
-        $_ -notmatch '^\?\? "?atualizar_recompilar_sega_emulator\.ps1"?$'
-    }
-)
-
-if ($Dirty.Count -gt 0) {
-    Write-Host "Alteracoes locais detectadas:" -ForegroundColor Yellow
-    $Dirty | ForEach-Object { Write-Host $_ -ForegroundColor Yellow }
-
-    throw "A arvore de trabalho possui alteracoes locais. Preserve-as antes de continuar."
-}
-
-Invoke-Checked -File "git" -Arguments @("fetch", "origin", "main") -Step "Atualizar referencias remotas"
+$BeforeSha = (& git rev-parse HEAD).Trim()
+Invoke-Checked -File "git" -Arguments @("fetch", "origin", "main", "--prune") -Step "Consultar main remota"
 $RemoteSha = (& git rev-parse origin/main).Trim()
-if ($RemoteSha -ne $ExpectedMainSha) {
-    throw "origin/main mudou. SHA esperado: $ExpectedMainSha; SHA remoto encontrado: $RemoteSha. Pare e revalide o novo HEAD antes de atualizar."
-}
+if ($LASTEXITCODE -ne 0) { throw "Nao foi possivel resolver origin/main." }
 
-Invoke-Checked -File "git" -Arguments @("pull", "--ff-only", "origin", "main") -Step "Git pull fast-forward da main"
+$Counts = (& git rev-list --left-right --count "HEAD...origin/main").Trim() -split '\s+'
+if ($LASTEXITCODE -ne 0 -or $Counts.Count -ne 2) { throw "Falha ao comparar HEAD local com origin/main." }
+$Ahead = [int]$Counts[0]
+$Behind = [int]$Counts[1]
+if ($Ahead -gt 0) {
+    throw "A main local tem $Ahead commit(s) que nao estao em origin/main. Nenhum reset/force-pull sera executado."
+}
+if ($Behind -gt 0) {
+    Invoke-Checked -File "git" -Arguments @("merge", "--ff-only", "origin/main") -Step "Avancar main local por fast-forward"
+}
 $LocalSha = (& git rev-parse HEAD).Trim()
-if ($LocalSha -ne $ExpectedMainSha) {
-    throw "HEAD local ($LocalSha) nao corresponde ao SHA validado ($ExpectedMainSha)."
-}
-Write-Host "HEAD validado: $LocalSha" -ForegroundColor Green
+if ($LocalSha -ne $RemoteSha) { throw "HEAD local nao corresponde a origin/main apos sincronizacao." }
+Write-Host "Repositorio sincronizado: $LocalSha" -ForegroundColor Green
+if ($BeforeSha -eq $LocalSha) { Write-Host "Sem commits novos; build incremental sera reutilizado quando possivel." }
 
-$Python = Join-Path $RepoRoot ".venv\Scripts\python.exe"
-if (-not (Test-Path $Python)) {
+if (-not (Test-Path $VenvPython)) {
     Invoke-Checked -File "py" -Arguments @("-3.14", "-m", "venv", ".venv") -Step "Criar ambiente virtual Python 3.14"
 }
-if (-not (Test-Path $Python)) {
-    throw "Python 3.14 nao foi encontrado ou o ambiente virtual nao foi criado."
+if (-not (Test-Path $VenvPython)) { throw "Python 3.14 nao encontrado. Instale-o e tente novamente." }
+
+if (-not (Test-Path $VenvMaturin)) {
+    Invoke-Checked -File $VenvPython -Arguments @("-m", "pip", "install", "maturin>=1.9,<2") -Step "Instalar Maturin ausente"
+}
+if (-not (Test-Path $VenvMaturin)) { throw "Maturin nao foi instalado no ambiente virtual." }
+
+# Reinstala dependencias somente quando o manifesto Python mudou.
+$Changed = @()
+if ($BeforeSha -ne $LocalSha) {
+    $Changed = @(& git diff --name-only $BeforeSha $LocalSha)
+    if ($LASTEXITCODE -ne 0) { throw "Falha ao identificar arquivos alterados no pull." }
+}
+if ($Changed -contains "pyproject.toml") {
+    Invoke-Checked -File $VenvPython -Arguments @("-m", "pip", "install", "-e", ".[dev,qt]") -Step "Atualizar dependencias Python alteradas"
 }
 
-Invoke-Checked -File $Python -Arguments @("-m", "pip", "install", "--upgrade", "pip") -Step "Atualizar pip"
-Invoke-Checked -File $Python -Arguments @("-m", "pip", "install", "-e", ".[dev,qt]", "maturin>=1.9,<2") -Step "Instalar dependencias de desenvolvimento e Maturin"
-
-Invoke-Checked -File "cargo" -Arguments @("fmt", "--all", "--", "--check") -Step "Rust fmt do workspace"
-Invoke-Checked -File "cargo" -Arguments @("clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings") -Step "Clippy do workspace"
-Invoke-Checked -File "cargo" -Arguments @("test", "--workspace", "--locked") -Step "Testes Rust do workspace (inclui sega-sms-core)"
-Invoke-Checked -File "cargo" -Arguments @("fmt", "--manifest-path", "native/z80_core/Cargo.toml", "--all", "--", "--check") -Step "Rust fmt da extensao PyO3"
-Invoke-Checked -File "cargo" -Arguments @("clippy", "--manifest-path", "native/z80_core/Cargo.toml", "--all-targets", "--", "-D", "warnings") -Step "Clippy da extensao PyO3"
-Invoke-Checked -File "cargo" -Arguments @("test", "--manifest-path", "native/z80_core/Cargo.toml") -Step "Testes Rust da extensao PyO3"
-
-Write-Host "`n==> Compilar e instalar runtime Rust/PyO3 em Release" -ForegroundColor Cyan
-$Maturin = Join-Path $RepoRoot ".venv\Scripts\maturin.exe"
-if (-not (Test-Path $Maturin)) {
-    throw "Executavel Maturin nao encontrado em .venv\Scripts."
+if ($Full) {
+    Invoke-Checked -File "cargo" -Arguments @("fmt", "--all", "--", "--check") -Step "Rust fmt workspace"
+    Invoke-Checked -File "cargo" -Arguments @("clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings") -Step "Rust Clippy workspace"
+    Invoke-Checked -File "cargo" -Arguments @("test", "--workspace", "--locked") -Step "Testes Rust workspace"
+    Invoke-Checked -File "cargo" -Arguments @("fmt", "--manifest-path", "native/z80_core/Cargo.toml", "--all", "--", "--check") -Step "Rust fmt PyO3"
+    Invoke-Checked -File "cargo" -Arguments @("clippy", "--manifest-path", "native/z80_core/Cargo.toml", "--locked", "--all-targets", "--", "-D", "warnings") -Step "Rust Clippy PyO3"
+    Invoke-Checked -File "cargo" -Arguments @("test", "--manifest-path", "native/z80_core/Cargo.toml", "--locked") -Step "Testes Rust PyO3"
 }
+
+Write-Host "`n==> Build incremental Release + instalacao PyO3" -ForegroundColor Cyan
 Push-Location (Join-Path $RepoRoot "native\z80_core")
 try {
-    & $Maturin develop --release --features python-extension
-    if ($LASTEXITCODE -ne 0) {
-        throw "Falha na compilacao/instalacao Release via Maturin (exit code $LASTEXITCODE)."
-    }
+    Invoke-Checked -File $VenvMaturin -Arguments @("develop", "--release", "--locked", "--features", "python-extension") -Step "Maturin Release"
 }
-finally {
-    Pop-Location
-}
+finally { Pop-Location }
 
-Invoke-Checked -File $Python -Arguments @("-c", "from sega_z80_core import NativeSG1000Machine; print('Extensao PyO3 importada com sucesso')") -Step "Verificar importacao do runtime nativo"
+Invoke-Checked -File $VenvPython -Arguments @("-c", "import sega_z80_core as m; assert hasattr(m, 'NativeSMSMachine'); assert hasattr(m, 'NativeSG1000Machine'); print('PyO3 SMS/SG-1000 OK')") -Step "Smoke test da extensao nativa"
 
-Invoke-Checked -File $Python -Arguments @("-m", "ruff", "check", ".") -Step "Ruff lint"
-Invoke-Checked -File $Python -Arguments @("-m", "ruff", "format", "--check", ".") -Step "Ruff format"
-Invoke-Checked -File $Python -Arguments @("-m", "pytest", "-q") -Step "Suite Python"
-
-Write-Host "`nVALIDACAO AUTOMATIZADA CONCLUIDA. SHA: $LocalSha" -ForegroundColor Green
-Write-Host "A proxima etapa e reproduzir a cena do Aladdin e comparar o resultado visual com Ares/hardware."
-if ([string]::IsNullOrWhiteSpace($RomPath)) {
-    Write-Host "Abrindo frontend Qt. Carregue a ROM local pelo menu Arquivo > Abrir ROM."
-    & $Python -m sega_emulator
+if ($Full) {
+    Invoke-Checked -File $VenvPython -Arguments @("-m", "compileall", "src") -Step "Python compileall"
+    Invoke-Checked -File $VenvPython -Arguments @("-m", "pip", "check") -Step "Dependencias Python"
+    Invoke-Checked -File $VenvPython -Arguments @("-m", "ruff", "check", ".") -Step "Ruff lint"
+    Invoke-Checked -File $VenvPython -Arguments @("-m", "ruff", "format", "--check", ".") -Step "Ruff format"
+    Invoke-Checked -File $VenvPython -Arguments @("-m", "pytest", "-q") -Step "Suite Python completa"
 }
 else {
-    $ResolvedRom = (Resolve-Path $RomPath).Path
-    Write-Host "Abrindo ROM local para verificacao: $ResolvedRom"
-    & $Python -m sega_emulator $ResolvedRom
+    Write-Host "Modo rapido: build Release e smoke test concluidos. Use -Full para a bateria completa." -ForegroundColor Yellow
 }
-if ($LASTEXITCODE -ne 0) {
-    throw "O frontend terminou com codigo de saida $LASTEXITCODE."
+
+if ($Launch -or -not [string]::IsNullOrWhiteSpace($RomPath)) {
+    $AppArgs = @("-m", "sega_emulator")
+    if (-not [string]::IsNullOrWhiteSpace($RomPath)) {
+        $ResolvedRom = (Resolve-Path $RomPath).Path
+        $AppArgs += $ResolvedRom
+    }
+    Invoke-Checked -File $VenvPython -Arguments $AppArgs -Step "Abrir frontend Qt"
 }
+
+Write-Host "`nCONCLUIDO — SHA $LocalSha" -ForegroundColor Green
