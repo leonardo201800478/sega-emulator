@@ -50,7 +50,7 @@ def test_python_sms_trace_observes_synthetic_bios_overlay_handoff():
         json.loads(line) for line in machine.drain_instruction_trace_json().splitlines()
     ]
     assert not machine.bios_enabled
-    assert [record["opcode_bytes"] for record in records] == [
+    assert [record["instruction_bytes"] for record in records] == [
         ["3E", "08"],
         ["D3", "3E"],
     ]
