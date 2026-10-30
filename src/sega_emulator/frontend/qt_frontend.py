@@ -219,7 +219,7 @@ def run(initial_path: Path | None = None) -> None:
                 bios_region,
                 catalog=sms_rom_catalog,
             )
-            if bios_region is not None
+            if preferences.sms_bios_boot_enabled and bios_region is not None
             else None
         )
         if bios is not None:
@@ -230,6 +230,15 @@ def run(initial_path: Path | None = None) -> None:
                     "region": bios_region,
                     "region_source": bios_region_source,
                     "sha256": hashlib.sha256(bios).hexdigest(),
+                },
+            )
+        elif not preferences.sms_bios_boot_enabled:
+            logger.info(
+                "Boot por BIOS SMS desativado nas configurações; usando boot direto",
+                extra={
+                    "event": "sms_bios_boot_disabled",
+                    "region": bios_region,
+                    "region_source": bios_region_source,
                 },
             )
         elif preferences.firmware_directory:
