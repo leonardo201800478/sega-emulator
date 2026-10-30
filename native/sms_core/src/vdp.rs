@@ -1546,4 +1546,51 @@ mod tests {
         let v = SmsVdp::default();
         assert_eq!(v.framebuffer().len(), SMS_VDP_WIDTH * 192 * 3);
     }
+
+
+    // Characterization tests: these assert the current scanline model's
+    // whole-line state sampling. They are not claims about physical SMS VDP
+    // visibility rules for mid-line writes.
+    fn setup_midline_write_fixture() -> SmsVdp {
+        let mut v = SmsVdp::default();
+        v.registers[0] = 0x04;
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[5] = 0x7E;
+        v.cram[1] = 0x03;
+        v.vram[0] = 0x80;
+        v.vram[0x3800] = 0;
+        v.vram[0x3F00] = 0xD0;
+        v
+    }
+
+    #[test]
+    fn midline_r8_write_is_sampled_for_the_whole_scanline_by_current_model() {
+        let mut v = setup_midline_write_fixture();
+
+        v.advance(114);
+        reg(&mut v, 8, 8);
+        v.advance(114);
+
+        // The write occurs after half the modeled line has elapsed, but the
+        // scanline renderer sees the new R8 for every pixel of that line.
+        // This records the current abstraction, not hardware-correct timing.
+        assert_eq!(&v.working_framebuffer[0..3], &[0, 0, 0]);
+        assert_eq!(&v.working_framebuffer[8 * 3..8 * 3 + 3], &[255, 0, 0]);
+    }
+
+    #[test]
+    fn midline_cram_write_is_sampled_for_the_whole_scanline_by_current_model() {
+        let mut v = setup_midline_write_fixture();
+
+        v.advance(114);
+        addr(&mut v, 1, 0xC0);
+        v.write_port(0xBE, 0x0C);
+        v.advance(114);
+
+        // CRAM is mutated immediately and the line is rendered at its end;
+        // therefore even pixels left of the write phase use the new color.
+        // This is a model-characterization assertion, not a hardware oracle.
+        assert_eq!(&v.working_framebuffer[0..3], &[0, 255, 0]);
+    }
 }
