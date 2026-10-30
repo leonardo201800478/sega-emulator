@@ -57,7 +57,7 @@ def test_python_sms_trace_observes_synthetic_bios_overlay_handoff():
 
 
 def test_python_sms_trace_can_start_after_a_deterministic_instruction_window():
-    machine = SMSMachine(b"\\x00" * 0x4000)
+    machine = SMSMachine(b"\x00" * 0x4000)
     machine.enable_instruction_trace(2, start_after_instructions=3)
 
     for _ in range(5):
