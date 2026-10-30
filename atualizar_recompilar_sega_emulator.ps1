@@ -59,25 +59,26 @@ if ($LocalSha -ne $RemoteSha) { throw "HEAD local nao corresponde a origin/main 
 Write-Host "Repositorio sincronizado: $LocalSha" -ForegroundColor Green
 if ($BeforeSha -eq $LocalSha) { Write-Host "Sem commits novos; build incremental sera reutilizado quando possivel." }
 
-if (-not (Test-Path $VenvPython)) {
+$NewVenv = -not (Test-Path $VenvPython)
+if ($NewVenv) {
     Invoke-Checked -File "py" -Arguments @("-3.14", "-m", "venv", ".venv") -Step "Criar ambiente virtual Python 3.14"
 }
 if (-not (Test-Path $VenvPython)) { throw "Python 3.14 nao encontrado. Instale-o e tente novamente." }
 
-if (-not (Test-Path $VenvMaturin)) {
-    Invoke-Checked -File $VenvPython -Arguments @("-m", "pip", "install", "maturin>=1.9,<2") -Step "Instalar Maturin ausente"
-}
-if (-not (Test-Path $VenvMaturin)) { throw "Maturin nao foi instalado no ambiente virtual." }
-
-# Reinstala dependencias somente quando o manifesto Python mudou.
+# Detecta alteracoes de dependencias no intervalo efetivamente sincronizado.
 $Changed = @()
 if ($BeforeSha -ne $LocalSha) {
     $Changed = @(& git diff --name-only $BeforeSha $LocalSha)
     if ($LASTEXITCODE -ne 0) { throw "Falha ao identificar arquivos alterados no pull." }
 }
-if ($Changed -contains "pyproject.toml") {
-    Invoke-Checked -File $VenvPython -Arguments @("-m", "pip", "install", "-e", ".[dev,qt]") -Step "Atualizar dependencias Python alteradas"
+if ($NewVenv -or ($Changed -contains "pyproject.toml")) {
+    Invoke-Checked -File $VenvPython -Arguments @("-m", "pip", "install", "-e", ".[dev,qt]") -Step "Instalar/atualizar dependencias Python do projeto"
 }
+
+if (-not (Test-Path $VenvMaturin)) {
+    Invoke-Checked -File $VenvPython -Arguments @("-m", "pip", "install", "maturin>=1.9,<2") -Step "Instalar Maturin ausente"
+}
+if (-not (Test-Path $VenvMaturin)) { throw "Maturin nao foi instalado no ambiente virtual." }
 
 if ($Full) {
     Invoke-Checked -File "cargo" -Arguments @("fmt", "--all", "--", "--check") -Step "Rust fmt workspace"
