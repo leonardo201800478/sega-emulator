@@ -123,7 +123,9 @@ impl CpuBus for SmsMachineBus<'_> {
     }
 
     fn write_port(&mut self, port: u16, value: u8) {
-        if matches!((port as u8) & 0xC1, 0x80 | 0x81) {
+        if port as u8 == 0x3E {
+            self.memory.write_control_port(value);
+        } else if matches!((port as u8) & 0xC1, 0x80 | 0x81) {
             self.vdp.write_port(port, value);
         } else {
             self.io.write_port(port, value);
@@ -174,8 +176,26 @@ impl SmsMachine {
         config: SmsMachineConfig,
         sample_rate: u64,
     ) -> Result<Self, SmsCoreError> {
+        Self::with_bios_audio(rom, None, config, sample_rate)
+    }
+
+    /// Construct an SMS machine with an optional user-supplied 8 KiB BIOS.
+    pub fn with_bios(
+        rom: impl Into<Vec<u8>>,
+        bios: Option<Vec<u8>>,
+        config: SmsMachineConfig,
+    ) -> Result<Self, SmsCoreError> {
+        Self::with_bios_audio(rom, bios, config, 44_100)
+    }
+
+    pub fn with_bios_audio(
+        rom: impl Into<Vec<u8>>,
+        bios: Option<Vec<u8>>,
+        config: SmsMachineConfig,
+        sample_rate: u64,
+    ) -> Result<Self, SmsCoreError> {
         let cartridge = CartridgeImage::new(rom)?;
-        let memory = SmsMemory::new(cartridge)?;
+        let memory = SmsMemory::with_bios(cartridge, bios)?;
         let mut cpu = Z80::default();
         cpu.reset();
         let vdp = SmsVdp::new(config.video_standard, config.sprite_limit);
@@ -350,6 +370,31 @@ mod tests {
         assert_eq!(machine.cpu().registers.a, 0x42);
         assert_eq!(machine.read_memory(0xC000), 0x42);
         assert_eq!(machine.read_memory(0xC001), 0x42);
+    }
+
+    #[test]
+    fn cpu_executes_bios_and_disables_overlay_through_port_3e() {
+        // BIOS: LD A,$08; OUT ($3E),A. This disables BIOS overlay.
+        let bios = vec![0x3E, 0x08, 0xD3, 0x3E].into_iter()
+            .chain(std::iter::repeat_n(0x00, 0x2000 - 4)).collect();
+        let cartridge = vec![0xC3; 0x4000];
+        let mut machine = SmsMachine::with_bios(
+            cartridge, Some(bios), SmsMachineConfig::default()
+        ).unwrap();
+        assert!(machine.memory().bios_enabled());
+        assert_eq!(machine.read_memory(0x0000), 0x3E);
+        machine.step().unwrap();
+        assert!(machine.memory().bios_enabled());
+        machine.step().unwrap();
+        assert!(!machine.memory().bios_enabled());
+        assert_eq!(machine.read_memory(0x0000), 0xC3);
+    }
+
+    #[test]
+    fn machine_without_bios_preserves_direct_cartridge_boot() {
+        let machine = SmsMachine::new(vec![0xA7; 0x4000]).unwrap();
+        assert!(!machine.memory().bios_enabled());
+        assert_eq!(machine.read_memory(0x0000), 0xA7);
     }
 
     #[test]
