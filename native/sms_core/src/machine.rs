@@ -396,6 +396,29 @@ mod tests {
     }
 
     #[test]
+    fn mirrored_even_ports_select_the_sms_memory_control_latch() {
+        let bios = vec![0xA5; 0x2000];
+        let mut machine =
+            SmsMachine::with_bios(vec![0xC3; 0x4000], Some(bios), SmsMachineConfig::default())
+                .unwrap();
+        assert!(machine.memory().bios_enabled());
+
+        {
+            let mut bus = SmsMachineBus::new(
+                &mut machine.memory,
+                &mut machine.io,
+                &mut machine.sega_scope,
+                &mut machine.vdp,
+            );
+            // SMS decodes A0 in the $00-$3F range; $1E mirrors $3E.
+            bus.write_port(0x001E, 0x08);
+        }
+
+        assert!(!machine.memory().bios_enabled());
+        assert_eq!(machine.read_memory(0x0000), 0xC3);
+    }
+
+    #[test]
     fn cpu_reset_restores_bios_overlay_after_firmware_disabled_it() {
         let mut bios = vec![0x3E, 0x08, 0xD3, 0x3E];
         bios.resize(0x2000, 0x00);
