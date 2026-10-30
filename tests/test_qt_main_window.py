@@ -62,6 +62,7 @@ def test_main_window_exposes_required_menus_and_shortcuts(qt_app) -> None:
     assert window.pause_action.text() == "Retomar"
     window.set_pause_state(False, enabled=False)
     assert not window.pause_action.isEnabled()
+    window.set_pause_state(False, enabled=True)
     assert window.reset_action.shortcut().toString() == "F10"
     assert window.change_system_action.isEnabled()
     assert window.change_system_action.objectName() == "changeSystemAction"

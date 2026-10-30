@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sega_emulator.frontend.qt.focus_pause import EmulationPauseController
+from sega_emulator.frontend.qt.focus_pause import EmulationPauseController, FocusPauseController
 
 
 class FakeTimer:
@@ -60,3 +60,40 @@ def test_toggle_alternates_pause_and_resume_transitions() -> None:
     assert controller.toggle()
     assert controller.toggle()
     assert events == ["pause", "state:True", "resume", "state:False"]
+
+
+def test_focus_loss_does_not_resume_a_manually_paused_session() -> None:
+    controller = EmulationPauseController(
+        can_pause=lambda: True,
+        pause=lambda: None,
+        resume=lambda: None,
+        on_change=lambda paused: None,
+    )
+    focus = FocusPauseController(
+        pause=lambda: controller.set_paused(True),
+        resume=lambda: controller.set_paused(False),
+    )
+
+    assert controller.set_paused(True)
+    focus.application_state_changed("inactive", "active")
+    focus.application_state_changed("active", "active")
+
+    assert controller.paused
+
+
+def test_focus_loss_pause_is_resumed_when_focus_returns() -> None:
+    controller = EmulationPauseController(
+        can_pause=lambda: True,
+        pause=lambda: None,
+        resume=lambda: None,
+        on_change=lambda paused: None,
+    )
+    focus = FocusPauseController(
+        pause=lambda: controller.set_paused(True),
+        resume=lambda: controller.set_paused(False),
+    )
+
+    focus.application_state_changed("inactive", "active")
+    assert controller.paused
+    focus.application_state_changed("active", "active")
+    assert not controller.paused
