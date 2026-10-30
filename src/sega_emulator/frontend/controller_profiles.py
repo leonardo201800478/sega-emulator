@@ -7,8 +7,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-ACTIONS = ("up", "down", "left", "right", "button1", "button2", "hold")
-JOYSTICK_ACTIONS = frozenset(ACTIONS) - {"hold"}
+ACTIONS = ("up", "down", "left", "right", "button1", "button2", "hold", "console_pause")
+JOYSTICK_ACTIONS = frozenset(ACTIONS) - {"hold", "console_pause"}
 ACTION_BITS = {
     "up": 0,
     "down": 1,
@@ -48,6 +48,7 @@ DEFAULT_GAMEPAD_BINDINGS = {
     "button1": "a",
     "button2": "b",
     "hold": "start",
+    "console_pause": "back",
 }
 DEFAULT_KEYBOARD_BINDINGS_P1 = {
     "up": "Up",
@@ -57,6 +58,7 @@ DEFAULT_KEYBOARD_BINDINGS_P1 = {
     "button1": "Z",
     "button2": "X",
     "hold": "P",
+    "console_pause": "Pause",
 }
 DEFAULT_KEYBOARD_BINDINGS_P2 = {
     "up": "W",
@@ -66,6 +68,7 @@ DEFAULT_KEYBOARD_BINDINGS_P2 = {
     "button1": "F",
     "button2": "G",
     "hold": "H",
+    "console_pause": "ScrollLock",
 }
 DEFAULT_DEADZONE = 0.15
 TURBO_ACTIONS = frozenset({"button1", "button2"})

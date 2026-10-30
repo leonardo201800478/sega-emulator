@@ -6,6 +6,7 @@ import pytest
 
 from sega_emulator.frontend.controller_profiles import (
     ACTION_BITS,
+    JOYSTICK_ACTIONS,
     ControllerInputConfig,
     PlayerInputProfile,
     apply_turbo,
@@ -48,3 +49,30 @@ def test_hold_binding_is_a_dedicated_action_outside_controller_port_bits() -> No
     assert config.players[2].keyboard_bindings["hold"] == "H"
     assert config.players[1].gamepad_buttons["hold"] == "start"
     assert "hold" not in ACTION_BITS
+
+
+
+def test_sms_console_pause_has_dedicated_keyboard_and_gamepad_defaults() -> None:
+    config = ControllerInputConfig()
+    assert config.players[1].keyboard_bindings["console_pause"] == "Pause"
+    assert config.players[2].keyboard_bindings["console_pause"] == "ScrollLock"
+    assert config.players[1].gamepad_buttons["console_pause"] == "back"
+    assert "console_pause" not in JOYSTICK_ACTIONS
+    assert "console_pause" not in ACTION_BITS
+    with pytest.raises(ValueError, match="Ações desconhecidas"):
+        joystick_value({"console_pause"})
+
+
+def test_legacy_controller_profiles_gain_pause_binding_without_losing_custom_keys() -> None:
+    legacy = PlayerInputProfile.from_dict(
+        {
+            "gamepad_buttons": {"up": "x", "hold": "leftshoulder"},
+            "keyboard_bindings": {"up": "I", "hold": "K"},
+        }
+    )
+    assert legacy.gamepad_buttons["up"] == "x"
+    assert legacy.gamepad_buttons["hold"] == "leftshoulder"
+    assert legacy.gamepad_buttons["console_pause"] == "back"
+    assert legacy.keyboard_bindings["up"] == "I"
+    assert legacy.keyboard_bindings["hold"] == "K"
+    assert legacy.keyboard_bindings["console_pause"] == "Pause"

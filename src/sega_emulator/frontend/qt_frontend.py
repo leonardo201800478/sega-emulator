@@ -413,13 +413,16 @@ def run(initial_path: Path | None = None) -> None:
                     joystick_value(actions[player].intersection(JOYSTICK_ACTIONS)),
                 )
         hold_pressed = any("hold" in actions[player] for player in (1, 2))
+        console_pause_pressed = any(
+            "console_pause" in actions[player] for player in (1, 2)
+        )
         if active_system == "sg1000" and hold_pressed and not hold_was_pressed:
             # The SG-1000 Hold switch is an edge-triggered NMI, not a joystick bit.
             machine.request_nmi()
         elif active_system == "master_system":
-            # SMS PAUSE is a dedicated console input line, not a controller bit.
-            # The Rust machine detects the rising edge and latches exactly one NMI.
-            machine.set_pause_button(hold_pressed)
+            # Preserve the legacy Hold mapping while exposing a dedicated SMS PAUSE binding.
+            # Rust owns the level transition and latches one NMI per released-to-pressed edge.
+            machine.set_pause_button(hold_pressed or console_pause_pressed)
         hold_was_pressed = hold_pressed
 
     class KeyboardInputFilter(QObject):
@@ -1316,7 +1319,8 @@ def run(initial_path: Path | None = None) -> None:
             "right": "Direita",
             "button1": "Botão 1",
             "button2": "Botão 2",
-            "hold": "PAUSE / Hold (NMI)",
+            "hold": "Hold / SW (SMS compatível; SG-1000)",
+            "console_pause": "PAUSE do console (SMS / NMI)",
         }
         button_labels = {
             "a": "A (sul)",
