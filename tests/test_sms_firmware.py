@@ -454,9 +454,7 @@ def test_europe_bios_falls_back_to_shared_export_when_v2_is_absent(tmp_path):
     (tmp_path / "USA-Europe-v1.3.sms").write_bytes(export_payload)
 
     with patch("sega_emulator.machine.sms_firmware.hashlib.sha256") as sha256:
-        sha256.return_value = SimpleNamespace(
-            hexdigest=lambda: EXPORT_SHA256
-        )
+        sha256.return_value = SimpleNamespace(hexdigest=lambda: EXPORT_SHA256)
         assert load_sms_bios(tmp_path, "europe") == export_payload
 
 
