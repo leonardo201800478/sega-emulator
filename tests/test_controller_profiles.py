@@ -40,3 +40,11 @@ def test_joystick_active_low_bits_match_sg1000_input_contract() -> None:
     assert joystick_value({"up", "button1"}) == 0xEE
     with pytest.raises(ValueError, match="Ações desconhecidas"):
         joystick_value({"unknown"})
+
+
+def test_hold_binding_is_a_dedicated_action_outside_controller_port_bits() -> None:
+    config = ControllerInputConfig()
+    assert config.players[1].keyboard_bindings["hold"] == "P"
+    assert config.players[2].keyboard_bindings["hold"] == "H"
+    assert config.players[1].gamepad_buttons["hold"] == "start"
+    assert "hold" not in ACTION_BITS
