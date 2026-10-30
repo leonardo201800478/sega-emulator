@@ -86,6 +86,8 @@ def _sms_bios_region_from_dat_candidates(
 
     resolved: set[SmsFirmwareRegion] = set()
     for candidate in candidates:
+        if candidate.system != "master_system":
+            return None
         if require_bios_entry and not candidate.game_name.casefold().startswith(
             "[bios] sega master system"
         ):
@@ -193,7 +195,11 @@ def scan_sms_firmware_directory(
                     f"DAT lookup failed: {exc.__class__.__name__}."
                 )
             if identification is not None:
-                if identification.matched_by in {"sha1", "md5"}:
+                if (
+                    identification.status == "matched"
+                    and identification.system == "master_system"
+                    and identification.matched_by in {"sha1", "md5"}
+                ):
                     region = _sms_bios_region_from_dat_candidates(
                         identification.candidates,
                         require_bios_entry=True,
