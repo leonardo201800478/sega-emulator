@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from sega_emulator.rom_catalog import RomCatalog
-
 from sega_emulator.machine.sms_firmware import (
     SMS_BIOS_SIZE,
     SmsFirmwareDirectoryStatus,
@@ -14,6 +12,7 @@ from sega_emulator.machine.sms_firmware import (
     sms_bios_region_from_cartridge,
     sms_bios_region_from_catalog,
 )
+from sega_emulator.rom_catalog import RomCatalog
 
 JP_SHA256 = "67846e26764bd862f19179294347f7353a4166b62ac4198a5ec32933b7da486e"
 EXPORT_SHA256 = "477617917a12a30f9f43844909dc2de6e6a617430f5c9a36306c86414a670d50"
@@ -160,7 +159,9 @@ def _write_sms_dat(directory, payload, regions, *, game_name="Fixture"):
     import hashlib
     import zlib
 
-    releases = "".join(f'<release name="Fixture" region="{region}"/>' for region in regions)
+    releases = "".join(
+        f'<release name="Fixture" region="{region}"/>' for region in regions
+    )
     (directory / "sms.dat").write_text(
         f'''<datafile><header><name>Sega - Master System - Mark III</name></header>
         <game name="{game_name}">{releases}
