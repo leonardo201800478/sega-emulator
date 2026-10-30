@@ -600,6 +600,4 @@ mod tests {
         assert_eq!(machine.cpu().registers.pc, 0x0066);
         assert!(!machine.cpu().nmi_pending);
     }
-
-
 }
