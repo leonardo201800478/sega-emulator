@@ -352,7 +352,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn sms_adapter_exposes_bounded_instruction_trace_as_jsonl() {
         let mut machine = NativeSMSMachine::new(vec![0x00; 16], false, Some("usa"), None).unwrap();
