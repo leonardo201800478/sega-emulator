@@ -130,10 +130,10 @@ def test_load_sms_bios_returns_none_when_only_incompatible_region_exists(tmp_pat
 
 def test_cartridge_header_selects_japan_or_export_bios_automatically():
     japanese = bytearray(0x8000)
-    japanese[0x7FF0 : 0x7FF8] = b"TMR SEGA"
+    japanese[0x7FF0:0x7FF8] = b"TMR SEGA"
     japanese[0x7FFF] = 0x3C
     export = bytearray(0x8000)
-    export[0x7FF0 : 0x7FF8] = b"TMR SEGA"
+    export[0x7FF0:0x7FF8] = b"TMR SEGA"
     export[0x7FFF] = 0x4C
     assert sms_bios_region_from_cartridge(bytes(japanese)) == "japan"
     assert sms_bios_region_from_cartridge(bytes(export)) == "usa"
@@ -141,7 +141,7 @@ def test_cartridge_header_selects_japan_or_export_bios_automatically():
 
 def test_unknown_or_missing_cartridge_header_does_not_guess_bios_region():
     unknown = bytearray(0x8000)
-    unknown[0x7FF0 : 0x7FF8] = b"TMR SEGA"
+    unknown[0x7FF0:0x7FF8] = b"TMR SEGA"
     unknown[0x7FFF] = 0x5C
     assert sms_bios_region_from_cartridge(bytes(unknown)) is None
     assert sms_bios_region_from_cartridge(b"\x00" * 0x8000) is None
@@ -149,6 +149,6 @@ def test_unknown_or_missing_cartridge_header_does_not_guess_bios_region():
 
 def test_cartridge_header_locations_are_checked_from_largest_to_smallest():
     rom = bytearray(0x4000)
-    rom[0x1FF0 : 0x1FF8] = b"TMR SEGA"
+    rom[0x1FF0:0x1FF8] = b"TMR SEGA"
     rom[0x1FFF] = 0x3C
     assert sms_bios_region_from_cartridge(bytes(rom)) == "japan"
