@@ -443,11 +443,7 @@ impl SmsVdp {
                 if matches!(register, 8..=10) {
                     eprintln!(
                         "F{} L{} T{} R{}={:#04x}",
-                        self.frame_number,
-                        self.scanline,
-                        self.tstates_into_line,
-                        register,
-                        first
+                        self.frame_number, self.scanline, self.tstates_into_line, register, first
                     );
                 }
                 if register == 9 {
