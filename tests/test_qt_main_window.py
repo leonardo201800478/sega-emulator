@@ -69,6 +69,29 @@ def test_main_window_exposes_required_menus_and_shortcuts(qt_app) -> None:
     window.close()
 
 
+def test_main_window_exposes_brazil_pal_m_region_action(qt_app) -> None:
+    selected: list[str] = []
+    window = EmulatorMainWindow(
+        on_open_rom=lambda: None,
+        on_pause_resume=lambda: None,
+        on_reset=lambda: None,
+        on_configure_controls=lambda: None,
+        on_show_controllers=lambda: None,
+        on_vdp_snapshot=lambda: None,
+        on_open_logs=lambda: None,
+        on_show_machine_state=lambda: None,
+        on_video_scale=lambda scale: None,
+        on_configure_region=selected.append,
+        region_preference="brazil",
+    )
+
+    assert set(window.region_actions) == {"auto", "usa", "europe", "japan", "brazil"}
+    assert window.region_actions["brazil"].isChecked()
+    window.region_actions["brazil"].trigger()
+    assert selected == ["brazil"]
+    window.close()
+
+
 @pytest.mark.parametrize("scale", [2, 3, 4])
 def test_video_scale_updates_window_size(qt_app, scale: int) -> None:
     window = EmulatorMainWindow(
