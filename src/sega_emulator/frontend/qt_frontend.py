@@ -176,8 +176,8 @@ def run(initial_path: Path | None = None) -> None:
             persisted_window_dimensions,
         )
         from sega_emulator.frontend.qt.rom_library_dialog import RomLibraryDialog
-        from sega_emulator.frontend.qt.sms_rom_audit_dialog import SmsRomAuditDialog
         from sega_emulator.frontend.qt.settings_dialog import SettingsDialog
+        from sega_emulator.frontend.qt.sms_rom_audit_dialog import SmsRomAuditDialog
     except ImportError as exc:
         raise RuntimeError(
             'Interface Qt não instalada. Execute: python -m pip install -e ".[qt]"'
