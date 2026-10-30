@@ -156,6 +156,10 @@ impl SmsMemory {
         self.control_port = value;
     }
 
+    pub fn reset_control_port(&mut self) {
+        self.control_port = if self.bios.is_some() { 0x00 } else { 0x08 };
+    }
+
     pub fn control_port(&self) -> u8 { self.control_port }
 
     pub fn bios_enabled(&self) -> bool {
