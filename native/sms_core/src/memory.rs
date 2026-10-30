@@ -1,10 +1,10 @@
-//! Standard Sega mapper and 8 KiB mirrored work RAM for SMS cartridges.
+//! Sega and Codemasters cartridge mappers plus 8 KiB mirrored SMS work RAM.
 //!
-//! The standard mapper exposes three 16 KiB slots. The first 1 KiB at
-//! 0000-03FF is fixed to ROM bank 0; writes at FFFD-FFFF select the bank
-//! visible in the remaining slots. Writes at FFFC configure cartridge RAM
-//! mapping. Mapper register writes also reach mirrored work RAM, and reads
-//! from those addresses return the RAM copy.
+//! The Sega mapper exposes three 16 KiB slots. The first 1 KiB at 0000-03FF
+//! is fixed to ROM bank 0; writes at FFFD-FFFF select the remaining slots.
+//! The Codemasters mapper pages all three slots through writes to 0000, 4000
+//! and 8000. Sega mapper writes also reach mirrored work RAM, and reads from
+//! those addresses return the RAM copy.
 //!
 //! Reference: https://www.smspower.org/Development/Mappers
 //! Reference: https://www.smspower.org/Development/MemoryMap
