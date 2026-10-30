@@ -2,7 +2,7 @@
 
 **Data:** 2026-10-29  
 **Base observada:** `main` em `fad306e7461878201fe7dcf447ffe7e81e417ff3`  
-**Status:** CORE_BOOT_IMPLEMENTED / FRONTEND_INTEGRATION_PENDING. O core Rust já recebe BIOS opcional, aplica overlay de 1 KiB, decodifica o latch `$3E` para BIOS/cartucho/RAM e permite boot direto sem BIOS. A seleção persistente pela interface Qt ainda está pendente.
+**Status:** IMPLEMENTED / CI_PENDING / REAL_BIOS_BOOT_PENDING. O scanner por SHA-256, a configuração persistente da pasta, a seleção regional, o encaminhamento Qt/PyO3 e o boot pelo core Rust estão conectados. A validação com BIOS real permanece dependente de arquivos locais do usuário e teste manual; CI deve ser avaliado no SHA candidato mais recente.
 
 ## Objetivo
 
@@ -33,6 +33,10 @@ A documentação pública do perfil ares no catálogo RetroBIOS informa que:
 - os slots de firmware são associados ao sistema/perfil depois da identificação.
 
 Fontes:
+- SMS Power, Port $3E: https://www.smspower.org/Development/Port3E
+- SMS Power, comportamento das BIOSes: https://www.smspower.org/Development/BIOSes
+- SMS Power, formato e códigos regionais do cabeçalho: https://www.smspower.org/Development/ROMHeader
+- Charles MacDonald, *SMS/GG hardware notes* (2002), seções 2–4 e 6; cópia de referência: https://github.com/drhelius/Gearsystem/blob/master/skills/gearsystem-debugging/references/smstech.md
 - ares upstream: https://github.com/ares-emulator/ares
 - perfil ares e referências ao código de varredura por hash: https://abdess.github.io/retrobios/emulators/ares/
 - catálogo Sega e hashes de Master System: https://abdess.github.io/retrobios/systems/sega/
@@ -45,9 +49,10 @@ A pesquisa do catálogo descreve a identificação por conteúdo e os arquivos c
 ### Configuração e diretório
 
 - Criar uma configuração persistente `firmware_directory` definida pelo usuário.
-- Usar um diretório padrão dentro da área de dados/configuração do usuário, nunca dentro da pasta do repositório nem de uma pasta de ROMs.
-- Expor na interface: caminho atual, selecionar pasta, varrer novamente e mostrar status por BIOS.
-- Não fazer varreduras de disco inesperadas no startup; a primeira configuração deve ser explícita e o cache deve ser invalidado quando o caminho/arquivos mudarem.
+- A pasta é configurada explicitamente pelo usuário nas configurações Qt; o valor vazio significa BIOS não configurada.
+- Expor caminho, seletor de pasta, botão de varredura explícita e resultado por arquivo (status, região e prefixo SHA-256).
+- Não varrer disco no startup. A varredura ocorre quando solicitada no diálogo ou ao carregar/resetar uma ROM SMS.
+- Não manter cache de bytes entre sessões; a seleção revalida tamanho e SHA-256 imediatamente antes de encaminhar os bytes ao core.
 - Não baixar BIOS automaticamente.
 
 ### Identificação e validação
@@ -66,8 +71,10 @@ A pesquisa do catálogo descreve a identificação por conteúdo e os arquivos c
 - Definir uma política explícita de preferência: região manual do usuário tem prioridade; no modo automático, resolver a região usando os metadados confiáveis disponíveis do cartucho e do sistema, e registrar a decisão.
 - Para território japonês, preferir BIOS JP quando instalada; para território export, preferir BIOS US/EU compartilhada.
 - Se não houver correspondência, respeitar a política de boot sem BIOS e mostrar estado “não instalada”; não escolher uma BIOS incompatível silenciosamente.
-- Quando mais de um arquivo tiver o mesmo hash conhecido, tratá-los como duplicatas da mesma imagem e não como conflito.
-- A política para títulos japoneses/coreanos, títulos PAL de Austrália/Coreia e cabeçalhos ausentes precisa ser confirmada contra comportamento real do ares e testes antes de ser congelada.
+- Para modo automático, ler o nibble alto de `$7FFF` em um cabeçalho `TMR SEGA` localizado em `$7FF0`, `$3FF0` ou `$1FF0`: código 3 seleciona BIOS JP e código 4 seleciona BIOS de exportação US/EU.
+- Se o cabeçalho estiver ausente ou tiver código desconhecido, não inferir uma BIOS; preservar boot direto sem firmware. A preferência regional manual tem precedência.
+- Quando mais de um arquivo tiver o mesmo hash conhecido, manter a primeira ocorrência determinística selecionável e marcar as demais como `DUPLICATE_HASH`.
+- Os códigos do cabeçalho identificam território (Japan/Export), não PAL/NTSC. O padrão de vídeo continua sendo uma escolha separada.
 
 ### Integração de hardware
 
@@ -80,7 +87,15 @@ A BIOS deve ser parte do caminho de inicialização do cartucho/máquina, não u
 - limpar/reinicializar estado de overlay e latch no reset, de acordo com o contrato de hardware confirmado;
 - evitar duplicar o carregador de ROM ou criar um segundo runtime Python de hardware.
 
-**Não assumir que a BIOS deve estar sempre mapeada ou sempre obrigatória.** A semântica do registrador de controle e o fluxo de desabilitação precisam ser conferidos em documentação técnica e código independente antes da implementação.
+### Semântica de controle validada para esta fatia
+
+- O SMS decodifica escritas pares no intervalo de portas `$00-$3F` como o latch de memória; o core aplica essa máscara, não apenas a porta literal `$3E`.
+- Os bits são ativos em nível baixo: bit 7 expansão, bit 6 cartucho, bit 5 card, bit 4 RAM interna, bit 3 BIOS e bit 2 I/O.
+- A BIOS fica habilitada no power-on. O core modela o perfil inicial `$F3` (BIOS ativa; cartucho e RAM interna desabilitados) e o perfil pós-BIOS de cartucho `$AB` (BIOS desabilitada; cartucho e RAM interna habilitados).
+- O fluxo sintético de aceitação habilita RAM mantendo BIOS, copia um pequeno stub para RAM, desabilita BIOS/habilita cartucho e transfere execução ao endereço zero do cartucho.
+- A BIOS de 8 KiB fornecida pelo usuário só ocupa o overlay de 1 KiB em `$0000-$03FF`; os bytes restantes não são expostos por esse overlay. O slot do cartucho continua sujeito ao latch de memória.
+
+**Não assumir que a BIOS deve estar sempre mapeada ou sempre obrigatória.** O perfil de inicialização e a transferência de controle devem respeitar o latch e a ordem observada nos documentos técnicos citados.
 
 ## Estados de diagnóstico propostos
 
@@ -100,19 +115,23 @@ A BIOS deve ser parte do caminho de inicialização do cartucho/máquina, não u
 - [ ] Testar hashes exatos dos três arquivos fornecidos por fixtures de teste não versionadas/localmente ou por constantes de metadados; não commitar binários.
 - [ ] Confirmar que JP é classificada como Japan e que o hash compartilhado é classificado como US/Europe.
 - [ ] Confirmar que nomes arbitrários funcionam e nomes “corretos” com conteúdo incorreto são rejeitados.
-- [ ] Testar arquivo ausente, tamanho incorreto, leitura negada, pasta inexistente, duplicatas e arquivos não relacionados.
+- [ ] Testar arquivo ausente, tamanho incorreto, falha de leitura, pasta inexistente, duplicatas e arquivos não relacionados.
+- [ ] Garantir que arquivos grandes sejam rejeitados por tamanho antes de ler seu conteúdo integral.
 - [ ] Garantir que nenhum conteúdo de BIOS seja incluído em logs ou artefatos CI.
 
 ### Integração SMS
 - [ ] Definir e testar o mapa de memória da BIOS e seu overlay/desabilitação com programa sintético.
 - [ ] Testar reset, leitura antes/depois de desabilitar BIOS, transferência ao cartucho e mapper padrão.
+- [ ] Testar perfil de power-on `$F3`, perfil de cartucho `$AB` e espelhamento de escritas pares em `$00-$3F`.
+- [ ] Executar um programa sintético que copia o stub da BIOS para RAM antes do hand-off.
 - [ ] Testar boot sem BIOS para preservar compatibilidade atual.
 - [ ] Testar BIOS JP e US/EU em perfis regionais compatíveis.
 - [ ] Confirmar o comportamento de jogos com e sem BIOS e evitar regressões nos testes SMS existentes.
 
 ### Interface, CI e distribuição
-- [ ] Permitir escolher/alterar pasta e revalidar sem reinício quando seguro; mudanças de BIOS ativa devem ter política explícita de reset/reload.
-- [ ] Exibir hash abreviado, região, validade e se está em uso.
+- [ ] Permitir escolher/alterar a pasta; mudanças na BIOS ativa aplicam-se no próximo reset ou carregamento.
+- [ ] Exibir resultado da varredura explícita com hash abreviado, região e validade.
+- [ ] Registrar carregamento/fallback com evento de diagnóstico sem registrar bytes da BIOS.
 - [ ] Garantir que empacotamento/CI não distribua os binários.
 - [ ] Executar fmt, clippy, testes Rust, lint/testes Python, build Release/Maturin e testes de integração pertinentes.
 - [ ] Validar manualmente no Windows com arquivos locais do usuário.
@@ -129,26 +148,32 @@ A BIOS deve ser parte do caminho de inicialização do cartucho/máquina, não u
 
 ### Fatia 1 — catálogo e scanner Python
 
-- **IMPLEMENTED:** metadados SHA-256 para JP e imagem compartilhada US/EU.
-- **IMPLEMENTED:** scanner explícito de diretório, sem varredura automática no startup.
-- **IMPLEMENTED:** nomes/extensões arbitrários, validação de 8 KiB, diagnóstico de leitura/tamanho e identificação por conteúdo.
-- **IMPLEMENTED:** detecção de múltiplos arquivos com o mesmo hash conhecido.
-- **IMPLEMENTED:** testes sintéticos que substituem o digest; nenhum binário de BIOS é armazenado no Git.
-- **QUICK_PASS / SHORT_PASS / LONG_PASS:** NOT RUN — ainda não há execução confirmada no SHA candidato.
-- **CI:** NOT RUN / sem checks publicados para o SHA candidato consultado.
+- **IMPLEMENTED:** assinaturas SHA-256 para BIOS JP e imagem compartilhada US/EU.
+- **IMPLEMENTED:** varredura explícita, nomes arbitrários, tamanho exato de 8 KiB e rejeição por tamanho antes da leitura integral.
+- **IMPLEMENTED:** seleção por território e revalidação do arquivo (tamanho + SHA-256) imediatamente antes do carregamento.
+- **IMPLEMENTED:** duplicatas determinísticas; primeira ocorrência selecionável e cópias adicionais marcadas como `DUPLICATE_HASH`.
+- **IMPLEMENTED:** inferência automática de território a partir dos códigos 3/4 de cabeçalho SMS reconhecido; cabeçalho desconhecido não provoca escolha especulativa.
+- **IMPLEMENTED:** testes sintéticos sem binários de BIOS no Git.
 
 ### Fatia 2 — boot no core Rust e fronteira PyO3
 
-- **IMPLEMENTED:** BIOS opcional de 8 KiB recebida pelo construtor da máquina; tamanho inválido é rejeitado.
-- **IMPLEMENTED:** overlay dos primeiros 1 KiB em `$0000-$03FF`; restante da janela continua vindo do cartucho.
-- **IMPLEMENTED:** latch `$3E` controla overlay da BIOS (bit 3), RAM interna (bit 4) e slot de cartucho (bit 6).
-- **IMPLEMENTED:** sem BIOS, o estado inicial preserva boot direto do cartucho; reset restaura o perfil inicial.
-- **IMPLEMENTED:** PyO3 aceita `bios=None` sem alterar os parâmetros antigos `rom`, `pal` e `region`; adaptador Python encaminha bytes opcionais.
-- **QUICK_PASS / SHORT_PASS / LONG_PASS:** aguardando CI no SHA candidato; não executado localmente.
+- **IMPLEMENTED:** BIOS opcional de 8 KiB; overlay de 1 KiB em `$0000-$03FF`.
+- **IMPLEMENTED:** latch `$3E` com decodificação de portas pares espelhadas em `$00-$3F`.
+- **IMPLEMENTED:** perfil de power-on `$F3`, RAM habilitada mantendo BIOS por `$E3`, hand-off para cartucho por `$AB`, e reset coerente com BIOS presente/ausente.
+- **IMPLEMENTED:** teste sintético executa cópia do stub BIOS para RAM antes de desabilitar a BIOS e saltar ao cartucho.
+- **IMPLEMENTED:** PyO3 mantém compatibilidade dos argumentos antigos e encaminha bytes opcionais sem callbacks por instrução.
 
-### Fatias pendentes
+### Fatia 3 — Qt/configuração
 
-- **INTEGRATION_PENDING:** SIM.
-- **Qt/configuração:** caminho persistente de firmware, seleção regional a partir do scanner e apresentação de diagnóstico ainda não implementados.
-- **Boot real com BIOS:** PENDING; requer validação local no Windows com firmware do usuário.
-- **TEMPORAL_PASS:** não aplicável a esta funcionalidade.
+- **IMPLEMENTED:** preferência persistente `firmware_directory` e seletor de pasta na aba BIOS SMS.
+- **IMPLEMENTED:** botão de varredura explícita com status, região e prefixo SHA-256 por arquivo.
+- **IMPLEMENTED:** carregamento da BIOS compatível ao abrir/resetar ROM SMS; preferência manual prevalece e modo automático usa cabeçalho confiável.
+- **IMPLEMENTED:** fallback para boot direto quando BIOS não está configurada ou não há correspondência segura.
+- **IMPLEMENTED:** diagnóstico de BIOS carregada/fallback sem registrar bytes do firmware.
+
+### Validação
+
+- **QUICK_PASS / SHORT_PASS:** pendentes de confirmação no SHA final desta cadeia.
+- **CI:** avaliar todos os checks aplicáveis no SHA candidato atual; checks cancelados ou de commits anteriores não contam como PASS.
+- **Boot real com BIOS:** PENDING; requer firmware local do usuário e validação visual/manual.
+- **TEMPORAL_PASS:** não aplicável; esta fatia não altera o scheduler ciclo a ciclo.
