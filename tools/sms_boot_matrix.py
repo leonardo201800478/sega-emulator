@@ -464,9 +464,7 @@ def main() -> int:
         }
         for result in bios_startup_results
     }
-    game_results = [
-        result for result in results if result["rom"] != "NO_CARTRIDGE"
-    ]
+    game_results = [result for result in results if result["rom"] != "NO_CARTRIDGE"]
     game_names = sorted({result["rom"] for result in game_results})
     successful_game_outcomes = {
         "BIOS_HANDOFF_AND_POSTRUN",
@@ -474,9 +472,7 @@ def main() -> int:
     }
     game_boot_summary = {}
     for game_name in game_names:
-        game_cases = [
-            result for result in game_results if result["rom"] == game_name
-        ]
+        game_cases = [result for result in game_results if result["rom"] == game_name]
         successful_paths = [
             f"{result['bios'] or 'sem BIOS'} / {result['region']}"
             for result in game_cases
