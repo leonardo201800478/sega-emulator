@@ -64,9 +64,7 @@ class _SmsRomAuditThread(QThread):
     def run(self) -> None:
         """Descobre os arquivos e executa cada ROM em uma instância Rust isolada."""
         try:
-            targets = discover_sms_rom_targets(
-                self.directory, recursive=self.recursive
-            )
+            targets = discover_sms_rom_targets(self.directory, recursive=self.recursive)
             self.discovered.emit(len(targets))
             report = run_sms_rom_audit(
                 targets,
@@ -219,6 +217,7 @@ class SmsRomAuditDialog(QDialog):
         self._thread.progress.connect(self._on_progress)
         self._thread.report_ready.connect(self._on_report_ready)
         self._thread.failed.connect(self._on_failed)
+        self._thread.finished.connect(self._set_idle)
         self._thread.start()
         self.start_button.setEnabled(False)
         self.browse_button.setEnabled(False)
@@ -230,9 +229,7 @@ class SmsRomAuditDialog(QDialog):
         self.progress_bar.setValue(0)
         self.summary_label.setText(f"{total} item(ns) encontrado(s). Executando…")
 
-    def _on_progress(
-        self, index: int, total: int, result: SmsRomAuditResult
-    ) -> None:
+    def _on_progress(self, index: int, total: int, result: SmsRomAuditResult) -> None:
         """Acrescenta o resultado individual sem bloquear a execução do worker."""
         row = self.results_table.rowCount()
         self.results_table.insertRow(row)
@@ -249,7 +246,9 @@ class SmsRomAuditDialog(QDialog):
             self.results_table.setItem(row, column, QTableWidgetItem(value))
         self.progress_bar.setRange(0, max(1, total))
         self.progress_bar.setValue(index)
-        self.summary_label.setText(f"Auditando {index} de {total}: {result.display_name}")
+        self.summary_label.setText(
+            f"Auditando {index} de {total}: {result.display_name}"
+        )
 
     def _on_report_ready(self, report: SmsRomAuditReport) -> None:
         """Persiste somente telemetria e hashes em um JSON local."""
@@ -266,18 +265,20 @@ class SmsRomAuditDialog(QDialog):
                 f"Auditoria concluída, mas o JSON não pôde ser salvo: {exc}"
             )
         else:
-            counts = ", ".join(
-                f"{status}: {count}" for status, count in sorted(report.counts.items())
-            ) or "nenhuma ROM encontrada"
+            counts = (
+                ", ".join(
+                    f"{status}: {count}"
+                    for status, count in sorted(report.counts.items())
+                )
+                or "nenhuma ROM encontrada"
+            )
             self.summary_label.setText(
                 f"Concluída — {counts}. Relatório local: {self._report_path}"
             )
-        self._set_idle()
 
     def _on_failed(self, message: str) -> None:
         """Apresenta falhas operacionais da auditoria sem encerrar a aplicação."""
         self.summary_label.setText(f"Falha na auditoria: {message}")
-        self._set_idle()
 
     def _cancel_audit(self) -> None:
         """Solicita cancelamento entre frames; o frame nativo atual termina limitado."""
