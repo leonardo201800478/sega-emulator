@@ -643,7 +643,7 @@ def run(initial_path: Path | None = None) -> None:
                 for phase in phase_totals_ms:
                     phase_totals_ms[phase] = 0.0
                     phase_max_ms[phase] = 0.0
-        except Exception as exc:
+        except Exception:
             logger.exception(
                 "Falha durante execução de quadro",
                 extra={
