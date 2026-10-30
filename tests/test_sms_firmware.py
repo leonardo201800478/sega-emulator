@@ -17,6 +17,7 @@ from sega_emulator.rom_catalog import RomCatalog
 
 JP_SHA256 = "67846e26764bd862f19179294347f7353a4166b62ac4198a5ec32933b7da486e"
 EXPORT_SHA256 = "477617917a12a30f9f43844909dc2de6e6a617430f5c9a36306c86414a670d50"
+EUROPE_V2_SHA256 = "1eb16fc06ceaf05651d7cfd69d1713e6ddccc4349a511f6fd17e037d71f9d85b"
 
 
 def test_unconfigured_and_missing_directories_are_reported(tmp_path):
@@ -53,38 +54,56 @@ def test_wrong_size_file_is_invalid_and_not_hashed(tmp_path):
     assert result.files[0].sha256 is None
 
 
-def test_known_hashes_classify_japan_and_shared_export_image(tmp_path):
+def test_known_hashes_classify_japan_and_export_revisions(tmp_path):
+    from types import SimpleNamespace
     from unittest.mock import patch
 
-    (tmp_path / "jp-with-arbitrary-name.data").write_bytes(b"J" * SMS_BIOS_SIZE)
-    (tmp_path / "export.bin").write_bytes(b"E" * SMS_BIOS_SIZE)
+    (tmp_path / "japan.sms").write_bytes(b"J" * SMS_BIOS_SIZE)
+    (tmp_path / "usa-v1.3.sms").write_bytes(b"U" * SMS_BIOS_SIZE)
+    (tmp_path / "europe-v2.0.sms").write_bytes(b"E" * SMS_BIOS_SIZE)
 
-    from types import SimpleNamespace
-
+    expected = {
+        b"J": JP_SHA256,
+        b"U": EXPORT_SHA256,
+        b"E": EUROPE_V2_SHA256,
+    }
     with patch("sega_emulator.machine.sms_firmware.hashlib.sha256") as sha256:
         sha256.side_effect = lambda data: SimpleNamespace(
-            hexdigest=lambda: JP_SHA256 if data.startswith(b"J") else EXPORT_SHA256
+            hexdigest=lambda: expected[data[:1]]
         )
         result = scan_sms_firmware_directory(tmp_path)
 
     by_name = {item.path.name: item for item in result.files}
-    assert by_name["jp-with-arbitrary-name.data"].region is SmsFirmwareRegion.JAPAN
-    assert (
-        by_name["jp-with-arbitrary-name.data"].status
-        is SmsFirmwareFileStatus.VALID_JAPAN
-    )
-    assert by_name["export.bin"].region is SmsFirmwareRegion.EXPORT_US_EU
-    assert by_name["export.bin"].status is SmsFirmwareFileStatus.VALID_EXPORT_US_EU
+    assert by_name["japan.sms"].region is SmsFirmwareRegion.JAPAN
+    assert by_name["japan.sms"].status is SmsFirmwareFileStatus.VALID_JAPAN
+    for filename in ("usa-v1.3.sms", "europe-v2.0.sms"):
+        assert by_name[filename].region is SmsFirmwareRegion.EXPORT_US_EU
+        assert by_name[filename].status is SmsFirmwareFileStatus.VALID_EXPORT_US_EU
 
 
-def test_export_and_japan_signatures_are_unique_catalog_entries():
-    # The catalog intentionally contains exactly two unique signatures:
-    # JP and the byte-identical US/EU export image.
+def test_known_bios_signatures_map_to_their_compatible_families():
     from sega_emulator.machine import sms_firmware
 
     assert sms_firmware._KNOWN_BIOS[JP_SHA256] is SmsFirmwareRegion.JAPAN
     assert sms_firmware._KNOWN_BIOS[EXPORT_SHA256] is SmsFirmwareRegion.EXPORT_US_EU
-    assert len(sms_firmware._KNOWN_BIOS) == 2
+    assert (
+        sms_firmware._KNOWN_BIOS[EUROPE_V2_SHA256]
+        is SmsFirmwareRegion.EXPORT_US_EU
+    )
+    assert len(sms_firmware._KNOWN_BIOS) == 3
+
+
+def test_europe_v2_bios_sms_file_is_selected_for_europe(tmp_path):
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    payload = b"E" * SMS_BIOS_SIZE
+    (tmp_path / "Europe-v2.0.sms").write_bytes(payload)
+    with patch("sega_emulator.machine.sms_firmware.hashlib.sha256") as sha256:
+        sha256.return_value = SimpleNamespace(
+            hexdigest=lambda: EUROPE_V2_SHA256
+        )
+        assert load_sms_bios(tmp_path, "europe") == payload
 
 
 def test_duplicate_recognized_hashes_are_not_reported_as_conflicts(tmp_path):
