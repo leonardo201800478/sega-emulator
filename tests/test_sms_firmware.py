@@ -8,6 +8,7 @@ from sega_emulator.machine.sms_firmware import (
     SmsFirmwareFileStatus,
     SmsFirmwareRegion,
     load_sms_bios,
+    load_sms_bios_for_boot,
     scan_sms_firmware_directory,
     sms_bios_region_for_rom,
     sms_bios_region_from_cartridge,
@@ -416,3 +417,30 @@ def test_firmware_scanner_rejects_unverified_prototype_bios_from_dat(tmp_path):
 
     assert prototype.region is None
     assert prototype.status is SmsFirmwareFileStatus.NOT_FOUND
+
+
+def test_disabled_bios_boot_bypasses_firmware_scanning(monkeypatch, tmp_path):
+    import sega_emulator.machine.sms_firmware as firmware
+
+    def unexpected_scan(*args, **kwargs):
+        raise AssertionError("disabled BIOS boot must not scan firmware")
+
+    monkeypatch.setattr(firmware, "scan_sms_firmware_directory", unexpected_scan)
+    assert load_sms_bios_for_boot(False, tmp_path, "usa") is None
+
+
+def test_enabled_bios_boot_loads_selected_region(tmp_path):
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    (tmp_path / "usa-v1.3.sms").write_bytes(b"U" * SMS_BIOS_SIZE)
+    with patch("sega_emulator.machine.sms_firmware.hashlib.sha256") as sha256:
+        sha256.return_value = SimpleNamespace(hexdigest=lambda: EXPORT_SHA256)
+        assert load_sms_bios_for_boot(True, tmp_path, "usa") == b"U" * SMS_BIOS_SIZE
+
+
+def test_bios_boot_requires_boolean_flag():
+    import pytest
+
+    with pytest.raises(TypeError, match="enabled"):
+        load_sms_bios_for_boot("false", None, "usa")
