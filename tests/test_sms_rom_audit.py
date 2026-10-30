@@ -28,6 +28,8 @@ class _FakeMachine:
         self.vdp = _FakeVdp(uniform=uniform)
         self.total_instructions = 0
         self.total_tstates = 0
+        self.region = "usa"
+        self.bios_enabled = False
         self.cpu = type("Cpu", (), {"pc": 0x1234})()
 
     def run_frame(self, *, max_steps: int) -> int:
@@ -82,6 +84,9 @@ def test_audit_runs_native_machine_factory_and_confirms_framebuffer(tmp_path):
     assert result.instructions == 400
     assert result.tstates == 1600
     assert result.pc == 0x1234
+    assert result.region == "usa"
+    assert result.bios_enabled_at_start is False
+    assert result.bios_enabled_at_end is False
     assert result.sha256 is not None
     payload = json.loads(report.to_json())
     assert payload["results"][0]["status"] == "BOOT_CONFIRMED"
