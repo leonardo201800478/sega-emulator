@@ -385,9 +385,7 @@ class SettingsDialog(QDialog):
         for item in scan.files:
             region = item.region.value if item.region is not None else "unknown"
             digest = f"SHA-256 {item.sha256[:12]}…" if item.sha256 else "no hash"
-            lines.append(
-                f"{item.path.name}: {item.status.value}; {region}; {digest}"
-            )
+            lines.append(f"{item.path.name}: {item.status.value}; {region}; {digest}")
         self.firmware_scan_status.setText("\n".join(lines))
 
     def _choose_firmware_directory(self) -> None:
