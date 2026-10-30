@@ -839,8 +839,9 @@ fn render_scanline(
 #[cfg(test)]
 mod tests {
     use super::{
-        COLLISION, FRAME_SIZE, OVERFLOW, SMS_VDP_WIDTH, SmsVdp, StereoPresentation, TMS_PALETTE,
-        VBLANK, render_legacy_scanline, render_legacy_sprites, render_scanline,
+        COLLISION, FRAME_SIZE, LINE_TSTATES, OVERFLOW, SMS_VDP_WIDTH, SmsVdp,
+        StereoPresentation, TMS_PALETTE, VBLANK, render_legacy_scanline, render_legacy_sprites,
+        render_scanline,
     };
     use crate::config::{SpriteLimitMode, VideoStandard};
     fn reg(v: &mut SmsVdp, i: u8, value: u8) {
@@ -1541,7 +1542,6 @@ mod tests {
         assert_eq!(v.read_v_counter(), 0xFF);
     }
 
-
     fn configure_horizontal_scroll_pattern(v: &mut SmsVdp) {
         v.registers[0] = 0x04;
         v.registers[1] = 0x40;
@@ -1570,10 +1570,12 @@ mod tests {
 
         reg(&mut v, 8, 1);
         v.advance(228);
-        let second_line =
-            v.working_framebuffer[SMS_VDP_WIDTH * 3..SMS_VDP_WIDTH * 6].to_vec();
+        let second_line = v.working_framebuffer[SMS_VDP_WIDTH * 3..SMS_VDP_WIDTH * 6].to_vec();
 
-        assert_ne!(first_line, second_line, "R8 change must affect the next rendered line");
+        assert_ne!(
+            first_line, second_line,
+            "R8 change must affect the next rendered line"
+        );
         assert_eq!(
             &v.working_framebuffer[..SMS_VDP_WIDTH * 3],
             &first_line,
@@ -1598,8 +1600,14 @@ mod tests {
             reg(&mut split_chunks, 8, scroll);
         }
 
-        assert_eq!(whole_chunks.raster_position(), split_chunks.raster_position());
-        assert_eq!(whole_chunks.working_framebuffer, split_chunks.working_framebuffer);
+        assert_eq!(
+            whole_chunks.raster_position(),
+            split_chunks.raster_position()
+        );
+        assert_eq!(
+            whole_chunks.working_framebuffer,
+            split_chunks.working_framebuffer
+        );
         assert_eq!(whole_chunks.registers()[8], split_chunks.registers()[8]);
     }
 
@@ -1676,11 +1684,14 @@ mod tests {
                 "raster mismatch at split={split}"
             );
             assert_eq!(
-                whole.working_framebuffer,
-                fragmented.working_framebuffer,
+                whole.working_framebuffer, fragmented.working_framebuffer,
                 "framebuffer mismatch at split={split}"
             );
-            assert_eq!(whole.status(), fragmented.status(), "status at split={split}");
+            assert_eq!(
+                whole.status(),
+                fragmented.status(),
+                "status at split={split}"
+            );
         }
     }
 
