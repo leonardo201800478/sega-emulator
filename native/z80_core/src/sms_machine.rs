@@ -24,6 +24,32 @@ fn sms_region_profile(
     }
 }
 
+/// Construct the SMS hardware without invoking the Python interpreter.
+///
+/// This is shared by the PyO3 constructor and native Rust tests so the test
+/// harness never creates Python exceptions or requires interpreter lifecycle.
+fn build_sms_machine(
+    rom: Vec<u8>,
+    pal: bool,
+    region: Option<&str>,
+    bios: Option<Vec<u8>>,
+) -> Result<SmsMachine, SmsMachineBuildError> {
+    let (territory, video_standard) = sms_region_profile(region, pal)
+        .map_err(SmsMachineBuildError::InvalidRegion)?;
+    let config = SmsMachineConfig {
+        territory,
+        video_standard,
+        ..SmsMachineConfig::default()
+    };
+    SmsMachine::with_bios_audio(rom, bios, config, 44_100)
+        .map_err(|error| SmsMachineBuildError::Machine(error.to_string()))
+}
+
+enum SmsMachineBuildError {
+    InvalidRegion(&'static str),
+    Machine(String),
+}
+
 /// Thin Python boundary; the SMS machine, PSG and sample generation stay in Rust.
 #[pyclass(module = "sega_z80_core")]
 pub struct NativeSMSMachine {
@@ -36,18 +62,12 @@ impl NativeSMSMachine {
     #[new]
     #[pyo3(signature = (rom, pal=false, region=None, bios=None))]
     fn new(rom: Vec<u8>, pal: bool, region: Option<&str>, bios: Option<Vec<u8>>) -> PyResult<Self> {
-        // Keep the legacy positional `pal` argument compatible; an explicit
-        // region profile takes precedence and also selects territory.
-        let (territory, video_standard) =
-            sms_region_profile(region, pal).map_err(pyo3::exceptions::PyValueError::new_err)?;
-        let config = SmsMachineConfig {
-            territory,
-            video_standard,
-            ..SmsMachineConfig::default()
-        };
-        // The shared native resampler consumes a deterministic 44.1 kHz PSG stream.
-        let machine = SmsMachine::with_bios_audio(rom, bios, config, 44_100)
-            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        let machine = build_sms_machine(rom, pal, region, bios).map_err(|error| match error {
+            SmsMachineBuildError::InvalidRegion(message) => {
+                pyo3::exceptions::PyValueError::new_err(message)
+            }
+            SmsMachineBuildError::Machine(message) => PyRuntimeError::new_err(message),
+        })?;
         Ok(Self {
             machine,
             total_instructions: 0,
@@ -217,7 +237,7 @@ mod tests {
 
     #[test]
     fn sms_adapter_uses_native_psg_and_reports_configured_clock() {
-        let machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa"), None).unwrap();
+        let machine = NativeSMSMachine { machine: build_sms_machine(vec![0; 16], false, Some("usa"), None).unwrap(), total_instructions: 0 };
         assert_eq!(machine.psg_sample_rate(), 44_100);
         assert_eq!(machine.psg_clock_hz(), 3_579_545);
         assert_eq!(machine.total_tstates(), 0);
@@ -225,10 +245,10 @@ mod tests {
 
     #[test]
     fn region_selects_pal_clock_and_japan_territory_profile() {
-        let pal_machine = NativeSMSMachine::new(vec![0; 16], false, Some("europe"), None).unwrap();
+        let pal_machine = NativeSMSMachine { machine: build_sms_machine(vec![0; 16], false, Some("europe"), None).unwrap(), total_instructions: 0 };
         assert_eq!(pal_machine.psg_clock_hz(), 3_546_895);
 
-        let japan_machine = NativeSMSMachine::new(vec![0; 16], false, Some("japan"), None).unwrap();
+        let japan_machine = NativeSMSMachine { machine: build_sms_machine(vec![0; 16], false, Some("japan"), None).unwrap(), total_instructions: 0 };
         assert_eq!(japan_machine.psg_clock_hz(), 3_579_545);
     }
 
@@ -236,7 +256,7 @@ mod tests {
     fn bios_is_forwarded_to_native_memory_and_executes() {
         let bios = vec![0x3E, 0x08, 0xD3, 0x3E];
         let machine =
-            NativeSMSMachine::new(vec![0xC3; 0x4000], false, Some("usa"), Some(bios)).unwrap();
+            NativeSMSMachine { machine: build_sms_machine(vec![0xC3; 0x4000], false, Some("usa"), Some(bios)).unwrap(), total_instructions: 0 };
         assert!(machine.bios_enabled());
         assert_eq!(machine.read_memory(0), 0x3E);
     }
