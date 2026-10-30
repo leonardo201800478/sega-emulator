@@ -85,15 +85,15 @@ A contagem normalizada de linhas reais confirma exatamente os valores do relató
 | C2 | IM1 não define WZ=0038 | Confirmado: `service_int`, ramo IM1, empilha PC e define PC=0038 sem escrever WZ | Diferença confirmada; ausente da matriz JSON, que não modela estados de interrupção |
 | C3 | Reset zera AF/SP; ares usa FFFF | `reset()` atribui `Z80Registers::default()`; a semântica efetiva depende dos defaults do tipo | Estado inicial do SMS_CORE verificável; valor esperado de power-on não está provado pelo relatório/manual anexado. Não alterar por compatibilidade com ares isoladamente |
 | C4 | R incrementa durante HALT no SMS_CORE | Confirmado: cada passo HALT incrementa os 7 bits inferiores de R e soma 4 T-states | Preservar até haver evidência específica do Z80 NMOS e do perfil de hardware |
-| C5 | EX (SP),HL escreve SP antes de SP+1 | Confirmado: o caminho base escreve primeiro em SP e depois em SP+1 | Ordem funcional confirmada; a alegação de que hardware real exige a ordem inversa ainda precisa de fonte/trace de barramento independente |
-| C6 | EX (SP),IX/IY escreve SP+1 antes de SP | Confirmado: o caminho indexado escreve primeiro em SP+1 e depois em SP | Inconsistência interna confirmada; não normalizar a ordem sem vetor independente que fixe a sequência correta |
+| C5 | EX (SP),HL escreve SP antes de SP+1 | Confirmado: o caminho base escreve primeiro em SP e depois em SP+1 | O manual Zilog UM008011-0816, p. 127, descreve H ↔ (SP+1) e L ↔ SP, mas não fornece a ordem cronológica dos dois ciclos de escrita. A divergência é plausível, ainda requer trace/vetor de barramento independente |
+| C6 | EX (SP),IX/IY escreve SP+1 antes de SP | Confirmado: o caminho indexado escreve primeiro em SP+1 e depois em SP | A notação do manual para IX (p. 128) também lista IXH ↔ (SP+1) antes de IXL ↔ SP; isso é compatível com a ordem implementada, mas não substitui um trace temporal dos ciclos. A inconsistência entre caminhos base/indexado permanece confirmada |
 | C7 | CPU agrega T-states por instrução | Confirmado pelo contrato do executor e pela integração da máquina; os eventos detalhados são limitados a instruções ED selecionadas | Lacuna temporal arquitetural confirmada; não equivale a erro de contagem nominal |
 
 ### Notas de interpretação
 
 - O JSON registra C1, HALT, C5 e C6 em observações, mas não contém um registro próprio para C2, C3 ou C7. A matriz de opcodes não substitui uma matriz de estados especiais/interrupções.
 - O teste de classificação de opcodes demonstra que o decoder aceita os bytes varridos; não demonstra semântica completa, estado final, flags, acesso ao barramento ou timing de cada combinação.
-- O manual Zilog fundamenta M-cycles, T-states, M1, memória, I/O, WAIT e refresh. Ele não define o mapa de memória do Master System, a arbitragem do mapper ou os latches do VDP.
+- O manual Zilog UM008011-0816 (08/2016), pp. 127–128, descreve a operação de EX (SP),HL/IX e a duração agregada em M-cycles/T-states. A notação dos operandos não especifica, por si só, a cronologia elétrica de cada write. O manual fundamenta M-cycles, T-states, M1, memória, I/O, WAIT e refresh; não define o mapa de memória do Master System, a arbitragem do mapper ou os latches do VDP.
 - A ordem de duas escritas de `EX (SP),HL` deve ser validada com um bus observer sensível à ordem (inclusive endereços de mapper), usando um vetor independente; a concordância com ares não basta.
 
 ## 4. Barramento e scheduler — o que a auditoria precisa separar
