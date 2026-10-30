@@ -131,9 +131,9 @@ class SmsInputSettingsPage(QWidget):
 
         controls_note = QLabel(
             "Cada controle possui direcional e dois botões de ação (1 e 2). "
-            "Os mapeamentos de teclado e gamepad são os definidos nas abas "
-            "Jogador 1 e Jogador 2; o botão SW/Hold do perfil SG-1000 não é "
-            "um terceiro botão do controle SMS."
+            "Jogador 1 e Jogador 2; a ação Hold/SW aciona o botão físico "
+            "PAUSE do console SMS (por padrão, P/H no teclado e Start no "
+            "gamepad), separado dos dois botões do controle."
         )
         controls_note.setWordWrap(True)
         root.addWidget(controls_note)
@@ -199,9 +199,10 @@ class SmsInputSettingsPage(QWidget):
         root.addWidget(phaser_group)
 
         note = QLabel(
-            "Estado de integração: estas preferências são salvas, mas a ponte "
-            "Qt → núcleo SMS ainda precisa encaminhar eventos de mouse/eixos. "
-            "A detecção real do Light Phaser também depende do VDP informar "
+            "O botão PAUSE do console já é encaminhado ao Z80 como NMI por "
+            "borda de pressionamento. A integração de mira do Light Phaser "
+            "ainda está pendente: depende do Qt encaminhar mouse/eixos e do "
+            "VDP informar "
             "um pulso de luz válido no raster; a posição do mouse, sozinha, "
             "não confirma um acerto."
         )
