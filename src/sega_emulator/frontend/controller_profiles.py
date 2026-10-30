@@ -7,7 +7,9 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-ACTIONS = ("up", "down", "left", "right", "button1", "button2", "hold", "console_pause")
+ACTIONS = (
+    "up", "down", "left", "right", "button1", "button2", "hold", "console_pause"
+)
 JOYSTICK_ACTIONS = frozenset(ACTIONS) - {"hold", "console_pause"}
 ACTION_BITS = {
     "up": 0,
@@ -274,3 +276,9 @@ def apply_turbo(
             if turbo_buttons.get(action, False):
                 result.discard(action)
     return result
+
+
+
+def is_rising_edge(pressed: bool, was_pressed: bool) -> bool:
+    """Return true only for a released-to-pressed transition."""
+    return pressed and not was_pressed
