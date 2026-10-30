@@ -10,6 +10,8 @@ from sega_emulator.frontend.controller_profiles import (
     PlayerInputProfile,
     apply_turbo,
     joystick_value,
+    is_rising_edge,
+    JOYSTICK_ACTIONS,
 )
 
 
@@ -49,8 +51,6 @@ def test_console_pause_is_persisted_but_never_becomes_a_joystick_bit() -> None:
     assert decoded.players[1].keyboard_bindings["console_pause"] == "Pause"
     assert decoded.players[2].keyboard_bindings["console_pause"] == "ScrollLock"
     assert decoded.players[1].gamepad_buttons["console_pause"] == "back"
-    from sega_emulator.frontend.controller_profiles import JOYSTICK_ACTIONS
-
     assert "console_pause" not in JOYSTICK_ACTIONS
     assert joystick_value({"up", "button1"}) == 0xEE
 
@@ -66,3 +66,13 @@ def test_legacy_profiles_gain_console_pause_default_without_losing_bindings() ->
     assert legacy.gamepad_buttons["console_pause"] == "back"
     assert legacy.keyboard_bindings["up"] == "I"
     assert legacy.keyboard_bindings["console_pause"] == "Pause"
+
+
+
+def test_console_pause_is_edge_triggered_for_press_hold_release_press() -> None:
+    was_pressed = False
+    events = []
+    for pressed in (True, True, True, False, False, True):
+        events.append(is_rising_edge(pressed, was_pressed))
+        was_pressed = pressed
+    assert events == [True, False, False, False, False, True]
