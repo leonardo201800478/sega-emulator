@@ -993,6 +993,9 @@ def run(initial_path: Path | None = None) -> None:
         firmware_directory_changed = (
             updated.firmware_directory != preferences.firmware_directory
         )
+        firmware_boot_changed = (
+            updated.sms_bios_boot_enabled != preferences.sms_bios_boot_enabled
+        )
         if (
             updated.sprite_limit_enabled != preferences.sprite_limit_enabled
             and machine is not None
@@ -1048,20 +1051,31 @@ def run(initial_path: Path | None = None) -> None:
         audio_warning = _audio_output_warning(
             preferences, audio_output, selected_audio_driver
         )
-        settings_message = (
-            "Pasta de BIOS SMS atualizada; aplique no próximo reset ou carregamento."
-            if firmware_directory_changed and active_system == "master_system"
-            else "Configurações de áudio e vídeo aplicadas."
-        )
+        if firmware_boot_changed:
+            settings_message = (
+                "Boot por BIOS SMS atualizado; recarregue a ROM do Master System "
+                "para aplicar a alteração."
+            )
+        elif firmware_directory_changed and active_system == "master_system":
+            settings_message = (
+                "Pasta de BIOS SMS atualizada; recarregue a ROM para aplicar."
+            )
+        else:
+            settings_message = "Configurações de áudio e vídeo aplicadas."
         status.showMessage(
             audio_warning or settings_message,
-            8000 if audio_warning is not None or firmware_directory_changed else 5000,
+            8000
+            if audio_warning is not None
+            or firmware_directory_changed
+            or firmware_boot_changed
+            else 5000,
         )
         logger.info(
             "Configurações de áudio e vídeo atualizadas",
             extra={
                 "event": "audio_video_settings_updated",
                 "audio_enabled": preferences.audio_enabled,
+                "sms_bios_boot_enabled": preferences.sms_bios_boot_enabled,
                 "audio_driver": selected_audio_driver,
                 "audio_sample_rate": preferences.audio_sample_rate,
                 "audio_buffer_size": preferences.audio_buffer_size,
