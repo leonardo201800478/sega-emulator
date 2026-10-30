@@ -152,7 +152,15 @@ class SmsRomAuditDialog(QDialog):
         self.results_table = QTableWidget(0, 7)
         self.results_table.setObjectName("smsAuditResults")
         self.results_table.setHorizontalHeaderLabels(
-            ["ROM", "Resultado", "Boot/Região", "Frames", "PC", "Tempo (ms)", "Detalhes"]
+            [
+                "ROM",
+                "Resultado",
+                "Boot/Região",
+                "Frames",
+                "PC",
+                "Tempo (ms)",
+                "Detalhes",
+            ]
         )
         self.results_table.setSortingEnabled(False)
         self.results_table.setAlternatingRowColors(True)
