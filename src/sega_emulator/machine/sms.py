@@ -131,6 +131,10 @@ class SMSMachine:
             "button2" in actions,
         )
 
+    def request_console_pause(self) -> None:
+        """Request one SMS console Pause NMI; this is not host emulation pause."""
+        self.native_machine.request_console_pause()
+
     def drain_psg_write_events(self) -> list[tuple[int, int]]:
         # SMS VGM event capture is not wired to the native timestamped bus yet.
         return []
