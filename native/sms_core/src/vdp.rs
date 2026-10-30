@@ -1699,4 +1699,55 @@ mod tests {
         let v = SmsVdp::default();
         assert_eq!(v.framebuffer().len(), SMS_VDP_WIDTH * 192 * 3);
     }
+
+    // Characterization tests for the current scanline renderer. These record
+    // when the model samples mutable VDP state; they are not hardware oracles.
+    fn setup_midline_write_fixture() -> SmsVdp {
+        let mut v = SmsVdp::default();
+        v.registers[0] = 0x04;
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[5] = 0x7E;
+        v.cram[1] = 0x03;
+        v.vram[0] = 0x80;
+        v.vram[0x3800] = 0;
+        v.vram[0x3F00] = 0xD0;
+        v
+    }
+
+    #[test]
+    fn midline_r8_write_is_sampled_for_the_whole_scanline_by_current_model() {
+        let mut actual = setup_midline_write_fixture();
+        let mut expected = setup_midline_write_fixture();
+
+        // Configure the expected final state before the line starts. The
+        // current renderer samples R8 only when the scanline is completed.
+        reg(&mut expected, 8, 8);
+        expected.advance(228);
+
+        actual.advance(114);
+        reg(&mut actual, 8, 8);
+        actual.advance(114);
+
+        // This characterizes the current abstraction, not hardware-correct
+        // timing: a mid-line write produces the same completed line as if R8
+        // had been set before the line began.
+        assert_eq!(actual.working_framebuffer, expected.working_framebuffer);
+    }
+
+    #[test]
+    fn midline_cram_write_is_sampled_for_the_whole_scanline_by_current_model() {
+        let mut v = setup_midline_write_fixture();
+
+        v.advance(114);
+        addr(&mut v, 1, 0xC0);
+        v.write_port(0xBE, 0x0C);
+        v.advance(114);
+
+        // CRAM is mutated immediately and the line is rendered at its end;
+        // therefore even pixels left of the write phase use the new color.
+        // This is a model-characterization assertion, not a hardware oracle.
+        assert_eq!(&v.working_framebuffer[0..3], &[0, 255, 0]);
+    }
+
 }
