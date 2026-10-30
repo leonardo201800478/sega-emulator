@@ -219,7 +219,11 @@ def run(initial_path: Path | None = None) -> None:
                     logger.warning("Catálogo DAT SMS indisponível: %s", exc)
                     bios_region = None
         bios = (
-            load_sms_bios(preferences.firmware_directory, bios_region)
+            load_sms_bios(
+                preferences.firmware_directory,
+                bios_region,
+                catalog=sms_rom_catalog,
+            )
             if bios_region is not None
             else None
         )
