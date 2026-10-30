@@ -102,7 +102,7 @@ A BIOS deve ser parte do caminho de inicialização do cartucho/máquina, não u
 
 - O SMS decodifica escritas pares no intervalo de portas `$00-$3F` como o latch de memória; o core aplica essa máscara, não apenas a porta literal `$3E`.
 - Os bits são ativos em nível baixo: bit 7 expansão, bit 6 cartucho, bit 5 card, bit 4 RAM interna, bit 3 BIOS e bit 2 I/O.
-- A BIOS fica habilitada no power-on. O core modela o perfil inicial `$F3` (BIOS ativa; cartucho e RAM interna desabilitados) e o perfil pós-BIOS de cartucho `$AB` (BIOS desabilitada; cartucho e RAM interna habilitados).
+- A BIOS fica habilitada no power-on. O core modela o perfil inicial `$E0` (BIOS e RAM interna habilitadas; cartucho, card e expansão desabilitados), alinhado ao SMS Plus GX e aos bits ativos em nível baixo do port `$3E`. O perfil pós-BIOS de cartucho permanece `$AB` (BIOS desabilitada; cartucho e RAM interna habilitados).
 - O fluxo sintético de aceitação habilita RAM mantendo BIOS, copia um pequeno stub para RAM, desabilita BIOS/habilita cartucho e transfere execução ao endereço zero do cartucho.
 - A BIOS de 8 KiB fornecida pelo usuário é mapeada integralmente em `$0000-$1FFF`; fora dessa janela, o slot de cartucho continua sujeito ao latch de memória. O slot do cartucho continua sujeito ao latch de memória.
 - A arbitragem elétrica quando BIOS e cartucho são habilitados simultaneamente difere entre SMS e SMS 2 (precedência/AND nas referências consultadas); esse caso não é exercitado pelo fluxo de boot implementado, que mantém os slots mutuamente selecionados. A modelagem explícita dessa sobreposição permanece uma limitação, não um comportamento declarado como validado.
@@ -153,7 +153,7 @@ substituem a preferência de vídeo do console.
 ### Integração SMS
 - [ ] Definir e testar o mapa integral de 8 KiB da BIOS e sua desabilitação com programa sintético.
 - [ ] Testar reset, leitura antes/depois de desabilitar BIOS, transferência ao cartucho e mapper padrão.
-- [ ] Testar perfil de power-on `$F3`, perfil de cartucho `$AB` e espelhamento de escritas pares em `$00-$3F`.
+- [ ] Testar perfil de power-on `$E0`, acesso imediato à RAM/stack com BIOS ativa, perfil de cartucho `$AB` e espelhamento de escritas pares em `$00-$3F`.
 - [ ] Executar um programa sintético que copia o stub da BIOS para RAM antes do hand-off.
 - [ ] Testar boot sem BIOS para preservar compatibilidade atual.
 - [ ] Testar JP v2.1, USA/Europe v1.3 e Europe v2.0 em perfis compatíveis; Europe v2.0 deve ter preferência apenas no perfil Europe, com v1.3 como fallback.
@@ -190,7 +190,7 @@ substituem a preferência de vídeo do console.
 
 - **IMPLEMENTED:** BIOS opcional de 8 KiB; mapeamento integral de 8 KiB em `$0000-$1FFF`.
 - **IMPLEMENTED:** latch `$3E` com decodificação de portas pares espelhadas em `$00-$3F`.
-- **IMPLEMENTED:** perfil de power-on `$F3`, RAM habilitada mantendo BIOS por `$E3`, hand-off para cartucho por `$AB`, e reset coerente com BIOS presente/ausente.
+- **IMPLEMENTED:** perfil de power-on `$E0` com RAM imediatamente acessível e BIOS ativa, hand-off sintético para cartucho por `$AB`, e reset coerente com BIOS presente/ausente. O boot com BIOS comercial real permanece pendente de validação no emulador.
 - **IMPLEMENTED:** teste sintético executa cópia do stub BIOS para RAM antes de desabilitar a BIOS e saltar ao cartucho.
 - **IMPLEMENTED:** PyO3 mantém compatibilidade dos argumentos antigos e encaminha bytes opcionais sem callbacks por instrução.
 

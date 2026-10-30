@@ -21,9 +21,10 @@ const MAX_BANKS: usize = 64;
 const MAX_ROM_SIZE: usize = BANK_SIZE * MAX_BANKS;
 const RAM_SIZE: usize = 0x2000;
 const RAM_START: u16 = 0xC000;
-// SMS memory-control latch values grounded in the documented power-on and
-// post-BIOS cartridge profiles (Charles MacDonald hardware notes).
-const BIOS_POWER_ON_CONTROL: u8 = 0xF3;
+// SMS Plus GX initializes the BIOS slot with $E0: BIOS and work RAM enabled,
+// while cartridge, card and expansion slots remain disabled. Port $3E bits
+// are active-low (SMS Power / Charles MacDonald hardware notes).
+const BIOS_POWER_ON_CONTROL: u8 = 0xE0;
 const CARTRIDGE_BOOT_CONTROL: u8 = 0xAB;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -343,12 +344,25 @@ mod tests {
 
     #[test]
     fn bios_power_on_profile_matches_sms_slot_and_ram_latches() {
-        let memory = SmsMemory::with_bios(patterned_rom(1), Some(vec![0xA5; 0x2000])).unwrap();
-        assert_eq!(memory.control_port(), 0xF3);
+        let mut memory =
+            SmsMemory::with_bios(patterned_rom(1), Some(vec![0xA5; 0x2000])).unwrap();
+        assert_eq!(memory.control_port(), 0xE0);
         assert!(memory.bios_enabled());
         assert_eq!(memory.read(0x0000), 0xA5);
         assert_eq!(memory.read(0x0400), 0xA5);
-        assert_eq!(memory.read(0xC000), 0xFF);
+        assert_eq!(memory.read(0xC000), 0x00);
+        memory.write(0xC000, 0x5A);
+        assert_eq!(memory.read(0xC000), 0x5A);
+        assert!(memory.bios_enabled(), "RAM access must not disable the BIOS overlay");
+    }
+
+    #[test]
+    fn bios_has_priority_when_bios_and_cartridge_slots_are_both_enabled() {
+        let mut memory =
+            SmsMemory::with_bios(patterned_rom(1), Some(vec![0xA5; 0x2000])).unwrap();
+        memory.write_control_port(0xA0); // BIOS + cartridge + work RAM enabled.
+        assert_eq!(memory.read(0x0000), 0xA5);
+        assert_eq!(memory.read(0x2000), 0x00);
     }
 
     #[test]

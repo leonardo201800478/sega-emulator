@@ -24,7 +24,10 @@ from sega_emulator.frontend.native_first_controller_input import (
     NativeFirstControllerInput,
 )
 from sega_emulator.frontend.qt.audio_output import PcmResampler
-from sega_emulator.frontend.qt.focus_pause import FocusPauseController
+from sega_emulator.frontend.qt.focus_pause import (
+    EmulationPauseController,
+    FocusPauseController,
+)
 from sega_emulator.frontend.qt.frame_pacer import FramePacer
 from sega_emulator.frontend.qt.preferences import FrontendPreferences
 from sega_emulator.frontend.qt.wasapi_audio import NativeAudioOutput
@@ -381,7 +384,6 @@ def run(initial_path: Path | None = None) -> None:
     active_system = "sg1000"
     vgm_recorder = VgmRecorder()
     vgm_output_path: Path | None = None
-    paused = False
     frame_count = 0
     pressed_keys: set[int] = set()
     hold_was_pressed = False
@@ -393,6 +395,32 @@ def run(initial_path: Path | None = None) -> None:
     active_sms_region = "usa"
     timer.setTimerType(Qt.TimerType.PreciseTimer)
     timer.setInterval(1)
+
+    def stop_emulation_timer() -> None:
+        timer.stop()
+        frame_pacer.reset()
+
+    def resume_emulation_timer() -> None:
+        frame_pacer.reset()
+        timer.start()
+
+    def pause_state_changed(is_paused: bool) -> None:
+        window.set_pause_state(is_paused, enabled=machine is not None)
+        status.showMessage(
+            "Emulação pausada" if is_paused else "Emulação em execução"
+        )
+        logger.info(
+            "Estado de pausa alterado",
+            extra={"event": "pause_changed", "paused": is_paused},
+        )
+
+    pause_controller = EmulationPauseController(
+        can_pause=lambda: machine is not None,
+        pause=stop_emulation_timer,
+        resume=resume_emulation_timer,
+        on_change=pause_state_changed,
+    )
+    window.set_pause_state(False, enabled=False)
 
     def build_key_map() -> dict[int, tuple[int, str]]:
         result: dict[int, tuple[int, str]] = {}
@@ -496,13 +524,12 @@ def run(initial_path: Path | None = None) -> None:
     def show_frame() -> None:
         nonlocal \
             audio_output, \
-            paused, \
             frame_count, \
             last_checkpoint_time, \
             last_checkpoint_tstates
         nonlocal last_checkpoint_instructions, last_checkpoint_frame
         nonlocal machine, frame_pacer, active_sms_region
-        if machine is None or paused:
+        if machine is None or pause_controller.paused:
             return
         if not frame_pacer.should_run(time.perf_counter()):
             return
@@ -511,7 +538,7 @@ def run(initial_path: Path | None = None) -> None:
             phase_started = frame_started
             update_joystick()
             if controller_input.consume_disconnect_event():
-                paused = True
+                pause_controller.set_paused(True)
                 status.showMessage("Emulação pausada: controle desconectado", 5000)
                 logger.warning(
                     "Emulação pausada após desconexão de controle",
@@ -659,6 +686,7 @@ def run(initial_path: Path | None = None) -> None:
                     "pc": machine.cpu.pc if machine else None,
                 },
             )
+            pause_controller.set_paused(True)
             timer.stop()
             QMessageBox.critical(
                 window,
@@ -680,7 +708,7 @@ def run(initial_path: Path | None = None) -> None:
         refresh_recent_rom_menu()
 
     def open_rom(path: str | None = None, system: str | None = None) -> None:
-        nonlocal machine, loaded, frame_count, paused, active_system
+        nonlocal machine, loaded, frame_count, active_system
         nonlocal frame_pacer, sms_region_attempts
         nonlocal active_sms_region
         nonlocal last_checkpoint_time, last_checkpoint_tstates
@@ -772,7 +800,9 @@ def run(initial_path: Path | None = None) -> None:
 
         if vgm_recorder.active and not stop_vgm_recording():
             return
-        machine, loaded, frame_count, paused = loaded_machine, candidate, 0, False
+        machine, loaded, frame_count = loaded_machine, candidate, 0
+        pause_controller.set_paused(False)
+        window.set_pause_state(False, enabled=True)
         active_system = requested_system
         window.set_active_system(active_system)
         audio_resampler.reset()
@@ -1170,22 +1200,16 @@ def run(initial_path: Path | None = None) -> None:
         return True
 
     def pause_resume() -> None:
-        nonlocal paused
-        paused = not paused
-        status.showMessage("Pausado" if paused else "Emulação em execução")
-        logger.info(
-            "Estado de pausa alterado",
-            extra={"event": "pause_changed", "paused": paused},
-        )
+        """Toggle the loaded machine's actual host execution timer."""
+        pause_controller.toggle()
 
     def pause_for_focus_loss() -> bool:
         """Pause only a running session; preserve a pause requested by the user."""
-        nonlocal paused
-        if machine is None or paused:
+        if machine is None or pause_controller.paused:
             return False
-        paused = True
-        timer.stop()
-        frame_pacer.reset()
+        changed = pause_controller.set_paused(True)
+        if not changed:
+            return False
         status.showMessage("Emulação pausada: janela perdeu o foco")
         logger.info(
             "Emulação pausada porque a aplicação perdeu o foco",
@@ -1195,12 +1219,10 @@ def run(initial_path: Path | None = None) -> None:
 
     def resume_after_focus_gain() -> None:
         """Resume only a session that this focus controller paused."""
-        nonlocal paused
-        if machine is None or not paused:
+        if machine is None or not pause_controller.paused:
             return
-        paused = False
-        frame_pacer.reset()
-        timer.start()
+        if not pause_controller.set_paused(False):
+            return
         status.showMessage("Emulação retomada: janela recebeu o foco")
         logger.info(
             "Emulação retomada após recuperar o foco",
@@ -1218,7 +1240,7 @@ def run(initial_path: Path | None = None) -> None:
     )
 
     def reset_machine() -> None:
-        nonlocal machine, frame_count, paused, frame_pacer
+        nonlocal machine, frame_count, frame_pacer
         nonlocal sms_region_attempts, active_sms_region
         nonlocal last_checkpoint_time, last_checkpoint_tstates
         nonlocal last_checkpoint_instructions, last_checkpoint_frame
@@ -1251,7 +1273,9 @@ def run(initial_path: Path | None = None) -> None:
             machine = SG1000Machine(loaded.data)
             frame_pacer = FramePacer(FRAME_PERIOD_SECONDS)
         audio_resampler.reset()
-        frame_count, paused = 0, False
+        frame_count = 0
+        pause_controller.set_paused(False)
+        window.set_pause_state(False, enabled=True)
         frame_pacer.reset()
         pressed_keys.clear()
         update_joystick()

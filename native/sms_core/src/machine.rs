@@ -377,6 +377,39 @@ mod tests {
     }
 
     #[test]
+    fn bios_can_use_stack_and_work_ram_immediately_after_power_on() {
+        // LD SP,$CFF0; LD BC,$1234; PUSH BC; POP DE;
+        // LD A,$5A; LD ($C000),A; LD A,($C000); HALT.
+        let mut bios = vec![0x00; 0x2000];
+        bios[..16].copy_from_slice(&[
+            0x31, 0xF0, 0xCF, 0x01, 0x34, 0x12, 0xC5, 0xD1, 0x3E, 0x5A, 0x32, 0x00, 0xC0, 0x3A,
+            0x00, 0xC0,
+        ]);
+        bios[16] = 0x76;
+        let mut machine = SmsMachine::with_bios(
+            vec![0xFF; 0x4000],
+            Some(bios),
+            SmsMachineConfig::default(),
+        )
+        .unwrap();
+
+        assert_eq!(machine.memory().control_port(), 0xE0);
+        assert!(machine.memory().bios_enabled());
+        assert_eq!(machine.read_memory(0xC000), 0x00);
+        for _ in 0..8 {
+            machine.step().unwrap();
+        }
+
+        assert_eq!(machine.cpu().registers.sp, 0xCFF0);
+        assert_eq!(machine.cpu().registers.d, 0x12);
+        assert_eq!(machine.cpu().registers.e, 0x34);
+        assert_eq!(machine.cpu().registers.a, 0x5A);
+        assert_eq!(machine.read_memory(0xC000), 0x5A);
+        assert!(machine.memory().bios_enabled());
+        assert_eq!(machine.memory().control_port(), 0xE0);
+    }
+
+    #[test]
     fn bios_copies_bootstrap_to_ram_then_hands_off_to_cartridge() {
         // BIOS enables RAM while keeping its own ROM mapped, copies a small
         // hand-off routine to RAM, then disables itself and enables cartridge.
@@ -400,7 +433,7 @@ mod tests {
         let cartridge = vec![0xC3; 0x4000];
         let mut machine =
             SmsMachine::with_bios(cartridge, Some(bios), SmsMachineConfig::default()).unwrap();
-        assert_eq!(machine.memory().control_port(), 0xF3);
+        assert_eq!(machine.memory().control_port(), 0xE0);
         assert!(machine.memory().bios_enabled());
         assert_eq!(machine.read_memory(0x0000), 0x3E);
         assert_eq!(machine.read_memory(0x0400), 0x00);
