@@ -21,6 +21,10 @@ const MAX_BANKS: usize = 64;
 const MAX_ROM_SIZE: usize = BANK_SIZE * MAX_BANKS;
 const RAM_SIZE: usize = 0x2000;
 const RAM_START: u16 = 0xC000;
+// SMS memory-control latch values grounded in the documented power-on and
+// post-BIOS cartridge profiles (Charles MacDonald hardware notes).
+const BIOS_POWER_ON_CONTROL: u8 = 0xF3;
+const CARTRIDGE_BOOT_CONTROL: u8 = 0xAB;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SmsMemory {
@@ -54,9 +58,14 @@ impl SmsMemory {
             });
         }
 
-        // Without BIOS, preserve direct-cartridge boot. With BIOS, expose the
-        // system-ROM overlay and leave the cartridge slot enabled for hand-off.
-        let control_port = if bios.is_some() { 0x00 } else { 0x08 };
+        // Power-on with BIOS: BIOS slot enabled, cartridge/card/expansion and
+        // work RAM disabled. Without BIOS, emulate the normal post-BIOS
+        // cartridge profile so legacy direct boot remains available.
+        let control_port = if bios.is_some() {
+            BIOS_POWER_ON_CONTROL
+        } else {
+            CARTRIDGE_BOOT_CONTROL
+        };
         Ok(Self {
             rom,
             mapper_control: 0,
@@ -166,7 +175,11 @@ impl SmsMemory {
     }
 
     pub fn reset_control_port(&mut self) {
-        self.control_port = if self.bios.is_some() { 0x00 } else { 0x08 };
+        self.control_port = if self.bios.is_some() {
+            BIOS_POWER_ON_CONTROL
+        } else {
+            CARTRIDGE_BOOT_CONTROL
+        };
     }
 
     pub fn control_port(&self) -> u8 {
@@ -311,16 +324,40 @@ mod tests {
         assert_eq!(memory.read(0x03FF), 0x5A);
         assert_eq!(
             memory.read(0x0400),
-            0x00,
-            "cartridge remains visible after overlay"
+            0xFF,
+            "cartridge slot is disabled in the BIOS power-on profile"
         );
         memory.write_control_port(0x08);
         assert!(!memory.bios_enabled());
         assert_eq!(memory.read(0x0000), 0x00);
+        assert_eq!(memory.read(0x0400), 0x00);
     }
 
     #[test]
-    fn cartridge_slot_disable_returns_open_bus_without_disabling_work_ram() {
+    fn bios_power_on_profile_matches_sms_slot_and_ram_latches() {
+        let memory = SmsMemory::with_bios(
+            patterned_rom(1),
+            Some(vec![0xA5; 0x2000]),
+        )
+        .unwrap();
+        assert_eq!(memory.control_port(), 0xF3);
+        assert!(memory.bios_enabled());
+        assert_eq!(memory.read(0x0000), 0xA5);
+        assert_eq!(memory.read(0x0400), 0xFF);
+        assert_eq!(memory.read(0xC000), 0xFF);
+    }
+
+    #[test]
+    fn cartridge_boot_profile_matches_post_bios_slot_and_ram_latches() {
+        let memory = SmsMemory::new(patterned_rom(1)).unwrap();
+        assert_eq!(memory.control_port(), 0xAB);
+        assert!(!memory.bios_enabled());
+        assert_eq!(memory.read(0x0000), 0x00);
+        assert_eq!(memory.read(0xC000), 0x00);
+    }
+
+    #[test]
+    fn cartridge_slot_disable_returns_open_bus_without_disabling_work_ram {
         let mut memory = SmsMemory::with_bios(patterned_rom(1), Some(vec![0xA5; 0x2000])).unwrap();
         memory.write_control_port(0x40);
         assert_eq!(memory.read(0x0400), 0xFF);
