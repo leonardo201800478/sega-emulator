@@ -30,10 +30,7 @@ from sega_emulator.frontend.qt.preferences import FrontendPreferences
 from sega_emulator.frontend.qt.wasapi_audio import NativeAudioOutput
 from sega_emulator.machine.sg1000 import SG1000Machine
 from sega_emulator.machine.sms import SMSMachine, load_sms_rom
-from sega_emulator.machine.sms_firmware import (
-    load_sms_bios,
-    sms_bios_region_for_rom,
-)
+from sega_emulator.machine.sms_firmware import load_sms_bios
 from sega_emulator.machine.sms_region import (
     normalize_sms_region_preference,
     resolve_sms_region_profile,
@@ -199,19 +196,14 @@ def run(initial_path: Path | None = None) -> None:
     sms_rom_catalog = RomCatalog()
 
     def create_sms_machine(rom_data: bytes, region: str) -> SMSMachine:
-        # Manual territory wins. Automatic mode resolves the header and exact
-        # DAT identity together; Korean/Taiwan variants and contradictory
-        # metadata deliberately remain without an automatically selected BIOS.
-        if region_preference != "auto":
-            bios_region = region_preference
-            bios_region_source = "manual"
-        else:
-            bios_region = sms_bios_region_for_rom(rom_data, sms_rom_catalog)
-            bios_region_source = (
-                "automatic_header_dat"
-                if bios_region is not None
-                else "unresolved_or_conflicting_metadata"
-            )
+        # The caller has already resolved manual preference, TMR SEGA header
+        # and exact DAT identity into this concrete territory/video profile.
+        # Reusing it preserves Europe-specific BIOS selection instead of
+        # collapsing every Export header into the shared USA/Europe family.
+        bios_region = region
+        bios_region_source = (
+            "manual" if region_preference != "auto" else "resolved_region_profile"
+        )
         bios = (
             load_sms_bios(
                 preferences.firmware_directory,
