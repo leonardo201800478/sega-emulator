@@ -2,7 +2,7 @@
 
 **Data:** 2026-10-29  
 **Base observada:** `main` em `fad306e7461878201fe7dcf447ffe7e81e417ff3`  
-**Status:** SPECIFICATION / IMPLEMENTATION_PENDING. Esta PR inicial fixa contratos, hashes e critérios; o runtime ainda não foi alterado.
+**Status:** CORE_BOOT_IMPLEMENTED / FRONTEND_INTEGRATION_PENDING. O core Rust já recebe BIOS opcional, aplica overlay de 1 KiB, decodifica o latch `$3E` para BIOS/cartucho/RAM e permite boot direto sem BIOS. A seleção persistente pela interface Qt ainda está pendente.
 
 ## Objetivo
 
