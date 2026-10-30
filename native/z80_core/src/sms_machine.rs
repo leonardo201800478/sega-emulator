@@ -264,7 +264,8 @@ mod tests {
 
     #[test]
     fn bios_is_forwarded_to_native_memory_and_executes() {
-        let bios = vec![0x3E, 0x08, 0xD3, 0x3E];
+        let mut bios = vec![0; 0x2000];
+        bios[..4].copy_from_slice(&[0x3E, 0x08, 0xD3, 0x3E]);
         let machine = NativeSMSMachine {
             machine: build_sms_machine(vec![0xC3; 0x4000], false, Some("usa"), Some(bios)).unwrap(),
             total_instructions: 0,
