@@ -15,7 +15,7 @@ from sega_emulator.rom_loader import LoadedRom
 
 
 class SMSMachine:
-    """Instruction-stepping SMS machine with native PSG audio output."""
+    """Instruction-stepping SMS machine with native PSG and optional BIOS boot."""
 
     cpu_core = "rust"
 
