@@ -119,11 +119,12 @@ def resolve_sms_region_profile(
 
     normalized = normalize_sms_region_preference(preference)
     header_bios_family = sms_bios_region_from_cartridge(rom)
-    header_family = (
-        "japan" if header_bios_family == "japan" else "export"
-        if header_bios_family == "usa"
-        else None
-    )
+    if header_bios_family == "japan":
+        header_family = "japan"
+    elif header_bios_family == "usa":
+        header_family = "export"
+    else:
+        header_family = None
     catalog_profile, release_regions, ambiguous, catalog_error = (
         _catalog_video_profile(rom, catalog)
     )
