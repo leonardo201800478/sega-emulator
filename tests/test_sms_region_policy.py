@@ -173,12 +173,20 @@ def test_export_header_conflicting_with_japan_dat_uses_safe_fallback(tmp_path):
     assert result.conflict
 
 
-@pytest.mark.parametrize("region_code", [0x3, 0x4])
+@pytest.mark.parametrize(
+    ("region_code", "release_region"),
+    [
+        (0x3, "Korea"),
+        (0x4, "Korea"),
+        (0x3, "Taiwan"),
+        (0x4, "Taiwan"),
+    ],
+)
 def test_korean_and_taiwan_releases_are_not_collapsed_into_japan_or_export(
-    tmp_path, region_code
+    tmp_path, region_code, release_region
 ):
     rom = _sms_header(region_code)
-    _write_sms_dat(tmp_path, rom, "Synthetic SMS (Korea)")
+    _write_sms_dat(tmp_path, rom, f"Synthetic SMS ({release_region})")
 
     result = resolve_sms_region_profile("auto", rom, RomCatalog(tmp_path))
 
