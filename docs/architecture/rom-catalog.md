@@ -2,9 +2,11 @@
 
 ## Objetivo
 
-O serviço `sega_emulator.rom_catalog.RomCatalog` lê os arquivos XML DAT da pasta
-raiz `dats/` e permite identificar imagens por conteúdo, sem depender do nome
-do arquivo. Ele é uma camada de metadados, independente do runtime de hardware.
+O serviço `sega_emulator.rom_catalog.RomCatalog` lê os arquivos XML DAT versionados
+em `dats/` no checkout do repositório. Na distribuição setuptools, os mesmos DATs
+são instalados em `share/sega-emulator/dats`, usado como fallback quando a pasta
+do checkout não existe. A identificação é feita pelo conteúdo, sem depender do
+nome do arquivo. O catálogo é uma camada de metadados, independente do runtime.
 Uma identificação do catálogo não significa que o sistema correspondente já pode
 ser executado pelo emulador.
 
@@ -14,9 +16,12 @@ ser executado pelo emulador.
 - A correspondência tenta SHA-1, depois MD5 e, por último, CRC-32 combinado com
   tamanho. CRC-32 é uma alternativa de menor força e não deve ser usado como prova
   criptográfica de identidade.
-- A região vem das entradas `release region` presentes no DAT. Se uma entrada
-  tiver várias regiões ou várias correspondências, o resultado preserva todas
-  as regiões encontradas; não escolhe arbitrariamente uma.
+- A região vem primeiro das entradas `release region` presentes no DAT. Quando
+  essas tags não existem, o parser extrai apenas rótulos reconhecidos de território
+  em grupos entre parênteses do nome No-Intro, como `(Japan, Europe)`. Rótulos
+  desconhecidos permanecem desconhecidos; não são inferidos pelo nome do arquivo.
+- Se uma entrada tiver várias regiões ou várias correspondências, o resultado
+  preserva todas as regiões encontradas; não escolhe arbitrariamente uma.
 - ROMs ausentes do DAT retornam `not_catalogued`. Hacks e homebrew exigirão
   analisadores estruturais específicos por sistema ou seleção manual; o catálogo
   não deduz região pelo nome do arquivo.
