@@ -266,6 +266,28 @@ def test_fullscreen_hides_application_chrome_and_escape_restores_it(qt_app) -> N
     window.close()
 
 
+def test_main_window_exposes_sms_batch_audit_action(qt_app) -> None:
+    called: list[str] = []
+    window = EmulatorMainWindow(
+        on_open_rom=lambda: None,
+        on_pause_resume=lambda: None,
+        on_reset=lambda: None,
+        on_configure_controls=lambda: None,
+        on_show_controllers=lambda: None,
+        on_vdp_snapshot=lambda: None,
+        on_open_logs=lambda: None,
+        on_show_machine_state=lambda: None,
+        on_audit_sms_roms=lambda: called.append("audit"),
+        on_video_scale=lambda scale: None,
+    )
+
+    assert window.sms_rom_audit_action.isEnabled()
+    assert window.sms_rom_audit_action.objectName() == "smsRomBatchAuditAction"
+    window.sms_rom_audit_action.trigger()
+    assert called == ["audit"]
+    window.close()
+
+
 def test_about_dialog_shows_version_scope_credits_and_mit_license(
     qt_app, monkeypatch
 ) -> None:
