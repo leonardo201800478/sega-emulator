@@ -37,6 +37,7 @@ from sega_emulator.machine.sms_region import (
     normalize_sms_region_preference,
     sms_frame_period_seconds,
     sms_region_candidates,
+    sms_region_candidates_for_rom,
 )
 from sega_emulator.rom_loader import LoadedRom, list_rom_members, load_rom
 
@@ -745,7 +746,9 @@ def run(initial_path: Path | None = None) -> None:
                     return
                 candidate = load_rom(path, member_name=selected)
             if requested_system == "master_system":
-                sms_region_attempts = sms_region_candidates(region_preference)
+                sms_region_attempts = sms_region_candidates_for_rom(
+                    region_preference, candidate.data
+                )
                 sms_region_attempt_index = 0
                 active_sms_region = sms_region_attempts[0]
                 loaded_machine = create_sms_machine(candidate.data, active_sms_region)
@@ -1170,7 +1173,9 @@ def run(initial_path: Path | None = None) -> None:
         if loaded is None:
             return
         if active_system == "master_system":
-            sms_region_attempts = sms_region_candidates(region_preference)
+            sms_region_attempts = sms_region_candidates_for_rom(
+                region_preference, loaded.data
+            )
             sms_region_attempt_index = 0
             active_sms_region = sms_region_attempts[0]
             machine = create_sms_machine(loaded.data, active_sms_region)
