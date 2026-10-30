@@ -350,7 +350,7 @@ def run_sms_rom_audit(
 
     return SmsRomAuditReport(
         schema_version=1,
-        created_at_utc=datetime.now(timezone.utc).isoformat(),
+        created_at_utc=datetime.now(UTC).isoformat(),
         root_directory=str(Path(root_directory).expanduser().resolve()),
         recursive=recursive,
         frames_per_rom=frames_per_rom,
