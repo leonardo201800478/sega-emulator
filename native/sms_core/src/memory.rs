@@ -114,12 +114,16 @@ impl SmsMemory {
             self.work_ram[usize::from(address - RAM_START) & (RAM_SIZE - 1)] = value;
         }
 
-        match address {
-            0xFFFC => self.mapper_control = value,
-            0xFFFD => self.bank_registers[0] = value,
-            0xFFFE => self.bank_registers[1] = value,
-            0xFFFF => self.bank_registers[2] = value,
-            _ => {}
+        // The mapper registers belong to the cartridge slot. A BIOS-only
+        // power-on profile must not mutate a disabled cartridge mapper.
+        if self.control_port & 0x40 == 0 {
+            match address {
+                0xFFFC => self.mapper_control = value,
+                0xFFFD => self.bank_registers[0] = value,
+                0xFFFE => self.bank_registers[1] = value,
+                0xFFFF => self.bank_registers[2] = value,
+                _ => {}
+            }
         }
     }
 
@@ -359,6 +363,19 @@ mod tests {
         assert_eq!(memory.read(0x0400), 0xFF);
         assert_eq!(memory.read(0xC000), 0x00);
         assert_eq!(memory.read(0x0000), 0xA5);
+    }
+
+    #[test]
+    fn disabled_cartridge_slot_does_not_receive_mapper_register_writes() {
+        let mut memory =
+            SmsMemory::with_bios(patterned_rom(3), Some(vec![0xA5; 0x2000])).unwrap();
+        assert_eq!(memory.selected_banks(), [0, 1, 2]);
+        memory.write(0xFFFD, 0x07);
+        assert_eq!(memory.selected_banks(), [0, 1, 2]);
+
+        memory.write_control_port(0xAB);
+        memory.write(0xFFFD, 0x07);
+        assert_eq!(memory.selected_banks(), [0x07, 1, 2]);
     }
 
     #[test]
