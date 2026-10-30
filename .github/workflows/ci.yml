@@ -13,7 +13,6 @@ on:
       - "Cargo.lock"
       - "native/**"
       - "dats/**"
-      - ".github/workflows/ci.yml"
   workflow_dispatch:
 
 permissions:
