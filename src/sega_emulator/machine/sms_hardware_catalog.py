@@ -11,7 +11,6 @@ import re
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-
 _SHA1_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 _MD5_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 
