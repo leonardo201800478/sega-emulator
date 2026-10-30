@@ -6,8 +6,8 @@ import pytest
 
 from sega_emulator.frontend.controller_profiles import (
     ACTION_BITS,
-    JOYSTICK_ACTIONS,
     ControllerInputConfig,
+    JOYSTICK_ACTIONS,
     PlayerInputProfile,
     apply_turbo,
     joystick_value,
@@ -51,7 +51,6 @@ def test_hold_binding_is_a_dedicated_action_outside_controller_port_bits() -> No
     assert "hold" not in ACTION_BITS
 
 
-
 def test_sms_console_pause_has_dedicated_keyboard_and_gamepad_defaults() -> None:
     config = ControllerInputConfig()
     assert config.players[1].keyboard_bindings["console_pause"] == "Pause"
@@ -63,7 +62,9 @@ def test_sms_console_pause_has_dedicated_keyboard_and_gamepad_defaults() -> None
         joystick_value({"console_pause"})
 
 
-def test_legacy_controller_profiles_gain_pause_binding_without_losing_custom_keys() -> None:
+def test_legacy_controller_profiles_gain_pause_binding_without_losing_custom_keys() -> (
+    None
+):
     legacy = PlayerInputProfile.from_dict(
         {
             "gamepad_buttons": {"up": "x", "hold": "leftshoulder"},
