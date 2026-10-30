@@ -21,7 +21,7 @@
 "BASE","13","INC DE","documented_or_context_dependent","decoder path present; classification test only","exhaustive_internal_model","NOT_VERIFIED",""
 "BASE","14","INC D","documented_or_context_dependent","decoder path present; classification test only","exhaustive_internal_model","NOT_VERIFIED",""
 "BASE","15","DEC D","documented_or_context_dependent","decoder path present; classification test only","exhaustive_internal_model","NOT_VERIFIED",""
-"BASE","16","LD D,n","documented_or_context_dependent","decoder path present; classification test only","sparse_selected_vectors","NOT_VERIFIED",""
+"BASE","16","LD D,n","documented_or_context_dependent","decoder path present; classification test only","one_pinned_reference_vector","NOT_VERIFIED","SingleStepTests/Z80 v1/16.json vector 16 0000 at ebe1875d48f374bcfd4b505d8eb8ee751568b5f7; architectural state, unchanged RAM and 7 aggregate T-states only"
 "BASE","17","RLA","documented_or_context_dependent","decoder path present; classification test only","exhaustive_internal_model","NOT_VERIFIED",""
 "BASE","18","JR e","documented_or_context_dependent","decoder path present; classification test only","sparse_selected_vectors","NOT_VERIFIED",""
 "BASE","19","ADD HL,DE","documented_or_context_dependent","decoder path present; classification test only","sparse_selected_vectors","NOT_VERIFIED",""
