@@ -34,8 +34,8 @@ fn build_sms_machine(
     region: Option<&str>,
     bios: Option<Vec<u8>>,
 ) -> Result<SmsMachine, SmsMachineBuildError> {
-    let (territory, video_standard) = sms_region_profile(region, pal)
-        .map_err(SmsMachineBuildError::InvalidRegion)?;
+    let (territory, video_standard) =
+        sms_region_profile(region, pal).map_err(SmsMachineBuildError::InvalidRegion)?;
     let config = SmsMachineConfig {
         territory,
         video_standard,
@@ -237,7 +237,10 @@ mod tests {
 
     #[test]
     fn sms_adapter_uses_native_psg_and_reports_configured_clock() {
-        let machine = NativeSMSMachine { machine: build_sms_machine(vec![0; 16], false, Some("usa"), None).unwrap(), total_instructions: 0 };
+        let machine = NativeSMSMachine {
+            machine: build_sms_machine(vec![0; 16], false, Some("usa"), None).unwrap(),
+            total_instructions: 0,
+        };
         assert_eq!(machine.psg_sample_rate(), 44_100);
         assert_eq!(machine.psg_clock_hz(), 3_579_545);
         assert_eq!(machine.total_tstates(), 0);
@@ -245,18 +248,26 @@ mod tests {
 
     #[test]
     fn region_selects_pal_clock_and_japan_territory_profile() {
-        let pal_machine = NativeSMSMachine { machine: build_sms_machine(vec![0; 16], false, Some("europe"), None).unwrap(), total_instructions: 0 };
+        let pal_machine = NativeSMSMachine {
+            machine: build_sms_machine(vec![0; 16], false, Some("europe"), None).unwrap(),
+            total_instructions: 0,
+        };
         assert_eq!(pal_machine.psg_clock_hz(), 3_546_895);
 
-        let japan_machine = NativeSMSMachine { machine: build_sms_machine(vec![0; 16], false, Some("japan"), None).unwrap(), total_instructions: 0 };
+        let japan_machine = NativeSMSMachine {
+            machine: build_sms_machine(vec![0; 16], false, Some("japan"), None).unwrap(),
+            total_instructions: 0,
+        };
         assert_eq!(japan_machine.psg_clock_hz(), 3_579_545);
     }
 
     #[test]
     fn bios_is_forwarded_to_native_memory_and_executes() {
         let bios = vec![0x3E, 0x08, 0xD3, 0x3E];
-        let machine =
-            NativeSMSMachine { machine: build_sms_machine(vec![0xC3; 0x4000], false, Some("usa"), Some(bios)).unwrap(), total_instructions: 0 };
+        let machine = NativeSMSMachine {
+            machine: build_sms_machine(vec![0xC3; 0x4000], false, Some("usa"), Some(bios)).unwrap(),
+            total_instructions: 0,
+        };
         assert!(machine.bios_enabled());
         assert_eq!(machine.read_memory(0), 0x3E);
     }
