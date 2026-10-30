@@ -255,8 +255,8 @@ impl SmsMachine {
     pub fn step(&mut self) -> Result<u32, CpuError> {
         let start_tstate = self.cpu.total_tstates;
         let trace_limit = self.instruction_trace_limit;
-        let trace_buffer = (trace_limit > self.instruction_traces.len())
-            .then_some(&mut self.instruction_traces);
+        let trace_buffer =
+            (trace_limit > self.instruction_traces.len()).then_some(&mut self.instruction_traces);
         let cycles = {
             let mut bus = SmsMachineBus::with_psg_queue(
                 &mut self.memory,
@@ -626,12 +626,8 @@ mod tests {
         let mut bios = vec![0x00; 0x2000];
         bios[..4].copy_from_slice(&[0x3E, 0x08, 0xD3, 0x3E]);
         let cartridge = vec![0x76; 0x4000];
-        let mut machine = SmsMachine::with_bios(
-            cartridge,
-            Some(bios),
-            SmsMachineConfig::default(),
-        )
-        .unwrap();
+        let mut machine =
+            SmsMachine::with_bios(cartridge, Some(bios), SmsMachineConfig::default()).unwrap();
 
         assert_eq!(machine.enable_instruction_trace(2), 2);
         machine.step().unwrap();
