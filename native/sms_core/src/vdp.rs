@@ -292,6 +292,11 @@ impl SmsVdp {
             }
             0x81 => {
                 let value = self.status;
+                eprintln!(
+                    "F{} L{} T{} STATUS={:#04x} LINE_PENDING={} R10={} COUNT={}",
+                    self.frame_number, self.scanline, self.tstates_into_line, value,
+                    self.line_irq_pending, self.registers[10], self.line_counter
+                );
                 self.status = 0;
                 self.line_irq_pending = false;
                 self.control_first = None;
@@ -364,6 +369,11 @@ impl SmsVdp {
                 self.light_h_counter = Some(0x08 + (self.light_x / 2) as u8);
             }
             if self.line_counter == 0 {
+                eprintln!(
+                    "F{} L{} T{} LINE-IRQ R10={} COUNT={}",
+                    self.frame_number, line, self.tstates_into_line,
+                    self.registers[10], self.line_counter
+                );
                 self.line_irq_pending = true;
                 self.line_counter = self.registers[10];
             } else {
@@ -372,6 +382,11 @@ impl SmsVdp {
         }
         self.scanline += 1;
         if self.scanline == height {
+            eprintln!(
+                "F{} L{} T{} VBLANK status_before={:#04x} line_pending={}",
+                self.frame_number, self.scanline, self.tstates_into_line,
+                self.status, self.line_irq_pending
+            );
             if let Some(scroll_y) = self.pending_scroll_y.take() {
                 self.latched_scroll_y = scroll_y;
             }
@@ -414,6 +429,13 @@ impl SmsVdp {
             let register = usize::from(value & 0x0F);
             if register <= 10 {
                 self.registers[register] = first;
+                if matches!(register, 8 | 9 | 10) {
+                    eprintln!(
+                        "F{} L{} T{} R{}={:#04x}",
+                        self.frame_number, self.scanline, self.tstates_into_line,
+                        register, first
+                    );
+                }
                 if register == 9 {
                     if self.scanline < self.visible_height() {
                         self.pending_scroll_y = Some(first);
@@ -421,9 +443,6 @@ impl SmsVdp {
                         self.latched_scroll_y = first;
                         self.pending_scroll_y = None;
                     }
-                }
-                if register == 10 {
-                    self.line_counter = first;
                 }
             }
             self.cram_write = false;
@@ -955,6 +974,36 @@ mod tests {
         assert!(v.interrupt_pending());
         let _ = v.read_port(0xBF);
         assert!(!v.interrupt_pending());
+    }
+
+    #[test]
+    fn mid_irq_r10_write_changes_next_reload_not_active_countdown() {
+        let mut v = SmsVdp::default();
+        reg(&mut v, 0, 0x14);
+        reg(&mut v, 10, 63);
+        // Model the counter after frame-start initialization. The first
+        // line IRQ occurs after the 64th visible scanline.
+        v.line_counter = 63;
+        v.advance(228 * 64);
+        assert!(v.interrupt_pending());
+
+        // The interrupt handler changes the reload value. The countdown
+        // already reloaded at underflow and must remain at 63 for this period.
+        let _ = v.read_port(0xBF);
+        reg(&mut v, 10, 47);
+        assert_eq!(v.line_counter, 63);
+
+        v.advance(228 * 63);
+        assert!(!v.interrupt_pending());
+        v.advance(228);
+        assert!(v.interrupt_pending());
+
+        // The new reload value applies at the next underflow: 48 lines.
+        let _ = v.read_port(0xBF);
+        v.advance(228 * 47);
+        assert!(!v.interrupt_pending());
+        v.advance(228);
+        assert!(v.interrupt_pending());
     }
 
     #[test]
@@ -1698,5 +1747,55 @@ mod tests {
     fn framebuffer_is_rgb24() {
         let v = SmsVdp::default();
         assert_eq!(v.framebuffer().len(), SMS_VDP_WIDTH * 192 * 3);
+    }
+
+    // Characterization tests for the current scanline renderer. These record
+    // when the model samples mutable VDP state; they are not hardware oracles.
+    fn setup_midline_write_fixture() -> SmsVdp {
+        let mut v = SmsVdp::default();
+        v.registers[0] = 0x04;
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[5] = 0x7E;
+        v.cram[1] = 0x03;
+        v.vram[0] = 0x80;
+        v.vram[0x3800] = 0;
+        v.vram[0x3F00] = 0xD0;
+        v
+    }
+
+    #[test]
+    fn midline_r8_write_is_sampled_for_the_whole_scanline_by_current_model() {
+        let mut actual = setup_midline_write_fixture();
+        let mut expected = setup_midline_write_fixture();
+
+        // Configure the expected final state before the line starts. The
+        // current renderer samples R8 only when the scanline is completed.
+        reg(&mut expected, 8, 8);
+        expected.advance(228);
+
+        actual.advance(114);
+        reg(&mut actual, 8, 8);
+        actual.advance(114);
+
+        // This characterizes the current abstraction, not hardware-correct
+        // timing: a mid-line write produces the same completed line as if R8
+        // had been set before the line began.
+        assert_eq!(actual.working_framebuffer, expected.working_framebuffer);
+    }
+
+    #[test]
+    fn midline_cram_write_is_sampled_for_the_whole_scanline_by_current_model() {
+        let mut v = setup_midline_write_fixture();
+
+        v.advance(114);
+        addr(&mut v, 1, 0xC0);
+        v.write_port(0xBE, 0x0C);
+        v.advance(114);
+
+        // CRAM is mutated immediately and the line is rendered at its end;
+        // therefore even pixels left of the write phase use the new color.
+        // This is a model-characterization assertion, not a hardware oracle.
+        assert_eq!(&v.working_framebuffer[0..3], &[0, 255, 0]);
     }
 }
