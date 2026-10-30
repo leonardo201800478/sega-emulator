@@ -303,8 +303,10 @@ def load_sms_bios(
     Selection is content-based. The selected file is revalidated after the scan
     to avoid loading bytes that changed between discovery and machine creation.
     """
-    if region not in {"japan", "usa", "europe"}:
-        raise ValueError("region deve ser usa, europe ou japan.")
+    if region not in {"japan", "usa", "europe", "brazil"}:
+        raise ValueError("region deve ser usa, europe, japan ou brazil.")
+    # Brazil uses the export BIOS family, but its PAL-M video profile is
+    # resolved independently by the SMS machine configuration.
     expected_region = (
         SmsFirmwareRegion.JAPAN if region == "japan" else SmsFirmwareRegion.EXPORT_US_EU
     )
