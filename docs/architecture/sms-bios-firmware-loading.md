@@ -105,7 +105,7 @@ A BIOS deve ser parte do caminho de inicialização do cartucho/máquina, não u
 - `NOT_FOUND`: nenhum arquivo corresponde a uma assinatura conhecida.
 - `INVALID_FILE`: falha de leitura/tamanho/validação.
 - `VALID_JAPAN`: hash japonês validado.
-- `VALID_EXPORT_US_EU`: hash compartilhado US/EU validado.
+- `VALID_EXPORT_US_EU`: assinatura conhecida de BIOS da família de exportação validada.
 - `DUPLICATE_HASH`: múltiplos nomes, mesmo conteúdo já reconhecido.
 - `IN_USE`: firmware selecionado e carregado na máquina.
 - `FALLBACK_NO_BIOS`: modo de compatibilidade selecionado sem BIOS.
@@ -144,7 +144,7 @@ substituem a preferência de vídeo do console.
 - [ ] Testar perfil de power-on `$F3`, perfil de cartucho `$AB` e espelhamento de escritas pares em `$00-$3F`.
 - [ ] Executar um programa sintético que copia o stub da BIOS para RAM antes do hand-off.
 - [ ] Testar boot sem BIOS para preservar compatibilidade atual.
-- [ ] Testar BIOS JP e US/EU em perfis regionais compatíveis.
+- [ ] Testar BIOS JP v2.1 e as revisões de exportação USA/Europe v1.3 e Europe v2.0 em perfis regionais compatíveis.
 - [ ] Confirmar o comportamento de jogos com e sem BIOS e evitar regressões nos testes SMS existentes.
 
 ### Interface, CI e distribuição
