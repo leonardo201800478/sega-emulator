@@ -231,7 +231,7 @@ def _write_bios_dat(directory, payload, game_name, regions):
         <rom name="firmware.sms" size="{len(payload)}"
              crc="{zlib.crc32(payload) & 0xFFFFFFFF:08x}"
              md5="{hashlib.md5(payload).hexdigest()}"
-             sha1="{hashlib.sha1(payload).hexdigest()}"/>
+             sha1="{hashlib.sha1(payload).hexdigest()}" status="verified"/>
         </game></datafile>''',
         encoding="utf-8",
     )
@@ -283,6 +283,7 @@ def test_firmware_scanner_accepts_export_bios_from_dat_and_loads_it(tmp_path):
     catalog = RomCatalog(tmp_path)
 
     assert load_sms_bios(tmp_path, "europe", catalog=catalog) == payload
+
 
 def test_firmware_scanner_rejects_unverified_prototype_bios_from_dat(tmp_path):
     payload = b"P" * SMS_BIOS_SIZE
