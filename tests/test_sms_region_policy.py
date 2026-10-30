@@ -42,7 +42,6 @@ def test_unknown_concrete_region_is_rejected():
         sms_frame_period_seconds("auto")
 
 
-
 def test_automatic_region_candidates_follow_trusted_sms_header():
     japanese = bytearray(0x8000)
     japanese[0x7FF0:0x7FF8] = b"TMR SEGA"
