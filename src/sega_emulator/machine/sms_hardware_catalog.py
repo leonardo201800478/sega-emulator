@@ -293,7 +293,11 @@ class SmsHardwareIdentification:
             if not self.matched_by:
                 raise ValueError("An ambiguous result requires a match type.")
         elif self.status is SmsHardwareMatchStatus.NOT_CATALOGUED:
-            if self.candidates or self.metadata is not None or self.matched_by is not None:
+            if (
+                self.candidates
+                or self.metadata is not None
+                or self.matched_by is not None
+            ):
                 raise ValueError("An unknown result cannot contain a match.")
 
 
