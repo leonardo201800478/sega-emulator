@@ -446,7 +446,6 @@ def test_bios_boot_requires_boolean_flag():
         load_sms_bios_for_boot("false", None, "usa")
 
 
-
 def test_europe_bios_falls_back_to_shared_export_when_v2_is_absent(tmp_path):
     from types import SimpleNamespace
     from unittest.mock import patch
