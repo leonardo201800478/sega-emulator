@@ -52,6 +52,7 @@ class EmulatorMainWindow(QMainWindow):
         on_vdp_snapshot: Callable[[], None],
         on_open_logs: Callable[[], None],
         on_show_machine_state: Callable[[], None],
+        on_audit_sms_roms: Callable[[], None] | None = None,
         on_video_scale: Callable[[int], None],
         on_change_system: Callable[[], None] | None = None,
         on_configure_drivers: Callable[[], None] | None = None,
@@ -257,6 +258,13 @@ class EmulatorMainWindow(QMainWindow):
         self.vdp_snapshot_action.setShortcut("F8")
         self.vdp_snapshot_action.triggered.connect(on_vdp_snapshot)
         diagnostics_menu.addAction(self.vdp_snapshot_action)
+        self.sms_rom_audit_action = QAction("Auditar ROMs SMS em lote…", self)
+        self.sms_rom_audit_action.setObjectName("smsRomBatchAuditAction")
+        if on_audit_sms_roms is not None:
+            self.sms_rom_audit_action.triggered.connect(on_audit_sms_roms)
+        else:
+            self.sms_rom_audit_action.setEnabled(False)
+        diagnostics_menu.addAction(self.sms_rom_audit_action)
         diagnostics_menu.addSeparator()
         self.start_vgm_recording_action = QAction("Iniciar gravação PSG em VGM…", self)
         self.start_vgm_recording_action.setShortcut("Ctrl+Shift+V")
