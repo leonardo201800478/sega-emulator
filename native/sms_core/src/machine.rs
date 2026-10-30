@@ -646,7 +646,6 @@ mod tests {
         assert_eq!(machine.read_memory(0xDFF8), 0x01);
     }
 
-
     #[test]
     fn delayed_instruction_trace_starts_after_the_requested_step_count() {
         let mut machine = SmsMachine::new(vec![0x00; 16]).unwrap();
