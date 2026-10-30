@@ -416,6 +416,10 @@ def run(initial_path: Path | None = None) -> None:
         if active_system == "sg1000" and hold_pressed and not hold_was_pressed:
             # The SG-1000 Hold switch is an edge-triggered NMI, not a joystick bit.
             machine.request_nmi()
+        elif active_system == "master_system":
+            # SMS PAUSE is a dedicated console input line, not a controller bit.
+            # The Rust machine detects the rising edge and latches exactly one NMI.
+            machine.set_pause_button(hold_pressed)
         hold_was_pressed = hold_pressed
 
     class KeyboardInputFilter(QObject):
