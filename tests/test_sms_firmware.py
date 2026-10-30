@@ -9,9 +9,9 @@ from sega_emulator.machine.sms_firmware import (
     SmsFirmwareRegion,
     load_sms_bios,
     scan_sms_firmware_directory,
+    sms_bios_region_for_rom,
     sms_bios_region_from_cartridge,
     sms_bios_region_from_catalog,
-    sms_bios_region_for_rom,
 )
 from sega_emulator.rom_catalog import RomCatalog
 
