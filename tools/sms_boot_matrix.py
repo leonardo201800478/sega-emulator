@@ -222,7 +222,9 @@ def _run_case(
         outcome = "DIRECT_BOOT_FRAME_ADVANCE" if frames_run == frames else "INCOMPLETE"
         if outcome == "DIRECT_BOOT_FRAME_ADVANCE" and not visual_activity:
             outcome = "DIRECT_BOOT_BLANK_FRAME"
-    elif handoff_frame is None and mapper == "codemasters" and bios_name == "export_v1_3":
+    elif (
+        handoff_frame is None and mapper == "codemasters" and bios_name == "export_v1_3"
+    ):
         outcome = "BIOS_MAPPER_CHECKSUM_UNRELIABLE"
     elif handoff_frame is None:
         outcome = "NO_BIOS_HANDOFF"
@@ -283,8 +285,7 @@ def _run_bios_startup(
     visible_height = int(machine.vdp.visible_height)
     frame_metrics = _frame_metrics(framebuffer)
     visual_activity = (
-        frame_metrics["non_black_pixels"] > 0
-        and frame_metrics["unique_rgb_colors"] > 1
+        frame_metrics["non_black_pixels"] > 0 and frame_metrics["unique_rgb_colors"] > 1
     )
     capture_path = capture_dir / f"bios_only__{bios_name}__{region}.ppm"
     _write_ppm(capture_path, framebuffer, visible_height)

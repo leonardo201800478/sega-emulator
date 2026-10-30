@@ -62,11 +62,7 @@ fn has_codemasters_header(rom: &[u8]) -> bool {
     let month = (header[2] >> 4) * 10 + (header[2] & 0x0F);
     let hour = (header[4] >> 4) * 10 + (header[4] & 0x0F);
     let minute = (header[5] >> 4) * 10 + (header[5] & 0x0F);
-    if !(1..=31).contains(&day)
-        || !(1..=12).contains(&month)
-        || hour > 23
-        || minute > 59
-    {
+    if !(1..=31).contains(&day) || !(1..=12).contains(&month) || hour > 23 || minute > 59 {
         return false;
     }
 
