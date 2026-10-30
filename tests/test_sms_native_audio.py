@@ -127,6 +127,7 @@ def test_sms_frame_runner_exposes_native_framebuffer_and_controller() -> None:
     with pytest.raises(ValueError):
         machine.set_controller(3, False, False, False, False, False, False)
 
+
 def test_sms_pause_button_latches_one_nmi_per_press_in_native_binding() -> None:
     rom = bytearray([0x00] * 0x4000)
     rom[:3] = bytes([0xC3, 0x00, 0x01])  # JP $0100
@@ -154,6 +155,7 @@ def test_sms_python_adapter_validates_and_forwards_pause_button() -> None:
     machine.set_pause_button(True)
     with pytest.raises(TypeError, match="pressed deve ser bool"):
         machine.set_pause_button(1)  # type: ignore[arg-type]
+
 
 def test_sms_adapter_exposes_qt_frame_and_controller_contract() -> None:
     machine = SMSMachine(bytes([0x00]) * 16)
