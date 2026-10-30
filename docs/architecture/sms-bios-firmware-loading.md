@@ -14,15 +14,15 @@ O SMS deve continuar iniciando sem BIOS quando o modo de boot selecionado permit
 
 Os hashes abaixo foram calculados localmente a partir dos arquivos anexados. Os binários não foram adicionados ao Git.
 
-| Arquivo recebido | Tamanho | SHA-256 | Identificação pelo catálogo consultado |
+| Arquivo recebido | Tamanho | SHA-256 | Identificação |
 |---|---:|---|---|
-| `jp_sms.bin` | 8.192 bytes | `67846e26764bd862f19179294347f7353a4166b62ac4198a5ec32933b7da486e` | Master System Japan |
-| `us_sms.bin` | 8.192 bytes | `477617917a12a30f9f43844909dc2de6e6a617430f5c9a36306c86414a670d50` | Master System USA / Europe |
-| `eu_sms.bin` | 8.192 bytes | `477617917a12a30f9f43844909dc2de6e6a617430f5c9a36306c86414a670d50` | Master System Europe; mesmo conteúdo de US |
+| `[BIOS] Sega Master System (Japan) (v2.1).sms` | 8.192 bytes | `67846e26764bd862f19179294347f7353a4166b62ac4198a5ec32933b7da486e` | Master System Japan |
+| `[BIOS] Sega Master System (USA, Europe) (v1.3).sms` | 8.192 bytes | `477617917a12a30f9f43844909dc2de6e6a617430f5c9a36306c86414a670d50` | Master System export (USA/Europe) |
+| `[BIOS] Sega Master System (Europe) (v2.0).sms` | 8.192 bytes | `1eb16fc06ceaf05651d7cfd69d1713e6ddccc4349a511f6fd17e037d71f9d85b` | Master System Europe / export |
 
-**Resultado importante:** os arquivos US e EU são byte a byte idênticos segundo tamanho e SHA-256; devem ser tratados como uma única imagem de firmware com aliases regionais, não como duas BIOS distintas. O arquivo JP possui hash diferente.
+**Resultado importante:** as imagens USA/Europe v1.3 e Europe v2.0 são diferentes (SHA-256 distintos), mas pertencem à família de BIOS de exportação compatível com os perfis USA, Europe e Brazil. A BIOS Japan v2.1 pertence à família japonesa. A seleção regional escolhe a família compatível; não deve confundir revisão da BIOS com padrão de vídeo.
 
-Os rótulos regionais acima são sustentados pela correspondência de SHA-256 no catálogo público RetroBIOS; não inferir uma versão exata além do que o hash/catalogação confirma.
+Os hashes foram calculados a partir dos arquivos fornecidos pelo usuário nesta conversa. Os binários permanecem fora do Git.
 
 ## Referência: abordagem do ares
 
@@ -59,8 +59,8 @@ A pesquisa do catálogo descreve a identificação por conteúdo e os arquivos c
 
 - Ler arquivos candidatos como dados locais, calcular SHA-256 e comparar com uma lista interna de metadados (hash, sistema, região/alias, tamanho esperado e versão quando conhecida).
 - Não confiar em nomes, extensões ou diretórios para validar firmware.
-- A BIOS japonesa aceita o hash JP indicado acima.
-- A BIOS de exportação US/EU aceita o hash compartilhado US/EU indicado acima.
+- A BIOS japonesa aceita a assinatura conhecida JP v2.1 indicada acima.
+- A família de exportação aceita as assinaturas conhecidas USA/Europe v1.3 e Europe v2.0, que são imagens distintas.
 - Recusar arquivos truncados, vazios, inacessíveis ou de tamanho incompatível, com erro diagnóstico explícito.
 - Nunca gravar o conteúdo ou dumps da BIOS em logs; registrar apenas nome/caminho escolhido pelo usuário, tamanho, hash, região identificada e resultado da validação.
 - Manter os hashes em testes de metadados, sem armazenar os binários proprietários no repositório.
@@ -132,7 +132,7 @@ substituem a preferência de vídeo do console.
 
 ### Validação de metadados e armazenamento
 - [ ] Testar hashes exatos dos três arquivos fornecidos por fixtures de teste não versionadas/localmente ou por constantes de metadados; não commitar binários.
-- [ ] Confirmar que JP é classificada como Japan e que o hash compartilhado é classificado como US/Europe.
+- [ ] Confirmar que JP v2.1 é classificada como Japan e que USA/Europe v1.3 e Europe v2.0 são classificadas como BIOS de exportação.
 - [ ] Confirmar que nomes arbitrários funcionam e nomes “corretos” com conteúdo incorreto são rejeitados.
 - [ ] Testar arquivo ausente, tamanho incorreto, falha de leitura, pasta inexistente, duplicatas e arquivos não relacionados.
 - [ ] Garantir que arquivos grandes sejam rejeitados por tamanho antes de ler seu conteúdo integral.
@@ -167,7 +167,7 @@ substituem a preferência de vídeo do console.
 
 ### Fatia 1 — catálogo e scanner Python
 
-- **IMPLEMENTED:** assinaturas SHA-256 para BIOS JP e imagem compartilhada US/EU.
+- **IMPLEMENTED:** assinaturas SHA-256 para BIOS JP v2.1, USA/Europe v1.3 e Europe v2.0; as duas imagens de exportação são distintas, mas selecionáveis pela mesma família regional.
 - **IMPLEMENTED:** varredura explícita, nomes arbitrários, tamanho exato de 8 KiB e rejeição por tamanho antes da leitura integral.
 - **IMPLEMENTED:** seleção por território e revalidação do arquivo (tamanho + SHA-256) imediatamente antes do carregamento.
 - **IMPLEMENTED:** duplicatas determinísticas; primeira ocorrência selecionável e cópias adicionais marcadas como `DUPLICATE_HASH`.
