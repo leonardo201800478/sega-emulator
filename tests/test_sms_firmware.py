@@ -118,6 +118,7 @@ def test_load_sms_bios_selects_only_the_active_territory_and_revalidates(tmp_pat
         assert load_sms_bios(tmp_path, "japan") == b"J" * SMS_BIOS_SIZE
         assert load_sms_bios(tmp_path, "usa") == b"E" * SMS_BIOS_SIZE
         assert load_sms_bios(tmp_path, "europe") == b"E" * SMS_BIOS_SIZE
+        assert load_sms_bios(tmp_path, "brazil") == b"E" * SMS_BIOS_SIZE
 
 
 def test_load_sms_bios_returns_none_when_only_incompatible_region_exists(tmp_path):
