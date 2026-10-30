@@ -619,4 +619,45 @@ mod tests {
         assert_eq!(machine.read_memory(0xFFF8), 0x01);
         assert_eq!(machine.read_memory(0xDFF8), 0x01);
     }
+
+
+    #[test]
+    fn bios_boot_trace_captures_fetch_bytes_and_stops_at_the_requested_limit() {
+        // BIOS loads A=$08 and disables its own overlay through memory-control port $3E.
+        let bios = [0x3E, 0x08, 0xD3, 0x3E];
+        let cartridge = vec![0x76; 0x4000];
+        let mut machine = SmsMachine::with_bios(
+            cartridge,
+            Some(bios.to_vec()),
+            SmsMachineConfig::default(),
+        )
+        .unwrap();
+
+        assert_eq!(machine.enable_instruction_trace(2), 2);
+        machine.step().unwrap();
+        machine.step().unwrap();
+        machine.step().unwrap();
+
+        assert!(!machine.memory().bios_enabled());
+        let traces = machine.drain_instruction_traces();
+        assert_eq!(traces.len(), 2);
+        assert_eq!(traces[0].before.pc, 0x0000);
+        assert_eq!(traces[0].after.pc, 0x0002);
+        assert_eq!(
+            &traces[0].instruction_bytes[..usize::from(traces[0].instruction_len)],
+            &[0x3E, 0x08]
+        );
+        assert_eq!(traces[1].before.pc, 0x0002);
+        assert_eq!(traces[1].after.pc, 0x0004);
+        assert_eq!(
+            &traces[1].instruction_bytes[..usize::from(traces[1].instruction_len)],
+            &[0xD3, 0x3E]
+        );
+        assert_eq!(traces[1].after.af >> 8, 0x08);
+        assert_eq!(traces[1].after.total_tstates, 18);
+
+        // The capture limit is exhausted; further execution remains uninstrumented.
+        machine.step().unwrap();
+        assert!(machine.drain_instruction_traces().is_empty());
+    }
 }
