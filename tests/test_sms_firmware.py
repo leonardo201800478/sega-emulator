@@ -127,7 +127,6 @@ def test_load_sms_bios_returns_none_when_only_incompatible_region_exists(tmp_pat
         assert load_sms_bios(tmp_path, "usa") is None
 
 
-
 def test_cartridge_header_selects_japan_or_export_bios_automatically():
     japanese = bytearray(0x8000)
     japanese[0x7FF0:0x7FF8] = b"TMR SEGA"
