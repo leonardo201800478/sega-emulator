@@ -15,11 +15,13 @@ de verificações estáticas de nome, extensão ou cabeçalho.
 3. Criar uma nova `SMSMachine` por ROM através da fábrica fornecida pelo
    frontend. A fábrica usa o runtime Rust/PyO3 e a política regional/BIOS
    configurada na aplicação.
-4. Executar frames reais por `SMSMachine.run_frame`, em modo sem pacing do host,
+4. Registrar a região e se a BIOS estava ativa no power-on e após os frames,
+   permitindo observar a transferência BIOS→cartucho.
+5. Executar frames reais por `SMSMachine.run_frame`, em modo sem pacing do host,
    com limite de frames, timeout entre frames e limite de instruções por frame.
-5. Registrar PC, instruções, T-states, frames avançados, SHA-256 da ROM e do
-   framebuffer, quantidade de cores RGB, tempo e erro.
-6. Exportar JSON local em `logs/sms_rom_audit/`. Nenhum byte de ROM ou BIOS é
+6. Registrar PC, instruções, T-states, frames avançados, estado inicial/final da
+   BIOS, região, SHA-256 da ROM e do framebuffer, cores RGB, tempo e erro.
+7. Exportar JSON local em `logs/sms_rom_audit/`. Nenhum byte de ROM ou BIOS é
    gravado no relatório, no repositório ou em artefatos de CI.
 
 ## Estados do relatório
