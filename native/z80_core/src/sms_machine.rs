@@ -209,7 +209,7 @@ mod tests {
 
     #[test]
     fn sms_adapter_uses_native_psg_and_reports_configured_clock() {
-        let machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa")).unwrap();
+        let machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa"), None).unwrap();
         assert_eq!(machine.psg_sample_rate(), 44_100);
         assert_eq!(machine.psg_clock_hz(), 3_579_545);
         assert_eq!(machine.total_tstates(), 0);
@@ -217,10 +217,10 @@ mod tests {
 
     #[test]
     fn region_selects_pal_clock_and_japan_territory_profile() {
-        let pal_machine = NativeSMSMachine::new(vec![0; 16], false, Some("europe")).unwrap();
+        let pal_machine = NativeSMSMachine::new(vec![0; 16], false, Some("europe"), None).unwrap();
         assert_eq!(pal_machine.psg_clock_hz(), 3_546_895);
 
-        let japan_machine = NativeSMSMachine::new(vec![0; 16], false, Some("japan")).unwrap();
+        let japan_machine = NativeSMSMachine::new(vec![0; 16], false, Some("japan"), None).unwrap();
         assert_eq!(japan_machine.psg_clock_hz(), 3_579_545);
     }
 
@@ -234,7 +234,7 @@ mod tests {
 
     #[test]
     fn unsupported_region_is_rejected() {
-        assert!(NativeSMSMachine::new(vec![0; 16], false, Some("automatic")).is_err());
+        assert!(NativeSMSMachine::new(vec![0; 16], false, Some("automatic"), None).is_err());
     }
 
     #[test]
