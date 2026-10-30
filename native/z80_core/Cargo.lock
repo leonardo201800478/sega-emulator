@@ -167,7 +167,7 @@ checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
 
 [[package]]
 name = "sega-audio-output"
-version = "0.1.0"
+version = "0.2.0-dev.1"
 dependencies = [
  "rtrb",
  "wasapi",
@@ -176,26 +176,26 @@ dependencies = [
 
 [[package]]
 name = "sega-audio-runtime"
-version = "0.1.0"
+version = "0.2.0-dev.1"
 
 [[package]]
 name = "sega-sg1000-core"
-version = "0.1.0"
+version = "0.2.0-dev.1"
 
 [[package]]
 name = "sega-sms-core"
-version = "0.1.0"
+version = "0.2.0-dev.1"
 dependencies = [
  "sega-z80-bus",
 ]
 
 [[package]]
 name = "sega-z80-bus"
-version = "0.1.0"
+version = "0.2.0-dev.1"
 
 [[package]]
 name = "sega-z80-core"
-version = "0.1.0"
+version = "0.2.0-dev.1"
 dependencies = [
  "pyo3",
  "sega-audio-output",

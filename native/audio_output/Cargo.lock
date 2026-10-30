@@ -58,7 +58,7 @@ checksum = "342e1478a6e1c839e7405033eabfdc954d4d5dabd39f34e83420a43a95acfb04"
 
 [[package]]
 name = "sega-audio-output"
-version = "0.1.0"
+version = "0.2.0-dev.1"
 dependencies = [
  "rtrb",
  "wasapi",

@@ -4,23 +4,23 @@ version = 4
 
 [[package]]
 name = "sega-audio-runtime"
-version = "0.1.0"
+version = "0.2.0-dev.1"
 
 [[package]]
 name = "sega-sg1000-core"
-version = "0.1.0"
+version = "0.2.0-dev.1"
 
 [[package]]
 name = "sega-sms-core"
-version = "0.1.0"
+version = "0.2.0-dev.1"
 dependencies = [
  "sega-z80-bus",
 ]
 
 [[package]]
 name = "sega-z80-alu"
-version = "0.1.0"
+version = "0.2.0-dev.1"
 
 [[package]]
 name = "sega-z80-bus"
-version = "0.1.0"
+version = "0.2.0-dev.1"
