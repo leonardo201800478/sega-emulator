@@ -159,6 +159,12 @@ def test_load_sms_bios_returns_none_when_only_incompatible_region_exists(tmp_pat
         sha256.return_value.hexdigest.return_value = JP_SHA256
         assert load_sms_bios(tmp_path, "usa") is None
 
+    (tmp_path / "japan.bin").unlink()
+    (tmp_path / "europe-v2.0.sms").write_bytes(b"E" * SMS_BIOS_SIZE)
+    with patch("sega_emulator.machine.sms_firmware.hashlib.sha256") as sha256:
+        sha256.return_value.hexdigest.return_value = EUROPE_V2_SHA256
+        assert load_sms_bios(tmp_path, "usa") is None
+
 
 def test_cartridge_header_selects_japan_or_export_bios_automatically():
     japanese = bytearray(0x8000)
@@ -232,7 +238,7 @@ def test_dat_fallback_selects_export_bios_for_brazil_europe_release(tmp_path):
 def test_dat_fallback_selects_export_bios_for_brazil_only_release(tmp_path):
     payload = b"synthetic-brazil-rom"
     _write_sms_dat(tmp_path, payload, ("BRA",))
-    assert sms_bios_region_from_catalog(payload, RomCatalog(tmp_path)) == "usa"
+    assert sms_bios_region_from_catalog(payload, RomCatalog(tmp_path)) == "brazil"
 
 
 def test_dat_fallback_refuses_japan_and_brazil_mixed_releases(tmp_path):
@@ -378,7 +384,7 @@ def test_firmware_scanner_does_not_accept_an_ordinary_game_as_bios(tmp_path):
     assert game.status is SmsFirmwareFileStatus.NOT_FOUND
 
 
-def test_firmware_scanner_accepts_export_bios_from_dat_and_loads_it(tmp_path):
+def test_firmware_scanner_accepts_europe_v2_bios_from_dat_and_loads_it(tmp_path):
     payload = b"E" * SMS_BIOS_SIZE
     (tmp_path / "export.bin").write_bytes(payload)
     _write_bios_dat(
