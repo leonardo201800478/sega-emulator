@@ -335,11 +335,7 @@ mod tests {
 
     #[test]
     fn bios_power_on_profile_matches_sms_slot_and_ram_latches() {
-        let memory = SmsMemory::with_bios(
-            patterned_rom(1),
-            Some(vec![0xA5; 0x2000]),
-        )
-        .unwrap();
+        let memory = SmsMemory::with_bios(patterned_rom(1), Some(vec![0xA5; 0x2000])).unwrap();
         assert_eq!(memory.control_port(), 0xF3);
         assert!(memory.bios_enabled());
         assert_eq!(memory.read(0x0000), 0xA5);
