@@ -8640,7 +8640,6 @@ fn singlestep_expanded_opcode_0e_vector_0000() {
     );
 }
 
-
 #[test]
 fn singlestep_expanded_opcode_16_vector_0000() {
     run_vector_with_memory(
