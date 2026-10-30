@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from sega_emulator.frontend.qt.preferences import FrontendPreferences
+from sega_emulator.machine.sms_firmware import scan_sms_firmware_directory
 
 
 class SettingsDialog(QDialog):
@@ -344,6 +345,12 @@ class SettingsDialog(QDialog):
         firmware_path_layout.addWidget(self.firmware_directory, 1)
         firmware_path_layout.addWidget(browse_firmware)
         firmware_form.addRow("Pasta de BIOS:", firmware_path_row)
+        scan_firmware = QPushButton("Verificar BIOS agora", firmware_group)
+        scan_firmware.clicked.connect(self._scan_firmware_directory)
+        self.firmware_scan_status = QLabel("Nenhuma varredura realizada.")
+        self.firmware_scan_status.setWordWrap(True)
+        firmware_form.addRow(scan_firmware)
+        firmware_form.addRow("Resultado da verificação:", self.firmware_scan_status)
         firmware_note = QLabel(
             "A BIOS é opcional e deve ser obtida e instalada pelo usuário. "
             "O emulador identifica os arquivos por SHA-256, aceita nomes "
@@ -367,6 +374,21 @@ class SettingsDialog(QDialog):
             self._restore_defaults
         )
         root.addWidget(buttons)
+
+    def _scan_firmware_directory(self) -> None:
+        directory = self.firmware_directory.text().strip() or None
+        scan = scan_sms_firmware_directory(directory)
+        if not scan.files:
+            self.firmware_scan_status.setText(scan.status.value)
+            return
+        lines = [scan.status.value]
+        for item in scan.files:
+            region = item.region.value if item.region is not None else "unknown"
+            digest = f"SHA-256 {item.sha256[:12]}…" if item.sha256 else "no hash"
+            lines.append(
+                f"{item.path.name}: {item.status.value}; {region}; {digest}"
+            )
+        self.firmware_scan_status.setText("\\n".join(lines))
 
     def _choose_firmware_directory(self) -> None:
         selected = QFileDialog.getExistingDirectory(
