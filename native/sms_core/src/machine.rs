@@ -267,6 +267,7 @@ impl SmsMachine {
 
     pub fn reset_cpu(&mut self) {
         self.cpu.reset();
+        self.memory.reset_control_port();
     }
 
     pub fn set_controller(
