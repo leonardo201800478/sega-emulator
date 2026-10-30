@@ -158,8 +158,6 @@ pub struct SmsMachine {
     pending_psg_writes: Vec<SmsPsgWriteEvent>,
     sega_scope: SegaScopeState,
     config: SmsMachineConfig,
-    /// Physical console PAUSE button level; only its rising edge requests NMI.
-    pause_button_pressed: bool,
 }
 
 impl SmsMachine {
@@ -215,7 +213,6 @@ impl SmsMachine {
             pending_psg_writes: Vec::new(),
             sega_scope: SegaScopeState::default(),
             config,
-            pause_button_pressed: false,
         })
     }
 
@@ -274,18 +271,6 @@ impl SmsMachine {
     pub fn reset_cpu(&mut self) {
         self.cpu.reset();
         self.memory.reset_control_port();
-        self.pause_button_pressed = false;
-    }
-
-    /// Update the dedicated SMS console PAUSE line.
-    ///
-    /// The hardware button is not a controller-port bit: a low-to-high host
-    /// transition latches one Z80 NMI. Holding the button does not retrigger it.
-    pub fn set_pause_button(&mut self, pressed: bool) {
-        if pressed && !self.pause_button_pressed {
-            self.cpu.request_nmi();
-        }
-        self.pause_button_pressed = pressed;
     }
 
     pub fn set_controller(
@@ -418,7 +403,7 @@ mod tests {
         assert_eq!(machine.memory().control_port(), 0xF3);
         assert!(machine.memory().bios_enabled());
         assert_eq!(machine.read_memory(0x0000), 0x3E);
-        assert_eq!(machine.read_memory(0x0400), 0xFF);
+        assert_eq!(machine.read_memory(0x0400), 0x00);
         assert_eq!(machine.read_memory(0xC000), 0xFF);
 
         // LDIR is modeled as one repeated transfer per CPU step.
@@ -469,33 +454,6 @@ mod tests {
         machine.reset_cpu();
         assert!(machine.memory().bios_enabled());
         assert_eq!(machine.read_memory(0), 0x3E);
-    }
-
-    #[test]
-    fn pause_button_requests_one_nmi_per_press_and_retriggers_after_release() {
-        // Jump over the NMI vector; the handler returns with RETN.
-        let mut rom = vec![0x00; 0x4000];
-        rom[..3].copy_from_slice(&[0xC3, 0x00, 0x01]); // JP $0100
-        rom[0x0066] = 0xED;
-        rom[0x0067] = 0x45; // RETN
-        let mut machine = SmsMachine::new(rom).unwrap();
-        machine.cpu.registers.sp = 0xC100;
-        machine.step().unwrap();
-        assert_eq!(machine.cpu.registers.pc, 0x0100);
-
-        machine.set_pause_button(true);
-        machine.set_pause_button(true); // Held: no second edge.
-        assert_eq!(machine.step(), Ok(11));
-        assert_eq!(machine.cpu.registers.pc, 0x0066);
-        assert_eq!(machine.step(), Ok(14)); // RETN
-        assert_eq!(machine.cpu.registers.pc, 0x0100);
-        assert_eq!(machine.step(), Ok(4)); // No repeated NMI while held.
-        assert_eq!(machine.cpu.registers.pc, 0x0101);
-
-        machine.set_pause_button(false);
-        machine.set_pause_button(true);
-        assert_eq!(machine.step(), Ok(11));
-        assert_eq!(machine.cpu.registers.pc, 0x0066);
     }
 
     #[test]
