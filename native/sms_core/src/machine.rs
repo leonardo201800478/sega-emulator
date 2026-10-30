@@ -620,7 +620,6 @@ mod tests {
         assert_eq!(machine.read_memory(0xDFF8), 0x01);
     }
 
-
     #[test]
     fn bios_boot_trace_captures_fetch_bytes_and_stops_at_the_requested_limit() {
         // BIOS loads A=$08 and disables its own overlay through memory-control port $3E.
