@@ -6,45 +6,7 @@ concurrency:
   cancel-in-progress: true
 
 on:
-  pull_request:
-    paths:
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "native/audio_runtime/**"
-      - "native/audio_output/**"
-      - "pyproject.toml"
-      - "src/sega_emulator/frontend/qt/drivers_dialog.py"
-      - "src/sega_emulator/frontend/qt/settings_dialog.py"
-      - "tests/test_qt_drivers_dialog.py"
-      - "tests/test_qt_settings_dialog.py"
-      - "src/sega_emulator/frontend/qt/audio_output.py"
-      - "src/sega_emulator/frontend/qt/wasapi_audio.py"
-      - "tests/test_qt_audio_output.py"
-      - "tests/unit/test_wasapi_audio_output.py"
-      - "native/z80_core/**"
-      - "native/z80_core/Cargo.toml"
-      - "native/z80_core/Cargo.lock"
-      - "native/sms_core/**"
-      - "native/z80_bus/**"
-      - "tests/test_sms_native_audio.py"
-      - "native/sg1000_core/**"
-      - "src/sega_emulator/machine/sg1000.py"
-      - "src/sega_emulator/frontend/qt_frontend.py"
-      - "tests/test_sg1000_native_machine.py"
-      - "tests/test_rust_runtime_selection.py"
-      - "tests/test_vgm_machine_integration.py"
-  push:
-    branches: ["feat/qt-rust-z80-available"]
-    paths:
-      - "native/z80_core/**"
-      - "native/z80_core/Cargo.toml"
-      - "native/z80_core/Cargo.lock"
-      - "native/sg1000_core/**"
-      - "src/sega_emulator/machine/sg1000.py"
-      - "src/sega_emulator/frontend/qt_frontend.py"
-      - "tests/test_sg1000_native_machine.py"
-      - "tests/test_rust_runtime_selection.py"
-      - "tests/test_vgm_machine_integration.py"
+  workflow_dispatch:
 
 jobs:
   windows:

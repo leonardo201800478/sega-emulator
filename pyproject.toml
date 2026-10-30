@@ -41,7 +41,7 @@ pythonpath = ["."]
 addopts = "-ra"
 
 [tool.ruff]
-extend-exclude = ["legacy/**", "tools/audits/*.ipynb"]
+extend-exclude = ["tools/audits/*.ipynb"]
 target-version = "py314"
 line-length = 88
 src = ["src", "tests"]
