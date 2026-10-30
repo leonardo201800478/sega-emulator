@@ -181,6 +181,7 @@ pub struct SmsMachine {
     pending_psg_writes: Vec<SmsPsgWriteEvent>,
     instruction_traces: Vec<Z80InstructionTrace>,
     instruction_trace_limit: usize,
+    instruction_trace_skip_remaining: u64,
     sega_scope: SegaScopeState,
     config: SmsMachineConfig,
 }
@@ -238,6 +239,7 @@ impl SmsMachine {
             pending_psg_writes: Vec::new(),
             instruction_traces: Vec::new(),
             instruction_trace_limit: 0,
+            instruction_trace_skip_remaining: 0,
             sega_scope: SegaScopeState::default(),
             config,
         })
@@ -258,7 +260,9 @@ impl SmsMachine {
     pub fn step(&mut self) -> Result<u32, CpuError> {
         let start_tstate = self.cpu.total_tstates;
         let trace_limit = self.instruction_trace_limit;
-        let trace_capture = if trace_limit > self.instruction_traces.len() {
+        let trace_capture = if self.instruction_trace_skip_remaining == 0
+            && trace_limit > self.instruction_traces.len()
+        {
             Some(SmsInstructionTraceCapture {
                 records: &mut self.instruction_traces,
                 limit: trace_limit,
@@ -345,16 +349,27 @@ impl SmsMachine {
     /// of records has been collected. The limit is capped to avoid unbounded
     /// memory use in frontend-driven sessions.
     pub fn enable_instruction_trace(&mut self, max_instructions: usize) -> usize {
+        self.enable_instruction_trace_after(max_instructions, 0)
+    }
+
+    /// Capture a bounded instruction window after a deterministic number of steps.
+    pub fn enable_instruction_trace_after(
+        &mut self,
+        max_instructions: usize,
+        start_after_instructions: u64,
+    ) -> usize {
         let limit = max_instructions.min(4096);
         self.instruction_traces.clear();
         self.instruction_traces.reserve(limit);
         self.instruction_trace_limit = limit;
+        self.instruction_trace_skip_remaining = start_after_instructions;
         limit
     }
 
     /// Stop capture and return the collected deterministic instruction records.
     pub fn drain_instruction_traces(&mut self) -> Vec<Z80InstructionTrace> {
         self.instruction_trace_limit = 0;
+        self.instruction_trace_skip_remaining = 0;
         std::mem::take(&mut self.instruction_traces)
     }
 
