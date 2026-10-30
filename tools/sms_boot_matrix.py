@@ -164,6 +164,11 @@ def _run_case(
 
     framebuffer = bytes(machine.vdp.framebuffer)
     visible_height = int(machine.vdp.visible_height)
+    frame_metrics = _frame_metrics(framebuffer)
+    visual_activity = (
+        frame_metrics["non_black_pixels"] > 0
+        and frame_metrics["unique_rgb_colors"] > 1
+    )
     capture_name = f"{_safe_stem(rom_name)}__{bios_name or 'direct'}__{region}.ppm"
     capture_path = capture_dir / capture_name
     _write_ppm(capture_path, framebuffer, visible_height)
@@ -174,10 +179,14 @@ def _run_case(
         outcome = (
             "DIRECT_BOOT_FRAME_ADVANCE" if frames_run == frames else "INCOMPLETE"
         )
+        if outcome == "DIRECT_BOOT_FRAME_ADVANCE" and not visual_activity:
+            outcome = "DIRECT_BOOT_BLANK_FRAME"
     elif handoff_frame is None:
         outcome = "NO_BIOS_HANDOFF"
     elif (frames_after_handoff or 0) < post_handoff_frames:
         outcome = "BIOS_HANDOFF_WITHOUT_FULL_POSTRUN"
+    elif not visual_activity:
+        outcome = "BIOS_HANDOFF_BUT_BLANK_FRAME"
     else:
         outcome = "BIOS_HANDOFF_AND_POSTRUN"
 
@@ -199,7 +208,8 @@ def _run_case(
         "tstates": machine.total_tstates,
         "frame_number": machine.vdp.frame_number,
         "visible_height": visible_height,
-        "framebuffer": _frame_metrics(framebuffer),
+        "framebuffer": frame_metrics,
+        "visual_activity": visual_activity,
         "capture_path": str(capture_path.resolve()),
         "execution_error": execution_error,
     }
