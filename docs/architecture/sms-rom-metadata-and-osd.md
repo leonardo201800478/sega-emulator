@@ -96,6 +96,22 @@ O header SMS pode ocorrer em offsets `$1FF0`, `$3FF0` ou `$7FF0`, contém a assi
 
 Se header e DAT divergirem, preservar ambos os resultados e registrar `IDENTITY_CONFLICT`; não sobrescrever silenciosamente uma fonte pela outra. O resolvedor deverá expor a origem da decisão e sua confiança.
 
+### 4.1.1 Resolução automática do perfil de vídeo
+
+A família do header SMS é somente Japan (`$3`) ou Export (`$4`); ela não distingue USA, Europe e Brazil. A seleção automática do perfil de vídeo deve seguir estas regras:
+
+- preferência manual sempre vence;
+- header Japan seleciona perfil Japan, registrando conflito se o DAT exato apontar território de exportação;
+- header Export é refinado por DAT exato de território único: USA → USA/NTSC; EUR/AUS → Europe/PAL; BRA → Brazil/PAL-M;
+- sem header, DAT exato de território único pode selecionar o mesmo perfil;
+- releases com múltiplos territórios que implicam padrões diferentes (por exemplo, Brazil + Europe) são ambíguas: usar USA como fallback determinístico, marcar `UNKNOWN/AMBIGUOUS` e permitir seleção manual; não afirmar que USA é a região correta;
+- sem header e sem DAT confiável, usar USA como padrão e iniciar diretamente pelo cartucho, sem BIOS;
+- Korea/Taiwan não são convertidas automaticamente em Japan ou Export genérico. Até existir um modelo específico, usar fallback conservador, marcar a resolução como conflitante/ambígua e não selecionar BIOS automaticamente.
+
+O fallback não tenta sequencialmente outros perfis quando o primeiro frame falha. Falha de execução não é evidência de região. A decisão deve ocorrer no carregamento da ROM e ser registrada com fonte, regiões DAT, ambiguidade e conflito.
+
+O perfil Brazil é representado como PAL-M, com temporização NTSC-like de 262 linhas e clock nominal de 3.579.545 Hz. O VDP mantém PAL-M distinto de NTSC para configuração e diagnóstico, mas a saída RGB atual não simula a codificação analógica de cor PAL-M/subportadora.
+
 ### 4.2 ROM sem identificação no header e no DAT
 
 Regra de compatibilidade aprovada:
