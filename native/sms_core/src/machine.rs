@@ -51,6 +51,11 @@ struct SmsPsgWriteEvent {
     value: u8,
 }
 
+struct SmsInstructionTraceCapture<'a> {
+    records: &'a mut Vec<Z80InstructionTrace>,
+    limit: usize,
+}
+
 /// SMS-owned implementation of the hardware-neutral Z80 memory/I/O contract.
 pub struct SmsMachineBus<'a> {
     memory: &'a mut SmsMemory,
@@ -58,8 +63,7 @@ pub struct SmsMachineBus<'a> {
     sega_scope: &'a mut SegaScopeState,
     vdp: &'a mut SmsVdp,
     pending_psg_writes: Option<&'a mut Vec<SmsPsgWriteEvent>>,
-    pending_instruction_traces: Option<&'a mut Vec<Z80InstructionTrace>>,
-    instruction_trace_limit: usize,
+    instruction_trace_capture: Option<SmsInstructionTraceCapture<'a>>,
     tstate: u64,
 }
 
@@ -76,8 +80,7 @@ impl<'a> SmsMachineBus<'a> {
             sega_scope,
             vdp,
             pending_psg_writes: None,
-            pending_instruction_traces: None,
-            instruction_trace_limit: 0,
+            instruction_trace_capture: None,
             tstate: 0,
         }
     }
@@ -88,8 +91,7 @@ impl<'a> SmsMachineBus<'a> {
         sega_scope: &'a mut SegaScopeState,
         vdp: &'a mut SmsVdp,
         pending_psg_writes: &'a mut Vec<SmsPsgWriteEvent>,
-        pending_instruction_traces: Option<&'a mut Vec<Z80InstructionTrace>>,
-        instruction_trace_limit: usize,
+        instruction_trace_capture: Option<SmsInstructionTraceCapture<'a>>,
         tstate: u64,
     ) -> Self {
         Self {
@@ -98,8 +100,7 @@ impl<'a> SmsMachineBus<'a> {
             sega_scope,
             vdp,
             pending_psg_writes: Some(pending_psg_writes),
-            pending_instruction_traces,
-            instruction_trace_limit,
+            instruction_trace_capture,
             tstate,
         }
     }
@@ -107,14 +108,16 @@ impl<'a> SmsMachineBus<'a> {
 
 impl CpuBus for SmsMachineBus<'_> {
     fn instruction_trace_enabled(&self) -> bool {
-        self.instruction_trace_limit > 0 && self.pending_instruction_traces.is_some()
+        self.instruction_trace_capture
+            .as_ref()
+            .is_some_and(|capture| capture.records.len() < capture.limit)
     }
 
     fn observe_instruction_trace(&mut self, trace: Z80InstructionTrace) {
-        if let Some(traces) = self.pending_instruction_traces.as_mut()
-            && traces.len() < self.instruction_trace_limit
+        if let Some(capture) = self.instruction_trace_capture.as_mut()
+            && capture.records.len() < capture.limit
         {
-            traces.push(trace);
+            capture.records.push(trace);
         }
     }
 
@@ -255,8 +258,14 @@ impl SmsMachine {
     pub fn step(&mut self) -> Result<u32, CpuError> {
         let start_tstate = self.cpu.total_tstates;
         let trace_limit = self.instruction_trace_limit;
-        let trace_buffer =
-            (trace_limit > self.instruction_traces.len()).then_some(&mut self.instruction_traces);
+        let trace_capture = if trace_limit > self.instruction_traces.len() {
+            Some(SmsInstructionTraceCapture {
+                records: &mut self.instruction_traces,
+                limit: trace_limit,
+            })
+        } else {
+            None
+        };
         let cycles = {
             let mut bus = SmsMachineBus::with_psg_queue(
                 &mut self.memory,
@@ -264,8 +273,7 @@ impl SmsMachine {
                 &mut self.sega_scope,
                 &mut self.vdp,
                 &mut self.pending_psg_writes,
-                trace_buffer,
-                trace_limit,
+                trace_capture,
                 start_tstate,
             );
             self.cpu.step(&mut bus)?
