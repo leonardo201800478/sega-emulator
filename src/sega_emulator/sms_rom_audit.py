@@ -233,6 +233,7 @@ def run_sms_rom_audit(
         started = time.perf_counter()
         rom_hash: str | None = None
         machine = None
+        rom_data_loaded = False
         frames_advanced = 0
         instructions = 0
         tstates = 0
@@ -245,6 +246,7 @@ def run_sms_rom_audit(
 
         try:
             data = read_sms_rom_target(target)
+            rom_data_loaded = True
             rom_hash = hashlib.sha256(data).hexdigest()
             machine = machine_factory(data)
             initial_frame = int(machine.vdp.frame_number)
@@ -301,13 +303,21 @@ def run_sms_rom_audit(
             details = str(exc)
             status = (
                 "READ_OR_EXTRACTION_FAILED"
+                if not rom_data_loaded
+                else "MACHINE_CREATION_FAILED"
                 if machine is None
                 else "BOOT_FAILED"
             )
         except Exception as exc:
             error_type = type(exc).__name__
             details = str(exc)
-            status = "BOOT_FAILED" if machine is not None else "MACHINE_CREATION_FAILED"
+            status = (
+                "READ_OR_EXTRACTION_FAILED"
+                if not rom_data_loaded
+                else "MACHINE_CREATION_FAILED"
+                if machine is None
+                else "BOOT_FAILED"
+            )
 
         result = SmsRomAuditResult(
             display_name=target.display_name,
