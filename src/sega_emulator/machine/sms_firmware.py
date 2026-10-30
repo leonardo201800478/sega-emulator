@@ -88,8 +88,11 @@ def _sms_bios_region_from_dat_candidates(
     for candidate in candidates:
         if candidate.system != "master_system":
             return None
-        if require_bios_entry and not candidate.game_name.casefold().startswith(
-            "[bios] sega master system"
+        if require_bios_entry and (
+            not candidate.game_name.casefold().startswith(
+                "[bios] sega master system"
+            )
+            or candidate.status != "verified"
         ):
             return None
         regions = set(candidate.regions)
