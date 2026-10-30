@@ -166,8 +166,7 @@ def _run_case(
     visible_height = int(machine.vdp.visible_height)
     frame_metrics = _frame_metrics(framebuffer)
     visual_activity = (
-        frame_metrics["non_black_pixels"] > 0
-        and frame_metrics["unique_rgb_colors"] > 1
+        frame_metrics["non_black_pixels"] > 0 and frame_metrics["unique_rgb_colors"] > 1
     )
     capture_name = f"{_safe_stem(rom_name)}__{bios_name or 'direct'}__{region}.ppm"
     capture_path = capture_dir / capture_name
@@ -176,9 +175,7 @@ def _run_case(
     if execution_error is not None:
         outcome = "EXECUTION_ERROR"
     elif bios_data is None:
-        outcome = (
-            "DIRECT_BOOT_FRAME_ADVANCE" if frames_run == frames else "INCOMPLETE"
-        )
+        outcome = "DIRECT_BOOT_FRAME_ADVANCE" if frames_run == frames else "INCOMPLETE"
         if outcome == "DIRECT_BOOT_FRAME_ADVANCE" and not visual_activity:
             outcome = "DIRECT_BOOT_BLANK_FRAME"
     elif handoff_frame is None:
@@ -269,16 +266,13 @@ def main() -> int:
             (
                 item
                 for item in scan.files
-                if item.region is region
-                and item.status is expected_status[region]
+                if item.region is region and item.status is expected_status[region]
             ),
             None,
         )
         for region in expected_status
     }
-    missing = [
-        region.value for region, item in bios_by_region.items() if item is None
-    ]
+    missing = [region.value for region, item in bios_by_region.items() if item is None]
     if missing:
         parser.error(
             "Missing recognized BIOS revisions: "
