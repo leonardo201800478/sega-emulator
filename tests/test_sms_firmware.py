@@ -86,7 +86,7 @@ def test_duplicate_recognized_hashes_are_not_reported_as_conflicts(tmp_path):
     # bytes are needed in the repository or test environment.
     from unittest.mock import patch
 
-    data = b"\xA5" * SMS_BIOS_SIZE
+    data = b"\xa5" * SMS_BIOS_SIZE
     (tmp_path / "first.bin").write_bytes(data)
     (tmp_path / "renamed.rom").write_bytes(data)
     with patch("sega_emulator.machine.sms_firmware.hashlib.sha256") as sha256:
