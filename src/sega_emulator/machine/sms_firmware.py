@@ -102,8 +102,7 @@ def scan_sms_firmware_directory(
     recognized: dict[str, list[int]] = {}
     for candidate in candidates:
         try:
-            data = candidate.read_bytes()
-            size = len(data)
+            size = candidate.stat().st_size
             if size != SMS_BIOS_SIZE:
                 scanned.append(
                     SmsFirmwareFile(
@@ -113,6 +112,19 @@ def scan_sms_firmware_directory(
                         None,
                         SmsFirmwareFileStatus.INVALID_FILE,
                         f"Expected {SMS_BIOS_SIZE} bytes; found {size}.",
+                    )
+                )
+                continue
+            data = candidate.read_bytes()
+            if len(data) != SMS_BIOS_SIZE:
+                scanned.append(
+                    SmsFirmwareFile(
+                        candidate,
+                        len(data),
+                        None,
+                        None,
+                        SmsFirmwareFileStatus.INVALID_FILE,
+                        f"Expected {SMS_BIOS_SIZE} bytes; found {len(data)}.",
                     )
                 )
                 continue
@@ -142,16 +154,63 @@ def scan_sms_firmware_directory(
             recognized.setdefault(digest, []).append(len(scanned) - 1)
 
     for indexes in recognized.values():
-        if len(indexes) > 1:
-            for index in indexes:
-                item = scanned[index]
-                scanned[index] = SmsFirmwareFile(
-                    item.path,
-                    item.size,
-                    item.sha256,
-                    item.region,
-                    SmsFirmwareFileStatus.DUPLICATE_HASH,
-                    "Another file has the same recognized firmware hash.",
-                )
+        # Keep the first deterministic match selectable; only later paths are
+        # duplicates of that same validated firmware image.
+        for index in indexes[1:]:
+            item = scanned[index]
+            scanned[index] = SmsFirmwareFile(
+                item.path,
+                item.size,
+                item.sha256,
+                item.region,
+                SmsFirmwareFileStatus.DUPLICATE_HASH,
+                "Another file has the same recognized firmware hash.",
+            )
 
     return SmsFirmwareScan(root, SmsFirmwareDirectoryStatus.READY, tuple(scanned))
+
+
+def load_sms_bios(
+    directory: str | Path | None,
+    region: str,
+) -> bytes | None:
+    """Load a known BIOS matching the active console territory.
+
+    Selection is content-based. The selected file is revalidated after the scan
+    to avoid loading bytes that changed between discovery and machine creation.
+    """
+    if region not in {"japan", "usa", "europe"}:
+        raise ValueError("region deve ser usa, europe ou japan.")
+    expected_region = (
+        SmsFirmwareRegion.JAPAN if region == "japan" else SmsFirmwareRegion.EXPORT_US_EU
+    )
+    scan = scan_sms_firmware_directory(directory)
+    selected = next(
+        (
+            item
+            for item in scan.files
+            if item.region is expected_region
+            and item.status
+            in {
+                SmsFirmwareFileStatus.VALID_JAPAN,
+                SmsFirmwareFileStatus.VALID_EXPORT_US_EU,
+            }
+        ),
+        None,
+    )
+    if selected is None:
+        return None
+
+    try:
+        data = selected.path.read_bytes()
+    except OSError as exc:
+        raise ValueError(
+            f"Não foi possível carregar a BIOS SMS '{selected.path.name}': "
+            f"{exc.__class__.__name__}."
+        ) from exc
+    if len(data) != SMS_BIOS_SIZE or hashlib.sha256(data).hexdigest() != selected.sha256:
+        raise ValueError(
+            f"A BIOS SMS '{selected.path.name}' mudou após a verificação; "
+            "execute uma nova varredura."
+        )
+    return data
