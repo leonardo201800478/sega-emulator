@@ -275,8 +275,6 @@ def apply_turbo(
                 result.discard(action)
     return result
 
-
-
 def is_rising_edge(pressed: bool, was_pressed: bool) -> bool:
     """Return true only for a released-to-pressed transition."""
     return pressed and not was_pressed
