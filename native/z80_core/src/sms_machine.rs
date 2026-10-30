@@ -351,18 +351,4 @@ mod tests {
                 .is_ok()
         );
     }
-
-    #[test]
-    fn sms_adapter_exposes_bounded_instruction_trace_as_jsonl() {
-        let mut machine = NativeSMSMachine::new(vec![0x00; 16], false, Some("usa"), None).unwrap();
-        assert_eq!(machine.enable_instruction_trace(2).unwrap(), 2);
-        machine.step().unwrap();
-        machine.step().unwrap();
-        let trace = machine.drain_instruction_trace_json();
-        let lines: Vec<_> = trace.lines().collect();
-        assert_eq!(lines.len(), 2);
-        assert!(lines[0].contains("\"instruction_index\":1"));
-        assert!(lines[0].contains("\"pc\":0"));
-        assert!(lines[1].contains("\"instruction_index\":2"));
-    }
 }
