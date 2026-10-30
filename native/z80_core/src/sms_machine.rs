@@ -227,7 +227,8 @@ mod tests {
     #[test]
     fn bios_is_forwarded_to_native_memory_and_executes() {
         let bios = vec![0x3E, 0x08, 0xD3, 0x3E];
-        let machine = NativeSMSMachine::new(vec![0xC3; 0x4000], false, Some("usa"), Some(bios)).unwrap();
+        let machine =
+            NativeSMSMachine::new(vec![0xC3; 0x4000], false, Some("usa"), Some(bios)).unwrap();
         assert!(machine.bios_enabled());
         assert_eq!(machine.read_memory(0), 0x3E);
     }
