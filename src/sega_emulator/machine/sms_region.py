@@ -80,7 +80,12 @@ def _catalog_video_profile(
         or identification.matched_by not in {"sha1", "md5"}
         or not identification.candidates
     ):
-        return None, regions, bool(regions), False
+        ambiguous = (
+            identification.status == "ambiguous"
+            or identification.matched_by == "crc32+size"
+            or bool(regions)
+        )
+        return None, regions, ambiguous, False
 
     candidate_profiles: set[str] = set()
     for candidate in identification.candidates:
