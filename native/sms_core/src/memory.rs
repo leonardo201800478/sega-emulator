@@ -84,7 +84,13 @@ impl SmsMemory {
             0x8000..=0xBFFF => {
                 self.read_bank(self.bank_registers[2], usize::from(address) - 0x8000)
             }
-            0xC000..=0xFFFF => self.work_ram[usize::from(address - RAM_START) & (RAM_SIZE - 1)],
+            0xC000..=0xFFFF => {
+                if self.control_port & 0x10 != 0 {
+                    0xFF
+                } else {
+                    self.work_ram[usize::from(address - RAM_START) & (RAM_SIZE - 1)]
+                }
+            },
         }
     }
 
@@ -92,7 +98,7 @@ impl SmsMemory {
     pub fn write(&mut self, address: u16, value: u8) {
         // Work RAM is mirrored through FFFF. Mapper writes update both the
         // mapper register and the RAM mirror at the same logical address.
-        if address >= RAM_START {
+        if address >= RAM_START && self.control_port & 0x10 == 0 {
             self.work_ram[usize::from(address - RAM_START) & (RAM_SIZE - 1)] = value;
         }
 
@@ -311,6 +317,17 @@ mod tests {
         assert_eq!(memory.read(0x0400), 0xFF);
         assert_eq!(memory.read(0xC000), 0x00);
         assert_eq!(memory.read(0x0000), 0xA5);
+    }
+
+    #[test]
+    fn memory_control_port_can_disable_and_reenable_work_ram() {
+        let mut memory = SmsMemory::new(patterned_rom(1)).unwrap();
+        memory.write(0xC000, 0x5A);
+        memory.write_control_port(0x18);
+        assert_eq!(memory.read(0xC000), 0xFF);
+        memory.write(0xC000, 0xA5);
+        memory.write_control_port(0x08);
+        assert_eq!(memory.read(0xC000), 0x5A);
     }
 
     #[test]
