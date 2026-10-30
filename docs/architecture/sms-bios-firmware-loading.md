@@ -118,7 +118,8 @@ cabeçalho `TMR SEGA` válido. Se ambos não resolverem o território, consulta 
 exclusivamente `JPN` ou exclusivamente `USA`/`EUR` podem selecionar a família de
 BIOS japonesa ou de exportação, respectivamente. Entradas mistas, regiões sem
 mapeamento comprovado, ROMs desconhecidas e colisões entre sistemas não escolhem
-BIOS automaticamente. Os DATs identificam releases; não determinam PAL/NTSC nem
+BIOS automaticamente. A seleção de firmware exige correspondência SHA-1 ou MD5;
+o fallback CRC-32 + tamanho do catálogo não é forte o bastante para escolher BIOS. Os DATs identificam releases; não determinam PAL/NTSC nem
 substituem a preferência de vídeo do console.
 
 ## Critérios de aceitação
