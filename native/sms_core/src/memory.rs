@@ -47,6 +47,9 @@ fn has_codemasters_header(rom: &[u8]) -> bool {
         return false;
     }
 
+    if &rom[0x7FF0..0x7FF8] != b"TMR SEGA" {
+        return false;
+    }
     let header = &rom[0x7FE0..0x7FF0];
     if usize::from(header[0]) != rom.len() / BANK_SIZE
         || !header[1..6].iter().copied().all(is_bcd)
