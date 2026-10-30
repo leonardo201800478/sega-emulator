@@ -277,17 +277,27 @@ class SmsHardwareIdentification:
     def __post_init__(self) -> None:
         if not isinstance(self.candidates, tuple):
             raise TypeError("candidates must be a tuple.")
-        is_ambiguous = self.status is SmsHardwareMatchStatus.AMBIGUOUS
-        is_unknown = self.status is SmsHardwareMatchStatus.NOT_CATALOGUED
         if self.status is SmsHardwareMatchStatus.MATCHED:
-            if self.metadata is None or len(self.candidates) != 1:
-                raise ValueError("A matched result requires exactly one record.")
-        elif is_ambiguous and len(self.candidates) < 2:
-            raise ValueError("An ambiguous result requires multiple candidates.")
-        elif is_unknown and self.candidates:
-            raise ValueError("An unknown result cannot contain candidates.")
-        elif self.metadata is not None:
-            raise ValueError("Ambiguous/unknown results cannot expose a winner.")
+            if (
+                self.metadata is None
+                or len(self.candidates) != 1
+                or not self.matched_by
+            ):
+                raise ValueError(
+                    "A matched result requires one record, metadata and match type."
+                )
+            if self.candidates[0].metadata != self.metadata:
+                raise ValueError("Matched metadata must come from its candidate.")
+        elif self.status is SmsHardwareMatchStatus.AMBIGUOUS:
+            if len(self.candidates) < 2 or self.metadata is not None:
+                raise ValueError(
+                    "An ambiguous result requires multiple candidates and no winner."
+                )
+            if not self.matched_by:
+                raise ValueError("An ambiguous result requires a match type.")
+        elif self.status is SmsHardwareMatchStatus.NOT_CATALOGUED:
+            if self.candidates or self.metadata is not None or self.matched_by is not None:
+                raise ValueError("An unknown result cannot contain a match.")
 
 
 class SmsHardwareCatalog:
