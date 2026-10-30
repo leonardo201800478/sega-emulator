@@ -77,6 +77,15 @@ def test_sms_pal_profile_selects_pal_psg_clock() -> None:
     assert machine.psg_clock_hz == 3_546_895
 
 
+def test_sms_brazil_pal_m_profile_uses_ntsc_like_clock() -> None:
+    native = NativeSMSMachine(bytes([0x00]), region="brazil")
+    adapter = SMSMachine(bytes([0x00]), region="brazil")
+
+    assert native.psg_clock_hz == 3_579_545
+    assert adapter.region == "brazil"
+    assert adapter.psg_clock_hz == 3_579_545
+
+
 def test_sms_python_adapter_drains_pcm_without_changing_tstates() -> None:
     machine = SMSMachine(
         bytes(
