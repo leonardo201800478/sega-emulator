@@ -197,3 +197,24 @@ def test_legacy_python_runtime_preference_is_migrated_to_rust() -> None:
 def test_python_runtime_cannot_be_selected_in_preferences() -> None:
     with pytest.raises(ValueError, match="Rust-only"):
         FrontendPreferences(cpu_core="python")
+
+
+
+@pytest.mark.parametrize("value", [None, "invalid", [], 2])
+def test_invalid_saved_sms_bios_boot_preference_defaults_to_enabled(value) -> None:
+    settings = MemorySettings({"sms_bios_boot_enabled": value})
+
+    preferences = FrontendPreferences.from_store(settings)
+
+    assert preferences.sms_bios_boot_enabled is True
+
+
+def test_recent_rom_update_preserves_disabled_sms_bios_boot_preference() -> None:
+    preferences = FrontendPreferences(
+        recent_roms=("old.sms",),
+        sms_bios_boot_enabled=False,
+    )
+
+    updated = preferences.with_recent_rom("new.sms")
+
+    assert updated.sms_bios_boot_enabled is False

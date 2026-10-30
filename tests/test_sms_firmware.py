@@ -444,3 +444,34 @@ def test_bios_boot_requires_boolean_flag():
 
     with pytest.raises(TypeError, match="enabled"):
         load_sms_bios_for_boot("false", None, "usa")
+
+
+
+def test_europe_bios_falls_back_to_shared_export_when_v2_is_absent(tmp_path):
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    export_payload = b"U" * SMS_BIOS_SIZE
+    (tmp_path / "USA-Europe-v1.3.sms").write_bytes(export_payload)
+
+    with patch("sega_emulator.machine.sms_firmware.hashlib.sha256") as sha256:
+        sha256.return_value = SimpleNamespace(
+            hexdigest=lambda: EXPORT_SHA256
+        )
+        assert load_sms_bios(tmp_path, "europe") == export_payload
+
+
+def test_unresolved_territory_bypasses_firmware_scanning(monkeypatch, tmp_path):
+    import sega_emulator.machine.sms_firmware as firmware
+
+    def unexpected_scan(*args, **kwargs):
+        raise AssertionError("unresolved territory must not scan firmware")
+
+    monkeypatch.setattr(firmware, "scan_sms_firmware_directory", unexpected_scan)
+    assert load_sms_bios_for_boot(True, tmp_path, None) is None
+
+
+def test_enabled_bios_boot_keeps_direct_cartridge_boot_when_bios_is_missing(
+    tmp_path,
+):
+    assert load_sms_bios_for_boot(True, tmp_path, "usa") is None
