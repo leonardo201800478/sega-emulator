@@ -186,6 +186,24 @@ def test_dat_fallback_selects_export_bios_for_exact_usa_europe_match(tmp_path):
     assert sms_bios_region_from_catalog(payload, RomCatalog(tmp_path)) == "usa"
 
 
+def test_dat_fallback_selects_export_bios_for_brazil_europe_release(tmp_path):
+    payload = b"synthetic-brazil-europe-rom"
+    _write_sms_dat(tmp_path, payload, ("BRA", "EUR"))
+    assert sms_bios_region_from_catalog(payload, RomCatalog(tmp_path)) == "usa"
+
+
+def test_dat_fallback_selects_export_bios_for_brazil_only_release(tmp_path):
+    payload = b"synthetic-brazil-rom"
+    _write_sms_dat(tmp_path, payload, ("BRA",))
+    assert sms_bios_region_from_catalog(payload, RomCatalog(tmp_path)) == "usa"
+
+
+def test_dat_fallback_refuses_japan_and_brazil_mixed_releases(tmp_path):
+    payload = b"synthetic-japan-brazil-rom"
+    _write_sms_dat(tmp_path, payload, ("JPN", "BRA"))
+    assert sms_bios_region_from_catalog(payload, RomCatalog(tmp_path)) is None
+
+
 def test_dat_fallback_refuses_mixed_japan_and_export_releases(tmp_path):
     payload = b"synthetic-mixed-region-rom"
     _write_sms_dat(tmp_path, payload, ("JPN", "USA"))
