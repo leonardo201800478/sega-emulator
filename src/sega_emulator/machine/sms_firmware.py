@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+from sega_emulator.rom_catalog import RomCatalog
+
 SMS_BIOS_SIZE = 0x2000
 
 
@@ -196,6 +198,43 @@ def sms_bios_region_from_cartridge(rom: bytes) -> str | None:
             return "usa"
         return None
     return None
+
+
+def sms_bios_region_from_catalog(
+    rom: bytes,
+    catalog: RomCatalog,
+) -> str | None:
+    """Resolve BIOS territory from an exact SMS DAT match when the ROM header is absent.
+
+    No-Intro release regions are not video-standard metadata. Only an exact,
+    unambiguous Japan-only or USA/Europe-only DAT identity is used to choose
+    the corresponding BIOS family. Mixed, unknown, non-SMS, and uncatalogued
+    identities deliberately return None.
+    """
+    if not isinstance(rom, bytes):
+        raise TypeError("rom deve ser bytes.")
+
+    identification = catalog.identify_bytes(rom, suffix=".sms")
+    if (
+        identification.status != "matched"
+        or identification.system != "master_system"
+        or not identification.candidates
+    ):
+        return None
+
+    candidate_regions: set[str | None] = set()
+    for candidate in identification.candidates:
+        regions = set(candidate.regions)
+        if regions and regions <= {"JPN"}:
+            candidate_regions.add("japan")
+        elif regions and regions <= {"USA", "EUR"}:
+            candidate_regions.add("usa")
+        else:
+            candidate_regions.add(None)
+
+    if len(candidate_regions) != 1:
+        return None
+    return next(iter(candidate_regions))
 
 
 def load_sms_bios(
