@@ -18,9 +18,10 @@ fn sms_region_profile(
     let region = region.unwrap_or(if pal { "europe" } else { "usa" });
     match region {
         "usa" => Ok((sega_sms_core::Territory::Export, VideoStandard::Ntsc)),
+        "brazil" => Ok((sega_sms_core::Territory::Export, VideoStandard::PalM)),
         "europe" => Ok((sega_sms_core::Territory::Export, VideoStandard::Pal)),
         "japan" => Ok((sega_sms_core::Territory::Japan, VideoStandard::Ntsc)),
-        _ => Err("region deve ser usa, europe ou japan"),
+        _ => Err("region deve ser usa, brazil, europe ou japan"),
     }
 }
 
@@ -206,11 +207,6 @@ impl NativeSMSMachine {
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
-    /// Set the dedicated console PAUSE button level; a rising edge requests one NMI.
-    fn set_pause_button(&mut self, pressed: bool) {
-        self.machine.set_pause_button(pressed);
-    }
-
     fn drain_audio_samples(&mut self, max_samples: Option<usize>) -> Vec<f64> {
         self.machine.drain_audio_samples(max_samples)
     }
@@ -277,6 +273,14 @@ mod tests {
         };
         assert!(machine.bios_enabled());
         assert_eq!(machine.read_memory(0), 0x3E);
+    }
+
+    #[test]
+    fn brazil_region_selects_export_territory_with_pal_m_timing() {
+        let machine = build_sms_machine(vec![0; 16], false, Some("brazil"), None).unwrap();
+        assert_eq!(machine.vdp().system_clock_hz(), 3_579_545);
+        assert_eq!(machine.vdp().video_standard(), VideoStandard::PalM);
+        assert_eq!(machine.vdp().total_lines(), 262);
     }
 
     #[test]
