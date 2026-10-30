@@ -120,7 +120,8 @@ def _write_ppm(path: Path, framebuffer: bytes, height: int) -> None:
     expected_size = 256 * height * 3
     if len(framebuffer) != expected_size:
         raise ValueError(
-            f"Framebuffer size mismatch: expected {expected_size}, got {len(framebuffer)}"
+            "Framebuffer size mismatch: "
+            f"expected {expected_size}, got {len(framebuffer)}"
         )
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("wb") as output:
@@ -171,7 +172,9 @@ def _run_case(
     if execution_error is not None:
         outcome = "EXECUTION_ERROR"
     elif bios_data is None:
-        outcome = "DIRECT_BOOT_FRAME_ADVANCE" if frames_run == frames else "INCOMPLETE"
+        outcome = (
+            "DIRECT_BOOT_FRAME_ADVANCE" if frames_run == frames else "INCOMPLETE"
+        )
     elif handoff_frame is None:
         outcome = "NO_BIOS_HANDOFF"
     else:
@@ -214,8 +217,17 @@ def main() -> int:
         required=True,
         help="Path to one .sms/.rom/.bin file or ZIP containing exactly one ROM; repeat per game.",
     )
-    parser.add_argument("--bios-dir", required=True, help="Directory containing the three BIOS files.")
-    parser.add_argument("--frames", type=int, default=240, help="Maximum frames per combination.")
+    parser.add_argument(
+        "--bios-dir",
+        required=True,
+        help="Directory containing the three BIOS files.",
+    )
+    parser.add_argument(
+        "--frames",
+        type=int,
+        default=240,
+        help="Maximum frames per combination.",
+    )
     parser.add_argument(
         "--post-handoff-frames",
         type=int,
@@ -235,7 +247,9 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.frames < 1 or args.post_handoff_frames < 0:
-        parser.error("--frames must be positive and --post-handoff-frames non-negative.")
+        parser.error(
+            "--frames must be positive and --post-handoff-frames non-negative."
+        )
 
     scan = scan_sms_firmware_directory(args.bios_dir)
     expected_status = {
@@ -248,13 +262,16 @@ def main() -> int:
             (
                 item
                 for item in scan.files
-                if item.region is region and item.status is expected_status[region]
+                if item.region is region
+                and item.status is expected_status[region]
             ),
             None,
         )
         for region in expected_status
     }
-    missing = [region.value for region, item in bios_by_region.items() if item is None]
+    missing = [
+        region.value for region, item in bios_by_region.items() if item is None
+    ]
     if missing:
         parser.error(
             "Missing recognized BIOS revisions: "
@@ -352,10 +369,11 @@ def main() -> int:
     print(f"PPM captures: {capture_dir.resolve()}")
     print("ROM/BIOS bytes were not copied to the report or repository.")
 
-    return 0 if all(
-        result["execution_error"] is None
-        for result in results
-    ) else 1
+    return (
+        0
+        if all(result["execution_error"] is None for result in results)
+        else 1
+    )
 
 
 if __name__ == "__main__":
