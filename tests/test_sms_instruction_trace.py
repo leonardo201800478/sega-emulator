@@ -54,3 +54,19 @@ def test_python_sms_trace_observes_synthetic_bios_overlay_handoff():
         ["3E", "08"],
         ["D3", "3E"],
     ]
+
+
+def test_python_sms_trace_can_start_after_a_deterministic_instruction_window():
+    machine = SMSMachine(b"\\x00" * 0x4000)
+    machine.enable_instruction_trace(2, start_after_instructions=3)
+
+    for _ in range(5):
+        machine.step()
+
+    records = [
+        json.loads(line) for line in machine.drain_instruction_trace_json().splitlines()
+    ]
+    assert len(records) == 2
+    assert records[0]["before"]["pc"] == 3
+    assert records[0]["after"]["pc"] == 4
+    assert records[1]["before"]["pc"] == 4
