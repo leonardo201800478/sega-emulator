@@ -31,7 +31,7 @@ from sega_emulator.frontend.qt.wasapi_audio import NativeAudioOutput
 from sega_emulator.machine.sg1000 import SG1000Machine
 from sega_emulator.machine.sms import SMSMachine, load_sms_rom
 from sega_emulator.machine.sms_firmware import (
-    load_sms_bios,
+    load_sms_bios_for_boot,
     sms_bios_region_for_rom,
 )
 from sega_emulator.machine.sms_region import (
@@ -213,14 +213,11 @@ def run(initial_path: Path | None = None) -> None:
                 if bios_region is not None
                 else "unresolved_or_conflicting_metadata"
             )
-        bios = (
-            load_sms_bios(
-                preferences.firmware_directory,
-                bios_region,
-                catalog=sms_rom_catalog,
-            )
-            if preferences.sms_bios_boot_enabled and bios_region is not None
-            else None
+        bios = load_sms_bios_for_boot(
+            preferences.sms_bios_boot_enabled,
+            preferences.firmware_directory,
+            bios_region,
+            catalog=sms_rom_catalog,
         )
         if bios is not None:
             logger.info(
