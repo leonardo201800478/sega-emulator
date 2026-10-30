@@ -10,7 +10,7 @@ from sega_emulator.machine.sms import SMSMachine
 
 
 def test_native_sms_instruction_trace_is_bounded_and_emits_jsonl():
-    machine = SMSMachine(b"\\x00" * 0x4000)
+    machine = SMSMachine(b"\x00" * 0x4000)
 
     assert machine.enable_instruction_trace(2) == 2
     assert machine.step() == 4
@@ -31,7 +31,7 @@ def test_native_sms_instruction_trace_is_bounded_and_emits_jsonl():
 
 @pytest.mark.parametrize("limit", [0, 4097])
 def test_native_sms_instruction_trace_rejects_invalid_limits(limit):
-    machine = SMSMachine(b"\\x00" * 0x4000)
+    machine = SMSMachine(b"\x00" * 0x4000)
 
     with pytest.raises(ValueError, match="max_instructions"):
         machine.enable_instruction_trace(limit)
