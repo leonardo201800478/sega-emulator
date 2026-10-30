@@ -262,3 +262,17 @@ Em `SmsMachine::step()`, a sequência é: executar uma instrução Z80, avançar
 - Ares: SHA de referência ainda não fixado; os valores `vs_ares` continuam sendo comparações declaradas no CSV, não reproduções independentes.
 - ROM de paralaxe: não executada; nenhum nome de jogo foi fornecido.
 - Build/testes locais desta revisão: NOT RUN. Os workflows da PR #274 são a evidência de CI aplicável ao código alterado.
+
+
+## 10. Adendo — identificação do caso visual de paralaxe (2026-10-30)
+
+Após a revisão inicial, foi identificado pelo usuário o caso visual concreto: **Aladdin (Master System), primeira fase, no início do scroll lateral automático**. O usuário informa também que outros jogos que utilizam o mesmo tipo de efeito apresentam problemas no SMS_CORE.
+
+A captura fornecida mostra cenário de nuvens em camadas durante o deslocamento lateral. Ela localiza o cenário de reprodução, mas, isoladamente, não fornece uma referência A/B do mesmo frame no hardware/ares nem permite medir deslocamento por camada ou linha.
+
+A evidência direciona a investigação para comportamento compartilhado de raster/scroll do VDP e sincronização CPU↔VDP. R10 permanece uma hipótese concreta, não causa exclusiva confirmada. A limitação arquitetural de aplicar escritas do Z80 antes de avançar o VDP pelo total agregado da instrução continua relevante para R8 e outros registradores com efeito raster.
+
+- Jogo/cenário-alvo identificado: Aladdin, Master System, primeira fase, início do scroll automático.
+- Relato de escopo: outros jogos que usam o mesmo efeito também apresentam defeito; ainda sem lista de títulos/ROMs e sem traces individuais.
+- Execução da ROM, comparação com Ares/hardware e captura equivalente: NOT RUN.
+- A PR #274 passou a registrar este cenário como alvo de validação; não declarar correção visual até teste no emulador.
