@@ -33,12 +33,14 @@ from sega_emulator.machine.sms import SMSMachine, load_sms_rom
 from sega_emulator.machine.sms_firmware import (
     load_sms_bios,
     sms_bios_region_from_cartridge,
+    sms_bios_region_from_catalog,
 )
 from sega_emulator.machine.sms_region import (
     normalize_sms_region_preference,
     sms_frame_period_seconds,
     sms_region_candidates_for_rom,
 )
+from sega_emulator.rom_catalog import RomCatalog
 from sega_emulator.rom_loader import LoadedRom, list_rom_members, load_rom
 
 logger = logging.getLogger(__name__)
@@ -195,15 +197,20 @@ def run(initial_path: Path | None = None) -> None:
         settings.value("sms_region_preference", "auto")
     )
     settings.setValue("sms_region_preference", region_preference)
+    sms_rom_catalog = RomCatalog()
 
     def create_sms_machine(rom_data: bytes, region: str) -> SMSMachine:
-        # Manual territory always wins. In automatic mode, only use a BIOS
-        # when a recognized Sega header provides an explicit SMS region code.
-        bios_region = (
-            region_preference
-            if region_preference != "auto"
-            else sms_bios_region_from_cartridge(rom_data)
-        )
+        # Manual territory and a recognized hardware header have priority.
+        # The exact DAT identity is a conservative fallback, never a video-mode
+        # selector: release territory and PAL/NTSC timing remain separate.
+        bios_region_source = "manual"
+        if region_preference != "auto":
+            bios_region = region_preference
+        else:
+            bios_region = sms_bios_region_from_cartridge(rom_data)
+            bios_region_source = "header" if bios_region is not None else "dat"
+            if bios_region is None:
+                bios_region = sms_bios_region_from_catalog(rom_data, sms_rom_catalog)
         bios = (
             load_sms_bios(preferences.firmware_directory, bios_region)
             if bios_region is not None
@@ -215,6 +222,7 @@ def run(initial_path: Path | None = None) -> None:
                 extra={
                     "event": "sms_bios_loaded",
                     "region": bios_region,
+                    "region_source": bios_region_source,
                     "sha256": hashlib.sha256(bios).hexdigest(),
                 },
             )
@@ -224,6 +232,7 @@ def run(initial_path: Path | None = None) -> None:
                 extra={
                     "event": "sms_bios_fallback",
                     "region": bios_region,
+                    "region_source": bios_region_source,
                 },
             )
         return SMSMachine(rom_data, region=region, bios=bios)
