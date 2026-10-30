@@ -88,7 +88,7 @@ class SMSMachine:
         return int(self.native_machine.enable_instruction_trace(max_instructions))
 
     def drain_instruction_trace_json(self) -> str:
-        """Return captured CPU snapshots as JSON Lines without ROM contents."""
+        """Return CPU snapshots as JSON Lines; records include executed ROM bytes."""
         return str(self.native_machine.drain_instruction_trace_json())
 
     def step(self) -> int:
