@@ -9,15 +9,12 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Generic, TypeVar
-
-T = TypeVar("T")
+from enum import StrEnum
 _SHA1_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 _MD5_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 
 
-class MetadataSource(str, Enum):
+class MetadataSource(StrEnum):
     """Origin of an individual hardware metadata field."""
 
     UNKNOWN = "unknown"
@@ -28,7 +25,7 @@ class MetadataSource(str, Enum):
     RUNTIME_OBSERVATION = "runtime_observation"
 
 
-class MetadataConfidence(str, Enum):
+class MetadataConfidence(StrEnum):
     """Strength and nature of the evidence supporting a field value."""
 
     CONFIRMED = "confirmed"
@@ -40,7 +37,7 @@ class MetadataConfidence(str, Enum):
 
 
 @dataclass(frozen=True, slots=True)
-class FieldEvidence(Generic[T]):
+class FieldEvidence[T]:
     """A value together with field-level provenance and confidence.
 
     Unknown values are represented by FieldEvidence.unknown(). A missing
@@ -99,21 +96,21 @@ class FieldEvidence(Generic[T]):
         )
 
 
-class FmCapability(str, Enum):
+class FmCapability(StrEnum):
     """Whether the selected console hardware exposes an FM sound device."""
 
     AVAILABLE = "available"
     UNAVAILABLE = "unavailable"
 
 
-class FmGameUsage(str, Enum):
+class FmGameUsage(StrEnum):
     """Evidence about whether a specific game uses FM audio."""
 
     USED = "used"
     NOT_OBSERVED = "not_observed"
 
 
-class FmRequirement(str, Enum):
+class FmRequirement(StrEnum):
     """Known FM requirement declared or demonstrated by a game."""
 
     REQUIRED = "required"
@@ -136,7 +133,7 @@ class SmsFmMetadata:
     )
 
 
-class SmsPeripheral(str, Enum):
+class SmsPeripheral(StrEnum):
     """SMS/Mark III peripheral families; these are not cartridge mappers."""
 
     JOYPAD = "joypad"
@@ -147,7 +144,7 @@ class SmsPeripheral(str, Enum):
     RESET = "reset"
 
 
-class PeripheralState(str, Enum):
+class PeripheralState(StrEnum):
     """Per-game peripheral requirement/compatibility state."""
 
     REQUIRED = "required"
@@ -165,7 +162,7 @@ class SmsPeripheralMetadata:
     state: FieldEvidence[PeripheralState]
 
 
-class SmsSaveKind(str, Enum):
+class SmsSaveKind(StrEnum):
     """Cartridge save-memory class, distinct from volatile working RAM."""
 
     NONE_CONFIRMED = "none_confirmed"
@@ -257,7 +254,7 @@ class SmsHardwareRecord:
             raise ValueError("md5 must be a lowercase 32-character hexadecimal digest.")
 
 
-class SmsHardwareMatchStatus(str, Enum):
+class SmsHardwareMatchStatus(StrEnum):
     """Outcome of exact lookup in the curated SMS hardware catalog."""
 
     MATCHED = "matched"
