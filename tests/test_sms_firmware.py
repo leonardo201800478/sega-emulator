@@ -48,6 +48,36 @@ def test_wrong_size_file_is_invalid_and_not_hashed(tmp_path):
     assert result.files[0].sha256 is None
 
 
+def test_known_hashes_classify_japan_and_shared_export_image(tmp_path):
+    from unittest.mock import patch
+
+    (tmp_path / "jp-with-arbitrary-name.data").write_bytes(b"J" * SMS_BIOS_SIZE)
+    (tmp_path / "export.bin").write_bytes(b"E" * SMS_BIOS_SIZE)
+
+    with patch(
+        "sega_emulator.machine.sms_firmware.hashlib.sha256"
+    ) as sha256:
+        sha256.side_effect = [
+            type("Digest", (), {"hexdigest": lambda self: JP_SHA256})(),
+            type("Digest", (), {"hexdigest": lambda self: EXPORT_SHA256})(),
+        ]
+        result = scan_sms_firmware_directory(tmp_path)
+
+    by_name = {item.path.name: item for item in result.files}
+    assert by_name["jp-with-arbitrary-name.data"].region is SmsFirmwareRegion.JAPAN
+    assert (
+        by_name["jp-with-arbitrary-name.data"].status
+        is SmsFirmwareFileStatus.VALID_JAPAN
+    )
+    assert (
+        by_name["export.bin"].region is SmsFirmwareRegion.EXPORT_US_EU
+    )
+    assert (
+        by_name["export.bin"].status
+        is SmsFirmwareFileStatus.VALID_EXPORT_US_EU
+    )
+
+
 def test_export_and_japan_signatures_are_unique_catalog_entries():
     # The catalog intentionally contains exactly two unique signatures:
     # JP and the byte-identical US/EU export image.
