@@ -32,6 +32,9 @@ where = ["src"]
 [tool.setuptools.package-data]
 "sega_emulator.frontend.qt" = ["assets/*.svg", "assets/systems/*.svg"]
 
+[tool.setuptools.data-files]
+"share/sega-emulator/dats" = ["dats/*.dat"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
