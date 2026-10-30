@@ -18,8 +18,6 @@ Consulte [ADR 0007 — Política de desenvolvimento Rust-first](adr/0007-rust-fi
 
 ## Princípios
 
-## Princípios
-
 1. **Fidelidade antes de atalhos:** implementar as instruções documentadas de cada CPU, com flags, efeitos colaterais, interrupções e temporização sustentados por documentação e testes.
 2. **Separar CPU de plataforma:** um núcleo de CPU depende de contratos de barramento e sinais, não diretamente de um console concreto.
 3. **Separar estado lógico de temporização:** uma instrução que retorna um número nominal de ciclos não equivale a executar cada ciclo de barramento.
@@ -98,11 +96,13 @@ O repositório contém caminhos de execução para as famílias base, CB, ED, DD
 
 Próxima tarefa técnica: validação diferencial da CPU Z80 contra uma suíte de referência confiável, com foco inicial em flags, operações ED de bloco, IX/IY, interrupções e temporização nominal. Corrigir primeiro as divergências reproduzíveis e documentar o que não puder ser validado.
 
-
 ## Fidelidade de áudio e reutilização do PSG
 
 O modelo SN76489AN do SG-1000 tem um roadmap dedicado que separa lógica digital, reamostragem anti-aliasing e resposta analógica, além de registrar as diferenças necessárias para futuras variantes Master System, Game Gear e Mega Drive: [Roadmap de fidelidade do PSG e reutilização de hardware Sega](architecture/psg-fidelity-roadmap.md).
 
+## Catálogo de ROM, metadados e OSD SMS
+
+O modelo de identificação regional, catálogo técnico de hardware, metadados de save/FM/periféricos e OSD do Master System está especificado em [SMS ROM metadata, compatibilidade de hardware e OSD](architecture/sms-rom-metadata-and-osd.md). O documento está em estado DESIGN / NOT IMPLEMENTED e separa identidade da ROM, perfil de console, padrão de vídeo e estado de compatibilidade.
 
 ## Fluxo permanente de implementação e validação
 
