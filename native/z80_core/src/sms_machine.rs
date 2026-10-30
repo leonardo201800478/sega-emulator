@@ -154,7 +154,7 @@ impl NativeSMSMachine {
         Ok(self.machine.enable_instruction_trace(max_instructions))
     }
 
-    /// Drain captured instruction traces as JSON Lines without ROM contents.
+    /// Drain captured instruction traces as JSON Lines. Records include executed ROM bytes.
     fn drain_instruction_trace_json(&mut self) -> String {
         let traces = self.machine.drain_instruction_traces();
         let mut output = String::new();
