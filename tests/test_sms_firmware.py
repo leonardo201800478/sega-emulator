@@ -148,7 +148,7 @@ def test_unknown_or_missing_cartridge_header_does_not_guess_bios_region():
 
 
 def test_cartridge_header_locations_are_checked_from_largest_to_smallest():
-    rom = bytearray(0x4000)
+    rom = bytearray(0x2000)
     rom[0x1FF0:0x1FF8] = b"TMR SEGA"
     rom[0x1FFF] = 0x3C
     assert sms_bios_region_from_cartridge(bytes(rom)) == "japan"
