@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from sega_emulator.rom_catalog import CatalogIdentification, DatRom, RomCatalog
+from sega_emulator.rom_catalog import DatRom, RomCatalog
 
 SMS_BIOS_SIZE = 0x2000
 
@@ -114,11 +114,12 @@ def scan_sms_firmware_directory(
     *,
     catalog: RomCatalog | None = None,
 ) -> SmsFirmwareScan:
-    """Scan a user-selected directory and identify known BIOS files by SHA-256.
+    """Scan a user-selected directory and identify SMS BIOS images by content.
 
     The function performs no network access and never scans implicitly at import
     or machine startup. Every regular file is considered regardless of its name
-    or extension. Known BIOS signatures require exactly 8 KiB.
+    or extension. Known firmware requires exactly 8 KiB and either a trusted
+    SHA-256 signature or an exact SHA-1/MD5 match to a No-Intro SMS BIOS entry.
     """
     if directory is None or not str(directory).strip():
         return SmsFirmwareScan(None, SmsFirmwareDirectoryStatus.NOT_CONFIGURED, ())
