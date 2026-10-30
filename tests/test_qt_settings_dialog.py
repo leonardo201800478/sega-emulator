@@ -44,7 +44,10 @@ def test_dialog_loads_and_returns_audio_video_preferences(qt_app) -> None:
         "Guia de som",
         "Vídeo",
         "CRT / NTSC",
+        "BIOS SMS",
     ]
+    assert dialog.firmware_directory.text() == ""
+    dialog.firmware_directory.setText("D:/SMS-Firmware")
     assert dialog.balance.value() == -35
     assert dialog.queue_blocks.currentData() == 8
     assert "Período WASAPI solicitado" in dialog.latency_label.text()
@@ -77,6 +80,7 @@ def test_dialog_loads_and_returns_audio_video_preferences(qt_app) -> None:
 
     updated = dialog.preferences()
     assert updated.audio_enabled is True
+    assert updated.firmware_directory == "D:/SMS-Firmware"
     assert updated.audio_sample_rate == 22_050
     assert updated.audio_buffer_size == 256
     assert updated.audio_volume == 40
@@ -110,6 +114,7 @@ def test_restore_defaults_resets_audio_video_controls(qt_app) -> None:
     dialog = SettingsDialog(
         FrontendPreferences(
             audio_enabled=False,
+            firmware_directory="D:/Old-BIOS",
             audio_sample_rate=48_000,
             audio_buffer_size=2048,
             audio_volume=10,
@@ -130,6 +135,8 @@ def test_restore_defaults_resets_audio_video_controls(qt_app) -> None:
 
     defaults = FrontendPreferences()
     assert dialog.preferences().audio_enabled is True
+    assert dialog.firmware_directory.text() == ""
+    assert dialog.preferences().firmware_directory == defaults.firmware_directory
     assert dialog.sample_rate.currentData() == defaults.audio_sample_rate
     assert dialog.buffer_size.currentData() == defaults.audio_buffer_size
     assert dialog.volume.value() == defaults.audio_volume
@@ -145,4 +152,18 @@ def test_restore_defaults_resets_audio_video_controls(qt_app) -> None:
     assert dialog.av_sync_mode.currentData() == defaults.av_sync_mode
     assert dialog.crt_scanline_intensity.value() == defaults.crt_scanline_intensity
     assert dialog.crt_signal_mode.currentData() == defaults.crt_signal_mode
+    dialog.close()
+
+
+def test_firmware_scan_is_explicit_and_reports_unknown_files(qt_app, tmp_path):
+    (tmp_path / "unknown-firmware.bin").write_bytes(b"\x00" * 0x2000)
+    dialog = SettingsDialog(FrontendPreferences(firmware_directory=str(tmp_path)))
+
+    assert dialog.firmware_scan_status.text() == "Nenhuma varredura realizada."
+    dialog._scan_firmware_directory()
+    result = dialog.firmware_scan_status.text()
+    assert "ready" in result
+    assert "unknown-firmware.bin" in result
+    assert "not_found" in result
+    assert "SHA-256" in result
     dialog.close()

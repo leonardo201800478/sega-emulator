@@ -8,10 +8,13 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QFileDialog,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
+    QPushButton,
     QSlider,
     QSpinBox,
     QTabWidget,
@@ -20,6 +23,7 @@ from PySide6.QtWidgets import (
 )
 
 from sega_emulator.frontend.qt.preferences import FrontendPreferences
+from sega_emulator.machine.sms_firmware import scan_sms_firmware_directory
 
 
 class SettingsDialog(QDialog):
@@ -326,6 +330,40 @@ class SettingsDialog(QDialog):
         crt_layout.addStretch(1)
         tabs.addTab(crt_page, "CRT / NTSC")
 
+        firmware_page = QWidget(self)
+        firmware_layout = QVBoxLayout(firmware_page)
+        firmware_group = QGroupBox("Firmware do Sega Master System")
+        firmware_form = QFormLayout(firmware_group)
+        self.firmware_directory = QLineEdit(preferences.firmware_directory)
+        self.firmware_directory.setPlaceholderText(
+            "Selecione a pasta que contém sua BIOS SMS"
+        )
+        browse_firmware = QPushButton("Selecionar pasta…", firmware_group)
+        browse_firmware.clicked.connect(self._choose_firmware_directory)
+        firmware_path_row = QWidget(firmware_group)
+        firmware_path_layout = QHBoxLayout(firmware_path_row)
+        firmware_path_layout.setContentsMargins(0, 0, 0, 0)
+        firmware_path_layout.addWidget(self.firmware_directory, 1)
+        firmware_path_layout.addWidget(browse_firmware)
+        firmware_form.addRow("Pasta de BIOS:", firmware_path_row)
+        scan_firmware = QPushButton("Verificar BIOS agora", firmware_group)
+        scan_firmware.clicked.connect(self._scan_firmware_directory)
+        self.firmware_scan_status = QLabel("Nenhuma varredura realizada.")
+        self.firmware_scan_status.setWordWrap(True)
+        firmware_form.addRow(scan_firmware)
+        firmware_form.addRow("Resultado da verificação:", self.firmware_scan_status)
+        firmware_note = QLabel(
+            "A BIOS é opcional e deve ser obtida e instalada pelo usuário. "
+            "O emulador identifica os arquivos por SHA-256, aceita nomes "
+            "arbitrários e não baixa nem distribui firmware. A varredura ocorre "
+            "somente quando solicitada aqui ou ao carregar uma ROM do Master System."
+        )
+        firmware_note.setWordWrap(True)
+        firmware_form.addRow(firmware_note)
+        firmware_layout.addWidget(firmware_group)
+        firmware_layout.addStretch(1)
+        tabs.addTab(firmware_page, "BIOS SMS")
+
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok
             | QDialogButtonBox.StandardButton.Cancel
@@ -337,6 +375,28 @@ class SettingsDialog(QDialog):
             self._restore_defaults
         )
         root.addWidget(buttons)
+
+    def _scan_firmware_directory(self) -> None:
+        directory = self.firmware_directory.text().strip() or None
+        scan = scan_sms_firmware_directory(directory)
+        if not scan.files:
+            self.firmware_scan_status.setText(scan.status.value)
+            return
+        lines = [scan.status.value]
+        for item in scan.files:
+            region = item.region.value if item.region is not None else "unknown"
+            digest = f"SHA-256 {item.sha256[:12]}…" if item.sha256 else "no hash"
+            lines.append(f"{item.path.name}: {item.status.value}; {region}; {digest}")
+        self.firmware_scan_status.setText("\n".join(lines))
+
+    def _choose_firmware_directory(self) -> None:
+        selected = QFileDialog.getExistingDirectory(
+            self,
+            "Selecionar pasta de BIOS SMS",
+            self.firmware_directory.text(),
+        )
+        if selected:
+            self.firmware_directory.setText(selected)
 
     def _update_balance_label(self, value: int) -> None:
         if value == 0:
@@ -375,6 +435,7 @@ class SettingsDialog(QDialog):
 
     def _restore_defaults(self) -> None:
         defaults = FrontendPreferences()
+        self.firmware_directory.clear()
         self.sample_rate.setCurrentIndex(
             self.sample_rate.findData(defaults.audio_sample_rate)
         )
@@ -413,6 +474,7 @@ class SettingsDialog(QDialog):
             video_scale=old.video_scale,
             recent_roms=old.recent_roms,
             controller_config=old.controller_config,
+            firmware_directory=self.firmware_directory.text().strip(),
             audio_enabled=self._audio_backend != "disabled",
             diagnostics_enabled=old.diagnostics_enabled,
             cpu_core=old.cpu_core,

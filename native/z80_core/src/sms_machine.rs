@@ -7,6 +7,50 @@ use sega_sms_core::{ControllerButtons, SmsMachine, SmsMachineConfig, VideoStanda
 
 use crate::audio::NativePcmResampler;
 
+/// Resolve the territory and video standard without constructing Python errors.
+///
+/// Keeping this policy independent of PyO3 also makes it safe to unit-test in
+/// Rust's parallel test harness, where no Python interpreter is guaranteed.
+fn sms_region_profile(
+    region: Option<&str>,
+    pal: bool,
+) -> Result<(sega_sms_core::Territory, VideoStandard), &'static str> {
+    let region = region.unwrap_or(if pal { "europe" } else { "usa" });
+    match region {
+        "usa" => Ok((sega_sms_core::Territory::Export, VideoStandard::Ntsc)),
+        "europe" => Ok((sega_sms_core::Territory::Export, VideoStandard::Pal)),
+        "japan" => Ok((sega_sms_core::Territory::Japan, VideoStandard::Ntsc)),
+        _ => Err("region deve ser usa, europe ou japan"),
+    }
+}
+
+/// Construct the SMS hardware without invoking the Python interpreter.
+///
+/// This is shared by the PyO3 constructor and native Rust tests so the test
+/// harness never creates Python exceptions or requires interpreter lifecycle.
+fn build_sms_machine(
+    rom: Vec<u8>,
+    pal: bool,
+    region: Option<&str>,
+    bios: Option<Vec<u8>>,
+) -> Result<SmsMachine, SmsMachineBuildError> {
+    let (territory, video_standard) =
+        sms_region_profile(region, pal).map_err(SmsMachineBuildError::InvalidRegion)?;
+    let config = SmsMachineConfig {
+        territory,
+        video_standard,
+        ..SmsMachineConfig::default()
+    };
+    SmsMachine::with_bios_audio(rom, bios, config, 44_100)
+        .map_err(|error| SmsMachineBuildError::Machine(error.to_string()))
+}
+
+#[derive(Debug)]
+enum SmsMachineBuildError {
+    InvalidRegion(&'static str),
+    Machine(String),
+}
+
 /// Thin Python boundary; the SMS machine, PSG and sample generation stay in Rust.
 #[pyclass(module = "sega_z80_core")]
 pub struct NativeSMSMachine {
@@ -17,33 +61,23 @@ pub struct NativeSMSMachine {
 #[pymethods]
 impl NativeSMSMachine {
     #[new]
-    #[pyo3(signature = (rom, pal=false, region=None))]
-    fn new(rom: Vec<u8>, pal: bool, region: Option<&str>) -> PyResult<Self> {
-        // Keep the legacy positional `pal` argument compatible; an explicit
-        // region profile takes precedence and also selects territory.
-        let region = region.unwrap_or(if pal { "europe" } else { "usa" });
-        let (territory, video_standard) = match region {
-            "usa" => (sega_sms_core::Territory::Export, VideoStandard::Ntsc),
-            "europe" => (sega_sms_core::Territory::Export, VideoStandard::Pal),
-            "japan" => (sega_sms_core::Territory::Japan, VideoStandard::Ntsc),
-            _ => {
-                return Err(pyo3::exceptions::PyValueError::new_err(
-                    "region deve ser usa, europe ou japan",
-                ));
+    #[pyo3(signature = (rom, pal=false, region=None, bios=None))]
+    fn new(rom: Vec<u8>, pal: bool, region: Option<&str>, bios: Option<Vec<u8>>) -> PyResult<Self> {
+        let machine = build_sms_machine(rom, pal, region, bios).map_err(|error| match error {
+            SmsMachineBuildError::InvalidRegion(message) => {
+                pyo3::exceptions::PyValueError::new_err(message)
             }
-        };
-        let config = SmsMachineConfig {
-            territory,
-            video_standard,
-            ..SmsMachineConfig::default()
-        };
-        // The shared native resampler consumes a deterministic 44.1 kHz PSG stream.
-        let machine = SmsMachine::with_audio(rom, config, 44_100)
-            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+            SmsMachineBuildError::Machine(message) => PyRuntimeError::new_err(message),
+        })?;
         Ok(Self {
             machine,
             total_instructions: 0,
         })
+    }
+
+    #[getter]
+    fn bios_enabled(&self) -> bool {
+        self.machine.memory().bios_enabled()
     }
 
     #[getter]
@@ -204,7 +238,10 @@ mod tests {
 
     #[test]
     fn sms_adapter_uses_native_psg_and_reports_configured_clock() {
-        let machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa")).unwrap();
+        let machine = NativeSMSMachine {
+            machine: build_sms_machine(vec![0; 16], false, Some("usa"), None).unwrap(),
+            total_instructions: 0,
+        };
         assert_eq!(machine.psg_sample_rate(), 44_100);
         assert_eq!(machine.psg_clock_hz(), 3_579_545);
         assert_eq!(machine.total_tstates(), 0);
@@ -212,21 +249,42 @@ mod tests {
 
     #[test]
     fn region_selects_pal_clock_and_japan_territory_profile() {
-        let pal_machine = NativeSMSMachine::new(vec![0; 16], false, Some("europe")).unwrap();
+        let pal_machine = NativeSMSMachine {
+            machine: build_sms_machine(vec![0; 16], false, Some("europe"), None).unwrap(),
+            total_instructions: 0,
+        };
         assert_eq!(pal_machine.psg_clock_hz(), 3_546_895);
 
-        let japan_machine = NativeSMSMachine::new(vec![0; 16], false, Some("japan")).unwrap();
+        let japan_machine = NativeSMSMachine {
+            machine: build_sms_machine(vec![0; 16], false, Some("japan"), None).unwrap(),
+            total_instructions: 0,
+        };
         assert_eq!(japan_machine.psg_clock_hz(), 3_579_545);
     }
 
     #[test]
-    fn unsupported_region_is_rejected() {
-        assert!(NativeSMSMachine::new(vec![0; 16], false, Some("automatic")).is_err());
+    fn bios_is_forwarded_to_native_memory_and_executes() {
+        let mut bios = vec![0; 0x2000];
+        bios[..4].copy_from_slice(&[0x3E, 0x08, 0xD3, 0x3E]);
+        let machine = NativeSMSMachine {
+            machine: build_sms_machine(vec![0xC3; 0x4000], false, Some("usa"), Some(bios)).unwrap(),
+            total_instructions: 0,
+        };
+        assert!(machine.bios_enabled());
+        assert_eq!(machine.read_memory(0), 0x3E);
+    }
+
+    #[test]
+    fn unsupported_region_is_rejected_without_initializing_python() {
+        assert!(matches!(
+            build_sms_machine(vec![0; 16], false, Some("automatic"), None),
+            Err(SmsMachineBuildError::InvalidRegion(_))
+        ));
     }
 
     #[test]
     fn draining_audio_does_not_change_cpu_timing() {
-        let mut machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa")).unwrap();
+        let mut machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa"), None).unwrap();
         for _ in 0..100 {
             machine.step().unwrap();
         }
@@ -237,7 +295,7 @@ mod tests {
 
     #[test]
     fn frame_runner_advances_native_vdp_and_exposes_frame_state() {
-        let mut machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa")).unwrap();
+        let mut machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa"), None).unwrap();
         assert_eq!(machine.frame_number(), 0);
         let steps = machine.run_frame(100_000).unwrap();
         assert!(steps > 0 && steps <= 100_000);
@@ -248,7 +306,7 @@ mod tests {
 
     #[test]
     fn controller_rejects_unknown_player() {
-        let mut machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa")).unwrap();
+        let mut machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa"), None).unwrap();
         assert!(
             machine
                 .set_controller(3, false, false, false, false, false, false)

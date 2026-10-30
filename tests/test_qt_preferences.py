@@ -28,6 +28,7 @@ def test_defaults_are_valid_and_stable() -> None:
     assert preferences.window_height == 768
     assert preferences.video_scale == 3
     assert preferences.recent_roms == ()
+    assert preferences.firmware_directory == ""
     assert preferences.audio_enabled is True
     assert preferences.diagnostics_enabled is False
     assert preferences.audio_sample_rate == 48_000
@@ -67,6 +68,7 @@ def test_load_recovers_from_corrupt_or_legacy_values() -> None:
             "window_height": 12000,
             "video_scale": 5,
             "recent_roms": [" game.sg ", "", "game.sg", None],
+            "firmware_directory": "  C:/Emulator/BIOS  ",
             "audio_enabled": "off",
             "audio_sample_rate": 96000,
             "audio_buffer_size": 300,
@@ -90,6 +92,7 @@ def test_load_recovers_from_corrupt_or_legacy_values() -> None:
     assert preferences.window_height == 768
     assert preferences.video_scale == 3
     assert preferences.recent_roms == ("game.sg",)
+    assert preferences.firmware_directory == "C:/Emulator/BIOS"
     assert preferences.audio_enabled is False
     assert preferences.audio_sample_rate == 48_000
     assert preferences.audio_buffer_size == 512
@@ -113,6 +116,7 @@ def test_save_and_load_round_trip() -> None:
         video_scale=4,
         recent_roms=("one.sg", "two.zip"),
         controller_config='{"players": {}}',
+        firmware_directory="D:/SMS-Firmware",
         audio_enabled=False,
         diagnostics_enabled=False,
         audio_sample_rate=48_000,

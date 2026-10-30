@@ -30,10 +30,14 @@ from sega_emulator.frontend.qt.preferences import FrontendPreferences
 from sega_emulator.frontend.qt.wasapi_audio import NativeAudioOutput
 from sega_emulator.machine.sg1000 import SG1000Machine
 from sega_emulator.machine.sms import SMSMachine, load_sms_rom
+from sega_emulator.machine.sms_firmware import (
+    load_sms_bios,
+    sms_bios_region_from_cartridge,
+)
 from sega_emulator.machine.sms_region import (
     normalize_sms_region_preference,
     sms_frame_period_seconds,
-    sms_region_candidates,
+    sms_region_candidates_for_rom,
 )
 from sega_emulator.rom_loader import LoadedRom, list_rom_members, load_rom
 
@@ -191,6 +195,39 @@ def run(initial_path: Path | None = None) -> None:
         settings.value("sms_region_preference", "auto")
     )
     settings.setValue("sms_region_preference", region_preference)
+
+    def create_sms_machine(rom_data: bytes, region: str) -> SMSMachine:
+        # Manual territory always wins. In automatic mode, only use a BIOS
+        # when a recognized Sega header provides an explicit SMS region code.
+        bios_region = (
+            region_preference
+            if region_preference != "auto"
+            else sms_bios_region_from_cartridge(rom_data)
+        )
+        bios = (
+            load_sms_bios(preferences.firmware_directory, bios_region)
+            if bios_region is not None
+            else None
+        )
+        if bios is not None:
+            logger.info(
+                "BIOS SMS validada e carregada",
+                extra={
+                    "event": "sms_bios_loaded",
+                    "region": bios_region,
+                    "sha256": hashlib.sha256(bios).hexdigest(),
+                },
+            )
+        elif preferences.firmware_directory and bios_region is not None:
+            logger.info(
+                "Nenhuma BIOS SMS compatível encontrada; usando boot direto",
+                extra={
+                    "event": "sms_bios_fallback",
+                    "region": bios_region,
+                },
+            )
+        return SMSMachine(rom_data, region=region, bios=bios)
+
     ui_language = str(settings.value("ui_language", "pt-BR"))
     if ui_language not in {"pt-BR", "en", "es", "it", "fr"}:
         ui_language = "pt-BR"
@@ -603,7 +640,7 @@ def run(initial_path: Path | None = None) -> None:
             ):
                 sms_region_attempt_index += 1
                 active_sms_region = sms_region_attempts[sms_region_attempt_index]
-                machine = SMSMachine(loaded.data, region=active_sms_region)
+                machine = create_sms_machine(loaded.data, active_sms_region)
                 frame_pacer = FramePacer(sms_frame_period_seconds(active_sms_region))
                 frame_pacer.reset()
                 audio_resampler.reset()
@@ -709,10 +746,12 @@ def run(initial_path: Path | None = None) -> None:
                     return
                 candidate = load_rom(path, member_name=selected)
             if requested_system == "master_system":
-                sms_region_attempts = sms_region_candidates(region_preference)
+                sms_region_attempts = sms_region_candidates_for_rom(
+                    region_preference, candidate.data
+                )
                 sms_region_attempt_index = 0
                 active_sms_region = sms_region_attempts[0]
-                loaded_machine = SMSMachine(candidate.data, region=active_sms_region)
+                loaded_machine = create_sms_machine(candidate.data, active_sms_region)
                 frame_pacer = FramePacer(sms_frame_period_seconds(active_sms_region))
             else:
                 sms_region_attempts = ("usa", "europe", "japan")
@@ -799,7 +838,7 @@ def run(initial_path: Path | None = None) -> None:
             reset_machine()
             status.showMessage(
                 f"Região SMS: {region_preference} — iniciando em "
-                f"{sms_region_candidates(region_preference)[0].upper()}",
+                f"{sms_region_attempts[0].upper()}",
                 6000,
             )
         else:
@@ -812,7 +851,7 @@ def run(initial_path: Path | None = None) -> None:
             extra={
                 "event": "sms_region_preference_changed",
                 "preference": region_preference,
-                "fallback_order": list(sms_region_candidates(region_preference)),
+                "fallback_order": list(sms_region_attempts),
             },
         )
 
@@ -950,6 +989,9 @@ def run(initial_path: Path | None = None) -> None:
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         updated = dialog.preferences()
+        firmware_directory_changed = (
+            updated.firmware_directory != preferences.firmware_directory
+        )
         if (
             updated.sprite_limit_enabled != preferences.sprite_limit_enabled
             and machine is not None
@@ -1005,9 +1047,14 @@ def run(initial_path: Path | None = None) -> None:
         audio_warning = _audio_output_warning(
             preferences, audio_output, selected_audio_driver
         )
+        settings_message = (
+            "Pasta de BIOS SMS atualizada; aplique no próximo reset ou carregamento."
+            if firmware_directory_changed and active_system == "master_system"
+            else "Configurações de áudio e vídeo aplicadas."
+        )
         status.showMessage(
-            audio_warning or "Configurações de áudio e vídeo aplicadas.",
-            8000 if audio_warning is not None else 5000,
+            audio_warning or settings_message,
+            8000 if audio_warning is not None or firmware_directory_changed else 5000,
         )
         logger.info(
             "Configurações de áudio e vídeo atualizadas",
@@ -1165,10 +1212,12 @@ def run(initial_path: Path | None = None) -> None:
         if loaded is None:
             return
         if active_system == "master_system":
-            sms_region_attempts = sms_region_candidates(region_preference)
+            sms_region_attempts = sms_region_candidates_for_rom(
+                region_preference, loaded.data
+            )
             sms_region_attempt_index = 0
             active_sms_region = sms_region_attempts[0]
-            machine = SMSMachine(loaded.data, region=active_sms_region)
+            machine = create_sms_machine(loaded.data, active_sms_region)
             frame_pacer = FramePacer(sms_frame_period_seconds(active_sms_region))
         else:
             machine = SG1000Machine(loaded.data)
@@ -1653,6 +1702,7 @@ def run(initial_path: Path | None = None) -> None:
             if isinstance(path, str) and path.strip()
         )[:12],
         controller_config=controller_input.config.to_json(),
+        firmware_directory=preferences.firmware_directory,
         audio_enabled=preferences.audio_enabled,
         diagnostics_enabled=preferences.diagnostics_enabled,
         audio_sample_rate=preferences.audio_sample_rate,

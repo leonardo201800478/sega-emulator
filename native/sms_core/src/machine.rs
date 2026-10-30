@@ -123,11 +123,16 @@ impl CpuBus for SmsMachineBus<'_> {
     }
 
     fn write_port(&mut self, port: u16, value: u8) {
-        if matches!((port as u8) & 0xC1, 0x80 | 0x81) {
+        let port_byte = port as u8;
+        if port_byte <= 0x3F && port_byte & 1 == 0 {
+            // A0 selects the memory-control latch throughout $00-$3F;
+            // the upper address bits are not decoded by the SMS.
+            self.memory.write_control_port(value);
+        } else if matches!(port_byte & 0xC1, 0x80 | 0x81) {
             self.vdp.write_port(port, value);
         } else {
             self.io.write_port(port, value);
-            if (0x40..=0x7F).contains(&(port as u8))
+            if (0x40..=0x7F).contains(&port_byte)
                 && let Some(pending) = self.pending_psg_writes.as_mut()
             {
                 pending.push(SmsPsgWriteEvent {
@@ -174,8 +179,26 @@ impl SmsMachine {
         config: SmsMachineConfig,
         sample_rate: u64,
     ) -> Result<Self, SmsCoreError> {
+        Self::with_bios_audio(rom, None, config, sample_rate)
+    }
+
+    /// Construct an SMS machine with an optional user-supplied 8 KiB BIOS.
+    pub fn with_bios(
+        rom: impl Into<Vec<u8>>,
+        bios: Option<Vec<u8>>,
+        config: SmsMachineConfig,
+    ) -> Result<Self, SmsCoreError> {
+        Self::with_bios_audio(rom, bios, config, 44_100)
+    }
+
+    pub fn with_bios_audio(
+        rom: impl Into<Vec<u8>>,
+        bios: Option<Vec<u8>>,
+        config: SmsMachineConfig,
+        sample_rate: u64,
+    ) -> Result<Self, SmsCoreError> {
         let cartridge = CartridgeImage::new(rom)?;
-        let memory = SmsMemory::new(cartridge)?;
+        let memory = SmsMemory::with_bios(cartridge, bios)?;
         let mut cpu = Z80::default();
         cpu.reset();
         let vdp = SmsVdp::new(config.video_standard, config.sprite_limit);
@@ -247,6 +270,7 @@ impl SmsMachine {
 
     pub fn reset_cpu(&mut self) {
         self.cpu.reset();
+        self.memory.reset_control_port();
     }
 
     pub fn set_controller(
@@ -350,6 +374,93 @@ mod tests {
         assert_eq!(machine.cpu().registers.a, 0x42);
         assert_eq!(machine.read_memory(0xC000), 0x42);
         assert_eq!(machine.read_memory(0xC001), 0x42);
+    }
+
+    #[test]
+    fn bios_copies_bootstrap_to_ram_then_hands_off_to_cartridge() {
+        // BIOS enables RAM while keeping its own ROM mapped, copies a small
+        // hand-off routine to RAM, then disables itself and enables cartridge.
+        let mut bios = vec![0x00; 0x2000];
+        let startup = [
+            0x3E, 0xE3, // LD A,$E3: BIOS + work RAM enabled, cartridge disabled.
+            0xD3, 0x3E, // OUT ($3E),A
+            0x21, 0x20, 0x00, // LD HL,$0020
+            0x11, 0x00, 0xC0, // LD DE,$C000
+            0x01, 0x07, 0x00, // LD BC,$0007
+            0xED, 0xB0, // LDIR
+            0xC3, 0x00, 0xC0, // JP $C000
+        ];
+        bios[..startup.len()].copy_from_slice(&startup);
+        bios[0x20..0x27].copy_from_slice(&[
+            0x3E, 0xAB, // LD A,$AB: cartridge + work RAM enabled, BIOS disabled.
+            0xD3, 0x3E, // OUT ($3E),A
+            0xC3, 0x00, 0x00, // JP $0000 (now the cartridge).
+        ]);
+
+        let cartridge = vec![0xC3; 0x4000];
+        let mut machine =
+            SmsMachine::with_bios(cartridge, Some(bios), SmsMachineConfig::default()).unwrap();
+        assert_eq!(machine.memory().control_port(), 0xF3);
+        assert!(machine.memory().bios_enabled());
+        assert_eq!(machine.read_memory(0x0000), 0x3E);
+        assert_eq!(machine.read_memory(0x0400), 0xFF);
+        assert_eq!(machine.read_memory(0xC000), 0xFF);
+
+        // LDIR is modeled as one repeated transfer per CPU step.
+        for _ in 0..16 {
+            machine.step().unwrap();
+        }
+
+        assert!(!machine.memory().bios_enabled());
+        assert_eq!(machine.memory().control_port(), 0xAB);
+        assert_eq!(machine.cpu().registers.pc, 0x0000);
+        assert_eq!(machine.read_memory(0x0000), 0xC3);
+        assert_eq!(machine.read_memory(0xC000), 0x3E);
+    }
+
+    #[test]
+    fn mirrored_even_ports_select_the_sms_memory_control_latch() {
+        let bios = vec![0xA5; 0x2000];
+        let mut machine =
+            SmsMachine::with_bios(vec![0xC3; 0x4000], Some(bios), SmsMachineConfig::default())
+                .unwrap();
+        assert!(machine.memory().bios_enabled());
+
+        {
+            let mut bus = SmsMachineBus::new(
+                &mut machine.memory,
+                &mut machine.io,
+                &mut machine.sega_scope,
+                &mut machine.vdp,
+            );
+            // SMS decodes A0 in the $00-$3F range; $1E mirrors $3E.
+            bus.write_port(0x001E, 0x08);
+        }
+
+        assert!(!machine.memory().bios_enabled());
+        assert_eq!(machine.read_memory(0x0000), 0xC3);
+    }
+
+    #[test]
+    fn cpu_reset_restores_bios_overlay_after_firmware_disabled_it() {
+        let mut bios = vec![0x3E, 0x08, 0xD3, 0x3E];
+        bios.resize(0x2000, 0x00);
+        let mut machine =
+            SmsMachine::with_bios(vec![0xC3; 0x4000], Some(bios), SmsMachineConfig::default())
+                .unwrap();
+        machine.step().unwrap();
+        machine.step().unwrap();
+        assert!(!machine.memory().bios_enabled());
+        machine.reset_cpu();
+        assert!(machine.memory().bios_enabled());
+        assert_eq!(machine.read_memory(0), 0x3E);
+    }
+
+    #[test]
+    fn machine_without_bios_preserves_direct_cartridge_boot() {
+        let machine = SmsMachine::new(vec![0xA7; 0x4000]).unwrap();
+        assert!(!machine.memory().bios_enabled());
+        assert_eq!(machine.read_memory(0x0000), 0xA7);
     }
 
     #[test]

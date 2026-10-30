@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from sega_emulator.machine.sms_firmware import sms_bios_region_from_cartridge
+
 SMS_REGION_ORDER = ("usa", "europe", "japan")
 SMS_REGION_LABELS = {
     "auto": "Automático (EUA → Europa → Japão)",
@@ -29,6 +31,27 @@ def sms_region_candidates(preference: str) -> tuple[str, ...]:
     """Return region attempts in priority order for automatic or forced selection."""
     normalized = normalize_sms_region_preference(preference)
     return SMS_REGION_ORDER if normalized == "auto" else (normalized,)
+
+
+def sms_region_candidates_for_rom(
+    preference: str,
+    rom: bytes,
+) -> tuple[str, ...]:
+    """Resolve territory attempts using an explicit preference or trusted ROM header.
+
+    Automatic mode uses the SMS region nibble when a valid Sega header exists:
+    Japan stays Japan; export tries NTSC then PAL. Unknown headers retain the
+    existing deterministic fallback order without selecting a BIOS by guesswork.
+    """
+    normalized = normalize_sms_region_preference(preference)
+    if normalized != "auto":
+        return (normalized,)
+    cartridge_region = sms_bios_region_from_cartridge(rom)
+    if cartridge_region == "japan":
+        return ("japan",)
+    if cartridge_region == "usa":
+        return ("usa", "europe")
+    return SMS_REGION_ORDER
 
 
 def sms_frame_period_seconds(region: str) -> float:
