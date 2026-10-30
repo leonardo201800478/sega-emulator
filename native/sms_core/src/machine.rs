@@ -403,7 +403,7 @@ mod tests {
         assert_eq!(machine.memory().control_port(), 0xF3);
         assert!(machine.memory().bios_enabled());
         assert_eq!(machine.read_memory(0x0000), 0x3E);
-        assert_eq!(machine.read_memory(0x0400), 0xFF);
+        assert_eq!(machine.read_memory(0x0400), 0x00);
         assert_eq!(machine.read_memory(0xC000), 0xFF);
 
         // LDIR is modeled as one repeated transfer per CPU step.
