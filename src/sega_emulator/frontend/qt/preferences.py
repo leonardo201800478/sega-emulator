@@ -35,6 +35,7 @@ class FrontendPreferences:
     recent_roms: tuple[str, ...] = ()
     controller_config: str = ""
     firmware_directory: str = ""
+    sms_bios_boot_enabled: bool = True
     audio_enabled: bool = True
     diagnostics_enabled: bool = False
     cpu_core: str = "rust"
@@ -72,6 +73,8 @@ class FrontendPreferences:
             raise ValueError("controller_config must be serialized as text")
         if not isinstance(self.firmware_directory, str):
             raise ValueError("firmware_directory must be a path string")
+        if type(self.sms_bios_boot_enabled) is not bool:
+            raise ValueError("sms_bios_boot_enabled must be a bool")
         if self.cpu_core != "rust":
             raise ValueError("cpu_core must be 'rust'; the Qt runtime is Rust-only")
         if self.audio_sample_rate not in (22_050, 44_100, 48_000):
@@ -159,6 +162,10 @@ class FrontendPreferences:
         if not isinstance(firmware_directory, str):
             firmware_directory = ""
         firmware_directory = firmware_directory.strip()
+        sms_bios_boot_enabled = _bool_value(
+            store.value("sms_bios_boot_enabled", defaults.sms_bios_boot_enabled),
+            defaults.sms_bios_boot_enabled,
+        )
         audio_enabled = _bool_value(
             store.value("audio_enabled", defaults.audio_enabled),
             defaults.audio_enabled,
@@ -240,6 +247,7 @@ class FrontendPreferences:
             recent_roms=recent,
             controller_config=controller_config,
             firmware_directory=firmware_directory,
+            sms_bios_boot_enabled=sms_bios_boot_enabled,
             audio_enabled=audio_enabled,
             diagnostics_enabled=diagnostics_enabled,
             cpu_core=cpu_core,
@@ -266,6 +274,7 @@ class FrontendPreferences:
         store.setValue("recent_roms", list(self.recent_roms))
         store.setValue("controller_config", self.controller_config)
         store.setValue("firmware_directory", self.firmware_directory)
+        store.setValue("sms_bios_boot_enabled", self.sms_bios_boot_enabled)
         store.setValue("audio_enabled", self.audio_enabled)
         store.setValue("diagnostics_enabled", False)
         store.setValue("cpu_core", self.cpu_core)
@@ -303,6 +312,7 @@ class FrontendPreferences:
             recent_roms=recent[:MAX_RECENT_ROMS],
             controller_config=self.controller_config,
             firmware_directory=self.firmware_directory,
+            sms_bios_boot_enabled=self.sms_bios_boot_enabled,
             audio_enabled=self.audio_enabled,
             diagnostics_enabled=self.diagnostics_enabled,
             cpu_core=self.cpu_core,
