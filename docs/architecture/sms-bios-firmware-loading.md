@@ -20,9 +20,14 @@ Os hashes abaixo foram calculados localmente a partir dos arquivos anexados. Os 
 | `[BIOS] Sega Master System (USA, Europe) (v1.3).sms` | 8.192 bytes | `477617917a12a30f9f43844909dc2de6e6a617430f5c9a36306c86414a670d50` | Master System export (USA/Europe) |
 | `[BIOS] Sega Master System (Europe) (v2.0).sms` | 8.192 bytes | `1eb16fc06ceaf05651d7cfd69d1713e6ddccc4349a511f6fd17e037d71f9d85b` | Master System Europe / export |
 
-**Resultado importante:** as imagens USA/Europe v1.3 e Europe v2.0 são diferentes (SHA-256 distintos), mas pertencem à família de BIOS de exportação compatível com os perfis USA, Europe e Brazil. A BIOS Japan v2.1 pertence à família japonesa. A seleção regional escolhe a família compatível; não deve confundir revisão da BIOS com padrão de vídeo.
+**Resultado importante:** USA/Europe v1.3 é a imagem compartilhada de exportação; Europe v2.0 é uma BIOS europeia distinta e não deve ser selecionada para USA/Brazil. Para Europe, v2.0 tem preferência; se ausente, a imagem compartilhada v1.3 é fallback. Japan v2.1 permanece na família japonesa. A seleção de BIOS não altera o perfil PAL/PAL-M/NTSC.
 
 Os hashes foram calculados a partir dos arquivos fornecidos pelo usuário nesta conversa. Os binários permanecem fora do Git.
+
+
+### Particularidade observada da BIOS Europe v2.0
+
+A documentação técnica do SMS Power descreve a BIOS v2.0 incomum como uma variante da v1.3: ela não valida o cabeçalho TMR SEGA nem o checksum da ROM, e usa uma verificação de variação nos primeiros 513 bytes. Portanto, não é apenas um alias de nome da v1.3 e sua seleção deve permanecer explícita. O MAME cataloga a imagem com CRC32 B3D854F8 como European BIOS v2.0 no perfil SMS PAL. Fontes: SMS Power, *BIOSes* (seção “Uncommon BIOS v2.0”); MAME, definição `sms1pal` (`mpr-10883.rom`).
 
 ## Referência: abordagem do ares
 
@@ -60,7 +65,8 @@ A pesquisa do catálogo descreve a identificação por conteúdo e os arquivos c
 - Ler arquivos candidatos como dados locais, calcular SHA-256 e comparar com uma lista interna de metadados (hash, sistema, região/alias, tamanho esperado e versão quando conhecida).
 - Não confiar em nomes, extensões ou diretórios para validar firmware.
 - A BIOS japonesa aceita a assinatura conhecida JP v2.1 indicada acima.
-- A família de exportação aceita as assinaturas conhecidas USA/Europe v1.3 e Europe v2.0, que são imagens distintas.
+- A BIOS compartilhada de exportação USA/Europe aceita a assinatura v1.3.
+- A BIOS Europe v2.0 tem assinatura própria e só é preferida para o território Europe; na ausência dela, Europe pode usar a BIOS compartilhada v1.3.
 - Recusar arquivos truncados, vazios, inacessíveis ou de tamanho incompatível, com erro diagnóstico explícito.
 - Nunca gravar o conteúdo ou dumps da BIOS em logs; registrar apenas nome/caminho escolhido pelo usuário, tamanho, hash, região identificada e resultado da validação.
 - Manter os hashes em testes de metadados, sem armazenar os binários proprietários no repositório.
@@ -105,7 +111,8 @@ A BIOS deve ser parte do caminho de inicialização do cartucho/máquina, não u
 - `NOT_FOUND`: nenhum arquivo corresponde a uma assinatura conhecida.
 - `INVALID_FILE`: falha de leitura/tamanho/validação.
 - `VALID_JAPAN`: hash japonês validado.
-- `VALID_EXPORT_US_EU`: assinatura conhecida de BIOS da família de exportação validada.
+- `VALID_EUROPE`: assinatura conhecida da BIOS Europe v2.0 validada.
+- `VALID_EXPORT_US_EU`: assinatura conhecida da BIOS compartilhada USA/Europe v1.3 validada.
 - `DUPLICATE_HASH`: múltiplos nomes, mesmo conteúdo já reconhecido.
 - `IN_USE`: firmware selecionado e carregado na máquina.
 - `FALLBACK_NO_BIOS`: modo de compatibilidade selecionado sem BIOS.
@@ -132,7 +139,7 @@ substituem a preferência de vídeo do console.
 
 ### Validação de metadados e armazenamento
 - [ ] Testar hashes exatos dos três arquivos fornecidos por fixtures de teste não versionadas/localmente ou por constantes de metadados; não commitar binários.
-- [ ] Confirmar que JP v2.1 é classificada como Japan e que USA/Europe v1.3 e Europe v2.0 são classificadas como BIOS de exportação.
+- [ ] Confirmar que JP v2.1 é classificada como Japan, USA/Europe v1.3 como BIOS compartilhada de exportação e Europe v2.0 como BIOS específica Europe.
 - [ ] Confirmar que nomes arbitrários funcionam e nomes “corretos” com conteúdo incorreto são rejeitados.
 - [ ] Testar arquivo ausente, tamanho incorreto, falha de leitura, pasta inexistente, duplicatas e arquivos não relacionados.
 - [ ] Garantir que arquivos grandes sejam rejeitados por tamanho antes de ler seu conteúdo integral.
@@ -144,7 +151,7 @@ substituem a preferência de vídeo do console.
 - [ ] Testar perfil de power-on `$F3`, perfil de cartucho `$AB` e espelhamento de escritas pares em `$00-$3F`.
 - [ ] Executar um programa sintético que copia o stub da BIOS para RAM antes do hand-off.
 - [ ] Testar boot sem BIOS para preservar compatibilidade atual.
-- [ ] Testar BIOS JP v2.1 e as revisões de exportação USA/Europe v1.3 e Europe v2.0 em perfis regionais compatíveis.
+- [ ] Testar JP v2.1, USA/Europe v1.3 e Europe v2.0 em perfis compatíveis; Europe v2.0 deve ter preferência apenas no perfil Europe, com v1.3 como fallback.
 - [ ] Confirmar o comportamento de jogos com e sem BIOS e evitar regressões nos testes SMS existentes.
 
 ### Interface, CI e distribuição
