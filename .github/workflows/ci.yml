@@ -1,18 +1,9 @@
 name: CI
 
 on:
+  push:
+    branches: [main]
   pull_request:
-    paths:
-      - "src/**/*.py"
-      - "tests/**/*.py"
-      - "pyproject.toml"
-      - "requirements*.txt"
-      - "setup.py"
-      - "setup.cfg"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "native/**"
-      - "dats/**"
   workflow_dispatch:
 
 permissions:
@@ -57,7 +48,7 @@ jobs:
             exit $?
           fi
 
-          mapfile -d '' changed_python_files < <(git diff --diff-filter=ACMRT --name-only -z "$base_sha" "$head_sha" -- '*.py')
+          mapfile -d '' changed_python_files < <(git diff --diff-filter=ACMRT --name-only -z "$base_sha" "$head_sha" -- '*.py' ':!legacy/**')
           if (("${#changed_python_files[@]}" == 0)); then
             echo "No changed Python files to format-check."
             exit 0
@@ -83,7 +74,7 @@ jobs:
             exit $?
           fi
 
-          mapfile -d '' changed_python_files < <(git diff --diff-filter=ACMRT --name-only -z "$base_sha" "$head_sha" -- '*.py')
+          mapfile -d '' changed_python_files < <(git diff --diff-filter=ACMRT --name-only -z "$base_sha" "$head_sha" -- '*.py' ':!legacy/**')
           if (("${#changed_python_files[@]}" == 0)); then
             echo "No changed Python files to lint."
             exit 0

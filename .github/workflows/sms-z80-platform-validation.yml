@@ -1,6 +1,27 @@
 name: SMS Z80 Platform Validation
 
 on:
+  pull_request:
+    paths:
+      - "native/sg1000_core/src/cpu.rs"
+      - "native/z80_alu/**"
+      - "native/z80_bus/**"
+      - "native/sms_core/**"
+      - "docs/architecture/z80-sms-platform-model.md"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/sms-z80-platform-validation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "native/sg1000_core/src/cpu.rs"
+      - "native/z80_alu/**"
+      - "native/z80_bus/**"
+      - "native/sms_core/**"
+      - "docs/architecture/z80-sms-platform-model.md"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/sms-z80-platform-validation.yml"
   workflow_dispatch:
 
 permissions:

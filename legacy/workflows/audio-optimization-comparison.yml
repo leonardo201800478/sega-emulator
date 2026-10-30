@@ -1,0 +1,105 @@
+name: Audio Optimization Comparison
+
+on:
+  pull_request:
+    branches:
+      - fix/sg1000-psg-correctness
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  compare-psg-hot-path:
+    if: github.event.pull_request.head.ref == 'perf/optimize-sn76489-hot-path'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout corrected baseline
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: baseline
+      - name: Checkout optimized revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: optimized
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Download and verify Super Uwol homebrew ROM
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROM_PATH="$RUNNER_TEMP/super-uwol.sg"
+          curl --fail --location --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 90 \
+            "https://raw.githubusercontent.com/webrcade/webrcade-default-feed/b7bc8e1946aa67436bb296955d55bbf3f3841ba6/content/sms/mojon-twins--super-uwol.sg" \
+            --output "$ROM_PATH"
+          python - "$ROM_PATH" <<'PY'
+          import pathlib
+          import sys
+          import zlib
+          rom = pathlib.Path(sys.argv[1]).read_bytes()
+          crc32 = zlib.crc32(rom) & 0xFFFFFFFF
+          print(f"ROM size: {len(rom)} bytes; CRC32: {crc32:08X}")
+          if len(rom) != 0xC000 or crc32 != 0xAA8EA6EB:
+              raise SystemExit("Super Uwol ROM identity check failed")
+          PY
+          echo "ROM_PATH=$ROM_PATH" >> "$GITHUB_ENV"
+      - name: Run interleaved baseline/head ROM benchmarks
+        shell: bash
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          for round in 1 2 3; do
+            echo "=== Round $round: baseline ==="
+            PYTHONPATH="$GITHUB_WORKSPACE/baseline/src" python baseline/tools/benchmarks/benchmark_rom.py \
+              --rom "$ROM_PATH" --warmup-frames 30 --frames 120 --repeats 3 \
+              | tee "baseline-round-$round.txt"
+            echo "=== Round $round: optimized ==="
+            PYTHONPATH="$GITHUB_WORKSPACE/optimized/src" python optimized/tools/benchmarks/benchmark_rom.py \
+              --rom "$ROM_PATH" --warmup-frames 30 --frames 120 --repeats 3 \
+              | tee "optimized-round-$round.txt"
+          done
+      - name: Compare medians
+        shell: bash
+        run: |
+          python - <<'PY'
+          import re
+          import statistics
+          from pathlib import Path
+
+          def read_medians(prefix: str) -> list[float]:
+              values = []
+              for round_number in range(1, 4):
+                  text = Path(f"{prefix}-round-{round_number}.txt").read_text()
+                  match = re.search(r"median_fps=([0-9.]+)", text)
+                  if not match:
+                      raise SystemExit(f"Missing median_fps in {prefix} round {round_number}")
+                  values.append(float(match.group(1)))
+              return values
+
+          baseline = read_medians("baseline")
+          optimized = read_medians("optimized")
+          base_median = statistics.median(baseline)
+          head_median = statistics.median(optimized)
+          delta = (head_median / base_median - 1.0) * 100
+          print(f"Baseline round medians FPS: {baseline}")
+          print(f"Optimized round medians FPS: {optimized}")
+          print(f"Baseline median FPS: {base_median:.3f}")
+          print(f"Optimized median FPS: {head_median:.3f}")
+          print(f"Relative change: {delta:+.2f}%")
+          print("Interpretation: same GitHub runner, same ROM hash validation, interleaved repeat rounds.")
+          PY
+      - name: Upload comparison reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audio-optimization-comparison
+          path: |
+            baseline-round-*.txt
+            optimized-round-*.txt
+          if-no-files-found: warn
+          retention-days: 14
