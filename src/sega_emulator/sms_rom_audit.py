@@ -49,6 +49,9 @@ class SmsRomAuditResult:
     instructions: int
     tstates: int
     pc: int | None
+    region: str | None
+    bios_enabled_at_start: bool | None
+    bios_enabled_at_end: bool | None
     framebuffer_sha256: str | None
     distinct_rgb_colors: int | None
     elapsed_ms: float
@@ -233,6 +236,9 @@ def run_sms_rom_audit(
         instructions = 0
         tstates = 0
         pc: int | None = None
+        region: str | None = None
+        bios_enabled_at_start: bool | None = None
+        bios_enabled_at_end: bool | None = None
         framebuffer_hash: str | None = None
         colors: int | None = None
         status = "BOOT_FAILED"
@@ -244,6 +250,11 @@ def run_sms_rom_audit(
             rom_data_loaded = True
             rom_hash = hashlib.sha256(data).hexdigest()
             machine = machine_factory(data)
+            machine_region = getattr(machine, "region", None)
+            region = str(machine_region) if machine_region is not None else None
+            initial_bios_state = getattr(machine, "bios_enabled", None)
+            if initial_bios_state is not None:
+                bios_enabled_at_start = bool(initial_bios_state)
             initial_frame = int(machine.vdp.frame_number)
             deadline = started + timeout_seconds
             for _ in range(frames_per_rom):
@@ -274,6 +285,9 @@ def run_sms_rom_audit(
             instructions = int(machine.total_instructions)
             tstates = int(machine.total_tstates)
             pc = int(machine.cpu.pc)
+            final_bios_state = getattr(machine, "bios_enabled", None)
+            if final_bios_state is not None:
+                bios_enabled_at_end = bool(final_bios_state)
             if status not in {"TIMEOUT", "FRAME_NOT_ADVANCING", "CANCELLED"}:
                 framebuffer = bytes(machine.vdp.framebuffer)
                 height = int(machine.vdp.visible_height)
@@ -336,6 +350,9 @@ def run_sms_rom_audit(
             instructions=instructions,
             tstates=tstates,
             pc=pc,
+            region=region,
+            bios_enabled_at_start=bios_enabled_at_start,
+            bios_enabled_at_end=bios_enabled_at_end,
             framebuffer_sha256=framebuffer_hash,
             distinct_rgb_colors=colors,
             elapsed_ms=round((time.perf_counter() - started) * 1000, 3),
