@@ -40,3 +40,29 @@ def test_joystick_active_low_bits_match_sg1000_input_contract() -> None:
     assert joystick_value({"up", "button1"}) == 0xEE
     with pytest.raises(ValueError, match="Ações desconhecidas"):
         joystick_value({"unknown"})
+
+
+
+def test_console_pause_is_persisted_but_never_becomes_a_joystick_bit() -> None:
+    config = ControllerInputConfig()
+    decoded = ControllerInputConfig.from_json(config.to_json())
+    assert decoded.players[1].keyboard_bindings["console_pause"] == "Pause"
+    assert decoded.players[2].keyboard_bindings["console_pause"] == "ScrollLock"
+    assert decoded.players[1].gamepad_buttons["console_pause"] == "back"
+    from sega_emulator.frontend.controller_profiles import JOYSTICK_ACTIONS
+
+    assert "console_pause" not in JOYSTICK_ACTIONS
+    assert joystick_value({"up", "button1"}) == 0xEE
+
+
+def test_legacy_profiles_gain_console_pause_default_without_losing_bindings() -> None:
+    legacy = PlayerInputProfile.from_dict(
+        {
+            "gamepad_buttons": {"up": "x"},
+            "keyboard_bindings": {"up": "I"},
+        }
+    )
+    assert legacy.gamepad_buttons["up"] == "x"
+    assert legacy.gamepad_buttons["console_pause"] == "back"
+    assert legacy.keyboard_bindings["up"] == "I"
+    assert legacy.keyboard_bindings["console_pause"] == "Pause"
