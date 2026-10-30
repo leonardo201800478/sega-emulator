@@ -281,6 +281,14 @@ impl SmsMachine {
         self.io.set_controller(player, buttons)
     }
 
+    /// Latch the SMS console Pause button as a Z80 NMI request.
+    ///
+    /// The frontend calls this only on a physical press edge; the CPU services
+    /// the latched request at its next instruction boundary.
+    pub fn request_console_pause(&mut self) {
+        self.cpu.request_nmi();
+    }
+
     pub fn set_input(&mut self, input: SmsInputState) -> Result<(), SmsIoError> {
         self.io.set_input(input)?;
         self.vdp.set_light_phaser_input(
@@ -571,4 +579,18 @@ mod tests {
         assert_eq!(machine.read_memory(0xFFF8), 0x01);
         assert_eq!(machine.read_memory(0xDFF8), 0x01);
     }
+    #[test]
+    fn console_pause_requests_nmi_without_changing_controller_lines() {
+        let mut machine = SmsMachine::new(vec![0x00; 0x4000]).unwrap();
+        machine.set_controller(1, ControllerButtons { button_1: true, ..Default::default() }).unwrap();
+        let controller_before = machine.read_port(0xDC);
+        machine.request_console_pause();
+        assert!(machine.cpu().nmi_pending);
+        assert_eq!(machine.read_port(0xDC), controller_before);
+        machine.step().unwrap();
+        assert_eq!(machine.cpu().registers.pc, 0x0066);
+        assert!(!machine.cpu().nmi_pending);
+    }
+
+
 }
