@@ -216,3 +216,68 @@ def test_dat_fallback_refuses_crc32_only_identity(tmp_path):
         encoding="utf-8",
     )
     assert sms_bios_region_from_catalog(payload, RomCatalog(tmp_path)) is None
+
+
+def _write_bios_dat(directory, payload, game_name, regions):
+    import hashlib
+    import zlib
+
+    releases = "".join(
+        f'<release name="Firmware" region="{region}"/>' for region in regions
+    )
+    (directory / "bios.dat").write_text(
+        f'''<datafile><header><name>Sega - Master System - Mark III</name></header>
+        <game name="{game_name}">{releases}
+        <rom name="firmware.sms" size="{len(payload)}"
+             crc="{zlib.crc32(payload) & 0xFFFFFFFF:08x}"
+             md5="{hashlib.md5(payload).hexdigest()}"
+             sha1="{hashlib.sha1(payload).hexdigest()}"/>
+        </game></datafile>''',
+        encoding="utf-8",
+    )
+
+
+def test_firmware_scanner_accepts_verified_sms_bios_from_dat(tmp_path):
+    payload = b"J" * SMS_BIOS_SIZE
+    (tmp_path / "firmware.bin").write_bytes(payload)
+    _write_bios_dat(
+        tmp_path,
+        payload,
+        "[BIOS] Sega Master System (Japan) (v2.1)",
+        ("JPN",),
+    )
+
+    result = scan_sms_firmware_directory(tmp_path, catalog=RomCatalog(tmp_path))
+
+    assert result.files[0].region is SmsFirmwareRegion.JAPAN
+    assert result.files[0].status is SmsFirmwareFileStatus.VALID_JAPAN
+
+
+def test_firmware_scanner_does_not_accept_an_ordinary_game_as_bios(tmp_path):
+    payload = b"G" * SMS_BIOS_SIZE
+    (tmp_path / "game.bin").write_bytes(payload)
+    _write_bios_dat(
+        tmp_path,
+        payload,
+        "Example Game (Japan)",
+        ("JPN",),
+    )
+
+    result = scan_sms_firmware_directory(tmp_path, catalog=RomCatalog(tmp_path))
+
+    assert result.files[0].region is None
+    assert result.files[0].status is SmsFirmwareFileStatus.NOT_FOUND
+
+
+def test_firmware_scanner_accepts_export_bios_from_dat_and_loads_it(tmp_path):
+    payload = b"E" * SMS_BIOS_SIZE
+    (tmp_path / "export.bin").write_bytes(payload)
+    _write_bios_dat(
+        tmp_path,
+        payload,
+        "[BIOS] Sega Master System (Europe) (v2.0)",
+        ("EUR",),
+    )
+    catalog = RomCatalog(tmp_path)
+
+    assert load_sms_bios(tmp_path, "europe", catalog=catalog) == payload
