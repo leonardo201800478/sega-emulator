@@ -1,8 +1,8 @@
 """Qt settings and visual reference for Sega Master System input devices.
 
-These preferences are persisted by the frontend, but the SMS Qt-to-Rust input
-adapter is not integrated yet. The page must not imply that mouse aiming or
-Light Phaser hit detection is already active in gameplay.
+The dedicated PAUSE button is integrated through the Qt-to-Rust input path.
+Light Phaser mouse aiming and raster-qualified hit detection remain pending;
+the page must not imply that those features are active in gameplay.
 """
 
 from __future__ import annotations
@@ -131,7 +131,8 @@ class SmsInputSettingsPage(QWidget):
 
         controls_note = QLabel(
             "Cada controle possui direcional e dois botões de ação (1 e 2). "
-            "Jogador 1 e Jogador 2; a ação Hold/SW aciona o botão físico "
+            "Os mapeamentos são configurados nas abas Jogador 1 e Jogador 2; "
+            "a ação Hold/SW aciona o botão físico "
             "PAUSE do console SMS (por padrão, P/H no teclado e Start no "
             "gamepad), separado dos dois botões do controle."
         )
