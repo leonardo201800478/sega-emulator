@@ -47,7 +47,9 @@ def test_dialog_loads_and_returns_audio_video_preferences(qt_app) -> None:
         "BIOS SMS",
     ]
     assert dialog.firmware_directory.text() == ""
+    assert dialog.sms_bios_boot_enabled.isChecked() is True
     dialog.firmware_directory.setText("D:/SMS-Firmware")
+    dialog.sms_bios_boot_enabled.setChecked(False)
     assert dialog.balance.value() == -35
     assert dialog.queue_blocks.currentData() == 8
     assert "Período WASAPI solicitado" in dialog.latency_label.text()
@@ -81,6 +83,7 @@ def test_dialog_loads_and_returns_audio_video_preferences(qt_app) -> None:
     updated = dialog.preferences()
     assert updated.audio_enabled is True
     assert updated.firmware_directory == "D:/SMS-Firmware"
+    assert updated.sms_bios_boot_enabled is False
     assert updated.audio_sample_rate == 22_050
     assert updated.audio_buffer_size == 256
     assert updated.audio_volume == 40
@@ -115,6 +118,7 @@ def test_restore_defaults_resets_audio_video_controls(qt_app) -> None:
         FrontendPreferences(
             audio_enabled=False,
             firmware_directory="D:/Old-BIOS",
+            sms_bios_boot_enabled=False,
             audio_sample_rate=48_000,
             audio_buffer_size=2048,
             audio_volume=10,
@@ -137,6 +141,8 @@ def test_restore_defaults_resets_audio_video_controls(qt_app) -> None:
     assert dialog.preferences().audio_enabled is True
     assert dialog.firmware_directory.text() == ""
     assert dialog.preferences().firmware_directory == defaults.firmware_directory
+    assert dialog.sms_bios_boot_enabled.isChecked() is defaults.sms_bios_boot_enabled
+    assert dialog.preferences().sms_bios_boot_enabled is defaults.sms_bios_boot_enabled
     assert dialog.sample_rate.currentData() == defaults.audio_sample_rate
     assert dialog.buffer_size.currentData() == defaults.audio_buffer_size
     assert dialog.volume.value() == defaults.audio_volume
