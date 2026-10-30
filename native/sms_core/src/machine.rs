@@ -123,16 +123,16 @@ impl CpuBus for SmsMachineBus<'_> {
     }
 
     fn write_port(&mut self, port: u16, value: u8) {
-        let port = port as u8;
-        if port <= 0x3F && port & 1 == 0 {
+        let port_byte = port as u8;
+        if port_byte <= 0x3F && port_byte & 1 == 0 {
             // A0 selects the memory-control latch throughout $00-$3F;
             // the upper address bits are not decoded by the SMS.
             self.memory.write_control_port(value);
-        } else if matches!((port as u8) & 0xC1, 0x80 | 0x81) {
+        } else if matches!(port_byte & 0xC1, 0x80 | 0x81) {
             self.vdp.write_port(port, value);
         } else {
             self.io.write_port(port, value);
-            if (0x40..=0x7F).contains(&(port as u8))
+            if (0x40..=0x7F).contains(&port_byte)
                 && let Some(pending) = self.pending_psg_writes.as_mut()
             {
                 pending.push(SmsPsgWriteEvent {
