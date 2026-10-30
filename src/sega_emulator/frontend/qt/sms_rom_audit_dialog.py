@@ -149,10 +149,10 @@ class SmsRomAuditDialog(QDialog):
         self.summary_label.setWordWrap(True)
         root.addWidget(self.summary_label)
 
-        self.results_table = QTableWidget(0, 6)
+        self.results_table = QTableWidget(0, 7)
         self.results_table.setObjectName("smsAuditResults")
         self.results_table.setHorizontalHeaderLabels(
-            ["ROM", "Resultado", "Frames", "PC", "Tempo (ms)", "Detalhes"]
+            ["ROM", "Resultado", "Boot/Região", "Frames", "PC", "Tempo (ms)", "Detalhes"]
         )
         self.results_table.setSortingEnabled(False)
         self.results_table.setAlternatingRowColors(True)
@@ -234,9 +234,20 @@ class SmsRomAuditDialog(QDialog):
         row = self.results_table.rowCount()
         self.results_table.insertRow(row)
         details = result.details or result.error_type or ""
+        if result.bios_enabled_at_start is True:
+            boot_mode = "BIOS"
+            if result.bios_enabled_at_end is False:
+                boot_mode += " → cartucho"
+        elif result.bios_enabled_at_start is False:
+            boot_mode = "Direto"
+        else:
+            boot_mode = "Indeterminado"
+        if result.region:
+            boot_mode += f" / {result.region}"
         values = (
             result.display_name,
             result.status,
+            boot_mode,
             f"{result.frames_advanced}/{result.frames_requested}",
             f"{result.pc:04X}" if result.pc is not None else "—",
             f"{result.elapsed_ms:.1f}",
