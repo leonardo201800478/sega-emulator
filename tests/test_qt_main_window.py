@@ -12,6 +12,7 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QApplication, QMessageBox  # noqa: E402
 
+from sega_emulator import __version__  # noqa: E402
 from sega_emulator.frontend.qt.main_window import (
     EmulatorMainWindow,
     persisted_window_dimensions,
@@ -293,7 +294,7 @@ def test_about_dialog_shows_version_scope_credits_and_mit_license(
     title, content, parent_title = shown[0]
     assert title == "Sobre o Sega Emulator"
     assert parent_title == "Sega Emulator | SG-1000"
-    assert "Versão:</b> 0.1.0" in content
+    assert f"Versão:</b> {__version__}" in content
     assert "SG-1000" in content
     assert "PySide6" in content
     assert "Licença:</b> MIT" in content
