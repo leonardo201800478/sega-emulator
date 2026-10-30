@@ -367,8 +367,7 @@ mod tests {
 
     #[test]
     fn disabled_cartridge_slot_does_not_receive_mapper_register_writes() {
-        let mut memory =
-            SmsMemory::with_bios(patterned_rom(3), Some(vec![0xA5; 0x2000])).unwrap();
+        let mut memory = SmsMemory::with_bios(patterned_rom(3), Some(vec![0xA5; 0x2000])).unwrap();
         assert_eq!(memory.selected_banks(), [0, 1, 2]);
         memory.write(0xFFFD, 0x07);
         assert_eq!(memory.selected_banks(), [0, 1, 2]);
