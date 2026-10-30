@@ -377,22 +377,44 @@ mod tests {
     }
 
     #[test]
-    fn cpu_executes_bios_and_disables_overlay_through_port_3e() {
-        // BIOS: LD A,$08; OUT ($3E),A. This disables BIOS overlay.
-        let bios = vec![0x3E, 0x08, 0xD3, 0x3E]
-            .into_iter()
-            .chain(std::iter::repeat_n(0x00, 0x2000 - 4))
-            .collect();
+    fn bios_copies_bootstrap_to_ram_then_hands_off_to_cartridge() {
+        // BIOS enables RAM while keeping its own ROM mapped, copies a small
+        // hand-off routine to RAM, then disables itself and enables cartridge.
+        let mut bios = vec![0x00; 0x2000];
+        let startup = [
+            0x3E, 0xE3, // LD A,$E3: BIOS + work RAM enabled, cartridge disabled.
+            0xD3, 0x3E, // OUT ($3E),A
+            0x21, 0x20, 0x00, // LD HL,$0020
+            0x11, 0x00, 0xC0, // LD DE,$C000
+            0x01, 0x07, 0x00, // LD BC,$0007
+            0xED, 0xB0, // LDIR
+            0xC3, 0x00, 0xC0, // JP $C000
+        ];
+        bios[..startup.len()].copy_from_slice(&startup);
+        bios[0x20..0x27].copy_from_slice(&[
+            0x3E, 0xAB, // LD A,$AB: cartridge + work RAM enabled, BIOS disabled.
+            0xD3, 0x3E, // OUT ($3E),A
+            0xC3, 0x00, 0x00, // JP $0000 (now the cartridge).
+        ]);
+
         let cartridge = vec![0xC3; 0x4000];
         let mut machine =
             SmsMachine::with_bios(cartridge, Some(bios), SmsMachineConfig::default()).unwrap();
+        assert_eq!(machine.memory().control_port(), 0xF3);
         assert!(machine.memory().bios_enabled());
         assert_eq!(machine.read_memory(0x0000), 0x3E);
-        machine.step().unwrap();
-        assert!(machine.memory().bios_enabled());
-        machine.step().unwrap();
+        assert_eq!(machine.read_memory(0x0400), 0xFF);
+        assert_eq!(machine.read_memory(0xC000), 0xFF);
+
+        for _ in 0..10 {
+            machine.step().unwrap();
+        }
+
         assert!(!machine.memory().bios_enabled());
+        assert_eq!(machine.memory().control_port(), 0xAB);
+        assert_eq!(machine.cpu().registers.pc, 0x0000);
         assert_eq!(machine.read_memory(0x0000), 0xC3);
+        assert_eq!(machine.read_memory(0xC000), 0x3E);
     }
 
     #[test]
