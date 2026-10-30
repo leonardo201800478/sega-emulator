@@ -95,7 +95,10 @@ def _sms_bios_region_from_dat_candidates(
         regions = set(candidate.regions)
         if regions and regions <= {"JPN"}:
             resolved.add(SmsFirmwareRegion.JAPAN)
-        elif regions and regions <= {"USA", "EUR"}:
+        elif regions and regions <= {"USA", "EUR", "BRA", "AUS"}:
+            # These territories are all non-Japanese SMS export markets.
+            # Brazil uses PAL-M timing, but that does not imply a European
+            # video profile; this mapping selects only the shared export BIOS.
             resolved.add(SmsFirmwareRegion.EXPORT_US_EU)
         else:
             return None
