@@ -147,7 +147,9 @@ class EmulatorMainWindow(QMainWindow):
         self.open_action.setShortcut(QKeySequence.StandardKey.Open)
         self.open_action.triggered.connect(on_open_rom)
         self.pause_action = QAction(translate("action_pause", language), self)
+        self.pause_action.setObjectName("pauseAction")
         self.pause_action.setShortcut("F5")
+        self.pause_action.setEnabled(False)
         self.pause_action.triggered.connect(on_pause_resume)
         self.reset_action = QAction(translate("action_reset", language), self)
         self.reset_action.setShortcut("F10")
@@ -348,6 +350,12 @@ class EmulatorMainWindow(QMainWindow):
                 self.fullscreen_action.blockSignals(True)
                 self.fullscreen_action.setChecked(self.isFullScreen())
                 self.fullscreen_action.blockSignals(False)
+
+    def set_pause_state(self, paused: bool, *, enabled: bool) -> None:
+        """Update the pause label and availability for the loaded session."""
+        label = "action_resume" if paused else "action_pause"
+        self.pause_action.setText(translate(label, self._language))
+        self.pause_action.setEnabled(enabled)
 
     def set_vgm_recording(self, active: bool) -> None:
         """Keep the VGM recording controls synchronized with recorder state."""

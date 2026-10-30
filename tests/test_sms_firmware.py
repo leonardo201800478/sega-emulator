@@ -8,6 +8,7 @@ from sega_emulator.machine.sms_firmware import (
     SmsFirmwareFileStatus,
     SmsFirmwareRegion,
     load_sms_bios,
+    load_sms_bios_for_boot,
     scan_sms_firmware_directory,
     sms_bios_region_for_rom,
     sms_bios_region_from_cartridge,
@@ -17,6 +18,7 @@ from sega_emulator.rom_catalog import RomCatalog
 
 JP_SHA256 = "67846e26764bd862f19179294347f7353a4166b62ac4198a5ec32933b7da486e"
 EXPORT_SHA256 = "477617917a12a30f9f43844909dc2de6e6a617430f5c9a36306c86414a670d50"
+EUROPE_V2_SHA256 = "1eb16fc06ceaf05651d7cfd69d1713e6ddccc4349a511f6fd17e037d71f9d85b"
 
 
 def test_unconfigured_and_missing_directories_are_reported(tmp_path):
@@ -53,38 +55,60 @@ def test_wrong_size_file_is_invalid_and_not_hashed(tmp_path):
     assert result.files[0].sha256 is None
 
 
-def test_known_hashes_classify_japan_and_shared_export_image(tmp_path):
+def test_known_hashes_classify_japan_and_export_revisions(tmp_path):
+    from types import SimpleNamespace
     from unittest.mock import patch
 
-    (tmp_path / "jp-with-arbitrary-name.data").write_bytes(b"J" * SMS_BIOS_SIZE)
-    (tmp_path / "export.bin").write_bytes(b"E" * SMS_BIOS_SIZE)
+    (tmp_path / "japan.sms").write_bytes(b"J" * SMS_BIOS_SIZE)
+    (tmp_path / "usa-v1.3.sms").write_bytes(b"U" * SMS_BIOS_SIZE)
+    (tmp_path / "europe-v2.0.sms").write_bytes(b"E" * SMS_BIOS_SIZE)
 
-    from types import SimpleNamespace
-
+    expected = {
+        b"J": JP_SHA256,
+        b"U": EXPORT_SHA256,
+        b"E": EUROPE_V2_SHA256,
+    }
     with patch("sega_emulator.machine.sms_firmware.hashlib.sha256") as sha256:
         sha256.side_effect = lambda data: SimpleNamespace(
-            hexdigest=lambda: JP_SHA256 if data.startswith(b"J") else EXPORT_SHA256
+            hexdigest=lambda: expected[data[:1]]
         )
         result = scan_sms_firmware_directory(tmp_path)
 
     by_name = {item.path.name: item for item in result.files}
-    assert by_name["jp-with-arbitrary-name.data"].region is SmsFirmwareRegion.JAPAN
-    assert (
-        by_name["jp-with-arbitrary-name.data"].status
-        is SmsFirmwareFileStatus.VALID_JAPAN
-    )
-    assert by_name["export.bin"].region is SmsFirmwareRegion.EXPORT_US_EU
-    assert by_name["export.bin"].status is SmsFirmwareFileStatus.VALID_EXPORT_US_EU
+    assert by_name["japan.sms"].region is SmsFirmwareRegion.JAPAN
+    assert by_name["japan.sms"].status is SmsFirmwareFileStatus.VALID_JAPAN
+    assert by_name["usa-v1.3.sms"].region is SmsFirmwareRegion.EXPORT_US_EU
+    assert by_name["usa-v1.3.sms"].status is SmsFirmwareFileStatus.VALID_EXPORT_US_EU
+    assert by_name["europe-v2.0.sms"].region is SmsFirmwareRegion.EUROPE
+    assert by_name["europe-v2.0.sms"].status is SmsFirmwareFileStatus.VALID_EUROPE
 
 
-def test_export_and_japan_signatures_are_unique_catalog_entries():
-    # The catalog intentionally contains exactly two unique signatures:
-    # JP and the byte-identical US/EU export image.
+def test_known_bios_signatures_map_to_their_compatible_families():
     from sega_emulator.machine import sms_firmware
 
     assert sms_firmware._KNOWN_BIOS[JP_SHA256] is SmsFirmwareRegion.JAPAN
     assert sms_firmware._KNOWN_BIOS[EXPORT_SHA256] is SmsFirmwareRegion.EXPORT_US_EU
-    assert len(sms_firmware._KNOWN_BIOS) == 2
+    assert sms_firmware._KNOWN_BIOS[EUROPE_V2_SHA256] is SmsFirmwareRegion.EUROPE
+    assert len(sms_firmware._KNOWN_BIOS) == 3
+
+
+def test_europe_v2_bios_is_preferred_for_europe_only(tmp_path):
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    europe_payload = b"E" * SMS_BIOS_SIZE
+    export_payload = b"U" * SMS_BIOS_SIZE
+    (tmp_path / "Europe-v2.0.sms").write_bytes(europe_payload)
+    (tmp_path / "USA-Europe-v1.3.sms").write_bytes(export_payload)
+
+    digests = {b"E": EUROPE_V2_SHA256, b"U": EXPORT_SHA256}
+    with patch("sega_emulator.machine.sms_firmware.hashlib.sha256") as sha256:
+        sha256.side_effect = lambda data: SimpleNamespace(
+            hexdigest=lambda: digests[data[:1]]
+        )
+        assert load_sms_bios(tmp_path, "europe") == europe_payload
+        assert load_sms_bios(tmp_path, "usa") == export_payload
+        assert load_sms_bios(tmp_path, "brazil") == export_payload
 
 
 def test_duplicate_recognized_hashes_are_not_reported_as_conflicts(tmp_path):
@@ -128,6 +152,12 @@ def test_load_sms_bios_returns_none_when_only_incompatible_region_exists(tmp_pat
     (tmp_path / "japan.bin").write_bytes(b"J" * SMS_BIOS_SIZE)
     with patch("sega_emulator.machine.sms_firmware.hashlib.sha256") as sha256:
         sha256.return_value.hexdigest.return_value = JP_SHA256
+        assert load_sms_bios(tmp_path, "usa") is None
+
+    (tmp_path / "japan.bin").unlink()
+    (tmp_path / "europe-v2.0.sms").write_bytes(b"E" * SMS_BIOS_SIZE)
+    with patch("sega_emulator.machine.sms_firmware.hashlib.sha256") as sha256:
+        sha256.return_value.hexdigest.return_value = EUROPE_V2_SHA256
         assert load_sms_bios(tmp_path, "usa") is None
 
 
@@ -188,6 +218,12 @@ def test_dat_fallback_selects_export_bios_for_exact_usa_europe_match(tmp_path):
     assert sms_bios_region_from_catalog(payload, RomCatalog(tmp_path)) == "usa"
 
 
+def test_dat_fallback_selects_europe_bios_for_europe_only_match(tmp_path):
+    payload = b"synthetic-europe-only-rom"
+    _write_sms_dat(tmp_path, payload, ("EUR",))
+    assert sms_bios_region_from_catalog(payload, RomCatalog(tmp_path)) == "europe"
+
+
 def test_dat_fallback_selects_export_bios_for_brazil_europe_release(tmp_path):
     payload = b"synthetic-brazil-europe-rom"
     _write_sms_dat(tmp_path, payload, ("BRA", "EUR"))
@@ -197,7 +233,7 @@ def test_dat_fallback_selects_export_bios_for_brazil_europe_release(tmp_path):
 def test_dat_fallback_selects_export_bios_for_brazil_only_release(tmp_path):
     payload = b"synthetic-brazil-rom"
     _write_sms_dat(tmp_path, payload, ("BRA",))
-    assert sms_bios_region_from_catalog(payload, RomCatalog(tmp_path)) == "usa"
+    assert sms_bios_region_from_catalog(payload, RomCatalog(tmp_path)) == "brazil"
 
 
 def test_dat_fallback_refuses_japan_and_brazil_mixed_releases(tmp_path):
@@ -247,6 +283,15 @@ def test_automatic_bios_resolver_keeps_header_when_dat_has_no_match(tmp_path):
     rom = _rom_with_sms_header(0x4)
 
     assert sms_bios_region_for_rom(rom, RomCatalog(tmp_path)) == "usa"
+
+
+def test_automatic_bios_resolver_refines_export_header_to_europe_for_europe_only_dat(
+    tmp_path,
+):
+    rom = _rom_with_sms_header(0x4)
+    _write_sms_dat(tmp_path, rom, ("EUR",))
+
+    assert sms_bios_region_for_rom(rom, RomCatalog(tmp_path)) == "europe"
 
 
 def test_dat_fallback_refuses_mixed_japan_and_export_releases(tmp_path):
@@ -334,7 +379,7 @@ def test_firmware_scanner_does_not_accept_an_ordinary_game_as_bios(tmp_path):
     assert game.status is SmsFirmwareFileStatus.NOT_FOUND
 
 
-def test_firmware_scanner_accepts_export_bios_from_dat_and_loads_it(tmp_path):
+def test_firmware_scanner_accepts_europe_v2_bios_from_dat_and_loads_it(tmp_path):
     payload = b"E" * SMS_BIOS_SIZE
     (tmp_path / "export.bin").write_bytes(payload)
     _write_bios_dat(
@@ -345,6 +390,10 @@ def test_firmware_scanner_accepts_export_bios_from_dat_and_loads_it(tmp_path):
     )
     catalog = RomCatalog(tmp_path)
 
+    result = scan_sms_firmware_directory(tmp_path, catalog=catalog)
+    firmware = next(item for item in result.files if item.path.name == "export.bin")
+    assert firmware.region is SmsFirmwareRegion.EUROPE
+    assert firmware.status is SmsFirmwareFileStatus.VALID_EUROPE
     assert load_sms_bios(tmp_path, "europe", catalog=catalog) == payload
 
 
@@ -368,3 +417,58 @@ def test_firmware_scanner_rejects_unverified_prototype_bios_from_dat(tmp_path):
 
     assert prototype.region is None
     assert prototype.status is SmsFirmwareFileStatus.NOT_FOUND
+
+
+def test_disabled_bios_boot_bypasses_firmware_scanning(monkeypatch, tmp_path):
+    import sega_emulator.machine.sms_firmware as firmware
+
+    def unexpected_scan(*args, **kwargs):
+        raise AssertionError("disabled BIOS boot must not scan firmware")
+
+    monkeypatch.setattr(firmware, "scan_sms_firmware_directory", unexpected_scan)
+    assert load_sms_bios_for_boot(False, tmp_path, "usa") is None
+
+
+def test_enabled_bios_boot_loads_selected_region(tmp_path):
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    (tmp_path / "usa-v1.3.sms").write_bytes(b"U" * SMS_BIOS_SIZE)
+    with patch("sega_emulator.machine.sms_firmware.hashlib.sha256") as sha256:
+        sha256.return_value = SimpleNamespace(hexdigest=lambda: EXPORT_SHA256)
+        assert load_sms_bios_for_boot(True, tmp_path, "usa") == b"U" * SMS_BIOS_SIZE
+
+
+def test_bios_boot_requires_boolean_flag():
+    import pytest
+
+    with pytest.raises(TypeError, match="enabled"):
+        load_sms_bios_for_boot("false", None, "usa")
+
+
+def test_europe_bios_falls_back_to_shared_export_when_v2_is_absent(tmp_path):
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    export_payload = b"U" * SMS_BIOS_SIZE
+    (tmp_path / "USA-Europe-v1.3.sms").write_bytes(export_payload)
+
+    with patch("sega_emulator.machine.sms_firmware.hashlib.sha256") as sha256:
+        sha256.return_value = SimpleNamespace(hexdigest=lambda: EXPORT_SHA256)
+        assert load_sms_bios(tmp_path, "europe") == export_payload
+
+
+def test_unresolved_territory_bypasses_firmware_scanning(monkeypatch, tmp_path):
+    import sega_emulator.machine.sms_firmware as firmware
+
+    def unexpected_scan(*args, **kwargs):
+        raise AssertionError("unresolved territory must not scan firmware")
+
+    monkeypatch.setattr(firmware, "scan_sms_firmware_directory", unexpected_scan)
+    assert load_sms_bios_for_boot(True, tmp_path, None) is None
+
+
+def test_enabled_bios_boot_keeps_direct_cartridge_boot_when_bios_is_missing(
+    tmp_path,
+):
+    assert load_sms_bios_for_boot(True, tmp_path, "usa") is None

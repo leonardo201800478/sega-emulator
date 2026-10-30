@@ -37,6 +37,18 @@ Important consequence: the current runtime applies the Sega mapper path even to 
 
 This baseline is specific to the audited SHA. Re-check the source files after the BIOS feature branch is integrated; BIOS overlay and the memory-control latch must compose with cartridge selection without creating a second memory owner.
 
+## 2A. Candidate implementation in PR #295 (not merged)
+
+The current PR branch adds an initial Codemasters implementation in `native/sms_core/src/memory.rs`:
+
+- Detects the narrow `$7FE0` Codemasters metadata signature (bank count, BCD build timestamp, checksum/complement and reserved bytes), together with the `TMR SEGA` signature.
+- Initializes three 16 KiB windows to banks `0, 1, 0`.
+- Decodes writes throughout the three windows at `$0000-$3FFF`, `$4000-$7FFF` and `$8000-$BFFF`; the first 1 KiB is not fixed.
+- Keeps mapper writes inactive while the cartridge is disabled by the SMS memory-control latch.
+- Adds synthetic bank-pattern tests for all three slots and invalid metadata.
+
+This is a scoped initial mapper implementation, **not** completion of Phase 1. Cartridge RAM behavior (including the optional Codemasters RAM profile), a general CRC/profile database, and tests with Cosmic Spacehead and the other Codemasters releases remain pending. The branch also adds a local 27-case BIOS/game runner, but real-game execution and visual review have not yet been completed. Do not mark gameplay compatibility as validated from synthetic tests alone.
+
 ## 3. Target architecture
 
 Keep the cartridge model in the Rust runtime. Python/Qt may identify files, store preferences and expose a mapper override, but must not implement bank switching or become a second hardware runtime.
@@ -88,9 +100,13 @@ Acceptance requirements:
 
 ### Phase 1 — Codemasters
 
-Implement the three bank registers at `$0000`, `$4000` and `$8000`, including their documented address mirrors, initial banks `0,1,0`, and the absence of Sega-style RAM readback. The first 1 KiB is not fixed under this mapper.
+The core banking path is present on the unmerged PR #295 candidate. Complete the remaining requirements:
 
-Support the optional 8 KiB RAM behavior only for a confirmed cartridge profile: the high bit written to `$4000` enables RAM at `$A000-$BFFF`, while the lower half of slot 2 remains ROM. Do not enable RAM for every Codemasters title.
+- Confirm the `$7FE0` signature detector against independent Codemasters ROM headers and reject false positives.
+- Validate address mirrors and all three 16 KiB slots against an independent reference.
+- Implement optional 8 KiB RAM only for a confirmed cartridge profile: the high bit written to `$4000` enables RAM at `$A000-$BFFF`, while the lower half of slot 2 remains ROM. Do not enable RAM for every Codemasters title.
+- Execute Cosmic Spacehead on the native SMS runtime, verify its 224-line video mode and inspect the framebuffer after boot.
+- Add further SMS releases only after obtaining a reproducible legal test target.
 
 Initial SMS regression set: Cosmic Spacehead, CJ Elephant Fugitive, Fantastic Dizzy and Micro Machines. Keep Game Gear and prototype entries out of the SMS acceptance set.
 

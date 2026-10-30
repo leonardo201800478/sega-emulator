@@ -29,6 +29,7 @@ def test_defaults_are_valid_and_stable() -> None:
     assert preferences.video_scale == 3
     assert preferences.recent_roms == ()
     assert preferences.firmware_directory == ""
+    assert preferences.sms_bios_boot_enabled is True
     assert preferences.audio_enabled is True
     assert preferences.diagnostics_enabled is False
     assert preferences.audio_sample_rate == 48_000
@@ -69,6 +70,7 @@ def test_load_recovers_from_corrupt_or_legacy_values() -> None:
             "video_scale": 5,
             "recent_roms": [" game.sg ", "", "game.sg", None],
             "firmware_directory": "  C:/Emulator/BIOS  ",
+            "sms_bios_boot_enabled": "off",
             "audio_enabled": "off",
             "audio_sample_rate": 96000,
             "audio_buffer_size": 300,
@@ -93,6 +95,7 @@ def test_load_recovers_from_corrupt_or_legacy_values() -> None:
     assert preferences.video_scale == 3
     assert preferences.recent_roms == ("game.sg",)
     assert preferences.firmware_directory == "C:/Emulator/BIOS"
+    assert preferences.sms_bios_boot_enabled is False
     assert preferences.audio_enabled is False
     assert preferences.audio_sample_rate == 48_000
     assert preferences.audio_buffer_size == 512
@@ -117,6 +120,7 @@ def test_save_and_load_round_trip() -> None:
         recent_roms=("one.sg", "two.zip"),
         controller_config='{"players": {}}',
         firmware_directory="D:/SMS-Firmware",
+        sms_bios_boot_enabled=False,
         audio_enabled=False,
         diagnostics_enabled=False,
         audio_sample_rate=48_000,
@@ -193,3 +197,23 @@ def test_legacy_python_runtime_preference_is_migrated_to_rust() -> None:
 def test_python_runtime_cannot_be_selected_in_preferences() -> None:
     with pytest.raises(ValueError, match="Rust-only"):
         FrontendPreferences(cpu_core="python")
+
+
+@pytest.mark.parametrize("value", [None, "invalid", [], 2])
+def test_invalid_saved_sms_bios_boot_preference_defaults_to_enabled(value) -> None:
+    settings = MemorySettings({"sms_bios_boot_enabled": value})
+
+    preferences = FrontendPreferences.from_store(settings)
+
+    assert preferences.sms_bios_boot_enabled is True
+
+
+def test_recent_rom_update_preserves_disabled_sms_bios_boot_preference() -> None:
+    preferences = FrontendPreferences(
+        recent_roms=("old.sms",),
+        sms_bios_boot_enabled=False,
+    )
+
+    updated = preferences.with_recent_rom("new.sms")
+
+    assert updated.sms_bios_boot_enabled is False

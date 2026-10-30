@@ -123,6 +123,15 @@ def test_sms_python_adapter_drains_pcm_without_changing_tstates() -> None:
     assert machine.total_tstates == before
 
 
+def test_sms_adapter_routes_console_pause_to_z80_nmi() -> None:
+    machine = SMSMachine(bytes([0x31, 0xF0, 0xDF, 0x00]))
+    machine.step()
+    machine.request_nmi()
+
+    assert machine.step() == 11
+    assert machine.cpu.pc == 0x0066
+
+
 def test_sms_frame_runner_exposes_native_framebuffer_and_controller() -> None:
     machine = NativeSMSMachine(bytes([0x00]) * 16, region="usa")
     assert machine.frame_number == 0

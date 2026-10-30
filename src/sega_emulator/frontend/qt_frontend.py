@@ -24,14 +24,17 @@ from sega_emulator.frontend.native_first_controller_input import (
     NativeFirstControllerInput,
 )
 from sega_emulator.frontend.qt.audio_output import PcmResampler
-from sega_emulator.frontend.qt.focus_pause import FocusPauseController
+from sega_emulator.frontend.qt.focus_pause import (
+    EmulationPauseController,
+    FocusPauseController,
+)
 from sega_emulator.frontend.qt.frame_pacer import FramePacer
 from sega_emulator.frontend.qt.preferences import FrontendPreferences
 from sega_emulator.frontend.qt.wasapi_audio import NativeAudioOutput
 from sega_emulator.machine.sg1000 import SG1000Machine
 from sega_emulator.machine.sms import SMSMachine, load_sms_rom
 from sega_emulator.machine.sms_firmware import (
-    load_sms_bios,
+    load_sms_bios_for_boot,
     sms_bios_region_for_rom,
 )
 from sega_emulator.machine.sms_region import (
@@ -199,9 +202,10 @@ def run(initial_path: Path | None = None) -> None:
     sms_rom_catalog = RomCatalog()
 
     def create_sms_machine(rom_data: bytes, region: str) -> SMSMachine:
-        # Manual territory wins. Automatic mode resolves the header and exact
-        # DAT identity together; Korean/Taiwan variants and contradictory
-        # metadata deliberately remain without an automatically selected BIOS.
+        # Manual territory wins. Automatic BIOS selection refines an Export
+        # header with exact DAT evidence; Europe-only releases may select the
+        # distinct v2.0 image, while contradictory/Korean/Taiwan metadata is
+        # deliberately prevented from selecting a BIOS automatically.
         if region_preference != "auto":
             bios_region = region_preference
             bios_region_source = "manual"
@@ -212,14 +216,11 @@ def run(initial_path: Path | None = None) -> None:
                 if bios_region is not None
                 else "unresolved_or_conflicting_metadata"
             )
-        bios = (
-            load_sms_bios(
-                preferences.firmware_directory,
-                bios_region,
-                catalog=sms_rom_catalog,
-            )
-            if bios_region is not None
-            else None
+        bios = load_sms_bios_for_boot(
+            preferences.sms_bios_boot_enabled,
+            preferences.firmware_directory,
+            bios_region,
+            catalog=sms_rom_catalog,
         )
         if bios is not None:
             logger.info(
@@ -229,6 +230,15 @@ def run(initial_path: Path | None = None) -> None:
                     "region": bios_region,
                     "region_source": bios_region_source,
                     "sha256": hashlib.sha256(bios).hexdigest(),
+                },
+            )
+        elif not preferences.sms_bios_boot_enabled:
+            logger.info(
+                "Boot por BIOS SMS desativado nas configurações; usando boot direto",
+                extra={
+                    "event": "sms_bios_boot_disabled",
+                    "region": bios_region,
+                    "region_source": bios_region_source,
                 },
             )
         elif preferences.firmware_directory:
@@ -374,7 +384,6 @@ def run(initial_path: Path | None = None) -> None:
     active_system = "sg1000"
     vgm_recorder = VgmRecorder()
     vgm_output_path: Path | None = None
-    paused = False
     frame_count = 0
     pressed_keys: set[int] = set()
     hold_was_pressed = False
@@ -386,6 +395,30 @@ def run(initial_path: Path | None = None) -> None:
     active_sms_region = "usa"
     timer.setTimerType(Qt.TimerType.PreciseTimer)
     timer.setInterval(1)
+
+    def stop_emulation_timer() -> None:
+        timer.stop()
+        frame_pacer.reset()
+
+    def resume_emulation_timer() -> None:
+        frame_pacer.reset()
+        timer.start()
+
+    def pause_state_changed(is_paused: bool) -> None:
+        window.set_pause_state(is_paused, enabled=machine is not None)
+        status.showMessage("Emulação pausada" if is_paused else "Emulação em execução")
+        logger.info(
+            "Estado de pausa alterado",
+            extra={"event": "pause_changed", "paused": is_paused},
+        )
+
+    pause_controller = EmulationPauseController(
+        can_pause=lambda: machine is not None,
+        pause=stop_emulation_timer,
+        resume=resume_emulation_timer,
+        on_change=pause_state_changed,
+    )
+    window.set_pause_state(False, enabled=False)
 
     def build_key_map() -> dict[int, tuple[int, str]]:
         result: dict[int, tuple[int, str]] = {}
@@ -428,8 +461,8 @@ def run(initial_path: Path | None = None) -> None:
                     joystick_value(actions[player].intersection(JOYSTICK_ACTIONS)),
                 )
         hold_pressed = any("hold" in actions[player] for player in (1, 2))
-        if active_system == "sg1000" and hold_pressed and not hold_was_pressed:
-            # The SG-1000 Hold switch is an edge-triggered NMI, not a joystick bit.
+        if hold_pressed and not hold_was_pressed:
+            # SG-1000 Hold and SMS Pause are edge-triggered NMI inputs.
             machine.request_nmi()
         hold_was_pressed = hold_pressed
 
@@ -489,13 +522,12 @@ def run(initial_path: Path | None = None) -> None:
     def show_frame() -> None:
         nonlocal \
             audio_output, \
-            paused, \
             frame_count, \
             last_checkpoint_time, \
             last_checkpoint_tstates
         nonlocal last_checkpoint_instructions, last_checkpoint_frame
         nonlocal machine, frame_pacer, active_sms_region
-        if machine is None or paused:
+        if machine is None or pause_controller.paused:
             return
         if not frame_pacer.should_run(time.perf_counter()):
             return
@@ -504,7 +536,7 @@ def run(initial_path: Path | None = None) -> None:
             phase_started = frame_started
             update_joystick()
             if controller_input.consume_disconnect_event():
-                paused = True
+                pause_controller.set_paused(True)
                 status.showMessage("Emulação pausada: controle desconectado", 5000)
                 logger.warning(
                     "Emulação pausada após desconexão de controle",
@@ -652,6 +684,7 @@ def run(initial_path: Path | None = None) -> None:
                     "pc": machine.cpu.pc if machine else None,
                 },
             )
+            pause_controller.set_paused(True)
             timer.stop()
             QMessageBox.critical(
                 window,
@@ -673,7 +706,7 @@ def run(initial_path: Path | None = None) -> None:
         refresh_recent_rom_menu()
 
     def open_rom(path: str | None = None, system: str | None = None) -> None:
-        nonlocal machine, loaded, frame_count, paused, active_system
+        nonlocal machine, loaded, frame_count, active_system
         nonlocal frame_pacer, sms_region_attempts
         nonlocal active_sms_region
         nonlocal last_checkpoint_time, last_checkpoint_tstates
@@ -765,7 +798,9 @@ def run(initial_path: Path | None = None) -> None:
 
         if vgm_recorder.active and not stop_vgm_recording():
             return
-        machine, loaded, frame_count, paused = loaded_machine, candidate, 0, False
+        machine, loaded, frame_count = loaded_machine, candidate, 0
+        pause_controller.set_paused(False)
+        window.set_pause_state(False, enabled=True)
         active_system = requested_system
         window.set_active_system(active_system)
         audio_resampler.reset()
@@ -986,6 +1021,9 @@ def run(initial_path: Path | None = None) -> None:
         firmware_directory_changed = (
             updated.firmware_directory != preferences.firmware_directory
         )
+        firmware_boot_changed = (
+            updated.sms_bios_boot_enabled != preferences.sms_bios_boot_enabled
+        )
         if (
             updated.sprite_limit_enabled != preferences.sprite_limit_enabled
             and machine is not None
@@ -1041,20 +1079,31 @@ def run(initial_path: Path | None = None) -> None:
         audio_warning = _audio_output_warning(
             preferences, audio_output, selected_audio_driver
         )
-        settings_message = (
-            "Pasta de BIOS SMS atualizada; aplique no próximo reset ou carregamento."
-            if firmware_directory_changed and active_system == "master_system"
-            else "Configurações de áudio e vídeo aplicadas."
-        )
+        if firmware_boot_changed:
+            settings_message = (
+                "Boot por BIOS SMS atualizado; recarregue a ROM do Master System "
+                "para aplicar a alteração."
+            )
+        elif firmware_directory_changed and active_system == "master_system":
+            settings_message = (
+                "Pasta de BIOS SMS atualizada; recarregue a ROM para aplicar."
+            )
+        else:
+            settings_message = "Configurações de áudio e vídeo aplicadas."
         status.showMessage(
             audio_warning or settings_message,
-            8000 if audio_warning is not None or firmware_directory_changed else 5000,
+            8000
+            if audio_warning is not None
+            or firmware_directory_changed
+            or firmware_boot_changed
+            else 5000,
         )
         logger.info(
             "Configurações de áudio e vídeo atualizadas",
             extra={
                 "event": "audio_video_settings_updated",
                 "audio_enabled": preferences.audio_enabled,
+                "sms_bios_boot_enabled": preferences.sms_bios_boot_enabled,
                 "audio_driver": selected_audio_driver,
                 "audio_sample_rate": preferences.audio_sample_rate,
                 "audio_buffer_size": preferences.audio_buffer_size,
@@ -1149,22 +1198,16 @@ def run(initial_path: Path | None = None) -> None:
         return True
 
     def pause_resume() -> None:
-        nonlocal paused
-        paused = not paused
-        status.showMessage("Pausado" if paused else "Emulação em execução")
-        logger.info(
-            "Estado de pausa alterado",
-            extra={"event": "pause_changed", "paused": paused},
-        )
+        """Toggle the loaded machine's actual host execution timer."""
+        pause_controller.toggle()
 
     def pause_for_focus_loss() -> bool:
         """Pause only a running session; preserve a pause requested by the user."""
-        nonlocal paused
-        if machine is None or paused:
+        if machine is None or pause_controller.paused:
             return False
-        paused = True
-        timer.stop()
-        frame_pacer.reset()
+        changed = pause_controller.set_paused(True)
+        if not changed:
+            return False
         status.showMessage("Emulação pausada: janela perdeu o foco")
         logger.info(
             "Emulação pausada porque a aplicação perdeu o foco",
@@ -1174,12 +1217,10 @@ def run(initial_path: Path | None = None) -> None:
 
     def resume_after_focus_gain() -> None:
         """Resume only a session that this focus controller paused."""
-        nonlocal paused
-        if machine is None or not paused:
+        if machine is None or not pause_controller.paused:
             return
-        paused = False
-        frame_pacer.reset()
-        timer.start()
+        if not pause_controller.set_paused(False):
+            return
         status.showMessage("Emulação retomada: janela recebeu o foco")
         logger.info(
             "Emulação retomada após recuperar o foco",
@@ -1197,7 +1238,7 @@ def run(initial_path: Path | None = None) -> None:
     )
 
     def reset_machine() -> None:
-        nonlocal machine, frame_count, paused, frame_pacer
+        nonlocal machine, frame_count, frame_pacer
         nonlocal sms_region_attempts, active_sms_region
         nonlocal last_checkpoint_time, last_checkpoint_tstates
         nonlocal last_checkpoint_instructions, last_checkpoint_frame
@@ -1230,7 +1271,9 @@ def run(initial_path: Path | None = None) -> None:
             machine = SG1000Machine(loaded.data)
             frame_pacer = FramePacer(FRAME_PERIOD_SECONDS)
         audio_resampler.reset()
-        frame_count, paused = 0, False
+        frame_count = 0
+        pause_controller.set_paused(False)
+        window.set_pause_state(False, enabled=True)
         frame_pacer.reset()
         pressed_keys.clear()
         update_joystick()
