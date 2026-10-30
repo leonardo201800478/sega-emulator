@@ -17,8 +17,7 @@ def test_native_sms_instruction_trace_is_bounded_and_emits_jsonl():
     assert machine.step() == 4
 
     records = [
-        json.loads(line)
-        for line in machine.drain_instruction_trace_json().splitlines()
+        json.loads(line) for line in machine.drain_instruction_trace_json().splitlines()
     ]
     assert len(records) == 2
     assert records[0]["instruction_index"] == 1
