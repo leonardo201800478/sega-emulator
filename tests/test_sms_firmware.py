@@ -9,8 +9,11 @@ from sega_emulator.machine.sms_firmware import (
     SmsFirmwareRegion,
     load_sms_bios,
     scan_sms_firmware_directory,
+    sms_bios_region_for_rom,
     sms_bios_region_from_cartridge,
+    sms_bios_region_from_catalog,
 )
+from sega_emulator.rom_catalog import RomCatalog
 
 JP_SHA256 = "67846e26764bd862f19179294347f7353a4166b62ac4198a5ec32933b7da486e"
 EXPORT_SHA256 = "477617917a12a30f9f43844909dc2de6e6a617430f5c9a36306c86414a670d50"
@@ -116,6 +119,7 @@ def test_load_sms_bios_selects_only_the_active_territory_and_revalidates(tmp_pat
         assert load_sms_bios(tmp_path, "japan") == b"J" * SMS_BIOS_SIZE
         assert load_sms_bios(tmp_path, "usa") == b"E" * SMS_BIOS_SIZE
         assert load_sms_bios(tmp_path, "europe") == b"E" * SMS_BIOS_SIZE
+        assert load_sms_bios(tmp_path, "brazil") == b"E" * SMS_BIOS_SIZE
 
 
 def test_load_sms_bios_returns_none_when_only_incompatible_region_exists(tmp_path):
@@ -151,3 +155,216 @@ def test_cartridge_header_locations_are_checked_from_largest_to_smallest():
     rom[0x1FF0:0x1FF8] = b"TMR SEGA"
     rom[0x1FFF] = 0x3C
     assert sms_bios_region_from_cartridge(bytes(rom)) == "japan"
+
+
+def _write_sms_dat(directory, payload, regions, *, game_name="Fixture"):
+    import hashlib
+    import zlib
+
+    releases = "".join(
+        f'<release name="Fixture" region="{region}"/>' for region in regions
+    )
+    (directory / "sms.dat").write_text(
+        f'''<datafile><header><name>Sega - Master System - Mark III</name></header>
+        <game name="{game_name}">{releases}
+        <rom name="fixture.sms" size="{len(payload)}"
+             crc="{zlib.crc32(payload) & 0xFFFFFFFF:08x}"
+             md5="{hashlib.md5(payload).hexdigest()}"
+             sha1="{hashlib.sha1(payload).hexdigest()}" status="verified"/>
+        </game></datafile>''',
+        encoding="utf-8",
+    )
+
+
+def test_dat_fallback_selects_japan_bios_for_exact_japan_only_match(tmp_path):
+    payload = b"synthetic-japan-rom"
+    _write_sms_dat(tmp_path, payload, ("JPN",))
+    assert sms_bios_region_from_catalog(payload, RomCatalog(tmp_path)) == "japan"
+
+
+def test_dat_fallback_selects_export_bios_for_exact_usa_europe_match(tmp_path):
+    payload = b"synthetic-export-rom"
+    _write_sms_dat(tmp_path, payload, ("USA", "EUR"))
+    assert sms_bios_region_from_catalog(payload, RomCatalog(tmp_path)) == "usa"
+
+
+def test_dat_fallback_selects_export_bios_for_brazil_europe_release(tmp_path):
+    payload = b"synthetic-brazil-europe-rom"
+    _write_sms_dat(tmp_path, payload, ("BRA", "EUR"))
+    assert sms_bios_region_from_catalog(payload, RomCatalog(tmp_path)) == "usa"
+
+
+def test_dat_fallback_selects_export_bios_for_brazil_only_release(tmp_path):
+    payload = b"synthetic-brazil-rom"
+    _write_sms_dat(tmp_path, payload, ("BRA",))
+    assert sms_bios_region_from_catalog(payload, RomCatalog(tmp_path)) == "usa"
+
+
+def test_dat_fallback_refuses_japan_and_brazil_mixed_releases(tmp_path):
+    payload = b"synthetic-japan-brazil-rom"
+    _write_sms_dat(tmp_path, payload, ("JPN", "BRA"))
+    assert sms_bios_region_from_catalog(payload, RomCatalog(tmp_path)) is None
+
+
+def _rom_with_sms_header(region_code: int) -> bytes:
+    rom = bytearray(0x8000)
+    rom[0x7FF0:0x7FF8] = b"TMR SEGA"
+    rom[0x7FFF] = (region_code << 4) | 0x0C
+    return bytes(rom)
+
+
+def test_automatic_bios_resolver_confirms_export_header_with_brazil_europe_dat(
+    tmp_path,
+):
+    rom = _rom_with_sms_header(0x4)
+    _write_sms_dat(tmp_path, rom, ("BRA", "EUR"))
+
+    assert sms_bios_region_for_rom(rom, RomCatalog(tmp_path)) == "usa"
+
+
+def test_automatic_bios_resolver_rejects_export_header_for_korean_release(tmp_path):
+    rom = _rom_with_sms_header(0x4)
+    _write_sms_dat(tmp_path, rom, ("KOR",))
+
+    assert sms_bios_region_for_rom(rom, RomCatalog(tmp_path)) is None
+
+
+def test_automatic_bios_resolver_rejects_export_header_for_japan_dat(tmp_path):
+    rom = _rom_with_sms_header(0x4)
+    _write_sms_dat(tmp_path, rom, ("JPN",))
+
+    assert sms_bios_region_for_rom(rom, RomCatalog(tmp_path)) is None
+
+
+def test_automatic_bios_resolver_rejects_japan_header_for_brazil_dat(tmp_path):
+    rom = _rom_with_sms_header(0x3)
+    _write_sms_dat(tmp_path, rom, ("BRA",))
+
+    assert sms_bios_region_for_rom(rom, RomCatalog(tmp_path)) is None
+
+
+def test_automatic_bios_resolver_keeps_header_when_dat_has_no_match(tmp_path):
+    rom = _rom_with_sms_header(0x4)
+
+    assert sms_bios_region_for_rom(rom, RomCatalog(tmp_path)) == "usa"
+
+
+def test_dat_fallback_refuses_mixed_japan_and_export_releases(tmp_path):
+    payload = b"synthetic-mixed-region-rom"
+    _write_sms_dat(tmp_path, payload, ("JPN", "USA"))
+    assert sms_bios_region_from_catalog(payload, RomCatalog(tmp_path)) is None
+
+
+def test_dat_fallback_refuses_regions_without_known_bios_mapping(tmp_path):
+    payload = b"synthetic-korea-rom"
+    _write_sms_dat(tmp_path, payload, ("KOR",))
+    assert sms_bios_region_from_catalog(payload, RomCatalog(tmp_path)) is None
+
+
+def test_dat_fallback_does_not_identify_uncatalogued_rom(tmp_path):
+    _write_sms_dat(tmp_path, b"known", ("USA",))
+    assert sms_bios_region_from_catalog(b"unknown", RomCatalog(tmp_path)) is None
+
+
+def test_dat_fallback_refuses_crc32_only_identity(tmp_path):
+    import zlib
+
+    payload = b"crc-only-sms-rom"
+    (tmp_path / "sms.dat").write_text(
+        f'''<datafile><header><name>Sega - Master System - Mark III</name></header>
+        <game name="CRC only"><release region="USA"/>
+        <rom name="fixture.sms" size="{len(payload)}"
+             crc="{zlib.crc32(payload) & 0xFFFFFFFF:08x}"/>
+        </game></datafile>''',
+        encoding="utf-8",
+    )
+    assert sms_bios_region_from_catalog(payload, RomCatalog(tmp_path)) is None
+
+
+def _write_bios_dat(directory, payload, game_name, regions):
+    import hashlib
+    import zlib
+
+    releases = "".join(
+        f'<release name="Firmware" region="{region}"/>' for region in regions
+    )
+    (directory / "bios.dat").write_text(
+        f'''<datafile><header><name>Sega - Master System - Mark III</name></header>
+        <game name="{game_name}">{releases}
+        <rom name="firmware.sms" size="{len(payload)}"
+             crc="{zlib.crc32(payload) & 0xFFFFFFFF:08x}"
+             md5="{hashlib.md5(payload).hexdigest()}"
+             sha1="{hashlib.sha1(payload).hexdigest()}" status="verified"/>
+        </game></datafile>''',
+        encoding="utf-8",
+    )
+
+
+def test_firmware_scanner_accepts_verified_sms_bios_from_dat(tmp_path):
+    payload = b"J" * SMS_BIOS_SIZE
+    (tmp_path / "firmware.bin").write_bytes(payload)
+    _write_bios_dat(
+        tmp_path,
+        payload,
+        "[BIOS] Sega Master System (Japan) (v2.1)",
+        ("JPN",),
+    )
+
+    result = scan_sms_firmware_directory(tmp_path, catalog=RomCatalog(tmp_path))
+
+    firmware = next(item for item in result.files if item.path.name == "firmware.bin")
+    assert firmware.region is SmsFirmwareRegion.JAPAN
+    assert firmware.status is SmsFirmwareFileStatus.VALID_JAPAN
+
+
+def test_firmware_scanner_does_not_accept_an_ordinary_game_as_bios(tmp_path):
+    payload = b"G" * SMS_BIOS_SIZE
+    (tmp_path / "game.bin").write_bytes(payload)
+    _write_bios_dat(
+        tmp_path,
+        payload,
+        "Example Game (Japan)",
+        ("JPN",),
+    )
+
+    result = scan_sms_firmware_directory(tmp_path, catalog=RomCatalog(tmp_path))
+
+    game = next(item for item in result.files if item.path.name == "game.bin")
+    assert game.region is None
+    assert game.status is SmsFirmwareFileStatus.NOT_FOUND
+
+
+def test_firmware_scanner_accepts_export_bios_from_dat_and_loads_it(tmp_path):
+    payload = b"E" * SMS_BIOS_SIZE
+    (tmp_path / "export.bin").write_bytes(payload)
+    _write_bios_dat(
+        tmp_path,
+        payload,
+        "[BIOS] Sega Master System (Europe) (v2.0)",
+        ("EUR",),
+    )
+    catalog = RomCatalog(tmp_path)
+
+    assert load_sms_bios(tmp_path, "europe", catalog=catalog) == payload
+
+
+def test_firmware_scanner_rejects_unverified_prototype_bios_from_dat(tmp_path):
+    payload = b"P" * SMS_BIOS_SIZE
+    (tmp_path / "prototype.bin").write_bytes(payload)
+    _write_bios_dat(
+        tmp_path,
+        payload,
+        "[BIOS] Sega Master System (USA) (Proto)",
+        ("USA",),
+    )
+    dat_path = tmp_path / "bios.dat"
+    dat_path.write_text(
+        dat_path.read_text(encoding="utf-8").replace(' status="verified"', ""),
+        encoding="utf-8",
+    )
+
+    result = scan_sms_firmware_directory(tmp_path, catalog=RomCatalog(tmp_path))
+    prototype = next(item for item in result.files if item.path.name == "prototype.bin")
+
+    assert prototype.region is None
+    assert prototype.status is SmsFirmwareFileStatus.NOT_FOUND
