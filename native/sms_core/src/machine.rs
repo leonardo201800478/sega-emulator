@@ -123,7 +123,10 @@ impl CpuBus for SmsMachineBus<'_> {
     }
 
     fn write_port(&mut self, port: u16, value: u8) {
-        if port as u8 == 0x3E {
+        let port = port as u8;
+        if port <= 0x3F && port & 1 == 0 {
+            // A0 selects the memory-control latch throughout $00-$3F;
+            // the upper address bits are not decoded by the SMS.
             self.memory.write_control_port(value);
         } else if matches!((port as u8) & 0xC1, 0x80 | 0x81) {
             self.vdp.write_port(port, value);
