@@ -75,9 +75,9 @@ A pesquisa do catálogo descreve a identificação por conteúdo e os arquivos c
 
 - Separar **território do console**, **padrão de vídeo PAL/NTSC** e **região/identidade da BIOS**; não assumir que esses campos são equivalentes.
 - Definir uma política explícita de preferência: região manual do usuário tem prioridade; no modo automático, resolver a região usando os metadados confiáveis disponíveis do cartucho e do sistema, e registrar a decisão.
-- Para território japonês, preferir BIOS JP quando instalada; para território export, preferir BIOS US/EU compartilhada.
+- Para Japan, preferir BIOS JP; para Europe, preferir a imagem Europe v2.0 e usar USA/Europe v1.3 como fallback; para USA/Brazil, usar a imagem compartilhada v1.3.
 - Se não houver correspondência, respeitar a política de boot sem BIOS e mostrar estado “não instalada”; não escolher uma BIOS incompatível silenciosamente.
-- Para modo automático, ler o nibble alto de `$7FFF` em um cabeçalho `TMR SEGA` localizado em `$7FF0`, `$3FF0` ou `$1FF0`: código 3 seleciona BIOS JP e código 4 seleciona BIOS de exportação US/EU.
+- Para modo automático, ler o nibble alto de `$7FFF` em um cabeçalho `TMR SEGA` localizado em `$7FF0`, `$3FF0` ou `$1FF0`: código 3 identifica Japan e código 4 identifica Export. Um DAT exato e unânime pode refinar Export para Europe e selecionar a v2.0; sem essa evidência, usar a BIOS compartilhada v1.3.
 - Se o cabeçalho estiver ausente ou tiver código desconhecido, não inferir uma BIOS; preservar boot direto sem firmware. A preferência regional manual tem precedência.
 - Quando mais de um arquivo tiver o mesmo hash conhecido, manter a primeira ocorrência determinística selecionável e marcar as demais como `DUPLICATE_HASH`.
 - Os códigos do cabeçalho identificam território (Japan/Export), não PAL/NTSC. O padrão de vídeo continua sendo uma escolha separada.
@@ -174,7 +174,7 @@ substituem a preferência de vídeo do console.
 
 ### Fatia 1 — catálogo e scanner Python
 
-- **IMPLEMENTED:** assinaturas SHA-256 para BIOS JP v2.1, USA/Europe v1.3 e Europe v2.0; as duas imagens de exportação são distintas, mas selecionáveis pela mesma família regional.
+- **IMPLEMENTED:** assinaturas SHA-256 para BIOS JP v2.1, USA/Europe v1.3 e Europe v2.0; v1.3 é compartilhada entre USA/Europe, enquanto v2.0 mantém identidade Europe específica.
 - **IMPLEMENTED:** varredura explícita, nomes arbitrários, tamanho exato de 8 KiB e rejeição por tamanho antes da leitura integral.
 - **IMPLEMENTED:** seleção por território e revalidação do arquivo (tamanho + SHA-256) imediatamente antes do carregamento.
 - **IMPLEMENTED:** duplicatas determinísticas; primeira ocorrência selecionável e cópias adicionais marcadas como `DUPLICATE_HASH`.
