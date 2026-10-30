@@ -346,6 +346,16 @@ class SettingsDialog(QDialog):
         firmware_path_layout.addWidget(self.firmware_directory, 1)
         firmware_path_layout.addWidget(browse_firmware)
         firmware_form.addRow("Pasta de BIOS:", firmware_path_row)
+        self.sms_bios_boot_enabled = QCheckBox(
+            "Inicializar o Master System pela BIOS quando houver uma versão compatível"
+        )
+        self.sms_bios_boot_enabled.setChecked(preferences.sms_bios_boot_enabled)
+        self.sms_bios_boot_enabled.setToolTip(
+            "Ativado: carrega a BIOS regional antes de entregar o controle ao cartucho. "
+            "Desativado: ignora a BIOS e inicia diretamente pelo cartucho. "
+            "A alteração vale no próximo carregamento ou reinício do jogo."
+        )
+        firmware_form.addRow(self.sms_bios_boot_enabled)
         scan_firmware = QPushButton("Verificar BIOS agora", firmware_group)
         scan_firmware.clicked.connect(self._scan_firmware_directory)
         self.firmware_scan_status = QLabel("Nenhuma varredura realizada.")
@@ -355,8 +365,9 @@ class SettingsDialog(QDialog):
         firmware_note = QLabel(
             "A BIOS é opcional e deve ser obtida e instalada pelo usuário. "
             "O emulador identifica os arquivos por SHA-256, aceita nomes "
-            "arbitrários e não baixa nem distribui firmware. A varredura ocorre "
-            "somente quando solicitada aqui ou ao carregar uma ROM do Master System."
+            "arbitrários e não baixa nem distribui firmware. A opção acima controla "
+            "se a BIOS será usada no próximo boot; a verificação manual continua "
+            "disponível mesmo quando o boot por BIOS está desativado."
         )
         firmware_note.setWordWrap(True)
         firmware_form.addRow(firmware_note)
@@ -436,6 +447,7 @@ class SettingsDialog(QDialog):
     def _restore_defaults(self) -> None:
         defaults = FrontendPreferences()
         self.firmware_directory.clear()
+        self.sms_bios_boot_enabled.setChecked(defaults.sms_bios_boot_enabled)
         self.sample_rate.setCurrentIndex(
             self.sample_rate.findData(defaults.audio_sample_rate)
         )
@@ -475,6 +487,7 @@ class SettingsDialog(QDialog):
             recent_roms=old.recent_roms,
             controller_config=old.controller_config,
             firmware_directory=self.firmware_directory.text().strip(),
+            sms_bios_boot_enabled=self.sms_bios_boot_enabled.isChecked(),
             audio_enabled=self._audio_backend != "disabled",
             diagnostics_enabled=old.diagnostics_enabled,
             cpu_core=old.cpu_core,
