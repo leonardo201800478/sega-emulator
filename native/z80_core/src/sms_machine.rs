@@ -206,6 +206,11 @@ impl NativeSMSMachine {
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
+    /// Request the physical SMS console Pause NMI (not host-side pause).
+    fn request_console_pause(&mut self) {
+        self.machine.request_console_pause();
+    }
+
     fn drain_audio_samples(&mut self, max_samples: Option<usize>) -> Vec<f64> {
         self.machine.drain_audio_samples(max_samples)
     }
