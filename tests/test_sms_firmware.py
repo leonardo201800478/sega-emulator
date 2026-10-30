@@ -305,4 +305,3 @@ def test_firmware_scanner_rejects_unverified_prototype_bios_from_dat(tmp_path):
 
     assert prototype.region is None
     assert prototype.status is SmsFirmwareFileStatus.NOT_FOUND
-
