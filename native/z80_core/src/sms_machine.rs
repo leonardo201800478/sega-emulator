@@ -282,13 +282,8 @@ mod tests {
 
     #[test]
     fn console_pause_is_exposed_as_a_z80_non_maskable_interrupt() {
-        let mut machine = NativeSMSMachine::new(
-            vec![0x31, 0xF0, 0xDF, 0x00],
-            false,
-            Some("usa"),
-            None,
-        )
-        .unwrap();
+        let mut machine =
+            NativeSMSMachine::new(vec![0x31, 0xF0, 0xDF, 0x00], false, Some("usa"), None).unwrap();
         machine.step().unwrap();
         machine.request_nmi();
         assert_eq!(machine.step().unwrap(), 11);
