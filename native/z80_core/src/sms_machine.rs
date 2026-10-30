@@ -278,7 +278,7 @@ mod tests {
     #[test]
     fn brazil_region_selects_export_territory_with_pal_m_timing() {
         let machine = build_sms_machine(vec![0; 16], false, Some("brazil"), None).unwrap();
-        assert_eq!(machine.psg_clock_hz(), 3_579_545);
+        assert_eq!(machine.vdp().system_clock_hz(), 3_579_545);
         assert_eq!(machine.vdp().video_standard(), VideoStandard::PalM);
         assert_eq!(machine.vdp().total_lines(), 262);
     }
