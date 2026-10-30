@@ -42,7 +42,7 @@ impl SmsMemory {
     }
 
     /// Construct memory with an optional user-supplied 8 KiB SMS BIOS.
-    /// Only the first 1 KiB is overlaid at $0000-$03FF while BIOS is enabled.
+    /// The complete BIOS image is mapped at $0000-$1FFF while enabled.
     pub fn with_bios(rom: CartridgeImage, bios: Option<Vec<u8>>) -> Result<Self, SmsCoreError> {
         if rom.len() > MAX_ROM_SIZE {
             return Err(SmsCoreError::RomTooLargeForSegaMapper {
@@ -78,7 +78,7 @@ impl SmsMemory {
 
     #[inline]
     pub fn read(&self, address: u16) -> u8 {
-        if address <= 0x03FF && self.bios.is_some() && self.control_port & 0x08 == 0 {
+        if address <= 0x1FFF && self.bios.is_some() && self.control_port & 0x08 == 0 {
             return self
                 .bios
                 .as_ref()
@@ -318,18 +318,22 @@ mod tests {
     }
 
     #[test]
-    fn bios_overlays_only_the_first_kib_and_can_be_disabled() {
+    fn bios_maps_all_eight_kib_and_can_be_disabled() {
         let rom = patterned_rom(2);
         let mut bios = vec![0xA5; 0x2000];
         bios[0x03FF] = 0x5A;
+        bios[0x0400] = 0x6B;
+        bios[0x1FFF] = 0x7C;
         let mut memory = SmsMemory::with_bios(rom, Some(bios)).unwrap();
         assert!(memory.bios_enabled());
         assert_eq!(memory.read(0x0000), 0xA5);
         assert_eq!(memory.read(0x03FF), 0x5A);
+        assert_eq!(memory.read(0x0400), 0x6B);
+        assert_eq!(memory.read(0x1FFF), 0x7C);
         assert_eq!(
-            memory.read(0x0400),
+            memory.read(0x2000),
             0xFF,
-            "cartridge slot is disabled in the BIOS power-on profile"
+            "disabled cartridge slot remains unmapped outside the 8 KiB BIOS"
         );
         memory.write_control_port(0x08);
         assert!(!memory.bios_enabled());
@@ -343,7 +347,7 @@ mod tests {
         assert_eq!(memory.control_port(), 0xF3);
         assert!(memory.bios_enabled());
         assert_eq!(memory.read(0x0000), 0xA5);
-        assert_eq!(memory.read(0x0400), 0xFF);
+        assert_eq!(memory.read(0x0400), 0xA5);
         assert_eq!(memory.read(0xC000), 0xFF);
     }
 
@@ -360,7 +364,11 @@ mod tests {
     fn cartridge_slot_disable_returns_open_bus_without_disabling_work_ram() {
         let mut memory = SmsMemory::with_bios(patterned_rom(1), Some(vec![0xA5; 0x2000])).unwrap();
         memory.write_control_port(0x40);
-        assert_eq!(memory.read(0x0400), 0xFF);
+        assert_eq!(
+            memory.read(0x0400),
+            0xA5,
+            "BIOS remains mapped while its disable bit is clear"
+        );
         assert_eq!(memory.read(0xC000), 0x00);
         assert_eq!(memory.read(0x0000), 0xA5);
     }
