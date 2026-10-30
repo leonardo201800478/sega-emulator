@@ -839,8 +839,8 @@ fn render_scanline(
 #[cfg(test)]
 mod tests {
     use super::{
-        COLLISION, FRAME_SIZE, OVERFLOW, SMS_VDP_WIDTH, SmsVdp, StereoPresentation, TMS_PALETTE,
-        VBLANK, render_legacy_scanline, render_legacy_sprites, render_scanline,
+        COLLISION, FRAME_SIZE, LINE_TSTATES, OVERFLOW, SMS_VDP_WIDTH, SmsVdp, StereoPresentation,
+        TMS_PALETTE, VBLANK, render_legacy_scanline, render_legacy_sprites, render_scanline,
     };
     use crate::config::{SpriteLimitMode, VideoStandard};
     fn reg(v: &mut SmsVdp, i: u8, value: u8) {
@@ -1539,6 +1539,159 @@ mod tests {
         assert_eq!(v.read_v_counter(), 0xD2);
         v.scanline = 312;
         assert_eq!(v.read_v_counter(), 0xFF);
+    }
+
+    fn configure_horizontal_scroll_pattern(v: &mut SmsVdp) {
+        v.registers[0] = 0x04;
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[5] = 0x7E;
+        v.cram[1] = 0x03;
+        for row in 0..8 {
+            v.vram[0x20 + row * 4] = 0xAA;
+        }
+        for row in 0..24 {
+            for col in 0..32 {
+                v.vram[0x3800 + row * 64 + col * 2] = 1;
+                v.vram[0x3800 + row * 64 + col * 2 + 1] = 0;
+            }
+        }
+        v.vram[0x3F00] = 0xD0;
+    }
+
+    #[test]
+    fn horizontal_scroll_changes_between_scanlines_without_rewriting_prior_lines() {
+        let mut v = SmsVdp::default();
+        configure_horizontal_scroll_pattern(&mut v);
+
+        v.advance(228);
+        let first_line = v.working_framebuffer[..SMS_VDP_WIDTH * 3].to_vec();
+
+        reg(&mut v, 8, 1);
+        v.advance(228);
+        let second_line = v.working_framebuffer[SMS_VDP_WIDTH * 3..SMS_VDP_WIDTH * 6].to_vec();
+
+        assert_ne!(
+            first_line, second_line,
+            "R8 change must affect the next rendered line"
+        );
+        assert_eq!(
+            &v.working_framebuffer[..SMS_VDP_WIDTH * 3],
+            &first_line,
+            "a later R8 write must not retroactively rewrite an already-rendered line"
+        );
+        assert_eq!(v.raster_position().line, 2);
+        assert_eq!(v.raster_position().tstates_into_line, 0);
+    }
+
+    #[test]
+    fn horizontal_scroll_and_raster_progress_are_chunking_invariant() {
+        let mut whole_chunks = SmsVdp::default();
+        let mut split_chunks = SmsVdp::default();
+        configure_horizontal_scroll_pattern(&mut whole_chunks);
+        configure_horizontal_scroll_pattern(&mut split_chunks);
+
+        for scroll in [0_u8, 1, 7, 8] {
+            whole_chunks.advance(228);
+            split_chunks.advance(57);
+            split_chunks.advance(171);
+            reg(&mut whole_chunks, 8, scroll);
+            reg(&mut split_chunks, 8, scroll);
+        }
+
+        assert_eq!(
+            whole_chunks.raster_position(),
+            split_chunks.raster_position()
+        );
+        assert_eq!(
+            whole_chunks.working_framebuffer,
+            split_chunks.working_framebuffer
+        );
+        assert_eq!(whole_chunks.registers()[8], split_chunks.registers()[8]);
+    }
+
+    #[test]
+    fn sms_mode4_horizontal_scroll_all_register_values_match_full_width_pixel_oracle() {
+        let mut v = SmsVdp::default();
+        v.registers[0] = 0x04;
+        v.registers[1] = 0x40;
+        v.registers[2] = 0x0E;
+        v.registers[5] = 0x7E;
+        v.cram[1] = 0x03;
+        // Every tile is tile zero; its first bit in each row is set.
+        // This creates a one-pixel vertical stripe every eight source pixels.
+        for row in 0..8 {
+            v.vram[row * 4] = 0x80;
+        }
+        for row in 0..24 {
+            for col in 0..32 {
+                let entry = 0x3800 + row * 64 + col * 2;
+                v.vram[entry] = 0;
+                v.vram[entry + 1] = 0;
+            }
+        }
+        v.vram[0x3F00] = 0xD0;
+
+        for scroll in 0_u16..=255 {
+            v.registers[8] = scroll as u8;
+            v.working_framebuffer.fill(0);
+            let mut status = 0;
+            render_scanline(
+                &v.vram,
+                &v.cram,
+                &v.registers,
+                &mut status,
+                &mut v.working_framebuffer,
+                0,
+                true,
+            );
+
+            let fine_scroll = (scroll & 7) as usize;
+            for x in 0..SMS_VDP_WIDTH {
+                let expected = if x < fine_scroll {
+                    [0, 0, 0]
+                } else if (x - fine_scroll) & 7 == 0 {
+                    [255, 0, 0]
+                } else {
+                    [0, 0, 0]
+                };
+                let offset = x * 3;
+                assert_eq!(
+                    &v.working_framebuffer[offset..offset + 3],
+                    &expected,
+                    "R8={scroll}, screen x={x}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sms_vdp_raster_is_invariant_for_every_single_line_advance_split() {
+        for split in 1_u64..LINE_TSTATES {
+            let mut whole = SmsVdp::default();
+            let mut fragmented = whole.clone();
+            configure_horizontal_scroll_pattern(&mut whole);
+            configure_horizontal_scroll_pattern(&mut fragmented);
+
+            whole.advance(LINE_TSTATES);
+            fragmented.advance(split);
+            fragmented.advance(LINE_TSTATES - split);
+
+            assert_eq!(
+                whole.raster_position(),
+                fragmented.raster_position(),
+                "raster mismatch at split={split}"
+            );
+            assert_eq!(
+                whole.working_framebuffer, fragmented.working_framebuffer,
+                "framebuffer mismatch at split={split}"
+            );
+            assert_eq!(
+                whole.status(),
+                fragmented.status(),
+                "status at split={split}"
+            );
+        }
     }
 
     #[test]
