@@ -77,6 +77,7 @@ class DatRom:
     sha1: str | None
     regions: tuple[str, ...]
     dat_name: str
+    status: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,6 +166,7 @@ def _read_dat(path: Path) -> list[DatRom]:
                     sha1=_normalize_hash(rom.get("sha1")),
                     regions=regions,
                     dat_name=path.name,
+                    status=rom.get("status"),
                 )
             )
     return entries
