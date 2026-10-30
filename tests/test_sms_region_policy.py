@@ -50,9 +50,7 @@ def _write_sms_dat(tmp_path, payload: bytes, title: str, *, strong_hashes=True):
         ("invalid", ("usa",)),
     ],
 )
-def test_region_candidates_follow_manual_or_deterministic_default(
-    preference, expected
-):
+def test_region_candidates_follow_manual_or_deterministic_default(preference, expected):
     assert sms_region_candidates(preference) == expected
 
 
@@ -236,8 +234,8 @@ def test_automatic_candidates_are_single_profile_and_use_catalog(tmp_path):
     rom = b"synthetic brazil rom"
     _write_sms_dat(tmp_path, rom, "Synthetic SMS (Brazil)")
 
-    assert sms_region_candidates_for_rom(
-        "auto", rom, RomCatalog(tmp_path)
-    ) == ("brazil",)
+    assert sms_region_candidates_for_rom("auto", rom, RomCatalog(tmp_path)) == (
+        "brazil",
+    )
     assert sms_region_candidates_for_rom("auto", b"unknown") == ("usa",)
     assert sms_region_candidates_for_rom("europe", _sms_header(0x3)) == ("europe",)
