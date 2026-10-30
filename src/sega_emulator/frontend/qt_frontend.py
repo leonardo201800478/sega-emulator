@@ -24,6 +24,7 @@ from sega_emulator.frontend.native_first_controller_input import (
     NativeFirstControllerInput,
 )
 from sega_emulator.frontend.qt.audio_output import PcmResampler
+from sega_emulator.frontend.qt.focus_pause import FocusPauseController
 from sega_emulator.frontend.qt.frame_pacer import FramePacer
 from sega_emulator.frontend.qt.preferences import FrontendPreferences
 from sega_emulator.frontend.qt.wasapi_audio import NativeAudioOutput
@@ -1114,6 +1115,45 @@ def run(initial_path: Path | None = None) -> None:
             "Estado de pausa alterado",
             extra={"event": "pause_changed", "paused": paused},
         )
+
+    def pause_for_focus_loss() -> bool:
+        """Pause only a running session; preserve a pause requested by the user."""
+        nonlocal paused
+        if machine is None or paused:
+            return False
+        paused = True
+        timer.stop()
+        frame_pacer.reset()
+        status.showMessage("Emulação pausada: janela perdeu o foco")
+        logger.info(
+            "Emulação pausada porque a aplicação perdeu o foco",
+            extra={"event": "application_focus_pause", "paused": True},
+        )
+        return True
+
+    def resume_after_focus_gain() -> None:
+        """Resume only a session that this focus controller paused."""
+        nonlocal paused
+        if machine is None or not paused:
+            return
+        paused = False
+        frame_pacer.reset()
+        timer.start()
+        status.showMessage("Emulação retomada: janela recebeu o foco")
+        logger.info(
+            "Emulação retomada após recuperar o foco",
+            extra={"event": "application_focus_resume", "paused": False},
+        )
+
+    focus_pause = FocusPauseController(
+        pause=pause_for_focus_loss,
+        resume=resume_after_focus_gain,
+    )
+    app.applicationStateChanged.connect(
+        lambda state: focus_pause.application_state_changed(
+            state, Qt.ApplicationState.ApplicationActive
+        )
+    )
 
     def reset_machine() -> None:
         nonlocal machine, frame_count, paused, frame_pacer
