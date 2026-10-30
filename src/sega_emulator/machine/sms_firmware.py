@@ -218,6 +218,7 @@ def sms_bios_region_from_catalog(
     if (
         identification.status != "matched"
         or identification.system != "master_system"
+        or identification.matched_by not in {"sha1", "md5"}
         or not identification.candidates
     ):
         return None
