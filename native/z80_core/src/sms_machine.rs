@@ -17,8 +17,8 @@ pub struct NativeSMSMachine {
 #[pymethods]
 impl NativeSMSMachine {
     #[new]
-    #[pyo3(signature = (rom, pal=false, region=None))]
-    fn new(rom: Vec<u8>, pal: bool, region: Option<&str>) -> PyResult<Self> {
+    #[pyo3(signature = (rom, pal=false, region=None, bios=None))]
+    fn new(rom: Vec<u8>, pal: bool, region: Option<&str>, bios: Option<Vec<u8>>) -> PyResult<Self> {
         // Keep the legacy positional `pal` argument compatible; an explicit
         // region profile takes precedence and also selects territory.
         let region = region.unwrap_or(if pal { "europe" } else { "usa" });
@@ -38,12 +38,17 @@ impl NativeSMSMachine {
             ..SmsMachineConfig::default()
         };
         // The shared native resampler consumes a deterministic 44.1 kHz PSG stream.
-        let machine = SmsMachine::with_audio(rom, config, 44_100)
+        let machine = SmsMachine::with_bios_audio(rom, bios, config, 44_100)
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
         Ok(Self {
             machine,
             total_instructions: 0,
         })
+    }
+
+    #[getter]
+    fn bios_enabled(&self) -> bool {
+        self.machine.memory().bios_enabled()
     }
 
     #[getter]
@@ -217,6 +222,14 @@ mod tests {
 
         let japan_machine = NativeSMSMachine::new(vec![0; 16], false, Some("japan")).unwrap();
         assert_eq!(japan_machine.psg_clock_hz(), 3_579_545);
+    }
+
+    #[test]
+    fn bios_is_forwarded_to_native_memory_and_executes() {
+        let bios = vec![0x3E, 0x08, 0xD3, 0x3E];
+        let machine = NativeSMSMachine::new(vec![0xC3; 0x4000], false, Some("usa"), Some(bios)).unwrap();
+        assert!(machine.bios_enabled());
+        assert_eq!(machine.read_memory(0), 0x3E);
     }
 
     #[test]
