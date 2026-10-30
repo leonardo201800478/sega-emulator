@@ -274,7 +274,9 @@ impl SmsMemory {
 
 #[cfg(test)]
 mod tests {
-    use super::{BANK_SIZE, MAX_ROM_SIZE, RAM_SIZE, SmsMemory};
+    use super::{
+        BANK_SIZE, BIOS_POWER_ON_CONTROL, MAX_ROM_SIZE, MapperKind, RAM_SIZE, SmsMemory,
+    };
     use crate::{CartridgeImage, SmsCoreError};
 
     fn patterned_rom(bank_count: usize) -> CartridgeImage {
