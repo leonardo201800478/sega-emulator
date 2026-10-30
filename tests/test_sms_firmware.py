@@ -11,6 +11,7 @@ from sega_emulator.machine.sms_firmware import (
     scan_sms_firmware_directory,
     sms_bios_region_from_cartridge,
     sms_bios_region_from_catalog,
+    sms_bios_region_for_rom,
 )
 from sega_emulator.rom_catalog import RomCatalog
 
@@ -203,6 +204,49 @@ def test_dat_fallback_refuses_japan_and_brazil_mixed_releases(tmp_path):
     payload = b"synthetic-japan-brazil-rom"
     _write_sms_dat(tmp_path, payload, ("JPN", "BRA"))
     assert sms_bios_region_from_catalog(payload, RomCatalog(tmp_path)) is None
+
+
+def _rom_with_sms_header(region_code: int) -> bytes:
+    rom = bytearray(0x8000)
+    rom[0x7FF0:0x7FF8] = b"TMR SEGA"
+    rom[0x7FFF] = (region_code << 4) | 0x0C
+    return bytes(rom)
+
+
+def test_automatic_bios_resolver_confirms_export_header_with_brazil_europe_dat(
+    tmp_path,
+):
+    rom = _rom_with_sms_header(0x4)
+    _write_sms_dat(tmp_path, rom, ("BRA", "EUR"))
+
+    assert sms_bios_region_for_rom(rom, RomCatalog(tmp_path)) == "usa"
+
+
+def test_automatic_bios_resolver_rejects_export_header_for_korean_release(tmp_path):
+    rom = _rom_with_sms_header(0x4)
+    _write_sms_dat(tmp_path, rom, ("KOR",))
+
+    assert sms_bios_region_for_rom(rom, RomCatalog(tmp_path)) is None
+
+
+def test_automatic_bios_resolver_rejects_export_header_for_japan_dat(tmp_path):
+    rom = _rom_with_sms_header(0x4)
+    _write_sms_dat(tmp_path, rom, ("JPN",))
+
+    assert sms_bios_region_for_rom(rom, RomCatalog(tmp_path)) is None
+
+
+def test_automatic_bios_resolver_rejects_japan_header_for_brazil_dat(tmp_path):
+    rom = _rom_with_sms_header(0x3)
+    _write_sms_dat(tmp_path, rom, ("BRA",))
+
+    assert sms_bios_region_for_rom(rom, RomCatalog(tmp_path)) is None
+
+
+def test_automatic_bios_resolver_keeps_header_when_dat_has_no_match(tmp_path):
+    rom = _rom_with_sms_header(0x4)
+
+    assert sms_bios_region_for_rom(rom, RomCatalog(tmp_path)) == "usa"
 
 
 def test_dat_fallback_refuses_mixed_japan_and_export_releases(tmp_path):
