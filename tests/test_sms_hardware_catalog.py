@@ -14,6 +14,7 @@ from sega_emulator.machine.sms_hardware_catalog import (
     PeripheralState,
     SmsFmMetadata,
     SmsHardwareCatalog,
+    SmsHardwareIdentification,
     SmsHardwareMatchStatus,
     SmsHardwareMetadata,
     SmsHardwareRecord,
@@ -263,3 +264,33 @@ def test_metadata_snapshot_rejects_mutable_peripheral_collections() -> None:
 
     with pytest.raises(TypeError, match="peripherals must be a tuple"):
         SmsHardwareMetadata(peripherals=[joypad])
+
+
+def test_lookup_result_rejects_inconsistent_match_contracts() -> None:
+    payload = b"result invariant"
+    record = _record(payload)
+    metadata = record.metadata
+
+    with pytest.raises(ValueError, match="one record, metadata and match type"):
+        SmsHardwareIdentification(
+            status=SmsHardwareMatchStatus.MATCHED,
+            metadata=metadata,
+            matched_by=None,
+            candidates=(record,),
+        )
+
+    with pytest.raises(ValueError, match="multiple candidates and no winner"):
+        SmsHardwareIdentification(
+            status=SmsHardwareMatchStatus.AMBIGUOUS,
+            metadata=metadata,
+            matched_by="sha1",
+            candidates=(record,),
+        )
+
+    with pytest.raises(ValueError, match="cannot contain a match"):
+        SmsHardwareIdentification(
+            status=SmsHardwareMatchStatus.NOT_CATALOGUED,
+            metadata=None,
+            matched_by="sha1",
+            candidates=(),
+        )
