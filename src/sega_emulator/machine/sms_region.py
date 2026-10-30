@@ -86,17 +86,13 @@ def _catalog_video_profile(
     for candidate in identification.candidates:
         if candidate.system != "master_system" or not candidate.regions:
             return None, regions, True, False
-        profiles = {
-            _VIDEO_PROFILE_BY_RELEASE_REGION[region]
-            for region in candidate.regions
-            if region in _VIDEO_PROFILE_BY_RELEASE_REGION
-        }
-        if len(profiles) != 1 or len(profiles) != len(
-            {
-                _VIDEO_PROFILE_BY_RELEASE_REGION.get(region)
-                for region in candidate.regions
-            }
-        ):
+        profiles: set[str] = set()
+        for release_region in candidate.regions:
+            profile = _VIDEO_PROFILE_BY_RELEASE_REGION.get(release_region)
+            if profile is None:
+                return None, regions, True, False
+            profiles.add(profile)
+        if len(profiles) != 1:
             return None, regions, True, False
         candidate_profiles.update(profiles)
 
