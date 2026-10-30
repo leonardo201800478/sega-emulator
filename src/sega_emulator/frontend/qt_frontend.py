@@ -36,7 +36,6 @@ from sega_emulator.machine.sms_firmware import (
 from sega_emulator.machine.sms_region import (
     normalize_sms_region_preference,
     sms_frame_period_seconds,
-    sms_region_candidates,
     sms_region_candidates_for_rom,
 )
 from sega_emulator.rom_loader import LoadedRom, list_rom_members, load_rom
