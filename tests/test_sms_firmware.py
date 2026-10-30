@@ -76,9 +76,13 @@ def test_known_hashes_classify_japan_and_export_revisions(tmp_path):
     by_name = {item.path.name: item for item in result.files}
     assert by_name["japan.sms"].region is SmsFirmwareRegion.JAPAN
     assert by_name["japan.sms"].status is SmsFirmwareFileStatus.VALID_JAPAN
-    for filename in ("usa-v1.3.sms", "europe-v2.0.sms"):
-        assert by_name[filename].region is SmsFirmwareRegion.EXPORT_US_EU
-        assert by_name[filename].status is SmsFirmwareFileStatus.VALID_EXPORT_US_EU
+    assert by_name["usa-v1.3.sms"].region is SmsFirmwareRegion.EXPORT_US_EU
+    assert (
+        by_name["usa-v1.3.sms"].status
+        is SmsFirmwareFileStatus.VALID_EXPORT_US_EU
+    )
+    assert by_name["europe-v2.0.sms"].region is SmsFirmwareRegion.EUROPE
+    assert by_name["europe-v2.0.sms"].status is SmsFirmwareFileStatus.VALID_EUROPE
 
 
 def test_known_bios_signatures_map_to_their_compatible_families():
@@ -88,22 +92,28 @@ def test_known_bios_signatures_map_to_their_compatible_families():
     assert sms_firmware._KNOWN_BIOS[EXPORT_SHA256] is SmsFirmwareRegion.EXPORT_US_EU
     assert (
         sms_firmware._KNOWN_BIOS[EUROPE_V2_SHA256]
-        is SmsFirmwareRegion.EXPORT_US_EU
+        is SmsFirmwareRegion.EUROPE
     )
     assert len(sms_firmware._KNOWN_BIOS) == 3
 
 
-def test_europe_v2_bios_sms_file_is_selected_for_europe(tmp_path):
+def test_europe_v2_bios_is_preferred_for_europe_only(tmp_path):
     from types import SimpleNamespace
     from unittest.mock import patch
 
-    payload = b"E" * SMS_BIOS_SIZE
-    (tmp_path / "Europe-v2.0.sms").write_bytes(payload)
+    europe_payload = b"E" * SMS_BIOS_SIZE
+    export_payload = b"U" * SMS_BIOS_SIZE
+    (tmp_path / "Europe-v2.0.sms").write_bytes(europe_payload)
+    (tmp_path / "USA-Europe-v1.3.sms").write_bytes(export_payload)
+
+    digests = {b"E": EUROPE_V2_SHA256, b"U": EXPORT_SHA256}
     with patch("sega_emulator.machine.sms_firmware.hashlib.sha256") as sha256:
-        sha256.return_value = SimpleNamespace(
-            hexdigest=lambda: EUROPE_V2_SHA256
+        sha256.side_effect = lambda data: SimpleNamespace(
+            hexdigest=lambda: digests[data[:1]]
         )
-        assert load_sms_bios(tmp_path, "europe") == payload
+        assert load_sms_bios(tmp_path, "europe") == europe_payload
+        assert load_sms_bios(tmp_path, "usa") == export_payload
+        assert load_sms_bios(tmp_path, "brazil") == export_payload
 
 
 def test_duplicate_recognized_hashes_are_not_reported_as_conflicts(tmp_path):
@@ -207,6 +217,12 @@ def test_dat_fallback_selects_export_bios_for_exact_usa_europe_match(tmp_path):
     assert sms_bios_region_from_catalog(payload, RomCatalog(tmp_path)) == "usa"
 
 
+def test_dat_fallback_selects_europe_bios_for_europe_only_match(tmp_path):
+    payload = b"synthetic-europe-only-rom"
+    _write_sms_dat(tmp_path, payload, ("EUR",))
+    assert sms_bios_region_from_catalog(payload, RomCatalog(tmp_path)) == "europe"
+
+
 def test_dat_fallback_selects_export_bios_for_brazil_europe_release(tmp_path):
     payload = b"synthetic-brazil-europe-rom"
     _write_sms_dat(tmp_path, payload, ("BRA", "EUR"))
@@ -266,6 +282,15 @@ def test_automatic_bios_resolver_keeps_header_when_dat_has_no_match(tmp_path):
     rom = _rom_with_sms_header(0x4)
 
     assert sms_bios_region_for_rom(rom, RomCatalog(tmp_path)) == "usa"
+
+
+def test_automatic_bios_resolver_refines_export_header_to_europe_for_europe_only_dat(
+    tmp_path,
+):
+    rom = _rom_with_sms_header(0x4)
+    _write_sms_dat(tmp_path, rom, ("EUR",))
+
+    assert sms_bios_region_for_rom(rom, RomCatalog(tmp_path)) == "europe"
 
 
 def test_dat_fallback_refuses_mixed_japan_and_export_releases(tmp_path):
@@ -364,6 +389,10 @@ def test_firmware_scanner_accepts_export_bios_from_dat_and_loads_it(tmp_path):
     )
     catalog = RomCatalog(tmp_path)
 
+    result = scan_sms_firmware_directory(tmp_path, catalog=catalog)
+    firmware = next(item for item in result.files if item.path.name == "export.bin")
+    assert firmware.region is SmsFirmwareRegion.EUROPE
+    assert firmware.status is SmsFirmwareFileStatus.VALID_EUROPE
     assert load_sms_bios(tmp_path, "europe", catalog=catalog) == payload
 
 
