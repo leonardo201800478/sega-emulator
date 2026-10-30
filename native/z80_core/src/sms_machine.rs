@@ -144,14 +144,20 @@ impl NativeSMSMachine {
     }
 
     /// Enable bounded architectural tracing for the next SMS CPU instructions.
-    #[pyo3(signature = (max_instructions=256))]
-    fn enable_instruction_trace(&mut self, max_instructions: usize) -> PyResult<usize> {
+    #[pyo3(signature = (max_instructions=256, start_after_instructions=0))]
+    fn enable_instruction_trace(
+        &mut self,
+        max_instructions: usize,
+        start_after_instructions: u64,
+    ) -> PyResult<usize> {
         if max_instructions == 0 {
             return Err(pyo3::exceptions::PyValueError::new_err(
                 "max_instructions deve ser positivo",
             ));
         }
-        Ok(self.machine.enable_instruction_trace(max_instructions))
+        Ok(self
+            .machine
+            .enable_instruction_trace_after(max_instructions, start_after_instructions))
     }
 
     /// Drain captured instruction traces as JSON Lines. Records include executed ROM bytes.
