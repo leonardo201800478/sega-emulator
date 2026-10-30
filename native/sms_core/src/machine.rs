@@ -624,11 +624,12 @@ mod tests {
     #[test]
     fn bios_boot_trace_captures_fetch_bytes_and_stops_at_the_requested_limit() {
         // BIOS loads A=$08 and disables its own overlay through memory-control port $3E.
-        let bios = [0x3E, 0x08, 0xD3, 0x3E];
+        let mut bios = vec![0x00; 0x2000];
+        bios[..4].copy_from_slice(&[0x3E, 0x08, 0xD3, 0x3E]);
         let cartridge = vec![0x76; 0x4000];
         let mut machine = SmsMachine::with_bios(
             cartridge,
-            Some(bios.to_vec()),
+            Some(bios),
             SmsMachineConfig::default(),
         )
         .unwrap();
