@@ -195,7 +195,7 @@ def run(initial_path: Path | None = None) -> None:
     settings.setValue("sms_region_preference", region_preference)
     sms_rom_catalog = RomCatalog()
 
-    def create_sms_machine(rom_data: bytes, region: str) -> SMSMachine:
+    def create_sms_machine(region: str) -> SMSMachine:
         # The caller has already resolved manual preference, TMR SEGA header
         # and exact DAT identity into this concrete territory/video profile.
         # Reusing it preserves Europe-specific BIOS selection instead of
@@ -738,7 +738,7 @@ def run(initial_path: Path | None = None) -> None:
                         "catalog_error": resolution.catalog_error,
                     },
                 )
-                loaded_machine = create_sms_machine(candidate.data, active_sms_region)
+                loaded_machine = create_sms_machine(active_sms_region)
                 frame_pacer = FramePacer(sms_frame_period_seconds(active_sms_region))
             else:
                 sms_region_attempts = ("usa",)
@@ -1216,7 +1216,7 @@ def run(initial_path: Path | None = None) -> None:
                     "catalog_error": resolution.catalog_error,
                 },
             )
-            machine = create_sms_machine(loaded.data, active_sms_region)
+            machine = create_sms_machine(active_sms_region)
             frame_pacer = FramePacer(sms_frame_period_seconds(active_sms_region))
         else:
             machine = SG1000Machine(loaded.data)
