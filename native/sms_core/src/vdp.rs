@@ -130,7 +130,7 @@ impl SmsVdp {
     pub fn system_clock_hz(&self) -> u64 {
         match self.video_standard {
             VideoStandard::Pal => 3_546_895,
-            VideoStandard::Ntsc | VideoStandard::Unknown => 3_579_545,
+            VideoStandard::Ntsc | VideoStandard::PalM | VideoStandard::Unknown => 3_579_545,
         }
     }
     pub fn total_lines(&self) -> u16 {
@@ -311,10 +311,14 @@ impl SmsVdp {
     pub fn read_v_counter(&self) -> u8 {
         let line = self.scanline;
         match (self.video_standard, self.visible_height()) {
-            (VideoStandard::Ntsc | VideoStandard::Unknown, 192) if line >= 219 => {
+            (VideoStandard::Ntsc | VideoStandard::PalM | VideoStandard::Unknown, 192)
+                if line >= 219 =>
+            {
                 0xD5_u8.wrapping_add((line - 219) as u8)
             }
-            (VideoStandard::Ntsc | VideoStandard::Unknown, 224) if line >= 235 => {
+            (VideoStandard::Ntsc | VideoStandard::PalM | VideoStandard::Unknown, 224)
+                if line >= 235 =>
+            {
                 0xE5_u8.wrapping_add((line - 235) as u8)
             }
             (VideoStandard::Pal, 192) if line >= 243 => 0xBA_u8.wrapping_add((line - 243) as u8),
@@ -890,8 +894,10 @@ mod tests {
     #[test]
     fn regional_clocks_and_raster_lengths_are_distinct() {
         let n = SmsVdp::new(VideoStandard::Ntsc, SpriteLimitMode::HardwareLimit);
+        let pm = SmsVdp::new(VideoStandard::PalM, SpriteLimitMode::HardwareLimit);
         let p = SmsVdp::new(VideoStandard::Pal, SpriteLimitMode::HardwareLimit);
         assert_eq!((n.total_lines(), n.system_clock_hz()), (262, 3_579_545));
+        assert_eq!((pm.total_lines(), pm.system_clock_hz()), (262, 3_579_545));
         assert_eq!((p.total_lines(), p.system_clock_hz()), (313, 3_546_895));
     }
     #[test]
@@ -1540,6 +1546,15 @@ mod tests {
         let mut v = SmsVdp::new(VideoStandard::Unknown, SpriteLimitMode::HardwareLimit);
         v.scanline = 219;
         assert_eq!(v.read_v_counter(), 0xD5);
+    }
+
+    #[test]
+    fn pal_m_uses_ntsc_like_vertical_counter_profile() {
+        let mut v = SmsVdp::new(VideoStandard::PalM, SpriteLimitMode::HardwareLimit);
+        v.scanline = 219;
+        assert_eq!(v.read_v_counter(), 0xD5);
+        assert_eq!(v.total_lines(), 262);
+        assert_eq!(v.system_clock_hz(), 3_579_545);
     }
 
     #[test]
