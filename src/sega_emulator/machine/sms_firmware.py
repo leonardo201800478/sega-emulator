@@ -292,6 +292,52 @@ def sms_bios_region_from_catalog(
     return None
 
 
+def sms_bios_region_for_rom(
+    rom: bytes,
+    catalog: RomCatalog,
+) -> str | None:
+    """Resolve an automatic BIOS family from header and exact DAT evidence.
+
+    A recognized TMR SEGA header is the primary source. An exact SHA-1/MD5
+    DAT match may confirm it, refine the generic Export group, or expose a
+    conflict. Korean and Taiwan releases are deliberately not collapsed into
+    the Japanese or US/EU BIOS families because their console variants need
+    separate hardware profiles. DAT failures do not prevent header-based boot.
+    """
+    if not isinstance(rom, bytes):
+        raise TypeError("rom deve ser bytes.")
+
+    header_family = sms_bios_region_from_cartridge(rom)
+    try:
+        identification = catalog.identify_bytes(rom, suffix=".sms")
+    except ValueError:
+        return header_family
+
+    if (
+        identification.status != "matched"
+        or identification.system != "master_system"
+        or identification.matched_by not in {"sha1", "md5"}
+    ):
+        return header_family
+
+    regions = set(identification.regions)
+    if regions & {"KOR", "TAI"}:
+        return None
+
+    export_regions = {"USA", "EUR", "BRA", "AUS"}
+    if header_family == "japan":
+        if regions & export_regions:
+            return None
+        return header_family
+
+    if header_family == "usa":
+        if "JPN" in regions:
+            return None
+        return header_family
+
+    return sms_bios_region_from_catalog(rom, catalog)
+
+
 def load_sms_bios(
     directory: str | Path | None,
     region: str,
