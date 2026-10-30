@@ -32,7 +32,7 @@ A documentação técnica do SMS Power descreve a BIOS v2.0 incomum como uma var
 
 ### Controle de boot por BIOS
 
-A aba **BIOS SMS** oferece a opção persistente `sms_bios_boot_enabled`. O padrão é ativado para preservar o comportamento anterior. Desativada, a inicialização ignora o carregamento e a varredura automática de firmware e usa o boot direto pelo cartucho; a varredura manual pelo botão continua disponível para diagnóstico. A mudança é aplicada no próximo carregamento ou reinício do jogo, não altera uma máquina que já está em execução.
+A aba **BIOS SMS** oferece a opção persistente `sms_bios_boot_enabled`. O padrão é ativado para preservar o comportamento anterior. Desativada, a inicialização ignora o carregamento e a varredura automática de firmware e usa o boot direto pelo cartucho; a varredura manual pelo botão continua disponível para diagnóstico. A mudança é aplicada no próximo carregamento de uma ROM SMS; para aplicá-la ao jogo atual, é necessário fechar e carregar a ROM novamente. Não altera uma máquina que já está em execução.
 
 ## Referência: abordagem do ares
 
