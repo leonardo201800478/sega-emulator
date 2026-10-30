@@ -406,7 +406,8 @@ mod tests {
         assert_eq!(machine.read_memory(0x0400), 0xFF);
         assert_eq!(machine.read_memory(0xC000), 0xFF);
 
-        for _ in 0..10 {
+        // LDIR is modeled as one repeated transfer per CPU step.
+        for _ in 0..16 {
             machine.step().unwrap();
         }
 
