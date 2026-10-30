@@ -33,39 +33,6 @@
 
 ---
 
-## [0.2.0-dev.1] - 2026-10-30 — pré-release experimental
-
-> **Não é release estável.** Esta versão serve para validar o novo fluxo de versionamento e registrar o estado integrado do SMS. Não habilita mappers especiais ainda não implementados.
-
-### Incluído no baseline
-
-- BIOS SMS opcional de 8 KiB mapeada integralmente em `$0000-$1FFF`, com controle pelo latch de memória.
-- Identificação de firmware SMS combinando cabeçalho `TMR SEGA` e identidade exata via DAT, com recusa conservadora de conflitos, ambiguidades e hashes fracos para seleção de BIOS.
-- DATs No-Intro instalados junto ao pacote e resolvidos tanto no checkout quanto na distribuição.
-- Resolução regional determinística e perfil Brazil/PAL-M, mantendo território de BIOS separado do padrão de vídeo.
-- Integração das configurações SMS entre Rust, PyO3, Python e Qt.
-
-### Versionamento
-
-- Introduz `VERSION` como versão canônica do projeto.
-- Sincroniza metadados Python/PEP 440, extensão Maturin e crates Rust/Cargo.lock.
-- Adiciona verificador automatizado de consistência de versões e política de rollback.
-
-### Limitações explicitamente mantidas
-
-- Mapper Sega padrão: SRAM de cartucho e persistência de saves ainda não implementadas.
-- Mapper Codemasters e famílias coreanas/MSX/Nemesis/Janggun ainda não implementadas.
-- A investigação do mapper de 128 Hap permanece inconclusiva; não há correção específica declarada.
-- Não declarar boot/gameplay geral, LONG_PASS ou TEMPORAL_PASS sem evidência independente no emulador.
-
-### Validação desta pré-release
-
-- Baseline: `41c32007ae961b78b3d8fa6c604af9f01159ffad`.
-- Checks desta alteração: aguardando execução no SHA candidato da PR.
-- Gameplay manual no Windows: não executado nesta alteração.
-
----
-
 ## Estado SMS — 2026-10-29
 - Publica fotografia técnica do SMS na base `b4a85c82b1d975a126f1dcbd3084dac51249b398`, após integração do runtime nativo Rust à aplicação Qt/PySide6.
 - Registra separadamente os subsistemas implementados e as lacunas de Z80, VDP raster, scheduler temporal, FM/YM2413 e validação Windows.
