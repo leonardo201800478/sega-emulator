@@ -99,8 +99,7 @@ def _safe_stem(value: str) -> str:
 def _frame_metrics(framebuffer: bytes) -> dict[str, int | str]:
     """Summarize framebuffer activity without embedding image bytes in the report."""
     colors = {
-        framebuffer[index : index + 3]
-        for index in range(0, len(framebuffer) - 2, 3)
+        framebuffer[index : index + 3] for index in range(0, len(framebuffer) - 2, 3)
     }
     non_black = sum(
         1
@@ -163,9 +162,7 @@ def _run_case(
 
     framebuffer = bytes(machine.vdp.framebuffer)
     visible_height = int(machine.vdp.visible_height)
-    capture_name = (
-        f"{_safe_stem(rom_name)}__{bios_name or 'direct'}__{region}.ppm"
-    )
+    capture_name = f"{_safe_stem(rom_name)}__{bios_name or 'direct'}__{region}.ppm"
     capture_path = capture_dir / capture_name
     _write_ppm(capture_path, framebuffer, visible_height)
 
@@ -218,15 +215,10 @@ def main() -> int:
         help="Path to one .sms/.rom/.bin file or ZIP containing exactly one ROM; repeat per game.",
     )
     parser.add_argument(
-        "--bios-dir",
-        required=True,
-        help="Directory containing the three BIOS files.",
+        "--bios-dir", required=True, help="Directory containing the three BIOS files."
     )
     parser.add_argument(
-        "--frames",
-        type=int,
-        default=240,
-        help="Maximum frames per combination.",
+        "--frames", type=int, default=240, help="Maximum frames per combination."
     )
     parser.add_argument(
         "--post-handoff-frames",
@@ -369,11 +361,7 @@ def main() -> int:
     print(f"PPM captures: {capture_dir.resolve()}")
     print("ROM/BIOS bytes were not copied to the report or repository.")
 
-    return (
-        0
-        if all(result["execution_error"] is None for result in results)
-        else 1
-    )
+    return 0 if all(result["execution_error"] is None for result in results) else 1
 
 
 if __name__ == "__main__":
