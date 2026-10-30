@@ -294,3 +294,28 @@ def test_lookup_result_rejects_inconsistent_match_contracts() -> None:
             matched_by="sha1",
             candidates=(),
         )
+
+
+def test_exact_hash_with_wrong_rom_size_is_not_a_match() -> None:
+    payload = b"size is part of identity"
+    record = SmsHardwareRecord(
+        record_id="wrong-size",
+        rom_size=len(payload) + 1,
+        sha1=hashlib.sha1(payload).hexdigest(),
+        metadata=SmsHardwareMetadata(),
+    )
+
+    result = SmsHardwareCatalog((record,)).identify_bytes(payload)
+
+    assert result.status is SmsHardwareMatchStatus.NOT_CATALOGUED
+
+
+def test_known_field_rejects_blank_source_revision() -> None:
+    with pytest.raises(ValueError, match="source_revision cannot be empty"):
+        FieldEvidence(
+            value="codemasters",
+            source=MetadataSource.CURATED_HARDWARE_DB,
+            confidence=MetadataConfidence.CONFIRMED,
+            source_reference="sms-power:test",
+            source_revision=" ",
+        )
