@@ -355,7 +355,7 @@ class SettingsDialog(QDialog):
             "A BIOS é opcional e deve ser obtida e instalada pelo usuário. "
             "O emulador identifica os arquivos por SHA-256, aceita nomes "
             "arbitrários e não baixa nem distribui firmware. A varredura ocorre "
-            "somente ao carregar uma ROM do Master System."
+            "somente quando solicitada aqui ou ao carregar uma ROM do Master System."
         )
         firmware_note.setWordWrap(True)
         firmware_form.addRow(firmware_note)
@@ -388,7 +388,7 @@ class SettingsDialog(QDialog):
             lines.append(
                 f"{item.path.name}: {item.status.value}; {region}; {digest}"
             )
-        self.firmware_scan_status.setText("\\n".join(lines))
+        self.firmware_scan_status.setText("\n".join(lines))
 
     def _choose_firmware_directory(self) -> None:
         selected = QFileDialog.getExistingDirectory(
