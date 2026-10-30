@@ -230,7 +230,10 @@ def load_sms_bios(
             f"Não foi possível carregar a BIOS SMS '{selected.path.name}': "
             f"{exc.__class__.__name__}."
         ) from exc
-    if len(data) != SMS_BIOS_SIZE or hashlib.sha256(data).hexdigest() != selected.sha256:
+    if (
+        len(data) != SMS_BIOS_SIZE
+        or hashlib.sha256(data).hexdigest() != selected.sha256
+    ):
         raise ValueError(
             f"A BIOS SMS '{selected.path.name}' mudou após a verificação; "
             "execute uma nova varredura."
