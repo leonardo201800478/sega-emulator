@@ -245,7 +245,7 @@ Os CSVs agora estão disponíveis. O próximo passo é fixar SHA do ares e cruza
 | 49 | Cor | CRAM 6 bits → RGB | DIVERGE (apresentação) | baixa |
 | 50 | Extras | Light Phaser, SegaScope 3D, anaglyph/side-by-side | EXTENSÃO | — |
 
-A contagem literal de resultados é: 21 `IGUAL`, 12 `DIVERGE`, 2 extensões rotuladas `EXTENSÃO do SMS_CORE`, 1 extensão rotulada `EXTENSÃO`, e 14 classificações qualificadas (por exemplo, divergência específica ou igualdade com ressalva). Portanto, não se deve resumir esta coluna como "20 divergências" sem explicitar a regra de agrupamento.
+A contagem agrupada por prefixo do rótulo é: 26 itens `IGUAL` (incluindo igualdades com ressalva), 20 itens `DIVERGE` (incluindo divergências qualificadas), 3 itens `EXTENSÃO` e 1 item `AUSENTE`. Isso reproduz a distribuição resumida no relatório original. Os rótulos literais mais específicos foram preservados linha a linha na tabela.
 
 ### 9.3 R10 — reavaliação após inspeção do glue CPU↔VDP
 
