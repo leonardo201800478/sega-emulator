@@ -283,6 +283,9 @@ impl SmsMachine {
             self.cpu.step(&mut bus)?
         };
         let end_tstate = self.cpu.total_tstates;
+        if self.instruction_trace_skip_remaining > 0 {
+            self.instruction_trace_skip_remaining -= 1;
+        }
         self.vdp.advance(u64::from(cycles));
         loop {
             let next = self
@@ -641,6 +644,24 @@ mod tests {
         assert_eq!(machine.sega_scope().lens(), SegaScopeLens::Left);
         assert_eq!(machine.read_memory(0xFFF8), 0x01);
         assert_eq!(machine.read_memory(0xDFF8), 0x01);
+    }
+
+
+    #[test]
+    fn delayed_instruction_trace_starts_after_the_requested_step_count() {
+        let mut machine = SmsMachine::new(vec![0x00; 16]).unwrap();
+        machine.enable_instruction_trace_after(2, 3);
+
+        for _ in 0..5 {
+            machine.step().unwrap();
+        }
+
+        let traces = machine.drain_instruction_traces();
+        assert_eq!(traces.len(), 2);
+        assert_eq!(traces[0].before.pc, 3);
+        assert_eq!(traces[0].after.pc, 4);
+        assert_eq!(traces[1].before.pc, 4);
+        assert_eq!(traces[1].after.pc, 5);
     }
 
     #[test]
