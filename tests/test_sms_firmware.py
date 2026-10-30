@@ -296,9 +296,7 @@ def test_firmware_scanner_rejects_unverified_prototype_bios_from_dat(tmp_path):
     )
     dat_path = tmp_path / "bios.dat"
     dat_path.write_text(
-        dat_path.read_text(encoding="utf-8").replace(
-            ' status="verified"', ""
-        ),
+        dat_path.read_text(encoding="utf-8").replace(' status="verified"', ""),
         encoding="utf-8",
     )
 
