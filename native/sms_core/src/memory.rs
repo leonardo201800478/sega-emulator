@@ -70,7 +70,10 @@ impl SmsMemory {
     #[inline]
     pub fn read(&self, address: u16) -> u8 {
         if address <= 0x03FF && self.bios.is_some() && self.control_port & 0x08 == 0 {
-            return self.bios.as_ref().map_or(0xFF, |bios| bios[usize::from(address)]);
+            return self
+                .bios
+                .as_ref()
+                .map_or(0xFF, |bios| bios[usize::from(address)]);
         }
         if address <= 0xBFFF && self.control_port & 0x40 != 0 {
             return 0xFF;
@@ -166,7 +169,9 @@ impl SmsMemory {
         self.control_port = if self.bios.is_some() { 0x00 } else { 0x08 };
     }
 
-    pub fn control_port(&self) -> u8 { self.control_port }
+    pub fn control_port(&self) -> u8 {
+        self.control_port
+    }
 
     pub fn bios_enabled(&self) -> bool {
         self.bios.is_some() && self.control_port & 0x08 == 0
@@ -304,7 +309,11 @@ mod tests {
         assert!(memory.bios_enabled());
         assert_eq!(memory.read(0x0000), 0xA5);
         assert_eq!(memory.read(0x03FF), 0x5A);
-        assert_eq!(memory.read(0x0400), 0x00, "cartridge remains visible after overlay");
+        assert_eq!(
+            memory.read(0x0400),
+            0x00,
+            "cartridge remains visible after overlay"
+        );
         memory.write_control_port(0x08);
         assert!(!memory.bios_enabled());
         assert_eq!(memory.read(0x0000), 0x00);
@@ -333,7 +342,13 @@ mod tests {
     #[test]
     fn rejects_bios_with_wrong_size() {
         let error = SmsMemory::with_bios(patterned_rom(1), Some(vec![0x00; 0x400])).unwrap_err();
-        assert_eq!(error, SmsCoreError::InvalidBiosSize { size: 0x400, expected: 0x2000 });
+        assert_eq!(
+            error,
+            SmsCoreError::InvalidBiosSize {
+                size: 0x400,
+                expected: 0x2000
+            }
+        );
     }
 
     #[test]
