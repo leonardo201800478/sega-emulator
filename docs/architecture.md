@@ -18,6 +18,8 @@ Consulte [ADR 0007 — Política de desenvolvimento Rust-first](adr/0007-rust-fi
 
 ## Princípios
 
+## Princípios
+
 1. **Fidelidade antes de atalhos:** implementar as instruções documentadas de cada CPU, com flags, efeitos colaterais, interrupções e temporização sustentados por documentação e testes.
 2. **Separar CPU de plataforma:** um núcleo de CPU depende de contratos de barramento e sinais, não diretamente de um console concreto.
 3. **Separar estado lógico de temporização:** uma instrução que retorna um número nominal de ciclos não equivale a executar cada ciclo de barramento.
