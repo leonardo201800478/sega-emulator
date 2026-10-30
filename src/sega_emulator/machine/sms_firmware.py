@@ -422,3 +422,22 @@ def load_sms_bios(
             "execute uma nova varredura."
         )
     return data
+
+
+def load_sms_bios_for_boot(
+    enabled: bool,
+    directory: str | Path | None,
+    region: str | None,
+    *,
+    catalog: RomCatalog | None = None,
+) -> bytes | None:
+    """Load the selected SMS BIOS only when BIOS boot is enabled.
+
+    A disabled option or unresolved territory bypasses firmware scanning and
+    returns None, preserving direct cartridge boot.
+    """
+    if type(enabled) is not bool:
+        raise TypeError("enabled deve ser bool.")
+    if not enabled or region is None:
+        return None
+    return load_sms_bios(directory, region, catalog=catalog)
