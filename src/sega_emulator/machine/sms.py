@@ -28,8 +28,8 @@ class SMSMachine:
             raise ValueError("A ROM do Master System não pode estar vazia.")
         if bios is not None and (not isinstance(bios, bytes) or len(bios) != 0x2000):
             raise ValueError("A BIOS SMS deve conter exatamente 8192 bytes.")
-        if region not in {"usa", "europe", "japan"}:
-            raise ValueError("region deve ser usa, europe ou japan.")
+        if region not in {"usa", "brazil", "europe", "japan"}:
+            raise ValueError("region deve ser usa, brazil, europe ou japan.")
 
         try:
             from sega_z80_core import NativeSMSMachine
