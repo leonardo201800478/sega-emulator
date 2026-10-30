@@ -35,7 +35,6 @@ class FrontendPreferences:
     recent_roms: tuple[str, ...] = ()
     controller_config: str = ""
     firmware_directory: str = ""
-    sms_bios_boot_enabled: bool = True
     audio_enabled: bool = True
     diagnostics_enabled: bool = False
     cpu_core: str = "rust"
@@ -55,6 +54,7 @@ class FrontendPreferences:
     crt_phosphor_mask: int = 25
     crt_curvature: int = 0
     crt_signal_mode: str = "rgb"
+    sms_bios_boot_enabled: bool = True
 
     def __post_init__(self) -> None:
         if not MIN_WINDOW_WIDTH <= self.window_width <= MAX_WINDOW_WIDTH:
