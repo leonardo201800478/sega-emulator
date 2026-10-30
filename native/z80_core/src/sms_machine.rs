@@ -18,9 +18,10 @@ fn sms_region_profile(
     let region = region.unwrap_or(if pal { "europe" } else { "usa" });
     match region {
         "usa" => Ok((sega_sms_core::Territory::Export, VideoStandard::Ntsc)),
+        "brazil" => Ok((sega_sms_core::Territory::Export, VideoStandard::PalM)),
         "europe" => Ok((sega_sms_core::Territory::Export, VideoStandard::Pal)),
         "japan" => Ok((sega_sms_core::Territory::Japan, VideoStandard::Ntsc)),
-        _ => Err("region deve ser usa, europe ou japan"),
+        _ => Err("region deve ser usa, brazil, europe ou japan"),
     }
 }
 
@@ -272,6 +273,14 @@ mod tests {
         };
         assert!(machine.bios_enabled());
         assert_eq!(machine.read_memory(0), 0x3E);
+    }
+
+    #[test]
+    fn brazil_region_selects_export_territory_with_pal_m_timing() {
+        let machine = build_sms_machine(vec![0; 16], false, Some("brazil"), None).unwrap();
+        assert_eq!(machine.psg_clock_hz(), 3_579_545);
+        assert_eq!(machine.vdp().video_standard(), VideoStandard::PalM);
+        assert_eq!(machine.vdp().total_lines(), 262);
     }
 
     #[test]
