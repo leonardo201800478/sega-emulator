@@ -34,3 +34,20 @@ def test_native_sms_instruction_trace_rejects_invalid_limits(limit):
 
     with pytest.raises(ValueError, match="max_instructions"):
         machine.enable_instruction_trace(limit)
+
+
+def test_python_sms_trace_observes_synthetic_bios_overlay_handoff():
+    bios = bytearray(0x2000)
+    bios[:4] = b"\\x3e\\x08\\xd3\\x3e"
+    machine = SMSMachine(b"\\x76" * 0x4000, bios=bytes(bios))
+
+    assert machine.bios_enabled
+    machine.enable_instruction_trace(2)
+    machine.step()
+    machine.step()
+
+    records = [
+        json.loads(line) for line in machine.drain_instruction_trace_json().splitlines()
+    ]
+    assert not machine.bios_enabled
+    assert [record["opcode_bytes"] for record in records] == [["3E", "08"], ["D3", "3E"]]
