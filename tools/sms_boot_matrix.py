@@ -454,10 +454,66 @@ def main() -> int:
             )
         )
 
+    bios_startup_results = [
+        result for result in results if result["rom"] == "NO_CARTRIDGE"
+    ]
+    bios_startup_summary = {
+        result["bios"]: {
+            "passed": result["outcome"] == "BIOS_STARTUP_VISIBLE",
+            "outcome": result["outcome"],
+        }
+        for result in bios_startup_results
+    }
+    game_results = [
+        result for result in results if result["rom"] != "NO_CARTRIDGE"
+    ]
+    game_names = sorted({result["rom"] for result in game_results})
+    successful_game_outcomes = {
+        "BIOS_HANDOFF_AND_POSTRUN",
+        "DIRECT_BOOT_FRAME_ADVANCE",
+    }
+    game_boot_summary = {}
+    for game_name in game_names:
+        game_cases = [
+            result for result in game_results if result["rom"] == game_name
+        ]
+        successful_paths = [
+            f"{result['bios'] or 'sem BIOS'} / {result['region']}"
+            for result in game_cases
+            if result["outcome"] in successful_game_outcomes
+        ]
+        game_boot_summary[game_name] = {
+            "passed": bool(successful_paths),
+            "successful_paths": successful_paths,
+            "all_outcomes": [
+                {
+                    "bios": result["bios"],
+                    "region": result["region"],
+                    "outcome": result["outcome"],
+                }
+                for result in game_cases
+            ],
+        }
+
+    acceptance = {
+        "all_three_bios_startups_visible": (
+            len(bios_startup_summary) == 3
+            and all(item["passed"] for item in bios_startup_summary.values())
+        ),
+        "all_games_have_at_least_one_boot_path": (
+            bool(game_boot_summary)
+            and all(item["passed"] for item in game_boot_summary.values())
+        ),
+    }
+    acceptance["passed"] = all(acceptance.values())
+
     report = {
         "schema_version": 1,
         "method": "native Rust SMS runtime through the installed PyO3 extension",
         "case_count": len(results),
+        "acceptance": acceptance,
+        "bios_startup_summary": bios_startup_summary,
+        "game_boot_summary": game_boot_summary,
         "rom_and_bios_bytes_included": False,
         "frames_limit": args.frames,
         "post_handoff_frames": args.post_handoff_frames,
@@ -495,20 +551,7 @@ def main() -> int:
     print(f"PPM captures: {capture_dir.resolve()}")
     print("ROM/BIOS bytes were not copied to the report or repository.")
 
-    return (
-        0
-        if all(
-            result["outcome"]
-            in {
-                "BIOS_HANDOFF_AND_POSTRUN",
-                "BIOS_MAPPER_CHECKSUM_UNRELIABLE",
-                "BIOS_STARTUP_VISIBLE",
-                "DIRECT_BOOT_FRAME_ADVANCE",
-            }
-            for result in results
-        )
-        else 1
-    )
+    return 0 if acceptance["passed"] else 1
 
 
 if __name__ == "__main__":
