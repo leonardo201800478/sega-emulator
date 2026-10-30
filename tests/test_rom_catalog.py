@@ -113,3 +113,25 @@ def test_bin_without_cue_is_not_assumed_to_be_a_disc(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="Arquivo .bin isolado"):
         inspect_disc_media(image)
+
+
+def test_catalog_uses_no_intro_title_region_when_release_tags_are_absent(
+    tmp_path: Path,
+) -> None:
+    payload = b"synthetic title-region fixture"
+    path = tmp_path / "title-region.dat"
+    path.write_text(
+        f'''<datafile><header><name>Sega - Master System - Mark III</name></header>
+        <game name="Example Game (Japan, Europe) (En)">
+        <rom name="example.sms" size="{len(payload)}"
+             crc="{zlib.crc32(payload) & 0xFFFFFFFF:08x}"
+             md5="{hashlib.md5(payload).hexdigest()}"
+             sha1="{hashlib.sha1(payload).hexdigest()}"/>
+        </game></datafile>''',
+        encoding="utf-8",
+    )
+
+    result = RomCatalog(tmp_path).identify_bytes(payload)
+
+    assert result.status == "matched"
+    assert result.regions == ("EUR", "JPN")
