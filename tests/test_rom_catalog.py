@@ -157,6 +157,7 @@ def test_default_dat_directory_supports_source_and_installed_layouts(
     source_dats.rmdir()
     assert rom_catalog.default_dat_directory() == installed_dats
 
+
 def test_catalog_extracts_brazil_and_europe_from_no_intro_title(tmp_path: Path) -> None:
     payload = b"synthetic brazil-europe title fixture"
     path = tmp_path / "brazil-europe.dat"
@@ -175,4 +176,3 @@ def test_catalog_extracts_brazil_and_europe_from_no_intro_title(tmp_path: Path) 
 
     assert result.status == "matched"
     assert result.regions == ("BRA", "EUR")
-
