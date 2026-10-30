@@ -17,7 +17,10 @@ impl fmt::Display for SmsCoreError {
         match self {
             Self::EmptyCartridge => write!(f, "cartridge image must not be empty"),
             Self::Audio(error) => write!(f, "SMS PSG initialization failed: {error}"),
-            Self::InvalidBiosSize { size, expected } => write!(f, "SMS BIOS size {size} bytes is invalid; expected {expected} bytes"),
+            Self::InvalidBiosSize { size, expected } => write!(
+                f,
+                "SMS BIOS size {size} bytes is invalid; expected {expected} bytes"
+            ),
             Self::RomTooLargeForSegaMapper { size, max_size } => write!(
                 f,
                 "ROM size {size} exceeds the standard Sega mapper range of {max_size} bytes; select a supported mapper"
