@@ -1667,6 +1667,7 @@ def run(initial_path: Path | None = None) -> None:
 
     def audit_sms_roms() -> None:
         """Audit a folder of SMS ROMs through the configured native Rust runtime."""
+
         def create_audit_machine(rom_data: bytes) -> SMSMachine:
             resolution = resolve_sms_region_profile(
                 region_preference, rom_data, sms_rom_catalog
