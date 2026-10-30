@@ -239,7 +239,9 @@ def run(initial_path: Path | None = None) -> None:
                 extra={
                     "event": "sms_bios_fallback",
                     "region": bios_region,
-                    "region_source": bios_region_source if bios_region else "unresolved",
+                    "region_source": (
+                        bios_region_source if bios_region else "unresolved"
+                    ),
                 },
             )
         return SMSMachine(rom_data, region=region, bios=bios)
