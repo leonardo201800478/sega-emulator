@@ -160,6 +160,16 @@ O teste R9 existente é importante: escreve R9 durante active display, termina a
 - HINT com timestamp horizontal e borda INT;
 - instrução Z80 que cruza uma fronteira de linha enquanto executa OUT para o VDP.
 
+### 5.1 Testes de caracterização adicionados nesta etapa
+
+Foram adicionados dois testes unitários em `native/sms_core/src/vdp.rs`:
+- `midline_r8_write_is_sampled_for_the_whole_scanline_by_current_model`;
+- `midline_cram_write_is_sampled_for_the_whole_scanline_by_current_model`.
+
+Eles avançam 114 T-states, executam uma escrita de R8 ou CRAM e completam os 114 T-states restantes. As asserções registram que o renderer atual aplica o estado novo à linha inteira quando a linha é concluída.
+
+**Limite explícito:** são testes de caracterização da abstração atual, não oráculos de hardware e não definem qual pixel deveria mudar num SMS real. Servem para impedir que a limitação seja confundida com uma regra física ou seja removida acidentalmente sem substituir por testes de semântica temporal validada.
+
 ## 6. Conclusões confirmadas versus hipóteses
 
 ### Confirmado pelo código
@@ -241,9 +251,9 @@ Não implementar ainda. A auditoria Z80/barramento identificou que a CPU atual n
 - Identificação da ausência de latch explícito de R8 e timestamp de VRAM/CRAM: PASS por inspeção estática.
 - Confirmação de timing físico de R8 por hardware: NOT RUN.
 - Reprodução de Aladdin e comparação de capturas: NOT RUN.
-- Testes Rust locais: NOT RUN.
+- Testes Rust locais: NOT RUN; os dois novos testes estão aguardando CI no SHA candidato.
 - Teste visual em hardware/emulador: NOT RUN.
-- Alterações no runtime: nenhuma.
+- Alterações na lógica de runtime: nenhuma; foram adicionados somente dois testes unitários de caracterização.
 - `TEMPORAL_PASS`: não declarado.
 
 ## 11. Próximo passo
