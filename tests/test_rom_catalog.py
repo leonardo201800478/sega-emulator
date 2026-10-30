@@ -156,3 +156,23 @@ def test_default_dat_directory_supports_source_and_installed_layouts(
     assert rom_catalog.default_dat_directory() == source_dats
     source_dats.rmdir()
     assert rom_catalog.default_dat_directory() == installed_dats
+
+def test_catalog_extracts_brazil_and_europe_from_no_intro_title(tmp_path: Path) -> None:
+    payload = b"synthetic brazil-europe title fixture"
+    path = tmp_path / "brazil-europe.dat"
+    path.write_text(
+        f'''<datafile><header><name>Sega - Master System - Mark III</name></header>
+        <game name="Example Game (Europe, Brazil) (En)">
+        <rom name="example.sms" size="{len(payload)}"
+             crc="{zlib.crc32(payload) & 0xFFFFFFFF:08x}"
+             md5="{hashlib.md5(payload).hexdigest()}"
+             sha1="{hashlib.sha1(payload).hexdigest()}"/>
+        </game></datafile>''',
+        encoding="utf-8",
+    )
+
+    result = RomCatalog(tmp_path).identify_bytes(payload, suffix=".sms")
+
+    assert result.status == "matched"
+    assert result.regions == ("BRA", "EUR")
+
