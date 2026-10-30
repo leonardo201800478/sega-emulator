@@ -18,7 +18,9 @@ from sega_emulator.machine.sms_firmware import (
     SmsFirmwareFileStatus,
     SmsFirmwareRegion,
     scan_sms_firmware_directory,
+    sms_bios_region_for_rom,
 )
+from sega_emulator.rom_catalog import RomCatalog
 
 SMS_HEADER_OFFSETS = (0x7FF0, 0x3FF0, 0x1FF0)
 SMS_SIZE_CODES = {
@@ -143,6 +145,7 @@ def _run_case(
     machine = SMSMachine(rom_data, region=region, bios=bios_data)
     handoff_frame = None
     frames_run = 0
+    frames_after_handoff = None
     execution_error = None
 
     try:
@@ -152,11 +155,10 @@ def _run_case(
             if bios_data is not None and handoff_frame is None:
                 if not machine.bios_enabled:
                     handoff_frame = frames_run
-            if (
-                handoff_frame is not None
-                and frames_run - handoff_frame >= post_handoff_frames
-            ):
-                break
+            if handoff_frame is not None:
+                frames_after_handoff = frames_run - handoff_frame
+                if frames_after_handoff >= post_handoff_frames:
+                    break
     except Exception as exc:  # Keep the matrix running after an individual failure.
         execution_error = f"{type(exc).__name__}: {exc}"
 
@@ -174,8 +176,10 @@ def _run_case(
         )
     elif handoff_frame is None:
         outcome = "NO_BIOS_HANDOFF"
+    elif (frames_after_handoff or 0) < post_handoff_frames:
+        outcome = "BIOS_HANDOFF_WITHOUT_FULL_POSTRUN"
     else:
-        outcome = "BIOS_HANDOFF_OBSERVED"
+        outcome = "BIOS_HANDOFF_AND_POSTRUN"
 
     return {
         "rom": rom_name,
@@ -188,6 +192,7 @@ def _run_case(
         "outcome": outcome,
         "frames_run": frames_run,
         "handoff_frame": handoff_frame,
+        "frames_after_handoff": frames_after_handoff,
         "bios_still_enabled": machine.bios_enabled,
         "pc": machine.cpu.pc,
         "instructions": machine.total_instructions,
@@ -279,11 +284,13 @@ def main() -> int:
     capture_dir = Path(args.capture_dir)
     results: list[dict[str, Any]] = []
     preflight: list[dict[str, Any]] = []
+    catalog = RomCatalog()
 
     for rom_path in args.rom:
         loaded = load_sms_rom(rom_path)
         header = _header_diagnostics(loaded.data)
         detection = _bios_preflight(loaded.data)
+        direct_region = sms_bios_region_for_rom(loaded.data, catalog) or "usa"
         preflight.append(
             {
                 "rom": loaded.display_name,
@@ -291,6 +298,7 @@ def main() -> int:
                 "size": len(loaded.data),
                 "header": header,
                 "bios_detection": detection,
+                "direct_boot_region": direct_region,
             }
         )
 
@@ -314,7 +322,7 @@ def main() -> int:
                 rom_data=loaded.data,
                 bios_name=None,
                 bios_data=None,
-                region="usa",
+                region=direct_region,
                 frames=args.frames,
                 post_handoff_frames=0,
                 capture_dir=capture_dir,
@@ -361,7 +369,15 @@ def main() -> int:
     print(f"PPM captures: {capture_dir.resolve()}")
     print("ROM/BIOS bytes were not copied to the report or repository.")
 
-    return 0 if all(result["execution_error"] is None for result in results) else 1
+    return (
+        0
+        if all(
+            result["outcome"]
+            in {"BIOS_HANDOFF_AND_POSTRUN", "DIRECT_BOOT_FRAME_ADVANCE"}
+            for result in results
+        )
+        else 1
+    )
 
 
 if __name__ == "__main__":
