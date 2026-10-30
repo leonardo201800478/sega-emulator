@@ -135,3 +135,24 @@ def test_catalog_uses_no_intro_title_region_when_release_tags_are_absent(
 
     assert result.status == "matched"
     assert result.regions == ("EUR", "JPN")
+
+
+def test_default_dat_directory_supports_source_and_installed_layouts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sega_emulator import rom_catalog
+
+    package_file = tmp_path / "source" / "src" / "sega_emulator" / "rom_catalog.py"
+    package_file.parent.mkdir(parents=True)
+    package_file.write_text("", encoding="utf-8")
+    source_dats = tmp_path / "source" / "dats"
+    source_dats.mkdir()
+    installed_dats = tmp_path / "prefix" / "share" / "sega-emulator" / "dats"
+    installed_dats.mkdir(parents=True)
+
+    monkeypatch.setattr(rom_catalog, "__file__", str(package_file))
+    monkeypatch.setattr(rom_catalog.sys, "prefix", str(tmp_path / "prefix"))
+
+    assert rom_catalog.default_dat_directory() == source_dats
+    source_dats.rmdir()
+    assert rom_catalog.default_dat_directory() == installed_dats
