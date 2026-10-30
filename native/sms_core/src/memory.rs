@@ -347,8 +347,7 @@ mod tests {
 
     #[test]
     fn bios_power_on_profile_matches_sms_slot_and_ram_latches() {
-        let mut memory =
-            SmsMemory::with_bios(patterned_rom(1), Some(vec![0xA5; 0x2000])).unwrap();
+        let mut memory = SmsMemory::with_bios(patterned_rom(1), Some(vec![0xA5; 0x2000])).unwrap();
         assert_eq!(memory.control_port(), 0xE0);
         assert!(memory.bios_enabled());
         assert_eq!(memory.read(0x0000), 0xA5);
@@ -356,13 +355,15 @@ mod tests {
         assert_eq!(memory.read(0xC000), 0x00);
         memory.write(0xC000, 0x5A);
         assert_eq!(memory.read(0xC000), 0x5A);
-        assert!(memory.bios_enabled(), "RAM access must not disable the BIOS overlay");
+        assert!(
+            memory.bios_enabled(),
+            "RAM access must not disable the BIOS overlay"
+        );
     }
 
     #[test]
     fn cartridge_has_priority_when_bios_and_cartridge_slots_are_both_enabled() {
-        let mut memory =
-            SmsMemory::with_bios(patterned_rom(1), Some(vec![0xA5; 0x2000])).unwrap();
+        let mut memory = SmsMemory::with_bios(patterned_rom(1), Some(vec![0xA5; 0x2000])).unwrap();
         memory.write_control_port(0xA0); // BIOS + cartridge + work RAM enabled.
         assert_eq!(memory.read(0x0000), 0x00);
         assert_eq!(memory.read(0x2000), 0x00);
