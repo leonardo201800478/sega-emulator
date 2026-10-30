@@ -280,8 +280,6 @@ class SmsHardwareIdentification:
         if self.status is SmsHardwareMatchStatus.MATCHED:
             if self.metadata is None or len(self.candidates) != 1:
                 raise ValueError("A matched result requires exactly one record.")
-        elif self.metadata is not None:
-            raise ValueError("Ambiguous/unknown results cannot expose a winner.")
         elif (
             self.status is SmsHardwareMatchStatus.AMBIGUOUS
             and len(self.candidates) < 2
@@ -292,6 +290,8 @@ class SmsHardwareIdentification:
             and self.candidates
         ):
             raise ValueError("An unknown result cannot contain candidates.")
+        elif self.metadata is not None:
+            raise ValueError("Ambiguous/unknown results cannot expose a winner.")
 
 
 class SmsHardwareCatalog:
