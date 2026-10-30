@@ -23,6 +23,10 @@ ser executado pelo emulador.
 - `identify_path` calcula hashes por blocos de 1 MiB e pode levar tempo em
   imagens de CD grandes. O chamador deve executá-lo fora do caminho de renderização.
 
+## Integração com metadados técnicos do Master System
+
+O DAT No-Intro continua sendo a fonte de identidade e regiões de release; não é uma fonte suficiente para mapper, SRAM, FM, periféricos ou requisitos de BIOS. Essas características serão descritas por um catálogo técnico SMS separado, versionado e associado a identidades exatas, com proveniência e confiança por campo. A arquitetura e a política de ROM não identificada estão em [SMS ROM metadata, compatibilidade de hardware e OSD](sms-rom-metadata-and-osd.md).
+
 ## Mídias Sega CD
 
 `inspect_disc_media` classifica ISO, CUE/BIN e CHD como mídias Sega CD e
