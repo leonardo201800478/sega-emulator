@@ -1,3 +1,5 @@
+> **Estado do SMS — 2026-10-29, base `b4a85c82b1d975a126f1dcbd3084dac51249b398`:** o runtime SMS nativo em Rust já integra CPU Z80, memória/cartucho, I/O, VDP Mode 4 e PSG e está conectado ao frontend Qt/PySide6 via PyO3. Isso não significa conclusão de fidelidade: a renderização do VDP é orientada a scanlines, os T-states da CPU são nominais e o scheduler mestre/precisão ciclo a ciclo continuam pendentes. A síntese YM2413/FM também não está implementada. Consulte o [estado técnico detalhado do SMS](docs/audits/sms-current-technical-status-2026-10-29.md), auditado nesse SHA. Resultados de testes/workflows antigos permanecem vinculados aos respectivos candidatos e não são automaticamente PASS para esta base.
+
 # Sega Emulator
 
 Projeto de emulação de alta precisão com hardware ativo implementado em Rust. Python na aplicação fica restrito à interface Qt, carregamento de ROMs/perfis e integração fina com o runtime nativo; ferramentas e testes são infraestrutura, não um runtime de emulação. O primeiro alvo é o Sega SG-1000.
