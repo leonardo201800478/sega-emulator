@@ -210,7 +210,14 @@ def run(initial_path: Path | None = None) -> None:
             bios_region = sms_bios_region_from_cartridge(rom_data)
             bios_region_source = "header" if bios_region is not None else "dat"
             if bios_region is None:
-                bios_region = sms_bios_region_from_catalog(rom_data, sms_rom_catalog)
+                try:
+                    bios_region = sms_bios_region_from_catalog(
+                        rom_data, sms_rom_catalog
+                    )
+                except ValueError as exc:
+                    # A broken optional DAT must never prevent direct game boot.
+                    logger.warning("Catálogo DAT SMS indisponível: %s", exc)
+                    bios_region = None
         bios = (
             load_sms_bios(preferences.firmware_directory, bios_region)
             if bios_region is not None
@@ -226,13 +233,13 @@ def run(initial_path: Path | None = None) -> None:
                     "sha256": hashlib.sha256(bios).hexdigest(),
                 },
             )
-        elif preferences.firmware_directory and bios_region is not None:
+        elif preferences.firmware_directory:
             logger.info(
                 "Nenhuma BIOS SMS compatível encontrada; usando boot direto",
                 extra={
                     "event": "sms_bios_fallback",
                     "region": bios_region,
-                    "region_source": bios_region_source,
+                    "region_source": bios_region_source if bios_region else "unresolved",
                 },
             )
         return SMSMachine(rom_data, region=region, bios=bios)
