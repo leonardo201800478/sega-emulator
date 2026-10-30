@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import sys
 import zlib
 from dataclasses import dataclass
 from pathlib import Path
@@ -39,6 +40,31 @@ CUE_FILE_PATTERN = re.compile(
 )
 
 
+_DAT_REGION_NAME_ALIASES = {
+    "japan": "JPN",
+    "usa": "USA",
+    "europe": "EUR",
+    "brazil": "BRA",
+    "korea": "KOR",
+    "taiwan": "TAI",
+    "australia": "AUS",
+    "asia": "ASI",
+    "portugal": "POR",
+    "world": "WORLD",
+}
+
+
+def _regions_from_game_name(game_name: str) -> tuple[str, ...]:
+    """Extract only recognized No-Intro territory labels from title groups."""
+    regions = {
+        code
+        for group in re.findall(r"\(([^()]*)\)", game_name)
+        for label in group.split(",")
+        if (code := _DAT_REGION_NAME_ALIASES.get(label.strip().casefold()))
+    }
+    return tuple(sorted(regions))
+
+
 @dataclass(frozen=True, slots=True)
 class DatRom:
     system: str
@@ -51,6 +77,7 @@ class DatRom:
     sha1: str | None
     regions: tuple[str, ...]
     dat_name: str
+    status: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,8 +107,11 @@ class DiscMediaDescriptor:
 
 
 def default_dat_directory() -> Path:
-    """Return the repository's root-level dats directory."""
-    return Path(__file__).resolve().parents[2] / "dats"
+    """Find versioned DATs in a source checkout or installed application."""
+    source_directory = Path(__file__).resolve().parents[2] / "dats"
+    if source_directory.is_dir():
+        return source_directory
+    return Path(sys.prefix) / "share" / "sega-emulator" / "dats"
 
 
 def _normalize_hash(value: str | None) -> str | None:
@@ -121,7 +151,7 @@ def _read_dat(path: Path) -> list[DatRom]:
                     if (region := release.get("region", "").strip())
                 }
             )
-        )
+        ) or _regions_from_game_name(game_name)
         for rom in game.findall("rom"):
             try:
                 size = int(rom.get("size", ""))
@@ -139,6 +169,7 @@ def _read_dat(path: Path) -> list[DatRom]:
                     sha1=_normalize_hash(rom.get("sha1")),
                     regions=regions,
                     dat_name=path.name,
+                    status=rom.get("status"),
                 )
             )
     return entries

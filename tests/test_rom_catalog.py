@@ -113,3 +113,66 @@ def test_bin_without_cue_is_not_assumed_to_be_a_disc(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="Arquivo .bin isolado"):
         inspect_disc_media(image)
+
+
+def test_catalog_uses_no_intro_title_region_when_release_tags_are_absent(
+    tmp_path: Path,
+) -> None:
+    payload = b"synthetic title-region fixture"
+    path = tmp_path / "title-region.dat"
+    path.write_text(
+        f'''<datafile><header><name>Sega - Master System - Mark III</name></header>
+        <game name="Example Game (Japan, Europe) (En)">
+        <rom name="example.sms" size="{len(payload)}"
+             crc="{zlib.crc32(payload) & 0xFFFFFFFF:08x}"
+             md5="{hashlib.md5(payload).hexdigest()}"
+             sha1="{hashlib.sha1(payload).hexdigest()}"/>
+        </game></datafile>''',
+        encoding="utf-8",
+    )
+
+    result = RomCatalog(tmp_path).identify_bytes(payload)
+
+    assert result.status == "matched"
+    assert result.regions == ("EUR", "JPN")
+
+
+def test_default_dat_directory_supports_source_and_installed_layouts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from sega_emulator import rom_catalog
+
+    package_file = tmp_path / "source" / "src" / "sega_emulator" / "rom_catalog.py"
+    package_file.parent.mkdir(parents=True)
+    package_file.write_text("", encoding="utf-8")
+    source_dats = tmp_path / "source" / "dats"
+    source_dats.mkdir()
+    installed_dats = tmp_path / "prefix" / "share" / "sega-emulator" / "dats"
+    installed_dats.mkdir(parents=True)
+
+    monkeypatch.setattr(rom_catalog, "__file__", str(package_file))
+    monkeypatch.setattr(rom_catalog.sys, "prefix", str(tmp_path / "prefix"))
+
+    assert rom_catalog.default_dat_directory() == source_dats
+    source_dats.rmdir()
+    assert rom_catalog.default_dat_directory() == installed_dats
+
+
+def test_catalog_extracts_brazil_and_europe_from_no_intro_title(tmp_path: Path) -> None:
+    payload = b"synthetic brazil-europe title fixture"
+    path = tmp_path / "brazil-europe.dat"
+    path.write_text(
+        f'''<datafile><header><name>Sega - Master System - Mark III</name></header>
+        <game name="Example Game (Europe, Brazil) (En)">
+        <rom name="example.sms" size="{len(payload)}"
+             crc="{zlib.crc32(payload) & 0xFFFFFFFF:08x}"
+             md5="{hashlib.md5(payload).hexdigest()}"
+             sha1="{hashlib.sha1(payload).hexdigest()}"/>
+        </game></datafile>''',
+        encoding="utf-8",
+    )
+
+    result = RomCatalog(tmp_path).identify_bytes(payload, suffix=".sms")
+
+    assert result.status == "matched"
+    assert result.regions == ("BRA", "EUR")

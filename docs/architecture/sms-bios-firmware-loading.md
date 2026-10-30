@@ -93,7 +93,7 @@ A BIOS deve ser parte do caminho de inicialização do cartucho/máquina, não u
 - Os bits são ativos em nível baixo: bit 7 expansão, bit 6 cartucho, bit 5 card, bit 4 RAM interna, bit 3 BIOS e bit 2 I/O.
 - A BIOS fica habilitada no power-on. O core modela o perfil inicial `$F3` (BIOS ativa; cartucho e RAM interna desabilitados) e o perfil pós-BIOS de cartucho `$AB` (BIOS desabilitada; cartucho e RAM interna habilitados).
 - O fluxo sintético de aceitação habilita RAM mantendo BIOS, copia um pequeno stub para RAM, desabilita BIOS/habilita cartucho e transfere execução ao endereço zero do cartucho.
-- A BIOS de 8 KiB fornecida pelo usuário só ocupa o overlay de 1 KiB em `$0000-$03FF`; os bytes restantes não são expostos por esse overlay. O slot do cartucho continua sujeito ao latch de memória.
+- A BIOS de 8 KiB fornecida pelo usuário é mapeada integralmente em `$0000-$1FFF`; fora dessa janela, o slot de cartucho continua sujeito ao latch de memória. O slot do cartucho continua sujeito ao latch de memória.
 - A arbitragem elétrica quando BIOS e cartucho são habilitados simultaneamente difere entre SMS e SMS 2 (precedência/AND nas referências consultadas); esse caso não é exercitado pelo fluxo de boot implementado, que mantém os slots mutuamente selecionados. A modelagem explícita dessa sobreposição permanece uma limitação, não um comportamento declarado como validado.
 
 **Não assumir que a BIOS deve estar sempre mapeada ou sempre obrigatória.** O perfil de inicialização e a transferência de controle devem respeitar o latch e a ordem observada nos documentos técnicos citados.
@@ -110,6 +110,24 @@ A BIOS deve ser parte do caminho de inicialização do cartucho/máquina, não u
 - `IN_USE`: firmware selecionado e carregado na máquina.
 - `FALLBACK_NO_BIOS`: modo de compatibilidade selecionado sem BIOS.
 
+## Uso do DAT na seleção da BIOS SMS
+
+A inicialização SMS prioriza a preferência regional manual e, em seguida, um
+cabeçalho `TMR SEGA` válido. Se ambos não resolverem o território, consulta o
+`RomCatalog` por hash e tamanho. Somente correspondências inequívocas com região exclusivamente `JPN`
+selecionam a família de BIOS japonesa. Regiões de exportação `USA`, `EUR`,
+`BRA` e `AUS` selecionam a família compartilhada de BIOS de exportação
+US/EU. Brazil é território de exportação com padrão PAL-M; essa classificação
+seleciona somente a família da BIOS e não escolhe temporização Europe/PAL.
+Se um header reconhecido e um DAT exato contradisserem o grupo regional (por
+exemplo, header Export com release Japan), a seleção automática é recusada.
+Registros Korea/Taiwan também não são reduzidos automaticamente às famílias
+Japan ou Export, pois exigem perfis de console próprios. Entradas mistas,
+regiões sem mapeamento comprovado, ROMs desconhecidas e colisões entre sistemas
+não escolhem BIOS automaticamente. A seleção de firmware exige correspondência SHA-1 ou MD5;
+o fallback CRC-32 + tamanho do catálogo não é forte o bastante para escolher BIOS. Os DATs identificam releases; não determinam PAL/NTSC nem
+substituem a preferência de vídeo do console.
+
 ## Critérios de aceitação
 
 ### Validação de metadados e armazenamento
@@ -121,7 +139,7 @@ A BIOS deve ser parte do caminho de inicialização do cartucho/máquina, não u
 - [ ] Garantir que nenhum conteúdo de BIOS seja incluído em logs ou artefatos CI.
 
 ### Integração SMS
-- [ ] Definir e testar o mapa de memória da BIOS e seu overlay/desabilitação com programa sintético.
+- [ ] Definir e testar o mapa integral de 8 KiB da BIOS e sua desabilitação com programa sintético.
 - [ ] Testar reset, leitura antes/depois de desabilitar BIOS, transferência ao cartucho e mapper padrão.
 - [ ] Testar perfil de power-on `$F3`, perfil de cartucho `$AB` e espelhamento de escritas pares em `$00-$3F`.
 - [ ] Executar um programa sintético que copia o stub da BIOS para RAM antes do hand-off.
@@ -158,7 +176,7 @@ A BIOS deve ser parte do caminho de inicialização do cartucho/máquina, não u
 
 ### Fatia 2 — boot no core Rust e fronteira PyO3
 
-- **IMPLEMENTED:** BIOS opcional de 8 KiB; overlay de 1 KiB em `$0000-$03FF`.
+- **IMPLEMENTED:** BIOS opcional de 8 KiB; mapeamento integral de 8 KiB em `$0000-$1FFF`.
 - **IMPLEMENTED:** latch `$3E` com decodificação de portas pares espelhadas em `$00-$3F`.
 - **IMPLEMENTED:** perfil de power-on `$F3`, RAM habilitada mantendo BIOS por `$E3`, hand-off para cartucho por `$AB`, e reset coerente com BIOS presente/ausente.
 - **IMPLEMENTED:** teste sintético executa cópia do stub BIOS para RAM antes de desabilitar a BIOS e saltar ao cartucho.

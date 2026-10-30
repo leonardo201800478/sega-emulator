@@ -28,8 +28,8 @@ class SMSMachine:
             raise ValueError("A ROM do Master System não pode estar vazia.")
         if bios is not None and (not isinstance(bios, bytes) or len(bios) != 0x2000):
             raise ValueError("A BIOS SMS deve conter exatamente 8192 bytes.")
-        if region not in {"usa", "europe", "japan"}:
-            raise ValueError("region deve ser usa, europe ou japan.")
+        if region not in {"usa", "brazil", "europe", "japan"}:
+            raise ValueError("region deve ser usa, brazil, europe ou japan.")
 
         try:
             from sega_z80_core import NativeSMSMachine
@@ -130,12 +130,6 @@ class SMSMachine:
             "button1" in actions,
             "button2" in actions,
         )
-
-    def set_pause_button(self, pressed: bool) -> None:
-        """Set the dedicated SMS console PAUSE button level."""
-        if type(pressed) is not bool:
-            raise TypeError("pressed deve ser bool.")
-        self.native_machine.set_pause_button(pressed)
 
     def drain_psg_write_events(self) -> list[tuple[int, int]]:
         # SMS VGM event capture is not wired to the native timestamped bus yet.

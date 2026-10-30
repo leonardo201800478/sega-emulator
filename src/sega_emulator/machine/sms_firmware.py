@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+from sega_emulator.rom_catalog import DatRom, RomCatalog
+
 SMS_BIOS_SIZE = 0x2000
 
 
@@ -72,6 +74,38 @@ _KNOWN_BIOS: dict[str, SmsFirmwareRegion] = {
 }
 
 
+def _sms_bios_region_from_dat_candidates(
+    candidates: tuple[DatRom, ...],
+    *,
+    require_bios_entry: bool,
+) -> SmsFirmwareRegion | None:
+    """Resolve only unanimous, known SMS BIOS families from DAT metadata."""
+    if not candidates:
+        return None
+
+    resolved: set[SmsFirmwareRegion] = set()
+    for candidate in candidates:
+        if candidate.system != "master_system":
+            return None
+        if require_bios_entry and (
+            not candidate.game_name.casefold().startswith("[bios] sega master system")
+            or candidate.status != "verified"
+        ):
+            return None
+        regions = set(candidate.regions)
+        if regions and regions <= {"JPN"}:
+            resolved.add(SmsFirmwareRegion.JAPAN)
+        elif regions and regions <= {"USA", "EUR", "BRA", "AUS"}:
+            # These territories are all non-Japanese SMS export markets.
+            # Brazil uses PAL-M timing, but that does not imply a European
+            # video profile; this mapping selects only the shared export BIOS.
+            resolved.add(SmsFirmwareRegion.EXPORT_US_EU)
+        else:
+            return None
+
+    return next(iter(resolved)) if len(resolved) == 1 else None
+
+
 def _read_sms_bios_candidate(path: Path) -> bytes:
     """Read at most one byte beyond the supported BIOS size."""
     with path.open("rb") as stream:
@@ -80,12 +114,15 @@ def _read_sms_bios_candidate(path: Path) -> bytes:
 
 def scan_sms_firmware_directory(
     directory: str | Path | None,
+    *,
+    catalog: RomCatalog | None = None,
 ) -> SmsFirmwareScan:
-    """Scan a user-selected directory and identify known BIOS files by SHA-256.
+    """Scan a user-selected directory and identify SMS BIOS images by content.
 
     The function performs no network access and never scans implicitly at import
     or machine startup. Every regular file is considered regardless of its name
-    or extension. Known BIOS signatures require exactly 8 KiB.
+    or extension. Known firmware requires exactly 8 KiB and either a trusted
+    SHA-256 signature or an exact SHA-1/MD5 match to a No-Intro SMS BIOS entry.
     """
     if directory is None or not str(directory).strip():
         return SmsFirmwareScan(None, SmsFirmwareDirectoryStatus.NOT_CONFIGURED, ())
@@ -106,6 +143,7 @@ def scan_sms_firmware_directory(
 
     scanned: list[SmsFirmwareFile] = []
     recognized: dict[str, list[int]] = {}
+    active_catalog = catalog
     for candidate in candidates:
         try:
             size = candidate.stat().st_size
@@ -149,13 +187,35 @@ def scan_sms_firmware_directory(
             continue
 
         region = _KNOWN_BIOS.get(digest)
+        catalog_diagnostic = None
+        if region is None:
+            if active_catalog is None:
+                active_catalog = RomCatalog()
+            try:
+                identification = active_catalog.identify_bytes(data, suffix=".sms")
+            except ValueError as exc:
+                identification = None
+                catalog_diagnostic = f"DAT lookup failed: {exc.__class__.__name__}."
+            if identification is not None:
+                if (
+                    identification.status == "matched"
+                    and identification.system == "master_system"
+                    and identification.matched_by in {"sha1", "md5"}
+                ):
+                    region = _sms_bios_region_from_dat_candidates(
+                        identification.candidates,
+                        require_bios_entry=True,
+                    )
+
         if region is None:
             status = SmsFirmwareFileStatus.NOT_FOUND
         elif region is SmsFirmwareRegion.JAPAN:
             status = SmsFirmwareFileStatus.VALID_JAPAN
         else:
             status = SmsFirmwareFileStatus.VALID_EXPORT_US_EU
-        scanned.append(SmsFirmwareFile(candidate, size, digest, region, status))
+        scanned.append(
+            SmsFirmwareFile(candidate, size, digest, region, status, catalog_diagnostic)
+        )
         if region is not None:
             recognized.setdefault(digest, []).append(len(scanned) - 1)
 
@@ -198,21 +258,113 @@ def sms_bios_region_from_cartridge(rom: bytes) -> str | None:
     return None
 
 
+def sms_bios_region_from_catalog(
+    rom: bytes,
+    catalog: RomCatalog,
+) -> str | None:
+    """Resolve BIOS territory from an exact SMS DAT match when the ROM header is absent.
+
+    No-Intro release regions are not video-standard metadata. An exact,
+    unambiguous Japan-only DAT identity selects the Japanese BIOS family.
+    USA, Europe, Brazil, and Australia release territories select the shared
+    export BIOS family. Brazil still requires a separate PAL-M video profile.
+    Mixed, unknown, non-SMS, and uncatalogued identities return None.
+    """
+    if not isinstance(rom, bytes):
+        raise TypeError("rom deve ser bytes.")
+
+    identification = catalog.identify_bytes(rom, suffix=".sms")
+    if (
+        identification.status != "matched"
+        or identification.system != "master_system"
+        or identification.matched_by not in {"sha1", "md5"}
+    ):
+        return None
+
+    region = _sms_bios_region_from_dat_candidates(
+        identification.candidates,
+        require_bios_entry=False,
+    )
+    if region is SmsFirmwareRegion.JAPAN:
+        return "japan"
+    if region is SmsFirmwareRegion.EXPORT_US_EU:
+        return "usa"
+    return None
+
+
+def sms_bios_region_for_rom(
+    rom: bytes,
+    catalog: RomCatalog,
+) -> str | None:
+    """Resolve an automatic BIOS family from header and exact DAT evidence.
+
+    A recognized TMR SEGA header is the primary source. An exact SHA-1/MD5
+    DAT match may confirm it, refine the generic Export group, or expose a
+    conflict. Korean and Taiwan releases are deliberately not collapsed into
+    the Japanese or US/EU BIOS families because their console variants need
+    separate hardware profiles. DAT failures do not prevent header-based boot.
+    """
+    if not isinstance(rom, bytes):
+        raise TypeError("rom deve ser bytes.")
+
+    header_family = sms_bios_region_from_cartridge(rom)
+    try:
+        identification = catalog.identify_bytes(rom, suffix=".sms")
+    except ValueError:
+        return header_family
+
+    if (
+        identification.status != "matched"
+        or identification.system != "master_system"
+        or identification.matched_by not in {"sha1", "md5"}
+    ):
+        return header_family
+
+    regions = set(identification.regions)
+    if regions & {"KOR", "TAI"}:
+        return None
+
+    export_regions = {"USA", "EUR", "BRA", "AUS"}
+    if header_family == "japan":
+        if regions & export_regions:
+            return None
+        return header_family
+
+    if header_family == "usa":
+        if "JPN" in regions:
+            return None
+        return header_family
+
+    dat_family = _sms_bios_region_from_dat_candidates(
+        identification.candidates,
+        require_bios_entry=False,
+    )
+    if dat_family is SmsFirmwareRegion.JAPAN:
+        return "japan"
+    if dat_family is SmsFirmwareRegion.EXPORT_US_EU:
+        return "usa"
+    return None
+
+
 def load_sms_bios(
     directory: str | Path | None,
     region: str,
+    *,
+    catalog: RomCatalog | None = None,
 ) -> bytes | None:
     """Load a known BIOS matching the active console territory.
 
     Selection is content-based. The selected file is revalidated after the scan
     to avoid loading bytes that changed between discovery and machine creation.
     """
-    if region not in {"japan", "usa", "europe"}:
-        raise ValueError("region deve ser usa, europe ou japan.")
+    if region not in {"japan", "usa", "europe", "brazil"}:
+        raise ValueError("region deve ser usa, europe, japan ou brazil.")
+    # Brazil uses the export BIOS family, but its PAL-M video profile is
+    # resolved independently by the SMS machine configuration.
     expected_region = (
         SmsFirmwareRegion.JAPAN if region == "japan" else SmsFirmwareRegion.EXPORT_US_EU
     )
-    scan = scan_sms_firmware_directory(directory)
+    scan = scan_sms_firmware_directory(directory, catalog=catalog)
     selected = next(
         (
             item
