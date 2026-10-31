@@ -279,7 +279,7 @@ mod windows {
                 next_device_id: 1,
                 sequence: 0,
                 started: now,
-                last_scan: now - Duration::from_secs(1),
+                last_scan: now,
                 initialized: true,
             })
         }
