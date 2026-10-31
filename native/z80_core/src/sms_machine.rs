@@ -307,6 +307,7 @@ mod tests {
         let pal_machine = NativeSMSMachine {
             machine: build_sms_machine(vec![0; 16], false, Some("europe"), None).unwrap(),
             total_instructions: 0,
+            audio_session: None,
         };
         assert_eq!(pal_machine.psg_clock_hz(), 3_546_895);
 
