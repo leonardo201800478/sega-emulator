@@ -164,3 +164,4 @@ A comparação confirmou que o SMS é o baseline semântico e de validação mai
 - [Coprocessadores especializados](architecture/specialized-coprocessors.md) é uma diretriz futura, condicionada ao marco Mega Drive.
 
 Em caso de divergência, a precedência é: contratos e comportamento efetivamente implementados e validados no código; decisões arquiteturais normativas deste repositório; documentos especializados; inventários/auditorias datados (fotografias históricas); propostas de implementação. Nenhuma proposta ou PR aberta prevalece sobre código integrado sem revisão e merge.
+
