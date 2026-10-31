@@ -39,8 +39,7 @@ fn base_ld_nn_hl_wraps_little_endian_writes_from_ffff_to_0000() {
     const PROGRAM: u16 = 0x0100;
 
     let mut bus = TraceBus::default();
-    bus.memory[usize::from(PROGRAM)..usize::from(PROGRAM) + 3]
-        .copy_from_slice(&[0x22, 0xFF, 0xFF]);
+    bus.memory[usize::from(PROGRAM)..usize::from(PROGRAM) + 3].copy_from_slice(&[0x22, 0xFF, 0xFF]);
 
     let mut cpu = Z80::default();
     cpu.registers.pc = PROGRAM;
