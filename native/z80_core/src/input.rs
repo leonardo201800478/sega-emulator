@@ -111,21 +111,21 @@ fn parse_binding(value: &str, deadzone: u16) -> PyResult<PhysicalControl> {
     )))
 }
 
-fn collect_actions(state: &ActionState, turbo: [bool; 2], frame: u64) -> Vec<String> {
-    ACTIONS
-        .iter()
-        .enumerate()
-        .filter_map(|(index, name)| {
-            let action = ActionId::new(index as u8)?;
-            let mut active = state.is_active(action);
-            if frame % 4 >= 2 {
-                if (*name == "button1" && turbo[0]) || (*name == "button2" && turbo[1]) {
-                    active = false;
-                }
-            }
-            active.then(|| (*name).to_owned())
-        })
-        .collect()
+fn collect_actions(state: &ActionState, turbo: [bool; 2], frame: u64) -> u8 {
+    let mut mask = 0_u8;
+    for (index, name) in ACTIONS.iter().enumerate() {
+        let action = ActionId::new(index as u8).expect("action index is within range");
+        let mut active = state.is_active(action);
+        if frame % 4 >= 2
+            && ((*name == "button1" && turbo[0]) || (*name == "button2" && turbo[1]))
+        {
+            active = false;
+        }
+        if active {
+            mask |= 1 << index;
+        }
+    }
+    mask
 }
 
 #[pyclass(unsendable, module = "sega_z80_core")]
@@ -298,9 +298,9 @@ impl NativeInputManager {
         Ok(())
     }
 
-    fn poll_actions(&mut self, frame_number: u64) -> PyResult<(Vec<String>, Vec<String>)> {
+    fn poll_actions(&mut self, frame_number: u64) -> PyResult<(u8, u8)> {
         self.poll_backend()?;
-        let mut output: [Vec<String>; 2] = [Vec::new(), Vec::new()];
+        let mut output = [0_u8; 2];
         for player in 0..2 {
             let (Some(profile), Some(state)) =
                 (self.profiles[player].as_ref(), self.state_for_player(player))
@@ -311,7 +311,7 @@ impl NativeInputManager {
             profile.evaluate(state, &mut actions);
             output[player] = collect_actions(&actions, self.turbo[player], frame_number);
         }
-        Ok((output[0].clone(), output[1].clone()))
+        Ok((output[0], output[1]))
     }
 
     fn read_pressed_button(&mut self, player: u8) -> PyResult<Option<String>> {
@@ -419,11 +419,11 @@ mod tests {
 
         assert_eq!(
             collect_actions(&state, [true, false], 0),
-            vec!["up", "button1", "button2"]
+            0b0110_0011
         );
         assert_eq!(
             collect_actions(&state, [true, false], 2),
-            vec!["up", "button2"]
+            0b0010_0001
         );
     }
 }
