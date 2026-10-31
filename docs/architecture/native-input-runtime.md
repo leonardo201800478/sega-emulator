@@ -27,11 +27,12 @@ O crate não depende de SG-1000, Master System, Game Gear, Mega Drive, Sega CD, 
 
 ## Estratégia Windows
 
-- Microsoft GameInput é o candidato preferencial no Windows por unificar XInput, DirectInput, Raw Input, HID, WinRT e classes de controladores. Oferece polling e notificações de eventos.
-- SDL3 é fallback de compatibilidade e backend multiplataforma. Gamepad API oferece controles mapeados; Joystick API expõe botões, eixos e hats brutos.
-- GameInput e SDL3 não são grupos separados de jogadores. Devem alimentar um único registro físico e deduplicar pela identidade canônica do dispositivo quando disponível.
-- XInput ctypes e PySDL3 permanecem apenas durante a migração e serão removidos após paridade e validação física.
-- GameInput para PC possui redistribuível próprio. O instalador deverá distribuí-lo se o backend for enviado; ausência/falha de inicialização deve ativar SDL3.
+- A primeira implementação física é Sdl3Backend, em Rust, carregando a ABI C do SDL3 dinamicamente no Windows. Ela usa a Gamepad API para controles mapeados e a Joystick API para eixos, botões e hats brutos.
+- O SDL3 é inicializado e consultado na thread da Qt, na fronteira de input antes do avanço do frame. O backend mantém handles, atualiza estados e detecta hotplug sem chamadas por instrução.
+- Instale o runtime oficial com scripts/install_sdl3_runtime.ps1. O script fixa SDL 3.4.18 e valida SHA-256 antes de copiar SDL3.dll para a raiz local; o binário não é versionado. SEGA_EMULATOR_SDL3_DLL permite indicar outro caminho.
+- NativeInputManager expõe leituras semânticas pela extensão PyO3. RustControllerInput é apenas uma ponte de UI: envia perfis e recebe ações; não enumera, consulta ou mapeia dispositivos.
+- O backend SDL3 atual atende inicialmente Windows. GameInput permanece candidato a backend complementar/futuro, sujeito a spike de ABI e validação; não está implementado nesta etapa.
+- Atribuição automática atual suporta dois slots de jogador e um dispositivo por slot. Multi-dispositivo por jogador, deduplicação GameInput/SDL3, rumble/force feedback, sensores e classificação detalhada de volantes/pedais permanecem pendentes.
 - GameInput usa interfaces COM C++. Antes do backend de produção, é obrigatório um spike isolado de ABI em Windows. Preferir bindings Rust gerados/auditados. Se um pequeno shim C ABI for inevitável, ele só poderá encapsular chamadas COM; normalização, perfis, roteamento, scheduler e emulação permanecem em Rust.
 
 ## Compatibilidade
@@ -61,3 +62,21 @@ A primeira implementação é caller-polled e pertence à fronteira nativa da ap
 - INPUT_NATIVE_PASS: gates anteriores mais medições de latência e regressões.
 
 Medições devem separar captura dispositivo-runtime, aplicação runtime-frame e button-to-photon. Registrar modelo/firmware do controle, transporte USB/Bluetooth, Windows/build, refresh, FPS, aquecimento, repetições, mediana, p95 e variação. Marketing da API ou timestamps de software não provam redução de latência.
+
+
+## Implementação física atual — 2026-10-31
+
+- native/input_runtime/src/sdl3_backend.rs implementa o backend SDL3 nativo em Rust para Windows, sem PySDL3 ou callbacks Python.
+- native/z80_core/src/input.rs implementa NativeInputManager, que normaliza leituras, aplica perfis físicos e entrega ações semânticas pela fronteira PyO3.
+- src/sega_emulator/frontend/rust_controller_input.py é somente um adaptador de UI/configuração. O Qt não faz polling físico nem converte botões SDL.
+- A UI continua capturando teclado por eventos Qt e combina ações de teclado com as ações já normalizadas do backend nativo.
+- A implementação ainda não prova menor latência física: timestamps e medições button-to-photon não foram validados com controles reais.
+
+### Limitações explícitas desta fatia
+
+- SDL3 é carregado dinamicamente por SDL3.dll; sem esse runtime, o backend fica indisponível e o teclado continua operacional.
+- O backend é Windows-only nesta etapa.
+- Atribuição automática é limitada a dois dispositivos, um por jogador.
+- Controles gamepad mapeados expõem 21 botões padrão e 6 eixos padrão. Joysticks genéricos expõem até 96 botões brutos, 16 eixos brutos e 8 hats.
+- Eixos brutos são preservados; a semântica de volante/pedais ainda exige perfil manual.
+- GameInput, deduplicação entre backends, force feedback, rumble e sensores não estão implementados.
