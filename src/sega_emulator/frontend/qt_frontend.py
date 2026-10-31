@@ -897,11 +897,7 @@ def run(initial_path: Path | None = None) -> None:
         )
 
     def configure_drivers() -> None:
-        nonlocal \
-            controller_input, \
-            audio_output, \
-            preferences, \
-            selected_audio_driver
+        nonlocal controller_input, audio_output, preferences, selected_audio_driver
 
         from sega_emulator.frontend.qt.drivers_dialog import DriversDialog
 
@@ -1077,7 +1073,9 @@ def run(initial_path: Path | None = None) -> None:
                 and selected_audio_driver != "disabled"
             )
             if machine is None:
-                audio_output = updated.audio_enabled and selected_audio_driver != "disabled"
+                audio_output = (
+                    updated.audio_enabled and selected_audio_driver != "disabled"
+                )
 
         preferences = updated
         settings.setValue("audio_driver", selected_audio_driver)
