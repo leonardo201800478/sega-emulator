@@ -13,7 +13,6 @@ from types import SimpleNamespace
 
 from sega_emulator.rom_loader import LoadedRom
 
-
 class SMSMachine:
     """Instruction-stepping SMS machine with native PSG and optional BIOS boot."""
 
@@ -99,24 +98,6 @@ class SMSMachine:
             raise ValueError("address deve estar entre 0000h e FFFFh.")
         return int(self.native_machine.read_port(address))
 
-    def drain_audio_samples(self, max_samples: int | None = None) -> list[float]:
-        if max_samples is not None and (
-            type(max_samples) is not int or max_samples < 0
-        ):
-            raise ValueError("max_samples deve ser um inteiro não negativo ou None.")
-        return list(self.native_machine.drain_audio_samples(max_samples))
-
-    def drain_audio_pcm(self, resampler: object) -> bytes:
-        """Drain native PSG samples and convert them to PCM16 in Rust."""
-        native_resampler = getattr(resampler, "_native", None)
-        if native_resampler is None:
-            raise TypeError("resampler deve encapsular o processador PCM nativo.")
-        return bytes(self.native_machine.drain_audio_pcm(native_resampler))
-
-    def discard_audio_samples(self) -> None:
-        """Discard pending native PSG samples when output is disabled."""
-        self.native_machine.discard_audio_samples()
-
     def configure_audio_output(
         self,
         backend: str,
@@ -168,7 +149,6 @@ class SMSMachine:
         # SMS VGM event capture is not wired to the native timestamped bus yet.
         return []
 
-
 class _SMSVdpSnapshot:
     """Read-only view of native SMS VDP state required by Qt presentation."""
 
@@ -194,7 +174,6 @@ class _SMSVdpSnapshot:
     @property
     def visible_height(self) -> int:
         return int(self._native_machine.visible_height)
-
 
 def load_sms_rom(path: str | Path) -> LoadedRom:
     """Load a local SMS cartridge image without applying the SG-1000 size limit."""
