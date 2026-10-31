@@ -64,9 +64,9 @@ fn parse_binding(value: &str, deadzone: u16) -> PyResult<PhysicalControl> {
             .ok_or_else(|| PyValueError::new_err("raw_button index deve estar entre 0 e 95"));
     }
     if let Some(rest) = value.strip_prefix("raw_axis_") {
-        let (index, direction) = rest.split_once('_').ok_or_else(|| {
-            PyValueError::new_err("binding raw_axis inválido")
-        })?;
+        let (index, direction) = rest
+            .split_once('_')
+            .ok_or_else(|| PyValueError::new_err("binding raw_axis inválido"))?;
         let index = index
             .parse::<usize>()
             .map_err(|_| PyValueError::new_err("índice raw_axis inválido"))?;
@@ -85,14 +85,16 @@ fn parse_binding(value: &str, deadzone: u16) -> PyResult<PhysicalControl> {
             .ok_or_else(|| PyValueError::new_err("raw_axis index deve estar entre 0 e 15"));
     }
     if let Some(rest) = value.strip_prefix("raw_hat_") {
-        let (index, direction) = rest.split_once('_').ok_or_else(|| {
-            PyValueError::new_err("binding raw_hat inválido")
-        })?;
+        let (index, direction) = rest
+            .split_once('_')
+            .ok_or_else(|| PyValueError::new_err("binding raw_hat inválido"))?;
         let index = index
             .parse::<usize>()
             .map_err(|_| PyValueError::new_err("índice raw_hat inválido"))?;
         if index >= 8 {
-            return Err(PyValueError::new_err("raw_hat index deve estar entre 0 e 7"));
+            return Err(PyValueError::new_err(
+                "raw_hat index deve estar entre 0 e 7",
+            ));
         }
         let direction_mask = match direction {
             "up" => 1,
@@ -116,8 +118,7 @@ fn collect_actions(state: &ActionState, turbo: [bool; 2], frame: u64) -> u8 {
     for (index, name) in ACTIONS.iter().enumerate() {
         let action = ActionId::new(index as u8).expect("action index is within range");
         let mut active = state.is_active(action);
-        if frame % 4 >= 2
-            && ((*name == "button1" && turbo[0]) || (*name == "button2" && turbo[1]))
+        if frame % 4 >= 2 && ((*name == "button1" && turbo[0]) || (*name == "button2" && turbo[1]))
         {
             active = false;
         }
@@ -153,9 +154,10 @@ impl NativeInputManager {
             if self.assignments[player].is_some() {
                 continue;
             }
-            let candidate = self.devices.iter().find(|device| {
-                !self.assignments.iter().flatten().any(|id| *id == device.id)
-            });
+            let candidate = self
+                .devices
+                .iter()
+                .find(|device| !self.assignments.iter().flatten().any(|id| *id == device.id));
             if let Some(device) = candidate {
                 self.assignments[player] = Some(device.id);
             }
@@ -261,7 +263,9 @@ impl NativeInputManager {
             return Err(PyValueError::new_err("player deve ser 1 ou 2"));
         }
         if !deadzone.is_finite() || !(0.0..1.0).contains(&deadzone) {
-            return Err(PyValueError::new_err("deadzone deve estar no intervalo [0, 1)"));
+            return Err(PyValueError::new_err(
+                "deadzone deve estar no intervalo [0, 1)",
+            ));
         }
         let threshold = (deadzone * i16::MAX as f64).round() as u16;
         let mut result = Vec::with_capacity(9);
@@ -302,9 +306,10 @@ impl NativeInputManager {
         self.poll_backend()?;
         let mut output = [0_u8; 2];
         for player in 0..2 {
-            let (Some(profile), Some(state)) =
-                (self.profiles[player].as_ref(), self.state_for_player(player))
-            else {
+            let (Some(profile), Some(state)) = (
+                self.profiles[player].as_ref(),
+                self.state_for_player(player),
+            ) else {
                 continue;
             };
             let mut actions = ActionState::default();
@@ -323,9 +328,27 @@ impl NativeInputManager {
             return Ok(None);
         };
         const BUTTON_NAMES: [&str; 21] = [
-            "a", "b", "x", "y", "back", "guide", "start", "leftstick", "rightstick",
-            "leftshoulder", "rightshoulder", "dpad_up", "dpad_down", "dpad_left",
-            "dpad_right", "misc1", "paddle1", "paddle2", "paddle3", "paddle4", "touchpad",
+            "a",
+            "b",
+            "x",
+            "y",
+            "back",
+            "guide",
+            "start",
+            "leftstick",
+            "rightstick",
+            "leftshoulder",
+            "rightshoulder",
+            "dpad_up",
+            "dpad_down",
+            "dpad_left",
+            "dpad_right",
+            "misc1",
+            "paddle1",
+            "paddle2",
+            "paddle3",
+            "paddle4",
+            "touchpad",
         ];
         for (index, name) in BUTTON_NAMES.iter().enumerate() {
             if state.buttons.is_pressed(index) {
@@ -358,7 +381,10 @@ impl NativeInputManager {
     }
 
     fn connected_names(&self) -> Vec<String> {
-        self.devices.iter().map(|device| device.name.clone()).collect()
+        self.devices
+            .iter()
+            .map(|device| device.name.clone())
+            .collect()
     }
 
     fn consume_disconnect_event(&mut self) -> bool {
@@ -417,13 +443,7 @@ mod tests {
         state.set(ActionId::new(4).unwrap(), true);
         state.set(ActionId::new(5).unwrap(), true);
 
-        assert_eq!(
-            collect_actions(&state, [true, false], 0),
-            0b0011_0001
-        );
-        assert_eq!(
-            collect_actions(&state, [true, false], 2),
-            0b0010_0001
-        );
+        assert_eq!(collect_actions(&state, [true, false], 0), 0b0011_0001);
+        assert_eq!(collect_actions(&state, [true, false], 2), 0b0010_0001);
     }
 }
