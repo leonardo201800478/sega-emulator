@@ -8,7 +8,7 @@ O caminho de input físico ativo é nativo em Rust:
 2. A Gamepad API fornece controles padronizados; a Joystick API preserva eixos, botões e hats brutos.
 3. NativeInputManager mantém handles, lê estados, processa hotplug, aplica perfis e produz ações semânticas.
 4. RustControllerInput é uma ponte fina entre Qt e PyO3. Não faz polling, descoberta nem mapeamento físico.
-5. Qt combina ações semânticas dos controles com eventos de teclado e envia snapshots aos cores SG-1000/SMS.
+5. Qt envia ações do teclado; Rust mescla teclado e controles físicos, aplica turbo e converte máscaras nos snapshots específicos de SG-1000/SMS.
 
 ## Runtime SDL3
 
@@ -37,7 +37,7 @@ Pendente:
 
 ## Fronteira arquitetural
 
-- Qt/PySide6 é frontend: menus, perfis persistidos, captura de teclado, configuração e diagnóstico.
-- Rust é responsável pela captura física, normalização, hotplug e mapeamento de controles.
+- Qt/PySide6 é frontend: menus, perfis persistidos, captura de teclado, configuração e diagnóstico. Envia somente máscaras lógicas de teclado ao runtime Rust.
+- Rust é responsável pela captura física, normalização, hotplug, mapeamento físico, mesclagem com teclado, turbo e conversão dos snapshots elétricos de cada core.
 - Os cores recebem somente snapshots/ações lógicas; não conhecem SDL, Windows, Qt ou dispositivos físicos.
 - Não há callbacks Python por instrução, memória, pixel ou amostra de áudio.
