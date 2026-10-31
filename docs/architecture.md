@@ -2,21 +2,19 @@
 
 ## Objetivo
 
-Construir uma base de emulação determinística, testável e evolutiva, começando pelo SG-1000. Componentes de hardware devem ser reutilizados entre consoles quando o hardware e os contratos forem realmente compatíveis. Reutilização não deve apagar diferenças entre revisões, mapas de memória, periféricos ou temporização.
+Construir uma base de emulação determinística, testável e evolutiva, consolidando conjuntamente SG-1000 e Master System. Componentes de hardware devem ser reutilizados entre consoles quando o hardware e os contratos forem realmente compatíveis. Reutilização não deve apagar diferenças entre revisões, mapas de memória, periféricos ou temporização.
 
 ## Política de implementação (decisão adotada)
 
 Rust é a linguagem principal e definitiva para a lógica de hardware do emulador. Novos componentes críticos de CPU, barramento, memória, temporização, VDP, PSG, interrupções e scheduler devem ser implementados diretamente em Rust quando seus contratos e critérios de validação estiverem claros. Não é obrigatório criar primeiro uma versão Python nem portar cada componente duas vezes.
 
-Python ativo na aplicação é restrito ao frontend Qt e seus backends de host, carregamento de ROMs/perfis, configuração/logging e à fachada fina PyO3. Ferramentas e testes podem ser escritos em Python, mas devem exercitar o runtime Rust e não importar implementações de hardware arquivadas. As antigas implementações Python de CPU, barramento/memória, VDP, PSG e máquina ficam em `legacy/python_reference/` apenas para consulta, fora do pacote executável.
+Python ativo na aplicação é restrito ao frontend Qt, orquestração de aplicação, carregamento de ROMs/perfis, configuração/logging e à fachada fina PyO3. Backends que executam hardware, processam áudio/input ou controlam o pipeline de vídeo permanecem em Rust; Qt pode consultar e apresentar capacidades do host, mas não substitui esses runtimes. Ferramentas e testes podem ser escritos em Python, mas devem exercitar o runtime Rust e não importar implementações de hardware arquivadas. As antigas implementações Python de CPU, barramento/memória, VDP, PSG e máquina ficam em `legacy/python_reference/` apenas para consulta, fora do pacote executável.
 
 Novos componentes de hardware devem nascer em Rust quando os contratos e critérios de validação estiverem claros. Não criar novos protótipos de hardware Python nem reativar código de `legacy/`; validar Rust com testes sintéticos, vetores independentes, regressões e evidência técnica.
 
 A migração é incremental: preservar contratos públicos e testes úteis, mas o único runtime de hardware ativo é Rust. O código arquivado não é backend de referência ativo nem parte da estratégia de validação. Não adicionar JIT nem paralelismo de hardware por antecipação; usar profiling e benchmarks reproduzíveis. A ordem temporal de CPU, VDP, PSG e barramento deve continuar determinística, sem paralelismo inseguro entre componentes sincronizados.
 
 Consulte [ADR 0007 — Política de desenvolvimento Rust-first](adr/0007-rust-first-development-policy.md) e [AGENTS.md](../AGENTS.md) para o fluxo de implementação, testes e workflows.
-
-## Princípios
 
 ## Princípios
 
@@ -61,8 +59,9 @@ Uma plataforma instancia e conecta os componentes concretos, define mapas de mem
 
 | Sistema | CPUs principais/auxiliares relevantes | Consequência arquitetural |
 |---|---|---|
-| SG-1000 | Z80 | Primeiro alvo para validar CPU, RAM, barramento, VDP, PSG e entrada. |
-| Master System / Game Gear | Z80 | Reutilizar o núcleo Z80; implementar mapas, VDP, áudio, I/O e diferenças da plataforma separadamente. |
+| SG-1000 | Z80 | Runtime Rust integrado; preservar CPU, RAM, barramento, I/O, TMS9918A, PSG e entrada como baseline funcional. |
+| Master System (SMS) | Z80 | Runtime Rust integrado; consolidar gameplay, CPU, mapa, VDP Mode 4, PSG, I/O, mappers e diferenças próprias. |
+| Game Gear | Z80 | Marco futuro após SG-1000/SMS; reutilizar somente mecanismos compatíveis e especializar LCD, I/O, estéreo e periféricos. |
 | Mega Drive / Genesis | Motorola 68000 principal e Z80 auxiliar | Reutilizar o núcleo Z80 quando compatível; criar núcleo 68000 separado e modelar a comunicação, RAM e arbitragem entre processadores. |
 | Sega CD | Base Mega Drive, 68000 adicional e subsistemas específicos | Compor com o Mega Drive; adicionar CPU, memória, CD e demais componentes específicos em marcos próprios. |
 | 32X | Base Mega Drive e dois SH-2 | Compor com a plataforma-base e implementar os SH-2 e os subsistemas 32X separadamente. |
@@ -71,13 +70,7 @@ Esta tabela é um direcionamento de arquitetura, não uma afirmação de que ess
 
 ## Plano incremental
 
-1. **SG-1000 — base e Z80:** completar e validar a CPU Z80 progressivamente, manter o contrato atual funcionando e só ampliá-lo quando necessário.
-2. **Z80 — cobertura:** construir uma matriz de opcodes por família/prefixo, testes de flags e ciclos, testes de limites e comparação com testes de diagnóstico confiáveis.
-3. **Temporização:** definir o modelo de avanço temporal e acessos ao barramento antes de afirmar precisão ciclo a ciclo.
-4. **SG-1000 — integração:** adicionar I/O, VDP, PSG, entrada e sincronização, testando cada componente isoladamente e em conjunto.
-5. **Master System / Game Gear:** reutilizar os componentes compatíveis e documentar diferenças específicas.
-6. **Mega Drive:** desenvolver e validar o núcleo 68000 e a interação entre CPUs antes de ampliar para Sega CD ou 32X.
-7. **Sega CD e 32X:** adicionar cada conjunto de hardware como expansão incremental da plataforma-base.
+A ordem atual de execução está no [Roadmap de consolidação SG-1000 + SMS](roadmaps/sg1000-sms-consolidation-roadmap.md). Ele prioriza baseline reproduzível, motor Z80 compartilhado, semântica Z80, barramentos/I/O, VDPs independentes, áudio, integração funcional, compatibilidade, scheduler e Qt/PyO3. Game Gear e plataformas posteriores aguardam o fechamento desse marco.
 
 ## Critérios mínimos de conclusão de uma CPU
 
@@ -88,15 +81,20 @@ Esta tabela é um direcionamento de arquitetura, não uma afirmação de que ess
 - Testes de diagnóstico de referência e regressão automatizada.
 - Incertezas de hardware identificadas; nenhuma alegação de precisão temporal além do que os testes comprovam.
 
-## Estado atual
+## Estado atual — fotografia de arquitetura
 
-O repositório contém caminhos de execução para as famílias base, CB, ED, DD/FD e DD/FD-CB da CPU Z80 e um barramento inicial de memória SG-1000 com ROM e RAM. O protocolo de memória modela leituras e escritas lógicas de bytes; não modela cada ciclo de barramento. Existe um contrato inicial separado para I/O, mas o mapa de portas da plataforma ainda não está integrado. A validação local reportada em 22/10/2026 aprovou 262 testes, além das verificações Ruff; isso não prova compatibilidade geral nem precisão ciclo a ciclo. A máquina SG-1000 completa permanece não integrada.
+O estado a seguir resume a arquitetura integrada conhecida no baseline documental de 2026-10-31. Ele não substitui a auditoria de código e workflows no SHA de cada mudança.
 
-- [Registro de desenvolvimento e ponto de retomada](development-handoff-2026-10-22.md): HEAD confirmado, testes locais, limitações e próximos passos.
-- [Auditoria geral do código](codebase-audit.md): riscos e estado revisado.
-- [Auditoria de cobertura da CPU Z80](z80-coverage.md): inventário de instruções e prefixos.
+- **SG-1000:** runtime Rust integrado à aplicação por PyO3. A máquina inclui Z80, memória, barramento, I/O, VDP TMS9918A, PSG SN76489AN, entrada e execução de frames. A compatibilidade funcional observada em jogos específicos está registrada em documentos de hardware e não implica suporte universal.
+- **Master System:** runtime Rust integrado e ativado no frontend Qt. A rota de carregamento/execução SMS foi integrada na PR #256. A auditoria SMS de 2026-10-29 registra o estado técnico e limitações; deve ser atualizada contra o baseline corrente antes de orientar remoções/refatorações.
+- **Z80:** SG-1000 e SMS mantêm executores duplicados no baseline histórico auditado, com 3.257 linhas executáveis normalizadas idênticas reportadas pela auditoria comparativa. O SMS possui suíte de testes mais madura. A consolidação em um único crate compartilhado é a prioridade técnica inicial; confirme novamente os dados no SHA candidato antes de remover cópias.
+- **VDP:** TMS9918A do SG-1000 e VDP Mode 4 do SMS são dispositivos distintos, com estados, registradores, raster, sprites e contratos próprios.
+- **Áudio:** geração digital e runtime nativo pertencem a Rust. WASAPI Shared/event-driven e XAudio2 são caminhos de saída documentados; a migração e a fidelidade por chip continuam sujeitas a validação específica.
+- **Qt/PyO3:** o frontend existente suporta os dois sistemas integrados. Os documentos de modelo funcional e arquitetura-alvo Qt são especificações de evolução e não afirmam que todas as decisões já estejam implementadas.
+- **Tempo:** o modelo atual de execução por instrução/T-states nominais não equivale a precisão ciclo a ciclo. A autoridade temporal exclusiva Rust e o Master Scheduler são decisões arquiteturais; o nível de implementação e validação deve ser conferido na auditoria temporal atual.
 
-Próxima tarefa técnica: validação diferencial da CPU Z80 contra uma suíte de referência confiável, com foco inicial em flags, operações ED de bloco, IX/IY, interrupções e temporização nominal. Corrigir primeiro as divergências reproduzíveis e documentar o que não puder ser validado.
+A fotografia e os limites por sistema estão documentados em [auditoria SMS de 2026-10-29](audits/sms-current-technical-status-2026-10-29.md), [auditoria comparativa Z80](architecture/migrations/sms-z80-maturity-audit-2026-10-31.md), [marco SG-1000](milestones/sg1000-audio-video-milestone-2026-10-26.md) e [roadmap SG-1000 + SMS](roadmaps/sg1000-sms-consolidation-roadmap.md). Auditorias datadas são evidências históricas, não garantias de que o código atual permaneça idêntico.
+
 
 
 ## Fidelidade de áudio e reutilização do PSG
