@@ -30,7 +30,9 @@ fn render(samples: &[f64]) -> Vec<Vec<u8>> {
     let sink = RecordingSink::default();
     let capture = sink.clone();
     let mut session = NativeAudioSession::new(48_000, 100, sink).expect("audio session");
-    session.process_samples(samples).expect("process native samples");
+    session
+        .process_samples(samples)
+        .expect("process native samples");
     session.close();
     let blocks = capture.0.lock().expect("recording sink lock").clone();
     blocks
@@ -62,18 +64,10 @@ fn sg1000_psg_audio_pipeline_is_deterministic_without_python_or_host_audio() {
 
 #[test]
 fn sms_psg_audio_pipeline_is_deterministic_without_python_or_host_audio() {
-    let mut left = SmsMachine::with_audio(
-        PSG_ROM.to_vec(),
-        SmsMachineConfig::default(),
-        44_100,
-    )
-    .unwrap();
-    let mut right = SmsMachine::with_audio(
-        PSG_ROM.to_vec(),
-        SmsMachineConfig::default(),
-        44_100,
-    )
-    .unwrap();
+    let mut left =
+        SmsMachine::with_audio(PSG_ROM.to_vec(), SmsMachineConfig::default(), 44_100).unwrap();
+    let mut right =
+        SmsMachine::with_audio(PSG_ROM.to_vec(), SmsMachineConfig::default(), 44_100).unwrap();
     for _ in 0..10_000 {
         left.step().unwrap();
         right.step().unwrap();
