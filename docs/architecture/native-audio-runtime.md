@@ -1,5 +1,7 @@
 # Runtime de áudio nativo — arquitetura e migração
 
+> **ORDEM DIRETA OBRIGATÓRIA:** todo código executável de áudio, lógica de chips, temporização, DSP, mixer, resampling, buffers e integração com APIs de saída deve ser implementado em Rust. Python é permitido somente para frontend Qt/PySide6, configuração, comandos coarse-grained, diagnóstico, testes e ferramentas. É proibido usar Python como runtime, fallback de hardware ou processador PCM. Consulte a [ordem arquitetural obrigatória — áudio exclusivamente em Rust](audio-rust-only-directive.md).
+
 - **Decisão:** WASAPI Shared é o backend padrão no Windows; XAudio2 é a alternativa nativa.
 - **Estado da migração:** em andamento. A documentação não implica implementação concluída.
 - **Escopo:** SG-1000 → Master System/Game Gear → Mega Drive/Genesis → Sega CD → 32X. QSound é uma extensão DSP opcional, não um chip nativo desses consoles.
