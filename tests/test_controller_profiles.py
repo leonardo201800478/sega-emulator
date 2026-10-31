@@ -7,7 +7,6 @@ import pytest
 from sega_emulator.frontend.controller_profiles import (
     ACTION_BITS,
     ControllerInputConfig,
-    PlayerInputProfile,
 )
 
 
