@@ -10,6 +10,7 @@ from __future__ import annotations
 from sega_emulator.frontend.controller_profiles import ControllerInputConfig
 
 _ACTIONS = ("up", "down", "left", "right", "button1", "button2", "hold")
+_ACTION_BITS = {action: bit for bit, action in enumerate(_ACTIONS)}
 
 
 class RustControllerInput:
@@ -58,8 +59,8 @@ class RustControllerInput:
                 profile.gamepad_buttons,
                 profile.use_left_stick,
                 self._config.deadzone,
-                False,
-                False,
+                profile.turbo_buttons.get("button1", False),
+                profile.turbo_buttons.get("button2", False),
             )
 
     @property
@@ -78,14 +79,40 @@ class RustControllerInput:
         if self._native is not None:
             self._native.set_backend_preference(preference)
 
-    def poll(self, frame_number: int = 0) -> dict[int, set[str]]:
-        if self._native is None:
-            return {1: set(), 2: set()}
-        player1, player2 = self._native.poll_actions(frame_number)
-        return {
-            player: {action for bit, action in enumerate(_ACTIONS) if mask & (1 << bit)}
-            for player, mask in ((1, player1), (2, player2))
+    @staticmethod
+    def _action_mask(actions: set[str]) -> int:
+        mask = 0
+        for action in actions:
+            bit = _ACTION_BITS.get(action)
+            if bit is not None:
+                mask |= 1 << bit
+        return mask
+
+    def poll_masks(
+        self,
+        frame_number: int,
+        keyboard_actions: dict[int, set[str]],
+    ) -> dict[int, int]:
+        keyboard_masks = {
+            player: self._action_mask(keyboard_actions.get(player, set()))
+            for player in (1, 2)
         }
+        if self._native is None:
+            masks = keyboard_masks
+            for player in (1, 2):
+                turbo = self._config.players[player].turbo_buttons
+                if frame_number % 4 >= 2:
+                    if turbo.get("button1", False):
+                        masks[player] &= ~(1 << 4)
+                    if turbo.get("button2", False):
+                        masks[player] &= ~(1 << 5)
+            return masks
+        player1, player2 = self._native.poll_actions(
+            frame_number,
+            keyboard_masks[1],
+            keyboard_masks[2],
+        )
+        return {1: int(player1), 2: int(player2)}
 
     def read_pressed_button(self, player: int) -> str | None:
         if self._native is None:
