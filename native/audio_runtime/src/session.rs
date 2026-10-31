@@ -1,61 +1,51 @@
-//! Rust-owned audio session shared by the emulated machine adapters.
+//! Rust-owned audio session shared by machine runtimes.
 //!
-//! This module has no PyO3 or Python dependency. It owns DSP, resampling and
-//! the selected host output backend. Machine adapters pass native sample
-//! slices directly; PCM buffers never cross the Python boundary.
+//! This module has no PyO3, Python, or host API dependency. Output is supplied
+//! through a small sink contract, allowing the complete DSP path to be tested
+//! headlessly with deterministic in-memory sinks.
 
 use crate::{AudioMixer, MixSource, PcmResampler};
-use sega_audio_output::{
-    NativeWasapiOutput as RustWasapiOutput, NativeXAudio2Output as RustXAudio2Output,
-};
 
-/// Complete per-machine audio session, independent from the Python binding.
-pub struct NativeAudioSession {
+/// Host-output boundary consumed by the Python-independent audio session.
+pub trait PcmSink {
+    /// Enqueue one interleaved PCM16 block. Implementations own any host buffers.
+    fn write_pcm(&mut self, pcm: Vec<u8>) -> Result<(), String>;
+
+    /// Return (underruns, dropped blocks) observed by the sink.
+    fn metrics(&self) -> (u64, u64);
+
+    /// Stop the host stream and release its resources.
+    fn close(&mut self);
+}
+
+/// Complete per-machine DSP session, independent from PyO3 and Qt.
+pub struct NativeAudioSession<S: PcmSink> {
     mixer: AudioMixer,
     mixed_samples: Vec<f64>,
     resampler: PcmResampler,
-    output: NativeAudioBackend,
+    sink: S,
+    closed: bool,
 }
 
-enum NativeAudioBackend {
-    Wasapi(RustWasapiOutput),
-    XAudio2(RustXAudio2Output),
-}
-
-impl NativeAudioSession {
-    pub fn new(
-        backend: &str,
-        sample_rate: u32,
-        buffer_size: u32,
-        queue_blocks: usize,
-        volume: u8,
-        balance: i8,
-    ) -> Result<Self, String> {
+impl<S: PcmSink> NativeAudioSession<S> {
+    /// Construct a session around an explicitly selected output sink.
+    pub fn new(sample_rate: u32, volume: u8, sink: S) -> Result<Self, String> {
         let resampler = PcmResampler::new(sample_rate, volume)
             .map_err(|error| error.to_string())?;
-        let output = match backend {
-            "wasapi" => NativeAudioBackend::Wasapi(
-                RustWasapiOutput::new_with_balance(sample_rate, buffer_size, queue_blocks, balance)
-                    .map_err(|error| error.to_string())?,
-            ),
-            "xaudio2" => NativeAudioBackend::XAudio2(
-                RustXAudio2Output::new_with_balance(
-                    sample_rate, buffer_size, queue_blocks, balance,
-                )
-                .map_err(|error| error.to_string())?,
-            ),
-            _ => return Err(format!("unsupported native audio backend: {backend}")),
-        };
         Ok(Self {
             mixer: AudioMixer::default(),
             mixed_samples: Vec::new(),
             resampler,
-            output,
+            sink,
+            closed: false,
         })
     }
 
     /// Mix, resample and enqueue one native hardware sample batch.
     pub fn process_samples(&mut self, samples: &[f64]) -> Result<(), String> {
+        if self.closed {
+            return Err("native audio session is closed".to_owned());
+        }
         if samples.is_empty() {
             return Ok(());
         }
@@ -69,49 +59,29 @@ impl NativeAudioSession {
         if pcm.is_empty() {
             return Ok(());
         }
-        match &mut self.output {
-            NativeAudioBackend::Wasapi(output) => {
-                output.write_pcm(pcm).map_err(|error| error.to_string())
-            }
-            NativeAudioBackend::XAudio2(output) => {
-                output.write_pcm(pcm).map_err(|error| error.to_string())
-            }
-        }
+        self.sink.write_pcm(pcm)
     }
 
     /// Return backend underrun and dropped-block counters.
     pub fn metrics(&self) -> (u64, u64) {
-        match &self.output {
-            NativeAudioBackend::Wasapi(output) => {
-                (output.underrun_count(), output.dropped_block_count())
-            }
-            NativeAudioBackend::XAudio2(output) => {
-                (output.underrun_count(), output.dropped_block_count())
-            }
-        }
+        self.sink.metrics()
     }
 
-    /// Flush the resampler tail and close the selected native output.
+    /// Flush the resampler tail and close the selected native output once.
     pub fn close(&mut self) {
+        if self.closed {
+            return;
+        }
         let tail = self.resampler.flush();
         if !tail.is_empty() {
-            match &mut self.output {
-                NativeAudioBackend::Wasapi(output) => {
-                    let _ = output.write_pcm(tail);
-                }
-                NativeAudioBackend::XAudio2(output) => {
-                    let _ = output.write_pcm(tail);
-                }
-            }
+            let _ = self.sink.write_pcm(tail);
         }
-        match &mut self.output {
-            NativeAudioBackend::Wasapi(output) => output.close(),
-            NativeAudioBackend::XAudio2(output) => output.close(),
-        }
+        self.sink.close();
+        self.closed = true;
     }
 }
 
-impl Drop for NativeAudioSession {
+impl<S: PcmSink> Drop for NativeAudioSession<S> {
     fn drop(&mut self) {
         self.close();
     }
@@ -119,14 +89,63 @@ impl Drop for NativeAudioSession {
 
 #[cfg(test)]
 mod tests {
-    use super::NativeAudioSession;
+    use super::{NativeAudioSession, PcmSink};
+
+    #[derive(Default)]
+    struct RecordingSink {
+        blocks: Vec<Vec<u8>>,
+        underruns: u64,
+        dropped: u64,
+        closed: bool,
+    }
+
+    impl PcmSink for RecordingSink {
+        fn write_pcm(&mut self, pcm: Vec<u8>) -> Result<(), String> {
+            if self.closed {
+                return Err("sink is closed".to_owned());
+            }
+            self.blocks.push(pcm);
+            Ok(())
+        }
+
+        fn metrics(&self) -> (u64, u64) {
+            (self.underruns, self.dropped)
+        }
+
+        fn close(&mut self) {
+            self.closed = true;
+        }
+    }
 
     #[test]
-    fn rejects_unknown_backend_without_opening_a_device() {
-        let result = NativeAudioSession::new("unknown", 48_000, 512, 4, 100, 0);
-        assert!(result
-            .err()
-            .expect("unknown backend must fail")
-            .contains("unsupported native audio backend"));
+    fn session_runs_pcm_conversion_without_a_host_or_python_runtime() {
+        let sink = RecordingSink::default();
+        let mut session = NativeAudioSession::new(44_100, 100, sink).unwrap();
+        session.process_samples(&[0.0, 0.5, -0.5]).unwrap();
+        session.close();
+        assert_eq!(session.sink.blocks, vec![vec![0, 0, 0, 64, 0, 192]]);
+        assert!(session.sink.closed);
+    }
+
+    #[test]
+    fn session_ignores_empty_batches_and_closes_idempotently() {
+        let mut session = NativeAudioSession::new(44_100, 100, RecordingSink::default()).unwrap();
+        session.process_samples(&[]).unwrap();
+        assert!(session.sink.blocks.is_empty());
+        session.close();
+        session.close();
+        assert!(session.sink.closed);
+        assert!(session.process_samples(&[0.25]).is_err());
+    }
+
+    #[test]
+    fn session_reports_sink_metrics() {
+        let sink = RecordingSink {
+            underruns: 3,
+            dropped: 2,
+            ..RecordingSink::default()
+        };
+        let session = NativeAudioSession::new(44_100, 100, sink).unwrap();
+        assert_eq!(session.metrics(), (3, 2));
     }
 }
