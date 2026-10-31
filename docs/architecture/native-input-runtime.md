@@ -80,3 +80,5 @@ Medições devem separar captura dispositivo-runtime, aplicação runtime-frame 
 - Controles gamepad mapeados expõem 21 botões padrão e 6 eixos padrão. Joysticks genéricos expõem até 96 botões brutos, 16 eixos brutos e 8 hats.
 - Eixos brutos são preservados; a semântica de volante/pedais ainda exige perfil manual.
 - GameInput, deduplicação entre backends, force feedback, rumble e sensores não estão implementados.
+
+- A ponte PyO3 atual entrega máscaras de ações digitais para SG-1000/SMS. Os canais analógicos continuam preservados em DeviceState no runtime Rust, mas ainda não são encaminhados aos cores; controles analógicos de cores futuros exigirão um snapshot nativo dedicado, sem round-trip por Python.
