@@ -3,7 +3,7 @@
 //! This module owns no CPU, memory, VDP or PSG implementation. It exposes
 //! snapshots and machine operations from sega_sg1000_core.
 
-use crate::audio::MachineAudioSession;
+use crate::audio::{open_audio_session, MachineAudioSession};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
@@ -308,7 +308,7 @@ impl NativeSG1000Machine {
         volume: u8,
         balance: i8,
     ) -> PyResult<()> {
-        let session = MachineAudioSession::open(
+        let session = open_audio_session(
             backend,
             sample_rate,
             buffer_size,
