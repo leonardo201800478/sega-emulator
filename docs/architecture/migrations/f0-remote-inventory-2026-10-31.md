@@ -11,13 +11,13 @@ A auditoria confirma que a extração de um único motor Z80 compartilhado é te
 
 A arquitetura temporal tem uma fundação real candidata na PR #315, com testes e workflows aprovados no SHA avaliado. Ela ainda não contém scheduler de máquina nem execução temporal da CPU. A PR #313 é a implementação concreta mais avançada de input Rust, mas sua integração precisa respeitar o relógio da máquina e resolver a fronteira de polling por frame. As PRs antigas #300, #301 e #298 são principalmente especificações/documentação; #297 contém código de ferramenta e está muito defasada em relação à `main`.
 
-**Decisão F0:** concluir o inventário e usar os resultados como entrada para F1 (ADRs/contratos). Não fazer merge nem iniciar alteração de gameplay nesta etapa.
+**Decisão F0:** baseline remoto e inventário estrutural concluídos; auditoria detalhada de todos os patches, testes e consumidores ainda está em andamento. Os resultados já permitem preparar os contratos F1, mas não autorizam merge nem alteração de gameplay.
 
 ## 2. Baseline e limitações da auditoria
 
 - `main` foi consultada novamente e o último commit remoto observado foi `e2eff776ec248674da07d32ff480b70d9db49a1f`.
 - Os sete heads de PR abaixo foram resolvidos diretamente pelos nomes de suas branches e comparados com `main`; os SHAs são os heads efetivamente observados nesta captura.
-- Os workflows foram consultados por SHA e os jobs retornados foram verificados individualmente.
+- Foram consultados metadados, listas completas de arquivos alterados, estatísticas de diff e workflows por SHA; os jobs retornados foram verificados individualmente. Patches foram lidos em amostras representativas, não em todos os arquivos de todas as PRs.
 - A tentativa de `git ls-remote`/sincronização de clone local falhou por resolução DNS de `github.com`. Portanto, testes locais, builds locais e inspeção de working tree local estão **NOT RUN**. A evidência de CI descrita abaixo é remota e vinculada aos SHAs listados.
 - Não foi executado agente independente A4 nesta rodada. A auditoria aqui é do coordenador, com evidência das APIs e workflows do GitHub; não deve ser descrita como revisão independente por IA.
 
@@ -175,7 +175,7 @@ Nenhuma branch será atualizada em lote. Cada PR deve ser reconciliada individua
 
 | Item | Estado |
 |---|---|
-| Baseline remoto e heads das sete PRs | **F0 concluído** |
+| Baseline remoto e heads das sete PRs | **Inventário estrutural concluído; auditoria profunda pendente** |
 | Duplicação executável Z80 SG/SMS | **Confirmada** |
 | Reuso potencial de ALU/bus compartilhados | **Confirmado; integração pendente** |
 | Temporal Core T0 | **IMPLEMENTED na PR #315; INTEGRATION_PENDING** |
@@ -188,4 +188,4 @@ Nenhuma branch será atualizada em lote. Cada PR deve ser reconciliada individua
 | A4 — revisão independente | **NOT RUN** |
 | Testes/build locais nesta sessão | **NOT RUN — DNS impediu sincronização** |
 
-**Próximo gate:** F1, com ADRs e contratos congelados. Depois disso, abrir branch de implementação para o crate Z80 compartilhado e outra para T1 temporal, sem sobrepor arquivos. Nenhum merge é autorizado por este relatório.
+**Próximo gate:** concluir a leitura detalhada dos patches/consumidores e executar A4 independente sobre F0 + ADRs. As ADRs F1 foram redigidas como propostas, ainda não aprovadas como APIs definitivas. Só depois desse gate abrir branches de implementação para o crate Z80 compartilhado e T1 temporal, sem sobrepor arquivos. Nenhum merge é autorizado por este relatório.
