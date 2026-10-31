@@ -92,8 +92,9 @@ Referência: main SHA 2318fb35715c49c26e63f71debadacdb1816c79c; branch inicial m
 - native/audio_runtime: resampler PCM em Rust.
 - native/z80_core/src/audio.rs: fachadas PyO3 para resampler e saídas; métodos atuais aceitam/retornam PCM Python e fazem cópia para Vec<u8>.
 - native/z80_core/src/machine.rs e sms_machine.rs: expõem drenagem de amostras/PCM e descarte para Python.
-- src/sega_emulator/frontend/qt_frontend.py: chama run_frame, drain_audio_pcm, write_pcm e descarte dentro do fluxo de frame.
-- src/sega_emulator/frontend/qt/audio_output.py e wasapi_audio.py: fachadas Python ainda participam da sessão e do transporte de PCM.
+- src/sega_emulator/frontend/qt_frontend.py: envia comandos de configuração/ciclo de vida e chama run_frame pelo pacing; não recebe amostras nem PCM.
+- native/z80_core/src/audio.rs: adapta os backends WASAPI/XAudio2 ao PcmSink Rust, sem classes PyO3 de transporte PCM.
+- As antigas fachadas Python audio_output.py e wasapi_audio.py foram removidas; não há transporte PCM no frontend.
 
 Esse estado é inventário, não aprovação arquitetural. O caminho PCM via Python deve ser removido após transição com testes equivalentes.
 
