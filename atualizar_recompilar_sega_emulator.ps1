@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$RomPath,
     [switch]$Full,
@@ -39,11 +39,12 @@ if (-not (Test-Path (Join-Path $RepoRoot ".git")) -or
     throw "Execute na raiz do repositorio sega-emulator."
 }
 
-# Este atualizador opera somente na main. Nao troca branches nem descarta commits.
+# Preserva a branch de trabalho. Nao troca branches nem descarta commits.
 $Branch = ((Get-GitOutput -Arguments @("branch", "--show-current")) -join "").Trim()
-if ($Branch -ne "main") {
-    throw "A branch atual e '$Branch'. Este atualizador sincroniza somente main; preserve seu trabalho e mude de branch manualmente."
+if ([string]::IsNullOrWhiteSpace($Branch)) {
+    throw "Nao foi possivel identificar a branch atual."
 }
+Write-Host "Branch de trabalho: $Branch" -ForegroundColor Cyan
 
 # Preserva arquivos locais nao rastreados em artifact/. Qualquer outra alteracao
 # (staged, tracked ou untracked) bloqueia a sincronizacao para evitar perda de trabalho.
@@ -58,7 +59,7 @@ foreach ($Entry in $Status) {
 
     $IndexStatus = $Entry.Substring(0, 2)
     $Path = $Entry.Substring(3).Trim('"') -replace '\\', '/'
-    if ($IndexStatus -eq "??" -and ($Path -eq "artifact" -or $Path.StartsWith("artifact/", [System.StringComparison]::OrdinalIgnoreCase))) {
+    if (($IndexStatus -eq "??" -and ($Path -eq "artifact" -or $Path.StartsWith("artifact/", [System.StringComparison]::OrdinalIgnoreCase))) -or ($IndexStatus -eq " M" -and $Path -eq "atualizar_recompilar_sega_emulator.ps1")) {
         $PreservedArtifacts += $Entry
     }
     else {
