@@ -526,6 +526,7 @@ def run(initial_path: Path | None = None) -> None:
 
     def show_frame() -> None:
         nonlocal \
+            audio_output, \
             frame_count, \
             last_checkpoint_time, \
             last_checkpoint_tstates
