@@ -69,7 +69,7 @@ Medições devem separar captura dispositivo-runtime, aplicação runtime-frame 
 - native/input_runtime/src/sdl3_backend.rs implementa o backend SDL3 nativo em Rust para Windows, sem PySDL3 ou callbacks Python.
 - native/z80_core/src/input.rs implementa NativeInputManager, que normaliza leituras, aplica perfis físicos e entrega ações semânticas pela fronteira PyO3.
 - src/sega_emulator/frontend/rust_controller_input.py é somente um adaptador de UI/configuração. O Qt não faz polling físico nem converte botões SDL.
-- A UI continua capturando teclado por eventos Qt e combina ações de teclado com as ações já normalizadas do backend nativo.
+- A UI captura teclado por eventos Qt e envia as ações lógicas ao runtime Rust. Os adaptadores dos cores convertem máscaras em linhas active-low/registradores específicos dentro de Rust.
 - A implementação ainda não prova menor latência física: timestamps e medições button-to-photon não foram validados com controles reais.
 
 ### Limitações explícitas desta fatia
