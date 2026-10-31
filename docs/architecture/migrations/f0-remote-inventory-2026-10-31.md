@@ -197,3 +197,17 @@ Nenhuma branch será atualizada em lote. Cada PR deve ser reconciliada individua
 | Testes/build locais nesta sessão | **NOT RUN — DNS impediu sincronização** |
 
 **Próximo gate:** concluir a leitura detalhada dos patches/consumidores e executar A4 independente sobre F0 + ADRs. As ADRs F1 foram redigidas como propostas, ainda não aprovadas como APIs definitivas. Só depois desse gate abrir branches de implementação para o crate Z80 compartilhado e T1 temporal, sem sobrepor arquivos. Nenhum merge é autorizado por este relatório.
+
+
+## 9. Correção de maturidade — auditoria comparativa SMS × SG-1000
+
+A igualdade executável descrita na seção 3 não deve ser interpretada como maturidade equivalente. A auditoria específica [SMS × SG-1000](sms-z80-maturity-audit-2026-10-31.md), feita no mesmo baseline `d54d2751ce19a11c2591b400f1ef43b00f797b6c`, confirma:
+
+- O SMS é a origem histórica consolidada e o baseline de validação semântica; o cabeçalho do SG-1000 declara que seu executor foi portado da implementação SMS.
+- Os executores e ALUs atuais são idênticos no código executável normalizado. O SG não mantém uma variante semântica independente que deva ser promovida.
+- Ambos têm 49 testes inline no arquivo CPU, mas o SMS possui mais 37 arquivos de testes dedicados ao Z80. O SG não possui `native/sg1000_core/tests`; seus testes específicos estão principalmente inline em CPU/machine.
+- O SMS já reexporta `sega-z80-bus`; SG mantém cópia local do contrato.
+- A suíte SMS inclui vetores SingleStepTests, modelos combinatórios, prefixos/indexed-CB, ED, interrupções, integração de memória e traces ED delimitados, além do runner externo fixado. Esses testes não são todos oráculos independentes: a ancestralidade Ares do SingleStepTests e os limites dos modelos internos estão documentados.
+- A PR #160 rejeitou duas diferenças propostas a partir do SG após falhas nos vetores Q de `EX AF,AF'` e DAA. A PR #201 corrigiu DAA posteriormente no baseline SMS; o código SG atual já contém a mesma correção.
+
+**Direção corrigida:** extrair o novo crate a partir do executor SMS consolidado e migrar os testes de CPU/ALU portáveis para o crate compartilhado. Não duplicar a suíte em SG. Manter testes de plataforma SMS e criar/fortalecer testes próprios de integração SG-1000. `native/z80_alu` é código duplicado equivalente, não oráculo independente.
