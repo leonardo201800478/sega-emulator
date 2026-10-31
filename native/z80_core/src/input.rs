@@ -373,3 +373,57 @@ impl NativeInputManager {
         self.assignments = [None, None];
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn physical_bindings_cover_standard_and_raw_sdl_controls() {
+        assert_eq!(parse_binding("a", 5).unwrap(), PhysicalControl::Button(0));
+        assert_eq!(
+            parse_binding("raw_button_95", 5).unwrap(),
+            PhysicalControl::Button(127)
+        );
+        assert_eq!(
+            parse_binding("raw_axis_15_negative", 5).unwrap(),
+            PhysicalControl::Axis {
+                index: 31,
+                direction: AxisDirection::Negative,
+                threshold: 5,
+            }
+        );
+        assert_eq!(
+            parse_binding("raw_hat_7_right", 5).unwrap(),
+            PhysicalControl::Hat {
+                index: 7,
+                direction_mask: 2,
+            }
+        );
+    }
+
+    #[test]
+    fn invalid_physical_binding_ranges_are_rejected() {
+        assert!(parse_binding("raw_button_96", 1).is_err());
+        assert!(parse_binding("raw_axis_16_positive", 1).is_err());
+        assert!(parse_binding("raw_hat_8_up", 1).is_err());
+        assert!(parse_binding("raw_hat_0_diagonal", 1).is_err());
+    }
+
+    #[test]
+    fn turbo_phase_suppresses_only_selected_buttons() {
+        let mut state = ActionState::default();
+        state.set(ActionId::new(0).unwrap(), true);
+        state.set(ActionId::new(4).unwrap(), true);
+        state.set(ActionId::new(5).unwrap(), true);
+
+        assert_eq!(
+            collect_actions(&state, [true, false], 0),
+            vec!["up", "button1", "button2"]
+        );
+        assert_eq!(
+            collect_actions(&state, [true, false], 2),
+            vec!["up", "button2"]
+        );
+    }
+}
