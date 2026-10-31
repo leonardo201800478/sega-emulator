@@ -165,7 +165,7 @@ Esse estado é inventário, não aprovação arquitetural. O caminho PCM via Pyt
 - Testes headless Rust validam o pipeline da sessão com sink determinístico e integração de geração PSG dos dois sistemas.
 - Reset, troca de ROM e reconfiguração fecham/recriam a sessão.
 
-### Estado de validação no candidato aad95bd26b7e90a38b250ef865fafe51f2aa1c8f
+### Evidência histórica no candidato aad95bd26b7e90a38b250ef865fafe51f2aa1c8f (não transferível)
 
 - QUICK_PASS: PASS — CI Linux, Ruff format/lint, build Maturin, smoke test SMS e 257 testes aprovados (11 ignorados).
 - SHORT_PASS: INTEGRATION_PENDING — validação funcional Python PASS (224 aprovados/21 ignorados); integridade/repetibilidade PASS (duas execuções); Qt Frontend Rebuild PASS (66 aprovados/1 ignorado, controladores 10 aprovados, suíte completa 321 aprovados/10 ignorados); UI/Controller PASS.
@@ -175,4 +175,12 @@ Esse estado é inventário, não aprovação arquitetural. O caminho PCM via Pyt
 - A drenagem PCM, conversão PCM e escrita direta de PCM por PyO3 foram removidas; as fachadas Python audio_output.py e wasapi_audio.py foram removidas. O frontend ainda chama run_frame() pelo pacing Qt; esse acoplamento temporal é uma fase separada e continua pendente.
 - WASAPI/XAudio2 em hardware físico, latência ponta a ponta, underruns sob carga e reconexão: INTEGRATION_PENDING.
 
-Não classificar a migração completa: a autonomia do scheduler frente ao timer Qt e a validação física Windows ainda estão pendentes.
+### Validação do candidato v0.1.1 — feat/rust-owned-audio-runtime
+
+- QUICK_PASS: NOT RUN — aguardando GitHub Actions no SHA candidato exato.
+- SHORT_PASS: INTEGRATION_PENDING — build Maturin, integração Qt e regressões de gameplay dependem dos workflows deste candidato.
+- LONG_PASS: NOT RUN.
+- TEMPORAL_PASS: NOT RUN — o pump ainda é acionado ao final de run_frame() pelo fluxo Qt.
+- WASAPI/XAudio2 físico, hotplug, sessões longas e latência ponta a ponta: NOT RUN.
+
+Os resultados históricos acima pertencem somente ao SHA antigo e não aprovam este candidato. Não classificar a migração completa: a autonomia do scheduler frente ao timer Qt e a validação física Windows ainda estão pendentes.
