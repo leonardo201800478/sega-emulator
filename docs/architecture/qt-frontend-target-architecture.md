@@ -226,7 +226,7 @@ Esta revisão foi executada como três frentes analíticas coordenadas nesta ses
 
 O modelo funcional registra 31 escolhas explícitas (F01–F31) e mantém F32–F35 pendentes. Este resumo destaca os impactos arquiteturais; a tabela completa e as regras de interpretação estão em [qt-frontend-functional-model.md](qt-frontend-functional-model.md), seção 14.
 
-- **Stop versus Fechar ROM (F01=C):** são comandos distintos. Stop termina a execução, mantém mídia e sessão carregadas em estado retomável; Fechar ROM encerra a sessão e descarrega a mídia. A máquina de estados precisa representar READY com mídia carregada depois de Stop.
+- **Stop versus Fechar ROM (F01=C):** são comandos distintos. Stop encerra a emulação, persiste dados pendentes e descarrega a mídia, mantendo a aplicação Qt aberta. Pause mantém a ROM e a sessão carregadas em estado suspenso; Play retoma a execução. A máquina de estados deve representar PAUSED com mídia carregada; Stop encerra a sessão e descarrega a mídia, mas não encerra o processo Qt.
 - **Reiniciar runtime (F02=B):** operação separada de Reset físico. Preserva a mídia; exige contrato de reconstrução/reinicialização, persistência de SRAM pendente, recuperação de falhas e ownership PyO3/Rust.
 - **Reset físico (F03=A) e região (F31=C):** reset mantém a sessão; alteração regional é aplicada somente após Reset. Validar se a infraestrutura atual consegue reconstruir componentes dependentes de região sem estado inconsistente.
 - **Play/Pause (F04=A):** Play inicia ou retoma; Pause suspende.
@@ -242,12 +242,12 @@ O modelo funcional registra 31 escolhas explícitas (F01–F31) e mantém F32–
 
 ### 12.1 Ajustes obrigatórios no modelo de estado
 
-A máquina de estados da seção 3 deve acomodar Stop sem descarregar mídia. Portanto, READY não pode ser interpretado como “sem ROM”: é necessário distinguir sessão pronta com mídia carregada, BIOS-only e sessão encerrada. A representação recomendada é manter dimensões ortogonais:
+A máquina de estados da seção 3 deve acomodar Stop descarrega mídia, mas não fecha a aplicação Qt. Portanto, READY não pode ser interpretado como “sem ROM”: é necessário distinguir sessão pronta com mídia carregada, BIOS-only e sessão encerrada. A representação recomendada é manter dimensões ortogonais:
 - lifecycle da sessão: CLOSED, READY, RUNNING, PAUSED, STOPPING, ERROR;
 - tipo/estado da mídia: NONE, CARTRIDGE_LOADED, BIOS_ONLY;
 - estado de execução: READY/STOPPED, RUNNING ou PAUSED (ou enum equivalente claramente definido).
 
-A transição Stop deve resultar em sessão pronta/parada com mídia preservada; Fechar ROM resulta em CLOSED + NONE. Troca de sistema com sessão ativa requer confirmação e só ocorre após encerramento seguro. O contrato de Restart Runtime deve preservar a identidade da mídia e não ser confundido com Reset físico.
+A transição Pause resulta em PAUSED + mídia carregada. Stop/Fechar ROM resulta em CLOSED + NONE após persistência segura, mantendo a aplicação Qt aberta. Troca de sistema com sessão ativa requer confirmação e só ocorre após encerramento seguro. O contrato de Restart Runtime deve preservar a identidade da mídia e não ser confundido com Reset físico.
 
 ### 12.2 Decisões ainda pendentes
 
@@ -259,3 +259,15 @@ A transição Stop deve resultar em sessão pronta/parada com mídia preservada;
 Não inferir nem aplicar as sugestões anteriores para essas flags. O inventário completo da Fase A deve determinar quais componentes e contratos já existem antes de definir extrações ou implementação.
 
 **Estado:** modelagem atualizada com decisões funcionais parciais. Sem alterações em código executável e sem validação de runtime.
+
+
+## 13. Correção de F01 — semântica de Stop e Pause
+
+Correção explícita do usuário em 2026-10-30:
+
+- **Pause:** mantém sessão e ROM carregadas, suspende a execução e permite retomar por Play.
+- **Stop:** encerra a sessão de emulação e descarrega a ROM após persistência segura; não fecha a aplicação Qt.
+- **Fechar ROM:** deve compartilhar a mesma semântica de encerramento/descarregamento de Stop, se o inventário confirmar que ambos podem encaminhar ao mesmo comando central.
+- **Reset físico:** permanece dentro da sessão e preserva a mídia.
+
+Consequência para o modelo: PAUSED é o estado com ROM carregada e execução suspensa; CLOSED + mídia NONE é o resultado de Stop. Não manter estado READY com cartucho carregado como consequência de Stop.
