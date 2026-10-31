@@ -256,3 +256,9 @@ Este plano deve seguir a [Política permanente de desenvolvimento, fidelidade e 
 6. Continuar para o próximo componente do SMS. A campanha completa de temporização ciclo a ciclo ocorrerá quando CPU, memória/barramento, I/O, VDP, PSG e scheduler estiverem integrados e funcionais.
 
 Não adiar regressões baratas nem ignorar falhas conhecidas. Não declarar completude por mera cobertura de decoder, nem precisão ciclo a ciclo por T-states agregados. Preparar desde já os contratos de eventos temporais necessários.
+
+## Reorganização do núcleo — atualização 2026-10-31
+
+A extração do Z80 para um crate compartilhado é uma mudança arquitetural separada do fechamento das lacunas semânticas desta auditoria. Não reescrever nem simplificar o decoder apenas para acomodar a nova estrutura. Primeiro estabelecer equivalência do executor SG-1000/SMS, consolidar o contrato de barramento e manter os testes/fixtures existentes. Depois, converter famílias de instruções para micro-operações retomáveis em fatias pequenas, preservando a API por instrução como fachada compatível enquanto for necessária.
+
+O Z80 de Game Gear reutilizará o mesmo motor com adaptador/perfil próprio. No Mega Drive/Genesis, o Z80 é auxiliar ao 68000 e deve obedecer ao barramento/ownership da máquina; isso pertence ao core Mega Drive e ao scheduler da plataforma, não a condicionais de console no decoder. Detalhes e gates em [reorganização arquitetural](architecture/migrations/shared-z80-runtime-reorganization.md).
