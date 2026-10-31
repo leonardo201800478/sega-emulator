@@ -8,15 +8,16 @@ Estabelecer um único proprietário temporal em Rust para a máquina emulada. CP
 
 Este documento define a arquitetura-alvo e os gates de migração. Não declara o scheduler implementado, não altera a fidelidade atual e não reivindica precisão ciclo a ciclo.
 
-## Dependências e ordem obrigatória
+## Dependências e ordem de implantação
 
-Esta etapa depende da conclusão e integração dos ports existentes:
+A infraestrutura de clock e fila de eventos pode ser desenvolvida e validada em modo headless, sem aguardar as migrações de host:
 
-1. **PR #301 — vídeo nativo em Rust:** renderer, recursos, filtros, saída/apresentação, frame pacing e coordenação com o host. A saída normal de vídeo deve ser Rust-owned, sem cópia integral do framebuffer para Python/QImage por frame.
-2. **PR #300 — input nativo em Rust:** captura/backend, enumeração, polling/eventos, hotplug, normalização, perfis e encaminhamento de gameplay. Nenhum polling/tradução de input por frame deve permanecer em Python.
-3. **Áudio Rust já integrado:** reutilizar a sessão `NativeAudioSession<S: PcmSink>`, os adaptadores SG-1000/SMS e os sinks WASAPI/XAudio2 existentes. Não criar um segundo mixer, segundo pipeline PCM ou uma segunda execução da máquina.
+1. **Rust Temporal Core:** base compartilhada de MachineTime, ClockDomain e EventQueue. Sua primeira fatia é independente de plataforma e não altera ainda o runtime das máquinas.
+2. **PR #300 — input nativo em Rust:** necessária para a integração final da captura, normalização e despacho de input do host.
+3. **PR #301 — vídeo nativo em Rust:** necessária para a integração final de renderer, apresentação e frame pacing do host.
+4. **Áudio Rust já integrado:** reutilizar a sessão NativeAudioSession<S: PcmSink> e os sinks WASAPI/XAudio2. Não criar outro mixer, segundo pipeline PCM ou segunda execução da máquina.
 
-As PRs #300 e #301 estão em Draft no momento da abertura desta proposta. Esta PR é deliberadamente uma etapa posterior: não substitui, não fecha e não declara concluídas essas dependências. Antes da implementação do scheduler, revalidar seus SHAs, contratos e testes no estado remoto atual.
+As PRs #300 e #301 continuam sendo gates de integração das fronteiras de host, mas não bloqueiam o desenvolvimento do relógio virtual, da fila de eventos nem do scheduler headless. Revalidar SHAs, contratos e testes dessas dependências antes da integração final.
 
 ## Modelo de responsabilidades
 
