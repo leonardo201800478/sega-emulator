@@ -30,8 +30,17 @@ pub struct NativeAudioSession<S: PcmSink> {
 impl<S: PcmSink> NativeAudioSession<S> {
     /// Construct a session around an explicitly selected output sink.
     pub fn new(sample_rate: u32, volume: u8, sink: S) -> Result<Self, String> {
+        Self::with_sink_factory(sample_rate, volume, || Ok(sink))
+    }
+
+    /// Validate DSP configuration before opening the host sink.
+    pub fn with_sink_factory<F>(sample_rate: u32, volume: u8, make_sink: F) -> Result<Self, String>
+    where
+        F: FnOnce() -> Result<S, String>,
+    {
         let resampler = PcmResampler::new(sample_rate, volume)
             .map_err(|error| error.to_string())?;
+        let sink = make_sink()?;
         Ok(Self {
             mixer: AudioMixer::default(),
             mixed_samples: Vec::new(),
