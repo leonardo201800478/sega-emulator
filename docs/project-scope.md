@@ -145,6 +145,34 @@ Multicarts e hacks não devem receber um mapper genérico por conveniência. Mul
 
 O diagnóstico deve informar identidade/hash, DAT e versão usados, correspondência, região/revisão, perfil de placa, mapper, mapa/tamanho de ROM, RAM/SRAM, acessórios/jogadores quando conhecidos, política/estado de BIOS e alertas de incompatibilidade. Não registrar conteúdo da ROM nem despejar dados protegidos em logs.
 
+### 4.2.1 Conjuntos compostos, cartuchos acoplados e mídias auxiliares
+
+O Media Manager também deve representar mídias que não são um único arquivo ou uma única imagem de cartucho. A unidade de carregamento pode ser um **MediaSet** versionado, composto por mídia principal, cartuchos adicionais, patches e recursos auxiliares. Cada membro mantém sua identidade, hash, procedência e papel; o conjunto não deve ser achatado em uma ROM sintética sem necessidade e sem preservar a relação entre os componentes.
+
+**Lock-on e cartuchos acoplados (Mega Drive/Genesis):**
+- Modelar o cartucho-base com pass-through/slot secundário e o cartucho conectado como dois dispositivos de mídia/placa distintos.
+- Representar detecção de presença, conexão do barramento e decodificação/seleção de ROMs de acordo com a lógica do cartucho-base; não concatenar as ROMs nem presumir que formem uma imagem linear.
+- Resolver perfis de compatibilidade e combinações suportadas. O comportamento pode depender da identidade do cartucho secundário e de dados específicos do jogo; combinação não reconhecida não deve receber resultado inventado.
+- Preservar os hashes e metadados individuais de ambos os cartuchos, a ordem/posição da conexão e a configuração de lock-on no estado de sessão/save state.
+- O comportamento Lock-On é responsabilidade do perfil de placa e da lógica de mapper/barramento Rust; Media Manager identifica e prepara o conjunto físico lógico.
+
+**ROMs com patches e recursos auxiliares (MSU-MD e MD+):**
+
+MSU-MD e MD+ devem ser identificados como perfis distintos de mídia aprimorada para Mega Drive, não como sinônimos e nem como novos mappers de cartucho. Ambos podem associar uma ROM de cartucho modificada a recursos de áudio em formato de CD, mas os contratos de integração são diferentes:
+
+- **MSU-MD:** patches e driver que utilizam o caminho Sega CD em Mode 1, com o jogo inicializado pelo cartucho e funções de áudio/streaming atendidas pelo subsistema CD. A configuração pode exigir BIOS Sega CD compatível e deve resolver essa exigência conforme o perfil e a implementação do modo. O conjunto pode incluir ROM modificada, imagem de dados e trilhas de áudio descritas por CUE/CHD; não presumir que seja apenas uma playlist de CDDA.
+- **MD+:** formato/overlay associado ao ecossistema MegaSD e seus comandos de CD overlay, com ROM modificada e CUE/recursos de áudio correspondentes. Não equivale a executar o hardware completo do Sega CD em Mode 1 e não deve herdar automaticamente a política de BIOS do MSU-MD. A compatibilidade depende do protocolo/recursos MD+ efetivamente implementados; comandos ou recursos não suportados devem ser reportados.
+- Não inferir o formato apenas pela extensão, nome do arquivo ou presença de CUE. Identificar marcadores e comandos documentados, metadados de patch, relação entre ROM e sidecars e compatibilidade do perfil. Quando a detecção for ambígua, solicitar seleção explícita.
+- Preservar a ROM original sem alteração. Registrar patch aplicado, versão, algoritmo/formato do patch, hash da ROM-base, hash da ROM resultante e hashes dos recursos auxiliares. Se o patch for pré-aplicado e não houver patch reversível disponível, classificar a imagem como derivada/modificada e não como dump original validado pelo DAT.
+- Resolver nomes e relações entre ROM, CUE, ISO/BIN/CHD e faixas de áudio de maneira explícita. Validar arquivos ausentes, trilhas referenciadas, índices, loops e metadados específicos do formato; não presumir que um CUE de MD+ seja equivalente a um CUE de MSU-MD.
+- O runtime Rust deve separar o protocolo de extensão (MD+ ou MSU-MD), o leitor de mídia óptica/sidecar e o hardware Sega CD real. O adaptador de protocolo não pode falsificar registradores, BIOS, CPUs ou dispositivos do Sega CD quando o modo não os instancia.
+
+**Modelo de conjunto e validação:**
+- Um MediaSet deve declarar papel de cada membro (cartucho primário, cartucho lock-on, patch, imagem de dados, trilha de áudio, firmware, sidecar), identidade, hash, formato, versão do perfil e dependências.
+- O carregamento deve falhar com diagnóstico específico se faltar membro obrigatório, se hashes/revisões não corresponderem, se o CUE apontar para arquivos inexistentes ou se o protocolo de extensão for incompatível.
+- Testar separadamente: cartucho isolado; combinações lock-on conhecidas e desconhecidas; ROM original versus ROM modificada; MD+; MSU-MD com Mode 1; arquivos auxiliares ausentes/incompatíveis; e save/load state com a mesma composição de mídia.
+- MediaSet, seleção de perfil e estado de leitura devem ser reproduzíveis. O leitor do host não controla o tempo emulado; latências e eventos percebidos pelo jogo são determinados pelo controlador de hardware e pelo Master Scheduler Rust.
+
 ### 4.3 MachineProfile
 
 Antes do reset/boot, resolver um perfil explícito e versionado com, no mínimo:
@@ -371,6 +399,9 @@ Cada componente deve seguir inventário → critérios de aceitação → implem
 | Mappers | Vetores por mapper/placa, bancos/janelas, limites, leituras/escritas, reset, RAM persistente e efeitos de barramento comprovados |
 | Multicarts e hacks | Seleção de título/banco reproduzível; hacks/patches identificados como derivados, com procedência e perfil explícito quando alterarem hardware |
 | Requisitos do jogo | Jogadores, modo de jogo, acessórios, BIOS/firmware e peculiaridades de boot com fonte/confiança ou estado UNKNOWN |
+| MediaSet e mídia composta | Identidade individual e composição de cartuchos lock-on, patches, sidecars, imagens de dados e trilhas; hashes/procedência e dependências reproduzíveis |
+| Lock-on | Dois cartuchos/dispositivos distintos, pass-through, seleção/decodificação de barramento, combinações suportadas e save state |
+| MSU-MD / MD+ | Perfis distintos; patch/base ROM/sidecars/CUE e trilhas validados; Mode 1/BIOS separado de MD+ overlay; incompatibilidades e arquivos ausentes diagnosticados |
 | Raster | H/V counters, linhas, dots, blanking, fronteiras e eventos |
 | Sprites | Limites, avaliação, prioridade, colisão, overflow e casos fora da tela |
 | Paleta/composição | Valores digitais, transparência, prioridade e mistura entre camadas |
@@ -438,6 +469,10 @@ Não implementar os seis núcleos em paralelo. O SMS é a próxima trilha de cor
 - Não tratar No-Intro/Redump como catálogo completo de comportamento de hardware, jogadores ou acessórios; esses dados exigem metadados técnicos complementares e evidência rastreável.
 - Não selecionar mapper, perfil de placa, RAM/SRAM ou política de BIOS por heurística silenciosa quando a identidade for ambígua.
 - Não confundir CartProfile/BoardProfile, implementação executável do mapper e MachineProfile; são responsabilidades distintas.
+- Não achatar cartuchos lock-on em uma ROM concatenada nem tratar cartuchos acoplados como um único dump sem preservar seus dispositivos e relações.
+- Não tratar MSU-MD e MD+ como sinônimos: seus protocolos, caminhos de áudio/CD e requisitos de hardware/BIOS são distintos.
+- Não validar ROM modificada como dump original No-Intro; preservar hash da base, patch/procedência, hash resultante e recursos auxiliares.
+
 - Não exigir BIOS de SMS/GG universalmente; respeitar modelo e configuração.
 - Não simular Sega CD funcional sem firmware exigido e válido.
 - Não ativar HLE como se fosse firmware original.
