@@ -475,7 +475,7 @@ mod tests {
         state.set(ActionId::new(4).unwrap(), true);
         state.set(ActionId::new(5).unwrap(), true);
 
-        assert_eq!(collect_actions(&state, [true, false], 0), 0b0011_0001);
-        assert_eq!(collect_actions(&state, [true, false], 2), 0b0010_0001);
+        assert_eq!(apply_turbo(collect_actions(&state), [true, false], 0), 0b0011_0001);
+        assert_eq!(apply_turbo(collect_actions(&state), [true, false], 2), 0b0010_0001);
     }
 }
