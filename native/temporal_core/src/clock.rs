@@ -122,7 +122,12 @@ pub struct ClockDomain {
 impl ClockDomain {
     /// Create a domain at start with zero fractional phase and cycle count.
     pub const fn new(ratio: ClockRatio, start: MachineTime) -> Self {
-        Self { ratio, time: start, total_cycles: 0, phase: 0 }
+        Self {
+            ratio,
+            time: start,
+            total_cycles: 0,
+            phase: 0,
+        }
     }
 
     /// Create a domain with an explicit initial phase.
@@ -134,7 +139,12 @@ impl ClockDomain {
         if phase >= ratio.ticks_denominator as u128 {
             return Err(ClockError::PhaseOutOfRange);
         }
-        Ok(Self { ratio, time: start, total_cycles: 0, phase })
+        Ok(Self {
+            ratio,
+            time: start,
+            total_cycles: 0,
+            phase,
+        })
     }
 
     /// Return the domain's immutable clock ratio.
@@ -157,7 +167,8 @@ impl ClockDomain {
     /// Calls must be monotonic. Arithmetic is checked before state is changed,
     /// so an error leaves the domain unchanged.
     pub fn advance_to(&mut self, target: MachineTime) -> Result<u128, ClockError> {
-        let elapsed = target.checked_duration_since(self.time)
+        let elapsed = target
+            .checked_duration_since(self.time)
             .ok_or(ClockError::TimeWentBackwards)?;
         let scaled = elapsed
             .checked_mul(u128::from(self.ratio.cycles_numerator))
@@ -166,7 +177,9 @@ impl ClockDomain {
         let denominator = u128::from(self.ratio.ticks_denominator);
         let new_cycles = scaled / denominator;
         let new_phase = scaled % denominator;
-        let new_total = self.total_cycles.checked_add(new_cycles)
+        let new_total = self
+            .total_cycles
+            .checked_add(new_cycles)
             .ok_or(ClockError::ArithmeticOverflow)?;
 
         self.time = target;
@@ -221,7 +234,10 @@ mod tests {
         let mut domain = ClockDomain::new(ratio, MachineTime::from_ticks(5));
         let before = domain.clone();
 
-        assert_eq!(domain.advance_to(MachineTime::from_ticks(4)), Err(ClockError::TimeWentBackwards));
+        assert_eq!(
+            domain.advance_to(MachineTime::from_ticks(4)),
+            Err(ClockError::TimeWentBackwards)
+        );
         assert_eq!(domain, before);
     }
 
