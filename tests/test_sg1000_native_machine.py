@@ -7,11 +7,9 @@ import pytest
 from sega_emulator.machine.sg1000 import SG1000Machine
 
 
-
 def _machine(rom: bytes = b"\xc3\x00\x00") -> SG1000Machine:
     pytest.importorskip("sega_z80_core")
     return SG1000Machine(rom)
-
 
 
 def test_machine_uses_only_native_rust_runtime() -> None:
