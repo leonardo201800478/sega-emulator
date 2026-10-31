@@ -32,7 +32,7 @@
 "BASE","1E","LD E,n","documented_or_context_dependent","decoder path present; classification test only","sparse_selected_vectors","NOT_VERIFIED",""
 "BASE","1F","RRA","documented_or_context_dependent","decoder path present; classification test only","exhaustive_internal_model","NOT_VERIFIED",""
 "BASE","20","JR NZ,e","documented_or_context_dependent","decoder path present; classification test only","sparse_selected_vectors","NOT_VERIFIED","SingleStepTests/Z80 v1/20.json vector 20 0000 at ebe1875d48f374bcfd4b505d8eb8ee751568b5f7; architectural state and 12 aggregate T-states only; conditional JR regression separately covers all four conditions taken/not taken, PC, flags, WZ and 7/12 T-states; no ordered bus trace"
-"BASE","21","LD HL,nn","documented_or_context_dependent","decoder path present; classification test only","sparse_selected_vectors","NOT_VERIFIED",""
+"BASE","21","LD HL,nn","documented_or_context_dependent","decoder path present; classification test only","one_pinned_reference_vector","NOT_VERIFIED","SingleStepTests/Z80 v1/21.json vector 21 0000 at ebe1875d48f374bcfd4b505d8eb8ee751568b5f7; architectural state, the three listed RAM bytes unchanged and 10 aggregate T-states only; no ordered bus trace"
 "BASE","22","LD (nn),HL","documented_or_context_dependent","decoder path present; classification test only","sparse_selected_vectors","NOT_VERIFIED",""
 "BASE","23","INC HL","documented_or_context_dependent","decoder path present; classification test only","exhaustive_internal_model","NOT_VERIFIED",""
 "BASE","24","INC H","documented_or_context_dependent","decoder path present; classification test only","exhaustive_internal_model","NOT_VERIFIED",""
