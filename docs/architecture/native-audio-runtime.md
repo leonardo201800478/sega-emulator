@@ -147,3 +147,27 @@ Esse estado é inventário, não aprovação arquitetural. O caminho PCM via Pyt
 - Rust windows: https://docs.rs/windows/
 - Rust rtrb: https://docs.rs/rtrb/
 - Versões efetivas das crates e workflows do SHA candidato prevalecem sobre exemplos externos.
+
+## 9. Estado da implementação na PR #299
+
+**Candidato:** branch migration/native-audio-runtime; referência de código atualizada durante esta fatia em 2026-10-31.
+
+### IMPLEMENTED — primeira fatia da sessão nativa
+
+- NativeAudioSession em Rust possui resampler e backend WASAPI/XAudio2.
+- NativeSG1000Machine e NativeSMSMachine possuem e controlam a sessão.
+- O caminho Qt ativo configura a sessão por comandos coarse-grained e não chama drain_audio_pcm nem write_pcm por frame.
+- Ao concluir run_frame, Rust drena as amostras internamente e as encaminha à sessão.
+- Falha de escrita desativa a sessão e é reportada ao frontend sem interromper a emulação.
+- Reset, troca de ROM e reconfiguração fecham/recriam a sessão.
+
+### Ainda pendente
+
+- QUICK_PASS: NOT RUN nesta atualização; os workflows anteriores pararam em Ruff format antes de lint/build/test.
+- SHORT_PASS: INTEGRATION_PENDING até o novo SHA candidato concluir CI Windows e testes Python/Rust.
+- LONG_PASS: NOT RUN.
+- TEMPORAL_PASS: NOT RUN; a execução ainda é em lotes/frame e não constitui produção de áudio desacoplada do timer Qt.
+- A API PyO3 antiga de drenagem PCM e as fachadas Python de resampler/saída ainda existem para compatibilidade/testes. A remoção é a próxima fase, após validar a sessão nativa.
+- WASAPI/XAudio2 em hardware físico, latência ponta a ponta, underruns sob carga e reconexão: INTEGRATION_PENDING.
+
+Não classificar a migração completa nem remover compatibilidade até que os testes de integração do candidato exato passem.
