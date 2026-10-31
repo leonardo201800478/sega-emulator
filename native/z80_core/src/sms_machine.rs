@@ -5,7 +5,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use sega_sms_core::{ControllerButtons, SmsMachine, SmsMachineConfig, VideoStandard};
 
-use crate::audio::MachineAudioSession;
+use crate::audio::{open_audio_session, MachineAudioSession};
 
 /// Resolve the territory and video standard without constructing Python errors.
 ///
@@ -107,7 +107,7 @@ impl NativeSMSMachine {
         volume: u8,
         balance: i8,
     ) -> PyResult<()> {
-        let session = MachineAudioSession::open(
+        let session = open_audio_session(
             backend,
             sample_rate,
             buffer_size,
