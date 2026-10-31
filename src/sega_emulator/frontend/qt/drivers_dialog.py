@@ -16,9 +16,8 @@ from PySide6.QtWidgets import (
 )
 
 INPUT_DRIVERS = (
-    ("Automático (XInput → SDL3)", "auto"),
-    ("XInput (Windows)", "xinput"),
-    ("SDL3 Gamepad", "sdl3"),
+    ("Automático (SDL3 nativo em Rust)", "auto"),
+    ("SDL3 nativo em Rust", "sdl3"),
 )
 AUDIO_DRIVERS = (
     ("WASAPI nativo (Rust)", "wasapi"),
