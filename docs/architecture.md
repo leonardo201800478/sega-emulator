@@ -137,7 +137,7 @@ O runtime de áudio é uma infraestrutura Rust compartilhada, independente das A
 
 ## Scheduler mestre Rust e sincronização A/V/input
 
-A arquitetura-alvo para sincronizar CPU, barramento, VDP, PSG, entrada e saídas de áudio/vídeo em uma única timeline Rust está especificada em [Master Scheduler Rust](architecture/native-master-scheduler.md), com etapas e gates em [Plano de migração do Master Scheduler](architecture/migrations/native-master-scheduler.md). Essa etapa depende da integração dos ports nativos de vídeo e input; a documentação não declara implementação nem validação temporal concluídas.
+A arquitetura-alvo para sincronizar CPU, barramento, VDP, PSG, entrada e saídas de áudio/vídeo em uma única timeline Rust está especificada em [Master Scheduler Rust](architecture/native-master-scheduler.md), com etapas e gates em [Plano de migração do Master Scheduler](architecture/migrations/native-master-scheduler.md). A integração completa das fronteiras de host depende dos ports nativos de vídeo e input; o desenvolvimento do Temporal Core e do scheduler headless pode ocorrer antes deles. A documentação não declara implementação nem validação temporal concluídas.
 
 ## Núcleo temporal compartilhado
 
