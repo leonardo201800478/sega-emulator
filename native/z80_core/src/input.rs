@@ -354,7 +354,7 @@ impl NativeInputManager {
         if !matches!(player, 1 | 2) {
             return Err(PyValueError::new_err("player deve ser 1 ou 2"));
         }
-        self.poll_backend()?;
+        self.poll_backend();
         let Some(state) = self.state_for_player((player - 1) as usize) else {
             return Ok(None);
         };
