@@ -112,6 +112,29 @@ class SG1000Machine:
         """Discard queued PSG samples natively when audio output is disabled."""
         self.native_machine.discard_audio_samples()
 
+    def configure_audio_output(
+        self,
+        backend: str,
+        sample_rate: int = 48_000,
+        buffer_size: int = 512,
+        queue_blocks: int = 4,
+        volume: int = 100,
+        balance: int = 0,
+    ) -> None:
+        """Configure the native Rust audio session without exposing PCM buffers."""
+        self.native_machine.configure_audio_output(
+            backend, sample_rate, buffer_size, queue_blocks, volume, balance
+        )
+
+    def close_audio_output(self) -> None:
+        """Stop and release the native Rust audio session."""
+        self.native_machine.close_audio_output()
+
+    @property
+    def audio_output_metrics(self) -> tuple[int, int]:
+        """Return native underrun and dropped-block counters."""
+        return tuple(self.native_machine.audio_output_metrics)
+
     def run_frame(self, max_steps: int = 100_000) -> int:
         if type(max_steps) is not int or max_steps < 1:
             raise ValueError("max_steps deve ser um inteiro positivo.")
