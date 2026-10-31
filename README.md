@@ -202,6 +202,7 @@ O projeto é independente e não é afiliado à SEGA. SEGA e SG-1000 são marcas
 - [Reorganização Rust-first e núcleo Z80 compartilhado](docs/architecture/migrations/shared-z80-runtime-reorganization.md)
 - [Cronograma da reorganização e charter dos agentes](docs/architecture/migrations/reorganization-roadmap-and-agent-charter.md)
 - [Contrato global de drivers de entrada, áudio e vídeo](docs/architecture/host-driver-apis.md)
+- [Escopo e decisões de arquitetura para periféricos e entradas modernas](docs/architecture/input-peripherals-scope.md)
 - [Arquitetura dos crates Rust nativos, dependências e limites de CI](docs/architecture/native-rust-crates.md)
 - [Backends de apresentação de vídeo e validação Vulkan](docs/architecture/vulkan-presentation-qt-quick.md)
 - [Instruções para agentes de código](AGENTS.md)
