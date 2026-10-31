@@ -1,9 +1,10 @@
 //! Host-independent input contracts shared by all Sega emulator cores.
 //!
-//! This crate has no OS, windowing, SDL, GameInput, Python, or console-specific
-//! dependencies. Platform backends produce timestamped physical-device state;
-//! profiles map controls to logical actions; each console maps those actions
-//! into its own peripheral state.
+//! The shared contracts are host-independent and have no third-party
+//! dependencies. Platform adapters are isolated in backend modules; the
+//! initial Windows SDL3 adapter dynamically loads SDL3's C ABI. Backends
+//! produce timestamped physical-device state; profiles map controls to
+//! logical actions; each console maps those actions into its own peripherals.
 //!
 //! Poll only at an explicit host input boundary. Never poll from CPU
 //! instructions, memory accesses, bus callbacks, or pixel/sample paths.
