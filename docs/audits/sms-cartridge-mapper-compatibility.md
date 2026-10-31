@@ -228,7 +228,7 @@ Estados de jogo não podem ser promovidos apenas por identificação do mapper:
 3. Genesis Plus GX, [sms_cart.c](https://github.com/ekeeke/Genesis-Plus-GX/blob/master/core/cart_hw/sms_cart.c): catálogo de CRCs e classificação de Codemasters, MSX, Korea 16K, multicarts, HiCOM e outros perfis. Usado como oráculo comparativo, não como prova final de hardware.
 4. MAME, [hash/sms.xml](https://github.com/mamedev/mame/blob/master/hash/sms.xml): metadados de dumps, CRC/SHA-1 e identificação de placas/slots quando disponível.
 5. SMS Power!, [Cyborg Z](https://www.smspower.org/Games/CyborgZ-SMS): CRC32 e classificação do jogo como port MSX.
-6. SMS Power!, [Dallyeora Pigu-Wang](https://www.smspower.org/Games/DallyeoraPiguWang-SMS): identidade do jogo e dump; consultar também o perfil de mapper no catálogo Genesis Plus GX.
+6. No-Intro SMS DAT e catálogo Genesis Plus GX: identidade por CRC32 e classificação de Dallyeora Pigu-Wang; a documentação SMS Power descreve separadamente o Korean mapper simples.
 7. SMS Power!, [E.I. - Exa Innova](https://www.smspower.org/Games/EIExaInnova-SMS): dump de 32 KiB e CRC32; não demonstra mapper especial.
 8. SMS Power!, [20 em 1](https://www.smspower.org/Games/20Em1-SMS): dump brasileiro de 256 KiB e CRC32; mapper permanece pendente.
 
