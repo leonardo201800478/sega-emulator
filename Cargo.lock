@@ -18,6 +18,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "sega-temporal-core"
+version = "0.1.0"
+
+[[package]]
 name = "sega-z80-alu"
 version = "0.1.0"
 
