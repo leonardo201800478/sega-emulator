@@ -333,7 +333,7 @@ impl NativeInputManager {
         frame_number: u64,
         keyboard_player1: u8,
         keyboard_player2: u8,
-    ) -> PyResult<(u8, u8)> {
+    ) -> (u8, u8) {
         self.poll_backend();
         let mut output = [keyboard_player1, keyboard_player2];
         for player in 0..2 {
@@ -347,7 +347,7 @@ impl NativeInputManager {
             }
             output[player] = apply_turbo(output[player], self.turbo[player], frame_number);
         }
-        Ok((output[0], output[1]))
+        (output[0], output[1])
     }
 
     fn read_pressed_button(&mut self, player: u8) -> PyResult<Option<String>> {
