@@ -125,6 +125,14 @@ Pontos que exigem decisão/validação antes da integração:
 
 A #300 é documentação anterior, não deve originar um segundo runtime. Seus critérios (perfis, dispositivos genéricos, hotplug, compatibilidade e latência) permanecem requisitos de aceitação para a #313.
 
+**Checagem da API SDL3 (documentação oficial):** a versão `3.4.18` usada pela PR é a release estável mais recente listada em 2026-10-31. O SHA-256 do ZIP Windows x64 no script de instalação coincide com o hash publicado na release oficial. Os valores numéricos usados para classificar joystick type (2 wheel, 3 arcade stick, 4 flight stick e 8 arcade pad) correspondem ao enum oficial. O código também respeita a ownership de `SDL_GetGamepadJoystick`: fecha o gamepad e não fecha separadamente o joystick emprestado. Isso valida os pontos de ABI/ownership revisados, não a compatibilidade de todos os controles físicos.
+
+Referências oficiais:
+- [SDL 3.4.18 release](https://github.com/libsdl-org/SDL/releases/tag/release-3.4.18)
+- [SDL_JoystickType](https://wiki.libsdl.org/SDL3/SDL_JoystickType)
+- [SDL_GetGamepadJoystick](https://wiki.libsdl.org/SDL3/SDL_GetGamepadJoystick)
+- [SDL_CloseGamepad](https://wiki.libsdl.org/SDL3/SDL_CloseGamepad)
+
 ### 5.4 #301 — vídeo
 
 A PR é especificação documental. A integração deve manter Qt como shell de janela/UI e transferir ownership de renderer, recursos e apresentação para Rust somente após decisão de API, surface lifecycle, device loss, fallback e medições. VSync/VRR/frame pacing não pode avançar o relógio lógico da máquina. Não há migração de vídeo implementada por essa PR.
