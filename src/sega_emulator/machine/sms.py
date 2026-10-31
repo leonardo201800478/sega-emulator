@@ -150,6 +150,7 @@ class SMSMachine:
         # SMS VGM event capture is not wired to the native timestamped bus yet.
         return []
 
+
 class _SMSVdpSnapshot:
     """Read-only view of native SMS VDP state required by Qt presentation."""
 
@@ -175,6 +176,7 @@ class _SMSVdpSnapshot:
     @property
     def visible_height(self) -> int:
         return int(self._native_machine.visible_height)
+
 
 def load_sms_rom(path: str | Path) -> LoadedRom:
     """Load a local SMS cartridge image without applying the SG-1000 size limit."""
