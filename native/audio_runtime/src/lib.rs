@@ -289,7 +289,10 @@ mod tests {
         let high = decode(&high_pcm);
         let rms = |samples: &[i16]| -> f64 {
             let tail = &samples[100..];
-            (tail.iter().map(|sample| f64::from(*sample).powi(2)).sum::<f64>()
+            (tail
+                .iter()
+                .map(|sample| f64::from(*sample).powi(2))
+                .sum::<f64>()
                 / tail.len() as f64)
                 .sqrt()
         };
@@ -297,5 +300,4 @@ mod tests {
         assert!(rms(&low) > 8_000.0);
         assert!(rms(&high) < rms(&low) * 0.03);
     }
-
 }
