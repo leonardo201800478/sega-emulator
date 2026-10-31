@@ -1,4 +1,4 @@
-"""Integration tests for native Rust SMS PSG audio exposed through PyO3."""
+"""Smoke tests for SMS machine state exposed by the native Rust binding."""
 
 from __future__ import annotations
 
