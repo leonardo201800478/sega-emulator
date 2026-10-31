@@ -427,15 +427,6 @@ impl NativeSG1000Machine {
             .collect()
     }
 
-    fn drain_audio_pcm<'py>(
-        &mut self,
-        py: Python<'py>,
-        mut resampler: PyRefMut<'_, NativePcmResampler>,
-    ) -> Bound<'py, PyBytes> {
-        let samples = self.machine.drain_audio_samples(None);
-        PyBytes::new(py, &resampler.process_native(&samples))
-    }
-
     fn step(&mut self) -> PyResult<u32> {
         let cycles = self
             .machine
