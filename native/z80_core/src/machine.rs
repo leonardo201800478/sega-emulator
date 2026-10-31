@@ -460,59 +460,5 @@ impl NativeSG1000Machine {
         }
         Ok(total_steps)
     }
-    #[derive(Clone, Default)]
-    struct RecordingAudioSink(std::sync::Arc<std::sync::Mutex<Vec<Vec<u8>>>>);
-
-    impl sega_audio_runtime::PcmSink for RecordingAudioSink {
-        fn write_pcm(&mut self, pcm: Vec<u8>) -> Result<(), String> {
-            self.0.lock().unwrap().push(pcm);
-            Ok(())
-        }
-
-        fn metrics(&self) -> (u64, u64) {
-            (0, 0)
-        }
-
-        fn close(&mut self) {}
-    }
-
-    #[test]
-    fn sg1000_psg_audio_runs_through_rust_session_without_python() {
-        let rom = [
-            0x3E, 0x90, 0xD3, 0x7F, 0x3E, 0x85, 0xD3, 0x7F, 0x3E, 0x12, 0xD3, 0x7F, 0xC3, 0x00,
-            0x00,
-        ];
-        let mut left = Sg1000Machine::new(&rom, MemoryConfig::default()).unwrap();
-        let mut right = Sg1000Machine::new(&rom, MemoryConfig::default()).unwrap();
-        for _ in 0..10_000 {
-            left.step().unwrap();
-            right.step().unwrap();
-        }
-
-        let left_tstates = left.cpu.total_tstates;
-        let right_tstates = right.cpu.total_tstates;
-        let left_samples = left.drain_audio_samples(None);
-        let right_samples = right.drain_audio_samples(None);
-        assert!(!left_samples.is_empty());
-        assert_eq!(left_samples, right_samples);
-
-        let left_sink = RecordingAudioSink::default();
-        let right_sink = RecordingAudioSink::default();
-        let left_capture = left_sink.clone();
-        let right_capture = right_sink.clone();
-        let mut left_session =
-            sega_audio_runtime::NativeAudioSession::new(48_000, 100, left_sink).unwrap();
-        let mut right_session =
-            sega_audio_runtime::NativeAudioSession::new(48_000, 100, right_sink).unwrap();
-        left_session.process_samples(&left_samples).unwrap();
-        right_session.process_samples(&right_samples).unwrap();
-
-        let left_pcm = left_capture.0.lock().unwrap().clone();
-        let right_pcm = right_capture.0.lock().unwrap().clone();
-        assert!(!left_pcm.is_empty());
-        assert_eq!(left_pcm, right_pcm);
-        assert_eq!(left.cpu.total_tstates, left_tstates);
-        assert_eq!(right.cpu.total_tstates, right_tstates);
-    }
 
 }
