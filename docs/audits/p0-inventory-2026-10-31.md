@@ -564,3 +564,32 @@ Ação tomada:
 Próxima decisão:
 - Aguardar resultado do rerun Windows e do Agent 3.
 - Depois, fazer reconciliação real em branch baseada no `main` atual. Não usar GitHub Contents API para simular rebase de uma PR com 107 commits; não alterar a branch original e não abrir PR de integração sem uma árvore reconciliada e validada.
+
+
+## 17. Regra de sincronização por SHA e nova tentativa Windows — 2026-10-31
+
+Diretriz operacional confirmada pelo mantenedor:
+- Toda PR divergente deve ser substituída por uma nova PR cuja branch nasce do SHA atual de `main`.
+- A PR antiga só pode ser fechada depois de a substituta existir e conter integralmente as alterações válidas.
+- Nunca descartar alterações válidas, fazer force-push ou fechar a PR antiga antes da substituta.
+- Não transportar resultados de CI entre SHAs.
+
+Revalidação:
+- `main` permanece em `c31e4183b8d0b36d95b4f58582938186417652f8`.
+- PR #313 continua aberta/Draft, head `fc6463f...`; 107 commits ahead e 36 behind.
+- Agent 3 completou SUCCESS no SHA da PR #313.
+- O rerun do job Windows falhou novamente no mesmo passo de download oficial SDL3, em `scripts/install_sdl3_runtime.ps1:18`, com timeout de conexão a `https://www.libsdl.org/release/SDL3-3.4.18-win32-x64.zip`. As etapas posteriores foram skipped.
+- Classificação: BLOCKED por indisponibilidade de download externo. Não é PASS e não prova falha do código.
+
+Decisão de segurança:
+- Não foi criada uma branch vazia/parcial para fingir substituição da PR #313.
+- Não foi aberta PR substituta parcial e a PR #313 não foi fechada, pois a substituta precisa conter integralmente os 36 arquivos e preservar semanticamente as mudanças do main.
+- A tentativa anterior de `git ls-remote` no ambiente de trabalho falhou por DNS para github.com. Sem checkout Git funcional, não há como executar um rebase/cherry-pick real e resolver conflitos semanticamente. GitHub Contents API não é substituto aceitável para essa operação.
+- A PR #315 também diverge (15 ahead, 36 behind) e fica sujeita à mesma regra de substituição; não foi modificada.
+- PR #324 (6 ahead, 0 behind) e PR #325 (8 ahead, 0 behind) permanecem não divergentes em relação ao main consultado.
+
+Próximo passo operacional:
+1. Restabelecer um ambiente Git com acesso ao GitHub.
+2. Criar branch nova a partir do SHA de main consultado novamente no momento da operação.
+3. Reaplicar integralmente as mudanças da PR divergente, resolver conflitos e testar.
+4. Abrir a PR substituta; só então fechar a antiga com referência cruzada.
