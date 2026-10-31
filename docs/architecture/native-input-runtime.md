@@ -86,3 +86,5 @@ Medições devem separar captura dispositivo-runtime, aplicação runtime-frame 
 ## Fronteira PyO3 atual
 
 A classe genérica NativeInputManager está temporariamente registrada no módulo PyO3 `sega_z80_core` para reutilizar a extensão nativa já instalada pela aplicação. Ela não depende de CPU Z80 nem de estado Sega. O crate `sega-input-runtime` continua independente. Antes de introduzir uma segunda extensão nativa para um core não relacionado, extrair o manager/ponte para um módulo host compartilhado (por exemplo, `sega_input_host`) para evitar que futuros cores dependam incidentalmente de `sega_z80_core`.
+
+A ponte atual atribui um dispositivo físico por jogador. Volantes com pedais/câmbio expostos pelo mesmo dispositivo HID podem ser lidos em conjunto; pedais, câmbio ou manetes USB independentes ainda não podem ser agregados ao mesmo jogador. O roteador multi-dispositivo por jogador permanece pendente.
