@@ -246,11 +246,19 @@ A arquitetura oferecerá quatro caminhos de rasterização/apresentação:
 
 A seleção automática será o padrão: detectar capacidades reais, compatibilidade, estabilidade conhecida e recursos necessários; escolher o backend mais adequado ao conjunto sistema operacional/GPU/driver; e manter fallback seguro para outro backend suportado ou Raster. Não selecionar apenas pelo nome ou geração da GPU. A Qt deve oferecer seleção manual, opção de voltar ao automático e diagnóstico do backend efetivamente ativo, incluindo motivo de fallback. A troca de backend deve ocorrer em fronteira segura, preservando o estado do emulador e sem avançar ou reiniciar arbitrariamente o tempo emulado.
 
+**Precisão terminológica e contrato dos quatro caminhos:** Raster é o backend de rasterização por software, não uma API gráfica; Direct3D 11, Direct3D 12 e Vulkan são APIs/backends gráficos. São exatamente esses quatro caminhos que compõem a base de renderização prevista. Qt QRhi não será contado como um quinto backend nem substituirá a escolha explícita desses caminhos; poderá ser usado apenas se uma decisão arquitetural futura demonstrar que não esconde requisitos de controle, sincronização ou recursos específicos, e deverá ser documentado como camada de abstração, não como API adicional.
+
+O resolvedor automático de backend deve consultar capacidades reais em tempo de execução (sistema operacional, adaptador ativo, driver, extensões/recursos, formatos, limites e estabilidade), e não aplicar uma ordem fixa universal. A preferência automática deve considerar correção e compatibilidade antes de desempenho nominal. Se a inicialização falhar, registrar a causa, liberar corretamente os recursos parcialmente criados e tentar o próximo caminho elegível; o fallback final é Raster. A escolha efetiva e a cadeia de fallback devem aparecer nos diagnósticos da Qt. A seleção manual não pode forçar um backend incompatível nem deixar a aplicação em estado parcialmente inicializado.
+
+A interface Qt deve expor, no mínimo: seleção Automático/Raster/D3D11/D3D12/Vulkan; estado do backend ativo; recursos avançados realmente disponíveis; opção de limite de sprites; e aviso claro quando uma opção altera a fidelidade ao hardware. Preferências de apresentação não podem modificar MachineProfile, clocks, raster físico ou estado canônico do VDP. Alterações que exigem recriação de dispositivo/superfície devem ser aplicadas em fronteira segura, preservando o estado emulado.
+
+O contrato de apresentação deve separar o framebuffer/segmentos produzidos pelo runtime, o recurso nativo de GPU e a superfície Qt/host. Ownership, sincronização CPU/GPU, fences, filas, descarte de recursos e recuperação de device-lost precisam ser explícitos e permanecer fora do controle Python. O backend Raster deve ser utilizável em máquinas sem GPU compatível e em cenários de diagnóstico.
+
 A separação de responsabilidades é obrigatória:
 
 - **Rust:** dono dos buffers e recursos de vídeo, renderização, shaders, composição, sincronização com a timeline emulada e coordenação de apresentação.
 - **Qt:** interface, preferências do jogador, janela/superfície hospedeira e apresentação do resultado produzido por Rust. A Qt não implementa regras de VDP, não rasteriza conteúdo do console e não se torna autoridade temporal.
-- **Python:** não participa do caminho de vídeo em tempo de execução. Pode apenas encaminhar configurações de alto nível pela fronteira fina já definida, sem callbacks por frame/pixel/evento nem manipulação de buffers.
+- **Python:** não participa do caminho de vídeo em tempo de execução e não pode controlar saída, backend, buffers, renderização, shaders, VSync/VRR ou apresentação. Não implementar controles de vídeo em Python nem usar callbacks Python por frame/pixel/evento. A interface Qt apresenta as opções e envia comandos tipados diretamente à camada nativa Rust/Qt definida pela arquitetura; a aplicação Python não intermedeia o caminho de vídeo.
 
 Recursos avançados devem ser habilitados somente quando o backend, o sistema operacional, o driver e o monitor realmente os suportarem. Shaders e filtros programáveis devem ter disponibilidade condicionada aos recursos gráficos; VRR depende também do caminho de apresentação e da cadeia de display/driver, não apenas da API gráfica. A interface não deve prometer nem expor como funcional um recurso indisponível. O backend Raster deve continuar oferecendo uma saída correta mesmo quando recursos avançados não estiverem disponíveis.
 
@@ -309,6 +317,11 @@ Cada componente deve seguir inventário → critérios de aceitação → implem
 | Interrupções | Instante de geração, acknowledge, cancelamento e estado |
 | Raster effects | Escritas no meio da linha/quadro e mudança de modo |
 | DMA/barramento | Duração, arbitragem, waits, contenção e efeitos na CPU |
+| Limite de sprites | Limite específico do hardware ativo por padrão em cada VDP; modo aprimorado opt-in; flags/status observáveis permanecem coerentes; ambos os modos têm vetores de teste |
+| Backends de vídeo | Raster, D3D11, D3D12 e Vulkan testados individualmente quando disponíveis; seleção automática, seleção manual, fallback e falha de inicialização cobertos |
+| Equivalência de renderização | Comparar saída Raster e backends acelerados para casos determinísticos; divergências de precisão/formato devem ser justificadas e documentadas, não aceitas por tolerância arbitrária |
+| Fronteira Qt/Rust | Qt configura e apresenta; Rust possui pipeline e recursos de vídeo; nenhum controle de saída/vídeo em Python; nenhuma chamada por frame/pixel/evento |
+| Recursos avançados | Shaders e VRR só aparecem ativos quando a cadeia completa de hardware/software os suporta; fallback não pode afirmar suporte inexistente |
 | Determinismo | Mesma configuração/estado/eventos produzem estado, traces e pixels idênticos |
 | Integração | CPU(s), VDP(s), áudio, memória e scheduler compartilham a mesma timeline |
 
@@ -369,6 +382,8 @@ Não implementar os seis núcleos em paralelo. O SMS é a próxima trilha de cor
 - Não implementar ou controlar o pipeline de vídeo em Python; a Qt limita-se à interface, configuração e apresentação da saída Rust.
 - Não desabilitar por padrão os limites reais de sprites por linha; o modo aprimorado deve ser opt-in e preservar os efeitos de hardware observáveis.
 - Não tratar CUDA como backend obrigatório de vídeo, nem como substituto da semântica determinística dos dispositivos.
+- Não contar Raster como API gráfica nem Qt QRhi como quinto backend desta decisão.
+- Não permitir que Python controle backend, buffers, renderização, sincronização ou saída de vídeo; essas responsabilidades ficam em Rust e na camada nativa Qt de apresentação/configuração.
 - Não iniciar implementação do SVP antes da trilha Mega Drive e dos critérios específicos de aceitação, salvo decisão técnica expressa.
 - Não introduzir JIT, paralelismo especulativo ou otimizações não medidas.
 
