@@ -214,3 +214,95 @@ impl NativeXAudio2Output {
         Ok(())
     }
 }
+
+
+/// Complete per-machine audio session. PCM never crosses the Python boundary:
+/// machine wrappers feed native samples directly into this session after a
+/// coarse-grained execution batch.
+pub(crate) struct NativeAudioSession {
+    resampler: PcmResampler,
+    output: NativeAudioBackend,
+}
+
+enum NativeAudioBackend {
+    Wasapi(RustWasapiOutput),
+    XAudio2(RustXAudio2Output),
+}
+
+impl NativeAudioSession {
+    pub(crate) fn new(
+        backend: &str,
+        sample_rate: u32,
+        buffer_size: u32,
+        queue_blocks: usize,
+        volume: u8,
+        balance: i8,
+    ) -> Result<Self, String> {
+        let resampler = PcmResampler::new(sample_rate, volume)
+            .map_err(|error| error.to_string())?;
+        let output = match backend {
+            "wasapi" => NativeAudioBackend::Wasapi(
+                RustWasapiOutput::new_with_balance(
+                    sample_rate,
+                    buffer_size,
+                    queue_blocks,
+                    balance,
+                )
+                .map_err(|error| error.to_string())?,
+            ),
+            "xaudio2" => NativeAudioBackend::XAudio2(
+                RustXAudio2Output::new_with_balance(
+                    sample_rate,
+                    buffer_size,
+                    queue_blocks,
+                    balance,
+                )
+                .map_err(|error| error.to_string())?,
+            ),
+            _ => return Err(format!("unsupported native audio backend: {backend}")),
+        };
+        Ok(Self { resampler, output })
+    }
+
+    pub(crate) fn process_samples(&mut self, samples: &[f64]) -> Result<(), String> {
+        if samples.is_empty() {
+            return Ok(());
+        }
+        let pcm = self.resampler.process(samples);
+        if pcm.is_empty() {
+            return Ok(());
+        }
+        match &mut self.output {
+            NativeAudioBackend::Wasapi(output) => {
+                output.write_pcm(pcm).map_err(|error| error.to_string())
+            }
+            NativeAudioBackend::XAudio2(output) => {
+                output.write_pcm(pcm).map_err(|error| error.to_string())
+            }
+        }
+    }
+
+    pub(crate) fn set_volume(&mut self, volume: u8) -> Result<(), String> {
+        self.resampler
+            .set_volume(volume)
+            .map_err(|error| error.to_string())
+    }
+
+    pub(crate) fn metrics(&self) -> (u64, u64) {
+        match &self.output {
+            NativeAudioBackend::Wasapi(output) => {
+                (output.underrun_count(), output.dropped_block_count())
+            }
+            NativeAudioBackend::XAudio2(output) => {
+                (output.underrun_count(), output.dropped_block_count())
+            }
+        }
+    }
+
+    pub(crate) fn close(&mut self) {
+        match &mut self.output {
+            NativeAudioBackend::Wasapi(output) => output.close(),
+            NativeAudioBackend::XAudio2(output) => output.close(),
+        }
+    }
+}
