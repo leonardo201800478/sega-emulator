@@ -9,6 +9,10 @@ use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use sega_sg1000_core::{MemoryConfig, Sg1000Machine};
 
+fn active_low_joystick_value(actions: u8) -> u8 {
+    0xFF & !(actions & 0x3F)
+}
+
 #[pyclass(module = "sega_z80_core")]
 pub struct NativeCpuSnapshot {
     #[pyo3(get)]
@@ -420,9 +424,8 @@ impl NativeSG1000Machine {
     }
 
     fn set_joystick_actions_mask(&mut self, player: u8, actions: u8) -> PyResult<()> {
-        let active_low = 0xFF & !(actions & 0x3F);
         self.machine
-            .set_joystick(player, active_low)
+            .set_joystick(player, active_low_joystick_value(actions))
             .map_err(|error| PyValueError::new_err(error.to_string()))
     }
 
@@ -466,5 +469,19 @@ impl NativeSG1000Machine {
             total_steps = total_steps.saturating_add(self.run_frame(100_000)?);
         }
         Ok(total_steps)
+    }
+}
+
+
+#[cfg(test)]
+mod input_action_mask_tests {
+    use super::active_low_joystick_value;
+
+    #[test]
+    fn sg1000_action_mask_maps_to_active_low_port_bits() {
+        assert_eq!(active_low_joystick_value(0), 0xFF);
+        assert_eq!(active_low_joystick_value(1 << 0), 0xFE);
+        assert_eq!(active_low_joystick_value(0x3F), 0xC0);
+        assert_eq!(active_low_joystick_value(0x7F), 0xC0);
     }
 }
