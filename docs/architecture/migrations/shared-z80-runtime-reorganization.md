@@ -293,3 +293,22 @@ Para cada SHA candidato, classificar checks como PASS, FAIL, BLOCKED ou NOT RUN.
 ## 10. Próximo passo
 
 Executar Z0: comparar as duas implementações atuais do Z80, os contratos de barramento e os testes já existentes; definir a implementação canônica e a API pública do novo crate. Em paralelo, avaliar a PR #315 no seu SHA atual. Não começar a extração nem alterar os runtimes até que o inventário e os vetores de aceitação estejam registrados.
+
+
+## 11. Referência técnica Z80 e implicações para o contrato temporal
+
+Foram inspecionados os manuais ZiLOG anexados ao projeto:
+
+- *Z80 CPU User Manual*, arquivo `um0080.pdf` (metadados: Z80 CPU User Manual; ZiLOG Inc.). O manual descreve sinais de controle, ciclos de máquina, M1/refresh, WAIT e sequências BUSREQ/BUSACK, além das tabelas de M-cycles/T-states por instrução.
+- *Z80 Family CPU User Manual*, arquivo `z80cpu_um.pdf`. Usado como conferência da descrição de sinais, interrupções e ciclos do Z80.
+- `Zilog_Z80-CPU_Technical_Manual.pdf` apresentou erros estruturais de stream durante extração de texto; não foi usado como fonte de evidência nesta revisão até que sua integridade seja confirmada.
+
+Implicações arquiteturais sustentadas pelos manuais genéricos ZiLOG:
+
+1. T-states agregados por instrução não descrevem a ordem/instante dos acessos externos. O core deve distinguir M-cycles e, progressivamente, T-states observáveis.
+2. M1 identifica o ciclo de busca de opcode e está associado à operação de refresh; não deve ser reduzido a uma leitura de memória indistinta.
+3. WAIT pode estender ciclos de barramento. Deve ser representado como condição do acesso/ciclo, não como multiplicador global do tempo da CPU.
+4. BUSREQ/BUSACK formam uma transferência de controle do barramento; BUSREQ é reconhecido no limite de ciclo de máquina descrito pelo manual. A política de ownership, o agente solicitante e os efeitos sobre outros dispositivos pertencem à máquina e ao scheduler.
+5. INT/NMI, acknowledge e HALT precisam manter fronteiras temporais compatíveis com os ciclos em que são reconhecidos; a semântica e o instante devem ser testados separadamente.
+
+Esses manuais descrevem a família Z80 genérica. Eles não definem, por si só, mapas de memória, clocks, prioridades de eventos, divisores PSG/VDP ou arbitragem específica de SG-1000, SMS, Game Gear ou Mega Drive. Esses detalhes exigem fontes técnicas da plataforma e evidência independente. O contrato compartilhado não deve incorporar números ou prioridades presumidos.
