@@ -281,8 +281,11 @@ mod tests {
         let low_pcm = [low_resampler.process(&low_tone), low_resampler.flush()].concat();
         let high_pcm = [high_resampler.process(&high_tone), high_resampler.flush()].concat();
         let decode = |pcm: &[u8]| -> Vec<i16> {
-            pcm.chunks_exact(2)
-                .map(|sample| i16::from_le_bytes([sample[0], sample[1]]))
+            let (samples, remainder) = pcm.as_chunks::<2>();
+            assert!(remainder.is_empty(), "PCM16 output must contain complete samples");
+            samples
+                .iter()
+                .map(|sample| i16::from_le_bytes(*sample))
                 .collect()
         };
         let low = decode(&low_pcm);
