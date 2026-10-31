@@ -13,6 +13,7 @@ from types import SimpleNamespace
 
 from sega_emulator.rom_loader import LoadedRom
 
+
 class SMSMachine:
     """Instruction-stepping SMS machine with native PSG and optional BIOS boot."""
 
