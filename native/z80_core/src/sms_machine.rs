@@ -379,7 +379,7 @@ mod tests {
             machine.step().unwrap();
         }
         let before = machine.total_tstates();
-        let _ = machine.drain_audio_samples(None);
+        let _ = machine.machine.drain_audio_samples(None);
         assert_eq!(machine.total_tstates(), before);
     }
 
