@@ -36,14 +36,18 @@ pub struct ScheduledEvent<T> {
     pub payload: T,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct QueueEntry<T> {
     event: ScheduledEvent<T>,
 }
 
 impl<T> QueueEntry<T> {
     fn ordering_key(&self) -> (super::MachineTime, EventPriority, u64) {
-        (self.event.timestamp, self.event.priority, self.event.sequence)
+        (
+            self.event.timestamp,
+            self.event.priority,
+            self.event.sequence,
+        )
     }
 }
 
@@ -85,7 +89,10 @@ impl fmt::Display for EventQueueError {
             Self::SequenceExhausted => write!(f, "event insertion sequence exhausted"),
             Self::EventInPast => write!(f, "cannot schedule an event before dispatched time"),
             Self::PriorityRegressionAtCurrentTime => {
-                write!(f, "cannot insert an earlier priority at the current timestamp")
+                write!(
+                    f,
+                    "cannot insert an earlier priority at the current timestamp"
+                )
             }
         }
     }
@@ -139,10 +146,17 @@ impl<T> EventQueue<T> {
         }
 
         let sequence = self.next_sequence;
-        self.next_sequence = self.next_sequence.checked_add(1)
+        self.next_sequence = self
+            .next_sequence
+            .checked_add(1)
             .ok_or(EventQueueError::SequenceExhausted)?;
         self.heap.push(QueueEntry {
-            event: ScheduledEvent { timestamp, priority, sequence, payload },
+            event: ScheduledEvent {
+                timestamp,
+                priority,
+                sequence,
+                payload,
+            },
         });
         Ok(sequence)
     }
@@ -188,17 +202,30 @@ mod tests {
         let time_8 = MachineTime::from_ticks(8);
         let time_4 = MachineTime::from_ticks(4);
 
-        queue.schedule(time_8, EventPriority::new(2), "late-priority").unwrap();
-        queue.schedule(time_4, EventPriority::new(5), "early-time").unwrap();
-        queue.schedule(time_8, EventPriority::new(1), "early-priority-a").unwrap();
-        queue.schedule(time_8, EventPriority::new(1), "early-priority-b").unwrap();
+        queue
+            .schedule(time_8, EventPriority::new(2), "late-priority")
+            .unwrap();
+        queue
+            .schedule(time_4, EventPriority::new(5), "early-time")
+            .unwrap();
+        queue
+            .schedule(time_8, EventPriority::new(1), "early-priority-a")
+            .unwrap();
+        queue
+            .schedule(time_8, EventPriority::new(1), "early-priority-b")
+            .unwrap();
 
         let events: Vec<_> = core::iter::from_fn(|| queue.pop_next())
             .map(|event| event.payload)
             .collect();
         assert_eq!(
             events,
-            vec!["early-time", "early-priority-a", "early-priority-b", "late-priority"]
+            vec![
+                "early-time",
+                "early-priority-a",
+                "early-priority-b",
+                "late-priority"
+            ]
         );
     }
 
@@ -220,7 +247,9 @@ mod tests {
     #[test]
     fn events_cannot_be_scheduled_before_dispatched_time() {
         let mut queue = EventQueue::new();
-        queue.schedule(MachineTime::from_ticks(10), EventPriority::new(0), "now").unwrap();
+        queue
+            .schedule(MachineTime::from_ticks(10), EventPriority::new(0), "now")
+            .unwrap();
         queue.pop_next();
 
         assert_eq!(
@@ -247,8 +276,12 @@ mod tests {
     #[test]
     fn queue_reports_next_timestamp_and_length() {
         let mut queue = EventQueue::new();
-        queue.schedule(MachineTime::from_ticks(5), EventPriority::new(0), ()).unwrap();
-        queue.schedule(MachineTime::from_ticks(3), EventPriority::new(0), ()).unwrap();
+        queue
+            .schedule(MachineTime::from_ticks(5), EventPriority::new(0), ())
+            .unwrap();
+        queue
+            .schedule(MachineTime::from_ticks(3), EventPriority::new(0), ())
+            .unwrap();
         assert_eq!(queue.len(), 2);
         assert_eq!(queue.next_timestamp(), Some(MachineTime::from_ticks(3)));
     }
