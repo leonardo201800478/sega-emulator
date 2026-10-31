@@ -268,3 +268,70 @@ Cada fase requer critérios de aceitação e testes direcionados. Widgets desenh
 - Boot sem cartucho por BIOS específico por sistema/região, condicionado à capacidade real do runtime.
 
 **Classificação:** DESIGN / MODELING. Não representa implementação Qt, validação funcional, teste visual, build ou aprovação de gameplay.
+
+
+## 14. Registro de decisões funcionais — 2026-10-30
+
+As escolhas abaixo foram fornecidas explicitamente pelo usuário. Elas substituem as alternativas anteriores correspondentes neste documento. Não representam implementação nem validação técnica.
+
+| Flag | Decisão | Consequência funcional registrada |
+|---|---:|---|
+| F01 | C | Stop encerra a execução, mantém a ROM carregada e permite retomar com Play. |
+| F02 | B | Reiniciar emulador reinicia o runtime preservando a mídia carregada; contrato técnico ainda precisa ser definido. |
+| F03 | A | Reset físico reinicia os componentes conforme o hardware, preservando a ROM/sessão. |
+| F04 | A | Play inicia ou retoma; Pause suspende a execução. |
+| F05 | B | Velocidades oferecidas: 0,5x, 1x, 2x e ilimitada. |
+| F06 | A | Fast Forward executa o mais rápido possível, sem sincronização com o monitor. |
+| F07 | C | Perfis de precisão, baixa latência e desempenho. |
+| F08 | A | Histórico global limitado a 10 entradas, identificadas por sistema e caminho. |
+| F09 | B | ROM removida/inacessível é removida automaticamente do histórico. |
+| F10 | D | Tela inicial configurável. |
+| F11 | C | Troca de sistema pergunta antes de encerrar a sessão atual. |
+| F12 | A | Boot pela BIOS sem ROM permitido quando houver BIOS válida e suporte implementado. |
+| F13 | C | BIOS automática por padrão, com seleção manual avançada. |
+| F14 | C | Boot sem BIOS permitido quando tecnicamente suportado. |
+| F15 | C | Monitor automático por padrão, com seleção manual e hotplug. |
+| F16 | C | Resolução/frequência automáticas por padrão, com controles avançados. |
+| F17 | C | VRR com detecção, configuração e relatório do estado efetivo. |
+| F18 | C | API gráfica automática por padrão, seleção manual avançada e exibição do backend ativo. |
+| F19 | A | Manter proporção original e integer scaling; não incluir os modos adicionais de esticamento e ajuste manual nesta decisão. |
+| F20 | C | Áudio automático por padrão, seleção manual e hotplug. |
+| F21 | C | Descobrir capacidades, permitir configuração manual e informar valores efetivos. |
+| F22 | B | Diagnóstico de áudio exibe buffer, latência estimada e underruns; não prometer latência ponta a ponta medida. |
+| F23 | B | Separar dispositivo físico, periférico lógico e mapeamento. |
+| F24 | C | Hotplug automático preservando perfil de mapeamento. |
+| F25 | C | Modelar Light Phaser, Paddle e demais periféricos previstos por sistema, sem antecipar suporte não validado. |
+| F26 | C | Catálogo de periféricos por sistema, respeitando limites do hardware. |
+| F27 | A | SRAM salva automaticamente quando houver alterações e em encerramentos seguros. |
+| F28 | A | Planejar 10 slots de Save State por jogo. Implementação continua condicionada à serialização determinística e compatibilidade de estado. |
+| F29 | B | Identificação dos saves por hash, sistema, região e versão do emulador. |
+| F30 | B | Separar região comercial, padrão de vídeo e perfil de hardware; revisão de hardware/BIOS não foi escolhida como dimensão obrigatória. |
+| F31 | C | Troca de região permitida somente após Reset. |
+| F32 | — | PENDENTE — migração das configurações atuais. |
+| F33 | — | PENDENTE — organização do painel Debug/Diagnóstico. |
+| F34 | — | PENDENTE — detalhamento do relatório de backend. |
+| F35 | — | PENDENTE — restauração de configurações. |
+
+### 14.1 Regras de interpretação e reconciliação
+
+- F01 altera a semântica anteriormente descrita para Stop: Stop não descarrega a ROM. O comando Fechar ROM continua sendo a operação explícita que encerra a sessão e descarrega a mídia. Menus, toolbar e atalhos devem chamar operações centrais distintas.
+- F02 não pode ser implementada como destruição/recriação arbitrária do runtime sem contrato. Definir preservação de mídia, estado persistente, SRAM pendente, recursos host e falhas de reinicialização.
+- F03 permanece dependente da semântica de reset específica de cada plataforma; não significa zerar indiscriminadamente todos os componentes.
+- F05 e F06 substituem a lista anterior de velocidades e definem Fast Forward como execução máxima sem sincronização com monitor. O comportamento de áudio nesse modo precisa ser definido pelo perfil/contrato de pacing, sem alterar clocks nominais do hardware.
+- F07 perfis de sincronização são políticas do host; não podem comprometer determinismo ou modificar temporização lógica do console.
+- F09 remove automaticamente entradas indisponíveis do histórico; a remoção não apaga arquivos físicos nem conteúdo da biblioteca.
+- F10 exige preferência configurável para a tela inicial. Os valores possíveis e o comportamento de primeira execução precisam ser detalhados no contrato de preferências.
+- F11 permite solicitar troca de sistema com sessão ativa, mas exige confirmação e conclusão segura do encerramento/descarregamento antes da troca. Não permite troca implícita.
+- F12 e F14 permitem boot BIOS-only e boot sem BIOS quando suportados. A UI deve consultar capacidade real por sistema/região e não inferir suporte apenas pela presença de firmware.
+- F19 limita a decisão funcional a proporção original e integer scaling. A compatibilidade com opções de proporção já existentes precisa ser reconciliada no inventário, sem descartar configurações silenciosamente.
+- F22 limita a telemetria aprovada a buffer, latência estimada e underruns. Não exibir estimativa como medição física.
+- F28 define a experiência-alvo de 10 slots, mas não autoriza implementação antes da serialização determinística, identidade de estado e testes de compatibilidade.
+- F30 não exige uma dimensão separada de revisão de hardware/BIOS na interface; manter distinções internas quando tecnicamente necessárias.
+- F31 significa que a alteração regional é aplicada após Reset. O inventário deve confirmar se o reset atual pode reconstruir os componentes regionais de forma correta; se não, apresentar a operação como indisponível até haver suporte seguro.
+- F32–F35 permanecem decisões em aberto e não devem ser preenchidas pelas sugestões anteriores.
+
+### 14.2 Pendências técnicas que as escolhas não resolvem
+
+As decisões funcionais não provam disponibilidade técnica. Permanecem necessárias: inventário completo dos callbacks e serviços; contratos de sessão/runtime/PyO3; capacidades reais de BIOS-only por sistema; descoberta host de monitores, modos, VRR e dispositivos; política de pacing e áudio em Fast Forward; migração do histórico e preferências; e critérios/testes para SRAM e Save States.
+
+**Estado do registro:** 31/35 flags respondidas; 4 pendentes (F32–F35). Nenhum código executável foi alterado por este registro.
