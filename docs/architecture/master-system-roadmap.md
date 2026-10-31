@@ -305,3 +305,8 @@ O corpus SingleStepTests/Z80 fixado em `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7
 
 
 **Ordem recomendada:** (1) consolidar evidências e matriz do Z80; (2) resolver lacunas semânticas reproduzíveis; (3) expandir o contrato temporal em fatias verificáveis; (4) integrar CPU/barramento com memória, I/O, VDP, PSG e scheduler sem chamar contagem agregada de precisão ciclo a ciclo; (5) executar regressões específicas por plataforma. O gate do Z80A/SG-1000 permanece separado e bloqueado pelos seus critérios próprios.
+
+
+## Política comum de saída e runtime de áudio
+
+O SMS deve reutilizar o runtime de áudio multi-sistema, sem criar uma saída Windows própria. WASAPI Shared/event-driven é o padrão e XAudio2 a alternativa. PSG e YM2413 permanecem dispositivos independentes, com clocks e estado próprios; o mixer comum deve combinar suas contribuições sem fazer o clock do host ou o timer Qt governar a timeline emulada. A primeira sessão Rust está integrada ao SG-1000/SMS para o PSG existente; FM e o mixer multi-fonte/estéreo continuam pendentes. Ver [Runtime de áudio nativo](native-audio-runtime.md).
