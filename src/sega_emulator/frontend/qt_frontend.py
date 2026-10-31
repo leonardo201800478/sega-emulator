@@ -476,13 +476,11 @@ def run(initial_path: Path | None = None) -> None:
                     return True
                 if key in key_map:
                     pressed_keys.add(key)
-                    update_joystick()
                     return True
             elif event.type() == QEvent.Type.KeyRelease:
                 key = event.key()
                 if key in key_map:
                     pressed_keys.discard(key)
-                    update_joystick()
                     return True
             return False
 
