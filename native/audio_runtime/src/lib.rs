@@ -266,4 +266,36 @@ mod tests {
         assert!(PcmResampler::new(0, 100).is_err());
         assert!(PcmResampler::new(44_100, 101).is_err());
     }
+    #[test]
+    fn downsampling_fir_attenuates_tones_above_output_nyquist() {
+        let count = 8192;
+        let low_tone: Vec<f64> = (0..count)
+            .map(|index| 0.5 * (std::f64::consts::TAU * 0.10 * index as f64).sin())
+            .collect();
+        let high_tone: Vec<f64> = (0..count)
+            .map(|index| 0.5 * (std::f64::consts::TAU * 0.35 * index as f64).sin())
+            .collect();
+
+        let mut low_resampler = PcmResampler::new(22_050, 100).unwrap();
+        let mut high_resampler = PcmResampler::new(22_050, 100).unwrap();
+        let low_pcm = [low_resampler.process(&low_tone), low_resampler.flush()].concat();
+        let high_pcm = [high_resampler.process(&high_tone), high_resampler.flush()].concat();
+        let decode = |pcm: &[u8]| -> Vec<i16> {
+            pcm.chunks_exact(2)
+                .map(|sample| i16::from_le_bytes([sample[0], sample[1]]))
+                .collect()
+        };
+        let low = decode(&low_pcm);
+        let high = decode(&high_pcm);
+        let rms = |samples: &[i16]| -> f64 {
+            let tail = &samples[100..];
+            (tail.iter().map(|sample| f64::from(*sample).powi(2)).sum::<f64>()
+                / tail.len() as f64)
+                .sqrt()
+        };
+
+        assert!(rms(&low) > 8_000.0);
+        assert!(rms(&high) < rms(&low) * 0.03);
+    }
+
 }
