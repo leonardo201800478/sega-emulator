@@ -317,3 +317,19 @@ Esses manuais descrevem a família Z80 genérica. Eles não definem, por si só,
 ## 12. Cronograma e governança de agentes
 
 O cronograma por fases, papéis dos agentes, regra de concorrência, gates independentes e Definition of Done estão em [Roadmap de reorganização e charter dos agentes](reorganization-roadmap-and-agent-charter.md). O plano limita a três agentes simultâneos: três papéis de execução e um supervisor independente ativado em janelas de revisão, pausando temporariamente um agente de execução.
+
+
+## 10. Atualização F0 — inventário remoto e reconciliação das PRs
+
+A captura inicial das seções 2 e 7 foi atualizada após nova consulta ao GitHub em 2026-10-31. O HEAD remoto observado de `main` é `e2eff776ec248674da07d32ff480b70d9db49a1f`.
+
+O relatório [F0 — inventário remoto e reconciliação das PRs](f0-remote-inventory-2026-10-31.md) registra:
+- SHAs atuais consultados das sete PRs, merge-bases e distância em relação à `main`;
+- workflows/jobs executados por SHA, sem transferir PASS de uma branch antiga para a `main`;
+- comparação normalizada dos executores Z80 SG-1000/SMS, ALU e contratos de barramento;
+- avaliação técnica das PRs #297, #298, #300, #301, #313, #314 e #315;
+- limitações, decisões para F1 e gates de integração.
+
+**Evidência nova relevante:** após remover comentários/linhas em branco e normalizar espaços, os arquivos `native/sg1000_core/src/cpu.rs` e `native/sms_core/src/cpu.rs` possuem 3.257 linhas executáveis idênticas, na mesma ordem. As ALUs locais também correspondem ao código de `native/z80_alu`. A extração deve, portanto, priorizar reutilização de `sega-z80-alu` e `sega-z80-bus`, sem criar cópias adicionais.
+
+O relatório F0 substitui a tabela de estado das PRs da seção 7 como referência para a captura de 2026-10-31. Nenhuma PR foi mergeada e nenhum runtime foi alterado nesta atualização documental.
