@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-from sega_emulator.frontend.qt.audio_output import PcmResampler
 from sega_emulator.machine.sg1000 import SG1000Machine
 
 
@@ -59,22 +58,3 @@ def test_machine_rejects_unknown_native_audio_backend() -> None:
     with pytest.raises(RuntimeError, match="unsupported native audio backend"):
         machine.configure_audio_output("invalid")
     assert machine.native_machine.audio_output_metrics == (0, 0)
-
-
-def test_native_audio_drain_resamples_inside_rust_deterministically() -> None:
-    left = _machine(b"\x00")
-    right = _machine(b"\x00")
-    for machine in (left, right):
-        machine.write_port(0x7F, 0x80)
-        machine.write_port(0x7F, 0x00)
-        machine.write_port(0x7F, 0x90)
-        machine.run_frame()
-
-    left_pcm = left.drain_audio_pcm(PcmResampler(44_100, 100))
-    right_pcm = right.drain_audio_pcm(PcmResampler(44_100, 100))
-
-    assert left_pcm
-    assert len(left_pcm) % 2 == 0
-    assert left_pcm == right_pcm
-    left.discard_audio_samples()
-    right.discard_audio_samples()

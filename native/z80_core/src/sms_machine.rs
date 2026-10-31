@@ -5,7 +5,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use sega_sms_core::{ControllerButtons, SmsMachine, SmsMachineConfig, VideoStandard};
 
-use crate::audio::{NativeAudioSession, NativePcmResampler};
+use crate::audio::{MachineAudioSession, open_audio_session};
 
 /// Resolve the territory and video standard without constructing Python errors.
 ///
@@ -57,7 +57,7 @@ enum SmsMachineBuildError {
 pub struct NativeSMSMachine {
     machine: SmsMachine,
     total_instructions: u64,
-    audio_session: Option<NativeAudioSession>,
+    audio_session: Option<MachineAudioSession>,
     audio_output_error: Option<String>,
 }
 
@@ -107,7 +107,7 @@ impl NativeSMSMachine {
         volume: u8,
         balance: i8,
     ) -> PyResult<()> {
-        let session = NativeAudioSession::new(
+        let session = open_audio_session(
             backend,
             sample_rate,
             buffer_size,
@@ -137,7 +137,7 @@ impl NativeSMSMachine {
     fn audio_output_metrics(&self) -> (u64, u64) {
         self.audio_session
             .as_ref()
-            .map(NativeAudioSession::metrics)
+            .map(MachineAudioSession::metrics)
             .unwrap_or((0, 0))
     }
 
@@ -278,23 +278,6 @@ impl NativeSMSMachine {
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
-    fn drain_audio_samples(&mut self, max_samples: Option<usize>) -> Vec<f64> {
-        self.machine.drain_audio_samples(max_samples)
-    }
-
-    fn drain_audio_pcm<'py>(
-        &mut self,
-        py: Python<'py>,
-        mut resampler: PyRefMut<'_, NativePcmResampler>,
-    ) -> Bound<'py, PyBytes> {
-        let samples = self.machine.drain_audio_samples(None);
-        PyBytes::new(py, &resampler.process_native(&samples))
-    }
-
-    fn discard_audio_samples(&mut self) {
-        let _ = self.machine.drain_audio_samples(None);
-    }
-
     fn read_memory(&self, address: u16) -> u8 {
         self.machine.read_memory(address)
     }
@@ -387,7 +370,7 @@ mod tests {
             machine.step().unwrap();
         }
         let before = machine.total_tstates();
-        let _ = machine.drain_audio_samples(None);
+        let _ = machine.machine.drain_audio_samples(None);
         assert_eq!(machine.total_tstates(), before);
     }
 

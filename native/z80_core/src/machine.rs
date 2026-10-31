@@ -3,7 +3,7 @@
 //! This module owns no CPU, memory, VDP or PSG implementation. It exposes
 //! snapshots and machine operations from sega_sg1000_core.
 
-use crate::audio::{NativeAudioSession, NativePcmResampler};
+use crate::audio::{MachineAudioSession, open_audio_session};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
@@ -251,7 +251,7 @@ impl NativePsgSnapshot {
 pub struct NativeSG1000Machine {
     machine: Sg1000Machine,
     total_instructions: u64,
-    audio_session: Option<NativeAudioSession>,
+    audio_session: Option<MachineAudioSession>,
     audio_output_error: Option<String>,
 }
 
@@ -308,7 +308,7 @@ impl NativeSG1000Machine {
         volume: u8,
         balance: i8,
     ) -> PyResult<()> {
-        let session = NativeAudioSession::new(
+        let session = open_audio_session(
             backend,
             sample_rate,
             buffer_size,
@@ -338,7 +338,7 @@ impl NativeSG1000Machine {
     fn audio_output_metrics(&self) -> (u64, u64) {
         self.audio_session
             .as_ref()
-            .map(NativeAudioSession::metrics)
+            .map(MachineAudioSession::metrics)
             .unwrap_or((0, 0))
     }
 
@@ -425,23 +425,6 @@ impl NativeSG1000Machine {
             .into_iter()
             .map(|event| (event.tstate, event.value))
             .collect()
-    }
-
-    fn drain_audio_samples(&mut self, max_samples: Option<usize>) -> Vec<f64> {
-        self.machine.drain_audio_samples(max_samples)
-    }
-
-    fn drain_audio_pcm<'py>(
-        &mut self,
-        py: Python<'py>,
-        mut resampler: PyRefMut<'_, NativePcmResampler>,
-    ) -> Bound<'py, PyBytes> {
-        let samples = self.machine.drain_audio_samples(None);
-        PyBytes::new(py, &resampler.process_native(&samples))
-    }
-
-    fn discard_audio_samples(&mut self) {
-        let _ = self.machine.drain_audio_samples(None);
     }
 
     fn step(&mut self) -> PyResult<u32> {

@@ -1,4 +1,4 @@
-"""Ponto de entrada da aplicação Qt para o Sega SG-1000."""
+"""Ponto de entrada da aplicação Qt do Sega Emulator."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from sega_emulator import __version__
 from sega_emulator.diagnostics import configure_session_logging
 from sega_emulator.rom_loader import list_rom_members
 
@@ -15,11 +16,11 @@ from sega_emulator.rom_loader import list_rom_members
 def main(argv: Sequence[str] | None = None) -> int:
     """Abre a interface Qt; o carregador também pode listar ROMs de um ZIP."""
     parser = argparse.ArgumentParser(
-        description="Sega Emulator — interface Qt com runtime SG-1000 nativo em Rust",
+        description="Sega Emulator — interface Qt com runtimes nativos em Rust",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
-        "--version", action="version", version="Sega Emulator SG-1000 0.1.0"
+        "--version", action="version", version=f"Sega Emulator {__version__}"
     )
     parser.add_argument(
         "rom",

@@ -5,6 +5,17 @@
 
 # Histórico de versões
 
+## v0.1.1 — sessão de áudio Rust-only (em validação)
+- Move NativeAudioSession para native/audio_runtime, sem dependência de PyO3, Python ou APIs do host.
+- Introduz o contrato genérico PcmSink, permitindo testes headless determinísticos do mixer, resampler, PCM16 e lifecycle.
+- Mantém a adaptação WASAPI/XAudio2 em Rust no crate da extensão, fora do módulo de binding Python.
+- Remove as APIs PyO3 de drain_audio_samples, drain_audio_pcm, discard_audio_samples, NativePcmResampler, NativeWasapiOutput e NativeXAudio2Output.
+- Remove as fachadas Python de PCM/resampling e encaminhamento direto de PCM.
+- Migra as verificações do pipeline de áudio para testes Rust; os testes Python restantes cobrem somente o contrato de frontend/máquina.
+- Atualiza o pacote Python para 0.1.1.
+
+Limites: o pump ainda ocorre na fronteira de run_frame(); a execução do scheduler independente do timer Qt, testes físicos WASAPI/XAudio2 e medições de latência ponta a ponta permanecem pendentes. Esta atualização não declara precisão ciclo a ciclo nem fidelidade analógica.
+
 ## Limpeza arquitetural — extensão PyO3
 - Remove o executor Z80 independente `RustZ80Cpu` e o adaptador `NativeMemoryBus` não utilizados pela máquina integrada.
 - Mantém `native/z80_core` como fronteira PyO3/Maturin para `NativeSG1000Machine`, cujo hardware ativo permanece em `native/sg1000_core`.
