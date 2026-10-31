@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use pyo3::exceptions::{PyRuntimeError, PyValueError};
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use sega_input_runtime::sdl3_backend::Sdl3Backend;
 use sega_input_runtime::{
@@ -156,6 +156,17 @@ impl NativeInputManager {
         backend.enumerate(&mut self.devices)
     }
 
+    fn disable_backend(&mut self, message: String) {
+        self.backend_error = Some(message);
+        if let Some(mut backend) = self.backend.take() {
+            backend.shutdown();
+        }
+        self.devices.clear();
+        self.assignments = [None, None];
+        self.buffers.clear();
+        self.disconnect_event = true;
+    }
+
     fn assign_unclaimed_devices(&mut self) {
         for player in 0..2 {
             if self.assignments[player].is_some() {
@@ -172,14 +183,20 @@ impl NativeInputManager {
     }
 
     fn poll_backend(&mut self) -> PyResult<()> {
-        let Some(backend) = self.backend.as_mut() else {
+        if self.backend.is_none() {
             self.buffers.clear();
             return Ok(());
-        };
+        }
         self.buffers.clear();
-        backend
-            .poll_into(&mut self.buffers)
-            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        let poll_result = self
+            .backend
+            .as_mut()
+            .expect("backend was checked above")
+            .poll_into(&mut self.buffers);
+        if let Err(error) = poll_result {
+            self.disable_backend(error.to_string());
+            return Ok(());
+        }
 
         for event in &self.buffers.events {
             if event.kind == DeviceEventKind::Disconnected {
@@ -192,8 +209,10 @@ impl NativeInputManager {
             }
         }
         if !self.buffers.events.is_empty() {
-            self.refresh_devices()
-                .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+            if let Err(error) = self.refresh_devices() {
+                self.disable_backend(error.to_string());
+                return Ok(());
+            }
             self.assign_unclaimed_devices();
         }
         Ok(())
