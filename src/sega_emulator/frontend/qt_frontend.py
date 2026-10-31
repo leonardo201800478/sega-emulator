@@ -20,13 +20,13 @@ from sega_emulator.frontend.controller_profiles import (
     apply_turbo,
     joystick_value,
 )
-from sega_emulator.frontend.rust_controller_input import RustControllerInput
 from sega_emulator.frontend.qt.focus_pause import (
     EmulationPauseController,
     FocusPauseController,
 )
 from sega_emulator.frontend.qt.frame_pacer import FramePacer
 from sega_emulator.frontend.qt.preferences import FrontendPreferences
+from sega_emulator.frontend.rust_controller_input import RustControllerInput
 from sega_emulator.machine.sg1000 import SG1000Machine
 from sega_emulator.machine.sms import SMSMachine, load_sms_rom
 from sega_emulator.machine.sms_firmware import (
