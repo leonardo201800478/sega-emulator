@@ -199,6 +199,7 @@ O projeto é independente e não é afiliado à SEGA. SEGA e SG-1000 são marcas
 - [Notas preliminares do release v0.1.0](docs/releases/v0.1.0.md)
 - [Atualização v0.1.1 — sessão de áudio Rust-only](docs/releases/v0.1.1.md)
 - [Arquitetura multi-sistema e política Rust-first](docs/architecture.md)
+- [Diretiva obrigatória — autoridade temporal exclusiva em Rust](docs/architecture/rust-temporal-authority.md)
 - [Reorganização Rust-first e núcleo Z80 compartilhado](docs/architecture/migrations/shared-z80-runtime-reorganization.md)
 - [Cronograma da reorganização e charter dos agentes](docs/architecture/migrations/reorganization-roadmap-and-agent-charter.md)
 - [Contrato global de drivers de entrada, áudio e vídeo](docs/architecture/host-driver-apis.md)
