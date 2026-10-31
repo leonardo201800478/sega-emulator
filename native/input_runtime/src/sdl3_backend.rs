@@ -63,7 +63,6 @@ mod windows {
     type GamepadConnected = unsafe extern "C" fn(*mut c_void) -> SdlBool;
     type GetGamepadButton = unsafe extern "C" fn(*mut c_void, c_int) -> SdlBool;
     type GetGamepadAxis = unsafe extern "C" fn(*mut c_void, c_int) -> i16;
-    type PumpEvents = unsafe extern "C" fn();
     type UpdateJoysticks = unsafe extern "C" fn();
     type UpdateGamepads = unsafe extern "C" fn();
     type Free = unsafe extern "C" fn(*mut c_void);
@@ -94,7 +93,6 @@ mod windows {
         gamepad_connected: GamepadConnected,
         get_gamepad_button: GetGamepadButton,
         get_gamepad_axis: GetGamepadAxis,
-        pump_events: PumpEvents,
         update_joysticks: UpdateJoysticks,
         update_gamepads: UpdateGamepads,
         free: Free,
@@ -167,7 +165,6 @@ mod windows {
                 gamepad_connected: load!("SDL_GamepadConnected", GamepadConnected),
                 get_gamepad_button: load!("SDL_GetGamepadButton", GetGamepadButton),
                 get_gamepad_axis: load!("SDL_GetGamepadAxis", GetGamepadAxis),
-                pump_events: load!("SDL_PumpEvents", PumpEvents),
                 update_joysticks: load!("SDL_UpdateJoysticks", UpdateJoysticks),
                 update_gamepads: load!("SDL_UpdateGamepads", UpdateGamepads),
                 free: load!("SDL_free", Free),
@@ -470,7 +467,6 @@ mod windows {
 
         fn poll_into(&mut self, output: &mut InputBuffers) -> Result<(), BackendError> {
             unsafe {
-                (self.api.pump_events)();
                 (self.api.update_joysticks)();
                 (self.api.update_gamepads)();
             }
