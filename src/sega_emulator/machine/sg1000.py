@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from sega_emulator.machine.cartridge_profiles import cartridge_profile
 
-
 class SG1000Machine:
     """Thin Python facade over the native Rust SG-1000 machine."""
 
@@ -97,20 +96,6 @@ class SG1000Machine:
 
     def step(self) -> int:
         return int(self.native_machine.step())
-
-    def drain_audio_samples(self, max_samples: int | None = None) -> list[float]:
-        return list(self.native_machine.drain_audio_samples(max_samples))
-
-    def drain_audio_pcm(self, resampler: object) -> bytes:
-        """Drain PSG audio and convert it in Rust without a Python sample list."""
-        native_resampler = getattr(resampler, "_native", None)
-        if native_resampler is None:
-            raise TypeError("resampler deve encapsular o processador PCM nativo")
-        return bytes(self.native_machine.drain_audio_pcm(native_resampler))
-
-    def discard_audio_samples(self) -> None:
-        """Discard queued PSG samples natively when audio output is disabled."""
-        self.native_machine.discard_audio_samples()
 
     def configure_audio_output(
         self,
