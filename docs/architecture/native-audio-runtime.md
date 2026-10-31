@@ -161,10 +161,11 @@ Esse estado é inventário, não aprovação arquitetural. O caminho PCM via Pyt
 - Falha de escrita desativa a sessão e é reportada ao frontend sem interromper a emulação.
 - Reset, troca de ROM e reconfiguração fecham/recriam a sessão.
 
-### Ainda pendente
+### Estado de validação no candidato aad95bd26b7e90a38b250ef865fafe51f2aa1c8f
 
-- QUICK_PASS: NOT RUN nesta atualização; os workflows anteriores pararam em Ruff format antes de lint/build/test.
-- SHORT_PASS: INTEGRATION_PENDING até o novo SHA candidato concluir CI Windows e testes Python/Rust.
+- QUICK_PASS: PASS — CI Linux, Ruff format/lint, build Maturin, smoke test SMS e 257 testes aprovados (11 ignorados).
+- SHORT_PASS: INTEGRATION_PENDING — validação funcional Python PASS (224 aprovados/21 ignorados); integridade/repetibilidade PASS (duas execuções); Qt Frontend Rebuild PASS (66 aprovados/1 ignorado, controladores 10 aprovados, suíte completa 321 aprovados/10 ignorados); UI/Controller PASS.
+- Windows Rust integration: IN_PROGRESS no workflow https://github.com/leonardo201800478/sega-emulator/actions/runs/41158473737. Rust formatting, formatação do crate audio_output, Clippy e testes do crate audio_output PASS; Clippy do z80_core está em execução; testes Rust do z80_core, build Maturin Windows e integração ainda pendentes.
 - LONG_PASS: NOT RUN.
 - TEMPORAL_PASS: NOT RUN; a execução ainda é em lotes/frame e não constitui produção de áudio desacoplada do timer Qt.
 - A API PyO3 antiga de drenagem PCM e as fachadas Python de resampler/saída ainda existem para compatibilidade/testes. A remoção é a próxima fase, após validar a sessão nativa.
