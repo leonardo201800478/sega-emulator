@@ -53,7 +53,10 @@ impl ClockRatio {
         if ticks_denominator == 0 {
             return Err(ClockError::ZeroClockDenominator);
         }
-        Ok(Self { cycles_numerator, ticks_denominator })
+        Ok(Self {
+            cycles_numerator,
+            ticks_denominator,
+        })
     }
 
     /// Return the numerator of local cycles per master tick.
