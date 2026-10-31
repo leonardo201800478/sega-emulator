@@ -59,3 +59,8 @@ Official reference: [NVIDIA Reflex SDK](https://developer.nvidia.com/performance
 ## Validation status
 
 The code changes in this PR have not been executed in a local Windows environment by the authoring agent. GitHub Actions results on the PR candidate SHA are the required validation evidence; skipped or missing checks are not PASS.
+
+
+## Audio clock and host presentation boundary
+
+Audio device periods and Qt presentation pacing are host-side scheduling concerns; neither may advance or correct emulated Z80/VDP/PSG time. The Rust scheduler remains the emulated-time authority, while the Rust audio session adapts output to the host device. WASAPI Shared/event-driven is the Windows default and XAudio2 is the alternative. The current migration moves PCM processing out of the active Python frame path; fully decoupling audio production from the Qt timer remains pending. See [native multi-system audio runtime](native-audio-runtime.md).
