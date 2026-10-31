@@ -16,6 +16,7 @@ ACTION_BITS = {
     "button1": 4,
     "button2": 5,
 }
+TURBO_ACTIONS = frozenset({"button1", "button2"})
 SUPPORTED_BUTTONS = (
     "a",
     "b",
