@@ -246,6 +246,82 @@ A sequência conceitual obrigatória é:
 
 A ordem concreta varia por plataforma. Este fluxo não autoriza reset simultâneo ou liberação imediata de todos os processadores quando o hardware exige handshakes, transferência de firmware ou controle de reset.
 
+### 4.7 Arquitetura de memória, barramentos, I/O e persistência
+
+A infraestrutura transversal deve compartilhar mecanismos e contratos, mas não impor uma topologia universal. O princípio normativo é **compartilhar mecanismos; especializar o hardware**. Cada plataforma mantém seus próprios mapas, dispositivos conectados, larguras, decodificações, regras lógicas, prioridades e relações temporais. Uma abstração comum só pode ser reutilizada quando não apagar diferenças observáveis e quando a equivalência estiver demonstrada.
+
+**Responsabilidades e ownership:**
+
+- Rust é proprietário de todo o estado de memória, barramento, I/O, persistência emulada e temporização da máquina. Python/Qt pode selecionar mídia, configurar opções, solicitar operações de ciclo de vida e exibir diagnóstico, mas não lê/escreve hardware emulado diretamente nem avança seu tempo.
+- Frameworks comuns fornecem primitivas reutilizáveis — regiões de memória, contratos de acesso, transações, decodificação, linhas de interrupção, domínios de clock e persistência no host. Não devem codificar mapas ou comportamento específico de console como regras universais.
+- Cada sistema compõe essas primitivas em uma implementação própria de barramento, mapa de memória, mapa de I/O, dispositivos e topologia. O perfil da máquina e o perfil de placa/cartucho selecionam e configuram componentes; não substituem sua implementação executável.
+- Um dispositivo responde por seu estado e comportamento interno. A conexão, seleção, arbitragem e ordenação dos acessos pertencem ao barramento/controlador correspondente. A CPU não deve conter conhecimento direto de VDP, PSG, mapper, controle ou periféricos específicos.
+
+**Memória e regiões:**
+
+- Distinguir ROM, RAM volátil, VRAM, registradores mapeados, memória compartilhada, memória de expansão e memória persistente. O tipo lógico não deve ser inferido apenas pelo intervalo de endereços.
+- Uma região descreve capacidade, largura/organização, endereçamento, espelhamento/alias, permissões, inicialização/reset, retenção, latência/esperas e efeitos observáveis, apenas quando conhecidos para o hardware concreto.
+- Decodificação e mapeamento são específicos do sistema, modelo/revisão, placa e dispositivo. Não presumir que todos os endereços não mapeados leem zero, que espelhamentos são universais ou que acessos inválidos são ignorados: modelar open bus, retenção do barramento, conflitos e aliases somente conforme evidência.
+- ROM permanece imutável durante a execução normal. Bancos e janelas são selecionados por mapper/controlador; não copiar ou concatenar imagens para simular hardware composto.
+- Memórias compartilhadas devem explicitar os participantes, regras de acesso, prioridades, contenção, ownership e efeitos temporais. Não representar compartilhamento como duas cópias independentes que podem divergir.
+
+**RAM volátil, SRAM/NVRAM e bateria:**
+
+- RAM volátil é estado de execução. Seu conteúdo, inicialização e comportamento após reset/power cycle devem seguir o hardware e não podem ser inicializados com valores convenientes sem evidência.
+- SRAM/NVRAM é uma capacidade do dispositivo/placa, com tamanho, organização, faixa de endereços, espelhamento, write-enable/proteção, retenção e política de persistência descritos no CartProfile/BoardProfile ou perfil do dispositivo.
+- Distinguir a memória persistente emulada do mecanismo do host que grava/carrega seus bytes. O backend de persistência não participa do caminho de acesso por instrução e não avança a timeline.
+- Bateria é uma característica de alimentação/retenção do hardware, não um tipo de RAM, um mapper ou o arquivo de save. Modelar bateria-backed quando houver evidência de que ela mantém determinada região; não presumir que toda SRAM tenha bateria nem que toda memória persistente dependa dela.
+- Eventual esgotamento de bateria, perda de retenção ou comportamento de falha só pode ser simulado se houver requisito de compatibilidade e evidência suficientes. Não introduzir envelhecimento, temporizadores ou corrupção aleatória por padrão.
+- A gravação no host deve ocorrer em pontos seguros e definidos (por exemplo, encerramento, troca de mídia ou flush explícito), com política de dirty tracking, atomicidade/recuperação e diagnóstico. Não gravar em cada escrita emulada.
+- Save states são distintos dos saves persistentes: devem capturar o estado completo necessário para retomar a execução determinística, incluindo RAM volátil, SRAM/NVRAM, registradores de mapper, seleção de bancos, estado dos dispositivos, eventos pendentes e estado temporal relevante. A restauração não pode produzir gravações externas inesperadas nem misturar o estado de uma mídia/perfil diferente.
+- Identidade da mídia, perfil de placa, versão do formato de save e hashes/metadados necessários devem permitir detectar saves incompatíveis. Não incluir ROM comercial nem conteúdo de BIOS protegida nos arquivos de diagnóstico/versionamento.
+
+**Barramentos e transações:**
+
+- Cada barramento concreto define largura de endereço e dados, alinhamento, lanes/byte enables quando existentes, masters, slaves, decodificação, prioridades, arbitragem, ownership, latência, wait states, contenção, regras de leitura/escrita e reset.
+- O framework comum pode representar uma transação com endereço, tipo de acesso, largura, dados, origem/master e fase/resultado temporal. A representação não pode forçar todas as plataformas a uma largura ou semântica única.
+- Acesso a memória e acesso a portas de I/O podem compartilhar infraestrutura interna, mas permanecem espaços e contratos distintos quando o processador/hardware assim os define. Não converter portas em memória mapeada nem o inverso por conveniência.
+- O resultado de uma transação deve permitir representar dados lidos/escritos, dispositivo selecionado, ciclos/esperas, contenção, interrupções ou efeitos laterais observáveis. Acesso não mapeado e conflito elétrico/lógico exigem política específica e evidenciada.
+- DMA, vídeo e outros masters devem participar da arbitragem real do barramento. A ordem relativa entre CPU, DMA e dispositivos não pode ser resolvida por ordem incidental de chamadas no código.
+- Em sistemas com múltiplas CPUs ou subsistemas, modelar explicitamente barramentos compartilhados, bridges, janelas, handshakes, bloqueios e ownership. Não presumir que dois processadores com mapas de endereços parecidos compartilhem o mesmo barramento físico.
+
+**I/O, registradores e interrupções:**
+
+- Distinguir I/O por portas, I/O mapeado em memória, registradores internos de dispositivos, linhas de sinal e interfaces externas. O mapa e a decodificação pertencem ao sistema/dispositivo correspondente.
+- Dispositivos expõem contratos explícitos de leitura, escrita, reset, estado, eventos e interrupções. Leituras podem ter efeitos colaterais (latches, acknowledge, FIFO, status) e devem reproduzi-los conforme evidência.
+- Entradas do host são normalizadas na fronteira e convertidas em eventos determinísticos. A leitura do controle emulado ocorre no runtime Rust, não por chamadas de API do host a cada instrução.
+- Linhas de interrupção devem representar origem, nível/estado, prioridade quando aplicável, acknowledge e instante de assert/deassert. O scheduler ordena esses eventos com CPU, barramento e dispositivos.
+- O contrato comum não deve apagar diferenças entre portas Z80, registradores de VDP/PSG, controladores de entrada, I/O do Mega Drive ou interfaces do Sega CD/32X.
+
+**Clock domains e controle de ciclos:**
+
+- Cada MachineProfile define um grafo explícito de fontes de clock, domínios, divisores/relações e componentes associados, sustentado por fonte e revisão de hardware. Região de mídia, região do console, padrão de vídeo e clock não são sinônimos.
+- Representar relações temporais com inteiros, razões racionais ou acumuladores de fase determinísticos. Evitar ponto flutuante e relógios de parede para decidir eventos emulados. Frequências e divisores não documentados permanecem desconhecidos/pendentes; não inventar valores.
+- Distinguir clock tick, CPU T-state, M-cycle, fase de máquina, transação de barramento, wait state, contenção e evento de dispositivo. Uma contagem nominal de T-states por instrução não equivale à sequência temporal dos acessos.
+- O modelo temporal deve evoluir progressivamente: primeiro preservar contagens e fronteiras já validadas; depois explicitar fases/acessos relevantes; em seguida waits, contenção, arbitragem, DMA e interrupções; por fim fechar a precisão ciclo a ciclo onde houver evidência e necessidade.
+- CPU e dispositivos devem poder suspender/retomar em fronteiras seguras para que uma transação bloqueada ou evento concorrente seja respeitado. Não permitir que uma instrução atravesse silenciosamente um evento que altera seu resultado.
+- O Master Scheduler Rust permanece a única autoridade para converter clocks em eventos e avançar a timeline. Dispositivos podem manter contadores/fases locais, mas só avançam em resposta ao scheduler e não executam relógios independentes.
+- VSync, VRR, timer Qt, sleep e clock de áudio do host regulam apenas a apresentação/entrega física; não corrigem deriva alterando clocks lógicos nem determinam ciclos emulados.
+
+**Composição por plataforma:**
+
+SG-1000 e SMS/GG podem reutilizar primitivas comuns de memória, barramento e I/O quando os contratos e comportamentos forem compatíveis, mantendo mapas e dispositivos próprios. Mega Drive exige representar separadamente os barramentos e masters relevantes do 68000, Z80, VDP e demais dispositivos, incluindo compartilhamento e controle de acesso comprovados. Sega CD e 32X acrescentam suas próprias memórias, bridges, controladores, CPUs, janelas e regras de sincronização. A arquitetura comum deve acomodar essas topologias sem antecipar ou fingir que elas já estejam implementadas.
+
+**Critérios de aceitação desta arquitetura:**
+
+1. Mapas de memória e I/O versionados por plataforma/modelo/revisão, com origem dos valores e tratamento explícito de aliases, regiões ausentes e acessos não mapeados.
+2. Vetores de leitura/escrita e reset para ROM, RAM, VRAM, SRAM/NVRAM, registradores e expansões, incluindo limites, wrap, espelhamento, proteção e efeitos colaterais.
+3. Testes de mapper/placa para bancos, janelas, SRAM, write-enable, reset, seleção e estado; perfil ambíguo não escolhe implementação silenciosamente.
+4. Testes de persistência: criação, leitura, alteração, flush, encerramento/reabertura, mídia incompatível, arquivo ausente/corrompido e recuperação de gravação interrompida, sem I/O de host no hot path.
+5. Testes de save/load state que comprovem restauração determinística de RAM volátil, memória persistente, registradores, mapper, dispositivos e eventos pendentes; save state não pode ser confundido com save de cartucho.
+6. Testes de transação/arbitragem para CPU, DMA e dispositivos concorrentes, waits, contenção, open bus e conflitos apenas nos casos documentados/observados.
+7. Testes de I/O para portas e memória mapeada, efeitos laterais, linhas de interrupção, acknowledge e ordenação temporal.
+8. Vetores de clock/ciclos com relações exatas entre domínios, fronteiras de eventos, waits e interrupções; repetição da mesma sequência deve gerar traces idênticos.
+9. Integração com Master Scheduler e regressões SG-1000/SMS; precisão ciclo a ciclo só recebe TEMPORAL_PASS com traces e oráculos/evidências independentes.
+10. Diagnóstico deve identificar máquina/revisão, perfil de placa, mapa, domínio de clock, dispositivo/barramento e estado de persistência sem despejar conteúdo protegido da mídia.
+
+Esses itens definem contratos e critérios futuros; não afirmam que frameworks genéricos, todos os barramentos, persistência, bateria ou precisão ciclo a ciclo já estejam implementados.
+
 ## 5. Estratégia global para os VDPs
 
 O vídeo é uma área crítica de fidelidade. Cada VDP deve reproduzir seu hardware, limites e temporização; uma imagem visualmente plausível não é critério suficiente.
