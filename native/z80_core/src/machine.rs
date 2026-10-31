@@ -3,7 +3,7 @@
 //! This module owns no CPU, memory, VDP or PSG implementation. It exposes
 //! snapshots and machine operations from sega_sg1000_core.
 
-use crate::audio::NativePcmResampler;
+use crate::audio::{NativeAudioSession, NativePcmResampler};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
@@ -250,6 +250,19 @@ impl NativePsgSnapshot {
 pub struct NativeSG1000Machine {
     machine: Sg1000Machine,
     total_instructions: u64,
+    audio_session: Option<NativeAudioSession>,
+}
+
+impl NativeSG1000Machine {
+    fn pump_audio_output(&mut self) -> PyResult<()> {
+        if let Some(session) = self.audio_session.as_mut() {
+            let samples = self.machine.drain_audio_samples(None);
+            session
+                .process_samples(&samples)
+                .map_err(PyRuntimeError::new_err)?;
+        }
+        Ok(())
+    }
 }
 
 #[pymethods]
@@ -273,7 +286,41 @@ impl NativeSG1000Machine {
         Ok(Self {
             machine,
             total_instructions: 0,
+            audio_session: None,
         })
+    }
+
+    /// Configure the Rust-owned audio session. No PCM is returned to Python.
+    #[pyo3(signature = (backend, sample_rate=48000, buffer_size=512, queue_blocks=4, volume=100, balance=0))]
+    fn configure_audio_output(
+        &mut self,
+        backend: &str,
+        sample_rate: u32,
+        buffer_size: u32,
+        queue_blocks: usize,
+        volume: u8,
+        balance: i8,
+    ) -> PyResult<()> {
+        let session = NativeAudioSession::new(
+            backend, sample_rate, buffer_size, queue_blocks, volume, balance,
+        )
+        .map_err(PyRuntimeError::new_err)?;
+        self.audio_session = Some(session);
+        Ok(())
+    }
+
+    fn close_audio_output(&mut self) {
+        if let Some(mut session) = self.audio_session.take() {
+            session.close();
+        }
+    }
+
+    #[getter]
+    fn audio_output_metrics(&self) -> (u64, u64) {
+        self.audio_session
+            .as_ref()
+            .map(NativeAudioSession::metrics)
+            .unwrap_or((0, 0))
     }
 
     #[getter]
@@ -395,6 +442,7 @@ impl NativeSG1000Machine {
         for steps in 1..=max_steps {
             self.step()?;
             if self.machine.vdp.frame_number() != start_frame {
+                self.pump_audio_output()?;
                 return Ok(steps);
             }
         }
