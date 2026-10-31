@@ -20,9 +20,7 @@ from sega_emulator.frontend.controller_profiles import (
     apply_turbo,
     joystick_value,
 )
-from sega_emulator.frontend.native_first_controller_input import (
-    NativeFirstControllerInput,
-)
+from sega_emulator.frontend.rust_controller_input import RustControllerInput
 from sega_emulator.frontend.qt.focus_pause import (
     EmulationPauseController,
     FocusPauseController,
@@ -294,9 +292,9 @@ def run(initial_path: Path | None = None) -> None:
         logger.warning("Configuração de controles inválida; usando padrões.")
         controller_config = ControllerInputConfig()
     input_driver = str(settings.value("input_driver", "auto"))
-    if input_driver not in {"auto", "xinput", "sdl3"}:
+    if input_driver not in {"auto", "sdl3"}:
         input_driver = "auto"
-    controller_input = NativeFirstControllerInput(
+    controller_input = RustControllerInput(
         controller_config, backend_preference=input_driver
     )
     logger.info(
@@ -305,6 +303,7 @@ def run(initial_path: Path | None = None) -> None:
             "event": "native_first_input_initialized",
             "available": controller_input.available,
             "devices": controller_input.connected_names(),
+            "backend_error": controller_input.backend_error,
         },
     )
 
@@ -452,7 +451,7 @@ def run(initial_path: Path | None = None) -> None:
             if binding is not None:
                 player, action = binding
                 actions[player].add(action)
-        gamepad_actions = controller_input.poll()
+        gamepad_actions = controller_input.poll(frame_count)
         for player in (1, 2):
             actions[player].update(gamepad_actions[player])
             profile = controller_input.config.players[player]
@@ -913,15 +912,12 @@ def run(initial_path: Path | None = None) -> None:
         input_driver, audio_driver, video_driver = dialog.drivers()
 
         # Validate forced drivers before applying any of the new preferences.
-        if input_driver != "auto" and not (
-            controller_input.native.available
-            if input_driver == "xinput"
-            else bool(controller_input.fallback.available)
-        ):
+        if input_driver == "sdl3" and not controller_input.available:
             QMessageBox.warning(
                 window,
-                "Driver de input indisponível",
-                f"A API {input_driver} não está disponível neste sistema. "
+                "Backend de input indisponível",
+                controller_input.backend_error
+                or "A biblioteca SDL3 nativa não está disponível. "
                 "A configuração anterior foi mantida.",
             )
             return
