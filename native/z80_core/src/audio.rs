@@ -59,18 +59,15 @@ impl PcmSink for NativeAudioBackend {
     }
 }
 
-impl MachineAudioSession {
-    pub(crate) fn open(
-        backend: &str,
-        sample_rate: u32,
-        buffer_size: u32,
-        queue_blocks: usize,
-        volume: u8,
-        balance: i8,
-    ) -> Result<Self, String> {
-        let output = NativeAudioBackend::new(
-            backend, sample_rate, buffer_size, queue_blocks, balance,
-        )?;
-        NativeAudioSession::new(sample_rate, volume, output)
-    }
+pub(crate) fn open_audio_session(
+    backend: &str,
+    sample_rate: u32,
+    buffer_size: u32,
+    queue_blocks: usize,
+    volume: u8,
+    balance: i8,
+) -> Result<MachineAudioSession, String> {
+    NativeAudioSession::with_sink_factory(sample_rate, volume, || {
+        NativeAudioBackend::new(backend, sample_rate, buffer_size, queue_blocks, balance)
+    })
 }
