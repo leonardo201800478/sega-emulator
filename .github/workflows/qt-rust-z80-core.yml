@@ -12,6 +12,11 @@ on:
       - "Cargo.lock"
       - "native/audio_runtime/**"
       - "native/audio_output/**"
+      - "native/input_runtime/**"
+      - "src/sega_emulator/frontend/rust_controller_input.py"
+      - "tests/test_rust_controller_input.py"
+      - "tests/test_native_input_runtime.py"
+      - "scripts/install_sdl3_runtime.ps1"
       - "pyproject.toml"
       - "src/sega_emulator/frontend/qt/drivers_dialog.py"
       - "src/sega_emulator/frontend/qt/settings_dialog.py"
@@ -58,6 +63,9 @@ jobs:
           cache: pip
       - name: Install project, Qt and Maturin
         run: python -m pip install -e ".[dev,qt]" maturin==1.15.0
+      - name: Install official SDL3 runtime for native input smoke tests
+        shell: pwsh
+        run: ./scripts/install_sdl3_runtime.ps1
       - name: Generate native dependency lockfiles for review
         run: |
           cargo generate-lockfile --manifest-path native/z80_core/Cargo.toml
@@ -107,7 +115,9 @@ jobs:
           if-no-files-found: error
       - name: Lint and format Python
         run: |
-          python -m ruff check src/sega_emulator/machine/sg1000.py src/sega_emulator/machine/sms.py src/sega_emulator/__main__.py src/sega_emulator/frontend/qt/main_window.py src/sega_emulator/frontend/qt/preferences.py src/sega_emulator/frontend/qt/video_widget.py src/sega_emulator/frontend/qt/settings_dialog.py src/sega_emulator/frontend/qt_frontend.py src/sega_emulator/frontend/qt/drivers_dialog.py tests/test_qt_drivers_dialog.py tests/test_qt_settings_dialog.py tests/unit/test_vulkan_video_widget.py tests/test_qt_main_window.py tests/test_qt_preferences.py tests/test_sg1000_native_machine.py tests/test_sms_native_audio.py tests/test_rust_runtime_selection.py tests/test_vgm_machine_integration.py
+          python -m ruff check src/sega_emulator/machine/sg1000.py src/sega_emulator/machine/sms.py src/sega_emulator/__main__.py src/sega_emulator/frontend/qt/main_window.py src/sega_emulator/frontend/qt/preferences.py src/sega_emulator/frontend/qt/video_widget.py src/sega_emulator/frontend/qt/settings_dialog.py src/sega_emulator/frontend/qt_frontend.py src/sega_emulator/frontend/qt/drivers_dialog.py src/sega_emulator/frontend/rust_controller_input.py tests/test_qt_drivers_dialog.py tests/test_rust_controller_input.py tests/test_native_input_runtime.py tests/test_qt_settings_dialog.py tests/unit/test_vulkan_video_widget.py tests/test_qt_main_window.py tests/test_qt_preferences.py tests/test_sg1000_native_machine.py tests/test_sms_native_audio.py tests/test_rust_runtime_selection.py tests/test_vgm_machine_integration.py
           python -m ruff format --check src/sega_emulator/machine/sg1000.py src/sega_emulator/__main__.py src/sega_emulator/frontend/qt/main_window.py src/sega_emulator/frontend/qt/preferences.py src/sega_emulator/frontend/qt/video_widget.py src/sega_emulator/frontend/qt/settings_dialog.py src/sega_emulator/frontend/qt_frontend.py src/sega_emulator/frontend/qt/drivers_dialog.py tests/unit/test_vulkan_video_widget.py tests/test_qt_main_window.py tests/test_qt_preferences.py tests/test_sg1000_native_machine.py tests/test_sms_native_audio.py tests/test_rust_runtime_selection.py tests/test_vgm_machine_integration.py
       - name: Test Qt integration and Rust-only runtime
-        run: python -m pytest tests/unit/test_vulkan_video_widget.py tests/test_qt_main_window.py tests/test_qt_preferences.py tests/test_sg1000_native_machine.py tests/test_sms_native_audio.py tests/test_rust_runtime_selection.py tests/test_qt_drivers_dialog.py tests/test_qt_settings_dialog.py -q
+        env:
+          SEGA_INPUT_REQUIRE_SDL3: "1"
+        run: python -m pytest tests/unit/test_vulkan_video_widget.py tests/test_qt_main_window.py tests/test_qt_preferences.py tests/test_sg1000_native_machine.py tests/test_sms_native_audio.py tests/test_rust_runtime_selection.py tests/test_qt_drivers_dialog.py tests/test_qt_settings_dialog.py tests/test_rust_controller_input.py tests/test_native_input_runtime.py -q
