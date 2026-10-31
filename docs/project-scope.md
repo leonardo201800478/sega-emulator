@@ -149,6 +149,18 @@ O diagnóstico deve informar identidade/hash, DAT e versão usados, correspondê
 
 O Media Manager também deve representar mídias que não são um único arquivo ou uma única imagem de cartucho. A unidade de carregamento pode ser um **MediaSet** versionado, composto por mídia principal, cartuchos adicionais, patches e recursos auxiliares. Cada membro mantém sua identidade, hash, procedência e papel; o conjunto não deve ser achatado em uma ROM sintética sem necessidade e sem preservar a relação entre os componentes.
 
+**Combinação ROM + ISO (mídia híbrida):**
+
+O Media Manager deve oferecer suporte explícito a conjuntos compostos por uma ROM de cartucho e uma imagem ISO associada. Esse arranjo não pode ser reduzido automaticamente a um cartucho comum nem confundido com uma imagem de CD autônoma. O perfil da plataforma/extensão define como os dois meios se relacionam e qual dispositivo emulado expõe cada recurso.
+
+- Registrar a ROM e a ISO como membros independentes do mesmo MediaSet, com hashes, tamanhos, formatos, identidade, procedência e papéis explícitos (por exemplo, cartucho principal e imagem de dados auxiliar).
+- Permitir que o perfil declare se a ISO contém dados auxiliares, filesystem, conteúdo consultado pelo jogo, dados de expansão ou uma imagem de disco destinada a um controlador de CD emulado. Não presumir um único protocolo universal para todo par ROM+ISO.
+- Preservar a estrutura e o formato da imagem. Uma ISO de dados não representa automaticamente TOC, trilhas de áudio, pregaps, subcanais ou layout de um disco misto; quando esses elementos forem necessários, exigir CUE/BIN, CHD ou outro formato que preserve a estrutura correspondente.
+- Resolver a associação por metadados do perfil, manifest/patch documentado ou seleção explícita. Não associar arquivos apenas porque compartilham o nome-base e não procurar sidecars arbitrários fora das regras do conjunto.
+- Validar hash/versão compatível entre ROM, patch e ISO, existência dos arquivos e requisitos do controlador/protocolo. Reportar claramente componentes ausentes, incompatíveis ou desconhecidos.
+- O leitor de mídia fornece os dados; o controlador de hardware apropriado determina comandos, buffers, interrupções e instante de disponibilização ao jogo, sob o Master Scheduler Rust. A leitura de arquivo no host nunca avança diretamente o tempo emulado.
+- Incluir testes de ROM isolada, ROM+ISO válida, ISO ausente, ISO incompatível, identidade ambígua, imagem de dados versus disco misto e save/load state preservando a composição.
+
 **Lock-on e cartuchos acoplados (Mega Drive/Genesis):**
 - Modelar o cartucho-base com pass-through/slot secundário e o cartucho conectado como dois dispositivos de mídia/placa distintos.
 - Representar detecção de presença, conexão do barramento e decodificação/seleção de ROMs de acordo com a lógica do cartucho-base; não concatenar as ROMs nem presumir que formem uma imagem linear.
@@ -399,7 +411,7 @@ Cada componente deve seguir inventário → critérios de aceitação → implem
 | Mappers | Vetores por mapper/placa, bancos/janelas, limites, leituras/escritas, reset, RAM persistente e efeitos de barramento comprovados |
 | Multicarts e hacks | Seleção de título/banco reproduzível; hacks/patches identificados como derivados, com procedência e perfil explícito quando alterarem hardware |
 | Requisitos do jogo | Jogadores, modo de jogo, acessórios, BIOS/firmware e peculiaridades de boot com fonte/confiança ou estado UNKNOWN |
-| MediaSet e mídia composta | Identidade individual e composição de cartuchos lock-on, patches, sidecars, imagens de dados e trilhas; hashes/procedência e dependências reproduzíveis |
+| MediaSet e mídia composta | Identidade individual e composição ROM+ISO, cartuchos lock-on, patches, sidecars, imagens de dados e trilhas; hashes/procedência e dependências reproduzíveis |
 | Lock-on | Dois cartuchos/dispositivos distintos, pass-through, seleção/decodificação de barramento, combinações suportadas e save state |
 | MSU-MD / MD+ | Perfis distintos; patch/base ROM/sidecars/CUE e trilhas validados; Mode 1/BIOS separado de MD+ overlay; incompatibilidades e arquivos ausentes diagnosticados |
 | Raster | H/V counters, linhas, dots, blanking, fronteiras e eventos |
@@ -471,6 +483,7 @@ Não implementar os seis núcleos em paralelo. O SMS é a próxima trilha de cor
 - Não confundir CartProfile/BoardProfile, implementação executável do mapper e MachineProfile; são responsabilidades distintas.
 - Não achatar cartuchos lock-on em uma ROM concatenada nem tratar cartuchos acoplados como um único dump sem preservar seus dispositivos e relações.
 - Não tratar MSU-MD e MD+ como sinônimos: seus protocolos, caminhos de áudio/CD e requisitos de hardware/BIOS são distintos.
+- Não descartar ou fundir o suporte a conjuntos ROM+ISO; a relação entre os meios deve ser explícita e validada pelo perfil, sem presumir que ISO contenha estrutura de disco misto.
 - Não validar ROM modificada como dump original No-Intro; preservar hash da base, patch/procedência, hash resultante e recursos auxiliares.
 
 - Não exigir BIOS de SMS/GG universalmente; respeitar modelo e configuração.
