@@ -163,3 +163,18 @@ O corpus SingleStepTests/Z80 fixado em `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7
 
 
 Para validar o workspace principal, usar os comandos Rust registrados acima e verificar o SHA exato. Como `native/z80_core` é excluído do workspace, sua compilação/testes e integração PyO3/Maturin exigem checks explícitos próprios quando houver alterações nele. Nenhuma das PRs #227–#229 justifica ativar um segundo runtime Python de hardware.
+
+
+## Runtime de áudio — decisão atual
+
+Os crates audio_runtime e audio_output já são conectados por NativeAudioSession no adaptador nativo: a sessão possui resampler e backend WASAPI/XAudio2 e é acionada pelo wrapper da máquina após run_frame. A primeira fatia ainda usa o PSG e resampler mono existentes; mixer multi-fonte/estéreo, desacoplamento do timer Qt e remoção das APIs PyO3 antigas permanecem pendentes. WASAPI Shared é o default; XAudio2 é a alternativa existente. Ver [Runtime de áudio nativo](native-audio-runtime.md).
+
+
+### Atualização — crates de áudio na PR #299
+
+| Caminho | Papel | Estado |
+|---|---|---|
+| native/audio_runtime (sega-audio-runtime) | Resampler PCM e DSP host-independent: mixer mono multi-fonte, ganho individual/mestre e passa-baixa opcional | IMPLEMENTED (base DSP); filtros analógicos por chip não calibrados e fontes adicionais pendentes |
+| native/audio_output (sega-audio-output) | Backends Windows WASAPI Shared/event-driven com negociação IAudioClient3 e fallback convencional; XAudio2 alternativo | IMPLEMENTED (negociação); validação física e telemetria efetiva pendentes |
+
+O runtime DSP é compartilhado antes da seleção do backend. O mixer está conectado à sessão nativa SG-1000/SMS, atualmente com a fonte PSG que já existe; isso não declara FM, PCM, CDDA ou PWM implementados. wasapi = 0.26 já fornece os métodos IAudioClient3, sem dependência adicional de binding.

@@ -5,7 +5,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use sega_sms_core::{ControllerButtons, SmsMachine, SmsMachineConfig, VideoStandard};
 
-use crate::audio::NativePcmResampler;
+use crate::audio::{NativeAudioSession, NativePcmResampler};
 
 /// Resolve the territory and video standard without constructing Python errors.
 ///
@@ -52,11 +52,29 @@ enum SmsMachineBuildError {
     Machine(String),
 }
 
-/// Thin Python boundary; the SMS machine, PSG and sample generation stay in Rust.
-#[pyclass(module = "sega_z80_core")]
+/// Thin, thread-affine Python boundary; Qt creates and accesses it on one thread.
+#[pyclass(unsendable, module = "sega_z80_core")]
 pub struct NativeSMSMachine {
     machine: SmsMachine,
     total_instructions: u64,
+    audio_session: Option<NativeAudioSession>,
+    audio_output_error: Option<String>,
+}
+
+impl NativeSMSMachine {
+    fn pump_audio_output(&mut self) {
+        if self.audio_session.is_some() {
+            let samples = self.machine.drain_audio_samples(None);
+            let result = match self.audio_session.as_mut() {
+                Some(session) => session.process_samples(&samples),
+                None => return,
+            };
+            if let Err(error) = result {
+                self.audio_session = None;
+                self.audio_output_error = Some(error);
+            }
+        }
+    }
 }
 
 #[pymethods]
@@ -73,7 +91,54 @@ impl NativeSMSMachine {
         Ok(Self {
             machine,
             total_instructions: 0,
+            audio_session: None,
+            audio_output_error: None,
         })
+    }
+
+    /// Configure the Rust-owned audio session. No PCM is returned to Python.
+    #[pyo3(signature = (backend, sample_rate=48000, buffer_size=512, queue_blocks=4, volume=100, balance=0))]
+    fn configure_audio_output(
+        &mut self,
+        backend: &str,
+        sample_rate: u32,
+        buffer_size: u32,
+        queue_blocks: usize,
+        volume: u8,
+        balance: i8,
+    ) -> PyResult<()> {
+        let session = NativeAudioSession::new(
+            backend,
+            sample_rate,
+            buffer_size,
+            queue_blocks,
+            volume,
+            balance,
+        )
+        .map_err(PyRuntimeError::new_err)?;
+        self.audio_session = Some(session);
+        self.audio_output_error = None;
+        Ok(())
+    }
+
+    fn close_audio_output(&mut self) {
+        if let Some(mut session) = self.audio_session.take() {
+            session.close();
+        }
+        self.audio_output_error = None;
+    }
+
+    #[getter]
+    fn audio_output_error(&self) -> Option<String> {
+        self.audio_output_error.clone()
+    }
+
+    #[getter]
+    fn audio_output_metrics(&self) -> (u64, u64) {
+        self.audio_session
+            .as_ref()
+            .map(NativeAudioSession::metrics)
+            .unwrap_or((0, 0))
     }
 
     #[getter]
@@ -171,6 +236,7 @@ impl NativeSMSMachine {
         for steps in 1..=max_steps {
             self.step()?;
             if self.machine.vdp().frame_number() != initial_frame {
+                self.pump_audio_output();
                 return Ok(steps);
             }
         }
@@ -247,6 +313,8 @@ mod tests {
         let machine = NativeSMSMachine {
             machine: build_sms_machine(vec![0; 16], false, Some("usa"), None).unwrap(),
             total_instructions: 0,
+            audio_session: None,
+            audio_output_error: None,
         };
         assert_eq!(machine.psg_sample_rate(), 44_100);
         assert_eq!(machine.psg_clock_hz(), 3_579_545);
@@ -258,12 +326,16 @@ mod tests {
         let pal_machine = NativeSMSMachine {
             machine: build_sms_machine(vec![0; 16], false, Some("europe"), None).unwrap(),
             total_instructions: 0,
+            audio_session: None,
+            audio_output_error: None,
         };
         assert_eq!(pal_machine.psg_clock_hz(), 3_546_895);
 
         let japan_machine = NativeSMSMachine {
             machine: build_sms_machine(vec![0; 16], false, Some("japan"), None).unwrap(),
             total_instructions: 0,
+            audio_session: None,
+            audio_output_error: None,
         };
         assert_eq!(japan_machine.psg_clock_hz(), 3_579_545);
     }
@@ -275,6 +347,8 @@ mod tests {
         let machine = NativeSMSMachine {
             machine: build_sms_machine(vec![0xC3; 0x4000], false, Some("usa"), Some(bios)).unwrap(),
             total_instructions: 0,
+            audio_session: None,
+            audio_output_error: None,
         };
         assert!(machine.bios_enabled());
         assert_eq!(machine.read_memory(0), 0x3E);

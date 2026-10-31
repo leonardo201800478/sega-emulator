@@ -10,7 +10,7 @@
 3. Componentes compartilhados vivem em crates neutros somente depois de contratos e testes aprovados. A extração não faz parte da primeira fatia.
 4. O núcleo não depende de PyO3, Qt, Vulkan ou WASAPI.
 5. PyO3 é uma fronteira grossa entre Rust e Python; execução CPU/dispositivos fica em Rust, sem callback Python por instrução/byte.
-6. Vulkan apresenta framebuffer finalizado; WASAPI consome PCM finalizado. Nenhum determina clocks ou estado de hardware.
+6. Vulkan apresenta framebuffer finalizado; a sessão nativa de áudio consome PCM finalizado. WASAPI Shared é o padrão e XAudio2 a alternativa. Nenhum determina clocks ou estado de hardware.
 7. Configuração, ROM, entradas e checkpoints iguais devem produzir estado determinístico.
 
 ## 2. Diagrama de componentes
@@ -32,10 +32,10 @@ flowchart TB
     FM --> MIX
     MIX --> PCM[PCM blocks]
     FB --> VULKAN[Existing Qt Quick / Vulkan presentation]
-    PCM --> WASAPI[Existing WASAPI PCM output]
+    PCM --> HOST[Native Rust audio session]\n    HOST --> WASAPI[WASAPI Shared default]\n    HOST --> XAUDIO2[XAudio2 alternative]
 ~~~
 
-Este diagrama é o alvo arquitetural. CPU candidata, scheduler e YM2413 precisam de validação antes de serem considerados concluídos.
+Este diagrama é o alvo arquitetural. A sessão Rust já cobre a saída PSG SG-1000/SMS, mas o mixer multi-fonte/estéreo e a integração YM2413 precisam de validação antes de serem considerados concluídos. Ver [Runtime de áudio nativo](native-audio-runtime.md).
 
 ## 3. Estrutura proposta
 

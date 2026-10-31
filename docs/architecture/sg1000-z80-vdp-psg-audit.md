@@ -102,3 +102,8 @@ Report each gate as PASS, FAIL, BLOCKED or NOT RUN against the exact candidate S
 ## Completion criteria
 
 The CPU is complete for the selected Z80 silicon profile only when every encoding is implemented or explicitly classified, all supported instruction families have independent state/flag/timing tests, and interrupt/prefix behavior is covered. The SG-1000 standalone milestone remains open until CPU, bus/memory, I/O, VDP, PSG, scheduler and the required frontend integration are tested together. No claim of cycle accuracy is allowed without timestamped bus-level evidence.
+
+
+## Saída host e pipeline de áudio
+
+Separar os testes do SN76489 (estado digital, clocks, writes e vetores de amostras) da sessão host (resampling, fila, underruns e API Windows). O caminho Qt ativo encaminha amostras diretamente à sessão Rust; não usar o frontend como oráculo de síntese. WASAPI Shared é padrão e XAudio2 alternativa. Ver [Runtime de áudio nativo](native-audio-runtime.md).

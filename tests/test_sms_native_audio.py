@@ -51,6 +51,13 @@ def test_sms_binding_uses_native_psg_and_ntsc_clock() -> None:
     assert machine.total_tstates > 0
 
 
+def test_sms_machine_rejects_unknown_native_audio_backend() -> None:
+    machine = _machine()
+    with pytest.raises(RuntimeError, match="unsupported native audio backend"):
+        machine.configure_audio_output("invalid")
+    assert machine.audio_output_metrics == (0, 0)
+
+
 def test_sms_audio_pcm_is_deterministic_and_drain_does_not_change_timing() -> None:
     left = _machine()
     right = _machine()

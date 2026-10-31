@@ -13,7 +13,8 @@ use std::time::Duration;
 use std::collections::VecDeque;
 #[cfg(windows)]
 use wasapi::{
-    DeviceEnumerator, Direction, SampleType, StreamMode, WaveFormat, deinitialize, initialize_mta,
+    DeviceEnumerator, Direction, SampleType, StreamMode, TimingMode, WaveFormat, deinitialize,
+    initialize_mta,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -240,6 +241,21 @@ impl Drop for NativeWasapiOutput {
     }
 }
 
+/// Select an IAudioClient3 period in frames, respecting endpoint limits and alignment.
+fn select_shared_period(requested: u32, min: u32, max: u32, fundamental: u32) -> Option<u32> {
+    if fundamental == 0 || min == 0 || min > max {
+        return None;
+    }
+    let target = requested.max(1).clamp(min, max);
+    let aligned = target.div_ceil(fundamental).saturating_mul(fundamental);
+    let selected = if aligned <= max {
+        aligned
+    } else {
+        (max / fundamental) * fundamental
+    };
+    (selected >= min && selected <= max).then_some(selected)
+}
+
 #[cfg(windows)]
 struct ComApartment;
 
@@ -287,14 +303,39 @@ fn run_wasapi_worker(
             let (default_period, _minimum_period) = audio_client
                 .get_device_period()
                 .map_err(|error| error.to_string())?;
-            let requested_period = (buffer_size as u64 * 10_000_000 / sample_rate as u64) as i64;
-            let mode = StreamMode::EventsShared {
-                autoconvert: true,
-                buffer_duration_hns: requested_period.max(default_period),
-            };
-            audio_client
-                .initialize_client(&format, &Direction::Render, &mode)
-                .map_err(|error| error.to_string())?;
+
+            // Prefer IAudioClient3 in shared/event-driven mode. Clamp the
+            // requested period to the endpoint range and align it to the
+            // fundamental period. Retain the previous Shared path when the
+            // interface or initialization is unavailable.
+            let requested_frames = buffer_size.max(1);
+            let selected_period = audio_client
+                .get_shared_mode_engine_period(&format)
+                .ok()
+                .and_then(|periods| {
+                    select_shared_period(
+                        requested_frames,
+                        periods.min,
+                        periods.max,
+                        periods.fundamental,
+                    )
+                });
+            let initialized_with_client3 = selected_period.is_some_and(|period| {
+                audio_client
+                    .initialize_shared_audio_stream(&format, TimingMode::Events, period)
+                    .is_ok()
+            });
+            if !initialized_with_client3 {
+                let requested_period =
+                    (buffer_size as u64 * 10_000_000 / sample_rate as u64) as i64;
+                let mode = StreamMode::EventsShared {
+                    autoconvert: true,
+                    buffer_duration_hns: requested_period.max(default_period),
+                };
+                audio_client
+                    .initialize_client(&format, &Direction::Render, &mode)
+                    .map_err(|error| error.to_string())?;
+            }
             let event = audio_client
                 .set_get_eventhandle()
                 .map_err(|error| error.to_string())?;
@@ -739,6 +780,16 @@ fn run_xaudio2_worker(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn iaudio_client3_period_is_clamped_and_aligned_to_fundamental() {
+        assert_eq!(select_shared_period(512, 48, 448, 4), Some(448));
+        assert_eq!(select_shared_period(49, 48, 448, 4), Some(52));
+        assert_eq!(select_shared_period(1, 48, 448, 4), Some(48));
+        assert_eq!(select_shared_period(512, 49, 50, 48), None);
+        assert_eq!(select_shared_period(100, 0, 448, 4), None);
+        assert_eq!(select_shared_period(100, 48, 448, 0), None);
+    }
 
     #[test]
     fn mono_pcm16_is_duplicated_to_left_and_right_stereo_channels() {

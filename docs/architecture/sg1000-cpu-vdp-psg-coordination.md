@@ -43,3 +43,8 @@ This work is coordinated across three independently reviewable workstreams. They
 - The Rust VDP exposes a configurable per-line sprite limit; the former Python VDP is archived.
 - Qt preferences persist the setting and apply it to the active machine. The Qt UI forwards the setting to the Rust binding. The Python hardware backend has been removed from the active package.
 - VDP/PSG timing and full CPU/device synchronization remain instruction-boundary based until timestamped bus-cycle evidence proves otherwise.
+
+
+## Host audio runtime boundary
+
+PSG sample generation and timestamped register writes remain part of the emulated machine timeline. The host audio session is owned by Rust and must not become a timing master for the Z80, VDP or PSG. Qt/Python may configure the session and read diagnostics, but it must not drain, resample, mix or dispatch PCM. WASAPI Shared is the Windows default and XAudio2 is the alternative. See [native multi-system audio runtime](native-audio-runtime.md).

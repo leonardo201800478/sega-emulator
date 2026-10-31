@@ -29,6 +29,7 @@ on:
       - "tests/test_sms_native_audio.py"
       - "native/sg1000_core/**"
       - "src/sega_emulator/machine/sg1000.py"
+      - "src/sega_emulator/machine/sms.py"
       - "src/sega_emulator/frontend/qt_frontend.py"
       - "tests/test_sg1000_native_machine.py"
       - "tests/test_rust_runtime_selection.py"
@@ -65,14 +66,21 @@ jobs:
         run: |
           cargo generate-lockfile --manifest-path native/z80_core/Cargo.toml
           cargo generate-lockfile --manifest-path native/audio_output/Cargo.toml
+          cargo generate-lockfile --manifest-path native/audio_runtime/Cargo.toml
       - name: Rust formatting
         run: cargo fmt --manifest-path native/z80_core/Cargo.toml --all -- --check
       - name: Rust formatting — native audio output
         run: cargo fmt --manifest-path native/audio_output/Cargo.toml -- --check
+      - name: Rust formatting — native audio runtime
+        run: cargo fmt --manifest-path native/audio_runtime/Cargo.toml -- --check
       - name: Rust Clippy — native audio output
         run: cargo clippy --manifest-path native/audio_output/Cargo.toml --locked --all-targets -- -D warnings
       - name: Rust tests — native audio output
         run: cargo test --manifest-path native/audio_output/Cargo.toml --locked
+      - name: Rust Clippy — native audio runtime
+        run: cargo clippy --manifest-path native/audio_runtime/Cargo.toml --locked --all-targets -- -D warnings
+      - name: Rust tests — native audio runtime
+        run: cargo test --manifest-path native/audio_runtime/Cargo.toml --locked
       - name: Rust Clippy
         run: cargo clippy --manifest-path native/z80_core/Cargo.toml --locked --all-targets -- -D warnings
       - name: Rust unit tests
@@ -92,10 +100,11 @@ jobs:
           path: |
             native/z80_core/Cargo.lock
             native/audio_output/Cargo.lock
+            native/audio_runtime/Cargo.lock
           if-no-files-found: error
       - name: Lint and format Python
         run: |
-          python -m ruff check src/sega_emulator/machine/sg1000.py src/sega_emulator/__main__.py src/sega_emulator/frontend/qt/main_window.py src/sega_emulator/frontend/qt/preferences.py src/sega_emulator/frontend/qt/video_widget.py src/sega_emulator/frontend/qt/settings_dialog.py src/sega_emulator/frontend/qt_frontend.py src/sega_emulator/frontend/qt/audio_output.py src/sega_emulator/frontend/qt/wasapi_audio.py src/sega_emulator/frontend/qt/drivers_dialog.py tests/test_qt_audio_output.py tests/unit/test_wasapi_audio_output.py tests/test_qt_drivers_dialog.py tests/test_qt_settings_dialog.py tests/unit/test_vulkan_video_widget.py tests/test_qt_main_window.py tests/test_qt_preferences.py tests/test_sg1000_native_machine.py tests/test_sms_native_audio.py tests/test_rust_runtime_selection.py tests/test_vgm_machine_integration.py
+          python -m ruff check src/sega_emulator/machine/sg1000.py src/sega_emulator/machine/sms.py src/sega_emulator/__main__.py src/sega_emulator/frontend/qt/main_window.py src/sega_emulator/frontend/qt/preferences.py src/sega_emulator/frontend/qt/video_widget.py src/sega_emulator/frontend/qt/settings_dialog.py src/sega_emulator/frontend/qt_frontend.py src/sega_emulator/frontend/qt/audio_output.py src/sega_emulator/frontend/qt/wasapi_audio.py src/sega_emulator/frontend/qt/drivers_dialog.py tests/test_qt_audio_output.py tests/unit/test_wasapi_audio_output.py tests/test_qt_drivers_dialog.py tests/test_qt_settings_dialog.py tests/unit/test_vulkan_video_widget.py tests/test_qt_main_window.py tests/test_qt_preferences.py tests/test_sg1000_native_machine.py tests/test_sms_native_audio.py tests/test_rust_runtime_selection.py tests/test_vgm_machine_integration.py
           python -m ruff format --check src/sega_emulator/machine/sg1000.py src/sega_emulator/__main__.py src/sega_emulator/frontend/qt/main_window.py src/sega_emulator/frontend/qt/preferences.py src/sega_emulator/frontend/qt/video_widget.py src/sega_emulator/frontend/qt/settings_dialog.py src/sega_emulator/frontend/qt_frontend.py src/sega_emulator/frontend/qt/audio_output.py src/sega_emulator/frontend/qt/wasapi_audio.py src/sega_emulator/frontend/qt/drivers_dialog.py tests/test_qt_audio_output.py tests/unit/test_wasapi_audio_output.py tests/unit/test_vulkan_video_widget.py tests/test_qt_main_window.py tests/test_qt_preferences.py tests/test_sg1000_native_machine.py tests/test_sms_native_audio.py tests/test_rust_runtime_selection.py tests/test_vgm_machine_integration.py
       - name: Test Qt integration and Rust-only runtime
         run: python -m pytest tests/unit/test_vulkan_video_widget.py tests/test_qt_main_window.py tests/test_qt_preferences.py tests/test_sg1000_native_machine.py tests/test_sms_native_audio.py tests/test_rust_runtime_selection.py tests/test_qt_audio_output.py tests/unit/test_wasapi_audio_output.py tests/test_qt_drivers_dialog.py tests/test_qt_settings_dialog.py -q

@@ -141,3 +141,8 @@ Não adicionar JIT por antecipação. Priorizar o runtime Rust interpretado, pro
 7. SMS Power!, [Game Gear Stereo](https://www.smspower.org/Development/GameGearStereo) — extensão de roteamento estéreo do Game Gear.
 
 Referências de código são usadas como evidência comparativa e não como autorização para copiar código. Verificar versão, licença e atribuição antes de reutilizar qualquer implementação.
+
+
+## Integração com o runtime de áudio multi-sistema
+
+A fidelidade digital do SN76489AN deve ser validada no próprio dispositivo (divisores, ruído, atenuação, estado e timestamps), separadamente do resampling e da saída Windows. O runtime Rust comum recebe as contribuições do PSG e as encaminha à sessão nativa; WASAPI Shared/event-driven é o padrão e XAudio2 a alternativa. O balance global do host não substitui roteamento estéreo específico de Game Gear. Ver [Runtime de áudio nativo](native-audio-runtime.md). A sessão atual ainda usa o PSG mono e o resampler existente; o mixer DSP multi-fonte mono já está integrado, enquanto fontes estéreo nativas e desacoplamento do timer Qt permanecem pendentes.

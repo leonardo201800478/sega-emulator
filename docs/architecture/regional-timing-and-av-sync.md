@@ -91,3 +91,7 @@ Requisitos:
 ## Limitações
 
 Valores regionais exatos, revisões de ASIC e comportamento de borda devem ser validados por manuais específicos, testes de diagnóstico e, quando possível, hardware real. Esta especificação não autoriza inventar frequências nem declarar fidelidade de ciclo sem evidência.
+
+## Sincronização do áudio multi-sistema
+
+O áudio não pode usar o timer Qt ou o período do dispositivo Windows como relógio mestre. O scheduler Rust é a autoridade dos ticks emulados; PSG, FM, PCM/DAC, CDDA e PWM devem publicar eventos/contribuições ordenados na timeline da máquina. O mixer e o resampler adaptam a saída ao dispositivo sem alterar o estado lógico do console. WASAPI Shared é o backend padrão e XAudio2 a alternativa; nenhum PCM deve atravessar Python/PyO3 durante gameplay. Ver [Runtime de áudio nativo](native-audio-runtime.md).

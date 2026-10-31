@@ -41,3 +41,8 @@ Para a extensão, verificar também `native/z80_core/Cargo.toml`, build Release/
 - O avanço temporal atual é baseado em fronteiras de instrução e T-states nominais, não em um modelo de barramento completo ciclo a ciclo.
 - A integração deve ser considerada validada somente quando os workflows terminarem com sucesso no SHA candidato.
 - A jogabilidade das oito ROMs da issue #136 e a comparação visual/sonora com ARES ainda precisam de evidência registrada. Não declarar compatibilidade universal com base apenas em compilação, testes sintéticos ou hashes.
+
+
+## Runtime de áudio nativo multi-sistema
+
+A migração do fluxo de áudio tem especificação própria em [Runtime de áudio nativo](architecture/native-audio-runtime.md) e acompanhamento em [PR #299](https://github.com/leonardo201800478/sega-emulator/pull/299). WASAPI Shared é o padrão Windows e XAudio2 a alternativa. A primeira sessão Rust está integrada ao SG-1000/SMS, com mixer DSP multi-fonte mono e negociação IAudioClient3 no WASAPI Shared (fallback convencional). Remoção das APIs PCM legadas, fontes estéreo nativas, desacoplamento do timer Qt e validação física permanecem pendentes.

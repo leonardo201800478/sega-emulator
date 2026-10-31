@@ -1,4 +1,8 @@
-//! Native PCM conversion shared by host audio backends.
+//! Native audio DSP and PCM conversion shared by host audio backends.
+
+mod dsp;
+
+pub use dsp::{AudioMixer, DspError, MixSource, OnePoleLowPass};
 
 use std::f64::consts::PI;
 

@@ -124,3 +124,8 @@ The current SMS cartridge implementation and the staged plan for ROM-only cartri
 - [Special SMS mappers and known game families — research inventory](hardware/sms-special-mappers-research.md)
 
 The research inventory is not an implementation specification by itself. Use the roadmap's source hierarchy, explicit uncertainty labels, deterministic synthetic tests and license boundary before changing the Rust runtime.
+
+
+## Runtime de áudio nativo multi-sistema
+
+O runtime de áudio é uma infraestrutura Rust compartilhada, independente das APIs do host e dos consoles. WASAPI Shared/event-driven é o backend padrão Windows e tenta IAudioClient3 para negociar o período suportado, com fallback para Shared convencional; XAudio2 é a alternativa. Python/PySide6 é apenas frontend de configuração, controle e diagnóstico: PCM não atravessa PyO3 durante gameplay. O escopo de hardware contempla PSG, FM, PCM/DAC, CDDA e PWM ao longo de SG-1000, SMS/GG, Mega Drive, Sega CD e 32X; QSound permanece extensão DSP opcional. A arquitetura, os critérios e as fases de migração estão em [Runtime de áudio nativo](architecture/native-audio-runtime.md).

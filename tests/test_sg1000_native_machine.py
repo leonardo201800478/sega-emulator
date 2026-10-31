@@ -54,6 +54,13 @@ def test_native_machine_runs_a_frame_and_rejects_invalid_limit() -> None:
     assert machine.vdp.frame_number == 1
 
 
+def test_machine_rejects_unknown_native_audio_backend() -> None:
+    machine = _machine()
+    with pytest.raises(RuntimeError, match="unsupported native audio backend"):
+        machine.configure_audio_output("invalid")
+    assert machine.native_machine.audio_output_metrics == (0, 0)
+
+
 def test_native_audio_drain_resamples_inside_rust_deterministically() -> None:
     left = _machine(b"\x00")
     right = _machine(b"\x00")

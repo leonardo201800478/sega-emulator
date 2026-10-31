@@ -23,14 +23,12 @@ from sega_emulator.frontend.controller_profiles import (
 from sega_emulator.frontend.native_first_controller_input import (
     NativeFirstControllerInput,
 )
-from sega_emulator.frontend.qt.audio_output import PcmResampler
 from sega_emulator.frontend.qt.focus_pause import (
     EmulationPauseController,
     FocusPauseController,
 )
 from sega_emulator.frontend.qt.frame_pacer import FramePacer
 from sega_emulator.frontend.qt.preferences import FrontendPreferences
-from sega_emulator.frontend.qt.wasapi_audio import NativeAudioOutput
 from sega_emulator.machine.sg1000 import SG1000Machine
 from sega_emulator.machine.sms import SMSMachine, load_sms_rom
 from sega_emulator.machine.sms_firmware import (
@@ -112,33 +110,43 @@ def _runtime_diagnostic(machine: object, rom_sha256: str) -> dict[str, object]:
     return diagnostic
 
 
-def _initialize_audio_backend(
+def _configure_machine_audio(
+    machine: object | None,
     preferences: FrontendPreferences,
     backend: str,
-) -> NativeAudioOutput | None:
-    """Open the selected native Rust output without tying it to the frame loop."""
+) -> str | None:
+    """Configure the machine-owned Rust audio session; PCM never enters Python."""
+    if machine is None:
+        return None
     if not preferences.audio_enabled or backend == "disabled":
+        machine.close_audio_output()
         return None
     try:
-        return NativeAudioOutput(
-            sample_rate=preferences.audio_sample_rate,
-            buffer_size=preferences.audio_buffer_size,
-            backend=backend,
-            queue_blocks=preferences.audio_queue_blocks,
-            balance=preferences.audio_balance,
+        machine.configure_audio_output(
+            backend,
+            preferences.audio_sample_rate,
+            preferences.audio_buffer_size,
+            preferences.audio_queue_blocks,
+            preferences.audio_volume,
+            preferences.audio_balance,
         )
     except Exception as exc:
         logger.warning("Saída de áudio %s indisponível: %s", backend, exc)
-        return None
+        try:
+            machine.close_audio_output()
+        except Exception:
+            logger.exception("Falha ao encerrar a sessão nativa de áudio")
+        return f"Áudio {backend.upper()} indisponível; consulte o log para detalhes."
+    return None
 
 
 def _audio_output_warning(
     preferences: FrontendPreferences,
-    audio_output: NativeAudioOutput | None,
+    audio_active: bool,
     backend: str = "wasapi",
 ) -> str | None:
-    """Describe an enabled native audio backend that failed to initialize."""
-    if preferences.audio_enabled and backend != "disabled" and audio_output is None:
+    """Describe a requested native audio session that is not active."""
+    if preferences.audio_enabled and backend != "disabled" and not audio_active:
         backend_label = {"wasapi": "WASAPI", "xaudio2": "XAudio2"}.get(backend, backend)
         return f"Áudio {backend_label} indisponível; consulte o log para detalhes."
     return None
@@ -274,10 +282,7 @@ def run(initial_path: Path | None = None) -> None:
     if preferences.audio_enabled != backend_audio_enabled:
         settings.setValue("audio_enabled", backend_audio_enabled)
         preferences = FrontendPreferences.from_store(settings)
-    audio_output = _initialize_audio_backend(preferences, selected_audio_driver)
-    audio_resampler = PcmResampler(
-        preferences.audio_sample_rate, preferences.audio_volume
-    )
+    audio_output = preferences.audio_enabled and selected_audio_driver != "disabled"
     serialized_controller_config = settings.value("controller_config", "", type=str)
     try:
         controller_config = (
@@ -547,28 +552,24 @@ def run(initial_path: Path | None = None) -> None:
                 )
                 return
             machine.run_frame()
+            if audio_output:
+                audio_error = machine.audio_output_error
+                if audio_error is not None:
+                    audio_output = False
+                    machine.discard_audio_samples()
+                    logger.warning(
+                        "Saída de áudio desativada sem interromper a emulação: %s",
+                        audio_error,
+                    )
+                    status.showMessage(
+                        "Saída de áudio indisponível; a emulação continua sem som.",
+                        8000,
+                    )
             psg_events = machine.drain_psg_write_events()
             if vgm_recorder.active:
                 for event_tstate, event_value in psg_events:
                     vgm_recorder.record_write(event_tstate, event_value)
-            if audio_output is not None:
-                pcm = machine.drain_audio_pcm(audio_resampler)
-                if pcm:
-                    try:
-                        audio_output.write_pcm(pcm)
-                    except RuntimeError as exc:
-                        logger.warning(
-                            "Saída de áudio %s falhou durante a sessão: %s",
-                            selected_audio_driver,
-                            exc,
-                        )
-                        audio_output.close()
-                        audio_output = None
-                        status.showMessage(
-                            "Saída de áudio indisponível; a emulação continua sem som.",
-                            8000,
-                        )
-            else:
+            if not audio_output:
                 machine.discard_audio_samples()
             emulation_ms = (time.perf_counter() - phase_started) * 1000
             frame_count += 1
@@ -706,7 +707,7 @@ def run(initial_path: Path | None = None) -> None:
         refresh_recent_rom_menu()
 
     def open_rom(path: str | None = None, system: str | None = None) -> None:
-        nonlocal machine, loaded, frame_count, active_system
+        nonlocal machine, loaded, frame_count, active_system, audio_output
         nonlocal frame_pacer, sms_region_attempts
         nonlocal active_sms_region
         nonlocal last_checkpoint_time, last_checkpoint_tstates
@@ -798,12 +799,23 @@ def run(initial_path: Path | None = None) -> None:
 
         if vgm_recorder.active and not stop_vgm_recording():
             return
+        if machine is not None:
+            machine.close_audio_output()
+        audio_warning = _configure_machine_audio(
+            loaded_machine, preferences, selected_audio_driver
+        )
+        audio_output = (
+            audio_warning is None
+            and preferences.audio_enabled
+            and selected_audio_driver != "disabled"
+        )
+        if audio_warning is not None:
+            logger.warning(audio_warning)
         machine, loaded, frame_count = loaded_machine, candidate, 0
         pause_controller.set_paused(False)
         window.set_pause_state(False, enabled=True)
         active_system = requested_system
         window.set_active_system(active_system)
-        audio_resampler.reset()
         window.set_rom_label(candidate.display_name)
         selected_path = str(Path(path).expanduser().resolve())
         settings.setValue("last_directory", str(Path(selected_path).parent))
@@ -885,12 +897,7 @@ def run(initial_path: Path | None = None) -> None:
         )
 
     def configure_drivers() -> None:
-        nonlocal \
-            controller_input, \
-            audio_output, \
-            audio_resampler, \
-            preferences, \
-            selected_audio_driver
+        nonlocal controller_input, audio_output, preferences, selected_audio_driver
 
         from sega_emulator.frontend.qt.drivers_dialog import DriversDialog
 
@@ -941,14 +948,9 @@ def run(initial_path: Path | None = None) -> None:
         audio_changed = (
             audio_enabled != preferences.audio_enabled
             or audio_driver != selected_audio_driver
-            or (audio_enabled and audio_output is None)
+            or (audio_enabled and not audio_output)
         )
         if audio_changed:
-            if audio_output is not None:
-                try:
-                    audio_output.close()
-                except Exception:
-                    logger.exception("Falha ao encerrar áudio ao trocar o driver")
             updated_audio = FrontendPreferences(
                 window_width=preferences.window_width,
                 window_height=preferences.window_height,
@@ -974,16 +976,26 @@ def run(initial_path: Path | None = None) -> None:
                 crt_curvature=preferences.crt_curvature,
                 crt_signal_mode=preferences.crt_signal_mode,
             )
-            audio_output = _initialize_audio_backend(updated_audio, audio_driver)
-            audio_resampler = PcmResampler(
-                updated_audio.audio_sample_rate, updated_audio.audio_volume
-            )
             preferences = updated_audio
         selected_audio_driver = audio_driver
+        audio_warning = None
+        if audio_changed:
+            audio_warning = _configure_machine_audio(
+                machine, preferences, selected_audio_driver
+            )
+            audio_output = (
+                audio_warning is None
+                and preferences.audio_enabled
+                and selected_audio_driver != "disabled"
+            )
+            if machine is None:
+                audio_output = (
+                    preferences.audio_enabled and selected_audio_driver != "disabled"
+                )
         settings.setValue("audio_driver", audio_driver)
         preferences.save_to_store(settings)
 
-        audio_warning = _audio_output_warning(
+        audio_warning = audio_warning or _audio_output_warning(
             preferences, audio_output, selected_audio_driver
         )
         restart_note = (
@@ -1011,7 +1023,7 @@ def run(initial_path: Path | None = None) -> None:
         )
 
     def configure_audio_video() -> None:
-        nonlocal preferences, audio_output, audio_resampler, selected_audio_driver
+        nonlocal preferences, audio_output, selected_audio_driver
         dialog = SettingsDialog(
             preferences, window, audio_backend=selected_audio_driver
         )
@@ -1042,27 +1054,28 @@ def run(initial_path: Path | None = None) -> None:
             or updated.audio_sample_rate != preferences.audio_sample_rate
             or updated.audio_buffer_size != preferences.audio_buffer_size
             or updated.audio_balance != preferences.audio_balance
+            or updated.audio_volume != preferences.audio_volume
             or updated.audio_queue_blocks != preferences.audio_queue_blocks
             or (
                 updated.audio_enabled
                 and selected_audio_driver != "disabled"
-                and audio_output is None
+                and not audio_output
             )
         )
+        audio_warning = None
         if audio_device_changed:
-            if audio_output is not None:
-                try:
-                    audio_output.close()
-                except Exception:
-                    logger.exception(
-                        "Falha ao encerrar o backend de áudio antes de reconfigurar"
-                    )
-            audio_output = _initialize_audio_backend(updated, selected_audio_driver)
-            audio_resampler = PcmResampler(
-                updated.audio_sample_rate, updated.audio_volume
+            audio_warning = _configure_machine_audio(
+                machine, updated, selected_audio_driver
             )
-        else:
-            audio_resampler.set_volume(updated.audio_volume)
+            audio_output = (
+                audio_warning is None
+                and updated.audio_enabled
+                and selected_audio_driver != "disabled"
+            )
+            if machine is None:
+                audio_output = (
+                    updated.audio_enabled and selected_audio_driver != "disabled"
+                )
 
         preferences = updated
         settings.setValue("audio_driver", selected_audio_driver)
@@ -1076,7 +1089,7 @@ def run(initial_path: Path | None = None) -> None:
         )
         view.set_integer_scale(preferences.integer_scale)
         preferences.save_to_store(settings)
-        audio_warning = _audio_output_warning(
+        audio_warning = audio_warning or _audio_output_warning(
             preferences, audio_output, selected_audio_driver
         )
         if firmware_boot_changed:
@@ -1238,7 +1251,7 @@ def run(initial_path: Path | None = None) -> None:
     )
 
     def reset_machine() -> None:
-        nonlocal machine, frame_count, frame_pacer
+        nonlocal machine, frame_count, frame_pacer, audio_output
         nonlocal sms_region_attempts, active_sms_region
         nonlocal last_checkpoint_time, last_checkpoint_tstates
         nonlocal last_checkpoint_instructions, last_checkpoint_frame
@@ -1246,6 +1259,8 @@ def run(initial_path: Path | None = None) -> None:
             return
         if loaded is None:
             return
+        if machine is not None:
+            machine.close_audio_output()
         if active_system == "master_system":
             resolution = resolve_sms_region_profile(
                 region_preference, loaded.data, sms_rom_catalog
@@ -1270,7 +1285,16 @@ def run(initial_path: Path | None = None) -> None:
         else:
             machine = SG1000Machine(loaded.data)
             frame_pacer = FramePacer(FRAME_PERIOD_SECONDS)
-        audio_resampler.reset()
+        audio_warning = _configure_machine_audio(
+            machine, preferences, selected_audio_driver
+        )
+        audio_output = (
+            audio_warning is None
+            and preferences.audio_enabled
+            and selected_audio_driver != "disabled"
+        )
+        if audio_warning is not None:
+            status.showMessage(audio_warning, 8000)
         frame_count = 0
         pause_controller.set_paused(False)
         window.set_pause_state(False, enabled=True)
@@ -1765,5 +1789,5 @@ def run(initial_path: Path | None = None) -> None:
     )
     preferences.save_to_store(settings)
     controller_input.close()
-    if audio_output is not None:
-        audio_output.close()
+    if machine is not None:
+        machine.close_audio_output()

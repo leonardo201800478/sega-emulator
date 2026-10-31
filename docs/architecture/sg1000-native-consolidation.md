@@ -35,3 +35,8 @@ This PR is an incremental port, not a completed standalone emulator:
 ## Current evidence
 
 Validation is determined by GitHub checks and review on the final candidate SHA; queued, cancelled, skipped, or failed checks are not PASS. This document records an incremental native-core slice only. A merge of this slice does not authorize declaring the SG-1000 standalone gate complete; the CPU, hardware-reference, and PyO3/Qt integration gates above remain open.
+
+
+## Host audio session boundary
+
+O PSG e sua fila de amostras pertencem ao hardware Rust. A sessão host nativa faz resampling e entrega ao backend sem exigir transporte PCM no frontend. WASAPI Shared é o padrão Windows e XAudio2 a alternativa. Esta saída não altera a temporização lógica do PSG nem prova precisão ciclo a ciclo. Ver [Runtime de áudio nativo](native-audio-runtime.md).

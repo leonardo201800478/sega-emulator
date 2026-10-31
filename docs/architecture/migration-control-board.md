@@ -74,3 +74,12 @@ A CI workflow only validates the commands it actually executes. A green Python w
 - 2026-10-28: SG-1000 functional milestone recorded after PR #141 merged into main. The eight-game manual result is maintainer-reported; differential testing and additional Python checks remain NOT RUN. The Master System is the next milestone; preserve SG-1000 regressions.
 - 2026-10-27: Initial control board added. No source files moved and no tests claimed as passing.
 - 2026-10-27: Corrected the excluded shared-core scaffold's workspace registration and sibling dependency paths so the manifest can be validated independently.
+
+
+## Native audio runtime migration — PR #299
+
+- **Decision:** WASAPI Shared/event-driven default; XAudio2 alternative. Exclusive/IAudioClient3 remain experimental.
+- **IMPLEMENTED (first slice):** Rust-owned NativeAudioSession integrated into SG-1000/SMS machine wrappers; active Qt path no longer transports PCM per frame.
+- **INTEGRATION_PENDING:** latest Windows CI, removal of legacy PyO3 PCM APIs, multi-source/stereo mixer, scheduler decoupling and physical-device validation.
+- **Scope:** PSG → FM → PCM/DAC → CDDA → PWM across SG-1000, SMS/GG, Mega Drive, Sega CD and 32X. QSound is an optional DSP extension, not a native component of these consoles.
+- Canonical specification and acceptance criteria: [native audio runtime](native-audio-runtime.md); execution tracker: [migration tracker](migrations/native-audio-runtime.md).
