@@ -521,7 +521,8 @@ mod tests {
                 },
             ],
             4_000,
-        ).unwrap();
+        )
+        .unwrap();
         let mut state = DeviceState::default();
         state.buttons.set(0, true).unwrap();
         state.set_axis(0, -12_000, AxisSemantic::Unknown).unwrap();
@@ -546,7 +547,8 @@ mod tests {
                 },
             }],
             5_000,
-        ).unwrap();
+        )
+        .unwrap();
         let mut state = DeviceState::default();
         let mut actions = ActionState::default();
         state.set_axis(0, 0, AxisSemantic::Unknown).unwrap();
@@ -563,18 +565,29 @@ mod tests {
     #[test]
     fn invalid_profile_indices_and_ranges_are_rejected() {
         assert_eq!(
-            InputProfile::new(vec![ActionBinding {
-                action: action(0), control: PhysicalControl::Button(MAX_BUTTONS as u8),
-            }], 0).unwrap_err(),
+            InputProfile::new(
+                vec![ActionBinding {
+                    action: action(0),
+                    control: PhysicalControl::Button(MAX_BUTTONS as u8),
+                }],
+                0
+            )
+            .unwrap_err(),
             InputError::ButtonOutOfRange(MAX_BUTTONS)
         );
         assert_eq!(
-            InputProfile::new(vec![ActionBinding {
-                action: action(0),
-                control: PhysicalControl::Axis {
-                    index: MAX_AXES as u8, direction: AxisDirection::Positive, threshold: 1,
-                },
-            }], 0).unwrap_err(),
+            InputProfile::new(
+                vec![ActionBinding {
+                    action: action(0),
+                    control: PhysicalControl::Axis {
+                        index: MAX_AXES as u8,
+                        direction: AxisDirection::Positive,
+                        threshold: 1,
+                    },
+                }],
+                0
+            )
+            .unwrap_err(),
             InputError::AxisOutOfRange(MAX_AXES)
         );
         assert_eq!(
