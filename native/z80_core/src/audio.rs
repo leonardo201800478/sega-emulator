@@ -21,16 +21,16 @@ impl NativeAudioBackend {
         balance: i8,
     ) -> Result<Self, String> {
         match backend {
-            "wasapi" => RustWasapiOutput::new_with_balance(
-                sample_rate, buffer_size, queue_blocks, balance,
-            )
-            .map(Self::Wasapi)
-            .map_err(|error| error.to_string()),
-            "xaudio2" => RustXAudio2Output::new_with_balance(
-                sample_rate, buffer_size, queue_blocks, balance,
-            )
-            .map(Self::XAudio2)
-            .map_err(|error| error.to_string()),
+            "wasapi" => {
+                RustWasapiOutput::new_with_balance(sample_rate, buffer_size, queue_blocks, balance)
+                    .map(Self::Wasapi)
+                    .map_err(|error| error.to_string())
+            }
+            "xaudio2" => {
+                RustXAudio2Output::new_with_balance(sample_rate, buffer_size, queue_blocks, balance)
+                    .map(Self::XAudio2)
+                    .map_err(|error| error.to_string())
+            }
             _ => Err(format!("unsupported native audio backend: {backend}")),
         }
     }
