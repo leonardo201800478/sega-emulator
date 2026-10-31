@@ -41,3 +41,14 @@ A sessão Rust independente de PyO3 está integrada aos adaptadores SG-1000/SMS;
 
 
 A negociação IAudioClient3 e as primitivas DSP foram incorporadas na PR #299; esta atualização moveu a sessão DSP para um crate Rust independente e removeu a fronteira Python de PCM. O mixer já está no caminho ativo da sessão Rust para a fonte PSG atual; ainda não há fontes FM/PCM/CDDA/PWM implementadas nem filtros analógicos habilitados. Latência ponta a ponta e compatibilidade real do IAudioClient3 permanecem pendentes de validação em hardware Windows.
+
+
+## Validação da atualização v0.1.1
+
+Os resultados citados acima são históricos e pertencem aos SHAs anteriores. Para a branch feat/rust-owned-audio-runtime:
+
+- QUICK_PASS: NOT RUN — aguardando workflows no SHA candidato.
+- SHORT_PASS: INTEGRATION_PENDING.
+- LONG_PASS: NOT RUN.
+- TEMPORAL_PASS: NOT RUN.
+- Testes físicos WASAPI/XAudio2 e latência ponta a ponta: NOT RUN.
