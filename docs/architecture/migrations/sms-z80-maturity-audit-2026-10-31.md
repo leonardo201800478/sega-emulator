@@ -71,9 +71,9 @@ O objetivo declarado da PR #160 foi consolidar no SMS o trabalho do SG-1000 sem 
 - O código atual do SG-1000 contém a mesma lógica executável que o SMS, incluindo as correções posteriores. Portanto, não se deve afirmar que o SMS tem hoje um decoder diferente ou que o SG mantém a antiga fórmula de DAA.
 
 Referências:
-- [Auditoria histórica de consolidação SG-1000/SMS](../architecture/sg1000-sms-z80-consolidation-audit.md)
-- [Matriz de cobertura de referência SMS](../architecture/z80-sms-reference-coverage.md)
-- [Matriz CSV de opcodes SMS](../architecture/z80-sms-opcode-matrix.csv)
+- [Auditoria histórica de consolidação SG-1000/SMS](../sg1000-sms-z80-consolidation-audit.md)
+- [Matriz de cobertura de referência SMS](../z80-sms-reference-coverage.md)
+- [Matriz CSV de opcodes SMS](../z80-sms-opcode-matrix.csv)
 - [PR #160](https://github.com/leonardo201800478/sega-emulator/pull/160)
 - [PR #201](https://github.com/leonardo201800478/sega-emulator/pull/201)
 - [Issue #158 — semântica/opcodes](https://github.com/leonardo201800478/sega-emulator/issues/158)
