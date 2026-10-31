@@ -551,6 +551,19 @@ def run(initial_path: Path | None = None) -> None:
                 )
                 return
             machine.run_frame()
+            if audio_output:
+                audio_error = machine.audio_output_error
+                if audio_error is not None:
+                    audio_output = False
+                    machine.discard_audio_samples()
+                    logger.warning(
+                        "Saída de áudio desativada sem interromper a emulação: %s",
+                        audio_error,
+                    )
+                    status.showMessage(
+                        "Saída de áudio indisponível; a emulação continua sem som.",
+                        8000,
+                    )
             psg_events = machine.drain_psg_write_events()
             if vgm_recorder.active:
                 for event_tstate, event_value in psg_events:
