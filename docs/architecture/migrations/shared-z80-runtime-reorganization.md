@@ -319,9 +319,9 @@ Esses manuais descrevem a família Z80 genérica. Eles não definem, por si só,
 O cronograma por fases, papéis dos agentes, regra de concorrência, gates independentes e Definition of Done estão em [Roadmap de reorganização e charter dos agentes](reorganization-roadmap-and-agent-charter.md). O plano limita a três agentes simultâneos: três papéis de execução e um supervisor independente ativado em janelas de revisão, pausando temporariamente um agente de execução.
 
 
-## 10. Atualização F0 — inventário remoto e reconciliação das PRs
+## Atualização F0 — inventário remoto e reconciliação das PRs
 
-A captura inicial das seções 2 e 7 foi atualizada após nova consulta ao GitHub em 2026-10-31. O HEAD remoto observado de `main` é `e2eff776ec248674da07d32ff480b70d9db49a1f`.
+Este adendo complementa o inventário inicial após nova consulta ao GitHub em 2026-10-31. O HEAD remoto observado de `main` na captura F0 foi `e2eff776ec248674da07d32ff480b70d9db49a1f`.
 
 O relatório [F0 — inventário remoto e reconciliação das PRs](f0-remote-inventory-2026-10-31.md) registra:
 - SHAs atuais consultados das sete PRs, merge-bases e distância em relação à `main`;
