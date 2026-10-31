@@ -53,7 +53,7 @@ O frontend Grid é opcional em Opções. Desativar o Grid não desativa a janela
 | Reset do hardware | Simula o botão RESET do console real, respeitando sequência e efeitos específicos do hardware. Mantém ROM/sessão e não apaga dados persistentes. |
 | Velocidade | Ajusta velocidade sem alterar clocks nominais do hardware. |
 
-Escalas inicialmente previstas: 0,25x, 0,50x, 0,75x, 1x, 1,25x, 1,5x, 2x, 4x e ilimitada/Fast Forward. Distinguir escala temporal do host dos clocks lógicos do console.
+Escalas aprovadas (F05=B): 0,5x, 1x, 2x e ilimitada. Fast Forward (F06=A) executa o mais rápido possível, sem sincronização com o monitor. Distinguir escala temporal do host dos clocks lógicos do console. Distinguir escala temporal do host dos clocks lógicos do console.
 
 Reset de hardware não reinicializa indiscriminadamente todos os componentes. Cada plataforma implementará comportamento sustentado por documentação/evidência. Reiniciar emulador permanece distinto; seu contrato interno está pendente.
 
@@ -307,14 +307,14 @@ As escolhas abaixo foram fornecidas explicitamente pelo usuário. Elas substitue
 | F29 | B | Identificação dos saves por hash, sistema, região e versão do emulador. |
 | F30 | B | Separar região comercial, padrão de vídeo e perfil de hardware; revisão de hardware/BIOS não foi escolhida como dimensão obrigatória. |
 | F31 | C | Troca de região permitida somente após Reset. |
-| F32 | — | PENDENTE — migração das configurações atuais. |
-| F33 | — | PENDENTE — organização do painel Debug/Diagnóstico. |
-| F34 | — | PENDENTE — detalhamento do relatório de backend. |
-| F35 | — | PENDENTE — restauração de configurações. |
+| F32 | C | Migrar automaticamente as configurações atuais e registrar incompatibilidades para revisão. |
+| F33 | C | Separar Diagnóstico e Debug técnico, com responsabilidades distintas. |
+| F34 | C | Exibir backend solicitado, backend ativo, fallback, motivo de falha e capacidades detectadas. |
+| F35 | C | Oferecer restauração global e restauração por categoria, ambas com confirmação. |
 
 ### 14.1 Regras de interpretação e reconciliação
 
-- F01 altera a semântica anteriormente descrita para Stop: Stop não descarrega a ROM. O comando Fechar ROM continua sendo a operação explícita que encerra a sessão e descarrega a mídia. Menus, toolbar e atalhos devem chamar operações centrais distintas.
+- F01: Pause mantém ROM/sessão carregadas e suspende a execução; Stop e Arquivo → Fechar ROM encerram a sessão, persistem dados nativos pendentes e descarregam a mídia, mantendo a aplicação Qt aberta. A auditoria deve verificar se ambos encaminham ao mesmo comando central, sem duplicar lógica.
 - F02 não pode ser implementada como destruição/recriação arbitrária do runtime sem contrato. Definir preservação de mídia, estado persistente, SRAM pendente, recursos host e falhas de reinicialização.
 - F03 permanece dependente da semântica de reset específica de cada plataforma; não significa zerar indiscriminadamente todos os componentes.
 - F05 e F06 substituem a lista anterior de velocidades e definem Fast Forward como execução máxima sem sincronização com monitor. O comportamento de áudio nesse modo precisa ser definido pelo perfil/contrato de pacing, sem alterar clocks nominais do hardware.
@@ -328,13 +328,13 @@ As escolhas abaixo foram fornecidas explicitamente pelo usuário. Elas substitue
 - F28 define a experiência-alvo de 10 slots, mas não autoriza implementação antes da serialização determinística, identidade de estado e testes de compatibilidade.
 - F30 não exige uma dimensão separada de revisão de hardware/BIOS na interface; manter distinções internas quando tecnicamente necessárias.
 - F31 significa que a alteração regional é aplicada após Reset. O inventário deve confirmar se o reset atual pode reconstruir os componentes regionais de forma correta; se não, apresentar a operação como indisponível até haver suporte seguro.
-- F32–F35 permanecem decisões em aberto e não devem ser preenchidas pelas sugestões anteriores.
+- F32–F35 foram respondidas como C e estão registradas na tabela: migração automática com relatório de incompatibilidades; separação entre Diagnóstico e Debug técnico; relatório de backend com solicitado/ativo/fallback/motivo/capacidades; restauração global e por categoria, sempre confirmada.
 
 ### 14.2 Pendências técnicas que as escolhas não resolvem
 
 As decisões funcionais não provam disponibilidade técnica. Permanecem necessárias: inventário completo dos callbacks e serviços; contratos de sessão/runtime/PyO3; capacidades reais de BIOS-only por sistema; descoberta host de monitores, modos, VRR e dispositivos; política de pacing e áudio em Fast Forward; migração do histórico e preferências; e critérios/testes para SRAM e Save States.
 
-**Estado do registro:** 31/35 flags respondidas; 4 pendentes (F32–F35). Nenhum código executável foi alterado por este registro.
+**Estado do registro:** 35/35 flags respondidas. Nenhum código executável foi alterado por este registro.
 
 
 ## 15. Correção de decisão — F01 (2026-10-30)
