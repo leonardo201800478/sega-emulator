@@ -82,3 +82,7 @@ Medições devem separar captura dispositivo-runtime, aplicação runtime-frame 
 - GameInput, deduplicação entre backends, force feedback, rumble e sensores não estão implementados.
 
 - A ponte PyO3 atual entrega máscaras de ações digitais para SG-1000/SMS. Os canais analógicos continuam preservados em DeviceState no runtime Rust, mas ainda não são encaminhados aos cores; controles analógicos de cores futuros exigirão um snapshot nativo dedicado, sem round-trip por Python.
+
+## Fronteira PyO3 atual
+
+A classe genérica NativeInputManager está temporariamente registrada no módulo PyO3 `sega_z80_core` para reutilizar a extensão nativa já instalada pela aplicação. Ela não depende de CPU Z80 nem de estado Sega. O crate `sega-input-runtime` continua independente. Antes de introduzir uma segunda extensão nativa para um core não relacionado, extrair o manager/ponte para um módulo host compartilhado (por exemplo, `sega_input_host`) para evitar que futuros cores dependam incidentalmente de `sega_z80_core`.
