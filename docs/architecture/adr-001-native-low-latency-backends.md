@@ -172,6 +172,15 @@ Concluir a validação da fatia atual de I/O Rust sem misturá-la a esta decisã
 
 ## Decisão complementar — runtime de áudio Sega (2026-10-30)
 
-**Status da decisão de áudio: Aceita.** WASAPI Shared/event-driven é o backend Windows padrão; XAudio2 permanece como alternativa. Exclusive Mode e IAudioClient3 ficam como investigação opt-in após testes em dispositivos reais. A decisão detalhada e a matriz SG-1000 → SMS/GG → Mega Drive → Sega CD → 32X estão em [Runtime de áudio nativo](native-audio-runtime.md).
+**Status da decisão de áudio: Aceita e parcialmente implementada na PR #299.** WASAPI Shared/event-driven permanece padrão; quando disponível, IAudioClient3 consulta e negocia o período do Audio Engine. Se não suportado, o backend recua para Shared convencional. XAudio2 permanece como alternativa. Exclusive Mode continua investigação opt-in. A decisão detalhada e a matriz SG-1000 → SMS/GG → Mega Drive → Sega CD → 32X estão em [Runtime de áudio nativo](native-audio-runtime.md).
 
 A seção de áudio anterior que descreve entrega de PCM em blocos ao host é apenas uma etapa intermediária. O contrato final proíbe drenagem, resampling, mixagem, cópia e escrita PCM em Python/PyO3 no caminho de gameplay. Rust deve possuir a sessão completa e os backends. Esta decisão não declara a migração implementada nem valida latência física.
+
+
+### Atualização de implementação — IAudioClient3 e DSP (PR #299)
+
+- A crate existente wasapi = 0.26 já expõe get_shared_mode_engine_period e initialize_shared_audio_stream; não foi adicionada segunda biblioteca COM.
+- O worker WASAPI tenta IAudioClient3 em Shared/event-driven, limita o período alvo aos valores min/max e alinha ao período fundamental. Falha na consulta ou inicialização leva ao Shared/event-driven convencional com autoconversão.
+- sega-audio-runtime oferece mixer DSP multi-fonte com ganho individual/mestre e scratch buffer reutilizável, além de passa-baixa opcional desativada por padrão.
+- O mixer é independente do Windows e compartilhado por WASAPI/XAudio2. A sessão SG-1000/SMS o utiliza com a fonte PSG atual; fontes FM/PCM futuras não são declaradas implementadas.
+- Filtros analógicos por chip permanecem desativados até calibração baseada em documentação/medições. Não há alegação de redução de latência sem testes físicos.

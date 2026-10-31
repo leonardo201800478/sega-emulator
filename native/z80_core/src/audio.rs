@@ -4,7 +4,7 @@ use pyo3::types::PyBytes;
 use sega_audio_output::{
     NativeWasapiOutput as RustWasapiOutput, NativeXAudio2Output as RustXAudio2Output,
 };
-use sega_audio_runtime::PcmResampler;
+use sega_audio_runtime::{AudioMixer, MixSource, PcmResampler};
 use std::sync::Mutex;
 
 #[pyclass]
@@ -219,6 +219,8 @@ impl NativeXAudio2Output {
 /// machine wrappers feed native samples directly into this session after a
 /// coarse-grained execution batch.
 pub(crate) struct NativeAudioSession {
+    mixer: AudioMixer,
+    mixed_samples: Vec<f64>,
     resampler: PcmResampler,
     output: NativeAudioBackend,
 }
@@ -255,14 +257,17 @@ impl NativeAudioSession {
             ),
             _ => return Err(format!("unsupported native audio backend: {backend}")),
         };
-        Ok(Self { resampler, output })
+        Ok(Self { mixer: AudioMixer::default(), mixed_samples: Vec::new(), resampler, output })
     }
 
     pub(crate) fn process_samples(&mut self, samples: &[f64]) -> Result<(), String> {
         if samples.is_empty() {
             return Ok(());
         }
-        let pcm = self.resampler.process(samples);
+        self.mixer
+            .mix_mono_into(&[MixSource { samples, gain: 1.0 }], &mut self.mixed_samples)
+            .map_err(|error| error.to_string())?;
+        let pcm = self.resampler.process(&self.mixed_samples);
         if pcm.is_empty() {
             return Ok(());
         }

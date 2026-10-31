@@ -13,7 +13,7 @@ use std::time::Duration;
 use std::collections::VecDeque;
 #[cfg(windows)]
 use wasapi::{
-    DeviceEnumerator, Direction, SampleType, StreamMode, WaveFormat, deinitialize, initialize_mta,
+    DeviceEnumerator, Direction, SampleType, StreamMode, TimingMode, WaveFormat, deinitialize, initialize_mta,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -287,14 +287,29 @@ fn run_wasapi_worker(
             let (default_period, _minimum_period) = audio_client
                 .get_device_period()
                 .map_err(|error| error.to_string())?;
-            let requested_period = (buffer_size as u64 * 10_000_000 / sample_rate as u64) as i64;
-            let mode = StreamMode::EventsShared {
-                autoconvert: true,
-                buffer_duration_hns: requested_period.max(default_period),
-            };
-            audio_client
-                .initialize_client(&format, &Direction::Render, &mode)
-                .map_err(|error| error.to_string())?;
+
+            // Prefer IAudioClient3 in shared/event-driven mode. Clamp the
+            // requested period to the endpoint range and align it to the
+            // fundamental period. Retain the previous Shared path when the
+            // interface or initialization is unavailable.
+            let requested_frames = buffer_size.max(1);
+            let selected_period = audio_client
+                .get_shared_mode_engine_period(&format)
+                .ok()
+                .and_then(|periods| {
+                    if periods.fundamental == 0 || periods.min == 0 || periods.min > periods.max { return None; }
+                    let target = requested_frames.clamp(periods.min, periods.max);
+                    let aligned = target.div_ceil(periods.fundamental).saturating_mul(periods.fundamental);
+                    Some(if aligned <= periods.max { aligned } else { (periods.max / periods.fundamental) * periods.fundamental })
+                });
+            let initialized_with_client3 = selected_period.is_some_and(|period| {
+                audio_client.initialize_shared_audio_stream(&format, TimingMode::Events, period).is_ok()
+            });
+            if !initialized_with_client3 {
+                let requested_period = (buffer_size as u64 * 10_000_000 / sample_rate as u64) as i64;
+                let mode = StreamMode::EventsShared { autoconvert: true, buffer_duration_hns: requested_period.max(default_period) };
+                audio_client.initialize_client(&format, &Direction::Render, &mode).map_err(|error| error.to_string())?;
+            }
             let event = audio_client
                 .set_get_eventhandle()
                 .map_err(|error| error.to_string())?;

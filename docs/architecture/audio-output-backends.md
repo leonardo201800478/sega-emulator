@@ -29,7 +29,7 @@ A callback de áudio não deve executar emulação, acessar a interface gráfica
 
 A Qt cria e controla a fachada PyO3; a inicialização COM, enumeração do dispositivo padrão, stream compartilhado event-driven, fila PCM limitada, preenchimento de underruns com silêncio e encerramento ocorrem em Rust (native/audio_output). A taxa de amostragem e o tamanho de buffer são configurações de saída e não alteram o clock do PSG.
 
-**Limites de validação:** esta implementação ainda não foi certificada em dispositivo Windows real. A política atual descarta o novo bloco quando a fila limitada está cheia; a contagem de blocos descartados e underruns é mantida no backend Rust. O tamanho configurado é uma solicitação de duração do buffer; no modo compartilhado, o Windows determina o período efetivo e a latência real ainda não foi medida. Reconexão/hot-plug, latência efetiva, estabilidade em sessões longas e fallback explícito ainda precisam de testes no Windows. O backend não executa emulação nem chama Python na thread de áudio.
+**Limites de validação:** esta implementação ainda não foi certificada em dispositivo Windows real. A política atual descarta o novo bloco quando a fila limitada está cheia; a contagem de blocos descartados e underruns é mantida no backend Rust. O tamanho configurado orienta a seleção do período IAudioClient3, limitado pelo intervalo min/max e alinhado ao período fundamental reportado pelo Audio Engine; se IAudioClient3 não estiver disponível, o backend usa a inicialização Shared convencional. A latência real ainda não foi medida. Reconexão/hot-plug, latência efetiva, estabilidade em sessões longas e fallback explícito ainda precisam de testes no Windows. O backend não executa emulação nem chama Python na thread de áudio.
 
 ### XAudio2 (backend nativo Rust — primeira implementação)
 
@@ -47,7 +47,7 @@ Backend multiplataforma baseado em dispositivos e fluxos de áudio SDL3. Deve se
 - Taxa PCM de saída: 22050, 44100 ou 48000 Hz. Padrão recomendado: 48000 Hz para compatibilidade comum com o mixer do Windows; isso é uma escolha de saída moderna, não uma propriedade histórica do console.
 - Volume de saída: 0–100%, padrão 80% para manter margem de headroom.
 - Balanço L/R: -100 (esquerda) a +100 (direita), padrão 0. O PSG mono é duplicado para os dois canais e o balanço atenua o canal oposto no limite de saída Rust.
-- WASAPI compartilhado: período solicitado configurável por buffer de 256, 512, 1024 ou 2048 amostras, padrão 512. O Windows controla o período efetivo e pode converter a taxa/formato para o dispositivo.
+- WASAPI compartilhado: período alvo configurável por buffer de 256, 512, 1024 ou 2048 frames, padrão 512. IAudioClient3 seleciona período suportado respeitando min/max e múltiplo do período fundamental; fallback convencional usa o período do Audio Engine. IAudioClient3 não oferece autoconversão de formato, por isso a tentativa usa PCM negociado e recua quando não aceito.
 - XAudio2: tamanho do bloco PCM configurável com os mesmos valores e profundidade da fila de 2, 4 ou 8 blocos, padrão 4. A estimativa nominal da fila não inclui a latência do dispositivo.
 - Ambos: fila de entrada de 2, 4 ou 8 blocos. A legenda e a estimativa de tempo são específicas do backend; não representam latência ponta a ponta medida.
 
@@ -110,9 +110,16 @@ A arquitetura normativa foi consolidada em [Runtime de áudio nativo](native-aud
 
 - WASAPI Shared/event-driven é o backend padrão Windows.
 - XAudio2 é a alternativa nativa existente, selecionável pelo frontend.
-- WASAPI Exclusive e IAudioClient3 não são defaults nem recursos prometidos; serão avaliados posteriormente.
+- WASAPI Shared usa IAudioClient3 para negociar períodos menores quando suportados; falhas fazem fallback para WASAPI Shared/event-driven convencional. WASAPI Exclusive permanece fora do padrão.
 - O runtime completo — sessão, mixer, resampler, fila, workers, recuperação e saída — pertence ao Rust.
 - Python/PySide6 limita-se a configuração, comandos de ciclo de vida e telemetria. Nenhum PCM cruza PyO3 durante gameplay.
 - O escopo de chips inclui PSG, FM, PCM/DAC, CDDA e PWM conforme o console. QSound é extensão DSP opcional e não um componente nativo obrigatório das plataformas Sega listadas.
 
 No inventário inicial da PR #299, qt_frontend.py chamava drain_audio_pcm e write_pcm por frame. A primeira fatia implementada moveu esse processamento para NativeAudioSession, chamada pelo runtime Rust ao concluir run_frame. As APIs antigas ainda existem por compatibilidade e devem ser removidas após a validação dos novos testes; o pipeline ainda não está desacoplado do timer Qt.
+
+
+## DSP compartilhado no runtime Rust — atualização da PR #299
+
+O crate sega-audio-runtime contém subsistema DSP independente do backend: AudioMixer soma blocos mono de múltiplas fontes com ganho individual e mestre em buffer reutilizável, preservando headroom; quantização/saturação continua no resampler. OnePoleLowPass é uma primitiva opcional, não ativada por padrão. Não aplicar coeficientes genéricos como resposta analógica de PSG/FM/DAC: cada perfil de chip requer evidência própria. WASAPI e XAudio2 recebem o mesmo PCM processado pelo runtime compartilhado.
+
+O WASAPI Shared tenta IAudioClient3 usando GetSharedModeEnginePeriod e InitializeSharedAudioStream. O período alvo é limitado ao intervalo aceito e alinhado ao período fundamental. Se interface, consulta ou inicialização não estiver disponível, o worker recua para Shared/event-driven convencional com autoconversão. Não há fallback silencioso para XAudio2. IAudioClient3 não é Exclusive Mode e não constitui medição de latência.

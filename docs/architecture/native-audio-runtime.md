@@ -9,7 +9,7 @@
 
 1. **WASAPI Shared/event-driven:** backend padrão do Windows, preservando coexistência com outras aplicações e o mixer do sistema.
 2. **XAudio2:** backend alternativo nativo, mantido porque já existe no projeto; não é um segundo mixer nem um caminho simultâneo.
-3. **WASAPI Exclusive e IAudioClient3:** evoluções opcionais para investigação posterior. Não serão padrão nem expostos como recursos garantidos antes de testes de compatibilidade, recuperação e latência em hardware real.
+3. **WASAPI Shared + IAudioClient3:** caminho preferencial quando a interface e o formato forem aceitos. Consultar períodos suportados, limitar o período solicitado ao intervalo do endpoint e alinhá-lo ao período fundamental. Se a interface ou inicialização falhar, usar WASAPI Shared/event-driven convencional com conversão automática. IAudioClient3 não implica modo exclusivo nem garante latência ponta a ponta menor. WASAPI Exclusive continua fora do caminho padrão.
 4. **Rust é dono do ciclo de vida:** abertura, worker, fila, resampling, mixagem, recuperação de dispositivo, fallback, métricas e encerramento.
 5. **Python não transporta PCM:** nenhum bytes, vetor de amostras ou buffer PCM atravessa PyO3 no caminho ativo. PyO3 expõe comandos coarse-grained de configuração/ciclo de vida e snapshots/telemetria.
 6. **O scheduler do hardware é a autoridade temporal:** clocks e eventos dos chips não dependem da taxa de saída, do timer Qt, do período WASAPI ou da frequência de apresentação de vídeo.
@@ -52,6 +52,8 @@ A arquitetura evolui para timestamps/ticks explícitos e ordenação determinís
 
 ### 3.3 Mixer e formato interno
 
+O módulo native/audio_runtime/src/dsp.rs fornece mixer DSP Rust independente do host: soma de múltiplas fontes mono, ganho por fonte, ganho mestre e buffer reutilizável. A soma preserva headroom; saturação/quantização permanece no resampler PCM. Há também filtro passa-baixa de primeira ordem opcional, desativado por padrão. Seus coeficientes não representam automaticamente o circuito de nenhum console: cada resposta analógica exige evidência e calibração específicas.
+
 O mixer comum combina fontes heterogêneas sem apagar suas propriedades:
 - canais mono/estéreo e roteamento específico do console;
 - ganho por dispositivo/canal e headroom;
@@ -65,9 +67,9 @@ O contrato interno deve evoluir de blocos mono PCM16 para formato de mixagem cap
 ### 3.4 Saída Windows
 
 O crate sega-audio-output é a camada de dispositivo do host. Consome blocos já mixados, converte apenas o necessário para o formato negociado e entrega ao Windows.
-- **WASAPI Shared/event-driven:** padrão. Consultar formato/período suportados e registrar valores efetivos; tamanho solicitado não é latência medida.
+- **WASAPI Shared/event-driven + IAudioClient3:** padrão preferencial. Consultar GetSharedModeEnginePeriod, escolher período dentro de min/max e múltiplo do fundamental, então inicializar com InitializeSharedAudioStream. Se interface/consulta/inicialização não estiver disponível, fallback para Initialize via EventsShared com autoconversão. Tamanho solicitado não é latência medida.
 - **XAudio2:** alternativa. Ownership dos buffers até callback de conclusão; callbacks mínimos e não bloqueantes. Evitar polling se callbacks confiáveis cobrirem o ciclo de vida.
-- **Exclusive/IAudioClient3:** investigação posterior, opt-in, com fallback claro e validação de drivers. Não assumir suporte universal.
+- **WASAPI Exclusive:** investigação posterior, opt-in, com fallback claro e validação de drivers. IAudioClient3 é usado no Shared quando disponível; fallback mantém compatibilidade.
 - **Device loss/hotplug:** worker Rust detecta falhas, reenumera/reabre conforme política e reporta falha persistente sem bloquear a UI.
 - **Fila:** limitada, com política explícita de overflow/underrun e métricas separadas.
 - **Shutdown:** parar produção, sinalizar worker, liberar buffers após o backend deixar de usá-los e aguardar término sem deadlock.
@@ -103,7 +105,8 @@ Esse estado é inventário, não aprovação arquitetural. O caminho PCM via Pyt
 - Atualizar ADRs, arquitetura global, documentação dos crates, drivers e sincronização A/V.
 
 ### Fase B — sessão nativa Rust
-- Introduzir sessão de áudio Rust que possua resampler/mixer e backend selecionado.
+- Introduzir sessão de áudio Rust que possua mixer DSP multi-fonte, resampler e backend selecionado.
+- Integrar IAudioClient3 ao WASAPI Shared com consulta/alinhamento de período e fallback convencional.
 - Integrar sessão aos wrappers/máquinas Rust SG-1000 e SMS sem expor buffers PCM.
 - Processar amostras dentro de Rust, usando comandos PyO3 apenas para configuração/telemetria.
 - Preservar VGM/diagnóstico como fluxos separados; não usar gravação como transporte de áudio.
@@ -130,7 +133,7 @@ Esse estado é inventário, não aprovação arquitetural. O caminho PCM via Pyt
 - Nenhum resampling, mixagem, ganho ou escrita no backend ocorre em Python.
 - WASAPI Shared é o default; XAudio2 permanece selecionável como alternativa.
 - Falha de WASAPI não inicia silenciosamente outro backend; fallback deve ser explícito e observável.
-- Testes Rust cobrem resampler, mixer, roteamento, saturação, filas, overflow, underrun e shutdown.
+- Testes Rust cobrem resampler, mixer multi-fonte, ganho, filtro DSP opcional, filas, overflow, underrun e shutdown.
 - Testes de integração verificam SG-1000 e SMS, áudio habilitado/desabilitado e reconfiguração.
 - CI Windows compila/testa WASAPI e XAudio2; testes físicos documentam Windows, dispositivo, driver, formato/período efetivos e estabilidade.
 - Benchmarks comparam baseline/candidato equivalentes, registrando mediana, variação, CPU, underruns e latência.
