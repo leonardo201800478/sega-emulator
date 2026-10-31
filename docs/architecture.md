@@ -138,3 +138,8 @@ O runtime de áudio é uma infraestrutura Rust compartilhada, independente das A
 ## Scheduler mestre Rust e sincronização A/V/input
 
 A arquitetura-alvo para sincronizar CPU, barramento, VDP, PSG, entrada e saídas de áudio/vídeo em uma única timeline Rust está especificada em [Master Scheduler Rust](architecture/native-master-scheduler.md), com etapas e gates em [Plano de migração do Master Scheduler](architecture/migrations/native-master-scheduler.md). Essa etapa depende da integração dos ports nativos de vídeo e input; a documentação não declara implementação nem validação temporal concluídas.
+
+
+## Reorganização do runtime e núcleo Z80 compartilhado
+
+A decisão arquitetural vigente para consolidar o runtime Rust, unificar o motor Z80 de SG-1000/SMS e preparar Game Gear/Genesis, e coordenar a transição temporal está registrada em [Reorganização arquitetural — runtime Rust, Z80 compartilhado e sincronização temporal](architecture/migrations/shared-z80-runtime-reorganization.md). O documento separa o estado observado em `main` do desenho-alvo e das propostas ainda abertas; não declara a migração concluída.
