@@ -350,3 +350,16 @@ As ADRs formalizam o destino arquitetural, mas não congelam ainda as APIs públ
 | Autorização para implementação de runtime | **BLOCKED até revisão A4 e conclusão da auditoria profunda** |
 
 Não há agente independente A4 disponível nesta execução. Não confundir inspeção do coordenador ou sucesso de GitHub Actions com revisão independente. A4 deve revisar os achados, as ADRs, os riscos de integração e os critérios de aceitação antes da primeira mudança de runtime.
+
+
+### Correção do baseline Z80 — 2026-10-31
+
+A auditoria comparativa confirmou o SMS como fonte canônica de semântica e validação, embora os executores atuais tenham código executável normalizado idêntico. A origem histórica do executor SG é o SMS; o SMS possui 37 arquivos dedicados de testes Z80 e o SG não possui diretório equivalente. O contrato de barramento já é compartilhado no SMS, mas ainda é local no SG.
+
+- Relatório: [Auditoria de maturidade Z80 SMS × SG-1000](sms-z80-maturity-audit-2026-10-31.md).
+- O crate compartilhado será extraído do executor SMS consolidado.
+- Testes CPU/ALU/CB/ED/prefixos/interrupções portáveis migram uma única vez para `native/z80_cpu/tests`.
+- Testes de plataforma SMS permanecem no SMS; o SG recebe testes próprios de integração de memória, I/O, controller, VDP/INT e PSG.
+- Não duplicar os 37 arquivos de testes em cada console nem usar `native/z80_alu` como oráculo independente.
+
+Este ajuste é requisito do gate Z1 e não altera o estado de validação do runtime.
