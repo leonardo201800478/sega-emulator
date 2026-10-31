@@ -58,17 +58,23 @@ pub struct NativeSMSMachine {
     machine: SmsMachine,
     total_instructions: u64,
     audio_session: Option<NativeAudioSession>,
+    audio_output_error: Option<String>,
 }
 
 impl NativeSMSMachine {
-    fn pump_audio_output(&mut self) -> PyResult<()> {
-        if let Some(session) = self.audio_session.as_mut() {
+    fn pump_audio_output(&mut self) {
+        if self.audio_session.is_some() {
             let samples = self.machine.drain_audio_samples(None);
-            session
-                .process_samples(&samples)
-                .map_err(PyRuntimeError::new_err)?;
+            let result = self
+                .audio_session
+                .as_mut()
+                .expect("audio session was checked above")
+                .process_samples(&samples);
+            if let Err(error) = result {
+                self.audio_session = None;
+                self.audio_output_error = Some(error);
+            }
         }
-        Ok(())
     }
 }
 
@@ -87,6 +93,7 @@ impl NativeSMSMachine {
             machine,
             total_instructions: 0,
             audio_session: None,
+            audio_output_error: None,
         })
     }
 
@@ -106,6 +113,7 @@ impl NativeSMSMachine {
         )
         .map_err(PyRuntimeError::new_err)?;
         self.audio_session = Some(session);
+        self.audio_output_error = None;
         Ok(())
     }
 
@@ -113,6 +121,12 @@ impl NativeSMSMachine {
         if let Some(mut session) = self.audio_session.take() {
             session.close();
         }
+        self.audio_output_error = None;
+    }
+
+    #[getter]
+    fn audio_output_error(&self) -> Option<String> {
+        self.audio_output_error.clone()
     }
 
     #[getter]
@@ -218,7 +232,7 @@ impl NativeSMSMachine {
         for steps in 1..=max_steps {
             self.step()?;
             if self.machine.vdp().frame_number() != initial_frame {
-                self.pump_audio_output()?;
+                self.pump_audio_output();
                 return Ok(steps);
             }
         }
@@ -296,6 +310,7 @@ mod tests {
             machine: build_sms_machine(vec![0; 16], false, Some("usa"), None).unwrap(),
             total_instructions: 0,
             audio_session: None,
+            audio_output_error: None,
         };
         assert_eq!(machine.psg_sample_rate(), 44_100);
         assert_eq!(machine.psg_clock_hz(), 3_579_545);
