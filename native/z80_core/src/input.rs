@@ -269,7 +269,9 @@ impl NativeInputManager {
 
     fn set_backend_preference(&self, preference: &str) -> PyResult<()> {
         if !matches!(preference, "auto" | "sdl3") {
-            return Err(PyValueError::new_err("preferência de backend deve ser auto ou sdl3"));
+            return Err(PyValueError::new_err(
+                "preferência de backend deve ser auto ou sdl3",
+            ));
         }
         Ok(())
     }
@@ -474,7 +476,13 @@ mod tests {
         state.set(ActionId::new(4).unwrap(), true);
         state.set(ActionId::new(5).unwrap(), true);
 
-        assert_eq!(apply_turbo(collect_actions(&state), [true, false], 0), 0b0011_0001);
-        assert_eq!(apply_turbo(collect_actions(&state), [true, false], 2), 0b0010_0001);
+        assert_eq!(
+            apply_turbo(collect_actions(&state), [true, false], 0),
+            0b0011_0001
+        );
+        assert_eq!(
+            apply_turbo(collect_actions(&state), [true, false], 2),
+            0b0010_0001
+        );
     }
 }
