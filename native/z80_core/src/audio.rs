@@ -217,10 +217,12 @@ impl NativeXAudio2Output {
 
 
 
-enum NativeAudioBackend {
+pub(crate) enum NativeAudioBackend {
     Wasapi(RustWasapiOutput),
     XAudio2(RustXAudio2Output),
 }
+
+pub(crate) type MachineAudioSession = NativeAudioSession<NativeAudioBackend>;
 
 impl NativeAudioBackend {
     fn new(
