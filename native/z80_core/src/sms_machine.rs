@@ -5,7 +5,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use sega_sms_core::{ControllerButtons, SmsMachine, SmsMachineConfig, VideoStandard};
 
-use crate::audio::{MachineAudioSession, NativePcmResampler};
+use crate::audio::MachineAudioSession;
 
 /// Resolve the territory and video standard without constructing Python errors.
 ///
@@ -278,10 +278,6 @@ impl NativeSMSMachine {
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
-    fn drain_audio_samples(&mut self, max_samples: Option<usize>) -> Vec<f64> {
-        self.machine.drain_audio_samples(max_samples)
-    }
-
     fn drain_audio_pcm<'py>(
         &mut self,
         py: Python<'py>,
@@ -289,10 +285,6 @@ impl NativeSMSMachine {
     ) -> Bound<'py, PyBytes> {
         let samples = self.machine.drain_audio_samples(None);
         PyBytes::new(py, &resampler.process_native(&samples))
-    }
-
-    fn discard_audio_samples(&mut self) {
-        let _ = self.machine.drain_audio_samples(None);
     }
 
     fn read_memory(&self, address: u16) -> u8 {
