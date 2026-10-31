@@ -247,3 +247,64 @@ Todas essas PRs precisam ser comparadas/rebaseadas contra o `main` atual antes d
 | ZEXALL/ZEXDOC ou oráculos Z80 | NOT RUN nesta fotografia | vincular execução e resultado a SHA específico |
 
 **Conclusão atualizada:** a P-0 avançou de inventário documental para baseline parcialmente executado e CI comprovado. Ainda não pode ser encerrada: faltam os três gates Rust locais, build/import da extensão em Windows e smoke tests nativos SG-1000/SMS com resultados vinculados ao SHA.
+
+
+---
+
+## 11. Fechamento dos gates locais reportados — Windows (2026-10-31)
+
+O usuário enviou a saída integral dos comandos de validação executados no clone Windows em `C:\Users\leost\sega-emulator`.
+
+### 11.1 Gates Rust do workspace
+
+| Comando | Evidência observada | Estado |
+|---|---|---|
+| `cargo fmt --all -- --check` | Retornou ao prompt sem diff/erro | PASS |
+| `cargo clippy --workspace --all-targets --locked -- -D warnings` | `Finished dev profile`, sem warnings/erros | PASS |
+| `cargo test --workspace --locked` | Todos os executáveis de teste e doc-tests concluíram; nenhuma falha | PASS |
+
+O log mostra testes unitários para `sega_audio_runtime` (13), `sega_sg1000_core` (115), `sega_sms_core` (152), `sega_z80_alu` (7), `sega_z80_bus` (3), além de vários alvos de integração/exaustivos/referência do Z80. Entre os alvos explícitos: vetores exaustivos de ALU, CB, ED, controle condicional, prefixos indexados, interrupções, traces temporais ED, integração de memória Z80/SMS e vetores single-step. Todos os resultados visíveis são PASS.
+
+### 11.2 Build e instalação da extensão nativa no Windows
+
+O procedimento alinhado ao workflow CI foi executado:
+
+- Maturin instalado em `1.15.0`.
+- Build com `--locked`, manifest `native/z80_core/Cargo.toml`, perfil release e feature `python-extension`.
+- Compilação dos crates locais e de PyO3 concluída.
+- Wheel produzida: `sega_z80_core-0.1.0-cp314-cp314-win_amd64.whl`.
+- Wheel instalada com pip.
+- `import sega_z80_core` executado com sucesso.
+
+Estado: **PASS** para build, instalação e import da extensão no Windows/Python 3.14.7.
+
+### 11.3 Suíte Python final no Windows
+
+| Verificação | Resultado | Estado |
+|---|---:|---|
+| `python -m pytest` | **330 passed, 0 skipped, 0 failed** | PASS |
+| `python -m ruff check .` | All checks passed | PASS |
+| `python -m ruff format --check .` | 204 files already formatted | PASS |
+| `python -m pip check` | No broken requirements found | PASS |
+
+A execução do pytest coletou 330 testes, incluindo seleção de runtime Rust, máquina nativa SG-1000, áudio nativo SMS, firmware SMS, integração VGM e filtros de vídeo. Os oito skips da execução anterior foram eliminados após compilar e instalar a extensão correta do próprio repositório.
+
+### 11.4 Proveniência e ressalvas
+
+- O log anexado identifica o caminho do clone, ambiente Python 3.14.7 e comandos executados, mas **não contém `git rev-parse HEAD` nem `git status`**.
+- Em uma verificação anterior, o usuário informou que o clone estava limpo em `main`, no SHA `c31e4183b8d0b36d95b4f58582938186417652f8`. Não há no log recém-enviado prova direta de que o HEAD permaneceu nesse SHA durante todas as execuções.
+- Portanto, os resultados são PASS como execução local reportada; para vinculá-los formalmente ao SHA candidato da P-0, falta apenas confirmar novamente `git rev-parse HEAD` e `git status --short --branch` no mesmo clone.
+- A wheel e a pasta `native/z80_core/dist` são artefatos locais de build. Não devem ser adicionados ao Git; verificar `git status` antes de qualquer commit.
+- A evidência não equivale a ZEXALL/ZEXDOC nem a validação temporal integral do hardware. Os vetores e testes registrados aumentam a cobertura semântica, mas não justificam declarar o Z80 cycle-accurate ou o scheduler temporal concluído.
+
+### 11.5 Estado atualizado da P-0
+
+Com os novos logs, os três gates Rust obrigatórios, a build/import da extensão Windows, os testes Python e Ruff estão todos PASS como execuções reportadas. O bloqueio de ambiente Python foi removido.
+
+Permanecem para fechamento formal:
+1. Confirmar SHA e árvore limpa após a geração da wheel.
+2. Vincular as execuções locais ao SHA candidato.
+3. Reconciliar os estados/bases das PRs concorrentes e registrar a decisão de integração, sem fazer merge nesta auditoria.
+4. Verificar se os critérios P-0 definidos no documento inicial estão integralmente satisfeitos.
+
+Não declarar TEMPORAL_PASS: o sucesso dos testes de workspace não prova integração de scheduler mestre com barramento, CPU, VDP e áudio em precisão cycle-accurate.
