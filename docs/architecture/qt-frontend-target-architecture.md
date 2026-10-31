@@ -303,9 +303,9 @@ Esta revisão foi executada como três frentes analíticas coordenadas nesta ses
 
 ## 12. Decisões funcionais recebidas e impacto arquitetural — 2026-10-30
 
-O modelo funcional registra 31 escolhas explícitas (F01–F31) e mantém F32–F35 pendentes. Este resumo destaca os impactos arquiteturais; a tabela completa e as regras de interpretação estão em [qt-frontend-functional-model.md](qt-frontend-functional-model.md), seção 14.
+O modelo funcional registra 35/35 decisões funcionais respondidas (F01–F35). As decisões F32–F35 foram aprovadas como C e estão detalhadas na seção 14 do modelo funcional. Este resumo destaca os impactos arquiteturais; a tabela completa e as regras de interpretação estão em [qt-frontend-functional-model.md](qt-frontend-functional-model.md), seção 14.
 
-- **Stop versus Fechar ROM (F01=C):** são comandos distintos. Stop encerra a emulação, persiste dados pendentes e descarrega a mídia, mantendo a aplicação Qt aberta. Pause mantém a ROM e a sessão carregadas em estado suspenso; Play retoma a execução. A máquina de estados deve representar PAUSED com mídia carregada; Stop encerra a sessão e descarrega a mídia, mas não encerra o processo Qt.
+- **Stop e Fechar ROM (F01 corrigido):** são pontos de entrada de UI distintos, mas devem produzir o mesmo resultado funcional e reutilizar a operação central de encerramento. Pause mantém a ROM e a sessão carregadas em estado suspenso; Play retoma a execução. Stop/Fechar ROM persistem dados pendentes e descarregam a mídia, mantendo a aplicação Qt aberta.
 - **Reiniciar runtime (F02=B):** operação separada de Reset físico. Preserva a mídia; exige contrato de reconstrução/reinicialização, persistência de SRAM pendente, recuperação de falhas e ownership PyO3/Rust.
 - **Reset físico (F03=A) e região (F31=C):** reset mantém a sessão; alteração regional é aplicada somente após Reset. Validar se a infraestrutura atual consegue reconstruir componentes dependentes de região sem estado inconsistente.
 - **Play/Pause (F04=A):** Play inicia ou retoma; Pause suspende.
