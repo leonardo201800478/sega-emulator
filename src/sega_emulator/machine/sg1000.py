@@ -131,6 +131,12 @@ class SG1000Machine:
         self.native_machine.close_audio_output()
 
     @property
+    def audio_output_error(self) -> str | None:
+        """Return the last native output error without stopping emulation."""
+        error = self.native_machine.audio_output_error
+        return str(error) if error is not None else None
+
+    @property
     def audio_output_metrics(self) -> tuple[int, int]:
         """Return native underrun and dropped-block counters."""
         return tuple(self.native_machine.audio_output_metrics)
