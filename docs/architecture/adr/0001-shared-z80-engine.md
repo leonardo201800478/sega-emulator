@@ -61,3 +61,16 @@ A consolidação inicial deve ser uma refatoração de baixo risco porque o cód
 - [Issue #158 — matriz de opcodes](https://github.com/leonardo201800478/sega-emulator/issues/158)
 - [Issue #159 — interrupções e temporalidade](https://github.com/leonardo201800478/sega-emulator/issues/159)
 - [PR #314 — LD (nn),HL e wraparound](https://github.com/leonardo201800478/sega-emulator/pull/314)
+
+
+## Baseline canônico de implementação e validação
+
+A auditoria comparativa [SMS × SG-1000](../migrations/sms-z80-maturity-audit-2026-10-31.md) corrige a interpretação de maturidade: embora o código executável atual dos dois arquivos seja idêntico, o SMS é a origem histórica consolidada e possui o corpus mais amplo de testes Z80. O executor SG declara que foi portado do SMS. A PR #160 documentou diferenças SMS específicas e rejeitou alterações SG de Q/DAA quando vetores independentes falharam; a correção DAA posterior da PR #201 foi integrada ao código comum atual.
+
+Assim:
+- Extrair o executor consolidado SMS como fonte canônica do novo crate.
+- Migrar o corpus portável SMS para `native/z80_cpu/tests`, sem duplicar 37 arquivos em cada core.
+- Preservar testes de mapper/portas SMS como integração de plataforma.
+- Acrescentar testes de memória/I/O/VDP/PSG/interrupt SG-1000 próprios; a igualdade do executor não valida os adapters.
+- O SG-1000 deve migrar seu contrato local para `sega-z80-bus`.
+- `native/z80_alu` é código duplicado equivalente às ALUs locais; não deve ser descrito como oráculo independente. Consolidá-lo como produção ou substituí-lo, mantendo os modelos de teste separados.
