@@ -595,6 +595,7 @@ Este documento é o índice normativo de escopo. Os documentos específicos deta
 - [Política permanente de desenvolvimento, fidelidade e entrega](development-and-validation-policy.md)
 - [Arquitetura e modelo TMS9918A](hardware/tms9918a-model.md)
 - [Auditoria técnica SMS — fotografia de 2026-10-29](audits/sms-current-technical-status-2026-10-29.md)
+- [Engenharia reversa da sequência de boot da BIOS SMS](audits/sms-bios-boot-sequence-reverse-engineering.md) — pesquisa documental; lacunas de dump/disassembly explicitadas.
 - [Compatibilidade de mappers de cartucho SMS](audits/sms-cartridge-mapper-compatibility.md) — prevenção de falhas de boot, fingerprints, decodificação de escrita e perfis especiais.
 - [Arquitetura do Master Scheduler nativo](architecture/native-master-scheduler.md)
 - [Plano de migração do Master Scheduler](architecture/migrations/native-master-scheduler.md)
