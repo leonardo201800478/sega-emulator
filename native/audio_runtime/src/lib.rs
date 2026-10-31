@@ -282,7 +282,10 @@ mod tests {
         let high_pcm = [high_resampler.process(&high_tone), high_resampler.flush()].concat();
         let decode = |pcm: &[u8]| -> Vec<i16> {
             let (samples, remainder) = pcm.as_chunks::<2>();
-            assert!(remainder.is_empty(), "PCM16 output must contain complete samples");
+            assert!(
+                remainder.is_empty(),
+                "PCM16 output must contain complete samples"
+            );
             samples
                 .iter()
                 .map(|sample| i16::from_le_bytes(*sample))
