@@ -1,4 +1,7 @@
 //! Native host-output adapter for the Python-independent Rust audio session.
+//!
+//! This module deliberately exports no PyO3 audio classes; machine adapters
+//! use these sinks through the Rust-owned session.
 
 use sega_audio_output::{
     NativeWasapiOutput as RustWasapiOutput, NativeXAudio2Output as RustXAudio2Output,
