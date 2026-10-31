@@ -275,10 +275,7 @@ pub trait InputBackend {
     fn kind(&self) -> BackendKind;
 
     /// Enumerate connected devices. Call at startup and after hotplug events.
-    fn enumerate(
-        &mut self,
-        devices: &mut Vec<DeviceDescriptor>,
-    ) -> Result<(), BackendError>;
+    fn enumerate(&mut self, devices: &mut Vec<DeviceDescriptor>) -> Result<(), BackendError>;
 
     /// Append newest readings and lifecycle events to reusable caller buffers.
     fn poll_into(&mut self, output: &mut InputBuffers) -> Result<(), BackendError>;
@@ -372,7 +369,9 @@ impl InputProfile {
                 PhysicalControl::Button(index) if index as usize >= MAX_BUTTONS => {
                     return Err(InputError::ButtonOutOfRange(index as usize));
                 }
-                PhysicalControl::Axis { index, threshold, .. } => {
+                PhysicalControl::Axis {
+                    index, threshold, ..
+                } => {
                     if index as usize >= MAX_AXES {
                         return Err(InputError::AxisOutOfRange(index as usize));
                     }
@@ -380,7 +379,10 @@ impl InputProfile {
                         return Err(InputError::InvalidThreshold(threshold));
                     }
                 }
-                PhysicalControl::Hat { index, direction_mask } => {
+                PhysicalControl::Hat {
+                    index,
+                    direction_mask,
+                } => {
                     if index as usize >= MAX_HATS {
                         return Err(InputError::HatOutOfRange(index as usize));
                     }
@@ -400,7 +402,11 @@ impl InputProfile {
         for binding in &self.bindings {
             let active = match binding.control {
                 PhysicalControl::Button(index) => state.buttons.is_pressed(index as usize),
-                PhysicalControl::Axis { index, direction, threshold } => {
+                PhysicalControl::Axis {
+                    index,
+                    direction,
+                    threshold,
+                } => {
                     let threshold = self.deadzone.max(threshold).max(1) as i32;
                     let value = state.axis(index as usize) as i32;
                     match direction {
@@ -408,9 +414,10 @@ impl InputProfile {
                         AxisDirection::Positive => value >= threshold,
                     }
                 }
-                PhysicalControl::Hat { index, direction_mask } => {
-                    state.hat(index as usize) & direction_mask == direction_mask
-                }
+                PhysicalControl::Hat {
+                    index,
+                    direction_mask,
+                } => state.hat(index as usize) & direction_mask == direction_mask,
             };
             if active {
                 output.set(binding.action, true);
@@ -456,7 +463,7 @@ impl std::error::Error for InputError {}
 mod tests {
     use super::{
         ActionBinding, ActionId, ActionState, AxisDirection, AxisSemantic, ButtonSet, DeviceState,
-        InputBuffers, InputError, InputProfile, PhysicalControl, MAX_AXES, MAX_BUTTONS,
+        InputBuffers, InputError, InputProfile, MAX_AXES, MAX_BUTTONS, PhysicalControl,
     };
 
     fn action(value: u8) -> ActionId {
@@ -478,7 +485,9 @@ mod tests {
     fn device_state_preserves_analog_axes_and_hat_diagonals() {
         let mut state = DeviceState::default();
         state.set_axis(0, -16_384, AxisSemantic::Wheel).unwrap();
-        state.set_axis(1, 32_767, AxisSemantic::Accelerator).unwrap();
+        state
+            .set_axis(1, 32_767, AxisSemantic::Accelerator)
+            .unwrap();
         state.set_hat(0, 0b0011).unwrap();
         assert_eq!(state.axis(0), -16_384);
         assert_eq!(state.axis(1), 32_767);
@@ -491,16 +500,24 @@ mod tests {
     fn profile_maps_buttons_axes_and_hats_to_generic_actions() {
         let profile = InputProfile::new(
             vec![
-                ActionBinding { action: action(0), control: PhysicalControl::Button(0) },
+                ActionBinding {
+                    action: action(0),
+                    control: PhysicalControl::Button(0),
+                },
                 ActionBinding {
                     action: action(1),
                     control: PhysicalControl::Axis {
-                        index: 0, direction: AxisDirection::Negative, threshold: 8_000,
+                        index: 0,
+                        direction: AxisDirection::Negative,
+                        threshold: 8_000,
                     },
                 },
                 ActionBinding {
                     action: action(2),
-                    control: PhysicalControl::Hat { index: 0, direction_mask: 0b0011 },
+                    control: PhysicalControl::Hat {
+                        index: 0,
+                        direction_mask: 0b0011,
+                    },
                 },
             ],
             4_000,
@@ -523,7 +540,9 @@ mod tests {
             vec![ActionBinding {
                 action: action(0),
                 control: PhysicalControl::Axis {
-                    index: 0, direction: AxisDirection::Positive, threshold: 0,
+                    index: 0,
+                    direction: AxisDirection::Positive,
+                    threshold: 0,
                 },
             }],
             5_000,
@@ -558,8 +577,10 @@ mod tests {
             }], 0).unwrap_err(),
             InputError::AxisOutOfRange(MAX_AXES)
         );
-        assert_eq!(InputProfile::new(Vec::new(), 32_768).unwrap_err(),
-            InputError::InvalidDeadzone(32_768));
+        assert_eq!(
+            InputProfile::new(Vec::new(), 32_768).unwrap_err(),
+            InputError::InvalidDeadzone(32_768)
+        );
     }
 
     #[test]
