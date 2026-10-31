@@ -51,11 +51,13 @@ fn sg1000_psg_audio_pipeline_is_deterministic_without_python_or_host_audio() {
     let left_samples = left.drain_audio_samples(None);
     let right_samples = right.drain_audio_samples(None);
     assert!(!left_samples.is_empty());
+    assert!(left_samples.iter().any(|sample| sample.abs() > f64::EPSILON));
     assert_eq!(left_samples, right_samples);
 
     let left_pcm = render(&left_samples);
     let right_pcm = render(&right_samples);
     assert!(!left_pcm.is_empty());
+    assert!(left_pcm.iter().flatten().any(|byte| *byte != 0));
     assert_eq!(left_pcm, right_pcm);
     assert_eq!(left.cpu.total_tstates, left_tstates);
     assert_eq!(right.cpu.total_tstates, right_tstates);
