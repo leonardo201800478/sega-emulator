@@ -26,6 +26,7 @@ mod windows {
 
     const SDL_INIT_JOYSTICK: u32 = 0x0000_0200;
     const SDL_INIT_GAMEPAD: u32 = 0x0000_2000;
+    const SDL_INIT_EVENTS: u32 = 0x0000_4000;
     const GAMEPAD_BUTTON_COUNT: usize = 21;
     const GAMEPAD_AXIS_COUNT: usize = 6;
     const RAW_BUTTON_OFFSET: usize = 32;
@@ -246,7 +247,7 @@ mod windows {
                 backend: BackendKind::Sdl3,
                 message,
             })?;
-            let flags = SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD;
+            let flags = SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD | SDL_INIT_EVENTS;
             if !unsafe { (api.init_subsystem)(flags) } {
                 return Err(BackendError {
                     backend: BackendKind::Sdl3,
@@ -404,6 +405,14 @@ mod windows {
             for axis in 0..device.raw_axes.min(MAX_AXES - RAW_AXIS_OFFSET) {
                 let value = unsafe { (self.api.get_axis)(device.joystick, axis as c_int) };
                 let _ = state.set_axis(RAW_AXIS_OFFSET + axis, value, AxisSemantic::Unknown);
+                if device.gamepad.is_null() && axis < 2 {
+                    let semantic = if axis == 0 {
+                        AxisSemantic::LeftStickX
+                    } else {
+                        AxisSemantic::LeftStickY
+                    };
+                    let _ = state.set_axis(axis, value, semantic);
+                }
             }
             for hat in 0..device.raw_hats.min(MAX_HATS) {
                 let value = unsafe { (self.api.get_hat)(device.joystick, hat as c_int) };
@@ -465,7 +474,7 @@ mod windows {
                 self.close_device(device);
             }
             if self.initialized {
-                unsafe { (self.api.quit_subsystem)(SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD) };
+                unsafe { (self.api.quit_subsystem)(SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD | SDL_INIT_EVENTS) };
                 self.initialized = false;
             }
         }
