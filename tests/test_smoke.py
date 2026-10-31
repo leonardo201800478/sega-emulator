@@ -8,7 +8,7 @@ def test_package_version_is_defined() -> None:
     """Confirma que o pacote expõe sua versão."""
     from sega_emulator import __version__
 
-    assert __version__ == "0.1.0"
+    assert __version__ == "0.1.1"
 
 
 def test_entry_point_without_rom_opens_qt_frontend_without_starting_gui(
