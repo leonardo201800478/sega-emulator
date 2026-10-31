@@ -58,4 +58,3 @@ def test_machine_rejects_unknown_native_audio_backend() -> None:
     with pytest.raises(RuntimeError, match="unsupported native audio backend"):
         machine.configure_audio_output("invalid")
     assert machine.native_machine.audio_output_metrics == (0, 0)
-
