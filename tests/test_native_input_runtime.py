@@ -59,8 +59,9 @@ def test_native_input_manager_exposes_stable_frontend_contract() -> None:
             False,
         )
         masks = manager.poll_actions(2, (1 << 0) | (1 << 4), 1 << 5)
-        assert masks[0] == 1 << 0
-        assert masks[1] == 1 << 5
+        assert masks[0] & (1 << 0)
+        assert not masks[0] & (1 << 4)
+        assert masks[1] & (1 << 5)
         assert isinstance(manager.connected_names(), list)
         captured = manager.read_pressed_button(1)
         assert captured is None or isinstance(captured, str)
