@@ -146,6 +146,13 @@ class SMSMachine:
             "button2" in actions,
         )
 
+    def set_controller_actions_mask(self, player: int, actions: int) -> None:
+        if player not in (1, 2):
+            raise ValueError("player deve ser 1 ou 2.")
+        if type(actions) is not int or not 0 <= actions <= 0x7F:
+            raise ValueError("actions deve conter somente os sete bits lógicos.")
+        self.native_machine.set_controller_actions_mask(player, actions)
+
     def drain_psg_write_events(self) -> list[tuple[int, int]]:
         # SMS VGM event capture is not wired to the native timestamped bus yet.
         return []
