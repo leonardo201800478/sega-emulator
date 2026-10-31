@@ -68,9 +68,10 @@ def test_qt_adapter_sends_profiles_to_rust_and_receives_semantic_actions(
 
     assert native.preference == "sdl3"
     assert native.profiles[1][0] == config.players[1].gamepad_buttons
+    assert native.profiles[1][3:] == (False, False)
     assert native.profiles[2][2] == config.deadzone
     assert controller.poll_masks(123, {1: {"left"}, 2: {"button2"}}) == {
-        1: 0b0001_1001,
+        1: 0b0001_0101,
         2: 0b0010_1000,
     }
     assert native.frames == [123]
@@ -88,10 +89,12 @@ def test_qt_adapter_updates_native_profiles_when_ui_configuration_changes(
     updated = ControllerInputConfig()
     updated.deadzone = 0.25
     updated.players[1].gamepad_buttons["button1"] = "x"
+    updated.players[1].turbo_buttons["button1"] = True
     controller.config = updated
 
     assert native.profiles[1][0]["button1"] == "x"
     assert native.profiles[1][2] == 0.25
+    assert native.profiles[1][3] is True
 
 
 def test_qt_adapter_degrades_to_keyboard_only_if_extension_is_missing(
