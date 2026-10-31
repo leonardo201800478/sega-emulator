@@ -215,7 +215,6 @@ impl NativeXAudio2Output {
     }
 }
 
-
 /// Complete per-machine audio session. PCM never crosses the Python boundary:
 /// machine wrappers feed native samples directly into this session after a
 /// coarse-grained execution batch.
@@ -238,17 +237,12 @@ impl NativeAudioSession {
         volume: u8,
         balance: i8,
     ) -> Result<Self, String> {
-        let resampler = PcmResampler::new(sample_rate, volume)
-            .map_err(|error| error.to_string())?;
+        let resampler =
+            PcmResampler::new(sample_rate, volume).map_err(|error| error.to_string())?;
         let output = match backend {
             "wasapi" => NativeAudioBackend::Wasapi(
-                RustWasapiOutput::new_with_balance(
-                    sample_rate,
-                    buffer_size,
-                    queue_blocks,
-                    balance,
-                )
-                .map_err(|error| error.to_string())?,
+                RustWasapiOutput::new_with_balance(sample_rate, buffer_size, queue_blocks, balance)
+                    .map_err(|error| error.to_string())?,
             ),
             "xaudio2" => NativeAudioBackend::XAudio2(
                 RustXAudio2Output::new_with_balance(
@@ -325,6 +319,11 @@ mod audio_session_tests {
     #[test]
     fn rejects_unknown_backend_without_opening_a_device() {
         let result = NativeAudioSession::new("unknown", 48_000, 512, 4, 100, 0);
-        assert!(result.err().expect("unknown backend must fail").contains("unsupported native audio backend"));
+        assert!(
+            result
+                .err()
+                .expect("unknown backend must fail")
+                .contains("unsupported native audio backend")
+        );
     }
 }
