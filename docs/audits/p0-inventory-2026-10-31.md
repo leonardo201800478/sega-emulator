@@ -382,3 +382,77 @@ A branch `main` foi consultada novamente e permanece no SHA `c31e4183b8d0b36d95b
 3. Decidir separadamente a integração documental de #324.
 4. Consolidar matriz de workflows e critérios de aceite por componente; não confundir CI verde com cobertura de hardware físico.
 5. Preservar ZEXALL/ZEXDOC, testes externos independentes, traces temporais e validação física como evidências distintas; não declarar TEMPORAL_PASS.
+
+
+
+---
+
+## 13. Revalidação remota dos checks — 2026-10-31
+
+Consulta posterior à seção 12, diretamente nos refs e check-runs do GitHub. O SHA de `main` permanece `c31e4183b8d0b36d95b4f58582938186417652f8`.
+
+### 13.1 PR #325 — head atual da auditoria
+
+- Head atual: `ae4216aa44a8ec77489ec19e9040e9b0e1ecc4bb`.
+- Base: `c31e4183b8d0b36d95b4f58582938186417652f8`.
+- Estado: aberta, Draft, `mergeable=true`.
+- Check-run `quality`, ID `124671366410`, workflow run `41246652697`: **completed / success** no SHA exato `ae4216a...`.
+- O status combinado legado continua `pending`, com zero status entries; isso não invalida o check-run de Actions, mas também não deve ser descrito como status combinado SUCCESS.
+- O check informa duas annotations; seus detalhes não foram recuperados nesta consulta. Não inferir que sejam warnings de compilação nem ignorá-las sem leitura posterior.
+
+### 13.2 PR #313 — checks completos no head existente
+
+Head consultado: `1c64734c56413276b27ab0d85d9a8ec6978f3c41`. A PR continua aberta e Draft, com base antiga `3cf846d...`; comparação contra `main` permanece `diverged` (106 commits à frente, 36 atrás; merge-base `3cf846d...`).
+
+Foram consultados os check-runs associados diretamente ao head. Todos os seguintes concluíram **SUCCESS** nesse SHA:
+- Agent 3 — Workspace quality and complete Rust checks;
+- Agent 2 — Memory and deterministic machine;
+- Agent 1 — CPU instruction tests;
+- Python 3.14 quality and regression suite;
+- Pinned external Z80 conformance suite;
+- Rust formatting;
+- Workspace Rust tests;
+- Workspace Clippy;
+- Qt tests;
+- Repeatability, imports and package integrity;
+- Windows;
+- SMS focused format, lint and tests;
+- Python UI;
+- Quality.
+
+Isso eleva a evidência da PR #313: os gates completos de formatação, Clippy e testes do workspace, além da suíte externa Z80 pinada, passaram no **head original**. Não transfere esses resultados para um SHA atualizado/reconciliado com main.
+
+A revisão de patch confirma que a implementação adiciona `sega-input-runtime`, backend SDL3 Windows, fachada PyO3 `NativeInputManager`, adaptador Qt/Python e snapshots de ações para SG-1000/SMS. Os testes de review consultados não retornaram review threads nem reviews submetidas. A comparação por caminhos continua sem sobreposição direta com os 36 caminhos modificados por main desde o merge-base, mas há alterações em manifests/lockfiles, workflows e integração nativa que exigem revisão semântica.
+
+**Decisão mantida:** #313 é a candidata prioritária de implementação de input, porém permanece não integrada. Não foi criado branch vazio nem feita atualização automática: as ferramentas disponíveis permitem criar refs e objetos Git, mas não oferecem uma operação de cherry-pick/rebase com resolução e validação local reproduzível. A reconciliação deve ocorrer em checkout Git real, preservando a branch original e sem force-push.
+
+### 13.3 PR #315 — Temporal Core
+
+Head: `bb1aec75cf99c1ffd49f4e4c591250de43f1c0cb`. A PR continua Draft e diverged (15 commits à frente, 36 atrás), com `mergeable=false`.
+
+Os check-runs consultados no head original concluíram **SUCCESS** para:
+- Agent 3 — Workspace quality and complete Rust checks;
+- Agent 2 — Memory and deterministic machine;
+- Workspace Clippy;
+- Workspace Rust tests;
+- Pinned external Z80 conformance suite;
+- Rust formatting;
+- Agent 1 — CPU instruction tests;
+- SMS focused format, lint and tests;
+- Windows (dois jobs);
+- Quality.
+
+Os resultados comprovam qualidade do head original, mas não removem a divergência documental nem demonstram scheduler integrado à máquina. Não promover para TEMPORAL_PASS.
+
+### 13.4 PR #324 — documentação BIOS/mappers
+
+Head `51fd75e1d280ebf7a8180275ac60974604debbbe`, seis commits à frente de main, sem commits atrás e `mergeable=true`. Os checks `Sourcery review` e `quality` concluíram SUCCESS nesse head. O escopo permanece documental; nenhum runtime foi alterado.
+
+### 13.5 Próxima decisão operacional
+
+1. **#313:** atualizar em checkout Git dedicado a partir do main atual, sem modificar a branch original; revisar conflitos semânticos em manifests/lockfiles, extensão PyO3, workflows e fronteira Qt; executar novamente todos os gates no novo SHA.
+2. **#315:** manter separado até resolução explícita dos conflitos nos três documentos de arquitetura e revisão do Cargo workspace/lockfile.
+3. **#324:** manter como candidata documental separada; não mesclar automaticamente.
+4. **#325:** manter Draft. A CI no head atual passou, mas ainda faltam a confirmação local pós-build de SHA/árvore limpa e o fechamento dos critérios de inventário e smoke tests definidos nas seções 9 e 11.
+
+Nenhum runtime foi alterado, nenhuma branch de integração foi criada, e nenhuma PR foi fechada ou mesclada nesta atualização.
