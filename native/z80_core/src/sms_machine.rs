@@ -278,15 +278,6 @@ impl NativeSMSMachine {
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
-    fn drain_audio_pcm<'py>(
-        &mut self,
-        py: Python<'py>,
-        mut resampler: PyRefMut<'_, NativePcmResampler>,
-    ) -> Bound<'py, PyBytes> {
-        let samples = self.machine.drain_audio_samples(None);
-        PyBytes::new(py, &resampler.process_native(&samples))
-    }
-
     fn read_memory(&self, address: u16) -> u8 {
         self.machine.read_memory(address)
     }
