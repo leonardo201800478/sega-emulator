@@ -419,6 +419,13 @@ impl NativeSG1000Machine {
             .map_err(|error| PyValueError::new_err(error.to_string()))
     }
 
+    fn set_joystick_actions_mask(&mut self, player: u8, actions: u8) -> PyResult<()> {
+        let active_low = 0xFF & !(actions & 0x3F);
+        self.machine
+            .set_joystick(player, active_low)
+            .map_err(|error| PyValueError::new_err(error.to_string()))
+    }
+
     fn drain_psg_write_events(&mut self) -> Vec<(u64, u8)> {
         self.machine
             .drain_psg_write_events()
