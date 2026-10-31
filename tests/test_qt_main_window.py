@@ -58,6 +58,7 @@ def test_main_window_exposes_required_menus_and_shortcuts(qt_app) -> None:
     assert not window.start_vgm_recording_action.isEnabled()
     window.set_vgm_recording(False)
     assert called == ["audio-settings", "drivers", "audio-diagnostics", "vgm-start"]
+    called.clear()
 
     menu_titles = [action.text() for action in window.menuBar().actions()]
     assert menu_titles == [
