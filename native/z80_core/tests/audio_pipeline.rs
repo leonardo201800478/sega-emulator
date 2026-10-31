@@ -31,6 +31,7 @@ fn render(samples: &[f64]) -> Vec<Vec<u8>> {
     let capture = sink.clone();
     let mut session = NativeAudioSession::new(48_000, 100, sink).expect("audio session");
     session.process_samples(samples).expect("process native samples");
+    session.close();
     let blocks = capture.0.lock().expect("recording sink lock").clone();
     blocks
 }
