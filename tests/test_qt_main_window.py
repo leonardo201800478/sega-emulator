@@ -330,7 +330,7 @@ def test_about_dialog_shows_version_scope_credits_and_mit_license(
     title, content, parent_title = shown[0]
     assert title == "Sobre o Sega Emulator"
     assert parent_title == "Sega Emulator | SG-1000"
-    assert "Versão:</b> 0.1.0" in content
+    assert "Versão:</b> 0.1.1" in content
     assert "SG-1000" in content
     assert "PySide6" in content
     assert "Licença:</b> MIT" in content
