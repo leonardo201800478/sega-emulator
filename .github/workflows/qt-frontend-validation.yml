@@ -52,9 +52,9 @@ jobs:
       - name: Install Qt frontend and development dependencies
         run: python -m pip install -e ".[dev,qt]"
       - name: Check changed Python formatting
-        run: python -m ruff format --check src/sega_emulator/frontend/qt src/sega_emulator/rom_library.py src/sega_emulator/frontend/qt/rom_library_dialog.py tests/test_qt_preferences.py tests/test_qt_main_window.py tests/test_qt_settings_dialog.py tests/test_qt_scraper_settings.py tests/test_qt_box_art.py tests/test_rom_library.py
+        run: python -m ruff format --check src/sega_emulator/frontend/rust_controller_input.py tests/test_rust_controller_input.py src/sega_emulator/frontend/qt src/sega_emulator/rom_library.py src/sega_emulator/frontend/qt/rom_library_dialog.py tests/test_qt_preferences.py tests/test_qt_main_window.py tests/test_qt_settings_dialog.py tests/test_qt_scraper_settings.py tests/test_qt_box_art.py tests/test_rom_library.py
       - name: Lint frontend and tests
-        run: python -m ruff check src/sega_emulator/frontend/qt src/sega_emulator/rom_library.py tests/test_rom_library.py tests/test_qt_preferences.py tests/test_qt_main_window.py tests/test_qt_settings_dialog.py tests/test_qt_scraper_settings.py tests/test_qt_box_art.py tests/test_qt_rom_library_dialog.py
+        run: python -m ruff check src/sega_emulator/frontend/rust_controller_input.py tests/test_rust_controller_input.py src/sega_emulator/frontend/qt src/sega_emulator/rom_library.py tests/test_rom_library.py tests/test_qt_preferences.py tests/test_qt_main_window.py tests/test_qt_settings_dialog.py tests/test_qt_scraper_settings.py tests/test_qt_box_art.py tests/test_qt_rom_library_dialog.py
       - name: Test Qt preferences, window, and audio output
         run: python -m pytest -q tests/test_qt_preferences.py tests/test_qt_main_window.py tests/test_qt_settings_dialog.py tests/test_qt_scraper_settings.py tests/test_qt_box_art.py tests/test_rom_library.py
       - name: Test controller backends
