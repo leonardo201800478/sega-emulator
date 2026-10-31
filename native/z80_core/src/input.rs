@@ -1,6 +1,6 @@
 //! Python-facing facade for the Rust-owned physical input runtime.
 //!
-//! Python receives semantic actions and device labels only. Device polling,
+//! Python receives compact action masks and device labels only. Device polling,
 //! physical mapping, analog deadzones, hotplug and turbo phase stay in Rust.
 
 use std::collections::HashMap;
@@ -182,10 +182,10 @@ impl NativeInputManager {
         }
     }
 
-    fn poll_backend(&mut self) -> PyResult<()> {
+    fn poll_backend(&mut self) {
         if self.backend.is_none() {
             self.buffers.clear();
-            return Ok(());
+            return;
         }
         self.buffers.clear();
         let poll_result = self
@@ -195,7 +195,7 @@ impl NativeInputManager {
             .poll_into(&mut self.buffers);
         if let Err(error) = poll_result {
             self.disable_backend(error.to_string());
-            return Ok(());
+            return;
         }
 
         for event in &self.buffers.events {
@@ -211,11 +211,10 @@ impl NativeInputManager {
         if !self.buffers.events.is_empty() {
             if let Err(error) = self.refresh_devices() {
                 self.disable_backend(error.to_string());
-                return Ok(());
+                return;
             }
             self.assign_unclaimed_devices();
         }
-        Ok(())
     }
 
     fn state_for_player(&self, player: usize) -> Option<&sega_input_runtime::DeviceState> {
@@ -269,8 +268,8 @@ impl NativeInputManager {
     }
 
     fn set_backend_preference(&self, preference: &str) -> PyResult<()> {
-        if !matches!(preference, "auto" | "sdl3" | "xinput") {
-            return Err(PyValueError::new_err("preferência de backend inválida"));
+        if !matches!(preference, "auto" | "sdl3") {
+            return Err(PyValueError::new_err("preferência de backend deve ser auto ou sdl3"));
         }
         Ok(())
     }
@@ -335,7 +334,7 @@ impl NativeInputManager {
         keyboard_player1: u8,
         keyboard_player2: u8,
     ) -> PyResult<(u8, u8)> {
-        self.poll_backend()?;
+        self.poll_backend();
         let mut output = [keyboard_player1, keyboard_player2];
         for player in 0..2 {
             if let (Some(profile), Some(state)) = (
