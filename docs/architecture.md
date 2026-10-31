@@ -129,3 +129,8 @@ The research inventory is not an implementation specification by itself. Use the
 ## Runtime de áudio nativo multi-sistema
 
 O runtime de áudio é uma infraestrutura Rust compartilhada, independente das APIs do host e dos consoles. WASAPI Shared/event-driven é o backend padrão Windows e tenta IAudioClient3 para negociar o período suportado, com fallback para Shared convencional; XAudio2 é a alternativa. Python/PySide6 é apenas frontend de configuração, controle e diagnóstico: PCM não atravessa PyO3 durante gameplay. O escopo de hardware contempla PSG, FM, PCM/DAC, CDDA e PWM ao longo de SG-1000, SMS/GG, Mega Drive, Sega CD e 32X; QSound permanece extensão DSP opcional. A arquitetura, os critérios e as fases de migração estão em [Runtime de áudio nativo](architecture/native-audio-runtime.md).
+
+
+## Scheduler mestre Rust e sincronização A/V/input
+
+A arquitetura-alvo para sincronizar CPU, barramento, VDP, PSG, entrada e saídas de áudio/vídeo em uma única timeline Rust está especificada em [Master Scheduler Rust](architecture/native-master-scheduler.md), com etapas e gates em [Plano de migração do Master Scheduler](architecture/migrations/native-master-scheduler.md). Essa etapa depende da integração dos ports nativos de vídeo e input; a documentação não declara implementação nem validação temporal concluídas.
