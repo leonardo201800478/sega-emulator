@@ -48,7 +48,7 @@ O frontend Grid é opcional em Opções. Desativar o Grid não desativa a janela
 |---|---|
 | Play | Inicia ou retoma execução. |
 | Pause | Suspende execução, mantendo sessão em memória. |
-| Stop | Interrompe, persiste dados pendentes e descarrega ROM; encerra sessão e retorna à tela inicial do sistema selecionado. |
+| Stop | Encerra a emulação, persiste dados pendentes e descarrega a ROM; mantém a aplicação Qt aberta e retorna à tela inicial do sistema selecionado. |
 | Reiniciar emulador | Reinicializa o mecanismo de emulação. Escopo interno será definido na arquitetura do runtime; não equivale ao reset físico. |
 | Reset do hardware | Simula o botão RESET do console real, respeitando sequência e efeitos específicos do hardware. Mantém ROM/sessão e não apaga dados persistentes. |
 | Velocidade | Ajusta velocidade sem alterar clocks nominais do hardware. |
@@ -248,7 +248,7 @@ Cada fase requer critérios de aceitação e testes direcionados. Widgets desenh
 - Nenhum suporte de hardware declarado apenas pela presença de controle na UI.
 - Preferências persistem; estado interno da emulação não.
 - Troca de sistema bloqueada durante ROM/sessão.
-- Stop descarrega ROM; reset físico não.
+- Stop encerra a emulação e descarrega a ROM, sem fechar a aplicação Qt; Pause mantém ROM carregada.
 - Reset físico específico por plataforma.
 - Região contextual e distinta de padrão de vídeo/BIOS.
 - Grid opcional; tela sem ROM preta.
@@ -259,7 +259,7 @@ Cada fase requer critérios de aceitação e testes direcionados. Widgets desenh
 
 ## 13. Pendências explícitas
 - Contrato interno preciso de Reiniciar emulador, distinto do reset físico.
-- Relação operacional entre Stop e Arquivo → Fechar ROM: mesma operação central em locais diferentes ou diferenças adicionais.
+- Confirmar no inventário se Stop e Arquivo → Fechar ROM já encaminham à mesma operação central; a semântica funcional aprovada para ambos é encerrar a emulação e descarregar a ROM, mantendo a aplicação aberta.
 - Semântica exata de velocidades e pacing/fast-forward por backend.
 - Schema/versionamento das preferências e migração.
 - Inventário completo do que já está implementado versus planejado.
@@ -276,7 +276,7 @@ As escolhas abaixo foram fornecidas explicitamente pelo usuário. Elas substitue
 
 | Flag | Decisão | Consequência funcional registrada |
 |---|---:|---|
-| F01 | C | Stop encerra a execução, mantém a ROM carregada e permite retomar com Play. |
+| F01 | C | Stop encerra a emulação e descarrega a ROM, mas mantém a aplicação Qt aberta. Pause é que mantém a ROM carregada e suspensa, podendo ser retomada com Play. |
 | F02 | B | Reiniciar emulador reinicia o runtime preservando a mídia carregada; contrato técnico ainda precisa ser definido. |
 | F03 | A | Reset físico reinicia os componentes conforme o hardware, preservando a ROM/sessão. |
 | F04 | A | Play inicia ou retoma; Pause suspende a execução. |
@@ -335,3 +335,15 @@ As escolhas abaixo foram fornecidas explicitamente pelo usuário. Elas substitue
 As decisões funcionais não provam disponibilidade técnica. Permanecem necessárias: inventário completo dos callbacks e serviços; contratos de sessão/runtime/PyO3; capacidades reais de BIOS-only por sistema; descoberta host de monitores, modos, VRR e dispositivos; política de pacing e áudio em Fast Forward; migração do histórico e preferências; e critérios/testes para SRAM e Save States.
 
 **Estado do registro:** 31/35 flags respondidas; 4 pendentes (F32–F35). Nenhum código executável foi alterado por este registro.
+
+
+## 15. Correção de decisão — F01 (2026-10-30)
+
+O usuário corrigiu a interpretação anterior de F01=C. A semântica aprovada passa a ser:
+
+- **Pause:** interrompe temporariamente a execução, mantendo ROM e sessão carregadas em estado PAUSED; Play retoma.
+- **Stop:** encerra a emulação, persiste dados nativos pendentes e descarrega a ROM; a aplicação Qt permanece aberta e retorna à tela inicial.
+- **Arquivo → Fechar ROM:** deve produzir o mesmo resultado funcional de Stop. A auditoria deverá verificar se ambos reutilizam a mesma operação de aplicação, sem duplicar lógica.
+- **Reset físico:** não descarrega ROM nem encerra a sessão.
+
+A correção substitui todas as passagens anteriores que diziam que Stop preservava a ROM. O código ainda não foi alterado nem validado.
