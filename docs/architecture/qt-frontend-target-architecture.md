@@ -220,3 +220,42 @@ Condição para sair da modelagem: nenhum requisito aprovado sem destino arquite
 Esta revisão foi executada como três frentes analíticas coordenadas nesta sessão, não como três processos autônomos independentes.
 
 **Não implementado:** este documento não altera runtime, widgets ou serviços. Não constitui teste, build, validação visual ou aprovação de gameplay.
+
+
+## 12. Decisões funcionais recebidas e impacto arquitetural — 2026-10-30
+
+O modelo funcional registra 31 escolhas explícitas (F01–F31) e mantém F32–F35 pendentes. Este resumo destaca os impactos arquiteturais; a tabela completa e as regras de interpretação estão em [qt-frontend-functional-model.md](qt-frontend-functional-model.md), seção 14.
+
+- **Stop versus Fechar ROM (F01=C):** são comandos distintos. Stop termina a execução, mantém mídia e sessão carregadas em estado retomável; Fechar ROM encerra a sessão e descarrega a mídia. A máquina de estados precisa representar READY com mídia carregada depois de Stop.
+- **Reiniciar runtime (F02=B):** operação separada de Reset físico. Preserva a mídia; exige contrato de reconstrução/reinicialização, persistência de SRAM pendente, recuperação de falhas e ownership PyO3/Rust.
+- **Reset físico (F03=A) e região (F31=C):** reset mantém a sessão; alteração regional é aplicada somente após Reset. Validar se a infraestrutura atual consegue reconstruir componentes dependentes de região sem estado inconsistente.
+- **Play/Pause (F04=A):** Play inicia ou retoma; Pause suspende.
+- **Pacing (F05=B, F06=A, F07=C):** opções de velocidade 0,5x/1x/2x/ilimitada; Fast Forward é execução máxima sem sincronização com monitor; perfis de precisão, baixa latência e desempenho permanecem políticas do host. Não alterar clocks nominais do hardware.
+- **Mídia e navegação (F08=A, F09=B, F10=D, F11=C):** histórico global de 10 itens com sistema+caminho; remover automaticamente itens indisponíveis; tela inicial configurável; troca de sistema exige confirmação quando houver sessão ativa.
+- **Boot (F12=A, F13=C, F14=C):** permitir BIOS-only com firmware válido e suporte; seleção automática com override manual; boot sem BIOS quando o sistema/runtime suportar explicitamente.
+- **Host capabilities (F15–F18, F20–F21):** seleção automática por padrão, controles manuais, hotplug e exposição do backend/valores efetivos. Capacidades precisam ser descobertas e reportadas; preferências selecionadas não provam inicialização.
+- **Vídeo (F19=A):** manter proporção original e integer scaling como opções aprovadas; reconciliar opções já existentes sem descartar configurações silenciosamente.
+- **Áudio (F22=B):** mostrar buffer, latência estimada e underruns; não rotular estimativa como medição ponta a ponta.
+- **Input (F23=B, F24=C, F25=C, F26=C):** separar dispositivo físico, periférico lógico e mapeamento; hotplug preserva perfis; catálogo contextual por sistema, incluindo periféricos especiais previstos sem declarar suporte ainda não validado.
+- **Persistência (F27=A, F28=A, F29=B):** SRAM com salvamento automático quando alterada e em encerramentos seguros; 10 slots de Save State como alvo, condicionados à serialização determinística; identificação por hash, sistema, região e versão do emulador.
+- **Perfil regional (F30=B):** distinguir região comercial, padrão de vídeo e perfil de hardware; não foi escolhida revisão de hardware/BIOS como dimensão obrigatória de UI.
+
+### 12.1 Ajustes obrigatórios no modelo de estado
+
+A máquina de estados da seção 3 deve acomodar Stop sem descarregar mídia. Portanto, READY não pode ser interpretado como “sem ROM”: é necessário distinguir sessão pronta com mídia carregada, BIOS-only e sessão encerrada. A representação recomendada é manter dimensões ortogonais:
+- lifecycle da sessão: CLOSED, READY, RUNNING, PAUSED, STOPPING, ERROR;
+- tipo/estado da mídia: NONE, CARTRIDGE_LOADED, BIOS_ONLY;
+- estado de execução: READY/STOPPED, RUNNING ou PAUSED (ou enum equivalente claramente definido).
+
+A transição Stop deve resultar em sessão pronta/parada com mídia preservada; Fechar ROM resulta em CLOSED + NONE. Troca de sistema com sessão ativa requer confirmação e só ocorre após encerramento seguro. O contrato de Restart Runtime deve preservar a identidade da mídia e não ser confundido com Reset físico.
+
+### 12.2 Decisões ainda pendentes
+
+- **F32:** estratégia de migração das preferências atuais.
+- **F33:** manter Debug, evoluir para diagnóstico geral ou separar os dois.
+- **F34:** nível de detalhe do relatório de backend.
+- **F35:** restaurar configurações globalmente, por categoria ou ambos.
+
+Não inferir nem aplicar as sugestões anteriores para essas flags. O inventário completo da Fase A deve determinar quais componentes e contratos já existem antes de definir extrações ou implementação.
+
+**Estado:** modelagem atualizada com decisões funcionais parciais. Sem alterações em código executável e sem validação de runtime.
