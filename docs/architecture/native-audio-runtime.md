@@ -74,7 +74,7 @@ O crate sega-audio-output é a camada de dispositivo do host. Consome blocos já
 - **Fila:** limitada, com política explícita de overflow/underrun e métricas separadas.
 - **Shutdown:** parar produção, sinalizar worker, liberar buffers após o backend deixar de usá-los e aguardar término sem deadlock.
 
-A saída já tem backends Rust WASAPI/XAudio2 e filas limitadas. Isso não significa que o pipeline completo esteja migrado: o caminho atual ainda drena amostras, invoca resampler e encaminha PCM por Python/PyO3.
+A saída possui backends Rust WASAPI/XAudio2 e filas limitadas. A sessão DSP/resampler agora reside em native/audio_runtime/src/session.rs, atrás do contrato PcmSink, sem dependência de PyO3 ou APIs do host. As classes PyO3 antigas para resampler, escrita PCM e drenagem de amostras foram removidas. O adaptador Rust da extensão instancia o sink WASAPI/XAudio2 e entrega amostras nativas à sessão; nenhum buffer PCM é exportado para Python.
 
 ## 4. Fronteira PyO3 e Qt
 
@@ -112,8 +112,8 @@ Esse estado é inventário, não aprovação arquitetural. O caminho PCM via Pyt
 - Preservar VGM/diagnóstico como fluxos separados; não usar gravação como transporte de áudio.
 
 ### Fase C — remoção do caminho Python
-- Remover NativePcmResampler, drain_audio_pcm, drain_audio_samples e write_pcm da API Python ativa quando não houver consumidores legítimos.
-- Remover PcmResampler/NativeAudioOutput Python do caminho ativo e ajustar testes/UI.
+- [x] Remover NativePcmResampler, drain_audio_pcm, drain_audio_samples e descarte PCM da API PyO3.
+- [x] Remover as fachadas Python de resampling e escrita PCM; testes do pipeline migrados para Rust.
 - Reconfiguração de volume/backend deve ocorrer por comandos de sessão Rust, com rollback/fallback definido.
 
 ### Fase D — runtime independente da UI
@@ -151,17 +151,18 @@ Esse estado é inventário, não aprovação arquitetural. O caminho PCM via Pyt
 - Rust rtrb: https://docs.rs/rtrb/
 - Versões efetivas das crates e workflows do SHA candidato prevalecem sobre exemplos externos.
 
-## 9. Estado da implementação na PR #299
+## 9. Estado da implementação na atualização v0.1.1
 
-**Candidato:** branch migration/native-audio-runtime; referência de código atualizada durante esta fatia em 2026-10-31.
+**Candidato:** branch feat/rust-owned-audio-runtime, derivado da integração Qt/áudio; versão de pacote 0.1.1.
 
-### IMPLEMENTED — primeira fatia da sessão nativa
+### IMPLEMENTED — sessão Rust independente de PyO3
 
-- NativeAudioSession em Rust possui resampler e backend WASAPI/XAudio2.
-- NativeSG1000Machine e NativeSMSMachine possuem e controlam a sessão.
-- O caminho Qt ativo configura a sessão por comandos coarse-grained e não chama drain_audio_pcm nem write_pcm por frame.
-- Ao concluir run_frame, Rust drena as amostras internamente e as encaminha à sessão.
+- NativeAudioSession<S: PcmSink> está no crate puro sega-audio-runtime; não importa PyO3, Python ou backend específico.
+- Os adaptadores Rust SG-1000/SMS conectam a sessão ao sink WASAPI/XAudio2 nativo.
+- O caminho Qt não tem API para drenar amostras/PCM nem para chamar write_pcm; apenas configura, fecha e consulta métricas.
+- Ao concluir run_frame, o adaptador Rust drena as amostras internamente e as encaminha à sessão.
 - Falha de escrita desativa a sessão e é reportada ao frontend sem interromper a emulação.
+- Testes headless Rust validam o pipeline da sessão com sink determinístico e integração de geração PSG dos dois sistemas.
 - Reset, troca de ROM e reconfiguração fecham/recriam a sessão.
 
 ### Estado de validação no candidato aad95bd26b7e90a38b250ef865fafe51f2aa1c8f
@@ -171,7 +172,7 @@ Esse estado é inventário, não aprovação arquitetural. O caminho PCM via Pyt
 - Windows Rust integration: IN_PROGRESS no workflow https://github.com/leonardo201800478/sega-emulator/actions/runs/41158473737. Rust formatting, formatação do crate audio_output, Clippy e testes do crate audio_output PASS; Clippy do z80_core está em execução; testes Rust do z80_core, build Maturin Windows e integração ainda pendentes.
 - LONG_PASS: NOT RUN.
 - TEMPORAL_PASS: NOT RUN; a execução ainda é em lotes/frame e não constitui produção de áudio desacoplada do timer Qt.
-- A API PyO3 antiga de drenagem PCM e as fachadas Python de resampler/saída ainda existem para compatibilidade/testes. A remoção é a próxima fase, após validar a sessão nativa.
+- A drenagem PCM, conversão PCM e escrita direta de PCM por PyO3 foram removidas; as fachadas Python audio_output.py e wasapi_audio.py foram removidas. O frontend ainda chama run_frame() pelo pacing Qt; esse acoplamento temporal é uma fase separada e continua pendente.
 - WASAPI/XAudio2 em hardware físico, latência ponta a ponta, underruns sob carga e reconexão: INTEGRATION_PENDING.
 
-Não classificar a migração completa nem remover compatibilidade até que os testes de integração do candidato exato passem.
+Não classificar a migração completa: a autonomia do scheduler frente ao timer Qt e a validação física Windows ainda estão pendentes.
