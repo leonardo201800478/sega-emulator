@@ -14,9 +14,9 @@ A arquitetura normativa e a matriz de hardware estão em [Runtime de áudio nati
 
 1. [x] Inventário inicial de código, crates, fachadas PyO3, frontend e workflows.
 2. [x] Decisão de backend e contrato arquitetural documentados.
-3. [ ] Criar sessão de áudio Rust que possua resampler/mixer e backend.
-4. [ ] Integrar sessão aos runtimes SG-1000 e SMS sem transportar PCM por PyO3.
-5. [ ] Remover APIs Python de drenagem, conversão e escrita PCM do caminho ativo.
+3. [x] Criar sessão de áudio Rust que possua resampler e backend (primeira fatia; mixer multi-fonte ainda pendente).
+4. [x] Integrar sessão aos runtimes SG-1000 e SMS; o caminho Qt ativo não transporta PCM por PyO3.
+5. [ ] Remover APIs PyO3 antigas de drenagem/conversão e fachadas Python não utilizadas.
 6. [ ] Desacoplar a produção de áudio do timer Qt sem criar uma segunda execução da máquina.
 7. [ ] Validar Rust, Maturin, CI Windows, integração e hardware físico.
 
@@ -31,6 +31,6 @@ A arquitetura normativa e a matriz de hardware estão em [Runtime de áudio nati
 
 ## Estado
 
-**DOCUMENTATION_UPDATED / IMPLEMENTATION_PENDING**
+**IMPLEMENTED (primeira fatia) / INTEGRATION_PENDING (migração completa)**
 
-A atualização documental não significa que a migração de código foi implementada. Os estados IMPLEMENTED, QUICK_PASS, SHORT_PASS, LONG_PASS, INTEGRATION_PENDING e TEMPORAL_PASS devem ser registrados separadamente, conforme evidência.
+A sessão Rust está integrada ao SG-1000/SMS e o Qt não transporta PCM no caminho ativo. As APIs legadas ainda existem. Os workflows no SHA candidato anterior pararam no Ruff format; lint/build/test ainda não foram executados. Registrar IMPLEMENTED, QUICK_PASS, SHORT_PASS, LONG_PASS, INTEGRATION_PENDING e TEMPORAL_PASS separadamente, conforme evidência.
