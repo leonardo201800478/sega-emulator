@@ -98,15 +98,7 @@ class RustControllerInput:
             for player in (1, 2)
         }
         if self._native is None:
-            masks = keyboard_masks
-            for player in (1, 2):
-                turbo = self._config.players[player].turbo_buttons
-                if frame_number % 4 >= 2:
-                    if turbo.get("button1", False):
-                        masks[player] &= ~(1 << 4)
-                    if turbo.get("button2", False):
-                        masks[player] &= ~(1 << 5)
-            return masks
+            return keyboard_masks
         player1, player2 = self._native.poll_actions(
             frame_number,
             keyboard_masks[1],
