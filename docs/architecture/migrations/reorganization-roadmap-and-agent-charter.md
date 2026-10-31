@@ -315,7 +315,7 @@ Essa sequência é uma ordem de revisão e preparação, não uma autorização 
 ### Baseline
 
 - HEAD de `main` na captura F0: `e2eff776ec248674da07d32ff480b70d9db49a1f`.
-- HEAD documental atual após registrar F0/F1: `cee6bbdd442305262042daa3aa78703a42693348` (a atualização seguinte deve consultar novamente o remoto).
+- A branch `main` recebeu commits exclusivamente documentais para registrar F0/F1; consultar novamente o SHA remoto antes de qualquer implementação.
 - Nenhuma alteração de runtime foi feita; nenhuma PR foi mergeada.
 - Os commits desta rodada são exclusivamente Markdown. Os workflows filtrados não produziram execução para os commits documentais atuais; não declarar CI PASS para o HEAD atual.
 - Testes/build locais: **NOT RUN**, pois a sincronização Git falhou por erro de resolução DNS de `github.com`.
