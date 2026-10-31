@@ -167,4 +167,4 @@ Para validar o workspace principal, usar os comandos Rust registrados acima e ve
 
 ## Runtime de áudio — decisão atual
 
-Os crates audio_runtime e audio_output devem evoluir para uma sessão Rust que conecte os dispositivos de áudio emulados ao mixer/resampler e aos backends do host sem transportar PCM por Python. WASAPI Shared é o default; XAudio2 é a alternativa existente. A matriz de hardware, responsabilidades e fases de migração estão em [Runtime de áudio nativo](native-audio-runtime.md). A documentação não declara que a sessão completa já esteja implementada.
+Os crates audio_runtime e audio_output já são conectados por NativeAudioSession no adaptador nativo: a sessão possui resampler e backend WASAPI/XAudio2 e é acionada pelo wrapper da máquina após run_frame. A primeira fatia ainda usa o PSG e resampler mono existentes; mixer multi-fonte/estéreo, desacoplamento do timer Qt e remoção das APIs PyO3 antigas permanecem pendentes. WASAPI Shared é o default; XAudio2 é a alternativa existente. Ver [Runtime de áudio nativo](native-audio-runtime.md).
