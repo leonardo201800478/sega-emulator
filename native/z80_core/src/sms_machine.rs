@@ -52,8 +52,8 @@ enum SmsMachineBuildError {
     Machine(String),
 }
 
-/// Thin Python boundary; the SMS machine, PSG and sample generation stay in Rust.
-#[pyclass(module = "sega_z80_core")]
+/// Thin, thread-affine Python boundary; Qt creates and accesses it on one thread.
+#[pyclass(unsendable, module = "sega_z80_core")]
 pub struct NativeSMSMachine {
     machine: SmsMachine,
     total_instructions: u64,
@@ -334,6 +334,8 @@ mod tests {
         let japan_machine = NativeSMSMachine {
             machine: build_sms_machine(vec![0; 16], false, Some("japan"), None).unwrap(),
             total_instructions: 0,
+            audio_session: None,
+            audio_output_error: None,
         };
         assert_eq!(japan_machine.psg_clock_hz(), 3_579_545);
     }
@@ -345,6 +347,8 @@ mod tests {
         let machine = NativeSMSMachine {
             machine: build_sms_machine(vec![0xC3; 0x4000], false, Some("usa"), Some(bios)).unwrap(),
             total_instructions: 0,
+            audio_session: None,
+            audio_output_error: None,
         };
         assert!(machine.bios_enabled());
         assert_eq!(machine.read_memory(0), 0x3E);
