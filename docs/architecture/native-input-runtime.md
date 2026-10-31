@@ -28,7 +28,7 @@ O crate não depende de SG-1000, Master System, Game Gear, Mega Drive, Sega CD, 
 ## Estratégia Windows
 
 - A primeira implementação física é Sdl3Backend, em Rust, carregando a ABI C do SDL3 dinamicamente no Windows. Ela usa a Gamepad API para controles mapeados e a Joystick API para eixos, botões e hats brutos.
-- O SDL3 é inicializado e consultado na thread da Qt, na fronteira de input antes do avanço do frame. O backend mantém handles, atualiza estados e detecta hotplug sem chamadas por instrução.
+- O SDL3 é inicializado e consultado na thread da Qt, na fronteira de input antes do avanço do frame. O backend atualiza snapshots com SDL_UpdateJoysticks/SDL_UpdateGamepads, sem chamar SDL_PumpEvents para não disputar o loop de mensagens do Qt. Mantém handles e detecta hotplug sem chamadas por instrução.
 - Instale o runtime oficial com scripts/install_sdl3_runtime.ps1. O script fixa SDL 3.4.18 e valida SHA-256 antes de copiar SDL3.dll para a raiz local; o binário não é versionado. SEGA_EMULATOR_SDL3_DLL permite indicar outro caminho.
 - NativeInputManager expõe leituras semânticas pela extensão PyO3. RustControllerInput é apenas uma ponte de UI: envia perfis e recebe ações; não enumera, consulta ou mapeia dispositivos.
 - O backend SDL3 atual atende inicialmente Windows. GameInput permanece candidato a backend complementar/futuro, sujeito a spike de ABI e validação; não está implementado nesta etapa.
