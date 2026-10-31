@@ -54,3 +54,6 @@ z80-audit-results*/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Local SDL3 runtime used by the native Rust input backend
+SDL3.dll

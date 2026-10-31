@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "native/sms_core/**"
+      - "native/input_runtime/**"
       - "native/z80_bus/**"
       - "Cargo.toml"
       - "Cargo.lock"

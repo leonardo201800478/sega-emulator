@@ -1,0 +1,9 @@
+[package]
+name = "sega-input-runtime"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "sega_input_runtime"
+path = "src/lib.rs"

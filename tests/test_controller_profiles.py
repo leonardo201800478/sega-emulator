@@ -7,9 +7,6 @@ import pytest
 from sega_emulator.frontend.controller_profiles import (
     ACTION_BITS,
     ControllerInputConfig,
-    PlayerInputProfile,
-    apply_turbo,
-    joystick_value,
 )
 
 
@@ -25,21 +22,26 @@ def test_invalid_profile_schema_is_rejected() -> None:
         ControllerInputConfig.from_json('{"schema_version":99,"players":{}}')
 
 
-def test_player_profile_defaults_and_turbo_are_deterministic() -> None:
-    profile = PlayerInputProfile()
-    assert profile.turbo_buttons == {"button1": False, "button2": False}
-    actions = {"button1", "button2"}
-    assert apply_turbo(actions, {"button1": True}, 0) == actions
-    assert "button1" not in apply_turbo(actions, {"button1": True}, 2)
-    assert "button2" in apply_turbo(actions, {"button1": True}, 2)
+def test_turbo_preferences_are_configuration_only_and_round_trip() -> None:
+    config = ControllerInputConfig()
+    config.players[1].turbo_buttons = {"button1": True, "button2": False}
+    decoded = ControllerInputConfig.from_json(config.to_json())
+
+    assert decoded.players[1].turbo_buttons == {
+        "button1": True,
+        "button2": False,
+    }
 
 
-def test_joystick_active_low_bits_match_sg1000_input_contract() -> None:
-    assert ACTION_BITS["up"] == 0
-    assert joystick_value(set()) == 0xFF
-    assert joystick_value({"up", "button1"}) == 0xEE
-    with pytest.raises(ValueError, match="Ações desconhecidas"):
-        joystick_value({"unknown"})
+def test_sg1000_port_action_order_is_stable() -> None:
+    assert ACTION_BITS == {
+        "up": 0,
+        "down": 1,
+        "left": 2,
+        "right": 3,
+        "button1": 4,
+        "button2": 5,
+    }
 
 
 def test_hold_binding_is_a_dedicated_action_outside_controller_port_bits() -> None:
