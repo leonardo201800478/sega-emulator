@@ -121,7 +121,7 @@ Pontos que exigem decisão/validação antes da integração:
 1. `DeviceReading.timestamp_ns` é monotônico do host; deve ser convertido/associado à timeline da máquina na fronteira, sem permitir que o relógio do host avance a emulação.
 2. `NativeInputManager` é `#[pyclass(unsendable)]` e `poll_actions` é chamado pela fachada Python na fronteira de input do frame. Não há polling Python das APIs físicas, mas existe uma chamada PyO3 por frame; medir custo e latência e avaliar como o scheduler consumirá eventos ordenados.
 3. `set_backend_preference` atualmente valida `auto`/`sdl3`, mas não altera seleção de backend. Corrigir o contrato ou não expor uma preferência que ainda não tem efeito.
-4. SDL3 é o único backend físico implementado nesta fatia. A matriz de controles físicos, hotplug real e latência device-to-runtime/button-to-photon permanece **NOT RUN**.
+4. SDL3 é o único backend físico implementado nesta fatia. A matriz de controles físicos, hotplug real e latência device-to-runtime/button-to-photon permanece **NOT RUN**.\n5. O backend mantém um único contador `sequence` e o incrementa ao iterar `HashMap::values()` em `poll_into`. Isso não implementa sequência por dispositivo e a ordem entre dispositivos pode variar entre processos. Antes de usar essas leituras como eventos temporais, definir sequência por dispositivo e um desempate total determinístico (por exemplo timestamp, device id e sequência), sem depender da ordem de iteração do HashMap.
 
 A #300 é documentação anterior, não deve originar um segundo runtime. Seus critérios (perfis, dispositivos genéricos, hotplug, compatibilidade e latência) permanecem requisitos de aceitação para a #313.
 
