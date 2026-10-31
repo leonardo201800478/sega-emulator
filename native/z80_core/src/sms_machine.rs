@@ -65,11 +65,10 @@ impl NativeSMSMachine {
     fn pump_audio_output(&mut self) {
         if self.audio_session.is_some() {
             let samples = self.machine.drain_audio_samples(None);
-            let result = self
-                .audio_session
-                .as_mut()
-                .expect("audio session was checked above")
-                .process_samples(&samples);
+            let result = match self.audio_session.as_mut() {
+                Some(session) => session.process_samples(&samples),
+                None => return,
+            };
             if let Err(error) = result {
                 self.audio_session = None;
                 self.audio_output_error = Some(error);
@@ -323,6 +322,7 @@ mod tests {
             machine: build_sms_machine(vec![0; 16], false, Some("europe"), None).unwrap(),
             total_instructions: 0,
             audio_session: None,
+            audio_output_error: None,
         };
         assert_eq!(pal_machine.psg_clock_hz(), 3_546_895);
 
