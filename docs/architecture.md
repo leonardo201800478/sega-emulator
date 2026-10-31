@@ -153,3 +153,16 @@ As decisões para o motor Z80 compartilhado, scheduler temporal e fronteiras do 
 ### Auditoria de maturidade Z80 SMS × SG-1000
 
 A comparação confirmou que o SMS é o baseline semântico e de validação mais maduro, embora o código executável atual dos dois cores seja idêntico. Consulte a [auditoria comparativa Z80](architecture/migrations/sms-z80-maturity-audit-2026-10-31.md) e a [ADR-0001 atualizada](architecture/adr/0001-shared-z80-engine.md).
+
+
+## Diretrizes normativas consolidadas
+
+- [Escopo do projeto](project-scope.md) define plataformas, prioridades, limites e critérios globais.
+- [Roadmap SG-1000 + SMS](roadmaps/sg1000-sms-consolidation-roadmap.md) define a ordem de execução atual e os critérios de saída do marco prioritário.
+- [Diretriz de autoridade temporal Rust](architecture/rust-temporal-authority.md) determina que Rust é o único proprietário do avanço temporal emulado.
+- [Diretriz Rust-only de áudio](architecture/audio-rust-only-directive.md) determina que chips, geração, processamento e pipeline digital de áudio pertencem ao runtime Rust.
+- [Escopo de periféricos e entrada](architecture/input-peripherals-scope.md) registra decisões de periféricos e limitações dos backends host.
+- [Modelo funcional Qt](architecture/qt-frontend-functional-model.md) e [arquitetura-alvo Qt](architecture/qt-frontend-target-architecture.md) descrevem produto e fronteiras da aplicação; são especificações, não prova de implementação.
+- [Coprocessadores especializados](architecture/specialized-coprocessors.md) é uma diretriz futura, condicionada ao marco Mega Drive.
+
+Em caso de divergência, a precedência é: contratos e comportamento efetivamente implementados e validados no código; decisões arquiteturais normativas deste repositório; documentos especializados; inventários/auditorias datados (fotografias históricas); propostas de implementação. Nenhuma proposta ou PR aberta prevalece sobre código integrado sem revisão e merge.
