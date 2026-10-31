@@ -204,6 +204,32 @@ O projeto é independente e não é afiliado à SEGA. SEGA e SG-1000 são marcas
 - [Autoridade temporal exclusiva em Rust](docs/architecture/rust-temporal-authority.md)
 - [Arquitetura de coprocessadores especializados](docs/architecture/specialized-coprocessors.md)
 
+
+- [Marco de qualidade do SG-1000 — áudio, vídeo, sincronismo e primeiro release](docs/milestones/sg1000-audio-video-milestone-2026-10-26.md)
+- [Notas preliminares do release v0.1.0](docs/releases/v0.1.0.md)
+- [Atualização v0.1.1 — sessão de áudio Rust-only](docs/releases/v0.1.1.md)
+- [Arquitetura multi-sistema e política Rust-first](docs/architecture.md)
+- [Reorganização Rust-first e núcleo Z80 compartilhado](docs/architecture/migrations/shared-z80-runtime-reorganization.md)
+- [Cronograma da reorganização e charter dos agentes](docs/architecture/migrations/reorganization-roadmap-and-agent-charter.md)
+- [Contrato global de drivers de entrada, áudio e vídeo](docs/architecture/host-driver-apis.md)
+- [Arquitetura dos crates Rust nativos, dependências e limites de CI](docs/architecture/native-rust-crates.md)
+- [Backends de apresentação de vídeo e validação Vulkan](docs/architecture/vulkan-presentation-qt-quick.md)
+- [Instruções para agentes de código](AGENTS.md)
+- [Política permanente de desenvolvimento, fidelidade e entrega](docs/development-and-validation-policy.md)
+- [Prompt de orientações do projeto (ChatGPT; menos de 8.000 caracteres)](docs/project-instructions-prompt.md)
+- [ADR 0007 — Política de desenvolvimento Rust-first](docs/adr/0007-rust-first-development-policy.md)
+- [Pesquisa de compatibilidade de hardware Sega](docs/research/hardware-compatibility-roadmap-2026-10.md)
+- [Notas de hardware SG-1000](docs/hardware/sg1000.md)
+- [Modelo e plano de fidelidade do VDP TMS9918A](docs/hardware/tms9918a-model.md)
+- [Backlog consolidado de validação da TMS9918A](docs/hardware/tms9918a-validation-backlog.md)
+- [Memória, portas e barramentos SG-1000](docs/hardware/sg1000-memory-buses.md)
+- [Modelo digital do PSG SN76489AN](docs/hardware/sn76489an.md)
+- [Catálogo prioritário de compatibilidade SG-1000](docs/hardware/sg1000-game-compatibility.md)
+- [Marco do primeiro jogo executável](docs/sg1000-first-playable.md)
+- [Auditoria de cobertura da CPU Z80](docs/z80-coverage.md)
+- [Auditoria técnica da CPU Z80](docs/z80-code-audit-2026-10-22.md)
+- [Plano de resolução das lacunas Z80](docs/z80-gap-resolution-plan.md)
+
 ## Limitações conhecidas e próximos passos
 
 1. Investigar os pequenos engasgos e o possível descompasso que aparecem após sessões longas, medindo fila PCM, underruns/overflows, duração dos frames e deriva temporal antes de alterar o scheduler.
