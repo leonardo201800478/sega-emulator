@@ -314,6 +314,6 @@ mod audio_session_tests {
     #[test]
     fn rejects_unknown_backend_without_opening_a_device() {
         let result = NativeAudioSession::new("unknown", 48_000, 512, 4, 100, 0);
-        assert!(result.unwrap_err().contains("unsupported native audio backend"));
+        assert!(result.err().expect("unknown backend must fail").contains("unsupported native audio backend"));
     }
 }
