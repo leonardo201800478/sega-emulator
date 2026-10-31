@@ -221,20 +221,22 @@ mod windows {
                 product_id: (self.product_id != 0).then_some(self.product_id),
                 physical_key: None,
                 capabilities: DeviceCapabilities {
-                    button_count: (self.raw_buttons
-                        + if self.gamepad.is_null() {
+                    button_count: self
+                        .raw_buttons
+                        .max(if self.gamepad.is_null() {
                             0
                         } else {
                             GAMEPAD_BUTTON_COUNT
                         })
-                    .min(MAX_BUTTONS) as u16,
-                    axis_count: (self.raw_axes
-                        + if self.gamepad.is_null() {
+                        .min(MAX_BUTTONS) as u16,
+                    axis_count: self
+                        .raw_axes
+                        .max(if self.gamepad.is_null() {
                             0
                         } else {
                             GAMEPAD_AXIS_COUNT
                         })
-                    .min(MAX_AXES) as u8,
+                        .min(MAX_AXES) as u8,
                     hat_count: self.raw_hats.min(MAX_HATS) as u8,
                     rumble: false,
                     force_feedback: false,
@@ -363,7 +365,6 @@ mod windows {
                         2 => DeviceClass::Wheel,
                         3 | 8 => DeviceClass::ArcadeStick,
                         4 => DeviceClass::FlightStick,
-                        9 => DeviceClass::Pedals,
                         _ => DeviceClass::Joystick,
                     }
                 };
