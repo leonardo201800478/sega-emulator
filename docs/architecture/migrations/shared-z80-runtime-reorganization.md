@@ -312,3 +312,8 @@ Implicações arquiteturais sustentadas pelos manuais genéricos ZiLOG:
 5. INT/NMI, acknowledge e HALT precisam manter fronteiras temporais compatíveis com os ciclos em que são reconhecidos; a semântica e o instante devem ser testados separadamente.
 
 Esses manuais descrevem a família Z80 genérica. Eles não definem, por si só, mapas de memória, clocks, prioridades de eventos, divisores PSG/VDP ou arbitragem específica de SG-1000, SMS, Game Gear ou Mega Drive. Esses detalhes exigem fontes técnicas da plataforma e evidência independente. O contrato compartilhado não deve incorporar números ou prioridades presumidos.
+
+
+## 12. Cronograma e governança de agentes
+
+O cronograma por fases, papéis dos agentes, regra de concorrência, gates independentes e Definition of Done estão em [Roadmap de reorganização e charter dos agentes](reorganization-roadmap-and-agent-charter.md). O plano limita a três agentes simultâneos: três papéis de execução e um supervisor independente ativado em janelas de revisão, pausando temporariamente um agente de execução.
