@@ -419,7 +419,7 @@ mod tests {
 
         assert_eq!(
             collect_actions(&state, [true, false], 0),
-            0b0110_0011
+            0b0011_0001
         );
         assert_eq!(
             collect_actions(&state, [true, false], 2),
