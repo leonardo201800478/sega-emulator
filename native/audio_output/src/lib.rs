@@ -319,16 +319,29 @@ fn run_wasapi_worker(
             let selected_period = audio_client
                 .get_shared_mode_engine_period(&format)
                 .ok()
-                .and_then(|periods| select_shared_period(requested_frames, periods.min, periods.max, periods.fundamental));
+                .and_then(|periods| {
+                    select_shared_period(
+                        requested_frames,
+                        periods.min,
+                        periods.max,
+                        periods.fundamental,
+                    )
+                });
             let initialized_with_client3 = selected_period.is_some_and(|period| {
                 audio_client
                     .initialize_shared_audio_stream(&format, TimingMode::Events, period)
                     .is_ok()
             });
             if !initialized_with_client3 {
-                let requested_period = (buffer_size as u64 * 10_000_000 / sample_rate as u64) as i64;
-                let mode = StreamMode::EventsShared { autoconvert: true, buffer_duration_hns: requested_period.max(default_period) };
-                audio_client.initialize_client(&format, &Direction::Render, &mode).map_err(|error| error.to_string())?;
+                let requested_period =
+                    (buffer_size as u64 * 10_000_000 / sample_rate as u64) as i64;
+                let mode = StreamMode::EventsShared {
+                    autoconvert: true,
+                    buffer_duration_hns: requested_period.max(default_period),
+                };
+                audio_client
+                    .initialize_client(&format, &Direction::Render, &mode)
+                    .map_err(|error| error.to_string())?;
             }
             let event = audio_client
                 .set_get_eventhandle()
