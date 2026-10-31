@@ -34,8 +34,7 @@ fn render(samples: &[f64]) -> Vec<Vec<u8>> {
         .process_samples(samples)
         .expect("process native samples");
     session.close();
-    let blocks = capture.0.lock().expect("recording sink lock").clone();
-    blocks
+    capture.0.lock().expect("recording sink lock").clone()
 }
 
 #[test]
