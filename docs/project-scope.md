@@ -51,7 +51,7 @@ Rust é responsável por todo o estado e execução da máquina:
 
 - CPUs, ALUs e processadores auxiliares;
 - memória, barramentos, mappers e decodificação de endereços;
-- VDPs, raster, sprites, DMA e composição de vídeo;
+- VDPs, raster, sprites, DMA, composição e pipeline de vídeo/renderização;
 - PSG, FM, PCM, CDDA, PWM e pipeline digital de áudio;
 - I/O, interrupções, periféricos e protocolos de hardware;
 - clocks, T-states, acessos, waits, arbitragem e scheduler;
@@ -61,7 +61,7 @@ Rust é responsável por todo o estado e execução da máquina:
 
 Python fica restrito a:
 
-- frontend Qt/PySide6;
+- frontend Qt/PySide6, incluindo apresentação da superfície de vídeo e controles de configuração do jogador;
 - carregamento e seleção de ROMs, discos, BIOS e perfis;
 - configuração, logs e diagnósticos da aplicação;
 - backends de host e integração de dispositivos;
@@ -215,7 +215,15 @@ Cada núcleo deve preservar as regras específicas do hardware:
 - regras de sobreposição de planos, sprites e camadas;
 - efeitos de alterações de registradores durante o raster.
 
-Não desabilitar limites físicos para corrigir defeitos visuais. Modos de compatibilidade devem ser explicitamente separados do modo fiel.
+**Política obrigatória de limite de sprites por linha:**
+
+- O comportamento padrão de todo VDP deve aplicar o limite real de sprites por linha do console, modelo e revisão emulados. O limite deve estar habilitado desde a inicialização, sem depender de uma preferência do jogador.
+- A Qt deve disponibilizar uma opção explícita para desativar esse limite em um modo de renderização aprimorada. A opção deve ser identificada como não fiel ao hardware, persistida na configuração do emulador e aplicada de forma controlada, sem alterar silenciosamente o perfil físico da máquina.
+- A implementação deve separar a avaliação de sprites e os efeitos observáveis pelo software (status, overflow, colisões e índices) da política de apresentação aprimorada. Desativar a limitação visual não pode apagar, falsificar ou reescrever flags e efeitos de hardware que o jogo consegue observar, salvo quando um modo alternativo documentado reproduzir deliberadamente outra semântica.
+- O padrão fiel continua sendo a referência para testes, comparações com hardware/oráculos e validação. Testes devem cobrir limite habilitado e modo aprimorado, garantindo que a opção não corrompa memória, estado do VDP, scheduler ou determinismo.
+- Os limites são específicos de cada VDP; não criar um valor universal nem presumir que todos os consoles compartilham a mesma regra.
+
+Não desabilitar limites físicos por padrão nem para corrigir defeitos visuais. Modos de compatibilidade/aprimoramento devem ser explicitamente separados do modo fiel.
 
 Manter representação digital nativa de cores/paletas até a etapa apropriada de composição. Converter para RGB de apresentação somente na fronteira de saída, preservando precisão suficiente para composição e diagnósticos. Efeitos analógicos de monitor/encoder são outra camada e não devem ser confundidos com lógica digital do VDP.
 
@@ -224,6 +232,29 @@ Manter representação digital nativa de cores/paletas até a etapa apropriada d
 O Sega CD usa o VDP do Mega Drive; seus recursos de processamento de imagem e transferência devem ser modelados como caminhos auxiliares reais, não como um segundo VDP convencional. Word RAM, Cell Arranger, ASICs e DMA devem respeitar ownership, latência, contenção e o destino de memória real.
 
 No 32X, a imagem do VDP do Mega Drive e os framebuffers do 32X precisam ser compostos segundo as regras de hardware. Não compor dois quadros RGB completos no frontend como substituto do compositor. Troca de framebuffer, prioridade, transparência, overwrite, formato de pixel e sincronização devem ser eventos do runtime Rust.
+
+### 5.7 Pipeline de vídeo Rust e backends de rasterização
+
+Todo o pipeline de vídeo do emulador — lógica dos VDPs, raster, avaliação de sprites, geração de pixels, composição entre camadas/sistemas, conversão de formato, shaders e preparação da superfície de apresentação — pertence ao runtime Rust. Não haverá implementação paralela de vídeo em Python, nem controle Python de frames, buffers, rasterização, shaders, sincronização ou seleção de backend.
+
+A arquitetura oferecerá quatro caminhos de rasterização/apresentação:
+
+1. **Raster (software):** backend de referência e fallback de compatibilidade, executado em Rust e sem exigir GPU. Deve preservar determinismo e servir como caminho de diagnóstico e comparação.
+2. **Direct3D 11:** backend gráfico para hardware e sistemas compatíveis.
+3. **Direct3D 12:** backend gráfico moderno, sujeito à compatibilidade do sistema, driver e dispositivo.
+4. **Vulkan:** backend gráfico multiplataforma, sujeito ao suporte efetivo do sistema, driver e dispositivo.
+
+A seleção automática será o padrão: detectar capacidades reais, compatibilidade, estabilidade conhecida e recursos necessários; escolher o backend mais adequado ao conjunto sistema operacional/GPU/driver; e manter fallback seguro para outro backend suportado ou Raster. Não selecionar apenas pelo nome ou geração da GPU. A Qt deve oferecer seleção manual, opção de voltar ao automático e diagnóstico do backend efetivamente ativo, incluindo motivo de fallback. A troca de backend deve ocorrer em fronteira segura, preservando o estado do emulador e sem avançar ou reiniciar arbitrariamente o tempo emulado.
+
+A separação de responsabilidades é obrigatória:
+
+- **Rust:** dono dos buffers e recursos de vídeo, renderização, shaders, composição, sincronização com a timeline emulada e coordenação de apresentação.
+- **Qt:** interface, preferências do jogador, janela/superfície hospedeira e apresentação do resultado produzido por Rust. A Qt não implementa regras de VDP, não rasteriza conteúdo do console e não se torna autoridade temporal.
+- **Python:** não participa do caminho de vídeo em tempo de execução. Pode apenas encaminhar configurações de alto nível pela fronteira fina já definida, sem callbacks por frame/pixel/evento nem manipulação de buffers.
+
+Recursos avançados devem ser habilitados somente quando o backend, o sistema operacional, o driver e o monitor realmente os suportarem. Shaders e filtros programáveis devem ter disponibilidade condicionada aos recursos gráficos; VRR depende também do caminho de apresentação e da cadeia de display/driver, não apenas da API gráfica. A interface não deve prometer nem expor como funcional um recurso indisponível. O backend Raster deve continuar oferecendo uma saída correta mesmo quando recursos avançados não estiverem disponíveis.
+
+**CUDA/NVIDIA:** CUDA via Rust é uma capacidade auxiliar opcional, não um quinto backend de apresentação nem requisito do emulador. Só poderá ser adotada para workloads identificados por profiling — por exemplo, processamento paralelo pesado ou tarefas de IA auxiliares — quando houver ganho demonstrável e caminho de interoperabilidade seguro. Não delegar a CUDA a semântica do VDP, eventos temporais, flags de hardware ou estado canônico. O resultado precisa manter contratos de determinismo e ter comparação com uma implementação Rust de referência; qualquer variação numérica, não determinismo ou dependência exclusiva de GPU deve ser explicitamente delimitada. A ausência de CUDA nunca pode impedir o boot ou a renderização correta.
 
 ## 6. Autoridade temporal e sincronização A/V
 
@@ -248,7 +279,7 @@ O scheduler pode avançar até o próximo evento observável, mas nunca atravess
 
 Qt/Python não controla T-states, ciclos, scanlines, pixels, áudio ou frame progression. QTimer, sleep, loops FPS ou callbacks Python não avançam a máquina. A GUI pode enviar comandos de ciclo de vida em alto nível (load, pause, resume, reset, stop, step request) e exibir telemetria.
 
-VSync, VRR e clock do dispositivo de áudio regulam a apresentação física. Eles não alteram a timeline lógica do console. Eventos de input do host são normalizados na fronteira, ordenados e aplicados pelo runtime Rust.
+VSync, VRR e clock do dispositivo de áudio regulam a apresentação física. Eles não alteram a timeline lógica do console. A apresentação é coordenada pelo pipeline Rust e pela superfície hospedeira Qt; a Qt não avança frames nem controla temporização de hardware. VRR só deve ser oferecido quando o backend/caminho de apresentação, o sistema, o driver e o display o suportarem. Eventos de input do host são normalizados na fronteira, ordenados e aplicados pelo runtime Rust.
 
 ### 6.3 Eficiência
 
@@ -335,6 +366,9 @@ Não implementar os seis núcleos em paralelo. O SMS é a próxima trilha de cor
 - Não ativar HLE como se fosse firmware original.
 - Não criar scheduler Python, timers de frame ou clocks independentes por dispositivo.
 - Não usar o frontend para compor imagens de hardware que deveriam ser compostas no runtime.
+- Não implementar ou controlar o pipeline de vídeo em Python; a Qt limita-se à interface, configuração e apresentação da saída Rust.
+- Não desabilitar por padrão os limites reais de sprites por linha; o modo aprimorado deve ser opt-in e preservar os efeitos de hardware observáveis.
+- Não tratar CUDA como backend obrigatório de vídeo, nem como substituto da semântica determinística dos dispositivos.
 - Não iniciar implementação do SVP antes da trilha Mega Drive e dos critérios específicos de aceitação, salvo decisão técnica expressa.
 - Não introduzir JIT, paralelismo especulativo ou otimizações não medidas.
 
