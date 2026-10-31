@@ -308,3 +308,77 @@ Permanecem para fechamento formal:
 4. Verificar se os critérios P-0 definidos no documento inicial estão integralmente satisfeitos.
 
 Não declarar TEMPORAL_PASS: o sucesso dos testes de workspace não prova integração de scheduler mestre com barramento, CPU, VDP e áudio em precisão cycle-accurate.
+
+
+---
+
+## 12. Reconciliação remota das PRs concorrentes — atualização 2026-10-31
+
+A branch `main` foi consultada novamente e permanece no SHA `c31e4183b8d0b36d95b4f58582938186417652f8`. A comparação foi realizada usando o merge-base real de cada PR, não apenas a idade informada no campo base.
+
+### 12.1 PR #325 — CI da auditoria
+
+- Head: `f1b085ef22b9fa5d833ab8909461a25b1c33db43`.
+- Base: `c31e4183b8d0b36d95b4f58582938186417652f8`.
+- Workflow run `41246275232`, job `quality`: **SUCCESS**.
+- Etapas concluídas: checkout, toolchains, instalação, formatação, lint, build/instalação da extensão nativa, compileall, pip check, smoke test SMS boot matrix CLI e pytest.
+- A PR continua Draft; o sucesso do CI não fecha os critérios arquiteturais restantes.
+
+### 12.2 PR #313 — implementação input Rust/SDL3
+
+- Head: `1c64734c56413276b27ab0d85d9a8ec6978f3c41`.
+- Merge-base com main: `3cf846d688798080d35f997f6e0d34680372d7e3`.
+- Main avançou 36 commits desde o merge-base; a PR tem 106 commits à frente. O compare retornou estado `diverged`.
+- GitHub informa `mergeable=true`, mas isso não substitui atualização/revisão da base nem os testes no head reconciliado.
+- Comparação por caminho: nenhum dos 36 arquivos alterados em main desde o merge-base coincide com os 36 caminhos alterados pela PR #313. Isso reduz a evidência de conflito textual direto, mas não exclui conflito semântico ou de dependência.
+- Workflows observados no SHA da PR concluíram SUCCESS: CI, Qt Frontend Rebuild Validation, UI and Controller Input Validation, SG-1000 sequencial, Qt Rust SG-1000 integration, SMS Core Fast Validation, Agent Functional Validation, SMS Z80 Platform Validation, Rust SG-1000 Workspace e Agent Integrity/Determinism.
+- A PR contém implementação substancial: crate `native/input_runtime`, backend SDL3 Windows, ponte PyO3/Qt, migração de chamadas de input físico e testes. Limitações declaradas incluem backend Windows inicial, dois slots automáticos, ausência de rumble/FFB e ausência de medição input-to-photon.
+- Decisão: **candidata prioritária de implementação**, mas não integrada. Exigir rebase/atualização controlada e repetir gates no SHA reconciliado; validar dispositivos físicos antes de promover a compatibilidade de hardware.
+
+### 12.3 PR #315 — Temporal Core
+
+- Head: `bb1aec75cf99c1ffd49f4e4c591250de43f1c0cb`.
+- Merge-base com main: `3cf846d688798080d35f997f6e0d34680372d7e3`.
+- Main avançou 36 commits; PR está 15 commits à frente; estado de comparação `diverged`.
+- GitHub informa `mergeable=false`.
+- Há sobreposição de caminhos com mudanças posteriores de main em `docs/architecture.md`, `docs/architecture/migrations/native-master-scheduler.md` e `docs/architecture/native-master-scheduler.md`.
+- Workflows observados no head concluíram SUCCESS: CI, SMS Z80 Platform Validation, SG-1000 sequencial, Rust SG-1000 Workspace, Qt Rust SG-1000 integration e SMS Core Fast Validation.
+- Decisão: não tentar merge/rebase automático. Resolver primeiro as divergências documentais e verificar cuidadosamente `Cargo.toml`/lockfile; em seguida reexecutar validações. Mesmo integrada, a crate temporal não autoriza TEMPORAL_PASS sem scheduler de máquina conectado aos componentes reais.
+
+### 12.4 PR #324 — BIOS e mappers SMS
+
+- Head: `51fd75e1d280ebf7a8180275ac60974604debbbe`.
+- Merge-base com main: o próprio SHA atual `c31e4183b8d0b36d95b4f58582938186417652f8`.
+- Main não possui commits exclusivos desde o merge-base; PR está 6 commits à frente.
+- GitHub informa `mergeable=true`; workflow CI run `41243587738`, job `quality`: SUCCESS.
+- Alterações: dois documentos de auditoria e inclusão no índice `docs/project-scope.md`; nenhum runtime alterado.
+- A documentação explicita limites: sem análise de dumps locais, sem boot/gameplay executado e sem afirmar mapper implementado. Classificações desconhecidas permanecem UNKNOWN.
+- Decisão: candidata documental tecnicamente integrável após revisão editorial final. Não foi mesclada nesta auditoria; a integração requer decisão explícita separada.
+
+### 12.5 PRs #300 e #301 — propostas documentais
+
+- #300 adiciona somente `docs/architecture/migrations/native-input-runtime.md`; seu escopo é uma proposta de migração, não implementação.
+- #301 adiciona somente `docs/architecture/migrations/native-video-runtime.md`; seu escopo é uma proposta, não port de vídeo.
+- Ambas têm base antiga (`2318fb35715c49c26e63f71debadacdb1816c79c`).
+- Decisão: preservar os documentos como propostas e atualizar sua orientação quando apropriado; não tratá-las como PRs de runtime nem duplicar a implementação de input da #313. Não fechar automaticamente.
+
+### 12.6 Matriz de decisão atualizada
+
+| PR | Estado técnico | Base/merge | CI observado | Próxima ação |
+|---|---|---|---|---|
+| #300 | Documento de proposta | Base antiga | Não consultado nesta rodada | Manter como referência; reconciliar com #313 |
+| #301 | Documento de proposta | Base antiga | Não consultado nesta rodada | Manter como referência; não declarar vídeo portado |
+| #313 | Implementação input Rust/SDL3 | Diverged; sem caminhos alterados coincidentes detectados | Workflows listados SUCCESS no head antigo | Reconciliar branch e repetir gates |
+| #315 | Temporal Core isolado | Diverged; mergeable=false e 3 caminhos documentais coincidentes | Workflows listados SUCCESS no head antigo | Resolver conflitos manualmente e revisar arquitetura |
+| #324 | Documentação BIOS/mappers | Ahead 6, mergeable=true | CI SUCCESS | Revisão final; integração documental separada |
+| #325 | Baseline P-0 documental | Base exata main | CI quality SUCCESS | Manter Draft até critérios P-0 fecharem |
+
+**Limite de execução:** nenhuma branch foi rebaseada, nenhum arquivo de runtime foi alterado, nenhuma PR foi fechada ou mesclada nesta atualização. As comparações são evidência de estado remoto no momento da consulta; checks SUCCESS pertencem aos SHAs listados, não a futuros SHAs reconciliados.
+
+### 12.7 Pendências finais de P-0
+
+1. Confirmar a saída final de `git status --short --branch` após remover o artefato local `cargo-metadata.json` identificado pelo usuário. A remoção foi sugerida, mas ainda não confirmada.
+2. Atualizar/reconciliar #313 e #315 em branches dedicadas, repetindo todos os gates nos novos heads.
+3. Decidir separadamente a integração documental de #324.
+4. Consolidar matriz de workflows e critérios de aceite por componente; não confundir CI verde com cobertura de hardware físico.
+5. Preservar ZEXALL/ZEXDOC, testes externos independentes, traces temporais e validação física como evidências distintas; não declarar TEMPORAL_PASS.
