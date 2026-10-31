@@ -163,3 +163,8 @@ O corpus SingleStepTests/Z80 fixado em `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7
 
 
 Para validar o workspace principal, usar os comandos Rust registrados acima e verificar o SHA exato. Como `native/z80_core` é excluído do workspace, sua compilação/testes e integração PyO3/Maturin exigem checks explícitos próprios quando houver alterações nele. Nenhuma das PRs #227–#229 justifica ativar um segundo runtime Python de hardware.
+
+
+## Runtime de áudio — decisão atual
+
+Os crates audio_runtime e audio_output devem evoluir para uma sessão Rust que conecte os dispositivos de áudio emulados ao mixer/resampler e aos backends do host sem transportar PCM por Python. WASAPI Shared é o default; XAudio2 é a alternativa existente. A matriz de hardware, responsabilidades e fases de migração estão em [Runtime de áudio nativo](native-audio-runtime.md). A documentação não declara que a sessão completa já esteja implementada.
