@@ -195,6 +195,8 @@ O projeto é independente e não é afiliado à SEGA. SEGA e SG-1000 são marcas
 
 ## Documentação
 
+- [Escopo consolidado do projeto — plataformas, perfis regionais, BIOS, VDPs e sincronização](docs/project-scope.md)
+
 - [Marco de qualidade do SG-1000 — áudio, vídeo, sincronismo e primeiro release](docs/milestones/sg1000-audio-video-milestone-2026-10-26.md)
 - [Notas preliminares do release v0.1.0](docs/releases/v0.1.0.md)
 - [Atualização v0.1.1 — sessão de áudio Rust-only](docs/releases/v0.1.1.md)
