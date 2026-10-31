@@ -9,3 +9,4 @@ name = "sega_audio_runtime"
 path = "src/lib.rs"
 
 [dependencies]
+sega-audio-output = { path = "../audio_output" }
