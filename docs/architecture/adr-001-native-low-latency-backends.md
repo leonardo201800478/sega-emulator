@@ -168,3 +168,10 @@ Não centralizar essas dependências em sg1000_core. Usar crates host separados 
 ## Próximo passo
 
 Concluir a validação da fatia atual de I/O Rust sem misturá-la a esta decisão. Em seguida, aprovar esta ADR e executar P0: mapear fronteiras e estabelecer baseline. Só depois implementar SDL3 input e WASAPI em PRs pequenos, seguidos do protótipo Vulkan/Qt.
+
+
+## Decisão complementar — runtime de áudio Sega (2026-10-30)
+
+**Status da decisão de áudio: Aceita.** WASAPI Shared/event-driven é o backend Windows padrão; XAudio2 permanece como alternativa. Exclusive Mode e IAudioClient3 ficam como investigação opt-in após testes em dispositivos reais. A decisão detalhada e a matriz SG-1000 → SMS/GG → Mega Drive → Sega CD → 32X estão em [Runtime de áudio nativo](native-audio-runtime.md).
+
+A seção de áudio anterior que descreve entrega de PCM em blocos ao host é apenas uma etapa intermediária. O contrato final proíbe drenagem, resampling, mixagem, cópia e escrita PCM em Python/PyO3 no caminho de gameplay. Rust deve possuir a sessão completa e os backends. Esta decisão não declara a migração implementada nem valida latência física.
