@@ -246,7 +246,8 @@ impl NativePsgSnapshot {
     }
 }
 
-#[pyclass(module = "sega_z80_core")]
+/// Thread-affine PyO3 adapter; the Qt runtime creates and accesses it on one thread.
+#[pyclass(unsendable, module = "sega_z80_core")]
 pub struct NativeSG1000Machine {
     machine: Sg1000Machine,
     total_instructions: u64,
