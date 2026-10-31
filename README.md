@@ -232,3 +232,6 @@ ROMs comerciais e logs locais não devem ser incluídos no repositório. Use hom
 Compilação e execução rápida:
 .\atualizar_recompilar_sega_emulator.ps1 -Launch
 python -m sega_emulator
+## Ordem arquitetural de áudio
+
+- [Ordem direta obrigatória: áudio exclusivamente em Rust](docs/architecture/audio-rust-only-directive.md)
