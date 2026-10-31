@@ -240,6 +240,17 @@ impl Drop for NativeWasapiOutput {
     }
 }
 
+/// Select an IAudioClient3 period in frames, respecting endpoint limits and alignment.
+fn select_shared_period(requested: u32, min: u32, max: u32, fundamental: u32) -> Option<u32> {
+    if fundamental == 0 || min == 0 || min > max {
+        return None;
+    }
+    let target = requested.max(1).clamp(min, max);
+    let aligned = target.div_ceil(fundamental).saturating_mul(fundamental);
+    let selected = if aligned <= max { aligned } else { (max / fundamental) * fundamental };
+    (selected >= min && selected <= max).then_some(selected)
+}
+
 #[cfg(windows)]
 struct ComApartment;
 
@@ -296,12 +307,7 @@ fn run_wasapi_worker(
             let selected_period = audio_client
                 .get_shared_mode_engine_period(&format)
                 .ok()
-                .and_then(|periods| {
-                    if periods.fundamental == 0 || periods.min == 0 || periods.min > periods.max { return None; }
-                    let target = requested_frames.clamp(periods.min, periods.max);
-                    let aligned = target.div_ceil(periods.fundamental).saturating_mul(periods.fundamental);
-                    Some(if aligned <= periods.max { aligned } else { (periods.max / periods.fundamental) * periods.fundamental })
-                });
+                .and_then(|periods| select_shared_period(requested_frames, periods.min, periods.max, periods.fundamental));
             let initialized_with_client3 = selected_period.is_some_and(|period| {
                 audio_client.initialize_shared_audio_stream(&format, TimingMode::Events, period).is_ok()
             });
@@ -754,6 +760,16 @@ fn run_xaudio2_worker(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn iaudio_client3_period_is_clamped_and_aligned_to_fundamental() {
+        assert_eq!(select_shared_period(512, 48, 448, 4), Some(448));
+        assert_eq!(select_shared_period(49, 48, 448, 4), Some(52));
+        assert_eq!(select_shared_period(1, 48, 448, 4), Some(48));
+        assert_eq!(select_shared_period(512, 49, 50, 48), None);
+        assert_eq!(select_shared_period(100, 0, 448, 4), None);
+        assert_eq!(select_shared_period(100, 48, 448, 0), None);
+    }
 
     #[test]
     fn mono_pcm16_is_duplicated_to_left_and_right_stereo_channels() {

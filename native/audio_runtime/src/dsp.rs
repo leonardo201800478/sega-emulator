@@ -40,7 +40,7 @@ impl OnePoleLowPass {
  }
  pub fn reset(&mut self) { self.previous = 0.0; }
  pub fn process_sample(&mut self, input: f64) -> f64 { self.previous += self.alpha * (input - self.previous); self.previous }
- pub fn process_block(&mut self, input: &[f64], output: &mut Vec<f64>) { output.clear(); output.reserve(input.len().saturating_sub(output.capacity())); for sample in input { output.push(self.process_sample(*sample)); } }
+ pub fn process_block(&mut self, input: &[f64], output: &mut Vec<f64>) { output.clear(); output.reserve(input.len()); for sample in input { output.push(self.process_sample(*sample)); } }
 }
 #[cfg(test)] mod tests { use super::*;
  #[test] fn mixer_sums_sources_and_reuses_output() { let mixer = AudioMixer::new(0.5).unwrap(); let a=[0.5,-0.5,0.25]; let b=[0.5,0.5,-0.25]; let mut out=vec![99.0;8]; mixer.mix_mono_into(&[MixSource{samples:&a,gain:1.0},MixSource{samples:&b,gain:2.0}],&mut out).unwrap(); assert_eq!(out,vec![0.75,0.25,-0.125]); }
