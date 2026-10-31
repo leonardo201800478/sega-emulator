@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from sega_emulator.machine.cartridge_profiles import cartridge_profile
 
+
 class SG1000Machine:
     """Thin Python facade over the native Rust SG-1000 machine."""
 
