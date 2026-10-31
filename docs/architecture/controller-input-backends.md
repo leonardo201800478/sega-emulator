@@ -1,31 +1,43 @@
-# Controller Input Backends — Legacy Frontend Path
+# Controller Input Backends
 
-> **Migration status:** the current Python XInput/PySDL3 implementation is a compatibility baseline, not the target architecture. The reusable host-independent contract is now defined in [Native Input Runtime](native-input-runtime.md).
+## Estado atual
 
-## Current implementation retained during migration
+O caminho de input físico ativo é nativo em Rust:
 
-- XInput is currently polled through Python ctypes.
-- SDL3 Gamepad and raw Joystick support is currently accessed through PySDL3.
-- The Qt frontend samples these backends immediately before machine frame execution.
-- SG-1000 and SMS receive normalized snapshots through their existing native APIs.
-- XInput currently takes precedence as a group. In mixed XInput/non-XInput setups, SDL-only devices can be omitted. This is a known compatibility limitation, not desired behavior.
+1. Sdl3Backend carrega a ABI oficial SDL3 no Windows e enumera gamepads/joysticks.
+2. A Gamepad API fornece controles padronizados; a Joystick API preserva eixos, botões e hats brutos.
+3. NativeInputManager mantém handles, lê estados, processa hotplug, aplica perfis e produz ações semânticas.
+4. RustControllerInput é uma ponte fina entre Qt e PyO3. Não faz polling, descoberta nem mapeamento físico.
+5. Qt combina ações semânticas dos controles com eventos de teclado e envia snapshots aos cores SG-1000/SMS.
 
-These paths must remain operational until native backends have equivalent behavior and hardware validation. Do not remove or duplicate their profile, mapping, hotplug, and device-selection behavior during the port.
+## Runtime SDL3
 
-## Target architecture
+- Instale o runtime oficial usando scripts/install_sdl3_runtime.ps1.
+- O instalador fixa SDL 3.4.18 e valida o SHA-256 do ZIP oficial.
+- O arquivo SDL3.dll local é ignorado pelo Git.
+- Para outro local, defina SEGA_EMULATOR_SDL3_DLL com o caminho absoluto.
+- Sem SDL3, os controles físicos ficam indisponíveis; o teclado continua funcional.
 
-See [Native Input Runtime](native-input-runtime.md) for the cross-core data model, GameInput/SDL3 strategy, device identity, timestamping, allocation rules, compatibility matrix, and acceptance gates.
+## Compatibilidade implementada e pendente
 
-The intended Windows backend is Microsoft GameInput, with native SDL3 as fallback. The two backends must feed one device registry and deduplicate the same physical controller. They must not compete as separate player groups.
+Implementado nesta fatia:
+- Gamepads reconhecidos pelo mapeamento SDL3, com botões e eixos padronizados.
+- Joysticks genéricos com botões, eixos e hats brutos.
+- Hotplug/reconexão por enumeração periódica.
+- Deadzone, perfis físicos e captura de botão processados em Rust.
+- Leituras na fronteira de frame, sem polling dentro do core.
 
-## Latency contract
+Pendente:
+- GameInput e deduplicação entre GameInput/SDL3.
+- Mais de um dispositivo por jogador e seleção manual de dispositivos.
+- Classificação detalhada de volantes, pedais, câmbios e flight sticks.
+- Rumble, force feedback, sensores e relatórios HID específicos.
+- Backend nativo para Linux/macOS.
+- Matriz física de compatibilidade e medições de latência.
 
-- Poll the newest available reading at the latest safe boundary before emulation advances.
-- Do not poll inside CPU instructions, memory accesses, bus callbacks, or audio/video inner loops.
-- Do not add a dedicated polling thread without a measured benefit and explicit ownership/synchronization design.
-- Distinguish device-to-runtime capture, runtime-to-emulated-frame application, and button-to-photon latency.
-- API marketing claims and software timestamps are not physical latency measurements.
+## Fronteira arquitetural
 
-## Existing core contract
-
-The SG-1000 and SMS hardware cores remain host-independent. They accept explicit input snapshots and do not call Windows, SDL, Qt, or Python APIs. Console-specific electrical layouts, active-low behavior, light-phaser timing, and future peripheral protocols remain inside the corresponding core/scheduler layers.
+- Qt/PySide6 é frontend: menus, perfis persistidos, captura de teclado, configuração e diagnóstico.
+- Rust é responsável pela captura física, normalização, hotplug e mapeamento de controles.
+- Os cores recebem somente snapshots/ações lógicas; não conhecem SDL, Windows, Qt ou dispositivos físicos.
+- Não há callbacks Python por instrução, memória, pixel ou amostra de áudio.
