@@ -1,171 +1,294 @@
 # Engenharia reversa: sequência de boot da BIOS do Sega Master System
 
-**Estado:** pesquisa documental inicial; não altera o runtime.  
-**Escopo:** BIOS US/Europeia v1.3 e variante incomum v2.0.  
-**Baseline documental:** `main` em `767d89b227b328b8d17b677944a832353240a74e` (2026-10-31).  
-**Objetivo:** registrar comportamento útil para o core SMS sem transformar hipóteses de leitura de dump em requisitos de hardware.
+**Estado:** pesquisa documental ampliada; runtime não alterado.  
+**Escopo primário:** BIOS US/Europeia v1.3 (1986); comparação com a variante incomum v2.0 (1987).  
+**Baseline da PR:** \`767d89b227b328b8d17b677944a832353240a74e\`.  
+**Evidência binária local:** NÃO ANALISADA nesta alteração; hashes e procedência dos dumps ainda não foram fornecidos.  
+**Objetivo:** registrar o comportamento sustentado por documentação/disassembly público e manter explícitas as lacunas que dependem de análise dos dumps ou de hardware.
 
 ## 1. Resumo executivo
 
-A BIOS do Master System é código Z80 executado pela CPU, acompanhado de tabelas e dados gráficos/textuais. O dump binário, portanto, mistura opcodes, operandos, dados de inicialização, fontes/tile data, tabelas e strings legíveis. Encontrar uma string ASCII no arquivo não demonstra, por si só, quando ou como ela é exibida: é necessário localizar referências no disassembly e acompanhar o fluxo de execução.
+A BIOS do Master System é código Z80 executado no próprio barramento da máquina. Ela apresenta a abertura, sonda os slots e, quando encontra mídia aceita pela rotina da revisão em uso, deixa o slot selecionado visível para a CPU. A BIOS não deve ser substituída por um atalho de boot no emulador: a CPU precisa executar o firmware real e as alterações de mapeamento devem ocorrer pelo hardware modelado.
 
-A documentação pública do SMS Power descreve a BIOS US/Europeia v1.3 como uma rotina de apresentação inicial seguida por sondagem dos slots de mídia. A v1.3 verifica cabeçalho, região e checksum. A variante v2.0, embora visualmente semelhante e com texto de versão atualizado, altera significativamente a detecção: não executa a mesma validação de cabeçalho/checksum; verifica se os primeiros 513 bytes do slot não são todos iguais.
+A BIOS US/Europeia v1.3 procura cabeçalho \`TMR SEGA\` em três offsets, exige código de região \`4\` e calcula checksum de 16 bits sobre faixas definidas pelo nibble inferior do byte \`0x7FFF\`. A v2.0 não faz essa validação: testa variação entre os primeiros 513 bytes. A BIOS japonesa v2.1 usa outro teste, baseado na variação dos bits médios dos primeiros 256 bytes. Essas rotinas não são intercambiáveis.
 
-**Conclusão importante:** v1.3 e v2.0 não podem ser modeladas como uma única rotina genérica de validação de cartucho. A revisão de BIOS é um perfil de comportamento observável.
+**Conclusão arquitetural:** BIOS é firmware executável e específico por revisão/modelo. Parser de cabeçalho de ROM, identificação de mídia, mapper e política de detecção da BIOS são responsabilidades distintas.
 
-## 2. Evidência e níveis de confiança
+## 2. Classificação de evidência
 
-Este registro separa três classes:
+- **DOCUMENTADO:** descrito em referência técnica especializada e/ou acompanhado de trecho de disassembly público.
+- **RELATADO, NÃO REPRODUZIDO:** informação apresentada a partir de dumps ou observações, mas ainda sem hash, disassembly e trace reproduzíveis neste projeto.
+- **LACUNA — ANALISAR:** exige inspeção de dump identificado, execução instrumentada ou captura em hardware.
+- **NÃO IMPLEMENTAR COMO FATO:** afirmação contradita pelas referências consultadas ou generalização indevida.
 
-- **Documentado por disassembly/referência técnica:** comportamento descrito em fonte especializada e acompanhado de código ou mapa de bits.
-- **Relatado no material de entrada:** strings e sequência descritas a partir de um dump, ainda sem identificação binária reproduzível nesta tarefa.
-- **Pendente de confirmação:** detalhe que exige dump identificado, hash, disassembly e/ou captura de hardware.
+Esta atualização consultou a documentação técnica pública do SMS Power, incluindo o resumo da BIOS v1.3/v2.0/v2.1, o formato do cabeçalho e o port \`0x3E\`. Isso não equivale a uma auditoria independente dos arquivos binários de BIOS.
 
-Não foram fornecidos nesta tarefa os arquivos binários das BIOS v1.3/v2.0, seus tamanhos, SHA-256, procedência ou dumps de execução. Assim, este documento não declara ter realizado uma análise byte a byte dos arquivos.
+## 3. Reset, estado inicial e configuração de hardware
 
-## 3. Sequência de boot — visão funcional
+### 3.1 Reset da CPU
 
-### 3.1 Reset e vetor inicial
+**DOCUMENTADO — CPU Z80:** após reset, o Z80 inicia a busca de instruções em \`PC = 0x0000\`. Isso descreve o estado arquitetural da CPU, não todo o estado elétrico do console.
 
-O Z80 inicia a execução após reset com o PC no endereço `0x0000`. No Master System, a BIOS pode ocupar o espaço de memória inferior compartilhado com os slots de Card, Cartridge e Expansion. A seleção de qual dispositivo responde nessa região é controlada pelo hardware de mapeamento, acessível pelo port de I/O `0x3E`.
+**LACUNA — ANALISAR:** a sequência física de power-on/reset do SMS, duração do sinal, estado de todos os latches, estado inicial exato do port \`0x3E\`, habilitação inicial de BIOS/RAM/slots e eventuais diferenças entre revisões de placa ainda precisam ser documentados com fonte de hardware ou medição.
 
-Para o emulador, não basta inicializar o PC em zero: o estado inicial do registrador de controle de memória e a visibilidade da BIOS precisam corresponder ao perfil da máquina/revisão.
+Não assumir que o valor inicial do port \`0x3E\` seja um valor arbitrário escolhido pelo emulador. O estado deve ser derivado da documentação do circuito e confirmado por dump/trace ou hardware.
 
-**Atenção:** não assumir que toda máquina SMS possui a mesma BIOS, tamanho de ROM, conteúdo de inicialização ou jogo interno.
+### 3.2 Port \`0x3E\` e arbitragem dos slots
 
-### 3.2 Apresentação inicial da BIOS v1.3
+**DOCUMENTADO:** BIOS, Card, Cartridge e Expansion compartilham o espaço de endereços \`0x0000–0xBFFF\`. O port de I/O \`0x3E\` controla as linhas de enable que arbitram qual dispositivo responde.
 
-A BIOS US/Europeia v1.3 apresenta uma animação de abertura SEGA/Master System e reproduz o jingle de dois tons antes da sondagem dos slots. A referência consultada descreve uma espera fixa de aproximadamente 1,67 s na v1.3.
+| Bit | Função | Semântica documentada |
+|---:|---|---|
+| 7 | Expansion slot | ativo em nível baixo |
+| 6 | Cartridge slot | ativo em nível baixo |
+| 5 | Card slot | ativo em nível baixo |
+| 4 | Work RAM | ativo em nível baixo |
+| 3 | BIOS ROM | ativo em nível baixo |
+| 2 | I/O | ativo em nível baixo |
+| 1–0 | desconhecidos | não atribuir função sem evidência |
 
-A tela de instruções, quando nenhum slot contém mídia reconhecida, inclui a combinação secreta para iniciar Snail Maze. A combinação é **Up + botão 1 + botão 2 no controle do jogador 1**; a referência informa que outros botões podem também estar pressionados sem impedir o acionamento.
+Escrever \`0\` habilita a função correspondente; escrever \`1\` a desabilita. Os bits 7, 6, 5 e 2 têm exceções/semânticas de ausência de efeito em alguns modelos, conforme a documentação do port.
 
-### 3.3 Sondagem de slots na v1.3
+A BIOS executa código copiado para RAM para desabilitar a ROM da BIOS e habilitar os slots um a um durante a detecção. A prioridade documentada para a v1.3 é Card → Cartridge → Expansion.
 
-A ordem documentada é:
+**LACUNA — ANALISAR:** obter a sequência completa de valores escritos em \`0x3E\`, incluindo valor inicial, cada transição, leituras do latch e valor final por caminho (mídia aceita, mídia inválida, nenhum slot). O documento técnico descreve a função geral, mas a implementação do emulador precisa de valores e ordem exatos extraídos do disassembly da revisão.
+
+### 3.3 Primeira instrução
+
+**DOCUMENTADO:** o PC inicia em \`0x0000\`; a primeira instrução vem do dispositivo que o mapa inicial deixa visível nesse endereço. Para um perfil com BIOS habilitada, a BIOS fornece esse conteúdo.
+
+**LACUNA — ANALISAR:** confirmar para cada modelo-alvo a combinação inicial de BIOS, slots, RAM e I/O. Não modelar o reset apenas como \`PC = 0\` sem estabelecer o estado inicial do barramento.
+
+## 4. Inicialização da BIOS v1.3
+
+A referência da BIOS v1.3 documenta a animação SEGA/Master System e o jingle de dois tons antes da sondagem dos slots. A sequência exata de instruções e escritas de registradores precisa ser confirmada no disassembly completo.
+
+| Afirmação | Estado | Observação / trabalho necessário |
+|---|---|---|
+| Executa \`DI\` no início | LACUNA — ANALISAR | Localizar opcode e posição no fluxo; não inferir apenas pela necessidade de setup. |
+| Define \`SP = 0xDFFF\` | LACUNA — ANALISAR | Confirmar valor e momento exatos no disassembly. |
+| Limpa \`0xC000–0xDFFF\` com zero | LACUNA — ANALISAR | A RAM física é 8 KiB e é espelhada em \`0xC000–0xFFFF\`; identificar os endereços efetivamente escritos e o padrão. |
+| Envia \`0x9F, 0xBF, 0xDF, 0xFF\` ao SN76489 | LACUNA — ANALISAR | Confirmar sequência, temporização, ordem dos canais e se há outras escritas. |
+| Desliga display antes de limpar VRAM | LACUNA — ANALISAR | Extrair escritas de registradores do VDP e a ordem. |
+| Limpa toda a VRAM | LACUNA — ANALISAR | Determinar faixa, valor, mecanismo (CPU/VDP) e tempo consumido. |
+| Carrega paleta e fonte/tile data | PARCIALMENTE DOCUMENTADO | Identificar tabelas/rotinas e offsets no dump da BIOS alvo. |
+| Apresenta animação e jingle antes de sondar slots | DOCUMENTADO | A referência da v1.3 descreve o bumper animado e o jingle de dois tons. |
+
+**Importante sobre RAM:** o SMS tem 8 KiB de Work RAM, visíveis com espelhamento em \`0xC000–0xFFFF\`. A frase “limpa \`0xC000–0xDFFF\`” não está confirmada como rotina exata da BIOS. O emulador não deve transformar esse intervalo relatado em requisito sem verificar o código.
+
+**Importante sobre áudio/vídeo:** a presença de animação e jingle demonstra que a BIOS usa VDP e PSG, mas não comprova, por si só, a sequência de inicialização descrita no material recebido. A ordem de disable display, VRAM clear, palette, tile/font upload e writes ao PSG fica pendente de disassembly.
+
+## 5. Detecção de mídia — BIOS US/Europeia v1.3
+
+### 5.1 Ordem e busca
+
+**DOCUMENTADO:** a BIOS v1.3 sonda os slots nesta ordem:
 
 1. Card;
 2. Cartridge;
 3. Expansion.
 
-A BIOS usa o port `0x3E` para selecionar/mapear cada slot para a região de memória acessível pela CPU. Para cada slot, copia 16 bytes para RAM e procura um cabeçalho válido nos offsets `0x7FF0`, `0x3FF0` e `0x1FF0` do espaço do slot.
+Para cada slot, copia 16 bytes para RAM e procura um cabeçalho nos offsets \`0x7FF0\`, \`0x3FF0\` e \`0x1FF0\`, nessa ordem. Se não encontrar \`TMR SEGA\` em nenhum dos três locais, considera o slot vazio para essa rotina.
 
-Quando encontra a assinatura ASCII `TMR SEGA`, executa as validações seguintes:
+A BIOS não inicializa registradores de paginação do mapper antes dessa busca. Portanto, o mapper/cartucho precisa expor os dados esperados no estado inicial. Para o cabeçalho usual em \`0x7FF0\`, a referência destaca a necessidade de o slot 1 apresentar o banco inicial apropriado quando bancos/janelas forem de 16 KiB.
 
-- **Região:** os quatro bits superiores do último byte do cabeçalho devem ser `0x4` para a BIOS US/Europeia v1.3; caso contrário, apresenta `SOFTWARE ERROR`.
-- **Checksum:** soma as regiões indicadas pelo nibble inferior do byte final do cabeçalho e compara o resultado com o checksum armazenado. Divergência também resulta em `SOFTWARE ERROR`.
-- **Mapeamento inicial:** a rotina não inicializa os registradores de paginação do mapper antes da busca. Para o cabeçalho usual em `0x7FF0`, a configuração inicial do mapper precisa expor os dados esperados no slot/banco correspondente.
+### 5.2 Região: correção importante
 
-Se nenhum cabeçalho for encontrado nos três slots, a BIOS considera os slots vazios para essa rotina e mostra a tela de instruções.
+**DOCUMENTADO:** a BIOS US/Europeia v1.3 exige que o nibble alto do byte \`0x7FFF\` seja exatamente \`0x4\` (SMS Export). Se o valor for diferente, rejeita a mídia com \`SOFTWARE ERROR\`.
 
-### 3.4 Transferência de controle
+**NÃO IMPLEMENTAR COMO FATO:** a afirmação de que a BIOS v1.3 aceita códigos \`3\` e \`4\` está incorreta segundo a descrição da rotina v1.3 consultada. O código \`3\` identifica SMS Japan no formato do cabeçalho, mas a BIOS de exportação descrita verifica igualdade com \`4\`, não uma lista \`{3,4}\`.
 
-A seleção de BIOS, slots e RAM é controlada pelo port `0x3E`. Os bits relevantes são ativos em nível baixo:
+Os códigos de região/sistema do cabeçalho são:
 
-| Bit | Função |
+| Nibble alto | Identificação |
 |---:|---|
-| 7 | Expansion slot |
-| 6 | Cartridge slot |
-| 5 | Card slot |
-| 4 | Work RAM |
-| 3 | BIOS ROM |
-| 2 | I/O |
+| \`3\` | SMS Japan |
+| \`4\` | SMS Export |
+| \`5\` | Game Gear Japan |
+| \`6\` | Game Gear Export |
+| \`7\` | Game Gear International |
 
-Escrever 0 habilita a função correspondente; escrever 1 a desabilita. A referência do SMS Power descreve que a BIOS executa uma rotina copiada para RAM, desabilita a ROM da BIOS e habilita os slots um a um para sondagem.
+A BIOS japonesa v2.1 usa uma estratégia diferente de detecção, pois software japonês legado não tinha a mesma exigência de cabeçalho. Não generalizar a rotina da BIOS de exportação para consoles japoneses.
 
-Ao iniciar a mídia reconhecida, a BIOS precisa deixar o mapeamento do slot correto ativo. Não modelar isso como “desligar fisicamente o chip” nem como um simples salto abstrato sem reproduzir o estado de `0x3E`, a prioridade dos slots e o endereço/banco efetivamente visível. O último valor escrito em `0x3E` é também guardado em `0xC000` pela v1.3, conforme a referência consultada.
+### 5.3 Checksum: algoritmo e faixas
 
-## 4. Diferença crítica: BIOS v1.3 versus v2.0
+**DOCUMENTADO:** a rotina pública da BIOS v1.3 soma bytes em um acumulador de 16 bits \`DE\`. Para cada byte em \`(HL)\`, soma o valor ao byte baixo \`E\`, propaga o carry para \`D\`, avança \`HL\` e decrementa o contador \`BC\`. O overflow além de 16 bits é descartado (aritmética módulo \`65536\`).
 
-A variante US/Europeia v2.0 é descrita como incomum e derivada da v1.3, mas a rotina de detecção de cartucho é diferente:
+A rotina soma as faixas definidas pelo nibble inferior do byte \`0x7FFF\`. O cabeçalho final de 16 bytes não é incluído na faixa inferior: por exemplo, código \`0xC\` cobre \`0x0000–0x7FEF\`, não \`0x0000–0x7FFF\`. Para ROMs maiores, uma segunda faixa é somada a partir de \`0x8000\`, assumindo o mapper Sega padrão.
 
-| Característica | v1.3 | v2.0 |
-|---|---|---|
-| Busca por `TMR SEGA` | Sim | Não, na rotina de detecção descrita |
-| Validação de região | Sim | Não |
-| Cálculo/comparação de checksum | Sim | Não |
-| Teste de presença | Cabeçalho e validações subsequentes | Compara os primeiros 513 bytes |
-| Tela sem mídia | Instruções | Instruções, com texto `V2.0` |
-| Snail Maze | Presente | Presente |
+| Nibble baixo | Faixa inferior | Faixa superior | Total declarado |
+|---:|---|---|---:|
+| \`A\` | \`0x0000–0x1FEF\` | — | 8 KiB |
+| \`B\` | \`0x0000–0x3FEF\` | — | 16 KiB |
+| \`C\` | \`0x0000–0x7FEF\` | — | 32 KiB |
+| \`D\` | \`0x0000–0xBFEF\` | — | 48 KiB |
+| \`E\` | \`0x0000–0x7FEF\` | \`0x8000–0xFFFF\` | 64 KiB |
+| \`F\` | \`0x0000–0x7FEF\` | \`0x8000–0x1FFFF\` | 128 KiB |
+| \`0\` | \`0x0000–0x7FEF\` | \`0x8000–0x3FFFF\` | 256 KiB |
+| \`1\` | \`0x0000–0x7FEF\` | \`0x8000–0x7FFFF\` | 512 KiB |
+| \`2\` | \`0x0000–0x7FEF\` | \`0x8000–0xFFFFF\` | 1 MiB |
+| \`3–9\` | não suportado | não suportado | — |
 
-Na v2.0, os primeiros 513 bytes são copiados para RAM. A rotina compara o primeiro byte com os 512 seguintes; se encontrar qualquer diferença, considera que há dados de ROM e aceita o slot para execução. Se todos forem iguais, a rotina considera que não encontrou mídia. Isso é um teste heurístico de presença, não validação de integridade ou autenticidade.
+Os valores \`D\` e \`2\` são apontados como problemáticos/buggy em implementações da BIOS; não assumir que a tabela descreve um checksum confiável para todos os valores. Também não inferir o tamanho real do arquivo a partir do nibble: a documentação registra jogos cujo campo indica faixa menor que o tamanho efetivo da ROM.
 
-A fonte também documenta um efeito colateral: a área temporária usada para a cópia dos 513 bytes sobrepõe-se parcialmente à cópia em RAM do tilemap de Snail Maze, causando pequenos glitches nos cantos superiores do labirinto em hardware real.
+O valor armazenado no cabeçalho em \`0x7FFA–0x7FFB\` é descrito na página ROM Header do SMS Power como palavra little-endian. O parser futuro deve confirmar essa interpretação contra os bytes de dumps conhecidos e o disassembly da BIOS; há documentação histórica de tags/formatos que descreve a ordem de bytes de outra forma, então a decisão deve ficar vinculada à fonte e ao teste de referência.
 
-**Implicação para o emulador:** implementar validação de cabeçalho/checksum como comportamento obrigatório de toda BIOS SMS seria incorreto. A rotina precisa ser selecionada por revisão de BIOS.
+**Correção do material recebido:** o nibble \`0xC\` significa 32 KiB, não 48 KiB; \`0xD\` significa 48 KiB. Os códigos \`A–B\` são 8/16 KiB, \`E–F\` são 64/128 KiB, \`0\` é 256 KiB, \`1\` é 512 KiB e \`2\` é 1 MiB.
 
-## 5. Formato do cabeçalho de cartucho
+### 5.4 Resultado da validação
 
-A referência de desenvolvimento descreve um cabeçalho de 16 bytes, que pode estar nos offsets `0x1FF0`, `0x3FF0` ou `0x7FF0`. A posição `0x7FF0` é a usual nos jogos comerciais conhecidos.
+- Cabeçalho ausente em todos os offsets testados: slot tratado como vazio.
+- Cabeçalho presente, mas região diferente de \`4\`: rejeição com \`SOFTWARE ERROR\`.
+- Região aceita, mas checksum divergente: rejeição com \`SOFTWARE ERROR\`.
+- Região e checksum aceitos: BIOS inicia a mídia do slot selecionado.
 
-| Offset relativo ao cabeçalho | Campo |
+A referência indica que o último valor escrito no port \`0x3E\` também é salvo em \`0xC000\), permitindo que software reative o slot de origem quando necessário.
+
+**LACUNA — ANALISAR:** mapear a rotina de checksum completa para cada nibble suportado, incluindo preparação de \`HL/BC/DE\`, acesso à faixa superior através do mapper, leitura do checksum armazenado e branch exato em sucesso/falha. A tabela documenta o comportamento esperado, mas os testes do projeto devem reproduzir o disassembly.
+
+## 6. Handoff: transferência para o cartucho
+
+**DOCUMENTADO em nível funcional:** o port \`0x3E\` controla a visibilidade da BIOS e dos slots; a documentação descreve a execução de código em RAM para desabilitar a BIOS e habilitar slots durante a sondagem. Após selecionar mídia válida, a BIOS executa o conteúdo do slot.
+
+**LACUNA — ANALISAR:** o relato recebido especifica uma rotina copiada para \`0xC000\`, um salto para essa rotina, escrita final em \`0x3E\` e salto explícito para \`0x0000\`. A referência consultada não é suficiente para confirmar todos esses detalhes de sequência. Precisamos obter do disassembly v1.3:
+- endereço e bytes da rotina temporária copiada para RAM;
+- origem, comprimento e destino exatos da cópia;
+- valor escrito no port \`0x3E\` no handoff;
+- instrução de salto e endereço efetivo de destino;
+- estado de \`SP\`, \`IFF1/IFF2\`, registradores e latch do port no instante da transferência.
+
+Não descrever o evento como “desligamento físico do chip” no modelo lógico. O emulador deve reproduzir a alteração de mapeamento/enable e a resolução do barramento. Só especificar o salto exato depois de confirmar o disassembly.
+
+## 7. Caminho sem mídia, erro e Snail Maze
+
+**DOCUMENTADO para v1.3:** se nenhum slot for reconhecido, a BIOS mostra uma tela de instruções. Durante essa tela, a combinação Up + 1 + 2 no controle 1 aciona o jogo interno Snail Maze; a referência informa que outros botões também podem estar pressionados.
+
+**DOCUMENTADO:** falha de região ou checksum resulta em \`SOFTWARE ERROR\`.
+
+**LACUNA — ANALISAR:** a descrição recebida afirma que a BIOS fica em polling contínuo das portas de controle e abandona um loop ao detectar a combinação. Confirmar portas exatas, máscaras, polaridade, cadência de polling, debounce (se houver), endereço de entrada do Snail Maze e se há diferença entre o caminho “nenhuma mídia” e “mídia inválida”.
+
+Não generalizar a tela/fluxo de erro para outras BIOSes: a BIOS protótipo v1.0, v2.0, v2.1 e revisões posteriores apresentam diferenças documentadas.
+
+## 8. Diferenças entre revisões
+
+| Comportamento | US/Europeia v1.3 | US/Europeia v2.0 | Japonesa v2.1 |
+|---|---|---|---|
+| Detecção principal | cabeçalho + região + checksum | variação nos primeiros 513 bytes | variação nos bits médios dos primeiros 256 bytes |
+| Exige \`TMR SEGA\` | sim | não | não |
+| Valida região/checksum | sim | não | não pela rotina descrita |
+| Mídia japonesa antiga sem header | rejeitada pela rotina de cabeçalho | pode ser aceita pelo teste de variação | compatível com o método de detecção |
+| Conteúdo/tela interna | Snail Maze | Snail Maze | instruções japonesas; música diferente |
+
+Na v2.0, o código copia 513 bytes para RAM e compara o primeiro byte com os 512 seguintes. Se qualquer byte divergir, considera que existe dado de ROM; se todos forem iguais, falha na detecção. A cópia temporária sobrepõe parcialmente dados usados pelo tilemap do Snail Maze e provoca glitches nos cantos superiores.
+
+A BIOS japonesa v2.1 não usa o mesmo algoritmo da v2.0: examina 256 bytes e compara os bits mascarados por \`0x3C\` com os do primeiro byte. São algoritmos diferentes e devem ter perfis de teste separados.
+
+## 9. Formato do cabeçalho Sega — parser não é validação da BIOS
+
+O cabeçalho possui 16 bytes e pode estar nos offsets \`0x1FF0\`, \`0x3FF0\` ou \`0x7FF0\`. \`0x7FF0\` é a posição usual em jogos conhecidos.
+
+| Offset absoluto usual | Campo |
 |---|---|
-| +0x00..+0x07 | ASCII `TMR SEGA` |
-| +0x08..+0x09 | Reservado |
-| +0x0A..+0x0B | Checksum de 16 bits little-endian |
-| +0x0C..+0x0E | Código do produto |
-| +0x0E low nibble | Revisão do software |
-| +0x0F high nibble | Região/sistema |
-| +0x0F low nibble | Código de tamanho da ROM |
+| \`0x7FF0–0x7FF7\` | ASCII \`TMR SEGA\` |
+| \`0x7FF8–0x7FF9\` | reservado |
+| \`0x7FFA–0x7FFB\` | checksum 16-bit |
+| \`0x7FFC–0x7FFD\` | código do produto, BCD |
+| \`0x7FFE\`, nibble alto | parte adicional do código do produto |
+| \`0x7FFE\`, nibble baixo | revisão do software |
+| \`0x7FFF\`, nibble alto | região/sistema |
+| \`0x7FFF\`, nibble baixo | código de faixa/tamanho para checksum |
 
-O byte final contém dois nibbles com significados distintos. O código de região `0x4` representa SMS Export; `0x3` representa SMS Japan. A documentação observa que somente a BIOS SMS de exportação efetivamente verifica esse campo.
+O código do produto ocupa 2,5 bytes, não os três bytes completos \`0x7FFC–0x7FFE\`. O nibble baixo de \`0x7FFE\` é a revisão do software e não pode ser incluído no código do produto. O checksum é little-endian segundo a página ROM Header do SMS Power.
 
-O checksum não deve ser confundido com um hash criptográfico: é uma soma de 16 bits usada pela rotina de validação da BIOS. A extensão e a seleção das regiões somadas dependem do código de tamanho. A própria documentação registra valores de tamanho pouco usados ou problemáticos; não inferir o tamanho real do arquivo somente desse nibble.
+**Limites para um futuro parser Rust:**
+- validar cada posição candidata sem assumir que toda ROM tenha cabeçalho;
+- distinguir parse estrutural de validação de BIOS v1.3;
+- não exigir que uma ROM japonesa antiga tenha \`TMR SEGA\`;
+- não tratar nibble de tamanho como tamanho físico definitivo do arquivo;
+- representar códigos desconhecidos/buggy sem fallback silencioso para 32 KiB;
+- não calcular checksum sobre o arquivo inteiro: aplicar as faixas específicas e o mapper assumido pela rotina;
+- não misturar a validação de BIOS com identidade No-Intro, perfil do console ou seleção do mapper.
 
-## 6. Afirmações do material inicial que exigem cautela
+A implementação Rust enviada como proposta no material de entrada **não foi incorporada**. Ela tem um fallback arbitrário para 32 KiB e um modelo de tamanho que precisa ser revisado. A criação de parser deve ser uma tarefa separada, com vetores de ROM sintética e ROMs de referência legalmente utilizáveis.
 
-As seguintes descrições foram apresentadas no material de entrada, mas não devem ser tratadas como fatos universais sem confirmar a revisão e o disassembly:
+## 10. Afirmações do material recebido: decisão de auditoria
 
-1. **“A BIOS limpa RAM de `0xC000` a `0xDFFF`.”** A RAM física do SMS é 8 KiB e aparece espelhada no intervalo `0xC000`–`0xFFFF`. A faixa efetivamente inicializada e o padrão escrito precisam ser confirmados na rotina da BIOS analisada.
-2. **“A BIOS sempre inicializa VDP, VRAM, paleta e PSG antes de verificar mídia.”** A v1.3 executa animação e áudio antes da detecção, mas a sequência exata de cada escrita de registrador/porta deve ser extraída do disassembly. Não presumir que todas as revisões executam a mesma sequência.
-3. **“Toda BIOS valida cabeçalho, região e checksum.”** Falso para a v2.0 descrita acima e para outras famílias/revisões japonesas que usam testes diferentes.
-4. **“O comando final desativa fisicamente a BIOS e salta para `0x0000`.”** A abstração correta é uma alteração do mapeamento via `0x3E`, seguida da execução no espaço de endereços agora fornecido pelo slot. A sequência de instruções e o valor escrito devem ser obtidos no disassembly da revisão específica.
-5. **“Os textos encontrados no dump são necessariamente exibidos.”** Strings como `WELCOME TO THE SEGA MASTER SYSTEM`, `SOFTWARE ERROR`, `V1.3` e instruções de inserção foram relatadas no material de entrada. A presença, offset, codificação, revisão e uso de cada string ainda devem ser conferidos nos arquivos binários identificados.
+| Afirmação recebida | Decisão nesta revisão |
+|---|---|
+| Reset leva PC a \`0x0000\` | Confirmado como estado arquitetural Z80; estado elétrico/mapeamento inicial SMS permanece pendente. |
+| Port \`0x3E\` inicia com valor específico que ativa BIOS e desativa slots | Não afirmar valor; pendente de fonte de hardware/dump. |
+| BIOS começa com \`DI\` | Pendente de disassembly. |
+| \`SP = 0xDFFF\` | Pendente de disassembly. |
+| Limpa \`0xC000–0xDFFF\` | Pendente; RAM é 8 KiB espelhada. |
+| PSG recebe exatamente \`9F BF DF FF\` | Pendente de disassembly/trace. |
+| VDP desliga display, limpa VRAM e carrega paleta/fonte em sequência fixa | Pendente de disassembly/trace. |
+| Busca cabeçalho em \`7FF0/3FF0/1FF0\` e slots Card → Cartridge → Expansion | Confirmado para BIOS US/Europeia v1.3. |
+| BIOS v1.3 aceita regiões \`3\` e \`4\` | Corrigido: a rotina descrita exige nibble alto exatamente \`4\`. |
+| Checksum é soma de 16 bits com overflow descartado | Confirmado. |
+| Checksum soma tudo menos o cabeçalho | Simplificação incompleta; faixas dependem do nibble e podem incluir faixa superior via mapper. |
+| Checksum armazenado em little-endian | Documentado pela página ROM Header; confirmar nos dumps/disassembly usados como vetores. |
+| Copia rotina de handoff para \`0xC000\` e faz \`JP 0x0000\` | Pendente de confirmação no disassembly completo. |
+| Nenhum cartucho/erro sempre resulta na mesma tela e loop | Diferenciar slot vazio, região inválida, checksum inválido e revisão de BIOS. |
+| Adaptador 44→50 pinos permite boot de qualquer jogo japonês | Não afirmar; depende de conectividade, cabeçalho, hardware e revisão de BIOS. Não é consequência automática do código de região. |
+| Nibble de região deve selecionar FM e framerate do emulador | Não implementar: região do cabeçalho é metadado da mídia, não autoridade para configurar hardware físico. FM e padrão de vídeo pertencem ao MachineProfile explícito. |
 
-## 7. Consequências para a arquitetura do Sega Emulator
+## 11. Consequências para a arquitetura Sega Emulator
 
-Este estudo deve orientar os contratos do SMS, sem colocar a lógica de BIOS dentro da CPU Z80:
+- **Z80:** executa instruções e transações; não conhece BIOS, validade de cartucho ou handoff.
+- **SMS bus/memory:** resolve BIOS, Card, Cartridge, Expansion e RAM conforme os latches/enable reais, incluindo prioridades e estados iniciais.
+- **Port I/O \`0x3E\`:** implementar bits documentados e manter bits desconhecidos sem semântica inventada.
+- **Mapper/cartucho:** expor o estado inicial real; não inicializar bancos para “ajudar” a BIOS a encontrar o cabeçalho.
+- **BIOS:** imagem opcional por perfil/modelo/revisão; executar o firmware real, sem HLE disfarçado de BIOS original.
+- **ROM parser:** metadados e validação estrutural não substituem a execução da rotina de validação da BIOS.
+- **MachineProfile:** região física, clock, VDP e FM são propriedades do console/perfil, não inferências automáticas do nibble da ROM.
+- **Determinismo:** mesma BIOS, mídia, perfil, estado inicial e entradas devem produzir os mesmos traces de barramento e resultado.
 
-- **Z80:** executa instruções e transações de barramento; não conhece “BIOS”, “cartucho válido” ou “handoff”.
-- **SMS memory/bus:** resolve a região `0x0000`–`0xBFFF` conforme o estado do port `0x3E`, com prioridade e visibilidade dos slots.
-- **I/O:** implementa o latch do port `0x3E` e seus efeitos de habilitação/desabilitação, respeitando bits ativos baixos.
-- **Cartridge/mapper:** expõe o estado de paginação inicial; a BIOS v1.3 não deve ser usada como justificativa para inicializar automaticamente bancos que o hardware não inicializa.
-- **BIOS image:** é firmware opcional/configurável por perfil/revisão. O conteúdo da BIOS é executado como ROM pela CPU; não substituir sua lógica por um atalho de boot.
-- **Determinismo:** mesma revisão de BIOS, mídia, estado inicial e entradas devem produzir o mesmo trace de bus e o mesmo resultado.
+Instrumentação recomendada: log determinístico de reset, valor inicial e escritas em \`0x3E\`, slot selecionado, bytes lidos nos offsets de header, faixas de checksum, resultado das comparações e endereço/estado no handoff. Evitar logar ou versionar dumps protegidos.
 
-A futura implementação deve registrar o valor inicial e cada escrita em `0x3E`, o slot selecionado, os bytes lidos durante a sondagem, o resultado das verificações e o ponto de handoff. Esses dados permitem comparar o emulador com disassemblies e traces externos.
+## 12. Lacunas priorizadas para análise
 
-## 8. Plano de confirmação por dump
+| ID | Prioridade | Lacuna | Evidência necessária | Critério de encerramento |
+|---|---|---|---|---|
+| BIOS-01 | P0 | Identidade dos dumps v1.3/v2.0/v2.1 | tamanho, SHA-256, CRC32, procedência e revisão | manifesto local reproduzível sem incluir BIOS no Git |
+| BIOS-02 | P0 | Reset e estado inicial de \`0x3E\` | documentação de circuito + disassembly/trace ou hardware | estado por modelo/revisão definido e testado |
+| BIOS-03 | P0 | Sequência completa de writes \`0x3E\` | disassembly anotado e trace | valores, ordem e caminho de execução testados |
+| BIOS-04 | P0 | Checksum v1.3 | disassembly completo + ROMs de referência | faixas, contador, endianess e branches reproduzidos por testes |
+| BIOS-05 | P1 | Rotina de handoff | disassembly de v1.3 | cópia RAM, destino, valor \`0x3E\`, salto e estado da CPU documentados |
+| BIOS-06 | P1 | Inicialização CPU/RAM | disassembly e trace de writes | \`DI\`, \`SP\`, faixa/padrão RAM confirmados |
+| BIOS-07 | P1 | Inicialização PSG/VDP | disassembly e trace de I/O/memória | ordem, valores e duração confirmados |
+| BIOS-08 | P1 | Polling de controles/Snail Maze | disassembly + trace de input | portas, máscaras, polaridade, cadência e vetor de entrada confirmados |
+| BIOS-09 | P1 | Diferenças de tela/erro por revisão | disassemblies e dumps identificados | matriz v1.0/v1.3/v2.0/v2.1 sem generalizações |
+| BIOS-10 | P2 | Compatibilidade física de cartuchos japoneses/adaptadores | pinout, esquemático e testes com cartuchos | comportamento descrito por combinação real de hardware/mídia |
 
-Para transformar esta pesquisa documental em uma auditoria reproduzível:
+### Próxima sequência de trabalho
 
-1. Identificar cada arquivo local de BIOS por tamanho, SHA-256, CRC32 e procedência; não versionar os bytes no Git.
-2. Associar cada hash a uma revisão/território usando catálogos e comparação de conteúdo, não apenas o nome do arquivo.
-3. Extrair strings ASCII e seus offsets, mas tratar isso somente como inventário de dados.
-4. Desassemblar o código Z80 com endereços de ROM e mapear referências cruzadas para strings, tabelas e rotinas.
-5. Marcar basic blocks de inicialização, sondagem de slots, checksum/região, renderização da tela e Snail Maze.
-6. Criar testes com ROMs sintéticas: cabeçalho válido, cabeçalho ausente, região incompatível, checksum inválido, slot vazio, slot com bytes uniformes e slot com variação.
-7. Comparar v1.3 e v2.0 em testes separados; incluir Card/Cartridge/Expansion e estados de mapeamento de `0x3E`.
-8. Validar traces e resultados em emulador de referência e, quando disponível, hardware real.
+1. Obter localmente os dumps de BIOS que o usuário está analisando e gerar apenas manifesto de metadados (nome local, tamanho, SHA-256, CRC32, procedência); não copiar os binários ao repositório.
+2. Identificar revisão com comparação contra referências públicas e registrar ambiguidades.
+3. Obter/estudar os disassemblies comentados da BIOS v1.3 e v2.0 referenciados pelo SMS Power.
+4. Criar anotações por endereço: reset, setup, PSG/VDP, sondagem, checksum, handoff, tela de erro e Snail Maze.
+5. Produzir vetores sintéticos para cabeçalho, região, cada faixa de checksum, mapper inicial e casos de slot vazio/constante/variável.
+6. Implementar somente depois de especificação testável; preservar SG-1000 e executar a matriz de CI do SHA candidato.
 
-Não adicionar dumps de BIOS comerciais, ROMs, screenshots protegidos ou dados binários proprietários ao repositório. Registrar hashes, offsets, resultados e instruções de reprodução.
+## 13. Critérios de aceitação da pesquisa
 
-## 9. Critérios de aceitação para promover os achados
+- [ ] Hashes e identificação das BIOS examinadas.
+- [ ] Disassembly referenciado com endereços e referências cruzadas.
+- [ ] Estado inicial e sequência de escritas em \`0x3E\` confirmados.
+- [ ] Rotina de checksum v1.3 reproduzida byte a byte, incluindo faixas e endianess.
+- [ ] Handoff e estado da CPU no destino confirmados.
+- [ ] Rotinas de RAM, PSG e VDP confirmadas sem inferência a partir de strings.
+- [ ] Polling de input e Snail Maze confirmados.
+- [ ] Testes diferenciais separados para v1.3, v2.0 e v2.1.
+- [ ] Regressões SG-1000/SMS e CI executadas no SHA candidato.
 
-- [ ] SHA-256 e identificação da revisão para cada BIOS examinada.
-- [ ] Disassembly com offsets e referências cruzadas arquivado ou referenciado por fonte/licença.
-- [ ] Sequência de escritas no port `0x3E` extraída e testada.
-- [ ] Ordem Card → Cartridge → Expansion confirmada para v1.3.
-- [ ] Validação de cabeçalho, região e checksum reproduzida para v1.3.
-- [ ] Teste dos 513 bytes reproduzido para v2.0.
-- [ ] Diferenças de RAM/VDP/PSG confirmadas sem inferência a partir de strings.
-- [ ] Testes determinísticos e regressões SG-1000/SMS aprovados no SHA candidato.
+**Estado atual:** pesquisa documental ampliada; várias lacunas explícitas permanecem abertas. Nenhum runtime foi alterado. Nenhum teste de código ou temporal foi executado por esta alteração. Não declarar \`IMPLEMENTED\`, \`QUICK_PASS\`, \`SHORT_PASS\`, \`LONG_PASS\`, \`INTEGRATION_PENDING\` ou \`TEMPORAL_PASS\` para o comportamento da BIOS com base somente neste documento.
 
-**Estado atual deste documento:** pesquisa documental inicial. Não representa implementação, não altera o estado de compatibilidade da BIOS e não declara PASS de hardware ou temporal.
+## 14. Referências técnicas
 
-## 10. Referências
+1. SMS Power!, [BIOSes — Development](https://www.smspower.org/Development/BIOSes). Fluxo da v1.3, código de checksum, faixas por nibble, diferenças v2.0/v2.1 e disassemblies comentados.
+2. SMS Power!, [ROM Header — Development](https://www.smspower.org/Development/ROMHeader). Campos do cabeçalho, offsets, checksum little-endian, produto/revisão, região e tamanhos.
+3. SMS Power!, [Port $3E — Development](https://www.smspower.org/Development/Port3E). Compartilhamento do espaço \`0x0000–0xBFFF\`, bits ativos baixos e uso pela BIOS.
+4. SMS Power!, [RAM — Development](https://www.smspower.org/Development/RAM). Capacidade e espelhamento da Work RAM.
+5. ZiLOG, [Z80 CPU User Manual, UM008011-0816](https://www.zilog.com/docs/z80/um0080.pdf). Semântica da CPU; não substitui a documentação específica do circuito SMS.
+6. SMS Power!, [SDSC ROM Tag Specification](https://www.smspower.org/Development/SDSCROMTagSpecification). Referência histórica adicional; há diferenças de convenção/descrição de endianess em documentos relacionados, a confirmar contra os bytes de ROM e a rotina BIOS efetivamente usada.
 
-1. SMS Power!, [BIOSes — Development](https://www.smspower.org/Development/BIOSes). Fonte principal para diferenças entre BIOSes, fluxo da v1.3, validação de slots e algoritmo da v2.0. Inclui referência a disassemblies comentados.
-2. SMS Power!, [ROM Header — Development](https://www.smspower.org/Development/ROMHeader). Formato do cabeçalho, offsets, campos, região e códigos de tamanho.
-3. SMS Power!, [Port $3E — Development](https://www.smspower.org/Development/Port3E). Mapeamento de BIOS/slots, bits ativos baixos e uso do port durante a detecção.
-4. SMS Power!, [RAM — Development](https://www.smspower.org/Development/RAM). Mapeamento e espelhamento da RAM de 8 KiB no espaço `0xC000`–`0xFFFF`.
-5. ZiLOG, [Z80 CPU User Manual, UM008011-0816](https://www.zilog.com/docs/z80/um0080.pdf). Referência primária para semântica da CPU Z80; não substitui documentação específica do hardware SMS.
