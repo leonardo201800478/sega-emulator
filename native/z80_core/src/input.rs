@@ -113,17 +113,24 @@ fn parse_binding(value: &str, deadzone: u16) -> PyResult<PhysicalControl> {
     )))
 }
 
-fn collect_actions(state: &ActionState, turbo: [bool; 2], frame: u64) -> u8 {
+fn collect_actions(state: &ActionState) -> u8 {
     let mut mask = 0_u8;
-    for (index, name) in ACTIONS.iter().enumerate() {
+    for index in 0..ACTIONS.len() {
         let action = ActionId::new(index as u8).expect("action index is within range");
-        let mut active = state.is_active(action);
-        if frame % 4 >= 2 && ((*name == "button1" && turbo[0]) || (*name == "button2" && turbo[1]))
-        {
-            active = false;
-        }
-        if active {
+        if state.is_active(action) {
             mask |= 1 << index;
+        }
+    }
+    mask
+}
+
+fn apply_turbo(mut mask: u8, turbo: [bool; 2], frame: u64) -> u8 {
+    if frame % 4 >= 2 {
+        if turbo[0] {
+            mask &= !(1 << 4);
+        }
+        if turbo[1] {
+            mask &= !(1 << 5);
         }
     }
     mask
@@ -302,19 +309,25 @@ impl NativeInputManager {
         Ok(())
     }
 
-    fn poll_actions(&mut self, frame_number: u64) -> PyResult<(u8, u8)> {
+    #[pyo3(signature = (frame_number, keyboard_player1=0, keyboard_player2=0))]
+    fn poll_actions(
+        &mut self,
+        frame_number: u64,
+        keyboard_player1: u8,
+        keyboard_player2: u8,
+    ) -> PyResult<(u8, u8)> {
         self.poll_backend()?;
-        let mut output = [0_u8; 2];
+        let mut output = [keyboard_player1, keyboard_player2];
         for player in 0..2 {
-            let (Some(profile), Some(state)) = (
+            if let (Some(profile), Some(state)) = (
                 self.profiles[player].as_ref(),
                 self.state_for_player(player),
-            ) else {
-                continue;
-            };
-            let mut actions = ActionState::default();
-            profile.evaluate(state, &mut actions);
-            output[player] = collect_actions(&actions, self.turbo[player], frame_number);
+            ) {
+                let mut actions = ActionState::default();
+                profile.evaluate(state, &mut actions);
+                output[player] |= collect_actions(&actions);
+            }
+            output[player] = apply_turbo(output[player], self.turbo[player], frame_number);
         }
         Ok((output[0], output[1]))
     }
