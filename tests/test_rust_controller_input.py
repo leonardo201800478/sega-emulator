@@ -32,7 +32,7 @@ class FakeNativeInputManager:
 
     def poll_actions(self, frame_number: int):
         self.frames.append(frame_number)
-        return ["up", "button1"], ["right"]
+        return 0b0001_0001, 0b0000_1000
 
     def read_pressed_button(self, player: int):
         return "raw_button_4" if player == 1 else None
