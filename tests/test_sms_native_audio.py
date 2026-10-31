@@ -6,8 +6,9 @@ import pytest
 
 pytest.importorskip("sega_z80_core")
 
-from sega_emulator.machine import SMSMachine
 from sega_z80_core import NativeSMSMachine
+
+from sega_emulator.machine import SMSMachine
 
 
 def _machine() -> NativeSMSMachine:
