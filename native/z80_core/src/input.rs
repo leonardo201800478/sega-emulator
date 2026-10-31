@@ -338,16 +338,16 @@ impl NativeInputManager {
     ) -> (u8, u8) {
         self.poll_backend();
         let mut output = [keyboard_player1, keyboard_player2];
-        for player in 0..2 {
+        for (player, output_mask) in output.iter_mut().enumerate() {
             if let (Some(profile), Some(state)) = (
                 self.profiles[player].as_ref(),
                 self.state_for_player(player),
             ) {
                 let mut actions = ActionState::default();
                 profile.evaluate(state, &mut actions);
-                output[player] |= collect_actions(&actions);
+                *output_mask |= collect_actions(&actions);
             }
-            output[player] = apply_turbo(output[player], self.turbo[player], frame_number);
+            *output_mask = apply_turbo(*output_mask, self.turbo[player], frame_number);
         }
         (output[0], output[1])
     }
