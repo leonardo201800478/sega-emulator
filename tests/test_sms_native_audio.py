@@ -7,6 +7,8 @@ import pytest
 pytest.importorskip("sega_z80_core")
 
 from sega_z80_core import NativeSMSMachine
+from sega_emulator.machine import SMSMachine
+
 
 def _machine() -> NativeSMSMachine:
     # Program: set tone channel 0 and loop forever.
@@ -30,6 +32,7 @@ def _machine() -> NativeSMSMachine:
         ]
     )
     return NativeSMSMachine(rom, region="usa")
+
 
 def test_sms_binding_uses_native_psg_and_ntsc_clock() -> None:
     machine = _machine()
