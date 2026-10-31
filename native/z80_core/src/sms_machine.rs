@@ -278,6 +278,27 @@ impl NativeSMSMachine {
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
+    fn set_controller_actions_mask(&mut self, player: u8, actions: u8) -> PyResult<()> {
+        if !matches!(player, 1 | 2) {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "player deve ser 1 ou 2",
+            ));
+        }
+        self.machine
+            .set_controller(
+                player,
+                ControllerButtons {
+                    up: actions & (1 << 0) != 0,
+                    down: actions & (1 << 1) != 0,
+                    left: actions & (1 << 2) != 0,
+                    right: actions & (1 << 3) != 0,
+                    button_1: actions & (1 << 4) != 0,
+                    button_2: actions & (1 << 5) != 0,
+                },
+            )
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
     fn read_memory(&self, address: u16) -> u8 {
         self.machine.read_memory(address)
     }
