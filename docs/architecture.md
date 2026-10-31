@@ -16,6 +16,8 @@ A migração é incremental: preservar contratos públicos e testes úteis, mas 
 
 Consulte [ADR 0007 — Política de desenvolvimento Rust-first](adr/0007-rust-first-development-policy.md) e [AGENTS.md](../AGENTS.md) para o fluxo de implementação, testes e workflows.
 
+**Regra normativa:** toda autoridade temporal e de ciclos pertence exclusivamente ao runtime Rust; Python/Qt não pode avançar nem sincronizar a máquina. Consulte a [diretiva obrigatória de autoridade temporal Rust](architecture/rust-temporal-authority.md).
+
 ## Princípios
 
 ## Princípios
