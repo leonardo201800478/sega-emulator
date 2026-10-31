@@ -66,14 +66,21 @@ jobs:
         run: |
           cargo generate-lockfile --manifest-path native/z80_core/Cargo.toml
           cargo generate-lockfile --manifest-path native/audio_output/Cargo.toml
+          cargo generate-lockfile --manifest-path native/audio_runtime/Cargo.toml
       - name: Rust formatting
         run: cargo fmt --manifest-path native/z80_core/Cargo.toml --all -- --check
       - name: Rust formatting — native audio output
         run: cargo fmt --manifest-path native/audio_output/Cargo.toml -- --check
+      - name: Rust formatting — native audio runtime
+        run: cargo fmt --manifest-path native/audio_runtime/Cargo.toml -- --check
       - name: Rust Clippy — native audio output
         run: cargo clippy --manifest-path native/audio_output/Cargo.toml --locked --all-targets -- -D warnings
       - name: Rust tests — native audio output
         run: cargo test --manifest-path native/audio_output/Cargo.toml --locked
+      - name: Rust Clippy — native audio runtime
+        run: cargo clippy --manifest-path native/audio_runtime/Cargo.toml --locked --all-targets -- -D warnings
+      - name: Rust tests — native audio runtime
+        run: cargo test --manifest-path native/audio_runtime/Cargo.toml --locked
       - name: Rust Clippy
         run: cargo clippy --manifest-path native/z80_core/Cargo.toml --locked --all-targets -- -D warnings
       - name: Rust unit tests
@@ -93,6 +100,7 @@ jobs:
           path: |
             native/z80_core/Cargo.lock
             native/audio_output/Cargo.lock
+            native/audio_runtime/Cargo.lock
           if-no-files-found: error
       - name: Lint and format Python
         run: |
