@@ -534,3 +534,33 @@ Validação remota imediatamente após o commit:
 - Não houve checkout local, execução de testes, reconciliação com main, criação de branch de integração ou merge.
 
 Próximo passo obrigatório: aguardar/consultar checks do SHA `fc6463f...`, criar branch de integração a partir do `main` atual e reconciliar a PR sem alterar a branch original. A divergência de 36 commits e a nova condição `mergeable=false` impedem qualquer tentativa de merge direto.
+
+
+## 16. Revalidação da correção de input e diagnóstico do CI — 2026-10-31
+
+Estado remoto confirmado:
+- `main`: `c31e4183b8d0b36d95b4f58582938186417652f8` (inalterado).
+- PR #313: head `fc6463f986fc83e24d1024e6e4e2ad795b484f85`, aberta e Draft.
+- PR #313 compare: 107 commits ahead, 36 behind, `diverged`; mergeability retornou `true` nesta consulta, mas a divergência permanece e não autoriza merge.
+- PR #325: aberta, Draft; não alterada nesta etapa.
+
+Checks no SHA `fc6463f...`:
+- PASS: Agent 2, Repeatability/import/package integrity, python-ui, quality, qt-tests, Python 3.14 quality/regression, Agent 1, Workspace Rust tests, pinned external Z80 conformance, Rust formatting, SMS focused format/lint/tests, Workspace Clippy e outro job Windows.
+- IN PROGRESS na consulta: Agent 3 — Workspace quality and complete Rust checks.
+- FAIL: job Windows `124672749170`, no passo `Install official SDL3 runtime for native input smoke tests`.
+
+Diagnóstico do FAIL:
+- A instalação de dependências Python terminou normalmente.
+- O instalador falhou em `scripts/install_sdl3_runtime.ps1:18`, durante `Invoke-WebRequest -Uri $uri -OutFile $archivePath`.
+- Erro reportado: timeout/conexão ao host remoto não respondeu.
+- As etapas seguintes foram skipped; portanto, esse job não validou o build Maturin nem o smoke test SDL3.
+- Classificação: falha de infraestrutura/download externo, não evidência de defeito no código SDL3. Ainda assim, o gate Windows do SHA não está aprovado.
+
+Ação tomada:
+- Solicitado rerun apenas do job Windows com falha, ID `124672749170`; GitHub confirmou `success=true` para a solicitação de rerun. Resultado do novo attempt ainda pendente.
+- Nenhum código adicional foi alterado após `fc6463f...`.
+- O ambiente de trabalho continuou sem DNS para github.com; `git ls-remote` falhou por resolução de host. Não foi possível checkout/rebase local.
+
+Próxima decisão:
+- Aguardar resultado do rerun Windows e do Agent 3.
+- Depois, fazer reconciliação real em branch baseada no `main` atual. Não usar GitHub Contents API para simular rebase de uma PR com 107 commits; não alterar a branch original e não abrir PR de integração sem uma árvore reconciliada e validada.
