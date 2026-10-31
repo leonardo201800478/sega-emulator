@@ -18,7 +18,7 @@ A arquitetura normativa e a matriz de hardware estão em [Runtime de áudio nati
 4. [x] Integrar sessão aos runtimes SG-1000 e SMS; o caminho Qt ativo não transporta PCM por PyO3.
 5. [x] Integrar IAudioClient3 ao WASAPI Shared, com alinhamento min/max/fundamental e fallback convencional.
 6. [x] Adicionar mixer DSP compartilhado em Rust e filtro passa-baixa opcional, desativado até calibração por chip.
-7. [ ] Remover APIs PyO3 antigas de drenagem/conversão e fachadas Python não utilizadas.
+7. [x] Remover APIs PyO3 antigas de drenagem/conversão e fachadas Python de PCM/saída.
 8. [ ] Desacoplar a produção de áudio do timer Qt sem criar uma segunda execução da máquina.
 9. [ ] Expor telemetria do período efetivo IAudioClient3 e validar fallback em endpoints sem suporte.
 10. [ ] Expandir o mixer para fontes estéreo nativas e filtros por chip somente com referência técnica.
@@ -35,9 +35,9 @@ A arquitetura normativa e a matriz de hardware estão em [Runtime de áudio nati
 
 ## Estado
 
-**IMPLEMENTED (primeira fatia + mixer DSP base + negociação IAudioClient3) / INTEGRATION_PENDING (migração completa)**
+**IMPLEMENTED (sessão DSP Rust independente de PyO3 + remoção da API Python PCM + testes headless) / INTEGRATION_PENDING (scheduler independente do timer Qt e validação física)**
 
-A sessão Rust está integrada ao SG-1000/SMS e o Qt não transporta PCM no caminho ativo. No candidato aad95bd26b7e90a38b250ef865fafe51f2aa1c8f, CI Linux, build Maturin, Ruff, testes Python, integridade e Qt passaram. Windows: rustfmt, Clippy e testes do crate audio_output passaram; Clippy do z80_core está em execução. APIs legadas permanecem. QUICK_PASS=PASS; SHORT_PASS=INTEGRATION_PENDING; LONG_PASS=NOT RUN; TEMPORAL_PASS=NOT RUN. Testes físicos WASAPI/XAudio2 ainda estão pendentes.
+A sessão Rust independente de PyO3 está integrada aos adaptadores SG-1000/SMS; o Qt não transporta amostras nem PCM, e as APIs Python de drenagem/conversão foram removidas. No candidato aad95bd26b7e90a38b250ef865fafe51f2aa1c8f, CI Linux, build Maturin, Ruff, testes Python, integridade e Qt passaram. Windows: rustfmt, Clippy e testes do crate audio_output passaram; Clippy do z80_core está em execução. As APIs legadas de PCM/PyO3 foram removidas; o pump ainda é chamado após run_frame(). QUICK_PASS=PASS; SHORT_PASS=INTEGRATION_PENDING; LONG_PASS=NOT RUN; TEMPORAL_PASS=NOT RUN. Testes físicos WASAPI/XAudio2 ainda estão pendentes.
 
 
-A negociação IAudioClient3 e as primitivas DSP foram incorporadas na PR #299. O mixer já está no caminho ativo da sessão Rust para a fonte PSG atual; ainda não há fontes FM/PCM/CDDA/PWM implementadas nem filtros analógicos habilitados. Latência ponta a ponta e compatibilidade real do IAudioClient3 permanecem pendentes de validação em hardware Windows.
+A negociação IAudioClient3 e as primitivas DSP foram incorporadas na PR #299; esta atualização moveu a sessão DSP para um crate Rust independente e removeu a fronteira Python de PCM. O mixer já está no caminho ativo da sessão Rust para a fonte PSG atual; ainda não há fontes FM/PCM/CDDA/PWM implementadas nem filtros analógicos habilitados. Latência ponta a ponta e compatibilidade real do IAudioClient3 permanecem pendentes de validação em hardware Windows.
