@@ -155,38 +155,78 @@ Distinguir **selecionado**, **disponível**, **inicializado** e **efetivamente a
 
 ## 8. Inventário inicial e reconciliação obrigatória
 
-Arquivos confirmados na main durante a inspeção:
-- \`frontend/qt/main_window.py\`: janela, menus, toolbar, abas Emulador/Debug, status bar e callbacks.
-- \`frontend/qt/video_widget.py\`: superfície Qt Quick, APIs gráficas Vulkan/D3D11/D3D12 e fallback raster; provider de imagem com cópia protegida por lock.
-- \`frontend/qt/preferences.py\`: dataclass validada independente de PySide6, adaptador de armazenamento compatível com QSettings, defaults e migração defensiva.
-- \`frontend/qt/drivers_dialog.py\`: seleção de APIs XInput/SDL3, WASAPI/XAudio2 e Vulkan/D3D11/D3D12/Raster; informa que mudança gráfica requer reinicialização.
-- \`frontend/qt/settings_dialog.py\`: configura áudio/PSG e vídeo; já possui filtros, VSync/VRR, sync A/V, integer scaling e opção de limite de sprites.
+Inventário remoto realizado na branch `main`, SHA-base `2318fb35715c49c26e63f71debadacdb1816c79c`. Os SHAs de cada arquivo foram consultados no GitHub durante esta rodada.
 
-Observações objetivas da inspeção:
-- \`main_window.py\` ainda tem callbacks obrigatórios/opcionais numerosos e constrói menus diretamente no construtor. Isso sugere acoplamento de composição, não prova que a lógica de aplicação esteja toda dentro da janela.
-- A janela atual inclui menu de região do Master System e ação “Mudar sistema/ROM…”. A regra nova de seleção de sistema apenas com sessão encerrada precisa ser conferida contra o callback real.
-- \`preferences.py\` limita histórico a 12 caminhos simples, enquanto a decisão funcional define 10 entradas globais com sistema e caminho. Necessário migrar sem perder dados e sem confundir caminhos de sistemas diferentes.
-- \`settings_dialog.py\` apresenta valores fixos para taxa/buffer de áudio e descreve estimativa nominal de fila, não medição ponta a ponta. A proposta funcional exige descoberta e exposição de capacidades/valores efetivos; isso é lacuna, não implementação concluída.
-- \`drivers_dialog.py\` apresenta seleções de APIs, mas o próprio texto distingue escolha persistida e reinicialização. Falta confirmar no inventário o relatório unificado de backend efetivamente ativo, fallback e rollback.
-- \`video_widget.py\` contém estado de apresentação e fallback; não presumir que já oferece seleção de monitor, modos de resolução/Hz ou VRR confirmado.
+### 8.1 Composição e apresentação
 
-Os caminhos acima são os arquivos verificados. Nomes de serviços, entrypoints, testes e outros módulos não devem ser presumidos: completar a busca de referências/importadores e testes antes de definir extrações.
+- `frontend/qt_frontend.py` (SHA `81ce472fcb2edee432c7290a6defbffcbef1ede9`): entrypoint/orquestrador. A função `run()` coordena settings, criação de máquina SMS, runtime, áudio e janela. É o ponto prioritário para rastrear composição e ownership antes de extrair um Application Controller.
+- `frontend/qt/main_window.py` (SHA `a1965d2f6d2e08a00e16adb9efa40a92ad1f038`): janela de 402 linhas; menus/toolbar, abas Emulador/Debug, status bar e callbacks injetados. A janela não importa diretamente a máquina, mas recebe numerosas operações por callback.
+- `frontend/qt/video_widget.py` (SHA `d9a7f9e2249d0ddbd1de60460a3a87ad127aeaa6`): superfície Qt Quick, Vulkan/D3D11/D3D12 e fallback raster; `FramebufferImageProvider` usa lock e `QImage`. Confirmar cópias e custo no caminho de frame.
+- `frontend/qt/localization.py`: localização compartilhada.
+- `frontend/qt/video_filters.py`: filtros existentes.
+- `frontend/qt/focus_pause.py` e `frontend/qt/frame_pacer.py`: pausa por foco e pacing já separados em módulos.
+
+### 8.2 Preferências, configurações e drivers
+
+- `frontend/qt/preferences.py` (SHA `196e3bae1a3f58a4077f9e0bdf4032393b1bc4e0`): dataclass `FrontendPreferences`, protocolo `SettingsStore`, validação, leitura/gravação e histórico atual de 12 caminhos simples.
+- `frontend/qt/settings_dialog.py` (SHA `51e9879ebc0917d7c4e03698527760ec57c94348`): diálogo de áudio/PSG, vídeo, firmware SMS, filtros, VSync/VRR, sincronização A/V, integer scaling, CRT e limite de sprites.
+- `frontend/qt/drivers_dialog.py` (SHA `024aa32b7eef5aa214736719ec780046c13a896e`): seleção XInput/SDL3, WASAPI/XAudio2 e Vulkan/D3D11/D3D12/Raster. Seleção persistida não prova inicialização nem backend ativo.
+- `frontend/qt/sms_input_settings.py`: página de controles SMS; o próprio módulo documenta Light Phaser/mira e detecção por raster como pendentes no gameplay.
+- F32=C exige migrador automático e relatório de incompatibilidades. Antes de implementá-lo, enumerar chaves antigas, tipos, defaults, escopos e versões. A migração deve preservar valores válidos e não descartar incompatibilidades silenciosamente.
+- F35=C exige restauração global e por categoria, ambas confirmadas. As categorias devem corresponder ao schema efetivo, não a grupos arbitrários de widgets.
+
+### 8.3 Biblioteca, mídia e identificação
+
+- `frontend/qt/rom_library_dialog.py` (SHA `fa3335a1229c748971b54b7d9fbfbd2dccd0d0c0`) + `rom_library.py` (SHA `6843c2a8dab0d4ac3cebbb6edecc45d6465196b5`): UI de biblioteca e scanner existente. A varredura usa `QRunnable`/`QThreadPool`, sinais de progresso/conclusão, cancelamento por `Event`, índice persistente, hashes e agrupamento de duplicados. Reutilizar.
+- `rom_loader.py` (SHA `3cee48dc1804abaa8128cabc1abac2df01716208`): carregamento/validação de ROM e membros ZIP.
+- `rom_catalog.py` (SHA `f775b0a6f9cf521a7a271e4413bc8f528ce82714`): catálogo DAT, identificação por hashes e inspeção de mídia.
+- `scraper_settings_dialog.py` e `screenscraper.py`: integração de metadados/capas já existente; não faz parte do núcleo de sessão.
+
+### 8.4 Input, áudio e diagnóstico
+
+- `frontend/controller_profiles.py` (SHA `90a0489486ecc816d1055922dd959fb2a687652c`): modelos/serialização de perfis de jogador e configuração de controles.
+- `frontend/native_first_controller_input.py` (SHA `a90ed8ee53fc4a602426336aa677b7652bf0a580`): XInput nativo e fallback SDL3; snapshots normalizados na fronteira de input.
+- `frontend/qt/audio_output.py` (SHA `ce007a1b75a5c65af8184a66848dfb995a09cf01`): facade de `PcmResampler` nativo Rust/PyO3.
+- `frontend/qt/wasapi_audio.py` (SHA `5b043fcb0ac39c2df86b97be20fc10b5567167a2`): facade de saída de áudio Rust; expõe taxa, buffer, callbacks de underrun, blocos descartados e escrita PCM.
+- `frontend/qt/debug_logging.py` (SHA `3e6db05e522b6d2bae65e87adeb386fef16174d0`): logger opt-in assíncrono, fila limitada e thread dedicada de escrita.
+- F33=C determina separar Diagnóstico de Debug técnico. Diagnóstico deve agregar estado observável/capacidades/métricas/falhas; Debug mantém logs e traces. Reutilizar o logger existente; não criar segundo pipeline.
+- F34=C exige relatório com backend solicitado, ativo, fallback, motivo de falha e capacidades detectadas. Distinguir solicitado, disponível, inicializado e efetivamente ativo.
+
+### 8.5 Testes encontrados na main
+
+Testes de frontend diretamente relacionados: `test_qt_main_window.py`, `test_qt_preferences.py`, `test_qt_drivers_dialog.py`, `test_qt_settings_dialog.py`, `test_qt_rom_library_dialog.py`, `test_qt_video_driver_selection.py`, `test_qt_frame_pacer.py`, `test_qt_audio_output.py`, `test_qt_sms_input_settings.py`, `test_qt_key_mapping.py`, `test_focus_pause.py`, `test_qt_box_art.py`, `test_qt_scraper_settings.py`, além de testes unitários de configuração/estado de áudio, logging, formatadores de diagnóstico, Vulkan e WASAPI. Também existem testes de perfis de controle, input native-first/SDL3 e integração de runtime Rust.
+
+Workflows presentes na main incluem `qt-frontend-validation.yml`, `ui-controller-validation.yml`, `ci.yml`, além de workflows separados para SG-1000, SMS e Z80. A existência do workflow não é evidência de execução/aprovação nesta PR; filtros, SHA candidato e logs ainda precisam ser verificados quando houver mudança executável.
+
+### 8.6 Lacunas de evidência
+
+- O inventário de módulos confirma componentes reutilizáveis, mas ainda não rastreou cada callback da janela até o serviço, runtime Rust e fronteira PyO3.
+- Não foi concluída a matriz de todas as chaves QSettings, migrações existentes e namespaces por sistema/periférico.
+- Não foi demonstrado que Stop e Arquivo → Fechar ROM já compartilham a mesma operação central.
+- Não foi demonstrado relatório unificado de backend com fallback/motivo/capacidades, nem rollback completo após falha.
+- Não foi demonstrada descoberta de monitor/modos/Hz/VRR efetivos.
+- Métricas de áudio disponíveis no facade precisam ser reconciliadas com o backend real; estimativa não pode ser rotulada como medição ponta a ponta.
+- O inventário de testes identifica cobertura existente, mas não prova cobertura de todas as transições funcionais aprovadas.
+
+Os caminhos e SHAs acima são evidências do inventário consultado. Ausência de evidência em um ponto não deve ser descrita como ausência definitiva de implementação até rastrear referências, contratos e testes.
 
 ## 9. Matriz inicial de lacunas
 
-| Domínio | Base observada | Trabalho de modelagem |
-|---|---|---|
-| Shell da janela | MainWindow já existe | Extrair catálogo de comandos/estado sem reescrita ampla |
-| Preferências | FrontendPreferences e store existem | Namespaces por sistema/periférico, limite 10, schema/migração |
-| Biblioteca | Há UI/scanner e auditoria em desenvolvimento | Localizar serviço existente e reutilizar |
-| Vídeo | VideoWidget Qt Quick/raster e filtros | Descoberta monitor/modos, efetividade, proporção/escala |
-| Áudio | WASAPI/XAudio2 e settings | Dispositivo host, formatos efetivos, underruns/latência medida |
-| Input | XInput/SDL3 selecionáveis | Inventário de dispositivos, periféricos lógicos e mapeamentos |
-| Sessão | callbacks pause/reset e fluxo de ROM existentes | Máquina de estados única e semântica Stop/fechar |
-| Diagnóstico | Aba Debug e ações diagnósticas | Agregação sem duplicar logging |
-| Saves | SRAM e fluxo de Save State ainda a reconciliar | Persistência antes de unload; slots futuros |
+| Domínio | Base observada | Decisão/necessidade | Lacuna e evidência de aceitação |
+|---|---|---|---|
+| Shell/comandos | MainWindow e entrypoint Qt existentes; callbacks injetados | Menus, toolbar e atalhos com semântica comum | Rastrear callbacks; teste por comando e estado, sem duplicar lógica |
+| Sessão/mídia | Entry point compõe máquinas; loader e catálogo existem | Pause retém mídia; Stop/Fechar ROM descarregam; reset preserva mídia | Contrato único de sessão; testes de transições e falhas de persistência |
+| Preferências | FrontendPreferences/SettingsStore existentes | F32=C migração automática com incompatibilidades reportadas | Inventário de chaves; fixtures de versões antigas; idempotência e preservação |
+| Restauração | Defaults em diálogos/modelo já existem | F35=C restauração global e por categoria, confirmadas | Testes garantindo isolamento entre categorias e revalidação do schema |
+| Diagnóstico | Aba Debug, logger assíncrono e formatadores existentes | F33=C Diagnóstico separado de Debug | Snapshot confiável separado de logs; não duplicar logger |
+| Backends | DriversDialog e facades de áudio/vídeo/input | F34=C solicitado/ativo/fallback/motivo/capacidades | Testes com backend indisponível, fallback, erro e rollback |
+| Biblioteca | RomLibrary e RomLibraryDialog com scan assíncrono | Reutilizar biblioteca existente | Testar cancelamento, atualização, inacessibilidade e duplicados |
+| Vídeo | VideoWidget Qt Quick/raster e filtros | Proporção original/integer scaling; capacidades efetivas | Descoberta de monitor/modos/VRR e fallback com evidência host |
+| Áudio | Facades nativas, buffer e contadores de underrun | Buffer/latência estimada/underruns | Separar estimativa de medição; testar dispositivo removido e erro |
+| Input | Perfis, XInput/SDL3 e página SMS | Físico/lógico/mapeamento separados; hotplug preserva perfil | Testar reconexão e mapeamentos; não declarar Light Phaser funcional |
+| Saves | Persistência SRAM e Save State precisam reconciliação adicional | SRAM automática; 10 slots como alvo futuro | Testar gravação segura; Save State depende de serialização determinística |
 
-Esta matriz é provisória. Uma célula sem evidência não é classificada como ausente: precisa de busca no código e nos testes.
+A matriz é uma linha de base do inventário remoto, não uma certificação de completude.
 
 ## 10. Ordem de trabalho e critérios de saída
 
@@ -249,17 +289,14 @@ A máquina de estados da seção 3 deve acomodar Stop descarrega mídia, mas nã
 
 A transição Pause resulta em PAUSED + mídia carregada. Stop/Fechar ROM resulta em CLOSED + NONE após persistência segura, mantendo a aplicação Qt aberta. Troca de sistema com sessão ativa requer confirmação e só ocorre após encerramento seguro. O contrato de Restart Runtime deve preservar a identidade da mídia e não ser confundido com Reset físico.
 
-### 12.2 Decisões ainda pendentes
+### 12.2 Decisões F32–F35 agora aprovadas
 
-- **F32:** estratégia de migração das preferências atuais.
-- **F33:** manter Debug, evoluir para diagnóstico geral ou separar os dois.
-- **F34:** nível de detalhe do relatório de backend.
-- **F35:** restaurar configurações globalmente, por categoria ou ambos.
+- **F32=C — migração:** migrar automaticamente as configurações atuais e registrar incompatibilidades para revisão. Preservar valores válidos; incompatibilidades não devem ser descartadas silenciosamente. Inventariar chaves, tipos, defaults, escopos e versões antes de implementar.
+- **F33=C — diagnóstico:** separar Diagnóstico (estado observável, capacidades, métricas e falhas) de Debug técnico (logs/traces). Reutilizar a infraestrutura de logging existente; não criar segundo pipeline.
+- **F34=C — relatório de backend:** exibir backend solicitado, ativo, fallback aplicado, motivo de falha e capacidades detectadas. Distinguir solicitado, disponível, inicializado e efetivamente ativo.
+- **F35=C — restauração:** oferecer restauração global e por categoria, ambas com confirmação; restaurar uma categoria sem alterar as demais.
 
-Não inferir nem aplicar as sugestões anteriores para essas flags. O inventário completo da Fase A deve determinar quais componentes e contratos já existem antes de definir extrações ou implementação.
-
-**Estado:** modelagem atualizada com decisões funcionais parciais. Sem alterações em código executável e sem validação de runtime.
-
+**Estado:** 35/35 decisões funcionais registradas. Sem alterações em código executável e sem validação de runtime.
 
 ## 13. Correção de F01 — semântica de Stop e Pause
 
