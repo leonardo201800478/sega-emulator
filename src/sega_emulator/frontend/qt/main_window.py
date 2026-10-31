@@ -243,7 +243,7 @@ class EmulatorMainWindow(QMainWindow):
             video_menu.addAction(action)
         video_menu.addAction(self.fullscreen_action)
         audio_menu = self.menuBar().addMenu("Áudio")
-        self.audio_video_action = QAction("Configurar saída e DSP…", self)
+        self.audio_video_action = QAction("Configurações de áudio…", self)
         self.audio_video_action.setObjectName("configureAudioOutputAction")
         if on_configure_audio_video is not None:
             self.audio_video_action.triggered.connect(on_configure_audio_video)
@@ -267,6 +267,21 @@ class EmulatorMainWindow(QMainWindow):
         else:
             self.audio_diagnostics_action.setEnabled(False)
         audio_menu.addAction(self.audio_diagnostics_action)
+        audio_menu.addSeparator()
+        self.start_vgm_recording_action = QAction("Iniciar gravação PSG em VGM…", self)
+        self.start_vgm_recording_action.setShortcut("Ctrl+Shift+V")
+        if on_start_vgm_recording is not None:
+            self.start_vgm_recording_action.triggered.connect(on_start_vgm_recording)
+        else:
+            self.start_vgm_recording_action.setEnabled(False)
+        audio_menu.addAction(self.start_vgm_recording_action)
+        self.stop_vgm_recording_action = QAction("Parar gravação VGM", self)
+        if on_stop_vgm_recording is not None:
+            self.stop_vgm_recording_action.triggered.connect(on_stop_vgm_recording)
+        else:
+            self.stop_vgm_recording_action.setEnabled(False)
+        self.stop_vgm_recording_action.setEnabled(False)
+        audio_menu.addAction(self.stop_vgm_recording_action)
 
         settings_menu = self.menuBar().addMenu(translate("menu_settings", language))
         controls_menu = settings_menu.addMenu("Controles")
@@ -280,22 +295,6 @@ class EmulatorMainWindow(QMainWindow):
         self.vdp_snapshot_action.setShortcut("F8")
         self.vdp_snapshot_action.triggered.connect(on_vdp_snapshot)
         diagnostics_menu.addAction(self.vdp_snapshot_action)
-        diagnostics_menu.addSeparator()
-        self.start_vgm_recording_action = QAction("Iniciar gravação PSG em VGM…", self)
-        self.start_vgm_recording_action.setShortcut("Ctrl+Shift+V")
-        if on_start_vgm_recording is not None:
-            self.start_vgm_recording_action.triggered.connect(on_start_vgm_recording)
-        else:
-            self.start_vgm_recording_action.setEnabled(False)
-        diagnostics_menu.addAction(self.start_vgm_recording_action)
-        self.stop_vgm_recording_action = QAction("Parar gravação VGM", self)
-        if on_stop_vgm_recording is not None:
-            self.stop_vgm_recording_action.triggered.connect(on_stop_vgm_recording)
-        else:
-            self.stop_vgm_recording_action.setEnabled(False)
-        self.stop_vgm_recording_action.setEnabled(False)
-        diagnostics_menu.addAction(self.stop_vgm_recording_action)
-        diagnostics_menu.addSeparator()
         diagnostics_menu.addAction("Abrir pasta de logs", on_open_logs)
         diagnostics_menu.addAction("Estado da máquina", on_show_machine_state)
 
