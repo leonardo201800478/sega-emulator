@@ -10,7 +10,7 @@ use pyo3::types::PyBytes;
 use sega_sg1000_core::{MemoryConfig, Sg1000Machine};
 
 fn active_low_joystick_value(actions: u8) -> u8 {
-    0xFF & !(actions & 0x3F)
+    !(actions & 0x3F)
 }
 
 #[pyclass(module = "sega_z80_core")]
