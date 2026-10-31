@@ -333,3 +333,12 @@ O relatório [F0 — inventário remoto e reconciliação das PRs](f0-remote-inv
 **Evidência nova relevante:** após remover comentários/linhas em branco e normalizar espaços, os arquivos `native/sg1000_core/src/cpu.rs` e `native/sms_core/src/cpu.rs` possuem 3.257 linhas executáveis idênticas, na mesma ordem. As ALUs locais também correspondem ao código de `native/z80_alu`. A extração deve, portanto, priorizar reutilização de `sega-z80-alu` e `sega-z80-bus`, sem criar cópias adicionais.
 
 O relatório F0 substitui a tabela de estado das PRs da seção 7 como referência para a captura de 2026-10-31. Nenhuma PR foi mergeada e nenhum runtime foi alterado nesta atualização documental.
+
+
+## 11. Baseline de maturidade corrigido — SMS como fonte canônica
+
+A comparação executável anterior permanece válida, mas não implica maturidade equivalente. A [auditoria comparativa SMS × SG-1000](sms-z80-maturity-audit-2026-10-31.md) confirma que o SMS é o baseline histórico e de validação semântica: o executor SG foi portado do SMS, ambos têm o mesmo código executável normalizado, porém o SMS mantém 37 arquivos de testes Z80 dedicados e harness externo fixado; o SG não possui diretório de testes de integração Z80 equivalente e mantém cópia local do contrato de barramento.
+
+A extração do crate compartilhado deverá partir do executor SMS consolidado e migrar os testes de CPU/ALU/prefixos/interrupções para o novo crate, sem duplicá-los em SG e SMS. Testes de mapper/portas SMS permanecem na plataforma SMS; testes de integração de memória, I/O, controle, VDP/INT e PSG devem ser acrescentados ao SG-1000. O crate `native/z80_alu` é uma cópia equivalente das ALUs locais e não constitui oráculo independente.
+
+Esta correção substitui qualquer leitura de que os dois cores são fontes igualmente maduras. A implementação semântica atual está igualada por cópia; a evidência de validação não está.
