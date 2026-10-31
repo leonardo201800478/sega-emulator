@@ -1,10 +1,10 @@
 //! PyO3 adapter for the independent SMS core and native PSG audio path.
 
+use crate::audio::{MachineAudioSession, open_audio_session};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use sega_sms_core::{ControllerButtons, SmsMachine, SmsMachineConfig, VideoStandard};
-use crate::audio::{MachineAudioSession, open_audio_session};
 
 fn sms_controller_buttons_from_action_mask(actions: u8) -> ControllerButtons {
     ControllerButtons {
