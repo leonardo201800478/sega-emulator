@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from sega_emulator.frontend.controller_profiles import ControllerInputConfig
 
+_ACTIONS = ("up", "down", "left", "right", "button1", "button2", "hold")
+
 
 class RustControllerInput:
     """Frontend facade over sega_z80_core.NativeInputManager."""
@@ -80,7 +82,14 @@ class RustControllerInput:
         if self._native is None:
             return {1: set(), 2: set()}
         player1, player2 = self._native.poll_actions(frame_number)
-        return {1: set(player1), 2: set(player2)}
+        return {
+            player: {
+                action
+                for bit, action in enumerate(_ACTIONS)
+                if mask & (1 << bit)
+            }
+            for player, mask in ((1, player1), (2, player2))
+        }
 
     def read_pressed_button(self, player: int) -> str | None:
         if self._native is None:
