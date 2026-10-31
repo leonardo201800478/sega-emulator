@@ -966,16 +966,20 @@ def run(initial_path: Path | None = None) -> None:
             )
             preferences = updated_audio
         selected_audio_driver = audio_driver
-        audio_warning = _configure_machine_audio(
-            machine, preferences, selected_audio_driver
-        )
-        audio_output = (
-            audio_warning is None
-            and preferences.audio_enabled
-            and selected_audio_driver != "disabled"
-        )
-        if machine is None:
-            audio_output = preferences.audio_enabled and selected_audio_driver != "disabled"
+        audio_warning = None
+        if audio_changed:
+            audio_warning = _configure_machine_audio(
+                machine, preferences, selected_audio_driver
+            )
+            audio_output = (
+                audio_warning is None
+                and preferences.audio_enabled
+                and selected_audio_driver != "disabled"
+            )
+            if machine is None:
+                audio_output = (
+                    preferences.audio_enabled and selected_audio_driver != "disabled"
+                )
         settings.setValue("audio_driver", audio_driver)
         preferences.save_to_store(settings)
 
@@ -1233,7 +1237,7 @@ def run(initial_path: Path | None = None) -> None:
     )
 
     def reset_machine() -> None:
-        nonlocal machine, frame_count, frame_pacer
+        nonlocal machine, frame_count, frame_pacer, audio_output
         nonlocal sms_region_attempts, active_sms_region
         nonlocal last_checkpoint_time, last_checkpoint_tstates
         nonlocal last_checkpoint_instructions, last_checkpoint_frame
@@ -1265,7 +1269,16 @@ def run(initial_path: Path | None = None) -> None:
         else:
             machine = SG1000Machine(loaded.data)
             frame_pacer = FramePacer(FRAME_PERIOD_SECONDS)
-        audio_resampler.reset()
+        audio_warning = _configure_machine_audio(
+            machine, preferences, selected_audio_driver
+        )
+        audio_output = (
+            audio_warning is None
+            and preferences.audio_enabled
+            and selected_audio_driver != "disabled"
+        )
+        if audio_warning is not None:
+            status.showMessage(audio_warning, 8000)
         frame_count = 0
         pause_controller.set_paused(False)
         window.set_pause_state(False, enabled=True)
