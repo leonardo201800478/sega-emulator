@@ -258,11 +258,10 @@ impl NativeSG1000Machine {
     fn pump_audio_output(&mut self) {
         if self.audio_session.is_some() {
             let samples = self.machine.drain_audio_samples(None);
-            let result = self
-                .audio_session
-                .as_mut()
-                .expect("audio session was checked above")
-                .process_samples(&samples);
+            let result = match self.audio_session.as_mut() {
+                Some(session) => session.process_samples(&samples),
+                None => return,
+            };
             if let Err(error) = result {
                 self.audio_session = None;
                 self.audio_output_error = Some(error);
