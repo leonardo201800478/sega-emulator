@@ -5,7 +5,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use sega_sms_core::{ControllerButtons, SmsMachine, SmsMachineConfig, VideoStandard};
 
-use crate::audio::{open_audio_session, MachineAudioSession};
+use crate::audio::{MachineAudioSession, open_audio_session};
 
 /// Resolve the territory and video standard without constructing Python errors.
 ///
@@ -399,5 +399,4 @@ mod tests {
                 .is_ok()
         );
     }
-
 }
