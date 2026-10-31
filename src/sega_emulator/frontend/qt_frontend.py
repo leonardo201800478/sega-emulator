@@ -1024,16 +1024,19 @@ def run(initial_path: Path | None = None) -> None:
         )
 
     def show_audio_diagnostics() -> None:
-        """Show native Rust output counters and distinguish estimates from measurements."""
+        """Show native output counters and separate estimates from measurements."""
         backend_labels = {
             "wasapi": "WASAPI Shared (IAudioClient3 com fallback Shared)",
             "xaudio2": "XAudio2",
             "disabled": "Desativado",
         }
         lines = [
-            f"Backend selecionado: {backend_labels.get(selected_audio_driver, selected_audio_driver)}",
+            "Backend selecionado: "
+            f"{backend_labels.get(selected_audio_driver, selected_audio_driver)}",
             f"Saída ativa: {'sim' if machine is not None and audio_output else 'não'}",
-            f"Taxa PCM configurada: {preferences.audio_sample_rate:,} Hz".replace(",", "."),
+            f"Taxa PCM configurada: {preferences.audio_sample_rate:,} Hz".replace(
+                ",", "."
+            ),
             f"Bloco solicitado: {preferences.audio_buffer_size} amostras",
             f"Fila da aplicação: {preferences.audio_queue_blocks} blocos",
             f"Volume: {preferences.audio_volume}%",
@@ -1045,7 +1048,8 @@ def run(initial_path: Path | None = None) -> None:
             )
             lines.append(f"Período WASAPI solicitado: {requested_ms:.2f} ms")
             lines.append(
-                "O período efetivo do mecanismo Windows ainda não é exposto pelo runtime."
+                "O período efetivo do mecanismo Windows ainda não é exposto "
+                "pelo runtime."
             )
         elif selected_audio_driver == "xaudio2":
             queued_ms = (
@@ -1072,8 +1076,9 @@ def run(initial_path: Path | None = None) -> None:
             [
                 "",
                 "Latência física ponta a ponta: não medida.",
-                "Os valores em milissegundos são estimativas da solicitação/fila da aplicação; "
-                "não incluem necessariamente o mecanismo Windows, driver, DAC e transdutor.",
+                "Os valores em milissegundos são estimativas da solicitação/fila "
+                "da aplicação; não incluem necessariamente o mecanismo Windows, "
+                "driver, DAC e transdutor.",
             ]
         )
         QMessageBox.information(
