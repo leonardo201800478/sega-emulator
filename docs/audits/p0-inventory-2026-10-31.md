@@ -456,3 +456,59 @@ Head `51fd75e1d280ebf7a8180275ac60974604debbbe`, seis commits à frente de main,
 4. **#325:** manter Draft. A CI no head atual passou, mas ainda faltam a confirmação local pós-build de SHA/árvore limpa e o fechamento dos critérios de inventário e smoke tests definidos nas seções 9 e 11.
 
 Nenhum runtime foi alterado, nenhuma branch de integração foi criada, e nenhuma PR foi fechada ou mesclada nesta atualização.
+
+
+
+---
+
+## 14. Revalidação CI e inspeção semântica do input — 2026-10-31
+
+### 14.1 PR #325 — check confirmado no head atual
+
+Nova consulta após a seção 13 confirmou:
+- Head: `9c22e297a4ac11de184c5a5ebdef41ad5823655c`.
+- Check-run `quality`, job `124671846261`, workflow run `41246815479`.
+- Estado: `completed`, conclusão: **success**, SHA correspondente exatamente ao head atual.
+- PR #325: aberta, Draft, base `c31e4183b8d0b36d95b4f58582938186417652f8`, `mergeable=true`.
+- `main` permanece em `c31e4183b8d0b36d95b4f58582938186417652f8`.
+
+A pendência de check-run do novo head registrada na seção 13 foi resolvida. A PR continua Draft por decisão de escopo; CI verde não encerra os critérios P-0.
+
+### 14.2 Inspeção de código da PR #313 — fronteira do input
+
+Foi feita leitura direta dos arquivos no head original `1c64734c56413276b27ab0d85d9a8ec6978f3c41`, incluindo:
+- `native/input_runtime/src/lib.rs`;
+- `native/input_runtime/src/sdl3_backend.rs`;
+- `native/z80_core/src/input.rs`;
+- `src/sega_emulator/frontend/rust_controller_input.py`;
+- `src/sega_emulator/frontend/qt_frontend.py`;
+- `scripts/install_sdl3_runtime.ps1`;
+- manifests Cargo e adaptadores SG-1000/SMS.
+
+O desenho principal é coerente com a fronteira arquitetural: SDL3 e mapeamento físico em Rust; PyO3 expõe máscaras compactas e nomes; Qt traduz teclado e aplica snapshots nos adaptadores de console. O backend SDL3 é explicitamente Windows-only nesta implementação inicial. Rumble/FFB e medições input-to-photon não são implementados nem reivindicados.
+
+### 14.3 Achado de revisão — polling físico em callbacks de teclado
+
+Em `qt_frontend.py`, `KeyboardInputFilter.eventFilter` chama `update_joystick()` em KeyPress e KeyRelease. Essa função chama `controller_input.poll_masks(...)`, que atravessa PyO3 e executa `NativeInputManager.poll_actions()`, incluindo `poll_backend()` e polling SDL3.
+
+A mesma função também é chamada na entrada de `show_frame()`, imediatamente antes de `machine.run_frame()`.
+
+Consequências e avaliação:
+- O polling SDL3 não está restrito a uma única fronteira explícita por frame: também ocorre em eventos de teclado.
+- Como Qt e a emulação são executados sequencialmente na mesma thread, a chamada de evento não interrompe uma instrução Z80 em andamento; portanto, não há evidência aqui de callback host dentro de CPU/barramento.
+- Ainda assim, o mesmo snapshot de input é atualizado por dois caminhos de chamada, com frequência dependente da atividade do teclado. Isso dificulta reproduzir/medir a cadência de amostragem e torna o contrato de entrada menos simples do que o desejado.
+- A recomendação é separar a atualização de teclado do polling físico: KeyPress/KeyRelease devem apenas atualizar o conjunto de teclas pressionadas; a leitura física SDL3 e a composição teclado+gamepad devem ocorrer uma única vez na fronteira do frame (ou em uma fronteira explícita do scheduler, quando existir). O tratamento de NMI por transição de HOLD deve consumir o snapshot composto nessa mesma fronteira.
+- Adicionar testes que contem chamadas de polling por frame e provem que eventos Qt de teclado não acionam polling SDL3 nem avançam estado de turbo.
+
+Classificação: **REVIEW FINDING — correção recomendada antes da integração**. Não é classificado como violação de execução dentro de instrução nem como bug confirmado de timing da CPU; é uma inconsistência de fronteira/cadência de amostragem.
+
+### 14.4 Outras verificações semânticas observadas
+
+- `poll_actions` usa `frame_number` para fasear turbo; a fase é determinística para uma sequência de números de frame, mas deve ser testada para pausas, reinício de ROM e chamadas extras de polling.
+- A API `set_backend_preference` atualmente valida `auto`/ `sdl3`, mas não seleciona backends diferentes; isso é aceitável somente enquanto SDL3 for o único backend suportado e a UI não prometer XInput/GameInput.
+- A alocação automática atribui os primeiros dois dispositivos enumerados aos jogadores 1 e 2. Não equivale a configuração persistente de identidade/dispositivo e deve permanecer descrita como atribuição automática básica.
+- O SDL3 runtime é carregado dinamicamente e o script fixa versão `3.4.18` com SHA-256 esperado. O arquivo DLL é runtime externo local e está no `.gitignore`; não deve ser versionado.
+
+### 14.5 Decisão operacional
+
+A PR #313 continua candidata prioritária, mas o achado 14.3 deve ser corrigido no branch de integração antes de solicitar aprovação. A reconciliação Git real e os gates no novo SHA ainda não foram executados. Não houve criação de branch de integração, alteração de runtime, comentário/review remoto ou merge nesta etapa.
