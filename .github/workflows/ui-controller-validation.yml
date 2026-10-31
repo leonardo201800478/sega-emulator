@@ -5,6 +5,8 @@ on:
     paths:
       - "src/sega_emulator/frontend/controller_profiles.py"
       - "src/sega_emulator/frontend/qt_frontend.py"
+      - "src/sega_emulator/frontend/rust_controller_input.py"
+      - "tests/test_rust_controller_input.py"
       - "tests/test_controller_profiles.py"
       - "tests/test_qt_key_mapping.py"
       - ".github/workflows/ui-controller-validation.yml"
@@ -40,4 +42,4 @@ jobs:
       - name: Compile frontend modules
         run: python -m compileall -q src/sega_emulator/frontend
       - name: Run controller and Qt key mapping tests
-        run: python -m pytest tests/test_controller_profiles.py tests/test_qt_key_mapping.py -q
+        run: python -m pytest tests/test_controller_profiles.py tests/test_rust_controller_input.py tests/test_qt_key_mapping.py -q
