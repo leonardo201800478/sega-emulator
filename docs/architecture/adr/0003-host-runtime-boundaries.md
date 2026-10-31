@@ -23,7 +23,7 @@ As PRs abertas oferecem implementações e requisitos distintos: #313 contém in
 ### Input
 
 - Captura e normalização física pertencem ao runtime Rust/backend nativo.
-- Eventos de input devem carregar timestamp monotônico de origem, sequência e estado normalizado. O adaptador da máquina converte/associa esses eventos à timeline emulada com política explícita e determinística.
+- Eventos de input devem carregar timestamp monotônico de origem, sequência por dispositivo e estado normalizado. O adaptador da máquina estabelece uma ordem total determinística para eventos simultâneos (timestamp, identidade estável do dispositivo e sequência), sem depender da ordem de iteração de containers hash. A implementação atual da #313 usa um contador global enquanto percorre um `HashMap`; isso precisa ser reconciliado antes de a leitura alimentar o scheduler.
 - O timestamp do host nunca substitui `MachineTime` e nunca avança CPU/dispositivos por conta própria.
 - A implementação #313 é a candidata principal para a primeira fatia Windows/SDL3. O contrato atual de `DeviceReading.timestamp_ns` é host-monotonic; o scheduler deve fazer a conversão na fronteira.
 - A chamada PyO3 `poll_actions` por frame é transitória até avaliação de custo e contrato final de eventos. Não é polling Python de APIs físicas, mas seu custo e latência precisam ser medidos. O alvo é evitar dependência do loop Qt para determinar a ordem temporal dos eventos de gameplay.
