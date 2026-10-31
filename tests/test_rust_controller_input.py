@@ -30,9 +30,9 @@ class FakeNativeInputManager:
             turbo2,
         )
 
-    def poll_actions(self, frame_number: int):
+    def poll_actions(self, frame_number: int, keyboard_player1: int, keyboard_player2: int):
         self.frames.append(frame_number)
-        return 0b0001_0001, 0b0000_1000
+        return 0b0001_0001 | keyboard_player1, 0b0000_1000 | keyboard_player2
 
     def read_pressed_button(self, player: int):
         return "raw_button_4" if player == 1 else None
@@ -69,9 +69,9 @@ def test_qt_adapter_sends_profiles_to_rust_and_receives_semantic_actions(
     assert native.preference == "sdl3"
     assert native.profiles[1][0] == config.players[1].gamepad_buttons
     assert native.profiles[2][2] == config.deadzone
-    assert controller.poll(123) == {
-        1: {"up", "button1"},
-        2: {"right"},
+    assert controller.poll_masks(123, {1: {"left"}, 2: {"button2"}}) == {
+        1: 0b0001_1001,
+        2: 0b0010_1000,
     }
     assert native.frames == [123]
     assert controller.read_pressed_button(1) == "raw_button_4"
