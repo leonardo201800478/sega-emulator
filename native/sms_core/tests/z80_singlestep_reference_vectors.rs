@@ -8704,7 +8704,6 @@ fn singlestep_expanded_opcode_16_vector_0000() {
     );
 }
 
-
 #[test]
 fn singlestep_expanded_opcode_21_vector_0000() {
     // Pinned SingleStepTests/Z80 vector 21 0000 from ebe1875d48f374bcfd4b505d8eb8ee751568b5f7.
