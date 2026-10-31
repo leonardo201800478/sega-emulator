@@ -33,4 +33,4 @@ A arquitetura normativa e a matriz de hardware estão em [Runtime de áudio nati
 
 **IMPLEMENTED (primeira fatia) / INTEGRATION_PENDING (migração completa)**
 
-A sessão Rust está integrada ao SG-1000/SMS e o Qt não transporta PCM no caminho ativo. As APIs legadas ainda existem. Os workflows no SHA candidato anterior pararam no Ruff format; lint/build/test ainda não foram executados. Registrar IMPLEMENTED, QUICK_PASS, SHORT_PASS, LONG_PASS, INTEGRATION_PENDING e TEMPORAL_PASS separadamente, conforme evidência.
+A sessão Rust está integrada ao SG-1000/SMS e o Qt não transporta PCM no caminho ativo. No candidato aad95bd26b7e90a38b250ef865fafe51f2aa1c8f, CI Linux, build Maturin, Ruff, testes Python, integridade e Qt passaram. Windows: rustfmt, Clippy e testes do crate audio_output passaram; Clippy do z80_core está em execução. APIs legadas permanecem. QUICK_PASS=PASS; SHORT_PASS=INTEGRATION_PENDING; LONG_PASS=NOT RUN; TEMPORAL_PASS=NOT RUN. Testes físicos WASAPI/XAudio2 ainda estão pendentes.
