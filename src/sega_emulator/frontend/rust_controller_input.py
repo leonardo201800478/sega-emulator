@@ -1,7 +1,7 @@
 """Thin Qt adapter for the Rust-owned physical controller runtime.
 
 This module performs no device discovery, polling, normalization or physical
-button mapping. It only transfers UI configuration and semantic actions across
+button mapping. It transfers UI configuration and keyboard action masks across
 the PyO3 boundary.
 """
 
