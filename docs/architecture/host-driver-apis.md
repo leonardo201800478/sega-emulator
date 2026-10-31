@@ -53,3 +53,8 @@ Qt é a única interface gráfica ativa e usa exclusivamente o runtime Rust. Pyg
 - Testar áudio habilitado/desabilitado, falha ao abrir o dispositivo e continuidade de vídeo/input.
 - Testar a seleção raster após cada atualização de framebuffer e a indisponibilidade de Vulkan.
 - Validar o contrato para cada console antes de habilitar drivers específicos nele.
+
+
+## Decisão normativa de áudio — 2026-10-30
+
+A seleção global de saída permanece WASAPI Shared por padrão e XAudio2 como alternativa. A fachada Qt/PySide6 envia apenas configuração e comandos de sessão; o runtime Rust possui produção, mixagem, resampling, filas, workers e saída. O frontend não drena nem transporta PCM. O contrato completo, os limites de Exclusive/IAudioClient3 e a matriz de dispositivos Sega estão em [Runtime de áudio nativo](native-audio-runtime.md).
