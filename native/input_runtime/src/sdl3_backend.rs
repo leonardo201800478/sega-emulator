@@ -52,6 +52,7 @@ mod windows {
     type GetJoystickName = unsafe extern "C" fn(*mut c_void) -> *const c_char;
     type GetJoystickVendor = unsafe extern "C" fn(*mut c_void) -> u16;
     type GetJoystickProduct = unsafe extern "C" fn(*mut c_void) -> u16;
+    type GetJoystickType = unsafe extern "C" fn(*mut c_void) -> c_int;
     type GetNumJoystickAxes = unsafe extern "C" fn(*mut c_void) -> c_int;
     type GetNumJoystickButtons = unsafe extern "C" fn(*mut c_void) -> c_int;
     type GetNumJoystickHats = unsafe extern "C" fn(*mut c_void) -> c_int;
@@ -82,6 +83,7 @@ mod windows {
         get_joystick_name: GetJoystickName,
         get_joystick_vendor: GetJoystickVendor,
         get_joystick_product: GetJoystickProduct,
+        get_joystick_type: GetJoystickType,
         get_num_axes: GetNumJoystickAxes,
         get_num_buttons: GetNumJoystickButtons,
         get_num_hats: GetNumJoystickHats,
@@ -150,6 +152,7 @@ mod windows {
                 get_joystick_name: load!("SDL_GetJoystickName", GetJoystickName),
                 get_joystick_vendor: load!("SDL_GetJoystickVendor", GetJoystickVendor),
                 get_joystick_product: load!("SDL_GetJoystickProduct", GetJoystickProduct),
+                get_joystick_type: load!("SDL_GetJoystickType", GetJoystickType),
                 get_num_axes: load!("SDL_GetNumJoystickAxes", GetNumJoystickAxes),
                 get_num_buttons: load!("SDL_GetNumJoystickButtons", GetNumJoystickButtons),
                 get_num_hats: load!("SDL_GetNumJoystickHats", GetNumJoystickHats),
@@ -193,6 +196,7 @@ mod windows {
         name: String,
         vendor_id: u16,
         product_id: u16,
+        device_class: DeviceClass,
         joystick: *mut c_void,
         gamepad: *mut c_void,
         raw_axes: usize,
@@ -205,11 +209,7 @@ mod windows {
             DeviceDescriptor {
                 id: self.id,
                 backend: BackendKind::Sdl3,
-                class: if self.gamepad.is_null() {
-                    DeviceClass::Joystick
-                } else {
-                    DeviceClass::Gamepad
-                },
+                class: self.device_class,
                 name: self.name.clone(),
                 vendor_id: (self.vendor_id != 0).then_some(self.vendor_id),
                 product_id: (self.product_id != 0).then_some(self.product_id),
@@ -334,6 +334,18 @@ mod windows {
                 } else {
                     unsafe { CStr::from_ptr(name_ptr) }.to_string_lossy().into_owned()
                 };
+                let joystick_type = unsafe { (self.api.get_joystick_type)(joystick) };
+                let device_class = if !gamepad.is_null() {
+                    DeviceClass::Gamepad
+                } else {
+                    match joystick_type {
+                        2 => DeviceClass::Wheel,
+                        3 | 8 => DeviceClass::ArcadeStick,
+                        4 => DeviceClass::FlightStick,
+                        9 => DeviceClass::Pedals,
+                        _ => DeviceClass::Joystick,
+                    }
+                };
                 let raw_axes = unsafe { (self.api.get_num_axes)(joystick) }.max(0) as usize;
                 let raw_buttons = unsafe { (self.api.get_num_buttons)(joystick) }.max(0) as usize;
                 let raw_hats = unsafe { (self.api.get_num_hats)(joystick) }.max(0) as usize;
@@ -342,6 +354,7 @@ mod windows {
                     name,
                     vendor_id: unsafe { (self.api.get_joystick_vendor)(joystick) },
                     product_id: unsafe { (self.api.get_joystick_product)(joystick) },
+                    device_class,
                     joystick,
                     gamepad,
                     raw_axes,
