@@ -96,9 +96,17 @@ Também é possível apontar para um ZIP:
 
 Se o ZIP contiver várias ROMs compatíveis, a interface permite selecionar explicitamente o membro. O conteúdo não é extraído automaticamente.
 
-## Estado do marco SG-1000 e primeiro release
+## Estado dos marcos SG-1000 e Master System
 
 `native/sg1000_core` é o núcleo oficial de hardware SG-1000 em Rust puro. `native/z80_core` é a fronteira PyO3/Maturin; a máquina integrada delega CPU, memória, I/O, VDP, PSG e execução ao núcleo Rust. Isso não implica precisão ciclo a ciclo: o modelo temporal continua baseado em instruções e T-states nominais.
+
+## Runtime Master System — arquitetura vigente
+
+O Master System possui uma máquina nativa Rust integrada ao frontend Qt. A implementação da máquina está em `native/z80_core/src/sms_machine.rs`, exposta pela extensão nativa e encaminhada pela fachada `src/sega_emulator/machine/sms.py`. A PR #256 ativou a seleção, o carregamento e a execução do SMS no fluxo da biblioteca Qt, preservando o SG-1000.
+
+A integração inicial documentada aceita ROMs locais `.sms`, `.rom`, `.bin` e ZIP com um único candidato compatível (limite descrito na PR de ativação). A entrada inicial cobre direcional e botões 1/2. O SMS não deve reutilizar diagnósticos exclusivos do VDP SG-1000 nem produzir captura VGM temporizada sem estar ligada ao barramento temporal.
+
+Limitações registradas na ativação: temporização por instrução/T-states nominais (não ciclo a ciclo), captura VGM SMS ainda não conectada à timeline, cobertura de mappers e fidelidade audiovisual não universais. A existência do caminho de gameplay não certifica todos os jogos. Consulte a [auditoria técnica SMS](docs/audits/sms-current-technical-status-2026-10-29.md) e o [roadmap de consolidação SG-1000 + SMS](docs/roadmaps/sg1000-sms-consolidation-roadmap.md).
 
 ## Runtime SG-1000 — arquitetura vigente
 
@@ -112,7 +120,7 @@ O hardware ativo em Rust inclui:
 - PSG SN76489AN, eventos temporizados e geração de amostras digitais;
 - entrada, interrupções e coordenação da máquina.
 
-Python de produção fica restrito à interface Qt e backends de host, carregamento de ROMs e perfis de cartucho, configuração/logging de aplicação e a fachada de integração. Ferramentas/testes Python devem validar Rust; não podem usar as implementações em `legacy/` como runtime ou oráculo ativo.
+Python de produção fica restrito à interface Qt, orquestração da aplicação, carregamento de ROMs/perfis, configuração/logging e fachada de integração. As diretivas de áudio, input e vídeo definem Rust como destino dos backends de hardware; a migração deve ser verificada componente a componente e PRs ainda abertas não contam como integração. Ferramentas/testes Python devem validar Rust; não podem usar as implementações em `legacy/` como runtime ou oráculo ativo.
 
 PyO3 expõe snapshots e operações da máquina. O GIL permanece adquirido durante as chamadas da extensão; isso não implica callbacks por instrução nem precisão ciclo a ciclo. O modelo temporal atual é baseado em instruções e T-states nominais.
 
