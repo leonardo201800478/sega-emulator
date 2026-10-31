@@ -323,6 +323,7 @@ def run(initial_path: Path | None = None) -> None:
         on_configure_region=lambda region: configure_region(region),
         region_preference=region_preference,
         on_configure_audio_video=lambda: configure_audio_video(),
+        on_show_audio_diagnostics=lambda: show_audio_diagnostics(),
         on_start_vgm_recording=lambda: start_vgm_recording(),
         on_stop_vgm_recording=lambda: stop_vgm_recording(),
         video_driver=video_driver,
@@ -1020,6 +1021,63 @@ def run(initial_path: Path | None = None) -> None:
                 "input_available": controller_input.available,
                 "audio_enabled": preferences.audio_enabled,
             },
+        )
+
+    def show_audio_diagnostics() -> None:
+        """Show native Rust output counters and distinguish estimates from measurements."""
+        backend_labels = {
+            "wasapi": "WASAPI Shared (IAudioClient3 com fallback Shared)",
+            "xaudio2": "XAudio2",
+            "disabled": "Desativado",
+        }
+        lines = [
+            f"Backend selecionado: {backend_labels.get(selected_audio_driver, selected_audio_driver)}",
+            f"Saída ativa: {'sim' if audio_output else 'não'}",
+            f"Taxa PCM configurada: {preferences.audio_sample_rate:,} Hz".replace(",", "."),
+            f"Bloco solicitado: {preferences.audio_buffer_size} amostras",
+            f"Fila da aplicação: {preferences.audio_queue_blocks} blocos",
+            f"Volume: {preferences.audio_volume}%",
+            f"Balanço: {preferences.audio_balance:+d}",
+        ]
+        if selected_audio_driver == "wasapi":
+            requested_ms = (
+                preferences.audio_buffer_size * 1000 / preferences.audio_sample_rate
+            )
+            lines.append(f"Período WASAPI solicitado: {requested_ms:.2f} ms")
+            lines.append(
+                "O período efetivo do mecanismo Windows ainda não é exposto pelo runtime."
+            )
+        elif selected_audio_driver == "xaudio2":
+            queued_ms = (
+                preferences.audio_buffer_size
+                * preferences.audio_queue_blocks
+                * 1000
+                / preferences.audio_sample_rate
+            )
+            lines.append(f"Fila nominal da aplicação: {queued_ms:.2f} ms")
+        if machine is None:
+            lines.append("Sessão nativa: aguardando carregamento de uma ROM.")
+        else:
+            try:
+                underruns, dropped_blocks = machine.audio_output_metrics
+                lines.append(f"Underruns registrados: {underruns}")
+                lines.append(f"Blocos descartados: {dropped_blocks}")
+                output_error = machine.audio_output_error
+                lines.append(
+                    f"Último erro nativo: {output_error or 'nenhum registrado'}"
+                )
+            except (AttributeError, RuntimeError, TypeError, ValueError) as exc:
+                lines.append(f"Telemetria indisponível: {exc}")
+        lines.extend(
+            [
+                "",
+                "Latência física ponta a ponta: não medida.",
+                "Os valores em milissegundos são estimativas da solicitação/fila da aplicação; "
+                "não incluem necessariamente o mecanismo Windows, driver, DAC e transdutor.",
+            ]
+        )
+        QMessageBox.information(
+            window, "Diagnóstico da saída de áudio Rust", "\\n".join(lines)
         )
 
     def configure_audio_video() -> None:
