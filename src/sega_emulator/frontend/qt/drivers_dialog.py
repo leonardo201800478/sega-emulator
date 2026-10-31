@@ -15,9 +15,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-INPUT_DRIVERS = (
-    ("Automático (SDL3 nativo em Rust)", "auto"),
-)
+INPUT_DRIVERS = (("Automático (SDL3 nativo em Rust)", "auto"),)
 AUDIO_DRIVERS = (
     ("WASAPI nativo (Rust)", "wasapi"),
     ("XAudio2 nativo (Rust)", "xaudio2"),
