@@ -775,16 +775,6 @@ def run(initial_path: Path | None = None) -> None:
                 loaded_machine = SG1000Machine(candidate.data)
                 if not preferences.sprite_limit_enabled:
                     loaded_machine.set_sprite_limit_enabled(False)
-            audio_warning = _configure_machine_audio(
-                loaded_machine, preferences, selected_audio_driver
-            )
-            audio_output = (
-                audio_warning is None
-                and preferences.audio_enabled
-                and selected_audio_driver != "disabled"
-            )
-            if audio_warning is not None:
-                logger.warning(audio_warning)
         except Exception as exc:
             logger.exception(
                 "Falha ao carregar ROM",
@@ -795,6 +785,18 @@ def run(initial_path: Path | None = None) -> None:
 
         if vgm_recorder.active and not stop_vgm_recording():
             return
+        if machine is not None:
+            machine.close_audio_output()
+        audio_warning = _configure_machine_audio(
+            loaded_machine, preferences, selected_audio_driver
+        )
+        audio_output = (
+            audio_warning is None
+            and preferences.audio_enabled
+            and selected_audio_driver != "disabled"
+        )
+        if audio_warning is not None:
+            logger.warning(audio_warning)
         machine, loaded, frame_count = loaded_machine, candidate, 0
         pause_controller.set_paused(False)
         window.set_pause_state(False, enabled=True)
@@ -1245,6 +1247,8 @@ def run(initial_path: Path | None = None) -> None:
             return
         if loaded is None:
             return
+        if machine is not None:
+            machine.close_audio_output()
         if active_system == "master_system":
             resolution = resolve_sms_region_profile(
                 region_preference, loaded.data, sms_rom_catalog
