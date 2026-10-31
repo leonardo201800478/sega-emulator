@@ -282,12 +282,6 @@ impl NativeAudioSession {
         }
     }
 
-    pub(crate) fn set_volume(&mut self, volume: u8) -> Result<(), String> {
-        self.resampler
-            .set_volume(volume)
-            .map_err(|error| error.to_string())
-    }
-
     pub(crate) fn metrics(&self) -> (u64, u64) {
         match &self.output {
             NativeAudioBackend::Wasapi(output) => {
@@ -300,10 +294,27 @@ impl NativeAudioSession {
     }
 
     pub(crate) fn close(&mut self) {
+        let tail = self.resampler.flush();
+        if !tail.is_empty() {
+            match &mut self.output {
+                NativeAudioBackend::Wasapi(output) => {
+                    let _ = output.write_pcm(tail);
+                }
+                NativeAudioBackend::XAudio2(output) => {
+                    let _ = output.write_pcm(tail);
+                }
+            }
+        }
         match &mut self.output {
             NativeAudioBackend::Wasapi(output) => output.close(),
             NativeAudioBackend::XAudio2(output) => output.close(),
         }
+    }
+}
+
+impl Drop for NativeAudioSession {
+    fn drop(&mut self) {
+        self.close();
     }
 }
 
