@@ -4,6 +4,7 @@ use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use sega_sms_core::{ControllerButtons, SmsMachine, SmsMachineConfig, VideoStandard};
+use crate::audio::{MachineAudioSession, open_audio_session};
 
 fn sms_controller_buttons_from_action_mask(actions: u8) -> ControllerButtons {
     ControllerButtons {
@@ -15,8 +16,6 @@ fn sms_controller_buttons_from_action_mask(actions: u8) -> ControllerButtons {
         button_2: actions & (1 << 5) != 0,
     }
 }
-
-use crate::audio::{MachineAudioSession, open_audio_session};
 
 /// Resolve the territory and video standard without constructing Python errors.
 ///
