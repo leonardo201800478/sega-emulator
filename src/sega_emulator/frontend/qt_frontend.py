@@ -461,7 +461,7 @@ def run(initial_path: Path | None = None) -> None:
         hold_was_pressed = hold_pressed
 
     class KeyboardInputFilter(QObject):
-        """Converte eventos Qt em bits de joystick SG-1000 ativos em nível baixo."""
+        """Converte eventos Qt em ações lógicas; os cores codificam as linhas em Rust."""
 
         def eventFilter(self, watched: QObject, event: QEvent) -> bool:
             if event.type() == QEvent.Type.KeyPress:
