@@ -90,7 +90,62 @@ Não inferir o hardware apenas pelo nome do jogo ou por um único byte de cabeç
 
 A região da mídia é evidência e restrição de compatibilidade, não necessariamente a região física do console. Um jogo PAL pode ser executado em console NTSC, sujeito ao comportamento real do software e do hardware. A configuração física/regional da máquina permanece explícita; divergências devem ser sinalizadas e tratadas por política documentada, não corrigidas automaticamente alterando o clock.
 
-### 4.2 MachineProfile
+### 4.2 Catálogo de mídia, DATs, fingerprints e perfis de cartucho
+
+A identificação de mídia e a resolução do hardware do cartucho são funções centrais do emulador, não uma heurística secundária do carregador. O projeto adotará DATs reconhecidos de preservação como fontes primárias de identidade:
+
+- **No-Intro:** referência de identificação e auditoria de dumps de cartuchos, usando os conjuntos e sistemas pertinentes.
+- **Redump:** referência de identificação e auditoria de mídia óptica, incluindo a estrutura de discos/trilhas quando aplicável. Não aplicar o modelo de DAT de cartucho a CD nem reduzir discos a um único hash de arquivo.
+
+Os DATs devem ser importáveis/atualizáveis e versionados como dependências de dados externas ao runtime. Registrar nome do conjunto, sistema, versão/data, origem, licença/termos de uso e hash do próprio DAT. A atualização de catálogo não pode alterar silenciosamente o comportamento de um jogo já carregado: a identidade e o perfil resolvidos devem ser reproduzíveis e registráveis em diagnóstico.
+
+**Identidade e auditoria de dumps:**
+- Calcular e comparar os checksums disponíveis no DAT e no formato de mídia, incluindo CRC32, MD5 e SHA-1 quando fornecidos; manter os valores e o algoritmo identificados, sem tratar hashes diferentes como intercambiáveis.
+- Registrar tamanho exato, cabeçalhos/headers, organização/interleaving, overdumps, padding, trilhas e demais características relevantes antes de normalizar ou transformar a imagem.
+- Distinguir hash do arquivo recebido, hash do conteúdo canônico usado para identificação e hash de cada trilha/área quando o formato exigir. Toda transformação deve ser explícita, reversível quando possível e diagnosticável.
+- Classificar correspondências como exata, variante conhecida, derivada/modificada, ambígua ou desconhecida. Não aprovar uma ROM apenas por nome, tamanho ou correspondência parcial.
+- Auditar região declarada, variantes/revisões, diferenças de revisão e peculiaridades conhecidas. A região identificada é metadado da mídia e não substitui a seleção explícita do perfil físico da máquina.
+- Exibir divergências entre o DAT e os dados observados, preservando evidências; nunca corrigir ou reescrever a ROM original automaticamente.
+
+**DAT não é especificação completa de hardware ou gameplay.** Número de jogadores, acessórios necessários/suportados, expansão de RAM, SRAM, peculiaridades de boot e comportamento de mapper devem vir de uma camada complementar de metadados técnicos, sustentada por documentação, pesquisas e testes. Cada campo deve indicar procedência, nível de confiança e estado (documentado, observado, inferido ou desconhecido). Não inventar esses atributos quando o DAT não os fornecer.
+
+**CartProfile / BoardProfile:** após identificar a mídia, resolver um perfil explícito e versionado da placa/cartucho, separado do MachineProfile e do mapper executável. O perfil deve descrever, conforme evidência disponível:
+- capacidade e organização da ROM, bancos, janelas, registradores, linhas de endereço e regras de seleção; suportar ROMs maiores que a janela diretamente endereçável e mapeamentos não padronizados;
+- tipo, tamanho, faixa de endereço, espelhamento, retenção, write-enable/proteção e persistência de RAM, incluindo SRAM/NVRAM e RAM de expansão embutida no cartucho;
+- mapper padrão, mapper proprietário, lógica discreta/ASIC, variantes de placa e requisitos de inicialização/reset;
+- expansões e dispositivos integrados, interrupções, registradores auxiliares e quaisquer efeitos sobre o mapa de memória/I/O;
+- compatibilidade de boot, BIOS/firmware exigido, opcional ou não utilizado, respeitando o modelo e a revisão do console;
+- metadados de uso: número de jogadores, modo simultâneo/alternado quando conhecido, acessórios obrigatórios/opcionais/suportados e limitações de compatibilidade.
+
+O mapper Rust implementa o comportamento elétrico/lógico do perfil de placa: decodificação de endereços, bancos, leitura/escrita, RAM, registradores, conflitos de barramento quando comprovados, reset e efeitos temporais observáveis. O catálogo identifica e seleciona o perfil; não executa o mapper nem substitui sua lógica. Perfis compartilhados só podem ser reutilizados quando a equivalência da placa e do comportamento estiver demonstrada.
+
+A arquitetura deve contemplar, sem presumir que já estejam implementados:
+- cartuchos com ROM banking e janelas múltiplas;
+- cartuchos com ROM expandida e mapeamento diferenciado;
+- cartuchos com SRAM/NVRAM ou RAM de expansão embutida;
+- cartuchos com ASICs, controladores ou expansões especiais;
+- cartuchos multijogos/multicarts, com seleção de título/banco e estado de seleção reproduzível;
+- hacks, traduções, overdumps, revisões e ROMs modificadas, identificadas como derivadas e nunca confundidas com a revisão original;
+- títulos que dependem de acessórios ou de configurações específicas de entrada;
+- jogos com caminhos de boot que dependem de BIOS, firmware, região, modelo ou estado inicial específico.
+
+Multicarts e hacks não devem receber um mapper genérico por conveniência. Multicarts precisam de perfil de placa e lógica de seleção próprios; hacks/patches devem preservar a identidade do original, registrar patch/proveniência e permitir perfil explícito quando alterarem mapeamento, boot ou requisitos. Se a identidade não for suficiente para escolher um perfil com segurança, bloquear a seleção automática ou solicitar escolha explícita, sem fallback silencioso para um mapper incorreto.
+
+**Política de BIOS por título/perfil:** a decisão de exigir, permitir, ignorar ou proibir BIOS deve ser dado explícito do perfil resolvido e da plataforma/modelo, com justificativa e fonte. A ausência de BIOS opcional não pode bloquear o boot; uma BIOS obrigatória ausente/inválida deve produzir erro claro; não usar BIOS quando o hardware/jogo não a utiliza. Não generalizar a política de uma plataforma para outra.
+
+**Fluxo obrigatório de carregamento:**
+1. preservar a imagem original e calcular fingerprints sem modificá-la;
+2. identificar formato e plataforma; para cartuchos consultar No-Intro e para mídia óptica consultar Redump;
+3. resolver correspondência, revisão, região e estado de integridade;
+4. consultar metadados técnicos complementares e resolver CartProfile/BoardProfile;
+5. validar mapper, ROM banking, RAM/SRAM, expansões, acessórios, jogadores e requisitos de BIOS;
+6. resolver separadamente MachineProfile, região física e domínios de clock;
+7. validar incompatibilidades e ambiguidades; solicitar decisão explícita quando necessário;
+8. instanciar o mapper e os dispositivos Rust, aplicar reset/boot e registrar a identidade e os perfis efetivamente selecionados.
+
+O diagnóstico deve informar identidade/hash, DAT e versão usados, correspondência, região/revisão, perfil de placa, mapper, mapa/tamanho de ROM, RAM/SRAM, acessórios/jogadores quando conhecidos, política/estado de BIOS e alertas de incompatibilidade. Não registrar conteúdo da ROM nem despejar dados protegidos em logs.
+
+### 4.3 MachineProfile
 
 Antes do reset/boot, resolver um perfil explícito e versionado com, no mínimo:
 
@@ -109,7 +164,7 @@ Antes do reset/boot, resolver um perfil explícito e versionado com, no mínimo:
 
 O perfil é imutável durante a sessão normal. Alterar território, padrão de vídeo, revisão ou clock exige reset/reconfiguração explícita; não se deve mudar o clock silenciosamente no meio do quadro.
 
-### 4.3 NTSC, PAL e PAL-M
+### 4.4 NTSC, PAL e PAL-M
 
 NTSC, PAL e PAL-M não são simples opções de resolução nem aliases de uma taxa de FPS.
 
@@ -121,7 +176,7 @@ Geometria lógica, clocks, raster e codificação de cor são dimensões separad
 
 Nenhum valor de clock, linhas por quadro, pixels por linha ou ciclo será fixado sem fonte técnica rastreável e validação do modelo/revisão correspondente.
 
-### 4.4 Firmware e BIOS
+### 4.5 Firmware e BIOS
 
 A política é específica por plataforma e perfil:
 
@@ -136,7 +191,7 @@ A política é específica por plataforma e perfil:
 
 O inventário deve validar presença, integridade, variante regional e compatibilidade. BIOS protegidas não devem ser versionadas. HLE, quando considerado, precisa ser explicitamente identificado como modo alternativo e não como firmware original.
 
-### 4.5 Sequência de inicialização
+### 4.6 Sequência de inicialização
 
 A sequência conceitual obrigatória é:
 
@@ -311,6 +366,11 @@ Cada componente deve seguir inventário → critérios de aceitação → implem
 |---|---|
 | Registradores/portas | Vetores de leitura/escrita, máscaras, aliases, latches e efeitos colaterais |
 | Memórias | Endereçamento, wrap, buffers, acessos concorrentes e restrições |
+| Identidade da mídia | DAT No-Intro/Redump versionado, fingerprints, tamanho/estrutura, revisão/região, correspondência exata/derivada/ambígua e diagnóstico reproduzível |
+| CartProfile/BoardProfile | Perfil de placa separado do MachineProfile e do mapper executável; ROM banking/expandida, SRAM/RAM embutida, registradores, expansões e reset |
+| Mappers | Vetores por mapper/placa, bancos/janelas, limites, leituras/escritas, reset, RAM persistente e efeitos de barramento comprovados |
+| Multicarts e hacks | Seleção de título/banco reproduzível; hacks/patches identificados como derivados, com procedência e perfil explícito quando alterarem hardware |
+| Requisitos do jogo | Jogadores, modo de jogo, acessórios, BIOS/firmware e peculiaridades de boot com fonte/confiança ou estado UNKNOWN |
 | Raster | H/V counters, linhas, dots, blanking, fronteiras e eventos |
 | Sprites | Limites, avaliação, prioridade, colisão, overflow e casos fora da tela |
 | Paleta/composição | Valores digitais, transparência, prioridade e mistura entre camadas |
@@ -374,6 +434,10 @@ Não implementar os seis núcleos em paralelo. O SMS é a próxima trilha de cor
 - Não criar um VDP genérico que apague diferenças reais entre consoles.
 - Não tratar resolução de apresentação como raster físico.
 - Não permitir que mídia escolha silenciosamente o clock físico da máquina.
+- Não identificar cartuchos apenas por nome, extensão, tamanho ou um único byte de cabeçalho; usar DATs e fingerprints com proveniência e estado de confiança.
+- Não tratar No-Intro/Redump como catálogo completo de comportamento de hardware, jogadores ou acessórios; esses dados exigem metadados técnicos complementares e evidência rastreável.
+- Não selecionar mapper, perfil de placa, RAM/SRAM ou política de BIOS por heurística silenciosa quando a identidade for ambígua.
+- Não confundir CartProfile/BoardProfile, implementação executável do mapper e MachineProfile; são responsabilidades distintas.
 - Não exigir BIOS de SMS/GG universalmente; respeitar modelo e configuração.
 - Não simular Sega CD funcional sem firmware exigido e válido.
 - Não ativar HLE como se fosse firmware original.
