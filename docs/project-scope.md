@@ -75,7 +75,7 @@ Python fica restrito a:
 - frontend Qt/PySide6, incluindo apresentação da superfície de vídeo e controles de configuração do jogador;
 - carregamento e seleção de ROMs, discos, BIOS e perfis;
 - configuração, logs e diagnósticos da aplicação;
-- backends de host e integração de dispositivos;
+- configuração/orquestração de serviços do host e apresentação de suas capacidades; captura, normalização e execução de backends de hardware (áudio, input e pipeline de vídeo) pertencem a Rust e à camada nativa definida para cada domínio;
 - ferramentas, auditorias, automação, testes e benchmarks;
 - fachada fina para a extensão Rust.
 
@@ -615,4 +615,4 @@ Nenhuma decisão nova pode contradizer silenciosamente este escopo. Se surgir ev
 
 ---
 
-**Decisão consolidada:** o Sega Emulator é um conjunto de máquinas Sega compostas por dispositivos Rust específicos, inicializadas a partir de perfis explícitos de hardware/mídia/firmware e sincronizadas por uma timeline mestre Rust. Os VDPs mantêm identidade e regras próprias, com SG-1000 preservado, SMS como prioridade de correção e Game Gear, Mega Drive, Sega CD e 32X tratados em sequência. Coprocessadores especializados como o SVP fazem parte do escopo futuro, com núcleos próprios e integração baseada em evidências.
+**Decisão consolidada:** o Sega Emulator é um conjunto de máquinas Sega compostas por dispositivos Rust específicos, inicializadas a partir de perfis explícitos de hardware/mídia/firmware e sincronizadas por uma timeline mestre Rust. Os VDPs mantêm identidade e regras próprias, com SG-1000 e SMS como prioridades conjuntas de implementação e validação, preservando as diferenças específicas de hardware; Game Gear, Mega Drive, Sega CD e 32X aguardam os marcos anteriores. Coprocessadores especializados como o SVP fazem parte do escopo futuro, com núcleos próprios e integração baseada em evidências.
