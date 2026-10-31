@@ -229,3 +229,82 @@ Estados do projeto continuam separados: `IMPLEMENTED`, `QUICK_PASS`, `SHORT_PASS
 5. Corrigir os blockers, aprovar F1 e só então abrir os protótipos executáveis em branches isoladas.
 
 **Primeiro marco de entrega:** inventário Z0 + ADRs F1 + relatório A4. O marco deve encerrar com decisão documentada sobre implementação canônica Z80, API do barramento, ownership do scheduler e lista priorizada de gaps. Nenhuma alteração de runtime entra em `main` antes desse gate.
+
+
+## 8. Estratégia obrigatória de compatibilidade e integração das PRs abertas
+
+**Regra:** toda decisão arquitetural nova deve ser avaliada contra as PRs abertas antes de criar um contrato, crate ou adaptador equivalente. O objetivo é preservar valor técnico sem manter branches incompatíveis nem duplicar implementações.
+
+### 8.1 Baseline e estado observado em 2026-10-31
+
+- HEAD de `main`: `98f730015e98fc33cf2472eef606d7f27d038291`.
+- As sete PRs abaixo continuam abertas e Draft.
+- Os heads não estão atualizados em relação ao HEAD atual da `main`; todas as comparações indicam branches divergentes, com merge-base histórico. Nenhuma deve ser atualizada em lote sem análise de commits e arquivos.
+- O número de commits à frente/atrás é relativo ao HEAD de `main` observado nesta auditoria e não substitui análise de diff, conflitos ou checks.
+
+| PR | Head observado | Commits exclusivos à frente | Commits de main ausentes | Diretriz de compatibilidade |
+|---|---|---:|---:|---|
+| #315 Temporal Core | `bb1aec75cf99c1ffd49f4e4c591250de43f1c0cb` | 15 | 12 | Reutilizar a fundação T0 após revisão de API, overflow, ordenação e testes; completar T1 MachineScheduler fora de dependências de host |
+| #314 Z80 boundary test | `7ff733f79d38f94e21bdb01f989b6eea5694f47e` | 3 | 12 | Preservar como regressão de wraparound; portar o teste para o crate Z80 compartilhado e manter adaptadores SG-1000/SMS cobertos |
+| #313 Input Rust/SDL3 | `1c64734c56413276b27ab0d85d9a8ec6978f3c41` | 106 | 12 | Principal implementação candidata de input; auditar API host-independent, polling/hotplug, threads, lifecycle SDL, teclado/ponte Qt e integração com scheduler |
+| #300 Input Rust anterior | `eeb8b8ae37f7ce116d2211fccd338afe4c29b3fb` | 1 | 209 | Tratar como proposta/documentação anterior; reconciliar decisões úteis com #313, sem criar segundo backend |
+| #301 Vídeo Rust | `d2d15431896d52f20929a56b72efdfd24aeb9b8e` | 1 | 209 | Preservar inventário e critérios; definir port de apresentação/surface/recursos sem permitir que VSync ou host clock avancem a máquina |
+| #298 Modelo funcional Qt | `f821e3e0acee8b1ad1f056eb31e18e3744cfe17a` | 10 | 209 | Incorporar decisões funcionais e requisitos de diagnóstico ao contrato da aplicação; não reimplementar frontend nem perder decisões F01–F35 |
+| #297 Auditoria ROM SMS | `3b19837cacd18a048e313e5a8f5a86c97a02837d` | 27 | 271 | Preservar como ferramenta de teste/integration harness; garantir instância isolada, execução Rust real e relatório sem bytes de ROM/BIOS |
+
+### 8.2 Matriz de suporte por domínio arquitetural
+
+| Domínio | PR de referência | Contrato-alvo a preparar | Condição antes da integração |
+|---|---|---|---|
+| Tempo e scheduler | #315 | ClockDomain, EventQueue, MachineScheduler e interface de eventos de dispositivos | Revisar determinismo, fase, overflow, prioridades e independência do host |
+| CPU Z80 | #314 + issues #158/#159 | API de execução por instrução e futura API step/resume, Bus port tipado | Vetores e proveniência preservados; um único decoder de produção |
+| Input | #313; decisões históricas #300 | InputSource/normalized events, timestamp/sequence, dispositivo e perfil | Não duplicar polling; separar captura física do estado de gameplay; SDL lifecycle explícito |
+| Vídeo | #301 | Frame output/surface port, ownership de recursos, pacing e telemetria | Não acoplar renderer ao relógio lógico; backend ativo/fallback verificável |
+| Frontend | #298 | Application commands, snapshots, settings migration e diagnostics | Qt continua shell; decisões funcionais não podem ser perdidas |
+| Auditoria de ROMs | #297 | API de execução headless/diagnostics, cancelamento e resultados estruturados | Não bloquear UI; logs locais; não persistir conteúdo de ROM/BIOS |
+
+### 8.3 Como preparar os contratos sem congelar a arquitetura prematuramente
+
+1. **Inventariar primeiro:** ler commits, diffs, testes, dependências e workflows de cada PR; registrar quais elementos são código executável, documentação, teste ou proposta.
+2. **Mapear consumidores:** identificar quem chama cada API atual e cada API proposta; não projetar ports baseados apenas nos nomes das PRs.
+3. **Definir interfaces mínimas:** aceitar somente contratos exigidos por ao menos um consumidor concreto e necessários à direção arquitetural.
+4. **Usar adaptadores de compatibilidade:** quando uma PR depender de API antiga válida, criar adapter fino e temporário; evitar duplicar domínio ou decoder.
+5. **Preservar testes e semântica:** portar os testes relevantes para o crate/camada definitiva, mantendo fixtures, licença, proveniência e limitações dos oráculos.
+6. **Atualizar branch individualmente:** criar branch de integração ou atualizar a PR somente após decisão explícita; nunca rebasear/force-push ou substituir trabalho alheio sem autorização.
+7. **Validar no SHA candidato:** workflows aplicáveis, filtros, logs, artefatos e testes no SHA exato. Check ausente não é PASS.
+8. **Encerrar duplicações com evidência:** somente depois que a implementação escolhida cobre todos os consumidores e as regressões da alternativa foram preservadas.
+
+### 8.4 Sequência de integração recomendada
+
+- **Primeiro grupo — documentação e critérios:** #298 e documentação arquitetural. Extrair as decisões funcionais, requisitos de configuração, pausa/parada, diagnóstico, migração de settings e estados da UI. Não depender da integração do renderer.
+- **Segundo grupo — fundação independente:** #315 e #314. Revisar o Temporal Core e preservar o vetor Z80. A extração do Z80 e o scheduler headless podem avançar em paralelo após aprovação dos contratos.
+- **Terceiro grupo — input:** #313 é a implementação candidata principal; #300 deve ser reconciliada como histórico/decisões. Integrar apenas um runtime de input.
+- **Quarto grupo — vídeo:** #301 deve ser reavaliada depois de definidos ownership, surface lifecycle, frame output e separação entre clock emulado e pacing de apresentação.
+- **Quinto grupo — ferramenta de diagnóstico:** #297 deve ser adaptada à API final de execução headless, sem acoplar-se a internals do frontend nem a APIs temporárias do SMS.
+
+Essa sequência é uma ordem de revisão e preparação, não uma autorização de merge nem uma afirmação de que uma PR depende tecnicamente de outra. Dependências reais devem ser demonstradas pelo código e pelos contratos.
+
+### 8.5 Requisitos que a arquitetura deverá satisfazer para suportar as PRs
+
+- A aplicação Qt deve operar por comandos e snapshots coarse-grained, compatíveis com as decisões de #298.
+- A execução headless deve permitir que #297 execute sessões isoladas sem frame pacing ou janela visível.
+- Input deve entregar eventos normalizados com ordem/tempo definidos, sem polling Python por frame; captura SDL e configuração Qt precisam ter lifecycle e ownership distintos.
+- Vídeo deve receber frames/surfaces produzidos pela máquina, sem controlar o avanço do scheduler.
+- Scheduler deve aceitar eventos de input e coordenar dispositivos, mas não depender de SDL, Qt, wgpu, WASAPI ou threads de host.
+- CPU deve oferecer compatibilidade de stepping por instrução para consumidores existentes e evolução para step/resume temporal sem segundo decoder.
+- Testes de fronteira Z80, matrizes de opcodes e ferramentas de auditoria devem consumir interfaces públicas, não campos internos dos cores.
+
+### 8.6 Gate de compatibilidade antes de F2/F3/F6
+
+- [ ] Cada PR aberta tem inventário de commits, arquivos, testes, dependências e workflow.
+- [ ] Cada funcionalidade útil tem destino explícito na arquitetura-alvo.
+- [ ] Cada API incompatível tem plano de adaptação/migração e lista de consumidores.
+- [ ] Duplicações #300/#313 foram reconciliadas sem dois runtimes de input.
+- [ ] #314 tem plano de preservação/portabilidade do teste.
+- [ ] #315 tem avaliação técnica e plano de evolução T0→T1.
+- [ ] #301 tem ownership e lifecycle de vídeo definidos.
+- [ ] #298 tem decisões funcionais preservadas.
+- [ ] #297 tem contrato headless e privacidade de logs definidos.
+- [ ] A4 revisou a matriz e não deixou BLOCKER sem resolução ou aceitação formal.
+
+**Regra de bloqueio:** não congelar API pública de scheduler, input, vídeo, CPU ou frontend antes de concluir o mapeamento das PRs que a consumirão. A arquitetura deve acomodar os requisitos válidos, mas pode rejeitar implementações ou abstrações incompatíveis com determinismo, Clean Architecture ou runtime Rust.
