@@ -5,6 +5,17 @@ use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use sega_sms_core::{ControllerButtons, SmsMachine, SmsMachineConfig, VideoStandard};
 
+fn sms_controller_buttons_from_action_mask(actions: u8) -> ControllerButtons {
+    ControllerButtons {
+        up: actions & (1 << 0) != 0,
+        down: actions & (1 << 1) != 0,
+        left: actions & (1 << 2) != 0,
+        right: actions & (1 << 3) != 0,
+        button_1: actions & (1 << 4) != 0,
+        button_2: actions & (1 << 5) != 0,
+    }
+}
+
 use crate::audio::{MachineAudioSession, open_audio_session};
 
 /// Resolve the territory and video standard without constructing Python errors.
@@ -287,14 +298,7 @@ impl NativeSMSMachine {
         self.machine
             .set_controller(
                 player,
-                ControllerButtons {
-                    up: actions & (1 << 0) != 0,
-                    down: actions & (1 << 1) != 0,
-                    left: actions & (1 << 2) != 0,
-                    right: actions & (1 << 3) != 0,
-                    button_1: actions & (1 << 4) != 0,
-                    button_2: actions & (1 << 5) != 0,
-                },
+                sms_controller_buttons_from_action_mask(actions),
             )
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
@@ -419,5 +423,16 @@ mod tests {
                 .set_controller(1, true, false, false, false, true, false)
                 .is_ok()
         );
+    }
+
+    #[test]
+    fn action_mask_maps_to_sms_controller_lines() {
+        let buttons = sms_controller_buttons_from_action_mask(0b0010_0101);
+        assert!(buttons.up);
+        assert!(!buttons.down);
+        assert!(buttons.left);
+        assert!(!buttons.right);
+        assert!(!buttons.button_1);
+        assert!(buttons.button_2);
     }
 }
