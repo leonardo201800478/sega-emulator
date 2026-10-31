@@ -298,9 +298,9 @@ def run(initial_path: Path | None = None) -> None:
         controller_config, backend_preference=input_driver
     )
     logger.info(
-        "Backend nativo-primeiro de controles inicializado",
+        "Backend nativo Rust de controles inicializado",
         extra={
-            "event": "native_first_input_initialized",
+            "event": "rust_native_input_initialized",
             "available": controller_input.available,
             "devices": controller_input.connected_names(),
             "backend_error": controller_input.backend_error,
