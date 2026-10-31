@@ -289,12 +289,13 @@ mod windows {
                 unsafe { (self.api.free)(ids.cast()) };
             }
 
-            let removed: Vec<u32> = self
+            let mut removed: Vec<u32> = self
                 .devices
                 .keys()
                 .filter(|id| !connected.contains(id))
                 .copied()
                 .collect();
+            removed.sort_unstable();
             for raw_id in removed {
                 if let Some(device) = self.devices.remove(&raw_id) {
                     let device_id = device.id;
@@ -307,7 +308,9 @@ mod windows {
                 }
             }
 
-            for raw_id in connected {
+            let mut connected_ids: Vec<u32> = connected.into_iter().collect();
+            connected_ids.sort_unstable();
+            for raw_id in connected_ids {
                 if self.devices.contains_key(&raw_id) {
                     continue;
                 }
@@ -446,6 +449,7 @@ mod windows {
             self.refresh(&mut events)?;
             devices.clear();
             devices.extend(self.devices.values().map(OpenDevice::descriptor));
+            devices.sort_by_key(|device| device.id);
             Ok(())
         }
 
