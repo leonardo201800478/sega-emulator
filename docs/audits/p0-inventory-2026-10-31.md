@@ -512,3 +512,25 @@ Classificação: **REVIEW FINDING — correção recomendada antes da integraç�
 ### 14.5 Decisão operacional
 
 A PR #313 continua candidata prioritária, mas o achado 14.3 deve ser corrigido no branch de integração antes de solicitar aprovação. A reconciliação Git real e os gates no novo SHA ainda não foram executados. Não houve criação de branch de integração, alteração de runtime, comentário/review remoto ou merge nesta etapa.
+
+
+---
+
+## 15. Correção inicial da fronteira de polling da PR #313 — 2026-10-31
+
+Foi aplicado commit diretamente na branch original da PR #313, sem force-push:
+- Branch: `feat/native-input-runtime-foundation`.
+- Commit: `fc6463f986fc83e24d1024e6e4e2ad795b484f85`.
+- Arquivo: `src/sega_emulator/frontend/qt_frontend.py`.
+- Mudança: KeyPress/KeyRelease agora apenas atualizam `pressed_keys`; removidas as chamadas a `update_joystick()` nesses eventos. A composição e polling continuam no início de `show_frame()`, antes de `machine.run_frame()`.
+
+A alteração remove o caminho de polling físico disparado por eventos de teclado, mantendo a aplicação do snapshot na fronteira do frame. Não altera o comportamento de Escape nem os contratos de teclado/controle.
+
+Validação remota imediatamente após o commit:
+- PR #313 head confirmado em `fc6463f...`.
+- Compare com main: 107 commits à frente, 36 atrás, estado `diverged`.
+- GitHub informou `mergeable=false` após o commit.
+- A consulta imediata de check-runs retornou lista vazia; nenhum PASS foi atribuído ao novo SHA.
+- Não houve checkout local, execução de testes, reconciliação com main, criação de branch de integração ou merge.
+
+Próximo passo obrigatório: aguardar/consultar checks do SHA `fc6463f...`, criar branch de integração a partir do `main` atual e reconciliar a PR sem alterar a branch original. A divergência de 36 commits e a nova condição `mergeable=false` impedem qualquer tentativa de merge direto.
