@@ -111,6 +111,4 @@ Qualquer exceção a esta diretiva exige decisão arquitetural explícita, justi
 
 - [Arquitetura multi-sistema](../architecture.md)
 - [Master Scheduler Rust](native-master-scheduler.md)
-- [Arquitetura de entrada e periféricos](input-peripherals-scope.md)
-- [Diretiva Rust-only de áudio](audio-rust-only-directive.md)
 - [Política de desenvolvimento e validação](../development-and-validation-policy.md)
