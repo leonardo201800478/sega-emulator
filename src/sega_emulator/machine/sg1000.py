@@ -95,6 +95,13 @@ class SG1000Machine:
             raise ValueError("value deve estar entre 00h e FFh.")
         self.native_machine.set_joystick(player, value)
 
+    def set_joystick_actions_mask(self, player: int, actions: int) -> None:
+        if player not in (1, 2):
+            raise ValueError("player deve ser 1 ou 2.")
+        if type(actions) is not int or not 0 <= actions <= 0x7F:
+            raise ValueError("actions deve conter somente os sete bits lógicos.")
+        self.native_machine.set_joystick_actions_mask(player, actions)
+
     def step(self) -> int:
         return int(self.native_machine.step())
 
