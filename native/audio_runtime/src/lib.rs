@@ -4,7 +4,7 @@ mod dsp;
 mod session;
 
 pub use dsp::{AudioMixer, DspError, MixSource, OnePoleLowPass};
-pub use session::NativeAudioSession;
+pub use session::{NativeAudioSession, PcmSink};
 
 use std::f64::consts::PI;
 
