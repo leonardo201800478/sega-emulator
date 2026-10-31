@@ -4,10 +4,12 @@
 //! caller-polled on the Qt thread and preserves raw HID-derived axes, buttons,
 //! hats, plus SDL's standardized gamepad mapping where available.
 
+use crate::{BackendError, BackendKind, DeviceDescriptor, InputBackend, InputBuffers};
+
+#[cfg(windows)]
 use crate::{
-    AxisSemantic, BackendError, BackendKind, DeviceCapabilities, DeviceClass, DeviceDescriptor,
-    DeviceEvent, DeviceEventKind, DeviceId, DeviceReading, DeviceState, InputBackend,
-    InputBuffers, MAX_AXES, MAX_BUTTONS, MAX_HATS,
+    AxisSemantic, DeviceCapabilities, DeviceClass, DeviceEvent, DeviceEventKind, DeviceId,
+    DeviceReading, DeviceState, MAX_AXES, MAX_BUTTONS, MAX_HATS,
 };
 
 #[cfg(windows)]
@@ -30,10 +32,11 @@ mod windows {
     const RAW_AXIS_OFFSET: usize = 16;
 
     #[link(name = "kernel32")]
+    #[allow(non_snake_case)]
     unsafe extern "system" {
         fn LoadLibraryW(name: *const u16) -> *mut c_void;
         fn GetProcAddress(module: *mut c_void, name: *const c_char) -> *mut c_void;
-        fn FreeLibrary(module: *mut c_void) -> SdlBool;
+        fn FreeLibrary(module: *mut c_void) -> i32;
     }
 
     type InitSubSystem = unsafe extern "C" fn(u32) -> SdlBool;
@@ -293,9 +296,10 @@ mod windows {
                 .collect();
             for raw_id in removed {
                 if let Some(device) = self.devices.remove(&raw_id) {
+                    let device_id = device.id;
                     self.close_device(device);
                     output.events.push(DeviceEvent {
-                        device_id: device.id,
+                        device_id,
                         timestamp_ns: self.timestamp_ns(),
                         kind: DeviceEventKind::Disconnected,
                     });
