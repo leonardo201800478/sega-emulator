@@ -117,7 +117,11 @@ mod windows {
         fn load() -> Result<Self, String> {
             let configured = std::env::var_os("SEGA_EMULATOR_SDL3_DLL");
             let path = configured.unwrap_or_else(|| "SDL3.dll".into());
-            let wide: Vec<u16> = path.to_string_lossy().encode_utf16().chain(Some(0)).collect();
+            let wide: Vec<u16> = path
+                .to_string_lossy()
+                .encode_utf16()
+                .chain(Some(0))
+                .collect();
             let handle = unsafe { LoadLibraryW(wide.as_ptr()) };
             if handle.is_null() {
                 return Err(format!(
@@ -176,7 +180,9 @@ mod windows {
             let message = if message.is_null() {
                 "erro SDL3 sem descrição".to_owned()
             } else {
-                unsafe { CStr::from_ptr(message) }.to_string_lossy().into_owned()
+                unsafe { CStr::from_ptr(message) }
+                    .to_string_lossy()
+                    .into_owned()
             };
             format!("{operation}: {message}")
         }
@@ -215,10 +221,20 @@ mod windows {
                 product_id: (self.product_id != 0).then_some(self.product_id),
                 physical_key: None,
                 capabilities: DeviceCapabilities {
-                    button_count: (self.raw_buttons + if self.gamepad.is_null() { 0 } else { GAMEPAD_BUTTON_COUNT })
-                        .min(MAX_BUTTONS) as u16,
-                    axis_count: (self.raw_axes + if self.gamepad.is_null() { 0 } else { GAMEPAD_AXIS_COUNT })
-                        .min(MAX_AXES) as u8,
+                    button_count: (self.raw_buttons
+                        + if self.gamepad.is_null() {
+                            0
+                        } else {
+                            GAMEPAD_BUTTON_COUNT
+                        })
+                    .min(MAX_BUTTONS) as u16,
+                    axis_count: (self.raw_axes
+                        + if self.gamepad.is_null() {
+                            0
+                        } else {
+                            GAMEPAD_AXIS_COUNT
+                        })
+                    .min(MAX_AXES) as u8,
                     hat_count: self.raw_hats.min(MAX_HATS) as u8,
                     rumble: false,
                     force_feedback: false,
@@ -335,7 +351,9 @@ mod windows {
                 let name = if name_ptr.is_null() {
                     format!("SDL device {raw_id}")
                 } else {
-                    unsafe { CStr::from_ptr(name_ptr) }.to_string_lossy().into_owned()
+                    unsafe { CStr::from_ptr(name_ptr) }
+                        .to_string_lossy()
+                        .into_owned()
                 };
                 let joystick_type = unsafe { (self.api.get_joystick_type)(joystick) };
                 let device_class = if !gamepad.is_null() {
@@ -391,9 +409,8 @@ mod windows {
             let mut state = DeviceState::default();
             if !device.gamepad.is_null() {
                 for button in 0..GAMEPAD_BUTTON_COUNT {
-                    let pressed = unsafe {
-                        (self.api.get_gamepad_button)(device.gamepad, button as c_int)
-                    };
+                    let pressed =
+                        unsafe { (self.api.get_gamepad_button)(device.gamepad, button as c_int) };
                     let _ = state.buttons.set(button, pressed);
                 }
                 let semantics = [
@@ -405,17 +422,14 @@ mod windows {
                     AxisSemantic::RightTrigger,
                 ];
                 for (axis, semantic) in semantics.into_iter().enumerate() {
-                    let value = unsafe {
-                        (self.api.get_gamepad_axis)(device.gamepad, axis as c_int)
-                    };
+                    let value =
+                        unsafe { (self.api.get_gamepad_axis)(device.gamepad, axis as c_int) };
                     let _ = state.set_axis(axis, value, semantic);
                 }
             }
 
             for button in 0..device.raw_buttons.min(MAX_BUTTONS - RAW_BUTTON_OFFSET) {
-                let pressed = unsafe {
-                    (self.api.get_button)(device.joystick, button as c_int)
-                };
+                let pressed = unsafe { (self.api.get_button)(device.joystick, button as c_int) };
                 let _ = state.buttons.set(RAW_BUTTON_OFFSET + button, pressed);
             }
             for axis in 0..device.raw_axes.min(MAX_AXES - RAW_AXIS_OFFSET) {
@@ -491,7 +505,11 @@ mod windows {
                 self.close_device(device);
             }
             if self.initialized {
-                unsafe { (self.api.quit_subsystem)(SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD | SDL_INIT_EVENTS) };
+                unsafe {
+                    (self.api.quit_subsystem)(
+                        SDL_INIT_JOYSTICK | SDL_INIT_GAMEPAD | SDL_INIT_EVENTS,
+                    )
+                };
                 self.initialized = false;
             }
         }
