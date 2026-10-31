@@ -57,7 +57,7 @@ jobs:
           python-version: "3.14"
           cache: pip
       - name: Install project, Qt and Maturin
-        run: python -m pip install -e ".[dev,qt]" maturin
+        run: python -m pip install -e ".[dev,qt]" maturin==1.15.0
       - name: Generate native dependency lockfiles for review
         run: |
           cargo generate-lockfile --manifest-path native/z80_core/Cargo.toml
@@ -89,6 +89,13 @@ jobs:
           Pop-Location
           $wheel = Get-ChildItem native/z80_core/dist/*.whl | Select-Object -First 1
           python -m pip install $wheel.FullName
+      - name: Upload Windows wheel for game testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: sega-emulator-v0.1.1-win-amd64-py314
+          path: native/z80_core/dist/*.whl
+          if-no-files-found: error
+          retention-days: 14
       - name: Archive generated native dependency lockfile
         uses: actions/upload-artifact@v4
         with:
