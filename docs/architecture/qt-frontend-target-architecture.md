@@ -201,6 +201,8 @@ Workflows presentes na main incluem `qt-frontend-validation.yml`, `ui-controller
 ### 8.6 Lacunas de evidência
 
 - O inventário de módulos confirma componentes reutilizáveis, mas ainda não rastreou cada callback da janela até o serviço, runtime Rust e fronteira PyO3.
+- `qt_frontend.py` concentra a composição em `run()` e define closures locais para timer, input, frame presentation, ROM loading, troca de sistema, região e drivers. É uma concentração relevante de orquestração; não extrair classes antes de mapear dependências e ownership.
+- `main_window.py` atualmente expõe Play/Pause por uma ação toggle e Reset, mas o menu Arquivo não possui Fechar ROM e o menu Emulação não possui Stop. Logo, Stop/Fechar ROM aprovados ainda não estão representados como comandos visíveis no shell atual; a ausência deve ser confirmada no fluxo de aplicação, não corrigida diretamente na janela sem contrato.
 - Não foi concluída a matriz de todas as chaves QSettings, migrações existentes e namespaces por sistema/periférico.
 - Não foi demonstrado que Stop e Arquivo → Fechar ROM já compartilham a mesma operação central.
 - Não foi demonstrado relatório unificado de backend com fallback/motivo/capacidades, nem rollback completo após falha.
