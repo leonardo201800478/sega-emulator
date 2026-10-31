@@ -100,3 +100,19 @@ O utilitário emite um tom senoidal de baixo volume pelo backend selecionado e r
 Para cada backend, registrar manualmente: versão do Windows; dispositivo de saída e driver; backend ativo; taxa/formato efetivos informados pelo sistema, se disponíveis; configuração solicitada; som audível sem cortes/distorção; contadores antes/depois; encerramento sem travar. Repetir durante uma sessão longa e, quando for seguro, desconectar/reconectar o dispositivo ou alternar a saída padrão para verificar recuperação. Não provocar remoção de dispositivo durante uso crítico nem presumir que a recuperação ocorreu sem observar a saída.
 
 Critério mínimo: a inicialização e o encerramento devem completar; o tom deve ser audível; não deve haver falha contínua nem aumento persistente de underruns/descarte em carga normal. Toda medição de latência precisa indicar método, dispositivo, backend e configurações efetivas. Esta validação manual complementa — não substitui — CI, testes de determinismo e testes automatizados.
+
+
+---
+
+## Decisão normativa atual — 2026-10-30
+
+A arquitetura normativa foi consolidada em [Runtime de áudio nativo](native-audio-runtime.md). Esta seção prevalece sobre descrições históricas anteriores que atribuam ao Python a drenagem de amostras, o resampling, a conversão PCM ou a escrita no backend.
+
+- WASAPI Shared/event-driven é o backend padrão Windows.
+- XAudio2 é a alternativa nativa existente, selecionável pelo frontend.
+- WASAPI Exclusive e IAudioClient3 não são defaults nem recursos prometidos; serão avaliados posteriormente.
+- O runtime completo — sessão, mixer, resampler, fila, workers, recuperação e saída — pertence ao Rust.
+- Python/PySide6 limita-se a configuração, comandos de ciclo de vida e telemetria. Nenhum PCM cruza PyO3 durante gameplay.
+- O escopo de chips inclui PSG, FM, PCM/DAC, CDDA e PWM conforme o console. QSound é extensão DSP opcional e não um componente nativo obrigatório das plataformas Sega listadas.
+
+O estado do código no início da PR #299 ainda viola a fronteira final: qt_frontend.py chama drain_audio_pcm e write_pcm por frame. Essa situação é uma lacuna a remover, não um contrato válido.
