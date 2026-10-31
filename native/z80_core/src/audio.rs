@@ -270,13 +270,7 @@ impl NativeAudioSession {
             return Ok(());
         }
         self.mixer
-            .mix_mono_into(
-                &[MixSource {
-                    samples,
-                    gain: 1.0,
-                }],
-                &mut self.mixed_samples,
-            )
+            .mix_mono_into(&[MixSource { samples, gain: 1.0 }], &mut self.mixed_samples)
             .map_err(|error| error.to_string())?;
         let pcm = self.resampler.process(&self.mixed_samples);
         if pcm.is_empty() {

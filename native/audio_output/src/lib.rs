@@ -242,19 +242,12 @@ impl Drop for NativeWasapiOutput {
 }
 
 /// Select an IAudioClient3 period in frames, respecting endpoint limits and alignment.
-fn select_shared_period(
-    requested: u32,
-    min: u32,
-    max: u32,
-    fundamental: u32,
-) -> Option<u32> {
+fn select_shared_period(requested: u32, min: u32, max: u32, fundamental: u32) -> Option<u32> {
     if fundamental == 0 || min == 0 || min > max {
         return None;
     }
     let target = requested.max(1).clamp(min, max);
-    let aligned = target
-        .div_ceil(fundamental)
-        .saturating_mul(fundamental);
+    let aligned = target.div_ceil(fundamental).saturating_mul(fundamental);
     let selected = if aligned <= max {
         aligned
     } else {

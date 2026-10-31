@@ -72,15 +72,13 @@ impl AudioMixer {
             return Ok(());
         };
         let frames = first.samples.len();
-        if sources
-            .iter()
-            .any(|source| source.samples.len() != frames)
-        {
+        if sources.iter().any(|source| source.samples.len() != frames) {
             return Err(DspError::InconsistentSourceLength);
         }
-        if sources.iter().any(|source| {
-            !source.gain.is_finite() || !(0.0..=4.0).contains(&source.gain)
-        }) {
+        if sources
+            .iter()
+            .any(|source| !source.gain.is_finite() || !(0.0..=4.0).contains(&source.gain))
+        {
             return Err(DspError::InvalidSourceGain);
         }
 
@@ -112,9 +110,11 @@ impl OnePoleLowPass {
         {
             return Err(DspError::InvalidFilterConfiguration);
         }
-        let alpha =
-            1.0 - (-std::f64::consts::TAU * cutoff_hz / sample_rate as f64).exp();
-        Ok(Self { alpha, previous: 0.0 })
+        let alpha = 1.0 - (-std::f64::consts::TAU * cutoff_hz / sample_rate as f64).exp();
+        Ok(Self {
+            alpha,
+            previous: 0.0,
+        })
     }
 
     pub fn reset(&mut self) {
