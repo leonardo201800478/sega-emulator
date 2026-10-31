@@ -115,4 +115,4 @@ A arquitetura normativa foi consolidada em [Runtime de áudio nativo](native-aud
 - Python/PySide6 limita-se a configuração, comandos de ciclo de vida e telemetria. Nenhum PCM cruza PyO3 durante gameplay.
 - O escopo de chips inclui PSG, FM, PCM/DAC, CDDA e PWM conforme o console. QSound é extensão DSP opcional e não um componente nativo obrigatório das plataformas Sega listadas.
 
-O estado do código no início da PR #299 ainda viola a fronteira final: qt_frontend.py chama drain_audio_pcm e write_pcm por frame. Essa situação é uma lacuna a remover, não um contrato válido.
+No inventário inicial da PR #299, qt_frontend.py chamava drain_audio_pcm e write_pcm por frame. A primeira fatia implementada moveu esse processamento para NativeAudioSession, chamada pelo runtime Rust ao concluir run_frame. As APIs antigas ainda existem por compatibilidade e devem ser removidas após a validação dos novos testes; o pipeline ainda não está desacoplado do timer Qt.
