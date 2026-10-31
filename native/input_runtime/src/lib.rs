@@ -11,8 +11,10 @@
 
 use std::fmt;
 
+pub mod sdl3_backend;
+
 pub const MAX_BUTTONS: usize = 128;
-pub const MAX_AXES: usize = 16;
+pub const MAX_AXES: usize = 32;
 pub const MAX_HATS: usize = 8;
 pub const MAX_ACTIONS: usize = 128;
 
