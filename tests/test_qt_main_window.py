@@ -39,7 +39,25 @@ def test_main_window_exposes_required_menus_and_shortcuts(qt_app) -> None:
         on_video_scale=lambda scale: called.append(f"scale:{scale}"),
         on_change_system=lambda: called.append("change-system"),
         on_configure_drivers=lambda: called.append("drivers"),
+        on_configure_audio_video=lambda: called.append("audio-settings"),
+        on_show_audio_diagnostics=lambda: called.append("audio-diagnostics"),
+        on_start_vgm_recording=lambda: called.append("vgm-start"),
+        on_stop_vgm_recording=lambda: called.append("vgm-stop"),
     )
+
+    assert window.audio_video_action.objectName() == "configureAudioOutputAction"
+    assert window.audio_drivers_action.objectName() == "configureAudioBackendAction"
+    assert window.audio_diagnostics_action.objectName() == "audioOutputDiagnosticsAction"
+    window.audio_video_action.trigger()
+    window.audio_drivers_action.trigger()
+    window.audio_diagnostics_action.trigger()
+    window.start_vgm_recording_action.trigger()
+    assert not window.stop_vgm_recording_action.isEnabled()
+    window.set_vgm_recording(True)
+    assert window.stop_vgm_recording_action.isEnabled()
+    assert not window.start_vgm_recording_action.isEnabled()
+    window.set_vgm_recording(False)
+    assert called == ["audio-settings", "drivers", "audio-diagnostics", "vgm-start"]
 
     menu_titles = [action.text() for action in window.menuBar().actions()]
     assert menu_titles == [
@@ -47,6 +65,7 @@ def test_main_window_exposes_required_menus_and_shortcuts(qt_app) -> None:
         "&Emulação",
         "&Drivers",
         "&Vídeo",
+        "Áudio",
         "&Configurações",
         "&Diagnóstico",
         "&Ajuda",
