@@ -472,7 +472,6 @@ impl NativeSG1000Machine {
     }
 }
 
-
 #[cfg(test)]
 mod input_action_mask_tests {
     use super::active_low_joystick_value;
