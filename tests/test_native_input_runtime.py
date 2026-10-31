@@ -48,11 +48,10 @@ def test_native_input_manager_exposes_stable_frontend_contract() -> None:
         actions = manager.poll_actions(0)
         assert isinstance(actions, tuple)
         assert len(actions) == 2
-        assert all(isinstance(player_actions, list) for player_actions in actions)
+        assert all(isinstance(player_mask, int) for player_mask in actions)
         assert isinstance(manager.connected_names(), list)
-        assert manager.read_pressed_button(1) is None or isinstance(
-            manager.read_pressed_button(1), str
-        )
+        captured = manager.read_pressed_button(1)
+        assert captured is None or isinstance(captured, str)
         if os.environ.get("SEGA_INPUT_REQUIRE_SDL3") == "1":
             assert manager.available, manager.backend_error
             assert manager.backend_error is None
