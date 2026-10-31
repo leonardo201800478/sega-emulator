@@ -38,8 +38,8 @@ impl<S: PcmSink> NativeAudioSession<S> {
     where
         F: FnOnce() -> Result<S, String>,
     {
-        let resampler = PcmResampler::new(sample_rate, volume)
-            .map_err(|error| error.to_string())?;
+        let resampler =
+            PcmResampler::new(sample_rate, volume).map_err(|error| error.to_string())?;
         let sink = make_sink()?;
         Ok(Self {
             mixer: AudioMixer::default(),
@@ -59,10 +59,7 @@ impl<S: PcmSink> NativeAudioSession<S> {
             return Ok(());
         }
         self.mixer
-            .mix_mono_into(
-                &[MixSource { samples, gain: 1.0 }],
-                &mut self.mixed_samples,
-            )
+            .mix_mono_into(&[MixSource { samples, gain: 1.0 }], &mut self.mixed_samples)
             .map_err(|error| error.to_string())?;
         let pcm = self.resampler.process(&self.mixed_samples);
         if pcm.is_empty() {
@@ -160,16 +157,11 @@ mod tests {
     #[test]
     fn invalid_dsp_configuration_does_not_construct_the_host_sink() {
         let mut sink_created = false;
-        let result = NativeAudioSession::<RecordingSink>::with_sink_factory(
-            0,
-            100,
-            || {
-                sink_created = true;
-                Ok(RecordingSink::default())
-            },
-        );
+        let result = NativeAudioSession::<RecordingSink>::with_sink_factory(0, 100, || {
+            sink_created = true;
+            Ok(RecordingSink::default())
+        });
         assert!(result.is_err());
         assert!(!sink_created);
     }
-
 }
