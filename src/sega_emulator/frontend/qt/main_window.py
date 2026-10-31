@@ -58,6 +58,7 @@ class EmulatorMainWindow(QMainWindow):
         on_configure_region: Callable[[str], None] | None = None,
         region_preference: str = "auto",
         on_configure_audio_video: Callable[[], None] | None = None,
+        on_show_audio_diagnostics: Callable[[], None] | None = None,
         on_start_vgm_recording: Callable[[], None] | None = None,
         on_stop_vgm_recording: Callable[[], None] | None = None,
         video_driver: str = "auto",
@@ -241,13 +242,33 @@ class EmulatorMainWindow(QMainWindow):
             )
             video_menu.addAction(action)
         video_menu.addAction(self.fullscreen_action)
-        settings_menu = self.menuBar().addMenu(translate("menu_settings", language))
-        self.audio_video_action = QAction("Áudio e vídeo…", self)
+        audio_menu = self.menuBar().addMenu("Áudio")
+        self.audio_video_action = QAction("Configurar saída e DSP…", self)
+        self.audio_video_action.setObjectName("configureAudioOutputAction")
         if on_configure_audio_video is not None:
             self.audio_video_action.triggered.connect(on_configure_audio_video)
         else:
             self.audio_video_action.setEnabled(False)
-        settings_menu.addAction(self.audio_video_action)
+        audio_menu.addAction(self.audio_video_action)
+
+        self.audio_drivers_action = QAction("Backend e APIs de áudio…", self)
+        self.audio_drivers_action.setObjectName("configureAudioBackendAction")
+        if on_configure_drivers is not None:
+            self.audio_drivers_action.triggered.connect(on_configure_drivers)
+        else:
+            self.audio_drivers_action.setEnabled(False)
+        audio_menu.addAction(self.audio_drivers_action)
+
+        audio_menu.addSeparator()
+        self.audio_diagnostics_action = QAction("Diagnóstico da saída…", self)
+        self.audio_diagnostics_action.setObjectName("audioOutputDiagnosticsAction")
+        if on_show_audio_diagnostics is not None:
+            self.audio_diagnostics_action.triggered.connect(on_show_audio_diagnostics)
+        else:
+            self.audio_diagnostics_action.setEnabled(False)
+        audio_menu.addAction(self.audio_diagnostics_action)
+
+        settings_menu = self.menuBar().addMenu(translate("menu_settings", language))
         controls_menu = settings_menu.addMenu("Controles")
         controls_menu.addAction("Configurar controles…", on_configure_controls)
         controls_menu.addAction("Dispositivos detectados", on_show_controllers)
