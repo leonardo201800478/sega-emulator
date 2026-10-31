@@ -47,7 +47,9 @@ def test_main_window_exposes_required_menus_and_shortcuts(qt_app) -> None:
 
     assert window.audio_video_action.objectName() == "configureAudioOutputAction"
     assert window.audio_drivers_action.objectName() == "configureAudioBackendAction"
-    assert window.audio_diagnostics_action.objectName() == "audioOutputDiagnosticsAction"
+    assert (
+        window.audio_diagnostics_action.objectName() == "audioOutputDiagnosticsAction"
+    )
     window.audio_video_action.trigger()
     window.audio_drivers_action.trigger()
     window.audio_diagnostics_action.trigger()
