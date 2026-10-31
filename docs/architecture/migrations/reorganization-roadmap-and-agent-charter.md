@@ -308,3 +308,45 @@ Essa sequência é uma ordem de revisão e preparação, não uma autorização 
 - [ ] A4 revisou a matriz e não deixou BLOCKER sem resolução ou aceitação formal.
 
 **Regra de bloqueio:** não congelar API pública de scheduler, input, vídeo, CPU ou frontend antes de concluir o mapeamento das PRs que a consumirão. A arquitetura deve acomodar os requisitos válidos, mas pode rejeitar implementações ou abstrações incompatíveis com determinismo, Clean Architecture ou runtime Rust.
+
+
+## 9. Estado confirmado — 2026-10-31
+
+### Baseline
+
+- HEAD de `main` na captura F0: `e2eff776ec248674da07d32ff480b70d9db49a1f`.
+- HEAD documental atual após registrar F0/F1: `cee6bbdd442305262042daa3aa78703a42693348` (a atualização seguinte deve consultar novamente o remoto).
+- Nenhuma alteração de runtime foi feita; nenhuma PR foi mergeada.
+- Os commits desta rodada são exclusivamente Markdown. Os workflows filtrados não produziram execução para os commits documentais atuais; não declarar CI PASS para o HEAD atual.
+- Testes/build locais: **NOT RUN**, pois a sincronização Git falhou por erro de resolução DNS de `github.com`.
+
+### F0 — inventário estrutural
+
+- Confirmados os heads das sete PRs, merge-bases, ahead/behind, listas de arquivos e workflows nos SHAs avaliados.
+- Confirmada a identidade do código executável normalizado dos dois executores Z80 e a duplicação das ALUs locais em relação a `sega-z80-alu`.
+- Inspecionados patches representativos de #297, #313, #314 e #315; #298, #300 e #301 foram classificados quanto à natureza documental/funcional.
+- **Pendente:** leitura detalhada de todos os patches, testes, dependências e consumidores de cada PR. O inventário estrutural não equivale à auditoria profunda completa.
+- Relatório: [F0 — inventário remoto e reconciliação das PRs](f0-remote-inventory-2026-10-31.md).
+
+### F1 — ADRs e contratos
+
+Foram publicados três ADRs em estado **Proposto para implementação**:
+
+- [ADR-0001 — motor Z80 compartilhado](../adr/0001-shared-z80-engine.md)
+- [ADR-0002 — scheduler temporal único por máquina](../adr/0002-machine-temporal-scheduler.md)
+- [ADR-0003 — fronteiras entre runtime Rust e host Qt/PyO3](../adr/0003-host-runtime-boundaries.md)
+- [Índice de ADRs](../adr/README.md)
+
+As ADRs formalizam o destino arquitetural, mas não congelam ainda as APIs públicas. A chamada PyO3 de input por frame na #313, o timestamp monotônico do host, a seleção de backend sem efeito em `set_backend_preference` e a ausência de scheduler T1 continuam como pontos explícitos de validação.
+
+### Gate antes de código
+
+| Gate | Estado |
+|---|---|
+| Baseline remoto e inventário estrutural | **PASS** |
+| Auditoria detalhada de todos os patches/consumidores | **IN PROGRESS** |
+| ADRs F1 redigidas | **PASS — propostas, não finais** |
+| Revisão independente A4 | **NOT RUN** |
+| Autorização para implementação de runtime | **BLOCKED até revisão A4 e conclusão da auditoria profunda** |
+
+Não há agente independente A4 disponível nesta execução. Não confundir inspeção do coordenador ou sucesso de GitHub Actions com revisão independente. A4 deve revisar os achados, as ADRs, os riscos de integração e os critérios de aceitação antes da primeira mudança de runtime.
