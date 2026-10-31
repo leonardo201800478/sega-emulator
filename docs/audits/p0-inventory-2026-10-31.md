@@ -140,3 +140,110 @@ P-0 só será encerrada quando houver:
 - matriz componente × sistema × implementação × teste × evidência × pendência.
 
 **Nenhuma reestruturação ampla de runtime está autorizada por esta fotografia isolada.** A etapa seguinte é concluir o inventário executável e então propor fatias de refatoração pequenas, com branch/PR e regressões preservadas.
+
+
+---
+
+## 10. Atualização de evidências — checkout, testes e CI (2026-10-31)
+
+Esta seção complementa e prevalece sobre as pendências de proveniência e CI descritas nas seções anteriores.
+
+### 10.1 SHA e estado do checkout
+
+- `main` foi consultada diretamente no GitHub e aponta para `c31e4183b8d0b36d95b4f58582938186417652f8`.
+- A PR #325 permanece Draft e sua branch `audit/p0-baseline-20261031` parte exatamente desse SHA.
+- O usuário recriou o clone Windows e informou `git status --short --branch` como `## main...origin/main`, sem alterações locais, e `git rev-parse HEAD` igual ao SHA acima.
+- `main` e `origin/main` foram reportadas no mesmo SHA; o clone também contém a branch remota da auditoria.
+- O estado local foi informado pelo usuário; não foi executado um checkout Windows controlado nesta sessão.
+
+### 10.2 Baseline Python no Windows
+
+No clone em Windows 11, Python 3.14.7:
+
+| Verificação | Resultado | Estado |
+|---|---:|---|
+| Instalação editável `pip install -e ".[dev,qt]"` | concluída | PASS |
+| Imports `sega_emulator`, `numpy`, `PySide6` | OK | PASS |
+| `python -m pip check` | No broken requirements found | PASS |
+| `python -m pytest` | 313 passed, 8 skipped | PASS, com ressalva |
+| `python -m ruff check .` | All checks passed | PASS |
+| `python -m ruff format --check .` | 204 files already formatted | PASS |
+| `python -m pip list --outdated` | somente pytest e Ruff | inventário |
+| `cargo tree --locked` | cinco crates do workspace; SMS depende de Z80 bus | inventário |
+| `cargo tree -d` | nothing to print | PASS, sem duplicações |
+
+Os oito skips do pytest são associados à ausência do módulo nativo `sega_z80_core`: dois testes de seleção de runtime/áudio SMS, cinco testes SG-1000 nativos e um teste de integração VGM. Portanto, a suíte Python local passou, mas não validou os caminhos de integração que exigem a extensão. Não instalar pacote homônimo de origem não verificada.
+
+As versões das dependências foram mantidas. O inventário encontrou apenas pytest 9.1.1 e Ruff 0.17.1 abaixo das versões listadas como latest pelo pip; nenhuma atualização foi aplicada.
+
+### 10.3 CI real no SHA de main
+
+A consulta direta ao GitHub Actions encontrou o check `quality` no SHA `c31e4183b8d0b36d95b4f58582938186417652f8`:
+
+- Workflow run: `41243525506`.
+- Job: `quality`, ID `124662133536`.
+- Conclusão: `success`.
+- Todas as etapas concluídas com sucesso: checkout, toolchains, instalação, Ruff, build e instalação da extensão Rust via Maturin, compileall, pip check, CLI de boot SMS e pytest.
+- O workflow compilou `native/z80_core` com `maturin build --locked --manifest-path native/z80_core/Cargo.toml --release --features python-extension` e instalou a wheel.
+- Ambiente CI: Linux, Python 3.14.9, pytest 9.1.1.
+- Resultado da suíte CI: **233 passed, 11 skipped**.
+
+Esse resultado demonstra que a extensão nativa foi compilada e importada no runner Linux e que a suíte Python desse ambiente passou. Não transfere aprovação para Windows nem substitui os três gates completos do workspace Rust. O job `quality` não executou `cargo fmt --all`, `cargo clippy --workspace` ou `cargo test --workspace`.
+
+### 10.4 Inventário dos dez workflows no SHA de main
+
+| Workflow | Gatilho e escopo observado | Validação principal |
+|---|---|---|
+| `ci.yml` | Todo PR, push em main e manual | Ruff (arquivos Python alterados em PR/push), build Maturin, compileall, pip check, CLI SMS e pytest |
+| `agent-functional-validation.yml` | PR/push com alterações Python relevantes, diário e manual | Ruff e regressão Python |
+| `agent-integrity.yml` | PR/push Python, diário e manual | compileall, pip check e duas execuções pytest |
+| `qt-frontend-validation.yml` | PR com paths Qt/frontend/testes e manual | Qt headless, input e suíte Python |
+| `qt-rust-z80-core.yml` | PR com paths da extensão/runtime/áudio e push em branch específica | Windows, Maturin, Clippy/testes de crates isolados e integração |
+| `rust-sg1000-core.yml` | PR/push com paths SG-1000, ALU, bus e áudio | fmt, Clippy workspace, testes workspace e scaffold |
+| `sg1000-three-agent-validation.yml` | PR/push SG-1000 e manual | testes focados sequenciais e gates Rust workspace |
+| `sms-core-fast.yml` | PR/push com paths SMS/Z80 bus e manual | fmt workspace, Clippy SMS e testes SMS |
+| `sms-z80-platform-validation.yml` | PR/push com paths CPU/ALU/bus/SMS e manual | fmt, Clippy e testes workspace; Z80 full e CCF externos |
+| `ui-controller-validation.yml` | PR com paths de controle/UI, push em branch específica e manual | Ruff, compileall e testes de input/UI |
+
+Observações de cobertura:
+- `ci.yml` é amplo e executa pytest, mas não substitui os gates Rust do workspace.
+- Os workflows de Rust têm filtros por paths diferentes. Uma alteração isolada em SMS pode acionar `sms-core-fast` e/ou `sms-z80-platform-validation`, mas não necessariamente `rust-sg1000-core`.
+- Os workflows com `workflow_dispatch` podem ser executados manualmente; a existência do workflow não comprova que tenha rodado no SHA analisado.
+- O check `quality` foi o único check-run encontrado associado diretamente ao SHA de main nesta consulta.
+
+### 10.5 Reconciliação inicial das PRs concorrentes
+
+As PRs continuam abertas e seus snapshots apontam bases anteriores ao SHA atual de main:
+
+| PR | Head | Base SHA observado | Arquivos | Conclusão P-0 |
+|---|---|---|---:|---|
+| #300 input migration | `eeb8b8a...` | `2318fb3...` | 1 | Documento de proposta; não contém implementação |
+| #301 vídeo migration | `d2d1543...` | `2318fb3...` | 1 | Documento de proposta; não contém implementação |
+| #313 input Rust/SDL3 | `1c64734...` | `3cf846d...` | 30 | Implementação substancial de input nativo; requer rebase/reconciliação e validação |
+| #315 Temporal Core | `bb1aec7...` | `3cf846d...` | 11 | Primitivas temporais isoladas; integração com máquinas continua pendente |
+| #324 BIOS/mappers SMS | `51fd75e...` | `767d89b...` | 3 | Documentação e pesquisa; evidência binária de BIOS explicitamente não analisada |
+
+A #313 é a implementação de input; #300 é somente o documento de migração. Portanto, não são duas implementações equivalentes, embora a proposta #300 deva ser atualizada para refletir a direção já implementada em #313. #301 também é somente documento de migração, não port de vídeo. #315 adiciona o crate `native/temporal_core`, mas não integra scheduler à CPU/barramento/VDP/PSG. #324 contém documentação BIOS/mappers e não altera runtime.
+
+Todas essas PRs precisam ser comparadas/rebaseadas contra o `main` atual antes de qualquer decisão de integração. Não foram mescladas nem fechadas nesta auditoria.
+
+### 10.6 Gates ainda pendentes para fechar P-0
+
+| Gate | Estado | Evidência / ação necessária |
+|---|---|---|
+| SHA e clone limpo | PASS informado pelo usuário | SHA e `git status` no clone Windows |
+| Python tests | PASS com ressalva | 313 passed; 8 skips por extensão ausente |
+| Ruff check | PASS | execução local informada |
+| Ruff format | PASS | execução local informada |
+| pip check | PASS | execução local informada |
+| Inventário Cargo tree | PASS | cinco crates e sem duplicações |
+| CI quality no SHA main | PASS | check-run #124662133536; 233 passed, 11 skipped em Linux |
+| cargo fmt workspace | NOT RUN | executar no clone Windows |
+| cargo clippy workspace com `-D warnings` | NOT RUN | executar no clone Windows |
+| cargo test workspace | NOT RUN | executar no clone Windows |
+| Build/import da extensão no Windows | NOT RUN | usar o fluxo Maturin do CI |
+| Baseline SG-1000 nativo em Windows | BLOCKED | extensão ausente no ambiente local atual |
+| Baseline SMS nativo em Windows | BLOCKED | extensão ausente no ambiente local atual |
+| ZEXALL/ZEXDOC ou oráculos Z80 | NOT RUN nesta fotografia | vincular execução e resultado a SHA específico |
+
+**Conclusão atualizada:** a P-0 avançou de inventário documental para baseline parcialmente executado e CI comprovado. Ainda não pode ser encerrada: faltam os três gates Rust locais, build/import da extensão em Windows e smoke tests nativos SG-1000/SMS com resultados vinculados ao SHA.
