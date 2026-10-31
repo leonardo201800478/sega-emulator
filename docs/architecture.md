@@ -143,3 +143,8 @@ A arquitetura-alvo para sincronizar CPU, barramento, VDP, PSG, entrada e saídas
 ## Reorganização do runtime e núcleo Z80 compartilhado
 
 A decisão arquitetural vigente para consolidar o runtime Rust, unificar o motor Z80 de SG-1000/SMS e preparar Game Gear/Genesis, e coordenar a transição temporal está registrada em [Reorganização arquitetural — runtime Rust, Z80 compartilhado e sincronização temporal](architecture/migrations/shared-z80-runtime-reorganization.md). O documento separa o estado observado em `main` do desenho-alvo e das propostas ainda abertas; não declara a migração concluída.
+
+
+## ADRs da reorganização Rust-first
+
+As decisões para o motor Z80 compartilhado, scheduler temporal e fronteiras do runtime host estão indexadas em [ADRs de reorganização](architecture/adr/README.md). A evidência de baseline e reconciliação das PRs está em [F0 — inventário remoto](architecture/migrations/f0-remote-inventory-2026-10-31.md).
