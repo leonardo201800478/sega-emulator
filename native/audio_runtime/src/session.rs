@@ -157,4 +157,19 @@ mod tests {
         let session = NativeAudioSession::new(44_100, 100, sink).unwrap();
         assert_eq!(session.metrics(), (3, 2));
     }
+    #[test]
+    fn invalid_dsp_configuration_does_not_construct_the_host_sink() {
+        let mut sink_created = false;
+        let result = NativeAudioSession::<RecordingSink>::with_sink_factory(
+            0,
+            100,
+            || {
+                sink_created = true;
+                Ok(RecordingSink::default())
+            },
+        );
+        assert!(result.is_err());
+        assert!(!sink_created);
+    }
+
 }
