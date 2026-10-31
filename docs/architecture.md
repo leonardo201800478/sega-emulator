@@ -148,3 +148,8 @@ A decisão arquitetural vigente para consolidar o runtime Rust, unificar o motor
 ## ADRs da reorganização Rust-first
 
 As decisões para o motor Z80 compartilhado, scheduler temporal e fronteiras do runtime host estão indexadas em [ADRs de reorganização](architecture/adr/README.md). A evidência de baseline e reconciliação das PRs está em [F0 — inventário remoto](architecture/migrations/f0-remote-inventory-2026-10-31.md).
+
+
+### Auditoria de maturidade Z80 SMS × SG-1000
+
+A comparação confirmou que o SMS é o baseline semântico e de validação mais maduro, embora o código executável atual dos dois cores seja idêntico. Consulte a [auditoria comparativa Z80](architecture/migrations/sms-z80-maturity-audit-2026-10-31.md) e a [ADR-0001 atualizada](architecture/adr/0001-shared-z80-engine.md).
