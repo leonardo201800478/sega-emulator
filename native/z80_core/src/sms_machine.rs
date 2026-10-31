@@ -108,7 +108,12 @@ impl NativeSMSMachine {
         balance: i8,
     ) -> PyResult<()> {
         let session = NativeAudioSession::new(
-            backend, sample_rate, buffer_size, queue_blocks, volume, balance,
+            backend,
+            sample_rate,
+            buffer_size,
+            queue_blocks,
+            volume,
+            balance,
         )
         .map_err(PyRuntimeError::new_err)?;
         self.audio_session = Some(session);
