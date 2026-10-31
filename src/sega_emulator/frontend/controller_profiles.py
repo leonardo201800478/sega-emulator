@@ -70,7 +70,9 @@ DEFAULT_KEYBOARD_BINDINGS_P2 = {
 DEFAULT_DEADZONE = 0.15
 TURBO_ACTIONS = frozenset({"button1", "button2"})
 _RAW_BINDING_PATTERN = re.compile(
-    r"raw_(?:button_\d+|hat_\d+_(?:up|down|left|right)|axis_\d+_(?:negative|positive))"
+    r"raw_(?:button_(?:[0-9]|[1-8][0-9]|9[0-5])|"
+    r"hat_[0-7]_(?:up|down|left|right)|"
+    r"axis_(?:[0-9]|1[0-5])_(?:negative|positive))"
 )
 
 
