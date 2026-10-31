@@ -257,7 +257,12 @@ impl NativeAudioSession {
             ),
             _ => return Err(format!("unsupported native audio backend: {backend}")),
         };
-        Ok(Self { mixer: AudioMixer::default(), mixed_samples: Vec::new(), resampler, output })
+        Ok(Self {
+            mixer: AudioMixer::default(),
+            mixed_samples: Vec::new(),
+            resampler,
+            output,
+        })
     }
 
     pub(crate) fn process_samples(&mut self, samples: &[f64]) -> Result<(), String> {
@@ -265,7 +270,13 @@ impl NativeAudioSession {
             return Ok(());
         }
         self.mixer
-            .mix_mono_into(&[MixSource { samples, gain: 1.0 }], &mut self.mixed_samples)
+            .mix_mono_into(
+                &[MixSource {
+                    samples,
+                    gain: 1.0,
+                }],
+                &mut self.mixed_samples,
+            )
             .map_err(|error| error.to_string())?;
         let pcm = self.resampler.process(&self.mixed_samples);
         if pcm.is_empty() {

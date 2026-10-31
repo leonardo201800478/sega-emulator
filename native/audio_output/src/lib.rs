@@ -13,7 +13,8 @@ use std::time::Duration;
 use std::collections::VecDeque;
 #[cfg(windows)]
 use wasapi::{
-    DeviceEnumerator, Direction, SampleType, StreamMode, TimingMode, WaveFormat, deinitialize, initialize_mta,
+    DeviceEnumerator, Direction, SampleType, StreamMode, TimingMode, WaveFormat, deinitialize,
+    initialize_mta,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -241,13 +242,24 @@ impl Drop for NativeWasapiOutput {
 }
 
 /// Select an IAudioClient3 period in frames, respecting endpoint limits and alignment.
-fn select_shared_period(requested: u32, min: u32, max: u32, fundamental: u32) -> Option<u32> {
+fn select_shared_period(
+    requested: u32,
+    min: u32,
+    max: u32,
+    fundamental: u32,
+) -> Option<u32> {
     if fundamental == 0 || min == 0 || min > max {
         return None;
     }
     let target = requested.max(1).clamp(min, max);
-    let aligned = target.div_ceil(fundamental).saturating_mul(fundamental);
-    let selected = if aligned <= max { aligned } else { (max / fundamental) * fundamental };
+    let aligned = target
+        .div_ceil(fundamental)
+        .saturating_mul(fundamental);
+    let selected = if aligned <= max {
+        aligned
+    } else {
+        (max / fundamental) * fundamental
+    };
     (selected >= min && selected <= max).then_some(selected)
 }
 
@@ -309,7 +321,9 @@ fn run_wasapi_worker(
                 .ok()
                 .and_then(|periods| select_shared_period(requested_frames, periods.min, periods.max, periods.fundamental));
             let initialized_with_client3 = selected_period.is_some_and(|period| {
-                audio_client.initialize_shared_audio_stream(&format, TimingMode::Events, period).is_ok()
+                audio_client
+                    .initialize_shared_audio_stream(&format, TimingMode::Events, period)
+                    .is_ok()
             });
             if !initialized_with_client3 {
                 let requested_period = (buffer_size as u64 * 10_000_000 / sample_rate as u64) as i64;
