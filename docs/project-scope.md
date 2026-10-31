@@ -75,7 +75,8 @@ Python fica restrito a:
 - frontend Qt/PySide6, incluindo apresentação da superfície de vídeo e controles de configuração do jogador;
 - carregamento e seleção de ROMs, discos, BIOS e perfis;
 - configuração, logs e diagnósticos da aplicação;
-- configuração/orquestração de serviços do host e apresentação de suas capacidades; captura, normalização e execução de backends de hardware (áudio, input e pipeline de vídeo) pertencem a Rust e à camada nativa definida para cada domínio;
+- configuração e orquestração da aplicação, além de consultar/apresentar capacidades do host;
+- a arquitetura-alvo mantém em Rust os backends que executam áudio, captura/normalização de periféricos e pipeline de vídeo. O estado da migração de cada backend deve ser verificado no código/PR correspondente; uma diretriz documental não significa que a migração já esteja integrada;
 - ferramentas, auditorias, automação, testes e benchmarks;
 - fachada fina para a extensão Rust.
 
