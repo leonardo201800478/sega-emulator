@@ -52,3 +52,11 @@ Os resultados citados acima são históricos e pertencem aos SHAs anteriores. Pa
 - LONG_PASS: NOT RUN.
 - TEMPORAL_PASS: NOT RUN.
 - Testes físicos WASAPI/XAudio2 e latência ponta a ponta: NOT RUN.
+
+## Registro de validação manual pós-integração — 2026-10-31
+
+**Base da main verificada:** `9c6f2b75c4994f1eb3eb7ccc0cd64c7c4d2b2de2`, merge da PR #303. As fases B/C (sessão Rust, mixer/resampler e remoção do transporte PCM Python/PyO3) estão integradas para o caminho ativo SG-1000/SMS. A fase D não está concluída: o pump ainda é acionado após `run_frame()` pelo fluxo Qt.
+
+O mantenedor relatou teste auditivo manual com **WASAPI e XAudio2 em ambos os cores (SG-1000 e SMS)**. Resultado percebido: som mais limpo, menos engasgos e ruídos estranhos, timbre muito próximo ao Ares e volume mais alto. Registrar como **Manual listening — PASS (relato do mantenedor)**, não como benchmark, teste automatizado ou prova de equivalência acústica.
+
+Permanecem sem evidência objetiva: duração e ROMs usadas em cada teste, device/driver/formato efetivos, medição RMS/peak/loudness, latência ponta a ponta, taxa de underruns e estabilidade em sessões longas/hotplug. FM/YM2413, fontes PCM/CDDA/PWM, estéreo nativo completo, filtros analógicos calibrados e scheduler desacoplado do timer Qt continuam fora do que foi validado. `LONG_PASS` e `TEMPORAL_PASS` permanecem NOT RUN.

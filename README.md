@@ -2,6 +2,11 @@
 
 # Sega Emulator
 
+## Atualização do runtime de áudio Rust — 2026-10-31
+
+As PRs [#299](https://github.com/leonardo201800478/sega-emulator/pull/299), [#302](https://github.com/leonardo201800478/sega-emulator/pull/302) e [#303](https://github.com/leonardo201800478/sega-emulator/pull/303) integraram na `main` a sessão DSP e o fluxo PCM Rust para SG-1000/SMS. Python/PyO3 não transporta buffers PCM durante gameplay. O mantenedor relatou teste auditivo positivo nos dois cores e nos dois backends (WASAPI e XAudio2): som mais limpo, menos engasgos e ruídos, timbre percebido como muito próximo ao Ares e volume mais alto. É evidência observacional, não benchmark, medição de loudness, latência ou prova de equivalência ao hardware. O pump ainda ocorre após `run_frame()` no fluxo Qt; desacoplamento do timer, validação física prolongada, hotplug, FM/YM2413, estéreo nativo completo e filtros analógicos calibrados continuam pendentes. Base da main: `9c6f2b75c4994f1eb3eb7ccc0cd64c7c4d2b2de2`. Consulte [arquitetura e validação do áudio](docs/architecture/native-audio-runtime.md#10-resultado-do-port-e-validação-auditiva-manual-2026-10-31).
+
+
 Projeto de emulação de alta precisão com hardware ativo implementado em Rust. Python na aplicação fica restrito à interface Qt, carregamento de ROMs/perfis e integração fina com o runtime nativo; ferramentas e testes são infraestrutura, não um runtime de emulação. O primeiro alvo é o Sega SG-1000.
 
 ## Marco SG-1000 — concluído no escopo funcional validado (2026-10-28)

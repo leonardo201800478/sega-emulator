@@ -185,3 +185,33 @@ Esse estado é inventário, não aprovação arquitetural. O caminho PCM via Pyt
 - WASAPI/XAudio2 físico, hotplug, sessões longas e latência ponta a ponta: NOT RUN.
 
 Os resultados históricos acima pertencem somente ao SHA antigo e não aprovam este candidato. Não classificar a migração completa: a autonomia do scheduler frente ao timer Qt e a validação física Windows ainda estão pendentes.
+
+## 10. Resultado do port e validação auditiva manual — 2026-10-31
+
+### Integração efetivamente presente na main
+
+Base verificada: `9c6f2b75c4994f1eb3eb7ccc0cd64c7c4d2b2de2` (merge da PR #303). A sequência #299 → #302 → #303 consolidou a migração do caminho ativo de áudio SG-1000/SMS para ownership Rust:
+
+- `NativeAudioSession<S: PcmSink>` reside no crate Rust puro `sega-audio-runtime`, sem dependência de PyO3 ou APIs de dispositivo.
+- Adaptadores Rust SG-1000 e SMS conectam a sessão aos sinks WASAPI/XAudio2.
+- Mixer DSP, resampling, filas e entrega PCM ao backend ocorrem em Rust; as APIs Python/PyO3 legadas de drenagem, conversão e escrita PCM foram removidas.
+- Qt/Python conserva configuração, controle de ciclo de vida e telemetria coarse-grained; nenhum buffer PCM é transportado pelo binding durante gameplay.
+- WASAPI Shared/event-driven é a opção padrão e tenta IAudioClient3, com fallback para WASAPI Shared convencional. XAudio2 continua selecionável.
+- O filtro passa-baixa DSP opcional permanece desativado por padrão; não é um modelo analógico calibrado do PSG.
+
+### Resultado auditivo manual relatado pelo mantenedor
+
+Em 2026-10-31, o mantenedor informou ter testado **WASAPI e XAudio2 nos dois cores (SG-1000 e SMS)**. A avaliação subjetiva relatada foi: som mais limpo; redução perceptível de engasgos/cortes; redução de ruídos/artefatos estranhos; timbre muito próximo ao Ares; volume percebido como mais alto.
+
+Classificação: **evidência de teste auditivo manual relatada pelo mantenedor** para a matriz 2 cores × 2 backends. O resultado é baseline qualitativo de regressão, mas não inclui identificação de ROM/jogo, duração de cada sessão, dispositivo físico, formato/ganho efetivo, gravações de referência ou medições. Portanto, não comprova equivalência acústica com Ares, loudness normalizado, ausência quantitativa de underruns, latência ponta a ponta nem fidelidade elétrica/analógica. A diferença de volume deve ser investigada separadamente por medições RMS/peak/loudness em condições iguais antes de qualquer normalização.
+
+### Estado e limites remanescentes
+
+- **IMPLEMENTED:** sessão/mixer/resampler/entrega PCM no runtime Rust e fronteira sem transporte PCM via PyO3, conforme código integrado na base indicada.
+- **Manual listening — PASS (relato do mantenedor):** SG-1000 e SMS × WASAPI e XAudio2, com os resultados qualitativos acima. Não é status automatizado de CI.
+- **INTEGRATION_PENDING:** produção/consumo de áudio ainda é bombeado ao final de `run_frame()` no fluxo acionado pelo pacing Qt; não há scheduler de áudio independente da UI.
+- **NOT RUN / pendente:** sessões longas, hotplug/recuperação física de dispositivos, medição de latência ponta a ponta, contagem instrumental de underruns e comparação de loudness normalizada.
+- **Não implementado nesta fatia:** FM/YM2413, PCM/CDDA/PWM, roteamento estéreo nativo completo e filtros analógicos calibrados por chip.
+- **TEMPORAL_PASS:** não declarado. A arquitetura atual não oferece evidência de eventos de barramento/áudio ordenados por T-state.
+
+Esta avaliação não altera os critérios de conclusão anteriores nem transfere resultados de workflows de SHAs anteriores para a base atual.
