@@ -338,7 +338,7 @@ impl NativeSG1000Machine {
     fn audio_output_metrics(&self) -> (u64, u64) {
         self.audio_session
             .as_ref()
-            .map(NativeAudioSession::metrics)
+            .map(MachineAudioSession::metrics)
             .unwrap_or((0, 0))
     }
 
