@@ -153,3 +153,8 @@ As decisões para o motor Z80 compartilhado, scheduler temporal e fronteiras do 
 ### Auditoria de maturidade Z80 SMS × SG-1000
 
 A comparação confirmou que o SMS é o baseline semântico e de validação mais maduro, embora o código executável atual dos dois cores seja idêntico. Consulte a [auditoria comparativa Z80](architecture/migrations/sms-z80-maturity-audit-2026-10-31.md) e a [ADR-0001 atualizada](architecture/adr/0001-shared-z80-engine.md).
+
+
+## Escopo consolidado do projeto
+
+O escopo transversal vigente de plataformas, identificação de mídia, perfis regionais NTSC/PAL/PAL-M, firmware/BIOS, VDPs, raster, sprites, composição, scheduler mestre, áudio, input e critérios de validação está consolidado em [Escopo do projeto — Sega Emulator](project-scope.md). Este documento é o índice normativo de escopo; as páginas de arquitetura e hardware detalham cada componente. Uma decisão em PR relacionada não é considerada integrada até seu merge.
