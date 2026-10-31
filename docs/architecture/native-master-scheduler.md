@@ -137,3 +137,12 @@ Registrar separadamente `IMPLEMENTED`, `QUICK_PASS`, `SHORT_PASS`, `LONG_PASS`, 
 - [Migração de áudio nativo](migrations/native-audio-runtime.md)
 - [Migração de vídeo nativo — PR #301](migrations/native-video-runtime.md)
 - [Migração de input nativo — PR #300](migrations/native-input-runtime.md)
+
+
+## Atualização de implantação — Temporal Core e scheduler headless (2026-10-31)
+
+A dependência rígida de concluir primeiro as PRs de vídeo/input não se aplica à fundação temporal headless. O clock virtual, domínios racionais, fila determinística e um futuro `MachineScheduler` podem ser desenvolvidos/testados sem os ports de host. As PRs de input e vídeo permanecem gates para a integração final da fronteira de host e apresentação/captura, não para T0/T1 headless.
+
+A PR #315 propõe `sega-temporal-core` com `MachineTime`, `ClockRatio`, `ClockDomain`, prioridades e fila de eventos. Seu próprio escopo declara que ainda não implementa `MachineScheduler`, micro-operações Z80, bus cycles, WAIT, contenção, eventos raster nem integração PSG. Logo, a existência do crate não satisfaz a arquitetura completa deste documento e não autoriza TEMPORAL_PASS.
+
+A regra vigente é: um scheduler por instância de máquina, com vários domínios de clock; nunca um scheduler autônomo por CPU/VDP/PSG. A integração deve aguardar auditoria dos contratos atuais e vetores/traces de regressão. Para o plano multi-plataforma e o motor Z80 único, consulte [reorganização arquitetural](migrations/shared-z80-runtime-reorganization.md).
