@@ -13,12 +13,9 @@ from sega_emulator.audio.vgm_recorder import VgmRecorder
 from sega_emulator.frontend.controller_profiles import (
     ACTIONS,
     DEFAULT_GAMEPAD_BINDINGS,
-    JOYSTICK_ACTIONS,
     SUPPORTED_BUTTONS,
     ControllerInputConfig,
     PlayerInputProfile,
-    apply_turbo,
-    joystick_value,
 )
 from sega_emulator.frontend.qt.focus_pause import (
     EmulationPauseController,
@@ -451,21 +448,13 @@ def run(initial_path: Path | None = None) -> None:
             if binding is not None:
                 player, action = binding
                 actions[player].add(action)
-        gamepad_actions = controller_input.poll(frame_count)
+        action_masks = controller_input.poll_masks(frame_count, actions)
         for player in (1, 2):
-            actions[player].update(gamepad_actions[player])
-            profile = controller_input.config.players[player]
-            actions[player] = apply_turbo(
-                actions[player], profile.turbo_buttons, frame_count
-            )
             if active_system == "master_system":
-                machine.set_controller_actions(player, actions[player])
+                machine.set_controller_actions_mask(player, action_masks[player])
             else:
-                machine.set_joystick(
-                    player,
-                    joystick_value(actions[player].intersection(JOYSTICK_ACTIONS)),
-                )
-        hold_pressed = any("hold" in actions[player] for player in (1, 2))
+                machine.set_joystick_actions_mask(player, action_masks[player])
+        hold_pressed = any(action_masks[player] & (1 << 6) for player in (1, 2))
         if hold_pressed and not hold_was_pressed:
             # SG-1000 Hold and SMS Pause are edge-triggered NMI inputs.
             machine.request_nmi()
