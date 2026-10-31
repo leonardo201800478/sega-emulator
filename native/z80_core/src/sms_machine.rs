@@ -295,10 +295,7 @@ impl NativeSMSMachine {
             ));
         }
         self.machine
-            .set_controller(
-                player,
-                sms_controller_buttons_from_action_mask(actions),
-            )
+            .set_controller(player, sms_controller_buttons_from_action_mask(actions))
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
