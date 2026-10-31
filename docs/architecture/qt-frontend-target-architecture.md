@@ -212,6 +212,43 @@ Workflows presentes na main incluem `qt-frontend-validation.yml`, `ui-controller
 
 Os caminhos e SHAs acima são evidências do inventário consultado. Ausência de evidência em um ponto não deve ser descrita como ausência definitiva de implementação até rastrear referências, contratos e testes.
 
+### 8.7 Rastreamento de sessão e preferências — aprofundamento
+
+**Composição observada em `qt_frontend.py`:**
+- `run()` instancia `QApplication`, `QSettings`, `FrontendPreferences`, `RomCatalog`, controlador de input, resampler, saída de áudio e `EmulatorMainWindow`.
+- O estado de sessão permanece em variáveis locais/closures: `machine`, `loaded`, `active_system`, `pause_controller`, `timer`, `frame_pacer`, região SMS e contadores de frame.
+- A janela recebe callbacks que fecham sobre essas variáveis. O entrypoint concentra carregamento, troca de sistema, reset, pacing, input, áudio, gravação VGM, configuração e diagnóstico.
+- `show_frame()` executa `machine.run_frame()`, drena eventos PSG/PCM, escreve áudio e copia framebuffer para `QImage`. A fronteira de apresentação faz cópia explícita do framebuffer; o caminho e custo devem continuar separados do runtime.
+- `reset_machine()` cria uma nova instância `SG1000Machine` ou `SMSMachine` com os dados da ROM carregada, zera métricas do frontend e retoma timer. Isso é a implementação observada de reset atual; não é evidência de um reset físico detalhado por componente nem de Restart Runtime preservando estado interno.
+- `open_rom()` prepara candidato antes de substituir `machine/loaded`; se falha no carregamento, mostra aviso e mantém o fluxo anterior. Depois da preparação, troca máquina/mídia, atualiza histórico, UI e timer.
+- `choose_system()` abre a biblioteca e chama `open_rom()` com a ROM/sistema escolhidos. Não foi observada confirmação explícita para encerrar uma sessão ativa antes da troca.
+- Não foi localizado comando Stop/Fechar ROM nem uma rotina central de encerramento de sessão no trecho auditado. Pause apenas para o timer; reset reconstrói a máquina com ROM atual. Portanto, o comportamento aprovado de Stop ainda precisa de contrato e implementação futura.
+- `stop_vgm_recording()` é uma dependência de encerramento: gravação ativa precisa ser finalizada ou o fechamento/troca deve ser cancelado. O mesmo padrão de falha transacional deve ser avaliado para SRAM pendente.
+
+**Inventário parcial de chaves persistidas** (não inclui chaves de módulos ainda não rastreados):
+- Preferências de `FrontendPreferences`: `window_width`, `window_height`, `video_scale`, `recent_roms`, `controller_config`, `firmware_directory`, `sms_bios_boot_enabled`, `audio_enabled`, `diagnostics_enabled`, `cpu_core`, `audio_sample_rate`, `audio_buffer_size`, `audio_volume`, `audio_balance`, `audio_queue_blocks`, `video_filter`, `integer_scale`, `sprite_limit_enabled`, `vsync_mode`, `vrr_mode`, `av_sync_mode`, `crt_scanline_intensity`, `crt_scanline_thickness`, `crt_phosphor_mask`, `crt_curvature`, `crt_signal_mode`.
+- Chaves adicionais acessadas diretamente no entrypoint: `ui_language`, `video_driver`, `audio_driver`, `input_driver`, `window_state`, `last_directory`, `last_rom`, `sms_region_preference`.
+- `recent_roms` é lido/escrito tanto pelo entrypoint quanto pelo modelo de preferências; atualmente o caminho direto limita a 10 itens, enquanto `FrontendPreferences.MAX_RECENT_ROMS` ainda é 12. A estrutura persiste caminhos sem sistema explícito; inferir sistema pela extensão não é confiável para extensões compartilhadas.
+- `diagnostics_enabled` é sempre forçado a `False` na leitura/gravação de `FrontendPreferences`; a captura de Debug é opt-in e sessão-local. Não tratar a chave como preferência funcional ativa.
+- `cpu_core` legado diferente de `rust` é sobrescrito durante `from_store()`; esta é uma migração pontual sem versão global do schema nem relatório de incompatibilidades.
+- As preferências não contêm campos explícitos para monitor, modo de vídeo, VRR efetivo, device ID de áudio ou versão do schema. Isso não prova que nenhuma outra camada armazene tais dados; exige busca integral.
+
+**Backends — comportamento observado:**
+- Input: preferência `auto/xinput/sdl3`; validação de backend forçado antes de persistir. A disponibilidade é consultada no objeto de input existente.
+- Vídeo: mudança de API pode exigir reinício; para certos casos, tenta `view.set_render_backend()` e rejeita aplicação quando indisponível. Não há no trecho um objeto de relatório uniforme com estado solicitado/disponível/inicializado/ativo.
+- Áudio: fecha a saída anterior e tenta inicializar a nova. Se a inicialização falha, `_initialize_audio_backend()` retorna `None`, mas a preferência selecionada pode ser persistida e a mensagem indica indisponibilidade. Durante falha de escrita PCM, fecha a saída e mantém emulação sem áudio.
+- `NativeAudioOutput` expõe sample rate, buffer, underrun callbacks e dropped blocks via extensão nativa. Não expõe ID/nome do dispositivo, latência física ponta a ponta nem motivo estruturado de fallback.
+- A troca de drivers não é totalmente transacional: input/vídeo são validados em partes, depois as preferências são gravadas e áudio é reaberto. A ordem, rollback e coerência quando o backend de áudio falha precisam de contrato/testes.
+
+**Critérios adicionais para a matriz:**
+- Testar Pause → Play sem reconstruir máquina nem descarregar ROM.
+- Testar Stop/Fechar ROM: persistência concluída antes do unload; falha em SRAM/VGM deve impedir perda silenciosa; aplicação continua aberta; mídia fica NONE.
+- Testar Reset preservando identidade da ROM e região aplicada após reset; distinguir da reconstrução genérica atual.
+- Testar troca de sistema com sessão ativa, cancelamento de confirmação e falha ao salvar dados pendentes.
+- Testar migração QSettings idempotente, preservação de valores desconhecidos/incompatíveis em relatório e rollback seguro.
+- Testar histórico com 10 itens, caminhos iguais em sistemas distintos, extensão ambígua, arquivos movidos/removidos e migração dos 12 itens legados.
+- Testar backend solicitado indisponível, fallback automático, falha após inicialização, falha em escrita e rollback sem declarar preferência como backend ativo.
+
 ## 9. Matriz inicial de lacunas
 
 | Domínio | Base observada | Decisão/necessidade | Lacuna e evidência de aceitação |
