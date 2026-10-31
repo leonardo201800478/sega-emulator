@@ -30,7 +30,9 @@ class FakeNativeInputManager:
             turbo2,
         )
 
-    def poll_actions(self, frame_number: int, keyboard_player1: int, keyboard_player2: int):
+    def poll_actions(
+        self, frame_number: int, keyboard_player1: int, keyboard_player2: int
+    ):
         self.frames.append(frame_number)
         return 0b0001_0001 | keyboard_player1, 0b0000_1000 | keyboard_player2
 
@@ -59,7 +61,7 @@ def install_fake_extension(monkeypatch: pytest.MonkeyPatch) -> FakeNativeInputMa
     return native
 
 
-def test_qt_adapter_sends_profiles_to_rust_and_receives_semantic_actions(
+def test_qt_adapter_sends_profiles_to_rust_and_receives_action_masks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     native = install_fake_extension(monkeypatch)
@@ -105,7 +107,10 @@ def test_qt_adapter_degrades_to_keyboard_only_if_extension_is_missing(
 
     assert not controller.available
     assert controller.backend_error
-    assert controller.poll(1) == {1: set(), 2: set()}
+    assert controller.poll_masks(1, {1: {"up", "button1"}, 2: set()}) == {
+        1: 0b0001_0001,
+        2: 0,
+    }
     assert controller.connected_names() == []
     assert controller.read_pressed_button(1) is None
     assert not controller.consume_disconnect_event()
