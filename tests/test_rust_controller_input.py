@@ -49,9 +49,14 @@ class FakeNativeInputManager:
     def selected_device(self, player):
         return self.selected.get(player)
 
-    def select_device(self, player, device_id):
+    def device_assignment_is_manual(self, player):
+        return self.manual.get(player, False)
+
+    def select_device(self, player, device_id, manual=True):
         self.selected = getattr(self, "selected", {})
+        self.manual = getattr(self, "manual", {})
         self.selected[player] = device_id
+        self.manual[player] = manual
 
     def consume_disconnect_event(self):
         result = self.disconnect
@@ -147,3 +152,8 @@ def test_qt_adapter_exposes_and_selects_distinct_session_devices(
     assert controller.selected_device(1) is None
     controller.select_device(1, 8)
     assert native.selected[1] == 8
+    assert controller.device_assignment_is_manual(1)
+
+    controller.select_device(1, None, manual=False)
+    assert native.selected[1] is None
+    assert not controller.device_assignment_is_manual(1)
