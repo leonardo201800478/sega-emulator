@@ -71,15 +71,13 @@ impl ClockEdgeTime {
 
 impl Ord for ClockEdgeTime {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.whole_ticks
-            .cmp(&other.whole_ticks)
-            .then_with(|| {
-                let left = u128::from(self.fractional_numerator)
-                    * u128::from(other.fractional_denominator);
-                let right = u128::from(other.fractional_numerator)
-                    * u128::from(self.fractional_denominator);
-                left.cmp(&right)
-            })
+        self.whole_ticks.cmp(&other.whole_ticks).then_with(|| {
+            let left =
+                u128::from(self.fractional_numerator) * u128::from(other.fractional_denominator);
+            let right =
+                u128::from(other.fractional_numerator) * u128::from(self.fractional_denominator);
+            left.cmp(&right)
+        })
     }
 }
 
@@ -353,10 +351,28 @@ mod tests {
             .collect();
 
         assert_eq!(edges[0].whole_ticks(), MachineTime::ZERO);
-        assert_eq!((edges[0].fractional_numerator(), edges[0].fractional_denominator()), (3, 7));
-        assert_eq!((edges[1].fractional_numerator(), edges[1].fractional_denominator()), (6, 7));
+        assert_eq!(
+            (
+                edges[0].fractional_numerator(),
+                edges[0].fractional_denominator()
+            ),
+            (3, 7)
+        );
+        assert_eq!(
+            (
+                edges[1].fractional_numerator(),
+                edges[1].fractional_denominator()
+            ),
+            (6, 7)
+        );
         assert_eq!(edges[2].whole_ticks(), MachineTime::from_ticks(1));
-        assert_eq!((edges[2].fractional_numerator(), edges[2].fractional_denominator()), (2, 7));
+        assert_eq!(
+            (
+                edges[2].fractional_numerator(),
+                edges[2].fractional_denominator()
+            ),
+            (2, 7)
+        );
         assert!(edges.windows(2).all(|pair| pair[0] < pair[1]));
     }
 
@@ -369,15 +385,27 @@ mod tests {
         let third = domain.edge_time_after(3).unwrap();
 
         assert_eq!(
-            (first.whole_ticks(), first.fractional_numerator(), first.fractional_denominator()),
+            (
+                first.whole_ticks(),
+                first.fractional_numerator(),
+                first.fractional_denominator()
+            ),
             (MachineTime::ZERO, 2, 3)
         );
         assert_eq!(
-            (second.whole_ticks(), second.fractional_numerator(), second.fractional_denominator()),
+            (
+                second.whole_ticks(),
+                second.fractional_numerator(),
+                second.fractional_denominator()
+            ),
             (MachineTime::from_ticks(1), 1, 3)
         );
         assert_eq!(
-            (third.whole_ticks(), third.fractional_numerator(), third.fractional_denominator()),
+            (
+                third.whole_ticks(),
+                third.fractional_numerator(),
+                third.fractional_denominator()
+            ),
             (MachineTime::from_ticks(2), 0, 1)
         );
         assert!(first < second && second < third);
@@ -390,15 +418,22 @@ mod tests {
         let edge = domain.next_edge_time().unwrap();
 
         assert_eq!(edge.whole_ticks(), MachineTime::from_ticks(9));
-        assert_eq!((edge.fractional_numerator(), edge.fractional_denominator()), (0, 1));
+        assert_eq!(
+            (edge.fractional_numerator(), edge.fractional_denominator()),
+            (0, 1)
+        );
     }
 
     #[test]
     fn edge_time_comparison_is_exact_for_different_denominators() {
         let ratio_a = ClockRatio::new(3, 2).unwrap();
         let ratio_b = ClockRatio::new(7, 3).unwrap();
-        let a = ClockDomain::new(ratio_a, MachineTime::ZERO).next_edge_time().unwrap();
-        let b = ClockDomain::new(ratio_b, MachineTime::ZERO).next_edge_time().unwrap();
+        let a = ClockDomain::new(ratio_a, MachineTime::ZERO)
+            .next_edge_time()
+            .unwrap();
+        let b = ClockDomain::new(ratio_b, MachineTime::ZERO)
+            .next_edge_time()
+            .unwrap();
         assert!(b < a);
     }
 
