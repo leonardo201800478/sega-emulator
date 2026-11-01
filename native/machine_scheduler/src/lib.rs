@@ -594,6 +594,49 @@ mod tests {
     }
 
     #[test]
+    fn scheduler_orders_hardware_phase_before_platform_priority() {
+        let mut scheduler = MachineScheduler::new();
+        let timestamp = MachineTime::from_ticks(15);
+        scheduler
+            .schedule_at_with_phase(
+                timestamp,
+                HardwarePhase::new(2),
+                PlatformPriority::new(0),
+                "phase-two",
+            )
+            .unwrap();
+        scheduler
+            .schedule_at_with_phase(
+                timestamp,
+                HardwarePhase::new(1),
+                PlatformPriority::new(3),
+                "phase-one-priority-three",
+            )
+            .unwrap();
+        scheduler
+            .schedule_at_with_phase(
+                timestamp,
+                HardwarePhase::new(1),
+                PlatformPriority::new(1),
+                "phase-one-priority-one",
+            )
+            .unwrap();
+
+        assert_eq!(
+            scheduler.dispatch_next().unwrap().unwrap().event.payload,
+            "phase-one-priority-one"
+        );
+        assert_eq!(
+            scheduler.dispatch_next().unwrap().unwrap().event.payload,
+            "phase-one-priority-three"
+        );
+        assert_eq!(
+            scheduler.dispatch_next().unwrap().unwrap().event.payload,
+            "phase-two"
+        );
+    }
+
+    #[test]
     fn causal_same_timestamp_events_allow_same_or_later_priority_only() {
         use sega_temporal_core::EventQueueError;
 
