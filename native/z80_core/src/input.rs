@@ -458,9 +458,24 @@ impl NativeInputManager {
         Ok(self.assignments[(player - 1) as usize].map(|id| id.0))
     }
 
+    /// Report whether the current slot assignment was explicitly selected.
+    fn device_assignment_is_manual(&self, player: u8) -> PyResult<bool> {
+        if !matches!(player, 1 | 2) {
+            return Err(PyValueError::new_err("player deve ser 1 ou 2"));
+        }
+        Ok(self.manual_assignments[(player - 1) as usize])
+    }
+
     /// Assign one enumerated SDL device to a player, or None to unassign it.
     /// A physical SDL entry cannot drive both player slots simultaneously.
-    fn select_device(&mut self, player: u8, device_id: Option<u64>) -> PyResult<()> {
+    /// Set manual=false only when restoring a previously automatic assignment.
+    #[pyo3(signature = (player, device_id, manual=true))]
+    fn select_device(
+        &mut self,
+        player: u8,
+        device_id: Option<u64>,
+        manual: bool,
+    ) -> PyResult<()> {
         if !matches!(player, 1 | 2) {
             return Err(PyValueError::new_err("player deve ser 1 ou 2"));
         }
@@ -478,7 +493,7 @@ impl NativeInputManager {
             }
         }
         self.assignments[player_index] = selected;
-        self.manual_assignments[player_index] = true;
+        self.manual_assignments[player_index] = manual;
         Ok(())
     }
 
