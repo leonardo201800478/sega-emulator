@@ -207,3 +207,99 @@ O contrato temporal do Z80/barramento atual ainda é parcial: traces T-state par
 **AUDIT DOCUMENTED — runtime unchanged.**
 
 A pesquisa técnica foi preservada, o exemplo Rust foi confrontado com os contratos existentes e a integração foi bloqueada nos pontos em que o runtime ainda não fornece timestamps de barramento confiáveis. Próximo gate: concluir e validar a fundação temporal/scheduler e, em trilha separada, evoluir o Z80 para transações temporais observáveis.
+
+
+## 10. Aditivo — revalidação da fundação Machine Scheduler (2026-11-01)
+
+**Snapshot remoto atualizado:** PR #341 permanece Open/Draft, agora no HEAD
+`9f45f6444d19f0d4ab775912ca8e7454cf5280ed`. O workflow CI
+`41353993811` terminou com sucesso: Rust formatting, Clippy, testes do
+workspace, Ruff formatting, Ruff lint e regressões Python passaram. A correção
+em relação ao snapshot anterior foi restrita ao teste
+`registration_and_past_events_are_validated`; não alterou a semântica do
+scheduler. PR #339 também permanece Open/Draft e seu CI
+`41349282720` passou. PR #342 continua sendo a branch documental desta
+auditoria.
+
+### 10.1 Contratos efetivamente presentes na PR #341
+
+O crate `native/machine_scheduler` compõe as primitivas de
+`sega_temporal_core` e implementa:
+
+- uma timeline `MachineTime` por instância de `MachineScheduler<T>`;
+- domínios registrados em `BTreeMap<ClockDomainId, ClockDomain>`, com ordem
+  de apresentação determinística pelo ID;
+- conversão racional com preflight de overflow antes do despacho;
+- despacho do próximo evento após avançar todos os domínios até seu timestamp;
+- eventos ordenados pela fila compartilhada por timestamp, prioridade e
+  sequência de inserção;
+- avanço idle que recusa atravessar evento pendente;
+- payload tipado, sem callback de dispositivo dentro do crate.
+
+O CI verde valida os gates configurados no workflow para esse SHA; não prova
+integração de hardware nem precisão temporal física.
+
+### 10.2 Lacunas e restrições para integração
+
+1. **Clock edges ainda agregadas:** `MachineDispatch` entrega
+   `elapsed_cycles`, total e fase por domínio. Não fornece timestamp de cada
+   borda local nem API de próxima borda. Isso não é suficiente, sozinho, para
+   sequenciar micro-operações Z80 ou fetches VDP que dependam da posição exata
+   de cada borda. Antes da integração, implementar/definir a API de próxima
+   borda ou eventos de borda e seus testes.
+2. **Fase inicial de domínio:** `register_clock_domain` cria o domínio com
+   fase zero no `now` corrente. O scheduler não expõe
+   `ClockDomain::with_phase`. Até existir contrato explícito para fase inicial,
+   registrar todos os domínios estáticos antes do primeiro avanço. Registro
+   dinâmico após avanço não deve ser usado para simular um clock cuja fase
+   física deva continuar ou ser derivada de outra fonte.
+3. **Fase de evento não é dimensão independente:** a fila ordena
+   `(timestamp, EventPriority, sequence)`; o modelo temporal documenta
+   `(timestamp, hardware_phase, platform_priority, stable_sequence)`.
+   Não presumir que o campo único `EventPriority` resolve ambas as dimensões.
+   Antes de integrar eventos simultâneos de CPU/VDP/PSG, reconciliar o contrato
+   e justificar cada precedência por perfil e evidência.
+4. **Eventos delta sem limite explícito:** eventos causais no mesmo timestamp
+   são permitidos na mesma prioridade ou em prioridade posterior; prioridade
+   anterior é rejeitada. Não há limite de iterações/eventos delta por timestamp.
+   Definir proteção contra ciclos causais infinitos no loop proprietário da
+   máquina antes de permitir produtores de eventos recursivos.
+5. **Save state incompleto:** o scheduler deriva `Clone`, mas não oferece
+   snapshot/restore completo serializável da timeline e da fila. O snapshot
+   individual de clock domain não captura eventos pendentes, sequência global
+   ou histórico de despacho. Não declarar save-state determinístico da máquina
+   com base apenas nessa API.
+6. **Sem semântica de dispositivo:** o crate não executa callbacks e não
+   determina prioridades SMS, WAIT, contenção ou arbitragem. A máquina
+   consumidora ainda precisa estabelecer causalidade e sincronização antes de
+   ler/escrever estado de dispositivos.
+
+### 10.3 Testes presentes e próximos testes necessários
+
+Testes existentes cobrem avanço racional, fase fracionária, ordem de IDs,
+idle sem saltar evento, preflight de overflow, rejeição de domínio duplicado,
+evento passado e equivalência entre avanço único e avanço em blocos.
+
+Antes de integrar a máquina, acrescentar testes direcionados para:
+
+- despacho de múltiplos eventos no mesmo timestamp e mesma prioridade;
+- evento causal criado pelo consumidor durante o despacho, no mesmo timestamp;
+- rejeição de prioridade regressiva no timestamp já despachado através da API
+  `MachineScheduler`;
+- evento causal com prioridade posterior e preservação da sequência;
+- falha de preflight com múltiplos domínios, provando que nenhum domínio muda;
+- fase inicial explícita e/ou proibição documentada de registro após início;
+- limite determinístico para cadeias delta;
+- snapshot/restore incluindo fila, sequência, timestamp e fases.
+
+### 10.4 Decisão e estado
+
+A PR #341 é uma **fundação de scheduler genérica validada por CI**, não um
+scheduler de máquina SMS integrado e não um componente TEMPORAL_PASS. O
+resultado do CI permite avançar para revisão de contrato e testes adicionais,
+mas não autoriza ligar o Z80/VDP ao scheduler usando apenas contagens agregadas
+de ciclos.
+
+**Próximo gate:** fechar as decisões de bordas, fase de evento, causalidade
+delta e snapshot/restore; depois definir transações temporais de barramento
+Z80. Nenhuma alteração no runtime SMS/VDP foi feita por este aditivo.
