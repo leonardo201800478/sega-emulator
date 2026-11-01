@@ -498,3 +498,339 @@ mod tests {
         let mut scheduler = MachineScheduler::new();
         scheduler
             .register_clock_domain(ClockDomainId(0), ClockRatio::new(u64::MAX, 1).unwrap())
+            .unwrap();
+        scheduler
+            .schedule_at(MachineTime::from_ticks(u128::MAX), EventPriority::new(0), 9)
+            .unwrap();
+
+        assert!(matches!(
+            scheduler.dispatch_next(),
+            Err(SchedulerError::Clock(_))
+        ));
+        assert_eq!(scheduler.pending_events(), 1);
+        assert_eq!(scheduler.now(), MachineTime::ZERO);
+        assert_eq!(
+            scheduler
+                .clock_snapshot(ClockDomainId(0))
+                .unwrap()
+                .total_cycles,
+            0
+        );
+    }
+
+    #[test]
+    fn registration_and_past_events_are_validated() {
+        let mut scheduler = MachineScheduler::<()>::new();
+        let id = ClockDomainId(7);
+        scheduler
+            .register_clock_domain(id, ClockRatio::new(1, 1).unwrap())
+            .unwrap();
+        assert_eq!(
+            scheduler.register_clock_domain(id, ClockRatio::new(1, 1).unwrap()),
+            Err(SchedulerError::DuplicateClockDomain(id))
+        );
+        assert_eq!(
+            scheduler.schedule_at(MachineTime::from_ticks(0), EventPriority::new(0), ()),
+            Ok(0)
+        );
+        scheduler.dispatch_next().unwrap();
+        scheduler
+            .advance_idle_to(MachineTime::from_ticks(1))
+            .unwrap();
+        assert_eq!(
+            scheduler.schedule_at(MachineTime::ZERO, EventPriority::new(0), ()),
+            Err(SchedulerError::TimeWentBackwards)
+        );
+    }
+
+    #[test]
+    fn chunked_idle_advances_match_one_large_advance() {
+        let ratio = ClockRatio::new(7, 3).unwrap();
+        let mut whole = MachineScheduler::<()>::new();
+        let mut chunked = MachineScheduler::<()>::new();
+        whole
+            .register_clock_domain(ClockDomainId(1), ratio)
+            .unwrap();
+        chunked
+            .register_clock_domain(ClockDomainId(1), ratio)
+            .unwrap();
+
+        whole.advance_idle_to(MachineTime::from_ticks(10)).unwrap();
+        chunked.advance_idle_to(MachineTime::from_ticks(3)).unwrap();
+        chunked.advance_idle_to(MachineTime::from_ticks(7)).unwrap();
+        chunked
+            .advance_idle_to(MachineTime::from_ticks(10))
+            .unwrap();
+
+        assert_eq!(
+            whole.clock_snapshot(ClockDomainId(1)).unwrap(),
+            chunked.clock_snapshot(ClockDomainId(1)).unwrap()
+        );
+    }
+
+    #[test]
+    fn same_timestamp_events_dispatch_by_priority_then_insertion_order() {
+        let mut scheduler = MachineScheduler::new();
+        let timestamp = MachineTime::from_ticks(12);
+        scheduler
+            .schedule_at(timestamp, EventPriority::new(3), "late")
+            .unwrap();
+        scheduler
+            .schedule_at(timestamp, EventPriority::new(1), "early-a")
+            .unwrap();
+        scheduler
+            .schedule_at(timestamp, EventPriority::new(1), "early-b")
+            .unwrap();
+
+        let first = scheduler.dispatch_next().unwrap().unwrap();
+        let second = scheduler.dispatch_next().unwrap().unwrap();
+        let third = scheduler.dispatch_next().unwrap().unwrap();
+
+        assert_eq!(first.event.payload, "early-a");
+        assert_eq!(second.event.payload, "early-b");
+        assert_eq!(third.event.payload, "late");
+        assert_eq!(first.event.timestamp, timestamp);
+        assert_eq!(second.event.timestamp, timestamp);
+        assert_eq!(third.event.timestamp, timestamp);
+        assert_eq!(scheduler.now(), timestamp);
+        assert_eq!(scheduler.pending_events(), 0);
+    }
+
+    #[test]
+    fn scheduler_orders_hardware_phase_before_platform_priority() {
+        let mut scheduler = MachineScheduler::new();
+        let timestamp = MachineTime::from_ticks(15);
+        scheduler
+            .schedule_at_with_phase(
+                timestamp,
+                HardwarePhase::new(2),
+                PlatformPriority::new(0),
+                "phase-two",
+            )
+            .unwrap();
+        scheduler
+            .schedule_at_with_phase(
+                timestamp,
+                HardwarePhase::new(1),
+                PlatformPriority::new(3),
+                "phase-one-priority-three",
+            )
+            .unwrap();
+        scheduler
+            .schedule_at_with_phase(
+                timestamp,
+                HardwarePhase::new(1),
+                PlatformPriority::new(1),
+                "phase-one-priority-one",
+            )
+            .unwrap();
+
+        assert_eq!(
+            scheduler.dispatch_next().unwrap().unwrap().event.payload,
+            "phase-one-priority-one"
+        );
+        assert_eq!(
+            scheduler.dispatch_next().unwrap().unwrap().event.payload,
+            "phase-one-priority-three"
+        );
+        assert_eq!(
+            scheduler.dispatch_next().unwrap().unwrap().event.payload,
+            "phase-two"
+        );
+    }
+
+    #[test]
+    fn causal_same_timestamp_events_allow_same_or_later_priority_only() {
+        use sega_temporal_core::EventQueueError;
+
+        let mut scheduler = MachineScheduler::new();
+        let timestamp = MachineTime::from_ticks(8);
+        scheduler
+            .schedule_at(timestamp, EventPriority::new(3), "origin")
+            .unwrap();
+        assert_eq!(
+            scheduler.dispatch_next().unwrap().unwrap().event.payload,
+            "origin"
+        );
+
+        assert_eq!(
+            scheduler.schedule_at(timestamp, EventPriority::new(2), "retroactive"),
+            Err(SchedulerError::EventQueue(
+                EventQueueError::OrderingRegressionAtCurrentTime
+            ))
+        );
+        scheduler
+            .schedule_at(timestamp, EventPriority::new(3), "same")
+            .unwrap();
+        scheduler
+            .schedule_at(timestamp, EventPriority::new(4), "later")
+            .unwrap();
+
+        assert_eq!(
+            scheduler.dispatch_next().unwrap().unwrap().event.payload,
+            "same"
+        );
+        assert_eq!(
+            scheduler.dispatch_next().unwrap().unwrap().event.payload,
+            "later"
+        );
+    }
+
+    #[test]
+    fn delta_event_policy_rejects_zero_budget() {
+        assert_eq!(
+            DeltaEventPolicy::new(0),
+            Err(SchedulerError::ZeroDeltaEventLimit)
+        );
+        assert_eq!(
+            DeltaEventPolicy::new(3).unwrap().max_events_per_timestamp(),
+            3
+        );
+    }
+
+    #[test]
+    fn same_timestamp_budget_blocks_without_dropping_pending_events() {
+        let policy = DeltaEventPolicy::new(2).unwrap();
+        let mut scheduler = MachineScheduler::with_delta_event_policy(policy);
+        let timestamp = MachineTime::from_ticks(5);
+        for payload in ["first", "second", "third"] {
+            scheduler
+                .schedule_at(timestamp, EventPriority::new(0), payload)
+                .unwrap();
+        }
+
+        assert_eq!(
+            scheduler.dispatch_next().unwrap().unwrap().event.payload,
+            "first"
+        );
+        assert_eq!(
+            scheduler.dispatch_next().unwrap().unwrap().event.payload,
+            "second"
+        );
+        assert_eq!(
+            scheduler.dispatch_next(),
+            Err(SchedulerError::DeltaEventLimitExceeded {
+                timestamp,
+                limit: 2
+            })
+        );
+        assert_eq!(scheduler.pending_events(), 1);
+        assert_eq!(scheduler.next_event_time(), Some(timestamp));
+        assert_eq!(scheduler.now(), timestamp);
+    }
+
+    #[test]
+    fn delta_event_budget_bounds_causal_same_timestamp_chains() {
+        let timestamp = MachineTime::from_ticks(9);
+        let policy = DeltaEventPolicy::new(3).unwrap();
+        let mut scheduler = MachineScheduler::with_delta_event_policy(policy);
+        scheduler
+            .schedule_at(timestamp, EventPriority::new(0), 0_u8)
+            .unwrap();
+
+        for expected in 0..3 {
+            let dispatch = scheduler.dispatch_next().unwrap().unwrap();
+            assert_eq!(dispatch.event.payload, expected);
+            scheduler
+                .schedule_at(timestamp, EventPriority::new(0), expected + 1)
+                .unwrap();
+        }
+
+        assert_eq!(
+            scheduler.dispatch_next(),
+            Err(SchedulerError::DeltaEventLimitExceeded {
+                timestamp,
+                limit: 3
+            })
+        );
+        assert_eq!(scheduler.pending_events(), 1);
+    }
+
+    #[test]
+    fn delta_event_budget_resets_at_a_later_timestamp() {
+        let policy = DeltaEventPolicy::new(2).unwrap();
+        let mut scheduler = MachineScheduler::with_delta_event_policy(policy);
+        let first_time = MachineTime::from_ticks(4);
+        let second_time = MachineTime::from_ticks(5);
+        scheduler
+            .schedule_at(first_time, EventPriority::new(0), 1)
+            .unwrap();
+        scheduler
+            .schedule_at(first_time, EventPriority::new(0), 2)
+            .unwrap();
+        scheduler
+            .schedule_at(second_time, EventPriority::new(0), 3)
+            .unwrap();
+
+        assert_eq!(scheduler.dispatch_next().unwrap().unwrap().event.payload, 1);
+        assert_eq!(scheduler.dispatch_next().unwrap().unwrap().event.payload, 2);
+        assert_eq!(scheduler.dispatch_next().unwrap().unwrap().event.payload, 3);
+        assert_eq!(scheduler.pending_events(), 0);
+    }
+
+    #[test]
+    fn increasing_delta_budget_resumes_blocked_queue_without_resetting_it() {
+        let mut scheduler =
+            MachineScheduler::with_delta_event_policy(DeltaEventPolicy::new(1).unwrap());
+        let timestamp = MachineTime::from_ticks(6);
+        scheduler
+            .schedule_at(timestamp, EventPriority::new(0), "one")
+            .unwrap();
+        scheduler
+            .schedule_at(timestamp, EventPriority::new(0), "two")
+            .unwrap();
+
+        assert_eq!(
+            scheduler.dispatch_next().unwrap().unwrap().event.payload,
+            "one"
+        );
+        assert_eq!(
+            scheduler.dispatch_next(),
+            Err(SchedulerError::DeltaEventLimitExceeded {
+                timestamp,
+                limit: 1
+            })
+        );
+        scheduler.set_delta_event_policy(DeltaEventPolicy::new(2).unwrap());
+        assert_eq!(
+            scheduler.dispatch_next().unwrap().unwrap().event.payload,
+            "two"
+        );
+    }
+
+    #[test]
+    fn failed_preflight_keeps_all_clock_domains_unchanged() {
+        let mut scheduler = MachineScheduler::new();
+        scheduler
+            .register_clock_domain(ClockDomainId(0), ClockRatio::new(1, 1).unwrap())
+            .unwrap();
+        scheduler
+            .register_clock_domain(ClockDomainId(1), ClockRatio::new(u64::MAX, 1).unwrap())
+            .unwrap();
+        scheduler
+            .schedule_at(
+                MachineTime::from_ticks(u128::MAX),
+                EventPriority::new(0),
+                "overflow",
+            )
+            .unwrap();
+
+        let before_0 = scheduler.clock_snapshot(ClockDomainId(0)).unwrap();
+        let before_1 = scheduler.clock_snapshot(ClockDomainId(1)).unwrap();
+        assert!(matches!(
+            scheduler.dispatch_next(),
+            Err(SchedulerError::Clock(_))
+        ));
+
+        assert_eq!(
+            scheduler.clock_snapshot(ClockDomainId(0)).unwrap(),
+            before_0
+        );
+        assert_eq!(
+            scheduler.clock_snapshot(ClockDomainId(1)).unwrap(),
+            before_1
+        );
+        assert_eq!(scheduler.now(), MachineTime::ZERO);
+        assert_eq!(scheduler.pending_events(), 1);
+    }
+}
