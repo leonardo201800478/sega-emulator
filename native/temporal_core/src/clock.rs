@@ -546,8 +546,7 @@ mod tests {
     #[test]
     fn restored_clock_domain_preserves_complete_history() {
         let ratio = ClockRatio::new(5, 3).unwrap();
-        let mut original =
-            ClockDomain::with_phase(ratio, MachineTime::from_ticks(4), 2).unwrap();
+        let mut original = ClockDomain::with_phase(ratio, MachineTime::from_ticks(4), 2).unwrap();
         original.advance_to(MachineTime::from_ticks(11)).unwrap();
 
         let mut restored = ClockDomain::restore(
