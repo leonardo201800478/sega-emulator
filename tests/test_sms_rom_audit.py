@@ -40,12 +40,16 @@ def test_file_read_is_bounded_even_when_file_grows_after_discovery(tmp_path, mon
         audit.read_sms_rom_target(target)
 
 
-def test_zip_member_read_is_bounded(tmp_path, monkeypatch):
-    path = tmp_path / "oversized.zip"
+def test_zip_member_read_is_bounded_when_archive_changes_after_discovery(
+    tmp_path, monkeypatch
+):
+    path = tmp_path / "replaced.zip"
     with zipfile.ZipFile(path, "w") as archive:
-        archive.writestr("game.sms", b"x" * 65)
+        archive.writestr("game.sms", b"x" * 32)
     target = audit.discover_sms_rom_targets(tmp_path)[0]
     monkeypatch.setattr(audit, "MAX_SMS_ROM_SIZE", 64)
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("game.sms", b"x" * 65)
 
     with pytest.raises(ValueError, match="excede"):
         audit.read_sms_rom_target(target)
