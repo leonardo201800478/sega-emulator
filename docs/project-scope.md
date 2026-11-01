@@ -27,7 +27,7 @@ Não sacrificar correção por velocidade. Não declarar compatibilidade univers
 
 O escopo de plataformas é:
 
-1. **SG-1000 + Master System (SMS) — prioridade conjunta e exclusiva de implementação atual.** Preservar o SG-1000 funcional e consolidar o SMS funcional, compartilhando o motor Z80 e mecanismos comprovadamente comuns, sem unificar VDPs, mapas de memória, I/O, PSGs ou perfis específicos.
+1. **SG-1000 + Master System (SMS) — prioridade conjunta e exclusiva de implementação atual.** Preservar o SG-1000 funcional e consolidar o SMS funcional, compartilhando o motor Z80 e os componentes comprovadamente comuns. Os VDPs, mapas de memória e I/O permanecem específicos; o núcleo SN76489 deve ser compartilhado no bloco de áudio com perfis SG-1000/SMS explícitos, preservando diferenças documentadas de cada máquina.
 2. **Game Gear** — somente após o marco conjunto SG-1000/SMS; reutilizar o que for comprovadamente comum ao SMS e especializar LCD, I/O, áudio estéreo e periféricos próprios.
 3. **Mega Drive / Genesis** — integrar 68000, Z80 auxiliar, VDP, áudio, cartuchos, mappers e periféricos.
 4. **Sega CD** — compor com Mega Drive, incluindo CPUs, BIOS, CD/media, Word RAM, ASICs, DMA, PCM e CDDA.
