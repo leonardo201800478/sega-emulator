@@ -142,7 +142,8 @@ def discover_sms_rom_targets(
                     infos = archive.infolist()
                     if len(infos) > MAX_ZIP_MEMBERS:
                         raise SmsRomAuditLimitError(
-                            f"ZIP excede o limite de {MAX_ZIP_MEMBERS} membros: {path.name}"
+                            f"ZIP excede o limite de {MAX_ZIP_MEMBERS} membros: "
+                            f"{path.name}"
                         )
                     candidates = [
                         (index, info)
