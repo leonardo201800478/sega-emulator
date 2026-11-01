@@ -151,7 +151,7 @@ Do not invent additional physical hardware ordering rules in this validation lay
 
 The next implementation work is deliberately split into small, reviewable slices:
 
-1. **E0 — Stabilize the base.** Reconfirm PR #346 head SHA, Draft/open state and CI. Do not rebase or merge the stack without a separate decision. The initial implementation branch may be stacked directly on the verified #346 SHA.
+1. **E0 — Freeze and stabilize the base.** Reconfirm PRs #341–#347, their heads, dependency chain and CI. Because #341–#346 are still open and unmerged, do not assume the stack is integrated. Freeze the verified #346 SHA as the temporal implementation baseline and stack Etapa E after the documentation PR #347. Do not rebase or merge the stack without a separate maintainer decision. If any parent changes, stop and reconcile before continuing.
 2. **E1 — State model.** Add the DTO types and document their version/codec contract. No runtime behavior changes yet.
 3. **E2 — Clock-domain export/restore.** Implement complete `ClockDomainState`, checked reconstruction and arithmetic invariant tests.
 4. **E3 — Queue export/restore.** Implement canonical vector export, preserve sequence allocator and causal watermark, validate duplicates and reconstruct the heap.
@@ -177,7 +177,7 @@ The snapshot milestone is not complete until tests cover:
 - isolated invalid-state cases for every restore invariant;
 - truncated/corrupt encoded inputs;
 - sequence exhaustion and arithmetic overflow before and after restore;
-- canonical DTO equality/encoding for semantically equivalent scheduler states, independent of heap layout and domain registration order.
+- canonical DTO equality/encoding for the same logical scheduler state reached through different clock-domain registration orders and different internal heap layouts, while preserving the exact assigned event sequence numbers. Do not require equality when event insertion order differs: insertion sequence is observable tie-break state and must be preserved.
 
 The principal acceptance criterion is exact observable equivalence: the same dispatched events, the same `ClockAdvance` outputs, the same errors at the same operation, and the same final exported state.
 
