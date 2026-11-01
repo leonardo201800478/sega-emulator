@@ -13,6 +13,7 @@ members = [
     "native/audio_runtime",
     "native/input_runtime",
     "native/temporal_core",
+    "native/machine_scheduler",
 ]
 default-members = [
     "native/sg1000_core",
@@ -22,4 +23,5 @@ default-members = [
     "native/audio_runtime",
     "native/input_runtime",
     "native/temporal_core",
+    "native/machine_scheduler",
 ]
