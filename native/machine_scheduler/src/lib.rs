@@ -859,6 +859,12 @@ mod tests {
             target.clock_snapshot(id).unwrap(),
             source.clock_snapshot(id).unwrap()
         );
+        source.advance_idle_to(MachineTime::from_ticks(13)).unwrap();
+        target.advance_idle_to(MachineTime::from_ticks(13)).unwrap();
+        assert_eq!(
+            target.clock_snapshot(id).unwrap(),
+            source.clock_snapshot(id).unwrap()
+        );
     }
 
     #[test]
