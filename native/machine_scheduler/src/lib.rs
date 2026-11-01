@@ -404,7 +404,10 @@ impl<T> MachineScheduler<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ClockDomainId, ClockDomainState, ClockError, DeltaEventPolicy, MachineScheduler, SchedulerError};
+    use super::{
+        ClockDomainId, ClockDomainState, ClockError, DeltaEventPolicy, MachineScheduler,
+        SchedulerError,
+    };
     use sega_temporal_core::{
         ClockRatio, EventPriority, HardwarePhase, MachineTime, PlatformPriority,
     };
@@ -841,9 +844,7 @@ mod tests {
         source
             .register_clock_domain_with_phase(id, ClockRatio::new(5, 3).unwrap(), 2)
             .unwrap();
-        source
-            .advance_idle_to(MachineTime::from_ticks(7))
-            .unwrap();
+        source.advance_idle_to(MachineTime::from_ticks(7)).unwrap();
 
         let state = source.export_clock_domain_state(id).unwrap();
         assert_eq!(state.current_time, MachineTime::from_ticks(7));
@@ -851,9 +852,7 @@ mod tests {
         assert_eq!(state.initial_phase, 2);
 
         let mut target = MachineScheduler::<()>::new();
-        target
-            .advance_idle_to(MachineTime::from_ticks(7))
-            .unwrap();
+        target.advance_idle_to(MachineTime::from_ticks(7)).unwrap();
         target.restore_clock_domain_state(state).unwrap();
         assert_eq!(
             target.clock_snapshot(id).unwrap(),
