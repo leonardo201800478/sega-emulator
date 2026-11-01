@@ -1,95 +1,62 @@
 name: CI
 
 on:
+  pull_request:
   push:
     branches: [main]
-  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  quality:
+  rust:
+    name: Rust workspace quality and regression
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: Swatinem/rust-cache@v2
+      - name: Formatting
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Workspace tests
+        run: cargo test --workspace --locked
+
+  python-and-extension:
+    name: Python quality, native extension and regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.14"
           cache: pip
       - name: Install project and development tools
         run: python -m pip install -e ".[dev]" maturin==1.15.0
-      - name: Check formatting
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PUSH_BEFORE_SHA: ${{ github.event.before }}
-          CURRENT_SHA: ${{ github.sha }}
-        shell: bash
-        run: |
-          if [[ "$EVENT_NAME" == "pull_request" ]]; then
-            base_sha="$PR_BASE_SHA"
-            head_sha="$PR_HEAD_SHA"
-          elif [[ "$EVENT_NAME" == "push" && -n "$PUSH_BEFORE_SHA" && "$PUSH_BEFORE_SHA" != "0000000000000000000000000000000000000000" ]]; then
-            base_sha="$PUSH_BEFORE_SHA"
-            head_sha="$CURRENT_SHA"
-          else
-            ruff format --check .
-            exit $?
-          fi
-
-          mapfile -d '' changed_python_files < <(git diff --diff-filter=ACMRT --name-only -z "$base_sha" "$head_sha" -- '*.py' ':!legacy/**')
-          if (("${#changed_python_files[@]}" == 0)); then
-            echo "No changed Python files to format-check."
-            exit 0
-          fi
-          ruff format --check "${changed_python_files[@]}"
-      - name: Lint
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PUSH_BEFORE_SHA: ${{ github.event.before }}
-          CURRENT_SHA: ${{ github.sha }}
-        shell: bash
-        run: |
-          if [[ "$EVENT_NAME" == "pull_request" ]]; then
-            base_sha="$PR_BASE_SHA"
-            head_sha="$PR_HEAD_SHA"
-          elif [[ "$EVENT_NAME" == "push" && -n "$PUSH_BEFORE_SHA" && "$PUSH_BEFORE_SHA" != "0000000000000000000000000000000000000000" ]]; then
-            base_sha="$PUSH_BEFORE_SHA"
-            head_sha="$CURRENT_SHA"
-          else
-            ruff check .
-            exit $?
-          fi
-
-          mapfile -d '' changed_python_files < <(git diff --diff-filter=ACMRT --name-only -z "$base_sha" "$head_sha" -- '*.py' ':!legacy/**')
-          if (("${#changed_python_files[@]}" == 0)); then
-            echo "No changed Python files to lint."
-            exit 0
-          fi
-          ruff check "${changed_python_files[@]}"
+      - name: Ruff formatting
+        run: python -m ruff format --check .
+      - name: Ruff lint
+        run: python -m ruff check .
       - name: Build and install native Rust extension
-        shell: bash
         run: |
           maturin build --locked --manifest-path native/z80_core/Cargo.toml --release --features python-extension --out native/z80_core/dist
           python -m pip install native/z80_core/dist/*.whl
       - name: Compile Python sources
         run: python -m compileall -q src tests tools
-      - name: Check Python dependency consistency
+      - name: Check Python dependencies
         run: python -m pip check
       - name: Smoke-test SMS boot matrix CLI
         run: python tools/sms_boot_matrix.py --help
-      - name: Run tests
-        run: python -m pytest
+      - name: Python regression suite
+        run: python -m pytest -q
