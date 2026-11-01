@@ -673,11 +673,9 @@ mod tests {
         for expected in 0..3 {
             let dispatch = scheduler.dispatch_next().unwrap().unwrap();
             assert_eq!(dispatch.event.payload, expected);
-            if expected < 2 {
-                scheduler
-                    .schedule_at(timestamp, EventPriority::new(0), expected + 1)
-                    .unwrap();
-            }
+            scheduler
+                .schedule_at(timestamp, EventPriority::new(0), expected + 1)
+                .unwrap();
         }
 
         assert_eq!(
@@ -687,7 +685,7 @@ mod tests {
                 limit: 3
             })
         );
-        assert_eq!(scheduler.pending_events(), 0);
+        assert_eq!(scheduler.pending_events(), 1);
     }
 
     #[test]
