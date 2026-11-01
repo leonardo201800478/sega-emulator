@@ -365,8 +365,10 @@ def run_sms_rom_audit(
         except Exception as exc:
             error_type, details = type(exc).__name__, str(exc)
             status = (
-                "READ_OR_EXTRACTION_FAILED" if not data_loaded
-                else "MACHINE_CREATION_FAILED" if machine is None
+                "READ_OR_EXTRACTION_FAILED"
+                if not data_loaded
+                else "MACHINE_CREATION_FAILED"
+                if machine is None
                 else "EXECUTION_FAILED"
             )
 
