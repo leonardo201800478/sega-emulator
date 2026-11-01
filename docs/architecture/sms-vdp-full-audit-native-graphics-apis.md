@@ -2,8 +2,8 @@
 
 **Tipo desta PR:** Draft de arquitetura e plano de implementação incremental.  
 **Base:** `main` em `0da3098893cce4d80f7a22291d00488e4e7d0f9b`.  
-**Runtime alterado nesta fatia:** não.  
-**Estado inicial:** DESIGN / IMPLEMENTATION PENDING.  
+**Runtime alterado nesta revisão:** sim, apenas para expor a política de sprites já existente no core SMS através da API nativa e do adapter Python fino.  
+**Estado atual:** especificação + primeira fatia de API/testes sintéticos; auditoria temporal completa e backends gráficos ainda pendentes.  
 **Precisão ciclo a ciclo:** não declarada.
 
 ## 1. Objetivo
