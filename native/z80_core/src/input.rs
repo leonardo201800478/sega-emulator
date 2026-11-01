@@ -159,6 +159,7 @@ pub struct NativeInputManager {
     buffers: InputBuffers,
     devices: Vec<DeviceDescriptor>,
     assignments: [Option<DeviceId>; 2],
+    manual_assignments: [bool; 2],
     profiles: [Option<InputProfile>; 2],
     turbo: [[bool; 2]; 2],
     disconnect_event: bool,
@@ -185,7 +186,7 @@ impl NativeInputManager {
 
     fn assign_unclaimed_devices(&mut self) {
         for player in 0..2 {
-            if self.assignments[player].is_some() {
+            if self.manual_assignments[player] || self.assignments[player].is_some() {
                 continue;
             }
             let candidate = self
@@ -254,6 +255,7 @@ impl NativeInputManager {
             buffers: InputBuffers::default(),
             devices: Vec::new(),
             assignments: [None, None],
+            manual_assignments: [false, false],
             profiles: [None, None],
             turbo: [[false; 2]; 2],
             disconnect_event: false,
@@ -476,6 +478,7 @@ impl NativeInputManager {
             }
         }
         self.assignments[player_index] = selected;
+        self.manual_assignments[player_index] = true;
         Ok(())
     }
 
