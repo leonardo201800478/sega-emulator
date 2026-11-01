@@ -134,7 +134,6 @@ def test_qt_adapter_closes_native_manager(monkeypatch: pytest.MonkeyPatch) -> No
     assert native.closed
 
 
-
 def test_qt_adapter_exposes_and_selects_distinct_session_devices(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
