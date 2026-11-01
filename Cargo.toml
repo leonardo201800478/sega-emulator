@@ -21,4 +21,5 @@ default-members = [
     "native/z80_bus",
     "native/audio_runtime",
     "native/input_runtime",
+    "native/temporal_core",
 ]
