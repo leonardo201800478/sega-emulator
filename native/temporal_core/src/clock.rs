@@ -1,5 +1,6 @@
 //! Integer machine time and rational clock-domain conversion.
 
+use core::cmp::Ordering;
 use core::fmt;
 
 /// Absolute tick count in one machine profile's chosen master-time unit.
@@ -35,6 +36,66 @@ impl MachineTime {
     pub const fn checked_duration_since(self, earlier: Self) -> Option<u128> {
         self.0.checked_sub(earlier.0)
     }
+}
+
+/// Exact position of a local clock edge on the machine timeline.
+///
+/// The timestamp is represented as an integer master tick plus a reduced
+/// fractional master tick. The fractional numerator and denominator are
+/// u64, so cross-multiplication for ordering fits exactly in u128.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ClockEdgeTime {
+    whole_ticks: MachineTime,
+    fractional_numerator: u64,
+    fractional_denominator: u64,
+}
+
+impl ClockEdgeTime {
+    /// Return the integer master-tick component.
+    pub const fn whole_ticks(self) -> MachineTime {
+        self.whole_ticks
+    }
+
+    /// Return the reduced fractional numerator.
+    pub const fn fractional_numerator(self) -> u64 {
+        self.fractional_numerator
+    }
+
+    /// Return the reduced fractional denominator.
+    ///
+    /// An integral timestamp has a denominator of one and a numerator of zero.
+    pub const fn fractional_denominator(self) -> u64 {
+        self.fractional_denominator
+    }
+}
+
+impl Ord for ClockEdgeTime {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.whole_ticks
+            .cmp(&other.whole_ticks)
+            .then_with(|| {
+                let left = u128::from(self.fractional_numerator)
+                    * u128::from(other.fractional_denominator);
+                let right = u128::from(other.fractional_numerator)
+                    * u128::from(self.fractional_denominator);
+                left.cmp(&right)
+            })
+    }
+}
+
+impl PartialOrd for ClockEdgeTime {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+const fn gcd_u64(mut left: u64, mut right: u64) -> u64 {
+    while right != 0 {
+        let remainder = left % right;
+        left = right;
+        right = remainder;
+    }
+    left
 }
 
 /// Rational number of local device clock edges per master-time tick.
@@ -83,6 +144,8 @@ pub enum ClockError {
     ArithmeticOverflow,
     /// The initial fractional phase must be smaller than the denominator.
     PhaseOutOfRange,
+    /// A local edge index is one-based and cannot be zero.
+    ZeroEdgeIndex,
 }
 
 impl fmt::Display for ClockError {
@@ -93,6 +156,7 @@ impl fmt::Display for ClockError {
             Self::TimeWentBackwards => write!(f, "clock domain cannot advance backwards"),
             Self::ArithmeticOverflow => write!(f, "clock-domain arithmetic overflow"),
             Self::PhaseOutOfRange => write!(f, "clock phase must be smaller than its denominator"),
+            Self::ZeroEdgeIndex => write!(f, "local clock edge index must be positive"),
         }
     }
 }
@@ -165,6 +229,44 @@ impl ClockDomain {
         self.total_cycles
     }
 
+    /// Return the exact timestamp of the edge_index-th future local edge.
+    ///
+    /// The index is one-based relative to this domain's current integer
+    /// timestamp and retained phase. No state is mutated. The returned
+    /// timestamp is an exact rational master-time position, not rounded to
+    /// MachineTime.
+    pub fn edge_time_after(&self, edge_index: u128) -> Result<ClockEdgeTime, ClockError> {
+        if edge_index == 0 {
+            return Err(ClockError::ZeroEdgeIndex);
+        }
+
+        let threshold = edge_index
+            .checked_mul(u128::from(self.ratio.ticks_denominator))
+            .ok_or(ClockError::ArithmeticOverflow)?;
+        let elapsed_numerator = threshold
+            .checked_sub(self.phase)
+            .ok_or(ClockError::ArithmeticOverflow)?;
+        let edge_denominator = u128::from(self.ratio.cycles_numerator);
+        let whole_offset = elapsed_numerator / edge_denominator;
+        let fractional_numerator = (elapsed_numerator % edge_denominator) as u64;
+        let whole_ticks = self
+            .time
+            .checked_add(whole_offset)
+            .ok_or(ClockError::ArithmeticOverflow)?;
+
+        let divisor = gcd_u64(fractional_numerator, self.ratio.cycles_numerator);
+        Ok(ClockEdgeTime {
+            whole_ticks,
+            fractional_numerator: fractional_numerator / divisor,
+            fractional_denominator: self.ratio.cycles_numerator / divisor,
+        })
+    }
+
+    /// Return the exact timestamp of the next local clock edge.
+    pub fn next_edge_time(&self) -> Result<ClockEdgeTime, ClockError> {
+        self.edge_time_after(1)
+    }
+
     /// Advance to an absolute machine timestamp and return newly elapsed edges.
     ///
     /// Calls must be monotonic. Arithmetic is checked before state is changed,
@@ -229,6 +331,85 @@ mod tests {
         assert_eq!(domain.advance_to(MachineTime::from_ticks(3)), Ok(1));
         assert_eq!(domain.total_cycles(), 1);
         assert_eq!(domain.snapshot().phase, 0);
+    }
+
+    #[test]
+    fn next_edge_time_preserves_fractional_master_tick_exactly() {
+        let ratio = ClockRatio::new(7, 3).unwrap();
+        let domain = ClockDomain::new(ratio, MachineTime::ZERO);
+        let edge = domain.next_edge_time().unwrap();
+
+        assert_eq!(edge.whole_ticks(), MachineTime::ZERO);
+        assert_eq!(edge.fractional_numerator(), 3);
+        assert_eq!(edge.fractional_denominator(), 7);
+    }
+
+    #[test]
+    fn consecutive_edges_are_exact_and_monotonically_ordered() {
+        let ratio = ClockRatio::new(7, 3).unwrap();
+        let domain = ClockDomain::new(ratio, MachineTime::ZERO);
+        let edges: Vec<_> = (1..=5)
+            .map(|index| domain.edge_time_after(index).unwrap())
+            .collect();
+
+        assert_eq!(edges[0].whole_ticks(), MachineTime::ZERO);
+        assert_eq!((edges[0].fractional_numerator(), edges[0].fractional_denominator()), (3, 7));
+        assert_eq!((edges[1].fractional_numerator(), edges[1].fractional_denominator()), (6, 7));
+        assert_eq!(edges[2].whole_ticks(), MachineTime::from_ticks(1));
+        assert_eq!((edges[2].fractional_numerator(), edges[2].fractional_denominator()), (2, 7));
+        assert!(edges.windows(2).all(|pair| pair[0] < pair[1]));
+    }
+
+    #[test]
+    fn edge_times_support_multiple_edges_inside_one_master_tick() {
+        let ratio = ClockRatio::new(3, 2).unwrap();
+        let domain = ClockDomain::new(ratio, MachineTime::ZERO);
+        let first = domain.edge_time_after(1).unwrap();
+        let second = domain.edge_time_after(2).unwrap();
+        let third = domain.edge_time_after(3).unwrap();
+
+        assert_eq!(
+            (first.whole_ticks(), first.fractional_numerator(), first.fractional_denominator()),
+            (MachineTime::ZERO, 2, 3)
+        );
+        assert_eq!(
+            (second.whole_ticks(), second.fractional_numerator(), second.fractional_denominator()),
+            (MachineTime::from_ticks(1), 1, 3)
+        );
+        assert_eq!(
+            (third.whole_ticks(), third.fractional_numerator(), third.fractional_denominator()),
+            (MachineTime::from_ticks(2), 0, 1)
+        );
+        assert!(first < second && second < third);
+    }
+
+    #[test]
+    fn edge_time_uses_retained_fractional_phase() {
+        let ratio = ClockRatio::new(1, 3).unwrap();
+        let domain = ClockDomain::with_phase(ratio, MachineTime::from_ticks(8), 2).unwrap();
+        let edge = domain.next_edge_time().unwrap();
+
+        assert_eq!(edge.whole_ticks(), MachineTime::from_ticks(9));
+        assert_eq!((edge.fractional_numerator(), edge.fractional_denominator()), (0, 1));
+    }
+
+    #[test]
+    fn edge_time_comparison_is_exact_for_different_denominators() {
+        let ratio_a = ClockRatio::new(3, 2).unwrap();
+        let ratio_b = ClockRatio::new(7, 3).unwrap();
+        let a = ClockDomain::new(ratio_a, MachineTime::ZERO).next_edge_time().unwrap();
+        let b = ClockDomain::new(ratio_b, MachineTime::ZERO).next_edge_time().unwrap();
+        assert!(b < a);
+    }
+
+    #[test]
+    fn zero_edge_index_and_timestamp_overflow_are_rejected() {
+        let ratio = ClockRatio::new(1, 1).unwrap();
+        let mut domain = ClockDomain::new(ratio, MachineTime::ZERO);
+        assert_eq!(domain.edge_time_after(0), Err(ClockError::ZeroEdgeIndex));
+
+        domain.time = MachineTime::from_ticks(u128::MAX);
+        assert_eq!(domain.next_edge_time(), Err(ClockError::ArithmeticOverflow));
     }
 
     #[test]
