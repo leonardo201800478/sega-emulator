@@ -1521,9 +1521,7 @@ def run(initial_path: Path | None = None) -> None:
                 controller_input.select_device(player, None, manual=False)
             for player in (1, 2):
                 selected, was_manual = original_device_assignments[player]
-                controller_input.select_device(
-                    player, selected, manual=was_manual
-                )
+                controller_input.select_device(player, selected, manual=was_manual)
 
         for player in (1, 2):
             page = QWidget()
