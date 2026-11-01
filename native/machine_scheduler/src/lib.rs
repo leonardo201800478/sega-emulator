@@ -377,9 +377,15 @@ mod tests {
     fn same_timestamp_events_dispatch_by_priority_then_insertion_order() {
         let mut scheduler = MachineScheduler::new();
         let timestamp = MachineTime::from_ticks(12);
-        scheduler\n            .schedule_at(timestamp, EventPriority::new(3), "late")\n            .unwrap();
-        scheduler\n            .schedule_at(timestamp, EventPriority::new(1), "early-a")\n            .unwrap();
-        scheduler\n            .schedule_at(timestamp, EventPriority::new(1), "early-b")\n            .unwrap();
+        scheduler
+            .schedule_at(timestamp, EventPriority::new(3), "late")
+            .unwrap();
+        scheduler
+            .schedule_at(timestamp, EventPriority::new(1), "early-a")
+            .unwrap();
+        scheduler
+            .schedule_at(timestamp, EventPriority::new(1), "early-b")
+            .unwrap();
 
         let first = scheduler.dispatch_next().unwrap().unwrap();
         let second = scheduler.dispatch_next().unwrap().unwrap();
@@ -401,7 +407,9 @@ mod tests {
 
         let mut scheduler = MachineScheduler::new();
         let timestamp = MachineTime::from_ticks(8);
-        scheduler\n            .schedule_at(timestamp, EventPriority::new(3), "origin")\n            .unwrap();
+        scheduler
+            .schedule_at(timestamp, EventPriority::new(3), "origin")
+            .unwrap();
         assert_eq!(
             scheduler.dispatch_next().unwrap().unwrap().event.payload,
             "origin"
@@ -413,8 +421,12 @@ mod tests {
                 EventQueueError::PriorityRegressionAtCurrentTime
             ))
         );
-        scheduler\n            .schedule_at(timestamp, EventPriority::new(3), "same")\n            .unwrap();
-        scheduler\n            .schedule_at(timestamp, EventPriority::new(4), "later")\n            .unwrap();
+        scheduler
+            .schedule_at(timestamp, EventPriority::new(3), "same")
+            .unwrap();
+        scheduler
+            .schedule_at(timestamp, EventPriority::new(4), "later")
+            .unwrap();
 
         assert_eq!(
             scheduler.dispatch_next().unwrap().unwrap().event.payload,
@@ -433,10 +445,7 @@ mod tests {
             .register_clock_domain(ClockDomainId(0), ClockRatio::new(1, 1).unwrap())
             .unwrap();
         scheduler
-            .register_clock_domain(
-                ClockDomainId(1),
-                ClockRatio::new(u64::MAX, 1).unwrap(),
-            )
+            .register_clock_domain(ClockDomainId(1), ClockRatio::new(u64::MAX, 1).unwrap())
             .unwrap();
         scheduler
             .schedule_at(
@@ -453,10 +462,15 @@ mod tests {
             Err(SchedulerError::Clock(_))
         ));
 
-        assert_eq!(\n            scheduler.clock_snapshot(ClockDomainId(0)).unwrap(),\n            before_0\n        );
-        assert_eq!(\n            scheduler.clock_snapshot(ClockDomainId(1)).unwrap(),\n            before_1\n        );
+        assert_eq!(
+            scheduler.clock_snapshot(ClockDomainId(0)).unwrap(),
+            before_0
+        );
+        assert_eq!(
+            scheduler.clock_snapshot(ClockDomainId(1)).unwrap(),
+            before_1
+        );
         assert_eq!(scheduler.now(), MachineTime::ZERO);
         assert_eq!(scheduler.pending_events(), 1);
     }
-
 }
