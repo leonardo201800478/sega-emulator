@@ -119,10 +119,25 @@ impl<T> MachineScheduler<T> {
         id: ClockDomainId,
         ratio: ClockRatio,
     ) -> Result<(), SchedulerError> {
+        self.register_clock_domain_with_phase(id, ratio, 0)
+    }
+
+    /// Register a clock domain with an explicit fractional phase.
+    ///
+    /// The phase uses the denominator of `ratio` as its unit and must be
+    /// strictly smaller than that denominator. Registration is atomic: an
+    /// invalid phase or duplicate ID leaves the scheduler unchanged.
+    pub fn register_clock_domain_with_phase(
+        &mut self,
+        id: ClockDomainId,
+        ratio: ClockRatio,
+        phase: u128,
+    ) -> Result<(), SchedulerError> {
         if self.clocks.contains_key(&id) {
             return Err(SchedulerError::DuplicateClockDomain(id));
         }
-        self.clocks.insert(id, ClockDomain::new(ratio, self.now));
+        let domain = ClockDomain::with_phase(ratio, self.now, phase)?;
+        self.clocks.insert(id, domain);
         Ok(())
     }
 
@@ -256,6 +271,86 @@ impl<T> MachineScheduler<T> {
 mod tests {
     use super::{ClockDomainId, MachineScheduler, SchedulerError};
     use sega_temporal_core::{ClockRatio, EventPriority, MachineTime};
+
+    
+    #[test]
+    fn explicit_initial_phase_is_preserved_and_advances_rationally() {
+        let mut scheduler = MachineScheduler::<()>::new();
+        let id = ClockDomainId(4);
+        scheduler
+            .register_clock_domain_with_phase(id, ClockRatio::new(1, 3).unwrap(), 2)
+            .unwrap();
+
+        let initial = scheduler.clock_snapshot(id).unwrap();
+        assert_eq!(initial.time, MachineTime::ZERO);
+        assert_eq!(initial.total_cycles, 0);
+        assert_eq!(initial.phase, 2);
+
+        scheduler.advance_idle_to(MachineTime::from_ticks(1)).unwrap();
+        let advanced = scheduler.clock_snapshot(id).unwrap();
+        assert_eq!(advanced.total_cycles, 1);
+        assert_eq!(advanced.phase, 0);
+    }
+
+    #[test]
+    fn explicit_initial_phase_is_chunk_invariant() {
+        let ratio = ClockRatio::new(5, 3).unwrap();
+        let mut whole = MachineScheduler::<()>::new();
+        let mut chunked = MachineScheduler::<()>::new();
+        whole
+            .register_clock_domain_with_phase(ClockDomainId(1), ratio, 2)
+            .unwrap();
+        chunked
+            .register_clock_domain_with_phase(ClockDomainId(1), ratio, 2)
+            .unwrap();
+
+        whole.advance_idle_to(MachineTime::from_ticks(11)).unwrap();
+        for target in [2, 5, 7, 11] {
+            chunked
+                .advance_idle_to(MachineTime::from_ticks(target))
+                .unwrap();
+        }
+
+        assert_eq!(
+            whole.clock_snapshot(ClockDomainId(1)).unwrap(),
+            chunked.clock_snapshot(ClockDomainId(1)).unwrap()
+        );
+    }
+
+    #[test]
+    fn invalid_initial_phase_does_not_register_a_domain() {
+        let mut scheduler = MachineScheduler::<()>::new();
+        let id = ClockDomainId(9);
+        assert_eq!(
+            scheduler.register_clock_domain_with_phase(
+                id,
+                ClockRatio::new(2, 3).unwrap(),
+                3
+            ),
+            Err(SchedulerError::Clock(ClockError::PhaseOutOfRange))
+        );
+        assert_eq!(
+            scheduler.clock_snapshot(id),
+            Err(SchedulerError::UnknownClockDomain(id))
+        );
+    }
+
+    #[test]
+    fn zero_phase_registration_remains_backward_compatible() {
+        let mut conventional = MachineScheduler::<()>::new();
+        let mut explicit_zero = MachineScheduler::<()>::new();
+        let ratio = ClockRatio::new(7, 3).unwrap();
+
+        conventional.register_clock_domain(ClockDomainId(2), ratio).unwrap();
+        explicit_zero
+            .register_clock_domain_with_phase(ClockDomainId(2), ratio, 0)
+            .unwrap();
+
+        assert_eq!(
+            conventional.clock_snapshot(ClockDomainId(2)).unwrap(),
+            explicit_zero.clock_snapshot(ClockDomainId(2)).unwrap()
+        );
+    }
 
     #[test]
     fn dispatch_advances_all_domains_and_preserves_rational_phase() {
