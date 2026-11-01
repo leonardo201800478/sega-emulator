@@ -1425,7 +1425,11 @@ def run(initial_path: Path | None = None) -> None:
         turbo_checks: dict[tuple[int, str], QCheckBox] = {}
         device_combos: dict[int, QComboBox] = {}
         original_device_assignments = {
-            player: controller_input.selected_device(player) for player in (1, 2)
+            player: (
+                controller_input.selected_device(player),
+                controller_input.device_assignment_is_manual(player),
+            )
+            for player in (1, 2)
         }
         capture_target: tuple[int, str] | None = None
         capture_timer = QTimer(dialog)
@@ -1514,11 +1518,12 @@ def run(initial_path: Path | None = None) -> None:
 
         def restore_device_assignments() -> None:
             for player in (1, 2):
-                controller_input.select_device(player, None)
+                controller_input.select_device(player, None, manual=False)
             for player in (1, 2):
-                selected = original_device_assignments[player]
-                if selected is not None:
-                    controller_input.select_device(player, selected)
+                selected, was_manual = original_device_assignments[player]
+                controller_input.select_device(
+                    player, selected, manual=was_manual
+                )
 
         for player in (1, 2):
             page = QWidget()
