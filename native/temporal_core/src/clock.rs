@@ -544,8 +544,6 @@ mod tests {
     }
 
     #[test]
-
-    #[test]
     fn restored_clock_domain_preserves_complete_history() {
         let ratio = ClockRatio::new(5, 3).unwrap();
         let mut original =
@@ -609,6 +607,7 @@ mod tests {
         );
     }
 
+    #[test]
     fn same_timestamp_is_a_valid_noop() {
         let ratio = ClockRatio::new(7, 3).unwrap();
         let mut domain = ClockDomain::new(ratio, MachineTime::from_ticks(9));
