@@ -550,7 +550,7 @@ mod tests {
             ClockDomain::with_phase(ratio, MachineTime::from_ticks(4), 2).unwrap();
         original.advance_to(MachineTime::from_ticks(11)).unwrap();
 
-        let restored = ClockDomain::restore(
+        let mut restored = ClockDomain::restore(
             original.ratio(),
             original.current_time(),
             original.total_cycles(),
@@ -560,6 +560,33 @@ mod tests {
         )
         .unwrap();
         assert_eq!(restored, original);
+        original.advance_to(MachineTime::from_ticks(17)).unwrap();
+        restored.advance_to(MachineTime::from_ticks(17)).unwrap();
+        assert_eq!(restored, original);
+    }
+
+    #[test]
+    fn restore_round_trips_common_rational_clock_ratios() {
+        for (numerator, denominator, initial_phase) in [(3, 2, 1), (7, 3, 2), (1, 3, 2)] {
+            let ratio = ClockRatio::new(numerator, denominator).unwrap();
+            let mut original = ClockDomain::with_phase(
+                ratio,
+                MachineTime::from_ticks(5),
+                initial_phase,
+            )
+            .unwrap();
+            original.advance_to(MachineTime::from_ticks(29)).unwrap();
+            let restored = ClockDomain::restore(
+                ratio,
+                original.current_time(),
+                original.total_cycles(),
+                original.snapshot().phase,
+                original.registration_start(),
+                original.initial_phase(),
+            )
+            .unwrap();
+            assert_eq!(restored, original);
+        }
     }
 
     #[test]
