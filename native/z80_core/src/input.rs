@@ -470,12 +470,7 @@ impl NativeInputManager {
     /// A physical SDL entry cannot drive both player slots simultaneously.
     /// Set manual=false only when restoring a previously automatic assignment.
     #[pyo3(signature = (player, device_id, manual=true))]
-    fn select_device(
-        &mut self,
-        player: u8,
-        device_id: Option<u64>,
-        manual: bool,
-    ) -> PyResult<()> {
+    fn select_device(&mut self, player: u8, device_id: Option<u64>, manual: bool) -> PyResult<()> {
         if !matches!(player, 1 | 2) {
             return Err(PyValueError::new_err("player deve ser 1 ou 2"));
         }
