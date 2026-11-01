@@ -896,6 +896,7 @@ def run(initial_path: Path | None = None) -> None:
             parent=window,
         )
         if dialog.exec() != QDialog.DialogCode.Accepted:
+            restore_device_assignments()
             return
         input_driver, audio_driver, video_driver = dialog.drivers()
 
@@ -1424,6 +1425,9 @@ def run(initial_path: Path | None = None) -> None:
         stick_checks: dict[int, QCheckBox] = {}
         turbo_checks: dict[tuple[int, str], QCheckBox] = {}
         device_combos: dict[int, QComboBox] = {}
+        original_device_assignments = {
+            player: controller_input.selected_device(player) for player in (1, 2)
+        }
         capture_target: tuple[int, str] | None = None
         capture_timer = QTimer(dialog)
         capture_timer.setInterval(30)
@@ -1497,6 +1501,26 @@ def run(initial_path: Path | None = None) -> None:
 
         capture_timer.timeout.connect(poll_gamepad_capture)
 
+        def apply_selected_device(player: int) -> None:
+            combo = device_combos[player]
+            try:
+                controller_input.select_device(player, combo.currentData())
+            except (TypeError, ValueError) as exc:
+                QMessageBox.warning(dialog, "Dispositivo indisponível", str(exc))
+                combo.blockSignals(True)
+                combo.setCurrentIndex(
+                    max(0, combo.findData(controller_input.selected_device(player)))
+                )
+                combo.blockSignals(False)
+
+        def restore_device_assignments() -> None:
+            for player in (1, 2):
+                controller_input.select_device(player, None)
+            for player in (1, 2):
+                selected = original_device_assignments[player]
+                if selected is not None:
+                    controller_input.select_device(player, selected)
+
         for player in (1, 2):
             page = QWidget()
             form = QFormLayout(page)
@@ -1509,6 +1533,11 @@ def run(initial_path: Path | None = None) -> None:
             selected_index = device_combo.findData(selected_device)
             device_combo.setCurrentIndex(max(0, selected_index))
             device_combos[player] = device_combo
+            device_combo.currentIndexChanged.connect(
+                lambda _index, selected_player=player: apply_selected_device(
+                    selected_player
+                )
+            )
             form.addRow("Dispositivo físico:", device_combo)
             for action in ACTIONS:
                 combo = QComboBox()
@@ -1632,28 +1661,6 @@ def run(initial_path: Path | None = None) -> None:
         controller_input.config = ControllerInputConfig(
             players=profiles, deadzone=deadzone.value()
         )
-        selected_devices = {
-            player: device_combos[player].currentData() for player in (1, 2)
-        }
-        assigned_ids = [
-            device_id for device_id in selected_devices.values() if device_id is not None
-        ]
-        if len(assigned_ids) != len(set(assigned_ids)):
-            QMessageBox.warning(
-                dialog,
-                "Dispositivo duplicado",
-                "Cada dispositivo físico pode ser atribuído a apenas um jogador.",
-            )
-            return
-        try:
-            # Clear both slots first so the user can swap player assignments.
-            for player in (1, 2):
-                controller_input.select_device(player, None)
-            for player in (1, 2):
-                controller_input.select_device(player, selected_devices[player])
-        except (TypeError, ValueError) as exc:
-            QMessageBox.warning(dialog, "Dispositivo inválido", str(exc))
-            return
         key_map.clear()
         key_map.update(build_key_map())
         settings.setValue("controller_config", controller_input.config.to_json())
