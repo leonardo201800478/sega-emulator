@@ -841,7 +841,8 @@ fn render_scanline(
 mod tests {
     use super::{
         COLLISION, FRAME_SIZE, LINE_TSTATES, OVERFLOW, SMS_VDP_WIDTH, SmsVdp, StereoPresentation,
-        TMS_PALETTE, VBLANK, render_legacy_scanline, render_legacy_sprites, render_scanline,
+        TMS_PALETTE, VBLANK, VRAM_SIZE, CRAM_SIZE, render_legacy_scanline, render_legacy_sprites,
+        render_scanline,
     };
     use crate::config::{SpriteLimitMode, VideoStandard};
     fn reg(v: &mut SmsVdp, i: u8, value: u8) {
