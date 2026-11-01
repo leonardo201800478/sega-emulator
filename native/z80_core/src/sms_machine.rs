@@ -379,6 +379,21 @@ mod tests {
     }
 
     #[test]
+    fn sprite_limit_setting_is_exposed_by_the_native_sms_adapter() {
+        let mut machine =
+            NativeSMSMachine::new(vec![0x00], false, Some("usa"), None).unwrap();
+        assert!(machine.sprite_limit_enabled());
+        machine.set_sprite_limit_enabled(false);
+        assert!(!machine.sprite_limit_enabled());
+        assert_eq!(
+            machine.machine.sprite_limit_mode(),
+            SpriteLimitMode::UnlockedCompatibility
+        );
+        machine.set_sprite_limit_enabled(true);
+        assert!(machine.sprite_limit_enabled());
+    }
+
+    #[test]
     fn console_pause_is_exposed_as_a_z80_non_maskable_interrupt() {
         let mut machine =
             NativeSMSMachine::new(vec![0x31, 0xF0, 0xDF, 0x00], false, Some("usa"), None).unwrap();
