@@ -178,3 +178,12 @@ Os crates audio_runtime e audio_output já são conectados por NativeAudioSessio
 | native/audio_output (sega-audio-output) | Backends Windows WASAPI Shared/event-driven com negociação IAudioClient3 e fallback convencional; XAudio2 alternativo | IMPLEMENTED (negociação); validação física e telemetria efetiva pendentes |
 
 O runtime DSP é compartilhado antes da seleção do backend. O mixer está conectado à sessão nativa SG-1000/SMS, atualmente com a fonte PSG que já existe; isso não declara FM, PCM, CDDA ou PWM implementados. wasapi = 0.26 já fornece os métodos IAudioClient3, sem dependência adicional de binding.
+
+
+## Atualização arquitetural — unificação do motor Z80 (2026-10-31)
+
+**Correção do inventário:** no baseline `main` `3cf846d688798080d35f997f6e0d34680372d7e3`, há executores Z80 em `native/sg1000_core/src/cpu.rs` e `native/sms_core/src/cpu.rs`. Os arquivos têm estrutura e estado muito semelhantes, mas continuam compilados dentro de dois crates de máquina e usam contratos de barramento distintos. Portanto, ainda não existe um único motor Z80 compartilhado em produção.
+
+A arquitetura-alvo propõe extrair a semântica/decodificação para `native/z80_cpu` (`sega-z80-cpu`). Esse caminho é diferente de `native/z80_core`, que permanece a fronteira PyO3/Maturin. Os crates SG-1000, SMS/Game Gear e futuro Mega Drive deverão fornecer adaptadores de barramento e perfis de máquina, não cópias do decoder. O plano detalhado, fases, critérios e limites do Genesis estão em [Reorganização do runtime e Z80 compartilhado](migrations/shared-z80-runtime-reorganization.md).
+
+Esta seção substitui qualquer leitura da tabela histórica acima que sugira que a CPU já é compartilhada. Não houve extração de código neste commit documental. A CPU atual fornece T-states nominais por instrução e instrumentação temporal parcial; não há comprovação de bus trace completo nem de precisão ciclo a ciclo.

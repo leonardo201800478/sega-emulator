@@ -7,6 +7,7 @@ on:
       - "Cargo.lock"
       - "native/sg1000_core/**"
       - "native/audio_runtime/**"
+      - "native/input_runtime/**"
       - "native/sega_emu_core/**"
       - "native/z80_alu/**"
       - "native/z80_bus/**"

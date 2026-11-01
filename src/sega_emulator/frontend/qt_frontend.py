@@ -13,15 +13,9 @@ from sega_emulator.audio.vgm_recorder import VgmRecorder
 from sega_emulator.frontend.controller_profiles import (
     ACTIONS,
     DEFAULT_GAMEPAD_BINDINGS,
-    JOYSTICK_ACTIONS,
     SUPPORTED_BUTTONS,
     ControllerInputConfig,
     PlayerInputProfile,
-    apply_turbo,
-    joystick_value,
-)
-from sega_emulator.frontend.native_first_controller_input import (
-    NativeFirstControllerInput,
 )
 from sega_emulator.frontend.qt.focus_pause import (
     EmulationPauseController,
@@ -29,6 +23,7 @@ from sega_emulator.frontend.qt.focus_pause import (
 )
 from sega_emulator.frontend.qt.frame_pacer import FramePacer
 from sega_emulator.frontend.qt.preferences import FrontendPreferences
+from sega_emulator.frontend.rust_controller_input import RustControllerInput
 from sega_emulator.machine.sg1000 import SG1000Machine
 from sega_emulator.machine.sms import SMSMachine, load_sms_rom
 from sega_emulator.machine.sms_firmware import (
@@ -294,17 +289,18 @@ def run(initial_path: Path | None = None) -> None:
         logger.warning("Configuração de controles inválida; usando padrões.")
         controller_config = ControllerInputConfig()
     input_driver = str(settings.value("input_driver", "auto"))
-    if input_driver not in {"auto", "xinput", "sdl3"}:
+    if input_driver not in {"auto", "sdl3"}:
         input_driver = "auto"
-    controller_input = NativeFirstControllerInput(
+    controller_input = RustControllerInput(
         controller_config, backend_preference=input_driver
     )
     logger.info(
-        "Backend nativo-primeiro de controles inicializado",
+        "Backend nativo Rust de controles inicializado",
         extra={
-            "event": "native_first_input_initialized",
+            "event": "rust_native_input_initialized",
             "available": controller_input.available,
             "devices": controller_input.connected_names(),
+            "backend_error": controller_input.backend_error,
         },
     )
 
@@ -452,28 +448,21 @@ def run(initial_path: Path | None = None) -> None:
             if binding is not None:
                 player, action = binding
                 actions[player].add(action)
-        gamepad_actions = controller_input.poll()
+        action_masks = controller_input.poll_masks(frame_count, actions)
         for player in (1, 2):
-            actions[player].update(gamepad_actions[player])
-            profile = controller_input.config.players[player]
-            actions[player] = apply_turbo(
-                actions[player], profile.turbo_buttons, frame_count
-            )
             if active_system == "master_system":
-                machine.set_controller_actions(player, actions[player])
+                machine.set_controller_actions_mask(player, action_masks[player])
             else:
-                machine.set_joystick(
-                    player,
-                    joystick_value(actions[player].intersection(JOYSTICK_ACTIONS)),
-                )
-        hold_pressed = any("hold" in actions[player] for player in (1, 2))
+                machine.set_joystick_actions_mask(player, action_masks[player])
+        hold_pressed = any(action_masks[player] & (1 << 6) for player in (1, 2))
         if hold_pressed and not hold_was_pressed:
             # SG-1000 Hold and SMS Pause are edge-triggered NMI inputs.
             machine.request_nmi()
         hold_was_pressed = hold_pressed
 
     class KeyboardInputFilter(QObject):
-        """Converte eventos Qt em bits de joystick SG-1000 ativos em nível baixo."""
+        """Converte eventos Qt em ações lógicas; os cores
+        codificam as linhas em Rust."""
 
         def eventFilter(self, watched: QObject, event: QEvent) -> bool:
             if event.type() == QEvent.Type.KeyPress:
@@ -487,13 +476,11 @@ def run(initial_path: Path | None = None) -> None:
                     return True
                 if key in key_map:
                     pressed_keys.add(key)
-                    update_joystick()
                     return True
             elif event.type() == QEvent.Type.KeyRelease:
                 key = event.key()
                 if key in key_map:
                     pressed_keys.discard(key)
-                    update_joystick()
                     return True
             return False
 
@@ -913,15 +900,12 @@ def run(initial_path: Path | None = None) -> None:
         input_driver, audio_driver, video_driver = dialog.drivers()
 
         # Validate forced drivers before applying any of the new preferences.
-        if input_driver != "auto" and not (
-            controller_input.native.available
-            if input_driver == "xinput"
-            else bool(controller_input.fallback.available)
-        ):
+        if input_driver == "sdl3" and not controller_input.available:
             QMessageBox.warning(
                 window,
-                "Driver de input indisponível",
-                f"A API {input_driver} não está disponível neste sistema. "
+                "Backend de input indisponível",
+                controller_input.backend_error
+                or "A biblioteca SDL3 nativa não está disponível. "
                 "A configuração anterior foi mantida.",
             )
             return
@@ -1439,6 +1423,14 @@ def run(initial_path: Path | None = None) -> None:
         key_buttons: dict[tuple[int, str], QPushButton] = {}
         stick_checks: dict[int, QCheckBox] = {}
         turbo_checks: dict[tuple[int, str], QCheckBox] = {}
+        device_combos: dict[int, QComboBox] = {}
+        original_device_assignments = {
+            player: (
+                controller_input.selected_device(player),
+                controller_input.device_assignment_is_manual(player),
+            )
+            for player in (1, 2)
+        }
         capture_target: tuple[int, str] | None = None
         capture_timer = QTimer(dialog)
         capture_timer.setInterval(30)
@@ -1512,10 +1504,43 @@ def run(initial_path: Path | None = None) -> None:
 
         capture_timer.timeout.connect(poll_gamepad_capture)
 
+        def apply_selected_device(player: int) -> None:
+            combo = device_combos[player]
+            try:
+                controller_input.select_device(player, combo.currentData())
+            except (TypeError, ValueError) as exc:
+                QMessageBox.warning(dialog, "Dispositivo indisponível", str(exc))
+                combo.blockSignals(True)
+                combo.setCurrentIndex(
+                    max(0, combo.findData(controller_input.selected_device(player)))
+                )
+                combo.blockSignals(False)
+
+        def restore_device_assignments() -> None:
+            for player in (1, 2):
+                controller_input.select_device(player, None, manual=False)
+            for player in (1, 2):
+                selected, was_manual = original_device_assignments[player]
+                controller_input.select_device(player, selected, manual=was_manual)
+
         for player in (1, 2):
             page = QWidget()
             form = QFormLayout(page)
             profile = controller_input.config.players[player]
+            device_combo = QComboBox()
+            device_combo.addItem("Não usar dispositivo físico", None)
+            selected_device = controller_input.selected_device(player)
+            for device_id, device_name in controller_input.connected_devices():
+                device_combo.addItem(f"{device_name} [SDL #{device_id}]", device_id)
+            selected_index = device_combo.findData(selected_device)
+            device_combo.setCurrentIndex(max(0, selected_index))
+            device_combos[player] = device_combo
+            device_combo.currentIndexChanged.connect(
+                lambda _index, selected_player=player: apply_selected_device(
+                    selected_player
+                )
+            )
+            form.addRow("Dispositivo físico:", device_combo)
             for action in ACTIONS:
                 combo = QComboBox()
                 for button in SUPPORTED_BUTTONS:
@@ -1590,6 +1615,7 @@ def run(initial_path: Path | None = None) -> None:
         buttons.rejected.connect(dialog.reject)
         dialog_layout.addWidget(buttons)
         if dialog.exec() != QDialog.DialogCode.Accepted:
+            restore_device_assignments()
             return
         profiles: dict[int, PlayerInputProfile] = {}
         seen_keyboard_keys: dict[int, tuple[int, str]] = {}
@@ -1607,6 +1633,7 @@ def run(initial_path: Path | None = None) -> None:
                         "Mapeamento inválido",
                         f"A tecla configurada para {action_labels[action]} é inválida.",
                     )
+                    restore_device_assignments()
                     return
                 key_code = int(sequence[0].toCombined())
                 previous = seen_keyboard_keys.get(key_code)
@@ -1621,6 +1648,7 @@ def run(initial_path: Path | None = None) -> None:
                         f"e a {action_labels[action]} "
                         f"do Jogador {player}.",
                     )
+                    restore_device_assignments()
                     return
                 seen_keyboard_keys[key_code] = (player, action)
             profiles[player] = PlayerInputProfile(

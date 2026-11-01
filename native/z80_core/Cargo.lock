@@ -179,6 +179,10 @@ name = "sega-audio-runtime"
 version = "0.1.0"
 
 [[package]]
+name = "sega-input-runtime"
+version = "0.1.0"
+
+[[package]]
 name = "sega-sg1000-core"
 version = "0.1.0"
 
@@ -200,6 +204,7 @@ dependencies = [
  "pyo3",
  "sega-audio-output",
  "sega-audio-runtime",
+ "sega-input-runtime",
  "sega-sg1000-core",
  "sega-sms-core",
 ]

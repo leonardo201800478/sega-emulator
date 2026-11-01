@@ -278,3 +278,10 @@ Essa cobertura é representativa, não uma prova exaustiva dos 256 segundos byte
 
 A implementação agora deriva os bits F3/F5 de `BIT b,(HL)` do byte alto de WZ/MEMPTR, em vez de assumir que esses bits vêm de HL. O teste direcionado usa HL e WZ com valores altos diferentes e cobre os oito índices de bit. Esta é a hipótese para o Z80 clássico; não equivale a validação ciclo a ciclo nem demonstra comportamento idêntico em todos os clones.
 
+
+
+## Transição para motor Z80 compartilhado — 2026-10-31
+
+Esta matriz continua sendo a referência de cobertura semântica do Z80 e deve ser preservada durante a extração. A existência de executores semelhantes em SG-1000 e SMS não significa que a CPU já esteja unificada: no baseline observado, ambos ainda possuem `cpu.rs` em seus próprios crates. A extração planejada para `native/z80_cpu` deve manter todos os vetores, fixtures, proveniência, limites de licença e estados de validação, acrescentando execução dos mesmos testes contra os adaptadores de cada máquina.
+
+A unificação não promove automaticamente itens para IMPLEMENTED/SHORT_PASS/LONG_PASS. O modo de instrução e o futuro modo por micro-operações devem compartilhar uma única semântica; T-states agregados continuam distintos de eventos de barramento temporizados. Ver [plano de reorganização do runtime e Z80](architecture/migrations/shared-z80-runtime-reorganization.md).

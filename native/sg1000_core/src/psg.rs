@@ -9,6 +9,28 @@ use std::f64::consts::PI;
 use std::fmt;
 
 const CLOCK_DIVIDER: u64 = 16;
+
+/// Split a master-clock delta without overflowing when `clocks` is near u64::MAX.
+fn split_clock_advance(clocks: u64, phase: u64) -> (u64, u64) {
+    debug_assert!(phase < CLOCK_DIVIDER);
+    let partial = clocks % CLOCK_DIVIDER + phase;
+    (
+        clocks / CLOCK_DIVIDER + partial / CLOCK_DIVIDER,
+        partial % CLOCK_DIVIDER,
+    )
+}
+
+/// Accumulate the resampler phase using a wider intermediate.
+fn advance_output_phase(phase: u64, sample_rate: u64, clock_hz: u64) -> (u64, u64) {
+    debug_assert!(phase < clock_hz);
+    let total = u128::from(phase) + u128::from(sample_rate) * u128::from(CLOCK_DIVIDER);
+    let divisor = u128::from(clock_hz);
+    let samples = u64::try_from(total / divisor)
+        .expect("validated sample rate and phase produce a u64 sample count");
+    let remainder =
+        u64::try_from(total % divisor).expect("remainder is smaller than the u64 clock frequency");
+    (samples, remainder)
+}
 const TONE_CHANNELS: usize = 3;
 const NOISE_CHANNEL: usize = 3;
 const LFSR_MASK: u16 = 0x7FFF;
@@ -96,6 +118,9 @@ impl Sn76489 {
         if sample_rate == 0 {
             return Err(PsgError::ZeroSampleRate);
         }
+        sample_rate
+            .checked_mul(CLOCK_DIVIDER)
+            .ok_or(PsgError::SampleRateTooLarge)?;
         let capacity = sample_rate
             .checked_mul(SAMPLE_BUFFER_SECONDS)
             .ok_or(PsgError::SampleRateTooLarge)?;
@@ -356,16 +381,17 @@ impl Sn76489 {
     }
 
     fn advance_clocks_inner(&mut self, clocks: u64, render_sink: bool) {
-        let internal_total = self.clock_divider_phase + clocks;
-        let internal_clocks = internal_total / CLOCK_DIVIDER;
-        self.clock_divider_phase = internal_total % CLOCK_DIVIDER;
+        let (internal_clocks, phase) = split_clock_advance(clocks, self.clock_divider_phase);
+        self.clock_divider_phase = phase;
         for _ in 0..internal_clocks {
             self.tick_internal_clock();
             self.push_filter_sample();
-            self.output_phase += self.sample_rate * CLOCK_DIVIDER;
-            if self.output_phase >= self.clock_hz {
+            let (sample_count, phase) =
+                advance_output_phase(self.output_phase, self.sample_rate, self.clock_hz);
+            self.output_phase = phase;
+            if sample_count > 0 {
                 let sample = self.filtered_output();
-                while self.output_phase >= self.clock_hz {
+                for _ in 0..sample_count {
                     if render_sink {
                         self.render_pending.push_back(sample);
                     } else {
@@ -375,7 +401,6 @@ impl Sn76489 {
                         }
                         self.pending_samples.push_back(sample);
                     }
-                    self.output_phase -= self.clock_hz;
                 }
             }
         }
@@ -668,6 +693,18 @@ mod tests {
     }
 
     #[test]
+    fn clock_arithmetic_handles_u64_boundary_without_intermediate_overflow() {
+        let (internal_clocks, phase) = super::split_clock_advance(u64::MAX, 15);
+        assert_eq!(internal_clocks, u64::MAX / super::CLOCK_DIVIDER + 1);
+        assert_eq!(phase, 14);
+
+        let sample_rate = u64::MAX / super::CLOCK_DIVIDER;
+        let (samples, phase) = super::advance_output_phase(u64::MAX - 1, sample_rate, u64::MAX);
+        assert_eq!(samples, 1);
+        assert_eq!(phase, u64::MAX - 16);
+    }
+
+    #[test]
     fn constructor_rejects_zero_clock_and_sample_rate() {
         assert_eq!(
             Sn76489::new(0, 44_100).unwrap_err(),
@@ -676,6 +713,10 @@ mod tests {
         assert_eq!(
             Sn76489::new(3_579_545, 0).unwrap_err(),
             super::PsgError::ZeroSampleRate
+        );
+        assert_eq!(
+            Sn76489::new(u64::MAX, u64::MAX).unwrap_err(),
+            super::PsgError::SampleRateTooLarge
         );
     }
 }
