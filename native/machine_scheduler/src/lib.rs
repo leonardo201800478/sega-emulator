@@ -269,7 +269,7 @@ impl<T> MachineScheduler<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ClockDomainId, MachineScheduler, SchedulerError};
+    use super::{ClockDomainId, ClockError, MachineScheduler, SchedulerError};
     use sega_temporal_core::{ClockRatio, EventPriority, MachineTime};
 
     #[test]
