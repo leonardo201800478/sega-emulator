@@ -174,17 +174,17 @@ impl<T> EventQueue<T> {
         let mut sequences = BTreeSet::new();
         let mut previous_key = None;
         for event in &state.pending {
-            let key = (event.timestamp, event.hardware_phase, event.priority, event.sequence);
-            if previous_key.is_some_and(|previous| previous >= key) {
-                return Err(EventQueueError::NonCanonicalState);
-            }
-            previous_key = Some(key);
             if !sequences.insert(event.sequence) {
                 return Err(EventQueueError::DuplicateSequence);
             }
             if event.sequence >= state.next_sequence {
                 return Err(EventQueueError::SequenceOutOfRange);
             }
+            let key = (event.timestamp, event.hardware_phase, event.priority, event.sequence);
+            if previous_key.is_some_and(|previous| previous >= key) {
+                return Err(EventQueueError::NonCanonicalState);
+            }
+            previous_key = Some(key);
             if let Some(watermark) = state.last_dispatched {
                 if event.timestamp < watermark.timestamp
                     || (event.timestamp == watermark.timestamp
@@ -402,9 +402,7 @@ mod tests {
             sequence,
             payload: (),
         };
-        let mut second = event(0);
-        second.timestamp = MachineTime::from_ticks(5);
-        let duplicate = EventQueueState { pending: vec![event(0), second], next_sequence: 1, last_dispatched: None };
+        let duplicate = EventQueueState { pending: vec![event(0), event(0)], next_sequence: 1, last_dispatched: None };
         assert_eq!(EventQueue::restore_state(duplicate).err(), Some(EventQueueError::DuplicateSequence));
         let out_of_range = EventQueueState { pending: vec![event(2)], next_sequence: 2, last_dispatched: None };
         assert_eq!(EventQueue::restore_state(out_of_range).err(), Some(EventQueueError::SequenceOutOfRange));
