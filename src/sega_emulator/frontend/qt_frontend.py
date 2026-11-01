@@ -896,7 +896,6 @@ def run(initial_path: Path | None = None) -> None:
             parent=window,
         )
         if dialog.exec() != QDialog.DialogCode.Accepted:
-            restore_device_assignments()
             return
         input_driver, audio_driver, video_driver = dialog.drivers()
 
@@ -1613,6 +1612,7 @@ def run(initial_path: Path | None = None) -> None:
         buttons.rejected.connect(dialog.reject)
         dialog_layout.addWidget(buttons)
         if dialog.exec() != QDialog.DialogCode.Accepted:
+            restore_device_assignments()
             return
         profiles: dict[int, PlayerInputProfile] = {}
         seen_keyboard_keys: dict[int, tuple[int, str]] = {}
@@ -1630,6 +1630,7 @@ def run(initial_path: Path | None = None) -> None:
                         "Mapeamento inválido",
                         f"A tecla configurada para {action_labels[action]} é inválida.",
                     )
+                    restore_device_assignments()
                     return
                 key_code = int(sequence[0].toCombined())
                 previous = seen_keyboard_keys.get(key_code)
@@ -1644,6 +1645,7 @@ def run(initial_path: Path | None = None) -> None:
                         f"e a {action_labels[action]} "
                         f"do Jogador {player}.",
                     )
+                    restore_device_assignments()
                     return
                 seen_keyboard_keys[key_code] = (player, action)
             profiles[player] = PlayerInputProfile(
