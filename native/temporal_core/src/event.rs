@@ -2,7 +2,9 @@
 
 use core::cmp::Ordering;
 use core::fmt;
-use std::collections::BinaryHeap;
+use std::collections::{BTreeSet, BinaryHeap};
+
+use crate::{EventQueueState, EventQueueWatermark};
 
 /// Profile-defined ordering stratum at one absolute timestamp.
 ///
@@ -103,6 +105,10 @@ pub enum EventQueueError {
     EventInPast,
     /// A same-timestamp event regressed the dispatched phase/priority key.
     OrderingRegressionAtCurrentTime,
+    DuplicateSequence,
+    SequenceOutOfRange,
+    NonCanonicalState,
+    WatermarkRegression,
 }
 impl fmt::Display for EventQueueError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -113,6 +119,10 @@ impl fmt::Display for EventQueueError {
                 f,
                 "cannot insert an earlier phase/priority at the current timestamp"
             ),
+            Self::DuplicateSequence => write!(f, "duplicate pending event sequence"),
+            Self::SequenceOutOfRange => write!(f, "pending event sequence is not below next_sequence"),
+            Self::NonCanonicalState => write!(f, "pending events are not in canonical order"),
+            Self::WatermarkRegression => write!(f, "pending event regresses the causal watermark"),
         }
     }
 }
@@ -140,6 +150,53 @@ impl<T> EventQueue<T> {
     /// Create an empty event queue.
     pub fn new() -> Self {
         Self::default()
+    }
+
+
+    /// Export pending events in canonical order, preserving assigned sequences.
+    pub fn export_state(&self) -> EventQueueState<T>
+    where
+        T: Clone,
+    {
+        let mut pending: Vec<_> = self.heap.iter().map(|entry| entry.event.clone()).collect();
+        pending.sort_by_key(|event| (event.timestamp, event.hardware_phase, event.priority, event.sequence));
+        EventQueueState {
+            pending,
+            next_sequence: self.next_sequence,
+            last_dispatched: self.last_dispatched.map(
+                |(timestamp, hardware_phase, priority)| EventQueueWatermark { timestamp, hardware_phase, priority },
+            ),
+        }
+    }
+
+    /// Rebuild the heap from a validated canonical DTO without reallocating sequences.
+    pub fn restore_state(state: EventQueueState<T>) -> Result<Self, EventQueueError> {
+        let mut sequences = BTreeSet::new();
+        let mut previous_key = None;
+        for event in &state.pending {
+            let key = (event.timestamp, event.hardware_phase, event.priority, event.sequence);
+            if previous_key.is_some_and(|previous| previous >= key) {
+                return Err(EventQueueError::NonCanonicalState);
+            }
+            previous_key = Some(key);
+            if !sequences.insert(event.sequence) {
+                return Err(EventQueueError::DuplicateSequence);
+            }
+            if event.sequence >= state.next_sequence {
+                return Err(EventQueueError::SequenceOutOfRange);
+            }
+            if let Some(watermark) = state.last_dispatched {
+                if event.timestamp < watermark.timestamp
+                    || (event.timestamp == watermark.timestamp
+                        && (event.hardware_phase, event.priority) < (watermark.hardware_phase, watermark.priority))
+                {
+                    return Err(EventQueueError::WatermarkRegression);
+                }
+            }
+        }
+        let heap = state.pending.into_iter().map(|event| QueueEntry { event }).collect();
+        let last_dispatched = state.last_dispatched.map(|w| (w.timestamp, w.hardware_phase, w.priority));
+        Ok(Self { heap, next_sequence: state.next_sequence, last_dispatched })
     }
 
     /// Insert using the compatibility zero-phase ordering.
