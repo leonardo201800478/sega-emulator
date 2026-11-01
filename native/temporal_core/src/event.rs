@@ -59,7 +59,6 @@ pub struct ScheduledEvent<T> {
     pub payload: T,
 }
 
-
 #[derive(Debug, Clone)]
 struct QueueEntry<T> {
     event: ScheduledEvent<T>,
