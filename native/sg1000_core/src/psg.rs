@@ -23,13 +23,12 @@ fn split_clock_advance(clocks: u64, phase: u64) -> (u64, u64) {
 /// Accumulate the resampler phase using a wider intermediate.
 fn advance_output_phase(phase: u64, sample_rate: u64, clock_hz: u64) -> (u64, u64) {
     debug_assert!(phase < clock_hz);
-    let total = u128::from(phase)
-        + u128::from(sample_rate) * u128::from(CLOCK_DIVIDER);
+    let total = u128::from(phase) + u128::from(sample_rate) * u128::from(CLOCK_DIVIDER);
     let divisor = u128::from(clock_hz);
     let samples = u64::try_from(total / divisor)
         .expect("validated sample rate and phase produce a u64 sample count");
-    let remainder = u64::try_from(total % divisor)
-        .expect("remainder is smaller than the u64 clock frequency");
+    let remainder =
+        u64::try_from(total % divisor).expect("remainder is smaller than the u64 clock frequency");
     (samples, remainder)
 }
 const TONE_CHANNELS: usize = 3;
@@ -382,8 +381,7 @@ impl Sn76489 {
     }
 
     fn advance_clocks_inner(&mut self, clocks: u64, render_sink: bool) {
-        let (internal_clocks, phase) =
-            split_clock_advance(clocks, self.clock_divider_phase);
+        let (internal_clocks, phase) = split_clock_advance(clocks, self.clock_divider_phase);
         self.clock_divider_phase = phase;
         for _ in 0..internal_clocks {
             self.tick_internal_clock();
@@ -701,8 +699,7 @@ mod tests {
         assert_eq!(phase, 14);
 
         let sample_rate = u64::MAX / super::CLOCK_DIVIDER;
-        let (samples, phase) =
-            super::advance_output_phase(u64::MAX - 1, sample_rate, u64::MAX);
+        let (samples, phase) = super::advance_output_phase(u64::MAX - 1, sample_rate, u64::MAX);
         assert_eq!(samples, 1);
         assert_eq!(phase, u64::MAX - 16);
     }
