@@ -63,6 +63,18 @@ def test_native_input_manager_exposes_stable_frontend_contract() -> None:
         assert not masks[0] & (1 << 4)
         assert masks[1] & (1 << 5)
         assert isinstance(manager.connected_names(), list)
+        devices = manager.connected_devices()
+        assert all(
+            isinstance(device_id, int) and isinstance(name, str)
+            for device_id, name in devices
+        )
+        assert manager.selected_device(1) is None or isinstance(
+            manager.selected_device(1), int
+        )
+        manager.select_device(1, None)
+        assert manager.selected_device(1) is None
+        with pytest.raises(ValueError):
+            manager.select_device(3, None)
         captured = manager.read_pressed_button(1)
         assert captured is None or isinstance(captured, str)
         if os.environ.get("SEGA_INPUT_REQUIRE_SDL3") == "1":
