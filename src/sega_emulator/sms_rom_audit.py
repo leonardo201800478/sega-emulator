@@ -23,6 +23,7 @@ SMS_ROM_SUFFIXES = frozenset({".sms", ".rom", ".bin"})
 MAX_SMS_ROM_SIZE = 0x100000
 MAX_DISCOVERED_FILES = 10_000
 MAX_ZIP_MEMBERS = 20_000
+MAX_ZIP_ARCHIVE_SIZE = 64 * 1024 * 1024
 MAX_DISCOVERED_TARGETS = 20_000
 READ_CHUNK_SIZE = 64 * 1024
 
@@ -111,6 +112,15 @@ def _bounded_file_list(directory: Path, recursive: bool) -> list[Path]:
     return sorted(files, key=lambda path: (str(path).casefold(), str(path)))
 
 
+def _validate_zip_archive_size(path: Path) -> None:
+    """Reject oversized ZIP containers before parsing central-directory metadata."""
+    size = path.stat().st_size
+    if size > MAX_ZIP_ARCHIVE_SIZE:
+        raise SmsRomAuditLimitError(
+            f"ZIP excede o limite de {MAX_ZIP_ARCHIVE_SIZE} bytes: {path.name}"
+        )
+
+
 def discover_sms_rom_targets(
     directory: str | Path, *, recursive: bool = True
 ) -> tuple[SmsRomAuditTarget, ...]:
@@ -138,6 +148,7 @@ def discover_sms_rom_targets(
                 )
         elif suffix == ".zip":
             try:
+                _validate_zip_archive_size(path)
                 with zipfile.ZipFile(path) as archive:
                     infos = archive.infolist()
                     if len(infos) > MAX_ZIP_MEMBERS:
@@ -209,6 +220,7 @@ def read_sms_rom_target(target: SmsRomAuditTarget) -> bytes:
     if target.declared_size is not None and target.declared_size > MAX_SMS_ROM_SIZE:
         raise ValueError(f"ROM excede o limite atual de {MAX_SMS_ROM_SIZE} bytes.")
     if target.member_index is not None:
+        _validate_zip_archive_size(target.source_path)
         with zipfile.ZipFile(target.source_path) as archive:
             infos = archive.infolist()
             if len(infos) > MAX_ZIP_MEMBERS or target.member_index >= len(infos):
