@@ -171,9 +171,11 @@ def discover_sms_rom_targets(
             except SmsRomAuditLimitError:
                 raise
             except (OSError, zipfile.BadZipFile, RuntimeError) as exc:
-                targets.append(SmsRomAuditTarget(
-                    path, path.name, read_error=f"{type(exc).__name__}: {exc}"
-                ))
+                targets.append(
+                    SmsRomAuditTarget(
+                        path, path.name, read_error=f"{type(exc).__name__}: {exc}"
+                    )
+                )
         if len(targets) > MAX_DISCOVERED_TARGETS:
             raise SmsRomAuditLimitError(
                 f"Varredura excedeu o limite de {MAX_DISCOVERED_TARGETS} ROMs."
