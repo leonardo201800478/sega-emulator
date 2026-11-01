@@ -17,6 +17,7 @@ class FakeNativeInputManager:
         self.frames: list[int] = []
         self.closed = False
         self.disconnect = True
+        self.selected = {1: 7, 2: 8}
 
     def set_backend_preference(self, preference: str) -> None:
         self.preference = preference
