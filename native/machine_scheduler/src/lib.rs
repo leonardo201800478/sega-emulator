@@ -9,8 +9,8 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 use sega_temporal_core::{
-    ClockDomain, ClockDomainSnapshot, ClockError, ClockRatio, EventPriority, EventQueue, HardwarePhase, PlatformPriority,
-    EventQueueError, MachineTime, ScheduledEvent,
+    ClockDomain, ClockDomainSnapshot, ClockError, ClockRatio, EventPriority, EventQueue,
+    EventQueueError, HardwarePhase, MachineTime, PlatformPriority, ScheduledEvent,
 };
 
 /// Stable identity for one clock domain registered with a machine scheduler.
@@ -366,7 +366,9 @@ impl<T> MachineScheduler<T> {
 #[cfg(test)]
 mod tests {
     use super::{ClockDomainId, ClockError, DeltaEventPolicy, MachineScheduler, SchedulerError};
-    use sega_temporal_core::{ClockRatio, EventPriority, HardwarePhase, PlatformPriority, MachineTime};
+    use sega_temporal_core::{
+        ClockRatio, EventPriority, HardwarePhase, MachineTime, PlatformPriority,
+    };
 
     #[test]
     fn explicit_initial_phase_is_preserved_and_advances_rationally() {
