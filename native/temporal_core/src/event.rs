@@ -402,7 +402,9 @@ mod tests {
             sequence,
             payload: (),
         };
-        let duplicate = EventQueueState { pending: vec![event(0), event(0)], next_sequence: 1, last_dispatched: None };
+        let mut second = event(0);
+        second.timestamp = MachineTime::from_ticks(5);
+        let duplicate = EventQueueState { pending: vec![event(0), second], next_sequence: 1, last_dispatched: None };
         assert_eq!(EventQueue::restore_state(duplicate).err(), Some(EventQueueError::DuplicateSequence));
         let out_of_range = EventQueueState { pending: vec![event(2)], next_sequence: 2, last_dispatched: None };
         assert_eq!(EventQueue::restore_state(out_of_range).err(), Some(EventQueueError::SequenceOutOfRange));
