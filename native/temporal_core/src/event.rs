@@ -120,7 +120,9 @@ impl fmt::Display for EventQueueError {
                 "cannot insert an earlier phase/priority at the current timestamp"
             ),
             Self::DuplicateSequence => write!(f, "duplicate pending event sequence"),
-            Self::SequenceOutOfRange => write!(f, "pending event sequence is not below next_sequence"),
+            Self::SequenceOutOfRange => {
+                write!(f, "pending event sequence is not below next_sequence")
+            }
             Self::NonCanonicalState => write!(f, "pending events are not in canonical order"),
             Self::WatermarkRegression => write!(f, "pending event regresses the causal watermark"),
         }
@@ -152,20 +154,30 @@ impl<T> EventQueue<T> {
         Self::default()
     }
 
-
     /// Export pending events in canonical order, preserving assigned sequences.
     pub fn export_state(&self) -> EventQueueState<T>
     where
         T: Clone,
     {
         let mut pending: Vec<_> = self.heap.iter().map(|entry| entry.event.clone()).collect();
-        pending.sort_by_key(|event| (event.timestamp, event.hardware_phase, event.priority, event.sequence));
+        pending.sort_by_key(|event| {
+            (
+                event.timestamp,
+                event.hardware_phase,
+                event.priority,
+                event.sequence,
+            )
+        });
         EventQueueState {
             pending,
             next_sequence: self.next_sequence,
-            last_dispatched: self.last_dispatched.map(
-                |(timestamp, hardware_phase, priority)| EventQueueWatermark { timestamp, hardware_phase, priority },
-            ),
+            last_dispatched: self
+                .last_dispatched
+                .map(|(timestamp, hardware_phase, priority)| EventQueueWatermark {
+                    timestamp,
+                    hardware_phase,
+                    priority,
+                }),
         }
     }
 
@@ -180,7 +192,12 @@ impl<T> EventQueue<T> {
             if event.sequence >= state.next_sequence {
                 return Err(EventQueueError::SequenceOutOfRange);
             }
-            let key = (event.timestamp, event.hardware_phase, event.priority, event.sequence);
+            let key = (
+                event.timestamp,
+                event.hardware_phase,
+                event.priority,
+                event.sequence,
+            );
             if previous_key.is_some_and(|previous| previous >= key) {
                 return Err(EventQueueError::NonCanonicalState);
             }
@@ -188,15 +205,26 @@ impl<T> EventQueue<T> {
             if let Some(watermark) = state.last_dispatched {
                 if event.timestamp < watermark.timestamp
                     || (event.timestamp == watermark.timestamp
-                        && (event.hardware_phase, event.priority) < (watermark.hardware_phase, watermark.priority))
+                        && (event.hardware_phase, event.priority)
+                            < (watermark.hardware_phase, watermark.priority))
                 {
                     return Err(EventQueueError::WatermarkRegression);
                 }
             }
         }
-        let heap = state.pending.into_iter().map(|event| QueueEntry { event }).collect();
-        let last_dispatched = state.last_dispatched.map(|w| (w.timestamp, w.hardware_phase, w.priority));
-        Ok(Self { heap, next_sequence: state.next_sequence, last_dispatched })
+        let heap = state
+            .pending
+            .into_iter()
+            .map(|event| QueueEntry { event })
+            .collect();
+        let last_dispatched = state
+            .last_dispatched
+            .map(|w| (w.timestamp, w.hardware_phase, w.priority));
+        Ok(Self {
+            heap,
+            next_sequence: state.next_sequence,
+            last_dispatched,
+        })
     }
 
     /// Insert using the compatibility zero-phase ordering.
@@ -380,16 +408,32 @@ mod tests {
     fn queue_snapshot_round_trip_preserves_sequences_watermark_and_allocator() {
         let mut queue = EventQueue::new();
         let t = MachineTime::from_ticks(10);
-        queue.schedule_with_phase(t, HardwarePhase::new(1), PlatformPriority::new(2), "b").unwrap();
-        queue.schedule_with_phase(t, HardwarePhase::new(1), PlatformPriority::new(1), "a").unwrap();
-        queue.schedule(MachineTime::from_ticks(12), PlatformPriority::new(0), "c").unwrap();
+        queue
+            .schedule_with_phase(t, HardwarePhase::new(1), PlatformPriority::new(2), "b")
+            .unwrap();
+        queue
+            .schedule_with_phase(t, HardwarePhase::new(1), PlatformPriority::new(1), "a")
+            .unwrap();
+        queue
+            .schedule(MachineTime::from_ticks(12), PlatformPriority::new(0), "c")
+            .unwrap();
         assert_eq!(queue.pop_next().unwrap().payload, "a");
         let state = queue.export_state();
         assert_eq!(state.next_sequence, 3);
-        assert_eq!(state.pending.iter().map(|event| event.sequence).collect::<Vec<_>>(), vec![0, 2]);
+        assert_eq!(
+            state
+                .pending
+                .iter()
+                .map(|event| event.sequence)
+                .collect::<Vec<_>>(),
+            vec![0, 2]
+        );
         let mut restored = EventQueue::restore_state(state.clone()).unwrap();
         assert_eq!(restored.export_state(), state);
-        assert_eq!(restored.schedule(MachineTime::from_ticks(13), PlatformPriority::new(0), "d"), Ok(3));
+        assert_eq!(
+            restored.schedule(MachineTime::from_ticks(13), PlatformPriority::new(0), "d"),
+            Ok(3)
+        );
         assert_eq!(restored.pop_next().unwrap().payload, "b");
     }
 
@@ -402,10 +446,24 @@ mod tests {
             sequence,
             payload: (),
         };
-        let duplicate = EventQueueState { pending: vec![event(0), event(0)], next_sequence: 1, last_dispatched: None };
-        assert_eq!(EventQueue::restore_state(duplicate).err(), Some(EventQueueError::DuplicateSequence));
-        let out_of_range = EventQueueState { pending: vec![event(2)], next_sequence: 2, last_dispatched: None };
-        assert_eq!(EventQueue::restore_state(out_of_range).err(), Some(EventQueueError::SequenceOutOfRange));
+        let duplicate = EventQueueState {
+            pending: vec![event(0), event(0)],
+            next_sequence: 1,
+            last_dispatched: None,
+        };
+        assert_eq!(
+            EventQueue::restore_state(duplicate).err(),
+            Some(EventQueueError::DuplicateSequence)
+        );
+        let out_of_range = EventQueueState {
+            pending: vec![event(2)],
+            next_sequence: 2,
+            last_dispatched: None,
+        };
+        assert_eq!(
+            EventQueue::restore_state(out_of_range).err(),
+            Some(EventQueueError::SequenceOutOfRange)
+        );
     }
 
     #[test]
@@ -417,8 +475,15 @@ mod tests {
             sequence,
             payload: (),
         };
-        let reversed = EventQueueState { pending: vec![event(5, 1, 0, 0), event(5, 0, 0, 1)], next_sequence: 2, last_dispatched: None };
-        assert_eq!(EventQueue::restore_state(reversed).err(), Some(EventQueueError::NonCanonicalState));
+        let reversed = EventQueueState {
+            pending: vec![event(5, 1, 0, 0), event(5, 0, 0, 1)],
+            next_sequence: 2,
+            last_dispatched: None,
+        };
+        assert_eq!(
+            EventQueue::restore_state(reversed).err(),
+            Some(EventQueueError::NonCanonicalState)
+        );
         let regressed = EventQueueState {
             pending: vec![event(5, 1, 0, 0)],
             next_sequence: 1,
@@ -428,14 +493,24 @@ mod tests {
                 priority: PlatformPriority::new(0),
             }),
         };
-        assert_eq!(EventQueue::restore_state(regressed).err(), Some(EventQueueError::WatermarkRegression));
+        assert_eq!(
+            EventQueue::restore_state(regressed).err(),
+            Some(EventQueueError::WatermarkRegression)
+        );
     }
 
     #[test]
     fn restore_preserves_exhausted_sequence_allocator() {
-        let state = EventQueueState::<()> { pending: vec![], next_sequence: u64::MAX, last_dispatched: None };
+        let state = EventQueueState::<()> {
+            pending: vec![],
+            next_sequence: u64::MAX,
+            last_dispatched: None,
+        };
         let mut queue = EventQueue::restore_state(state).unwrap();
-        assert_eq!(queue.schedule(MachineTime::ZERO, PlatformPriority::new(0), ()), Err(EventQueueError::SequenceExhausted));
+        assert_eq!(
+            queue.schedule(MachineTime::ZERO, PlatformPriority::new(0), ()),
+            Err(EventQueueError::SequenceExhausted)
+        );
     }
 
 }
