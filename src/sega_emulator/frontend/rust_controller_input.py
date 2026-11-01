@@ -130,9 +130,16 @@ class RustControllerInput:
         selected = self._native.selected_device(player)
         return None if selected is None else int(selected)
 
-    def select_device(self, player: int, device_id: int | None) -> None:
+    def device_assignment_is_manual(self, player: int) -> bool:
+        if self._native is None:
+            return False
+        return bool(self._native.device_assignment_is_manual(player))
+
+    def select_device(
+        self, player: int, device_id: int | None, *, manual: bool = True
+    ) -> None:
         if self._native is not None:
-            self._native.select_device(player, device_id)
+            self._native.select_device(player, device_id, manual)
 
     def consume_disconnect_event(self) -> bool:
         if self._native is None:
