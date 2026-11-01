@@ -1,0 +1,12 @@
+[package]
+name = "sega-machine-scheduler"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "sega_machine_scheduler"
+path = "src/lib.rs"
+
+[dependencies]
+sega-temporal-core = { path = "../temporal_core" }
