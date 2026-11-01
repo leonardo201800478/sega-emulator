@@ -11,6 +11,7 @@ members = [
     "native/z80_alu",
     "native/z80_bus",
     "native/audio_runtime",
+    "native/input_runtime",
 ]
 default-members = [
     "native/sg1000_core",
@@ -18,4 +19,5 @@ default-members = [
     "native/z80_alu",
     "native/z80_bus",
     "native/audio_runtime",
+    "native/input_runtime",
 ]

@@ -25,7 +25,7 @@ def test_drivers_dialog_exposes_only_implemented_api_choices(qt_app) -> None:
     dialog = DriversDialog()
     assert [
         dialog.input_combo.itemData(i) for i in range(dialog.input_combo.count())
-    ] == ["auto", "xinput", "sdl3"]
+    ] == ["auto"]
     assert [
         dialog.audio_combo.itemData(i) for i in range(dialog.audio_combo.count())
     ] == ["wasapi", "xaudio2", "disabled"]
