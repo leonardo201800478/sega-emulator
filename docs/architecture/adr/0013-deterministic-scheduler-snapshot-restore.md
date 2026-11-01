@@ -199,7 +199,7 @@ At the time this ADR was prepared:
 - GitHub Actions workflow run `41356994362` reports SUCCESS for that exact SHA.
 - The main branch remains `0da3098893cce4d80f7a22291d00488e4e7d0f9b` and does not contain `native/machine_scheduler`.
 - The independent audit's targeted local tests passed (16 temporal-core + 18 scheduler tests); its local `fmt` and `clippy` were NOT RUN.
-- E1 state-model DTOs are defined in `temporal_core::event` (`EventQueueState` / `EventQueueWatermark`) and `machine_scheduler` (`ClockDomainState` / `SchedulerState`); no runtime export, validation, restore or codec is implemented by this slice.
+- E1 state-model DTOs are defined in `temporal_core::state` (`EventQueueState` / `EventQueueWatermark`) and `machine_scheduler` (`ClockDomainState` / `SchedulerState`); no runtime export, validation, restore or codec is implemented by this slice.
 - E1 validation on the Windows environment and exact candidate CI: pending.
 - Snapshot/restore continuation, invalid-state validation and differential replay: NOT IMPLEMENTED / NOT RUN.
 - `TEMPORAL_PASS`: NOT CLAIMED.
