@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 
 $version = "3.4.18"
 $archiveName = "SDL3-$version-win32-x64.zip"
-$uri = "https://www.libsdl.org/release/$archiveName"
+$uri = "https://github.com/libsdl-org/SDL/releases/download/release-$version/$archiveName"
 $expectedSha256 = "75c2c0fc74e7d1206aaedc22893a35887332f4f85f5c8b74fddc10d177985f2c"
 
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("sega-sdl3-" + [guid]::NewGuid())
