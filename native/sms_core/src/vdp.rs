@@ -1542,6 +1542,93 @@ mod tests {
     }
 
     #[test]
+    fn mode4_sprite_screen_position_is_independent_of_background_horizontal_scroll() {
+        let mut vram = vec![0; VRAM_SIZE];
+        let mut cram = [0; CRAM_SIZE];
+        let mut regs = [0; 16];
+        regs[0] = 0x04;
+        regs[1] = 0x40;
+        regs[5] = 0x7E;
+        vram[0x3F00] = 0;
+        vram[0x3F80] = 100;
+        vram[0x3F81] = 1;
+        vram[32] = 0x80;
+        cram[17] = 0x01;
+
+        let pixel_offset = (SMS_VDP_WIDTH + 100) * 3;
+        for scroll in [0, 1, 3, 7, 8, 15, 127, 255] {
+            regs[8] = scroll;
+            let mut status = 0;
+            let mut frame = vec![0; FRAME_SIZE];
+            render_scanline(
+                &vram,
+                &cram,
+                &regs,
+                &mut status,
+                &mut frame,
+                1,
+                true,
+            );
+            assert_eq!(
+                &frame[pixel_offset..pixel_offset + 3],
+                &[85, 0, 0],
+                "sprite X must remain fixed at 100 while background R8={scroll}"
+            );
+        }
+    }
+
+    #[test]
+    fn mode4_unlocked_draws_ninth_sprite_but_preserves_hardware_overflow() {
+        let mut vram = vec![0; VRAM_SIZE];
+        let mut cram = [0; CRAM_SIZE];
+        let mut regs = [0; 16];
+        regs[0] = 0x04;
+        regs[1] = 0x40;
+        regs[5] = 0x7E;
+        cram[17] = 0x01;
+        vram[32] = 0x80;
+
+        for index in 0..9 {
+            vram[0x3F00 + index] = 0;
+            vram[0x3F80 + index * 2] = 16 + (index as u8 * 16);
+            vram[0x3F81 + index * 2] = 1;
+        }
+
+        let ninth_x = 16 + 8 * 16;
+        let ninth_pixel = (SMS_VDP_WIDTH + ninth_x as usize) * 3;
+        let mut limited_status = 0;
+        let mut limited_frame = vec![0; FRAME_SIZE];
+        render_scanline(
+            &vram,
+            &cram,
+            &regs,
+            &mut limited_status,
+            &mut limited_frame,
+            1,
+            true,
+        );
+        assert_ne!(limited_status & OVERFLOW, 0);
+        assert_eq!(&limited_frame[ninth_pixel..ninth_pixel + 3], &[0, 0, 0]);
+
+        let mut unlocked_status = 0;
+        let mut unlocked_frame = vec![0; FRAME_SIZE];
+        render_scanline(
+            &vram,
+            &cram,
+            &regs,
+            &mut unlocked_status,
+            &mut unlocked_frame,
+            1,
+            false,
+        );
+        assert_ne!(unlocked_status & OVERFLOW, 0);
+        assert_eq!(
+            &unlocked_frame[ninth_pixel..ninth_pixel + 3],
+            &[85, 0, 0]
+        );
+    }
+
+    #[test]
     fn unknown_video_standard_uses_the_ntsc_counter_profile() {
         let mut v = SmsVdp::new(VideoStandard::Unknown, SpriteLimitMode::HardwareLimit);
         v.scanline = 219;
