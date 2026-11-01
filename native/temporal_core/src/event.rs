@@ -4,32 +4,45 @@ use core::cmp::Ordering;
 use core::fmt;
 use std::collections::BinaryHeap;
 
-/// Platform-defined event ordering class.
+/// Profile-defined ordering stratum at one absolute timestamp.
 ///
-/// Lower numeric values are dispatched first at the same timestamp. The
-/// temporal core intentionally does not assign hardware meanings to values.
+/// This is an ordinal tie-break label, not a duration, electrical phase
+/// measurement, or sub-tick timestamp. Lower values dispatch first.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct EventPriority(u16);
+pub struct HardwarePhase(u16);
 
-impl EventPriority {
-    /// Construct a platform-defined priority value.
-    pub const fn new(value: u16) -> Self {
-        Self(value)
-    }
-
-    /// Return the underlying priority value.
-    pub const fn value(self) -> u16 {
-        self.0
-    }
+impl HardwarePhase {
+    /// Construct a profile-defined ordering stratum.
+    pub const fn new(value: u16) -> Self { Self(value) }
+    /// Return the profile-defined stratum.
+    pub const fn value(self) -> u16 { self.0 }
 }
+
+/// Software dispatch priority, independent of hardware phase.
+///
+/// Lower values dispatch first within the same timestamp and hardware phase.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PlatformPriority(u16);
+
+impl PlatformPriority {
+    /// Construct a platform dispatch priority.
+    pub const fn new(value: u16) -> Self { Self(value) }
+    /// Return the priority value.
+    pub const fn value(self) -> u16 { self.0 }
+}
+
+/// Backward-compatible name for the former single priority dimension.
+pub type EventPriority = PlatformPriority;
 
 /// One event removed from an EventQueue.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScheduledEvent<T> {
     /// Absolute timestamp in the machine profile's time unit.
     pub timestamp: super::MachineTime,
-    /// Platform-defined ordering class.
-    pub priority: EventPriority,
+    /// Profile-defined ordering stratum at this timestamp.
+    pub hardware_phase: HardwarePhase,
+    /// Software dispatch priority within the hardware phase.
+    pub priority: PlatformPriority,
     /// Stable insertion sequence assigned by the queue.
     pub sequence: u64,
     /// Event-specific typed payload.
@@ -37,39 +50,17 @@ pub struct ScheduledEvent<T> {
 }
 
 #[derive(Debug, Clone)]
-struct QueueEntry<T> {
-    event: ScheduledEvent<T>,
-}
+struct QueueEntry<T> { event: ScheduledEvent<T> }
 
 impl<T> QueueEntry<T> {
-    fn ordering_key(&self) -> (super::MachineTime, EventPriority, u64) {
-        (
-            self.event.timestamp,
-            self.event.priority,
-            self.event.sequence,
-        )
+    fn key(&self) -> (super::MachineTime, HardwarePhase, PlatformPriority, u64) {
+        (self.event.timestamp, self.event.hardware_phase, self.event.priority, self.event.sequence)
     }
 }
-
-impl<T> PartialEq for QueueEntry<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.ordering_key() == other.ordering_key()
-    }
-}
-
+impl<T> PartialEq for QueueEntry<T> { fn eq(&self, other: &Self) -> bool { self.key() == other.key() } }
 impl<T> Eq for QueueEntry<T> {}
-
-impl<T> PartialOrd for QueueEntry<T> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl<T> Ord for QueueEntry<T> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        other.ordering_key().cmp(&self.ordering_key())
-    }
-}
+impl<T> PartialOrd for QueueEntry<T> { fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) } }
+impl<T> Ord for QueueEntry<T> { fn cmp(&self, other: &Self) -> Ordering { other.key().cmp(&self.key()) } }
 
 /// Errors returned when inserting an event would violate timeline causality.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,211 +69,120 @@ pub enum EventQueueError {
     SequenceExhausted,
     /// An event was scheduled before the last dispatched timestamp.
     EventInPast,
-    /// A same-timestamp event was inserted with an earlier priority after
-    /// that timestamp had already begun dispatching.
-    PriorityRegressionAtCurrentTime,
+    /// A same-timestamp event regressed the dispatched phase/priority key.
+    OrderingRegressionAtCurrentTime,
 }
-
 impl fmt::Display for EventQueueError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::SequenceExhausted => write!(f, "event insertion sequence exhausted"),
             Self::EventInPast => write!(f, "cannot schedule an event before dispatched time"),
-            Self::PriorityRegressionAtCurrentTime => {
-                write!(
-                    f,
-                    "cannot insert an earlier priority at the current timestamp"
-                )
-            }
+            Self::OrderingRegressionAtCurrentTime => write!(f, "cannot insert an earlier phase/priority at the current timestamp"),
         }
     }
 }
-
 impl std::error::Error for EventQueueError {}
 
-/// Min-priority event queue with stable deterministic tie-breaking.
-///
-/// Events are ordered by timestamp, platform priority, and insertion sequence.
-/// Producers must enqueue same-timestamp events of earlier priority before
-/// dispatch reaches that timestamp. Causal events emitted while handling an
-/// event may use the same timestamp only at the same or a later priority.
+/// Min-priority queue ordered by timestamp, hardware phase, platform priority,
+/// then stable insertion sequence. The queue does not accept rational sub-tick
+/// timestamps; HardwarePhase is not a substitute for one.
 #[derive(Debug, Clone)]
 pub struct EventQueue<T> {
     heap: BinaryHeap<QueueEntry<T>>,
     next_sequence: u64,
-    last_dispatched: Option<(super::MachineTime, EventPriority)>,
+    last_dispatched: Option<(super::MachineTime, HardwarePhase, PlatformPriority)>,
 }
-
 impl<T> Default for EventQueue<T> {
     fn default() -> Self {
-        Self {
-            heap: BinaryHeap::new(),
-            next_sequence: 0,
-            last_dispatched: None,
-        }
+        Self { heap: BinaryHeap::new(), next_sequence: 0, last_dispatched: None }
     }
 }
-
 impl<T> EventQueue<T> {
     /// Create an empty event queue.
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new() -> Self { Self::default() }
+
+    /// Insert using the compatibility zero-phase ordering.
+    pub fn schedule(&mut self, timestamp: super::MachineTime, priority: PlatformPriority, payload: T) -> Result<u64, EventQueueError> {
+        self.schedule_with_phase(timestamp, HardwarePhase::default(), priority, payload)
     }
 
-    /// Insert an event and return its stable insertion sequence.
-    pub fn schedule(
-        &mut self,
-        timestamp: super::MachineTime,
-        priority: EventPriority,
-        payload: T,
-    ) -> Result<u64, EventQueueError> {
-        if let Some((last_time, last_priority)) = self.last_dispatched {
-            if timestamp < last_time {
-                return Err(EventQueueError::EventInPast);
-            }
-            if timestamp == last_time && priority < last_priority {
-                return Err(EventQueueError::PriorityRegressionAtCurrentTime);
+    /// Insert an event with independent phase and platform-priority keys.
+    pub fn schedule_with_phase(&mut self, timestamp: super::MachineTime, hardware_phase: HardwarePhase, priority: PlatformPriority, payload: T) -> Result<u64, EventQueueError> {
+        if let Some((last_time, last_phase, last_priority)) = self.last_dispatched {
+            if timestamp < last_time { return Err(EventQueueError::EventInPast); }
+            if timestamp == last_time && (hardware_phase, priority) < (last_phase, last_priority) {
+                return Err(EventQueueError::OrderingRegressionAtCurrentTime);
             }
         }
-
         let sequence = self.next_sequence;
-        self.next_sequence = self
-            .next_sequence
-            .checked_add(1)
-            .ok_or(EventQueueError::SequenceExhausted)?;
-        self.heap.push(QueueEntry {
-            event: ScheduledEvent {
-                timestamp,
-                priority,
-                sequence,
-                payload,
-            },
-        });
+        self.next_sequence = self.next_sequence.checked_add(1).ok_or(EventQueueError::SequenceExhausted)?;
+        self.heap.push(QueueEntry { event: ScheduledEvent { timestamp, hardware_phase, priority, sequence, payload } });
         Ok(sequence)
     }
 
-    /// Remove the next event in timestamp/priority/sequence order.
+    /// Remove the next event in timestamp/phase/priority/sequence order.
     pub fn pop_next(&mut self) -> Option<ScheduledEvent<T>> {
         let entry = self.heap.pop()?;
-        self.last_dispatched = Some((entry.event.timestamp, entry.event.priority));
+        self.last_dispatched = Some((entry.event.timestamp, entry.event.hardware_phase, entry.event.priority));
         Some(entry.event)
     }
-
-    /// Return the timestamp of the next queued event, if any.
-    pub fn next_timestamp(&self) -> Option<super::MachineTime> {
-        self.heap.peek().map(|entry| entry.event.timestamp)
-    }
-
+    /// Return the next queued absolute timestamp.
+    pub fn next_timestamp(&self) -> Option<super::MachineTime> { self.heap.peek().map(|entry| entry.event.timestamp) }
     /// Return the number of queued events.
-    pub fn len(&self) -> usize {
-        self.heap.len()
-    }
-
-    /// Return whether the queue contains no events.
-    pub fn is_empty(&self) -> bool {
-        self.heap.is_empty()
-    }
-
-    /// Remove all events and reset ordering history and insertion sequence.
-    pub fn clear(&mut self) {
-        self.heap.clear();
-        self.next_sequence = 0;
-        self.last_dispatched = None;
-    }
+    pub fn len(&self) -> usize { self.heap.len() }
+    /// Return whether the queue is empty.
+    pub fn is_empty(&self) -> bool { self.heap.is_empty() }
+    /// Clear events and reset sequence and causal history.
+    pub fn clear(&mut self) { self.heap.clear(); self.next_sequence = 0; self.last_dispatched = None; }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{EventPriority, EventQueue, EventQueueError};
+    use super::{EventPriority, EventQueue, EventQueueError, HardwarePhase, PlatformPriority};
     use crate::MachineTime;
 
     #[test]
-    fn events_are_ordered_by_time_then_priority_then_insertion_sequence() {
-        let mut queue = EventQueue::new();
-        let time_8 = MachineTime::from_ticks(8);
-        let time_4 = MachineTime::from_ticks(4);
-
-        queue
-            .schedule(time_8, EventPriority::new(2), "late-priority")
-            .unwrap();
-        queue
-            .schedule(time_4, EventPriority::new(5), "early-time")
-            .unwrap();
-        queue
-            .schedule(time_8, EventPriority::new(1), "early-priority-a")
-            .unwrap();
-        queue
-            .schedule(time_8, EventPriority::new(1), "early-priority-b")
-            .unwrap();
-
-        let events: Vec<_> = core::iter::from_fn(|| queue.pop_next())
-            .map(|event| event.payload)
-            .collect();
-        assert_eq!(
-            events,
-            vec![
-                "early-time",
-                "early-priority-a",
-                "early-priority-b",
-                "late-priority"
-            ]
-        );
+    fn events_order_by_absolute_time_phase_priority_and_stable_sequence() {
+        let mut q = EventQueue::new();
+        let t = MachineTime::from_ticks(8);
+        q.schedule_with_phase(t, HardwarePhase::new(2), PlatformPriority::new(0), "phase2").unwrap();
+        q.schedule_with_phase(t, HardwarePhase::new(1), PlatformPriority::new(2), "priority2").unwrap();
+        q.schedule_with_phase(t, HardwarePhase::new(1), PlatformPriority::new(1), "first").unwrap();
+        q.schedule_with_phase(t, HardwarePhase::new(1), PlatformPriority::new(1), "second").unwrap();
+        q.schedule(MachineTime::from_ticks(4), EventPriority::new(9), "earlier-time").unwrap();
+        let events: Vec<_> = core::iter::from_fn(|| q.pop_next()).map(|e| e.payload).collect();
+        assert_eq!(events, vec!["earlier-time", "first", "second", "priority2", "phase2"]);
     }
 
     #[test]
-    fn causal_same_time_events_cannot_retroactively_change_priority_order() {
-        let mut queue = EventQueue::new();
-        let now = MachineTime::from_ticks(10);
-        queue.schedule(now, EventPriority::new(3), "first").unwrap();
-        assert_eq!(queue.pop_next().unwrap().payload, "first");
-
-        assert_eq!(
-            queue.schedule(now, EventPriority::new(2), "retroactive"),
-            Err(EventQueueError::PriorityRegressionAtCurrentTime)
-        );
-        assert_eq!(queue.schedule(now, EventPriority::new(3), "causal"), Ok(1));
-        assert_eq!(queue.pop_next().unwrap().payload, "causal");
+    fn causal_events_cannot_regress_phase_or_priority() {
+        let mut q = EventQueue::new();
+        let t = MachineTime::from_ticks(10);
+        q.schedule_with_phase(t, HardwarePhase::new(2), PlatformPriority::new(3), "origin").unwrap();
+        q.pop_next();
+        assert_eq!(q.schedule_with_phase(t, HardwarePhase::new(1), PlatformPriority::new(9), "phase-back"), Err(EventQueueError::OrderingRegressionAtCurrentTime));
+        assert_eq!(q.schedule_with_phase(t, HardwarePhase::new(2), PlatformPriority::new(2), "priority-back"), Err(EventQueueError::OrderingRegressionAtCurrentTime));
+        assert_eq!(q.schedule_with_phase(t, HardwarePhase::new(2), PlatformPriority::new(3), "same"), Ok(1));
+        assert_eq!(q.schedule_with_phase(t, HardwarePhase::new(3), PlatformPriority::new(0), "later-phase"), Ok(2));
     }
 
     #[test]
-    fn events_cannot_be_scheduled_before_dispatched_time() {
-        let mut queue = EventQueue::new();
-        queue
-            .schedule(MachineTime::from_ticks(10), EventPriority::new(0), "now")
-            .unwrap();
-        queue.pop_next();
-
-        assert_eq!(
-            queue.schedule(MachineTime::from_ticks(9), EventPriority::new(0), "past"),
-            Err(EventQueueError::EventInPast)
-        );
+    fn compatibility_schedule_uses_zero_phase_and_sequence_is_stable() {
+        let mut q = EventQueue::new();
+        let t = MachineTime::from_ticks(1);
+        assert_eq!(q.schedule(t, EventPriority::new(0), "a"), Ok(0));
+        assert_eq!(q.schedule(t, EventPriority::new(0), "b"), Ok(1));
+        assert_eq!(q.pop_next().unwrap().payload, "a");
+        assert_eq!(q.pop_next().unwrap().payload, "b");
     }
 
     #[test]
-    fn clear_resets_queue_and_sequence() {
-        let mut queue = EventQueue::new();
-        assert_eq!(
-            queue.schedule(MachineTime::from_ticks(1), EventPriority::new(0), 1),
-            Ok(0)
-        );
-        queue.clear();
-        assert!(queue.is_empty());
-        assert_eq!(
-            queue.schedule(MachineTime::from_ticks(2), EventPriority::new(0), 2),
-            Ok(0)
-        );
-    }
-
-    #[test]
-    fn queue_reports_next_timestamp_and_length() {
-        let mut queue = EventQueue::new();
-        queue
-            .schedule(MachineTime::from_ticks(5), EventPriority::new(0), ())
-            .unwrap();
-        queue
-            .schedule(MachineTime::from_ticks(3), EventPriority::new(0), ())
-            .unwrap();
-        assert_eq!(queue.len(), 2);
-        assert_eq!(queue.next_timestamp(), Some(MachineTime::from_ticks(3)));
+    fn past_events_are_rejected_and_clear_resets_history() {
+        let mut q = EventQueue::new();
+        q.schedule(MachineTime::from_ticks(10), EventPriority::new(0), ()).unwrap();
+        q.pop_next();
+        assert_eq!(q.schedule(MachineTime::from_ticks(9), EventPriority::new(0), ()), Err(EventQueueError::EventInPast));
+        q.clear();
+        assert_eq!(q.schedule(MachineTime::from_ticks(2), EventPriority::new(0), ()), Ok(0));
     }
 }
