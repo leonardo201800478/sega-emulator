@@ -216,21 +216,31 @@ impl<T> MachineScheduler<T> {
             .ok_or(SchedulerError::UnknownClockDomain(id))
     }
 
-    /// Schedule a typed machine event at an absolute machine timestamp.
-    ///
-    /// Events in the past are rejected. Priority meanings are defined by the
-    /// owning console profile, not by this generic scheduler.
+    /// Schedule at an absolute timestamp using the compatibility zero phase.
     pub fn schedule_at(
         &mut self,
         timestamp: MachineTime,
         priority: EventPriority,
         payload: T,
     ) -> Result<u64, SchedulerError> {
+        self.schedule_at_with_phase(timestamp, HardwarePhase::default(), priority, payload)
+    }
+
+    /// Schedule with independent hardware-phase and platform-priority keys.
+    ///
+    /// HardwarePhase is an ordering stratum, not a fractional timestamp.
+    pub fn schedule_at_with_phase(
+        &mut self,
+        timestamp: MachineTime,
+        hardware_phase: HardwarePhase,
+        priority: PlatformPriority,
+        payload: T,
+    ) -> Result<u64, SchedulerError> {
         if timestamp < self.now {
             return Err(SchedulerError::TimeWentBackwards);
         }
         self.events
-            .schedule(timestamp, priority, payload)
+            .schedule_with_phase(timestamp, hardware_phase, priority, payload)
             .map_err(SchedulerError::from)
     }
 
