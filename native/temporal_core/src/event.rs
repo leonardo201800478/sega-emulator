@@ -60,32 +60,6 @@ pub struct ScheduledEvent<T> {
 }
 
 
-/// Causal watermark retained after the most recently dispatched event.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct EventQueueWatermark {
-    /// Absolute integer timestamp of the last dispatched event.
-    pub timestamp: super::MachineTime,
-    /// Hardware-ordering stratum of the last dispatched event.
-    pub hardware_phase: HardwarePhase,
-    /// Software dispatch priority of the last dispatched event.
-    pub priority: PlatformPriority,
-}
-
-/// Canonical persistence DTO for one event queue.
-///
-/// Pending events must be sorted ascending by
-/// (timestamp, hardware_phase, priority, sequence), independently of the
-/// runtime heap layout. Sequence values are preserved exactly.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EventQueueState<T> {
-    /// Pending events in canonical dispatch order.
-    pub pending: Vec<ScheduledEvent<T>>,
-    /// Next sequence value to assign within this queue.
-    pub next_sequence: u64,
-    /// Causal watermark from the last dispatched event, if any.
-    pub last_dispatched: Option<EventQueueWatermark>,
-}
-
 #[derive(Debug, Clone)]
 struct QueueEntry<T> {
     event: ScheduledEvent<T>,
