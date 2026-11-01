@@ -31,20 +31,21 @@ Os perfis persistidos estão organizados por jogador/slot. Ao trocar o periféri
 - Esquema JSON versionado, migração da configuração legada por jogador e testes para preservar dados.
 - Quando a plataforma não fornecer identidade estável suficiente, expor a ambiguidade em vez de prometer associação física determinística.
 
-## 3. Backend XInput direto
+## 3. Backend XInput direto — decisão de arquitetura
 
-A lacuna deve ser confirmada por inspeção do código, não inferida apenas pela existência de uma opção de driver na interface.
+**Decisão:** adicionar XInput nativo como backend complementar ao SDL3, mantendo SDL3 disponível. O objetivo primário é ampliar compatibilidade com controles Xbox e dispositivos expostos pelo driver XInput no Windows. A possibilidade de menor latência é uma hipótese a medir, não uma garantia: XInput não será considerado mais rápido sem benchmark comparativo no mesmo hardware e condições.
 
 ### Trabalho requerido
 
 1. Auditar seleção de driver, carregamento de bibliotecas, enumeração e polling no runtime atual.
-2. Se não houver backend XInput direto, implementar um backend Windows em Rust atrás dos contratos host-independent de `sega-input-runtime`.
-3. Definir seleção explícita/automática e política de fallback com SDL3.
-4. Deduplicar o mesmo controle quando exposto por mais de um backend, usando identidade física opaca confiável.
+2. Implementar backend Windows em Rust atrás dos contratos host-independent de `sega-input-runtime`.
+3. Definir seleção explícita/automática e política de fallback com SDL3; SDL3 continua necessário para HID/joysticks e capacidades mais amplas.
+4. Deduplicar o mesmo controle quando exposto por mais de um backend, usando identidade física opaca confiável. Não apresentar duas instâncias do mesmo periférico ao usuário.
 5. Testar conexão, desconexão, reconexão, quatro slots XInput, estado de botões, sticks e triggers.
 6. Documentar que XInput não substitui HID/SDL3 para volantes, joysticks genéricos, sensores, hats ou periféricos avançados.
+7. Comparar SDL3 versus XInput em condições equivalentes: polling/captura device→runtime, jitter, CPU, latência percebida e, se houver equipamento/protocolo adequado, button-to-photon. Registrar método, repetição, mediana e p95.
 
-Nenhum backend XInput é declarado implementado por este documento.
+O backend XInput ainda não está declarado implementado; esta seção registra a decisão e os critérios para sua implementação.
 
 ## 4. Captura analógica do mapper
 
