@@ -119,7 +119,10 @@ class RustControllerInput:
     def connected_devices(self) -> list[tuple[int, str]]:
         if self._native is None:
             return []
-        return [(int(device_id), str(name)) for device_id, name in self._native.connected_devices()]
+        return [
+            (int(device_id), str(name))
+            for device_id, name in self._native.connected_devices()
+        ]
 
     def selected_device(self, player: int) -> int | None:
         if self._native is None:
