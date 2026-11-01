@@ -42,6 +42,16 @@ class FakeNativeInputManager:
     def connected_names(self):
         return ["Test HID Controller"]
 
+    def connected_devices(self):
+        return [(7, "Test HID Controller"), (8, "Duplicate HID Controller")]
+
+    def selected_device(self, player):
+        return self.selected.get(player)
+
+    def select_device(self, player, device_id):
+        self.selected = getattr(self, "selected", {})
+        self.selected[player] = device_id
+
     def consume_disconnect_event(self):
         result = self.disconnect
         self.disconnect = False
@@ -121,3 +131,19 @@ def test_qt_adapter_closes_native_manager(monkeypatch: pytest.MonkeyPatch) -> No
     controller = RustControllerInput(ControllerInputConfig())
     controller.close()
     assert native.closed
+
+
+
+def test_qt_adapter_exposes_and_selects_distinct_session_devices(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    native = install_fake_extension(monkeypatch)
+    controller = RustControllerInput(ControllerInputConfig())
+
+    assert controller.connected_devices() == [
+        (7, "Test HID Controller"),
+        (8, "Duplicate HID Controller"),
+    ]
+    assert controller.selected_device(1) is None
+    controller.select_device(1, 8)
+    assert native.selected[1] == 8
