@@ -544,6 +544,71 @@ mod tests {
     }
 
     #[test]
+
+    #[test]
+    fn restored_clock_domain_preserves_complete_history() {
+        let ratio = ClockRatio::new(5, 3).unwrap();
+        let mut original =
+            ClockDomain::with_phase(ratio, MachineTime::from_ticks(4), 2).unwrap();
+        original.advance_to(MachineTime::from_ticks(11)).unwrap();
+
+        let restored = ClockDomain::restore(
+            original.ratio(),
+            original.current_time(),
+            original.total_cycles(),
+            original.snapshot().phase,
+            original.registration_start(),
+            original.initial_phase(),
+        )
+        .unwrap();
+        assert_eq!(restored, original);
+    }
+
+    #[test]
+    fn restore_rejects_inconsistent_clock_history() {
+        let ratio = ClockRatio::new(5, 3).unwrap();
+        assert_eq!(
+            ClockDomain::restore(
+                ratio,
+                MachineTime::from_ticks(10),
+                1,
+                0,
+                MachineTime::ZERO,
+                0,
+            ),
+            Err(ClockError::InvalidClockHistory)
+        );
+    }
+
+    #[test]
+    fn restore_rejects_out_of_range_initial_and_current_phase() {
+        let ratio = ClockRatio::new(5, 3).unwrap();
+        assert_eq!(
+            ClockDomain::restore(ratio, MachineTime::ZERO, 0, 0, MachineTime::ZERO, 3),
+            Err(ClockError::PhaseOutOfRange)
+        );
+        assert_eq!(
+            ClockDomain::restore(ratio, MachineTime::ZERO, 0, 3, MachineTime::ZERO, 0),
+            Err(ClockError::PhaseOutOfRange)
+        );
+    }
+
+    #[test]
+    fn restore_rejects_registration_after_current_time() {
+        let ratio = ClockRatio::new(1, 1).unwrap();
+        assert_eq!(
+            ClockDomain::restore(
+                ratio,
+                MachineTime::from_ticks(2),
+                0,
+                0,
+                MachineTime::from_ticks(3),
+                0,
+            ),
+            Err(ClockError::InvalidClockHistory)
+        );
+    }
+
     fn same_timestamp_is_a_valid_noop() {
         let ratio = ClockRatio::new(7, 3).unwrap();
         let mut domain = ClockDomain::new(ratio, MachineTime::from_ticks(9));
