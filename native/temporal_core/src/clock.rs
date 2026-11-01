@@ -144,6 +144,8 @@ pub enum ClockError {
     PhaseOutOfRange,
     /// A local edge index is one-based and cannot be zero.
     ZeroEdgeIndex,
+    /// Stored clock history is inconsistent with its exact rational ratio.
+    InvalidClockHistory,
 }
 
 impl fmt::Display for ClockError {
@@ -155,6 +157,7 @@ impl fmt::Display for ClockError {
             Self::ArithmeticOverflow => write!(f, "clock-domain arithmetic overflow"),
             Self::PhaseOutOfRange => write!(f, "clock phase must be smaller than its denominator"),
             Self::ZeroEdgeIndex => write!(f, "local clock edge index must be positive"),
+            Self::InvalidClockHistory => write!(f, "clock-domain history is inconsistent"),
         }
     }
 }
@@ -182,6 +185,8 @@ pub struct ClockDomain {
     time: MachineTime,
     total_cycles: u128,
     phase: u128,
+    registration_start: MachineTime,
+    initial_phase: u128,
 }
 
 impl ClockDomain {
@@ -192,6 +197,8 @@ impl ClockDomain {
             time: start,
             total_cycles: 0,
             phase: 0,
+            registration_start: start,
+            initial_phase: 0,
         }
     }
 
@@ -209,7 +216,59 @@ impl ClockDomain {
             time: start,
             total_cycles: 0,
             phase,
+            registration_start: start,
+            initial_phase: phase,
         })
+    }
+
+    /// Restore a domain from its complete rational-clock history.
+    ///
+    /// The stored counters are accepted only when they satisfy the exact
+    /// conversion equation from registration through `current_time`.
+    pub fn restore(
+        ratio: ClockRatio,
+        current_time: MachineTime,
+        total_cycles: u128,
+        phase: u128,
+        registration_start: MachineTime,
+        initial_phase: u128,
+    ) -> Result<Self, ClockError> {
+        let denominator = u128::from(ratio.denominator());
+        if phase >= denominator || initial_phase >= denominator {
+            return Err(ClockError::PhaseOutOfRange);
+        }
+        let elapsed = current_time
+            .checked_duration_since(registration_start)
+            .ok_or(ClockError::InvalidClockHistory)?;
+        let left = total_cycles
+            .checked_mul(denominator)
+            .and_then(|value| value.checked_add(phase))
+            .ok_or(ClockError::ArithmeticOverflow)?;
+        let right = elapsed
+            .checked_mul(u128::from(ratio.numerator()))
+            .and_then(|value| value.checked_add(initial_phase))
+            .ok_or(ClockError::ArithmeticOverflow)?;
+        if left != right {
+            return Err(ClockError::InvalidClockHistory);
+        }
+        Ok(Self {
+            ratio,
+            time: current_time,
+            total_cycles,
+            phase,
+            registration_start,
+            initial_phase,
+        })
+    }
+
+    /// Return the domain's registration timestamp.
+    pub const fn registration_start(&self) -> MachineTime {
+        self.registration_start
+    }
+
+    /// Return the rational phase supplied at registration.
+    pub const fn initial_phase(&self) -> u128 {
+        self.initial_phase
     }
 
     /// Return the domain's immutable clock ratio.
