@@ -1,4 +1,4 @@
-# This workflow validates only the optional native/z80_core extension. SG-1000 workspace slices are validated by the Rust SG-1000 Workspace workflow.
+# Windows-only integration coverage for the optional PyO3 extension, SDL3 input runtime and Qt bridge. Workspace-wide Rust gates run in ci.yml.
 name: Qt Rust SG-1000 runtime integration
 
 concurrency:
@@ -8,6 +8,7 @@ concurrency:
 on:
   pull_request:
     paths:
+      - ".github/workflows/qt-rust-z80-core.yml"
       - "Cargo.toml"
       - "Cargo.lock"
       - "native/audio_runtime/**"
@@ -66,11 +67,6 @@ jobs:
       - name: Install official SDL3 runtime for native input smoke tests
         shell: pwsh
         run: ./scripts/install_sdl3_runtime.ps1
-      - name: Generate native dependency lockfiles for review
-        run: |
-          cargo generate-lockfile --manifest-path native/z80_core/Cargo.toml
-          cargo generate-lockfile --manifest-path native/audio_output/Cargo.toml
-          cargo generate-lockfile --manifest-path native/audio_runtime/Cargo.toml
       - name: Rust formatting
         run: cargo fmt --manifest-path native/z80_core/Cargo.toml --all -- --check
       - name: Rust formatting — native audio output
@@ -104,14 +100,14 @@ jobs:
           path: native/z80_core/dist/*.whl
           if-no-files-found: error
           retention-days: 14
-      - name: Archive generated native dependency lockfile
+      - name: Archive validated committed Cargo lockfiles
         uses: actions/upload-artifact@v4
         with:
           name: native-audio-cargo-lock
           path: |
             native/z80_core/Cargo.lock
             native/audio_output/Cargo.lock
-            native/audio_runtime/Cargo.lock
+            Cargo.lock
           if-no-files-found: error
       - name: Lint and format Python
         run: |

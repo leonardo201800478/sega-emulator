@@ -1,14 +1,15 @@
-name: SMS Z80 Platform Validation
+name: SMS Z80 External Conformance
 
 on:
   pull_request:
+    branches: [main]
     paths:
       - "native/sg1000_core/src/cpu.rs"
       - "native/z80_alu/**"
       - "native/z80_bus/**"
       - "native/sms_core/**"
-      - "native/input_runtime/**"
       - "docs/architecture/z80-sms-platform-model.md"
+      - "tools/z80test/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/sms-z80-platform-validation.yml"
@@ -20,6 +21,7 @@ on:
       - "native/z80_bus/**"
       - "native/sms_core/**"
       - "docs/architecture/z80-sms-platform-model.md"
+      - "tools/z80test/**"
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/sms-z80-platform-validation.yml"
@@ -29,53 +31,22 @@ permissions:
   contents: read
 
 concurrency:
-  group: sms-z80-platform-validation-${{ github.event.pull_request.number || github.ref }}
+  group: sms-z80-conformance-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  format:
-    name: Rust formatting
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
-      - name: Check workspace formatting
-        run: cargo fmt --all -- --check
-
-  lint:
-    name: Workspace Clippy
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-      - uses: Swatinem/rust-cache@v2
-      - name: Lint all workspace targets
-        run: cargo clippy --workspace --all-targets --locked -- -D warnings
-
-  tests:
-    name: Workspace Rust tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: Run all workspace tests
-        run: cargo test --workspace --locked
-
   external-conformance:
-    name: Pinned external Z80 conformance suite
+    name: Pinned upstream Z80 conformance suites
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Install build prerequisites
-        run: sudo apt-get update && sudo apt-get install --yes cmake g++
-      - name: Run upstream Z80 full conformance suite
+      - name: Install upstream test build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes cmake g++
+      - name: Run Z80 full conformance suite
         run: python3 tools/z80test/run_sms_z80test.py --variant z80full --max-steps 250000000
-      - name: Run upstream Z80 SCF/CCF flag conformance suite
+      - name: Run Z80 SCF/CCF flag conformance suite
         run: python3 tools/z80test/run_sms_z80test.py --variant z80ccf --max-steps 250000000
