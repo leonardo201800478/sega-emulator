@@ -8,7 +8,6 @@ from dataclasses import dataclass, field
 from typing import Any
 
 ACTIONS = ("up", "down", "left", "right", "button1", "button2", "hold")
-JOYSTICK_ACTIONS = frozenset(ACTIONS) - {"hold"}
 ACTION_BITS = {
     "up": 0,
     "down": 1,
@@ -17,6 +16,7 @@ ACTION_BITS = {
     "button1": 4,
     "button2": 5,
 }
+TURBO_ACTIONS = frozenset({"button1", "button2"})
 SUPPORTED_BUTTONS = (
     "a",
     "b",
@@ -68,9 +68,10 @@ DEFAULT_KEYBOARD_BINDINGS_P2 = {
     "hold": "H",
 }
 DEFAULT_DEADZONE = 0.15
-TURBO_ACTIONS = frozenset({"button1", "button2"})
 _RAW_BINDING_PATTERN = re.compile(
-    r"raw_(?:button_\d+|hat_\d+_(?:up|down|left|right)|axis_\d+_(?:negative|positive))"
+    r"raw_(?:button_(?:[0-9]|[1-8][0-9]|9[0-5])|"
+    r"hat_[0-7]_(?:up|down|left|right)|"
+    r"axis_(?:[0-9]|1[0-5])_(?:negative|positive))"
 )
 
 
@@ -246,28 +247,3 @@ class ControllerInputConfig:
             return cls(players=players, deadzone=float(deadzone))
         except (TypeError, ValueError) as exc:
             raise ValueError(f"Configuração de controles inválida: {exc}") from exc
-
-
-def joystick_value(actions: set[str] | frozenset[str]) -> int:
-    """Converte ações pressionadas para os seis bits ativos em nível baixo."""
-    unknown = set(actions) - set(ACTION_BITS)
-    if unknown:
-        raise ValueError(f"Ações desconhecidas: {sorted(unknown)}")
-    value = 0xFF
-    for action in actions:
-        value &= ~(1 << ACTION_BITS[action])
-    return value
-
-
-def apply_turbo(
-    actions: set[str],
-    turbo_buttons: dict[str, bool],
-    frame_number: int,
-) -> set[str]:
-    """Aplica turbo de 15 Hz: dois frames ativos e dois inativos por ciclo."""
-    result = actions.copy()
-    if frame_number % 4 >= 2:
-        for action in TURBO_ACTIONS:
-            if turbo_buttons.get(action, False):
-                result.discard(action)
-    return result

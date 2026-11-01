@@ -1,46 +1,43 @@
-# Low-latency controller input for SG-1000
+# Controller Input Backends
 
-## Default backend policy
+## Estado atual
 
-The Qt frontend uses **Native Low Latency** by default:
+O caminho de input físico ativo é nativo em Rust:
 
-1. **Windows XInput** is polled directly through the native XInput DLL when at least one XInput controller is connected.
-2. **SDL3** is the fallback when no XInput controller is connected. SDL3 supports mapped gamepads and raw joystick bindings, including legacy and non-XInput devices.
-3. The frontend polls input at the frame boundary immediately before calling `machine.run_frame()`; the resulting semantic actions are latched through the existing machine `set_joystick` interface before CPU execution.
+1. Sdl3Backend carrega a ABI oficial SDL3 no Windows e enumera gamepads/joysticks.
+2. A Gamepad API fornece controles padronizados; a Joystick API preserva eixos, botões e hats brutos.
+3. NativeInputManager mantém handles, lê estados, processa hotplug, aplica perfis e produz ações semânticas.
+4. RustControllerInput é uma ponte fina entre Qt e PyO3. Não faz polling, descoberta nem mapeamento físico.
+5. Qt envia ações do teclado; Rust mescla teclado e controles físicos, aplica turbo e converte máscaras nos snapshots específicos de SG-1000/SMS.
 
-XInput is not asserted to be universally faster on every device. The actual button-to-photon latency depends on controller firmware, USB/Bluetooth transport, driver, display refresh, and frame pacing. No physical-device latency measurements are claimed by this PR.
+## Runtime SDL3
 
-References:
-- Microsoft XInputGetState: https://learn.microsoft.com/en-us/windows/win32/api/xinput/nf-xinput-xinputgetstate
-- Microsoft XInput polling: https://learn.microsoft.com/en-us/windows/win32/xinput/getting-started-with-xinput
-- SDL3 event pumping: https://wiki.libsdl.org/SDL3/SDL_PumpEvents
-- SG-1000 controller pinout: https://consolemods.org/wiki/SG-1000:Connector_Pinouts
-- SG-1000 port layout discussion: https://nicole.express/2023/neo-geo-eat-your-heart-out.html
+- Instale o runtime oficial usando scripts/install_sdl3_runtime.ps1.
+- O instalador fixa SDL 3.4.18 e valida o SHA-256 do ZIP oficial.
+- O arquivo SDL3.dll local é ignorado pelo Git.
+- Para outro local, defina SEGA_EMULATOR_SDL3_DLL com o caminho absoluto.
+- Sem SDL3, os controles físicos ficam indisponíveis; o teclado continua funcional.
 
-## Input and determinism contract
+## Compatibilidade implementada e pendente
 
-- Host APIs are polled only at the frontend frame/input boundary. There are no OS API calls, SDL calls, or Python callbacks from a CPU instruction, memory access, or bus callback.
-- Each backend translates device state into semantic pressed/not-pressed actions. The SG-1000 machine receives one logical active-low snapshot per player before running the next frame.
-- The Rust core's `ControllerFrame` is host-independent and deterministic. It performs no polling; it only transfers the normalized snapshot into the machine.
-- Each logical controller uses bits 0–3 for Up, Down, Left, Right and bits 4–5 for Button 1 and Button 2. A released control is 1; a pressed control is 0.
-- Physical reads are composed by `Sg1000Io`: `0xDC` carries player 1 controls on bits 0–5 and player 2 Up/Down on bits 6–7; `0xDD` carries player 2 Left/Right/Button 1/Button 2 on bits 0–3. Logical aliases `0x00` and `0x01` remain for compatibility with the host-facing machine contract.
-- A disconnect releases the input snapshot and raises a disconnect event so the frontend can pause rather than silently continue with a missing expected controller.
-- XInput discovery of all four user slots is throttled to 500 ms; known-connected slots are sampled each frame. No background polling thread is created.
-- XInput takes precedence as a group when any XInput device is connected, to avoid assigning the same physical controller through XInput and SDL simultaneously. In mixed XInput/non-XInput setups, SDL-only devices are not assigned until all XInput devices are disconnected. This limitation is deliberate and documented.
-- SDL3 remains responsible for mapped Gamepad and raw Joystick state when XInput is not present. The existing user-configurable button mapping and analog deadzone are retained.
-- No DirectInput COM adapter is implemented or claimed by this PR. A future DirectInput adapter needs its own device lifecycle, configurable object mapping, duplicate-device detection, and Windows CI coverage.
+Implementado nesta fatia:
+- Gamepads reconhecidos pelo mapeamento SDL3, com botões e eixos padronizados.
+- Joysticks genéricos com botões, eixos e hats brutos.
+- Hotplug/reconexão por enumeração periódica.
+- Deadzone, perfis físicos e captura de botão processados em Rust.
+- Leituras na fronteira de frame, sem polling dentro do core.
 
-## Implementation boundary
+Pendente:
+- GameInput e deduplicação entre GameInput/SDL3.
+- Mais de um dispositivo por jogador e seleção manual de dispositivos.
+- Classificação detalhada de volantes, pedais, câmbios e flight sticks.
+- Rumble, force feedback, sensores e relatórios HID específicos.
+- Backend nativo para Linux/macOS.
+- Matriz física de compatibilidade e medições de latência.
 
-1. `NativeFirstControllerInput` attempts XInput first and delegates to the existing SDL3 backend only when no XInput controller is connected.
-2. XInput's native DLL is loaded only on Windows. Missing DLLs and non-Windows platforms safely use the SDL3 fallback.
-3. The frontend calls `poll()` immediately before the frame is executed, then applies actions to the machine. The hardware core remains independent of Windows and SDL types.
-4. The native Rust `ControllerFrame` API remains a deterministic, host-independent contract. It is not used to call host APIs and does not claim per-instruction polling.
+## Fronteira arquitetural
 
-## Validation gates
-
-- Unit-test each active-low bit, button chords, two-player isolation, logical aliases and physical port composition.
-- Test XInput button/axis mapping, XInput slot discovery throttling, disconnect/reconnect, SDL fallback, configuration updates and one-shot disconnect events using injected fake APIs.
-- Run Windows Rust formatting, Clippy and workspace tests, plus Python formatting/lint and Qt integration tests. Python hardware differential/robustness workflows are archived.
-- Physical input latency benchmarking is a separate hardware-dependent validation. It must specify controller, connection transport, frame rate, warmup, workload, repetitions, median and spread; API naming alone is not evidence of lower latency.
-- No dedicated input thread without profiling and an explicit ownership/synchronization model.
+- Qt/PySide6 é frontend: menus, perfis persistidos, captura de teclado, configuração e diagnóstico. Envia somente máscaras lógicas de teclado ao runtime Rust.
+- Rust é responsável pela captura física, normalização, hotplug, mapeamento físico, mesclagem com teclado, turbo e conversão dos snapshots elétricos de cada core.
+- Os cores recebem somente snapshots/ações lógicas; não conhecem SDL, Windows, Qt ou dispositivos físicos.
+- Não há callbacks Python por instrução, memória, pixel ou amostra de áudio.

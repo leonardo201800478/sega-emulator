@@ -1,11 +1,21 @@
 //! PyO3 adapter for the independent SMS core and native PSG audio path.
 
+use crate::audio::{MachineAudioSession, open_audio_session};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use sega_sms_core::{ControllerButtons, SmsMachine, SmsMachineConfig, VideoStandard};
 
-use crate::audio::{MachineAudioSession, open_audio_session};
+fn sms_controller_buttons_from_action_mask(actions: u8) -> ControllerButtons {
+    ControllerButtons {
+        up: actions & (1 << 0) != 0,
+        down: actions & (1 << 1) != 0,
+        left: actions & (1 << 2) != 0,
+        right: actions & (1 << 3) != 0,
+        button_1: actions & (1 << 4) != 0,
+        button_2: actions & (1 << 5) != 0,
+    }
+}
 
 /// Resolve the territory and video standard without constructing Python errors.
 ///
@@ -278,6 +288,17 @@ impl NativeSMSMachine {
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
     }
 
+    fn set_controller_actions_mask(&mut self, player: u8, actions: u8) -> PyResult<()> {
+        if !matches!(player, 1 | 2) {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "player deve ser 1 ou 2",
+            ));
+        }
+        self.machine
+            .set_controller(player, sms_controller_buttons_from_action_mask(actions))
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
     fn read_memory(&self, address: u16) -> u8 {
         self.machine.read_memory(address)
     }
@@ -398,5 +419,16 @@ mod tests {
                 .set_controller(1, true, false, false, false, true, false)
                 .is_ok()
         );
+    }
+
+    #[test]
+    fn action_mask_maps_to_sms_controller_lines() {
+        let buttons = sms_controller_buttons_from_action_mask(0b0010_0101);
+        assert!(buttons.up);
+        assert!(!buttons.down);
+        assert!(buttons.left);
+        assert!(!buttons.right);
+        assert!(!buttons.button_1);
+        assert!(buttons.button_2);
     }
 }

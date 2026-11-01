@@ -6,8 +6,11 @@
 use pyo3::prelude::*;
 
 mod audio;
+mod input;
 mod machine;
 mod sms_machine;
+
+use input::NativeInputManager;
 use machine::{NativeCpuSnapshot, NativePsgSnapshot, NativeSG1000Machine, NativeVdpSnapshot};
 use sms_machine::NativeSMSMachine;
 
@@ -15,6 +18,7 @@ use sms_machine::NativeSMSMachine;
 fn sega_z80_core(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<NativeSG1000Machine>()?;
     module.add_class::<NativeSMSMachine>()?;
+    module.add_class::<NativeInputManager>()?;
     module.add_class::<NativeCpuSnapshot>()?;
     module.add_class::<NativeVdpSnapshot>()?;
     module.add_class::<NativePsgSnapshot>()?;
