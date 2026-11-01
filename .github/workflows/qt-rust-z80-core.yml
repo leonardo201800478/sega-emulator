@@ -67,11 +67,6 @@ jobs:
       - name: Install official SDL3 runtime for native input smoke tests
         shell: pwsh
         run: ./scripts/install_sdl3_runtime.ps1
-      - name: Generate native dependency lockfiles for review
-        run: |
-          cargo generate-lockfile --manifest-path native/z80_core/Cargo.toml
-          cargo generate-lockfile --manifest-path native/audio_output/Cargo.toml
-          cargo generate-lockfile --manifest-path native/audio_runtime/Cargo.toml
       - name: Rust formatting
         run: cargo fmt --manifest-path native/z80_core/Cargo.toml --all -- --check
       - name: Rust formatting — native audio output
@@ -105,14 +100,14 @@ jobs:
           path: native/z80_core/dist/*.whl
           if-no-files-found: error
           retention-days: 14
-      - name: Archive generated native dependency lockfile
+      - name: Archive validated committed Cargo lockfiles
         uses: actions/upload-artifact@v4
         with:
           name: native-audio-cargo-lock
           path: |
             native/z80_core/Cargo.lock
             native/audio_output/Cargo.lock
-            native/audio_runtime/Cargo.lock
+            Cargo.lock
           if-no-files-found: error
       - name: Lint and format Python
         run: |
