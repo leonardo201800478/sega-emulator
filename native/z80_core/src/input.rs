@@ -440,6 +440,45 @@ impl NativeInputManager {
             .collect()
     }
 
+    /// Return session-local device identifiers with names; IDs distinguish
+    /// duplicate SDL entries but are intentionally not persisted across runs.
+    fn connected_devices(&self) -> Vec<(u64, String)> {
+        self.devices
+            .iter()
+            .map(|device| (device.id.0, device.name.clone()))
+            .collect()
+    }
+
+    fn selected_device(&self, player: u8) -> PyResult<Option<u64>> {
+        if !matches!(player, 1 | 2) {
+            return Err(PyValueError::new_err("player deve ser 1 ou 2"));
+        }
+        Ok(self.assignments[(player - 1) as usize].map(|id| id.0))
+    }
+
+    /// Assign one enumerated SDL device to a player, or None to unassign it.
+    /// A physical SDL entry cannot drive both player slots simultaneously.
+    fn select_device(&mut self, player: u8, device_id: Option<u64>) -> PyResult<()> {
+        if !matches!(player, 1 | 2) {
+            return Err(PyValueError::new_err("player deve ser 1 ou 2"));
+        }
+        let player_index = (player - 1) as usize;
+        let selected = device_id.map(DeviceId);
+        if let Some(id) = selected {
+            if !self.devices.iter().any(|device| device.id == id) {
+                return Err(PyValueError::new_err("dispositivo SDL não está conectado"));
+            }
+            let other_player = 1 - player_index;
+            if self.assignments[other_player] == Some(id) {
+                return Err(PyValueError::new_err(
+                    "dispositivo já está atribuído ao outro jogador",
+                ));
+            }
+        }
+        self.assignments[player_index] = selected;
+        Ok(())
+    }
+
     fn consume_disconnect_event(&mut self) -> bool {
         std::mem::take(&mut self.disconnect_event)
     }
