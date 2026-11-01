@@ -127,10 +127,7 @@ impl<T> MachineScheduler<T> {
     }
 
     /// Return a read-only snapshot of a registered clock domain.
-    pub fn clock_snapshot(
-        &self,
-        id: ClockDomainId,
-    ) -> Result<ClockDomainSnapshot, SchedulerError> {
+    pub fn clock_snapshot(&self, id: ClockDomainId) -> Result<ClockDomainSnapshot, SchedulerError> {
         self.clocks
             .get(&id)
             .map(ClockDomain::snapshot)
@@ -209,10 +206,7 @@ impl<T> MachineScheduler<T> {
         self.events.len()
     }
 
-    fn calculate_advances(
-        &self,
-        target: MachineTime,
-    ) -> Result<Vec<ClockAdvance>, SchedulerError> {
+    fn calculate_advances(&self, target: MachineTime) -> Result<Vec<ClockAdvance>, SchedulerError> {
         let mut advances = Vec::with_capacity(self.clocks.len());
         for (&id, domain) in &self.clocks {
             let elapsed = target
@@ -295,11 +289,7 @@ mod tests {
     fn idle_advance_cannot_skip_pending_events() {
         let mut scheduler = MachineScheduler::<u8>::new();
         scheduler
-            .schedule_at(
-                MachineTime::from_ticks(5),
-                EventPriority::new(0),
-                7,
-            )
+            .schedule_at(MachineTime::from_ticks(5), EventPriority::new(0), 7)
             .unwrap();
         assert_eq!(
             scheduler.advance_idle_to(MachineTime::from_ticks(5)),
@@ -312,17 +302,10 @@ mod tests {
     fn failed_clock_preflight_does_not_pop_event_or_advance_any_domain() {
         let mut scheduler = MachineScheduler::new();
         scheduler
-            .register_clock_domain(
-                ClockDomainId(0),
-                ClockRatio::new(u64::MAX, 1).unwrap(),
-            )
+            .register_clock_domain(ClockDomainId(0), ClockRatio::new(u64::MAX, 1).unwrap())
             .unwrap();
         scheduler
-            .schedule_at(
-                MachineTime::from_ticks(u128::MAX),
-                EventPriority::new(0),
-                9,
-            )
+            .schedule_at(MachineTime::from_ticks(u128::MAX), EventPriority::new(0), 9)
             .unwrap();
 
         assert!(matches!(
@@ -332,7 +315,10 @@ mod tests {
         assert_eq!(scheduler.pending_events(), 1);
         assert_eq!(scheduler.now(), MachineTime::ZERO);
         assert_eq!(
-            scheduler.clock_snapshot(ClockDomainId(0)).unwrap().total_cycles,
+            scheduler
+                .clock_snapshot(ClockDomainId(0))
+                .unwrap()
+                .total_cycles,
             0
         );
     }
@@ -349,20 +335,12 @@ mod tests {
             Err(SchedulerError::DuplicateClockDomain(id))
         );
         assert_eq!(
-            scheduler.schedule_at(
-                MachineTime::from_ticks(0),
-                EventPriority::new(0),
-                ()
-            ),
+            scheduler.schedule_at(MachineTime::from_ticks(0), EventPriority::new(0), ()),
             Ok(0)
         );
         scheduler.dispatch_next().unwrap();
         assert_eq!(
-            scheduler.schedule_at(
-                MachineTime::ZERO,
-                EventPriority::new(0),
-                ()
-            ),
+            scheduler.schedule_at(MachineTime::ZERO, EventPriority::new(0), ()),
             Err(SchedulerError::TimeWentBackwards)
         );
     }
@@ -372,18 +350,16 @@ mod tests {
         let ratio = ClockRatio::new(7, 3).unwrap();
         let mut whole = MachineScheduler::<()>::new();
         let mut chunked = MachineScheduler::<()>::new();
-        whole.register_clock_domain(ClockDomainId(1), ratio).unwrap();
-        chunked.register_clock_domain(ClockDomainId(1), ratio).unwrap();
-
         whole
-            .advance_idle_to(MachineTime::from_ticks(10))
+            .register_clock_domain(ClockDomainId(1), ratio)
             .unwrap();
         chunked
-            .advance_idle_to(MachineTime::from_ticks(3))
+            .register_clock_domain(ClockDomainId(1), ratio)
             .unwrap();
-        chunked
-            .advance_idle_to(MachineTime::from_ticks(7))
-            .unwrap();
+
+        whole.advance_idle_to(MachineTime::from_ticks(10)).unwrap();
+        chunked.advance_idle_to(MachineTime::from_ticks(3)).unwrap();
+        chunked.advance_idle_to(MachineTime::from_ticks(7)).unwrap();
         chunked
             .advance_idle_to(MachineTime::from_ticks(10))
             .unwrap();
