@@ -6,7 +6,7 @@
 use crate::SmsCoreError;
 use crate::bus::CpuBus;
 use crate::cartridge::CartridgeImage;
-use crate::config::SmsMachineConfig;
+use crate::config::{SmsMachineConfig, SpriteLimitMode};
 use crate::cpu::{CpuError, Z80};
 use crate::input::{ControllerButtons, SmsInputState};
 use crate::io::{SmsIo, SmsIoError};
@@ -342,6 +342,20 @@ impl SmsMachine {
 
     pub fn sega_scope(&self) -> SegaScopeState {
         self.sega_scope
+    }
+
+    /// Configure the per-scanline sprite policy without changing hardware status semantics.
+    ///
+    /// HardwareLimit draws at most eight Mode 4 sprites (four in legacy modes).
+    /// UnlockedCompatibility draws all selected sprites while preserving OVERFLOW status.
+    pub fn set_sprite_limit_mode(&mut self, mode: SpriteLimitMode) {
+        self.vdp.set_sprite_limit_mode(mode);
+        self.config.sprite_limit = mode;
+    }
+
+    /// Return the active hardware-faithful or compatibility sprite policy.
+    pub fn sprite_limit_mode(&self) -> SpriteLimitMode {
+        self.vdp.sprite_limit_mode()
     }
 
     pub fn config(&self) -> &SmsMachineConfig {
