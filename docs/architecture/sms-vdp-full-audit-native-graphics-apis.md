@@ -327,3 +327,41 @@ Esta primeira revisão registra o escopo e a arquitetura. **Nenhum backend Vulka
 - TEMPORAL_PASS: NOT CLAIMED.
 
 A implementação começa por F0/F1 e só então avança para renderer e backends, sem misturar correções semânticas do VDP com mudanças de apresentação.
+
+
+## 12. Auditoria específica de sprites e scroll — refinamento
+
+### Evidência de hardware
+
+A documentação SMS Power estabelece que o SAT possui até 64 entradas; o hardware seleciona no máximo oito sprites para uma linha. O Y efetivo começa em Y+1; em 192 linhas, $D0 encerra a tabela; o bit 3 de R0 desloca sprites oito pixels para a esquerda. O modo 8x16 força o índice do tile para par. O zoom possui diferenças entre SMS1, SMS2 e Game Gear.
+
+A referência MAME descreve parsing da SAT na linha anterior à linha exibida, buffer de oito índices e leitura em tempo real dos dados de sprite. O comportamento de zoom do SMS1 difere do SMS2/GG. Essas regras precisam ser codificadas por perfil/revisão quando a evidência permitir, e não achatadas em uma regra genérica.
+
+### Regra de coordenadas
+
+- R8/R9 controlam o plano de fundo; não devem ser subtraídos das coordenadas X/Y dos sprites.
+- O jogo atualiza as coordenadas SAT dos objetos de mundo durante o scroll da cena; o VDP deve apresentar exatamente a coordenada de tela resultante da SAT, sem aplicar o scroll de background uma segunda vez.
+- A avaliação N/N+1, o latch de oito índices e as leituras de atributos/padrões devem ser eventos do VDP, sincronizados ao scheduler.
+- Writes na SAT durante uma linha não podem ser tratados como se todos os atributos tivessem sido amostrados simultaneamente no fechamento da scanline.
+
+### Opção de limite de sprites
+
+O SMS Rust já possuía `SpriteLimitMode::{HardwareLimit, UnlockedCompatibility}`, mas o caminho de configuração não estava exposto pelo adaptador nativo SMS. Nesta revisão, a opção foi propagada por:
+- `SmsMachine::set_sprite_limit_mode()` e `sprite_limit_mode()`;
+- `NativeSMSMachine.set_sprite_limit_enabled(bool)` e getter;
+- `SMSMachine.set_sprite_limit_enabled(bool)` e getter.
+
+O padrão permanece **limite de hardware ativo**. Ao desativar a opção, o renderer pode desenhar mais de oito sprites em Mode 4 (e mais de quatro nos modos legados), mas deve preservar o status OVERFLOW do hardware. A opção é uma extensão de compatibilidade, não uma representação do VDP físico. A integração automática com a preferência persistida do diálogo Qt ainda precisa ser ligada e testada ponta a ponta.
+
+### Vetores adicionados nesta revisão
+
+- Sprite Mode 4 em X=100 com R8 variando entre 0, 1, 3, 7, 8, 15, 127 e 255: a coordenada do sprite deve permanecer fixa, demonstrando que scroll de background não desloca sprite.
+- Nove sprites ativos na mesma linha: modo limitado não desenha o nono; modo desbloqueado desenha o nono e ambos mantêm OVERFLOW.
+
+**Limite da evidência:** esses vetores são testes sintéticos de regressão do renderer atual. Eles não provam o pipeline N/N+1, a temporização de fetches, a correção de sprites em ROMs comerciais ou a precisão de cada revisão ASIC. Os testes precisam ser executados no SHA candidato e comparados com ARES/MAME e hardware quando disponível.
+
+### Referências de pesquisa
+
+- SMS Power, Sprites: https://www.smspower.org/Development/Sprites
+- SMS Power, VDP Registers: https://www.smspower.org/Development/VDPRegisters
+- MAME, 315_5124.cpp: https://github.com/mamedev/mame/blob/master/src/devices/video/315_5124.cpp
