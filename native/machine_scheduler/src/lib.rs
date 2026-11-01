@@ -219,6 +219,36 @@ impl<T> MachineScheduler<T> {
             .ok_or(SchedulerError::UnknownClockDomain(id))
     }
 
+    /// Export one clock domain with its complete registration and phase history.
+    pub fn export_clock_domain_state(
+        &self,
+        id: ClockDomainId,
+    ) -> Result<ClockDomainState, SchedulerError> {
+        self.clocks
+            .get(&id)
+            .map(|domain| ClockDomainState::from_domain(id, domain))
+            .ok_or(SchedulerError::UnknownClockDomain(id))
+    }
+
+    /// Restore one clock domain into this scheduler without partial mutation.
+    ///
+    /// The restored domain must be at the scheduler's current timestamp and
+    /// its ID must not already be registered.
+    pub fn restore_clock_domain_state(
+        &mut self,
+        state: ClockDomainState,
+    ) -> Result<(), SchedulerError> {
+        if self.clocks.contains_key(&state.id) {
+            return Err(SchedulerError::DuplicateClockDomain(state.id));
+        }
+        if state.current_time != self.now {
+            return Err(SchedulerError::TimeWentBackwards);
+        }
+        let (id, domain) = state.into_domain()?;
+        self.clocks.insert(id, domain);
+        Ok(())
+    }
+
     /// Schedule at an absolute timestamp using the compatibility zero phase.
     pub fn schedule_at(
         &mut self,
