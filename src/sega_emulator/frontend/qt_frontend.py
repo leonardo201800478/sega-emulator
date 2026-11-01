@@ -1423,6 +1423,7 @@ def run(initial_path: Path | None = None) -> None:
         key_buttons: dict[tuple[int, str], QPushButton] = {}
         stick_checks: dict[int, QCheckBox] = {}
         turbo_checks: dict[tuple[int, str], QCheckBox] = {}
+        device_combos: dict[int, QComboBox] = {}
         capture_target: tuple[int, str] | None = None
         capture_timer = QTimer(dialog)
         capture_timer.setInterval(30)
@@ -1500,6 +1501,15 @@ def run(initial_path: Path | None = None) -> None:
             page = QWidget()
             form = QFormLayout(page)
             profile = controller_input.config.players[player]
+            device_combo = QComboBox()
+            device_combo.addItem("Não usar dispositivo físico", None)
+            selected_device = controller_input.selected_device(player)
+            for device_id, device_name in controller_input.connected_devices():
+                device_combo.addItem(f"{device_name} [SDL #{device_id}]", device_id)
+            selected_index = device_combo.findData(selected_device)
+            device_combo.setCurrentIndex(max(0, selected_index))
+            device_combos[player] = device_combo
+            form.addRow("Dispositivo físico:", device_combo)
             for action in ACTIONS:
                 combo = QComboBox()
                 for button in SUPPORTED_BUTTONS:
@@ -1622,6 +1632,15 @@ def run(initial_path: Path | None = None) -> None:
         controller_input.config = ControllerInputConfig(
             players=profiles, deadzone=deadzone.value()
         )
+        try:
+            for player in (1, 2):
+                controller_input.select_device(
+                    player,
+                    device_combos[player].currentData(),
+                )
+        except (TypeError, ValueError) as exc:
+            QMessageBox.warning(dialog, "Dispositivo inválido", str(exc))
+            return
         key_map.clear()
         key_map.update(build_key_map())
         settings.setValue("controller_config", controller_input.config.to_json())
