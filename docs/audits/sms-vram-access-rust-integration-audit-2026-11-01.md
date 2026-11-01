@@ -303,3 +303,35 @@ de ciclos.
 **Próximo gate:** fechar as decisões de bordas, fase de evento, causalidade
 delta e snapshot/restore; depois definir transações temporais de barramento
 Z80. Nenhuma alteração no runtime SMS/VDP foi feita por este aditivo.
+
+
+## 11. Aditivo — testes de causalidade do scheduler publicados (2026-11-01)
+
+A PR #341 recebeu três testes direcionados em
+`native/machine_scheduler/src/lib.rs`, no HEAD
+`e77645a207145fd440e3d295a11ae78d2670d337`:
+
+- `same_timestamp_events_dispatch_by_priority_then_insertion_order`: confirma
+  prioridade e sequência estável para eventos pré-enfileirados no mesmo instante.
+- `causal_same_timestamp_events_allow_same_or_later_priority_only`: confirma
+  que o consumidor pode inserir evento no timestamp atual com prioridade igual
+  ou posterior e que prioridade anterior é rejeitada.
+- `failed_preflight_keeps_all_clock_domains_unchanged`: confirma que falha de
+  aritmética em um dos domínios não modifica snapshots dos domínios, timeline
+  nem fila pendente.
+
+O workflow CI `41354414900` terminou com `success` no SHA acima:
+`cargo fmt --all -- --check`, Clippy, testes do workspace, Ruff formatting,
+Ruff lint e regressões Python passaram conforme os jobs do workflow.
+
+Esses testes validam invariantes genéricos da fundação; não validam:
+- limite para cadeias de eventos delta;
+- prioridade independente de hardware phase;
+- fase inicial configurável no scheduler;
+- timestamps de bordas individuais;
+- serialização/restauração completa da fila e scheduler;
+- integração de transações temporais Z80, barramento ou dispositivos SMS.
+
+**Estado:** QUICK_PASS dos testes de invariantes do crate no SHA identificado,
+não TEMPORAL_PASS da máquina SMS. O scheduler continua sem integração
+cycle-accurate de hardware.
