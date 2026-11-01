@@ -304,6 +304,19 @@ def run(initial_path: Path | None = None) -> None:
         },
     )
 
+    def show_sms_rom_audit() -> None:
+        """Open batch audit with the same SMS region and BIOS policy as gameplay."""
+        from sega_emulator.frontend.qt.sms_rom_audit_dialog import SmsRomAuditDialog
+
+        def create_audit_machine(rom_data: bytes) -> SMSMachine:
+            resolution = resolve_sms_region_profile(
+                region_preference, rom_data, sms_rom_catalog
+            )
+            return create_sms_machine(rom_data, resolution.region)
+
+        dialog = SmsRomAuditDialog(create_audit_machine, parent=window)
+        dialog.exec()
+
     window = EmulatorMainWindow(
         on_open_rom=lambda: open_rom(),
         on_pause_resume=lambda: pause_resume(),
@@ -314,6 +327,7 @@ def run(initial_path: Path | None = None) -> None:
         on_open_logs=lambda: show_logs(),
         on_show_machine_state=lambda: show_machine_state(),
         on_video_scale=lambda scale: window.set_video_scale(scale),
+        on_audit_sms_roms=lambda: show_sms_rom_audit(),
         on_change_system=lambda: choose_system(),
         on_configure_drivers=lambda: configure_drivers(),
         on_configure_region=lambda region: configure_region(region),
