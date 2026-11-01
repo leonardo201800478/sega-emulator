@@ -20,7 +20,7 @@ A chave passa a ser:
 1. **Absolute timestamp:** instante absoluto monotônico em `MachineTime`. É a primeira dimensão e não pode regredir.
 2. **Hardware phase:** rótulo ordinal fornecido pelo perfil da máquina para distinguir estratos de observabilidade no mesmo timestamp. Não é duração, offset elétrico, número de T-state, fração de tick ou medição física. Valores menores são despachados primeiro, mas nenhum valor SMS é atribuído nesta ADR.
 3. **Platform priority:** política de despacho do runtime dentro do mesmo timestamp e hardware phase. Não representa precedência elétrica nem substitui uma fase de hardware.
-4. **Stable sequence:** contador global de inserção da fila, atribuído pelo próprio scheduler/queue. É o último desempate determinístico e não é configurável pelo dispositivo.
+4. **Stable sequence:** contador monotônico de inserção atribuído pela própria `EventQueue`. É o último desempate determinístico e não é configurável pelo dispositivo. Seu escopo é **por fila**; não é um contador global do processo nem de toda a máquina.
 
 A fila rejeita inserção causal no mesmo timestamp quando o par `(hardware_phase, platform_priority)` retrocede em relação ao último evento despachado. A sequência não pode ser fornecida pelo produtor.
 
@@ -52,7 +52,7 @@ Enquanto não houver evidência, a regra permanece UNKNOWN e não deve ser codif
 ## Validação exigida
 
 - Ordenação lexicográfica independente das quatro dimensões.
-- Estabilidade por sequência de inserção.
+- Estabilidade por sequência de inserção dentro da fila.
 - Rejeição causal de regressão de fase e de prioridade separadamente.
 - Compatibilidade das APIs antigas com fase zero.
 - Determinismo após replay/snapshot (ainda pendente de snapshot serializável completo).
