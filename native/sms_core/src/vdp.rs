@@ -840,9 +840,9 @@ fn render_scanline(
 #[cfg(test)]
 mod tests {
     use super::{
-        COLLISION, FRAME_SIZE, LINE_TSTATES, OVERFLOW, SMS_VDP_WIDTH, SmsVdp, StereoPresentation,
-        TMS_PALETTE, VBLANK, VRAM_SIZE, CRAM_SIZE, render_legacy_scanline, render_legacy_sprites,
-        render_scanline,
+        COLLISION, CRAM_SIZE, FRAME_SIZE, LINE_TSTATES, OVERFLOW, SMS_VDP_WIDTH, SmsVdp,
+        StereoPresentation, TMS_PALETTE, VBLANK, VRAM_SIZE, render_legacy_scanline,
+        render_legacy_sprites, render_scanline,
     };
     use crate::config::{SpriteLimitMode, VideoStandard};
     fn reg(v: &mut SmsVdp, i: u8, value: u8) {
@@ -1561,15 +1561,7 @@ mod tests {
             regs[8] = scroll;
             let mut status = 0;
             let mut frame = vec![0; FRAME_SIZE];
-            render_scanline(
-                &vram,
-                &cram,
-                &regs,
-                &mut status,
-                &mut frame,
-                1,
-                true,
-            );
+            render_scanline(&vram, &cram, &regs, &mut status, &mut frame, 1, true);
             assert_eq!(
                 &frame[pixel_offset..pixel_offset + 3],
                 &[85, 0, 0],
@@ -1623,10 +1615,7 @@ mod tests {
             false,
         );
         assert_ne!(unlocked_status & OVERFLOW, 0);
-        assert_eq!(
-            &unlocked_frame[ninth_pixel..ninth_pixel + 3],
-            &[85, 0, 0]
-        );
+        assert_eq!(&unlocked_frame[ninth_pixel..ninth_pixel + 3], &[85, 0, 0]);
     }
 
     #[test]
