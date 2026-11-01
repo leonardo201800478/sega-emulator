@@ -86,8 +86,8 @@ impl Default for SmsMachineConfig {
 #[cfg(test)]
 mod tests {
     use super::{
-        FmHardware, SmsConsoleModel, SmsMachineConfig, SmsVdpRevision, SpriteLimitMode,
-        Territory, VideoStandard,
+        FmHardware, SmsConsoleModel, SmsMachineConfig, SmsVdpRevision, SpriteLimitMode, Territory,
+        VideoStandard,
     };
 
     #[test]
