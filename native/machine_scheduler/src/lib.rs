@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 use sega_temporal_core::{
-    ClockDomain, ClockDomainSnapshot, ClockError, ClockRatio, EventPriority, EventQueue,
+    ClockDomain, ClockDomainSnapshot, ClockError, ClockRatio, EventPriority, EventQueue, HardwarePhase, PlatformPriority,
     EventQueueError, MachineTime, ScheduledEvent,
 };
 
@@ -356,7 +356,7 @@ impl<T> MachineScheduler<T> {
 #[cfg(test)]
 mod tests {
     use super::{ClockDomainId, ClockError, DeltaEventPolicy, MachineScheduler, SchedulerError};
-    use sega_temporal_core::{ClockRatio, EventPriority, MachineTime};
+    use sega_temporal_core::{ClockRatio, EventPriority, HardwarePhase, PlatformPriority, MachineTime};
 
     #[test]
     fn explicit_initial_phase_is_preserved_and_advances_rationally() {
@@ -598,7 +598,7 @@ mod tests {
         assert_eq!(
             scheduler.schedule_at(timestamp, EventPriority::new(2), "retroactive"),
             Err(SchedulerError::EventQueue(
-                EventQueueError::PriorityRegressionAtCurrentTime
+                EventQueueError::OrderingRegressionAtCurrentTime
             ))
         );
         scheduler
