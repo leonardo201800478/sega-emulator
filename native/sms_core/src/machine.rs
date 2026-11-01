@@ -625,6 +625,23 @@ mod tests {
     }
 
     #[test]
+    fn sprite_limit_policy_updates_vdp_and_machine_configuration() {
+        let mut machine = SmsMachine::new(vec![0x00]).unwrap();
+        assert_eq!(machine.sprite_limit_mode(), SpriteLimitMode::HardwareLimit);
+        machine.set_sprite_limit_mode(SpriteLimitMode::UnlockedCompatibility);
+        assert_eq!(
+            machine.sprite_limit_mode(),
+            SpriteLimitMode::UnlockedCompatibility
+        );
+        assert_eq!(
+            machine.config().sprite_limit,
+            SpriteLimitMode::UnlockedCompatibility
+        );
+        machine.set_sprite_limit_mode(SpriteLimitMode::HardwareLimit);
+        assert_eq!(machine.sprite_limit_mode(), SpriteLimitMode::HardwareLimit);
+    }
+
+    #[test]
     fn sega_scope_latch_observes_cpu_memory_writes_without_corrupting_ram_mirror() {
         // LD A,$01; LD ($FFF8),A
         let mut machine = SmsMachine::new(vec![0x3E, 0x01, 0x32, 0xF8, 0xFF]).unwrap();
