@@ -78,7 +78,6 @@ def test_discovery_rejects_zip_member_count_over_limit(tmp_path, monkeypatch):
         audit.discover_sms_rom_targets(tmp_path)
 
 
-
 def test_discovery_rejects_oversized_zip_before_metadata_parse(tmp_path, monkeypatch):
     path = tmp_path / "large-container.zip"
     with zipfile.ZipFile(path, "w") as archive:
@@ -87,7 +86,6 @@ def test_discovery_rejects_oversized_zip_before_metadata_parse(tmp_path, monkeyp
 
     with pytest.raises(audit.SmsRomAuditLimitError, match="ZIP excede"):
         audit.discover_sms_rom_targets(tmp_path)
-
 
 
 def test_visual_activity_is_not_claimed_as_confirmed_boot(tmp_path):
