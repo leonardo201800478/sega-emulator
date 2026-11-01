@@ -8,6 +8,7 @@ concurrency:
 on:
   pull_request:
     paths:
+      - ".github/workflows/qt-rust-z80-core.yml"
       - "Cargo.toml"
       - "Cargo.lock"
       - "native/audio_runtime/**"
