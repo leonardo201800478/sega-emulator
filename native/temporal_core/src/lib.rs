@@ -11,5 +11,6 @@ pub use clock::{
     ClockDomain, ClockDomainSnapshot, ClockEdgeTime, ClockError, ClockRatio, MachineTime,
 };
 pub use event::{
-    EventPriority, EventQueue, EventQueueError, HardwarePhase, PlatformPriority, ScheduledEvent,
+    EventPriority, EventQueue, EventQueueError, EventQueueState, EventQueueWatermark,
+    HardwarePhase, PlatformPriority, ScheduledEvent,
 };
