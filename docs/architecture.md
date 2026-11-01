@@ -138,6 +138,10 @@ O runtime de áudio é uma infraestrutura Rust compartilhada, independente das A
 A arquitetura-alvo para sincronizar CPU, barramento, VDP, PSG, entrada e saídas de áudio/vídeo em uma única timeline Rust está especificada em [Master Scheduler Rust](architecture/native-master-scheduler.md), com etapas e gates em [Plano de migração do Master Scheduler](architecture/migrations/native-master-scheduler.md). A infraestrutura temporal headless pode evoluir independentemente dos ports de vídeo/input; esses ports continuam gates para a integração completa das fronteiras de host. A documentação não declara implementação nem validação temporal concluídas.
 
 
+## Coordenação de tarefas — auditoria VDP SMS
+
+O plano operacional, a divisão das três frentes de trabalho, as regras de bloqueio/redistribuição, o backlog priorizado e a matriz de validação de sprites/scroll estão em [Coordenação de trabalho e plano de tarefas do VDP SMS](architecture/sms-vdp-work-coordination-and-task-plan.md). O documento distingue papéis de trabalho de agentes autônomos efetivamente disponíveis e exige evidência por SHA para cada estado de validação.
+
 ## Auditoria integral do VDP SMS e backends gráficos nativos
 
 A especificação de auditoria funcional/visual/temporal do VDP SMS e da migração do pipeline gráfico Rust para Vulkan, Direct3D 11 e Direct3D 12 está em [Auditoria integral do VDP SMS e backends gráficos nativos](architecture/sms-vdp-full-audit-native-graphics-apis.md). O contrato separa estritamente o tempo determinístico do hardware (scheduler Rust) da apresentação física da GPU. A proposta não introduz Python/PyO3 no caminho gráfico e não declara os três backends implementados.
