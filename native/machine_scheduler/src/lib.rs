@@ -78,10 +78,7 @@ pub enum SchedulerError {
     TimeWentBackwards,
     EventPendingBeforeTarget,
     ZeroDeltaEventLimit,
-    DeltaEventLimitExceeded {
-        timestamp: MachineTime,
-        limit: u64,
-    },
+    DeltaEventLimitExceeded { timestamp: MachineTime, limit: u64 },
 }
 
 impl fmt::Display for SchedulerError {
@@ -255,12 +252,12 @@ impl<T> MachineScheduler<T> {
                     limit: self.delta_event_policy.max_events_per_timestamp,
                 });
             }
-            self.dispatched_at_timestamp
-                .checked_add(1)
-                .ok_or(SchedulerError::DeltaEventLimitExceeded {
+            self.dispatched_at_timestamp.checked_add(1).ok_or(
+                SchedulerError::DeltaEventLimitExceeded {
                     timestamp,
                     limit: self.delta_event_policy.max_events_per_timestamp,
-                })?
+                },
+            )?
         } else {
             1
         };
@@ -644,11 +641,20 @@ mod tests {
                 .unwrap();
         }
 
-        assert_eq!(scheduler.dispatch_next().unwrap().unwrap().event.payload, "first");
-        assert_eq!(scheduler.dispatch_next().unwrap().unwrap().event.payload, "second");
+        assert_eq!(
+            scheduler.dispatch_next().unwrap().unwrap().event.payload,
+            "first"
+        );
+        assert_eq!(
+            scheduler.dispatch_next().unwrap().unwrap().event.payload,
+            "second"
+        );
         assert_eq!(
             scheduler.dispatch_next(),
-            Err(SchedulerError::DeltaEventLimitExceeded { timestamp, limit: 2 })
+            Err(SchedulerError::DeltaEventLimitExceeded {
+                timestamp,
+                limit: 2
+            })
         );
         assert_eq!(scheduler.pending_events(), 1);
         assert_eq!(scheduler.next_event_time(), Some(timestamp));
@@ -676,7 +682,10 @@ mod tests {
 
         assert_eq!(
             scheduler.dispatch_next(),
-            Err(SchedulerError::DeltaEventLimitExceeded { timestamp, limit: 3 })
+            Err(SchedulerError::DeltaEventLimitExceeded {
+                timestamp,
+                limit: 3
+            })
         );
         assert_eq!(scheduler.pending_events(), 0);
     }
@@ -687,9 +696,15 @@ mod tests {
         let mut scheduler = MachineScheduler::with_delta_event_policy(policy);
         let first_time = MachineTime::from_ticks(4);
         let second_time = MachineTime::from_ticks(5);
-        scheduler.schedule_at(first_time, EventPriority::new(0), 1).unwrap();
-        scheduler.schedule_at(first_time, EventPriority::new(0), 2).unwrap();
-        scheduler.schedule_at(second_time, EventPriority::new(0), 3).unwrap();
+        scheduler
+            .schedule_at(first_time, EventPriority::new(0), 1)
+            .unwrap();
+        scheduler
+            .schedule_at(first_time, EventPriority::new(0), 2)
+            .unwrap();
+        scheduler
+            .schedule_at(second_time, EventPriority::new(0), 3)
+            .unwrap();
 
         assert_eq!(scheduler.dispatch_next().unwrap().unwrap().event.payload, 1);
         assert_eq!(scheduler.dispatch_next().unwrap().unwrap().event.payload, 2);
@@ -702,16 +717,29 @@ mod tests {
         let mut scheduler =
             MachineScheduler::with_delta_event_policy(DeltaEventPolicy::new(1).unwrap());
         let timestamp = MachineTime::from_ticks(6);
-        scheduler.schedule_at(timestamp, EventPriority::new(0), "one").unwrap();
-        scheduler.schedule_at(timestamp, EventPriority::new(0), "two").unwrap();
+        scheduler
+            .schedule_at(timestamp, EventPriority::new(0), "one")
+            .unwrap();
+        scheduler
+            .schedule_at(timestamp, EventPriority::new(0), "two")
+            .unwrap();
 
-        assert_eq!(scheduler.dispatch_next().unwrap().unwrap().event.payload, "one");
+        assert_eq!(
+            scheduler.dispatch_next().unwrap().unwrap().event.payload,
+            "one"
+        );
         assert_eq!(
             scheduler.dispatch_next(),
-            Err(SchedulerError::DeltaEventLimitExceeded { timestamp, limit: 1 })
+            Err(SchedulerError::DeltaEventLimitExceeded {
+                timestamp,
+                limit: 1
+            })
         );
         scheduler.set_delta_event_policy(DeltaEventPolicy::new(2).unwrap());
-        assert_eq!(scheduler.dispatch_next().unwrap().unwrap().event.payload, "two");
+        assert_eq!(
+            scheduler.dispatch_next().unwrap().unwrap().event.payload,
+            "two"
+        );
     }
 
     #[test]
