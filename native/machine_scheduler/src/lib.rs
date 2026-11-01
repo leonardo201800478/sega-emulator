@@ -829,6 +829,82 @@ mod tests {
     }
 
     #[test]
+
+    #[test]
+    fn clock_domain_state_export_and_restore_preserve_history() {
+        let mut source = MachineScheduler::<()>::new();
+        let id = ClockDomainId(12);
+        source
+            .register_clock_domain_with_phase(id, ClockRatio::new(5, 3).unwrap(), 2)
+            .unwrap();
+        source
+            .advance_idle_to(MachineTime::from_ticks(7))
+            .unwrap();
+
+        let state = source.export_clock_domain_state(id).unwrap();
+        assert_eq!(state.current_time, MachineTime::from_ticks(7));
+        assert_eq!(state.registration_start, MachineTime::ZERO);
+        assert_eq!(state.initial_phase, 2);
+
+        let mut target = MachineScheduler::<()>::new();
+        target
+            .advance_idle_to(MachineTime::from_ticks(7))
+            .unwrap();
+        target.restore_clock_domain_state(state).unwrap();
+        assert_eq!(
+            target.clock_snapshot(id).unwrap(),
+            source.clock_snapshot(id).unwrap()
+        );
+    }
+
+    #[test]
+    fn invalid_clock_domain_state_does_not_mutate_scheduler() {
+        let mut scheduler = MachineScheduler::<()>::new();
+        let before_now = scheduler.now();
+        let invalid = ClockDomainState {
+            id: ClockDomainId(4),
+            ratio_numerator: 5,
+            ratio_denominator: 3,
+            current_time: MachineTime::from_ticks(4),
+            total_cycles: 1,
+            phase: 0,
+            registration_start: MachineTime::ZERO,
+            initial_phase: 0,
+        };
+        assert_eq!(
+            scheduler.restore_clock_domain_state(invalid),
+            Err(SchedulerError::TimeWentBackwards)
+        );
+        assert_eq!(scheduler.now(), before_now);
+        assert_eq!(
+            scheduler.clock_snapshot(ClockDomainId(4)),
+            Err(SchedulerError::UnknownClockDomain(ClockDomainId(4)))
+        );
+    }
+
+    #[test]
+    fn invalid_arithmetic_clock_state_is_rejected_without_registration() {
+        let mut scheduler = MachineScheduler::<()>::new();
+        let invalid = ClockDomainState {
+            id: ClockDomainId(5),
+            ratio_numerator: 5,
+            ratio_denominator: 3,
+            current_time: MachineTime::ZERO,
+            total_cycles: 1,
+            phase: 0,
+            registration_start: MachineTime::ZERO,
+            initial_phase: 0,
+        };
+        assert!(matches!(
+            scheduler.restore_clock_domain_state(invalid),
+            Err(SchedulerError::Clock(ClockError::InvalidClockHistory))
+        ));
+        assert_eq!(
+            scheduler.clock_snapshot(ClockDomainId(5)),
+            Err(SchedulerError::UnknownClockDomain(ClockDomainId(5)))
+        );
+    }
+
     fn failed_preflight_keeps_all_clock_domains_unchanged() {
         let mut scheduler = MachineScheduler::new();
         scheduler
