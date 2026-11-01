@@ -33,6 +33,41 @@ pub struct MachineDispatch<T> {
     pub clock_advances: Vec<ClockAdvance>,
 }
 
+/// Deterministic upper bound for event dispatches at one machine timestamp.
+///
+/// This is a scheduler safety policy, not a claim about hardware event
+/// precedence or a physical limit. A machine profile may choose a different
+/// non-zero budget based on its event model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeltaEventPolicy {
+    max_events_per_timestamp: u64,
+}
+
+impl DeltaEventPolicy {
+    /// Construct a policy with a non-zero per-timestamp dispatch budget.
+    pub const fn new(max_events_per_timestamp: u64) -> Result<Self, SchedulerError> {
+        if max_events_per_timestamp == 0 {
+            return Err(SchedulerError::ZeroDeltaEventLimit);
+        }
+        Ok(Self {
+            max_events_per_timestamp,
+        })
+    }
+
+    /// Return the maximum number of events dispatched at one timestamp.
+    pub const fn max_events_per_timestamp(self) -> u64 {
+        self.max_events_per_timestamp
+    }
+}
+
+impl Default for DeltaEventPolicy {
+    fn default() -> Self {
+        Self {
+            max_events_per_timestamp: 1024,
+        }
+    }
+}
+
 /// Errors raised while maintaining a machine timeline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SchedulerError {
@@ -42,6 +77,11 @@ pub enum SchedulerError {
     EventQueue(EventQueueError),
     TimeWentBackwards,
     EventPendingBeforeTarget,
+    ZeroDeltaEventLimit,
+    DeltaEventLimitExceeded {
+        timestamp: MachineTime,
+        limit: u64,
+    },
 }
 
 impl fmt::Display for SchedulerError {
@@ -59,6 +99,12 @@ impl fmt::Display for SchedulerError {
             Self::EventPendingBeforeTarget => {
                 write!(f, "cannot advance idle time past an undispatched event")
             }
+            Self::ZeroDeltaEventLimit => write!(f, "delta-event limit must be positive"),
+            Self::DeltaEventLimitExceeded { timestamp, limit } => write!(
+                f,
+                "delta-event dispatch limit {limit} exceeded at machine tick {}",
+                timestamp.ticks()
+            ),
         }
     }
 }
@@ -87,6 +133,9 @@ pub struct MachineScheduler<T> {
     now: MachineTime,
     events: EventQueue<T>,
     clocks: BTreeMap<ClockDomainId, ClockDomain>,
+    delta_event_policy: DeltaEventPolicy,
+    last_dispatch_timestamp: Option<MachineTime>,
+    dispatched_at_timestamp: u64,
 }
 
 impl<T> Default for MachineScheduler<T> {
@@ -98,11 +147,32 @@ impl<T> Default for MachineScheduler<T> {
 impl<T> MachineScheduler<T> {
     /// Construct an empty scheduler at machine time zero.
     pub fn new() -> Self {
+        Self::with_delta_event_policy(DeltaEventPolicy::default())
+    }
+
+    /// Construct an empty scheduler with an explicit same-timestamp budget.
+    pub fn with_delta_event_policy(delta_event_policy: DeltaEventPolicy) -> Self {
         Self {
             now: MachineTime::ZERO,
             events: EventQueue::new(),
             clocks: BTreeMap::new(),
+            delta_event_policy,
+            last_dispatch_timestamp: None,
+            dispatched_at_timestamp: 0,
         }
+    }
+
+    /// Return the active same-timestamp dispatch policy.
+    pub const fn delta_event_policy(&self) -> DeltaEventPolicy {
+        self.delta_event_policy
+    }
+
+    /// Replace the same-timestamp dispatch policy.
+    ///
+    /// This does not discard pending events or reset dispatch history. Raising
+    /// the limit can therefore resume a queue that was previously blocked.
+    pub fn set_delta_event_policy(&mut self, policy: DeltaEventPolicy) {
+        self.delta_event_policy = policy;
     }
 
     /// Return the current machine timestamp.
@@ -178,12 +248,31 @@ impl<T> MachineScheduler<T> {
             return Ok(None);
         };
 
+        let next_dispatch_count = if self.last_dispatch_timestamp == Some(timestamp) {
+            if self.dispatched_at_timestamp >= self.delta_event_policy.max_events_per_timestamp {
+                return Err(SchedulerError::DeltaEventLimitExceeded {
+                    timestamp,
+                    limit: self.delta_event_policy.max_events_per_timestamp,
+                });
+            }
+            self.dispatched_at_timestamp
+                .checked_add(1)
+                .ok_or(SchedulerError::DeltaEventLimitExceeded {
+                    timestamp,
+                    limit: self.delta_event_policy.max_events_per_timestamp,
+                })?
+        } else {
+            1
+        };
+
         let advances = self.calculate_advances(timestamp)?;
         self.apply_advances(timestamp, &advances)?;
         let event = self
             .events
             .pop_next()
             .expect("next_timestamp guarantees a queued event");
+        self.last_dispatch_timestamp = Some(timestamp);
+        self.dispatched_at_timestamp = next_dispatch_count;
         Ok(Some(MachineDispatch {
             event,
             clock_advances: advances,
@@ -269,7 +358,7 @@ impl<T> MachineScheduler<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ClockDomainId, ClockError, MachineScheduler, SchedulerError};
+    use super::{ClockDomainId, ClockError, DeltaEventPolicy, MachineScheduler, SchedulerError};
     use sega_temporal_core::{ClockRatio, EventPriority, MachineTime};
 
     #[test]
@@ -530,6 +619,99 @@ mod tests {
             scheduler.dispatch_next().unwrap().unwrap().event.payload,
             "later"
         );
+    }
+
+    #[test]
+    fn delta_event_policy_rejects_zero_budget() {
+        assert_eq!(
+            DeltaEventPolicy::new(0),
+            Err(SchedulerError::ZeroDeltaEventLimit)
+        );
+        assert_eq!(
+            DeltaEventPolicy::new(3).unwrap().max_events_per_timestamp(),
+            3
+        );
+    }
+
+    #[test]
+    fn same_timestamp_budget_blocks_without_dropping_pending_events() {
+        let policy = DeltaEventPolicy::new(2).unwrap();
+        let mut scheduler = MachineScheduler::with_delta_event_policy(policy);
+        let timestamp = MachineTime::from_ticks(5);
+        for payload in ["first", "second", "third"] {
+            scheduler
+                .schedule_at(timestamp, EventPriority::new(0), payload)
+                .unwrap();
+        }
+
+        assert_eq!(scheduler.dispatch_next().unwrap().unwrap().event.payload, "first");
+        assert_eq!(scheduler.dispatch_next().unwrap().unwrap().event.payload, "second");
+        assert_eq!(
+            scheduler.dispatch_next(),
+            Err(SchedulerError::DeltaEventLimitExceeded { timestamp, limit: 2 })
+        );
+        assert_eq!(scheduler.pending_events(), 1);
+        assert_eq!(scheduler.next_event_time(), Some(timestamp));
+        assert_eq!(scheduler.now(), timestamp);
+    }
+
+    #[test]
+    fn delta_event_budget_bounds_causal_same_timestamp_chains() {
+        let timestamp = MachineTime::from_ticks(9);
+        let policy = DeltaEventPolicy::new(3).unwrap();
+        let mut scheduler = MachineScheduler::with_delta_event_policy(policy);
+        scheduler
+            .schedule_at(timestamp, EventPriority::new(0), 0_u8)
+            .unwrap();
+
+        for expected in 0..3 {
+            let dispatch = scheduler.dispatch_next().unwrap().unwrap();
+            assert_eq!(dispatch.event.payload, expected);
+            if expected < 2 {
+                scheduler
+                    .schedule_at(timestamp, EventPriority::new(0), expected + 1)
+                    .unwrap();
+            }
+        }
+
+        assert_eq!(
+            scheduler.dispatch_next(),
+            Err(SchedulerError::DeltaEventLimitExceeded { timestamp, limit: 3 })
+        );
+        assert_eq!(scheduler.pending_events(), 0);
+    }
+
+    #[test]
+    fn delta_event_budget_resets_at_a_later_timestamp() {
+        let policy = DeltaEventPolicy::new(2).unwrap();
+        let mut scheduler = MachineScheduler::with_delta_event_policy(policy);
+        let first_time = MachineTime::from_ticks(4);
+        let second_time = MachineTime::from_ticks(5);
+        scheduler.schedule_at(first_time, EventPriority::new(0), 1).unwrap();
+        scheduler.schedule_at(first_time, EventPriority::new(0), 2).unwrap();
+        scheduler.schedule_at(second_time, EventPriority::new(0), 3).unwrap();
+
+        assert_eq!(scheduler.dispatch_next().unwrap().unwrap().event.payload, 1);
+        assert_eq!(scheduler.dispatch_next().unwrap().unwrap().event.payload, 2);
+        assert_eq!(scheduler.dispatch_next().unwrap().unwrap().event.payload, 3);
+        assert_eq!(scheduler.pending_events(), 0);
+    }
+
+    #[test]
+    fn increasing_delta_budget_resumes_blocked_queue_without_resetting_it() {
+        let mut scheduler =
+            MachineScheduler::with_delta_event_policy(DeltaEventPolicy::new(1).unwrap());
+        let timestamp = MachineTime::from_ticks(6);
+        scheduler.schedule_at(timestamp, EventPriority::new(0), "one").unwrap();
+        scheduler.schedule_at(timestamp, EventPriority::new(0), "two").unwrap();
+
+        assert_eq!(scheduler.dispatch_next().unwrap().unwrap().event.payload, "one");
+        assert_eq!(
+            scheduler.dispatch_next(),
+            Err(SchedulerError::DeltaEventLimitExceeded { timestamp, limit: 1 })
+        );
+        scheduler.set_delta_event_policy(DeltaEventPolicy::new(2).unwrap());
+        assert_eq!(scheduler.dispatch_next().unwrap().unwrap().event.payload, "two");
     }
 
     #[test]
