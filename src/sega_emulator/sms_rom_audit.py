@@ -4,6 +4,7 @@ A ferramenta não implementa hardware em Python, não extrai ZIPs ao disco e
 nunca inclui bytes de ROM/BIOS no relatório. Os limites de descoberta e leitura
 são deliberadamente explícitos para evitar consumo de memória não limitado.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -22,6 +23,7 @@ SMS_ROM_SUFFIXES = frozenset({".sms", ".rom", ".bin"})
 MAX_SMS_ROM_SIZE = 0x100000
 MAX_DISCOVERED_FILES = 10_000
 MAX_ZIP_MEMBERS = 20_000
+MAX_ZIP_ARCHIVE_SIZE = 64 * 1024 * 1024
 MAX_DISCOVERED_TARGETS = 20_000
 READ_CHUNK_SIZE = 64 * 1024
 
@@ -101,16 +103,22 @@ def _bounded_file_list(directory: Path, recursive: bool) -> list[Path]:
         directory.rglob("*") if recursive else directory.iterdir()
     )
     files = list(
-        islice(
-            (path for path in iterator if path.is_file()),
-            MAX_DISCOVERED_FILES + 1,
-        )
+        islice((path for path in iterator if path.is_file()), MAX_DISCOVERED_FILES + 1)
     )
     if len(files) > MAX_DISCOVERED_FILES:
         raise SmsRomAuditLimitError(
             f"Varredura excedeu o limite de {MAX_DISCOVERED_FILES} arquivos."
         )
     return sorted(files, key=lambda path: (str(path).casefold(), str(path)))
+
+
+def _validate_zip_archive_size(path: Path) -> None:
+    """Reject oversized ZIP containers before parsing central-directory metadata."""
+    size = path.stat().st_size
+    if size > MAX_ZIP_ARCHIVE_SIZE:
+        raise SmsRomAuditLimitError(
+            f"ZIP excede o limite de {MAX_ZIP_ARCHIVE_SIZE} bytes: {path.name}"
+        )
 
 
 def discover_sms_rom_targets(
@@ -135,18 +143,18 @@ def discover_sms_rom_targets(
             except OSError as exc:
                 targets.append(
                     SmsRomAuditTarget(
-                        path,
-                        path.name,
-                        read_error=f"{type(exc).__name__}: {exc}",
+                        path, path.name, read_error=f"{type(exc).__name__}: {exc}"
                     )
                 )
         elif suffix == ".zip":
             try:
+                _validate_zip_archive_size(path)
                 with zipfile.ZipFile(path) as archive:
                     infos = archive.infolist()
                     if len(infos) > MAX_ZIP_MEMBERS:
                         raise SmsRomAuditLimitError(
-                            f"ZIP excede o limite de {MAX_ZIP_MEMBERS} membros: {path.name}"
+                            f"ZIP excede o limite de {MAX_ZIP_MEMBERS} membros: "
+                            f"{path.name}"
                         )
                     candidates = [
                         (index, info)
@@ -212,6 +220,7 @@ def read_sms_rom_target(target: SmsRomAuditTarget) -> bytes:
     if target.declared_size is not None and target.declared_size > MAX_SMS_ROM_SIZE:
         raise ValueError(f"ROM excede o limite atual de {MAX_SMS_ROM_SIZE} bytes.")
     if target.member_index is not None:
+        _validate_zip_archive_size(target.source_path)
         with zipfile.ZipFile(target.source_path) as archive:
             infos = archive.infolist()
             if len(infos) > MAX_ZIP_MEMBERS or target.member_index >= len(infos):
@@ -356,7 +365,7 @@ def run_sms_rom_audit(
             ValueError,
             zipfile.BadZipFile,
             RuntimeError,
-            zlib.error
+            zlib.error,
         ) as exc:
             error_type, details = type(exc).__name__, str(exc)
             status = (
@@ -369,8 +378,10 @@ def run_sms_rom_audit(
         except Exception as exc:
             error_type, details = type(exc).__name__, str(exc)
             status = (
-                "READ_OR_EXTRACTION_FAILED" if not data_loaded
-                else "MACHINE_CREATION_FAILED" if machine is None
+                "READ_OR_EXTRACTION_FAILED"
+                if not data_loaded
+                else "MACHINE_CREATION_FAILED"
+                if machine is None
                 else "EXECUTION_FAILED"
             )
 

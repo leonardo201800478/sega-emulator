@@ -1,4 +1,5 @@
 """Security and semantic tests for the SMS ROM audit service."""
+
 from __future__ import annotations
 
 import json
@@ -46,16 +47,12 @@ def test_file_read_is_bounded_even_when_file_grows_after_discovery(
         audit.read_sms_rom_target(target)
 
 
-def test_zip_member_read_is_bounded_when_archive_changes_after_discovery(
-    tmp_path, monkeypatch
-):
-    path = tmp_path / "replaced.zip"
-    with zipfile.ZipFile(path, "w") as archive:
-        archive.writestr("game.sms", b"x" * 32)
-    target = audit.discover_sms_rom_targets(tmp_path)[0]
-    monkeypatch.setattr(audit, "MAX_SMS_ROM_SIZE", 64)
+def test_zip_member_read_is_bounded(tmp_path, monkeypatch):
+    path = tmp_path / "oversized.zip"
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr("game.sms", b"x" * 65)
+    target = audit.discover_sms_rom_targets(tmp_path)[0]
+    monkeypatch.setattr(audit, "MAX_SMS_ROM_SIZE", 64)
 
     with pytest.raises(ValueError, match="excede"):
         audit.read_sms_rom_target(target)
@@ -78,6 +75,16 @@ def test_discovery_rejects_zip_member_count_over_limit(tmp_path, monkeypatch):
     monkeypatch.setattr(audit, "MAX_ZIP_MEMBERS", 1)
 
     with pytest.raises(audit.SmsRomAuditLimitError, match="membros"):
+        audit.discover_sms_rom_targets(tmp_path)
+
+
+def test_discovery_rejects_oversized_zip_before_metadata_parse(tmp_path, monkeypatch):
+    path = tmp_path / "large-container.zip"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("game.sms", b"rom")
+    monkeypatch.setattr(audit, "MAX_ZIP_ARCHIVE_SIZE", 1)
+
+    with pytest.raises(audit.SmsRomAuditLimitError, match="ZIP excede"):
         audit.discover_sms_rom_targets(tmp_path)
 
 
