@@ -11,15 +11,11 @@ from sega_emulator import sms_rom_audit as audit
 
 class FakeMachine:
     def __init__(self):
-        self.vdp = type(
-            "Vdp",
-            (),
-            {
-                "frame_number": 0,
-                "visible_height": 192,
-                "framebuffer": bytes([0, 0, 0, 255, 255, 255]) * (256 * 192 // 2),
-            },
-        )()
+        self.vdp = type("Vdp", (), {
+            "frame_number": 0,
+            "visible_height": 192,
+            "framebuffer": bytes([0, 0, 0, 255, 255, 255]) * (256 * 192 // 2),
+        })()
         self.total_instructions = 0
         self.total_tstates = 0
         self.region = "usa"
@@ -33,9 +29,7 @@ class FakeMachine:
         self.total_tstates += 40
 
 
-def test_file_read_is_bounded_even_when_file_grows_after_discovery(
-    tmp_path, monkeypatch
-):
+def test_file_read_is_bounded_even_when_file_grows_after_discovery(tmp_path, monkeypatch):
     path = tmp_path / "growing.sms"
     path.write_bytes(b"x" * 32)
     target = audit.SmsRomAuditTarget(path, path.name, declared_size=32)
@@ -46,16 +40,12 @@ def test_file_read_is_bounded_even_when_file_grows_after_discovery(
         audit.read_sms_rom_target(target)
 
 
-def test_zip_member_read_is_bounded_when_archive_changes_after_discovery(
-    tmp_path, monkeypatch
-):
-    path = tmp_path / "replaced.zip"
-    with zipfile.ZipFile(path, "w") as archive:
-        archive.writestr("game.sms", b"x" * 32)
-    target = audit.discover_sms_rom_targets(tmp_path)[0]
-    monkeypatch.setattr(audit, "MAX_SMS_ROM_SIZE", 64)
+def test_zip_member_read_is_bounded(tmp_path, monkeypatch):
+    path = tmp_path / "oversized.zip"
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr("game.sms", b"x" * 65)
+    target = audit.discover_sms_rom_targets(tmp_path)[0]
+    monkeypatch.setattr(audit, "MAX_SMS_ROM_SIZE", 64)
 
     with pytest.raises(ValueError, match="excede"):
         audit.read_sms_rom_target(target)
@@ -87,10 +77,8 @@ def test_visual_activity_is_not_claimed_as_confirmed_boot(tmp_path):
     targets = audit.discover_sms_rom_targets(tmp_path)
 
     report = audit.run_sms_rom_audit(
-        targets,
-        lambda _data: FakeMachine(),
-        root_directory=tmp_path,
-        frames_per_rom=3,
+        targets, lambda _data: FakeMachine(),
+        root_directory=tmp_path, frames_per_rom=3,
     )
 
     assert report.counts == {"EXECUTED_VISUAL_ACTIVITY": 1}
@@ -112,8 +100,7 @@ def test_uniform_framebuffer_is_inconclusive(tmp_path):
     report = audit.run_sms_rom_audit(
         audit.discover_sms_rom_targets(tmp_path),
         lambda _data: UniformMachine(),
-        root_directory=tmp_path,
-        frames_per_rom=2,
+        root_directory=tmp_path, frames_per_rom=2,
     )
 
     assert report.counts == {"EXECUTED_INCONCLUSIVE": 1}

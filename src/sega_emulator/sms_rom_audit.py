@@ -100,12 +100,8 @@ def _bounded_file_list(directory: Path, recursive: bool) -> list[Path]:
     iterator: Iterator[Path] = (
         directory.rglob("*") if recursive else directory.iterdir()
     )
-    files = list(
-        islice(
-            (path for path in iterator if path.is_file()),
-            MAX_DISCOVERED_FILES + 1,
-        )
-    )
+    files = list(islice((path for path in iterator if path.is_file()),
+                        MAX_DISCOVERED_FILES + 1))
     if len(files) > MAX_DISCOVERED_FILES:
         raise SmsRomAuditLimitError(
             f"Varredura excedeu o limite de {MAX_DISCOVERED_FILES} arquivos."
@@ -133,13 +129,9 @@ def discover_sms_rom_targets(
                 size = path.stat().st_size
                 targets.append(SmsRomAuditTarget(path, path.name, declared_size=size))
             except OSError as exc:
-                targets.append(
-                    SmsRomAuditTarget(
-                        path,
-                        path.name,
-                        read_error=f"{type(exc).__name__}: {exc}",
-                    )
-                )
+                targets.append(SmsRomAuditTarget(
+                    path, path.name, read_error=f"{type(exc).__name__}: {exc}"
+                ))
         elif suffix == ".zip":
             try:
                 with zipfile.ZipFile(path) as archive:
@@ -149,37 +141,27 @@ def discover_sms_rom_targets(
                             f"ZIP excede o limite de {MAX_ZIP_MEMBERS} membros: {path.name}"
                         )
                     candidates = [
-                        (index, info)
-                        for index, info in enumerate(infos)
+                        (index, info) for index, info in enumerate(infos)
                         if not info.is_dir()
                         and Path(info.filename).suffix.casefold() in SMS_ROM_SUFFIXES
                     ]
                     if not candidates:
-                        targets.append(
-                            SmsRomAuditTarget(
-                                path,
-                                path.name,
-                                read_error="ZIP não contém membros .sms, .rom ou .bin.",
-                            )
-                        )
+                        targets.append(SmsRomAuditTarget(
+                            path, path.name,
+                            read_error="ZIP não contém membros .sms, .rom ou .bin.",
+                        ))
                     for index, info in candidates:
-                        targets.append(
-                            SmsRomAuditTarget(
-                                path,
-                                Path(info.filename).name,
-                                member_name=info.filename,
-                                member_index=index,
-                                declared_size=info.file_size,
-                            )
-                        )
+                        targets.append(SmsRomAuditTarget(
+                            path, Path(info.filename).name,
+                            member_name=info.filename, member_index=index,
+                            declared_size=info.file_size,
+                        ))
             except SmsRomAuditLimitError:
                 raise
             except (OSError, zipfile.BadZipFile, RuntimeError) as exc:
-                targets.append(
-                    SmsRomAuditTarget(
-                        path, path.name, read_error=f"{type(exc).__name__}: {exc}"
-                    )
-                )
+                targets.append(SmsRomAuditTarget(
+                    path, path.name, read_error=f"{type(exc).__name__}: {exc}"
+                ))
         if len(targets) > MAX_DISCOVERED_TARGETS:
             raise SmsRomAuditLimitError(
                 f"Varredura excedeu o limite de {MAX_DISCOVERED_TARGETS} ROMs."
@@ -229,12 +211,10 @@ def _distinct_rgb_colors(framebuffer: bytes) -> int:
     """Count distinct 24-bit RGB colors in a framebuffer."""
     if len(framebuffer) % 3:
         return 0
-    return len(
-        {
-            (framebuffer[offset], framebuffer[offset + 1], framebuffer[offset + 2])
-            for offset in range(0, len(framebuffer), 3)
-        }
-    )
+    return len({
+        (framebuffer[offset], framebuffer[offset + 1], framebuffer[offset + 2])
+        for offset in range(0, len(framebuffer), 3)
+    })
 
 
 def run_sms_rom_audit(
@@ -310,9 +290,7 @@ def run_sms_rom_audit(
                 frames_advanced = int(machine.vdp.frame_number) - initial_frame
                 if time.perf_counter() >= deadline:
                     status, error_type = "TIMEOUT", "PerRomTimeout"
-                    details = (
-                        f"Limite de {timeout_seconds:.2f}s excedido durante um frame."
-                    )
+                    details = f"Limite de {timeout_seconds:.2f}s excedido durante um frame."
                     break
                 if frames_advanced < 1:
                     status, error_type = "FRAME_NOT_ADVANCING", "FrameCounterStalled"
@@ -330,10 +308,7 @@ def run_sms_rom_audit(
                 height = int(machine.vdp.visible_height)
                 expected_size = 256 * height * 3
                 if len(framebuffer) != expected_size:
-                    status, error_type = (
-                        "INVALID_FRAMEBUFFER",
-                        "FramebufferSizeMismatch",
-                    )
+                    status, error_type = "INVALID_FRAMEBUFFER", "FramebufferSizeMismatch"
                     details = (
                         f"Framebuffer tem {len(framebuffer)} bytes; esperado "
                         f"{expected_size} para {height} linhas."
@@ -352,18 +327,12 @@ def run_sms_rom_audit(
                             "não é evidência suficiente de boot do jogo."
                         )
         except (
-            OSError,
-            ValueError,
-            zipfile.BadZipFile,
-            RuntimeError,
-            zlib.error
+            OSError, ValueError, zipfile.BadZipFile, RuntimeError, zlib.error
         ) as exc:
             error_type, details = type(exc).__name__, str(exc)
             status = (
-                "READ_OR_EXTRACTION_FAILED"
-                if not data_loaded
-                else "MACHINE_CREATION_FAILED"
-                if machine is None
+                "READ_OR_EXTRACTION_FAILED" if not data_loaded
+                else "MACHINE_CREATION_FAILED" if machine is None
                 else "EXECUTION_FAILED"
             )
         except Exception as exc:
