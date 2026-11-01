@@ -4,7 +4,7 @@
 //! scheduler objects. Runtime export, validation, and restoration are added
 //! in subsequent snapshot milestones.
 
-use sega_temporal_core::{EventQueueState, MachineTime};
+use sega_temporal_core::{ClockDomain, ClockError, ClockRatio, EventQueueState, MachineTime};
 
 use crate::ClockDomainId;
 
@@ -56,4 +56,36 @@ pub struct SchedulerState<T> {
     pub last_dispatch_timestamp: Option<MachineTime>,
     /// Number of events dispatched at `last_dispatch_timestamp`.
     pub dispatched_at_timestamp: u64,
+}
+
+impl ClockDomainState {
+    /// Capture the complete deterministic history of a live clock domain.
+    pub fn from_domain(id: ClockDomainId, domain: &ClockDomain) -> Self {
+        let snapshot = domain.snapshot();
+        let ratio = domain.ratio();
+        Self {
+            id,
+            ratio_numerator: ratio.numerator(),
+            ratio_denominator: ratio.denominator(),
+            current_time: snapshot.time,
+            total_cycles: snapshot.total_cycles,
+            phase: snapshot.phase,
+            registration_start: domain.registration_start(),
+            initial_phase: domain.initial_phase(),
+        }
+    }
+
+    /// Reconstruct a clock domain after validating its exact arithmetic history.
+    pub fn into_domain(self) -> Result<(ClockDomainId, ClockDomain), ClockError> {
+        let ratio = ClockRatio::new(self.ratio_numerator, self.ratio_denominator)?;
+        let domain = ClockDomain::restore(
+            ratio,
+            self.current_time,
+            self.total_cycles,
+            self.phase,
+            self.registration_start,
+            self.initial_phase,
+        )?;
+        Ok((self.id, domain))
+    }
 }
