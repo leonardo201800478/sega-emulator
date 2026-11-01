@@ -53,7 +53,10 @@ Esta proposta não autoriza merge das PRs #300/#301 nem presume que estejam conc
 
 ## Regra de avanço
 
-Não iniciar a Fase B enquanto os ports de vídeo e input não estiverem integrados e seus contratos de saída/captura estiverem estáveis. Não declarar sincronização total até que a Fase E apresente evidências em testes determinísticos e hardware Windows. A precisão ciclo a ciclo permanece um objetivo progressivo, não um pressuposto desta migração.
+- T0 (tempo, domínios de clock e fila) e T1 (scheduler headless) podem ser desenvolvidos e testados com dispositivos sintéticos, relógio virtual e replay, sem depender dos ports de vídeo/input.
+- Não integrar o scheduler às máquinas SG-1000/SMS antes de auditar os contratos atuais e fixar vetores/traces de regressão.
+- PR #300 e #301 permanecem gates para a integração completa das fronteiras de host, não para a infraestrutura temporal headless.
+- Não declarar sincronização total até existirem evidências em testes determinísticos, integração SG-1000/SMS e hardware Windows. Precisão ciclo a ciclo continua sendo um objetivo progressivo, não um pressuposto.
 
 
 ## Revisão de dependências — 2026-10-31
