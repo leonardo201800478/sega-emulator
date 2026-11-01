@@ -10,4 +10,6 @@ pub mod event;
 pub use clock::{
     ClockDomain, ClockDomainSnapshot, ClockEdgeTime, ClockError, ClockRatio, MachineTime,
 };
-pub use event::{EventPriority, EventQueue, EventQueueError, HardwarePhase, PlatformPriority, ScheduledEvent};
+pub use event::{
+    EventPriority, EventQueue, EventQueueError, HardwarePhase, PlatformPriority, ScheduledEvent,
+};
