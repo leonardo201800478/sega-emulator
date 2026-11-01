@@ -1,4 +1,4 @@
-# This workflow validates only the optional native/z80_core extension. SG-1000 workspace slices are validated by the Rust SG-1000 Workspace workflow.
+# Windows-only integration coverage for the optional PyO3 extension, SDL3 input runtime and Qt bridge. Workspace-wide Rust gates run in ci.yml.
 name: Qt Rust SG-1000 runtime integration
 
 concurrency:
