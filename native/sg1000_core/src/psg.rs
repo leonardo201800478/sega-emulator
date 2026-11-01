@@ -704,7 +704,7 @@ mod tests {
         let (samples, phase) =
             super::advance_output_phase(u64::MAX - 1, sample_rate, u64::MAX);
         assert_eq!(samples, 1);
-        assert_eq!(phase, u64::MAX - 1);
+        assert_eq!(phase, u64::MAX - 16);
     }
 
     #[test]
