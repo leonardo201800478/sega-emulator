@@ -4,7 +4,9 @@ use crate::audio::{MachineAudioSession, open_audio_session};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
-use sega_sms_core::{ControllerButtons, SmsMachine, SmsMachineConfig, VideoStandard};
+use sega_sms_core::{
+    ControllerButtons, SmsMachine, SmsMachineConfig, SpriteLimitMode, VideoStandard,
+};
 
 fn sms_controller_buttons_from_action_mask(actions: u8) -> ControllerButtons {
     ControllerButtons {
@@ -225,6 +227,24 @@ impl NativeSMSMachine {
             .map_err(|error| PyRuntimeError::new_err(format!("SMS CPU step failed: {error:?}")))?;
         self.total_instructions = self.total_instructions.saturating_add(1);
         Ok(cycles)
+    }
+
+    /// Enable or disable compatibility drawing beyond the hardware sprite limit.
+    ///
+    /// OVERFLOW continues to report the hardware condition when more than eight
+    /// Mode 4 sprites intersect a scanline, even when extra sprites are drawn.
+    fn set_sprite_limit_enabled(&mut self, enabled: bool) {
+        let mode = if enabled {
+            SpriteLimitMode::HardwareLimit
+        } else {
+            SpriteLimitMode::UnlockedCompatibility
+        };
+        self.machine.set_sprite_limit_mode(mode);
+    }
+
+    #[getter]
+    fn sprite_limit_enabled(&self) -> bool {
+        self.machine.sprite_limit_mode() == SpriteLimitMode::HardwareLimit
     }
 
     /// Assert the SMS console Pause switch, which is wired to the Z80 NMI input.
