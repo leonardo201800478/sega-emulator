@@ -1632,12 +1632,25 @@ def run(initial_path: Path | None = None) -> None:
         controller_input.config = ControllerInputConfig(
             players=profiles, deadzone=deadzone.value()
         )
+        selected_devices = {
+            player: device_combos[player].currentData() for player in (1, 2)
+        }
+        assigned_ids = [
+            device_id for device_id in selected_devices.values() if device_id is not None
+        ]
+        if len(assigned_ids) != len(set(assigned_ids)):
+            QMessageBox.warning(
+                dialog,
+                "Dispositivo duplicado",
+                "Cada dispositivo físico pode ser atribuído a apenas um jogador.",
+            )
+            return
         try:
+            # Clear both slots first so the user can swap player assignments.
             for player in (1, 2):
-                controller_input.select_device(
-                    player,
-                    device_combos[player].currentData(),
-                )
+                controller_input.select_device(player, None)
+            for player in (1, 2):
+                controller_input.select_device(player, selected_devices[player])
         except (TypeError, ValueError) as exc:
             QMessageBox.warning(dialog, "Dispositivo inválido", str(exc))
             return
