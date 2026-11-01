@@ -835,8 +835,6 @@ mod tests {
     }
 
     #[test]
-
-    #[test]
     fn clock_domain_state_export_and_restore_preserve_history() {
         let mut source = MachineScheduler::<()>::new();
         let id = ClockDomainId(12);
@@ -911,6 +909,7 @@ mod tests {
         );
     }
 
+    #[test]
     fn failed_preflight_keeps_all_clock_domains_unchanged() {
         let mut scheduler = MachineScheduler::new();
         scheduler
