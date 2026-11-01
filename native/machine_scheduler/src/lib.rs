@@ -372,4 +372,91 @@ mod tests {
             chunked.clock_snapshot(ClockDomainId(1)).unwrap()
         );
     }
+
+    #[test]
+    fn same_timestamp_events_dispatch_by_priority_then_insertion_order() {
+        let mut scheduler = MachineScheduler::new();
+        let timestamp = MachineTime::from_ticks(12);
+        scheduler.schedule_at(timestamp, EventPriority::new(3), "late").unwrap();
+        scheduler.schedule_at(timestamp, EventPriority::new(1), "early-a").unwrap();
+        scheduler.schedule_at(timestamp, EventPriority::new(1), "early-b").unwrap();
+
+        let first = scheduler.dispatch_next().unwrap().unwrap();
+        let second = scheduler.dispatch_next().unwrap().unwrap();
+        let third = scheduler.dispatch_next().unwrap().unwrap();
+
+        assert_eq!(first.event.payload, "early-a");
+        assert_eq!(second.event.payload, "early-b");
+        assert_eq!(third.event.payload, "late");
+        assert_eq!(first.event.timestamp, timestamp);
+        assert_eq!(second.event.timestamp, timestamp);
+        assert_eq!(third.event.timestamp, timestamp);
+        assert_eq!(scheduler.now(), timestamp);
+        assert_eq!(scheduler.pending_events(), 0);
+    }
+
+    #[test]
+    fn causal_same_timestamp_events_allow_same_or_later_priority_only() {
+        use sega_temporal_core::EventQueueError;
+
+        let mut scheduler = MachineScheduler::new();
+        let timestamp = MachineTime::from_ticks(8);
+        scheduler.schedule_at(timestamp, EventPriority::new(3), "origin").unwrap();
+        assert_eq!(
+            scheduler.dispatch_next().unwrap().unwrap().event.payload,
+            "origin"
+        );
+
+        assert_eq!(
+            scheduler.schedule_at(timestamp, EventPriority::new(2), "retroactive"),
+            Err(SchedulerError::EventQueue(
+                EventQueueError::PriorityRegressionAtCurrentTime
+            ))
+        );
+        scheduler.schedule_at(timestamp, EventPriority::new(3), "same").unwrap();
+        scheduler.schedule_at(timestamp, EventPriority::new(4), "later").unwrap();
+
+        assert_eq!(
+            scheduler.dispatch_next().unwrap().unwrap().event.payload,
+            "same"
+        );
+        assert_eq!(
+            scheduler.dispatch_next().unwrap().unwrap().event.payload,
+            "later"
+        );
+    }
+
+    #[test]
+    fn failed_preflight_keeps_all_clock_domains_unchanged() {
+        let mut scheduler = MachineScheduler::new();
+        scheduler
+            .register_clock_domain(ClockDomainId(0), ClockRatio::new(1, 1).unwrap())
+            .unwrap();
+        scheduler
+            .register_clock_domain(
+                ClockDomainId(1),
+                ClockRatio::new(u64::MAX, 1).unwrap(),
+            )
+            .unwrap();
+        scheduler
+            .schedule_at(
+                MachineTime::from_ticks(u128::MAX),
+                EventPriority::new(0),
+                "overflow",
+            )
+            .unwrap();
+
+        let before_0 = scheduler.clock_snapshot(ClockDomainId(0)).unwrap();
+        let before_1 = scheduler.clock_snapshot(ClockDomainId(1)).unwrap();
+        assert!(matches!(
+            scheduler.dispatch_next(),
+            Err(SchedulerError::Clock(_))
+        ));
+
+        assert_eq!(scheduler.clock_snapshot(ClockDomainId(0)).unwrap(), before_0);
+        assert_eq!(scheduler.clock_snapshot(ClockDomainId(1)).unwrap(), before_1);
+        assert_eq!(scheduler.now(), MachineTime::ZERO);
+        assert_eq!(scheduler.pending_events(), 1);
+    }
+
 }
