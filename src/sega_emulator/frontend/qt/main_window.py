@@ -53,6 +53,7 @@ class EmulatorMainWindow(QMainWindow):
         on_open_logs: Callable[[], None],
         on_show_machine_state: Callable[[], None],
         on_video_scale: Callable[[int], None],
+        on_audit_sms_roms: Callable[[], None] | None = None,
         on_change_system: Callable[[], None] | None = None,
         on_configure_drivers: Callable[[], None] | None = None,
         on_configure_region: Callable[[str], None] | None = None,
@@ -297,6 +298,14 @@ class EmulatorMainWindow(QMainWindow):
         diagnostics_menu.addAction(self.vdp_snapshot_action)
         diagnostics_menu.addAction("Abrir pasta de logs", on_open_logs)
         diagnostics_menu.addAction("Estado da máquina", on_show_machine_state)
+        self.sms_rom_audit_action = QAction("Auditoria em lote de ROMs SMS…", self)
+        self.sms_rom_audit_action.setObjectName("smsRomBatchAuditAction")
+        if on_audit_sms_roms is not None:
+            self.sms_rom_audit_action.triggered.connect(on_audit_sms_roms)
+        else:
+            self.sms_rom_audit_action.setEnabled(False)
+        diagnostics_menu.addSeparator()
+        diagnostics_menu.addAction(self.sms_rom_audit_action)
 
         help_menu = self.menuBar().addMenu(translate("menu_help", language))
         self.about_action = QAction("Sobre o Sega Emulator…", self)
