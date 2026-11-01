@@ -248,5 +248,5 @@ O projeto é independente e não é afiliado à SEGA. SEGA e SG-1000 são marcas
 ROMs comerciais e logs locais não devem ser incluídos no repositório. Use homebrew ou cópias obtidas legalmente no ambiente local.
 
 Compilação e execução rápida:
-.\atualizar_recompilar_sega_emulator.ps1 -Launch
+.\atualizar_recompilar_sega_emulator.ps1 -Full -Launch
 python -m sega_emulator
