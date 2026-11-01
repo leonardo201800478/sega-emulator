@@ -89,6 +89,17 @@ class SMSMachine:
         """Assert the SMS console Pause switch through the Z80 NMI input."""
         self.native_machine.request_nmi()
 
+    def set_sprite_limit_enabled(self, enabled: bool) -> None:
+        """Select hardware sprite limits or the unlocked compatibility renderer."""
+        if type(enabled) is not bool:
+            raise TypeError("enabled deve ser bool.")
+        self.native_machine.set_sprite_limit_enabled(enabled)
+
+    @property
+    def sprite_limit_enabled(self) -> bool:
+        """Return whether the VDP currently enforces the hardware sprite limit."""
+        return bool(self.native_machine.sprite_limit_enabled)
+
     def read_memory(self, address: int) -> int:
         if type(address) is not int or not 0 <= address <= 0xFFFF:
             raise ValueError("address deve estar entre 0000h e FFFFh.")
