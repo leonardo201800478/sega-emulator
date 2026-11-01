@@ -339,6 +339,9 @@ mod tests {
             Ok(0)
         );
         scheduler.dispatch_next().unwrap();
+        scheduler
+            .advance_idle_to(MachineTime::from_ticks(1))
+            .unwrap();
         assert_eq!(
             scheduler.schedule_at(MachineTime::ZERO, EventPriority::new(0), ()),
             Err(SchedulerError::TimeWentBackwards)
