@@ -375,4 +375,67 @@ mod tests {
             Ok(0)
         );
     }
+
+    #[test]
+    fn queue_snapshot_round_trip_preserves_sequences_watermark_and_allocator() {
+        let mut queue = EventQueue::new();
+        let t = MachineTime::from_ticks(10);
+        queue.schedule_with_phase(t, HardwarePhase::new(1), PlatformPriority::new(2), "b").unwrap();
+        queue.schedule_with_phase(t, HardwarePhase::new(1), PlatformPriority::new(1), "a").unwrap();
+        queue.schedule(MachineTime::from_ticks(12), PlatformPriority::new(0), "c").unwrap();
+        assert_eq!(queue.pop_next().unwrap().payload, "a");
+        let state = queue.export_state();
+        assert_eq!(state.next_sequence, 3);
+        assert_eq!(state.pending.iter().map(|event| event.sequence).collect::<Vec<_>>(), vec![0, 2]);
+        let mut restored = EventQueue::restore_state(state.clone()).unwrap();
+        assert_eq!(restored.export_state(), state);
+        assert_eq!(restored.schedule(MachineTime::from_ticks(13), PlatformPriority::new(0), "d"), Ok(3));
+        assert_eq!(restored.pop_next().unwrap().payload, "b");
+    }
+
+    #[test]
+    fn restore_rejects_duplicate_and_out_of_range_sequences() {
+        let event = |sequence| ScheduledEvent {
+            timestamp: MachineTime::from_ticks(4),
+            hardware_phase: HardwarePhase::new(0),
+            priority: PlatformPriority::new(0),
+            sequence,
+            payload: (),
+        };
+        let duplicate = EventQueueState { pending: vec![event(0), event(0)], next_sequence: 1, last_dispatched: None };
+        assert_eq!(EventQueue::restore_state(duplicate).err(), Some(EventQueueError::DuplicateSequence));
+        let out_of_range = EventQueueState { pending: vec![event(2)], next_sequence: 2, last_dispatched: None };
+        assert_eq!(EventQueue::restore_state(out_of_range).err(), Some(EventQueueError::SequenceOutOfRange));
+    }
+
+    #[test]
+    fn restore_rejects_noncanonical_order_and_watermark_regression() {
+        let event = |timestamp, phase, priority, sequence| ScheduledEvent {
+            timestamp: MachineTime::from_ticks(timestamp),
+            hardware_phase: HardwarePhase::new(phase),
+            priority: PlatformPriority::new(priority),
+            sequence,
+            payload: (),
+        };
+        let reversed = EventQueueState { pending: vec![event(5, 1, 0, 0), event(5, 0, 0, 1)], next_sequence: 2, last_dispatched: None };
+        assert_eq!(EventQueue::restore_state(reversed).err(), Some(EventQueueError::NonCanonicalState));
+        let regressed = EventQueueState {
+            pending: vec![event(5, 1, 0, 0)],
+            next_sequence: 1,
+            last_dispatched: Some(EventQueueWatermark {
+                timestamp: MachineTime::from_ticks(5),
+                hardware_phase: HardwarePhase::new(2),
+                priority: PlatformPriority::new(0),
+            }),
+        };
+        assert_eq!(EventQueue::restore_state(regressed).err(), Some(EventQueueError::WatermarkRegression));
+    }
+
+    #[test]
+    fn restore_preserves_exhausted_sequence_allocator() {
+        let state = EventQueueState::<()> { pending: vec![], next_sequence: u64::MAX, last_dispatched: None };
+        let mut queue = EventQueue::restore_state(state).unwrap();
+        assert_eq!(queue.schedule(MachineTime::ZERO, PlatformPriority::new(0), ()), Err(EventQueueError::SequenceExhausted));
+    }
+
 }
