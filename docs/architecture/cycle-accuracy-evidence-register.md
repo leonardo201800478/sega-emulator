@@ -137,3 +137,26 @@ O manifest de oráculos também deve preservar licença, origem e ancestralidade
 - [Contrato Z80/barramento](z80-temporal-bus-model.md)
 - [Auditoria raster SMS 2026-10-29](../audits/sms-vdp-raster-timing-investigation-2026-10-29.md)
 - [Auditoria latches/raster SMS 2026-10-30](../audits/sms-vdp-latches-raster-audit-2026-10-30.md)
+
+
+## 7. Atualização — acesso temporal VRAM/CRAM SMS (2026-11-01)
+
+A pesquisa complementar e a auditoria de integração foram preservadas em [Auditoria de integração — acesso temporal à VRAM do SMS](../audits/sms-vram-access-rust-integration-audit-2026-11-01.md).
+
+### Evidências e limites registrados
+
+- A pesquisa fornecida pelo usuário relata corrupção em acessos rápidos no SMS2 e intervalo medido de aproximadamente 26 T-states entre escritas durante Active Display. O setup experimental completo e os documentos originais citados indiretamente ainda precisam ser arquivados para reprodução independente.
+- Referências indiretas a manuais Mark III/Game Gear mencionam 29/16 e 28 T-states, respectivamente. Esses números permanecem em conflito com a medição de 26 T-states; não unificar os valores nem generalizá-los para SMS1/CRAM/VBlank.
+- Não há evidência suficiente para afirmar WAIT states efetivos, slots em 32 dots/4 dots, fase de slot, buffer físico de escrita com substituição ou política de acesso tardio.
+- A existência de read-ahead de um byte é preservada como comportamento documentado; o runtime SMS já mantém `read_buffer` e implementa leitura do byte anterior seguida de pré-carregamento e incremento do endereço.
+- O fetch dot-by-dot do Mode 4 SMS e diferenças de arbitragem 315-5124/315-5246 permanecem UNKNOWN.
+
+### Auditoria de integração Rust
+
+- O tipo canônico integrado é `sega_temporal_core::MachineTime(u128)`; não criar um segundo `MachineTime(u64)`.
+- `native/temporal_core` fornece domínios racionais e fila determinística, mas não equivale por si só ao Machine Scheduler integrado.
+- A PR #341 permanece proposta aberta/Draft na fotografia desta auditoria; sua API não é contrato de `main`.
+- O Z80 SMS atual executa por instrução e o contrato `CpuBus` não fornece timestamp por transação I/O. A máquina avança o VDP após a instrução completa.
+- Portanto, um contador confiável de espaçamento entre escritas ainda não pode ser ligado ao runtime sem primeiro introduzir transações temporais observáveis no Z80/barramento.
+
+**Decisão atual:** não implementar slots, WAIT, perda/corrupção artificial, política Slotted ou contador de violações no runtime. Preservar o comportamento funcional atual; evoluir primeiro os contratos temporais e a instrumentação de barramento. Nenhum TEMPORAL_PASS é declarado.
