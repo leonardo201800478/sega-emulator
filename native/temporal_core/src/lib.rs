@@ -7,5 +7,7 @@
 pub mod clock;
 pub mod event;
 
-pub use clock::{ClockDomain, ClockDomainSnapshot, ClockEdgeTime, ClockError, ClockRatio, MachineTime};
+pub use clock::{
+    ClockDomain, ClockDomainSnapshot, ClockEdgeTime, ClockError, ClockRatio, MachineTime,
+};
 pub use event::{EventPriority, EventQueue, EventQueueError, ScheduledEvent};
