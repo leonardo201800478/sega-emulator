@@ -118,7 +118,7 @@ A failed restore must not expose or leave behind a partially restored scheduler.
 
 All temporal quantities must remain exact. No `f32` or `f64` representation is allowed for timestamps, ratios, phases, cycle counters or rational residues.
 
-The persistence codec must preserve the full range of `u128` values without truncation. The concrete wire representation (for example, a decimal string or fixed-width big-endian bytes) must be selected and documented before the codec is finalized. Do not assume every Serde format handles `u128` identically.
+The persistence wire representation for every `u128` temporal quantity is fixed-width **16-byte unsigned big-endian**. This applies to `MachineTime` tick counts, `total_cycles`, `phase` and `initial_phase`. The codec must map this representation without signed or floating-point conversion and reject truncated or oversized values. The outer container/framing remains a codec concern, but the 128-bit scalar representation is fixed by this ADR. In-memory DTOs retain native `u128` values; they do not depend on a serializer's native `u128` support.
 
 ### 3.7 Current boundary of ClockEdgeTime
 
@@ -199,7 +199,9 @@ At the time this ADR was prepared:
 - GitHub Actions workflow run `41356994362` reports SUCCESS for that exact SHA.
 - The main branch remains `0da3098893cce4d80f7a22291d00488e4e7d0f9b` and does not contain `native/machine_scheduler`.
 - The independent audit's targeted local tests passed (16 temporal-core + 18 scheduler tests); its local `fmt` and `clippy` were NOT RUN.
-- Snapshot/restore implementation and its tests: NOT IMPLEMENTED / NOT RUN.
+- E1 state-model DTOs are defined in `temporal_core::event` (`EventQueueState` / `EventQueueWatermark`) and `machine_scheduler` (`ClockDomainState` / `SchedulerState`); no runtime export, validation, restore or codec is implemented by this slice.
+- E1 validation on the Windows environment and exact candidate CI: pending.
+- Snapshot/restore continuation, invalid-state validation and differential replay: NOT IMPLEMENTED / NOT RUN.
 - `TEMPORAL_PASS`: NOT CLAIMED.
 - Cycle-accurate SMS timing: NOT CLAIMED.
 
