@@ -366,3 +366,25 @@ def test_main_window_localizes_navigation(qt_app, language, expected_file_menu) 
     assert window.menuBar().actions()[0].text() == expected_file_menu
     assert window.windowTitle() == "Sega Emulator | SG-1000"
     window.close()
+
+
+def test_main_window_exposes_sms_rom_audit_action(qt_app) -> None:
+    called: list[str] = []
+    window = EmulatorMainWindow(
+        on_open_rom=lambda: None,
+        on_pause_resume=lambda: None,
+        on_reset=lambda: None,
+        on_configure_controls=lambda: None,
+        on_show_controllers=lambda: None,
+        on_vdp_snapshot=lambda: None,
+        on_open_logs=lambda: None,
+        on_show_machine_state=lambda: None,
+        on_video_scale=lambda scale: None,
+        on_audit_sms_roms=lambda: called.append("sms-audit"),
+    )
+
+    assert window.sms_rom_audit_action.objectName() == "smsRomBatchAuditAction"
+    assert window.sms_rom_audit_action.isEnabled()
+    window.sms_rom_audit_action.trigger()
+    assert called == ["sms-audit"]
+    window.close()
