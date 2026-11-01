@@ -17,6 +17,51 @@ use sega_temporal_core::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ClockDomainId(pub u16);
 
+/// Version of the top-level scheduler state schema.
+pub const SCHEDULER_STATE_FORMAT_VERSION: u16 = 1;
+
+/// Complete persistence DTO for one registered clock domain.
+/// Registration origin and initial phase are retained to validate its arithmetic history.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ClockDomainState {
+    /// Stable scheduler-local identity.
+    pub id: ClockDomainId,
+    /// Numerator of local cycles per master-time tick.
+    pub ratio_numerator: u64,
+    /// Denominator of local cycles per master-time tick.
+    pub ratio_denominator: u64,
+    /// Integer timestamp through which the domain was advanced.
+    pub current_time: MachineTime,
+    /// Accumulated local clock edges since registration.
+    pub total_cycles: u128,
+    /// Retained rational phase; must be less than ratio_denominator.
+    pub phase: u128,
+    /// Timestamp at which this domain was registered.
+    pub registration_start: MachineTime,
+    /// Rational phase supplied at registration.
+    pub initial_phase: u128,
+}
+
+/// Complete persistence DTO for a machine scheduler.
+/// Domains are ordered by ID; pending events use canonical queue ordering.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SchedulerState<T> {
+    /// Schema version. Unknown versions must be rejected by the codec.
+    pub format_version: u16,
+    /// Current absolute integer machine timestamp.
+    pub now: MachineTime,
+    /// Registered domains in canonical ascending ID order.
+    pub clock_domains: Vec<ClockDomainState>,
+    /// Event queue state, including allocator and causal watermark.
+    pub event_queue: sega_temporal_core::EventQueueState<T>,
+    /// Maximum number of events dispatchable at one timestamp; non-zero.
+    pub delta_event_limit: u64,
+    /// Timestamp of the most recent scheduler dispatch, if any.
+    pub last_dispatch_timestamp: Option<MachineTime>,
+    /// Number of events dispatched at the last dispatch timestamp.
+    pub dispatched_at_timestamp: u64,
+}
+
 /// Newly elapsed clock edges for one registered device domain.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ClockAdvance {
