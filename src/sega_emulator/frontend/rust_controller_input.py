@@ -116,6 +116,21 @@ class RustControllerInput:
             return []
         return list(self._native.connected_names())
 
+    def connected_devices(self) -> list[tuple[int, str]]:
+        if self._native is None:
+            return []
+        return [(int(device_id), str(name)) for device_id, name in self._native.connected_devices()]
+
+    def selected_device(self, player: int) -> int | None:
+        if self._native is None:
+            return None
+        selected = self._native.selected_device(player)
+        return None if selected is None else int(selected)
+
+    def select_device(self, player: int, device_id: int | None) -> None:
+        if self._native is not None:
+            self._native.select_device(player, device_id)
+
     def consume_disconnect_event(self) -> bool:
         if self._native is None:
             return False
