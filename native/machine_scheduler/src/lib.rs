@@ -76,6 +76,7 @@ impl Default for DeltaEventPolicy {
 pub enum SchedulerError {
     DuplicateClockDomain(ClockDomainId),
     UnknownClockDomain(ClockDomainId),
+    ClockDomainTimeMismatch(ClockDomainId),
     Clock(ClockError),
     EventQueue(EventQueueError),
     TimeWentBackwards,
@@ -93,6 +94,11 @@ impl fmt::Display for SchedulerError {
             Self::UnknownClockDomain(id) => {
                 write!(f, "clock domain {} is not registered", id.0)
             }
+            Self::ClockDomainTimeMismatch(id) => write!(
+                f,
+                "clock domain {} timestamp does not match scheduler time",
+                id.0
+            ),
             Self::Clock(error) => write!(f, "clock-domain advancement failed: {error}"),
             Self::EventQueue(error) => write!(f, "event scheduling failed: {error}"),
             Self::TimeWentBackwards => write!(f, "machine scheduler cannot move backwards"),
@@ -242,7 +248,7 @@ impl<T> MachineScheduler<T> {
             return Err(SchedulerError::DuplicateClockDomain(state.id));
         }
         if state.current_time != self.now {
-            return Err(SchedulerError::TimeWentBackwards);
+            return Err(SchedulerError::ClockDomainTimeMismatch(state.id));
         }
         let (id, domain) = state.into_domain()?;
         self.clocks.insert(id, domain);
@@ -398,7 +404,7 @@ impl<T> MachineScheduler<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::{ClockDomainId, ClockError, DeltaEventPolicy, MachineScheduler, SchedulerError};
+    use super::{ClockDomainId, ClockDomainState, ClockError, DeltaEventPolicy, MachineScheduler, SchedulerError};
     use sega_temporal_core::{
         ClockRatio, EventPriority, HardwarePhase, MachineTime, PlatformPriority,
     };
@@ -873,7 +879,7 @@ mod tests {
         };
         assert_eq!(
             scheduler.restore_clock_domain_state(invalid),
-            Err(SchedulerError::TimeWentBackwards)
+            Err(SchedulerError::ClockDomainTimeMismatch(ClockDomainId(4)))
         );
         assert_eq!(scheduler.now(), before_now);
         assert_eq!(
