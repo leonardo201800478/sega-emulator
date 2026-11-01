@@ -272,7 +272,6 @@ mod tests {
     use super::{ClockDomainId, MachineScheduler, SchedulerError};
     use sega_temporal_core::{ClockRatio, EventPriority, MachineTime};
 
-    
     #[test]
     fn explicit_initial_phase_is_preserved_and_advances_rationally() {
         let mut scheduler = MachineScheduler::<()>::new();
@@ -286,7 +285,9 @@ mod tests {
         assert_eq!(initial.total_cycles, 0);
         assert_eq!(initial.phase, 2);
 
-        scheduler.advance_idle_to(MachineTime::from_ticks(1)).unwrap();
+        scheduler
+            .advance_idle_to(MachineTime::from_ticks(1))
+            .unwrap();
         let advanced = scheduler.clock_snapshot(id).unwrap();
         assert_eq!(advanced.total_cycles, 1);
         assert_eq!(advanced.phase, 0);
@@ -322,11 +323,7 @@ mod tests {
         let mut scheduler = MachineScheduler::<()>::new();
         let id = ClockDomainId(9);
         assert_eq!(
-            scheduler.register_clock_domain_with_phase(
-                id,
-                ClockRatio::new(2, 3).unwrap(),
-                3
-            ),
+            scheduler.register_clock_domain_with_phase(id, ClockRatio::new(2, 3).unwrap(), 3),
             Err(SchedulerError::Clock(ClockError::PhaseOutOfRange))
         );
         assert_eq!(
@@ -341,7 +338,9 @@ mod tests {
         let mut explicit_zero = MachineScheduler::<()>::new();
         let ratio = ClockRatio::new(7, 3).unwrap();
 
-        conventional.register_clock_domain(ClockDomainId(2), ratio).unwrap();
+        conventional
+            .register_clock_domain(ClockDomainId(2), ratio)
+            .unwrap();
         explicit_zero
             .register_clock_domain_with_phase(ClockDomainId(2), ratio, 0)
             .unwrap();
