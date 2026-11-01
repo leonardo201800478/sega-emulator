@@ -1,6 +1,6 @@
 # ADR-0013 — deterministic scheduler snapshot and restore
 
-- **Status:** In progress — E1 and E2 implemented in stacked draft PRs; E3–E7 pending.
+- **Status:** In progress — E1–E3 implemented in stacked draft PRs; E4–E7 pending.
 - **Date:** 2026-11-01.
 - **Baseline:** PR #346, branch `feat/temporal-event-order-dimensions`, SHA `ec2bd69d32409490901d30dc58ff94779eda061b`.
 - **Main baseline:** `0da3098893cce4d80f7a22291d00488e4e7d0f9b`; this main revision does not contain `native/machine_scheduler`.
@@ -17,7 +17,7 @@ The temporal foundation has been developed as a linear, reviewable stack. The fo
 | PR #345 | `ff628cb479dc70b6b7a6b8cc734eed5007bf306d` | Configurable `DeltaEventPolicy`; default budget 1024 dispatches per integer timestamp; blocked event remains pending. | CI reported SUCCESS on the candidate SHA. |
 | PR #346 | `ec2bd69d32409490901d30dc58ff94779eda061b` | Separate `HardwarePhase` and `PlatformPriority`; lexicographic event ordering; causal regression checks; ADR-0012. | GitHub Actions run `41356994362` SUCCESS on this exact SHA. PR #346 remains open, Draft, and unmerged. |
 | PR #348 — E1 | `02f71b830ddd47156eb69d78de7b8107f851ec41` | Versioned DTOs for clock domains, event queue and scheduler; exact `u128` wire contract documented. | GitHub Actions run `41360589305` SUCCESS on this exact SHA. PR #348 remains open, Draft, and unmerged. |
-| PR #349 — E2 | `78076be55df7f3d2c57db4044e9eaada06ac2a91` | Clock-domain origin history retained; DTO export/import; checked arithmetic validation; scheduler clock-domain export/restore and continuation tests. | GitHub Actions run `41361029624` SUCCESS on this exact SHA. PR #349 remains open, Draft, and unmerged. |
+| PR #349 — E2 | `356a7eb4a022e898b87c04c1ca61140056f47d14` | Clock-domain origin history retained; DTO export/import; checked arithmetic validation; scheduler clock-domain export/restore and continuation tests. | GitHub Actions run `41361029624` SUCCESS on this exact SHA. PR #349 remains open, Draft, and unmerged. |
 
 The independent audit dated 2026-11-01 examined the actual #346 branch and found no snapshot/restore implementation, no Serde support in the native crates, and no snapshot tests. Its local targeted test run passed 16 `temporal_core` tests and 18 `machine_scheduler` tests using Rust 1.85.1. The auditor did not run `fmt` or `clippy`; those local checks are therefore NOT RUN. The GitHub Actions success above is separate evidence and must not be confused with the auditor's local run.
 
@@ -204,7 +204,8 @@ At the time this ADR was prepared:
 - E1 state-model DTOs are defined in `temporal_core::state` (`EventQueueState` / `EventQueueWatermark`) and `machine_scheduler` (`ClockDomainState` / `SchedulerState`). E1 exact-SHA CI: PASS (`41360589305`).
 - E2 clock-domain export/restore is implemented in PR #349. It retains registration origin and initial phase, validates the checked rational-history equation, and rejects timestamp mismatch/invalid history before inserting the domain.
 - E2 exact-SHA CI: PASS (`41361029624`) on `78076be55df7f3d2c57db4044e9eaada06ac2a91`; Rust formatting, Clippy with `-D warnings`, workspace tests, Python Ruff format/check and pytest all passed.
-- Queue export/restore, full scheduler atomic restore, codec, full differential replay and cross-component invalid-state validation: NOT IMPLEMENTED / NOT RUN.
+- E3 queue export/restore is implemented in the current candidate branch: canonical vector export, preserved event sequences/allocator/watermark, validation of canonical order, duplicate/out-of-range sequences and causal regressions, followed by direct heap reconstruction. Exact-SHA CI: PENDING.
+- Full scheduler atomic restore, codec, full differential replay and cross-component invalid-state validation: NOT IMPLEMENTED / NOT RUN.
 - `TEMPORAL_PASS`: NOT CLAIMED.
 - Cycle-accurate SMS timing: NOT CLAIMED.
 
