@@ -14,6 +14,22 @@ use sega_input_runtime::{
 };
 
 const ACTIONS: [&str; 7] = ["up", "down", "left", "right", "button1", "button2", "hold"];
+const DEFAULT_CAPTURE_AXIS_THRESHOLD: u16 = 18_000;
+
+/// Convert a raw axis value into a capture binding using the active profile's
+/// deadzone. A zero deadzone still requires one unit of movement to avoid
+/// treating a neutral axis as pressed.
+fn captured_axis_binding(index: usize, value: i16, deadzone: u16) -> Option<String> {
+    let threshold = i32::from(deadzone.max(1));
+    let value = i32::from(value);
+    if value <= -threshold {
+        Some(format!("raw_axis_{index}_negative"))
+    } else if value >= threshold {
+        Some(format!("raw_axis_{index}_positive"))
+    } else {
+        None
+    }
+}
 
 fn action_id(name: &str) -> Option<ActionId> {
     ACTIONS
@@ -357,7 +373,13 @@ impl NativeInputManager {
             return Err(PyValueError::new_err("player deve ser 1 ou 2"));
         }
         self.poll_backend();
-        let Some(state) = self.state_for_player((player - 1) as usize) else {
+        let player_index = (player - 1) as usize;
+        let capture_deadzone = self.profiles[player_index]
+            .as_ref()
+            .map(InputProfile::deadzone)
+            .unwrap_or(DEFAULT_CAPTURE_AXIS_THRESHOLD)
+            .max(1);
+        let Some(state) = self.state_for_player(player_index) else {
             return Ok(None);
         };
         const BUTTON_NAMES: [&str; 21] = [
@@ -402,12 +424,10 @@ impl NativeInputManager {
             }
         }
         for index in 0..16 {
-            let axis = state.axis(16 + index);
-            if axis <= -18_000 {
-                return Ok(Some(format!("raw_axis_{index}_negative")));
-            }
-            if axis >= 18_000 {
-                return Ok(Some(format!("raw_axis_{index}_positive")));
+            if let Some(binding) =
+                captured_axis_binding(index, state.axis(16 + index), capture_deadzone)
+            {
+                return Ok(Some(binding));
             }
         }
         Ok(None)
@@ -467,6 +487,45 @@ mod tests {
         assert!(parse_binding("raw_axis_16_positive", 1).is_err());
         assert!(parse_binding("raw_hat_8_up", 1).is_err());
         assert!(parse_binding("raw_hat_0_diagonal", 1).is_err());
+    }
+
+    #[test]
+    fn axis_capture_uses_configured_deadzone_in_both_directions() {
+        assert_eq!(captured_axis_binding(2, 4_999, 5_000), None);
+        assert_eq!(
+            captured_axis_binding(2, 5_000, 5_000).as_deref(),
+            Some("raw_axis_2_positive")
+        );
+        assert_eq!(captured_axis_binding(2, -4_999, 5_000), None);
+        assert_eq!(
+            captured_axis_binding(2, -5_000, 5_000).as_deref(),
+            Some("raw_axis_2_negative")
+        );
+    }
+
+    #[test]
+    fn zero_deadzone_requires_non_neutral_axis_movement() {
+        assert_eq!(captured_axis_binding(0, 0, 0), None);
+        assert_eq!(
+            captured_axis_binding(0, 1, 0).as_deref(),
+            Some("raw_axis_0_positive")
+        );
+        assert_eq!(
+            captured_axis_binding(0, -1, 0).as_deref(),
+            Some("raw_axis_0_negative")
+        );
+    }
+
+    #[test]
+    fn capture_default_deadzone_remains_compatible_without_profile() {
+        assert_eq!(
+            captured_axis_binding(0, 17_999, DEFAULT_CAPTURE_AXIS_THRESHOLD),
+            None
+        );
+        assert_eq!(
+            captured_axis_binding(0, 18_000, DEFAULT_CAPTURE_AXIS_THRESHOLD).as_deref(),
+            Some("raw_axis_0_positive")
+        );
     }
 
     #[test]
