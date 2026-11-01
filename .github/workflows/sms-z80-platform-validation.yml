@@ -1,37 +1,13 @@
-name: SMS Z80 External Conformance
+name: SMS Z80 External Conformance (manual)
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - "native/sg1000_core/src/cpu.rs"
-      - "native/z80_alu/**"
-      - "native/z80_bus/**"
-      - "native/sms_core/**"
-      - "docs/architecture/z80-sms-platform-model.md"
-      - "tools/z80test/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - ".github/workflows/sms-z80-platform-validation.yml"
-  push:
-    branches: [main]
-    paths:
-      - "native/sg1000_core/src/cpu.rs"
-      - "native/z80_alu/**"
-      - "native/z80_bus/**"
-      - "native/sms_core/**"
-      - "docs/architecture/z80-sms-platform-model.md"
-      - "tools/z80test/**"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - ".github/workflows/sms-z80-platform-validation.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: sms-z80-conformance-${{ github.event.pull_request.number || github.ref }}
+  group: sms-z80-conformance-manual
   cancel-in-progress: true
 
 jobs:
@@ -42,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Install upstream test build prerequisites
+      - name: Install upstream test prerequisites
         run: |
           sudo apt-get update
           sudo apt-get install --yes cmake g++
