@@ -2,7 +2,7 @@
 
 - **Estado:** Proposto para revisão.
 - **Data:** 2026-11-02.
-- **Base de trabalho:** PR #350, branch `feat/scheduler-event-queue-snapshot`, SHA `5ae6df8b156f8e01115955a104a5546c2ad6f23c`.
+- **Base de trabalho:** PR #350, branch `feat/scheduler-event-queue-snapshot`, SHA `d84e588a470c09655ae3c424a094d9f2c98e9a58`.
 - **Dependências:** ADR-0002, ADR-0010, ADR-0012 e ADR-0013.
 - **Referência comparativa:** arquitetura cooperativa de threads do [Ares Scheduler](https://github.com/ares-emulator/ares/tree/master/ares/ares/scheduler).
 - **Escopo:** contrato extensível para múltiplas CPUs, coprocessadores, controladores de vídeo, áudio, DMA, timers, I/O e dispositivos auxiliares em sistemas Sega.
