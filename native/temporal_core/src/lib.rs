@@ -5,11 +5,16 @@
 //! facts while one machine scheduler owns the timeline and coordinates devices.
 
 pub mod clock;
+pub mod contract;
 pub mod event;
 pub mod state;
 
 pub use clock::{
     ClockDomain, ClockDomainSnapshot, ClockEdgeTime, ClockError, ClockRatio, MachineTime,
+};
+pub use contract::{
+    BusContractError, BusCycleKind, BusDirection, BusOperationResult, BusPhase,
+    BusTransaction, DeviceProgress,
 };
 pub use event::{
     EventPriority, EventQueue, EventQueueError, HardwarePhase, PlatformPriority, ScheduledEvent,
