@@ -373,10 +373,6 @@ impl ClockDomain {
         self.edge_time_after(1)
     }
 
-    /// Advance to an absolute machine timestamp and return newly elapsed edges.
-    ///
-    /// Calls must be monotonic. Arithmetic is checked before state is changed,
-    /// so an error leaves the domain unchanged.
     /// Preview an absolute advance without mutating the clock domain.
     ///
     /// This is the scheduler's preflight path: it uses the same exact rational
@@ -404,6 +400,10 @@ impl ClockDomain {
         ))
     }
 
+    /// Advance to an absolute machine timestamp and return newly elapsed edges.
+    ///
+    /// Calls must be monotonic. Arithmetic is checked before state is changed,
+    /// so an error leaves the domain unchanged.
     /// Advance to an absolute machine timestamp and return newly elapsed edges.
     ///
     /// Calls must be monotonic. Arithmetic is checked before state is changed,
