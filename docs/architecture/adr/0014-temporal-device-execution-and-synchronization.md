@@ -211,3 +211,28 @@ O custo é maior disciplina nos contratos de fronteira, nos IDs estáveis, no es
 - [ADR-0010 — runtime Rust e propriedade temporal](0010-rust-runtime-temporal-ownership.md)
 - [ADR-0012 — dimensões de ordenação temporal](0012-event-ordering-dimensions.md)
 - [ADR-0013 — snapshot/restore determinístico](0013-deterministic-scheduler-snapshot-restore.md)
+
+
+---
+
+## 12. Estado da fundação temporal após PR #358/#359 (2026-11-02)
+
+A stack consolidada está em revisão, ainda sem integração na `main`:
+
+- PR #358: `0d8ad97e79ac50c4687e1400dd5bb434ca5f3607`, Draft, com CI ordinário PASS e stress SHORT/LONG conforme ledger.
+- PR #359: `a544fe367f67c1f6c6d622efcdb528e222ab53c3`, Draft, empilhada sobre #358, com CI Rust/Python PASS no head exato.
+
+A PR #359 adiciona testes de avanço de três domínios racionais, registro fora da ordem de ID, eventos em timestamps repetidos, replay após restore, avanço idle fragmentado verificado por oracle aritmético independente e atomicidade diante de overflow. A cobertura opera em timestamps inteiros de `MachineTime`.
+
+**Interpretação:** a fundação de software demonstra propriedades de ordenação, avanço racional, persistência/replay e falha atômica nos cenários cobertos. Ela ainda não implementa a execução cooperativa de dispositivos prevista nesta ADR.
+
+Permanecem explicitamente não demonstrados:
+- despacho de eventos em timestamp sub-tick;
+- safe points reais de CPU ou VDP;
+- transações Z80 no instante de barramento;
+- arbitragem, contenção e wait states do SMS;
+- sincronização temporal integrada de VDP, PSG ou YM2413.
+
+O status segue `INTEGRATION_PENDING`; `TEMPORAL_PASS` não foi atribuído. A próxima etapa é inventariar o caminho real SMS/Z80/barramento e produzir um contrato de integração com fontes primárias e oráculos independentes antes de alterar a execução de hardware.
+
+Consulte o ledger `docs/evidence/adr-0013-snapshot-restore-validation.md` e a referência técnica `docs/architecture/machine-scheduler-technical-reference.md` para a evidência por SHA e workflows.

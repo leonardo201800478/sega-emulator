@@ -207,3 +207,20 @@ Antes de codificar, apresente:
 7. Riscos encontrados na leitura inicial.
 
 Depois, aguarde a consolidação dos relatórios ou prossiga apenas com as verificações não destrutivas claramente autorizadas. Não faça merge.
+
+
+---
+
+## Nota de continuidade — atualização em 2026-11-02
+
+Este handoff foi escrito para a fase de finalização do Scheduler e contém referências históricas. A validação da stack E1–E7, os resultados SHORT/LONG e a cobertura multi-domain #359 foram reconciliados em:
+
+- `docs/evidence/adr-0013-snapshot-restore-validation.md`
+- `docs/architecture/machine-scheduler-technical-reference.md`
+- `docs/architecture/adr/0014-temporal-device-execution-and-synchronization.md`
+
+Para a próxima etapa, **não reinicie a finalização do Scheduler**. Use o novo handoff específico:
+
+`docs/prompts/sms-temporal-integration-design-handoff-2026-11-02.md`
+
+Ele orienta a continuidade pelo inventário remoto, auditoria do caminho SMS/Z80/barramento, pesquisa de timing com fontes primárias e definição de contrato/testes antes de qualquer integração de hardware. As referências antigas deste documento não substituem o estado atual do GitHub nem o ledger atualizado.

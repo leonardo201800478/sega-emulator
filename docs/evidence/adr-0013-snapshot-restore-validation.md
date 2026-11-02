@@ -71,3 +71,62 @@ No warning was accepted as a pass. A failed earlier candidate is not promoted: P
 - No force-push or destructive reset.
 - No merge or PR closure.
 - PR #358 remains Draft for review; superseded PRs listed above are closed, not merged.
+
+
+---
+
+## Addendum — consolidated Scheduler and multi-domain evidence (2026-11-02)
+
+This addendum supersedes the earlier #358 head/check references above where they differ. Historical rows remain as provenance for the earlier candidate SHAs; they must not be interpreted as evidence for the current heads.
+
+### Current PR stack
+
+| PR | Role | Base | Head SHA | State |
+|---|---|---|---|---|
+| [#358](https://github.com/leonardo201800478/sega-emulator/pull/358) | Consolidated Temporal Core + Machine Scheduler, ADRs, evidence and stress harness | `main` | `0d8ad97e79ac50c4687e1400dd5bb434ca5f3607` | Open, Draft, not merged |
+| [#359](https://github.com/leonardo201800478/sega-emulator/pull/359) | Multi-domain advancement/replay tests | #358 branch | `a544fe367f67c1f6c6d622efcdb528e222ab53c3` | Open, Draft, not merged |
+
+The #359 branch is stacked on #358. Its tests cover integer `MachineTime` boundaries only. Do not retarget, rebase, merge, or close either PR without an explicit dependency plan and authorization.
+
+### Exact-SHA validation
+
+**PR #358 — head `0d8ad97e79ac50c4687e1400dd5bb434ca5f3607`**
+
+- Ordinary CI workflow [41378338137](https://github.com/leonardo201800478/sega-emulator/actions/runs/41378338137): Rust fmt, Clippy with `-D warnings`, Rust workspace tests, Python Ruff format, Ruff lint and pytest all PASS on this exact SHA.
+- SHORT workflow [41379180394](https://github.com/leonardo201800478/sega-emulator/actions/runs/41379180394): the stress test stage completed successfully for 4 fixed seeds × 20,000 events = 80,000 events under 512 MiB; 1 test passed. The overall workflow was **cancelled**, and the Rust workspace test stage did not complete. Therefore record SHORT_PASS only for the stress stage, not for the workflow as a whole.
+- LONG workflow [41379203192](https://github.com/leonardo201800478/sega-emulator/actions/runs/41379203192): all three jobs succeeded. The stress harness processed 16 fixed seeds × 250,000 events = 4,000,000 events under a 2 GiB limit; 1 stress test passed. LONG_PASS applies to this harness and exact SHA.
+
+**PR #359 — head `a544fe367f67c1f6c6d622efcdb528e222ab53c3`**
+
+- CI workflow [41381005224](https://github.com/leonardo201800478/sega-emulator/actions/runs/41381005224): Python lint/regression and Rust quality/unit regression jobs succeeded on this exact SHA. The Scheduler stress job was skipped by the PR workflow condition; no stress result is implied for #359.
+- `multi_domain_replay.rs` adds:
+  - three rational clock domains registered out of ID order;
+  - duplicate event timestamps and explicit phase/priority ordering;
+  - fixed expected dispatch token order `[0, 1, 2, 4, 3, 5, 6]`;
+  - uninterrupted versus repeated snapshot/restore comparison;
+  - irregular idle chunks checked at intermediate timestamps against an independent integer-rational arithmetic oracle (not `ClockDomain`);
+  - atomic preflight overflow assertion for the exact `SchedulerError::Clock(ClockError::ArithmeticOverflow)` variant, including unchanged exported state and pending event.
+- These tests establish software-level multi-domain advancement/replay properties at integer machine timestamps. They do not establish sub-tick dispatch, device safe points, bus arbitration or hardware timing.
+
+### Stress-harness interpretation
+
+The #358 SHORT/LONG harness schedules events directly using `MachineTime`. Registered clock domains are persisted and advanced by scheduler dispatch, but the stress workload does not generate events by stepping independent device clocks. Consequently, the stress results validate deterministic event replay/restore under the stated workloads, not end-to-end cross-domain device interactions. PR #359 separately adds focused multi-domain advancement coverage, but still does not integrate hardware devices.
+
+### Current component status
+
+| Area | Implementation | QUICK_PASS | SHORT_PASS | LONG_PASS | Integration | TEMPORAL_PASS |
+|---|---|---|---|---|---|---|
+| Temporal Core / Scheduler E1–E7 | IMPLEMENTED in PR stack | PASS on recorded exact SHAs | #358 stress stage PASS; workflow cancelled | PASS on #358 exact SHA | INTEGRATION_PENDING | NOT CLAIMED |
+| Multi-domain advancement/replay tests | IMPLEMENTED in #359 | CI PASS on exact head | NOT RUN | NOT RUN | INTEGRATION_PENDING | NOT CLAIMED |
+| SMS/Z80/bus/VDP/PSG integration | NOT IMPLEMENTED by this stack | NOT RUN | NOT RUN | NOT RUN | PENDING | NOT CLAIMED |
+
+### Next engineering milestone
+
+Design and evidence-gate the first real SMS temporal integration boundary. Before implementation:
+1. Re-inventory current remote SMS CPU, bus, VDP and PSG execution paths and the current issue #158 ledger.
+2. Read the existing SMS architecture/audit documents and relevant ADRs.
+3. Establish primary-source evidence for clock relationships, bus-cycle visibility, wait states/contention and interrupt timing. Do not infer physical priorities from the scheduler's ordinal fields.
+4. Define a minimal, testable CPU/bus/scheduler contract and acceptance traces, including an independent oracle.
+5. Keep device-specific timing out of generic Scheduler crates and keep Python outside the timing loop.
+
+No device timing implementation, merge, or `TEMPORAL_PASS` is authorized by this documentation update.
