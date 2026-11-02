@@ -351,6 +351,12 @@ impl<T> MachineScheduler<T> {
             return Err(SchedulerError::DispatchWatermarkMismatch);
         }
 
+        // The number of dispatches at one timestamp cannot exceed the total
+        // number of events ever allocated by the queue.
+        if state.dispatched_at_timestamp > state.event_queue.next_sequence {
+            return Err(SchedulerError::DispatchHistoryMismatch);
+        }
+
         if state
             .event_queue
             .pending
@@ -1184,6 +1190,43 @@ mod tests {
             MachineScheduler::restore_state(zero_limit),
             Err(SchedulerError::ZeroDeltaEventLimit)
         ));
+    }
+
+    #[test]
+    fn restore_rejects_dispatch_count_above_total_allocated_sequences() {
+        let mut state = scheduler_snapshot_fixture();
+        state.dispatched_at_timestamp = state.event_queue.next_sequence + 1;
+        assert!(matches!(
+            MachineScheduler::restore_state(state),
+            Err(SchedulerError::DispatchHistoryMismatch)
+        ));
+    }
+
+    #[test]
+    fn restore_accepts_dispatch_order_not_monotonic_in_insertion_sequence() {
+        let mut scheduler =
+            MachineScheduler::with_delta_event_policy(DeltaEventPolicy::new(4).unwrap());
+        let timestamp = MachineTime::from_ticks(4);
+        scheduler
+            .schedule_at(timestamp, EventPriority::new(1), "inserted-first")
+            .unwrap();
+        scheduler
+            .schedule_at(timestamp, EventPriority::new(0), "inserted-second")
+            .unwrap();
+
+        assert_eq!(
+            scheduler.dispatch_next().unwrap().unwrap().event.sequence,
+            1
+        );
+        assert_eq!(
+            scheduler.dispatch_next().unwrap().unwrap().event.sequence,
+            0
+        );
+
+        let state = scheduler.export_state();
+        assert_eq!(state.dispatched_at_timestamp, 2);
+        assert_eq!(state.event_queue.last_dispatched.unwrap().sequence, 0);
+        assert!(MachineScheduler::restore_state(state).is_ok());
     }
 
     #[test]
