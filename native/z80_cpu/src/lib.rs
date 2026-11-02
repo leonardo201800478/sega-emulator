@@ -16,6 +16,7 @@ pub mod bus {
 pub mod cpu;
 pub mod micro_ops;
 pub mod sequencer;
+pub mod snapshot;
 
 pub const Z80_MICRO_SEQUENCER_STATE_VERSION: u16 = 1;
 
@@ -28,3 +29,4 @@ pub use sequencer::{
     Z80MicroSequencer, Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroSequencerState,
     Z80MicroStep,
 };
+pub use snapshot::Z80MicroSequencerStateCodecError;
