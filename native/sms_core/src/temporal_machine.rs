@@ -9,8 +9,7 @@ use core::fmt;
 use crate::{SmsTemporalBus, SmsTemporalBusError, SmsTemporalBusState, SmsTemporalDispatch};
 use sega_temporal_core::{
     BusContractError, BusCycleKind, BusDirection, BusOperationResult, BusPhase, BusTransaction,
-    MCycleIndex,
-    MachineTime, TStateIndex,
+    MCycleIndex, MachineTime, TStateIndex,
 };
 use sega_z80_cpu::{
     Z80BusOperation, Z80MicroSequencer, Z80MicroSequencerError, Z80MicroSequencerPhase,
@@ -173,10 +172,12 @@ impl SmsTemporalMachine {
     pub fn pending_bus_operation_result(
         &self,
     ) -> Option<BusOperationResult<Option<u8>, SmsTemporalBusError>> {
-        self.bus.completion().map(|completion| BusOperationResult::Completed {
-            value: completion.data,
-            completed_at: completion.completed_at,
-        })
+        self.bus
+            .completion()
+            .map(|completion| BusOperationResult::Completed {
+                value: completion.data,
+                completed_at: completion.completed_at,
+            })
     }
 
     /// Describe the currently exposed CPU-internal interval using the shared contract.
@@ -631,7 +632,10 @@ mod tests {
         ));
         let completed_transaction = machine.pending_bus_transaction().unwrap().unwrap();
         assert_eq!(completed_transaction.phase(), BusPhase::Complete);
-        assert_eq!(completed_transaction.timestamp(), MachineTime::from_ticks(12));
+        assert_eq!(
+            completed_transaction.timestamp(),
+            MachineTime::from_ticks(12)
+        );
         let completed_at = machine.now();
         assert_eq!(
             machine.pending_bus_operation_result(),
