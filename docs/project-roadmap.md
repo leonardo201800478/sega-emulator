@@ -1,11 +1,11 @@
 # Roadmap mestre — Sega Emulator
 
 **Status:** documento canônico de direção do projeto; todas as fases abaixo são planejadas, salvo quando um estado for explicitamente comprovado por código, testes e SHA.
-**Autoridade:** este documento define o escopo global, a ordem dos marcos e as composições de máquinas. Roadmaps de subsistemas são planos subordinados e não podem redefinir o escopo global.
+**Autoridade:** este é o único roadmap do repositório. Define o escopo global, a ordem dos marcos e as composições de máquinas. Nenhum roadmap de subsistema, documento de planejamento, issue ou PR pode criar uma rota paralela; a execução corrente é controlada por issues/PRs vinculadas a este documento.
 **Runtime:** hardware e tempo emulado em Rust; Python/Qt somente aplicação e tooling; PyO3/Maturin como fronteira coarse-grained.
 **Plataforma de desenvolvimento prioritária:** Windows x64.
 
-> Este roadmap substitui o antigo cronograma geral de reorganização. Ele não substitui os planos técnicos detalhados de SMS, Z80, PSG, mappers, VDP ou Scheduler. Esses documentos permanecem válidos somente para seu domínio e devem seguir as decisões globais aqui registradas.
+> Este documento substitui todos os roadmaps, cronogramas e cartas de planejamento anteriores. Especificações técnicas, ADRs, auditorias e matrizes de validação podem detalhar comportamento e evidências, mas não podem estabelecer fases, prioridades, cronogramas ou escopo concorrente. A execução é rastreada por issues e PRs.
 
 ## 1. Regras arquiteturais não negociáveis
 
@@ -175,7 +175,7 @@ Esses nomes são agrupamentos conceituais. A migração real será incremental e
 - Fechar lacunas Z80 e contratos temporais.
 - Integrar CPU, Bus, VDP SMS1, PSG, I/O e IRQ ao Scheduler único.
 - Validar mappers e perfil regional; manter SMS2/GG como comparativos distintos.
-- O plano detalhado de consolidação SG-1000/SMS é subordinado a este roadmap.
+- A execução desta fase é rastreada por issues e PRs vinculadas; não manter um roadmap documental paralelo para SG-1000/SMS.
 
 ### Fase 2 — Game Gear
 - Resolver perfil de hardware, revisões, LCD, I/O, estéreo e região.
@@ -238,15 +238,17 @@ python -m ruff format --check .
 ```
 Build Release/Maturin, Windows x64, D3D12, áudio/input físicos e testes de mídia/BIOS devem ser acrescentados conforme a fatia.
 
-## 10. Hierarquia documental e prevenção de conflitos
+## 10. Autoridade documental e prevenção de conflitos
 
-1. **Este arquivo — `docs/project-roadmap.md`:** fonte única para escopo global, ordem de plataformas, modelos e composições.
-2. **`docs/project-scope.md`:** princípios, limites de runtime, mídia, perfis e contratos transversais; não redefine a ordem global.
-3. **ADRs:** decisões arquiteturais aprovadas/propostas com estado explícito.
-4. **Roadmaps de subsistema:** planos de execução restritos (SMS, Z80, PSG, mappers, vídeo, input etc.); não podem contradizer este documento. Se houver conflito, registrar ADR/alteração aqui antes de implementar.
-5. **Auditorias e evidence registers:** fontes de fatos, incertezas e evidências; não são roteiros globais.
+1. **Este arquivo — `docs/project-roadmap.md`:** única fonte de planejamento global, escopo de plataformas, ordem de implementação, modelos, variantes e composições.
+2. **`docs/project-scope.md`:** princípios e limites arquiteturais, contratos transversais e critérios de qualidade; não cria fases nem altera prioridades globais.
+3. **ADRs:** registram decisões arquiteturais aprovadas, propostas ou substituídas, com status explícito. ADR não é plano de execução.
+4. **Especificações técnicas, auditorias e evidence registers:** descrevem comportamento de hardware, contratos, fontes, incertezas e critérios de validação. Não podem conter cronogramas, fases globais ou rotas concorrentes.
+5. **Issues e PRs:** são os únicos instrumentos para decompor, priorizar, executar e acompanhar trabalho. Cada item deve apontar para a seção deste roadmap e declarar dependências, critérios de aceitação, evidências e status no SHA candidato.
 
-Roadmaps históricos que contenham cronogramas, agentes, SHAs ou PRs antigos não são autoridade operacional. A antiga carta de reorganização e cronograma de agentes foi removida por estar desatualizada e conter baseline/planos de PR históricos. Seus documentos técnicos e ADRs úteis permanecem preservados.
+**Proibição de roadmaps paralelos:** não criar nem manter arquivos de roadmap por subsistema, cronogramas de migração, planos faseados independentes ou cartas de agentes. Um plano técnico existente só pode permanecer se for convertido em especificação/auditoria sem sequência de execução concorrente e sem baseline operacional obsoleta. Conteúdo de execução deve ser transferido para issues/PRs. Em caso de conflito, interromper a implementação, abrir issue de reconciliação e atualizar este documento por PR antes de prosseguir.
+
+Documentos históricos podem permanecer apenas quando forem necessários para proveniência ou evidência e estiverem claramente identificados como históricos/substituídos; não podem ser referenciados como instrução vigente. Referências quebradas a documentos removidos devem ser eliminadas. Nenhuma PR antiga deve reintroduzir arquivos ou definições substituídas sem atualizar primeiro este roadmap.
 
 ## 11. Estado desta consolidação
 
