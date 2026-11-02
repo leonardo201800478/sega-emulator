@@ -23,6 +23,11 @@ dependencies = [
 [[package]]
 name = "sega-audio-runtime"
 version = "0.1.0"
+dependencies = [
+ "sega-audio-output",
+ "sega-machine-scheduler",
+ "sega-sn76489",
+]
 
 [[package]]
 name = "sega-input-runtime"
