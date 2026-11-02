@@ -9,7 +9,6 @@ members = [
     "native/sg1000_core",
     "native/sms_core",
     "native/z80_cpu",
-    "native/z80_cpu",
     "native/z80_alu",
     "native/z80_bus",
     "native/audio_runtime",
@@ -21,6 +20,7 @@ members = [
 default-members = [
     "native/sg1000_core",
     "native/sms_core",
+    "native/z80_cpu",
     "native/z80_alu",
     "native/z80_bus",
     "native/audio_runtime",
