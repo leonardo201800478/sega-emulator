@@ -1,0 +1,210 @@
+# Roadmap mestre — SG-1000 + Master System
+
+**Status:** única rota de implementação vigente do projeto.
+**Prioridade ativa:** preservar e consolidar SG-1000 + Master System (SMS), com integração temporal progressiva.
+**Baseline auditada:** `main` em `3a510ae68028228065f7e60350a821ef9f76c882` (2026-11-02).
+**Runtime-alvo:** Rust executa hardware, áudio, vídeo, entrada e tempo emulado. Python/Qt é plano de controle, interface e tooling. A migração de cada backend deve ser comprovada no código; esta diretriz não declara a arquitetura-alvo concluída.
+
+> Este arquivo substitui todos os roadmaps, cronogramas de migração e cartas de planejamento anteriores. Não manter planos paralelos por subsistema. ADRs, especificações e auditorias continuam válidos como documentação técnica, mas não podem criar fases ou prioridades concorrentes. O trabalho executável é acompanhado por issues e PRs vinculadas às fases abaixo.
+
+## 1. Escopo ativo e limites
+
+### Dentro do escopo ativo
+
+- SG-1000 e SG-1000 II como linha de preservação e regressão.
+- Master System / Mark III, com distinção explícita entre modelos, revisões, ASICs e regiões quando houver evidência.
+- Consolidação do Z80, barramentos, mappers, I/O, VDPs, PSG e integração temporal.
+- Autonomia progressiva do runtime Rust para áudio, vídeo, entrada, pacing e execução.
+- Frontend Python/Qt reduzido a aplicação, controle e telemetria.
+- Matriz de compatibilidade, testes determinísticos e evidência vinculada a SHA.
+
+### Fora do escopo de implementação até o marco M4
+
+Game Gear como plataforma independente, Mega Drive/Genesis, Sega CD, 32X, SVP, Neptune e sistemas integrados de terceiros. Não iniciar implementação dessas plataformas durante o fechamento SG-1000 + SMS. Documentação histórica ou pesquisa desses sistemas não os torna escopo ativo. Uma expansão futura exige revisão formal deste roadmap por PR, após o M4.
+
+JIT, frame-skip, paralelismo especulativo e otimizações sem baseline também permanecem proibidos.
+
+## 2. Regras arquiteturais
+
+1. Rust é o único runtime de hardware. Nenhum hardware, estado de registrador, ciclo, barramento, VDP ou chip de áudio é executado em Python.
+2. Um único Master Scheduler é a autoridade temporal por máquina composta. Chips não mantêm loops temporais autônomos.
+3. Python/Qt não avança a máquina, não transporta PCM e não participa do caminho de input ou apresentação de pixels quando o backend Rust correspondente estiver integrado.
+4. PyO3 é uma fronteira coarse-grained de controle e telemetria; sem callbacks por instrução, pixel ou amostra.
+5. SG-1000 e SMS compartilham mecanismos somente quando equivalência estiver demonstrada. TMS9918A e SMS VDP, mapas, I/O e perfis de hardware permanecem específicos.
+6. A migração é port-first: preservar comportamento por testes/golden masters antes de refatorar. Mudanças estruturais e semânticas devem ser separadas.
+7. T-states nominais não são execução ciclo a ciclo. Não declarar precisão temporal sem integração e evidência.
+8. Perfil, firmware ou mapper desconhecido gera erro explícito; nunca fallback silencioso.
+9. ROMs comerciais, BIOS proprietárias e dumps protegidos não entram no Git.
+10. Mudanças não triviais seguem branch + PR. Não commitar diretamente na main, não fazer force-push e não integrar sem revisão e gates verdes.
+
+## 3. Arquitetura de destino
+
+O documento de arquitetura recebido propõe a seguinte separação lógica. Os nomes são conceitos de destino, não declaração de crates já existentes:
+
+- **Domínio:** Z80, TMS9918A, SMS VDP, PSG, YM2413, mappers, Scheduler, SG-1000 e SMS.
+- **Aplicação:** sessão, thread de emulação, comandos, pacing e portas de host.
+- **Infraestrutura Rust:** áudio, vídeo, input, storage e host nulo/headless.
+- **Interfaces:** binário Rust autônomo e fronteira PyO3; Qt como launcher/painel de controle.
+- **Tooling:** golden masters, vetores, oráculos independentes, trace diff, matriz de compatibilidade e auditorias.
+
+A arquitetura de destino deve ser alcançada incrementalmente, sem criar crates vazios ou mover código apenas para reproduzir uma árvore idealizada. O inventário real e o status por componente estão em [component-status.md](component-status.md).
+
+### Fronteira de host
+
+- Rust deve tornar-se um executável completo, capaz de iniciar ROM, executar a máquina, produzir áudio/vídeo e ler input sem Python.
+- Áudio usa uma porta `AudioSink`; vídeo usa `VideoSink`; input usa `InputSource`; storage usa `Storage`; o relógio de host é isolado do tempo emulado.
+- Host-null/headless é o alvo de determinismo e golden masters.
+- O pacer mapeia tempo emulado para tempo real; nunca decide quais ciclos ou eventos de hardware acontecem.
+- A janela de jogo pertence ao host Rust na arquitetura final. Qt permanece launcher, biblioteca, preferências e telemetria.
+
+## 4. Roadmap único P0–P9
+
+### P0 — Baseline e golden masters
+
+- Confirmar SHA, árvore, workspace, APIs, testes, workflows e PRs concorrentes.
+- Inventariar cada componente SG-1000/SMS: implementação, consumidor, testes, evidência e pendências.
+- Capturar framebuffer, PCM e checkpoints de estado com entradas reproduzíveis e identificação/hash de ROM.
+- Repetir capturas para verificar determinismo.
+- Classificar lacunas como código ausente, integração pendente, teste ausente ou documentação desatualizada.
+
+**Saída:** baseline rastreável e matriz de componentes; não cristalizar golden master divergente.
+
+### P1 — Esqueleto arquitetural e portões
+
+- Consolidar contratos mínimos compartilhados de Bus, Clock/ClockDomain, Event/Timestamp, IRQ, Snapshot e erros.
+- Preparar host-null e testkit para leitura/comparação de golden masters e traces.
+- Criar portões CI para dependências arquiteturais e fronteiras Python/Rust.
+- Contratos temporais iniciais devem ser rotulados como nominais enquanto não sustentarem execução temporal real.
+
+**Saída:** contratos mínimos e CI capazes de bloquear dependências proibidas.
+
+### P2 — Port as-is de SG-1000 e SMS
+
+- Portar SG-1000 primeiro, preservando TMS9918A, PSG, memória, I/O, entrada e testes.
+- Portar SMS em PR separado, preservando VDP Mode 4, perfil PSG, mappers, memória, I/O e testes.
+- Manter os executores Z80 específicos até a fase P3.
+- Adaptar interfaces sem alterar semântica de hardware.
+- Manter a fachada de compatibilidade atual durante a migração.
+
+**Saída M1:** os dois sistemas preservam golden masters e testes portados; nenhuma regressão inexplicada.
+
+### P3 — Z80 compartilhado
+
+- Extrair uma única CPU Z80 a partir do executor SMS, após o port estrutural.
+- Parametrizar o barramento e criar adaptadores SG-1000 e SMS.
+- Portar a suíte de testes e executar comparação diferencial entre executor antigo e novo.
+- Remover duplicações somente quando ambos os sistemas usarem o novo núcleo e não houver desvio semântico inexplicado.
+
+**Saída:** uma implementação de CPU em produção, consumida pelos dois consoles.
+
+### P4 — Engine e hosts Rust standalone
+
+- Criar engine de sessão, thread de emulação, comandos, filas SPSC, triple buffer e configuração.
+- Integrar janela Rust, input e saída de áudio.
+- Implementar pacer com métricas de underrun, fila, cadência e deriva.
+- Integrar storage e binário `sega-emu`.
+- Remover o avanço da máquina por QTimer/loop Python.
+
+**Saída M2:** SG-1000 e SMS executam no binário Rust sem Python; host-null e smoke passam.
+
+### P5 — Controle PyO3 e painel Python
+
+- Reduzir PyO3 a controle de ciclo de vida e telemetria somente leitura.
+- Reorganizar o frontend em domain/application/adapters/ui, reaproveitando serviços existentes.
+- Manter um único adaptador Python responsável por importar a extensão.
+- Validar troca de sistema, pause, stop, reset, falhas e encerramento.
+- Decidir por ADR se PyO3 permanece em processo ou se haverá processo Rust separado.
+
+**Saída M3:** painel opcional; runtime segue funcional sem ele.
+
+### P6 — Barramento, mappers e I/O
+
+- Consolidar contratos de transação, leitura/escrita, portas e adaptadores específicos.
+- Validar mapas, espelhamento, ROM/RAM/VRAM, decodificação, limites e reset.
+- Reconciliar mappers e perfis existentes; nenhum mapper genérico como fallback.
+- Modelar efeitos colaterais, IRQ/acknowledge, WAIT e arbitragem somente com evidência.
+
+**Saída:** testes isolados e integrados de barramento, I/O, interrupções e cartuchos nos dois sistemas.
+
+### P7 — Fechamento semântico e de hardware
+
+- Z80: BASE, CB, ED, DD/FD, DDCB/FDCB, flags, I/R, WZ/MEMPTR, INT/NMI, IM 0/1/2, EI delay, HALT, RETI/RETN e instruções de bloco.
+- VDPs: cenas sintéticas, sprites, colisão/overflow, status, IRQ, scroll, CRAM e efeitos raster.
+- PSG: divisores, ruído, atenuação, latches, reamostragem e determinismo.
+- YM2413 como etapa própria, condicionada à compatibilidade básica.
+- Cada correção semântica em PR separada, com oráculo independente e atualização justificada de golden master.
+
+**Saída M4:** fechamento funcional SG-1000 + SMS com cobertura semântica e evidência reproduzível.
+
+### P8 — Compatibilidade e robustez
+
+- Ampliar a matriz de jogos/homebrew com identidade, cenário, SHA candidato, estado e limitações.
+- Executar smoke, regressões longas, troca de mídia e replay determinístico.
+- Validar Windows x64, PyO3/Maturin, backends físicos de áudio/vídeo/input e diagnóstico.
+- Medir desempenho somente depois de baseline funcional.
+
+**Saída:** compatibilidade delimitada por evidência; sem alegações universais.
+
+### P9 — Integração temporal e TEMPORAL_PASS
+
+- Integrar CPU, barramento, VDP, PSG, I/O e IRQ ao Scheduler mestre.
+- Implementar execução interrompível/microsequenciada e transações temporais com WAIT/arbitragem.
+- Validar causalidade, ordenação de eventos, chunk invariance, snapshots parciais e replay.
+- Usar traces e oráculos independentes, com origem e versão registradas.
+
+**Saída M5:** TEMPORAL_PASS somente após integração e evidência temporal completa. Contratos ou testes unitários isolados não satisfazem este marco.
+
+## 5. Golden masters, oráculos e compatibilidade
+
+Golden master responde: “o port preservou o comportamento observado no baseline?”. Não prova que o comportamento esteja correto.
+
+Oráculo independente responde: “o comportamento observado corresponde à especificação ou a uma referência independente?”. Não pode derivar circularmente do mesmo código sob teste.
+
+Cada golden master deve registrar ROM/homebrew identificada por SHA-256, entradas scriptadas, hash de framebuffer por frame, hash de PCM e checkpoints de estado da CPU. ROM comercial permanece local; o repositório guarda apenas identificadores, hashes e passos de reprodução.
+
+A matriz de compatibilidade deve distinguir:
+- `BOOT_CONFIRMED`
+- `GAMEPLAY_SMOKE`
+- `REGRESSION_PASS`
+- `VALIDATED`
+
+Boot não equivale a gameplay; gameplay smoke não equivale a compatibilidade universal.
+
+## 6. Estados e gates
+
+Estados de componente:
+- `IMPLEMENTED`
+- `QUICK_PASS`
+- `SHORT_PASS`
+- `LONG_PASS`
+- `INTEGRATION_PENDING`
+- `TEMPORAL_PASS`
+
+Estados de suíte: `PASS`, `FAIL`, `BLOCKED`, `NOT RUN` ou `SKIPPED`, sempre vinculados ao SHA candidato. Check ignorado ou executado em SHA anterior não é aprovação.
+
+Gates obrigatórios:
+```text
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
+python -m pytest
+python -m ruff check .
+python -m ruff format --check .
+```
+
+Build Release/Maturin, testes Windows x64, GPU, áudio e input físicos são adicionais conforme a fatia. Não declarar TEMPORAL_PASS sem integração real.
+
+## 7. Autoridade documental
+
+1. **`docs/project-roadmap.md`:** única fonte de escopo ativo, fases e ordem de implementação.
+2. **`docs/project-scope.md`:** princípios, limites e fronteiras arquiteturais; não cria fases.
+3. **`docs/component-status.md`:** fotografia dos componentes implementados, integrações pendentes e evidências conhecidas; deve ser atualizada quando uma PR alterar estado.
+4. **ADRs:** decisões arquiteturais, com status aprovado/proposto/substituído; não são roadmaps.
+5. **Especificações e auditorias:** comportamento, evidências, incertezas e critérios técnicos; não criam cronogramas.
+6. **Issues e PRs:** execução e acompanhamento das tarefas, sempre referenciando uma fase deste roadmap.
+
+**Proibido manter roadmaps paralelos**, inclusive por chip, plataforma, mapper, áudio, vídeo, Qt ou pesquisa de hardware. Os documentos de roadmap antigos foram removidos nesta consolidação. Documentos técnicos e componentes existentes permanecem. Referências a roadmaps removidos devem ser corrigidas; documentos históricos que ainda forem necessários devem ser explicitamente marcados como históricos e nunca usados como instrução vigente.
+
+## 8. Plataformas futuras
+
+Game Gear, Mega Drive/Genesis, Sega CD, 32X, SVP e sistemas integrados de terceiros não fazem parte da execução ativa deste roadmap. Após M4, sua inclusão dependerá de nova revisão aprovada do roadmap, baseada no inventário e na arquitetura efetivamente consolidada. Não criar cronogramas ou branches de implementação dessas plataformas antes dessa decisão.
