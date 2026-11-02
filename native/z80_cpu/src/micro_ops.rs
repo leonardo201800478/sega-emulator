@@ -106,13 +106,18 @@ impl Z80BusHandshake {
 
     /// Extend the active bus cycle by one WAIT T-state.
     pub fn insert_wait_tstate(&mut self) -> Result<(), Z80BusHandshakeError> {
+        self.insert_wait_tstates(1)
+    }
+
+    /// Add several WAIT T-states atomically to the outstanding request.
+    pub fn insert_wait_tstates(&mut self, tstates: u32) -> Result<(), Z80BusHandshakeError> {
         let pending = self
             .pending
             .as_mut()
             .ok_or(Z80BusHandshakeError::NoRequestPending)?;
         pending.wait_tstates = pending
             .wait_tstates
-            .checked_add(1)
+            .checked_add(tstates)
             .ok_or(Z80BusHandshakeError::WaitCounterExhausted)?;
         Ok(())
     }
