@@ -373,6 +373,78 @@ mod tests {
         ));
     }
 
+    #[derive(Clone)]
+    struct FlatBus {
+        memory: Vec<u8>,
+    }
+
+    impl FlatBus {
+        fn new(rom: &[u8]) -> Self {
+            let mut memory = vec![0; 0x10000];
+            memory[..rom.len()].copy_from_slice(rom);
+            Self { memory }
+        }
+    }
+
+    impl crate::CpuBus for FlatBus {
+        fn read_memory(&mut self, address: u16) -> u8 {
+            self.memory[usize::from(address)]
+        }
+
+        fn write_memory(&mut self, address: u16, value: u8) {
+            self.memory[usize::from(address)] = value;
+        }
+    }
+
+    fn assert_atomic_differential(
+        rom: &[u8],
+        initial_a: u8,
+        initial_f: u8,
+        initial_hl: u16,
+        initial_ram: u8,
+        expected_opcode: u8,
+    ) {
+        let mut temporal = SmsTemporalMachine::new(rom.to_vec(), 3).unwrap();
+        temporal.cpu_mut().registers.a = initial_a;
+        temporal.cpu_mut().registers.f = initial_f;
+        temporal.cpu_mut().registers.set_hl(initial_hl);
+        if initial_hl >= 0xC000 {
+            temporal.bus.write_memory_for_test(initial_hl, initial_ram);
+        }
+
+        let mut atomic = crate::Z80::default();
+        atomic.registers.a = initial_a;
+        atomic.registers.f = initial_f;
+        atomic.registers.set_hl(initial_hl);
+        let mut bus = FlatBus::new(rom);
+        bus.memory[usize::from(initial_hl)] = initial_ram;
+
+        let expected_tstates = atomic.step(&mut bus).unwrap();
+        retired(
+            temporal.step_instruction(0).unwrap(),
+            expected_opcode,
+            expected_tstates,
+        );
+        assert_eq!(temporal.cpu().registers.a, atomic.registers.a);
+        assert_eq!(temporal.cpu().registers.f, atomic.registers.f);
+        assert_eq!(temporal.cpu().registers.bc(), atomic.registers.bc());
+        assert_eq!(temporal.cpu().registers.de(), atomic.registers.de());
+        assert_eq!(temporal.cpu().registers.hl(), atomic.registers.hl());
+        assert_eq!(temporal.cpu().registers.sp, atomic.registers.sp);
+        assert_eq!(temporal.cpu().registers.pc, atomic.registers.pc);
+        assert_eq!(temporal.cpu().refresh, atomic.r);
+        assert_eq!(temporal.memory().read(initial_hl), bus.memory[usize::from(initial_hl)]);
+        assert_eq!(temporal.now(), MachineTime::from_ticks(u128::from(expected_tstates) * 3));
+    }
+
+    #[test]
+    fn supported_microsequencer_slice_matches_atomic_reference() {
+        assert_atomic_differential(&[0x00], 0, 0, 0, 0, 0x00);
+        assert_atomic_differential(&[0x3E, 0x42], 0, 0, 0, 0, 0x3E);
+        assert_atomic_differential(&[0x77], 0x5A, 0, 0xC000, 0, 0x77);
+        assert_atomic_differential(&[0x34], 0, 0, 0xC000, 0x7F, 0x34);
+    }
+
     #[test]
     fn exported_phase_is_ready_after_retirement() {
         let mut machine = SmsTemporalMachine::new(vec![0x00; 0x4000], 3).unwrap();
