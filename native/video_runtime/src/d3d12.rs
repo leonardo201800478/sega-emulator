@@ -570,15 +570,12 @@ impl D3d12Host {
 
             // Queue the fence before Present so a DXGI presentation failure
             // cannot leave submitted GPU work without a retirement signal.
-            let next_fence = self
-                .last_submitted_fence
-                .checked_add(1)
-                .ok_or_else(|| {
-                    Error::new(
-                        windows::core::HRESULT(0x8000_4005_u32 as i32),
-                        "D3D12 fence value exhausted",
-                    )
-                })?;
+            let next_fence = self.last_submitted_fence.checked_add(1).ok_or_else(|| {
+                Error::new(
+                    windows::core::HRESULT(0x8000_4005_u32 as i32),
+                    "D3D12 fence value exhausted",
+                )
+            })?;
             self.queue.Signal(&self.fence, next_fence)?;
             self.last_submitted_fence = next_fence;
             self.swap_chain.Present(1, DXGI_PRESENT(0)).ok()?;
@@ -794,11 +791,7 @@ impl D3d12Host {
 /// Returns false when the source row or destination length is invalid. This
 /// pure conversion is kept separate from mapped GPU memory so its pixel math
 /// can be tested without creating a D3D12 device.
-fn convert_frame_row_to_rgba8888(
-    frame: &VideoFrame,
-    y: u32,
-    destination: &mut [u8],
-) -> bool {
+fn convert_frame_row_to_rgba8888(frame: &VideoFrame, y: u32, destination: &mut [u8]) -> bool {
     let Some(source) = frame.row(y) else {
         return false;
     };
@@ -820,9 +813,8 @@ fn convert_frame_row_to_rgba8888(
             if source.len() != (frame.width() as usize) * 2 {
                 return false;
             }
-            for (source_pixel, destination_pixel) in source
-                .chunks_exact(2)
-                .zip(destination.chunks_exact_mut(4))
+            for (source_pixel, destination_pixel) in
+                source.chunks_exact(2).zip(destination.chunks_exact_mut(4))
             {
                 let pixel = u16::from_le_bytes([source_pixel[0], source_pixel[1]]);
                 let red = ((pixel >> 11) & 0x1F) as u8;
@@ -840,7 +832,7 @@ fn convert_frame_row_to_rgba8888(
 
 #[cfg(test)]
 mod tests {
-    use super::{convert_frame_row_to_rgba8888, PixelFormat, VideoFrame};
+    use super::{PixelFormat, VideoFrame, convert_frame_row_to_rgba8888};
 
     #[test]
     fn converts_rgb565_primary_colors_to_rgba8888() {
@@ -861,12 +853,7 @@ mod tests {
         let mut output = [0; 12];
 
         assert!(convert_frame_row_to_rgba8888(&frame, 0, &mut output));
-        assert_eq!(
-            output,
-            [
-                255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255
-            ]
-        );
+        assert_eq!(output, [255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255]);
     }
 
     #[test]
@@ -888,15 +875,7 @@ mod tests {
 
     #[test]
     fn rejects_invalid_row_or_destination_size() {
-        let frame = VideoFrame::new(
-            3,
-            1,
-            1,
-            PixelFormat::Rgb565Le,
-            2,
-            vec![0, 0],
-        )
-        .unwrap();
+        let frame = VideoFrame::new(3, 1, 1, PixelFormat::Rgb565Le, 2, vec![0, 0]).unwrap();
 
         assert!(!convert_frame_row_to_rgba8888(&frame, 1, &mut [0; 4]));
         assert!(!convert_frame_row_to_rgba8888(&frame, 0, &mut [0; 3]));
