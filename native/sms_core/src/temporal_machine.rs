@@ -446,6 +446,16 @@ impl SmsTemporalMachine {
         {
             return Err(SmsTemporalMachineError::InvalidState);
         }
+        // A restored internal-cycle event must still be completable by the CPU.
+        // These values are rejected by schedule_internal_cycle() before creating
+        // the event; accepting them from a snapshot would create an unrecoverable
+        // continuation even though the Scheduler event is already pending.
+        if state.pending_internal_cycle_id.is_some()
+            && (state.cpu.instruction_tstates == u32::MAX
+                || state.cpu.handshake.next_request_id == u64::MAX)
+        {
+            return Err(SmsTemporalMachineError::InvalidState);
+        }
         Ok(Self {
             cpu,
             bus,
@@ -558,7 +568,7 @@ mod tests {
     }
 
     #[test]
-    fn internal_completion_remains_latched_when_cpu_commit_fails_and_can_retry() {
+    fn restore_rejects_internal_cycle_states_that_cannot_complete() {
         let mut machine = SmsTemporalMachine::new(vec![0x34; 0x4000], 3).unwrap();
         machine.cpu_mut().registers.set_hl(0xC000);
         machine.begin_instruction().unwrap();
@@ -574,28 +584,15 @@ mod tests {
         );
         machine.schedule_internal_cycle(1).unwrap();
 
-        let mut state = machine.export_state();
-        state.cpu.instruction_tstates = u32::MAX;
-        let mut machine = SmsTemporalMachine::restore_state(state).unwrap();
-        assert!(matches!(
-            machine.dispatch_next(),
-            Err(SmsTemporalMachineError::Cpu(
-                Z80MicroSequencerError::InstructionTStateOverflow
-            ))
-        ));
+        let valid_state = machine.export_state();
 
-        let mut state = machine.export_state();
-        assert_eq!(state.bus.pending_internal_cycle, Some(0));
-        assert_eq!(state.bus.internal_completion.unwrap().continuation_id, 0);
-        assert_eq!(state.pending_internal_cycle_id, Some(0));
-        assert_eq!(state.pending_internal_tstates, Some(1));
+        let mut overflowing_cpu = valid_state.clone();
+        overflowing_cpu.cpu.instruction_tstates = u32::MAX;
+        assert!(SmsTemporalMachine::restore_state(overflowing_cpu).is_err());
 
-        state.cpu.instruction_tstates = 7;
-        let mut restored = SmsTemporalMachine::restore_state(state).unwrap();
-        retired(restored.resume_instruction(0).unwrap(), 0x34, 11);
-        assert_eq!(restored.memory().read(0xC000), 1);
-        assert!(restored.export_state().bus.internal_completion.is_none());
-        assert!(restored.export_state().bus.pending_internal_cycle.is_none());
+        let mut exhausted_request_ids = valid_state;
+        exhausted_request_ids.cpu.handshake.next_request_id = u64::MAX;
+        assert!(SmsTemporalMachine::restore_state(exhausted_request_ids).is_err());
     }
 
     #[test]
