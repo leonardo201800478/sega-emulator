@@ -504,10 +504,10 @@ mod tests {
         invalid.delta_event_limit = 0;
         let encoded = encode_scheduler_state(&invalid, &U32PayloadCodec).unwrap();
         let decoded = decode_scheduler_state(&encoded, &U32PayloadCodec).unwrap();
-        assert_eq!(
+        assert!(matches!(
             MachineScheduler::restore_state(decoded),
             Err(SchedulerError::ZeroDeltaEventLimit)
-        );
+        ));
     }
 
     #[test]
