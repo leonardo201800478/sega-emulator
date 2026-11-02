@@ -152,7 +152,10 @@ impl SmsTemporalMachine {
         ) {
             return Err(SmsTemporalMachineError::InvalidState);
         }
-        if self.pending_internal_cycle_id.is_some() {
+        if self.pending_internal_cycle_id.is_some() || tstates != 1 {
+            // The current resumable slice exposes exactly one internal T-state
+            // for INC/DEC (HL). Reject caller-supplied durations that would make
+            // scheduler time diverge from the CPU's checked instruction counter.
             return Err(SmsTemporalMachineError::InvalidState);
         }
         if cpu_state.instruction_tstates == u32::MAX {
@@ -477,6 +480,32 @@ mod tests {
         retired(machine.step_instruction(0).unwrap(), 0x77, 7);
         assert_eq!(machine.memory().read(0xC000), 0x5A);
         assert_eq!(machine.now(), MachineTime::from_ticks(21));
+    }
+
+    #[test]
+    fn internal_cycle_rejects_duration_that_disagrees_with_cpu_phase() {
+        let mut machine = SmsTemporalMachine::new(vec![0x34; 0x4000], 3).unwrap();
+        machine.cpu_mut().registers.set_hl(0xC000);
+        machine.begin_instruction().unwrap();
+        machine.schedule_pending_bus(0).unwrap();
+        machine.dispatch_next().unwrap();
+        machine.schedule_pending_bus(0).unwrap();
+        assert_eq!(
+            machine.dispatch_next().unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+
+        let before = machine.export_state();
+        let now = machine.now();
+        assert_eq!(
+            machine.schedule_internal_cycle(2),
+            Err(SmsTemporalMachineError::InvalidState)
+        );
+        assert_eq!(machine.export_state(), before);
+        assert_eq!(machine.now(), now);
+
+        machine.schedule_internal_cycle(1).unwrap();
+        retired(machine.dispatch_next().unwrap(), 0x34, 11);
     }
 
     #[test]
