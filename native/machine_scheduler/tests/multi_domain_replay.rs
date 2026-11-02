@@ -3,8 +3,8 @@
 //! These tests validate integer MachineTime boundaries only. They do not
 //! claim sub-tick event dispatch or device safe-point execution.
 
-use sega_machine_scheduler::{ClockDomainId, MachineScheduler};
-use sega_temporal_core::{ClockRatio, HardwarePhase, MachineTime, PlatformPriority};
+use sega_machine_scheduler::{ClockDomainId, MachineScheduler, SchedulerError};
+use sega_temporal_core::{ClockError, ClockRatio, HardwarePhase, MachineTime, PlatformPriority};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Payload {
@@ -159,7 +159,10 @@ fn multi_domain_preflight_failure_is_atomic_for_every_domain_and_event() {
         .unwrap();
 
     let before = scheduler.export_state();
-    assert!(scheduler.dispatch_next().is_err());
+    assert_eq!(
+        scheduler.dispatch_next(),
+        Err(SchedulerError::Clock(ClockError::ArithmeticOverflow))
+    );
     assert_eq!(scheduler.export_state(), before);
     assert_eq!(scheduler.pending_events(), 1);
     assert_eq!(scheduler.now(), MachineTime::ZERO);
