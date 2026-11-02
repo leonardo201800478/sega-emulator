@@ -156,3 +156,25 @@ T0 não está concluído enquanto:
 - as incógnitas estiverem identificadas e isoladas sem constantes especulativas.
 
 **Resultado atual:** T0_PARTIAL. A evidência já permite iniciar estrutura de dados e testes funcionais SMS1, mas não autoriza implementar offsets de raster, fetch schedule, bus WAIT ou prioridade de eventos simultâneos. Nenhum status de precisão temporal é promovido.
+
+## 7. Baseline do repositório — inventário, não oráculo
+
+### Código legado observado em main
+
+- Arquivo: `native/sms_core/src/vdp.rs`.
+- O arquivo declara explicitamente modelo determinístico por scanline, não dot-cycle exact.
+- `LINE_TSTATES = 228`; `advance()` acumula T-states e fecha a linha em `complete_scanline()`.
+- O renderer lê VRAM/CRAM/registradores no fechamento da linha. As auditorias de 2026-10-29/30 já identificaram a consequência para writes intralinha.
+- O perfil `VideoStandard` permite NTSC/PAL/PAL-M/Unknown e a implementação atual disponibiliza 192/224/240 linhas; não há gate de ASIC para 224/240 no modelo legado.
+- O modelo atual mantém R9 pending/latch e atualiza o contador/IRQ por scanline. Isso não fixa a fase real de latch ou IRQ.
+- O arquivo contém testes unitários de semântica e testes de caracterização do próprio renderer, incluindo asserts que demonstram que um write R8/CRAM no meio da linha é aplicado à linha inteira. Os comentários dos testes dizem explicitamente que são caracterização do modelo, não oráculo de hardware.
+
+### Cobertura externa e golden masters
+
+- A árvore de `main` não contém atualmente uma suíte de integração dedicada ao SMS VDP em `native/sms_core/tests/`; os testes VDP observados ficam no módulo `vdp.rs`.
+- `docs/validation/golden-master-capture-contract.md` está marcado PROPOSED. Define a separação entre determinismo, integridade de baseline e fidelidade de hardware, mas não comprova que existam golden captures SMS aprovados.
+- Portanto, T0 não pode declarar baseline visual aprovado apenas porque os testes unitários do VDP legado passam.
+
+### Consequência para a reconstrução
+
+O novo VDP deve começar com testes SMS1 sintéticos e oráculos explicitamente classificados. O VDP legado pode fornecer fixtures funcionais e imagens comparativas, mas nunca deve determinar os timestamps/fases do novo pipeline. A constante legada de 228 T-states por linha fica como hipótese de compatibilidade até ser confirmada por fonte/medição específica do SMS1.
