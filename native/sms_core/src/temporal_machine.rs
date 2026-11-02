@@ -16,7 +16,7 @@ use sega_z80_cpu::{
     Z80MicroSequencerState, Z80MicroStep,
 };
 
-pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 3;
+pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 4;
 
 /// Runtime event trace emitted from actual Scheduler/bus dispatch boundaries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -140,11 +140,19 @@ impl SmsTemporalMachine {
                 (BusCycleKind::IoWrite, BusDirection::Write, Some(value))
             }
         };
+        let completion = self.bus.completion();
+        let (timestamp, phase) = match completion {
+            Some(completion) => (completion.completed_at, BusPhase::Complete),
+            None => (
+                self.bus.request_started_at().unwrap_or_else(|| self.bus.now()),
+                BusPhase::Setup,
+            ),
+        };
         BusTransaction::new(
-            self.bus.now(),
+            timestamp,
             MCycleIndex::new(state.mcycle_index),
             TStateIndex::new(state.tstate_index),
-            BusPhase::Setup,
+            phase,
             kind,
             direction,
             Some(request.address),
@@ -285,8 +293,19 @@ impl SmsTemporalMachine {
                 }
                 let tstates = self
                     .pending_internal_tstates
-                    .take()
                     .ok_or(SmsTemporalMachineError::InvalidState)?;
+
+                // Prepare the CPU transition before acknowledging the scheduler
+                // event. On failure, both the bus completion and continuation
+                // metadata remain available for snapshot/restore/retry.
+                let mut next_cpu = self.cpu.clone();
+                let step = next_cpu.complete_internal_cycle()?;
+                self.bus
+                    .acknowledge_internal_completion(completion.continuation_id)?;
+
+                self.cpu = next_cpu;
+                self.pending_internal_tstates = None;
+                self.pending_internal_cycle_id = None;
                 if self.trace_enabled {
                     self.trace_events
                         .push(SmsTemporalTraceEvent::InternalCycleCompleted {
@@ -295,8 +314,7 @@ impl SmsTemporalMachine {
                             tstates,
                         });
                 }
-                self.pending_internal_cycle_id = None;
-                Ok(self.cpu.complete_internal_cycle()?)
+                Ok(step)
             }
         }
     }
