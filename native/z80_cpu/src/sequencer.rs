@@ -21,6 +21,7 @@ pub enum Z80MicroSequencerError {
     InstructionAlreadyActive,
     NoInstructionActive,
     UnexpectedCompletion,
+    InstructionTStateOverflow,
     UnsupportedOpcode { opcode: u8, address: u16 },
 }
 
@@ -133,11 +134,13 @@ impl Z80MicroSequencer {
             .pending_request()
             .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
         let waits = self.handshake.wait_tstates().unwrap_or(0);
-        let response = self.handshake.complete(request_id, data)?;
-        self.instruction_tstates = self
+        let next_instruction_tstates = self
             .instruction_tstates
-            .saturating_add(u32::from(request.base_tstates))
-            .saturating_add(waits);
+            .checked_add(u32::from(request.base_tstates))
+            .and_then(|total| total.checked_add(waits))
+            .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+        let response = self.handshake.complete(request_id, data)?;
+        self.instruction_tstates = next_instruction_tstates;
 
         match self.phase {
             InstructionPhase::OpcodeFetch => {
@@ -264,7 +267,10 @@ impl Z80MicroSequencer {
         else {
             return Err(Z80MicroSequencerError::UnexpectedCompletion);
         };
-        self.instruction_tstates = self.instruction_tstates.saturating_add(1);
+        self.instruction_tstates = self
+            .instruction_tstates
+            .checked_add(1)
+            .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
         let value = self.increment_decrement_register(old, decrement);
         self.issue_write(address, value)
     }
