@@ -20,7 +20,8 @@ Validation ledger captured 2026-11-02. GitHub is the source of truth; every PASS
 | #347 | ADR-0013 documentation | `fc3fb1e014324f025fb05447e29e7ac8b2c890b0` | 41358326800 | PASS | PASS | PASS | PASS | PASS | PASS | Documentation |
 | #348 | E1 — Snapshot DTOs | `02f71b830ddd47156eb69d78de7b8107f851ec41` | 41360589305 | PASS | PASS | PASS | PASS | PASS | PASS | E1 |
 | #349 | E2 — ClockDomain restore | `356a7eb4a022e898b87c04c1ca61140056f47d14` | 41361087461 | PASS | PASS | PASS | PASS | PASS | PASS | E2 |
-| #350 | E3 — EventQueue restore | `d84e588a470c09655ae3c424a094d9f2c98e9a58` | 41368745114 | PASS | PASS | PASS | PASS | PASS | PASS | E3 implementation SHA; branch head `a2e21ca310f7b73e95d4d75700ca1e032cf1cc07` is a documentation-only reconciliation commit and has no separate exact-head workflow |
+| #350 | E3 — EventQueue restore | `d84e588a470c09655ae3c424a094d9f2c98e9a58` | 41368745114 | PASS | PASS | PASS | PASS | PASS | PASS | E3 implementation SHA |
+| #350 | E3 — Final PR head | `a2e21ca310f7b73e95d4d75700ca1e032cf1cc07` | 41370142913 | PASS | PASS | PASS | PASS | PASS | PASS | Documentation-only reconciliation commit; exact-head workflow verified PASS in all six gates |
 | #351 | ADR-0014 synchronization | `2b577e96e467d170e6eef537a51cee4eced8ee70` | 41369576783 | PASS | PASS | PASS | PASS | PASS | PASS | Exact current head |
 | #352 | E4 — Atomic Scheduler restore | `9c506be48982c20c98977e71aef71eb8f1cf3031` | 41369507172 | PASS | PASS | PASS | PASS | PASS | PASS | E4 implementation SHA; branch head `c5f3c76f1fdb833576153f22da8d66a4107f1f0b` contains documentation-only reconciliation and has no separate exact-head workflow |
 | #353 | E5 — Versioned state codec | `a33065fe14c09ee1840f5c9abb7e9ff0730457d2` | 41370192970 | PASS | PASS | PASS | PASS | PASS | PASS | Implementation SHA |
