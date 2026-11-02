@@ -15,8 +15,10 @@ pub mod bus {
 
 pub mod cpu;
 pub mod micro_ops;
+pub mod sequencer;
 
 pub use cpu::{CpuError, Z80, Z80AlternateRegisters, Z80Registers};
 pub use micro_ops::{
     Z80BusHandshake, Z80BusHandshakeError, Z80BusOperation, Z80BusRequest, Z80BusResponse,
 };
+pub use sequencer::{Z80MicroSequencer, Z80MicroSequencerError, Z80MicroStep};
