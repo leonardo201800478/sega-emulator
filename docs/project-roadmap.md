@@ -121,7 +121,7 @@ A arquitetura de destino deve ser alcançada incrementalmente, sem criar crates 
 
 Esta fase passa a ser a frente ativa de integração temporal, autorizada formalmente em 2026-11-02. A antecipação é incremental: não exige desligar o executor legado, não presume que contratos em revisão estejam aprovados e não antecipa sem evidência a semântica elétrica do SMS.
 
-- Reconciliar a PR #396 com o microsequenciador Z80 e os contratos normativos de `docs/architecture/scheduler/`; não duplicar `BusTransaction`, continuação ou trace.
+- Manter uma única origem para os contratos temporais: a PR #418 absorve `BusTransaction`, `BusOperationResult`, os tipos de progresso e a ADR-001 originalmente propostos na #396. A #396 é supersedida e não deve ser integrada em paralelo.
 - Completar o estado retomável serializável do Z80 para os safe points implementados, mantendo o executor atômico como referência diferencial.
 - Construir o coordenador da máquina que usa o `MachineScheduler` como única autoridade temporal, consumindo deadlines e dispatches sem mover lógica de dispositivo para o Scheduler.
 - Migrar o barramento em etapas para transações suspensíveis, com efeitos exatamente-uma-vez, WAIT somente quando modelado por fixture/evidência e sem busy-wait.
@@ -130,17 +130,18 @@ Esta fase passa a ser a frente ativa de integração temporal, autorizada formal
 - Não conectar a CPU ao VDP scanline legado como atalho; o destino de raster/IRQ é o novo VDP temporal.
 
 **Registro de execução (2026-11-02):**
-- T0: revisão da PR #396 registrada; contratos genéricos permanecem Draft porque o microsequenciador ainda não fornece índices M-cycle/T-state estáveis para mapeamento fiel.
+- T0: a #396 foi a proposta original dos contratos. Na T5a, `contract.rs`, exports e ADR-001 foram absorvidos pela #418 como fonte única; a #396 será fechada como supersedida, sem merge.
 - T1: PRs #412/#413 — contadores checked e codec binário versionado do estado retomável suportado.
 - T2: PR #414 — coordenador SMS sobre `MachineScheduler`, com escala temporal explícita.
 - T3: barramento de memória transacional, efeitos no deadline, acknowledgement único e WAIT de fixture, incorporado à stack T4.
 - T4: PR #416 — integrada em `main` no SHA `3f4a71d7b7bbc1863c20cd3293466405cb3f579b`; head validado `bfdc7d2fbbcf7712091df9960a7e7e593c18afea`; CI #41499228458 PASS em todos os quatro jobs sobre merge ref `cea276159efd382e8289085be4b5f67dccecc753`.
+- T5a: PR #418 — código validado no commit `82a259049171162a1407fc4a4d8ab612967332e5`; CI #3511 PASS nos gates Rust/Python/Windows e CI #3512 PASS incluindo Scheduler deterministic stress short. A reconciliação documental da ADR-001 e da #396 está nesta branch e exige novo CI no HEAD final.
 
-**Estado:** T0–T4 integrados incrementalmente; a primeira fatia vertical T4 está em `SHORT_PASS`. P6 permanece ativa para completar mappers/I/O, estado arquitetural Z80, integração do novo VDP/PSG e semântica sustentada por evidência. O caminho legado permanece preservado. `TEMPORAL_PASS` continua pendente.
+**Estado:** T0–T4 integrados incrementalmente; T4 permanece em `SHORT_PASS`. T5a (#418) está em revisão, com contratos temporais de origem única, índices M/T serializáveis e integração restrita ao subconjunto SMS. P6 continua ativa para mappers/I/O, estado arquitetural Z80, VDP/PSG e integração SG-1000. O caminho legado permanece preservado. `TEMPORAL_PASS` continua pendente.
 
-**Próxima tarefa executável — T5a:** expor índices M-cycle/T-state estáveis no microsequenciador para as operações já suportadas e produzir um mapeamento revisável para `BusTransaction`/`BusOperationResult` da PR #396. Primeiro fechar ownership, fase e timestamp sem duplicar o handshake; somente depois ampliar a próxima família de instruções. Não inferir fases elétricas nem ampliar o escopo de opcodes sem vetores e diferencial.
+**T5a — PR #418:** expor índices M-cycle/T-state estáveis no microsequenciador para as operações já suportadas e mapear para os contratos canônicos `BusTransaction`/`BusOperationResult` mantidos em `sega-temporal-core`. A #418 absorve a implementação e a ADR-001 da #396; a #396 é supersedida. Ownership, fase, timestamp, restore e conclusão transacional devem permanecer coerentes. Não inferir fases elétricas nem ampliar opcodes nesta etapa.
 
-**Saída:** primeira fatia vertical Z80/bus/Scheduler com trace runtime, snapshot/replay e regressões SG-1000/SMS; isso ainda não equivale a `TEMPORAL_PASS`.
+**Saída T5a:** metadados M/T serializáveis e mapeamento revisável CPU/bus/Scheduler para o subconjunto retomável existente no SMS, com trace, snapshot/replay e diferencial. SG-1000 ainda não consome esse caminho temporal. Isso não equivale a `TEMPORAL_PASS`.
 
 ### P7 — Fechamento semântico e expansão da integração temporal
 

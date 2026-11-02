@@ -1,6 +1,6 @@
 # Estado dos componentes — SG-1000 + Master System
 
-**Base de referência:** `main` em `3f4a71d7b7bbc1863c20cd3293466405cb3f579b` (2026-11-02, após PR #416).
+**Base de referência:** `main` em `62ab404e67fffbe8d0da7bf956e6b801a2e2bbd7` (2026-11-02, após PR #417).
 **Natureza:** inventário documental do estado observado no repositório e das auditorias disponíveis. Não substitui testes no SHA candidato nem declara precisão ciclo a ciclo.
 
 Este documento responde o que já existe, o que permanece como componente válido e o que ainda precisa ser integrado ou concluído. Componentes existentes não devem ser apagados só porque a arquitetura-alvo muda; a migração deve preservar APIs e testes até haver substituição comprovada.
@@ -97,3 +97,10 @@ Não elevar um estado com base apenas em documentação, compilação isolada, b
 | TEMPORAL_PASS | NOT DECLARED | Faltam oráculos independentes/físicos, WAIT físico, arbitragem e integração sistêmica |
 
 **T5a — PR #418 (em revisão):** índices M-cycle/T-state para o subconjunto retomável; validação de restore por fase; preservação do timestamp de início da transação; conclusão interna latched e acknowledgement após commit transacional da CPU. Correções e regressões foram publicadas na branch da PR; CI do SHA final e revisão independente ainda precisam ser confirmados. Não considerar integrado à main nem declarar `TEMPORAL_PASS`.
+## 5. T5a — PR #418 em revisão
+
+- Fonte canônica dos contratos temporais: a linha T5a (#418), que incorpora `BusTransaction`, `BusOperationResult`, os tipos de progresso e a ADR-001 originalmente propostos na PR #396. A #396 é supersedida e não deve ser integrada em paralelo.
+- Código T5a validado no commit `82a259049171162a1407fc4a4d8ab612967332e5`: CI #3511 PASS nos gates Rust, Python e Windows; CI #3512 PASS com Scheduler deterministic stress short.
+- Restore do sequenciador valida progresso M1/M2; restore da máquina rejeita ciclos internos pendentes que não poderiam ser concluídos por overflow do contador ou exaustão de request ID. Conclusões de barramento/ciclo interno permanecem latched até commit/ack.
+- Limites: apenas subconjunto atual de opcodes no SMS; WAIT é fixture; SG-1000, VDP/PSG/I/O/IRQ e semântica elétrica não estão integrados nesta fatia. `TEMPORAL_PASS` não concedido.
+- A revisão técnica independente e o CI do HEAD final, incluindo a reconciliação documental, permanecem gates de integração.
