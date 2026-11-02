@@ -148,7 +148,7 @@ fn multi_domain_preflight_failure_is_atomic_for_every_domain_and_event() {
     scheduler
         .register_clock_domain(
             ClockDomainId(1),
-            ClockRatio::new(3, 2).unwrap(),
+            ClockRatio::new(1, 1).unwrap(),
         )
         .unwrap();
     scheduler
