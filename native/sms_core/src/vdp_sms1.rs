@@ -937,4 +937,22 @@ mod sprite_tests {
         assert_eq!(line[80].palette_index, 17);
         assert_eq!(line[81].palette_index, 0);
     }
+
+    #[test]
+    fn tall_magnified_sprite_uses_even_tile_pair_and_vertical_duplication() {
+        let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
+        state.registers.set_raw(1, 0x43);
+        state.registers.set_raw(5, 0x7F);
+        set_sprite(&mut state, 0, 0xFF, 40, 3);
+        solid_tile(&mut state, 2, 2);
+        solid_tile(&mut state, 3, 7);
+        let mut line = background();
+
+        render_mode4_sprites_line(&state, 16, &mut line);
+
+        assert_eq!(line[40].palette_index, 23);
+        assert_eq!(line[41].palette_index, 23);
+    }
+
+
 }
