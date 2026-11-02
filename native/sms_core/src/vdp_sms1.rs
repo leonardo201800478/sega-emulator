@@ -498,7 +498,8 @@ pub fn render_mode4_background_line(
         }
 
         let fine_scroll = usize::from(horizontal_scroll & 7);
-        let source_x = (screen_x + usize::from(horizontal_scroll)) & 0xFF;
+        let coarse_scroll = usize::from(horizontal_scroll & 0xF8);
+        let source_x = (screen_x + coarse_scroll) & 0xFF;
         // SMS Mode 4 does not wrap the fine-scroll gap into the right edge:
         // the exposed left edge is filled with the backdrop color.
         if fine_scroll != 0 && screen_x < fine_scroll {
@@ -675,6 +676,29 @@ mod background_tests {
         assert_eq!(line[0].palette_index, 2);
         render_mode4_background_line(&state, 223, 1, &mut line);
         assert_eq!(line[0].palette_index, 1);
+    }
+
+
+
+    #[test]
+    fn fine_horizontal_scroll_exposes_backdrop_at_left_edge_without_wrapping() {
+        let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
+        state.registers.set_raw(0, 0x04);
+        state.registers.set_raw(1, 0x40);
+        state.registers.set_raw(2, 0x0E);
+        state.registers.set_raw(7, 3);
+        state.registers.set_raw(8, 1);
+        state.memory.vram[0x3800] = 1;
+        state.memory.vram[0x3802] = 2;
+        put_tile(&mut state, 1, 1);
+        put_tile(&mut state, 2, 2);
+        state.memory.cram[3] = 0x03;
+
+        let mut line = [BackgroundPixel { color: [0; 3], palette_index: 0, priority: false }; 256];
+        render_mode4_background_line(&state, 0, 0, &mut line);
+
+        assert_eq!(line[0].palette_index, 3);
+        assert_eq!(line[1].palette_index, 1);
     }
 
 }
