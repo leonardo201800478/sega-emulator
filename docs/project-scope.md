@@ -31,8 +31,6 @@ A prioridade de implementação corrente continua sendo fechar SG-1000 + SMS e a
 
 ### 2.1 Extensões e hardware especializado
 
-### 2.1 Extensões e hardware especializado
-
 O projeto também contempla processadores auxiliares e coprocessadores especializados presentes em cartuchos e expansões, como o **SVP (Sega Virtua Processor)** de Virtua Racing, DSPs, aceleradores matemáticos/gráficos programáveis e ASICs híbridos com processador próprio.
 
 Esses dispositivos são diferentes de VDPs convencionais, PSG/FM, controladores comuns e ALUs integradas às CPUs. Cada arquitetura especializada terá seu próprio núcleo Rust, memória, estado, interface externa, perfil de placa e integração temporal. Não haverá um interpretador universal de instruções.
