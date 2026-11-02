@@ -7,6 +7,14 @@
 
 use crate::{Z80BusHandshake, Z80BusHandshakeError, Z80BusOperation, Z80BusRequest, Z80Registers};
 
+const FLAG_C: u8 = 0x01;
+const FLAG_N: u8 = 0x02;
+const FLAG_PV: u8 = 0x04;
+const FLAG_H: u8 = 0x10;
+const FLAG_Z: u8 = 0x40;
+const FLAG_S: u8 = 0x80;
+const FLAG_XY: u8 = 0x28;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Z80MicroSequencerError {
     Handshake(Z80BusHandshakeError),
@@ -137,6 +145,18 @@ impl Z80MicroSequencer {
                         InstructionPhase::ImmediateReadMemoryWrite,
                         self.registers.pc,
                     ),
+                    0x04..=0x3D if (opcode & 0xC7) == 0x04 || (opcode & 0xC7) == 0x05 => {
+                        let register = (opcode >> 3) & 0x07;
+                        if register == 6 {
+                            self.unsupported(opcode)
+                        } else {
+                            let decrement = opcode & 0x01 != 0;
+                            let old = self.read_register(register);
+                            let value = self.increment_decrement_register(old, decrement);
+                            self.write_register(register, value);
+                            self.retire(opcode)
+                        }
+                    }
                     0x40..=0x7F if opcode != 0x76 => {
                         let destination = (opcode >> 3) & 0x07;
                         let source = opcode & 0x07;
@@ -214,6 +234,34 @@ impl Z80MicroSequencer {
         self.opcode = None;
         self.instruction_tstates = 0;
         Err(Z80MicroSequencerError::UnsupportedOpcode { opcode, address })
+    }
+
+    /// Apply the Z80 8-bit INC/DEC flag rules while preserving Carry.
+    fn increment_decrement_register(&mut self, old: u8, decrement: bool) -> u8 {
+        let value = if decrement {
+            old.wrapping_sub(1)
+        } else {
+            old.wrapping_add(1)
+        };
+        let mut flags = (self.registers.f & FLAG_C) | (value & (FLAG_S | FLAG_XY));
+        if value == 0 {
+            flags |= FLAG_Z;
+        }
+        if if decrement {
+            old & 0x0F == 0
+        } else {
+            old & 0x0F == 0x0F
+        } {
+            flags |= FLAG_H;
+        }
+        if if decrement { old == 0x80 } else { old == 0x7F } {
+            flags |= FLAG_PV;
+        }
+        if decrement {
+            flags |= FLAG_N;
+        }
+        self.registers.f = flags;
+        value
     }
 
     fn read_register(&self, code: u8) -> u8 {
@@ -519,6 +567,64 @@ mod tests {
         ));
         assert_eq!(cpu.registers.pc, 0);
         assert_eq!(cpu.pending_request(), Some(fetch));
+    }
+
+    #[test]
+    fn inc_b_wraps_and_sets_half_carry_and_overflow_preserving_carry() {
+        let mut cpu = Z80MicroSequencer {
+            registers: Z80Registers {
+                b: 0x7F,
+                f: FLAG_C,
+                ..Z80Registers::default()
+            },
+            ..Z80MicroSequencer::default()
+        };
+        let fetch = request(cpu.begin_instruction().unwrap());
+        retired(cpu.complete_bus_cycle(fetch.id, Some(0x04)).unwrap(), 0x04, 4);
+        assert_eq!(cpu.registers.b, 0x80);
+        assert_eq!(cpu.registers.f, FLAG_S | FLAG_H | FLAG_PV | FLAG_C);
+    }
+
+    #[test]
+    fn dec_a_wraps_and_sets_subtract_half_carry_and_overflow() {
+        let mut cpu = Z80MicroSequencer {
+            registers: Z80Registers {
+                a: 0x80,
+                f: FLAG_C,
+                ..Z80Registers::default()
+            },
+            ..Z80MicroSequencer::default()
+        };
+        let fetch = request(cpu.begin_instruction().unwrap());
+        retired(cpu.complete_bus_cycle(fetch.id, Some(0x3D)).unwrap(), 0x3D, 4);
+        assert_eq!(cpu.registers.a, 0x7F);
+        assert_eq!(cpu.registers.f, (0x7F & FLAG_XY) | FLAG_H | FLAG_PV | FLAG_N | FLAG_C);
+    }
+
+    #[test]
+    fn inc_zero_sets_zero_flag_and_preserves_carry() {
+        let mut cpu = Z80MicroSequencer {
+            registers: Z80Registers {
+                c: 0xFF,
+                f: FLAG_C | FLAG_N,
+                ..Z80Registers::default()
+            },
+            ..Z80MicroSequencer::default()
+        };
+        let fetch = request(cpu.begin_instruction().unwrap());
+        retired(cpu.complete_bus_cycle(fetch.id, Some(0x0C)).unwrap(), 0x0C, 4);
+        assert_eq!(cpu.registers.c, 0);
+        assert_eq!(cpu.registers.f, FLAG_C | FLAG_Z | FLAG_H);
+    }
+
+    #[test]
+    fn inc_hl_memory_form_is_not_misdecoded_as_register_inc() {
+        let mut cpu = Z80MicroSequencer::default();
+        let fetch = request(cpu.begin_instruction().unwrap());
+        assert!(matches!(
+            cpu.complete_bus_cycle(fetch.id, Some(0x34)),
+            Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x34, .. })
+        ));
     }
 
     #[test]
