@@ -235,10 +235,11 @@ impl Z80MicroSequencer {
                 };
                 payload_matches_source
                     && matches!(
-                    request.operation,
-                    Z80BusOperation::MemoryWrite { value: request_value }
-                        if request_value == value
-                ) && request.address == address
+                        request.operation,
+                        Z80BusOperation::MemoryWrite { value: request_value }
+                            if request_value == value
+                    )
+                    && request.address == address
                     && address == state.registers.hl()
                     && request.base_tstates == 3
                     && state.instruction_tstates >= minimum_tstates
@@ -1586,6 +1587,5 @@ mod tests {
             Err(Z80MicroSequencerError::InvalidState)
         );
     }
-
 
 }
