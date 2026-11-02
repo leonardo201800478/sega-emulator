@@ -247,6 +247,7 @@ pub struct Sms1Vdp {
     control_first: Option<u8>,
     code: PortCode,
     status: u8,
+    h_counter_latch: Option<u8>,
 }
 
 impl Sms1Vdp {
@@ -259,6 +260,7 @@ impl Sms1Vdp {
             control_first: None,
             code: PortCode::VramRead,
             status: 0,
+            h_counter_latch: None,
         }
     }
 
@@ -342,6 +344,22 @@ impl Sms1Vdp {
         status
     }
 
+    /// Capture the supplied H Counter value when the TH input changes.
+    ///
+    /// The timing generator/input integration must call this at the actual
+    /// TH transition and supply the H Counter sample for that instant. This
+    /// method does not calculate H Counter phase or synthesize a transition.
+    pub fn capture_h_counter_on_th_transition(&mut self, h_counter: u8) {
+        self.h_counter_latch = Some(h_counter);
+    }
+
+    /// Read the most recently captured H Counter value.
+    ///
+    /// Returns None until the first TH transition has captured a value.
+    pub const fn read_latched_h_counter(&self) -> Option<u8> {
+        self.h_counter_latch
+    }
+
     /// Set status bits from the raster/sprite subsystems when those are
     /// integrated. The low five bits are retained as the SMS status field.
     pub fn set_status_bits(&mut self, bits: u8) {
@@ -395,6 +413,7 @@ impl Sms1Vdp {
         self.control_first = None;
         self.code = PortCode::VramRead;
         self.status = 0;
+        self.h_counter_latch = None;
     }
 
     fn increment_address(&mut self) {
@@ -489,6 +508,37 @@ mod port_tests {
         vdp.write_control(0x82);
         assert_eq!(vdp.state.registers.get(2), Some(0xA8));
         assert_eq!(vdp.address(), 0x02A8);
+    }
+
+    #[test]
+    fn h_counter_is_unavailable_until_a_th_transition_latches_it() {
+        let mut vdp = Sms1Vdp::new(VideoStandard::Ntsc);
+
+        assert_eq!(vdp.read_latched_h_counter(), None);
+
+        vdp.capture_h_counter_on_th_transition(0x52);
+
+        assert_eq!(vdp.read_latched_h_counter(), Some(0x52));
+        assert_eq!(vdp.read_latched_h_counter(), Some(0x52));
+    }
+
+    #[test]
+    fn next_th_transition_replaces_the_previous_h_counter_latch() {
+        let mut vdp = Sms1Vdp::new(VideoStandard::Ntsc);
+        vdp.capture_h_counter_on_th_transition(0x31);
+        vdp.capture_h_counter_on_th_transition(0xA4);
+
+        assert_eq!(vdp.read_latched_h_counter(), Some(0xA4));
+    }
+
+    #[test]
+    fn reset_clears_the_h_counter_latch() {
+        let mut vdp = Sms1Vdp::new(VideoStandard::Ntsc);
+        vdp.capture_h_counter_on_th_transition(0x7C);
+
+        vdp.reset(false);
+
+        assert_eq!(vdp.read_latched_h_counter(), None);
     }
 
     #[test]
