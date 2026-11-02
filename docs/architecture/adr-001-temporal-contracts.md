@@ -95,8 +95,8 @@ Os contratos desta ADR são implementados em `native/temporal_core` e consumidos
 - [x] Progresso/next-event de dispositivo definido.
 - [x] Reset, snapshot e restore de estado parcial especificados.
 - [ ] Revisão arquitetural e aprovação do contrato.
-- [x] Código T5a, incluindo a regressão do codec com CRC32 válido: SHA `60395290f677e133963a917a32837af64273046d`, run `41533717810`, quatro jobs PASS.
-- [x] HEAD documental final: SHA `646bd556572a1f077dc3c003407c6e64439f66f3`, run `41534269758`, quatro jobs PASS (Rust, Python, Windows x64 e Scheduler deterministic stress). Execução local: NOT RUN.
+- [x] Código T5a, incluindo validação de endereço `(HL)`, codec com CRC32 válido e reconciliação `instruction_tstates`/Scheduler: SHA `0c178ed6c8da6aeddf8e25682a2ebc620eec786f`, run `41536695747`, quatro jobs PASS.
+- [x] HEAD documental predecessor: SHA `646bd556572a1f077dc3c003407c6e64439f66f3`, run `41534269758`, quatro jobs PASS. Atualizações documentais posteriores são validadas no SHA final da PR, registrado no body. Execução local: NOT RUN.
 - [ ] PR aprovada e integrada.
 
-**Estado:** IMPLEMENTED na branch #418 / QUICK_PASS PASS para o código no SHA `60395290f677e133963a917a32837af64273046d` (run `41533717810`) / CI do HEAD documental `646bd556572a1f077dc3c003407c6e64439f66f3` (run `41534269758`) PASS / APPROVAL_PENDING. A ADR permanece proposta até revisão arquitetural independente e integração; não declara `TEMPORAL_PASS`.
+**Estado:** IMPLEMENTED na branch #418 / QUICK_PASS PASS para o código no SHA `0c178ed6c8da6aeddf8e25682a2ebc620eec786f` (run `41536695747`, quatro jobs PASS) / APPROVAL_PENDING para reauditoria do HEAD final. A ADR permanece proposta até revisão arquitetural independente e integração; não declara `TEMPORAL_PASS`.
