@@ -241,8 +241,30 @@ pub struct D3d12Host {
 
 impl D3d12Host {
     /// Create the native window, D3D12 device/queue and DXGI flip-model swap chain.
+    ///
+    /// The initial window size and swap-chain image size are identical.
     pub fn initialize(width: u32, height: u32) -> Result<Self> {
-        let window = NativeVideoWindow::create(width, height)?;
+        Self::initialize_with_window_size(width, height, width, height)
+    }
+
+    /// Initialize a logical render surface and a separately sized native window.
+    ///
+    /// DXGI's stretch scaling presents the logical frame across the window
+    /// client area. This is useful for SMS native-resolution frames without
+    /// requiring the emulation core to render at the desktop window size.
+    pub fn initialize_with_window_size(
+        render_width: u32,
+        render_height: u32,
+        window_width: u32,
+        window_height: u32,
+    ) -> Result<Self> {
+        if render_width == 0 || render_height == 0 {
+            return Err(Error::new(
+                windows::core::HRESULT(0x8007_0057_u32 as i32),
+                "render dimensions must be non-zero",
+            ));
+        }
+        let window = NativeVideoWindow::create(window_width, window_height)?;
         let factory: IDXGIFactory2 =
             unsafe { CreateDXGIFactory2(DXGI_CREATE_FACTORY_FLAGS::default())? };
 
@@ -261,8 +283,8 @@ impl D3d12Host {
         let queue: ID3D12CommandQueue = unsafe { device.CreateCommandQueue(&queue_desc)? };
 
         let swap_chain_desc = DXGI_SWAP_CHAIN_DESC1 {
-            Width: width,
-            Height: height,
+            Width: render_width,
+            Height: render_height,
             Format: DXGI_FORMAT_R8G8B8A8_UNORM,
             SampleDesc: DXGI_SAMPLE_DESC {
                 Count: 1,
@@ -442,8 +464,8 @@ impl D3d12Host {
             upload_layout,
             upload_size,
             texture_is_copy_source: false,
-            width,
-            height,
+            width: render_width,
+            height: render_height,
             window,
         })
     }
