@@ -739,10 +739,12 @@ pub fn render_mode4_sprites_line(
     state: &Sms1VdpState,
     screen_y: u16,
     background: &mut [BackgroundPixel; 256],
+    hardware_sprite_limit: bool,
 ) -> u8 {
     const SPRITE_OVERFLOW: u8 = 0x40;
     const SPRITE_COLLISION: u8 = 0x20;
-    const SPRITE_LIMIT: usize = 8;
+    const HARDWARE_SPRITE_LIMIT: usize = 8;
+    const MAX_SPRITES: usize = 64;
     const SAT_TERMINATOR: u8 = 0xD0;
 
     if screen_y >= 192 || state.registers.as_array()[1] & 0x40 == 0 {
@@ -759,11 +761,11 @@ pub fn render_mode4_sprites_line(
     let display_height = sprite_height * if magnified { 2 } else { 1 };
     let x_shift = if registers[0] & 0x08 != 0 { 8i16 } else { 0i16 };
 
-    let mut selected = [(0usize, 0u8, 0u8, 0usize); SPRITE_LIMIT];
+    let mut selected = [(0usize, 0u8, 0u8, 0usize); MAX_SPRITES];
     let mut selected_count = 0usize;
     let mut overflow = false;
 
-    for sprite in 0..64usize {
+    for sprite in 0..MAX_SPRITES {
         let y = vram[(sat_base + sprite) & 0x3FFF];
         if y == SAT_TERMINATOR {
             break;
@@ -773,9 +775,11 @@ pub fn render_mode4_sprites_line(
         if relative < 0 || relative >= display_height as i16 {
             continue;
         }
-        if selected_count == SPRITE_LIMIT {
+        if selected_count == HARDWARE_SPRITE_LIMIT {
             overflow = true;
-            break;
+            if hardware_sprite_limit {
+                break;
+            }
         }
         let x = vram[(sat_base + 0x80 + sprite * 2) & 0x3FFF];
         let tile = vram[(sat_base + 0x81 + sprite * 2) & 0x3FFF];
@@ -871,7 +875,7 @@ mod sprite_tests {
         set_sprite(&mut state, 0, 0xFF, 10, 1);
         solid_tile(&mut state, 1, 5);
         let mut line = background();
-        let flags = render_mode4_sprites_line(&state, 0, &mut line);
+        let flags = render_mode4_sprites_line(&state, 0, &mut line, true);
         assert_eq!(flags, 0);
         assert_eq!(line[10].palette_index, 21);
         assert_eq!(line[17].palette_index, 21);
@@ -942,6 +946,23 @@ mod sprite_tests {
     }
 
     #[test]
+    fn unlocked_mode_draws_ninth_sprite_but_keeps_hardware_overflow() {
+        let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
+        state.registers.set_raw(1, 0x40);
+        state.registers.set_raw(5, 0x7F);
+        for index in 0..9 {
+            set_sprite(&mut state, index, 0xFF, (10 + index * 20) as u8, 1);
+        }
+        solid_tile(&mut state, 1, 1);
+        let mut line = background();
+
+        let flags = render_mode4_sprites_line(&state, 0, &mut line, false);
+
+        assert_eq!(flags & 0x40, 0x40);
+        assert_eq!(line[170].palette_index, 17);
+    }
+
+    #[test]
     fn tall_magnified_sprite_uses_even_tile_pair_and_vertical_duplication() {
         let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
         state.registers.set_raw(1, 0x43);
@@ -951,7 +972,7 @@ mod sprite_tests {
         solid_tile(&mut state, 3, 7);
         let mut line = background();
 
-        render_mode4_sprites_line(&state, 16, &mut line);
+        render_mode4_sprites_line(&state, 16, &mut line, true);
 
         assert_eq!(line[40].palette_index, 23);
         assert_eq!(line[41].palette_index, 23);
