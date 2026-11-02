@@ -22,6 +22,7 @@ use windows::Win32::Graphics::Dxgi::{
     IDXGISwapChain2, IDXGISwapChain3,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::System::Threading::{INFINITE, WaitForSingleObjectEx};
 use windows::Win32::UI::WindowsAndMessaging::{
     CW_USEDEFAULT, CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow,
     DispatchMessageW, MSG, PM_REMOVE, PeekMessageW, PostQuitMessage, RegisterClassW, SW_SHOW,
@@ -247,6 +248,22 @@ impl D3d12Host {
     /// Return the configured maximum queued presentation latency.
     pub fn maximum_frame_latency(&self) -> Result<u32> {
         unsafe { self.swap_chain2.GetMaximumFrameLatency() }
+    }
+
+    /// Block the presentation thread until DXGI allows another frame.
+    ///
+    /// Call this only from the host/render thread. It must never gate machine
+    /// stepping or Scheduler time. The swap chain was created with the
+    /// frame-latency waitable-object flag and a maximum latency of one.
+    pub fn wait_for_frame_slot(&self) -> Result<()> {
+        let result = unsafe {
+            WaitForSingleObjectEx(self.frame_latency_handle, INFINITE, false)
+        };
+        if result.0 == 0 {
+            Ok(())
+        } else {
+            Err(Error::from_win32())
+        }
     }
 
     /// Return whether the frame-latency waitable object was created.
