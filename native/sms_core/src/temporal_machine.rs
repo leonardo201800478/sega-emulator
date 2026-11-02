@@ -6,13 +6,11 @@
 
 use core::fmt;
 
-use crate::{
-    SmsTemporalBus, SmsTemporalBusError, SmsTemporalBusState, SmsTemporalDispatch,
-};
+use crate::{SmsTemporalBus, SmsTemporalBusError, SmsTemporalBusState, SmsTemporalDispatch};
 use sega_temporal_core::MachineTime;
 use sega_z80_cpu::{
-    Z80MicroSequencer, Z80MicroSequencerError, Z80MicroSequencerPhase,
-    Z80MicroSequencerState, Z80MicroStep,
+    Z80MicroSequencer, Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroSequencerState,
+    Z80MicroStep,
 };
 
 pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 1;
@@ -241,9 +239,7 @@ impl SmsTemporalMachine {
     }
 
     /// Restore the complete first vertical slice after cross-validating CPU and bus state.
-    pub fn restore_state(
-        state: SmsTemporalMachineState,
-    ) -> Result<Self, SmsTemporalMachineError> {
+    pub fn restore_state(state: SmsTemporalMachineState) -> Result<Self, SmsTemporalMachineError> {
         if state.format_version != SMS_TEMPORAL_MACHINE_STATE_VERSION {
             return Err(SmsTemporalMachineError::InvalidState);
         }
@@ -328,8 +324,7 @@ mod tests {
         ));
         machine.schedule_pending_bus(1).unwrap();
 
-        let restored =
-            SmsTemporalMachine::restore_state(machine.export_state()).unwrap();
+        let restored = SmsTemporalMachine::restore_state(machine.export_state()).unwrap();
         let mut restored = restored;
         retired(restored.resume_instruction(0).unwrap(), 0x00, 5);
         assert_eq!(restored.cpu().registers.pc, 1);
