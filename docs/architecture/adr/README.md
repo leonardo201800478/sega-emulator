@@ -13,6 +13,13 @@ Decisões arquiteturais da reorganização Rust-first, do motor Z80 compartilhad
 | [ADR-0014 — execução e sincronização temporal de dispositivos](0014-temporal-device-execution-and-synchronization.md) | Contratos extensíveis para múltiplas CPUs, chips temporizados, safe points, domínios independentes e determinismo. | Proposto para revisão |
 | [ADR-0015 — contrato temporal SMS/Z80/barramento](0015-sms-z80-bus-temporal-contract.md) | Safe points retomáveis, transações Z80/SMS e decisão de granularidade condicionada a evidências. | Proposta para revisão; runtime não autorizado |
 
+## Documentação normativa do Scheduler
+
+- [Master Clock Scheduler — índice](../scheduler/README.md)
+- [Manual de arquitetura e integração](../scheduler/scheduler-integration-manual.md)
+- [Contrato de integração de componentes](../scheduler/component-integration-contract.md)
+- [Prompt permanente de integração](../../prompts/scheduler-component-integration.md)
+
 ## Documentos de arquitetura temporal
 
 - [Modelo temporal cycle-accurate do sistema](../cycle-accurate-system-model.md)
@@ -30,7 +37,7 @@ As ADRs consolidam contratos e decisões; não significam que os componentes já
 
 Baseline de evidência: [F0 — inventário remoto e reconciliação das PRs](../migrations/f0-remote-inventory-2026-10-31.md).
 
-A ADR-0013 registra o progresso temporal das PRs #343–#346, a auditoria independente da Etapa E e a sequência de implementação aprovada. A consolidação da stack de Scheduler está na PR #358 (Draft, não integrada à `main`), com a cobertura multi-domain complementar na PR #359 (Draft, empilhada sobre #358). O ledger `docs/evidence/adr-0013-snapshot-restore-validation.md` registra os heads e workflows exatos de 2026-11-02.
+A ADR-0013 registra o progresso temporal das PRs #343–#346, a auditoria independente da Etapa E e a sequência de implementação aprovada. A stack consolidada de Scheduler (#358) e a cobertura multi-domain (#359) foram integradas à `main` em 2026-11-02. A documentação normativa atual está em `docs/architecture/scheduler/`; o ledger `docs/evidence/adr-0013-snapshot-restore-validation.md` mantém os heads e workflows exatos. A integração com CPU, barramento e dispositivos continua separada e pendente.
 
 A ADR-0014 define o contrato futuro de execução e sincronização de dispositivos. A cobertura multi-domain da PR #359 valida avanço/replay de domínios racionais em timestamps inteiros, mas não substitui a implementação E1–E7 da ADR-0013 nem autoriza integração temporal prematura de CPU, barramento, VDP, PSG ou FM.
 

@@ -1,3 +1,5 @@
+> **Atualização de estado — 2026-11-02:** este dossier foi escrito durante a revisão da stack e contém trechos históricos que descrevem #358/#359 como Draft/não integradas. Essa situação foi superada: GitHub confirma PR #358 e PR #359 como **closed + merged**; a implementação correspondente está na `main` em `eb0b951e8f78394b7f83d8750506a3678dab75bb`. Consulte a [documentação normativa atual do Scheduler](scheduler/README.md) e o [ledger de evidências](../evidence/adr-0013-snapshot-restore-validation.md) para o estado atual. O merge da infraestrutura não significa integração temporal de CPU/bus/VDP/PSG e não autoriza `TEMPORAL_PASS`. Os parágrafos históricos abaixo devem ser lidos como registro da época em que foram escritos, não como estado remoto atual.
+
 # Machine Scheduler — Technical Reference and Completion Dossier
 
 - **Repository:** `leonardo201800478/sega-emulator`
