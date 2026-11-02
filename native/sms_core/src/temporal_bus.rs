@@ -23,6 +23,20 @@ pub struct SmsBusCompletion {
     pub completed_at: MachineTime,
 }
 
+/// Completion of a CPU-internal interval with no memory-bus transaction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SmsInternalCycleCompletion {
+    pub continuation_id: u64,
+    pub completed_at: MachineTime,
+}
+
+/// One dispatched event owned by the SMS temporal bus/coordinator boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SmsTemporalDispatch {
+    BusCompletion(SmsBusCompletion),
+    InternalCycleComplete(SmsInternalCycleCompletion),
+}
+
 /// Complete in-memory continuation of the transactional bus adapter.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SmsTemporalBusState {
@@ -31,6 +45,7 @@ pub struct SmsTemporalBusState {
     pub coordinator: SmsTemporalCoordinatorState,
     pub pending_request: Option<Z80BusRequest>,
     pub completion: Option<SmsBusCompletion>,
+    pub pending_internal_cycle: Option<u64>,
 }
 
 /// Errors from the transactional SMS memory-bus adapter.
@@ -85,6 +100,7 @@ pub struct SmsTemporalBus {
     coordinator: SmsTemporalCoordinator,
     pending_request: Option<Z80BusRequest>,
     completion: Option<SmsBusCompletion>,
+    pending_internal_cycle: Option<u64>,
 }
 
 impl SmsTemporalBus {
@@ -101,6 +117,7 @@ impl SmsTemporalBus {
             coordinator,
             pending_request: None,
             completion: None,
+            pending_internal_cycle: None,
         })
     }
 
@@ -133,49 +150,83 @@ impl SmsTemporalBus {
         Ok(deadline)
     }
 
+    /// Schedule one internal CPU interval without creating a fake bus access.
+    pub fn schedule_internal_cycle(
+        &mut self,
+        continuation_id: u64,
+        tstates: u32,
+    ) -> Result<MachineTime, SmsTemporalBusError> {
+        if self.pending_request.is_some()
+            || self.completion.is_some()
+            || self.pending_internal_cycle.is_some()
+        {
+            return Err(SmsTemporalBusError::Busy);
+        }
+        let deadline = self
+            .coordinator
+            .schedule_internal_cycle(continuation_id, tstates)?;
+        self.pending_internal_cycle = Some(continuation_id);
+        Ok(deadline)
+    }
+
     /// Dispatch the next scheduled boundary and apply the memory side effect once.
     ///
     /// A read samples memory at this completion boundary. A write mutates memory
     /// at this completion boundary. The response is latched until acknowledged.
     pub fn dispatch_next(
         &mut self,
-    ) -> Result<Option<SmsBusCompletion>, SmsTemporalBusError> {
+    ) -> Result<Option<SmsTemporalDispatch>, SmsTemporalBusError> {
         let Some(dispatch) = self.coordinator.dispatch_next()? else {
             return Ok(None);
         };
-        let SmsTemporalEvent::BusCompletion { request_id } = dispatch.event.payload;
-        let request = self
-            .pending_request
-            .ok_or(SmsTemporalBusError::NoPendingRequest)?;
-        if request.id != request_id {
-            return Err(SmsTemporalBusError::WrongRequestId {
-                expected: request.id,
-                received: request_id,
-            });
-        }
-        if self.completion.is_some() {
-            return Err(SmsTemporalBusError::Busy);
-        }
+        match dispatch.event.payload {
+            SmsTemporalEvent::BusCompletion { request_id } => {
+                let request = self
+                    .pending_request
+                    .ok_or(SmsTemporalBusError::NoPendingRequest)?;
+                if request.id != request_id {
+                    return Err(SmsTemporalBusError::WrongRequestId {
+                        expected: request.id,
+                        received: request_id,
+                    });
+                }
+                if self.completion.is_some() {
+                    return Err(SmsTemporalBusError::Busy);
+                }
 
-        let data = match request.operation {
-            Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
-                Some(self.memory.read(request.address))
+                let data = match request.operation {
+                    Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
+                        Some(self.memory.read(request.address))
+                    }
+                    Z80BusOperation::MemoryWrite { value } => {
+                        self.memory.write(request.address, value);
+                        None
+                    }
+                    Z80BusOperation::PortRead | Z80BusOperation::PortWrite { .. } => {
+                        return Err(SmsTemporalBusError::UnsupportedOperation);
+                    }
+                };
+                let completion = SmsBusCompletion {
+                    request_id,
+                    data,
+                    completed_at: dispatch.event.timestamp,
+                };
+                self.completion = Some(completion);
+                Ok(Some(SmsTemporalDispatch::BusCompletion(completion)))
             }
-            Z80BusOperation::MemoryWrite { value } => {
-                self.memory.write(request.address, value);
-                None
+            SmsTemporalEvent::InternalCycleComplete { continuation_id } => {
+                if self.pending_internal_cycle != Some(continuation_id) {
+                    return Err(SmsTemporalBusError::InvalidState);
+                }
+                self.pending_internal_cycle = None;
+                Ok(Some(SmsTemporalDispatch::InternalCycleComplete(
+                    SmsInternalCycleCompletion {
+                        continuation_id,
+                        completed_at: dispatch.event.timestamp,
+                    },
+                )))
             }
-            Z80BusOperation::PortRead | Z80BusOperation::PortWrite { .. } => {
-                return Err(SmsTemporalBusError::UnsupportedOperation);
-            }
-        };
-        let completion = SmsBusCompletion {
-            request_id,
-            data,
-            completed_at: dispatch.event.timestamp,
-        };
-        self.completion = Some(completion);
-        Ok(Some(completion))
+        }
     }
 
     /// Consume the latched response exactly once after the CPU accepts it.
@@ -220,6 +271,7 @@ impl SmsTemporalBus {
             coordinator: self.coordinator.export_state(),
             pending_request: self.pending_request,
             completion: self.completion,
+            pending_internal_cycle: self.pending_internal_cycle,
         }
     }
 
@@ -230,16 +282,24 @@ impl SmsTemporalBus {
         }
         let coordinator = SmsTemporalCoordinator::restore_state(state.coordinator.clone())?;
         let pending_events = &state.coordinator.scheduler.event_queue.pending;
-        match (state.pending_request, state.completion) {
-            (None, None) if pending_events.is_empty() => {}
-            (Some(request), None)
+        match (
+            state.pending_request,
+            state.completion,
+            state.pending_internal_cycle,
+        ) {
+            (None, None, None) if pending_events.is_empty() => {}
+            (Some(request), None, None)
                 if pending_events.len() == 1
                     && pending_events[0].payload
                         == (SmsTemporalEvent::BusCompletion {
                             request_id: request.id,
                         }) => {}
-            (Some(request), Some(completion))
+            (Some(request), Some(completion), None)
                 if request.id == completion.request_id && pending_events.is_empty() => {}
+            (None, None, Some(continuation_id))
+                if pending_events.len() == 1
+                    && pending_events[0].payload
+                        == (SmsTemporalEvent::InternalCycleComplete { continuation_id }) => {}
             _ => return Err(SmsTemporalBusError::InvalidState),
         }
         Ok(Self {
@@ -247,13 +307,14 @@ impl SmsTemporalBus {
             coordinator,
             pending_request: state.pending_request,
             completion: state.completion,
+            pending_internal_cycle: state.pending_internal_cycle,
         })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{SmsTemporalBus, SmsTemporalBusError};
+    use super::{SmsTemporalBus, SmsTemporalBusError, SmsTemporalDispatch};
     use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
 
     fn request(id: u64, operation: Z80BusOperation, address: u16, tstates: u8) -> Z80BusRequest {
@@ -270,7 +331,7 @@ mod tests {
         let mut bus = SmsTemporalBus::new(vec![0xA5; 0x4000], 3).unwrap();
         let request = request(1, Z80BusOperation::MemoryRead, 0x0100, 3);
         bus.begin_request(request, 2).unwrap();
-        let completion = bus.dispatch_next().unwrap().unwrap();
+        let SmsTemporalDispatch::BusCompletion(completion) = bus.dispatch_next().unwrap().unwrap() else { panic!("expected bus completion"); };
         assert_eq!(completion.request_id, 1);
         assert_eq!(completion.data, Some(0xA5));
         assert_eq!(bus.acknowledge_completion(1).unwrap(), completion);
@@ -291,7 +352,7 @@ mod tests {
         );
         bus.begin_request(request, 0).unwrap();
         assert_eq!(bus.memory().read(0xC000), 0);
-        let completion = bus.dispatch_next().unwrap().unwrap();
+        let SmsTemporalDispatch::BusCompletion(completion) = bus.dispatch_next().unwrap().unwrap() else { panic!("expected bus completion"); };
         assert_eq!(completion.data, None);
         assert_eq!(bus.memory().read(0xC000), 0x5A);
         bus.acknowledge_completion(2).unwrap();
@@ -310,7 +371,7 @@ mod tests {
         bus.begin_request(request, 1).unwrap();
         let mut restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
         assert_eq!(restored.memory().read(0xC001), 0);
-        let completion = restored.dispatch_next().unwrap().unwrap();
+        let SmsTemporalDispatch::BusCompletion(completion) = restored.dispatch_next().unwrap().unwrap() else { panic!("expected bus completion"); };
         assert_eq!(restored.memory().read(0xC001), 0x77);
         restored.acknowledge_completion(completion.request_id).unwrap();
     }
