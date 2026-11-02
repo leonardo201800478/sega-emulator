@@ -1159,54 +1159,55 @@ mod tests {
     fn restore_rejects_invalid_format_and_zero_delta_limit() {
         let mut unsupported = scheduler_snapshot_fixture();
         unsupported.format_version += 1;
-        assert_eq!(
+        assert!(matches!(
             MachineScheduler::restore_state(unsupported),
             Err(SchedulerError::StateFormatVersionMismatch {
-                expected: super::SCHEDULER_STATE_FORMAT_VERSION,
-                actual: super::SCHEDULER_STATE_FORMAT_VERSION + 1,
-            })
-        );
+                expected,
+                actual,
+            }) if expected == super::SCHEDULER_STATE_FORMAT_VERSION
+                && actual == super::SCHEDULER_STATE_FORMAT_VERSION + 1
+        ));
 
         let mut zero_limit = scheduler_snapshot_fixture();
         zero_limit.delta_event_limit = 0;
-        assert_eq!(
+        assert!(matches!(
             MachineScheduler::restore_state(zero_limit),
             Err(SchedulerError::ZeroDeltaEventLimit)
-        );
+        ));
     }
 
     #[test]
     fn restore_rejects_cross_component_dispatch_history_mismatch() {
         let mut state = scheduler_snapshot_fixture();
         state.dispatched_at_timestamp = 0;
-        assert_eq!(
+        assert!(matches!(
             MachineScheduler::restore_state(state),
             Err(SchedulerError::DispatchHistoryMismatch)
-        );
+        ));
 
         let mut state = scheduler_snapshot_fixture();
         state.last_dispatch_timestamp = Some(MachineTime::from_ticks(4));
-        assert_eq!(
+        assert!(matches!(
             MachineScheduler::restore_state(state),
             Err(SchedulerError::DispatchWatermarkMismatch)
-        );
+        ));
     }
 
     #[test]
     fn restore_rejects_noncanonical_domains_and_events_before_now() {
         let mut unsorted = scheduler_snapshot_fixture();
         unsorted.clock_domains.swap(0, 1);
-        assert_eq!(
+        assert!(matches!(
             MachineScheduler::restore_state(unsorted),
             Err(SchedulerError::NonCanonicalClockDomainOrder)
-        );
+        ));
 
         let mut event_before_now = scheduler_snapshot_fixture();
         event_before_now.event_queue.pending[0].timestamp = MachineTime::from_ticks(4);
-        assert_eq!(
+        assert!(matches!(
             MachineScheduler::restore_state(event_before_now),
             Err(SchedulerError::PendingEventBeforeNow)
-        );
+        ));
     }
 
     #[test]
@@ -1214,16 +1215,16 @@ mod tests {
         let mut watermark_after_now = scheduler_snapshot_fixture();
         watermark_after_now.event_queue.last_dispatched.as_mut().unwrap().timestamp =
             MachineTime::from_ticks(6);
-        assert_eq!(
+        assert!(matches!(
             MachineScheduler::restore_state(watermark_after_now),
             Err(SchedulerError::WatermarkAfterNow)
-        );
+        ));
 
         let mut domain_time_mismatch = scheduler_snapshot_fixture();
         domain_time_mismatch.clock_domains[0].current_time = MachineTime::from_ticks(4);
-        assert_eq!(
+        assert!(matches!(
             MachineScheduler::restore_state(domain_time_mismatch),
             Err(SchedulerError::ClockDomainTimeMismatch(ClockDomainId(1)))
-        );
+        ));
     }
 }
