@@ -211,6 +211,9 @@ impl<T> EventQueue<T> {
             }
             previous_key = Some(key);
             if let Some(watermark) = state.last_dispatched {
+                if event.sequence == watermark.sequence {
+                    return Err(EventQueueError::DuplicateSequence);
+                }
                 let event_key = (
                     event.timestamp,
                     event.hardware_phase,
@@ -551,6 +554,22 @@ mod tests {
             last_dispatched: Some(watermark),
         };
         assert!(EventQueue::restore_state(valid).is_ok());
+
+        let reused_dispatched_sequence = EventQueueState {
+            pending: vec![ScheduledEvent {
+                timestamp: MachineTime::from_ticks(6),
+                hardware_phase: HardwarePhase::new(0),
+                priority: PlatformPriority::new(0),
+                sequence: 1,
+                payload: (),
+            }],
+            next_sequence: 2,
+            last_dispatched: Some(watermark),
+        };
+        assert_eq!(
+            EventQueue::restore_state(reused_dispatched_sequence).err(),
+            Some(EventQueueError::DuplicateSequence)
+        );
     }
 
     #[test]
