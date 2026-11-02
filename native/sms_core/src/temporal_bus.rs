@@ -552,6 +552,7 @@ mod tests {
         };
         assert_eq!(bus.memory().selected_banks(), [3, 1, 2]);
         assert_eq!(bus.memory().read(0x0400), 3);
+        assert_eq!(bus.memory().mapper_register_write_count_for_test(), 1);
 
         let mut restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
         let latched_state = restored.export_state();
@@ -563,6 +564,7 @@ mod tests {
         );
         assert_eq!(restored.memory().selected_banks(), [3, 1, 2]);
         assert_eq!(restored.memory().read(0x0400), 3);
+        assert_eq!(restored.memory().mapper_register_write_count_for_test(), 1);
         assert_eq!(restored.acknowledge_completion(20).unwrap(), completion);
         assert_eq!(restored.dispatch_next().unwrap(), None);
         assert_eq!(restored.memory().selected_banks(), [3, 1, 2]);
