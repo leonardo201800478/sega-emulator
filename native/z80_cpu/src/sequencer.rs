@@ -944,6 +944,29 @@ mod tests {
     }
 
     #[test]
+    fn failed_internal_write_allocation_does_not_consume_internal_tstate() {
+        let mut cpu = Z80MicroSequencer::default();
+        let fetch = request(cpu.begin_instruction().unwrap());
+        let read = request(cpu.complete_bus_cycle(fetch.id, Some(0x34)).unwrap());
+        assert_eq!(
+            cpu.complete_bus_cycle(read.id, Some(0x7F)).unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        let mut state = cpu.export_state();
+        state.handshake.next_request_id = u64::MAX;
+        let mut restored = Z80MicroSequencer::restore_state(state).unwrap();
+        let before = restored.export_state();
+
+        assert_eq!(
+            restored.complete_internal_cycle(),
+            Err(Z80MicroSequencerError::Handshake(
+                crate::Z80BusHandshakeError::RequestIdExhausted
+            ))
+        );
+        assert_eq!(restored.export_state(), before);
+    }
+
+    #[test]
     fn snapshot_restore_rejects_phase_handshake_mismatch() {
         let mut cpu = Z80MicroSequencer::default();
         cpu.begin_instruction().unwrap();
