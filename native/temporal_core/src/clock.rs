@@ -377,7 +377,14 @@ impl ClockDomain {
     ///
     /// Calls must be monotonic. Arithmetic is checked before state is changed,
     /// so an error leaves the domain unchanged.
-    pub fn advance_to(&mut self, target: MachineTime) -> Result<u128, ClockError> {
+    /// Preview an absolute advance without mutating the clock domain.
+    ///
+    /// This is the scheduler's preflight path: it uses the same exact rational
+    /// conversion as advance_to, so validation and commit cannot diverge.
+    pub fn preview_advance_to(
+        &self,
+        target: MachineTime,
+    ) -> Result<(u128, ClockDomainSnapshot), ClockError> {
         let elapsed = target
             .checked_duration_since(self.time)
             .ok_or(ClockError::TimeWentBackwards)?;
@@ -387,9 +394,25 @@ impl ClockDomain {
             .checked_add(new_cycles)
             .ok_or(ClockError::ArithmeticOverflow)?;
 
-        self.time = target;
-        self.total_cycles = new_total;
-        self.phase = new_phase;
+        Ok((
+            new_cycles,
+            ClockDomainSnapshot {
+                time: target,
+                total_cycles: new_total,
+                phase: new_phase,
+            },
+        ))
+    }
+
+    /// Advance to an absolute machine timestamp and return newly elapsed edges.
+    ///
+    /// Calls must be monotonic. Arithmetic is checked before state is changed,
+    /// so an error leaves the domain unchanged.
+    pub fn advance_to(&mut self, target: MachineTime) -> Result<u128, ClockError> {
+        let (new_cycles, snapshot) = self.preview_advance_to(target)?;
+        self.time = snapshot.time;
+        self.total_cycles = snapshot.total_cycles;
+        self.phase = snapshot.phase;
         Ok(new_cycles)
     }
 
