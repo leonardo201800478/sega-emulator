@@ -3,8 +3,8 @@
 
 use std::ops::{Deref, DerefMut};
 
+pub use sega_sn76489::Sn76489Core;
 pub use sega_sn76489::{PsgError, PsgProfile};
-use sega_sn76489::Sn76489Core;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Sn76489(Sn76489Core);
@@ -12,8 +12,7 @@ pub struct Sn76489(Sn76489Core);
 impl Sn76489 {
     /// Construct the PSG using this console's hardware profile.
     pub fn new(clock_hz: u64, sample_rate: u64) -> Result<Self, PsgError> {
-        Sn76489Core::new_with_profile(clock_hz, sample_rate, PsgProfile::Sg1000)
-            .map(Self)
+        Sn76489Core::new_with_profile(clock_hz, sample_rate, PsgProfile::Sg1000).map(Self)
     }
 }
 
