@@ -34,22 +34,11 @@ impl From<Z80BusHandshakeError> for Z80MicroSequencerError {
 enum InstructionPhase {
     Ready,
     OpcodeFetch,
-    ImmediateReadRegister {
-        destination: u8,
-    },
+    ImmediateReadRegister { destination: u8 },
     ImmediateReadMemoryWrite,
-    MemoryReadRegister {
-        destination: u8,
-    },
-    MemoryReadIncDec {
-        decrement: bool,
-        address: u16,
-    },
-    MemoryIncDecInternal {
-        decrement: bool,
-        old: u8,
-        address: u16,
-    },
+    MemoryReadRegister { destination: u8 },
+    MemoryReadIncDec { decrement: bool, address: u16 },
+    MemoryIncDecInternal { decrement: bool, old: u8, address: u16 },
     MemoryWrite,
 }
 
@@ -377,8 +366,8 @@ impl Z80MicroSequencer {
 #[cfg(test)]
 mod tests {
     use super::{
-        Z80MicroSequencer, Z80MicroSequencerError, Z80MicroStep, FLAG_C, FLAG_H, FLAG_N,
-        FLAG_PV, FLAG_S, FLAG_XY, FLAG_Z,
+        FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_S, FLAG_XY, FLAG_Z, Z80MicroSequencer,
+        Z80MicroSequencerError, Z80MicroStep,
     };
     use crate::{Z80BusOperation, Z80Registers};
 
