@@ -436,7 +436,8 @@ mod tests {
     };
 
     use crate::{
-        ClockDomainId, ClockDomainState, SCHEDULER_STATE_FORMAT_VERSION, SchedulerState,
+        ClockDomainId, ClockDomainState, MachineScheduler, SCHEDULER_STATE_FORMAT_VERSION,
+        SchedulerError, SchedulerState,
     };
 
     struct U32PayloadCodec;
@@ -493,6 +494,20 @@ mod tests {
         let encoded = encode_scheduler_state(&state, &U32PayloadCodec).unwrap();
         let decoded = decode_scheduler_state(&encoded, &U32PayloadCodec).unwrap();
         assert_eq!(decoded, state);
+        let restored = MachineScheduler::restore_state(decoded).unwrap();
+        assert_eq!(restored.export_state(), state);
+    }
+
+    #[test]
+    fn codec_decode_leaves_semantic_validation_to_atomic_scheduler_restore() {
+        let mut invalid = state_fixture();
+        invalid.delta_event_limit = 0;
+        let encoded = encode_scheduler_state(&invalid, &U32PayloadCodec).unwrap();
+        let decoded = decode_scheduler_state(&encoded, &U32PayloadCodec).unwrap();
+        assert_eq!(
+            MachineScheduler::restore_state(decoded),
+            Err(SchedulerError::ZeroDeltaEventLimit)
+        );
     }
 
     #[test]
