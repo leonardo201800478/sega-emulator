@@ -185,3 +185,13 @@ Workflow [41384147113](https://github.com/leonardo201800478/sega-emulator/action
 - The workflow's stress job, Rust quality job and Python quality job all completed SUCCESS.
 
 The new operation-replay profile is now LONG_PASS on this exact SHA. This is a scheduler software stress result only; it does not establish device integration or TEMPORAL_PASS.
+### Final evidence ledger — PR #362 LONG profile
+
+- Exact candidate SHA: `cce79018427daab57a36808e162492b17bf4303e`.
+- SHORT: workflow `41384089223` SUCCESS; 8,000 operation-replay operations plus 80,000 dispatch events; both stress tests passed.
+- LONG: workflow `41384147113` SUCCESS; 320,000 operation-replay operations plus 4,000,000 dispatch events; both stress tests passed.
+- Ordinary quality gates passed in both SHORT and LONG workflows.
+- Rational-clock overflow correction is independently validated on PR #363 exact head `d6c2e9fbc243208ebe4e761e079934dd95eba98e`, workflow `41384173879` SUCCESS.
+- Documentation evidence update is on PR #364; its new CI run must pass before this evidence update is treated as CI-validated.
+
+Scheduler software stress is SHORT_PASS and LONG_PASS. Scheduler/device integration remains INTEGRATION_PENDING; TEMPORAL_PASS NOT CLAIMED.
