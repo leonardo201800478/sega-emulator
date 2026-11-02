@@ -113,13 +113,10 @@ impl SmsTemporalMachine {
         &mut self,
         tstates: u32,
     ) -> Result<MachineTime, SmsTemporalMachineError> {
-        if self.cpu.export_state().phase
-            != Z80MicroSequencerPhase::MemoryIncDecInternal {
-                decrement: true,
-                old: self.cpu.export_state().phase_old_value_placeholder(),
-                address: self.cpu.export_state().phase_address_placeholder(),
-            }
-        {
+        if !matches!(
+            self.cpu.export_state().phase,
+            Z80MicroSequencerPhase::MemoryIncDecInternal { .. }
+        ) {
             return Err(SmsTemporalMachineError::InvalidState);
         }
         if self.pending_internal_cycle_id.is_some() {
