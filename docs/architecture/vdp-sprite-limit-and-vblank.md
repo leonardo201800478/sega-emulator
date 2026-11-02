@@ -91,3 +91,15 @@ Não declara compatibilidade completa com todos os jogos, não define timings se
 ## Implementação do modo sem limite no backend Rust
 
 A opção de compatibilidade altera a lista de sprites desenhados, mas não a avaliação de overflow do hardware. Mesmo com o limite de desenho desativado, o VDP continua registrando o primeiro sprite que excede os quatro por linha nos bits de overflow/índice de status. Essa separação é coberta por regressão no núcleo Rust: o quinto sprite pode aparecer no framebuffer, enquanto o status continua reportando índice 4. O comportamento de colisão continua sendo calculado sobre os sprites efetivamente avaliados/renderizados; fidelidade temporal por dot permanece fora do escopo atual.
+
+
+## Política por família de VDP e integração com Qt
+
+A mesma preferência visual de compatibilidade é compartilhada pelo frontend, mas o limite efetivo permanece específico do hardware:
+
+- SG-1000 com TMS9918A: quatro sprites ativos por linha.
+- Master System SMS1 Mode 4: oito sprites ativos por linha.
+
+A opção fica habilitada por padrão. Desabilitá-la permite desenhar os sprites excedentes sem remover o registro de overflow do VDP. O estado de compatibilidade é uma política de renderização, não uma alteração dos registradores ou do limite de avaliação reportado pelo hardware.
+
+O frontend Qt aplica a preferência na criação da máquina e também quando o usuário a altera com uma ROM carregada. A API Python é apenas uma ponte coarse-grained para o setter Rust da máquina; nenhuma decisão de sprites ou rasterização é transferida para Python.
