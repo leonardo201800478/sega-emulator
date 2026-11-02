@@ -49,3 +49,16 @@ jobs:
         run: python -m ruff check .
       - name: Python regression suite
         run: python -m pytest -q
+
+  windows-d3d12:
+    name: Windows x64 D3D12 compile
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Compile native video runtime for Windows x64
+        run: cargo check --locked --all-targets -p sega-video-runtime --target x86_64-pc-windows-msvc
+      - name: Run Windows video-runtime unit tests
+        run: cargo test --locked -p sega-video-runtime --target x86_64-pc-windows-msvc
