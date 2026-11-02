@@ -183,16 +183,9 @@ impl BusTransaction {
 /// or device error, not an emulated hardware value.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BusOperationResult<T, E> {
-    Completed {
-        value: T,
-        completed_at: MachineTime,
-    },
-    Wait {
-        resume_at: MachineTime,
-    },
-    Suspended {
-        continuation_id: u64,
-    },
+    Completed { value: T, completed_at: MachineTime },
+    Wait { resume_at: MachineTime },
+    Suspended { continuation_id: u64 },
     Fault(E),
 }
 
@@ -262,13 +255,13 @@ impl fmt::Display for BusContractError {
             Self::ZeroDuration => f.write_str("bus transaction duration must be positive"),
             Self::InconsistentFields => {
                 f.write_str("bus transaction fields are inconsistent with its cycle kind")
-            },
+            }
             Self::WaitDoesNotAdvanceTime => {
                 f.write_str("WAIT resume timestamp must be later than request timestamp")
-            },
+            }
             Self::RetroactiveEvent => {
                 f.write_str("device reported an event before its reached timestamp")
-            },
+            }
             Self::CompletionBeforeRequest => {
                 f.write_str("bus operation completed before its request timestamp")
             },
@@ -281,8 +274,8 @@ impl std::error::Error for BusContractError {}
 #[cfg(test)]
 mod tests {
     use super::{
-        BusContractError, BusCycleKind, BusDirection, BusOperationResult, BusPhase,
-        BusTransaction, DeviceProgress, MCycleIndex, TStateIndex,
+        BusContractError, BusCycleKind, BusDirection, BusOperationResult, BusPhase, BusTransaction,
+        DeviceProgress, MCycleIndex, TStateIndex,
     };
     use crate::MachineTime;
 
@@ -357,19 +350,24 @@ mod tests {
 
     #[test]
     fn wait_must_resume_at_a_strictly_later_timestamp() {
-        let same_time = BusOperationResult::<(), ()>::Wait { resume_at: MachineTime::ZERO };
+        let same_time = BusOperationResult::<(), ()>::Wait {
+            resume_at: MachineTime::ZERO,
+        };
         assert_eq!(
             same_time.validate_wait(MachineTime::ZERO),
             Err(BusContractError::WaitDoesNotAdvanceTime)
         );
-        let later = BusOperationResult::<(), ()>::Wait { resume_at: MachineTime::from_ticks(1) };
+        let later = BusOperationResult::<(), ()>::Wait {
+            resume_at: MachineTime::from_ticks(1),
+        };
         assert_eq!(later.validate_wait(MachineTime::ZERO), Ok(()));
     }
 
     #[test]
     fn completion_cannot_precede_request() {
         let result = BusOperationResult::<(), ()>::Completed {
-            value: (), completed_at: MachineTime::ZERO,
+            value: (),
+            completed_at: MachineTime::ZERO,
         };
         assert_eq!(
             result.validate_completion(MachineTime::from_ticks(1)),
@@ -379,18 +377,20 @@ mod tests {
 
     #[test]
     fn refresh_cycle_has_address_but_no_read_or_write_direction() {
-        assert!(BusTransaction::new(
-            MachineTime::ZERO,
-            MCycleIndex::new(0),
-            TStateIndex::new(0),
-            BusPhase::Setup,
-            BusCycleKind::Refresh,
-            BusDirection::None,
-            Some(0x1234),
-            None,
-            1,
-        )
-        .is_ok());
+        assert!(
+            BusTransaction::new(
+                MachineTime::ZERO,
+                MCycleIndex::new(0),
+                TStateIndex::new(0),
+                BusPhase::Setup,
+                BusCycleKind::Refresh,
+                BusDirection::None,
+                Some(0x1234),
+                None,
+                1,
+            )
+            .is_ok()
+        );
     }
 
     #[test]
