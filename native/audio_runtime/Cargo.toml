@@ -9,3 +9,6 @@ name = "sega_audio_runtime"
 path = "src/lib.rs"
 
 [dependencies]
+sega-machine-scheduler = { path = "../machine_scheduler" }
+sega-sn76489 = { path = "../sn76489" }
+sega-audio-output = { path = "../audio_output" }
