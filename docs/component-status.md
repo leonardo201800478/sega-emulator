@@ -96,12 +96,12 @@ Não elevar um estado com base apenas em documentação, compilação isolada, b
 | SMS completo (CPU/VDP/PSG/I/O/IRQ) | INTEGRATION_PENDING | VDP legado excluído; novo VDP temporal, PSG, I/O e interrupções ainda não integrados |
 | TEMPORAL_PASS | NOT DECLARED | Faltam oráculos independentes/físicos, WAIT físico, arbitragem e integração sistêmica |
 
-**T5a — PR #418 (em revisão):** índices M-cycle/T-state para o subconjunto retomável; validação de restore por fase; preservação do timestamp de início da transação; conclusão interna latched e acknowledgement após commit transacional da CPU. Correções e regressões foram publicadas na branch da PR; CI do SHA final e revisão independente ainda precisam ser confirmados. Não considerar integrado à main nem declarar `TEMPORAL_PASS`.
+**T5a — PR #418 (em revisão):** índices M-cycle/T-state para o subconjunto retomável; validação de restore por fase; preservação do timestamp de início da transação; conclusão interna latched e acknowledgement após commit transacional da CPU. Correções e regressões estão publicadas na branch; CI #3517 passou no HEAD `e782614b50db857c7333d82982de3f3a43bfdf3d`. A revisão técnica independente ainda é gate de integração. Não considerar integrado à main nem declarar `TEMPORAL_PASS`.
 ## 5. T5a — PR #418 em revisão
 
 - Fonte canônica dos contratos temporais: a linha T5a (#418), que incorpora `BusTransaction`, `BusOperationResult`, os tipos de progresso e a ADR-001 originalmente propostos na PR #396. A #396 é supersedida e não deve ser integrada em paralelo.
-- Código T5a validado no commit `a50c4a1d4cb02384c7b26bf418a56d0151513af0`: CI #3516 PASS nos quatro jobs (Rust fmt/Clippy/workspace tests; Ruff/pytest; Windows x64 D3D12, video-runtime, WASAPI/XAudio2 e audio-output; Scheduler deterministic stress short). Execução local: NOT RUN.
+- Código T5a validado no commit `e782614b50db857c7333d82982de3f3a43bfdf3d`: CI #3517 PASS nos quatro jobs (Rust quality/unit regression; Python lint/regression; Windows x64 D3D12 compile; Scheduler deterministic stress). Execução local: NOT RUN.
 - Restore do sequenciador valida fase/opcode/request, destino, endereço e duração nominal; restore do barramento valida deadline, escala de T-state e watermark de dispatch; restore da máquina cruza WAITs com o contador do handshake e exige exatamente 1 T-state para o ciclo interno. Conclusões permanecem latched até commit/ack.
 - `BusTransaction.timestamp` conserva o início da requisição em Setup e Complete; `BusOperationResult::Completed.completed_at` expõe a conclusão separadamente.
 - Limites: apenas subconjunto atual de opcodes no SMS; WAIT é fixture; SG-1000, VDP/PSG/I/O/IRQ e semântica elétrica não estão integrados nesta fatia. `TEMPORAL_PASS` não concedido.
-- A revisão técnica independente e o CI do HEAD final, incluindo a reconciliação documental, permanecem gates de integração.
+- A revisão técnica independente e o CI do HEAD documental permanecem gates de integração. Execução local: NOT RUN.
