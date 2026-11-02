@@ -20,6 +20,7 @@ pub mod temporal;
 pub mod vdp;
 pub mod vdp_sms1;
 pub mod temporal_bus;
+pub mod temporal_machine;
 
 pub use bus::{
     CpuBus, Z80BusEvent, Z80BusEventKind, Z80CpuSnapshot, Z80InstructionOutcome,
@@ -38,8 +39,13 @@ pub use machine::{SegaScopeLens, SegaScopeState, SmsMachine, SmsMachineBus};
 pub use memory::SmsMemory;
 pub use psg::{PsgError, Sn76489};
 pub use temporal_bus::{
-    SmsBusCompletion, SmsTemporalBus, SmsTemporalBusError, SmsTemporalBusState,
+    SmsBusCompletion, SmsInternalCycleCompletion, SmsTemporalBus, SmsTemporalBusError,
+    SmsTemporalBusState, SmsTemporalDispatch,
     SMS_TEMPORAL_BUS_STATE_VERSION,
+};
+pub use temporal_machine::{
+    SmsTemporalMachine, SmsTemporalMachineError, SmsTemporalMachineState,
+    SMS_TEMPORAL_MACHINE_STATE_VERSION,
 };
 pub use temporal::{
     SMS_TEMPORAL_COORDINATOR_STATE_VERSION, SMS_Z80_CLOCK_DOMAIN_ID, SmsTemporalCoordinator,
