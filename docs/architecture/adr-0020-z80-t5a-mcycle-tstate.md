@@ -32,5 +32,5 @@ A implementação cobre somente as fases que o sequenciador já expõe: M1 opcod
 ## Evidência de CI
 
 - Código validado: SHA `e782614b50db857c7333d82982de3f3a43bfdf3d`.
-- GitHub Actions: [run #3516](https://github.com/leonardo201800478/sega-emulator/actions/runs/41530210481) — quatro jobs concluídos com PASS: Rust quality/unit regression, Python lint/regression, Windows x64 D3D12 + WASAPI/XAudio2 e Scheduler deterministic stress short.
-- Execução local: NOT RUN. O HEAD de código e os quatro jobs do CI #3517 correspondem ao SHA acima. A atualização documental subsequente exige CI próprio; execução local: NOT RUN.
+- GitHub Actions: [run #3517](https://github.com/leonardo201800478/sega-emulator/actions/runs/41530210481) — quatro jobs concluídos com PASS: Rust quality/unit regression, Python lint/regression, Windows x64 D3D12 + WASAPI/XAudio2 e Scheduler deterministic stress short.
+- Execução local: NOT RUN. O HEAD de código e os quatro jobs do CI #3517 correspondem ao SHA acima. Esta atualização documental é posterior ao HEAD de código validado; o CI do HEAD documental está pendente. Execução local: NOT RUN.
