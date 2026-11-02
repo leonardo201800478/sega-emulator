@@ -305,6 +305,13 @@ mod tests {
     }
 
     #[test]
+    fn fixture_wait_is_counted_in_cpu_tstates_and_machine_time() {
+        let mut machine = SmsTemporalMachine::new(vec![0x3E, 0x42], 3).unwrap();
+        retired(machine.step_instruction(1).unwrap(), 0x3E, 9);
+        assert_eq!(machine.now(), MachineTime::from_ticks(27));
+    }
+
+    #[test]
     fn memory_write_is_committed_at_the_scheduled_bus_completion() {
         let mut machine = SmsTemporalMachine::new(vec![0x77; 0x4000], 3).unwrap();
         machine.cpu_mut().registers.a = 0x5A;
