@@ -84,12 +84,35 @@ fn design_lowpass(clock_hz: u64, sample_rate: u64) -> Vec<f64> {
 
 /// Hardware-specific noise generator behavior for compatible SN76489-family chips.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PsgProfile { Sg1000, Sms }
+pub enum PsgProfile {
+    Sg1000,
+    Sms,
+}
 impl PsgProfile {
-    const fn lfsr_seed(self) -> u16 { match self { Self::Sg1000 => 0x4000, Self::Sms => 0x8000 } }
-    const fn lfsr_mask(self) -> u16 { match self { Self::Sg1000 => 0x7FFF, Self::Sms => 0xFFFF } }
-    const fn feedback_shift(self) -> u32 { match self { Self::Sg1000 => 14, Self::Sms => 15 } }
-    fn white_noise_feedback(self, value: u16) -> u16 { match self { Self::Sg1000 => (value ^ (value >> 1)) & 1, Self::Sms => ((value & 9).count_ones() as u16) & 1 } }
+    const fn lfsr_seed(self) -> u16 {
+        match self {
+            Self::Sg1000 => 0x4000,
+            Self::Sms => 0x8000,
+        }
+    }
+    const fn lfsr_mask(self) -> u16 {
+        match self {
+            Self::Sg1000 => 0x7FFF,
+            Self::Sms => 0xFFFF,
+        }
+    }
+    const fn feedback_shift(self) -> u32 {
+        match self {
+            Self::Sg1000 => 14,
+            Self::Sms => 15,
+        }
+    }
+    fn white_noise_feedback(self, value: u16) -> u16 {
+        match self {
+            Self::Sg1000 => (value ^ (value >> 1)) & 1,
+            Self::Sms => ((value & 0x0009).count_ones() as u16) & 1,
+        }
+    }
 }
 #[derive(Debug, Clone, PartialEq)]
 pub struct Sn76489Core {
@@ -119,8 +142,14 @@ pub struct Sn76489Core {
 }
 
 impl Sn76489Core {
-    pub fn new(clock_hz: u64, sample_rate: u64) -> Result<Self, PsgError> { Self::new_with_profile(clock_hz, sample_rate, PsgProfile::Sg1000) }
-    pub fn new_with_profile(clock_hz: u64, sample_rate: u64, profile: PsgProfile) -> Result<Self, PsgError> {
+    pub fn new(clock_hz: u64, sample_rate: u64) -> Result<Self, PsgError> {
+        Self::new_with_profile(clock_hz, sample_rate, PsgProfile::Sg1000)
+    }
+    pub fn new_with_profile(
+        clock_hz: u64,
+        sample_rate: u64,
+        profile: PsgProfile,
+    ) -> Result<Self, PsgError> {
         if clock_hz == 0 {
             return Err(PsgError::ZeroClock);
         }
@@ -365,7 +394,8 @@ impl Sn76489 {
         } else {
             self.lfsr & 1
         };
-        self.lfsr = ((self.lfsr >> 1) | (feedback << self.profile.feedback_shift())) & self.profile.lfsr_mask();
+        self.lfsr = ((self.lfsr >> 1) | (feedback << self.profile.feedback_shift()))
+            & self.profile.lfsr_mask();
     }
 
     fn tick_internal_clock(&mut self) {
