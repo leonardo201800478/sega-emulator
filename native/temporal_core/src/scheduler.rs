@@ -67,7 +67,11 @@ impl fmt::Display for MachineSchedulerError {
                 target.ticks()
             ),
             Self::DuplicateClockDomain(id) => {
-                write!(formatter, "clock domain {} is already registered", id.value())
+                write!(
+                    formatter,
+                    "clock domain {} is already registered",
+                    id.value()
+                )
             }
             Self::UnknownClockDomain(id) => {
                 write!(formatter, "clock domain {} is not registered", id.value())
@@ -208,9 +212,7 @@ impl<T> MachineScheduler<T> {
     ///
     /// The returned event is not executed here. The owning machine dispatches
     /// its payload to the relevant device(s) and may schedule causal events.
-    pub fn dispatch_next(
-        &mut self,
-    ) -> Result<Option<ScheduledEvent<T>>, MachineSchedulerError> {
+    pub fn dispatch_next(&mut self) -> Result<Option<ScheduledEvent<T>>, MachineSchedulerError> {
         let Some(timestamp) = self.events.next_timestamp() else {
             return Ok(None);
         };
@@ -233,10 +235,7 @@ impl<T> MachineScheduler<T> {
         if let Some(event_time) = self.events.next_timestamp()
             && event_time <= target
         {
-            return Err(MachineSchedulerError::EventPendingBeforeTarget {
-                event_time,
-                target,
-            });
+            return Err(MachineSchedulerError::EventPendingBeforeTarget { event_time, target });
         }
 
         self.advance_domains_atomically(target)?;
@@ -295,11 +294,7 @@ mod tests {
     fn advance_to_refuses_to_skip_a_pending_event() {
         let mut scheduler = MachineScheduler::<()>::new(MachineTime::ZERO);
         scheduler
-            .schedule_at(
-                MachineTime::from_ticks(5),
-                EventPriority::new(0),
-                (),
-            )
+            .schedule_at(MachineTime::from_ticks(5), EventPriority::new(0), ())
             .unwrap();
 
         assert_eq!(
@@ -324,7 +319,10 @@ mod tests {
             .unwrap();
 
         assert_eq!(scheduler.dispatch_next().unwrap().unwrap().payload, "first");
-        assert_eq!(scheduler.dispatch_next().unwrap().unwrap().payload, "second");
+        assert_eq!(
+            scheduler.dispatch_next().unwrap().unwrap().payload,
+            "second"
+        );
         assert_eq!(scheduler.now(), MachineTime::from_ticks(3));
     }
 
@@ -332,7 +330,11 @@ mod tests {
     fn causal_event_cannot_retroactively_change_current_timestamp_priority() {
         let mut scheduler = MachineScheduler::new(MachineTime::ZERO);
         scheduler
-            .schedule_at(MachineTime::from_ticks(3), EventPriority::new(2), "dispatch")
+            .schedule_at(
+                MachineTime::from_ticks(3),
+                EventPriority::new(2),
+                "dispatch",
+            )
             .unwrap();
         scheduler.dispatch_next().unwrap();
 
@@ -347,11 +349,7 @@ mod tests {
             ))
         );
         assert_eq!(
-            scheduler.schedule_at(
-                MachineTime::from_ticks(3),
-                EventPriority::new(2),
-                "causal",
-            ),
+            scheduler.schedule_at(MachineTime::from_ticks(3), EventPriority::new(2), "causal",),
             Ok(1)
         );
     }
@@ -359,7 +357,9 @@ mod tests {
     #[test]
     fn relative_scheduling_uses_current_master_time() {
         let mut scheduler = MachineScheduler::new(MachineTime::from_ticks(7));
-        scheduler.schedule_after(5, EventPriority::new(0), "future").unwrap();
+        scheduler
+            .schedule_after(5, EventPriority::new(0), "future")
+            .unwrap();
 
         assert_eq!(
             scheduler.next_event_time(),
