@@ -7,7 +7,9 @@
 
 use core::mem::ManuallyDrop;
 
-use windows::Win32::Foundation::{CloseHandle, HANDLE, HINSTANCE, HWND, LPARAM, LRESULT, RECT, WPARAM};
+use windows::Win32::Foundation::{
+    CloseHandle, HANDLE, HINSTANCE, HWND, LPARAM, LRESULT, RECT, WPARAM,
+};
 use windows::Win32::Graphics::Direct3D::D3D_FEATURE_LEVEL_11_0;
 use windows::Win32::Graphics::Direct3D12::{
     D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_QUEUE_DESC, D3D12_COMMAND_QUEUE_FLAG_NONE,
@@ -31,7 +33,7 @@ use windows::Win32::Graphics::Dxgi::{
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::{
-    CreateEventW, INFINITE, WAIT_OBJECT_0, WaitForSingleObjectEx,
+    CreateEventW, INFINITE, WaitForSingleObjectEx,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, DestroyWindow,
@@ -334,7 +336,7 @@ impl D3d12Host {
     /// stepping or Scheduler time.
     pub fn wait_for_frame_slot(&self) -> Result<()> {
         let result = unsafe { WaitForSingleObjectEx(self.frame_latency_handle, INFINITE, false) };
-        if result == WAIT_OBJECT_0 {
+        if result.0 == 0 {
             Ok(())
         } else {
             Err(Error::from_thread())
