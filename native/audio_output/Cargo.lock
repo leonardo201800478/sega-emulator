@@ -34,12 +34,32 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
+version = "1.0.101"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "89ae43fd86e4158d6db51ad8e2b80f313af9cc74f5c0e03ccb87de09998732de"
+dependencies = [
+ "unicode-ident",
+]
+
+
+[[package]]
+name = "proc-macro2"
 version = "1.0.107"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
 dependencies = [
  "unicode-ident",
 ]
+
+[[package]]
+name = "quote"
+version = "1.0.40"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1885c039570dc00dcb4ff087a89e185fd56bae234ddc7f056a945bf36467248d"
+dependencies = [
+ "proc-macro2",
+]
+
 
 [[package]]
 name = "quote"
@@ -60,10 +80,101 @@ checksum = "342e1478a6e1c839e7405033eabfdc954d4d5dabd39f34e83420a43a95acfb04"
 name = "sega-audio-output"
 version = "0.1.0"
 dependencies = [
+ "sega-audio-runtime",
  "rtrb",
  "wasapi",
  "windows",
 ]
+
+[[package]]
+name = "sega-audio-runtime"
+version = "0.1.0"
+dependencies = [
+ "sega-machine-scheduler",
+ "sega-sn76489",
+]
+
+
+[[package]]
+name = "sega-input-runtime"
+version = "0.1.0"
+
+
+[[package]]
+name = "sega-machine-scheduler"
+version = "0.1.0"
+dependencies = [
+ "sega-temporal-core",
+]
+
+
+[[package]]
+name = "sega-sg1000-core"
+version = "0.1.0"
+dependencies = [
+ "sega-sn76489",
+ "sega-z80-cpu",
+]
+
+
+[[package]]
+name = "sega-sms-core"
+version = "0.1.0"
+dependencies = [
+ "sega-sn76489",
+ "sega-z80-bus",
+ "sega-z80-cpu",
+]
+
+
+[[package]]
+name = "sega-sn76489"
+version = "0.1.0"
+
+
+[[package]]
+name = "sega-temporal-core"
+version = "0.1.0"
+
+
+[[package]]
+name = "sega-video-runtime"
+version = "0.1.0"
+dependencies = [
+ "windows",
+]
+
+
+[[package]]
+name = "sega-z80-alu"
+version = "0.1.0"
+
+
+[[package]]
+name = "sega-z80-bus"
+version = "0.1.0"
+
+
+[[package]]
+name = "sega-z80-cpu"
+version = "0.1.0"
+dependencies = [
+ "sega-z80-alu",
+ "sega-z80-bus",
+]
+
+
+[[package]]
+name = "syn"
+version = "2.0.106"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ede7c438028d4436d71104916910f5bb611972c5cfd7f89b8300a8186e6fada6"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unicode-ident",
+]
+
 
 [[package]]
 name = "syn"
@@ -88,15 +199,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "thiserror"
-version = "2.0.21"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09e52cb86a36cede5cb101bf8908837b3e4c6e5e59fe7fd85c23fb56200d189e"
-dependencies = [
- "thiserror-impl",
-]
-
-[[package]]
 name = "thiserror-impl"
 version = "2.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -107,6 +209,20 @@ dependencies = [
  "syn 3.0.9",
 ]
 
+[[package]]
+name = "thiserror"
+version = "2.0.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09e52cb86a36cede5cb101bf8908837b3e4c6e5e59fe7fd85c23fb56200d189e"
+dependencies = [
+ "thiserror-impl",
+]
+
+[[package]]
+name = "unicode-ident"
+version = "1.0.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f63a545481291138910575129486daeaf8ac54aee4387fe7906919f7830c7d9d"
 [[package]]
 name = "unicode-ident"
 version = "1.0.27"
@@ -124,18 +240,6 @@ dependencies = [
  "thiserror",
  "windows",
  "windows-core",
-]
-
-[[package]]
-name = "windows"
-version = "0.62.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "527fadee13e0c05939a6a05d5bd6eec6cd2e3dbd648b9f8e447c6518133d8580"
-dependencies = [
- "windows-collections",
- "windows-core",
- "windows-future",
- "windows-numerics",
 ]
 
 [[package]]
@@ -235,3 +339,16 @@ checksum = "3949bd5b99cafdf1c7ca86b43ca564028dfe27d66958f2470940f73d86d75b37"
 dependencies = [
  "windows-link",
 ]
+
+[[package]]
+name = "windows"
+version = "0.62.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "527fadee13e0c05939a6a05d5bd6eec6cd2e3dbd648b9f8e447c6518133d8580"
+dependencies = [
+ "windows-collections",
+ "windows-core",
+ "windows-future",
+ "windows-numerics",
+]
+
