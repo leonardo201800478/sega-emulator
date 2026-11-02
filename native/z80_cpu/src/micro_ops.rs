@@ -36,12 +36,23 @@ pub enum Z80BusHandshakeError {
     MissingReadData,
     UnexpectedWriteData,
     RequestIdExhausted,
+    WaitCounterExhausted,
+    InvalidState,
+    ZeroBaseDuration,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct PendingCycle {
     request: Z80BusRequest,
     wait_tstates: u32,
+}
+
+/// Version-independent DTO for the exact outstanding handshake state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Z80BusHandshakeState {
+    pub next_request_id: u64,
+    pub pending_request: Option<Z80BusRequest>,
+    pub wait_tstates: u32,
 }
 
 /// One outstanding transaction. The machine scheduler remains the sole owner
@@ -62,6 +73,9 @@ impl Z80BusHandshake {
     ) -> Result<Z80BusRequest, Z80BusHandshakeError> {
         if self.pending.is_some() {
             return Err(Z80BusHandshakeError::RequestAlreadyPending);
+        }
+        if base_tstates == 0 {
+            return Err(Z80BusHandshakeError::ZeroBaseDuration);
         }
         let id = self.next_request_id;
         self.next_request_id = id
@@ -92,11 +106,19 @@ impl Z80BusHandshake {
 
     /// Extend the active bus cycle by one WAIT T-state.
     pub fn insert_wait_tstate(&mut self) -> Result<(), Z80BusHandshakeError> {
+        self.insert_wait_tstates(1)
+    }
+
+    /// Add several WAIT T-states atomically to the outstanding request.
+    pub fn insert_wait_tstates(&mut self, tstates: u32) -> Result<(), Z80BusHandshakeError> {
         let pending = self
             .pending
             .as_mut()
             .ok_or(Z80BusHandshakeError::NoRequestPending)?;
-        pending.wait_tstates = pending.wait_tstates.saturating_add(1);
+        pending.wait_tstates = pending
+            .wait_tstates
+            .checked_add(tstates)
+            .ok_or(Z80BusHandshakeError::WaitCounterExhausted)?;
         Ok(())
     }
 
@@ -125,6 +147,34 @@ impl Z80BusHandshake {
         }
         self.pending = None;
         Ok(Z80BusResponse { request_id, data })
+    }
+
+    /// Export the complete deterministic handshake continuation.
+    pub fn export_state(&self) -> Z80BusHandshakeState {
+        Z80BusHandshakeState {
+            next_request_id: self.next_request_id,
+            pending_request: self.pending.map(|pending| pending.request),
+            wait_tstates: self.pending.map_or(0, |pending| pending.wait_tstates),
+        }
+    }
+
+    /// Restore a handshake only when its request allocator is consistent.
+    pub fn restore_state(state: Z80BusHandshakeState) -> Result<Self, Z80BusHandshakeError> {
+        let pending = match state.pending_request {
+            Some(request) if request.id < state.next_request_id && request.base_tstates > 0 => {
+                Some(PendingCycle {
+                    request,
+                    wait_tstates: state.wait_tstates,
+                })
+            }
+            Some(_) => return Err(Z80BusHandshakeError::InvalidState),
+            None if state.wait_tstates == 0 => None,
+            None => return Err(Z80BusHandshakeError::InvalidState),
+        };
+        Ok(Self {
+            next_request_id: state.next_request_id,
+            pending,
+        })
     }
 
     /// Whether a transaction is outstanding.
@@ -197,6 +247,20 @@ mod tests {
         );
         assert!(bus.is_pending());
         bus.complete(write.id, None).unwrap();
+    }
+
+    #[test]
+    fn wait_counter_overflow_is_reported_without_wrapping_or_saturating() {
+        let mut bus = Z80BusHandshake::default();
+        let request = bus.begin(Z80BusOperation::MemoryRead, 0x1234, 3).unwrap();
+        bus.pending.as_mut().unwrap().wait_tstates = u32::MAX;
+
+        assert_eq!(
+            bus.insert_wait_tstate(),
+            Err(Z80BusHandshakeError::WaitCounterExhausted)
+        );
+        assert_eq!(bus.pending_request(), Some(request));
+        assert_eq!(bus.wait_tstates(), Some(u32::MAX));
     }
 
     #[test]

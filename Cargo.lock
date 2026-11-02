@@ -55,7 +55,9 @@ dependencies = [
 name = "sega-sms-core"
 version = "0.1.0"
 dependencies = [
+ "sega-machine-scheduler",
  "sega-sn76489",
+ "sega-temporal-core",
  "sega-z80-bus",
  "sega-z80-cpu",
 ]

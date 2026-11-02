@@ -1,0 +1,454 @@
+//! Versioned deterministic codec for the resumable Z80 microsequencer state.
+//!
+//! The wire format is explicit and independent of Serde. It stores only the
+//! state represented by the current microsequencer slice; it is not a full Z80
+//! architectural save state.
+
+use crate::{
+    Z80_MICRO_SEQUENCER_STATE_VERSION, Z80BusHandshakeState, Z80BusOperation, Z80BusRequest,
+    Z80MicroSequencer, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80Registers,
+};
+use core::fmt;
+
+pub const Z80_MICRO_SEQUENCER_STATE_MAGIC: [u8; 8] = *b"Z80SEQ\0\0";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Z80MicroSequencerStateCodecError {
+    InvalidMagic,
+    UnsupportedVersion { expected: u16, actual: u16 },
+    Truncated,
+    TrailingData,
+    InvalidTag(u8),
+    ChecksumMismatch,
+    InvalidState,
+}
+
+impl fmt::Display for Z80MicroSequencerStateCodecError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidMagic => f.write_str("Z80 sequencer state has invalid magic"),
+            Self::UnsupportedVersion { expected, actual } => write!(
+                f,
+                "Z80 sequencer state version {actual} is unsupported (expected {expected})"
+            ),
+            Self::Truncated => f.write_str("Z80 sequencer state is truncated"),
+            Self::TrailingData => f.write_str("Z80 sequencer state has trailing bytes"),
+            Self::InvalidTag(tag) => write!(f, "Z80 sequencer state has invalid tag {tag}"),
+            Self::ChecksumMismatch => f.write_str("Z80 sequencer state checksum mismatch"),
+            Self::InvalidState => {
+                f.write_str("Z80 sequencer state violates CPU/handshake invariants")
+            }
+        }
+    }
+}
+
+impl std::error::Error for Z80MicroSequencerStateCodecError {}
+
+impl Z80MicroSequencerState {
+    /// Encode a validated snapshot into the versioned canonical binary format.
+    pub fn encode(&self) -> Result<Vec<u8>, Z80MicroSequencerStateCodecError> {
+        Z80MicroSequencer::restore_state(self.clone())
+            .map_err(|_| Z80MicroSequencerStateCodecError::InvalidState)?;
+
+        let mut body = Writer::default();
+        for value in [
+            self.registers.a,
+            self.registers.f,
+            self.registers.b,
+            self.registers.c,
+            self.registers.d,
+            self.registers.e,
+            self.registers.h,
+            self.registers.l,
+        ] {
+            body.u8(value);
+        }
+        body.u16(self.registers.sp);
+        body.u16(self.registers.pc);
+        body.u8(self.refresh);
+        body.u32(self.instruction_tstates);
+        match self.opcode {
+            None => body.u8(0),
+            Some(value) => {
+                body.u8(1);
+                body.u8(value);
+            }
+        }
+        write_phase(&mut body, self.phase);
+        body.u64(self.handshake.next_request_id);
+        match self.handshake.pending_request {
+            None => body.u8(0),
+            Some(request) => {
+                body.u8(1);
+                write_request(&mut body, request);
+            }
+        }
+        body.u32(self.handshake.wait_tstates);
+
+        let body_len = u32::try_from(body.bytes.len())
+            .map_err(|_| Z80MicroSequencerStateCodecError::InvalidState)?;
+        let mut frame = Writer::default();
+        frame
+            .bytes
+            .extend_from_slice(&Z80_MICRO_SEQUENCER_STATE_MAGIC);
+        frame.u16(Z80_MICRO_SEQUENCER_STATE_VERSION);
+        frame.u32(body_len);
+        frame.bytes.extend_from_slice(&body.bytes);
+        frame.u32(crc32(&body.bytes));
+        Ok(frame.bytes)
+    }
+
+    /// Decode exactly one frame and validate all CPU/handshake cross-invariants.
+    pub fn decode(bytes: &[u8]) -> Result<Self, Z80MicroSequencerStateCodecError> {
+        let mut frame = Reader::new(bytes);
+        if frame.array::<8>()? != Z80_MICRO_SEQUENCER_STATE_MAGIC {
+            return Err(Z80MicroSequencerStateCodecError::InvalidMagic);
+        }
+        let version = frame.u16()?;
+        if version != Z80_MICRO_SEQUENCER_STATE_VERSION {
+            return Err(Z80MicroSequencerStateCodecError::UnsupportedVersion {
+                expected: Z80_MICRO_SEQUENCER_STATE_VERSION,
+                actual: version,
+            });
+        }
+        let body_len = usize::try_from(frame.u32()?)
+            .map_err(|_| Z80MicroSequencerStateCodecError::Truncated)?;
+        let body = frame.take(body_len)?;
+        let checksum = frame.u32()?;
+        if !frame.finished() {
+            return Err(Z80MicroSequencerStateCodecError::TrailingData);
+        }
+        if crc32(body) != checksum {
+            return Err(Z80MicroSequencerStateCodecError::ChecksumMismatch);
+        }
+
+        let mut reader = Reader::new(body);
+        let registers = Z80Registers {
+            a: reader.u8()?,
+            f: reader.u8()?,
+            b: reader.u8()?,
+            c: reader.u8()?,
+            d: reader.u8()?,
+            e: reader.u8()?,
+            h: reader.u8()?,
+            l: reader.u8()?,
+            sp: reader.u16()?,
+            pc: reader.u16()?,
+        };
+        let refresh = reader.u8()?;
+        let instruction_tstates = reader.u32()?;
+        let opcode = match reader.u8()? {
+            0 => None,
+            1 => Some(reader.u8()?),
+            tag => return Err(Z80MicroSequencerStateCodecError::InvalidTag(tag)),
+        };
+        let phase = read_phase(&mut reader)?;
+        let next_request_id = reader.u64()?;
+        let pending_request = match reader.u8()? {
+            0 => None,
+            1 => Some(read_request(&mut reader)?),
+            tag => return Err(Z80MicroSequencerStateCodecError::InvalidTag(tag)),
+        };
+        let wait_tstates = reader.u32()?;
+        if !reader.finished() {
+            return Err(Z80MicroSequencerStateCodecError::TrailingData);
+        }
+
+        let state = Self {
+            format_version: version,
+            registers,
+            refresh,
+            handshake: Z80BusHandshakeState {
+                next_request_id,
+                pending_request,
+                wait_tstates,
+            },
+            phase,
+            opcode,
+            instruction_tstates,
+        };
+        Z80MicroSequencer::restore_state(state.clone())
+            .map_err(|_| Z80MicroSequencerStateCodecError::InvalidState)?;
+        Ok(state)
+    }
+}
+
+fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
+    match phase {
+        Z80MicroSequencerPhase::Ready => writer.u8(0),
+        Z80MicroSequencerPhase::OpcodeFetch => writer.u8(1),
+        Z80MicroSequencerPhase::ImmediateReadRegister { destination } => {
+            writer.u8(2);
+            writer.u8(destination);
+        }
+        Z80MicroSequencerPhase::ImmediateReadMemoryWrite => writer.u8(3),
+        Z80MicroSequencerPhase::MemoryReadRegister { destination } => {
+            writer.u8(4);
+            writer.u8(destination);
+        }
+        Z80MicroSequencerPhase::MemoryReadIncDec { decrement, address } => {
+            writer.u8(5);
+            writer.u8(u8::from(decrement));
+            writer.u16(address);
+        }
+        Z80MicroSequencerPhase::MemoryIncDecInternal {
+            decrement,
+            old,
+            address,
+        } => {
+            writer.u8(6);
+            writer.u8(u8::from(decrement));
+            writer.u8(old);
+            writer.u16(address);
+        }
+        Z80MicroSequencerPhase::MemoryWrite => writer.u8(7),
+    }
+}
+
+fn read_phase(
+    reader: &mut Reader<'_>,
+) -> Result<Z80MicroSequencerPhase, Z80MicroSequencerStateCodecError> {
+    Ok(match reader.u8()? {
+        0 => Z80MicroSequencerPhase::Ready,
+        1 => Z80MicroSequencerPhase::OpcodeFetch,
+        2 => Z80MicroSequencerPhase::ImmediateReadRegister {
+            destination: reader.u8()?,
+        },
+        3 => Z80MicroSequencerPhase::ImmediateReadMemoryWrite,
+        4 => Z80MicroSequencerPhase::MemoryReadRegister {
+            destination: reader.u8()?,
+        },
+        5 => Z80MicroSequencerPhase::MemoryReadIncDec {
+            decrement: read_bool(reader)?,
+            address: reader.u16()?,
+        },
+        6 => Z80MicroSequencerPhase::MemoryIncDecInternal {
+            decrement: read_bool(reader)?,
+            old: reader.u8()?,
+            address: reader.u16()?,
+        },
+        7 => Z80MicroSequencerPhase::MemoryWrite,
+        tag => return Err(Z80MicroSequencerStateCodecError::InvalidTag(tag)),
+    })
+}
+
+fn write_request(writer: &mut Writer, request: Z80BusRequest) {
+    writer.u64(request.id);
+    match request.operation {
+        Z80BusOperation::OpcodeFetch => writer.u8(0),
+        Z80BusOperation::MemoryRead => writer.u8(1),
+        Z80BusOperation::MemoryWrite { value } => {
+            writer.u8(2);
+            writer.u8(value);
+        }
+        Z80BusOperation::PortRead => writer.u8(3),
+        Z80BusOperation::PortWrite { value } => {
+            writer.u8(4);
+            writer.u8(value);
+        }
+    }
+    writer.u16(request.address);
+    writer.u8(request.base_tstates);
+}
+
+fn read_request(
+    reader: &mut Reader<'_>,
+) -> Result<Z80BusRequest, Z80MicroSequencerStateCodecError> {
+    let id = reader.u64()?;
+    let operation = match reader.u8()? {
+        0 => Z80BusOperation::OpcodeFetch,
+        1 => Z80BusOperation::MemoryRead,
+        2 => Z80BusOperation::MemoryWrite {
+            value: reader.u8()?,
+        },
+        3 => Z80BusOperation::PortRead,
+        4 => Z80BusOperation::PortWrite {
+            value: reader.u8()?,
+        },
+        tag => return Err(Z80MicroSequencerStateCodecError::InvalidTag(tag)),
+    };
+    Ok(Z80BusRequest {
+        id,
+        operation,
+        address: reader.u16()?,
+        base_tstates: reader.u8()?,
+    })
+}
+
+fn read_bool(reader: &mut Reader<'_>) -> Result<bool, Z80MicroSequencerStateCodecError> {
+    match reader.u8()? {
+        0 => Ok(false),
+        1 => Ok(true),
+        tag => Err(Z80MicroSequencerStateCodecError::InvalidTag(tag)),
+    }
+}
+
+#[derive(Default)]
+struct Writer {
+    bytes: Vec<u8>,
+}
+
+impl Writer {
+    fn u8(&mut self, value: u8) {
+        self.bytes.push(value);
+    }
+
+    fn u16(&mut self, value: u16) {
+        self.bytes.extend_from_slice(&value.to_be_bytes());
+    }
+
+    fn u32(&mut self, value: u32) {
+        self.bytes.extend_from_slice(&value.to_be_bytes());
+    }
+
+    fn u64(&mut self, value: u64) {
+        self.bytes.extend_from_slice(&value.to_be_bytes());
+    }
+}
+
+struct Reader<'a> {
+    bytes: &'a [u8],
+    offset: usize,
+}
+
+impl<'a> Reader<'a> {
+    fn new(bytes: &'a [u8]) -> Self {
+        Self { bytes, offset: 0 }
+    }
+
+    fn take(&mut self, len: usize) -> Result<&'a [u8], Z80MicroSequencerStateCodecError> {
+        let end = self
+            .offset
+            .checked_add(len)
+            .ok_or(Z80MicroSequencerStateCodecError::Truncated)?;
+        let value = self
+            .bytes
+            .get(self.offset..end)
+            .ok_or(Z80MicroSequencerStateCodecError::Truncated)?;
+        self.offset = end;
+        Ok(value)
+    }
+
+    fn array<const N: usize>(&mut self) -> Result<[u8; N], Z80MicroSequencerStateCodecError> {
+        self.take(N)?
+            .try_into()
+            .map_err(|_| Z80MicroSequencerStateCodecError::Truncated)
+    }
+
+    fn u8(&mut self) -> Result<u8, Z80MicroSequencerStateCodecError> {
+        Ok(self.array::<1>()?[0])
+    }
+
+    fn u16(&mut self) -> Result<u16, Z80MicroSequencerStateCodecError> {
+        Ok(u16::from_be_bytes(self.array()?))
+    }
+
+    fn u32(&mut self) -> Result<u32, Z80MicroSequencerStateCodecError> {
+        Ok(u32::from_be_bytes(self.array()?))
+    }
+
+    fn u64(&mut self) -> Result<u64, Z80MicroSequencerStateCodecError> {
+        Ok(u64::from_be_bytes(self.array()?))
+    }
+
+    fn finished(&self) -> bool {
+        self.offset == self.bytes.len()
+    }
+}
+
+fn crc32(bytes: &[u8]) -> u32 {
+    let mut crc = !0_u32;
+    for byte in bytes {
+        crc ^= u32::from(*byte);
+        for _ in 0..8 {
+            let mask = 0_u32.wrapping_sub(crc & 1);
+            crc = (crc >> 1) ^ (0xEDB8_8320 & mask);
+        }
+    }
+    !crc
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Z80_MICRO_SEQUENCER_STATE_MAGIC, Z80MicroSequencerStateCodecError};
+    use crate::{Z80MicroSequencer, Z80MicroSequencerState};
+
+    #[test]
+    fn pending_fetch_snapshot_round_trips_with_wait_and_allocator() {
+        let mut cpu = Z80MicroSequencer::default();
+        let request = match cpu.begin_instruction().unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected request, got {other:?}"),
+        };
+        cpu.insert_wait_tstate().unwrap();
+        let state = cpu.export_state();
+
+        let encoded = state.encode().unwrap();
+        let decoded = Z80MicroSequencerState::decode(&encoded).unwrap();
+        assert_eq!(decoded, state);
+        let mut restored = Z80MicroSequencer::restore_state(decoded).unwrap();
+        assert_eq!(
+            restored.complete_bus_cycle(request.id, Some(0)).unwrap(),
+            crate::Z80MicroStep::InstructionRetired {
+                opcode: 0,
+                tstates: 5
+            }
+        );
+    }
+
+    #[test]
+    fn internal_cycle_safe_point_round_trips_through_binary_codec() {
+        let mut cpu = Z80MicroSequencer::default();
+        let fetch = match cpu.begin_instruction().unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected opcode fetch, got {other:?}"),
+        };
+        let read = match cpu.complete_bus_cycle(fetch.id, Some(0x34)).unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected memory read, got {other:?}"),
+        };
+        assert_eq!(
+            cpu.complete_bus_cycle(read.id, Some(0x7F)).unwrap(),
+            crate::Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+
+        let state = cpu.export_state();
+        let decoded = Z80MicroSequencerState::decode(&state.encode().unwrap()).unwrap();
+        assert_eq!(decoded, state);
+        let mut restored = Z80MicroSequencer::restore_state(decoded).unwrap();
+        let write = match restored.complete_internal_cycle().unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected memory write, got {other:?}"),
+        };
+        assert_eq!(
+            write.operation,
+            crate::Z80BusOperation::MemoryWrite { value: 0x80 }
+        );
+    }
+
+    #[test]
+    fn codec_rejects_corruption_truncation_and_trailing_data() {
+        let state = Z80MicroSequencer::default().export_state();
+        let encoded = state.encode().unwrap();
+
+        let mut corrupted = encoded.clone();
+        let last = corrupted.len() - 1;
+        corrupted[last] ^= 1;
+        assert_eq!(
+            Z80MicroSequencerState::decode(&corrupted),
+            Err(Z80MicroSequencerStateCodecError::ChecksumMismatch)
+        );
+        assert_eq!(
+            Z80MicroSequencerState::decode(&encoded[..encoded.len() - 1]),
+            Err(Z80MicroSequencerStateCodecError::Truncated)
+        );
+
+        let mut trailing = encoded;
+        trailing.push(0);
+        assert_eq!(
+            Z80MicroSequencerState::decode(&trailing),
+            Err(Z80MicroSequencerStateCodecError::TrailingData)
+        );
+        assert_eq!(Z80_MICRO_SEQUENCER_STATE_MAGIC, *b"Z80SEQ\0\0");
+    }
+}

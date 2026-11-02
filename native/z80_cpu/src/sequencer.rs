@@ -5,7 +5,10 @@
 //! atomic executor; it does not yet cover interrupts, prefixes, HALT, refresh
 //! pin phases, or the full architectural state.
 
-use crate::{Z80BusHandshake, Z80BusHandshakeError, Z80BusOperation, Z80BusRequest, Z80Registers};
+use crate::{
+    Z80_MICRO_SEQUENCER_STATE_VERSION, Z80BusHandshake, Z80BusHandshakeError, Z80BusOperation,
+    Z80BusRequest, Z80Registers,
+};
 
 const FLAG_C: u8 = 0x01;
 const FLAG_N: u8 = 0x02;
@@ -21,6 +24,8 @@ pub enum Z80MicroSequencerError {
     InstructionAlreadyActive,
     NoInstructionActive,
     UnexpectedCompletion,
+    InstructionTStateOverflow,
+    InvalidState,
     UnsupportedOpcode { opcode: u8, address: u16 },
 }
 
@@ -31,7 +36,7 @@ impl From<Z80BusHandshakeError> for Z80MicroSequencerError {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum InstructionPhase {
+pub enum Z80MicroSequencerPhase {
     Ready,
     OpcodeFetch,
     ImmediateReadRegister {
@@ -65,6 +70,18 @@ pub enum Z80MicroStep {
     InternalCycle { tstates: u32 },
 }
 
+/// Logical state needed to resume the currently implemented sequencer slice.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Z80MicroSequencerState {
+    pub format_version: u16,
+    pub registers: Z80Registers,
+    pub refresh: u8,
+    pub handshake: crate::Z80BusHandshakeState,
+    pub phase: Z80MicroSequencerPhase,
+    pub opcode: Option<u8>,
+    pub instruction_tstates: u32,
+}
+
 /// A resumable subset of the Z80 instruction engine.
 ///
 /// The scheduler owns elapsed time. This type only exposes ordered bus cycles
@@ -76,7 +93,7 @@ pub struct Z80MicroSequencer {
     /// Low seven bits count M1 fetches; bit 7 is preserved.
     pub refresh: u8,
     handshake: Z80BusHandshake,
-    phase: InstructionPhase,
+    phase: Z80MicroSequencerPhase,
     opcode: Option<u8>,
     instruction_tstates: u32,
 }
@@ -87,7 +104,7 @@ impl Default for Z80MicroSequencer {
             registers: Z80Registers::default(),
             refresh: 0,
             handshake: Z80BusHandshake::default(),
-            phase: InstructionPhase::Ready,
+            phase: Z80MicroSequencerPhase::Ready,
             opcode: None,
             instruction_tstates: 0,
         }
@@ -95,10 +112,67 @@ impl Default for Z80MicroSequencer {
 }
 
 impl Z80MicroSequencer {
+    /// Export the complete resumable state without advancing emulated time.
+    pub fn export_state(&self) -> Z80MicroSequencerState {
+        Z80MicroSequencerState {
+            format_version: Z80_MICRO_SEQUENCER_STATE_VERSION,
+            registers: self.registers,
+            refresh: self.refresh,
+            handshake: self.handshake.export_state(),
+            phase: self.phase,
+            opcode: self.opcode,
+            instruction_tstates: self.instruction_tstates,
+        }
+    }
+
+    /// Restore a resumable state after validating CPU/handshake cross-invariants.
+    pub fn restore_state(state: Z80MicroSequencerState) -> Result<Self, Z80MicroSequencerError> {
+        if state.format_version != Z80_MICRO_SEQUENCER_STATE_VERSION {
+            return Err(Z80MicroSequencerError::InvalidState);
+        }
+        let handshake = Z80BusHandshake::restore_state(state.handshake)?;
+        let pending = handshake.pending_request();
+        let valid = match state.phase {
+            Z80MicroSequencerPhase::Ready => {
+                pending.is_none() && state.opcode.is_none() && state.instruction_tstates == 0
+            }
+            Z80MicroSequencerPhase::OpcodeFetch => {
+                pending.is_some_and(|request| request.operation == Z80BusOperation::OpcodeFetch)
+                    && state.opcode.is_none()
+            }
+            Z80MicroSequencerPhase::ImmediateReadRegister { .. }
+            | Z80MicroSequencerPhase::ImmediateReadMemoryWrite
+            | Z80MicroSequencerPhase::MemoryReadRegister { .. }
+            | Z80MicroSequencerPhase::MemoryReadIncDec { .. } => {
+                pending.is_some_and(|request| request.operation == Z80BusOperation::MemoryRead)
+                    && state.opcode.is_some()
+            }
+            Z80MicroSequencerPhase::MemoryIncDecInternal { .. } => {
+                pending.is_none() && state.opcode.is_some()
+            }
+            Z80MicroSequencerPhase::MemoryWrite => {
+                pending.is_some_and(|request| {
+                    matches!(request.operation, Z80BusOperation::MemoryWrite { .. })
+                }) && state.opcode.is_some()
+            }
+        };
+        if !valid {
+            return Err(Z80MicroSequencerError::InvalidState);
+        }
+        Ok(Self {
+            registers: state.registers,
+            refresh: state.refresh,
+            handshake,
+            phase: state.phase,
+            opcode: state.opcode,
+            instruction_tstates: state.instruction_tstates,
+        })
+    }
+
     /// Begin the next instruction by issuing its M1 opcode-fetch request.
     /// Architectural PC/R changes occur only when that request completes.
     pub fn begin_instruction(&mut self) -> Result<Z80MicroStep, Z80MicroSequencerError> {
-        if self.phase != InstructionPhase::Ready || self.handshake.is_pending() {
+        if self.phase != Z80MicroSequencerPhase::Ready || self.handshake.is_pending() {
             return Err(Z80MicroSequencerError::InstructionAlreadyActive);
         }
         self.instruction_tstates = 0;
@@ -106,13 +180,19 @@ impl Z80MicroSequencer {
         let request = self
             .handshake
             .begin(Z80BusOperation::OpcodeFetch, self.registers.pc, 4)?;
-        self.phase = InstructionPhase::OpcodeFetch;
+        self.phase = Z80MicroSequencerPhase::OpcodeFetch;
         Ok(Z80MicroStep::BusRequest(request))
     }
 
     /// Add one WAIT T-state to the currently outstanding bus transaction.
     pub fn insert_wait_tstate(&mut self) -> Result<(), Z80MicroSequencerError> {
         self.handshake.insert_wait_tstate()?;
+        Ok(())
+    }
+
+    /// Insert several WAIT T-states atomically into the active bus request.
+    pub fn insert_wait_tstates(&mut self, tstates: u32) -> Result<(), Z80MicroSequencerError> {
+        self.handshake.insert_wait_tstates(tstates)?;
         Ok(())
     }
 
@@ -125,7 +205,7 @@ impl Z80MicroSequencer {
         request_id: u64,
         data: Option<u8>,
     ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
-        if self.phase == InstructionPhase::Ready {
+        if self.phase == Z80MicroSequencerPhase::Ready {
             return Err(Z80MicroSequencerError::NoInstructionActive);
         }
         let request = self
@@ -133,14 +213,16 @@ impl Z80MicroSequencer {
             .pending_request()
             .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
         let waits = self.handshake.wait_tstates().unwrap_or(0);
-        let response = self.handshake.complete(request_id, data)?;
-        self.instruction_tstates = self
+        let next_instruction_tstates = self
             .instruction_tstates
-            .saturating_add(u32::from(request.base_tstates))
-            .saturating_add(waits);
+            .checked_add(u32::from(request.base_tstates))
+            .and_then(|total| total.checked_add(waits))
+            .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+        let response = self.handshake.complete(request_id, data)?;
+        self.instruction_tstates = next_instruction_tstates;
 
         match self.phase {
-            InstructionPhase::OpcodeFetch => {
+            Z80MicroSequencerPhase::OpcodeFetch => {
                 let opcode = response
                     .data
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
@@ -152,19 +234,19 @@ impl Z80MicroSequencer {
                     0x06 | 0x0E | 0x16 | 0x1E | 0x26 | 0x2E | 0x3E => {
                         let destination = (opcode >> 3) & 0x07;
                         self.issue_read(
-                            InstructionPhase::ImmediateReadRegister { destination },
+                            Z80MicroSequencerPhase::ImmediateReadRegister { destination },
                             self.registers.pc,
                         )
                     }
                     0x36 => self.issue_read(
-                        InstructionPhase::ImmediateReadMemoryWrite,
+                        Z80MicroSequencerPhase::ImmediateReadMemoryWrite,
                         self.registers.pc,
                     ),
                     0x04..=0x3D if (opcode & 0xC7) == 0x04 || (opcode & 0xC7) == 0x05 => {
                         let register = (opcode >> 3) & 0x07;
                         if register == 6 {
                             self.issue_read(
-                                InstructionPhase::MemoryReadIncDec {
+                                Z80MicroSequencerPhase::MemoryReadIncDec {
                                     decrement: opcode & 0x01 != 0,
                                     address: self.registers.hl(),
                                 },
@@ -188,7 +270,7 @@ impl Z80MicroSequencer {
                                 self.issue_write(self.registers.hl(), value)
                             }
                             (register, 6) => self.issue_read(
-                                InstructionPhase::MemoryReadRegister {
+                                Z80MicroSequencerPhase::MemoryReadRegister {
                                     destination: register,
                                 },
                                 self.registers.hl(),
@@ -203,7 +285,7 @@ impl Z80MicroSequencer {
                     _ => self.unsupported(opcode),
                 }
             }
-            InstructionPhase::ImmediateReadRegister { destination } => {
+            Z80MicroSequencerPhase::ImmediateReadRegister { destination } => {
                 let value = response
                     .data
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
@@ -214,14 +296,14 @@ impl Z80MicroSequencer {
                         .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
                 )
             }
-            InstructionPhase::ImmediateReadMemoryWrite => {
+            Z80MicroSequencerPhase::ImmediateReadMemoryWrite => {
                 let value = response
                     .data
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 self.registers.pc = self.registers.pc.wrapping_add(1);
                 self.issue_write(self.registers.hl(), value)
             }
-            InstructionPhase::MemoryReadRegister { destination } => {
+            Z80MicroSequencerPhase::MemoryReadRegister { destination } => {
                 let value = response
                     .data
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
@@ -231,32 +313,32 @@ impl Z80MicroSequencer {
                         .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
                 )
             }
-            InstructionPhase::MemoryReadIncDec { decrement, address } => {
+            Z80MicroSequencerPhase::MemoryReadIncDec { decrement, address } => {
                 let old = response
                     .data
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
-                self.phase = InstructionPhase::MemoryIncDecInternal {
+                self.phase = Z80MicroSequencerPhase::MemoryIncDecInternal {
                     decrement,
                     old,
                     address,
                 };
                 Ok(Z80MicroStep::InternalCycle { tstates: 1 })
             }
-            InstructionPhase::MemoryIncDecInternal { .. } => {
+            Z80MicroSequencerPhase::MemoryIncDecInternal { .. } => {
                 Err(Z80MicroSequencerError::UnexpectedCompletion)
             }
-            InstructionPhase::MemoryWrite => self.retire(
+            Z80MicroSequencerPhase::MemoryWrite => self.retire(
                 self.opcode
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
             ),
-            InstructionPhase::Ready => Err(Z80MicroSequencerError::NoInstructionActive),
+            Z80MicroSequencerPhase::Ready => Err(Z80MicroSequencerError::NoInstructionActive),
         }
     }
 
     /// Complete the explicitly exposed internal T-state of INC/DEC (HL).
     /// The result/flags are committed at this edge, then the memory write is issued.
     pub fn complete_internal_cycle(&mut self) -> Result<Z80MicroStep, Z80MicroSequencerError> {
-        let InstructionPhase::MemoryIncDecInternal {
+        let Z80MicroSequencerPhase::MemoryIncDecInternal {
             decrement,
             old,
             address,
@@ -264,9 +346,16 @@ impl Z80MicroSequencer {
         else {
             return Err(Z80MicroSequencerError::UnexpectedCompletion);
         };
-        self.instruction_tstates = self.instruction_tstates.saturating_add(1);
-        let value = self.increment_decrement_register(old, decrement);
-        self.issue_write(address, value)
+        let next_instruction_tstates = self
+            .instruction_tstates
+            .checked_add(1)
+            .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+        let mut next = self.clone();
+        let value = next.increment_decrement_register(old, decrement);
+        let step = next.issue_write(address, value)?;
+        next.instruction_tstates = next_instruction_tstates;
+        *self = next;
+        Ok(step)
     }
 
     /// Inspect the pending request without advancing the sequencer.
@@ -276,12 +365,12 @@ impl Z80MicroSequencer {
 
     /// Whether an instruction is currently suspended or in progress.
     pub fn instruction_active(&self) -> bool {
-        self.phase != InstructionPhase::Ready
+        self.phase != Z80MicroSequencerPhase::Ready
     }
 
     fn unsupported(&mut self, opcode: u8) -> Result<Z80MicroStep, Z80MicroSequencerError> {
         let address = self.registers.pc.wrapping_sub(1);
-        self.phase = InstructionPhase::Ready;
+        self.phase = Z80MicroSequencerPhase::Ready;
         self.opcode = None;
         self.instruction_tstates = 0;
         Err(Z80MicroSequencerError::UnsupportedOpcode { opcode, address })
@@ -343,7 +432,7 @@ impl Z80MicroSequencer {
 
     fn issue_read(
         &mut self,
-        phase: InstructionPhase,
+        phase: Z80MicroSequencerPhase,
         address: u16,
     ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
         let request = self
@@ -361,13 +450,13 @@ impl Z80MicroSequencer {
         let request = self
             .handshake
             .begin(Z80BusOperation::MemoryWrite { value }, address, 3)?;
-        self.phase = InstructionPhase::MemoryWrite;
+        self.phase = Z80MicroSequencerPhase::MemoryWrite;
         Ok(Z80MicroStep::BusRequest(request))
     }
 
     fn retire(&mut self, opcode: u8) -> Result<Z80MicroStep, Z80MicroSequencerError> {
         let tstates = self.instruction_tstates;
-        self.phase = InstructionPhase::Ready;
+        self.phase = Z80MicroSequencerPhase::Ready;
         self.opcode = None;
         self.instruction_tstates = 0;
         Ok(Z80MicroStep::InstructionRetired { opcode, tstates })
@@ -378,7 +467,7 @@ impl Z80MicroSequencer {
 mod tests {
     use super::{
         FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_S, FLAG_XY, FLAG_Z, Z80MicroSequencer,
-        Z80MicroSequencerError, Z80MicroStep,
+        Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroStep,
     };
     use crate::{Z80BusOperation, Z80Registers};
 
@@ -791,6 +880,105 @@ mod tests {
         assert_eq!(read.address, 0x1234);
         assert_eq!(cpu.registers.h, 0x12);
         assert_eq!(cpu.registers.l, 0x34);
+    }
+
+    #[test]
+    fn instruction_tstate_overflow_keeps_bus_request_pending() {
+        let mut cpu = Z80MicroSequencer::default();
+        let fetch = request(cpu.begin_instruction().unwrap());
+        cpu.instruction_tstates = u32::MAX;
+
+        assert_eq!(
+            cpu.complete_bus_cycle(fetch.id, Some(0x00)),
+            Err(Z80MicroSequencerError::InstructionTStateOverflow)
+        );
+        assert_eq!(cpu.pending_request(), Some(fetch));
+        assert_eq!(cpu.registers.pc, 0);
+        assert_eq!(cpu.instruction_tstates, u32::MAX);
+    }
+
+    #[test]
+    fn snapshot_restore_preserves_pending_fetch_and_wait_state() {
+        let mut cpu = Z80MicroSequencer::default();
+        let fetch = request(cpu.begin_instruction().unwrap());
+        cpu.insert_wait_tstate().unwrap();
+
+        let mut restored = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+        assert_eq!(restored.export_state(), cpu.export_state());
+        assert_eq!(restored.pending_request(), Some(fetch));
+        assert_eq!(
+            restored.complete_bus_cycle(fetch.id, Some(0x00)).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x00,
+                tstates: 5
+            }
+        );
+    }
+
+    #[test]
+    fn snapshot_restore_preserves_internal_incdec_safe_point() {
+        let mut cpu = Z80MicroSequencer {
+            registers: Z80Registers {
+                h: 0xC0,
+                l: 0x10,
+                ..Z80Registers::default()
+            },
+            ..Z80MicroSequencer::default()
+        };
+        let fetch = request(cpu.begin_instruction().unwrap());
+        let read = request(cpu.complete_bus_cycle(fetch.id, Some(0x34)).unwrap());
+        assert_eq!(
+            cpu.complete_bus_cycle(read.id, Some(0x7F)).unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+
+        let mut restored = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+        assert_eq!(restored.export_state(), cpu.export_state());
+        let write = request(restored.complete_internal_cycle().unwrap());
+        assert_eq!(write.address, 0xC010);
+        assert_eq!(
+            restored.complete_bus_cycle(write.id, None).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x34,
+                tstates: 11
+            }
+        );
+    }
+
+    #[test]
+    fn failed_internal_write_allocation_does_not_consume_internal_tstate() {
+        let mut cpu = Z80MicroSequencer::default();
+        let fetch = request(cpu.begin_instruction().unwrap());
+        let read = request(cpu.complete_bus_cycle(fetch.id, Some(0x34)).unwrap());
+        assert_eq!(
+            cpu.complete_bus_cycle(read.id, Some(0x7F)).unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        let mut state = cpu.export_state();
+        state.handshake.next_request_id = u64::MAX;
+        let mut restored = Z80MicroSequencer::restore_state(state).unwrap();
+        let before = restored.export_state();
+
+        assert_eq!(
+            restored.complete_internal_cycle(),
+            Err(Z80MicroSequencerError::Handshake(
+                crate::Z80BusHandshakeError::RequestIdExhausted
+            ))
+        );
+        assert_eq!(restored.export_state(), before);
+    }
+
+    #[test]
+    fn snapshot_restore_rejects_phase_handshake_mismatch() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.begin_instruction().unwrap();
+        let mut state = cpu.export_state();
+        state.phase = Z80MicroSequencerPhase::MemoryWrite;
+
+        assert_eq!(
+            Z80MicroSequencer::restore_state(state),
+            Err(Z80MicroSequencerError::InvalidState)
+        );
     }
 
     #[test]
