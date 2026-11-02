@@ -1,8 +1,8 @@
 //! Persistence-state DTOs for the machine scheduler.
 //!
-//! The DTOs in this module are a stable, versioned state model, not live
-//! scheduler objects. Runtime export, validation, and restoration are added
-//! in subsequent snapshot milestones.
+//! The DTOs in this module are the stable, versioned persistence model for
+//! scheduler state. Runtime export, validation, atomic restoration, and the
+//! versioned wire codec are implemented in the machine-scheduler crate.
 
 use sega_temporal_core::{ClockDomain, ClockError, ClockRatio, EventQueueState, MachineTime};
 
