@@ -529,7 +529,7 @@ impl<T> MachineScheduler<T> {
 mod tests {
     use super::{
         ClockDomainId, ClockDomainState, ClockError, DeltaEventPolicy, MachineScheduler,
-        SchedulerError,
+        SchedulerError, SchedulerState,
     };
     use sega_temporal_core::{
         ClockRatio, EventPriority, HardwarePhase, MachineTime, PlatformPriority,
@@ -1071,5 +1071,159 @@ mod tests {
         );
         assert_eq!(scheduler.now(), MachineTime::ZERO);
         assert_eq!(scheduler.pending_events(), 1);
+    }
+
+    fn scheduler_snapshot_fixture() -> SchedulerState<&'static str> {
+        let mut scheduler =
+            MachineScheduler::with_delta_event_policy(DeltaEventPolicy::new(4).unwrap());
+        scheduler
+            .register_clock_domain_with_phase(
+                ClockDomainId(3),
+                ClockRatio::new(5, 3).unwrap(),
+                2,
+            )
+            .unwrap();
+        scheduler
+            .register_clock_domain(ClockDomainId(1), ClockRatio::new(1, 3).unwrap())
+            .unwrap();
+        scheduler
+            .schedule_at_with_phase(
+                MachineTime::from_ticks(5),
+                HardwarePhase::new(1),
+                PlatformPriority::new(1),
+                "dispatched",
+            )
+            .unwrap();
+        scheduler
+            .schedule_at_with_phase(
+                MachineTime::from_ticks(5),
+                HardwarePhase::new(1),
+                PlatformPriority::new(2),
+                "same-time-pending",
+            )
+            .unwrap();
+        scheduler
+            .schedule_at(MachineTime::from_ticks(9), EventPriority::new(0), "future")
+            .unwrap();
+        assert_eq!(
+            scheduler.dispatch_next().unwrap().unwrap().event.payload,
+            "dispatched"
+        );
+        scheduler.export_state()
+    }
+
+    #[test]
+    fn full_scheduler_snapshot_restore_preserves_state_and_continuation() {
+        let state = scheduler_snapshot_fixture();
+        let mut restored = MachineScheduler::restore_state(state.clone()).unwrap();
+        assert_eq!(restored.export_state(), state);
+
+        let mut uninterrupted = MachineScheduler::restore_state(state).unwrap();
+        loop {
+            let expected = uninterrupted.dispatch_next().unwrap();
+            let actual = restored.dispatch_next().unwrap();
+            assert_eq!(actual, expected);
+            if expected.is_none() {
+                break;
+            }
+        }
+        assert_eq!(restored.export_state(), uninterrupted.export_state());
+    }
+
+    #[test]
+    fn restore_preserves_dispatch_count_above_reduced_delta_limit() {
+        let mut scheduler =
+            MachineScheduler::with_delta_event_policy(DeltaEventPolicy::new(3).unwrap());
+        let timestamp = MachineTime::from_ticks(4);
+        scheduler
+            .schedule_at(timestamp, EventPriority::new(0), "first")
+            .unwrap();
+        scheduler
+            .schedule_at(timestamp, EventPriority::new(0), "second")
+            .unwrap();
+        scheduler.dispatch_next().unwrap();
+        scheduler.set_delta_event_policy(DeltaEventPolicy::new(1).unwrap());
+
+        let state = scheduler.export_state();
+        assert_eq!(state.dispatched_at_timestamp, 1);
+        assert_eq!(state.delta_event_limit, 1);
+        let mut restored = MachineScheduler::restore_state(state.clone()).unwrap();
+        assert_eq!(restored.export_state(), state);
+        assert_eq!(
+            restored.dispatch_next(),
+            Err(SchedulerError::DeltaEventLimitExceeded { timestamp, limit: 1 })
+        );
+    }
+
+    #[test]
+    fn restore_rejects_invalid_format_and_zero_delta_limit() {
+        let mut unsupported = scheduler_snapshot_fixture();
+        unsupported.format_version += 1;
+        assert_eq!(
+            MachineScheduler::restore_state(unsupported),
+            Err(SchedulerError::StateFormatVersionMismatch {
+                expected: super::SCHEDULER_STATE_FORMAT_VERSION,
+                actual: super::SCHEDULER_STATE_FORMAT_VERSION + 1,
+            })
+        );
+
+        let mut zero_limit = scheduler_snapshot_fixture();
+        zero_limit.delta_event_limit = 0;
+        assert_eq!(
+            MachineScheduler::restore_state(zero_limit),
+            Err(SchedulerError::ZeroDeltaEventLimit)
+        );
+    }
+
+    #[test]
+    fn restore_rejects_cross_component_dispatch_history_mismatch() {
+        let mut state = scheduler_snapshot_fixture();
+        state.dispatched_at_timestamp = 0;
+        assert_eq!(
+            MachineScheduler::restore_state(state),
+            Err(SchedulerError::DispatchHistoryMismatch)
+        );
+
+        let mut state = scheduler_snapshot_fixture();
+        state.last_dispatch_timestamp = Some(MachineTime::from_ticks(4));
+        assert_eq!(
+            MachineScheduler::restore_state(state),
+            Err(SchedulerError::DispatchWatermarkMismatch)
+        );
+    }
+
+    #[test]
+    fn restore_rejects_noncanonical_domains_and_events_before_now() {
+        let mut unsorted = scheduler_snapshot_fixture();
+        unsorted.clock_domains.swap(0, 1);
+        assert_eq!(
+            MachineScheduler::restore_state(unsorted),
+            Err(SchedulerError::NonCanonicalClockDomainOrder)
+        );
+
+        let mut event_before_now = scheduler_snapshot_fixture();
+        event_before_now.event_queue.pending[0].timestamp = MachineTime::from_ticks(4);
+        assert_eq!(
+            MachineScheduler::restore_state(event_before_now),
+            Err(SchedulerError::PendingEventBeforeNow)
+        );
+    }
+
+    #[test]
+    fn restore_rejects_watermark_after_now_and_domain_time_mismatch() {
+        let mut watermark_after_now = scheduler_snapshot_fixture();
+        watermark_after_now.event_queue.last_dispatched.as_mut().unwrap().timestamp =
+            MachineTime::from_ticks(6);
+        assert_eq!(
+            MachineScheduler::restore_state(watermark_after_now),
+            Err(SchedulerError::WatermarkAfterNow)
+        );
+
+        let mut domain_time_mismatch = scheduler_snapshot_fixture();
+        domain_time_mismatch.clock_domains[0].current_time = MachineTime::from_ticks(4);
+        assert_eq!(
+            MachineScheduler::restore_state(domain_time_mismatch),
+            Err(SchedulerError::ClockDomainTimeMismatch(ClockDomainId(1)))
+        );
     }
 }
