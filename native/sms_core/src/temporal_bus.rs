@@ -372,7 +372,8 @@ mod tests {
         bus.begin_request(request, 1).unwrap();
         let mut restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
         assert_eq!(restored.memory().read(0xC001), 0);
-        let SmsTemporalDispatch::BusCompletion(completion) = restored.dispatch_next().unwrap().unwrap()
+        let SmsTemporalDispatch::BusCompletion(completion) =
+            restored.dispatch_next().unwrap().unwrap()
         else {
             panic!("expected bus completion");
         };
