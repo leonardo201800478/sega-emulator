@@ -597,7 +597,6 @@ mod tests {
         assert_eq!(restored.dispatch_next().unwrap(), Some(first));
         assert_eq!(restored.export_state(), state);
         assert_eq!(restored.write_dispatch_count_for_test(), 1);
-        assert_eq!(restored.write_dispatch_count_for_test(), 1);
         assert_eq!(restored.memory().read(0xC000), 0x33);
         restored.acknowledge_completion(6).unwrap();
         assert!(restored.dispatch_next().unwrap().is_none());
