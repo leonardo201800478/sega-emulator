@@ -204,7 +204,7 @@ impl D3d12Host {
         unsafe { swap_chain2.SetMaximumFrameLatency(1)? };
         let frame_latency_handle = unsafe { swap_chain2.GetFrameLatencyWaitableObject() };
         if frame_latency_handle.is_invalid() {
-            return Err(Error::from_win32());
+            return Err(Error::from_thread());
         }
 
         let swap_chain: IDXGISwapChain3 = swap_chain2.cast()?;
@@ -252,7 +252,7 @@ impl D3d12Host {
         if result.0 == 0 {
             Ok(())
         } else {
-            Err(Error::from_win32())
+            Err(Error::from_thread())
         }
     }
 
