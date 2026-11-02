@@ -6,7 +6,7 @@
 use crate::SmsCoreError;
 use crate::bus::CpuBus;
 use crate::cartridge::CartridgeImage;
-use crate::config::SmsMachineConfig;
+use crate::config::{SmsMachineConfig, SpriteLimitMode};
 use crate::cpu::{CpuError, Z80};
 use crate::input::{ControllerButtons, SmsInputState};
 use crate::io::{SmsIo, SmsIoError};
@@ -334,6 +334,23 @@ impl SmsMachine {
 
     pub fn vdp_mut(&mut self) -> &mut SmsVdp {
         &mut self.vdp
+    }
+
+    /// Configure whether SMS sprites beyond the native eight-per-line limit
+    /// are drawn. Hardware overflow reporting remains enabled in both modes.
+    pub fn set_sprite_limit_enabled(&mut self, enabled: bool) {
+        let mode = if enabled {
+            SpriteLimitMode::HardwareLimit
+        } else {
+            SpriteLimitMode::UnlockedCompatibility
+        };
+        self.vdp.set_sprite_limit_mode(mode);
+        self.config.sprite_limit = mode;
+    }
+
+    /// Return whether the native SMS1 eight-sprites-per-line draw limit is active.
+    pub fn sprite_limit_enabled(&self) -> bool {
+        self.config.sprite_limit == SpriteLimitMode::HardwareLimit
     }
 
     pub fn set_stereo_presentation(&mut self, mode: StereoPresentation) {
