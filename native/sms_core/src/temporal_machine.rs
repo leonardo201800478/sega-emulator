@@ -16,7 +16,7 @@ use sega_z80_cpu::{
     Z80MicroSequencerState, Z80MicroStep,
 };
 
-pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 4;
+pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 5;
 
 /// Runtime event trace emitted from actual Scheduler/bus dispatch boundaries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -456,6 +456,72 @@ impl SmsTemporalMachine {
         {
             return Err(SmsTemporalMachineError::InvalidState);
         }
+        if let Some(request) = state.bus.pending_request {
+            let started_at = state
+                .bus
+                .request_started_at
+                .ok_or(SmsTemporalMachineError::InvalidState)?;
+            let completed_at = state
+                .bus
+                .completion
+                .map(|completion| completion.completed_at)
+                .or_else(|| {
+                    state
+                        .bus
+                        .coordinator
+                        .scheduler
+                        .event_queue
+                        .pending
+                        .first()
+                        .map(|event| event.timestamp)
+                })
+                .ok_or(SmsTemporalMachineError::InvalidState)?;
+            let scale = u128::from(state.bus.coordinator.master_ticks_per_tstate);
+            let elapsed = completed_at
+                .checked_duration_since(started_at)
+                .ok_or(SmsTemporalMachineError::InvalidState)?;
+            if scale == 0 || elapsed % scale != 0 {
+                return Err(SmsTemporalMachineError::InvalidState);
+            }
+            let total_tstates = elapsed / scale;
+            let wait_tstates = total_tstates
+                .checked_sub(u128::from(request.base_tstates))
+                .ok_or(SmsTemporalMachineError::InvalidState)?;
+            if wait_tstates != u128::from(state.cpu.handshake.wait_tstates) {
+                return Err(SmsTemporalMachineError::InvalidState);
+            }
+        }
+        if state.pending_internal_cycle_id.is_some() {
+            if state.pending_internal_tstates != Some(1) {
+                return Err(SmsTemporalMachineError::InvalidState);
+            }
+            let started_at = state
+                .bus
+                .internal_cycle_started_at
+                .ok_or(SmsTemporalMachineError::InvalidState)?;
+            let completed_at = state
+                .bus
+                .internal_completion
+                .map(|completion| completion.completed_at)
+                .or_else(|| {
+                    state
+                        .bus
+                        .coordinator
+                        .scheduler
+                        .event_queue
+                        .pending
+                        .first()
+                        .map(|event| event.timestamp)
+                })
+                .ok_or(SmsTemporalMachineError::InvalidState)?;
+            let scale = u128::from(state.bus.coordinator.master_ticks_per_tstate);
+            let expected = started_at
+                .checked_add(scale)
+                .ok_or(SmsTemporalMachineError::InvalidState)?;
+            if completed_at != expected {
+                return Err(SmsTemporalMachineError::InvalidState);
+            }
+        }
         Ok(Self {
             cpu,
             bus,
@@ -673,6 +739,39 @@ mod tests {
         assert_eq!(left.export_state(), right.export_state());
         assert_eq!(left.now(), right.now());
         assert_eq!(left.memory().work_ram(), right.memory().work_ram());
+    }
+
+    #[test]
+    fn restore_rejects_bus_deadline_that_disagrees_with_cpu_wait_counter() {
+        let mut machine = SmsTemporalMachine::new(vec![0x00; 0x4000], 3).unwrap();
+        machine.begin_instruction().unwrap();
+        machine.schedule_pending_bus(1).unwrap();
+
+        let mut state = machine.export_state();
+        state.bus.coordinator.scheduler.event_queue.pending[0].timestamp =
+            MachineTime::from_ticks(12);
+        assert!(SmsTemporalMachine::restore_state(state).is_err());
+    }
+
+    #[test]
+    fn restore_rejects_internal_cycle_duration_other_than_one_tstate() {
+        let mut machine = SmsTemporalMachine::new(vec![0x34; 0x4000], 3).unwrap();
+        machine.cpu_mut().registers.set_hl(0xC000);
+        machine.begin_instruction().unwrap();
+        machine.schedule_pending_bus(0).unwrap();
+        machine.dispatch_next().unwrap();
+        machine.schedule_pending_bus(0).unwrap();
+        assert_eq!(
+            machine.dispatch_next().unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        machine.schedule_internal_cycle(1).unwrap();
+
+        let mut state = machine.export_state();
+        state.pending_internal_tstates = Some(2);
+        state.bus.coordinator.scheduler.event_queue.pending[0].timestamp =
+            MachineTime::from_ticks(27);
+        assert!(SmsTemporalMachine::restore_state(state).is_err());
     }
 
     #[test]
