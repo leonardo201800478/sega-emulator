@@ -339,10 +339,12 @@ impl<T> MachineScheduler<T> {
             _ => return Err(SchedulerError::DispatchHistoryMismatch),
         }
 
-        if let Some(watermark) = state.event_queue.last_dispatched {
-            if watermark.timestamp > state.now {
-                return Err(SchedulerError::WatermarkAfterNow);
-            }
+        if state
+            .event_queue
+            .last_dispatched
+            .is_some_and(|watermark| watermark.timestamp > state.now)
+        {
+            return Err(SchedulerError::WatermarkAfterNow);
         }
         if state.event_queue.last_dispatched.map(|w| w.timestamp) != state.last_dispatch_timestamp {
             return Err(SchedulerError::DispatchWatermarkMismatch);
