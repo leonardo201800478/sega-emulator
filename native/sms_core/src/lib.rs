@@ -24,7 +24,10 @@ pub use bus::{
     Z80InstructionTrace, Z80TStatePhase, Z80TStateSample,
 };
 pub use cartridge::CartridgeImage;
-pub use config::{FmHardware, SmsMachineConfig, SpriteLimitMode, Territory, VideoStandard};
+pub use config::{
+    FmHardware, SmsConsoleModel, SmsMachineConfig, SmsVdpRevision, SpriteLimitMode, Territory,
+    VideoStandard,
+};
 pub use cpu::{CpuError, Z80};
 pub use error::SmsCoreError;
 pub use input::{ControllerButtons, LightPhaserState, SmsInputState};

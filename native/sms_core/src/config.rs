@@ -1,5 +1,29 @@
 //! Explicit hardware configuration for an SMS machine.
 
+/// Physical console family selected for compatibility and machine-level defaults.
+///
+/// This field identifies the console family only. It does not imply a particular
+/// VDP ASIC revision; that hardware identity is configured independently.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SmsConsoleModel {
+    Sms1,
+    /// Default console family for new configurations.
+    #[default]
+    Sms2,
+}
+
+/// VDP ASIC revision installed in the modeled console.
+///
+/// Do not infer this from SmsConsoleModel: real hardware variants and
+/// replacement boards can combine console families and VDP revisions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SmsVdpRevision {
+    Sega3155124,
+    /// Default VDP revision for new configurations.
+    #[default]
+    Sega3155246,
+}
+
 /// Console territory/model family. This is not inferred from video standard.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Territory {
@@ -33,8 +57,13 @@ pub enum SpriteLimitMode {
     UnlockedCompatibility,
 }
 
+/// Immutable hardware profile supplied when constructing an SMS machine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SmsMachineConfig {
+    /// Console family; independent from the installed VDP ASIC.
+    pub console_model: SmsConsoleModel,
+    /// Exact VDP ASIC revision selected for this machine instance.
+    pub vdp_revision: SmsVdpRevision,
     pub territory: Territory,
     pub video_standard: VideoStandard,
     pub fm_hardware: FmHardware,
@@ -44,6 +73,8 @@ pub struct SmsMachineConfig {
 impl Default for SmsMachineConfig {
     fn default() -> Self {
         Self {
+            console_model: SmsConsoleModel::Sms2,
+            vdp_revision: SmsVdpRevision::Sega3155246,
             territory: Territory::Export,
             video_standard: VideoStandard::Ntsc,
             fm_hardware: FmHardware::Absent,
@@ -54,13 +85,18 @@ impl Default for SmsMachineConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::{FmHardware, SmsMachineConfig, SpriteLimitMode, Territory, VideoStandard};
+    use super::{
+        FmHardware, SmsConsoleModel, SmsMachineConfig, SmsVdpRevision, SpriteLimitMode, Territory,
+        VideoStandard,
+    };
 
     #[test]
-    fn defaults_to_export_ntsc_without_fm_and_with_hardware_sprite_limit() {
+    fn defaults_to_sms2_with_315_5246_and_export_ntsc_profile() {
         assert_eq!(
             SmsMachineConfig::default(),
             SmsMachineConfig {
+                console_model: SmsConsoleModel::Sms2,
+                vdp_revision: SmsVdpRevision::Sega3155246,
                 territory: Territory::Export,
                 video_standard: VideoStandard::Ntsc,
                 fm_hardware: FmHardware::Absent,
@@ -70,15 +106,18 @@ mod tests {
     }
 
     #[test]
-    fn territory_video_standard_and_fm_are_independent_fields() {
+    fn console_model_and_vdp_revision_are_independent_fields() {
         let config = SmsMachineConfig {
+            console_model: SmsConsoleModel::Sms1,
+            vdp_revision: SmsVdpRevision::Sega3155246,
             territory: Territory::Japan,
             video_standard: VideoStandard::Pal,
             fm_hardware: FmHardware::Absent,
             sprite_limit: SpriteLimitMode::UnlockedCompatibility,
         };
+        assert_eq!(config.console_model, SmsConsoleModel::Sms1);
+        assert_eq!(config.vdp_revision, SmsVdpRevision::Sega3155246);
         assert_eq!(config.territory, Territory::Japan);
         assert_eq!(config.video_standard, VideoStandard::Pal);
-        assert_eq!(config.fm_hardware, FmHardware::Absent);
     }
 }

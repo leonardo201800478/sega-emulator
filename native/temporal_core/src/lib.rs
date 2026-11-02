@@ -6,6 +6,12 @@
 
 pub mod clock;
 pub mod event;
+pub mod state;
 
-pub use clock::{ClockDomain, ClockDomainSnapshot, ClockError, ClockRatio, MachineTime};
-pub use event::{EventPriority, EventQueue, EventQueueError, ScheduledEvent};
+pub use clock::{
+    ClockDomain, ClockDomainSnapshot, ClockEdgeTime, ClockError, ClockRatio, MachineTime,
+};
+pub use event::{
+    EventPriority, EventQueue, EventQueueError, HardwarePhase, PlatformPriority, ScheduledEvent,
+};
+pub use state::{EventQueueState, EventQueueWatermark};

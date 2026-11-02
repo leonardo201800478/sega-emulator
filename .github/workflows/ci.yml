@@ -5,6 +5,13 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      scheduler_stress_profile:
+        description: "Optional deterministic Scheduler stress profile"
+        required: false
+        type: choice
+        options: [none, short, long]
+        default: none
 
 permissions:
   contents: read
@@ -30,6 +37,26 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Workspace unit tests
         run: cargo test --workspace --locked
+
+  scheduler-stress:
+    name: Scheduler deterministic stress
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.scheduler_stress_profile != 'none'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SCHEDULER_STRESS_PROFILE: ${{ github.event.inputs.scheduler_stress_profile }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Compile deterministic stress replay
+        run: cargo test -p sega-machine-scheduler --test stress_replay --no-run
+      - name: Run deterministic stress replay with bounded memory
+        run: |
+          test_bin="$(find target/debug/deps -maxdepth 1 -type f -name 'stress_replay-*' -perm -111 -print -quit)"
+          test -n "$test_bin"
+          if [ "$SCHEDULER_STRESS_PROFILE" = "short" ]; then ulimit -v 524288; else ulimit -v 2097152; fi
+          "$test_bin" --ignored --nocapture
 
   python:
     name: Python lint and regression

@@ -1,5 +1,6 @@
 //! Integer machine time and rational clock-domain conversion.
 
+use core::cmp::Ordering;
 use core::fmt;
 
 /// Absolute tick count in one machine profile's chosen master-time unit.
@@ -35,6 +36,64 @@ impl MachineTime {
     pub const fn checked_duration_since(self, earlier: Self) -> Option<u128> {
         self.0.checked_sub(earlier.0)
     }
+}
+
+/// Exact position of a local clock edge on the machine timeline.
+///
+/// The timestamp is represented as an integer master tick plus a reduced
+/// fractional master tick. The fractional numerator and denominator are
+/// u64, so cross-multiplication for ordering fits exactly in u128.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ClockEdgeTime {
+    whole_ticks: MachineTime,
+    fractional_numerator: u64,
+    fractional_denominator: u64,
+}
+
+impl ClockEdgeTime {
+    /// Return the integer master-tick component.
+    pub const fn whole_ticks(self) -> MachineTime {
+        self.whole_ticks
+    }
+
+    /// Return the reduced fractional numerator.
+    pub const fn fractional_numerator(self) -> u64 {
+        self.fractional_numerator
+    }
+
+    /// Return the reduced fractional denominator.
+    ///
+    /// An integral timestamp has a denominator of one and a numerator of zero.
+    pub const fn fractional_denominator(self) -> u64 {
+        self.fractional_denominator
+    }
+}
+
+impl Ord for ClockEdgeTime {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.whole_ticks.cmp(&other.whole_ticks).then_with(|| {
+            let left =
+                u128::from(self.fractional_numerator) * u128::from(other.fractional_denominator);
+            let right =
+                u128::from(other.fractional_numerator) * u128::from(self.fractional_denominator);
+            left.cmp(&right)
+        })
+    }
+}
+
+impl PartialOrd for ClockEdgeTime {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+const fn gcd_u64(mut left: u64, mut right: u64) -> u64 {
+    while right != 0 {
+        let remainder = left % right;
+        left = right;
+        right = remainder;
+    }
+    left
 }
 
 /// Rational number of local device clock edges per master-time tick.
@@ -83,6 +142,10 @@ pub enum ClockError {
     ArithmeticOverflow,
     /// The initial fractional phase must be smaller than the denominator.
     PhaseOutOfRange,
+    /// A local edge index is one-based and cannot be zero.
+    ZeroEdgeIndex,
+    /// Stored clock history is inconsistent with its exact rational ratio.
+    InvalidClockHistory,
 }
 
 impl fmt::Display for ClockError {
@@ -93,6 +156,8 @@ impl fmt::Display for ClockError {
             Self::TimeWentBackwards => write!(f, "clock domain cannot advance backwards"),
             Self::ArithmeticOverflow => write!(f, "clock-domain arithmetic overflow"),
             Self::PhaseOutOfRange => write!(f, "clock phase must be smaller than its denominator"),
+            Self::ZeroEdgeIndex => write!(f, "local clock edge index must be positive"),
+            Self::InvalidClockHistory => write!(f, "clock-domain history is inconsistent"),
         }
     }
 }
@@ -120,6 +185,8 @@ pub struct ClockDomain {
     time: MachineTime,
     total_cycles: u128,
     phase: u128,
+    registration_start: MachineTime,
+    initial_phase: u128,
 }
 
 impl ClockDomain {
@@ -130,6 +197,8 @@ impl ClockDomain {
             time: start,
             total_cycles: 0,
             phase: 0,
+            registration_start: start,
+            initial_phase: 0,
         }
     }
 
@@ -147,7 +216,59 @@ impl ClockDomain {
             time: start,
             total_cycles: 0,
             phase,
+            registration_start: start,
+            initial_phase: phase,
         })
+    }
+
+    /// Restore a domain from its complete rational-clock history.
+    ///
+    /// The stored counters are accepted only when they satisfy the exact
+    /// conversion equation from registration through `current_time`.
+    pub fn restore(
+        ratio: ClockRatio,
+        current_time: MachineTime,
+        total_cycles: u128,
+        phase: u128,
+        registration_start: MachineTime,
+        initial_phase: u128,
+    ) -> Result<Self, ClockError> {
+        let denominator = u128::from(ratio.denominator());
+        if phase >= denominator || initial_phase >= denominator {
+            return Err(ClockError::PhaseOutOfRange);
+        }
+        let elapsed = current_time
+            .checked_duration_since(registration_start)
+            .ok_or(ClockError::InvalidClockHistory)?;
+        let left = total_cycles
+            .checked_mul(denominator)
+            .and_then(|value| value.checked_add(phase))
+            .ok_or(ClockError::ArithmeticOverflow)?;
+        let right = elapsed
+            .checked_mul(u128::from(ratio.numerator()))
+            .and_then(|value| value.checked_add(initial_phase))
+            .ok_or(ClockError::ArithmeticOverflow)?;
+        if left != right {
+            return Err(ClockError::InvalidClockHistory);
+        }
+        Ok(Self {
+            ratio,
+            time: current_time,
+            total_cycles,
+            phase,
+            registration_start,
+            initial_phase,
+        })
+    }
+
+    /// Return the domain's registration timestamp.
+    pub const fn registration_start(&self) -> MachineTime {
+        self.registration_start
+    }
+
+    /// Return the rational phase supplied at registration.
+    pub const fn initial_phase(&self) -> u128 {
+        self.initial_phase
     }
 
     /// Return the domain's immutable clock ratio.
@@ -163,6 +284,44 @@ impl ClockDomain {
     /// Return the accumulated local clock edges.
     pub const fn total_cycles(&self) -> u128 {
         self.total_cycles
+    }
+
+    /// Return the exact timestamp of the edge_index-th future local edge.
+    ///
+    /// The index is one-based relative to this domain's current integer
+    /// timestamp and retained phase. No state is mutated. The returned
+    /// timestamp is an exact rational master-time position, not rounded to
+    /// MachineTime.
+    pub fn edge_time_after(&self, edge_index: u128) -> Result<ClockEdgeTime, ClockError> {
+        if edge_index == 0 {
+            return Err(ClockError::ZeroEdgeIndex);
+        }
+
+        let threshold = edge_index
+            .checked_mul(u128::from(self.ratio.ticks_denominator))
+            .ok_or(ClockError::ArithmeticOverflow)?;
+        let elapsed_numerator = threshold
+            .checked_sub(self.phase)
+            .ok_or(ClockError::ArithmeticOverflow)?;
+        let edge_denominator = u128::from(self.ratio.cycles_numerator);
+        let whole_offset = elapsed_numerator / edge_denominator;
+        let fractional_numerator = (elapsed_numerator % edge_denominator) as u64;
+        let whole_ticks = self
+            .time
+            .checked_add(whole_offset)
+            .ok_or(ClockError::ArithmeticOverflow)?;
+
+        let divisor = gcd_u64(fractional_numerator, self.ratio.cycles_numerator);
+        Ok(ClockEdgeTime {
+            whole_ticks,
+            fractional_numerator: fractional_numerator / divisor,
+            fractional_denominator: self.ratio.cycles_numerator / divisor,
+        })
+    }
+
+    /// Return the exact timestamp of the next local clock edge.
+    pub fn next_edge_time(&self) -> Result<ClockEdgeTime, ClockError> {
+        self.edge_time_after(1)
     }
 
     /// Advance to an absolute machine timestamp and return newly elapsed edges.
@@ -232,6 +391,122 @@ mod tests {
     }
 
     #[test]
+    fn next_edge_time_preserves_fractional_master_tick_exactly() {
+        let ratio = ClockRatio::new(7, 3).unwrap();
+        let domain = ClockDomain::new(ratio, MachineTime::ZERO);
+        let edge = domain.next_edge_time().unwrap();
+
+        assert_eq!(edge.whole_ticks(), MachineTime::ZERO);
+        assert_eq!(edge.fractional_numerator(), 3);
+        assert_eq!(edge.fractional_denominator(), 7);
+    }
+
+    #[test]
+    fn consecutive_edges_are_exact_and_monotonically_ordered() {
+        let ratio = ClockRatio::new(7, 3).unwrap();
+        let domain = ClockDomain::new(ratio, MachineTime::ZERO);
+        let edges: Vec<_> = (1..=5)
+            .map(|index| domain.edge_time_after(index).unwrap())
+            .collect();
+
+        assert_eq!(edges[0].whole_ticks(), MachineTime::ZERO);
+        assert_eq!(
+            (
+                edges[0].fractional_numerator(),
+                edges[0].fractional_denominator()
+            ),
+            (3, 7)
+        );
+        assert_eq!(
+            (
+                edges[1].fractional_numerator(),
+                edges[1].fractional_denominator()
+            ),
+            (6, 7)
+        );
+        assert_eq!(edges[2].whole_ticks(), MachineTime::from_ticks(1));
+        assert_eq!(
+            (
+                edges[2].fractional_numerator(),
+                edges[2].fractional_denominator()
+            ),
+            (2, 7)
+        );
+        assert!(edges.windows(2).all(|pair| pair[0] < pair[1]));
+    }
+
+    #[test]
+    fn edge_times_support_multiple_edges_inside_one_master_tick() {
+        let ratio = ClockRatio::new(3, 2).unwrap();
+        let domain = ClockDomain::new(ratio, MachineTime::ZERO);
+        let first = domain.edge_time_after(1).unwrap();
+        let second = domain.edge_time_after(2).unwrap();
+        let third = domain.edge_time_after(3).unwrap();
+
+        assert_eq!(
+            (
+                first.whole_ticks(),
+                first.fractional_numerator(),
+                first.fractional_denominator()
+            ),
+            (MachineTime::ZERO, 2, 3)
+        );
+        assert_eq!(
+            (
+                second.whole_ticks(),
+                second.fractional_numerator(),
+                second.fractional_denominator()
+            ),
+            (MachineTime::from_ticks(1), 1, 3)
+        );
+        assert_eq!(
+            (
+                third.whole_ticks(),
+                third.fractional_numerator(),
+                third.fractional_denominator()
+            ),
+            (MachineTime::from_ticks(2), 0, 1)
+        );
+        assert!(first < second && second < third);
+    }
+
+    #[test]
+    fn edge_time_uses_retained_fractional_phase() {
+        let ratio = ClockRatio::new(1, 3).unwrap();
+        let domain = ClockDomain::with_phase(ratio, MachineTime::from_ticks(8), 2).unwrap();
+        let edge = domain.next_edge_time().unwrap();
+
+        assert_eq!(edge.whole_ticks(), MachineTime::from_ticks(9));
+        assert_eq!(
+            (edge.fractional_numerator(), edge.fractional_denominator()),
+            (0, 1)
+        );
+    }
+
+    #[test]
+    fn edge_time_comparison_is_exact_for_different_denominators() {
+        let ratio_a = ClockRatio::new(3, 2).unwrap();
+        let ratio_b = ClockRatio::new(7, 3).unwrap();
+        let a = ClockDomain::new(ratio_a, MachineTime::ZERO)
+            .next_edge_time()
+            .unwrap();
+        let b = ClockDomain::new(ratio_b, MachineTime::ZERO)
+            .next_edge_time()
+            .unwrap();
+        assert!(b < a);
+    }
+
+    #[test]
+    fn zero_edge_index_and_timestamp_overflow_are_rejected() {
+        let ratio = ClockRatio::new(1, 1).unwrap();
+        let mut domain = ClockDomain::new(ratio, MachineTime::ZERO);
+        assert_eq!(domain.edge_time_after(0), Err(ClockError::ZeroEdgeIndex));
+
+        domain.time = MachineTime::from_ticks(u128::MAX);
+        assert_eq!(domain.next_edge_time(), Err(ClockError::ArithmeticOverflow));
+    }
+
+    #[test]
     fn backwards_advance_is_rejected_without_mutating_state() {
         let ratio = ClockRatio::new(1, 1).unwrap();
         let mut domain = ClockDomain::new(ratio, MachineTime::from_ticks(5));
@@ -266,6 +541,92 @@ mod tests {
             Err(ClockError::ArithmeticOverflow)
         );
         assert_eq!(domain, before);
+    }
+
+    #[test]
+    fn restored_clock_domain_preserves_complete_history() {
+        let ratio = ClockRatio::new(5, 3).unwrap();
+        let mut original = ClockDomain::with_phase(ratio, MachineTime::from_ticks(4), 2).unwrap();
+        original.advance_to(MachineTime::from_ticks(11)).unwrap();
+
+        let mut restored = ClockDomain::restore(
+            original.ratio(),
+            original.current_time(),
+            original.total_cycles(),
+            original.snapshot().phase,
+            original.registration_start(),
+            original.initial_phase(),
+        )
+        .unwrap();
+        assert_eq!(restored, original);
+        original.advance_to(MachineTime::from_ticks(17)).unwrap();
+        restored.advance_to(MachineTime::from_ticks(17)).unwrap();
+        assert_eq!(restored, original);
+    }
+
+    #[test]
+    fn restore_round_trips_common_rational_clock_ratios() {
+        for (numerator, denominator, initial_phase) in [(3, 2, 1), (7, 3, 2), (1, 3, 2)] {
+            let ratio = ClockRatio::new(numerator, denominator).unwrap();
+            let mut original =
+                ClockDomain::with_phase(ratio, MachineTime::from_ticks(5), initial_phase).unwrap();
+            original.advance_to(MachineTime::from_ticks(29)).unwrap();
+            let restored = ClockDomain::restore(
+                ratio,
+                original.current_time(),
+                original.total_cycles(),
+                original.snapshot().phase,
+                original.registration_start(),
+                original.initial_phase(),
+            )
+            .unwrap();
+            assert_eq!(restored, original);
+        }
+    }
+
+    #[test]
+    fn restore_rejects_inconsistent_clock_history() {
+        let ratio = ClockRatio::new(5, 3).unwrap();
+        assert_eq!(
+            ClockDomain::restore(
+                ratio,
+                MachineTime::from_ticks(10),
+                1,
+                0,
+                MachineTime::ZERO,
+                0,
+            ),
+            Err(ClockError::InvalidClockHistory)
+        );
+    }
+
+    #[test]
+    fn restore_rejects_out_of_range_initial_and_current_phase() {
+        let ratio = ClockRatio::new(5, 3).unwrap();
+        assert_eq!(
+            ClockDomain::restore(ratio, MachineTime::ZERO, 0, 0, MachineTime::ZERO, 3),
+            Err(ClockError::PhaseOutOfRange)
+        );
+        assert_eq!(
+            ClockDomain::restore(ratio, MachineTime::ZERO, 0, 3, MachineTime::ZERO, 0),
+            Err(ClockError::PhaseOutOfRange)
+        );
+    }
+
+    #[test]
+    fn restore_rejects_registration_after_current_time() {
+        let ratio = ClockRatio::new(1, 1).unwrap();
+        assert_eq!(
+            ClockDomain::restore(
+                ratio,
+                MachineTime::from_ticks(2),
+                0,
+                0,
+                MachineTime::from_ticks(3),
+                0,
+            ),
+            Err(ClockError::InvalidClockHistory)
+        );
     }
 
     #[test]
