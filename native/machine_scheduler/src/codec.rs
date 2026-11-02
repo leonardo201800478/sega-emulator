@@ -150,8 +150,8 @@ where
         let payload = payload_codec
             .encode_payload(&event.payload)
             .map_err(|error| SchedulerStateCodecError::Payload(error.to_string()))?;
-        let payload_len = u32::try_from(payload.len())
-            .map_err(|_| SchedulerStateCodecError::PayloadTooLarge)?;
+        let payload_len =
+            u32::try_from(payload.len()).map_err(|_| SchedulerStateCodecError::PayloadTooLarge)?;
         body.write_u32(payload_len)?;
         body.write_bytes(&payload)?;
     }
@@ -166,8 +166,8 @@ where
     }
     body.write_u64(state.dispatched_at_timestamp)?;
 
-    let body_len = u64::try_from(body.bytes.len())
-        .map_err(|_| SchedulerStateCodecError::LengthOverflow)?;
+    let body_len =
+        u64::try_from(body.bytes.len()).map_err(|_| SchedulerStateCodecError::LengthOverflow)?;
     let mut frame = Writer::default();
     frame.write_bytes(&SCHEDULER_STATE_MAGIC)?;
     frame.write_u16(SCHEDULER_STATE_FORMAT_VERSION)?;
@@ -208,8 +208,8 @@ where
             actual: payload_version,
         });
     }
-    let body_len = usize::try_from(frame.read_u64()?)
-        .map_err(|_| SchedulerStateCodecError::LengthOverflow)?;
+    let body_len =
+        usize::try_from(frame.read_u64()?).map_err(|_| SchedulerStateCodecError::LengthOverflow)?;
     let body_bytes = frame.read_bytes(body_len)?;
     if !frame.is_finished() {
         return Err(SchedulerStateCodecError::TrailingData);
@@ -219,8 +219,8 @@ where
     let now = MachineTime::from_ticks(reader.read_u128()?);
 
     let domain_count = reader.read_u32()?;
-    let domain_count_usize = usize::try_from(domain_count)
-        .map_err(|_| SchedulerStateCodecError::LengthOverflow)?;
+    let domain_count_usize =
+        usize::try_from(domain_count).map_err(|_| SchedulerStateCodecError::LengthOverflow)?;
     if domain_count_usize > reader.remaining() / CLOCK_DOMAIN_WIRE_SIZE {
         return Err(SchedulerStateCodecError::Truncated);
     }
@@ -242,8 +242,8 @@ where
     }
 
     let pending_count = reader.read_u32()?;
-    let pending_count_usize = usize::try_from(pending_count)
-        .map_err(|_| SchedulerStateCodecError::LengthOverflow)?;
+    let pending_count_usize =
+        usize::try_from(pending_count).map_err(|_| SchedulerStateCodecError::LengthOverflow)?;
     if pending_count_usize > reader.remaining() / EVENT_FIXED_WIRE_SIZE {
         return Err(SchedulerStateCodecError::Truncated);
     }
@@ -428,8 +428,8 @@ impl<'a> Reader<'a> {
 #[cfg(test)]
 mod tests {
     use super::{
-        decode_scheduler_state, encode_scheduler_state, EventPayloadCodec,
-        SchedulerStateCodecError, SCHEDULER_STATE_MAGIC,
+        EventPayloadCodec, SCHEDULER_STATE_MAGIC, SchedulerStateCodecError, decode_scheduler_state,
+        encode_scheduler_state,
     };
     use sega_temporal_core::{
         EventQueueState, EventQueueWatermark, HardwarePhase, MachineTime, PlatformPriority,
@@ -453,7 +453,9 @@ mod tests {
         }
 
         fn decode_payload(&self, bytes: &[u8]) -> Result<u32, Self::Error> {
-            let array: [u8; 4] = bytes.try_into().map_err(|_| "expected four payload bytes")?;
+            let array: [u8; 4] = bytes
+                .try_into()
+                .map_err(|_| "expected four payload bytes")?;
             Ok(u32::from_be_bytes(array))
         }
     }
@@ -619,7 +621,8 @@ mod tests {
         );
 
         let mut malformed_payload = encoded;
-        let payload_length_offset = 20 + 16 + 4 + CLOCK_DOMAIN_SIZE_FOR_TEST + 4 + 8 + 1 + 16 + 2 + 2 + 8;
+        let payload_length_offset =
+            20 + 16 + 4 + CLOCK_DOMAIN_SIZE_FOR_TEST + 4 + 8 + 1 + 16 + 2 + 2 + 8;
         malformed_payload[payload_length_offset..payload_length_offset + 4]
             .copy_from_slice(&3_u32.to_be_bytes());
         assert!(matches!(
@@ -631,7 +634,8 @@ mod tests {
     #[test]
     fn codec_rejects_payload_lengths_beyond_frame_boundary() {
         let mut encoded = encode_scheduler_state(&state_fixture(), &U32PayloadCodec).unwrap();
-        let payload_length_offset = 20 + 16 + 4 + CLOCK_DOMAIN_SIZE_FOR_TEST + 4 + 8 + 1 + 16 + 2 + 2 + 8;
+        let payload_length_offset =
+            20 + 16 + 4 + CLOCK_DOMAIN_SIZE_FOR_TEST + 4 + 8 + 1 + 16 + 2 + 2 + 8;
         encoded[payload_length_offset..payload_length_offset + 4]
             .copy_from_slice(&u32::MAX.to_be_bytes());
         assert_eq!(
