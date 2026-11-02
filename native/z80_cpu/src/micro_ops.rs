@@ -161,7 +161,7 @@ impl Z80BusHandshake {
                     request,
                     wait_tstates: state.wait_tstates,
                 })
-            },
+            }
             Some(_) => return Err(Z80BusHandshakeError::InvalidState),
             None if state.wait_tstates == 0 => None,
             None => return Err(Z80BusHandshakeError::InvalidState),
