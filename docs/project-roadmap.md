@@ -2,7 +2,7 @@
 
 **Status:** única rota de implementação vigente do projeto.
 **Prioridade ativa:** preservar e consolidar SG-1000 + Master System (SMS), com integração temporal progressiva.
-**Baseline auditada:** `main` em `29930e0b28c83456634fd6cfc80301bd2e714679` (2026-11-02).
+**Baseline auditada:** `main` em `3f4a71d7b7bbc1863c20cd3293466405cb3f579b` (2026-11-02, T4 integrado).
 **Runtime-alvo:** Rust executa hardware, áudio, vídeo, entrada e tempo emulado. Python/Qt é plano de controle, interface e tooling. A migração de cada backend deve ser comprovada no código; esta diretriz não declara a arquitetura-alvo concluída.
 
 > Este arquivo substitui todos os roadmaps, cronogramas de migração e cartas de planejamento anteriores. Não manter planos paralelos por subsistema. ADRs, especificações e auditorias continuam válidos como documentação técnica, mas não podem criar fases ou prioridades concorrentes. O trabalho executável é acompanhado por issues e PRs vinculadas às fases abaixo.
@@ -134,9 +134,11 @@ Esta fase passa a ser a frente ativa de integração temporal, autorizada formal
 - T1: PRs #412/#413 — contadores checked e codec binário versionado do estado retomável suportado.
 - T2: PR #414 — coordenador SMS sobre `MachineScheduler`, com escala temporal explícita.
 - T3: barramento de memória transacional, efeitos no deadline, acknowledgement único e WAIT de fixture, incorporado à stack T4.
-- T4: PR #416 — fatia vertical consolidada no SHA `94a6a2128e7f7b4af115d65e98ebbe33cc19ce8f`; CI #41496284832: Rust fmt/clippy/tests PASS, Python Ruff/pytest PASS, Windows x64 vídeo/áudio PASS e Scheduler stress short PASS.
+- T4: PR #416 — integrada em `main` no SHA `3f4a71d7b7bbc1863c20cd3293466405cb3f579b`; head validado `bfdc7d2fbbcf7712091df9960a7e7e593c18afea`; CI #41499228458 PASS em todos os quatro jobs sobre merge ref `cea276159efd382e8289085be4b5f67dccecc753`.
 
-**Estado:** primeira fatia vertical `SHORT_PASS`; P6 permanece ativa para completar mappers/I/O, estado arquitetural Z80, integração do novo VDP/PSG e semântica sustentada por evidência. O caminho legado permanece preservado. `TEMPORAL_PASS` continua pendente.
+**Estado:** T0–T4 integrados incrementalmente; a primeira fatia vertical T4 está em `SHORT_PASS`. P6 permanece ativa para completar mappers/I/O, estado arquitetural Z80, integração do novo VDP/PSG e semântica sustentada por evidência. O caminho legado permanece preservado. `TEMPORAL_PASS` continua pendente.
+
+**Próxima tarefa executável — T5a:** expor índices M-cycle/T-state estáveis no microsequenciador para as operações já suportadas e produzir um mapeamento revisável para `BusTransaction`/`BusOperationResult` da PR #396. Primeiro fechar ownership, fase e timestamp sem duplicar o handshake; somente depois ampliar a próxima família de instruções. Não inferir fases elétricas nem ampliar o escopo de opcodes sem vetores e diferencial.
 
 **Saída:** primeira fatia vertical Z80/bus/Scheduler com trace runtime, snapshot/replay e regressões SG-1000/SMS; isso ainda não equivale a `TEMPORAL_PASS`.
 
@@ -224,3 +226,16 @@ Build Release/Maturin, testes Windows x64, GPU, áudio e input físicos são adi
 ## 8. Plataformas futuras
 
 Game Gear, Mega Drive/Genesis, Sega CD, 32X, SVP e sistemas integrados de terceiros não fazem parte da execução ativa deste roadmap. Após M4, sua inclusão dependerá de nova revisão aprovada do roadmap, baseada no inventário e na arquitetura efetivamente consolidada. Não criar cronogramas ou branches de implementação dessas plataformas antes dessa decisão.
+
+
+## 9. Registro de integração T4 na main — 2026-11-02
+
+- PR #416 integrada por merge commit em `main`: `3f4a71d7b7bbc1863c20cd3293466405cb3f579b`.
+- Head da PR validado: `bfdc7d2fbbcf7712091df9960a7e7e593c18afea`.
+- CI de PR #41499228458, sobre merge ref `cea276159efd382e8289085be4b5f67dccecc753`: Rust fmt/clippy/workspace tests, Python Ruff/pytest, Windows x64 vídeo/áudio e Scheduler deterministic stress short — todos PASS.
+- CI pós-merge #41499594576: Rust e Python PASS; Windows x64 vídeo/áudio PASS quando concluído; Scheduler stress SKIPPED por ser push em main sem o label de PR. O stress short já havia PASS no CI de PR do mesmo candidato.
+- Logs do workspace: SG-1000 42/42; SMS 156/156; Z80 83/83. Os testes integrados novos de overflow/acknowledgement, duração do ciclo interno, diferencial, trace e replay também passaram.
+- Testes locais: NOT RUN. Não houve execução de ROM homebrew/golden master nem das suítes externas Z80 nesta integração.
+- PRs #412 e #415 têm seus heads como ancestrais do SHA integrado; #412 foi reconhecida pelo GitHub como merged. PRs #413 e #414 foram encerradas como supersedidas: seus heads divergiam da stack consolidada, mas os entregáveis funcionais de snapshot/codec e coordinator estão no diff integrado de #416. Os hashes específicos dos commits divergentes de #413/#414 não foram preservados como ancestrais; a consolidação preservou o conteúdo funcional, não toda a linhagem histórica dessas duas branches.
+
+Estados: T1 `IMPLEMENTED / QUICK_PASS`; T2 `IMPLEMENTED / QUICK_PASS`; T3 `IMPLEMENTED / QUICK_PASS`; T4 `IMPLEMENTED / SHORT_PASS`; SMS temporal completo `INTEGRATION_PENDING`; `TEMPORAL_PASS` NÃO declarado.
