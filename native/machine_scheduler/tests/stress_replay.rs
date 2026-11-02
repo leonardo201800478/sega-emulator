@@ -109,7 +109,7 @@ fn fixed_seed_stress_replay_survives_repeated_restores() {
             }
             dispatched += 1;
 
-            if dispatched % 4_096 == 0 {
+            if dispatched.is_multiple_of(4_096) {
                 restored = MachineScheduler::restore_state(restored.export_state()).unwrap();
                 assert_eq!(
                     continuous.export_state(),
