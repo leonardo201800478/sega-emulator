@@ -37,7 +37,7 @@ fn populated(seed: u64, count: u64) -> MachineScheduler<Payload> {
     let mut rng = FixedRng(seed);
     for index in 0..count {
         // Sixteen events per timestamp keep the dispatch budget bounded while
-        // exercising equal-time ordering, all key dimensions and clock ratios.
+        // exercising equal-time ordering and persisted clock-domain configuration.
         let timestamp = u128::from(index / 16 + 1);
         let phase = u16::try_from(rng.next() % 4).unwrap();
         let priority = u16::try_from(rng.next() % 8).unwrap();
