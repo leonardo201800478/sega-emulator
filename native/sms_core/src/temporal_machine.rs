@@ -505,6 +505,11 @@ mod tests {
         assert_eq!(machine.now(), now);
 
         machine.schedule_internal_cycle(1).unwrap();
+        assert!(matches!(
+            machine.dispatch_next().unwrap(),
+            Z80MicroStep::BusRequest(_)
+        ));
+        machine.schedule_pending_bus(0).unwrap();
         retired(machine.dispatch_next().unwrap(), 0x34, 11);
     }
 
