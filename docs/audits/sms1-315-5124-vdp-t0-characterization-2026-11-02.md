@@ -178,3 +178,6 @@ T0 não está concluído enquanto:
 ### Consequência para a reconstrução
 
 O novo VDP deve começar com testes SMS1 sintéticos e oráculos explicitamente classificados. O VDP legado pode fornecer fixtures funcionais e imagens comparativas, mas nunca deve determinar os timestamps/fases do novo pipeline. A constante legada de 228 T-states por linha fica como hipótese de compatibilidade até ser confirmada por fonte/medição específica do SMS1.
+### Discrepância documental — bits de status de sprites
+
+A documentação oficial de software Mark III atribui status bit 6 a sprite overflow (nove sprites) e bit 5 a sprite collision (SMS Official Docs, seção INT e Appendix B). A página comunitária SMS Power/Sprites descreve overflow no bit 6 e também menciona bit 6 para collision. Há, portanto, uma inconsistência textual na fonte comunitária. Para a matriz inicial, preservar o mapeamento do manual Mark III como PRIMARY_DOC; não copiar a referência do bit de collision da página Sprites sem confirmação por teste de hardware/oráculo. Registrar um teste específico que gere overflow sem colisão e colisão sem overflow.
