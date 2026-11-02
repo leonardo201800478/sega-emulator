@@ -83,6 +83,12 @@ pub enum SchedulerError {
     EventPendingBeforeTarget,
     ZeroDeltaEventLimit,
     DeltaEventLimitExceeded { timestamp: MachineTime, limit: u64 },
+    StateFormatVersionMismatch { expected: u16, actual: u16 },
+    NonCanonicalClockDomainOrder,
+    PendingEventBeforeNow,
+    WatermarkAfterNow,
+    DispatchHistoryMismatch,
+    DispatchWatermarkMismatch,
 }
 
 impl fmt::Display for SchedulerError {
@@ -111,6 +117,25 @@ impl fmt::Display for SchedulerError {
                 "delta-event dispatch limit {limit} exceeded at machine tick {}",
                 timestamp.ticks()
             ),
+            Self::StateFormatVersionMismatch { expected, actual } => write!(
+                f,
+                "scheduler state format version {actual} is unsupported (expected {expected})"
+            ),
+            Self::NonCanonicalClockDomainOrder => {
+                write!(f, "clock-domain states are not in strict ascending ID order")
+            }
+            Self::PendingEventBeforeNow => {
+                write!(f, "restored event queue contains an event before scheduler time")
+            }
+            Self::WatermarkAfterNow => {
+                write!(f, "event queue watermark is later than scheduler time")
+            }
+            Self::DispatchHistoryMismatch => {
+                write!(f, "scheduler dispatch timestamp and count are inconsistent")
+            }
+            Self::DispatchWatermarkMismatch => {
+                write!(f, "scheduler dispatch timestamp does not match queue watermark")
+            }
         }
     }
 }
@@ -253,6 +278,104 @@ impl<T> MachineScheduler<T> {
         let (id, domain) = state.into_domain()?;
         self.clocks.insert(id, domain);
         Ok(())
+    }
+
+    /// Export the complete scheduler state in canonical clock-domain order.
+    ///
+    /// Event payloads are cloned by the underlying queue export; callers must
+    /// provide payloads whose clone operation preserves their logical value.
+    pub fn export_state(&self) -> SchedulerState<T>
+    where
+        T: Clone,
+    {
+        SchedulerState {
+            format_version: SCHEDULER_STATE_FORMAT_VERSION,
+            now: self.now,
+            clock_domains: self
+                .clocks
+                .iter()
+                .map(|(&id, domain)| ClockDomainState::from_domain(id, domain))
+                .collect(),
+            event_queue: self.events.export_state(),
+            delta_event_limit: self.delta_event_policy.max_events_per_timestamp,
+            last_dispatch_timestamp: self.last_dispatch_timestamp,
+            dispatched_at_timestamp: self.dispatched_at_timestamp,
+        }
+    }
+
+    /// Construct a scheduler from a complete DTO after validating every
+    /// component and cross-component invariant before exposing the result.
+    ///
+    /// All reconstructed domains and the event queue are held in temporary
+    /// values. Any error returns without producing a partially restored
+    /// scheduler.
+    pub fn restore_state(state: SchedulerState<T>) -> Result<Self, SchedulerError> {
+        if state.format_version != SCHEDULER_STATE_FORMAT_VERSION {
+            return Err(SchedulerError::StateFormatVersionMismatch {
+                expected: SCHEDULER_STATE_FORMAT_VERSION,
+                actual: state.format_version,
+            });
+        }
+        if state.delta_event_limit == 0 {
+            return Err(SchedulerError::ZeroDeltaEventLimit);
+        }
+
+        match (state.last_dispatch_timestamp, state.dispatched_at_timestamp) {
+            (None, 0) => {}
+            (Some(timestamp), count) if count > 0 => {
+                if timestamp > state.now {
+                    return Err(SchedulerError::DispatchHistoryMismatch);
+                }
+            }
+            _ => return Err(SchedulerError::DispatchHistoryMismatch),
+        }
+
+        if let Some(watermark) = state.event_queue.last_dispatched {
+            if watermark.timestamp > state.now {
+                return Err(SchedulerError::WatermarkAfterNow);
+            }
+        }
+        if state.event_queue.last_dispatched.map(|w| w.timestamp)
+            != state.last_dispatch_timestamp
+        {
+            return Err(SchedulerError::DispatchWatermarkMismatch);
+        }
+        if state
+            .event_queue
+            .pending
+            .iter()
+            .any(|event| event.timestamp < state.now)
+        {
+            return Err(SchedulerError::PendingEventBeforeNow);
+        }
+
+        let mut clocks = BTreeMap::new();
+        let mut previous_id = None;
+        for domain_state in state.clock_domains {
+            if previous_id.is_some_and(|previous| previous >= domain_state.id) {
+                return Err(SchedulerError::NonCanonicalClockDomainOrder);
+            }
+            previous_id = Some(domain_state.id);
+            if domain_state.current_time != state.now {
+                return Err(SchedulerError::ClockDomainTimeMismatch(domain_state.id));
+            }
+            let (id, domain) = domain_state.into_domain()?;
+            if clocks.insert(id, domain).is_some() {
+                return Err(SchedulerError::DuplicateClockDomain(id));
+            }
+        }
+
+        let events = EventQueue::restore_state(state.event_queue)?;
+        Ok(Self {
+            now: state.now,
+            events,
+            clocks,
+            delta_event_policy: DeltaEventPolicy {
+                max_events_per_timestamp: state.delta_event_limit,
+            },
+            last_dispatch_timestamp: state.last_dispatch_timestamp,
+            dispatched_at_timestamp: state.dispatched_at_timestamp,
+        })
     }
 
     /// Schedule at an absolute timestamp using the compatibility zero phase.
