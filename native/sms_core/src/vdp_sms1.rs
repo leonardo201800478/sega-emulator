@@ -723,6 +723,8 @@ mod background_tests {
         state.registers.set_raw(0, 0x44);
         state.registers.set_raw(1, 0x40);
         state.registers.set_raw(2, 0x0E);
+        state.registers.set_raw(3, 0xFF);
+        state.registers.set_raw(4, 0x07);
         state.registers.set_raw(8, 8);
         // First map tile is color 1, second is color 2.
         state.memory.vram[0x3800] = 1;
@@ -767,6 +769,8 @@ mod background_tests {
         state.registers.set_raw(0, 0x04);
         state.registers.set_raw(1, 0x40);
         state.registers.set_raw(2, 0x0E);
+        state.registers.set_raw(3, 0xFF);
+        state.registers.set_raw(4, 0x07);
         state.memory.vram[0x3800] = 1;
         state.memory.vram[0x3800 + 16 * 64] = 2;
         put_tile(&mut state, 1, 1);
@@ -871,6 +875,8 @@ mod background_tests {
         state.registers.set_raw(0, 0x04);
         state.registers.set_raw(1, 0x40);
         state.registers.set_raw(2, 0x0E);
+        state.registers.set_raw(3, 0xFF);
+        state.registers.set_raw(4, 0x07);
         // Distinguish the first two name-table rows.
         state.memory.vram[0x3800] = 1;
         state.memory.vram[0x3840] = 2;
