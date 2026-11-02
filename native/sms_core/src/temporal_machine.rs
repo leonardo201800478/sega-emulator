@@ -13,7 +13,7 @@ use sega_z80_cpu::{
     Z80MicroSequencerState, Z80MicroStep,
 };
 
-pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 1;
+pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 2;
 
 /// Runtime event trace emitted from actual Scheduler/bus dispatch boundaries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -326,6 +326,7 @@ impl SmsTemporalMachine {
         if cpu.pending_request() != state.bus.pending_request
             || state.pending_internal_cycle_id != state.bus.pending_internal_cycle
             || state.pending_internal_cycle_id.is_some() != state.pending_internal_tstates.is_some()
+            || state.pending_internal_tstates == Some(0)
             || state
                 .pending_internal_cycle_id
                 .is_some_and(|id| id >= state.next_internal_cycle_id)
@@ -524,6 +525,57 @@ mod tests {
         assert_atomic_differential(&[0x3E, 0x42], 0, 0, 0, 0, 0x3E);
         assert_atomic_differential(&[0x77], 0x5A, 0, 0xC000, 0, 0x77);
         assert_atomic_differential(&[0x34], 0, 0, 0xC000, 0x7F, 0x34);
+    }
+
+    #[test]
+    fn runtime_trace_records_real_bus_and_internal_dispatch_boundaries() {
+        let mut machine = SmsTemporalMachine::new(vec![0x34; 0x4000], 3).unwrap();
+        machine.cpu_mut().registers.set_hl(0xC000);
+        machine.set_trace_enabled(true);
+        retired(machine.step_instruction(0).unwrap(), 0x34, 11);
+
+        let trace = machine.take_trace();
+        assert_eq!(trace.len(), 4);
+        assert!(matches!(
+            trace[0],
+            super::SmsTemporalTraceEvent::BusCompleted {
+                timestamp,
+                operation: sega_z80_cpu::Z80BusOperation::OpcodeFetch,
+                base_tstates: 4,
+                wait_tstates: 0,
+                data: Some(0x34),
+                ..
+            } if timestamp == MachineTime::from_ticks(12)
+        ));
+        assert!(matches!(
+            trace[1],
+            super::SmsTemporalTraceEvent::BusCompleted {
+                timestamp,
+                operation: sega_z80_cpu::Z80BusOperation::MemoryRead,
+                base_tstates: 3,
+                data: Some(0),
+                ..
+            } if timestamp == MachineTime::from_ticks(21)
+        ));
+        assert!(matches!(
+            trace[2],
+            super::SmsTemporalTraceEvent::InternalCycleCompleted {
+                timestamp,
+                tstates: 1,
+                ..
+            } if timestamp == MachineTime::from_ticks(24)
+        ));
+        assert!(matches!(
+            trace[3],
+            super::SmsTemporalTraceEvent::BusCompleted {
+                timestamp,
+                operation: sega_z80_cpu::Z80BusOperation::MemoryWrite { value: 1 },
+                base_tstates: 3,
+                data: None,
+                ..
+            } if timestamp == MachineTime::from_ticks(33)
+        ));
+        assert!(machine.take_trace().is_empty());
     }
 
     #[test]
