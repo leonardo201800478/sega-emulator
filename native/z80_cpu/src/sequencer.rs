@@ -350,9 +350,11 @@ impl Z80MicroSequencer {
             .instruction_tstates
             .checked_add(1)
             .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
-        let value = self.increment_decrement_register(old, decrement);
-        let step = self.issue_write(address, value)?;
-        self.instruction_tstates = next_instruction_tstates;
+        let mut next = self.clone();
+        let value = next.increment_decrement_register(old, decrement);
+        let step = next.issue_write(address, value)?;
+        next.instruction_tstates = next_instruction_tstates;
+        *self = next;
         Ok(step)
     }
 
