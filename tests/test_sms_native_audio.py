@@ -103,6 +103,7 @@ def test_sms_adapter_exposes_qt_frame_and_controller_contract() -> None:
     assert machine.vdp.visible_height == 192
     machine.set_controller_actions(1, {"up", "button1"})
 
+
 def test_sms_sprite_limit_setting_is_exposed_by_native_and_python_adapters() -> None:
     native = _machine()
     adapter = SMSMachine(bytes([0x00]) * 16)
