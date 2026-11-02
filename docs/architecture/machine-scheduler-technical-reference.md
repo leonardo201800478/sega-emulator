@@ -423,3 +423,12 @@ Two additional candidate PRs extend the validation baseline without changing dev
 The operation replay SHORT/LONG profiles introduced by #362 remain NOT RUN. Do not infer their result from the ordinary CI gates or from the older #358 dispatch-only stress result. The exact SHA/workflow matrix is maintained in `docs/evidence/adr-0013-snapshot-restore-validation.md`.
 
 These changes improve software arithmetic correctness and deterministic replay coverage. They do not change the documented integer `MachineTime` EventQueue contract, do not enable sub-tick dispatch, and do not establish hardware timing. Scheduler/device integration remains `INTEGRATION_PENDING`; `TEMPORAL_PASS` remains unclaimed.
+### 12.6 Opt-in operation-replay execution — 2026-11-02
+
+The CI workflow now accepts explicit pull-request labels `scheduler-stress-short` and `scheduler-stress-long`. The stress job remains opt-in; ordinary PR CI does not pay the stress cost.
+
+- SHORT on PR #362 head `cce79018427daab57a36808e162492b17bf4303e`, workflow `41384089223`: PASS. The new operation replay completed 8,000 operations (4 seeds × 2,000), and the existing dispatch replay completed 80,000 events (4 seeds × 20,000); both tests passed. All six ordinary gates also passed.
+- LONG on the same exact head, workflow `41384147113`: 320,000 operations plus 4,000,000 dispatch events; status remains IN PROGRESS at this addendum's timestamp. No LONG_PASS is claimed until successful completion.
+- The arithmetic PR #363's final head is `d6c2e9fbc243208ebe4e761e079934dd95eba98e`; ordinary CI workflow `41384173879` passed all six gates after a documentation-only rustdoc correction.
+
+These software-level stress results do not change the limitations in §12.3: no sub-tick dispatch, CPU/bus transactions, SMS arbitration, VDP/PSG safe points, or hardware timing has been demonstrated.
