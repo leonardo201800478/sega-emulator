@@ -594,7 +594,7 @@ Este documento é o índice normativo de escopo. Os documentos específicos deta
 - [Arquitetura do Master Scheduler nativo](architecture/native-master-scheduler.md)
 - [Plano de migração do Master Scheduler](architecture/migrations/native-master-scheduler.md)
 - [Runtime de áudio nativo multi-sistema](architecture/native-audio-runtime.md)
-- [Roadmap de consolidação SG-1000 + SMS](roadmaps/sg1000-sms-consolidation-roadmap.md)
+- A execução SG-1000/SMS é acompanhada por issues e PRs; não existe roadmap documental subordinado.
 - [Modelo funcional do frontend Qt](architecture/qt-frontend-functional-model.md)
 - [Arquitetura-alvo do frontend Qt](architecture/qt-frontend-target-architecture.md)
 - [Diretriz Rust-only de áudio](architecture/audio-rust-only-directive.md)
