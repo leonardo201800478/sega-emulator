@@ -791,11 +791,9 @@ mod tests {
     }
     #[test]
     fn profile_specific_noise_sequences_remain_distinct_and_repeatable() {
-        let mut sms_a =
-            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        let mut sms_a = Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
         let mut sms_b = sms_a.clone();
-        let mut sg_a =
-            Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sg1000).unwrap();
+        let mut sg_a = Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sg1000).unwrap();
         let mut sg_b = sg_a.clone();
 
         for device in [&mut sms_a, &mut sms_b, &mut sg_a, &mut sg_b] {
