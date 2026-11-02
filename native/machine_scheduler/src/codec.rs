@@ -26,6 +26,7 @@ const EVENT_FIXED_WIRE_SIZE: usize = 16 + 2 + 2 + 8 + 4;
 pub enum SchedulerStateCodecError {
     InvalidMagic,
     UnsupportedVersion { expected: u16, actual: u16 },
+    UnsupportedPayloadVersion { expected: u16, actual: u16 },
     StateVersionMismatch { expected: u16, actual: u16 },
     Truncated,
     TrailingData,
@@ -44,6 +45,10 @@ impl fmt::Display for SchedulerStateCodecError {
             Self::UnsupportedVersion { expected, actual } => write!(
                 f,
                 "scheduler-state codec version {actual} is unsupported (expected {expected})"
+            ),
+            Self::UnsupportedPayloadVersion { expected, actual } => write!(
+                f,
+                "event payload codec version {actual} is unsupported (expected {expected})"
             ),
             Self::StateVersionMismatch { expected, actual } => write!(
                 f,
@@ -75,6 +80,9 @@ impl std::error::Error for SchedulerStateCodecError {}
 /// schemas. Implementations must be deterministic and reject malformed
 /// payload bytes rather than silently normalizing them.
 pub trait EventPayloadCodec<T> {
+    /// Stable version of this payload representation.
+    const VERSION: u16;
+
     /// Error type produced by the payload implementation.
     type Error: fmt::Display;
 
@@ -88,7 +96,7 @@ pub trait EventPayloadCodec<T> {
 /// Encode a scheduler DTO using the versioned canonical wire format.
 ///
 /// Frame layout:
-/// magic[8] | format_version[u16 BE] | body_length[u64 BE] | body.
+/// magic[8] | state_version[u16 BE] | payload_version[u16 BE] | body_length[u64 BE] | body.
 ///
 /// Collection counts and payload lengths are unsigned 32-bit big-endian.
 /// All temporal u128 values are exactly 16-byte unsigned big-endian values.
@@ -163,6 +171,7 @@ where
     let mut frame = Writer::default();
     frame.write_bytes(&SCHEDULER_STATE_MAGIC)?;
     frame.write_u16(SCHEDULER_STATE_FORMAT_VERSION)?;
+    frame.write_u16(C::VERSION)?;
     frame.write_u64(body_len)?;
     frame.write_bytes(&body.bytes)?;
     Ok(frame.bytes)
@@ -190,6 +199,13 @@ where
         return Err(SchedulerStateCodecError::UnsupportedVersion {
             expected: SCHEDULER_STATE_FORMAT_VERSION,
             actual: version,
+        });
+    }
+    let payload_version = frame.read_u16()?;
+    if payload_version != C::VERSION {
+        return Err(SchedulerStateCodecError::UnsupportedPayloadVersion {
+            expected: C::VERSION,
+            actual: payload_version,
         });
     }
     let body_len = usize::try_from(frame.read_u64()?)
@@ -426,6 +442,8 @@ mod tests {
     struct U32PayloadCodec;
 
     impl EventPayloadCodec<u32> for U32PayloadCodec {
+        const VERSION: u16 = 1;
+
         type Error = &'static str;
 
         fn encode_payload(&self, payload: &u32) -> Result<Vec<u8>, Self::Error> {
@@ -487,7 +505,7 @@ mod tests {
 
         let encoded = encode_scheduler_state(&state, &U32PayloadCodec).unwrap();
         assert_eq!(&encoded[..8], &SCHEDULER_STATE_MAGIC);
-        assert_eq!(&encoded[18..34], &[0xff; 16]);
+        assert_eq!(&encoded[20..36], &[0xff; 16]);
         let decoded = decode_scheduler_state(&encoded, &U32PayloadCodec).unwrap();
         assert_eq!(decoded.now.ticks(), u128::MAX);
         assert_eq!(decoded.clock_domains[0].total_cycles, u128::MAX);
@@ -511,6 +529,16 @@ mod tests {
             decode_scheduler_state(&encoded, &U32PayloadCodec),
             Err(SchedulerStateCodecError::UnsupportedVersion {
                 expected: SCHEDULER_STATE_FORMAT_VERSION,
+                actual: u16::MAX,
+            })
+        );
+
+        let mut encoded = encode_scheduler_state(&state, &U32PayloadCodec).unwrap();
+        encoded[10..12].copy_from_slice(&u16::MAX.to_be_bytes());
+        assert_eq!(
+            decode_scheduler_state(&encoded, &U32PayloadCodec),
+            Err(SchedulerStateCodecError::UnsupportedPayloadVersion {
+                expected: U32PayloadCodec::VERSION,
                 actual: u16::MAX,
             })
         );
@@ -545,7 +573,7 @@ mod tests {
     #[test]
     fn codec_rejects_invalid_option_tags_and_malformed_payloads() {
         let encoded = encode_scheduler_state(&state_fixture(), &U32PayloadCodec).unwrap();
-        let watermark_tag_offset = 18 + 16 + 4 + CLOCK_DOMAIN_SIZE_FOR_TEST + 4 + 8;
+        let watermark_tag_offset = 20 + 16 + 4 + CLOCK_DOMAIN_SIZE_FOR_TEST + 4 + 8;
         let mut invalid_tag = encoded.clone();
         invalid_tag[watermark_tag_offset] = 2;
         assert_eq!(
@@ -554,7 +582,7 @@ mod tests {
         );
 
         let mut malformed_payload = encoded;
-        let payload_length_offset = 18 + 16 + 4 + CLOCK_DOMAIN_SIZE_FOR_TEST + 4 + 8 + 1 + 16 + 2 + 2 + 8;
+        let payload_length_offset = 20 + 16 + 4 + CLOCK_DOMAIN_SIZE_FOR_TEST + 4 + 8 + 1 + 16 + 2 + 2 + 8;
         malformed_payload[payload_length_offset..payload_length_offset + 4]
             .copy_from_slice(&3_u32.to_be_bytes());
         assert!(matches!(
@@ -566,7 +594,7 @@ mod tests {
     #[test]
     fn codec_rejects_payload_lengths_beyond_frame_boundary() {
         let mut encoded = encode_scheduler_state(&state_fixture(), &U32PayloadCodec).unwrap();
-        let payload_length_offset = 18 + 16 + 4 + CLOCK_DOMAIN_SIZE_FOR_TEST + 4 + 8 + 1 + 16 + 2 + 2 + 8;
+        let payload_length_offset = 20 + 16 + 4 + CLOCK_DOMAIN_SIZE_FOR_TEST + 4 + 8 + 1 + 16 + 2 + 2 + 8;
         encoded[payload_length_offset..payload_length_offset + 4]
             .copy_from_slice(&u32::MAX.to_be_bytes());
         assert_eq!(
