@@ -274,6 +274,12 @@ impl Z80MicroSequencer {
                 *self = next;
                 Ok(step)
             }
+            Err(error @ Z80MicroSequencerError::UnsupportedOpcode { .. }) => {
+                // Unsupported decode is a terminal, explicit rejection: clear
+                // the consumed fetch and return to Ready as the legacy contract requires.
+                *self = next;
+                Err(error)
+            }
             Err(error) => Err(error),
         }
     }
@@ -776,8 +782,8 @@ mod tests {
             cpu.complete_bus_cycle(fetch.id, Some(0x76)),
             Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x76, .. })
         ));
-        assert_eq!(cpu.export_state(), before);
-        assert_eq!(cpu.pending_request(), Some(fetch));
+        assert!(!cpu.instruction_active());
+        assert!(cpu.pending_request().is_none());
     }
 
     #[test]
