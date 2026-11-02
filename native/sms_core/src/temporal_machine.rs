@@ -370,7 +370,7 @@ impl SmsTemporalMachine {
 mod tests {
     use super::{SmsTemporalMachine, SmsTemporalMachineError};
     use sega_temporal_core::MachineTime;
-    use sega_z80_cpu::{Z80MicroSequencerPhase, Z80MicroStep};
+    use sega_z80_cpu::{Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroStep};
 
     fn retired(step: Z80MicroStep, opcode: u8, tstates: u32) {
         assert_eq!(step, Z80MicroStep::InstructionRetired { opcode, tstates });
