@@ -39,14 +39,14 @@ As expectativas abaixo são limitadas ao que as fontes citadas documentam. Elas 
 
 | ID | Área | Estímulo | Observável/assertion | Evidência | Limite |
 |---|---|---|---|---|---|
-| SMS1-PORT-001 | Control port | Escrever primeiro byte do comando e interromper sequência com acesso à data port | Primeiro byte pendente deve ser descartado conforme regra documentada do protocolo, a confirmar por vetor | PRIMARY_DOC: Mark III Software Reference Manual | Não define fase de amostragem |
-| SMS1-PORT-002 | Control port | Enviar comando de dois bytes completo | Decodificação de endereço/modo corresponde aos bits do comando | PRIMARY_DOC | Teste funcional, sem timestamp |
+| SMS1-PORT-001 | Control port | Escrever o primeiro byte; em execuções separadas, ler control port, ler data port ou escrever data port antes do segundo byte | Cada uma dessas operações limpa o estado de byte pendente; o segundo byte subsequente inicia uma nova sequência, sem completar a palavra anterior | COMMUNITY_DOC: SMS Power Control Port, seção Writes | Teste de transição funcional; não define fase elétrica nem efeitos de IRQ simultâneos |
+| SMS1-PORT-002 | Control port | Enviar os dois bytes de uma palavra de controle, low byte primeiro | Os campos code (bits 15–14) e address (bits 13–0) são decodificados; apenas o segundo byte dispara a ação do code | COMMUNITY_DOC: SMS Power Control Port, seções Writes/Data format | Teste funcional, sem timestamp |
 | SMS1-VRAM-001 | VRAM read-ahead | Preparar bytes A/B, iniciar leitura e ler sequência | Primeiro retorno corresponde ao read buffer inicial; leituras seguintes seguem o read-ahead documentado | PRIMARY_DOC | Não fixa latência física |
 | SMS1-VRAM-002 | Address wrap | Ler/escrever próximo ao limite 0x3FFF | Endereço permanece no espaço VRAM de 16 KiB, conforme regra documentada | PRIMARY_DOC + PROPERTY | Separar endereço CPU e endereço interno VDP |
 | SMS1-CRAM-001 | CRAM width | Escrever valores com bits superiores definidos | Apenas seis bits de cor são armazenados no modelo digital documentado | PRIMARY_DOC | Não valida DAC analógico |
 | SMS1-CRAM-002 | CRAM addressing | Escrever nos limites e além do índice CRAM | Decodificação de 32 entradas/aliases segue contrato documentado | PRIMARY_DOC | Confirmar alias não documentado antes de fixar |
 | SMS1-STATUS-001 | Status read | Ler status com flags de interrupção pendentes | Leitura retorna estado anterior e executa clear/acknowledge documentado | PRIMARY_DOC | Não fixa instante elétrico de clear |
-| SMS1-STATUS-002 | Sprite flags | Gerar overflow sem colisão e colisão sem overflow | Flags independentes conforme mapeamento primário; conflito documental permanece explícito | PRIMARY_DOC Mark III; COMMUNITY_DOC conflitante | Não assumir bit conflitante sem oráculo |
+| SMS1-STATUS-002 | Sprite flags | Gerar overflow sem colisão e colisão sem overflow; ler status após cada cenário | Mapeamento de trabalho: overflow = bit 6; collision = bit 5; leitura do status limpa flags. A página SMS Power/Sprites contém uma afirmação contraditória que atribui collision ao bit 6 | COMMUNITY_DOC: SMS Power Control Port (bits 6/5), Collision Detection (bit 5), Sprites (linha contraditória: bit 6); confirmar contra manual primário/captura 315-5124 antes de fechar o oracle | Não implementar dois flags independentes com bit compartilhado; manter hardware-oracle pendente |
 | SMS1-REG-001 | R9 | Escrever R9 durante active display e VBlank | Scroll vertical aplicado conforme latch em VBlank documentado | PRIMARY_DOC | Fronteira exata do latch UNKNOWN |
 | SMS1-REG-002 | R10 | Alterar R10 antes/depois de evento de linha | Valor programado observa a latência de um interrupt descrita no manual | PRIMARY_DOC | Não fixar borda sublinha |
 | SMS1-MASK-002 | R2 | Variar R2 bit 0 e observar endereço de name table | Address mask 315-5124 aplica o gate descrito | COMMUNITY_DOC: SMS Power VDP Registers | Separar efeitos conhecidos de observações não testadas |
@@ -83,6 +83,10 @@ Os casos abaixo devem existir no backlog, mas não podem receber valores esperad
 Um caso temporal só sai de BLOCKED quando o manifest registrar fonte/medição, setup, ASIC/região, resolução temporal, incerteza do instrumento, estímulo, observável e resultado reproduzível.
 
 ## 5. Oráculos e independência
+
+### Proveniência corrigida das assertions de portas
+
+As regras detalhadas de protocolo de portas, read-ahead, wrap e CRAM address alias desta matriz são referenciadas às páginas técnicas comunitárias SMS Power (Control Port), não devem ser rotuladas como PRIMARY_DOC apenas por descreverem o comportamento programável. O manual de software Mark III permanece fonte primária para os pontos efetivamente localizados nele; cada assertion deve indicar a página/seção exata antes de ser promovida a DOCUMENTED. O mapeamento de status overflow/collision permanece sujeito a confirmação por manual primário ou medição física, apesar da convergência de duas páginas comunitárias para bit 5 de collision.
 
 Ordem de confiança:
 
