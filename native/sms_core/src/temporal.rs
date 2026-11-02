@@ -8,8 +8,7 @@
 use core::fmt;
 
 use sega_machine_scheduler::{
-    ClockDomainId, MachineDispatch, MachineScheduler, SchedulerError,
-    SchedulerState,
+    ClockDomainId, MachineDispatch, MachineScheduler, SchedulerError, SchedulerState,
 };
 use sega_temporal_core::{
     ClockDomainSnapshot, ClockRatio, HardwarePhase, MachineTime, PlatformPriority,
@@ -47,7 +46,9 @@ impl fmt::Display for SmsTemporalCoordinatorError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::ZeroTStateScale => f.write_str("master ticks per Z80 T-state must be positive"),
-            Self::ZeroBusCycleDuration => f.write_str("scheduled bus cycle duration must be positive"),
+            Self::ZeroBusCycleDuration => {
+                f.write_str("scheduled bus cycle duration must be positive")
+            }
             Self::DurationOverflow => f.write_str("bus cycle duration overflow"),
             Self::DeadlineOverflow => f.write_str("bus completion deadline overflow"),
             Self::InvalidState => f.write_str("SMS temporal coordinator state is inconsistent"),
@@ -77,9 +78,7 @@ impl SmsTemporalCoordinator {
     /// The scale is a configuration input, not a claim about any SMS region or
     /// board revision. The coordinator registers one Z80 domain and advances
     /// it only when the machine scheduler dispatches a boundary.
-    pub fn new(
-        master_ticks_per_tstate: u64,
-    ) -> Result<Self, SmsTemporalCoordinatorError> {
+    pub fn new(master_ticks_per_tstate: u64) -> Result<Self, SmsTemporalCoordinatorError> {
         if master_ticks_per_tstate == 0 {
             return Err(SmsTemporalCoordinatorError::ZeroTStateScale);
         }
@@ -106,9 +105,7 @@ impl SmsTemporalCoordinator {
     }
 
     /// Inspect the Z80 clock-domain state without changing the timeline.
-    pub fn z80_clock_snapshot(
-        &self,
-    ) -> Result<ClockDomainSnapshot, SmsTemporalCoordinatorError> {
+    pub fn z80_clock_snapshot(&self) -> Result<ClockDomainSnapshot, SmsTemporalCoordinatorError> {
         self.scheduler
             .clock_snapshot(SMS_Z80_CLOCK_DOMAIN_ID)
             .map_err(Into::into)
@@ -186,9 +183,7 @@ impl SmsTemporalCoordinator {
             .iter()
             .find(|domain| domain.id == SMS_Z80_CLOCK_DOMAIN_ID)
             .ok_or(SmsTemporalCoordinatorError::InvalidState)?;
-        if domain.ratio_numerator != 1
-            || domain.ratio_denominator != state.master_ticks_per_tstate
-        {
+        if domain.ratio_numerator != 1 || domain.ratio_denominator != state.master_ticks_per_tstate {
             return Err(SmsTemporalCoordinatorError::InvalidState);
         }
         let scheduler = MachineScheduler::restore_state(state.scheduler)?;
@@ -231,8 +226,7 @@ mod tests {
     fn scheduler_snapshot_restore_preserves_pending_deadline_and_clock_phase() {
         let mut machine = SmsTemporalCoordinator::new(3).unwrap();
         let deadline = machine.schedule_bus_completion(9, 3, 2).unwrap();
-        let restored =
-            SmsTemporalCoordinator::restore_state(machine.export_state()).unwrap();
+        let restored = SmsTemporalCoordinator::restore_state(machine.export_state()).unwrap();
         assert_eq!(restored.now(), MachineTime::ZERO);
         assert_eq!(restored.export_state(), machine.export_state());
 
