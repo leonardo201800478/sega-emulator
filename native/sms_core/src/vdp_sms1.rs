@@ -225,7 +225,6 @@ mod tests {
 }
 
 
-
 /// Operation selected by the second byte written to the VDP control port.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PortCode {
@@ -456,7 +455,6 @@ mod port_tests {
     }
 }
 
-
 /// One decoded Mode 4 background pixel. Priority is consumed by the sprite
 /// compositor; palette_index retains the hardware CRAM entry for diagnostics.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -518,8 +516,8 @@ pub fn render_mode4_background_line(
         let tile_x = source_x >> 3;
         let tile_y = source_y >> 3;
         let entry_address = (name_table_base + tile_y * 64 + tile_x * 2) & 0x3FFF;
-        let entry = u16::from(vram[entry_address])
-            | (u16::from(vram[(entry_address + 1) & 0x3FFF]) << 8);
+        let entry =
+            u16::from(vram[entry_address]) | (u16::from(vram[(entry_address + 1) & 0x3FFF]) << 8);
         let tile_index = usize::from(entry & 0x01FF);
         let mut pixel_x = source_x & 7;
         let mut pixel_y = source_y & 7;
@@ -538,11 +536,8 @@ pub fn render_mode4_background_line(
             | (((vram[pattern_address + 3] >> bit) & 1) << 3);
         let palette_base = if entry & 0x0800 != 0 { 16 } else { 0 };
         let palette_index = palette_base + color_index;
-        *pixel = decode_background_pixel(
-            cram,
-            palette_index,
-            entry & 0x1000 != 0 && color_index != 0,
-        );
+        *pixel =
+            decode_background_pixel(cram, palette_index, entry & 0x1000 != 0 && color_index != 0);
     }
 }
 
@@ -558,17 +553,19 @@ fn decode_background_pixel(cram: &[u8; CRAM_SIZE], index: u8, priority: bool) ->
     }
 }
 
-
 #[cfg(test)]
 mod background_tests {
-    use super::{render_mode4_background_line, BackgroundPixel, Sms1VdpState, VideoStandard};
+    use super::{BackgroundPixel, Sms1VdpState, VideoStandard, render_mode4_background_line};
 
     fn put_tile(state: &mut Sms1VdpState, tile: usize, color: u8) {
         let base = tile * 32;
         for y in 0..8 {
             for plane in 0..4 {
-                state.memory.vram[base + y * 4 + plane] =
-                    if color & (1 << plane) != 0 { 0xFF } else { 0x00 };
+                state.memory.vram[base + y * 4 + plane] = if color & (1 << plane) != 0 {
+                    0xFF
+                } else {
+                    0x00
+                };
             }
         }
     }
@@ -584,7 +581,11 @@ mod background_tests {
         put_tile(&mut state, 1, 0b1011);
         state.memory.cram[11] = 0b00_10_01_11;
 
-        let mut line = [BackgroundPixel { color: [0; 3], palette_index: 0, priority: false }; 256];
+        let mut line = [BackgroundPixel {
+            color: [0; 3],
+            palette_index: 0,
+            priority: false,
+        }; 256];
         render_mode4_background_line(&state, 0, 0, &mut line);
 
         assert_eq!(line[0].palette_index, 11);
@@ -606,7 +607,11 @@ mod background_tests {
         state.memory.vram[32 + 7 * 4] = 0x00;
         state.memory.cram[2] = 0x0C;
 
-        let mut line = [BackgroundPixel { color: [0; 3], palette_index: 0, priority: false }; 256];
+        let mut line = [BackgroundPixel {
+            color: [0; 3],
+            palette_index: 0,
+            priority: false,
+        }; 256];
         render_mode4_background_line(&state, 0, 0, &mut line);
 
         assert!(line[0].priority);
@@ -618,7 +623,11 @@ mod background_tests {
         let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
         state.registers.set_raw(7, 3);
         state.memory.cram[3] = 0x39;
-        let mut line = [BackgroundPixel { color: [0; 3], palette_index: 0, priority: false }; 256];
+        let mut line = [BackgroundPixel {
+            color: [0; 3],
+            palette_index: 0,
+            priority: false,
+        }; 256];
         render_mode4_background_line(&state, 0, 0, &mut line);
         assert_eq!(line[0].palette_index, 3);
         assert_eq!(line[0].color, [255, 85, 170]);
@@ -639,7 +648,11 @@ mod background_tests {
         put_tile(&mut state, 2, 2);
         put_tile(&mut state, 3, 3);
 
-        let mut line = [BackgroundPixel { color: [0; 3], palette_index: 0, priority: false }; 256];
+        let mut line = [BackgroundPixel {
+            color: [0; 3],
+            palette_index: 0,
+            priority: false,
+        }; 256];
         render_mode4_background_line(&state, 0, 0, &mut line);
         assert_eq!(line[0].palette_index, 1);
         render_mode4_background_line(&state, 16, 0, &mut line);
@@ -654,7 +667,11 @@ mod background_tests {
         state.registers.set_raw(2, 0x0A);
         state.memory.vram[0x2800] = 1;
         put_tile(&mut state, 1, 4);
-        let mut line = [BackgroundPixel { color: [0; 3], palette_index: 0, priority: false }; 256];
+        let mut line = [BackgroundPixel {
+            color: [0; 3],
+            palette_index: 0,
+            priority: false,
+        }; 256];
         render_mode4_background_line(&state, 0, 0, &mut line);
         assert_eq!(line[0].palette_index, 4);
     }
@@ -670,14 +687,17 @@ mod background_tests {
         state.memory.vram[0x3880] = 2;
         put_tile(&mut state, 1, 1);
         put_tile(&mut state, 2, 2);
-        let mut line = [BackgroundPixel { color: [0; 3], palette_index: 0, priority: false }; 256];
+        let mut line = [BackgroundPixel {
+            color: [0; 3],
+            palette_index: 0,
+            priority: false,
+        }; 256];
 
         render_mode4_background_line(&state, 0, 1, &mut line);
         assert_eq!(line[0].palette_index, 2);
         render_mode4_background_line(&state, 223, 1, &mut line);
         assert_eq!(line[0].palette_index, 1);
     }
-
 
 
     #[test]
@@ -694,7 +714,11 @@ mod background_tests {
         put_tile(&mut state, 2, 2);
         state.memory.cram[3] = 0x03;
 
-        let mut line = [BackgroundPixel { color: [0; 3], palette_index: 0, priority: false }; 256];
+        let mut line = [BackgroundPixel {
+            color: [0; 3],
+            palette_index: 0,
+            priority: false,
+        }; 256];
         render_mode4_background_line(&state, 0, 0, &mut line);
 
         assert_eq!(line[0].palette_index, 3);
