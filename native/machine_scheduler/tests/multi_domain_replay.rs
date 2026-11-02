@@ -4,7 +4,7 @@
 //! claim sub-tick event dispatch or device safe-point execution.
 
 use sega_machine_scheduler::{ClockDomainId, MachineScheduler};
-use sega_temporal_core::{ClockDomain, ClockRatio, HardwarePhase, MachineTime, PlatformPriority};
+use sega_temporal_core::{ClockRatio, HardwarePhase, MachineTime, PlatformPriority};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Payload {
@@ -112,17 +112,28 @@ fn multi_domain_advancement_is_chunk_invariant_and_replay_stable() {
         .register_clock_domain_with_phase(ClockDomainId(9), ClockRatio::new(1, 3).unwrap(), 2)
         .unwrap();
 
-    for target in [2, 3, 7, 8, 13] {
-        chunked
-            .advance_idle_to(MachineTime::from_ticks(target))
-            .unwrap();
-    }
-
-    for (id, ratio, phase) in [
+    let domains = [
         (ClockDomainId(2), ClockRatio::new(3, 2).unwrap(), 1),
         (ClockDomainId(5), ClockRatio::new(5, 7).unwrap(), 4),
         (ClockDomainId(9), ClockRatio::new(1, 3).unwrap(), 2),
-    ] {
+    ];
+    for target in [2, 3, 7, 8, 13] {
+        let timestamp = MachineTime::from_ticks(target);
+        chunked.advance_idle_to(timestamp).unwrap();
+
+        // Check every intermediate chunk against the independent rational
+        // arithmetic oracle, not only the final accumulated state.
+        for (id, ratio, phase) in domains {
+            assert_eq!(
+                chunked.clock_snapshot(id).unwrap(),
+                expected_domain(ratio, phase, timestamp),
+                "chunked domain mismatch at machine timestamp {target}, domain {}",
+                id.0
+            );
+        }
+    }
+
+    for (id, ratio, phase) in domains {
         let expected = expected_domain(ratio, phase, final_timestamp);
         assert_eq!(uninterrupted.clock_snapshot(id).unwrap(), expected);
         assert_eq!(replayed.clock_snapshot(id).unwrap(), expected);
