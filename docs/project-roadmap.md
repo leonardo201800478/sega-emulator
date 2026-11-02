@@ -129,6 +129,15 @@ Esta fase passa a ser a frente ativa de integração temporal, autorizada formal
 - Manter o runtime legado disponível até que a substituição de cada caminho tenha equivalência comprovada.
 - Não conectar a CPU ao VDP scanline legado como atalho; o destino de raster/IRQ é o novo VDP temporal.
 
+**Registro de execução (2026-11-02):**
+- T0: revisão da PR #396 registrada; contratos genéricos permanecem Draft porque o microsequenciador ainda não fornece índices M-cycle/T-state estáveis para mapeamento fiel.
+- T1: PRs #412/#413 — contadores checked e codec binário versionado do estado retomável suportado.
+- T2: PR #414 — coordenador SMS sobre `MachineScheduler`, com escala temporal explícita.
+- T3: barramento de memória transacional, efeitos no deadline, acknowledgement único e WAIT de fixture, incorporado à stack T4.
+- T4: PR #416 — fatia vertical consolidada no SHA `94a6a2128e7f7b4af115d65e98ebbe33cc19ce8f`; CI #41496284832: Rust fmt/clippy/tests PASS, Python Ruff/pytest PASS, Windows x64 vídeo/áudio PASS e Scheduler stress short PASS.
+
+**Estado:** primeira fatia vertical `SHORT_PASS`; P6 permanece ativa para completar mappers/I/O, estado arquitetural Z80, integração do novo VDP/PSG e semântica sustentada por evidência. O caminho legado permanece preservado. `TEMPORAL_PASS` continua pendente.
+
 **Saída:** primeira fatia vertical Z80/bus/Scheduler com trace runtime, snapshot/replay e regressões SG-1000/SMS; isso ainda não equivale a `TEMPORAL_PASS`.
 
 ### P7 — Fechamento semântico e expansão da integração temporal
