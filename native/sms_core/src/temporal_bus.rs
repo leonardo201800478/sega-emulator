@@ -552,7 +552,7 @@ mod tests {
         let request = request(20, Z80BusOperation::MemoryWrite { value: 3 }, 0xFFFD, 3);
         bus.begin_request(request, 1).unwrap();
         let first = bus.dispatch_next().unwrap().unwrap();
-        let Some(SmsTemporalDispatch::BusCompletion(completion)) = first else {
+        let SmsTemporalDispatch::BusCompletion(completion) = first else {
             panic!("expected mapper-register write completion");
         };
         assert_eq!(bus.memory().selected_banks(), [3, 1, 2]);
