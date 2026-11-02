@@ -496,6 +496,47 @@ pub struct BackgroundPixel {
     pub priority: bool,
 }
 
+/// Apply the SMS1 R3/R4 address gates to one background pattern-plane fetch.
+///
+/// SMS1 uses R3 for planes 0-1 (address bits 13..6) and R4 for planes 2-3
+/// (address bits 13..11). SMS2 does not apply these gates; this module models
+/// only the SMS1/315-5124 ASIC.
+fn sms1_background_pattern_address(
+    address: usize,
+    registers: &[u8; REGISTER_COUNT],
+    plane: usize,
+) -> usize {
+    match plane {
+        0 | 1 => {
+            let mask = usize::from(registers[3]) << 6;
+            (address & !0x3FC0) | (address & mask)
+        }
+        _ => {
+            let mask = usize::from(registers[4] & 0x07) << 11;
+            (address & !0x3800) | (address & mask)
+        }
+    }
+}
+
+/// Apply the SMS1 R5 bit-0 gate to a sprite attribute-table byte address.
+///
+/// With the mask bit clear, address bit 7 is forced low. This aliases the
+/// X-coordinate/tile half of the SAT into its Y-coordinate half.
+fn sms1_sprite_attribute_address(sat_base: usize, offset: usize, register5: u8) -> usize {
+    let address = (sat_base + offset) & 0x3FFF;
+    if register5 & 0x01 == 0 {
+        address & !0x0080
+    } else {
+        address
+    }
+}
+
+/// Apply SMS1 R6 bits 1-0 to sprite pattern address bits 12-11.
+fn sms1_sprite_pattern_address(address: usize, register6: u8) -> usize {
+    let mask = usize::from(register6 & 0x03) << 11;
+    (address & !0x1800) | (address & mask)
+}
+
 /// Render one complete Mode 4 background scanline from the current register,
 /// VRAM and CRAM image.
 ///
@@ -546,7 +587,12 @@ pub fn render_mode4_background_line(
         let source_y = (usize::from(screen_y) + vertical) % virtual_height;
 
         let tile_x = source_x >> 3;
-        let tile_y = source_y >> 3;
+        let mut tile_y = source_y >> 3;
+        // In 192-line Mode 4, R2 bit 0 gates address bit 10 (the high
+        // row-coordinate bit) on the SMS1 ASIC.
+        if registers[2] & 0x01 == 0 {
+            tile_y &= !(1 << 4);
+        }
         let entry_address = (name_table_base + tile_y * 64 + tile_x * 2) & 0x3FFF;
         let entry =
             u16::from(vram[entry_address]) | (u16::from(vram[(entry_address + 1) & 0x3FFF]) << 8);
@@ -561,11 +607,17 @@ pub fn render_mode4_background_line(
         }
 
         let pattern_address = (tile_index * 32 + pixel_y * 4) & 0x3FFF;
+        let plane_addresses = [
+            sms1_background_pattern_address(pattern_address, registers, 0),
+            sms1_background_pattern_address(pattern_address + 1, registers, 1),
+            sms1_background_pattern_address(pattern_address + 2, registers, 2),
+            sms1_background_pattern_address(pattern_address + 3, registers, 3),
+        ];
         let bit = 7 - pixel_x;
-        let color_index = ((vram[pattern_address] >> bit) & 1)
-            | (((vram[pattern_address + 1] >> bit) & 1) << 1)
-            | (((vram[pattern_address + 2] >> bit) & 1) << 2)
-            | (((vram[pattern_address + 3] >> bit) & 1) << 3);
+        let color_index = ((vram[plane_addresses[0]] >> bit) & 1)
+            | (((vram[plane_addresses[1]] >> bit) & 1) << 1)
+            | (((vram[plane_addresses[2]] >> bit) & 1) << 2)
+            | (((vram[plane_addresses[3]] >> bit) & 1) << 3);
         let palette_base = if entry & 0x0800 != 0 { 16 } else { 0 };
         let palette_index = palette_base + color_index;
         *pixel =
@@ -710,6 +762,91 @@ mod background_tests {
     }
 
     #[test]
+    fn sms1_mask_r2_gates_the_high_name_table_row_bit() {
+        let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
+        state.registers.set_raw(0, 0x04);
+        state.registers.set_raw(1, 0x40);
+        state.registers.set_raw(2, 0x0E);
+        state.memory.vram[0x3800] = 1;
+        state.memory.vram[0x3800 + 16 * 64] = 2;
+        put_tile(&mut state, 1, 1);
+        put_tile(&mut state, 2, 2);
+
+        let mut line = [BackgroundPixel {
+            color: [0; 3],
+            palette_index: 0,
+            priority: false,
+        }; 256];
+
+        // R2 bit 0 clear forces row-address bit 10 low: row 16 aliases row 0.
+        render_mode4_background_line(&state, 128, 0, &mut line);
+        assert_eq!(line[0].palette_index, 1);
+
+        state.registers.set_raw(2, 0x0F);
+        render_mode4_background_line(&state, 128, 0, &mut line);
+        assert_eq!(line[0].palette_index, 2);
+    }
+
+    #[test]
+    fn sms1_mask_r3_gates_pattern_address_bits_13_to_6_for_planes_zero_and_one() {
+        let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
+        state.registers.set_raw(0, 0x04);
+        state.registers.set_raw(1, 0x40);
+        state.registers.set_raw(2, 0x0E);
+        state.registers.set_raw(3, 0x7F);
+        state.registers.set_raw(4, 0x07);
+        state.memory.vram[0x3800] = 0x00;
+        state.memory.vram[0x3801] = 0x01; // Tile 0x100.
+
+        // Tile 0: plane 1 only. Tile 0x100: planes 0 and 2.
+        for row in 0..8 {
+            state.memory.vram[row * 4 + 1] = 0xFF;
+            let high_tile = 0x2000 + row * 4;
+            state.memory.vram[high_tile] = 0xFF;
+            state.memory.vram[high_tile + 2] = 0xFF;
+        }
+
+        let mut line = [BackgroundPixel {
+            color: [0; 3],
+            palette_index: 0,
+            priority: false,
+        }; 256];
+        render_mode4_background_line(&state, 0, 0, &mut line);
+
+        // R3 bit 7 clears address bit 13 for planes 0-1 only: plane 1
+        // comes from tile 0, while plane 2 still comes from tile 0x100.
+        assert_eq!(line[0].palette_index, 0b0110);
+    }
+
+    #[test]
+    fn sms1_mask_r4_gates_pattern_address_bits_13_to_11_for_planes_two_and_three() {
+        let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
+        state.registers.set_raw(0, 0x04);
+        state.registers.set_raw(1, 0x40);
+        state.registers.set_raw(2, 0x0E);
+        state.registers.set_raw(3, 0xFF);
+        state.registers.set_raw(4, 0x05);
+        state.memory.vram[0x3800] = 0x80; // Tile 128.
+
+        // Tile 128 has planes 0 and 2 set. Tile 0 has no pattern bits set.
+        for row in 0..8 {
+            let high_tile = 0x1000 + row * 4;
+            state.memory.vram[high_tile] = 0xFF;
+            state.memory.vram[high_tile + 2] = 0xFF;
+        }
+
+        let mut line = [BackgroundPixel {
+            color: [0; 3],
+            palette_index: 0,
+            priority: false,
+        }; 256];
+        render_mode4_background_line(&state, 0, 0, &mut line);
+
+        // R4 bit 1 clears address bit 12 for planes 2-3 only.
+        assert_eq!(line[0].palette_index, 0b0001);
+    }
+
+    #[test]
     fn vertical_scroll_advances_source_rows_with_224_line_wrap() {
         let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
         state.registers.set_raw(0, 0x04);
@@ -798,7 +935,8 @@ pub fn render_mode4_sprites_line(
     let mut overflow = false;
 
     for sprite in 0..MAX_SPRITES {
-        let y = vram[(sat_base + sprite) & 0x3FFF];
+        let y_address = sms1_sprite_attribute_address(sat_base, sprite, registers[5]);
+        let y = vram[y_address];
         if y == SAT_TERMINATOR {
             break;
         }
@@ -813,8 +951,12 @@ pub fn render_mode4_sprites_line(
                 break;
             }
         }
-        let x = vram[(sat_base + 0x80 + sprite * 2) & 0x3FFF];
-        let tile = vram[(sat_base + 0x81 + sprite * 2) & 0x3FFF];
+        let x_address =
+            sms1_sprite_attribute_address(sat_base, 0x80 + sprite * 2, registers[5]);
+        let tile_address =
+            sms1_sprite_attribute_address(sat_base, 0x81 + sprite * 2, registers[5]);
+        let x = vram[x_address];
+        let tile = vram[tile_address];
         let source_y = relative as usize / if magnified { 2 } else { 1 };
         selected[selected_count] = (sprite, x, tile, source_y);
         selected_count += 1;
@@ -832,6 +974,7 @@ pub fn render_mode4_sprites_line(
         };
         let pattern_row = source_y & 7;
         let pattern_address = (sprite_pattern_base + tile_number * 32 + pattern_row * 4) & 0x3FFF;
+        let pattern_address = sms1_sprite_pattern_address(pattern_address, registers[6]);
         let x_origin = i16::from(x) - x_shift;
 
         for source_x in 0..8usize {
@@ -933,6 +1076,70 @@ mod sprite_tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn sms1_mask_r5_bit_zero_aliases_sprite_x_and_tile_addresses_into_y_table() {
+        let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
+        state.registers.set_raw(1, 0x40);
+        state.registers.set_raw(5, 0x7E); // SAT base 0x3F00; mask bit 0 clear.
+        state.memory.vram[0x3F00] = 0x80; // Sprite 0 is not eligible on line 0.
+        state.memory.vram[0x3F01] = 0xFF; // Sprite 1 is eligible on line 0.
+        state.memory.vram[0x3F02] = 20; // Aliased X byte for sprite 1.
+        state.memory.vram[0x3F03] = 1; // Aliased tile byte for sprite 1.
+        solid_tile(&mut state, 1, 3);
+
+        let mut line = background();
+        render_mode4_sprites_line(&state, 0, &mut line, true);
+        assert_eq!(line[20].palette_index, 19);
+
+        // Setting R5 bit 0 removes the address alias: the upper SAT half is
+        // now read, where this test has left X/tile bytes at zero.
+        state.registers.set_raw(5, 0x7F);
+        let mut line = background();
+        render_mode4_sprites_line(&state, 0, &mut line, true);
+        assert_eq!(line[20].palette_index, 0);
+    }
+
+    fn solid_tile_at(state: &mut Sms1VdpState, base: usize, color: u8) {
+        for row in 0..8 {
+            for plane in 0..4 {
+                state.memory.vram[base + row * 4 + plane] =
+                    if color & (1 << plane) != 0 { 0xFF } else { 0 };
+            }
+        }
+    }
+
+    #[test]
+    fn sms1_mask_r6_bit_one_gates_sprite_pattern_address_bit_12() {
+        let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
+        state.registers.set_raw(1, 0x40);
+        state.registers.set_raw(5, 0x7F);
+        state.registers.set_raw(6, 0x05); // Bit 12 gate clear; bit 11 gate set.
+        set_sprite(&mut state, 0, 0xFF, 10, 0x80);
+        solid_tile_at(&mut state, 0x2000, 3);
+        solid_tile_at(&mut state, 0x3000, 5);
+
+        let mut line = background();
+        render_mode4_sprites_line(&state, 0, &mut line, true);
+
+        assert_eq!(line[10].palette_index, 19); // Tile 0, color 3.
+    }
+
+    #[test]
+    fn sms1_mask_r6_bit_zero_gates_sprite_pattern_address_bit_11() {
+        let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
+        state.registers.set_raw(1, 0x40);
+        state.registers.set_raw(5, 0x7F);
+        state.registers.set_raw(6, 0x06); // Bit 12 gate set; bit 11 gate clear.
+        set_sprite(&mut state, 0, 0xFF, 10, 0x40);
+        solid_tile_at(&mut state, 0x2000, 3);
+        solid_tile_at(&mut state, 0x2800, 5);
+
+        let mut line = background();
+        render_mode4_sprites_line(&state, 0, &mut line, true);
+
+        assert_eq!(line[10].palette_index, 19); // Tile 0, color 3.
     }
 
     #[test]
