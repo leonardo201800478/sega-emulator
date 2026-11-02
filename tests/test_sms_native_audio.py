@@ -102,3 +102,24 @@ def test_sms_adapter_exposes_qt_frame_and_controller_contract() -> None:
     assert machine.vdp.frame_number == 1
     assert machine.vdp.visible_height == 192
     machine.set_controller_actions(1, {"up", "button1"})
+
+def test_sms_sprite_limit_setting_is_exposed_by_native_and_python_adapters() -> None:
+    native = _machine()
+    adapter = SMSMachine(bytes([0x00]) * 16)
+
+    assert native.sprite_limit_enabled is True
+    assert adapter.native_machine.sprite_limit_enabled is True
+    native.set_sprite_limit_enabled(False)
+    adapter.set_sprite_limit_enabled(False)
+    assert native.sprite_limit_enabled is False
+    assert adapter.native_machine.sprite_limit_enabled is False
+    native.set_sprite_limit_enabled(True)
+    adapter.set_sprite_limit_enabled(True)
+    assert native.sprite_limit_enabled is True
+    assert adapter.native_machine.sprite_limit_enabled is True
+
+
+def test_sms_adapter_rejects_non_boolean_sprite_limit_value() -> None:
+    adapter = SMSMachine(bytes([0x00]) * 16)
+    with pytest.raises(TypeError, match="bool"):
+        adapter.set_sprite_limit_enabled(1)
