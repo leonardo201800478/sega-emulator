@@ -190,8 +190,7 @@ mod tests {
     fn scheduled_psg_samples_reach_the_rust_audio_session() {
         let domain = ClockDomainId(7);
         let mut scheduler = MachineScheduler::<u8>::new();
-        let mut psg =
-            ScheduledPsg::new(domain, PsgProfile::Sms, 3_579_545, 44_100).unwrap();
+        let mut psg = ScheduledPsg::new(domain, PsgProfile::Sms, 3_579_545, 44_100).unwrap();
         psg.register_clock_domain(&mut scheduler, ClockRatio::new(1, 1).unwrap())
             .unwrap();
         scheduler
