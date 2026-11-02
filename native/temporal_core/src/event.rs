@@ -137,7 +137,7 @@ impl std::error::Error for EventQueueError {}
 pub struct EventQueue<T> {
     heap: BinaryHeap<QueueEntry<T>>,
     next_sequence: u64,
-    last_dispatched: Option<(super::MachineTime, HardwarePhase, PlatformPriority)>,
+    last_dispatched: Option<(super::MachineTime, HardwarePhase, PlatformPriority, u64)>,
 }
 impl<T> Default for EventQueue<T> {
     fn default() -> Self {
@@ -174,10 +174,11 @@ impl<T> EventQueue<T> {
             last_dispatched: self
                 .last_dispatched
                 .map(
-                    |(timestamp, hardware_phase, priority)| EventQueueWatermark {
+                    |(timestamp, hardware_phase, priority, sequence)| EventQueueWatermark {
                         timestamp,
                         hardware_phase,
                         priority,
+                        sequence,
                     },
                 ),
         }
@@ -204,13 +205,15 @@ impl<T> EventQueue<T> {
                 return Err(EventQueueError::NonCanonicalState);
             }
             previous_key = Some(key);
-            if let Some(watermark) = state.last_dispatched
-                && (event.timestamp < watermark.timestamp
-                    || (event.timestamp == watermark.timestamp
-                        && (event.hardware_phase, event.priority)
-                            < (watermark.hardware_phase, watermark.priority)))
-            {
-                return Err(EventQueueError::WatermarkRegression);
+            if let Some(watermark) = state.last_dispatched {
+                if watermark.sequence >= state.next_sequence {
+                    return Err(EventQueueError::SequenceOutOfRange);
+                }
+                let event_key = (event.timestamp, event.hardware_phase, event.priority, event.sequence);
+                let watermark_key = (watermark.timestamp, watermark.hardware_phase, watermark.priority, watermark.sequence);
+                if event_key <= watermark_key {
+                    return Err(EventQueueError::WatermarkRegression);
+                }
             }
         }
         let heap = state
@@ -220,7 +223,7 @@ impl<T> EventQueue<T> {
             .collect();
         let last_dispatched = state
             .last_dispatched
-            .map(|w| (w.timestamp, w.hardware_phase, w.priority));
+            .map(|w| (w.timestamp, w.hardware_phase, w.priority, w.sequence));
         Ok(Self {
             heap,
             next_sequence: state.next_sequence,
@@ -278,6 +281,7 @@ impl<T> EventQueue<T> {
             entry.event.timestamp,
             entry.event.hardware_phase,
             entry.event.priority,
+            entry.event.sequence,
         ));
         Some(entry.event)
     }
@@ -494,6 +498,7 @@ mod tests {
                 timestamp: MachineTime::from_ticks(5),
                 hardware_phase: HardwarePhase::new(2),
                 priority: PlatformPriority::new(0),
+                sequence: 1,
             }),
         };
         assert_eq!(
