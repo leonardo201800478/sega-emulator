@@ -790,8 +790,7 @@ pub fn render_mode4_sprites_line(
             usize::from(tile)
         };
         let pattern_row = source_y & 7;
-        let pattern_address =
-            (sprite_pattern_base + tile_number * 32 + pattern_row * 4) & 0x3FFF;
+        let pattern_address = (sprite_pattern_base + tile_number * 32 + pattern_row * 4) & 0x3FFF;
         let x_origin = i16::from(x) - x_shift;
 
         for source_x in 0..8usize {
@@ -818,7 +817,7 @@ pub fn render_mode4_sprites_line(
                 if !was_occupied {
                     let bg = background[x_screen];
                     if !(bg.priority && (bg.palette_index & 0x0F) != 0) {
-                    let palette_index = 16 + color_index;
+                        let palette_index = 16 + color_index;
                         background[x_screen] =
                             decode_background_pixel(&state.memory.cram, palette_index, false);
                     }
@@ -827,13 +826,12 @@ pub fn render_mode4_sprites_line(
         }
     }
 
-    (if overflow { SPRITE_OVERFLOW } else { 0 })
-        | (if collision { SPRITE_COLLISION } else { 0 })
+    (if overflow { SPRITE_OVERFLOW } else { 0 }) | (if collision { SPRITE_COLLISION } else { 0 })
 }
 
 #[cfg(test)]
 mod sprite_tests {
-    use super::{render_mode4_sprites_line, BackgroundPixel, Sms1VdpState, VideoStandard};
+    use super::{BackgroundPixel, Sms1VdpState, VideoStandard, render_mode4_sprites_line};
 
     fn set_sprite(state: &mut Sms1VdpState, index: usize, y: u8, x: u8, tile: u8) {
         let sat = usize::from(state.registers.get(5).unwrap_or(0) & 0x7E) << 7;
@@ -953,6 +951,4 @@ mod sprite_tests {
         assert_eq!(line[40].palette_index, 23);
         assert_eq!(line[41].palette_index, 23);
     }
-
-
 }
