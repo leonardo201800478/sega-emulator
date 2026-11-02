@@ -227,7 +227,10 @@ impl DeviceProgress {
         if next_event.is_some_and(|next| next < reached) {
             return Err(BusContractError::RetroactiveEvent);
         }
-        Ok(Self { reached, next_event })
+        Ok(Self {
+            reached,
+            next_event,
+        })
     }
 
     pub const fn reached(self) -> MachineTime {
