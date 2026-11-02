@@ -496,7 +496,7 @@ pub fn render_mode4_background_line(
 
         let fine_scroll = usize::from(horizontal_scroll & 7);
         let coarse_scroll = usize::from(horizontal_scroll & 0xF8);
-        let source_x = (screen_x + coarse_scroll) & 0xFF;
+        let source_x = (screen_x + 256 - coarse_scroll) & 0xFF;
         // SMS Mode 4 does not wrap the fine-scroll gap into the right edge:
         // the exposed left edge is filled with the backdrop color.
         if fine_scroll != 0 && screen_x < fine_scroll {
@@ -588,7 +588,7 @@ mod background_tests {
         render_mode4_background_line(&state, 0, 0, &mut line);
 
         assert_eq!(line[0].palette_index, 11);
-        assert_eq!(line[0].color, [170, 85, 255]);
+        assert_eq!(line[0].color, [255, 85, 170]);
     }
 
     #[test]
@@ -599,7 +599,7 @@ mod background_tests {
         state.registers.set_raw(2, 0x0E);
         // Tile 1, both flips and priority enabled.
         state.memory.vram[0x3800] = 1;
-        state.memory.vram[0x3801] = 0x17;
+        state.memory.vram[0x3801] = 0x16;
         put_tile(&mut state, 1, 0b0010);
         // Change the first and last source columns so the flip is observable.
         state.memory.vram[32] = 0x80;
@@ -629,7 +629,7 @@ mod background_tests {
         }; 256];
         render_mode4_background_line(&state, 0, 0, &mut line);
         assert_eq!(line[0].palette_index, 3);
-        assert_eq!(line[0].color, [255, 85, 170]);
+        assert_eq!(line[0].color, [170, 85, 255]);
     }
 
     #[test]
@@ -642,7 +642,7 @@ mod background_tests {
         // First map tile is color 1, second is color 2.
         state.memory.vram[0x3800] = 1;
         state.memory.vram[0x3802] = 2;
-        state.memory.vram[0x383E] = 3;
+        state.memory.vram[0x383E] = 2;
         put_tile(&mut state, 1, 1);
         put_tile(&mut state, 2, 2);
         put_tile(&mut state, 3, 3);
@@ -683,7 +683,7 @@ mod background_tests {
         state.registers.set_raw(2, 0x0E);
         // Distinguish the first two name-table rows.
         state.memory.vram[0x3800] = 1;
-        state.memory.vram[0x3880] = 2;
+        state.memory.vram[0x3840] = 2;
         put_tile(&mut state, 1, 1);
         put_tile(&mut state, 2, 2);
         let mut line = [BackgroundPixel {
@@ -776,8 +776,8 @@ pub fn render_mode4_sprites_line(
             overflow = true;
             break;
         }
-        let x = vram[(sat_base + 0x80 + sprite) & 0x3FFF];
-        let tile = vram[(sat_base + 0xC0 + sprite) & 0x3FFF];
+        let x = vram[(sat_base + 0x80 + sprite * 2) & 0x3FFF];
+        let tile = vram[(sat_base + 0x81 + sprite * 2) & 0x3FFF];
         let source_y = relative as usize / if magnified { 2 } else { 1 };
         selected[selected_count] = (sprite, x, tile, source_y);
         selected_count += 1;
@@ -840,8 +840,8 @@ mod sprite_tests {
     fn set_sprite(state: &mut Sms1VdpState, index: usize, y: u8, x: u8, tile: u8) {
         let sat = usize::from(state.registers.get(5).unwrap_or(0) & 0x7E) << 7;
         state.memory.vram[sat + index] = y;
-        state.memory.vram[sat + 0x80 + index] = x;
-        state.memory.vram[sat + 0xC0 + index] = tile;
+        state.memory.vram[sat + 0x80 + index * 2] = x;
+        state.memory.vram[sat + 0x81 + index * 2] = tile;
     }
 
     fn solid_tile(state: &mut Sms1VdpState, tile: usize, color: u8) {
