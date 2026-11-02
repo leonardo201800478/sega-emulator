@@ -13,7 +13,7 @@ Menor valor em cada dimensão é despachado primeiro.
 - `PlatformPriority(u16)`: prioridade de despacho de software.
 - `insertion_sequence(u64)`: desempate estável atribuído pela fila.
 
-A sequência é local à fila e preservada em snapshot. Registro de componente deve usar IDs estáveis próprios, não confundir ID com sequência.
+A sequência é local à fila e preservada em snapshot. Ela é atribuída na ordem de inserção; portanto, a repetibilidade do desempate também depende de os produtores inserirem eventos em ordem determinística. Registro de componente deve usar IDs estáveis próprios, não confundir ID com sequência.
 
 ## 2. O que as dimensões não significam
 
@@ -39,7 +39,7 @@ Para cada colisão potencial (CPU write × VDP fetch, IRQ × acknowledge, DMA ×
 5. comportamento se a evidência for insuficiente;
 6. teste que fixa a regra.
 
-Não usar sequência de inserção como substituto de uma regra física ausente. A sequência só desempata eventos que o perfil já considera equivalentes.
+Não usar sequência de inserção como substituto de uma regra física ausente. A sequência só desempata eventos que o perfil já considera equivalentes e cuja ordem de inserção seja determinística. Ela não substitui uma regra física ausente.
 
 ## 5. Delta-event budget
 
