@@ -122,10 +122,16 @@ impl fmt::Display for SchedulerError {
                 "scheduler state format version {actual} is unsupported (expected {expected})"
             ),
             Self::NonCanonicalClockDomainOrder => {
-                write!(f, "clock-domain states are not in strict ascending ID order")
+                write!(
+                    f,
+                    "clock-domain states are not in strict ascending ID order"
+                )
             }
             Self::PendingEventBeforeNow => {
-                write!(f, "restored event queue contains an event before scheduler time")
+                write!(
+                    f,
+                    "restored event queue contains an event before scheduler time"
+                )
             }
             Self::WatermarkAfterNow => {
                 write!(f, "event queue watermark is later than scheduler time")
@@ -134,7 +140,10 @@ impl fmt::Display for SchedulerError {
                 write!(f, "scheduler dispatch timestamp and count are inconsistent")
             }
             Self::DispatchWatermarkMismatch => {
-                write!(f, "scheduler dispatch timestamp does not match queue watermark")
+                write!(
+                    f,
+                    "scheduler dispatch timestamp does not match queue watermark"
+                )
             }
         }
     }
@@ -335,9 +344,7 @@ impl<T> MachineScheduler<T> {
                 return Err(SchedulerError::WatermarkAfterNow);
             }
         }
-        if state.event_queue.last_dispatched.map(|w| w.timestamp)
-            != state.last_dispatch_timestamp
-        {
+        if state.event_queue.last_dispatched.map(|w| w.timestamp) != state.last_dispatch_timestamp {
             return Err(SchedulerError::DispatchWatermarkMismatch);
         }
         if state
@@ -1077,11 +1084,7 @@ mod tests {
         let mut scheduler =
             MachineScheduler::with_delta_event_policy(DeltaEventPolicy::new(4).unwrap());
         scheduler
-            .register_clock_domain_with_phase(
-                ClockDomainId(3),
-                ClockRatio::new(5, 3).unwrap(),
-                2,
-            )
+            .register_clock_domain_with_phase(ClockDomainId(3), ClockRatio::new(5, 3).unwrap(), 2)
             .unwrap();
         scheduler
             .register_clock_domain(ClockDomainId(1), ClockRatio::new(1, 3).unwrap())
@@ -1151,7 +1154,10 @@ mod tests {
         assert_eq!(restored.export_state(), state);
         assert_eq!(
             restored.dispatch_next(),
-            Err(SchedulerError::DeltaEventLimitExceeded { timestamp, limit: 1 })
+            Err(SchedulerError::DeltaEventLimitExceeded {
+                timestamp,
+                limit: 1
+            })
         );
     }
 
@@ -1213,8 +1219,12 @@ mod tests {
     #[test]
     fn restore_rejects_watermark_after_now_and_domain_time_mismatch() {
         let mut watermark_after_now = scheduler_snapshot_fixture();
-        watermark_after_now.event_queue.last_dispatched.as_mut().unwrap().timestamp =
-            MachineTime::from_ticks(6);
+        watermark_after_now
+            .event_queue
+            .last_dispatched
+            .as_mut()
+            .unwrap()
+            .timestamp = MachineTime::from_ticks(6);
         assert!(matches!(
             MachineScheduler::restore_state(watermark_after_now),
             Err(SchedulerError::WatermarkAfterNow)
