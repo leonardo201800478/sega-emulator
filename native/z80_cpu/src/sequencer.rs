@@ -27,7 +27,6 @@ enum InstructionPhase {
     Ready,
     OpcodeFetch,
     ImmediateRead,
-    MemoryRead,
     MemoryReadRegister { destination: u8 },
     MemoryWrite,
 }
@@ -166,16 +165,6 @@ impl Z80MicroSequencer {
                     .data
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 self.write_register(destination, value);
-                self.retire(
-                    self.opcode
-                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
-                )
-            }
-            InstructionPhase::MemoryRead => {
-                let value = response
-                    .data
-                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
-                self.registers.a = value;
                 self.retire(
                     self.opcode
                         .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
