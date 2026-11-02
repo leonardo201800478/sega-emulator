@@ -665,7 +665,8 @@ mod tests {
     }
 
     fn refresh_checksum(frame: &mut [u8]) {
-        let body_len = usize::try_from(u64::from_be_bytes(frame[12..20].try_into().unwrap())).unwrap();
+        let body_len =
+            usize::try_from(u64::from_be_bytes(frame[12..20].try_into().unwrap())).unwrap();
         let body_end = 20 + body_len;
         let checksum = crc32(&frame[20..body_end]);
         frame[body_end..body_end + 4].copy_from_slice(&checksum.to_be_bytes());
