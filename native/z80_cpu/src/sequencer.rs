@@ -777,7 +777,6 @@ mod tests {
     fn halt_opcode_is_not_decoded_as_a_register_load() {
         let mut cpu = Z80MicroSequencer::default();
         let fetch = request(cpu.begin_instruction().unwrap());
-        let before = cpu.export_state();
         assert!(matches!(
             cpu.complete_bus_cycle(fetch.id, Some(0x76)),
             Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x76, .. })
