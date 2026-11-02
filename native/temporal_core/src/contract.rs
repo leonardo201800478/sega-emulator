@@ -192,20 +192,20 @@ pub enum BusOperationResult<T, E> {
 impl<T, E> BusOperationResult<T, E> {
     /// Validate that a completed transaction does not finish before it starts.
     pub fn validate_completion(&self, requested_at: MachineTime) -> Result<(), BusContractError> {
-        if let Self::Completed { completed_at, .. } = self {
-            if *completed_at < requested_at {
-                return Err(BusContractError::CompletionBeforeRequest);
-            }
+        if let Self::Completed { completed_at, .. } = self
+            && *completed_at < requested_at
+        {
+            return Err(BusContractError::CompletionBeforeRequest);
         }
         Ok(())
     }
 
     /// Validate the temporal relation of a WAIT response to its request.
     pub fn validate_wait(&self, requested_at: MachineTime) -> Result<(), BusContractError> {
-        if let Self::Wait { resume_at } = self {
-            if *resume_at <= requested_at {
-                return Err(BusContractError::WaitDoesNotAdvanceTime);
-            }
+        if let Self::Wait { resume_at } = self
+            && *resume_at <= requested_at
+        {
+            return Err(BusContractError::WaitDoesNotAdvanceTime);
         }
         Ok(())
     }
