@@ -46,9 +46,9 @@ As expectativas abaixo são limitadas ao que as fontes citadas documentam. Elas 
 | SMS1-CRAM-001 | CRAM width | UNIT_FUNCTIONAL | Escrever bytes CRAM com bits 7–6 variados, em índices conhecidos | Somente os seis bits de cor definidos pelo formato SMS são observáveis no armazenamento digital; não inferir comportamento analógico do DAC | COMMUNITY_DOC: documentação técnica SMS de CRAM; exigir referência de formato específica no fixture | Não valida DAC analógico, conversão RGB ou resposta elétrica |
 | SMS1-CRAM-002 | CRAM addressing | PROPERTY | Em SMS, escrever nos índices 0x00, 0x1F, 0x20, 0x3F e endereços com bits altos definidos | CRAM tem 32 bytes; bits acima dos cinco bits baixos do endereço são ignorados na escrita CRAM (por exemplo, 0x20 seleciona índice 0x00) | COMMUNITY_DOC: SMS Power Control Port, seção CRAM write address | Não generalizar o tamanho de 64 bytes do Game Gear; leitura da data port permanece leitura VRAM |
 | SMS1-STATUS-001 | Status read | STATE_TRANSITION | Definir flags de status; ler control port uma vez; ler novamente | Primeira leitura retorna flags pendentes e limpa flags internas; segunda leitura não repete flags já reconhecidas | COMMUNITY_DOC: SMS Power Control Port, seção Reads | Não fixa instante elétrico de clear nem amostragem de IRQ Z80 |
-| SMS1-STATUS-002 | Sprite flags | STATE_TRANSITION | Gerar overflow sem colisão e colisão sem overflow; ler status após cada cenário | Mapeamento de trabalho: overflow = bit 6; collision = bit 5; leitura do status limpa flags. A página SMS Power/Sprites contém uma afirmação contraditória que atribui collision ao bit 6 | COMMUNITY_DOC: SMS Power Control Port (bits 6/5), Collision Detection (bit 5), Sprites (linha contraditória: bit 6); confirmar contra manual primário/captura 315-5124 antes de fechar o oracle | Não implementar dois flags independentes com bit compartilhado; manter hardware-oracle pendente |
-| SMS1-REG-001 | R9 | STATE_TRANSITION | Escrever R9 durante active display e VBlank | Scroll vertical aplicado conforme latch em VBlank documentado | PRIMARY_DOC | Fronteira exata do latch UNKNOWN |
-| SMS1-REG-002 | R10 | STATE_TRANSITION | Alterar R10 antes/depois de evento de linha | Valor programado observa a latência de um interrupt descrita no manual | PRIMARY_DOC | Não fixar borda sublinha |
+| SMS1-STATUS-002 | Sprite flags | STATE_TRANSITION | Gerar overflow sem colisão e colisão sem overflow; ler status após cada cenário | Referência de trabalho: overflow = bit 6 e collision = bit 5; leitura de status limpa flags. SMS Official Docs também lista overflow em bit 6 e collision em bit 5. A página SMS Power/Sprites contradiz collision atribuindo-a ao bit 6 | PRIMARY_DOC: SMS Official Docs, tabela Read Port $BF (VDP STATUS); COMMUNITY_DOC: SMS Power Control Port, Collision Detection e Sprites (esta última contém a linha contraditória) | Registrar a divergência editorial; não confundir confiança documental com confirmação física específica do 315-5124 |
+| SMS1-REG-001 | R9 | STATE_TRANSITION | Alterar R9 antes e durante a área efetiva; observar valor aplicado no quadro corrente e no seguinte | O manual oficial descreve o valor escrito imediatamente antes da área efetiva como valor que se torna efetivo durante aquele quadro, evitando alteração do scroll vertical durante o display; não reduzir isso a um latch genérico em qualquer VBlank sem validar a condição | PRIMARY_DOC: SMS Official Docs, descrição de Register #9; COMMUNITY_DOC: SMS Power VDP Registers, R9 | A fronteira exata e a relação com o início do VBlank exigem leitura cuidadosa do manual/medição; não fixar dot |
+| SMS1-REG-002 | R10 | STATE_TRANSITION | Carregar R10 com valor conhecido e observar o decremento/recarga do contador de linha | O manual oficial descreve R10 como valor carregado no down-counter do VDP para interrupção em posição vertical arbitrária; a regra de reload/underflow deve ser especificada separadamente | PRIMARY_DOC: SMS Official Docs, descrição de Register #10; COMMUNITY_DOC: SMS Power VDP Registers, R10 | Não inferir a borda sublinha ou atraso de uma linha sem citação/página explícita e validação |
 | SMS1-MASK-002 | R2 | UNIT_FUNCTIONAL | Variar R2 bit 0 e observar endereço de name table | Address mask 315-5124 aplica o gate descrito | COMMUNITY_DOC: SMS Power VDP Registers | Separar efeitos conhecidos de observações não testadas |
 | SMS1-MASK-003 | R3 | UNIT_FUNCTIONAL | Variar individualmente bits de máscara documentados | Geração de endereço de pattern planes segue máscaras publicadas | COMMUNITY_DOC | Efeitos secundários não testados não são assertions |
 | SMS1-MASK-004 | R4 | UNIT_FUNCTIONAL | Variar individualmente bits de máscara documentados | Geração de endereço de pattern planes segue máscaras publicadas | COMMUNITY_DOC | Mesmo limite de R3 |
@@ -66,19 +66,19 @@ IDs são estáveis para rastreabilidade; casos podem ser divididos quando uma fo
 
 Os casos abaixo devem existir no backlog, mas não podem receber valores esperados até que uma fonte ou captura independente sustente a expectativa.
 
-| ID | Pergunta | Bloqueio atual |
+| ID | Classe | Pergunta | Bloqueio atual |
 |---|---|---|
-| SMS1-RASTER-001 | Qual offset e sequência observável do H-counter? | UNKNOWN; offsets SMS1 não fixados |
-| SMS1-RASTER-002 | Em qual fase active display/HBlank começa e termina? | UNKNOWN; descrição aproximada não fixa fase |
-| SMS1-RASTER-003 | Qual a fase de reset e relação de fase clock VDP/Z80? | UNKNOWN; frequência nominal não determina fase |
-| SMS1-FETCH-001 | Quando ocorrem name/pattern/attribute fetches? | UNKNOWN; sem tabela SMS1 por dot validada |
-| SMS1-FETCH-002 | Qual escrita VRAM vence quando coincide com fetch? | UNKNOWN; prioridade simultânea não documentada |
-| SMS1-CRAM-003 | Qual primeiro pixel é afetado por write CRAM em cada posição? | UNKNOWN; DAC/latch/fetch schedule não medidos |
-| SMS1-SPR-005 | Em qual fase SAT é lida e quando o buffer é fechado? | UNKNOWN; regra funcional não determina fase |
-| SMS1-SPR-006 | Qual primeiro dot torna overflow/collision observável? | UNKNOWN |
-| SMS1-BUS-001 | Qual acesso CPU recebe WAIT/stall em active display? | UNKNOWN; cadência 16/29 T-states não prova WAIT automático |
-| SMS1-BUS-002 | Como CPU write e VDP fetch são ordenados no mesmo instante? | UNKNOWN; não criar prioridade |
-| SMS1-IRQ-001 | Em qual fase INT muda e em qual fase Z80 a amostra? | UNKNOWN; exige VDP, bus e Z80 temporal |
+| SMS1-RASTER-001 | RASTER_TRACE | Qual offset e sequência observável do H-counter? | UNKNOWN; offsets SMS1 não fixados |
+| SMS1-RASTER-002 | RASTER_TRACE | Em qual fase active display/HBlank começa e termina? | UNKNOWN; descrição aproximada não fixa fase |
+| SMS1-RASTER-003 | RASTER_TRACE | Qual a fase de reset e relação de fase clock VDP/Z80? | UNKNOWN; frequência nominal não determina fase |
+| SMS1-FETCH-001 | RASTER_TRACE | Quando ocorrem name/pattern/attribute fetches? | UNKNOWN; sem tabela SMS1 por dot validada |
+| SMS1-FETCH-002 | BUS_TRACE | Qual escrita VRAM vence quando coincide com fetch? | UNKNOWN; prioridade simultânea não documentada |
+| SMS1-CRAM-003 | RASTER_TRACE | Qual primeiro pixel é afetado por write CRAM em cada posição? | UNKNOWN; DAC/latch/fetch schedule não medidos |
+| SMS1-SPR-005 | RASTER_TRACE | Em qual fase SAT é lida e quando o buffer é fechado? | UNKNOWN; regra funcional não determina fase |
+| SMS1-SPR-006 | RASTER_TRACE | Qual primeiro dot torna overflow/collision observável? | UNKNOWN |
+| SMS1-BUS-001 | BUS_TRACE | Qual acesso CPU recebe WAIT/stall em active display? | UNKNOWN; cadência 16/29 T-states não prova WAIT automático |
+| SMS1-BUS-002 | BUS_TRACE | Como CPU write e VDP fetch são ordenados no mesmo instante? | UNKNOWN; não criar prioridade |
+| SMS1-IRQ-001 | BUS_TRACE | Em qual fase INT muda e em qual fase Z80 a amostra? | UNKNOWN; exige VDP, bus e Z80 temporal |
 
 Um caso temporal só sai de BLOCKED quando o manifest registrar fonte/medição, setup, ASIC/região, resolução temporal, incerteza do instrumento, estímulo, observável e resultado reproduzível.
 
@@ -86,7 +86,15 @@ Um caso temporal só sai de BLOCKED quando o manifest registrar fonte/medição,
 
 ### Proveniência corrigida das assertions de portas
 
-As regras detalhadas de protocolo de portas, read-ahead, wrap e CRAM address alias desta matriz são referenciadas às páginas técnicas comunitárias SMS Power (Control Port), não devem ser rotuladas como PRIMARY_DOC apenas por descreverem o comportamento programável. O manual de software Mark III permanece fonte primária para os pontos efetivamente localizados nele; cada assertion deve indicar a página/seção exata antes de ser promovida a DOCUMENTED. O mapeamento de status overflow/collision permanece sujeito a confirmação por manual primário ou medição física, apesar da convergência de duas páginas comunitárias para bit 5 de collision.
+As regras detalhadas de protocolo de portas, read-ahead, wrap e CRAM address alias são referenciadas à documentação comunitária SMS Power, Control Port (https://www.smspower.org/Development/ControlPort). Não as rotular como PRIMARY_DOC. A tabela oficial de status $BF no SMS Official Docs atribui bit 6 a sprite overflow e bit 5 a sprite collision; a página Control Port reproduz o mesmo mapa. A página SMS Power/Sprites contradiz esse mapa ao atribuir bit 6 também à colisão. Portanto, a matriz registra o mapeamento documental primário como referência, mas mantém a validação de comportamento 315-5124 em HARDWARE_ORACLE pendente. Para R2–R6 e R9–R10, citar SMS Official Docs e SMS Power VDP Registers (https://www.smspower.org/Development/VDPRegisters) por assertion, preservando ressalvas sobre a natureza comunitária das explicações.
+
+### Referências técnicas verificadas nesta revisão
+
+- SMS Power, Control Port: https://www.smspower.org/Development/ControlPort — word de controle em dois bytes; cancelamento do byte pendente por leitura do control port/data port ou escrita data port; VRAM read-ahead; wrap 0x3FFF→0; formato de status; clear das flags na leitura; alias de endereços CRAM acima do tamanho físico.
+- SMS Official Docs: https://www.smspower.org/Development/SMSOfficialDocs — tabela do status $BF (bit 6 overflow, bit 5 collision), formato de escrita de registrador e descrições oficiais de R9/R10. O endpoint da tabela de R9/R10 não ficou acessível pelo navegador nesta revisão; manter referência ao documento e confirmar página/scan no PDF antes de elevar qualquer detalhe temporal.
+- SMS Power, VDP Registers: https://www.smspower.org/Development/VDPRegisters — gates/máscaras SMS1 de R2–R6, modos de altura SMS2 e ressalvas explícitas do autor para efeitos ainda não testados.
+- SMS Power, Collision Detection: https://www.smspower.org/Development/CollisionDetection — collision em bit 5 e reset após leitura.
+- SMS Power, Sprites: https://www.smspower.org/Development/Sprites — limite de oito sprites, overflow bit 6, peculiaridade de zoom SMS1; contém a afirmação contraditória sobre collision bit 6.
 
 Ordem de confiança:
 
