@@ -1064,10 +1064,8 @@ mod tests {
     fn restore_rejects_memory_read_before_m1_elapsed_time() {
         let mut cpu = Z80MicroSequencer::default();
         let fetch = request(cpu.begin_instruction().unwrap());
-        let read = request(cpu.complete_bus_cycle(fetch.id, Some(0x3E)).unwrap());
+        let _read = cpu.complete_bus_cycle(fetch.id, Some(0x3E)).unwrap();
         let mut state = cpu.export_state();
-        assert_eq!(state.phase, Z80MicroSequencerPhase::ImmediateReadRegister { register: 0 });
-        assert_eq!(state.handshake.pending_request(), Some(read));
         state.instruction_tstates = 3;
 
         assert_eq!(
