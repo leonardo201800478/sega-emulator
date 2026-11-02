@@ -5,6 +5,9 @@
 //! ownership. Native presentation backends consume completed frames through
 //! this contract.
 
+#[cfg(windows)]
+pub mod d3d12;
+
 use core::fmt;
 use std::sync::Arc;
 
