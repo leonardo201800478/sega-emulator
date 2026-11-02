@@ -259,7 +259,7 @@ mod tests {
         );
         assert_eq!(
             BusTransaction::new(
-                MachineTime::ZERO, 0, 0, BusPhase::Setup,
+                MachineTime::ZERO, MCycleIndex::new(0), TStateIndex::new(0), BusPhase::Setup,
                 BusCycleKind::MemoryWrite, BusDirection::Write, Some(0), None, 3,
             ),
             Err(BusContractError::InconsistentFields),
@@ -270,7 +270,7 @@ mod tests {
     fn transaction_rejects_zero_duration() {
         assert_eq!(
             BusTransaction::new(
-                MachineTime::ZERO, 0, 0, BusPhase::Setup,
+                MachineTime::ZERO, MCycleIndex::new(0), TStateIndex::new(0), BusPhase::Setup,
                 BusCycleKind::Internal, BusDirection::None, None, None, 0,
             ),
             Err(BusContractError::ZeroDuration),
