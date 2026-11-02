@@ -27,11 +27,13 @@ A implementação cobre somente as fases que o sequenciador já expõe: M1 opcod
 - [x] Snapshot binário versionado carrega índices e valida endereço/payload esperados da escrita pendente.
 - [x] Testes de sequência, WAIT e snapshot para M1/M2/M3, incluindo rejeição de payload de escrita adulterado e round-trip do codec.
 - [x] Teste de atomicidade da conclusão quando a alocação da próxima requisição falha.
-- [x] `cargo fmt --all -- --check`, Clippy `-D warnings`, `cargo test --workspace --locked`, pytest, Ruff check e Ruff format no SHA `9a92386c1bb923d0e5bcf8486f7cb88eeec5a6cf` (CI #3524; quatro jobs PASS).
-- [x] Windows x64 D3D12/video-runtime e WASAPI/XAudio2/audio-output tests; Scheduler deterministic stress (CI #3524).
+- [x] `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets --locked -- -D warnings` e `cargo test --workspace --locked` no HEAD `646bd556572a1f077dc3c003407c6e64439f66f3` (run `41534269758`; Rust quality/unit regression PASS).
+- [x] `python -m pytest`, `python -m ruff check .` e `python -m ruff format --check .` no mesmo HEAD/run (Python lint/regression PASS).
+- [x] Windows x64 D3D12/video-runtime e WASAPI/XAudio2/audio-output tests (Windows x64 D3D12 compile PASS).
+- [x] Scheduler deterministic stress (PASS).
 - [ ] Aprovação técnica independente do Agente 2 para o HEAD final e integração por PR; não declarar `TEMPORAL_PASS`.
 ## Evidência de CI
 
-- HEAD de código auditado: `60395290f677e133963a917a32837af64273046d`.
-- GitHub Actions: [run `41533717810`](https://github.com/leonardo201800478/sega-emulator/actions/runs/41533717810) — quatro jobs concluídos com PASS: Rust quality/unit regression, Python lint/regression, Windows x64 D3D12/video/audio e Scheduler deterministic stress.
-- Follow-up de regressão: `codec_rejects_pending_write_payload_mismatch_with_valid_checksum` altera o payload binário mantendo CRC32 válido e exige `InvalidState`, provando a rejeição semântica. O HEAD candidato que contém esse teste e a documentação reconciliada está aguardando CI; execução local: NOT RUN.
+- HEAD de código auditado: `60395290f677e133963a917a32837af64273046d`; run `41533717810` — quatro jobs PASS, incluindo `codec_rejects_pending_write_payload_mismatch_with_valid_checksum`.
+- HEAD documental final: `646bd556572a1f077dc3c003407c6e64439f66f3`; run `41534269758` — quatro jobs PASS: Rust quality/unit regression, Python lint/regression, Windows x64 D3D12/video/audio e Scheduler deterministic stress.
+- Execução local: NOT RUN.

@@ -2,7 +2,7 @@
 
 **Status:** única rota de implementação vigente do projeto.
 **Prioridade ativa:** preservar e consolidar SG-1000 + Master System (SMS), com integração temporal progressiva.
-**Baseline auditada:** `main` em `3f4a71d7b7bbc1863c20cd3293466405cb3f579b` (2026-11-02, T4 integrado).
+**Baseline auditada:** `main` em `62ab404e67fffbe8d0da7bf956e6b801a2e2bbd7` (2026-11-02, após T4 e PR #417).
 **Runtime-alvo:** Rust executa hardware, áudio, vídeo, entrada e tempo emulado. Python/Qt é plano de controle, interface e tooling. A migração de cada backend deve ser comprovada no código; esta diretriz não declara a arquitetura-alvo concluída.
 
 > Este arquivo substitui todos os roadmaps, cronogramas de migração e cartas de planejamento anteriores. Não manter planos paralelos por subsistema. ADRs, especificações e auditorias continuam válidos como documentação técnica, mas não podem criar fases ou prioridades concorrentes. O trabalho executável é acompanhado por issues e PRs vinculadas às fases abaixo.
@@ -135,7 +135,7 @@ Esta fase passa a ser a frente ativa de integração temporal, autorizada formal
 - T2: PR #414 — coordenador SMS sobre `MachineScheduler`, com escala temporal explícita.
 - T3: barramento de memória transacional, efeitos no deadline, acknowledgement único e WAIT de fixture, incorporado à stack T4.
 - T4: PR #416 — integrada em `main` no SHA `3f4a71d7b7bbc1863c20cd3293466405cb3f579b`; head validado `bfdc7d2fbbcf7712091df9960a7e7e593c18afea`; CI #41499228458 PASS em todos os quatro jobs sobre merge ref `cea276159efd382e8289085be4b5f67dccecc753`.
-- T5a: PR #418 — HEAD `60395290f677e133963a917a32837af64273046d`; run `41533717810` PASS nos quatro jobs: Rust quality/unit regression, Python lint/regression, Windows x64 D3D12/video/audio e Scheduler deterministic stress. O restore preserva e valida endereço/payload de escrita; o codec rejeita payload adulterado mesmo com CRC32 recalculado. Execução local: NOT RUN.
+- T5a: PR #418 — código SHA `60395290f677e133963a917a32837af64273046d`; run `41533717810` PASS nos quatro jobs, incluindo a regressão do codec com CRC32 recalculado. HEAD documental `646bd556572a1f077dc3c003407c6e64439f66f3`; run `41534269758` PASS nos quatro jobs. O restore preserva e valida endereço/payload de escrita. Execução local: NOT RUN.
 
 **Estado:** T0–T4 integrados incrementalmente; T4 permanece em `SHORT_PASS`. T5a (#418) está em revisão, com contratos temporais de origem única, índices M/T serializáveis e integração restrita ao subconjunto SMS. P6 continua ativa para mappers/I/O, estado arquitetural Z80, VDP/PSG e integração SG-1000. O caminho legado permanece preservado. `TEMPORAL_PASS` continua pendente.
 
