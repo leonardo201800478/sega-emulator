@@ -20,7 +20,7 @@ Este documento responde o que já existe, o que permanece como componente válid
 |---|---|---|
 | Z80 — execução | Executores atômicos legados permanecem nos cores SG-1000/SMS; `native/z80_cpu` contém microsequenciador retomável consumido pela fatia temporal SMS | Microsequenciador ainda restrito ao subconjunto testado; executor atômico preservado como oráculo diferencial. Não é ainda o executor compartilhado completo em produção |
 | Z80 — ALU | `native/z80_alu` | Biblioteca compartilhada existente; continuar auditoria de flags/opcodes e cobertura independente |
-| Z80 — bus | `native/z80_bus` e adaptador `SmsTemporalBus` em `native/sms_core/src/temporal_bus.rs` | Fetch/read/write de memória são agendados por deadline; `BusTransaction`/`BusOperationResult` da PR #396 continuam Draft até índices M-cycle/T-state estáveis |
+| Z80 — bus | `native/z80_bus` e adaptador `SmsTemporalBus` em `native/sms_core/src/temporal_bus.rs` | Fetch/read/write de memória são agendados por deadline; T5a expõe índices M-cycle/T-state no subconjunto retomável e mapeia transações para `BusTransaction`; conclusão de barramento e ciclo interno ficam latched até commit/acknowledgement; WAIT continua sendo fixture |
 | Memória e barramentos SG-1000 | `native/sg1000_core` | Funcionais no runtime; ampliar testes de mapa, espelhamento, RAM e cartuchos |
 | Memória e barramentos SMS | `native/sms_core/src/memory.rs`, `temporal_bus.rs`, `temporal_machine.rs` | Caminho temporal CPU→Scheduler→memória SMS para fetch/read/write está implementado e `SHORT_PASS`; WAIT é fixture, I/O temporal, arbitragem e integração completa permanecem pendentes |
 | TMS9918A | `native/sg1000_core` | VDP ativo do SG-1000; preservar regressões e validar efeitos de hardware com cenas/oráculos |
@@ -96,4 +96,4 @@ Não elevar um estado com base apenas em documentação, compilação isolada, b
 | SMS completo (CPU/VDP/PSG/I/O/IRQ) | INTEGRATION_PENDING | VDP legado excluído; novo VDP temporal, PSG, I/O e interrupções ainda não integrados |
 | TEMPORAL_PASS | NOT DECLARED | Faltam oráculos independentes/físicos, WAIT físico, arbitragem e integração sistêmica |
 
-**Próxima tarefa T5a:** expor índices M-cycle/T-state estáveis para o subconjunto atual e mapear explicitamente as operações para os contratos da PR #396. Expandir famílias de instruções somente após essa ponte ser validada.
+**T5a — PR #418 (em revisão):** índices M-cycle/T-state para o subconjunto retomável; validação de restore por fase; preservação do timestamp de início da transação; conclusão interna latched e acknowledgement após commit transacional da CPU. Correções e regressões foram publicadas na branch da PR; CI do SHA final e revisão independente ainda precisam ser confirmados. Não considerar integrado à main nem declarar `TEMPORAL_PASS`.
