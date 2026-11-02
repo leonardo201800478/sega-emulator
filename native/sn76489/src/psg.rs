@@ -383,7 +383,7 @@ impl Sn76489 {
     }
 
     fn reset_noise_generator(&mut self) {
-        self.lfsr = LFSR_SEED;
+        self.lfsr = self.profile.lfsr_seed();
         self.noise_output = (self.lfsr & 1) as u8;
         self.noise_counter = self.noise_period;
         self.noise_counter_phase = 0;
