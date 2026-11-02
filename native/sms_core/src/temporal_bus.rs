@@ -358,7 +358,10 @@ mod tests {
         let request = request(2, Z80BusOperation::MemoryWrite { value: 0x5A }, 0xC000, 3);
         bus.begin_request(request, 0).unwrap();
         assert_eq!(bus.memory().read(0xC000), 0);
-        let SmsTemporalDispatch::BusCompletion(completion) = bus.dispatch_next().unwrap().unwrap() else { panic!("expected bus completion"); };
+        let SmsTemporalDispatch::BusCompletion(completion) = bus.dispatch_next().unwrap().unwrap()
+        else {
+            panic!("expected bus completion");
+        };
         assert_eq!(completion.data, None);
         assert_eq!(bus.memory().read(0xC000), 0x5A);
         bus.acknowledge_completion(2).unwrap();
