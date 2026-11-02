@@ -14,7 +14,10 @@ use crate::{NativeAudioSession, PcmSink};
 /// Error returned when a scheduler advance belongs to another device domain.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PsgClockError {
-    WrongClockDomain { expected: ClockDomainId, actual: ClockDomainId },
+    WrongClockDomain {
+        expected: ClockDomainId,
+        actual: ClockDomainId,
+    },
 }
 
 impl std::fmt::Display for PsgClockError {
@@ -64,10 +67,7 @@ impl ScheduledPsg {
     }
 
     /// Consume the PSG clock-edge count produced by one scheduler dispatch.
-    pub fn apply_clock_advance(
-        &mut self,
-        advance: &ClockAdvance,
-    ) -> Result<(), PsgClockError> {
+    pub fn apply_clock_advance(&mut self, advance: &ClockAdvance) -> Result<(), PsgClockError> {
         if advance.domain != self.domain {
             return Err(PsgClockError::WrongClockDomain {
                 expected: self.domain,
@@ -119,11 +119,11 @@ impl ScheduledPsg {
 mod tests {
     use super::{PsgClockError, ScheduledPsg};
     use crate::{NativeAudioSession, PcmSink};
-    use std::sync::{Arc, Mutex};
     use sega_machine_scheduler::{
         ClockDomainId, ClockRatio, EventPriority, MachineScheduler, MachineTime,
     };
     use sega_sn76489::PsgProfile;
+    use std::sync::{Arc, Mutex};
 
     #[derive(Default)]
     struct RecordingSink {
@@ -145,8 +145,7 @@ mod tests {
     fn scheduler_is_the_only_source_of_psg_clock_advances() {
         let domain = ClockDomainId(7);
         let mut scheduler = MachineScheduler::<u8>::new();
-        let mut psg =
-            ScheduledPsg::new(domain, PsgProfile::Sms, 3_579_545, 44_100).unwrap();
+        let mut psg = ScheduledPsg::new(domain, PsgProfile::Sms, 3_579_545, 44_100).unwrap();
         psg.register_clock_domain(&mut scheduler, ClockRatio::new(1, 3).unwrap())
             .unwrap();
         scheduler
@@ -154,8 +153,11 @@ mod tests {
             .unwrap();
 
         let dispatch = scheduler.dispatch_next().unwrap().unwrap();
-        let advance = dispatch.clock_advances.iter()
-            .find(|advance| advance.domain == domain).unwrap();
+        let advance = dispatch
+            .clock_advances
+            .iter()
+            .find(|advance| advance.domain == domain)
+            .unwrap();
         assert_eq!(advance.elapsed_cycles, 10);
         psg.apply_clock_advance(advance).unwrap();
         psg.write_at_dispatch(dispatch.event.payload);
@@ -168,9 +170,11 @@ mod tests {
         let mut psg =
             ScheduledPsg::new(ClockDomainId(7), PsgProfile::Sms, 3_579_545, 44_100).unwrap();
         let mut scheduler = MachineScheduler::<()>::new();
-        scheduler.register_clock_domain(ClockDomainId(8), ClockRatio::new(1, 3).unwrap())
+        scheduler
+            .register_clock_domain(ClockDomainId(8), ClockRatio::new(1, 3).unwrap())
             .unwrap();
-        scheduler.schedule_at(MachineTime::from_ticks(3), EventPriority::new(0), ())
+        scheduler
+            .schedule_at(MachineTime::from_ticks(3), EventPriority::new(0), ())
             .unwrap();
         let dispatch = scheduler.dispatch_next().unwrap().unwrap();
         assert_eq!(
@@ -190,13 +194,12 @@ mod tests {
             ScheduledPsg::new(domain, PsgProfile::Sms, 3_579_545, 44_100).unwrap();
         psg.register_clock_domain(&mut scheduler, ClockRatio::new(1, 1).unwrap())
             .unwrap();
-        scheduler.schedule_at(
-            MachineTime::from_ticks(48_000),
-            EventPriority::new(0),
-            0x90,
-        ).unwrap();
+        scheduler
+            .schedule_at(MachineTime::from_ticks(48_000), EventPriority::new(0), 0x90)
+            .unwrap();
         let dispatch = scheduler.dispatch_next().unwrap().unwrap();
-        psg.apply_clock_advance(&dispatch.clock_advances[0]).unwrap();
+        psg.apply_clock_advance(&dispatch.clock_advances[0])
+            .unwrap();
 
         let sink = RecordingSink::default();
         let blocks = Arc::clone(&sink.blocks);
