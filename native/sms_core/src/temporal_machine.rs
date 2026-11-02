@@ -103,7 +103,15 @@ impl SmsTemporalMachine {
         if self.bus.pending_request().is_some() {
             return Err(SmsTemporalMachineError::InvalidState);
         }
-        Ok(self.bus.begin_request(request, fixture_wait_tstates)?)
+        let cpu_before = self.cpu.export_state();
+        self.cpu.insert_wait_tstates(fixture_wait_tstates)?;
+        match self.bus.begin_request(request, fixture_wait_tstates) {
+            Ok(deadline) => Ok(deadline),
+            Err(error) => {
+                self.cpu = Z80MicroSequencer::restore_state(cpu_before)?;
+                Err(error.into())
+            }
+        }
     }
 
     /// Schedule the current exposed internal CPU interval.
