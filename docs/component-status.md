@@ -1,6 +1,6 @@
 # Estado dos componentes — SG-1000 + Master System
 
-**Base de referência:** `main` em `6c8e18b1c0a134ee56e8282d1cbc7660373100f8` (2026-11-02, após PR #418/T5a).
+**Base de referência:** `main` em `b2c8e6533d8ffb698e14a213b324de5c9cbab108` (2026-11-02, após PR #421/T6a).
 **Natureza:** inventário documental do estado observado no repositório e das auditorias disponíveis. Não substitui testes no SHA candidato nem declara precisão ciclo a ciclo.
 
 Este documento responde o que já existe, o que permanece como componente válido e o que ainda precisa ser integrado ou concluído. Componentes existentes não devem ser apagados só porque a arquitetura-alvo muda; a migração deve preservar APIs e testes até haver substituição comprovada.
@@ -55,6 +55,8 @@ Este documento responde o que já existe, o que permanece como componente válid
 - **PR #413/#414:** fechadas como supersedidas; seus entregáveis funcionais de snapshot/codec e coordinator estão no diff integrado de #416, mas os heads divergentes não são ancestrais de main.
 - **PR #415:** fechada como supersedida; seu head é ancestral do merge #416, portanto o histórico desse head está contido em main.
 - **PR #396 — contratos temporais SMS1:** encerrada sem merge, supersedida pela PR #418. Os contratos temporais canônicos foram absorvidos pela #418; não reabrir nem duplicar essa proposta.
+- **PR #421 — P6/T6a, Sega mapper no SmsTemporalBus:** integrada à main no merge SHA `b2c8e6533d8ffb698e14a213b324de5c9cbab108`; HEAD validado `9bffc3015ecb55893808519cdaf9b8aef468b976`; CI da PR `41545972767` 4/4 PASS. CI pós-merge `41546391641`: Rust/Python/Windows PASS; Scheduler stress SKIPPED no evento push. Auditoria técnica do Agente 2 limitada à issue #420 aprovada no comentário `5744939391`.
+- **PR #423 — P6/T6b, barramento de memória temporal SG-1000:** aberta em Draft na branch `feat/sg1000-temporal-memory-bus`; código SHA `b4330713e329dbb44149d9589f9d5053afdd3db9`; CI `41548085870` 4/4 PASS. É candidata de branch, não parte da main; não implementa ainda `Sg1000TemporalMachine` nem liga o Z80 retomável ao SG-1000.
 
 ## 5. Componentes que permanecem no projeto
 
@@ -84,15 +86,16 @@ Toda PR que alterar um componente deve atualizar sua linha e indicar:
 Não elevar um estado com base apenas em documentação, compilação isolada, boot ou teste ignorado. O estado de uma PR aberta não deve ser descrito como parte da main.
 
 
-## 7. Estado formal após T4 — main `3f4a71d7b7bbc1863c20cd3293466405cb3f579b`
+## 7. Estado formal após P6/T6a — main `b2c8e6533d8ffb698e14a213b324de5c9cbab108`
 
 | Componente | Estado formal | Evidência / limite |
 |---|---|---|
 | Z80 microsequencer retomável (subconjunto) | IMPLEMENTED / QUICK_PASS | Codec versionado, CRC32, WAIT/T-states checked, diferencial contra executor atômico; não é CPU completa |
 | SMS temporal coordinator | IMPLEMENTED / QUICK_PASS | `MachineScheduler`, `MachineTime` e escala master-ticks/T-state explícita |
-| SMS temporal bus | IMPLEMENTED / QUICK_PASS | Fetch/read/write memória, deadline, efeito único, completion latched, WAIT de fixture |
+| SMS temporal bus | IMPLEMENTED / SHORT_PASS | Fetch/read/write memória; Sega mapper `$FFFD/$FFFE/$FFFF` no deadline; janela fixa 1 KiB, RAM mirror, WAIT fixture, exactly-once, snapshot/restore/replay; PR #421 |
 | SMS temporal vertical slice T4 | IMPLEMENTED / SHORT_PASS | PR #416, CI #41499228458; trace, snapshot/restore in-memory, replay e diferencial |
-| SG-1000 legado | IMPLEMENTED / QUICK_PASS | 42 testes unitários no workspace no SHA candidato; sem golden master/homebrew smoke nesta execução |
+| SG-1000 legado | IMPLEMENTED / QUICK_PASS | Runtime legado preservado; sem golden master/homebrew smoke nesta execução |
+| SG-1000 temporal memory bus | INTEGRATION_PENDING | PR #423 candidata em branch, HEAD de código `b4330713e329dbb44149d9589f9d5053afdd3db9`, CI 4/4 PASS; ainda não integrada à main e sem Z80TemporalMachine |
 | SMS completo (CPU/VDP/PSG/I/O/IRQ) | INTEGRATION_PENDING | VDP legado excluído; novo VDP temporal, PSG, I/O e interrupções ainda não integrados |
 | TEMPORAL_PASS | NOT DECLARED | Faltam oráculos independentes/físicos, WAIT físico, arbitragem e integração sistêmica |
 
@@ -106,3 +109,21 @@ Não elevar um estado com base apenas em documentação, compilação isolada, b
 - P2 de payload de escrita tratado na branch: a fase `MemoryWrite` preserva endereço/valor esperados, o restore compara a requisição exata e o codec versão 3 inclui esses campos. Testes negativos DTO para `LD (HL),n` e `INC (HL)`, round-trip do codec e teste de rejeição binária com CRC recalculado cobrem o payload adulterado. Também há regressão para o timestamp inicial de ciclo interno durante conclusão latched.
 - Limites: apenas subconjunto atual de opcodes no SMS; WAIT é fixture; SG-1000, VDP/PSG/I/O/IRQ e semântica elétrica não estão integrados nesta fatia. `TEMPORAL_PASS` não concedido.
 - A integração está concluída. A auditoria técnica pós-merge do Agente 2 para o SHA `6c8e18b1c0a134ee56e8282d1cbc7660373100f8` foi aprovada tecnicamente no escopo limitado de T5a (comentário 6590621514); a revisão arquitetural independente da ADR-001 permanece pendente; o CI da PR passou 4/4 no HEAD `6e73c0655521941c9e4ab7384f4508954306561a`. O CI pós-merge teve Scheduler deterministic stress SKIPPED; não classificar esse job como PASS. Execução local: NOT RUN.
+
+
+## 8. Evidência P6 — T6a integrada e T6b em validação
+
+### T6a — issue #420 / PR #421 (main)
+
+- Merge SHA: `b2c8e6533d8ffb698e14a213b324de5c9cbab108`; HEAD validado da PR: `9bffc3015ecb55893808519cdaf9b8aef468b976`.
+- CI da PR `41545972767`: Rust fmt/Clippy, SMS core focado, workspace, Ruff, pytest, Windows x64 e Scheduler deterministic stress short PASS (4/4 jobs).
+- Testes SMS core focados: 171; Scheduler short: 2 PASS, 1 teste de perfil longo filtrado. Pytest: 214 PASS, 21 SKIPPED por ausência de PySide6, extensão PyO3 e NumPy; SKIPPED não é PASS.
+- CI pós-merge `41546391641`: Rust/Python/Windows PASS; Scheduler deterministic stress SKIPPED no evento push. Não contar como PASS pós-merge.
+- Auditoria técnica do Agente 2 limitada à issue #420: APROVADA TECNICAMENTE no comentário #5744939391 (COMMENTED, não review formal APPROVE). Sem TEMPORAL_PASS.
+
+### T6b — issue #422 / PR #423 (branch candidata)
+
+- Branch: `feat/sg1000-temporal-memory-bus`; código validado no SHA `b4330713e329dbb44149d9589f9d5053afdd3db9`; base `main` em `b2c8e6533d8ffb698e14a213b324de5c9cbab108`.
+- CI `41548085870`: 4/4 jobs PASS. Rust fmt e Clippy PASS; `cargo test -p sega-sms-core --locked` PASS; `cargo test -p sega-sg1000-core --locked` PASS (57 testes); workspace PASS; Ruff PASS; pytest 214 PASS / 21 SKIPPED; Windows D3D12/video/WASAPI/XAudio2 PASS; Scheduler stress short 2 PASS, 1 teste longo filtrado.
+- Escopo validado: transações de memória, ROM mirror, RAM interna 1 KiB/8 KiB, cartridge RAM 1/2/8 KiB, deadline, WAIT fixture, exactly-once, snapshot/restore e rejeição explícita de PortRead/PortWrite.
+- Limite: PR #423 continua aberta; o barramento ainda não compõe o Z80MicroSequencer. Não contar como implementação da main até merge. Execução local: NOT RUN.
