@@ -6,8 +6,9 @@ Validation ledger captured 2026-11-02. GitHub is the source of truth; every PASS
 
 - Main branch SHA: `0da3098893cce4d80f7a22291d00488e4e7d0f9b`
 - Main was not modified.
-- PRs #343–#354 remain open and Draft; no PR was merged or closed.
-- All PRs #343–#354 reported mergeable at the final inventory, except mergeability may be recalculated by GitHub after subsequent branch updates.
+- Superseded implementation PRs #339, #341, #343–#350 and #352–#354 were closed after their changes were represented in the consolidated #358 branch; none was merged.
+- #351 (ADR-0014), #355 (documentation reconciliation), #356 (technical dossier/handoff) and #358 (consolidated Scheduler stack) remain open Draft PRs at the time of this ledger update.
+- PR #358 targets `main`; exact head and CI evidence are recorded below. No PR was merged.
 
 ## Exact-SHA CI ledger
 
@@ -26,9 +27,10 @@ Validation ledger captured 2026-11-02. GitHub is the source of truth; every PASS
 | #353 | E5 — Versioned state codec | `a33065fe14c09ee1840f5c9abb7e9ff0730457d2` | 41370192970 | PASS | PASS | PASS | PASS | PASS | PASS | Implementation SHA |
 | #353 | E5 — Final PR head | `839fdaa25137a91916057c585a7cd81a9bcdb305` | 41370298546 | PASS | PASS | PASS | PASS | PASS | PASS | Exact current head |
 | #354 | E6 — Differential replay tests | `f724479832fc0e3f051c37ec23b226056858019c` | 41370554220 | PASS | PASS | PASS | PASS | PASS | PASS | Implementation SHA |
-| #354 | E6 — Pre-ledger head | `e89fe8619e5f7798e3b4e44f29c5297cef7f1d6b` | 41370622762 | PASS | PASS | PASS | PASS | PASS | PASS | E6 code and ADR head immediately before adding this evidence ledger |
+| #354 | E6 — Pre-ledger head | `e89fe8619e5f7798e3b4e44f29c5297cef7f1d6b` | 41370622762 | PASS | PASS | PASS | PASS | PASS | E6 code and ADR head immediately before adding this evidence ledger |
+| #358 | Consolidated Scheduler stack + stress harness | `ca349d304942d105fcef4bf133be8be2c79c8ed6` | 41377566361 | PASS | PASS | PASS | PASS | PASS | PASS | Exact PR head; stress profile job SKIPPED on PR event; SHORT_PASS/LONG_PASS NOT RUN |
 
-The evidence ledger itself was committed in a subsequent PR update. Its containing commit SHA and exact workflow result are tracked by the live PR #354 checks and final control report; this file intentionally avoids self-referential commit metadata.
+The #354 evidence-ledger commit was `11378882ea73a7307430dcb52389709fdea2a509`, validated by workflow `41370823497` on that exact SHA. The current consolidated PR #358 head `ca349d304942d105fcef4bf133be8be2c79c8ed6` passed all six ordinary gates in workflow `41377566361`; the opt-in stress job was skipped because this was a pull-request event.
 
 ## Required workflow gates
 
@@ -68,4 +70,4 @@ No warning was accepted as a pass. A failed earlier candidate is not promoted: P
 - No direct commit to `main`.
 - No force-push or destructive reset.
 - No merge or PR closure.
-- PRs remain Draft for review.
+- PR #358 remains Draft for review; superseded PRs listed above are closed, not merged.
