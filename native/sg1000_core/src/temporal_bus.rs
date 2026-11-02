@@ -26,7 +26,7 @@ fn elapsed_tstates(
     if elapsed == 0 || elapsed % scale != 0 {
         return None;
     }
-    Some(elapsed / scale)
+    u32::try_from(elapsed / scale).ok()
 }
 
 fn valid_bus_deadline(
@@ -35,8 +35,9 @@ fn valid_bus_deadline(
     master_ticks_per_tstate: u64,
     base_tstates: u8,
 ) -> bool {
-    elapsed_tstates(started_at, deadline, master_ticks_per_tstate)
-        .is_some_and(|total| total >= u128::from(base_tstates))
+    base_tstates > 0
+        && elapsed_tstates(started_at, deadline, master_ticks_per_tstate)
+            .is_some_and(|total| total >= u32::from(base_tstates))
 }
 
 fn valid_internal_deadline(
@@ -90,6 +91,8 @@ pub struct Sg1000TemporalBusState {
     pub pending_internal_cycle: Option<u64>,
     pub internal_cycle_started_at: Option<MachineTime>,
     pub internal_completion: Option<Sg1000InternalCycleCompletion>,
+    #[cfg(test)]
+    pub write_dispatch_count: u64,
 }
 
 /// Errors from the SG-1000 transactional memory bus.
@@ -148,6 +151,8 @@ pub struct Sg1000TemporalBus {
     pending_internal_cycle: Option<u64>,
     internal_cycle_started_at: Option<MachineTime>,
     internal_completion: Option<Sg1000InternalCycleCompletion>,
+    #[cfg(test)]
+    write_dispatch_count: u64,
 }
 
 impl Sg1000TemporalBus {
@@ -169,6 +174,8 @@ impl Sg1000TemporalBus {
             pending_internal_cycle: None,
             internal_cycle_started_at: None,
             internal_completion: None,
+            #[cfg(test)]
+            write_dispatch_count: 0,
         })
     }
 
@@ -251,6 +258,10 @@ impl Sg1000TemporalBus {
                     }
                     Z80BusOperation::MemoryWrite { value } => {
                         self.memory.write(request.address, value);
+                        #[cfg(test)]
+                        {
+                            self.write_dispatch_count += 1;
+                        }
                         None
                     }
                     Z80BusOperation::PortRead | Z80BusOperation::PortWrite { .. } => {
@@ -347,6 +358,11 @@ impl Sg1000TemporalBus {
     }
 
     #[cfg(test)]
+    pub const fn write_dispatch_count_for_test(&self) -> u64 {
+        self.write_dispatch_count
+    }
+
+    #[cfg(test)]
     pub(crate) fn write_memory_for_test(&mut self, address: u16, value: u8) {
         self.memory.write(address, value);
     }
@@ -363,6 +379,8 @@ impl Sg1000TemporalBus {
             pending_internal_cycle: self.pending_internal_cycle,
             internal_cycle_started_at: self.internal_cycle_started_at,
             internal_completion: self.internal_completion,
+            #[cfg(test)]
+            write_dispatch_count: self.write_dispatch_count,
         }
     }
 
@@ -440,6 +458,8 @@ impl Sg1000TemporalBus {
             pending_internal_cycle: state.pending_internal_cycle,
             internal_cycle_started_at: state.internal_cycle_started_at,
             internal_completion: state.internal_completion,
+            #[cfg(test)]
+            write_dispatch_count: state.write_dispatch_count,
         })
     }
 }
@@ -576,6 +596,8 @@ mod tests {
         let mut restored = Sg1000TemporalBus::restore_state(state.clone()).unwrap();
         assert_eq!(restored.dispatch_next().unwrap(), Some(first));
         assert_eq!(restored.export_state(), state);
+        assert_eq!(restored.write_dispatch_count_for_test(), 1);
+        assert_eq!(restored.write_dispatch_count_for_test(), 1);
         assert_eq!(restored.memory().read(0xC000), 0x33);
         restored.acknowledge_completion(6).unwrap();
         assert!(restored.dispatch_next().unwrap().is_none());
@@ -637,6 +659,19 @@ mod tests {
         .unwrap();
         let mut state = bus.export_state();
         state.pending_request.as_mut().unwrap().id = 9;
+        assert_eq!(
+            Sg1000TemporalBus::restore_state(state).err(),
+            Some(Sg1000TemporalBusError::InvalidState)
+        );
+    }
+
+    #[test]
+    fn restore_rejects_zero_base_tstates_in_a_pending_request() {
+        let mut bus = Sg1000TemporalBus::new(vec![0x00], MemoryConfig::default(), 2).unwrap();
+        bus.begin_request(request(12, Z80BusOperation::MemoryRead, 0x0000, 3), 0)
+            .unwrap();
+        let mut state = bus.export_state();
+        state.pending_request.as_mut().unwrap().base_tstates = 0;
         assert_eq!(
             Sg1000TemporalBus::restore_state(state).err(),
             Some(Sg1000TemporalBusError::InvalidState)
