@@ -139,9 +139,7 @@ impl Z80MicroSequencer {
                             self.retire(opcode)
                         }
                     }
-                    _ => {
-                        self.unsupported(opcode)
-                    }
+                    _ => self.unsupported(opcode)
                 }
             }
             InstructionPhase::ImmediateRead => {
@@ -349,11 +347,18 @@ mod tests {
     #[test]
     fn register_to_register_load_retires_after_m1_without_extra_bus_cycle() {
         let mut cpu = Z80MicroSequencer {
-            registers: Z80Registers { b: 0xA5, ..Z80Registers::default() },
+            registers: Z80Registers {
+                b: 0xA5,
+                ..Z80Registers::default()
+            },
             ..Z80MicroSequencer::default()
         };
         let fetch = request(cpu.begin_instruction().unwrap());
-        retired(cpu.complete_bus_cycle(fetch.id, Some(0x78)).unwrap(), 0x78, 4);
+        retired(
+            cpu.complete_bus_cycle(fetch.id, Some(0x78)).unwrap(),
+            0x78,
+            4,
+        );
         assert_eq!(cpu.registers.a, 0xA5);
         assert_eq!(cpu.registers.b, 0xA5);
         assert!(cpu.pending_request().is_none());
@@ -362,11 +367,18 @@ mod tests {
     #[test]
     fn register_load_does_not_modify_flags_and_memory_matrix_entries_stay_unsupported() {
         let mut cpu = Z80MicroSequencer {
-            registers: Z80Registers { f: 0xD7, h: 0x12, ..Z80Registers::default() },
+            registers: Z80Registers {
+                f: 0xD7,
+                h: 0x12,
+                ..Z80Registers::default()
+            },
             ..Z80MicroSequencer::default()
         };
         let fetch = request(cpu.begin_instruction().unwrap());
-        assert!(matches!(cpu.complete_bus_cycle(fetch.id, Some(0x46)), Err(Z80MicroSequencerError::UnsupportedOpcode { .. })));
+        assert!(matches!(
+            cpu.complete_bus_cycle(fetch.id, Some(0x46)),
+            Err(Z80MicroSequencerError::UnsupportedOpcode { .. })
+        ));
         assert_eq!(cpu.registers.f, 0xD7);
     }
 
