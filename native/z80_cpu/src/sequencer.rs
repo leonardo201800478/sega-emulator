@@ -1,7 +1,7 @@
 //! First resumable instruction slice for the shared Z80.
 //!
 //! This deliberately small sequencer proves real suspend/resume semantics for
-//! NOP, LD A,n, LD A,(HL), and LD (HL),A. It is independent of the legacy
+//! NOP, LD A,n, LD A,(HL), LD (HL),A, and register-to-register LD. It is independent of the legacy
 //! atomic executor; it does not yet cover interrupts, prefixes, HALT, refresh
 //! pin phases, or the full architectural state.
 
@@ -128,13 +128,18 @@ impl Z80MicroSequencer {
                     0x3E => self.issue_read(InstructionPhase::ImmediateRead, self.registers.pc),
                     0x7E => self.issue_read(InstructionPhase::MemoryRead, self.registers.hl()),
                     0x77 => self.issue_write(self.registers.hl(), self.registers.a),
-                    _ => {
-                        let address = self.registers.pc.wrapping_sub(1);
-                        self.phase = InstructionPhase::Ready;
-                        self.opcode = None;
-                        self.instruction_tstates = 0;
-                        Err(Z80MicroSequencerError::UnsupportedOpcode { opcode, address })
+                    0x40..=0x7F if opcode != 0x76 => {
+                        let destination = (opcode >> 3) & 0x07;
+                        let source = opcode & 0x07;
+                        if destination == 6 || source == 6 {
+                            self.unsupported(opcode)
+                        } else {
+                            let value = self.read_register(source);
+                            self.write_register(destination, value);
+                            self.retire(opcode)
+                        }
                     }
+                    _ => self.unsupported(opcode),
                 }
             }
             InstructionPhase::ImmediateRead => {
@@ -174,6 +179,40 @@ impl Z80MicroSequencer {
     /// Whether an instruction is currently suspended or in progress.
     pub fn instruction_active(&self) -> bool {
         self.phase != InstructionPhase::Ready
+    }
+
+    fn unsupported(&mut self, opcode: u8) -> Result<Z80MicroStep, Z80MicroSequencerError> {
+        let address = self.registers.pc.wrapping_sub(1);
+        self.phase = InstructionPhase::Ready;
+        self.opcode = None;
+        self.instruction_tstates = 0;
+        Err(Z80MicroSequencerError::UnsupportedOpcode { opcode, address })
+    }
+
+    fn read_register(&self, code: u8) -> u8 {
+        match code {
+            0 => self.registers.b,
+            1 => self.registers.c,
+            2 => self.registers.d,
+            3 => self.registers.e,
+            4 => self.registers.h,
+            5 => self.registers.l,
+            7 => self.registers.a,
+            _ => unreachable!("memory operand is not a register"),
+        }
+    }
+
+    fn write_register(&mut self, code: u8, value: u8) {
+        match code {
+            0 => self.registers.b = value,
+            1 => self.registers.c = value,
+            2 => self.registers.d = value,
+            3 => self.registers.e = value,
+            4 => self.registers.h = value,
+            5 => self.registers.l = value,
+            7 => self.registers.a = value,
+            _ => unreachable!("memory operand is not a register"),
+        }
     }
 
     fn issue_read(
@@ -303,6 +342,44 @@ mod tests {
         );
         assert_eq!(write.address, 0xC123);
         retired(cpu.complete_bus_cycle(write.id, None).unwrap(), 0x77, 7);
+    }
+
+    #[test]
+    fn register_to_register_load_retires_after_m1_without_extra_bus_cycle() {
+        let mut cpu = Z80MicroSequencer {
+            registers: Z80Registers {
+                b: 0xA5,
+                ..Z80Registers::default()
+            },
+            ..Z80MicroSequencer::default()
+        };
+        let fetch = request(cpu.begin_instruction().unwrap());
+        retired(
+            cpu.complete_bus_cycle(fetch.id, Some(0x78)).unwrap(),
+            0x78,
+            4,
+        );
+        assert_eq!(cpu.registers.a, 0xA5);
+        assert_eq!(cpu.registers.b, 0xA5);
+        assert!(cpu.pending_request().is_none());
+    }
+
+    #[test]
+    fn register_load_does_not_modify_flags_and_memory_matrix_entries_stay_unsupported() {
+        let mut cpu = Z80MicroSequencer {
+            registers: Z80Registers {
+                f: 0xD7,
+                h: 0x12,
+                ..Z80Registers::default()
+            },
+            ..Z80MicroSequencer::default()
+        };
+        let fetch = request(cpu.begin_instruction().unwrap());
+        assert!(matches!(
+            cpu.complete_bus_cycle(fetch.id, Some(0x46)),
+            Err(Z80MicroSequencerError::UnsupportedOpcode { .. })
+        ));
+        assert_eq!(cpu.registers.f, 0xD7);
     }
 
     #[test]
