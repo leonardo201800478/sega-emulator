@@ -6,6 +6,8 @@
 
 pub mod clock;
 pub mod event;
+pub mod scheduler;
 
 pub use clock::{ClockDomain, ClockDomainSnapshot, ClockError, ClockRatio, MachineTime};
 pub use event::{EventPriority, EventQueue, EventQueueError, ScheduledEvent};
+pub use scheduler::{ClockDomainId, MachineScheduler, MachineSchedulerError};
