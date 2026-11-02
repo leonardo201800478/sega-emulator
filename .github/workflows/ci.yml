@@ -50,7 +50,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Set bounded process memory
-        run: ulimit -v 2097152
+        run: |
+          if [ "$SCHEDULER_STRESS_PROFILE" = "short" ]; then ulimit -v 524288; else ulimit -v 2097152; fi
       - name: Run deterministic stress replay
         run: cargo test -p sega-machine-scheduler --test stress_replay -- --ignored --nocapture
 
