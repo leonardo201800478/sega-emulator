@@ -6,8 +6,8 @@
 //! pin phases, or the full architectural state.
 
 use crate::{
-    Z80BusHandshake, Z80BusHandshakeError, Z80BusOperation, Z80BusRequest, Z80Registers,
-    Z80_MICRO_SEQUENCER_STATE_VERSION,
+    Z80_MICRO_SEQUENCER_STATE_VERSION, Z80BusHandshake, Z80BusHandshakeError, Z80BusOperation,
+    Z80BusRequest, Z80Registers,
 };
 
 const FLAG_C: u8 = 0x01;
