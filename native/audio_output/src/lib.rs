@@ -896,6 +896,9 @@ impl NativeWasapiOutput {
         output_sample_rate: u32,
         volume: u8,
     ) -> Result<sega_audio_runtime::NativeAudioSession<Self>, String> {
+        if self.sample_rate() != output_sample_rate {
+            return Err("WASAPI device rate must match the DSP output rate".to_owned());
+        }
         sega_audio_runtime::NativeAudioSession::new(output_sample_rate, volume, self)
     }
 }
@@ -921,6 +924,9 @@ impl NativeXAudio2Output {
         output_sample_rate: u32,
         volume: u8,
     ) -> Result<sega_audio_runtime::NativeAudioSession<Self>, String> {
+        if self.sample_rate() != output_sample_rate {
+            return Err("XAudio2 device rate must match the DSP output rate".to_owned());
+        }
         sega_audio_runtime::NativeAudioSession::new(output_sample_rate, volume, self)
     }
 }
