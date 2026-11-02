@@ -419,7 +419,7 @@ mod tests {
         );
 
         let state = cpu.export_state();
-        assert_eq!((state.mcycle_index, state.tstate_index), (2, 0));
+        assert_eq!((state.mcycle_index, state.tstate_index), (1, 3));
         let decoded = Z80MicroSequencerState::decode(&state.encode().unwrap()).unwrap();
         assert_eq!(decoded, state);
         let mut restored = Z80MicroSequencer::restore_state(decoded).unwrap();
@@ -430,6 +430,10 @@ mod tests {
         assert_eq!(
             write.operation,
             crate::Z80BusOperation::MemoryWrite { value: 0x80 }
+        );
+        assert_eq!(
+            (restored.export_state().mcycle_index, restored.export_state().tstate_index),
+            (2, 0)
         );
     }
 
