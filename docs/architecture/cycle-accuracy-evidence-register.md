@@ -174,3 +174,4 @@ Newly recorded source facts:
 Scope decision: first new VDP implementation is 315-5124 only. 315-5246 comparison follows later. ASIC identity and NTSC/PAL remain independent dimensions. Do not import Game Gear H-counter ratios/timings into SMS1.
 
 Status: T0_PARTIAL. Documentary evidence supports register/address/functional behavior and test design. It does not yet authorize H-counter offsets, raster phase constants, per-dot fetch schedules, WAIT generation, or simultaneous-event priorities.
+- Candidate test corpus: FluBBaOfWard/SmsVdpTest at inspected commit `490c00b38c83012dee5a7a582097f080c210a3e7`. Covers VDP ports, counters, IRQs, sprite flags/collision, and latch effects. Repository declares no license; do not vendor source/binary before permission review. Its own TODO leaves several hardware latch tests incomplete; 228 CPU cycles/line is a stated test precondition, not yet an independently confirmed 315-5124 measurement.
