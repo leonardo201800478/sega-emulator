@@ -890,7 +890,7 @@ mod sprite_tests {
             set_sprite(&mut state, index, 0xFF, 250, 0);
         }
         let mut line = background();
-        let flags = render_mode4_sprites_line(&state, 0, &mut line);
+        let flags = render_mode4_sprites_line(&state, 0, &mut line, true);
         assert_eq!(flags & 0x40, 0x40);
     }
 
@@ -904,7 +904,7 @@ mod sprite_tests {
         solid_tile(&mut state, 1, 3);
         solid_tile(&mut state, 2, 6);
         let mut line = background();
-        let flags = render_mode4_sprites_line(&state, 0, &mut line);
+        let flags = render_mode4_sprites_line(&state, 0, &mut line, true);
         assert_eq!(flags & 0x20, 0x20);
         assert_eq!(line[20].palette_index, 19);
     }
@@ -922,7 +922,7 @@ mod sprite_tests {
             palette_index: 2,
             priority: true,
         };
-        render_mode4_sprites_line(&state, 0, &mut line);
+        render_mode4_sprites_line(&state, 0, &mut line, true);
         assert_eq!(line[30].palette_index, 2);
     }
 
@@ -936,7 +936,7 @@ mod sprite_tests {
         }
         solid_tile(&mut state, 1, 1);
         let mut line = background();
-        render_mode4_sprites_line(&state, 0, &mut line);
+        render_mode4_sprites_line(&state, 0, &mut line, true);
         assert_eq!(line[0].palette_index, 17);
         assert_eq!(line[15].palette_index, 17);
         assert_eq!(line[16].palette_index, 0);
