@@ -22,6 +22,7 @@ pub enum Z80MicroSequencerError {
     NoInstructionActive,
     UnexpectedCompletion,
     InstructionTStateOverflow,
+    InvalidState,
     UnsupportedOpcode { opcode: u8, address: u16 },
 }
 
@@ -32,7 +33,7 @@ impl From<Z80BusHandshakeError> for Z80MicroSequencerError {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum InstructionPhase {
+pub enum Z80MicroSequencerPhase {
     Ready,
     OpcodeFetch,
     ImmediateReadRegister {
@@ -66,6 +67,17 @@ pub enum Z80MicroStep {
     InternalCycle { tstates: u32 },
 }
 
+/// Versioned logical state needed to resume the currently implemented sequencer slice.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Z80MicroSequencerState {
+    pub registers: Z80Registers,
+    pub refresh: u8,
+    pub handshake: crate::Z80BusHandshakeState,
+    pub phase: Z80MicroSequencerPhase,
+    pub opcode: Option<u8>,
+    pub instruction_tstates: u32,
+}
+
 /// A resumable subset of the Z80 instruction engine.
 ///
 /// The scheduler owns elapsed time. This type only exposes ordered bus cycles
@@ -77,7 +89,7 @@ pub struct Z80MicroSequencer {
     /// Low seven bits count M1 fetches; bit 7 is preserved.
     pub refresh: u8,
     handshake: Z80BusHandshake,
-    phase: InstructionPhase,
+    phase: Z80MicroSequencerPhase,
     opcode: Option<u8>,
     instruction_tstates: u32,
 }
@@ -96,6 +108,59 @@ impl Default for Z80MicroSequencer {
 }
 
 impl Z80MicroSequencer {
+    /// Export the complete resumable state without advancing emulated time.
+    pub fn export_state(&self) -> Z80MicroSequencerState {
+        Z80MicroSequencerState {
+            registers: self.registers,
+            refresh: self.refresh,
+            handshake: self.handshake.export_state(),
+            phase: self.phase,
+            opcode: self.opcode,
+            instruction_tstates: self.instruction_tstates,
+        }
+    }
+
+    /// Restore a resumable state after validating CPU/handshake cross-invariants.
+    pub fn restore_state(state: Z80MicroSequencerState) -> Result<Self, Z80MicroSequencerError> {
+        let handshake = Z80BusHandshake::restore_state(state.handshake)?;
+        let pending = handshake.pending_request();
+        let valid = match state.phase {
+            Z80MicroSequencerPhase::Ready => {
+                pending.is_none() && state.opcode.is_none() && state.instruction_tstates == 0
+            }
+            Z80MicroSequencerPhase::OpcodeFetch => {
+                pending.is_some_and(|request| request.operation == Z80BusOperation::OpcodeFetch)
+                    && state.opcode.is_none()
+            }
+            Z80MicroSequencerPhase::ImmediateReadRegister { .. }
+            | Z80MicroSequencerPhase::ImmediateReadMemoryWrite
+            | Z80MicroSequencerPhase::MemoryReadRegister { .. }
+            | Z80MicroSequencerPhase::MemoryReadIncDec { .. } => {
+                pending.is_some_and(|request| request.operation == Z80BusOperation::MemoryRead)
+                    && state.opcode.is_some()
+            }
+            Z80MicroSequencerPhase::MemoryIncDecInternal { .. } => {
+                pending.is_none() && state.opcode.is_some()
+            }
+            Z80MicroSequencerPhase::MemoryWrite => {
+                pending.is_some_and(|request| {
+                    matches!(request.operation, Z80BusOperation::MemoryWrite { .. })
+                }) && state.opcode.is_some()
+            }
+        };
+        if !valid {
+            return Err(Z80MicroSequencerError::InvalidState);
+        }
+        Ok(Self {
+            registers: state.registers,
+            refresh: state.refresh,
+            handshake,
+            phase: state.phase,
+            opcode: state.opcode,
+            instruction_tstates: state.instruction_tstates,
+        })
+    }
+
     /// Begin the next instruction by issuing its M1 opcode-fetch request.
     /// Architectural PC/R changes occur only when that request completes.
     pub fn begin_instruction(&mut self) -> Result<Z80MicroStep, Z80MicroSequencerError> {
