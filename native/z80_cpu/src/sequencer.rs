@@ -438,10 +438,17 @@ mod tests {
             ..Z80MicroSequencer::default()
         };
         let fetch = request(cpu.begin_instruction().unwrap());
-        assert!(matches!(
-            cpu.complete_bus_cycle(fetch.id, Some(0x46)),
-            Err(Z80MicroSequencerError::UnsupportedOpcode { .. })
-        ));
+        let read = request(cpu.complete_bus_cycle(fetch.id, Some(0x46)).unwrap());
+        assert_eq!(cpu.registers.f, 0xD7);
+        assert_eq!(read.address, 0x1200);
+        let retired = cpu.complete_bus_cycle(read.id, Some(0xA5)).unwrap();
+        assert_eq!(
+            retired,
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x46,
+                tstates: 7
+            }
+        );
         assert_eq!(cpu.registers.f, 0xD7);
     }
 
