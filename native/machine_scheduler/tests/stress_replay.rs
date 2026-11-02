@@ -125,7 +125,6 @@ fn fixed_seed_stress_replay_survives_repeated_restores() {
     }
 }
 
-
 #[test]
 fn sequence_exhaustion_is_rejected_without_mutating_scheduler_state() {
     use sega_temporal_core::EventQueueError;
@@ -157,21 +156,18 @@ struct OperationPayload(u64);
 
 struct OperationPayloadCodec;
 
-impl sega_machine_scheduler::codec::EventPayloadCodec<OperationPayload>
-    for OperationPayloadCodec
-{
+impl sega_machine_scheduler::codec::EventPayloadCodec<OperationPayload> for OperationPayloadCodec {
     const VERSION: u16 = 1;
     type Error = &'static str;
 
-    fn encode_payload(
-        &self,
-        payload: &OperationPayload,
-    ) -> Result<Vec<u8>, Self::Error> {
+    fn encode_payload(&self, payload: &OperationPayload) -> Result<Vec<u8>, Self::Error> {
         Ok(payload.0.to_be_bytes().to_vec())
     }
 
     fn decode_payload(&self, bytes: &[u8]) -> Result<OperationPayload, Self::Error> {
-        let encoded: [u8; 8] = bytes.try_into().map_err(|_| "payload must contain 8 bytes")?;
+        let encoded: [u8; 8] = bytes
+            .try_into()
+            .map_err(|_| "payload must contain 8 bytes")?;
         Ok(OperationPayload(u64::from_be_bytes(encoded)))
     }
 }
