@@ -672,7 +672,9 @@ mod tests {
         assert_eq!(idle_advances[0].phase, 0);
 
         let mut dispatched = MachineScheduler::<()>::new();
-        dispatched.register_clock_domain(ClockDomainId(0), ratio).unwrap();
+        dispatched
+            .register_clock_domain(ClockDomainId(0), ratio)
+            .unwrap();
         dispatched
             .schedule_at(target, EventPriority::new(0), ())
             .unwrap();
