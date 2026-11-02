@@ -362,18 +362,9 @@ impl Sms1Vdp {
         hardware_sprite_limit: bool,
         output: &mut [BackgroundPixel; 256],
     ) -> u8 {
-        render_mode4_background_line(
-            &self.state,
-            screen_y,
-            latched_vertical_scroll,
-            output,
-        );
-        let status_bits = render_mode4_sprites_line(
-            &self.state,
-            screen_y,
-            output,
-            hardware_sprite_limit,
-        );
+        render_mode4_background_line(&self.state, screen_y, latched_vertical_scroll, output);
+        let status_bits =
+            render_mode4_sprites_line(&self.state, screen_y, output, hardware_sprite_limit);
         self.set_status_bits(status_bits);
         status_bits
     }
@@ -1095,9 +1086,7 @@ pub fn render_mode4_sprites_line(
 
 #[cfg(test)]
 mod sprite_tests {
-    use super::{
-        BackgroundPixel, Sms1Vdp, Sms1VdpState, VideoStandard, render_mode4_sprites_line,
-    };
+    use super::{BackgroundPixel, Sms1Vdp, Sms1VdpState, VideoStandard, render_mode4_sprites_line};
 
     fn set_sprite(state: &mut Sms1VdpState, index: usize, y: u8, x: u8, tile: u8) {
         let sat = usize::from(state.registers.get(5).unwrap_or(0) & 0x7E) << 7;
