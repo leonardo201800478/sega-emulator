@@ -222,7 +222,7 @@ Cada fatia de runtime exige branch própria, PR Draft, gates completos no SHA ex
 | T1 | Contadores checked e snapshot binário versionado do estado retomável implementado | PRs #412/#413; consolidado e revalidado no CI #41496284832 | IMPLEMENTED; SHORT_PASS na fatia |
 | T2 | Coordenador SMS sobre MachineScheduler com escala explícita | PR #414; revalidado no SHA T4 | IMPLEMENTED; QUICK_PASS |
 | T3 | Barramento de memória transacional com efeitos no deadline e WAIT de fixture | Stack #415/#416; revalidado no SHA T4 | IMPLEMENTED; QUICK_PASS |
-| T4 | Execução vertical Z80/bus/Scheduler/memória, trace, snapshot/restore e replay | PR #416, SHA `94a6a2128e7f7b4af115d65e98ebbe33cc19ce8f`, CI #41496284832 | SHORT_PASS |
+| T4 | Execução vertical Z80/bus/Scheduler/memória, trace, snapshot/restore e replay | PR #416; head `bfdc7d2fbbcf7712091df9960a7e7e593c18afea`; main `3f4a71d7b7bbc1863c20cd3293466405cb3f579b`; CI #41499228458 | SHORT_PASS / INTEGRATED |
 
 A fatia usa somente o subconjunto atual do microsequenciador. A escala temporal é configurada explicitamente e não deve ser interpretada como prova de clock/fase SMS NTSC/PAL. A ausência de VDP/PSG/IRQ e de oráculo físico independente mantém o sistema completo em `INTEGRATION_PENDING`.
 
@@ -236,7 +236,7 @@ A fatia usa somente o subconjunto atual do microsequenciador. A escala temporal 
 - [ ] Plano de testes com oráculos e ancestralidade documentados.
 - [ ] Novo VDP temporal implementado ao menos até os contratos necessários de raster/fetch/IRQ antes da integração da CPU; VDP legado explicitamente excluído do caminho temporal.
 
-**Status atual (2026-11-02):** T0–T4 executados incrementalmente; a primeira fatia vertical obteve `SHORT_PASS` no SHA candidato `94a6a2128e7f7b4af115d65e98ebbe33cc19ce8f` (PR #416, CI run #41496284832). Isso não aprova a PR #396 nem declara `TEMPORAL_PASS`.
+**Status atual (2026-11-02, pós-merge):** T0–T4 executados incrementalmente; a primeira fatia vertical obteve `SHORT_PASS` no head `bfdc7d2fbbcf7712091df9960a7e7e593c18afea`, integrada em `main` no merge SHA `3f4a71d7b7bbc1863c20cd3293466405cb3f579b` (PR #416, CI #41499228458). Isso não aprova a PR #396 nem declara `TEMPORAL_PASS`.
 
 - T0: revisão técnica registrada na PR #396 (review #5740657756). Os contratos genéricos continuam Draft e sem merge; não são ligados artificialmente ao microsequenciador porque ele ainda não expõe índices M-cycle/T-state estáveis.
 - T1: PRs #412/#413 implementam aritmética checked e snapshot binário versionado com checksum para o subconjunto retomável existente. Não representam o estado arquitetural completo do Z80.
@@ -258,3 +258,18 @@ No SHA T4, Rust fmt/clippy/test, Python Ruff/pytest, Windows x64 vídeo/áudio e
 - `docs/architecture/adr/0012-event-ordering-dimensions.md`
 - `docs/architecture/adr/0013-deterministic-scheduler-snapshot-restore.md`
 - `docs/roadmaps/sg1000-sms-consolidation-roadmap.md`
+
+
+## 10. Estado após integração T4 em main (2026-11-02)
+
+A PR #416 foi integrada por merge commit `3f4a71d7b7bbc1863c20cd3293466405cb3f579b`. O SHA de head validado foi `bfdc7d2fbbcf7712091df9960a7e7e593c18afea`; o CI de PR #41499228458 executou no merge ref `cea276159efd382e8289085be4b5f67dccecc753`, composto pela base `bf09712659a102d6e4c02f2ff5d97a99487ac166` e pelo head validado. Todos os quatro jobs foram PASS, incluindo Windows x64 vídeo/áudio e Scheduler deterministic stress short.
+
+A auditoria encontrou e corrigiu duas invariantes antes do merge: (1) completion de barramento já efetivada permanece latched até acknowledgement, enquanto a CPU valida a continuação em cópia; (2) o ciclo interno da fatia atual aceita somente o 1 T-state exposto pelo microsequenciador, rejeitando durações divergentes sem mutação. O diferencial foi ampliado para instruções representativas do subconjunto suportado.
+
+A implementação T4 cobre somente opcode fetch, leituras/escritas de memória, ciclos internos e WAIT de fixture. O trace real observado para INC/DEC (HL) é fetch 4, read 3, internal 1, write 3 T-states (11 no total), agrupável em (4,4,3), sem fundir o evento interno no trace. O caminho temporal não referencia o VDP scanline legado.
+
+**Próximo incremento T5a:** adicionar índices M-cycle/T-state estáveis às operações já suportadas e mapear os tipos do microsequenciador para os contratos genéricos da PR #396. A PR #396 permanece Draft até que o mapeamento seja demonstrado sem duplicar estado de continuação. Depois disso, expandir uma família de instruções por vez com vetores diferenciais.
+
+O CI pós-merge #41499594576 é uma execução separada: o job Scheduler stress aparece SKIPPED no evento push; isso não invalida o PASS do stress short no CI de PR #41499228458. O CI pós-merge deve ser registrado por job sem converter SKIPPED em PASS.
+
+O estado global permanece `INTEGRATION_PENDING`; não declarar `TEMPORAL_PASS`.
