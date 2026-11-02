@@ -95,7 +95,7 @@ Os contratos desta ADR são implementados em `native/temporal_core` e consumidos
 - [x] Progresso/next-event de dispositivo definido.
 - [x] Reset, snapshot e restore de estado parcial especificados.
 - [ ] Revisão arquitetural e aprovação do contrato.
-- [x] Baseline T5a pré-correção validada no SHA `35aa9292e423f4313ba7a0ddee5b805fc2f87450` (run `41531640745`; quatro jobs PASS, incluindo Scheduler deterministic stress). A branch agora acrescenta validação do payload de escrita pendente e preservação do timestamp inicial do ciclo interno; os checks do HEAD candidato são a evidência vigente. Execução local: NOT RUN.
+- [x] T5a validada no HEAD `60395290f677e133963a917a32837af64273046d` (GitHub Actions run `41533717810`; quatro jobs PASS: Rust quality/unit regression, Python lint/regression, Windows x64 D3D12/video/audio e Scheduler deterministic stress). Execução local: NOT RUN.
 - [ ] PR aprovada e integrada.
 
 **Estado:** IMPLEMENTED na branch canônica #418 / QUICK_PASS PASS no SHA `e782614b50db857c7333d82982de3f3a43bfdf3d` (CI #3517) / APPROVAL_PENDING. A ADR permanece proposta até revisão arquitetural independente e integração; não declara `TEMPORAL_PASS`.
