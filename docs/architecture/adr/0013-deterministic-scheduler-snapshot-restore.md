@@ -1,6 +1,6 @@
 # ADR-0013 — deterministic scheduler snapshot and restore
 
-- **Status:** In progress — E1–E6 implemented as candidates in stacked draft PRs; E7 pending.
+- **Status:** Scheduler snapshot/restore implementation complete in the stacked PR series (E1–E7); review and integration pending. This status does not imply device integration or `TEMPORAL_PASS`.
 - **Date:** 2026-11-01.
 - **Baseline:** PR #346, branch `feat/temporal-event-order-dimensions`, SHA `ec2bd69d32409490901d30dc58ff94779eda061b`.
 - **Main baseline:** `0da3098893cce4d80f7a22291d00488e4e7d0f9b`; this main revision does not contain `native/machine_scheduler`.
@@ -25,7 +25,7 @@ The temporal foundation has been developed as a linear, reviewable stack. The fo
 
 The independent audit dated 2026-11-01 examined the actual #346 branch and found no snapshot/restore implementation, no Serde support in the native crates, and no snapshot tests. Its local targeted test run passed 16 `temporal_core` tests and 18 `machine_scheduler` tests using Rust 1.85.1. The auditor did not run `fmt` or `clippy`; those local checks are therefore NOT RUN. The GitHub Actions success above is separate evidence and must not be confused with the auditor's local run.
 
-The original audit verdict was **READY WITH CONDITIONS**. E1–E6 have exact implementation-SHA CI evidence in stacked PRs. E7 evidence consolidation remains pending; `TEMPORAL_PASS` is not claimed.
+The original audit verdict was **READY WITH CONDITIONS**. E1–E6 have exact implementation-SHA CI evidence in stacked PRs, and E7 evidence consolidation is recorded in `docs/evidence/adr-0013-snapshot-restore-validation.md`. The scheduler snapshot/restore implementation milestone is complete on the audited stack; independent review, stress campaigns and device integration remain separate gates. `TEMPORAL_PASS` is not claimed.
 
 ## 2. Problem
 
@@ -236,8 +236,8 @@ python -m ruff format --check .
 
 No PR is to be merged without explicit maintainer authorization. No direct commits to `main`, force-pushes or destructive resets are permitted.
 
-## 9. Exit gate
+## 9. Exit gate and current disposition
 
-The scheduler snapshot milestone may be marked implemented only when the DTO/restore contract is complete, invalid states are rejected atomically, all differential replay tests pass, and the required CI checks pass on the exact candidate SHA.
+The implementation exit gate for the snapshot/restore milestone is satisfied on the audited stack: the DTO/restore contract is implemented, invalid states are rejected atomically, differential replay tests pass, and all six required CI checks passed on the exact PR #354 head `11378882ea73a7307430dcb52389709fdea2a509` (workflow `41370823497`). The corresponding evidence is recorded in `docs/evidence/adr-0013-snapshot-restore-validation.md`.
 
-It must not be called `TEMPORAL_PASS` until broader temporal integration evidence exists. Software determinism is not proof of electrical or cycle-accurate SMS fidelity.
+The PR series remains open and Draft pending maintainer review and explicit integration authorization. `SHORT_PASS` / `LONG_PASS` stress campaigns remain NOT RUN. The scheduler is not yet integrated with the SMS/SG-1000 devices. It must not be called `TEMPORAL_PASS` until broader temporal integration and independent hardware-oracle evidence exist. Software determinism is not proof of electrical or cycle-accurate SMS fidelity.
