@@ -468,6 +468,34 @@ mod tests {
     }
 
     #[test]
+    fn internal_completion_is_latched_until_acknowledged_and_survives_restore() {
+        let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
+        let deadline = bus.schedule_internal_cycle(77, 1).unwrap();
+        let first = bus.dispatch_next().unwrap().unwrap();
+        assert_eq!(
+            first,
+            SmsTemporalDispatch::InternalCycleComplete(
+                super::SmsInternalCycleCompletion {
+                    continuation_id: 77,
+                    completed_at: deadline,
+                }
+            )
+        );
+        assert_eq!(bus.dispatch_next().unwrap(), Some(first));
+
+        let mut restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
+        assert_eq!(restored.dispatch_next().unwrap(), Some(first));
+        assert_eq!(
+            restored.acknowledge_internal_completion(77).unwrap(),
+            match first {
+                SmsTemporalDispatch::InternalCycleComplete(completion) => completion,
+                _ => unreachable!(),
+            }
+        );
+        assert_eq!(restored.dispatch_next().unwrap(), None);
+    }
+
+    #[test]
     fn port_operations_are_rejected_before_scheduling() {
         let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
         assert_eq!(
