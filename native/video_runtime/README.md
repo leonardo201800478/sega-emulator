@@ -15,5 +15,5 @@ The example creates a Rust-owned Win32 window, publishes a synthetic 256x192 RGB
 through `FrameMailbox`, expands it to RGBA8888 in the D3D12 upload path, copies it to the
 DXGI back buffer and presents it. Close the window to exit.
 
-This is a host/transfer smoke test, not an SMS1 VDP validation or a GPU performance benchmark.
+This is a host/transfer smoke test, not an SMS1 VDP validation or a GPU performance benchmark. Windows CI compiles this example but does not execute it because the runner is headless.
 The example intentionally runs no emulation and does not involve Python, PyO3 or Qt.
