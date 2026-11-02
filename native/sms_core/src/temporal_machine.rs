@@ -186,12 +186,26 @@ impl SmsTemporalMachine {
             .ok_or(SmsTemporalMachineError::NoScheduledEvent)?;
         match dispatch {
             SmsTemporalDispatch::BusCompletion(completion) => {
-                if self.trace_enabled {
+                let trace_data = if self.trace_enabled {
                     let request = self
                         .bus
                         .pending_request()
                         .ok_or(SmsTemporalMachineError::InvalidState)?;
-                    let wait_tstates = self.cpu.export_state().handshake.wait_tstates;
+                    Some((request, self.cpu.export_state().handshake.wait_tstates))
+                } else {
+                    None
+                };
+
+                // Validate and apply the CPU continuation on a clone before
+                // consuming the latched bus completion. If CPU completion fails
+                // (for example, checked T-state overflow), the bus response and
+                // its already-applied memory effect remain pending for restore/retry.
+                let mut next_cpu = self.cpu.clone();
+                let step = next_cpu.complete_bus_cycle(completion.request_id, completion.data)?;
+                self.bus.acknowledge_completion(completion.request_id)?;
+                self.cpu = next_cpu;
+
+                if let Some((request, wait_tstates)) = trace_data {
                     self.trace_events.push(SmsTemporalTraceEvent::BusCompleted {
                         timestamp: completion.completed_at,
                         request_id: request.id,
@@ -202,10 +216,7 @@ impl SmsTemporalMachine {
                         data: completion.data,
                     });
                 }
-                let response = self.bus.acknowledge_completion(completion.request_id)?;
-                Ok(self
-                    .cpu
-                    .complete_bus_cycle(response.request_id, response.data)?)
+                Ok(step)
             }
             SmsTemporalDispatch::InternalCycleComplete(completion) => {
                 if self.pending_internal_cycle_id != Some(completion.continuation_id) {
@@ -418,6 +429,44 @@ mod tests {
         let mut machine = SmsTemporalMachine::new(vec![0x3E, 0x42], 3).unwrap();
         retired(machine.step_instruction(1).unwrap(), 0x3E, 9);
         assert_eq!(machine.now(), MachineTime::from_ticks(27));
+    }
+
+    #[test]
+    fn overflow_keeps_completed_bus_write_latched_for_snapshot_restore_and_retry() {
+        let mut machine = SmsTemporalMachine::new(vec![0x77; 0x4000], 3).unwrap();
+        machine.cpu_mut().registers.a = 0x5A;
+        machine.cpu_mut().registers.set_hl(0xC000);
+        machine.begin_instruction().unwrap();
+        machine.schedule_pending_bus(0).unwrap();
+        assert!(matches!(
+            machine.dispatch_next().unwrap(),
+            Z80MicroStep::BusRequest(_)
+        ));
+        machine.schedule_pending_bus(0).unwrap();
+
+        let mut state = machine.export_state();
+        state.cpu.instruction_tstates = u32::MAX - 2;
+        let mut machine = SmsTemporalMachine::restore_state(state).unwrap();
+        assert!(matches!(
+            machine.dispatch_next(),
+            Err(SmsTemporalMachineError::Cpu(
+                Z80MicroSequencerError::InstructionTStateOverflow
+            ))
+        ));
+
+        let mut state = machine.export_state();
+        assert_eq!(state.bus.completion.unwrap().request_id, 1);
+        assert_eq!(state.bus.pending_request.unwrap().id, 1);
+        assert_eq!(machine.memory().read(0xC000), 0x5A);
+
+        // Restore a valid CPU counter while preserving the already-committed,
+        // unacknowledged bus completion. Resume must consume it, not dispatch
+        // the memory write a second time.
+        state.cpu.instruction_tstates = 0;
+        let mut restored = SmsTemporalMachine::restore_state(state).unwrap();
+        retired(restored.resume_instruction(0).unwrap(), 0x77, 3);
+        assert_eq!(restored.memory().read(0xC000), 0x5A);
+        assert!(restored.export_state().bus.completion.is_none());
     }
 
     #[test]
