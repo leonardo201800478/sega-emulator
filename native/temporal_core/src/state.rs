@@ -15,6 +15,8 @@ pub struct EventQueueWatermark {
     pub hardware_phase: HardwarePhase,
     /// Software dispatch priority of the last dispatched event.
     pub priority: PlatformPriority,
+    /// Stable queue sequence of the last dispatched event.
+    pub sequence: u64,
 }
 
 /// Persistence DTO for an event queue.
