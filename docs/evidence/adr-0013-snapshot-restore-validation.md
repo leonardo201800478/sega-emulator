@@ -26,7 +26,9 @@ Validation ledger captured 2026-11-02. GitHub is the source of truth; every PASS
 | #353 | E5 — Versioned state codec | `a33065fe14c09ee1840f5c9abb7e9ff0730457d2` | 41370192970 | PASS | PASS | PASS | PASS | PASS | PASS | Implementation SHA |
 | #353 | E5 — Final PR head | `839fdaa25137a91916057c585a7cd81a9bcdb305` | 41370298546 | PASS | PASS | PASS | PASS | PASS | PASS | Exact current head |
 | #354 | E6 — Differential replay tests | `f724479832fc0e3f051c37ec23b226056858019c` | 41370554220 | PASS | PASS | PASS | PASS | PASS | PASS | Implementation SHA |
-| #354 | E6 — Final PR head | `e89fe8619e5f7798e3b4e44f29c5297cef7f1d6b` | 41370622762 | PASS | PASS | PASS | PASS | PASS | PASS | Exact current head |
+| #354 | E6 — Pre-ledger head | `e89fe8619e5f7798e3b4e44f29c5297cef7f1d6b` | 41370622762 | PASS | PASS | PASS | PASS | PASS | PASS | E6 code and ADR head immediately before adding this evidence ledger |
+
+The evidence ledger itself was committed in a subsequent PR update. Its containing commit SHA and exact workflow result are tracked by the live PR #354 checks and final control report; this file intentionally avoids self-referential commit metadata.
 
 ## Required workflow gates
 
