@@ -204,6 +204,20 @@ mod tests {
     }
 
     #[test]
+    fn wait_counter_overflow_is_reported_without_wrapping_or_saturating() {
+        let mut bus = Z80BusHandshake::default();
+        let request = bus.begin(Z80BusOperation::MemoryRead, 0x1234, 3).unwrap();
+        bus.pending.as_mut().unwrap().wait_tstates = u32::MAX;
+
+        assert_eq!(
+            bus.insert_wait_tstate(),
+            Err(Z80BusHandshakeError::WaitCounterExhausted)
+        );
+        assert_eq!(bus.pending_request(), Some(request));
+        assert_eq!(bus.wait_tstates(), Some(u32::MAX));
+    }
+
+    #[test]
     fn operations_without_pending_request_are_rejected() {
         let mut bus = Z80BusHandshake::default();
         assert_eq!(
