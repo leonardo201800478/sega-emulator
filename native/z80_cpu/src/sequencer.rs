@@ -26,7 +26,8 @@ impl From<Z80BusHandshakeError> for Z80MicroSequencerError {
 enum InstructionPhase {
     Ready,
     OpcodeFetch,
-    ImmediateRead,
+    ImmediateReadRegister { destination: u8 },
+    ImmediateReadMemoryWrite,
     MemoryReadRegister { destination: u8 },
     MemoryWrite,
 }
@@ -125,7 +126,17 @@ impl Z80MicroSequencer {
                 self.opcode = Some(opcode);
                 match opcode {
                     0x00 => self.retire(opcode),
-                    0x3E => self.issue_read(InstructionPhase::ImmediateRead, self.registers.pc),
+                    0x06 | 0x0E | 0x16 | 0x1E | 0x26 | 0x2E | 0x3E => {
+                        let destination = (opcode >> 3) & 0x07;
+                        self.issue_read(
+                            InstructionPhase::ImmediateReadRegister { destination },
+                            self.registers.pc,
+                        )
+                    }
+                    0x36 => self.issue_read(
+                        InstructionPhase::ImmediateReadMemoryWrite,
+                        self.registers.pc,
+                    ),
                     0x40..=0x7F if opcode != 0x76 => {
                         let destination = (opcode >> 3) & 0x07;
                         let source = opcode & 0x07;
@@ -151,16 +162,23 @@ impl Z80MicroSequencer {
                     _ => self.unsupported(opcode),
                 }
             }
-            InstructionPhase::ImmediateRead => {
+            InstructionPhase::ImmediateReadRegister { destination } => {
                 let value = response
                     .data
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 self.registers.pc = self.registers.pc.wrapping_add(1);
-                self.registers.a = value;
+                self.write_register(destination, value);
                 self.retire(
                     self.opcode
                         .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
                 )
+            }
+            InstructionPhase::ImmediateReadMemoryWrite => {
+                let value = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.registers.pc = self.registers.pc.wrapping_add(1);
+                self.issue_write(self.registers.hl(), value)
             }
             InstructionPhase::MemoryReadRegister { destination } => {
                 let value = response
@@ -371,6 +389,38 @@ mod tests {
         assert_eq!(cpu.registers.a, 0xA5);
         assert_eq!(cpu.registers.b, 0xA5);
         assert!(cpu.pending_request().is_none());
+    }
+
+    #[test]
+    fn ld_register_immediate_commits_only_after_operand_read() {
+        let mut cpu = Z80MicroSequencer::default();
+        let fetch = request(cpu.begin_instruction().unwrap());
+        let operand = request(cpu.complete_bus_cycle(fetch.id, Some(0x0E)).unwrap());
+        assert_eq!(operand.address, 1);
+        assert_eq!(cpu.registers.c, 0);
+        retired(
+            cpu.complete_bus_cycle(operand.id, Some(0x91)).unwrap(),
+            0x0E,
+            7,
+        );
+        assert_eq!(cpu.registers.c, 0x91);
+        assert_eq!(cpu.registers.pc, 2);
+    }
+
+    #[test]
+    fn ld_hl_immediate_uses_operand_read_then_memory_write() {
+        let mut cpu = Z80MicroSequencer {
+            registers: Z80Registers { h: 0xC0, l: 0x10, ..Z80Registers::default() },
+            ..Z80MicroSequencer::default()
+        };
+        let fetch = request(cpu.begin_instruction().unwrap());
+        let operand = request(cpu.complete_bus_cycle(fetch.id, Some(0x36)).unwrap());
+        assert_eq!(operand.address, 1);
+        let write = request(cpu.complete_bus_cycle(operand.id, Some(0xA5)).unwrap());
+        assert_eq!(write.address, 0xC010);
+        assert_eq!(write.operation, Z80BusOperation::MemoryWrite { value: 0xA5 });
+        assert_eq!(cpu.registers.pc, 2);
+        retired(cpu.complete_bus_cycle(write.id, None).unwrap(), 0x36, 10);
     }
 
     #[test]
