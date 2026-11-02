@@ -723,3 +723,215 @@ mod background_tests {
         assert_eq!(line[1].palette_index, 1);
     }
 }
+
+/// Render the SMS1 Mode 4 sprite layer over a previously rendered background
+/// scanline. Returns status bits raised by this line (overflow/collision).
+///
+/// Sprite evaluation follows SAT order and retains at most eight sprites.
+/// This is a functional scanline model; it does not model per-dot SAT fetches,
+/// the internal sprite shifter, or the exact HBlank evaluation phase.
+pub fn render_mode4_sprites_line(
+    state: &Sms1VdpState,
+    screen_y: u16,
+    background: &mut [BackgroundPixel; 256],
+) -> u8 {
+    const SPRITE_OVERFLOW: u8 = 0x40;
+    const SPRITE_COLLISION: u8 = 0x20;
+    const SPRITE_LIMIT: usize = 8;
+    const SAT_TERMINATOR: u8 = 0xD0;
+
+    if screen_y >= 192 || state.registers.get(1).unwrap_or(0) & 0x40 == 0 {
+        return 0;
+    }
+
+    let registers = state.registers.as_array();
+    let vram = &state.memory.vram;
+    let sat_base = (usize::from(registers[5] & 0x7E) << 7) & 0x3F00;
+    let sprite_pattern_base = if registers[6] & 0x04 != 0 { 0x2000 } else { 0 };
+    let tall = registers[1] & 0x02 != 0;
+    let magnified = registers[1] & 0x01 != 0;
+    let sprite_height = if tall { 16usize } else { 8usize };
+    let display_height = sprite_height * if magnified { 2 } else { 1 };
+    let x_shift = if registers[0] & 0x08 != 0 { 8i16 } else { 0i16 };
+
+    let mut selected = [(0usize, 0u8, 0u8, 0usize); SPRITE_LIMIT];
+    let mut selected_count = 0usize;
+    let mut overflow = false;
+
+    for sprite in 0..64usize {
+        let y = vram[(sat_base + sprite) & 0x3FFF];
+        if y == SAT_TERMINATOR {
+            break;
+        }
+        let top = i16::from(y).wrapping_add(1);
+        let relative = i16::from(screen_y) - top;
+        if relative < 0 || relative >= display_height as i16 {
+            continue;
+        }
+        if selected_count == SPRITE_LIMIT {
+            overflow = true;
+            break;
+        }
+        let x = vram[(sat_base + 0x80 + sprite * 2) & 0x3FFF];
+        let tile = vram[(sat_base + 0x81 + sprite * 2) & 0x3FFF];
+        let source_y = relative as usize / if magnified { 2 } else { 1 };
+        selected[selected_count] = (sprite, x, tile, source_y);
+        selected_count += 1;
+    }
+
+    let mut collision = false;
+    let mut occupied = [false; 256];
+    for (rank, &(_, x, tile, source_y)) in selected[..selected_count].iter().enumerate() {
+        let horizontal_double = magnified && rank < selected_count.saturating_sub(4);
+        let width_scale = if horizontal_double { 2usize } else { 1usize };
+        let tile_number = if tall {
+            usize::from(tile & 0xFE) + source_y / 8
+        } else {
+            usize::from(tile)
+        };
+        let pattern_row = source_y & 7;
+        let pattern_address =
+            (sprite_pattern_base + tile_number * 32 + pattern_row * 4) & 0x3FFF;
+        let x_origin = i16::from(x) - x_shift;
+
+        for source_x in 0..8usize {
+            let bit = 7 - source_x;
+            let color_index = ((vram[pattern_address] >> bit) & 1)
+                | (((vram[pattern_address + 1] >> bit) & 1) << 1)
+                | (((vram[pattern_address + 2] >> bit) & 1) << 2)
+                | (((vram[pattern_address + 3] >> bit) & 1) << 3);
+            if color_index == 0 {
+                continue;
+            }
+            for duplicate in 0..width_scale {
+                let x_screen = x_origin + (source_x * width_scale + duplicate) as i16;
+                if !(0..256).contains(&x_screen) {
+                    continue;
+                }
+                let x_screen = x_screen as usize;
+                if occupied[x_screen] {
+                    collision = true;
+                } else {
+                    occupied[x_screen] = true;
+                }
+                let bg = background[x_screen];
+                if !(bg.priority && (bg.palette_index & 0x0F) != 0) {
+                    let palette_index = 16 + color_index;
+                    background[x_screen] =
+                        decode_background_pixel(&state.memory.cram, palette_index, false);
+                }
+            }
+        }
+    }
+
+    (if overflow { SPRITE_OVERFLOW } else { 0 })
+        | (if collision { SPRITE_COLLISION } else { 0 })
+}
+
+#[cfg(test)]
+mod sprite_tests {
+    use super::{render_mode4_sprites_line, BackgroundPixel, Sms1VdpState, VideoStandard};
+
+    fn set_sprite(state: &mut Sms1VdpState, index: usize, y: u8, x: u8, tile: u8) {
+        let sat = usize::from(state.registers.get(5).unwrap_or(0) & 0x7E) << 7;
+        state.memory.vram[sat + index] = y;
+        state.memory.vram[sat + 0x80 + index * 2] = x;
+        state.memory.vram[sat + 0x81 + index * 2] = tile;
+    }
+
+    fn solid_tile(state: &mut Sms1VdpState, tile: usize, color: u8) {
+        let base = tile * 32;
+        for row in 0..8 {
+            for plane in 0..4 {
+                state.memory.vram[base + row * 4 + plane] =
+                    if color & (1 << plane) != 0 { 0xFF } else { 0 };
+            }
+        }
+    }
+
+    fn background() -> [BackgroundPixel; 256] {
+        [BackgroundPixel {
+            color: [0; 3],
+            palette_index: 0,
+            priority: false,
+        }; 256]
+    }
+
+    #[test]
+    fn first_sprite_is_composited_from_sprite_palette() {
+        let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
+        state.registers.set_raw(1, 0x40);
+        state.registers.set_raw(5, 0x7F);
+        set_sprite(&mut state, 0, 0xFF, 10, 1);
+        solid_tile(&mut state, 1, 5);
+        let mut line = background();
+        let flags = render_mode4_sprites_line(&state, 0, &mut line);
+        assert_eq!(flags, 0);
+        assert_eq!(line[10].palette_index, 21);
+        assert_eq!(line[17].palette_index, 21);
+    }
+
+    #[test]
+    fn ninth_sprite_sets_overflow_even_when_offscreen() {
+        let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
+        state.registers.set_raw(1, 0x40);
+        state.registers.set_raw(5, 0x7F);
+        for index in 0..9 {
+            set_sprite(&mut state, index, 0xFF, 250, 0);
+        }
+        let mut line = background();
+        let flags = render_mode4_sprites_line(&state, 0, &mut line);
+        assert_eq!(flags & 0x40, 0x40);
+    }
+
+    #[test]
+    fn overlapping_opaque_sprites_set_collision_and_keep_earlier_sprite() {
+        let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
+        state.registers.set_raw(1, 0x40);
+        state.registers.set_raw(5, 0x7F);
+        set_sprite(&mut state, 0, 0xFF, 20, 1);
+        set_sprite(&mut state, 1, 0xFF, 20, 2);
+        solid_tile(&mut state, 1, 3);
+        solid_tile(&mut state, 2, 6);
+        let mut line = background();
+        let flags = render_mode4_sprites_line(&state, 0, &mut line);
+        assert_eq!(flags & 0x20, 0x20);
+        assert_eq!(line[20].palette_index, 19);
+    }
+
+    #[test]
+    fn sprite_priority_respects_opaque_high_priority_background() {
+        let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
+        state.registers.set_raw(1, 0x40);
+        state.registers.set_raw(5, 0x7F);
+        set_sprite(&mut state, 0, 0xFF, 30, 1);
+        solid_tile(&mut state, 1, 4);
+        let mut line = background();
+        line[30] = BackgroundPixel {
+            color: [0; 3],
+            palette_index: 2,
+            priority: true,
+        };
+        render_mode4_sprites_line(&state, 0, &mut line);
+        assert_eq!(line[30].palette_index, 2);
+    }
+
+    #[test]
+    fn sms1_horizontal_zoom_skips_last_four_selected_sprites() {
+        let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
+        state.registers.set_raw(1, 0x41);
+        state.registers.set_raw(5, 0x7F);
+        for index in 0..6 {
+            set_sprite(&mut state, index, 0xFF, (index * 20) as u8, 1);
+        }
+        solid_tile(&mut state, 1, 1);
+        let mut line = background();
+        render_mode4_sprites_line(&state, 0, &mut line);
+        assert_eq!(line[0].palette_index, 17);
+        assert_eq!(line[1].palette_index, 17);
+        assert_eq!(line[40].palette_index, 17);
+        assert_eq!(line[41].palette_index, 17);
+        assert_eq!(line[80].palette_index, 17);
+        assert_eq!(line[81].palette_index, 0);
+    }
+}
