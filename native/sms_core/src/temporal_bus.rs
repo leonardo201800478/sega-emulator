@@ -503,6 +503,11 @@ mod tests {
             let mut restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
             assert_eq!(restored.memory().selected_banks(), before);
             assert_eq!(restored.memory().read(banked_address), before[slot]);
+            assert_eq!(
+                restored.memory().read(ram_mirror),
+                0,
+                "the mirrored work-RAM byte must remain unchanged until the mapper write deadline"
+            );
 
             let Some(SmsTemporalDispatch::BusCompletion(completion)) =
                 restored.dispatch_next().unwrap()
