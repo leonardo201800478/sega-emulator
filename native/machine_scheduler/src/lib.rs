@@ -499,25 +499,12 @@ impl<T> MachineScheduler<T> {
     fn calculate_advances(&self, target: MachineTime) -> Result<Vec<ClockAdvance>, SchedulerError> {
         let mut advances = Vec::with_capacity(self.clocks.len());
         for (&id, domain) in &self.clocks {
-            let elapsed = target
-                .checked_duration_since(domain.current_time())
-                .ok_or(SchedulerError::TimeWentBackwards)?;
-            let ratio = domain.ratio();
-            let scaled = elapsed
-                .checked_mul(u128::from(ratio.numerator()))
-                .and_then(|value| value.checked_add(domain.snapshot().phase))
-                .ok_or(SchedulerError::Clock(ClockError::ArithmeticOverflow))?;
-            let denominator = u128::from(ratio.denominator());
-            let cycles = scaled / denominator;
-            let total = domain
-                .total_cycles()
-                .checked_add(cycles)
-                .ok_or(SchedulerError::Clock(ClockError::ArithmeticOverflow))?;
+            let (elapsed_cycles, snapshot) = domain.preview_advance_to(target)?;
             advances.push(ClockAdvance {
                 domain: id,
-                elapsed_cycles: cycles,
-                total_cycles: total,
-                phase: scaled % denominator,
+                elapsed_cycles,
+                total_cycles: snapshot.total_cycles,
+                phase: snapshot.phase,
             });
         }
         Ok(advances)
@@ -672,6 +659,28 @@ mod tests {
         assert_eq!(scheduler.now(), MachineTime::ZERO);
     }
 
+    #[test]
+    fn scheduler_preflight_handles_large_exact_rational_advances() {
+        let ratio = ClockRatio::new(u64::MAX, u64::MAX).unwrap();
+        let target = MachineTime::from_ticks(1_u128 << 65);
+
+        let mut idle = MachineScheduler::<()>::new();
+        idle.register_clock_domain(ClockDomainId(0), ratio).unwrap();
+        let idle_advances = idle.advance_idle_to(target).unwrap();
+        assert_eq!(idle_advances[0].elapsed_cycles, 1_u128 << 65);
+        assert_eq!(idle_advances[0].total_cycles, 1_u128 << 65);
+        assert_eq!(idle_advances[0].phase, 0);
+
+        let mut dispatched = MachineScheduler::<()>::new();
+        dispatched.register_clock_domain(ClockDomainId(0), ratio).unwrap();
+        dispatched
+            .schedule_at(target, EventPriority::new(0), ())
+            .unwrap();
+        let event = dispatched.dispatch_next().unwrap().unwrap();
+        assert_eq!(event.clock_advances[0].elapsed_cycles, 1_u128 << 65);
+        assert_eq!(event.clock_advances[0].total_cycles, 1_u128 << 65);
+        assert_eq!(event.clock_advances[0].phase, 0);
+    }
     #[test]
     fn failed_clock_preflight_does_not_pop_event_or_advance_any_domain() {
         let mut scheduler = MachineScheduler::new();
