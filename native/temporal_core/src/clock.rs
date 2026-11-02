@@ -741,6 +741,57 @@ mod tests {
     }
 
     #[test]
+    fn rational_clock_conversion_matches_small_integer_oracles() {
+        for numerator in 1_u64..=8 {
+            for denominator in 1_u64..=8 {
+                let ratio = ClockRatio::new(numerator, denominator).unwrap();
+                for initial_phase in 0..denominator {
+                    for elapsed in 0_u128..=16 {
+                        let mut domain = ClockDomain::with_phase(
+                            ratio,
+                            MachineTime::ZERO,
+                            u128::from(initial_phase),
+                        )
+                        .unwrap();
+                        let before = domain.snapshot();
+                        let (cycles, preview) = domain
+                            .preview_advance_to(MachineTime::from_ticks(elapsed))
+                            .unwrap();
+                        let scaled = elapsed * u128::from(numerator)
+                            + u128::from(initial_phase);
+                        assert_eq!(cycles, scaled / u128::from(denominator));
+                        assert_eq!(preview.phase, scaled % u128::from(denominator));
+                        assert_eq!(domain.snapshot(), before);
+                        assert_eq!(
+                            domain.advance_to(MachineTime::from_ticks(elapsed)),
+                            Ok(cycles)
+                        );
+                        assert_eq!(domain.snapshot(), preview);
+                    }
+
+                    let domain = ClockDomain::with_phase(
+                        ratio,
+                        MachineTime::ZERO,
+                        u128::from(initial_phase),
+                    )
+                    .unwrap();
+                    for edge_index in 1_u128..=8 {
+                        let edge = domain.edge_time_after(edge_index).unwrap();
+                        let exact_numerator =
+                            edge_index * u128::from(denominator) - u128::from(initial_phase);
+                        let expected_whole = exact_numerator / u128::from(numerator);
+                        let expected_remainder = exact_numerator % u128::from(numerator);
+                        assert_eq!(edge.whole_ticks().ticks(), expected_whole);
+                        assert_eq!(
+                            u128::from(edge.fractional_numerator()) * u128::from(numerator),
+                            expected_remainder * u128::from(edge.fractional_denominator())
+                        );
+                    }
+                }
+            }
+        }
+    }
+    #[test]
     fn same_timestamp_is_a_valid_noop() {
         let ratio = ClockRatio::new(7, 3).unwrap();
         let mut domain = ClockDomain::new(ratio, MachineTime::from_ticks(9));
