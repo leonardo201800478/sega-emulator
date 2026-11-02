@@ -38,6 +38,7 @@ pub enum Z80BusHandshakeError {
     RequestIdExhausted,
     WaitCounterExhausted,
     InvalidState,
+    ZeroBaseDuration,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -72,6 +73,9 @@ impl Z80BusHandshake {
     ) -> Result<Z80BusRequest, Z80BusHandshakeError> {
         if self.pending.is_some() {
             return Err(Z80BusHandshakeError::RequestAlreadyPending);
+        }
+        if base_tstates == 0 {
+            return Err(Z80BusHandshakeError::ZeroBaseDuration);
         }
         let id = self.next_request_id;
         self.next_request_id = id
@@ -152,7 +156,7 @@ impl Z80BusHandshake {
     /// Restore a handshake only when its request allocator is consistent.
     pub fn restore_state(state: Z80BusHandshakeState) -> Result<Self, Z80BusHandshakeError> {
         let pending = match state.pending_request {
-            Some(request) if request.id < state.next_request_id => Some(PendingCycle {
+            Some(request) if request.id < state.next_request_id && request.base_tstates > 0 => Some(PendingCycle {
                 request,
                 wait_tstates: state.wait_tstates,
             }),
