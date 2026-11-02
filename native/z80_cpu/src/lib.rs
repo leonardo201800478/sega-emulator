@@ -18,7 +18,7 @@ pub mod micro_ops;
 pub mod sequencer;
 pub mod snapshot;
 
-pub const Z80_MICRO_SEQUENCER_STATE_VERSION: u16 = 1;
+pub const Z80_MICRO_SEQUENCER_STATE_VERSION: u16 = 3;
 
 pub use cpu::{CpuError, Z80, Z80AlternateRegisters, Z80Registers};
 pub use micro_ops::{

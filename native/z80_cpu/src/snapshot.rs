@@ -67,6 +67,8 @@ impl Z80MicroSequencerState {
         body.u16(self.registers.pc);
         body.u8(self.refresh);
         body.u32(self.instruction_tstates);
+        body.u32(self.mcycle_index);
+        body.u16(self.tstate_index);
         match self.opcode {
             None => body.u8(0),
             Some(value) => {
@@ -137,6 +139,8 @@ impl Z80MicroSequencerState {
         };
         let refresh = reader.u8()?;
         let instruction_tstates = reader.u32()?;
+        let mcycle_index = reader.u32()?;
+        let tstate_index = reader.u16()?;
         let opcode = match reader.u8()? {
             0 => None,
             1 => Some(reader.u8()?),
@@ -166,6 +170,8 @@ impl Z80MicroSequencerState {
             phase,
             opcode,
             instruction_tstates,
+            mcycle_index,
+            tstate_index,
         };
         Z80MicroSequencer::restore_state(state.clone())
             .map_err(|_| Z80MicroSequencerStateCodecError::InvalidState)?;
@@ -201,7 +207,11 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u8(old);
             writer.u16(address);
         }
-        Z80MicroSequencerPhase::MemoryWrite => writer.u8(7),
+        Z80MicroSequencerPhase::MemoryWrite { address, value } => {
+            writer.u8(7);
+            writer.u16(address);
+            writer.u8(value);
+        }
     }
 }
 
@@ -227,7 +237,10 @@ fn read_phase(
             old: reader.u8()?,
             address: reader.u16()?,
         },
-        7 => Z80MicroSequencerPhase::MemoryWrite,
+        7 => Z80MicroSequencerPhase::MemoryWrite {
+            address: reader.u16()?,
+            value: reader.u8()?,
+        },
         tag => return Err(Z80MicroSequencerStateCodecError::InvalidTag(tag)),
     })
 }
@@ -370,7 +383,7 @@ fn crc32(bytes: &[u8]) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{Z80_MICRO_SEQUENCER_STATE_MAGIC, Z80MicroSequencerStateCodecError};
+    use super::{Reader, Z80_MICRO_SEQUENCER_STATE_MAGIC, Z80MicroSequencerStateCodecError};
     use crate::{Z80MicroSequencer, Z80MicroSequencerState};
 
     #[test]
@@ -413,6 +426,7 @@ mod tests {
         );
 
         let state = cpu.export_state();
+        assert_eq!((state.mcycle_index, state.tstate_index), (1, 3));
         let decoded = Z80MicroSequencerState::decode(&state.encode().unwrap()).unwrap();
         assert_eq!(decoded, state);
         let mut restored = Z80MicroSequencer::restore_state(decoded).unwrap();
@@ -423,6 +437,86 @@ mod tests {
         assert_eq!(
             write.operation,
             crate::Z80BusOperation::MemoryWrite { value: 0x80 }
+        );
+        assert_eq!(
+            (
+                restored.export_state().mcycle_index,
+                restored.export_state().tstate_index
+            ),
+            (2, 0)
+        );
+    }
+
+    #[test]
+    fn pending_memory_write_snapshot_round_trips_captured_address_and_payload() {
+        let mut cpu = Z80MicroSequencer::default();
+        let fetch = match cpu.begin_instruction().unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected opcode fetch, got {other:?}"),
+        };
+        let write = match cpu.complete_bus_cycle(fetch.id, Some(0x77)).unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected memory write, got {other:?}"),
+        };
+        let state = cpu.export_state();
+        let encoded = state.encode().unwrap();
+        let decoded = Z80MicroSequencerState::decode(&encoded).unwrap();
+        assert_eq!(decoded, state);
+
+        let restored = Z80MicroSequencer::restore_state(decoded).unwrap();
+        assert_eq!(restored.pending_request(), Some(write));
+    }
+
+    #[test]
+    fn codec_rejects_pending_write_payload_mismatch_with_valid_checksum() {
+        let mut cpu = Z80MicroSequencer::default();
+        let fetch = match cpu.begin_instruction().unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected opcode fetch, got {other:?}"),
+        };
+        let operand = match cpu.complete_bus_cycle(fetch.id, Some(0x36)).unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected immediate read, got {other:?}"),
+        };
+        let write = match cpu.complete_bus_cycle(operand.id, Some(0xA5)).unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected memory write, got {other:?}"),
+        };
+        assert_eq!(
+            write.operation,
+            crate::Z80BusOperation::MemoryWrite { value: 0xA5 }
+        );
+
+        let mut encoded = cpu.export_state().encode().unwrap();
+        const FRAME_HEADER_LEN: usize = 14;
+        let body_len = u32::from_be_bytes(
+            encoded[10..FRAME_HEADER_LEN]
+                .try_into()
+                .expect("encoded frame contains body length"),
+        ) as usize;
+        let checksum_offset = FRAME_HEADER_LEN + body_len;
+
+        // Walk the canonical body to the pending operation payload instead of
+        // relying on a magic absolute offset in the serialized frame.
+        let payload_offset = {
+            let mut reader = Reader::new(&encoded[FRAME_HEADER_LEN..checksum_offset]);
+            reader.take(23).unwrap(); // registers, refresh and M/T counters
+            reader.take(2).unwrap(); // opcode option tag and opcode
+            super::read_phase(&mut reader).unwrap();
+            reader.u64().unwrap(); // next request ID
+            assert_eq!(reader.u8().unwrap(), 1); // pending request present
+            reader.u64().unwrap(); // pending request ID
+            assert_eq!(reader.u8().unwrap(), 2); // MemoryWrite operation tag
+            reader.offset
+        };
+        encoded[FRAME_HEADER_LEN + payload_offset] = 0x5A;
+
+        let checksum = super::crc32(&encoded[FRAME_HEADER_LEN..checksum_offset]);
+        encoded[checksum_offset..checksum_offset + 4].copy_from_slice(&checksum.to_be_bytes());
+
+        assert_eq!(
+            Z80MicroSequencerState::decode(&encoded),
+            Err(Z80MicroSequencerStateCodecError::InvalidState)
         );
     }
 
@@ -450,5 +544,60 @@ mod tests {
             Err(Z80MicroSequencerStateCodecError::TrailingData)
         );
         assert_eq!(Z80_MICRO_SEQUENCER_STATE_MAGIC, *b"Z80SEQ\0\0");
+    }
+    #[test]
+    fn codec_rejects_hl_write_address_mismatch_with_valid_checksum() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.registers.set_hl(0xC010);
+        let fetch = match cpu.begin_instruction().unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected opcode fetch, got {other:?}"),
+        };
+        let operand = match cpu.complete_bus_cycle(fetch.id, Some(0x36)).unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected immediate read, got {other:?}"),
+        };
+        cpu.complete_bus_cycle(operand.id, Some(0xA5)).unwrap();
+
+        let mut encoded = cpu.export_state().encode().unwrap();
+        const FRAME_HEADER_LEN: usize = 14;
+        let body_len = u32::from_be_bytes(
+            encoded[10..FRAME_HEADER_LEN]
+                .try_into()
+                .expect("encoded frame contains body length"),
+        ) as usize;
+        let checksum_offset = FRAME_HEADER_LEN + body_len;
+        let (phase_address_offset, request_address_offset) = {
+            let mut reader = Reader::new(&encoded[FRAME_HEADER_LEN..checksum_offset]);
+            reader.take(23).unwrap();
+            reader.take(2).unwrap();
+            let phase_address_offset = reader.offset + 1;
+            let phase = super::read_phase(&mut reader).unwrap();
+            assert!(matches!(
+                phase,
+                crate::Z80MicroSequencerPhase::MemoryWrite { .. }
+            ));
+            reader.u64().unwrap();
+            assert_eq!(reader.u8().unwrap(), 1);
+            reader.u64().unwrap();
+            assert_eq!(reader.u8().unwrap(), 2);
+            reader.u8().unwrap();
+            let request_address_offset = reader.offset;
+            (phase_address_offset, request_address_offset)
+        };
+        let tampered_address = 0xC011_u16.to_be_bytes();
+        encoded
+            [FRAME_HEADER_LEN + phase_address_offset..FRAME_HEADER_LEN + phase_address_offset + 2]
+            .copy_from_slice(&tampered_address);
+        encoded[FRAME_HEADER_LEN + request_address_offset
+            ..FRAME_HEADER_LEN + request_address_offset + 2]
+            .copy_from_slice(&tampered_address);
+
+        let checksum = super::crc32(&encoded[FRAME_HEADER_LEN..checksum_offset]);
+        encoded[checksum_offset..checksum_offset + 4].copy_from_slice(&checksum.to_be_bytes());
+        assert_eq!(
+            Z80MicroSequencerState::decode(&encoded),
+            Err(Z80MicroSequencerStateCodecError::InvalidState)
+        );
     }
 }

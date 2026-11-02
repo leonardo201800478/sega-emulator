@@ -1,6 +1,6 @@
 # Estado dos componentes — SG-1000 + Master System
 
-**Base de referência:** `main` em `3f4a71d7b7bbc1863c20cd3293466405cb3f579b` (2026-11-02, após PR #416).
+**Base de referência:** `main` em `62ab404e67fffbe8d0da7bf956e6b801a2e2bbd7` (2026-11-02, após PR #417).
 **Natureza:** inventário documental do estado observado no repositório e das auditorias disponíveis. Não substitui testes no SHA candidato nem declara precisão ciclo a ciclo.
 
 Este documento responde o que já existe, o que permanece como componente válido e o que ainda precisa ser integrado ou concluído. Componentes existentes não devem ser apagados só porque a arquitetura-alvo muda; a migração deve preservar APIs e testes até haver substituição comprovada.
@@ -20,7 +20,7 @@ Este documento responde o que já existe, o que permanece como componente válid
 |---|---|---|
 | Z80 — execução | Executores atômicos legados permanecem nos cores SG-1000/SMS; `native/z80_cpu` contém microsequenciador retomável consumido pela fatia temporal SMS | Microsequenciador ainda restrito ao subconjunto testado; executor atômico preservado como oráculo diferencial. Não é ainda o executor compartilhado completo em produção |
 | Z80 — ALU | `native/z80_alu` | Biblioteca compartilhada existente; continuar auditoria de flags/opcodes e cobertura independente |
-| Z80 — bus | `native/z80_bus` e adaptador `SmsTemporalBus` em `native/sms_core/src/temporal_bus.rs` | Fetch/read/write de memória são agendados por deadline; `BusTransaction`/`BusOperationResult` da PR #396 continuam Draft até índices M-cycle/T-state estáveis |
+| Z80 — bus | `native/z80_bus` e adaptador `SmsTemporalBus` em `native/sms_core/src/temporal_bus.rs` | Fetch/read/write de memória são agendados por deadline; T5a expõe índices M-cycle/T-state no subconjunto retomável e mapeia transações para `BusTransaction`; conclusão de barramento e ciclo interno ficam latched até commit/acknowledgement; WAIT continua sendo fixture |
 | Memória e barramentos SG-1000 | `native/sg1000_core` | Funcionais no runtime; ampliar testes de mapa, espelhamento, RAM e cartuchos |
 | Memória e barramentos SMS | `native/sms_core/src/memory.rs`, `temporal_bus.rs`, `temporal_machine.rs` | Caminho temporal CPU→Scheduler→memória SMS para fetch/read/write está implementado e `SHORT_PASS`; WAIT é fixture, I/O temporal, arbitragem e integração completa permanecem pendentes |
 | TMS9918A | `native/sg1000_core` | VDP ativo do SG-1000; preservar regressões e validar efeitos de hardware com cenas/oráculos |
@@ -96,4 +96,13 @@ Não elevar um estado com base apenas em documentação, compilação isolada, b
 | SMS completo (CPU/VDP/PSG/I/O/IRQ) | INTEGRATION_PENDING | VDP legado excluído; novo VDP temporal, PSG, I/O e interrupções ainda não integrados |
 | TEMPORAL_PASS | NOT DECLARED | Faltam oráculos independentes/físicos, WAIT físico, arbitragem e integração sistêmica |
 
-**Próxima tarefa T5a:** expor índices M-cycle/T-state estáveis para o subconjunto atual e mapear explicitamente as operações para os contratos da PR #396. Expandir famílias de instruções somente após essa ponte ser validada.
+**T5a — PR #418 (em revisão):** índices M-cycle/T-state para o subconjunto retomável; restore valida fase/opcode, endereço efetivo `(HL)`, payload e progresso temporal da instrução; codec binário Z80 versão 3; `SmsTemporalMachineState` versão 6 preserva `instruction_started_at`; conclusão latched até commit/ack da CPU. Código SHA `0c178ed6c8da6aeddf8e25682a2ebc620eec786f`, run `41536695747`: 4/4 jobs PASS (Rust, Python, Windows x64 D3D12/video/audio e Scheduler stress). Reauditoria técnica do Agente 2 para o HEAD final ainda é gate. Não considerar integrado à main nem declarar `TEMPORAL_PASS`.
+## 5. T5a — PR #418 em revisão
+
+- Fonte canônica dos contratos temporais: a linha T5a (#418), que incorpora `BusTransaction`, `BusOperationResult`, os tipos de progresso e a ADR-001 originalmente propostos na PR #396. A #396 é supersedida e não deve ser integrada em paralelo.
+- HEAD de código `0c178ed6c8da6aeddf8e25682a2ebc620eec786f`: run `41536695747` PASS nos quatro jobs; inclui testes de restore para endereço `(HL)`, CRC válido e `instruction_tstates` incompatível com a timeline do Scheduler. Execução local: NOT RUN.
+- Restore do sequenciador valida fase/opcode/request, destino, endereço efetivo `(HL)`, duração nominal e payload esperado; `MemoryWrite` persiste endereço/valor e o codec Z80 é versão 3. `SmsTemporalMachineState` versão 6 preserva o início da instrução e valida `instruction_tstates` contra o tempo decorrido no Scheduler, inclusive completion latched. Restore do barramento valida deadline, escala de T-state e watermark de dispatch; restore da máquina exige exatamente 1 T-state para o ciclo interno. Conclusões permanecem latched até commit/ack.
+- `BusTransaction.timestamp` conserva o início da requisição em Setup e Complete; `BusOperationResult::Completed.completed_at` expõe a conclusão separadamente. O descriptor de ciclo interno conserva seu timestamp de início mesmo quando a conclusão está latched.
+- P2 de payload de escrita tratado na branch: a fase `MemoryWrite` preserva endereço/valor esperados, o restore compara a requisição exata e o codec versão 3 inclui esses campos. Testes negativos DTO para `LD (HL),n` e `INC (HL)`, round-trip do codec e teste de rejeição binária com CRC recalculado cobrem o payload adulterado. Também há regressão para o timestamp inicial de ciclo interno durante conclusão latched.
+- Limites: apenas subconjunto atual de opcodes no SMS; WAIT é fixture; SG-1000, VDP/PSG/I/O/IRQ e semântica elétrica não estão integrados nesta fatia. `TEMPORAL_PASS` não concedido.
+- A reauditoria técnica independente do HEAD final permanece gate de integração. O código SHA `0c178ed6c8da6aeddf8e25682a2ebc620eec786f` (run `41536695747`) tem 4/4 jobs PASS; a sincronização documental corrente será validada no CI do SHA final da PR. Execução local: NOT RUN.

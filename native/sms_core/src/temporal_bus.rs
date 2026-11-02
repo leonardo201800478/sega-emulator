@@ -13,7 +13,42 @@ use crate::{
 use sega_temporal_core::MachineTime;
 use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
 
-pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 2;
+pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 4;
+
+fn elapsed_tstates(
+    started_at: MachineTime,
+    completed_at: MachineTime,
+    master_ticks_per_tstate: u64,
+) -> Option<u128> {
+    let scale = u128::from(master_ticks_per_tstate);
+    if scale == 0 {
+        return None;
+    }
+    let elapsed = completed_at.checked_duration_since(started_at)?;
+    if elapsed == 0 || elapsed % scale != 0 {
+        return None;
+    }
+    let tstates = elapsed / scale;
+    (tstates <= u128::from(u32::MAX)).then_some(tstates)
+}
+
+fn valid_bus_deadline(
+    started_at: MachineTime,
+    deadline: MachineTime,
+    master_ticks_per_tstate: u64,
+    base_tstates: u8,
+) -> bool {
+    elapsed_tstates(started_at, deadline, master_ticks_per_tstate)
+        .is_some_and(|total| total >= u128::from(base_tstates))
+}
+
+fn valid_internal_deadline(
+    started_at: MachineTime,
+    deadline: MachineTime,
+    master_ticks_per_tstate: u64,
+) -> bool {
+    elapsed_tstates(started_at, deadline, master_ticks_per_tstate).is_some()
+}
 
 /// Result latched at the completion boundary of one memory transaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -44,8 +79,11 @@ pub struct SmsTemporalBusState {
     pub memory: SmsMemory,
     pub coordinator: SmsTemporalCoordinatorState,
     pub pending_request: Option<Z80BusRequest>,
+    pub request_started_at: Option<MachineTime>,
     pub completion: Option<SmsBusCompletion>,
     pub pending_internal_cycle: Option<u64>,
+    pub internal_cycle_started_at: Option<MachineTime>,
+    pub internal_completion: Option<SmsInternalCycleCompletion>,
 }
 
 /// Errors from the transactional SMS memory-bus adapter.
@@ -101,8 +139,11 @@ pub struct SmsTemporalBus {
     memory: SmsMemory,
     coordinator: SmsTemporalCoordinator,
     pending_request: Option<Z80BusRequest>,
+    request_started_at: Option<MachineTime>,
     completion: Option<SmsBusCompletion>,
     pending_internal_cycle: Option<u64>,
+    internal_cycle_started_at: Option<MachineTime>,
+    internal_completion: Option<SmsInternalCycleCompletion>,
 }
 
 impl SmsTemporalBus {
@@ -118,8 +159,11 @@ impl SmsTemporalBus {
             memory,
             coordinator,
             pending_request: None,
+            request_started_at: None,
             completion: None,
             pending_internal_cycle: None,
+            internal_cycle_started_at: None,
+            internal_completion: None,
         })
     }
 
@@ -135,6 +179,7 @@ impl SmsTemporalBus {
         if self.pending_request.is_some()
             || self.completion.is_some()
             || self.pending_internal_cycle.is_some()
+            || self.internal_completion.is_some()
         {
             return Err(SmsTemporalBusError::Busy);
         }
@@ -146,12 +191,14 @@ impl SmsTemporalBus {
         ) {
             return Err(SmsTemporalBusError::UnsupportedOperation);
         }
+        let started_at = self.coordinator.now();
         let deadline = self.coordinator.schedule_bus_completion(
             request.id,
             request.base_tstates,
             fixture_wait_tstates,
         )?;
         self.pending_request = Some(request);
+        self.request_started_at = Some(started_at);
         Ok(deadline)
     }
 
@@ -167,10 +214,12 @@ impl SmsTemporalBus {
         {
             return Err(SmsTemporalBusError::Busy);
         }
+        let started_at = self.coordinator.now();
         let deadline = self
             .coordinator
             .schedule_internal_cycle(continuation_id, tstates)?;
         self.pending_internal_cycle = Some(continuation_id);
+        self.internal_cycle_started_at = Some(started_at);
         Ok(deadline)
     }
 
@@ -179,11 +228,12 @@ impl SmsTemporalBus {
     /// A read samples memory at this completion boundary. A write mutates memory
     /// at this completion boundary. The response is latched until acknowledged.
     pub fn dispatch_next(&mut self) -> Result<Option<SmsTemporalDispatch>, SmsTemporalBusError> {
-        // A dispatched completion remains observable until acknowledgement. This
-        // also lets a restored machine resume after the memory effect but before
-        // the CPU has accepted the response.
+        // Dispatched boundaries remain latched until the CPU accepts them.
         if let Some(completion) = self.completion {
             return Ok(Some(SmsTemporalDispatch::BusCompletion(completion)));
+        }
+        if let Some(completion) = self.internal_completion {
+            return Ok(Some(SmsTemporalDispatch::InternalCycleComplete(completion)));
         }
         let Some(dispatch) = self.coordinator.dispatch_next()? else {
             return Ok(None);
@@ -227,13 +277,12 @@ impl SmsTemporalBus {
                 if self.pending_internal_cycle != Some(continuation_id) {
                     return Err(SmsTemporalBusError::InvalidState);
                 }
-                self.pending_internal_cycle = None;
-                Ok(Some(SmsTemporalDispatch::InternalCycleComplete(
-                    SmsInternalCycleCompletion {
-                        continuation_id,
-                        completed_at: dispatch.event.timestamp,
-                    },
-                )))
+                let completion = SmsInternalCycleCompletion {
+                    continuation_id,
+                    completed_at: dispatch.event.timestamp,
+                };
+                self.internal_completion = Some(completion);
+                Ok(Some(SmsTemporalDispatch::InternalCycleComplete(completion)))
             }
         }
     }
@@ -254,12 +303,47 @@ impl SmsTemporalBus {
         }
         self.completion = None;
         self.pending_request = None;
+        self.request_started_at = None;
+        Ok(completion)
+    }
+
+    /// Acknowledge an internal interval only after the CPU continuation commits.
+    pub fn acknowledge_internal_completion(
+        &mut self,
+        continuation_id: u64,
+    ) -> Result<SmsInternalCycleCompletion, SmsTemporalBusError> {
+        let completion = self
+            .internal_completion
+            .ok_or(SmsTemporalBusError::NoPendingRequest)?;
+        if completion.continuation_id != continuation_id
+            || self.pending_internal_cycle != Some(continuation_id)
+        {
+            return Err(SmsTemporalBusError::InvalidState);
+        }
+        self.internal_completion = None;
+        self.pending_internal_cycle = None;
+        self.internal_cycle_started_at = None;
         Ok(completion)
     }
 
     /// Return the currently outstanding CPU request, if any.
     pub const fn pending_request(&self) -> Option<Z80BusRequest> {
         self.pending_request
+    }
+
+    /// Timestamp at which the outstanding bus request was scheduled.
+    pub const fn request_started_at(&self) -> Option<MachineTime> {
+        self.request_started_at
+    }
+
+    /// Timestamp at which the outstanding internal interval was scheduled.
+    pub const fn internal_cycle_started_at(&self) -> Option<MachineTime> {
+        self.internal_cycle_started_at
+    }
+
+    /// Return the latched bus completion, if dispatch has reached its deadline.
+    pub const fn completion(&self) -> Option<SmsBusCompletion> {
+        self.completion
     }
 
     /// Return the current machine timestamp.
@@ -284,8 +368,11 @@ impl SmsTemporalBus {
             memory: self.memory.clone(),
             coordinator: self.coordinator.export_state(),
             pending_request: self.pending_request,
+            request_started_at: self.request_started_at,
             completion: self.completion,
             pending_internal_cycle: self.pending_internal_cycle,
+            internal_cycle_started_at: self.internal_cycle_started_at,
+            internal_completion: self.internal_completion,
         }
     }
 
@@ -296,32 +383,67 @@ impl SmsTemporalBus {
         }
         let coordinator = SmsTemporalCoordinator::restore_state(state.coordinator.clone())?;
         let pending_events = &state.coordinator.scheduler.event_queue.pending;
+        let scale = state.coordinator.master_ticks_per_tstate;
+        let now = coordinator.now();
+        let last_dispatch = state.coordinator.scheduler.last_dispatch_timestamp;
         match (
             state.pending_request,
+            state.request_started_at,
             state.completion,
             state.pending_internal_cycle,
+            state.internal_cycle_started_at,
+            state.internal_completion,
         ) {
-            (None, None, None) if pending_events.is_empty() => {}
-            (Some(request), None, None)
+            (None, None, None, None, None, None) if pending_events.is_empty() => {}
+            (Some(request), Some(started_at), None, None, None, None)
                 if pending_events.len() == 1
                     && pending_events[0].payload
                         == (SmsTemporalEvent::BusCompletion {
                             request_id: request.id,
-                        }) => {}
-            (Some(request), Some(completion), None)
-                if request.id == completion.request_id && pending_events.is_empty() => {}
-            (None, None, Some(continuation_id))
+                        })
+                    && started_at <= now
+                    && pending_events[0].timestamp >= now
+                    && valid_bus_deadline(
+                        started_at,
+                        pending_events[0].timestamp,
+                        scale,
+                        request.base_tstates,
+                    ) => {}
+            (Some(request), Some(started_at), Some(completion), None, None, None)
+                if request.id == completion.request_id
+                    && pending_events.is_empty()
+                    && completion.completed_at == now
+                    && last_dispatch == Some(completion.completed_at)
+                    && valid_bus_deadline(
+                        started_at,
+                        completion.completed_at,
+                        scale,
+                        request.base_tstates,
+                    ) => {}
+            (None, None, None, Some(continuation_id), Some(started_at), None)
                 if pending_events.len() == 1
                     && pending_events[0].payload
-                        == (SmsTemporalEvent::InternalCycleComplete { continuation_id }) => {}
+                        == (SmsTemporalEvent::InternalCycleComplete { continuation_id })
+                    && started_at <= now
+                    && pending_events[0].timestamp >= now
+                    && valid_internal_deadline(started_at, pending_events[0].timestamp, scale) => {}
+            (None, None, None, Some(continuation_id), Some(started_at), Some(completion))
+                if continuation_id == completion.continuation_id
+                    && pending_events.is_empty()
+                    && completion.completed_at == now
+                    && last_dispatch == Some(completion.completed_at)
+                    && valid_internal_deadline(started_at, completion.completed_at, scale) => {}
             _ => return Err(SmsTemporalBusError::InvalidState),
         }
         Ok(Self {
             memory: state.memory,
             coordinator,
             pending_request: state.pending_request,
+            request_started_at: state.request_started_at,
             completion: state.completion,
             pending_internal_cycle: state.pending_internal_cycle,
+            internal_cycle_started_at: state.internal_cycle_started_at,
+            internal_completion: state.internal_completion,
         })
     }
 }
@@ -329,6 +451,7 @@ impl SmsTemporalBus {
 #[cfg(test)]
 mod tests {
     use super::{SmsTemporalBus, SmsTemporalBusError, SmsTemporalDispatch};
+    use sega_temporal_core::MachineTime;
     use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
 
     fn request(id: u64, operation: Z80BusOperation, address: u16, tstates: u8) -> Z80BusRequest {
@@ -408,6 +531,34 @@ mod tests {
     }
 
     #[test]
+    fn restore_rejects_bus_deadlines_shorter_than_nominal_cycle() {
+        let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
+        let request = request(1, Z80BusOperation::OpcodeFetch, 0, 4);
+        bus.begin_request(request, 0).unwrap();
+
+        let mut state = bus.export_state();
+        state.coordinator.scheduler.event_queue.pending[0].timestamp = MachineTime::from_ticks(3);
+        assert_eq!(
+            SmsTemporalBus::restore_state(state).err(),
+            Some(SmsTemporalBusError::InvalidState)
+        );
+    }
+
+    #[test]
+    fn restore_rejects_bus_deadlines_not_aligned_to_tstate_scale() {
+        let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
+        let request = request(1, Z80BusOperation::OpcodeFetch, 0, 4);
+        bus.begin_request(request, 0).unwrap();
+
+        let mut state = bus.export_state();
+        state.coordinator.scheduler.event_queue.pending[0].timestamp = MachineTime::from_ticks(13);
+        assert_eq!(
+            SmsTemporalBus::restore_state(state).err(),
+            Some(SmsTemporalBusError::InvalidState)
+        );
+    }
+
+    #[test]
     fn internal_cycle_dispatch_has_no_memory_side_effect() {
         let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
         let deadline = bus.schedule_internal_cycle(77, 1).unwrap();
@@ -419,6 +570,32 @@ mod tests {
         assert_eq!(completion.continuation_id, 77);
         assert_eq!(completion.completed_at, deadline);
         assert_eq!(bus.memory().read(0xC000), 0);
+    }
+
+    #[test]
+    fn internal_completion_is_latched_until_acknowledged_and_survives_restore() {
+        let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
+        let deadline = bus.schedule_internal_cycle(77, 1).unwrap();
+        let first = bus.dispatch_next().unwrap().unwrap();
+        assert_eq!(
+            first,
+            SmsTemporalDispatch::InternalCycleComplete(super::SmsInternalCycleCompletion {
+                continuation_id: 77,
+                completed_at: deadline,
+            })
+        );
+        assert_eq!(bus.dispatch_next().unwrap(), Some(first));
+
+        let mut restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
+        assert_eq!(restored.dispatch_next().unwrap(), Some(first));
+        assert_eq!(
+            restored.acknowledge_internal_completion(77).unwrap(),
+            match first {
+                SmsTemporalDispatch::InternalCycleComplete(completion) => completion,
+                _ => unreachable!(),
+            }
+        );
+        assert_eq!(restored.dispatch_next().unwrap(), None);
     }
 
     #[test]
