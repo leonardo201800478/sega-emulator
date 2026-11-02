@@ -512,8 +512,7 @@ mod tests {
         encoded[FRAME_HEADER_LEN + payload_offset] = 0x5A;
 
         let checksum = super::crc32(&encoded[FRAME_HEADER_LEN..checksum_offset]);
-        encoded[checksum_offset..checksum_offset + 4]
-            .copy_from_slice(&checksum.to_be_bytes());
+        encoded[checksum_offset..checksum_offset + 4].copy_from_slice(&checksum.to_be_bytes());
 
         assert_eq!(
             Z80MicroSequencerState::decode(&encoded),
