@@ -36,6 +36,7 @@ pub enum Z80BusHandshakeError {
     MissingReadData,
     UnexpectedWriteData,
     RequestIdExhausted,
+    WaitCounterExhausted,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -96,7 +97,10 @@ impl Z80BusHandshake {
             .pending
             .as_mut()
             .ok_or(Z80BusHandshakeError::NoRequestPending)?;
-        pending.wait_tstates = pending.wait_tstates.saturating_add(1);
+        pending.wait_tstates = pending
+            .wait_tstates
+            .checked_add(1)
+            .ok_or(Z80BusHandshakeError::WaitCounterExhausted)?;
         Ok(())
     }
 
