@@ -5,9 +5,8 @@
 //! architectural save state.
 
 use crate::{
-    Z80BusHandshakeState, Z80BusOperation, Z80BusRequest, Z80MicroSequencer,
-    Z80MicroSequencerPhase, Z80MicroSequencerState, Z80_MICRO_SEQUENCER_STATE_VERSION,
-    Z80Registers,
+    Z80_MICRO_SEQUENCER_STATE_VERSION, Z80BusHandshakeState, Z80BusOperation, Z80BusRequest,
+    Z80MicroSequencer, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80Registers,
 };
 use core::fmt;
 
@@ -36,7 +35,9 @@ impl fmt::Display for Z80MicroSequencerStateCodecError {
             Self::TrailingData => f.write_str("Z80 sequencer state has trailing bytes"),
             Self::InvalidTag(tag) => write!(f, "Z80 sequencer state has invalid tag {tag}"),
             Self::ChecksumMismatch => f.write_str("Z80 sequencer state checksum mismatch"),
-            Self::InvalidState => f.write_str("Z80 sequencer state violates CPU/handshake invariants"),
+            Self::InvalidState => {
+                f.write_str("Z80 sequencer state violates CPU/handshake invariants")
+            }
         }
     }
 }
@@ -87,7 +88,9 @@ impl Z80MicroSequencerState {
         let body_len = u32::try_from(body.bytes.len())
             .map_err(|_| Z80MicroSequencerStateCodecError::InvalidState)?;
         let mut frame = Writer::default();
-        frame.bytes.extend_from_slice(&Z80_MICRO_SEQUENCER_STATE_MAGIC);
+        frame
+            .bytes
+            .extend_from_slice(&Z80_MICRO_SEQUENCER_STATE_MAGIC);
         frame.u16(Z80_MICRO_SEQUENCER_STATE_VERSION);
         frame.u32(body_len);
         frame.bytes.extend_from_slice(&body.bytes);
@@ -188,7 +191,11 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u8(u8::from(decrement));
             writer.u16(address);
         }
-        Z80MicroSequencerPhase::MemoryIncDecInternal { decrement, old, address } => {
+        Z80MicroSequencerPhase::MemoryIncDecInternal {
+            decrement,
+            old,
+            address,
+        } => {
             writer.u8(6);
             writer.u8(u8::from(decrement));
             writer.u8(old);
@@ -244,14 +251,20 @@ fn write_request(writer: &mut Writer, request: Z80BusRequest) {
     writer.u8(request.base_tstates);
 }
 
-fn read_request(reader: &mut Reader<'_>) -> Result<Z80BusRequest, Z80MicroSequencerStateCodecError> {
+fn read_request(
+    reader: &mut Reader<'_>,
+) -> Result<Z80BusRequest, Z80MicroSequencerStateCodecError> {
     let id = reader.u64()?;
     let operation = match reader.u8()? {
         0 => Z80BusOperation::OpcodeFetch,
         1 => Z80BusOperation::MemoryRead,
-        2 => Z80BusOperation::MemoryWrite { value: reader.u8()? },
+        2 => Z80BusOperation::MemoryWrite {
+            value: reader.u8()?,
+        },
         3 => Z80BusOperation::PortRead,
-        4 => Z80BusOperation::PortWrite { value: reader.u8()? },
+        4 => Z80BusOperation::PortWrite {
+            value: reader.u8()?,
+        },
         tag => return Err(Z80MicroSequencerStateCodecError::InvalidTag(tag)),
     };
     Ok(Z80BusRequest {
@@ -304,9 +317,13 @@ impl<'a> Reader<'a> {
     }
 
     fn take(&mut self, len: usize) -> Result<&'a [u8], Z80MicroSequencerStateCodecError> {
-        let end = self.offset.checked_add(len)
+        let end = self
+            .offset
+            .checked_add(len)
             .ok_or(Z80MicroSequencerStateCodecError::Truncated)?;
-        let value = self.bytes.get(self.offset..end)
+        let value = self
+            .bytes
+            .get(self.offset..end)
             .ok_or(Z80MicroSequencerStateCodecError::Truncated)?;
         self.offset = end;
         Ok(value)
@@ -353,7 +370,7 @@ fn crc32(bytes: &[u8]) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{Z80MicroSequencerStateCodecError, Z80_MICRO_SEQUENCER_STATE_MAGIC};
+    use super::{Z80_MICRO_SEQUENCER_STATE_MAGIC, Z80MicroSequencerStateCodecError};
     use crate::{Z80MicroSequencer, Z80MicroSequencerState};
 
     #[test]
