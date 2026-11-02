@@ -11,7 +11,7 @@ use std::slice;
 
 use super::{PixelFormat, VideoFrame};
 
-use windows::Win32::Foundation::{CloseHandle, HANDLE, HINSTANCE, HWND, RECT};
+use windows::Win32::Foundation::{CloseHandle, HANDLE, HINSTANCE, HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows::Win32::Graphics::Direct3D::D3D_FEATURE_LEVEL_11_0;
 use windows::Win32::Graphics::Direct3D12::{
     D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_QUEUE_DESC, D3D12_COMMAND_QUEUE_FLAG_NONE,
@@ -83,7 +83,7 @@ impl NativeVideoWindow {
 
         let atom = unsafe { RegisterClassW(&class) };
         if atom == 0 {
-            return Err(Error::from_win32());
+            return Err(Error::from_thread());
         }
 
         let hwnd = unsafe {
@@ -149,9 +149,9 @@ impl Drop for NativeVideoWindow {
 unsafe extern "system" fn window_proc(
     hwnd: HWND,
     message: u32,
-    wparam: usize,
-    lparam: isize,
-) -> isize {
+    wparam: WPARAM,
+    lparam: LPARAM,
+) -> LRESULT {
     if message == WM_DESTROY {
         unsafe { PostQuitMessage(0) };
         return 0;
@@ -244,7 +244,7 @@ impl D3d12Host {
             Scaling: DXGI_SCALING_STRETCH,
             SwapEffect: DXGI_SWAP_EFFECT_FLIP_DISCARD,
             AlphaMode: DXGI_ALPHA_MODE_IGNORE,
-            Flags: DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT.0,
+            Flags: DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT.0 as u32,
             ..Default::default()
         };
 
