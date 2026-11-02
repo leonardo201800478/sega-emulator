@@ -1,6 +1,6 @@
 # ADR-0015 — contrato temporal SMS/Z80/barramento e resolução de safe points
 
-- **Estado:** Proposta para revisão; decisão de runtime NÃO aprovada.
+- **Estado:** Direção arquitetural aprovada para antecipação incremental; implementação de runtime sujeita a PRs e gates.
 - **Data:** 2026-11-02.
 - **Base:** PR #360, head `b2079083d5e19ac1b1936ba98cf40ae98c7b7f9b`.
 - **Branch desta ADR:** `docs/adr-0015-sms-z80-bus-temporal-contract`.
@@ -176,7 +176,9 @@ A ADR-0014 estabelece safe points, separação entre Scheduler genérico e perfi
 
 O roadmap consolidado `docs/roadmaps/sg1000-sms-consolidation-roadmap.md` posiciona a implementação do Scheduler na Fase 8, após fechamento funcional e robustez; o roadmap PDF também descreve o Scheduler como implementação tardia, mantendo contratos temporais antes disso.
 
-O pedido de continuidade de 2026-11-02 prioriza agora o desenho da integração SMS começando pelo Z80 e barramento. Esta ADR registra essa frente como **trabalho de design e prototipagem isolada**, não como autorização para antecipar a integração de runtime nem para reordenar automaticamente as fases normativas. A mudança formal da sequência do roadmap deve ser aprovada explicitamente antes de abrir PRs de runtime que antecipem a Fase 8.
+A decisão explícita do mantenedor em 2026-11-02 autoriza antecipar a integração temporal do Scheduler. O trabalho de runtime pode avançar por PRs incrementais, começando pela reconciliação dos contratos de CPU retomável, transações de barramento e coordenação da máquina. A autorização não aprova automaticamente APIs, fases elétricas, clocks, WAITs, arbitragem ou semânticas ainda sem evidência.
+
+A antecipação não significa declarar concluídas as fases funcionais nem conectar o Z80 ao VDP legado. O roadmap único coloca a fundação Scheduler-driven dentro da fase de barramento e integração; a fase final permanece reservada à comprovação sistêmica de `TEMPORAL_PASS`. O novo VDP temporal continua sendo o destino de raster/IRQ.
 
 ## 7. Plano de validação
 
@@ -201,28 +203,28 @@ A comparação com Ares, Gearsystem e MAME deve registrar SHA/versão e divergê
 
 | Fatia | Escopo | Critério de aceitação |
 |---|---|---|
-| T0 | Corrigir documentação/ledger do trace atual e consolidar matriz de opcodes × cobertura temporal | Nenhum trace existente duplicado; gaps listados por família |
-| T1 | Protótipo headless de safe-point e snapshot da CPU, sem ligar hardware real | Suspensão/retomada e restore reproduzem estado e sequência |
-| T2 | Adaptador de barramento com transações sintéticas e relógio virtual | Ordem e efeitos determinísticos; WAIT configurável apenas em fixtures |
-| T3 | Microsequencer Z80 para subconjunto já coberto pelo trace ED | Trace runtime bate com corpus existente no escopo declarado |
-| T4 | Ampliar famílias de transações com testes por opcode/micro-op | Primeira divergência, não apenas ciclos totais |
-| T5 | Provar a unidade temporal SMS por perfil/revisão e decidir despacho inteiro/sub-tick | Fonte/medição e oracle independente para cada relação |
-| T6 | Primeira integração CPU/bus/Scheduler em SMS, sem mudar semântica não documentada | Snapshot/replay e traces integrados; SG-1000 preservado |
-| T7 | Sincronização VDP/PSG/IRQ progressiva | H/VBlank, I/O, áudio e waits cobertos por traces/oráculos |
+| T0 | Reconciliar a PR #396 e os contratos temporais existentes com o microsequenciador já integrado; inventariar o trace atual sem duplicá-lo | Uma única definição de transação/continuação; lacunas e ownership documentados |
+| T1 | Completar o estado arquitetural retomável e seus pontos de snapshot, preservando o executor atômico como referência diferencial | Suspensão/retomada/restore reproduzem registradores, micro-op, índices M/T e transação pendente |
+| T2 | Implementar o coordenador da máquina sobre o `MachineScheduler`, sem lógica de dispositivo dentro do Scheduler | Um único `MachineTime`, deadlines explícitos, avanço monotônico e consumo determinístico de dispatches |
+| T3 | Integrar um adaptador de barramento transacional com operações sintéticas, efeitos exatamente-uma-vez e WAIT apenas em fixtures controladas | Ordem causal, suspensão sem busy-wait e replay idêntico; sem alegar timing elétrico SMS ainda não demonstrado |
+| T4 | Primeira fatia vertical Z80/bus/Scheduler em SMS usando somente operações cuja sequência temporal esteja coberta | Trace originado do caminho real, comparação diferencial e snapshot/replay; VDP legado excluído |
+| T5 | Expandir famílias do microsequenciador e transações (M1/refresh, memória, I/O, stack, RMW, prefixos, interrupções) com oráculos por escopo | Primeira divergência por operação, não apenas total de T-states; UNKNOWN preservado onde faltar evidência |
+| T6 | Provar unidade temporal e perfil SMS por revisão; integrar o novo VDP temporal e eventos IRQ/raster progressivamente | Relações de clock/fase sustentadas por fonte/medição; sem sub-tick até decisão formal específica |
+| T7 | Integrar PSG/áudio, WAIT/arbitragem e snapshots/replay da máquina completa | CPU/bus/VDP/PSG causalmente integrados; SG-1000 e SMS regressivos preservados |
 
 Cada fatia de runtime exige branch própria, PR Draft, gates completos no SHA exato e separação entre mudança estrutural e correção semântica. Não alterar `main`, não rebasear a stack #358–#360 automaticamente e não declarar `TEMPORAL_PASS` antes da integração e dos oráculos.
 
 ## 9. Critérios de saída desta ADR
 
 - [ ] Revisão da compatibilidade com ADR-0014.
-- [ ] Decisão explícita sobre a sequência do roadmap (manter Fase 8 tardia ou antecipar integração).
+- [x] Decisão explícita do mantenedor: antecipar a integração temporal por fatias incrementais, sem declarar o marco final concluído.
 - [ ] Inventário de cobertura dos traces Z80 existente por família.
 - [ ] Evidência primária ou captura reproduzível para relação de clocks/fases SMS.
 - [ ] Modelo de transação e snapshot revisado, sem API pública prematura.
 - [ ] Plano de testes com oráculos e ancestralidade documentados.
 - [ ] Novo VDP temporal implementado ao menos até os contratos necessários de raster/fetch/IRQ antes da integração da CPU; VDP legado explicitamente excluído do caminho temporal.
 
-**Status atual:** design proposto; nenhuma implementação autorizada por esta ADR. `INTEGRATION_PENDING` permanece. `TEMPORAL_PASS` não declarado.
+**Status atual:** direção arquitetural aprovada para antecipação incremental. A PR #396 permanece uma proposta de contrato em revisão e não é considerada automaticamente aprovada ou integrada. CPU/bus/Scheduler em execução de máquina continuam `INTEGRATION_PENDING`; VDP/PSG integrados à máquina continuam `INTEGRATION_PENDING`. `TEMPORAL_PASS` não declarado.
 
 ## Referências
 
