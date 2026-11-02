@@ -800,6 +800,21 @@ mod tests {
     }
 
     #[test]
+    fn instruction_tstate_overflow_keeps_bus_request_pending() {
+        let mut cpu = Z80MicroSequencer::default();
+        let fetch = request(cpu.begin_instruction().unwrap());
+        cpu.instruction_tstates = u32::MAX;
+
+        assert_eq!(
+            cpu.complete_bus_cycle(fetch.id, Some(0x00)),
+            Err(Z80MicroSequencerError::InstructionTStateOverflow)
+        );
+        assert_eq!(cpu.pending_request(), Some(fetch));
+        assert_eq!(cpu.registers.pc, 0);
+        assert_eq!(cpu.instruction_tstates, u32::MAX);
+    }
+
+    #[test]
     fn unsupported_opcode_does_not_leave_a_phantom_pending_request() {
         let mut cpu = Z80MicroSequencer::default();
         let fetch = request(cpu.begin_instruction().unwrap());
