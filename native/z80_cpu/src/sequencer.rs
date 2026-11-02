@@ -716,6 +716,36 @@ mod tests {
     }
 
     #[test]
+    fn inc_hl_keeps_captured_address_when_hl_changes_during_suspension() {
+        let mut cpu = Z80MicroSequencer {
+            registers: Z80Registers {
+                h: 0x12,
+                l: 0x34,
+                f: FLAG_C,
+                ..Z80Registers::default()
+            },
+            ..Z80MicroSequencer::default()
+        };
+        let fetch = request(cpu.begin_instruction().unwrap());
+        let read = request(cpu.complete_bus_cycle(fetch.id, Some(0x34)).unwrap());
+        assert_eq!(read.address, 0x1234);
+        assert_eq!(
+            cpu.complete_bus_cycle(read.id, Some(0x41)).unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+
+        cpu.registers.h = 0xAB;
+        cpu.registers.l = 0xCD;
+        let write = request(cpu.complete_internal_cycle().unwrap());
+        assert_eq!(write.address, 0x1234);
+        assert_eq!(
+            write.operation,
+            Z80BusOperation::MemoryWrite { value: 0x42 }
+        );
+        retired(cpu.complete_bus_cycle(write.id, None).unwrap(), 0x34, 11);
+    }
+
+    #[test]
     fn dec_hl_sets_flags_and_writes_result_after_internal_cycle() {
         let mut cpu = Z80MicroSequencer {
             registers: Z80Registers {
