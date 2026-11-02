@@ -6,6 +6,10 @@
 //! frame; uploading emulator VideoFrame pixels is a subsequent milestone.
 
 use core::mem::ManuallyDrop;
+use core::ptr::null_mut;
+use std::slice;
+
+use super::{PixelFormat, VideoFrame};
 
 use windows::Win32::Foundation::{CloseHandle, HANDLE, HINSTANCE, HWND, RECT};
 use windows::Win32::Graphics::Direct3D::D3D_FEATURE_LEVEL_11_0;
@@ -17,6 +21,15 @@ use windows::Win32::Graphics::Direct3D12::{
     D3D12_RESOURCE_BARRIER, D3D12_RESOURCE_BARRIER_0, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
     D3D12_RESOURCE_BARRIER_FLAG_NONE, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
     D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET,
+    D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COPY_SOURCE,
+    D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_DIMENSION_BUFFER,
+    D3D12_RESOURCE_DIMENSION_TEXTURE2D, D3D12_RESOURCE_FLAG_NONE,
+    D3D12_TEXTURE_LAYOUT_ROW_MAJOR, D3D12_TEXTURE_LAYOUT_UNKNOWN,
+    D3D12_HEAP_PROPERTIES, D3D12_HEAP_TYPE_DEFAULT, D3D12_HEAP_TYPE_UPLOAD,
+    D3D12_HEAP_FLAG_NONE, D3D12_CPU_PAGE_PROPERTY_UNKNOWN, D3D12_MEMORY_POOL_UNKNOWN,
+    D3D12_RESOURCE_DESC, D3D12_RANGE, D3D12_PLACED_SUBRESOURCE_FOOTPRINT,
+    D3D12_TEXTURE_COPY_LOCATION, D3D12_TEXTURE_COPY_LOCATION_0,
+    D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT, D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
     D3D12_RESOURCE_TRANSITION_BARRIER, D3D12CreateDevice, ID3D12CommandAllocator,
     ID3D12CommandList, ID3D12CommandQueue, ID3D12DescriptorHeap, ID3D12Device, ID3D12Fence,
     ID3D12GraphicsCommandList, ID3D12PipelineState, ID3D12Resource,
@@ -188,6 +201,11 @@ pub struct D3d12Host {
     fence: ID3D12Fence,
     fence_event: HANDLE,
     last_submitted_fence: u64,
+    frame_texture: ID3D12Resource,
+    upload_buffer: ID3D12Resource,
+    upload_layout: D3D12_PLACED_SUBRESOURCE_FOOTPRINT,
+    upload_size: u64,
+    texture_is_copy_source: bool,
     width: u32,
     height: u32,
     window: NativeVideoWindow,
@@ -291,6 +309,84 @@ impl D3d12Host {
         };
         unsafe { command_list.Close()? };
 
+        let texture_desc = D3D12_RESOURCE_DESC {
+            Dimension: D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+            Alignment: 0,
+            Width: u64::from(width),
+            Height: height,
+            DepthOrArraySize: 1,
+            MipLevels: 1,
+            Format: DXGI_FORMAT_R8G8B8A8_UNORM,
+            SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+            Layout: D3D12_TEXTURE_LAYOUT_UNKNOWN,
+            Flags: D3D12_RESOURCE_FLAG_NONE,
+        };
+        let mut upload_layout = D3D12_PLACED_SUBRESOURCE_FOOTPRINT::default();
+        let mut upload_rows = 0_u32;
+        let mut upload_row_size = 0_u64;
+        let mut upload_size = 0_u64;
+        unsafe {
+            device.GetCopyableFootprints(
+                &texture_desc,
+                0,
+                1,
+                0,
+                Some(&mut upload_layout),
+                Some(&mut upload_rows),
+                Some(&mut upload_row_size),
+                Some(&mut upload_size),
+            );
+        }
+
+        let default_heap = D3D12_HEAP_PROPERTIES {
+            Type: D3D12_HEAP_TYPE_DEFAULT,
+            CPUPageProperty: D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
+            MemoryPoolPreference: D3D12_MEMORY_POOL_UNKNOWN,
+            CreationNodeMask: 1,
+            VisibleNodeMask: 1,
+        };
+        let mut frame_texture = None;
+        unsafe {
+            device.CreateCommittedResource(
+                &default_heap,
+                D3D12_HEAP_FLAG_NONE,
+                &texture_desc,
+                D3D12_RESOURCE_STATE_COPY_DEST,
+                None,
+                &mut frame_texture,
+            )?;
+        }
+        let frame_texture: ID3D12Resource = frame_texture.ok_or_else(Error::from_win32)?;
+
+        let upload_desc = D3D12_RESOURCE_DESC {
+            Dimension: D3D12_RESOURCE_DIMENSION_BUFFER,
+            Alignment: 0,
+            Width: upload_size,
+            Height: 1,
+            DepthOrArraySize: 1,
+            MipLevels: 1,
+            Format: windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_UNKNOWN,
+            SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+            Layout: D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+            Flags: D3D12_RESOURCE_FLAG_NONE,
+        };
+        let upload_heap = D3D12_HEAP_PROPERTIES {
+            Type: D3D12_HEAP_TYPE_UPLOAD,
+            ..default_heap
+        };
+        let mut upload_buffer = None;
+        unsafe {
+            device.CreateCommittedResource(
+                &upload_heap,
+                D3D12_HEAP_FLAG_NONE,
+                &upload_desc,
+                D3D12_RESOURCE_STATE_GENERIC_READ,
+                None,
+                &mut upload_buffer,
+            )?;
+        }
+        let upload_buffer: ID3D12Resource = upload_buffer.ok_or_else(Error::from_win32)?;
+
         let fence: ID3D12Fence =
             unsafe { device.CreateFence(0, D3D12_FENCE_FLAG_NONE)? };
         let fence_event = unsafe { CreateEventW(None, false, false, None)? };
@@ -310,6 +406,11 @@ impl D3d12Host {
             fence,
             fence_event,
             last_submitted_fence: 0,
+            frame_texture,
+            upload_buffer,
+            upload_layout,
+            upload_size,
+            texture_is_copy_source: false,
             width,
             height,
             window,
@@ -421,6 +522,159 @@ impl D3d12Host {
             self.queue.Signal(&self.fence, self.last_submitted_fence)?;
         }
 
+        Ok(())
+    }
+
+    /// Upload and present one immutable emulator frame.
+    ///
+    /// The host's swap-chain dimensions must match the frame dimensions.
+    /// RGB565 is expanded to RGBA8888 in the mapped upload buffer; RGBA8888
+    /// rows are copied directly. D3D12's GetCopyableFootprints supplies the
+    /// required row pitch, so the source frame stride is never assumed to be
+    /// GPU-aligned.
+    pub fn present_frame(&mut self, frame: &VideoFrame) -> Result<()> {
+        if frame.width() != self.width || frame.height() != self.height {
+            return Err(Error::new(
+                windows::core::HRESULT(0x8007_0057_u32 as i32),
+                "VideoFrame dimensions must match the initialized DXGI swap chain",
+            ));
+        }
+
+        self.wait_for_frame_slot()?;
+        self.wait_for_gpu()?;
+        self.write_frame_to_upload(frame)?;
+
+        let buffer_index = self.current_back_buffer_index() as usize;
+        let back_buffer = &self.render_targets[buffer_index];
+
+        unsafe {
+            self.command_allocator.Reset()?;
+            self.command_list
+                .Reset(&self.command_allocator, None::<&ID3D12PipelineState>)?;
+
+            if self.texture_is_copy_source {
+                let to_copy_dest = transition_barrier(
+                    &self.frame_texture,
+                    D3D12_RESOURCE_STATE_COPY_SOURCE,
+                    D3D12_RESOURCE_STATE_COPY_DEST,
+                );
+                self.command_list.ResourceBarrier(&[to_copy_dest]);
+            }
+
+            let upload_location = D3D12_TEXTURE_COPY_LOCATION {
+                pResource: ManuallyDrop::new(Some(self.upload_buffer.clone())),
+                Type: D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
+                Anonymous: D3D12_TEXTURE_COPY_LOCATION_0 {
+                    PlacedFootprint: self.upload_layout,
+                },
+            };
+            let texture_location = D3D12_TEXTURE_COPY_LOCATION {
+                pResource: ManuallyDrop::new(Some(self.frame_texture.clone())),
+                Type: D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
+                Anonymous: D3D12_TEXTURE_COPY_LOCATION_0 {
+                    SubresourceIndex: 0,
+                },
+            };
+            self.command_list.CopyTextureRegion(
+                &texture_location,
+                0,
+                0,
+                0,
+                &upload_location,
+                None,
+            );
+
+            let texture_to_source = transition_barrier(
+                &self.frame_texture,
+                D3D12_RESOURCE_STATE_COPY_DEST,
+                D3D12_RESOURCE_STATE_COPY_SOURCE,
+            );
+            let backbuffer_to_dest = transition_barrier(
+                back_buffer,
+                D3D12_RESOURCE_STATE_PRESENT,
+                D3D12_RESOURCE_STATE_COPY_DEST,
+            );
+            self.command_list.ResourceBarrier(&[texture_to_source, backbuffer_to_dest]);
+            self.command_list.CopyResource(back_buffer, &self.frame_texture);
+
+            let backbuffer_to_present = transition_barrier(
+                back_buffer,
+                D3D12_RESOURCE_STATE_COPY_DEST,
+                D3D12_RESOURCE_STATE_PRESENT,
+            );
+            self.command_list.ResourceBarrier(&[backbuffer_to_present]);
+            self.command_list.Close()?;
+
+            let command_list: ID3D12CommandList = self.command_list.cast()?;
+            self.queue.ExecuteCommandLists(&[Some(command_list)]);
+            self.texture_is_copy_source = true;
+
+            let next_fence = self.last_submitted_fence.saturating_add(1);
+            self.queue.Signal(&self.fence, next_fence)?;
+            self.last_submitted_fence = next_fence;
+            self.swap_chain.Present(1, DXGI_PRESENT(0)).ok()?;
+        }
+
+        Ok(())
+    }
+
+    fn write_frame_to_upload(&self, frame: &VideoFrame) -> Result<()> {
+        let row_bytes = (frame.width() as usize)
+            .checked_mul(4)
+            .ok_or_else(Error::from_win32)?;
+        let row_pitch = self.upload_layout.Footprint.RowPitch as usize;
+        if row_pitch < row_bytes || self.upload_size < self.upload_layout.Offset {
+            return Err(Error::from_win32());
+        }
+
+        let read_range = D3D12_RANGE { Begin: 0, End: 0 };
+        let mut mapped = null_mut();
+        unsafe {
+            self.upload_buffer
+                .Map(0, Some(&read_range), Some(&mut mapped))?;
+        }
+        if mapped.is_null() {
+            unsafe { self.upload_buffer.Unmap(0, None) };
+            return Err(Error::from_win32());
+        }
+
+        let destination = unsafe {
+            mapped
+                .cast::<u8>()
+                .add(self.upload_layout.Offset as usize)
+        };
+
+        for y in 0..frame.height() {
+            let source = frame.row(y).ok_or_else(Error::from_win32)?;
+            let destination_row =
+                unsafe { slice::from_raw_parts_mut(destination.add(y as usize * row_pitch), row_bytes) };
+
+            match frame.pixel_format() {
+                PixelFormat::Rgba8888 => destination_row.copy_from_slice(source),
+                PixelFormat::Rgb565Le => {
+                    for (source_pixel, destination_pixel) in
+                        source.chunks_exact(2).zip(destination_row.chunks_exact_mut(4))
+                    {
+                        let pixel = u16::from_le_bytes([source_pixel[0], source_pixel[1]]);
+                        let red = ((pixel >> 11) & 0x1F) as u8;
+                        let green = ((pixel >> 5) & 0x3F) as u8;
+                        let blue = (pixel & 0x1F) as u8;
+                        destination_pixel[0] = (red << 3) | (red >> 2);
+                        destination_pixel[1] = (green << 2) | (green >> 4);
+                        destination_pixel[2] = (blue << 3) | (blue >> 2);
+                        destination_pixel[3] = u8::MAX;
+                    }
+                }
+            }
+        }
+
+        let written_range = D3D12_RANGE {
+            Begin: self.upload_layout.Offset as usize,
+            End: self.upload_size as usize,
+        };
+        unsafe {
+            self.upload_buffer.Unmap(0, Some(&written_range));
+        }
         Ok(())
     }
 
