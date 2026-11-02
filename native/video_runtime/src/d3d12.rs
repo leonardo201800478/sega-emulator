@@ -10,10 +10,9 @@ use core::mem::ManuallyDrop;
 use windows::Win32::Foundation::{CloseHandle, HANDLE, HINSTANCE, HWND, RECT};
 use windows::Win32::Graphics::Direct3D::D3D_FEATURE_LEVEL_11_0;
 use windows::Win32::Graphics::Direct3D12::{
-    D3D12_COMMAND_QUEUE_DESC, D3D12_COMMAND_QUEUE_FLAG_NONE,
-    D3D12_COMMAND_QUEUE_PRIORITY_NORMAL, D3D12_COMMAND_LIST_TYPE_DIRECT,
-    D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_DESCRIPTOR_HEAP_DESC, D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
-    D3D12_DESCRIPTOR_HEAP_TYPE_RTV, D3D12_FENCE_FLAG_NONE,
+    D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_QUEUE_DESC, D3D12_COMMAND_QUEUE_FLAG_NONE,
+    D3D12_COMMAND_QUEUE_PRIORITY_NORMAL, D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_DESCRIPTOR_HEAP_DESC,
+    D3D12_DESCRIPTOR_HEAP_FLAG_NONE, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, D3D12_FENCE_FLAG_NONE,
     D3D12_RESOURCE_BARRIER, D3D12_RESOURCE_BARRIER_0, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
     D3D12_RESOURCE_BARRIER_FLAG_NONE, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
     D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET,
@@ -27,17 +26,17 @@ use windows::Win32::Graphics::Dxgi::Common::{
 use windows::Win32::Graphics::Dxgi::{
     CreateDXGIFactory2, DXGI_CREATE_FACTORY_FLAGS, DXGI_PRESENT, DXGI_SCALING_STRETCH,
     DXGI_SWAP_CHAIN_DESC1, DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT,
-    DXGI_SWAP_EFFECT_FLIP_DISCARD, DXGI_USAGE_RENDER_TARGET_OUTPUT, IDXGIFactory2,
-    IDXGISwapChain2, IDXGISwapChain3,
+    DXGI_SWAP_EFFECT_FLIP_DISCARD, DXGI_USAGE_RENDER_TARGET_OUTPUT, IDXGIFactory2, IDXGISwapChain2,
+    IDXGISwapChain3,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::{
     CreateEventW, INFINITE, WAIT_OBJECT_0, WaitForSingleObjectEx,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CW_USEDEFAULT, CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow,
+    CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, DestroyWindow,
     DispatchMessageW, MSG, PM_REMOVE, PeekMessageW, PostQuitMessage, RegisterClassW, SW_SHOW,
-    ShowWindow, TranslateMessage, WNDCLASSW, WINDOW_EX_STYLE, WINDOW_STYLE, WM_DESTROY,
+    ShowWindow, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_DESTROY, WNDCLASSW,
     WS_OVERLAPPEDWINDOW,
 };
 use windows::core::{Error, Interface, Result, w};
@@ -232,13 +231,7 @@ impl D3d12Host {
         };
 
         let swap_chain1 = unsafe {
-            factory.CreateSwapChainForHwnd(
-                &queue,
-                window.hwnd(),
-                &swap_chain_desc,
-                None,
-                None,
-            )?
+            factory.CreateSwapChainForHwnd(&queue, window.hwnd(), &swap_chain_desc, None, None)?
         };
         unsafe {
             factory.MakeWindowAssociation(
@@ -291,8 +284,7 @@ impl D3d12Host {
         };
         unsafe { command_list.Close()? };
 
-        let fence: ID3D12Fence =
-            unsafe { device.CreateFence(0, D3D12_FENCE_FLAG_NONE)? };
+        let fence: ID3D12Fence = unsafe { device.CreateFence(0, D3D12_FENCE_FLAG_NONE)? };
         let fence_event = unsafe { CreateEventW(None, false, false, None)? };
 
         Ok(Self {
@@ -341,9 +333,7 @@ impl D3d12Host {
     /// Call this only from the host/render thread. It must never gate machine
     /// stepping or Scheduler time.
     pub fn wait_for_frame_slot(&self) -> Result<()> {
-        let result = unsafe {
-            WaitForSingleObjectEx(self.frame_latency_handle, INFINITE, false)
-        };
+        let result = unsafe { WaitForSingleObjectEx(self.frame_latency_handle, INFINITE, false) };
         if result == WAIT_OBJECT_0 {
             Ok(())
         } else {
@@ -401,8 +391,11 @@ impl D3d12Host {
                     right,
                     bottom: band_bottom,
                 };
-                self.command_list
-                    .ClearRenderTargetView(rtv, color, Some(std::slice::from_ref(&rect)));
+                self.command_list.ClearRenderTargetView(
+                    rtv,
+                    color,
+                    Some(std::slice::from_ref(&rect)),
+                );
             }
 
             let to_present = transition_barrier(
