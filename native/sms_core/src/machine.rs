@@ -6,7 +6,7 @@
 use crate::SmsCoreError;
 use crate::bus::CpuBus;
 use crate::cartridge::CartridgeImage;
-use crate::config::SmsMachineConfig;
+use crate::config::{SmsMachineConfig, SpriteLimitMode};
 use crate::cpu::{CpuError, Z80};
 use crate::input::{ControllerButtons, SmsInputState};
 use crate::io::{SmsIo, SmsIoError};
@@ -336,6 +336,23 @@ impl SmsMachine {
         &mut self.vdp
     }
 
+    /// Configure whether SMS sprites beyond the native eight-per-line limit
+    /// are drawn. Hardware overflow reporting remains enabled in both modes.
+    pub fn set_sprite_limit_enabled(&mut self, enabled: bool) {
+        let mode = if enabled {
+            SpriteLimitMode::HardwareLimit
+        } else {
+            SpriteLimitMode::UnlockedCompatibility
+        };
+        self.vdp.set_sprite_limit_mode(mode);
+        self.config.sprite_limit = mode;
+    }
+
+    /// Return whether the native SMS1 eight-sprites-per-line draw limit is active.
+    pub fn sprite_limit_enabled(&self) -> bool {
+        self.config.sprite_limit == SpriteLimitMode::HardwareLimit
+    }
+
     pub fn set_stereo_presentation(&mut self, mode: StereoPresentation) {
         self.vdp.set_stereo_presentation(mode);
     }
@@ -365,6 +382,26 @@ mod tests {
     use crate::bus::CpuBus;
     use crate::config::{SmsMachineConfig, VideoStandard};
     use crate::input::{ControllerButtons, SmsInputState};
+
+    #[test]
+    fn runtime_sprite_limit_policy_updates_vdp_and_machine_config() {
+        let mut machine = SmsMachine::new(vec![0; 0x4000]).unwrap();
+        assert!(machine.sprite_limit_enabled());
+        assert_eq!(
+            machine.vdp().sprite_limit_mode(),
+            crate::config::SpriteLimitMode::HardwareLimit
+        );
+
+        machine.set_sprite_limit_enabled(false);
+        assert!(!machine.sprite_limit_enabled());
+        assert_eq!(
+            machine.vdp().sprite_limit_mode(),
+            crate::config::SpriteLimitMode::UnlockedCompatibility
+        );
+
+        machine.set_sprite_limit_enabled(true);
+        assert!(machine.sprite_limit_enabled());
+    }
 
     #[test]
     fn cpu_fetches_cartridge_rom_and_uses_the_same_mapper_memory_for_ram() {
