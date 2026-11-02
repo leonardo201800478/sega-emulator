@@ -154,9 +154,7 @@ impl SmsTemporalMachine {
         .map(Some)
     }
     /// Describe the currently exposed CPU-internal interval using the shared contract.
-    pub fn pending_internal_transaction(
-        &self,
-    ) -> Result<Option<BusTransaction>, BusContractError> {
+    pub fn pending_internal_transaction(&self) -> Result<Option<BusTransaction>, BusContractError> {
         let state = self.cpu.export_state();
         if !matches!(
             state.phase,
@@ -712,10 +710,7 @@ mod tests {
         assert_eq!(transaction.address(), Some(0));
         assert_eq!(transaction.data(), None);
         assert_eq!(transaction.duration_tstates(), 4);
-        assert_eq!(
-            machine.pending_bus_transaction().unwrap(),
-            Some(transaction)
-        );
+        assert_eq!(machine.pending_bus_transaction().unwrap(), Some(transaction));
         machine.schedule_pending_bus(0).unwrap();
         assert_eq!(machine.pending_bus_transaction().unwrap(), Some(transaction));
     }
