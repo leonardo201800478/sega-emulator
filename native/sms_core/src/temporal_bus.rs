@@ -534,9 +534,7 @@ mod tests {
                 panic!("expected selected-bank read completion");
             };
             assert_eq!(read_completion.data, Some(3));
-            restored
-                .acknowledge_completion(read_request.id)
-                .unwrap();
+            restored.acknowledge_completion(read_request.id).unwrap();
 
             // Continue the next register case from the restored timeline.
             bus = restored;
@@ -546,12 +544,7 @@ mod tests {
     #[test]
     fn mapper_write_completion_remains_latched_across_restore_without_reapplying_effect() {
         let mut bus = SmsTemporalBus::new(patterned_rom(4), 3).unwrap();
-        let request = request(
-            20,
-            Z80BusOperation::MemoryWrite { value: 3 },
-            0xFFFD,
-            3,
-        );
+        let request = request(20, Z80BusOperation::MemoryWrite { value: 3 }, 0xFFFD, 3);
         bus.begin_request(request, 1).unwrap();
         let first = bus.dispatch_next().unwrap().unwrap();
         let Some(SmsTemporalDispatch::BusCompletion(completion)) = first else {
