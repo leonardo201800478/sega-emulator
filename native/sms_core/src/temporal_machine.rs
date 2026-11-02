@@ -129,10 +129,11 @@ impl SmsTemporalMachine {
             return Err(SmsTemporalMachineError::InvalidState);
         }
         let continuation_id = self.next_internal_cycle_id;
-        self.next_internal_cycle_id = continuation_id
+        let next_internal_cycle_id = continuation_id
             .checked_add(1)
             .ok_or(SmsTemporalMachineError::InternalCycleIdExhausted)?;
         let deadline = self.bus.schedule_internal_cycle(continuation_id, tstates)?;
+        self.next_internal_cycle_id = next_internal_cycle_id;
         self.pending_internal_cycle_id = Some(continuation_id);
         Ok(deadline)
     }
