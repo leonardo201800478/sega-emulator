@@ -203,7 +203,7 @@ impl D3d12Host {
         unsafe {
             D3D12CreateDevice(None, D3D_FEATURE_LEVEL_11_0, &mut device)?;
         }
-        let device: ID3D12Device = device.ok_or_else(Error::from_win32)?;
+        let device: ID3D12Device = device.ok_or_else(Error::from_thread)?;
 
         let queue_desc = D3D12_COMMAND_QUEUE_DESC {
             Type: D3D12_COMMAND_LIST_TYPE_DIRECT,
@@ -244,7 +244,7 @@ impl D3d12Host {
         unsafe { swap_chain2.SetMaximumFrameLatency(1)? };
         let frame_latency_handle = unsafe { swap_chain2.GetFrameLatencyWaitableObject() };
         if frame_latency_handle.is_invalid() {
-            return Err(Error::from_win32());
+            return Err(Error::from_thread());
         }
         let swap_chain: IDXGISwapChain3 = swap_chain2.cast()?;
 
@@ -337,7 +337,7 @@ impl D3d12Host {
         if result == WAIT_OBJECT_0 {
             Ok(())
         } else {
-            Err(Error::from_win32())
+            Err(Error::from_thread())
         }
     }
 
@@ -431,7 +431,7 @@ impl D3d12Host {
             if result == WAIT_OBJECT_0 {
                 Ok(())
             } else {
-                Err(Error::from_win32())
+                Err(Error::from_thread())
             }
         }
     }
