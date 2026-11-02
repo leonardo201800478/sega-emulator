@@ -768,7 +768,7 @@ pub fn render_mode4_sprites_line(
             break;
         }
         let top = i16::from(y.wrapping_add(1));
-        let relative = i16::from(screen_y) - top;
+        let relative = i16::from(screen_y as u8) - top;
         if relative < 0 || relative >= display_height as i16 {
             continue;
         }
