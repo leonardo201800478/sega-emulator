@@ -209,8 +209,18 @@ impl<T> EventQueue<T> {
                 if watermark.sequence >= state.next_sequence {
                     return Err(EventQueueError::SequenceOutOfRange);
                 }
-                let event_key = (event.timestamp, event.hardware_phase, event.priority, event.sequence);
-                let watermark_key = (watermark.timestamp, watermark.hardware_phase, watermark.priority, watermark.sequence);
+                let event_key = (
+                    event.timestamp,
+                    event.hardware_phase,
+                    event.priority,
+                    event.sequence,
+                );
+                let watermark_key = (
+                    watermark.timestamp,
+                    watermark.hardware_phase,
+                    watermark.priority,
+                    watermark.sequence,
+                );
                 if event_key <= watermark_key {
                     return Err(EventQueueError::WatermarkRegression);
                 }
