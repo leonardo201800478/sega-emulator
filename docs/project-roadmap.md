@@ -2,7 +2,7 @@
 
 **Status:** única rota de implementação vigente do projeto.
 **Prioridade ativa:** preservar e consolidar SG-1000 + Master System (SMS), com integração temporal progressiva.
-**Baseline auditada:** `main` em `62ab404e67fffbe8d0da7bf956e6b801a2e2bbd7` (2026-11-02, após T4 e PR #417).
+**Baseline auditada:** `main` em `6c8e18b1c0a134ee56e8282d1cbc7660373100f8` (2026-11-02, após integração da PR #418/T5a).
 **Runtime-alvo:** Rust executa hardware, áudio, vídeo, entrada e tempo emulado. Python/Qt é plano de controle, interface e tooling. A migração de cada backend deve ser comprovada no código; esta diretriz não declara a arquitetura-alvo concluída.
 
 > Este arquivo substitui todos os roadmaps, cronogramas de migração e cartas de planejamento anteriores. Não manter planos paralelos por subsistema. ADRs, especificações e auditorias continuam válidos como documentação técnica, mas não podem criar fases ou prioridades concorrentes. O trabalho executável é acompanhado por issues e PRs vinculadas às fases abaixo.
@@ -135,13 +135,13 @@ Esta fase passa a ser a frente ativa de integração temporal, autorizada formal
 - T2: PR #414 — coordenador SMS sobre `MachineScheduler`, com escala temporal explícita.
 - T3: barramento de memória transacional, efeitos no deadline, acknowledgement único e WAIT de fixture, incorporado à stack T4.
 - T4: PR #416 — integrada em `main` no SHA `3f4a71d7b7bbc1863c20cd3293466405cb3f579b`; head validado `bfdc7d2fbbcf7712091df9960a7e7e593c18afea`; CI #41499228458 PASS em todos os quatro jobs sobre merge ref `cea276159efd382e8289085be4b5f67dccecc753`.
-- T5a: PR #418 — código SHA `0c178ed6c8da6aeddf8e25682a2ebc620eec786f`; run `41536695747` PASS nos quatro jobs. O restore valida endereço efetivo `(HL)`, payload com CRC válido e progresso `instruction_tstates` contra o Scheduler; `SmsTemporalMachineState` versão 6 preserva `instruction_started_at`. Execução local: NOT RUN. A atualização documental posterior é validada no CI do SHA final da PR.
+- T5a: PR #418 — código SHA `0c178ed6c8da6aeddf8e25682a2ebc620eec786f`, run `41536695747` 4/4 PASS; HEAD final da PR `6e73c0655521941c9e4ab7384f4508954306561a`, run `41538464875` 4/4 PASS; merge SHA `6c8e18b1c0a134ee56e8282d1cbc7660373100f8`. O restore valida endereço efetivo `(HL)`, payload com CRC válido e progresso `instruction_tstates` contra o Scheduler; `SmsTemporalMachineState` versão 6 preserva `instruction_started_at`. CI pós-merge `41540515497`: Scheduler deterministic stress SKIPPED, não PASS. Execução local: NOT RUN.
 
-**Estado:** T0–T4 integrados incrementalmente; T4 permanece em `SHORT_PASS`. T5a (#418) está em revisão, com contratos temporais de origem única, índices M/T serializáveis e integração restrita ao subconjunto SMS. P6 continua ativa para mappers/I/O, estado arquitetural Z80, VDP/PSG e integração SG-1000. O caminho legado permanece preservado. `TEMPORAL_PASS` continua pendente.
+**Estado:** T0–T5a integrados incrementalmente; T4 permanece em `SHORT_PASS`. T5a/PR #418 está integrada em `main` pelo merge SHA `6c8e18b1c0a134ee56e8282d1cbc7660373100f8`. O escopo continua restrito ao subconjunto retomável SMS e não representa CPU Z80 completa nem `TEMPORAL_PASS`. P6 permanece ativa para completar a integração temporal, validar mapas/mappers/I/O e ampliar a cobertura de estado e dispositivos, incluindo SG-1000. O executor atômico legado permanece como referência diferencial.
 
 **T5a — PR #418:** expor índices M-cycle/T-state estáveis no microsequenciador para as operações já suportadas e mapear para os contratos canônicos `BusTransaction`/`BusOperationResult` mantidos em `sega-temporal-core`. A #418 absorve a implementação e a ADR-001 da #396; a #396 é supersedida. Ownership, fase, timestamp, restore e conclusão transacional devem permanecer coerentes. Não inferir fases elétricas nem ampliar opcodes nesta etapa.
 
-**Saída T5a:** metadados M/T serializáveis e mapeamento revisável CPU/bus/Scheduler para o subconjunto retomável existente no SMS, com trace, snapshot/replay e diferencial. SG-1000 ainda não consome esse caminho temporal. Isso não equivale a `TEMPORAL_PASS`.
+**Saída T5a (integrada):** metadados M/T serializáveis e mapeamento CPU/bus/Scheduler para o subconjunto retomável existente no SMS, com trace, snapshot/replay e diferencial. SG-1000 ainda não consome esse caminho temporal. Isso não equivale a `TEMPORAL_PASS`. Evidência: PR #418, HEAD `6e73c0655521941c9e4ab7384f4508954306561a`, CI de PR `41538464875` (4/4 PASS); merge em `main` `6c8e18b1c0a134ee56e8282d1cbc7660373100f8`. CI pós-merge `41540515497`: Rust, Python e Windows PASS; Scheduler deterministic stress SKIPPED no evento push, portanto não contado como PASS pós-merge. Auditoria técnica pós-merge do Agente 2: APROVADA TECNICAMENTE para o escopo limitado de T5a, registrada como comentário no PR #418 (comentário 6590621514); não é review formal `APPROVE` nem aprovação arquitetural da ADR-001.
 
 ### P7 — Fechamento semântico e expansão da integração temporal
 
@@ -239,4 +239,4 @@ Game Gear, Mega Drive/Genesis, Sega CD, 32X, SVP e sistemas integrados de tercei
 - Testes locais: NOT RUN. Não houve execução de ROM homebrew/golden master nem das suítes externas Z80 nesta integração.
 - PRs #412 e #415 têm seus heads como ancestrais do SHA integrado; #412 foi reconhecida pelo GitHub como merged. PRs #413 e #414 foram encerradas como supersedidas: seus heads divergiam da stack consolidada, mas os entregáveis funcionais de snapshot/codec e coordinator estão no diff integrado de #416. Os hashes específicos dos commits divergentes de #413/#414 não foram preservados como ancestrais; a consolidação preservou o conteúdo funcional, não toda a linhagem histórica dessas duas branches.
 
-Estados: T1 `IMPLEMENTED / QUICK_PASS`; T2 `IMPLEMENTED / QUICK_PASS`; T3 `IMPLEMENTED / QUICK_PASS`; T4 `IMPLEMENTED / SHORT_PASS`; SMS temporal completo `INTEGRATION_PENDING`; `TEMPORAL_PASS` NÃO declarado.
+Estados: T1 `IMPLEMENTED / QUICK_PASS`; T2 `IMPLEMENTED / QUICK_PASS`; T3 `IMPLEMENTED / QUICK_PASS`; T4 `IMPLEMENTED / SHORT_PASS`; T5a `IMPLEMENTED / QUICK_PASS` (PR #418 integrada; CI da PR 4/4 PASS; CI pós-merge com Scheduler stress SKIPPED); SMS temporal completo `INTEGRATION_PENDING`; auditoria técnica pós-merge T5a `APROVADA TECNICAMENTE` (comentário 6590621514; escopo limitado, sem `TEMPORAL_PASS`); `TEMPORAL_PASS` NÃO declarado.
