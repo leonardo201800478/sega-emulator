@@ -8,3 +8,5 @@ publish = false
 name = "sega_sg1000_core"
 path = "src/lib.rs"
 
+[dependencies]
+sega-z80-cpu = { path = "../z80_cpu" }

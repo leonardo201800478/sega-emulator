@@ -38,12 +38,16 @@ dependencies = [
 [[package]]
 name = "sega-sg1000-core"
 version = "0.1.0"
+dependencies = [
+ "sega-z80-cpu",
+]
 
 [[package]]
 name = "sega-sms-core"
 version = "0.1.0"
 dependencies = [
  "sega-z80-bus",
+ "sega-z80-cpu",
 ]
 
 [[package]]
@@ -64,6 +68,14 @@ version = "0.1.0"
 [[package]]
 name = "sega-z80-bus"
 version = "0.1.0"
+
+[[package]]
+name = "sega-z80-cpu"
+version = "0.1.0"
+dependencies = [
+ "sega-z80-alu",
+ "sega-z80-bus",
+]
 
 [[package]]
 name = "syn"

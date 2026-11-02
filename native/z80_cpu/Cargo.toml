@@ -1,0 +1,13 @@
+[package]
+name = "sega-z80-cpu"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "sega_z80_cpu"
+path = "src/lib.rs"
+
+[dependencies]
+sega-z80-alu = { path = "../z80_alu" }
+sega-z80-bus = { path = "../z80_bus" }
