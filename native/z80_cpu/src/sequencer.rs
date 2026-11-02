@@ -1587,5 +1587,4 @@ mod tests {
             Err(Z80MicroSequencerError::InvalidState)
         );
     }
-
 }
