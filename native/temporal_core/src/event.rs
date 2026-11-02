@@ -303,8 +303,11 @@ impl<T> EventQueue<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::{EventPriority, EventQueue, EventQueueError, HardwarePhase, PlatformPriority};
-    use crate::MachineTime;
+    use super::{
+        EventPriority, EventQueue, EventQueueError, HardwarePhase, PlatformPriority,
+        ScheduledEvent,
+    };
+    use crate::{EventQueueState, EventQueueWatermark, MachineTime};
 
     #[test]
     fn events_order_by_absolute_time_phase_priority_and_stable_sequence() {
