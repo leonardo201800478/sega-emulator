@@ -348,6 +348,36 @@ impl Sms1Vdp {
         self.status |= bits;
     }
 
+    /// Compose one functional SMS1 Mode 4 scanline.
+    ///
+    /// The caller supplies the already-latched vertical scroll and the sprite
+    /// limit policy. Sprite overflow/collision are accumulated in the status
+    /// register until a status-port read clears them. This is a scanline
+    /// composition API: it does not calculate latch edges, fetch slots,
+    /// counters, interrupt phases or wait states.
+    pub fn render_mode4_scanline(
+        &mut self,
+        screen_y: u16,
+        latched_vertical_scroll: u8,
+        hardware_sprite_limit: bool,
+        output: &mut [BackgroundPixel; 256],
+    ) -> u8 {
+        render_mode4_background_line(
+            &self.state,
+            screen_y,
+            latched_vertical_scroll,
+            output,
+        );
+        let status_bits = render_mode4_sprites_line(
+            &self.state,
+            screen_y,
+            output,
+            hardware_sprite_limit,
+        );
+        self.set_status_bits(status_bits);
+        status_bits
+    }
+
     /// Read/write port decoder for mirrored SMS VDP port addresses.
     pub fn read_port(&mut self, port: u16) -> u8 {
         match (port as u8) & 0xC1 {
@@ -1065,7 +1095,9 @@ pub fn render_mode4_sprites_line(
 
 #[cfg(test)]
 mod sprite_tests {
-    use super::{BackgroundPixel, Sms1VdpState, VideoStandard, render_mode4_sprites_line};
+    use super::{
+        BackgroundPixel, Sms1Vdp, Sms1VdpState, VideoStandard, render_mode4_sprites_line,
+    };
 
     fn set_sprite(state: &mut Sms1VdpState, index: usize, y: u8, x: u8, tile: u8) {
         let sat = usize::from(state.registers.get(5).unwrap_or(0) & 0x7E) << 7;
@@ -1090,6 +1122,39 @@ mod sprite_tests {
             palette_index: 0,
             priority: false,
         }; 256]
+    }
+
+    #[test]
+    fn sms1_status_002_scanline_composition_latches_overflow_and_collision() {
+        let mut vdp = Sms1Vdp::new(VideoStandard::Ntsc);
+        vdp.state.registers.set_raw(0, 0x04);
+        vdp.state.registers.set_raw(1, 0x40);
+        vdp.state.registers.set_raw(2, 0x0E);
+        vdp.state.registers.set_raw(3, 0xFF);
+        vdp.state.registers.set_raw(4, 0x07);
+        vdp.state.registers.set_raw(5, 0x7F);
+
+        set_sprite(&mut vdp.state, 0, 0xFF, 20, 1);
+        set_sprite(&mut vdp.state, 1, 0xFF, 20, 2);
+        for index in 2..9 {
+            set_sprite(
+                &mut vdp.state,
+                index,
+                0xFF,
+                (50 + (index - 2) * 20) as u8,
+                1,
+            );
+        }
+        solid_tile(&mut vdp.state, 1, 3);
+        solid_tile(&mut vdp.state, 2, 6);
+
+        let mut line = background();
+        let flags = vdp.render_mode4_scanline(0, 0, true, &mut line);
+
+        assert_eq!(flags, 0x60);
+        assert_eq!(line[20].palette_index, 19);
+        assert_eq!(vdp.read_status(), 0x60);
+        assert_eq!(vdp.read_status(), 0);
     }
 
     #[test]
