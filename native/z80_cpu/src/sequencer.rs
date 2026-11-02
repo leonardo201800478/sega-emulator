@@ -580,7 +580,11 @@ mod tests {
             ..Z80MicroSequencer::default()
         };
         let fetch = request(cpu.begin_instruction().unwrap());
-        retired(cpu.complete_bus_cycle(fetch.id, Some(0x04)).unwrap(), 0x04, 4);
+        retired(
+            cpu.complete_bus_cycle(fetch.id, Some(0x04)).unwrap(),
+            0x04,
+            4,
+        );
         assert_eq!(cpu.registers.b, 0x80);
         assert_eq!(cpu.registers.f, FLAG_S | FLAG_H | FLAG_PV | FLAG_C);
     }
@@ -596,9 +600,16 @@ mod tests {
             ..Z80MicroSequencer::default()
         };
         let fetch = request(cpu.begin_instruction().unwrap());
-        retired(cpu.complete_bus_cycle(fetch.id, Some(0x3D)).unwrap(), 0x3D, 4);
+        retired(
+            cpu.complete_bus_cycle(fetch.id, Some(0x3D)).unwrap(),
+            0x3D,
+            4,
+        );
         assert_eq!(cpu.registers.a, 0x7F);
-        assert_eq!(cpu.registers.f, (0x7F & FLAG_XY) | FLAG_H | FLAG_PV | FLAG_N | FLAG_C);
+        assert_eq!(
+            cpu.registers.f,
+            (0x7F & FLAG_XY) | FLAG_H | FLAG_PV | FLAG_N | FLAG_C
+        );
     }
 
     #[test]
@@ -612,7 +623,11 @@ mod tests {
             ..Z80MicroSequencer::default()
         };
         let fetch = request(cpu.begin_instruction().unwrap());
-        retired(cpu.complete_bus_cycle(fetch.id, Some(0x0C)).unwrap(), 0x0C, 4);
+        retired(
+            cpu.complete_bus_cycle(fetch.id, Some(0x0C)).unwrap(),
+            0x0C,
+            4,
+        );
         assert_eq!(cpu.registers.c, 0);
         assert_eq!(cpu.registers.f, FLAG_C | FLAG_Z | FLAG_H);
     }
