@@ -8,18 +8,16 @@
 use windows::Win32::Foundation::{CloseHandle, HANDLE, HINSTANCE, HWND};
 use windows::Win32::Graphics::Direct3D::D3D_FEATURE_LEVEL_11_0;
 use windows::Win32::Graphics::Direct3D12::{
-    D3D12_COMMAND_QUEUE_DESC, D3D12_COMMAND_QUEUE_FLAG_NONE,
-    D3D12_COMMAND_QUEUE_PRIORITY_NORMAL, D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12CreateDevice,
-    ID3D12CommandQueue, ID3D12Device,
+    D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_QUEUE_DESC, D3D12_COMMAND_QUEUE_FLAG_NONE,
+    D3D12_COMMAND_QUEUE_PRIORITY_NORMAL, D3D12CreateDevice, ID3D12CommandQueue, ID3D12Device,
 };
 use windows::Win32::Graphics::Dxgi::Common::{
     DXGI_ALPHA_MODE_IGNORE, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_SAMPLE_DESC,
 };
 use windows::Win32::Graphics::Dxgi::{
-    CreateDXGIFactory2, DXGI_CREATE_FACTORY_FLAGS, DXGI_SCALING_STRETCH,
-    DXGI_SWAP_CHAIN_DESC1, DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT,
-    DXGI_SWAP_EFFECT_FLIP_DISCARD, DXGI_USAGE_RENDER_TARGET_OUTPUT, IDXGIFactory2,
-    IDXGISwapChain2, IDXGISwapChain3,
+    CreateDXGIFactory2, DXGI_CREATE_FACTORY_FLAGS, DXGI_SCALING_STRETCH, DXGI_SWAP_CHAIN_DESC1,
+    DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT, DXGI_SWAP_EFFECT_FLIP_DISCARD,
+    DXGI_USAGE_RENDER_TARGET_OUTPUT, IDXGIFactory2, IDXGISwapChain2, IDXGISwapChain3,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::{INFINITE, WaitForSingleObjectEx};
@@ -193,13 +191,7 @@ impl D3d12Host {
         };
 
         let swap_chain1 = unsafe {
-            factory.CreateSwapChainForHwnd(
-                &queue,
-                window.hwnd(),
-                &swap_chain_desc,
-                None,
-                None,
-            )?
+            factory.CreateSwapChainForHwnd(&queue, window.hwnd(), &swap_chain_desc, None, None)?
         };
         unsafe {
             factory.MakeWindowAssociation(
@@ -256,9 +248,7 @@ impl D3d12Host {
     /// stepping or Scheduler time. The swap chain was created with the
     /// frame-latency waitable-object flag and a maximum latency of one.
     pub fn wait_for_frame_slot(&self) -> Result<()> {
-        let result = unsafe {
-            WaitForSingleObjectEx(self.frame_latency_handle, INFINITE, false)
-        };
+        let result = unsafe { WaitForSingleObjectEx(self.frame_latency_handle, INFINITE, false) };
         if result.0 == 0 {
             Ok(())
         } else {
