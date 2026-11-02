@@ -2,7 +2,7 @@
 
 **Status:** única rota de implementação vigente do projeto.
 **Prioridade ativa:** preservar e consolidar SG-1000 + Master System (SMS), com integração temporal progressiva.
-**Baseline auditada:** `main` em `3a510ae68028228065f7e60350a821ef9f76c882` (2026-11-02).
+**Baseline auditada:** `main` em `29930e0b28c83456634fd6cfc80301bd2e714679` (2026-11-02).
 **Runtime-alvo:** Rust executa hardware, áudio, vídeo, entrada e tempo emulado. Python/Qt é plano de controle, interface e tooling. A migração de cada backend deve ser comprovada no código; esta diretriz não declara a arquitetura-alvo concluída.
 
 > Este arquivo substitui todos os roadmaps, cronogramas de migração e cartas de planejamento anteriores. Não manter planos paralelos por subsistema. ADRs, especificações e auditorias continuam válidos como documentação técnica, mas não podem criar fases ou prioridades concorrentes. O trabalho executável é acompanhado por issues e PRs vinculadas às fases abaixo.
@@ -117,24 +117,39 @@ A arquitetura de destino deve ser alcançada incrementalmente, sem criar crates 
 
 **Saída M3:** painel opcional; runtime segue funcional sem ele.
 
-### P6 — Barramento, mappers e I/O
+### P6 — Barramento, mappers, I/O e fundação Scheduler-driven (prioridade antecipada)
 
-- Consolidar contratos de transação, leitura/escrita, portas e adaptadores específicos.
-- Validar mapas, espelhamento, ROM/RAM/VRAM, decodificação, limites e reset.
-- Reconciliar mappers e perfis existentes; nenhum mapper genérico como fallback.
-- Modelar efeitos colaterais, IRQ/acknowledge, WAIT e arbitragem somente com evidência.
+Esta fase passa a ser a frente ativa de integração temporal, autorizada formalmente em 2026-11-02. A antecipação é incremental: não exige desligar o executor legado, não presume que contratos em revisão estejam aprovados e não antecipa sem evidência a semântica elétrica do SMS.
 
-**Saída:** testes isolados e integrados de barramento, I/O, interrupções e cartuchos nos dois sistemas.
+- Reconciliar a PR #396 com o microsequenciador Z80 e os contratos normativos de `docs/architecture/scheduler/`; não duplicar `BusTransaction`, continuação ou trace.
+- Completar o estado retomável serializável do Z80 para os safe points implementados, mantendo o executor atômico como referência diferencial.
+- Construir o coordenador da máquina que usa o `MachineScheduler` como única autoridade temporal, consumindo deadlines e dispatches sem mover lógica de dispositivo para o Scheduler.
+- Migrar o barramento em etapas para transações suspensíveis, com efeitos exatamente-uma-vez, WAIT somente quando modelado por fixture/evidência e sem busy-wait.
+- Validar mapas, espelhamento, ROM/RAM/VRAM, decodificação, limites, reset, mapper e I/O sem regressões.
+- Manter o runtime legado disponível até que a substituição de cada caminho tenha equivalência comprovada.
+- Não conectar a CPU ao VDP scanline legado como atalho; o destino de raster/IRQ é o novo VDP temporal.
 
-### P7 — Fechamento semântico e de hardware
+**Registro de execução (2026-11-02):**
+- T0: revisão da PR #396 registrada; contratos genéricos permanecem Draft porque o microsequenciador ainda não fornece índices M-cycle/T-state estáveis para mapeamento fiel.
+- T1: PRs #412/#413 — contadores checked e codec binário versionado do estado retomável suportado.
+- T2: PR #414 — coordenador SMS sobre `MachineScheduler`, com escala temporal explícita.
+- T3: barramento de memória transacional, efeitos no deadline, acknowledgement único e WAIT de fixture, incorporado à stack T4.
+- T4: PR #416 — fatia vertical consolidada no SHA `94a6a2128e7f7b4af115d65e98ebbe33cc19ce8f`; CI #41496284832: Rust fmt/clippy/tests PASS, Python Ruff/pytest PASS, Windows x64 vídeo/áudio PASS e Scheduler stress short PASS.
 
-- Z80: BASE, CB, ED, DD/FD, DDCB/FDCB, flags, I/R, WZ/MEMPTR, INT/NMI, IM 0/1/2, EI delay, HALT, RETI/RETN e instruções de bloco.
-- VDPs: cenas sintéticas, sprites, colisão/overflow, status, IRQ, scroll, CRAM e efeitos raster.
-- PSG: divisores, ruído, atenuação, latches, reamostragem e determinismo.
-- YM2413 como etapa própria, condicionada à compatibilidade básica.
+**Estado:** primeira fatia vertical `SHORT_PASS`; P6 permanece ativa para completar mappers/I/O, estado arquitetural Z80, integração do novo VDP/PSG e semântica sustentada por evidência. O caminho legado permanece preservado. `TEMPORAL_PASS` continua pendente.
+
+**Saída:** primeira fatia vertical Z80/bus/Scheduler com trace runtime, snapshot/replay e regressões SG-1000/SMS; isso ainda não equivale a `TEMPORAL_PASS`.
+
+### P7 — Fechamento semântico e expansão da integração temporal
+
+- Z80: completar BASE, CB, ED, DD/FD, DDCB/FDCB, flags, I/R, WZ/MEMPTR, INT/NMI, IM 0/1/2, EI delay, HALT, RETI/RETN e instruções de bloco, integrando cada família ao microsequenciador sem remover a referência atômica antes da validação.
+- VDPs: avançar o novo SMS1 VDP em raster/fetch/pixel pipeline, sprites, colisão/overflow, status, IRQ, scroll, CRAM e efeitos raster; TMS9918A permanece específico do SG-1000.
+- PSG: consolidar divisores, ruído, atenuação, latches, reamostragem e determinismo no caminho Scheduler-driven da máquina.
+- YM2413 como etapa própria, condicionada à compatibilidade básica e à evidência de clock/fase.
+- WAIT, arbitragem e simultaneidade só recebem semântica física quando sustentadas por documentação primária ou captura reproduzível.
 - Cada correção semântica em PR separada, com oráculo independente e atualização justificada de golden master.
 
-**Saída M4:** fechamento funcional SG-1000 + SMS com cobertura semântica e evidência reproduzível.
+**Saída M4:** fechamento funcional SG-1000 + SMS com cobertura semântica e integração temporal parcial demonstrada; não declarar `TEMPORAL_PASS`.
 
 ### P8 — Compatibilidade e robustez
 
@@ -145,14 +160,15 @@ A arquitetura de destino deve ser alcançada incrementalmente, sem criar crates 
 
 **Saída:** compatibilidade delimitada por evidência; sem alegações universais.
 
-### P9 — Integração temporal e TEMPORAL_PASS
+### P9 — Comprovação sistêmica e TEMPORAL_PASS
 
-- Integrar CPU, barramento, VDP, PSG, I/O e IRQ ao Scheduler mestre.
-- Implementar execução interrompível/microsequenciada e transações temporais com WAIT/arbitragem.
-- Validar causalidade, ordenação de eventos, chunk invariance, snapshots parciais e replay.
-- Usar traces e oráculos independentes, com origem e versão registradas.
+- Fechar a integração Scheduler-driven iniciada em P6 e expandida em P7: CPU, barramento, VDP, PSG, I/O e IRQ.
+- Comprovar cronologia causal entre transações e eventos, incluindo WAIT/arbitragem onde houver evidência suficiente.
+- Validar chunk invariance, ordenação, determinismo entre execuções equivalentes, snapshots em safe points/transações pendentes e replay.
+- Comparar traces runtime com oráculos independentes ou evidência física adequada, registrando ancestralidade, SHA, primeira divergência e limitações.
+- Executar regressões completas SG-1000/SMS e gates no mesmo SHA candidato.
 
-**Saída M5:** TEMPORAL_PASS somente após integração e evidência temporal completa. Contratos ou testes unitários isolados não satisfazem este marco.
+**Saída M5:** `TEMPORAL_PASS` somente após integração e evidência temporal completa. Contratos, Scheduler isolado, testes unitários ou aparência visual não satisfazem este marco.
 
 ## 5. Golden masters, oráculos e compatibilidade
 
