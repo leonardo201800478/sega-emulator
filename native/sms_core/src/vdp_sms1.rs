@@ -498,7 +498,7 @@ pub fn render_mode4_background_line(
         }
 
         let fine_scroll = usize::from(horizontal_scroll & 7);
-        let source_x = (screen_x + 256 - usize::from(horizontal_scroll)) & 0xFF;
+        let source_x = (screen_x + usize::from(horizontal_scroll)) & 0xFF;
         // SMS Mode 4 does not wrap the fine-scroll gap into the right edge:
         // the exposed left edge is filled with the backdrop color.
         if fine_scroll != 0 && screen_x < fine_scroll {
@@ -512,8 +512,7 @@ pub fn render_mode4_background_line(
             0
         };
         let virtual_height = 224usize;
-        let source_y = (usize::from(screen_y) + virtual_height - (vertical % virtual_height))
-            % virtual_height;
+        let source_y = (usize::from(screen_y) + vertical) % virtual_height;
 
         let tile_x = source_x >> 3;
         let tile_y = source_y >> 3;
