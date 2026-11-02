@@ -183,7 +183,8 @@ impl SmsTemporalCoordinator {
             .iter()
             .find(|domain| domain.id == SMS_Z80_CLOCK_DOMAIN_ID)
             .ok_or(SmsTemporalCoordinatorError::InvalidState)?;
-        if domain.ratio_numerator != 1 || domain.ratio_denominator != state.master_ticks_per_tstate {
+        if domain.ratio_numerator != 1 || domain.ratio_denominator != state.master_ticks_per_tstate
+        {
             return Err(SmsTemporalCoordinatorError::InvalidState);
         }
         let scheduler = MachineScheduler::restore_state(state.scheduler)?;
