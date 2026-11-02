@@ -688,15 +688,12 @@ impl D3d12Host {
             self.queue.ExecuteCommandLists(&[Some(command_list)]);
             self.texture_is_copy_source = true;
 
-            let next_fence = self
-                .last_submitted_fence
-                .checked_add(1)
-                .ok_or_else(|| {
-                    Error::new(
-                        windows::core::HRESULT(0x8000_4005_u32 as i32),
-                        "D3D12 fence value exhausted",
-                    )
-                })?;
+            let next_fence = self.last_submitted_fence.checked_add(1).ok_or_else(|| {
+                Error::new(
+                    windows::core::HRESULT(0x8000_4005_u32 as i32),
+                    "D3D12 fence value exhausted",
+                )
+            })?;
             self.queue.Signal(&self.fence, next_fence)?;
             self.last_submitted_fence = next_fence;
             self.swap_chain.Present(1, DXGI_PRESENT(0)).ok()?;
