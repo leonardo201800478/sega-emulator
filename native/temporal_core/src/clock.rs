@@ -271,8 +271,7 @@ impl ClockDomain {
         let elapsed = current_time
             .checked_duration_since(registration_start)
             .ok_or(ClockError::InvalidClockHistory)?;
-        let (expected_cycles, expected_phase) =
-            convert_elapsed(elapsed, ratio, initial_phase)?;
+        let (expected_cycles, expected_phase) = convert_elapsed(elapsed, ratio, initial_phase)?;
         if expected_cycles != total_cycles || expected_phase != phase {
             return Err(ClockError::InvalidClockHistory);
         }
@@ -672,7 +671,6 @@ mod tests {
             Err(ClockError::InvalidClockHistory)
         );
     }
-
 
     #[test]
     fn rational_advance_does_not_overflow_when_reduced_result_fits() {
