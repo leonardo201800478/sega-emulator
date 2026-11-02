@@ -25,15 +25,11 @@ Não sacrificar correção por velocidade. Não declarar compatibilidade univers
 
 ## 2. Plataformas e ordem dos marcos
 
-O escopo de plataformas é:
+O catálogo global, os modelos comerciais, as variantes regionais, as expansões e a sequência completa de implementação são definidos exclusivamente em [Roadmap mestre do projeto](project-roadmap.md). Esse roadmap é a fonte única para a direção global e inclui SG-1000/II, SMS I/II, Game Gear, Genesis Model 1/2, Nomad, Sega CD, 32X, sistemas integrados de terceiros e a composição hipotética Sega Neptune Definitive.
 
-1. **SG-1000 + Master System (SMS) — prioridade conjunta e exclusiva de implementação atual.** Preservar o SG-1000 funcional e consolidar o SMS funcional, compartilhando o motor Z80 e os componentes comprovadamente comuns. Os VDPs, mapas de memória e I/O permanecem específicos; o núcleo SN76489 deve ser compartilhado no bloco de áudio com perfis SG-1000/SMS explícitos, preservando diferenças documentadas de cada máquina.
-2. **Game Gear** — somente após o marco conjunto SG-1000/SMS; reutilizar o que for comprovadamente comum ao SMS e especializar LCD, I/O, áudio estéreo e periféricos próprios.
-3. **Mega Drive / Genesis** — integrar 68000, Z80 auxiliar, VDP, áudio, cartuchos, mappers e periféricos.
-4. **Sega CD** — compor com Mega Drive, incluindo CPUs, BIOS, CD/media, Word RAM, ASICs, DMA, PCM e CDDA.
-5. **32X** — compor com Mega Drive, incluindo dois SH-2, firmware, VDP/framebuffers, PWM e composição de vídeo.
+A prioridade de implementação corrente continua sendo fechar SG-1000 + SMS e a integração temporal SMS1, preservando o que já funciona. Essa prioridade não elimina nem redefine o escopo futuro já consolidado no roadmap mestre. Os planos detalhados de SMS, Z80, PSG, mappers e VDP são subordinados e limitados aos respectivos domínios.
 
-A sequência é uma ordem de dependências e validação, não uma promessa de prazo. O SG-1000 e o SMS são tratados como uma única frente prioritária de consolidação: preservar regressões SG-1000 enquanto se fecha o SMS, aproveitando componentes comuns já existentes. Não iniciar Game Gear, Mega Drive ou plataformas posteriores enquanto isso comprometer o fechamento funcional dos dois sistemas, salvo dependência arquitetural justificada.
+### 2.1 Extensões e hardware especializado
 
 ### 2.1 Extensões e hardware especializado
 
