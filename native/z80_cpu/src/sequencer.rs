@@ -230,7 +230,7 @@ impl Z80MicroSequencer {
                 };
                 let payload_matches_source = match state.opcode {
                     Some(0x77) => value == state.registers.a,
-                    Some(0x36 | 0x34 | 0x35) => true,
+                    Some(0x34..=0x36) => true,
                     _ => false,
                 };
                 payload_matches_source
