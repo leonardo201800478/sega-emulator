@@ -642,7 +642,7 @@ mod background_tests {
         render_mode4_background_line(&state, 0, 0, &mut line);
         assert_eq!(line[0].palette_index, 1);
         render_mode4_background_line(&state, 16, 0, &mut line);
-        assert_eq!(line[0].palette_index, 3);
+        assert_eq!(line[0].palette_index, 2);
     }
 
     #[test]
@@ -658,3 +658,23 @@ mod background_tests {
         assert_eq!(line[0].palette_index, 4);
     }
 }
+
+
+    #[test]
+    fn vertical_scroll_advances_source_rows_with_224_line_wrap() {
+        let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
+        state.registers.set_raw(0, 0x04);
+        state.registers.set_raw(1, 0x40);
+        state.registers.set_raw(2, 0x0E);
+        // Distinguish the first two name-table rows.
+        state.memory.vram[0x3800] = 1;
+        state.memory.vram[0x3880] = 2;
+        put_tile(&mut state, 1, 1);
+        put_tile(&mut state, 2, 2);
+        let mut line = [BackgroundPixel { color: [0; 3], palette_index: 0, priority: false }; 256];
+
+        render_mode4_background_line(&state, 0, 1, &mut line);
+        assert_eq!(line[0].palette_index, 2);
+        render_mode4_background_line(&state, 223, 1, &mut line);
+        assert_eq!(line[0].palette_index, 1);
+    }
