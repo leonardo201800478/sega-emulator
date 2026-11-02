@@ -20,6 +20,24 @@ pub enum BusCycleKind {
     Internal,
 }
 
+/// Zero-based M-cycle position in the current CPU continuation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct MCycleIndex(u32);
+
+impl MCycleIndex {
+    pub const fn new(value: u32) -> Self { Self(value) }
+    pub const fn value(self) -> u32 { self.0 }
+}
+
+/// Zero-based T-state position within one M-cycle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TStateIndex(u16);
+
+impl TStateIndex {
+    pub const fn new(value: u16) -> Self { Self(value) }
+    pub const fn value(self) -> u16 { self.0 }
+}
+
 /// Direction of a bus transaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BusDirection {
@@ -50,8 +68,8 @@ pub enum BusPhase {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BusTransaction {
     timestamp: MachineTime,
-    cycle_index: u32,
-    t_state_index: u16,
+    cycle_index: MCycleIndex,
+    t_state_index: TStateIndex,
     phase: BusPhase,
     kind: BusCycleKind,
     direction: BusDirection,
@@ -65,8 +83,8 @@ impl BusTransaction {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         timestamp: MachineTime,
-        cycle_index: u32,
-        t_state_index: u16,
+        cycle_index: MCycleIndex,
+        t_state_index: TStateIndex,
         phase: BusPhase,
         kind: BusCycleKind,
         direction: BusDirection,
@@ -78,11 +96,15 @@ impl BusTransaction {
             return Err(BusContractError::ZeroDuration);
         }
         let valid = match kind {
-            BusCycleKind::OpcodeFetch
-            | BusCycleKind::MemoryRead
-            | BusCycleKind::IoRead
-            | BusCycleKind::InterruptAcknowledge
-            | BusCycleKind::Refresh => direction == BusDirection::Read && address.is_some(),
+            BusCycleKind::OpcodeFetch | BusCycleKind::MemoryRead | BusCycleKind::IoRead => {
+                direction == BusDirection::Read && address.is_some() && data.is_none()
+            }
+            BusCycleKind::InterruptAcknowledge => {
+                direction == BusDirection::Read && address.is_none() && data.is_none()
+            }
+            BusCycleKind::Refresh => {
+                direction == BusDirection::None && address.is_some() && data.is_none()
+            },
             BusCycleKind::MemoryWrite | BusCycleKind::IoWrite => {
                 direction == BusDirection::Write && address.is_some() && data.is_some()
             }
@@ -107,8 +129,8 @@ impl BusTransaction {
     }
 
     pub const fn timestamp(self) -> MachineTime { self.timestamp }
-    pub const fn cycle_index(self) -> u32 { self.cycle_index }
-    pub const fn t_state_index(self) -> u16 { self.t_state_index }
+    pub const fn cycle_index(self) -> MCycleIndex { self.cycle_index }
+    pub const fn t_state_index(self) -> TStateIndex { self.t_state_index }
     pub const fn phase(self) -> BusPhase { self.phase }
     pub const fn kind(self) -> BusCycleKind { self.kind }
     pub const fn direction(self) -> BusDirection { self.direction }
@@ -139,6 +161,16 @@ pub enum BusOperationResult<T, E> {
 }
 
 impl<T, E> BusOperationResult<T, E> {
+    /// Validate that a completed transaction does not finish before it starts.
+    pub fn validate_completion(&self, requested_at: MachineTime) -> Result<(), BusContractError> {
+        if let Self::Completed { completed_at, .. } = self {
+            if *completed_at < requested_at {
+                return Err(BusContractError::CompletionBeforeRequest);
+            }
+        }
+        Ok(())
+    }
+
     /// Validate the temporal relation of a WAIT response to its request.
     pub fn validate_wait(&self, requested_at: MachineTime) -> Result<(), BusContractError> {
         if let Self::Wait { resume_at } = self {
@@ -180,6 +212,7 @@ pub enum BusContractError {
     InconsistentFields,
     WaitDoesNotAdvanceTime,
     RetroactiveEvent,
+    CompletionBeforeRequest,
 }
 
 impl fmt::Display for BusContractError {
@@ -189,6 +222,7 @@ impl fmt::Display for BusContractError {
             Self::InconsistentFields => f.write_str("bus transaction fields are inconsistent with its cycle kind"),
             Self::WaitDoesNotAdvanceTime => f.write_str("WAIT resume timestamp must be later than request timestamp"),
             Self::RetroactiveEvent => f.write_str("device reported an event before its reached timestamp"),
+            Self::CompletionBeforeRequest => f.write_str("bus operation completed before its request timestamp"),
         }
     }
 }
@@ -199,14 +233,14 @@ impl std::error::Error for BusContractError {}
 mod tests {
     use super::{
         BusContractError, BusCycleKind, BusDirection, BusOperationResult, BusPhase,
-        BusTransaction, DeviceProgress,
+        BusTransaction, DeviceProgress, MCycleIndex, TStateIndex,
     };
     use crate::MachineTime;
 
     #[test]
     fn transaction_accepts_a_well_formed_memory_read() {
         let transaction = BusTransaction::new(
-            MachineTime::from_ticks(12), 2, 1, BusPhase::Sample,
+            MachineTime::from_ticks(12), MCycleIndex::new(2), TStateIndex::new(1), BusPhase::Sample,
             BusCycleKind::MemoryRead, BusDirection::Read, Some(0xC000), None, 3,
         ).unwrap();
         assert_eq!(transaction.timestamp(), MachineTime::from_ticks(12));
@@ -218,7 +252,7 @@ mod tests {
     fn transaction_rejects_inconsistent_direction_and_missing_write_data() {
         assert_eq!(
             BusTransaction::new(
-                MachineTime::ZERO, 0, 0, BusPhase::Setup,
+                MachineTime::ZERO, MCycleIndex::new(0), TStateIndex::new(0), BusPhase::Setup,
                 BusCycleKind::MemoryRead, BusDirection::Write, Some(0), Some(1), 3,
             ),
             Err(BusContractError::InconsistentFields),
@@ -249,6 +283,22 @@ mod tests {
         assert_eq!(same_time.validate_wait(MachineTime::ZERO), Err(BusContractError::WaitDoesNotAdvanceTime));
         let later = BusOperationResult::<(), ()>::Wait { resume_at: MachineTime::from_ticks(1) };
         assert_eq!(later.validate_wait(MachineTime::ZERO), Ok(()));
+    }
+
+    #[test]
+    fn completion_cannot_precede_request() {
+        let result = BusOperationResult::<(), ()>::Completed {
+            value: (), completed_at: MachineTime::ZERO,
+        };
+        assert_eq!(result.validate_completion(MachineTime::from_ticks(1)), Err(BusContractError::CompletionBeforeRequest));
+    }
+
+    #[test]
+    fn refresh_cycle_has_address_but_no_read_or_write_direction() {
+        assert!(BusTransaction::new(
+            MachineTime::ZERO, MCycleIndex::new(0), TStateIndex::new(0), BusPhase::Setup,
+            BusCycleKind::Refresh, BusDirection::None, Some(0x1234), None, 1,
+        ).is_ok());
     }
 
     #[test]
