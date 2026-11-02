@@ -561,7 +561,13 @@ mod tests {
         assert_eq!(bus.memory().read(0x0400), 3);
 
         let mut restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
+        let latched_state = restored.export_state();
         assert_eq!(restored.dispatch_next().unwrap(), Some(first));
+        assert_eq!(
+            restored.export_state(),
+            latched_state,
+            "a latched completion must not dispatch the scheduler event or mutate memory twice"
+        );
         assert_eq!(restored.memory().selected_banks(), [3, 1, 2]);
         assert_eq!(restored.memory().read(0x0400), 3);
         assert_eq!(restored.acknowledge_completion(20).unwrap(), completion);
