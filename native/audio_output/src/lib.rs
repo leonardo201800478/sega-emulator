@@ -871,3 +871,56 @@ mod tests {
         ));
     }
 }
+
+
+// The output crate owns these concrete sink types, so it implements the
+// runtime's sink contract here without introducing a dependency cycle.
+impl sega_audio_runtime::PcmSink for NativeWasapiOutput {
+    fn write_pcm(&mut self, pcm: Vec<u8>) -> Result<(), String> {
+        NativeWasapiOutput::write_pcm(self, pcm).map_err(|error| error.to_string())
+    }
+
+    fn metrics(&self) -> (u64, u64) {
+        (self.underrun_count(), self.dropped_block_count())
+    }
+
+    fn close(&mut self) {
+        NativeWasapiOutput::close(self);
+    }
+}
+
+impl NativeWasapiOutput {
+    /// Compose this native endpoint with the Rust DSP/resampling session.
+    pub fn into_audio_session(
+        self,
+        output_sample_rate: u32,
+        volume: u8,
+    ) -> Result<sega_audio_runtime::NativeAudioSession<Self>, String> {
+        sega_audio_runtime::NativeAudioSession::new(output_sample_rate, volume, self)
+    }
+}
+
+impl sega_audio_runtime::PcmSink for NativeXAudio2Output {
+    fn write_pcm(&mut self, pcm: Vec<u8>) -> Result<(), String> {
+        NativeXAudio2Output::write_pcm(self, pcm).map_err(|error| error.to_string())
+    }
+
+    fn metrics(&self) -> (u64, u64) {
+        (self.underrun_count(), self.dropped_block_count())
+    }
+
+    fn close(&mut self) {
+        NativeXAudio2Output::close(self);
+    }
+}
+
+impl NativeXAudio2Output {
+    /// Compose this native endpoint with the Rust DSP/resampling session.
+    pub fn into_audio_session(
+        self,
+        output_sample_rate: u32,
+        volume: u8,
+    ) -> Result<sega_audio_runtime::NativeAudioSession<Self>, String> {
+        sega_audio_runtime::NativeAudioSession::new(output_sample_rate, volume, self)
+    }
+}
