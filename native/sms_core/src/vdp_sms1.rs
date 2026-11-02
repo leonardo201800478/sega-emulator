@@ -447,10 +447,10 @@ mod port_tests {
     fn status_read_clears_flags_and_control_latch() {
         let mut vdp = Sms1Vdp::new(VideoStandard::Ntsc);
         vdp.set_status_bits(0xE0);
-        vdp.write_control(0xBF, 0x12);
+        vdp.write_control(0x12);
         assert_eq!(vdp.read_status(), 0xE0);
         assert_eq!(vdp.read_status(), 0);
-        vdp.write_control(0xBF, 0x34);
+        vdp.write_control(0x34);
         vdp.write_control(0x41);
         assert_eq!(vdp.address(), 0x0134);
     }
@@ -657,8 +657,6 @@ mod background_tests {
         render_mode4_background_line(&state, 0, 0, &mut line);
         assert_eq!(line[0].palette_index, 4);
     }
-}
-
 
     #[test]
     fn vertical_scroll_advances_source_rows_with_224_line_wrap() {
@@ -678,3 +676,5 @@ mod background_tests {
         render_mode4_background_line(&state, 223, 1, &mut line);
         assert_eq!(line[0].palette_index, 1);
     }
+
+}
