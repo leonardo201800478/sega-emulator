@@ -22,7 +22,8 @@ impl FixedRng {
 }
 
 fn populated(seed: u64, count: u64) -> MachineScheduler<Payload> {
-    let mut scheduler = MachineScheduler::with_delta_event_policy(DeltaEventPolicy::new(64).unwrap());
+    let mut scheduler =
+        MachineScheduler::with_delta_event_policy(DeltaEventPolicy::new(64).unwrap());
     scheduler
         .register_clock_domain_with_phase(ClockDomainId(0), ClockRatio::new(1, 3).unwrap(), 0)
         .unwrap();
