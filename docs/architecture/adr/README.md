@@ -13,7 +13,14 @@ Decisões arquiteturais da reorganização Rust-first, do motor Z80 compartilhad
 | [ADR-0014 — execução e sincronização temporal de dispositivos](0014-temporal-device-execution-and-synchronization.md) | Contratos extensíveis para múltiplas CPUs, chips temporizados, safe points, domínios independentes e determinismo. | Proposto para revisão |
 | [ADR-0015 — contrato temporal SMS/Z80/barramento](0015-sms-z80-bus-temporal-contract.md) | Safe points retomáveis, transações Z80/SMS e decisão de granularidade condicionada a evidências. | Proposta para revisão; runtime não autorizado |
 
-## Documentação normativa do Scheduler\n\n- [Master Clock Scheduler — índice](../scheduler/README.md)\n- [Manual de arquitetura e integração](../scheduler/scheduler-integration-manual.md)\n- [Contrato de integração de componentes](../scheduler/component-integration-contract.md)\n- [Prompt permanente de integração](../../prompts/scheduler-component-integration.md)\n\n## Documentos de arquitetura temporal
+## Documentação normativa do Scheduler
+
+- [Master Clock Scheduler — índice](../scheduler/README.md)
+- [Manual de arquitetura e integração](../scheduler/scheduler-integration-manual.md)
+- [Contrato de integração de componentes](../scheduler/component-integration-contract.md)
+- [Prompt permanente de integração](../../prompts/scheduler-component-integration.md)
+
+## Documentos de arquitetura temporal
 
 - [Modelo temporal cycle-accurate do sistema](../cycle-accurate-system-model.md)
 - [Arquitetura temporal do VDP SMS](../sms-vdp-cycle-accurate-design.md)
