@@ -25,4 +25,5 @@ default-members = [
     "native/input_runtime",
     "native/temporal_core",
     "native/machine_scheduler",
+    "native/video_runtime",
 ]
