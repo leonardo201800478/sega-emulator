@@ -21,6 +21,7 @@ pub const SMS_Z80_CLOCK_DOMAIN_ID: ClockDomainId = ClockDomainId(0);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SmsTemporalEvent {
     BusCompletion { request_id: u64 },
+    InternalCycleComplete { continuation_id: u64 },
 }
 
 /// Versioned in-memory state for the coordinator and its scheduler timeline.
@@ -139,6 +140,31 @@ impl SmsTemporalCoordinator {
             HardwarePhase::new(0),
             PlatformPriority::new(0),
             SmsTemporalEvent::BusCompletion { request_id },
+        )?;
+        Ok(deadline)
+    }
+
+    /// Schedule a CPU-internal T-state boundary without inventing a bus access.
+    pub fn schedule_internal_cycle(
+        &mut self,
+        continuation_id: u64,
+        tstates: u32,
+    ) -> Result<MachineTime, SmsTemporalCoordinatorError> {
+        if tstates == 0 {
+            return Err(SmsTemporalCoordinatorError::ZeroBusCycleDuration);
+        }
+        let master_ticks = u128::from(tstates)
+            .checked_mul(u128::from(self.master_ticks_per_tstate))
+            .ok_or(SmsTemporalCoordinatorError::DurationOverflow)?;
+        let deadline = self
+            .now()
+            .checked_add(master_ticks)
+            .ok_or(SmsTemporalCoordinatorError::DeadlineOverflow)?;
+        self.scheduler.schedule_at_with_phase(
+            deadline,
+            HardwarePhase::new(0),
+            PlatformPriority::new(0),
+            SmsTemporalEvent::InternalCycleComplete { continuation_id },
         )?;
         Ok(deadline)
     }
