@@ -56,3 +56,33 @@ impl PcmSink for NativeAudioOutput {
         }
     }
 }
+
+impl crate::NativeAudioSession<NativeAudioOutput> {
+    /// Create a complete Rust-owned DSP session using Windows WASAPI.
+    pub fn open_wasapi(
+        sample_rate: u32,
+        volume: u8,
+        buffer_size: u32,
+        queue_blocks: usize,
+        balance: i8,
+    ) -> Result<Self, String> {
+        Self::with_sink_factory(sample_rate, volume, || {
+            NativeAudioOutput::open_wasapi(sample_rate, buffer_size, queue_blocks, balance)
+                .map_err(|error| error.to_string())
+        })
+    }
+
+    /// Create a complete Rust-owned DSP session using Windows XAudio2.
+    pub fn open_xaudio2(
+        sample_rate: u32,
+        volume: u8,
+        buffer_size: u32,
+        queue_blocks: usize,
+        balance: i8,
+    ) -> Result<Self, String> {
+        Self::with_sink_factory(sample_rate, volume, || {
+            NativeAudioOutput::open_xaudio2(sample_rate, buffer_size, queue_blocks, balance)
+                .map_err(|error| error.to_string())
+        })
+    }
+}
