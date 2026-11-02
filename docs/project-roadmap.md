@@ -135,7 +135,7 @@ Esta fase passa a ser a frente ativa de integração temporal, autorizada formal
 - T2: PR #414 — coordenador SMS sobre `MachineScheduler`, com escala temporal explícita.
 - T3: barramento de memória transacional, efeitos no deadline, acknowledgement único e WAIT de fixture, incorporado à stack T4.
 - T4: PR #416 — integrada em `main` no SHA `3f4a71d7b7bbc1863c20cd3293466405cb3f579b`; head validado `bfdc7d2fbbcf7712091df9960a7e7e593c18afea`; CI #41499228458 PASS em todos os quatro jobs sobre merge ref `cea276159efd382e8289085be4b5f67dccecc753`.
-- T5a: PR #418 — baseline pré-correção validada no SHA `35aa9292e423f4313ba7a0ddee5b805fc2f87450`; run `41531640745` PASS nos quatro jobs: Rust quality/unit regression, Python lint/regression, Windows x64 D3D12/video/audio e Scheduler deterministic stress. A branch acrescenta validação do payload de escrita e timestamp estável do ciclo interno; os checks do HEAD candidato são o gate vigente. Execução local: NOT RUN.
+- T5a: PR #418 — HEAD `9a92386c1bb923d0e5bcf8486f7cb88eeec5a6cf`; CI #3524 / run `41532813264` PASS nos quatro jobs: Rust quality/unit regression, Python lint/regression, Windows x64 D3D12 compile e Scheduler deterministic stress. O payload esperado de escrita é preservado e validado; regressão adicional do codec binário com CRC válido aguarda CI no HEAD final. Execução local: NOT RUN.
 
 **Estado:** T0–T4 integrados incrementalmente; T4 permanece em `SHORT_PASS`. T5a (#418) está em revisão, com contratos temporais de origem única, índices M/T serializáveis e integração restrita ao subconjunto SMS. P6 continua ativa para mappers/I/O, estado arquitetural Z80, VDP/PSG e integração SG-1000. O caminho legado permanece preservado. `TEMPORAL_PASS` continua pendente.
 
