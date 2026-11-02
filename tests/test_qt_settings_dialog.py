@@ -59,6 +59,10 @@ def test_dialog_loads_and_returns_audio_video_preferences(qt_app) -> None:
     assert dialog.video_filter.currentData() == "bilinear"
     assert dialog.integer_scale.isChecked() is False
     assert dialog.sprite_limit_unlocked.isChecked() is True
+    sprite_limit_help = dialog.sprite_limit_unlocked.toolTip()
+    assert "quatro" in sprite_limit_help
+    assert "oito" in sprite_limit_help
+    assert "overflow" in sprite_limit_help
     assert dialog.vsync_mode.currentData() == "on"
     assert dialog.vrr_mode.currentData() == "driver"
     assert dialog.av_sync_mode.currentData() == "low_latency"
