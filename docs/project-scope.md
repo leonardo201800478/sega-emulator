@@ -6,7 +6,7 @@
 **Integração:** PyO3 / Maturin, fronteira fina  
 **Autoridade temporal:** Master Scheduler Rust único por máquina
 
-Este documento consolida o escopo de produto e as decisões arquiteturais transversais do Sega Emulator. Ele orienta o roadmap, os documentos específicos de hardware e a priorização das implementações. Não declara como implementado nenhum componente que ainda não tenha evidência no código e nos testes.
+Este documento registra princípios e limites arquiteturais transversais. O escopo ativo e a única sequência de implementação estão definidos exclusivamente em [docs/project-roadmap.md](project-roadmap.md). Não declara como implementado nenhum componente que ainda não tenha evidência no código e nos testes.
 
 ## 1. Objetivo e princípios
 
@@ -25,9 +25,7 @@ Não sacrificar correção por velocidade. Não declarar compatibilidade univers
 
 ## 2. Plataformas e ordem dos marcos
 
-O catálogo global, os modelos comerciais, as variantes regionais, as expansões e a sequência completa de implementação são definidos exclusivamente em [Roadmap mestre do projeto](project-roadmap.md). Esse roadmap é a fonte única para a direção global e inclui SG-1000/II, SMS I/II, Game Gear, Genesis Model 1/2, Nomad, Sega CD, 32X, sistemas integrados de terceiros e a composição hipotética Sega Neptune Definitive.
-
-A prioridade de implementação corrente continua sendo fechar SG-1000 + SMS e a integração temporal SMS1, preservando o que já funciona. Essa prioridade não elimina nem redefine o escopo futuro já consolidado no roadmap mestre. A execução corrente deve seguir os critérios de aceitação registrados nas issues, ADRs e PRs ativos; documentos históricos de planejamento não são fonte de escopo.
+A implementação ativa está restrita ao SG-1000 + Master System até o marco M4. Game Gear, Mega Drive/Genesis, Sega CD, 32X, SVP e sistemas integrados permanecem adiados e não podem ser tratados como frentes ativas. Qualquer ampliação depende de revisão formal do roadmap após o fechamento funcional SG-1000 + SMS.
 
 ### 2.1 Extensões e hardware especializado
 
@@ -39,7 +37,7 @@ O SVP é o primeiro estudo de caso planejado para essa categoria, condicionado a
 
 ### 2.2 Marco ativo SG-1000 + SMS
 
-O objetivo imediato não é ampliar a lista de plataformas, mas reestruturar e consolidar os dois runtimes já capazes de iniciar jogos. O SG-1000 é baseline de preservação; o SMS é alvo de fechamento funcional e compatibilidade. A ordem de execução imediata é definida pelas issues e PRs ativos do marco SG-1000 + SMS, com prioridade à integração temporal SMS1.
+O objetivo imediato é preservar o SG-1000 e fechar funcionalmente o SMS, evoluindo para execução temporal integrada. O SG-1000 é baseline de regressão; o SMS é alvo de fechamento funcional e compatibilidade. A ordem de execução é exclusivamente P0–P9 em docs/project-roadmap.md.
 
 Regras obrigatórias deste marco:
 - manter SG-1000 funcional como baseline de regressão;
