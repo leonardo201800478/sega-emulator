@@ -11,9 +11,7 @@ use sega_temporal_core::{
     ScheduledEvent,
 };
 
-use crate::{
-    ClockDomainId, ClockDomainState, SCHEDULER_STATE_FORMAT_VERSION, SchedulerState,
-};
+use crate::{ClockDomainId, ClockDomainState, SCHEDULER_STATE_FORMAT_VERSION, SchedulerState};
 
 /// Eight-byte identifier at the beginning of every scheduler-state frame.
 pub const SCHEDULER_STATE_MAGIC: [u8; 8] = *b"SEGSCHD\0";
