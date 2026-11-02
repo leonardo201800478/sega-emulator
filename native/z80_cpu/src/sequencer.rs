@@ -34,9 +34,22 @@ impl From<Z80BusHandshakeError> for Z80MicroSequencerError {
 enum InstructionPhase {
     Ready,
     OpcodeFetch,
-    ImmediateReadRegister { destination: u8 },
+    ImmediateReadRegister {
+        destination: u8,
+    },
     ImmediateReadMemoryWrite,
-    MemoryReadRegister { destination: u8 },
+    MemoryReadRegister {
+        destination: u8,
+    },
+    MemoryReadIncDec {
+        decrement: bool,
+        address: u16,
+    },
+    MemoryIncDecInternal {
+        decrement: bool,
+        old: u8,
+        address: u16,
+    },
     MemoryWrite,
 }
 
@@ -48,6 +61,8 @@ pub enum Z80MicroStep {
     /// One instruction has retired. T-states include base cycle lengths and
     /// WAIT states inserted while its bus requests were pending.
     InstructionRetired { opcode: u8, tstates: u32 },
+    /// One non-bus internal T-state; advance machine time before resuming.
+    InternalCycle { tstates: u32 },
 }
 
 /// A resumable subset of the Z80 instruction engine.
@@ -148,7 +163,13 @@ impl Z80MicroSequencer {
                     0x04..=0x3D if (opcode & 0xC7) == 0x04 || (opcode & 0xC7) == 0x05 => {
                         let register = (opcode >> 3) & 0x07;
                         if register == 6 {
-                            self.unsupported(opcode)
+                            self.issue_read(
+                                InstructionPhase::MemoryReadIncDec {
+                                    decrement: opcode & 0x01 != 0,
+                                    address: self.registers.hl(),
+                                },
+                                self.registers.hl(),
+                            )
                         } else {
                             let decrement = opcode & 0x01 != 0;
                             let old = self.read_register(register);
@@ -210,12 +231,42 @@ impl Z80MicroSequencer {
                         .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
                 )
             }
+            InstructionPhase::MemoryReadIncDec { decrement, address } => {
+                let old = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.phase = InstructionPhase::MemoryIncDecInternal {
+                    decrement,
+                    old,
+                    address,
+                };
+                Ok(Z80MicroStep::InternalCycle { tstates: 1 })
+            }
+            InstructionPhase::MemoryIncDecInternal { .. } => {
+                Err(Z80MicroSequencerError::UnexpectedCompletion)
+            }
             InstructionPhase::MemoryWrite => self.retire(
                 self.opcode
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
             ),
             InstructionPhase::Ready => Err(Z80MicroSequencerError::NoInstructionActive),
         }
+    }
+
+    /// Complete the explicitly exposed internal T-state of INC/DEC (HL).
+    /// The result/flags are committed at this edge, then the memory write is issued.
+    pub fn complete_internal_cycle(&mut self) -> Result<Z80MicroStep, Z80MicroSequencerError> {
+        let InstructionPhase::MemoryIncDecInternal {
+            decrement,
+            old,
+            address,
+        } = self.phase
+        else {
+            return Err(Z80MicroSequencerError::UnexpectedCompletion);
+        };
+        self.instruction_tstates = self.instruction_tstates.saturating_add(1);
+        let value = self.increment_decrement_register(old, decrement);
+        self.issue_write(address, value)
     }
 
     /// Inspect the pending request without advancing the sequencer.
@@ -636,13 +687,110 @@ mod tests {
     }
 
     #[test]
-    fn inc_hl_memory_form_is_not_misdecoded_as_register_inc() {
-        let mut cpu = Z80MicroSequencer::default();
+    fn inc_hl_uses_read_internal_cycle_and_write_for_eleven_tstates() {
+        let mut cpu = Z80MicroSequencer {
+            registers: Z80Registers {
+                h: 0xC0,
+                l: 0x10,
+                f: FLAG_C,
+                ..Z80Registers::default()
+            },
+            ..Z80MicroSequencer::default()
+        };
         let fetch = request(cpu.begin_instruction().unwrap());
-        assert!(matches!(
-            cpu.complete_bus_cycle(fetch.id, Some(0x34)),
-            Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x34, .. })
-        ));
+        let read = request(cpu.complete_bus_cycle(fetch.id, Some(0x34)).unwrap());
+        assert_eq!(read.operation, Z80BusOperation::MemoryRead);
+        assert_eq!(read.address, 0xC010);
+        cpu.insert_wait_tstate().unwrap();
+        let internal = cpu.complete_bus_cycle(read.id, Some(0x7F)).unwrap();
+        assert_eq!(internal, Z80MicroStep::InternalCycle { tstates: 1 });
+        assert_eq!(cpu.registers.f, FLAG_C);
+        let write = request(cpu.complete_internal_cycle().unwrap());
+        assert_eq!(write.address, 0xC010);
+        assert_eq!(
+            write.operation,
+            Z80BusOperation::MemoryWrite { value: 0x80 }
+        );
+        assert_eq!(cpu.registers.f, FLAG_S | FLAG_H | FLAG_PV | FLAG_C);
+        retired(cpu.complete_bus_cycle(write.id, None).unwrap(), 0x34, 12);
+    }
+
+    #[test]
+    fn inc_hl_keeps_captured_address_when_hl_changes_during_suspension() {
+        let mut cpu = Z80MicroSequencer {
+            registers: Z80Registers {
+                h: 0x12,
+                l: 0x34,
+                f: FLAG_C,
+                ..Z80Registers::default()
+            },
+            ..Z80MicroSequencer::default()
+        };
+        let fetch = request(cpu.begin_instruction().unwrap());
+        let read = request(cpu.complete_bus_cycle(fetch.id, Some(0x34)).unwrap());
+        assert_eq!(read.address, 0x1234);
+        assert_eq!(
+            cpu.complete_bus_cycle(read.id, Some(0x41)).unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+
+        cpu.registers.h = 0xAB;
+        cpu.registers.l = 0xCD;
+        let write = request(cpu.complete_internal_cycle().unwrap());
+        assert_eq!(write.address, 0x1234);
+        assert_eq!(
+            write.operation,
+            Z80BusOperation::MemoryWrite { value: 0x42 }
+        );
+        retired(cpu.complete_bus_cycle(write.id, None).unwrap(), 0x34, 11);
+    }
+
+    #[test]
+    fn dec_hl_sets_flags_and_writes_result_after_internal_cycle() {
+        let mut cpu = Z80MicroSequencer {
+            registers: Z80Registers {
+                h: 0x12,
+                l: 0x34,
+                f: FLAG_C,
+                ..Z80Registers::default()
+            },
+            ..Z80MicroSequencer::default()
+        };
+        let fetch = request(cpu.begin_instruction().unwrap());
+        let read = request(cpu.complete_bus_cycle(fetch.id, Some(0x35)).unwrap());
+        assert_eq!(read.address, 0x1234);
+        assert_eq!(
+            cpu.complete_bus_cycle(read.id, Some(0x80)).unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        let write = request(cpu.complete_internal_cycle().unwrap());
+        assert_eq!(
+            write.operation,
+            Z80BusOperation::MemoryWrite { value: 0x7F }
+        );
+        assert_eq!(
+            cpu.registers.f,
+            (0x7F & FLAG_XY) | FLAG_H | FLAG_PV | FLAG_N | FLAG_C
+        );
+        retired(cpu.complete_bus_cycle(write.id, None).unwrap(), 0x35, 11);
+    }
+
+    #[test]
+    fn inc_hl_memory_form_is_decoded_as_memory_read_not_register_inc() {
+        let mut cpu = Z80MicroSequencer {
+            registers: Z80Registers {
+                h: 0x12,
+                l: 0x34,
+                ..Z80Registers::default()
+            },
+            ..Z80MicroSequencer::default()
+        };
+        let fetch = request(cpu.begin_instruction().unwrap());
+        let read = request(cpu.complete_bus_cycle(fetch.id, Some(0x34)).unwrap());
+        assert_eq!(read.operation, Z80BusOperation::MemoryRead);
+        assert_eq!(read.address, 0x1234);
+        assert_eq!(cpu.registers.h, 0x12);
+        assert_eq!(cpu.registers.l, 0x34);
     }
 
     #[test]
