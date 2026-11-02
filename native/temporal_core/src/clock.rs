@@ -96,6 +96,37 @@ const fn gcd_u64(mut left: u64, mut right: u64) -> u64 {
     left
 }
 
+/// Convert elapsed machine ticks into local cycles and retained phase.
+///
+/// Splitting the elapsed value before multiplication keeps the remainder
+/// product within u128 while ensuring quotient overflow corresponds to a
+/// genuinely unrepresentable cycle count.
+fn convert_elapsed(
+    elapsed: u128,
+    ratio: ClockRatio,
+    phase: u128,
+) -> Result<(u128, u128), ClockError> {
+    let denominator = u128::from(ratio.ticks_denominator);
+    if phase >= denominator {
+        return Err(ClockError::PhaseOutOfRange);
+    }
+
+    let numerator = u128::from(ratio.cycles_numerator);
+    let elapsed_quotient = elapsed / denominator;
+    let elapsed_remainder = elapsed % denominator;
+    let remainder_scaled = elapsed_remainder
+        .checked_mul(numerator)
+        .and_then(|value| value.checked_add(phase))
+        .ok_or(ClockError::ArithmeticOverflow)?;
+    let whole_cycles = elapsed_quotient
+        .checked_mul(numerator)
+        .ok_or(ClockError::ArithmeticOverflow)?;
+    let cycles = whole_cycles
+        .checked_add(remainder_scaled / denominator)
+        .ok_or(ClockError::ArithmeticOverflow)?;
+    Ok((cycles, remainder_scaled % denominator))
+}
+
 /// Rational number of local device clock edges per master-time tick.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ClockRatio {
@@ -240,15 +271,9 @@ impl ClockDomain {
         let elapsed = current_time
             .checked_duration_since(registration_start)
             .ok_or(ClockError::InvalidClockHistory)?;
-        let left = total_cycles
-            .checked_mul(denominator)
-            .and_then(|value| value.checked_add(phase))
-            .ok_or(ClockError::ArithmeticOverflow)?;
-        let right = elapsed
-            .checked_mul(u128::from(ratio.numerator()))
-            .and_then(|value| value.checked_add(initial_phase))
-            .ok_or(ClockError::ArithmeticOverflow)?;
-        if left != right {
+        let (expected_cycles, expected_phase) =
+            convert_elapsed(elapsed, ratio, initial_phase)?;
+        if expected_cycles != total_cycles || expected_phase != phase {
             return Err(ClockError::InvalidClockHistory);
         }
         Ok(Self {
@@ -357,25 +382,7 @@ impl ClockDomain {
         let elapsed = target
             .checked_duration_since(self.time)
             .ok_or(ClockError::TimeWentBackwards)?;
-        // Split elapsed time by the denominator before multiplying. The
-        // remainder product is bounded by u64::MAX squared, while overflow in
-        // the quotient product necessarily means the final cycle count cannot
-        // fit in u128.
-        let denominator = u128::from(self.ratio.ticks_denominator);
-        let numerator = u128::from(self.ratio.cycles_numerator);
-        let elapsed_quotient = elapsed / denominator;
-        let elapsed_remainder = elapsed % denominator;
-        let remainder_scaled = elapsed_remainder
-            .checked_mul(numerator)
-            .and_then(|value| value.checked_add(self.phase))
-            .ok_or(ClockError::ArithmeticOverflow)?;
-        let whole_cycles = elapsed_quotient
-            .checked_mul(numerator)
-            .ok_or(ClockError::ArithmeticOverflow)?;
-        let new_cycles = whole_cycles
-            .checked_add(remainder_scaled / denominator)
-            .ok_or(ClockError::ArithmeticOverflow)?;
-        let new_phase = remainder_scaled % denominator;
+        let (new_cycles, new_phase) = convert_elapsed(elapsed, self.ratio, self.phase)?;
         let new_total = self
             .total_cycles
             .checked_add(new_cycles)
@@ -691,6 +698,25 @@ mod tests {
         assert_eq!(edge.whole_ticks(), MachineTime::from_ticks(edge_index));
         assert_eq!(edge.fractional_numerator(), 0);
         assert_eq!(edge.fractional_denominator(), 1);
+    }
+
+    #[test]
+    fn restore_accepts_large_exact_history_without_intermediate_overflow() {
+        let ratio = ClockRatio::new(u64::MAX, u64::MAX).unwrap();
+        let elapsed = 1_u128 << 65;
+
+        let restored = ClockDomain::restore(
+            ratio,
+            MachineTime::from_ticks(elapsed),
+            elapsed,
+            0,
+            MachineTime::ZERO,
+            0,
+        )
+        .unwrap();
+
+        assert_eq!(restored.total_cycles(), elapsed);
+        assert_eq!(restored.snapshot().phase, 0);
     }
 
     #[test]
