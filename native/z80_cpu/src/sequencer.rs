@@ -679,7 +679,6 @@ mod tests {
         assert_eq!(cpu.registers.f, FLAG_C | FLAG_Z | FLAG_H);
     }
 
-
     #[test]
     fn inc_hl_uses_read_internal_cycle_and_write_for_eleven_tstates() {
         let mut cpu = Z80MicroSequencer {
