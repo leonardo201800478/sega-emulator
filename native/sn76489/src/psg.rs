@@ -790,6 +790,27 @@ mod tests {
         assert_eq!(psg.lfsr(), 0x8000);
     }
     #[test]
+    fn profile_specific_noise_sequences_remain_distinct_and_repeatable() {
+        let mut sms_a = Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        let mut sms_b = sms_a.clone();
+        let mut sg_a = Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sg1000).unwrap();
+        let mut sg_b = sg_a.clone();
+
+        for device in [&mut sms_a, &mut sms_b, &mut sg_a, &mut sg_b] {
+            device.write(0xE4);
+            for _ in 0..64 {
+                device.shift_noise_register();
+            }
+        }
+
+        assert_eq!(sms_a.lfsr(), sms_b.lfsr());
+        assert_eq!(sg_a.lfsr(), sg_b.lfsr());
+        assert_ne!(sms_a.lfsr(), sg_a.lfsr());
+        assert_eq!(sms_a.profile(), PsgProfile::Sms);
+        assert_eq!(sg_a.profile(), PsgProfile::Sg1000);
+    }
+
+    #[test]
     fn reset_restores_the_selected_profile_seed() {
         for (profile, seed) in [(PsgProfile::Sg1000, 0x4000), (PsgProfile::Sms, 0x8000)] {
             let mut psg = Sn76489::new_with_profile(3_579_545, 44_100, profile).unwrap();

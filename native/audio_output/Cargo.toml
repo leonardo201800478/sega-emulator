@@ -10,6 +10,7 @@ path = "src/lib.rs"
 
 [dependencies]
 rtrb = "0.3"
+sega-audio-runtime = { path = "../audio_runtime" }
 
 [target.'cfg(windows)'.dependencies]
 wasapi = "0.26"

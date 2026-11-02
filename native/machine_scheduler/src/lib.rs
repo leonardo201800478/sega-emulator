@@ -12,9 +12,11 @@ pub mod codec;
 pub mod state;
 pub use state::{ClockDomainState, SCHEDULER_STATE_FORMAT_VERSION, SchedulerState};
 
+pub use sega_temporal_core::{ClockRatio, EventPriority, MachineTime};
+
 use sega_temporal_core::{
-    ClockDomain, ClockDomainSnapshot, ClockError, ClockRatio, EventPriority, EventQueue,
-    EventQueueError, HardwarePhase, MachineTime, PlatformPriority, ScheduledEvent,
+    ClockDomain, ClockDomainSnapshot, ClockError, EventQueue, EventQueueError, HardwarePhase,
+    PlatformPriority, ScheduledEvent,
 };
 
 /// Stable identity for one clock domain registered with a machine scheduler.
