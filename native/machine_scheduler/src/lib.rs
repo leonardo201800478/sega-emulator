@@ -350,6 +350,16 @@ impl<T> MachineScheduler<T> {
         if state.event_queue.last_dispatched.map(|w| w.timestamp) != state.last_dispatch_timestamp {
             return Err(SchedulerError::DispatchWatermarkMismatch);
         }
+
+        // A timestamp dispatch count cannot exceed the number of sequence
+        // values allocated through its final dispatched event. Since sequence
+        // allocation starts at zero and is strictly increasing, the watermark
+        // sequence must be at least count - 1.
+        if let Some(watermark) = state.event_queue.last_dispatched {
+            if state.dispatched_at_timestamp - 1 > watermark.sequence {
+                return Err(SchedulerError::DispatchHistoryMismatch);
+            }
+        }
         if state
             .event_queue
             .pending
@@ -1182,6 +1192,21 @@ mod tests {
         assert!(matches!(
             MachineScheduler::restore_state(zero_limit),
             Err(SchedulerError::ZeroDeltaEventLimit)
+        ));
+    }
+
+    #[test]
+    fn restore_rejects_dispatch_count_impossible_for_watermark_sequence() {
+        let mut state = scheduler_snapshot_fixture();
+        assert_eq!(state.dispatched_at_timestamp, 1);
+        assert_eq!(state.event_queue.last_dispatched.unwrap().sequence, 0);
+
+        // Sequence zero can represent only one dispatched event, even when
+        // later pending events have already received larger sequence values.
+        state.dispatched_at_timestamp = 2;
+        assert!(matches!(
+            MachineScheduler::restore_state(state),
+            Err(SchedulerError::DispatchHistoryMismatch)
         ));
     }
 
