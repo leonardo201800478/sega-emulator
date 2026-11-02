@@ -168,7 +168,7 @@ impl Z80MicroSequencer {
                 }) && state.opcode.is_some()
             }
         };
-        if !valid {
+        if !valid || state.tstate_index != 0 {
             return Err(Z80MicroSequencerError::InvalidState);
         }
         Ok(Self {
@@ -392,6 +392,8 @@ impl Z80MicroSequencer {
         self.phase = Z80MicroSequencerPhase::Ready;
         self.opcode = None;
         self.instruction_tstates = 0;
+        self.mcycle_index = 0;
+        self.tstate_index = 0;
         Err(Z80MicroSequencerError::UnsupportedOpcode { opcode, address })
     }
 
@@ -907,6 +909,27 @@ mod tests {
         assert_eq!(read.address, 0x1234);
         assert_eq!(cpu.registers.h, 0x12);
         assert_eq!(cpu.registers.l, 0x34);
+    }
+
+    #[test]
+    fn inc_hl_exposes_stable_mcycle_positions_across_bus_and_internal_phases() {
+        let mut cpu = Z80MicroSequencer::default();
+        let fetch = request(cpu.begin_instruction().unwrap());
+        assert_eq!((cpu.export_state().mcycle_index, cpu.export_state().tstate_index), (0, 0));
+
+        let read = request(cpu.complete_bus_cycle(fetch.id, Some(0x34)).unwrap());
+        assert_eq!((cpu.export_state().mcycle_index, cpu.export_state().tstate_index), (1, 0));
+
+        assert_eq!(
+            cpu.complete_bus_cycle(read.id, Some(0x7F)).unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        assert_eq!((cpu.export_state().mcycle_index, cpu.export_state().tstate_index), (2, 0));
+
+        let write = request(cpu.complete_internal_cycle().unwrap());
+        assert_eq!((cpu.export_state().mcycle_index, cpu.export_state().tstate_index), (3, 0));
+        retired(cpu.complete_bus_cycle(write.id, None).unwrap(), 0x34, 11);
+        assert_eq!((cpu.export_state().mcycle_index, cpu.export_state().tstate_index), (0, 0));
     }
 
     #[test]
