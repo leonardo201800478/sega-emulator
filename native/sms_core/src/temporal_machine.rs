@@ -417,7 +417,9 @@ mod tests {
         atomic.registers.f = initial_f;
         atomic.registers.set_hl(initial_hl);
         let mut bus = FlatBus::new(rom);
-        bus.memory[usize::from(initial_hl)] = initial_ram;
+        if initial_hl >= 0xC000 {
+            bus.memory[usize::from(initial_hl)] = initial_ram;
+        }
 
         let expected_tstates = atomic.step(&mut bus).unwrap();
         retired(
