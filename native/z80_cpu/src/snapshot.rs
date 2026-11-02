@@ -498,15 +498,18 @@ mod tests {
 
         // Walk the canonical body to the pending operation payload instead of
         // relying on a magic absolute offset in the serialized frame.
-        let mut reader = Reader::new(&encoded[FRAME_HEADER_LEN..checksum_offset]);
-        reader.take(23).unwrap(); // registers, refresh and M/T counters
-        reader.take(2).unwrap(); // opcode option tag and opcode
-        super::read_phase(&mut reader).unwrap();
-        reader.u64().unwrap(); // next request ID
-        assert_eq!(reader.u8().unwrap(), 1); // pending request present
-        reader.u64().unwrap(); // pending request ID
-        assert_eq!(reader.u8().unwrap(), 2); // MemoryWrite operation tag
-        encoded[FRAME_HEADER_LEN + reader.offset] = 0x5A;
+        let payload_offset = {
+            let mut reader = Reader::new(&encoded[FRAME_HEADER_LEN..checksum_offset]);
+            reader.take(23).unwrap(); // registers, refresh and M/T counters
+            reader.take(2).unwrap(); // opcode option tag and opcode
+            super::read_phase(&mut reader).unwrap();
+            reader.u64().unwrap(); // next request ID
+            assert_eq!(reader.u8().unwrap(), 1); // pending request present
+            reader.u64().unwrap(); // pending request ID
+            assert_eq!(reader.u8().unwrap(), 2); // MemoryWrite operation tag
+            reader.offset
+        };
+        encoded[FRAME_HEADER_LEN + payload_offset] = 0x5A;
 
         let checksum = super::crc32(&encoded[FRAME_HEADER_LEN..checksum_offset]);
         encoded[checksum_offset..checksum_offset + 4]
