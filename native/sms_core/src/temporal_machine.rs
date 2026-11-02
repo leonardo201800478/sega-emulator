@@ -8,7 +8,8 @@ use core::fmt;
 
 use crate::{SmsTemporalBus, SmsTemporalBusError, SmsTemporalBusState, SmsTemporalDispatch};
 use sega_temporal_core::{
-    BusContractError, BusCycleKind, BusDirection, BusPhase, BusTransaction, MCycleIndex,
+    BusContractError, BusCycleKind, BusDirection, BusOperationResult, BusPhase, BusTransaction,
+    MCycleIndex,
     MachineTime, TStateIndex,
 };
 use sega_z80_cpu::{
@@ -140,16 +141,17 @@ impl SmsTemporalMachine {
                 (BusCycleKind::IoWrite, BusDirection::Write, Some(value))
             }
         };
-        let completion = self.bus.completion();
-        let (timestamp, phase) = match completion {
-            Some(completion) => (completion.completed_at, BusPhase::Complete),
-            None => (
-                self.bus
-                    .request_started_at()
-                    .unwrap_or_else(|| self.bus.now()),
-                BusPhase::Setup,
-            ),
+        let phase = if self.bus.completion().is_some() {
+            BusPhase::Complete
+        } else {
+            BusPhase::Setup
         };
+        // BusTransaction.timestamp is the request/start timestamp in both
+        // phases. The completion boundary is exposed separately as a result.
+        let timestamp = self
+            .bus
+            .request_started_at()
+            .unwrap_or_else(|| self.bus.now());
         BusTransaction::new(
             timestamp,
             MCycleIndex::new(state.mcycle_index),
@@ -163,6 +165,20 @@ impl SmsTemporalMachine {
         )
         .map(Some)
     }
+
+    /// Return the completed result for the currently latched bus transaction.
+    ///
+    /// The request timestamp remains on BusTransaction; the result carries
+    /// the distinct completion timestamp required by the temporal contract.
+    pub fn pending_bus_operation_result(
+        &self,
+    ) -> Option<BusOperationResult<Option<u8>, SmsTemporalBusError>> {
+        self.bus.completion().map(|completion| BusOperationResult::Completed {
+            value: completion.data,
+            completed_at: completion.completed_at,
+        })
+    }
+
     /// Describe the currently exposed CPU-internal interval using the shared contract.
     pub fn pending_internal_transaction(&self) -> Result<Option<BusTransaction>, BusContractError> {
         let state = self.cpu.export_state();
@@ -537,6 +553,7 @@ impl SmsTemporalMachine {
 #[cfg(test)]
 mod tests {
     use super::{SmsTemporalMachine, SmsTemporalMachineError};
+    use sega_temporal_core::BusOperationResult;
     use sega_temporal_core::{
         BusCycleKind, BusDirection, BusPhase, MCycleIndex, MachineTime, TStateIndex,
     };
@@ -614,7 +631,15 @@ mod tests {
         ));
         let completed_transaction = machine.pending_bus_transaction().unwrap().unwrap();
         assert_eq!(completed_transaction.phase(), BusPhase::Complete);
-        assert_eq!(completed_transaction.timestamp(), machine.now());
+        assert_eq!(completed_transaction.timestamp(), MachineTime::from_ticks(12));
+        let completed_at = machine.now();
+        assert_eq!(
+            machine.pending_bus_operation_result(),
+            Some(BusOperationResult::Completed {
+                value: None,
+                completed_at,
+            })
+        );
 
         let mut state = machine.export_state();
         assert_eq!(state.bus.completion.unwrap().request_id, 1);

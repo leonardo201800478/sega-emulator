@@ -446,8 +446,8 @@ impl SmsTemporalBus {
 #[cfg(test)]
 mod tests {
     use super::{SmsTemporalBus, SmsTemporalBusError, SmsTemporalDispatch};
-    use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
     use sega_temporal_core::MachineTime;
+    use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
 
     fn request(id: u64, operation: Z80BusOperation, address: u16, tstates: u8) -> Z80BusRequest {
         Z80BusRequest {
@@ -532,8 +532,7 @@ mod tests {
         bus.begin_request(request, 0).unwrap();
 
         let mut state = bus.export_state();
-        state.coordinator.scheduler.event_queue.pending[0].timestamp =
-            MachineTime::from_ticks(3);
+        state.coordinator.scheduler.event_queue.pending[0].timestamp = MachineTime::from_ticks(3);
         assert_eq!(
             SmsTemporalBus::restore_state(state).err(),
             Some(SmsTemporalBusError::InvalidState)
@@ -547,8 +546,7 @@ mod tests {
         bus.begin_request(request, 0).unwrap();
 
         let mut state = bus.export_state();
-        state.coordinator.scheduler.event_queue.pending[0].timestamp =
-            MachineTime::from_ticks(13);
+        state.coordinator.scheduler.event_queue.pending[0].timestamp = MachineTime::from_ticks(13);
         assert_eq!(
             SmsTemporalBus::restore_state(state).err(),
             Some(SmsTemporalBusError::InvalidState)
