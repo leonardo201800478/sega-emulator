@@ -362,8 +362,8 @@ impl D3d12Host {
         let texture_desc = D3D12_RESOURCE_DESC {
             Dimension: D3D12_RESOURCE_DIMENSION_TEXTURE2D,
             Alignment: 0,
-            Width: u64::from(width),
-            Height: height,
+            Width: u64::from(render_width),
+            Height: render_height,
             DepthOrArraySize: 1,
             MipLevels: 1,
             Format: DXGI_FORMAT_R8G8B8A8_UNORM,
@@ -387,7 +387,7 @@ impl D3d12Host {
                 Some(&mut upload_size),
             );
         }
-        if upload_rows != height || upload_row_size != u64::from(width) * 4 {
+        if upload_rows != render_height || upload_row_size != u64::from(render_width) * 4 {
             return Err(Error::from_win32());
         }
 
