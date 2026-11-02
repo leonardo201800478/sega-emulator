@@ -795,7 +795,7 @@ mod background_tests {
             state.registers.set_raw(0, 0x04);
             state.registers.set_raw(1, 0x40);
             state.registers.set_raw(2, 0x0E);
-            state.registers.set_raw(3, 0xFF & !(1 << mask_bit));
+            state.registers.set_raw(3, !(1 << mask_bit));
             state.registers.set_raw(4, 0x07);
             state.memory.vram[0x3800] = tile_index as u8;
             state.memory.vram[0x3801] = (tile_index >> 8) as u8;
