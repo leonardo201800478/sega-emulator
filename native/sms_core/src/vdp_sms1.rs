@@ -809,7 +809,8 @@ mod background_tests {
 
             render_mode4_background_line(&state, 0, 0, &mut line);
             assert_eq!(
-                line[0].palette_index, 0,
+                line[0].palette_index,
+                0,
                 "R3 bit {mask_bit} must clear pattern address bit {}",
                 mask_bit + 6
             );
@@ -817,7 +818,8 @@ mod background_tests {
             state.registers.set_raw(3, 0xFF);
             render_mode4_background_line(&state, 0, 0, &mut line);
             assert_eq!(
-                line[0].palette_index, 1,
+                line[0].palette_index,
+                1,
                 "R3 bit {mask_bit} set must preserve pattern address bit {}",
                 mask_bit + 6
             );
@@ -846,7 +848,8 @@ mod background_tests {
 
             render_mode4_background_line(&state, 0, 0, &mut line);
             assert_eq!(
-                line[0].palette_index, 0,
+                line[0].palette_index,
+                0,
                 "R4 bit {mask_bit} must clear pattern address bit {}",
                 mask_bit + 11
             );
@@ -854,7 +857,8 @@ mod background_tests {
             state.registers.set_raw(4, 0x07);
             render_mode4_background_line(&state, 0, 0, &mut line);
             assert_eq!(
-                line[0].palette_index, 4,
+                line[0].palette_index,
+                4,
                 "R4 bit {mask_bit} set must preserve pattern address bit {}",
                 mask_bit + 11
             );
@@ -966,10 +970,8 @@ pub fn render_mode4_sprites_line(
                 break;
             }
         }
-        let x_address =
-            sms1_sprite_attribute_address(sat_base, 0x80 + sprite * 2, registers[5]);
-        let tile_address =
-            sms1_sprite_attribute_address(sat_base, 0x81 + sprite * 2, registers[5]);
+        let x_address = sms1_sprite_attribute_address(sat_base, 0x80 + sprite * 2, registers[5]);
+        let tile_address = sms1_sprite_attribute_address(sat_base, 0x81 + sprite * 2, registers[5]);
         let x = vram[x_address];
         let tile = vram[tile_address];
         let source_y = relative as usize / if magnified { 2 } else { 1 };
