@@ -26,8 +26,8 @@ A Etapa 1 fixa vocabulário e invariantes sem conectar prematuramente o Schedule
 
 A estrutura `BusTransaction` contém:
 - timestamp absoluto;
-- índice estável do M-cycle na continuação da CPU;
-- índice T-state dentro do M-cycle;
+- índice tipado e estável do M-cycle na continuação da CPU (\`MCycleIndex\`);
+- índice tipado de T-state dentro do M-cycle (\`TStateIndex\`);
 - fase lógica (`Setup`, `Sample`, `Wait`, `Hold`, `Complete`, `Internal`);
 - tipo (`OpcodeFetch`, `MemoryRead/Write`, `IoRead/Write`, `InterruptAcknowledge`, `Refresh`, `Internal`);
 - direção, endereço opcional, dado opcional e duração em T-states.
@@ -42,7 +42,7 @@ As fases são rótulos de protocolo e não descrevem bordas elétricas do Z80. O
 - `Suspended`: continuação preservada e identificada pelo proprietário;
 - `Fault`: erro determinístico de protocolo/dispositivo.
 
-WAIT deve apontar para timestamp estritamente posterior ao instante solicitado. Não se permite busy-wait. A implementação futura deve garantir que efeitos colaterais de leitura/escrita ocorram uma única vez e somente no ponto de conclusão definido pelo perfil.
+WAIT deve apontar para timestamp estritamente posterior ao instante solicitado; uma conclusão não pode preceder a solicitação. Não se permite busy-wait. A implementação futura deve garantir que efeitos colaterais de leitura/escrita ocorram uma única vez e somente no ponto de conclusão definido pelo perfil.
 
 ### 4. Progresso de dispositivos
 
