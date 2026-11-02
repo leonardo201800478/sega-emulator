@@ -587,6 +587,28 @@ mod tests {
     }
 
     #[test]
+    fn one_two_and_eight_kib_cartridge_ram_mirror_inside_the_configured_window() {
+        for (index, ram_size) in [0x0400_u16, 0x0800, 0x2000].into_iter().enumerate() {
+            let config = MemoryConfig {
+                cartridge_ram_size: usize::from(ram_size),
+                cartridge_ram_start: 0x8000,
+                cartridge_ram_end: 0xBFFF,
+                ..MemoryConfig::default()
+            };
+            let mut bus = Sg1000TemporalBus::new(vec![0x00], config, 1).unwrap();
+            let start_value = 0xA0 + index as u8;
+            dispatch_write(&mut bus, 20 + index as u64 * 2, 0x8000, start_value, 0);
+            assert_eq!(bus.memory().read(0x8000 + ram_size), start_value);
+
+            let end_value = 0x50 + index as u8;
+            dispatch_write(&mut bus, 21 + index as u64 * 2, 0xBFFF, end_value, 0);
+            let mirrored_last = 0x8000 + (0x3FFF % ram_size);
+            assert_eq!(bus.memory().read(mirrored_last), end_value);
+            assert_eq!(bus.memory().read(0xBFFF), end_value);
+        }
+    }
+
+    #[test]
     fn completion_latched_snapshot_restore_does_not_repeat_memory_write() {
         let mut bus = Sg1000TemporalBus::new(vec![0x00], MemoryConfig::default(), 2).unwrap();
         bus.begin_request(
