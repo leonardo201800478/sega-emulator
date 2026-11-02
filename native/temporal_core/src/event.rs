@@ -173,11 +173,13 @@ impl<T> EventQueue<T> {
             next_sequence: self.next_sequence,
             last_dispatched: self
                 .last_dispatched
-                .map(|(timestamp, hardware_phase, priority)| EventQueueWatermark {
-                    timestamp,
-                    hardware_phase,
-                    priority,
-                }),
+                .map(
+                    |(timestamp, hardware_phase, priority)| EventQueueWatermark {
+                        timestamp,
+                        hardware_phase,
+                        priority,
+                    },
+                ),
         }
     }
 
@@ -512,5 +514,4 @@ mod tests {
             Err(EventQueueError::SequenceExhausted)
         );
     }
-
 }
