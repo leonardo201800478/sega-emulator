@@ -80,6 +80,11 @@ pub struct Z80MicroSequencerState {
     pub phase: Z80MicroSequencerPhase,
     pub opcode: Option<u8>,
     pub instruction_tstates: u32,
+    /// Zero-based M-cycle index within the active instruction.
+    pub mcycle_index: u32,
+    /// Zero-based T-state position at the start of the current M-cycle.
+    /// This slice exposes M-cycle boundaries; intra-cycle edges remain unmodeled.
+    pub tstate_index: u16,
 }
 
 /// A resumable subset of the Z80 instruction engine.
@@ -96,6 +101,8 @@ pub struct Z80MicroSequencer {
     phase: Z80MicroSequencerPhase,
     opcode: Option<u8>,
     instruction_tstates: u32,
+    mcycle_index: u32,
+    tstate_index: u16,
 }
 
 impl Default for Z80MicroSequencer {
@@ -107,6 +114,8 @@ impl Default for Z80MicroSequencer {
             phase: Z80MicroSequencerPhase::Ready,
             opcode: None,
             instruction_tstates: 0,
+            mcycle_index: 0,
+            tstate_index: 0,
         }
     }
 }
@@ -122,6 +131,8 @@ impl Z80MicroSequencer {
             phase: self.phase,
             opcode: self.opcode,
             instruction_tstates: self.instruction_tstates,
+            mcycle_index: self.mcycle_index,
+            tstate_index: self.tstate_index,
         }
     }
 
@@ -135,6 +146,7 @@ impl Z80MicroSequencer {
         let valid = match state.phase {
             Z80MicroSequencerPhase::Ready => {
                 pending.is_none() && state.opcode.is_none() && state.instruction_tstates == 0
+                    && state.mcycle_index == 0 && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::OpcodeFetch => {
                 pending.is_some_and(|request| request.operation == Z80BusOperation::OpcodeFetch)
@@ -166,6 +178,8 @@ impl Z80MicroSequencer {
             phase: state.phase,
             opcode: state.opcode,
             instruction_tstates: state.instruction_tstates,
+            mcycle_index: state.mcycle_index,
+            tstate_index: state.tstate_index,
         })
     }
 
@@ -176,6 +190,8 @@ impl Z80MicroSequencer {
             return Err(Z80MicroSequencerError::InstructionAlreadyActive);
         }
         self.instruction_tstates = 0;
+        self.mcycle_index = 0;
+        self.tstate_index = 0;
         self.opcode = None;
         let request = self
             .handshake
@@ -317,6 +333,9 @@ impl Z80MicroSequencer {
                 let old = response
                     .data
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.mcycle_index = self.mcycle_index.checked_add(1)
+                    .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                self.tstate_index = 0;
                 self.phase = Z80MicroSequencerPhase::MemoryIncDecInternal {
                     decrement,
                     old,
@@ -435,6 +454,9 @@ impl Z80MicroSequencer {
         phase: Z80MicroSequencerPhase,
         address: u16,
     ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
+        self.mcycle_index = self.mcycle_index.checked_add(1)
+            .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+        self.tstate_index = 0;
         let request = self
             .handshake
             .begin(Z80BusOperation::MemoryRead, address, 3)?;
@@ -447,6 +469,9 @@ impl Z80MicroSequencer {
         address: u16,
         value: u8,
     ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
+        self.mcycle_index = self.mcycle_index.checked_add(1)
+            .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+        self.tstate_index = 0;
         let request = self
             .handshake
             .begin(Z80BusOperation::MemoryWrite { value }, address, 3)?;
@@ -459,6 +484,8 @@ impl Z80MicroSequencer {
         self.phase = Z80MicroSequencerPhase::Ready;
         self.opcode = None;
         self.instruction_tstates = 0;
+        self.mcycle_index = 0;
+        self.tstate_index = 0;
         Ok(Z80MicroStep::InstructionRetired { opcode, tstates })
     }
 }
