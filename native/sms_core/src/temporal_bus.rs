@@ -463,6 +463,123 @@ mod tests {
         }
     }
 
+    fn patterned_rom(bank_count: usize) -> Vec<u8> {
+        let mut rom = vec![0; bank_count * 0x4000];
+        for bank in 0..bank_count {
+            let start = bank * 0x4000;
+            rom[start..start + 0x4000].fill(bank as u8);
+        }
+        rom
+    }
+
+    #[test]
+    fn sega_mapper_writes_take_effect_at_scheduler_deadline_and_reads_see_selected_bank() {
+        let mut bus = SmsTemporalBus::new(patterned_rom(4), 3).unwrap();
+        let cases = [
+            (10, 0xFFFD, 0x0400, 0, 0xDFFD),
+            (11, 0xFFFE, 0x4000, 1, 0xDFFE),
+            (12, 0xFFFF, 0x8000, 2, 0xDFFF),
+        ];
+
+        for (request_id, register, banked_address, slot, ram_mirror) in cases {
+            let before = bus.memory().selected_banks();
+            assert_eq!(bus.memory().read(banked_address), before[slot]);
+
+            let write_request = request(
+                request_id,
+                Z80BusOperation::MemoryWrite { value: 3 },
+                register,
+                3,
+            );
+            let started_at = bus.now();
+            let deadline = bus.begin_request(write_request, 2).unwrap();
+            assert_eq!(
+                deadline.checked_duration_since(started_at),
+                Some(15),
+                "three nominal T-states plus two fixture WAIT T-states at three master ticks each"
+            );
+
+            // Snapshot/restore before dispatch must not expose the mapper write.
+            let mut restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
+            assert_eq!(restored.memory().selected_banks(), before);
+            assert_eq!(restored.memory().read(banked_address), before[slot]);
+            assert_eq!(
+                restored.memory().read(ram_mirror),
+                0,
+                "the mirrored work-RAM byte must remain unchanged until the mapper write deadline"
+            );
+
+            let Some(SmsTemporalDispatch::BusCompletion(completion)) =
+                restored.dispatch_next().unwrap()
+            else {
+                panic!("expected mapper-register write completion");
+            };
+            assert_eq!(completion.request_id, request_id);
+            assert_eq!(completion.completed_at, deadline);
+            assert_eq!(restored.memory().selected_banks()[slot], 3);
+            assert_eq!(
+                restored.memory().mapper_register_write_count_for_test(),
+                request_id - 9,
+                "each Sega mapper register write is applied exactly once"
+            );
+            assert_eq!(restored.memory().read(ram_mirror), 3);
+            assert_eq!(
+                restored.memory().read(0x03FF),
+                0,
+                "the Sega mapper's first 1 KiB remains fixed to bank zero"
+            );
+            assert_eq!(restored.memory().read(banked_address), 3);
+
+            restored.acknowledge_completion(request_id).unwrap();
+            let read_request = request(
+                request_id + 100,
+                Z80BusOperation::MemoryRead,
+                banked_address,
+                3,
+            );
+            restored.begin_request(read_request, 0).unwrap();
+            let Some(SmsTemporalDispatch::BusCompletion(read_completion)) =
+                restored.dispatch_next().unwrap()
+            else {
+                panic!("expected selected-bank read completion");
+            };
+            assert_eq!(read_completion.data, Some(3));
+            restored.acknowledge_completion(read_request.id).unwrap();
+
+            // Continue the next register case from the restored timeline.
+            bus = restored;
+        }
+    }
+
+    #[test]
+    fn mapper_write_completion_remains_latched_across_restore_without_reapplying_effect() {
+        let mut bus = SmsTemporalBus::new(patterned_rom(4), 3).unwrap();
+        let request = request(20, Z80BusOperation::MemoryWrite { value: 3 }, 0xFFFD, 3);
+        bus.begin_request(request, 1).unwrap();
+        let first = bus.dispatch_next().unwrap().unwrap();
+        let SmsTemporalDispatch::BusCompletion(completion) = first else {
+            panic!("expected mapper-register write completion");
+        };
+        assert_eq!(bus.memory().selected_banks(), [3, 1, 2]);
+        assert_eq!(bus.memory().read(0x0400), 3);
+        assert_eq!(bus.memory().mapper_register_write_count_for_test(), 1);
+
+        let mut restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
+        let latched_state = restored.export_state();
+        assert_eq!(restored.dispatch_next().unwrap(), Some(first));
+        assert_eq!(
+            restored.export_state(),
+            latched_state,
+            "a latched completion must not dispatch the scheduler event or mutate memory twice"
+        );
+        assert_eq!(restored.memory().selected_banks(), [3, 1, 2]);
+        assert_eq!(restored.memory().read(0x0400), 3);
+        assert_eq!(restored.memory().mapper_register_write_count_for_test(), 1);
+        assert_eq!(restored.acknowledge_completion(20).unwrap(), completion);
+        assert_eq!(restored.dispatch_next().unwrap(), None);
+        assert_eq!(restored.memory().selected_banks(), [3, 1, 2]);
+    }
+
     #[test]
     fn memory_read_is_sampled_at_dispatch_and_acknowledged_once() {
         let mut bus = SmsTemporalBus::new(vec![0xA5; 0x4000], 3).unwrap();
