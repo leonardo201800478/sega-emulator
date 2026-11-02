@@ -485,14 +485,14 @@ mod tests {
             let before = bus.memory().selected_banks();
             assert_eq!(bus.memory().read(banked_address), before[slot]);
 
-            let request = request(
+            let write_request = request(
                 request_id,
                 Z80BusOperation::MemoryWrite { value: 3 },
                 register,
                 3,
             );
             let started_at = bus.now();
-            let deadline = bus.begin_request(request, 2).unwrap();
+            let deadline = bus.begin_request(write_request, 2).unwrap();
             assert_eq!(
                 deadline.checked_duration_since(started_at),
                 Some(15),
