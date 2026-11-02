@@ -420,7 +420,10 @@ mod tests {
             crate::Z80MicroStep::BusRequest(request) => request,
             other => panic!("expected memory write, got {other:?}"),
         };
-        assert_eq!(write.operation, crate::Z80BusOperation::MemoryWrite { value: 0x80 });
+        assert_eq!(
+            write.operation,
+            crate::Z80BusOperation::MemoryWrite { value: 0x80 }
+        );
     }
 
     #[test]
