@@ -885,6 +885,67 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_restore_preserves_pending_fetch_and_wait_state() {
+        let mut cpu = Z80MicroSequencer::default();
+        let fetch = request(cpu.begin_instruction().unwrap());
+        cpu.insert_wait_tstate().unwrap();
+
+        let restored = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+        assert_eq!(restored.export_state(), cpu.export_state());
+        assert_eq!(restored.pending_request(), Some(fetch));
+        assert_eq!(
+            restored.complete_bus_cycle(fetch.id, Some(0x00)).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x00,
+                tstates: 5
+            }
+        );
+    }
+
+    #[test]
+    fn snapshot_restore_preserves_internal_incdec_safe_point() {
+        let mut cpu = Z80MicroSequencer {
+            registers: Z80Registers {
+                h: 0xC0,
+                l: 0x10,
+                ..Z80Registers::default()
+            },
+            ..Z80MicroSequencer::default()
+        };
+        let fetch = request(cpu.begin_instruction().unwrap());
+        let read = request(cpu.complete_bus_cycle(fetch.id, Some(0x34)).unwrap());
+        assert_eq!(
+            cpu.complete_bus_cycle(read.id, Some(0x7F)).unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+
+        let mut restored = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+        assert_eq!(restored.export_state(), cpu.export_state());
+        let write = request(restored.complete_internal_cycle().unwrap());
+        assert_eq!(write.address, 0xC010);
+        assert_eq!(
+            restored.complete_bus_cycle(write.id, None).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x34,
+                tstates: 11
+            }
+        );
+    }
+
+    #[test]
+    fn snapshot_restore_rejects_phase_handshake_mismatch() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.begin_instruction().unwrap();
+        let mut state = cpu.export_state();
+        state.phase = Z80MicroSequencerPhase::MemoryWrite;
+
+        assert_eq!(
+            Z80MicroSequencer::restore_state(state),
+            Err(Z80MicroSequencerError::InvalidState)
+        );
+    }
+
+    #[test]
     fn unsupported_opcode_does_not_leave_a_phantom_pending_request() {
         let mut cpu = Z80MicroSequencer::default();
         let fetch = request(cpu.begin_instruction().unwrap());
