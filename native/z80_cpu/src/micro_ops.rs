@@ -156,10 +156,12 @@ impl Z80BusHandshake {
     /// Restore a handshake only when its request allocator is consistent.
     pub fn restore_state(state: Z80BusHandshakeState) -> Result<Self, Z80BusHandshakeError> {
         let pending = match state.pending_request {
-            Some(request) if request.id < state.next_request_id && request.base_tstates > 0 => Some(PendingCycle {
-                request,
-                wait_tstates: state.wait_tstates,
-            }),
+            Some(request) if request.id < state.next_request_id && request.base_tstates > 0 => {
+                Some(PendingCycle {
+                    request,
+                    wait_tstates: state.wait_tstates,
+                })
+            },
             Some(_) => return Err(Z80BusHandshakeError::InvalidState),
             None if state.wait_tstates == 0 => None,
             None => return Err(Z80BusHandshakeError::InvalidState),
