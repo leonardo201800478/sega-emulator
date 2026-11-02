@@ -763,7 +763,7 @@ pub fn render_mode4_sprites_line(
         if y == SAT_TERMINATOR {
             break;
         }
-        let top = i16::from(y).wrapping_add(1);
+        let top = i16::from(y.wrapping_add(1));
         let relative = i16::from(screen_y) - top;
         if relative < 0 || relative >= display_height as i16 {
             continue;
@@ -772,8 +772,8 @@ pub fn render_mode4_sprites_line(
             overflow = true;
             break;
         }
-        let x = vram[(sat_base + 0x80 + sprite * 2) & 0x3FFF];
-        let tile = vram[(sat_base + 0x81 + sprite * 2) & 0x3FFF];
+        let x = vram[(sat_base + 0x80 + sprite) & 0x3FFF];
+        let tile = vram[(sat_base + 0xC0 + sprite) & 0x3FFF];
         let source_y = relative as usize / if magnified { 2 } else { 1 };
         selected[selected_count] = (sprite, x, tile, source_y);
         selected_count += 1;
@@ -814,11 +814,13 @@ pub fn render_mode4_sprites_line(
                 } else {
                     occupied[x_screen] = true;
                 }
-                let bg = background[x_screen];
-                if !(bg.priority && (bg.palette_index & 0x0F) != 0) {
+                if !occupied[x_screen] {
+                    let bg = background[x_screen];
+                    if !(bg.priority && (bg.palette_index & 0x0F) != 0) {
                     let palette_index = 16 + color_index;
-                    background[x_screen] =
-                        decode_background_pixel(&state.memory.cram, palette_index, false);
+                        background[x_screen] =
+                            decode_background_pixel(&state.memory.cram, palette_index, false);
+                    }
                 }
             }
         }
@@ -835,8 +837,8 @@ mod sprite_tests {
     fn set_sprite(state: &mut Sms1VdpState, index: usize, y: u8, x: u8, tile: u8) {
         let sat = usize::from(state.registers.get(5).unwrap_or(0) & 0x7E) << 7;
         state.memory.vram[sat + index] = y;
-        state.memory.vram[sat + 0x80 + index * 2] = x;
-        state.memory.vram[sat + 0x81 + index * 2] = tile;
+        state.memory.vram[sat + 0x80 + index] = x;
+        state.memory.vram[sat + 0xC0 + index] = tile;
     }
 
     fn solid_tile(state: &mut Sms1VdpState, tile: usize, color: u8) {
