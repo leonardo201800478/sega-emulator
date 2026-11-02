@@ -158,6 +158,7 @@ pub struct Sms1VdpState {
     pub profile: VdpProfile,
     pub registers: RegisterFile,
     pub memory: VdpMemory,
+    h_counter_latch: Option<u8>,
 }
 
 impl Sms1VdpState {
@@ -167,6 +168,7 @@ impl Sms1VdpState {
             profile: VdpProfile::sms1(video_standard),
             registers: RegisterFile::new(),
             memory: VdpMemory::new(),
+            h_counter_latch: None,
         }
     }
 
@@ -174,6 +176,7 @@ impl Sms1VdpState {
     pub fn reset(&mut self, clear_vram: bool) {
         self.registers = RegisterFile::new();
         self.memory.cram.fill(0);
+        self.h_counter_latch = None;
         if clear_vram {
             self.memory.vram.fill(0);
         }
@@ -247,7 +250,6 @@ pub struct Sms1Vdp {
     control_first: Option<u8>,
     code: PortCode,
     status: u8,
-    h_counter_latch: Option<u8>,
 }
 
 impl Sms1Vdp {
@@ -260,7 +262,6 @@ impl Sms1Vdp {
             control_first: None,
             code: PortCode::VramRead,
             status: 0,
-            h_counter_latch: None,
         }
     }
 
@@ -350,14 +351,14 @@ impl Sms1Vdp {
     /// TH transition and supply the H Counter sample for that instant. This
     /// method does not calculate H Counter phase or synthesize a transition.
     pub fn capture_h_counter_on_th_transition(&mut self, h_counter: u8) {
-        self.h_counter_latch = Some(h_counter);
+        self.state.h_counter_latch = Some(h_counter);
     }
 
     /// Read the most recently captured H Counter value.
     ///
     /// Returns None until the first TH transition has captured a value.
     pub const fn read_latched_h_counter(&self) -> Option<u8> {
-        self.h_counter_latch
+        self.state.h_counter_latch
     }
 
     /// Set status bits from the raster/sprite subsystems when those are
@@ -413,7 +414,6 @@ impl Sms1Vdp {
         self.control_first = None;
         self.code = PortCode::VramRead;
         self.status = 0;
-        self.h_counter_latch = None;
     }
 
     fn increment_address(&mut self) {
