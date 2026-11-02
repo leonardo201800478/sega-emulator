@@ -15,7 +15,6 @@ use crate::{NativeAudioSession, PcmSink};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PsgClockError {
     WrongClockDomain { expected: ClockDomainId, actual: ClockDomainId },
-    ClockAdvanceTooLarge,
 }
 
 impl std::fmt::Display for PsgClockError {
@@ -26,9 +25,6 @@ impl std::fmt::Display for PsgClockError {
                 "PSG expected clock domain {}, received {}",
                 expected.0, actual.0
             ),
-            Self::ClockAdvanceTooLarge => {
-                write!(f, "PSG clock advance exceeds the supported u64 range")
-            }
         }
     }
 }
@@ -78,9 +74,12 @@ impl ScheduledPsg {
                 actual: advance.domain,
             });
         }
-        let clocks = u64::try_from(advance.elapsed_cycles)
-            .map_err(|_| PsgClockError::ClockAdvanceTooLarge)?;
-        self.core.advance_clocks(clocks);
+        let mut remaining = advance.elapsed_cycles;
+        while remaining > u128::from(u64::MAX) {
+            self.core.advance_clocks(u64::MAX);
+            remaining -= u128::from(u64::MAX);
+        }
+        self.core.advance_clocks(remaining as u64);
         Ok(())
     }
 
