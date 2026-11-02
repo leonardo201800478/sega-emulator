@@ -128,7 +128,7 @@ unsafe extern "system" fn window_proc(
 ) -> LRESULT {
     if message == WM_DESTROY {
         unsafe { PostQuitMessage(0) };
-        return 0;
+        return LRESULT(0);
     }
 
     unsafe { DefWindowProcW(hwnd, message, wparam, lparam) }
@@ -159,7 +159,7 @@ impl D3d12Host {
         let factory: IDXGIFactory2 =
             unsafe { CreateDXGIFactory2(DXGI_CREATE_FACTORY_FLAGS::default())? };
 
-        let mut device = None;
+        let mut device: Option<ID3D12Device> = None;
         unsafe {
             D3D12CreateDevice(None, D3D_FEATURE_LEVEL_11_0, &mut device)?;
         }
