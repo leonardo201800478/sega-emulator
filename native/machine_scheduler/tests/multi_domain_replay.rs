@@ -4,9 +4,7 @@
 //! claim sub-tick event dispatch or device safe-point execution.
 
 use sega_machine_scheduler::{ClockDomainId, MachineScheduler};
-use sega_temporal_core::{
-    ClockDomain, ClockRatio, HardwarePhase, MachineTime, PlatformPriority,
-};
+use sega_temporal_core::{ClockDomain, ClockRatio, HardwarePhase, MachineTime, PlatformPriority};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Payload {
@@ -21,25 +19,13 @@ fn populated_scheduler() -> MachineScheduler<Payload> {
     // Register deliberately out of ID order. Scheduler advancement and
     // exported state must remain canonical by stable domain ID.
     scheduler
-        .register_clock_domain_with_phase(
-            ClockDomainId(9),
-            ClockRatio::new(1, 3).unwrap(),
-            2,
-        )
+        .register_clock_domain_with_phase(ClockDomainId(9), ClockRatio::new(1, 3).unwrap(), 2)
         .unwrap();
     scheduler
-        .register_clock_domain_with_phase(
-            ClockDomainId(2),
-            ClockRatio::new(3, 2).unwrap(),
-            1,
-        )
+        .register_clock_domain_with_phase(ClockDomainId(2), ClockRatio::new(3, 2).unwrap(), 1)
         .unwrap();
     scheduler
-        .register_clock_domain_with_phase(
-            ClockDomainId(5),
-            ClockRatio::new(5, 7).unwrap(),
-            4,
-        )
+        .register_clock_domain_with_phase(ClockDomainId(5), ClockRatio::new(5, 7).unwrap(), 4)
         .unwrap();
 
     for (index, timestamp) in TARGETS.into_iter().enumerate() {
@@ -86,8 +72,7 @@ fn multi_domain_advancement_is_chunk_invariant_and_replay_stable() {
         // Restore after every second dispatch, including same-timestamp
         // dispatches, so both queue history and domain phase are exercised.
         if index % 2 == 1 {
-            replayed =
-                MachineScheduler::restore_state(replayed.export_state()).unwrap();
+            replayed = MachineScheduler::restore_state(replayed.export_state()).unwrap();
         }
         assert_eq!(
             uninterrupted.export_state(),
@@ -103,25 +88,13 @@ fn multi_domain_advancement_is_chunk_invariant_and_replay_stable() {
     // chunks. Its final rational states must equal event-driven advancement.
     let mut chunked = MachineScheduler::<Payload>::new();
     chunked
-        .register_clock_domain_with_phase(
-            ClockDomainId(2),
-            ClockRatio::new(3, 2).unwrap(),
-            1,
-        )
+        .register_clock_domain_with_phase(ClockDomainId(2), ClockRatio::new(3, 2).unwrap(), 1)
         .unwrap();
     chunked
-        .register_clock_domain_with_phase(
-            ClockDomainId(5),
-            ClockRatio::new(5, 7).unwrap(),
-            4,
-        )
+        .register_clock_domain_with_phase(ClockDomainId(5), ClockRatio::new(5, 7).unwrap(), 4)
         .unwrap();
     chunked
-        .register_clock_domain_with_phase(
-            ClockDomainId(9),
-            ClockRatio::new(1, 3).unwrap(),
-            2,
-        )
+        .register_clock_domain_with_phase(ClockDomainId(9), ClockRatio::new(1, 3).unwrap(), 2)
         .unwrap();
 
     for target in [2, 3, 7, 8, 13] {
@@ -146,16 +119,10 @@ fn multi_domain_advancement_is_chunk_invariant_and_replay_stable() {
 fn multi_domain_preflight_failure_is_atomic_for_every_domain_and_event() {
     let mut scheduler = MachineScheduler::<u8>::new();
     scheduler
-        .register_clock_domain(
-            ClockDomainId(1),
-            ClockRatio::new(1, 1).unwrap(),
-        )
+        .register_clock_domain(ClockDomainId(1), ClockRatio::new(1, 1).unwrap())
         .unwrap();
     scheduler
-        .register_clock_domain(
-            ClockDomainId(2),
-            ClockRatio::new(u64::MAX, 1).unwrap(),
-        )
+        .register_clock_domain(ClockDomainId(2), ClockRatio::new(u64::MAX, 1).unwrap())
         .unwrap();
     scheduler
         .schedule_at(
