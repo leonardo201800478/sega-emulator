@@ -8,6 +8,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
+pub mod codec;
 pub mod state;
 pub use state::{ClockDomainState, SCHEDULER_STATE_FORMAT_VERSION, SchedulerState};
 
