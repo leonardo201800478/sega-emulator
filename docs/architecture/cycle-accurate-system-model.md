@@ -214,4 +214,4 @@ Nenhum valor ou prioridade deve ser preenchido por conveniência. Registrar font
 - [Contrato temporal Z80/barramento](z80-temporal-bus-model.md)
 - [Projeto temporal do VDP SMS](sms-vdp-cycle-accurate-design.md)
 - [Registro de evidências e perguntas abertas](cycle-accuracy-evidence-register.md)
-- [Roadmap SG-1000/SMS](master-system-roadmap.md)
+- [Roadmap SG-1000/SMS](../project-roadmap.md)
