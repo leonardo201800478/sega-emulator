@@ -21,7 +21,7 @@
 | Windows x64 WASAPI/XAudio2 compile + unit tests | PASS |
 | Scheduler deterministic stress — short | PASS |
 
-O workflow pós-merge [#41499594576](https://github.com/leonardo201800478/sega-emulator/actions/runs/41499594576) é distinto: Rust e Python PASS; Windows x64 vídeo/áudio deve ser lido por job no resultado final; Scheduler stress foi SKIPPED no evento push em `main`. O stress short já passou no CI candidato acima. Não converter SKIPPED em PASS.
+O workflow pós-merge [#41499594576](https://github.com/leonardo201800478/sega-emulator/actions/runs/41499594576) é distinto: Rust, Python e Windows x64 vídeo/áudio PASS; Scheduler stress foi SKIPPED no evento push em `main`. O stress short já passou no CI candidato acima. Não converter SKIPPED em PASS.
 
 ## Regressões e testes direcionados
 
