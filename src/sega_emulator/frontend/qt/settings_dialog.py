@@ -266,8 +266,9 @@ class SettingsDialog(QDialog):
         )
         self.sprite_limit_unlocked.setChecked(not preferences.sprite_limit_enabled)
         self.sprite_limit_unlocked.setToolTip(
-            "Ative para desenhar mais de quatro sprites na mesma linha. "
-            "O VDP continua registrando o status de overflow do hardware."
+            "Desenha sprites além do limite nativo de cada console: quatro por "
+            "linha no SG-1000/TMS9918A e oito no SMS1. O VDP continua registrando "
+            "o overflow conforme o hardware, mesmo no modo de compatibilidade."
         )
         video_form.addRow(self.sprite_limit_unlocked)
 

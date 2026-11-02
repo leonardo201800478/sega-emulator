@@ -232,6 +232,17 @@ impl NativeSMSMachine {
         self.machine.request_nmi();
     }
 
+    /// Enable or disable drawing beyond the SMS VDP's native eight-sprite
+    /// scanline limit. Hardware overflow status is preserved.
+    fn set_sprite_limit_enabled(&mut self, enabled: bool) {
+        self.machine.set_sprite_limit_enabled(enabled);
+    }
+
+    #[getter]
+    fn sprite_limit_enabled(&self) -> bool {
+        self.machine.sprite_limit_enabled()
+    }
+
     /// Advance instruction-stepped SMS hardware until the VDP frame counter changes.
     ///
     /// This is nominal instruction timing, not cycle-exact bus scheduling.
@@ -311,6 +322,17 @@ impl NativeSMSMachine {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn sms_sprite_limit_can_be_toggled_through_native_binding() {
+        let mut machine =
+            NativeSMSMachine::new(vec![0; 0x4000], false, Some("usa"), None).unwrap();
+        assert!(machine.sprite_limit_enabled());
+        machine.set_sprite_limit_enabled(false);
+        assert!(!machine.sprite_limit_enabled());
+        machine.set_sprite_limit_enabled(true);
+        assert!(machine.sprite_limit_enabled());
+    }
 
     #[test]
     fn sms_adapter_uses_native_psg_and_reports_configured_clock() {

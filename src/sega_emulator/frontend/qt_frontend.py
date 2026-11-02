@@ -789,8 +789,7 @@ def run(initial_path: Path | None = None) -> None:
                 active_sms_region = "usa"
                 frame_pacer = FramePacer(FRAME_PERIOD_SECONDS)
                 loaded_machine = SG1000Machine(candidate.data)
-                if not preferences.sprite_limit_enabled:
-                    loaded_machine.set_sprite_limit_enabled(False)
+            loaded_machine.set_sprite_limit_enabled(preferences.sprite_limit_enabled)
         except Exception as exc:
             logger.exception(
                 "Falha ao carregar ROM",
