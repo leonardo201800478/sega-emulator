@@ -8,8 +8,8 @@ use core::fmt;
 
 use crate::{SmsTemporalBus, SmsTemporalBusError, SmsTemporalBusState, SmsTemporalDispatch};
 use sega_temporal_core::{
-    BusContractError, BusCycleKind, BusDirection, BusPhase, BusTransaction, MachineTime,
-    MCycleIndex, TStateIndex,
+    BusContractError, BusCycleKind, BusDirection, BusPhase, BusTransaction, MCycleIndex,
+    MachineTime, TStateIndex,
 };
 use sega_z80_cpu::{
     Z80BusOperation, Z80MicroSequencer, Z80MicroSequencerError, Z80MicroSequencerPhase,
@@ -154,9 +154,14 @@ impl SmsTemporalMachine {
         .map(Some)
     }
     /// Describe the currently exposed CPU-internal interval using the shared contract.
-    pub fn pending_internal_transaction(&self) -> Result<Option<BusTransaction>, BusContractError> {
+    pub fn pending_internal_transaction(
+        &self,
+    ) -> Result<Option<BusTransaction>, BusContractError> {
         let state = self.cpu.export_state();
-        if !matches!(state.phase, Z80MicroSequencerPhase::MemoryIncDecInternal { .. }) {
+        if !matches!(
+            state.phase,
+            Z80MicroSequencerPhase::MemoryIncDecInternal { .. }
+        ) {
             return Ok(None);
         }
         BusTransaction::new(
@@ -707,7 +712,10 @@ mod tests {
         assert_eq!(transaction.address(), Some(0));
         assert_eq!(transaction.data(), None);
         assert_eq!(transaction.duration_tstates(), 4);
-        assert_eq!(machine.pending_bus_transaction().unwrap(), Some(transaction));
+        assert_eq!(
+            machine.pending_bus_transaction().unwrap(),
+            Some(transaction)
+        );
         machine.schedule_pending_bus(0).unwrap();
         assert_eq!(machine.pending_bus_transaction().unwrap(), Some(transaction));
     }
@@ -718,7 +726,10 @@ mod tests {
         machine.cpu_mut().registers.set_hl(0xC000);
         machine.begin_instruction().unwrap();
         machine.schedule_pending_bus(0).unwrap();
-        assert!(matches!(machine.dispatch_next().unwrap(), Z80MicroStep::BusRequest(_)));
+        assert!(matches!(
+            machine.dispatch_next().unwrap(),
+            Z80MicroStep::BusRequest(_)
+        ));
         machine.schedule_pending_bus(0).unwrap();
         assert_eq!(
             machine.dispatch_next().unwrap(),
