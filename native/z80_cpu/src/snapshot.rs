@@ -383,7 +383,7 @@ fn crc32(bytes: &[u8]) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{Z80_MICRO_SEQUENCER_STATE_MAGIC, Z80MicroSequencerStateCodecError};
+    use super::{Reader, Z80_MICRO_SEQUENCER_STATE_MAGIC, Z80MicroSequencerStateCodecError};
     use crate::{Z80MicroSequencer, Z80MicroSequencerState};
 
     #[test]
