@@ -16,7 +16,7 @@ use sega_z80_cpu::{
     Z80MicroSequencerState, Z80MicroStep,
 };
 
-pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 5;
+pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 6;
 
 /// Runtime event trace emitted from actual Scheduler/bus dispatch boundaries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,10 +42,98 @@ pub enum SmsTemporalTraceEvent {
 pub struct SmsTemporalMachineState {
     pub format_version: u16,
     pub cpu: Z80MicroSequencerState,
+    /// Absolute machine timestamp at which the active instruction began.
+    pub instruction_started_at: Option<MachineTime>,
     pub bus: SmsTemporalBusState,
     pub next_internal_cycle_id: u64,
     pub pending_internal_cycle_id: Option<u64>,
     pub pending_internal_tstates: Option<u32>,
+}
+
+
+fn elapsed_tstates(
+    started_at: MachineTime,
+    boundary: MachineTime,
+    master_ticks_per_tstate: u64,
+) -> Option<u32> {
+    let scale = u128::from(master_ticks_per_tstate);
+    if scale == 0 {
+        return None;
+    }
+    let elapsed = boundary.checked_duration_since(started_at)?;
+    if elapsed % scale != 0 {
+        return None;
+    }
+    u32::try_from(elapsed / scale).ok()
+}
+
+fn instruction_timeline_is_valid(state: &SmsTemporalMachineState) -> bool {
+    if matches!(state.cpu.phase, Z80MicroSequencerPhase::Ready) {
+        return state.instruction_started_at.is_none();
+    }
+    let Some(instruction_started_at) = state.instruction_started_at else {
+        return false;
+    };
+    let cpu_tstates = state.cpu.instruction_tstates;
+    let (boundary, expected_tstates) = match (
+        state.bus.pending_request,
+        state.bus.completion,
+        state.bus.pending_internal_cycle,
+        state.bus.internal_completion,
+    ) {
+        (Some(request), None, None, None) => {
+            let Some(request_started_at) = state.bus.request_started_at else {
+                return false;
+            };
+            (request_started_at, cpu_tstates)
+        }
+        (Some(request), Some(completion), None, None) => {
+            if request.id != completion.request_id {
+                return false;
+            }
+            let Some(current_cycle_tstates) = u32::from(request.base_tstates)
+                .checked_add(state.cpu.handshake.wait_tstates)
+            else {
+                return false;
+            };
+            let Some(expected_tstates) = cpu_tstates.checked_add(current_cycle_tstates) else {
+                return false;
+            };
+            (completion.completed_at, expected_tstates)
+        }
+        (None, None, Some(_), None) => {
+            let Some(internal_started_at) = state.bus.internal_cycle_started_at else {
+                return false;
+            };
+            (internal_started_at, cpu_tstates)
+        }
+        (None, None, Some(continuation_id), Some(completion)) => {
+            if continuation_id != completion.continuation_id {
+                return false;
+            }
+            let Some(internal_tstates) = state.pending_internal_tstates else {
+                return false;
+            };
+            let Some(expected_tstates) = cpu_tstates.checked_add(internal_tstates) else {
+                return false;
+            };
+            (completion.completed_at, expected_tstates)
+        }
+        (None, None, None, None)
+            if matches!(
+                state.cpu.phase,
+                Z80MicroSequencerPhase::MemoryIncDecInternal { .. }
+            ) =>
+        {
+            (state.bus.coordinator.scheduler.now, cpu_tstates)
+        }
+        _ => return false,
+    };
+    elapsed_tstates(
+        instruction_started_at,
+        boundary,
+        state.bus.coordinator.master_ticks_per_tstate,
+    ) == Some(expected_tstates)
 }
 
 /// Errors from the first integrated SMS temporal execution path.
@@ -91,6 +179,7 @@ impl From<Z80MicroSequencerError> for SmsTemporalMachineError {
 pub struct SmsTemporalMachine {
     cpu: Z80MicroSequencer,
     bus: SmsTemporalBus,
+    instruction_started_at: Option<MachineTime>,
     next_internal_cycle_id: u64,
     pending_internal_cycle_id: Option<u64>,
     pending_internal_tstates: Option<u32>,
@@ -107,6 +196,7 @@ impl SmsTemporalMachine {
         Ok(Self {
             cpu: Z80MicroSequencer::default(),
             bus: SmsTemporalBus::new(rom, master_ticks_per_tstate)?,
+            instruction_started_at: None,
             next_internal_cycle_id: 0,
             pending_internal_cycle_id: None,
             pending_internal_tstates: None,
@@ -117,7 +207,9 @@ impl SmsTemporalMachine {
 
     /// Start the next instruction and expose its first bus request.
     pub fn begin_instruction(&mut self) -> Result<Z80MicroStep, SmsTemporalMachineError> {
-        Ok(self.cpu.begin_instruction()?)
+        let step = self.cpu.begin_instruction()?;
+        self.instruction_started_at = Some(self.bus.now());
+        Ok(step)
     }
 
     /// Describe the pending CPU bus request using the shared temporal contract.
@@ -296,6 +388,9 @@ impl SmsTemporalMachine {
                 let step = next_cpu.complete_bus_cycle(completion.request_id, completion.data)?;
                 self.bus.acknowledge_completion(completion.request_id)?;
                 self.cpu = next_cpu;
+                if matches!(step, Z80MicroStep::InstructionRetired { .. }) {
+                    self.instruction_started_at = None;
+                }
 
                 if let Some((request, wait_tstates)) = trace_data {
                     self.trace_events.push(SmsTemporalTraceEvent::BusCompleted {
@@ -435,6 +530,7 @@ impl SmsTemporalMachine {
         SmsTemporalMachineState {
             format_version: SMS_TEMPORAL_MACHINE_STATE_VERSION,
             cpu: self.cpu.export_state(),
+            instruction_started_at: self.instruction_started_at,
             bus: self.bus.export_state(),
             next_internal_cycle_id: self.next_internal_cycle_id,
             pending_internal_cycle_id: self.pending_internal_cycle_id,
@@ -557,12 +653,14 @@ impl SmsTemporalMachine {
 
 #[cfg(test)]
 mod tests {
-    use super::{SmsTemporalMachine, SmsTemporalMachineError};
+    use super::{SmsTemporalBus, SmsTemporalMachine, SmsTemporalMachineError};
     use sega_temporal_core::BusOperationResult;
     use sega_temporal_core::{
         BusCycleKind, BusDirection, BusPhase, MCycleIndex, MachineTime, TStateIndex,
     };
-    use sega_z80_cpu::{Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroStep};
+    use sega_z80_cpu::{
+        Z80MicroSequencer, Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroStep,
+    };
 
     fn retired(step: Z80MicroStep, opcode: u8, tstates: u32) {
         assert_eq!(step, Z80MicroStep::InstructionRetired { opcode, tstates });
@@ -627,7 +725,21 @@ mod tests {
 
         let mut state = machine.export_state();
         state.cpu.instruction_tstates = u32::MAX - 2;
-        let mut machine = SmsTemporalMachine::restore_state(state).unwrap();
+        // Fault-inject the CPU counter after restoring its own DTO. The machine
+        // restore gate rejects this impossible CPU/Scheduler combination; this
+        // test bypasses that gate to exercise atomic dispatch failure handling.
+        let cpu = Z80MicroSequencer::restore_state(state.cpu).unwrap();
+        let bus = SmsTemporalBus::restore_state(state.bus).unwrap();
+        let mut machine = SmsTemporalMachine {
+            cpu,
+            bus,
+            instruction_started_at: state.instruction_started_at,
+            next_internal_cycle_id: state.next_internal_cycle_id,
+            pending_internal_cycle_id: state.pending_internal_cycle_id,
+            pending_internal_tstates: state.pending_internal_tstates,
+            trace_enabled: false,
+            trace_events: Vec::new(),
+        };
         assert!(matches!(
             machine.dispatch_next(),
             Err(SmsTemporalMachineError::Cpu(
@@ -1076,4 +1188,38 @@ mod tests {
             Z80MicroSequencerPhase::Ready
         );
     }
+    #[test]
+    fn restore_rejects_instruction_tstates_ahead_of_scheduler_before_pending_bus_cycle() {
+        let mut machine = SmsTemporalMachine::new(vec![0x3E, 0x42], 3).unwrap();
+        machine.begin_instruction().unwrap();
+        machine.schedule_pending_bus(0).unwrap();
+        assert!(matches!(
+            machine.dispatch_next().unwrap(),
+            Z80MicroStep::BusRequest(_)
+        ));
+        machine.schedule_pending_bus(0).unwrap();
+
+        let mut state = machine.export_state();
+        assert_eq!(state.cpu.instruction_tstates, 4);
+        state.cpu.instruction_tstates = 5;
+        assert!(matches!(
+            SmsTemporalMachine::restore_state(state),
+            Err(SmsTemporalMachineError::InvalidState)
+        ));
+    }
+
+    #[test]
+    fn restore_requires_instruction_start_timestamp_for_active_cpu() {
+        let mut machine = SmsTemporalMachine::new(vec![0x00; 0x4000], 3).unwrap();
+        machine.begin_instruction().unwrap();
+        machine.schedule_pending_bus(0).unwrap();
+        let mut state = machine.export_state();
+        state.instruction_started_at = None;
+        assert!(matches!(
+            SmsTemporalMachine::restore_state(state),
+            Err(SmsTemporalMachineError::InvalidState)
+        ));
+    }
+
+
 }

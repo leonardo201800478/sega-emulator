@@ -545,4 +545,58 @@ mod tests {
         );
         assert_eq!(Z80_MICRO_SEQUENCER_STATE_MAGIC, *b"Z80SEQ\0\0");
     }
+    #[test]
+    fn codec_rejects_hl_write_address_mismatch_with_valid_checksum() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.registers.set_hl(0xC010);
+        let fetch = match cpu.begin_instruction().unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected opcode fetch, got {other:?}"),
+        };
+        let operand = match cpu.complete_bus_cycle(fetch.id, Some(0x36)).unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected immediate read, got {other:?}"),
+        };
+        cpu.complete_bus_cycle(operand.id, Some(0xA5)).unwrap();
+
+        let mut encoded = cpu.export_state().encode().unwrap();
+        const FRAME_HEADER_LEN: usize = 14;
+        let body_len = u32::from_be_bytes(
+            encoded[10..FRAME_HEADER_LEN]
+                .try_into()
+                .expect("encoded frame contains body length"),
+        ) as usize;
+        let checksum_offset = FRAME_HEADER_LEN + body_len;
+        let (phase_address_offset, request_address_offset) = {
+            let mut reader = Reader::new(&encoded[FRAME_HEADER_LEN..checksum_offset]);
+            reader.take(23).unwrap();
+            reader.take(2).unwrap();
+            let phase_address_offset = reader.offset + 1;
+            let phase = super::read_phase(&mut reader).unwrap();
+            assert!(matches!(phase, crate::Z80MicroSequencerPhase::MemoryWrite { .. }));
+            reader.u64().unwrap();
+            assert_eq!(reader.u8().unwrap(), 1);
+            reader.u64().unwrap();
+            assert_eq!(reader.u8().unwrap(), 2);
+            reader.u8().unwrap();
+            let request_address_offset = reader.offset;
+            (phase_address_offset, request_address_offset)
+        };
+        let tampered_address = 0xC011_u16.to_be_bytes();
+        encoded[FRAME_HEADER_LEN + phase_address_offset
+            ..FRAME_HEADER_LEN + phase_address_offset + 2]
+            .copy_from_slice(&tampered_address);
+        encoded[FRAME_HEADER_LEN + request_address_offset
+            ..FRAME_HEADER_LEN + request_address_offset + 2]
+            .copy_from_slice(&tampered_address);
+
+        let checksum = super::crc32(&encoded[FRAME_HEADER_LEN..checksum_offset]);
+        encoded[checksum_offset..checksum_offset + 4].copy_from_slice(&checksum.to_be_bytes());
+        assert_eq!(
+            Z80MicroSequencerState::decode(&encoded),
+            Err(Z80MicroSequencerStateCodecError::InvalidState)
+        );
+    }
+
+
 }

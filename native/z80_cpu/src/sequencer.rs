@@ -206,12 +206,18 @@ impl Z80MicroSequencer {
                         && request.address == address
                         && request.base_tstates == 3
                 }) && state.opcode == Some(expected_opcode)
+                    && address == state.registers.hl()
                     && state.instruction_tstates >= 4
             }
-            Z80MicroSequencerPhase::MemoryIncDecInternal { decrement, .. } => {
+            Z80MicroSequencerPhase::MemoryIncDecInternal {
+                decrement,
+                address,
+                ..
+            } => {
                 let expected_opcode = if decrement { 0x35 } else { 0x34 };
                 pending.is_none()
                     && state.opcode == Some(expected_opcode)
+                    && address == state.registers.hl()
                     && state.instruction_tstates >= 4 + u32::from(state.tstate_index)
             }
             Z80MicroSequencerPhase::MemoryWrite { address, value } => {
@@ -229,6 +235,7 @@ impl Z80MicroSequencer {
                     Z80BusOperation::MemoryWrite { value: request_value }
                         if request_value == value
                 ) && request.address == address
+                    && address == state.registers.hl()
                     && request.base_tstates == 3
                     && state.instruction_tstates >= minimum_tstates
             }
@@ -1474,4 +1481,82 @@ mod tests {
         assert!(!cpu.instruction_active());
         assert!(cpu.pending_request().is_none());
     }
+    #[test]
+    fn restore_rejects_incdec_read_address_mismatch_with_hl() {
+        let mut cpu = Z80MicroSequencer {
+            registers: Z80Registers {
+                h: 0xC0,
+                l: 0x10,
+                ..Z80Registers::default()
+            },
+            ..Z80MicroSequencer::default()
+        };
+        let fetch = request(cpu.begin_instruction().unwrap());
+        cpu.complete_bus_cycle(fetch.id, Some(0x34)).unwrap();
+        let mut state = cpu.export_state();
+        state.phase = Z80MicroSequencerPhase::MemoryReadIncDec {
+            decrement: false,
+            address: 0xC011,
+        };
+        state.handshake.pending_request.as_mut().unwrap().address = 0xC011;
+        assert_eq!(
+            Z80MicroSequencer::restore_state(state),
+            Err(Z80MicroSequencerError::InvalidState)
+        );
+    }
+
+    #[test]
+    fn restore_rejects_incdec_internal_address_mismatch_with_hl() {
+        let mut cpu = Z80MicroSequencer {
+            registers: Z80Registers {
+                h: 0xC0,
+                l: 0x10,
+                ..Z80Registers::default()
+            },
+            ..Z80MicroSequencer::default()
+        };
+        let fetch = request(cpu.begin_instruction().unwrap());
+        let read = request(cpu.complete_bus_cycle(fetch.id, Some(0x34)).unwrap());
+        assert_eq!(
+            cpu.complete_bus_cycle(read.id, Some(0x7F)).unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        let mut state = cpu.export_state();
+        state.phase = Z80MicroSequencerPhase::MemoryIncDecInternal {
+            decrement: false,
+            old: 0x7F,
+            address: 0xC011,
+        };
+        assert_eq!(
+            Z80MicroSequencer::restore_state(state),
+            Err(Z80MicroSequencerError::InvalidState)
+        );
+    }
+
+    #[test]
+    fn restore_rejects_hl_write_address_mismatch_even_when_request_matches_phase() {
+        let mut cpu = Z80MicroSequencer {
+            registers: Z80Registers {
+                a: 0x5A,
+                h: 0xC0,
+                l: 0x10,
+                ..Z80Registers::default()
+            },
+            ..Z80MicroSequencer::default()
+        };
+        let fetch = request(cpu.begin_instruction().unwrap());
+        cpu.complete_bus_cycle(fetch.id, Some(0x77)).unwrap();
+        let mut state = cpu.export_state();
+        state.phase = Z80MicroSequencerPhase::MemoryWrite {
+            address: 0xC011,
+            value: 0x5A,
+        };
+        state.handshake.pending_request.as_mut().unwrap().address = 0xC011;
+        assert_eq!(
+            Z80MicroSequencer::restore_state(state),
+            Err(Z80MicroSequencerError::InvalidState)
+        );
+    }
+
+
 }
