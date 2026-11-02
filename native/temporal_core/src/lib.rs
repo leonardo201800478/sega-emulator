@@ -14,7 +14,7 @@ pub use clock::{
 };
 pub use contract::{
     BusContractError, BusCycleKind, BusDirection, BusOperationResult, BusPhase,
-    BusTransaction, DeviceProgress,
+    BusTransaction, DeviceProgress, MCycleIndex, TStateIndex,
 };
 pub use event::{
     EventPriority, EventQueue, EventQueueError, HardwarePhase, PlatformPriority, ScheduledEvent,
