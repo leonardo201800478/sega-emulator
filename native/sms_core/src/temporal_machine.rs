@@ -435,8 +435,14 @@ mod tests {
         assert_eq!(temporal.cpu().registers.sp, atomic.registers.sp);
         assert_eq!(temporal.cpu().registers.pc, atomic.registers.pc);
         assert_eq!(temporal.cpu().refresh, atomic.r);
-        assert_eq!(temporal.memory().read(initial_hl), bus.memory[usize::from(initial_hl)]);
-        assert_eq!(temporal.now(), MachineTime::from_ticks(u128::from(expected_tstates) * 3));
+        assert_eq!(
+            temporal.memory().read(initial_hl),
+            bus.memory[usize::from(initial_hl)]
+        );
+        assert_eq!(
+            temporal.now(),
+            MachineTime::from_ticks(u128::from(expected_tstates) * 3)
+        );
     }
 
     #[test]
