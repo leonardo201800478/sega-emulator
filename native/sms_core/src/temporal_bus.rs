@@ -13,7 +13,7 @@ use crate::{
 use sega_temporal_core::MachineTime;
 use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
 
-pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 1;
+pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 2;
 
 /// Result latched at the completion boundary of one memory transaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -130,7 +130,10 @@ impl SmsTemporalBus {
         request: Z80BusRequest,
         fixture_wait_tstates: u32,
     ) -> Result<MachineTime, SmsTemporalBusError> {
-        if self.pending_request.is_some() || self.completion.is_some() {
+        if self.pending_request.is_some()
+            || self.completion.is_some()
+            || self.pending_internal_cycle.is_some()
+        {
             return Err(SmsTemporalBusError::Busy);
         }
         if !matches!(
@@ -386,7 +389,7 @@ mod tests {
             3,
         );
         bus.begin_request(request, 0).unwrap();
-        let completion = bus.dispatch_next().unwrap().unwrap();
+        let SmsTemporalDispatch::BusCompletion(completion) = bus.dispatch_next().unwrap().unwrap() else { panic!("expected bus completion"); };
         let mut restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
         assert_eq!(restored.memory().read(0xC002), 0x99);
         assert_eq!(
@@ -394,6 +397,20 @@ mod tests {
             completion
         );
         assert_eq!(restored.memory().read(0xC002), 0x99);
+    }
+
+    #[test]
+    fn internal_cycle_dispatch_has_no_memory_side_effect() {
+        let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
+        let deadline = bus.schedule_internal_cycle(77, 1).unwrap();
+        let Some(SmsTemporalDispatch::InternalCycleComplete(completion)) =
+            bus.dispatch_next().unwrap()
+        else {
+            panic!("expected internal-cycle completion");
+        };
+        assert_eq!(completion.continuation_id, 77);
+        assert_eq!(completion.completed_at, deadline);
+        assert_eq!(bus.memory().read(0xC000), 0);
     }
 
     #[test]
