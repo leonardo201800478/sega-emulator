@@ -304,8 +304,7 @@ impl<T> EventQueue<T> {
 #[cfg(test)]
 mod tests {
     use super::{
-        EventPriority, EventQueue, EventQueueError, HardwarePhase, PlatformPriority,
-        ScheduledEvent,
+        EventPriority, EventQueue, EventQueueError, HardwarePhase, PlatformPriority, ScheduledEvent,
     };
     use crate::{EventQueueState, EventQueueWatermark, MachineTime};
 
