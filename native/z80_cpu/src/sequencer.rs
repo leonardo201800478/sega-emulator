@@ -34,10 +34,10 @@ impl From<Z80BusHandshakeError> for Z80MicroSequencerError {
 enum InstructionPhase {
     Ready,
     OpcodeFetch,
-    ImmediateReadRegister { destination: u8 },
+    ImmediateReadRegister {\n        destination: u8,\n    },
     ImmediateReadMemoryWrite,
-    MemoryReadRegister { destination: u8 },
-    MemoryReadIncDec { decrement: bool, address: u16 },
+    MemoryReadRegister {\n        destination: u8,\n    },
+    MemoryReadIncDec {\n        decrement: bool,\n        address: u16,\n    },
     MemoryIncDecInternal {
         decrement: bool,
         old: u8,
