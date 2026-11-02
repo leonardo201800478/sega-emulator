@@ -144,7 +144,9 @@ impl SmsTemporalMachine {
         let (timestamp, phase) = match completion {
             Some(completion) => (completion.completed_at, BusPhase::Complete),
             None => (
-                self.bus.request_started_at().unwrap_or_else(|| self.bus.now()),
+                self.bus
+                    .request_started_at()
+                    .unwrap_or_else(|| self.bus.now()),
                 BusPhase::Setup,
             ),
         };
@@ -584,10 +586,7 @@ mod tests {
 
         let mut state = machine.export_state();
         assert_eq!(state.bus.pending_internal_cycle, Some(0));
-        assert_eq!(
-            state.bus.internal_completion.unwrap().continuation_id,
-            0
-        );
+        assert_eq!(state.bus.internal_completion.unwrap().continuation_id, 0);
         assert_eq!(state.pending_internal_cycle_id, Some(0));
         assert_eq!(state.pending_internal_tstates, Some(1));
 
