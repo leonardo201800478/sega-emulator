@@ -171,21 +171,26 @@ impl<T> EventQueue<T> {
         EventQueueState {
             pending,
             next_sequence: self.next_sequence,
-            last_dispatched: self
-                .last_dispatched
-                .map(
-                    |(timestamp, hardware_phase, priority, sequence)| EventQueueWatermark {
-                        timestamp,
-                        hardware_phase,
-                        priority,
-                        sequence,
-                    },
-                ),
+            last_dispatched: self.last_dispatched.map(
+                |(timestamp, hardware_phase, priority, sequence)| EventQueueWatermark {
+                    timestamp,
+                    hardware_phase,
+                    priority,
+                    sequence,
+                },
+            ),
         }
     }
 
     /// Rebuild the heap from a validated canonical DTO without reallocating sequences.
     pub fn restore_state(state: EventQueueState<T>) -> Result<Self, EventQueueError> {
+        if state
+            .last_dispatched
+            .is_some_and(|watermark| watermark.sequence >= state.next_sequence)
+        {
+            return Err(EventQueueError::SequenceOutOfRange);
+        }
+
         let mut sequences = BTreeSet::new();
         let mut previous_key = None;
         for event in &state.pending {
@@ -206,9 +211,6 @@ impl<T> EventQueue<T> {
             }
             previous_key = Some(key);
             if let Some(watermark) = state.last_dispatched {
-                if watermark.sequence >= state.next_sequence {
-                    return Err(EventQueueError::SequenceOutOfRange);
-                }
                 let event_key = (
                     event.timestamp,
                     event.hardware_phase,
@@ -259,7 +261,7 @@ impl<T> EventQueue<T> {
         priority: PlatformPriority,
         payload: T,
     ) -> Result<u64, EventQueueError> {
-        if let Some((last_time, last_phase, last_priority)) = self.last_dispatched {
+        if let Some((last_time, last_phase, last_priority, _last_sequence)) = self.last_dispatched {
             if timestamp < last_time {
                 return Err(EventQueueError::EventInPast);
             }
