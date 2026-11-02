@@ -139,7 +139,7 @@ impl Z80MicroSequencer {
                             self.retire(opcode)
                         }
                     }
-                    _ => self.unsupported(opcode)
+                    _ => self.unsupported(opcode),
                 }
             }
             InstructionPhase::ImmediateRead => {
