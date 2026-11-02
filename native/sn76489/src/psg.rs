@@ -194,7 +194,9 @@ impl Sn76489Core {
         Ok(device)
     }
 
-    pub fn profile(&self) -> PsgProfile { self.profile }
+    pub fn profile(&self) -> PsgProfile {
+        self.profile
+    }
 
     pub fn clock_hz(&self) -> u64 {
         self.clock_hz
