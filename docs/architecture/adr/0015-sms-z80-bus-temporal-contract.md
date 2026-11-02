@@ -214,6 +214,18 @@ A comparação com Ares, Gearsystem e MAME deve registrar SHA/versão e divergê
 
 Cada fatia de runtime exige branch própria, PR Draft, gates completos no SHA exato e separação entre mudança estrutural e correção semântica. Não alterar `main`, não rebasear a stack #358–#360 automaticamente e não declarar `TEMPORAL_PASS` antes da integração e dos oráculos.
 
+## 8.1 Registro de execução T0–T4 (2026-11-02)
+
+| Etapa | Entrega | Evidência | Estado |
+|---|---|---|---|
+| T0 | Revisão de compatibilidade PR #396 versus microsequenciador existente | Review #5740657756; contratos não integrados sem índices M/T fiéis | REVIEWED; integração dos contratos pendente |
+| T1 | Contadores checked e snapshot binário versionado do estado retomável implementado | PRs #412/#413; consolidado e revalidado no CI #41496284832 | IMPLEMENTED; SHORT_PASS na fatia |
+| T2 | Coordenador SMS sobre MachineScheduler com escala explícita | PR #414; revalidado no SHA T4 | IMPLEMENTED; QUICK_PASS |
+| T3 | Barramento de memória transacional com efeitos no deadline e WAIT de fixture | Stack #415/#416; revalidado no SHA T4 | IMPLEMENTED; QUICK_PASS |
+| T4 | Execução vertical Z80/bus/Scheduler/memória, trace, snapshot/restore e replay | PR #416, SHA `94a6a2128e7f7b4af115d65e98ebbe33cc19ce8f`, CI #41496284832 | SHORT_PASS |
+
+A fatia usa somente o subconjunto atual do microsequenciador. A escala temporal é configurada explicitamente e não deve ser interpretada como prova de clock/fase SMS NTSC/PAL. A ausência de VDP/PSG/IRQ e de oráculo físico independente mantém o sistema completo em `INTEGRATION_PENDING`.
+
 ## 9. Critérios de saída desta ADR
 
 - [ ] Revisão da compatibilidade com ADR-0014.
@@ -224,7 +236,15 @@ Cada fatia de runtime exige branch própria, PR Draft, gates completos no SHA ex
 - [ ] Plano de testes com oráculos e ancestralidade documentados.
 - [ ] Novo VDP temporal implementado ao menos até os contratos necessários de raster/fetch/IRQ antes da integração da CPU; VDP legado explicitamente excluído do caminho temporal.
 
-**Status atual:** direção arquitetural aprovada para antecipação incremental. A PR #396 permanece uma proposta de contrato em revisão e não é considerada automaticamente aprovada ou integrada. CPU/bus/Scheduler em execução de máquina continuam `INTEGRATION_PENDING`; VDP/PSG integrados à máquina continuam `INTEGRATION_PENDING`. `TEMPORAL_PASS` não declarado.
+**Status atual (2026-11-02):** T0–T4 executados incrementalmente; a primeira fatia vertical obteve `SHORT_PASS` no SHA candidato `94a6a2128e7f7b4af115d65e98ebbe33cc19ce8f` (PR #416, CI run #41496284832). Isso não aprova a PR #396 nem declara `TEMPORAL_PASS`.
+
+- T0: revisão técnica registrada na PR #396 (review #5740657756). Os contratos genéricos continuam Draft e sem merge; não são ligados artificialmente ao microsequenciador porque ele ainda não expõe índices M-cycle/T-state estáveis.
+- T1: PRs #412/#413 implementam aritmética checked e snapshot binário versionado com checksum para o subconjunto retomável existente. Não representam o estado arquitetural completo do Z80.
+- T2: PR #414 implementa `SmsTemporalCoordinator` sobre `MachineScheduler`, com escala de T-state explícita pelo perfil chamador.
+- T3: adaptador de memória transacional, efeitos no deadline, acknowledgement único e WAIT de fixture foram incorporados à stack que culmina na PR #416.
+- T4: PR #416 integra microsequenciador, scheduler, memória SMS/mapper, ciclo interno, trace runtime opcional, snapshot/restore in-memory, replay e comparação diferencial com o executor atômico para as instruções cobertas.
+
+No SHA T4, Rust fmt/clippy/test, Python Ruff/pytest, Windows x64 vídeo/áudio e Scheduler deterministic stress (perfil short) passaram. Execução local: NOT RUN; a evidência é o CI remoto do SHA indicado. O resultado não cobre VDP, PSG, I/O, interrupções, HALT, DMA, arbitragem, WAIT físico, clock/fase regional ou codec persistente da máquina completa. CPU/bus/VDP/PSG do runtime SMS completo continuam `INTEGRATION_PENDING`; `TEMPORAL_PASS` não declarado.
 
 ## Referências
 
