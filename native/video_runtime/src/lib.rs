@@ -287,6 +287,14 @@ mod tests {
     }
 
     #[test]
+    fn rejects_storage_size_overflow() {
+        assert_eq!(
+            VideoFrame::new(0, 2, 2, PixelFormat::Rgb565Le, usize::MAX, Vec::new()),
+            Err(VideoFrameError::DimensionOverflow)
+        );
+    }
+
+    #[test]
     fn pixel_format_reports_exact_bytes_per_pixel() {
         assert_eq!(PixelFormat::Rgb565Le.bytes_per_pixel(), 2);
         assert_eq!(PixelFormat::Rgba8888.bytes_per_pixel(), 4);
