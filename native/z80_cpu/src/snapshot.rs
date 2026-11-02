@@ -397,6 +397,33 @@ mod tests {
     }
 
     #[test]
+    fn internal_cycle_safe_point_round_trips_through_binary_codec() {
+        let mut cpu = Z80MicroSequencer::default();
+        let fetch = match cpu.begin_instruction().unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected opcode fetch, got {other:?}"),
+        };
+        let read = match cpu.complete_bus_cycle(fetch.id, Some(0x34)).unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected memory read, got {other:?}"),
+        };
+        assert_eq!(
+            cpu.complete_bus_cycle(read.id, Some(0x7F)).unwrap(),
+            crate::Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+
+        let state = cpu.export_state();
+        let decoded = Z80MicroSequencerState::decode(&state.encode().unwrap()).unwrap();
+        assert_eq!(decoded, state);
+        let mut restored = Z80MicroSequencer::restore_state(decoded).unwrap();
+        let write = match restored.complete_internal_cycle().unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected memory write, got {other:?}"),
+        };
+        assert_eq!(write.operation, crate::Z80BusOperation::MemoryWrite { value: 0x80 });
+    }
+
+    #[test]
     fn codec_rejects_corruption_truncation_and_trailing_data() {
         let state = Z80MicroSequencer::default().export_state();
         let encoded = state.encode().unwrap();
