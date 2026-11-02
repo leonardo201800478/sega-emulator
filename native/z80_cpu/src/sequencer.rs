@@ -82,8 +82,8 @@ pub struct Z80MicroSequencerState {
     pub instruction_tstates: u32,
     /// Zero-based M-cycle index within the active instruction.
     pub mcycle_index: u32,
-    /// Zero-based T-state position at the start of the current M-cycle.
-    /// This slice exposes M-cycle boundaries; intra-cycle edges remain unmodeled.
+    /// Zero-based T-state position within the current M-cycle.
+    /// This slice exposes selected intra-M-cycle offsets, not electrical edges.
     pub tstate_index: u16,
 }
 
@@ -171,7 +171,30 @@ impl Z80MicroSequencer {
                 }) && state.opcode.is_some()
             }
         };
-        if !valid || state.tstate_index != 0 {
+        let indices_valid = match state.phase {
+            Z80MicroSequencerPhase::Ready | Z80MicroSequencerPhase::OpcodeFetch => {
+                state.mcycle_index == 0 && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::ImmediateReadRegister { .. }
+            | Z80MicroSequencerPhase::ImmediateReadMemoryWrite
+            | Z80MicroSequencerPhase::MemoryReadRegister { .. }
+            | Z80MicroSequencerPhase::MemoryReadIncDec { .. } => {
+                state.mcycle_index == 1 && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::MemoryIncDecInternal { .. } => {
+                state.mcycle_index == 1
+                    && state.tstate_index >= 3
+                    && matches!(state.opcode, Some(0x34 | 0x35))
+            }
+            Z80MicroSequencerPhase::MemoryWrite => match state.opcode {
+                Some(0x77) => state.mcycle_index == 1 && state.tstate_index == 0,
+                Some(0x36 | 0x34 | 0x35) => {
+                    state.mcycle_index == 2 && state.tstate_index == 0
+                }
+                _ => false,
+            },
+        };
+        if !valid || !indices_valid {
             return Err(Z80MicroSequencerError::InvalidState);
         }
         Ok(Self {
@@ -220,6 +243,30 @@ impl Z80MicroSequencer {
     /// Read data is consumed only here, at the completion edge supplied by the
     /// machine scheduler. A rejected response leaves the request outstanding.
     pub fn complete_bus_cycle(
+        &mut self,
+        request_id: u64,
+        data: Option<u8>,
+    ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
+        // Prepare the complete transition on a copy. Any failure after consuming
+        // the handshake (for example, allocating the next request) leaves the
+        // caller's continuation byte-for-byte unchanged.
+        let mut next = self.clone();
+        match next.complete_bus_cycle_inner(request_id, data) {
+            Ok(step) => {
+                *self = next;
+                Ok(step)
+            }
+            Err(error @ Z80MicroSequencerError::UnsupportedOpcode { .. }) => {
+                // Preserve the established unsupported-opcode behavior: retire
+                // the rejected decode back to Ready while still returning the error.
+                *self = next;
+                Err(error)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    fn complete_bus_cycle_inner(
         &mut self,
         request_id: u64,
         data: Option<u8>,
@@ -336,11 +383,14 @@ impl Z80MicroSequencer {
                 let old = response
                     .data
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
-                self.mcycle_index = self
-                    .mcycle_index
-                    .checked_add(1)
+                let wait_offset = u16::try_from(waits)
+                    .ok()
+                    .and_then(|waits| 3_u16.checked_add(waits))
                     .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
-                self.tstate_index = 0;
+                // INC/DEC (HL) has three M-cycles: M1 fetch, M2 read plus
+                // its internal T-state, and M3 write. WAIT extends M2, so
+                // the internal interval begins at T3 + the M2 WAIT count.
+                self.tstate_index = wait_offset;
                 self.phase = Z80MicroSequencerPhase::MemoryIncDecInternal {
                     decrement,
                     old,
@@ -833,6 +883,7 @@ mod tests {
         cpu.insert_wait_tstate().unwrap();
         let internal = cpu.complete_bus_cycle(read.id, Some(0x7F)).unwrap();
         assert_eq!(internal, Z80MicroStep::InternalCycle { tstates: 1 });
+        assert_eq!((cpu.mcycle_index, cpu.tstate_index), (1, 4));
         assert_eq!(cpu.registers.f, FLAG_C);
         let write = request(cpu.complete_internal_cycle().unwrap());
         assert_eq!(write.address, 0xC010);
@@ -952,7 +1003,7 @@ mod tests {
                 cpu.export_state().mcycle_index,
                 cpu.export_state().tstate_index
             ),
-            (2, 0)
+            (1, 3)
         );
 
         let write = request(cpu.complete_internal_cycle().unwrap());
@@ -961,7 +1012,7 @@ mod tests {
                 cpu.export_state().mcycle_index,
                 cpu.export_state().tstate_index
             ),
-            (3, 0)
+            (2, 0)
         );
         retired(cpu.complete_bus_cycle(write.id, None).unwrap(), 0x34, 11);
         assert_eq!(
@@ -971,6 +1022,38 @@ mod tests {
             ),
             (0, 0)
         );
+    }
+
+    #[test]
+    fn restore_rejects_mcycle_index_outside_the_active_phase() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.begin_instruction().unwrap();
+        let mut state = cpu.export_state();
+        state.mcycle_index = u32::MAX;
+
+        assert_eq!(
+            Z80MicroSequencer::restore_state(state),
+            Err(Z80MicroSequencerError::InvalidState)
+        );
+    }
+
+    #[test]
+    fn complete_bus_cycle_is_atomic_when_follow_up_request_allocation_fails() {
+        let mut cpu = Z80MicroSequencer::default();
+        let fetch = request(cpu.begin_instruction().unwrap());
+        let mut state = cpu.export_state();
+        state.handshake.next_request_id = u64::MAX;
+        cpu = Z80MicroSequencer::restore_state(state).unwrap();
+        let before = cpu.export_state();
+
+        assert_eq!(
+            cpu.complete_bus_cycle(fetch.id, Some(0x3E)),
+            Err(Z80MicroSequencerError::Handshake(
+                crate::Z80BusHandshakeError::RequestIdExhausted
+            ))
+        );
+        assert_eq!(cpu.export_state(), before);
+        assert_eq!(cpu.pending_request(), Some(fetch));
     }
 
     #[test]
