@@ -46,12 +46,23 @@ fn populated_scheduler() -> MachineScheduler<Payload> {
 
 fn expected_domain(
     ratio: ClockRatio,
-    phase: u128,
+    initial_phase: u128,
     target: MachineTime,
 ) -> sega_temporal_core::ClockDomainSnapshot {
-    let mut domain = ClockDomain::with_phase(ratio, MachineTime::ZERO, phase).unwrap();
-    domain.advance_to(target).unwrap();
-    domain.snapshot()
+    // Independent arithmetic oracle: do not call ClockDomain, which is the
+    // implementation exercised by MachineScheduler.
+    let numerator = u128::from(ratio.numerator());
+    let denominator = u128::from(ratio.denominator());
+    let accumulated = target
+        .ticks()
+        .checked_mul(numerator)
+        .and_then(|value| value.checked_add(initial_phase))
+        .expect("test oracle arithmetic must fit u128");
+    sega_temporal_core::ClockDomainSnapshot {
+        time: target,
+        total_cycles: accumulated / denominator,
+        phase: accumulated % denominator,
+    }
 }
 
 #[test]
@@ -59,6 +70,8 @@ fn multi_domain_advancement_is_chunk_invariant_and_replay_stable() {
     let mut uninterrupted = populated_scheduler();
     let mut replayed = MachineScheduler::restore_state(uninterrupted.export_state()).unwrap();
 
+    let expected_dispatch_tokens = [0_u64, 1, 2, 4, 3, 5, 6];
+    let mut observed_dispatch_tokens = Vec::new();
     let mut final_timestamp = MachineTime::ZERO;
     for (index, expected_timestamp) in TARGETS.into_iter().enumerate() {
         let expected_timestamp = MachineTime::from_ticks(expected_timestamp);
@@ -67,6 +80,7 @@ fn multi_domain_advancement_is_chunk_invariant_and_replay_stable() {
 
         assert_eq!(actual, expected, "dispatch mismatch at event {index}");
         assert_eq!(actual.event.timestamp, expected_timestamp);
+        observed_dispatch_tokens.push(actual.event.payload.token);
         final_timestamp = expected_timestamp;
 
         // Restore after every second dispatch, including same-timestamp
@@ -81,6 +95,7 @@ fn multi_domain_advancement_is_chunk_invariant_and_replay_stable() {
         );
     }
 
+    assert_eq!(observed_dispatch_tokens, expected_dispatch_tokens);
     assert_eq!(uninterrupted.now(), final_timestamp);
     assert_eq!(replayed.now(), final_timestamp);
 
