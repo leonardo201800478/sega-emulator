@@ -766,25 +766,60 @@ mod tests {
         let mut psg = Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
         assert_eq!(psg.lfsr(), 0x8000);
         psg.write(0xE4);
-        let expected = [0x8000_u16,0x4000,0x2000,0x1000,0x0800,0x0400,0x0200,0x0100,0x0080,0x0040,0x0020,0x0010,0x0008,0x8004,0x4002,0x2001];
-        for state in expected { assert_eq!(psg.lfsr(), state); psg.shift_noise_register(); }
+        let expected = [
+            0x8000_u16, 0x4000, 0x2000, 0x1000, 0x0800, 0x0400, 0x0200, 0x0100,
+            0x0080, 0x0040, 0x0020, 0x0010, 0x0008, 0x8004, 0x4002, 0x2001,
+        ];
+        for state in expected {
+            assert_eq!(psg.lfsr(), state);
+            psg.shift_noise_register();
+        }
         assert_eq!(psg.profile(), PsgProfile::Sms);
     }
     #[test]
     fn sms_periodic_noise_shifts_feedback_into_bit_fifteen() {
         let mut psg = Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
         psg.write(0xE0);
-        for _ in 0..15 { psg.shift_noise_register(); }
+        for _ in 0..15 {
+            psg.shift_noise_register();
+        }
         assert_eq!(psg.lfsr(), 1);
         psg.shift_noise_register();
         assert_eq!(psg.lfsr(), 0x8000);
     }
     #[test]
     fn reset_restores_the_selected_profile_seed() {
-        for (profile, seed) in [(PsgProfile::Sg1000,0x4000),(PsgProfile::Sms,0x8000)] {
-            let mut psg = Sn76489::new_with_profile(3_579_545,44_100,profile).unwrap();
-            psg.write(0xE4); psg.shift_noise_register(); psg.reset();
-            assert_eq!(psg.lfsr(),seed); assert_eq!(psg.profile(),profile);
+        for (profile, seed) in [(PsgProfile::Sg1000, 0x4000), (PsgProfile::Sms, 0x8000)] {
+            let mut psg = Sn76489::new_with_profile(3_579_545, 44_100, profile).unwrap();
+            psg.write(0xE4);
+            psg.shift_noise_register();
+            psg.reset();
+            assert_eq!(psg.lfsr(), seed);
+            assert_eq!(psg.profile(), profile);
         }
+    }
+    #[test]
+    fn sms_tone_register_protocol_is_shared_without_profile_drift() {
+        let mut psg = Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        psg.write(0x85);
+        psg.write(0x12);
+        psg.write(0x90);
+        assert_eq!(psg.tone_periods(), [0x125, 0, 0]);
+        assert_eq!(psg.attenuations()[0], 0);
+    }
+    #[test]
+    fn sms_audio_generation_is_deterministic_and_chunk_invariant() {
+        let mut whole = Sn76489::new_with_profile(3_579_545, 44_100, PsgProfile::Sms).unwrap();
+        let mut chunked = whole.clone();
+        for psg in [&mut whole, &mut chunked] {
+            psg.write(0x90);
+            psg.write(0x85);
+            psg.write(0x12);
+        }
+        whole.advance_clocks(120_000);
+        chunked.advance_clocks(40_000);
+        chunked.advance_clocks(80_000);
+        assert_eq!(whole, chunked);
+        assert!(!whole.drain_samples(None).is_empty());
     }
 }
