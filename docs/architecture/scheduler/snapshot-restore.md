@@ -37,11 +37,12 @@ Frame:
 `magic[8] | state_version[u16 BE] | payload_version[u16 BE] | body_length[u64 BE] | body | crc32[u32 BE]`
 
 - magic: `SEGSCHD\0`;
-- temporais `u128`: 16 bytes unsigned big-endian;
-- contagens e tamanhos: u32 big-endian;
+- timestamps, ciclos, fases e demais campos temporais `u128`: 16 bytes unsigned big-endian;
+- contagens de domínios/eventos e comprimentos de payload: `u32` big-endian;
+- sequence, delta-event limit, dispatch count e body length: `u64` big-endian;
 - versão do DTO e versão do codec de payload independentes;
 - payload de evento codificado por `EventPayloadCodec<T>`;
-- CRC-32/ISO-HDLC detecta corrupção acidental; não é autenticação criptográfica.
+- CRC-32/ISO-HDLC é calculado somente sobre `body` (não cobre magic, versões ou `body_length`); detecta corrupção acidental no corpo, mas não é autenticação criptográfica.
 
 O codec de payload deve ser determinístico, versionado e rejeitar bytes inválidos. Não persistir tipos de dispositivo por meio de suposições genéricas.
 
