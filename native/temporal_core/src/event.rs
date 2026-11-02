@@ -505,7 +505,7 @@ mod tests {
         );
         let regressed = EventQueueState {
             pending: vec![event(5, 1, 0, 0)],
-            next_sequence: 1,
+            next_sequence: 2,
             last_dispatched: Some(EventQueueWatermark {
                 timestamp: MachineTime::from_ticks(5),
                 hardware_phase: HardwarePhase::new(2),
