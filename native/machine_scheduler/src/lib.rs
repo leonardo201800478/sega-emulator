@@ -355,10 +355,10 @@ impl<T> MachineScheduler<T> {
         // values allocated through its final dispatched event. Since sequence
         // allocation starts at zero and is strictly increasing, the watermark
         // sequence must be at least count - 1.
-        if let Some(watermark) = state.event_queue.last_dispatched {
-            if state.dispatched_at_timestamp - 1 > watermark.sequence {
-                return Err(SchedulerError::DispatchHistoryMismatch);
-            }
+        if let Some(watermark) = state.event_queue.last_dispatched
+            && state.dispatched_at_timestamp - 1 > watermark.sequence
+        {
+            return Err(SchedulerError::DispatchHistoryMismatch);
         }
         if state
             .event_queue
