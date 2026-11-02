@@ -36,9 +36,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "sega-sn76489"
+version = "0.1.0"
+
+[[package]]
 name = "sega-sg1000-core"
 version = "0.1.0"
 dependencies = [
+ "sega-sn76489",
  "sega-z80-cpu",
 ]
 
@@ -46,6 +51,7 @@ dependencies = [
 name = "sega-sms-core"
 version = "0.1.0"
 dependencies = [
+ "sega-sn76489",
  "sega-z80-bus",
  "sega-z80-cpu",
 ]
