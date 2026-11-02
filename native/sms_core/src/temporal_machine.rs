@@ -9,11 +9,30 @@ use core::fmt;
 use crate::{SmsTemporalBus, SmsTemporalBusError, SmsTemporalBusState, SmsTemporalDispatch};
 use sega_temporal_core::MachineTime;
 use sega_z80_cpu::{
-    Z80MicroSequencer, Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroSequencerState,
-    Z80MicroStep,
+    Z80BusOperation, Z80MicroSequencer, Z80MicroSequencerError, Z80MicroSequencerPhase,
+    Z80MicroSequencerState, Z80MicroStep,
 };
 
 pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 1;
+
+/// Runtime event trace emitted from actual Scheduler/bus dispatch boundaries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SmsTemporalTraceEvent {
+    BusCompleted {
+        timestamp: MachineTime,
+        request_id: u64,
+        operation: Z80BusOperation,
+        address: u16,
+        base_tstates: u8,
+        wait_tstates: u32,
+        data: Option<u8>,
+    },
+    InternalCycleCompleted {
+        timestamp: MachineTime,
+        continuation_id: u64,
+        tstates: u32,
+    },
+}
 
 /// Versioned state spanning the CPU continuation and SMS memory/scheduler.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,6 +42,7 @@ pub struct SmsTemporalMachineState {
     pub bus: SmsTemporalBusState,
     pub next_internal_cycle_id: u64,
     pub pending_internal_cycle_id: Option<u64>,
+    pub pending_internal_tstates: Option<u32>,
 }
 
 /// Errors from the first integrated SMS temporal execution path.
@@ -70,6 +90,9 @@ pub struct SmsTemporalMachine {
     bus: SmsTemporalBus,
     next_internal_cycle_id: u64,
     pending_internal_cycle_id: Option<u64>,
+    pending_internal_tstates: Option<u32>,
+    trace_enabled: bool,
+    trace_events: Vec<SmsTemporalTraceEvent>,
 }
 
 impl SmsTemporalMachine {
@@ -83,6 +106,9 @@ impl SmsTemporalMachine {
             bus: SmsTemporalBus::new(rom, master_ticks_per_tstate)?,
             next_internal_cycle_id: 0,
             pending_internal_cycle_id: None,
+            pending_internal_tstates: None,
+            trace_enabled: false,
+            trace_events: Vec::new(),
         })
     }
 
@@ -135,6 +161,7 @@ impl SmsTemporalMachine {
         let deadline = self.bus.schedule_internal_cycle(continuation_id, tstates)?;
         self.next_internal_cycle_id = next_internal_cycle_id;
         self.pending_internal_cycle_id = Some(continuation_id);
+        self.pending_internal_tstates = Some(tstates);
         Ok(deadline)
     }
 
@@ -146,6 +173,22 @@ impl SmsTemporalMachine {
             .ok_or(SmsTemporalMachineError::NoScheduledEvent)?;
         match dispatch {
             SmsTemporalDispatch::BusCompletion(completion) => {
+                if self.trace_enabled {
+                    let request = self
+                        .bus
+                        .pending_request()
+                        .ok_or(SmsTemporalMachineError::InvalidState)?;
+                    let wait_tstates = self.cpu.export_state().handshake.wait_tstates;
+                    self.trace_events.push(SmsTemporalTraceEvent::BusCompleted {
+                        timestamp: completion.completed_at,
+                        request_id: request.id,
+                        operation: request.operation,
+                        address: request.address,
+                        base_tstates: request.base_tstates,
+                        wait_tstates,
+                        data: completion.data,
+                    });
+                }
                 let response = self.bus.acknowledge_completion(completion.request_id)?;
                 Ok(self
                     .cpu
@@ -154,6 +197,18 @@ impl SmsTemporalMachine {
             SmsTemporalDispatch::InternalCycleComplete(completion) => {
                 if self.pending_internal_cycle_id != Some(completion.continuation_id) {
                     return Err(SmsTemporalMachineError::InvalidState);
+                }
+                let tstates = self
+                    .pending_internal_tstates
+                    .take()
+                    .ok_or(SmsTemporalMachineError::InvalidState)?;
+                if self.trace_enabled {
+                    self.trace_events
+                        .push(SmsTemporalTraceEvent::InternalCycleCompleted {
+                            timestamp: completion.completed_at,
+                            continuation_id: completion.continuation_id,
+                            tstates,
+                        });
                 }
                 self.pending_internal_cycle_id = None;
                 Ok(self.cpu.complete_internal_cycle()?)
@@ -216,6 +271,19 @@ impl SmsTemporalMachine {
         }
     }
 
+    /// Enable or disable allocation-backed runtime trace capture.
+    pub fn set_trace_enabled(&mut self, enabled: bool) {
+        self.trace_enabled = enabled;
+        if !enabled {
+            self.trace_events.clear();
+        }
+    }
+
+    /// Drain trace events captured from actual scheduler dispatches.
+    pub fn take_trace(&mut self) -> Vec<SmsTemporalTraceEvent> {
+        core::mem::take(&mut self.trace_events)
+    }
+
     /// Current CPU state (read-only).
     pub const fn cpu(&self) -> &Z80MicroSequencer {
         &self.cpu
@@ -244,6 +312,7 @@ impl SmsTemporalMachine {
             bus: self.bus.export_state(),
             next_internal_cycle_id: self.next_internal_cycle_id,
             pending_internal_cycle_id: self.pending_internal_cycle_id,
+            pending_internal_tstates: self.pending_internal_tstates,
         }
     }
 
@@ -256,6 +325,7 @@ impl SmsTemporalMachine {
         let bus = SmsTemporalBus::restore_state(state.bus.clone())?;
         if cpu.pending_request() != state.bus.pending_request
             || state.pending_internal_cycle_id != state.bus.pending_internal_cycle
+            || state.pending_internal_cycle_id.is_some() != state.pending_internal_tstates.is_some()
             || state
                 .pending_internal_cycle_id
                 .is_some_and(|id| id >= state.next_internal_cycle_id)
@@ -275,6 +345,9 @@ impl SmsTemporalMachine {
             bus,
             next_internal_cycle_id: state.next_internal_cycle_id,
             pending_internal_cycle_id: state.pending_internal_cycle_id,
+            pending_internal_tstates: state.pending_internal_tstates,
+            trace_enabled: false,
+            trace_events: Vec::new(),
         })
     }
 }
