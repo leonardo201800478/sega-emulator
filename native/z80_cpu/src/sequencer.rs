@@ -478,7 +478,9 @@ impl Z80MicroSequencer {
         address: u16,
         value: u8,
     ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
-        self.mcycle_index = self.mcycle_index.checked_add(1)
+        self.mcycle_index = self
+            .mcycle_index
+            .checked_add(1)
             .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
         self.tstate_index = 0;
         let request = self
