@@ -202,8 +202,7 @@ impl Sg1000TemporalCoordinator {
             .iter()
             .find(|domain| domain.id == SG1000_Z80_CLOCK_DOMAIN_ID)
             .ok_or(Sg1000TemporalCoordinatorError::InvalidState)?;
-        if domain.ratio_numerator != 1
-            || domain.ratio_denominator != state.master_ticks_per_tstate
+        if domain.ratio_numerator != 1 || domain.ratio_denominator != state.master_ticks_per_tstate
         {
             return Err(Sg1000TemporalCoordinatorError::InvalidState);
         }
@@ -218,8 +217,8 @@ impl Sg1000TemporalCoordinator {
 #[cfg(test)]
 mod tests {
     use super::{
-        SG1000_Z80_CLOCK_DOMAIN_ID, Sg1000TemporalCoordinator,
-        Sg1000TemporalCoordinatorError, Sg1000TemporalEvent,
+        SG1000_Z80_CLOCK_DOMAIN_ID, Sg1000TemporalCoordinator, Sg1000TemporalCoordinatorError,
+        Sg1000TemporalEvent,
     };
     use sega_temporal_core::MachineTime;
 
@@ -238,7 +237,10 @@ mod tests {
         );
         assert_eq!(timeline.now(), deadline);
         assert_eq!(dispatch.clock_advances.len(), 1);
-        assert_eq!(dispatch.clock_advances[0].domain, SG1000_Z80_CLOCK_DOMAIN_ID);
+        assert_eq!(
+            dispatch.clock_advances[0].domain,
+            SG1000_Z80_CLOCK_DOMAIN_ID
+        );
         assert_eq!(dispatch.clock_advances[0].elapsed_cycles, 5);
         assert_eq!(timeline.z80_clock_snapshot().unwrap().total_cycles, 5);
     }

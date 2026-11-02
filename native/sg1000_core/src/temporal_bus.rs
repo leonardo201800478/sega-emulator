@@ -6,8 +6,10 @@
 
 use core::fmt;
 
-use crate::{MemoryConfig, MemoryError, Sg1000Memory, Sg1000TemporalCoordinator,
-    Sg1000TemporalCoordinatorError, Sg1000TemporalCoordinatorState, Sg1000TemporalEvent};
+use crate::{
+    MemoryConfig, MemoryError, Sg1000Memory, Sg1000TemporalCoordinator,
+    Sg1000TemporalCoordinatorError, Sg1000TemporalCoordinatorState, Sg1000TemporalEvent,
+};
 use sega_temporal_core::MachineTime;
 use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
 
@@ -236,7 +238,9 @@ impl Sg1000TemporalBus {
             return Ok(Some(Sg1000TemporalDispatch::BusCompletion(completion)));
         }
         if let Some(completion) = self.internal_completion {
-            return Ok(Some(Sg1000TemporalDispatch::InternalCycleComplete(completion)));
+            return Ok(Some(Sg1000TemporalDispatch::InternalCycleComplete(
+                completion,
+            )));
         }
         let Some(dispatch) = self.coordinator.dispatch_next()? else {
             return Ok(None);
@@ -285,7 +289,9 @@ impl Sg1000TemporalBus {
                     completed_at: dispatch.event.timestamp,
                 };
                 self.internal_completion = Some(completion);
-                Ok(Some(Sg1000TemporalDispatch::InternalCycleComplete(completion)))
+                Ok(Some(Sg1000TemporalDispatch::InternalCycleComplete(
+                    completion,
+                )))
             }
         }
     }
@@ -385,9 +391,7 @@ impl Sg1000TemporalBus {
     }
 
     /// Restore only if the memory transaction and Scheduler event agree.
-    pub fn restore_state(
-        state: Sg1000TemporalBusState,
-    ) -> Result<Self, Sg1000TemporalBusError> {
+    pub fn restore_state(state: Sg1000TemporalBusState) -> Result<Self, Sg1000TemporalBusError> {
         if state.format_version != SG1000_TEMPORAL_BUS_STATE_VERSION {
             return Err(Sg1000TemporalBusError::InvalidState);
         }
@@ -466,14 +470,17 @@ impl Sg1000TemporalBus {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        Sg1000TemporalBus, Sg1000TemporalBusError, Sg1000TemporalDispatch,
-    };
+    use super::{Sg1000TemporalBus, Sg1000TemporalBusError, Sg1000TemporalDispatch};
     use crate::MemoryConfig;
-    use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
     use sega_temporal_core::MachineTime;
+    use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
 
-    fn request(id: u64, operation: Z80BusOperation, address: u16, base_tstates: u8) -> Z80BusRequest {
+    fn request(
+        id: u64,
+        operation: Z80BusOperation,
+        address: u16,
+        base_tstates: u8,
+    ) -> Z80BusRequest {
         Z80BusRequest {
             id,
             operation,
@@ -494,8 +501,7 @@ mod tests {
             wait_tstates,
         )
         .unwrap();
-        let Some(Sg1000TemporalDispatch::BusCompletion(completion)) =
-            bus.dispatch_next().unwrap()
+        let Some(Sg1000TemporalDispatch::BusCompletion(completion)) = bus.dispatch_next().unwrap()
         else {
             panic!("expected memory write completion");
         };
@@ -539,11 +545,8 @@ mod tests {
     #[test]
     fn memory_read_samples_the_value_at_dispatch_deadline() {
         let mut bus = Sg1000TemporalBus::new(vec![0x00], MemoryConfig::default(), 3).unwrap();
-        bus.begin_request(
-            request(2, Z80BusOperation::MemoryRead, 0xC000, 3),
-            1,
-        )
-        .unwrap();
+        bus.begin_request(request(2, Z80BusOperation::MemoryRead, 0xC000, 3), 1)
+            .unwrap();
         bus.write_memory_for_test(0xC000, 0x5A);
         let Some(Sg1000TemporalDispatch::BusCompletion(completion)) = bus.dispatch_next().unwrap()
         else {
@@ -651,11 +654,8 @@ mod tests {
     #[test]
     fn restore_rejects_inconsistent_pending_event_and_request() {
         let mut bus = Sg1000TemporalBus::new(vec![0x00], MemoryConfig::default(), 2).unwrap();
-        bus.begin_request(
-            request(8, Z80BusOperation::MemoryRead, 0x0000, 3),
-            0,
-        )
-        .unwrap();
+        bus.begin_request(request(8, Z80BusOperation::MemoryRead, 0x0000, 3), 0)
+            .unwrap();
         let mut state = bus.export_state();
         state.pending_request.as_mut().unwrap().id = 9;
         assert_eq!(

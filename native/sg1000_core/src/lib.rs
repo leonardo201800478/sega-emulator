@@ -37,7 +37,7 @@ pub use temporal::{
     Sg1000TemporalEvent,
 };
 pub use temporal_bus::{
-    Sg1000BusCompletion, Sg1000InternalCycleCompletion, Sg1000TemporalBus,
-    Sg1000TemporalBusError, Sg1000TemporalBusState, Sg1000TemporalDispatch,
+    Sg1000BusCompletion, Sg1000InternalCycleCompletion, Sg1000TemporalBus, Sg1000TemporalBusError,
+    Sg1000TemporalBusState, Sg1000TemporalDispatch,
 };
 pub use vdp::Tms9918A;
