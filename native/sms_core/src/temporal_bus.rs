@@ -514,7 +514,7 @@ mod tests {
             assert_eq!(restored.memory().selected_banks()[slot], 3);
             assert_eq!(
                 restored.memory().mapper_register_write_count_for_test(),
-                u64::from(request_id - 9),
+                request_id - 9,
                 "each Sega mapper register write is applied exactly once"
             );
             assert_eq!(restored.memory().read(ram_mirror), 3);
