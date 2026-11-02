@@ -337,6 +337,9 @@ impl D3d12Host {
                 Some(&mut upload_size),
             );
         }
+        if upload_rows != height || upload_row_size != u64::from(width) * 4 {
+            return Err(Error::from_win32());
+        }
 
         let default_heap = D3D12_HEAP_PROPERTIES {
             Type: D3D12_HEAP_TYPE_DEFAULT,
@@ -623,7 +626,19 @@ impl D3d12Host {
             .checked_mul(4)
             .ok_or_else(Error::from_win32)?;
         let row_pitch = self.upload_layout.Footprint.RowPitch as usize;
-        if row_pitch < row_bytes || self.upload_size < self.upload_layout.Offset {
+        let required_size = self
+            .upload_layout
+            .Offset
+            .checked_add(
+                (row_pitch as u64)
+                    .checked_mul(u64::from(frame.height()))
+                    .ok_or_else(Error::from_win32)?,
+            )
+            .ok_or_else(Error::from_win32)?;
+        if row_pitch < row_bytes || required_size > self.upload_size {
+            return Err(Error::from_win32());
+        }
+        if (0..frame.height()).any(|row| frame.row(row).is_none()) {
             return Err(Error::from_win32());
         }
 
