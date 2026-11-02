@@ -7,6 +7,7 @@
 ## Ownership e mapeamento
 
 - `Z80MicroSequencer` continua sendo o único proprietário da continuação de instrução.
+- A conclusão de uma transação calcula a transição em uma cópia e só publica o novo estado quando a conclusão inteira tem sucesso; falhas mantêm handshake, fase e registradores originais.
 - `mcycle_index` é zero-based dentro da instrução: opcode fetch é M1 (índice 0), a leitura de INC/DEC (HL) é M2 (índice 1) e a escrita é M3 (índice 2).
 - O intervalo interno de 1 T-state de INC/DEC (HL) pertence ao próprio M2: sem WAIT, começa em `(mcycle_index, tstate_index) = (1, 3)`. WAITs inseridos na leitura deslocam esse offset dentro do mesmo M2; não criam outro M-cycle.
 - `tstate_index` é zero-based dentro do M-cycle. O sequenciador expõe apenas o offset necessário ao intervalo interno atual, não bordas elétricas, amostragem de pinos ou subfases de clock.
@@ -24,5 +25,6 @@ A implementação cobre somente as fases que o sequenciador já expõe: M1 opcod
 - [x] Índices M/T pertencem ao estado retomável do sequenciador.
 - [x] Snapshot binário versionado carrega os índices.
 - [x] Testes de sequência, WAIT e snapshot para M1/M2/M3 no CI candidato.
+- [x] Teste de atomicidade da conclusão quando a alocação da próxima requisição falha.
 - [ ] fmt, clippy com `-D warnings`, testes do workspace e regressões Python no SHA candidato.
 - [ ] Revisão arquitetural e integração por PR; não declarar `TEMPORAL_PASS`.
