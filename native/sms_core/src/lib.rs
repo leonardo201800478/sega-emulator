@@ -17,6 +17,7 @@ pub mod machine;
 pub mod memory;
 pub mod psg;
 pub mod vdp;
+pub mod vdp_sms1;
 
 pub use bus::{
     CpuBus, Z80BusEvent, Z80BusEventKind, Z80CpuSnapshot, Z80InstructionOutcome,
