@@ -67,6 +67,8 @@ impl Z80MicroSequencerState {
         body.u16(self.registers.pc);
         body.u8(self.refresh);
         body.u32(self.instruction_tstates);
+        body.u32(self.mcycle_index);
+        body.u16(self.tstate_index);
         match self.opcode {
             None => body.u8(0),
             Some(value) => {
@@ -137,6 +139,8 @@ impl Z80MicroSequencerState {
         };
         let refresh = reader.u8()?;
         let instruction_tstates = reader.u32()?;
+        let mcycle_index = reader.u32()?;
+        let tstate_index = reader.u16()?;
         let opcode = match reader.u8()? {
             0 => None,
             1 => Some(reader.u8()?),
@@ -166,6 +170,8 @@ impl Z80MicroSequencerState {
             phase,
             opcode,
             instruction_tstates,
+            mcycle_index,
+            tstate_index,
         };
         Z80MicroSequencer::restore_state(state.clone())
             .map_err(|_| Z80MicroSequencerStateCodecError::InvalidState)?;
