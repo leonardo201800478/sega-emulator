@@ -643,6 +643,7 @@ mod background_tests {
         state.memory.vram[0x3800] = 1;
         state.memory.vram[0x3802] = 2;
         state.memory.vram[0x383E] = 2;
+        state.memory.vram[0x38BE] = 2;
         put_tile(&mut state, 1, 1);
         put_tile(&mut state, 2, 2);
         put_tile(&mut state, 3, 3);
