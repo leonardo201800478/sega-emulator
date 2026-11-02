@@ -124,9 +124,7 @@ impl SmsTemporalMachine {
     ///
     /// The timestamp is the scheduler's current machine time (transaction start);
     /// the CPU remains the sole owner of continuation and request identity.
-    pub fn pending_bus_transaction(
-        &self,
-    ) -> Result<Option<BusTransaction>, BusContractError> {
+    pub fn pending_bus_transaction(&self) -> Result<Option<BusTransaction>, BusContractError> {
         let Some(request) = self.cpu.pending_request() else {
             return Ok(None);
         };
@@ -156,9 +154,7 @@ impl SmsTemporalMachine {
         .map(Some)
     }
     /// Describe the currently exposed CPU-internal interval using the shared contract.
-    pub fn pending_internal_transaction(
-        &self,
-    ) -> Result<Option<BusTransaction>, BusContractError> {
+    pub fn pending_internal_transaction(&self) -> Result<Option<BusTransaction>, BusContractError> {
         let state = self.cpu.export_state();
         if !matches!(state.phase, Z80MicroSequencerPhase::MemoryIncDecInternal { .. }) {
             return Ok(None);
