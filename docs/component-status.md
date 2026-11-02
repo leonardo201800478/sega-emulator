@@ -1,6 +1,6 @@
 # Estado dos componentes — SG-1000 + Master System
 
-**Base de referência:** `main` em `62ab404e67fffbe8d0da7bf956e6b801a2e2bbd7` (2026-11-02, após PR #417).
+**Base de referência:** `main` em `6c8e18b1c0a134ee56e8282d1cbc7660373100f8` (2026-11-02, após PR #418/T5a).
 **Natureza:** inventário documental do estado observado no repositório e das auditorias disponíveis. Não substitui testes no SHA candidato nem declara precisão ciclo a ciclo.
 
 Este documento responde o que já existe, o que permanece como componente válido e o que ainda precisa ser integrado ou concluído. Componentes existentes não devem ser apagados só porque a arquitetura-alvo muda; a migração deve preservar APIs e testes até haver substituição comprovada.
@@ -54,7 +54,7 @@ Este documento responde o que já existe, o que permanece como componente válid
 - **PR #412:** head é ancestral do merge #416 e foi reconhecida como merged pelo GitHub.
 - **PR #413/#414:** fechadas como supersedidas; seus entregáveis funcionais de snapshot/codec e coordinator estão no diff integrado de #416, mas os heads divergentes não são ancestrais de main.
 - **PR #415:** fechada como supersedida; seu head é ancestral do merge #416, portanto o histórico desse head está contido em main.
-- **PR #396 — contratos temporais SMS1:** permanece OPEN / Draft. A revisão T0 identificou que o microsequenciador ainda não expõe índices M-cycle/T-state estáveis para mapear os contratos sem adaptação artificial.
+- **PR #396 — contratos temporais SMS1:** encerrada sem merge, supersedida pela PR #418. Os contratos temporais canônicos foram absorvidos pela #418; não reabrir nem duplicar essa proposta.
 
 ## 5. Componentes que permanecem no projeto
 
@@ -96,8 +96,8 @@ Não elevar um estado com base apenas em documentação, compilação isolada, b
 | SMS completo (CPU/VDP/PSG/I/O/IRQ) | INTEGRATION_PENDING | VDP legado excluído; novo VDP temporal, PSG, I/O e interrupções ainda não integrados |
 | TEMPORAL_PASS | NOT DECLARED | Faltam oráculos independentes/físicos, WAIT físico, arbitragem e integração sistêmica |
 
-**T5a — PR #418 (em revisão):** índices M-cycle/T-state para o subconjunto retomável; restore valida fase/opcode, endereço efetivo `(HL)`, payload e progresso temporal da instrução; codec binário Z80 versão 3; `SmsTemporalMachineState` versão 6 preserva `instruction_started_at`; conclusão latched até commit/ack da CPU. Código SHA `0c178ed6c8da6aeddf8e25682a2ebc620eec786f`, run `41536695747`: 4/4 jobs PASS (Rust, Python, Windows x64 D3D12/video/audio e Scheduler stress). Reauditoria técnica do Agente 2 para o HEAD final ainda é gate. Não considerar integrado à main nem declarar `TEMPORAL_PASS`.
-## 5. T5a — PR #418 em revisão
+**T5a — PR #418 integrada:** índices M-cycle/T-state para o subconjunto retomável; restore valida fase/opcode, endereço efetivo `(HL)`, payload e progresso temporal da instrução; codec binário Z80 versão 3; `SmsTemporalMachineState` versão 6 preserva `instruction_started_at`; conclusão latched até commit/ack da CPU. HEAD da PR `6e73c0655521941c9e4ab7384f4508954306561a`, CI da PR `41538464875`: 4/4 jobs PASS. Merge em `main`: `6c8e18b1c0a134ee56e8282d1cbc7660373100f8`. CI pós-merge `41540515497`: Rust, Python e Windows PASS; Scheduler deterministic stress SKIPPED (não contar como PASS). Auditoria técnica pós-merge no SHA integrado: PENDENTE. Limites preservados; não declarar `TEMPORAL_PASS`.
+## 5. T5a — PR #418 integrada
 
 - Fonte canônica dos contratos temporais: a linha T5a (#418), que incorpora `BusTransaction`, `BusOperationResult`, os tipos de progresso e a ADR-001 originalmente propostos na PR #396. A #396 é supersedida e não deve ser integrada em paralelo.
 - HEAD de código `0c178ed6c8da6aeddf8e25682a2ebc620eec786f`: run `41536695747` PASS nos quatro jobs; inclui testes de restore para endereço `(HL)`, CRC válido e `instruction_tstates` incompatível com a timeline do Scheduler. Execução local: NOT RUN.
@@ -105,4 +105,4 @@ Não elevar um estado com base apenas em documentação, compilação isolada, b
 - `BusTransaction.timestamp` conserva o início da requisição em Setup e Complete; `BusOperationResult::Completed.completed_at` expõe a conclusão separadamente. O descriptor de ciclo interno conserva seu timestamp de início mesmo quando a conclusão está latched.
 - P2 de payload de escrita tratado na branch: a fase `MemoryWrite` preserva endereço/valor esperados, o restore compara a requisição exata e o codec versão 3 inclui esses campos. Testes negativos DTO para `LD (HL),n` e `INC (HL)`, round-trip do codec e teste de rejeição binária com CRC recalculado cobrem o payload adulterado. Também há regressão para o timestamp inicial de ciclo interno durante conclusão latched.
 - Limites: apenas subconjunto atual de opcodes no SMS; WAIT é fixture; SG-1000, VDP/PSG/I/O/IRQ e semântica elétrica não estão integrados nesta fatia. `TEMPORAL_PASS` não concedido.
-- A reauditoria técnica independente do HEAD final permanece gate de integração. O código SHA `0c178ed6c8da6aeddf8e25682a2ebc620eec786f` (run `41536695747`) tem 4/4 jobs PASS; a sincronização documental corrente será validada no CI do SHA final da PR. Execução local: NOT RUN.
+- A integração está concluída. A auditoria técnica independente pós-merge do SHA `6c8e18b1c0a134ee56e8282d1cbc7660373100f8` permanece pendente; o CI da PR passou 4/4 no HEAD `6e73c0655521941c9e4ab7384f4508954306561a`. O CI pós-merge teve Scheduler deterministic stress SKIPPED; não classificar esse job como PASS. Execução local: NOT RUN.
