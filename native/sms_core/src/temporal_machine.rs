@@ -120,7 +120,6 @@ impl SmsTemporalMachine {
         Ok(self.cpu.begin_instruction()?)
     }
 
-    /// Schedule the CPU's current pending bus request with fixture WAIT states.
     /// Describe the pending CPU bus request using the shared temporal contract.
     ///
     /// The timestamp is the scheduler's current machine time (transaction start);
@@ -156,6 +155,7 @@ impl SmsTemporalMachine {
         )
         .map(Some)
     }
+    /// Schedule the CPU's current pending bus request with fixture WAIT states.
     pub fn schedule_pending_bus(
         &mut self,
         fixture_wait_tstates: u32,
@@ -694,6 +694,7 @@ mod tests {
         machine.schedule_pending_bus(0).unwrap();
         assert_eq!(machine.pending_bus_transaction().unwrap(), Some(transaction));
     }
+
     #[test]
     fn supported_microsequencer_slice_matches_atomic_reference() {
         assert_atomic_differential(&[0x00], 0, 0, 0, 0, 0x00);
