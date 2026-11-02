@@ -22,10 +22,10 @@ use windows::Win32::Graphics::Dxgi::{
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::{INFINITE, WaitForSingleObjectEx};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CW_USEDEFAULT, CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow,
+    CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, DestroyWindow,
     DispatchMessageW, MSG, PM_REMOVE, PeekMessageW, PostQuitMessage, RegisterClassW, SW_SHOW,
-    ShowWindow, TranslateMessage, WNDCLASSW, WINDOW_EX_STYLE, WINDOW_STYLE,
-    WM_DESTROY, WS_OVERLAPPEDWINDOW,
+    ShowWindow, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_DESTROY, WNDCLASSW,
+    WS_OVERLAPPEDWINDOW,
 };
 use windows::core::{Error, Interface, Result, w};
 
