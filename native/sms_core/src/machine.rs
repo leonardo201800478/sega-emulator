@@ -384,6 +384,26 @@ mod tests {
     use crate::input::{ControllerButtons, SmsInputState};
 
     #[test]
+    fn runtime_sprite_limit_policy_updates_vdp_and_machine_config() {
+        let mut machine = SmsMachine::new(vec![0; 0x4000]).unwrap();
+        assert!(machine.sprite_limit_enabled());
+        assert_eq!(
+            machine.vdp().sprite_limit_mode(),
+            crate::config::SpriteLimitMode::HardwareLimit
+        );
+
+        machine.set_sprite_limit_enabled(false);
+        assert!(!machine.sprite_limit_enabled());
+        assert_eq!(
+            machine.vdp().sprite_limit_mode(),
+            crate::config::SpriteLimitMode::UnlockedCompatibility
+        );
+
+        machine.set_sprite_limit_enabled(true);
+        assert!(machine.sprite_limit_enabled());
+    }
+
+    #[test]
     fn cpu_fetches_cartridge_rom_and_uses_the_same_mapper_memory_for_ram() {
         // LD A,$42; LD ($C000),A; LD A,($C000); LD ($C001),A
         let rom = [
