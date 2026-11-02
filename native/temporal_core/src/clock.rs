@@ -757,8 +757,7 @@ mod tests {
                         let (cycles, preview) = domain
                             .preview_advance_to(MachineTime::from_ticks(elapsed))
                             .unwrap();
-                        let scaled = elapsed * u128::from(numerator)
-                            + u128::from(initial_phase);
+                        let scaled = elapsed * u128::from(numerator) + u128::from(initial_phase);
                         assert_eq!(cycles, scaled / u128::from(denominator));
                         assert_eq!(preview.phase, scaled % u128::from(denominator));
                         assert_eq!(domain.snapshot(), before);
