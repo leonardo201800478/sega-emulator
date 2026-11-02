@@ -28,6 +28,7 @@ pub enum SchedulerStateCodecError {
     StateVersionMismatch { expected: u16, actual: u16 },
     Truncated,
     TrailingData,
+    ChecksumMismatch,
     LengthOverflow,
     CollectionTooLarge,
     PayloadTooLarge,
@@ -54,6 +55,7 @@ impl fmt::Display for SchedulerStateCodecError {
             ),
             Self::Truncated => write!(f, "scheduler-state frame is truncated"),
             Self::TrailingData => write!(f, "scheduler-state frame contains trailing data"),
+            Self::ChecksumMismatch => write!(f, "scheduler-state frame checksum does not match"),
             Self::LengthOverflow => write!(f, "scheduler-state frame length overflow"),
             Self::CollectionTooLarge => {
                 write!(f, "scheduler-state collection exceeds the wire count limit")
@@ -94,7 +96,7 @@ pub trait EventPayloadCodec<T> {
 /// Encode a scheduler DTO using the versioned canonical wire format.
 ///
 /// Frame layout:
-/// magic[8] | state_version[u16 BE] | payload_version[u16 BE] | body_length[u64 BE] | body.
+/// magic[8] | state_version[u16 BE] | payload_version[u16 BE] | body_length[u64 BE] | body | crc32[u32 BE].
 ///
 /// Collection counts and payload lengths are unsigned 32-bit big-endian.
 /// All temporal u128 values are exactly 16-byte unsigned big-endian values.
@@ -172,6 +174,7 @@ where
     frame.write_u16(C::VERSION)?;
     frame.write_u64(body_len)?;
     frame.write_bytes(&body.bytes)?;
+    frame.write_u32(crc32(&body.bytes))?;
     Ok(frame.bytes)
 }
 
@@ -209,8 +212,12 @@ where
     let body_len =
         usize::try_from(frame.read_u64()?).map_err(|_| SchedulerStateCodecError::LengthOverflow)?;
     let body_bytes = frame.read_bytes(body_len)?;
+    let expected_checksum = frame.read_u32()?;
     if !frame.is_finished() {
         return Err(SchedulerStateCodecError::TrailingData);
+    }
+    if crc32(body_bytes) != expected_checksum {
+        return Err(SchedulerStateCodecError::ChecksumMismatch);
     }
 
     let mut reader = Reader::new(body_bytes);
@@ -301,6 +308,18 @@ where
         last_dispatch_timestamp,
         dispatched_at_timestamp,
     })
+}
+
+fn crc32(bytes: &[u8]) -> u32 {
+    let mut checksum = !0_u32;
+    for byte in bytes {
+        checksum ^= u32::from(*byte);
+        for _ in 0..8 {
+            let mask = 0_u32.wrapping_sub(checksum & 1);
+            checksum = (checksum >> 1) ^ (0xedb8_8320 & mask);
+        }
+    }
+    !checksum
 }
 
 fn write_watermark(
@@ -426,8 +445,8 @@ impl<'a> Reader<'a> {
 #[cfg(test)]
 mod tests {
     use super::{
-        EventPayloadCodec, SCHEDULER_STATE_MAGIC, SchedulerStateCodecError, decode_scheduler_state,
-        encode_scheduler_state,
+        EventPayloadCodec, SCHEDULER_STATE_MAGIC, SchedulerStateCodecError, crc32,
+        decode_scheduler_state, encode_scheduler_state,
     };
     use sega_temporal_core::{
         EventQueueState, EventQueueWatermark, HardwarePhase, MachineTime, PlatformPriority,
@@ -613,6 +632,7 @@ mod tests {
         let watermark_tag_offset = 20 + 16 + 4 + CLOCK_DOMAIN_SIZE_FOR_TEST + 4 + 8;
         let mut invalid_tag = encoded.clone();
         invalid_tag[watermark_tag_offset] = 2;
+        refresh_checksum(&mut invalid_tag);
         assert_eq!(
             decode_scheduler_state(&invalid_tag, &U32PayloadCodec),
             Err(SchedulerStateCodecError::InvalidOptionTag(2))
@@ -623,6 +643,7 @@ mod tests {
             20 + 16 + 4 + CLOCK_DOMAIN_SIZE_FOR_TEST + 4 + 8 + 1 + 16 + 2 + 2 + 8;
         malformed_payload[payload_length_offset..payload_length_offset + 4]
             .copy_from_slice(&3_u32.to_be_bytes());
+        refresh_checksum(&mut malformed_payload);
         assert!(matches!(
             decode_scheduler_state(&malformed_payload, &U32PayloadCodec),
             Err(SchedulerStateCodecError::Payload(_))
@@ -636,9 +657,28 @@ mod tests {
             20 + 16 + 4 + CLOCK_DOMAIN_SIZE_FOR_TEST + 4 + 8 + 1 + 16 + 2 + 2 + 8;
         encoded[payload_length_offset..payload_length_offset + 4]
             .copy_from_slice(&u32::MAX.to_be_bytes());
+        refresh_checksum(&mut encoded);
         assert_eq!(
             decode_scheduler_state(&encoded, &U32PayloadCodec),
             Err(SchedulerStateCodecError::Truncated)
+        );
+    }
+
+    fn refresh_checksum(frame: &mut [u8]) {
+        let body_len = u64::from_be_bytes(frame[12..20].try_into().unwrap()) as usize;
+        let body_end = 20 + body_len;
+        let checksum = crc32(&frame[20..body_end]);
+        frame[body_end..body_end + 4].copy_from_slice(&checksum.to_be_bytes());
+    }
+
+    #[test]
+    fn codec_detects_body_corruption_with_crc32() {
+        assert_eq!(crc32(b"123456789"), 0xcbf4_3926);
+        let mut encoded = encode_scheduler_state(&state_fixture(), &U32PayloadCodec).unwrap();
+        encoded[20] ^= 1;
+        assert_eq!(
+            decode_scheduler_state(&encoded, &U32PayloadCodec),
+            Err(SchedulerStateCodecError::ChecksumMismatch)
         );
     }
 
