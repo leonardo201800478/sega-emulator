@@ -26,7 +26,7 @@ O workflow pós-merge [#41499594576](https://github.com/leonardo201800478/sega-e
 ## Regressões e testes direcionados
 
 - `sega-sg1000-core`: 42 passed, 0 failed.
-- `sega-sms-core`: 156 passed, 0 failed.
+- `sega-sms-core`: 157 passed, 0 failed.
 - `sega-z80-cpu`: 83 passed, 0 failed.
 - Testes de diferencial contra executor atômico para NOP, LD imediato, LD (HL),n, LD A,(HL), LD (HL),A, LD A,B, INC B e INC/DEC (HL).
 - INC/DEC (HL): fetch 4 + memory read 3 + internal event 1 + memory write 3 = 11 T-states; agrupamento nominal (4,4,3). O ciclo interno permanece evento separado no trace.
