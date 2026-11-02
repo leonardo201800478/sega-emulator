@@ -155,7 +155,6 @@ impl SmsTemporalMachine {
         )
         .map(Some)
     }
-    /// Schedule the CPU's current pending bus request with fixture WAIT states.
     /// Describe the currently exposed CPU-internal interval using the shared contract.
     pub fn pending_internal_transaction(
         &self,
@@ -177,6 +176,7 @@ impl SmsTemporalMachine {
         )
         .map(Some)
     }
+    /// Schedule the CPU's current pending bus request with fixture WAIT states.
     pub fn schedule_pending_bus(
         &mut self,
         fixture_wait_tstates: u32,
