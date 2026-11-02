@@ -13,8 +13,8 @@ pub use clock::{
     ClockDomain, ClockDomainSnapshot, ClockEdgeTime, ClockError, ClockRatio, MachineTime,
 };
 pub use contract::{
-    BusContractError, BusCycleKind, BusDirection, BusOperationResult, BusPhase,
-    BusTransaction, DeviceProgress, MCycleIndex, TStateIndex,
+    BusContractError, BusCycleKind, BusDirection, BusOperationResult, BusPhase, BusTransaction,
+    DeviceProgress, MCycleIndex, TStateIndex,
 };
 pub use event::{
     EventPriority, EventQueue, EventQueueError, HardwarePhase, PlatformPriority, ScheduledEvent,
