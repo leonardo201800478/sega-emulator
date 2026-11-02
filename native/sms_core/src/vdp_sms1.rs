@@ -900,6 +900,43 @@ mod sprite_tests {
     }
 
     #[test]
+    fn sms1_spr_001_hardware_buffer_selects_eight_and_overflows_on_ninth() {
+        for (sprite_count, overflow_expected) in [(7usize, false), (8, false), (9, true)] {
+            let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
+            state.registers.set_raw(1, 0x40);
+            state.registers.set_raw(5, 0x7F);
+            for index in 0..sprite_count {
+                set_sprite(&mut state, index, 0xFF, (10 + index * 24) as u8, 1);
+            }
+            solid_tile(&mut state, 1, 1);
+            let mut line = background();
+
+            let flags = render_mode4_sprites_line(&state, 0, &mut line, true);
+
+            assert_eq!(
+                flags & 0x40,
+                if overflow_expected { 0x40 } else { 0 },
+                "overflow mismatch for {sprite_count} eligible sprites"
+            );
+            for index in 0..sprite_count.min(8) {
+                let x = 10 + index * 24;
+                assert_eq!(
+                    line[x].palette_index,
+                    17,
+                    "hardware buffer must draw selected sprite {index}"
+                );
+            }
+            if sprite_count == 9 {
+                assert_eq!(
+                    line[10 + 8 * 24].palette_index,
+                    0,
+                    "ninth sprite must not be drawn in hardware-limit mode"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn first_sprite_is_composited_from_sprite_palette() {
         let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
         state.registers.set_raw(1, 0x40);
