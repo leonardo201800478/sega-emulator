@@ -29,6 +29,10 @@ A implementação cobre somente as fases que o sequenciador já expõe: M1 opcod
 - [x] `cargo fmt --all -- --check`, Clippy `-D warnings`, `cargo test --workspace --locked`, pytest, Ruff check e Ruff format no SHA `e782614b50db857c7333d82982de3f3a43bfdf3d` (CI #3517).
 - [x] Windows x64 D3D12/video-runtime e WASAPI/XAudio2/audio-output tests; Scheduler deterministic stress short (CI #3517).
 - [ ] Aprovação técnica independente do Agente 2 para o HEAD final e integração por PR; não declarar `TEMPORAL_PASS`.
+## Pendência P2 identificada na reauditoria
+
+O restore de `MemoryWrite` ainda não valida o payload esperado para `LD (HL),n` (opcode `0x36`) e `INC/DEC (HL)` (opcodes `0x34/0x35`). A fase `MemoryWrite` não preserva o imediato nem o resultado calculado necessário para reconstruir esse valor; atualmente, o restore aceita qualquer `MemoryWrite { value }` nesses três casos. É necessário preservar o valor esperado na continuação, validar o payload exato e acrescentar testes negativos no restore DTO e no round-trip do codec binário. **P2 aberto; PR não aprovada.**
+
 ## Evidência de CI
 
 - Código validado: SHA `e782614b50db857c7333d82982de3f3a43bfdf3d`.
