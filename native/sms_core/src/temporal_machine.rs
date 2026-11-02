@@ -1223,4 +1223,69 @@ mod tests {
             Err(SmsTemporalMachineError::InvalidState)
         ));
     }
+    #[test]
+    fn mapper_write_snapshot_restore_replays_identical_temporal_trace() {
+        let mut rom = vec![0; 4 * 0x4000];
+        for bank in 0..4 {
+            let start = bank * 0x4000;
+            rom[start..start + 0x4000].fill(bank as u8);
+        }
+        // LD (HL),A writes A to the Sega mapper's first bank register.
+        rom[0] = 0x77;
+
+        let mut original = SmsTemporalMachine::new(rom, 3).unwrap();
+        original.cpu_mut().registers.a = 3;
+        original.cpu_mut().registers.set_hl(0xFFFD);
+        original.set_trace_enabled(true);
+        assert!(matches!(
+            original.begin_instruction().unwrap(),
+            Z80MicroStep::BusRequest(_)
+        ));
+        original.schedule_pending_bus(0).unwrap();
+        assert!(matches!(
+            original.dispatch_next().unwrap(),
+            Z80MicroStep::BusRequest(_)
+        ));
+        // Compare only the mapper write after the opcode-fetch trace boundary.
+        assert_eq!(original.take_trace().len(), 1);
+
+        original.schedule_pending_bus(2).unwrap();
+        assert_eq!(original.memory().selected_banks(), [0, 1, 2]);
+        assert_eq!(original.memory().read(0x0400), 0);
+
+        let mut restored = SmsTemporalMachine::restore_state(original.export_state()).unwrap();
+        restored.set_trace_enabled(true);
+
+        let original_step = original.dispatch_next().unwrap();
+        let restored_step = restored.dispatch_next().unwrap();
+        retired(original_step, 0x77, 9);
+        retired(restored_step, 0x77, 9);
+
+        assert_eq!(original.memory().selected_banks(), [3, 1, 2]);
+        assert_eq!(restored.memory().selected_banks(), [3, 1, 2]);
+        assert_eq!(original.memory().read(0x0400), 3);
+        assert_eq!(restored.memory().read(0x0400), 3);
+        assert_eq!(original.memory().read(0x03FF), 0);
+        assert_eq!(restored.memory().read(0x03FF), 0);
+        assert_eq!(original.memory().read(0xDFFD), 3);
+        assert_eq!(restored.memory().read(0xDFFD), 3);
+
+        let original_trace = original.take_trace();
+        let restored_trace = restored.take_trace();
+        assert_eq!(original_trace, restored_trace);
+        assert_eq!(original_trace.len(), 1);
+        assert!(matches!(
+            original_trace[0],
+            super::SmsTemporalTraceEvent::BusCompleted {
+                timestamp,
+                operation: sega_z80_cpu::Z80BusOperation::MemoryWrite { value: 3 },
+                address: 0xFFFD,
+                base_tstates: 3,
+                wait_tstates: 2,
+                data: None,
+                ..
+            } if timestamp == MachineTime::from_ticks(27)
+        ));
+    }
+
 }
