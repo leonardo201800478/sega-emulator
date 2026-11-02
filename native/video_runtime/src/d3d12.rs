@@ -428,7 +428,7 @@ impl D3d12Host {
             self.fence
                 .SetEventOnCompletion(self.last_submitted_fence, self.fence_event)?;
             let result = WaitForSingleObjectEx(self.fence_event, INFINITE, false);
-            if result == WAIT_OBJECT_0 {
+            if result.0 == 0 {
                 Ok(())
             } else {
                 Err(Error::from_thread())
