@@ -788,62 +788,77 @@ mod background_tests {
     }
 
     #[test]
-    fn sms1_mask_r3_gates_pattern_address_bits_13_to_6_for_planes_zero_and_one() {
-        let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
-        state.registers.set_raw(0, 0x04);
-        state.registers.set_raw(1, 0x40);
-        state.registers.set_raw(2, 0x0E);
-        state.registers.set_raw(3, 0x7F);
-        state.registers.set_raw(4, 0x07);
-        state.memory.vram[0x3800] = 0x00;
-        state.memory.vram[0x3801] = 0x01; // Tile 0x100.
+    fn sms1_mask_r3_gates_each_of_pattern_address_bits_13_to_6() {
+        for mask_bit in 0..8 {
+            let tile_index = 1usize << (mask_bit + 1);
+            let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
+            state.registers.set_raw(0, 0x04);
+            state.registers.set_raw(1, 0x40);
+            state.registers.set_raw(2, 0x0E);
+            state.registers.set_raw(3, 0xFF & !(1 << mask_bit));
+            state.registers.set_raw(4, 0x07);
+            state.memory.vram[0x3800] = tile_index as u8;
+            state.memory.vram[0x3801] = (tile_index >> 8) as u8;
+            state.memory.vram[tile_index * 32] = 0xFF;
 
-        // Tile 0: plane 1 only. Tile 0x100: planes 0 and 2.
-        for row in 0..8 {
-            state.memory.vram[row * 4 + 1] = 0xFF;
-            let high_tile = 0x2000 + row * 4;
-            state.memory.vram[high_tile] = 0xFF;
-            state.memory.vram[high_tile + 2] = 0xFF;
+            let mut line = [BackgroundPixel {
+                color: [0; 3],
+                palette_index: 0,
+                priority: false,
+            }; 256];
+
+            render_mode4_background_line(&state, 0, 0, &mut line);
+            assert_eq!(
+                line[0].palette_index, 0,
+                "R3 bit {mask_bit} must clear pattern address bit {}",
+                mask_bit + 6
+            );
+
+            state.registers.set_raw(3, 0xFF);
+            render_mode4_background_line(&state, 0, 0, &mut line);
+            assert_eq!(
+                line[0].palette_index, 1,
+                "R3 bit {mask_bit} set must preserve pattern address bit {}",
+                mask_bit + 6
+            );
         }
-
-        let mut line = [BackgroundPixel {
-            color: [0; 3],
-            palette_index: 0,
-            priority: false,
-        }; 256];
-        render_mode4_background_line(&state, 0, 0, &mut line);
-
-        // R3 bit 7 clears address bit 13 for planes 0-1 only: plane 1
-        // comes from tile 0, while plane 2 still comes from tile 0x100.
-        assert_eq!(line[0].palette_index, 0b0110);
     }
 
     #[test]
-    fn sms1_mask_r4_gates_pattern_address_bits_13_to_11_for_planes_two_and_three() {
-        let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
-        state.registers.set_raw(0, 0x04);
-        state.registers.set_raw(1, 0x40);
-        state.registers.set_raw(2, 0x0E);
-        state.registers.set_raw(3, 0xFF);
-        state.registers.set_raw(4, 0x05);
-        state.memory.vram[0x3800] = 0x80; // Tile 128.
+    fn sms1_mask_r4_gates_each_of_pattern_address_bits_13_to_11() {
+        for mask_bit in 0..3 {
+            let tile_index = 1usize << (mask_bit + 6);
+            let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
+            state.registers.set_raw(0, 0x04);
+            state.registers.set_raw(1, 0x40);
+            state.registers.set_raw(2, 0x0E);
+            state.registers.set_raw(3, 0xFF);
+            state.registers.set_raw(4, 0x07 & !(1 << mask_bit));
+            state.memory.vram[0x3800] = tile_index as u8;
+            state.memory.vram[0x3801] = (tile_index >> 8) as u8;
+            state.memory.vram[tile_index * 32 + 2] = 0xFF;
 
-        // Tile 128 has planes 0 and 2 set. Tile 0 has no pattern bits set.
-        for row in 0..8 {
-            let high_tile = 0x1000 + row * 4;
-            state.memory.vram[high_tile] = 0xFF;
-            state.memory.vram[high_tile + 2] = 0xFF;
+            let mut line = [BackgroundPixel {
+                color: [0; 3],
+                palette_index: 0,
+                priority: false,
+            }; 256];
+
+            render_mode4_background_line(&state, 0, 0, &mut line);
+            assert_eq!(
+                line[0].palette_index, 0,
+                "R4 bit {mask_bit} must clear pattern address bit {}",
+                mask_bit + 11
+            );
+
+            state.registers.set_raw(4, 0x07);
+            render_mode4_background_line(&state, 0, 0, &mut line);
+            assert_eq!(
+                line[0].palette_index, 4,
+                "R4 bit {mask_bit} set must preserve pattern address bit {}",
+                mask_bit + 11
+            );
         }
-
-        let mut line = [BackgroundPixel {
-            color: [0; 3],
-            palette_index: 0,
-            priority: false,
-        }; 256];
-        render_mode4_background_line(&state, 0, 0, &mut line);
-
-        // R4 bit 1 clears address bit 12 for planes 2-3 only.
-        assert_eq!(line[0].palette_index, 0b0001);
     }
 
     #[test]
