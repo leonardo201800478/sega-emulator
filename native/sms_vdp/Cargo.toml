@@ -1,8 +1,0 @@
-[package]
-name = "sega-sms-vdp"
-version = "0.1.0"
-edition = "2024"
-
-[lib]
-name = "sega_sms_vdp"
-path = "src/lib.rs"
