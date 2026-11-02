@@ -746,13 +746,21 @@ mod tests {
     }
 
     #[test]
-    fn inc_hl_memory_form_is_not_misdecoded_as_register_inc() {
-        let mut cpu = Z80MicroSequencer::default();
+    fn inc_hl_memory_form_is_decoded_as_memory_read_not_register_inc() {
+        let mut cpu = Z80MicroSequencer {
+            registers: Z80Registers {
+                h: 0x12,
+                l: 0x34,
+                ..Z80Registers::default()
+            },
+            ..Z80MicroSequencer::default()
+        };
         let fetch = request(cpu.begin_instruction().unwrap());
-        assert!(matches!(
-            cpu.complete_bus_cycle(fetch.id, Some(0x34)),
-            Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x34, .. })
-        ));
+        let read = request(cpu.complete_bus_cycle(fetch.id, Some(0x34)).unwrap());
+        assert_eq!(read.operation, Z80BusOperation::MemoryRead);
+        assert_eq!(read.address, 0x1234);
+        assert_eq!(cpu.registers.h, 0x12);
+        assert_eq!(cpu.registers.l, 0x34);
     }
 
     #[test]
