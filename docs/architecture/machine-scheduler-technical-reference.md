@@ -412,3 +412,14 @@ The next work item is an evidence-first design, not immediate device refactoring
 6. Specify deterministic traces and regression criteria for SG-1000 and SMS before implementation.
 
 No timing constant, event phase, bus priority or wait-state rule may be invented to fit the current scheduler API. A design gap requiring sub-tick timestamps must be raised as a separate architectural decision; `HardwarePhase` must not be repurposed as a fractional timestamp.
+
+### 12.5 Finalization audit addendum — 2026-11-02
+
+Two additional candidate PRs extend the validation baseline without changing device integration scope:
+
+- **PR #362** (`a94b096255c880ad703279b1c6c185feb3851414`) adds deterministic interleaved operation replay: scheduling, dispatch, idle advancement, delta-budget changes, snapshot/restore through the versioned codec, and final queue draining. It also checks scheduler-level sequence exhaustion without state mutation. Its six ordinary CI gates passed in workflow `41383394157`; opt-in stress was skipped.
+- **PR #363** (`8b2eee8264a2778557689654d0af62c0a0a29dc1`) fixes false intermediate overflow in rational clock conversion. The old code could overflow `elapsed * numerator` or `edge_index * denominator` before division even when the exact result fit in u128. The correction uses quotient/remainder decomposition, shares conversion logic with clock restore, exposes `ClockDomain::preview_advance_to`, and uses that preview in `MachineScheduler::calculate_advances` so preflight and commit share one conversion implementation. It adds large-ratio regressions and exhaustive small-ratio comparisons against integer arithmetic. Its six ordinary CI gates passed in workflow `41383734394`; opt-in stress was skipped.
+
+The operation replay SHORT/LONG profiles introduced by #362 remain NOT RUN. Do not infer their result from the ordinary CI gates or from the older #358 dispatch-only stress result. The exact SHA/workflow matrix is maintained in `docs/evidence/adr-0013-snapshot-restore-validation.md`.
+
+These changes improve software arithmetic correctness and deterministic replay coverage. They do not change the documented integer `MachineTime` EventQueue contract, do not enable sub-tick dispatch, and do not establish hardware timing. Scheduler/device integration remains `INTEGRATION_PENDING`; `TEMPORAL_PASS` remains unclaimed.
