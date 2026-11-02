@@ -1,9 +1,7 @@
 use sega_machine_scheduler::{
     ClockDomainId, DeltaEventPolicy, MachineDispatch, MachineScheduler, SchedulerError,
 };
-use sega_temporal_core::{
-    ClockError, ClockRatio, HardwarePhase, MachineTime, PlatformPriority,
-};
+use sega_temporal_core::{ClockError, ClockRatio, HardwarePhase, MachineTime, PlatformPriority};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ReplayPayload {
@@ -35,25 +33,13 @@ fn build_scheduler(seed: u64) -> MachineScheduler<ReplayPayload> {
 
     // Deliberately register out of ID order; export and restore must remain canonical.
     scheduler
-        .register_clock_domain_with_phase(
-            ClockDomainId(7),
-            ClockRatio::new(3, 2).unwrap(),
-            1,
-        )
+        .register_clock_domain_with_phase(ClockDomainId(7), ClockRatio::new(3, 2).unwrap(), 1)
         .unwrap();
     scheduler
-        .register_clock_domain_with_phase(
-            ClockDomainId(2),
-            ClockRatio::new(5, 3).unwrap(),
-            2,
-        )
+        .register_clock_domain_with_phase(ClockDomainId(2), ClockRatio::new(5, 3).unwrap(), 2)
         .unwrap();
     scheduler
-        .register_clock_domain_with_phase(
-            ClockDomainId(9),
-            ClockRatio::new(1, 7).unwrap(),
-            6,
-        )
+        .register_clock_domain_with_phase(ClockDomainId(9), ClockRatio::new(1, 7).unwrap(), 6)
         .unwrap();
 
     let mut rng = FixedSeedRng::new(seed);
@@ -200,10 +186,7 @@ fn fixed_seed_replay_matches_continuous_execution_across_independent_snapshots()
 fn clock_overflow_errors_and_unmodified_state_match_after_restore() {
     let mut uninterrupted = MachineScheduler::<u64>::new();
     uninterrupted
-        .register_clock_domain(
-            ClockDomainId(1),
-            ClockRatio::new(u64::MAX, 1).unwrap(),
-        )
+        .register_clock_domain(ClockDomainId(1), ClockRatio::new(u64::MAX, 1).unwrap())
         .unwrap();
     uninterrupted
         .schedule_at_with_phase(
