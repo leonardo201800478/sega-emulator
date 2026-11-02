@@ -391,7 +391,10 @@ mod tests {
         let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
         let request = request(4, Z80BusOperation::MemoryWrite { value: 0x99 }, 0xC002, 3);
         bus.begin_request(request, 0).unwrap();
-        let SmsTemporalDispatch::BusCompletion(completion) = bus.dispatch_next().unwrap().unwrap() else { panic!("expected bus completion"); };
+        let SmsTemporalDispatch::BusCompletion(completion) = bus.dispatch_next().unwrap().unwrap()
+        else {
+            panic!("expected bus completion");
+        };
         let mut restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
         assert_eq!(restored.memory().read(0xC002), 0x99);
         assert_eq!(restored.acknowledge_completion(4).unwrap(), completion);
