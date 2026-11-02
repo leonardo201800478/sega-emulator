@@ -474,12 +474,10 @@ mod tests {
         let first = bus.dispatch_next().unwrap().unwrap();
         assert_eq!(
             first,
-            SmsTemporalDispatch::InternalCycleComplete(
-                super::SmsInternalCycleCompletion {
-                    continuation_id: 77,
-                    completed_at: deadline,
-                }
-            )
+            SmsTemporalDispatch::InternalCycleComplete(super::SmsInternalCycleCompletion {
+                continuation_id: 77,
+                completed_at: deadline,
+            })
         );
         assert_eq!(bus.dispatch_next().unwrap(), Some(first));
 
