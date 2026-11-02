@@ -35,7 +35,7 @@ Para a mesma configuração, estado inicial, sequência de entradas e perfil, a 
 8. Falha de aritmética não deixa avanço parcial.
 9. Restore válido equivale à continuação sem restore.
 10. Codec rejeita truncamento, dados extras, versão desconhecida e checksum inválido.
-11. Mesma entrada produz mesmo trace e estado final.
+11. Mesma entrada produz mesmo trace e estado final, desde que a ordem de inserção dos eventos seja determinística.
 12. A saída digital não depende do host de áudio/vídeo.
 
 ## 4. Avanço em lote
