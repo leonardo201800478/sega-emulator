@@ -88,6 +88,8 @@ pub struct SmsMemory {
     work_ram: [u8; RAM_SIZE],
     bios: Option<Box<[u8]>>,
     control_port: u8,
+    #[cfg(test)]
+    mapper_register_write_count: u64,
 }
 
 impl SmsMemory {
@@ -134,6 +136,8 @@ impl SmsMemory {
             work_ram: [0; RAM_SIZE],
             bios: bios.map(Vec::into_boxed_slice),
             control_port,
+            #[cfg(test)]
+            mapper_register_write_count: 0,
         })
     }
 
@@ -201,7 +205,16 @@ impl SmsMemory {
                     _ => {}
                 },
             }
+            #[cfg(test)]
+            if self.mapper == MapperKind::Sega && matches!(address, 0xFFFD..=0xFFFF) {
+                self.mapper_register_write_count += 1;
+            }
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) const fn mapper_register_write_count_for_test(&self) -> u64 {
+        self.mapper_register_write_count
     }
 
     #[inline]
