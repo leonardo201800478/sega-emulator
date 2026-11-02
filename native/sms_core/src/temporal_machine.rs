@@ -16,7 +16,7 @@ use sega_z80_cpu::{
     Z80MicroSequencerState, Z80MicroStep,
 };
 
-pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 2;
+pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 3;
 
 /// Runtime event trace emitted from actual Scheduler/bus dispatch boundaries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
