@@ -12,7 +12,9 @@ use std::slice;
 
 use super::{FrameMailbox, FrameMailboxError, PixelFormat, VideoFrame};
 
-use windows::Win32::Foundation::{CloseHandle, HANDLE, HINSTANCE, HWND, LPARAM, LRESULT, RECT, WPARAM};
+use windows::Win32::Foundation::{
+    CloseHandle, HANDLE, HINSTANCE, HWND, LPARAM, LRESULT, RECT, WPARAM,
+};
 use windows::Win32::Graphics::Direct3D::D3D_FEATURE_LEVEL_11_0;
 use windows::Win32::Graphics::Direct3D12::{
     D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_QUEUE_DESC, D3D12_COMMAND_QUEUE_FLAG_NONE,
@@ -22,9 +24,9 @@ use windows::Win32::Graphics::Direct3D12::{
     D3D12_HEAP_PROPERTIES, D3D12_HEAP_TYPE_DEFAULT, D3D12_HEAP_TYPE_UPLOAD,
     D3D12_MEMORY_POOL_UNKNOWN, D3D12_PLACED_SUBRESOURCE_FOOTPRINT, D3D12_RANGE,
     D3D12_RESOURCE_BARRIER, D3D12_RESOURCE_BARRIER_0, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
-    D3D12_RESOURCE_BARRIER_FLAG_NONE, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
-    D3D12_RESOURCE_DESC, D3D12_RESOURCE_DIMENSION_BUFFER, D3D12_RESOURCE_DIMENSION_TEXTURE2D,
-    D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COPY_SOURCE,
+    D3D12_RESOURCE_BARRIER_FLAG_NONE, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION, D3D12_RESOURCE_DESC,
+    D3D12_RESOURCE_DIMENSION_BUFFER, D3D12_RESOURCE_DIMENSION_TEXTURE2D, D3D12_RESOURCE_FLAG_NONE,
+    D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_COPY_SOURCE,
     D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_PRESENT,
     D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_TRANSITION_BARRIER,
     D3D12_TEXTURE_COPY_LOCATION, D3D12_TEXTURE_COPY_LOCATION_0,
@@ -44,7 +46,7 @@ use windows::Win32::Graphics::Dxgi::{
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::{
-    CreateEventW, INFINITE, WAIT_OBJECT_0, WaitForSingleObjectEx,
+    CreateEventW, INFINITE, WaitForSingleObjectEx,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, DestroyWindow,
@@ -471,7 +473,7 @@ impl D3d12Host {
     /// stepping or Scheduler time.
     pub fn wait_for_frame_slot(&self) -> Result<()> {
         let result = unsafe { WaitForSingleObjectEx(self.frame_latency_handle, INFINITE, false) };
-        if result == WAIT_OBJECT_0 {
+        if result.0 == 0 {
             Ok(())
         } else {
             Err(Error::from_thread())
@@ -564,7 +566,7 @@ impl D3d12Host {
     pub fn present_latest_from_mailbox(
         &mut self,
         mailbox: &FrameMailbox,
-    ) -> Result<Option<u64>, MailboxPresentError> {
+    ) -> core::result::Result<Option<u64>, MailboxPresentError> {
         let Some(frame) = mailbox
             .take_latest()
             .map_err(MailboxPresentError::Mailbox)?
