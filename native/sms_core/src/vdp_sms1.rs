@@ -921,8 +921,7 @@ mod sprite_tests {
             for index in 0..sprite_count.min(8) {
                 let x = 10 + index * 24;
                 assert_eq!(
-                    line[x].palette_index,
-                    17,
+                    line[x].palette_index, 17,
                     "hardware buffer must draw selected sprite {index}"
                 );
             }
