@@ -398,7 +398,7 @@ mod port_tests {
         assert_eq!(vdp.address(), 0x0000);
         assert_eq!(vdp.read_data(), 0xA5);
         assert_eq!(vdp.read_data(), 0x5A);
-        assert_eq!(vdp.address(), 0x0001);
+        assert_eq!(vdp.address(), 0x0002);
     }
 
     #[test]
@@ -437,7 +437,7 @@ mod port_tests {
         vdp.write_control(0x34);
         vdp.write_data(0x77);
         vdp.write_control(0x12);
-        assert_eq!(vdp.address(), 0);
+        assert_eq!(vdp.address(), 1);
         assert_eq!(vdp.state.memory.vram_byte(0), Some(0x77));
     }
 
@@ -480,7 +480,7 @@ pub fn render_mode4_background_line(
     let cram = &state.memory.cram;
 
     let backdrop = registers[7] & 0x0F;
-    let blank = registers[1] & 0x40 != 0 || registers[0] & 0x04 == 0;
+    let blank = registers[1] & 0x40 == 0 || registers[0] & 0x04 == 0;
     let name_table_base = usize::from(registers[2] & 0x0E) << 10;
     let horizontal_scroll = if registers[0] & 0x40 != 0 && screen_y < 16 {
         0
@@ -542,9 +542,9 @@ pub fn render_mode4_background_line(
 
 fn decode_background_pixel(cram: &[u8; CRAM_SIZE], index: u8, priority: bool) -> BackgroundPixel {
     let value = cram[usize::from(index & 0x1F)];
-    let red = value & 0x03;
+    let red = (value >> 4) & 0x03;
     let green = (value >> 2) & 0x03;
-    let blue = (value >> 4) & 0x03;
+    let blue = value & 0x03;
     BackgroundPixel {
         color: [red * 85, green * 85, blue * 85],
         palette_index: index & 0x1F,
@@ -578,7 +578,7 @@ mod background_tests {
         state.memory.vram[0x3800] = 1;
         state.memory.vram[0x3801] = 0;
         put_tile(&mut state, 1, 0b1011);
-        state.memory.cram[11] = 0b00_10_01_11;
+        state.memory.cram[11] = 0b11_01_10;
 
         let mut line = [BackgroundPixel {
             color: [0; 3],
@@ -588,7 +588,7 @@ mod background_tests {
         render_mode4_background_line(&state, 0, 0, &mut line);
 
         assert_eq!(line[0].palette_index, 11);
-        assert_eq!(line[0].color, [255, 85, 170]);
+        assert_eq!(line[0].color, [170, 85, 255]);
     }
 
     #[test]
@@ -621,7 +621,7 @@ mod background_tests {
     fn blanking_uses_sprite_palette_backdrop() {
         let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
         state.registers.set_raw(7, 3);
-        state.memory.cram[3] = 0x39;
+        state.memory.cram[3] = 0x27;
         let mut line = [BackgroundPixel {
             color: [0; 3],
             palette_index: 0,
@@ -692,9 +692,9 @@ mod background_tests {
             priority: false,
         }; 256];
 
-        render_mode4_background_line(&state, 0, 1, &mut line);
+        render_mode4_background_line(&state, 0, 8, &mut line);
         assert_eq!(line[0].palette_index, 2);
-        render_mode4_background_line(&state, 223, 1, &mut line);
+        render_mode4_background_line(&state, 223, 8, &mut line);
         assert_eq!(line[0].palette_index, 1);
     }
 
@@ -710,7 +710,7 @@ mod background_tests {
         state.memory.vram[0x3802] = 2;
         put_tile(&mut state, 1, 1);
         put_tile(&mut state, 2, 2);
-        state.memory.cram[3] = 0x03;
+        state.memory.cram[3] = 0x30;
 
         let mut line = [BackgroundPixel {
             color: [0; 3],
@@ -933,11 +933,11 @@ mod sprite_tests {
         let mut line = background();
         render_mode4_sprites_line(&state, 0, &mut line);
         assert_eq!(line[0].palette_index, 17);
-        assert_eq!(line[1].palette_index, 17);
+        assert_eq!(line[15].palette_index, 17);
+        assert_eq!(line[16].palette_index, 0);
         assert_eq!(line[40].palette_index, 17);
-        assert_eq!(line[41].palette_index, 17);
-        assert_eq!(line[80].palette_index, 17);
-        assert_eq!(line[81].palette_index, 0);
+        assert_eq!(line[47].palette_index, 17);
+        assert_eq!(line[48].palette_index, 0);
     }
 
     #[test]
