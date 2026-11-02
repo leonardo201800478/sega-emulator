@@ -149,9 +149,14 @@ impl Z80MicroSequencer {
                 )
             }
             InstructionPhase::MemoryRead => {
-                let value = response.data.ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                let value = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 self.registers.a = value;
-                self.retire(self.opcode.ok_or(Z80MicroSequencerError::UnexpectedCompletion)?)
+                self.retire(
+                    self.opcode
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
+                )
             }
             InstructionPhase::MemoryWrite => self.retire(
                 self.opcode
@@ -297,11 +302,7 @@ mod tests {
             Z80BusOperation::MemoryWrite { value: 0x5A }
         );
         assert_eq!(write.address, 0xC123);
-        retired(
-            cpu.complete_bus_cycle(write.id, None).unwrap(),
-            0x77,
-            7,
-        );
+        retired(cpu.complete_bus_cycle(write.id, None).unwrap(), 0x77, 7);
     }
 
     #[test]
