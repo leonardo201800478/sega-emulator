@@ -130,3 +130,37 @@ Design and evidence-gate the first real SMS temporal integration boundary. Befor
 5. Keep device-specific timing out of generic Scheduler crates and keep Python outside the timing loop.
 
 No device timing implementation, merge, or `TEMPORAL_PASS` is authorized by this documentation update.
+
+## 2026-11-02 — Finalization audit additions
+
+Two follow-up Draft PRs were opened from the reconciled #360 base. Both remain unmerged and are validated only at their exact candidate heads.
+
+| PR | Candidate SHA | Workflow | Rust fmt | Clippy | Rust tests | Ruff fmt | Ruff lint | Pytest | Stress |
+|---|---|---:|---|---|---|---|---|---|---|
+| #362 — operation replay campaign | `a94b096255c880ad703279b1c6c185feb3851414` | [41383394157](https://github.com/leonardo201800478/sega-emulator/actions/runs/41383394157) | PASS | PASS | PASS | PASS | PASS | PASS | SKIPPED |
+| #363 — overflow-safe rational conversion | `8b2eee8264a2778557689654d0af62c0a0a29dc1` | [41383734394](https://github.com/leonardo201800478/sega-emulator/actions/runs/41383734394) | PASS | PASS | PASS | PASS | PASS | PASS | SKIPPED |
+
+### Agent-track findings
+
+- **Semantic/invariant audit:** found that the previous `elapsed * numerator` and `edge_index * denominator` intermediates could overflow u128 even when the exact quotient/timestamp fit in u128. The same issue existed in `ClockDomain::restore` and the MachineScheduler's duplicated preflight arithmetic. PR #363 introduces a quotient/remainder conversion, uses it for advance and restore, exposes a non-mutating `preview_advance_to`, and makes scheduler preflight consume that preview. The new tests cover large exact ratios and exhaustive small-ratio integer-oracle cases.
+- **Stress/property audit:** the original #358 stress workload pre-populates a queue and dispatches it; it does not interleave schedule, dispatch, idle advance, policy changes and codec restore. PR #362 adds deterministic operation-sequence replay and a scheduler-level sequence-exhaustion atomicity regression. The new SHORT profile is 4 seeds × 2,000 operations; LONG is 16 seeds × 20,000 operations.
+- **CI/architecture audit:** `temporal_core` has no external dependencies; `machine_scheduler` depends only on `temporal_core`. The generic scheduler returns dispatches and clock advances and contains no CPU, VDP or PSG callbacks. The new PRs add no device-specific semantics or dependencies.
+
+### Interpretation and remaining gates
+
+- The six ordinary CI gates PASS on the exact #362 and #363 heads listed above.
+- The opt-in stress job was skipped for both pull-request events. The new operation-sequence SHORT/LONG campaigns are therefore **NOT RUN**; do not mark them SHORT_PASS or LONG_PASS.
+- The previously recorded #358 LONG stress result remains valid only for its own exact SHA `0d8ad97e79ac50c4687e1400dd5bb434ca5f3607` and workflow `41379203192`.
+- Intermediate candidates in #362/#363 had formatting or Clippy failures; those candidates are not promoted. Only the final heads and workflows in the table above count as ordinary-gate PASS.
+- Neither PR changes `main`; both remain Draft. No device integration, independent hardware oracle, sub-tick event dispatch or `TEMPORAL_PASS` is claimed.
+
+### Status after the audit
+
+| Area | Implementation | QUICK_PASS | SHORT_PASS | LONG_PASS | Integration | TEMPORAL_PASS |
+|---|---|---|---|---|---|---|
+| E1–E7 baseline | IMPLEMENTED | PASS on recorded SHAs | #358 stress stage PASS; full SHORT workflow incomplete | PASS on #358 exact SHA | INTEGRATION_PENDING | NOT CLAIMED |
+| Multi-domain integer-time replay | IMPLEMENTED in #359 | CI PASS | NOT RUN | NOT RUN | INTEGRATION_PENDING | NOT CLAIMED |
+| Interleaved operation replay | IMPLEMENTED in #362 candidate | CI PASS | NOT RUN | NOT RUN | INTEGRATION_PENDING | NOT CLAIMED |
+| Overflow-safe rational conversion / scheduler preflight | IMPLEMENTED in #363 candidate | CI PASS | NOT RUN | NOT RUN | INTEGRATION_PENDING | NOT CLAIMED |
+
+Three review tracks were coordinated for this audit. The available execution environment did not provide three autonomous AI-agent contexts; no autonomous agents are claimed.
