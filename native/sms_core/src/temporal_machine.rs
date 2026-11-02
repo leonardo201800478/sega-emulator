@@ -50,7 +50,6 @@ pub struct SmsTemporalMachineState {
     pub pending_internal_tstates: Option<u32>,
 }
 
-
 fn elapsed_tstates(
     started_at: MachineTime,
     boundary: MachineTime,
@@ -91,8 +90,8 @@ fn instruction_timeline_is_valid(state: &SmsTemporalMachineState) -> bool {
             if request.id != completion.request_id {
                 return false;
             }
-            let Some(current_cycle_tstates) = u32::from(request.base_tstates)
-                .checked_add(state.cpu.handshake.wait_tstates)
+            let Some(current_cycle_tstates) =
+                u32::from(request.base_tstates).checked_add(state.cpu.handshake.wait_tstates)
             else {
                 return false;
             };
@@ -1220,6 +1219,5 @@ mod tests {
             Err(SmsTemporalMachineError::InvalidState)
         ));
     }
-
 
 }

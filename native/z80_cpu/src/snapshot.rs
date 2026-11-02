@@ -573,7 +573,10 @@ mod tests {
             reader.take(2).unwrap();
             let phase_address_offset = reader.offset + 1;
             let phase = super::read_phase(&mut reader).unwrap();
-            assert!(matches!(phase, crate::Z80MicroSequencerPhase::MemoryWrite { .. }));
+            assert!(matches!(
+                phase,
+                crate::Z80MicroSequencerPhase::MemoryWrite { .. }
+            ));
             reader.u64().unwrap();
             assert_eq!(reader.u8().unwrap(), 1);
             reader.u64().unwrap();
@@ -583,8 +586,8 @@ mod tests {
             (phase_address_offset, request_address_offset)
         };
         let tampered_address = 0xC011_u16.to_be_bytes();
-        encoded[FRAME_HEADER_LEN + phase_address_offset
-            ..FRAME_HEADER_LEN + phase_address_offset + 2]
+        encoded
+            [FRAME_HEADER_LEN + phase_address_offset..FRAME_HEADER_LEN + phase_address_offset + 2]
             .copy_from_slice(&tampered_address);
         encoded[FRAME_HEADER_LEN + request_address_offset
             ..FRAME_HEADER_LEN + request_address_offset + 2]
@@ -597,6 +600,5 @@ mod tests {
             Err(Z80MicroSequencerStateCodecError::InvalidState)
         );
     }
-
 
 }
