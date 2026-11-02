@@ -17,6 +17,6 @@ As ADRs consolidam contratos e decisões; não significam que os componentes já
 
 Baseline de evidência: [F0 — inventário remoto e reconciliação das PRs](../migrations/f0-remote-inventory-2026-10-31.md).
 
-A ADR-0013 registra o progresso temporal das PRs #343–#346, a auditoria independente da Etapa E e a sequência de implementação aprovada. A consolidação da stack de Scheduler está na PR #358, Draft e ainda não integrada à `main`; consulte o estado remoto e o ledger para SHAs e workflows exatos.
+A ADR-0013 registra o progresso temporal das PRs #343–#346, a auditoria independente da Etapa E e a sequência de implementação aprovada. A consolidação da stack de Scheduler está na PR #358 (Draft, não integrada à `main`), com a cobertura multi-domain complementar na PR #359 (Draft, empilhada sobre #358). O ledger `docs/evidence/adr-0013-snapshot-restore-validation.md` registra os heads e workflows exatos de 2026-11-02.
 
-A ADR-0014 define o contrato futuro de execução e sincronização de dispositivos. Ela não substitui a implementação E1–E7 da ADR-0013 nem autoriza integração temporal prematura de CPU, VDP, PSG ou FM.
+A ADR-0014 define o contrato futuro de execução e sincronização de dispositivos. A cobertura multi-domain da PR #359 valida avanço/replay de domínios racionais em timestamps inteiros, mas não substitui a implementação E1–E7 da ADR-0013 nem autoriza integração temporal prematura de CPU, barramento, VDP, PSG ou FM.
