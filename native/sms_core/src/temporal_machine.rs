@@ -1286,6 +1286,4 @@ mod tests {
                 ..
             } if timestamp == MachineTime::from_ticks(27)
         ));
-    }
-
-}
+    }}
