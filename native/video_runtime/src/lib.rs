@@ -200,6 +200,150 @@ impl VideoFrame {
     }
 }
 
+/// Errors returned by the bounded presentation mailbox.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FrameMailboxError {
+    /// A frame sequence is not newer than the last accepted sequence.
+    NonMonotonicSequence {
+        /// Last sequence accepted by the mailbox.
+        last: u64,
+        /// Sequence supplied by the producer.
+        incoming: u64,
+    },
+    /// The mailbox has been closed and no longer accepts frames.
+    Closed,
+    /// The internal mutex was poisoned by a panicking thread.
+    SynchronizationPoisoned,
+}
+
+impl fmt::Display for FrameMailboxError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NonMonotonicSequence { last, incoming } => write!(
+                formatter,
+                "frame sequence {incoming} is not newer than last accepted sequence {last}"
+            ),
+            Self::Closed => write!(formatter, "video frame mailbox is closed"),
+            Self::SynchronizationPoisoned => {
+                write!(formatter, "video frame mailbox synchronization is poisoned")
+            }
+        }
+    }
+}
+
+impl std::error::Error for FrameMailboxError {}
+
+/// Backend-independent sink for completed immutable frames.
+pub trait VideoFrameSink: Send + Sync {
+    /// Submit one completed frame to the presentation side.
+    fn submit(&self, frame: VideoFrame) -> Result<(), FrameMailboxError>;
+}
+
+#[derive(Debug, Default)]
+struct MailboxState {
+    latest: Option<VideoFrame>,
+    last_sequence: Option<u64>,
+    replaced_frames: u64,
+    closed: bool,
+}
+
+/// A bounded, single-slot mailbox for presentation.
+///
+/// The emulation producer never waits for the GPU. If the presentation host
+/// has not consumed the previous frame, a newer completed frame replaces it.
+/// This coalesces presentation work only: it does not skip machine execution,
+/// alter Scheduler time, or discard emulation events. Sequence numbers remain
+/// strictly monotonic across consumed and replaced frames.
+#[derive(Debug, Clone, Default)]
+pub struct FrameMailbox {
+    state: Arc<std::sync::Mutex<MailboxState>>,
+}
+
+impl FrameMailbox {
+    /// Create an empty mailbox accepting frames.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Publish a completed frame, replacing an older pending presentation frame.
+    ///
+    /// Frames must have strictly increasing sequence numbers. A frame already
+    /// consumed by the host still participates in this monotonicity check.
+    pub fn publish(&self, frame: VideoFrame) -> Result<(), FrameMailboxError> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| FrameMailboxError::SynchronizationPoisoned)?;
+
+        if state.closed {
+            return Err(FrameMailboxError::Closed);
+        }
+
+        if let Some(last) = state.last_sequence {
+            if frame.sequence() <= last {
+                return Err(FrameMailboxError::NonMonotonicSequence {
+                    last,
+                    incoming: frame.sequence(),
+                });
+            }
+        }
+
+        if state.latest.replace(frame).is_some() {
+            state.replaced_frames = state.replaced_frames.saturating_add(1);
+        }
+
+        state.last_sequence = state.latest.as_ref().map(VideoFrame::sequence);
+        Ok(())
+    }
+
+    /// Take the newest pending frame, leaving the mailbox empty.
+    pub fn take_latest(&self) -> Result<Option<VideoFrame>, FrameMailboxError> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| FrameMailboxError::SynchronizationPoisoned)?;
+        Ok(state.latest.take())
+    }
+
+    /// Return how many pending frames were replaced before presentation.
+    pub fn replaced_frames(&self) -> Result<u64, FrameMailboxError> {
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| FrameMailboxError::SynchronizationPoisoned)?;
+        Ok(state.replaced_frames)
+    }
+
+    /// Close the mailbox and discard any frame still pending presentation.
+    ///
+    /// Closing is intended for host shutdown. It does not change the last
+    /// accepted sequence number or any emulated machine state.
+    pub fn close(&self) -> Result<(), FrameMailboxError> {
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| FrameMailboxError::SynchronizationPoisoned)?;
+        state.closed = true;
+        state.latest = None;
+        Ok(())
+    }
+
+    /// Return whether the mailbox has been closed.
+    pub fn is_closed(&self) -> Result<bool, FrameMailboxError> {
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| FrameMailboxError::SynchronizationPoisoned)?;
+        Ok(state.closed)
+    }
+}
+
+impl VideoFrameSink for FrameMailbox {
+    fn submit(&self, frame: VideoFrame) -> Result<(), FrameMailboxError> {
+        self.publish(frame)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{PixelFormat, VideoFrame, VideoFrameError};
@@ -292,6 +436,87 @@ mod tests {
             VideoFrame::new(0, 2, 2, PixelFormat::Rgb565Le, usize::MAX, Vec::new()),
             Err(VideoFrameError::DimensionOverflow)
         );
+    }
+
+    fn test_frame(sequence: u64) -> VideoFrame {
+        VideoFrame::new(
+            sequence,
+            1,
+            1,
+            PixelFormat::Rgba8888,
+            4,
+            vec![sequence as u8, 0, 0, 255],
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn mailbox_returns_the_newest_pending_frame() {
+        let mailbox = super::FrameMailbox::new();
+
+        mailbox.publish(test_frame(1)).unwrap();
+        mailbox.publish(test_frame(2)).unwrap();
+
+        let frame = mailbox.take_latest().unwrap().unwrap();
+        assert_eq!(frame.sequence(), 2);
+        assert_eq!(mailbox.replaced_frames().unwrap(), 1);
+        assert_eq!(mailbox.take_latest().unwrap(), None);
+    }
+
+    #[test]
+    fn mailbox_rejects_non_monotonic_sequences_even_after_consumption() {
+        let mailbox = super::FrameMailbox::new();
+        mailbox.publish(test_frame(10)).unwrap();
+        mailbox.take_latest().unwrap();
+
+        assert_eq!(
+            mailbox.publish(test_frame(10)),
+            Err(super::FrameMailboxError::NonMonotonicSequence {
+                last: 10,
+                incoming: 10,
+            })
+        );
+        assert_eq!(
+            mailbox.publish(test_frame(9)),
+            Err(super::FrameMailboxError::NonMonotonicSequence {
+                last: 10,
+                incoming: 9,
+            })
+        );
+    }
+
+    #[test]
+    fn mailbox_closes_and_rejects_new_frames() {
+        let mailbox = super::FrameMailbox::new();
+        mailbox.publish(test_frame(1)).unwrap();
+        mailbox.close().unwrap();
+
+        assert!(mailbox.is_closed().unwrap());
+        assert_eq!(mailbox.take_latest().unwrap(), None);
+        assert_eq!(
+            mailbox.publish(test_frame(2)),
+            Err(super::FrameMailboxError::Closed)
+        );
+    }
+
+    #[test]
+    fn cloned_mailboxes_share_the_same_pending_frame() {
+        let producer = super::FrameMailbox::new();
+        let consumer = producer.clone();
+
+        producer.publish(test_frame(44)).unwrap();
+
+        assert_eq!(consumer.take_latest().unwrap().unwrap().sequence(), 44);
+    }
+
+    #[test]
+    fn video_frame_sink_trait_publishes_to_mailbox() {
+        let mailbox = super::FrameMailbox::new();
+        let sink: &dyn super::VideoFrameSink = &mailbox;
+
+        sink.submit(test_frame(5)).unwrap();
+
+        assert_eq!(mailbox.take_latest().unwrap().unwrap().sequence(), 5);
     }
 
     #[test]
