@@ -67,8 +67,16 @@ impl Z80BusHandshake {
         self.next_request_id = id
             .checked_add(1)
             .ok_or(Z80BusHandshakeError::RequestIdExhausted)?;
-        let request = Z80BusRequest { id, operation, address, base_tstates };
-        self.pending = Some(PendingCycle { request, wait_tstates: 0 });
+        let request = Z80BusRequest {
+            id,
+            operation,
+            address,
+            base_tstates,
+        };
+        self.pending = Some(PendingCycle {
+            request,
+            wait_tstates: 0,
+        });
         Ok(request)
     }
 
@@ -84,7 +92,10 @@ impl Z80BusHandshake {
 
     /// Extend the active bus cycle by one WAIT T-state.
     pub fn insert_wait_tstate(&mut self) -> Result<(), Z80BusHandshakeError> {
-        let pending = self.pending.as_mut().ok_or(Z80BusHandshakeError::NoRequestPending)?;
+        let pending = self
+            .pending
+            .as_mut()
+            .ok_or(Z80BusHandshakeError::NoRequestPending)?;
         pending.wait_tstates = pending.wait_tstates.saturating_add(1);
         Ok(())
     }
@@ -134,7 +145,10 @@ mod tests {
         bus.insert_wait_tstate().unwrap();
         assert_eq!(bus.pending_request(), Some(request));
         assert_eq!(bus.wait_tstates(), Some(2));
-        assert_eq!(bus.complete(request.id, Some(0xA5)).unwrap().data, Some(0xA5));
+        assert_eq!(
+            bus.complete(request.id, Some(0xA5)).unwrap().data,
+            Some(0xA5)
+        );
         assert!(!bus.is_pending());
     }
 
@@ -167,11 +181,16 @@ mod tests {
     fn read_requires_data_and_write_rejects_data() {
         let mut bus = Z80BusHandshake::default();
         let read = bus.begin(Z80BusOperation::OpcodeFetch, 0x0000, 4).unwrap();
-        assert_eq!(bus.complete(read.id, None), Err(Z80BusHandshakeError::MissingReadData));
+        assert_eq!(
+            bus.complete(read.id, None),
+            Err(Z80BusHandshakeError::MissingReadData)
+        );
         assert!(bus.is_pending());
         bus.complete(read.id, Some(0x00)).unwrap();
 
-        let write = bus.begin(Z80BusOperation::MemoryWrite { value: 0x42 }, 0xC000, 3).unwrap();
+        let write = bus
+            .begin(Z80BusOperation::MemoryWrite { value: 0x42 }, 0xC000, 3)
+            .unwrap();
         assert_eq!(
             bus.complete(write.id, Some(0x42)),
             Err(Z80BusHandshakeError::UnexpectedWriteData)
@@ -183,7 +202,13 @@ mod tests {
     #[test]
     fn operations_without_pending_request_are_rejected() {
         let mut bus = Z80BusHandshake::default();
-        assert_eq!(bus.complete(0, Some(0)), Err(Z80BusHandshakeError::NoRequestPending));
-        assert_eq!(bus.insert_wait_tstate(), Err(Z80BusHandshakeError::NoRequestPending));
+        assert_eq!(
+            bus.complete(0, Some(0)),
+            Err(Z80BusHandshakeError::NoRequestPending)
+        );
+        assert_eq!(
+            bus.insert_wait_tstate(),
+            Err(Z80BusHandshakeError::NoRequestPending)
+        );
     }
 }
