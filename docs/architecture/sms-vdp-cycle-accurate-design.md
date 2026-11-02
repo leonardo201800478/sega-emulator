@@ -6,7 +6,7 @@
 
 ## 1. Objetivo
 
-Construir um VDP SMS independente do TMS9918A do SG-1000, com estado temporal explícito e integração futura ao Master Scheduler. O projeto deve suportar as revisões selecionáveis SMS1/315-5124 e SMS2/315-5246 sem duplicar todo o núcleo e sem presumir equivalência onde não há evidência.
+Construir um VDP SMS independente do TMS9918A do SG-1000, com estado temporal explícito e integração futura ao Master Scheduler. **A primeira implementação tem como alvo exclusivo o ASIC SMS1/315-5124.** A revisão SMS2/315-5246 será caracterizada e adicionada em etapa posterior, reutilizando apenas o que a evidência comprovar equivalente. Não presumir equivalência entre revisões.
 
 A saída visual é produzida pelo VDP em tempo virtual. Vulkan/softbuffer/janela apenas apresentam o resultado; não determinam fetch, raster, sprites, IRQ ou clocks.
 
@@ -173,12 +173,15 @@ Testar save/load em meio à linha e em meio ao fetch; a execução após restore
 
 ## 7. Plano de implementação
 
-### VDP-T0 — caracterização
+### VDP-T0 — caracterização SMS1/315-5124
 
 - congelar golden frames e testes atuais;
-- mapear registradores/ports/modos e diferenças conhecidas;
-- coletar fontes para contadores, timing, fetch, latches, sprites, CRAM/DAC, IRQ e revisão ASIC;
-- marcar cada regra como documentada, medida, comparativa, inferida ou desconhecida.
+- identificar explicitamente o ASIC 315-5124; não inferir ASIC a partir do gabinete/modelo comercial;
+- manter NTSC/PAL como perfil independente da revisão ASIC;
+- mapear registradores/ports/modos e máscaras de endereço específicas do 315-5124;
+- coletar fontes para clocks, contadores, HBlank/VBlank, fetch, latches, sprites, CRAM/DAC, IRQ e acesso VRAM;
+- marcar cada regra como documentada, medida, comparativa, inferida ou desconhecida;
+- não habilitar modos extra-height 224/240 no perfil 315-5124 sem evidência contraditória específica.
 
 ### VDP-T1 — estado temporal sem alterar semântica existente
 
@@ -215,8 +218,9 @@ Testar save/load em meio à linha e em meio ao fetch; a execução após restore
 
 ### VDP-T6 — revisão e validação
 
-- comparar 315-5124 e 315-5246;
-- NTSC/PAL e modos suportados;
+- fechar validação do 315-5124 primeiro;
+- em etapa posterior, comparar 315-5246 e adicionar policies explícitas para diferenças confirmadas;
+- NTSC/PAL e modos suportados por revisão;
 - cenas sintéticas, homebrew de teste, Ares/MAME/MEKA/GearSystem com ancestralidade documentada;
 - hardware real quando disponível;
 - TEMPORAL_PASS somente após evidência integrada.
