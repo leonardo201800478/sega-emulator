@@ -334,7 +334,11 @@ mod tests {
         let mut bus = SmsTemporalBus::new(vec![0xA5; 0x4000], 3).unwrap();
         let request = request(1, Z80BusOperation::MemoryRead, 0x0100, 3);
         bus.begin_request(request, 2).unwrap();
-        let SmsTemporalDispatch::BusCompletion(completion) = bus.dispatch_next().unwrap().unwrap() else { panic!("expected bus completion"); };
+        let SmsTemporalDispatch::BusCompletion(completion) =
+            bus.dispatch_next().unwrap().unwrap()
+        else {
+            panic!("expected bus completion");
+        };
         assert_eq!(completion.request_id, 1);
         assert_eq!(completion.data, Some(0xA5));
         assert_eq!(bus.acknowledge_completion(1).unwrap(), completion);
@@ -374,7 +378,11 @@ mod tests {
         bus.begin_request(request, 1).unwrap();
         let mut restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
         assert_eq!(restored.memory().read(0xC001), 0);
-        let SmsTemporalDispatch::BusCompletion(completion) = restored.dispatch_next().unwrap().unwrap() else { panic!("expected bus completion"); };
+        let SmsTemporalDispatch::BusCompletion(completion) =
+            restored.dispatch_next().unwrap().unwrap()
+        else {
+            panic!("expected bus completion");
+        };
         assert_eq!(restored.memory().read(0xC001), 0x77);
         restored.acknowledge_completion(completion.request_id).unwrap();
     }
@@ -382,20 +390,12 @@ mod tests {
     #[test]
     fn snapshot_restore_preserves_completed_unacknowledged_write() {
         let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
-        let request = request(
-            4,
-            Z80BusOperation::MemoryWrite { value: 0x99 },
-            0xC002,
-            3,
-        );
+        let request = request(4, Z80BusOperation::MemoryWrite { value: 0x99 }, 0xC002, 3);
         bus.begin_request(request, 0).unwrap();
         let SmsTemporalDispatch::BusCompletion(completion) = bus.dispatch_next().unwrap().unwrap() else { panic!("expected bus completion"); };
         let mut restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
         assert_eq!(restored.memory().read(0xC002), 0x99);
-        assert_eq!(
-            restored.acknowledge_completion(4).unwrap(),
-            completion
-        );
+        assert_eq!(restored.acknowledge_completion(4).unwrap(), completion);
         assert_eq!(restored.memory().read(0xC002), 0x99);
     }
 
