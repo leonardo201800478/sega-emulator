@@ -238,22 +238,18 @@ mod tests {
         .unwrap();
 
         assert_eq!(frame.row(0), Some(&[1, 2, 3, 4][..]));
-        assert_eq!(frame.storage_row(0), Some(&[1, 2, 3, 4, 90, 91, 92, 93][..]));
+        assert_eq!(
+            frame.storage_row(0),
+            Some(&[1, 2, 3, 4, 90, 91, 92, 93][..])
+        );
         assert_eq!(frame.row(1), Some(&[5, 6, 7, 8][..]));
         assert_eq!(frame.row(2), None);
     }
 
     #[test]
     fn cloned_frames_share_immutable_storage() {
-        let frame = VideoFrame::new(
-            1,
-            1,
-            1,
-            PixelFormat::Rgba8888,
-            4,
-            vec![10, 20, 30, 40],
-        )
-        .unwrap();
+        let frame =
+            VideoFrame::new(1, 1, 1, PixelFormat::Rgba8888, 4, vec![10, 20, 30, 40]).unwrap();
         let clone = frame.clone();
 
         assert_eq!(frame.storage_reference_count(), 2);
