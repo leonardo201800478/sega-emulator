@@ -8,11 +8,11 @@
 use core::fmt;
 
 use sega_machine_scheduler::{
-    ClockDomainId, ClockDomainSnapshot, MachineDispatch, MachineScheduler, SchedulerError,
+    ClockDomainId, MachineDispatch, MachineScheduler, SchedulerError,
     SchedulerState,
 };
 use sega_temporal_core::{
-    ClockRatio, EventPriority, HardwarePhase, MachineTime, PlatformPriority,
+    ClockDomainSnapshot, ClockRatio, HardwarePhase, MachineTime, PlatformPriority,
 };
 
 pub const SMS_TEMPORAL_COORDINATOR_STATE_VERSION: u16 = 1;
