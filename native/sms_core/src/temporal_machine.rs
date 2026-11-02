@@ -525,9 +525,11 @@ mod tests {
         // Restore a valid CPU counter while preserving the already-committed,
         // unacknowledged bus completion. Resume must consume it, not dispatch
         // the memory write a second time.
-        state.cpu.instruction_tstates = 0;
+        // Preserve the four T-states already consumed by M1 before the
+        // pending M2 memory write; restore_state validates this phase minimum.
+        state.cpu.instruction_tstates = 4;
         let mut restored = SmsTemporalMachine::restore_state(state).unwrap();
-        retired(restored.resume_instruction(0).unwrap(), 0x77, 3);
+        retired(restored.resume_instruction(0).unwrap(), 0x77, 7);
         assert_eq!(restored.memory().read(0xC000), 0x5A);
         assert!(restored.export_state().bus.completion.is_none());
     }
