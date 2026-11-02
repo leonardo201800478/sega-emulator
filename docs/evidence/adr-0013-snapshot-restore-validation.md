@@ -164,3 +164,13 @@ Two follow-up Draft PRs were opened from the reconciled #360 base. Both remain u
 | Overflow-safe rational conversion / scheduler preflight | IMPLEMENTED in #363 candidate | CI PASS | NOT RUN | NOT RUN | INTEGRATION_PENDING | NOT CLAIMED |
 
 Three review tracks were coordinated for this audit. The available execution environment did not provide three autonomous AI-agent contexts; no autonomous agents are claimed.
+## 2026-11-02 — Stress execution follow-up
+
+The opt-in stress workflow was made invokable from pull requests by adding two explicit labels: `scheduler-stress-short` and `scheduler-stress-long`. The job remains skipped unless one of these labels is present, or `workflow_dispatch` selects a non-`none` profile.
+
+- PR #362 head `cce79018427daab57a36808e162492b17bf4303e`, ordinary CI workflow `41384027452`: all six ordinary gates PASS.
+- SHORT workflow `41384089223`, same exact SHA: all six ordinary gates PASS; stress job PASS. The new operation campaign completed 4 seeds × 2,000 operations = 8,000 operations; the existing dispatch/restore harness also completed 4 × 20,000 = 80,000 events. Both tests reported `ok`; 2 passed, 0 failed.
+- LONG workflow `41384147113`, same exact SHA: 16 × 20,000 = 320,000 operations plus the existing 16 × 250,000 = 4,000,000-event harness. Status at the time of this evidence update: IN PROGRESS; no LONG_PASS is claimed until the job and full workflow finish successfully.
+- PR #363 was advanced with a documentation-only correction to attach the `preview_advance_to` and `advance_to` rustdoc comments to the proper methods. Exact head `d6c2e9fbc243208ebe4e761e079934dd95eba98e`, workflow `41384173879`: all six ordinary gates PASS; stress skipped as expected.
+
+The earlier #362 statement that SHORT/LONG were NOT RUN is superseded for SHORT by workflow `41384089223`. The earlier #363 exact head `8b2eee8264a2778557689654d0af62c0a0a29dc1` is superseded by `d6c2e9fbc243208ebe4e761e079934dd95eba98e`; the arithmetic implementation is unchanged by that final documentation-only commit.
