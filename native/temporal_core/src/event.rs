@@ -204,14 +204,13 @@ impl<T> EventQueue<T> {
                 return Err(EventQueueError::NonCanonicalState);
             }
             previous_key = Some(key);
-            if let Some(watermark) = state.last_dispatched {
-                if event.timestamp < watermark.timestamp
+            if let Some(watermark) = state.last_dispatched
+                && (event.timestamp < watermark.timestamp
                     || (event.timestamp == watermark.timestamp
                         && (event.hardware_phase, event.priority)
-                            < (watermark.hardware_phase, watermark.priority))
-                {
-                    return Err(EventQueueError::WatermarkRegression);
-                }
+                            < (watermark.hardware_phase, watermark.priority)))
+            {
+                return Err(EventQueueError::WatermarkRegression);
             }
         }
         let heap = state
