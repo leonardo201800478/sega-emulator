@@ -1,9 +1,13 @@
 //! Native audio DSP and PCM conversion shared by host audio backends.
 
 mod dsp;
+mod output;
+mod psg;
 mod session;
 
 pub use dsp::{AudioMixer, DspError, MixSource, OnePoleLowPass};
+pub use output::NativeAudioOutput;
+pub use psg::{PsgClockError, ScheduledPsg};
 pub use session::{NativeAudioSession, PcmSink};
 
 use std::f64::consts::PI;
