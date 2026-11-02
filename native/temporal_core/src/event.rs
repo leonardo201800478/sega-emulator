@@ -508,6 +508,58 @@ mod tests {
     }
 
     #[test]
+    fn restore_validates_full_watermark_sequence_tiebreak() {
+        let event = |sequence| ScheduledEvent {
+            timestamp: MachineTime::from_ticks(5),
+            hardware_phase: HardwarePhase::new(1),
+            priority: PlatformPriority::new(1),
+            sequence,
+            payload: (),
+        };
+        let watermark = EventQueueWatermark {
+            timestamp: MachineTime::from_ticks(5),
+            hardware_phase: HardwarePhase::new(1),
+            priority: PlatformPriority::new(1),
+            sequence: 1,
+        };
+
+        let regressed = EventQueueState {
+            pending: vec![event(0)],
+            next_sequence: 2,
+            last_dispatched: Some(watermark),
+        };
+        assert_eq!(
+            EventQueue::restore_state(regressed).err(),
+            Some(EventQueueError::WatermarkRegression)
+        );
+
+        let valid = EventQueueState {
+            pending: vec![event(2)],
+            next_sequence: 3,
+            last_dispatched: Some(watermark),
+        };
+        assert!(EventQueue::restore_state(valid).is_ok());
+    }
+
+    #[test]
+    fn restore_rejects_watermark_sequence_outside_allocator_range() {
+        let state = EventQueueState::<()> {
+            pending: vec![],
+            next_sequence: 2,
+            last_dispatched: Some(EventQueueWatermark {
+                timestamp: MachineTime::from_ticks(5),
+                hardware_phase: HardwarePhase::new(1),
+                priority: PlatformPriority::new(1),
+                sequence: 2,
+            }),
+        };
+        assert_eq!(
+            EventQueue::restore_state(state).err(),
+            Some(EventQueueError::SequenceOutOfRange)
+        );
+    }
+
+    #[test]
     fn restore_preserves_exhausted_sequence_allocator() {
         let state = EventQueueState::<()> {
             pending: vec![],
