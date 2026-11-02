@@ -1,9 +1,14 @@
-//! Initial native Direct3D 12 host bootstrap for Windows x64.
+//! Native Direct3D 12 presentation host for Windows x64.
 //!
 //! This milestone owns the Win32 presentation window, DXGI factory/swap chain,
 //! D3D12 device, direct queue, command allocator/list, render-target views and
-//! fence lifecycle. The first presentation path emits a synthetic color-bar
-//! frame; uploading emulator VideoFrame pixels is a subsequent milestone.
+//! fence lifecycle. It uploads immutable VideoFrame data from the presentation
+//! mailbox, converts RGB565 to RGBA8888 when required, and presents through
+//! DXGI. The synthetic color-bar path remains available as a host diagnostic.
+//!
+//! Resize handling, device-loss recovery, and physical-GPU validation remain
+//! outside this milestone. GPU waits are restricted to the presentation thread
+//! and must never gate emulation or Scheduler advancement.
 
 use core::fmt;
 use core::mem::ManuallyDrop;
