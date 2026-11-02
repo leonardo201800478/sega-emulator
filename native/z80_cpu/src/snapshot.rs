@@ -211,7 +211,7 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u8(7);
             writer.u16(address);
             writer.u8(value);
-        },
+        }
     }
 }
 

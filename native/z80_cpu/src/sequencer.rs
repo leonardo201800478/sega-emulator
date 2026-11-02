@@ -1383,7 +1383,10 @@ mod tests {
         let fetch = request(cpu.begin_instruction().unwrap());
         let operand = request(cpu.complete_bus_cycle(fetch.id, Some(0x36)).unwrap());
         let write = request(cpu.complete_bus_cycle(operand.id, Some(0xA5)).unwrap());
-        assert_eq!(write.operation, Z80BusOperation::MemoryWrite { value: 0xA5 });
+        assert_eq!(
+            write.operation,
+            Z80BusOperation::MemoryWrite { value: 0xA5 }
+        );
 
         let mut state = cpu.export_state();
         state.handshake.pending_request.as_mut().unwrap().operation =
@@ -1411,7 +1414,10 @@ mod tests {
             Z80MicroStep::InternalCycle { tstates: 1 }
         );
         let write = request(cpu.complete_internal_cycle().unwrap());
-        assert_eq!(write.operation, Z80BusOperation::MemoryWrite { value: 0x80 });
+        assert_eq!(
+            write.operation,
+            Z80BusOperation::MemoryWrite { value: 0x80 }
+        );
 
         let mut state = cpu.export_state();
         state.handshake.pending_request.as_mut().unwrap().operation =
@@ -1446,7 +1452,10 @@ mod tests {
         let mut cpu = Z80MicroSequencer::default();
         cpu.begin_instruction().unwrap();
         let mut state = cpu.export_state();
-        state.phase = Z80MicroSequencerPhase::MemoryWrite { address: 0, value: 0 };
+        state.phase = Z80MicroSequencerPhase::MemoryWrite {
+            address: 0,
+            value: 0,
+        };
 
         assert_eq!(
             Z80MicroSequencer::restore_state(state),
