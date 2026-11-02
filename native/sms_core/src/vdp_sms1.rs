@@ -224,7 +224,6 @@ mod tests {
     }
 }
 
-
 /// Operation selected by the second byte written to the VDP control port.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PortCode {
@@ -699,7 +698,6 @@ mod background_tests {
         assert_eq!(line[0].palette_index, 1);
     }
 
-
     #[test]
     fn fine_horizontal_scroll_exposes_backdrop_at_left_edge_without_wrapping() {
         let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
@@ -724,5 +722,4 @@ mod background_tests {
         assert_eq!(line[0].palette_index, 3);
         assert_eq!(line[1].palette_index, 1);
     }
-
 }
