@@ -95,7 +95,7 @@ Os contratos desta ADR são implementados em `native/temporal_core` e consumidos
 - [x] Progresso/next-event de dispositivo definido.
 - [x] Reset, snapshot e restore de estado parcial especificados.
 - [ ] Revisão arquitetural e aprovação do contrato.
-- [x] Testes unitários dos contratos e gates Rust/Python/Windows executados no commit de código `82a2590` (CI #3511/#3512; stress Scheduler short PASS). A reconciliação documental exige CI no HEAD final.
+- [x] Testes unitários dos contratos e gates Rust/Python/Windows executados no commit de código `a50c4a1d4cb02384c7b26bf418a56d0151513af0` (CI #3516; quatro jobs PASS, incluindo Scheduler deterministic stress short). Execução local: NOT RUN.
 - [ ] PR aprovada e integrada.
 
-**Estado:** IMPLEMENTED na branch canônica #418 / QUICK_PASS PASS nos gates CI do commit de código `82a2590` / APPROVAL_PENDING. A ADR permanece proposta até revisão arquitetural independente e integração; não declara `TEMPORAL_PASS`.
+**Estado:** IMPLEMENTED na branch canônica #418 / QUICK_PASS PASS no SHA `a50c4a1d4cb02384c7b26bf418a56d0151513af0` (CI #3516) / APPROVAL_PENDING. A ADR permanece proposta até revisão arquitetural independente e integração; não declara `TEMPORAL_PASS`.

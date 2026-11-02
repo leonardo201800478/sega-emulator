@@ -135,7 +135,7 @@ Esta fase passa a ser a frente ativa de integração temporal, autorizada formal
 - T2: PR #414 — coordenador SMS sobre `MachineScheduler`, com escala temporal explícita.
 - T3: barramento de memória transacional, efeitos no deadline, acknowledgement único e WAIT de fixture, incorporado à stack T4.
 - T4: PR #416 — integrada em `main` no SHA `3f4a71d7b7bbc1863c20cd3293466405cb3f579b`; head validado `bfdc7d2fbbcf7712091df9960a7e7e593c18afea`; CI #41499228458 PASS em todos os quatro jobs sobre merge ref `cea276159efd382e8289085be4b5f67dccecc753`.
-- T5a: PR #418 — código validado no commit `82a259049171162a1407fc4a4d8ab612967332e5`; CI #3511 PASS nos gates Rust/Python/Windows e CI #3512 PASS incluindo Scheduler deterministic stress short. A reconciliação documental da ADR-001 e da #396 está nesta branch e exige novo CI no HEAD final.
+- T5a: PR #418 — código validado no commit `a50c4a1d4cb02384c7b26bf418a56d0151513af0`; CI #3516 PASS nos quatro jobs: Rust fmt/Clippy/workspace tests, Python Ruff/pytest, Windows x64 D3D12+WASAPI/XAudio2 e Scheduler deterministic stress short. O HEAD documental subsequente exige CI próprio.
 
 **Estado:** T0–T4 integrados incrementalmente; T4 permanece em `SHORT_PASS`. T5a (#418) está em revisão, com contratos temporais de origem única, índices M/T serializáveis e integração restrita ao subconjunto SMS. P6 continua ativa para mappers/I/O, estado arquitetural Z80, VDP/PSG e integração SG-1000. O caminho legado permanece preservado. `TEMPORAL_PASS` continua pendente.
 

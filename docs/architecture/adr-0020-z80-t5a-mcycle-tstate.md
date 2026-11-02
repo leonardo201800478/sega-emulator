@@ -26,5 +26,11 @@ A implementação cobre somente as fases que o sequenciador já expõe: M1 opcod
 - [x] Snapshot binário versionado carrega os índices.
 - [x] Testes de sequência, WAIT e snapshot para M1/M2/M3 no CI candidato.
 - [x] Teste de atomicidade da conclusão quando a alocação da próxima requisição falha.
-- [ ] fmt, clippy com `-D warnings`, testes do workspace e regressões Python no SHA candidato.
-- [ ] Revisão arquitetural e integração por PR; não declarar `TEMPORAL_PASS`.
+- [x] `cargo fmt --all -- --check`, Clippy `-D warnings`, `cargo test --workspace --locked`, pytest, Ruff check e Ruff format no SHA `a50c4a1d4cb02384c7b26bf418a56d0151513af0` (CI #3516).
+- [x] Windows x64 D3D12/video-runtime e WASAPI/XAudio2/audio-output tests; Scheduler deterministic stress short (CI #3516).
+- [ ] Aprovação técnica independente do Agente 2 para o HEAD final e integração por PR; não declarar `TEMPORAL_PASS`.
+## Evidência de CI
+
+- Código validado: SHA `a50c4a1d4cb02384c7b26bf418a56d0151513af0`.
+- GitHub Actions: [run #3516](https://github.com/leonardo201800478/sega-emulator/actions/runs/41529786452) — quatro jobs concluídos com PASS: Rust quality/unit regression, Python lint/regression, Windows x64 D3D12 + WASAPI/XAudio2 e Scheduler deterministic stress short.
+- Execução local: NOT RUN. O HEAD final após esta atualização documental exige CI próprio; esta evidência é do commit de código acima.
