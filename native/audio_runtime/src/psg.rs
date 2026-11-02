@@ -120,6 +120,7 @@ impl ScheduledPsg {
 mod tests {
     use super::{PsgClockError, ScheduledPsg};
     use crate::{NativeAudioSession, PcmSink};
+    use std::sync::{Arc, Mutex};
     use sega_machine_scheduler::{
         ClockDomainId, ClockRatio, EventPriority, MachineScheduler, MachineTime,
     };
@@ -127,15 +128,17 @@ mod tests {
 
     #[derive(Default)]
     struct RecordingSink {
-        blocks: Vec<Vec<u8>>,
+        blocks: Arc<Mutex<Vec<Vec<u8>>>>,
     }
 
     impl PcmSink for RecordingSink {
         fn write_pcm(&mut self, pcm: Vec<u8>) -> Result<(), String> {
-            self.blocks.push(pcm);
+            self.blocks.lock().unwrap().push(pcm);
             Ok(())
         }
-        fn metrics(&self) -> (u64, u64) { (0, 0) }
+        fn metrics(&self) -> (u64, u64) {
+            (0, 0)
+        }
         fn close(&mut self) {}
     }
 
@@ -197,10 +200,11 @@ mod tests {
         psg.apply_clock_advance(&dispatch.clock_advances[0]).unwrap();
 
         let sink = RecordingSink::default();
+        let blocks = Arc::clone(&sink.blocks);
         let mut session = NativeAudioSession::new(44_100, 100, sink).unwrap();
         let submitted = psg.submit_pending_audio(&mut session).unwrap();
         assert!(submitted > 0);
         session.close();
-        assert!(!session.sink.blocks.is_empty());
+        assert!(!blocks.lock().unwrap().is_empty());
     }
 }
