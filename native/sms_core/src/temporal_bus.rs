@@ -235,9 +235,9 @@ impl SmsTemporalBus {
             (Some(request), None)
                 if pending_events.len() == 1
                     && pending_events[0].payload
-                        == SmsTemporalEvent::BusCompletion {
+                        == (SmsTemporalEvent::BusCompletion {
                             request_id: request.id,
-                        } => {}
+                        }) => {}
             (Some(request), Some(completion))
                 if request.id == completion.request_id && pending_events.is_empty() => {}
             _ => return Err(SmsTemporalBusError::InvalidState),
