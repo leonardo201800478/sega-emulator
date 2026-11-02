@@ -39,7 +39,6 @@ Detalhes técnicos e testes: [perfis de RAM DahJee/Jumbo e Othello](docs/hardwar
 - **Configurações de áudio e vídeo:** saída mono do PSG, ativação, volume, taxa do mixer (22,05/44,1/48 kHz), buffer (256–2.048 amostras), quatro filtros de apresentação (Nearest, Bilinear, Dither Blending e CRT/NTSC), escala inteira e preferências de VSync/VRR/G-Sync e sincronismo A/V. Dither Blending detecta blocos 2×2 em xadrez e só os mistura quando os pares de cores são consistentes; não aplica blur global. CRT/NTSC oferece scanlines, máscara de fósforo, curvatura e modos RGB/Composite/RF aproximados por processamento espacial CPU/Numpy, compartilhados pelos backends Qt Quick e Raster. Composite/RF não modelam fase temporal, subportadora por linha nem a cadeia elétrica real; curvatura e efeitos avançados precisam de validação de desempenho no Windows. VSync/VRR ainda não são garantidos pelo backend efetivo; selecionar uma preferência não confirma que esteja ativa. O modo pelo relógio de áudio é experimental e ainda não altera o scheduler. O FIR de 63 taps reduz aliasing digital; não representa a resposta analógica do chip.
 - **Carregador:** arquivos `.sg`, `.rom`, `.bin` e ROMs dentro de ZIP; ZIP com múltiplas ROMs exige seleção explícita.
 - **Diagnóstico:** logs JSONL/texto por sessão, SHA-256 da ROM, checkpoints de execução e stack traces.
-- **Áudio:** PSG SN76489AN integrado; sessão DSP, resampling, filas e entrega PCM são executados em Rust. A sessão foi movida para native/audio_runtime, com contrato PcmSink independente de PyO3 e testes headless com sink determinístico. As APIs Python/PyO3 de drenagem PCM, conversão e escrita direta no backend foram removidas; Qt envia apenas comandos de configuração/ciclo de vida e consulta métricas. WASAPI Shared/event-driven tenta IAudioClient3 (fallback Shared convencional); XAudio2 permanece alternativa. O pump ainda é acionado ao concluir run_frame() chamado pelo pacing Qt; a autonomia do scheduler/produção de áudio em relação ao timer de apresentação continua pendente. Fontes estéreo nativas e filtros analógicos calibrados por chip também continuam pendentes. Em teste manual anterior, o som foi considerado próximo ao Gearsystem; isso é avaliação observacional, não certificação de fidelidade ou latência. O FIR é filtragem digital e não modela a resposta analógica do chip. Consulte o [runtime de áudio multi-sistema](docs/architecture/native-audio-runtime.md), o [roadmap de fidelidade do PSG](docs/architecture/psg-fidelity-roadmap.md) e o [contrato dos backends de saída](docs/architecture/audio-output-backends.md).
 - **Captura de áudio:** gravação dos comandos temporizados do SN76489 em VGM pelo menu Diagnóstico; consulte o [procedimento de captura VGM](docs/validation/vgm-psg-capture.md) e o [histórico de versões](CHANGELOG.md).
 
 ## Requisitos
@@ -106,7 +105,6 @@ O Master System possui uma máquina nativa Rust integrada ao frontend Qt. A impl
 
 A integração inicial documentada aceita ROMs locais `.sms`, `.rom`, `.bin` e ZIP com um único candidato compatível (limite descrito na PR de ativação). A entrada inicial cobre direcional e botões 1/2. O SMS não deve reutilizar diagnósticos exclusivos do VDP SG-1000 nem produzir captura VGM temporizada sem estar ligada ao barramento temporal.
 
-Limitações registradas na ativação: temporização por instrução/T-states nominais (não ciclo a ciclo), captura VGM SMS ainda não conectada à timeline, cobertura de mappers e fidelidade audiovisual não universais. A existência do caminho de gameplay não certifica todos os jogos. Consulte a [auditoria técnica SMS](docs/audits/sms-current-technical-status-2026-10-29.md) e o [roadmap de consolidação SG-1000 + SMS](docs/roadmaps/sg1000-sms-consolidation-roadmap.md).
 
 ## Runtime SG-1000 — arquitetura vigente
 
@@ -204,7 +202,6 @@ O projeto é independente e não é afiliado à SEGA. SEGA e SG-1000 são marcas
 ## Documentação
 
 - [Escopo consolidado do projeto](docs/project-scope.md)
-- [Roadmap prioritário de consolidação SG-1000 + SMS](docs/roadmaps/sg1000-sms-consolidation-roadmap.md)
 - [Modelo funcional do frontend Qt](docs/architecture/qt-frontend-functional-model.md)
 - [Arquitetura-alvo do frontend Qt](docs/architecture/qt-frontend-target-architecture.md)
 - [Diretriz Rust-only de áudio](docs/architecture/audio-rust-only-directive.md)
@@ -226,7 +223,6 @@ O projeto é independente e não é afiliado à SEGA. SEGA e SG-1000 são marcas
 - [Política permanente de desenvolvimento, fidelidade e entrega](docs/development-and-validation-policy.md)
 - [Prompt de orientações do projeto (ChatGPT; menos de 8.000 caracteres)](docs/project-instructions-prompt.md)
 - [ADR 0007 — Política de desenvolvimento Rust-first](docs/adr/0007-rust-first-development-policy.md)
-- [Pesquisa de compatibilidade de hardware Sega](docs/research/hardware-compatibility-roadmap-2026-10.md)
 - [Notas de hardware SG-1000](docs/hardware/sg1000.md)
 - [Modelo e plano de fidelidade do VDP TMS9918A](docs/hardware/tms9918a-model.md)
 - [Backlog consolidado de validação da TMS9918A](docs/hardware/tms9918a-validation-backlog.md)
