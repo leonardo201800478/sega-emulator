@@ -263,7 +263,7 @@ fn fixed_seed_operation_sequences_match_across_codec_restores() {
                     );
                     assert_eq!(left, right, "schedule divergence for seed {seed:#018x}");
                 }
-                2 | 0 | 1 => {
+                0..=2 => {
                     let left = continuous.dispatch_next();
                     let right = restored.dispatch_next();
                     assert_eq!(left, right, "dispatch divergence for seed {seed:#018x}");
