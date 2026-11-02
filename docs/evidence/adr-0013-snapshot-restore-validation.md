@@ -174,3 +174,14 @@ The opt-in stress workflow was made invokable from pull requests by adding two e
 - PR #363 was advanced with a documentation-only correction to attach the `preview_advance_to` and `advance_to` rustdoc comments to the proper methods. Exact head `d6c2e9fbc243208ebe4e761e079934dd95eba98e`, workflow `41384173879`: all six ordinary gates PASS; stress skipped as expected.
 
 The earlier #362 statement that SHORT/LONG were NOT RUN is superseded for SHORT by workflow `41384089223`. The earlier #363 exact head `8b2eee8264a2778557689654d0af62c0a0a29dc1` is superseded by `d6c2e9fbc243208ebe4e761e079934dd95eba98e`; the arithmetic implementation is unchanged by that final documentation-only commit.
+### LONG completion — 2026-11-02
+
+Workflow [41384147113](https://github.com/leonardo201800478/sega-emulator/actions/runs/41384147113) completed with SUCCESS on PR #362 exact head `cce79018427daab57a36808e162492b17bf4303e`.
+
+- Operation replay: 16 fixed seeds × 20,000 operations = 320,000 operations verified.
+- Existing dispatch/restore harness: 16 fixed seeds × 250,000 events = 4,000,000 dispatches verified.
+- Stress test result: `ok. 2 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out` (393.99s).
+- Ordinary gates in the same workflow: Rust formatting, Clippy `-D warnings`, workspace tests, Ruff formatting, Ruff lint, pytest — all PASS.
+- The workflow's stress job, Rust quality job and Python quality job all completed SUCCESS.
+
+The new operation-replay profile is now LONG_PASS on this exact SHA. This is a scheduler software stress result only; it does not establish device integration or TEMPORAL_PASS.
