@@ -25,7 +25,7 @@ use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
     CW_USEDEFAULT, CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow,
     DispatchMessageW, MSG, PM_REMOVE, PeekMessageW, PostQuitMessage, RegisterClassW, SW_SHOW,
-    ShowWindow, TranslateMessage, UpdateWindow, WNDCLASSW, WINDOW_EX_STYLE, WINDOW_STYLE,
+    ShowWindow, TranslateMessage, WNDCLASSW, WINDOW_EX_STYLE, WINDOW_STYLE,
     WM_DESTROY, WS_OVERLAPPEDWINDOW,
 };
 use windows::core::{Error, Interface, Result, w};
@@ -39,7 +39,10 @@ impl NativeVideoWindow {
     /// Create and show the native presentation window.
     pub fn create(width: u32, height: u32) -> Result<Self> {
         if width == 0 || height == 0 {
-            return Err(Error::from_win32());
+            return Err(Error::new(
+                windows::core::HRESULT(0x8007_0057_u32 as i32),
+                "window dimensions must be non-zero",
+            ));
         }
 
         let instance = unsafe { GetModuleHandleW(None)? };
@@ -76,7 +79,7 @@ impl NativeVideoWindow {
 
         unsafe {
             ShowWindow(hwnd, SW_SHOW);
-            UpdateWindow(hwnd)?;
+            // ShowWindow triggers the initial non-client paint/message sequence.
         }
 
         Ok(Self { hwnd })
