@@ -385,8 +385,8 @@ mod port_tests {
     use super::{Sms1Vdp, VideoStandard};
 
     fn select(vdp: &mut Sms1Vdp, address: u16, code: u8) {
-        vdp.write_control(0xBF, address as u8);
-        vdp.write_control(0xBF, ((code & 3) << 6) | ((address >> 8) as u8 & 0x3F));
+        vdp.write_control(address as u8);
+        vdp.write_control(((code & 3) << 6) | ((address >> 8) as u8 & 0x3F));
     }
 
     #[test]
@@ -427,8 +427,8 @@ mod port_tests {
     #[test]
     fn register_write_decodes_register_number_from_second_byte() {
         let mut vdp = Sms1Vdp::new(VideoStandard::Ntsc);
-        vdp.write_control(0xBF, 0xA8);
-        vdp.write_control(0xBF, 0x82);
+        vdp.write_control(0xA8);
+        vdp.write_control(0x82);
         assert_eq!(vdp.state.registers.get(2), Some(0xA8));
         assert_eq!(vdp.address(), 0x02A8);
     }
@@ -436,9 +436,9 @@ mod port_tests {
     #[test]
     fn data_access_cancels_partial_control_word() {
         let mut vdp = Sms1Vdp::new(VideoStandard::Ntsc);
-        vdp.write_control(0xBF, 0x34);
+        vdp.write_control(0x34);
         vdp.write_data(0x77);
-        vdp.write_control(0xBF, 0x12);
+        vdp.write_control(0x12);
         assert_eq!(vdp.address(), 0);
         assert_eq!(vdp.state.memory.vram_byte(0), Some(0x77));
     }
@@ -451,7 +451,210 @@ mod port_tests {
         assert_eq!(vdp.read_status(), 0xE0);
         assert_eq!(vdp.read_status(), 0);
         vdp.write_control(0xBF, 0x34);
-        vdp.write_control(0xBF, 0x41);
+        vdp.write_control(0x41);
         assert_eq!(vdp.address(), 0x0134);
+    }
+}
+
+
+/// One decoded Mode 4 background pixel. Priority is consumed by the sprite
+/// compositor; palette_index retains the hardware CRAM entry for diagnostics.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BackgroundPixel {
+    pub color: [u8; 3],
+    pub palette_index: u8,
+    pub priority: bool,
+}
+
+/// Render one complete Mode 4 background scanline from the current register,
+/// VRAM and CRAM image.
+///
+/// This is a deterministic functional renderer, not a dot-timed fetch model.
+/// The caller owns raster scheduling and must provide the line's vertical
+/// scroll latch when integrating mid-frame register writes.
+pub fn render_mode4_background_line(
+    state: &Sms1VdpState,
+    screen_y: u16,
+    latched_vertical_scroll: u8,
+    output: &mut [BackgroundPixel; 256],
+) {
+    let registers = state.registers.as_array();
+    let vram = &state.memory.vram;
+    let cram = &state.memory.cram;
+
+    let backdrop = registers[7] & 0x0F;
+    let blank = registers[1] & 0x40 != 0 || registers[0] & 0x04 == 0;
+    let name_table_base = usize::from(registers[2] & 0x0E) << 10;
+    let vertical_scroll_enabled = registers[0] & 0x80 == 0;
+    let horizontal_scroll = if registers[0] & 0x40 != 0 && screen_y < 16 {
+        0
+    } else {
+        registers[8]
+    };
+
+    for (screen_x, pixel) in output.iter_mut().enumerate() {
+        if blank {
+            *pixel = decode_background_pixel(cram, backdrop, false);
+            continue;
+        }
+
+        let fine_scroll = usize::from(horizontal_scroll & 7);
+        let source_x = (screen_x + 256 - usize::from(horizontal_scroll)) & 0xFF;
+        // SMS Mode 4 does not wrap the fine-scroll gap into the right edge:
+        // the exposed left edge is filled with the backdrop color.
+        if fine_scroll != 0 && screen_x < fine_scroll {
+            *pixel = decode_background_pixel(cram, backdrop, false);
+            continue;
+        }
+
+        let vertical = if vertical_scroll_enabled && !(registers[0] & 0x80 != 0 && screen_x >= 192) {
+            usize::from(latched_vertical_scroll)
+        } else {
+            0
+        };
+        let virtual_height = 224usize;
+        let source_y = (usize::from(screen_y) + virtual_height - (vertical % virtual_height))
+            % virtual_height;
+
+        let tile_x = source_x >> 3;
+        let tile_y = source_y >> 3;
+        let entry_address = (name_table_base + tile_y * 64 + tile_x * 2) & 0x3FFF;
+        let entry = u16::from(vram[entry_address])
+            | (u16::from(vram[(entry_address + 1) & 0x3FFF]) << 8);
+        let tile_index = usize::from(entry & 0x01FF);
+        let mut pixel_x = source_x & 7;
+        let mut pixel_y = source_y & 7;
+        if entry & 0x0200 != 0 {
+            pixel_x = 7 - pixel_x;
+        }
+        if entry & 0x0400 != 0 {
+            pixel_y = 7 - pixel_y;
+        }
+
+        let pattern_address = (tile_index * 32 + pixel_y * 4) & 0x3FFF;
+        let bit = 7 - pixel_x;
+        let color_index = ((vram[pattern_address] >> bit) & 1)
+            | (((vram[pattern_address + 1] >> bit) & 1) << 1)
+            | (((vram[pattern_address + 2] >> bit) & 1) << 2)
+            | (((vram[pattern_address + 3] >> bit) & 1) << 3);
+        let palette_base = if entry & 0x0800 != 0 { 16 } else { 0 };
+        let palette_index = palette_base + color_index;
+        *pixel = decode_background_pixel(
+            cram,
+            palette_index,
+            entry & 0x1000 != 0 && color_index != 0,
+        );
+    }
+}
+
+fn decode_background_pixel(cram: &[u8; CRAM_SIZE], index: u8, priority: bool) -> BackgroundPixel {
+    let value = cram[usize::from(index & 0x1F)];
+    let red = value & 0x03;
+    let green = (value >> 2) & 0x03;
+    let blue = (value >> 4) & 0x03;
+    BackgroundPixel {
+        color: [red * 85, green * 85, blue * 85],
+        palette_index: index & 0x1F,
+        priority,
+    }
+}
+
+
+#[cfg(test)]
+mod background_tests {
+    use super::{render_mode4_background_line, BackgroundPixel, Sms1VdpState, VideoStandard};
+
+    fn put_tile(state: &mut Sms1VdpState, tile: usize, color: u8) {
+        let base = tile * 32;
+        for y in 0..8 {
+            for plane in 0..4 {
+                state.memory.vram[base + y * 4 + plane] =
+                    if color & (1 << plane) != 0 { 0xFF } else { 0x00 };
+            }
+        }
+    }
+
+    #[test]
+    fn decodes_mode4_planar_pixels_and_palette_channels() {
+        let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
+        state.registers.set_raw(0, 0x04);
+        state.registers.set_raw(1, 0x40);
+        state.registers.set_raw(2, 0x0E);
+        state.memory.vram[0x3800] = 1;
+        state.memory.vram[0x3801] = 0;
+        put_tile(&mut state, 1, 0b1011);
+        state.memory.cram[11] = 0b00_10_01_11;
+
+        let mut line = [BackgroundPixel { color: [0; 3], palette_index: 0, priority: false }; 256];
+        render_mode4_background_line(&state, 0, 0, &mut line);
+
+        assert_eq!(line[0].palette_index, 11);
+        assert_eq!(line[0].color, [255, 85, 170]);
+    }
+
+    #[test]
+    fn decodes_horizontal_and_vertical_tile_flips_and_priority() {
+        let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
+        state.registers.set_raw(0, 0x04);
+        state.registers.set_raw(1, 0x40);
+        state.registers.set_raw(2, 0x0E);
+        // Tile 1, both flips and priority enabled.
+        state.memory.vram[0x3800] = 1;
+        state.memory.vram[0x3801] = 0x17;
+        put_tile(&mut state, 1, 0b0010);
+        // Change the first and last source columns so the flip is observable.
+        state.memory.vram[32] = 0x80;
+        state.memory.vram[32 + 7 * 4] = 0x01;
+        state.memory.cram[2] = 0x0C;
+
+        let mut line = [BackgroundPixel { color: [0; 3], palette_index: 0, priority: false }; 256];
+        render_mode4_background_line(&state, 0, 0, &mut line);
+
+        assert!(line[0].priority);
+        assert_eq!(line[0].palette_index, 2);
+    }
+
+    #[test]
+    fn blanking_uses_sprite_palette_backdrop() {
+        let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
+        state.registers.set_raw(7, 3);
+        state.memory.cram[3] = 0x39;
+        let mut line = [BackgroundPixel { color: [0; 3], palette_index: 0, priority: false }; 256];
+        render_mode4_background_line(&state, 0, 0, &mut line);
+        assert_eq!(line[0].palette_index, 3);
+        assert_eq!(line[0].color, [255, 85, 170]);
+    }
+
+    #[test]
+    fn horizontal_scroll_inhibit_keeps_first_two_rows_fixed() {
+        let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
+        state.registers.set_raw(0, 0x44);
+        state.registers.set_raw(1, 0x40);
+        state.registers.set_raw(2, 0x0E);
+        state.registers.set_raw(8, 8);
+        // First map tile is color 1, second is color 2.
+        state.memory.vram[0x3800] = 1;
+        state.memory.vram[0x3802] = 2;
+        put_tile(&mut state, 1, 1);
+        put_tile(&mut state, 2, 2);
+
+        let mut line = [BackgroundPixel { color: [0; 3], palette_index: 0, priority: false }; 256];
+        render_mode4_background_line(&state, 0, 0, &mut line);
+        assert_eq!(line[0].palette_index, 1);
+        render_mode4_background_line(&state, 16, 0, &mut line);
+        assert_eq!(line[0].palette_index, 2);
+    }
+
+    #[test]
+    fn name_table_base_uses_register_two_alignment() {
+        let mut state = Sms1VdpState::new(VideoStandard::Ntsc);
+        state.registers.set_raw(0, 0x04);
+        state.registers.set_raw(1, 0x40);
+        state.registers.set_raw(2, 0x0A);
+        state.memory.vram[0x2800] = 1;
+        put_tile(&mut state, 1, 4);
+        let mut line = [BackgroundPixel { color: [0; 3], palette_index: 0, priority: false }; 256];
+        render_mode4_background_line(&state, 0, 0, &mut line);
+        assert_eq!(line[0].palette_index, 4);
     }
 }
