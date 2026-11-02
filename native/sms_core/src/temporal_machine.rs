@@ -7,7 +7,10 @@
 use core::fmt;
 
 use crate::{SmsTemporalBus, SmsTemporalBusError, SmsTemporalBusState, SmsTemporalDispatch};
-use sega_temporal_core::MachineTime;
+use sega_temporal_core::{
+    BusContractError, BusCycleKind, BusDirection, BusPhase, BusTransaction, MachineTime,
+    MCycleIndex, TStateIndex,
+};
 use sega_z80_cpu::{
     Z80BusOperation, Z80MicroSequencer, Z80MicroSequencerError, Z80MicroSequencerPhase,
     Z80MicroSequencerState, Z80MicroStep,
@@ -118,6 +121,41 @@ impl SmsTemporalMachine {
     }
 
     /// Schedule the CPU's current pending bus request with fixture WAIT states.
+    /// Describe the pending CPU bus request using the shared temporal contract.
+    ///
+    /// The timestamp is the scheduler's current machine time (transaction start);
+    /// the CPU remains the sole owner of continuation and request identity.
+    pub fn pending_bus_transaction(
+        &self,
+    ) -> Result<Option<BusTransaction>, BusContractError> {
+        let Some(request) = self.cpu.pending_request() else {
+            return Ok(None);
+        };
+        let state = self.cpu.export_state();
+        let (kind, direction, data) = match request.operation {
+            Z80BusOperation::OpcodeFetch => (BusCycleKind::OpcodeFetch, BusDirection::Read, None),
+            Z80BusOperation::MemoryRead => (BusCycleKind::MemoryRead, BusDirection::Read, None),
+            Z80BusOperation::MemoryWrite { value } => {
+                (BusCycleKind::MemoryWrite, BusDirection::Write, Some(value))
+            }
+            Z80BusOperation::PortRead => (BusCycleKind::IoRead, BusDirection::Read, None),
+            Z80BusOperation::PortWrite { value } => {
+                (BusCycleKind::IoWrite, BusDirection::Write, Some(value))
+            }
+        };
+        BusTransaction::new(
+            self.bus.now(),
+            MCycleIndex::new(state.mcycle_index),
+            TStateIndex::new(state.tstate_index),
+            BusPhase::Setup,
+            kind,
+            direction,
+            Some(request.address),
+            data,
+            u16::from(request.base_tstates),
+        )
+        .map(Some)
+    }
     pub fn schedule_pending_bus(
         &mut self,
         fixture_wait_tstates: u32,
@@ -636,6 +674,24 @@ mod tests {
         );
     }
 
+    #[test]
+    fn pending_request_maps_to_shared_temporal_contract_without_duplicate_state() {
+        let mut machine = SmsTemporalMachine::new(vec![0x00; 0x4000], 3).unwrap();
+        machine.begin_instruction().unwrap();
+        let transaction = machine.pending_bus_transaction().unwrap().unwrap();
+        assert_eq!(transaction.timestamp(), MachineTime::ZERO);
+        assert_eq!(transaction.cycle_index(), MCycleIndex::new(0));
+        assert_eq!(transaction.t_state_index(), TStateIndex::new(0));
+        assert_eq!(transaction.phase(), BusPhase::Setup);
+        assert_eq!(transaction.kind(), BusCycleKind::OpcodeFetch);
+        assert_eq!(transaction.direction(), BusDirection::Read);
+        assert_eq!(transaction.address(), Some(0));
+        assert_eq!(transaction.data(), None);
+        assert_eq!(transaction.duration_tstates(), 4);
+        assert_eq!(machine.pending_bus_transaction().unwrap(), Some(transaction));
+        machine.schedule_pending_bus(0).unwrap();
+        assert_eq!(machine.pending_bus_transaction().unwrap(), Some(transaction));
+    }
     #[test]
     fn supported_microsequencer_slice_matches_atomic_reference() {
         assert_atomic_differential(&[0x00], 0, 0, 0, 0, 0x00);
