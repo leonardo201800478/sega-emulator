@@ -256,12 +256,6 @@ impl Z80MicroSequencer {
                 *self = next;
                 Ok(step)
             }
-            Err(error @ Z80MicroSequencerError::UnsupportedOpcode { .. }) => {
-                // Preserve the established unsupported-opcode behavior: retire
-                // the rejected decode back to Ready while still returning the error.
-                *self = next;
-                Err(error)
-            }
             Err(error) => Err(error),
         }
     }
@@ -759,10 +753,13 @@ mod tests {
     fn halt_opcode_is_not_decoded_as_a_register_load() {
         let mut cpu = Z80MicroSequencer::default();
         let fetch = request(cpu.begin_instruction().unwrap());
+        let before = cpu.export_state();
         assert!(matches!(
             cpu.complete_bus_cycle(fetch.id, Some(0x76)),
             Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x76, .. })
         ));
+        assert_eq!(cpu.export_state(), before);
+        assert_eq!(cpu.pending_request(), Some(fetch));
     }
 
     #[test]
