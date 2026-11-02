@@ -461,14 +461,15 @@ impl Z80MicroSequencer {
         phase: Z80MicroSequencerPhase,
         address: u16,
     ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
-        self.mcycle_index = self
+        let next_mcycle_index = self
             .mcycle_index
             .checked_add(1)
             .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
-        self.tstate_index = 0;
         let request = self
             .handshake
             .begin(Z80BusOperation::MemoryRead, address, 3)?;
+        self.mcycle_index = next_mcycle_index;
+        self.tstate_index = 0;
         self.phase = phase;
         Ok(Z80MicroStep::BusRequest(request))
     }
@@ -478,14 +479,15 @@ impl Z80MicroSequencer {
         address: u16,
         value: u8,
     ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
-        self.mcycle_index = self
+        let next_mcycle_index = self
             .mcycle_index
             .checked_add(1)
             .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
-        self.tstate_index = 0;
         let request = self
             .handshake
             .begin(Z80BusOperation::MemoryWrite { value }, address, 3)?;
+        self.mcycle_index = next_mcycle_index;
+        self.tstate_index = 0;
         self.phase = Z80MicroSequencerPhase::MemoryWrite;
         Ok(Z80MicroStep::BusRequest(request))
     }
@@ -954,6 +956,31 @@ mod tests {
             (cpu.export_state().mcycle_index, cpu.export_state().tstate_index),
             (0, 0)
         );
+    }
+
+    #[test]
+    fn failed_bus_request_allocation_does_not_advance_mcycle_index() {
+        let mut cpu = Z80MicroSequencer::default();
+        let mut state = cpu.export_state();
+        state.handshake.next_request_id = u64::MAX;
+        cpu = Z80MicroSequencer::restore_state(state).unwrap();
+
+        assert_eq!(
+            cpu.issue_read(Z80MicroSequencerPhase::OpcodeFetch, 0x1234),
+            Err(Z80MicroSequencerError::Handshake(
+                crate::Z80BusHandshakeError::RequestIdExhausted
+            ))
+        );
+        assert_eq!((cpu.mcycle_index, cpu.tstate_index), (0, 0));
+
+        assert_eq!(
+            cpu.issue_write(0x1234, 0x56),
+            Err(Z80MicroSequencerError::Handshake(
+                crate::Z80BusHandshakeError::RequestIdExhausted
+            ))
+        );
+        assert_eq!((cpu.mcycle_index, cpu.tstate_index), (0, 0));
+        assert!(cpu.pending_request().is_none());
     }
 
     #[test]
