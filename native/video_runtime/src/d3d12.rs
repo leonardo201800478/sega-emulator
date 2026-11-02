@@ -5,11 +5,12 @@
 //! fence lifecycle. The first presentation path emits a synthetic color-bar
 //! frame; uploading emulator VideoFrame pixels is a subsequent milestone.
 
+use core::fmt;
 use core::mem::ManuallyDrop;
 use core::ptr::null_mut;
 use std::slice;
 
-use super::{PixelFormat, VideoFrame};
+use super::{FrameMailbox, FrameMailboxError, PixelFormat, VideoFrame};
 
 use windows::Win32::Foundation::{CloseHandle, HANDLE, HINSTANCE, HWND, RECT};
 use windows::Win32::Graphics::Direct3D::D3D_FEATURE_LEVEL_11_0;
@@ -177,6 +178,33 @@ fn transition_barrier(
                 StateAfter: after,
             }),
         },
+    }
+}
+
+/// Error returned when consuming a frame mailbox for D3D12 presentation.
+#[derive(Debug)]
+pub enum MailboxPresentError {
+    /// The frame mailbox rejected the consumer operation.
+    Mailbox(FrameMailboxError),
+    /// The D3D12 upload or presentation operation failed.
+    Graphics(windows::core::Error),
+}
+
+impl fmt::Display for MailboxPresentError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Mailbox(error) => write!(formatter, "frame mailbox error: {error}"),
+            Self::Graphics(error) => write!(formatter, "D3D12 presentation error: {error}"),
+        }
+    }
+}
+
+impl std::error::Error for MailboxPresentError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Mailbox(error) => Some(error),
+            Self::Graphics(error) => Some(error),
+        }
     }
 }
 
@@ -526,6 +554,30 @@ impl D3d12Host {
         }
 
         Ok(())
+    }
+
+    /// Consume and present the newest pending frame from a Rust mailbox.
+    ///
+    /// Call this from the dedicated render thread after pumping the HWND
+    /// message queue. The mailbox lock is released before any GPU wait, upload
+    /// or Present call. It must not be called by the emulation/Scheduler thread.
+    ///
+    /// Returns the presented frame sequence, or None when no frame is pending.
+    pub fn present_latest_from_mailbox(
+        &mut self,
+        mailbox: &FrameMailbox,
+    ) -> Result<Option<u64>, MailboxPresentError> {
+        let Some(frame) = mailbox
+            .take_latest()
+            .map_err(MailboxPresentError::Mailbox)?
+        else {
+            return Ok(None);
+        };
+
+        let sequence = frame.sequence();
+        self.present_frame(&frame)
+            .map_err(MailboxPresentError::Graphics)?;
+        Ok(Some(sequence))
     }
 
     /// Upload and present one immutable emulator frame.
