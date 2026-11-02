@@ -27,15 +27,11 @@ A implementação cobre somente as fases que o sequenciador já expõe: M1 opcod
 - [x] Snapshot binário versionado carrega índices e valida endereço/payload esperados da escrita pendente.
 - [x] Testes de sequência, WAIT e snapshot para M1/M2/M3, incluindo rejeição de payload de escrita adulterado e round-trip do codec.
 - [x] Teste de atomicidade da conclusão quando a alocação da próxima requisição falha.
-- [x] `cargo fmt --all -- --check`, Clippy `-D warnings`, `cargo test --workspace --locked`, pytest, Ruff check e Ruff format no SHA `e782614b50db857c7333d82982de3f3a43bfdf3d` (CI #3517).
-- [x] Windows x64 D3D12/video-runtime e WASAPI/XAudio2/audio-output tests; Scheduler deterministic stress short (CI #3517).
+- [x] `cargo fmt --all -- --check`, Clippy `-D warnings`, `cargo test --workspace --locked`, pytest, Ruff check e Ruff format no SHA `9a92386c1bb923d0e5bcf8486f7cb88eeec5a6cf` (CI #3524; quatro jobs PASS).
+- [x] Windows x64 D3D12/video-runtime e WASAPI/XAudio2/audio-output tests; Scheduler deterministic stress (CI #3524).
 - [ ] Aprovação técnica independente do Agente 2 para o HEAD final e integração por PR; não declarar `TEMPORAL_PASS`.
-## Pendência P2 identificada na reauditoria
-
-O restore de `MemoryWrite` ainda não valida o payload esperado para `LD (HL),n` (opcode `0x36`) e `INC/DEC (HL)` (opcodes `0x34/0x35`). A fase `MemoryWrite` não preserva o imediato nem o resultado calculado necessário para reconstruir esse valor; atualmente, o restore aceita qualquer `MemoryWrite { value }` nesses três casos. É necessário preservar o valor esperado na continuação, validar o payload exato e acrescentar testes negativos no restore DTO e no round-trip do codec binário. **P2 aberto; PR não aprovada.**
-
 ## Evidência de CI
 
-- Baseline pré-correção validada: SHA `35aa9292e423f4313ba7a0ddee5b805fc2f87450`.
-- GitHub Actions: [run `41531640745`](https://github.com/leonardo201800478/sega-emulator/actions/runs/41531640745) — quatro jobs concluídos com PASS: Rust quality/unit regression, Python lint/regression, Windows x64 D3D12 + WASAPI/XAudio2 e Scheduler deterministic stress.
-- Execução local: NOT RUN. A branch inclui follow-up para validar payload de escrita e manter o timestamp inicial do ciclo interno; os checks do HEAD resultante da PR são a evidência final de integração.
+- HEAD de código auditado: `9a92386c1bb923d0e5bcf8486f7cb88eeec5a6cf`.
+- GitHub Actions: [CI #3524 / run `41532813264`](https://github.com/leonardo201800478/sega-emulator/actions/runs/41532813264) — quatro jobs concluídos com PASS: Rust quality/unit regression, Python lint/regression, Windows x64 D3D12 compile e Scheduler deterministic stress.
+- O follow-up acrescenta teste negativo do codec binário com CRC válido para payload de escrita adulterado. O CI desse teste e do HEAD final está pendente; execução local: NOT RUN.
