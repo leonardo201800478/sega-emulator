@@ -128,10 +128,13 @@ impl Z80MicroSequencer {
                     0x3E => self.issue_read(InstructionPhase::ImmediateRead, self.registers.pc),
                     0x7E => self.issue_read(InstructionPhase::MemoryRead, self.registers.hl()),
                     0x77 => self.issue_write(self.registers.hl(), self.registers.a),
-                    _ => Err(Z80MicroSequencerError::UnsupportedOpcode {
-                        opcode,
-                        address: self.registers.pc.wrapping_sub(1),
-                    }),
+                    _ => {
+                        let address = self.registers.pc.wrapping_sub(1);
+                        self.phase = InstructionPhase::Ready;
+                        self.opcode = None;
+                        self.instruction_tstates = 0;
+                        Err(Z80MicroSequencerError::UnsupportedOpcode { opcode, address })
+                    },
                 }
             }
             InstructionPhase::ImmediateRead => {
