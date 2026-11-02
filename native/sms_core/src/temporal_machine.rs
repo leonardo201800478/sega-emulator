@@ -156,6 +156,27 @@ impl SmsTemporalMachine {
         .map(Some)
     }
     /// Schedule the CPU's current pending bus request with fixture WAIT states.
+    /// Describe the currently exposed CPU-internal interval using the shared contract.
+    pub fn pending_internal_transaction(
+        &self,
+    ) -> Result<Option<BusTransaction>, BusContractError> {
+        let state = self.cpu.export_state();
+        if !matches!(state.phase, Z80MicroSequencerPhase::MemoryIncDecInternal { .. }) {
+            return Ok(None);
+        }
+        BusTransaction::new(
+            self.bus.now(),
+            MCycleIndex::new(state.mcycle_index),
+            TStateIndex::new(state.tstate_index),
+            BusPhase::Internal,
+            BusCycleKind::Internal,
+            BusDirection::None,
+            None,
+            None,
+            1,
+        )
+        .map(Some)
+    }
     pub fn schedule_pending_bus(
         &mut self,
         fixture_wait_tstates: u32,
@@ -695,6 +716,28 @@ mod tests {
         assert_eq!(machine.pending_bus_transaction().unwrap(), Some(transaction));
     }
 
+    #[test]
+    fn internal_mcycle_maps_to_shared_temporal_contract() {
+        let mut machine = SmsTemporalMachine::new(vec![0x34; 0x4000], 3).unwrap();
+        machine.cpu_mut().registers.set_hl(0xC000);
+        machine.begin_instruction().unwrap();
+        machine.schedule_pending_bus(0).unwrap();
+        assert!(matches!(machine.dispatch_next().unwrap(), Z80MicroStep::BusRequest(_)));
+        machine.schedule_pending_bus(0).unwrap();
+        assert_eq!(
+            machine.dispatch_next().unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        let transaction = machine.pending_internal_transaction().unwrap().unwrap();
+        assert_eq!(transaction.cycle_index(), MCycleIndex::new(2));
+        assert_eq!(transaction.t_state_index(), TStateIndex::new(0));
+        assert_eq!(transaction.phase(), BusPhase::Internal);
+        assert_eq!(transaction.kind(), BusCycleKind::Internal);
+        assert_eq!(transaction.direction(), BusDirection::None);
+        assert_eq!(transaction.address(), None);
+        assert_eq!(transaction.data(), None);
+        assert_eq!(transaction.duration_tstates(), 1);
+    }
     #[test]
     fn supported_microsequencer_slice_matches_atomic_reference() {
         assert_atomic_differential(&[0x00], 0, 0, 0, 0, 0x00);
