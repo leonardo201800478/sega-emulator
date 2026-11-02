@@ -34,4 +34,4 @@ A implementação cobre somente as fases que o sequenciador já expõe: M1 opcod
 
 - HEAD de código auditado: `9a92386c1bb923d0e5bcf8486f7cb88eeec5a6cf`.
 - GitHub Actions: [CI #3524 / run `41532813264`](https://github.com/leonardo201800478/sega-emulator/actions/runs/41532813264) — quatro jobs concluídos com PASS: Rust quality/unit regression, Python lint/regression, Windows x64 D3D12 compile e Scheduler deterministic stress.
-- O follow-up acrescenta teste negativo do codec binário com CRC válido para payload de escrita adulterado. O CI desse teste e do HEAD final está pendente; execução local: NOT RUN.
+- Follow-up de regressão: `codec_rejects_pending_write_payload_mismatch_with_valid_checksum` altera o payload binário mantendo CRC32 válido e exige `InvalidState`, provando a rejeição semântica. O HEAD candidato que contém esse teste e a documentação reconciliada está aguardando CI; execução local: NOT RUN.
