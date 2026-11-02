@@ -710,9 +710,15 @@ mod tests {
         assert_eq!(transaction.address(), Some(0));
         assert_eq!(transaction.data(), None);
         assert_eq!(transaction.duration_tstates(), 4);
-        assert_eq!(machine.pending_bus_transaction().unwrap(), Some(transaction));
+        assert_eq!(
+            machine.pending_bus_transaction().unwrap(),
+            Some(transaction)
+        );
         machine.schedule_pending_bus(0).unwrap();
-        assert_eq!(machine.pending_bus_transaction().unwrap(), Some(transaction));
+        assert_eq!(
+            machine.pending_bus_transaction().unwrap(),
+            Some(transaction)
+        );
     }
 
     #[test]
