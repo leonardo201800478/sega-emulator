@@ -145,8 +145,11 @@ impl Z80MicroSequencer {
         let pending = handshake.pending_request();
         let valid = match state.phase {
             Z80MicroSequencerPhase::Ready => {
-                pending.is_none() && state.opcode.is_none() && state.instruction_tstates == 0
-                    && state.mcycle_index == 0 && state.tstate_index == 0
+                pending.is_none()
+                    && state.opcode.is_none()
+                    && state.instruction_tstates == 0
+                    && state.mcycle_index == 0
+                    && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::OpcodeFetch => {
                 pending.is_some_and(|request| request.operation == Z80BusOperation::OpcodeFetch)
@@ -333,7 +336,9 @@ impl Z80MicroSequencer {
                 let old = response
                     .data
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
-                self.mcycle_index = self.mcycle_index.checked_add(1)
+                self.mcycle_index = self
+                    .mcycle_index
+                    .checked_add(1)
                     .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
                 self.tstate_index = 0;
                 self.phase = Z80MicroSequencerPhase::MemoryIncDecInternal {
@@ -456,7 +461,9 @@ impl Z80MicroSequencer {
         phase: Z80MicroSequencerPhase,
         address: u16,
     ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
-        self.mcycle_index = self.mcycle_index.checked_add(1)
+        self.mcycle_index = self
+            .mcycle_index
+            .checked_add(1)
             .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
         self.tstate_index = 0;
         let request = self
@@ -915,21 +922,36 @@ mod tests {
     fn inc_hl_exposes_stable_mcycle_positions_across_bus_and_internal_phases() {
         let mut cpu = Z80MicroSequencer::default();
         let fetch = request(cpu.begin_instruction().unwrap());
-        assert_eq!((cpu.export_state().mcycle_index, cpu.export_state().tstate_index), (0, 0));
+        assert_eq!(
+            (cpu.export_state().mcycle_index, cpu.export_state().tstate_index),
+            (0, 0)
+        );
 
         let read = request(cpu.complete_bus_cycle(fetch.id, Some(0x34)).unwrap());
-        assert_eq!((cpu.export_state().mcycle_index, cpu.export_state().tstate_index), (1, 0));
+        assert_eq!(
+            (cpu.export_state().mcycle_index, cpu.export_state().tstate_index),
+            (1, 0)
+        );
 
         assert_eq!(
             cpu.complete_bus_cycle(read.id, Some(0x7F)).unwrap(),
             Z80MicroStep::InternalCycle { tstates: 1 }
         );
-        assert_eq!((cpu.export_state().mcycle_index, cpu.export_state().tstate_index), (2, 0));
+        assert_eq!(
+            (cpu.export_state().mcycle_index, cpu.export_state().tstate_index),
+            (2, 0)
+        );
 
         let write = request(cpu.complete_internal_cycle().unwrap());
-        assert_eq!((cpu.export_state().mcycle_index, cpu.export_state().tstate_index), (3, 0));
+        assert_eq!(
+            (cpu.export_state().mcycle_index, cpu.export_state().tstate_index),
+            (3, 0)
+        );
         retired(cpu.complete_bus_cycle(write.id, None).unwrap(), 0x34, 11);
-        assert_eq!((cpu.export_state().mcycle_index, cpu.export_state().tstate_index), (0, 0));
+        assert_eq!(
+            (cpu.export_state().mcycle_index, cpu.export_state().tstate_index),
+            (0, 0)
+        );
     }
 
     #[test]
