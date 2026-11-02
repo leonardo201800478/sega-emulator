@@ -468,6 +468,57 @@ mod tests {
     }
 
     #[test]
+    fn codec_rejects_pending_write_payload_mismatch_with_valid_checksum() {
+        let mut cpu = Z80MicroSequencer::default();
+        let fetch = match cpu.begin_instruction().unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected opcode fetch, got {other:?}"),
+        };
+        let operand = match cpu.complete_bus_cycle(fetch.id, Some(0x36)).unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected immediate read, got {other:?}"),
+        };
+        let write = match cpu.complete_bus_cycle(operand.id, Some(0xA5)).unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected memory write, got {other:?}"),
+        };
+        assert_eq!(
+            write.operation,
+            crate::Z80BusOperation::MemoryWrite { value: 0xA5 }
+        );
+
+        let mut encoded = cpu.export_state().encode().unwrap();
+        const FRAME_HEADER_LEN: usize = 14;
+        let body_len = u32::from_be_bytes(
+            encoded[10..FRAME_HEADER_LEN]
+                .try_into()
+                .expect("encoded frame contains body length"),
+        ) as usize;
+        let checksum_offset = FRAME_HEADER_LEN + body_len;
+
+        // Walk the canonical body to the pending operation payload instead of
+        // relying on a magic absolute offset in the serialized frame.
+        let mut reader = Reader::new(&encoded[FRAME_HEADER_LEN..checksum_offset]);
+        reader.take(23).unwrap(); // registers, refresh and M/T counters
+        reader.take(2).unwrap(); // opcode option tag and opcode
+        super::read_phase(&mut reader).unwrap();
+        reader.u64().unwrap(); // next request ID
+        assert_eq!(reader.u8().unwrap(), 1); // pending request present
+        reader.u64().unwrap(); // pending request ID
+        assert_eq!(reader.u8().unwrap(), 2); // MemoryWrite operation tag
+        encoded[FRAME_HEADER_LEN + reader.offset] = 0x5A;
+
+        let checksum = super::crc32(&encoded[FRAME_HEADER_LEN..checksum_offset]);
+        encoded[checksum_offset..checksum_offset + 4]
+            .copy_from_slice(&checksum.to_be_bytes());
+
+        assert_eq!(
+            Z80MicroSequencerState::decode(&encoded),
+            Err(Z80MicroSequencerStateCodecError::InvalidState)
+        );
+    }
+
+    #[test]
     fn codec_rejects_corruption_truncation_and_trailing_data() {
         let state = Z80MicroSequencer::default().export_state();
         let encoded = state.encode().unwrap();
