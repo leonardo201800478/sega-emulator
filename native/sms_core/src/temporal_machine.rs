@@ -393,6 +393,27 @@ mod tests {
     }
 
     #[test]
+    fn integrated_snapshot_restores_scheduled_internal_cycle_and_pending_write() {
+        let mut machine = SmsTemporalMachine::new(vec![0x34; 0x4000], 3).unwrap();
+        machine.cpu_mut().registers.set_hl(0xC000);
+        machine.begin_instruction().unwrap();
+        machine.schedule_pending_bus(0).unwrap();
+        let read = machine.dispatch_next().unwrap();
+        assert!(matches!(read, Z80MicroStep::BusRequest(_)));
+        machine.schedule_pending_bus(0).unwrap();
+        assert_eq!(
+            machine.dispatch_next().unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        machine.schedule_internal_cycle(1).unwrap();
+
+        let mut restored = SmsTemporalMachine::restore_state(machine.export_state()).unwrap();
+        retired(restored.resume_instruction(0).unwrap(), 0x34, 11);
+        assert_eq!(restored.memory().read(0xC000), 1);
+        assert_eq!(restored.now(), MachineTime::from_ticks(33));
+    }
+
+    #[test]
     fn fixture_wait_is_counted_in_cpu_tstates_and_machine_time() {
         let mut machine = SmsTemporalMachine::new(vec![0x3E, 0x42], 3).unwrap();
         retired(machine.step_instruction(1).unwrap(), 0x3E, 9);
