@@ -47,6 +47,15 @@ fn valid_internal_deadline(
     elapsed_tstates(started_at, deadline, master_ticks_per_tstate).is_some()
 }
 
+fn is_supported_memory_operation(operation: Z80BusOperation) -> bool {
+    matches!(
+        operation,
+        Z80BusOperation::OpcodeFetch
+            | Z80BusOperation::MemoryRead
+            | Z80BusOperation::MemoryWrite { .. }
+    )
+}
+
 /// One memory-bus response latched at its scheduler deadline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Sg1000BusCompletion {
@@ -176,12 +185,7 @@ impl Sg1000TemporalBus {
         {
             return Err(Sg1000TemporalBusError::Busy);
         }
-        if !matches!(
-            request.operation,
-            Z80BusOperation::OpcodeFetch
-                | Z80BusOperation::MemoryRead
-                | Z80BusOperation::MemoryWrite { .. }
-        ) {
+        if !is_supported_memory_operation(request.operation) {
             return Err(Sg1000TemporalBusError::UnsupportedOperation);
         }
         let started_at = self.coordinator.now();
@@ -334,6 +338,10 @@ impl Sg1000TemporalBus {
         self.coordinator.now()
     }
 
+    pub const fn master_ticks_per_tstate(&self) -> u64 {
+        self.coordinator.master_ticks_per_tstate()
+    }
+
     pub const fn memory(&self) -> &Sg1000Memory {
         &self.memory
     }
@@ -381,7 +389,8 @@ impl Sg1000TemporalBus {
         ) {
             (None, None, None, None, None, None) if pending_events.is_empty() => {}
             (Some(request), Some(started_at), None, None, None, None)
-                if pending_events.len() == 1
+                if is_supported_memory_operation(request.operation)
+                    && pending_events.len() == 1
                     && pending_events[0].payload
                         == (Sg1000TemporalEvent::BusCompletion {
                             request_id: request.id,
@@ -395,7 +404,8 @@ impl Sg1000TemporalBus {
                         request.base_tstates,
                     ) => {}
             (Some(request), Some(started_at), Some(completion), None, None, None)
-                if request.id == completion.request_id
+                if is_supported_memory_operation(request.operation)
+                    && request.id == completion.request_id
                     && pending_events.is_empty()
                     && completion.completed_at == now
                     && last_dispatch == Some(completion.completed_at)
@@ -548,7 +558,9 @@ mod tests {
         dispatch_write(&mut bus, 5, 0xC000, 0x5C, 0);
         assert_eq!(bus.memory().read(0xC000), 0x5C);
         assert_eq!(bus.memory().read(0xE000), 0x5C);
-        assert_eq!(bus.memory().read(0xBFFF), 0xA7);
+        dispatch_write(&mut bus, 6, 0xBFFF, 0x3C, 0);
+        assert_eq!(bus.memory().read(0xBFFF), 0x3C);
+        assert_eq!(bus.memory().read(0x87FF), 0x3C);
     }
 
     #[test]
@@ -589,6 +601,30 @@ mod tests {
         );
         bus.acknowledge_internal_completion(7).unwrap();
         assert!(bus.dispatch_next().unwrap().is_none());
+    }
+
+    #[test]
+    fn port_requests_are_rejected_without_scheduling() {
+        let mut bus = Sg1000TemporalBus::new(vec![0x00], MemoryConfig::default(), 2).unwrap();
+        let before = bus.export_state();
+        assert_eq!(
+            bus.begin_request(request(10, Z80BusOperation::PortRead, 0x00DC, 4), 0),
+            Err(Sg1000TemporalBusError::UnsupportedOperation)
+        );
+        assert_eq!(bus.export_state(), before);
+    }
+
+    #[test]
+    fn restore_rejects_a_port_operation_in_a_memory_transaction_snapshot() {
+        let mut bus = Sg1000TemporalBus::new(vec![0x00], MemoryConfig::default(), 2).unwrap();
+        bus.begin_request(request(11, Z80BusOperation::MemoryRead, 0x0000, 4), 0)
+            .unwrap();
+        let mut state = bus.export_state();
+        state.pending_request.as_mut().unwrap().operation = Z80BusOperation::PortRead;
+        assert_eq!(
+            Sg1000TemporalBus::restore_state(state).err(),
+            Some(Sg1000TemporalBusError::InvalidState)
+        );
     }
 
     #[test]

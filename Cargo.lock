@@ -47,7 +47,9 @@ version = "0.1.0"
 name = "sega-sg1000-core"
 version = "0.1.0"
 dependencies = [
+ "sega-machine-scheduler",
  "sega-sn76489",
+ "sega-temporal-core",
  "sega-z80-cpu",
 ]
 
