@@ -432,7 +432,10 @@ mod tests {
             crate::Z80BusOperation::MemoryWrite { value: 0x80 }
         );
         assert_eq!(
-            (restored.export_state().mcycle_index, restored.export_state().tstate_index),
+            (
+                restored.export_state().mcycle_index,
+                restored.export_state().tstate_index
+            ),
             (2, 0)
         );
     }
