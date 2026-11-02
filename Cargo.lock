@@ -11,10 +11,6 @@ name = "sega-input-runtime"
 version = "0.1.0"
 
 [[package]]
-name = "sega-sms-vdp"
-version = "0.1.0"
-
-[[package]]
 name = "sega-sg1000-core"
 version = "0.1.0"
 
