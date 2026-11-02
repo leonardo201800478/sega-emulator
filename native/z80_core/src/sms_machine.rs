@@ -324,6 +324,17 @@ mod tests {
     use super::*;
 
     #[test]
+    fn sms_sprite_limit_can_be_toggled_through_native_binding() {
+        let mut machine =
+            NativeSMSMachine::new(vec![0; 0x4000], false, Some("usa"), None).unwrap();
+        assert!(machine.sprite_limit_enabled());
+        machine.set_sprite_limit_enabled(false);
+        assert!(!machine.sprite_limit_enabled());
+        machine.set_sprite_limit_enabled(true);
+        assert!(machine.sprite_limit_enabled());
+    }
+
+    #[test]
     fn sms_adapter_uses_native_psg_and_reports_configured_clock() {
         let machine = NativeSMSMachine {
             machine: build_sms_machine(vec![0; 16], false, Some("usa"), None).unwrap(),
