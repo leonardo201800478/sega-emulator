@@ -157,13 +157,20 @@ impl Z80MicroSequencer {
             }
             Z80MicroSequencerPhase::ImmediateReadRegister { .. }
             | Z80MicroSequencerPhase::ImmediateReadMemoryWrite
-            | Z80MicroSequencerPhase::MemoryReadRegister { .. }
-            | Z80MicroSequencerPhase::MemoryReadIncDec { .. } => {
+            | Z80MicroSequencerPhase::MemoryReadRegister { .. } => {
                 pending.is_some_and(|request| request.operation == Z80BusOperation::MemoryRead)
                     && state.opcode.is_some()
             }
-            Z80MicroSequencerPhase::MemoryIncDecInternal { .. } => {
-                pending.is_none() && state.opcode.is_some()
+            Z80MicroSequencerPhase::MemoryReadIncDec { decrement, .. } => {
+                let expected_opcode = if decrement { 0x35 } else { 0x34 };
+                pending.is_some_and(|request| request.operation == Z80BusOperation::MemoryRead)
+                    && state.opcode == Some(expected_opcode)
+            }
+            Z80MicroSequencerPhase::MemoryIncDecInternal { decrement, .. } => {
+                let expected_opcode = if decrement { 0x35 } else { 0x34 };
+                pending.is_none()
+                    && state.opcode == Some(expected_opcode)
+                    && state.instruction_tstates >= 4 + u32::from(state.tstate_index)
             }
             Z80MicroSequencerPhase::MemoryWrite => {
                 pending.is_some_and(|request| {
@@ -187,9 +194,20 @@ impl Z80MicroSequencer {
                     && matches!(state.opcode, Some(0x34 | 0x35))
             }
             Z80MicroSequencerPhase::MemoryWrite => match state.opcode {
-                Some(0x77) => state.mcycle_index == 1 && state.tstate_index == 0,
-                Some(0x36 | 0x34 | 0x35) => {
-                    state.mcycle_index == 2 && state.tstate_index == 0
+                Some(0x77) => {
+                    state.mcycle_index == 1
+                        && state.tstate_index == 0
+                        && state.instruction_tstates >= 4
+                }
+                Some(0x36) => {
+                    state.mcycle_index == 2
+                        && state.tstate_index == 0
+                        && state.instruction_tstates >= 7
+                }
+                Some(0x34 | 0x35) => {
+                    state.mcycle_index == 2
+                        && state.tstate_index == 0
+                        && state.instruction_tstates >= 8
                 }
                 _ => false,
             },
@@ -1028,6 +1046,25 @@ mod tests {
         let mut state = cpu.export_state();
         state.mcycle_index = u32::MAX;
 
+        assert_eq!(
+            Z80MicroSequencer::restore_state(state),
+            Err(Z80MicroSequencerError::InvalidState)
+        );
+    }
+
+    #[test]
+    fn restore_rejects_internal_tstate_offset_ahead_of_elapsed_time() {
+        let mut cpu = Z80MicroSequencer::default();
+        let fetch = request(cpu.begin_instruction().unwrap());
+        let read = request(cpu.complete_bus_cycle(fetch.id, Some(0x34)).unwrap());
+        assert_eq!(
+            cpu.complete_bus_cycle(read.id, Some(0x7F)).unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+
+        let mut state = cpu.export_state();
+        state.tstate_index = 4;
+        assert_eq!(state.instruction_tstates, 7);
         assert_eq!(
             Z80MicroSequencer::restore_state(state),
             Err(Z80MicroSequencerError::InvalidState)
