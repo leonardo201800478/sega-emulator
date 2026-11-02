@@ -59,4 +59,4 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Compile native video runtime for Windows x64
-        run: cargo check --locked -p sega-video-runtime --target x86_64-pc-windows-msvc
+        run: cargo check --locked --all-targets -p sega-video-runtime --target x86_64-pc-windows-msvc
