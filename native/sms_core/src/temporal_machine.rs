@@ -606,8 +606,13 @@ mod tests {
     fn supported_microsequencer_slice_matches_atomic_reference() {
         assert_atomic_differential(&[0x00], 0, 0, 0, 0, 0x00);
         assert_atomic_differential(&[0x3E, 0x42], 0, 0, 0, 0, 0x3E);
+        assert_atomic_differential(&[0x36, 0xA5], 0, 0, 0xC000, 0, 0x36);
+        assert_atomic_differential(&[0x7E], 0, 0, 0xC000, 0xA5, 0x7E);
         assert_atomic_differential(&[0x77], 0x5A, 0, 0xC000, 0, 0x77);
-        assert_atomic_differential(&[0x34], 0, 0, 0xC000, 0x7F, 0x34);
+        assert_atomic_differential(&[0x78], 0x33, 0, 0, 0, 0x78);
+        assert_atomic_differential(&[0x04], 0, 0x01, 0, 0, 0x04);
+        assert_atomic_differential(&[0x34], 0, 0x01, 0xC000, 0x7F, 0x34);
+        assert_atomic_differential(&[0x35], 0, 0x01, 0xC000, 0x80, 0x35);
     }
 
     #[test]
