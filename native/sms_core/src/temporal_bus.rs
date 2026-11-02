@@ -7,8 +7,8 @@
 use core::fmt;
 
 use crate::{
-    CartridgeImage, SmsCoreError, SmsMemory, SmsTemporalCoordinator,
-    SmsTemporalCoordinatorError, SmsTemporalCoordinatorState, SmsTemporalEvent,
+    CartridgeImage, SmsCoreError, SmsMemory, SmsTemporalCoordinator, SmsTemporalCoordinatorError,
+    SmsTemporalCoordinatorState, SmsTemporalEvent,
 };
 use sega_temporal_core::MachineTime;
 use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
@@ -65,7 +65,9 @@ impl fmt::Display for SmsTemporalBusError {
         match self {
             Self::Core(error) => write!(f, "SMS memory initialization failed: {error}"),
             Self::Coordinator(error) => write!(f, "SMS temporal coordinator failed: {error}"),
-            Self::Busy => f.write_str("SMS temporal bus already owns an unacknowledged transaction"),
+            Self::Busy => {
+                f.write_str("SMS temporal bus already owns an unacknowledged transaction")
+            }
             Self::NoPendingRequest => f.write_str("SMS temporal bus has no pending request"),
             Self::WrongRequestId { expected, received } => write!(
                 f,
@@ -176,9 +178,7 @@ impl SmsTemporalBus {
     ///
     /// A read samples memory at this completion boundary. A write mutates memory
     /// at this completion boundary. The response is latched until acknowledged.
-    pub fn dispatch_next(
-        &mut self,
-    ) -> Result<Option<SmsTemporalDispatch>, SmsTemporalBusError> {
+    pub fn dispatch_next(&mut self) -> Result<Option<SmsTemporalDispatch>, SmsTemporalBusError> {
         let Some(dispatch) = self.coordinator.dispatch_next()? else {
             return Ok(None);
         };
@@ -334,8 +334,7 @@ mod tests {
         let mut bus = SmsTemporalBus::new(vec![0xA5; 0x4000], 3).unwrap();
         let request = request(1, Z80BusOperation::MemoryRead, 0x0100, 3);
         bus.begin_request(request, 2).unwrap();
-        let SmsTemporalDispatch::BusCompletion(completion) =
-            bus.dispatch_next().unwrap().unwrap()
+        let SmsTemporalDispatch::BusCompletion(completion) = bus.dispatch_next().unwrap().unwrap()
         else {
             panic!("expected bus completion");
         };
@@ -351,12 +350,7 @@ mod tests {
     #[test]
     fn memory_write_occurs_only_at_its_scheduled_completion() {
         let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
-        let request = request(
-            2,
-            Z80BusOperation::MemoryWrite { value: 0x5A },
-            0xC000,
-            3,
-        );
+        let request = request(2, Z80BusOperation::MemoryWrite { value: 0x5A }, 0xC000, 3);
         bus.begin_request(request, 0).unwrap();
         assert_eq!(bus.memory().read(0xC000), 0);
         let SmsTemporalDispatch::BusCompletion(completion) = bus.dispatch_next().unwrap().unwrap() else { panic!("expected bus completion"); };
@@ -369,22 +363,18 @@ mod tests {
     #[test]
     fn snapshot_restore_preserves_pending_transaction_before_effect() {
         let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
-        let request = request(
-            3,
-            Z80BusOperation::MemoryWrite { value: 0x77 },
-            0xC001,
-            3,
-        );
+        let request = request(3, Z80BusOperation::MemoryWrite { value: 0x77 }, 0xC001, 3);
         bus.begin_request(request, 1).unwrap();
         let mut restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
         assert_eq!(restored.memory().read(0xC001), 0);
-        let SmsTemporalDispatch::BusCompletion(completion) =
-            restored.dispatch_next().unwrap().unwrap()
+        let SmsTemporalDispatch::BusCompletion(completion) = restored.dispatch_next().unwrap().unwrap()
         else {
             panic!("expected bus completion");
         };
         assert_eq!(restored.memory().read(0xC001), 0x77);
-        restored.acknowledge_completion(completion.request_id).unwrap();
+        restored
+            .acknowledge_completion(completion.request_id)
+            .unwrap();
     }
 
     #[test]
