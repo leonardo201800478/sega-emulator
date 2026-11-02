@@ -4,9 +4,9 @@
 - **Data:** 2026-11-02.
 - **Base:** PR #360, head `b2079083d5e19ac1b1936ba98cf40ae98c7b7f9b`.
 - **Branch desta ADR:** `docs/adr-0015-sms-z80-bus-temporal-contract`.
-- **Dependências:** ADR-0010, ADR-0012, ADR-0013, ADR-0014 e `docs/architecture/z80-temporal-bus-model.md`.
-- **Escopo:** primeira fronteira de integração temporal do SMS, com foco no Z80, bus adapter e compatibilidade com a timeline genérica.
-- **Não faz:** implementar CPU retomável, arbitrar o barramento, alterar timing VDP/PSG, adicionar sub-tick dispatch ou declarar `TEMPORAL_PASS`.
+- **Dependências:** ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0014, `docs/architecture/z80-temporal-bus-model.md` e `docs/architecture/sms-vdp-cycle-accurate-design.md` (arquitetura-alvo em revisão na PR #342).
+- **Escopo:** contrato da integração temporal do SMS entre Z80, bus adapter, Machine Scheduler e o **novo VDP temporal em construção**, conforme a arquitetura aprovada na ADR-0011 e detalhada na PR #342.
+- **Não faz:** integrar o Z80 ao VDP legado `native/sms_core/src/vdp.rs`, tratá-lo como destino temporal, implementar CPU retomável, arbitrar o barramento, fixar timing sem evidência, adicionar sub-tick dispatch ou declarar `TEMPORAL_PASS`.
 
 ## 1. Contexto e estado remoto
 
@@ -22,7 +22,7 @@ A stack de infraestrutura temporal está em revisão e não foi integrada à `ma
 
 O Scheduler atual fornece timeline inteira, domínios racionais, preservação de fase, ordenação determinística, snapshot/restore, codec e replay nos cenários cobertos. `ClockEdgeTime` calcula posições racionais de borda, mas `EventQueue` despacha em `MachineTime` inteiro. `HardwarePhase` e `PlatformPriority` são dimensões ordinais de ordenação, não instantes físicos ou fases elétricas.
 
-O runtime SMS existente permanece em `native/sms_core` e `native/z80_core`. A implementação Scheduler candidata está em `native/machine_scheduler` na stack #358. Não existe ainda ligação entre os dois.
+O runtime SMS atualmente executável permanece em `native/sms_core` e `native/z80_core`; seu `SmsVdp` scanline-based é o VDP legado e **não é o alvo da integração temporal**. A arquitetura do novo VDP está especificada em `docs/architecture/sms-vdp-cycle-accurate-design.md` (PR #342): `TimingGenerator`, `FetchPipeline`, `SpriteEngine`, `PixelPipeline`, `RegisterFile/latches`, VRAM/CRAM e `InterruptController`, todos sincronizados pelo único Machine Scheduler. A implementação Scheduler candidata está em `native/machine_scheduler` na stack #358. O novo VDP ainda está em construção e não há ligação integrada entre Z80/barramento/Scheduler/novo VDP.
 
 ## 2. Evidência atual no caminho Z80/SMS
 
@@ -44,14 +44,18 @@ O trace cobre endereço/dados e RD/WR/MREQ/IORQ no perfil de observação testad
 
 A instrumentação de instrução JSONL também é observacional e não é um trace completo de transações. Portanto, a primeira implementação não deve criar um segundo mecanismo concorrente de trace: deve inventariar, normalizar e estender os tipos/harness existentes.
 
-### 2.3 SMS Machine, VDP e PSG
+### 2.3 Runtime legado — inventário, não destino
 
-- `SmsMachine::step` executa CPU e depois avança o VDP pela duração agregada retornada.
-- O adaptador SMS aplica as leituras/escritas de memória e portas durante as chamadas síncronas do CPU.
+Os itens abaixo descrevem exclusivamente o runtime legado para localizar os pontos que serão substituídos/desacoplados; não são requisitos a preservar no novo modelo temporal:
+
+- `SmsMachine::step` executa CPU e depois avança o VDP legado pela duração agregada retornada.
+- O adaptador SMS aplica leituras/escritas de memória e portas durante chamadas síncronas do CPU.
 - Writes do PSG entram numa fila com timestamp nominal; a fila é consumida retrospectivamente após a instrução. Isso não equivale a efetivação temporal online.
-- O VDP é um modelo por scanline, com 228 T-states internos por linha; sua própria documentação de código não reivindica precisão por dot.
-- A sincronização VDP→INT é atualizada no avanço do VDP e observada pelo CPU em fronteiras de instrução.
+- `native/sms_core/src/vdp.rs` renderiza por scanline, com 228 T-states internos por linha. A auditoria documenta ausência de fetch pipeline, pixel stepping, visibilidade intralinha geral e bordas subinstrução de IRQ. Esse modelo é reconhecidamente insuficiente para a integração temporal pretendida.
+- A sincronização VDP→INT legada é atualizada no avanço do VDP e observada pelo CPU em fronteiras de instrução.
 - A fronteira PyO3 ainda expõe `step()` e `run_frame(max_steps)`; não deve ser ampliada com callbacks por transação.
+
+O novo VDP deverá ser implementado conforme a arquitetura temporal dedicada: gerador de raster, fetch pipeline, avaliação/fetch de sprites, pixel pipeline, latches/registradores temporais, VRAM/CRAM e IRQ. A API de saída pode manter compatibilidade com a apresentação existente, mas a implementação scanline legada não será a autoridade de hardware nem receberá as transações temporais do novo Z80.
 
 ### 2.4 Mapper e efeitos colaterais
 
@@ -104,7 +108,8 @@ Nenhuma constante de clock, divisor, fase CPU↔VDP, fase PSG, wait state ou pri
 
 1. **CPU microsequencer:** representa a continuação da instrução, incluindo opcode/prefixos, estado do decoder, micro-op atual e transação pendente.
 2. **SMS bus transaction layer:** traduz a micro-operação em ciclo Z80, resolve memória/I/O/mapper e decide os instantes de amostragem/efetivação conforme o perfil documentado.
-3. **Machine Scheduler:** avança domínios e despacha eventos tipados até limites autorizados. Não conhece instruções, endereços SMS, portas, VDP ou prioridades elétricas.
+3. **Novo SMS VDP temporal:** mantém seu próprio estado de raster/fetch/sprites/pixels/latches/IRQ e anuncia próximos eventos observáveis; não possui scheduler nem clock mestre autônomo.
+4. **Machine Scheduler:** avança domínios e despacha eventos tipados até limites autorizados. Não conhece instruções, endereços SMS, portas, VDP ou prioridades elétricas.
 
 A CPU e o barramento continuam genéricos por monomorfização. Não introduzir `dyn Bus` no hot path e não fazer o Scheduler chamar callbacks arbitrários de dispositivo.
 
@@ -163,7 +168,9 @@ Critério:
 
 A grade inteira comum é preferível se representar exatamente todos os eventos exigidos sem overflow ou denominadores impraticáveis. `ClockEdgeTime` pode ser usado para cálculo e prova; não se deve fingir que ele já é aceito pela EventQueue.
 
-## 6. Interação com ADR-0014 e roadmap existente
+## 6. Integração obrigatória com o novo VDP e interação com ADR-0014
+
+A ADR-0011 e o documento `sms-vdp-cycle-accurate-design.md` estabelecem o novo VDP temporal como arquitetura-alvo: o scanline renderer legado não pode ser a autoridade de raster, fetch, sprite evaluation, pixel output ou IRQ. A nova implementação deve avançar até timestamps solicitados pelo Scheduler e sincronizar antes de aplicar transações CPU/barramento. O Z80 não deve ser conectado ao VDP legado como atalho transitório.
 
 A ADR-0014 estabelece safe points, separação entre Scheduler genérico e perfil/barramento, e sugere uma sequência de integração que inclui um componente simples e o YM2413 antes da CPU.
 
@@ -179,10 +186,10 @@ O pedido de continuidade de 2026-11-02 prioriza agora o desenho da integração 
 | Memória | read/write, stack, RMW | ZiLOG para sequência genérica; SMS para decodificação |
 | I/O | IN/OUT imediato e ED | ZiLOG para TW automático genérico; pinout SMS não prova waits externos |
 | Mapper | write control + primeiro read do banco novo | Teste sintético de bus; hardware timing pendente |
-| VDP status | clear-on-read em fronteira de raster | VDP documentation/medição; emuladores só diferenciais |
+| VDP status | clear-on-read em fronteira de raster | Novo VDP temporal; documentação/medição; emuladores só diferenciais |
 | IRQ/NMI | evento durante instrução, reconhecimento e acknowledge | ZiLOG para Z80 genérico; fonte SMS específica pendente |
-| H/VBlank | evento raster e linha INT | Perfil VDP + trace físico/oráculo independente pendente |
-| PSG | write, fase/divisor e avanço | modelo SN76489 e evidência de clock SMS pendentes |
+| H/VBlank | evento raster e linha INT | TimingGenerator/InterruptController do novo VDP + trace físico/oráculo independente pendente |
+| PSG | write, fase/divisor e avanço | modelo SN76489 e evidência de clock SMS pendentes; não usar o VDP legado como relógio de referência |
 | WAIT | amostragem e repetição TW | ZiLOG genérico + captura de WAIT no SMS necessária |
 | Snapshot | salvar em cada safe point e em transação pendente | comparação com execução contínua |
 | Replay | mesmas entradas/eventos/trace | hash e primeira divergência de evento |
@@ -213,6 +220,7 @@ Cada fatia de runtime exige branch própria, PR Draft, gates completos no SHA ex
 - [ ] Evidência primária ou captura reproduzível para relação de clocks/fases SMS.
 - [ ] Modelo de transação e snapshot revisado, sem API pública prematura.
 - [ ] Plano de testes com oráculos e ancestralidade documentados.
+- [ ] Novo VDP temporal implementado ao menos até os contratos necessários de raster/fetch/IRQ antes da integração da CPU; VDP legado explicitamente excluído do caminho temporal.
 
 **Status atual:** design proposto; nenhuma implementação autorizada por esta ADR. `INTEGRATION_PENDING` permanece. `TEMPORAL_PASS` não declarado.
 
@@ -222,6 +230,8 @@ Cada fatia de runtime exige branch própria, PR Draft, gates completos no SHA ex
 - SMS Power, SMS Cartridge: https://www.smspower.org/Development/SMSCartridge
 - SMS Power, Cartridge Slot: https://www.smspower.org/Development/CartridgeSlot
 - `docs/architecture/z80-temporal-bus-model.md`
+- `docs/architecture/adr/0011-cycle-accurate-temporal-model.md`
+- `docs/architecture/sms-vdp-cycle-accurate-design.md` (PR #342; arquitetura-alvo do novo VDP)
 - `docs/architecture/adr/0014-temporal-device-execution-and-synchronization.md`
 - `docs/architecture/adr/0012-event-ordering-dimensions.md`
 - `docs/architecture/adr/0013-deterministic-scheduler-snapshot-restore.md`
