@@ -67,9 +67,10 @@ pub enum Z80MicroStep {
     InternalCycle { tstates: u32 },
 }
 
-/// Versioned logical state needed to resume the currently implemented sequencer slice.
+/// Logical state needed to resume the currently implemented sequencer slice.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Z80MicroSequencerState {
+    pub format_version: u16,
     pub registers: Z80Registers,
     pub refresh: u8,
     pub handshake: crate::Z80BusHandshakeState,
@@ -100,7 +101,7 @@ impl Default for Z80MicroSequencer {
             registers: Z80Registers::default(),
             refresh: 0,
             handshake: Z80BusHandshake::default(),
-            phase: InstructionPhase::Ready,
+            phase: Z80MicroSequencerPhase::Ready,
             opcode: None,
             instruction_tstates: 0,
         }
@@ -111,6 +112,7 @@ impl Z80MicroSequencer {
     /// Export the complete resumable state without advancing emulated time.
     pub fn export_state(&self) -> Z80MicroSequencerState {
         Z80MicroSequencerState {
+            format_version: Z80_MICRO_SEQUENCER_STATE_VERSION,
             registers: self.registers,
             refresh: self.refresh,
             handshake: self.handshake.export_state(),
@@ -122,6 +124,9 @@ impl Z80MicroSequencer {
 
     /// Restore a resumable state after validating CPU/handshake cross-invariants.
     pub fn restore_state(state: Z80MicroSequencerState) -> Result<Self, Z80MicroSequencerError> {
+        if state.format_version != Z80_MICRO_SEQUENCER_STATE_VERSION {
+            return Err(Z80MicroSequencerError::InvalidState);
+        }
         let handshake = Z80BusHandshake::restore_state(state.handshake)?;
         let pending = handshake.pending_request();
         let valid = match state.phase {
