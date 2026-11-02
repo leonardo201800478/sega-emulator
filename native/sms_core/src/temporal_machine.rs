@@ -189,8 +189,12 @@ impl SmsTemporalMachine {
         ) {
             return Ok(None);
         }
+        let timestamp = self
+            .bus
+            .internal_cycle_started_at()
+            .unwrap_or_else(|| self.bus.now());
         BusTransaction::new(
-            self.bus.now(),
+            timestamp,
             MCycleIndex::new(state.mcycle_index),
             TStateIndex::new(state.tstate_index),
             BusPhase::Internal,
@@ -937,6 +941,32 @@ mod tests {
         assert_eq!(transaction.data(), None);
         assert_eq!(transaction.duration_tstates(), 1);
     }
+    #[test]
+    fn internal_transaction_keeps_start_timestamp_while_completion_is_latched() {
+        let mut machine = SmsTemporalMachine::new(vec![0x34; 0x4000], 3).unwrap();
+        machine.cpu_mut().registers.set_hl(0xC000);
+        machine.begin_instruction().unwrap();
+        machine.schedule_pending_bus(0).unwrap();
+        assert!(matches!(
+            machine.dispatch_next().unwrap(),
+            Z80MicroStep::BusRequest(_)
+        ));
+        machine.schedule_pending_bus(0).unwrap();
+        assert_eq!(
+            machine.dispatch_next().unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+
+        let started_at = machine.now();
+        machine.schedule_internal_cycle(1).unwrap();
+        // Preserve the safe point between Scheduler dispatch and CPU acknowledgement.
+        machine.bus.dispatch_next().unwrap().unwrap();
+        assert!(machine.now() > started_at);
+
+        let transaction = machine.pending_internal_transaction().unwrap().unwrap();
+        assert_eq!(transaction.timestamp(), started_at);
+    }
+
     #[test]
     fn supported_microsequencer_slice_matches_atomic_reference() {
         assert_atomic_differential(&[0x00], 0, 0, 0, 0, 0x00);

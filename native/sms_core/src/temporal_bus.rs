@@ -336,6 +336,11 @@ impl SmsTemporalBus {
         self.request_started_at
     }
 
+    /// Timestamp at which the outstanding internal interval was scheduled.
+    pub const fn internal_cycle_started_at(&self) -> Option<MachineTime> {
+        self.internal_cycle_started_at
+    }
+
     /// Return the latched bus completion, if dispatch has reached its deadline.
     pub const fn completion(&self) -> Option<SmsBusCompletion> {
         self.completion

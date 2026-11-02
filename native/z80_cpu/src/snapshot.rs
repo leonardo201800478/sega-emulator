@@ -207,7 +207,11 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u8(old);
             writer.u16(address);
         }
-        Z80MicroSequencerPhase::MemoryWrite => writer.u8(7),
+        Z80MicroSequencerPhase::MemoryWrite { address, value } => {
+            writer.u8(7);
+            writer.u16(address);
+            writer.u8(value);
+        },
     }
 }
 
@@ -233,7 +237,10 @@ fn read_phase(
             old: reader.u8()?,
             address: reader.u16()?,
         },
-        7 => Z80MicroSequencerPhase::MemoryWrite,
+        7 => Z80MicroSequencerPhase::MemoryWrite {
+            address: reader.u16()?,
+            value: reader.u8()?,
+        },
         tag => return Err(Z80MicroSequencerStateCodecError::InvalidTag(tag)),
     })
 }
@@ -438,6 +445,26 @@ mod tests {
             ),
             (2, 0)
         );
+    }
+
+    #[test]
+    fn pending_memory_write_snapshot_round_trips_captured_address_and_payload() {
+        let mut cpu = Z80MicroSequencer::default();
+        let fetch = match cpu.begin_instruction().unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected opcode fetch, got {other:?}"),
+        };
+        let write = match cpu.complete_bus_cycle(fetch.id, Some(0x77)).unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected memory write, got {other:?}"),
+        };
+        let state = cpu.export_state();
+        let encoded = state.encode().unwrap();
+        let decoded = Z80MicroSequencerState::decode(&encoded).unwrap();
+        assert_eq!(decoded, state);
+
+        let restored = Z80MicroSequencer::restore_state(decoded).unwrap();
+        assert_eq!(restored.pending_request(), Some(write));
     }
 
     #[test]
