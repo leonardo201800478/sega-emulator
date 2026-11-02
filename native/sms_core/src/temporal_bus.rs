@@ -261,6 +261,11 @@ impl SmsTemporalBus {
         self.coordinator.now()
     }
 
+    #[cfg(test)]
+    pub(crate) fn write_memory_for_test(&mut self, address: u16, value: u8) {
+        self.memory.write(address, value);
+    }
+
     /// Read-only access to the mapper-backed memory image.
     pub const fn memory(&self) -> &SmsMemory {
         &self.memory
