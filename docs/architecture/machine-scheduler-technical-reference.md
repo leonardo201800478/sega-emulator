@@ -357,3 +357,58 @@ The Scheduler implementation milestone can be called finalized for integration o
 - the integration contract remains generic and device callbacks remain outside the Scheduler.
 
 Even after this gate, use `INTEGRATION_PENDING` until the machine/device connections are validated. Reserve `TEMPORAL_PASS` for later temporal integration supported by independent oracles. Software determinism alone does not prove cycle accuracy.
+
+
+---
+
+## 12. Current validation state and next integration boundary (2026-11-02)
+
+This section is the current status overlay. Earlier historical SHAs and PR descriptions in this dossier remain useful provenance, but the live PRs and exact-SHA evidence ledger are authoritative.
+
+### 12.1 Consolidated candidate stack
+
+- PR #358 is open, Draft, targets `main`, and is not merged.
+- PR #358 head: `0d8ad97e79ac50c4687e1400dd5bb434ca5f3607`.
+- PR #359 is open, Draft, based on the #358 branch, and is not merged.
+- PR #359 head: `a544fe367f67c1f6c6d622efcdb528e222ab53c3`.
+- The #359 test branch is a dependent stack layer, not an independent candidate against `main`.
+
+### 12.2 Verified CI and stress evidence
+
+For PR #358 head `0d8ad97e79ac50c4687e1400dd5bb434ca5f3607`:
+- Workflow 41378338137 passed the six ordinary Rust/Python gates.
+- Workflow 41379180394 completed the SHORT stress stage (4 × 20,000 = 80,000 events; 512 MiB; 1 test passed), but the overall workflow was cancelled and its Rust workspace test stage did not complete.
+- Workflow 41379203192 completed all jobs successfully, including LONG stress (16 × 250,000 = 4,000,000 events; 2 GiB; 1 stress test passed).
+
+For PR #359 head `a544fe367f67c1f6c6d622efcdb528e222ab53c3`:
+- Workflow 41381005224 passed Rust quality/unit regression and Python lint/regression.
+- The stress job was skipped by the PR workflow condition.
+- The integration test `native/machine_scheduler/tests/multi_domain_replay.rs` verifies integer-timestamp multi-domain advancement, replay/restore, chunk invariance, a fixed dispatch order and atomic overflow handling against an independent arithmetic oracle.
+
+The exact workflow links, caveats and statuses are maintained in `docs/evidence/adr-0013-snapshot-restore-validation.md`.
+
+### 12.3 What the evidence proves—and does not prove
+
+The scheduler stress harness uses direct `MachineTime` event scheduling. It does not model independent device clocks as event producers. The #359 test exercises rational domain advancement through dispatch and idle chunks, but still operates only at integer `MachineTime` boundaries.
+
+Therefore, the current evidence supports deterministic scheduler software behavior for the tested cases. It does **not** establish:
+- rational sub-tick event dispatch;
+- CPU micro-operation or bus-cycle execution;
+- Z80 memory/I/O transaction timestamps;
+- SMS bus arbitration, wait states or VDP contention;
+- VDP/PSG/YM2413 safe-point integration;
+- cycle-accurate SMS execution.
+
+The correct status remains `INTEGRATION_PENDING`; `TEMPORAL_PASS` is not claimed.
+
+### 12.4 Next milestone: SMS temporal integration design
+
+The next work item is an evidence-first design, not immediate device refactoring:
+1. Inspect the current remote SMS implementation and exact issue #158 state.
+2. Trace the real execution path from Z80 instruction stepping through memory/I/O access, VDP/PSG advancement and interrupt handling.
+3. Identify which operations currently advance time in aggregate and which bus effects are visible only after an instruction.
+4. Establish authoritative SMS timing references and independent test oracles before assigning any physical clock ratio, phase or priority.
+5. Define a minimal interface for CPU execution to yield at bus-visible safe points, while leaving the generic scheduler free of Z80/SMS semantics.
+6. Specify deterministic traces and regression criteria for SG-1000 and SMS before implementation.
+
+No timing constant, event phase, bus priority or wait-state rule may be invented to fit the current scheduler API. A design gap requiring sub-tick timestamps must be raised as a separate architectural decision; `HardwarePhase` must not be repurposed as a fractional timestamp.
