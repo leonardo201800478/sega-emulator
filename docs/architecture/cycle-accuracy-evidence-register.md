@@ -160,3 +160,17 @@ A pesquisa complementar e a auditoria de integração foram preservadas em [Audi
 - Portanto, um contador confiável de espaçamento entre escritas ainda não pode ser ligado ao runtime sem primeiro introduzir transações temporais observáveis no Z80/barramento.
 
 **Decisão atual:** não implementar slots, WAIT, perda/corrupção artificial, política Slotted ou contador de violações no runtime. Preservar o comportamento funcional atual; evoluir primeiro os contratos temporais e a instrumentação de barramento. Nenhum TEMPORAL_PASS é declarado.
+
+## 7. SMS1 VDP 315-5124 — T0 characterization (2026-11-02)
+
+Detailed evidence ledger: [SMS1 VDP T0 characterization](../audits/sms1-315-5124-vdp-t0-characterization-2026-11-02.md).
+
+Newly recorded source facts:
+- SMS Power distinguishes ASIC 315-5124 and 315-5246; known primary differences include SMS1 legacy VRAM address-mask behavior and SMS2-only 224/240-line modes. This is COMMUNITY_DOC, not an exhaustive electrical specification.
+- Sega Master System Service Manual lists IC5 pin 30 at 10.738635 MHz ±100 Hz and pin 34 at 3.579545 MHz ±30 Hz. This is PRIMARY_DOC/OCR; it does not establish edge phase, duty cycle, reset phase, or bus arbitration.
+- The Mark III Software Reference Manual documents 16 Z80A T-states between VDP accesses in VBLANK and 29 during active video, R9 latched in VBlank, R10 H-Line interrupt at HBLANK with one-interrupt update delay, and status behavior. The access-rate rule is not proof of automatic Z80 WAIT injection.
+- SMS Power documents 315-5124 address mask bits and the SMS1 sprite horizontal-zoom limitation; timing offsets for evaluation/fetch/overflow/collision remain UNKNOWN.
+
+Scope decision: first new VDP implementation is 315-5124 only. 315-5246 comparison follows later. ASIC identity and NTSC/PAL remain independent dimensions. Do not import Game Gear H-counter ratios/timings into SMS1.
+
+Status: T0_PARTIAL. Documentary evidence supports register/address/functional behavior and test design. It does not yet authorize H-counter offsets, raster phase constants, per-dot fetch schedules, WAIT generation, or simultaneous-event priorities.
