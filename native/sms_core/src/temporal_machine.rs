@@ -80,7 +80,7 @@ fn instruction_timeline_is_valid(state: &SmsTemporalMachineState) -> bool {
         state.bus.pending_internal_cycle,
         state.bus.internal_completion,
     ) {
-        (Some(request), None, None, None) => {
+        (Some(_), None, None, None) => {
             let Some(request_started_at) = state.bus.request_started_at else {
                 return false;
             };
@@ -638,9 +638,13 @@ impl SmsTemporalMachine {
                 return Err(SmsTemporalMachineError::InvalidState);
             }
         }
+        if !instruction_timeline_is_valid(&state) {
+            return Err(SmsTemporalMachineError::InvalidState);
+        }
         Ok(Self {
             cpu,
             bus,
+            instruction_started_at: state.instruction_started_at,
             next_internal_cycle_id: state.next_internal_cycle_id,
             pending_internal_cycle_id: state.pending_internal_cycle_id,
             pending_internal_tstates: state.pending_internal_tstates,
