@@ -390,6 +390,12 @@ mod port_tests {
         vdp.write_control(((code & 3) << 6) | ((address >> 8) as u8 & 0x3F));
     }
 
+    fn assert_second_byte_starts_new_control_word(vdp: &mut Sms1Vdp) {
+        vdp.write_control(0x12);
+        vdp.write_control(0x41);
+        assert_eq!(vdp.address(), 0x0112);
+    }
+
     #[test]
     fn vram_read_uses_prefetch_buffer_and_wraps_at_16_kib() {
         let mut vdp = Sms1Vdp::new(VideoStandard::Ntsc);
@@ -465,13 +471,34 @@ mod port_tests {
     }
 
     #[test]
-    fn data_access_cancels_partial_control_word() {
+    fn sms1_port_001_status_port_read_cancels_partial_control_word() {
         let mut vdp = Sms1Vdp::new(VideoStandard::Ntsc);
         vdp.write_control(0x34);
-        vdp.write_data(0x77);
-        vdp.write_control(0x12);
+
+        assert_eq!(vdp.read_port(0xBF), 0);
+        assert_second_byte_starts_new_control_word(&mut vdp);
+    }
+
+    #[test]
+    fn sms1_port_001_data_port_read_cancels_partial_control_word() {
+        let mut vdp = Sms1Vdp::new(VideoStandard::Ntsc);
+        vdp.write_control(0x34);
+
+        assert_eq!(vdp.read_port(0xBE), 0);
+        assert_eq!(vdp.address(), 1);
+        assert_second_byte_starts_new_control_word(&mut vdp);
+    }
+
+    #[test]
+    fn sms1_port_001_data_port_write_cancels_partial_control_word() {
+        let mut vdp = Sms1Vdp::new(VideoStandard::Ntsc);
+        vdp.write_control(0x34);
+
+        vdp.write_port(0xBE, 0x77);
+
         assert_eq!(vdp.address(), 1);
         assert_eq!(vdp.state.memory.vram_byte(0), Some(0x77));
+        assert_second_byte_starts_new_control_word(&mut vdp);
     }
 
     #[test]
@@ -479,8 +506,8 @@ mod port_tests {
         let mut vdp = Sms1Vdp::new(VideoStandard::Ntsc);
         vdp.set_status_bits(0xE0);
         vdp.write_control(0x12);
-        assert_eq!(vdp.read_status(), 0xE0);
-        assert_eq!(vdp.read_status(), 0);
+        assert_eq!(vdp.read_port(0xBF), 0xE0);
+        assert_eq!(vdp.read_port(0xBF), 0);
         vdp.write_control(0x34);
         vdp.write_control(0x41);
         assert_eq!(vdp.address(), 0x0134);
