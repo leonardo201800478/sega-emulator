@@ -1,6 +1,6 @@
 # ADR-0013 — deterministic scheduler snapshot and restore
 
-- **Status:** In progress — E1–E5 implemented as candidates in stacked draft PRs; E6–E7 pending.
+- **Status:** In progress — E1–E6 implemented as candidates in stacked draft PRs; E7 pending.
 - **Date:** 2026-11-01.
 - **Baseline:** PR #346, branch `feat/temporal-event-order-dimensions`, SHA `ec2bd69d32409490901d30dc58ff94779eda061b`.
 - **Main baseline:** `0da3098893cce4d80f7a22291d00488e4e7d0f9b`; this main revision does not contain `native/machine_scheduler`.
@@ -21,10 +21,11 @@ The temporal foundation has been developed as a linear, reviewable stack. The fo
 | PR #350 — E3 | `d84e588a470c09655ae3c424a094d9f2c98e9a58` | Canonical EventQueue export/restore; preserves pending sequence values, allocator, and complete dispatched watermark including sequence; validates full causal key, allocator bounds, and uniqueness against the dispatched sequence. | GitHub Actions run `41368745114` SUCCESS on this exact SHA; all six required gates passed. |
 | PR #352 — E4 | `9c506be48982c20c98977e71aef71eb8f1cf3031` | Atomic full-scheduler export/restore; canonical clock-domain DTOs; cross-validates time, event watermark, dispatch history, pending-event bounds, schema version and delta policy. | CI run `41369507172` SUCCESS on this exact implementation SHA; semantic cross-audit complete, external review pending. |
 | PR #353 — E5 | `a33065fe14c09ee1840f5c9abb7e9ff0730457d2` | Versioned binary frame with CRC-32/ISO-HDLC integrity check; independent payload-codec version; u128 fixed-width unsigned big-endian; strict length, tag and trailing-data validation. | GitHub Actions run `41370192970` SUCCESS on this exact SHA; all six required gates passed. |
+| PR #354 — E6 | `c0ccc8d84762258869d5c37ac856effa636619f2` | Fixed-seed differential replay across independent snapshots; exact comparison of dispatches, sequences, rational clock advances, errors and final state; delta-budget changes and overflow. | Implementation candidate; exact-SHA CI pending. |
 
 The independent audit dated 2026-11-01 examined the actual #346 branch and found no snapshot/restore implementation, no Serde support in the native crates, and no snapshot tests. Its local targeted test run passed 16 `temporal_core` tests and 18 `machine_scheduler` tests using Rust 1.85.1. The auditor did not run `fmt` or `clippy`; those local checks are therefore NOT RUN. The GitHub Actions success above is separate evidence and must not be confused with the auditor's local run.
 
-The original audit verdict was **READY WITH CONDITIONS**. E1–E5 have exact implementation-SHA CI evidence in stacked PRs. E6–E7 remain unfinished; the complete scheduler snapshot/restore contract is not yet closed and `TEMPORAL_PASS` is not claimed.
+The original audit verdict was **READY WITH CONDITIONS**. E1–E5 have exact implementation-SHA CI evidence; E6 is implemented as a deterministic replay-test candidate in PR #354 with CI pending. E7 evidence consolidation remains pending; `TEMPORAL_PASS` is not claimed.
 
 ## 2. Problem
 
@@ -135,6 +136,10 @@ Today the queue dispatches on integer `MachineTime`; `ClockEdgeTime` is an exact
 
 E5 introduces the first wire representation without changing the in-memory DTO schema, so `SCHEDULER_STATE_FORMAT_VERSION` remains `1`. The frame carries that scheduler-state version and a separate payload-codec version. A future DTO schema change must increment the scheduler-state version; a payload representation change increments its own codec version. The frame uses an eight-byte magic, two unsigned big-endian 16-bit versions, a 64-bit big-endian body length, a length-delimited body, and a CRC-32/ISO-HDLC checksum (u32 big-endian) over the body. The checksum detects accidental corruption; it is not an authenticity mechanism. Collection counts and payload lengths are unsigned 32-bit big-endian.
 
+## 3.9 E6 differential replay
+
+The differential replay harness uses a fixed local PRNG (no external randomized dependency) and multiple seeds/checkpoint positions. It compares a continuously running scheduler against a second instance restored from the snapshot, including event payloads and ordering keys, allocated sequences, rational clock advances, generated errors and final exported DTO. It exercises same-timestamp events, a lowered delta-event budget followed by resumption, past-event rejection, and checked-arithmetic overflow. These tests establish scheduler software determinism only; they do not establish electrical or cycle-accurate hardware behavior.
+
 ## 4. Restore invariants
 
 A restored scheduler must satisfy, at minimum:
@@ -166,7 +171,7 @@ The next implementation work is deliberately split into small, reviewable slices
 4. **E3 — Queue export/restore.** Implement canonical vector export, preserve sequence allocator and causal watermark, validate duplicates and reconstruct the heap.
 5. **E4 — Scheduler restore.** Preserve delta policy/counters and validate cross-component invariants atomically.
 6. **E5 — Codec.** Implemented as a candidate in PR #353: versioned encode/decode, exact `u128` handling, separately versioned payload codec, and strict framing validation.
-7. **E6 — Differential replay.** Prove equivalence against uninterrupted execution, including deterministic randomized operation sequences with fixed seeds.
+7. **E6 — Differential replay.** Implemented as a candidate in PR #354: fixed-seed independent snapshots compare dispatches, sequences, clock advances, errors and final state; includes delta-budget changes and overflow.
 8. **E7 — CI and evidence.** Run all required Rust and Python checks on the exact candidate SHA and record PASS/FAIL/BLOCKED/NOT RUN accurately.
 
 No implementation slice should be combined with unrelated device, CPU, VDP, PSG, mapper or FFI work.
@@ -214,7 +219,7 @@ At the time this ADR was prepared:
 - E3 queue export/restore is implemented in PR #350. The watermark preserves the complete dispatched key, including sequence; restore validates pending events against that full key and rejects watermark sequences outside the allocator range. Regression tests cover same-timestamp/phase/priority sequence rollback and a valid later sequence. A follow-up audit added rejection of pending events that reuse the dispatched watermark sequence, even when their timestamp is later. Final E3 candidate `d84e588a470c09655ae3c424a094d9f2c98e9a58` passed exact-SHA run `41368745114` (all six required gates).
 - E4 full scheduler atomic restore is implemented in PR #352 at `9c506be48982c20c98977e71aef71eb8f1cf3031`; exact-SHA CI run `41369507172` reports SUCCESS. Independent semantic review is pending.
 - E5 versioned codec is implemented in PR #353 at `a33065fe14c09ee1840f5c9abb7e9ff0730457d2`; exact-SHA CI run `41370192970` reports SUCCESS for Rust formatting, Clippy, workspace tests, Ruff formatting, Ruff lint and pytest. Tests cover CRC-32 corruption detection, both codec versions, u128 boundaries, truncation, trailing bytes and payload decoding.
-- E6 differential replay: NOT IMPLEMENTED / NOT RUN.
+- E6 differential replay is implemented as a candidate in PR #354 at `c0ccc8d84762258869d5c37ac856effa636619f2`; exact-SHA CI is pending.
 - `TEMPORAL_PASS`: NOT CLAIMED.
 - Cycle-accurate SMS timing: NOT CLAIMED.
 
