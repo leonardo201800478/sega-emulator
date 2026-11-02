@@ -534,6 +534,9 @@ mod tests {
                 Z80MicroSequencerError::InstructionTStateOverflow
             ))
         ));
+        let completed_transaction = machine.pending_bus_transaction().unwrap().unwrap();
+        assert_eq!(completed_transaction.phase(), BusPhase::Complete);
+        assert_eq!(completed_transaction.timestamp(), machine.now());
 
         let mut state = machine.export_state();
         assert_eq!(state.bus.completion.unwrap().request_id, 1);
@@ -550,6 +553,50 @@ mod tests {
         retired(restored.resume_instruction(0).unwrap(), 0x77, 7);
         assert_eq!(restored.memory().read(0xC000), 0x5A);
         assert!(restored.export_state().bus.completion.is_none());
+    }
+
+    #[test]
+    fn internal_completion_remains_latched_when_cpu_commit_fails_and_can_retry() {
+        let mut machine = SmsTemporalMachine::new(vec![0x34; 0x4000], 3).unwrap();
+        machine.cpu_mut().registers.set_hl(0xC000);
+        machine.begin_instruction().unwrap();
+        machine.schedule_pending_bus(0).unwrap();
+        assert!(matches!(
+            machine.dispatch_next().unwrap(),
+            Z80MicroStep::BusRequest(_)
+        ));
+        machine.schedule_pending_bus(0).unwrap();
+        assert_eq!(
+            machine.dispatch_next().unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        machine.schedule_internal_cycle(1).unwrap();
+
+        let mut state = machine.export_state();
+        state.cpu.instruction_tstates = u32::MAX;
+        let mut machine = SmsTemporalMachine::restore_state(state).unwrap();
+        assert!(matches!(
+            machine.dispatch_next(),
+            Err(SmsTemporalMachineError::Cpu(
+                Z80MicroSequencerError::InstructionTStateOverflow
+            ))
+        ));
+
+        let mut state = machine.export_state();
+        assert_eq!(state.bus.pending_internal_cycle, Some(0));
+        assert_eq!(
+            state.bus.internal_completion.unwrap().continuation_id,
+            0
+        );
+        assert_eq!(state.pending_internal_cycle_id, Some(0));
+        assert_eq!(state.pending_internal_tstates, Some(1));
+
+        state.cpu.instruction_tstates = 7;
+        let mut restored = SmsTemporalMachine::restore_state(state).unwrap();
+        retired(restored.resume_instruction(0).unwrap(), 0x34, 11);
+        assert_eq!(restored.memory().read(0xC000), 1);
+        assert!(restored.export_state().bus.internal_completion.is_none());
+        assert!(restored.export_state().bus.pending_internal_cycle.is_none());
     }
 
     #[test]
