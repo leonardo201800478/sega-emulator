@@ -279,13 +279,13 @@ impl FrameMailbox {
             return Err(FrameMailboxError::Closed);
         }
 
-        if let Some(last) = state.last_sequence {
-            if frame.sequence() <= last {
-                return Err(FrameMailboxError::NonMonotonicSequence {
-                    last,
-                    incoming: frame.sequence(),
-                });
-            }
+        if let Some(last) = state.last_sequence
+            && frame.sequence() <= last
+        {
+            return Err(FrameMailboxError::NonMonotonicSequence {
+                last,
+                incoming: frame.sequence(),
+            });
         }
 
         if state.latest.replace(frame).is_some() {
