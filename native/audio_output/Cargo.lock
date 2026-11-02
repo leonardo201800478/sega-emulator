@@ -34,32 +34,12 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.101"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89ae43fd86e4158d6db51ad8e2b80f313af9cc74f5c0e03ccb87de09998732de"
-dependencies = [
- "unicode-ident",
-]
-
-
-[[package]]
-name = "proc-macro2"
 version = "1.0.107"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
 dependencies = [
  "unicode-ident",
 ]
-
-[[package]]
-name = "quote"
-version = "1.0.40"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1885c039570dc00dcb4ff087a89e185fd56bae234ddc7f056a945bf36467248d"
-dependencies = [
- "proc-macro2",
-]
-
 
 [[package]]
 name = "quote"
@@ -94,12 +74,6 @@ dependencies = [
  "sega-sn76489",
 ]
 
-
-[[package]]
-name = "sega-input-runtime"
-version = "0.1.0"
-
-
 [[package]]
 name = "sega-machine-scheduler"
 version = "0.1.0"
@@ -107,74 +81,13 @@ dependencies = [
  "sega-temporal-core",
 ]
 
-
-[[package]]
-name = "sega-sg1000-core"
-version = "0.1.0"
-dependencies = [
- "sega-sn76489",
- "sega-z80-cpu",
-]
-
-
-[[package]]
-name = "sega-sms-core"
-version = "0.1.0"
-dependencies = [
- "sega-sn76489",
- "sega-z80-bus",
- "sega-z80-cpu",
-]
-
-
 [[package]]
 name = "sega-sn76489"
 version = "0.1.0"
 
-
 [[package]]
 name = "sega-temporal-core"
 version = "0.1.0"
-
-
-[[package]]
-name = "sega-video-runtime"
-version = "0.1.0"
-dependencies = [
- "windows",
-]
-
-
-[[package]]
-name = "sega-z80-alu"
-version = "0.1.0"
-
-
-[[package]]
-name = "sega-z80-bus"
-version = "0.1.0"
-
-
-[[package]]
-name = "sega-z80-cpu"
-version = "0.1.0"
-dependencies = [
- "sega-z80-alu",
- "sega-z80-bus",
-]
-
-
-[[package]]
-name = "syn"
-version = "2.0.106"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ede7c438028d4436d71104916910f5bb611972c5cfd7f89b8300a8186e6fada6"
-dependencies = [
- "proc-macro2",
- "quote",
- "unicode-ident",
-]
-
 
 [[package]]
 name = "syn"
@@ -218,11 +131,6 @@ dependencies = [
  "thiserror-impl",
 ]
 
-[[package]]
-name = "unicode-ident"
-version = "1.0.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f63a545481291138910575129486daeaf8ac54aee4387fe7906919f7830c7d9d"
 [[package]]
 name = "unicode-ident"
 version = "1.0.27"
@@ -351,4 +259,3 @@ dependencies = [
  "windows-future",
  "windows-numerics",
 ]
-
