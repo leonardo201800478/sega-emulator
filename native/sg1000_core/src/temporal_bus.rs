@@ -19,7 +19,7 @@ fn elapsed_tstates(
     started_at: MachineTime,
     completed_at: MachineTime,
     master_ticks_per_tstate: u64,
-) -> Option<u128> {
+) -> Option<u32> {
     let scale = u128::from(master_ticks_per_tstate);
     if scale == 0 {
         return None;
