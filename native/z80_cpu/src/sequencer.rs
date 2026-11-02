@@ -190,6 +190,15 @@ impl Z80MicroSequencer {
         Ok(())
     }
 
+    /// Insert several WAIT T-states atomically into the active bus request.
+    pub fn insert_wait_tstates(
+        &mut self,
+        tstates: u32,
+    ) -> Result<(), Z80MicroSequencerError> {
+        self.handshake.insert_wait_tstates(tstates)?;
+        Ok(())
+    }
+
     /// Complete the current bus request and either issue the next one or retire.
     ///
     /// Read data is consumed only here, at the completion edge supplied by the
