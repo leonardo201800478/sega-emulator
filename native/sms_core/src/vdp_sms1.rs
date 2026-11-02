@@ -809,12 +809,13 @@ pub fn render_mode4_sprites_line(
                     continue;
                 }
                 let x_screen = x_screen as usize;
-                if occupied[x_screen] {
+                let was_occupied = occupied[x_screen];
+                if was_occupied {
                     collision = true;
                 } else {
                     occupied[x_screen] = true;
                 }
-                if !occupied[x_screen] {
+                if !was_occupied {
                     let bg = background[x_screen];
                     if !(bg.priority && (bg.palette_index & 0x0F) != 0) {
                     let palette_index = 16 + color_index;
