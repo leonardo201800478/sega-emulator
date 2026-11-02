@@ -100,7 +100,10 @@ fn fixed_seed_stress_replay_survives_repeated_restores() {
         loop {
             let expected = continuous.dispatch_next().unwrap();
             let actual = restored.dispatch_next().unwrap();
-            assert_eq!(actual, expected, "dispatch divergence for seed {seed:#018x}");
+            assert_eq!(
+                actual, expected,
+                "dispatch divergence for seed {seed:#018x}"
+            );
             if expected.is_none() {
                 break;
             }
