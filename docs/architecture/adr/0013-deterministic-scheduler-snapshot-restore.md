@@ -1,6 +1,6 @@
 # ADR-0013 — deterministic scheduler snapshot and restore
 
-- **Status:** In progress — E1–E3 implemented in stacked draft PRs; E4–E7 pending.
+- **Status:** In progress — E1–E4 implemented in stacked draft PRs; E5–E7 pending.
 - **Date:** 2026-11-01.
 - **Baseline:** PR #346, branch `feat/temporal-event-order-dimensions`, SHA `ec2bd69d32409490901d30dc58ff94779eda061b`.
 - **Main baseline:** `0da3098893cce4d80f7a22291d00488e4e7d0f9b`; this main revision does not contain `native/machine_scheduler`.
@@ -19,11 +19,11 @@ The temporal foundation has been developed as a linear, reviewable stack. The fo
 | PR #348 — E1 | `02f71b830ddd47156eb69d78de7b8107f851ec41` | Versioned DTOs for clock domains, event queue and scheduler; exact `u128` wire contract documented. | GitHub Actions run `41360589305` SUCCESS on this exact SHA. PR #348 remains open, Draft, and unmerged. |
 | PR #349 — E2 | `356a7eb4a022e898b87c04c1ca61140056f47d14` | Clock-domain origin history retained; DTO export/import; checked arithmetic validation; scheduler clock-domain export/restore and continuation tests. | GitHub Actions run `41361029624` SUCCESS on this exact SHA. PR #349 remains open, Draft, and unmerged. |
 | PR #350 — E3 | `d84e588a470c09655ae3c424a094d9f2c98e9a58` | Canonical EventQueue export/restore; preserves pending sequence values, allocator, and complete dispatched watermark including sequence; validates full causal key, allocator bounds, and uniqueness against the dispatched sequence. | GitHub Actions run `41368745114` SUCCESS on this exact SHA; all six required gates passed. |
-| PR #352 — E4 | `5c323b6b12448ad84f98469c133c1912128b97b5` | Atomic full-scheduler export/restore; canonical clock-domain DTOs; cross-validates time, event watermark, dispatch history, pending-event bounds, schema version and delta policy. | Implementation candidate; exact-SHA CI pending. |
+| PR #352 — E4 | `9c506be48982c20c98977e71aef71eb8f1cf3031` | Atomic full-scheduler export/restore; canonical clock-domain DTOs; cross-validates time, event watermark, dispatch history, pending-event bounds, schema version and delta policy. | CI run `41369507172` SUCCESS on this exact implementation SHA; independent review pending. |
 
 The independent audit dated 2026-11-01 examined the actual #346 branch and found no snapshot/restore implementation, no Serde support in the native crates, and no snapshot tests. Its local targeted test run passed 16 `temporal_core` tests and 18 `machine_scheduler` tests using Rust 1.85.1. The auditor did not run `fmt` or `clippy`; those local checks are therefore NOT RUN. The GitHub Actions success above is separate evidence and must not be confused with the auditor's local run.
 
-The original audit verdict was **READY WITH CONDITIONS**. E1–E3 are implemented and have exact-SHA CI evidence in stacked PRs. E4 is under implementation in PR #352; the complete scheduler snapshot/restore contract remains unfinished and `TEMPORAL_PASS` is not claimed.
+The original audit verdict was **READY WITH CONDITIONS**. E1–E4 are implemented as candidates in stacked PRs with exact-SHA CI evidence. E5–E7 remain unfinished; the complete scheduler snapshot/restore contract is not yet closed and `TEMPORAL_PASS` is not claimed.
 
 ## 2. Problem
 
@@ -207,7 +207,7 @@ At the time this ADR was prepared:
 - E2 clock-domain export/restore is implemented in PR #349. It retains registration origin and initial phase, validates the checked rational-history equation, and rejects timestamp mismatch/invalid history before inserting the domain.
 - E2 exact-SHA CI: PASS (`41361029624`) on `356a7eb4a022e898b87c04c1ca61140056f47d14`; Rust formatting, Clippy with `-D warnings`, workspace tests, Python Ruff format/check and pytest all passed.
 - E3 queue export/restore is implemented in PR #350. The watermark preserves the complete dispatched key, including sequence; restore validates pending events against that full key and rejects watermark sequences outside the allocator range. Regression tests cover same-timestamp/phase/priority sequence rollback and a valid later sequence. A follow-up audit added rejection of pending events that reuse the dispatched watermark sequence, even when their timestamp is later. Final E3 candidate `d84e588a470c09655ae3c424a094d9f2c98e9a58` passed exact-SHA run `41368745114` (all six required gates).
-- E4 full scheduler atomic restore is implemented as a candidate in PR #352; exact-SHA CI and review are pending.
+- E4 full scheduler atomic restore is implemented in PR #352 at `9c506be48982c20c98977e71aef71eb8f1cf3031`; exact-SHA CI run `41369507172` reports SUCCESS. Independent semantic review is pending.
 - Codec and full differential replay: NOT IMPLEMENTED / NOT RUN.
 - `TEMPORAL_PASS`: NOT CLAIMED.
 - Cycle-accurate SMS timing: NOT CLAIMED.
