@@ -432,7 +432,8 @@ mod tests {
         SchedulerStateCodecError, SCHEDULER_STATE_MAGIC,
     };
     use sega_temporal_core::{
-        EventQueueState, HardwarePhase, MachineTime, PlatformPriority, ScheduledEvent,
+        EventQueueState, EventQueueWatermark, HardwarePhase, MachineTime, PlatformPriority,
+        ScheduledEvent,
     };
 
     use crate::{
@@ -508,6 +509,27 @@ mod tests {
             MachineScheduler::restore_state(decoded),
             Err(SchedulerError::ZeroDeltaEventLimit)
         ));
+    }
+
+    #[test]
+    fn codec_round_trips_present_watermarks_and_dispatch_history() {
+        let mut state = state_fixture();
+        state.event_queue.pending[0].sequence = 1;
+        state.event_queue.next_sequence = 2;
+        state.event_queue.last_dispatched = Some(EventQueueWatermark {
+            timestamp: MachineTime::from_ticks(4),
+            hardware_phase: HardwarePhase::new(1),
+            priority: PlatformPriority::new(1),
+            sequence: 0,
+        });
+        state.last_dispatch_timestamp = Some(MachineTime::from_ticks(4));
+        state.dispatched_at_timestamp = 1;
+
+        let encoded = encode_scheduler_state(&state, &U32PayloadCodec).unwrap();
+        let decoded = decode_scheduler_state(&encoded, &U32PayloadCodec).unwrap();
+        assert_eq!(decoded, state);
+        let restored = MachineScheduler::restore_state(decoded).unwrap();
+        assert_eq!(restored.export_state(), state);
     }
 
     #[test]
