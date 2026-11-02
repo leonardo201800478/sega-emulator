@@ -432,3 +432,13 @@ The CI workflow now accepts explicit pull-request labels `scheduler-stress-short
 - The arithmetic PR #363's final head is `d6c2e9fbc243208ebe4e761e079934dd95eba98e`; ordinary CI workflow `41384173879` passed all six gates after a documentation-only rustdoc correction.
 
 These software-level stress results do not change the limitations in §12.3: no sub-tick dispatch, CPU/bus transactions, SMS arbitration, VDP/PSG safe points, or hardware timing has been demonstrated.
+### 12.7 LONG completion — 2026-11-02
+
+Workflow [41384147113](https://github.com/leonardo201800478/sega-emulator/actions/runs/41384147113) completed SUCCESS on exact PR #362 head `cce79018427daab57a36808e162492b17bf4303e`.
+
+- Operation replay: 16 seeds × 20,000 operations = 320,000 operations verified.
+- Dispatch replay: 16 seeds × 250,000 events = 4,000,000 dispatches verified.
+- Test binary result: 2 passed, 0 failed; execution time 393.99 seconds.
+- All six ordinary gates passed in the same workflow.
+
+Therefore, the deterministic scheduler software stress campaign has SHORT_PASS and LONG_PASS evidence on the documented exact SHAs. This does not prove electrical phase behavior, sub-tick event dispatch, CPU/bus transaction integration, SMS arbitration, VDP/PSG synchronization, or hardware temporal accuracy. Overall scheduler/device integration remains INTEGRATION_PENDING and TEMPORAL_PASS remains NOT CLAIMED.
