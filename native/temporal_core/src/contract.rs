@@ -267,7 +267,7 @@ impl fmt::Display for BusContractError {
             }
             Self::CompletionBeforeRequest => {
                 f.write_str("bus operation completed before its request timestamp")
-            },
+            }
         }
     }
 }
