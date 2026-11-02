@@ -567,10 +567,21 @@ impl D3d12Host {
 
             let command_list: ID3D12CommandList = self.command_list.cast()?;
             self.queue.ExecuteCommandLists(&[Some(command_list)]);
-            self.swap_chain.Present(1, DXGI_PRESENT(0)).ok()?;
 
-            self.last_submitted_fence = self.last_submitted_fence.saturating_add(1);
-            self.queue.Signal(&self.fence, self.last_submitted_fence)?;
+            // Queue the fence before Present so a DXGI presentation failure
+            // cannot leave submitted GPU work without a retirement signal.
+            let next_fence = self
+                .last_submitted_fence
+                .checked_add(1)
+                .ok_or_else(|| {
+                    Error::new(
+                        windows::core::HRESULT(0x8000_4005_u32 as i32),
+                        "D3D12 fence value exhausted",
+                    )
+                })?;
+            self.queue.Signal(&self.fence, next_fence)?;
+            self.last_submitted_fence = next_fence;
+            self.swap_chain.Present(1, DXGI_PRESENT(0)).ok()?;
         }
 
         Ok(())
@@ -680,7 +691,15 @@ impl D3d12Host {
             self.queue.ExecuteCommandLists(&[Some(command_list)]);
             self.texture_is_copy_source = true;
 
-            let next_fence = self.last_submitted_fence.saturating_add(1);
+            let next_fence = self
+                .last_submitted_fence
+                .checked_add(1)
+                .ok_or_else(|| {
+                    Error::new(
+                        windows::core::HRESULT(0x8000_4005_u32 as i32),
+                        "D3D12 fence value exhausted",
+                    )
+                })?;
             self.queue.Signal(&self.fence, next_fence)?;
             self.last_submitted_fence = next_fence;
             self.swap_chain.Present(1, DXGI_PRESENT(0)).ok()?;
@@ -760,9 +779,16 @@ impl D3d12Host {
     }
 
     fn wait_for_gpu(&self) -> Result<()> {
-        if self.last_submitted_fence == 0
-            || unsafe { self.fence.GetCompletedValue() } >= self.last_submitted_fence
-        {
+        let completed_value = unsafe { self.fence.GetCompletedValue() };
+        // D3D12 returns UINT64_MAX when the device has been removed. Do not
+        // mistake that sentinel for successful completion of every fence.
+        if completed_value == u64::MAX {
+            return Err(Error::new(
+                windows::core::HRESULT(0x887A_0005_u32 as i32),
+                "D3D12 device was removed while waiting for the GPU fence",
+            ));
+        }
+        if self.last_submitted_fence == 0 || completed_value >= self.last_submitted_fence {
             return Ok(());
         }
 
