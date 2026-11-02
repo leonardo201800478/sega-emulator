@@ -37,12 +37,21 @@ pub enum Z80BusHandshakeError {
     UnexpectedWriteData,
     RequestIdExhausted,
     WaitCounterExhausted,
+    InvalidState,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct PendingCycle {
     request: Z80BusRequest,
     wait_tstates: u32,
+}
+
+/// Version-independent DTO for the exact outstanding handshake state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Z80BusHandshakeState {
+    pub next_request_id: u64,
+    pub pending_request: Option<Z80BusRequest>,
+    pub wait_tstates: u32,
 }
 
 /// One outstanding transaction. The machine scheduler remains the sole owner
@@ -129,6 +138,32 @@ impl Z80BusHandshake {
         }
         self.pending = None;
         Ok(Z80BusResponse { request_id, data })
+    }
+
+    /// Export the complete deterministic handshake continuation.
+    pub fn export_state(&self) -> Z80BusHandshakeState {
+        Z80BusHandshakeState {
+            next_request_id: self.next_request_id,
+            pending_request: self.pending.map(|pending| pending.request),
+            wait_tstates: self.pending.map_or(0, |pending| pending.wait_tstates),
+        }
+    }
+
+    /// Restore a handshake only when its request allocator is consistent.
+    pub fn restore_state(state: Z80BusHandshakeState) -> Result<Self, Z80BusHandshakeError> {
+        let pending = match state.pending_request {
+            Some(request) if request.id < state.next_request_id => Some(PendingCycle {
+                request,
+                wait_tstates: state.wait_tstates,
+            }),
+            Some(_) => return Err(Z80BusHandshakeError::InvalidState),
+            None if state.wait_tstates == 0 => None,
+            None => return Err(Z80BusHandshakeError::InvalidState),
+        };
+        Ok(Self {
+            next_request_id: state.next_request_id,
+            pending,
+        })
     }
 
     /// Whether a transaction is outstanding.
