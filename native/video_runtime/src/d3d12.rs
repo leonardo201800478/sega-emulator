@@ -153,7 +153,7 @@ unsafe extern "system" fn window_proc(
 ) -> LRESULT {
     if message == WM_DESTROY {
         unsafe { PostQuitMessage(0) };
-        return 0;
+        return LRESULT(0);
     }
 
     unsafe { DefWindowProcW(hwnd, message, wparam, lparam) }
@@ -216,7 +216,7 @@ impl D3d12Host {
         let factory: IDXGIFactory2 =
             unsafe { CreateDXGIFactory2(DXGI_CREATE_FACTORY_FLAGS::default())? };
 
-        let mut device = None;
+        let mut device: Option<ID3D12Device> = None;
         unsafe {
             D3D12CreateDevice(None, D3D_FEATURE_LEVEL_11_0, &mut device)?;
         }
@@ -339,7 +339,7 @@ impl D3d12Host {
             );
         }
         if upload_rows != height || upload_row_size != u64::from(width) * 4 {
-            return Err(Error::from_win32());
+            return Err(Error::from_thread());
         }
 
         let default_heap = D3D12_HEAP_PROPERTIES {
@@ -360,7 +360,7 @@ impl D3d12Host {
                 &mut frame_texture,
             )?;
         }
-        let frame_texture: ID3D12Resource = frame_texture.ok_or_else(Error::from_win32)?;
+        let frame_texture: ID3D12Resource = frame_texture.ok_or_else(Error::from_thread)?;
 
         let upload_desc = D3D12_RESOURCE_DESC {
             Dimension: D3D12_RESOURCE_DIMENSION_BUFFER,
@@ -392,7 +392,7 @@ impl D3d12Host {
                 &mut upload_buffer,
             )?;
         }
-        let upload_buffer: ID3D12Resource = upload_buffer.ok_or_else(Error::from_win32)?;
+        let upload_buffer: ID3D12Resource = upload_buffer.ok_or_else(Error::from_thread)?;
 
         let fence: ID3D12Fence = unsafe { device.CreateFence(0, D3D12_FENCE_FLAG_NONE)? };
         let fence_event = unsafe { CreateEventW(None, false, false, None)? };
@@ -452,7 +452,7 @@ impl D3d12Host {
         if result == WAIT_OBJECT_0 {
             Ok(())
         } else {
-            Err(Error::from_win32())
+            Err(Error::from_thread())
         }
     }
 
@@ -624,7 +624,7 @@ impl D3d12Host {
     fn write_frame_to_upload(&self, frame: &VideoFrame) -> Result<()> {
         let row_bytes = (frame.width() as usize)
             .checked_mul(4)
-            .ok_or_else(Error::from_win32)?;
+            .ok_or_else(Error::from_thread)?;
         let row_pitch = self.upload_layout.Footprint.RowPitch as usize;
         let required_size = self
             .upload_layout
@@ -632,14 +632,14 @@ impl D3d12Host {
             .checked_add(
                 (row_pitch as u64)
                     .checked_mul(u64::from(frame.height()))
-                    .ok_or_else(Error::from_win32)?,
+                    .ok_or_else(Error::from_thread)?,
             )
-            .ok_or_else(Error::from_win32)?;
+            .ok_or_else(Error::from_thread)?;
         if row_pitch < row_bytes || required_size > self.upload_size {
-            return Err(Error::from_win32());
+            return Err(Error::from_thread());
         }
         if (0..frame.height()).any(|row| frame.row(row).is_none()) {
-            return Err(Error::from_win32());
+            return Err(Error::from_thread());
         }
 
         let read_range = D3D12_RANGE { Begin: 0, End: 0 };
@@ -650,13 +650,13 @@ impl D3d12Host {
         }
         if mapped.is_null() {
             unsafe { self.upload_buffer.Unmap(0, None) };
-            return Err(Error::from_win32());
+            return Err(Error::from_thread());
         }
 
         let destination = unsafe { mapped.cast::<u8>().add(self.upload_layout.Offset as usize) };
 
         for y in 0..frame.height() {
-            let source = frame.row(y).ok_or_else(Error::from_win32)?;
+            let source = frame.row(y).ok_or_else(Error::from_thread)?;
             let destination_row = unsafe {
                 slice::from_raw_parts_mut(destination.add(y as usize * row_pitch), row_bytes)
             };
@@ -705,7 +705,7 @@ impl D3d12Host {
             if result == WAIT_OBJECT_0 {
                 Ok(())
             } else {
-                Err(Error::from_win32())
+                Err(Error::from_thread())
             }
         }
     }
