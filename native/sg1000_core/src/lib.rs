@@ -19,6 +19,8 @@ pub mod io;
 pub mod machine;
 pub mod memory;
 pub mod psg;
+pub mod temporal;
+pub mod temporal_bus;
 pub mod vdp;
 
 pub use bus::CpuBus;
@@ -30,4 +32,12 @@ pub use io::{IoError, PsgWriteEvent, Sg1000Io};
 pub use machine::{MachineError, Sg1000Machine};
 pub use memory::{MemoryConfig, MemoryError, Sg1000Memory};
 pub use psg::{PsgError, Sn76489};
+pub use temporal::{
+    Sg1000TemporalCoordinator, Sg1000TemporalCoordinatorError, Sg1000TemporalCoordinatorState,
+    Sg1000TemporalEvent,
+};
+pub use temporal_bus::{
+    Sg1000BusCompletion, Sg1000InternalCycleCompletion, Sg1000TemporalBus, Sg1000TemporalBusError,
+    Sg1000TemporalBusState, Sg1000TemporalDispatch,
+};
 pub use vdp::Tms9918A;
