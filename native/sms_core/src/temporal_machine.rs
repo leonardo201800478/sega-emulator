@@ -421,7 +421,9 @@ impl SmsTemporalMachine {
 #[cfg(test)]
 mod tests {
     use super::{SmsTemporalMachine, SmsTemporalMachineError};
-    use sega_temporal_core::MachineTime;
+    use sega_temporal_core::{
+        BusCycleKind, BusDirection, BusPhase, MCycleIndex, MachineTime, TStateIndex,
+    };
     use sega_z80_cpu::{Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroStep};
 
     fn retired(step: Z80MicroStep, opcode: u8, tstates: u32) {
