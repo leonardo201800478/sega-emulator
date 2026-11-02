@@ -1,6 +1,6 @@
 # Estado dos componentes — SG-1000 + Master System
 
-**Base de referência:** `main` em `3a510ae68028228065f7e60350a821ef9f76c882` (2026-11-02).
+**Base de referência:** `main` em `3f4a71d7b7bbc1863c20cd3293466405cb3f579b` (2026-11-02, após PR #416).
 **Natureza:** inventário documental do estado observado no repositório e das auditorias disponíveis. Não substitui testes no SHA candidato nem declara precisão ciclo a ciclo.
 
 Este documento responde o que já existe, o que permanece como componente válido e o que ainda precisa ser integrado ou concluído. Componentes existentes não devem ser apagados só porque a arquitetura-alvo muda; a migração deve preservar APIs e testes até haver substituição comprovada.
@@ -18,26 +18,26 @@ Este documento responde o que já existe, o que permanece como componente válid
 
 | Componente | Implementação / localização observada | Estado e trabalho restante |
 |---|---|---|
-| Z80 — execução | Executores presentes nos cores SG-1000/SMS, com extensão em `native/z80_core` | Não há ainda um único executor compartilhado em produção. Extração e adaptadores comuns pertencem a P3 |
+| Z80 — execução | Executores atômicos legados permanecem nos cores SG-1000/SMS; `native/z80_cpu` contém microsequenciador retomável consumido pela fatia temporal SMS | Microsequenciador ainda restrito ao subconjunto testado; executor atômico preservado como oráculo diferencial. Não é ainda o executor compartilhado completo em produção |
 | Z80 — ALU | `native/z80_alu` | Biblioteca compartilhada existente; continuar auditoria de flags/opcodes e cobertura independente |
-| Z80 — bus | `native/z80_bus` | Contratos/base compartilhada existentes; execução de transações ainda não é microsequenciada/interruptível |
+| Z80 — bus | `native/z80_bus` e adaptador `SmsTemporalBus` em `native/sms_core/src/temporal_bus.rs` | Fetch/read/write de memória são agendados por deadline; `BusTransaction`/`BusOperationResult` da PR #396 continuam Draft até índices M-cycle/T-state estáveis |
 | Memória e barramentos SG-1000 | `native/sg1000_core` | Funcionais no runtime; ampliar testes de mapa, espelhamento, RAM e cartuchos |
-| Memória e barramentos SMS | `native/sms_core` | Implementados para o runtime atual; WAIT físico, arbitragem e transações temporais completas permanecem pendentes |
+| Memória e barramentos SMS | `native/sms_core/src/memory.rs`, `temporal_bus.rs`, `temporal_machine.rs` | Caminho temporal CPU→Scheduler→memória SMS para fetch/read/write está implementado e `SHORT_PASS`; WAIT é fixture, I/O temporal, arbitragem e integração completa permanecem pendentes |
 | TMS9918A | `native/sg1000_core` | VDP ativo do SG-1000; preservar regressões e validar efeitos de hardware com cenas/oráculos |
-| SMS VDP / Mode 4 | `native/sms_core` | Caminho VDP SMS existente; não confundir renderização atual/legada com pipeline temporal por dot |
+| SMS VDP / Mode 4 | `native/sms_core/src/vdp.rs` e `vdp_sms1.rs` | Caminho legado permanece funcional e fora de `SmsTemporalMachine`; pipeline temporal por dot/fetch/IRQ ainda não integrado |
 | SMS1 VDP 315-5124 | `native/sms_core/src/vdp_sms1.rs` | Componente SMS1 e estado de H Counter latch presentes; integração completa com máquina, pipeline raster/fetch, IRQ e Scheduler permanece pendente |
 | PSG SN76489 | `native/sg1000_core`, `native/sms_core`, `native/audio_runtime` | Núcleo/geração digital e runtime de áudio existentes; perfis por máquina e validação de ruído/atenuação/timing ainda precisam de fechamento |
 | YM2413 | Não há runtime funcional integrado identificado no baseline | Permanece como componente futuro específico do SMS, não requisito para declarar o PSG implementado |
 | Mappers SMS | `native/sms_core` | Implementações existentes permanecem; cobertura e registry explícito sem fallback precisam ser auditados por perfil |
 | I/O, input e IRQ | Cores de máquina e `native/input_runtime` | Caminhos atuais existem; integração temporal, transições elétricas e IRQ do VDP ainda não estão fechadas |
-| Save states | Estruturas e snapshots distribuídos pelos cores | Persistência coordenada/versionada de todos os dispositivos e restore atômico ainda precisam de auditoria e integração |
+| Save states | `native/z80_cpu/src/snapshot.rs` e DTOs em `native/sms_core/src/temporal*.rs` | Codec binário versionado + CRC32 cobre o estado do microsequenciador suportado; estado integrado da máquina é DTO in-memory. Codec persistente e restore de todos os dispositivos seguem pendentes |
 
 ## 3. Componentes de infraestrutura e aplicação
 
 | Componente | Implementação / localização observada | Estado e trabalho restante |
 |---|---|---|
 | Temporal Core | `native/temporal_core` | Contratos e tipos temporais existem; contrato não significa execução temporal integrada |
-| Machine Scheduler | `native/machine_scheduler` | Scheduler determinístico existe como crate; a máquina SMS ainda não o consome como autoridade temporal ativa |
+| Machine Scheduler | `native/machine_scheduler`, `SmsTemporalCoordinator` e `SmsTemporalMachine` | SMS consome o Scheduler para a fatia CPU/memória T4; não é ainda autoridade temporal de VDP/PSG/I/O/IRQ da máquina completa |
 | Video Runtime | `native/video_runtime` | Runtime de apresentação e backend Windows/D3D12 existem; falta ligação de frames do SMS1 VDP e sincronização com o Scheduler |
 | Audio Runtime | `native/audio_runtime` | Sessão DSP/PCM Rust existe; o pump ainda depende do fluxo `run_frame()`/Qt, portanto produção/pacing autônomos permanecem pendentes |
 | Input Runtime | `native/input_runtime` | Crate de runtime existe; autonomia completa do host Rust e integração final ao engine permanecem pendentes |
@@ -47,12 +47,14 @@ Este documento responde o que já existe, o que permanece como componente válid
 | Frontend Qt/PySide6 | `src/sega_emulator` | Aplicação ativa, carregamento, configuração, apresentação e diagnóstico; deve evoluir para launcher/painel sem avanço temporal |
 | Workspace Cargo | `Cargo.toml` | Inclui SG-1000, SMS, ALU, bus, áudio, input, temporal, scheduler e vídeo; `native/z80_core`, `native/sega_emu_core` e `native/audio_output` estão excluídos do workspace root |
 
-## 4. PRs e trabalho em andamento na fotografia
+## 4. PRs e integração temporal registrada em 2026-11-02
 
-- **PR #393 — H Counter latch:** integrada à main antes da base deste inventário. O estado do latch existe no SMS1 VDP; não significa que todas as transições TH/VDP estejam conectadas ao caminho elétrico completo.
-- **PR #394 — Scheduler/SMS1 VDP/D3D12:** integrada à main como consolidação documental/arquitetural. Não significa que Scheduler, SMS1 VDP e D3D12 estejam integrados em runtime.
-- **PR #396 — contratos temporais SMS1:** aberta em Draft na fotografia consultada. Define contratos compartilhados, mas não implementa microsequenciador Z80, WAIT físico, arbitragem ou Scheduler integrado. Status e checks devem ser revalidados antes de qualquer integração.
-- **PR #397 — consolidação documental:** branch desta atualização. A exclusão dos roadmaps antigos e a atualização do documento canônico só passam a valer na main após merge e verificação dos links.
+- **PR #411 — ADR-0015/roadmap T0–T4:** integrada à main em `bf09712659a102d6e4c02f2ff5d97a99487ac166`.
+- **PR #416 — T1–T4 runtime SMS:** integrada à main em `3f4a71d7b7bbc1863c20cd3293466405cb3f579b`; head validado `bfdc7d2fbbcf7712091df9960a7e7e593c18afea`; CI #41499228458 PASS nos quatro jobs.
+- **PR #412:** head é ancestral do merge #416 e foi reconhecida como merged pelo GitHub.
+- **PR #413/#414:** fechadas como supersedidas; seus entregáveis funcionais de snapshot/codec e coordinator estão no diff integrado de #416, mas os heads divergentes não são ancestrais de main.
+- **PR #415:** fechada como supersedida; seu head é ancestral do merge #416, portanto o histórico desse head está contido em main.
+- **PR #396 — contratos temporais SMS1:** permanece OPEN / Draft. A revisão T0 identificou que o microsequenciador ainda não expõe índices M-cycle/T-state estáveis para mapear os contratos sem adaptação artificial.
 
 ## 5. Componentes que permanecem no projeto
 
@@ -80,3 +82,18 @@ Toda PR que alterar um componente deve atualizar sua linha e indicar:
 5. limitações conhecidas e o que não foi testado.
 
 Não elevar um estado com base apenas em documentação, compilação isolada, boot ou teste ignorado. O estado de uma PR aberta não deve ser descrito como parte da main.
+
+
+## 7. Estado formal após T4 — main `3f4a71d7b7bbc1863c20cd3293466405cb3f579b`
+
+| Componente | Estado formal | Evidência / limite |
+|---|---|---|
+| Z80 microsequencer retomável (subconjunto) | IMPLEMENTED / QUICK_PASS | Codec versionado, CRC32, WAIT/T-states checked, diferencial contra executor atômico; não é CPU completa |
+| SMS temporal coordinator | IMPLEMENTED / QUICK_PASS | `MachineScheduler`, `MachineTime` e escala master-ticks/T-state explícita |
+| SMS temporal bus | IMPLEMENTED / QUICK_PASS | Fetch/read/write memória, deadline, efeito único, completion latched, WAIT de fixture |
+| SMS temporal vertical slice T4 | IMPLEMENTED / SHORT_PASS | PR #416, CI #41499228458; trace, snapshot/restore in-memory, replay e diferencial |
+| SG-1000 legado | IMPLEMENTED / QUICK_PASS | 42 testes unitários no workspace no SHA candidato; sem golden master/homebrew smoke nesta execução |
+| SMS completo (CPU/VDP/PSG/I/O/IRQ) | INTEGRATION_PENDING | VDP legado excluído; novo VDP temporal, PSG, I/O e interrupções ainda não integrados |
+| TEMPORAL_PASS | NOT DECLARED | Faltam oráculos independentes/físicos, WAIT físico, arbitragem e integração sistêmica |
+
+**Próxima tarefa T5a:** expor índices M-cycle/T-state estáveis para o subconjunto atual e mapear explicitamente as operações para os contratos da PR #396. Expandir famílias de instruções somente após essa ponte ser validada.
