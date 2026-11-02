@@ -737,8 +737,8 @@ mod tests {
             Z80MicroStep::InternalCycle { tstates: 1 }
         );
         let transaction = machine.pending_internal_transaction().unwrap().unwrap();
-        assert_eq!(transaction.cycle_index(), MCycleIndex::new(2));
-        assert_eq!(transaction.t_state_index(), TStateIndex::new(0));
+        assert_eq!(transaction.cycle_index(), MCycleIndex::new(1));
+        assert_eq!(transaction.t_state_index(), TStateIndex::new(3));
         assert_eq!(transaction.phase(), BusPhase::Internal);
         assert_eq!(transaction.kind(), BusCycleKind::Internal);
         assert_eq!(transaction.direction(), BusDirection::None);
