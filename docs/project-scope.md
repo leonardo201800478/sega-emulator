@@ -27,7 +27,7 @@ Não sacrificar correção por velocidade. Não declarar compatibilidade univers
 
 O catálogo global, os modelos comerciais, as variantes regionais, as expansões e a sequência completa de implementação são definidos exclusivamente em [Roadmap mestre do projeto](project-roadmap.md). Esse roadmap é a fonte única para a direção global e inclui SG-1000/II, SMS I/II, Game Gear, Genesis Model 1/2, Nomad, Sega CD, 32X, sistemas integrados de terceiros e a composição hipotética Sega Neptune Definitive.
 
-A prioridade de implementação corrente continua sendo fechar SG-1000 + SMS e a integração temporal SMS1, preservando o que já funciona. Essa prioridade não elimina nem redefine o escopo futuro já consolidado no roadmap mestre. Os planos detalhados de SMS, Z80, PSG, mappers e VDP são subordinados e limitados aos respectivos domínios.
+A prioridade de implementação corrente continua sendo fechar SG-1000 + SMS e a integração temporal SMS1, preservando o que já funciona. Essa prioridade não elimina nem redefine o escopo futuro já consolidado no roadmap mestre. A execução corrente deve seguir os critérios de aceitação registrados nas issues, ADRs e PRs ativos; documentos históricos de planejamento não são fonte de escopo.
 
 ### 2.1 Extensões e hardware especializado
 
@@ -39,7 +39,7 @@ O SVP é o primeiro estudo de caso planejado para essa categoria, condicionado a
 
 ### 2.2 Marco ativo SG-1000 + SMS
 
-O objetivo imediato não é ampliar a lista de plataformas, mas reestruturar e consolidar os dois runtimes já capazes de iniciar jogos. O SG-1000 é baseline de preservação; o SMS é alvo de fechamento funcional e compatibilidade. A ordem de execução e os critérios de saída estão em [roadmap de consolidação SG-1000 + SMS](roadmaps/sg1000-sms-consolidation-roadmap.md).
+O objetivo imediato não é ampliar a lista de plataformas, mas reestruturar e consolidar os dois runtimes já capazes de iniciar jogos. O SG-1000 é baseline de preservação; o SMS é alvo de fechamento funcional e compatibilidade. A ordem de execução imediata é definida pelas issues e PRs ativos do marco SG-1000 + SMS, com prioridade à integração temporal SMS1.
 
 Regras obrigatórias deste marco:
 - manter SG-1000 funcional como baseline de regressão;
