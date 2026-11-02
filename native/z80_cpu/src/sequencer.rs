@@ -5,7 +5,10 @@
 //! atomic executor; it does not yet cover interrupts, prefixes, HALT, refresh
 //! pin phases, or the full architectural state.
 
-use crate::{Z80BusHandshake, Z80BusHandshakeError, Z80BusOperation, Z80BusRequest, Z80Registers};
+use crate::{
+    Z80BusHandshake, Z80BusHandshakeError, Z80BusOperation, Z80BusRequest, Z80Registers,
+    Z80_MICRO_SEQUENCER_STATE_VERSION,
+};
 
 const FLAG_C: u8 = 0x01;
 const FLAG_N: u8 = 0x02;
@@ -453,8 +456,8 @@ impl Z80MicroSequencer {
 #[cfg(test)]
 mod tests {
     use super::{
-        FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_S, FLAG_XY, FLAG_Z, Z80MicroSequencer,
-        Z80MicroSequencerError, Z80MicroStep,
+        FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_S, FLAG_XY, FLAG_Z, Z80MicroSequencer, Z80MicroSequencerError,
+        Z80MicroSequencerPhase, Z80MicroStep,
     };
     use crate::{Z80BusOperation, Z80Registers};
 
