@@ -1,35 +1,48 @@
 //! Initial native Direct3D 12 host bootstrap for Windows x64.
 //!
 //! This milestone owns the Win32 presentation window, DXGI factory/swap chain,
-//! D3D12 device and direct command queue. It intentionally does not submit or
-//! present frames yet: the upload/copy pipeline, resource barriers and fence
-//! retirement are implemented in the next milestone.
+//! D3D12 device, direct queue, command allocator/list, render-target views and
+//! fence lifecycle. The first presentation path emits a synthetic color-bar
+//! frame; uploading emulator VideoFrame pixels is a subsequent milestone.
 
-use windows::Win32::Foundation::{CloseHandle, HANDLE, HINSTANCE, HWND};
+use core::mem::ManuallyDrop;
+
+use windows::Win32::Foundation::{CloseHandle, HANDLE, HINSTANCE, HWND, RECT};
 use windows::Win32::Graphics::Direct3D::D3D_FEATURE_LEVEL_11_0;
 use windows::Win32::Graphics::Direct3D12::{
     D3D12_COMMAND_QUEUE_DESC, D3D12_COMMAND_QUEUE_FLAG_NONE,
-    D3D12_COMMAND_QUEUE_PRIORITY_NORMAL, D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12CreateDevice,
-    ID3D12CommandQueue, ID3D12Device,
+    D3D12_COMMAND_QUEUE_PRIORITY_NORMAL, D3D12_COMMAND_LIST_TYPE_DIRECT,
+    D3D12_CPU_DESCRIPTOR_HANDLE, D3D12_DESCRIPTOR_HEAP_DESC, D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+    D3D12_DESCRIPTOR_HEAP_TYPE_RTV, D3D12_FENCE_FLAG_NONE,
+    D3D12_RESOURCE_BARRIER, D3D12_RESOURCE_BARRIER_0, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+    D3D12_RESOURCE_BARRIER_FLAG_NONE, D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+    D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET,
+    D3D12_RESOURCE_TRANSITION_BARRIER, D3D12CreateDevice, ID3D12CommandAllocator,
+    ID3D12CommandList, ID3D12CommandQueue, ID3D12DescriptorHeap, ID3D12Device, ID3D12Fence,
+    ID3D12GraphicsCommandList, ID3D12PipelineState, ID3D12Resource,
 };
 use windows::Win32::Graphics::Dxgi::Common::{
     DXGI_ALPHA_MODE_IGNORE, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_SAMPLE_DESC,
 };
 use windows::Win32::Graphics::Dxgi::{
-    CreateDXGIFactory2, DXGI_CREATE_FACTORY_FLAGS, DXGI_SCALING_STRETCH,
+    CreateDXGIFactory2, DXGI_CREATE_FACTORY_FLAGS, DXGI_PRESENT, DXGI_SCALING_STRETCH,
     DXGI_SWAP_CHAIN_DESC1, DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT,
     DXGI_SWAP_EFFECT_FLIP_DISCARD, DXGI_USAGE_RENDER_TARGET_OUTPUT, IDXGIFactory2,
     IDXGISwapChain2, IDXGISwapChain3,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows::Win32::System::Threading::{INFINITE, WaitForSingleObjectEx};
+use windows::Win32::System::Threading::{
+    CreateEventW, INFINITE, WAIT_OBJECT_0, WaitForSingleObjectEx,
+};
 use windows::Win32::UI::WindowsAndMessaging::{
     CW_USEDEFAULT, CS_HREDRAW, CS_VREDRAW, CreateWindowExW, DefWindowProcW, DestroyWindow,
     DispatchMessageW, MSG, PM_REMOVE, PeekMessageW, PostQuitMessage, RegisterClassW, SW_SHOW,
-    ShowWindow, TranslateMessage, WNDCLASSW, WINDOW_EX_STYLE, WINDOW_STYLE,
-    WM_DESTROY, WS_OVERLAPPEDWINDOW,
+    ShowWindow, TranslateMessage, WNDCLASSW, WINDOW_EX_STYLE, WINDOW_STYLE, WM_DESTROY,
+    WS_OVERLAPPEDWINDOW,
 };
 use windows::core::{Error, Interface, Result, w};
+
+const SWAP_CHAIN_BUFFER_COUNT: u32 = 2;
 
 /// Native Win32 window owned by the Rust video host.
 pub struct NativeVideoWindow {
@@ -39,10 +52,10 @@ pub struct NativeVideoWindow {
 impl NativeVideoWindow {
     /// Create and show the native presentation window.
     pub fn create(width: u32, height: u32) -> Result<Self> {
-        if width == 0 || height == 0 {
+        if width == 0 || height == 0 || width > i32::MAX as u32 || height > i32::MAX as u32 {
             return Err(Error::new(
                 windows::core::HRESULT(0x8007_0057_u32 as i32),
-                "window dimensions must be non-zero",
+                "window dimensions must be in the non-zero i32 range",
             ));
         }
 
@@ -80,7 +93,6 @@ impl NativeVideoWindow {
 
         unsafe {
             ShowWindow(hwnd, SW_SHOW);
-            // ShowWindow triggers the initial non-client paint/message sequence.
         }
 
         Ok(Self { hwnd })
@@ -136,22 +148,49 @@ unsafe extern "system" fn window_proc(
     unsafe { DefWindowProcW(hwnd, message, wparam, lparam) }
 }
 
-/// Direct3D 12/DXGI initialization state.
+fn transition_barrier(
+    resource: &ID3D12Resource,
+    before: windows::Win32::Graphics::Direct3D12::D3D12_RESOURCE_STATES,
+    after: windows::Win32::Graphics::Direct3D12::D3D12_RESOURCE_STATES,
+) -> D3D12_RESOURCE_BARRIER {
+    D3D12_RESOURCE_BARRIER {
+        Type: D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+        Flags: D3D12_RESOURCE_BARRIER_FLAG_NONE,
+        Anonymous: D3D12_RESOURCE_BARRIER_0 {
+            Transition: ManuallyDrop::new(D3D12_RESOURCE_TRANSITION_BARRIER {
+                pResource: ManuallyDrop::new(Some(resource.clone())),
+                Subresource: D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                StateBefore: before,
+                StateAfter: after,
+            }),
+        },
+    }
+}
+
+/// Direct3D 12/DXGI host with one reusable command allocator/list.
 ///
-/// The swap chain uses the DXGI flip-discard model with a frame-latency
-/// waitable object and a maximum queued latency of one frame. This object does
-/// not yet expose frame submission because no command-list/upload pipeline has
-/// been installed in this bootstrap milestone.
+/// The single-allocator policy deliberately waits for the previous GPU fence
+/// before reuse. This first renderer favors explicit correctness over overlap;
+/// a later measured optimization can introduce per-frame contexts without
+/// changing the emulated machine timeline.
 pub struct D3d12Host {
-    window: NativeVideoWindow,
     _factory: IDXGIFactory2,
     _device: ID3D12Device,
-    _queue: ID3D12CommandQueue,
+    queue: ID3D12CommandQueue,
     swap_chain: IDXGISwapChain3,
     swap_chain2: IDXGISwapChain2,
     frame_latency_handle: HANDLE,
+    rtv_heap: ID3D12DescriptorHeap,
+    render_targets: Vec<ID3D12Resource>,
+    rtv_handles: Vec<D3D12_CPU_DESCRIPTOR_HANDLE>,
+    command_allocator: ID3D12CommandAllocator,
+    command_list: ID3D12GraphicsCommandList,
+    fence: ID3D12Fence,
+    fence_event: HANDLE,
+    last_submitted_fence: u64,
     width: u32,
     height: u32,
+    window: NativeVideoWindow,
 }
 
 impl D3d12Host {
@@ -165,7 +204,7 @@ impl D3d12Host {
         unsafe {
             D3D12CreateDevice(None, D3D_FEATURE_LEVEL_11_0, &mut device)?;
         }
-        let device = device.ok_or_else(Error::from_win32)?;
+        let device: ID3D12Device = device.ok_or_else(Error::from_win32)?;
 
         let queue_desc = D3D12_COMMAND_QUEUE_DESC {
             Type: D3D12_COMMAND_LIST_TYPE_DIRECT,
@@ -184,7 +223,7 @@ impl D3d12Host {
                 Quality: 0,
             },
             BufferUsage: DXGI_USAGE_RENDER_TARGET_OUTPUT,
-            BufferCount: 2,
+            BufferCount: SWAP_CHAIN_BUFFER_COUNT,
             Scaling: DXGI_SCALING_STRETCH,
             SwapEffect: DXGI_SWAP_EFFECT_FLIP_DISCARD,
             AlphaMode: DXGI_ALPHA_MODE_IGNORE,
@@ -214,19 +253,66 @@ impl D3d12Host {
         if frame_latency_handle.is_invalid() {
             return Err(Error::from_win32());
         }
-
         let swap_chain: IDXGISwapChain3 = swap_chain2.cast()?;
 
+        let rtv_heap_desc = D3D12_DESCRIPTOR_HEAP_DESC {
+            Type: D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+            NumDescriptors: SWAP_CHAIN_BUFFER_COUNT,
+            Flags: D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+            NodeMask: 0,
+        };
+        let rtv_heap: ID3D12DescriptorHeap =
+            unsafe { device.CreateDescriptorHeap(&rtv_heap_desc)? };
+        let descriptor_increment =
+            unsafe { device.GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV) };
+        let first_rtv = unsafe { rtv_heap.GetCPUDescriptorHandleForHeapStart() };
+
+        let mut render_targets = Vec::with_capacity(SWAP_CHAIN_BUFFER_COUNT as usize);
+        let mut rtv_handles = Vec::with_capacity(SWAP_CHAIN_BUFFER_COUNT as usize);
+        for index in 0..SWAP_CHAIN_BUFFER_COUNT {
+            let resource: ID3D12Resource = unsafe { swap_chain.GetBuffer(index)? };
+            let handle = D3D12_CPU_DESCRIPTOR_HANDLE {
+                ptr: first_rtv.ptr + index as usize * descriptor_increment as usize,
+            };
+            unsafe { device.CreateRenderTargetView(&resource, None, handle) };
+            render_targets.push(resource);
+            rtv_handles.push(handle);
+        }
+
+        let command_allocator: ID3D12CommandAllocator =
+            unsafe { device.CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT)? };
+        let command_list: ID3D12GraphicsCommandList = unsafe {
+            device.CreateCommandList(
+                0,
+                D3D12_COMMAND_LIST_TYPE_DIRECT,
+                &command_allocator,
+                None::<&ID3D12PipelineState>,
+            )?
+        };
+        unsafe { command_list.Close()? };
+
+        let fence: ID3D12Fence =
+            unsafe { device.CreateFence(0, D3D12_FENCE_FLAG_NONE)? };
+        let fence_event = unsafe { CreateEventW(None, false, false, None)? };
+
         Ok(Self {
-            window,
             _factory: factory,
             _device: device,
-            _queue: queue,
+            queue,
             swap_chain,
             swap_chain2,
             frame_latency_handle,
+            rtv_heap,
+            render_targets,
+            rtv_handles,
+            command_allocator,
+            command_list,
+            fence,
+            fence_event,
+            last_submitted_fence: 0,
             width,
             height,
+            window,
         })
     }
 
@@ -253,32 +339,129 @@ impl D3d12Host {
     /// Block the presentation thread until DXGI allows another frame.
     ///
     /// Call this only from the host/render thread. It must never gate machine
-    /// stepping or Scheduler time. The swap chain was created with the
-    /// frame-latency waitable-object flag and a maximum latency of one.
+    /// stepping or Scheduler time.
     pub fn wait_for_frame_slot(&self) -> Result<()> {
         let result = unsafe {
             WaitForSingleObjectEx(self.frame_latency_handle, INFINITE, false)
         };
-        if result.0 == 0 {
+        if result == WAIT_OBJECT_0 {
             Ok(())
         } else {
             Err(Error::from_win32())
         }
     }
 
-    /// Return whether the frame-latency waitable object was created.
-    pub fn has_frame_latency_waitable_object(&self) -> bool {
-        !self.frame_latency_handle.is_invalid()
+    /// Present a synthetic color-bar pattern through the real D3D12 swap chain.
+    ///
+    /// This is a renderer bring-up diagnostic, not an emulator framebuffer.
+    /// The command allocator is not reset until the previous submission's
+    /// fence has completed. The back buffer is transitioned to RENDER_TARGET
+    /// before clear and back to PRESENT before DXGI Present.
+    pub fn present_test_pattern(&mut self) -> Result<()> {
+        self.wait_for_frame_slot()?;
+        self.wait_for_gpu()?;
+
+        let buffer_index = self.current_back_buffer_index() as usize;
+        let back_buffer = &self.render_targets[buffer_index];
+        let rtv = self.rtv_handles[buffer_index];
+
+        unsafe {
+            self.command_allocator.Reset()?;
+            self.command_list
+                .Reset(&self.command_allocator, None::<&ID3D12PipelineState>)?;
+
+            let to_render_target = transition_barrier(
+                back_buffer,
+                D3D12_RESOURCE_STATE_PRESENT,
+                D3D12_RESOURCE_STATE_RENDER_TARGET,
+            );
+            self.command_list.ResourceBarrier(&[to_render_target]);
+            self.command_list
+                .OMSetRenderTargets(1, Some(&rtv), false, None);
+
+            self.command_list
+                .ClearRenderTargetView(rtv, &[0.025, 0.035, 0.055, 1.0], None);
+
+            let band_top = (self.height / 8) as i32;
+            let band_bottom = (self.height * 7 / 8) as i32;
+            let colors = [
+                [0.85, 0.08, 0.08, 1.0],
+                [0.08, 0.78, 0.12, 1.0],
+                [0.08, 0.20, 0.90, 1.0],
+                [0.85, 0.80, 0.08, 1.0],
+                [0.80, 0.08, 0.82, 1.0],
+                [0.08, 0.78, 0.82, 1.0],
+            ];
+            for (bar, color) in colors.iter().enumerate() {
+                let left = (self.width as usize * bar / colors.len()) as i32;
+                let right = (self.width as usize * (bar + 1) / colors.len()) as i32;
+                let rect = RECT {
+                    left,
+                    top: band_top,
+                    right,
+                    bottom: band_bottom,
+                };
+                self.command_list
+                    .ClearRenderTargetView(rtv, color, Some(std::slice::from_ref(&rect)));
+            }
+
+            let to_present = transition_barrier(
+                back_buffer,
+                D3D12_RESOURCE_STATE_RENDER_TARGET,
+                D3D12_RESOURCE_STATE_PRESENT,
+            );
+            self.command_list.ResourceBarrier(&[to_present]);
+            self.command_list.Close()?;
+
+            let command_list: ID3D12CommandList = self.command_list.cast()?;
+            self.queue.ExecuteCommandLists(&[Some(command_list)]);
+            self.swap_chain.Present(1, DXGI_PRESENT(0)).ok()?;
+
+            self.last_submitted_fence = self.last_submitted_fence.saturating_add(1);
+            self.queue.Signal(&self.fence, self.last_submitted_fence)?;
+        }
+
+        Ok(())
+    }
+
+    fn wait_for_gpu(&self) -> Result<()> {
+        if self.last_submitted_fence == 0
+            || unsafe { self.fence.GetCompletedValue() } >= self.last_submitted_fence
+        {
+            return Ok(());
+        }
+
+        unsafe {
+            self.fence
+                .SetEventOnCompletion(self.last_submitted_fence, self.fence_event)?;
+            let result = WaitForSingleObjectEx(self.fence_event, INFINITE, false);
+            if result == WAIT_OBJECT_0 {
+                Ok(())
+            } else {
+                Err(Error::from_win32())
+            }
+        }
     }
 }
 
 impl Drop for D3d12Host {
     fn drop(&mut self) {
+        let _ = self.wait_for_gpu();
+
         if !self.frame_latency_handle.is_invalid() {
             unsafe {
                 let _ = CloseHandle(self.frame_latency_handle);
             }
             self.frame_latency_handle = HANDLE::default();
         }
+        if !self.fence_event.is_invalid() {
+            unsafe {
+                let _ = CloseHandle(self.fence_event);
+            }
+            self.fence_event = HANDLE::default();
+        }
+
+        // The HWND is the final field, so its owner is dropped after DXGI.
+        let _ = &self.rtv_heap;
     }
 }
