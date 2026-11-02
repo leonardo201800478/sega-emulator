@@ -305,7 +305,7 @@ impl Sn76489Core {
     }
 }
 
-impl Sn76489 {
+impl Sn76489Core {
     fn reset_inner(&mut self) {
         self.tone_periods = [0; TONE_CHANNELS];
         self.attenuations = [15; 4];
