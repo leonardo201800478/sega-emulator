@@ -1,9 +1,9 @@
 //! New SMS1/315-5124 VDP foundation, hosted by the SMS core crate.
 //!
 //! This module is deliberately independent from the legacy scanline renderer.
-//! It currently owns only revision/profile identity and raw device state.
-//! Port semantics, raster timing, fetch, sprites, pixels and IRQ are added
-//! only when their contracts are supported by the SMS1 evidence matrix.
+//! It owns SMS1 identity, raw memory/register state, CPU port protocol and a
+//! deterministic functional Mode 4 background scanline renderer. Raster
+//! scheduling, fetch arbitration, sprites and IRQ remain separate milestones.
 
 /// SMS VDP ASIC revision. Video standard is modeled independently.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -485,7 +485,6 @@ pub fn render_mode4_background_line(
     let backdrop = registers[7] & 0x0F;
     let blank = registers[1] & 0x40 != 0 || registers[0] & 0x04 == 0;
     let name_table_base = usize::from(registers[2] & 0x0E) << 10;
-    let vertical_scroll_enabled = registers[0] & 0x80 == 0;
     let horizontal_scroll = if registers[0] & 0x40 != 0 && screen_y < 16 {
         0
     } else {
@@ -507,7 +506,7 @@ pub fn render_mode4_background_line(
             continue;
         }
 
-        let vertical = if vertical_scroll_enabled && !(registers[0] & 0x80 != 0 && screen_x >= 192) {
+        let vertical = if registers[0] & 0x80 == 0 || screen_x < 192 {
             usize::from(latched_vertical_scroll)
         } else {
             0
@@ -604,7 +603,7 @@ mod background_tests {
         put_tile(&mut state, 1, 0b0010);
         // Change the first and last source columns so the flip is observable.
         state.memory.vram[32] = 0x80;
-        state.memory.vram[32 + 7 * 4] = 0x01;
+        state.memory.vram[32 + 7 * 4] = 0x00;
         state.memory.cram[2] = 0x0C;
 
         let mut line = [BackgroundPixel { color: [0; 3], palette_index: 0, priority: false }; 256];
@@ -635,14 +634,16 @@ mod background_tests {
         // First map tile is color 1, second is color 2.
         state.memory.vram[0x3800] = 1;
         state.memory.vram[0x3802] = 2;
+        state.memory.vram[0x383E] = 3;
         put_tile(&mut state, 1, 1);
         put_tile(&mut state, 2, 2);
+        put_tile(&mut state, 3, 3);
 
         let mut line = [BackgroundPixel { color: [0; 3], palette_index: 0, priority: false }; 256];
         render_mode4_background_line(&state, 0, 0, &mut line);
         assert_eq!(line[0].palette_index, 1);
         render_mode4_background_line(&state, 16, 0, &mut line);
-        assert_eq!(line[0].palette_index, 2);
+        assert_eq!(line[0].palette_index, 3);
     }
 
     #[test]
