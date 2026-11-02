@@ -145,14 +145,27 @@ impl SmsTemporalMachine {
         &mut self,
         tstates: u32,
     ) -> Result<MachineTime, SmsTemporalMachineError> {
+        let cpu_state = self.cpu.export_state();
         if !matches!(
-            self.cpu.export_state().phase,
+            cpu_state.phase,
             Z80MicroSequencerPhase::MemoryIncDecInternal { .. }
         ) {
             return Err(SmsTemporalMachineError::InvalidState);
         }
         if self.pending_internal_cycle_id.is_some() {
             return Err(SmsTemporalMachineError::InvalidState);
+        }
+        if cpu_state.instruction_tstates == u32::MAX {
+            return Err(SmsTemporalMachineError::Cpu(
+                Z80MicroSequencerError::InstructionTStateOverflow,
+            ));
+        }
+        if cpu_state.handshake.next_request_id == u64::MAX {
+            return Err(SmsTemporalMachineError::Cpu(
+                Z80MicroSequencerError::Handshake(
+                    sega_z80_cpu::Z80BusHandshakeError::RequestIdExhausted,
+                ),
+            ));
         }
         let continuation_id = self.next_internal_cycle_id;
         let next_internal_cycle_id = continuation_id
@@ -525,6 +538,42 @@ mod tests {
         assert_atomic_differential(&[0x3E, 0x42], 0, 0, 0, 0, 0x3E);
         assert_atomic_differential(&[0x77], 0x5A, 0, 0xC000, 0, 0x77);
         assert_atomic_differential(&[0x34], 0, 0, 0xC000, 0x7F, 0x34);
+    }
+
+    #[test]
+    fn internal_cycle_preflights_request_id_exhaustion_before_scheduling() {
+        let mut machine = SmsTemporalMachine::new(vec![0x34; 0x4000], 3).unwrap();
+        machine.cpu_mut().registers.set_hl(0xC000);
+        let fetch = match machine.begin_instruction().unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected fetch, got {other:?}"),
+        };
+        machine.schedule_pending_bus(0).unwrap();
+        let read = match machine.dispatch_next().unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected memory read, got {other:?}"),
+        };
+        machine.schedule_pending_bus(0).unwrap();
+        assert_eq!(
+            machine.dispatch_next().unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+
+        let mut state = machine.export_state();
+        state.cpu.handshake.next_request_id = u64::MAX;
+        let mut restored = SmsTemporalMachine::restore_state(state).unwrap();
+        let before = restored.export_state();
+        assert_eq!(
+            restored.schedule_internal_cycle(1),
+            Err(SmsTemporalMachineError::Cpu(
+                Z80MicroSequencerError::Handshake(
+                    sega_z80_cpu::Z80BusHandshakeError::RequestIdExhausted
+                )
+            ))
+        );
+        assert_eq!(restored.export_state(), before);
+        assert_eq!(restored.cpu().pending_request(), None);
+        assert!(fetch.id < read.id);
     }
 
     #[test]
