@@ -297,15 +297,40 @@ impl ClockDomain {
             return Err(ClockError::ZeroEdgeIndex);
         }
 
-        let threshold = edge_index
-            .checked_mul(u128::from(self.ratio.ticks_denominator))
-            .ok_or(ClockError::ArithmeticOverflow)?;
-        let elapsed_numerator = threshold
-            .checked_sub(self.phase)
-            .ok_or(ClockError::ArithmeticOverflow)?;
-        let edge_denominator = u128::from(self.ratio.cycles_numerator);
-        let whole_offset = elapsed_numerator / edge_denominator;
-        let fractional_numerator = (elapsed_numerator % edge_denominator) as u64;
+        // Divide the edge index first so the intermediate product remains
+        // bounded by u64::MAX squared instead of multiplying two u128 values.
+        let numerator = u128::from(self.ratio.cycles_numerator);
+        let denominator = u128::from(self.ratio.ticks_denominator);
+        let edge_quotient = edge_index / numerator;
+        let edge_remainder = edge_index % numerator;
+        let remainder_ticks = edge_remainder * denominator;
+
+        let (whole_offset, fractional_numerator) = if remainder_ticks >= self.phase {
+            let partial = remainder_ticks - self.phase;
+            let whole = edge_quotient
+                .checked_mul(denominator)
+                .and_then(|value| value.checked_add(partial / numerator))
+                .ok_or(ClockError::ArithmeticOverflow)?;
+            (whole, (partial % numerator) as u64)
+        } else {
+            // This branch implies edge_quotient > 0: edge_index is positive,
+            // and an index below the numerator would contribute at least one
+            // complete denominator before the initial phase is subtracted.
+            let difference = self.phase - remainder_ticks;
+            let borrow = difference.div_ceil(numerator);
+            let whole = edge_quotient
+                .checked_sub(1)
+                .and_then(|value| value.checked_mul(denominator))
+                .and_then(|value| value.checked_add(denominator - borrow))
+                .ok_or(ClockError::ArithmeticOverflow)?;
+            let remainder = difference % numerator;
+            let fractional = if remainder == 0 {
+                0
+            } else {
+                (numerator - remainder) as u64
+            };
+            (whole, fractional)
+        };
         let whole_ticks = self
             .time
             .checked_add(whole_offset)
@@ -332,13 +357,25 @@ impl ClockDomain {
         let elapsed = target
             .checked_duration_since(self.time)
             .ok_or(ClockError::TimeWentBackwards)?;
-        let scaled = elapsed
-            .checked_mul(u128::from(self.ratio.cycles_numerator))
+        // Split elapsed time by the denominator before multiplying. The
+        // remainder product is bounded by u64::MAX squared, while overflow in
+        // the quotient product necessarily means the final cycle count cannot
+        // fit in u128.
+        let denominator = u128::from(self.ratio.ticks_denominator);
+        let numerator = u128::from(self.ratio.cycles_numerator);
+        let elapsed_quotient = elapsed / denominator;
+        let elapsed_remainder = elapsed % denominator;
+        let remainder_scaled = elapsed_remainder
+            .checked_mul(numerator)
             .and_then(|value| value.checked_add(self.phase))
             .ok_or(ClockError::ArithmeticOverflow)?;
-        let denominator = u128::from(self.ratio.ticks_denominator);
-        let new_cycles = scaled / denominator;
-        let new_phase = scaled % denominator;
+        let whole_cycles = elapsed_quotient
+            .checked_mul(numerator)
+            .ok_or(ClockError::ArithmeticOverflow)?;
+        let new_cycles = whole_cycles
+            .checked_add(remainder_scaled / denominator)
+            .ok_or(ClockError::ArithmeticOverflow)?;
+        let new_phase = remainder_scaled % denominator;
         let new_total = self
             .total_cycles
             .checked_add(new_cycles)
@@ -627,6 +664,33 @@ mod tests {
             ),
             Err(ClockError::InvalidClockHistory)
         );
+    }
+
+
+    #[test]
+    fn rational_advance_does_not_overflow_when_reduced_result_fits() {
+        let ratio = ClockRatio::new(u64::MAX, u64::MAX).unwrap();
+        let mut domain = ClockDomain::new(ratio, MachineTime::ZERO);
+        let elapsed = 1_u128 << 65;
+
+        assert_eq!(
+            domain.advance_to(MachineTime::from_ticks(elapsed)),
+            Ok(elapsed)
+        );
+        assert_eq!(domain.total_cycles(), elapsed);
+        assert_eq!(domain.snapshot().phase, 0);
+    }
+
+    #[test]
+    fn edge_time_does_not_overflow_when_reduced_timestamp_fits() {
+        let ratio = ClockRatio::new(u64::MAX, u64::MAX).unwrap();
+        let domain = ClockDomain::new(ratio, MachineTime::ZERO);
+        let edge_index = 1_u128 << 65;
+        let edge = domain.edge_time_after(edge_index).unwrap();
+
+        assert_eq!(edge.whole_ticks(), MachineTime::from_ticks(edge_index));
+        assert_eq!(edge.fractional_numerator(), 0);
+        assert_eq!(edge.fractional_denominator(), 1);
     }
 
     #[test]
