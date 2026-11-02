@@ -927,13 +927,19 @@ mod tests {
         let mut cpu = Z80MicroSequencer::default();
         let fetch = request(cpu.begin_instruction().unwrap());
         assert_eq!(
-            (cpu.export_state().mcycle_index, cpu.export_state().tstate_index),
+            (
+                cpu.export_state().mcycle_index,
+                cpu.export_state().tstate_index
+            ),
             (0, 0)
         );
 
         let read = request(cpu.complete_bus_cycle(fetch.id, Some(0x34)).unwrap());
         assert_eq!(
-            (cpu.export_state().mcycle_index, cpu.export_state().tstate_index),
+            (
+                cpu.export_state().mcycle_index,
+                cpu.export_state().tstate_index
+            ),
             (1, 0)
         );
 
@@ -942,18 +948,27 @@ mod tests {
             Z80MicroStep::InternalCycle { tstates: 1 }
         );
         assert_eq!(
-            (cpu.export_state().mcycle_index, cpu.export_state().tstate_index),
+            (
+                cpu.export_state().mcycle_index,
+                cpu.export_state().tstate_index
+            ),
             (2, 0)
         );
 
         let write = request(cpu.complete_internal_cycle().unwrap());
         assert_eq!(
-            (cpu.export_state().mcycle_index, cpu.export_state().tstate_index),
+            (
+                cpu.export_state().mcycle_index,
+                cpu.export_state().tstate_index
+            ),
             (3, 0)
         );
         retired(cpu.complete_bus_cycle(write.id, None).unwrap(), 0x34, 11);
         assert_eq!(
-            (cpu.export_state().mcycle_index, cpu.export_state().tstate_index),
+            (
+                cpu.export_state().mcycle_index,
+                cpu.export_state().tstate_index
+            ),
             (0, 0)
         );
     }
