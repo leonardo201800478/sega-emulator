@@ -179,6 +179,12 @@ impl SmsTemporalBus {
     /// A read samples memory at this completion boundary. A write mutates memory
     /// at this completion boundary. The response is latched until acknowledged.
     pub fn dispatch_next(&mut self) -> Result<Option<SmsTemporalDispatch>, SmsTemporalBusError> {
+        // A dispatched completion remains observable until acknowledgement. This
+        // also lets a restored machine resume after the memory effect but before
+        // the CPU has accepted the response.
+        if let Some(completion) = self.completion {
+            return Ok(Some(SmsTemporalDispatch::BusCompletion(completion)));
+        }
         let Some(dispatch) = self.coordinator.dispatch_next()? else {
             return Ok(None);
         };
