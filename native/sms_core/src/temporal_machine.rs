@@ -1219,5 +1219,4 @@ mod tests {
             Err(SmsTemporalMachineError::InvalidState)
         ));
     }
-
 }

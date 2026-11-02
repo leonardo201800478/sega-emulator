@@ -209,7 +209,9 @@ impl Z80MicroSequencer {
                     && address == state.registers.hl()
                     && state.instruction_tstates >= 4
             }
-            Z80MicroSequencerPhase::MemoryIncDecInternal { decrement, address, .. } => {
+            Z80MicroSequencerPhase::MemoryIncDecInternal {
+                decrement, address, ..
+            } => {
                 let expected_opcode = if decrement { 0x35 } else { 0x34 };
                 pending.is_none()
                     && state.opcode == Some(expected_opcode)
@@ -1553,5 +1555,4 @@ mod tests {
             Err(Z80MicroSequencerError::InvalidState)
         );
     }
-
 }

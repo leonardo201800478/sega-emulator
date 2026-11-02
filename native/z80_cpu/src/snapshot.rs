@@ -600,5 +600,4 @@ mod tests {
             Err(Z80MicroSequencerStateCodecError::InvalidState)
         );
     }
-
 }
