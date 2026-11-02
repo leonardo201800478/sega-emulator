@@ -21,11 +21,11 @@ The temporal foundation has been developed as a linear, reviewable stack. The fo
 | PR #350 — E3 | `d84e588a470c09655ae3c424a094d9f2c98e9a58` | Canonical EventQueue export/restore; preserves pending sequence values, allocator, and complete dispatched watermark including sequence; validates full causal key, allocator bounds, and uniqueness against the dispatched sequence. | GitHub Actions run `41368745114` SUCCESS on this exact SHA; all six required gates passed. |
 | PR #352 — E4 | `9c506be48982c20c98977e71aef71eb8f1cf3031` | Atomic full-scheduler export/restore; canonical clock-domain DTOs; cross-validates time, event watermark, dispatch history, pending-event bounds, schema version and delta policy. | CI run `41369507172` SUCCESS on this exact implementation SHA; semantic cross-audit complete, external review pending. |
 | PR #353 — E5 | `a33065fe14c09ee1840f5c9abb7e9ff0730457d2` | Versioned binary frame with CRC-32/ISO-HDLC integrity check; independent payload-codec version; u128 fixed-width unsigned big-endian; strict length, tag and trailing-data validation. | GitHub Actions run `41370192970` SUCCESS on this exact SHA; all six required gates passed. |
-| PR #354 — E6 | `c0ccc8d84762258869d5c37ac856effa636619f2` | Fixed-seed differential replay across independent snapshots; exact comparison of dispatches, sequences, rational clock advances, errors and final state; delta-budget changes and overflow. | Implementation candidate; exact-SHA CI pending. |
+| PR #354 — E6 | `f724479832fc0e3f051c37ec23b226056858019c` | Fixed-seed differential replay across independent snapshots; exact comparison of dispatches, sequences, rational clock advances, errors and final state; delta-budget changes and overflow. | GitHub Actions run `41370554220` SUCCESS on this exact SHA; all six required gates passed. |
 
 The independent audit dated 2026-11-01 examined the actual #346 branch and found no snapshot/restore implementation, no Serde support in the native crates, and no snapshot tests. Its local targeted test run passed 16 `temporal_core` tests and 18 `machine_scheduler` tests using Rust 1.85.1. The auditor did not run `fmt` or `clippy`; those local checks are therefore NOT RUN. The GitHub Actions success above is separate evidence and must not be confused with the auditor's local run.
 
-The original audit verdict was **READY WITH CONDITIONS**. E1–E5 have exact implementation-SHA CI evidence; E6 is implemented as a deterministic replay-test candidate in PR #354 with CI pending. E7 evidence consolidation remains pending; `TEMPORAL_PASS` is not claimed.
+The original audit verdict was **READY WITH CONDITIONS**. E1–E6 have exact implementation-SHA CI evidence in stacked PRs. E7 evidence consolidation remains pending; `TEMPORAL_PASS` is not claimed.
 
 ## 2. Problem
 
@@ -219,7 +219,7 @@ At the time this ADR was prepared:
 - E3 queue export/restore is implemented in PR #350. The watermark preserves the complete dispatched key, including sequence; restore validates pending events against that full key and rejects watermark sequences outside the allocator range. Regression tests cover same-timestamp/phase/priority sequence rollback and a valid later sequence. A follow-up audit added rejection of pending events that reuse the dispatched watermark sequence, even when their timestamp is later. Final E3 candidate `d84e588a470c09655ae3c424a094d9f2c98e9a58` passed exact-SHA run `41368745114` (all six required gates).
 - E4 full scheduler atomic restore is implemented in PR #352 at `9c506be48982c20c98977e71aef71eb8f1cf3031`; exact-SHA CI run `41369507172` reports SUCCESS. Independent semantic review is pending.
 - E5 versioned codec is implemented in PR #353 at `a33065fe14c09ee1840f5c9abb7e9ff0730457d2`; exact-SHA CI run `41370192970` reports SUCCESS for Rust formatting, Clippy, workspace tests, Ruff formatting, Ruff lint and pytest. Tests cover CRC-32 corruption detection, both codec versions, u128 boundaries, truncation, trailing bytes and payload decoding.
-- E6 differential replay is implemented as a candidate in PR #354 at `c0ccc8d84762258869d5c37ac856effa636619f2`; exact-SHA CI is pending.
+- E6 differential replay is implemented in PR #354 at `f724479832fc0e3f051c37ec23b226056858019c`; exact-SHA CI run `41370554220` reports SUCCESS for Rust formatting, Clippy, workspace tests, Ruff formatting, Ruff lint and pytest.
 - `TEMPORAL_PASS`: NOT CLAIMED.
 - Cycle-accurate SMS timing: NOT CLAIMED.
 
