@@ -79,11 +79,9 @@ impl Z80MicroSequencer {
         }
         self.instruction_tstates = 0;
         self.opcode = None;
-        let request = self.handshake.begin(
-            Z80BusOperation::OpcodeFetch,
-            self.registers.pc,
-            4,
-        )?;
+        let request = self
+            .handshake
+            .begin(Z80BusOperation::OpcodeFetch, self.registers.pc, 4)?;
         self.phase = InstructionPhase::OpcodeFetch;
         Ok(Z80MicroStep::BusRequest(request))
     }
@@ -119,7 +117,9 @@ impl Z80MicroSequencer {
 
         match self.phase {
             InstructionPhase::OpcodeFetch => {
-                let opcode = response.data.ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                let opcode = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 self.registers.pc = self.registers.pc.wrapping_add(1);
                 self.refresh = (self.refresh & 0x80) | (self.refresh.wrapping_add(1) & 0x7F);
                 self.opcode = Some(opcode);
@@ -134,23 +134,29 @@ impl Z80MicroSequencer {
                         self.opcode = None;
                         self.instruction_tstates = 0;
                         Err(Z80MicroSequencerError::UnsupportedOpcode { opcode, address })
-                    },
+                    }
                 }
             }
             InstructionPhase::ImmediateRead => {
-                let value = response.data.ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                let value = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 self.registers.pc = self.registers.pc.wrapping_add(1);
                 self.registers.a = value;
-                self.retire(self.opcode.ok_or(Z80MicroSequencerError::UnexpectedCompletion)?)
+                self.retire(
+                    self.opcode
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
+                )
             }
             InstructionPhase::MemoryRead => {
                 let value = response.data.ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 self.registers.a = value;
                 self.retire(self.opcode.ok_or(Z80MicroSequencerError::UnexpectedCompletion)?)
             }
-            InstructionPhase::MemoryWrite => {
-                self.retire(self.opcode.ok_or(Z80MicroSequencerError::UnexpectedCompletion)?)
-            }
+            InstructionPhase::MemoryWrite => self.retire(
+                self.opcode
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
+            ),
             InstructionPhase::Ready => Err(Z80MicroSequencerError::NoInstructionActive),
         }
     }
@@ -170,7 +176,9 @@ impl Z80MicroSequencer {
         phase: InstructionPhase,
         address: u16,
     ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
-        let request = self.handshake.begin(Z80BusOperation::MemoryRead, address, 3)?;
+        let request = self
+            .handshake
+            .begin(Z80BusOperation::MemoryRead, address, 3)?;
         self.phase = phase;
         Ok(Z80MicroStep::BusRequest(request))
     }
@@ -219,7 +227,11 @@ mod tests {
         assert_eq!(fetch.operation, Z80BusOperation::OpcodeFetch);
         assert_eq!(fetch.address, 0);
         assert_eq!(cpu.registers.pc, 0);
-        retired(cpu.complete_bus_cycle(fetch.id, Some(0x00)).unwrap(), 0x00, 4);
+        retired(
+            cpu.complete_bus_cycle(fetch.id, Some(0x00)).unwrap(),
+            0x00,
+            4,
+        );
         assert_eq!(cpu.registers.pc, 1);
         assert_eq!(cpu.refresh, 1);
         assert!(!cpu.instruction_active());
@@ -234,7 +246,11 @@ mod tests {
         assert_eq!(operand.address, 1);
         assert_eq!(cpu.registers.pc, 1);
         assert_eq!(cpu.registers.a, 0);
-        retired(cpu.complete_bus_cycle(operand.id, Some(0x42)).unwrap(), 0x3E, 7);
+        retired(
+            cpu.complete_bus_cycle(operand.id, Some(0x42)).unwrap(),
+            0x3E,
+            7,
+        );
         assert_eq!(cpu.registers.pc, 2);
         assert_eq!(cpu.registers.a, 0x42);
     }
@@ -242,7 +258,11 @@ mod tests {
     #[test]
     fn load_a_from_hl_commits_read_data_on_completion_and_counts_waits() {
         let mut cpu = Z80MicroSequencer {
-            registers: Z80Registers { h: 0xC0, l: 0x10, ..Z80Registers::default() },
+            registers: Z80Registers {
+                h: 0xC0,
+                l: 0x10,
+                ..Z80Registers::default()
+            },
             ..Z80MicroSequencer::default()
         };
         let fetch = request(cpu.begin_instruction().unwrap());
@@ -251,21 +271,37 @@ mod tests {
         assert_eq!(cpu.registers.a, 0);
         cpu.insert_wait_tstate().unwrap();
         cpu.insert_wait_tstate().unwrap();
-        retired(cpu.complete_bus_cycle(read.id, Some(0xA5)).unwrap(), 0x7E, 9);
+        retired(
+            cpu.complete_bus_cycle(read.id, Some(0xA5)).unwrap(),
+            0x7E,
+            9,
+        );
         assert_eq!(cpu.registers.a, 0xA5);
     }
 
     #[test]
     fn load_hl_from_a_exposes_write_without_committing_early() {
         let mut cpu = Z80MicroSequencer {
-            registers: Z80Registers { a: 0x5A, h: 0xC1, l: 0x23, ..Z80Registers::default() },
+            registers: Z80Registers {
+                a: 0x5A,
+                h: 0xC1,
+                l: 0x23,
+                ..Z80Registers::default()
+            },
             ..Z80MicroSequencer::default()
         };
         let fetch = request(cpu.begin_instruction().unwrap());
         let write = request(cpu.complete_bus_cycle(fetch.id, Some(0x77)).unwrap());
-        assert_eq!(write.operation, Z80BusOperation::MemoryWrite { value: 0x5A });
+        assert_eq!(
+            write.operation,
+            Z80BusOperation::MemoryWrite { value: 0x5A }
+        );
         assert_eq!(write.address, 0xC123);
-        retired(cpu.complete_bus_cycle(write.id, None).unwrap(), 0x77, 7);
+        retired(
+            cpu.complete_bus_cycle(write.id, None).unwrap(),
+            0x77,
+            7,
+        );
     }
 
     #[test]
