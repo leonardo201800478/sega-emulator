@@ -25,8 +25,13 @@ pub enum BusCycleKind {
 pub struct MCycleIndex(u32);
 
 impl MCycleIndex {
-    pub const fn new(value: u32) -> Self { Self(value) }
-    pub const fn value(self) -> u32 { self.0 }
+    pub const fn new(value: u32) -> Self {
+        Self(value)
+    }
+
+    pub const fn value(self) -> u32 {
+        self.0
+    }
 }
 
 /// Zero-based T-state position within one M-cycle.
@@ -34,8 +39,13 @@ impl MCycleIndex {
 pub struct TStateIndex(u16);
 
 impl TStateIndex {
-    pub const fn new(value: u16) -> Self { Self(value) }
-    pub const fn value(self) -> u16 { self.0 }
+    pub const fn new(value: u16) -> Self {
+        Self(value)
+    }
+
+    pub const fn value(self) -> u16 {
+        self.0
+    }
 }
 
 /// Direction of a bus transaction.
@@ -104,7 +114,7 @@ impl BusTransaction {
             }
             BusCycleKind::Refresh => {
                 direction == BusDirection::None && address.is_some() && data.is_none()
-            },
+            }
             BusCycleKind::MemoryWrite | BusCycleKind::IoWrite => {
                 direction == BusDirection::Write && address.is_some() && data.is_some()
             }
@@ -128,15 +138,41 @@ impl BusTransaction {
         })
     }
 
-    pub const fn timestamp(self) -> MachineTime { self.timestamp }
-    pub const fn cycle_index(self) -> MCycleIndex { self.cycle_index }
-    pub const fn t_state_index(self) -> TStateIndex { self.t_state_index }
-    pub const fn phase(self) -> BusPhase { self.phase }
-    pub const fn kind(self) -> BusCycleKind { self.kind }
-    pub const fn direction(self) -> BusDirection { self.direction }
-    pub const fn address(self) -> Option<u16> { self.address }
-    pub const fn data(self) -> Option<u8> { self.data }
-    pub const fn duration_tstates(self) -> u16 { self.duration_tstates }
+    pub const fn timestamp(self) -> MachineTime {
+        self.timestamp
+    }
+
+    pub const fn cycle_index(self) -> MCycleIndex {
+        self.cycle_index
+    }
+
+    pub const fn t_state_index(self) -> TStateIndex {
+        self.t_state_index
+    }
+
+    pub const fn phase(self) -> BusPhase {
+        self.phase
+    }
+
+    pub const fn kind(self) -> BusCycleKind {
+        self.kind
+    }
+
+    pub const fn direction(self) -> BusDirection {
+        self.direction
+    }
+
+    pub const fn address(self) -> Option<u16> {
+        self.address
+    }
+
+    pub const fn data(self) -> Option<u8> {
+        self.data
+    }
+
+    pub const fn duration_tstates(self) -> u16 {
+        self.duration_tstates
+    }
 }
 
 /// Result of attempting a temporal bus operation.
@@ -201,8 +237,13 @@ impl DeviceProgress {
         Ok(Self { reached, next_event })
     }
 
-    pub const fn reached(self) -> MachineTime { self.reached }
-    pub const fn next_event(self) -> Option<MachineTime> { self.next_event }
+    pub const fn reached(self) -> MachineTime {
+        self.reached
+    }
+
+    pub const fn next_event(self) -> Option<MachineTime> {
+        self.next_event
+    }
 }
 
 /// Errors detected while validating shared temporal contracts.
@@ -219,10 +260,18 @@ impl fmt::Display for BusContractError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::ZeroDuration => f.write_str("bus transaction duration must be positive"),
-            Self::InconsistentFields => f.write_str("bus transaction fields are inconsistent with its cycle kind"),
-            Self::WaitDoesNotAdvanceTime => f.write_str("WAIT resume timestamp must be later than request timestamp"),
-            Self::RetroactiveEvent => f.write_str("device reported an event before its reached timestamp"),
-            Self::CompletionBeforeRequest => f.write_str("bus operation completed before its request timestamp"),
+            Self::InconsistentFields => {
+                f.write_str("bus transaction fields are inconsistent with its cycle kind")
+            },
+            Self::WaitDoesNotAdvanceTime => {
+                f.write_str("WAIT resume timestamp must be later than request timestamp")
+            },
+            Self::RetroactiveEvent => {
+                f.write_str("device reported an event before its reached timestamp")
+            },
+            Self::CompletionBeforeRequest => {
+                f.write_str("bus operation completed before its request timestamp")
+            },
         }
     }
 }
@@ -240,9 +289,17 @@ mod tests {
     #[test]
     fn transaction_accepts_a_well_formed_memory_read() {
         let transaction = BusTransaction::new(
-            MachineTime::from_ticks(12), MCycleIndex::new(2), TStateIndex::new(1), BusPhase::Sample,
-            BusCycleKind::MemoryRead, BusDirection::Read, Some(0xC000), None, 3,
-        ).unwrap();
+            MachineTime::from_ticks(12),
+            MCycleIndex::new(2),
+            TStateIndex::new(1),
+            BusPhase::Sample,
+            BusCycleKind::MemoryRead,
+            BusDirection::Read,
+            Some(0xC000),
+            None,
+            3,
+        )
+        .unwrap();
         assert_eq!(transaction.timestamp(), MachineTime::from_ticks(12));
         assert_eq!(transaction.address(), Some(0xC000));
         assert_eq!(transaction.data(), None);
@@ -252,15 +309,29 @@ mod tests {
     fn transaction_rejects_inconsistent_direction_and_missing_write_data() {
         assert_eq!(
             BusTransaction::new(
-                MachineTime::ZERO, MCycleIndex::new(0), TStateIndex::new(0), BusPhase::Setup,
-                BusCycleKind::MemoryRead, BusDirection::Write, Some(0), Some(1), 3,
+                MachineTime::ZERO,
+                MCycleIndex::new(0),
+                TStateIndex::new(0),
+                BusPhase::Setup,
+                BusCycleKind::MemoryRead,
+                BusDirection::Write,
+                Some(0),
+                Some(1),
+                3,
             ),
             Err(BusContractError::InconsistentFields),
         );
         assert_eq!(
             BusTransaction::new(
-                MachineTime::ZERO, MCycleIndex::new(0), TStateIndex::new(0), BusPhase::Setup,
-                BusCycleKind::MemoryWrite, BusDirection::Write, Some(0), None, 3,
+                MachineTime::ZERO,
+                MCycleIndex::new(0),
+                TStateIndex::new(0),
+                BusPhase::Setup,
+                BusCycleKind::MemoryWrite,
+                BusDirection::Write,
+                Some(0),
+                None,
+                3,
             ),
             Err(BusContractError::InconsistentFields),
         );
@@ -270,8 +341,15 @@ mod tests {
     fn transaction_rejects_zero_duration() {
         assert_eq!(
             BusTransaction::new(
-                MachineTime::ZERO, MCycleIndex::new(0), TStateIndex::new(0), BusPhase::Setup,
-                BusCycleKind::Internal, BusDirection::None, None, None, 0,
+                MachineTime::ZERO,
+                MCycleIndex::new(0),
+                TStateIndex::new(0),
+                BusPhase::Setup,
+                BusCycleKind::Internal,
+                BusDirection::None,
+                None,
+                None,
+                0,
             ),
             Err(BusContractError::ZeroDuration),
         );
@@ -280,7 +358,10 @@ mod tests {
     #[test]
     fn wait_must_resume_at_a_strictly_later_timestamp() {
         let same_time = BusOperationResult::<(), ()>::Wait { resume_at: MachineTime::ZERO };
-        assert_eq!(same_time.validate_wait(MachineTime::ZERO), Err(BusContractError::WaitDoesNotAdvanceTime));
+        assert_eq!(
+            same_time.validate_wait(MachineTime::ZERO),
+            Err(BusContractError::WaitDoesNotAdvanceTime)
+        );
         let later = BusOperationResult::<(), ()>::Wait { resume_at: MachineTime::from_ticks(1) };
         assert_eq!(later.validate_wait(MachineTime::ZERO), Ok(()));
     }
@@ -290,15 +371,26 @@ mod tests {
         let result = BusOperationResult::<(), ()>::Completed {
             value: (), completed_at: MachineTime::ZERO,
         };
-        assert_eq!(result.validate_completion(MachineTime::from_ticks(1)), Err(BusContractError::CompletionBeforeRequest));
+        assert_eq!(
+            result.validate_completion(MachineTime::from_ticks(1)),
+            Err(BusContractError::CompletionBeforeRequest)
+        );
     }
 
     #[test]
     fn refresh_cycle_has_address_but_no_read_or_write_direction() {
         assert!(BusTransaction::new(
-            MachineTime::ZERO, MCycleIndex::new(0), TStateIndex::new(0), BusPhase::Setup,
-            BusCycleKind::Refresh, BusDirection::None, Some(0x1234), None, 1,
-        ).is_ok());
+            MachineTime::ZERO,
+            MCycleIndex::new(0),
+            TStateIndex::new(0),
+            BusPhase::Setup,
+            BusCycleKind::Refresh,
+            BusDirection::None,
+            Some(0x1234),
+            None,
+            1,
+        )
+        .is_ok());
     }
 
     #[test]
@@ -307,6 +399,9 @@ mod tests {
             DeviceProgress::new(MachineTime::from_ticks(8), Some(MachineTime::from_ticks(7))),
             Err(BusContractError::RetroactiveEvent),
         );
-        assert!(DeviceProgress::new(MachineTime::from_ticks(8), Some(MachineTime::from_ticks(8))).is_ok());
+        assert!(
+            DeviceProgress::new(MachineTime::from_ticks(8), Some(MachineTime::from_ticks(8)))
+                .is_ok()
+        );
     }
 }
