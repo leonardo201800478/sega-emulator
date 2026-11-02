@@ -16,9 +16,9 @@ pub mod io;
 pub mod machine;
 pub mod memory;
 pub mod psg;
+pub mod temporal;
 pub mod vdp;
 pub mod vdp_sms1;
-pub mod temporal;
 pub mod temporal_bus;
 
 pub use bus::{
@@ -42,8 +42,8 @@ pub use temporal_bus::{
     SMS_TEMPORAL_BUS_STATE_VERSION,
 };
 pub use temporal::{
-    SmsTemporalCoordinator, SmsTemporalCoordinatorError, SmsTemporalCoordinatorState,
-    SmsTemporalEvent, SMS_TEMPORAL_COORDINATOR_STATE_VERSION, SMS_Z80_CLOCK_DOMAIN_ID,
+    SMS_TEMPORAL_COORDINATOR_STATE_VERSION, SMS_Z80_CLOCK_DOMAIN_ID, SmsTemporalCoordinator,
+    SmsTemporalCoordinatorError, SmsTemporalCoordinatorState, SmsTemporalEvent,
 };
 pub use vdp::{
     SMS_VDP_MAX_HEIGHT, SMS_VDP_WIDTH, SmsRasterPosition, SmsVdp, SmsVdpEye, StereoPresentation,
