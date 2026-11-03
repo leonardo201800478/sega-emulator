@@ -875,7 +875,7 @@ impl SmsTemporalMachine {
 
 #[cfg(test)]
 mod tests {
-    use super::{SmsTemporalBus, SmsTemporalMachine, SmsTemporalMachineError};
+    use super::{SmsTemporalMachine, SmsTemporalMachineError};
     use sega_temporal_core::BusOperationResult;
     use sega_temporal_core::{
         BusCycleKind, BusDirection, BusPhase, MCycleIndex, MachineTime, TStateIndex,
