@@ -1154,14 +1154,22 @@ impl Z80MicroSequencer {
                             pair_value,
                         };
                         if store {
-                            self.issue_write(address, pair_value as u8)
+                            self.issue_ed_absolute_write(address, pair_value as u8, next_phase)
                         } else {
                             self.issue_read(next_phase, address)
                         }
                     }
-                    2 if store => self.issue_write(
+                    2 if store => self.issue_ed_absolute_write(
                         address.wrapping_add(1),
                         (pair_value >> 8) as u8,
+                        Z80MicroSequencerPhase::EdAbsoluteTransfer {
+                            stage: 3,
+                            pair,
+                            store,
+                            address,
+                            low: 0,
+                            pair_value,
+                        },
                     ),
                     2 => {
                         let data_low = response.data.ok_or(
@@ -1760,6 +1768,25 @@ impl Z80MicroSequencer {
         self.mcycle_index = next_mcycle_index;
         self.tstate_index = 0;
         self.phase = Z80MicroSequencerPhase::CbMemoryWrite { address, value };
+        Ok(Z80MicroStep::BusRequest(request))
+    }
+
+    fn issue_ed_absolute_write(
+        &mut self,
+        address: u16,
+        value: u8,
+        phase: Z80MicroSequencerPhase,
+    ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
+        let next_mcycle_index = self
+            .mcycle_index
+            .checked_add(1)
+            .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+        let request = self
+            .handshake
+            .begin(Z80BusOperation::MemoryWrite { value }, address, 3)?;
+        self.mcycle_index = next_mcycle_index;
+        self.tstate_index = 0;
+        self.phase = phase;
         Ok(Z80MicroStep::BusRequest(request))
     }
 
