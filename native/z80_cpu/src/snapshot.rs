@@ -1210,11 +1210,9 @@ mod tests {
         for (prefix, opcode, initial, operand) in
             [(0xDD, 0x09, 0x1234, 0x0102), (0xFD, 0x19, 0x4321, 0x0203)]
         {
-            let mut cpu = Z80MicroSequencer {
-                ix: if prefix == 0xDD { initial } else { 0xAAAA },
-                iy: if prefix == 0xFD { initial } else { 0xBBBB },
-                ..Z80MicroSequencer::default()
-            };
+            let mut cpu = Z80MicroSequencer::default();
+            cpu.ix = if prefix == 0xDD { initial } else { 0xAAAA };
+            cpu.iy = if prefix == 0xFD { initial } else { 0xBBBB };
             if opcode == 0x09 {
                 cpu.registers.set_bc(operand);
             } else {
@@ -1246,6 +1244,7 @@ mod tests {
         }
     }
 
+    #[test]
     fn pending_alu_operand_phases_round_trip_through_snapshot_codec() {
         for opcode in [0xC6, 0x86] {
             let mut cpu = Z80MicroSequencer::default();
