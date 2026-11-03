@@ -1208,10 +1208,9 @@ mod tests {
 
     #[test]
     fn pending_indexed_add_internal_phase_round_trips_v19_snapshot() {
-        for (prefix, opcode, initial, operand) in [
-            (0xDD, 0x09, 0x1234, 0x0102),
-            (0xFD, 0x19, 0x4321, 0x0203),
-        ] {
+        for (prefix, opcode, initial, operand) in
+            [(0xDD, 0x09, 0x1234, 0x0102), (0xFD, 0x19, 0x4321, 0x0203)]
+        {
             let mut cpu = Z80MicroSequencer {
                 ix: if prefix == 0xDD { initial } else { 0xAAAA },
                 iy: if prefix == 0xFD { initial } else { 0xBBBB },
