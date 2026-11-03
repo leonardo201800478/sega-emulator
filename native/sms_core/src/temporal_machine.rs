@@ -1829,18 +1829,23 @@ mod base_absolute_transfer_temporal_tests {
         store_hl.cpu_mut().registers.set_hl(0xBEEF);
         assert!(matches!(
             store_hl.step_instruction(0).unwrap(),
-            Z80MicroStep::InstructionRetired { opcode: 0x22, tstates: 16 }
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x22,
+                tstates: 16
+            }
         ));
         let state = store_hl.export_state();
         assert_eq!(state.bus.memory.read(0xC000), 0xEF);
         assert_eq!(state.bus.memory.read(0xC001), 0xBE);
         assert_eq!(store_hl.now(), MachineTime::from_ticks(48));
 
-        let mut load_hl =
-            SmsTemporalMachine::new(vec![0x2A, 0x03, 0x00, 0x34, 0x12], 3).unwrap();
+        let mut load_hl = SmsTemporalMachine::new(vec![0x2A, 0x03, 0x00, 0x34, 0x12], 3).unwrap();
         assert!(matches!(
             load_hl.step_instruction(0).unwrap(),
-            Z80MicroStep::InstructionRetired { opcode: 0x2A, tstates: 16 }
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x2A,
+                tstates: 16
+            }
         ));
         assert_eq!(load_hl.cpu().registers.hl(), 0x1234);
         assert_eq!(load_hl.now(), MachineTime::from_ticks(48));
@@ -1849,7 +1854,10 @@ mod base_absolute_transfer_temporal_tests {
         store_a.cpu_mut().registers.a = 0xA7;
         assert!(matches!(
             store_a.step_instruction(0).unwrap(),
-            Z80MicroStep::InstructionRetired { opcode: 0x32, tstates: 13 }
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x32,
+                tstates: 13
+            }
         ));
         assert_eq!(store_a.export_state().bus.memory.read(0xC000), 0xA7);
         assert_eq!(store_a.now(), MachineTime::from_ticks(39));
@@ -1857,7 +1865,10 @@ mod base_absolute_transfer_temporal_tests {
         let mut load_a = SmsTemporalMachine::new(vec![0x3A, 0x03, 0x00, 0x5A], 3).unwrap();
         assert!(matches!(
             load_a.step_instruction(0).unwrap(),
-            Z80MicroStep::InstructionRetired { opcode: 0x3A, tstates: 13 }
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x3A,
+                tstates: 13
+            }
         ));
         assert_eq!(load_a.cpu().registers.a, 0x5A);
         assert_eq!(load_a.now(), MachineTime::from_ticks(39));
