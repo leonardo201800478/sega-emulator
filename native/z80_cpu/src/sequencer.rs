@@ -9139,3 +9139,178 @@ mod base_call_rst_differential_tests {
         compare_rst(0xFF, 0x0000);
     }
 }
+
+
+#[cfg(test)]
+mod base_return_differential_tests {
+    use crate::bus::CpuBus;
+    use crate::{
+        Z80, Z80ArchitecturalState, Z80BusOperation, Z80MicroSequencer, Z80MicroStep,
+    };
+
+    const FLAG_C: u8 = 0x01;
+    const FLAG_PV: u8 = 0x04;
+    const FLAG_Z: u8 = 0x40;
+    const FLAG_S: u8 = 0x80;
+
+    #[derive(Clone)]
+    struct TestBus {
+        memory: Box<[u8; 0x1_0000]>,
+    }
+
+    impl Default for TestBus {
+        fn default() -> Self {
+            Self {
+                memory: Box::new([0; 0x1_0000]),
+            }
+        }
+    }
+
+    impl CpuBus for TestBus {
+        fn read_memory(&mut self, address: u16) -> u8 {
+            self.memory[usize::from(address)]
+        }
+
+        fn write_memory(&mut self, address: u16, value: u8) {
+            self.memory[usize::from(address)] = value;
+        }
+    }
+
+    fn run_sequencer(
+        mut cpu: Z80MicroSequencer,
+        bus: &mut TestBus,
+    ) -> (Z80ArchitecturalState, u32) {
+        let mut step = cpu.begin_instruction().unwrap();
+        for _ in 0..16 {
+            step = match step {
+                Z80MicroStep::BusRequest(request) => {
+                    cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+                    let data = match request.operation {
+                        Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
+                            Some(bus.read_memory(request.address))
+                        }
+                        Z80BusOperation::MemoryWrite { value } => {
+                            bus.write_memory(request.address, value);
+                            None
+                        }
+                        operation => panic!("unexpected RET bus operation: {operation:?}"),
+                    };
+                    cpu.complete_bus_cycle(request.id, data).unwrap()
+                }
+                Z80MicroStep::InternalCycle { .. } => {
+                    cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+                    cpu.complete_internal_cycle().unwrap()
+                }
+                Z80MicroStep::InstructionRetired { tstates, .. } => {
+                    return (cpu.export_architectural_state(), tstates);
+                }
+            };
+        }
+        panic!("RET did not retire within 16 micro-operations");
+    }
+
+    fn compare_return(opcode: u8, flags: u8, taken: bool) {
+        let mut initial = Z80::default().export_architectural_state();
+        initial.registers.pc = 0x1000;
+        initial.registers.sp = 0x2000;
+        initial.registers.f = flags;
+        initial.ei_delay = 1;
+        initial.wz = 0xA328;
+
+        let mut atomic_bus = TestBus::default();
+        atomic_bus.memory[0x1000] = opcode;
+        atomic_bus.memory[0x2000] = 0x34;
+        atomic_bus.memory[0x2001] = 0x12;
+        let mut micro_bus = atomic_bus.clone();
+
+        let mut atomic = Z80::default();
+        atomic.import_architectural_state(initial).unwrap();
+        let atomic_tstates = atomic.step(&mut atomic_bus).unwrap();
+
+        let mut micro = Z80MicroSequencer::default();
+        micro.import_architectural_state(initial).unwrap();
+        let (micro_state, micro_tstates) = run_sequencer(micro, &mut micro_bus);
+
+        let expected_tstates = if opcode == 0xC9 {
+            10
+        } else if taken {
+            11
+        } else {
+            5
+        };
+        assert_eq!(micro_tstates, expected_tstates, "RET {opcode:02X}");
+        assert_eq!(micro_tstates, atomic_tstates, "RET {opcode:02X}");
+        assert_eq!(
+            micro_state.registers.pc,
+            if taken { 0x1234 } else { 0x1001 },
+            "RET {opcode:02X}"
+        );
+        assert_eq!(
+            micro_state.wz,
+            if taken { 0x1234 } else { 0xA328 },
+            "RET {opcode:02X}"
+        );
+        assert_eq!(
+            micro_state.registers.sp,
+            if taken { 0x2002 } else { 0x2000 },
+            "RET {opcode:02X}"
+        );
+        assert_eq!(
+            micro_state,
+            atomic.export_architectural_state(),
+            "architectural mismatch for RET {opcode:02X}"
+        );
+        assert_eq!(
+            micro_bus.memory, atomic_bus.memory,
+            "memory mismatch for RET {opcode:02X}"
+        );
+    }
+
+    #[test]
+    fn unconditional_and_all_conditional_returns_match_atomic_executor() {
+        compare_return(0xC9, 0x00, true);
+        compare_return(0xC0, 0x00, true);
+        compare_return(0xC0, FLAG_Z, false);
+        compare_return(0xC8, FLAG_Z, true);
+        compare_return(0xC8, 0x00, false);
+        compare_return(0xD0, 0x00, true);
+        compare_return(0xD0, FLAG_C, false);
+        compare_return(0xD8, FLAG_C, true);
+        compare_return(0xD8, 0x00, false);
+        compare_return(0xE0, 0x00, true);
+        compare_return(0xE0, FLAG_PV, false);
+        compare_return(0xE8, FLAG_PV, true);
+        compare_return(0xE8, 0x00, false);
+        compare_return(0xF0, 0x00, true);
+        compare_return(0xF0, FLAG_S, false);
+        compare_return(0xF8, FLAG_S, true);
+        compare_return(0xF8, 0x00, false);
+    }
+
+    #[test]
+    fn unconditional_return_stack_reads_wrap_sp_at_ffff() {
+        let mut initial = Z80::default().export_architectural_state();
+        initial.registers.pc = 0x1000;
+        initial.registers.sp = 0xFFFF;
+        let mut atomic_bus = TestBus::default();
+        atomic_bus.memory[0x1000] = 0xC9;
+        atomic_bus.memory[0xFFFF] = 0x34;
+        atomic_bus.memory[0x0000] = 0x12;
+        let mut micro_bus = atomic_bus.clone();
+
+        let mut atomic = Z80::default();
+        atomic.import_architectural_state(initial).unwrap();
+        let atomic_tstates = atomic.step(&mut atomic_bus).unwrap();
+        let mut micro = Z80MicroSequencer::default();
+        micro.import_architectural_state(initial).unwrap();
+        let (micro_state, micro_tstates) = run_sequencer(micro, &mut micro_bus);
+
+        assert_eq!(micro_tstates, 10);
+        assert_eq!(micro_tstates, atomic_tstates);
+        assert_eq!(micro_state.registers.sp, 0x0001);
+        assert_eq!(micro_state.registers.pc, 0x1234);
+        assert_eq!(micro_state.wz, 0x1234);
+        assert_eq!(micro_state, atomic.export_architectural_state());
+        assert_eq!(micro_bus.memory, atomic_bus.memory);
+    }
+}
