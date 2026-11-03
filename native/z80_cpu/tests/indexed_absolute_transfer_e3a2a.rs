@@ -73,13 +73,19 @@ fn ld_iy_mem_nn_restores_both_data_read_phases() {
     let low_read = request(cpu.complete_bus_cycle(high_address.id, Some(0x60)).unwrap());
     assert_eq!(low_read.address, 0x6000);
 
-    let encoded = cpu.export_state().encode().expect("stage-2 snapshot encodes");
+    let encoded = cpu
+        .export_state()
+        .encode()
+        .expect("stage-2 snapshot encodes");
     let decoded = Z80MicroSequencerState::decode(&encoded).expect("stage-2 snapshot decodes");
     cpu = Z80MicroSequencer::restore_state(decoded).expect("stage-2 snapshot restores");
 
     let high_read = request(cpu.complete_bus_cycle(low_read.id, Some(0x34)).unwrap());
     assert_eq!(high_read.address, 0x6001);
-    let encoded = cpu.export_state().encode().expect("stage-3 snapshot encodes");
+    let encoded = cpu
+        .export_state()
+        .encode()
+        .expect("stage-3 snapshot encodes");
     let decoded = Z80MicroSequencerState::decode(&encoded).expect("stage-3 snapshot decodes");
     cpu = Z80MicroSequencer::restore_state(decoded).expect("stage-3 snapshot restores");
 
