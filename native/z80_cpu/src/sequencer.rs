@@ -2845,43 +2845,58 @@ mod tests {
             (&[0xDD, 0x21, 0x34, 0x12][..], 0x1234, 0xCAFE),
             (&[0xFD, 0x21, 0x78, 0x56][..], 0xBEEF, 0x5678),
             (&[0xDD, 0xFD, 0x21, 0xBC, 0x9A][..], 0xBEEF, 0x9ABC),
+            (&[0xFD, 0xDD, 0x21, 0x78, 0x56][..], 0x5678, 0xCAFE),
         ] {
             let mut cpu = Z80MicroSequencer {
                 ix: 0xBEEF,
                 iy: 0xCAFE,
                 ..Z80MicroSequencer::default()
             };
-            let first = request(cpu.begin_instruction().unwrap());
-            let mut next = cpu
-                .complete_bus_cycle(first.id, Some(opcode_bytes[0]))
-                .unwrap();
-            cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+            let mut next = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+            let first = request(next.begin_instruction().unwrap());
+            next = Z80MicroSequencer::restore_state(next.export_state()).unwrap();
+            let mut step = next.complete_bus_cycle(first.id, Some(opcode_bytes[0])).unwrap();
+            next = Z80MicroSequencer::restore_state(next.export_state()).unwrap();
+
             for byte in opcode_bytes.iter().copied().skip(1) {
-                let fetch = request(next);
-                next = cpu.complete_bus_cycle(fetch.id, Some(byte)).unwrap();
-                cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+                let fetch = request(step);
+                step = next.complete_bus_cycle(fetch.id, Some(byte)).unwrap();
+                next = Z80MicroSequencer::restore_state(next.export_state()).unwrap();
                 if byte == 0x21 {
                     break;
                 }
             }
-            let low_request = request(next);
+
+            let low_request = request(step);
             assert_eq!(low_request.operation, Z80BusOperation::MemoryRead);
+            assert_eq!(low_request.address, opcode_bytes.len() as u16 - 2);
             assert_eq!(low_request.base_tstates, 3);
-            next = cpu
-                .complete_bus_cycle(low_request.id, Some(opcode_bytes[opcode_bytes.len() - 2]))
-                .unwrap();
-            cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
-            let high_request = request(next);
+            next.insert_wait_tstates(2).unwrap();
+            next = Z80MicroSequencer::restore_state(next.export_state()).unwrap();
+            step = next.complete_bus_cycle(
+                low_request.id,
+                Some(opcode_bytes[opcode_bytes.len() - 2]),
+            ).unwrap();
+            next = Z80MicroSequencer::restore_state(next.export_state()).unwrap();
+
+            let high_request = request(step);
             assert_eq!(high_request.operation, Z80BusOperation::MemoryRead);
-            next = cpu
-                .complete_bus_cycle(high_request.id, Some(opcode_bytes[opcode_bytes.len() - 1]))
-                .unwrap();
-            let expected_tstates = 14 + 4 * u32::from(opcode_bytes.len() == 5);
-            retired(next, 0x21, expected_tstates);
-            assert_eq!(cpu.ix, expected_ix);
-            assert_eq!(cpu.iy, expected_iy);
-            assert_eq!(cpu.registers.pc, opcode_bytes.len() as u16);
-            assert_eq!(cpu.refresh, if opcode_bytes.len() == 5 { 3 } else { 2 });
+            assert_eq!(high_request.address, opcode_bytes.len() as u16 - 1);
+            assert_eq!(high_request.base_tstates, 3);
+            next.insert_wait_tstates(1).unwrap();
+            next = Z80MicroSequencer::restore_state(next.export_state()).unwrap();
+            step = next.complete_bus_cycle(
+                high_request.id,
+                Some(opcode_bytes[opcode_bytes.len() - 1]),
+            ).unwrap();
+
+            let expected_tstates = 17 + 4 * u32::from(opcode_bytes.len() == 5);
+            retired(step, 0x21, expected_tstates);
+            assert_eq!(next.ix, expected_ix);
+            assert_eq!(next.iy, expected_iy);
+            assert_eq!(next.registers.pc, opcode_bytes.len() as u16);
+            assert_eq!(next.refresh, if opcode_bytes.len() == 5 { 3 } else { 2 });
+            assert_eq!(next.q, 0);
         }
     }
 
