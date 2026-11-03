@@ -943,10 +943,10 @@ impl Z80MicroSequencer {
                     1 => (value.rotate_right(1), value & 0x01 != 0), // RRC
                     2 => ((value << 1) | u8::from(old_carry), value & 0x80 != 0), // RL
                     3 => ((value >> 1) | (u8::from(old_carry) << 7), value & 1 != 0), // RR
-                    4 => (value << 1, value & 0x80 != 0), // SLA
+                    4 => (value << 1, value & 0x80 != 0),           // SLA
                     5 => ((value >> 1) | (value & 0x80), value & 1 != 0), // SRA
-                    6 => ((value << 1) | 1, value & 0x80 != 0), // undocumented SLL
-                    _ => (value >> 1, value & 1 != 0), // SRL
+                    6 => ((value << 1) | 1, value & 0x80 != 0),     // undocumented SLL
+                    _ => (value >> 1, value & 1 != 0),              // SRL
                 };
                 let mut flags = result & (FLAG_S | FLAG_XY);
                 if result == 0 {
@@ -3041,11 +3041,9 @@ mod cb_register_differential_tests {
             for operation in 0_u8..8 {
                 for target in [0_u8, 1, 2, 3, 4, 5, 7] {
                     let opcode = (group << 6) | (operation << 3) | target;
-                    for (operand, flags, q) in [
-                        (0x00, 0x01, 0x00),
-                        (0x81, 0xD7, 0x28),
-                        (0x7F, 0xA5, 0x80),
-                    ] {
+                    for (operand, flags, q) in
+                        [(0x00, 0x01, 0x00), (0x81, 0xD7, 0x28), (0x7F, 0xA5, 0x80)]
+                    {
                         let registers = Z80Registers {
                             a: operand,
                             f: flags,
@@ -3080,13 +3078,12 @@ mod cb_register_differential_tests {
                         );
                         assert_eq!(second.operation, Z80BusOperation::OpcodeFetch);
                         assert_eq!(second.address, 0xFFFF);
-                        let retired = sequenced.complete_bus_cycle(second.id, Some(opcode)).unwrap();
+                        let retired = sequenced
+                            .complete_bus_cycle(second.id, Some(opcode))
+                            .unwrap();
                         assert_eq!(
                             retired,
-                            Z80MicroStep::InstructionRetired {
-                                opcode,
-                                tstates: 8
-                            },
+                            Z80MicroStep::InstructionRetired { opcode, tstates: 8 },
                             "opcode {opcode:02X}"
                         );
 
