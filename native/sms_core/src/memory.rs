@@ -342,10 +342,10 @@ impl SmsMemory {
     }
 
     fn write_cartridge_ram(&mut self, bank: u8, offset: usize, value: u8) {
-        if let Some(index) = self.cartridge_ram_index(bank, offset) {
-            if let Some(ram) = self.cartridge_ram.as_mut() {
-                ram[index] = value;
-            }
+        if let Some(index) = self.cartridge_ram_index(bank, offset)
+            && let Some(ram) = self.cartridge_ram.as_mut()
+        {
+            ram[index] = value;
         }
     }
 
