@@ -32,7 +32,6 @@ pub use micro_ops::{
 };
 pub use sequencer::{
     Z80IndexRegister, Z80MicroSequencer, Z80MicroSequencerError, Z80MicroSequencerPhase,
-    Z80MicroSequencerState,
-    Z80MicroStep,
+    Z80MicroSequencerState, Z80MicroStep,
 };
 pub use snapshot::Z80MicroSequencerStateCodecError;
