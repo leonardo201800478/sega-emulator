@@ -3535,6 +3535,37 @@ mod architectural_state_tests {
     }
 
     #[test]
+    fn architectural_dto_transfers_between_atomic_and_resumable_cores() {
+        let mut atomic = Z80::default();
+        atomic.registers.set_bc(0x1234);
+        atomic.registers.set_de(0x5678);
+        atomic.registers.set_hl(0x9ABC);
+        atomic.ix = 0x1357;
+        atomic.iy = 0x2468;
+        atomic.alternate.a = 0xA5;
+        atomic.alternate.f = 0x5A;
+        atomic.iff1 = true;
+        atomic.iff2 = true;
+        atomic.interrupt_mode = 1;
+        atomic.wz = 0xCDEF;
+        atomic.q = 0x28;
+        atomic.q_previous = 0xD7;
+        atomic.p = true;
+        atomic.int_pending = Some(0xFF);
+
+        let expected = atomic.export_architectural_state();
+        let mut sequencer = crate::Z80MicroSequencer::default();
+        sequencer.import_architectural_state(expected).unwrap();
+        assert_eq!(sequencer.export_architectural_state(), expected);
+
+        let mut restored_atomic = Z80::default();
+        restored_atomic
+            .import_architectural_state(sequencer.export_architectural_state())
+            .unwrap();
+        assert_eq!(restored_atomic.export_architectural_state(), expected);
+    }
+
+    #[test]
     fn atomic_executor_rejects_invalid_architectural_state_atomically() {
         let mut cpu = Z80::default();
         let before = cpu.export_architectural_state();
