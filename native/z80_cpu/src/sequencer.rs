@@ -716,6 +716,34 @@ impl Z80MicroSequencer {
                     _ => false,
                 }
             }
+            Z80MicroSequencerPhase::IndexDisplacementRead => {
+                matches!(state.prefix_state, Z80PrefixState::Index(_))
+                    && state.opcode.is_some_and(is_indexed_load_opcode)
+            }
+            Z80MicroSequencerPhase::IndexDisplacementInternal { .. } => {
+                matches!(state.prefix_state, Z80PrefixState::Index(_))
+                    && state.opcode.is_some_and(|opcode| {
+                        is_indexed_load_opcode(opcode) && opcode != 0x36
+                    })
+            }
+            Z80MicroSequencerPhase::IndexedImmediateReadMemoryWrite { .. }
+            | Z80MicroSequencerPhase::IndexedImmediateStoreInternal { .. } => {
+                matches!(state.prefix_state, Z80PrefixState::Index(_))
+                    && state.opcode == Some(0x36)
+            }
+            Z80MicroSequencerPhase::MemoryReadRegister { destination } => match state.prefix_state {
+                Z80PrefixState::None => true,
+                Z80PrefixState::Index(_) => state.opcode.is_some_and(|opcode| {
+                    is_indexed_memory_load_opcode(opcode)
+                        && ((opcode >> 3) & 0x07) == destination
+                }),
+                _ => false,
+            },
+            Z80MicroSequencerPhase::MemoryWrite { .. } => match state.prefix_state {
+                Z80PrefixState::None => true,
+                Z80PrefixState::Index(_) => state.opcode.is_some_and(is_indexed_memory_store_opcode),
+                _ => false,
+            },
             _ => state.prefix_state == Z80PrefixState::None,
         };
         let valid = match state.phase {
