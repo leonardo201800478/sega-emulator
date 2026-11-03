@@ -904,7 +904,7 @@ impl Z80MicroSequencer {
                 opcode,
                 remaining_tstates,
             } => {
-                let total_internal_tstates = match opcode {
+                let total_internal_tstates: u8 = match opcode {
                     0x03 | 0x0B | 0x13 | 0x1B | 0x23 | 0x2B | 0x33 | 0x3B | 0xF9 => 2,
                     0x09 | 0x19 | 0x29 | 0x39 => 7,
                     _ => 0,
