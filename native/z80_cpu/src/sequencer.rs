@@ -3210,7 +3210,7 @@ mod tests {
                 crate::Z80MicroSequencerState::decode(&bytes).unwrap(),
             )
             .unwrap();
-            for remaining in 1_u8..7 {
+            for completed_tstates in 1_u8..=6 {
                 let step = restored.complete_internal_cycle().unwrap();
                 assert_eq!(step, Z80MicroStep::InternalCycle { tstates: 1 });
                 restored = Z80MicroSequencer::restore_state(restored.export_state()).unwrap();
@@ -3219,15 +3219,19 @@ mod tests {
                     crate::Z80MicroSequencerState::decode(&encoded).unwrap(),
                 )
                 .unwrap();
-                if remaining == 4 {
-                    assert_eq!(restored.export_state().mcycle_index, 3);
-                    assert_eq!(restored.export_state().tstate_index, 0);
-                } else if remaining < 4 {
-                    assert_eq!(
-                        restored.export_state().tstate_index,
-                        u16::from(3 - remaining)
-                    );
+
+                let state = restored.export_state();
+                if completed_tstates <= 3 {
+                    assert_eq!(state.mcycle_index, 2);
+                    assert_eq!(state.tstate_index, u16::from(completed_tstates));
+                } else {
+                    assert_eq!(state.mcycle_index, 3);
+                    assert_eq!(state.tstate_index, u16::from(completed_tstates - 4));
                 }
+                assert_eq!(
+                    state.instruction_tstates,
+                    8 + u32::from(completed_tstates)
+                );
             }
             let retired_step = restored.complete_internal_cycle().unwrap();
             retired(retired_step, opcode, 15);
