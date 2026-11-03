@@ -429,7 +429,9 @@ impl Z80MicroSequencer {
                 let Some(request) = pending else {
                     return Err(Z80MicroSequencerError::InvalidState);
                 };
-                state.opcode.is_some_and(|opcode| opcode & 0x07 == 0x06 && opcode >> 6 != 1)
+                state
+                    .opcode
+                    .is_some_and(|opcode| opcode & 0x07 == 0x06 && opcode >> 6 != 1)
                     && matches!(
                         request.operation,
                         Z80BusOperation::MemoryWrite {
@@ -3096,7 +3098,6 @@ mod indirect_bc_de_differential_tests {
     }
 }
 
-
 #[cfg(test)]
 mod cb_memory_differential_tests {
     use super::{Z80MicroSequencer, Z80MicroStep};
@@ -3298,13 +3299,11 @@ mod cb_memory_differential_tests {
                         "memory mismatch for CB {opcode:02X}, operand {operand:02X}"
                     );
                     assert_eq!(
-                        sequenced_bus.reads,
-                        atomic_bus.reads,
+                        sequenced_bus.reads, atomic_bus.reads,
                         "read trace mismatch for CB {opcode:02X}"
                     );
                     assert_eq!(
-                        sequenced_bus.writes,
-                        atomic_bus.writes,
+                        sequenced_bus.writes, atomic_bus.writes,
                         "write trace mismatch for CB {opcode:02X}"
                     );
                     assert_eq!(sequenced.pending_request(), None);
@@ -3343,7 +3342,10 @@ mod cb_memory_differential_tests {
         let write_step = cpu.complete_internal_cycle().unwrap();
         let write = request(write_step);
         assert_eq!(write.address, 0xC123);
-        assert_eq!(write.operation, Z80BusOperation::MemoryWrite { value: 0x03 });
+        assert_eq!(
+            write.operation,
+            Z80BusOperation::MemoryWrite { value: 0x03 }
+        );
         cpu = roundtrip(cpu);
         cpu.insert_wait_tstates(3).unwrap();
         bus.write_memory(write.address, 0x03);
