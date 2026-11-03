@@ -47,13 +47,14 @@ fn push_ix_writes_high_then_low_with_waits_and_snapshot_resume() {
     let high = request(cpu.complete_internal_cycle().unwrap());
     assert_eq!(cpu.export_state().mcycle_index, 2);
     assert_eq!(high.address, 0xFFFF);
+    assert_eq!(cpu.registers.sp, 0xFFFF);
     assert_eq!(high.operation, Z80BusOperation::MemoryWrite { value: 0x12 });
     cpu.insert_wait_tstate().unwrap();
     cpu = round_trip(cpu);
 
     let low = request(cpu.complete_bus_cycle(high.id, None).unwrap());
     assert_eq!(cpu.export_state().mcycle_index, 3);
-    assert_eq!(cpu.registers.sp, 0xFFFF);
+    assert_eq!(cpu.registers.sp, 0xFFFE);
     assert_eq!(low.address, 0xFFFE);
     assert_eq!(low.operation, Z80BusOperation::MemoryWrite { value: 0x34 });
     cpu.insert_wait_tstates(2).unwrap();
