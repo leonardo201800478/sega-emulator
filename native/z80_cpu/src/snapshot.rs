@@ -1679,6 +1679,7 @@ mod base_stack_snapshot_tests {
             high: 0,
             low: 0,
         };
+        invalid.opcode = Some(0xC1);
         assert!(Z80MicroSequencer::restore_state(invalid).is_err());
 
         let mut invalid = cpu.export_state();
