@@ -127,3 +127,24 @@ Não elevar um estado com base apenas em documentação, compilação isolada, b
 - CI `41548085870`: 4/4 jobs PASS. Rust fmt e Clippy PASS; `cargo test -p sega-sms-core --locked` PASS; `cargo test -p sega-sg1000-core --locked` PASS (57 testes); workspace PASS; Ruff PASS; pytest 214 PASS / 21 SKIPPED; Windows D3D12/video/WASAPI/XAudio2 PASS; Scheduler stress short 2 PASS, 1 teste longo filtrado.
 - Escopo validado: transações de memória, ROM mirror, RAM interna 1 KiB/8 KiB, cartridge RAM 1/2/8 KiB, deadline, WAIT fixture, exactly-once, snapshot/restore e rejeição explícita de PortRead/PortWrite.
 - Limite: PR #423 continua aberta; o barramento ainda não compõe o Z80MicroSequencer. Não contar como implementação da main até merge. Execução local: NOT RUN.
+
+
+## 9. P1 — Sega Mapper cartridge SRAM e persistência (.srm), PR #424
+
+**Branch candidata:** `feat/sms-cartridge-ram-mapper`  
+**SHA candidato atual:** `646fea6c31c043231fcd2a531439f63160f0820c`  
+**PR:** https://github.com/leonardo201800478/sega-emulator/pull/424  
+**CI:** run `41562216662` em execução; os resultados de SHAs anteriores não substituem a validação deste candidato.
+
+| Componente | Estado formal | Evidência / limite |
+|---|---|---|
+| Sega Mapper cartridge SRAM 8/16/32 KiB | IMPLEMENTED / INTEGRATION_PENDING | Slot 2, seleção de bancos e slot 3 condicional; testes de mapa e deadlines temporais existentes. CI do SHA atual pendente |
+| Persistência .srm | IMPLEMENTED / INTEGRATION_PENDING | Formato próprio versionado com CRC32, capacidade explícita, validação de tamanho, backup/recuperação e load/save explícitos. Sem gravação no hot path |
+| PyO3/Python SRAM API | IMPLEMENTED / INTEGRATION_PENDING | `NativeSMSMachine` recebe capacidade e caminho; carrega na criação e expõe `save_cartridge_ram()`; classe `SMSMachine` encaminha a configuração |
+| Ciclo de vida Qt | IMPLEMENTED / INTEGRATION_PENDING | O frontend chama save em substituição/reset/encerramento limpo, mas ainda não oferece seleção de capacidade/caminho |
+| Auto-detecção de capacidade | INTEGRATION_PENDING | Depende da Task P0.1 (DAT/metadata); não inferir SRAM só pelo tamanho da ROM |
+| Codemasters SRAM | NOT IMPLEMENTED | Rejeição explícita; não há mapeamento SRAM Codemasters nesta PR |
+
+**Limites operacionais:** capacidade e caminho .srm precisam ser informados explicitamente ao criar `SMSMachine`. O frontend Qt ainda não resolve esses dados automaticamente. O arquivo usa cabeçalho próprio e não é declarado compatível com .srm raw de outros emuladores. Save State e persistência de SRAM são mecanismos distintos. Não há garantia de gravação após encerramento forçado.
+
+**Gate de integração:** não declarar SHORT_PASS, LONG_PASS ou TEMPORAL_PASS até o CI do SHA candidato passar e haver execução in-game com evidência. A PR aberta não faz parte da main.
