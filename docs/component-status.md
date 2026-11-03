@@ -174,18 +174,18 @@ A PR #426 permanece Draft e empilhada sobre #425. Nenhum merge foi realizado.
 ## 12. P7 — Q-latch e SCF/CCF no Z80 retomável, PR #427
 
 **Branch candidata:** `feat/z80-sms-accumulator-flags`  
-**SHA candidato atual:** `115fbcaa58357a2d4a36ae8885e86403ed50f2d8`  
+**SHA candidato validado:** `cb040c50bfec9867a0c97068ad4de4bd9e866de9`  
 **PR:** https://github.com/leonardo201800478/sega-emulator/pull/427  
-**CI:** run `41569395817` — pendente nesta atualização.
+**CI:** run `41569544969` — Rust, Python e Windows x64 PASS; Scheduler deterministic stress SKIPPED.
 
 | Componente | Estado formal | Evidência / limite |
 |---|---|---|
 | RLCA/RRCA/RLA/RRA, DAA e CPL | IMPLEMENTED / QUICK_PASS | Shared ALU, M1 4 T, testes unitários e diferencial Scheduler/atomic; CI run `41568918251` PASS em Rust, Python e Windows x64 |
-| Q-latch do microsequenciador | IMPLEMENTED / QUICK_PASS pendente de CI atual | `q` e `q_previous` atualizados na fronteira de instrução; instruções que escrevem F atualizam Q; instruções sem escrita de F deixam Q=0 |
+| Q-latch do microsequenciador | IMPLEMENTED / QUICK_PASS | `q` e `q_previous` atualizados na fronteira de instrução; instruções que escrevem F atualizam Q; instruções sem escrita de F deixam Q=0 |
 | SCF/CCF | IMPLEMENTED / QUICK_PASS pendente de CI atual | Fórmula X/Y usa `(A | (Q_previous XOR F)) & 0x28`; CCF alterna C/H; teste após CP e instrução sem escrita de flags |
-| Snapshot Z80 | IMPLEMENTED / QUICK_PASS pendente de CI atual | Codec binário versão 5 serializa Q/Q_previous; teste de round-trip/restauração com M1 pendente |
-| SMS temporal machine state | IMPLEMENTED / QUICK_PASS pendente de CI atual | Versão incrementada de 7 para 8 para refletir o novo estado embutido do Z80 |
+| Snapshot Z80 | IMPLEMENTED / QUICK_PASS pendente de CI atual | Codec binário versão 5 serializa Q/Q_previous; teste de round-trip/restauração com M1 pendente; CI `41569544969` PASS |
+| SMS temporal machine state | IMPLEMENTED / QUICK_PASS pendente de CI atual | Versão incrementada de 7 para 8 para refletir o novo estado embutido do Z80; CI `41569544969` PASS |
 | Z80 retomável completo | INTEGRATION_PENDING | Prefixos CB/ED/DD/FD, HALT, interrupções, I/O, instruções 16-bit, refresh elétrico e estado arquitetural completo permanecem pendentes |
 | TEMPORAL_PASS | NOT DECLARED | Sem oráculos independentes/físicos, WAIT físico e integração sistêmica completa |
 
-O executor atômico existente é a referência para SCF/CCF: no início de cada instrução ele captura `q_previous = q` e limpa `q`; `set_flags` grava F e Q. O microsequenciador reproduz essa fronteira e persiste ambos os latches. Não inferir validação in-game nem cobertura ZEXDOC/ZEXALL.
+O executor atômico existente é a referência para SCF/CCF: no início de cada instrução ele captura `q_previous = q` e limpa `q`; `set_flags` grava F e Q. O microsequenciador reproduz essa fronteira e persiste ambos os latches. CI `41569544969`: Rust Formatting, Clippy, testes direcionados SMS/SG-1000, workspace, Ruff, pytest e Windows x64 vídeo/áudio PASS; Scheduler deterministic stress SKIPPED. Execução local NOT RUN. Não inferir validação in-game nem cobertura ZEXDOC/ZEXALL.
