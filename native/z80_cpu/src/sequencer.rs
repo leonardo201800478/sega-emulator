@@ -1920,4 +1920,20 @@ mod tests {
             assert_eq!(cpu.registers.a, 0x11);
         }
     }
+
+    #[test]
+    fn accumulator_rotate_daa_and_cpl_retire_after_m1_without_extra_bus_cycles() {
+        for opcode in [0x07, 0x0F, 0x17, 0x1F, 0x27, 0x2F] {
+            let mut cpu = Z80MicroSequencer::default();
+            let fetch = request(cpu.begin_instruction().unwrap());
+            retired(
+                cpu.complete_bus_cycle(fetch.id, Some(opcode)).unwrap(),
+                opcode,
+                4,
+            );
+            assert_eq!(cpu.pending_request(), None, "opcode {opcode:02X}");
+            assert!(!cpu.instruction_active(), "opcode {opcode:02X}");
+        }
+    }
+
 }
