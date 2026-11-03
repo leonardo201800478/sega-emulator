@@ -5802,8 +5802,11 @@ mod ed_absolute_register_pair_differential_tests {
                                 ..
                             } = &state.phase
                             {
-                                let direction =
-                                    if matches!(*opcode, 0xAB | 0xBB) { -1_i16 } else { 1_i16 };
+                                let direction = if matches!(*opcode, 0xAB | 0xBB) {
+                                    -1_i16
+                                } else {
+                                    1_i16
+                                };
                                 assert_eq!(
                                     state.registers.hl(),
                                     memory_address.wrapping_add_signed(direction)
