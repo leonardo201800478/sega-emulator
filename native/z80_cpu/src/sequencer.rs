@@ -989,9 +989,13 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::ImmediateReadRegisterPairHigh { .. } => {
                 state.mcycle_index == 2 && state.tstate_index == 0
             }
-            Z80MicroSequencerPhase::IndexImmediateLow { .. }
-            | Z80MicroSequencerPhase::IndexImmediateHigh { .. } => {
+            Z80MicroSequencerPhase::IndexImmediateLow { .. } => {
                 state.mcycle_index >= 2
+                    && state.mcycle_index == u32::from(state.refresh)
+                    && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::IndexImmediateHigh { .. } => {
+                state.mcycle_index >= 3
                     && state.mcycle_index == u32::from(state.refresh) + 1
                     && state.tstate_index == 0
             }
