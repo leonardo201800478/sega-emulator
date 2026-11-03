@@ -488,8 +488,7 @@ impl Z80MicroSequencer {
                             6 => Some(0),
                             7 => Some(state.registers.a),
                             _ => None,
-                        }
-                    }
+                        },
                     _ => None,
                 };
                 expected_value == Some(value)
