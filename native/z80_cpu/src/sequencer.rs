@@ -8042,7 +8042,7 @@ mod base_relative_branch_differential_tests {
         let mut micro_bus = atomic_bus.clone();
 
         let mut atomic = Z80::default();
-        atomic.import_architectural_state(initial.clone()).unwrap();
+        atomic.import_architectural_state(initial).unwrap();
         let atomic_tstates = atomic.step(&mut atomic_bus).unwrap();
 
         let mut micro = Z80MicroSequencer::default();
@@ -8093,7 +8093,7 @@ mod base_relative_branch_differential_tests {
         let mut micro_bus = atomic_bus.clone();
 
         let mut atomic = Z80::default();
-        atomic.import_architectural_state(initial.clone()).unwrap();
+        atomic.import_architectural_state(initial).unwrap();
         let atomic_tstates = atomic.step(&mut atomic_bus).unwrap();
 
         let mut micro = Z80MicroSequencer::default();
@@ -8191,7 +8191,7 @@ mod base_absolute_jump_differential_tests {
         let mut micro_bus = atomic_bus.clone();
 
         let mut atomic = Z80::default();
-        atomic.import_architectural_state(initial.clone()).unwrap();
+        atomic.import_architectural_state(initial).unwrap();
         let atomic_tstates = atomic.step(&mut atomic_bus).unwrap();
 
         let mut micro = Z80MicroSequencer::default();
@@ -8247,7 +8247,7 @@ mod base_absolute_jump_differential_tests {
         let mut micro_bus = atomic_bus.clone();
 
         let mut atomic = Z80::default();
-        atomic.import_architectural_state(initial.clone()).unwrap();
+        atomic.import_architectural_state(initial).unwrap();
         let atomic_tstates = atomic.step(&mut atomic_bus).unwrap();
 
         let mut micro = Z80MicroSequencer::default();
