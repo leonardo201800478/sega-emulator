@@ -477,6 +477,38 @@ mod tests {
     use super::{Reader, Z80_MICRO_SEQUENCER_STATE_MAGIC, Z80MicroSequencerStateCodecError};
     use crate::{Z80MicroSequencer, Z80MicroSequencerState};
 
+
+    #[test]
+    fn complete_architectural_dto_round_trips_through_versioned_codec() {
+        let mut cpu = Z80MicroSequencer::default();
+        let mut state = cpu.export_architectural_state();
+        state.alternate = crate::Z80AlternateRegisters {
+            a: 0x21, f: 0x5A, b: 0x43, c: 0x65,
+            d: 0x87, e: 0xA9, h: 0xCB, l: 0xED,
+        };
+        state.ix = 0x1357;
+        state.iy = 0x2468;
+        state.i = 0x81;
+        state.r = 0xFE;
+        state.iff1 = true;
+        state.iff2 = false;
+        state.interrupt_mode = 2;
+        state.wz = 0xABCD;
+        state.ei_delay = 1;
+        state.nmi_pending = true;
+        state.int_pending = Some(0xCF);
+        state.q = 0x28;
+        state.q_previous = 0xD7;
+        state.p = true;
+        state.halted = true;
+        cpu.import_architectural_state(state).unwrap();
+
+        let encoded = cpu.export_state().encode().unwrap();
+        let decoded = Z80MicroSequencerState::decode(&encoded).unwrap();
+        let restored = Z80MicroSequencer::restore_state(decoded).unwrap();
+        assert_eq!(restored.export_architectural_state(), state);
+    }
+
     #[test]
     fn pending_fetch_snapshot_round_trips_with_wait_and_allocator() {
         let mut cpu = Z80MicroSequencer::default();
