@@ -5,7 +5,7 @@
 //! atomic executor; it does not yet cover interrupts, prefixes, HALT, refresh
 //! pin phases, or the full architectural state.
 
-use crate::alu::{adc8, add8, and8, cp8, or8, sbc8, sub8, xor8};
+use crate::alu::{adc8, add8, and8, cpl8, cp8, daa8, or8, rotate_accumulator, sbc8, sub8, xor8};
 use crate::{
     Z80_MICRO_SEQUENCER_STATE_VERSION, Z80BusHandshake, Z80BusHandshakeError, Z80BusOperation,
     Z80BusRequest, Z80Registers,
@@ -409,6 +409,10 @@ impl Z80MicroSequencer {
                 self.opcode = Some(opcode);
                 match opcode {
                     0x00 => self.retire(opcode),
+                    0x07 | 0x0F | 0x17 | 0x1F | 0x27 | 0x2F => {
+                        self.execute_accumulator_misc(opcode);
+                        self.retire(opcode)
+                    }
                     0x06 | 0x0E | 0x16 | 0x1E | 0x26 | 0x2E | 0x3E => {
                         let destination = (opcode >> 3) & 0x07;
                         self.issue_read(
@@ -629,6 +633,23 @@ impl Z80MicroSequencer {
         if operation != 7 {
             self.registers.a = result.value;
         }
+    }
+
+
+    /// Execute accumulator-only BASE instructions whose effects commit at M1 completion.
+    /// SCF/CCF are intentionally excluded until the Q-latch is represented in sequencer state.
+    fn execute_accumulator_misc(&mut self, opcode: u8) {
+        let result = match opcode {
+            0x07 => rotate_accumulator(self.registers.a, self.registers.f, 0),
+            0x0F => rotate_accumulator(self.registers.a, self.registers.f, 1),
+            0x17 => rotate_accumulator(self.registers.a, self.registers.f, 2),
+            0x1F => rotate_accumulator(self.registers.a, self.registers.f, 3),
+            0x27 => daa8(self.registers.a, self.registers.f),
+            0x2F => cpl8(self.registers.a, self.registers.f),
+            _ => unreachable!("accumulator-only instruction decode"),
+        };
+        self.registers.a = result.value;
+        self.registers.f = result.flags;
     }
 
     /// Apply the Z80 8-bit INC/DEC flag rules while preserving Carry.
