@@ -20,6 +20,7 @@ pub mod psg;
 pub mod temporal;
 pub mod temporal_bus;
 pub mod temporal_machine;
+pub mod temporal_m1;
 pub mod vdp;
 pub mod vdp_sms1;
 
@@ -51,6 +52,7 @@ pub use temporal_machine::{
     SMS_TEMPORAL_MACHINE_STATE_VERSION, SmsTemporalMachine, SmsTemporalMachineError,
     SmsTemporalMachineState,
 };
+pub use temporal_m1::{SmsTemporalM1, SmsTemporalM1Error, SmsTemporalM1State};
 pub use vdp::{
     SMS_VDP_MAX_HEIGHT, SMS_VDP_WIDTH, SmsRasterPosition, SmsVdp, SmsVdpEye, StereoPresentation,
 };
