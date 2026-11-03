@@ -5,7 +5,9 @@
 //! extension, and completion validation. Opcode decoding and architectural
 //! instruction semantics remain in the existing executor.
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 pub enum Z80BusOperation {
     OpcodeFetch,
     MemoryRead,
@@ -14,7 +16,7 @@ pub enum Z80BusOperation {
     PortWrite { value: u8 },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Z80BusRequest {
     pub id: u64,
     pub operation: Z80BusOperation,
@@ -48,7 +50,7 @@ struct PendingCycle {
 }
 
 /// Version-independent DTO for the exact outstanding handshake state.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Z80BusHandshakeState {
     pub next_request_id: u64,
     pub pending_request: Option<Z80BusRequest>,

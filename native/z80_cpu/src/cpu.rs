@@ -11,6 +11,8 @@ use crate::bus::{
     CpuBus, Z80BusEvent, Z80BusEventKind, Z80CpuSnapshot, Z80InstructionOutcome,
     Z80InstructionTrace, Z80TStatePhase, Z80TStateSample,
 };
+use crate::{Z80ArchitecturalState, Z80ArchitecturalStateError};
+use serde::{Deserialize, Serialize};
 
 const FLAG_C: u8 = 0x01;
 const FLAG_N: u8 = 0x02;
@@ -25,7 +27,7 @@ pub enum CpuError {
     UnsupportedOpcode { opcode: u8, address: u16 },
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Z80Registers {
     pub a: u8,
     pub f: u8,
@@ -71,7 +73,7 @@ impl Z80Registers {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Z80AlternateRegisters {
     pub a: u8,
     pub f: u8,
@@ -128,6 +130,64 @@ pub struct Z80 {
 }
 
 impl Z80 {
+    /// Export hardware-visible and CPU-internal architectural state.
+    ///
+    /// Host counters, traces, recursion guards, and transient decoder data are
+    /// deliberately excluded from this DTO.
+    pub fn export_architectural_state(&self) -> Z80ArchitecturalState {
+        Z80ArchitecturalState {
+            registers: self.registers,
+            alternate: self.alternate,
+            ix: self.ix,
+            iy: self.iy,
+            i: self.i,
+            r: self.r,
+            iff1: self.iff1,
+            iff2: self.iff2,
+            interrupt_mode: self.interrupt_mode,
+            wz: self.wz,
+            ei_delay: self.ei_delay,
+            nmi_pending: self.nmi_pending,
+            int_pending: self.int_pending,
+            q: self.q,
+            q_previous: self.q_previous,
+            p: self.p,
+            halted: self.halted,
+        }
+    }
+
+    /// Install a validated architectural state without changing host diagnostics.
+    ///
+    /// Import is an instruction-boundary operation. Transient injected-opcode
+    /// state is cleared because it belongs to an in-flight executor operation,
+    /// not to the architectural DTO.
+    pub fn import_architectural_state(
+        &mut self,
+        state: Z80ArchitecturalState,
+    ) -> Result<(), Z80ArchitecturalStateError> {
+        state.validate()?;
+        self.registers = state.registers;
+        self.alternate = state.alternate;
+        self.ix = state.ix;
+        self.iy = state.iy;
+        self.i = state.i;
+        self.r = state.r;
+        self.iff1 = state.iff1;
+        self.iff2 = state.iff2;
+        self.interrupt_mode = state.interrupt_mode;
+        self.wz = state.wz;
+        self.ei_delay = state.ei_delay;
+        self.nmi_pending = state.nmi_pending;
+        self.int_pending = state.int_pending;
+        self.q = state.q;
+        self.q_previous = state.q_previous;
+        self.p = state.p;
+        self.halted = state.halted;
+        self.injected_opcode = None;
+        self.step_depth = false;
+        Ok(())
+    }
+
     pub fn reset(&mut self) {
         self.registers = Z80Registers::default();
         self.alternate = Z80AlternateRegisters::default();
@@ -3445,5 +3505,139 @@ mod tests {
         assert_eq!(otdr.registers.b, 1);
         assert_eq!(otdr.registers.hl(), 0xC0FF);
         assert_eq!(otdr.registers.pc, 0);
+    }
+}
+
+#[cfg(test)]
+mod architectural_state_tests {
+    use super::{Z80, Z80AlternateRegisters, Z80Registers};
+    use crate::{Z80ArchitecturalState, Z80ArchitecturalStateError};
+
+    #[test]
+    fn atomic_executor_architectural_state_round_trips_all_cpu_fields() {
+        let state = Z80ArchitecturalState {
+            registers: Z80Registers {
+                a: 0x12,
+                f: 0xA5,
+                b: 0x34,
+                c: 0x56,
+                d: 0x78,
+                e: 0x9A,
+                h: 0xBC,
+                l: 0xDE,
+                sp: 0xF012,
+                pc: 0x3456,
+            },
+            alternate: Z80AlternateRegisters {
+                a: 0x21,
+                f: 0x5A,
+                b: 0x43,
+                c: 0x65,
+                d: 0x87,
+                e: 0xA9,
+                h: 0xCB,
+                l: 0xED,
+            },
+            ix: 0x1357,
+            iy: 0x2468,
+            i: 0x81,
+            r: 0xFE,
+            iff1: true,
+            iff2: false,
+            interrupt_mode: 2,
+            wz: 0xABCD,
+            ei_delay: 1,
+            nmi_pending: true,
+            int_pending: Some(0xCF),
+            q: 0x28,
+            q_previous: 0xD7,
+            p: true,
+            halted: true,
+        };
+        let mut cpu = Z80::default();
+        cpu.import_architectural_state(state).unwrap();
+        assert_eq!(cpu.export_architectural_state(), state);
+    }
+
+    #[test]
+    fn architectural_dto_transfers_between_atomic_and_resumable_cores() {
+        let mut atomic = Z80::default();
+        atomic.registers.set_bc(0x1234);
+        atomic.registers.set_de(0x5678);
+        atomic.registers.set_hl(0x9ABC);
+        atomic.ix = 0x1357;
+        atomic.iy = 0x2468;
+        atomic.alternate.a = 0xA5;
+        atomic.alternate.f = 0x5A;
+        atomic.iff1 = true;
+        atomic.iff2 = true;
+        atomic.interrupt_mode = 1;
+        atomic.wz = 0xCDEF;
+        atomic.q = 0x28;
+        atomic.q_previous = 0xD7;
+        atomic.p = true;
+        atomic.int_pending = Some(0xFF);
+
+        let expected = atomic.export_architectural_state();
+        let mut sequencer = crate::Z80MicroSequencer::default();
+        sequencer.import_architectural_state(expected).unwrap();
+        assert_eq!(sequencer.export_architectural_state(), expected);
+
+        let mut restored_atomic = Z80::default();
+        restored_atomic
+            .import_architectural_state(sequencer.export_architectural_state())
+            .unwrap();
+        assert_eq!(restored_atomic.export_architectural_state(), expected);
+    }
+
+    #[test]
+    fn atomic_executor_rejects_invalid_architectural_state_atomically() {
+        let mut cpu = Z80::default();
+        let before = cpu.export_architectural_state();
+        let mut invalid = before;
+        invalid.interrupt_mode = 3;
+        assert_eq!(
+            cpu.import_architectural_state(invalid),
+            Err(Z80ArchitecturalStateError::InvalidInterruptMode(3))
+        );
+        assert_eq!(cpu.export_architectural_state(), before);
+    }
+}
+
+#[cfg(test)]
+mod architectural_state_diagnostics_tests {
+    use super::Z80;
+
+    #[test]
+    fn architectural_import_preserves_host_counters_and_trace_buffers() {
+        let mut cpu = Z80 {
+            total_tstates: 0x1234,
+            instruction_count: 0x5678,
+            opcode_trace_bytes: [1, 2, 3, 4, 5, 6, 7, 8],
+            opcode_trace_len: 3,
+            opcode_trace_truncated: true,
+            capture_opcode_trace: true,
+            instruction_trace_bytes: [8, 7, 6, 5, 4, 3, 2, 1],
+            instruction_trace_len: 5,
+            instruction_trace_truncated: true,
+            injected_opcode: Some(0xDD),
+            step_depth: true,
+            ..Z80::default()
+        };
+
+        let state = cpu.export_architectural_state();
+        cpu.import_architectural_state(state).unwrap();
+
+        assert_eq!(cpu.total_tstates, 0x1234);
+        assert_eq!(cpu.instruction_count, 0x5678);
+        assert_eq!(cpu.opcode_trace_bytes, [1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(cpu.opcode_trace_len, 3);
+        assert!(cpu.opcode_trace_truncated);
+        assert!(cpu.capture_opcode_trace);
+        assert_eq!(cpu.instruction_trace_bytes, [8, 7, 6, 5, 4, 3, 2, 1]);
+        assert_eq!(cpu.instruction_trace_len, 5);
+        assert!(cpu.instruction_trace_truncated);
+        assert_eq!(cpu.injected_opcode, None);
+        assert!(!cpu.step_depth);
     }
 }

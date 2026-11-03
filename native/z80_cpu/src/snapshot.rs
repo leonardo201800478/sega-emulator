@@ -5,8 +5,9 @@
 //! architectural save state.
 
 use crate::{
-    Z80_MICRO_SEQUENCER_STATE_VERSION, Z80BusHandshakeState, Z80BusOperation, Z80BusRequest,
-    Z80MicroSequencer, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80Registers,
+    Z80_MICRO_SEQUENCER_STATE_VERSION, Z80AlternateRegisters, Z80BusHandshakeState,
+    Z80BusOperation, Z80BusRequest, Z80MicroSequencer, Z80MicroSequencerPhase,
+    Z80MicroSequencerState, Z80Registers,
 };
 use core::fmt;
 
@@ -88,6 +89,36 @@ impl Z80MicroSequencerState {
             }
         }
         body.u32(self.handshake.wait_tstates);
+        for value in [
+            self.alternate.a,
+            self.alternate.f,
+            self.alternate.b,
+            self.alternate.c,
+            self.alternate.d,
+            self.alternate.e,
+            self.alternate.h,
+            self.alternate.l,
+        ] {
+            body.u8(value);
+        }
+        body.u16(self.ix);
+        body.u16(self.iy);
+        body.u8(self.i);
+        body.u8(u8::from(self.iff1));
+        body.u8(u8::from(self.iff2));
+        body.u8(self.interrupt_mode);
+        body.u16(self.wz);
+        body.u8(self.ei_delay);
+        body.u8(u8::from(self.nmi_pending));
+        match self.int_pending {
+            None => body.u8(0),
+            Some(value) => {
+                body.u8(1);
+                body.u8(value);
+            }
+        }
+        body.u8(u8::from(self.p));
+        body.u8(u8::from(self.halted));
 
         let body_len = u32::try_from(body.bytes.len())
             .map_err(|_| Z80MicroSequencerStateCodecError::InvalidState)?;
@@ -158,6 +189,32 @@ impl Z80MicroSequencerState {
             tag => return Err(Z80MicroSequencerStateCodecError::InvalidTag(tag)),
         };
         let wait_tstates = reader.u32()?;
+        let alternate = Z80AlternateRegisters {
+            a: reader.u8()?,
+            f: reader.u8()?,
+            b: reader.u8()?,
+            c: reader.u8()?,
+            d: reader.u8()?,
+            e: reader.u8()?,
+            h: reader.u8()?,
+            l: reader.u8()?,
+        };
+        let ix = reader.u16()?;
+        let iy = reader.u16()?;
+        let i = reader.u8()?;
+        let iff1 = read_bool(&mut reader)?;
+        let iff2 = read_bool(&mut reader)?;
+        let interrupt_mode = reader.u8()?;
+        let wz = reader.u16()?;
+        let ei_delay = reader.u8()?;
+        let nmi_pending = read_bool(&mut reader)?;
+        let int_pending = match reader.u8()? {
+            0 => None,
+            1 => Some(reader.u8()?),
+            tag => return Err(Z80MicroSequencerStateCodecError::InvalidTag(tag)),
+        };
+        let p = read_bool(&mut reader)?;
+        let halted = read_bool(&mut reader)?;
         if !reader.finished() {
             return Err(Z80MicroSequencerStateCodecError::TrailingData);
         }
@@ -178,6 +235,19 @@ impl Z80MicroSequencerState {
             instruction_tstates,
             mcycle_index,
             tstate_index,
+            alternate,
+            ix,
+            iy,
+            i,
+            iff1,
+            iff2,
+            interrupt_mode,
+            wz,
+            ei_delay,
+            nmi_pending,
+            int_pending,
+            p,
+            halted,
         };
         Z80MicroSequencer::restore_state(state.clone())
             .map_err(|_| Z80MicroSequencerStateCodecError::InvalidState)?;
@@ -421,6 +491,43 @@ fn crc32(bytes: &[u8]) -> u32 {
 mod tests {
     use super::{Reader, Z80_MICRO_SEQUENCER_STATE_MAGIC, Z80MicroSequencerStateCodecError};
     use crate::{Z80MicroSequencer, Z80MicroSequencerState};
+
+    #[test]
+    fn complete_architectural_dto_round_trips_through_versioned_codec() {
+        let mut cpu = Z80MicroSequencer::default();
+        let mut state = cpu.export_architectural_state();
+        state.alternate = crate::Z80AlternateRegisters {
+            a: 0x21,
+            f: 0x5A,
+            b: 0x43,
+            c: 0x65,
+            d: 0x87,
+            e: 0xA9,
+            h: 0xCB,
+            l: 0xED,
+        };
+        state.ix = 0x1357;
+        state.iy = 0x2468;
+        state.i = 0x81;
+        state.r = 0xFE;
+        state.iff1 = true;
+        state.iff2 = false;
+        state.interrupt_mode = 2;
+        state.wz = 0xABCD;
+        state.ei_delay = 1;
+        state.nmi_pending = true;
+        state.int_pending = Some(0xCF);
+        state.q = 0x28;
+        state.q_previous = 0xD7;
+        state.p = true;
+        state.halted = true;
+        cpu.import_architectural_state(state).unwrap();
+
+        let encoded = cpu.export_state().encode().unwrap();
+        let decoded = Z80MicroSequencerState::decode(&encoded).unwrap();
+        let restored = Z80MicroSequencer::restore_state(decoded).unwrap();
+        assert_eq!(restored.export_architectural_state(), state);
+    }
 
     #[test]
     fn pending_fetch_snapshot_round_trips_with_wait_and_allocator() {
