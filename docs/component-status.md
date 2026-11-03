@@ -132,13 +132,13 @@ Não elevar um estado com base apenas em documentação, compilação isolada, b
 ## 10. P7 — expansão do Z80 retomável: ALU com fonte em registrador, PR #425
 
 **Branch candidata:** `feat/z80-sms-alu-register-matrix`  
-**SHA validado:** `c25a2bfdb5ab4929d8ed5cebb19ebfaef523bcd2`  
+**SHA validado:** `6ed6cc3b42942f791d04f4366db2b35e3cafa985`  
 **PR:** https://github.com/leonardo201800478/sega-emulator/pull/425  
-**CI:** run `41562069199` — Rust, Python e Windows PASS; Scheduler deterministic stress SKIPPED.
+**CI:** run `41562585658` — Rust, Python e Windows PASS; Scheduler deterministic stress SKIPPED.
 
 | Componente | Estado formal | Evidência / limite |
 |---|---|---|
-| ALU BASE com fonte em registrador no microsequenciador | IMPLEMENTED / QUICK_PASS | 56 encodings: ADD/ADC/SUB/SBC/AND/XOR/OR/CP com B,C,D,E,H,L,A; vetores fixos de resultado/flags e teste estrutural da matriz |
+| ALU BASE com fonte em registrador no microsequenciador | IMPLEMENTED / QUICK_PASS | 56 encodings: ADD/ADC/SUB/SBC/AND/XOR/OR/CP com B,C,D,E,H,L,A; vetores fixos de resultado/flags, teste estrutural e diferencial no SmsTemporalMachine/Scheduler |
 | ALU com fonte `(HL)` | INTEGRATION_PENDING | Requer fase de leitura de memória e validação do snapshot codec |
 | ALU imediata | INTEGRATION_PENDING | Requer fase de leitura do operando imediato, avanço de PC e validação temporal |
 | Z80 retomável completo | INTEGRATION_PENDING | Prefixos CB/ED/DD/FD, HALT, interrupções, I/O, instruções 16-bit, refresh elétrico e estado arquitetural completo permanecem pendentes |
