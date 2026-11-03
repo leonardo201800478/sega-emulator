@@ -182,10 +182,30 @@ A PR #426 permanece Draft e empilhada sobre #425. Nenhum merge foi realizado.
 |---|---|---|
 | RLCA/RRCA/RLA/RRA, DAA e CPL | IMPLEMENTED / QUICK_PASS | Shared ALU, M1 4 T, testes unitários e diferencial Scheduler/atomic; CI run `41568918251` PASS em Rust, Python e Windows x64 |
 | Q-latch do microsequenciador | IMPLEMENTED / QUICK_PASS | `q` e `q_previous` atualizados na fronteira de instrução; instruções que escrevem F atualizam Q; instruções sem escrita de F deixam Q=0 |
-| SCF/CCF | IMPLEMENTED / QUICK_PASS pendente de CI atual | Fórmula X/Y usa `(A | (Q_previous XOR F)) & 0x28`; CCF alterna C/H; teste após CP e instrução sem escrita de flags |
+| SCF/CCF | IMPLEMENTED / QUICK_PASS atual | Fórmula X/Y usa `(A | (Q_previous XOR F)) & 0x28`; CCF alterna C/H; teste após CP e instrução sem escrita de flags |
 | Snapshot Z80 | IMPLEMENTED / QUICK_PASS pendente de CI atual | Codec binário versão 5 serializa Q/Q_previous; teste de round-trip/restauração com M1 pendente; CI `41569544969` PASS |
 | SMS temporal machine state | IMPLEMENTED / QUICK_PASS pendente de CI atual | Versão incrementada de 7 para 8 para refletir o novo estado embutido do Z80; CI `41569544969` PASS |
 | Z80 retomável completo | INTEGRATION_PENDING | Prefixos CB/ED/DD/FD, HALT, interrupções, I/O, instruções 16-bit, refresh elétrico e estado arquitetural completo permanecem pendentes |
 | TEMPORAL_PASS | NOT DECLARED | Sem oráculos independentes/físicos, WAIT físico e integração sistêmica completa |
 
 O executor atômico existente é a referência para SCF/CCF: no início de cada instrução ele captura `q_previous = q` e limpa `q`; `set_flags` grava F e Q. O microsequenciador reproduz essa fronteira e persiste ambos os latches. CI `41569544969`: Rust Formatting, Clippy, testes direcionados SMS/SG-1000, workspace, Ruff, pytest e Windows x64 vídeo/áudio PASS; Scheduler deterministic stress SKIPPED. Execução local NOT RUN. Não inferir validação in-game nem cobertura ZEXDOC/ZEXALL.
+
+## 13. P7 — Z80 BASE: LD rr,nn no microsequenciador retomável
+
+**Branch candidata:** `feat/z80-sms-ld-register-pairs-immediate`  
+**SHA de código candidato:** `f416efef960cdd20816fd46c5e4a8509bff36ee5`  
+**PR:** https://github.com/leonardo201800478/sega-emulator/pull/428  
+**Dependência:** PR #427 (empilhada; ainda não integrada à main).  
+**CI:** run `41571174250` no SHA documental `0afb96a8302b77cf4068ecf5eb8f069d6fb6fb06` — Rust Formatting, Clippy, SMS, SG-1000, workspace, Ruff, pytest, Windows x64 D3D12/vídeo/WASAPI/XAudio2 e Scheduler deterministic stress short PASS.
+
+| Componente | Estado formal | Evidência / limite |
+|---|---|---|
+| LD BC,nn / LD DE,nn / LD HL,nn / LD SP,nn | IMPLEMENTED / QUICK_PASS pendente de CI | Quatro opcodes BASE (01/11/21/31); leitura little-endian em dois M-cycles de memória agendados após M1 |
+| Suspensão/retomada e snapshot | IMPLEMENTED / QUICK_PASS pendente de CI | Fases distintas para byte baixo e alto; validação de opcode, par, endereço, M-cycle e duração; codec Z80 versão 6 |
+| Integração temporal SMS | IMPLEMENTED / QUICK_PASS pendente de CI | Testes diferenciais no SmsTemporalMachine/Scheduler contra o executor atômico; estado temporal SMS versão 9 |
+| Z80 retomável completo | INTEGRATION_PENDING | Cobertura ainda parcial; instruções BASE restantes, prefixos CB/ED/DD/FD, HALT, interrupções, I/O e estados/pinos completos pendentes |
+| TEMPORAL_PASS | NOT DECLARED | Sem comprovação elétrica independente ou integração sistêmica completa |
+
+**Critérios da fatia:** M1 4 T + leitura do byte baixo 3 T + leitura do byte alto 3 T = 10 T nominais. PC avança apenas quando cada leitura conclui; o par de registradores só é atualizado após a leitura do byte alto. WAIT de cada transação deve ser contabilizado no Scheduler. O executor atômico legado permanece como oráculo diferencial e não é removido.
+
+**Validação:** CI `41571174250` PASS em todos os jobs, incluindo Scheduler deterministic stress short. Execução local NOT RUN. O resultado cobre o SHA candidato desta branch; não comprova integração sistêmica completa nem TEMPORAL_PASS.

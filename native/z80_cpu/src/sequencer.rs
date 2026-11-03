@@ -43,6 +43,13 @@ pub enum Z80MicroSequencerPhase {
     ImmediateReadRegister {
         destination: u8,
     },
+    ImmediateReadRegisterPairLow {
+        pair: u8,
+    },
+    ImmediateReadRegisterPairHigh {
+        pair: u8,
+        low: u8,
+    },
     ImmediateReadMemoryWrite,
     ImmediateReadAlu {
         operation: u8,
@@ -192,6 +199,30 @@ impl Z80MicroSequencer {
                     })
                     && state.instruction_tstates >= 4
             }
+            Z80MicroSequencerPhase::ImmediateReadRegisterPairLow { pair } => {
+                let opcode_matches = state.opcode.is_some_and(|opcode| {
+                    matches!(opcode, 0x01 | 0x11 | 0x21 | 0x31) && pair == ((opcode >> 4) & 0x03)
+                });
+                opcode_matches
+                    && pending.is_some_and(|request| {
+                        request.operation == Z80BusOperation::MemoryRead
+                            && request.address == state.registers.pc
+                            && request.base_tstates == 3
+                    })
+                    && state.instruction_tstates >= 4
+            }
+            Z80MicroSequencerPhase::ImmediateReadRegisterPairHigh { pair, .. } => {
+                let opcode_matches = state.opcode.is_some_and(|opcode| {
+                    matches!(opcode, 0x01 | 0x11 | 0x21 | 0x31) && pair == ((opcode >> 4) & 0x03)
+                });
+                opcode_matches
+                    && pending.is_some_and(|request| {
+                        request.operation == Z80BusOperation::MemoryRead
+                            && request.address == state.registers.pc
+                            && request.base_tstates == 3
+                    })
+                    && state.instruction_tstates >= 7
+            }
             Z80MicroSequencerPhase::ImmediateReadMemoryWrite => {
                 state.opcode == Some(0x36)
                     && pending.is_some_and(|request| {
@@ -285,12 +316,16 @@ impl Z80MicroSequencer {
                 state.mcycle_index == 0 && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::ImmediateReadRegister { .. }
+            | Z80MicroSequencerPhase::ImmediateReadRegisterPairLow { .. }
             | Z80MicroSequencerPhase::ImmediateReadMemoryWrite
             | Z80MicroSequencerPhase::ImmediateReadAlu { .. }
             | Z80MicroSequencerPhase::MemoryReadRegister { .. }
             | Z80MicroSequencerPhase::MemoryReadAlu { .. }
             | Z80MicroSequencerPhase::MemoryReadIncDec { .. } => {
                 state.mcycle_index == 1 && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::ImmediateReadRegisterPairHigh { .. } => {
+                state.mcycle_index == 2 && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::MemoryIncDecInternal { .. } => {
                 state.mcycle_index == 1
@@ -431,6 +466,12 @@ impl Z80MicroSequencer {
                         self.execute_carry_flag_operation(opcode);
                         self.retire(opcode)
                     }
+                    0x01 | 0x11 | 0x21 | 0x31 => self.issue_read(
+                        Z80MicroSequencerPhase::ImmediateReadRegisterPairLow {
+                            pair: (opcode >> 4) & 0x03,
+                        },
+                        self.registers.pc,
+                    ),
                     0x06 | 0x0E | 0x16 | 0x1E | 0x26 | 0x2E | 0x3E => {
                         let destination = (opcode >> 3) & 0x07;
                         self.issue_read(
@@ -513,6 +554,27 @@ impl Z80MicroSequencer {
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 self.registers.pc = self.registers.pc.wrapping_add(1);
                 self.write_register(destination, value);
+                self.retire(
+                    self.opcode
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
+                )
+            }
+            Z80MicroSequencerPhase::ImmediateReadRegisterPairLow { pair } => {
+                let low = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.registers.pc = self.registers.pc.wrapping_add(1);
+                self.issue_read(
+                    Z80MicroSequencerPhase::ImmediateReadRegisterPairHigh { pair, low },
+                    self.registers.pc,
+                )
+            }
+            Z80MicroSequencerPhase::ImmediateReadRegisterPairHigh { pair, low } => {
+                let high = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.registers.pc = self.registers.pc.wrapping_add(1);
+                self.write_register_pair(pair, u16::from_le_bytes([low, high]));
                 self.retire(
                     self.opcode
                         .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
@@ -716,6 +778,16 @@ impl Z80MicroSequencer {
         }
         self.set_flags(flags);
         value
+    }
+
+    fn write_register_pair(&mut self, pair: u8, value: u16) {
+        match pair {
+            0 => self.registers.set_bc(value),
+            1 => self.registers.set_de(value),
+            2 => self.registers.set_hl(value),
+            3 => self.registers.sp = value,
+            _ => unreachable!("two-bit register-pair field"),
+        }
     }
 
     fn read_register(&self, code: u8) -> u8 {
@@ -2024,6 +2096,65 @@ mod tests {
         let scf = request(cpu.begin_instruction().unwrap());
         retired(cpu.complete_bus_cycle(scf.id, Some(0x37)).unwrap(), 0x37, 4);
         assert_eq!(cpu.registers.f, FLAG_XY | FLAG_C);
+    }
+
+    #[test]
+    fn ld_register_pair_immediate_reads_little_endian_word_before_commit() {
+        for (opcode, expected_pair) in [
+            (0x01, 0x1234_u16),
+            (0x11, 0x5678_u16),
+            (0x21, 0x9ABC_u16),
+            (0x31, 0xDEF0_u16),
+        ] {
+            let mut cpu = Z80MicroSequencer::default();
+            let fetch = request(cpu.begin_instruction().unwrap());
+            let low_read = request(cpu.complete_bus_cycle(fetch.id, Some(opcode)).unwrap());
+            assert_eq!(low_read.address, 1);
+            assert_eq!(low_read.base_tstates, 3);
+            assert_eq!(cpu.registers.pc, 1);
+
+            let low = expected_pair as u8;
+            let high_read = request(cpu.complete_bus_cycle(low_read.id, Some(low)).unwrap());
+            assert_eq!(high_read.address, 2);
+            assert_eq!(high_read.base_tstates, 3);
+            assert_eq!(cpu.registers.pc, 2);
+            assert_eq!(cpu.registers.bc(), 0);
+            assert_eq!(cpu.registers.de(), 0);
+            assert_eq!(cpu.registers.hl(), 0);
+            assert_eq!(cpu.registers.sp, 0);
+
+            let high = (expected_pair >> 8) as u8;
+            retired(
+                cpu.complete_bus_cycle(high_read.id, Some(high)).unwrap(),
+                opcode,
+                10,
+            );
+            match opcode {
+                0x01 => assert_eq!(cpu.registers.bc(), expected_pair),
+                0x11 => assert_eq!(cpu.registers.de(), expected_pair),
+                0x21 => assert_eq!(cpu.registers.hl(), expected_pair),
+                0x31 => assert_eq!(cpu.registers.sp, expected_pair),
+                _ => unreachable!(),
+            }
+            assert_eq!(cpu.registers.pc, 3);
+            assert_eq!(cpu.pending_request(), None);
+        }
+    }
+
+    #[test]
+    fn ld_register_pair_immediate_waits_extend_both_operand_cycles() {
+        let mut cpu = Z80MicroSequencer::default();
+        let fetch = request(cpu.begin_instruction().unwrap());
+        let low_read = request(cpu.complete_bus_cycle(fetch.id, Some(0x01)).unwrap());
+        cpu.insert_wait_tstate().unwrap();
+        let high_read = request(cpu.complete_bus_cycle(low_read.id, Some(0x34)).unwrap());
+        cpu.insert_wait_tstates(2).unwrap();
+        retired(
+            cpu.complete_bus_cycle(high_read.id, Some(0x12)).unwrap(),
+            0x01,
+            13,
+        );
+        assert_eq!(cpu.registers.bc(), 0x1234);
     }
 
     #[test]

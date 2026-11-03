@@ -16,7 +16,7 @@ use sega_z80_cpu::{
     Z80MicroSequencerState, Z80MicroStep,
 };
 
-pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 8;
+pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 9;
 
 /// Runtime event trace emitted from actual Scheduler/bus dispatch boundaries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1396,6 +1396,63 @@ mod tests {
                 MachineTime::from_ticks(u128::from(expected_memory_tstates) * 3)
             );
         }
+    }
+
+    #[test]
+    fn ld_register_pair_immediate_matrix_matches_atomic_reference_through_scheduler() {
+        for (opcode, low, high) in [
+            (0x01, 0x34, 0x12),
+            (0x11, 0x78, 0x56),
+            (0x21, 0xBC, 0x9A),
+            (0x31, 0xF0, 0xDE),
+        ] {
+            let mut rom = vec![0; 0x4000];
+            rom[0] = opcode;
+            rom[1] = low;
+            rom[2] = high;
+            let initial_registers = Z80Registers {
+                a: 0xA5,
+                f: 0xD7,
+                b: 0x11,
+                c: 0x22,
+                d: 0x33,
+                e: 0x44,
+                h: 0x55,
+                l: 0x66,
+                sp: 0x7788,
+                pc: 0,
+            };
+
+            let mut temporal = SmsTemporalMachine::new(rom.clone(), 3).unwrap();
+            temporal.cpu_mut().registers = initial_registers;
+            let mut atomic = crate::Z80::default();
+            atomic.registers = initial_registers;
+            let mut atomic_bus = FlatBus::new(&rom);
+            let expected_tstates = atomic.step(&mut atomic_bus).unwrap();
+
+            retired(
+                temporal.step_instruction(0).unwrap(),
+                opcode,
+                expected_tstates,
+            );
+            assert_eq!(expected_tstates, 10);
+            assert_eq!(temporal.cpu().registers, atomic.registers);
+            assert_eq!(temporal.cpu().refresh, atomic.r);
+            assert_eq!(temporal.cpu().q, atomic.q);
+            assert_eq!(
+                temporal.now(),
+                MachineTime::from_ticks(u128::from(expected_tstates) * 3)
+            );
+        }
+    }
+
+    #[test]
+    fn ld_register_pair_immediate_wait_states_follow_scheduler_deadlines() {
+        let mut machine = SmsTemporalMachine::new(vec![0x21, 0x34, 0x12], 3).unwrap();
+        retired(machine.step_instruction(1).unwrap(), 0x21, 13);
+        assert_eq!(machine.cpu().registers.hl(), 0x1234);
+        assert_eq!(machine.cpu().registers.pc, 3);
+        assert_eq!(machine.now(), MachineTime::from_ticks(39));
     }
 
     #[test]
