@@ -3604,7 +3604,6 @@ mod architectural_state_tests {
     }
 }
 
-
 #[cfg(test)]
 mod architectural_state_diagnostics_tests {
     use super::Z80;
