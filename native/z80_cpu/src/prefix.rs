@@ -43,8 +43,19 @@ pub fn classify_index_opcode(opcode: u8) -> Z80IndexOpcodeClass {
 
     if matches!(
         opcode,
-        0x09 | 0x19 | 0x21 | 0x22 | 0x23 | 0x29 | 0x2A | 0x2B | 0x39
-            | 0xE1 | 0xE3 | 0xE5 | 0xE9 | 0xF9
+        0x09 | 0x19
+            | 0x21
+            | 0x22
+            | 0x23
+            | 0x29
+            | 0x2A
+            | 0x2B
+            | 0x39
+            | 0xE1
+            | 0xE3
+            | 0xE5
+            | 0xE9
+            | 0xF9
     ) {
         return Z80IndexOpcodeClass::UsesIndex;
     }

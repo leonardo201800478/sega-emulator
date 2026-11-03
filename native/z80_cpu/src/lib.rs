@@ -31,9 +31,7 @@ pub use micro_ops::{
     Z80BusHandshake, Z80BusHandshakeError, Z80BusHandshakeState, Z80BusOperation, Z80BusRequest,
     Z80BusResponse,
 };
-pub use prefix::{
-    classify_index_opcode, Z80IndexOpcodeClass, Z80IndexRegister, Z80PrefixState,
-};
+pub use prefix::{Z80IndexOpcodeClass, Z80IndexRegister, Z80PrefixState, classify_index_opcode};
 pub use sequencer::{
     Z80MicroSequencer, Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroSequencerState,
     Z80MicroStep,

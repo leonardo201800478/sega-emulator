@@ -1,8 +1,8 @@
 //! E2 prefix-FSM integration tests for the resumable Z80 sequencer.
 
 use sega_z80_cpu::{
-    classify_index_opcode, Z80BusRequest, Z80IndexOpcodeClass, Z80IndexRegister,
-    Z80MicroSequencer, Z80MicroSequencerError, Z80MicroStep, Z80PrefixState,
+    Z80BusRequest, Z80IndexOpcodeClass, Z80IndexRegister, Z80MicroSequencer,
+    Z80MicroSequencerError, Z80MicroStep, Z80PrefixState, classify_index_opcode,
 };
 
 fn request(step: Z80MicroStep) -> Z80BusRequest {
