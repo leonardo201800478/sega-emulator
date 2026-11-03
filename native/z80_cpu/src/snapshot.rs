@@ -239,6 +239,13 @@ fn read_phase(
         2 => Z80MicroSequencerPhase::ImmediateReadRegister {
             destination: reader.u8()?,
         },
+        10 => Z80MicroSequencerPhase::ImmediateReadRegisterPairLow {
+            pair: reader.u8()?,
+        },
+        11 => Z80MicroSequencerPhase::ImmediateReadRegisterPairHigh {
+            pair: reader.u8()?,
+            low: reader.u8()?,
+        },
         3 => Z80MicroSequencerPhase::ImmediateReadMemoryWrite,
         8 => Z80MicroSequencerPhase::ImmediateReadAlu {
             operation: reader.u8()?,
