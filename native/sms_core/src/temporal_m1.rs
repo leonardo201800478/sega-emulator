@@ -6,6 +6,7 @@
 //! payload to `complete_tstate`, keeping the M1 pins and machine clock aligned.
 
 use crate::{SmsTemporalCoordinator, SmsTemporalCoordinatorError, SmsTemporalEvent};
+use sega_temporal_core::MachineTime;
 use sega_z80_cpu::{Z80M1Cycle, Z80M1CycleState, Z80M1Error, Z80M1Phase, Z80M1Pins};
 
 /// Serializable continuation for one scheduler-driven M1 cycle.
@@ -14,6 +15,7 @@ pub struct SmsTemporalM1State {
     pub cycle: Z80M1CycleState,
     pub next_continuation_id: u64,
     pub pending_continuation_id: Option<u64>,
+    pub pending_deadline: Option<MachineTime>,
 }
 
 /// Errors raised while advancing an M1 cycle on the SMS machine timeline.
@@ -46,6 +48,7 @@ pub struct SmsTemporalM1 {
     cycle: Z80M1Cycle,
     next_continuation_id: u64,
     pending_continuation_id: Option<u64>,
+    pending_deadline: Option<MachineTime>,
 }
 
 impl SmsTemporalM1 {
@@ -55,6 +58,7 @@ impl SmsTemporalM1 {
             cycle: Z80M1Cycle::new(address, i, refresh),
             next_continuation_id: 0,
             pending_continuation_id: None,
+            pending_deadline: None,
         }
     }
 
@@ -100,8 +104,9 @@ impl SmsTemporalM1 {
             .next_continuation_id
             .checked_add(1)
             .ok_or(SmsTemporalM1Error::ContinuationIdExhausted)?;
-        coordinator.schedule_m1_tstate(self.next_continuation_id)?;
+        let deadline = coordinator.schedule_m1_tstate(self.next_continuation_id)?;
         self.pending_continuation_id = Some(self.next_continuation_id);
+        self.pending_deadline = Some(deadline);
         self.next_continuation_id = next_id;
         Ok(())
     }
@@ -114,6 +119,7 @@ impl SmsTemporalM1 {
     pub fn complete_tstate(
         &mut self,
         event: SmsTemporalEvent,
+        completed_at: MachineTime,
         wait_asserted: bool,
     ) -> Result<Z80M1Phase, SmsTemporalM1Error> {
         let Some(expected_id) = self.pending_continuation_id else {
@@ -126,8 +132,12 @@ impl SmsTemporalM1 {
         {
             return Err(SmsTemporalM1Error::EventMismatch);
         }
+        if self.pending_deadline != Some(completed_at) {
+            return Err(SmsTemporalM1Error::EventMismatch);
+        }
         let phase = self.cycle.advance_tstate(wait_asserted)?;
         self.pending_continuation_id = None;
+        self.pending_deadline = None;
         Ok(phase)
     }
 
@@ -143,6 +153,7 @@ impl SmsTemporalM1 {
             cycle: self.cycle.export_state(),
             next_continuation_id: self.next_continuation_id,
             pending_continuation_id: self.pending_continuation_id,
+            pending_deadline: self.pending_deadline,
         }
     }
 
@@ -151,8 +162,10 @@ impl SmsTemporalM1 {
         if state
             .pending_continuation_id
             .is_some_and(|id| id >= state.next_continuation_id)
+            || state.pending_continuation_id.is_some() != state.pending_deadline.is_some()
             || (state.pending_continuation_id.is_some()
-                && state.cycle.phase == Z80M1Phase::Complete)
+                && (state.cycle.phase == Z80M1Phase::Complete
+                    || (state.cycle.phase == Z80M1Phase::T3 && state.cycle.opcode.is_none())))
         {
             return Err(SmsTemporalM1Error::EventMismatch);
         }
@@ -161,6 +174,7 @@ impl SmsTemporalM1 {
             cycle,
             next_continuation_id: state.next_continuation_id,
             pending_continuation_id: state.pending_continuation_id,
+            pending_deadline: state.pending_deadline,
         })
     }
 }
@@ -219,7 +233,7 @@ mod tests {
         let dispatch = timeline.dispatch_next().unwrap().unwrap();
         assert_eq!(
             restored
-                .complete_tstate(dispatch.event.payload, true)
+                .complete_tstate(dispatch.event.payload, dispatch.event.timestamp, true)
                 .unwrap(),
             Z80M1Phase::Wait
         );
@@ -257,6 +271,7 @@ mod tests {
         assert_eq!(
             m1.complete_tstate(
                 SmsTemporalEvent::InternalCycleComplete { continuation_id: 0 },
+                MachineTime::from_ticks(1),
                 false
             ),
             Err(SmsTemporalM1Error::EventMismatch)
