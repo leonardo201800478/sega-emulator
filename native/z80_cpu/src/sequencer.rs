@@ -630,13 +630,17 @@ impl Z80MicroSequencer {
                     && state.instruction_tstates >= 4
             }
             Z80MicroSequencerPhase::BaseReturnPop { stage, low } => {
+                let return_condition_valid = state.opcode.is_some_and(|opcode| {
+                    opcode == 0xC9 || self_condition(state.registers.f, (opcode >> 3) & 0x07)
+                });
                 state.opcode.is_some_and(|opcode| {
                     opcode == 0xC9
                         || matches!(
                             opcode,
                             0xC0 | 0xC8 | 0xD0 | 0xD8 | 0xE0 | 0xE8 | 0xF0 | 0xF8
                         )
-                }) && stage <= 1
+                }) && return_condition_valid
+                    && stage <= 1
                     && pending.is_some_and(|request| {
                         request.operation == Z80BusOperation::MemoryRead
                             && request.address == state.registers.sp
