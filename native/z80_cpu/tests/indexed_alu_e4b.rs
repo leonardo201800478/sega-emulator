@@ -62,16 +62,9 @@ fn execute_indexed_alu(
         cpu.insert_wait_tstates(waits[opcode_wait]).unwrap();
         cpu = round_trip(cpu);
     }
-    let displacement_request =
-        request(cpu.complete_bus_cycle(fetch.id, Some(opcode)).unwrap());
-    assert_eq!(
-        displacement_request.operation,
-        Z80BusOperation::MemoryRead
-    );
-    assert_eq!(
-        displacement_request.address,
-        prefixes.len() as u16 + 1
-    );
+    let displacement_request = request(cpu.complete_bus_cycle(fetch.id, Some(opcode)).unwrap());
+    assert_eq!(displacement_request.operation, Z80BusOperation::MemoryRead);
+    assert_eq!(displacement_request.address, prefixes.len() as u16 + 1);
     assert_eq!(displacement_request.base_tstates, 3);
 
     let displacement_wait = prefixes.len() + 1;
@@ -177,8 +170,14 @@ fn indexed_alu_matrix_matches_fixed_arithmetic_and_flag_vectors_for_ix_and_iy() 
                 operand,
                 &[0, 0, 0, 0],
             );
-            assert_eq!(cpu.registers.a, expected_a, "prefix {prefix:02X}, opcode {opcode:02X}");
-            assert_eq!(cpu.registers.f, expected_f, "prefix {prefix:02X}, opcode {opcode:02X}");
+            assert_eq!(
+                cpu.registers.a, expected_a,
+                "prefix {prefix:02X}, opcode {opcode:02X}"
+            );
+            assert_eq!(
+                cpu.registers.f, expected_f,
+                "prefix {prefix:02X}, opcode {opcode:02X}"
+            );
             assert_eq!(cpu.registers.pc, 3);
             assert_eq!(cpu.wz, if prefix == 0xDD { 0x2000 } else { 0x3000 });
         }
