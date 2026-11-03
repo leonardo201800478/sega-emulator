@@ -204,8 +204,8 @@ pub fn cpl8(accumulator: u8, old_flags: u8) -> AluResult {
 #[cfg(test)]
 mod tests {
     use super::{
-        adc8, add8, and8, cp8, cpl8, daa8, or8, rotate_accumulator, sbc8, sub8, xor8, FLAG_C,
-        FLAG_H, FLAG_N, FLAG_PV, FLAG_S, FLAG_XY, FLAG_Z,
+        FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_S, FLAG_XY, FLAG_Z, adc8, add8, and8, cp8, cpl8,
+        daa8, or8, rotate_accumulator, sbc8, sub8, xor8,
     };
 
     #[test]
