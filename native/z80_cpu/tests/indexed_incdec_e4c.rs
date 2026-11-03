@@ -117,10 +117,7 @@ fn execute_indexed_inc_dec(case: IndexedIncDecCase<'_>) -> Z80MicroSequencer {
     );
     assert_eq!(cpu.export_state().mcycle_index, prefixes.len() as u32 + 3);
     assert_eq!(cpu.wz, effective_address);
-    assert_eq!(
-        cpu.registers.pc,
-        pc.wrapping_add(prefixes.len() as u16 + 2)
-    );
+    assert_eq!(cpu.registers.pc, pc.wrapping_add(prefixes.len() as u16 + 2));
     assert_eq!(cpu.refresh & 0x7F, prefixes.len() as u8 + 1);
 
     let read_wait = prefixes.len() + 2;
@@ -210,7 +207,10 @@ fn indexed_inc_dec_vectors_cover_flags_and_carry_preservation_for_ix_and_iy() {
                 expected_value,
                 waits: &[0, 0, 0, 0, 0],
             });
-            assert_eq!(cpu.registers.f, expected_flags, "prefix {prefix:02X}, opcode {opcode:02X}");
+            assert_eq!(
+                cpu.registers.f, expected_flags,
+                "prefix {prefix:02X}, opcode {opcode:02X}"
+            );
             assert_eq!(cpu.wz, if prefix == 0xDD { 0x2000 } else { 0x3000 });
             assert_eq!(cpu.registers.pc, 3);
             assert_eq!(cpu.refresh & 0x7F, 2);
@@ -260,7 +260,14 @@ fn indexed_inc_dec_repeated_and_alternating_prefixes_use_last_index_register() {
             expected_value: 0xFF,
             waits: &waits,
         });
-        assert_eq!(cpu.wz, if prefixes.last() == Some(&0xDD) { 0x1000 } else { 0x2000 });
+        assert_eq!(
+            cpu.wz,
+            if prefixes.last() == Some(&0xDD) {
+                0x1000
+            } else {
+                0x2000
+            }
+        );
         assert_eq!(cpu.registers.f, 0xBB);
     }
 }
