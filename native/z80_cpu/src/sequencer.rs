@@ -2943,6 +2943,81 @@ mod tests {
     }
 
     #[test]
+    fn dd_fd_add_index_pair_all_pairs_match_architectural_vectors() {
+        let cases = [
+            (0xDD, 0x09, 0x1000, 0x0001, 0x1001),
+            (0xDD, 0x19, 0x0FFF, 0x0001, 0x1000),
+            (0xDD, 0x29, 0xFFFF, 0xFFFF, 0xFFFE),
+            (0xDD, 0x39, 0xFFFF, 0x0001, 0x0000),
+            (0xFD, 0x09, 0x1000, 0x0001, 0x1001),
+            (0xFD, 0x19, 0x0FFF, 0x0001, 0x1000),
+            (0xFD, 0x29, 0xFFFF, 0xFFFF, 0xFFFE),
+            (0xFD, 0x39, 0xFFFF, 0x0001, 0x0000),
+        ];
+        for (prefix, opcode, lhs, rhs, expected) in cases {
+            let pair = (opcode >> 4) & 3;
+            let mut registers = Z80Registers {
+                f: FLAG_S | FLAG_Z | FLAG_PV | FLAG_C,
+                ..Z80Registers::default()
+            };
+            match pair {
+                0 => registers.set_bc(rhs),
+                1 => registers.set_de(rhs),
+                3 => registers.sp = rhs,
+                _ => {}
+            }
+            let mut cpu = Z80MicroSequencer {
+                ix: if prefix == 0xDD { lhs } else { 0x2468 },
+                iy: if prefix == 0xFD { lhs } else { 0x1357 },
+                registers,
+                ..Z80MicroSequencer::default()
+            };
+            let old_flags = cpu.registers.f;
+            let selected_before = lhs;
+            let other_before = if prefix == 0xDD { cpu.iy } else { cpu.ix };
+            let fetch0 = request(cpu.begin_instruction().unwrap());
+            let fetch1 = request(cpu.complete_bus_cycle(fetch0.id, Some(prefix)).unwrap());
+            let first_internal = cpu.complete_bus_cycle(fetch1.id, Some(opcode)).unwrap();
+            assert_eq!(first_internal, Z80MicroStep::InternalCycle { tstates: 1 });
+            assert_eq!(cpu.ix, if prefix == 0xDD { selected_before } else { other_before });
+            assert_eq!(cpu.iy, if prefix == 0xFD { selected_before } else { other_before });
+            assert_eq!(cpu.registers.f, old_flags);
+
+            let mut restored = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+            let bytes = restored.export_state().encode().unwrap();
+            restored = Z80MicroSequencer::restore_state(
+                crate::Z80MicroSequencerState::decode(&bytes).unwrap()
+            ).unwrap();
+            for _ in 1..7 {
+                assert_eq!(
+                    restored.complete_internal_cycle().unwrap(),
+                    Z80MicroStep::InternalCycle { tstates: 1 }
+                );
+                restored = Z80MicroSequencer::restore_state(restored.export_state()).unwrap();
+            }
+            let retired = restored.complete_internal_cycle().unwrap();
+            retired(retired, opcode, 15);
+            assert_eq!(
+                if prefix == 0xDD { restored.ix } else { restored.iy },
+                expected
+            );
+            assert_eq!(
+                if prefix == 0xDD { restored.iy } else { restored.ix },
+                other_before
+            );
+            let carry = u8::from(u32::from(lhs) + u32::from(rhs) > 0xFFFF) * FLAG_C;
+            let half = u8::from((lhs & 0x0FFF) + (rhs & 0x0FFF) > 0x0FFF) * FLAG_H;
+            let mut expected_flags = old_flags & (FLAG_S | FLAG_Z | FLAG_PV);
+            expected_flags |= ((expected >> 8) as u8) & FLAG_XY;
+            expected_flags |= carry | half;
+            assert_eq!(restored.registers.f, expected_flags);
+            assert_eq!(restored.wz, lhs.wrapping_add(1));
+            assert_eq!(restored.registers.pc, 2);
+            assert_eq!(restored.refresh, 2);
+        }
+    }
+
+    #[test]
     fn dd_fd_inc_dec_index_pair_wraparound_preserves_flags_and_other_registers() {
         for (prefix, opcode, initial, expected) in [
             (0xDD, 0x23, 0xFFFF, 0x0000),
