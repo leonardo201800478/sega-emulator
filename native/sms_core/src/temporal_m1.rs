@@ -248,22 +248,24 @@ mod tests {
     }
 
     #[test]
-    fn t3_requires_opcode_before_scheduling_irreversible_completion() {
+    fn t3_opcode_is_sampled_at_the_dispatched_completion_edge() {
         let mut timeline = SmsTemporalCoordinator::new(1).unwrap();
         let mut m1 = SmsTemporalM1::new(0, 0, 0);
         assert_eq!(tick(&mut m1, &mut timeline, false), Z80M1Phase::T2);
         assert_eq!(tick(&mut m1, &mut timeline, false), Z80M1Phase::T3);
+        m1.schedule_next_tstate(&mut timeline).unwrap();
+        let dispatch = timeline.dispatch_next().unwrap().unwrap();
+        m1.sample_opcode(0xA5).unwrap();
         assert_eq!(
-            m1.schedule_next_tstate(&mut timeline),
-            Err(SmsTemporalM1Error::Cycle(
-                sega_z80_cpu::Z80M1Error::MissingOpcodeAtT3End
-            ))
+            m1.complete_tstate(dispatch.event.payload, dispatch.event.timestamp, false)
+                .unwrap(),
+            Z80M1Phase::T4
         );
+        assert_eq!(m1.opcode(), Some(0xA5));
         assert_eq!(
             timeline.now(),
-            sega_temporal_core::MachineTime::from_ticks(2)
+            sega_temporal_core::MachineTime::from_ticks(3)
         );
-        assert_eq!(m1.phase(), Z80M1Phase::T3);
     }
 
     #[test]
