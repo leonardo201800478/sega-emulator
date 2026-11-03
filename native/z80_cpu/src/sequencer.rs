@@ -2618,6 +2618,11 @@ impl Z80MicroSequencer {
                 next.registers.sp = next.registers.sp.wrapping_sub(1);
                 next.issue_base_stack_push_write(0, low, next.registers.sp, high)?
             }
+            Z80MicroSequencerPhase::BaseControlPushInternal { target, high, low } => {
+                next.instruction_tstates = next_instruction_tstates;
+                next.registers.sp = next.registers.sp.wrapping_sub(1);
+                next.issue_base_control_push_write(0, target, low, next.registers.sp, high)?
+            }
             Z80MicroSequencerPhase::BaseRelativeBranchInternal {
                 displacement,
                 branch_taken,
