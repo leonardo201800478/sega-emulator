@@ -4,7 +4,7 @@
 **Baseline:** `main` — `04ee09f9839bfe29a595abbed831d055cc8d177a`  
 **PR:** [#473](https://github.com/leonardo201800478/sega-emulator/pull/473)  
 **Branch:** `feat/z80-indexed-displacement-e4c-2026-11-03`  
-**Candidato com cobertura de displacement ampliada:** `949dd365046562835eef97e428dc9700e2ae2a70`  
+**Candidato com cobertura de displacement ampliada:** `26182568055dc824a9725428e1770fed6cb8447e`  
 **Schema de snapshot:** 27 (sem alteração)
 
 ## 1. Escopo
@@ -66,7 +66,7 @@ Cobertura adicionada:
 | Implementação no microsequenciador | IMPLEMENTED |
 | Testes direcionados no candidato inicial `ad464672c2c3a01620a1f96b0f53395d0e905355` | QUICK_PASS / SHORT_PASS em CI |
 | Workflow inicial | [41739328124](https://github.com/leonardo201800478/sega-emulator/actions/runs/41739328124), 4/4 jobs PASS |
-| Cobertura adicional de displacement no SHA `949dd365046562835eef97e428dc9700e2ae2a70` | CI pendente na criação deste relatório |
+| Cobertura adicional de displacement no SHA `26182568055dc824a9725428e1770fed6cb8447e` | CI pendente na criação deste relatório |
 | LONG_PASS | NOT RUN |
 | ZEXDOC / ZEXALL | NOT RUN |
 | Comparação diferencial externa completa | NOT RUN |
@@ -77,7 +77,7 @@ O CI verde confirma gates de compilação, lint, testes do workspace, stress det
 
 ## 6. Limitações remanescentes e próximos passos
 
-- Confirmar CI do candidato final com os testes de displacement ampliados e este relatório documental.
+- O workflow `41741995929` identificou E0689 no fixture de teste (tipos inteiros ambíguos), não no runtime; a fixture recebeu tipos explícitos no SHA `26182568055dc824a9725428e1770fed6cb8447e`. Confirmar CI integral do candidato corrigido.
 - Atualizar a matriz semântica DD/FD, a estratégia de resolução e os roadmaps com a integração E4C.
 - E4 só pode ser fechada após E4A, E4B e E4C aprovadas individualmente.
 - Prosseguir para E5: DDCB/FDCB no microsequenciador, distinguindo BIT (sem write-back) das operações RMW.
