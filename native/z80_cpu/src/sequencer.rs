@@ -651,11 +651,6 @@ impl Z80MicroSequencer {
                 port_address,
                 memory_address,
             } => {
-                let direction = if matches!(opcode, 0xAA | 0xBA) {
-                    -1_i16
-                } else {
-                    1_i16
-                };
                 matches!(opcode, 0xA2 | 0xAA | 0xB2 | 0xBA)
                     && state.opcode == Some(opcode)
                     && port_address
@@ -675,11 +670,6 @@ impl Z80MicroSequencer {
                 memory_address,
                 value,
             } => {
-                let direction = if matches!(opcode, 0xAA | 0xBA) {
-                    -1_i16
-                } else {
-                    1_i16
-                };
                 matches!(opcode, 0xA2 | 0xAA | 0xB2 | 0xBA)
                     && state.opcode == Some(opcode)
                     && memory_address == state.registers.hl()
@@ -697,11 +687,6 @@ impl Z80MicroSequencer {
                 opcode,
                 memory_address,
             } => {
-                let direction = if matches!(opcode, 0xAB | 0xBB) {
-                    -1_i16
-                } else {
-                    1_i16
-                };
                 matches!(opcode, 0xA3 | 0xAB | 0xB3 | 0xBB)
                     && state.opcode == Some(opcode)
                     && memory_address == state.registers.hl()
@@ -1842,11 +1827,6 @@ impl Z80MicroSequencer {
             }
             Z80MicroSequencerPhase::EdBlockIoInitialInternal { opcode } => {
                 next.instruction_tstates = next_instruction_tstates;
-                let direction = if matches!(opcode, 0xAA | 0xBA | 0xAB | 0xBB) {
-                    -1_i16
-                } else {
-                    1_i16
-                };
                 // M3 T1 captures old BC for IN and decrements B; OUT decrements B
                 // before its M3 memory read. These updates are visible at the bus boundary.
                 if matches!(opcode, 0xA2 | 0xAA | 0xB2 | 0xBA) {
