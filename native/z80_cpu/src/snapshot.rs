@@ -300,7 +300,7 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u8(u8::from(decrement));
             writer.u8(old);
             writer.u16(address);
-        },
+        }
         Z80MicroSequencerPhase::BaseInternal {
             opcode,
             remaining_tstates,
@@ -1249,10 +1249,9 @@ mod tests {
     }
 }
 
-
 #[cfg(test)]
 mod base_internal_snapshot_tests {
-    use crate::{Z80MicroSequencer, Z80MicroStep, Z80MicroSequencerState};
+    use crate::{Z80MicroSequencer, Z80MicroSequencerState, Z80MicroStep};
 
     fn round_trip(cpu: &Z80MicroSequencer) -> Z80MicroSequencer {
         let state = cpu.export_state();
