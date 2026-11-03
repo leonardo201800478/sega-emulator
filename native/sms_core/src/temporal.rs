@@ -20,10 +20,16 @@ pub const SMS_Z80_CLOCK_DOMAIN_ID: ClockDomainId = ClockDomainId(0);
 /// Typed machine event consumed by the SMS coordinator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SmsTemporalEvent {
-    BusCompletion { request_id: u64 },
-    InternalCycleComplete { continuation_id: u64 },
+    BusCompletion {
+        request_id: u64,
+    },
+    InternalCycleComplete {
+        continuation_id: u64,
+    },
     /// One T-state boundary belonging to an explicit Z80 M1 fetch.
-    M1TStateComplete { continuation_id: u64 },
+    M1TStateComplete {
+        continuation_id: u64,
+    },
 }
 
 /// Versioned in-memory state for the coordinator and its scheduler timeline.
