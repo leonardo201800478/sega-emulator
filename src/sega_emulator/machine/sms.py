@@ -40,9 +40,7 @@ class SMSMachine:
             type(cartridge_ram_size) is not int
             or cartridge_ram_size not in {0x2000, 0x4000, 0x8000}
         ):
-            raise ValueError(
-                "cartridge_ram_size deve ser 8192, 16384 ou 32768 bytes."
-            )
+            raise ValueError("cartridge_ram_size deve ser 8192, 16384 ou 32768 bytes.")
         if (cartridge_ram_size is None) != (sram_path is None):
             raise ValueError(
                 "cartridge_ram_size e sram_path devem ser informados juntos."
