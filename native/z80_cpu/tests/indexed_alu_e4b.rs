@@ -29,8 +29,8 @@ fn round_trip(cpu: Z80MicroSequencer) -> Z80MicroSequencer {
     Z80MicroSequencer::restore_state(decoded).expect("snapshot restores")
 }
 
-fn execute_indexed_alu(
-    prefixes: &[u8],
+struct IndexedAluCase<'a> {
+    prefixes: &'a [u8],
     ix: u16,
     iy: u16,
     opcode: u8,
@@ -38,8 +38,21 @@ fn execute_indexed_alu(
     flags: u8,
     displacement: u8,
     operand: u8,
-    waits: &[u32],
-) -> Z80MicroSequencer {
+    waits: &'a [u32],
+}
+
+fn execute_indexed_alu(case: IndexedAluCase<'_>) -> Z80MicroSequencer {
+    let IndexedAluCase {
+        prefixes,
+        ix,
+        iy,
+        opcode,
+        accumulator,
+        flags,
+        displacement,
+        operand,
+        waits,
+    } = case;
     assert_eq!(waits.len(), prefixes.len() + 3);
 
     let mut cpu = Z80MicroSequencer::default();
@@ -159,17 +172,17 @@ fn indexed_alu_matrix_matches_fixed_arithmetic_and_flag_vectors_for_ix_and_iy() 
 
     for prefix in [0xDD, 0xFD] {
         for (opcode, accumulator, flags, operand, expected_a, expected_f) in vectors {
-            let cpu = execute_indexed_alu(
-                &[prefix],
-                0x2002,
-                0x3002,
+            let cpu = execute_indexed_alu(IndexedAluCase {
+                prefixes: &[prefix],
+                ix: 0x2002,
+                iy: 0x3002,
                 opcode,
                 accumulator,
                 flags,
-                0xFE,
+                displacement: 0xFE,
                 operand,
-                &[0, 0, 0, 0],
-            );
+                waits: &[0, 0, 0, 0],
+            });
             assert_eq!(
                 cpu.registers.a, expected_a,
                 "prefix {prefix:02X}, opcode {opcode:02X}"
@@ -187,17 +200,17 @@ fn indexed_alu_matrix_matches_fixed_arithmetic_and_flag_vectors_for_ix_and_iy() 
 #[test]
 fn indexed_alu_wait_states_are_additive_and_snapshots_resume_every_bus_phase() {
     for prefix in [0xDD, 0xFD] {
-        let cpu = execute_indexed_alu(
-            &[prefix],
-            0x1002,
-            0x2002,
-            0x86,
-            0x20,
-            0x00,
-            0xFE,
-            0x08,
-            &[1, 2, 3, 4],
-        );
+        let cpu = execute_indexed_alu(IndexedAluCase {
+            prefixes: &[prefix],
+            ix: 0x1002,
+            iy: 0x2002,
+            opcode: 0x86,
+            accumulator: 0x20,
+            flags: 0x00,
+            displacement: 0xFE,
+            operand: 0x08,
+            waits: &[1, 2, 3, 4],
+        });
         assert_eq!(cpu.registers.a, 0x28);
         assert_eq!(cpu.registers.f, 0x28);
         assert_eq!(cpu.registers.pc, 3);
@@ -214,17 +227,18 @@ fn indexed_alu_repeated_and_alternating_prefixes_use_last_index_register() {
         vec![0xDD, 0xFD, 0xDD],
         vec![0xFD, 0xDD, 0xFD],
     ] {
-        let cpu = execute_indexed_alu(
-            &prefixes,
-            0x1002,
-            0x2002,
-            0x86,
-            0x10,
-            0x00,
-            0xFE,
-            0x02,
-            &vec![0; prefixes.len() + 3],
-        );
+        let waits = vec![0; prefixes.len() + 3];
+        let cpu = execute_indexed_alu(IndexedAluCase {
+            prefixes: &prefixes,
+            ix: 0x1002,
+            iy: 0x2002,
+            opcode: 0x86,
+            accumulator: 0x10,
+            flags: 0x00,
+            displacement: 0xFE,
+            operand: 0x02,
+            waits: &waits,
+        });
         assert_eq!(cpu.registers.a, 0x12);
         assert_eq!(cpu.registers.f, 0x00);
         assert_eq!(
