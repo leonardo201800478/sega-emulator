@@ -726,6 +726,7 @@ impl Z80MicroSequencer {
                 matches!(opcode, 0xB2 | 0xBA | 0xB3 | 0xBB)
                     && state.opcode == Some(opcode)
                     && state.registers.b != 0
+                    && state.wz == state.registers.pc.wrapping_add(1)
                     && (1..=5).contains(&remaining_tstates)
                     && pending.is_none()
                     && state.instruction_tstates >= 16 + u32::from(5 - remaining_tstates)
