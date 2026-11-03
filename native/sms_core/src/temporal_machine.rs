@@ -78,11 +78,41 @@ fn elapsed_tstates(
 
 fn instruction_timeline_is_valid(state: &SmsTemporalMachineState) -> bool {
     if matches!(state.cpu.phase, Z80MicroSequencerPhase::Ready) {
-        return state.instruction_started_at.is_none();
+        return state.instruction_started_at.is_none()
+            && state.m1.is_none()
+            && state.m1_fixture_wait_tstates.is_none();
     }
     let Some(instruction_started_at) = state.instruction_started_at else {
         return false;
     };
+    if let Some(m1) = state.m1 {
+        if state.bus.pending_request.is_some()
+            || state.bus.completion.is_some()
+            || state.bus.pending_internal_cycle.is_some()
+            || state.bus.internal_completion.is_some()
+            || state.m1_fixture_wait_tstates.is_none()
+            || state.cpu.handshake.wait_tstates != state.m1_fixture_wait_tstates.unwrap_or(0)
+        {
+            return false;
+        }
+        let waits = m1.cycle.wait_tstates;
+        let expected_tstates = match m1.cycle.phase {
+            Z80M1Phase::T1 => 0,
+            Z80M1Phase::T2 => 1,
+            Z80M1Phase::Wait => 2_u32.saturating_add(waits),
+            Z80M1Phase::T3 => 2_u32.saturating_add(waits),
+            Z80M1Phase::T4 => 3_u32.saturating_add(waits),
+            Z80M1Phase::Complete => return false,
+        };
+        return elapsed_tstates(
+            instruction_started_at,
+            state.bus.coordinator.scheduler.now,
+            state.bus.coordinator.master_ticks_per_tstate,
+        ) == Some(expected_tstates);
+    }
+    if state.m1_fixture_wait_tstates.is_some() {
+        return false;
+    }
     let cpu_tstates = state.cpu.instruction_tstates;
     let (boundary, expected_tstates) = match (
         state.bus.pending_request,
