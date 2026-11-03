@@ -5,6 +5,7 @@
 //! atomic executor; it does not yet cover interrupts, prefixes, HALT, refresh
 //! pin phases, or the full architectural state.
 
+use crate::alu::{adc8, add8, and8, cp8, or8, sbc8, sub8, xor8};
 use crate::{
     Z80_MICRO_SEQUENCER_STATE_VERSION, Z80BusHandshake, Z80BusHandshakeError, Z80BusOperation,
     Z80BusRequest, Z80Registers,
@@ -426,6 +427,12 @@ impl Z80MicroSequencer {
                             }
                         }
                     }
+                    0x80..=0xBF if opcode & 0x07 != 6 => {
+                        let operation = (opcode >> 3) & 0x07;
+                        let operand = self.read_register(opcode & 0x07);
+                        self.execute_alu_operation(operation, operand);
+                        self.retire(opcode)
+                    }
                     _ => self.unsupported(opcode),
                 }
             }
@@ -528,6 +535,30 @@ impl Z80MicroSequencer {
         self.mcycle_index = 0;
         self.tstate_index = 0;
         Err(Z80MicroSequencerError::UnsupportedOpcode { opcode, address })
+    }
+
+    /// Execute one register-source BASE ALU operation using the shared ALU.
+    ///
+    /// Operation field: 0 ADD, 1 ADC, 2 SUB, 3 SBC, 4 AND, 5 XOR, 6 OR, 7 CP.
+    /// The caller excludes (HL), which requires a separate scheduled memory read.
+    fn execute_alu_operation(&mut self, operation: u8, operand: u8) {
+        let accumulator = self.registers.a;
+        let carry = self.registers.f & FLAG_C != 0;
+        let result = match operation {
+            0 => add8(accumulator, operand),
+            1 => adc8(accumulator, operand, carry),
+            2 => sub8(accumulator, operand),
+            3 => sbc8(accumulator, operand, carry),
+            4 => and8(accumulator, operand),
+            5 => xor8(accumulator, operand),
+            6 => or8(accumulator, operand),
+            7 => cp8(accumulator, operand),
+            _ => unreachable!("three-bit ALU operation field"),
+        };
+        self.registers.f = result.flags;
+        if operation != 7 {
+            self.registers.a = result.value;
+        }
     }
 
     /// Apply the Z80 8-bit INC/DEC flag rules while preserving Carry.
@@ -648,6 +679,176 @@ mod tests {
 
     fn retired(step: Z80MicroStep, opcode: u8, tstates: u32) {
         assert_eq!(step, Z80MicroStep::InstructionRetired { opcode, tstates });
+    }
+
+    fn execute_alu_opcode(opcode: u8, registers: Z80Registers) -> Z80MicroSequencer {
+        let mut cpu = Z80MicroSequencer {
+            registers,
+            ..Z80MicroSequencer::default()
+        };
+        let fetch = request(cpu.begin_instruction().unwrap());
+        retired(
+            cpu.complete_bus_cycle(fetch.id, Some(opcode)).unwrap(),
+            opcode,
+            4,
+        );
+        cpu
+    }
+
+    #[test]
+    fn alu_register_matrix_executes_all_56_register_source_encodings() {
+        for operation in 0_u8..8 {
+            for source in [0_u8, 1, 2, 3, 4, 5, 7] {
+                let opcode = 0x80 | (operation << 3) | source;
+                let cpu = execute_alu_opcode(
+                    opcode,
+                    Z80Registers {
+                        a: 0x22,
+                        b: 0x01,
+                        c: 0x02,
+                        d: 0x03,
+                        e: 0x04,
+                        h: 0x05,
+                        l: 0x06,
+                        f: FLAG_C,
+                        ..Z80Registers::default()
+                    },
+                );
+                assert!(!cpu.instruction_active(), "opcode {opcode:02X}");
+            }
+        }
+    }
+
+    #[test]
+    fn alu_register_operations_match_fixed_result_and_flag_vectors() {
+        let cases = [
+            (
+                0x80,
+                Z80Registers {
+                    a: 0x7F,
+                    b: 0x01,
+                    ..Z80Registers::default()
+                },
+                0x80,
+                0x94,
+            ),
+            (
+                0x89,
+                Z80Registers {
+                    a: 0x7F,
+                    c: 0x00,
+                    f: FLAG_C,
+                    ..Z80Registers::default()
+                },
+                0x80,
+                0x94,
+            ),
+            (
+                0x92,
+                Z80Registers {
+                    a: 0x00,
+                    d: 0x01,
+                    ..Z80Registers::default()
+                },
+                0xFF,
+                0xBB,
+            ),
+            (
+                0x9B,
+                Z80Registers {
+                    a: 0x80,
+                    e: 0x00,
+                    f: FLAG_C,
+                    ..Z80Registers::default()
+                },
+                0x7F,
+                0x3E,
+            ),
+            (
+                0xA4,
+                Z80Registers {
+                    a: 0xF0,
+                    h: 0x0F,
+                    ..Z80Registers::default()
+                },
+                0x00,
+                0x54,
+            ),
+            (
+                0xAD,
+                Z80Registers {
+                    a: 0xAA,
+                    l: 0xAA,
+                    ..Z80Registers::default()
+                },
+                0x00,
+                0x44,
+            ),
+            (
+                0xB7,
+                Z80Registers {
+                    a: 0x80,
+                    ..Z80Registers::default()
+                },
+                0x80,
+                0x80,
+            ),
+        ];
+
+        for (opcode, registers, expected_a, expected_f) in cases {
+            let cpu = execute_alu_opcode(opcode, registers);
+            assert_eq!(cpu.registers.a, expected_a, "opcode {opcode:02X}");
+            assert_eq!(cpu.registers.f, expected_f, "opcode {opcode:02X}");
+        }
+
+        let compare = execute_alu_opcode(
+            0xB8,
+            Z80Registers {
+                a: 0x10,
+                b: 0x28,
+                ..Z80Registers::default()
+            },
+        );
+        assert_eq!(compare.registers.a, 0x10, "CP must preserve A");
+        assert_eq!(compare.registers.f, 0xBB, "CP copies X/Y from its operand");
+    }
+
+    #[test]
+    fn alu_register_source_field_selects_the_requested_register() {
+        let source_values = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x10];
+        let source_codes = [0_u8, 1, 2, 3, 4, 5, 7];
+        for (source, value) in source_codes.into_iter().zip(source_values) {
+            let cpu = execute_alu_opcode(
+                0x80 | source,
+                Z80Registers {
+                    a: 0x10,
+                    b: 0x01,
+                    c: 0x02,
+                    d: 0x03,
+                    e: 0x04,
+                    h: 0x05,
+                    l: 0x06,
+                    ..Z80Registers::default()
+                },
+            );
+            assert_eq!(
+                cpu.registers.a,
+                0x10_u8.wrapping_add(value),
+                "source {source}"
+            );
+        }
+    }
+
+    #[test]
+    fn alu_memory_operand_remains_explicitly_unsupported_until_scheduled_read_exists() {
+        let mut cpu = Z80MicroSequencer::default();
+        let fetch = request(cpu.begin_instruction().unwrap());
+        assert!(matches!(
+            cpu.complete_bus_cycle(fetch.id, Some(0x86)),
+            Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x86, .. })
+        ));
+        assert!(!cpu.instruction_active());
+        assert_eq!(cpu.pending_request(), None);
     }
 
     #[test]
