@@ -309,7 +309,11 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u8(opcode);
             writer.u8(remaining_tstates);
         }
-        Z80MicroSequencerPhase::BaseAbsoluteTransfer { stage, address, low } => {
+        Z80MicroSequencerPhase::BaseAbsoluteTransfer {
+            stage,
+            address,
+            low,
+        } => {
             writer.u8(36);
             writer.u8(stage);
             writer.u16(address);
@@ -1374,7 +1378,9 @@ mod base_absolute_transfer_snapshot_tests {
                         cpu.complete_bus_cycle(request.id, data).unwrap()
                     }
                     Z80MicroStep::InstructionRetired { .. } => break,
-                    Z80MicroStep::InternalCycle { .. } => panic!("absolute transfer has no internal cycle"),
+                    Z80MicroStep::InternalCycle { .. } => {
+                        panic!("absolute transfer has no internal cycle")
+                    }
                 };
             }
             assert!(matches!(step, Z80MicroStep::InstructionRetired { .. }));
