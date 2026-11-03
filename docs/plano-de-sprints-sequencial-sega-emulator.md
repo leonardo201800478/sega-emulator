@@ -2,8 +2,8 @@
 
 **Status:** Rota oficial de implementação progressiva.  
 **Estratégia de Engenharia (MÓDULOS COMPARTILHADOS):** Toda e qualquer integração deve ser realizada exclusivamente nos **módulos e crates compartilhados** do workspace Rust (`sega-core`, `sega-cpus`, `sega-video`, `sega-audio`, `sega-scheduler`, `sega-hosts`). É estritamente proibido criar implementações individuais, duplicadas ou isoladas por console. Cada nova plataforma adicionada deve reaproveitar, estender ou parametrizar os componentes centrais existentes.  
-**Baseline de Entrada:** SHA `e9a3eff6c3733b4f11443954a647471c9d3908ff` (`main`, após PR #471 / E4A).  
-**Candidato Z80 ativo:** PR #472 / E4B, SHA `245d42eb0337d41295329155de8e151feceb9022` (não integrado).
+**Baseline de Entrada:** SHA `04ee09f9839bfe29a595abbed831d055cc8d177a` (`main`, após PRs #471/E4A e #472/E4B).  
+**Candidato Z80 ativo:** PR #473 / E4C, SHA `949dd365046562835eef97e428dc9700e2ae2a70`.
 
 ---
 
@@ -52,12 +52,12 @@ Esta sub-rota evolui o mesmo microsequenciador em `sega-cpus`; não cria impleme
 - [x] **CI do candidato E4A:** run 41734982519 — Rust, Python, Scheduler stress short e Windows x64 — 4/4 PASS.
 - [x] **E4B (candidato PR #472):** ADD, ADC, SUB, SBC, AND, XOR, OR e CP (IX/IY+d), ALU compartilhada, flags S/Z/H/PV/N/C e X/Y, CP preserva A e copia X/Y do operando, WAIT, snapshot/restore e last-prefix-wins.
 - [x] **CI do candidato E4B:** run 41738004725 — Rust, Python, Scheduler stress short e Windows x64 — 4/4 PASS.
-- [ ] **E4C:** INC/DEC (IX/IY+d), com read-modify-write e validação de flags.
-- [ ] **E4C:** INC/DEC (IX/IY+d), com read-modify-write e flags.
+- [x] **E4C (candidato PR #473):** INC/DEC (IX/IY+d), read-modify-write compartilhado, flags/C, WAIT, snapshots, prefixos e displacement 0/-128/+127; 23 T-states / 6 M-cycles conforme ZiLOG.
+
 - [ ] **E5:** DDCB/FDCB.
 - [ ] **E6–E9:** prefixos ignorados, fechamento semântico, ZEXDOC/ZEXALL e integração temporal.
 
-**Estado:** E4A integrada na main e E4B IMPLEMENTED / SHORT_PASS no SHA candidato. E4 permanece aberta até E4C. Não declarar LONG_PASS ou TEMPORAL_PASS.
+**Estado:** E4A e E4B integradas na main; E4C IMPLEMENTED no candidato PR #473, aguardando CI final e atualização de SHORT_PASS. Não declarar LONG_PASS ou TEMPORAL_PASS.
 
 **Critério de Conclusão da Sprint SMS:** Boot e gameplay funcional de SMS via módulos compartilhados, em *host-null* e janela Rust nativa sem dependência de Python.
 
