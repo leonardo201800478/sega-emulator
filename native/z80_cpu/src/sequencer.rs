@@ -577,16 +577,28 @@ impl Z80MicroSequencer {
                     }
             }
             Z80MicroSequencerPhase::BaseStackPushInternal { high, low } => {
-                let expected = state.opcode.and_then(|opcode| stack_pair_value(&state.registers, opcode));
-                expected.is_some_and(|value| {
-                    high == (value >> 8) as u8 && low == value as u8
-                }) && pending.is_none()
+                let opcode_matches = state
+                    .opcode
+                    .is_some_and(|opcode| matches!(opcode, 0xC5 | 0xD5 | 0xE5 | 0xF5));
+                let expected = state
+                    .opcode
+                    .and_then(|opcode| stack_pair_value(&state.registers, opcode));
+                opcode_matches
+                    && expected.is_some_and(|value| {
+                        high == (value >> 8) as u8 && low == value as u8
+                    })
+                    && pending.is_none()
                     && state.mcycle_index == 0
                     && state.tstate_index == 4
                     && state.instruction_tstates >= 4
             }
             Z80MicroSequencerPhase::BaseStackPushWrite { stage, low } => {
-                let expected = state.opcode.and_then(|opcode| stack_pair_value(&state.registers, opcode));
+                let opcode_matches = state
+                    .opcode
+                    .is_some_and(|opcode| matches!(opcode, 0xC5 | 0xD5 | 0xE5 | 0xF5));
+                let expected = state
+                    .opcode
+                    .and_then(|opcode| stack_pair_value(&state.registers, opcode));
                 let request_matches = expected.is_some_and(|value| {
                     let expected_value = if stage == 0 {
                         (value >> 8) as u8
@@ -602,7 +614,8 @@ impl Z80MicroSequencer {
                             && request.base_tstates == 3
                     })
                 });
-                stage <= 1
+                opcode_matches
+                    && stage <= 1
                     && expected.is_some_and(|value| low == value as u8)
                     && request_matches
                     && state.instruction_tstates >= 5 + u32::from(stage) * 3
