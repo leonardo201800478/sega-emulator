@@ -191,14 +191,39 @@ impl SmsMachine {
         Self::with_bios_audio(rom, bios, config, 44_100)
     }
 
+    pub fn with_cartridge_ram(
+        rom: impl Into<Vec<u8>>,
+        cartridge_ram: Vec<u8>,
+        config: SmsMachineConfig,
+    ) -> Result<Self, SmsCoreError> {
+        Self::with_bios_audio_and_cartridge_ram(
+            rom,
+            None,
+            Some(cartridge_ram),
+            config,
+            44_100,
+        )
+    }
+
     pub fn with_bios_audio(
         rom: impl Into<Vec<u8>>,
         bios: Option<Vec<u8>>,
         config: SmsMachineConfig,
         sample_rate: u64,
     ) -> Result<Self, SmsCoreError> {
+        Self::with_bios_audio_and_cartridge_ram(rom, bios, None, config, sample_rate)
+    }
+
+    /// Construct a machine with optional BIOS and explicitly configured cartridge SRAM.
+    pub fn with_bios_audio_and_cartridge_ram(
+        rom: impl Into<Vec<u8>>,
+        bios: Option<Vec<u8>>,
+        cartridge_ram: Option<Vec<u8>>,
+        config: SmsMachineConfig,
+        sample_rate: u64,
+    ) -> Result<Self, SmsCoreError> {
         let cartridge = CartridgeImage::new(rom)?;
-        let memory = SmsMemory::with_bios(cartridge, bios)?;
+        let memory = SmsMemory::with_bios_and_cartridge_ram(cartridge, bios, cartridge_ram)?;
         let mut cpu = Z80::default();
         cpu.reset();
         let vdp = SmsVdp::new(config.video_standard, config.sprite_limit);
@@ -401,6 +426,19 @@ mod tests {
 
         machine.set_sprite_limit_enabled(true);
         assert!(machine.sprite_limit_enabled());
+    }
+
+    #[test]
+    fn machine_constructor_exposes_cartridge_sram_through_the_sega_mapper() {
+        let mut machine = SmsMachine::with_cartridge_ram(
+            vec![0; 0x4000],
+            vec![0; 0x2000],
+            SmsMachineConfig::default(),
+        )
+        .unwrap();
+        machine.write_memory(0xFFFC, 0x08);
+        machine.write_memory(0x8000, 0x6D);
+        assert_eq!(machine.read_memory(0x8000), 0x6D);
     }
 
     #[test]
