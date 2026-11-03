@@ -1262,11 +1262,6 @@ impl Z80 {
                 self.set_flags(result.flags);
                 8
             }
-            0x4D => {
-                self.registers.pc = self.pop16(bus);
-                self.wz = self.registers.pc;
-                14
-            }
             op if op & 0xC7 == 0x45 => {
                 self.registers.pc = self.pop16(bus);
                 self.iff1 = self.iff2;
@@ -3086,8 +3081,8 @@ mod tests {
     }
 
     #[test]
-    fn ed_retn_aliases_restore_iff1_and_pop_return_address() {
-        for opcode in [0x45, 0x55, 0x5D, 0x65, 0x6D, 0x75, 0x7D] {
+    fn ed_retn_reti_aliases_restore_iff1_and_pop_return_address() {
+        for opcode in [0x45, 0x4D, 0x55, 0x5D, 0x65, 0x6D, 0x75, 0x7D] {
             let mut bus = TestBus([0; 0x10000]);
             bus.0[..2].copy_from_slice(&[0xED, opcode]);
             bus.0[0xD000] = 0x34;
@@ -3099,27 +3094,9 @@ mod tests {
             assert_eq!(cpu.step(&mut bus), Ok(14), "ED {opcode:02X}");
             assert_eq!(cpu.registers.pc, 0x1234, "ED {opcode:02X}");
             assert_eq!(cpu.registers.sp, 0xD002, "ED {opcode:02X}");
-            assert!(cpu.iff1, "ED {opcode:02X}: RETN must copy IFF2 to IFF1");
+            assert!(cpu.iff1, "ED {opcode:02X}: IFF1 must be restored from IFF2");
             assert!(cpu.iff2, "ED {opcode:02X}: IFF2 must remain unchanged");
         }
-    }
-
-    #[test]
-    fn ed_reti_pops_return_address_without_changing_interrupt_flip_flops() {
-        let mut bus = TestBus([0; 0x10000]);
-        bus.0[..2].copy_from_slice(&[0xED, 0x4D]);
-        bus.0[0xD000] = 0x34;
-        bus.0[0xD001] = 0x12;
-        let mut cpu = Z80::default();
-        cpu.registers.sp = 0xD000;
-        cpu.iff1 = false;
-        cpu.iff2 = true;
-
-        assert_eq!(cpu.step(&mut bus), Ok(14));
-        assert_eq!(cpu.registers.pc, 0x1234);
-        assert_eq!(cpu.registers.sp, 0xD002);
-        assert!(!cpu.iff1);
-        assert!(cpu.iff2);
     }
 
     #[test]
