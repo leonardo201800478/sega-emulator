@@ -319,6 +319,17 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u16(address);
             writer.u8(low);
         }
+        Z80MicroSequencerPhase::BaseRelativeBranchImmediate => writer.u8(37),
+        Z80MicroSequencerPhase::BaseRelativeBranchInternal {
+            displacement,
+            branch_taken,
+            remaining_tstates,
+        } => {
+            writer.u8(38);
+            writer.u8(displacement as u8);
+            writer.u8(u8::from(branch_taken));
+            writer.u8(remaining_tstates);
+        }
         Z80MicroSequencerPhase::MemoryWrite { address, value } => {
             writer.u8(7);
             writer.u16(address);
@@ -558,6 +569,12 @@ fn read_phase(
             stage: reader.u8()?,
             address: reader.u16()?,
             low: reader.u8()?,
+        },
+        37 => Z80MicroSequencerPhase::BaseRelativeBranchImmediate,
+        38 => Z80MicroSequencerPhase::BaseRelativeBranchInternal {
+            displacement: reader.u8()? as i8,
+            branch_taken: read_bool(reader)?,
+            remaining_tstates: reader.u8()?,
         },
         7 => Z80MicroSequencerPhase::MemoryWrite {
             address: reader.u16()?,
@@ -1385,5 +1402,83 @@ mod base_absolute_transfer_snapshot_tests {
             }
             assert!(matches!(step, Z80MicroStep::InstructionRetired { .. }));
         }
+    }
+}
+
+#[cfg(test)]
+mod base_relative_branch_snapshot_tests {
+    use crate::{Z80MicroSequencer, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep};
+
+    fn round_trip(cpu: &Z80MicroSequencer) -> Z80MicroSequencer {
+        let state = cpu.export_state();
+        let encoded = state.encode().unwrap();
+        let decoded = Z80MicroSequencerState::decode(&encoded).unwrap();
+        assert_eq!(decoded, state);
+        Z80MicroSequencer::restore_state(decoded).unwrap()
+    }
+
+    fn start_branch(opcode: u8, b: u8, displacement: u8) -> (Z80MicroSequencer, Z80MicroStep) {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.registers.pc = 0x1000;
+        cpu.registers.b = b;
+        let fetch = match cpu.begin_instruction().unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected opcode fetch, got {other:?}"),
+        };
+        let immediate = cpu.complete_bus_cycle(fetch.id, Some(opcode)).unwrap();
+        let request = match immediate {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected displacement read, got {other:?}"),
+        };
+        let mut restored = round_trip(&cpu);
+        let step = restored
+            .complete_bus_cycle(request.id, Some(displacement))
+            .unwrap();
+        (restored, step)
+    }
+
+    #[test]
+    fn relative_branch_internal_safe_points_round_trip_through_codec() {
+        for (opcode, b, displacement, expected_tstates) in [
+            (0x18, 0x00, 0x02, 12),
+            (0x10, 0x02, 0xFE, 13),
+            (0x10, 0x01, 0xFE, 8),
+        ] {
+            let (mut cpu, mut step) = start_branch(opcode, b, displacement);
+            loop {
+                match step {
+                    Z80MicroStep::InternalCycle { .. } => {
+                        cpu = round_trip(&cpu);
+                        step = cpu.complete_internal_cycle().unwrap();
+                    }
+                    Z80MicroStep::InstructionRetired { tstates, .. } => {
+                        assert_eq!(tstates, expected_tstates);
+                        break;
+                    }
+                    other => panic!("unexpected relative branch continuation: {other:?}"),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn relative_branch_restore_rejects_inconsistent_continuations() {
+        let (cpu, step) = start_branch(0x18, 0x00, 0x02);
+        assert_eq!(step, Z80MicroStep::InternalCycle { tstates: 1 });
+        let mut invalid = cpu.export_state();
+        invalid.phase = Z80MicroSequencerPhase::BaseRelativeBranchInternal {
+            displacement: 2,
+            branch_taken: false,
+            remaining_tstates: 5,
+        };
+        assert!(Z80MicroSequencer::restore_state(invalid).is_err());
+
+        let mut invalid = cpu.export_state();
+        invalid.phase = Z80MicroSequencerPhase::BaseRelativeBranchInternal {
+            displacement: 2,
+            branch_taken: true,
+            remaining_tstates: 0,
+        };
+        assert!(Z80MicroSequencer::restore_state(invalid).is_err());
     }
 }

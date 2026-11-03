@@ -57,6 +57,12 @@ pub enum Z80MicroSequencerPhase {
         address: u16,
         low: u8,
     },
+    BaseRelativeBranchImmediate,
+    BaseRelativeBranchInternal {
+        displacement: i8,
+        branch_taken: bool,
+        remaining_tstates: u8,
+    },
     ImmediateReadMemoryWrite,
     ImmediateReadAlu {
         operation: u8,
@@ -210,6 +216,7 @@ impl Z80MicroSequencerPhase {
                 | Self::EdBlockIoInitialInternal { .. }
                 | Self::EdBlockIoRepeatInternal { .. }
                 | Self::BaseInternal { .. }
+                | Self::BaseRelativeBranchInternal { .. }
                 | Self::MemoryIncDecInternal { .. }
         )
     }
@@ -521,6 +528,47 @@ impl Z80MicroSequencer {
                         3 => state.instruction_tstates >= 13,
                         _ => false,
                     }
+            }
+            Z80MicroSequencerPhase::BaseRelativeBranchImmediate => {
+                state
+                    .opcode
+                    .is_some_and(|opcode| matches!(opcode, 0x10 | 0x18 | 0x20 | 0x28 | 0x30 | 0x38))
+                    && pending.is_some_and(|request| {
+                        request.operation == Z80BusOperation::MemoryRead
+                            && request.address == state.registers.pc
+                            && request.base_tstates == 3
+                    })
+                    && state.instruction_tstates >= 4
+            }
+            Z80MicroSequencerPhase::BaseRelativeBranchInternal {
+                branch_taken,
+                remaining_tstates,
+                ..
+            } => {
+                let opcode = state.opcode;
+                let total_tstates: u8 = match (opcode, branch_taken) {
+                    (Some(0x10), true) => 6,
+                    (Some(0x10), false) => 1,
+                    (Some(0x18 | 0x20 | 0x28 | 0x30 | 0x38), true) => 5,
+                    _ => 0,
+                };
+                let completed = total_tstates.saturating_sub(remaining_tstates);
+                let branch_outcome_valid = match opcode {
+                    Some(0x10) => (state.registers.b != 0) == branch_taken,
+                    Some(0x18) => branch_taken,
+                    Some(0x20) => (state.registers.f & FLAG_Z == 0) == branch_taken,
+                    Some(0x28) => (state.registers.f & FLAG_Z != 0) == branch_taken,
+                    Some(0x30) => (state.registers.f & FLAG_C == 0) == branch_taken,
+                    Some(0x38) => (state.registers.f & FLAG_C != 0) == branch_taken,
+                    _ => false,
+                };
+                total_tstates != 0
+                    && branch_outcome_valid
+                    && (1..=total_tstates).contains(&remaining_tstates)
+                    && pending.is_none()
+                    && state.mcycle_index == 2
+                    && state.tstate_index == u16::from(completed)
+                    && state.instruction_tstates >= 7 + u32::from(completed)
             }
             Z80MicroSequencerPhase::ImmediateReadMemoryWrite => {
                 state.opcode == Some(0x36)
@@ -1033,8 +1081,25 @@ impl Z80MicroSequencer {
             | Z80MicroSequencerPhase::ImmediateReadAlu { .. }
             | Z80MicroSequencerPhase::MemoryReadRegister { .. }
             | Z80MicroSequencerPhase::MemoryReadAlu { .. }
-            | Z80MicroSequencerPhase::MemoryReadIncDec { .. } => {
+            | Z80MicroSequencerPhase::MemoryReadIncDec { .. }
+            | Z80MicroSequencerPhase::BaseRelativeBranchImmediate => {
                 state.mcycle_index == 1 && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::BaseRelativeBranchInternal {
+                branch_taken,
+                remaining_tstates,
+                ..
+            } => {
+                let total_tstates: u8 = match (state.opcode, branch_taken) {
+                    (Some(0x10), true) => 6,
+                    (Some(0x10), false) => 1,
+                    (Some(0x18 | 0x20 | 0x28 | 0x30 | 0x38), true) => 5,
+                    _ => 0,
+                };
+                total_tstates != 0
+                    && state.mcycle_index == 2
+                    && state.tstate_index
+                        == u16::from(total_tstates.saturating_sub(remaining_tstates))
             }
             Z80MicroSequencerPhase::CbMemoryRead { .. } => {
                 state.mcycle_index == 2 && state.tstate_index == 0
@@ -1381,6 +1446,10 @@ impl Z80MicroSequencer {
                         },
                         self.registers.pc,
                     ),
+                    0x10 | 0x18 | 0x20 | 0x28 | 0x30 | 0x38 => self.issue_read(
+                        Z80MicroSequencerPhase::BaseRelativeBranchImmediate,
+                        self.registers.pc,
+                    ),
                     0x03 | 0x0B | 0x13 | 0x1B | 0x23 | 0x2B | 0x33 | 0x3B | 0xF9 => {
                         self.mcycle_index = 0;
                         self.tstate_index = 4;
@@ -1611,6 +1680,42 @@ impl Z80MicroSequencer {
             }
             Z80MicroSequencerPhase::BaseAbsoluteTransfer { .. } => {
                 Err(Z80MicroSequencerError::UnexpectedCompletion)
+            }
+            Z80MicroSequencerPhase::BaseRelativeBranchImmediate => {
+                let displacement = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?
+                    as i8;
+                self.registers.pc = self.registers.pc.wrapping_add(1);
+                let opcode = self
+                    .opcode
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                let branch_taken = match opcode {
+                    0x10 => {
+                        self.registers.b = self.registers.b.wrapping_sub(1);
+                        self.registers.b != 0
+                    }
+                    0x18 => true,
+                    0x20 | 0x28 | 0x30 | 0x38 => self.condition((opcode >> 3) & 0x03),
+                    _ => return Err(Z80MicroSequencerError::UnexpectedCompletion),
+                };
+                if opcode != 0x10 && !branch_taken {
+                    self.retire(opcode)
+                } else {
+                    let remaining_tstates = if opcode == 0x10 {
+                        if branch_taken { 6 } else { 1 }
+                    } else {
+                        5
+                    };
+                    self.mcycle_index = 2;
+                    self.tstate_index = 0;
+                    self.phase = Z80MicroSequencerPhase::BaseRelativeBranchInternal {
+                        displacement,
+                        branch_taken,
+                        remaining_tstates,
+                    };
+                    Ok(Z80MicroStep::InternalCycle { tstates: 1 })
+                }
             }
             Z80MicroSequencerPhase::ImmediateReadMemoryWrite => {
                 let value = response
@@ -2051,6 +2156,7 @@ impl Z80MicroSequencer {
                 Ok(Z80MicroStep::InternalCycle { tstates: 1 })
             }
             Z80MicroSequencerPhase::BaseInternal { .. }
+            | Z80MicroSequencerPhase::BaseRelativeBranchInternal { .. }
             | Z80MicroSequencerPhase::MemoryIncDecInternal { .. } => {
                 Err(Z80MicroSequencerError::UnexpectedCompletion)
             }
@@ -2107,6 +2213,40 @@ impl Z80MicroSequencer {
                     }
                     next.phase = Z80MicroSequencerPhase::BaseInternal {
                         opcode,
+                        remaining_tstates,
+                    };
+                    Z80MicroStep::InternalCycle { tstates: 1 }
+                }
+            }
+            Z80MicroSequencerPhase::BaseRelativeBranchInternal {
+                displacement,
+                branch_taken,
+                remaining_tstates,
+            } => {
+                let opcode = next
+                    .opcode
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                let remaining_tstates = remaining_tstates
+                    .checked_sub(1)
+                    .ok_or(Z80MicroSequencerError::InvalidState)?;
+                next.instruction_tstates = next_instruction_tstates;
+                if remaining_tstates == 0 {
+                    if branch_taken {
+                        next.registers.pc = next
+                            .registers
+                            .pc
+                            .wrapping_add_signed(i16::from(displacement));
+                        next.wz = next.registers.pc;
+                    }
+                    next.retire(opcode)?
+                } else {
+                    next.tstate_index = next
+                        .tstate_index
+                        .checked_add(1)
+                        .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                    next.phase = Z80MicroSequencerPhase::BaseRelativeBranchInternal {
+                        displacement,
+                        branch_taken,
                         remaining_tstates,
                     };
                     Z80MicroStep::InternalCycle { tstates: 1 }
@@ -2662,6 +2802,20 @@ impl Z80MicroSequencer {
     }
 
     /// Commit a BASE 16-bit operation after its documented internal T-states.
+    fn condition(&self, code: u8) -> bool {
+        let flags = self.registers.f;
+        match code & 0x07 {
+            0 => flags & FLAG_Z == 0,
+            1 => flags & FLAG_Z != 0,
+            2 => flags & FLAG_C == 0,
+            3 => flags & FLAG_C != 0,
+            4 => flags & FLAG_PV == 0,
+            5 => flags & FLAG_PV != 0,
+            6 => flags & FLAG_S == 0,
+            _ => flags & FLAG_S != 0,
+        }
+    }
+
     fn execute_base_internal(&mut self, opcode: u8) {
         match opcode {
             0x03 | 0x0B | 0x13 | 0x1B | 0x23 | 0x2B | 0x33 | 0x3B => {
@@ -3079,6 +3233,9 @@ impl Z80MicroSequencer {
 
     fn retire(&mut self, opcode: u8) -> Result<Z80MicroStep, Z80MicroSequencerError> {
         let tstates = self.instruction_tstates;
+        if self.ei_delay > 0 && opcode != 0xFB {
+            self.ei_delay -= 1;
+        }
         self.phase = Z80MicroSequencerPhase::Ready;
         self.opcode = None;
         self.instruction_tstates = 0;
@@ -7742,5 +7899,152 @@ mod base_absolute_transfer_differential_tests {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod base_relative_branch_differential_tests {
+    use crate::bus::CpuBus;
+    use crate::{Z80, Z80ArchitecturalState, Z80BusOperation, Z80MicroSequencer, Z80MicroStep};
+
+    const FLAG_C: u8 = 0x01;
+    const FLAG_Z: u8 = 0x40;
+
+    #[derive(Clone)]
+    struct TestBus {
+        memory: Box<[u8; 0x1_0000]>,
+    }
+
+    impl Default for TestBus {
+        fn default() -> Self {
+            Self {
+                memory: Box::new([0; 0x1_0000]),
+            }
+        }
+    }
+
+    impl CpuBus for TestBus {
+        fn read_memory(&mut self, address: u16) -> u8 {
+            self.memory[usize::from(address)]
+        }
+
+        fn write_memory(&mut self, address: u16, value: u8) {
+            self.memory[usize::from(address)] = value;
+        }
+    }
+
+    fn run_sequencer(
+        mut cpu: Z80MicroSequencer,
+        bus: &mut TestBus,
+    ) -> (Z80ArchitecturalState, u32) {
+        let mut step = cpu.begin_instruction().unwrap();
+        for _ in 0..32 {
+            step = match step {
+                Z80MicroStep::BusRequest(request) => {
+                    cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+                    let data = match request.operation {
+                        Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
+                            Some(bus.read_memory(request.address))
+                        }
+                        Z80BusOperation::MemoryWrite { value } => {
+                            bus.write_memory(request.address, value);
+                            None
+                        }
+                        operation => {
+                            panic!("unexpected relative-branch bus operation: {operation:?}")
+                        }
+                    };
+                    cpu.complete_bus_cycle(request.id, data).unwrap()
+                }
+                Z80MicroStep::InternalCycle { .. } => {
+                    cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+                    cpu.complete_internal_cycle().unwrap()
+                }
+                Z80MicroStep::InstructionRetired { tstates, .. } => {
+                    return (cpu.export_architectural_state(), tstates);
+                }
+            };
+        }
+        panic!("relative branch did not retire within 32 micro-operations");
+    }
+
+    fn compare_case(opcode: u8, b: u8, flags: u8, displacement: u8, expected_tstates: u32) {
+        let mut initial = Z80::default().export_architectural_state();
+        initial.registers.pc = 0x1000;
+        initial.registers.b = b;
+        initial.registers.f = flags;
+        initial.ei_delay = 1;
+        initial.wz = 0xA328;
+
+        let mut atomic_bus = TestBus::default();
+        atomic_bus.memory[0x1000] = opcode;
+        atomic_bus.memory[0x1001] = displacement;
+        let mut micro_bus = atomic_bus.clone();
+
+        let mut atomic = Z80::default();
+        atomic.import_architectural_state(initial).unwrap();
+        let atomic_tstates = atomic.step(&mut atomic_bus).unwrap();
+
+        let mut micro = Z80MicroSequencer::default();
+        micro.import_architectural_state(initial).unwrap();
+        let (micro_state, micro_tstates) = run_sequencer(micro, &mut micro_bus);
+
+        assert_eq!(micro_tstates, atomic_tstates, "opcode {opcode:02X}");
+        assert_eq!(micro_tstates, expected_tstates, "opcode {opcode:02X}");
+        assert_eq!(
+            micro_state,
+            atomic.export_architectural_state(),
+            "architectural mismatch for opcode {opcode:02X}"
+        );
+        assert_eq!(
+            micro_bus.memory, atomic_bus.memory,
+            "memory mismatch for opcode {opcode:02X}"
+        );
+    }
+
+    #[test]
+    fn djnz_taken_and_not_taken_match_atomic_executor() {
+        compare_case(0x10, 0x02, 0x00, 0xFE, 13);
+        compare_case(0x10, 0x01, 0x00, 0xFE, 8);
+    }
+
+    #[test]
+    fn jr_and_all_conditional_relative_branches_match_atomic_executor() {
+        compare_case(0x18, 0x00, 0x00, 0x7F, 12);
+        compare_case(0x20, 0x00, 0x00, 0x02, 12);
+        compare_case(0x20, 0x00, FLAG_Z, 0x02, 7);
+        compare_case(0x28, 0x00, FLAG_Z, 0x02, 12);
+        compare_case(0x28, 0x00, 0x00, 0x02, 7);
+        compare_case(0x30, 0x00, 0x00, 0x02, 12);
+        compare_case(0x30, 0x00, FLAG_C, 0x02, 7);
+        compare_case(0x38, 0x00, FLAG_C, 0x02, 12);
+        compare_case(0x38, 0x00, 0x00, 0x02, 7);
+    }
+
+    #[test]
+    fn jr_displacement_wraps_pc_at_the_16_bit_boundary() {
+        let mut initial = Z80::default().export_architectural_state();
+        initial.registers.pc = 0xFFFE;
+        initial.wz = 0xA328;
+
+        let mut atomic_bus = TestBus::default();
+        atomic_bus.memory[0xFFFE] = 0x18;
+        atomic_bus.memory[0xFFFF] = 0xFF;
+        let mut micro_bus = atomic_bus.clone();
+
+        let mut atomic = Z80::default();
+        atomic.import_architectural_state(initial).unwrap();
+        let atomic_tstates = atomic.step(&mut atomic_bus).unwrap();
+
+        let mut micro = Z80MicroSequencer::default();
+        micro.import_architectural_state(initial).unwrap();
+        let (micro_state, micro_tstates) = run_sequencer(micro, &mut micro_bus);
+
+        assert_eq!(micro_tstates, 12);
+        assert_eq!(micro_tstates, atomic_tstates);
+        assert_eq!(micro_state.registers.pc, 0xFFFF);
+        assert_eq!(micro_state.wz, 0xFFFF);
+        assert_eq!(micro_state, atomic.export_architectural_state());
+        assert_eq!(micro_bus.memory, atomic_bus.memory);
     }
 }
