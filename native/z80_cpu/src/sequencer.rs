@@ -3430,6 +3430,221 @@ mod indirect_bc_de_differential_tests {
     }
 }
 
+
+#[cfg(test)]
+mod ed_16bit_arithmetic_differential_tests {
+    use super::{Z80MicroSequencer, Z80MicroStep};
+    use crate::bus::CpuBus;
+    use crate::{
+        Z80, Z80ArchitecturalState, Z80BusOperation, Z80MicroSequencerState, Z80Registers,
+    };
+
+    #[derive(Clone)]
+    struct TestBus {
+        memory: Box<[u8; 0x10000]>,
+        reads: Vec<u16>,
+        writes: Vec<(u16, u8)>,
+    }
+
+    impl Default for TestBus {
+        fn default() -> Self {
+            Self {
+                memory: Box::new([0; 0x10000]),
+                reads: Vec::new(),
+                writes: Vec::new(),
+            }
+        }
+    }
+
+    impl CpuBus for TestBus {
+        fn read_memory(&mut self, address: u16) -> u8 {
+            self.reads.push(address);
+            self.memory[usize::from(address)]
+        }
+
+        fn write_memory(&mut self, address: u16, value: u8) {
+            self.writes.push((address, value));
+            self.memory[usize::from(address)] = value;
+        }
+    }
+
+    fn request(step: Z80MicroStep) -> crate::Z80BusRequest {
+        match step {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected bus request, got {other:?}"),
+        }
+    }
+
+    fn read_opcode(
+        cpu: &mut Z80MicroSequencer,
+        bus: &mut TestBus,
+        step: Z80MicroStep,
+    ) -> Z80MicroStep {
+        let request = request(step);
+        assert_eq!(request.operation, Z80BusOperation::OpcodeFetch);
+        let value = bus.read_memory(request.address);
+        cpu.complete_bus_cycle(request.id, Some(value)).unwrap()
+    }
+
+    fn state(hl: u16, bc: u16, de: u16, sp: u16, carry: bool) -> Z80ArchitecturalState {
+        Z80ArchitecturalState {
+            registers: Z80Registers {
+                a: 0xA5,
+                f: if carry { 0xFF } else { 0xFE },
+                b: (bc >> 8) as u8,
+                c: bc as u8,
+                d: (de >> 8) as u8,
+                e: de as u8,
+                h: (hl >> 8) as u8,
+                l: hl as u8,
+                pc: 0xFFFE,
+                sp,
+            },
+            alternate: crate::Z80AlternateRegisters::default(),
+            ix: 0x1357,
+            iy: 0x2468,
+            i: 0xA5,
+            r: 0xFE,
+            iff1: false,
+            iff2: true,
+            interrupt_mode: 1,
+            wz: 0xA328,
+            ei_delay: 0,
+            nmi_pending: false,
+            int_pending: None,
+            q: 0x28,
+            q_previous: 0x5A,
+            p: false,
+            halted: false,
+        }
+    }
+
+    fn roundtrip(cpu: Z80MicroSequencer) -> Z80MicroSequencer {
+        let encoded = cpu.export_state().encode().unwrap();
+        let decoded = Z80MicroSequencerState::decode(&encoded).unwrap();
+        Z80MicroSequencer::restore_state(decoded).unwrap()
+    }
+
+    fn execute_pair(opcode: u8, architectural: Z80ArchitecturalState) {
+        let mut atomic = Z80::default();
+        atomic.import_architectural_state(architectural).unwrap();
+        let mut atomic_bus = TestBus::default();
+        atomic_bus.memory[0xFFFE] = 0xED;
+        atomic_bus.memory[0xFFFF] = opcode;
+
+        let mut sequenced = Z80MicroSequencer::default();
+        sequenced.import_architectural_state(architectural).unwrap();
+        let mut sequenced_bus = atomic_bus.clone();
+
+        assert_eq!(atomic.step(&mut atomic_bus), Ok(15), "atomic ED {opcode:02X}");
+
+        let first = request(sequenced.begin_instruction().unwrap());
+        let second = read_opcode(
+            &mut sequenced,
+            &mut sequenced_bus,
+            Z80MicroStep::BusRequest(first),
+        );
+        let internal = read_opcode(&mut sequenced, &mut sequenced_bus, second);
+        assert_eq!(internal, Z80MicroStep::InternalCycle { tstates: 1 });
+
+        sequenced = roundtrip(sequenced);
+        let mut retired = internal;
+        for index in 0..7 {
+            retired = sequenced.complete_internal_cycle().unwrap();
+            if index < 6 {
+                assert_eq!(
+                    retired,
+                    Z80MicroStep::InternalCycle { tstates: 1 },
+                    "internal T-state {index} for ED {opcode:02X}"
+                );
+            }
+        }
+        assert_eq!(
+            retired,
+            Z80MicroStep::InstructionRetired {
+                opcode,
+                tstates: 15
+            }
+        );
+        assert_eq!(
+            sequenced.export_architectural_state(),
+            atomic.export_architectural_state(),
+            "architectural mismatch for ED {opcode:02X}"
+        );
+        assert_eq!(sequenced_bus.reads, atomic_bus.reads);
+        assert_eq!(sequenced_bus.writes, atomic_bus.writes);
+        assert_eq!(sequenced.pending_request(), None);
+    }
+
+    #[test]
+    fn all_adc_sbc_hl_register_pairs_match_atomic_executor() {
+        let opcodes = [
+            0x4A, 0x5A, 0x6A, 0x7A, // ADC HL,BC/DE/HL/SP
+            0x42, 0x52, 0x62, 0x72, // SBC HL,BC/DE/HL/SP
+        ];
+        let values = [0x0000, 0x0001, 0x0FFF, 0x1000, 0x7FFF, 0x8000, 0xFFFF];
+
+        for opcode in opcodes {
+            for &hl in &values {
+                for &operand in &values {
+                    for carry in [false, true] {
+                        let pair = (opcode >> 4) & 0x03;
+                        let (bc, de, sp) = match pair {
+                            0 => (operand, 0x1357, 0x2468),
+                            1 => (0x1357, operand, 0x2468),
+                            2 => (0x1357, 0x2468, 0x369C),
+                            3 => (0x1357, 0x2468, operand),
+                            _ => unreachable!(),
+                        };
+                        execute_pair(opcode, state(hl, bc, de, sp, carry));
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn adc_sbc_internal_mcycles_waits_and_snapshots_resume_exactly() {
+        let architectural = state(0x7FFF, 0x0001, 0xFFFF, 0x8000, true);
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.import_architectural_state(architectural).unwrap();
+        let mut bus = TestBus::default();
+        bus.memory[0xFFFE] = 0xED;
+        bus.memory[0xFFFF] = 0x4A; // ADC HL,BC
+
+        let first = request(cpu.begin_instruction().unwrap());
+        let second = read_opcode(&mut cpu, &mut bus, Z80MicroStep::BusRequest(first));
+        cpu.insert_wait_tstates(3).unwrap();
+        assert_eq!(
+            read_opcode(&mut cpu, &mut bus, second),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        assert_eq!(cpu.export_state().instruction_tstates, 11);
+
+        for _ in 0..4 {
+            assert_eq!(
+                cpu.complete_internal_cycle().unwrap(),
+                Z80MicroStep::InternalCycle { tstates: 1 }
+            );
+        }
+        cpu = roundtrip(cpu);
+        assert_eq!(cpu.export_state().mcycle_index, 3);
+        assert_eq!(cpu.export_state().tstate_index, 0);
+
+        assert_eq!(
+            cpu.complete_internal_cycle().unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        assert_eq!(
+            cpu.complete_internal_cycle().unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x4A,
+                tstates: 18
+            }
+        );
+    }
+}
+
 #[cfg(test)]
 mod ed_port_io_differential_tests {
     use super::{Z80MicroSequencer, Z80MicroStep};
