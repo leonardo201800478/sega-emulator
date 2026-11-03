@@ -1824,4 +1824,64 @@ mod tests {
             Err(Z80MicroSequencerError::InvalidState)
         );
     }
+
+    #[test]
+    fn alu_immediate_uses_scheduled_operand_read_and_retires_in_seven_tstates() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.registers.a = 0x7F;
+        let fetch = request(cpu.begin_instruction().unwrap());
+        let operand_read = request(cpu.complete_bus_cycle(fetch.id, Some(0xC6)).unwrap());
+        assert_eq!(operand_read.operation, Z80BusOperation::MemoryRead);
+        assert_eq!(operand_read.address, 1);
+        assert_eq!(operand_read.base_tstates, 3);
+
+        retired(
+            cpu.complete_bus_cycle(operand_read.id, Some(0x01)).unwrap(),
+            0xC6,
+            7,
+        );
+        assert_eq!(cpu.registers.a, 0x80);
+        assert_eq!(cpu.registers.f, FLAG_S | FLAG_PV | FLAG_H);
+        assert_eq!(cpu.registers.pc, 2);
+    }
+
+    #[test]
+    fn alu_hl_uses_scheduled_memory_read_and_retires_in_seven_tstates() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.registers.a = 0x20;
+        cpu.registers.set_hl(0xC123);
+        let fetch = request(cpu.begin_instruction().unwrap());
+        let operand_read = request(cpu.complete_bus_cycle(fetch.id, Some(0x86)).unwrap());
+        assert_eq!(operand_read.operation, Z80BusOperation::MemoryRead);
+        assert_eq!(operand_read.address, 0xC123);
+        assert_eq!(operand_read.base_tstates, 3);
+
+        retired(
+            cpu.complete_bus_cycle(operand_read.id, Some(0x22)).unwrap(),
+            0x86,
+            7,
+        );
+        assert_eq!(cpu.registers.a, 0x42);
+        assert_eq!(cpu.registers.pc, 1);
+    }
+
+    #[test]
+    fn alu_immediate_and_memory_wait_states_are_counted_without_changing_operands() {
+        for (opcode, operand, address) in [(0xC6, 0x01, 1), (0x86, 0x01, 0xC000)] {
+            let mut cpu = Z80MicroSequencer::default();
+            cpu.registers.a = 0x10;
+            cpu.registers.set_hl(0xC000);
+            let fetch = request(cpu.begin_instruction().unwrap());
+            let read = request(cpu.complete_bus_cycle(fetch.id, Some(opcode)).unwrap());
+            assert_eq!(read.address, address);
+            cpu.insert_wait_tstates(2).unwrap();
+            retired(
+                cpu.complete_bus_cycle(read.id, Some(operand)).unwrap(),
+                opcode,
+                9,
+            );
+            assert_eq!(cpu.registers.a, 0x11);
+        }
+    }
+
 }
