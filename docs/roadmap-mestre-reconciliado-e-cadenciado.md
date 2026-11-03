@@ -4,7 +4,8 @@
 **Diretriz de Engenharia:** Arquitetura 100% modular sobre crates compartilhados Rust (`sega-core`, `sega-cpus`, `sega-video`, `sega-audio`, `sega-scheduler`, `sega-hosts`, `sega-media`, `sega-pyo3`). Proibida a criação de lógicas de hardware isoladas ou duplicadas por console.  
 **Baseline Auditada:** `main` em `e9a3eff6c3733b4f11443954a647471c9d3908ff` (2026-11-03, PR #471 / E4A integrada).  
 **Candidato em validação:** PR #472 / E4B, SHA `245d42eb0337d41295329155de8e151feceb9022` (ainda não integrado).  
-**Runtime & Host Target:** 100% Rust para hardware, tempo, barramento, render DirectX 12, áudio WASAPI/XAudio2 + DSP e input SDL3. Python/Qt (PySide6) atua estritamente como launcher, biblioteca, preferências e telemetria.
+**Runtime & Host Target:** 100% Rust para hardware, tempo, barramento, render DirectX 12, áudio WASAPI/XAudio2 + DSP e input SDL3. Python/Qt (PySide6) atua estritamente como launcher, biblioteca, preferências e telemetria.  
+**Meta de conclusão do Z80:** [scorecard de cobertura, validação e critérios de aceite](z80-completion-scorecard.md) — documento normativo de consulta para as fases E4C–E9.
 
 ---
 
