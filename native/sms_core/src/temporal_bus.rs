@@ -127,9 +127,9 @@ impl fmt::Display for SmsTemporalBusError {
                 f,
                 "SMS temporal bus expected request {expected}, received {received}"
             ),
-            Self::UnsupportedOperation => {
-                f.write_str("this temporal bus operation is not implemented by the SMS temporal slice")
-            }
+            Self::UnsupportedOperation => f.write_str(
+                "this temporal bus operation is not implemented by the SMS temporal slice",
+            ),
             Self::InvalidState => f.write_str("SMS temporal bus snapshot is inconsistent"),
         }
     }
@@ -839,7 +839,6 @@ mod tests {
     }
 }
 
-
 #[cfg(test)]
 mod immediate_port_transaction_tests {
     use super::{SmsTemporalBus, SmsTemporalDispatch};
@@ -869,11 +868,8 @@ mod immediate_port_transaction_tests {
             )
             .unwrap();
 
-        bus.begin_request(
-            request(0, Z80BusOperation::PortRead, 0x12DC),
-            0,
-        )
-        .unwrap();
+        bus.begin_request(request(0, Z80BusOperation::PortRead, 0x12DC), 0)
+            .unwrap();
         let read = bus.dispatch_next().unwrap().unwrap();
         assert_eq!(
             read,
