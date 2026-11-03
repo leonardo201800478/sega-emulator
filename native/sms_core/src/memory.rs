@@ -134,9 +134,10 @@ impl SmsMemory {
                 expected: 0x2000,
             });
         }
-        if cartridge_ram.as_ref().is_some_and(|image| {
-            !matches!(image.len(), 0x2000 | 0x4000 | 0x8000)
-        }) {
+        if cartridge_ram
+            .as_ref()
+            .is_some_and(|image| !matches!(image.len(), 0x2000 | 0x4000 | 0x8000))
+        {
             return Err(SmsCoreError::InvalidCartridgeRamSize {
                 size: cartridge_ram.as_ref().map_or(0, Vec::len),
             });
@@ -477,8 +478,7 @@ mod tests {
 
     #[test]
     fn sega_mapper_maps_and_mirrors_eight_kib_cartridge_ram_in_slot_two() {
-        let mut memory =
-            SmsMemory::with_cartridge_ram(patterned_rom(4), vec![0; 0x2000]).unwrap();
+        let mut memory = SmsMemory::with_cartridge_ram(patterned_rom(4), vec![0; 0x2000]).unwrap();
         memory.write(0xFFFC, 0x08);
         memory.write(0x8000, 0xA5);
         assert_eq!(memory.read(0x8000), 0xA5);
@@ -490,8 +490,7 @@ mod tests {
 
     #[test]
     fn sega_mapper_selects_between_two_sixteen_kib_sram_banks() {
-        let mut memory =
-            SmsMemory::with_cartridge_ram(patterned_rom(4), vec![0; 0x8000]).unwrap();
+        let mut memory = SmsMemory::with_cartridge_ram(patterned_rom(4), vec![0; 0x8000]).unwrap();
         memory.write(0xFFFC, 0x08);
         memory.write(0x8000, 0x31);
         memory.write(0xFFFC, 0x0C);
@@ -503,8 +502,7 @@ mod tests {
 
     #[test]
     fn sega_mapper_maps_cartridge_ram_to_slot_three_when_system_ram_is_disabled() {
-        let mut memory =
-            SmsMemory::with_cartridge_ram(patterned_rom(4), vec![0; 0x2000]).unwrap();
+        let mut memory = SmsMemory::with_cartridge_ram(patterned_rom(4), vec![0; 0x2000]).unwrap();
         memory.write_control_port(0xBB); // Cartridge enabled, internal RAM disabled.
         memory.write(0xFFFC, 0x10);
         memory.write(0xC000, 0x5A);
@@ -522,9 +520,11 @@ mod tests {
 
     #[test]
     fn rejects_unsupported_cartridge_ram_capacity() {
-        let error = SmsMemory::with_cartridge_ram(patterned_rom(1), vec![0; 0x1000])
-            .unwrap_err();
-        assert_eq!(error, SmsCoreError::InvalidCartridgeRamSize { size: 0x1000 });
+        let error = SmsMemory::with_cartridge_ram(patterned_rom(1), vec![0; 0x1000]).unwrap_err();
+        assert_eq!(
+            error,
+            SmsCoreError::InvalidCartridgeRamSize { size: 0x1000 }
+        );
     }
 
     #[test]
@@ -585,8 +585,8 @@ mod tests {
 
     #[test]
     fn cartridge_ram_configuration_rejects_unimplemented_codemasters_sram_mapping() {
-        let error = SmsMemory::with_cartridge_ram(codemasters_rom(16), vec![0; 0x2000])
-            .unwrap_err();
+        let error =
+            SmsMemory::with_cartridge_ram(codemasters_rom(16), vec![0; 0x2000]).unwrap_err();
         assert_eq!(error, SmsCoreError::CartridgeRamUnsupportedMapper);
     }
 
