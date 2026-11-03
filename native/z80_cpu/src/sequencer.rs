@@ -610,58 +610,6 @@ impl Z80MicroSequencer {
                     && address == state.registers.hl()
                     && state.instruction_tstates >= 11 + u32::from(4 - remaining_tstates)
             }
-            Z80MicroSequencerPhase::EdBlockCompareRead { opcode, address } => {
-                let value = response
-                    .data
-                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
-                let direction = if matches!(opcode, 0xA9 | 0xB9) {
-                    -1_i16
-                } else {
-                    1_i16
-                };
-                let accumulator = self.registers.a;
-                let result = accumulator.wrapping_sub(value);
-                let half = (accumulator & 0x0F) < (value & 0x0F);
-                self.registers
-                    .set_hl(address.wrapping_add_signed(direction));
-                let count = self.registers.bc().wrapping_sub(1);
-                self.registers.set_bc(count);
-                let adjusted = result.wrapping_sub(u8::from(half));
-                let mut flags = (self.registers.f & FLAG_C) | FLAG_N | (result & FLAG_S);
-                if result == 0 {
-                    flags |= FLAG_Z;
-                }
-                if half {
-                    flags |= FLAG_H;
-                }
-                if count != 0 {
-                    flags |= FLAG_PV;
-                }
-                flags |= adjusted & 0x08;
-                flags |= (adjusted & 0x02) << 4;
-                let repeat = matches!(opcode, 0xB1 | 0xB9) && count != 0 && result != 0;
-                if repeat {
-                    self.registers.pc = self.registers.pc.wrapping_sub(2);
-                    self.wz = self.registers.pc.wrapping_add(1);
-                    flags = (flags & !FLAG_XY)
-                        | (((self.registers.pc >> 8) as u8) & FLAG_XY);
-                } else {
-                    self.wz = self.wz.wrapping_add_signed(direction);
-                }
-                self.set_flags(flags);
-                self.mcycle_index = 3;
-                self.tstate_index = 0;
-                self.phase = Z80MicroSequencerPhase::EdBlockCompareInternal {
-                    opcode,
-                    remaining_tstates: 5,
-                    repeat,
-                };
-                Ok(Z80MicroStep::InternalCycle { tstates: 1 })
-            }
-            Z80MicroSequencerPhase::EdBlockCompareInternal { .. }
-            | Z80MicroSequencerPhase::EdBlockCompareRepeatInternal { .. } => {
-                Err(Z80MicroSequencerError::UnexpectedCompletion)
-            }
             Z80MicroSequencerPhase::EdBlockTransferRead {
                 opcode,
                 source,
@@ -694,56 +642,6 @@ impl Z80MicroSequencer {
                             && request.base_tstates == 5
                     })
                     && state.instruction_tstates >= 11
-            }
-            Z80MicroSequencerPhase::EdBlockCompareInternal {
-                opcode,
-                remaining_tstates,
-                repeat,
-            } => {
-                next.instruction_tstates = next_instruction_tstates;
-                if remaining_tstates == 1 {
-                    if repeat {
-                        next.mcycle_index = 4;
-                        next.tstate_index = 0;
-                        next.phase = Z80MicroSequencerPhase::EdBlockCompareRepeatInternal {
-                            opcode,
-                            remaining_tstates: 5,
-                        };
-                        Z80MicroStep::InternalCycle { tstates: 1 }
-                    } else {
-                        next.retire(opcode)?
-                    }
-                } else {
-                    next.phase = Z80MicroSequencerPhase::EdBlockCompareInternal {
-                        opcode,
-                        remaining_tstates: remaining_tstates - 1,
-                        repeat,
-                    };
-                    next.tstate_index = next
-                        .tstate_index
-                        .checked_add(1)
-                        .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
-                    Z80MicroStep::InternalCycle { tstates: 1 }
-                }
-            }
-            Z80MicroSequencerPhase::EdBlockCompareRepeatInternal {
-                opcode,
-                remaining_tstates,
-            } => {
-                next.instruction_tstates = next_instruction_tstates;
-                if remaining_tstates == 1 {
-                    next.retire(opcode)?
-                } else {
-                    next.phase = Z80MicroSequencerPhase::EdBlockCompareRepeatInternal {
-                        opcode,
-                        remaining_tstates: remaining_tstates - 1,
-                    };
-                    next.tstate_index = next
-                        .tstate_index
-                        .checked_add(1)
-                        .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
-                    Z80MicroStep::InternalCycle { tstates: 1 }
-                }
             }
             Z80MicroSequencerPhase::EdBlockRepeatInternal {
                 opcode,
@@ -1473,6 +1371,57 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::EdBlockRepeatInternal { .. } => {
                 Err(Z80MicroSequencerError::UnexpectedCompletion)
             }
+            Z80MicroSequencerPhase::EdBlockCompareRead { opcode, address } => {
+                let value = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                let direction = if matches!(opcode, 0xA9 | 0xB9) {
+                    -1_i16
+                } else {
+                    1_i16
+                };
+                let accumulator = self.registers.a;
+                let result = accumulator.wrapping_sub(value);
+                let half = (accumulator & 0x0F) < (value & 0x0F);
+                self.registers
+                    .set_hl(address.wrapping_add_signed(direction));
+                let count = self.registers.bc().wrapping_sub(1);
+                self.registers.set_bc(count);
+                let adjusted = result.wrapping_sub(u8::from(half));
+                let mut flags = (self.registers.f & FLAG_C) | FLAG_N | (result & FLAG_S);
+                if result == 0 {
+                    flags |= FLAG_Z;
+                }
+                if half {
+                    flags |= FLAG_H;
+                }
+                if count != 0 {
+                    flags |= FLAG_PV;
+                }
+                flags |= adjusted & 0x08;
+                flags |= (adjusted & 0x02) << 4;
+                let repeat = matches!(opcode, 0xB1 | 0xB9) && count != 0 && result != 0;
+                if repeat {
+                    self.registers.pc = self.registers.pc.wrapping_sub(2);
+                    self.wz = self.registers.pc.wrapping_add(1);
+                    flags = (flags & !FLAG_XY) | (((self.registers.pc >> 8) as u8) & FLAG_XY);
+                } else {
+                    self.wz = self.wz.wrapping_add_signed(direction);
+                }
+                self.set_flags(flags);
+                self.mcycle_index = 3;
+                self.tstate_index = 0;
+                self.phase = Z80MicroSequencerPhase::EdBlockCompareInternal {
+                    opcode,
+                    remaining_tstates: 5,
+                    repeat,
+                };
+                Ok(Z80MicroStep::InternalCycle { tstates: 1 })
+            }
+            Z80MicroSequencerPhase::EdBlockCompareInternal { .. }
+            | Z80MicroSequencerPhase::EdBlockCompareRepeatInternal { .. } => {
+                Err(Z80MicroSequencerError::UnexpectedCompletion)
+            }
             Z80MicroSequencerPhase::EdReturn { stage, low } => match stage {
                 0 => {
                     let low = response
@@ -1733,6 +1682,56 @@ impl Z80MicroSequencer {
                         address,
                         result_a,
                         result_memory,
+                        remaining_tstates: remaining_tstates - 1,
+                    };
+                    next.tstate_index = next
+                        .tstate_index
+                        .checked_add(1)
+                        .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                    Z80MicroStep::InternalCycle { tstates: 1 }
+                }
+            }
+            Z80MicroSequencerPhase::EdBlockCompareInternal {
+                opcode,
+                remaining_tstates,
+                repeat,
+            } => {
+                next.instruction_tstates = next_instruction_tstates;
+                if remaining_tstates == 1 {
+                    if repeat {
+                        next.mcycle_index = 4;
+                        next.tstate_index = 0;
+                        next.phase = Z80MicroSequencerPhase::EdBlockCompareRepeatInternal {
+                            opcode,
+                            remaining_tstates: 5,
+                        };
+                        Z80MicroStep::InternalCycle { tstates: 1 }
+                    } else {
+                        next.retire(opcode)?
+                    }
+                } else {
+                    next.phase = Z80MicroSequencerPhase::EdBlockCompareInternal {
+                        opcode,
+                        remaining_tstates: remaining_tstates - 1,
+                        repeat,
+                    };
+                    next.tstate_index = next
+                        .tstate_index
+                        .checked_add(1)
+                        .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                    Z80MicroStep::InternalCycle { tstates: 1 }
+                }
+            }
+            Z80MicroSequencerPhase::EdBlockCompareRepeatInternal {
+                opcode,
+                remaining_tstates,
+            } => {
+                next.instruction_tstates = next_instruction_tstates;
+                if remaining_tstates == 1 {
+                    next.retire(opcode)?
+                } else {
+                    next.phase = Z80MicroSequencerPhase::EdBlockCompareRepeatInternal {
+                        opcode,
                         remaining_tstates: remaining_tstates - 1,
                     };
                     next.tstate_index = next
