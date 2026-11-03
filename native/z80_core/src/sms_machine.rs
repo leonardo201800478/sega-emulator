@@ -41,6 +41,7 @@ fn sms_region_profile(
 ///
 /// This is shared by the PyO3 constructor and native Rust tests so the test
 /// harness never creates Python exceptions or requires interpreter lifecycle.
+#[cfg(test)]
 fn build_sms_machine(
     rom: Vec<u8>,
     pal: bool,
@@ -561,7 +562,7 @@ mod tests {
 
     #[test]
     fn controller_rejects_unknown_player() {
-        let mut machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa"), None).unwrap();
+        let mut machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa"), None, None, None).unwrap();
         assert!(
             machine
                 .set_controller(3, false, false, false, false, false, false)
