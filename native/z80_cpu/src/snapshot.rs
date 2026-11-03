@@ -193,6 +193,15 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u8(2);
             writer.u8(destination);
         }
+        Z80MicroSequencerPhase::ImmediateReadRegisterPairLow { pair } => {
+            writer.u8(10);
+            writer.u8(pair);
+        }
+        Z80MicroSequencerPhase::ImmediateReadRegisterPairHigh { pair, low } => {
+            writer.u8(11);
+            writer.u8(pair);
+            writer.u8(low);
+        }
         Z80MicroSequencerPhase::ImmediateReadMemoryWrite => writer.u8(3),
         Z80MicroSequencerPhase::ImmediateReadAlu { operation } => {
             writer.u8(8);
