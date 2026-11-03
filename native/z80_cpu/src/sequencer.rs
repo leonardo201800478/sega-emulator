@@ -419,13 +419,16 @@ impl Z80MicroSequencer {
                     Some(0x34 | 0x35) => (8, Some(state.registers.hl()), None),
                     _ => (u32::MAX, None, None),
                 };
-                matches!(
-                    request.operation,
-                    Z80BusOperation::MemoryWrite { value: request_value }
-                        if request_value == value
-                ) && request.address == address
+                let Z80BusOperation::MemoryWrite {
+                    value: request_value,
+                } = request.operation
+                else {
+                    return Err(Z80MicroSequencerError::InvalidState);
+                };
+                request_value == value
+                    && request.address == address
                     && expected_address == Some(address)
-                    && expected_value.is_none_or(|value| value == request_value)
+                    && expected_value.map_or(true, |expected| expected == request_value)
                     && request.base_tstates == 3
                     && state.instruction_tstates >= minimum_tstates
             }
