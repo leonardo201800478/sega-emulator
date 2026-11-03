@@ -38,11 +38,13 @@ fn ex_sp_ix_preserves_bus_order_waits_and_every_snapshot_boundary() {
     let fetch = start(&mut cpu);
     let fetch = feed_prefix(&mut cpu, fetch, 0xDD);
     let read_low = request(cpu.complete_bus_cycle(fetch.id, Some(0xE3)).unwrap());
+    assert_eq!(cpu.export_state().mcycle_index, 2);
     assert_eq!(read_low.address, 0x0100);
     cpu.insert_wait_tstate().unwrap();
     cpu = round_trip(cpu);
 
     let read_high = request(cpu.complete_bus_cycle(read_low.id, Some(0x90)).unwrap());
+    assert_eq!(cpu.export_state().mcycle_index, 3);
     assert_eq!(read_high.address, 0x0101);
     cpu.insert_wait_tstates(2).unwrap();
     cpu = round_trip(cpu);
@@ -52,8 +54,10 @@ fn ex_sp_ix_preserves_bus_order_waits_and_every_snapshot_boundary() {
         Z80MicroStep::InternalCycle { tstates: 1 }
     );
     cpu = round_trip(cpu);
+    assert_eq!(cpu.export_state().mcycle_index, 3);
 
     let write_low = request(cpu.complete_internal_cycle().unwrap());
+    assert_eq!(cpu.export_state().mcycle_index, 4);
     assert_eq!(write_low.address, 0x0100);
     assert_eq!(
         write_low.operation,
@@ -63,6 +67,7 @@ fn ex_sp_ix_preserves_bus_order_waits_and_every_snapshot_boundary() {
     cpu = round_trip(cpu);
 
     let write_high = request(cpu.complete_bus_cycle(write_low.id, None).unwrap());
+    assert_eq!(cpu.export_state().mcycle_index, 5);
     assert_eq!(write_high.address, 0x0101);
     assert_eq!(
         write_high.operation,
@@ -75,6 +80,7 @@ fn ex_sp_ix_preserves_bus_order_waits_and_every_snapshot_boundary() {
         Z80MicroStep::InternalCycle { tstates: 1 }
     );
     cpu = round_trip(cpu);
+    assert_eq!(cpu.export_state().mcycle_index, 5);
     assert_eq!(
         cpu.complete_internal_cycle().unwrap(),
         Z80MicroStep::InternalCycle { tstates: 1 }
