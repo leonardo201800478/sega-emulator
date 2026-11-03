@@ -2898,7 +2898,7 @@ mod tests {
             let mut cpu = Z80MicroSequencer {
                 ix: 0x2468,
                 iy: 0x1357,
-                registers: Z80Registers { f: 0xD7, hl: 0, ..Z80Registers::default() },
+                registers: Z80Registers { f: 0xD7, ..Z80Registers::default() },
                 ..Z80MicroSequencer::default()
             };
             if prefix == 0xDD { cpu.ix = initial; } else { cpu.iy = initial; }
