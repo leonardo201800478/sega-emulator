@@ -67,6 +67,17 @@ pub enum Z80MicroSequencerPhase {
         decrement: bool,
         address: u16,
     },
+    CbMemoryRead {
+        address: u16,
+    },
+    CbMemoryInternal {
+        address: u16,
+        result: Option<u8>,
+    },
+    CbMemoryWrite {
+        address: u16,
+        value: u8,
+    },
     MemoryIncDecInternal {
         decrement: bool,
         old: u8,
@@ -397,6 +408,42 @@ impl Z80MicroSequencer {
                 }) && address == state.registers.hl()
                     && state.instruction_tstates >= 4
             }
+            Z80MicroSequencerPhase::CbMemoryRead { address } => {
+                state.opcode.is_some_and(|opcode| opcode & 0x07 == 0x06)
+                    && pending.is_some_and(|request| {
+                        request.operation == Z80BusOperation::MemoryRead
+                            && request.address == address
+                            && request.base_tstates == 3
+                    })
+                    && address == state.registers.hl()
+                    && state.instruction_tstates >= 8
+            }
+            Z80MicroSequencerPhase::CbMemoryInternal { address, result } => {
+                state.opcode.is_some_and(|opcode| {
+                    opcode & 0x07 == 0x06 && ((opcode >> 6 == 1) == result.is_none())
+                }) && pending.is_none()
+                    && address == state.registers.hl()
+                    && state.tstate_index >= 3
+                    && state.instruction_tstates >= 8 + u32::from(state.tstate_index)
+            }
+            Z80MicroSequencerPhase::CbMemoryWrite { address, value } => {
+                let Some(request) = pending else {
+                    return Err(Z80MicroSequencerError::InvalidState);
+                };
+                state
+                    .opcode
+                    .is_some_and(|opcode| opcode & 0x07 == 0x06 && opcode >> 6 != 1)
+                    && matches!(
+                        request.operation,
+                        Z80BusOperation::MemoryWrite {
+                            value: request_value
+                        } if request_value == value
+                    )
+                    && request.address == address
+                    && request.base_tstates == 3
+                    && address == state.registers.hl()
+                    && state.instruction_tstates >= 12
+            }
             Z80MicroSequencerPhase::MemoryReadIncDec { decrement, address } => {
                 let expected_opcode = if decrement { 0x35 } else { 0x34 };
                 pending.is_some_and(|request| {
@@ -462,6 +509,15 @@ impl Z80MicroSequencer {
             | Z80MicroSequencerPhase::MemoryReadAlu { .. }
             | Z80MicroSequencerPhase::MemoryReadIncDec { .. } => {
                 state.mcycle_index == 1 && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::CbMemoryRead { .. } => {
+                state.mcycle_index == 2 && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::CbMemoryInternal { .. } => {
+                state.mcycle_index == 2 && state.tstate_index >= 3
+            }
+            Z80MicroSequencerPhase::CbMemoryWrite { .. } => {
+                state.mcycle_index == 3 && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::ImmediateReadRegisterPairHigh { .. } => {
                 state.mcycle_index == 2 && state.tstate_index == 0
@@ -622,6 +678,18 @@ impl Z80MicroSequencer {
                     return Ok(Z80MicroStep::BusRequest(request));
                 }
                 self.opcode = Some(opcode);
+                if previous_prefix == Some(0xCB) {
+                    if opcode & 0x07 == 0x06 {
+                        return self.issue_read(
+                            Z80MicroSequencerPhase::CbMemoryRead {
+                                address: self.registers.hl(),
+                            },
+                            self.registers.hl(),
+                        );
+                    }
+                    self.execute_cb_register(opcode);
+                    return self.retire(opcode);
+                }
                 if previous_prefix.is_some() {
                     return self.unsupported(opcode);
                 }
@@ -824,6 +892,31 @@ impl Z80MicroSequencer {
                         .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
                 )
             }
+            Z80MicroSequencerPhase::CbMemoryRead { address } => {
+                let value = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                let opcode = self
+                    .opcode
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                let result = self.execute_cb_value(opcode, value, (self.wz >> 8) as u8);
+                let wait_offset = u16::try_from(waits)
+                    .ok()
+                    .and_then(|waits| 3_u16.checked_add(waits))
+                    .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                self.tstate_index = wait_offset;
+                self.phase = Z80MicroSequencerPhase::CbMemoryInternal { address, result };
+                Ok(Z80MicroStep::InternalCycle { tstates: 1 })
+            }
+            Z80MicroSequencerPhase::CbMemoryInternal { .. } => {
+                Err(Z80MicroSequencerError::UnexpectedCompletion)
+            }
+            Z80MicroSequencerPhase::CbMemoryWrite { .. } => {
+                let opcode = self
+                    .opcode
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.retire(opcode)
+            }
             Z80MicroSequencerPhase::MemoryReadIncDec { decrement, address } => {
                 let old = response
                     .data
@@ -860,25 +953,38 @@ impl Z80MicroSequencer {
         }
     }
 
-    /// Complete the explicitly exposed internal T-state of INC/DEC (HL).
-    /// The result/flags are committed at this edge, then the memory write is issued.
+    /// Complete one explicitly exposed internal T-state for memory read/modify/write.
+    /// CB BIT (HL) retires here; the other CB memory groups issue their write cycle.
     pub fn complete_internal_cycle(&mut self) -> Result<Z80MicroStep, Z80MicroSequencerError> {
-        let Z80MicroSequencerPhase::MemoryIncDecInternal {
-            decrement,
-            old,
-            address,
-        } = self.phase
-        else {
-            return Err(Z80MicroSequencerError::UnexpectedCompletion);
-        };
         let next_instruction_tstates = self
             .instruction_tstates
             .checked_add(1)
             .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
         let mut next = self.clone();
-        let value = next.increment_decrement_register(old, decrement);
-        let step = next.issue_write(address, value)?;
-        next.instruction_tstates = next_instruction_tstates;
+        let step = match next.phase {
+            Z80MicroSequencerPhase::MemoryIncDecInternal {
+                decrement,
+                old,
+                address,
+            } => {
+                let value = next.increment_decrement_register(old, decrement);
+                let step = next.issue_write(address, value)?;
+                next.instruction_tstates = next_instruction_tstates;
+                step
+            }
+            Z80MicroSequencerPhase::CbMemoryInternal { address, result } => {
+                next.instruction_tstates = next_instruction_tstates;
+                if let Some(value) = result {
+                    next.issue_cb_memory_write(address, value)?
+                } else {
+                    let opcode = next
+                        .opcode
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                    next.retire(opcode)?
+                }
+            }
+            _ => return Err(Z80MicroSequencerError::UnexpectedCompletion),
+        };
         *self = next;
         Ok(step)
     }
@@ -915,6 +1021,65 @@ impl Z80MicroSequencer {
         self.mcycle_index = 0;
         self.tstate_index = 0;
         Err(Z80MicroSequencerError::UnsupportedOpcode { opcode, address })
+    }
+
+    /// Execute a CB-prefixed operation whose operand is a CPU register.
+    /// The caller supplies the undocumented X/Y flag source explicitly.
+    fn execute_cb_register(&mut self, opcode: u8) {
+        let target = opcode & 0x07;
+        let value = self.read_register(target);
+        if let Some(result) = self.execute_cb_value(opcode, value, value) {
+            self.write_register(target, result);
+        }
+    }
+
+    /// Apply the semantic portion of a CB operation to a sampled operand.
+    /// Returns a value only for groups that write their operand.
+    fn execute_cb_value(&mut self, opcode: u8, value: u8, undocumented: u8) -> Option<u8> {
+        let group = opcode >> 6;
+        let operation = (opcode >> 3) & 0x07;
+        match group {
+            0 => {
+                let old_carry = self.registers.f & FLAG_C != 0;
+                let (result, carry) = match operation {
+                    0 => (value.rotate_left(1), value & 0x80 != 0),
+                    1 => (value.rotate_right(1), value & 0x01 != 0),
+                    2 => ((value << 1) | u8::from(old_carry), value & 0x80 != 0),
+                    3 => ((value >> 1) | (u8::from(old_carry) << 7), value & 1 != 0),
+                    4 => (value << 1, value & 0x80 != 0),
+                    5 => ((value >> 1) | (value & 0x80), value & 1 != 0),
+                    6 => ((value << 1) | 1, value & 0x80 != 0),
+                    _ => (value >> 1, value & 1 != 0),
+                };
+                let mut flags = result & (FLAG_S | FLAG_XY);
+                if result == 0 {
+                    flags |= FLAG_Z;
+                }
+                if result.count_ones().is_multiple_of(2) {
+                    flags |= FLAG_PV;
+                }
+                if carry {
+                    flags |= FLAG_C;
+                }
+                self.set_flags(flags);
+                Some(result)
+            }
+            1 => {
+                let mask = 1_u8 << operation;
+                let bit_clear = value & mask == 0;
+                let mut flags = (self.registers.f & FLAG_C) | FLAG_H | (undocumented & FLAG_XY);
+                if bit_clear {
+                    flags |= FLAG_Z | FLAG_PV;
+                }
+                if operation == 7 && !bit_clear {
+                    flags |= FLAG_S;
+                }
+                self.set_flags(flags);
+                None
+            }
+            2 => Some(value & !(1_u8 << operation)),
+            _ => Some(value | (1_u8 << operation)),
+        }
     }
 
     /// Execute one register-source BASE ALU operation using the shared ALU.
@@ -1057,6 +1222,24 @@ impl Z80MicroSequencer {
         self.mcycle_index = next_mcycle_index;
         self.tstate_index = 0;
         self.phase = phase;
+        Ok(Z80MicroStep::BusRequest(request))
+    }
+
+    fn issue_cb_memory_write(
+        &mut self,
+        address: u16,
+        value: u8,
+    ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
+        let next_mcycle_index = self
+            .mcycle_index
+            .checked_add(1)
+            .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+        let request = self
+            .handshake
+            .begin(Z80BusOperation::MemoryWrite { value }, address, 3)?;
+        self.mcycle_index = next_mcycle_index;
+        self.tstate_index = 0;
+        self.phase = Z80MicroSequencerPhase::CbMemoryWrite { address, value };
         Ok(Z80MicroStep::BusRequest(request))
     }
 
@@ -2913,5 +3096,465 @@ mod indirect_bc_de_differential_tests {
                 "memory mismatch for opcode {opcode:02X}"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod cb_memory_differential_tests {
+    use super::{Z80MicroSequencer, Z80MicroStep};
+    use crate::bus::CpuBus;
+    use crate::{Z80, Z80ArchitecturalState, Z80BusOperation, Z80Registers};
+
+    #[derive(Clone)]
+    struct TestBus {
+        memory: Box<[u8; 0x10000]>,
+        reads: Vec<u16>,
+        writes: Vec<(u16, u8)>,
+    }
+
+    impl Default for TestBus {
+        fn default() -> Self {
+            Self {
+                memory: Box::new([0; 0x10000]),
+                reads: Vec::new(),
+                writes: Vec::new(),
+            }
+        }
+    }
+
+    impl CpuBus for TestBus {
+        fn read_memory(&mut self, address: u16) -> u8 {
+            self.reads.push(address);
+            self.memory[usize::from(address)]
+        }
+
+        fn write_memory(&mut self, address: u16, value: u8) {
+            self.writes.push((address, value));
+            self.memory[usize::from(address)] = value;
+        }
+    }
+
+    fn request(step: Z80MicroStep) -> crate::Z80BusRequest {
+        match step {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected bus request, got {other:?}"),
+        }
+    }
+
+    fn read_request(
+        cpu: &mut Z80MicroSequencer,
+        bus: &mut TestBus,
+        step: Z80MicroStep,
+    ) -> Z80MicroStep {
+        let request = request(step);
+        assert!(matches!(
+            request.operation,
+            Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead
+        ));
+        let value = bus.read_memory(request.address);
+        cpu.complete_bus_cycle(request.id, Some(value)).unwrap()
+    }
+
+    fn state() -> Z80ArchitecturalState {
+        Z80ArchitecturalState {
+            registers: Z80Registers {
+                a: 0x5A,
+                f: 0xD7,
+                b: 0x12,
+                c: 0x34,
+                d: 0x56,
+                e: 0x78,
+                h: 0xC1,
+                l: 0x23,
+                pc: 0xFFFE,
+                sp: 0xD000,
+            },
+            alternate: crate::Z80AlternateRegisters {
+                a: 0x21,
+                f: 0x5A,
+                b: 0x43,
+                c: 0x65,
+                d: 0x87,
+                e: 0xA9,
+                h: 0xCB,
+                l: 0xED,
+            },
+            ix: 0x1357,
+            iy: 0x2468,
+            i: 0xA5,
+            r: 0xFE,
+            iff1: false,
+            iff2: false,
+            interrupt_mode: 0,
+            wz: 0xA328,
+            ei_delay: 0,
+            nmi_pending: false,
+            int_pending: None,
+            q: 0x28,
+            q_previous: 0x5A,
+            p: false,
+            halted: false,
+        }
+    }
+
+    fn roundtrip(cpu: Z80MicroSequencer) -> Z80MicroSequencer {
+        Z80MicroSequencer::restore_state(cpu.export_state()).unwrap()
+    }
+
+    #[test]
+    fn all_32_cb_hl_encodings_match_atomic_state_bus_trace_and_timing() {
+        for group in 0_u8..4 {
+            for operation in 0_u8..8 {
+                let opcode = (group << 6) | (operation << 3) | 0x06;
+                for operand in [0x00, 0x81, 0x7F, 0xA5] {
+                    let architectural = state();
+                    let mut atomic = Z80::default();
+                    atomic.import_architectural_state(architectural).unwrap();
+                    let mut atomic_bus = TestBus::default();
+                    atomic_bus.memory[0xFFFE] = 0xCB;
+                    atomic_bus.memory[0xFFFF] = opcode;
+                    atomic_bus.memory[0xC123] = operand;
+
+                    let mut sequenced = Z80MicroSequencer::default();
+                    sequenced.import_architectural_state(architectural).unwrap();
+                    let mut sequenced_bus = atomic_bus.clone();
+
+                    let expected_tstates = if group == 1 { 12 } else { 15 };
+                    assert_eq!(
+                        atomic.step(&mut atomic_bus),
+                        Ok(expected_tstates),
+                        "atomic CB {opcode:02X}, operand {operand:02X}"
+                    );
+
+                    sequenced = roundtrip(sequenced);
+                    let first_m1 = request(sequenced.begin_instruction().unwrap());
+                    assert_eq!(first_m1.operation, Z80BusOperation::OpcodeFetch);
+                    assert_eq!(first_m1.address, 0xFFFE);
+                    let second_m1 = read_request(
+                        &mut sequenced,
+                        &mut sequenced_bus,
+                        Z80MicroStep::BusRequest(first_m1),
+                    );
+                    sequenced = roundtrip(sequenced);
+                    let second_m1 = request(second_m1);
+                    assert_eq!(second_m1.operation, Z80BusOperation::OpcodeFetch);
+                    assert_eq!(second_m1.address, 0xFFFF);
+
+                    let memory_read = request(read_request(
+                        &mut sequenced,
+                        &mut sequenced_bus,
+                        Z80MicroStep::BusRequest(second_m1),
+                    ));
+                    assert_eq!(memory_read.operation, Z80BusOperation::MemoryRead);
+                    assert_eq!(memory_read.address, 0xC123);
+                    sequenced = roundtrip(sequenced);
+
+                    let internal = sequenced_bus.read_memory(memory_read.address);
+                    let internal = sequenced
+                        .complete_bus_cycle(memory_read.id, Some(internal))
+                        .unwrap();
+                    assert_eq!(internal, Z80MicroStep::InternalCycle { tstates: 1 });
+                    sequenced = roundtrip(sequenced);
+
+                    let after_internal = sequenced.complete_internal_cycle().unwrap();
+                    let retired = if group == 1 {
+                        after_internal
+                    } else {
+                        let write = request(after_internal);
+                        assert_eq!(
+                            write.operation,
+                            Z80BusOperation::MemoryWrite {
+                                value: atomic_bus.memory[0xC123]
+                            }
+                        );
+                        assert_eq!(write.address, 0xC123);
+                        sequenced = roundtrip(sequenced);
+                        sequenced_bus.write_memory(
+                            write.address,
+                            match write.operation {
+                                Z80BusOperation::MemoryWrite { value } => value,
+                                _ => unreachable!(),
+                            },
+                        );
+                        sequenced.complete_bus_cycle(write.id, None).unwrap()
+                    };
+
+                    assert_eq!(
+                        retired,
+                        Z80MicroStep::InstructionRetired {
+                            opcode,
+                            tstates: expected_tstates
+                        },
+                        "sequenced CB {opcode:02X}, operand {operand:02X}"
+                    );
+                    assert_eq!(sequenced.registers.pc, 0);
+                    assert_eq!(sequenced.refresh, 0x80);
+                    assert_eq!(
+                        sequenced.export_architectural_state(),
+                        atomic.export_architectural_state(),
+                        "architectural mismatch for CB {opcode:02X}, operand {operand:02X}"
+                    );
+                    assert_eq!(
+                        sequenced_bus.memory.as_ref(),
+                        atomic_bus.memory.as_ref(),
+                        "memory mismatch for CB {opcode:02X}, operand {operand:02X}"
+                    );
+                    assert_eq!(
+                        sequenced_bus.reads, atomic_bus.reads,
+                        "read trace mismatch for CB {opcode:02X}"
+                    );
+                    assert_eq!(
+                        sequenced_bus.writes, atomic_bus.writes,
+                        "write trace mismatch for CB {opcode:02X}"
+                    );
+                    assert_eq!(sequenced.pending_request(), None);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn cb_hl_wait_states_and_snapshots_preserve_read_internal_and_write_boundaries() {
+        let architectural = state();
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.import_architectural_state(architectural).unwrap();
+        let mut bus = TestBus::default();
+        bus.memory[0xFFFE] = 0xCB;
+        bus.memory[0xFFFF] = 0x06; // RLC (HL)
+        bus.memory[0xC123] = 0x81;
+
+        let first = request(cpu.begin_instruction().unwrap());
+        let second = request(read_request(
+            &mut cpu,
+            &mut bus,
+            Z80MicroStep::BusRequest(first),
+        ));
+        let memory_read = request(read_request(
+            &mut cpu,
+            &mut bus,
+            Z80MicroStep::BusRequest(second),
+        ));
+        cpu = roundtrip(cpu);
+        cpu.insert_wait_tstates(2).unwrap();
+
+        let value = bus.read_memory(memory_read.address);
+        assert_eq!(
+            cpu.complete_bus_cycle(memory_read.id, Some(value)).unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        cpu = roundtrip(cpu);
+        let write_step = cpu.complete_internal_cycle().unwrap();
+        let write = request(write_step);
+        assert_eq!(write.address, 0xC123);
+        assert_eq!(
+            write.operation,
+            Z80BusOperation::MemoryWrite { value: 0x03 }
+        );
+        cpu = roundtrip(cpu);
+        cpu.insert_wait_tstates(3).unwrap();
+        bus.write_memory(write.address, 0x03);
+        assert_eq!(
+            cpu.complete_bus_cycle(write.id, None).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x06,
+                tstates: 20
+            }
+        );
+        assert_eq!(bus.memory[0xC123], 0x03);
+    }
+
+    #[test]
+    fn cb_bit_hl_waits_and_snapshot_restore_retire_after_one_internal_tstate() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.import_architectural_state(state()).unwrap();
+        let mut bus = TestBus::default();
+        bus.memory[0xFFFE] = 0xCB;
+        bus.memory[0xFFFF] = 0x7E; // BIT 7,(HL)
+        bus.memory[0xC123] = 0x80;
+
+        let first = request(cpu.begin_instruction().unwrap());
+        let second = request(read_request(
+            &mut cpu,
+            &mut bus,
+            Z80MicroStep::BusRequest(first),
+        ));
+        let read = request(read_request(
+            &mut cpu,
+            &mut bus,
+            Z80MicroStep::BusRequest(second),
+        ));
+        cpu = roundtrip(cpu);
+        cpu.insert_wait_tstates(2).unwrap();
+        let value = bus.read_memory(read.address);
+        assert_eq!(
+            cpu.complete_bus_cycle(read.id, Some(value)).unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        cpu = roundtrip(cpu);
+        assert_eq!(
+            cpu.complete_internal_cycle().unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x7E,
+                tstates: 14
+            }
+        );
+        assert_eq!(cpu.registers.f & 0xE5, 0xA1);
+        assert!(bus.writes.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod cb_register_differential_tests {
+    use super::{Z80MicroSequencer, Z80MicroStep};
+    use crate::bus::CpuBus;
+    use crate::{Z80, Z80ArchitecturalState, Z80BusOperation, Z80Registers};
+
+    #[derive(Clone)]
+    struct TestBus {
+        memory: Box<[u8; 0x10000]>,
+    }
+
+    impl Default for TestBus {
+        fn default() -> Self {
+            Self {
+                memory: Box::new([0; 0x10000]),
+            }
+        }
+    }
+
+    impl CpuBus for TestBus {
+        fn read_memory(&mut self, address: u16) -> u8 {
+            self.memory[usize::from(address)]
+        }
+
+        fn write_memory(&mut self, address: u16, value: u8) {
+            self.memory[usize::from(address)] = value;
+        }
+    }
+
+    fn request(step: Z80MicroStep) -> crate::Z80BusRequest {
+        match step {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected bus request, got {other:?}"),
+        }
+    }
+
+    fn initial_state(registers: Z80Registers, q: u8) -> Z80ArchitecturalState {
+        Z80ArchitecturalState {
+            registers,
+            alternate: crate::Z80AlternateRegisters::default(),
+            ix: 0x1357,
+            iy: 0x2468,
+            i: 0xA5,
+            r: 0xFE,
+            iff1: false,
+            iff2: false,
+            interrupt_mode: 0,
+            wz: 0xA328,
+            ei_delay: 0,
+            nmi_pending: false,
+            int_pending: None,
+            q,
+            q_previous: 0x5A,
+            p: false,
+            halted: false,
+        }
+    }
+
+    #[test]
+    fn all_56_cb_register_encodings_match_atomic_architecture_and_memory() {
+        for group in 0_u8..4 {
+            for operation in 0_u8..8 {
+                for target in [0_u8, 1, 2, 3, 4, 5, 7] {
+                    let opcode = (group << 6) | (operation << 3) | target;
+                    for (operand, flags, q) in
+                        [(0x00, 0x01, 0x00), (0x81, 0xD7, 0x28), (0x7F, 0xA5, 0x80)]
+                    {
+                        let registers = Z80Registers {
+                            a: operand,
+                            f: flags,
+                            b: operand.rotate_left(1),
+                            c: operand.rotate_right(1),
+                            d: operand ^ 0x55,
+                            e: operand ^ 0xAA,
+                            h: 0x42,
+                            l: 0x19,
+                            pc: 0xFFFE,
+                            sp: 0xD000,
+                        };
+                        let state = initial_state(registers, q);
+                        let mut atomic = Z80::default();
+                        atomic.import_architectural_state(state).unwrap();
+                        let mut atomic_bus = TestBus::default();
+                        atomic_bus.memory[0xFFFE] = 0xCB;
+                        atomic_bus.memory[0xFFFF] = opcode;
+
+                        let mut sequenced = Z80MicroSequencer::default();
+                        sequenced.import_architectural_state(state).unwrap();
+                        assert_eq!(atomic.step(&mut atomic_bus), Ok(8), "opcode {opcode:02X}");
+                        let first_m1 = request(sequenced.begin_instruction().unwrap());
+                        assert_eq!(first_m1.operation, Z80BusOperation::OpcodeFetch);
+                        assert_eq!(first_m1.address, 0xFFFE);
+                        let second = request(
+                            sequenced
+                                .complete_bus_cycle(first_m1.id, Some(0xCB))
+                                .unwrap(),
+                        );
+                        assert_eq!(second.operation, Z80BusOperation::OpcodeFetch);
+                        assert_eq!(second.address, 0xFFFF);
+                        let retired = sequenced
+                            .complete_bus_cycle(second.id, Some(opcode))
+                            .unwrap();
+                        assert_eq!(
+                            retired,
+                            Z80MicroStep::InstructionRetired { opcode, tstates: 8 },
+                            "opcode {opcode:02X}"
+                        );
+
+                        assert_eq!(
+                            sequenced.export_architectural_state(),
+                            atomic.export_architectural_state(),
+                            "architectural mismatch for CB {opcode:02X}"
+                        );
+                        assert_eq!(sequenced.pending_request(), None);
+                        assert_eq!(atomic_bus.memory[0xFFFE], 0xCB);
+                        assert_eq!(atomic_bus.memory[0xFFFF], opcode);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn cb_register_fetch_waits_extend_both_m1_cycles() {
+        let mut cpu = Z80MicroSequencer::default();
+        let first = request(cpu.begin_instruction().unwrap());
+        cpu.insert_wait_tstates(1).unwrap();
+        let second = request(cpu.complete_bus_cycle(first.id, Some(0xCB)).unwrap());
+        cpu.insert_wait_tstates(2).unwrap();
+        assert_eq!(
+            cpu.complete_bus_cycle(second.id, Some(0x00)).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x00,
+                tstates: 11
+            }
+        );
+        assert_eq!(cpu.registers.pc, 2);
+        assert_eq!(cpu.refresh & 0x7F, 2);
+        assert_eq!(cpu.pending_request(), None);
+    }
+
+    #[test]
+    fn cb_memory_encoding_issues_hl_read_after_two_m1_fetches() {
+        let mut cpu = Z80MicroSequencer::default();
+        let first = request(cpu.begin_instruction().unwrap());
+        let second = request(cpu.complete_bus_cycle(first.id, Some(0xCB)).unwrap());
+        assert_eq!(second.address, 1);
+        let read = request(cpu.complete_bus_cycle(second.id, Some(0x06)).unwrap());
+        assert_eq!(read.operation, Z80BusOperation::MemoryRead);
+        assert_eq!(read.address, 0);
+        assert_eq!(cpu.registers.pc, 2);
+        assert_eq!(cpu.refresh & 0x7F, 2);
+        assert!(cpu.instruction_active());
     }
 }

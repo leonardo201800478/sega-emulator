@@ -306,6 +306,26 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u16(address);
             writer.u8(value);
         }
+        Z80MicroSequencerPhase::CbMemoryRead { address } => {
+            writer.u8(12);
+            writer.u16(address);
+        }
+        Z80MicroSequencerPhase::CbMemoryInternal { address, result } => {
+            writer.u8(13);
+            writer.u16(address);
+            match result {
+                None => writer.u8(0),
+                Some(value) => {
+                    writer.u8(1);
+                    writer.u8(value);
+                }
+            }
+        }
+        Z80MicroSequencerPhase::CbMemoryWrite { address, value } => {
+            writer.u8(14);
+            writer.u16(address);
+            writer.u8(value);
+        }
     }
 }
 
@@ -344,6 +364,22 @@ fn read_phase(
             address: reader.u16()?,
         },
         7 => Z80MicroSequencerPhase::MemoryWrite {
+            address: reader.u16()?,
+            value: reader.u8()?,
+        },
+        12 => Z80MicroSequencerPhase::CbMemoryRead {
+            address: reader.u16()?,
+        },
+        13 => {
+            let address = reader.u16()?;
+            let result = if read_bool(reader)? {
+                Some(reader.u8()?)
+            } else {
+                None
+            };
+            Z80MicroSequencerPhase::CbMemoryInternal { address, result }
+        }
+        14 => Z80MicroSequencerPhase::CbMemoryWrite {
             address: reader.u16()?,
             value: reader.u8()?,
         },
@@ -810,5 +846,93 @@ mod tests {
             assert_eq!(restored.pending_request(), Some(read));
             assert_eq!(restored.export_state(), cpu.export_state());
         }
+    }
+
+    #[test]
+    fn cb_memory_read_internal_and_write_phases_round_trip_through_binary_codec() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.registers.set_hl(0xC123);
+        cpu.registers.pc = 0x0100;
+        let first = match cpu.begin_instruction().unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected first M1, got {other:?}"),
+        };
+        let second = match cpu.complete_bus_cycle(first.id, Some(0xCB)).unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected second M1, got {other:?}"),
+        };
+        let read = match cpu.complete_bus_cycle(second.id, Some(0x06)).unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected CB memory read, got {other:?}"),
+        };
+        let read_state = cpu.export_state();
+        assert_eq!(
+            Z80MicroSequencerState::decode(&read_state.encode().unwrap()).unwrap(),
+            read_state
+        );
+
+        assert_eq!(
+            cpu.complete_bus_cycle(read.id, Some(0x81)).unwrap(),
+            crate::Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        let internal_state = cpu.export_state();
+        assert_eq!(
+            Z80MicroSequencerState::decode(&internal_state.encode().unwrap()).unwrap(),
+            internal_state
+        );
+
+        let write = match cpu.complete_internal_cycle().unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected CB memory write, got {other:?}"),
+        };
+        let write_state = cpu.export_state();
+        assert_eq!(
+            Z80MicroSequencerState::decode(&write_state.encode().unwrap()).unwrap(),
+            write_state
+        );
+        let restored = Z80MicroSequencer::restore_state(
+            Z80MicroSequencerState::decode(&write_state.encode().unwrap()).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(restored.pending_request(), Some(write));
+    }
+
+    #[test]
+    fn cb_bit_memory_internal_phase_round_trips_without_write_payload() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.registers.set_hl(0xC123);
+        cpu.registers.pc = 0x0100;
+        let first = match cpu.begin_instruction().unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected first M1, got {other:?}"),
+        };
+        let second = match cpu.complete_bus_cycle(first.id, Some(0xCB)).unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected second M1, got {other:?}"),
+        };
+        let read = match cpu.complete_bus_cycle(second.id, Some(0x46)).unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected BIT memory read, got {other:?}"),
+        };
+        assert_eq!(
+            cpu.complete_bus_cycle(read.id, Some(0x80)).unwrap(),
+            crate::Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        let state = cpu.export_state();
+        assert_eq!(
+            Z80MicroSequencerState::decode(&state.encode().unwrap()).unwrap(),
+            state
+        );
+        let mut restored = Z80MicroSequencer::restore_state(
+            Z80MicroSequencerState::decode(&state.encode().unwrap()).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            restored.complete_internal_cycle().unwrap(),
+            crate::Z80MicroStep::InstructionRetired {
+                opcode: 0x46,
+                tstates: 12
+            }
+        );
     }
 }
