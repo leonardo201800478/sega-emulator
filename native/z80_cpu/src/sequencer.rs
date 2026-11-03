@@ -6832,7 +6832,7 @@ mod ed_block_io_differential_tests {
 
     #[test]
     fn block_io_normal_flags_ports_and_wz_match_documented_edge_vectors() {
-        let cases = [
+        let cases: [(u8, u8, u8, u16, u8, u16, u16, u16, u8); 4] = [
             (0xA2, 0x01, 0xFF, 0x12FF, 0x80, 0x01FF, 0x1300, 0x0200, 0x46),
             (0xAA, 0x01, 0x00, 0x1200, 0x01, 0x0100, 0x11FF, 0x00FF, 0x55),
             (0xA3, 0x01, 0xFE, 0x12FF, 0x80, 0x00FE, 0x1300, 0x00FF, 0x46),
@@ -6892,7 +6892,7 @@ mod ed_block_io_differential_tests {
 
     #[test]
     fn block_io_repeat_flags_cover_half_carry_and_parity_edges() {
-        let cases = [
+        let cases: [(u8, u16, u16, bool, u8); 2] = [
             // INIR: 0xFF + (C+1) carries; repeat-cycle PV clears and H remains set.
             (0xB2, 0x4000, 0x1101, true, 0x33),
             // OTIR: 0xFF + post-increment L carries; repeat-cycle PV sets and H remains set.
