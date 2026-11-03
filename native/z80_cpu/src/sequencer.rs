@@ -81,6 +81,14 @@ pub enum Z80MicroSequencerPhase {
     EdRegisterInternal {
         opcode: u8,
     },
+    EdPortRead {
+        register: u8,
+        address: u16,
+    },
+    EdPortWrite {
+        address: u16,
+        value: u8,
+    },
     MemoryIncDecInternal {
         decrement: bool,
         old: u8,
@@ -455,6 +463,43 @@ impl Z80MicroSequencer {
                     && state.tstate_index >= 4
                     && state.instruction_tstates >= 4 + u32::from(state.tstate_index)
             }
+            Z80MicroSequencerPhase::EdPortRead { register, address } => {
+                state.opcode.is_some_and(|opcode| {
+                    opcode & 0xC7 == 0x40 && register == ((opcode >> 3) & 0x07)
+                }) && pending.is_some_and(|request| {
+                    request.operation == Z80BusOperation::PortRead
+                        && request.address == address
+                        && request.base_tstates == 4
+                }) && address == state.registers.bc()
+                    && state.instruction_tstates >= 8
+            }
+            Z80MicroSequencerPhase::EdPortWrite { address, value } => {
+                let Some(request) = pending else {
+                    return Err(Z80MicroSequencerError::InvalidState);
+                };
+                state.opcode.is_some_and(|opcode| {
+                    opcode & 0xC7 == 0x41
+                        && value
+                            == if (opcode >> 3) & 0x07 == 6 {
+                                0
+                            } else {
+                                match (opcode >> 3) & 0x07 {
+                                    0 => state.registers.b,
+                                    1 => state.registers.c,
+                                    2 => state.registers.d,
+                                    3 => state.registers.e,
+                                    4 => state.registers.h,
+                                    5 => state.registers.l,
+                                    7 => state.registers.a,
+                                    _ => return false,
+                                }
+                            }
+                }) && request.operation == Z80BusOperation::PortWrite { value }
+                    && request.address == address
+                    && request.base_tstates == 4
+                    && address == state.registers.bc()
+                    && state.instruction_tstates >= 8
+            }
             Z80MicroSequencerPhase::MemoryReadIncDec { decrement, address } => {
                 let expected_opcode = if decrement { 0x35 } else { 0x34 };
                 pending.is_some_and(|request| {
@@ -534,6 +579,10 @@ impl Z80MicroSequencer {
                 state.mcycle_index == 1
                     && state.tstate_index >= 4
                     && state.instruction_tstates >= 4 + u32::from(state.tstate_index)
+            }
+            Z80MicroSequencerPhase::EdPortRead { .. }
+            | Z80MicroSequencerPhase::EdPortWrite { .. } => {
+                state.mcycle_index == 2 && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::ImmediateReadRegisterPairHigh { .. } => {
                 state.mcycle_index == 2 && state.tstate_index == 0
@@ -940,6 +989,35 @@ impl Z80MicroSequencer {
                 self.execute_ed_register_internal(opcode);
                 self.retire(opcode)
             }
+            Z80MicroSequencerPhase::EdPortRead { register, address } => {
+                let value = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                if register != 6 {
+                    self.write_register(register, value);
+                }
+                let mut flags =
+                    (self.registers.f & FLAG_C) | (value & (FLAG_S | FLAG_XY));
+                if value == 0 {
+                    flags |= FLAG_Z;
+                }
+                if value.count_ones().is_multiple_of(2) {
+                    flags |= FLAG_PV;
+                }
+                self.set_flags(flags);
+                self.wz = address.wrapping_add(1);
+                self.retire(
+                    self.opcode
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
+                )
+            }
+            Z80MicroSequencerPhase::EdPortWrite { address, .. } => {
+                self.wz = address.wrapping_add(1);
+                self.retire(
+                    self.opcode
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
+                )
+            }
             Z80MicroSequencerPhase::MemoryReadIncDec { decrement, address } => {
                 let old = response
                     .data
@@ -1085,6 +1163,18 @@ impl Z80MicroSequencer {
                 self.tstate_index = wait_offset;
                 self.phase = Z80MicroSequencerPhase::EdRegisterInternal { opcode };
                 Ok(Z80MicroStep::InternalCycle { tstates: 1 })
+            }
+            op if op & 0xC7 == 0x40 => {
+                self.issue_ed_port_read((opcode >> 3) & 0x07)
+            }
+            op if op & 0xC7 == 0x41 => {
+                let register = (opcode >> 3) & 0x07;
+                let value = if register == 6 {
+                    0
+                } else {
+                    self.read_register(register)
+                };
+                self.issue_ed_port_write(value)
             }
             _ => self.unsupported(opcode),
         }
@@ -1311,6 +1401,42 @@ impl Z80MicroSequencer {
         self.mcycle_index = next_mcycle_index;
         self.tstate_index = 0;
         self.phase = phase;
+        Ok(Z80MicroStep::BusRequest(request))
+    }
+
+    fn issue_ed_port_read(
+        &mut self,
+        register: u8,
+    ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
+        let address = self.registers.bc();
+        let next_mcycle_index = self
+            .mcycle_index
+            .checked_add(1)
+            .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+        let request = self
+            .handshake
+            .begin(Z80BusOperation::PortRead, address, 4)?;
+        self.mcycle_index = next_mcycle_index;
+        self.tstate_index = 0;
+        self.phase = Z80MicroSequencerPhase::EdPortRead { register, address };
+        Ok(Z80MicroStep::BusRequest(request))
+    }
+
+    fn issue_ed_port_write(
+        &mut self,
+        value: u8,
+    ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
+        let address = self.registers.bc();
+        let next_mcycle_index = self
+            .mcycle_index
+            .checked_add(1)
+            .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+        let request = self
+            .handshake
+            .begin(Z80BusOperation::PortWrite { value }, address, 4)?;
+        self.mcycle_index = next_mcycle_index;
+        self.tstate_index = 0;
+        self.phase = Z80MicroSequencerPhase::EdPortWrite { address, value };
         Ok(Z80MicroStep::BusRequest(request))
     }
 
