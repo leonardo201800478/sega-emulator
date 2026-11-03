@@ -1513,7 +1513,9 @@ impl Z80MicroSequencer {
                 let high = response.data.ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 self.registers.pc = self.registers.pc.wrapping_add(1);
                 let address = u16::from_le_bytes([low, high]);
-                let opcode = self.opcode.ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                let opcode = self
+                    .opcode
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 match opcode {
                     0x22 => self.issue_base_absolute_write(address, self.registers.l, 2, 0),
                     0x32 => self.issue_base_absolute_write(address, self.registers.a, 2, 0),
@@ -1543,14 +1545,20 @@ impl Z80MicroSequencer {
                         )
                     }
                     0x3A => {
-                        self.registers.a = response.data.ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                        self.registers.a = response
+                            .data
+                            .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                         self.wz = address.wrapping_add(1);
                         self.retire(opcode)
                     }
                     _ => Err(Z80MicroSequencerError::UnexpectedCompletion),
                 }
             }
-            Z80MicroSequencerPhase::BaseAbsoluteTransfer { stage: 3, address, low } => {
+            Z80MicroSequencerPhase::BaseAbsoluteTransfer {
+                stage: 3,
+                address,
+                low,
+            } => {
                 let opcode = self.opcode.ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 match opcode {
                     0x22 => {
@@ -1558,7 +1566,9 @@ impl Z80MicroSequencer {
                         self.retire(opcode)
                     }
                     0x2A => {
-                        let high = response.data.ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                        let high = response
+                            .data
+                            .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                         self.registers.set_hl(u16::from_le_bytes([low, high]));
                         self.wz = address.wrapping_add(1);
                         self.retire(opcode)
@@ -3003,7 +3013,11 @@ impl Z80MicroSequencer {
         self.tstate_index = 0;
         self.phase = Z80MicroSequencerPhase::BaseAbsoluteTransfer {
             stage,
-            address: if stage == 2 { address } else { address.wrapping_sub(1) },
+            address: if stage == 2 {
+                address
+            } else {
+                address.wrapping_sub(1)
+            },
             low,
         };
         Ok(Z80MicroStep::BusRequest(request))
@@ -7534,7 +7548,7 @@ mod base_16bit_register_differential_tests {
         }
     }
 }
- 
+
 #[cfg(test)]
 mod base_absolute_transfer_differential_tests {
     use super::{Z80MicroSequencer, Z80MicroStep};
@@ -7548,7 +7562,9 @@ mod base_absolute_transfer_differential_tests {
 
     impl Default for TestBus {
         fn default() -> Self {
-            Self { memory: Box::new([0; 0x1_0000]) }
+            Self {
+                memory: Box::new([0; 0x1_0000]),
+            }
         }
     }
 
@@ -7613,7 +7629,10 @@ mod base_absolute_transfer_differential_tests {
         }
     }
 
-    fn run_sequencer(mut cpu: Z80MicroSequencer, bus: &mut TestBus) -> (Z80ArchitecturalState, u32) {
+    fn run_sequencer(
+        mut cpu: Z80MicroSequencer,
+        bus: &mut TestBus,
+    ) -> (Z80ArchitecturalState, u32) {
         let mut step = cpu.begin_instruction().unwrap();
         for _ in 0..16 {
             step = match step {
@@ -7664,11 +7683,23 @@ mod base_absolute_transfer_differential_tests {
             let (micro_state, micro_tstates) = run_sequencer(micro, &mut micro_bus);
 
             assert_eq!(micro_tstates, atomic_tstates, "opcode {opcode:02X}");
-            assert_eq!(micro_state, atomic.export_architectural_state(),
-                "architectural mismatch for opcode {opcode:02X}");
-            assert_eq!(micro_bus.memory, atomic_bus.memory,
-                "memory mismatch for opcode {opcode:02X}");
-            assert_eq!(atomic_tstates, if matches!(opcode, 0x22 | 0x2A) { 16 } else { 13 });
+            assert_eq!(
+                micro_state,
+                atomic.export_architectural_state(),
+                "architectural mismatch for opcode {opcode:02X}"
+            );
+            assert_eq!(
+                micro_bus.memory, atomic_bus.memory,
+                "memory mismatch for opcode {opcode:02X}"
+            );
+            assert_eq!(
+                atomic_tstates,
+                if matches!(opcode, 0x22 | 0x2A) {
+                    16
+                } else {
+                    13
+                }
+            );
         }
     }
 }
