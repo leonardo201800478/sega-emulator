@@ -949,8 +949,8 @@ mod tests {
     }
 
     #[test]
-    fn overflow_keeps_completed_m1_fetch_for_snapshot_restore_and_retry() {
-        let mut machine = SmsTemporalMachine::new(vec![0x00; 0x4000], 3).unwrap();
+    fn unsupported_decode_keeps_completed_m1_for_snapshot_restore_and_retry() {
+        let mut machine = SmsTemporalMachine::new(vec![0xFF; 0x4000], 3).unwrap();
         machine.begin_instruction().unwrap();
 
         // Advance T1, T2, and T3. The opcode is sampled at T3 completion;
@@ -964,14 +964,10 @@ mod tests {
         }
         machine.schedule_pending_bus(0).unwrap();
 
-        let mut state = machine.export_state();
-        state.cpu.instruction_tstates = u32::MAX - 2;
-        // Fault-inject the CPU counter while preserving the already scheduled T4.
-        machine.cpu = Z80MicroSequencer::restore_state(state.cpu).unwrap();
         assert!(matches!(
             machine.dispatch_next(),
             Err(SmsTemporalMachineError::Cpu(
-                Z80MicroSequencerError::InstructionTStateOverflow
+                Z80MicroSequencerError::UnsupportedOpcode { opcode: 0xFF, .. }
             ))
         ));
         let completed_m1 = machine.export_state();
@@ -993,7 +989,7 @@ mod tests {
         assert!(matches!(
             restored.resume_instruction(0),
             Err(SmsTemporalMachineError::Cpu(
-                Z80MicroSequencerError::InstructionTStateOverflow
+                Z80MicroSequencerError::UnsupportedOpcode { opcode: 0xFF, .. }
             ))
         ));
     }
