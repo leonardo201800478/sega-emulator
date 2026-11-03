@@ -3197,7 +3197,10 @@ mod tests {
             assert_eq!(cpu.registers.f, old_flags);
 
             let state = cpu.export_state();
-            assert_eq!(state.active_index, Some(Z80IndexRegister::from_prefix(prefix).unwrap()));
+            assert_eq!(
+                state.active_index,
+                Some(Z80IndexRegister::from_prefix(prefix).unwrap())
+            );
             assert_eq!(state.opcode, Some(opcode));
             assert_eq!(state.mcycle_index, 2);
             assert_eq!(state.tstate_index, 0);
