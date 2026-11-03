@@ -159,8 +159,7 @@ impl SmsTemporalM1 {
             .is_some_and(|id| id >= state.next_continuation_id)
             || state.pending_continuation_id.is_some() != state.pending_deadline.is_some()
             || (state.pending_continuation_id.is_some()
-                && (state.cycle.phase == Z80M1Phase::Complete
-                    || (state.cycle.phase == Z80M1Phase::T3 && state.cycle.opcode.is_none())))
+                && state.cycle.phase == Z80M1Phase::Complete)
         {
             return Err(SmsTemporalM1Error::EventMismatch);
         }
