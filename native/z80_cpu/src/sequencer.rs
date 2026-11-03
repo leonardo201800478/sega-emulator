@@ -3248,6 +3248,9 @@ impl Z80MicroSequencer {
 
     fn retire(&mut self, opcode: u8) -> Result<Z80MicroStep, Z80MicroSequencerError> {
         let tstates = self.instruction_tstates;
+        if self.ei_delay > 0 && opcode != 0xFB {
+            self.ei_delay -= 1;
+        }
         self.phase = Z80MicroSequencerPhase::Ready;
         self.opcode = None;
         self.instruction_tstates = 0;
@@ -7986,6 +7989,7 @@ mod base_relative_branch_differential_tests {
         initial.registers.pc = 0x1000;
         initial.registers.b = b;
         initial.registers.f = flags;
+        initial.ei_delay = 1;
         initial.wz = 0xA328;
 
         let mut atomic_bus = TestBus::default();
