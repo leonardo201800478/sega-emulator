@@ -664,9 +664,7 @@ impl Z80MicroSequencer {
                     }
                     && state.instruction_tstates >= 8 + u32::from(7 - remaining_tstates)
                     && index_prefix.is_none_or(|prefix| {
-                        state.instruction_tstates >= 9
-                            && state.registers.pc >= 2
-                            && matches!(prefix, 0xDD | 0xFD)
+                        state.registers.pc >= 2 && matches!(prefix, 0xDD | 0xFD)
                     })
             }
             Z80MicroSequencerPhase::EdReturn { stage, low } => {
