@@ -1855,3 +1855,95 @@ mod base_call_rst_snapshot_tests {
         assert!(Z80MicroSequencer::restore_state(invalid).is_err());
     }
 }
+
+
+#[cfg(test)]
+mod base_return_snapshot_tests {
+    use crate::{Z80MicroSequencer, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep};
+
+    fn round_trip(cpu: &Z80MicroSequencer) -> Z80MicroSequencer {
+        let state = cpu.export_state();
+        let encoded = state.encode().unwrap();
+        let decoded = Z80MicroSequencerState::decode(&encoded).unwrap();
+        assert_eq!(decoded, state);
+        Z80MicroSequencer::restore_state(decoded).unwrap()
+    }
+
+    #[test]
+    fn conditional_return_internal_and_stack_read_boundaries_round_trip() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.registers.pc = 0x1000;
+        cpu.registers.sp = 0x2000;
+        cpu.registers.f = 0x00;
+        let fetch = match cpu.begin_instruction().unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected opcode fetch, got {other:?}"),
+        };
+        assert_eq!(
+            cpu.complete_bus_cycle(fetch.id, Some(0xC0)).unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        cpu = round_trip(&cpu);
+        let low_read = match cpu.complete_internal_cycle().unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected return low-byte read, got {other:?}"),
+        };
+        cpu = round_trip(&cpu);
+        let high_read = match cpu.complete_bus_cycle(low_read.id, Some(0x34)).unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected return high-byte read, got {other:?}"),
+        };
+        cpu = round_trip(&cpu);
+        assert_eq!(
+            cpu.complete_bus_cycle(high_read.id, Some(0x12)).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xC0,
+                tstates: 11,
+            }
+        );
+        assert_eq!(cpu.registers.pc, 0x1234);
+        assert_eq!(cpu.wz, 0x1234);
+        assert_eq!(cpu.registers.sp, 0x2002);
+    }
+
+    #[test]
+    fn not_taken_conditional_return_round_trips_and_retires_after_five_tstates() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.registers.pc = 0x1000;
+        cpu.registers.f = 0x40;
+        let fetch = match cpu.begin_instruction().unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected opcode fetch, got {other:?}"),
+        };
+        assert_eq!(
+            cpu.complete_bus_cycle(fetch.id, Some(0xC0)).unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        cpu = round_trip(&cpu);
+        assert_eq!(
+            cpu.complete_internal_cycle().unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xC0,
+                tstates: 5,
+            }
+        );
+        assert_eq!(cpu.registers.pc, 0x1001);
+    }
+
+    #[test]
+    fn return_restore_rejects_condition_mismatch() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.registers.pc = 0x1000;
+        cpu.registers.sp = 0x2000;
+        cpu.registers.f = 0x00;
+        let fetch = match cpu.begin_instruction().unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected opcode fetch, got {other:?}"),
+        };
+        let _ = cpu.complete_bus_cycle(fetch.id, Some(0xC0)).unwrap();
+        let mut invalid = cpu.export_state();
+        invalid.phase = Z80MicroSequencerPhase::BaseReturnPop { stage: 0, low: 0 };
+        invalid.registers.f = 0x40;
+        assert!(Z80MicroSequencer::restore_state(invalid).is_err());
+    }
+}
