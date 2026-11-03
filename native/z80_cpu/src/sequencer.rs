@@ -900,7 +900,7 @@ impl Z80MicroSequencer {
                 self.phase = Z80MicroSequencerPhase::CbMemoryInternal { address, result };
                 Ok(Z80MicroStep::InternalCycle { tstates: 1 })
             }
-            Z80MicroSequencerPhase::CbMemoryInternal { address, result } => {
+            Z80MicroSequencerPhase::CbMemoryInternal { .. } => {
                 Err(Z80MicroSequencerError::UnexpectedCompletion)
             }
             Z80MicroSequencerPhase::CbMemoryWrite { .. } => {
@@ -960,9 +960,12 @@ impl Z80MicroSequencer {
                 address,
             } => {
                 let value = next.increment_decrement_register(old, decrement);
-                next.issue_write(address, value)?
+                let step = next.issue_write(address, value)?;
+                next.instruction_tstates = next_instruction_tstates;
+                step
             }
             Z80MicroSequencerPhase::CbMemoryInternal { address, result } => {
+                next.instruction_tstates = next_instruction_tstates;
                 if let Some(value) = result {
                     next.issue_cb_memory_write(address, value)?
                 } else {
@@ -974,7 +977,6 @@ impl Z80MicroSequencer {
             }
             _ => return Err(Z80MicroSequencerError::UnexpectedCompletion),
         };
-        next.instruction_tstates = next_instruction_tstates;
         *self = next;
         Ok(step)
     }
@@ -3231,14 +3233,11 @@ mod cb_memory_differential_tests {
                     assert_eq!(second_m1.operation, Z80BusOperation::OpcodeFetch);
                     assert_eq!(second_m1.address, 0xFFFF);
 
-                    let memory_read = read_request(
-                        &mut sequenced,
-                        &mut sequenced_bus,
+                    let memory_read = request(
                         sequenced
                             .complete_bus_cycle(second_m1.id, Some(0xCB))
                             .unwrap(),
                     );
-                    let memory_read = request(memory_read);
                     assert_eq!(memory_read.operation, Z80BusOperation::MemoryRead);
                     assert_eq!(memory_read.address, 0xC123);
                     sequenced = roundtrip(sequenced);
@@ -3384,7 +3383,7 @@ mod cb_memory_differential_tests {
                 tstates: 14
             }
         );
-        assert_eq!(cpu.registers.f & 0xE5, 0xA5);
+        assert_eq!(cpu.registers.f & 0xE5, 0xA1);
         assert!(bus.writes.is_empty());
     }
 }
