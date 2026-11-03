@@ -2,7 +2,7 @@
 //!
 //! These are project-local synthetic invariants, not independent hardware
 //! oracles and not evidence of microsequencer or cycle-accurate correctness.
-use sega_z80_cpu::{bus::CpuBus, Z80};
+use sega_z80_cpu::{Z80, bus::CpuBus};
 
 #[derive(Clone)]
 struct FlatBus {
@@ -123,7 +123,6 @@ fn signed_index_displacement_wraps_the_effective_address() {
     assert_eq!(cpu.wz, 0xFFFF);
     assert_eq!(cpu.registers.pc, 3);
 }
-
 
 #[test]
 fn alternating_index_prefixes_select_the_last_index_register() {
