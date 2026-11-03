@@ -47,6 +47,8 @@ class SMSMachine:
             raise ValueError(
                 "cartridge_ram_size e sram_path devem ser informados juntos."
             )
+        if sram_path is not None and not isinstance(sram_path, (str, Path)):
+            raise TypeError("sram_path deve ser str ou Path.")
         resolved_sram_path = (
             str(Path(sram_path).expanduser()) if sram_path is not None else None
         )
