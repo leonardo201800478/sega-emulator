@@ -31,6 +31,14 @@ fn stack_pair_value(registers: &Z80Registers, opcode: u8) -> Option<u16> {
     }
 }
 
+fn is_call_opcode(opcode: u8) -> bool {
+    matches!(opcode, 0xCD | 0xC4 | 0xCC | 0xD4 | 0xDC | 0xE4 | 0xEC | 0xF4 | 0xFC)
+}
+
+fn is_rst_opcode(opcode: u8) -> bool {
+    opcode & 0xC7 == 0xC7
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Z80MicroSequencerError {
     Handshake(Z80BusHandshakeError),
@@ -87,6 +95,20 @@ pub enum Z80MicroSequencerPhase {
     },
     BaseStackPop {
         stage: u8,
+        low: u8,
+    },
+    BaseCallImmediate {
+        stage: u8,
+        low: u8,
+    },
+    BaseControlPushInternal {
+        target: u16,
+        high: u8,
+        low: u8,
+    },
+    BaseControlPushWrite {
+        stage: u8,
+        target: u16,
         low: u8,
     },
     ImmediateReadMemoryWrite,
@@ -244,6 +266,7 @@ impl Z80MicroSequencerPhase {
                 | Self::BaseInternal { .. }
                 | Self::BaseRelativeBranchInternal { .. }
                 | Self::BaseStackPushInternal { .. }
+                | Self::BaseControlPushInternal { .. }
                 | Self::MemoryIncDecInternal { .. }
         )
     }
@@ -575,6 +598,96 @@ impl Z80MicroSequencer {
                         1 => state.instruction_tstates >= 7,
                         _ => false,
                     }
+            }
+            Z80MicroSequencerPhase::BaseCallImmediate { stage, low } => {
+                state.opcode.is_some_and(is_call_opcode)
+                    && stage <= 1
+                    && pending.is_some_and(|request| {
+                        request.operation == Z80BusOperation::MemoryRead
+                            && request.address == state.registers.pc
+                            && request.base_tstates == 3
+                    })
+                    && match stage {
+                        0 => low == 0 && state.instruction_tstates >= 4,
+                        1 => state.instruction_tstates >= 7,
+                        _ => false,
+                    }
+            }
+            Z80MicroSequencerPhase::BaseControlPushInternal {
+                target,
+                high,
+                low,
+            } => {
+                let opcode = state.opcode;
+                let is_call = opcode.is_some_and(is_call_opcode);
+                let is_rst = opcode.is_some_and(is_rst_opcode);
+                let target_valid = match opcode {
+                    Some(opcode) if is_call_opcode(opcode) => state.wz == target,
+                    Some(opcode) if is_rst_opcode(opcode) => target == u16::from(opcode & 0x38),
+                    _ => false,
+                };
+                let return_bytes = state.registers.pc.to_be_bytes();
+                (is_call || is_rst)
+                    && target_valid
+                    && high == return_bytes[0]
+                    && low == return_bytes[1]
+                    && pending.is_none()
+                    && if is_call {
+                        state.mcycle_index == 2
+                            && state.tstate_index == 3
+                            && state.instruction_tstates >= 10
+                    } else {
+                        state.mcycle_index == 0
+                            && state.tstate_index == 4
+                            && state.instruction_tstates >= 4
+                    }
+            }
+            Z80MicroSequencerPhase::BaseControlPushWrite {
+                stage,
+                target,
+                low,
+            } => {
+                let opcode = state.opcode;
+                let is_call = opcode.is_some_and(is_call_opcode);
+                let is_rst = opcode.is_some_and(is_rst_opcode);
+                let target_valid = match opcode {
+                    Some(opcode) if is_call_opcode(opcode) => state.wz == target,
+                    Some(opcode) if is_rst_opcode(opcode) => target == u16::from(opcode & 0x38),
+                    _ => false,
+                };
+                let return_bytes = state.registers.pc.to_be_bytes();
+                let expected_value = if stage == 0 {
+                    return_bytes[0]
+                } else {
+                    return_bytes[1]
+                };
+                (is_call || is_rst)
+                    && stage <= 1
+                    && target_valid
+                    && low == return_bytes[1]
+                    && pending.is_some_and(|request| {
+                        matches!(
+                            request.operation,
+                            Z80BusOperation::MemoryWrite { value } if value == expected_value
+                        ) && request.address == state.registers.sp
+                            && request.base_tstates == 3
+                    })
+                    && if is_call {
+                        state.mcycle_index == 3 + u32::from(stage)
+                            && state.instruction_tstates >= 11 + u32::from(stage) * 3
+                    } else {
+                        state.mcycle_index == 1 + u32::from(stage)
+                            && state.instruction_tstates >= 5 + u32::from(stage) * 3
+                    }
+            }
+            Z80MicroSequencerPhase::BaseControlPushInternal {
+                target,
+                high,
+                low,
+            } => {
+                next.instruction_tstates = next_instruction_tstates;
+                next.registers.sp = next.registers.sp.wrapping_sub(1);
+                next.issue_base_control_push_write(0, target, low, next.registers.sp, high)?
             }
             Z80MicroSequencerPhase::BaseStackPushInternal { high, low } => {
                 let opcode_matches = state
@@ -1242,6 +1355,36 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::BaseAbsoluteTransfer { stage, .. } => {
                 state.mcycle_index == 1 + u32::from(stage) && state.tstate_index == 0
             }
+            Z80MicroSequencerPhase::BaseCallImmediate { stage, .. } => {
+                stage <= 1
+                    && state.mcycle_index == 1 + u32::from(stage)
+                    && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::BaseControlPushInternal { .. } => {
+                match state.opcode {
+                    Some(opcode) if is_call_opcode(opcode) => {
+                        state.mcycle_index == 2 && state.tstate_index == 3
+                    }
+                    Some(opcode) if is_rst_opcode(opcode) => {
+                        state.mcycle_index == 0 && state.tstate_index == 4
+                    }
+                    _ => false,
+                }
+            }
+            Z80MicroSequencerPhase::BaseControlPushWrite { stage, .. } => {
+                stage <= 1
+                    && match state.opcode {
+                        Some(opcode) if is_call_opcode(opcode) => {
+                            state.mcycle_index == 3 + u32::from(stage)
+                                && state.tstate_index == 0
+                        }
+                        Some(opcode) if is_rst_opcode(opcode) => {
+                            state.mcycle_index == 1 + u32::from(stage)
+                                && state.tstate_index == 0
+                        }
+                        _ => false,
+                    }
+            }
             Z80MicroSequencerPhase::BaseStackPushInternal { .. } => {
                 state.mcycle_index == 0 && state.tstate_index == 4
             }
@@ -1571,6 +1714,24 @@ impl Z80MicroSequencer {
                             Z80MicroSequencerPhase::BaseAbsoluteJump { stage: 0, low: 0 },
                             self.registers.pc,
                         ),
+                    0xCD | 0xC4 | 0xCC | 0xD4 | 0xDC | 0xE4 | 0xEC | 0xF4 | 0xFC => {
+                        self.issue_read(
+                            Z80MicroSequencerPhase::BaseCallImmediate { stage: 0, low: 0 },
+                            self.registers.pc,
+                        )
+                    }
+                    opcode if is_rst_opcode(opcode) => {
+                        let target = u16::from(opcode & 0x38);
+                        let [high, low] = self.registers.pc.to_be_bytes();
+                        self.mcycle_index = 0;
+                        self.tstate_index = 4;
+                        self.phase = Z80MicroSequencerPhase::BaseControlPushInternal {
+                            target,
+                            high,
+                            low,
+                        };
+                        Ok(Z80MicroStep::InternalCycle { tstates: 1 })
+                    }
                     0xC5 | 0xD5 | 0xE5 | 0xF5 => {
                         let value = stack_pair_value(&self.registers, opcode)
                             .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
@@ -1845,6 +2006,66 @@ impl Z80MicroSequencer {
                 self.retire(opcode)
             }
             Z80MicroSequencerPhase::BaseAbsoluteJump { .. } => {
+                Err(Z80MicroSequencerError::UnexpectedCompletion)
+            }
+            Z80MicroSequencerPhase::BaseCallImmediate { stage: 0, .. } => {
+                let low = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.registers.pc = self.registers.pc.wrapping_add(1);
+                self.issue_read(
+                    Z80MicroSequencerPhase::BaseCallImmediate { stage: 1, low },
+                    self.registers.pc,
+                )
+            }
+            Z80MicroSequencerPhase::BaseCallImmediate { stage: 1, low } => {
+                let high = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.registers.pc = self.registers.pc.wrapping_add(1);
+                let target = u16::from_le_bytes([low, high]);
+                let opcode = self
+                    .opcode
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.wz = target;
+                if opcode != 0xCD && !self.condition((opcode >> 3) & 0x07) {
+                    self.retire(opcode)
+                } else {
+                    let [high, low] = self.registers.pc.to_be_bytes();
+                    self.mcycle_index = 2;
+                    self.tstate_index = 3;
+                    self.phase = Z80MicroSequencerPhase::BaseControlPushInternal {
+                        target,
+                        high,
+                        low,
+                    };
+                    Ok(Z80MicroStep::InternalCycle { tstates: 1 })
+                }
+            }
+            Z80MicroSequencerPhase::BaseCallImmediate { .. } => {
+                Err(Z80MicroSequencerError::UnexpectedCompletion)
+            }
+            Z80MicroSequencerPhase::BaseControlPushWrite {
+                stage: 0,
+                target,
+                low,
+            } => {
+                self.registers.sp = self.registers.sp.wrapping_sub(1);
+                self.issue_base_control_push_write(1, target, low, self.registers.sp, low)
+            }
+            Z80MicroSequencerPhase::BaseControlPushWrite {
+                stage: 1,
+                target,
+                ..
+            } => {
+                let opcode = self
+                    .opcode
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.registers.pc = target;
+                self.wz = target;
+                self.retire(opcode)
+            }
+            Z80MicroSequencerPhase::BaseControlPushWrite { .. } => {
                 Err(Z80MicroSequencerError::UnexpectedCompletion)
             }
             Z80MicroSequencerPhase::BaseStackPushWrite { stage: 0, low } => {
@@ -2361,6 +2582,7 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::BaseInternal { .. }
             | Z80MicroSequencerPhase::BaseRelativeBranchInternal { .. }
             | Z80MicroSequencerPhase::BaseStackPushInternal { .. }
+            | Z80MicroSequencerPhase::BaseControlPushInternal { .. }
             | Z80MicroSequencerPhase::MemoryIncDecInternal { .. } => {
                 Err(Z80MicroSequencerError::UnexpectedCompletion)
             }
@@ -3034,6 +3256,19 @@ impl Z80MicroSequencer {
             _ => return Err(Z80MicroSequencerError::UnexpectedCompletion),
         }
         Ok(())
+    }
+
+    fn issue_base_control_push_write(
+        &mut self,
+        stage: u8,
+        target: u16,
+        low: u8,
+        address: u16,
+        value: u8,
+    ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
+        let step = self.issue_write(address, value)?;
+        self.phase = Z80MicroSequencerPhase::BaseControlPushWrite { stage, target, low };
+        Ok(step)
     }
 
     fn issue_base_stack_push_write(
