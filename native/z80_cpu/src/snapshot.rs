@@ -188,9 +188,18 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u8(destination);
         }
         Z80MicroSequencerPhase::ImmediateReadMemoryWrite => writer.u8(3),
+        Z80MicroSequencerPhase::ImmediateReadAlu { operation } => {
+            writer.u8(8);
+            writer.u8(operation);
+        }
         Z80MicroSequencerPhase::MemoryReadRegister { destination } => {
             writer.u8(4);
             writer.u8(destination);
+        }
+        Z80MicroSequencerPhase::MemoryReadAlu { operation, address } => {
+            writer.u8(9);
+            writer.u8(operation);
+            writer.u16(address);
         }
         Z80MicroSequencerPhase::MemoryReadIncDec { decrement, address } => {
             writer.u8(5);
@@ -225,8 +234,15 @@ fn read_phase(
             destination: reader.u8()?,
         },
         3 => Z80MicroSequencerPhase::ImmediateReadMemoryWrite,
+        8 => Z80MicroSequencerPhase::ImmediateReadAlu {
+            operation: reader.u8()?,
+        },
         4 => Z80MicroSequencerPhase::MemoryReadRegister {
             destination: reader.u8()?,
+        },
+        9 => Z80MicroSequencerPhase::MemoryReadAlu {
+            operation: reader.u8()?,
+            address: reader.u16()?,
         },
         5 => Z80MicroSequencerPhase::MemoryReadIncDec {
             decrement: read_bool(reader)?,
@@ -599,5 +615,27 @@ mod tests {
             Z80MicroSequencerState::decode(&encoded),
             Err(Z80MicroSequencerStateCodecError::InvalidState)
         );
+    }
+
+    #[test]
+    fn pending_alu_operand_phases_round_trip_through_snapshot_codec() {
+        for opcode in [0xC6, 0x86] {
+            let mut cpu = Z80MicroSequencer::default();
+            cpu.registers.set_hl(0xC123);
+            let fetch = match cpu.begin_instruction().unwrap() {
+                crate::Z80MicroStep::BusRequest(request) => request,
+                other => panic!("expected fetch request, got {other:?}"),
+            };
+            let read = match cpu.complete_bus_cycle(fetch.id, Some(opcode)).unwrap() {
+                crate::Z80MicroStep::BusRequest(request) => request,
+                other => panic!("expected operand request, got {other:?}"),
+            };
+            cpu.insert_wait_tstate().unwrap();
+            let encoded = cpu.export_state().encode().unwrap();
+            let decoded = crate::Z80MicroSequencerState::decode(&encoded).unwrap();
+            let restored = Z80MicroSequencer::restore_state(decoded).unwrap();
+            assert_eq!(restored.pending_request(), Some(read));
+            assert_eq!(restored.export_state(), cpu.export_state());
+        }
     }
 }
