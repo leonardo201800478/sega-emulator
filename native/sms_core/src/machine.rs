@@ -458,10 +458,8 @@ mod tests {
         use crate::SmsCartridgeRamFile;
         use std::fs;
 
-        let path = std::env::temp_dir().join(format!(
-            "sega-sms-machine-sram-{}.srm",
-            std::process::id()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("sega-sms-machine-sram-{}.srm", std::process::id()));
         let _ = fs::remove_file(&path);
         let save_file = SmsCartridgeRamFile::new(&path);
         let mut machine = SmsMachine::with_cartridge_ram(
