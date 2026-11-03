@@ -2,8 +2,8 @@
 
 **Data:** 2026-11-03  
 **Baseline main de entrada:** `bcc7ef7954bd8cadd148b22c464260810ff63fb3` (após PR #466 e PR #469)  
-**Candidato funcional:** `5cc45b9150006f3a53beb1493dc5bcc4be3965ae` — PR #470  
-**CI do candidato:** [run 41727716404](https://github.com/leonardo201800478/sega-emulator/actions/runs/41727716404), 4/4 workflows PASS  
+**Candidato funcional de código:** `5cc45b9150006f3a53beb1493dc5bcc4be3965ae`; **candidato final sincronizado/documentado:** `c102f0b3e1e49b68b7961d4847c0886aa77932d5` — PR #470  
+**CI:** [run 41727716404](https://github.com/leonardo201800478/sega-emulator/actions/runs/41727716404) no candidato de código e [run 41728166513](https://github.com/leonardo201800478/sega-emulator/actions/runs/41728166513) no candidato final sincronizado; ambos 4/4 workflows PASS  
 **Escopo:** microsequenciador compartilhado em `native/z80_cpu/src/sequencer.rs`. Não representa fechamento integral do Z80 nem integração temporal completa SMS/SG-1000.
 
 ## 1. Instruções e semântica implementadas
@@ -52,7 +52,7 @@ Os tempos nominais acima seguem o Zilog *Z80 CPU User Manual* UM008011-0816: tra
 | Windows x64 — WASAPI/XAudio2/audio | PASS |
 | Scheduler deterministic stress | PASS |
 
-Todos os resultados acima pertencem ao mesmo candidato `5cc45b9150006f3a53beb1493dc5bcc4be3965ae` e ao workflow [41727716404](https://github.com/leonardo201800478/sega-emulator/actions/runs/41727716404).
+Os testes de código foram executados no candidato `5cc45b9150006f3a53beb1493dc5bcc4be3965ae`; a execução integral foi repetida após sincronização com a main e atualização documental no candidato `c102f0b3e1e49b68b7961d4847c0886aa77932d5`. Ambos os workflows concluíram 4/4 PASS.
 
 ## 5. Limites e estado formal
 

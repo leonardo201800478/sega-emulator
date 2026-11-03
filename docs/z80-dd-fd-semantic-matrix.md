@@ -1,4 +1,4 @@
-# Matriz semântica DD/FD do Z80 — E1
+# Matriz semântica DD/FD do Z80 — estado após E3A2
 
 **Data:** 2026-11-03  
 **Baseline auditada:** `main` — `bcc7ef7954bd8cadd148b22c464260810ff63fb3`  
@@ -96,21 +96,21 @@ O decoder atômico classifica os 256 subopcodes para IX e IY e tem teste exausti
 
 **BIT é read-only:** o handler não deve emitir write-back. Rotação/deslocamento, RES e SET são operações read-modify-write. O campo z controla a cópia adicional para registrador nas operações x=0,2,3; z=6 não seleciona registrador adicional.
 
-## 6. Estado arquitetural e snapshot — situação E1
+## 6. Estado arquitetural e snapshot — estado após E3A2
 
 | Estado / recurso | Executor atômico | Microsequenciador DD/FD |
 |---|---|---|
-| IX/IY | Campos arquiteturais existentes | Campos de estado existem, mas sem instruções indexadas |
-| IXH/IXL/IYH/IYL | Acesso por helper de registrador indexado | Sem decode funcional |
-| PC / SP / wraparound | Handlers existentes; cobertura por família precisa ser ampliada | Prefix fetch atualiza PC; instrução indexada não chega ao commit |
-| Flags S/Z/H/PV/N/C e X/Y | Helpers e handlers existentes; não equivalem a validação independente | Sem efeitos DD/FD |
-| WZ/MEMPTR | Atualizado em handlers selecionados; falta matriz por família | Sem atualização indexada |
+| IX/IY | Campos arquiteturais existentes | E3A1/E3A2 executam operações 16-bit com commits nas fases finais correspondentes |
+| IXH/IXL/IYH/IYL | Acesso por helper de registrador indexado | Sem decode funcional no microsequenciador; permanece fora de E3A1/E3A2 |
+| PC / SP / wraparound | Handlers existentes; cobertura por família precisa ser ampliada | PC consome prefixos/opcodes; PUSH/POP/EX atualizam ou preservam SP nos pontos de barramento corretos; wrap testado |
+| Flags S/Z/H/PV/N/C e X/Y | Helpers e handlers existentes; não equivalem a validação independente | E3A1/E3A2 preservam flags conforme as instruções; famílias ALU/indexed-memory ainda pendentes |
+| WZ/MEMPTR | Atualizado em handlers selecionados; falta matriz por família | E3A2: absolute transfers usam nn+1; EX (SP),IX/IY recebe a word lida; PUSH/POP preservam o WZ BASE atual. Efeitos não documentados não são alegados como captura de silício |
 | Q / previous-Q | Não comprovado por esta auditoria para todas as famílias | Não comprovado |
-| R / refresh | Fetch de opcode no executor atômico; cobertura específica DD/FD incompleta | Testes existentes confirmam incremento por M1 de prefixos |
+| R / refresh | Fetch de opcode no executor atômico; cobertura específica DD/FD incompleta | M1 de prefixos DD/FD e contagem acumulada cobertos nas famílias E3A1/E3A2 |
 | INT/NMI/EI delay/HALT | Há lógica geral no executor atômico; interação com instruções indexadas ainda precisa de vetores | Sem interrupção integrada em todas as fases DD/FD |
-| Snapshot schema | Não é save state integral do sistema | Schema 25; estado serializa prefix latch, mas não possui estado de execução indexada |
+| Snapshot schema | Não é save state integral do sistema | Schema 26; FSM DD/FD e fases E3A1/E3A2 validam/restauram estados intermediários com requests pendentes |
 
-Não alterar o schema durante E1. O bump só será proposto quando E2–E7 exigirem latches adicionais e os safe points forem definidos.
+O schema 26 foi introduzido por E2 para persistir a FSM DD/FD. E3A1/E3A2 reutilizam as fases serializadas existentes; novos bumps só serão propostos quando E4/E5 exigirem estado adicional e safe points forem definidos.
 
 ## 7. Evidências e lacunas
 
@@ -120,7 +120,7 @@ Não alterar o schema durante E1. O bump só será proposto quando E2–E7 exigi
 | Teste de classificação dos 256 indexed-CB para IX/IY | Todos os subopcodes alcançam caminho sem erro | Ausência de escrita em BIT, resultado correto, cópia z, trace ou timing |
 | Teste dirigido `indexed_prefix_supports_ix_iy_displacements_and_indexed_cb` | Uma sequência representativa de IX/IY, half-register, displacement, BIT e SET | Todas as variantes e condições de borda |
 | Teste `z80_indexed_cb_exhaustive_rotate_shift.rs` | Rotate/shift indexed-CB memória-only exaustivo em valores/carry | BIT/RES/SET, cópia z e microsequenciador |
-| Testes de prefixo no sequenciador | Reconhecimento DD/FD, M1, R e latch do último prefixo | Execução de instrução indexada e DDCB/FDCB |
+| Testes de prefixo no sequenciador | Reconhecimento DD/FD, M1, R e latch do último prefixo; execução E3A1/E3A2 | Displacement e DDCB/FDCB ainda pendentes |
 | Igualdade com `Z80::step()` | Consistência entre caminhos do projeto | Independência do oráculo |
 
 ### Matriz de estado atual
