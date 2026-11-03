@@ -7699,42 +7699,48 @@ mod base_absolute_transfer_differential_tests {
 
     #[test]
     fn absolute_memory_transfers_match_atomic_executor_and_restore_every_bus_boundary() {
-        for opcode in [0x22, 0x2A, 0x32, 0x3A] {
-            let initial = initial_state();
-            let mut atomic_bus = TestBus::default();
-            atomic_bus.memory[0x1000] = opcode;
-            atomic_bus.memory[0x1001] = 0x00;
-            atomic_bus.memory[0x1002] = 0x20;
-            atomic_bus.memory[0x2000] = 0x34;
-            atomic_bus.memory[0x2001] = 0x12;
+        for address in [0x2000_u16, 0xFFFF] {
+            for opcode in [0x22, 0x2A, 0x32, 0x3A] {
+                let initial = initial_state();
+                let mut atomic_bus = TestBus::default();
+                let address_bytes = address.to_le_bytes();
+                atomic_bus.memory[0x1000] = opcode;
+                atomic_bus.memory[0x1001] = address_bytes[0];
+                atomic_bus.memory[0x1002] = address_bytes[1];
+                atomic_bus.memory[usize::from(address)] = 0x34;
+                atomic_bus.memory[usize::from(address.wrapping_add(1))] = 0x12;
 
-            let mut atomic = Z80::default();
-            atomic.import_architectural_state(initial).unwrap();
-            let atomic_tstates = atomic.step(&mut atomic_bus).unwrap();
+                let mut micro_bus = atomic_bus.clone();
+                let mut atomic = Z80::default();
+                atomic.import_architectural_state(initial).unwrap();
+                let atomic_tstates = atomic.step(&mut atomic_bus).unwrap();
 
-            let mut micro_bus = atomic_bus.clone();
-            let mut micro = Z80MicroSequencer::default();
-            micro.import_architectural_state(initial).unwrap();
-            let (micro_state, micro_tstates) = run_sequencer(micro, &mut micro_bus);
+                let mut micro = Z80MicroSequencer::default();
+                micro.import_architectural_state(initial).unwrap();
+                let (micro_state, micro_tstates) = run_sequencer(micro, &mut micro_bus);
 
-            assert_eq!(micro_tstates, atomic_tstates, "opcode {opcode:02X}");
-            assert_eq!(
-                micro_state,
-                atomic.export_architectural_state(),
-                "architectural mismatch for opcode {opcode:02X}"
-            );
-            assert_eq!(
-                micro_bus.memory, atomic_bus.memory,
-                "memory mismatch for opcode {opcode:02X}"
-            );
-            assert_eq!(
-                atomic_tstates,
-                if matches!(opcode, 0x22 | 0x2A) {
-                    16
-                } else {
-                    13
-                }
-            );
+                assert_eq!(
+                    micro_tstates, atomic_tstates,
+                    "T-state mismatch for opcode {opcode:02X} at {address:04X}"
+                );
+                assert_eq!(
+                    micro_state,
+                    atomic.export_architectural_state(),
+                    "architectural mismatch for opcode {opcode:02X} at {address:04X}"
+                );
+                assert_eq!(
+                    micro_bus.memory, atomic_bus.memory,
+                    "memory mismatch for opcode {opcode:02X} at {address:04X}"
+                );
+                assert_eq!(
+                    atomic_tstates,
+                    if matches!(opcode, 0x22 | 0x2A) {
+                        16
+                    } else {
+                        13
+                    }
+                );
+            }
         }
     }
 }
