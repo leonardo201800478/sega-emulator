@@ -7,16 +7,16 @@
 use core::fmt;
 
 use crate::{
-    SmsTemporalBus, SmsTemporalBusError, SmsTemporalBusState, SmsTemporalDispatch,
-    SmsTemporalM1, SmsTemporalM1Error, SmsTemporalM1State,
+    SmsTemporalBus, SmsTemporalBusError, SmsTemporalBusState, SmsTemporalDispatch, SmsTemporalM1,
+    SmsTemporalM1Error, SmsTemporalM1State,
 };
 use sega_temporal_core::{
     BusContractError, BusCycleKind, BusDirection, BusOperationResult, BusPhase, BusTransaction,
     MCycleIndex, MachineTime, TStateIndex,
 };
 use sega_z80_cpu::{
-    Z80BusOperation, Z80MicroSequencer, Z80MicroSequencerError, Z80MicroSequencerPhase,
-    Z80MicroSequencerState, Z80MicroStep, Z80M1Phase, Z80M1Pins,
+    Z80BusOperation, Z80M1Phase, Z80M1Pins, Z80MicroSequencer, Z80MicroSequencerError,
+    Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
 };
 
 pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 10;
@@ -508,9 +508,7 @@ impl SmsTemporalMachine {
                     .ok_or(SmsTemporalMachineError::InvalidState)?;
                 let wait_asserted = match phase_before {
                     Z80M1Phase::T2 => total_waits > 0,
-                    Z80M1Phase::Wait => {
-                        m1_state.cycle.wait_tstates.saturating_add(1) < total_waits
-                    }
+                    Z80M1Phase::Wait => m1_state.cycle.wait_tstates.saturating_add(1) < total_waits,
                     _ => false,
                 };
 
@@ -527,11 +525,12 @@ impl SmsTemporalMachine {
                 )?;
 
                 if self.trace_enabled {
-                    self.trace_events.push(SmsTemporalTraceEvent::M1TStateCompleted {
-                        timestamp: completed_at,
-                        phase: phase_before,
-                        pins,
-                    });
+                    self.trace_events
+                        .push(SmsTemporalTraceEvent::M1TStateCompleted {
+                            timestamp: completed_at,
+                            phase: phase_before,
+                            pins,
+                        });
                 }
 
                 if next_phase == Z80M1Phase::Complete {
@@ -628,29 +627,28 @@ impl SmsTemporalMachine {
             return Err(SmsTemporalMachineError::InvalidState);
         };
         loop {
-            step = match step {
-                Z80MicroStep::BusRequest(_) => {
-                    if self.m1.is_some() {
-                        if self
-                            .m1
-                            .as_ref()
-                            .is_some_and(|m1| m1.export_state().pending_continuation_id.is_none())
-                        {
+            step =
+                match step {
+                    Z80MicroStep::BusRequest(_) => {
+                        if self.m1.is_some() {
+                            if self.m1.as_ref().is_some_and(|m1| {
+                                m1.export_state().pending_continuation_id.is_none()
+                            }) {
+                                self.schedule_pending_bus(fixture_wait_tstates)?;
+                            }
+                        } else if self.bus.pending_request().is_none() {
                             self.schedule_pending_bus(fixture_wait_tstates)?;
                         }
-                    } else if self.bus.pending_request().is_none() {
-                        self.schedule_pending_bus(fixture_wait_tstates)?;
+                        self.dispatch_next()?
                     }
-                    self.dispatch_next()?
-                }
-                Z80MicroStep::InternalCycle { tstates } => {
-                    if self.pending_internal_cycle_id.is_none() {
-                        self.schedule_internal_cycle(tstates)?;
+                    Z80MicroStep::InternalCycle { tstates } => {
+                        if self.pending_internal_cycle_id.is_none() {
+                            self.schedule_internal_cycle(tstates)?;
+                        }
+                        self.dispatch_next()?
                     }
-                    self.dispatch_next()?
-                }
-                retired @ Z80MicroStep::InstructionRetired { .. } => return Ok(retired),
-            };
+                    retired @ Z80MicroStep::InstructionRetired { .. } => return Ok(retired),
+                };
         }
     }
 
