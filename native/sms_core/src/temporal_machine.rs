@@ -2458,3 +2458,115 @@ mod base_exchange_stack_temporal_tests {
         assert_eq!(restored.now(), MachineTime::from_ticks(57));
     }
 }
+
+
+#[cfg(test)]
+mod base_immediate_io_temporal_tests {
+    use super::SmsTemporalMachine;
+    use crate::input::ControllerButtons;
+    use sega_temporal_core::MachineTime;
+    use sega_z80_cpu::Z80MicroStep;
+
+    fn advance_m1(machine: &mut SmsTemporalMachine) -> Z80MicroStep {
+        let mut step = machine.begin_instruction().unwrap();
+        for _ in 0..4 {
+            machine.schedule_pending_bus(0).unwrap();
+            step = machine.dispatch_next().unwrap();
+        }
+        step
+    }
+
+    #[test]
+    fn immediate_in_reads_controller_and_out_updates_io_control() {
+        let mut input = SmsTemporalMachine::new(vec![0xDB, 0xDC], 3).unwrap();
+        input.cpu_mut().registers.a = 0x12;
+        input.cpu_mut().registers.f = 0xA5;
+        input
+            .bus
+            .io_mut()
+            .set_controller(
+                1,
+                ControllerButtons {
+                    up: true,
+                    ..ControllerButtons::default()
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            input.step_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xDB,
+                tstates: 11,
+            }
+        );
+        assert_eq!(input.cpu().registers.a, 0xFE);
+        assert_eq!(input.cpu().registers.f, 0xA5);
+        assert_eq!(input.now(), MachineTime::from_ticks(33));
+
+        let mut output = SmsTemporalMachine::new(vec![0xD3, 0x3F], 3).unwrap();
+        output.cpu_mut().registers.a = 0xD5;
+        assert_eq!(
+            output.step_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xD3,
+                tstates: 11,
+            }
+        );
+        assert_eq!(output.bus.io().io_control(), 0xD5);
+        assert_eq!(output.bus.port_write_trace().len(), 1);
+        assert_eq!(output.bus.port_write_trace()[0].port, 0xD53F);
+        assert_eq!(output.bus.port_write_trace()[0].value, 0xD5);
+        assert_eq!(
+            output.bus.port_write_trace()[0].completed_at,
+            MachineTime::from_ticks(33)
+        );
+        assert_eq!(output.now(), MachineTime::from_ticks(33));
+
+        let mut memory_control = SmsTemporalMachine::new(vec![0xD3, 0x3E], 3).unwrap();
+        memory_control.cpu_mut().registers.a = 0x55;
+        assert_eq!(
+            memory_control.step_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xD3,
+                tstates: 11,
+            }
+        );
+        assert_eq!(memory_control.bus.memory().control_port(), 0x55);
+    }
+
+    #[test]
+    fn immediate_in_port_read_pending_state_restores_with_io_context() {
+        let mut machine = SmsTemporalMachine::new(vec![0xDB, 0xDC], 3).unwrap();
+        machine.cpu_mut().registers.a = 0x12;
+        machine
+            .bus
+            .io_mut()
+            .set_controller(
+                1,
+                ControllerButtons {
+                    up: true,
+                    ..ControllerButtons::default()
+                },
+            )
+            .unwrap();
+        assert!(matches!(advance_m1(&mut machine), Z80MicroStep::BusRequest(_)));
+
+        machine.schedule_pending_bus(0).unwrap();
+        assert!(matches!(machine.dispatch_next().unwrap(), Z80MicroStep::BusRequest(_)));
+        machine.schedule_pending_bus(0).unwrap();
+        assert!(matches!(machine.dispatch_next().unwrap(), Z80MicroStep::BusRequest(_)));
+        machine.schedule_pending_bus(0).unwrap();
+
+        let snapshot = machine.export_state();
+        let mut restored = SmsTemporalMachine::restore_state(snapshot).unwrap();
+        assert_eq!(
+            restored.resume_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xDB,
+                tstates: 11,
+            }
+        );
+        assert_eq!(restored.cpu().registers.a, 0xFE);
+        assert_eq!(restored.now(), MachineTime::from_ticks(33));
+    }
+}
