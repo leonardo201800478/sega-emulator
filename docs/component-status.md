@@ -193,10 +193,10 @@ O executor atômico existente é a referência para SCF/CCF: no início de cada 
 ## 13. P7 — Z80 BASE: LD rr,nn no microsequenciador retomável
 
 **Branch candidata:** `feat/z80-sms-ld-register-pairs-immediate`  
-**SHA de código candidato:** `917eb97b3c5ec0dc0ada79d8c590c422a538197c`  
+**SHA de código candidato:** `f416efef960cdd20816fd46c5e4a8509bff36ee5`  
 **PR:** pendente de abertura  
 **Dependência:** PR #427 (empilhada; ainda não integrada à main).  
-**CI:** primeira execução `41570758837` falhou apenas em `cargo fmt --all -- --check`; a primeira correção de formatação foi incompleta; nova correção aplicada no SHA de código `917eb97b3c5ec0dc0ada79d8c590c422a538197c`; CI desse SHA ainda pendente.
+**CI:** primeira execução `41570758837` falhou apenas em `cargo fmt --all -- --check`; a primeira correção de formatação foi incompleta; nova correção aplicada no SHA de código `917eb97b3c5ec0dc0ada79d8c590c422a538197c`; CI desse SHA ainda pendente; o run `41571022447` confirmou Formatting PASS, mas Clippy encontrou ausência dos dois novos arms no encoder `write_phase`; corrigido em `f416efef960cdd20816fd46c5e4a8509bff36ee5`.
 
 | Componente | Estado formal | Evidência / limite |
 |---|---|---|
