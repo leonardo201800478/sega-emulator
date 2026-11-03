@@ -2352,7 +2352,7 @@ mod tests {
 #[cfg(test)]
 mod architectural_state_tests {
     use super::Z80MicroSequencer;
-    use crate::{Z80ArchitecturalState, Z80AlternateRegisters, Z80Registers};
+    use crate::{Z80AlternateRegisters, Z80ArchitecturalState, Z80Registers};
 
     #[test]
     fn sequencer_import_export_preserves_the_shared_architectural_dto() {
