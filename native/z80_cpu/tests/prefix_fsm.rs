@@ -77,7 +77,7 @@ fn ed_after_index_prefix_cancels_index_mode_before_ed_decode() {
         cpu.complete_bus_cycle(fetch.id, Some(0x46)).unwrap(),
         Z80MicroStep::InstructionRetired {
             opcode: 0x46,
-            tstates: 8,
+            tstates: 12,
         }
     );
     assert_eq!(cpu.interrupt_mode, 0);
