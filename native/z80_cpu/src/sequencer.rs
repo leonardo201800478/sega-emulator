@@ -3085,7 +3085,7 @@ mod tests {
             (&[0xDD, 0xFD, 0x21, 0xBC, 0x9A][..], 0xBEEF, 0x9ABC),
             (&[0xFD, 0xDD, 0x21, 0x78, 0x56][..], 0x5678, 0xCAFE),
         ] {
-            let mut cpu = Z80MicroSequencer {
+            let cpu = Z80MicroSequencer {
                 ix: 0xBEEF,
                 iy: 0xCAFE,
                 ..Z80MicroSequencer::default()
@@ -3202,7 +3202,7 @@ mod tests {
                 crate::Z80MicroSequencerState::decode(&bytes).unwrap(),
             )
             .unwrap();
-            for remaining in 1..7 {
+            for remaining in 1_u8..7 {
                 let step = restored.complete_internal_cycle().unwrap();
                 assert_eq!(step, Z80MicroStep::InternalCycle { tstates: 1 });
                 restored = Z80MicroSequencer::restore_state(restored.export_state()).unwrap();
