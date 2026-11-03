@@ -158,9 +158,7 @@ fn instruction_timeline_is_valid(state: &SmsTemporalMachineState) -> bool {
             };
             (completion.completed_at, expected_tstates)
         }
-        (None, None, None, None)
-            if state.cpu.phase.is_internal_cycle() =>
-        {
+        (None, None, None, None) if state.cpu.phase.is_internal_cycle() => {
             (state.bus.coordinator.scheduler.now, cpu_tstates)
         }
         _ => return false,
@@ -733,9 +731,7 @@ impl SmsTemporalMachine {
         {
             return Err(SmsTemporalMachineError::InvalidState);
         }
-        if state.pending_internal_cycle_id.is_some()
-            && !state.cpu.phase.is_internal_cycle()
-        {
+        if state.pending_internal_cycle_id.is_some() && !state.cpu.phase.is_internal_cycle() {
             return Err(SmsTemporalMachineError::InvalidState);
         }
         match (m1, state.m1_fixture_wait_tstates) {
