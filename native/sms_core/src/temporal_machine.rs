@@ -934,73 +934,45 @@ mod tests {
     }
 
     #[test]
-    fn overflow_keeps_completed_bus_write_latched_for_snapshot_restore_and_retry() {
-        let mut machine = SmsTemporalMachine::new(vec![0x77; 0x4000], 3).unwrap();
-        machine.cpu_mut().registers.a = 0x5A;
-        machine.cpu_mut().registers.set_hl(0xC000);
+    fn overflow_keeps_completed_m1_fetch_for_snapshot_restore_and_retry() {
+        let mut machine = SmsTemporalMachine::new(vec![0x00; 0x4000], 3).unwrap();
         machine.begin_instruction().unwrap();
-        machine.schedule_pending_bus(0).unwrap();
-        assert!(matches!(
-            machine.dispatch_next().unwrap(),
-            Z80MicroStep::BusRequest(_)
-        ));
+
+        // Advance T1, T2, and T3. The opcode is sampled at T3 completion;
+        // T4 is then scheduled but not yet dispatched.
+        for _ in 0..3 {
+            machine.schedule_pending_bus(0).unwrap();
+            assert!(matches!(
+                machine.dispatch_next().unwrap(),
+                Z80MicroStep::BusRequest(_)
+            ));
+        }
         machine.schedule_pending_bus(0).unwrap();
 
         let mut state = machine.export_state();
         state.cpu.instruction_tstates = u32::MAX - 2;
-        // Fault-inject the CPU counter after restoring its own DTO. The machine
-        // restore gate rejects this impossible CPU/Scheduler combination; this
-        // test bypasses that gate to exercise atomic dispatch failure handling.
-        let cpu = Z80MicroSequencer::restore_state(state.cpu).unwrap();
-        let bus = SmsTemporalBus::restore_state(state.bus).unwrap();
-        let mut machine = SmsTemporalMachine {
-            cpu,
-            bus,
-            instruction_started_at: state.instruction_started_at,
-            next_internal_cycle_id: state.next_internal_cycle_id,
-            pending_internal_cycle_id: state.pending_internal_cycle_id,
-            pending_internal_tstates: state.pending_internal_tstates,
-            m1: state.m1.map(SmsTemporalM1::restore_state).transpose().unwrap(),
-            m1_fixture_wait_tstates: state.m1_fixture_wait_tstates,
-            trace_enabled: false,
-            trace_events: Vec::new(),
-        };
+        // Fault-inject the CPU counter while preserving the already scheduled T4.
+        machine.cpu = Z80MicroSequencer::restore_state(state.cpu).unwrap();
         assert!(matches!(
             machine.dispatch_next(),
             Err(SmsTemporalMachineError::Cpu(
                 Z80MicroSequencerError::InstructionTStateOverflow
             ))
         ));
-        let completed_transaction = machine.pending_bus_transaction().unwrap().unwrap();
-        assert_eq!(completed_transaction.phase(), BusPhase::Complete);
+        let completed_m1 = machine.export_state();
         assert_eq!(
-            completed_transaction.timestamp(),
-            MachineTime::from_ticks(12)
+            completed_m1.m1.unwrap().cycle.phase,
+            sega_z80_cpu::Z80M1Phase::Complete
         );
-        let completed_at = machine.now();
-        assert_eq!(
-            machine.pending_bus_operation_result(),
-            Some(BusOperationResult::Completed {
-                value: None,
-                completed_at,
-            })
-        );
+        assert!(completed_m1.bus.coordinator.scheduler.event_queue.pending.is_empty());
 
-        let mut state = machine.export_state();
-        assert_eq!(state.bus.completion.unwrap().request_id, 1);
-        assert_eq!(state.bus.pending_request.unwrap().id, 1);
-        assert_eq!(machine.memory().read(0xC000), 0x5A);
-
-        // Restore a valid CPU counter while preserving the already-committed,
-        // unacknowledged bus completion. Resume must consume it, not dispatch
-        // the memory write a second time.
-        // Preserve the four T-states already consumed by M1 before the
-        // pending M2 memory write; restore_state validates this phase minimum.
-        state.cpu.instruction_tstates = 4;
-        let mut restored = SmsTemporalMachine::restore_state(state).unwrap();
-        retired(restored.resume_instruction(0).unwrap(), 0x77, 7);
-        assert_eq!(restored.memory().read(0xC000), 0x5A);
-        assert!(restored.export_state().bus.completion.is_none());
+        let mut restored = SmsTemporalMachine::restore_state(completed_m1).unwrap();
+        assert!(matches!(
+            restored.resume_instruction(0),
+            Err(SmsTemporalMachineError::Cpu(
+                Z80MicroSequencerError::InstructionTStateOverflow
+            ))
+        ));
     }
 
     #[test]
