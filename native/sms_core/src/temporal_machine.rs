@@ -648,9 +648,8 @@ impl SmsTemporalMachine {
                             if self.m1.as_ref().is_some_and(|m1| {
                                 m1.export_state().pending_continuation_id.is_none()
                             }) {
-                                let m1_waits = self
-                                    .m1_fixture_wait_tstates
-                                    .unwrap_or(fixture_wait_tstates);
+                                let m1_waits =
+                                    self.m1_fixture_wait_tstates.unwrap_or(fixture_wait_tstates);
                                 self.schedule_pending_bus(m1_waits)?;
                             }
                         } else if self.bus.pending_request().is_none() {
@@ -896,9 +895,7 @@ mod tests {
     ) -> Z80MicroStep {
         loop {
             let m1 = machine.export_state().m1;
-            if m1.is_none()
-                || m1.is_some_and(|state| state.pending_continuation_id.is_none())
-            {
+            if m1.is_none() || m1.is_some_and(|state| state.pending_continuation_id.is_none()) {
                 machine.schedule_pending_bus(fixture_wait_tstates).unwrap();
             }
             let step = machine.dispatch_next().unwrap();
