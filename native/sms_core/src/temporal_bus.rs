@@ -1,19 +1,21 @@
-//! Transactional SMS memory-bus adapter for the Scheduler-driven path.
+//! Transactional SMS memory/I/O bus adapter for the Scheduler-driven path.
 //!
-//! Memory reads and writes become visible only when their scheduled completion
-//! event is dispatched. A completion is latched until the CPU acknowledges it,
-//! preventing a second dispatch from repeating a write side effect.
+//! Memory and port transactions become visible only at their scheduled
+//! completion boundary. Controller/control-port effects are applied there;
+//! VDP/PSG devices remain outside this temporal slice, with writes retained in
+//! a bounded diagnostic trace and unconnected reads returning open bus.
 
 use core::fmt;
 
 use crate::{
-    CartridgeImage, SmsCoreError, SmsMemory, SmsTemporalCoordinator, SmsTemporalCoordinatorError,
-    SmsTemporalCoordinatorState, SmsTemporalEvent,
+    CartridgeImage, SmsCoreError, SmsIo, SmsMemory, SmsTemporalCoordinator,
+    SmsTemporalCoordinatorError, SmsTemporalCoordinatorState, SmsTemporalEvent,
 };
 use sega_temporal_core::MachineTime;
 use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
 
-pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 4;
+pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 6;
+const MAX_PORT_WRITE_TRACE: usize = 64;
 
 fn elapsed_tstates(
     started_at: MachineTime,
@@ -50,7 +52,7 @@ fn valid_internal_deadline(
     elapsed_tstates(started_at, deadline, master_ticks_per_tstate).is_some()
 }
 
-/// Result latched at the completion boundary of one memory transaction.
+/// Result latched at the completion boundary of one bus transaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SmsBusCompletion {
     pub request_id: u64,
@@ -76,11 +78,21 @@ pub enum SmsTemporalDispatch {
     },
 }
 
+/// Observable port write committed at a scheduled bus-completion boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SmsTemporalPortWrite {
+    pub port: u16,
+    pub value: u8,
+    pub completed_at: MachineTime,
+}
+
 /// Complete in-memory continuation of the transactional bus adapter.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SmsTemporalBusState {
     pub format_version: u16,
     pub memory: SmsMemory,
+    pub io: SmsIo,
+    pub port_write_trace: Vec<SmsTemporalPortWrite>,
     pub coordinator: SmsTemporalCoordinatorState,
     pub pending_request: Option<Z80BusRequest>,
     pub request_started_at: Option<MachineTime>,
@@ -115,9 +127,9 @@ impl fmt::Display for SmsTemporalBusError {
                 f,
                 "SMS temporal bus expected request {expected}, received {received}"
             ),
-            Self::UnsupportedOperation => {
-                f.write_str("this temporal bus slice supports memory cycles only")
-            }
+            Self::UnsupportedOperation => f.write_str(
+                "this temporal bus operation is not implemented by the SMS temporal slice",
+            ),
             Self::InvalidState => f.write_str("SMS temporal bus snapshot is inconsistent"),
         }
     }
@@ -141,6 +153,8 @@ impl From<SmsTemporalCoordinatorError> for SmsTemporalBusError {
 #[derive(Debug, Clone)]
 pub struct SmsTemporalBus {
     memory: SmsMemory,
+    io: SmsIo,
+    port_write_trace: Vec<SmsTemporalPortWrite>,
     coordinator: SmsTemporalCoordinator,
     pending_request: Option<Z80BusRequest>,
     request_started_at: Option<MachineTime>,
@@ -161,6 +175,8 @@ impl SmsTemporalBus {
         let coordinator = SmsTemporalCoordinator::new(master_ticks_per_tstate)?;
         Ok(Self {
             memory,
+            io: SmsIo::default(),
+            port_write_trace: Vec::new(),
             coordinator,
             pending_request: None,
             request_started_at: None,
@@ -171,7 +187,7 @@ impl SmsTemporalBus {
         })
     }
 
-    /// Begin one memory request and schedule its completion deadline.
+    /// Begin one memory or port request and schedule its completion deadline.
     ///
     /// WAIT is supplied by a deterministic fixture; this API does not sample
     /// or claim a physical SMS WAIT signal.
@@ -192,6 +208,8 @@ impl SmsTemporalBus {
             Z80BusOperation::OpcodeFetch
                 | Z80BusOperation::MemoryRead
                 | Z80BusOperation::MemoryWrite { .. }
+                | Z80BusOperation::PortRead
+                | Z80BusOperation::PortWrite { .. }
         ) {
             return Err(SmsTemporalBusError::UnsupportedOperation);
         }
@@ -242,7 +260,7 @@ impl SmsTemporalBus {
         Ok(self.coordinator.schedule_m1_tstate(continuation_id)?)
     }
 
-    /// Dispatch the next scheduled boundary and apply the memory side effect once.
+    /// Dispatch the next scheduled boundary and apply its bus side effect once.
     ///
     /// A read samples memory at this completion boundary. A write mutates memory
     /// at this completion boundary. The response is latched until acknowledged.
@@ -280,8 +298,10 @@ impl SmsTemporalBus {
                         self.memory.write(request.address, value);
                         None
                     }
-                    Z80BusOperation::PortRead | Z80BusOperation::PortWrite { .. } => {
-                        return Err(SmsTemporalBusError::UnsupportedOperation);
+                    Z80BusOperation::PortRead => Some(self.read_port(request.address)),
+                    Z80BusOperation::PortWrite { value } => {
+                        self.write_port(request.address, value, dispatch.event.timestamp);
+                        None
                     }
                 };
                 let completion = SmsBusCompletion {
@@ -392,6 +412,42 @@ impl SmsTemporalBus {
         self.memory.write(address, value);
     }
 
+    pub fn io(&self) -> &SmsIo {
+        &self.io
+    }
+
+    pub fn io_mut(&mut self) -> &mut SmsIo {
+        &mut self.io
+    }
+
+    pub fn port_write_trace(&self) -> &[SmsTemporalPortWrite] {
+        &self.port_write_trace
+    }
+
+    fn read_port(&self, port: u16) -> u8 {
+        match (port as u8) & 0xC1 {
+            0x40 | 0x41 | 0x80 | 0x81 => 0xFF,
+            _ => self.io.read_port(port),
+        }
+    }
+
+    fn write_port(&mut self, port: u16, value: u8, completed_at: MachineTime) {
+        let port_byte = port as u8;
+        if port_byte <= 0x3F && port_byte & 1 == 0 {
+            self.memory.write_control_port(value);
+        } else {
+            self.io.write_port(port, value);
+        }
+        if self.port_write_trace.len() == MAX_PORT_WRITE_TRACE {
+            self.port_write_trace.remove(0);
+        }
+        self.port_write_trace.push(SmsTemporalPortWrite {
+            port,
+            value,
+            completed_at,
+        });
+    }
+
     /// Read-only access to the mapper-backed memory image.
     pub const fn memory(&self) -> &SmsMemory {
         &self.memory
@@ -402,6 +458,8 @@ impl SmsTemporalBus {
         SmsTemporalBusState {
             format_version: SMS_TEMPORAL_BUS_STATE_VERSION,
             memory: self.memory.clone(),
+            io: self.io.clone(),
+            port_write_trace: self.port_write_trace.clone(),
             coordinator: self.coordinator.export_state(),
             pending_request: self.pending_request,
             request_started_at: self.request_started_at,
@@ -421,6 +479,18 @@ impl SmsTemporalBus {
         let pending_events = &state.coordinator.scheduler.event_queue.pending;
         let scale = state.coordinator.master_ticks_per_tstate;
         let now = coordinator.now();
+        if state.port_write_trace.len() > MAX_PORT_WRITE_TRACE
+            || state
+                .port_write_trace
+                .iter()
+                .any(|write| write.completed_at > now)
+            || state
+                .port_write_trace
+                .windows(2)
+                .any(|pair| pair[0].completed_at > pair[1].completed_at)
+        {
+            return Err(SmsTemporalBusError::InvalidState);
+        }
         let last_dispatch = state.coordinator.scheduler.last_dispatch_timestamp;
         match (
             state.pending_request,
@@ -479,6 +549,8 @@ impl SmsTemporalBus {
         }
         Ok(Self {
             memory: state.memory,
+            io: state.io,
+            port_write_trace: state.port_write_trace,
             coordinator,
             pending_request: state.pending_request,
             request_started_at: state.request_started_at,
@@ -758,11 +830,96 @@ mod tests {
     }
 
     #[test]
-    fn port_operations_are_rejected_before_scheduling() {
+    fn port_reads_are_accepted_and_complete_at_the_scheduled_boundary() {
         let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
+        let deadline = bus
+            .begin_request(request(5, Z80BusOperation::PortRead, 0x00DC, 4), 0)
+            .unwrap();
+        let Some(SmsTemporalDispatch::BusCompletion(completion)) = bus.dispatch_next().unwrap()
+        else {
+            panic!("expected port-read completion");
+        };
+        assert_eq!(completion.request_id, 5);
+        assert_eq!(completion.data, Some(0xFF));
+        assert_eq!(completion.completed_at, deadline);
+        bus.acknowledge_completion(5).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod immediate_port_transaction_tests {
+    use super::{SmsTemporalBus, SmsTemporalDispatch};
+    use crate::input::ControllerButtons;
+    use sega_temporal_core::MachineTime;
+    use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
+
+    fn request(id: u64, operation: Z80BusOperation, address: u16) -> Z80BusRequest {
+        Z80BusRequest {
+            id,
+            operation,
+            address,
+            base_tstates: 4,
+        }
+    }
+
+    #[test]
+    fn port_reads_writes_and_controller_state_commit_at_scheduled_boundaries() {
+        let mut bus = SmsTemporalBus::new(vec![0x00], 3).unwrap();
+        bus.io_mut()
+            .set_controller(
+                1,
+                ControllerButtons {
+                    up: true,
+                    ..ControllerButtons::default()
+                },
+            )
+            .unwrap();
+
+        bus.begin_request(request(0, Z80BusOperation::PortRead, 0x12DC), 0)
+            .unwrap();
+        let read = bus.dispatch_next().unwrap().unwrap();
         assert_eq!(
-            bus.begin_request(request(5, Z80BusOperation::PortRead, 0x00DC, 4), 0),
-            Err(SmsTemporalBusError::UnsupportedOperation)
+            read,
+            SmsTemporalDispatch::BusCompletion(super::SmsBusCompletion {
+                request_id: 0,
+                data: Some(0xFE),
+                completed_at: MachineTime::from_ticks(12),
+            })
         );
+        bus.acknowledge_completion(0).unwrap();
+
+        bus.begin_request(
+            request(1, Z80BusOperation::PortWrite { value: 0xD5 }, 0xD53F),
+            0,
+        )
+        .unwrap();
+        assert!(matches!(
+            bus.dispatch_next().unwrap(),
+            Some(SmsTemporalDispatch::BusCompletion(_))
+        ));
+        bus.acknowledge_completion(1).unwrap();
+        assert_eq!(bus.io().io_control(), 0xD5);
+
+        bus.begin_request(
+            request(2, Z80BusOperation::PortWrite { value: 0x55 }, 0x553E),
+            0,
+        )
+        .unwrap();
+        assert!(matches!(
+            bus.dispatch_next().unwrap(),
+            Some(SmsTemporalDispatch::BusCompletion(_))
+        ));
+        bus.acknowledge_completion(2).unwrap();
+        assert_eq!(bus.memory().control_port(), 0x55);
+        assert_eq!(bus.port_write_trace().len(), 2);
+        assert_eq!(bus.port_write_trace()[0].port, 0xD53F);
+        assert_eq!(bus.port_write_trace()[0].value, 0xD5);
+        assert_eq!(bus.port_write_trace()[1].port, 0x553E);
+        assert_eq!(bus.port_write_trace()[1].value, 0x55);
+
+        let restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
+        assert_eq!(restored.io().io_control(), 0xD5);
+        assert_eq!(restored.memory().control_port(), 0x55);
+        assert_eq!(restored.port_write_trace(), bus.port_write_trace());
     }
 }
