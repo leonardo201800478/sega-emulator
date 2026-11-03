@@ -5,6 +5,8 @@
 //! crate. The current executor preserves the SMS instruction-step behavior and
 //! reports nominal T-states; it is not yet a complete micro-operation sequencer.
 
+pub mod architectural_state;
+
 pub mod alu {
     pub use sega_z80_alu::*;
 }
@@ -20,6 +22,7 @@ pub mod snapshot;
 
 pub const Z80_MICRO_SEQUENCER_STATE_VERSION: u16 = 6;
 
+pub use architectural_state::{Z80ArchitecturalState, Z80ArchitecturalStateError};
 pub use cpu::{CpuError, Z80, Z80AlternateRegisters, Z80Registers};
 pub use micro_ops::{
     Z80BusHandshake, Z80BusHandshakeError, Z80BusHandshakeState, Z80BusOperation, Z80BusRequest,
