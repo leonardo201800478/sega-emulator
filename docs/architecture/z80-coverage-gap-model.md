@@ -1,3 +1,5 @@
+> **Runtime Rust atual (2026-11-03):** este relatório registra uma baseline histórica de infraestrutura Python e não é a matriz de cobertura vigente do microsequenciador Rust. Consulte [docs/z80-dd-fd-semantic-matrix.md](../z80-dd-fd-semantic-matrix.md) e [docs/z80-dd-fd-resolution-strategy.md](../z80-dd-fd-resolution-strategy.md). E4A/E4B estão integradas em `main`; E4C (#473) está em validação no candidato `949dd365`. Não inferir validação diferencial, formal ou temporal a partir deste relatório histórico.
+
 > **Estado vigente (2026-10-27):** runtime SG-1000 ativo em Rust. O hardware Python antigo e os testes/ferramentas que dependiam dele estão arquivados em `legacy/python_reference/` e não devem ser executados/importados. Este documento preserva observações históricas; comandos apontando para os caminhos arquivados não são comandos ativos.
 
 # Z80 coverage gap model
