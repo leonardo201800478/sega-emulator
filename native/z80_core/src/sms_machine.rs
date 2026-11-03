@@ -160,9 +160,7 @@ impl NativeSMSMachine {
                     "cartridge_ram_size inválido: {size}; use 8192, 16384 ou 32768",
                 ))
             }
-            SmsMachineBuildError::CartridgeRamFile(message) => {
-                PyRuntimeError::new_err(message)
-            }
+            SmsMachineBuildError::CartridgeRamFile(message) => PyRuntimeError::new_err(message),
             SmsMachineBuildError::Machine(message) => PyRuntimeError::new_err(message),
         })?;
         Ok(Self {
@@ -406,18 +404,16 @@ mod tests {
     fn explicit_sram_file_survives_native_machine_recreation() {
         use std::fs;
 
-        let path = std::env::temp_dir().join(format!(
-            "sega-sms-native-sram-{}.srm",
-            std::process::id()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("sega-sms-native-sram-{}.srm", std::process::id()));
         let _ = fs::remove_file(&path);
         let save_path = path.to_string_lossy().into_owned();
         let writer_rom = vec![
-            0x3E, 0x08,             // LD A,08h
-            0x32, 0xFC, 0xFF,       // LD (FFFC),A: enable slot-2 SRAM
-            0x3E, 0xB6,             // LD A,B6h
-            0x21, 0x23, 0x81,       // LD HL,8123h
-            0x77,                   // LD (HL),A
+            0x3E, 0x08, // LD A,08h
+            0x32, 0xFC, 0xFF, // LD (FFFC),A: enable slot-2 SRAM
+            0x3E, 0xB6, // LD A,B6h
+            0x21, 0x23, 0x81, // LD HL,8123h
+            0x77, // LD (HL),A
             0x00,
         ];
         let mut writer = NativeSMSMachine::new(
@@ -482,7 +478,7 @@ mod tests {
             total_instructions: 0,
             audio_session: None,
             audio_output_error: None,
-        sram_file: None,
+            sram_file: None,
         };
         assert_eq!(pal_machine.psg_clock_hz(), 3_546_895);
 
@@ -513,8 +509,15 @@ mod tests {
 
     #[test]
     fn console_pause_is_exposed_as_a_z80_non_maskable_interrupt() {
-        let mut machine =
-            NativeSMSMachine::new(vec![0x31, 0xF0, 0xDF, 0x00], false, Some("usa"), None, None, None).unwrap();
+        let mut machine = NativeSMSMachine::new(
+            vec![0x31, 0xF0, 0xDF, 0x00],
+            false,
+            Some("usa"),
+            None,
+            None,
+            None,
+        )
+        .unwrap();
         machine.step().unwrap();
         machine.request_nmi();
         assert_eq!(machine.step().unwrap(), 11);
@@ -539,7 +542,8 @@ mod tests {
 
     #[test]
     fn draining_audio_does_not_change_cpu_timing() {
-        let mut machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa"), None, None, None).unwrap();
+        let mut machine =
+            NativeSMSMachine::new(vec![0; 16], false, Some("usa"), None, None, None).unwrap();
         for _ in 0..100 {
             machine.step().unwrap();
         }
