@@ -67,6 +67,17 @@ pub enum Z80MicroSequencerPhase {
         decrement: bool,
         address: u16,
     },
+    CbMemoryRead {
+        address: u16,
+    },
+    CbMemoryInternal {
+        address: u16,
+        result: Option<u8>,
+    },
+    CbMemoryWrite {
+        address: u16,
+        value: u8,
+    },
     MemoryIncDecInternal {
         decrement: bool,
         old: u8,
@@ -397,6 +408,34 @@ impl Z80MicroSequencer {
                 }) && address == state.registers.hl()
                     && state.instruction_tstates >= 4
             }
+            Z80MicroSequencerPhase::CbMemoryRead { address } => {
+                state.opcode.is_some_and(|opcode| opcode & 0x07 == 0x06)
+                    && pending.is_some_and(|request| {
+                        request.operation == Z80BusOperation::MemoryRead
+                            && request.address == address
+                            && request.base_tstates == 3
+                    })
+                    && address == state.registers.hl()
+                    && state.instruction_tstates >= 8
+            }
+            Z80MicroSequencerPhase::CbMemoryInternal { address, .. } => {
+                state.opcode.is_some_and(|opcode| opcode & 0x07 == 0x06)
+                    && pending.is_none()
+                    && address == state.registers.hl()
+                    && state.tstate_index >= 3
+                    && state.instruction_tstates >= 8 + u32::from(state.tstate_index)
+            }
+            Z80MicroSequencerPhase::CbMemoryWrite { address, value } => {
+                let Some(request) = pending else {
+                    return Err(Z80MicroSequencerError::InvalidState);
+                };
+                state.opcode.is_some_and(|opcode| opcode & 0x07 == 0x06 && opcode >> 6 != 1)
+                    && request.operation == Z80BusOperation::MemoryWrite { value }
+                    && request.address == address
+                    && request.base_tstates == 3
+                    && address == state.registers.hl()
+                    && state.instruction_tstates >= 12
+            }
             Z80MicroSequencerPhase::MemoryReadIncDec { decrement, address } => {
                 let expected_opcode = if decrement { 0x35 } else { 0x34 };
                 pending.is_some_and(|request| {
@@ -462,6 +501,15 @@ impl Z80MicroSequencer {
             | Z80MicroSequencerPhase::MemoryReadAlu { .. }
             | Z80MicroSequencerPhase::MemoryReadIncDec { .. } => {
                 state.mcycle_index == 1 && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::CbMemoryRead { .. } => {
+                state.mcycle_index == 2 && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::CbMemoryInternal { .. } => {
+                state.mcycle_index == 2 && state.tstate_index >= 3
+            }
+            Z80MicroSequencerPhase::CbMemoryWrite { .. } => {
+                state.mcycle_index == 3 && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::ImmediateReadRegisterPairHigh { .. } => {
                 state.mcycle_index == 2 && state.tstate_index == 0
@@ -624,7 +672,12 @@ impl Z80MicroSequencer {
                 self.opcode = Some(opcode);
                 if previous_prefix == Some(0xCB) {
                     if opcode & 0x07 == 0x06 {
-                        return self.unsupported(opcode);
+                        return self.issue_read(
+                            Z80MicroSequencerPhase::CbMemoryRead {
+                                address: self.registers.hl(),
+                            },
+                            self.registers.hl(),
+                        );
                     }
                     self.execute_cb_register(opcode);
                     return self.retire(opcode);
@@ -831,6 +884,31 @@ impl Z80MicroSequencer {
                         .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
                 )
             }
+            Z80MicroSequencerPhase::CbMemoryRead { address } => {
+                let value = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                let opcode = self
+                    .opcode
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                let result = self.execute_cb_value(opcode, value, (self.wz >> 8) as u8);
+                let wait_offset = u16::try_from(waits)
+                    .ok()
+                    .and_then(|waits| 3_u16.checked_add(waits))
+                    .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                self.tstate_index = wait_offset;
+                self.phase = Z80MicroSequencerPhase::CbMemoryInternal { address, result };
+                Ok(Z80MicroStep::InternalCycle { tstates: 1 })
+            }
+            Z80MicroSequencerPhase::CbMemoryInternal { address, result } => {
+                Err(Z80MicroSequencerError::UnexpectedCompletion)
+            }
+            Z80MicroSequencerPhase::CbMemoryWrite { .. } => {
+                let opcode = self
+                    .opcode
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.retire(opcode)
+            }
             Z80MicroSequencerPhase::MemoryReadIncDec { decrement, address } => {
                 let old = response
                     .data
@@ -867,24 +945,35 @@ impl Z80MicroSequencer {
         }
     }
 
-    /// Complete the explicitly exposed internal T-state of INC/DEC (HL).
-    /// The result/flags are committed at this edge, then the memory write is issued.
+    /// Complete one explicitly exposed internal T-state for memory read/modify/write.
+    /// CB BIT (HL) retires here; the other CB memory groups issue their write cycle.
     pub fn complete_internal_cycle(&mut self) -> Result<Z80MicroStep, Z80MicroSequencerError> {
-        let Z80MicroSequencerPhase::MemoryIncDecInternal {
-            decrement,
-            old,
-            address,
-        } = self.phase
-        else {
-            return Err(Z80MicroSequencerError::UnexpectedCompletion);
-        };
         let next_instruction_tstates = self
             .instruction_tstates
             .checked_add(1)
             .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
         let mut next = self.clone();
-        let value = next.increment_decrement_register(old, decrement);
-        let step = next.issue_write(address, value)?;
+        let step = match next.phase {
+            Z80MicroSequencerPhase::MemoryIncDecInternal {
+                decrement,
+                old,
+                address,
+            } => {
+                let value = next.increment_decrement_register(old, decrement);
+                next.issue_write(address, value)?
+            }
+            Z80MicroSequencerPhase::CbMemoryInternal { address, result } => {
+                if let Some(value) = result {
+                    next.issue_cb_memory_write(address, value)?
+                } else {
+                    let opcode = next
+                        .opcode
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                    next.retire(opcode)?
+                }
+            }
+            _ => return Err(Z80MicroSequencerError::UnexpectedCompletion),
+        };
         next.instruction_tstates = next_instruction_tstates;
         *self = next;
         Ok(step)
@@ -925,28 +1014,32 @@ impl Z80MicroSequencer {
     }
 
     /// Execute a CB-prefixed operation whose operand is a CPU register.
-    ///
-    /// The two opcode bytes have already completed independent M1 cycles.
-    /// Memory operand encodings (z = 6) are deliberately handled by a later
-    /// microsequenced slice because they require additional bus/internal cycles.
+    /// The caller supplies the undocumented X/Y flag source explicitly.
     fn execute_cb_register(&mut self, opcode: u8) {
         let target = opcode & 0x07;
+        let value = self.read_register(target);
+        if let Some(result) = self.execute_cb_value(opcode, value, value) {
+            self.write_register(target, result);
+        }
+    }
+
+    /// Apply the semantic portion of a CB operation to a sampled operand.
+    /// Returns a value only for groups that write their operand.
+    fn execute_cb_value(&mut self, opcode: u8, value: u8, undocumented: u8) -> Option<u8> {
         let group = opcode >> 6;
         let operation = (opcode >> 3) & 0x07;
-        let value = self.read_register(target);
-
         match group {
             0 => {
                 let old_carry = self.registers.f & FLAG_C != 0;
                 let (result, carry) = match operation {
-                    0 => (value.rotate_left(1), value & 0x80 != 0), // RLC
-                    1 => (value.rotate_right(1), value & 0x01 != 0), // RRC
-                    2 => ((value << 1) | u8::from(old_carry), value & 0x80 != 0), // RL
-                    3 => ((value >> 1) | (u8::from(old_carry) << 7), value & 1 != 0), // RR
-                    4 => (value << 1, value & 0x80 != 0),           // SLA
-                    5 => ((value >> 1) | (value & 0x80), value & 1 != 0), // SRA
-                    6 => ((value << 1) | 1, value & 0x80 != 0),     // undocumented SLL
-                    _ => (value >> 1, value & 1 != 0),              // SRL
+                    0 => (value.rotate_left(1), value & 0x80 != 0),
+                    1 => (value.rotate_right(1), value & 0x01 != 0),
+                    2 => ((value << 1) | u8::from(old_carry), value & 0x80 != 0),
+                    3 => ((value >> 1) | (u8::from(old_carry) << 7), value & 1 != 0),
+                    4 => (value << 1, value & 0x80 != 0),
+                    5 => ((value >> 1) | (value & 0x80), value & 1 != 0),
+                    6 => ((value << 1) | 1, value & 0x80 != 0),
+                    _ => (value >> 1, value & 1 != 0),
                 };
                 let mut flags = result & (FLAG_S | FLAG_XY);
                 if result == 0 {
@@ -959,12 +1052,12 @@ impl Z80MicroSequencer {
                     flags |= FLAG_C;
                 }
                 self.set_flags(flags);
-                self.write_register(target, result);
+                Some(result)
             }
             1 => {
                 let mask = 1_u8 << operation;
                 let bit_clear = value & mask == 0;
-                let mut flags = (self.registers.f & FLAG_C) | FLAG_H | (value & FLAG_XY);
+                let mut flags = (self.registers.f & FLAG_C) | FLAG_H | (undocumented & FLAG_XY);
                 if bit_clear {
                     flags |= FLAG_Z | FLAG_PV;
                 }
@@ -972,9 +1065,10 @@ impl Z80MicroSequencer {
                     flags |= FLAG_S;
                 }
                 self.set_flags(flags);
+                None
             }
-            2 => self.write_register(target, value & !(1_u8 << operation)),
-            _ => self.write_register(target, value | (1_u8 << operation)),
+            2 => Some(value & !(1_u8 << operation)),
+            _ => Some(value | (1_u8 << operation)),
         }
     }
 
@@ -1118,6 +1212,24 @@ impl Z80MicroSequencer {
         self.mcycle_index = next_mcycle_index;
         self.tstate_index = 0;
         self.phase = phase;
+        Ok(Z80MicroStep::BusRequest(request))
+    }
+
+    fn issue_cb_memory_write(
+        &mut self,
+        address: u16,
+        value: u8,
+    ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
+        let next_mcycle_index = self
+            .mcycle_index
+            .checked_add(1)
+            .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+        let request = self
+            .handshake
+            .begin(Z80BusOperation::MemoryWrite { value }, address, 3)?;
+        self.mcycle_index = next_mcycle_index;
+        self.tstate_index = 0;
+        self.phase = Z80MicroSequencerPhase::CbMemoryWrite { address, value };
         Ok(Z80MicroStep::BusRequest(request))
     }
 
