@@ -297,7 +297,10 @@ mod tests {
         let mut machine = SmsTemporalCoordinator::new(3).unwrap();
         for continuation_id in 0..4 {
             let deadline = machine.schedule_m1_tstate(continuation_id).unwrap();
-            assert_eq!(deadline, MachineTime::from_ticks(u128::from((continuation_id + 1) * 3)));
+            assert_eq!(
+                deadline,
+                MachineTime::from_ticks(u128::from((continuation_id + 1) * 3))
+            );
             let dispatch = machine.dispatch_next().unwrap().unwrap();
             assert_eq!(dispatch.event.timestamp, deadline);
             assert_eq!(
