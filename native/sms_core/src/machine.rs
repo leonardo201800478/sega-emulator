@@ -430,8 +430,8 @@ mod tests {
             SmsMachineConfig::default(),
         )
         .unwrap();
-        machine.write_memory(0xFFFC, 0x08);
-        machine.write_memory(0x8000, 0x6D);
+        machine.memory.write(0xFFFC, 0x08);
+        machine.memory.write(0x8000, 0x6D);
         assert_eq!(machine.read_memory(0x8000), 0x6D);
     }
 
