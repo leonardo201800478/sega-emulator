@@ -3,7 +3,7 @@
 **Status:** Única rota normativamente ativa de implementação e arquitetura do projeto.  
 **Diretriz de Engenharia:** Arquitetura 100% modular sobre crates compartilhados Rust (`sega-core`, `sega-cpus`, `sega-video`, `sega-audio`, `sega-scheduler`, `sega-hosts`, `sega-media`, `sega-pyo3`). Proibida a criação de lógicas de hardware isoladas ou duplicadas por console.  
 **Baseline Auditada:** `main` em `04ee09f9839bfe29a595abbed831d055cc8d177a` (2026-11-03, PRs #471/E4A e #472/E4B integradas).  
-**Candidato em validação:** PR #473 / E4C, SHA `26182568055dc824a9725428e1770fed6cb8447e`.  
+**Candidato em validação:** PR #473 / E4C, SHA `5bf09790d3cd0dddc0b4ed7b9a434773f3d403db`.  
 **Runtime & Host Target:** 100% Rust para hardware, tempo, barramento, render DirectX 12, áudio WASAPI/XAudio2 + DSP e input SDL3. Python/Qt (PySide6) atua estritamente como launcher, biblioteca, preferências e telemetria.
 
 ---
