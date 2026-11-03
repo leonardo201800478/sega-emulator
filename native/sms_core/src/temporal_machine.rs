@@ -1351,8 +1351,7 @@ mod tests {
             let mut immediate_rom = vec![0; 0x4000];
             immediate_rom[0] = immediate_opcode;
             immediate_rom[1] = operand;
-            let mut immediate_temporal =
-                SmsTemporalMachine::new(immediate_rom.clone(), 3).unwrap();
+            let mut immediate_temporal = SmsTemporalMachine::new(immediate_rom.clone(), 3).unwrap();
             immediate_temporal.cpu_mut().registers = initial_registers;
             let mut immediate_atomic = crate::Z80::default();
             immediate_atomic.registers = initial_registers;
@@ -1363,7 +1362,10 @@ mod tests {
                 immediate_opcode,
                 expected_immediate_tstates,
             );
-            assert_eq!(immediate_temporal.cpu().registers, immediate_atomic.registers);
+            assert_eq!(
+                immediate_temporal.cpu().registers,
+                immediate_atomic.registers
+            );
             assert_eq!(immediate_temporal.cpu().refresh, immediate_atomic.r);
             assert_eq!(
                 immediate_temporal.now(),
@@ -1395,5 +1397,4 @@ mod tests {
             );
         }
     }
-
 }
