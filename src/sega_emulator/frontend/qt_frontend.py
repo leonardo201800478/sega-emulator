@@ -1909,4 +1909,5 @@ def run(initial_path: Path | None = None) -> None:
     preferences.save_to_store(settings)
     controller_input.close()
     if machine is not None:
+        _save_cartridge_ram(machine)
         machine.close_audio_output()
