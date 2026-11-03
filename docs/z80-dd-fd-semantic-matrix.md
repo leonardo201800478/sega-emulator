@@ -32,6 +32,7 @@
 | Classificação ampla do executor atômico | Testes unitários em `native/z80_cpu/src/cpu.rs`: `every_primary_and_prefixed_encoding_is_classified_without_fallback_errors` e `every_indexed_cb_encoding_is_classified_for_ix_and_iy` |
 | Teste dirigido de IX/IY | `indexed_prefix_supports_ix_iy_displacements_and_indexed_cb` no módulo de testes de `cpu.rs` |
 | Teste indexed-CB exaustivo existente | `native/sms_core/tests/z80_indexed_cb_exhaustive_rotate_shift.rs` |
+| Novos vetores sintéticos E1 | `native/z80_cpu/tests/indexed_semantic_baseline.rs`: BIT sem write-back, RMW + cópia z, exceção H/L, half-register, displacement com wrap e prefixos alternados |
 
 A matriz antiga `docs/z80-opcode-matrix.md` descreve principalmente a implementação Python arquivada. Ela não deve ser tratada como inventário normativo do runtime Rust atual.
 
