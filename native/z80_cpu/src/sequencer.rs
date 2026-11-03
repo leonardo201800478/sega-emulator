@@ -3622,7 +3622,7 @@ mod indirect_bc_de_differential_tests {
 
             let mut sequenced = Z80MicroSequencer::default();
             sequenced.import_architectural_state(architectural).unwrap();
-            let sequenced_bus = atomic_bus.clone();
+            let mut sequenced_bus = atomic_bus.clone();
 
             assert_eq!(atomic.step(&mut atomic_bus).unwrap(), 7);
             let fetch = sequenced.begin_instruction().unwrap();
@@ -4891,7 +4891,7 @@ mod ed_absolute_register_pair_differential_tests {
         if !matches!(next_address, 0x0000 | 0x0001 | 0xFFFF) {
             atomic_bus.memory[usize::from(next_address)] = 0x5A;
         }
-        let mut sequenced_bus = atomic_bus.clone();
+        let sequenced_bus = atomic_bus.clone();
 
         assert_eq!(atomic.step(&mut atomic_bus), Ok(20), "ED {opcode:02X}");
         let mut sequenced = Z80MicroSequencer::default();
