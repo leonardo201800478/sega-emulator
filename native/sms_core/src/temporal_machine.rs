@@ -1115,7 +1115,11 @@ mod tests {
                     expected_tstates,
                 );
 
-                assert_eq!(temporal.cpu().registers, atomic.registers, "opcode {opcode:02X}");
+                assert_eq!(
+                    temporal.cpu().registers,
+                    atomic.registers,
+                    "opcode {opcode:02X}"
+                );
                 assert_eq!(temporal.cpu().refresh, atomic.r, "opcode {opcode:02X}");
                 assert_eq!(
                     temporal.now(),
