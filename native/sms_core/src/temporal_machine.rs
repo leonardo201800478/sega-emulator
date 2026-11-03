@@ -460,6 +460,75 @@ impl SmsTemporalMachine {
                 }
                 Ok(step)
             }
+            SmsTemporalDispatch::M1TStateComplete {
+                continuation_id,
+                completed_at,
+            } => {
+                let mut m1 = self.m1.ok_or(SmsTemporalMachineError::InvalidState)?;
+                let phase_before = m1.phase();
+                let pins = m1.pins();
+                let m1_state = m1.export_state();
+                if m1_state.pending_continuation_id != Some(continuation_id)
+                    || m1_state.pending_deadline != Some(completed_at)
+                {
+                    return Err(SmsTemporalMachineError::InvalidState);
+                }
+                let total_waits = self
+                    .m1_fixture_wait_tstates
+                    .ok_or(SmsTemporalMachineError::InvalidState)?;
+                let wait_asserted = match phase_before {
+                    Z80M1Phase::T2 => total_waits > 0,
+                    Z80M1Phase::Wait => {
+                        m1_state.cycle.wait_tstates.saturating_add(1) < total_waits
+                    }
+                    _ => false,
+                };
+
+                // The opcode is sampled at the T3 completion boundary, before
+                // the M1 model advances to T4. Memory is not read at T1/T2/T4.
+                if phase_before == Z80M1Phase::T3 {
+                    let opcode = self.bus.memory().read(pins.address);
+                    m1.sample_opcode(opcode)?;
+                }
+                let next_phase = m1.complete_tstate(
+                    crate::SmsTemporalEvent::M1TStateComplete { continuation_id },
+                    completed_at,
+                    wait_asserted,
+                )?;
+
+                if self.trace_enabled {
+                    self.trace_events.push(SmsTemporalTraceEvent::M1TStateCompleted {
+                        timestamp: completed_at,
+                        phase: phase_before,
+                        pins,
+                    });
+                }
+
+                if next_phase == Z80M1Phase::Complete {
+                    let opcode = m1.opcode().ok_or(SmsTemporalMachineError::InvalidState)?;
+                    let request = self
+                        .cpu
+                        .pending_request()
+                        .filter(|request| request.operation == Z80BusOperation::OpcodeFetch)
+                        .ok_or(SmsTemporalMachineError::InvalidState)?;
+                    let mut next_cpu = self.cpu.clone();
+                    let step = next_cpu.complete_bus_cycle(request.id, Some(opcode))?;
+                    self.cpu = next_cpu;
+                    self.m1 = None;
+                    self.m1_fixture_wait_tstates = None;
+                    if matches!(step, Z80MicroStep::InstructionRetired { .. }) {
+                        self.instruction_started_at = None;
+                    }
+                    Ok(step)
+                } else {
+                    self.m1 = Some(m1);
+                    let request = self
+                        .cpu
+                        .pending_request()
+                        .ok_or(SmsTemporalMachineError::InvalidState)?;
+                    Ok(Z80MicroStep::BusRequest(request))
+                }
+            }
             SmsTemporalDispatch::InternalCycleComplete(completion) => {
                 if self.pending_internal_cycle_id != Some(completion.continuation_id) {
                     return Err(SmsTemporalMachineError::InvalidState);
