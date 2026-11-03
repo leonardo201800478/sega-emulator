@@ -6,7 +6,7 @@
 //! claim cycle-by-cycle bus accuracy. Semantic coverage still requires
 //! independent vectors and bus-level validation.
 
-use crate::alu::{adc8, add8, and8, cpl8, cp8, daa8, or8, rotate_accumulator, sbc8, sub8, xor8};
+use crate::alu::{adc8, add8, and8, cp8, cpl8, daa8, or8, rotate_accumulator, sbc8, sub8, xor8};
 use crate::bus::{
     CpuBus, Z80BusEvent, Z80BusEventKind, Z80CpuSnapshot, Z80InstructionOutcome,
     Z80InstructionTrace, Z80TStatePhase, Z80TStateSample,
