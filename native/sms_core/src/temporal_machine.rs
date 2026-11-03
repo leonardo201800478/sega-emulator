@@ -1335,4 +1335,65 @@ mod tests {
             } if timestamp == MachineTime::from_ticks(27)
         ));
     }
+
+    #[test]
+    fn alu_immediate_and_hl_matrices_match_atomic_reference_through_scheduler() {
+        for operation in 0_u8..8 {
+            let immediate_opcode = 0xC6 | (operation << 3);
+            let memory_opcode = 0x86 | (operation << 3);
+            let operand = 0x13;
+            let initial_registers = Z80Registers {
+                a: 0x27,
+                f: 0x01,
+                ..Z80Registers::default()
+            };
+
+            let mut immediate_rom = vec![0; 0x4000];
+            immediate_rom[0] = immediate_opcode;
+            immediate_rom[1] = operand;
+            let mut immediate_temporal =
+                SmsTemporalMachine::new(immediate_rom.clone(), 3).unwrap();
+            immediate_temporal.cpu_mut().registers = initial_registers;
+            let mut immediate_atomic = crate::Z80::default();
+            immediate_atomic.registers = initial_registers;
+            let mut immediate_bus = FlatBus::new(&immediate_rom);
+            let expected_immediate_tstates = immediate_atomic.step(&mut immediate_bus).unwrap();
+            retired(
+                immediate_temporal.step_instruction(0).unwrap(),
+                immediate_opcode,
+                expected_immediate_tstates,
+            );
+            assert_eq!(immediate_temporal.cpu().registers, immediate_atomic.registers);
+            assert_eq!(immediate_temporal.cpu().refresh, immediate_atomic.r);
+            assert_eq!(
+                immediate_temporal.now(),
+                MachineTime::from_ticks(u128::from(expected_immediate_tstates) * 3)
+            );
+
+            let mut memory_rom = vec![0; 0x4000];
+            memory_rom[0] = memory_opcode;
+            let mut memory_temporal = SmsTemporalMachine::new(memory_rom.clone(), 3).unwrap();
+            let mut memory_registers = initial_registers;
+            memory_registers.set_hl(0xC123);
+            memory_temporal.cpu_mut().registers = memory_registers;
+            memory_temporal.bus.write_memory_for_test(0xC123, operand);
+            let mut memory_atomic = crate::Z80::default();
+            memory_atomic.registers = memory_registers;
+            let mut memory_bus = FlatBus::new(&memory_rom);
+            memory_bus.memory[0xC123] = operand;
+            let expected_memory_tstates = memory_atomic.step(&mut memory_bus).unwrap();
+            retired(
+                memory_temporal.step_instruction(0).unwrap(),
+                memory_opcode,
+                expected_memory_tstates,
+            );
+            assert_eq!(memory_temporal.cpu().registers, memory_atomic.registers);
+            assert_eq!(memory_temporal.cpu().refresh, memory_atomic.r);
+            assert_eq!(
+                memory_temporal.now(),
+                MachineTime::from_ticks(u128::from(expected_memory_tstates) * 3)
+            );
+        }
+    }
+
 }
