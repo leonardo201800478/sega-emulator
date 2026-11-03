@@ -60,6 +60,8 @@ fn dd_fd_alternation_keeps_the_last_index_prefix_and_round_trips_snapshot() {
 
     cpu.ix = 0x1000;
     cpu.iy = 0x2000;
+    cpu.registers.a = 0x10;
+    cpu.registers.f = 0x00;
     let displacement = request(
         cpu.complete_bus_cycle(fetch.id, Some(0x86))
             .expect("indexed ALU opcode requests its displacement"),
