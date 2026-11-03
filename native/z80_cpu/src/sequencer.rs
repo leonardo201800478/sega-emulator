@@ -616,13 +616,9 @@ impl Z80MicroSequencer {
                     _ => return Err(Z80MicroSequencerError::InvalidState),
                 };
                 state.opcode == Some(0xE3)
-                    && prefix_m1_count(
-                        state.prefix_state,
-                        state.mcycle_index,
-                        post_prefix_mcycles,
-                    )
-                    .and_then(|count| minimum_prefixed_tstates(count, trailing_tstates))
-                    .is_some_and(|minimum| state.instruction_tstates >= minimum)
+                    && prefix_m1_count(state.prefix_state, state.mcycle_index, post_prefix_mcycles)
+                        .and_then(|count| minimum_prefixed_tstates(count, trailing_tstates))
+                        .is_some_and(|minimum| state.instruction_tstates >= minimum)
             }
             Z80MicroSequencerPhase::BaseStackPushInternal { .. } => match state.prefix_state {
                 Z80PrefixState::None => true,
@@ -644,9 +640,7 @@ impl Z80MicroSequencer {
                             state.mcycle_index,
                             1 + u32::from(stage),
                         )
-                        .and_then(|count| {
-                            minimum_prefixed_tstates(count, 1 + 3 * u32::from(stage))
-                        })
+                        .and_then(|count| minimum_prefixed_tstates(count, 1 + 3 * u32::from(stage)))
                         .is_some_and(|minimum| state.instruction_tstates >= minimum)
                 }
                 _ => false,
@@ -825,7 +819,8 @@ impl Z80MicroSequencer {
                         0 => {
                             low == 0
                                 && state.instruction_tstates
-                                    >= 4 + if matches!(state.prefix_state, Z80PrefixState::Index(_)) {
+                                    >= 4 + if matches!(state.prefix_state, Z80PrefixState::Index(_))
+                                    {
                                         4
                                     } else {
                                         0
@@ -894,7 +889,11 @@ impl Z80MicroSequencer {
                                     && request.base_tstates == 3
                             })
                             && state.instruction_tstates
-                                >= 4 + if matches!(state.prefix_state, Z80PrefixState::Index(_)) { 4 } else { 0 }
+                                >= 4 + if matches!(state.prefix_state, Z80PrefixState::Index(_)) {
+                                    4
+                                } else {
+                                    0
+                                }
                     }
                     1 => {
                         pending.is_some_and(|request| {
@@ -1087,13 +1086,13 @@ impl Z80MicroSequencer {
                 let opcode_matches = state
                     .opcode
                     .is_some_and(|opcode| matches!(opcode, 0xC5 | 0xD5 | 0xE5 | 0xF5));
-                let expected = state
-                    .opcode
-                    .and_then(|opcode| stack_pair_value(
+                let expected = state.opcode.and_then(|opcode| {
+                    stack_pair_value(
                         &state.registers,
                         opcode,
                         indexed_stack_pair(state.prefix_state, state.ix, state.iy),
-                    ));
+                    )
+                });
                 opcode_matches
                     && expected
                         .is_some_and(|value| high == (value >> 8) as u8 && low == value as u8)
@@ -1820,12 +1819,8 @@ impl Z80MicroSequencer {
             }
             Z80MicroSequencerPhase::BaseExchangeStack { stage, .. } => {
                 stage <= 3
-                    && prefix_m1_count(
-                        state.prefix_state,
-                        state.mcycle_index,
-                        1 + u32::from(stage),
-                    )
-                    .is_some()
+                    && prefix_m1_count(state.prefix_state, state.mcycle_index, 1 + u32::from(stage))
+                        .is_some()
                     && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::BaseExchangeStackInternal {
