@@ -546,14 +546,23 @@ impl Z80MicroSequencer {
                 });
                 let request_matches = pending.is_some_and(|request| {
                     let (operation_matches, expected_address) = match stage {
-                        0 | 1 => (request.operation == Z80BusOperation::MemoryRead, state.registers.pc),
+                        0 | 1 => (
+                            request.operation == Z80BusOperation::MemoryRead,
+                            state.registers.pc,
+                        ),
                         2 if store => (
-                            request.operation == Z80BusOperation::MemoryWrite { value: pair_value as u8 },
+                            request.operation
+                                == Z80BusOperation::MemoryWrite {
+                                    value: pair_value as u8,
+                                },
                             address,
                         ),
                         2 => (request.operation == Z80BusOperation::MemoryRead, address),
                         3 if store => (
-                            request.operation == Z80BusOperation::MemoryWrite { value: (pair_value >> 8) as u8 },
+                            request.operation
+                                == Z80BusOperation::MemoryWrite {
+                                    value: (pair_value >> 8) as u8,
+                                },
                             address.wrapping_add(1),
                         ),
                         3 => (
