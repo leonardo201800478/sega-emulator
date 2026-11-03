@@ -11,8 +11,8 @@ use sega_z80_cpu::{
 };
 
 const BASE_PREFIXES: [u8; 4] = [0xCB, 0xDD, 0xED, 0xFD];
-const EXPECTED_IMPLEMENTED_BASE_ENCODINGS: usize = 174;
-const EXPECTED_UNSUPPORTED_BASE_ENCODINGS: usize = 78;
+const EXPECTED_IMPLEMENTED_BASE_ENCODINGS: usize = 178;
+const EXPECTED_UNSUPPORTED_BASE_ENCODINGS: usize = 74;
 
 fn is_base_prefix(opcode: u8) -> bool {
     BASE_PREFIXES.contains(&opcode)
