@@ -1474,26 +1474,7 @@ impl Z80MicroSequencer {
                         )
                     }
                     0x36 => self.issue_read(
-                        Z80MicroSequencerPhase::BaseRelativeBranchImmediate => {
-                state.mcycle_index == 1 && state.tstate_index == 0
-            }
-            Z80MicroSequencerPhase::BaseRelativeBranchInternal {
-                branch_taken,
-                remaining_tstates,
-                ..
-            } => {
-                let total_tstates = match (state.opcode, branch_taken) {
-                    (Some(0x10), true) => 6,
-                    (Some(0x10), false) => 1,
-                    (Some(0x18 | 0x20 | 0x28 | 0x30 | 0x38), true) => 5,
-                    _ => 0,
-                };
-                total_tstates != 0
-                    && state.mcycle_index == 2
-                    && state.tstate_index
-                        == u16::from(total_tstates.saturating_sub(remaining_tstates))
-            }
-            Z80MicroSequencerPhase::ImmediateReadMemoryWrite,
+                        Z80MicroSequencerPhase::ImmediateReadMemoryWrite,
                         self.registers.pc,
                     ),
                     0xC6 | 0xCE | 0xD6 | 0xDE | 0xE6 | 0xEE | 0xF6 | 0xFE => self.issue_read(
