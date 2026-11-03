@@ -1,3 +1,17 @@
+## Atualização de continuidade — E4C (2026-11-03)
+
+- `main` auditada: `04ee09f9839bfe29a595abbed831d055cc8d177a`; PR #471/E4A e PR #472/E4B estão integradas.
+- PR #473/E4C: `feat/z80-indexed-displacement-e4c-2026-11-03`; candidato atualizado `949dd365046562835eef97e428dc9700e2ae2a70`.
+- INC/DEC (IX/IY+d) reutiliza `IndexDisplacementRead`, `IndexDisplacementInternal`, `MemoryReadIncDec`, `MemoryIncDecInternal` e `MemoryWrite`; schema 27 inalterado.
+- O UM008011-0816 especifica 6 M-cycles / 23 T-states: `4,4,3,5,4,3`; Carry preservado e flags S/Z/H/PV/N conforme INC/DEC.
+- Testes incluem IX/IY, valores de borda, displacement 0/-128/+127, wrap, WAIT, snapshots e prefixos repetidos/alternados.
+- CI inicial no SHA `ad464672c2c3a01620a1f96b0f53395d0e905355`: workflow `41739328124`, 4/4 PASS. Candidato com cobertura adicional `949dd365...`: aguardar workflow `41741995929`.
+- E4 somente fecha após validação final E4C. Não declarar LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS. Próxima etapa: E5 DDCB/FDCB.
+
+Esta atualização substitui as anotações históricas abaixo que indicavam E4B como ativa e E4C como pendente; os registros históricos são preservados para rastreabilidade.
+
+---
+
 # Estratégia de conclusão DD/FD do Z80
 
 **Status:** plano de execução para a próxima fatia de trabalho  
