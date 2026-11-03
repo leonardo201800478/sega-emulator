@@ -656,7 +656,7 @@ impl Z80MicroSequencer {
                     && pending.is_some_and(|request| {
                         request.operation == Z80BusOperation::PortRead
                             && request.address == port_address
-                            && request.base_tstates == 4
+                            && request.base_tstates == 3
                     })
                     && state.instruction_tstates >= 9
             }
@@ -676,9 +676,9 @@ impl Z80MicroSequencer {
                     && pending.is_some_and(|request| {
                         request.operation == Z80BusOperation::MemoryWrite { value }
                             && request.address == memory_address
-                            && request.base_tstates == 3
+                            && request.base_tstates == 4
                     })
-                    && state.instruction_tstates >= 13
+                    && state.instruction_tstates >= 12
             }
             Z80MicroSequencerPhase::EdBlockIoOutputMemoryRead {
                 opcode,
@@ -968,15 +968,15 @@ impl Z80MicroSequencer {
                 state.mcycle_index == 3 && state.tstate_index <= 3
             }
             Z80MicroSequencerPhase::EdBlockIoInitialInternal { .. } => {
-                state.mcycle_index == 2 && state.tstate_index == 0
+                state.mcycle_index == 1 && state.tstate_index == 4
             }
             Z80MicroSequencerPhase::EdBlockIoInputPortRead { .. }
             | Z80MicroSequencerPhase::EdBlockIoOutputMemoryRead { .. } => {
-                state.mcycle_index == 3 && state.tstate_index == 0
+                state.mcycle_index == 2 && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::EdBlockIoInputMemoryWrite { .. }
             | Z80MicroSequencerPhase::EdBlockIoOutputPortWrite { .. } => {
-                state.mcycle_index == 4 && state.tstate_index == 0
+                state.mcycle_index == 3 && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::EdBlockIoRepeatInternal {
                 remaining_tstates, ..
@@ -2087,8 +2087,8 @@ impl Z80MicroSequencer {
                 )
             }
             0xA2 | 0xAA | 0xB2 | 0xBA | 0xA3 | 0xAB | 0xB3 | 0xBB => {
-                self.mcycle_index = 2;
-                self.tstate_index = 0;
+                self.mcycle_index = 1;
+                self.tstate_index = 4;
                 self.phase = Z80MicroSequencerPhase::EdBlockIoInitialInternal { opcode };
                 Ok(Z80MicroStep::InternalCycle { tstates: 1 })
             }
@@ -2429,7 +2429,7 @@ impl Z80MicroSequencer {
             .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
         let request = self
             .handshake
-            .begin(Z80BusOperation::PortRead, port_address, 4)?;
+            .begin(Z80BusOperation::PortRead, port_address, 3)?;
         self.mcycle_index = next_mcycle_index;
         self.tstate_index = 0;
         self.phase = Z80MicroSequencerPhase::EdBlockIoInputPortRead {
@@ -2454,7 +2454,7 @@ impl Z80MicroSequencer {
         let request = self.handshake.begin(
             Z80BusOperation::MemoryWrite { value },
             memory_address,
-            3,
+            4,
         )?;
         self.mcycle_index = next_mcycle_index;
         self.tstate_index = 0;
