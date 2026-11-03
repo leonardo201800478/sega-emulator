@@ -19,7 +19,7 @@ use sega_z80_cpu::{
     Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
 };
 
-pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 10;
+pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 11;
 
 /// Runtime event trace emitted from actual Scheduler/bus dispatch boundaries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1076,6 +1076,46 @@ mod tests {
         retired(machine.step_instruction(0).unwrap(), 0x34, 11);
         assert_eq!(machine.memory().read(0xC000), 1);
         assert_eq!(machine.now(), MachineTime::from_ticks(33));
+    }
+
+    #[test]
+    fn base_inc_bc_internal_tstates_are_scheduler_driven_and_restorable() {
+        let mut machine = SmsTemporalMachine::new(vec![0x03; 0x4000], 3).unwrap();
+        machine.cpu_mut().registers.set_bc(0xFFFF);
+        machine.begin_instruction().unwrap();
+        assert_eq!(
+            complete_m1_fetch(&mut machine, 0),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+
+        machine.schedule_internal_cycle(1).unwrap();
+        let mut restored = SmsTemporalMachine::restore_state(machine.export_state()).unwrap();
+        retired(restored.resume_instruction(0).unwrap(), 0x03, 6);
+        assert_eq!(restored.cpu().registers.bc(), 0x0000);
+        assert_eq!(restored.now(), MachineTime::from_ticks(18));
+    }
+
+    #[test]
+    fn base_add_hl_bc_crosses_documented_mcycle_boundary_and_restores() {
+        let mut machine = SmsTemporalMachine::new(vec![0x09; 0x4000], 3).unwrap();
+        machine.cpu_mut().registers.set_hl(0x7FFF);
+        machine.cpu_mut().registers.set_bc(0xFFFF);
+        machine.begin_instruction().unwrap();
+        assert_eq!(
+            complete_m1_fetch(&mut machine, 0),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+
+        machine.schedule_internal_cycle(1).unwrap();
+        assert_eq!(
+            machine.dispatch_next().unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        let mut restored = SmsTemporalMachine::restore_state(machine.export_state()).unwrap();
+        retired(restored.resume_instruction(0).unwrap(), 0x09, 11);
+        assert_eq!(restored.cpu().registers.hl(), 0x7FFE);
+        assert_eq!(restored.cpu().registers.f & 0x11, 0x11);
+        assert_eq!(restored.now(), MachineTime::from_ticks(33));
     }
 
     #[test]
