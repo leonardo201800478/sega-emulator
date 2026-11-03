@@ -335,6 +335,21 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u8(stage);
             writer.u8(low);
         }
+        Z80MicroSequencerPhase::BaseStackPushInternal { high, low } => {
+            writer.u8(40);
+            writer.u8(high);
+            writer.u8(low);
+        }
+        Z80MicroSequencerPhase::BaseStackPushWrite { stage, low } => {
+            writer.u8(41);
+            writer.u8(stage);
+            writer.u8(low);
+        }
+        Z80MicroSequencerPhase::BaseStackPop { stage, low } => {
+            writer.u8(42);
+            writer.u8(stage);
+            writer.u8(low);
+        }
         Z80MicroSequencerPhase::MemoryWrite { address, value } => {
             writer.u8(7);
             writer.u16(address);
@@ -582,6 +597,18 @@ fn read_phase(
             remaining_tstates: reader.u8()?,
         },
         39 => Z80MicroSequencerPhase::BaseAbsoluteJump {
+            stage: reader.u8()?,
+            low: reader.u8()?,
+        },
+        40 => Z80MicroSequencerPhase::BaseStackPushInternal {
+            high: reader.u8()?,
+            low: reader.u8()?,
+        },
+        41 => Z80MicroSequencerPhase::BaseStackPushWrite {
+            stage: reader.u8()?,
+            low: reader.u8()?,
+        },
+        42 => Z80MicroSequencerPhase::BaseStackPop {
             stage: reader.u8()?,
             low: reader.u8()?,
         },
