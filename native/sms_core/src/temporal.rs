@@ -22,6 +22,8 @@ pub const SMS_Z80_CLOCK_DOMAIN_ID: ClockDomainId = ClockDomainId(0);
 pub enum SmsTemporalEvent {
     BusCompletion { request_id: u64 },
     InternalCycleComplete { continuation_id: u64 },
+    /// One T-state boundary belonging to an explicit Z80 M1 fetch.
+    M1TStateComplete { continuation_id: u64 },
 }
 
 /// Versioned in-memory state for the coordinator and its scheduler timeline.
@@ -169,6 +171,27 @@ impl SmsTemporalCoordinator {
         Ok(deadline)
     }
 
+    /// Schedule exactly one T-state boundary for an explicit M1 fetch phase.
+    ///
+    /// The caller advances the M1 pin model only after dispatching the matching
+    /// event. This keeps phase transitions aligned with the shared machine clock.
+    pub fn schedule_m1_tstate(
+        &mut self,
+        continuation_id: u64,
+    ) -> Result<MachineTime, SmsTemporalCoordinatorError> {
+        let deadline = self
+            .now()
+            .checked_add(u128::from(self.master_ticks_per_tstate))
+            .ok_or(SmsTemporalCoordinatorError::DeadlineOverflow)?;
+        self.scheduler.schedule_at_with_phase(
+            deadline,
+            HardwarePhase::new(0),
+            PlatformPriority::new(0),
+            SmsTemporalEvent::M1TStateComplete { continuation_id },
+        )?;
+        Ok(deadline)
+    }
+
     /// Dispatch the next boundary after advancing the registered clock domain.
     pub fn dispatch_next(
         &mut self,
@@ -261,6 +284,24 @@ mod tests {
         let dispatch = restored.dispatch_next().unwrap().unwrap();
         assert_eq!(dispatch.event.timestamp, deadline);
         assert_eq!(dispatch.clock_advances[0].elapsed_cycles, 5);
+    }
+
+    #[test]
+    fn m1_tstate_events_advance_the_shared_clock_one_cycle_at_a_time() {
+        let mut machine = SmsTemporalCoordinator::new(3).unwrap();
+        for continuation_id in 0..4 {
+            let deadline = machine.schedule_m1_tstate(continuation_id).unwrap();
+            assert_eq!(deadline, MachineTime::from_ticks((continuation_id + 1) * 3));
+            let dispatch = machine.dispatch_next().unwrap().unwrap();
+            assert_eq!(dispatch.event.timestamp, deadline);
+            assert_eq!(
+                dispatch.event.payload,
+                SmsTemporalEvent::M1TStateComplete { continuation_id }
+            );
+            assert_eq!(dispatch.clock_advances[0].elapsed_cycles, 1);
+            assert_eq!(machine.now(), deadline);
+        }
+        assert_eq!(machine.z80_clock_snapshot().unwrap().total_cycles, 4);
     }
 
     #[test]
