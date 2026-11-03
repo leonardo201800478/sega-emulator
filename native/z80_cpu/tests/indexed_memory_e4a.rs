@@ -361,3 +361,155 @@ fn indexed_immediate_store_wraps_pc_and_waits_across_every_bus_cycle() {
     assert_eq!(cpu.registers.pc, 0x0001);
     assert_eq!(cpu.iy, 0xFFFF);
 }
+
+
+#[test]
+fn indexed_load_register_matrix_covers_all_register_destinations() {
+    for prefix in [0xDD, 0xFD] {
+        for opcode in [0x46, 0x4E, 0x56, 0x5E, 0x66, 0x6E, 0x7E] {
+            let mut cpu = Z80MicroSequencer::default();
+            if prefix == 0xDD {
+                cpu.ix = 0x2000;
+            } else {
+                cpu.iy = 0x2000;
+            }
+            cpu.registers.f = 0xD7;
+
+            let fetch = start(&mut cpu);
+            let fetch = feed_prefix(&mut cpu, fetch, prefix);
+            let displacement = request(cpu.complete_bus_cycle(fetch.id, Some(opcode)).unwrap());
+            assert_eq!(
+                cpu.complete_bus_cycle(displacement.id, Some(0xFF)).unwrap(),
+                Z80MicroStep::InternalCycle { tstates: 1 }
+            );
+            let mut data_read = Z80MicroStep::InternalCycle { tstates: 1 };
+            for _ in 0..5 {
+                data_read = cpu.complete_internal_cycle().unwrap();
+            }
+            let data_read = request(data_read);
+            assert_eq!(data_read.address, 0x1FFF);
+            assert_eq!(
+                cpu.complete_bus_cycle(data_read.id, Some(0xA9)).unwrap(),
+                Z80MicroStep::InstructionRetired {
+                    opcode,
+                    tstates: 19,
+                }
+            );
+            match (opcode >> 3) & 0x07 {
+                0 => assert_eq!(cpu.registers.b, 0xA9),
+                1 => assert_eq!(cpu.registers.c, 0xA9),
+                2 => assert_eq!(cpu.registers.d, 0xA9),
+                3 => assert_eq!(cpu.registers.e, 0xA9),
+                4 => assert_eq!(cpu.registers.h, 0xA9),
+                5 => assert_eq!(cpu.registers.l, 0xA9),
+                7 => assert_eq!(cpu.registers.a, 0xA9),
+                _ => unreachable!(),
+            }
+            assert_eq!(cpu.registers.f, 0xD7);
+        }
+    }
+}
+
+#[test]
+fn indexed_store_register_matrix_uses_ordinary_hl_registers() {
+    for prefix in [0xDD, 0xFD] {
+        for opcode in [0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x77] {
+            let mut cpu = Z80MicroSequencer::default();
+            if prefix == 0xDD {
+                cpu.ix = 0x1234;
+            } else {
+                cpu.iy = 0x5678;
+            }
+            cpu.registers.b = 0x10;
+            cpu.registers.c = 0x11;
+            cpu.registers.d = 0x12;
+            cpu.registers.e = 0x13;
+            cpu.registers.h = 0x14;
+            cpu.registers.l = 0x15;
+            cpu.registers.a = 0x17;
+            cpu.registers.f = 0xE3;
+
+            let fetch = start(&mut cpu);
+            let fetch = feed_prefix(&mut cpu, fetch, prefix);
+            let displacement = request(cpu.complete_bus_cycle(fetch.id, Some(opcode)).unwrap());
+            assert_eq!(
+                cpu.complete_bus_cycle(displacement.id, Some(0x02)).unwrap(),
+                Z80MicroStep::InternalCycle { tstates: 1 }
+            );
+            let mut write = Z80MicroStep::InternalCycle { tstates: 1 };
+            for _ in 0..5 {
+                write = cpu.complete_internal_cycle().unwrap();
+            }
+            let write = request(write);
+            let expected_value = match opcode & 0x07 {
+                0 => 0x10,
+                1 => 0x11,
+                2 => 0x12,
+                3 => 0x13,
+                4 => 0x14,
+                5 => 0x15,
+                7 => 0x17,
+                _ => unreachable!(),
+            };
+            assert_eq!(write.address, if prefix == 0xDD { 0x1236 } else { 0x567A });
+            assert_eq!(
+                write.operation,
+                Z80BusOperation::MemoryWrite {
+                    value: expected_value
+                }
+            );
+            assert_eq!(
+                cpu.complete_bus_cycle(write.id, None).unwrap(),
+                Z80MicroStep::InstructionRetired {
+                    opcode,
+                    tstates: 19,
+                }
+            );
+            assert_eq!(cpu.registers.f, 0xE3);
+        }
+    }
+}
+
+#[test]
+fn repeated_and_alternating_index_prefixes_select_the_last_index_register() {
+    for prefixes in [
+        vec![0xDD, 0xDD],
+        vec![0xFD, 0xFD],
+        vec![0xDD, 0xFD],
+        vec![0xFD, 0xDD],
+        vec![0xDD, 0xFD, 0xDD],
+        vec![0xFD, 0xDD, 0xFD],
+    ] {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.ix = 0x1000;
+        cpu.iy = 0x2000;
+        let mut fetch = start(&mut cpu);
+        for prefix in prefixes.iter().copied() {
+            fetch = feed_prefix(&mut cpu, fetch, prefix);
+        }
+        let displacement = request(cpu.complete_bus_cycle(fetch.id, Some(0x7E)).unwrap());
+        assert_eq!(displacement.address, prefixes.len() as u16 + 1);
+        assert_eq!(
+            cpu.complete_bus_cycle(displacement.id, Some(0x01)).unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        let mut data_read = Z80MicroStep::InternalCycle { tstates: 1 };
+        for _ in 0..5 {
+            data_read = cpu.complete_internal_cycle().unwrap();
+        }
+        let data_read = request(data_read);
+        let last_prefix = prefixes.last().copied().unwrap();
+        assert_eq!(
+            data_read.address,
+            if last_prefix == 0xDD { 0x1001 } else { 0x2001 }
+        );
+        assert_eq!(
+            cpu.complete_bus_cycle(data_read.id, Some(0x88)).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x7E,
+                tstates: 15 + 4 * prefixes.len() as u32,
+            }
+        );
+        assert_eq!(cpu.registers.a, 0x88);
+    }
+}
