@@ -617,9 +617,11 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::Ed16ArithmeticInternal {
                 opcode,
                 remaining_tstates,
+                index_prefix,
             } => {
-                (matches!(opcode & 0xCF, 0x4A | 0x42)
-                    || matches!(opcode, 0x09 | 0x19 | 0x29 | 0x39))
+                ((matches!(opcode & 0xCF, 0x4A | 0x42) && index_prefix.is_none())
+                    || (matches!(opcode, 0x09 | 0x19 | 0x29 | 0x39)
+                        && matches!(index_prefix, Some(0xDD | 0xFD))))
                     && state.opcode == Some(opcode)
                     && (1..=7).contains(&remaining_tstates)
                     && pending.is_none()
