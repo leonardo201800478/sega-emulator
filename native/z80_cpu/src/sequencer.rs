@@ -63,6 +63,10 @@ pub enum Z80MicroSequencerPhase {
         branch_taken: bool,
         remaining_tstates: u8,
     },
+    BaseAbsoluteJump {
+        stage: u8,
+        low: u8,
+    },
     ImmediateReadMemoryWrite,
     ImmediateReadAlu {
         operation: u8,
@@ -526,6 +530,26 @@ impl Z80MicroSequencer {
                         1 => address == 0 && state.instruction_tstates >= 7,
                         2 => state.instruction_tstates >= 10,
                         3 => state.instruction_tstates >= 13,
+                        _ => false,
+                    }
+            }
+            Z80MicroSequencerPhase::BaseAbsoluteJump { stage, low } => {
+                let opcode_matches = state.opcode.is_some_and(|opcode| {
+                    matches!(
+                        opcode,
+                        0xC2 | 0xC3 | 0xCA | 0xD2 | 0xDA | 0xE2 | 0xEA | 0xF2 | 0xFA
+                    )
+                });
+                opcode_matches
+                    && stage <= 1
+                    && pending.is_some_and(|request| {
+                        request.operation == Z80BusOperation::MemoryRead
+                            && request.address == state.registers.pc
+                            && request.base_tstates == 3
+                    })
+                    && match stage {
+                        0 => low == 0 && state.instruction_tstates >= 4,
+                        1 => state.instruction_tstates >= 7,
                         _ => false,
                     }
             }
@@ -1444,6 +1468,12 @@ impl Z80MicroSequencer {
                         },
                         self.registers.pc,
                     ),
+                    0xC2 | 0xC3 | 0xCA | 0xD2 | 0xDA | 0xE2 | 0xEA | 0xF2 | 0xFA => {
+                        self.issue_read(
+                            Z80MicroSequencerPhase::BaseAbsoluteJump { stage: 0, low: 0 },
+                            self.registers.pc,
+                        )
+                    }
                     0x10 | 0x18 | 0x20 | 0x28 | 0x30 | 0x38 => self.issue_read(
                         Z80MicroSequencerPhase::BaseRelativeBranchImmediate,
                         self.registers.pc,
@@ -1474,7 +1504,38 @@ impl Z80MicroSequencer {
                         )
                     }
                     0x36 => self.issue_read(
-                        Z80MicroSequencerPhase::BaseRelativeBranchImmediate => {
+                        Z80MicroSequencerPhase::BaseAbsoluteJump { stage, .. } => {
+                state.mcycle_index == 1 + u32::from(stage) && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::BaseAbsoluteJump { stage: 0, .. } => {
+                let low = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.registers.pc = self.registers.pc.wrapping_add(1);
+                self.issue_read(
+                    Z80MicroSequencerPhase::BaseAbsoluteJump { stage: 1, low },
+                    self.registers.pc,
+                )
+            }
+            Z80MicroSequencerPhase::BaseAbsoluteJump { stage: 1, low } => {
+                let high = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.registers.pc = self.registers.pc.wrapping_add(1);
+                let target = u16::from_le_bytes([low, high]);
+                let opcode = self
+                    .opcode
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.wz = target;
+                if opcode == 0xC3 || self.condition((opcode >> 3) & 0x07) {
+                    self.registers.pc = target;
+                }
+                self.retire(opcode)
+            }
+            Z80MicroSequencerPhase::BaseAbsoluteJump { .. } => {
+                Err(Z80MicroSequencerError::UnexpectedCompletion)
+            }
+            Z80MicroSequencerPhase::BaseRelativeBranchImmediate => {
                 state.mcycle_index == 1 && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::BaseRelativeBranchInternal {
