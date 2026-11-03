@@ -1875,7 +1875,6 @@ mod base_absolute_transfer_temporal_tests {
     }
 }
 
-
 #[cfg(test)]
 mod base_relative_branch_temporal_tests {
     use super::SmsTemporalMachine;
