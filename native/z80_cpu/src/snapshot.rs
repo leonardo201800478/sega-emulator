@@ -188,9 +188,18 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u8(destination);
         }
         Z80MicroSequencerPhase::ImmediateReadMemoryWrite => writer.u8(3),
+        Z80MicroSequencerPhase::ImmediateReadAlu { operation } => {
+            writer.u8(8);
+            writer.u8(operation);
+        }
         Z80MicroSequencerPhase::MemoryReadRegister { destination } => {
             writer.u8(4);
             writer.u8(destination);
+        }
+        Z80MicroSequencerPhase::MemoryReadAlu { operation, address } => {
+            writer.u8(9);
+            writer.u8(operation);
+            writer.u16(address);
         }
         Z80MicroSequencerPhase::MemoryReadIncDec { decrement, address } => {
             writer.u8(5);
@@ -225,8 +234,15 @@ fn read_phase(
             destination: reader.u8()?,
         },
         3 => Z80MicroSequencerPhase::ImmediateReadMemoryWrite,
+        8 => Z80MicroSequencerPhase::ImmediateReadAlu {
+            operation: reader.u8()?,
+        },
         4 => Z80MicroSequencerPhase::MemoryReadRegister {
             destination: reader.u8()?,
+        },
+        9 => Z80MicroSequencerPhase::MemoryReadAlu {
+            operation: reader.u8()?,
+            address: reader.u16()?,
         },
         5 => Z80MicroSequencerPhase::MemoryReadIncDec {
             decrement: read_bool(reader)?,
