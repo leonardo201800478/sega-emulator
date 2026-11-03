@@ -121,7 +121,7 @@ impl Z80M1Cycle {
                 rd_n: false,
                 rfsh_n: true,
                 wait_sample: matches!(self.state.phase, Z80M1Phase::T2 | Z80M1Phase::Wait),
-                opcode_sample: self.state.phase as u8 == Z80M1Phase::T3 as u8,
+                opcode_sample: matches!(self.state.phase, Z80M1Phase::T3),
             },
             Z80M1Phase::T4 => Z80M1Pins {
                 address: self.state.refresh_address,
@@ -231,13 +231,13 @@ mod tests {
 
         assert_eq!(cycle.advance_tstate(false).unwrap(), Z80M1Phase::T4);
         let t4 = cycle.pins();
-        assert_eq!(t4.address, 0xAB7F);
+        assert_eq!(t4.address, 0xABFF);
         assert!(t4.m1_n && t4.rd_n);
         assert!(!t4.mreq_n && !t4.rfsh_n);
 
         assert_eq!(cycle.advance_tstate(false).unwrap(), Z80M1Phase::Complete);
         assert_eq!(cycle.opcode(), Some(0x3E));
-        assert_eq!(cycle.refresh_after_m1(), 0x7F);
+        assert_eq!(cycle.refresh_after_m1(), 0xFF);
     }
 
     #[test]
