@@ -2506,6 +2506,7 @@ mod base_immediate_io_temporal_tests {
         );
         assert_eq!(input.cpu().registers.a, 0xFE);
         assert_eq!(input.cpu().registers.f, 0xA5);
+        assert_eq!(input.cpu().wz, 0x12DD);
         assert_eq!(input.now(), MachineTime::from_ticks(33));
 
         let mut output = SmsTemporalMachine::new(vec![0xD3, 0x3F], 3).unwrap();
@@ -2518,6 +2519,7 @@ mod base_immediate_io_temporal_tests {
             }
         );
         assert_eq!(output.bus.io().io_control(), 0xD5);
+        assert_eq!(output.cpu().wz, 0xD540);
         assert_eq!(output.bus.port_write_trace().len(), 1);
         assert_eq!(output.bus.port_write_trace()[0].port, 0xD53F);
         assert_eq!(output.bus.port_write_trace()[0].value, 0xD5);
