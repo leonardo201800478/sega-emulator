@@ -90,8 +90,14 @@ impl Z80MicroSequencerState {
         }
         body.u32(self.handshake.wait_tstates);
         for value in [
-            self.alternate.a, self.alternate.f, self.alternate.b, self.alternate.c,
-            self.alternate.d, self.alternate.e, self.alternate.h, self.alternate.l,
+            self.alternate.a,
+            self.alternate.f,
+            self.alternate.b,
+            self.alternate.c,
+            self.alternate.d,
+            self.alternate.e,
+            self.alternate.h,
+            self.alternate.l,
         ] {
             body.u8(value);
         }
@@ -106,7 +112,10 @@ impl Z80MicroSequencerState {
         body.u8(u8::from(self.nmi_pending));
         match self.int_pending {
             None => body.u8(0),
-            Some(value) => { body.u8(1); body.u8(value); }
+            Some(value) => {
+                body.u8(1);
+                body.u8(value);
+            }
         }
         body.u8(u8::from(self.p));
         body.u8(u8::from(self.halted));
@@ -181,8 +190,14 @@ impl Z80MicroSequencerState {
         };
         let wait_tstates = reader.u32()?;
         let alternate = Z80AlternateRegisters {
-            a: reader.u8()?, f: reader.u8()?, b: reader.u8()?, c: reader.u8()?,
-            d: reader.u8()?, e: reader.u8()?, h: reader.u8()?, l: reader.u8()?,
+            a: reader.u8()?,
+            f: reader.u8()?,
+            b: reader.u8()?,
+            c: reader.u8()?,
+            d: reader.u8()?,
+            e: reader.u8()?,
+            h: reader.u8()?,
+            l: reader.u8()?,
         };
         let ix = reader.u16()?;
         let iy = reader.u16()?;
@@ -477,14 +492,19 @@ mod tests {
     use super::{Reader, Z80_MICRO_SEQUENCER_STATE_MAGIC, Z80MicroSequencerStateCodecError};
     use crate::{Z80MicroSequencer, Z80MicroSequencerState};
 
-
     #[test]
     fn complete_architectural_dto_round_trips_through_versioned_codec() {
         let mut cpu = Z80MicroSequencer::default();
         let mut state = cpu.export_architectural_state();
         state.alternate = crate::Z80AlternateRegisters {
-            a: 0x21, f: 0x5A, b: 0x43, c: 0x65,
-            d: 0x87, e: 0xA9, h: 0xCB, l: 0xED,
+            a: 0x21,
+            f: 0x5A,
+            b: 0x43,
+            c: 0x65,
+            d: 0x87,
+            e: 0xA9,
+            h: 0xCB,
+            l: 0xED,
         };
         state.ix = 0x1357;
         state.iy = 0x2468;
