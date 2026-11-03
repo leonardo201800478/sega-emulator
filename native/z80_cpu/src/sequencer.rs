@@ -99,6 +99,7 @@ pub enum Z80MicroSequencerPhase {
     Ed16ArithmeticInternal {
         opcode: u8,
         remaining_tstates: u8,
+        index_prefix: Option<u8>,
     },
     EdAbsoluteTransfer {
         stage: u8,
@@ -2153,6 +2154,7 @@ impl Z80MicroSequencer {
                 self.phase = Z80MicroSequencerPhase::Ed16ArithmeticInternal {
                     opcode,
                     remaining_tstates: 7,
+                    index_prefix: Some(prefix),
                 };
                 self.mcycle_index = self.mcycle_index.checked_add(1)
                     .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
@@ -2275,6 +2277,7 @@ impl Z80MicroSequencer {
                 self.phase = Z80MicroSequencerPhase::Ed16ArithmeticInternal {
                     opcode,
                     remaining_tstates: 7,
+                    index_prefix: None,
                 };
                 Ok(Z80MicroStep::InternalCycle { tstates: 1 })
             }
