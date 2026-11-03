@@ -93,6 +93,14 @@ pub enum Z80MicroSequencerPhase {
         opcode: u8,
         remaining_tstates: u8,
     },
+    EdAbsoluteTransfer {
+        stage: u8,
+        pair: u8,
+        store: bool,
+        address: u16,
+        low: u8,
+        pair_value: u16,
+    },
     MemoryIncDecInternal {
         decrement: bool,
         old: u8,
@@ -524,6 +532,62 @@ impl Z80MicroSequencer {
                     }
                     && state.instruction_tstates >= 8 + u32::from(7 - remaining_tstates)
             }
+            Z80MicroSequencerPhase::EdAbsoluteTransfer {
+                stage,
+                pair,
+                store,
+                address,
+                low,
+                pair_value,
+            } => {
+                let opcode_matches = state.opcode.is_some_and(|opcode| {
+                    let expected = if store { 0x43 } else { 0x4B };
+                    opcode & 0xCF == expected && pair == ((opcode >> 4) & 0x03)
+                });
+                let request_matches = pending.is_some_and(|request| {
+                    let (operation_matches, expected_address) = match stage {
+                        0 | 1 => (
+                            request.operation == Z80BusOperation::MemoryRead,
+                            state.registers.pc,
+                        ),
+                        2 if store => (
+                            request.operation
+                                == Z80BusOperation::MemoryWrite {
+                                    value: pair_value as u8,
+                                },
+                            address,
+                        ),
+                        2 => (request.operation == Z80BusOperation::MemoryRead, address),
+                        3 if store => (
+                            request.operation
+                                == Z80BusOperation::MemoryWrite {
+                                    value: (pair_value >> 8) as u8,
+                                },
+                            address.wrapping_add(1),
+                        ),
+                        3 => (
+                            request.operation == Z80BusOperation::MemoryRead,
+                            address.wrapping_add(1),
+                        ),
+                        _ => return false,
+                    };
+                    operation_matches
+                        && request.address == expected_address
+                        && request.base_tstates == 3
+                });
+                opcode_matches
+                    && pair <= 3
+                    && stage <= 3
+                    && request_matches
+                    && match stage {
+                        0 => address == 0 && low == 0,
+                        1 => address <= 0x00FF && low == 0,
+                        2 => low == 0,
+                        3 => true,
+                        _ => false,
+                    }
+                    && state.instruction_tstates >= 8 + u32::from(stage) * 3
+            }
             Z80MicroSequencerPhase::MemoryReadIncDec { decrement, address } => {
                 let expected_opcode = if decrement { 0x35 } else { 0x34 };
                 pending.is_some_and(|request| {
@@ -621,6 +685,9 @@ impl Z80MicroSequencer {
             }
             Z80MicroSequencerPhase::ImmediateReadRegisterPairHigh { .. } => {
                 state.mcycle_index == 2 && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::EdAbsoluteTransfer { stage, .. } => {
+                state.mcycle_index == 2 + u32::from(stage) && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::MemoryIncDecInternal { .. } => {
                 state.mcycle_index == 1
@@ -1055,6 +1122,99 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::Ed16ArithmeticInternal { .. } => {
                 Err(Z80MicroSequencerError::UnexpectedCompletion)
             }
+            Z80MicroSequencerPhase::EdAbsoluteTransfer {
+                stage,
+                pair,
+                store,
+                address,
+                low,
+                pair_value,
+            } => match stage {
+                0 => {
+                    let address_low = response
+                        .data
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                    self.registers.pc = self.registers.pc.wrapping_add(1);
+                    self.issue_read(
+                        Z80MicroSequencerPhase::EdAbsoluteTransfer {
+                            stage: 1,
+                            pair,
+                            store,
+                            address: u16::from(address_low),
+                            low: 0,
+                            pair_value,
+                        },
+                        self.registers.pc,
+                    )
+                }
+                1 => {
+                    let address_high = response
+                        .data
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                    self.registers.pc = self.registers.pc.wrapping_add(1);
+                    let address = u16::from_le_bytes([address as u8, address_high]);
+                    let next_phase = Z80MicroSequencerPhase::EdAbsoluteTransfer {
+                        stage: 2,
+                        pair,
+                        store,
+                        address,
+                        low: 0,
+                        pair_value,
+                    };
+                    if store {
+                        self.issue_ed_absolute_write(address, pair_value as u8, next_phase)
+                    } else {
+                        self.issue_read(next_phase, address)
+                    }
+                }
+                2 if store => self.issue_ed_absolute_write(
+                    address.wrapping_add(1),
+                    (pair_value >> 8) as u8,
+                    Z80MicroSequencerPhase::EdAbsoluteTransfer {
+                        stage: 3,
+                        pair,
+                        store,
+                        address,
+                        low: 0,
+                        pair_value,
+                    },
+                ),
+                2 => {
+                    let data_low = response
+                        .data
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                    self.issue_read(
+                        Z80MicroSequencerPhase::EdAbsoluteTransfer {
+                            stage: 3,
+                            pair,
+                            store,
+                            address,
+                            low: data_low,
+                            pair_value,
+                        },
+                        address.wrapping_add(1),
+                    )
+                }
+                3 if store => {
+                    self.wz = address.wrapping_add(1);
+                    self.retire(
+                        self.opcode
+                            .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
+                    )
+                }
+                3 => {
+                    let data_high = response
+                        .data
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                    self.write_register_pair(pair, u16::from_le_bytes([low, data_high]));
+                    self.wz = address.wrapping_add(1);
+                    self.retire(
+                        self.opcode
+                            .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
+                    )
+                }
+                _ => Err(Z80MicroSequencerError::InvalidState),
+            },
             Z80MicroSequencerPhase::MemoryReadIncDec { decrement, address } => {
                 let old = response
                     .data
@@ -1236,6 +1396,35 @@ impl Z80MicroSequencer {
                     self.read_register(register)
                 };
                 self.issue_ed_port_write(value)
+            }
+            op if op & 0xCF == 0x43 => {
+                let pair = (opcode >> 4) & 0x03;
+                let pair_value = self.read_register_pair(pair);
+                self.issue_read(
+                    Z80MicroSequencerPhase::EdAbsoluteTransfer {
+                        stage: 0,
+                        pair,
+                        store: true,
+                        address: 0,
+                        low: 0,
+                        pair_value,
+                    },
+                    self.registers.pc,
+                )
+            }
+            op if op & 0xCF == 0x4B => {
+                let pair = (opcode >> 4) & 0x03;
+                self.issue_read(
+                    Z80MicroSequencerPhase::EdAbsoluteTransfer {
+                        stage: 0,
+                        pair,
+                        store: false,
+                        address: 0,
+                        low: 0,
+                        pair_value: 0,
+                    },
+                    self.registers.pc,
+                )
             }
             op if op & 0xCF == 0x4A || op & 0xCF == 0x42 => {
                 self.mcycle_index = 2;
@@ -1472,6 +1661,16 @@ impl Z80MicroSequencer {
         value
     }
 
+    fn read_register_pair(&self, pair: u8) -> u16 {
+        match pair {
+            0 => self.registers.bc(),
+            1 => self.registers.de(),
+            2 => self.registers.hl(),
+            3 => self.registers.sp,
+            _ => unreachable!("two-bit register-pair field"),
+        }
+    }
+
     fn write_register_pair(&mut self, pair: u8, value: u16) {
         match pair {
             0 => self.registers.set_bc(value),
@@ -1571,6 +1770,25 @@ impl Z80MicroSequencer {
         self.mcycle_index = next_mcycle_index;
         self.tstate_index = 0;
         self.phase = Z80MicroSequencerPhase::CbMemoryWrite { address, value };
+        Ok(Z80MicroStep::BusRequest(request))
+    }
+
+    fn issue_ed_absolute_write(
+        &mut self,
+        address: u16,
+        value: u8,
+        phase: Z80MicroSequencerPhase,
+    ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
+        let next_mcycle_index = self
+            .mcycle_index
+            .checked_add(1)
+            .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+        let request = self
+            .handshake
+            .begin(Z80BusOperation::MemoryWrite { value }, address, 3)?;
+        self.mcycle_index = next_mcycle_index;
+        self.tstate_index = 0;
+        self.phase = phase;
         Ok(Z80MicroStep::BusRequest(request))
     }
 
@@ -4545,5 +4763,172 @@ mod cb_register_differential_tests {
         assert_eq!(cpu.registers.pc, 2);
         assert_eq!(cpu.refresh & 0x7F, 2);
         assert!(cpu.instruction_active());
+    }
+}
+
+#[cfg(test)]
+mod ed_absolute_register_pair_differential_tests {
+    use super::{Z80MicroSequencer, Z80MicroStep};
+    use crate::bus::CpuBus;
+    use crate::{Z80, Z80AlternateRegisters, Z80ArchitecturalState, Z80BusOperation, Z80Registers};
+
+    #[derive(Clone)]
+    struct TestBus {
+        memory: Box<[u8; 0x10000]>,
+        reads: Vec<u16>,
+        writes: Vec<(u16, u8)>,
+    }
+
+    impl Default for TestBus {
+        fn default() -> Self {
+            Self {
+                memory: Box::new([0; 0x10000]),
+                reads: Vec::new(),
+                writes: Vec::new(),
+            }
+        }
+    }
+
+    impl CpuBus for TestBus {
+        fn read_memory(&mut self, address: u16) -> u8 {
+            self.reads.push(address);
+            self.memory[usize::from(address)]
+        }
+
+        fn write_memory(&mut self, address: u16, value: u8) {
+            self.writes.push((address, value));
+            self.memory[usize::from(address)] = value;
+        }
+    }
+
+    fn architectural_state() -> Z80ArchitecturalState {
+        Z80ArchitecturalState {
+            registers: Z80Registers {
+                a: 0xA5,
+                f: 0xD7,
+                b: 0x12,
+                c: 0x34,
+                d: 0x56,
+                e: 0x78,
+                h: 0x9A,
+                l: 0xBC,
+                pc: 0xFFFE,
+                sp: 0xDEF0,
+            },
+            alternate: Z80AlternateRegisters::default(),
+            ix: 0x1357,
+            iy: 0x2468,
+            i: 0xA5,
+            r: 0xFE,
+            iff1: false,
+            iff2: true,
+            interrupt_mode: 1,
+            wz: 0xA328,
+            ei_delay: 0,
+            nmi_pending: false,
+            int_pending: None,
+            q: 0x28,
+            q_previous: 0x5A,
+            p: false,
+            halted: false,
+        }
+    }
+
+    fn roundtrip(cpu: Z80MicroSequencer) -> Z80MicroSequencer {
+        let encoded = cpu.export_state().encode().unwrap();
+        let decoded = crate::Z80MicroSequencerState::decode(&encoded).unwrap();
+        Z80MicroSequencer::restore_state(decoded).unwrap()
+    }
+
+    fn run_sequenced(
+        mut cpu: Z80MicroSequencer,
+        mut bus: TestBus,
+        add_waits: bool,
+    ) -> (Z80MicroSequencer, TestBus, u32) {
+        let mut step = cpu.begin_instruction().unwrap();
+        loop {
+            match step {
+                Z80MicroStep::BusRequest(request) => {
+                    if add_waits {
+                        cpu.insert_wait_tstate().unwrap();
+                    }
+                    let data = match request.operation {
+                        Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
+                            Some(bus.read_memory(request.address))
+                        }
+                        Z80BusOperation::MemoryWrite { value } => {
+                            bus.write_memory(request.address, value);
+                            None
+                        }
+                        other => panic!("unexpected ED absolute transfer operation: {other:?}"),
+                    };
+                    step = cpu.complete_bus_cycle(request.id, data).unwrap();
+                    cpu = roundtrip(cpu);
+                }
+                Z80MicroStep::InstructionRetired { opcode: _, tstates } => {
+                    return (cpu, bus, tstates);
+                }
+                Z80MicroStep::InternalCycle { .. } => {
+                    panic!("ED absolute register-pair transfers have no internal T-states")
+                }
+            }
+        }
+    }
+
+    fn run_case(opcode: u8, address: u16, add_waits: bool) {
+        let initial = architectural_state();
+        let mut atomic = Z80::default();
+        atomic.import_architectural_state(initial).unwrap();
+        let mut atomic_bus = TestBus::default();
+        atomic_bus.memory[0xFFFE] = 0xED;
+        atomic_bus.memory[0xFFFF] = opcode;
+        atomic_bus.memory[0x0000] = address as u8;
+        atomic_bus.memory[0x0001] = (address >> 8) as u8;
+        if !matches!(address, 0x0000 | 0x0001 | 0xFFFF) {
+            atomic_bus.memory[usize::from(address)] = 0xC3;
+        }
+        let next_address = address.wrapping_add(1);
+        if !matches!(next_address, 0x0000 | 0x0001 | 0xFFFF) {
+            atomic_bus.memory[usize::from(next_address)] = 0x5A;
+        }
+        let sequenced_bus = atomic_bus.clone();
+
+        assert_eq!(atomic.step(&mut atomic_bus), Ok(20), "ED {opcode:02X}");
+        let mut sequenced = Z80MicroSequencer::default();
+        sequenced.import_architectural_state(initial).unwrap();
+        let (sequenced, sequenced_bus, tstates) =
+            run_sequenced(sequenced, sequenced_bus, add_waits);
+
+        assert_eq!(tstates, 20 + if add_waits { 6 } else { 0 });
+        assert_eq!(
+            sequenced.export_architectural_state(),
+            atomic.export_architectural_state(),
+            "architectural mismatch for ED {opcode:02X} at {address:04X}"
+        );
+        assert_eq!(sequenced_bus.reads, atomic_bus.reads);
+        assert_eq!(sequenced_bus.writes, atomic_bus.writes);
+        assert_eq!(sequenced_bus.memory, atomic_bus.memory);
+        assert_eq!(sequenced.pending_request(), None);
+    }
+
+    #[test]
+    fn all_eight_ed_absolute_pair_encodings_match_atomic_state_and_bus_order() {
+        for opcode in [0x43, 0x53, 0x63, 0x73, 0x4B, 0x5B, 0x6B, 0x7B] {
+            run_case(opcode, 0x4000, false);
+        }
+    }
+
+    #[test]
+    fn absolute_pair_transfer_wraps_data_address_at_ffff() {
+        for opcode in [0x43, 0x4B, 0x73, 0x7B] {
+            run_case(opcode, 0xFFFF, false);
+        }
+    }
+
+    #[test]
+    fn waits_and_snapshot_restore_preserve_all_six_machine_cycles() {
+        for opcode in [0x43, 0x53, 0x63, 0x73, 0x4B, 0x5B, 0x6B, 0x7B] {
+            run_case(opcode, 0x7FFE, true);
+        }
     }
 }

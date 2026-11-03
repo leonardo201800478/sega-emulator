@@ -348,6 +348,22 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u8(opcode);
             writer.u8(remaining_tstates);
         }
+        Z80MicroSequencerPhase::EdAbsoluteTransfer {
+            stage,
+            pair,
+            store,
+            address,
+            low,
+            pair_value,
+        } => {
+            writer.u8(19);
+            writer.u8(stage);
+            writer.u8(pair);
+            writer.u8(u8::from(store));
+            writer.u16(address);
+            writer.u8(low);
+            writer.u16(pair_value);
+        }
     }
 }
 
@@ -419,6 +435,14 @@ fn read_phase(
         18 => Z80MicroSequencerPhase::Ed16ArithmeticInternal {
             opcode: reader.u8()?,
             remaining_tstates: reader.u8()?,
+        },
+        19 => Z80MicroSequencerPhase::EdAbsoluteTransfer {
+            stage: reader.u8()?,
+            pair: reader.u8()?,
+            store: read_bool(reader)?,
+            address: reader.u16()?,
+            low: reader.u8()?,
+            pair_value: reader.u16()?,
         },
         tag => return Err(Z80MicroSequencerStateCodecError::InvalidTag(tag)),
     })
