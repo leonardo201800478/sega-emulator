@@ -239,7 +239,8 @@ pub struct Z80MicroSequencerState {
     pub phase: Z80MicroSequencerPhase,
     /// Explicit DD/FD substitution latch, independent of the last fetched opcode.
     pub active_index: Option<Z80IndexRegister>,
-    pub opcode: Option<u8>,    pub instruction_tstates: u32,
+    pub opcode: Option<u8>,
+    pub instruction_tstates: u32,
     /// Zero-based M-cycle index within the active instruction.
     pub mcycle_index: u32,
     /// Zero-based T-state position within the current M-cycle.
@@ -290,7 +291,8 @@ pub struct Z80MicroSequencer {
     handshake: Z80BusHandshake,
     phase: Z80MicroSequencerPhase,
     active_index: Option<Z80IndexRegister>,
-    opcode: Option<u8>,    instruction_tstates: u32,
+    opcode: Option<u8>,
+    instruction_tstates: u32,
     mcycle_index: u32,
     tstate_index: u16,
 }
@@ -1111,7 +1113,24 @@ impl Z80MicroSequencer {
                 _ => false,
             },
         };
-        if !valid || !indices_valid {
+        let active_index_valid = match state.phase {
+            Z80MicroSequencerPhase::Ready => state.active_index.is_none(),
+            Z80MicroSequencerPhase::OpcodeFetch => match state.opcode {
+                Some(0xDD) => state.active_index == Some(Z80IndexRegister::Ix),
+                Some(0xFD) => state.active_index == Some(Z80IndexRegister::Iy),
+                Some(0xCB | 0xED) | None => state.active_index.is_none(),
+                Some(_) => false,
+            },
+            Z80MicroSequencerPhase::IndexImmediateLow { prefix }
+            | Z80MicroSequencerPhase::IndexImmediateHigh { prefix, .. } => {
+                state.active_index == Z80IndexRegister::from_prefix(prefix)
+            }
+            Z80MicroSequencerPhase::Ed16ArithmeticInternal {
+                index_prefix: Some(prefix), ..
+            } => state.active_index == Z80IndexRegister::from_prefix(prefix),
+            _ => state.active_index.is_none(),
+        };
+        if !valid || !indices_valid || !active_index_valid {
             return Err(Z80MicroSequencerError::InvalidState);
         }
         Ok(Self {
