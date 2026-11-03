@@ -1105,13 +1105,13 @@ impl Z80MicroSequencer {
                 let opcode_matches = state
                     .opcode
                     .is_some_and(|opcode| matches!(opcode, 0xC5 | 0xD5 | 0xE5 | 0xF5));
-                let expected = state
-                    .opcode
-                    .and_then(|opcode| stack_pair_value(
+                let expected = state.opcode.and_then(|opcode| {
+                    stack_pair_value(
                         &state.registers,
                         opcode,
                         indexed_stack_pair(state.prefix_state, state.ix, state.iy),
-                    ));
+                    )
+                });
                 let request_matches = expected.is_some_and(|value| {
                     let expected_value = if stage == 0 {
                         (value >> 8) as u8
@@ -1153,7 +1153,8 @@ impl Z80MicroSequencer {
                         0 => {
                             low == 0
                                 && state.instruction_tstates
-                                    >= 4 + if matches!(state.prefix_state, Z80PrefixState::Index(_)) {
+                                    >= 4 + if matches!(state.prefix_state, Z80PrefixState::Index(_))
+                                    {
                                         4
                                     } else {
                                         0
@@ -1878,12 +1879,8 @@ impl Z80MicroSequencer {
             }
             Z80MicroSequencerPhase::BaseStackPushWrite { stage, .. } => {
                 stage <= 1
-                    && prefix_m1_count(
-                        state.prefix_state,
-                        state.mcycle_index,
-                        1 + u32::from(stage),
-                    )
-                    .is_some()
+                    && prefix_m1_count(state.prefix_state, state.mcycle_index, 1 + u32::from(stage))
+                        .is_some()
                     && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::BaseStackPop { stage, .. } => {
