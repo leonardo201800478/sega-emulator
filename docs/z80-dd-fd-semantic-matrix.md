@@ -1,9 +1,9 @@
-**Atualização E4C (2026-11-03):** PR #471/E4A e PR #472/E4B estão integradas na `main` (`04ee09f9`). PR #473 implementa INC/DEC (IX/IY+d); candidato `26182568055dc824a9725428e1770fed6cb8447e`. A sequência nominal de 23 T-states / 6 M-cycles foi conferida no ZiLOG UM008011-0816, páginas impressas 168–171. O CI do candidato com os casos adicionais de displacement ainda deve ser confirmado; não promover LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS. DDCB/FDCB (E5) continua sendo a próxima fatia.
+**Atualização E4C (2026-11-03):** PR #471/E4A e PR #472/E4B estão integradas na `main` (`04ee09f9`). PR #473 implementa INC/DEC (IX/IY+d); candidato `5bf09790d3cd0dddc0b4ed7b9a434773f3d403db`. A sequência nominal de 23 T-states / 6 M-cycles foi conferida no ZiLOG UM008011-0816, páginas impressas 168–171. O CI do candidato com os casos adicionais de displacement ainda deve ser confirmado; não promover LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS. DDCB/FDCB (E5) continua sendo a próxima fatia.
 
 # Matriz semântica DD/FD do Z80 — estado após E4C
 
 **Data:** 2026-11-03  
-**Baseline auditada:** `main` — `04ee09f9839bfe29a595abbed831d055cc8d177a` (E4B integrada); candidato E4C PR #473 — `26182568055dc824a9725428e1770fed6cb8447e`  
+**Baseline auditada:** `main` — `04ee09f9839bfe29a595abbed831d055cc8d177a` (E4B integrada); candidato E4C PR #473 — `5bf09790d3cd0dddc0b4ed7b9a434773f3d403db`  
 **Schema do microsequenciador:** 27  
 **Escopo:** decoder DD/FD, IX/IY, IXH/IXL/IYH/IYL, (IX/IY+d), DDCB/FDCB.  
 **Natureza:** inventário do código ativo e das evidências disponíveis; não declara conclusão funcional nem temporal do Z80.
