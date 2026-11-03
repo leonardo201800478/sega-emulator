@@ -1285,6 +1285,66 @@ impl Z80MicroSequencer {
                     })
                     && state.instruction_tstates >= 4
             }
+            Z80MicroSequencerPhase::IndexDisplacementRead => {
+                state.opcode.is_some_and(is_indexed_load_opcode)
+                    && prefix_m1_count(state.prefix_state, state.mcycle_index, 1)
+                        .and_then(|count| minimum_prefixed_tstates(count, 0))
+                        .is_some_and(|minimum| state.instruction_tstates >= minimum)
+                    && pending.is_some_and(|request| {
+                        request.operation == Z80BusOperation::MemoryRead
+                            && request.address == state.registers.pc
+                            && request.base_tstates == 3
+                    })
+            }
+            Z80MicroSequencerPhase::IndexDisplacementInternal {
+                address,
+                remaining_tstates,
+            } => {
+                let completed_tstates = 5_u8.saturating_sub(remaining_tstates);
+                pending.is_none()
+                    && address == state.wz
+                    && (1..=5).contains(&remaining_tstates)
+                    && prefix_m1_count(state.prefix_state, state.mcycle_index, 2)
+                        .and_then(|count| {
+                            minimum_prefixed_tstates(
+                                count,
+                                3 + u32::from(completed_tstates),
+                            )
+                        })
+                        .is_some_and(|minimum| state.instruction_tstates >= minimum)
+                    && state.tstate_index == u16::from(completed_tstates)
+            }
+            Z80MicroSequencerPhase::IndexedImmediateReadMemoryWrite { address } => {
+                state.opcode == Some(0x36)
+                    && address == state.wz
+                    && prefix_m1_count(state.prefix_state, state.mcycle_index, 2)
+                        .and_then(|count| minimum_prefixed_tstates(count, 3))
+                        .is_some_and(|minimum| state.instruction_tstates >= minimum)
+                    && pending.is_some_and(|request| {
+                        request.operation == Z80BusOperation::MemoryRead
+                            && request.address == state.registers.pc
+                            && request.base_tstates == 3
+                    })
+            }
+            Z80MicroSequencerPhase::IndexedImmediateStoreInternal {
+                address,
+                remaining_tstates,
+                ..
+            } => {
+                pending.is_none()
+                    && state.opcode == Some(0x36)
+                    && address == state.wz
+                    && (1..=2).contains(&remaining_tstates)
+                    && state.tstate_index >= 3
+                    && prefix_m1_count(state.prefix_state, state.mcycle_index, 2)
+                        .and_then(|count| {
+                            minimum_prefixed_tstates(
+                                count,
+                                3 + u32::from(state.tstate_index),
+                            )
+                        })
+                        .is_some_and(|minimum| state.instruction_tstates >= minimum)
+            }
             Z80MicroSequencerPhase::ImmediateReadAlu { operation } => {
                 state.opcode.is_some_and(|opcode| {
                     matches!(
@@ -1298,26 +1358,42 @@ impl Z80MicroSequencer {
                 }) && state.instruction_tstates >= 4
             }
             Z80MicroSequencerPhase::MemoryReadRegister { destination } => {
-                let expected_address = state.opcode.and_then(|opcode| match opcode {
-                    0x0A if destination == 7 => Some(state.registers.bc()),
-                    0x1A if destination == 7 => Some(state.registers.de()),
-                    0x40..=0x7F
-                        if opcode != 0x76
-                            && opcode & 0x07 == 0x06
-                            && ((opcode >> 3) & 0x07) == destination
-                            && destination != 6 =>
-                    {
-                        Some(state.registers.hl())
+                let indexed = matches!(state.prefix_state, Z80PrefixState::Index(_));
+                let expected_address = state.opcode.and_then(|opcode| {
+                    if indexed {
+                        (is_indexed_memory_load_opcode(opcode)
+                            && ((opcode >> 3) & 0x07) == destination)
+                            .then_some(state.wz)
+                    } else {
+                        match opcode {
+                            0x0A if destination == 7 => Some(state.registers.bc()),
+                            0x1A if destination == 7 => Some(state.registers.de()),
+                            0x40..=0x7F
+                                if opcode != 0x76
+                                    && opcode & 0x07 == 0x06
+                                    && ((opcode >> 3) & 0x07) == destination
+                                    && destination != 6 =>
+                            {
+                                Some(state.registers.hl())
+                            }
+                            _ => None,
+                        }
                     }
-                    _ => None,
                 });
+                let minimum_tstates = if indexed {
+                    prefix_m1_count(state.prefix_state, state.mcycle_index, 3)
+                        .and_then(|count| minimum_prefixed_tstates(count, 8))
+                        .unwrap_or(u32::MAX)
+                } else {
+                    4
+                };
                 expected_address.is_some_and(|address| {
                     pending.is_some_and(|request| {
                         request.operation == Z80BusOperation::MemoryRead
                             && request.address == address
                             && request.base_tstates == 3
                     })
-                }) && state.instruction_tstates >= 4
+                }) && state.instruction_tstates >= minimum_tstates
             }
             Z80MicroSequencerPhase::MemoryReadAlu { operation, address } => {
                 state.opcode.is_some_and(|opcode| {
@@ -1762,7 +1838,14 @@ impl Z80MicroSequencer {
                 let Some(request) = pending else {
                     return Err(Z80MicroSequencerError::InvalidState);
                 };
+                let indexed = matches!(state.prefix_state, Z80PrefixState::Index(_));
+                let indexed_minimum = prefix_m1_count(state.prefix_state, state.mcycle_index, 3)
+                    .and_then(|count| minimum_prefixed_tstates(count, 8))
+                    .unwrap_or(u32::MAX);
                 let (minimum_tstates, expected_address, expected_value) = match state.opcode {
+                    Some(opcode) if indexed && is_indexed_memory_store_opcode(opcode) => {
+                        (indexed_minimum, Some(state.wz), None)
+                    }
                     Some(0x02) => (4, Some(state.registers.bc()), Some(state.registers.a)),
                     Some(0x12) => (4, Some(state.registers.de()), Some(state.registers.a)),
                     Some(0x77) => (4, Some(state.registers.hl()), None),
