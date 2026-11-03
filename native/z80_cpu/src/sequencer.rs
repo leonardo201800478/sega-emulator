@@ -989,8 +989,8 @@ impl Z80MicroSequencer {
                     Some(0x12) => (4, Some(state.registers.de()), Some(state.registers.a)),
                     Some(0x77) => (4, Some(state.registers.hl()), None),
                     Some(0x36) => (7, Some(state.registers.hl()), None),
-                    Some(0x22) => (10, None, None),
-                    Some(0x32) => (10, None, Some(state.registers.a)),
+                    Some(0x22) => (10, Some(address), None),
+                    Some(0x32) => (10, Some(address), Some(state.registers.a)),
                     Some(0x34 | 0x35) => (8, Some(state.registers.hl()), None),
                     Some(0x67 | 0x6F) => (15, Some(state.registers.hl()), None),
                     _ => (u32::MAX, None, None),
@@ -1549,7 +1549,6 @@ impl Z80MicroSequencer {
                 }
             }
             Z80MicroSequencerPhase::BaseAbsoluteTransfer { stage: 3, address, low } => {
-                let high = response.data.ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 let opcode = self.opcode.ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 match opcode {
                     0x22 => {
@@ -1557,6 +1556,7 @@ impl Z80MicroSequencer {
                         self.retire(opcode)
                     }
                     0x2A => {
+                        let high = response.data.ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                         self.registers.set_hl(u16::from_le_bytes([low, high]));
                         self.wz = address.wrapping_add(1);
                         self.retire(opcode)
