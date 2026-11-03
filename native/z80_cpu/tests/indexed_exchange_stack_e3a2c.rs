@@ -33,6 +33,7 @@ fn ex_sp_ix_preserves_bus_order_waits_and_every_snapshot_boundary() {
     let mut cpu = Z80MicroSequencer::default();
     cpu.ix = 0x3988;
     cpu.registers.sp = 0x0100;
+    cpu.registers.f = 0xA5;
 
     let fetch = start(&mut cpu);
     let fetch = feed_prefix(&mut cpu, fetch, 0xDD);
@@ -89,6 +90,8 @@ fn ex_sp_ix_preserves_bus_order_waits_and_every_snapshot_boundary() {
     assert_eq!(cpu.ix, 0x4890);
     assert_eq!(cpu.registers.sp, 0x0100);
     assert_eq!(cpu.wz, 0x4890);
+    assert_eq!(cpu.registers.f, 0xA5);
+    assert_eq!(cpu.registers.pc, 2);
 }
 
 #[test]
@@ -96,6 +99,7 @@ fn ex_sp_iy_wraps_memory_addresses_without_changing_sp() {
     let mut cpu = Z80MicroSequencer::default();
     cpu.iy = 0xBEEF;
     cpu.registers.sp = 0xFFFF;
+    cpu.registers.f = 0x5A;
 
     let fetch = start(&mut cpu);
     let fetch = feed_prefix(&mut cpu, fetch, 0xDD);
@@ -142,4 +146,6 @@ fn ex_sp_iy_wraps_memory_addresses_without_changing_sp() {
     assert_eq!(cpu.iy, 0x2211);
     assert_eq!(cpu.registers.sp, 0xFFFF);
     assert_eq!(cpu.wz, 0x2211);
+    assert_eq!(cpu.registers.f, 0x5A);
+    assert_eq!(cpu.registers.pc, 3);
 }
