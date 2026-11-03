@@ -551,7 +551,17 @@ impl Z80MicroSequencer {
                     _ => 0,
                 };
                 let completed = total_tstates.saturating_sub(remaining_tstates);
+                let branch_outcome_valid = match opcode {
+                    Some(0x10) => (state.registers.b != 0) == branch_taken,
+                    Some(0x18) => branch_taken,
+                    Some(0x20) => (state.registers.f & FLAG_Z == 0) == branch_taken,
+                    Some(0x28) => (state.registers.f & FLAG_Z != 0) == branch_taken,
+                    Some(0x30) => (state.registers.f & FLAG_C == 0) == branch_taken,
+                    Some(0x38) => (state.registers.f & FLAG_C != 0) == branch_taken,
+                    _ => false,
+                };
                 total_tstates != 0
+                    && branch_outcome_valid
                     && (1..=total_tstates).contains(&remaining_tstates)
                     && pending.is_none()
                     && state.mcycle_index == 2
