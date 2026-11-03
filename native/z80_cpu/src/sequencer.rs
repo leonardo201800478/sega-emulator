@@ -571,6 +571,18 @@ impl Z80MicroSequencer {
                 }
                 _ => false,
             },
+            Z80MicroSequencerPhase::BaseAbsoluteTransfer { stage, .. } => {
+                match state.prefix_state {
+                    Z80PrefixState::None => true,
+                    Z80PrefixState::Index(_) => {
+                        matches!(state.opcode, Some(0x22 | 0x2A))
+                            && stage <= 3
+                            && state.mcycle_index >= 2 + u32::from(stage)
+                            && state.instruction_tstates >= 8 + 3 * u32::from(stage)
+                    }
+                    _ => false,
+                }
+            }
             _ => state.prefix_state == Z80PrefixState::None,
         };
         let valid = match state.phase {
@@ -640,12 +652,17 @@ impl Z80MicroSequencer {
             } => {
                 let opcode = state.opcode;
                 let opcode_matches = matches!(opcode, Some(0x22 | 0x2A | 0x32 | 0x3A));
+                let index_pair = match state.prefix_state {
+                    Z80PrefixState::Index(Z80IndexRegister::Ix) => state.ix,
+                    Z80PrefixState::Index(Z80IndexRegister::Iy) => state.iy,
+                    _ => state.registers.hl(),
+                };
                 let request_matches = pending.is_some_and(|request| {
                     let (operation, expected_address) = match stage {
                         0 | 1 => (Z80BusOperation::MemoryRead, state.registers.pc),
                         2 if matches!(opcode, Some(0x22 | 0x32)) => {
                             let value = if opcode == Some(0x22) {
-                                state.registers.l
+                                index_pair as u8
                             } else {
                                 state.registers.a
                             };
@@ -654,7 +671,7 @@ impl Z80MicroSequencer {
                         2 => (Z80BusOperation::MemoryRead, address),
                         3 if opcode == Some(0x22) => (
                             Z80BusOperation::MemoryWrite {
-                                value: state.registers.h,
+                                value: (index_pair >> 8) as u8,
                             },
                             address.wrapping_add(1),
                         ),
@@ -665,14 +682,25 @@ impl Z80MicroSequencer {
                         && request.address == expected_address
                         && request.base_tstates == 3
                 });
+                let prefix_m1_count = state.mcycle_index.checked_sub(1 + u32::from(stage));
+                let prefix_count_valid = match (state.prefix_state, prefix_m1_count) {
+                    (Z80PrefixState::None, Some(0)) => true,
+                    (Z80PrefixState::Index(_), Some(count)) => count >= 1,
+                    _ => false,
+                };
+                let minimum_tstates = prefix_m1_count
+                    .and_then(|count| count.checked_add(1))
+                    .and_then(|m1_count| m1_count.checked_mul(4))
+                    .and_then(|base| base.checked_add(3 * u32::from(stage)));
                 opcode_matches
                     && stage <= 3
+                    && prefix_count_valid
                     && request_matches
+                    && minimum_tstates.is_some_and(|minimum| state.instruction_tstates >= minimum)
                     && match stage {
-                        0 => address == 0 && low == 0 && state.instruction_tstates >= 4,
-                        1 => address == 0 && state.instruction_tstates >= 7,
-                        2 => state.instruction_tstates >= 10,
-                        3 => state.instruction_tstates >= 13,
+                        0 => address == 0 && low == 0,
+                        1 => address == 0,
+                        2 | 3 => true,
                         _ => false,
                     }
             }
@@ -1606,7 +1634,14 @@ impl Z80MicroSequencer {
                 }
             }
             Z80MicroSequencerPhase::BaseAbsoluteTransfer { stage, .. } => {
-                state.mcycle_index == 1 + u32::from(stage) && state.tstate_index == 0
+                let prefix_m1_count = state.mcycle_index.checked_sub(1 + u32::from(stage));
+                match (state.prefix_state, prefix_m1_count) {
+                    (Z80PrefixState::None, Some(0)) => state.tstate_index == 0,
+                    (Z80PrefixState::Index(_), Some(count)) => {
+                        count >= 1 && state.tstate_index == 0
+                    }
+                    _ => false,
+                }
             }
             Z80MicroSequencerPhase::BaseImmediatePortAddress { .. } => {
                 state.mcycle_index == 1 && state.tstate_index == 0
@@ -1952,7 +1987,8 @@ impl Z80MicroSequencer {
                 if let Some(index_class) = index_opcode_class {
                     let indexed_16bit_opcode = matches!(
                         opcode,
-                        0x09 | 0x19 | 0x21 | 0x23 | 0x29 | 0x2B | 0x39 | 0xE9 | 0xF9
+                        0x09 | 0x19 | 0x21 | 0x22 | 0x23 | 0x29 | 0x2A | 0x2B | 0x39
+                            | 0xE9 | 0xF9
                     );
                     if index_class != Z80IndexOpcodeClass::UsesIndex || !indexed_16bit_opcode {
                         return self.unsupported(opcode);
@@ -2252,7 +2288,12 @@ impl Z80MicroSequencer {
                     .opcode
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 match opcode {
-                    0x22 => self.issue_base_absolute_write(address, self.registers.l, 2, 0),
+                    0x22 => self.issue_base_absolute_write(
+                        address,
+                        self.read_register_pair(2) as u8,
+                        2,
+                        0,
+                    ),
                     0x32 => self.issue_base_absolute_write(address, self.registers.a, 2, 0),
                     0x2A | 0x3A => self.issue_read(
                         Z80MicroSequencerPhase::BaseAbsoluteTransfer {
@@ -2274,7 +2315,7 @@ impl Z80MicroSequencer {
                 match opcode {
                     0x22 => self.issue_base_absolute_write(
                         address.wrapping_add(1),
-                        self.registers.h,
+                        (self.read_register_pair(2) >> 8) as u8,
                         3,
                         0,
                     ),
@@ -2323,7 +2364,7 @@ impl Z80MicroSequencer {
                         let high = response
                             .data
                             .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
-                        self.registers.set_hl(u16::from_le_bytes([low, high]));
+                        self.write_register_pair(2, u16::from_le_bytes([low, high]));
                         self.wz = address.wrapping_add(1);
                         self.retire(opcode)
                     }
