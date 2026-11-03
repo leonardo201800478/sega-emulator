@@ -570,7 +570,7 @@ impl Z80MicroSequencer {
                 ..
             } => {
                 let opcode = state.opcode;
-                let total_tstates = match (opcode, branch_taken) {
+                let total_tstates: u8 = match (opcode, branch_taken) {
                     (Some(0x10), true) => 6,
                     (Some(0x10), false) => 1,
                     (Some(0x18 | 0x20 | 0x28 | 0x30 | 0x38), true) => 5,
@@ -1114,7 +1114,7 @@ impl Z80MicroSequencer {
                 remaining_tstates,
                 ..
             } => {
-                let total_tstates = match (state.opcode, branch_taken) {
+                let total_tstates: u8 = match (state.opcode, branch_taken) {
                     (Some(0x10), true) => 6,
                     (Some(0x10), false) => 1,
                     (Some(0x18 | 0x20 | 0x28 | 0x30 | 0x38), true) => 5,
@@ -2216,6 +2216,7 @@ impl Z80MicroSequencer {
                 Ok(Z80MicroStep::InternalCycle { tstates: 1 })
             }
             Z80MicroSequencerPhase::BaseInternal { .. }
+            | Z80MicroSequencerPhase::BaseRelativeBranchInternal { .. }
             | Z80MicroSequencerPhase::MemoryIncDecInternal { .. } => {
                 Err(Z80MicroSequencerError::UnexpectedCompletion)
             }
