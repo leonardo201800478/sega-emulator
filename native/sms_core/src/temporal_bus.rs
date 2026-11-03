@@ -1,8 +1,9 @@
-//! Transactional SMS memory-bus adapter for the Scheduler-driven path.
+//! Transactional SMS memory/I/O bus adapter for the Scheduler-driven path.
 //!
-//! Memory reads and writes become visible only when their scheduled completion
-//! event is dispatched. A completion is latched until the CPU acknowledges it,
-//! preventing a second dispatch from repeating a write side effect.
+//! Memory and port transactions become visible only at their scheduled
+//! completion boundary. Controller/control-port effects are applied there;
+//! VDP/PSG devices remain outside this temporal slice, with writes retained in
+//! a bounded diagnostic trace and unconnected reads returning open bus.
 
 use core::fmt;
 
@@ -51,7 +52,7 @@ fn valid_internal_deadline(
     elapsed_tstates(started_at, deadline, master_ticks_per_tstate).is_some()
 }
 
-/// Result latched at the completion boundary of one memory transaction.
+/// Result latched at the completion boundary of one bus transaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SmsBusCompletion {
     pub request_id: u64,
@@ -186,7 +187,7 @@ impl SmsTemporalBus {
         })
     }
 
-    /// Begin one memory request and schedule its completion deadline.
+    /// Begin one memory or port request and schedule its completion deadline.
     ///
     /// WAIT is supplied by a deterministic fixture; this API does not sample
     /// or claim a physical SMS WAIT signal.
@@ -259,7 +260,7 @@ impl SmsTemporalBus {
         Ok(self.coordinator.schedule_m1_tstate(continuation_id)?)
     }
 
-    /// Dispatch the next scheduled boundary and apply the memory side effect once.
+    /// Dispatch the next scheduled boundary and apply its bus side effect once.
     ///
     /// A read samples memory at this completion boundary. A write mutates memory
     /// at this completion boundary. The response is latched until acknowledged.
