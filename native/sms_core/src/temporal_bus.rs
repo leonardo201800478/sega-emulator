@@ -687,7 +687,7 @@ mod tests {
             "ROM remains visible before dispatch"
         );
         let completion = bus.dispatch_next().unwrap().unwrap();
-        let restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
+        let mut restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
         assert_eq!(restored.memory().read(0x8000), 0xA6);
         assert_eq!(restored.dispatch_next().unwrap(), Some(completion));
         restored.acknowledge_completion(32).unwrap();
