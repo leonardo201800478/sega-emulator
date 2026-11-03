@@ -1918,7 +1918,7 @@ mod base_call_rst_snapshot_tests {
 
 #[cfg(test)]
 mod base_return_snapshot_tests {
-    use crate::{Z80MicroSequencer, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep};
+    use crate::{Z80MicroSequencer, Z80MicroSequencerState, Z80MicroStep};
 
     fn round_trip(cpu: &Z80MicroSequencer) -> Z80MicroSequencer {
         let state = cpu.export_state();
