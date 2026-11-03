@@ -320,6 +320,9 @@ impl SmsTemporalMachine {
         .map(Some)
     }
     /// Schedule the CPU's current pending bus request with fixture WAIT states.
+    ///
+    /// Opcode fetches use the explicit four-phase M1 model; data accesses retain
+    /// the transactional memory-cycle path.
     pub fn schedule_pending_bus(
         &mut self,
         fixture_wait_tstates: u32,
@@ -328,7 +331,38 @@ impl SmsTemporalMachine {
             .cpu
             .pending_request()
             .ok_or(SmsTemporalMachineError::InvalidState)?;
-        if self.bus.pending_request().is_some() {
+        if request.operation == Z80BusOperation::OpcodeFetch {
+            if self.bus.pending_request().is_some()
+                || self.bus.completion().is_some()
+                || self.pending_internal_cycle_id.is_some()
+            {
+                return Err(SmsTemporalMachineError::InvalidState);
+            }
+            if let Some(m1) = self.m1.as_mut() {
+                if self.m1_fixture_wait_tstates != Some(fixture_wait_tstates)
+                    || m1.export_state().pending_continuation_id.is_some()
+                {
+                    return Err(SmsTemporalMachineError::InvalidState);
+                }
+                m1.schedule_next_tstate(self.bus.coordinator_mut())?;
+                return Ok(m1.export_state().pending_deadline.unwrap());
+            }
+
+            let mut next_cpu = self.cpu.clone();
+            next_cpu.insert_wait_tstates(fixture_wait_tstates)?;
+            let mut m1 = SmsTemporalM1::new(request.address, next_cpu.i, next_cpu.refresh);
+            m1.schedule_next_tstate(self.bus.coordinator_mut())?;
+            let deadline = m1
+                .export_state()
+                .pending_deadline
+                .ok_or(SmsTemporalMachineError::InvalidState)?;
+            self.cpu = next_cpu;
+            self.m1 = Some(m1);
+            self.m1_fixture_wait_tstates = Some(fixture_wait_tstates);
+            return Ok(deadline);
+        }
+
+        if self.bus.pending_request().is_some() || self.m1.is_some() {
             return Err(SmsTemporalMachineError::InvalidState);
         }
         let cpu_before = self.cpu.export_state();
