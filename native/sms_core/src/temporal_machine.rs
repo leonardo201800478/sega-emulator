@@ -2098,7 +2098,6 @@ mod base_stack_temporal_tests {
     }
 }
 
-
 #[cfg(test)]
 mod base_call_rst_temporal_tests {
     use super::SmsTemporalMachine;
@@ -2132,8 +2131,7 @@ mod base_call_rst_temporal_tests {
         assert_eq!(call.bus.memory().read(0xC0FE), 0x03);
         assert_eq!(call.now(), MachineTime::from_ticks(51));
 
-        let mut call_not_taken =
-            SmsTemporalMachine::new(vec![0xC4, 0x04, 0x00], 3).unwrap();
+        let mut call_not_taken = SmsTemporalMachine::new(vec![0xC4, 0x04, 0x00], 3).unwrap();
         call_not_taken.cpu_mut().registers.sp = 0xC100;
         call_not_taken.cpu_mut().registers.f = 0x40;
         assert_eq!(
@@ -2171,7 +2169,10 @@ mod base_call_rst_temporal_tests {
         call.cpu_mut().registers.sp = 0xC100;
         assert!(matches!(advance_m1(&mut call), Z80MicroStep::BusRequest(_)));
         call.schedule_pending_bus(0).unwrap();
-        assert!(matches!(call.dispatch_next().unwrap(), Z80MicroStep::BusRequest(_)));
+        assert!(matches!(
+            call.dispatch_next().unwrap(),
+            Z80MicroStep::BusRequest(_)
+        ));
         call.schedule_pending_bus(0).unwrap();
         assert_eq!(
             call.dispatch_next().unwrap(),
@@ -2208,7 +2209,6 @@ mod base_call_rst_temporal_tests {
         assert_eq!(restored_rst.now(), MachineTime::from_ticks(33));
     }
 }
-
 
 #[cfg(test)]
 mod base_return_temporal_tests {
@@ -2302,7 +2302,6 @@ mod base_return_temporal_tests {
         assert_eq!(restored.now(), MachineTime::from_ticks(33));
     }
 }
-
 
 #[cfg(test)]
 mod base_exchange_interrupt_control_temporal_tests {
