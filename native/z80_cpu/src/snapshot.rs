@@ -350,6 +350,23 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u8(stage);
             writer.u8(low);
         }
+        Z80MicroSequencerPhase::BaseCallImmediate { stage, low } => {
+            writer.u8(43);
+            writer.u8(stage);
+            writer.u8(low);
+        }
+        Z80MicroSequencerPhase::BaseControlPushInternal { target, high, low } => {
+            writer.u8(44);
+            writer.u16(target);
+            writer.u8(high);
+            writer.u8(low);
+        }
+        Z80MicroSequencerPhase::BaseControlPushWrite { stage, target, low } => {
+            writer.u8(45);
+            writer.u8(stage);
+            writer.u16(target);
+            writer.u8(low);
+        }
         Z80MicroSequencerPhase::MemoryWrite { address, value } => {
             writer.u8(7);
             writer.u16(address);
@@ -610,6 +627,20 @@ fn read_phase(
         },
         42 => Z80MicroSequencerPhase::BaseStackPop {
             stage: reader.u8()?,
+            low: reader.u8()?,
+        },
+        43 => Z80MicroSequencerPhase::BaseCallImmediate {
+            stage: reader.u8()?,
+            low: reader.u8()?,
+        },
+        44 => Z80MicroSequencerPhase::BaseControlPushInternal {
+            target: reader.u16()?,
+            high: reader.u8()?,
+            low: reader.u8()?,
+        },
+        45 => Z80MicroSequencerPhase::BaseControlPushWrite {
+            stage: reader.u8()?,
+            target: reader.u16()?,
             low: reader.u8()?,
         },
         7 => Z80MicroSequencerPhase::MemoryWrite {
@@ -1680,6 +1711,126 @@ mod base_stack_snapshot_tests {
 
         let mut invalid = cpu.export_state();
         invalid.phase = Z80MicroSequencerPhase::BaseStackPop { stage: 2, low: 0 };
+        assert!(Z80MicroSequencer::restore_state(invalid).is_err());
+    }
+}
+
+#[cfg(test)]
+mod base_call_rst_snapshot_tests {
+    use crate::{Z80MicroSequencer, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep};
+
+    fn round_trip(cpu: &Z80MicroSequencer) -> Z80MicroSequencer {
+        let state = cpu.export_state();
+        let encoded = state.encode().unwrap();
+        let decoded = Z80MicroSequencerState::decode(&encoded).unwrap();
+        assert_eq!(decoded, state);
+        Z80MicroSequencer::restore_state(decoded).unwrap()
+    }
+
+    #[test]
+    fn call_immediate_internal_and_stack_write_boundaries_round_trip() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.registers.pc = 0x1000;
+        cpu.registers.sp = 0x2000;
+        let fetch = match cpu.begin_instruction().unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected opcode fetch, got {other:?}"),
+        };
+        let low_read = match cpu.complete_bus_cycle(fetch.id, Some(0xCD)).unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected CALL low-byte read, got {other:?}"),
+        };
+        cpu = round_trip(&cpu);
+        let high_read = match cpu.complete_bus_cycle(low_read.id, Some(0x00)).unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected CALL high-byte read, got {other:?}"),
+        };
+        cpu = round_trip(&cpu);
+        assert_eq!(
+            cpu.complete_bus_cycle(high_read.id, Some(0x20)).unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        cpu = round_trip(&cpu);
+        let high_write = match cpu.complete_internal_cycle().unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected CALL high stack write, got {other:?}"),
+        };
+        cpu = round_trip(&cpu);
+        let low_write = match cpu.complete_bus_cycle(high_write.id, None).unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected CALL low stack write, got {other:?}"),
+        };
+        cpu = round_trip(&cpu);
+        assert_eq!(
+            cpu.complete_bus_cycle(low_write.id, None).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xCD,
+                tstates: 17,
+            }
+        );
+        assert_eq!(cpu.registers.pc, 0x2000);
+        assert_eq!(cpu.wz, 0x2000);
+        assert_eq!(cpu.registers.sp, 0x1FFE);
+    }
+
+    #[test]
+    fn rst_internal_and_stack_write_boundaries_round_trip() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.registers.pc = 0x1000;
+        cpu.registers.sp = 0x2000;
+        let fetch = match cpu.begin_instruction().unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected opcode fetch, got {other:?}"),
+        };
+        assert_eq!(
+            cpu.complete_bus_cycle(fetch.id, Some(0xFF)).unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        cpu = round_trip(&cpu);
+        let high_write = match cpu.complete_internal_cycle().unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected RST high stack write, got {other:?}"),
+        };
+        cpu = round_trip(&cpu);
+        let low_write = match cpu.complete_bus_cycle(high_write.id, None).unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected RST low stack write, got {other:?}"),
+        };
+        cpu = round_trip(&cpu);
+        assert_eq!(
+            cpu.complete_bus_cycle(low_write.id, None).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xFF,
+                tstates: 11,
+            }
+        );
+        assert_eq!(cpu.registers.pc, 0x0038);
+        assert_eq!(cpu.wz, 0x0038);
+    }
+
+    #[test]
+    fn control_push_restore_rejects_wrong_target() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.registers.pc = 0x1000;
+        let fetch = match cpu.begin_instruction().unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected opcode fetch, got {other:?}"),
+        };
+        let low = match cpu.complete_bus_cycle(fetch.id, Some(0xCD)).unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected CALL low-byte read, got {other:?}"),
+        };
+        let high = match cpu.complete_bus_cycle(low.id, Some(0x00)).unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected CALL high-byte read, got {other:?}"),
+        };
+        let _ = cpu.complete_bus_cycle(high.id, Some(0x20)).unwrap();
+        let mut invalid = cpu.export_state();
+        invalid.phase = Z80MicroSequencerPhase::BaseControlPushInternal {
+            target: 0x1234,
+            high: 0x10,
+            low: 0x03,
+        };
         assert!(Z80MicroSequencer::restore_state(invalid).is_err());
     }
 }
