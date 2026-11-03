@@ -2888,6 +2888,43 @@ mod tests {
     }
 
     #[test]
+    fn dd_fd_inc_dec_index_pair_wraparound_preserves_flags_and_other_registers() {
+        for (prefix, opcode, initial, expected) in [
+            (0xDD, 0x23, 0xFFFF, 0x0000),
+            (0xDD, 0x2B, 0x0000, 0xFFFF),
+            (0xFD, 0x23, 0xFFFF, 0x0000),
+            (0xFD, 0x2B, 0x0000, 0xFFFF),
+        ] {
+            let mut cpu = Z80MicroSequencer {
+                ix: 0x2468,
+                iy: 0x1357,
+                registers: Z80Registers { f: 0xD7, hl: 0, ..Z80Registers::default() },
+                ..Z80MicroSequencer::default()
+            };
+            if prefix == 0xDD { cpu.ix = initial; } else { cpu.iy = initial; }
+            let original_flags = cpu.registers.f;
+            let original_ix = cpu.ix;
+            let original_iy = cpu.iy;
+            let original_hl = cpu.registers.hl();
+
+            let first = request(cpu.begin_instruction().unwrap());
+            let second = request(cpu.complete_bus_cycle(first.id, Some(prefix)).unwrap());
+            cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+            let retired_step = cpu.complete_bus_cycle(second.id, Some(opcode)).unwrap();
+            retired(retired_step, opcode, 8);
+
+            assert_eq!(if prefix == 0xDD { cpu.ix } else { cpu.iy }, expected);
+            assert_eq!(cpu.registers.f, original_flags);
+            assert_eq!(cpu.q, 0);
+            assert_eq!(cpu.registers.hl(), original_hl);
+            assert_eq!(cpu.ix, if prefix == 0xDD { expected } else { original_ix });
+            assert_eq!(cpu.iy, if prefix == 0xFD { expected } else { original_iy });
+            assert_eq!(cpu.registers.pc, 2);
+            assert_eq!(cpu.refresh, 2);
+        }
+    }
+
+    #[test]
     fn alu_register_matrix_executes_all_56_register_source_encodings() {
         for operation in 0_u8..8 {
             for source in [0_u8, 1, 2, 3, 4, 5, 7] {
