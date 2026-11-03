@@ -881,8 +881,7 @@ mod tests {
         BusCycleKind, BusDirection, BusPhase, MCycleIndex, MachineTime, TStateIndex,
     };
     use sega_z80_cpu::{
-        Z80MicroSequencer, Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroStep,
-        Z80Registers,
+        Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroStep, Z80Registers,
     };
 
     fn retired(step: Z80MicroStep, opcode: u8, tstates: u32) {
