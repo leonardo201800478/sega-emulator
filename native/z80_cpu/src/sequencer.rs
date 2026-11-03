@@ -659,6 +659,7 @@ impl Z80MicroSequencer {
             }
             Z80MicroSequencerPhase::BaseImmediatePortRead { port_address } => {
                 state.opcode == Some(0xDB)
+                    && ((port_address >> 8) as u8) == state.registers.a
                     && pending.is_some_and(|request| {
                         request.operation == Z80BusOperation::PortRead
                             && request.address == port_address
@@ -671,6 +672,7 @@ impl Z80MicroSequencer {
                 value,
             } => {
                 state.opcode == Some(0xD3)
+                    && ((port_address >> 8) as u8) == state.registers.a
                     && value == state.registers.a
                     && pending.is_some_and(|request| {
                         request.operation == Z80BusOperation::PortWrite { value }
