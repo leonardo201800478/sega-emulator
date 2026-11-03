@@ -371,6 +371,15 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u16(target);
             writer.u8(low);
         }
+        Z80MicroSequencerPhase::BaseReturnConditionInternal { branch_taken } => {
+            writer.u8(46);
+            writer.u8(u8::from(branch_taken));
+        }
+        Z80MicroSequencerPhase::BaseReturnPop { stage, low } => {
+            writer.u8(47);
+            writer.u8(stage);
+            writer.u8(low);
+        }
         Z80MicroSequencerPhase::MemoryWrite { address, value } => {
             writer.u8(7);
             writer.u16(address);
@@ -645,6 +654,13 @@ fn read_phase(
         45 => Z80MicroSequencerPhase::BaseControlPushWrite {
             stage: reader.u8()?,
             target: reader.u16()?,
+            low: reader.u8()?,
+        },
+        46 => Z80MicroSequencerPhase::BaseReturnConditionInternal {
+            branch_taken: read_bool(reader)?,
+        },
+        47 => Z80MicroSequencerPhase::BaseReturnPop {
+            stage: reader.u8()?,
             low: reader.u8()?,
         },
         7 => Z80MicroSequencerPhase::MemoryWrite {
