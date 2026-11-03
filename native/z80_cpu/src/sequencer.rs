@@ -2746,6 +2746,25 @@ impl Z80MicroSequencer {
                 next.registers.sp = next.registers.sp.wrapping_sub(1);
                 next.issue_base_stack_push_write(0, low, next.registers.sp, high)?
             }
+            Z80MicroSequencerPhase::BaseControlPushInternal { target, high, low } => {
+                next.instruction_tstates = next_instruction_tstates;
+                next.registers.sp = next.registers.sp.wrapping_sub(1);
+                next.issue_base_control_push_write(0, target, low, next.registers.sp, high)?
+            }
+            Z80MicroSequencerPhase::BaseReturnConditionInternal { branch_taken } => {
+                next.instruction_tstates = next_instruction_tstates;
+                let opcode = next
+                    .opcode
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                if branch_taken {
+                    next.issue_read(
+                        Z80MicroSequencerPhase::BaseReturnPop { stage: 0, low: 0 },
+                        next.registers.sp,
+                    )?
+                } else {
+                    next.retire(opcode)?
+                }
+            }
             Z80MicroSequencerPhase::BaseRelativeBranchInternal {
                 displacement,
                 branch_taken,
