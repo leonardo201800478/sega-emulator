@@ -2145,7 +2145,9 @@ impl Z80MicroSequencer {
                     remaining_tstates: 7,
                     index_prefix: Some(prefix),
                 };
-                self.mcycle_index = self.mcycle_index.checked_add(1)
+                self.mcycle_index = self
+                    .mcycle_index
+                    .checked_add(1)
                     .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
                 self.tstate_index = 0;
                 Ok(Z80MicroStep::InternalCycle { tstates: 1 })
@@ -2279,7 +2281,11 @@ impl Z80MicroSequencer {
         if let Some(prefix) = index_prefix {
             let lhs = if prefix == 0xDD { self.ix } else { self.iy };
             let pair = (opcode >> 4) & 0x03;
-            let operand = if pair == 2 { lhs } else { self.read_register_pair(pair) };
+            let operand = if pair == 2 {
+                lhs
+            } else {
+                self.read_register_pair(pair)
+            };
             let sum = u32::from(lhs) + u32::from(operand);
             let result = sum as u16;
             let mut flags = self.registers.f & (FLAG_S | FLAG_Z | FLAG_PV);
@@ -2290,7 +2296,11 @@ impl Z80MicroSequencer {
             if sum > u32::from(u16::MAX) {
                 flags |= FLAG_C;
             }
-            if prefix == 0xDD { self.ix = result; } else { self.iy = result; }
+            if prefix == 0xDD {
+                self.ix = result;
+            } else {
+                self.iy = result;
+            }
             self.wz = lhs.wrapping_add(1);
             self.set_flags(flags);
             return;
@@ -2897,7 +2907,9 @@ mod tests {
             let mut next = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
             let first = request(next.begin_instruction().unwrap());
             next = Z80MicroSequencer::restore_state(next.export_state()).unwrap();
-            let mut step = next.complete_bus_cycle(first.id, Some(opcode_bytes[0])).unwrap();
+            let mut step = next
+                .complete_bus_cycle(first.id, Some(opcode_bytes[0]))
+                .unwrap();
             next = Z80MicroSequencer::restore_state(next.export_state()).unwrap();
 
             for byte in opcode_bytes.iter().copied().skip(1) {
@@ -2915,10 +2927,9 @@ mod tests {
             assert_eq!(low_request.base_tstates, 3);
             next.insert_wait_tstates(2).unwrap();
             next = Z80MicroSequencer::restore_state(next.export_state()).unwrap();
-            step = next.complete_bus_cycle(
-                low_request.id,
-                Some(opcode_bytes[opcode_bytes.len() - 2]),
-            ).unwrap();
+            step = next
+                .complete_bus_cycle(low_request.id, Some(opcode_bytes[opcode_bytes.len() - 2]))
+                .unwrap();
             next = Z80MicroSequencer::restore_state(next.export_state()).unwrap();
 
             let high_request = request(step);
@@ -2927,10 +2938,9 @@ mod tests {
             assert_eq!(high_request.base_tstates, 3);
             next.insert_wait_tstates(1).unwrap();
             next = Z80MicroSequencer::restore_state(next.export_state()).unwrap();
-            step = next.complete_bus_cycle(
-                high_request.id,
-                Some(opcode_bytes[opcode_bytes.len() - 1]),
-            ).unwrap();
+            step = next
+                .complete_bus_cycle(high_request.id, Some(opcode_bytes[opcode_bytes.len() - 1]))
+                .unwrap();
 
             let expected_tstates = 17 + 4 * u32::from(opcode_bytes.len() == 5);
             retired(step, 0x21, expected_tstates);
@@ -2960,9 +2970,15 @@ mod tests {
                 f: FLAG_S | FLAG_Z | FLAG_PV | FLAG_C,
                 ..Z80Registers::default()
             };
-            if pair == 0 { registers.set_bc(rhs); }
-            if pair == 1 { registers.set_de(rhs); }
-            if pair == 3 { registers.sp = rhs; }
+            if pair == 0 {
+                registers.set_bc(rhs);
+            }
+            if pair == 1 {
+                registers.set_de(rhs);
+            }
+            if pair == 3 {
+                registers.sp = rhs;
+            }
             let mut cpu = Z80MicroSequencer {
                 ix: if prefix == 0xDD { lhs } else { 0x2468 },
                 iy: if prefix == 0xFD { lhs } else { 0x1357 },
@@ -2976,38 +2992,65 @@ mod tests {
             let fetch1 = request(cpu.complete_bus_cycle(fetch0.id, Some(prefix)).unwrap());
             let first_internal = cpu.complete_bus_cycle(fetch1.id, Some(opcode)).unwrap();
             assert_eq!(first_internal, Z80MicroStep::InternalCycle { tstates: 1 });
-            assert_eq!(cpu.ix, if prefix == 0xDD { selected_before } else { other_before });
-            assert_eq!(cpu.iy, if prefix == 0xFD { selected_before } else { other_before });
+            assert_eq!(
+                cpu.ix,
+                if prefix == 0xDD {
+                    selected_before
+                } else {
+                    other_before
+                }
+            );
+            assert_eq!(
+                cpu.iy,
+                if prefix == 0xFD {
+                    selected_before
+                } else {
+                    other_before
+                }
+            );
             assert_eq!(cpu.registers.f, old_flags);
 
             let mut restored = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
             let bytes = restored.export_state().encode().unwrap();
             restored = Z80MicroSequencer::restore_state(
-                crate::Z80MicroSequencerState::decode(&bytes).unwrap()
-            ).unwrap();
+                crate::Z80MicroSequencerState::decode(&bytes).unwrap(),
+            )
+            .unwrap();
             for remaining in 1..7 {
                 let step = restored.complete_internal_cycle().unwrap();
                 assert_eq!(step, Z80MicroStep::InternalCycle { tstates: 1 });
                 restored = Z80MicroSequencer::restore_state(restored.export_state()).unwrap();
                 let encoded = restored.export_state().encode().unwrap();
                 restored = Z80MicroSequencer::restore_state(
-                    crate::Z80MicroSequencerState::decode(&encoded).unwrap()
-                ).unwrap();
+                    crate::Z80MicroSequencerState::decode(&encoded).unwrap(),
+                )
+                .unwrap();
                 if remaining == 4 {
                     assert_eq!(restored.export_state().mcycle_index, 3);
                     assert_eq!(restored.export_state().tstate_index, 0);
                 } else if remaining < 4 {
-                    assert_eq!(restored.export_state().tstate_index, u16::from(3 - remaining));
+                    assert_eq!(
+                        restored.export_state().tstate_index,
+                        u16::from(3 - remaining)
+                    );
                 }
             }
             let retired_step = restored.complete_internal_cycle().unwrap();
             retired(retired_step, opcode, 15);
             assert_eq!(
-                if prefix == 0xDD { restored.ix } else { restored.iy },
+                if prefix == 0xDD {
+                    restored.ix
+                } else {
+                    restored.iy
+                },
                 expected
             );
             assert_eq!(
-                if prefix == 0xDD { restored.iy } else { restored.ix },
+                if prefix == 0xDD {
+                    restored.iy
+                } else {
+                    restored.ix
+                },
                 other_before
             );
             let carry = u8::from(u32::from(lhs) + u32::from(rhs) > 0xFFFF) * FLAG_C;
@@ -3033,10 +3076,17 @@ mod tests {
             let mut cpu = Z80MicroSequencer {
                 ix: 0x2468,
                 iy: 0x1357,
-                registers: Z80Registers { f: 0xD7, ..Z80Registers::default() },
+                registers: Z80Registers {
+                    f: 0xD7,
+                    ..Z80Registers::default()
+                },
                 ..Z80MicroSequencer::default()
             };
-            if prefix == 0xDD { cpu.ix = initial; } else { cpu.iy = initial; }
+            if prefix == 0xDD {
+                cpu.ix = initial;
+            } else {
+                cpu.iy = initial;
+            }
             let original_flags = cpu.registers.f;
             let original_ix = cpu.ix;
             let original_iy = cpu.iy;
@@ -3053,12 +3103,21 @@ mod tests {
             let retired_step = cpu.complete_bus_cycle(third.id, Some(opcode)).unwrap();
             retired(retired_step, opcode, 14);
 
-            assert_eq!(if prefix == 0xDD { cpu.ix } else { cpu.iy }, expected);
+            assert_eq!(
+                if prefix == 0xDD { cpu.ix } else { cpu.iy },
+                expected
+            );
             assert_eq!(cpu.registers.f, original_flags);
             assert_eq!(cpu.q, 0);
             assert_eq!(cpu.registers.hl(), original_hl);
-            assert_eq!(cpu.ix, if prefix == 0xDD { expected } else { original_ix });
-            assert_eq!(cpu.iy, if prefix == 0xFD { expected } else { original_iy });
+            assert_eq!(
+                cpu.ix,
+                if prefix == 0xDD { expected } else { original_ix }
+            );
+            assert_eq!(
+                cpu.iy,
+                if prefix == 0xFD { expected } else { original_iy }
+            );
             assert_eq!(cpu.registers.pc, 3);
             assert_eq!(cpu.refresh, 3);
         }
@@ -3260,10 +3319,8 @@ mod tests {
 
     #[test]
     fn repeated_index_prefixes_count_each_m1_and_last_prefix_is_retained() {
-        for (prefixes, expected_index) in [
-            (&[0xDD, 0xFD][..], 0x9ABC),
-            (&[0xFD, 0xDD][..], 0x1234),
-        ] {
+        for (prefixes, expected_index) in [(&[0xDD, 0xFD][..], 0x9ABC), (&[0xFD, 0xDD][..], 0x1234)]
+        {
             let mut cpu = Z80MicroSequencer::default();
             let mut fetch = request(cpu.begin_instruction().unwrap());
             for prefix in prefixes {
@@ -3274,11 +3331,20 @@ mod tests {
             assert_eq!(fetch.operation, Z80BusOperation::OpcodeFetch);
             assert_eq!(fetch.address, prefixes.len() as u16);
             assert_eq!(cpu.refresh, prefixes.len() as u8);
-            assert_eq!(cpu.export_state().opcode, Some(prefixes[prefixes.len() - 1]));
-            assert_eq!(cpu.export_state().instruction_tstates, prefixes.len() as u32 * 4);
+            assert_eq!(
+                cpu.export_state().opcode,
+                Some(prefixes[prefixes.len() - 1])
+            );
+            assert_eq!(
+                cpu.export_state().instruction_tstates,
+                prefixes.len() as u32 * 4
+            );
 
             let low = request(cpu.complete_bus_cycle(fetch.id, Some(0x21)).unwrap());
-            let high = request(cpu.complete_bus_cycle(low.id, Some(expected_index as u8)).unwrap());
+            let high = request(
+                cpu.complete_bus_cycle(low.id, Some(expected_index as u8))
+                    .unwrap(),
+            );
             let expected_tstates = 14 + 4 * u32::from(prefixes.len() == 2);
             retired(
                 cpu.complete_bus_cycle(high.id, Some((expected_index >> 8) as u8)).unwrap(),
