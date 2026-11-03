@@ -45,7 +45,10 @@ fn stack_pair_value(registers: &Z80Registers, opcode: u8) -> Option<u16> {
 }
 
 fn is_call_opcode(opcode: u8) -> bool {
-    matches!(opcode, 0xCD | 0xC4 | 0xCC | 0xD4 | 0xDC | 0xE4 | 0xEC | 0xF4 | 0xFC)
+    matches!(
+        opcode,
+        0xCD | 0xC4 | 0xCC | 0xD4 | 0xDC | 0xE4 | 0xEC | 0xF4 | 0xFC
+    )
 }
 
 fn is_rst_opcode(opcode: u8) -> bool {
@@ -622,8 +625,10 @@ impl Z80MicroSequencer {
             }
             Z80MicroSequencerPhase::BaseReturnConditionInternal { branch_taken } => {
                 state.opcode.is_some_and(|opcode| {
-                    matches!(opcode, 0xC0 | 0xC8 | 0xD0 | 0xD8 | 0xE0 | 0xE8 | 0xF0 | 0xF8)
-                        && branch_taken == self_condition(state.registers.f, (opcode >> 3) & 0x07)
+                    matches!(
+                        opcode,
+                        0xC0 | 0xC8 | 0xD0 | 0xD8 | 0xE0 | 0xE8 | 0xF0 | 0xF8
+                    ) && branch_taken == self_condition(state.registers.f, (opcode >> 3) & 0x07)
                 }) && pending.is_none()
                     && state.mcycle_index == 0
                     && state.tstate_index == 4
@@ -682,11 +687,7 @@ impl Z80MicroSequencer {
                     next.retire(opcode)?
                 }
             }
-            Z80MicroSequencerPhase::BaseControlPushInternal {
-                target,
-                high,
-                low,
-            } => {
+            Z80MicroSequencerPhase::BaseControlPushInternal { target, high, low } => {
                 let opcode = state.opcode;
                 let is_call = opcode.is_some_and(is_call_opcode);
                 let is_rst = opcode.is_some_and(is_rst_opcode);
@@ -711,11 +712,7 @@ impl Z80MicroSequencer {
                             && state.instruction_tstates >= 4
                     }
             }
-            Z80MicroSequencerPhase::BaseControlPushWrite {
-                stage,
-                target,
-                low,
-            } => {
+            Z80MicroSequencerPhase::BaseControlPushWrite { stage, target, low } => {
                 let opcode = state.opcode;
                 let is_call = opcode.is_some_and(is_call_opcode);
                 let is_rst = opcode.is_some_and(is_rst_opcode);
@@ -749,11 +746,7 @@ impl Z80MicroSequencer {
                             && state.instruction_tstates >= 5 + u32::from(stage) * 3
                     }
             }
-            Z80MicroSequencerPhase::BaseControlPushInternal {
-                target,
-                high,
-                low,
-            } => {
+            Z80MicroSequencerPhase::BaseControlPushInternal { target, high, low } => {
                 next.instruction_tstates = next_instruction_tstates;
                 next.registers.sp = next.registers.sp.wrapping_sub(1);
                 next.issue_base_control_push_write(0, target, low, next.registers.sp, high)?
@@ -1428,36 +1421,28 @@ impl Z80MicroSequencer {
                 state.mcycle_index == 0 && state.tstate_index == 4
             }
             Z80MicroSequencerPhase::BaseReturnPop { stage, .. } => {
-                stage <= 1
-                    && state.mcycle_index == 1 + u32::from(stage)
-                    && state.tstate_index == 0
+                stage <= 1 && state.mcycle_index == 1 + u32::from(stage) && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::BaseCallImmediate { stage, .. } => {
-                stage <= 1
-                    && state.mcycle_index == 1 + u32::from(stage)
-                    && state.tstate_index == 0
+                stage <= 1 && state.mcycle_index == 1 + u32::from(stage) && state.tstate_index == 0
             }
-            Z80MicroSequencerPhase::BaseControlPushInternal { .. } => {
-                match state.opcode {
-                    Some(opcode) if is_call_opcode(opcode) => {
-                        state.mcycle_index == 2 && state.tstate_index == 3
-                    }
-                    Some(opcode) if is_rst_opcode(opcode) => {
-                        state.mcycle_index == 0 && state.tstate_index == 4
-                    }
-                    _ => false,
+            Z80MicroSequencerPhase::BaseControlPushInternal { .. } => match state.opcode {
+                Some(opcode) if is_call_opcode(opcode) => {
+                    state.mcycle_index == 2 && state.tstate_index == 3
                 }
-            }
+                Some(opcode) if is_rst_opcode(opcode) => {
+                    state.mcycle_index == 0 && state.tstate_index == 4
+                }
+                _ => false,
+            },
             Z80MicroSequencerPhase::BaseControlPushWrite { stage, .. } => {
                 stage <= 1
                     && match state.opcode {
                         Some(opcode) if is_call_opcode(opcode) => {
-                            state.mcycle_index == 3 + u32::from(stage)
-                                && state.tstate_index == 0
+                            state.mcycle_index == 3 + u32::from(stage) && state.tstate_index == 0
                         }
                         Some(opcode) if is_rst_opcode(opcode) => {
-                            state.mcycle_index == 1 + u32::from(stage)
-                                && state.tstate_index == 0
+                            state.mcycle_index == 1 + u32::from(stage) && state.tstate_index == 0
                         }
                         _ => false,
                     }
@@ -1827,22 +1812,18 @@ impl Z80MicroSequencer {
                             Z80MicroSequencerPhase::BaseReturnConditionInternal { branch_taken };
                         Ok(Z80MicroStep::InternalCycle { tstates: 1 })
                     }
-                    0xCD | 0xC4 | 0xCC | 0xD4 | 0xDC | 0xE4 | 0xEC | 0xF4 | 0xFC => {
-                        self.issue_read(
+                    0xCD | 0xC4 | 0xCC | 0xD4 | 0xDC | 0xE4 | 0xEC | 0xF4 | 0xFC => self
+                        .issue_read(
                             Z80MicroSequencerPhase::BaseCallImmediate { stage: 0, low: 0 },
                             self.registers.pc,
-                        )
-                    }
+                        ),
                     opcode if is_rst_opcode(opcode) => {
                         let target = u16::from(opcode & 0x38);
                         let [high, low] = self.registers.pc.to_be_bytes();
                         self.mcycle_index = 0;
                         self.tstate_index = 4;
-                        self.phase = Z80MicroSequencerPhase::BaseControlPushInternal {
-                            target,
-                            high,
-                            low,
-                        };
+                        self.phase =
+                            Z80MicroSequencerPhase::BaseControlPushInternal { target, high, low };
                         Ok(Z80MicroStep::InternalCycle { tstates: 1 })
                     }
                     0xC5 | 0xD5 | 0xE5 | 0xF5 => {
@@ -2173,11 +2154,8 @@ impl Z80MicroSequencer {
                     let [high, low] = self.registers.pc.to_be_bytes();
                     self.mcycle_index = 2;
                     self.tstate_index = 3;
-                    self.phase = Z80MicroSequencerPhase::BaseControlPushInternal {
-                        target,
-                        high,
-                        low,
-                    };
+                    self.phase =
+                        Z80MicroSequencerPhase::BaseControlPushInternal { target, high, low };
                     Ok(Z80MicroStep::InternalCycle { tstates: 1 })
                 }
             }
@@ -2193,9 +2171,7 @@ impl Z80MicroSequencer {
                 self.issue_base_control_push_write(1, target, low, self.registers.sp, low)
             }
             Z80MicroSequencerPhase::BaseControlPushWrite {
-                stage: 1,
-                target,
-                ..
+                stage: 1, target, ..
             } => {
                 let opcode = self
                     .opcode
@@ -8988,13 +8964,10 @@ mod base_stack_push_pop_differential_tests {
     }
 }
 
-
 #[cfg(test)]
 mod base_call_rst_differential_tests {
     use crate::bus::CpuBus;
-    use crate::{
-        Z80, Z80ArchitecturalState, Z80BusOperation, Z80MicroSequencer, Z80MicroStep,
-    };
+    use crate::{Z80, Z80ArchitecturalState, Z80BusOperation, Z80MicroSequencer, Z80MicroStep};
 
     const FLAG_C: u8 = 0x01;
     const FLAG_PV: u8 = 0x04;
@@ -9078,7 +9051,11 @@ mod base_call_rst_differential_tests {
         micro.import_architectural_state(initial).unwrap();
         let (micro_state, micro_tstates) = run_sequencer(micro, &mut micro_bus);
 
-        assert_eq!(micro_tstates, if taken { 17 } else { 10 }, "CALL {opcode:02X}");
+        assert_eq!(
+            micro_tstates,
+            if taken { 17 } else { 10 },
+            "CALL {opcode:02X}"
+        );
         assert_eq!(micro_tstates, atomic_tstates, "CALL {opcode:02X}");
         assert_eq!(
             micro_state.registers.pc,
@@ -9166,13 +9143,10 @@ mod base_call_rst_differential_tests {
     }
 }
 
-
 #[cfg(test)]
 mod base_return_differential_tests {
     use crate::bus::CpuBus;
-    use crate::{
-        Z80, Z80ArchitecturalState, Z80BusOperation, Z80MicroSequencer, Z80MicroStep,
-    };
+    use crate::{Z80, Z80ArchitecturalState, Z80BusOperation, Z80MicroSequencer, Z80MicroStep};
 
     const FLAG_C: u8 = 0x01;
     const FLAG_PV: u8 = 0x04;
@@ -9341,13 +9315,10 @@ mod base_return_differential_tests {
     }
 }
 
-
 #[cfg(test)]
 mod base_exchange_interrupt_control_differential_tests {
     use crate::bus::CpuBus;
-    use crate::{
-        Z80, Z80ArchitecturalState, Z80BusOperation, Z80MicroSequencer, Z80MicroStep,
-    };
+    use crate::{Z80, Z80ArchitecturalState, Z80BusOperation, Z80MicroSequencer, Z80MicroStep};
 
     #[derive(Clone)]
     struct TestBus {
@@ -9372,10 +9343,7 @@ mod base_exchange_interrupt_control_differential_tests {
         }
     }
 
-    fn run_sequencer(
-        mut cpu: Z80MicroSequencer,
-        bus: &mut TestBus,
-    ) -> (Z80MicroSequencer, u32) {
+    fn run_sequencer(mut cpu: Z80MicroSequencer, bus: &mut TestBus) -> (Z80MicroSequencer, u32) {
         let mut step = cpu.begin_instruction().unwrap();
         for _ in 0..8 {
             step = match step {
@@ -9389,7 +9357,9 @@ mod base_exchange_interrupt_control_differential_tests {
                             bus.write_memory(request.address, value);
                             None
                         }
-                        operation => panic!("unexpected exchange/control bus operation: {operation:?}"),
+                        operation => {
+                            panic!("unexpected exchange/control bus operation: {operation:?}")
+                        }
                     };
                     cpu.complete_bus_cycle(request.id, data).unwrap()
                 }
@@ -9504,7 +9474,10 @@ mod base_exchange_interrupt_control_differential_tests {
         let (micro, second_tstates) = run_sequencer(micro, &mut micro_bus);
         assert_eq!(second_tstates, 4);
         assert_eq!(micro.ei_delay, 0);
-        assert_eq!(micro.export_architectural_state(), atomic.export_architectural_state());
+        assert_eq!(
+            micro.export_architectural_state(),
+            atomic.export_architectural_state()
+        );
         assert_eq!(micro_bus.memory, atomic_bus.memory);
     }
 }
