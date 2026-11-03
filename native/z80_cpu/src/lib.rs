@@ -27,11 +27,11 @@ pub const Z80_MICRO_SEQUENCER_STATE_VERSION: u16 = 26;
 pub use architectural_state::{Z80ArchitecturalState, Z80ArchitecturalStateError};
 pub use cpu::{CpuError, Z80, Z80AlternateRegisters, Z80Registers};
 pub use m1::{Z80M1Cycle, Z80M1CycleState, Z80M1Error, Z80M1Phase, Z80M1Pins};
-pub use prefix::{Z80IndexRegister, Z80PrefixState};
 pub use micro_ops::{
     Z80BusHandshake, Z80BusHandshakeError, Z80BusHandshakeState, Z80BusOperation, Z80BusRequest,
     Z80BusResponse,
 };
+pub use prefix::{Z80IndexRegister, Z80PrefixState};
 pub use sequencer::{
     Z80MicroSequencer, Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroSequencerState,
     Z80MicroStep,

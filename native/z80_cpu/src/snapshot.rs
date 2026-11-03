@@ -6,8 +6,8 @@
 
 use crate::{
     Z80_MICRO_SEQUENCER_STATE_VERSION, Z80AlternateRegisters, Z80BusHandshakeState,
-    Z80BusOperation, Z80BusRequest, Z80IndexRegister, Z80PrefixState, Z80MicroSequencer,
-    Z80MicroSequencerPhase, Z80MicroSequencerState, Z80Registers,
+    Z80BusOperation, Z80BusRequest, Z80IndexRegister, Z80MicroSequencer, Z80MicroSequencerPhase,
+    Z80MicroSequencerState, Z80PrefixState, Z80Registers,
 };
 use core::fmt;
 

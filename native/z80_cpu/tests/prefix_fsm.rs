@@ -1,8 +1,8 @@
 //! E2 prefix-FSM integration tests for the resumable Z80 sequencer.
 
 use sega_z80_cpu::{
-    Z80BusRequest, Z80IndexRegister, Z80MicroSequencer, Z80MicroSequencerError,
-    Z80MicroStep, Z80PrefixState,
+    Z80BusRequest, Z80IndexRegister, Z80MicroSequencer, Z80MicroSequencerError, Z80MicroStep,
+    Z80PrefixState,
 };
 
 fn request(step: Z80MicroStep) -> Z80BusRequest {
@@ -29,18 +29,33 @@ fn dd_fd_alternation_keeps_the_last_index_prefix_and_round_trips_snapshot() {
     let mut fetch = start(&mut cpu);
 
     fetch = feed_prefix(&mut cpu, fetch, 0xDD);
-    assert_eq!(cpu.export_state().prefix_state, Z80PrefixState::Index(Z80IndexRegister::Ix));
+    assert_eq!(
+        cpu.export_state().prefix_state,
+        Z80PrefixState::Index(Z80IndexRegister::Ix)
+    );
 
-    let encoded = cpu.export_state().encode().expect("IX prefix snapshot encodes");
-    let decoded = sega_z80_cpu::Z80MicroSequencerState::decode(&encoded)
-        .expect("IX prefix snapshot decodes");
+    let encoded = cpu
+        .export_state()
+        .encode()
+        .expect("IX prefix snapshot encodes");
+    let decoded =
+        sega_z80_cpu::Z80MicroSequencerState::decode(&encoded).expect("IX prefix snapshot decodes");
     cpu = Z80MicroSequencer::restore_state(decoded).expect("IX prefix snapshot restores");
-    assert_eq!(cpu.export_state().prefix_state, Z80PrefixState::Index(Z80IndexRegister::Ix));
+    assert_eq!(
+        cpu.export_state().prefix_state,
+        Z80PrefixState::Index(Z80IndexRegister::Ix)
+    );
 
     fetch = feed_prefix(&mut cpu, fetch, 0xFD);
-    assert_eq!(cpu.export_state().prefix_state, Z80PrefixState::Index(Z80IndexRegister::Iy));
+    assert_eq!(
+        cpu.export_state().prefix_state,
+        Z80PrefixState::Index(Z80IndexRegister::Iy)
+    );
     fetch = feed_prefix(&mut cpu, fetch, 0xDD);
-    assert_eq!(cpu.export_state().prefix_state, Z80PrefixState::Index(Z80IndexRegister::Ix));
+    assert_eq!(
+        cpu.export_state().prefix_state,
+        Z80PrefixState::Index(Z80IndexRegister::Ix)
+    );
 
     assert!(matches!(
         cpu.complete_bus_cycle(fetch.id, Some(0x21)),
@@ -109,7 +124,10 @@ fn repeated_prefix_stream_has_no_artificial_length_limit() {
     }
 
     let state = cpu.export_state();
-    assert_eq!(state.prefix_state, Z80PrefixState::Index(Z80IndexRegister::Ix));
+    assert_eq!(
+        state.prefix_state,
+        Z80PrefixState::Index(Z80IndexRegister::Ix)
+    );
     assert_eq!(state.mcycle_index, 257);
     assert_eq!(state.instruction_tstates, 257 * 4);
     assert_eq!(state.registers.pc, 257);
