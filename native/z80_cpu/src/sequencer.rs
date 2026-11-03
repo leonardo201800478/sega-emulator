@@ -2859,7 +2859,8 @@ mod tests {
             next = cpu
                 .complete_bus_cycle(high_request.id, Some(opcode_bytes[opcode_bytes.len() - 1]))
                 .unwrap();
-            retired(next, 0x21, 14);
+            let expected_tstates = 14 + 4 * u32::from(opcode_bytes.len() == 5);
+            retired(next, 0x21, expected_tstates);
             assert_eq!(cpu.ix, expected_ix);
             assert_eq!(cpu.iy, expected_iy);
             assert_eq!(cpu.registers.pc, opcode_bytes.len() as u16);
