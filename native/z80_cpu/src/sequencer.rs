@@ -2334,17 +2334,20 @@ impl Z80MicroSequencer {
                     Err(Z80MicroSequencerError::UnexpectedCompletion)
                 }
             }
-            Z80MicroSequencerPhase::BaseImmediatePortRead { .. } => {
+            Z80MicroSequencerPhase::BaseImmediatePortRead { port_address } => {
                 let value = response
                     .data
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.wz = port_address.wrapping_add(1);
                 self.registers.a = value;
                 let opcode = self
                     .opcode
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 self.retire(opcode)
             }
-            Z80MicroSequencerPhase::BaseImmediatePortWrite { .. } => {
+            Z80MicroSequencerPhase::BaseImmediatePortWrite { port_address, .. } => {
+                self.wz = (port_address & 0xFF00)
+                    | (port_address.wrapping_add(1) & 0x00FF);
                 let opcode = self
                     .opcode
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
@@ -10062,6 +10065,12 @@ mod base_immediate_io_differential_tests {
         let port_address = (u16::from(accumulator) << 8) | u16::from(port_low);
         assert_eq!(micro_tstates, 11);
         assert_eq!(micro_tstates, atomic_tstates);
+        let expected_wz = if opcode == 0xDB {
+            port_address.wrapping_add(1)
+        } else {
+            (port_address & 0xFF00) | (port_address.wrapping_add(1) & 0x00FF)
+        };
+        assert_eq!(micro_state.wz, expected_wz, "WZ/MEMPTR for opcode {opcode:02X}");
         assert_eq!(
             micro_state.registers.a,
             if opcode == 0xDB {
@@ -10084,6 +10093,8 @@ mod base_immediate_io_differential_tests {
     #[test]
     fn in_a_n_and_out_n_a_match_atomic_executor() {
         compare_io(0xDB, 0x12, 0xDC, 0xFE);
+        compare_io(0xDB, 0x12, 0xFF, 0xA6);
         compare_io(0xD3, 0x5A, 0x3F, 0x00);
+        compare_io(0xD3, 0xFF, 0xFF, 0x00);
     }
 }
