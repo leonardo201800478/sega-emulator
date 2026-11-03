@@ -1,8 +1,8 @@
 //! E3A1 indexed 16-bit register operations in the resumable Z80 sequencer.
 
 use sega_z80_cpu::{
-    Z80BusRequest, Z80IndexRegister, Z80MicroSequencer, Z80MicroSequencerError,
-    Z80MicroSequencerState, Z80MicroStep, Z80PrefixState,
+    Z80BusRequest, Z80IndexRegister, Z80MicroSequencer, Z80MicroSequencerState,
+    Z80MicroStep, Z80PrefixState,
 };
 
 const FLAG_S: u8 = 0x80;
