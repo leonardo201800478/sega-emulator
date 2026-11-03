@@ -325,9 +325,7 @@ fn indexed_immediate_store_wraps_pc_and_waits_across_every_bus_cycle() {
     assert_eq!(displacement.address, 0xFFFF);
     cpu.insert_wait_tstates(3).unwrap();
     cpu = round_trip(cpu);
-    let immediate = request(
-        cpu.complete_bus_cycle(displacement.id, Some(0x02)).unwrap(),
-    );
+    let immediate = request(cpu.complete_bus_cycle(displacement.id, Some(0x02)).unwrap());
     assert_eq!(immediate.address, 0x0000);
     assert_eq!(cpu.registers.pc, 0x0000);
     cpu.insert_wait_tstates(4).unwrap();
