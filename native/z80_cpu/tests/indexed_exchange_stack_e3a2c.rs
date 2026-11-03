@@ -98,6 +98,7 @@ fn ex_sp_iy_wraps_memory_addresses_without_changing_sp() {
     cpu.registers.sp = 0xFFFF;
 
     let fetch = start(&mut cpu);
+    let fetch = feed_prefix(&mut cpu, fetch, 0xDD);
     let fetch = feed_prefix(&mut cpu, fetch, 0xFD);
     let read_low = request(cpu.complete_bus_cycle(fetch.id, Some(0xE3)).unwrap());
     assert_eq!(read_low.address, 0xFFFF);
@@ -135,7 +136,7 @@ fn ex_sp_iy_wraps_memory_addresses_without_changing_sp() {
         cpu.complete_internal_cycle().unwrap(),
         Z80MicroStep::InstructionRetired {
             opcode: 0xE3,
-            tstates: 23,
+            tstates: 27,
         }
     );
     assert_eq!(cpu.iy, 0x2211);
