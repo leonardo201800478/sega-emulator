@@ -2218,3 +2218,77 @@ mod base_immediate_io_snapshot_tests {
         assert!(Z80MicroSequencer::restore_state(invalid).is_err());
     }
 }
+
+
+#[cfg(test)]
+mod halt_snapshot_tests {
+    use crate::{Z80MicroSequencer, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep};
+
+    fn round_trip(cpu: &Z80MicroSequencer) -> Z80MicroSequencer {
+        let state = cpu.export_state();
+        let encoded = state.encode().unwrap();
+        let decoded = Z80MicroSequencerState::decode(&encoded).unwrap();
+        assert_eq!(decoded, state);
+        Z80MicroSequencer::restore_state(decoded).unwrap()
+    }
+
+    #[test]
+    fn halted_cycle_round_trips_each_internal_tstate_boundary() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.registers.pc = 0x1000;
+        let fetch = match cpu.begin_instruction().unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected opcode fetch, got {other:?}"),
+        };
+        assert_eq!(
+            cpu.complete_bus_cycle(fetch.id, Some(0x76)).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x76,
+                tstates: 4,
+            }
+        );
+        assert!(cpu.halted);
+        assert_eq!(cpu.registers.pc, 0x1001);
+
+        assert_eq!(
+            cpu.begin_instruction().unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        for remaining in [4, 3, 2, 1] {
+            cpu = round_trip(&cpu);
+            if remaining == 1 {
+                assert_eq!(
+                    cpu.complete_internal_cycle().unwrap(),
+                    Z80MicroStep::InstructionRetired {
+                        opcode: 0x76,
+                        tstates: 4,
+                    }
+                );
+            } else {
+                assert_eq!(
+                    cpu.complete_internal_cycle().unwrap(),
+                    Z80MicroStep::InternalCycle { tstates: 1 }
+                );
+            }
+        }
+        assert!(cpu.halted);
+        assert_eq!(cpu.registers.pc, 0x1001);
+    }
+
+    #[test]
+    fn halted_cycle_restore_rejects_invalid_remaining_duration() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.registers.pc = 0x1000;
+        let fetch = match cpu.begin_instruction().unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected opcode fetch, got {other:?}"),
+        };
+        let _ = cpu.complete_bus_cycle(fetch.id, Some(0x76)).unwrap();
+        let _ = cpu.begin_instruction().unwrap();
+        let mut invalid = cpu.export_state();
+        invalid.phase = Z80MicroSequencerPhase::HaltedCycle {
+            remaining_tstates: 5,
+        };
+        assert!(Z80MicroSequencer::restore_state(invalid).is_err());
+    }
+}
