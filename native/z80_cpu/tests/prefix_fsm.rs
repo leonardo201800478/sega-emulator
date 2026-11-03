@@ -1,8 +1,8 @@
 //! E2 prefix-FSM integration tests for the resumable Z80 sequencer.
 
 use sega_z80_cpu::{
-    Z80BusRequest, Z80IndexRegister, Z80MicroSequencer, Z80MicroSequencerError, Z80MicroStep,
-    Z80PrefixState,
+    classify_index_opcode, Z80BusRequest, Z80IndexOpcodeClass, Z80IndexRegister,
+    Z80MicroSequencer, Z80MicroSequencerError, Z80MicroStep, Z80PrefixState,
 };
 
 fn request(step: Z80MicroStep) -> Z80BusRequest {
@@ -111,6 +111,25 @@ fn prefix_snapshot_rejects_index_latch_that_disagrees_with_last_prefix_byte() {
         Z80MicroSequencer::restore_state(state),
         Err(Z80MicroSequencerError::InvalidState)
     );
+}
+
+#[test]
+fn dd_fd_prefix_classifies_ignored_indexed_and_index_cb_opcodes() {
+    assert_eq!(classify_index_opcode(0x00), Z80IndexOpcodeClass::Ignored);
+    assert_eq!(classify_index_opcode(0xEB), Z80IndexOpcodeClass::Ignored);
+    assert_eq!(classify_index_opcode(0x76), Z80IndexOpcodeClass::Ignored);
+    assert_eq!(classify_index_opcode(0x21), Z80IndexOpcodeClass::UsesIndex);
+    assert_eq!(classify_index_opcode(0x66), Z80IndexOpcodeClass::UsesIndex);
+    assert_eq!(classify_index_opcode(0x84), Z80IndexOpcodeClass::UsesIndex);
+    assert_eq!(classify_index_opcode(0xCB), Z80IndexOpcodeClass::IndexedCb);
+
+    let mut cpu = Z80MicroSequencer::default();
+    let fetch = start(&mut cpu);
+    let fetch = feed_prefix(&mut cpu, fetch, 0xDD);
+    assert!(matches!(
+        cpu.complete_bus_cycle(fetch.id, Some(0xEB)),
+        Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0xEB, .. })
+    ));
 }
 
 #[test]

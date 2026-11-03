@@ -1839,7 +1839,7 @@ impl Z80MicroSequencer {
                 self.registers.pc = self.registers.pc.wrapping_add(1);
                 self.refresh = (self.refresh & 0x80) | (self.refresh.wrapping_add(1) & 0x7F);
                 let previous_prefix = self.opcode;
-                match self.prefix_state.transition(opcode) {
+                let index_opcode_class = match self.prefix_state.transition(opcode) {
                     Z80PrefixTransition::Continue(next_state) => {
                         self.prefix_state = next_state;
                         self.opcode = Some(opcode);
@@ -1856,12 +1856,16 @@ impl Z80MicroSequencer {
                         self.tstate_index = 0;
                         return Ok(Z80MicroStep::BusRequest(request));
                     }
-                    Z80PrefixTransition::Execute { index } => {
+                    Z80PrefixTransition::Execute {
+                        index,
+                        index_opcode_class,
+                    } => {
                         self.prefix_state = index
                             .map(Z80PrefixState::Index)
                             .unwrap_or(Z80PrefixState::None);
+                        index_opcode_class
                     }
-                }
+                };
                 self.opcode = Some(opcode);
                 if previous_prefix == Some(0xED) {
                     return self.execute_ed_register_control(opcode, waits);
@@ -1878,7 +1882,10 @@ impl Z80MicroSequencer {
                     self.execute_cb_register(opcode);
                     return self.retire(opcode);
                 }
-                if self.prefix_state != Z80PrefixState::None || previous_prefix.is_some() {
+                if index_opcode_class.is_some()
+                    || self.prefix_state != Z80PrefixState::None
+                    || previous_prefix.is_some()
+                {
                     return self.unsupported(opcode);
                 }
                 match opcode {
