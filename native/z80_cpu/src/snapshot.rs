@@ -364,6 +364,30 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u8(low);
             writer.u16(pair_value);
         }
+        Z80MicroSequencerPhase::EdReturn { stage, low } => {
+            writer.u8(20);
+            writer.u8(stage);
+            writer.u8(low);
+        }
+        Z80MicroSequencerPhase::EdNibbleRotateRead { opcode, address } => {
+            writer.u8(21);
+            writer.u8(opcode);
+            writer.u16(address);
+        }
+        Z80MicroSequencerPhase::EdNibbleRotateInternal {
+            opcode,
+            address,
+            result_a,
+            result_memory,
+            remaining_tstates,
+        } => {
+            writer.u8(22);
+            writer.u8(opcode);
+            writer.u16(address);
+            writer.u8(result_a);
+            writer.u8(result_memory);
+            writer.u8(remaining_tstates);
+        }
     }
 }
 
@@ -443,6 +467,21 @@ fn read_phase(
             address: reader.u16()?,
             low: reader.u8()?,
             pair_value: reader.u16()?,
+        },
+        20 => Z80MicroSequencerPhase::EdReturn {
+            stage: reader.u8()?,
+            low: reader.u8()?,
+        },
+        21 => Z80MicroSequencerPhase::EdNibbleRotateRead {
+            opcode: reader.u8()?,
+            address: reader.u16()?,
+        },
+        22 => Z80MicroSequencerPhase::EdNibbleRotateInternal {
+            opcode: reader.u8()?,
+            address: reader.u16()?,
+            result_a: reader.u8()?,
+            result_memory: reader.u8()?,
+            remaining_tstates: reader.u8()?,
         },
         tag => return Err(Z80MicroSequencerStateCodecError::InvalidTag(tag)),
     })
