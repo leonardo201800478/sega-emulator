@@ -403,6 +403,54 @@ mod tests {
     use super::*;
 
     #[test]
+    fn explicit_sram_file_survives_native_machine_recreation() {
+        use std::fs;
+
+        let path = std::env::temp_dir().join(format!(
+            "sega-sms-native-sram-{}.srm",
+            std::process::id()
+        ));
+        let _ = fs::remove_file(&path);
+        let save_path = path.to_string_lossy().into_owned();
+        let writer_rom = vec![
+            0x3E, 0x08,             // LD A,08h
+            0x32, 0xFC, 0xFF,       // LD (FFFC),A: enable slot-2 SRAM
+            0x3E, 0xB6,             // LD A,B6h
+            0x21, 0x23, 0x81,       // LD HL,8123h
+            0x77,                   // LD (HL),A
+            0x00,
+        ];
+        let mut writer = NativeSMSMachine::new(
+            writer_rom,
+            false,
+            Some("usa"),
+            None,
+            Some(0x2000),
+            Some(save_path.clone()),
+        )
+        .unwrap();
+        for _ in 0..5 {
+            writer.step().unwrap();
+        }
+        assert!(writer.save_cartridge_ram().unwrap());
+
+        let reader_rom = vec![0x3E, 0x08, 0x32, 0xFC, 0xFF, 0x00];
+        let mut reader = NativeSMSMachine::new(
+            reader_rom,
+            false,
+            Some("usa"),
+            None,
+            Some(0x2000),
+            Some(save_path),
+        )
+        .unwrap();
+        reader.step().unwrap();
+        reader.step().unwrap();
+        assert_eq!(reader.read_memory(0x8123), 0xB6);
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
     fn sms_sprite_limit_can_be_toggled_through_native_binding() {
         let mut machine =
             NativeSMSMachine::new(vec![0; 0x4000], false, Some("usa"), None, None, None).unwrap();
