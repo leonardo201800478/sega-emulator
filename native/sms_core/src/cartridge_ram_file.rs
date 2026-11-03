@@ -397,6 +397,22 @@ mod tests {
     }
 
     #[test]
+    fn recovers_previous_save_when_interrupted_during_replacement() {
+        let path = temporary_file();
+        cleanup(&path);
+        let store = SmsCartridgeRamFile::new(&path);
+        let expected = vec![0xC3; 0x2000];
+        let backup = PathBuf::from(format!("{}.bak", path.display()));
+
+        store.save(&expected).unwrap();
+        fs::rename(&path, &backup).unwrap();
+
+        assert_eq!(store.load(0x2000).unwrap(), Some(expected));
+        assert!(!backup.exists());
+        cleanup(&path);
+    }
+
+    #[test]
     fn derives_srm_as_a_sibling_of_the_rom() {
         let store = SmsCartridgeRamFile::for_rom_path("roms/sonic.sms");
         assert_eq!(store.path(), std::path::Path::new("roms/sonic.srm"));
