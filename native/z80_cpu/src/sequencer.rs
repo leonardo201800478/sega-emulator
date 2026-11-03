@@ -89,6 +89,10 @@ pub enum Z80MicroSequencerPhase {
         address: u16,
         value: u8,
     },
+    Ed16ArithmeticInternal {
+        opcode: u8,
+        remaining_tstates: u8,
+    },
     MemoryIncDecInternal {
         decrement: bool,
         old: u8,
@@ -503,6 +507,23 @@ impl Z80MicroSequencer {
                     && address == state.registers.bc()
                     && state.instruction_tstates >= 8
             }
+            Z80MicroSequencerPhase::Ed16ArithmeticInternal {
+                opcode,
+                remaining_tstates,
+            } => {
+                matches!(opcode & 0xCF, 0x4A | 0x42)
+                    && state.opcode == Some(opcode)
+                    && (1..=7).contains(&remaining_tstates)
+                    && pending.is_none()
+                    && if remaining_tstates >= 4 {
+                        state.mcycle_index == 2
+                            && state.tstate_index == u16::from(7 - remaining_tstates)
+                    } else {
+                        state.mcycle_index == 3
+                            && state.tstate_index == u16::from(3 - remaining_tstates)
+                    }
+                    && state.instruction_tstates >= 8 + u32::from(7 - remaining_tstates)
+            }
             Z80MicroSequencerPhase::MemoryReadIncDec { decrement, address } => {
                 let expected_opcode = if decrement { 0x35 } else { 0x34 };
                 pending.is_some_and(|request| {
@@ -586,6 +607,17 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::EdPortRead { .. }
             | Z80MicroSequencerPhase::EdPortWrite { .. } => {
                 state.mcycle_index == 2 && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::Ed16ArithmeticInternal {
+                remaining_tstates, ..
+            } => {
+                if remaining_tstates >= 4 {
+                    state.mcycle_index == 2
+                        && state.tstate_index == u16::from(7 - remaining_tstates)
+                } else {
+                    state.mcycle_index == 3
+                        && state.tstate_index == u16::from(3 - remaining_tstates)
+                }
             }
             Z80MicroSequencerPhase::ImmediateReadRegisterPairHigh { .. } => {
                 state.mcycle_index == 2 && state.tstate_index == 0
@@ -1020,6 +1052,9 @@ impl Z80MicroSequencer {
                         .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
                 )
             }
+            Z80MicroSequencerPhase::Ed16ArithmeticInternal { .. } => {
+                Err(Z80MicroSequencerError::UnexpectedCompletion)
+            }
             Z80MicroSequencerPhase::MemoryReadIncDec { decrement, address } => {
                 let old = response
                     .data
@@ -1090,6 +1125,32 @@ impl Z80MicroSequencer {
                 next.instruction_tstates = next_instruction_tstates;
                 next.execute_ed_register_internal(opcode);
                 next.retire(opcode)?
+            }
+            Z80MicroSequencerPhase::Ed16ArithmeticInternal {
+                opcode,
+                remaining_tstates,
+            } => {
+                next.instruction_tstates = next_instruction_tstates;
+                if remaining_tstates == 1 {
+                    next.execute_ed_16bit_arithmetic(opcode);
+                    next.retire(opcode)?
+                } else {
+                    let remaining_tstates = remaining_tstates - 1;
+                    if remaining_tstates == 3 {
+                        next.mcycle_index = 3;
+                        next.tstate_index = 0;
+                    } else {
+                        next.tstate_index = next
+                            .tstate_index
+                            .checked_add(1)
+                            .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                    }
+                    next.phase = Z80MicroSequencerPhase::Ed16ArithmeticInternal {
+                        opcode,
+                        remaining_tstates,
+                    };
+                    Z80MicroStep::InternalCycle { tstates: 1 }
+                }
             }
             _ => return Err(Z80MicroSequencerError::UnexpectedCompletion),
         };
@@ -1176,8 +1237,69 @@ impl Z80MicroSequencer {
                 };
                 self.issue_ed_port_write(value)
             }
+            op if op & 0xCF == 0x4A || op & 0xCF == 0x42 => {
+                self.mcycle_index = 2;
+                self.tstate_index = 0;
+                self.phase = Z80MicroSequencerPhase::Ed16ArithmeticInternal {
+                    opcode,
+                    remaining_tstates: 7,
+                };
+                Ok(Z80MicroStep::InternalCycle { tstates: 1 })
+            }
             _ => self.unsupported(opcode),
         }
+    }
+
+    /// Execute ADC/SBC HL,ss after its two M1 fetches and seven internal T-states.
+    fn execute_ed_16bit_arithmetic(&mut self, opcode: u8) {
+        let pair = (opcode >> 4) & 0x03;
+        let operand = match pair {
+            0 => self.registers.bc(),
+            1 => self.registers.de(),
+            2 => self.registers.hl(),
+            3 => self.registers.sp,
+            _ => unreachable!("two-bit register-pair field"),
+        };
+        let lhs = self.registers.hl();
+        let carry = u32::from(self.registers.f & FLAG_C != 0);
+        let rhs = u32::from(operand);
+        let lhs32 = u32::from(lhs);
+        let subtract = opcode & 0x0F == 0x02;
+        let result32 = if subtract {
+            lhs32.wrapping_sub(rhs + carry)
+        } else {
+            lhs32 + rhs + carry
+        };
+        let result = result32 as u16;
+        let mut flags = ((result >> 8) as u8) & (FLAG_S | FLAG_XY);
+        if result == 0 {
+            flags |= FLAG_Z;
+        }
+        if subtract {
+            flags |= FLAG_N;
+            if u32::from(lhs & 0x0FFF) < u32::from(operand & 0x0FFF) + carry {
+                flags |= FLAG_H;
+            }
+            if ((lhs ^ operand) & (lhs ^ result) & 0x8000) != 0 {
+                flags |= FLAG_PV;
+            }
+            if lhs32 < rhs + carry {
+                flags |= FLAG_C;
+            }
+        } else {
+            if u32::from(lhs & 0x0FFF) + u32::from(operand & 0x0FFF) + carry > 0x0FFF {
+                flags |= FLAG_H;
+            }
+            if (!(lhs ^ operand) & (lhs ^ result) & 0x8000) != 0 {
+                flags |= FLAG_PV;
+            }
+            if result32 > u32::from(u16::MAX) {
+                flags |= FLAG_C;
+            }
+        }
+        self.registers.set_hl(result);
+        self.wz = lhs.wrapping_add(1);
+        self.set_flags(flags);
     }
 
     /// Commit the semantic effect at the final T-state of an ED register load.
@@ -3305,6 +3427,228 @@ mod indirect_bc_de_differential_tests {
                 "memory mismatch for opcode {opcode:02X}"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod ed_16bit_arithmetic_differential_tests {
+    use super::{Z80MicroSequencer, Z80MicroStep};
+    use crate::bus::CpuBus;
+    use crate::{
+        Z80, Z80ArchitecturalState, Z80BusOperation, Z80MicroSequencerState, Z80Registers,
+    };
+
+    #[derive(Clone)]
+    struct TestBus {
+        memory: Box<[u8; 0x10000]>,
+        reads: Vec<u16>,
+        writes: Vec<(u16, u8)>,
+    }
+
+    impl Default for TestBus {
+        fn default() -> Self {
+            Self {
+                memory: Box::new([0; 0x10000]),
+                reads: Vec::new(),
+                writes: Vec::new(),
+            }
+        }
+    }
+
+    impl CpuBus for TestBus {
+        fn read_memory(&mut self, address: u16) -> u8 {
+            self.reads.push(address);
+            self.memory[usize::from(address)]
+        }
+
+        fn write_memory(&mut self, address: u16, value: u8) {
+            self.writes.push((address, value));
+            self.memory[usize::from(address)] = value;
+        }
+    }
+
+    fn request(step: Z80MicroStep) -> crate::Z80BusRequest {
+        match step {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected bus request, got {other:?}"),
+        }
+    }
+
+    fn read_opcode(
+        cpu: &mut Z80MicroSequencer,
+        bus: &mut TestBus,
+        step: Z80MicroStep,
+    ) -> Z80MicroStep {
+        let request = request(step);
+        assert_eq!(request.operation, Z80BusOperation::OpcodeFetch);
+        let value = bus.read_memory(request.address);
+        cpu.complete_bus_cycle(request.id, Some(value)).unwrap()
+    }
+
+    fn state(hl: u16, bc: u16, de: u16, sp: u16, carry: bool) -> Z80ArchitecturalState {
+        Z80ArchitecturalState {
+            registers: Z80Registers {
+                a: 0xA5,
+                f: if carry { 0xFF } else { 0xFE },
+                b: (bc >> 8) as u8,
+                c: bc as u8,
+                d: (de >> 8) as u8,
+                e: de as u8,
+                h: (hl >> 8) as u8,
+                l: hl as u8,
+                pc: 0xFFFE,
+                sp,
+            },
+            alternate: crate::Z80AlternateRegisters::default(),
+            ix: 0x1357,
+            iy: 0x2468,
+            i: 0xA5,
+            r: 0xFE,
+            iff1: false,
+            iff2: true,
+            interrupt_mode: 1,
+            wz: 0xA328,
+            ei_delay: 0,
+            nmi_pending: false,
+            int_pending: None,
+            q: 0x28,
+            q_previous: 0x5A,
+            p: false,
+            halted: false,
+        }
+    }
+
+    fn roundtrip(cpu: Z80MicroSequencer) -> Z80MicroSequencer {
+        let encoded = cpu.export_state().encode().unwrap();
+        let decoded = Z80MicroSequencerState::decode(&encoded).unwrap();
+        Z80MicroSequencer::restore_state(decoded).unwrap()
+    }
+
+    fn execute_pair(opcode: u8, architectural: Z80ArchitecturalState) {
+        let mut atomic = Z80::default();
+        atomic.import_architectural_state(architectural).unwrap();
+        let mut atomic_bus = TestBus::default();
+        atomic_bus.memory[0xFFFE] = 0xED;
+        atomic_bus.memory[0xFFFF] = opcode;
+
+        let mut sequenced = Z80MicroSequencer::default();
+        sequenced.import_architectural_state(architectural).unwrap();
+        let mut sequenced_bus = atomic_bus.clone();
+
+        assert_eq!(
+            atomic.step(&mut atomic_bus),
+            Ok(15),
+            "atomic ED {opcode:02X}"
+        );
+
+        let first = request(sequenced.begin_instruction().unwrap());
+        let second = read_opcode(
+            &mut sequenced,
+            &mut sequenced_bus,
+            Z80MicroStep::BusRequest(first),
+        );
+        let internal = read_opcode(&mut sequenced, &mut sequenced_bus, second);
+        assert_eq!(internal, Z80MicroStep::InternalCycle { tstates: 1 });
+
+        sequenced = roundtrip(sequenced);
+        let mut retired = internal;
+        for index in 0..7 {
+            retired = sequenced.complete_internal_cycle().unwrap();
+            if index < 6 {
+                assert_eq!(
+                    retired,
+                    Z80MicroStep::InternalCycle { tstates: 1 },
+                    "internal T-state {index} for ED {opcode:02X}"
+                );
+            }
+        }
+        assert_eq!(
+            retired,
+            Z80MicroStep::InstructionRetired {
+                opcode,
+                tstates: 15
+            }
+        );
+        assert_eq!(
+            sequenced.export_architectural_state(),
+            atomic.export_architectural_state(),
+            "architectural mismatch for ED {opcode:02X}"
+        );
+        assert_eq!(sequenced_bus.reads, atomic_bus.reads);
+        assert_eq!(sequenced_bus.writes, atomic_bus.writes);
+        assert_eq!(sequenced.pending_request(), None);
+    }
+
+    #[test]
+    fn all_adc_sbc_hl_register_pairs_match_atomic_executor() {
+        let opcodes = [
+            0x4A, 0x5A, 0x6A, 0x7A, // ADC HL,BC/DE/HL/SP
+            0x42, 0x52, 0x62, 0x72, // SBC HL,BC/DE/HL/SP
+        ];
+        let values = [0x0000, 0x0001, 0x0FFF, 0x1000, 0x7FFF, 0x8000, 0xFFFF];
+
+        for opcode in opcodes {
+            for &hl in &values {
+                for &operand in &values {
+                    for carry in [false, true] {
+                        let pair = (opcode >> 4) & 0x03;
+                        let (bc, de, sp) = match pair {
+                            0 => (operand, 0x1357, 0x2468),
+                            1 => (0x1357, operand, 0x2468),
+                            2 => (0x1357, 0x2468, 0x369C),
+                            3 => (0x1357, 0x2468, operand),
+                            _ => unreachable!(),
+                        };
+                        execute_pair(opcode, state(hl, bc, de, sp, carry));
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn adc_sbc_internal_mcycles_waits_and_snapshots_resume_exactly() {
+        let architectural = state(0x7FFF, 0x0001, 0xFFFF, 0x8000, true);
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.import_architectural_state(architectural).unwrap();
+        let mut bus = TestBus::default();
+        bus.memory[0xFFFE] = 0xED;
+        bus.memory[0xFFFF] = 0x4A; // ADC HL,BC
+
+        let first = request(cpu.begin_instruction().unwrap());
+        let second = read_opcode(&mut cpu, &mut bus, Z80MicroStep::BusRequest(first));
+        cpu.insert_wait_tstates(3).unwrap();
+        assert_eq!(
+            read_opcode(&mut cpu, &mut bus, second),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        assert_eq!(cpu.export_state().instruction_tstates, 11);
+
+        for _ in 0..4 {
+            assert_eq!(
+                cpu.complete_internal_cycle().unwrap(),
+                Z80MicroStep::InternalCycle { tstates: 1 }
+            );
+        }
+        cpu = roundtrip(cpu);
+        assert_eq!(cpu.export_state().mcycle_index, 3);
+        assert_eq!(cpu.export_state().tstate_index, 0);
+
+        assert_eq!(
+            cpu.complete_internal_cycle().unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        assert_eq!(
+            cpu.complete_internal_cycle().unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        assert_eq!(
+            cpu.complete_internal_cycle().unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x4A,
+                tstates: 18
+            }
+        );
     }
 }
 
