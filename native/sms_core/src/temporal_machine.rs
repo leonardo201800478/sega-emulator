@@ -958,7 +958,7 @@ mod tests {
 
     #[test]
     fn unsupported_decode_keeps_completed_m1_for_snapshot_restore_and_retry() {
-        let mut machine = SmsTemporalMachine::new(vec![0xFF; 0x4000], 3).unwrap();
+        let mut machine = SmsTemporalMachine::new(vec![0x76; 0x4000], 3).unwrap();
         machine.begin_instruction().unwrap();
 
         // Advance T1, T2, and T3. The opcode is sampled at T3 completion;
@@ -975,7 +975,7 @@ mod tests {
         assert!(matches!(
             machine.dispatch_next(),
             Err(SmsTemporalMachineError::Cpu(
-                Z80MicroSequencerError::UnsupportedOpcode { opcode: 0xFF, .. }
+                Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x76, .. }
             ))
         ));
         let completed_m1 = machine.export_state();
@@ -997,7 +997,7 @@ mod tests {
         assert!(matches!(
             restored.resume_instruction(0),
             Err(SmsTemporalMachineError::Cpu(
-                Z80MicroSequencerError::UnsupportedOpcode { opcode: 0xFF, .. }
+                Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x76, .. }
             ))
         ));
     }
