@@ -434,6 +434,7 @@ mod tests {
             total_instructions: 0,
             audio_session: None,
             audio_output_error: None,
+        sram_file: None,
         };
         assert_eq!(pal_machine.psg_clock_hz(), 3_546_895);
 
@@ -442,6 +443,7 @@ mod tests {
             total_instructions: 0,
             audio_session: None,
             audio_output_error: None,
+        sram_file: None,
         };
         assert_eq!(japan_machine.psg_clock_hz(), 3_579_545);
     }
@@ -455,6 +457,7 @@ mod tests {
             total_instructions: 0,
             audio_session: None,
             audio_output_error: None,
+        sram_file: None,
         };
         assert!(machine.bios_enabled());
         assert_eq!(machine.read_memory(0), 0x3E);
@@ -463,7 +466,7 @@ mod tests {
     #[test]
     fn console_pause_is_exposed_as_a_z80_non_maskable_interrupt() {
         let mut machine =
-            NativeSMSMachine::new(vec![0x31, 0xF0, 0xDF, 0x00], false, Some("usa"), None).unwrap();
+            NativeSMSMachine::new(vec![0x31, 0xF0, 0xDF, 0x00], false, Some("usa"), None, None, None).unwrap();
         machine.step().unwrap();
         machine.request_nmi();
         assert_eq!(machine.step().unwrap(), 11);
@@ -499,7 +502,7 @@ mod tests {
 
     #[test]
     fn frame_runner_advances_native_vdp_and_exposes_frame_state() {
-        let mut machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa"), None).unwrap();
+        let mut machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa"), None, None, None).unwrap();
         assert_eq!(machine.frame_number(), 0);
         let steps = machine.run_frame(100_000).unwrap();
         assert!(steps > 0 && steps <= 100_000);
