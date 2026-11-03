@@ -159,10 +159,7 @@ fn instruction_timeline_is_valid(state: &SmsTemporalMachineState) -> bool {
             (completion.completed_at, expected_tstates)
         }
         (None, None, None, None)
-            if matches!(
-                state.cpu.phase,
-                Z80MicroSequencerPhase::MemoryIncDecInternal { .. }
-            ) =>
+            if state.cpu.phase.is_internal_cycle() =>
         {
             (state.bus.coordinator.scheduler.now, cpu_tstates)
         }
@@ -326,10 +323,7 @@ impl SmsTemporalMachine {
     /// Describe the currently exposed CPU-internal interval using the shared contract.
     pub fn pending_internal_transaction(&self) -> Result<Option<BusTransaction>, BusContractError> {
         let state = self.cpu.export_state();
-        if !matches!(
-            state.phase,
-            Z80MicroSequencerPhase::MemoryIncDecInternal { .. }
-        ) {
+        if !state.phase.is_internal_cycle() {
             return Ok(None);
         }
         let timestamp = self
@@ -412,16 +406,18 @@ impl SmsTemporalMachine {
         tstates: u32,
     ) -> Result<MachineTime, SmsTemporalMachineError> {
         let cpu_state = self.cpu.export_state();
-        if !matches!(
-            cpu_state.phase,
-            Z80MicroSequencerPhase::MemoryIncDecInternal { .. }
-        ) {
+        if !cpu_state.phase.is_internal_cycle() {
             return Err(SmsTemporalMachineError::InvalidState);
         }
-        if self.pending_internal_cycle_id.is_some() || tstates != 1 {
-            // The current resumable slice exposes exactly one internal T-state
-            // for INC/DEC (HL). Reject caller-supplied durations that would make
-            // scheduler time diverge from the CPU's checked instruction counter.
+        if self.pending_internal_cycle_id.is_some()
+            || self.bus.pending_request().is_some()
+            || self.bus.completion().is_some()
+            || self.m1.is_some()
+            || tstates != 1
+        {
+            // The sequencer currently exposes internal work one T-state at a
+            // time. Accept every explicitly classified internal continuation,
+            // but reject aggregated durations that could skip a CPU phase edge.
             return Err(SmsTemporalMachineError::InvalidState);
         }
         if cpu_state.instruction_tstates == u32::MAX {
@@ -626,10 +622,7 @@ impl SmsTemporalMachine {
     ) -> Result<Z80MicroStep, SmsTemporalMachineError> {
         let mut step = if let Some(request) = self.cpu.pending_request() {
             Z80MicroStep::BusRequest(request)
-        } else if matches!(
-            self.cpu.export_state().phase,
-            Z80MicroSequencerPhase::MemoryIncDecInternal { .. }
-        ) {
+        } else if self.cpu.export_state().phase.is_internal_cycle() {
             Z80MicroStep::InternalCycle { tstates: 1 }
         } else {
             return Err(SmsTemporalMachineError::InvalidState);
@@ -741,10 +734,7 @@ impl SmsTemporalMachine {
             return Err(SmsTemporalMachineError::InvalidState);
         }
         if state.pending_internal_cycle_id.is_some()
-            && !matches!(
-                state.cpu.phase,
-                Z80MicroSequencerPhase::MemoryIncDecInternal { .. }
-            )
+            && !state.cpu.phase.is_internal_cycle()
         {
             return Err(SmsTemporalMachineError::InvalidState);
         }
@@ -938,6 +928,29 @@ mod tests {
         retired(restored.resume_instruction(0).unwrap(), 0x34, 11);
         assert_eq!(restored.memory().read(0xC000), 1);
         assert_eq!(restored.now(), MachineTime::from_ticks(33));
+    }
+
+    #[test]
+    fn non_base_internal_phase_runs_and_restores_through_generic_scheduler_path() {
+        let mut machine = SmsTemporalMachine::new(vec![0xED, 0x47], 3).unwrap();
+        machine.cpu_mut().registers.a = 0xA5;
+        machine.begin_instruction().unwrap();
+
+        assert!(matches!(
+            complete_m1_fetch(&mut machine, 0),
+            Z80MicroStep::BusRequest(_)
+        ));
+        assert_eq!(
+            complete_m1_fetch(&mut machine, 0),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        assert!(machine.cpu().export_state().phase.is_internal_cycle());
+
+        machine.schedule_internal_cycle(1).unwrap();
+        let mut restored = SmsTemporalMachine::restore_state(machine.export_state()).unwrap();
+        retired(restored.resume_instruction(0).unwrap(), 0x47, 9);
+        assert_eq!(restored.cpu().i, 0xA5);
+        assert_eq!(restored.now(), MachineTime::from_ticks(27));
     }
 
     #[test]
