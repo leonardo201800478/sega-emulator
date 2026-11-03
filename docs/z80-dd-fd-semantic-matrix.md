@@ -64,13 +64,13 @@ Os opcodes abaixo são o byte posterior ao prefixo DD ou FD. A coluna de T-state
 | `E3` | EX (SP),IX/IY | Troca o par com duas posições da pilha | 23 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
 | `E9` | JP (IX/IY) | PC recebe o par de índice | 8 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
 | `F9` | LD SP,IX/IY | SP recebe o par de índice | 10 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
-| `24`, `25`, `26` | INC/DEC/LD IXH/IYH,n | Operações na metade alta | 8 / 8 / 11 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
-| `2C`, `2D`, `2E` | INC/DEC/LD IXL/IYL,n | Operações na metade baixa | 8 / 8 / 11 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
-| `40`–`7F`, exceto `76` | LD r,r' | H/L são substituídos por IXH/IXL ou IYH/IYL quando aplicável | 8 | IMPLEMENTED_ATOMIC; teste dirigido parcial | NOT_IMPLEMENTED |
+| `24`, `25`, `26` | INC/DEC/LD IXH/IYH,n | Operações na metade alta; não são instruções documentadas como registradores independentes no manual UM008011 | 8 / 8 / 11 (derivado do custo do prefixo + operação BASE; confirmar variante e trace) | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
+| `2C`, `2D`, `2E` | INC/DEC/LD IXL/IYL,n | Operações na metade baixa; não são instruções documentadas como registradores independentes no manual UM008011 | 8 / 8 / 11 (derivado do custo do prefixo + operação BASE; confirmar variante e trace) | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
+| `40`–`7F`, exceto `76` | LD r,r' | H/L são substituídos por IXH/IXL ou IYH/IYL quando aplicável; comportamento de half-register deve ser classificado como não documentado para o alvo UM008011 | 8 (prefixo + M1 BASE; confirmação temporal pendente) | IMPLEMENTED_ATOMIC; teste dirigido parcial | NOT_IMPLEMENTED |
 | `40`–`7F` com campo `r=6` ou `r'=6` | LD r,(IX/IY+d) / LD (IX/IY+d),r | Usa memória indexada; H/L do outro operando são H/L normais | 19 | IMPLEMENTED_ATOMIC; testes dirigidos parciais | NOT_IMPLEMENTED |
 | `34`, `35` | INC/DEC (IX/IY+d) | Read-modify-write da memória indexada | 23 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
 | `36` | LD (IX/IY+d),n | Lê displacement e imediato; escreve memória | 19 | IMPLEMENTED_ATOMIC; teste dirigido parcial | NOT_IMPLEMENTED |
-| `80`–`BF`, fonte diferente de 6 | ALU A,IXH/IXL/IYH/IYL ou r | ALU com registrador/half-index | 8 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
+| `80`–`BF`, fonte diferente de 6 | ALU A,IXH/IXL/IYH/IYL ou r | ALU com registrador/half-index; half-register é comportamento não documentado no UM008011 | 8 (prefixo + M1 BASE; confirmação temporal pendente) | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
 | `80`–`BF`, fonte 6 | ALU A,(IX/IY+d) | Lê memória indexada e aplica ALU | 19 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
 | Demais opcodes | Prefixo ignorado ou fallback da instrução base, conforme classificação Z80 | Sem substituição IX/IY; custo do prefixo deve ser mantido | Base + 4T por prefixo ignorado | Fallback implementado no executor atômico | NOT_IMPLEMENTED / gap de fallback |
 
