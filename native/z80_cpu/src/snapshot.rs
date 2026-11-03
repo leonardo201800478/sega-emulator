@@ -6,7 +6,8 @@
 
 use crate::{
     Z80_MICRO_SEQUENCER_STATE_VERSION, Z80BusHandshakeState, Z80BusOperation, Z80BusRequest,
-    Z80MicroSequencer, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80Registers,
+    Z80AlternateRegisters, Z80MicroSequencer, Z80MicroSequencerPhase, Z80MicroSequencerState,
+    Z80Registers,
 };
 use core::fmt;
 
@@ -158,6 +159,26 @@ impl Z80MicroSequencerState {
             tag => return Err(Z80MicroSequencerStateCodecError::InvalidTag(tag)),
         };
         let wait_tstates = reader.u32()?;
+        let alternate = Z80AlternateRegisters {
+            a: reader.u8()?, f: reader.u8()?, b: reader.u8()?, c: reader.u8()?,
+            d: reader.u8()?, e: reader.u8()?, h: reader.u8()?, l: reader.u8()?,
+        };
+        let ix = reader.u16()?;
+        let iy = reader.u16()?;
+        let i = reader.u8()?;
+        let iff1 = read_bool(&mut reader)?;
+        let iff2 = read_bool(&mut reader)?;
+        let interrupt_mode = reader.u8()?;
+        let wz = reader.u16()?;
+        let ei_delay = reader.u8()?;
+        let nmi_pending = read_bool(&mut reader)?;
+        let int_pending = match reader.u8()? {
+            0 => None,
+            1 => Some(reader.u8()?),
+            tag => return Err(Z80MicroSequencerStateCodecError::InvalidTag(tag)),
+        };
+        let p = read_bool(&mut reader)?;
+        let halted = read_bool(&mut reader)?;
         if !reader.finished() {
             return Err(Z80MicroSequencerStateCodecError::TrailingData);
         }
@@ -178,6 +199,19 @@ impl Z80MicroSequencerState {
             instruction_tstates,
             mcycle_index,
             tstate_index,
+            alternate,
+            ix,
+            iy,
+            i,
+            iff1,
+            iff2,
+            interrupt_mode,
+            wz,
+            ei_delay,
+            nmi_pending,
+            int_pending,
+            p,
+            halted,
         };
         Z80MicroSequencer::restore_state(state.clone())
             .map_err(|_| Z80MicroSequencerStateCodecError::InvalidState)?;
