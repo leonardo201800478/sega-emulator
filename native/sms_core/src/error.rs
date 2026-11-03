@@ -29,7 +29,7 @@ impl fmt::Display for SmsCoreError {
             ),
             Self::CartridgeRamUnsupportedMapper => {
                 f.write_str("cartridge SRAM is currently supported only by the Sega mapper")
-            },
+            }
             Self::RomTooLargeForSegaMapper { size, max_size } => write!(
                 f,
                 "ROM size {size} exceeds the standard Sega mapper range of {max_size} bytes; select a supported mapper"
