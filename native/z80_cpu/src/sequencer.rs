@@ -1128,7 +1128,8 @@ impl Z80MicroSequencer {
                 state.active_index == Z80IndexRegister::from_prefix(prefix)
             }
             Z80MicroSequencerPhase::Ed16ArithmeticInternal {
-                index_prefix: Some(prefix), ..
+                index_prefix: Some(prefix),
+                ..
             } => state.active_index == Z80IndexRegister::from_prefix(prefix),
             _ => state.active_index.is_none(),
         };
@@ -2929,8 +2930,7 @@ impl Z80MicroSequencer {
 mod tests {
     use super::{
         FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_S, FLAG_XY, FLAG_Z, Z80IndexRegister,
-        Z80MicroSequencer,
-        Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroStep,
+        Z80MicroSequencer, Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroStep,
     };
     use crate::{Z80BusOperation, Z80Registers};
 
