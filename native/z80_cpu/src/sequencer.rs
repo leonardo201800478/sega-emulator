@@ -3240,11 +3240,11 @@ mod cb_memory_differential_tests {
                     assert_eq!(second_m1.operation, Z80BusOperation::OpcodeFetch);
                     assert_eq!(second_m1.address, 0xFFFF);
 
-                    let memory_read = request(
-                        sequenced
-                            .complete_bus_cycle(second_m1.id, Some(0xCB))
-                            .unwrap(),
-                    );
+                    let memory_read = request(read_request(
+                        &mut sequenced,
+                        &mut sequenced_bus,
+                        Z80MicroStep::BusRequest(second_m1),
+                    ));
                     assert_eq!(memory_read.operation, Z80BusOperation::MemoryRead);
                     assert_eq!(memory_read.address, 0xC123);
                     sequenced = roundtrip(sequenced);
