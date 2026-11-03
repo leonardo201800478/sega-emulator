@@ -832,3 +832,85 @@ mod tests {
         );
     }
 }
+
+
+#[cfg(test)]
+mod immediate_port_transaction_tests {
+    use super::{SmsTemporalBus, SmsTemporalDispatch};
+    use crate::input::ControllerButtons;
+    use sega_temporal_core::MachineTime;
+    use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
+
+    fn request(id: u64, operation: Z80BusOperation, address: u16) -> Z80BusRequest {
+        Z80BusRequest {
+            id,
+            operation,
+            address,
+            base_tstates: 4,
+        }
+    }
+
+    #[test]
+    fn port_reads_writes_and_controller_state_commit_at_scheduled_boundaries() {
+        let mut bus = SmsTemporalBus::new(vec![0x00], 3).unwrap();
+        bus.io_mut()
+            .set_controller(
+                1,
+                ControllerButtons {
+                    up: true,
+                    ..ControllerButtons::default()
+                },
+            )
+            .unwrap();
+
+        bus.begin_request(
+            request(0, Z80BusOperation::PortRead, 0x12DC),
+            0,
+        )
+        .unwrap();
+        let read = bus.dispatch_next().unwrap().unwrap();
+        assert_eq!(
+            read,
+            SmsTemporalDispatch::BusCompletion(super::SmsBusCompletion {
+                request_id: 0,
+                data: Some(0xFE),
+                completed_at: MachineTime::from_ticks(12),
+            })
+        );
+        bus.acknowledge_completion(0).unwrap();
+
+        bus.begin_request(
+            request(1, Z80BusOperation::PortWrite { value: 0xD5 }, 0xD53F),
+            0,
+        )
+        .unwrap();
+        assert!(matches!(
+            bus.dispatch_next().unwrap(),
+            Some(SmsTemporalDispatch::BusCompletion(_))
+        ));
+        bus.acknowledge_completion(1).unwrap();
+        assert_eq!(bus.io().io_control(), 0xD5);
+
+        bus.begin_request(
+            request(2, Z80BusOperation::PortWrite { value: 0x55 }, 0x553E),
+            0,
+        )
+        .unwrap();
+        assert!(matches!(
+            bus.dispatch_next().unwrap(),
+            Some(SmsTemporalDispatch::BusCompletion(_))
+        ));
+        bus.acknowledge_completion(2).unwrap();
+        assert_eq!(bus.memory().control_port(), 0x55);
+        assert_eq!(bus.port_write_trace().len(), 2);
+        assert_eq!(bus.port_write_trace()[0].port, 0xD53F);
+        assert_eq!(bus.port_write_trace()[0].value, 0xD5);
+        assert_eq!(bus.port_write_trace()[1].port, 0x553E);
+        assert_eq!(bus.port_write_trace()[1].value, 0x55);
+
+        let restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
+        assert_eq!(restored.io().io_control(), 0xD5);
+        assert_eq!(restored.memory().control_port(), 0x55);
+        assert_eq!(restored.port_write_trace(), bus.port_write_trace());
+    }
+}
