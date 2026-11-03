@@ -4,7 +4,7 @@
 **Baseline:** `main` — `04ee09f9839bfe29a595abbed831d055cc8d177a`  
 **PR:** [#473](https://github.com/leonardo201800478/sega-emulator/pull/473)  
 **Branch:** `feat/z80-indexed-displacement-e4c-2026-11-03`  
-**Candidato com cobertura de displacement ampliada:** `5bf09790d3cd0dddc0b4ed7b9a434773f3d403db`  
+**Candidato com cobertura de displacement ampliada:** `186a9996f5bbc26b65362040ac3759c9e62d3e09`  
 **Schema de snapshot:** 27 (sem alteração)
 
 ## 1. Escopo
@@ -66,7 +66,7 @@ Cobertura adicionada:
 | Implementação no microsequenciador | IMPLEMENTED |
 | Testes direcionados no candidato inicial `ad464672c2c3a01620a1f96b0f53395d0e905355` | QUICK_PASS / SHORT_PASS em CI |
 | Workflow inicial | [41739328124](https://github.com/leonardo201800478/sega-emulator/actions/runs/41739328124), 4/4 jobs PASS |
-| Cobertura adicional de displacement no SHA `5bf09790d3cd0dddc0b4ed7b9a434773f3d403db` | CI pendente na criação deste relatório |
+| Cobertura adicional de displacement no SHA `186a9996f5bbc26b65362040ac3759c9e62d3e09` | CI pendente na criação deste relatório |
 | LONG_PASS | NOT RUN |
 | ZEXDOC / ZEXALL | NOT RUN |
 | Comparação diferencial externa completa | NOT RUN |
@@ -77,7 +77,7 @@ O CI verde confirma gates de compilação, lint, testes do workspace, stress det
 
 ## 6. Limitações remanescentes e próximos passos
 
-- O workflow `41741995929` identificou E0689 no fixture de teste (tipos inteiros ambíguos), não no runtime; a fixture recebeu tipos explícitos no SHA `5bf09790d3cd0dddc0b4ed7b9a434773f3d403db`. Confirmar CI integral do candidato corrigido.
+- O workflow `41741995929` identificou E0689 no fixture de teste (tipos inteiros ambíguos), não no runtime; a fixture recebeu tipos explícitos no SHA `186a9996f5bbc26b65362040ac3759c9e62d3e09`. O Clippy foi corrigido com struct nomeada; a execução seguinte encontrou apenas diferença de rustfmt no novo teste, corrigida no SHA `186a9996f5bbc26b65362040ac3759c9e62d3e09`. Confirmar CI integral deste candidato.
 - Atualizar a matriz semântica DD/FD, a estratégia de resolução e os roadmaps com a integração E4C.
 - E4 só pode ser fechada após E4A, E4B e E4C aprovadas individualmente.
 - Prosseguir para E5: DDCB/FDCB no microsequenciador, distinguindo BIT (sem write-back) das operações RMW.
