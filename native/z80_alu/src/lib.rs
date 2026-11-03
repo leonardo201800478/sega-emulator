@@ -154,7 +154,10 @@ pub fn rotate_accumulator(value: u8, old_flags: u8, operation: u8) -> AluResult 
     let flags = (old_flags & (FLAG_S | FLAG_Z | FLAG_PV))
         | (result & FLAG_XY)
         | if carry { FLAG_C } else { 0 };
-    AluResult { value: result, flags }
+    AluResult {
+        value: result,
+        flags,
+    }
 }
 
 /// Executes DAA using the pre-adjust accumulator and flags.
