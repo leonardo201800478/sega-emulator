@@ -638,5 +638,4 @@ mod tests {
             assert_eq!(restored.export_state(), cpu.export_state());
         }
     }
-
 }
