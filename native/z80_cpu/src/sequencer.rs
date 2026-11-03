@@ -1249,9 +1249,7 @@ impl Z80MicroSequencer {
                 stage <= 1 && state.mcycle_index == 1 + u32::from(stage) && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::BaseStackPop { stage, .. } => {
-                stage <= 1
-                    && state.mcycle_index == 1 + u32::from(stage)
-                    && state.tstate_index == 0
+                stage <= 1 && state.mcycle_index == 1 + u32::from(stage) && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::BaseAbsoluteJump { stage, .. } => {
                 state.mcycle_index == 1 + u32::from(stage) && state.tstate_index == 0
