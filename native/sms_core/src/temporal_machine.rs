@@ -2385,3 +2385,76 @@ mod base_exchange_interrupt_control_temporal_tests {
         assert_eq!(ei.now(), MachineTime::from_ticks(24));
     }
 }
+
+
+#[cfg(test)]
+mod base_exchange_stack_temporal_tests {
+    use super::SmsTemporalMachine;
+    use sega_temporal_core::MachineTime;
+    use sega_z80_cpu::Z80MicroStep;
+
+    fn advance_m1(machine: &mut SmsTemporalMachine) -> Z80MicroStep {
+        let mut step = machine.begin_instruction().unwrap();
+        for _ in 0..4 {
+            machine.schedule_pending_bus(0).unwrap();
+            step = machine.dispatch_next().unwrap();
+        }
+        step
+    }
+
+    #[test]
+    fn ex_sp_hl_uses_five_scheduler_machine_cycles() {
+        let mut machine = SmsTemporalMachine::new(vec![0xE3], 3).unwrap();
+        machine.cpu_mut().registers.sp = 0xC100;
+        machine.cpu_mut().registers.set_hl(0xABCD);
+        machine.bus.write_memory_for_test(0xC100, 0x34);
+        machine.bus.write_memory_for_test(0xC101, 0x12);
+
+        assert_eq!(
+            machine.step_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xE3,
+                tstates: 19,
+            }
+        );
+        assert_eq!(machine.cpu().registers.hl(), 0x1234);
+        assert_eq!(machine.cpu().wz, 0x1234);
+        assert_eq!(machine.cpu().registers.sp, 0xC100);
+        assert_eq!(machine.bus.memory().read(0xC100), 0xCD);
+        assert_eq!(machine.bus.memory().read(0xC101), 0xAB);
+        assert_eq!(machine.now(), MachineTime::from_ticks(57));
+    }
+
+    #[test]
+    fn ex_sp_hl_internal_safe_point_restores_with_scheduler_state() {
+        let mut machine = SmsTemporalMachine::new(vec![0xE3], 3).unwrap();
+        machine.cpu_mut().registers.sp = 0xC100;
+        machine.cpu_mut().registers.set_hl(0xABCD);
+        machine.bus.write_memory_for_test(0xC100, 0x34);
+        machine.bus.write_memory_for_test(0xC101, 0x12);
+        assert!(matches!(advance_m1(&mut machine), Z80MicroStep::BusRequest(_)));
+
+        machine.schedule_pending_bus(0).unwrap();
+        assert!(matches!(machine.dispatch_next().unwrap(), Z80MicroStep::BusRequest(_)));
+        machine.schedule_pending_bus(0).unwrap();
+        assert_eq!(
+            machine.dispatch_next().unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+
+        let snapshot = machine.export_state();
+        let mut restored = SmsTemporalMachine::restore_state(snapshot).unwrap();
+        assert_eq!(
+            restored.resume_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xE3,
+                tstates: 19,
+            }
+        );
+        assert_eq!(restored.cpu().registers.hl(), 0x1234);
+        assert_eq!(restored.cpu().wz, 0x1234);
+        assert_eq!(restored.bus.memory().read(0xC100), 0xCD);
+        assert_eq!(restored.bus.memory().read(0xC101), 0xAB);
+        assert_eq!(restored.now(), MachineTime::from_ticks(57));
+    }
+}
