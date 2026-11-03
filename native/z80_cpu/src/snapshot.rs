@@ -6,8 +6,8 @@
 
 use crate::{
     Z80_MICRO_SEQUENCER_STATE_VERSION, Z80AlternateRegisters, Z80BusHandshakeState,
-    Z80BusOperation, Z80BusRequest, Z80MicroSequencer, Z80MicroSequencerPhase,
-    Z80MicroSequencerState, Z80Registers,
+    Z80BusOperation, Z80BusRequest, Z80IndexRegister, Z80PrefixState, Z80MicroSequencer,
+    Z80MicroSequencerPhase, Z80MicroSequencerState, Z80Registers,
 };
 use core::fmt;
 
@@ -78,6 +78,13 @@ impl Z80MicroSequencerState {
                 body.u8(1);
                 body.u8(value);
             }
+        }
+        match self.prefix_state {
+            Z80PrefixState::None => body.u8(0),
+            Z80PrefixState::Cb => body.u8(1),
+            Z80PrefixState::Ed => body.u8(2),
+            Z80PrefixState::Index(Z80IndexRegister::Ix) => body.u8(3),
+            Z80PrefixState::Index(Z80IndexRegister::Iy) => body.u8(4),
         }
         write_phase(&mut body, self.phase);
         body.u64(self.handshake.next_request_id);
@@ -181,6 +188,14 @@ impl Z80MicroSequencerState {
             1 => Some(reader.u8()?),
             tag => return Err(Z80MicroSequencerStateCodecError::InvalidTag(tag)),
         };
+        let prefix_state = match reader.u8()? {
+            0 => Z80PrefixState::None,
+            1 => Z80PrefixState::Cb,
+            2 => Z80PrefixState::Ed,
+            3 => Z80PrefixState::Index(Z80IndexRegister::Ix),
+            4 => Z80PrefixState::Index(Z80IndexRegister::Iy),
+            tag => return Err(Z80MicroSequencerStateCodecError::InvalidTag(tag)),
+        };
         let phase = read_phase(&mut reader)?;
         let next_request_id = reader.u64()?;
         let pending_request = match reader.u8()? {
@@ -232,6 +247,7 @@ impl Z80MicroSequencerState {
             },
             phase,
             opcode,
+            prefix_state,
             instruction_tstates,
             mcycle_index,
             tstate_index,
