@@ -1031,9 +1031,7 @@ impl Z80MicroSequencer {
                             && state.instruction_tstates >= 11 + u32::from(stage) * 3
                     } else {
                         state.mcycle_index == 1 + u32::from(stage)
-                            && state.instruction_tstates
-                        >= 5 + u32::from(stage) * 3
-                            + if matches!(state.prefix_state, Z80PrefixState::Index(_)) { 4 } else { 0 }
+                            && state.instruction_tstates >= 5 + u32::from(stage) * 3
                     }
             }
             Z80MicroSequencerPhase::BaseStackPushInternal { high, low } => {
@@ -1085,7 +1083,9 @@ impl Z80MicroSequencer {
                     && stage <= 1
                     && expected.is_some_and(|value| low == value as u8)
                     && request_matches
-                    && state.instruction_tstates >= 5 + u32::from(stage) * 3
+                    && state.instruction_tstates
+                        >= 5 + u32::from(stage) * 3
+                            + if matches!(state.prefix_state, Z80PrefixState::Index(_)) { 4 } else { 0 }
             }
             Z80MicroSequencerPhase::BaseStackPop { stage, low } => {
                 state
@@ -1098,8 +1098,11 @@ impl Z80MicroSequencer {
                             && request.base_tstates == 3
                     })
                     && match stage {
-                        0 => low == 0 && state.instruction_tstates >= 4,
-                        1 => state.instruction_tstates >= 7,
+                        0 => low == 0
+                            && state.instruction_tstates
+                                >= 4 + if matches!(state.prefix_state, Z80PrefixState::Index(_)) { 4 } else { 0 },
+                        1 => state.instruction_tstates
+                            >= 7 + if matches!(state.prefix_state, Z80PrefixState::Index(_)) { 4 } else { 0 },
                         _ => false,
                     }
             }
