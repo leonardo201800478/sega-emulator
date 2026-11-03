@@ -131,6 +131,19 @@ pub enum Z80MicroSequencerPhase {
         opcode: u8,
         remaining_tstates: u8,
     },
+    EdBlockCompareRead {
+        opcode: u8,
+        address: u16,
+    },
+    EdBlockCompareInternal {
+        opcode: u8,
+        remaining_tstates: u8,
+        repeat: bool,
+    },
+    EdBlockCompareRepeatInternal {
+        opcode: u8,
+        remaining_tstates: u8,
+    },
     MemoryIncDecInternal {
         decrement: bool,
         old: u8,
@@ -640,6 +653,39 @@ impl Z80MicroSequencer {
                     && pending.is_none()
                     && state.instruction_tstates >= 16 + u32::from(5 - remaining_tstates)
             }
+            Z80MicroSequencerPhase::EdBlockCompareRead { opcode, address } => {
+                matches!(opcode, 0xA1 | 0xA9 | 0xB1 | 0xB9)
+                    && state.opcode == Some(opcode)
+                    && address == state.registers.hl()
+                    && pending.is_some_and(|request| {
+                        request.operation == Z80BusOperation::MemoryRead
+                            && request.address == address
+                            && request.base_tstates == 3
+                    })
+                    && state.instruction_tstates >= 8
+            }
+            Z80MicroSequencerPhase::EdBlockCompareInternal {
+                opcode,
+                remaining_tstates,
+                repeat,
+            } => {
+                matches!(opcode, 0xA1 | 0xA9 | 0xB1 | 0xB9)
+                    && state.opcode == Some(opcode)
+                    && (!repeat || matches!(opcode, 0xB1 | 0xB9))
+                    && (1..=5).contains(&remaining_tstates)
+                    && pending.is_none()
+                    && state.instruction_tstates >= 11 + u32::from(5 - remaining_tstates)
+            }
+            Z80MicroSequencerPhase::EdBlockCompareRepeatInternal {
+                opcode,
+                remaining_tstates,
+            } => {
+                matches!(opcode, 0xB1 | 0xB9)
+                    && state.opcode == Some(opcode)
+                    && (1..=5).contains(&remaining_tstates)
+                    && pending.is_none()
+                    && state.instruction_tstates >= 16 + u32::from(5 - remaining_tstates)
+            }
             Z80MicroSequencerPhase::EdAbsoluteTransfer {
                 stage,
                 pair,
@@ -814,6 +860,15 @@ impl Z80MicroSequencer {
                 state.mcycle_index == 3 && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::EdBlockRepeatInternal {
+                remaining_tstates, ..
+            } => state.mcycle_index == 4 && state.tstate_index == u16::from(5 - remaining_tstates),
+            Z80MicroSequencerPhase::EdBlockCompareRead { .. } => {
+                state.mcycle_index == 2 && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::EdBlockCompareInternal {
+                remaining_tstates, ..
+            } => state.mcycle_index == 3 && state.tstate_index == u16::from(5 - remaining_tstates),
+            Z80MicroSequencerPhase::EdBlockCompareRepeatInternal {
                 remaining_tstates, ..
             } => state.mcycle_index == 4 && state.tstate_index == u16::from(5 - remaining_tstates),
             Z80MicroSequencerPhase::MemoryIncDecInternal { .. } => {
@@ -1316,6 +1371,57 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::EdBlockRepeatInternal { .. } => {
                 Err(Z80MicroSequencerError::UnexpectedCompletion)
             }
+            Z80MicroSequencerPhase::EdBlockCompareRead { opcode, address } => {
+                let value = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                let direction = if matches!(opcode, 0xA9 | 0xB9) {
+                    -1_i16
+                } else {
+                    1_i16
+                };
+                let accumulator = self.registers.a;
+                let result = accumulator.wrapping_sub(value);
+                let half = (accumulator & 0x0F) < (value & 0x0F);
+                self.registers
+                    .set_hl(address.wrapping_add_signed(direction));
+                let count = self.registers.bc().wrapping_sub(1);
+                self.registers.set_bc(count);
+                let adjusted = result.wrapping_sub(u8::from(half));
+                let mut flags = (self.registers.f & FLAG_C) | FLAG_N | (result & FLAG_S);
+                if result == 0 {
+                    flags |= FLAG_Z;
+                }
+                if half {
+                    flags |= FLAG_H;
+                }
+                if count != 0 {
+                    flags |= FLAG_PV;
+                }
+                flags |= adjusted & 0x08;
+                flags |= (adjusted & 0x02) << 4;
+                let repeat = matches!(opcode, 0xB1 | 0xB9) && count != 0 && result != 0;
+                if repeat {
+                    self.registers.pc = self.registers.pc.wrapping_sub(2);
+                    self.wz = self.registers.pc.wrapping_add(1);
+                    flags = (flags & !FLAG_XY) | (((self.registers.pc >> 8) as u8) & FLAG_XY);
+                } else {
+                    self.wz = self.wz.wrapping_add_signed(direction);
+                }
+                self.set_flags(flags);
+                self.mcycle_index = 3;
+                self.tstate_index = 0;
+                self.phase = Z80MicroSequencerPhase::EdBlockCompareInternal {
+                    opcode,
+                    remaining_tstates: 5,
+                    repeat,
+                };
+                Ok(Z80MicroStep::InternalCycle { tstates: 1 })
+            }
+            Z80MicroSequencerPhase::EdBlockCompareInternal { .. }
+            | Z80MicroSequencerPhase::EdBlockCompareRepeatInternal { .. } => {
+                Err(Z80MicroSequencerError::UnexpectedCompletion)
+            }
             Z80MicroSequencerPhase::EdReturn { stage, low } => match stage {
                 0 => {
                     let low = response
@@ -1585,6 +1691,56 @@ impl Z80MicroSequencer {
                     Z80MicroStep::InternalCycle { tstates: 1 }
                 }
             }
+            Z80MicroSequencerPhase::EdBlockCompareInternal {
+                opcode,
+                remaining_tstates,
+                repeat,
+            } => {
+                next.instruction_tstates = next_instruction_tstates;
+                if remaining_tstates == 1 {
+                    if repeat {
+                        next.mcycle_index = 4;
+                        next.tstate_index = 0;
+                        next.phase = Z80MicroSequencerPhase::EdBlockCompareRepeatInternal {
+                            opcode,
+                            remaining_tstates: 5,
+                        };
+                        Z80MicroStep::InternalCycle { tstates: 1 }
+                    } else {
+                        next.retire(opcode)?
+                    }
+                } else {
+                    next.phase = Z80MicroSequencerPhase::EdBlockCompareInternal {
+                        opcode,
+                        remaining_tstates: remaining_tstates - 1,
+                        repeat,
+                    };
+                    next.tstate_index = next
+                        .tstate_index
+                        .checked_add(1)
+                        .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                    Z80MicroStep::InternalCycle { tstates: 1 }
+                }
+            }
+            Z80MicroSequencerPhase::EdBlockCompareRepeatInternal {
+                opcode,
+                remaining_tstates,
+            } => {
+                next.instruction_tstates = next_instruction_tstates;
+                if remaining_tstates == 1 {
+                    next.retire(opcode)?
+                } else {
+                    next.phase = Z80MicroSequencerPhase::EdBlockCompareRepeatInternal {
+                        opcode,
+                        remaining_tstates: remaining_tstates - 1,
+                    };
+                    next.tstate_index = next
+                        .tstate_index
+                        .checked_add(1)
+                        .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                    Z80MicroStep::InternalCycle { tstates: 1 }
+                }
+            }
             Z80MicroSequencerPhase::EdRegisterInternal { opcode } => {
                 next.instruction_tstates = next_instruction_tstates;
                 next.execute_ed_register_internal(opcode);
@@ -1730,6 +1886,13 @@ impl Z80MicroSequencer {
                     self.registers.pc,
                 )
             }
+            0xA1 | 0xA9 | 0xB1 | 0xB9 => self.issue_read(
+                Z80MicroSequencerPhase::EdBlockCompareRead {
+                    opcode,
+                    address: self.registers.hl(),
+                },
+                self.registers.hl(),
+            ),
             0xA0 | 0xA8 | 0xB0 | 0xB8 => self.issue_read(
                 Z80MicroSequencerPhase::EdBlockTransferRead {
                     opcode,
@@ -5701,5 +5864,238 @@ mod ed_block_transfer_differential_tests {
         assert_eq!(sequenced_bus.writes, atomic_bus.writes);
         assert_eq!(sequenced.registers.hl(), 0x0000);
         assert_eq!(sequenced.registers.de(), 0x0001);
+    }
+}
+
+#[cfg(test)]
+mod ed_block_compare_differential_tests {
+    use super::{Z80MicroSequencer, Z80MicroStep};
+    use crate::bus::CpuBus;
+    use crate::{
+        Z80, Z80AlternateRegisters, Z80ArchitecturalState, Z80BusOperation, Z80MicroSequencerState,
+        Z80Registers,
+    };
+
+    #[derive(Clone)]
+    struct TestBus {
+        memory: Box<[u8; 0x10000]>,
+        reads: Vec<u16>,
+        writes: Vec<(u16, u8)>,
+    }
+
+    impl Default for TestBus {
+        fn default() -> Self {
+            Self {
+                memory: Box::new([0; 0x10000]),
+                reads: Vec::new(),
+                writes: Vec::new(),
+            }
+        }
+    }
+
+    impl CpuBus for TestBus {
+        fn read_memory(&mut self, address: u16) -> u8 {
+            self.reads.push(address);
+            self.memory[usize::from(address)]
+        }
+
+        fn write_memory(&mut self, address: u16, value: u8) {
+            self.writes.push((address, value));
+            self.memory[usize::from(address)] = value;
+        }
+    }
+
+    fn initial_state() -> Z80ArchitecturalState {
+        Z80ArchitecturalState {
+            registers: Z80Registers {
+                a: 0x12,
+                f: 0xD7,
+                b: 0x00,
+                c: 0x02,
+                d: 0xC1,
+                e: 0x00,
+                h: 0xC0,
+                l: 0x00,
+                pc: 0x1000,
+                sp: 0xD000,
+            },
+            alternate: Z80AlternateRegisters::default(),
+            ix: 0x1357,
+            iy: 0x2468,
+            i: 0x81,
+            r: 0xFE,
+            iff1: false,
+            iff2: true,
+            interrupt_mode: 1,
+            wz: 0xABCD,
+            ei_delay: 0,
+            nmi_pending: false,
+            int_pending: None,
+            q: 0,
+            q_previous: 0,
+            p: false,
+            halted: false,
+        }
+    }
+
+    fn roundtrip(cpu: Z80MicroSequencer) -> Z80MicroSequencer {
+        let encoded = cpu.export_state().encode().unwrap();
+        let decoded = Z80MicroSequencerState::decode(&encoded).unwrap();
+        Z80MicroSequencer::restore_state(decoded).unwrap()
+    }
+
+    fn run_sequenced(
+        mut cpu: Z80MicroSequencer,
+        mut bus: TestBus,
+        add_waits: bool,
+    ) -> (
+        Z80MicroSequencer,
+        TestBus,
+        u32,
+        Vec<(Z80BusOperation, u16, u8)>,
+    ) {
+        let mut step = cpu.begin_instruction().unwrap();
+        let mut cycles = Vec::new();
+        loop {
+            match step {
+                Z80MicroStep::BusRequest(request) => {
+                    if add_waits {
+                        cpu.insert_wait_tstate().unwrap();
+                    }
+                    cycles.push((request.operation, request.address, request.base_tstates));
+                    let data = match request.operation {
+                        Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
+                            Some(bus.read_memory(request.address))
+                        }
+                        Z80BusOperation::MemoryWrite { value } => {
+                            bus.write_memory(request.address, value);
+                            None
+                        }
+                        other => panic!("unexpected ED block compare operation: {other:?}"),
+                    };
+                    step = cpu.complete_bus_cycle(request.id, data).unwrap();
+                    cpu = roundtrip(cpu);
+                }
+                Z80MicroStep::InternalCycle { tstates } => {
+                    assert_eq!(tstates, 1);
+                    step = cpu.complete_internal_cycle().unwrap();
+                    cpu = roundtrip(cpu);
+                }
+                Z80MicroStep::InstructionRetired { tstates, .. } => {
+                    return (cpu, bus, tstates, cycles);
+                }
+            }
+        }
+    }
+
+    fn run_case(
+        opcode: u8,
+        initial_count: u16,
+        accumulator: u8,
+        memory_value: u8,
+        add_waits: bool,
+    ) {
+        let mut initial = initial_state();
+        initial.registers.a = accumulator;
+        initial.registers.set_bc(initial_count);
+        let mut atomic = Z80::default();
+        atomic.import_architectural_state(initial).unwrap();
+        let mut atomic_bus = TestBus::default();
+        atomic_bus.memory[0x1000] = 0xED;
+        atomic_bus.memory[0x1001] = opcode;
+        atomic_bus.memory[0xC000] = memory_value;
+        let sequenced_bus = atomic_bus.clone();
+
+        let result = accumulator.wrapping_sub(memory_value);
+        let repeats =
+            matches!(opcode, 0xB1 | 0xB9) && initial_count.wrapping_sub(1) != 0 && result != 0;
+        let expected_tstates = if repeats { 21 } else { 16 };
+        assert_eq!(
+            atomic.step(&mut atomic_bus),
+            Ok(expected_tstates),
+            "ED {opcode:02X}, BC={initial_count:04X}, A={accumulator:02X}, value={memory_value:02X}"
+        );
+
+        let mut sequenced = Z80MicroSequencer::default();
+        sequenced.import_architectural_state(initial).unwrap();
+        let (sequenced, sequenced_bus, tstates, cycles) =
+            run_sequenced(sequenced, sequenced_bus, add_waits);
+
+        assert_eq!(
+            tstates,
+            expected_tstates + if add_waits { 3 } else { 0 },
+            "ED {opcode:02X}, BC={initial_count:04X}"
+        );
+        assert_eq!(
+            cycles,
+            vec![
+                (Z80BusOperation::OpcodeFetch, 0x1000, 4),
+                (Z80BusOperation::OpcodeFetch, 0x1001, 4),
+                (Z80BusOperation::MemoryRead, 0xC000, 3),
+            ],
+            "ED {opcode:02X} M-cycle order"
+        );
+        assert_eq!(
+            sequenced.export_architectural_state(),
+            atomic.export_architectural_state(),
+            "architectural mismatch for ED {opcode:02X}, BC={initial_count:04X}"
+        );
+        assert_eq!(sequenced_bus.reads, atomic_bus.reads);
+        assert_eq!(sequenced_bus.writes, atomic_bus.writes);
+        assert_eq!(sequenced_bus.memory, atomic_bus.memory);
+        assert_eq!(sequenced.pending_request(), None);
+    }
+
+    #[test]
+    fn cpi_cpd_and_repeat_forms_match_atomic_flags_and_state() {
+        for opcode in [0xA1, 0xA9, 0xB1, 0xB9] {
+            run_case(opcode, 1, 0x12, 0x34, false);
+            run_case(opcode, 2, 0x12, 0x34, false);
+            run_case(opcode, 2, 0x34, 0x34, false);
+        }
+    }
+
+    #[test]
+    fn cpir_and_cpdr_repeat_when_count_wraps_from_zero_and_no_match() {
+        run_case(0xB1, 0, 0x12, 0x34, false);
+        run_case(0xB9, 0, 0x12, 0x34, false);
+    }
+
+    #[test]
+    fn waits_and_snapshot_restore_preserve_compare_internal_cycles() {
+        for opcode in [0xA1, 0xA9, 0xB1, 0xB9] {
+            run_case(opcode, 1, 0x12, 0x34, true);
+            run_case(opcode, 2, 0x12, 0x34, true);
+            run_case(opcode, 2, 0x34, 0x34, true);
+        }
+    }
+
+    #[test]
+    fn compare_address_wraps_at_ffff_in_both_directions() {
+        for (opcode, expected_hl) in [(0xA1, 0x0000), (0xA9, 0xFFFE)] {
+            let mut initial = initial_state();
+            initial.registers.set_hl(0xFFFF);
+            initial.registers.set_bc(1);
+            let mut atomic = Z80::default();
+            atomic.import_architectural_state(initial).unwrap();
+            let mut atomic_bus = TestBus::default();
+            atomic_bus.memory[0x1000] = 0xED;
+            atomic_bus.memory[0x1001] = opcode;
+            atomic_bus.memory[0xFFFF] = 0x34;
+            let sequenced_bus = atomic_bus.clone();
+
+            assert_eq!(atomic.step(&mut atomic_bus), Ok(16));
+            let mut sequenced = Z80MicroSequencer::default();
+            sequenced.import_architectural_state(initial).unwrap();
+            let (sequenced, sequenced_bus, tstates, _) =
+                run_sequenced(sequenced, sequenced_bus, false);
+            assert_eq!(tstates, 16);
+            assert_eq!(
+                sequenced.export_architectural_state(),
+                atomic.export_architectural_state()
+            );
+            assert_eq!(sequenced_bus.reads, atomic_bus.reads);
+            assert_eq!(sequenced.registers.hl(), expected_hl);
+        }
     }
 }
