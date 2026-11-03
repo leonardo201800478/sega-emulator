@@ -562,7 +562,8 @@ mod tests {
 
     #[test]
     fn controller_rejects_unknown_player() {
-        let mut machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa"), None, None, None).unwrap();
+        let mut machine =
+            NativeSMSMachine::new(vec![0; 16], false, Some("usa"), None, None, None).unwrap();
         assert!(
             machine
                 .set_controller(3, false, false, false, false, false, false)
