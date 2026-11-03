@@ -355,11 +355,7 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u8(stage);
             writer.u8(low);
         }
-        Z80MicroSequencerPhase::BaseControlPushInternal {
-            target,
-            high,
-            low,
-        } => {
+        Z80MicroSequencerPhase::BaseControlPushInternal { target, high, low } => {
             writer.u8(44);
             writer.u16(target);
             writer.u8(high);
@@ -1774,7 +1770,6 @@ mod base_stack_snapshot_tests {
     }
 }
 
-
 #[cfg(test)]
 mod base_call_rst_snapshot_tests {
     use crate::{Z80MicroSequencer, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep};
@@ -1895,7 +1890,6 @@ mod base_call_rst_snapshot_tests {
     }
 }
 
-
 #[cfg(test)]
 mod base_return_snapshot_tests {
     use crate::{Z80MicroSequencer, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep};
@@ -1986,7 +1980,6 @@ mod base_return_snapshot_tests {
         assert!(Z80MicroSequencer::restore_state(invalid).is_err());
     }
 }
-
 
 #[cfg(test)]
 mod base_exchange_stack_snapshot_tests {
