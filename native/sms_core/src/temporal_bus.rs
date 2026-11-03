@@ -152,8 +152,17 @@ impl SmsTemporalBus {
         rom: impl Into<Vec<u8>>,
         master_ticks_per_tstate: u64,
     ) -> Result<Self, SmsTemporalBusError> {
+        Self::new_with_cartridge_ram(rom, None, master_ticks_per_tstate)
+    }
+
+    /// Construct a temporal bus with explicitly supplied cartridge SRAM.
+    pub fn new_with_cartridge_ram(
+        rom: impl Into<Vec<u8>>,
+        cartridge_ram: Option<Vec<u8>>,
+        master_ticks_per_tstate: u64,
+    ) -> Result<Self, SmsTemporalBusError> {
         let cartridge = CartridgeImage::new(rom)?;
-        let memory = SmsMemory::new(cartridge)?;
+        let memory = SmsMemory::with_bios_and_cartridge_ram(cartridge, None, cartridge_ram)?;
         let coordinator = SmsTemporalCoordinator::new(master_ticks_per_tstate)?;
         Ok(Self {
             memory,
@@ -645,6 +654,22 @@ mod tests {
         assert_eq!(restored.memory().read(0xC002), 0x99);
         assert_eq!(restored.acknowledge_completion(4).unwrap(), completion);
         assert_eq!(restored.memory().read(0xC002), 0x99);
+    }
+
+    #[test]
+    fn snapshot_restore_preserves_cartridge_sram_and_mapper_selection() {
+        let mut bus = SmsTemporalBus::new_with_cartridge_ram(
+            patterned_rom(4),
+            Some(vec![0; 0x8000]),
+            3,
+        )
+        .unwrap();
+        bus.write_memory_for_test(0xFFFC, 0x0C);
+        bus.write_memory_for_test(0x8000, 0xA7);
+        let restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
+        assert_eq!(restored.memory().mapper_control(), 0x0C);
+        assert_eq!(restored.memory().read(0x8000), 0xA7);
+        assert_eq!(restored.memory().cartridge_ram().unwrap().len(), 0x8000);
     }
 
     #[test]
