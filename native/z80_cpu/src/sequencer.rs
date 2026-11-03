@@ -8,7 +8,7 @@
 use crate::alu::{adc8, add8, and8, cp8, cpl8, daa8, or8, rotate_accumulator, sbc8, sub8, xor8};
 use crate::{
     Z80_MICRO_SEQUENCER_STATE_VERSION, Z80BusHandshake, Z80BusHandshakeError, Z80BusOperation,
-    Z80BusRequest, Z80Registers,
+    Z80ArchitecturalState, Z80AlternateRegisters, Z80BusRequest, Z80Registers,
 };
 
 const FLAG_C: u8 = 0x01;
@@ -105,6 +105,18 @@ pub struct Z80MicroSequencerState {
     /// Zero-based T-state position within the current M-cycle.
     /// This slice exposes selected intra-M-cycle offsets, not electrical edges.
     pub tstate_index: u16,
+    pub alternate: Z80AlternateRegisters,
+    pub ix: u16,
+    pub iy: u16,
+    pub iff1: bool,
+    pub iff2: bool,
+    pub interrupt_mode: u8,
+    pub wz: u16,
+    pub ei_delay: u8,
+    pub nmi_pending: bool,
+    pub int_pending: Option<u8>,
+    pub p: bool,
+    pub halted: bool,
 }
 
 /// A resumable subset of the Z80 instruction engine.
@@ -121,6 +133,19 @@ pub struct Z80MicroSequencer {
     pub q: u8,
     /// Q value captured at the previous instruction boundary.
     pub q_previous: u8,
+    pub alternate: Z80AlternateRegisters,
+    pub ix: u16,
+    pub iy: u16,
+    pub i: u8,
+    pub iff1: bool,
+    pub iff2: bool,
+    pub interrupt_mode: u8,
+    pub wz: u16,
+    pub ei_delay: u8,
+    pub nmi_pending: bool,
+    pub int_pending: Option<u8>,
+    pub p: bool,
+    pub halted: bool,
     handshake: Z80BusHandshake,
     phase: Z80MicroSequencerPhase,
     opcode: Option<u8>,
@@ -136,6 +161,19 @@ impl Default for Z80MicroSequencer {
             refresh: 0,
             q: 0,
             q_previous: 0,
+            alternate: Z80AlternateRegisters::default(),
+            ix: 0,
+            iy: 0,
+            i: 0,
+            iff1: false,
+            iff2: false,
+            interrupt_mode: 0,
+            wz: 0,
+            ei_delay: 0,
+            nmi_pending: false,
+            int_pending: None,
+            p: false,
+            halted: false,
             handshake: Z80BusHandshake::default(),
             phase: Z80MicroSequencerPhase::Ready,
             opcode: None,
@@ -161,7 +199,71 @@ impl Z80MicroSequencer {
             instruction_tstates: self.instruction_tstates,
             mcycle_index: self.mcycle_index,
             tstate_index: self.tstate_index,
+            alternate: self.alternate,
+            ix: self.ix,
+            iy: self.iy,
+            iff1: self.iff1,
+            iff2: self.iff2,
+            interrupt_mode: self.interrupt_mode,
+            wz: self.wz,
+            ei_delay: self.ei_delay,
+            nmi_pending: self.nmi_pending,
+            int_pending: self.int_pending,
+            p: self.p,
+            halted: self.halted,
         }
+    }
+
+    /// Export the shared architectural DTO without sequencer continuation data.
+    pub fn export_architectural_state(&self) -> Z80ArchitecturalState {
+        Z80ArchitecturalState {
+            registers: self.registers,
+            alternate: self.alternate,
+            ix: self.ix,
+            iy: self.iy,
+            i: self.i,
+            r: self.refresh,
+            iff1: self.iff1,
+            iff2: self.iff2,
+            interrupt_mode: self.interrupt_mode,
+            wz: self.wz,
+            ei_delay: self.ei_delay,
+            nmi_pending: self.nmi_pending,
+            int_pending: self.int_pending,
+            q: self.q,
+            q_previous: self.q_previous,
+            p: self.p,
+            halted: self.halted,
+        }
+    }
+
+    /// Import architectural state only at a sequencer instruction boundary.
+    pub fn import_architectural_state(
+        &mut self,
+        state: Z80ArchitecturalState,
+    ) -> Result<(), Z80MicroSequencerError> {
+        state.validate().map_err(|_| Z80MicroSequencerError::InvalidState)?;
+        if self.phase != Z80MicroSequencerPhase::Ready || self.handshake.is_pending() {
+            return Err(Z80MicroSequencerError::InstructionAlreadyActive);
+        }
+        self.registers = state.registers;
+        self.alternate = state.alternate;
+        self.ix = state.ix;
+        self.iy = state.iy;
+        self.i = state.i;
+        self.refresh = state.r;
+        self.iff1 = state.iff1;
+        self.iff2 = state.iff2;
+        self.interrupt_mode = state.interrupt_mode;
+        self.wz = state.wz;
+        self.ei_delay = state.ei_delay;
+        self.nmi_pending = state.nmi_pending;
+        self.int_pending = state.int_pending;
+        self.q = state.q;
+        self.q_previous = state.q_previous;
+        self.p = state.p;
+        self.halted = state.halted;
+        Ok(())
     }
 
     /// Restore a resumable state after validating CPU/handshake cross-invariants.
@@ -170,6 +272,9 @@ impl Z80MicroSequencer {
             return Err(Z80MicroSequencerError::InvalidState);
         }
         let handshake = Z80BusHandshake::restore_state(state.handshake)?;
+        if state.interrupt_mode > 2 || state.ei_delay > 1 {
+            return Err(Z80MicroSequencerError::InvalidState);
+        }
         let pending = handshake.pending_request();
         let valid = match state.phase {
             Z80MicroSequencerPhase::Ready => {
@@ -359,6 +464,19 @@ impl Z80MicroSequencer {
             refresh: state.refresh,
             q: state.q,
             q_previous: state.q_previous,
+            alternate: state.alternate,
+            ix: state.ix,
+            iy: state.iy,
+            i: state.i,
+            iff1: state.iff1,
+            iff2: state.iff2,
+            interrupt_mode: state.interrupt_mode,
+            wz: state.wz,
+            ei_delay: state.ei_delay,
+            nmi_pending: state.nmi_pending,
+            int_pending: state.int_pending,
+            p: state.p,
+            halted: state.halted,
             handshake,
             phase: state.phase,
             opcode: state.opcode,
@@ -2224,5 +2342,30 @@ mod tests {
             assert_eq!(cpu.pending_request(), None, "opcode {opcode:02X}");
             assert!(!cpu.instruction_active(), "opcode {opcode:02X}");
         }
+    }
+}
+
+
+#[cfg(test)]
+mod architectural_state_tests {
+    use super::Z80MicroSequencer;
+    use crate::{Z80ArchitecturalState, Z80AlternateRegisters, Z80Registers};
+
+    #[test]
+    fn sequencer_import_export_preserves_the_shared_architectural_dto() {
+        let state = Z80ArchitecturalState {
+            registers: Z80Registers { a: 0x12, f: 0xA5, b: 0x34, c: 0x56, d: 0x78, e: 0x9A, h: 0xBC, l: 0xDE, sp: 0xF012, pc: 0x3456 },
+            alternate: Z80AlternateRegisters { a: 0x21, f: 0x5A, b: 0x43, c: 0x65, d: 0x87, e: 0xA9, h: 0xCB, l: 0xED },
+            ix: 0x1357, iy: 0x2468, i: 0x81, r: 0xFE,
+            iff1: true, iff2: false, interrupt_mode: 2, wz: 0xABCD,
+            ei_delay: 1, nmi_pending: true, int_pending: Some(0xCF),
+            q: 0x28, q_previous: 0xD7, p: true, halted: true,
+        };
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.import_architectural_state(state).unwrap();
+        assert_eq!(cpu.export_architectural_state(), state);
+        let snapshot = cpu.export_state();
+        let restored = Z80MicroSequencer::restore_state(snapshot).unwrap();
+        assert_eq!(restored.export_architectural_state(), state);
     }
 }
