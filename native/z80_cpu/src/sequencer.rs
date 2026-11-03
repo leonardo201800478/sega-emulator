@@ -3029,6 +3029,65 @@ impl Z80MicroSequencer {
                 next.registers.sp = next.registers.sp.wrapping_sub(1);
                 next.issue_base_stack_push_write(0, low, next.registers.sp, high)?
             }
+            Z80MicroSequencerPhase::BaseControlPushInternal { target, high, low } => {
+                next.instruction_tstates = next_instruction_tstates;
+                next.registers.sp = next.registers.sp.wrapping_sub(1);
+                next.issue_base_control_push_write(0, target, low, next.registers.sp, high)?
+            }
+            Z80MicroSequencerPhase::BaseReturnConditionInternal { branch_taken } => {
+                next.instruction_tstates = next_instruction_tstates;
+                let opcode = next
+                    .opcode
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                if branch_taken {
+                    next.issue_read(
+                        Z80MicroSequencerPhase::BaseReturnPop { stage: 0, low: 0 },
+                        next.registers.sp,
+                    )?
+                } else {
+                    next.retire(opcode)?
+                }
+            }
+            Z80MicroSequencerPhase::BaseExchangeStackInternal {
+                stage,
+                low,
+                high,
+                old_hl,
+                remaining_tstates,
+            } => {
+                let remaining_tstates = remaining_tstates
+                    .checked_sub(1)
+                    .ok_or(Z80MicroSequencerError::InvalidState)?;
+                next.instruction_tstates = next_instruction_tstates;
+                if stage == 0 {
+                    next.issue_base_exchange_stack_write(
+                        2,
+                        low,
+                        high,
+                        old_hl,
+                        next.registers.sp,
+                        old_hl as u8,
+                    )?
+                } else if remaining_tstates == 0 {
+                    let exchanged = u16::from_le_bytes([low, high]);
+                    next.registers.set_hl(exchanged);
+                    next.wz = exchanged;
+                    next.retire(0xE3)?
+                } else {
+                    next.tstate_index = next
+                        .tstate_index
+                        .checked_add(1)
+                        .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                    next.phase = Z80MicroSequencerPhase::BaseExchangeStackInternal {
+                        stage,
+                        low,
+                        high,
+                        old_hl,
+                        remaining_tstates,
+                    };
+                    Z80MicroStep::InternalCycle { tstates: 1 }
+                }
+            }
             Z80MicroSequencerPhase::BaseRelativeBranchInternal {
                 displacement,
                 branch_taken,
