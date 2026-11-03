@@ -143,6 +143,9 @@ impl SmsMemory {
         }
 
         let mapper = detect_mapper(&rom);
+        if cartridge_ram.is_some() && mapper != MapperKind::Sega {
+            return Err(SmsCoreError::CartridgeRamUnsupportedMapper);
+        }
         let bank_registers = match mapper {
             MapperKind::Sega => [0, 1, 2],
             MapperKind::Codemasters => [0, 1, 0],
@@ -578,6 +581,13 @@ mod tests {
         bytes[0x7FE0..0x7FF0].copy_from_slice(&header);
         bytes[0x7FF0..0x7FF8].copy_from_slice(b"TMR SEGA");
         CartridgeImage::new(bytes).unwrap()
+    }
+
+    #[test]
+    fn cartridge_ram_configuration_rejects_unimplemented_codemasters_sram_mapping() {
+        let error = SmsMemory::with_cartridge_ram(codemasters_rom(16), vec![0; 0x2000])
+            .unwrap_err();
+        assert_eq!(error, SmsCoreError::CartridgeRamUnsupportedMapper);
     }
 
     #[test]
