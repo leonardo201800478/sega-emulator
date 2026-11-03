@@ -3,7 +3,8 @@
 **Status:** plano de execução para a próxima fatia de trabalho  
 **Data da auditoria:** 2026-11-03  
 **Baseline inicial E0:** `e4604f3152c09e8d16c37f94f94a4b344db33b62`  
-**Baseline atual após E1 / PR #467:** `aa4a4fa7661c28d3b2e21ac6d6eb4379fd297f65`  
+**Baseline após E1 / PR #467:** `aa4a4fa7661c28d3b2e21ac6d6eb4379fd297f65`  
+**Baseline atual após E2 / PR #468:** `abd154332b1dabfb68874f2b80f306da7e060552`  
 **PR de referência:** [#447](https://github.com/leonardo201800478/sega-emulator/pull/447) — manter aberta, sem merge  
 **Escopo:** microsequenciador Z80 compartilhado; não confundir conclusão do núcleo com integração temporal completa ao SMS.
 
@@ -31,7 +32,9 @@ Ordem de execução:
 |---|---|
 | SHA da main na auditoria inicial | `e4604f3152c09e8d16c37f94f94a4b344db33b62` |
 | SHA da main após E1 (#467) | `aa4a4fa7661c28d3b2e21ac6d6eb4379fd297f65` |
-| Schema do microsequenciador | `Z80_MICRO_SEQUENCER_STATE_VERSION = 25` |
+| SHA da main após E2 (#468) | `abd154332b1dabfb68874f2b80f306da7e060552` |
+| Schema inicial E0 | `Z80_MICRO_SEQUENCER_STATE_VERSION = 25` |
+| Schema atual após E2 | `Z80_MICRO_SEQUENCER_STATE_VERSION = 26` |
 | Codec | `native/z80_cpu/src/snapshot.rs`; não é save state integral da máquina SMS |
 | Inventário BASE | PR #465 integrada; 251 encodings com handler e 1 lacuna explícita (HALT), excluídos CB/DD/ED/FD |
 | Fonte da verdade | Código e testes da main no SHA acima |
@@ -42,14 +45,17 @@ O inventário BASE da #465 mede **dispatch/retirement do microsequenciador**. N�
 
 Inspeção de `native/z80_cpu/src/sequencer.rs`:
 
-- Reconhece CB, ED, DD e FD como prefix fetches.
-- DD/FD repetidos são aceitos como fetches sucessivos; o último prefixo fica no latch de opcode.
-- ED após DD/FD cancela o modo indexado e segue o caminho ED.
-- DD/FD seguido de CB é explicitamente rejeitado; displacement e subopcode DDCB/FDCB ainda não são consumidos.
-- DD/FD seguido de opcode comum ainda resulta em `UnsupportedOpcode`; as instruções indexadas não estão implementadas no sequenciador.
+- A FSM explícita agora mantém `None`, `CB`, `ED` ou `Index(IX/IY)` como estado de continuação serializável.
+- DD/FD repetidos ou alternados atualizam o índice efetivo; o último prefixo vence.
+- ED após DD/FD cancela a indexação e passa à família ED.
+- O opcode após DD/FD é classificado como `UsesIndex`, `Ignored` ou `IndexedCb`; a execução das famílias permanece nas etapas E3-E7.
+- DDCB/FDCB ainda não consome displacement/subopcode não-M1 no microsequenciador.
+- Prefixos indexados seguidos de opcode terminal ainda resultam em `UnsupportedOpcode` até a implementação das respectivas famílias.
+- O snapshot inclui o latch e valida a coerência fase/opcode; schema 26. O round-trip após DD está coberto.
+- Não há limite artificial para cadeias DD/FD; teste com 257 prefixos alternados.
 - HALT (0x76) permanece explicitamente não implementado no inventário BASE do microsequenciador.
 
-Estado correto: **reconhecimento de prefixos implementado; famílias indexadas ainda não implementadas no sequenciador**.
+Estado correto: **FSM DD/FD implementada e QUICK_PASS/SHORT_PASS na dimensão de transição/estado; sem conclusão semântica ou temporal das instruções indexadas**.
 
 ### 2.3 PR #447
 
@@ -134,7 +140,8 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 
 ### E0 — Baseline congelada (sem runtime)
 
-- [x] SHA main e schema 25 registrados.
+- [x] SHA inicial E0 e schema 25 registrados.
+- [x] SHA atual após E2 e schema 26 registrados.
 - [x] Estado/base/head da PR #447 registrados.
 - [x] CI do HEAD antigo #447 consultado; quatro jobs confirmados.
 - [x] Inventário BASE #465 distinguido de cobertura semântica.
@@ -158,14 +165,18 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 
 ### E2 — Modelo de prefixos e modo indexado
 
-- Projetar FSM com prefixo efetivo explícito e modo `None/Ix/Iy` (ou abstração equivalente justificada pelo código).
-- Evitar microprogramas duplicados por opcode quando a diferença puder ser parametrizada por par/registrador.
-- Preservar comportamento e traces do caminho sem prefixo.
-- Modelar DD/FD repetidos, alternados, prefixos ignorados e ED cancelando indexação.
-- Não fixar máximo de prefixos no runtime.
-- Atualizar snapshot somente quando novos latches forem necessários; um único bump a partir do schema 25, com validação estrita e política de compatibilidade explícita.
+- [x] FSM integrada ao caminho OpcodeFetch com estados `None/Cb/Ed/Index(Ix|Iy)`.
+- [x] DD/FD repetidos e alternados aplicam last-prefix-wins; ED cancela o modo indexado.
+- [x] Classificador distingue `UsesIndex`, `Ignored` e `IndexedCb`; a execução de opcodes ignorados continua reservada a E4.
+- [x] Sem limite artificial de prefixos; cadeia de 257 prefixos validada.
+- [x] Snapshot contém o latch, valida fase/opcode e faz round-trip com request M1 pendente.
+- [x] Schema incrementado uma única vez de 25 para 26; formato antigo não é reinterpretado.
+- [x] Caminho NOP sem prefixo preserva 4 T-states.
+- [x] PR #468 integrada na main em `abd154332b1dabfb68874f2b80f306da7e060552`.
 
-**Gate E2:** caminho sem prefixo com estado/trace idênticos à baseline; testes de prefixos e restore aprovados.
+**Gate E2:** PASS para FSM, seleção de prefixo, classificação e snapshot. CI completo do SHA candidato: [run 41721337030](https://github.com/leonardo201800478/sega-emulator/actions/runs/41721337030). Isso não declara FUNCTIONAL_PASS das instruções DD/FD nem TEMPORAL_PASS.
+
+**Limites mantidos:** execução de instruções indexadas, semântica de prefixos ignorados, displacement, DDCB/FDCB, traces por T-state e integração temporal permanecem nas etapas E3-E9.
 
 ### E3 — Operações 16-bit e substituição HL→IX/IY
 
@@ -234,11 +245,11 @@ Além disso, Scheduler deterministic stress e Windows x64 D3D12/WASAPI/XAudio2 q
 4. WAIT: derivar amostragem e ciclos elegíveis dos diagramas; não assumir regra universal.
 5. DDCB/FDCB: validar sequência de barramento e R com fonte técnica e vetores.
 6. Oráculos: SingleStepTests deriva de um emulador; raxoft/z80test e hardware/documentação devem complementar.
-7. Schema: qualquer alteração parte de 25 e considera snapshots pendentes; nunca importar schema da PR #447.
+7. Schema: baseline inicial 25; E2 avançou para 26 com um latch de prefixo explícito. Próximas alterações devem considerar snapshots pendentes; nunca importar schema da PR #447.
 8. Integração SMS: separada da conclusão funcional do conjunto de instruções.
 
 ## 8. Próxima ação
 
-Abrir uma PR de documentação/baseline a partir do SHA registrado, sem runtime. A revisão confirma a matriz e o inventário antes de E1. A primeira PR funcional será exclusivamente de testes/inventário semântico DD/FD, reaproveitando manifests e harnesses existentes.
+Prosseguir para E3 em fatias pequenas: LD IX/IY,nn; INC/DEC IX/IY; ADD IX/IY,rr; transferências de/para memória absoluta; PUSH/POP; EX (SP),IX/IY; JP (IX/IY); LD SP,IX/IY. Preservar a FSM E2 e acrescentar fases retomáveis, snapshot e testes por família.
 
-**Estado atual DD/FD no microsequenciador:** reconhecimento de prefixos implementado; instruções indexadas não implementadas; DDCB/FDCB explicitamente rejeitados; sem QUICK_PASS/SHORT_PASS/LONG_PASS/TEMPORAL_PASS global.
+**Estado atual DD/FD:** E2 implementada com QUICK_PASS/SHORT_PASS na dimensão de FSM e snapshot; instruções indexadas ainda não implementadas no microsequenciador; DDCB/FDCB apenas classificados, sem displacement/subopcode; sem LONG_PASS ou TEMPORAL_PASS global.
