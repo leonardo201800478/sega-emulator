@@ -2285,8 +2285,27 @@ impl Z80MicroSequencer {
         }
     }
 
-    /// Execute ADC/SBC HL,ss after its two M1 fetches and seven internal T-states.
-    fn execute_ed_16bit_arithmetic(&mut self, opcode: u8) {
+    /// Execute ED ADC/SBC HL,ss or indexed ADD after seven internal T-states.
+    fn execute_ed_16bit_arithmetic(&mut self, opcode: u8, index_prefix: Option<u8>) {
+        if let Some(prefix) = index_prefix {
+            let lhs = if prefix == 0xDD { self.ix } else { self.iy };
+            let pair = (opcode >> 4) & 0x03;
+            let operand = if pair == 2 { lhs } else { self.read_register_pair(pair) };
+            let sum = u32::from(lhs) + u32::from(operand);
+            let result = sum as u16;
+            let mut flags = self.registers.f & (FLAG_S | FLAG_Z | FLAG_PV);
+            flags |= ((result >> 8) as u8) & FLAG_XY;
+            if u32::from(lhs & 0x0FFF) + u32::from(operand & 0x0FFF) > 0x0FFF {
+                flags |= FLAG_H;
+            }
+            if sum > u32::from(u16::MAX) {
+                flags |= FLAG_C;
+            }
+            if prefix == 0xDD { self.ix = result; } else { self.iy = result; }
+            self.wz = lhs.wrapping_add(1);
+            self.set_flags(flags);
+            return;
+        }
         let pair = (opcode >> 4) & 0x03;
         let operand = match pair {
             0 => self.registers.bc(),
