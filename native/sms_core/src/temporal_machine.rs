@@ -635,36 +635,35 @@ impl SmsTemporalMachine {
             return Err(SmsTemporalMachineError::InvalidState);
         };
         loop {
-            step =
-                match step {
-                    Z80MicroStep::BusRequest(_) => {
-                        if self
-                            .m1
-                            .as_ref()
-                            .is_some_and(|m1| m1.phase() == Z80M1Phase::Complete)
-                        {
-                            self.finish_m1_fetch()?
-                        } else {
-                            if self.m1.is_some() {
-                                if self.m1.as_ref().is_some_and(|m1| {
-                                    m1.export_state().pending_continuation_id.is_none()
-                                }) {
-                                    self.schedule_pending_bus(fixture_wait_tstates)?;
-                                }
-                            } else if self.bus.pending_request().is_none() {
+            step = match step {
+                Z80MicroStep::BusRequest(_) => {
+                    if self
+                        .m1
+                        .as_ref()
+                        .is_some_and(|m1| m1.phase() == Z80M1Phase::Complete)
+                    {
+                        self.finish_m1_fetch()?
+                    } else {
+                        if self.m1.is_some() {
+                            if self.m1.as_ref().is_some_and(|m1| {
+                                m1.export_state().pending_continuation_id.is_none()
+                            }) {
                                 self.schedule_pending_bus(fixture_wait_tstates)?;
                             }
-                            self.dispatch_next()?
-                        }
-                    }
-                    Z80MicroStep::InternalCycle { tstates } => {
-                        if self.pending_internal_cycle_id.is_none() {
-                            self.schedule_internal_cycle(tstates)?;
+                        } else if self.bus.pending_request().is_none() {
+                            self.schedule_pending_bus(fixture_wait_tstates)?;
                         }
                         self.dispatch_next()?
                     }
-                    retired @ Z80MicroStep::InstructionRetired { .. } => return Ok(retired),
-                };
+                }
+                Z80MicroStep::InternalCycle { tstates } => {
+                    if self.pending_internal_cycle_id.is_none() {
+                        self.schedule_internal_cycle(tstates)?;
+                    }
+                    self.dispatch_next()?
+                }
+                retired @ Z80MicroStep::InstructionRetired { .. } => return Ok(retired),
+            };
         }
     }
 
@@ -964,7 +963,15 @@ mod tests {
             completed_m1.m1.unwrap().cycle.phase,
             sega_z80_cpu::Z80M1Phase::Complete
         );
-        assert!(completed_m1.bus.coordinator.scheduler.event_queue.pending.is_empty());
+        assert!(
+            completed_m1
+                .bus
+                .coordinator
+                .scheduler
+                .event_queue
+                .pending
+                .is_empty()
+        );
 
         let mut restored = SmsTemporalMachine::restore_state(completed_m1).unwrap();
         assert!(matches!(
