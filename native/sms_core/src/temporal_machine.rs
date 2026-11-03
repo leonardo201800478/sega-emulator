@@ -709,10 +709,7 @@ impl SmsTemporalMachine {
         }
         let cpu = Z80MicroSequencer::restore_state(state.cpu.clone())?;
         let bus = SmsTemporalBus::restore_state(state.bus.clone())?;
-        let m1 = state
-            .m1
-            .map(SmsTemporalM1::restore_state)
-            .transpose()?;
+        let m1 = state.m1.map(SmsTemporalM1::restore_state).transpose()?;
         let expected_bus_request = if m1.is_some() {
             None
         } else {
@@ -1729,7 +1726,12 @@ mod tests {
         let trace = machine.take_trace();
         let m1_events = trace
             .iter()
-            .filter(|event| matches!(event, super::SmsTemporalTraceEvent::M1TStateCompleted { .. }))
+            .filter(|event| {
+                matches!(
+                    event,
+                    super::SmsTemporalTraceEvent::M1TStateCompleted { .. }
+                )
+            })
             .count();
         assert_eq!(m1_events, 4);
         assert!(machine.export_state().m1.is_none());
@@ -1761,5 +1763,4 @@ mod tests {
         assert_eq!(restored.cpu().registers.pc, 1);
         assert!(restored.export_state().m1.is_none());
     }
-
 }
