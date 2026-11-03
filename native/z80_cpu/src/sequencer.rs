@@ -910,13 +910,27 @@ mod tests {
     }
 
     #[test]
-    fn alu_memory_operand_remains_explicitly_unsupported_until_scheduled_read_exists() {
+    fn alu_memory_operand_issues_scheduled_read_instead_of_rejecting_opcode() {
         let mut cpu = Z80MicroSequencer::default();
         let fetch = request(cpu.begin_instruction().unwrap());
+        let read = request(cpu.complete_bus_cycle(fetch.id, Some(0x86)).unwrap());
+        assert_eq!(read.operation, Z80BusOperation::MemoryRead);
+        assert_eq!(read.address, 0);
+        assert_eq!(read.base_tstates, 3);
         assert!(matches!(
-            cpu.complete_bus_cycle(fetch.id, Some(0x86)),
-            Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x86, .. })
+            cpu.export_state().phase,
+            Z80MicroSequencerPhase::MemoryReadAlu {
+                operation: 0,
+                address: 0
+            }
         ));
+
+        retired(
+            cpu.complete_bus_cycle(read.id, Some(0x42)).unwrap(),
+            0x86,
+            7,
+        );
+        assert_eq!(cpu.registers.a, 0x42);
         assert!(!cpu.instruction_active());
         assert_eq!(cpu.pending_request(), None);
     }
