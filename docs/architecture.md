@@ -169,3 +169,7 @@ A comparação confirmou que o SMS é o baseline semântico e de validação mai
 
 Em caso de divergência, a precedência é: contratos e comportamento efetivamente implementados e validados no código; decisões arquiteturais normativas deste repositório; documentos especializados; inventários/auditorias datados (fotografias históricas); propostas de implementação. Nenhuma proposta ou PR aberta prevalece sobre código integrado sem revisão e merge.
 
+
+## Auditoria temporal Z80 — histórico e continuidade
+
+A auditoria de dependências do Z80 e da integração temporal SMS registra a base histórica e suas atualizações posteriores em [Auditoria de dependências do Z80 e da integração temporal SMS](architecture/z80-temporal-base-foundation-audit-2026-11-03.md). A atualização pós-PR #462 distingue a cobertura BASE recém-integrada das lacunas ainda abertas no caminho temporal completo.
