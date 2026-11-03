@@ -132,19 +132,21 @@ Não elevar um estado com base apenas em documentação, compilação isolada, b
 ## 9. P1 — Sega Mapper cartridge SRAM e persistência (.srm), PR #424
 
 **Branch candidata:** `feat/sms-cartridge-ram-mapper`  
-**SHA candidato atual:** `646fea6c31c043231fcd2a531439f63160f0820c`  
+**SHA validado pelo CI:** `a69356f0797518fc9036d01555f3b79aa32cf453`  
 **PR:** https://github.com/leonardo201800478/sega-emulator/pull/424  
-**CI:** run `41562216662` em execução; os resultados de SHAs anteriores não substituem a validação deste candidato.
+**CI:** run `41563086903` — Rust/PyO3, Python e Windows x64 PASS; Scheduler deterministic stress SKIPPED.
 
 | Componente | Estado formal | Evidência / limite |
 |---|---|---|
-| Sega Mapper cartridge SRAM 8/16/32 KiB | IMPLEMENTED / INTEGRATION_PENDING | Slot 2, seleção de bancos e slot 3 condicional; testes de mapa e deadlines temporais existentes. CI do SHA atual pendente |
-| Persistência .srm | IMPLEMENTED / INTEGRATION_PENDING | Formato próprio versionado com CRC32, capacidade explícita, validação de tamanho, backup/recuperação e load/save explícitos. Sem gravação no hot path |
-| PyO3/Python SRAM API | IMPLEMENTED / INTEGRATION_PENDING | `NativeSMSMachine` recebe capacidade e caminho; carrega na criação e expõe `save_cartridge_ram()`; classe `SMSMachine` encaminha a configuração |
-| Ciclo de vida Qt | IMPLEMENTED / INTEGRATION_PENDING | O frontend chama save em substituição/reset/encerramento limpo, mas ainda não oferece seleção de capacidade/caminho |
+| Sega Mapper cartridge SRAM 8/16/32 KiB | IMPLEMENTED / INTEGRATION_PENDING | Slot 2, seleção de bancos e slot 3 condicional; validação automatizada Rust/workspace PASS no SHA registrado |
+| Persistência .srm | IMPLEMENTED / INTEGRATION_PENDING | Formato próprio versionado com CRC32, capacidade explícita, validação de tamanho, backup/recuperação e load/save explícitos; testes Rust PASS |
+| PyO3/Python SRAM API | IMPLEMENTED / QUICK_PASS | API nativa, testes do adaptador PyO3 e compilação da feature Python PASS; regressão Python PASS |
+| Ciclo de vida Qt | IMPLEMENTED / INTEGRATION_PENDING | Hooks de save em substituição/reset/encerramento limpo; frontend ainda não seleciona automaticamente capacidade/caminho |
 | Auto-detecção de capacidade | INTEGRATION_PENDING | Depende da Task P0.1 (DAT/metadata); não inferir SRAM só pelo tamanho da ROM |
 | Codemasters SRAM | NOT IMPLEMENTED | Rejeição explícita; não há mapeamento SRAM Codemasters nesta PR |
 
+**Validação do SHA:** Rust fmt, Clippy, testes direcionados SMS/SG-1000 e workspace, formatação/Clippy/testes do adaptador PyO3 e compilação da extensão Python: PASS. Ruff e regressão Python: PASS. Windows x64 D3D12, vídeo e áudio: PASS. Scheduler deterministic stress: SKIPPED — não contar como PASS. Execução local: NOT RUN.
+
 **Limites operacionais:** capacidade e caminho .srm precisam ser informados explicitamente ao criar `SMSMachine`. O frontend Qt ainda não resolve esses dados automaticamente. O arquivo usa cabeçalho próprio e não é declarado compatível com .srm raw de outros emuladores. Save State e persistência de SRAM são mecanismos distintos. Não há garantia de gravação após encerramento forçado.
 
-**Gate de integração:** não declarar SHORT_PASS, LONG_PASS ou TEMPORAL_PASS até o CI do SHA candidato passar e haver execução in-game com evidência. A PR aberta não faz parte da main.
+**Gate de integração:** CI automatizado do SHA candidato passou, mas não houve execução in-game com evidência. Portanto, manter INTEGRATION_PENDING; não declarar SHORT_PASS, LONG_PASS ou TEMPORAL_PASS. A PR aberta não faz parte da main.
