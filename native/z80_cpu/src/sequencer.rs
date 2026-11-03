@@ -89,6 +89,10 @@ pub enum Z80MicroSequencerPhase {
         address: u16,
         value: u8,
     },
+    Ed16ArithmeticInternal {
+        opcode: u8,
+        remaining_tstates: u8,
+    },
     MemoryIncDecInternal {
         decrement: bool,
         old: u8,
@@ -503,6 +507,23 @@ impl Z80MicroSequencer {
                     && address == state.registers.bc()
                     && state.instruction_tstates >= 8
             }
+            Z80MicroSequencerPhase::Ed16ArithmeticInternal {
+                opcode,
+                remaining_tstates,
+            } => {
+                matches!(opcode & 0xCF, 0x4A | 0x42)
+                    && state.opcode == Some(opcode)
+                    && (1..=7).contains(&remaining_tstates)
+                    && pending.is_none()
+                    && if remaining_tstates >= 4 {
+                        state.mcycle_index == 2
+                            && state.tstate_index == 7 - remaining_tstates
+                    } else {
+                        state.mcycle_index == 3
+                            && state.tstate_index == 3 - remaining_tstates
+                    }
+                    && state.instruction_tstates >= 8 + u32::from(7 - remaining_tstates)
+            }
             Z80MicroSequencerPhase::MemoryReadIncDec { decrement, address } => {
                 let expected_opcode = if decrement { 0x35 } else { 0x34 };
                 pending.is_some_and(|request| {
@@ -586,6 +607,17 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::EdPortRead { .. }
             | Z80MicroSequencerPhase::EdPortWrite { .. } => {
                 state.mcycle_index == 2 && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::Ed16ArithmeticInternal {
+                remaining_tstates, ..
+            } => {
+                if remaining_tstates >= 4 {
+                    state.mcycle_index == 2
+                        && state.tstate_index == 7 - remaining_tstates
+                } else {
+                    state.mcycle_index == 3
+                        && state.tstate_index == 3 - remaining_tstates
+                }
             }
             Z80MicroSequencerPhase::ImmediateReadRegisterPairHigh { .. } => {
                 state.mcycle_index == 2 && state.tstate_index == 0
@@ -1020,6 +1052,9 @@ impl Z80MicroSequencer {
                         .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
                 )
             }
+            Z80MicroSequencerPhase::Ed16ArithmeticInternal { .. } => {
+                Err(Z80MicroSequencerError::UnexpectedCompletion)
+            }
             Z80MicroSequencerPhase::MemoryReadIncDec { decrement, address } => {
                 let old = response
                     .data
@@ -1090,6 +1125,32 @@ impl Z80MicroSequencer {
                 next.instruction_tstates = next_instruction_tstates;
                 next.execute_ed_register_internal(opcode);
                 next.retire(opcode)?
+            }
+            Z80MicroSequencerPhase::Ed16ArithmeticInternal {
+                opcode,
+                remaining_tstates,
+            } => {
+                next.instruction_tstates = next_instruction_tstates;
+                if remaining_tstates == 1 {
+                    next.execute_ed_16bit_arithmetic(opcode);
+                    next.retire(opcode)?
+                } else {
+                    let remaining_tstates = remaining_tstates - 1;
+                    if remaining_tstates == 3 {
+                        next.mcycle_index = 3;
+                        next.tstate_index = 0;
+                    } else {
+                        next.tstate_index = next
+                            .tstate_index
+                            .checked_add(1)
+                            .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                    }
+                    next.phase = Z80MicroSequencerPhase::Ed16ArithmeticInternal {
+                        opcode,
+                        remaining_tstates,
+                    };
+                    Z80MicroStep::InternalCycle { tstates: 1 }
+                }
             }
             _ => return Err(Z80MicroSequencerError::UnexpectedCompletion),
         };
@@ -1176,8 +1237,69 @@ impl Z80MicroSequencer {
                 };
                 self.issue_ed_port_write(value)
             }
+            op if op & 0xCF == 0x4A || op & 0xCF == 0x42 => {
+                self.mcycle_index = 2;
+                self.tstate_index = 0;
+                self.phase = Z80MicroSequencerPhase::Ed16ArithmeticInternal {
+                    opcode,
+                    remaining_tstates: 7,
+                };
+                Ok(Z80MicroStep::InternalCycle { tstates: 1 })
+            }
             _ => self.unsupported(opcode),
         }
+    }
+
+    /// Execute ADC/SBC HL,ss after its two M1 fetches and seven internal T-states.
+    fn execute_ed_16bit_arithmetic(&mut self, opcode: u8) {
+        let pair = (opcode >> 4) & 0x03;
+        let operand = match pair {
+            0 => self.registers.bc(),
+            1 => self.registers.de(),
+            2 => self.registers.hl(),
+            3 => self.registers.sp,
+            _ => unreachable!("two-bit register-pair field"),
+        };
+        let lhs = self.registers.hl();
+        let carry = u32::from(self.registers.f & FLAG_C != 0);
+        let rhs = u32::from(operand);
+        let lhs32 = u32::from(lhs);
+        let subtract = opcode & 0x0F == 0x02;
+        let result32 = if subtract {
+            lhs32.wrapping_sub(rhs + carry)
+        } else {
+            lhs32 + rhs + carry
+        };
+        let result = result32 as u16;
+        let mut flags = ((result >> 8) as u8) & (FLAG_S | FLAG_XY);
+        if result == 0 {
+            flags |= FLAG_Z;
+        }
+        if subtract {
+            flags |= FLAG_N;
+            if u32::from(lhs & 0x0FFF) < u32::from(operand & 0x0FFF) + carry {
+                flags |= FLAG_H;
+            }
+            if ((lhs ^ operand) & (lhs ^ result) & 0x8000) != 0 {
+                flags |= FLAG_PV;
+            }
+            if lhs32 < rhs + carry {
+                flags |= FLAG_C;
+            }
+        } else {
+            if u32::from(lhs & 0x0FFF) + u32::from(operand & 0x0FFF) + carry > 0x0FFF {
+                flags |= FLAG_H;
+            }
+            if (!(lhs ^ operand) & (lhs ^ result) & 0x8000) != 0 {
+                flags |= FLAG_PV;
+            }
+            if result32 > u32::from(u16::MAX) {
+                flags |= FLAG_C;
+            }
+        }
+        self.registers.set_hl(result);
+        self.wz = lhs.wrapping_add(1);
+        self.set_flags(flags);
     }
 
     /// Commit the semantic effect at the final T-state of an ED register load.
