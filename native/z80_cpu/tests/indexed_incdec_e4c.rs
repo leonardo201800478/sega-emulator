@@ -14,6 +14,7 @@ struct IndexedIncDecCase<'a> {
     flags: u8,
     displacement: u8,
     old_value: u8,
+    expected_value: u8,
     waits: &'a [u32],
 }
 
@@ -45,6 +46,7 @@ fn execute_indexed_inc_dec(case: IndexedIncDecCase<'_>) -> Z80MicroSequencer {
         flags,
         displacement,
         old_value,
+        expected_value,
         waits,
     } = case;
     assert!(matches!(opcode, 0x34 | 0x35));
@@ -142,11 +144,12 @@ fn execute_indexed_inc_dec(case: IndexedIncDecCase<'_>) -> Z80MicroSequencer {
 
     let write = request(cpu.complete_internal_cycle().unwrap());
     cpu = round_trip_at(cpu, "effective-address write pending");
-    let expected_value = if decrement {
+    let computed_value = if decrement {
         old_value.wrapping_sub(1)
     } else {
         old_value.wrapping_add(1)
     };
+    assert_eq!(computed_value, expected_value);
     assert_eq!(
         write.operation,
         Z80BusOperation::MemoryWrite {
@@ -204,13 +207,13 @@ fn indexed_inc_dec_vectors_cover_flags_and_carry_preservation_for_ix_and_iy() {
                 flags,
                 displacement: 0xFE,
                 old_value,
+                expected_value,
                 waits: &[0, 0, 0, 0, 0],
             });
             assert_eq!(cpu.registers.f, expected_flags, "prefix {prefix:02X}, opcode {opcode:02X}");
             assert_eq!(cpu.wz, if prefix == 0xDD { 0x2000 } else { 0x3000 });
-            assert_eq!(cpu.registers.pc, 4);
+            assert_eq!(cpu.registers.pc, 3);
             assert_eq!(cpu.refresh & 0x7F, 2);
-            assert_eq!(expected_value, if opcode == 0x35 { old_value.wrapping_sub(1) } else { old_value.wrapping_add(1) });
         }
     }
 }
@@ -227,6 +230,7 @@ fn indexed_inc_dec_wait_states_are_additive_and_snapshots_resume_each_bus_phase(
             flags: 0x01,
             displacement: 0xFE,
             old_value: 0x7F,
+            expected_value: 0x80,
             waits: &[1, 2, 3, 4, 5],
         });
         assert_eq!(cpu.registers.f, 0x95);
@@ -253,6 +257,7 @@ fn indexed_inc_dec_repeated_and_alternating_prefixes_use_last_index_register() {
             flags: 0x01,
             displacement: 0xFE,
             old_value: 0x00,
+            expected_value: 0xFF,
             waits: &waits,
         });
         assert_eq!(cpu.wz, if prefixes.last() == Some(&0xDD) { 0x1000 } else { 0x2000 });
@@ -271,9 +276,10 @@ fn indexed_inc_dec_wraps_effective_address_and_program_counter() {
         flags: 0,
         displacement: 0x01,
         old_value: 0xFF,
+        expected_value: 0x00,
         waits: &[0, 0, 0, 0, 0],
     });
     assert_eq!(cpu.wz, 0x0000);
     assert_eq!(cpu.registers.pc, 0x0000);
-    assert_eq!(cpu.registers.f, 0x51);
+    assert_eq!(cpu.registers.f, 0x50);
 }
