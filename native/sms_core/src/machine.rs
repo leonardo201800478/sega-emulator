@@ -454,6 +454,40 @@ mod tests {
     }
 
     #[test]
+    fn machine_loads_and_saves_cartridge_sram_file() {
+        use crate::SmsCartridgeRamFile;
+        use std::fs;
+
+        let path = std::env::temp_dir().join(format!(
+            "sega-sms-machine-sram-{}.srm",
+            std::process::id()
+        ));
+        let _ = fs::remove_file(&path);
+        let save_file = SmsCartridgeRamFile::new(&path);
+        let mut machine = SmsMachine::with_cartridge_ram(
+            vec![0; 0x4000],
+            vec![0; 0x2000],
+            SmsMachineConfig::default(),
+        )
+        .unwrap();
+        machine.memory.write(0xFFFC, 0x08);
+        machine.memory.write(0x8123, 0xA6);
+        machine.save_cartridge_ram_file(&save_file).unwrap();
+
+        let mut restored = SmsMachine::with_cartridge_ram(
+            vec![0; 0x4000],
+            vec![0; 0x2000],
+            SmsMachineConfig::default(),
+        )
+        .unwrap();
+        assert!(restored.load_cartridge_ram_file(&save_file).unwrap());
+        restored.memory.write(0xFFFC, 0x08);
+        assert_eq!(restored.read_memory(0x8123), 0xA6);
+
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
     fn cpu_fetches_cartridge_rom_and_uses_the_same_mapper_memory_for_ram() {
         // LD A,$42; LD ($C000),A; LD A,($C000); LD ($C001),A
         let rom = [
