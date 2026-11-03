@@ -3721,6 +3721,67 @@ impl Z80MicroSequencer {
                     Z80MicroStep::InternalCycle { tstates: 1 }
                 }
             }
+            Z80MicroSequencerPhase::IndexDisplacementInternal {
+                address,
+                remaining_tstates,
+            } => {
+                let remaining_tstates = remaining_tstates
+                    .checked_sub(1)
+                    .ok_or(Z80MicroSequencerError::InvalidState)?;
+                next.instruction_tstates = next_instruction_tstates;
+                if remaining_tstates == 0 {
+                    let opcode = next
+                        .opcode
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                    if is_indexed_memory_load_opcode(opcode) {
+                        let destination = (opcode >> 3) & 0x07;
+                        next.issue_read(
+                            Z80MicroSequencerPhase::MemoryReadRegister { destination },
+                            address,
+                        )?
+                    } else if is_indexed_memory_store_opcode(opcode) && opcode != 0x36 {
+                        let source = opcode & 0x07;
+                        let value = next.read_register(source);
+                        next.issue_write(address, value)?
+                    } else {
+                        return Err(Z80MicroSequencerError::InvalidState);
+                    }
+                } else {
+                    next.tstate_index = next
+                        .tstate_index
+                        .checked_add(1)
+                        .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                    next.phase = Z80MicroSequencerPhase::IndexDisplacementInternal {
+                        address,
+                        remaining_tstates,
+                    };
+                    Z80MicroStep::InternalCycle { tstates: 1 }
+                }
+            }
+            Z80MicroSequencerPhase::IndexedImmediateStoreInternal {
+                address,
+                value,
+                remaining_tstates,
+            } => {
+                let remaining_tstates = remaining_tstates
+                    .checked_sub(1)
+                    .ok_or(Z80MicroSequencerError::InvalidState)?;
+                next.instruction_tstates = next_instruction_tstates;
+                if remaining_tstates == 0 {
+                    next.issue_write(address, value)?
+                } else {
+                    next.tstate_index = next
+                        .tstate_index
+                        .checked_add(1)
+                        .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                    next.phase = Z80MicroSequencerPhase::IndexedImmediateStoreInternal {
+                        address,
+                        value,
+                        remaining_tstates,
+                    };
+                    Z80MicroStep::InternalCycle { tstates: 1 }
+                }
+            }
             Z80MicroSequencerPhase::MemoryIncDecInternal {
                 decrement,
                 old,
