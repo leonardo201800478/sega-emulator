@@ -206,7 +206,6 @@ fn ld_ix_displacement_immediate_fetches_displacement_before_value() {
     assert_eq!(cpu.wz, 0x00FE);
 }
 
-
 #[test]
 fn indexed_hl_register_loads_cover_signed_displacement_boundaries_and_snapshots() {
     for prefix in [0xDD, 0xFD] {
@@ -326,7 +325,9 @@ fn indexed_immediate_store_wraps_pc_and_waits_across_every_bus_cycle() {
     assert_eq!(displacement.address, 0xFFFF);
     cpu.insert_wait_tstates(3).unwrap();
     cpu = round_trip(cpu);
-    let immediate = request(cpu.complete_bus_cycle(displacement.id, Some(0x02)).unwrap());
+    let immediate = request(
+        cpu.complete_bus_cycle(displacement.id, Some(0x02)).unwrap(),
+    );
     assert_eq!(immediate.address, 0x0000);
     assert_eq!(cpu.registers.pc, 0x0000);
     cpu.insert_wait_tstates(4).unwrap();
@@ -359,7 +360,6 @@ fn indexed_immediate_store_wraps_pc_and_waits_across_every_bus_cycle() {
     assert_eq!(cpu.registers.pc, 0x0001);
     assert_eq!(cpu.iy, 0xFFFF);
 }
-
 
 #[test]
 fn indexed_load_register_matrix_covers_all_register_destinations() {
