@@ -2113,3 +2113,101 @@ mod base_exchange_stack_snapshot_tests {
         assert!(Z80MicroSequencer::restore_state(invalid).is_err());
     }
 }
+
+
+#[cfg(test)]
+mod base_immediate_io_snapshot_tests {
+    use crate::{Z80MicroSequencer, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep};
+
+    fn round_trip(cpu: &Z80MicroSequencer) -> Z80MicroSequencer {
+        let state = cpu.export_state();
+        let encoded = state.encode().unwrap();
+        let decoded = Z80MicroSequencerState::decode(&encoded).unwrap();
+        assert_eq!(decoded, state);
+        Z80MicroSequencer::restore_state(decoded).unwrap()
+    }
+
+    #[test]
+    fn in_a_n_address_and_port_read_boundaries_round_trip() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.registers.pc = 0x1000;
+        cpu.registers.a = 0x12;
+        let fetch = match cpu.begin_instruction().unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected opcode fetch, got {other:?}"),
+        };
+        let immediate = match cpu.complete_bus_cycle(fetch.id, Some(0xDB)).unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected IN immediate read, got {other:?}"),
+        };
+        cpu = round_trip(&cpu);
+        let port = match cpu.complete_bus_cycle(immediate.id, Some(0xDC)).unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected IN port read, got {other:?}"),
+        };
+        assert_eq!(port.address, 0x12DC);
+        cpu = round_trip(&cpu);
+        assert_eq!(
+            cpu.complete_bus_cycle(port.id, Some(0xFE)).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xDB,
+                tstates: 11,
+            }
+        );
+        assert_eq!(cpu.registers.a, 0xFE);
+    }
+
+    #[test]
+    fn out_n_a_address_and_port_write_boundaries_round_trip() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.registers.pc = 0x1000;
+        cpu.registers.a = 0x5A;
+        let fetch = match cpu.begin_instruction().unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected opcode fetch, got {other:?}"),
+        };
+        let immediate = match cpu.complete_bus_cycle(fetch.id, Some(0xD3)).unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected OUT immediate read, got {other:?}"),
+        };
+        cpu = round_trip(&cpu);
+        let port = match cpu.complete_bus_cycle(immediate.id, Some(0x3F)).unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected OUT port write, got {other:?}"),
+        };
+        assert_eq!(port.address, 0x5A3F);
+        assert_eq!(
+            port.operation,
+            crate::Z80BusOperation::PortWrite { value: 0x5A }
+        );
+        cpu = round_trip(&cpu);
+        assert_eq!(
+            cpu.complete_bus_cycle(port.id, None).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xD3,
+                tstates: 11,
+            }
+        );
+    }
+
+    #[test]
+    fn immediate_port_restore_rejects_mismatched_address() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.registers.pc = 0x1000;
+        cpu.registers.a = 0x12;
+        let fetch = match cpu.begin_instruction().unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected opcode fetch, got {other:?}"),
+        };
+        let immediate = match cpu.complete_bus_cycle(fetch.id, Some(0xDB)).unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected IN immediate read, got {other:?}"),
+        };
+        let _ = cpu.complete_bus_cycle(immediate.id, Some(0xDC)).unwrap();
+        let mut invalid = cpu.export_state();
+        invalid.phase = Z80MicroSequencerPhase::BaseImmediatePortRead {
+            port_address: 0x13DC,
+        };
+        assert!(Z80MicroSequencer::restore_state(invalid).is_err());
+    }
+}
