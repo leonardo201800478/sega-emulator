@@ -137,3 +137,58 @@ fn repeated_dd_fd_prefixes_store_the_last_selected_index_pair() {
     assert_eq!(cpu.wz, 0x7001);
     assert_eq!(cpu.registers.pc, 5);
 }
+
+#[test]
+fn ld_ix_nn_wraps_the_high_byte_read_from_ffff_to_zero() {
+    let mut cpu = Z80MicroSequencer::default();
+    let fetch = start(&mut cpu);
+    let fetch = feed_prefix(&mut cpu, fetch, 0xDD);
+    let low_address = request(cpu.complete_bus_cycle(fetch.id, Some(0x2A)).unwrap());
+    let high_address = request(cpu.complete_bus_cycle(low_address.id, Some(0xFF)).unwrap());
+    let low_read = request(cpu.complete_bus_cycle(high_address.id, Some(0xFF)).unwrap());
+    assert_eq!(low_read.address, 0xFFFF);
+
+    let high_read = request(cpu.complete_bus_cycle(low_read.id, Some(0xCD)).unwrap());
+    assert_eq!(high_read.address, 0x0000);
+    assert_eq!(
+        cpu.complete_bus_cycle(high_read.id, Some(0xAB)).unwrap(),
+        Z80MicroStep::InstructionRetired {
+            opcode: 0x2A,
+            tstates: 20,
+        }
+    );
+    assert_eq!(cpu.ix, 0xABCD);
+    assert_eq!(cpu.wz, 0x0000);
+}
+
+#[test]
+fn ld_iy_nn_store_wraps_the_high_byte_write_to_zero() {
+    let mut cpu = Z80MicroSequencer::default();
+    cpu.iy = 0x1234;
+    let fetch = start(&mut cpu);
+    let fetch = feed_prefix(&mut cpu, fetch, 0xFD);
+    let low_address = request(cpu.complete_bus_cycle(fetch.id, Some(0x22)).unwrap());
+    let high_address = request(cpu.complete_bus_cycle(low_address.id, Some(0xFF)).unwrap());
+    let low_write = request(cpu.complete_bus_cycle(high_address.id, Some(0xFF)).unwrap());
+    assert_eq!(low_write.address, 0xFFFF);
+    assert_eq!(
+        low_write.operation,
+        Z80BusOperation::MemoryWrite { value: 0x34 }
+    );
+
+    let high_write = request(cpu.complete_bus_cycle(low_write.id, None).unwrap());
+    assert_eq!(high_write.address, 0x0000);
+    assert_eq!(
+        high_write.operation,
+        Z80BusOperation::MemoryWrite { value: 0x12 }
+    );
+    assert_eq!(
+        cpu.complete_bus_cycle(high_write.id, None).unwrap(),
+        Z80MicroStep::InstructionRetired {
+            opcode: 0x22,
+            tstates: 20,
+        }
+    );
+    assert_eq!(cpu.iy, 0x1234);
+    assert_eq!(cpu.wz, 0x0000);
+}
