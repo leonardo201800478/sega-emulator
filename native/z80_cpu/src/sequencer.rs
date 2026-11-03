@@ -7,8 +7,8 @@
 
 use crate::alu::{adc8, add8, and8, cp8, cpl8, daa8, or8, rotate_accumulator, sbc8, sub8, xor8};
 use crate::{
-    Z80_MICRO_SEQUENCER_STATE_VERSION, Z80BusHandshake, Z80BusHandshakeError, Z80BusOperation,
-    Z80ArchitecturalState, Z80AlternateRegisters, Z80BusRequest, Z80Registers,
+    Z80_MICRO_SEQUENCER_STATE_VERSION, Z80AlternateRegisters, Z80ArchitecturalState,
+    Z80BusHandshake, Z80BusHandshakeError, Z80BusOperation, Z80BusRequest, Z80Registers,
 };
 
 const FLAG_C: u8 = 0x01;
