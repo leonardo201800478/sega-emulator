@@ -2750,7 +2750,22 @@ mod indirect_bc_de_differential_tests {
             }
             let architectural = Z80ArchitecturalState {
                 registers,
-                ..Z80ArchitecturalState::default()
+                alternate: crate::Z80AlternateRegisters::default(),
+                ix: 0,
+                iy: 0,
+                i: 0,
+                r: 0,
+                iff1: false,
+                iff2: false,
+                interrupt_mode: 0,
+                wz: 0,
+                ei_delay: 0,
+                nmi_pending: false,
+                int_pending: None,
+                q: 0,
+                q_previous: 0,
+                p: false,
+                halted: false,
             };
 
             let mut atomic = Z80::default();
