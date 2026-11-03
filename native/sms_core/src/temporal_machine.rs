@@ -102,7 +102,7 @@ fn instruction_timeline_is_valid(state: &SmsTemporalMachineState) -> bool {
             Z80M1Phase::Wait => 2_u32.saturating_add(waits),
             Z80M1Phase::T3 => 2_u32.saturating_add(waits),
             Z80M1Phase::T4 => 3_u32.saturating_add(waits),
-            Z80M1Phase::Complete => return false,
+            Z80M1Phase::Complete => 4_u32.saturating_add(waits),
         };
         return elapsed_tstates(
             instruction_started_at,
@@ -447,6 +447,28 @@ impl SmsTemporalMachine {
         Ok(deadline)
     }
 
+    fn finish_m1_fetch(&mut self) -> Result<Z80MicroStep, SmsTemporalMachineError> {
+        let m1 = self.m1.ok_or(SmsTemporalMachineError::InvalidState)?;
+        if m1.phase() != Z80M1Phase::Complete {
+            return Err(SmsTemporalMachineError::InvalidState);
+        }
+        let opcode = m1.opcode().ok_or(SmsTemporalMachineError::InvalidState)?;
+        let request = self
+            .cpu
+            .pending_request()
+            .filter(|request| request.operation == Z80BusOperation::OpcodeFetch)
+            .ok_or(SmsTemporalMachineError::InvalidState)?;
+        let mut next_cpu = self.cpu.clone();
+        let step = next_cpu.complete_bus_cycle(request.id, Some(opcode))?;
+        self.cpu = next_cpu;
+        self.m1 = None;
+        self.m1_fixture_wait_tstates = None;
+        if matches!(step, Z80MicroStep::InstructionRetired { .. }) {
+            self.instruction_started_at = None;
+        }
+        Ok(step)
+    }
+
     /// Dispatch one event and resume the matching CPU continuation.
     pub fn dispatch_next(&mut self) -> Result<Z80MicroStep, SmsTemporalMachineError> {
         let dispatch = self
@@ -533,24 +555,10 @@ impl SmsTemporalMachine {
                         });
                 }
 
+                self.m1 = Some(m1);
                 if next_phase == Z80M1Phase::Complete {
-                    let opcode = m1.opcode().ok_or(SmsTemporalMachineError::InvalidState)?;
-                    let request = self
-                        .cpu
-                        .pending_request()
-                        .filter(|request| request.operation == Z80BusOperation::OpcodeFetch)
-                        .ok_or(SmsTemporalMachineError::InvalidState)?;
-                    let mut next_cpu = self.cpu.clone();
-                    let step = next_cpu.complete_bus_cycle(request.id, Some(opcode))?;
-                    self.cpu = next_cpu;
-                    self.m1 = None;
-                    self.m1_fixture_wait_tstates = None;
-                    if matches!(step, Z80MicroStep::InstructionRetired { .. }) {
-                        self.instruction_started_at = None;
-                    }
-                    Ok(step)
+                    self.finish_m1_fetch()
                 } else {
-                    self.m1 = Some(m1);
                     let request = self
                         .cpu
                         .pending_request()
@@ -630,16 +638,24 @@ impl SmsTemporalMachine {
             step =
                 match step {
                     Z80MicroStep::BusRequest(_) => {
-                        if self.m1.is_some() {
-                            if self.m1.as_ref().is_some_and(|m1| {
-                                m1.export_state().pending_continuation_id.is_none()
-                            }) {
+                        if self
+                            .m1
+                            .as_ref()
+                            .is_some_and(|m1| m1.phase() == Z80M1Phase::Complete)
+                        {
+                            self.finish_m1_fetch()?
+                        } else {
+                            if self.m1.is_some() {
+                                if self.m1.as_ref().is_some_and(|m1| {
+                                    m1.export_state().pending_continuation_id.is_none()
+                                }) {
+                                    self.schedule_pending_bus(fixture_wait_tstates)?;
+                                }
+                            } else if self.bus.pending_request().is_none() {
                                 self.schedule_pending_bus(fixture_wait_tstates)?;
                             }
-                        } else if self.bus.pending_request().is_none() {
-                            self.schedule_pending_bus(fixture_wait_tstates)?;
+                            self.dispatch_next()?
                         }
-                        self.dispatch_next()?
                     }
                     Z80MicroStep::InternalCycle { tstates } => {
                         if self.pending_internal_cycle_id.is_none() {
