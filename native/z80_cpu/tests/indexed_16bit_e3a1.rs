@@ -87,12 +87,18 @@ fn ld_ix_snapshot_restores_both_immediate_operand_fetch_phases() {
     let fetch = feed_prefix(&mut cpu, fetch, 0xDD);
     let low = request(cpu.complete_bus_cycle(fetch.id, Some(0x21)).unwrap());
 
-    let encoded = cpu.export_state().encode().expect("low-byte snapshot encodes");
+    let encoded = cpu
+        .export_state()
+        .encode()
+        .expect("low-byte snapshot encodes");
     let decoded = Z80MicroSequencerState::decode(&encoded).expect("low-byte snapshot decodes");
     cpu = Z80MicroSequencer::restore_state(decoded).expect("low-byte snapshot restores");
 
     let high = request(cpu.complete_bus_cycle(low.id, Some(0x34)).unwrap());
-    let encoded = cpu.export_state().encode().expect("high-byte snapshot encodes");
+    let encoded = cpu
+        .export_state()
+        .encode()
+        .expect("high-byte snapshot encodes");
     let decoded = Z80MicroSequencerState::decode(&encoded).expect("high-byte snapshot decodes");
     cpu = Z80MicroSequencer::restore_state(decoded).expect("high-byte snapshot restores");
 
