@@ -1405,7 +1405,6 @@ mod base_absolute_transfer_snapshot_tests {
     }
 }
 
-
 #[cfg(test)]
 mod base_relative_branch_snapshot_tests {
     use crate::{Z80MicroSequencer, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep};
