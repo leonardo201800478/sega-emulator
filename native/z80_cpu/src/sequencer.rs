@@ -1885,11 +1885,42 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::ImmediateReadRegister { .. }
             | Z80MicroSequencerPhase::ImmediateReadMemoryWrite
             | Z80MicroSequencerPhase::ImmediateReadAlu { .. }
-            | Z80MicroSequencerPhase::MemoryReadRegister { .. }
             | Z80MicroSequencerPhase::MemoryReadAlu { .. }
             | Z80MicroSequencerPhase::MemoryReadIncDec { .. }
             | Z80MicroSequencerPhase::BaseRelativeBranchImmediate => {
                 state.mcycle_index == 1 && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::MemoryReadRegister { .. } => match state.prefix_state {
+                Z80PrefixState::Index(_) => {
+                    prefix_m1_count(state.prefix_state, state.mcycle_index, 3).is_some()
+                        && state.tstate_index == 0
+                }
+                Z80PrefixState::None => state.mcycle_index == 1 && state.tstate_index == 0,
+                _ => false,
+            },
+            Z80MicroSequencerPhase::IndexDisplacementRead => {
+                prefix_m1_count(state.prefix_state, state.mcycle_index, 1).is_some()
+                    && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::IndexDisplacementInternal {
+                remaining_tstates,
+                ..
+            } => {
+                (1..=5).contains(&remaining_tstates)
+                    && prefix_m1_count(state.prefix_state, state.mcycle_index, 2).is_some()
+                    && state.tstate_index == u16::from(5 - remaining_tstates)
+            }
+            Z80MicroSequencerPhase::IndexedImmediateReadMemoryWrite { .. } => {
+                prefix_m1_count(state.prefix_state, state.mcycle_index, 2).is_some()
+                    && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::IndexedImmediateStoreInternal {
+                remaining_tstates,
+                ..
+            } => {
+                (1..=2).contains(&remaining_tstates)
+                    && prefix_m1_count(state.prefix_state, state.mcycle_index, 2).is_some()
+                    && state.tstate_index >= 3
             }
             Z80MicroSequencerPhase::ImmediateReadRegisterPairLow { .. } => {
                 match state.prefix_state {
@@ -2126,32 +2157,39 @@ impl Z80MicroSequencer {
                     && state.tstate_index >= 3
                     && matches!(state.opcode, Some(0x34 | 0x35))
             }
-            Z80MicroSequencerPhase::MemoryWrite { .. } => match state.opcode {
-                Some(0x02 | 0x12 | 0x77) => {
-                    state.mcycle_index == 1
+            Z80MicroSequencerPhase::MemoryWrite { .. } => match state.prefix_state {
+                Z80PrefixState::Index(_) => {
+                    prefix_m1_count(state.prefix_state, state.mcycle_index, 3).is_some()
                         && state.tstate_index == 0
-                        && state.instruction_tstates >= 4
                 }
-                Some(0x36) => {
-                    state.mcycle_index == 2
-                        && state.tstate_index == 0
-                        && state.instruction_tstates >= 7
-                }
-                Some(0x22 | 0x32) => {
-                    state.mcycle_index == 3
-                        && state.tstate_index == 0
-                        && state.instruction_tstates >= 10
-                }
-                Some(0x34 | 0x35) => {
-                    state.mcycle_index == 2
-                        && state.tstate_index == 0
-                        && state.instruction_tstates >= 8
-                }
-                Some(0x67 | 0x6F) => {
-                    state.mcycle_index == 4
-                        && state.tstate_index == 0
-                        && state.instruction_tstates >= 15
-                }
+                Z80PrefixState::None => match state.opcode {
+                    Some(0x02 | 0x12 | 0x77) => {
+                        state.mcycle_index == 1
+                            && state.tstate_index == 0
+                            && state.instruction_tstates >= 4
+                    }
+                    Some(0x36) => {
+                        state.mcycle_index == 2
+                            && state.tstate_index == 0
+                            && state.instruction_tstates >= 7
+                    }
+                    Some(0x22 | 0x32) => {
+                        state.mcycle_index == 3
+                            && state.tstate_index == 0
+                            && state.instruction_tstates >= 10
+                    }
+                    Some(0x34 | 0x35) => {
+                        state.mcycle_index == 2
+                            && state.tstate_index == 0
+                            && state.instruction_tstates >= 8
+                    }
+                    Some(0x67 | 0x6F) => {
+                        state.mcycle_index == 4
+                            && state.tstate_index == 0
+                            && state.instruction_tstates >= 15
+                    }
+                    _ => false,
+                },
                 _ => false,
             },
         };
