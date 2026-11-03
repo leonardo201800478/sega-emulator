@@ -1413,5 +1413,4 @@ mod tests {
             assert_atomic_differential(&[opcode], accumulator, flags, 0, 0, opcode);
         }
     }
-
 }
