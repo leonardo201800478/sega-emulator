@@ -6559,6 +6559,28 @@ mod ed_block_io_differential_tests {
         }
     }
 
+    fn state_with_registers(registers: Z80Registers, wz: u16) -> Z80ArchitecturalState {
+        Z80ArchitecturalState {
+            registers,
+            alternate: Z80AlternateRegisters::default(),
+            ix: 0x1357,
+            iy: 0x2468,
+            i: 0xA5,
+            r: 0xFE,
+            iff1: false,
+            iff2: true,
+            interrupt_mode: 1,
+            wz,
+            ei_delay: 0,
+            nmi_pending: false,
+            int_pending: None,
+            q: 0x28,
+            q_previous: 0x5A,
+            p: false,
+            halted: false,
+        }
+    }
+
     fn round_trip(cpu: &mut Z80MicroSequencer) {
         let state = cpu.export_state();
         let encoded = state.encode().expect("valid ED block-I/O snapshot");
@@ -6700,8 +6722,8 @@ mod ed_block_io_differential_tests {
         ];
 
         for (opcode, b, c, hl, value, port, next_hl, wz, flags) in cases {
-            let state = Z80ArchitecturalState {
-                registers: Z80Registers {
+            let state = state_with_registers(
+                Z80Registers {
                     a: 0x5A,
                     f: 0xD7,
                     b,
@@ -6711,9 +6733,8 @@ mod ed_block_io_differential_tests {
                     pc: 0x2000,
                     ..Z80Registers::default()
                 },
-                wz: 0xA328,
-                ..Z80ArchitecturalState::default()
-            };
+                0xA328,
+            );
             let mut atomic = Z80::default();
             atomic.import_architectural_state(state).unwrap();
             let mut atomic_bus = TestBus::default();
@@ -6753,8 +6774,8 @@ mod ed_block_io_differential_tests {
 
     #[test]
     fn block_io_repeat_uses_pc_plus_one_memptr_and_five_extra_tstates() {
-        let state = Z80ArchitecturalState {
-            registers: Z80Registers {
+        let state = state_with_registers(
+            Z80Registers {
                 b: 2,
                 c: 1,
                 h: 0x40,
@@ -6762,8 +6783,8 @@ mod ed_block_io_differential_tests {
                 pc: 0x2000,
                 ..Z80Registers::default()
             },
-            ..Z80ArchitecturalState::default()
-        };
+            0,
+        );
         let mut cpu = Z80MicroSequencer::default();
         cpu.import_architectural_state(state).unwrap();
         let mut bus = TestBus::default();
