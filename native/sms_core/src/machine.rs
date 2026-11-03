@@ -196,13 +196,7 @@ impl SmsMachine {
         cartridge_ram: Vec<u8>,
         config: SmsMachineConfig,
     ) -> Result<Self, SmsCoreError> {
-        Self::with_bios_audio_and_cartridge_ram(
-            rom,
-            None,
-            Some(cartridge_ram),
-            config,
-            44_100,
-        )
+        Self::with_bios_audio_and_cartridge_ram(rom, None, Some(cartridge_ram), config, 44_100)
     }
 
     pub fn with_bios_audio(
