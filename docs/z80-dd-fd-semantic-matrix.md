@@ -1,7 +1,9 @@
-# Matriz semântica DD/FD do Z80 — estado após E4B
+**Atualização E4C (2026-11-03):** PR #471/E4A e PR #472/E4B estão integradas na `main` (`04ee09f9`). PR #473 implementa INC/DEC (IX/IY+d); candidato `949dd365046562835eef97e428dc9700e2ae2a70`. A sequência nominal de 23 T-states / 6 M-cycles foi conferida no ZiLOG UM008011-0816, páginas impressas 168–171. O CI do candidato com os casos adicionais de displacement ainda deve ser confirmado; não promover LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS. DDCB/FDCB (E5) continua sendo a próxima fatia.
+
+# Matriz semântica DD/FD do Z80 — estado após E4C
 
 **Data:** 2026-11-03  
-**Baseline auditada:** `main` — `e9a3eff6c3733b4f11443954a647471c9d3908ff`; candidato E4B PR #472 — `245d42eb0337d41295329155de8e151feceb9022`  
+**Baseline auditada:** `main` — `04ee09f9839bfe29a595abbed831d055cc8d177a` (E4B integrada); candidato E4C PR #473 — `949dd365046562835eef97e428dc9700e2ae2a70`  
 **Schema do microsequenciador:** 27  
 **Escopo:** decoder DD/FD, IX/IY, IXH/IXL/IYH/IYL, (IX/IY+d), DDCB/FDCB.  
 **Natureza:** inventário do código ativo e das evidências disponíveis; não declara conclusão funcional nem temporal do Z80.
@@ -73,7 +75,7 @@ Os opcodes abaixo são o byte posterior ao prefixo DD ou FD. A coluna de T-state
 | `2C`, `2D`, `2E` | INC/DEC/LD IXL/IYL,n | 2 / 2 / 3 | Atualiza metade baixa; INC/DEC altera flags de 8-bit, LD preserva flags; half-register não documentado como operando independente no UM008011 | 8 / 8 / 11 (derivado do prefixo + operação BASE; trace pendente) | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
 | `40`–`7F`, exceto `76` | LD r,r' | 2 | H/L substituídos por IXH/IXL ou IYH/IYL quando aplicável; flags preservadas; HALT `76` não é indexado | 8 (prefixo + M1 BASE; trace pendente) | IMPLEMENTED_ATOMIC; teste dirigido parcial | NOT_IMPLEMENTED |
 | `40`–`7F` com campo `r=6` ou `r'=6` | LD r,(IX/IY+d) / LD (IX/IY+d),r | 3 | EA=index+sign_extend(d); memória lida/escrita; H/L do outro operando são H/L normais; flags preservadas | 19 (5 M-cycles: 4,4,3,5,3) | IMPLEMENTED_ATOMIC; testes dirigidos | IMPLEMENTED_MICROSEQUENCED; E4A, 10 testes, IX/IY e matriz de registradores |
-| `34`, `35` | INC/DEC (IX/IY+d) | 3 | EA=index+sign_extend(d); read-modify-write; flags S/Z/H/PV/N atualizadas; C preservado | 23 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
+| `34`, `35` | INC/DEC (IX/IY+d) | 3 | EA=index+sign_extend(d); read-modify-write; flags S/Z/H/PV/N atualizadas; C preservado | 23 (6 M-cycles: 4,4,3,5,4,3) | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | IMPLEMENTED_MICROSEQUENCED; E4C no candidato #473, WAIT/snapshot/prefixos e displacement 0/-128/+127 |
 | `36` | LD (IX/IY+d),n | 4 | Lê displacement e imediato; escreve EA; flags preservadas | 19 (5 M-cycles: 4,4,3,5,3) | IMPLEMENTED_ATOMIC; testes dirigidos | IMPLEMENTED_MICROSEQUENCED; E4A, WAIT e snapshots por fase |
 | `80`–`BF`, fonte diferente de 6 | ALU A,IXH/IXL/IYH/IYL ou r | 2 | A/F atualizados conforme operação ALU; half-register não documentado como operando independente no UM008011 | 8 (prefixo + M1 BASE; trace pendente) | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
 | `80`–`BF`, fonte 6 | ALU A,(IX/IY+d) | 3 | EA=index+sign_extend(d); memória lida; A/F atualizados; CP preserva A e copia X/Y do operando | 19 (5 M-cycles: 4,4,3,5,3) | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | IMPLEMENTED_MICROSEQUENCED; E4B, 16 vetores x IX/IY, WAIT/snapshot/prefixos |
@@ -99,19 +101,19 @@ O decoder atômico classifica os 256 subopcodes para IX e IY e tem teste exausti
 
 **BIT é read-only:** o handler não deve emitir write-back. Rotação/deslocamento, RES e SET são operações read-modify-write. O campo z controla a cópia adicional para registrador nas operações x=0,2,3; z=6 não seleciona registrador adicional.
 
-## 6. Estado arquitetural e snapshot — estado após E4B
+## 6. Estado arquitetural e snapshot — estado após E4C
 
 | Estado / recurso | Executor atômico | Microsequenciador DD/FD |
 |---|---|---|
 | IX/IY | Campos arquiteturais existentes | E3A1/E3A2, E4A e E4B executam operações 16-bit, loads/stores indexados e ALU via fases compartilhadas; commits ocorrem nas fases finais correspondentes |
 | IXH/IXL/IYH/IYL | Acesso por helper de registrador indexado | Sem decode funcional no microsequenciador; permanece fora de E3A1/E3A2 |
 | PC / SP / wraparound | Handlers existentes; cobertura por família precisa ser ampliada | PC consome prefixos/opcodes; PUSH/POP/EX atualizam ou preservam SP nos pontos de barramento corretos; wrap testado |
-| Flags S/Z/H/PV/N/C e X/Y | Helpers e handlers existentes; não equivalem a validação independente | E3A1/E3A2 preservam flags; E4B atualiza S/Z/H/PV/N/C e X/Y via ALU compartilhada; INC/DEC indexed memory ainda pendente |
+| Flags S/Z/H/PV/N/C e X/Y | Helpers e handlers existentes; não equivalem a validação independente | E3A1/E3A2 preservam flags; E4B atualiza S/Z/H/PV/N/C e X/Y via ALU compartilhada; INC/DEC indexed memory usa MemoryReadIncDec → MemoryIncDecInternal → MemoryWrite; Carry preservado e flags INC/DEC atualizadas |
 | WZ/MEMPTR | Atualizado em handlers selecionados; falta matriz por família | E3A2: absolute transfers usam nn+1; E4A/E4B usam WZ=EA conforme o modelo MEMPTR do core; efeitos não documentados não são alegados como captura de silício |
 | Q / previous-Q | Não comprovado por esta auditoria para todas as famílias | Não comprovado |
 | R / refresh | Fetch de opcode no executor atômico; cobertura específica DD/FD incompleta | M1 de prefixos DD/FD e contagem acumulada cobertos nas famílias E3A1/E3A2/E4A/E4B |
 | INT/NMI/EI delay/HALT | Há lógica geral no executor atômico; interação com instruções indexadas ainda precisa de vetores | Sem interrupção integrada em todas as fases DD/FD |
-| Snapshot schema | Não é save state integral do sistema | Schema 27; FSM DD/FD e fases E3A1/E3A2/E4A/E4B validam/restauram estados intermediários com requests pendentes |
+| Snapshot schema | Não é save state integral do sistema | Schema 27; FSM DD/FD e fases E3A1/E3A2/E4A/E4B/E4C validam/restauram estados intermediários com requests pendentes |
 
 O schema 26 foi introduzido por E2; E4A elevou para 27 para serializar displacement e store imediato. E4B reutiliza as fases E4A e a fase MemoryReadAlu existente, sem novo bump de schema. Snapshot/restore foi exercitado nos estados intermediários cobertos; o codec não equivale a save state integral da máquina.
 
@@ -138,7 +140,7 @@ O schema 26 foi introduzido por E2; E4A elevou para 27 para serializar displacem
 | IXH/IXL/IYH/IYL | IMPLEMENTED no executor atômico | FUNCTIONAL_UNVERIFIED | NOT_RUN nesta auditoria | NOT_IMPLEMENTED no sequenciador | TEMPORAL_UNVERIFIED |
 | LD indexado / displacement (E4A) | IMPLEMENTED no executor atômico | SHORT_PASS no microsequenciador; testes dirigidos de IX/IY, H/L, WAIT, PC/address wrap e prefixos | NOT_RUN nesta auditoria | IMPLEMENTED_MICROSEQUENCED; schema 27 e snapshots por fases cobertas | TEMPORAL_UNVERIFIED |
 | ALU indexada (E4B) | IMPLEMENTED no executor atômico | SHORT_PASS no microsequenciador; 16 vetores x IX/IY, flags, WAIT, snapshot e prefixos | NOT_RUN nesta auditoria | IMPLEMENTED_MICROSEQUENCED; reutiliza MemoryReadAlu e schema 27 | TEMPORAL_UNVERIFIED |
-| INC/DEC (IX/IY+d) (E4C) | IMPLEMENTED no executor atômico | FUNCTIONAL_UNVERIFIED | NOT_RUN nesta auditoria | NOT_IMPLEMENTED no sequenciador; próximo E4C | TEMPORAL_UNVERIFIED |
+| INC/DEC (IX/IY+d) (E4C) | IMPLEMENTED no executor atômico | Vetores dirigidos, WAIT/snapshot e CI candidato | NOT_RUN nesta auditoria | IMPLEMENTED no candidato PR #473; SHORT_PASS condicionado ao CI final | TEMPORAL_UNVERIFIED |
 | DDCB/FDCB BIT | IMPLEMENTED no executor atômico | FUNCTIONAL_UNVERIFIED; teste de classificação | NOT_RUN nesta auditoria | NOT_IMPLEMENTED no sequenciador; próximo E5 | TEMPORAL_UNVERIFIED |
 | DDCB/FDCB RMW | IMPLEMENTED no executor atômico | DIFFERENTIAL_PARTIAL para rotate/shift memória-only; RES/SET com cobertura menor | NOT_RUN nesta auditoria | NOT_IMPLEMENTED no sequenciador; próximo E5 | TEMPORAL_UNVERIFIED |
 | Prefixos repetidos/alternados | IMPLEMENTED | Testes dirigidos de seleção do último prefixo | NOT_RUN nesta auditoria | Latch e contagem M1 preservados; execução E3A1/E3A2 coberta | TEMPORAL_UNVERIFIED |
