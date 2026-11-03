@@ -989,16 +989,10 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::ImmediateReadRegisterPairHigh { .. } => {
                 state.mcycle_index == 2 && state.tstate_index == 0
             }
-            Z80MicroSequencerPhase::IndexImmediateLow { .. } => {
-                // The M-cycle count is exact: one M1 per DD/FD prefix, then
-                // the opcode M1 and the low-byte memory read.
+            Z80MicroSequencerPhase::IndexImmediateLow { .. }
+            | Z80MicroSequencerPhase::IndexImmediateHigh { .. } => {
                 state.mcycle_index >= 2
                     && state.mcycle_index == u32::from(state.refresh) + 1
-                    && state.tstate_index == 0
-            }
-            Z80MicroSequencerPhase::IndexImmediateHigh { .. } => {
-                state.mcycle_index >= 3
-                    && state.mcycle_index == u32::from(state.refresh) + 2
                     && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::EdAbsoluteTransfer { stage, .. } => {
