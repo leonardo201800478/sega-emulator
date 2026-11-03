@@ -830,12 +830,19 @@ mod tests {
     }
 
     #[test]
-    fn port_operations_are_rejected_before_scheduling() {
+    fn port_reads_are_accepted_and_complete_at_the_scheduled_boundary() {
         let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
-        assert_eq!(
-            bus.begin_request(request(5, Z80BusOperation::PortRead, 0x00DC, 4), 0),
-            Err(SmsTemporalBusError::UnsupportedOperation)
-        );
+        let deadline = bus
+            .begin_request(request(5, Z80BusOperation::PortRead, 0x00DC, 4), 0)
+            .unwrap();
+        let Some(SmsTemporalDispatch::BusCompletion(completion)) = bus.dispatch_next().unwrap()
+        else {
+            panic!("expected port-read completion");
+        };
+        assert_eq!(completion.request_id, 5);
+        assert_eq!(completion.data, Some(0xFF));
+        assert_eq!(completion.completed_at, deadline);
+        bus.acknowledge_completion(5).unwrap();
     }
 }
 
