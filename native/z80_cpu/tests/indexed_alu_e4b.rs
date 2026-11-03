@@ -23,10 +23,19 @@ fn feed_prefix(cpu: &mut Z80MicroSequencer, current: Z80BusRequest, byte: u8) ->
     )
 }
 
+fn round_trip_at(cpu: Z80MicroSequencer, stage: &str) -> Z80MicroSequencer {
+    let encoded = cpu
+        .export_state()
+        .encode()
+        .unwrap_or_else(|error| panic!("snapshot at {stage} encodes: {error:?}"));
+    let decoded = Z80MicroSequencerState::decode(&encoded)
+        .unwrap_or_else(|error| panic!("snapshot at {stage} decodes: {error:?}"));
+    Z80MicroSequencer::restore_state(decoded)
+        .unwrap_or_else(|error| panic!("snapshot at {stage} restores: {error:?}"))
+}
+
 fn round_trip(cpu: Z80MicroSequencer) -> Z80MicroSequencer {
-    let encoded = cpu.export_state().encode().expect("snapshot encodes");
-    let decoded = Z80MicroSequencerState::decode(&encoded).expect("snapshot decodes");
-    Z80MicroSequencer::restore_state(decoded).expect("snapshot restores")
+    round_trip_at(cpu, "generic phase")
 }
 
 struct IndexedAluCase<'a> {
@@ -65,7 +74,7 @@ fn execute_indexed_alu(case: IndexedAluCase<'_>) -> Z80MicroSequencer {
     for (index, prefix) in prefixes.iter().copied().enumerate() {
         if waits[index] != 0 {
             cpu.insert_wait_tstates(waits[index]).unwrap();
-            cpu = round_trip(cpu);
+            cpu = round_trip_at(cpu, "prefix M1 WAIT");
         }
         fetch = feed_prefix(&mut cpu, fetch, prefix);
     }
@@ -73,7 +82,7 @@ fn execute_indexed_alu(case: IndexedAluCase<'_>) -> Z80MicroSequencer {
     let opcode_wait = prefixes.len();
     if waits[opcode_wait] != 0 {
         cpu.insert_wait_tstates(waits[opcode_wait]).unwrap();
-        cpu = round_trip(cpu);
+        cpu = round_trip_at(cpu, "opcode M1 WAIT");
     }
     let displacement_request = request(cpu.complete_bus_cycle(fetch.id, Some(opcode)).unwrap());
     assert_eq!(displacement_request.operation, Z80BusOperation::MemoryRead);
@@ -83,19 +92,19 @@ fn execute_indexed_alu(case: IndexedAluCase<'_>) -> Z80MicroSequencer {
     let displacement_wait = prefixes.len() + 1;
     if waits[displacement_wait] != 0 {
         cpu.insert_wait_tstates(waits[displacement_wait]).unwrap();
-        cpu = round_trip(cpu);
+        cpu = round_trip_at(cpu, "displacement WAIT");
     }
     assert_eq!(
         cpu.complete_bus_cycle(displacement_request.id, Some(displacement))
             .unwrap(),
         Z80MicroStep::InternalCycle { tstates: 1 }
     );
-    cpu = round_trip(cpu);
+    cpu = round_trip_at(cpu, "after displacement completion");
 
     let mut data_read_step = Z80MicroStep::InternalCycle { tstates: 1 };
     for _ in 0..5 {
         data_read_step = cpu.complete_internal_cycle().unwrap();
-        cpu = round_trip(cpu);
+        cpu = round_trip_at(cpu, "indexed ALU internal T-state");
     }
     let data_read = request(data_read_step);
     let last_prefix = prefixes.last().copied().expect("at least one index prefix");
@@ -119,7 +128,7 @@ fn execute_indexed_alu(case: IndexedAluCase<'_>) -> Z80MicroSequencer {
     let data_wait = prefixes.len() + 2;
     if waits[data_wait] != 0 {
         cpu.insert_wait_tstates(waits[data_wait]).unwrap();
-        cpu = round_trip(cpu);
+        cpu = round_trip_at(cpu, "effective-address read WAIT");
     }
     let wait_tstates: u32 = waits.iter().sum();
     let nominal_tstates = 19 + 4 * (prefixes.len() as u32 - 1);
