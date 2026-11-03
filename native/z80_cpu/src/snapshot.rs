@@ -1404,3 +1404,84 @@ mod base_absolute_transfer_snapshot_tests {
         }
     }
 }
+
+
+#[cfg(test)]
+mod base_relative_branch_snapshot_tests {
+    use crate::{
+        Z80MicroSequencer, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
+    };
+
+    fn round_trip(cpu: &Z80MicroSequencer) -> Z80MicroSequencer {
+        let state = cpu.export_state();
+        let encoded = state.encode().unwrap();
+        let decoded = Z80MicroSequencerState::decode(&encoded).unwrap();
+        assert_eq!(decoded, state);
+        Z80MicroSequencer::restore_state(decoded).unwrap()
+    }
+
+    fn start_branch(opcode: u8, b: u8, displacement: u8) -> (Z80MicroSequencer, Z80MicroStep) {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.registers.pc = 0x1000;
+        cpu.registers.b = b;
+        let fetch = match cpu.begin_instruction().unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected opcode fetch, got {other:?}"),
+        };
+        let immediate = cpu.complete_bus_cycle(fetch.id, Some(opcode)).unwrap();
+        let request = match immediate {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected displacement read, got {other:?}"),
+        };
+        let restored = round_trip(&cpu);
+        let step = restored
+            .complete_bus_cycle(request.id, Some(displacement))
+            .unwrap();
+        (restored, step)
+    }
+
+    #[test]
+    fn relative_branch_internal_safe_points_round_trip_through_codec() {
+        for (opcode, b, displacement, expected_tstates) in [
+            (0x18, 0x00, 0x02, 12),
+            (0x10, 0x02, 0xFE, 13),
+            (0x10, 0x01, 0xFE, 8),
+        ] {
+            let (mut cpu, mut step) = start_branch(opcode, b, displacement);
+            loop {
+                match step {
+                    Z80MicroStep::InternalCycle { .. } => {
+                        cpu = round_trip(&cpu);
+                        step = cpu.complete_internal_cycle().unwrap();
+                    }
+                    Z80MicroStep::InstructionRetired { tstates, .. } => {
+                        assert_eq!(tstates, expected_tstates);
+                        break;
+                    }
+                    other => panic!("unexpected relative branch continuation: {other:?}"),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn relative_branch_restore_rejects_inconsistent_continuations() {
+        let (cpu, step) = start_branch(0x18, 0x00, 0x02);
+        assert_eq!(step, Z80MicroStep::InternalCycle { tstates: 1 });
+        let mut invalid = cpu.export_state();
+        invalid.phase = Z80MicroSequencerPhase::BaseRelativeBranchInternal {
+            displacement: 2,
+            branch_taken: false,
+            remaining_tstates: 5,
+        };
+        assert!(Z80MicroSequencer::restore_state(invalid).is_err());
+
+        let mut invalid = cpu.export_state();
+        invalid.phase = Z80MicroSequencerPhase::BaseRelativeBranchInternal {
+            displacement: 2,
+            branch_taken: true,
+            remaining_tstates: 0,
+        };
+        assert!(Z80MicroSequencer::restore_state(invalid).is_err());
+    }
+}
