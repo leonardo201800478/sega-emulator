@@ -1204,9 +1204,7 @@ impl Z80MicroSequencer {
                         .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                     self.registers.sp = self.registers.sp.wrapping_add(1);
                     self.registers.pc = u16::from_le_bytes([low, high]);
-                    if self.opcode != Some(0x4D) {
-                        self.iff1 = self.iff2;
-                    }
+                    self.iff1 = self.iff2;
                     self.wz = self.registers.pc;
                     self.retire(
                         self.opcode
@@ -5279,7 +5277,7 @@ mod ed_return_nibble_rotate_differential_tests {
     }
 
     #[test]
-    fn retn_restores_iff1_but_reti_preserves_both_flip_flops() {
+    fn retn_and_reti_restore_iff1_from_iff2() {
         let mut retn = Z80MicroSequencer::default();
         let mut state = initial_state();
         state.registers.pc = 0x1000;
@@ -5301,7 +5299,7 @@ mod ed_return_nibble_rotate_differential_tests {
         bus.memory[0xD000] = 0x78;
         bus.memory[0xD001] = 0x56;
         let (reti, _, _) = run_sequenced(reti, bus, false);
-        assert!(!reti.iff1);
+        assert!(reti.iff1);
         assert!(reti.iff2);
     }
 }
