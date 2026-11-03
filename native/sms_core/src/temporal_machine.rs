@@ -1397,4 +1397,21 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn accumulator_rotate_daa_and_cpl_match_atomic_reference_through_scheduler() {
+        for (opcode, accumulator, flags) in [
+            (0x07, 0x81, 0xC4), // RLCA: bit 7 wraps into Carry
+            (0x0F, 0x01, 0xC4), // RRCA: bit 0 wraps into Carry
+            (0x17, 0x81, 0x01), // RLA: old Carry enters bit 0
+            (0x1F, 0x01, 0x01), // RRA: old Carry enters bit 7
+            (0x27, 0x0A, 0x00), // DAA after addition
+            (0x27, 0x9A, 0x00), // DAA sets decimal carry
+            (0x27, 0x10, 0x12), // DAA after subtraction with half-borrow
+            (0x2F, 0x55, 0xC5), // CPL preserves S/Z/PV/C
+        ] {
+            assert_atomic_differential(&[opcode], accumulator, flags, 0, 0, opcode);
+        }
+    }
+
 }
