@@ -1106,6 +1106,48 @@ mod tests {
     }
 
     #[test]
+    fn pending_dd_fd_index_immediate_phases_round_trip_through_snapshot_codec() {
+        for (prefix, expected_index) in [(0xDD, 0x1234), (0xFD, 0x5678)] {
+            let mut cpu = Z80MicroSequencer::default();
+            let first = match cpu.begin_instruction().unwrap() {
+                crate::Z80MicroStep::BusRequest(request) => request,
+                other => panic!("expected index prefix fetch, got {other:?}"),
+            };
+            let second = match cpu.complete_bus_cycle(first.id, Some(prefix)).unwrap() {
+                crate::Z80MicroStep::BusRequest(request) => request,
+                other => panic!("expected index opcode fetch, got {other:?}"),
+            };
+            let low = match cpu.complete_bus_cycle(second.id, Some(0x21)).unwrap() {
+                crate::Z80MicroStep::BusRequest(request) => request,
+                other => panic!("expected low-byte read, got {other:?}"),
+            };
+            let low_state = cpu.export_state();
+            let low_decoded = Z80MicroSequencerState::decode(&low_state.encode().unwrap()).unwrap();
+            let mut restored = Z80MicroSequencer::restore_state(low_decoded).unwrap();
+            assert_eq!(restored.export_state(), low_state);
+            assert_eq!(restored.pending_request(), Some(low));
+
+            let high = match restored.complete_bus_cycle(low.id, Some(expected_index as u8)).unwrap() {
+                crate::Z80MicroStep::BusRequest(request) => request,
+                other => panic!("expected high-byte read, got {other:?}"),
+            };
+            let high_state = restored.export_state();
+            let high_decoded = Z80MicroSequencerState::decode(&high_state.encode().unwrap()).unwrap();
+            let mut restored = Z80MicroSequencer::restore_state(high_decoded).unwrap();
+            assert_eq!(restored.export_state(), high_state);
+            assert_eq!(restored.pending_request(), Some(high));
+            assert_eq!(
+                restored.complete_bus_cycle(high.id, Some((expected_index >> 8) as u8)).unwrap(),
+                crate::Z80MicroStep::InstructionRetired {
+                    opcode: 0x21,
+                    tstates: 14,
+                }
+            );
+            assert_eq!(if prefix == 0xDD { restored.ix } else { restored.iy }, expected_index);
+        }
+    }
+
+    #[test]
     fn pending_alu_operand_phases_round_trip_through_snapshot_codec() {
         for opcode in [0xC6, 0x86] {
             let mut cpu = Z80MicroSequencer::default();
