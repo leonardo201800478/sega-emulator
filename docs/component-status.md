@@ -213,10 +213,10 @@ O executor atômico existente é a referência para SCF/CCF: no início de cada 
 ## 14. P7 — Z80 BASE: JP (HL) e EX DE,HL no microsequenciador retomável
 
 **Branch candidata:** `feat/z80-sms-jp-hl-ex-de-hl`  
-**SHA de código candidato:** `140251ebd5403eceabf1e1cfe70e1b8d9ee67155`  
+**SHA de código candidato:** `21cf592322057a8ec59dba0b368062d5b6b97491`  
 **PR:** pendente de abertura  
 **Dependência:** PR #428 (empilhada; ainda não integrada à main).  
-**CI:** pendente.
+**CI:** primeira execução `41571612626` falhou somente em `cargo fmt --all -- --check` por formatação do teste diferencial; corrigido no SHA `21cf592322057a8ec59dba0b368062d5b6b97491`; CI desse SHA pendente.
 
 | Componente | Estado formal | Evidência / limite |
 |---|---|---|
