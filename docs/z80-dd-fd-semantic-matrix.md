@@ -53,26 +53,26 @@ Não existe limite artificial de prefixos repetidos no contrato arquitetural. Te
 
 Os opcodes abaixo são o byte posterior ao prefixo DD ou FD. A coluna de T-states representa o valor nominal documentado para uma instrução com um prefixo, não uma prova de distribuição temporal no sequenciador.
 
-| Opcode(s) após DD/FD | Família | Substituição / efeito | T-states ZiLOG | Executor atômico | Microsequenciador |
-|---|---|---|---:|---|---|
-| `21 nn nn` | LD IX/IY,nn | Carrega par de índice | 14 | IMPLEMENTED_ATOMIC; teste dirigido | NOT_IMPLEMENTED |
-| `22 nn nn` | LD (nn),IX/IY | Escreve low/high em endereços consecutivos | 20 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
-| `2A nn nn` | LD IX/IY,(nn) | Lê low/high em endereços consecutivos | 20 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
-| `23`, `2B` | INC/DEC IX/IY | Incremento/decremento 16-bit; flags preservadas | 10 | IMPLEMENTED_ATOMIC; teste dirigido parcial | NOT_IMPLEMENTED |
-| `09`, `19`, `29`, `39` | ADD IX/IY,BC/DE/IX|IY/SP | Soma 16-bit; flags S/Z/PV preservadas; H/C e X/Y conforme resultado | 15 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
-| `E1`, `E5` | POP/PUSH IX/IY | Leitura/escrita da pilha | 14 / 15 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
-| `E3` | EX (SP),IX/IY | Troca o par com duas posições da pilha | 23 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
-| `E9` | JP (IX/IY) | PC recebe o par de índice | 8 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
-| `F9` | LD SP,IX/IY | SP recebe o par de índice | 10 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
-| `24`, `25`, `26` | INC/DEC/LD IXH/IYH,n | Operações na metade alta; não são instruções documentadas como registradores independentes no manual UM008011 | 8 / 8 / 11 (derivado do custo do prefixo + operação BASE; confirmar variante e trace) | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
-| `2C`, `2D`, `2E` | INC/DEC/LD IXL/IYL,n | Operações na metade baixa; não são instruções documentadas como registradores independentes no manual UM008011 | 8 / 8 / 11 (derivado do custo do prefixo + operação BASE; confirmar variante e trace) | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
-| `40`–`7F`, exceto `76` | LD r,r' | H/L são substituídos por IXH/IXL ou IYH/IYL quando aplicável; comportamento de half-register deve ser classificado como não documentado para o alvo UM008011 | 8 (prefixo + M1 BASE; confirmação temporal pendente) | IMPLEMENTED_ATOMIC; teste dirigido parcial | NOT_IMPLEMENTED |
-| `40`–`7F` com campo `r=6` ou `r'=6` | LD r,(IX/IY+d) / LD (IX/IY+d),r | Usa memória indexada; H/L do outro operando são H/L normais | 19 | IMPLEMENTED_ATOMIC; testes dirigidos parciais | NOT_IMPLEMENTED |
-| `34`, `35` | INC/DEC (IX/IY+d) | Read-modify-write da memória indexada | 23 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
-| `36` | LD (IX/IY+d),n | Lê displacement e imediato; escreve memória | 19 | IMPLEMENTED_ATOMIC; teste dirigido parcial | NOT_IMPLEMENTED |
-| `80`–`BF`, fonte diferente de 6 | ALU A,IXH/IXL/IYH/IYL ou r | ALU com registrador/half-index; half-register é comportamento não documentado no UM008011 | 8 (prefixo + M1 BASE; confirmação temporal pendente) | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
-| `80`–`BF`, fonte 6 | ALU A,(IX/IY+d) | Lê memória indexada e aplica ALU | 19 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
-| Demais opcodes | Prefixo ignorado ou fallback da instrução base, conforme classificação Z80 | Sem substituição IX/IY; custo do prefixo deve ser mantido | Base + 4T por prefixo ignorado | Fallback implementado no executor atômico | NOT_IMPLEMENTED / gap de fallback |
+| Opcode(s) após DD/FD | Família | Bytes totais (1 prefixo) | Substituição / estado / flags | T-states ZiLOG / observação | Executor atômico | Microsequenciador |
+|---|---|---:|---|---:|---|---|
+| `21 nn nn` | LD IX/IY,nn | 4 | IX/IY recebe nn; flags preservadas; PC consome 2 operandos | 14 | IMPLEMENTED_ATOMIC; teste dirigido | NOT_IMPLEMENTED |
+| `22 nn nn` | LD (nn),IX/IY | 4 | Escreve low/high em nn e nn+1; WZ=nn+1; flags preservadas | 20 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
+| `2A nn nn` | LD IX/IY,(nn) | 4 | Lê nn e nn+1; IX/IY recebe word; WZ=nn+1; flags preservadas | 20 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
+| `23`, `2B` | INC/DEC IX/IY | 2 | Atualiza word; flags preservadas; wrap 16-bit | 10 | IMPLEMENTED_ATOMIC; teste dirigido parcial | NOT_IMPLEMENTED |
+| `09`, `19`, `29`, `39` | ADD IX/IY,BC/DE/IX|IY/SP | 2 | IX/IY recebe soma; S/Z/PV preservadas; H/C atualizados; N reset; XY do high byte; WZ=index+1 | 15 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
+| `E1`, `E5` | POP/PUSH IX/IY | 2 | POP lê word e incrementa SP duas vezes; PUSH decrementa SP duas vezes; flags preservadas | 14 / 15 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
+| `E3` | EX (SP),IX/IY | 2 | Troca word com (SP)/(SP+1); SP preservado; WZ recebe word lida; flags preservadas | 23 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
+| `E9` | JP (IX/IY) | 2 | PC recebe IX/IY; sem operandos adicionais; flags preservadas | 8 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
+| `F9` | LD SP,IX/IY | 2 | SP recebe IX/IY; flags preservadas | 10 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
+| `24`, `25`, `26` | INC/DEC/LD IXH/IYH,n | 2 / 2 / 3 | Atualiza metade alta; INC/DEC altera flags de 8-bit, LD preserva flags; half-register não documentado como operando independente no UM008011 | 8 / 8 / 11 (derivado do prefixo + operação BASE; trace pendente) | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
+| `2C`, `2D`, `2E` | INC/DEC/LD IXL/IYL,n | 2 / 2 / 3 | Atualiza metade baixa; INC/DEC altera flags de 8-bit, LD preserva flags; half-register não documentado como operando independente no UM008011 | 8 / 8 / 11 (derivado do prefixo + operação BASE; trace pendente) | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
+| `40`–`7F`, exceto `76` | LD r,r' | 2 | H/L substituídos por IXH/IXL ou IYH/IYL quando aplicável; flags preservadas; HALT `76` não é indexado | 8 (prefixo + M1 BASE; trace pendente) | IMPLEMENTED_ATOMIC; teste dirigido parcial | NOT_IMPLEMENTED |
+| `40`–`7F` com campo `r=6` ou `r'=6` | LD r,(IX/IY+d) / LD (IX/IY+d),r | 3 | EA=index+sign_extend(d); memória lida/escrita; H/L do outro operando são H/L normais; flags preservadas | 19 | IMPLEMENTED_ATOMIC; testes dirigidos parciais | NOT_IMPLEMENTED |
+| `34`, `35` | INC/DEC (IX/IY+d) | 3 | EA=index+sign_extend(d); read-modify-write; flags S/Z/H/PV/N atualizadas; C preservado | 23 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
+| `36` | LD (IX/IY+d),n | 4 | Lê displacement e imediato; escreve EA; flags preservadas | 19 | IMPLEMENTED_ATOMIC; teste dirigido parcial | NOT_IMPLEMENTED |
+| `80`–`BF`, fonte diferente de 6 | ALU A,IXH/IXL/IYH/IYL ou r | 2 | A/F atualizados conforme operação ALU; half-register não documentado como operando independente no UM008011 | 8 (prefixo + M1 BASE; trace pendente) | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
+| `80`–`BF`, fonte 6 | ALU A,(IX/IY+d) | 3 | EA=index+sign_extend(d); memória lida; A/F atualizados conforme operação ALU | 19 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
+| Demais opcodes | Prefixo ignorado, prefixo repetido, ED ou fallback da instrução base | Prefixos extras + comprimento BASE | Sem substituição IX/IY; PC/R e custo do prefixo precisam ser mantidos; ED cancela indexação | BASE + 4T por prefixo ignorado | Fallback implementado no executor atômico | NOT_IMPLEMENTED / gap de fallback |
 
 **Exceção essencial H/L:** nas formas `LD H,(IX/IY+d)`, `LD L,(IX/IY+d)`, `LD (IX/IY+d),H` e `LD (IX/IY+d),L`, o registrador H/L é o par HL normal, não IXH/IXL ou IYH/IYL. O decoder atômico possui um caminho separado para os operandos de memória, mas a cobertura diferencial completa dessa exceção precisa ser demonstrada no microsequenciador.
 
