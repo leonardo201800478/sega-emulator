@@ -34,7 +34,6 @@ fn round_trip_at(cpu: Z80MicroSequencer, stage: &str) -> Z80MicroSequencer {
         .unwrap_or_else(|error| panic!("snapshot at {stage} restores: {error:?}"))
 }
 
-
 struct IndexedAluCase<'a> {
     prefixes: &'a [u8],
     ix: u16,
