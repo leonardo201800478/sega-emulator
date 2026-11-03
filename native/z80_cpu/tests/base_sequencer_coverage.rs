@@ -6,9 +6,7 @@
 //! complete. Update the expected inventory only alongside an implementation
 //! slice and its differential/temporal evidence.
 
-use sega_z80_cpu::{
-    Z80BusOperation, Z80MicroSequencer, Z80MicroSequencerError, Z80MicroStep,
-};
+use sega_z80_cpu::{Z80BusOperation, Z80MicroSequencer, Z80MicroSequencerError, Z80MicroStep};
 
 const BASE_PREFIXES: [u8; 4] = [0xCB, 0xDD, 0xED, 0xFD];
 const EXPECTED_IMPLEMENTED_BASE_ENCODINGS: usize = 178;
@@ -70,9 +68,7 @@ fn expected_base_handler(opcode: u8) -> bool {
 /// Drive one non-prefixed BASE instruction until retirement or explicit
 /// unsupported-decode rejection. Reads receive stable fixture data and writes
 /// are acknowledged without data; no hardware timing claim is made here.
-fn execute_base_opcode(
-    opcode: u8,
-) -> Result<u32, Z80MicroSequencerError> {
+fn execute_base_opcode(opcode: u8) -> Result<u32, Z80MicroSequencerError> {
     let mut cpu = Z80MicroSequencer::default();
     let mut step = cpu.begin_instruction()?;
     let mut first_opcode_fetch = true;
@@ -150,12 +146,12 @@ fn base_microsequencer_dispatch_matches_the_explicit_gap_baseline() {
             }
             (false, Ok(tstates)) => {
                 panic!(
-                    "BASE opcode {opcode:02X} unexpectedly retired in {tstates} T-states; update                      the inventory with its semantic and temporal evidence"
+                    "BASE opcode {opcode:02X} unexpectedly retired in {tstates} T-states; update the inventory with its semantic and temporal evidence"
                 )
             }
             (false, Err(error)) => {
                 panic!(
-                    "BASE opcode {opcode:02X} failed for a reason other than explicit                      unsupported decode: {error:?}"
+                    "BASE opcode {opcode:02X} failed for a reason other than explicit unsupported decode: {error:?}"
                 )
             }
         }
