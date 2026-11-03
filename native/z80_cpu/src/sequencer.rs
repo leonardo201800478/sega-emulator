@@ -2907,8 +2907,10 @@ mod tests {
             cpu.insert_wait_tstates(2).unwrap();
             let waited_prefix_state = cpu.export_state();
             cpu = Z80MicroSequencer::restore_state(waited_prefix_state).unwrap();
-            let retired_step = cpu.complete_bus_cycle(second.id, Some(opcode)).unwrap();
-            retired(retired_step, opcode, 10);
+            let third = request(cpu.complete_bus_cycle(second.id, Some(prefix)).unwrap());
+            cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+            let retired_step = cpu.complete_bus_cycle(third.id, Some(opcode)).unwrap();
+            retired(retired_step, opcode, 14);
 
             assert_eq!(if prefix == 0xDD { cpu.ix } else { cpu.iy }, expected);
             assert_eq!(cpu.registers.f, original_flags);
@@ -2916,8 +2918,8 @@ mod tests {
             assert_eq!(cpu.registers.hl(), original_hl);
             assert_eq!(cpu.ix, if prefix == 0xDD { expected } else { original_ix });
             assert_eq!(cpu.iy, if prefix == 0xFD { expected } else { original_iy });
-            assert_eq!(cpu.registers.pc, 2);
-            assert_eq!(cpu.refresh, 2);
+            assert_eq!(cpu.registers.pc, 3);
+            assert_eq!(cpu.refresh, 3);
         }
     }
 
