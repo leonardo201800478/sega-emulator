@@ -2819,10 +2819,10 @@ mod tests {
 
     #[test]
     fn dd_fd_ld_index_pair_immediate_is_resumable_and_snapshot_safe() {
-        for (prefix, opcode_bytes, expected_ix, expected_iy) in [
-            (0xDD, [0xDD, 0x21, 0x34, 0x12], 0x1234, 0xBEEF),
-            (0xFD, [0xFD, 0x21, 0x78, 0x56], 0xCAFE, 0x5678),
-            (0xFD, [0xDD, 0xFD, 0x21, 0xBC, 0x9A], 0xBEEF, 0x9ABC),
+        for (opcode_bytes, expected_ix, expected_iy) in [
+            (&[0xDD, 0x21, 0x34, 0x12][..], 0x1234, 0xBEEF),
+            (&[0xFD, 0x21, 0x78, 0x56][..], 0xCAFE, 0x5678),
+            (&[0xDD, 0xFD, 0x21, 0xBC, 0x9A][..], 0xBEEF, 0x9ABC),
         ] {
             let mut cpu = Z80MicroSequencer {
                 ix: 0xBEEF,
@@ -2832,10 +2832,13 @@ mod tests {
             let first = request(cpu.begin_instruction().unwrap());
             let mut next = cpu.complete_bus_cycle(first.id, Some(opcode_bytes[0])).unwrap();
             cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
-            for byte in opcode_bytes.iter().copied().skip(1).take(if opcode_bytes[0] == 0xDD && opcode_bytes[1] == 0xFD { 2 } else { 1 }) {
+            for byte in opcode_bytes.iter().copied().skip(1) {
                 let fetch = request(next);
                 next = cpu.complete_bus_cycle(fetch.id, Some(byte)).unwrap();
                 cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+                if byte == 0x21 {
+                    break;
+                }
             }
             let low_request = request(next);
             assert_eq!(low_request.operation, Z80BusOperation::MemoryRead);
@@ -2849,7 +2852,7 @@ mod tests {
             assert_eq!(cpu.ix, expected_ix);
             assert_eq!(cpu.iy, expected_iy);
             assert_eq!(cpu.registers.pc, opcode_bytes.len() as u16);
-            assert_eq!(cpu.refresh, if opcode_bytes[0] == 0xDD && opcode_bytes[1] == 0xFD { 3 } else { 2 });
+            assert_eq!(cpu.refresh, if opcode_bytes.len() == 5 { 3 } else { 2 });
         }
     }
 
