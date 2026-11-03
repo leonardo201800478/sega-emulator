@@ -1,8 +1,7 @@
 //! E4A indexed-displacement load/store execution through the resumable sequencer.
 
 use sega_z80_cpu::{
-    Z80BusOperation, Z80BusRequest, Z80MicroSequencer, Z80MicroSequencerError,
-    Z80MicroSequencerState, Z80MicroStep,
+    Z80BusOperation, Z80BusRequest, Z80MicroSequencer, Z80MicroSequencerState, Z80MicroStep,
 };
 
 fn request(step: Z80MicroStep) -> Z80BusRequest {
