@@ -24,8 +24,7 @@ fn is_base_prefix(opcode: u8) -> bool {
 fn expected_base_handler(opcode: u8) -> bool {
     matches!(
         opcode,
-        0x00
-            | 0x07
+        0x00 | 0x07
             | 0x0F
             | 0x17
             | 0x1F
@@ -59,8 +58,7 @@ fn expected_base_handler(opcode: u8) -> bool {
             | 0xEE
             | 0xF6
             | 0xFE
-    ) || ((0x04..=0x3D).contains(&opcode)
-        && matches!(opcode & 0xC7, 0x04 | 0x05))
+    ) || ((0x04..=0x3D).contains(&opcode) && matches!(opcode & 0xC7, 0x04 | 0x05))
         || ((0x40..=0x7F).contains(&opcode) && opcode != 0x76)
         || (0x80..=0xBF).contains(&opcode)
 }
@@ -83,8 +81,7 @@ fn execute_base_opcode(opcode: u8) -> Result<u32, Z80MicroSequencerError> {
                     }
                     Z80BusOperation::OpcodeFetch => Some(0x00),
                     Z80BusOperation::MemoryRead | Z80BusOperation::PortRead => Some(0x5A),
-                    Z80BusOperation::MemoryWrite { .. }
-                    | Z80BusOperation::PortWrite { .. } => None,
+                    Z80BusOperation::MemoryWrite { .. } | Z80BusOperation::PortWrite { .. } => None,
                 };
                 cpu.complete_bus_cycle(request.id, data)?
             }
@@ -134,10 +131,12 @@ fn base_microsequencer_dispatch_matches_the_explicit_gap_baseline() {
                 );
                 implemented += 1;
             }
-            (false, Err(Z80MicroSequencerError::UnsupportedOpcode {
-                opcode: rejected,
-                ..
-            })) => {
+            (
+                false,
+                Err(Z80MicroSequencerError::UnsupportedOpcode {
+                    opcode: rejected, ..
+                }),
+            ) => {
                 assert_eq!(rejected, opcode);
                 unsupported += 1;
             }
