@@ -81,6 +81,67 @@ fn ld_ix_iy_immediate_loads_little_endian_and_includes_prefix_m1() {
 }
 
 #[test]
+fn ld_ix_snapshot_restores_both_immediate_operand_fetch_phases() {
+    let mut cpu = Z80MicroSequencer::default();
+    let fetch = start(&mut cpu);
+    let fetch = feed_prefix(&mut cpu, fetch, 0xDD);
+    let low = request(cpu.complete_bus_cycle(fetch.id, Some(0x21)).unwrap());
+
+    let encoded = cpu.export_state().encode().expect("low-byte snapshot encodes");
+    let decoded = Z80MicroSequencerState::decode(&encoded).expect("low-byte snapshot decodes");
+    cpu = Z80MicroSequencer::restore_state(decoded).expect("low-byte snapshot restores");
+
+    let high = request(cpu.complete_bus_cycle(low.id, Some(0x34)).unwrap());
+    let encoded = cpu.export_state().encode().expect("high-byte snapshot encodes");
+    let decoded = Z80MicroSequencerState::decode(&encoded).expect("high-byte snapshot decodes");
+    cpu = Z80MicroSequencer::restore_state(decoded).expect("high-byte snapshot restores");
+
+    assert_eq!(
+        cpu.complete_bus_cycle(high.id, Some(0x12)).unwrap(),
+        Z80MicroStep::InstructionRetired {
+            opcode: 0x21,
+            tstates: 14,
+        }
+    );
+    assert_eq!(cpu.ix, 0x1234);
+}
+
+#[test]
+fn add_ix_snapshot_restores_after_the_internal_mcycle_boundary() {
+    let mut cpu = Z80MicroSequencer::default();
+    cpu.ix = 0x1000;
+    cpu.registers.b = 0;
+    cpu.registers.c = 1;
+    let fetch = start(&mut cpu);
+    let fetch = feed_prefix(&mut cpu, fetch, 0xDD);
+    assert_eq!(
+        cpu.complete_bus_cycle(fetch.id, Some(0x09)).unwrap(),
+        Z80MicroStep::InternalCycle { tstates: 1 }
+    );
+
+    for _ in 0..4 {
+        assert_eq!(
+            cpu.complete_internal_cycle().unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+    }
+    let state = cpu.export_state();
+    assert_eq!(state.mcycle_index, 3);
+    let encoded = state.encode().expect("ADD IX snapshot encodes");
+    let decoded = Z80MicroSequencerState::decode(&encoded).expect("ADD IX snapshot decodes");
+    cpu = Z80MicroSequencer::restore_state(decoded).expect("ADD IX snapshot restores");
+
+    assert_eq!(
+        complete_internal(&mut cpu, 3),
+        Z80MicroStep::InstructionRetired {
+            opcode: 0x09,
+            tstates: 15,
+        }
+    );
+    assert_eq!(cpu.ix, 0x1001);
+}
+
+#[test]
 fn repeated_alternating_prefixes_select_the_last_index_for_immediate_load() {
     let mut cpu = Z80MicroSequencer::default();
     let fetch = start(&mut cpu);
