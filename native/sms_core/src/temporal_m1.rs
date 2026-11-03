@@ -93,9 +93,7 @@ impl SmsTemporalM1 {
         // Reject the irreversible scheduler event before it is queued if the
         // opcode has not been sampled; the T3 completion edge cannot be retried.
         if self.phase() == Z80M1Phase::T3 && self.opcode().is_none() {
-            return Err(SmsTemporalM1Error::Cycle(
-                Z80M1Error::MissingOpcodeAtT3End,
-            ));
+            return Err(SmsTemporalM1Error::Cycle(Z80M1Error::MissingOpcodeAtT3End));
         }
         if self.pending_continuation_id.is_some() {
             return Err(SmsTemporalM1Error::EventAlreadyPending);
@@ -192,8 +190,12 @@ mod tests {
     ) -> Z80M1Phase {
         m1.schedule_next_tstate(coordinator).unwrap();
         let dispatch = coordinator.dispatch_next().unwrap().unwrap();
-        m1.complete_tstate(dispatch.event.payload, dispatch.event.timestamp, wait_asserted)
-            .unwrap()
+        m1.complete_tstate(
+            dispatch.event.payload,
+            dispatch.event.timestamp,
+            wait_asserted,
+        )
+        .unwrap()
     }
 
     #[test]
@@ -259,7 +261,10 @@ mod tests {
                 sega_z80_cpu::Z80M1Error::MissingOpcodeAtT3End
             ))
         );
-        assert_eq!(timeline.now(), sega_temporal_core::MachineTime::from_ticks(2));
+        assert_eq!(
+            timeline.now(),
+            sega_temporal_core::MachineTime::from_ticks(2)
+        );
         assert_eq!(m1.phase(), Z80M1Phase::T3);
     }
 
