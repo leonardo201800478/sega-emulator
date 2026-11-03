@@ -231,16 +231,6 @@ impl Z80MicroSequencer {
                 }) && address == state.registers.hl()
                     && state.instruction_tstates >= 4
             }
-            Z80MicroSequencerPhase::MemoryReadAlu { operation, .. } => {
-                let operand = response
-                    .data
-                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
-                self.execute_alu_operation(operation, operand);
-                self.retire(
-                    self.opcode
-                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
-                )
-            }
             Z80MicroSequencerPhase::MemoryReadIncDec { decrement, address } => {
                 let expected_opcode = if decrement { 0x35 } else { 0x34 };
                 pending.is_some_and(|request| {
@@ -529,6 +519,16 @@ impl Z80MicroSequencer {
                     .data
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 self.write_register(destination, value);
+                self.retire(
+                    self.opcode
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
+                )
+            }
+            Z80MicroSequencerPhase::MemoryReadAlu { operation, .. } => {
+                let operand = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.execute_alu_operation(operation, operand);
                 self.retire(
                     self.opcode
                         .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
