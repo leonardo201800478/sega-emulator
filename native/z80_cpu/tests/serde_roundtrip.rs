@@ -29,20 +29,25 @@ fn architectural_state_round_trips_through_json() {
     cpu.nmi_pending = true;
     cpu.int_pending = Some(0xCF);
     cpu.q = 0x28;
-    cpu.q_previous = 0xD7;
     cpu.p = true;
     cpu.halted = true;
 
+    let mut state = cpu.export_architectural_state();
+    state.q_previous = 0xD7;
+    cpu.import_architectural_state(state).unwrap();
+
     let expected = cpu.export_architectural_state();
     let json = serde_json::to_string(&expected).unwrap();
-    let decoded = serde_json::from_str(&json).unwrap();
+    let decoded: sega_z80_cpu::Z80ArchitecturalState = serde_json::from_str(&json).unwrap();
     assert_eq!(decoded, expected);
 }
 
 #[test]
 fn handshake_state_round_trips_through_json_with_wait() {
     let mut handshake = Z80BusHandshake::default();
-    handshake.begin(Z80BusOperation::MemoryRead, 0xC123, 3).unwrap();
+    handshake
+        .begin(Z80BusOperation::MemoryRead, 0xC123, 3)
+        .unwrap();
     handshake.insert_wait_tstates(2).unwrap();
 
     let expected = handshake.export_state();
@@ -85,7 +90,10 @@ fn sequencer_json_round_trip_preserves_internal_incdec_safe_point() {
     );
 
     let expected = cpu.export_state();
-    assert!(matches!(expected.phase, Z80MicroSequencerPhase::MemoryIncDecInternal { .. }));
+    assert!(matches!(
+        expected.phase,
+        Z80MicroSequencerPhase::MemoryIncDecInternal { .. }
+    ));
     assert!(expected.handshake.pending_request.is_none());
 
     let json = serde_json::to_string(&expected).unwrap();
@@ -104,7 +112,11 @@ fn invalid_architectural_json_is_rejected_without_mutating_atomic_cpu() {
     let valid_json = serde_json::to_value(before).unwrap();
 
     for (field, invalid_value, expected_error) in [
-        ("interrupt_mode", 3, Z80ArchitecturalStateError::InvalidInterruptMode(3)),
+        (
+            "interrupt_mode",
+            3,
+            Z80ArchitecturalStateError::InvalidInterruptMode(3),
+        ),
         ("ei_delay", 2, Z80ArchitecturalStateError::InvalidEiDelay(2)),
     ] {
         let mut value = valid_json.clone();
