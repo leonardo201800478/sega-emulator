@@ -90,11 +90,8 @@ impl SmsTemporalM1 {
         if self.phase() == Z80M1Phase::Complete {
             return Err(SmsTemporalM1Error::CycleComplete);
         }
-        // Reject the irreversible scheduler event before it is queued if the
-        // opcode has not been sampled; the T3 completion edge cannot be retried.
-        if self.phase() == Z80M1Phase::T3 && self.opcode().is_none() {
-            return Err(SmsTemporalM1Error::Cycle(Z80M1Error::MissingOpcodeAtT3End));
-        }
+        // The machine samples memory at the dispatched T3 edge, then calls
+        // complete_tstate. Keep that sample inside the owning event loop.
         if self.pending_continuation_id.is_some() {
             return Err(SmsTemporalM1Error::EventAlreadyPending);
         }
