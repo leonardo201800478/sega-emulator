@@ -887,6 +887,24 @@ mod tests {
         assert_eq!(step, Z80MicroStep::InstructionRetired { opcode, tstates });
     }
 
+    fn complete_m1_fetch(
+        machine: &mut SmsTemporalMachine,
+        fixture_wait_tstates: u32,
+    ) -> Z80MicroStep {
+        loop {
+            let m1 = machine.export_state().m1;
+            if m1.is_none()
+                || m1.is_some_and(|state| state.pending_continuation_id.is_none())
+            {
+                machine.schedule_pending_bus(fixture_wait_tstates).unwrap();
+            }
+            let step = machine.dispatch_next().unwrap();
+            if machine.export_state().m1.is_none() {
+                return step;
+            }
+        }
+    }
+
     #[test]
     fn nop_runs_on_the_scheduler_timeline_for_four_tstates() {
         let mut machine = SmsTemporalMachine::new(vec![0x00; 0x4000], 3).unwrap();
