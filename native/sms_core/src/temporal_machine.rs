@@ -192,9 +192,22 @@ impl SmsTemporalMachine {
         rom: impl Into<Vec<u8>>,
         master_ticks_per_tstate: u64,
     ) -> Result<Self, SmsTemporalMachineError> {
+        Self::new_with_cartridge_ram(rom, None, master_ticks_per_tstate)
+    }
+
+    /// Construct the resumable SMS machine with optional cartridge SRAM.
+    pub fn new_with_cartridge_ram(
+        rom: impl Into<Vec<u8>>,
+        cartridge_ram: Option<Vec<u8>>,
+        master_ticks_per_tstate: u64,
+    ) -> Result<Self, SmsTemporalMachineError> {
         Ok(Self {
             cpu: Z80MicroSequencer::default(),
-            bus: SmsTemporalBus::new(rom, master_ticks_per_tstate)?,
+            bus: SmsTemporalBus::new_with_cartridge_ram(
+                rom,
+                cartridge_ram,
+                master_ticks_per_tstate,
+            )?,
             instruction_started_at: None,
             next_internal_cycle_id: 0,
             pending_internal_cycle_id: None,
