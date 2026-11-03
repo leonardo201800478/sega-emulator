@@ -4,7 +4,9 @@ use crate::audio::{MachineAudioSession, open_audio_session};
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
-use sega_sms_core::{ControllerButtons, SmsMachine, SmsMachineConfig, VideoStandard};
+use sega_sms_core::{
+    ControllerButtons, SmsCartridgeRamFile, SmsMachine, SmsMachineConfig, VideoStandard,
+};
 
 fn sms_controller_buttons_from_action_mask(actions: u8) -> ControllerButtons {
     ControllerButtons {
@@ -45,6 +47,17 @@ fn build_sms_machine(
     region: Option<&str>,
     bios: Option<Vec<u8>>,
 ) -> Result<SmsMachine, SmsMachineBuildError> {
+    build_sms_machine_with_cartridge_ram(rom, pal, region, bios, None, None)
+}
+
+fn build_sms_machine_with_cartridge_ram(
+    rom: Vec<u8>,
+    pal: bool,
+    region: Option<&str>,
+    bios: Option<Vec<u8>>,
+    cartridge_ram_size: Option<usize>,
+    save_file: Option<&SmsCartridgeRamFile>,
+) -> Result<SmsMachine, SmsMachineBuildError> {
     let (territory, video_standard) =
         sms_region_profile(region, pal).map_err(SmsMachineBuildError::InvalidRegion)?;
     let config = SmsMachineConfig {
@@ -52,13 +65,37 @@ fn build_sms_machine(
         video_standard,
         ..SmsMachineConfig::default()
     };
-    SmsMachine::with_bios_audio(rom, bios, config, 44_100)
-        .map_err(|error| SmsMachineBuildError::Machine(error.to_string()))
+    let cartridge_ram = match cartridge_ram_size {
+        Some(size) if matches!(size, 0x2000 | 0x4000 | 0x8000) => Some(vec![0; size]),
+        Some(size) => return Err(SmsMachineBuildError::InvalidCartridgeRamSize(size)),
+        None => None,
+    };
+    let mut machine = SmsMachine::with_bios_audio_and_cartridge_ram(
+        rom,
+        bios,
+        cartridge_ram,
+        config,
+        44_100,
+    )
+    .map_err(|error| SmsMachineBuildError::Machine(error.to_string()))?;
+    if let Some(save_file) = save_file {
+        if cartridge_ram_size.is_none() {
+            return Err(SmsMachineBuildError::CartridgeRamFile(
+                "sram_path exige cartridge_ram_size explícito".to_owned(),
+            ));
+        }
+        machine
+            .load_cartridge_ram_file(save_file)
+            .map_err(|error| SmsMachineBuildError::CartridgeRamFile(error.to_string()))?;
+    }
+    Ok(machine)
 }
 
 #[derive(Debug)]
 enum SmsMachineBuildError {
     InvalidRegion(&'static str),
+    InvalidCartridgeRamSize(usize),
+    CartridgeRamFile(String),
     Machine(String),
 }
 
@@ -69,6 +106,7 @@ pub struct NativeSMSMachine {
     total_instructions: u64,
     audio_session: Option<MachineAudioSession>,
     audio_output_error: Option<String>,
+    sram_file: Option<SmsCartridgeRamFile>,
 }
 
 impl NativeSMSMachine {
@@ -90,11 +128,40 @@ impl NativeSMSMachine {
 #[pymethods]
 impl NativeSMSMachine {
     #[new]
-    #[pyo3(signature = (rom, pal=false, region=None, bios=None))]
-    fn new(rom: Vec<u8>, pal: bool, region: Option<&str>, bios: Option<Vec<u8>>) -> PyResult<Self> {
-        let machine = build_sms_machine(rom, pal, region, bios).map_err(|error| match error {
+    #[pyo3(signature = (rom, pal=false, region=None, bios=None, cartridge_ram_size=None, sram_path=None))]
+    fn new(
+        rom: Vec<u8>,
+        pal: bool,
+        region: Option<&str>,
+        bios: Option<Vec<u8>>,
+        cartridge_ram_size: Option<usize>,
+        sram_path: Option<String>,
+    ) -> PyResult<Self> {
+        if cartridge_ram_size.is_some() != sram_path.is_some() {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "cartridge_ram_size e sram_path devem ser informados juntos",
+            ));
+        }
+        let save_file = sram_path.map(SmsCartridgeRamFile::new);
+        let machine = build_sms_machine_with_cartridge_ram(
+            rom,
+            pal,
+            region,
+            bios,
+            cartridge_ram_size,
+            save_file.as_ref(),
+        )
+        .map_err(|error| match error {
             SmsMachineBuildError::InvalidRegion(message) => {
                 pyo3::exceptions::PyValueError::new_err(message)
+            }
+            SmsMachineBuildError::InvalidCartridgeRamSize(size) => {
+                pyo3::exceptions::PyValueError::new_err(format!(
+                    "cartridge_ram_size inválido: {size}; use 8192, 16384 ou 32768",
+                ))
+            }
+            SmsMachineBuildError::CartridgeRamFile(message) => {
+                PyRuntimeError::new_err(message)
             }
             SmsMachineBuildError::Machine(message) => PyRuntimeError::new_err(message),
         })?;
@@ -103,6 +170,7 @@ impl NativeSMSMachine {
             total_instructions: 0,
             audio_session: None,
             audio_output_error: None,
+            sram_file: save_file,
         })
     }
 
@@ -136,6 +204,17 @@ impl NativeSMSMachine {
             session.close();
         }
         self.audio_output_error = None;
+    }
+
+    /// Persist the current cartridge SRAM; false means no save path is configured.
+    fn save_cartridge_ram(&self) -> PyResult<bool> {
+        let Some(save_file) = &self.sram_file else {
+            return Ok(false);
+        };
+        self.machine
+            .save_cartridge_ram_file(save_file)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        Ok(true)
     }
 
     #[getter]
@@ -326,7 +405,7 @@ mod tests {
     #[test]
     fn sms_sprite_limit_can_be_toggled_through_native_binding() {
         let mut machine =
-            NativeSMSMachine::new(vec![0; 0x4000], false, Some("usa"), None).unwrap();
+            NativeSMSMachine::new(vec![0; 0x4000], false, Some("usa"), None, None, None).unwrap();
         assert!(machine.sprite_limit_enabled());
         machine.set_sprite_limit_enabled(false);
         assert!(!machine.sprite_limit_enabled());
@@ -341,6 +420,7 @@ mod tests {
             total_instructions: 0,
             audio_session: None,
             audio_output_error: None,
+            sram_file: None,
         };
         assert_eq!(machine.psg_sample_rate(), 44_100);
         assert_eq!(machine.psg_clock_hz(), 3_579_545);
@@ -408,7 +488,7 @@ mod tests {
 
     #[test]
     fn draining_audio_does_not_change_cpu_timing() {
-        let mut machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa"), None).unwrap();
+        let mut machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa"), None, None, None).unwrap();
         for _ in 0..100 {
             machine.step().unwrap();
         }
