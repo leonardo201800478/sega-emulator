@@ -127,3 +127,21 @@ Não elevar um estado com base apenas em documentação, compilação isolada, b
 - CI `41548085870`: 4/4 jobs PASS. Rust fmt e Clippy PASS; `cargo test -p sega-sms-core --locked` PASS; `cargo test -p sega-sg1000-core --locked` PASS (57 testes); workspace PASS; Ruff PASS; pytest 214 PASS / 21 SKIPPED; Windows D3D12/video/WASAPI/XAudio2 PASS; Scheduler stress short 2 PASS, 1 teste longo filtrado.
 - Escopo validado: transações de memória, ROM mirror, RAM interna 1 KiB/8 KiB, cartridge RAM 1/2/8 KiB, deadline, WAIT fixture, exactly-once, snapshot/restore e rejeição explícita de PortRead/PortWrite.
 - Limite: PR #423 continua aberta; o barramento ainda não compõe o Z80MicroSequencer. Não contar como implementação da main até merge. Execução local: NOT RUN.
+
+
+## 10. P7 — expansão do Z80 retomável: ALU com fonte em registrador, PR #425
+
+**Branch candidata:** `feat/z80-sms-alu-register-matrix`  
+**SHA validado:** `c25a2bfdb5ab4929d8ed5cebb19ebfaef523bcd2`  
+**PR:** https://github.com/leonardo201800478/sega-emulator/pull/425  
+**CI:** run `41562069199` — Rust, Python e Windows PASS; Scheduler deterministic stress SKIPPED.
+
+| Componente | Estado formal | Evidência / limite |
+|---|---|---|
+| ALU BASE com fonte em registrador no microsequenciador | IMPLEMENTED / QUICK_PASS | 56 encodings: ADD/ADC/SUB/SBC/AND/XOR/OR/CP com B,C,D,E,H,L,A; vetores fixos de resultado/flags e teste estrutural da matriz |
+| ALU com fonte `(HL)` | INTEGRATION_PENDING | Requer fase de leitura de memória e validação do snapshot codec |
+| ALU imediata | INTEGRATION_PENDING | Requer fase de leitura do operando imediato, avanço de PC e validação temporal |
+| Z80 retomável completo | INTEGRATION_PENDING | Prefixos CB/ED/DD/FD, HALT, interrupções, I/O, instruções 16-bit, refresh elétrico e estado arquitetural completo permanecem pendentes |
+| TEMPORAL_PASS | NOT DECLARED | A cobertura desta PR é uma fatia CPU isolada; não prova execução completa de jogos nem integração temporal sistêmica |
+
+A implementação reutiliza a ALU compartilhada `sega-z80-alu` e preserva o executor atômico como referência. O teste CP confirma preservação de A e flags incluindo X/Y. Não se declara cobertura de operandos imediatos/memória, comparação diferencial abrangente, ZEXDOC/ZEXALL ou boot de jogos. A PR #425 permanece Draft e não faz parte da main.
