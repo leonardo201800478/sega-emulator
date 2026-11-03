@@ -675,11 +675,6 @@ impl Z80MicroSequencer {
                             && state.instruction_tstates >= 5 + u32::from(stage) * 3
                     }
             }
-            Z80MicroSequencerPhase::BaseControlPushInternal { target, high, low } => {
-                next.instruction_tstates = next_instruction_tstates;
-                next.registers.sp = next.registers.sp.wrapping_sub(1);
-                next.issue_base_control_push_write(0, target, low, next.registers.sp, high)?
-            }
             Z80MicroSequencerPhase::BaseStackPushInternal { high, low } => {
                 let opcode_matches = state
                     .opcode
