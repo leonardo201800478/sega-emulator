@@ -3329,8 +3329,11 @@ mod cb_memory_differential_tests {
             &mut bus,
             Z80MicroStep::BusRequest(first),
         ));
-        let memory_read_step = cpu.complete_bus_cycle(second.id, Some(0xCB)).unwrap();
-        let memory_read = request(memory_read_step);
+        let memory_read = request(read_request(
+            &mut cpu,
+            &mut bus,
+            Z80MicroStep::BusRequest(second),
+        ));
         cpu = roundtrip(cpu);
         cpu.insert_wait_tstates(2).unwrap();
 
@@ -3375,7 +3378,11 @@ mod cb_memory_differential_tests {
             &mut bus,
             Z80MicroStep::BusRequest(first),
         ));
-        let read = request(cpu.complete_bus_cycle(second.id, Some(0xCB)).unwrap());
+        let read = request(read_request(
+            &mut cpu,
+            &mut bus,
+            Z80MicroStep::BusRequest(second),
+        ));
         cpu = roundtrip(cpu);
         cpu.insert_wait_tstates(2).unwrap();
         let value = bus.read_memory(read.address);
@@ -3538,20 +3545,16 @@ mod cb_register_differential_tests {
     }
 
     #[test]
-    fn cb_memory_encoding_remains_explicitly_unsupported_until_bus_slice_exists() {
+    fn cb_memory_encoding_issues_hl_read_after_two_m1_fetches() {
         let mut cpu = Z80MicroSequencer::default();
         let first = request(cpu.begin_instruction().unwrap());
         let second = request(cpu.complete_bus_cycle(first.id, Some(0xCB)).unwrap());
         assert_eq!(second.address, 1);
-        assert!(matches!(
-            cpu.complete_bus_cycle(second.id, Some(0x06)),
-            Err(super::Z80MicroSequencerError::UnsupportedOpcode {
-                opcode: 0x06,
-                address: 1
-            })
-        ));
+        let read = request(cpu.complete_bus_cycle(second.id, Some(0x06)).unwrap());
+        assert_eq!(read.operation, Z80BusOperation::MemoryRead);
+        assert_eq!(read.address, 0);
         assert_eq!(cpu.registers.pc, 2);
         assert_eq!(cpu.refresh & 0x7F, 2);
-        assert!(!cpu.instruction_active());
+        assert!(cpu.instruction_active());
     }
 }
