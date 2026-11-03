@@ -16,8 +16,8 @@ pub mod bus {
 }
 
 pub mod cpu;
-pub mod micro_ops;
 pub mod m1;
+pub mod micro_ops;
 pub mod sequencer;
 pub mod snapshot;
 
