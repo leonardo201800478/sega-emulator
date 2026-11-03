@@ -1,8 +1,10 @@
 //! First scheduler-driven SMS Z80/memory vertical slice.
 //!
 //! This composition uses the resumable Z80 subset, the mapper-backed SMS
-//! memory adapter, and one machine scheduler. It intentionally excludes the
-//! legacy scanline VDP, PSG, ports, interrupts, DMA and physical WAIT wiring.
+//! memory/I/O adapter, and one machine scheduler. Immediate port transactions
+//! support controller and memory-control effects; VDP/PSG devices remain
+//! unconnected (open-bus reads and bounded write diagnostics). Interrupts, DMA
+//! and physical WAIT wiring remain outside this temporal slice.
 
 use core::fmt;
 
