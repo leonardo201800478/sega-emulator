@@ -63,6 +63,27 @@ fn indexed_stack_pair(prefix_state: Z80PrefixState, ix: u16, iy: u16) -> Option<
     }
 }
 
+fn is_indexed_memory_load_opcode(opcode: u8) -> bool {
+    (0x40..=0x7F).contains(&opcode)
+        && opcode != 0x76
+        && opcode & 0x07 == 0x06
+        && (opcode >> 3) & 0x07 != 0x06
+}
+
+fn is_indexed_memory_store_opcode(opcode: u8) -> bool {
+    opcode == 0x36
+        || ((0x70..=0x7F).contains(&opcode)
+            && opcode != 0x76
+            && (opcode >> 3) & 0x07 == 0x06
+            && opcode & 0x07 != 0x06)
+}
+
+fn is_indexed_load_opcode(opcode: u8) -> bool {
+    opcode == 0x36
+        || is_indexed_memory_load_opcode(opcode)
+        || is_indexed_memory_store_opcode(opcode)
+}
+
 fn stack_pair_value(registers: &Z80Registers, opcode: u8, index_pair: Option<u16>) -> Option<u16> {
     match opcode {
         0xC5 | 0xC1 => Some(registers.bc()),
@@ -187,6 +208,19 @@ pub enum Z80MicroSequencerPhase {
         value: u8,
     },
     ImmediateReadMemoryWrite,
+    IndexDisplacementRead,
+    IndexDisplacementInternal {
+        address: u16,
+        remaining_tstates: u8,
+    },
+    IndexedImmediateReadMemoryWrite {
+        address: u16,
+    },
+    IndexedImmediateStoreInternal {
+        address: u16,
+        value: u8,
+        remaining_tstates: u8,
+    },
     ImmediateReadAlu {
         operation: u8,
     },
@@ -345,6 +379,8 @@ impl Z80MicroSequencerPhase {
                 | Self::BaseReturnConditionInternal { .. }
                 | Self::BaseExchangeStackInternal { .. }
                 | Self::MemoryIncDecInternal { .. }
+                | Self::IndexDisplacementInternal { .. }
+                | Self::IndexedImmediateStoreInternal { .. }
         )
     }
 }
@@ -2188,7 +2224,9 @@ impl Z80MicroSequencer {
                             | 0xE9
                             | 0xF9
                     );
-                    if index_class != Z80IndexOpcodeClass::UsesIndex || !indexed_16bit_opcode {
+                    if index_class != Z80IndexOpcodeClass::UsesIndex
+                        || !(indexed_16bit_opcode || is_indexed_load_opcode(opcode))
+                    {
                         return self.unsupported(opcode);
                     }
                 } else if self.prefix_state != Z80PrefixState::None || previous_prefix.is_some() {
