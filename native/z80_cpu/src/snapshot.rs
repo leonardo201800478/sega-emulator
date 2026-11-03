@@ -1127,8 +1127,8 @@ mod tests {
                     other => panic!("expected repeated prefix M1 request, got {other:?}"),
                 };
                 next = cpu.complete_bus_cycle(request.id, Some(prefix)).unwrap();
-                cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
             }
+            cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
 
             let opcode_fetch = match next {
                 crate::Z80MicroStep::BusRequest(request) => request,
