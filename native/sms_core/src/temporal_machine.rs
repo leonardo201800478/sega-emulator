@@ -6,17 +6,20 @@
 
 use core::fmt;
 
-use crate::{SmsTemporalBus, SmsTemporalBusError, SmsTemporalBusState, SmsTemporalDispatch};
+use crate::{
+    SmsTemporalBus, SmsTemporalBusError, SmsTemporalBusState, SmsTemporalDispatch,
+    SmsTemporalM1, SmsTemporalM1Error, SmsTemporalM1State,
+};
 use sega_temporal_core::{
     BusContractError, BusCycleKind, BusDirection, BusOperationResult, BusPhase, BusTransaction,
     MCycleIndex, MachineTime, TStateIndex,
 };
 use sega_z80_cpu::{
     Z80BusOperation, Z80MicroSequencer, Z80MicroSequencerError, Z80MicroSequencerPhase,
-    Z80MicroSequencerState, Z80MicroStep,
+    Z80MicroSequencerState, Z80MicroStep, Z80M1Phase, Z80M1Pins,
 };
 
-pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 9;
+pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 10;
 
 /// Runtime event trace emitted from actual Scheduler/bus dispatch boundaries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,6 +38,11 @@ pub enum SmsTemporalTraceEvent {
         continuation_id: u64,
         tstates: u32,
     },
+    M1TStateCompleted {
+        timestamp: MachineTime,
+        phase: Z80M1Phase,
+        pins: Z80M1Pins,
+    },
 }
 
 /// Versioned state spanning the CPU continuation and SMS memory/scheduler.
@@ -48,6 +56,8 @@ pub struct SmsTemporalMachineState {
     pub next_internal_cycle_id: u64,
     pub pending_internal_cycle_id: Option<u64>,
     pub pending_internal_tstates: Option<u32>,
+    pub m1: Option<SmsTemporalM1State>,
+    pub m1_fixture_wait_tstates: Option<u32>,
 }
 
 fn elapsed_tstates(
@@ -143,6 +153,7 @@ pub enum SmsTemporalMachineError {
     InvalidState,
     NoScheduledEvent,
     InternalCycleIdExhausted,
+    M1(SmsTemporalM1Error),
 }
 
 impl fmt::Display for SmsTemporalMachineError {
@@ -155,6 +166,7 @@ impl fmt::Display for SmsTemporalMachineError {
             Self::InternalCycleIdExhausted => {
                 f.write_str("SMS internal-cycle continuation ID exhausted")
             }
+            Self::M1(error) => write!(f, "SMS M1 continuation failed: {error:?}"),
         }
     }
 }
@@ -173,6 +185,12 @@ impl From<Z80MicroSequencerError> for SmsTemporalMachineError {
     }
 }
 
+impl From<SmsTemporalM1Error> for SmsTemporalMachineError {
+    fn from(error: SmsTemporalM1Error) -> Self {
+        Self::M1(error)
+    }
+}
+
 /// SMS Z80 + mapper memory + single scheduler timeline.
 #[derive(Debug, Clone)]
 pub struct SmsTemporalMachine {
@@ -182,6 +200,8 @@ pub struct SmsTemporalMachine {
     next_internal_cycle_id: u64,
     pending_internal_cycle_id: Option<u64>,
     pending_internal_tstates: Option<u32>,
+    m1: Option<SmsTemporalM1>,
+    m1_fixture_wait_tstates: Option<u32>,
     trace_enabled: bool,
     trace_events: Vec<SmsTemporalTraceEvent>,
 }
@@ -199,6 +219,8 @@ impl SmsTemporalMachine {
             next_internal_cycle_id: 0,
             pending_internal_cycle_id: None,
             pending_internal_tstates: None,
+            m1: None,
+            m1_fixture_wait_tstates: None,
             trace_enabled: false,
             trace_events: Vec::new(),
         })
