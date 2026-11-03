@@ -3610,18 +3610,20 @@ mod architectural_state_diagnostics_tests {
 
     #[test]
     fn architectural_import_preserves_host_counters_and_trace_buffers() {
-        let mut cpu = Z80::default();
-        cpu.total_tstates = 0x1234;
-        cpu.instruction_count = 0x5678;
-        cpu.opcode_trace_bytes = [1, 2, 3, 4, 5, 6, 7, 8];
-        cpu.opcode_trace_len = 3;
-        cpu.opcode_trace_truncated = true;
-        cpu.capture_opcode_trace = true;
-        cpu.instruction_trace_bytes = [8, 7, 6, 5, 4, 3, 2, 1];
-        cpu.instruction_trace_len = 5;
-        cpu.instruction_trace_truncated = true;
-        cpu.injected_opcode = Some(0xDD);
-        cpu.step_depth = true;
+        let mut cpu = Z80 {
+            total_tstates: 0x1234,
+            instruction_count: 0x5678,
+            opcode_trace_bytes: [1, 2, 3, 4, 5, 6, 7, 8],
+            opcode_trace_len: 3,
+            opcode_trace_truncated: true,
+            capture_opcode_trace: true,
+            instruction_trace_bytes: [8, 7, 6, 5, 4, 3, 2, 1],
+            instruction_trace_len: 5,
+            instruction_trace_truncated: true,
+            injected_opcode: Some(0xDD),
+            step_depth: true,
+            ..Z80::default()
+        };
 
         let state = cpu.export_architectural_state();
         cpu.import_architectural_state(state).unwrap();
