@@ -2479,6 +2479,7 @@ mod indirect_bc_de_tests {
         let read = request(cpu.complete_bus_cycle(fetch.id, Some(0x0A)).unwrap());
         assert_eq!(read.operation, Z80BusOperation::MemoryRead);
         assert_eq!(read.address, 0xC123);
+        assert_eq!(cpu.registers.a, 0x11);
         let retired = cpu.complete_bus_cycle(read.id, Some(0xA5)).unwrap();
         assert_eq!(retired, Z80MicroStep::InstructionRetired { opcode: 0x0A, tstates: 7 });
         assert_eq!(cpu.registers.a, 0xA5);
@@ -2521,6 +2522,7 @@ mod indirect_bc_de_tests {
         let write = request(cpu.complete_bus_cycle(fetch.id, Some(0x02)).unwrap());
         assert_eq!(write.address, 0xC1FF);
         assert_eq!(write.operation, Z80BusOperation::MemoryWrite { value: 0x5A });
+        assert_eq!(cpu.wz, 0);
         let retired = cpu.complete_bus_cycle(write.id, None).unwrap();
         assert_eq!(retired, Z80MicroStep::InstructionRetired { opcode: 0x02, tstates: 7 });
         assert_eq!(cpu.wz, 0x5A00);
@@ -2542,6 +2544,7 @@ mod indirect_bc_de_tests {
         let write = request(cpu.complete_bus_cycle(fetch.id, Some(0x12)).unwrap());
         assert_eq!(write.address, 0x1234);
         assert_eq!(write.operation, Z80BusOperation::MemoryWrite { value: 0xA5 });
+        assert_eq!(cpu.wz, 0);
         assert_eq!(
             cpu.complete_bus_cycle(write.id, None).unwrap(),
             Z80MicroStep::InstructionRetired { opcode: 0x12, tstates: 7 }
@@ -2560,5 +2563,95 @@ mod indirect_bc_de_tests {
             assert_eq!(restored.export_state(), cpu.export_state());
             assert!(matches!(pending, Z80MicroStep::BusRequest(_)));
         }
+    }
+}
+
+
+#[cfg(test)]
+mod indirect_bc_de_validation_tests {
+    use super::{Z80MicroSequencer, Z80MicroSequencerError, Z80MicroStep};
+    use crate::{Z80BusOperation, Z80Registers};
+
+    fn request(step: Z80MicroStep) -> crate::Z80BusRequest {
+        match step {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected bus request, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn indirect_memory_transfers_include_wait_states_in_retirement_time() {
+        for (opcode, expected_operation) in [
+            (0x02, Z80BusOperation::MemoryWrite { value: 0xA5 }),
+            (0x12, Z80BusOperation::MemoryWrite { value: 0xA5 }),
+            (0x0A, Z80BusOperation::MemoryRead),
+            (0x1A, Z80BusOperation::MemoryRead),
+        ] {
+            let mut cpu = Z80MicroSequencer {
+                registers: Z80Registers {
+                    a: 0xA5,
+                    ..Z80Registers::default()
+                },
+                ..Z80MicroSequencer::default()
+            };
+            let fetch = request(cpu.begin_instruction().unwrap());
+            let bus = request(cpu.complete_bus_cycle(fetch.id, Some(opcode)).unwrap());
+            assert_eq!(bus.operation, expected_operation);
+            cpu.insert_wait_tstates(2).unwrap();
+            let data = match bus.operation {
+                Z80BusOperation::MemoryRead => Some(0x37),
+                Z80BusOperation::MemoryWrite { .. } => None,
+                _ => unreachable!(),
+            };
+            assert_eq!(
+                cpu.complete_bus_cycle(bus.id, data).unwrap(),
+                Z80MicroStep::InstructionRetired {
+                    opcode,
+                    tstates: 9
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn restore_rejects_indirect_read_with_wrong_effective_address() {
+        let mut cpu = Z80MicroSequencer {
+            registers: Z80Registers {
+                b: 0x12,
+                c: 0x34,
+                ..Z80Registers::default()
+            },
+            ..Z80MicroSequencer::default()
+        };
+        let fetch = request(cpu.begin_instruction().unwrap());
+        let _read = request(cpu.complete_bus_cycle(fetch.id, Some(0x0A)).unwrap());
+        let mut state = cpu.export_state();
+        state.handshake.pending_request.as_mut().unwrap().address = 0x1235;
+        assert_eq!(
+            Z80MicroSequencer::restore_state(state),
+            Err(Z80MicroSequencerError::InvalidState)
+        );
+    }
+
+    #[test]
+    fn restore_rejects_indirect_write_with_wrong_payload() {
+        let mut cpu = Z80MicroSequencer {
+            registers: Z80Registers {
+                a: 0xA5,
+                b: 0x12,
+                c: 0x34,
+                ..Z80Registers::default()
+            },
+            ..Z80MicroSequencer::default()
+        };
+        let fetch = request(cpu.begin_instruction().unwrap());
+        let _write = request(cpu.complete_bus_cycle(fetch.id, Some(0x02)).unwrap());
+        let mut state = cpu.export_state();
+        state.handshake.pending_request.as_mut().unwrap().operation =
+            Z80BusOperation::MemoryWrite { value: 0xA4 };
+        assert_eq!(
+            Z80MicroSequencer::restore_state(state),
+            Err(Z80MicroSequencerError::InvalidState)
+        );
     }
 }
