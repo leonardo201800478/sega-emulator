@@ -6834,6 +6834,67 @@ mod ed_block_io_differential_tests {
     }
 
     #[test]
+    fn block_io_repeat_flags_cover_half_carry_and_parity_edges() {
+        let cases = [
+            // INIR: 0xFF + (C+1) carries; repeat-cycle PV clears and H remains set.
+            (0xB2, 0x4000, 0x1101, true, 0x33),
+            // OTIR: 0xFF + post-increment L carries; repeat-cycle PV sets and H remains set.
+            (0xB3, 0x40FE, 0x1001, false, 0x37),
+        ];
+
+        for (opcode, hl, port, input, expected_flags) in cases {
+            let state = state_with_registers(
+                Z80Registers {
+                    b: 0x11,
+                    c: 0x01,
+                    h: (hl >> 8) as u8,
+                    l: hl as u8,
+                    pc: 0x2000,
+                    ..Z80Registers::default()
+                },
+                0,
+            );
+            let mut atomic = Z80::default();
+            atomic.import_architectural_state(state).unwrap();
+            let mut atomic_bus = TestBus::default();
+            atomic_bus.memory[0x2000] = 0xED;
+            atomic_bus.memory[0x2001] = opcode;
+            if input {
+                atomic_bus.ports[usize::from(port)] = 0xFF;
+            } else {
+                atomic_bus.memory[usize::from(hl)] = 0xFF;
+            }
+
+            let mut sequenced = Z80MicroSequencer::default();
+            sequenced.import_architectural_state(state).unwrap();
+            let mut sequenced_bus = atomic_bus.clone();
+
+            assert_eq!(atomic.step(&mut atomic_bus), Ok(21));
+            assert_eq!(
+                run_sequenced_iteration(&mut sequenced, &mut sequenced_bus, false),
+                21
+            );
+            assert_eq!(sequenced.registers.b, 0x10);
+            assert_eq!(sequenced.registers.f, expected_flags);
+            assert_eq!(sequenced.wz, 0x2001);
+            assert_eq!(
+                sequenced.export_architectural_state(),
+                atomic.export_architectural_state()
+            );
+            assert_eq!(sequenced_bus.memory.as_ref(), atomic_bus.memory.as_ref());
+            assert_eq!(sequenced_bus.ports.as_ref(), atomic_bus.ports.as_ref());
+            assert_eq!(sequenced_bus.port_reads, atomic_bus.port_reads);
+            assert_eq!(sequenced_bus.port_writes, atomic_bus.port_writes);
+            if input {
+                assert_eq!(sequenced_bus.port_reads, vec![port]);
+                assert_eq!(sequenced_bus.memory[usize::from(hl)], 0xFF);
+            } else {
+                assert_eq!(sequenced_bus.port_writes, vec![(port, 0xFF)]);
+            }
+        }
+    }
+
+    #[test]
     fn block_io_repeat_uses_pc_plus_one_memptr_and_five_extra_tstates() {
         let state = state_with_registers(
             Z80Registers {
