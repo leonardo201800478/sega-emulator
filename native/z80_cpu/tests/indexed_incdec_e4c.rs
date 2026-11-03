@@ -342,13 +342,13 @@ fn indexed_inc_dec_covers_zero_and_signed_displacement_extremes_for_ix_and_iy() 
     ];
 
     for case in cases {
-        let index_base = if case.prefix == 0xDD { case.ix } else { case.iy };
-        let effective_address =
-            index_base.wrapping_add_signed(i16::from(case.displacement as i8));
-        for (opcode, old_value, expected_value) in [
-            (0x34, 0x01, 0x02),
-            (0x35, 0xFE, 0xFD),
-        ] {
+        let index_base = if case.prefix == 0xDD {
+            case.ix
+        } else {
+            case.iy
+        };
+        let effective_address = index_base.wrapping_add_signed(i16::from(case.displacement as i8));
+        for (opcode, old_value, expected_value) in [(0x34, 0x01, 0x02), (0x35, 0xFE, 0xFD)] {
             let cpu = execute_indexed_inc_dec(IndexedIncDecCase {
                 prefixes: &[case.prefix],
                 ix: case.ix,
