@@ -2910,8 +2910,11 @@ mod tests {
             let first = request(cpu.begin_instruction().unwrap());
             let second = request(cpu.complete_bus_cycle(first.id, Some(prefix)).unwrap());
             cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+            cpu.insert_wait_tstates(2).unwrap();
+            let waited_prefix_state = cpu.export_state();
+            cpu = Z80MicroSequencer::restore_state(waited_prefix_state).unwrap();
             let retired_step = cpu.complete_bus_cycle(second.id, Some(opcode)).unwrap();
-            retired(retired_step, opcode, 8);
+            retired(retired_step, opcode, 10);
 
             assert_eq!(if prefix == 0xDD { cpu.ix } else { cpu.iy }, expected);
             assert_eq!(cpu.registers.f, original_flags);
