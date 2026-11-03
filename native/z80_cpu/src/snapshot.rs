@@ -1414,12 +1414,9 @@ mod base_absolute_transfer_snapshot_tests {
     }
 }
 
-
 #[cfg(test)]
 mod base_relative_branch_snapshot_tests {
-    use crate::{
-        Z80MicroSequencer, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
-    };
+    use crate::{Z80MicroSequencer, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep};
 
     fn round_trip(cpu: &Z80MicroSequencer) -> Z80MicroSequencer {
         let state = cpu.export_state();
@@ -1494,7 +1491,6 @@ mod base_relative_branch_snapshot_tests {
         assert!(Z80MicroSequencer::restore_state(invalid).is_err());
     }
 }
-
 
 #[cfg(test)]
 mod base_absolute_jump_snapshot_tests {
