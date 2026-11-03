@@ -663,6 +663,7 @@ mod tests {
     };
     use sega_z80_cpu::{
         Z80MicroSequencer, Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroStep,
+        Z80Registers,
     };
 
     fn retired(step: Z80MicroStep, opcode: u8, tstates: u32) {
@@ -1080,6 +1081,49 @@ mod tests {
 
         let transaction = machine.pending_internal_transaction().unwrap().unwrap();
         assert_eq!(transaction.timestamp(), started_at);
+    }
+
+    #[test]
+    fn alu_register_matrix_matches_atomic_reference_through_scheduler() {
+        for operation in 0_u8..8 {
+            for source in [0_u8, 1, 2, 3, 4, 5, 7] {
+                let opcode = 0x80 | (operation << 3) | source;
+                let mut rom = vec![0; 0x4000];
+                rom[0] = opcode;
+                let initial_registers = Z80Registers {
+                    a: 0x7F,
+                    f: 0x01,
+                    b: 0x01,
+                    c: 0x02,
+                    d: 0x03,
+                    e: 0x04,
+                    h: 0x05,
+                    l: 0x06,
+                    ..Z80Registers::default()
+                };
+
+                let mut temporal = SmsTemporalMachine::new(rom.clone(), 3).unwrap();
+                temporal.cpu_mut().registers = initial_registers;
+                let mut atomic = crate::Z80::default();
+                atomic.registers = initial_registers;
+                let mut bus = FlatBus::new(&rom);
+
+                let expected_tstates = atomic.step(&mut bus).unwrap();
+                retired(
+                    temporal.step_instruction(0).unwrap(),
+                    opcode,
+                    expected_tstates,
+                );
+
+                assert_eq!(temporal.cpu().registers, atomic.registers, "opcode {opcode:02X}");
+                assert_eq!(temporal.cpu().refresh, atomic.r, "opcode {opcode:02X}");
+                assert_eq!(
+                    temporal.now(),
+                    MachineTime::from_ticks(u128::from(expected_tstates) * 3),
+                    "opcode {opcode:02X}"
+                );
+            }
+        }
     }
 
     #[test]
