@@ -1719,4 +1719,47 @@ mod tests {
             assert_atomic_differential(&[opcode], accumulator, flags, 0, 0, opcode);
         }
     }
+    #[test]
+    fn nop_opcode_fetch_uses_four_scheduler_driven_m1_tstates() {
+        let mut machine = SmsTemporalMachine::new(vec![0x00; 0x4000], 3).unwrap();
+        machine.set_trace_enabled(true);
+        retired(machine.step_instruction(0).unwrap(), 0x00, 4);
+        assert_eq!(machine.now(), MachineTime::from_ticks(12));
+        assert_eq!(machine.cpu().refresh, 1);
+        let trace = machine.take_trace();
+        let m1_events = trace
+            .iter()
+            .filter(|event| matches!(event, super::SmsTemporalTraceEvent::M1TStateCompleted { .. }))
+            .count();
+        assert_eq!(m1_events, 4);
+        assert!(machine.export_state().m1.is_none());
+    }
+
+    #[test]
+    fn opcode_fetch_wait_states_are_scheduler_tw_events() {
+        let mut machine = SmsTemporalMachine::new(vec![0x00; 0x4000], 2).unwrap();
+        retired(machine.step_instruction(2).unwrap(), 0x00, 6);
+        assert_eq!(machine.now(), MachineTime::from_ticks(12));
+        assert_eq!(machine.cpu().refresh, 1);
+    }
+
+    #[test]
+    fn m1_snapshot_restores_pending_tstate_and_retires_exactly_once() {
+        let mut machine = SmsTemporalMachine::new(vec![0x00; 0x4000], 3).unwrap();
+        machine.begin_instruction().unwrap();
+        machine.schedule_pending_bus(1).unwrap();
+        assert!(matches!(
+            machine.dispatch_next().unwrap(),
+            Z80MicroStep::BusRequest(_)
+        ));
+        machine.schedule_pending_bus(1).unwrap();
+        let snapshot = machine.export_state();
+        assert!(snapshot.m1.is_some());
+        let mut restored = SmsTemporalMachine::restore_state(snapshot).unwrap();
+        retired(restored.resume_instruction(1).unwrap(), 0x00, 5);
+        assert_eq!(restored.now(), MachineTime::from_ticks(15));
+        assert_eq!(restored.cpu().registers.pc, 1);
+        assert!(restored.export_state().m1.is_none());
+    }
+
 }
