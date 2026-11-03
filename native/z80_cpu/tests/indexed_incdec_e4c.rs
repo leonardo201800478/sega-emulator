@@ -290,3 +290,41 @@ fn indexed_inc_dec_wraps_effective_address_and_program_counter() {
     assert_eq!(cpu.registers.pc, 0x0000);
     assert_eq!(cpu.registers.f, 0x50);
 }
+
+#[test]
+fn indexed_inc_dec_covers_zero_and_signed_displacement_extremes_for_ix_and_iy() {
+    let cases = [
+        // IX: zero displacement, negative boundary and positive boundary with 16-bit wrap.
+        (0xDD, 0x1234, 0x0000, 0x00, 0x34, 0x01, 0x35, 0xFE),
+        (0xDD, 0x0001, 0x0000, 0x80, 0x34, 0x01, 0x35, 0xFE),
+        (0xDD, 0xFFFF, 0x0000, 0x7F, 0x34, 0x01, 0x35, 0xFE),
+        // IY: the same displacement boundaries, including wrap in both directions.
+        (0xFD, 0x0000, 0x1234, 0x00, 0x34, 0x01, 0x35, 0xFE),
+        (0xFD, 0x0000, 0x0001, 0x80, 0x34, 0x01, 0x35, 0xFE),
+        (0xFD, 0x0000, 0xFF80, 0x7F, 0x34, 0x01, 0x35, 0xFE),
+    ];
+
+    for (prefix, ix, iy, displacement, opcode, old_value, dec_opcode, dec_value) in cases {
+        let index_base = if prefix == 0xDD { ix } else { iy };
+        let effective_address = index_base.wrapping_add_signed(i16::from(displacement as i8));
+        for (opcode, old_value, expected_value) in [
+            (opcode, old_value, old_value.wrapping_add(1)),
+            (dec_opcode, dec_value, dec_value.wrapping_sub(1)),
+        ] {
+            let cpu = execute_indexed_inc_dec(IndexedIncDecCase {
+                prefixes: &[prefix],
+                ix,
+                iy,
+                pc: 0,
+                opcode,
+                flags: 0x01,
+                displacement,
+                old_value,
+                expected_value,
+                waits: &[0, 0, 0, 0, 0],
+            });
+            assert_eq!(cpu.wz, effective_address);
+            assert_eq!(cpu.registers.pc, 3);
+        }
+    }
+}
