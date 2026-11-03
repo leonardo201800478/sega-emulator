@@ -683,8 +683,8 @@ mod tests {
         bus.begin_request(ram_write, 0).unwrap();
         assert_eq!(
             bus.memory().read(0x8000),
-            2,
-            "ROM remains visible before dispatch"
+            0,
+            "enabled SRAM remains unchanged before the scheduled write dispatch"
         );
         let completion = bus.dispatch_next().unwrap().unwrap();
         let mut restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
