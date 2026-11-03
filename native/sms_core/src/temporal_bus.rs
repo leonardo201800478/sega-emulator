@@ -14,6 +14,7 @@ use sega_temporal_core::MachineTime;
 use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
 
 pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 6;
+const MAX_PORT_WRITE_TRACE: usize = 64;
 
 fn elapsed_tstates(
     started_at: MachineTime,
@@ -436,6 +437,9 @@ impl SmsTemporalBus {
         } else {
             self.io.write_port(port, value);
         }
+        if self.port_write_trace.len() == MAX_PORT_WRITE_TRACE {
+            self.port_write_trace.remove(0);
+        }
         self.port_write_trace.push(SmsTemporalPortWrite {
             port,
             value,
@@ -474,10 +478,11 @@ impl SmsTemporalBus {
         let pending_events = &state.coordinator.scheduler.event_queue.pending;
         let scale = state.coordinator.master_ticks_per_tstate;
         let now = coordinator.now();
-        if state
-            .port_write_trace
-            .iter()
-            .any(|write| write.completed_at > now)
+        if state.port_write_trace.len() > MAX_PORT_WRITE_TRACE
+            || state
+                .port_write_trace
+                .iter()
+                .any(|write| write.completed_at > now)
             || state
                 .port_write_trace
                 .windows(2)
