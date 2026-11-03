@@ -639,8 +639,10 @@ impl Z80MicroSequencer {
                     && state.instruction_tstates >= 11 + u32::from(4 - remaining_tstates)
             }
             Z80MicroSequencerPhase::EdBlockIoInitialInternal { opcode } => {
-                matches!(opcode, 0xA2 | 0xAA | 0xB2 | 0xBA | 0xA3 | 0xAB | 0xB3 | 0xBB)
-                    && state.opcode == Some(opcode)
+                matches!(
+                    opcode,
+                    0xA2 | 0xAA | 0xB2 | 0xBA | 0xA3 | 0xAB | 0xB3 | 0xBB
+                ) && state.opcode == Some(opcode)
                     && pending.is_none()
                     && state.instruction_tstates >= 8
             }
@@ -666,12 +668,17 @@ impl Z80MicroSequencer {
                 memory_address,
                 value,
             } => {
-                let direction = if matches!(opcode, 0xAA | 0xBA) { -1_i16 } else { 1_i16 };
+                let direction = if matches!(opcode, 0xAA | 0xBA) {
+                    -1_i16
+                } else {
+                    1_i16
+                };
                 matches!(opcode, 0xA2 | 0xAA | 0xB2 | 0xBA)
                     && state.opcode == Some(opcode)
                     && memory_address == state.registers.hl()
-                    && port_address == ((u16::from(state.registers.b.wrapping_add(1)) << 8)
-                        | u16::from(state.registers.c))
+                    && port_address
+                        == ((u16::from(state.registers.b.wrapping_add(1)) << 8)
+                            | u16::from(state.registers.c))
                     && state.wz == port_address.wrapping_add_signed(direction)
                     && pending.is_some_and(|request| {
                         request.operation == Z80BusOperation::MemoryWrite { value }
@@ -700,7 +707,11 @@ impl Z80MicroSequencer {
                 memory_address,
                 value,
             } => {
-                let direction = if matches!(opcode, 0xAB | 0xBB) { -1_i16 } else { 1_i16 };
+                let direction = if matches!(opcode, 0xAB | 0xBB) {
+                    -1_i16
+                } else {
+                    1_i16
+                };
                 matches!(opcode, 0xA3 | 0xAB | 0xB3 | 0xBB)
                     && state.opcode == Some(opcode)
                     && port_address == state.registers.bc()
@@ -980,7 +991,10 @@ impl Z80MicroSequencer {
             }
             Z80MicroSequencerPhase::EdBlockIoRepeatInternal {
                 remaining_tstates, ..
-            } => state.mcycle_index == 4 && state.tstate_index == u16::from(5 - remaining_tstates),
+            } => {
+                state.mcycle_index == 4
+                    && state.tstate_index == u16::from(5_u8.saturating_sub(remaining_tstates))
+            },
             Z80MicroSequencerPhase::EdBlockTransferRead { .. } => {
                 state.mcycle_index == 2 && state.tstate_index == 0
             }
@@ -1445,14 +1459,23 @@ impl Z80MicroSequencer {
                 let value = response
                     .data
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
-                let direction = if matches!(opcode, 0xAA | 0xBA) { -1_i16 } else { 1_i16 };
+                let direction = if matches!(opcode, 0xAA | 0xBA) {
+                    -1_i16
+                } else {
+                    1_i16
+                };
                 self.wz = port_address.wrapping_add_signed(direction);
                 self.registers.b = self.registers.b.wrapping_sub(1);
                 self.issue_block_io_memory_write(opcode, port_address, memory_address, value)
             }
             Z80MicroSequencerPhase::EdBlockIoInputMemoryWrite { opcode, value, .. } => {
-                let direction = if matches!(opcode, 0xAA | 0xBA) { -1_i16 } else { 1_i16 };
-                self.registers.set_hl(self.registers.hl().wrapping_add_signed(direction));
+                let direction = if matches!(opcode, 0xAA | 0xBA) {
+                    -1_i16
+                } else {
+                    1_i16
+                };
+                self.registers
+                    .set_hl(self.registers.hl().wrapping_add_signed(direction));
                 self.finish_block_io_iteration(opcode, value)
             }
             Z80MicroSequencerPhase::EdBlockIoOutputMemoryRead {
@@ -1463,13 +1486,22 @@ impl Z80MicroSequencer {
                     .data
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 self.registers.b = self.registers.b.wrapping_sub(1);
-                let direction = if matches!(opcode, 0xAB | 0xBB) { -1_i16 } else { 1_i16 };
+                let direction = if matches!(opcode, 0xAB | 0xBB) {
+                    -1_i16
+                } else {
+                    1_i16
+                };
                 self.wz = self.registers.bc().wrapping_add_signed(direction);
                 self.issue_block_io_port_write(opcode, memory_address, value)
             }
             Z80MicroSequencerPhase::EdBlockIoOutputPortWrite { opcode, value, .. } => {
-                let direction = if matches!(opcode, 0xAB | 0xBB) { -1_i16 } else { 1_i16 };
-                self.registers.set_hl(self.registers.hl().wrapping_add_signed(direction));
+                let direction = if matches!(opcode, 0xAB | 0xBB) {
+                    -1_i16
+                } else {
+                    1_i16
+                };
+                self.registers
+                    .set_hl(self.registers.hl().wrapping_add_signed(direction));
                 self.finish_block_io_iteration(opcode, value)
             }
             Z80MicroSequencerPhase::EdBlockIoInitialInternal { .. }
@@ -2451,11 +2483,9 @@ impl Z80MicroSequencer {
             .mcycle_index
             .checked_add(1)
             .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
-        let request = self.handshake.begin(
-            Z80BusOperation::MemoryWrite { value },
-            memory_address,
-            4,
-        )?;
+        let request =
+            self.handshake
+                .begin(Z80BusOperation::MemoryWrite { value }, memory_address, 4)?;
         self.mcycle_index = next_mcycle_index;
         self.tstate_index = 0;
         self.phase = Z80MicroSequencerPhase::EdBlockIoInputMemoryWrite {
@@ -2478,11 +2508,9 @@ impl Z80MicroSequencer {
             .mcycle_index
             .checked_add(1)
             .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
-        let request = self.handshake.begin(
-            Z80BusOperation::PortWrite { value },
-            port_address,
-            4,
-        )?;
+        let request =
+            self.handshake
+                .begin(Z80BusOperation::PortWrite { value }, port_address, 4)?;
         self.mcycle_index = next_mcycle_index;
         self.tstate_index = 0;
         self.phase = Z80MicroSequencerPhase::EdBlockIoOutputPortWrite {
@@ -5726,8 +5754,7 @@ mod ed_absolute_register_pair_differential_tests {
                             assert_eq!(request.base_tstates, 3);
                             assert_eq!(state.mcycle_index, 2);
                         }
-                        Z80BusOperation::MemoryWrite { .. }
-                        | Z80BusOperation::PortWrite { .. } => {
+                        Z80BusOperation::MemoryWrite { .. } | Z80BusOperation::PortWrite { .. } => {
                             assert_eq!(request.base_tstates, 4);
                             assert_eq!(state.mcycle_index, 3);
                         }
@@ -6548,7 +6575,11 @@ mod ed_block_io_differential_tests {
                 a: 0x5A,
                 f: 0xD7,
                 b: initial_b,
-                c: if matches!(opcode, 0xA2 | 0xB2) { 0xFF } else { 0x00 },
+                c: if matches!(opcode, 0xA2 | 0xB2) {
+                    0xFF
+                } else {
+                    0x00
+                },
                 d: 0x12,
                 e: 0x34,
                 h: if decrement { 0x00 } else { 0xFF },
@@ -6600,11 +6631,10 @@ mod ed_block_io_differential_tests {
     fn round_trip(cpu: &mut Z80MicroSequencer) {
         let state = cpu.export_state();
         let encoded = state.encode().expect("valid ED block-I/O snapshot");
-        let decoded = Z80MicroSequencerState::decode(&encoded)
-            .expect("ED block-I/O snapshot decodes");
+        let decoded =
+            Z80MicroSequencerState::decode(&encoded).expect("ED block-I/O snapshot decodes");
         assert_eq!(decoded, state);
-        *cpu = Z80MicroSequencer::restore_state(decoded)
-            .expect("ED block-I/O snapshot restores");
+        *cpu = Z80MicroSequencer::restore_state(decoded).expect("ED block-I/O snapshot restores");
     }
 
     fn run_sequenced_iteration(
@@ -6643,7 +6673,13 @@ mod ed_block_io_differential_tests {
                     assert_eq!(tstates, 1);
                     match cpu.export_state().phase {
                         super::Z80MicroSequencerPhase::EdBlockIoInitialInternal { .. } => {
-                            assert_eq!((cpu.export_state().mcycle_index, cpu.export_state().tstate_index), (1, 4));
+                            assert_eq!(
+                                (
+                                    cpu.export_state().mcycle_index,
+                                    cpu.export_state().tstate_index
+                                ),
+                                (1, 4)
+                            );
                         }
                         super::Z80MicroSequencerPhase::EdBlockIoRepeatInternal { .. } => {
                             assert_eq!(cpu.export_state().mcycle_index, 4);
