@@ -2346,8 +2346,7 @@ impl Z80MicroSequencer {
                 self.retire(opcode)
             }
             Z80MicroSequencerPhase::BaseImmediatePortWrite { port_address, .. } => {
-                self.wz = (port_address & 0xFF00)
-                    | (port_address.wrapping_add(1) & 0x00FF);
+                self.wz = (port_address & 0xFF00) | (port_address.wrapping_add(1) & 0x00FF);
                 let opcode = self
                     .opcode
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
@@ -10070,7 +10069,10 @@ mod base_immediate_io_differential_tests {
         } else {
             (port_address & 0xFF00) | (port_address.wrapping_add(1) & 0x00FF)
         };
-        assert_eq!(micro_state.wz, expected_wz, "WZ/MEMPTR for opcode {opcode:02X}");
+        assert_eq!(
+            micro_state.wz, expected_wz,
+            "WZ/MEMPTR for opcode {opcode:02X}"
+        );
         assert_eq!(
             micro_state.registers.a,
             if opcode == 0xDB {
