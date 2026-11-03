@@ -2043,10 +2043,11 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::Ed16ArithmeticInternal {
                 opcode,
                 remaining_tstates,
+                index_prefix,
             } => {
                 next.instruction_tstates = next_instruction_tstates;
                 if remaining_tstates == 1 {
-                    next.execute_ed_16bit_arithmetic(opcode);
+                    next.execute_ed_16bit_arithmetic(opcode, index_prefix);
                     next.retire(opcode)?
                 } else {
                     let remaining_tstates = remaining_tstates - 1;
@@ -2062,6 +2063,7 @@ impl Z80MicroSequencer {
                     next.phase = Z80MicroSequencerPhase::Ed16ArithmeticInternal {
                         opcode,
                         remaining_tstates,
+                        index_prefix,
                     };
                     Z80MicroStep::InternalCycle { tstates: 1 }
                 }
