@@ -326,6 +326,10 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u16(address);
             writer.u8(value);
         }
+        Z80MicroSequencerPhase::EdRegisterInternal { opcode } => {
+            writer.u8(15);
+            writer.u8(opcode);
+        }
     }
 }
 
@@ -382,6 +386,9 @@ fn read_phase(
         14 => Z80MicroSequencerPhase::CbMemoryWrite {
             address: reader.u16()?,
             value: reader.u8()?,
+        },
+        15 => Z80MicroSequencerPhase::EdRegisterInternal {
+            opcode: reader.u8()?,
         },
         tag => return Err(Z80MicroSequencerStateCodecError::InvalidTag(tag)),
     })
