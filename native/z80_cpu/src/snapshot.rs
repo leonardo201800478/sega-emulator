@@ -522,7 +522,7 @@ mod tests {
         // relying on a magic absolute offset in the serialized frame.
         let payload_offset = {
             let mut reader = Reader::new(&encoded[FRAME_HEADER_LEN..checksum_offset]);
-            reader.take(23).unwrap(); // registers, refresh and M/T counters
+            reader.take(25).unwrap(); // registers, refresh and M/T counters
             reader.take(2).unwrap(); // opcode option tag and opcode
             super::read_phase(&mut reader).unwrap();
             reader.u64().unwrap(); // next request ID
@@ -591,7 +591,7 @@ mod tests {
         let checksum_offset = FRAME_HEADER_LEN + body_len;
         let (phase_address_offset, request_address_offset) = {
             let mut reader = Reader::new(&encoded[FRAME_HEADER_LEN..checksum_offset]);
-            reader.take(23).unwrap();
+            reader.take(25).unwrap();
             reader.take(2).unwrap();
             let phase_address_offset = reader.offset + 1;
             let phase = super::read_phase(&mut reader).unwrap();
