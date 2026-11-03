@@ -575,6 +575,38 @@ impl Z80MicroSequencer {
                     _ => false,
                 }
             }
+            Z80MicroSequencerPhase::BaseExchangeStack { stage, .. } => match state.prefix_state {
+                Z80PrefixState::None => true,
+                Z80PrefixState::Index(_) => {
+                    state.opcode == Some(0xE3)
+                        && stage <= 3
+                        && state.instruction_tstates
+                            >= match stage {
+                                0 => 8,
+                                1 => 11,
+                                2 => 15,
+                                _ => 18,
+                            }
+                }
+                _ => false,
+            },
+            Z80MicroSequencerPhase::BaseExchangeStackInternal {
+                stage,
+                remaining_tstates,
+                ..
+            } => match state.prefix_state {
+                Z80PrefixState::None => true,
+                Z80PrefixState::Index(_) => {
+                    state.opcode == Some(0xE3)
+                        && match (stage, remaining_tstates) {
+                            (0, 1) => state.instruction_tstates >= 14,
+                            (1, 2) => state.instruction_tstates >= 21,
+                            (1, 1) => state.instruction_tstates >= 22,
+                            _ => false,
+                        }
+                }
+                _ => false,
+            },
             Z80MicroSequencerPhase::BaseStackPushInternal { .. } => match state.prefix_state {
                 Z80PrefixState::None => true,
                 Z80PrefixState::Index(_) => {
@@ -808,7 +840,12 @@ impl Z80MicroSequencer {
                 high,
                 old_hl,
             } => {
-                let expected_old_hl = state.registers.hl();
+                let expected_old_hl = indexed_stack_pair(
+                    state.prefix_state,
+                    state.ix,
+                    state.iy,
+                )
+                .unwrap_or_else(|| state.registers.hl());
                 let request_matches = match stage {
                     0 => {
                         low == 0
@@ -818,14 +855,16 @@ impl Z80MicroSequencer {
                                     && request.address == state.registers.sp
                                     && request.base_tstates == 3
                             })
-                            && state.instruction_tstates >= 4
+                            && state.instruction_tstates
+                                >= 4 + if matches!(state.prefix_state, Z80PrefixState::Index(_)) { 4 } else { 0 }
                     }
                     1 => {
                         pending.is_some_and(|request| {
                             request.operation == Z80BusOperation::MemoryRead
                                 && request.address == state.registers.sp.wrapping_add(1)
                                 && request.base_tstates == 3
-                        }) && state.instruction_tstates >= 7
+                        }) && state.instruction_tstates
+                            >= 7 + if matches!(state.prefix_state, Z80PrefixState::Index(_)) { 4 } else { 0 }
                     }
                     2 => {
                         pending.is_some_and(|request| {
@@ -834,7 +873,8 @@ impl Z80MicroSequencer {
                                 Z80BusOperation::MemoryWrite { value } if value == old_hl as u8
                             ) && request.address == state.registers.sp
                                 && request.base_tstates == 3
-                        }) && state.instruction_tstates >= 11
+                        }) && state.instruction_tstates
+                            >= 11 + if matches!(state.prefix_state, Z80PrefixState::Index(_)) { 4 } else { 0 }
                     }
                     3 => pending.is_some_and(|request| {
                         matches!(
@@ -842,7 +882,8 @@ impl Z80MicroSequencer {
                             Z80BusOperation::MemoryWrite { value } if value == (old_hl >> 8) as u8
                         ) && request.address == state.registers.sp.wrapping_add(1)
                             && request.base_tstates == 3
-                    }) && state.instruction_tstates >= 14,
+                    }) && state.instruction_tstates
+                        >= 14 + if matches!(state.prefix_state, Z80PrefixState::Index(_)) { 4 } else { 0 },
                     _ => false,
                 };
                 state.opcode == Some(0xE3)
@@ -860,22 +901,27 @@ impl Z80MicroSequencer {
                     (0, 1) => {
                         state.mcycle_index == 2
                             && state.tstate_index == 3
-                            && state.instruction_tstates >= 10
+                            && state.instruction_tstates
+                                >= 10 + if matches!(state.prefix_state, Z80PrefixState::Index(_)) { 4 } else { 0 }
                     }
                     (1, 1) => {
                         state.mcycle_index == 4
                             && state.tstate_index == 4
-                            && state.instruction_tstates >= 18
+                            && state.instruction_tstates
+                                >= 18 + if matches!(state.prefix_state, Z80PrefixState::Index(_)) { 4 } else { 0 }
                     }
                     (1, 2) => {
                         state.mcycle_index == 4
                             && state.tstate_index == 3
-                            && state.instruction_tstates >= 17
+                            && state.instruction_tstates
+                                >= 17 + if matches!(state.prefix_state, Z80PrefixState::Index(_)) { 4 } else { 0 }
                     }
                     _ => false,
                 };
                 state.opcode == Some(0xE3)
-                    && old_hl == state.registers.hl()
+                    && old_hl
+                    == indexed_stack_pair(state.prefix_state, state.ix, state.iy)
+                        .unwrap_or_else(|| state.registers.hl())
                     && pending.is_none()
                     && timing_valid
             }
@@ -1705,7 +1751,11 @@ impl Z80MicroSequencer {
                 state.mcycle_index == 2 && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::BaseExchangeStack { stage, .. } => {
-                stage <= 3 && state.mcycle_index == 1 + u32::from(stage) && state.tstate_index == 0
+                let prefix_mcycle =
+                    u32::from(stage <= 1 && matches!(state.prefix_state, Z80PrefixState::Index(_)));
+                stage <= 3
+                    && state.mcycle_index == 1 + u32::from(stage) + prefix_mcycle
+                    && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::BaseExchangeStackInternal {
                 stage,
@@ -2044,7 +2094,7 @@ impl Z80MicroSequencer {
                 if let Some(index_class) = index_opcode_class {
                     let indexed_16bit_opcode = matches!(
                         opcode,
-                        0x09 | 0x19 | 0x21 | 0x22 | 0x23 | 0x29 | 0x2A | 0x2B | 0x39 | 0xE1 | 0xE5 | 0xE9 | 0xF9
+                        0x09 | 0x19 | 0x21 | 0x22 | 0x23 | 0x29 | 0x2A | 0x2B | 0x39 | 0xE1 | 0xE3 | 0xE5 | 0xE9 | 0xF9
                     );
                     if index_class != Z80IndexOpcodeClass::UsesIndex || !indexed_16bit_opcode {
                         return self.unsupported(opcode);
@@ -2145,7 +2195,8 @@ impl Z80MicroSequencer {
                             stage: 0,
                             low: 0,
                             high: 0,
-                            old_hl: self.registers.hl(),
+                            old_hl: indexed_stack_pair(self.prefix_state, self.ix, self.iy)
+                                .unwrap_or_else(|| self.registers.hl()),
                         },
                         self.registers.sp,
                     ),
@@ -3284,7 +3335,11 @@ impl Z80MicroSequencer {
                     )?
                 } else if remaining_tstates == 0 {
                     let exchanged = u16::from_le_bytes([low, high]);
-                    next.registers.set_hl(exchanged);
+                    match next.prefix_state {
+                        Z80PrefixState::Index(Z80IndexRegister::Ix) => next.ix = exchanged,
+                        Z80PrefixState::Index(Z80IndexRegister::Iy) => next.iy = exchanged,
+                        _ => next.registers.set_hl(exchanged),
+                    }
                     next.wz = exchanged;
                     next.retire(0xE3)?
                 } else {
