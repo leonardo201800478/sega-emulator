@@ -1098,8 +1098,7 @@ impl Z80MicroSequencer {
             0x57 | 0x5F => {
                 let value = if opcode == 0x57 { self.i } else { self.refresh };
                 self.registers.a = value;
-                let mut flags =
-                    (self.registers.f & FLAG_C) | (value & (FLAG_S | FLAG_XY));
+                let mut flags = (self.registers.f & FLAG_C) | (value & (FLAG_S | FLAG_XY));
                 if value == 0 {
                     flags |= FLAG_Z;
                 }
@@ -3189,7 +3188,6 @@ mod indirect_bc_de_differential_tests {
     }
 }
 
-
 #[cfg(test)]
 mod ed_register_control_differential_tests {
     use super::{Z80MicroSequencer, Z80MicroStep};
@@ -3323,11 +3321,7 @@ mod ed_register_control_differential_tests {
                         Z80MicroStep::BusRequest(first),
                     );
                     sequenced = roundtrip(sequenced);
-                    let result = read_request(
-                        &mut sequenced,
-                        &mut sequenced_bus,
-                        second,
-                    );
+                    let result = read_request(&mut sequenced, &mut sequenced_bus, second);
                     let retired = if expected_tstates == 9 {
                         assert_eq!(result, Z80MicroStep::InternalCycle { tstates: 1 });
                         sequenced = roundtrip(sequenced);
@@ -3350,13 +3344,11 @@ mod ed_register_control_differential_tests {
                         "architectural mismatch for ED {opcode:02X}, A={accumulator:02X}, IFF2={iff2}"
                     );
                     assert_eq!(
-                        sequenced_bus.reads,
-                        atomic_bus.reads,
+                        sequenced_bus.reads, atomic_bus.reads,
                         "read trace mismatch for ED {opcode:02X}"
                     );
                     assert_eq!(
-                        sequenced_bus.writes,
-                        atomic_bus.writes,
+                        sequenced_bus.writes, atomic_bus.writes,
                         "write trace mismatch for ED {opcode:02X}"
                     );
                     assert_eq!(sequenced.pending_request(), None);
@@ -3383,11 +3375,7 @@ mod ed_register_control_differential_tests {
         ));
         cpu.insert_wait_tstates(3).unwrap();
         assert_eq!(
-            read_request(
-                &mut cpu,
-                &mut bus,
-                Z80MicroStep::BusRequest(second),
-            ),
+            read_request(&mut cpu, &mut bus, Z80MicroStep::BusRequest(second),),
             Z80MicroStep::InternalCycle { tstates: 1 }
         );
         assert_eq!(cpu.export_state().instruction_tstates, 13);
