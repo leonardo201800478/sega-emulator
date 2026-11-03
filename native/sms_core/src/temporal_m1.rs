@@ -114,7 +114,7 @@ impl SmsTemporalM1 {
     /// Apply a dispatched M1 boundary and sample WAIT at the modeled edge.
     ///
     /// The owning machine event loop must dispatch the scheduler first and pass
-    /// the resulting event payload here. WAIT is meaningful only at T2/Tw,
+    /// the resulting event payload and timestamp here. WAIT is meaningful only at T2/Tw,
     /// according to the underlying M1 pin model.
     pub fn complete_tstate(
         &mut self,
@@ -192,7 +192,7 @@ mod tests {
     ) -> Z80M1Phase {
         m1.schedule_next_tstate(coordinator).unwrap();
         let dispatch = coordinator.dispatch_next().unwrap().unwrap();
-        m1.complete_tstate(dispatch.event.payload, wait_asserted)
+        m1.complete_tstate(dispatch.event.payload, dispatch.event.timestamp, wait_asserted)
             .unwrap()
     }
 
@@ -277,6 +277,14 @@ mod tests {
             Err(SmsTemporalM1Error::EventMismatch)
         );
         assert_eq!(m1.phase(), Z80M1Phase::T1);
+        assert_eq!(
+            m1.complete_tstate(
+                SmsTemporalEvent::M1TStateComplete { continuation_id: 0 },
+                MachineTime::from_ticks(2),
+                false
+            ),
+            Err(SmsTemporalM1Error::EventMismatch)
+        );
         assert_eq!(
             timeline.dispatch_next().unwrap().unwrap().event.payload,
             SmsTemporalEvent::M1TStateComplete { continuation_id: 0 }
