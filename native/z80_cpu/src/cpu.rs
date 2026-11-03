@@ -497,11 +497,13 @@ impl Z80 {
                 let port_low = self.fetch8(bus);
                 let port = (u16::from(self.registers.a) << 8) | u16::from(port_low);
                 bus.write_port(port, self.registers.a);
+                self.wz = (port & 0xFF00) | (port.wrapping_add(1) & 0x00FF);
                 11
             }
             0xDB => {
                 let port_low = self.fetch8(bus);
                 let port = (u16::from(self.registers.a) << 8) | u16::from(port_low);
+                self.wz = port.wrapping_add(1);
                 self.registers.a = bus.read_port(port);
                 11
             }
