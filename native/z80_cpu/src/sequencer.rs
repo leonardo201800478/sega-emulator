@@ -4425,6 +4425,18 @@ mod indirect_bc_de_differential_tests {
     use crate::bus::CpuBus;
     use crate::{Z80, Z80ArchitecturalState, Z80BusOperation, Z80Registers};
 
+    struct NormalFlagsVector {
+        opcode: u8,
+        b: u8,
+        c: u8,
+        hl: u16,
+        value: u8,
+        port: u16,
+        next_hl: u16,
+        wz: u16,
+        flags: u8,
+    }
+
     #[derive(Clone)]
     struct TestBus {
         memory: Box<[u8; 0x10000]>,
@@ -6832,14 +6844,64 @@ mod ed_block_io_differential_tests {
 
     #[test]
     fn block_io_normal_flags_ports_and_wz_match_documented_edge_vectors() {
-        let cases: [(u8, u8, u8, u16, u8, u16, u16, u16, u8); 4] = [
-            (0xA2, 0x01, 0xFF, 0x12FF, 0x80, 0x01FF, 0x1300, 0x0200, 0x46),
-            (0xAA, 0x01, 0x00, 0x1200, 0x01, 0x0100, 0x11FF, 0x00FF, 0x55),
-            (0xA3, 0x01, 0xFE, 0x12FF, 0x80, 0x00FE, 0x1300, 0x00FF, 0x46),
-            (0xAB, 0x01, 0x01, 0x1200, 0xFF, 0x0001, 0x11FF, 0x0000, 0x57),
+        let cases = [
+            NormalFlagsVector {
+                opcode: 0xA2,
+                b: 0x01,
+                c: 0xFF,
+                hl: 0x12FF,
+                value: 0x80,
+                port: 0x01FF,
+                next_hl: 0x1300,
+                wz: 0x0200,
+                flags: 0x46,
+            },
+            NormalFlagsVector {
+                opcode: 0xAA,
+                b: 0x01,
+                c: 0x00,
+                hl: 0x1200,
+                value: 0x01,
+                port: 0x0100,
+                next_hl: 0x11FF,
+                wz: 0x00FF,
+                flags: 0x55,
+            },
+            NormalFlagsVector {
+                opcode: 0xA3,
+                b: 0x01,
+                c: 0xFE,
+                hl: 0x12FF,
+                value: 0x80,
+                port: 0x00FE,
+                next_hl: 0x1300,
+                wz: 0x00FF,
+                flags: 0x46,
+            },
+            NormalFlagsVector {
+                opcode: 0xAB,
+                b: 0x01,
+                c: 0x01,
+                hl: 0x1200,
+                value: 0xFF,
+                port: 0x0001,
+                next_hl: 0x11FF,
+                wz: 0x0000,
+                flags: 0x57,
+            },
         ];
 
-        for (opcode, b, c, hl, value, port, next_hl, wz, flags) in cases {
+        for NormalFlagsVector {
+            opcode,
+            b,
+            c,
+            hl,
+            value,
+            port,
+            next_hl,
+            wz,
+            flags,
+        } in cases {
             let state = state_with_registers(
                 Z80Registers {
                     a: 0x5A,
