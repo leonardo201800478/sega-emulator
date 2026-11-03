@@ -353,6 +353,48 @@ mod tests {
     }
 
     #[test]
+    fn loads_and_saves_sram_through_the_mapper_memory_image() {
+        use crate::{CartridgeImage, SmsMemory};
+
+        let path = temporary_file();
+        cleanup(&path);
+        let store = SmsCartridgeRamFile::new(&path);
+        let rom = CartridgeImage::new(vec![0; 0x4000]).unwrap();
+        let mut memory =
+            SmsMemory::with_cartridge_ram(rom.clone(), vec![0; 0x2000]).unwrap();
+
+        assert!(!store.load_into(&mut memory).unwrap());
+        memory.cartridge_ram_mut().unwrap()[0x123] = 0xA5;
+        store.save_from_memory(&memory).unwrap();
+
+        let mut restored =
+            SmsMemory::with_cartridge_ram(rom, vec![0; 0x2000]).unwrap();
+        assert!(store.load_into(&mut restored).unwrap());
+        assert_eq!(restored.cartridge_ram().unwrap()[0x123], 0xA5);
+        cleanup(&path);
+    }
+
+    #[test]
+    fn refuses_to_load_or_save_when_cartridge_has_no_sram() {
+        use crate::{CartridgeImage, SmsMemory};
+
+        let path = temporary_file();
+        cleanup(&path);
+        let store = SmsCartridgeRamFile::new(&path);
+        let mut memory = SmsMemory::new(CartridgeImage::new(vec![0; 0x4000]).unwrap()).unwrap();
+
+        assert!(matches!(
+            store.load_into(&mut memory),
+            Err(SmsCartridgeRamFileError::NoCartridgeRam)
+        ));
+        assert!(matches!(
+            store.save_from_memory(&memory),
+            Err(SmsCartridgeRamFileError::NoCartridgeRam)
+        ));
+        cleanup(&path);
+    }
+
+    #[test]
     fn derives_srm_as_a_sibling_of_the_rom() {
         let store = SmsCartridgeRamFile::for_rom_path("roms/sonic.sms");
         assert_eq!(store.path(), std::path::Path::new("roms/sonic.srm"));
