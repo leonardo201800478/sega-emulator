@@ -2,8 +2,8 @@
 
 **Status:** Rota oficial de implementação progressiva.  
 **Estratégia de Engenharia (MÓDULOS COMPARTILHADOS):** Toda e qualquer integração deve ser realizada exclusivamente nos **módulos e crates compartilhados** do workspace Rust (`sega-core`, `sega-cpus`, `sega-video`, `sega-audio`, `sega-scheduler`, `sega-hosts`). É estritamente proibido criar implementações individuais, duplicadas ou isoladas por console. Cada nova plataforma adicionada deve reaproveitar, estender ou parametrizar os componentes centrais existentes.  
-**Baseline de Entrada:** SHA `5b61b918055613902a70d60a2fdf645bb543f807` (`main`, após PR #470).  
-**Candidato Z80 ativo:** PR #471 / E4A, SHA `88b3c6fa7812c577a0c91693cebbe21e75b2c2c7` (não integrado).
+**Baseline de Entrada:** SHA `e9a3eff6c3733b4f11443954a647471c9d3908ff` (`main`, após PR #471 / E4A).  
+**Candidato Z80 ativo:** PR #472 / E4B, SHA `245d42eb0337d41295329155de8e151feceb9022` (não integrado).
 
 ---
 
@@ -48,14 +48,16 @@ Esta sub-rota evolui o mesmo microsequenciador em `sega-cpus`; não cria impleme
 
 - [x] **E3A1:** operações 16-bit IX/IY integradas na main.
 - [x] **E3A2:** LD absoluto, PUSH/POP e EX (SP),IX/IY integrados na main pela PR #470.
-- [x] **E4A (candidato PR #471):** LD r,(IX/IY+d), LD (IX/IY+d),r e LD (IX/IY+d),n; displacement assinado, wrap de 16 bits, exceção H/L, WAIT, snapshot/restore e prefixos DD/FD repetidos/alternados.
-- [x] **CI do candidato E4A:** run 41734982519 — Rust, Python, Scheduler stress short e Windows x64 — 4/4 PASS. E4A permanece candidata até merge.
-- [ ] **E4B:** ALU A,(IX/IY+d), com validação de todas as flags.
+- [x] **E4A (PR #471 integrada na main):** LD r,(IX/IY+d), LD (IX/IY+d),r e LD (IX/IY+d),n; displacement assinado, wrap de 16 bits, exceção H/L, WAIT, snapshot/restore e prefixos DD/FD repetidos/alternados.
+- [x] **CI do candidato E4A:** run 41734982519 — Rust, Python, Scheduler stress short e Windows x64 — 4/4 PASS.
+- [x] **E4B (candidato PR #472):** ADD, ADC, SUB, SBC, AND, XOR, OR e CP (IX/IY+d), ALU compartilhada, flags S/Z/H/PV/N/C e X/Y, CP preserva A e copia X/Y do operando, WAIT, snapshot/restore e last-prefix-wins.
+- [x] **CI do candidato E4B:** run 41738004725 — Rust, Python, Scheduler stress short e Windows x64 — 4/4 PASS.
+- [ ] **E4C:** INC/DEC (IX/IY+d), com read-modify-write e validação de flags.
 - [ ] **E4C:** INC/DEC (IX/IY+d), com read-modify-write e flags.
 - [ ] **E5:** DDCB/FDCB.
 - [ ] **E6–E9:** prefixos ignorados, fechamento semântico, ZEXDOC/ZEXALL e integração temporal.
 
-**Estado:** E4A IMPLEMENTED / SHORT_PASS no SHA candidato. E4 permanece aberta até E4B/E4C. Não declarar LONG_PASS ou TEMPORAL_PASS.
+**Estado:** E4A integrada na main e E4B IMPLEMENTED / SHORT_PASS no SHA candidato. E4 permanece aberta até E4C. Não declarar LONG_PASS ou TEMPORAL_PASS.
 
 **Critério de Conclusão da Sprint SMS:** Boot e gameplay funcional de SMS via módulos compartilhados, em *host-null* e janela Rust nativa sem dependência de Python.
 

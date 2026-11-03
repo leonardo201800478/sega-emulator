@@ -2,8 +2,8 @@
 
 **Status:** Única rota normativamente ativa de implementação e arquitetura do projeto.  
 **Diretriz de Engenharia:** Arquitetura 100% modular sobre crates compartilhados Rust (`sega-core`, `sega-cpus`, `sega-video`, `sega-audio`, `sega-scheduler`, `sega-hosts`, `sega-media`, `sega-pyo3`). Proibida a criação de lógicas de hardware isoladas ou duplicadas por console.  
-**Baseline Auditada:** `main` em `5b61b918055613902a70d60a2fdf645bb543f807` (2026-11-03, PR #470 / E3A2 integrada).  
-**Candidato em validação:** PR #471 / E4A, SHA `88b3c6fa7812c577a0c91693cebbe21e75b2c2c7` (ainda não integrado).  
+**Baseline Auditada:** `main` em `e9a3eff6c3733b4f11443954a647471c9d3908ff` (2026-11-03, PR #471 / E4A integrada).  
+**Candidato em validação:** PR #472 / E4B, SHA `245d42eb0337d41295329155de8e151feceb9022` (ainda não integrado).  
 **Runtime & Host Target:** 100% Rust para hardware, tempo, barramento, render DirectX 12, áudio WASAPI/XAudio2 + DSP e input SDL3. Python/Qt (PySide6) atua estritamente como launcher, biblioteca, preferências e telemetria.
 
 ---
@@ -81,13 +81,14 @@ A CPU Z80 permanece única em `sega-cpus` e compartilhada por SMS, SG-1000, Game
 | E1–E2 | Matriz semântica e FSM DD/FD, last-prefix-wins, snapshots | Integradas anteriormente |
 | E3A1 | Operações 16-bit IX/IY | Integrada na main |
 | E3A2 | Transferências absolutas, PUSH/POP e EX (SP),IX/IY | Integrada na main pela PR #470 |
-| E4A | LD r,(IX/IY+d), LD (IX/IY+d),r e LD (IX/IY+d),n | IMPLEMENTED / SHORT_PASS no candidato PR #471; CI run 41734982519, 4/4 PASS |
-| E4B | ALU A,(IX/IY+d) | Pendente |
+| E4A | LD r,(IX/IY+d), LD (IX/IY+d),r e LD (IX/IY+d),n | IMPLEMENTED / SHORT_PASS; integrada na main pela PR #471 (`e9a3eff6`) |
+| E4B | ADD/ADC/SUB/SBC/AND/XOR/OR/CP (IX/IY+d) | IMPLEMENTED / SHORT_PASS no candidato PR #472; CI run 41738004725, 4/4 PASS |
+
 | E4C | INC/DEC (IX/IY+d) | Pendente |
 | E5 | DDCB/FDCB | Pendente |
 | E6–E9 | Prefixos ignorados, fechamento semântico, validação formal e integração temporal | Pendente |
 
-**Limite de aceitação:** E4 não está concluída enquanto E4B e E4C não passarem. E4A não recebeu LONG_PASS nem TEMPORAL_PASS; a validação formal ZEXDOC/ZEXALL e a integração temporal sistêmica do Z80 continuam pendentes.
+**Limite de aceitação:** E4 não está concluída enquanto E4C não passar. E4A e E4B receberam QUICK_PASS/SHORT_PASS nos seus escopos, mas não LONG_PASS nem TEMPORAL_PASS; a validação formal ZEXDOC/ZEXALL e a integração temporal sistêmica do Z80 continuam pendentes.
 
 ### FASE P2 — SG-1000 (I & II) — *Reaproveitamento Integrado*
 **Foco:** Ativação do SG-1000 utilizando os mesmos crates de CPU Z80 (`sega-cpus`), PSG (`sega-audio`), Scheduler (`sega-scheduler`) e Hosts (`sega-hosts`).

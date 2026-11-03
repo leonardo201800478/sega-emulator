@@ -5,10 +5,11 @@
 **Baseline inicial E0:** `e4604f3152c09e8d16c37f94f94a4b344db33b62`  
 **Baseline após E1 / PR #467:** `aa4a4fa7661c28d3b2e21ac6d6eb4379fd297f65`  
 **Baseline após E2 / PR #468:** `abd154332b1dabfb68874f2b80f306da7e060552`  
-**Baseline atual da main após PR #470 / E3A2:** `5b61b918055613902a70d60a2fdf645bb543f807`  
-**Candidato E4A / PR #471:** `88b3c6fa7812c577a0c91693cebbe21e75b2c2c7`  
+**Baseline atual da main após PR #471 / E4A:** `e9a3eff6c3733b4f11443954a647471c9d3908ff`  
+**Candidato E4B / PR #472:** `245d42eb0337d41295329155de8e151feceb9022`  
 **PR de referência histórica:** [#447](https://github.com/leonardo201800478/sega-emulator/pull/447) — manter aberta, sem merge  
-**PR ativa E4A:** [#471](https://github.com/leonardo201800478/sega-emulator/pull/471)  
+**PR integrada E4A:** [#471](https://github.com/leonardo201800478/sega-emulator/pull/471)  
+**PR ativa E4B:** [#472](https://github.com/leonardo201800478/sega-emulator/pull/472)  
 **Escopo:** microsequenciador Z80 compartilhado; não confundir conclusão do núcleo com integração temporal completa ao SMS.
 
 ---
@@ -38,7 +39,8 @@ Ordem de execução:
 | SHA da main após E2 (#468) | `abd154332b1dabfb68874f2b80f306da7e060552` |
 | SHA da main após E3A1 (#469) | `ee9d39fc017b53493cc48d1343a7ca4b77581d3b` |
 | SHA da main após E3A2 (#470) | `5b61b918055613902a70d60a2fdf645bb543f807` |
-| Candidato E4A / PR #471 | `88b3c6fa7812c577a0c91693cebbe21e75b2c2c7` |
+| SHA da main após E4A (#471) | `e9a3eff6c3733b4f11443954a647471c9d3908ff` |
+| Candidato E4B / PR #472 | `245d42eb0337d41295329155de8e151feceb9022` |
 | Schema inicial E0 | `Z80_MICRO_SEQUENCER_STATE_VERSION = 25` |
 | Schema após E2 | `Z80_MICRO_SEQUENCER_STATE_VERSION = 26` |
 | Schema atual no candidato E4A | `Z80_MICRO_SEQUENCER_STATE_VERSION = 27` |
@@ -183,7 +185,7 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 
 **Gate E2:** PASS para FSM, seleção de prefixo, classificação e snapshot. CI completo do SHA candidato: [run 41721337030](https://github.com/leonardo201800478/sega-emulator/actions/runs/41721337030). Isso não declara FUNCTIONAL_PASS das instruções DD/FD nem TEMPORAL_PASS.
 
-**Limites mantidos após E2:** famílias indexadas restantes, prefixos ignorados, DDCB/FDCB, traces por T-state e integração temporal permaneceram nas etapas E4-E9. E4A agora implementa apenas LD indexado com displacement; E4B/E4C e E5-E9 continuam pendentes.
+**Limites mantidos após E2:** famílias indexadas restantes, prefixos ignorados, DDCB/FDCB, traces por T-state e integração temporal permanecem nas etapas E4-E9. E4A (LD) foi integrada e E4B (ALU indexada) está IMPLEMENTED/SHORT_PASS na PR #472; E4C e E5-E9 continuam pendentes.
 
 ### E3 — Operações 16-bit e substituição HL→IX/IY
 
@@ -214,7 +216,7 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 
 ### E4 — Instruções indexadas com displacement
 
-**E4A — LD indexado/displacement implementado no candidato PR #471:**
+**E4A — LD indexado/displacement implementado e integrado na main pela PR #471 (`e9a3eff6`):**
 - [x] `LD r,(IX+d)` / `LD r,(IY+d)`.
 - [x] `LD (IX+d),r` / `LD (IY+d),r`.
 - [x] `LD (IX+d),n` / `LD (IY+d),n`.
@@ -227,9 +229,16 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 
 **Estado E4A:** IMPLEMENTED / QUICK_PASS / SHORT_PASS para o escopo de LD indexado no microsequenciador. Não declarar LONG_PASS, diferencial externo, ZEXDOC/ZEXALL ou TEMPORAL_PASS.
 
-**E4B — ALU A,(IX/IY+d), pendente:**
-- [ ] ADD, ADC, SUB, SBC, AND, XOR, OR e CP.
-- [ ] Flags S/Z/H/PV/N/C e X/Y; WAIT, WZ, snapshot e commit.
+**E4B — ALU A,(IX/IY+d), implementado no candidato PR #472:**
+- [x] ADD, ADC, SUB, SBC, AND, XOR, OR e CP.
+- [x] Flags S/Z/H/PV/N/C e X/Y; vetores fixos para overflow, half-carry/borrow, carry/borrow-in, paridade e X/Y.
+- [x] CP preserva A e copia X/Y do operando; as demais operações usam a semântica da ALU compartilhada.
+- [x] Reutiliza `MemoryReadAlu`, sem duplicar aritmética ou flags.
+- [x] WAIT em prefix M1, opcode M1, displacement e leitura efetiva; snapshot/restore nos safe points, inclusive displacement pendente.
+- [x] IX/IY, prefixos DD/FD repetidos/alternados e last-prefix-wins.
+- [x] CI completo no candidato E4B: [run 41738004725](https://github.com/leonardo201800478/sega-emulator/actions/runs/41738004725), 4/4 jobs PASS.
+
+**Estado E4B:** IMPLEMENTED / QUICK_PASS / SHORT_PASS para as oito operações ALU indexadas. Não declarar LONG_PASS, diferencial externo, ZEXDOC/ZEXALL ou TEMPORAL_PASS.
 
 **E4C — INC/DEC (IX/IY+d), pendente:**
 - [ ] INC e DEC com leitura, ciclo interno e escrita.
@@ -309,6 +318,6 @@ Além disso, Scheduler deterministic stress e Windows x64 D3D12/WASAPI/XAudio2 q
 
 ## 8. Próxima ação
 
-Prosseguir para E4B: ALU A,(IX/IY+d), preservando as fases E4A já integradas no candidato e o contrato de WAIT/snapshot. Depois concluir E4C (INC/DEC indexed memory), antes de avançar para E5 DDCB/FDCB.
+Prosseguir para E4C: INC/DEC (IX/IY+d), com leitura, ciclo interno e escrita; validar flags S/Z/H/PV/N, C preservado, WAIT e snapshots em cada safe point. Depois avançar para E5 DDCB/FDCB.
 
-**Estado atual DD/FD:** E2 FSM/snapshot SHORT_PASS; E3A1/E3A2 integradas na main; E4A IMPLEMENTED/SHORT_PASS no candidato PR #471 com CI 4/4 PASS (run `41734982519`). E4B/E4C, E5 DDCB/FDCB, E6 fallback, E7 fechamento semântico, E8 formal e E9 integração temporal permanecem pendentes. Não há LONG_PASS nem TEMPORAL_PASS global.
+**Estado atual DD/FD:** E2 FSM/snapshot SHORT_PASS; E3A1/E3A2 e E4A integradas na main (`e9a3eff6`); E4B IMPLEMENTED/SHORT_PASS no candidato PR #472 com CI 4/4 PASS (run `41738004725`). E4C, E5 DDCB/FDCB, E6 fallback, E7 fechamento semântico, E8 formal e E9 integração temporal permanecem pendentes. Não há LONG_PASS nem TEMPORAL_PASS global.
