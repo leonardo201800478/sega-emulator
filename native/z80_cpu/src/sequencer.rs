@@ -1960,6 +1960,73 @@ mod tests {
     }
 
     #[test]
+    fn scf_ccf_use_q_latch_and_preserve_previous_flag_write_across_snapshot() {
+        fn execute(cpu: &mut Z80MicroSequencer, opcode: u8) {
+            let fetch = request(cpu.begin_instruction().unwrap());
+            retired(
+                cpu.complete_bus_cycle(fetch.id, Some(opcode)).unwrap(),
+                opcode,
+                4,
+            );
+        }
+
+        let mut cpu = Z80MicroSequencer {
+            registers: Z80Registers {
+                a: 0x00,
+                b: 0x28,
+                ..Z80Registers::default()
+            },
+            ..Z80MicroSequencer::default()
+        };
+
+        // CP B writes undocumented X/Y from B, while A remains zero.
+        execute(&mut cpu, 0xB8);
+        assert_eq!(cpu.registers.f, 0xBB);
+        assert_eq!(cpu.q, 0xBB);
+
+        // The next instruction boundary moves Q to Q-previous and clears Q.
+        let fetch = request(cpu.begin_instruction().unwrap());
+        assert_eq!(cpu.q_previous, 0xBB);
+        assert_eq!(cpu.q, 0x00);
+
+        // Both Q values must survive a pending M1 snapshot/restore.
+        let encoded = cpu.export_state().encode().unwrap();
+        let decoded = crate::Z80MicroSequencerState::decode(&encoded).unwrap();
+        let mut restored = Z80MicroSequencer::restore_state(decoded).unwrap();
+        retired(
+            restored.complete_bus_cycle(fetch.id, Some(0x37)).unwrap(),
+            0x37,
+            4,
+        );
+        assert_eq!(restored.registers.f, 0x81);
+        assert_eq!(restored.q, 0x81);
+        assert_eq!(restored.q_previous, 0xBB);
+
+        // CCF consumes the current carry, clears it, and sets H.
+        execute(&mut restored, 0x3F);
+        assert_eq!(restored.registers.f, 0x90);
+        assert_eq!(restored.q, 0x90);
+    }
+
+    #[test]
+    fn scf_after_non_flag_instruction_uses_retained_f_for_xy() {
+        let mut cpu = Z80MicroSequencer {
+            registers: Z80Registers {
+                f: FLAG_XY,
+                ..Z80Registers::default()
+            },
+            ..Z80MicroSequencer::default()
+        };
+        let nop = request(cpu.begin_instruction().unwrap());
+        retired(cpu.complete_bus_cycle(nop.id, Some(0x00)).unwrap(), 0x00, 4);
+        assert_eq!(cpu.q, 0);
+
+        let scf = request(cpu.begin_instruction().unwrap());
+        retired(cpu.complete_bus_cycle(scf.id, Some(0x37)).unwrap(), 0x37, 4);
+        assert_eq!(cpu.registers.f, FLAG_XY | FLAG_C);
+    }
+
+    #[test]
     fn accumulator_rotate_daa_and_cpl_retire_after_m1_without_extra_bus_cycles() {
         for opcode in [0x07, 0x0F, 0x17, 0x1F, 0x27, 0x2F] {
             let mut cpu = Z80MicroSequencer::default();
