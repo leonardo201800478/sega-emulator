@@ -720,13 +720,77 @@ mod tests {
     #[test]
     fn alu_register_operations_match_fixed_result_and_flag_vectors() {
         let cases = [
-            (0x80, Z80Registers { a: 0x7F, b: 0x01, ..Z80Registers::default() }, 0x80, 0x94),
-            (0x89, Z80Registers { a: 0x7F, c: 0x00, f: FLAG_C, ..Z80Registers::default() }, 0x80, 0x94),
-            (0x92, Z80Registers { a: 0x00, d: 0x01, ..Z80Registers::default() }, 0xFF, 0xBB),
-            (0x9B, Z80Registers { a: 0x80, e: 0x00, f: FLAG_C, ..Z80Registers::default() }, 0x7F, 0x3E),
-            (0xA4, Z80Registers { a: 0xF0, h: 0x0F, ..Z80Registers::default() }, 0x00, 0x54),
-            (0xAD, Z80Registers { a: 0xAA, l: 0xAA, ..Z80Registers::default() }, 0x00, 0x44),
-            (0xB7, Z80Registers { a: 0x80, ..Z80Registers::default() }, 0x80, 0x80),
+            (
+                0x80,
+                Z80Registers {
+                    a: 0x7F,
+                    b: 0x01,
+                    ..Z80Registers::default()
+                },
+                0x80,
+                0x94,
+            ),
+            (
+                0x89,
+                Z80Registers {
+                    a: 0x7F,
+                    c: 0x00,
+                    f: FLAG_C,
+                    ..Z80Registers::default()
+                },
+                0x80,
+                0x94,
+            ),
+            (
+                0x92,
+                Z80Registers {
+                    a: 0x00,
+                    d: 0x01,
+                    ..Z80Registers::default()
+                },
+                0xFF,
+                0xBB,
+            ),
+            (
+                0x9B,
+                Z80Registers {
+                    a: 0x80,
+                    e: 0x00,
+                    f: FLAG_C,
+                    ..Z80Registers::default()
+                },
+                0x7F,
+                0x3E,
+            ),
+            (
+                0xA4,
+                Z80Registers {
+                    a: 0xF0,
+                    h: 0x0F,
+                    ..Z80Registers::default()
+                },
+                0x00,
+                0x54,
+            ),
+            (
+                0xAD,
+                Z80Registers {
+                    a: 0xAA,
+                    l: 0xAA,
+                    ..Z80Registers::default()
+                },
+                0x00,
+                0x44,
+            ),
+            (
+                0xB7,
+                Z80Registers {
+                    a: 0x80,
+                    ..Z80Registers::default()
+                },
+                0x80,
+                0x80,
+            ),
         ];
 
         for (opcode, registers, expected_a, expected_f) in cases {
@@ -765,7 +829,11 @@ mod tests {
                     ..Z80Registers::default()
                 },
             );
-            assert_eq!(cpu.registers.a, 0x10_u8.wrapping_add(value), "source {source}");
+            assert_eq!(
+                cpu.registers.a,
+                0x10_u8.wrapping_add(value),
+                "source {source}"
+            );
         }
     }
 
