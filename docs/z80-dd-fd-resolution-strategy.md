@@ -4,7 +4,8 @@
 **Data da auditoria:** 2026-11-03  
 **Baseline inicial E0:** `e4604f3152c09e8d16c37f94f94a4b344db33b62`  
 **Baseline após E1 / PR #467:** `aa4a4fa7661c28d3b2e21ac6d6eb4379fd297f65`  
-**Baseline atual após E2 / PR #468:** `abd154332b1dabfb68874f2b80f306da7e060552`  
+**Baseline após E2 / PR #468:** `abd154332b1dabfb68874f2b80f306da7e060552`  
+**Baseline atual após E3A1 / PR #469:** `ee9d39fc017b53493cc48d1343a7ca4b77581d3b`  
 **PR de referência:** [#447](https://github.com/leonardo201800478/sega-emulator/pull/447) — manter aberta, sem merge  
 **Escopo:** microsequenciador Z80 compartilhado; não confundir conclusão do núcleo com integração temporal completa ao SMS.
 
@@ -33,6 +34,7 @@ Ordem de execução:
 | SHA da main na auditoria inicial | `e4604f3152c09e8d16c37f94f94a4b344db33b62` |
 | SHA da main após E1 (#467) | `aa4a4fa7661c28d3b2e21ac6d6eb4379fd297f65` |
 | SHA da main após E2 (#468) | `abd154332b1dabfb68874f2b80f306da7e060552` |
+| SHA da main após E3A1 (#469) | `ee9d39fc017b53493cc48d1343a7ca4b77581d3b` |
 | Schema inicial E0 | `Z80_MICRO_SEQUENCER_STATE_VERSION = 25` |
 | Schema atual após E2 | `Z80_MICRO_SEQUENCER_STATE_VERSION = 26` |
 | Codec | `native/z80_cpu/src/snapshot.rs`; não é save state integral da máquina SMS |
@@ -180,9 +182,20 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 
 ### E3 — Operações 16-bit e substituição HL→IX/IY
 
-Implementar em fatias: LD IX/IY,nn; INC/DEC IX/IY; ADD IX/IY,BC/DE/IX|IY/SP; LD (nn),IX/IY e LD IX/IY,(nn); PUSH/POP IX/IY; EX (SP),IX/IY; JP (IX/IY); LD SP,IX/IY.
+**E3A1 — implementado e validado:**
+- [x] LD IX/IY,nn.
+- [x] INC/DEC IX/IY.
+- [x] ADD IX/IY,BC/DE/IX|IY/SP.
+- [x] JP (IX/IY) e LD SP,IX/IY.
+- [x] Preservação do latch DD/FD em operand fetches e ciclos internos.
+- [x] M-cycle index acumulado pelos prefixos repetidos/alternados.
+- [x] WAIT em leituras imediatas e snapshot/restore nas fases de operandos e ciclos internos.
+- [x] 10 testes direcionados E3A1; flags, WZ, wrap e tempos nominais cobertos.
+- [x] CI completo no SHA candidato: [run 41723613218](https://github.com/leonardo201800478/sega-emulator/actions/runs/41723613218).
 
-**Gate E3:** estado, PC, flags, WZ, bytes consumidos, escritas, T-states e WAIT comparados por opcode/prefixo; commit semântico no T-state correto.
+**E3A2 — pendente:** LD (nn),IX/IY; LD IX/IY,(nn); PUSH/POP IX/IY; EX (SP),IX/IY.
+
+**Gate E3:** E3A1 QUICK_PASS/SHORT_PASS; E3 integral ainda não concluído. Não declara oráculo independente nem TEMPORAL_PASS; os traces por T-state e commit semântico temporal continuam pendentes.
 
 ### E4 — Prefixos não afetados
 
@@ -250,6 +263,6 @@ Além disso, Scheduler deterministic stress e Windows x64 D3D12/WASAPI/XAudio2 q
 
 ## 8. Próxima ação
 
-Prosseguir para E3 em fatias pequenas: LD IX/IY,nn; INC/DEC IX/IY; ADD IX/IY,rr; transferências de/para memória absoluta; PUSH/POP; EX (SP),IX/IY; JP (IX/IY); LD SP,IX/IY. Preservar a FSM E2 e acrescentar fases retomáveis, snapshot e testes por família.
+Prosseguir para E3A2: transferências de/para memória absoluta, PUSH/POP IX/IY e EX (SP),IX/IY. Preservar a FSM E2 e os contratos de barramento; acrescentar fases retomáveis, snapshot, WAIT e testes por família.
 
-**Estado atual DD/FD:** E2 implementada com QUICK_PASS/SHORT_PASS na dimensão de FSM e snapshot; instruções indexadas ainda não implementadas no microsequenciador; DDCB/FDCB apenas classificados, sem displacement/subopcode; sem LONG_PASS ou TEMPORAL_PASS global.
+**Estado atual DD/FD:** E2 aprovada na dimensão de FSM/snapshot; E3A1 implementada e QUICK_PASS/SHORT_PASS; E3A2, E4-E9 pendentes. DDCB/FDCB ainda sem displacement/subopcode no microsequenciador; sem LONG_PASS ou TEMPORAL_PASS global.
