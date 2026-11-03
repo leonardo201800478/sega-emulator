@@ -3196,7 +3196,14 @@ mod tests {
             );
             assert_eq!(cpu.registers.f, old_flags);
 
-            let mut restored = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+            let state = cpu.export_state();
+            assert_eq!(state.active_index, Some(Z80IndexRegister::from_prefix(prefix).unwrap()));
+            assert_eq!(state.opcode, Some(opcode));
+            assert_eq!(state.mcycle_index, 2);
+            assert_eq!(state.tstate_index, 0);
+            assert_eq!(state.instruction_tstates, 8);
+            let mut restored = Z80MicroSequencer::restore_state(state.clone())
+                .unwrap_or_else(|error| panic!("restore failed: {error:?}; state={state:?}"));
             let bytes = restored.export_state().encode().unwrap();
             restored = Z80MicroSequencer::restore_state(
                 crate::Z80MicroSequencerState::decode(&bytes).unwrap(),
