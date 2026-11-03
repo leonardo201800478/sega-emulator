@@ -83,10 +83,7 @@ impl SmsCartridgeRamFile {
     }
 
     /// Load an existing image, returning None when no save file exists.
-    pub fn load(
-        &self,
-        expected_size: usize,
-    ) -> Result<Option<Vec<u8>>, SmsCartridgeRamFileError> {
+    pub fn load(&self, expected_size: usize) -> Result<Option<Vec<u8>>, SmsCartridgeRamFileError> {
         validate_size(expected_size)?;
         self.recover_backup_if_needed()?;
 
@@ -143,7 +140,11 @@ impl SmsCartridgeRamFile {
     /// CPU/bus hot path.
     pub fn save(&self, ram: &[u8]) -> Result<(), SmsCartridgeRamFileError> {
         validate_size(ram.len())?;
-        if let Some(parent) = self.path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        if let Some(parent) = self
+            .path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
             fs::create_dir_all(parent)?;
         }
 
@@ -191,7 +192,9 @@ impl SmsCartridgeRamFile {
     /// Restore a validated save image into the already configured mapper SRAM.
     /// Returns false when no save file exists; never silently replaces bad data.
     pub fn load_into(&self, memory: &mut SmsMemory) -> Result<bool, SmsCartridgeRamFileError> {
-        let ram = memory.cartridge_ram_mut().ok_or(SmsCartridgeRamFileError::NoCartridgeRam)?;
+        let ram = memory
+            .cartridge_ram_mut()
+            .ok_or(SmsCartridgeRamFileError::NoCartridgeRam)?;
         let Some(saved) = self.load(ram.len())? else {
             return Ok(false);
         };
@@ -207,7 +210,9 @@ impl SmsCartridgeRamFile {
 
     /// Persist the mapper's current SRAM image, rejecting cartridges without SRAM.
     pub fn save_from_memory(&self, memory: &SmsMemory) -> Result<(), SmsCartridgeRamFileError> {
-        let ram = memory.cartridge_ram().ok_or(SmsCartridgeRamFileError::NoCartridgeRam)?;
+        let ram = memory
+            .cartridge_ram()
+            .ok_or(SmsCartridgeRamFileError::NoCartridgeRam)?;
         self.save(ram)
     }
 
@@ -260,10 +265,7 @@ mod tests {
 
     fn temporary_file() -> PathBuf {
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-        std::env::temp_dir().join(format!(
-            "sega-sms-sram-{}-{id}.srm",
-            std::process::id()
-        ))
+        std::env::temp_dir().join(format!("sega-sms-sram-{}-{id}.srm", std::process::id()))
     }
 
     fn cleanup(path: &std::path::Path) {
@@ -296,7 +298,9 @@ mod tests {
             let path = temporary_file();
             cleanup(&path);
             let store = SmsCartridgeRamFile::new(&path);
-            let ram: Vec<u8> = (0..size).map(|index| (index as u8).wrapping_mul(17)).collect();
+            let ram: Vec<u8> = (0..size)
+                .map(|index| (index as u8).wrapping_mul(17))
+                .collect();
 
             store.save(&ram).unwrap();
 
@@ -360,15 +364,13 @@ mod tests {
         cleanup(&path);
         let store = SmsCartridgeRamFile::new(&path);
         let rom = CartridgeImage::new(vec![0; 0x4000]).unwrap();
-        let mut memory =
-            SmsMemory::with_cartridge_ram(rom.clone(), vec![0; 0x2000]).unwrap();
+        let mut memory = SmsMemory::with_cartridge_ram(rom.clone(), vec![0; 0x2000]).unwrap();
 
         assert!(!store.load_into(&mut memory).unwrap());
         memory.cartridge_ram_mut().unwrap()[0x123] = 0xA5;
         store.save_from_memory(&memory).unwrap();
 
-        let mut restored =
-            SmsMemory::with_cartridge_ram(rom, vec![0; 0x2000]).unwrap();
+        let mut restored = SmsMemory::with_cartridge_ram(rom, vec![0; 0x2000]).unwrap();
         assert!(store.load_into(&mut restored).unwrap());
         assert_eq!(restored.cartridge_ram().unwrap()[0x123], 0xA5);
         cleanup(&path);
