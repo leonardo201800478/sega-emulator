@@ -1582,7 +1582,6 @@ mod base_absolute_jump_snapshot_tests {
     }
 }
 
-
 #[cfg(test)]
 mod base_stack_snapshot_tests {
     use crate::{Z80MicroSequencer, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep};
@@ -1675,10 +1674,7 @@ mod base_stack_snapshot_tests {
         let _ = cpu.complete_bus_cycle(fetch.id, Some(0xC5)).unwrap();
 
         let mut invalid = cpu.export_state();
-        invalid.phase = Z80MicroSequencerPhase::BaseStackPushInternal {
-            high: 0,
-            low: 0,
-        };
+        invalid.phase = Z80MicroSequencerPhase::BaseStackPushInternal { high: 0, low: 0 };
         invalid.opcode = Some(0xC1);
         assert!(Z80MicroSequencer::restore_state(invalid).is_err());
 
