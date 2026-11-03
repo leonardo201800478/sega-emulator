@@ -600,7 +600,15 @@ impl SmsTemporalMachine {
         loop {
             step = match step {
                 Z80MicroStep::BusRequest(_) => {
-                    if self.bus.pending_request().is_none() {
+                    if self.m1.is_some() {
+                        if self
+                            .m1
+                            .as_ref()
+                            .is_some_and(|m1| m1.export_state().pending_continuation_id.is_none())
+                        {
+                            self.schedule_pending_bus(fixture_wait_tstates)?;
+                        }
+                    } else if self.bus.pending_request().is_none() {
                         self.schedule_pending_bus(fixture_wait_tstates)?;
                     }
                     self.dispatch_next()?
