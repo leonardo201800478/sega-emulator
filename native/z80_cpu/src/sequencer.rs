@@ -729,7 +729,7 @@ impl Z80MicroSequencer {
                 matches!(opcode, 0xA3 | 0xAB | 0xB3 | 0xBB)
                     && state.opcode == Some(opcode)
                     && port_address == state.registers.bc()
-                    && (*memory_address).wrapping_add_signed(direction) == state.registers.hl()
+                    && memory_address.wrapping_add_signed(direction) == state.registers.hl()
                     && state.wz == port_address.wrapping_add_signed(direction)
                     && pending.is_some_and(|request| {
                         request.operation == Z80BusOperation::PortWrite { value }
