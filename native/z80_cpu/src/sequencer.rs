@@ -7555,9 +7555,8 @@ mod base_16bit_register_differential_tests {
             atomic_bus.memory[usize::from(initial.registers.pc)] = opcode;
             let mut atomic = Z80::default();
             atomic.import_architectural_state(initial).unwrap();
-            let atomic_tstates = atomic.step(&mut atomic_bus).unwrap();
-
             let mut micro_bus = atomic_bus.clone();
+            let atomic_tstates = atomic.step(&mut atomic_bus).unwrap();
             let mut micro = Z80MicroSequencer::default();
             micro.import_architectural_state(initial).unwrap();
             let (micro_state, micro_tstates) = run_sequencer(micro, &mut micro_bus);
