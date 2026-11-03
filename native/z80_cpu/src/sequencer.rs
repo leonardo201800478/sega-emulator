@@ -994,7 +994,7 @@ impl Z80MicroSequencer {
             } => {
                 state.mcycle_index == 4
                     && state.tstate_index == u16::from(5_u8.saturating_sub(remaining_tstates))
-            },
+            }
             Z80MicroSequencerPhase::EdBlockTransferRead { .. } => {
                 state.mcycle_index == 2 && state.tstate_index == 0
             }
