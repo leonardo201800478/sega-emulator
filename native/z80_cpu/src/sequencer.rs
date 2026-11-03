@@ -3073,6 +3073,49 @@ impl Z80MicroSequencer {
                 self.registers.pc = self.registers.pc.wrapping_add(1);
                 self.issue_write(self.registers.hl(), value)
             }
+            Z80MicroSequencerPhase::IndexDisplacementRead => {
+                let displacement = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.registers.pc = self.registers.pc.wrapping_add(1);
+                let index_base = indexed_stack_pair(self.prefix_state, self.ix, self.iy)
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                let address = index_base.wrapping_add_signed(i16::from(displacement as i8));
+                self.wz = address;
+                if self.opcode == Some(0x36) {
+                    self.issue_read(
+                        Z80MicroSequencerPhase::IndexedImmediateReadMemoryWrite { address },
+                        self.registers.pc,
+                    )
+                } else {
+                    self.mcycle_index = self
+                        .mcycle_index
+                        .checked_add(1)
+                        .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                    self.tstate_index = 0;
+                    self.phase = Z80MicroSequencerPhase::IndexDisplacementInternal {
+                        address,
+                        remaining_tstates: 5,
+                    };
+                    Ok(Z80MicroStep::InternalCycle { tstates: 1 })
+                }
+            }
+            Z80MicroSequencerPhase::IndexedImmediateReadMemoryWrite { address } => {
+                let value = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.registers.pc = self.registers.pc.wrapping_add(1);
+                self.tstate_index = u16::try_from(waits)
+                    .ok()
+                    .and_then(|waits| 3_u16.checked_add(waits))
+                    .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                self.phase = Z80MicroSequencerPhase::IndexedImmediateStoreInternal {
+                    address,
+                    value,
+                    remaining_tstates: 2,
+                };
+                Ok(Z80MicroStep::InternalCycle { tstates: 1 })
+            }
             Z80MicroSequencerPhase::ImmediateReadAlu { operation } => {
                 let operand = response
                     .data
@@ -3510,7 +3553,9 @@ impl Z80MicroSequencer {
             | Z80MicroSequencerPhase::BaseControlPushInternal { .. }
             | Z80MicroSequencerPhase::BaseReturnConditionInternal { .. }
             | Z80MicroSequencerPhase::BaseExchangeStackInternal { .. }
-            | Z80MicroSequencerPhase::MemoryIncDecInternal { .. } => {
+            | Z80MicroSequencerPhase::MemoryIncDecInternal { .. }
+            | Z80MicroSequencerPhase::IndexDisplacementInternal { .. }
+            | Z80MicroSequencerPhase::IndexedImmediateStoreInternal { .. } => {
                 Err(Z80MicroSequencerError::UnexpectedCompletion)
             }
             Z80MicroSequencerPhase::MemoryWrite { address, .. } => {
