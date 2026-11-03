@@ -5,6 +5,7 @@
 
 use crate::SmsCoreError;
 use crate::bus::CpuBus;
+use crate::cartridge_ram_file::{SmsCartridgeRamFile, SmsCartridgeRamFileError};
 use crate::cartridge::CartridgeImage;
 use crate::config::{SmsMachineConfig, SpriteLimitMode};
 use crate::cpu::{CpuError, Z80};
@@ -332,6 +333,23 @@ impl SmsMachine {
 
     pub fn memory(&self) -> &SmsMemory {
         &self.memory
+    }
+
+    /// Load an existing .srm image into the configured cartridge SRAM.
+    /// Returns false when the save file does not exist yet.
+    pub fn load_cartridge_ram_file(
+        &mut self,
+        save_file: &SmsCartridgeRamFile,
+    ) -> Result<bool, SmsCartridgeRamFileError> {
+        save_file.load_into(&mut self.memory)
+    }
+
+    /// Persist the current cartridge SRAM at a host checkpoint or clean shutdown.
+    pub fn save_cartridge_ram_file(
+        &self,
+        save_file: &SmsCartridgeRamFile,
+    ) -> Result<(), SmsCartridgeRamFileError> {
+        save_file.save_from_memory(&self.memory)
     }
 
     pub fn io(&self) -> &SmsIo {
