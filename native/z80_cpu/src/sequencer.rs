@@ -10172,3 +10172,128 @@ mod base_immediate_io_differential_tests {
         compare_io(0xD3, 0x5A, 0x3F, 0x00);
     }
 }
+
+
+#[cfg(test)]
+mod base_halt_differential_tests {
+    use crate::bus::CpuBus;
+    use crate::{
+        Z80, Z80ArchitecturalState, Z80BusOperation, Z80MicroSequencer,
+        Z80MicroSequencerError, Z80MicroStep,
+    };
+
+    #[derive(Clone)]
+    struct TestBus {
+        memory: Box<[u8; 0x1_0000]>,
+    }
+
+    impl Default for TestBus {
+        fn default() -> Self {
+            Self {
+                memory: Box::new([0; 0x1_0000]),
+            }
+        }
+    }
+
+    impl CpuBus for TestBus {
+        fn read_memory(&mut self, address: u16) -> u8 {
+            self.memory[usize::from(address)]
+        }
+
+        fn write_memory(&mut self, address: u16, value: u8) {
+            self.memory[usize::from(address)] = value;
+        }
+    }
+
+    fn run_sequencer(
+        mut cpu: Z80MicroSequencer,
+        bus: &mut TestBus,
+    ) -> (Z80MicroSequencer, u32) {
+        let mut step = cpu.begin_instruction().unwrap();
+        for _ in 0..12 {
+            step = match step {
+                Z80MicroStep::BusRequest(request) => {
+                    cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+                    let data = match request.operation {
+                        Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
+                            Some(bus.read_memory(request.address))
+                        }
+                        Z80BusOperation::MemoryWrite { value } => {
+                            bus.write_memory(request.address, value);
+                            None
+                        }
+                        operation => panic!("unexpected HALT bus operation: {operation:?}"),
+                    };
+                    cpu.complete_bus_cycle(request.id, data).unwrap()
+                }
+                Z80MicroStep::InternalCycle { .. } => {
+                    cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+                    cpu.complete_internal_cycle().unwrap()
+                }
+                Z80MicroStep::InstructionRetired { tstates, .. } => return (cpu, tstates),
+            };
+        }
+        panic!("HALT cycle did not retire within 12 micro-operations");
+    }
+
+    #[test]
+    fn halt_instruction_and_repeated_halt_cycle_match_atomic_executor() {
+        let mut initial = Z80::default().export_architectural_state();
+        initial.registers.pc = 0x1000;
+        initial.registers.r = 0x7E;
+        let mut atomic_bus = TestBus::default();
+        atomic_bus.memory[0x1000] = 0x76;
+        atomic_bus.memory[0x1001] = 0x00;
+        let mut micro_bus = atomic_bus.clone();
+
+        let mut atomic = Z80::default();
+        atomic.import_architectural_state(initial).unwrap();
+        let mut micro = Z80MicroSequencer::default();
+        micro.import_architectural_state(initial).unwrap();
+
+        let (next_micro, first_tstates) = run_sequencer(micro, &mut micro_bus);
+        assert_eq!(first_tstates, 4);
+        assert_eq!(atomic.step(&mut atomic_bus), Ok(4));
+        assert!(next_micro.halted);
+        assert_eq!(next_micro.registers.pc, 0x1001);
+        assert_eq!(next_micro.r, 0x7F);
+        assert_eq!(
+            next_micro.export_architectural_state(),
+            atomic.export_architectural_state()
+        );
+
+        let (next_micro, halt_tstates) = run_sequencer(next_micro, &mut micro_bus);
+        assert_eq!(halt_tstates, 4);
+        assert_eq!(atomic.step(&mut atomic_bus), Ok(4));
+        assert!(next_micro.halted);
+        assert_eq!(next_micro.registers.pc, 0x1001);
+        assert_eq!(next_micro.r, 0x80);
+        assert_eq!(
+            next_micro.export_architectural_state(),
+            atomic.export_architectural_state()
+        );
+        assert_eq!(micro_bus.memory, atomic_bus.memory);
+    }
+
+    #[test]
+    fn pending_interrupts_are_not_silently_ignored_at_instruction_boundary() {
+        let mut nmi = Z80::default().export_architectural_state();
+        nmi.nmi_pending = true;
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.import_architectural_state(nmi).unwrap();
+        assert_eq!(
+            cpu.begin_instruction(),
+            Err(Z80MicroSequencerError::UnsupportedInterrupt)
+        );
+
+        let mut int = Z80::default().export_architectural_state();
+        int.iff1 = true;
+        int.int_pending = Some(0xFF);
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.import_architectural_state(int).unwrap();
+        assert_eq!(
+            cpu.begin_instruction(),
+            Err(Z80MicroSequencerError::UnsupportedInterrupt)
+        );
+    }
+}
