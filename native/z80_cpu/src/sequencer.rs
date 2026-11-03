@@ -225,27 +225,6 @@ impl Z80MicroSequencer {
                     })
                     && state.instruction_tstates >= 7
             }
-            Z80MicroSequencerPhase::ImmediateReadRegisterPairLow { pair } => {
-                let low = response
-                    .data
-                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
-                self.registers.pc = self.registers.pc.wrapping_add(1);
-                self.issue_read(
-                    Z80MicroSequencerPhase::ImmediateReadRegisterPairHigh { pair, low },
-                    self.registers.pc,
-                )
-            }
-            Z80MicroSequencerPhase::ImmediateReadRegisterPairHigh { pair, low } => {
-                let high = response
-                    .data
-                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
-                self.registers.pc = self.registers.pc.wrapping_add(1);
-                self.write_register_pair(pair, u16::from_le_bytes([low, high]));
-                self.retire(
-                    self.opcode
-                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
-                )
-            }
             Z80MicroSequencerPhase::ImmediateReadMemoryWrite => {
                 state.opcode == Some(0x36)
                     && pending.is_some_and(|request| {
@@ -575,6 +554,27 @@ impl Z80MicroSequencer {
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 self.registers.pc = self.registers.pc.wrapping_add(1);
                 self.write_register(destination, value);
+                self.retire(
+                    self.opcode
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
+                )
+            }
+            Z80MicroSequencerPhase::ImmediateReadRegisterPairLow { pair } => {
+                let low = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.registers.pc = self.registers.pc.wrapping_add(1);
+                self.issue_read(
+                    Z80MicroSequencerPhase::ImmediateReadRegisterPairHigh { pair, low },
+                    self.registers.pc,
+                )
+            }
+            Z80MicroSequencerPhase::ImmediateReadRegisterPairHigh { pair, low } => {
+                let high = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.registers.pc = self.registers.pc.wrapping_add(1);
+                self.write_register_pair(pair, u16::from_le_bytes([low, high]));
                 self.retire(
                     self.opcode
                         .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
