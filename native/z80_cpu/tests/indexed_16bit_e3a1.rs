@@ -321,7 +321,7 @@ fn ld_ix_immediate_wait_states_extend_operand_cycles() {
 }
 
 #[test]
-fn unsupported_indexed_16bit_family_does_not_fall_back_to_hl() {
+fn unsupported_indexed_displacement_family_does_not_fall_back_to_hl() {
     let mut cpu = Z80MicroSequencer::default();
     cpu.ix = 0x1234;
     cpu.registers.h = 0x56;
@@ -329,8 +329,8 @@ fn unsupported_indexed_16bit_family_does_not_fall_back_to_hl() {
     let fetch = start(&mut cpu);
     let fetch = feed_prefix(&mut cpu, fetch, 0xDD);
     assert!(matches!(
-        cpu.complete_bus_cycle(fetch.id, Some(0x22)),
-        Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x22, .. })
+        cpu.complete_bus_cycle(fetch.id, Some(0x66)),
+        Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x66, .. })
     ));
     assert_eq!(cpu.ix, 0x1234);
     assert_eq!(cpu.registers.hl(), 0x5678);
