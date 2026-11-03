@@ -1,8 +1,8 @@
 # Matriz semântica DD/FD do Z80 — E1
 
 **Data:** 2026-11-03  
-**Baseline auditada:** `main` — `e4604f3152c09e8d16c37f94f94a4b344db33b62`  
-**Schema do microsequenciador:** 25  
+**Baseline auditada:** `main` — `bcc7ef7954bd8cadd148b22c464260810ff63fb3`  
+**Schema do microsequenciador:** 26  
 **Escopo:** decoder DD/FD, IX/IY, IXH/IXL/IYH/IYL, (IX/IY+d), DDCB/FDCB.  
 **Natureza:** inventário do código ativo e das evidências disponíveis; não declara conclusão funcional nem temporal do Z80.
 
@@ -11,6 +11,7 @@
 | Estado | Significado |
 |---|---|
 | `IMPLEMENTED_ATOMIC` | Há caminho de execução no executor atômico `Z80::step()`. |
+| `IMPLEMENTED_MICROSEQUENCED` | Há fases retomáveis no microsequenciador, com testes direcionados e snapshot/WAIT nos safe points cobertos; não equivale a conformidade formal ou temporal. |
 | `RECOGNIZED_ONLY` | O microsequenciador reconhece o byte de prefixo e agenda outro fetch M1, mas ainda não executa a família indexada. |
 | `NOT_IMPLEMENTED` | A família não tem execução no microsequenciador retomável; o decode termina em `UnsupportedOpcode`. |
 | `FUNCTIONAL_UNVERIFIED` | Existe handler, mas os testes localizados não demonstram a semântica integral da família. |
@@ -40,10 +41,10 @@ A matriz antiga `docs/z80-opcode-matrix.md` descreve principalmente a implementa
 
 | Sequência | Comportamento no executor atômico | Microsequenciador | Evidência / lacuna |
 |---|---|---|---|
-| `DD op` | Decoder indexado; substitui HL/H/L conforme família | Reconhece DD, mas rejeita opcode indexado comum | `execute_indexed`; `cb_ed_and_index_prefixes_issue_a_second_m1_fetch` |
-| `FD op` | Decoder indexado para IY | Reconhece FD, mas rejeita opcode indexado comum | Mesmo caminho parametrizado pelo prefixo |
-| `DD DD op`, `FD FD op` | Repetições contam 4T por prefixo extra | Fetches M1 repetidos; último prefixo fica no latch; opcode seguinte ainda rejeitado | `repeated_index_prefixes_are_counted_without_recursive_overflow` (atômico); `repeated_index_prefixes_count_each_m1_and_last_prefix_is_retained` (sequenciador) |
-| `DD FD op`, `FD DD op` | Último prefixo seleciona IY/IX, respectivamente | Latch do último prefixo; execução indexada não implementada | O teste do sequenciador prova somente seleção/latch e rejeição subsequente |
+| `DD op` | Decoder indexado; substitui HL/H/L conforme família | Executa o subconjunto E3A1/E3A2; rejeita displacement e famílias ainda não implementadas | `indexed_16bit_e3a1.rs`, `indexed_absolute_transfer_e3a2a.rs`, `indexed_stack_e3a2b.rs`, `indexed_exchange_stack_e3a2c.rs` |
+| `FD op` | Decoder indexado para IY | Executa o subconjunto E3A1/E3A2; rejeita displacement e famílias ainda não implementadas | Mesmas suítes E3A1/E3A2, cobrindo IX e IY |
+| `DD DD op`, `FD FD op` | Repetições contam 4T por prefixo extra | M1 repetidos, last-prefix-wins e execução E3A1/E3A2; outras famílias ainda rejeitadas | Testes E3A1/E3A2 com prefixos repetidos/alternados e M-cycle acumulado |
+| `DD FD op`, `FD DD op` | Último prefixo seleciona IY/IX, respectivamente | Last-prefix-wins executa E3A1/E3A2; demais famílias ainda pendentes | Testes E3A1/E3A2 de seleção IX/IY e prefixos alternados |
 | `DD/FD ED op` | Prefixo de índice ignorado; ED segue o decoder base | O estado de prefixo ED é reconhecido; execução ED pode seguir seu subset próprio | Exige teste de estado e custo total por instrução |
 | `DD/FD CB d op` | Consome displacement e subopcode e executa indexed-CB | Rejeita CB após DD/FD; não consome displacement/subopcode | `dd_cb_stops_before_treating_displacement_as_an_m1_opcode` |
 | `DD/FD op` não afetado | Fallback ao decoder base sem reler o opcode; custo adicional do prefixo preservado | Fallback ainda não está implementado de forma geral para DD/FD | Testar bytes consumidos, R, PC, custo e ausência de leitura duplicada |
@@ -56,15 +57,15 @@ Os opcodes abaixo são o byte posterior ao prefixo DD ou FD. A coluna de T-state
 
 | Opcode(s) após DD/FD | Família | Bytes totais (1 prefixo) | Substituição / estado / flags | T-states ZiLOG / observação | Executor atômico | Microsequenciador |
 |---|---|---:|---|---:|---|---|
-| `21 nn nn` | LD IX/IY,nn | 4 | IX/IY recebe nn; flags preservadas; PC consome 2 operandos | 14 | IMPLEMENTED_ATOMIC; teste dirigido | NOT_IMPLEMENTED |
-| `22 nn nn` | LD (nn),IX/IY | 4 | Escreve low/high em nn e nn+1; WZ=nn+1; flags preservadas | 20 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
-| `2A nn nn` | LD IX/IY,(nn) | 4 | Lê nn e nn+1; IX/IY recebe word; WZ=nn+1; flags preservadas | 20 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
-| `23`, `2B` | INC/DEC IX/IY | 2 | Atualiza word; flags preservadas; wrap 16-bit | 10 | IMPLEMENTED_ATOMIC; teste dirigido parcial | NOT_IMPLEMENTED |
-| `09`, `19`, `29`, `39` | ADD IX/IY,BC/DE/IX|IY/SP | 2 | IX/IY recebe soma; S/Z/PV preservadas; H/C atualizados; N reset; XY do high byte; WZ=index+1 | 15 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
-| `E1`, `E5` | POP/PUSH IX/IY | 2 | POP lê word e incrementa SP duas vezes; PUSH decrementa SP duas vezes; flags preservadas | 14 / 15 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
-| `E3` | EX (SP),IX/IY | 2 | Troca word com (SP)/(SP+1); SP preservado; WZ recebe word lida; flags preservadas | 23 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
-| `E9` | JP (IX/IY) | 2 | PC recebe IX/IY; sem operandos adicionais; flags preservadas | 8 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
-| `F9` | LD SP,IX/IY | 2 | SP recebe IX/IY; flags preservadas | 10 | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
+| `21 nn nn` | LD IX/IY,nn | 4 | IX/IY recebe nn; flags preservadas; PC consome 2 operandos | 14 (4 M-cycles) | IMPLEMENTED_ATOMIC; teste dirigido | IMPLEMENTED_MICROSEQUENCED; 10 testes E3A1 |
+| `22 nn nn` | LD (nn),IX/IY | 4 | Escreve low/high em nn e nn+1; WZ=nn+1; flags preservadas | 20 (6 M-cycles) | IMPLEMENTED_ATOMIC; testes dirigidos | IMPLEMENTED_MICROSEQUENCED; 5 testes E3A2a |
+| `2A nn nn` | LD IX/IY,(nn) | 4 | Lê nn e nn+1; IX/IY recebe word; WZ=nn+1; flags preservadas | 20 (6 M-cycles) | IMPLEMENTED_ATOMIC; testes dirigidos | IMPLEMENTED_MICROSEQUENCED; 5 testes E3A2a |
+| `23`, `2B` | INC/DEC IX/IY | 2 | Atualiza word; flags preservadas; wrap 16-bit | 10 (2 M-cycles) | IMPLEMENTED_ATOMIC; teste dirigido | IMPLEMENTED_MICROSEQUENCED; 10 testes E3A1 |
+| `09`, `19`, `29`, `39` | ADD IX/IY,BC/DE/IX|IY/SP | 2 | IX/IY recebe soma; S/Z/PV preservadas; H/C atualizados; N reset; XY do high byte; WZ=index+1 | 15 (4 M-cycles) | IMPLEMENTED_ATOMIC; testes dirigidos | IMPLEMENTED_MICROSEQUENCED; 10 testes E3A1 |
+| `E1`, `E5` | POP/PUSH IX/IY | 2 | POP lê low/high e incrementa SP após cada leitura; PUSH escreve high/low e decrementa SP antes de cada escrita; flags preservadas | 14 / 15 (4 M-cycles) | IMPLEMENTED_ATOMIC; testes dirigidos | IMPLEMENTED_MICROSEQUENCED; 4 testes E3A2b |
+| `E3` | EX (SP),IX/IY | 2 | Lê low/high, escreve o par antigo low/high; SP preservado; WZ recebe word lida; flags preservadas | 23 (6 M-cycles) | IMPLEMENTED_ATOMIC; testes dirigidos | IMPLEMENTED_MICROSEQUENCED; 2 testes E3A2c |
+| `E9` | JP (IX/IY) | 2 | PC recebe IX/IY; sem operandos adicionais; flags preservadas | 8 (2 M-cycles) | IMPLEMENTED_ATOMIC; testes dirigidos | IMPLEMENTED_MICROSEQUENCED; 10 testes E3A1 |
+| `F9` | LD SP,IX/IY | 2 | SP recebe IX/IY; flags preservadas | 10 (2 M-cycles) | IMPLEMENTED_ATOMIC; testes dirigidos | IMPLEMENTED_MICROSEQUENCED; 10 testes E3A1 |
 | `24`, `25`, `26` | INC/DEC/LD IXH/IYH,n | 2 / 2 / 3 | Atualiza metade alta; INC/DEC altera flags de 8-bit, LD preserva flags; half-register não documentado como operando independente no UM008011 | 8 / 8 / 11 (derivado do prefixo + operação BASE; trace pendente) | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
 | `2C`, `2D`, `2E` | INC/DEC/LD IXL/IYL,n | 2 / 2 / 3 | Atualiza metade baixa; INC/DEC altera flags de 8-bit, LD preserva flags; half-register não documentado como operando independente no UM008011 | 8 / 8 / 11 (derivado do prefixo + operação BASE; trace pendente) | IMPLEMENTED_ATOMIC; FUNCTIONAL_UNVERIFIED | NOT_IMPLEMENTED |
 | `40`–`7F`, exceto `76` | LD r,r' | 2 | H/L substituídos por IXH/IXL ou IYH/IYL quando aplicável; flags preservadas; HALT `76` não é indexado | 8 (prefixo + M1 BASE; trace pendente) | IMPLEMENTED_ATOMIC; teste dirigido parcial | NOT_IMPLEMENTED |
@@ -126,14 +127,14 @@ Não alterar o schema durante E1. O bump só será proposto quando E2–E7 exigi
 
 | Família | Reconhecimento atômico | Funcional atômico | Diferencial externo | Snapshot indexado | Temporal |
 |---|---|---|---|---|---|
-| Operações 16-bit IX/IY | IMPLEMENTED | FUNCTIONAL_UNVERIFIED / testes selecionados | NOT_RUN nesta auditoria | NOT_IMPLEMENTED no sequenciador | TEMPORAL_UNVERIFIED |
-| IXH/IXL/IYH/IYL | IMPLEMENTED | FUNCTIONAL_UNVERIFIED | NOT_RUN nesta auditoria | NOT_IMPLEMENTED no sequenciador | TEMPORAL_UNVERIFIED |
-| LD indexado / displacement | IMPLEMENTED | FUNCTIONAL_UNVERIFIED / casos selecionados | NOT_RUN nesta auditoria | NOT_IMPLEMENTED no sequenciador | TEMPORAL_UNVERIFIED |
-| ALU indexada | IMPLEMENTED | FUNCTIONAL_UNVERIFIED | NOT_RUN nesta auditoria | NOT_IMPLEMENTED no sequenciador | TEMPORAL_UNVERIFIED |
-| DDCB/FDCB BIT | IMPLEMENTED | FUNCTIONAL_UNVERIFIED; teste de classificação | NOT_RUN nesta auditoria | NOT_IMPLEMENTED no sequenciador | TEMPORAL_UNVERIFIED |
-| DDCB/FDCB RMW | IMPLEMENTED | DIFFERENTIAL_PARTIAL para rotate/shift memória-only; RES/SET com cobertura menor | NOT_RUN nesta auditoria | NOT_IMPLEMENTED no sequenciador | TEMPORAL_UNVERIFIED |
-| Prefixos repetidos/alternados | IMPLEMENTED | Testes dirigidos de seleção do último prefixo | NOT_RUN nesta auditoria | Latch parcial no sequenciador | TEMPORAL_UNVERIFIED |
-| Prefixo ignorado / ED após DD/FD | IMPLEMENTED | Testes dirigidos no executor legado/atômico; ampliar para todos os grupos | NOT_RUN nesta auditoria | Fallback geral pendente | TEMPORAL_UNVERIFIED |
+| Operações 16-bit IX/IY (E3A1/E3A2) | IMPLEMENTED | Testes dirigidos E3A1/E3A2; 21 testes no total | NOT_RUN nesta auditoria | IMPLEMENTED_MICROSEQUENCED; snapshot/WAIT por fase coberta | TEMPORAL_UNVERIFIED |
+| IXH/IXL/IYH/IYL | IMPLEMENTED no executor atômico | FUNCTIONAL_UNVERIFIED | NOT_RUN nesta auditoria | NOT_IMPLEMENTED no sequenciador | TEMPORAL_UNVERIFIED |
+| LD indexado / displacement | IMPLEMENTED no executor atômico | FUNCTIONAL_UNVERIFIED / casos selecionados | NOT_RUN nesta auditoria | NOT_IMPLEMENTED no sequenciador; próximo E4 | TEMPORAL_UNVERIFIED |
+| ALU indexada | IMPLEMENTED no executor atômico | FUNCTIONAL_UNVERIFIED | NOT_RUN nesta auditoria | NOT_IMPLEMENTED no sequenciador; próximo E4 | TEMPORAL_UNVERIFIED |
+| DDCB/FDCB BIT | IMPLEMENTED no executor atômico | FUNCTIONAL_UNVERIFIED; teste de classificação | NOT_RUN nesta auditoria | NOT_IMPLEMENTED no sequenciador; próximo E5 | TEMPORAL_UNVERIFIED |
+| DDCB/FDCB RMW | IMPLEMENTED no executor atômico | DIFFERENTIAL_PARTIAL para rotate/shift memória-only; RES/SET com cobertura menor | NOT_RUN nesta auditoria | NOT_IMPLEMENTED no sequenciador; próximo E5 | TEMPORAL_UNVERIFIED |
+| Prefixos repetidos/alternados | IMPLEMENTED | Testes dirigidos de seleção do último prefixo | NOT_RUN nesta auditoria | Latch e contagem M1 preservados; execução E3A1/E3A2 coberta | TEMPORAL_UNVERIFIED |
+| Prefixo ignorado / ED após DD/FD | IMPLEMENTED no executor atômico | Testes dirigidos; ampliar para todos os grupos | NOT_RUN nesta auditoria | Fallback geral pendente; próximo E6 | TEMPORAL_UNVERIFIED |
 
 ## 8. Referências técnicas primárias
 
@@ -160,8 +161,12 @@ Links:
 
 - **E1 — documentação/inventário:** esta matriz classifica as famílias e separa evidência de dispatch, semântica, diferencial, snapshot e temporalidade.
 - **E2 — FSM:** criar estado de prefixo efetivo e continuação indexada sem limite artificial de prefixos; preservar o caminho sem prefixo.
-- **E3–E7 — execução:** implementar em micro-operações suspensíveis, usando `BusTransaction`/`BusOperationResult` compartilhados. Não chamar o executor atômico para executar a instrução indexada.
-- **E8 — snapshot/interrupções:** serializar os novos latches e provar restore/replay em cada safe point.
-- **E9 — validação/integracão:** diferencial externo, ZEXDOC/ZEXALL quando compatíveis, stress de Scheduler e integração SMS separada.
+- **E3 — operações IX/IY de 16 bits:** E3A1/E3A2 implementadas no microsequenciador retomável; PR #470 candidata, CI 4/4 PASS.
+- **E4 — displacement:** implementar LD, ALU, INC/DEC em (IX/IY+d) em micro-operações suspensíveis.
+- **E5 — DDCB/FDCB:** separar fetches M1, displacement, opcode final, leitura e RMW.
+- **E6 — prefixos ignorados:** implementar fallback BASE sem fetch duplicado e todas as combinações DD/FD/ED/CB.
+- **E7 — fechamento semântico:** auditar BASE/CB/ED/DD/FD/DDCB/FDCB, flags, interrupções, HALT e snapshots.
+- **E8 — formal/diferencial:** ZEXDOC/ZEXALL e oráculos independentes.
+- **E9 — temporal/integração:** M/T-states, WAIT, interrupções, snapshots, Scheduler e SMS/SG-1000.
 
-**Estado global:** DD/FD funcional existe no executor atômico, mas o microsequenciador retomável não executa instruções indexadas. Nenhuma família DD/FD recebe `TEMPORAL_PASS`. O Z80 e a integração SMS permanecem INTEGRATION_PENDING para este escopo.
+**Estado global:** o microsequenciador executa E3A1/E3A2 (operações 16-bit IX/IY); displacement, DDCB/FDCB e fallback geral ainda não estão implementados nele. Não há validação formal completa nem `TEMPORAL_PASS`. A integração do Z80 à máquina SMS permanece INTEGRATION_PENDING.
