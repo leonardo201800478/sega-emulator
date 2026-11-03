@@ -380,6 +380,32 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u8(stage);
             writer.u8(low);
         }
+        Z80MicroSequencerPhase::BaseExchangeStack {
+            stage,
+            low,
+            high,
+            old_hl,
+        } => {
+            writer.u8(48);
+            writer.u8(stage);
+            writer.u8(low);
+            writer.u8(high);
+            writer.u16(old_hl);
+        }
+        Z80MicroSequencerPhase::BaseExchangeStackInternal {
+            stage,
+            low,
+            high,
+            old_hl,
+            remaining_tstates,
+        } => {
+            writer.u8(49);
+            writer.u8(stage);
+            writer.u8(low);
+            writer.u8(high);
+            writer.u16(old_hl);
+            writer.u8(remaining_tstates);
+        }
         Z80MicroSequencerPhase::MemoryWrite { address, value } => {
             writer.u8(7);
             writer.u16(address);
@@ -662,6 +688,19 @@ fn read_phase(
         47 => Z80MicroSequencerPhase::BaseReturnPop {
             stage: reader.u8()?,
             low: reader.u8()?,
+        },
+        48 => Z80MicroSequencerPhase::BaseExchangeStack {
+            stage: reader.u8()?,
+            low: reader.u8()?,
+            high: reader.u8()?,
+            old_hl: reader.u16()?,
+        },
+        49 => Z80MicroSequencerPhase::BaseExchangeStackInternal {
+            stage: reader.u8()?,
+            low: reader.u8()?,
+            high: reader.u8()?,
+            old_hl: reader.u16()?,
+            remaining_tstates: reader.u8()?,
         },
         7 => Z80MicroSequencerPhase::MemoryWrite {
             address: reader.u16()?,
