@@ -12,6 +12,7 @@ use crate::bus::{
     Z80InstructionTrace, Z80TStatePhase, Z80TStateSample,
 };
 use crate::{Z80ArchitecturalState, Z80ArchitecturalStateError};
+use serde::{Deserialize, Serialize};
 
 const FLAG_C: u8 = 0x01;
 const FLAG_N: u8 = 0x02;
@@ -26,7 +27,7 @@ pub enum CpuError {
     UnsupportedOpcode { opcode: u8, address: u16 },
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Z80Registers {
     pub a: u8,
     pub f: u8,
@@ -72,7 +73,7 @@ impl Z80Registers {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Z80AlternateRegisters {
     pub a: u8,
     pub f: u8,
