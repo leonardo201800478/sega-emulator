@@ -21,6 +21,30 @@ const FLAG_Z: u8 = 0x40;
 const FLAG_S: u8 = 0x80;
 const FLAG_XY: u8 = 0x28;
 
+/// Active DD/FD index-register substitution context.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+pub enum Z80IndexRegister {
+    Ix,
+    Iy,
+}
+
+impl Z80IndexRegister {
+    const fn from_prefix(prefix: u8) -> Option<Self> {
+        match prefix {
+            0xDD => Some(Self::Ix),
+            0xFD => Some(Self::Iy),
+            _ => None,
+        }
+    }
+
+    const fn prefix_byte(self) -> u8 {
+        match self {
+            Self::Ix => 0xDD,
+            Self::Iy => 0xFD,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Z80MicroSequencerError {
     Handshake(Z80BusHandshakeError),
@@ -213,8 +237,9 @@ pub struct Z80MicroSequencerState {
     pub q_previous: u8,
     pub handshake: crate::Z80BusHandshakeState,
     pub phase: Z80MicroSequencerPhase,
-    pub opcode: Option<u8>,
-    pub instruction_tstates: u32,
+    /// Explicit DD/FD substitution latch, independent of the last fetched opcode.
+    pub active_index: Option<Z80IndexRegister>,
+    pub opcode: Option<u8>,    pub instruction_tstates: u32,
     /// Zero-based M-cycle index within the active instruction.
     pub mcycle_index: u32,
     /// Zero-based T-state position within the current M-cycle.
@@ -264,8 +289,8 @@ pub struct Z80MicroSequencer {
     pub halted: bool,
     handshake: Z80BusHandshake,
     phase: Z80MicroSequencerPhase,
-    opcode: Option<u8>,
-    instruction_tstates: u32,
+    active_index: Option<Z80IndexRegister>,
+    opcode: Option<u8>,    instruction_tstates: u32,
     mcycle_index: u32,
     tstate_index: u16,
 }
@@ -292,6 +317,7 @@ impl Default for Z80MicroSequencer {
             halted: false,
             handshake: Z80BusHandshake::default(),
             phase: Z80MicroSequencerPhase::Ready,
+            active_index: None,
             opcode: None,
             instruction_tstates: 0,
             mcycle_index: 0,
@@ -311,6 +337,7 @@ impl Z80MicroSequencer {
             q_previous: self.q_previous,
             handshake: self.handshake.export_state(),
             phase: self.phase,
+            active_index: self.active_index,
             opcode: self.opcode,
             instruction_tstates: self.instruction_tstates,
             mcycle_index: self.mcycle_index,
@@ -1107,6 +1134,7 @@ impl Z80MicroSequencer {
             halted: state.halted,
             handshake,
             phase: state.phase,
+            active_index: state.active_index,
             opcode: state.opcode,
             instruction_tstates: state.instruction_tstates,
             mcycle_index: state.mcycle_index,
@@ -1123,6 +1151,7 @@ impl Z80MicroSequencer {
         self.instruction_tstates = 0;
         self.mcycle_index = 0;
         self.tstate_index = 0;
+        self.active_index = None;
         self.opcode = None;
         self.q_previous = self.q;
         self.q = 0;
@@ -1203,6 +1232,13 @@ impl Z80MicroSequencer {
                 self.refresh = (self.refresh & 0x80) | (self.refresh.wrapping_add(1) & 0x7F);
                 let previous_prefix = self.opcode;
                 if Self::is_prefix_fetch(previous_prefix, opcode) {
+                    match opcode {
+                        0xDD | 0xFD => {
+                            self.active_index = Z80IndexRegister::from_prefix(opcode);
+                        }
+                        0xED => self.active_index = None,
+                        _ => {}
+                    }
                     self.opcode = Some(opcode);
                     let next_mcycle_index = self
                         .mcycle_index
@@ -1231,8 +1267,8 @@ impl Z80MicroSequencer {
                     self.execute_cb_register(opcode);
                     return self.retire(opcode);
                 }
-                if let Some(prefix @ (0xDD | 0xFD)) = previous_prefix {
-                    return self.execute_indexed_pair_immediate(opcode, prefix);
+                if let Some(index) = self.active_index {
+                    return self.execute_indexed_pair_immediate(opcode, index.prefix_byte());
                 }
                 if previous_prefix.is_some() {
                     return self.unsupported(opcode);
@@ -2108,6 +2144,7 @@ impl Z80MicroSequencer {
     fn unsupported(&mut self, opcode: u8) -> Result<Z80MicroStep, Z80MicroSequencerError> {
         let address = self.registers.pc.wrapping_sub(1);
         self.phase = Z80MicroSequencerPhase::Ready;
+        self.active_index = None;
         self.opcode = None;
         self.instruction_tstates = 0;
         self.mcycle_index = 0;
@@ -2850,6 +2887,7 @@ impl Z80MicroSequencer {
     fn retire(&mut self, opcode: u8) -> Result<Z80MicroStep, Z80MicroSequencerError> {
         let tstates = self.instruction_tstates;
         self.phase = Z80MicroSequencerPhase::Ready;
+        self.active_index = None;
         self.opcode = None;
         self.instruction_tstates = 0;
         self.mcycle_index = 0;
@@ -2861,7 +2899,8 @@ impl Z80MicroSequencer {
 #[cfg(test)]
 mod tests {
     use super::{
-        FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_S, FLAG_XY, FLAG_Z, Z80MicroSequencer,
+        FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_S, FLAG_XY, FLAG_Z, Z80IndexRegister,
+        Z80MicroSequencer,
         Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroStep,
     };
     use crate::{Z80BusOperation, Z80Registers};
@@ -2889,6 +2928,51 @@ mod tests {
             4,
         );
         cpu
+    }
+
+    #[test]
+    fn repeated_index_prefixes_keep_explicit_last_prefix_latch_across_snapshots() {
+        for (prefixes, expected) in [
+            (&[0xDD][..], Z80IndexRegister::Ix),
+            (&[0xFD][..], Z80IndexRegister::Iy),
+            (&[0xDD, 0xFD][..], Z80IndexRegister::Iy),
+            (&[0xFD, 0xDD][..], Z80IndexRegister::Ix),
+            (&[0xDD, 0xDD, 0xFD, 0xDD][..], Z80IndexRegister::Ix),
+        ] {
+            let mut cpu = Z80MicroSequencer::default();
+            let mut step = cpu.begin_instruction().unwrap();
+            for prefix in prefixes {
+                let fetch = request(step);
+                step = cpu.complete_bus_cycle(fetch.id, Some(*prefix)).unwrap();
+                let state = cpu.export_state();
+                let encoded = state.encode().unwrap();
+                let decoded = crate::Z80MicroSequencerState::decode(&encoded).unwrap();
+                cpu = Z80MicroSequencer::restore_state(decoded).unwrap();
+            }
+            assert_eq!(cpu.active_index, Some(expected));
+            assert_eq!(cpu.refresh & 0x7F, prefixes.len() as u8);
+            assert_eq!(cpu.registers.pc, prefixes.len() as u16);
+            assert!(matches!(step, Z80MicroStep::BusRequest(_)));
+        }
+    }
+
+    #[test]
+    fn ed_prefix_cancels_active_index_latch_and_round_trips() {
+        let mut cpu = Z80MicroSequencer::default();
+        let dd = request(cpu.begin_instruction().unwrap());
+        let ed = request(cpu.complete_bus_cycle(dd.id, Some(0xDD)).unwrap());
+        assert_eq!(cpu.active_index, Some(Z80IndexRegister::Ix));
+        let ed_opcode = request(cpu.complete_bus_cycle(ed.id, Some(0xED)).unwrap());
+        assert_eq!(cpu.active_index, None);
+        assert_eq!(cpu.opcode, Some(0xED));
+        let encoded = cpu.export_state().encode().unwrap();
+        let restored = Z80MicroSequencer::restore_state(
+            crate::Z80MicroSequencerState::decode(&encoded).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(restored.active_index, None);
+        assert_eq!(restored.opcode, Some(0xED));
+        assert_eq!(restored.pending_request(), Some(ed_opcode));
     }
 
     #[test]
