@@ -496,7 +496,7 @@ mod tests {
             total_instructions: 0,
             audio_session: None,
             audio_output_error: None,
-        sram_file: None,
+            sram_file: None,
         };
         assert!(machine.bios_enabled());
         assert_eq!(machine.read_memory(0), 0x3E);
