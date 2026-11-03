@@ -1740,7 +1740,7 @@ impl Z80MicroSequencer {
                 };
                 let expected_mcycle_index =
                     prefix_m1_count.and_then(|count| count.checked_add(internal_mcycle_offset));
-                let position_valid = prefix_count_valid
+                prefix_count_valid
                     && expected_mcycle_index == Some(state.mcycle_index)
                     && if total_internal_tstates == 7 {
                         if remaining_tstates >= 4 {
@@ -1750,8 +1750,7 @@ impl Z80MicroSequencer {
                         }
                     } else {
                         state.tstate_index == 4 + u16::from(completed_tstates)
-                    };
-                position_valid
+                    }
             }
             Z80MicroSequencerPhase::MemoryIncDecInternal { .. } => {
                 state.mcycle_index == 1
