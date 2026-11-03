@@ -3603,3 +3603,40 @@ mod architectural_state_tests {
         assert_eq!(cpu.export_architectural_state(), before);
     }
 }
+
+
+#[cfg(test)]
+mod architectural_state_diagnostics_tests {
+    use super::Z80;
+
+    #[test]
+    fn architectural_import_preserves_host_counters_and_trace_buffers() {
+        let mut cpu = Z80::default();
+        cpu.total_tstates = 0x1234;
+        cpu.instruction_count = 0x5678;
+        cpu.opcode_trace_bytes = [1, 2, 3, 4, 5, 6, 7, 8];
+        cpu.opcode_trace_len = 3;
+        cpu.opcode_trace_truncated = true;
+        cpu.capture_opcode_trace = true;
+        cpu.instruction_trace_bytes = [8, 7, 6, 5, 4, 3, 2, 1];
+        cpu.instruction_trace_len = 5;
+        cpu.instruction_trace_truncated = true;
+        cpu.injected_opcode = Some(0xDD);
+        cpu.step_depth = true;
+
+        let state = cpu.export_architectural_state();
+        cpu.import_architectural_state(state).unwrap();
+
+        assert_eq!(cpu.total_tstates, 0x1234);
+        assert_eq!(cpu.instruction_count, 0x5678);
+        assert_eq!(cpu.opcode_trace_bytes, [1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(cpu.opcode_trace_len, 3);
+        assert!(cpu.opcode_trace_truncated);
+        assert!(cpu.capture_opcode_trace);
+        assert_eq!(cpu.instruction_trace_bytes, [8, 7, 6, 5, 4, 3, 2, 1]);
+        assert_eq!(cpu.instruction_trace_len, 5);
+        assert!(cpu.instruction_trace_truncated);
+        assert_eq!(cpu.injected_opcode, None);
+        assert!(!cpu.step_depth);
+    }
+}
