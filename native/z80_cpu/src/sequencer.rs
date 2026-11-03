@@ -4909,8 +4909,8 @@ mod tests {
         let mut cpu = Z80MicroSequencer::default();
         let fetch = request(cpu.begin_instruction().unwrap());
         assert!(matches!(
-            cpu.complete_bus_cycle(fetch.id, Some(0xFF)),
-            Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0xFF, .. })
+            cpu.complete_bus_cycle(fetch.id, Some(0x76)),
+            Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x76, .. })
         ));
         assert!(!cpu.instruction_active());
         assert!(cpu.pending_request().is_none());
