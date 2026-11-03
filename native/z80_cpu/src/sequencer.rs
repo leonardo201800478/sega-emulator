@@ -660,7 +660,7 @@ impl Z80MicroSequencer {
                     && pending.is_some_and(|request| {
                         request.operation == Z80BusOperation::PortRead
                             && request.address == port_address
-                            && request.base_tstates == 3
+                            && request.base_tstates == 4
                     })
                     && state.instruction_tstates >= 9
             }
@@ -679,9 +679,9 @@ impl Z80MicroSequencer {
                     && pending.is_some_and(|request| {
                         request.operation == Z80BusOperation::MemoryWrite { value }
                             && request.address == memory_address
-                            && request.base_tstates == 4
+                            && request.base_tstates == 3
                     })
-                    && state.instruction_tstates >= 12
+                    && state.instruction_tstates >= 13
             }
             Z80MicroSequencerPhase::EdBlockIoOutputMemoryRead {
                 opcode,
@@ -2458,7 +2458,7 @@ impl Z80MicroSequencer {
             .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
         let request = self
             .handshake
-            .begin(Z80BusOperation::PortRead, port_address, 3)?;
+            .begin(Z80BusOperation::PortRead, port_address, 4)?;
         self.mcycle_index = next_mcycle_index;
         self.tstate_index = 0;
         self.phase = Z80MicroSequencerPhase::EdBlockIoInputPortRead {
@@ -2482,7 +2482,7 @@ impl Z80MicroSequencer {
             .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
         let request =
             self.handshake
-                .begin(Z80BusOperation::MemoryWrite { value }, memory_address, 4)?;
+                .begin(Z80BusOperation::MemoryWrite { value }, memory_address, 3)?;
         self.mcycle_index = next_mcycle_index;
         self.tstate_index = 0;
         self.phase = Z80MicroSequencerPhase::EdBlockIoInputMemoryWrite {
@@ -5750,7 +5750,7 @@ mod ed_absolute_register_pair_differential_tests {
                             assert!(state.mcycle_index <= 1);
                         }
                         Z80BusOperation::PortRead => {
-                            assert_eq!(request.base_tstates, 3);
+                            assert_eq!(request.base_tstates, 4);
                             assert_eq!(state.mcycle_index, 2);
                             if let super::Z80MicroSequencerPhase::EdBlockIoInputPortRead {
                                 port_address,
@@ -5781,7 +5781,7 @@ mod ed_absolute_register_pair_differential_tests {
                             }
                         }
                         Z80BusOperation::MemoryWrite { .. } => {
-                            assert_eq!(request.base_tstates, 4);
+                            assert_eq!(request.base_tstates, 3);
                             assert_eq!(state.mcycle_index, 3);
                             if let super::Z80MicroSequencerPhase::EdBlockIoInputMemoryWrite {
                                 memory_address,
