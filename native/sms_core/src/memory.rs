@@ -331,6 +331,10 @@ impl SmsMemory {
         self.cartridge_ram.as_deref()
     }
 
+    pub(crate) fn cartridge_ram_mut(&mut self) -> Option<&mut [u8]> {
+        self.cartridge_ram.as_deref_mut()
+    }
+
     fn cartridge_ram_index(&self, bank: u8, offset: usize) -> Option<usize> {
         let ram = self.cartridge_ram.as_ref()?;
         Some((usize::from(bank) * BANK_SIZE + offset) & (ram.len() - 1))
