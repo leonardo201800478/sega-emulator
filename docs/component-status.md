@@ -149,7 +149,7 @@ A implementação reutiliza a ALU compartilhada `sega-z80-alu` e preserva o exec
 ## 11. P7 — Z80 ALU com operando imediato e indireto (HL), PR #426
 
 **Branch candidata:** feat/z80-sms-alu-immediate-memory  
-**SHA candidato atual:** c2db0fc3504ef40c37f8a23a21d8c9f16fd0d9d9  
+**SHA candidato atual:** 5fdb9ce8c8c705ae6af377151c1bb3b798a730c5  
 **PR:** https://github.com/leonardo201800478/sega-emulator/pull/426  
 **Base:** feat/z80-sms-alu-register-matrix (PR #425; empilhada, não integrada à main).  
 **CI:** run 41564679857 falhou somente no step Formatting; Windows x64 e Python PASS; Scheduler deterministic stress SKIPPED. A correção de formatação foi aplicada no SHA candidato atual, mas a execução CI desse SHA ainda não foi localizada/confirmada.
@@ -166,6 +166,6 @@ A implementação reutiliza a ALU compartilhada `sega-z80-alu` e preserva o exec
 
 **Critérios implementados no código:** M1 4 T + leitura 3 T; leitura imediata usa PC e incrementa PC somente ao concluir; (HL) solicita o byte pelo barramento temporal; WAIT entra no contador da instrução; snapshot preserva fase/request/WAIT. A suíte diferencial compara os oito grupos de operação com o executor atômico em registradores, refresh e tempo do Scheduler.
 
-**Validação:** as execuções 41564602106 e 41564679857 falharam no gate de formatação; a segunda também registrou Python e Windows x64 PASS. As correções de rustfmt estão no candidato atual, mas não há execução CI confirmada para esse SHA. Execução local NOT RUN. Manter INTEGRATION_PENDING até CI completo e evidência de integração.
+**Validação:** as execuções 41564602106 e 41564679857 falharam no gate de formatação; a segunda também registrou Python e Windows x64 PASS. As correções de rustfmt e a correção do despacho da fase MemoryReadAlu estão no candidato atual; ainda aguardando execução CI desse SHA. Execução local NOT RUN. Manter INTEGRATION_PENDING até CI completo e evidência de integração.
 
 A PR #426 permanece Draft e empilhada sobre #425. Nenhum merge foi realizado.
