@@ -272,11 +272,17 @@ mod tests {
     #[test]
     fn opcode_can_only_be_sampled_once_during_t3() {
         let mut cycle = Z80M1Cycle::new(0, 0, 0);
-        assert_eq!(cycle.sample_opcode(0), Err(Z80M1Error::OpcodeSampleOutsideT3));
+        assert_eq!(
+            cycle.sample_opcode(0),
+            Err(Z80M1Error::OpcodeSampleOutsideT3)
+        );
         cycle.advance_tstate(false).unwrap();
         cycle.advance_tstate(false).unwrap();
         cycle.sample_opcode(0x00).unwrap();
-        assert_eq!(cycle.sample_opcode(0x01), Err(Z80M1Error::OpcodeAlreadySampled));
+        assert_eq!(
+            cycle.sample_opcode(0x01),
+            Err(Z80M1Error::OpcodeAlreadySampled)
+        );
     }
 
     #[test]
