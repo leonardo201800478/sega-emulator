@@ -1941,8 +1941,8 @@ mod base_return_snapshot_tests {
             other => panic!("expected opcode fetch, got {other:?}"),
         };
         let _ = cpu.complete_bus_cycle(fetch.id, Some(0xC0)).unwrap();
+        let _ = cpu.complete_internal_cycle().unwrap();
         let mut invalid = cpu.export_state();
-        invalid.phase = Z80MicroSequencerPhase::BaseReturnPop { stage: 0, low: 0 };
         invalid.registers.f = 0x40;
         assert!(Z80MicroSequencer::restore_state(invalid).is_err());
     }
