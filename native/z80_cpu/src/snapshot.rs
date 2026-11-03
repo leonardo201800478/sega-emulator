@@ -300,6 +300,14 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u8(u8::from(decrement));
             writer.u8(old);
             writer.u16(address);
+        },
+        Z80MicroSequencerPhase::BaseInternal {
+            opcode,
+            remaining_tstates,
+        } => {
+            writer.u8(35);
+            writer.u8(opcode);
+            writer.u8(remaining_tstates);
         }
         Z80MicroSequencerPhase::MemoryWrite { address, value } => {
             writer.u8(7);
@@ -531,6 +539,10 @@ fn read_phase(
             decrement: read_bool(reader)?,
             old: reader.u8()?,
             address: reader.u16()?,
+        },
+        35 => Z80MicroSequencerPhase::BaseInternal {
+            opcode: reader.u8()?,
+            remaining_tstates: reader.u8()?,
         },
         7 => Z80MicroSequencerPhase::MemoryWrite {
             address: reader.u16()?,
