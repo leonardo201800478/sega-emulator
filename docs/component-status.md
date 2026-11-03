@@ -1,4 +1,4 @@
-> **Atualização do núcleo Z80 (2026-11-03):** `main` inclui E4A/E4B até `04ee09f9`. E4C (INC/DEC indexed-memory) está em PR #473, candidato corrigido `26182568055dc824a9725428e1770fed6cb8447e`; a tentativa de CI `41741995929` falhou em Clippy por tipos inteiros ambíguos exclusivamente no fixture de teste, já corrigidos. Aguardando nova execução integral. Não declarar LONG_PASS, integração temporal completa ou TEMPORAL_PASS.
+> **Atualização do núcleo Z80 (2026-11-03):** `main` inclui E4A/E4B até `04ee09f9`. E4C (INC/DEC indexed-memory) está em PR #473, candidato corrigido `5bf09790d3cd0dddc0b4ed7b9a434773f3d403db`; a tentativa de CI `41741995929` falhou em Clippy por tipos inteiros ambíguos exclusivamente no fixture de teste, já corrigidos. Aguardando nova execução integral. Não declarar LONG_PASS, integração temporal completa ou TEMPORAL_PASS.
 
 # Estado dos componentes — SG-1000 + Master System
 
