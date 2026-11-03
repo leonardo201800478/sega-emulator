@@ -189,6 +189,25 @@ Para o escopo indexado futuro, o estado lógico deverá preservar, conforme apli
 
 Não criar um campo redundante se o mesmo fato já estiver codificado numa fase validada. Ao generalizar o decoder, preferir um `PrefixDecodeState` explícito a usar `opcode` como latch implícito de múltiplas responsabilidades; a migração requer bump do schema.
 
+## 3.4 Incremento implementado após a modelagem (schema v19)
+
+A branch evoluiu o latch de prefixo de uma inferência baseada em `opcode` para um estado explícito:
+- `Z80IndexRegister::{Ix,Iy}`;
+- `Z80MicroSequencerState.active_index`;
+- atualização em cada DD/FD (último prefixo prevalece);
+- limpeza do latch ao reconhecer ED;
+- limpeza na retirada ou rejeição terminal de opcode;
+- validação cruzada entre `active_index`, fase e prefixo indexado;
+- codec determinístico atualizado para v19.
+
+Foram acrescentados vetores para DD, FD, DD FD, FD DD e cadeias de quatro prefixos, com encode/decode/restore em cada fronteira M1. Também há regressões para:
+- `DD 00`: NOP não afetado, 8 T-states;
+- `DD EB`: EX DE,HL permanece sobre DE/HL, 8 T-states;
+- `DD ED 47`: ED cancela IX, executa LD I,A e restaura no ciclo interno;
+- o validador de `EdRegisterInternal` aceita o M1 adicional de DD sem perder a coerência entre índice M/T e tempo acumulado.
+
+Esse incremento implementa uma pequena whitelist de instruções não afetadas, não a tabela inteira de fallback DD/FD. O estado geral continua INTEGRATION_PENDING até CI, diferencial e matriz ampla.
+
 ## 4. Auditoria objetiva da PR #447
 
 ### Implementado na branch consultada
@@ -316,6 +335,19 @@ Critério: replay produz a mesma sequência ordenada de eventos e efeitos de mem
 8. Nenhuma PR deve ser integrada sem rustfmt, Clippy com `-D warnings`, workspace tests, Scheduler stress e jobs Windows exigidos pelo projeto.
 9. `SKIPPED`, `CANCELLED`, execução local não realizada e testes sem oráculo não são PASS.
 10. Estados formais do componente devem permanecer explícitos: IMPLEMENTED, QUICK_PASS, SHORT_PASS, LONG_PASS, INTEGRATION_PENDING e TEMPORAL_PASS.
+
+## 9. Comparação com implementações de referência
+
+A pesquisa confirma que não existe um bug universal compartilhado por todos os emuladores. Existem soluções maduras para a semântica e para a temporização, mas a cobertura de comportamento não documentado varia:
+
+| Referência | Abordagem observada | O que aproveitamos |
+|---|---|---|
+| emu198x Z80 (Rust) | FSM de meia fase, `Walker` com sequências M-cycles, prefix enum; DDCB faz FetchDisp e depois leitura não-M1 do sub-opcode; save state reidrata a sequência | Melhor referência arquitetural para estado retomável e separação de sequências de barramento |
+| floooh / visual Z80 netlist | Rastreia pinos e registradores em meia fase; demonstra prefixos repetidos, cancelamento DD/FD por ED e o comportamento especial DDCB | Oráculo exploratório de temporização; não assumir equivalência absoluta para comportamento não documentado, pois o autor alerta sobre diferenças do netlist |
+| go-chip-z80 | Usa vetores SingleStepTests capturados de hardware; reporta 1.585/1.604 arquivos passando e 19 ignorados por limitações de WZ/Q | Exemplo de que até um core funcionalmente forte mantém lacunas documentadas em flags e estado interno |
+| MAME / Fuse / Z80Ex | Cores de referência amplamente usados para emulação Z80 | Diferencial funcional e inspeção independente; confirmar sempre a granularidade temporal de cada caminho |
+
+Conclusão: prefixos DD/FD não são um problema insolúvel nem um bug obrigatório em todos os emuladores. São uma fonte recorrente de bugs em implementações incompletas, principalmente quando o modelo ignora prefixos repetidos, ED cancel, DDCB/FDCB, bits X/Y, WZ/MEMPTR, refresh ou estados intermediários. Emuladores instruction-stepped podem contornar o problema funcionalmente sem modelar cada T-state; isso não os torna equivalentes a um core cycle-accurate.
 
 ## 9. Referências
 
