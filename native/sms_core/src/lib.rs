@@ -9,6 +9,7 @@
 pub mod alu;
 pub mod bus;
 pub mod cartridge;
+pub mod cartridge_ram_file;
 pub mod config;
 pub mod cpu;
 pub mod error;
@@ -28,6 +29,7 @@ pub use bus::{
     Z80InstructionTrace, Z80TStatePhase, Z80TStateSample,
 };
 pub use cartridge::CartridgeImage;
+pub use cartridge_ram_file::{SmsCartridgeRamFile, SmsCartridgeRamFileError};
 pub use config::{
     FmHardware, SmsConsoleModel, SmsMachineConfig, SmsVdpRevision, SpriteLimitMode, Territory,
     VideoStandard,
