@@ -1733,6 +1733,32 @@ impl Z80MicroSequencer {
                 }
                 match opcode {
                     0x00 => self.retire(opcode),
+                    0x08 => {
+                        std::mem::swap(&mut self.registers.a, &mut self.alternate.a);
+                        std::mem::swap(&mut self.registers.f, &mut self.alternate.f);
+                        self.retire(opcode)
+                    }
+                    0xD9 => {
+                        std::mem::swap(&mut self.registers.b, &mut self.alternate.b);
+                        std::mem::swap(&mut self.registers.c, &mut self.alternate.c);
+                        std::mem::swap(&mut self.registers.d, &mut self.alternate.d);
+                        std::mem::swap(&mut self.registers.e, &mut self.alternate.e);
+                        std::mem::swap(&mut self.registers.h, &mut self.alternate.h);
+                        std::mem::swap(&mut self.registers.l, &mut self.alternate.l);
+                        self.retire(opcode)
+                    }
+                    0xF3 => {
+                        self.iff1 = false;
+                        self.iff2 = false;
+                        self.ei_delay = 0;
+                        self.retire(opcode)
+                    }
+                    0xFB => {
+                        self.iff1 = true;
+                        self.iff2 = true;
+                        self.ei_delay = 1;
+                        self.retire(opcode)
+                    }
                     0x07 | 0x0F | 0x17 | 0x1F | 0x27 | 0x2F => {
                         self.execute_accumulator_misc(opcode);
                         self.retire(opcode)
