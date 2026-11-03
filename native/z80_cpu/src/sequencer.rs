@@ -10240,7 +10240,7 @@ mod base_halt_differential_tests {
     fn halt_instruction_and_repeated_halt_cycle_match_atomic_executor() {
         let mut initial = Z80::default().export_architectural_state();
         initial.registers.pc = 0x1000;
-        initial.registers.r = 0x7E;
+        initial.r = 0x7E;
         let mut atomic_bus = TestBus::default();
         atomic_bus.memory[0x1000] = 0x76;
         atomic_bus.memory[0x1001] = 0x00;
