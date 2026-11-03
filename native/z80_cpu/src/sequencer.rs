@@ -817,8 +817,8 @@ impl Z80MicroSequencer {
                     .opcode
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 if matches!(opcode, 0x02 | 0x12) {
-                    self.wz = (u16::from(self.registers.a) << 8)
-                        | (address.wrapping_add(1) & 0x00FF);
+                    self.wz =
+                        (u16::from(self.registers.a) << 8) | (address.wrapping_add(1) & 0x00FF);
                 }
                 self.retire(opcode)
             }
@@ -2450,7 +2450,6 @@ mod architectural_state_tests {
     }
 }
 
-
 #[cfg(test)]
 mod indirect_bc_de_tests {
     use super::{Z80MicroSequencer, Z80MicroStep};
@@ -2481,7 +2480,13 @@ mod indirect_bc_de_tests {
         assert_eq!(read.address, 0xC123);
         assert_eq!(cpu.registers.a, 0x11);
         let retired = cpu.complete_bus_cycle(read.id, Some(0xA5)).unwrap();
-        assert_eq!(retired, Z80MicroStep::InstructionRetired { opcode: 0x0A, tstates: 7 });
+        assert_eq!(
+            retired,
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x0A,
+                tstates: 7
+            }
+        );
         assert_eq!(cpu.registers.a, 0xA5);
         assert_eq!(cpu.registers.f, 0xD7);
         assert_eq!(cpu.wz, 0xC124);
@@ -2501,7 +2506,13 @@ mod indirect_bc_de_tests {
         let read = request(cpu.complete_bus_cycle(fetch.id, Some(0x1A)).unwrap());
         assert_eq!(read.address, 0xFEFF);
         let retired = cpu.complete_bus_cycle(read.id, Some(0x42)).unwrap();
-        assert_eq!(retired, Z80MicroStep::InstructionRetired { opcode: 0x1A, tstates: 7 });
+        assert_eq!(
+            retired,
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x1A,
+                tstates: 7
+            }
+        );
         assert_eq!(cpu.registers.a, 0x42);
         assert_eq!(cpu.wz, 0xFF00);
     }
@@ -2521,10 +2532,19 @@ mod indirect_bc_de_tests {
         let fetch = request(cpu.begin_instruction().unwrap());
         let write = request(cpu.complete_bus_cycle(fetch.id, Some(0x02)).unwrap());
         assert_eq!(write.address, 0xC1FF);
-        assert_eq!(write.operation, Z80BusOperation::MemoryWrite { value: 0x5A });
+        assert_eq!(
+            write.operation,
+            Z80BusOperation::MemoryWrite { value: 0x5A }
+        );
         assert_eq!(cpu.wz, 0);
         let retired = cpu.complete_bus_cycle(write.id, None).unwrap();
-        assert_eq!(retired, Z80MicroStep::InstructionRetired { opcode: 0x02, tstates: 7 });
+        assert_eq!(
+            retired,
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x02,
+                tstates: 7
+            }
+        );
         assert_eq!(cpu.wz, 0x5A00);
         assert_eq!(cpu.registers.f, 0xD7);
     }
@@ -2543,11 +2563,17 @@ mod indirect_bc_de_tests {
         let fetch = request(cpu.begin_instruction().unwrap());
         let write = request(cpu.complete_bus_cycle(fetch.id, Some(0x12)).unwrap());
         assert_eq!(write.address, 0x1234);
-        assert_eq!(write.operation, Z80BusOperation::MemoryWrite { value: 0xA5 });
+        assert_eq!(
+            write.operation,
+            Z80BusOperation::MemoryWrite { value: 0xA5 }
+        );
         assert_eq!(cpu.wz, 0);
         assert_eq!(
             cpu.complete_bus_cycle(write.id, None).unwrap(),
-            Z80MicroStep::InstructionRetired { opcode: 0x12, tstates: 7 }
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x12,
+                tstates: 7
+            }
         );
         assert_eq!(cpu.wz, 0xA535);
     }
@@ -2565,7 +2591,6 @@ mod indirect_bc_de_tests {
         }
     }
 }
-
 
 #[cfg(test)]
 mod indirect_bc_de_validation_tests {
@@ -2605,10 +2630,7 @@ mod indirect_bc_de_validation_tests {
             };
             assert_eq!(
                 cpu.complete_bus_cycle(bus.id, data).unwrap(),
-                Z80MicroStep::InstructionRetired {
-                    opcode,
-                    tstates: 9
-                }
+                Z80MicroStep::InstructionRetired { opcode, tstates: 9 }
             );
         }
     }
