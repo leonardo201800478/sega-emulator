@@ -181,6 +181,7 @@ impl SmsTemporalM1 {
 mod tests {
     use super::{SmsTemporalM1, SmsTemporalM1Error};
     use crate::{SmsTemporalCoordinator, SmsTemporalEvent};
+    use sega_temporal_core::MachineTime;
     use sega_z80_cpu::Z80M1Phase;
 
     fn tick(
