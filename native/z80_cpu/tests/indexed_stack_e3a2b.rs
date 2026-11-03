@@ -33,6 +33,8 @@ fn push_ix_writes_high_then_low_with_waits_and_snapshot_resume() {
     let mut cpu = Z80MicroSequencer::default();
     cpu.ix = 0x1234;
     cpu.registers.sp = 0x0000;
+    cpu.registers.f = 0xA5;
+    cpu.wz = 0x4567;
 
     let fetch = start(&mut cpu);
     let fetch = feed_prefix(&mut cpu, fetch, 0xDD);
@@ -63,6 +65,9 @@ fn push_ix_writes_high_then_low_with_waits_and_snapshot_resume() {
     );
     assert_eq!(cpu.registers.sp, 0xFFFE);
     assert_eq!(cpu.ix, 0x1234);
+    assert_eq!(cpu.registers.f, 0xA5);
+    assert_eq!(cpu.wz, 0x4567);
+    assert_eq!(cpu.registers.pc, 2);
 }
 
 #[test]
@@ -71,6 +76,8 @@ fn push_iy_uses_last_of_repeated_alternating_prefixes() {
     cpu.ix = 0x1111;
     cpu.iy = 0xABCD;
     cpu.registers.sp = 0x2000;
+    cpu.registers.f = 0x5A;
+    cpu.wz = 0x6789;
 
     let fetch = start(&mut cpu);
     let fetch = feed_prefix(&mut cpu, fetch, 0xDD);
@@ -99,12 +106,17 @@ fn push_iy_uses_last_of_repeated_alternating_prefixes() {
     assert_eq!(cpu.iy, 0xABCD);
     assert_eq!(cpu.ix, 0x1111);
     assert_eq!(cpu.registers.sp, 0x1FFE);
+    assert_eq!(cpu.registers.f, 0x5A);
+    assert_eq!(cpu.wz, 0x6789);
+    assert_eq!(cpu.registers.pc, 5);
 }
 
 #[test]
 fn pop_ix_reads_low_then_high_wraps_sp_and_restores_both_read_phases() {
     let mut cpu = Z80MicroSequencer::default();
     cpu.registers.sp = 0xFFFF;
+    cpu.registers.f = 0x3C;
+    cpu.wz = 0x789A;
     let fetch = start(&mut cpu);
     let fetch = feed_prefix(&mut cpu, fetch, 0xDD);
     let fetch = feed_prefix(&mut cpu, fetch, 0xFD);
@@ -128,6 +140,9 @@ fn pop_ix_reads_low_then_high_wraps_sp_and_restores_both_read_phases() {
     assert_eq!(cpu.ix, 0x5678);
     assert_eq!(cpu.registers.hl(), 0);
     assert_eq!(cpu.registers.sp, 0x0001);
+    assert_eq!(cpu.registers.f, 0x3C);
+    assert_eq!(cpu.wz, 0x789A);
+    assert_eq!(cpu.registers.pc, 4);
 }
 
 #[test]
@@ -135,6 +150,8 @@ fn pop_iy_uses_fd_prefix_and_commits_only_after_high_byte() {
     let mut cpu = Z80MicroSequencer::default();
     cpu.iy = 0xAAAA;
     cpu.registers.sp = 0x4000;
+    cpu.registers.f = 0xC3;
+    cpu.wz = 0x9ABC;
     let fetch = start(&mut cpu);
     let fetch = feed_prefix(&mut cpu, fetch, 0xFD);
     let low = request(cpu.complete_bus_cycle(fetch.id, Some(0xE1)).unwrap());
@@ -157,4 +174,7 @@ fn pop_iy_uses_fd_prefix_and_commits_only_after_high_byte() {
     );
     assert_eq!(cpu.iy, 0xABCD);
     assert_eq!(cpu.registers.sp, 0x4002);
+    assert_eq!(cpu.registers.f, 0xC3);
+    assert_eq!(cpu.wz, 0x9ABC);
+    assert_eq!(cpu.registers.pc, 2);
 }
