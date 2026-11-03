@@ -306,6 +306,26 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u16(address);
             writer.u8(value);
         }
+        Z80MicroSequencerPhase::CbMemoryRead { address } => {
+            writer.u8(12);
+            writer.u16(address);
+        }
+        Z80MicroSequencerPhase::CbMemoryInternal { address, result } => {
+            writer.u8(13);
+            writer.u16(address);
+            match result {
+                None => writer.u8(0),
+                Some(value) => {
+                    writer.u8(1);
+                    writer.u8(value);
+                }
+            }
+        }
+        Z80MicroSequencerPhase::CbMemoryWrite { address, value } => {
+            writer.u8(14);
+            writer.u16(address);
+            writer.u8(value);
+        }
     }
 }
 
@@ -344,6 +364,22 @@ fn read_phase(
             address: reader.u16()?,
         },
         7 => Z80MicroSequencerPhase::MemoryWrite {
+            address: reader.u16()?,
+            value: reader.u8()?,
+        },
+        12 => Z80MicroSequencerPhase::CbMemoryRead {
+            address: reader.u16()?,
+        },
+        13 => {
+            let address = reader.u16()?;
+            let result = if read_bool(reader)? {
+                Some(reader.u8()?)
+            } else {
+                None
+            };
+            Z80MicroSequencerPhase::CbMemoryInternal { address, result }
+        }
+        14 => Z80MicroSequencerPhase::CbMemoryWrite {
             address: reader.u16()?,
             value: reader.u8()?,
         },
