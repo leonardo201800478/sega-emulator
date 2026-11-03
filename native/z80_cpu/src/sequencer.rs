@@ -52,6 +52,13 @@ pub enum Z80MicroSequencerPhase {
         pair: u8,
         low: u8,
     },
+    IndexImmediateLow {
+        prefix: u8,
+    },
+    IndexImmediateHigh {
+        prefix: u8,
+        low: u8,
+    },
     ImmediateReadMemoryWrite,
     ImmediateReadAlu {
         operation: u8,
@@ -446,6 +453,26 @@ impl Z80MicroSequencer {
                             && request.base_tstates == 3
                     })
                     && state.instruction_tstates >= 7
+            }
+            Z80MicroSequencerPhase::IndexImmediateLow { prefix } => {
+                matches!(prefix, 0xDD | 0xFD)
+                    && state.opcode == Some(0x21)
+                    && pending.is_some_and(|request| {
+                        request.operation == Z80BusOperation::MemoryRead
+                            && request.address == state.registers.pc
+                            && request.base_tstates == 3
+                    })
+                    && state.instruction_tstates >= 8
+            }
+            Z80MicroSequencerPhase::IndexImmediateHigh { prefix, .. } => {
+                matches!(prefix, 0xDD | 0xFD)
+                    && state.opcode == Some(0x21)
+                    && pending.is_some_and(|request| {
+                        request.operation == Z80BusOperation::MemoryRead
+                            && request.address == state.registers.pc
+                            && request.base_tstates == 3
+                    })
+                    && state.instruction_tstates >= 11
             }
             Z80MicroSequencerPhase::ImmediateReadMemoryWrite => {
                 state.opcode == Some(0x36)
@@ -962,6 +989,12 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::ImmediateReadRegisterPairHigh { .. } => {
                 state.mcycle_index == 2 && state.tstate_index == 0
             }
+            Z80MicroSequencerPhase::IndexImmediateLow { .. } => {
+                state.mcycle_index == 2 && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::IndexImmediateHigh { .. } => {
+                state.mcycle_index == 3 && state.tstate_index == 0
+            }
             Z80MicroSequencerPhase::EdAbsoluteTransfer { stage, .. } => {
                 state.mcycle_index == 2 + u32::from(stage) && state.tstate_index == 0
             }
@@ -1185,6 +1218,9 @@ impl Z80MicroSequencer {
                     self.execute_cb_register(opcode);
                     return self.retire(opcode);
                 }
+                if let Some(prefix @ (0xDD | 0xFD)) = previous_prefix {
+                    return self.execute_indexed_pair_immediate(opcode, prefix);
+                }
                 if previous_prefix.is_some() {
                     return self.unsupported(opcode);
                 }
@@ -1340,6 +1376,25 @@ impl Z80MicroSequencer {
                     self.opcode
                         .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
                 )
+            }
+            Z80MicroSequencerPhase::IndexImmediateLow { prefix } => {
+                let low = response.data.ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.registers.pc = self.registers.pc.wrapping_add(1);
+                self.issue_read(
+                    Z80MicroSequencerPhase::IndexImmediateHigh { prefix, low },
+                    self.registers.pc,
+                )
+            }
+            Z80MicroSequencerPhase::IndexImmediateHigh { prefix, low } => {
+                let high = response.data.ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.registers.pc = self.registers.pc.wrapping_add(1);
+                let value = u16::from_le_bytes([low, high]);
+                if prefix == 0xDD {
+                    self.ix = value;
+                } else {
+                    self.iy = value;
+                }
+                self.retire(0x21)
             }
             Z80MicroSequencerPhase::ImmediateReadMemoryWrite => {
                 let value = response
@@ -2039,6 +2094,20 @@ impl Z80MicroSequencer {
         self.mcycle_index = 0;
         self.tstate_index = 0;
         Err(Z80MicroSequencerError::UnsupportedOpcode { opcode, address })
+    }
+
+    fn execute_indexed_pair_immediate(
+        &mut self,
+        opcode: u8,
+        prefix: u8,
+    ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
+        if opcode == 0x21 {
+            return self.issue_read(
+                Z80MicroSequencerPhase::IndexImmediateLow { prefix },
+                self.registers.pc,
+            );
+        }
+        self.unsupported(opcode)
     }
 
     /// Execute the ED register/control subset that retires after two M1 fetches.
