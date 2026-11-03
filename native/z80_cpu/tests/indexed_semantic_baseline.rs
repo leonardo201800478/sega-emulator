@@ -33,11 +33,9 @@ impl CpuBus for FlatBus {
 fn indexed_cb(prefix: u8, opcode: u8, value: u8) -> (Z80, FlatBus, u32) {
     let mut bus = FlatBus::default();
     bus.memory[..4].copy_from_slice(&[prefix, 0xCB, 0x01, opcode]);
-    let mut cpu = Z80 {
-        ix: if prefix == 0xDD { 0xC000 } else { 0x1357 },
-        iy: if prefix == 0xFD { 0xC000 } else { 0x2468 },
-        ..Z80::default()
-    };
+    let mut cpu = Z80::default();
+    cpu.ix = if prefix == 0xDD { 0xC000 } else { 0x1357 };
+    cpu.iy = if prefix == 0xFD { 0xC000 } else { 0x2468 };
     bus.memory[0xC001] = value;
     let cycles = cpu.step(&mut bus).unwrap();
     (cpu, bus, cycles)
@@ -76,31 +74,21 @@ fn indexed_memory_h_and_l_operands_use_plain_hl_registers() {
         let mut load_bus = FlatBus::default();
         load_bus.memory[..3].copy_from_slice(&[prefix, 0x66, 0x01]); // LD H,(IX/IY+1)
         load_bus.memory[0xC001] = 0x5A;
-        let mut load_cpu = Z80 {
-            ix: if prefix == 0xDD { 0xC000 } else { 0x1357 },
-            iy: if prefix == 0xFD { 0xC000 } else { 0x2468 },
-            registers: sega_z80_cpu::Z80Registers {
-                h: 0x12,
-                l: 0x34,
-                ..sega_z80_cpu::Z80Registers::default()
-            },
-            ..Z80::default()
-        };
+        let mut load_cpu = Z80::default();
+        load_cpu.ix = if prefix == 0xDD { 0xC000 } else { 0x1357 };
+        load_cpu.iy = if prefix == 0xFD { 0xC000 } else { 0x2468 };
+        load_cpu.registers.h = 0x12;
+        load_cpu.registers.l = 0x34;
         assert_eq!(load_cpu.step(&mut load_bus), Ok(19));
         assert_eq!(load_cpu.registers.h, 0x5A);
         assert_eq!(load_cpu.registers.l, 0x34);
 
         let mut store_bus = FlatBus::default();
         store_bus.memory[..3].copy_from_slice(&[prefix, 0x74, 0x02]); // LD (IX/IY+2),H
-        let mut store_cpu = Z80 {
-            ix: if prefix == 0xDD { 0xC000 } else { 0x1357 },
-            iy: if prefix == 0xFD { 0xC000 } else { 0x2468 },
-            registers: sega_z80_cpu::Z80Registers {
-                h: 0xA5,
-                ..sega_z80_cpu::Z80Registers::default()
-            },
-            ..Z80::default()
-        };
+        let mut store_cpu = Z80::default();
+        store_cpu.ix = if prefix == 0xDD { 0xC000 } else { 0x1357 };
+        store_cpu.iy = if prefix == 0xFD { 0xC000 } else { 0x2468 };
+        store_cpu.registers.h = 0xA5;
         assert_eq!(store_cpu.step(&mut store_bus), Ok(19));
         assert_eq!(store_bus.memory[0xC002], 0xA5);
         assert_eq!(store_bus.writes, vec![(0xC002, 0xA5)]);
@@ -112,11 +100,9 @@ fn index_half_registers_are_selected_by_the_effective_prefix() {
     for (prefix, index) in [(0xDD, 0xABCD), (0xFD, 0x9876)] {
         let mut bus = FlatBus::default();
         bus.memory[..2].copy_from_slice(&[prefix, 0x44]); // LD B,IXH/IYH
-        let mut cpu = Z80 {
-            ix: if prefix == 0xDD { index } else { 0x1357 },
-            iy: if prefix == 0xFD { index } else { 0x2468 },
-            ..Z80::default()
-        };
+        let mut cpu = Z80::default();
+        cpu.ix = if prefix == 0xDD { index } else { 0x1357 };
+        cpu.iy = if prefix == 0xFD { index } else { 0x2468 };
         assert_eq!(cpu.step(&mut bus), Ok(8));
         assert_eq!(cpu.registers.b, (index >> 8) as u8);
         assert_eq!(cpu.r & 0x7F, 2);
