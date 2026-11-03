@@ -7002,6 +7002,42 @@ mod ed_block_io_differential_tests {
                 value: 0xFF,
                 flags: 0x26,
             },
+            RepeatFlagsVector {
+                opcode: 0xB2,
+                c: 0xFE,
+                hl: 0x4000,
+                port: 0x11FE,
+                input: true,
+                value: 0x01,
+                flags: 0x25,
+            },
+            RepeatFlagsVector {
+                opcode: 0xB3,
+                c: 0x01,
+                hl: 0x40FE,
+                port: 0x1001,
+                input: false,
+                value: 0x01,
+                flags: 0x25,
+            },
+            RepeatFlagsVector {
+                opcode: 0xBA,
+                c: 0x00,
+                hl: 0x4000,
+                port: 0x1100,
+                input: true,
+                value: 0x01,
+                flags: 0x25,
+            },
+            RepeatFlagsVector {
+                opcode: 0xBB,
+                c: 0x02,
+                hl: 0x4100,
+                port: 0x1002,
+                input: false,
+                value: 0x01,
+                flags: 0x25,
+            },
         ];
 
         for RepeatFlagsVector {
