@@ -1473,12 +1473,11 @@ impl Z80MicroSequencer {
                         },
                         self.registers.pc,
                     ),
-                    0xC2 | 0xC3 | 0xCA | 0xD2 | 0xDA | 0xE2 | 0xEA | 0xF2 | 0xFA => {
-                        self.issue_read(
+                    0xC2 | 0xC3 | 0xCA | 0xD2 | 0xDA | 0xE2 | 0xEA | 0xF2 | 0xFA => self
+                        .issue_read(
                             Z80MicroSequencerPhase::BaseAbsoluteJump { stage: 0, low: 0 },
                             self.registers.pc,
-                        )
-                    }
+                        ),
                     0x10 | 0x18 | 0x20 | 0x28 | 0x30 | 0x38 => self.issue_read(
                         Z80MicroSequencerPhase::BaseRelativeBranchImmediate,
                         self.registers.pc,
@@ -8112,9 +8111,7 @@ mod base_relative_branch_differential_tests {
 #[cfg(test)]
 mod base_absolute_jump_differential_tests {
     use crate::bus::CpuBus;
-    use crate::{
-        Z80, Z80ArchitecturalState, Z80BusOperation, Z80MicroSequencer, Z80MicroStep,
-    };
+    use crate::{Z80, Z80ArchitecturalState, Z80BusOperation, Z80MicroSequencer, Z80MicroStep};
 
     const FLAG_C: u8 = 0x01;
     const FLAG_PV: u8 = 0x04;
@@ -8161,7 +8158,9 @@ mod base_absolute_jump_differential_tests {
                             bus.write_memory(request.address, value);
                             None
                         }
-                        operation => panic!("unexpected absolute-jump bus operation: {operation:?}"),
+                        operation => {
+                            panic!("unexpected absolute-jump bus operation: {operation:?}")
+                        }
                     };
                     cpu.complete_bus_cycle(request.id, data).unwrap()
                 }
