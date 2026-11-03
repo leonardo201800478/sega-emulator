@@ -36,6 +36,7 @@ fn indexed_cb(prefix: u8, opcode: u8, value: u8) -> (Z80, FlatBus, u32) {
     let mut cpu = Z80::default();
     cpu.ix = if prefix == 0xDD { 0xC000 } else { 0x1357 };
     cpu.iy = if prefix == 0xFD { 0xC000 } else { 0x2468 };
+    cpu.registers.f = 0x01; // Verify BIT preserves carry.
     bus.memory[0xC001] = value;
     let cycles = cpu.step(&mut bus).unwrap();
     (cpu, bus, cycles)
