@@ -695,7 +695,7 @@ impl SmsTemporalMachine {
             next_internal_cycle_id: self.next_internal_cycle_id,
             pending_internal_cycle_id: self.pending_internal_cycle_id,
             pending_internal_tstates: self.pending_internal_tstates,
-            m1: self.m1.map(SmsTemporalM1::export_state),
+            m1: self.m1.map(|m1| m1.export_state()),
             m1_fixture_wait_tstates: self.m1_fixture_wait_tstates,
         }
     }
@@ -741,7 +741,7 @@ impl SmsTemporalMachine {
                 let events = &state.bus.coordinator.scheduler.event_queue.pending;
                 if state.bus.pending_request.is_some()
                     || state.pending_internal_cycle_id.is_some()
-                    || cpu.handshake.wait_tstates != total_waits
+                    || state.cpu.handshake.wait_tstates != total_waits
                     || m1_state.cycle.address != request.address
                     || m1_state.cycle.refresh_after_m1
                         != ((cpu.refresh & 0x80) | (cpu.refresh.wrapping_add(1) & 0x7F))
@@ -944,6 +944,8 @@ mod tests {
             next_internal_cycle_id: state.next_internal_cycle_id,
             pending_internal_cycle_id: state.pending_internal_cycle_id,
             pending_internal_tstates: state.pending_internal_tstates,
+            m1: state.m1.map(SmsTemporalM1::restore_state).transpose().unwrap(),
+            m1_fixture_wait_tstates: state.m1_fixture_wait_tstates,
             trace_enabled: false,
             trace_events: Vec::new(),
         };
