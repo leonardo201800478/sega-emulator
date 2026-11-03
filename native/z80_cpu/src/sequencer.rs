@@ -5,7 +5,7 @@
 //! atomic executor; it does not yet cover interrupts, prefixes, HALT, refresh
 //! pin phases, or the full architectural state.
 
-use crate::alu::{adc8, add8, and8, cpl8, cp8, daa8, or8, rotate_accumulator, sbc8, sub8, xor8};
+use crate::alu::{adc8, add8, and8, cp8, cpl8, daa8, or8, rotate_accumulator, sbc8, sub8, xor8};
 use crate::{
     Z80_MICRO_SEQUENCER_STATE_VERSION, Z80BusHandshake, Z80BusHandshakeError, Z80BusOperation,
     Z80BusRequest, Z80Registers,
@@ -634,7 +634,6 @@ impl Z80MicroSequencer {
             self.registers.a = result.value;
         }
     }
-
 
     /// Execute accumulator-only BASE instructions whose effects commit at M1 completion.
     /// SCF/CCF are intentionally excluded until the Q-latch is represented in sequencer state.
@@ -1935,5 +1934,4 @@ mod tests {
             assert!(!cpu.instruction_active(), "opcode {opcode:02X}");
         }
     }
-
 }
