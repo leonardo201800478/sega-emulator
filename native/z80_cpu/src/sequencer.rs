@@ -6506,11 +6506,11 @@ mod ed_block_io_differential_tests {
                 port_reads: Vec::new(),
                 port_writes: Vec::new(),
             };
-            for address in 0..0x1_0000 {
-                bus.memory[address] = (address as u8)
-                    .wrapping_mul(13)
-                    .wrapping_add(0xA5);
-                bus.ports[address] = (address as u8)
+            for (address, (memory, port)) in
+                bus.memory.iter_mut().zip(bus.ports.iter_mut()).enumerate()
+            {
+                *memory = (address as u8).wrapping_mul(13).wrapping_add(0xA5);
+                *port = (address as u8)
                     .wrapping_mul(37)
                     .wrapping_add((address >> 8) as u8)
                     .wrapping_add(0x81);
