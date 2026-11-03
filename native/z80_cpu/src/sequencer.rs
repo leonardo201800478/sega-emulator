@@ -183,6 +183,28 @@ pub enum Z80MicroSequencerPhase {
     },
 }
 
+impl Z80MicroSequencerPhase {
+    /// Whether this continuation is waiting for a CPU-internal T-state.
+    ///
+    /// Internal phases do not own a memory or I/O request. The machine scheduler
+    /// must advance the requested T-state(s) before the sequencer can resume.
+    pub const fn is_internal_cycle(self) -> bool {
+        matches!(
+            self,
+            Self::CbMemoryInternal { .. }
+                | Self::EdRegisterInternal { .. }
+                | Self::Ed16ArithmeticInternal { .. }
+                | Self::EdNibbleRotateInternal { .. }
+                | Self::EdBlockRepeatInternal { .. }
+                | Self::EdBlockCompareInternal { .. }
+                | Self::EdBlockCompareRepeatInternal { .. }
+                | Self::EdBlockIoInitialInternal { .. }
+                | Self::EdBlockIoRepeatInternal { .. }
+                | Self::MemoryIncDecInternal { .. }
+        )
+    }
+}
+
 /// Observable result after a completed bus transaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Z80MicroStep {
