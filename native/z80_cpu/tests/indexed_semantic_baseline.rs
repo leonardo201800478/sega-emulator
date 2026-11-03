@@ -123,3 +123,19 @@ fn signed_index_displacement_wraps_the_effective_address() {
     assert_eq!(cpu.wz, 0xFFFF);
     assert_eq!(cpu.registers.pc, 3);
 }
+
+
+#[test]
+fn alternating_index_prefixes_select_the_last_index_register() {
+    let mut bus = FlatBus::default();
+    bus.memory[..5].copy_from_slice(&[0xDD, 0xFD, 0x21, 0x34, 0x12]);
+    let mut cpu = Z80::default();
+    cpu.ix = 0xAAAA;
+    cpu.iy = 0xBBBB;
+
+    assert_eq!(cpu.step(&mut bus), Ok(18));
+    assert_eq!(cpu.ix, 0xAAAA);
+    assert_eq!(cpu.iy, 0x1234);
+    assert_eq!(cpu.registers.pc, 5);
+    assert_eq!(cpu.r & 0x7F, 3, "DD, FD and LD opcode are M1 fetches");
+}
