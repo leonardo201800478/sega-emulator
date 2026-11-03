@@ -7230,14 +7230,11 @@ mod ed_block_io_differential_tests {
     }
 }
 
-
 #[cfg(test)]
 mod base_16bit_register_differential_tests {
     use super::{Z80MicroSequencer, Z80MicroStep};
     use crate::bus::CpuBus;
-    use crate::{
-        Z80, Z80AlternateRegisters, Z80ArchitecturalState, Z80BusOperation, Z80Registers,
-    };
+    use crate::{Z80, Z80AlternateRegisters, Z80ArchitecturalState, Z80BusOperation, Z80Registers};
 
     #[derive(Clone)]
     struct TestBus {
