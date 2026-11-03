@@ -584,9 +584,8 @@ impl Z80MicroSequencer {
                     .opcode
                     .and_then(|opcode| stack_pair_value(&state.registers, opcode));
                 opcode_matches
-                    && expected.is_some_and(|value| {
-                        high == (value >> 8) as u8 && low == value as u8
-                    })
+                    && expected
+                        .is_some_and(|value| high == (value >> 8) as u8 && low == value as u8)
                     && pending.is_none()
                     && state.mcycle_index == 0
                     && state.tstate_index == 4
@@ -621,7 +620,9 @@ impl Z80MicroSequencer {
                     && state.instruction_tstates >= 5 + u32::from(stage) * 3
             }
             Z80MicroSequencerPhase::BaseStackPop { stage, low } => {
-                state.opcode.is_some_and(|opcode| matches!(opcode, 0xC1 | 0xD1 | 0xE1 | 0xF1))
+                state
+                    .opcode
+                    .is_some_and(|opcode| matches!(opcode, 0xC1 | 0xD1 | 0xE1 | 0xF1))
                     && stage <= 1
                     && pending.is_some_and(|request| {
                         request.operation == Z80BusOperation::MemoryRead
@@ -1245,9 +1246,7 @@ impl Z80MicroSequencer {
                 state.mcycle_index == 0 && state.tstate_index == 4
             }
             Z80MicroSequencerPhase::BaseStackPushWrite { stage, .. } => {
-                stage <= 1
-                    && state.mcycle_index == 1 + u32::from(stage)
-                    && state.tstate_index == 0
+                stage <= 1 && state.mcycle_index == 1 + u32::from(stage) && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::BaseStackPop { stage, .. } => {
                 stage <= 1
@@ -8450,13 +8449,10 @@ mod base_absolute_jump_differential_tests {
     }
 }
 
-
 #[cfg(test)]
 mod base_stack_push_pop_differential_tests {
     use crate::bus::CpuBus;
-    use crate::{
-        Z80, Z80ArchitecturalState, Z80BusOperation, Z80MicroSequencer, Z80MicroStep,
-    };
+    use crate::{Z80, Z80ArchitecturalState, Z80BusOperation, Z80MicroSequencer, Z80MicroStep};
 
     #[derive(Clone)]
     struct TestBus {
