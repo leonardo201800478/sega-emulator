@@ -93,6 +93,14 @@ pub enum Z80MicroSequencerPhase {
         opcode: u8,
         remaining_tstates: u8,
     },
+    EdAbsoluteTransfer {
+        stage: u8,
+        pair: u8,
+        store: bool,
+        address: u16,
+        low: u8,
+        pair_value: u16,
+    },
     MemoryIncDecInternal {
         decrement: bool,
         old: u8,
