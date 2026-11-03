@@ -622,6 +622,13 @@ impl Z80MicroSequencer {
                     return Ok(Z80MicroStep::BusRequest(request));
                 }
                 self.opcode = Some(opcode);
+                if previous_prefix == Some(0xCB) {
+                    if opcode & 0x07 == 0x06 {
+                        return self.unsupported(opcode);
+                    }
+                    self.execute_cb_register(opcode);
+                    return self.retire(opcode);
+                }
                 if previous_prefix.is_some() {
                     return self.unsupported(opcode);
                 }
@@ -915,6 +922,60 @@ impl Z80MicroSequencer {
         self.mcycle_index = 0;
         self.tstate_index = 0;
         Err(Z80MicroSequencerError::UnsupportedOpcode { opcode, address })
+    }
+
+    /// Execute a CB-prefixed operation whose operand is a CPU register.
+    ///
+    /// The two opcode bytes have already completed independent M1 cycles.
+    /// Memory operand encodings (z = 6) are deliberately handled by a later
+    /// microsequenced slice because they require additional bus/internal cycles.
+    fn execute_cb_register(&mut self, opcode: u8) {
+        let target = opcode & 0x07;
+        let group = opcode >> 6;
+        let operation = (opcode >> 3) & 0x07;
+        let value = self.read_register(target);
+
+        match group {
+            0 => {
+                let old_carry = self.registers.f & FLAG_C != 0;
+                let (result, carry) = match operation {
+                    0 => (value.rotate_left(1), value & 0x80 != 0), // RLC
+                    1 => (value.rotate_right(1), value & 0x01 != 0), // RRC
+                    2 => ((value << 1) | u8::from(old_carry), value & 0x80 != 0), // RL
+                    3 => ((value >> 1) | (u8::from(old_carry) << 7), value & 1 != 0), // RR
+                    4 => (value << 1, value & 0x80 != 0), // SLA
+                    5 => ((value >> 1) | (value & 0x80), value & 1 != 0), // SRA
+                    6 => ((value << 1) | 1, value & 0x80 != 0), // undocumented SLL
+                    _ => (value >> 1, value & 1 != 0), // SRL
+                };
+                let mut flags = result & (FLAG_S | FLAG_XY);
+                if result == 0 {
+                    flags |= FLAG_Z;
+                }
+                if result.count_ones().is_multiple_of(2) {
+                    flags |= FLAG_PV;
+                }
+                if carry {
+                    flags |= FLAG_C;
+                }
+                self.set_flags(flags);
+                self.write_register(target, result);
+            }
+            1 => {
+                let mask = 1_u8 << operation;
+                let bit_clear = value & mask == 0;
+                let mut flags = (self.registers.f & FLAG_C) | FLAG_H | (value & FLAG_XY);
+                if bit_clear {
+                    flags |= FLAG_Z | FLAG_PV;
+                }
+                if operation == 7 && !bit_clear {
+                    flags |= FLAG_S;
+                }
+                self.set_flags(flags);
+            }
+            2 => self.write_register(target, value & !(1_u8 << operation)),
+            _ => self.write_register(target, value | (1_u8 << operation)),
+        }
     }
 
     /// Execute one register-source BASE ALU operation using the shared ALU.
@@ -2913,5 +2974,153 @@ mod indirect_bc_de_differential_tests {
                 "memory mismatch for opcode {opcode:02X}"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod cb_register_differential_tests {
+    use super::{Z80MicroSequencer, Z80MicroStep};
+    use crate::bus::CpuBus;
+    use crate::{Z80, Z80ArchitecturalState, Z80BusOperation, Z80Registers};
+
+    #[derive(Clone)]
+    struct TestBus {
+        memory: Box<[u8; 0x10000]>,
+    }
+
+    impl Default for TestBus {
+        fn default() -> Self {
+            Self {
+                memory: Box::new([0; 0x10000]),
+            }
+        }
+    }
+
+    impl CpuBus for TestBus {
+        fn read_memory(&mut self, address: u16) -> u8 {
+            self.memory[usize::from(address)]
+        }
+
+        fn write_memory(&mut self, address: u16, value: u8) {
+            self.memory[usize::from(address)] = value;
+        }
+    }
+
+    fn request(step: Z80MicroStep) -> crate::Z80BusRequest {
+        match step {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected bus request, got {other:?}"),
+        }
+    }
+
+    fn initial_state(registers: Z80Registers, q: u8) -> Z80ArchitecturalState {
+        Z80ArchitecturalState {
+            registers,
+            alternate: crate::Z80AlternateRegisters::default(),
+            ix: 0x1357,
+            iy: 0x2468,
+            i: 0xA5,
+            r: 0xFE,
+            iff1: false,
+            iff2: false,
+            interrupt_mode: 0,
+            wz: 0xA328,
+            ei_delay: 0,
+            nmi_pending: false,
+            int_pending: None,
+            q,
+            q_previous: 0x5A,
+            p: false,
+            halted: false,
+        }
+    }
+
+    #[test]
+    fn all_56_cb_register_encodings_match_atomic_architecture_and_memory() {
+        for group in 0_u8..4 {
+            for operation in 0_u8..8 {
+                for target in [0_u8, 1, 2, 3, 4, 5, 7] {
+                    let opcode = (group << 6) | (operation << 3) | target;
+                    for (operand, flags, q) in [
+                        (0x00, 0x01, 0x00),
+                        (0x81, 0xD7, 0x28),
+                        (0x7F, 0xA5, 0x80),
+                    ] {
+                        let registers = Z80Registers {
+                            a: operand,
+                            f: flags,
+                            b: operand.rotate_left(1),
+                            c: operand.rotate_right(1),
+                            d: operand ^ 0x55,
+                            e: operand ^ 0xAA,
+                            h: 0x42,
+                            l: 0x19,
+                            pc: 0xFFFE,
+                            sp: 0xD000,
+                        };
+                        let state = initial_state(registers, q);
+                        let mut atomic = Z80::default();
+                        atomic.import_architectural_state(state).unwrap();
+                        let mut atomic_bus = TestBus::default();
+                        atomic_bus.memory[0xFFFE] = 0xCB;
+                        atomic_bus.memory[0xFFFF] = opcode;
+
+                        let mut sequenced = Z80MicroSequencer::default();
+                        sequenced.import_architectural_state(state).unwrap();
+                        let mut sequenced_bus = atomic_bus.clone();
+
+                        assert_eq!(atomic.step(&mut atomic_bus), Ok(8), "opcode {opcode:02X}");
+                        let first_m1 = request(sequenced.begin_instruction().unwrap());
+                        assert_eq!(first_m1.operation, Z80BusOperation::OpcodeFetch);
+                        assert_eq!(first_m1.address, 0xFFFE);
+                        let second = request(
+                            sequenced
+                                .complete_bus_cycle(first_m1.id, Some(0xCB))
+                                .unwrap(),
+                        );
+                        assert_eq!(second.operation, Z80BusOperation::OpcodeFetch);
+                        assert_eq!(second.address, 0xFFFF);
+                        let retired = sequenced.complete_bus_cycle(second.id, Some(opcode)).unwrap();
+                        assert_eq!(
+                            retired,
+                            Z80MicroStep::InstructionRetired {
+                                opcode,
+                                tstates: 8
+                            },
+                            "opcode {opcode:02X}"
+                        );
+
+                        assert_eq!(
+                            sequenced.export_architectural_state(),
+                            atomic.export_architectural_state(),
+                            "architectural mismatch for CB {opcode:02X}"
+                        );
+                        assert_eq!(
+                            sequenced_bus.memory.as_ref(),
+                            atomic_bus.memory.as_ref(),
+                            "memory mismatch for CB {opcode:02X}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn cb_memory_encoding_remains_explicitly_unsupported_until_bus_slice_exists() {
+        let mut cpu = Z80MicroSequencer::default();
+        let first = request(cpu.begin_instruction().unwrap());
+        let second = request(cpu.complete_bus_cycle(first.id, Some(0xCB)).unwrap());
+        assert_eq!(second.address, 1);
+        assert!(matches!(
+            cpu.complete_bus_cycle(second.id, Some(0x06)),
+            Err(super::Z80MicroSequencerError::UnsupportedOpcode {
+                opcode: 0x06,
+                address: 1
+            })
+        ));
+        assert_eq!(cpu.registers.pc, 2);
+        assert_eq!(cpu.refresh & 0x7F, 2);
+        assert!(!cpu.instruction_active());
     }
 }
