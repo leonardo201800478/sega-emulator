@@ -2023,7 +2023,6 @@ mod base_absolute_jump_temporal_tests {
     }
 }
 
-
 #[cfg(test)]
 mod base_stack_temporal_tests {
     use super::SmsTemporalMachine;
