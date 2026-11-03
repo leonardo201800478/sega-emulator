@@ -1378,7 +1378,9 @@ impl Z80MicroSequencer {
                 )
             }
             Z80MicroSequencerPhase::IndexImmediateLow { prefix } => {
-                let low = response.data.ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                let low = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 self.registers.pc = self.registers.pc.wrapping_add(1);
                 self.issue_read(
                     Z80MicroSequencerPhase::IndexImmediateHigh { prefix, low },
@@ -1386,7 +1388,9 @@ impl Z80MicroSequencer {
                 )
             }
             Z80MicroSequencerPhase::IndexImmediateHigh { prefix, low } => {
-                let high = response.data.ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                let high = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 self.registers.pc = self.registers.pc.wrapping_add(1);
                 let value = u16::from_le_bytes([low, high]);
                 if prefix == 0xDD {
@@ -2830,7 +2834,9 @@ mod tests {
                 ..Z80MicroSequencer::default()
             };
             let first = request(cpu.begin_instruction().unwrap());
-            let mut next = cpu.complete_bus_cycle(first.id, Some(opcode_bytes[0])).unwrap();
+            let mut next = cpu
+                .complete_bus_cycle(first.id, Some(opcode_bytes[0]))
+                .unwrap();
             cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
             for byte in opcode_bytes.iter().copied().skip(1) {
                 let fetch = request(next);
@@ -2843,11 +2849,15 @@ mod tests {
             let low_request = request(next);
             assert_eq!(low_request.operation, Z80BusOperation::MemoryRead);
             assert_eq!(low_request.base_tstates, 3);
-            next = cpu.complete_bus_cycle(low_request.id, Some(opcode_bytes[opcode_bytes.len() - 2])).unwrap();
+            next = cpu
+                .complete_bus_cycle(low_request.id, Some(opcode_bytes[opcode_bytes.len() - 2]))
+                .unwrap();
             cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
             let high_request = request(next);
             assert_eq!(high_request.operation, Z80BusOperation::MemoryRead);
-            next = cpu.complete_bus_cycle(high_request.id, Some(opcode_bytes[opcode_bytes.len() - 1])).unwrap();
+            next = cpu
+                .complete_bus_cycle(high_request.id, Some(opcode_bytes[opcode_bytes.len() - 1]))
+                .unwrap();
             retired(next, 0x21, 14);
             assert_eq!(cpu.ix, expected_ix);
             assert_eq!(cpu.iy, expected_iy);
