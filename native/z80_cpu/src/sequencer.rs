@@ -950,39 +950,21 @@ impl Z80MicroSequencer {
                 ..
             } => {
                 let timing_valid = match (stage, remaining_tstates) {
-                    (0, 1) => {
-                        state.mcycle_index == 2
-                            && state.tstate_index == 3
-                            && state.instruction_tstates
-                                >= 10
-                                    + if matches!(state.prefix_state, Z80PrefixState::Index(_)) {
-                                        4
-                                    } else {
-                                        0
-                                    }
-                    }
-                    (1, 1) => {
-                        state.mcycle_index == 4
-                            && state.tstate_index == 4
-                            && state.instruction_tstates
-                                >= 18
-                                    + if matches!(state.prefix_state, Z80PrefixState::Index(_)) {
-                                        4
-                                    } else {
-                                        0
-                                    }
-                    }
-                    (1, 2) => {
-                        state.mcycle_index == 4
-                            && state.tstate_index == 3
-                            && state.instruction_tstates
-                                >= 17
-                                    + if matches!(state.prefix_state, Z80PrefixState::Index(_)) {
-                                        4
-                                    } else {
-                                        0
-                                    }
-                    }
+                    (0, 1) => prefix_m1_count(state.prefix_state, state.mcycle_index, 2)
+                        .and_then(|count| minimum_prefixed_tstates(count, 6))
+                        .is_some_and(|minimum| {
+                            state.tstate_index == 3 && state.instruction_tstates >= minimum
+                        }),
+                    (1, 1) => prefix_m1_count(state.prefix_state, state.mcycle_index, 4)
+                        .and_then(|count| minimum_prefixed_tstates(count, 14))
+                        .is_some_and(|minimum| {
+                            state.tstate_index == 4 && state.instruction_tstates >= minimum
+                        }),
+                    (1, 2) => prefix_m1_count(state.prefix_state, state.mcycle_index, 4)
+                        .and_then(|count| minimum_prefixed_tstates(count, 13))
+                        .is_some_and(|minimum| {
+                            state.tstate_index == 3 && state.instruction_tstates >= minimum
+                        }),
                     _ => false,
                 };
                 state.opcode == Some(0xE3)
@@ -1116,7 +1098,7 @@ impl Z80MicroSequencer {
                     && expected
                         .is_some_and(|value| high == (value >> 8) as u8 && low == value as u8)
                     && pending.is_none()
-                    && state.mcycle_index == 0
+                    && prefix_m1_count(state.prefix_state, state.mcycle_index, 0).is_some()
                     && state.tstate_index == 4
                     && state.instruction_tstates >= 4
             }
