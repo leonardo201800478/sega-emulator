@@ -194,16 +194,14 @@ pub fn daa8(accumulator: u8, old_flags: u8) -> AluResult {
 /// Executes CPL: complement A, preserve S/Z/PV/C, and set H/N.
 pub fn cpl8(accumulator: u8, old_flags: u8) -> AluResult {
     let value = !accumulator;
-    let flags = (old_flags & (FLAG_S | FLAG_Z | FLAG_PV | FLAG_C))
-        | (value & FLAG_XY)
-        | FLAG_H
-        | FLAG_N;
+    let flags =
+        (old_flags & (FLAG_S | FLAG_Z | FLAG_PV | FLAG_C)) | (value & FLAG_XY) | FLAG_H | FLAG_N;
     AluResult { value, flags }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{adc8, add8, and8, cpl8, cp8, daa8, or8, rotate_accumulator, sbc8, sub8, xor8};
+    use super::{adc8, add8, and8, cp8, cpl8, daa8, or8, rotate_accumulator, sbc8, sub8, xor8};
 
     #[test]
     fn arithmetic_wraps_at_eight_bits() {
@@ -271,7 +269,10 @@ mod tests {
     fn cpl_complements_accumulator_and_preserves_szpc() {
         let result = cpl8(0x10, FLAG_S | FLAG_Z | FLAG_PV | FLAG_C);
         assert_eq!(result.value, 0xEF);
-        assert_eq!(result.flags, FLAG_S | FLAG_Z | FLAG_PV | FLAG_C | FLAG_XY | FLAG_H | FLAG_N);
+        assert_eq!(
+            result.flags,
+            FLAG_S | FLAG_Z | FLAG_PV | FLAG_C | FLAG_XY | FLAG_H | FLAG_N
+        );
     }
 
     #[test]
