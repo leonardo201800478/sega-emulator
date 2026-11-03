@@ -309,6 +309,16 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u8(opcode);
             writer.u8(remaining_tstates);
         }
+        Z80MicroSequencerPhase::BaseAbsoluteTransfer {
+            stage,
+            address,
+            low,
+        } => {
+            writer.u8(36);
+            writer.u8(stage);
+            writer.u16(address);
+            writer.u8(low);
+        }
         Z80MicroSequencerPhase::MemoryWrite { address, value } => {
             writer.u8(7);
             writer.u16(address);
@@ -543,6 +553,11 @@ fn read_phase(
         35 => Z80MicroSequencerPhase::BaseInternal {
             opcode: reader.u8()?,
             remaining_tstates: reader.u8()?,
+        },
+        36 => Z80MicroSequencerPhase::BaseAbsoluteTransfer {
+            stage: reader.u8()?,
+            address: reader.u16()?,
+            low: reader.u8()?,
         },
         7 => Z80MicroSequencerPhase::MemoryWrite {
             address: reader.u16()?,
@@ -1315,6 +1330,60 @@ mod base_internal_snapshot_tests {
                 assert_eq!(step, Z80MicroStep::InternalCycle { tstates: 1 });
                 cpu = round_trip(&cpu);
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod base_absolute_transfer_snapshot_tests {
+    use crate::{Z80BusOperation, Z80MicroSequencer, Z80MicroSequencerState, Z80MicroStep};
+
+    fn round_trip(cpu: &Z80MicroSequencer) -> Z80MicroSequencer {
+        let state = cpu.export_state();
+        let encoded = state.encode().unwrap();
+        let decoded = Z80MicroSequencerState::decode(&encoded).unwrap();
+        assert_eq!(decoded, state);
+        Z80MicroSequencer::restore_state(decoded).unwrap()
+    }
+
+    #[test]
+    fn absolute_transfer_pending_requests_round_trip_at_each_stage() {
+        for opcode in [0x22, 0x2A, 0x32, 0x3A] {
+            let mut cpu = Z80MicroSequencer::default();
+            cpu.registers.pc = 0x1000;
+            cpu.registers.set_hl(0xBEEF);
+            cpu.registers.a = 0xA5;
+            let mut step = cpu.begin_instruction().unwrap();
+            let mut memory = [0_u8; 0x1_0000];
+            memory[0x1000] = opcode;
+            memory[0x1001] = 0x00;
+            memory[0x1002] = 0x20;
+            memory[0x2000] = 0x34;
+            memory[0x2001] = 0x12;
+
+            for _ in 0..8 {
+                step = match step {
+                    Z80MicroStep::BusRequest(request) => {
+                        cpu = round_trip(&cpu);
+                        let data = match request.operation {
+                            Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
+                                Some(memory[usize::from(request.address)])
+                            }
+                            Z80BusOperation::MemoryWrite { value } => {
+                                memory[usize::from(request.address)] = value;
+                                None
+                            }
+                            operation => panic!("unexpected operation: {operation:?}"),
+                        };
+                        cpu.complete_bus_cycle(request.id, data).unwrap()
+                    }
+                    Z80MicroStep::InstructionRetired { .. } => break,
+                    Z80MicroStep::InternalCycle { .. } => {
+                        panic!("absolute transfer has no internal cycle")
+                    }
+                };
+            }
+            assert!(matches!(step, Z80MicroStep::InstructionRetired { .. }));
         }
     }
 }
