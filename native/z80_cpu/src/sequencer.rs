@@ -8449,3 +8449,170 @@ mod base_absolute_jump_differential_tests {
         assert_eq!(micro_bus.memory, atomic_bus.memory);
     }
 }
+
+
+#[cfg(test)]
+mod base_stack_push_pop_differential_tests {
+    use crate::bus::CpuBus;
+    use crate::{
+        Z80, Z80ArchitecturalState, Z80BusOperation, Z80MicroSequencer, Z80MicroStep,
+    };
+
+    #[derive(Clone)]
+    struct TestBus {
+        memory: Box<[u8; 0x1_0000]>,
+    }
+
+    impl Default for TestBus {
+        fn default() -> Self {
+            Self {
+                memory: Box::new([0; 0x1_0000]),
+            }
+        }
+    }
+
+    impl CpuBus for TestBus {
+        fn read_memory(&mut self, address: u16) -> u8 {
+            self.memory[usize::from(address)]
+        }
+
+        fn write_memory(&mut self, address: u16, value: u8) {
+            self.memory[usize::from(address)] = value;
+        }
+    }
+
+    fn run_sequencer(
+        mut cpu: Z80MicroSequencer,
+        bus: &mut TestBus,
+    ) -> (Z80ArchitecturalState, u32) {
+        let mut step = cpu.begin_instruction().unwrap();
+        for _ in 0..16 {
+            step = match step {
+                Z80MicroStep::BusRequest(request) => {
+                    cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+                    let data = match request.operation {
+                        Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
+                            Some(bus.read_memory(request.address))
+                        }
+                        Z80BusOperation::MemoryWrite { value } => {
+                            bus.write_memory(request.address, value);
+                            None
+                        }
+                        operation => panic!("unexpected stack bus operation: {operation:?}"),
+                    };
+                    cpu.complete_bus_cycle(request.id, data).unwrap()
+                }
+                Z80MicroStep::InternalCycle { .. } => {
+                    cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+                    cpu.complete_internal_cycle().unwrap()
+                }
+                Z80MicroStep::InstructionRetired { tstates, .. } => {
+                    return (cpu.export_architectural_state(), tstates);
+                }
+            };
+        }
+        panic!("stack instruction did not retire within 16 micro-operations");
+    }
+
+    fn push_initial_state(opcode: u8, sp: u16) -> (Z80ArchitecturalState, u16) {
+        let mut initial = Z80::default().export_architectural_state();
+        initial.registers.pc = 0x1000;
+        initial.registers.sp = sp;
+        initial.ei_delay = 1;
+        let value = match opcode {
+            0xC5 => {
+                initial.registers.b = 0x12;
+                initial.registers.c = 0x34;
+                0x1234
+            }
+            0xD5 => {
+                initial.registers.d = 0x56;
+                initial.registers.e = 0x78;
+                0x5678
+            }
+            0xE5 => {
+                initial.registers.h = 0x9A;
+                initial.registers.l = 0xBC;
+                0x9ABC
+            }
+            0xF5 => {
+                initial.registers.a = 0xDE;
+                initial.registers.f = 0xF0;
+                0xDEF0
+            }
+            _ => panic!("not a PUSH opcode: {opcode:02X}"),
+        };
+        (initial, value)
+    }
+
+    fn compare_push(opcode: u8, sp: u16) {
+        let (initial, value) = push_initial_state(opcode, sp);
+        let mut atomic_bus = TestBus::default();
+        atomic_bus.memory[0x1000] = opcode;
+        let mut micro_bus = atomic_bus.clone();
+
+        let mut atomic = Z80::default();
+        atomic.import_architectural_state(initial).unwrap();
+        let atomic_tstates = atomic.step(&mut atomic_bus).unwrap();
+
+        let mut micro = Z80MicroSequencer::default();
+        micro.import_architectural_state(initial).unwrap();
+        let (micro_state, micro_tstates) = run_sequencer(micro, &mut micro_bus);
+
+        let [high, low] = value.to_be_bytes();
+        let high_address = sp.wrapping_sub(1);
+        let low_address = sp.wrapping_sub(2);
+        assert_eq!(micro_tstates, 11, "PUSH opcode {opcode:02X}");
+        assert_eq!(micro_tstates, atomic_tstates, "PUSH opcode {opcode:02X}");
+        assert_eq!(micro_state.registers.sp, low_address);
+        assert_eq!(micro_bus.memory[usize::from(high_address)], high);
+        assert_eq!(micro_bus.memory[usize::from(low_address)], low);
+        assert_eq!(micro_state, atomic.export_architectural_state());
+        assert_eq!(micro_bus.memory, atomic_bus.memory);
+    }
+
+    fn compare_pop(opcode: u8, sp: u16) {
+        let mut initial = Z80::default().export_architectural_state();
+        initial.registers.pc = 0x1000;
+        initial.registers.sp = sp;
+        initial.registers.a = 0xA5;
+        initial.registers.f = 0xD7;
+        initial.ei_delay = 1;
+
+        let mut atomic_bus = TestBus::default();
+        atomic_bus.memory[0x1000] = opcode;
+        atomic_bus.memory[usize::from(sp)] = 0x34;
+        atomic_bus.memory[usize::from(sp.wrapping_add(1))] = 0x12;
+        let mut micro_bus = atomic_bus.clone();
+
+        let mut atomic = Z80::default();
+        atomic.import_architectural_state(initial).unwrap();
+        let atomic_tstates = atomic.step(&mut atomic_bus).unwrap();
+
+        let mut micro = Z80MicroSequencer::default();
+        micro.import_architectural_state(initial).unwrap();
+        let (micro_state, micro_tstates) = run_sequencer(micro, &mut micro_bus);
+
+        assert_eq!(micro_tstates, 10, "POP opcode {opcode:02X}");
+        assert_eq!(micro_tstates, atomic_tstates, "POP opcode {opcode:02X}");
+        assert_eq!(micro_state.registers.sp, sp.wrapping_add(2));
+        assert_eq!(micro_state, atomic.export_architectural_state());
+        assert_eq!(micro_bus.memory, atomic_bus.memory);
+    }
+
+    #[test]
+    fn all_push_pairs_match_atomic_executor_at_normal_and_wrapping_stack_addresses() {
+        for opcode in [0xC5, 0xD5, 0xE5, 0xF5] {
+            compare_push(opcode, 0x2000);
+            compare_push(opcode, 0x0000);
+        }
+    }
+
+    #[test]
+    fn all_pop_pairs_match_atomic_executor_at_normal_and_wrapping_stack_addresses() {
+        for opcode in [0xC1, 0xD1, 0xE1, 0xF1] {
+            compare_pop(opcode, 0x2000);
+            compare_pop(opcode, 0xFFFF);
+        }
+    }
+}
