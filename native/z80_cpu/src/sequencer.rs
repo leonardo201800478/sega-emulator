@@ -533,38 +533,16 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::EdNibbleRotateInternal {
                 opcode,
                 address,
-                result_a,
-                result_memory,
                 remaining_tstates,
+                ..
             } => {
-                next.instruction_tstates = next_instruction_tstates;
-                if remaining_tstates == 1 {
-                    next.registers.a = result_a;
-                    let mut flags = (next.registers.f & FLAG_C)
-                        | (result_a & (FLAG_S | FLAG_XY));
-                    if result_a == 0 {
-                        flags |= FLAG_Z;
-                    }
-                    if result_a.count_ones().is_multiple_of(2) {
-                        flags |= FLAG_PV;
-                    }
-                    next.set_flags(flags);
-                    next.wz = address.wrapping_add(1);
-                    next.issue_write(address, result_memory)?
-                } else {
-                    next.phase = Z80MicroSequencerPhase::EdNibbleRotateInternal {
-                        opcode,
-                        address,
-                        result_a,
-                        result_memory,
-                        remaining_tstates: remaining_tstates - 1,
-                    };
-                    next.tstate_index = next
-                        .tstate_index
-                        .checked_add(1)
-                        .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
-                    Z80MicroStep::InternalCycle { tstates: 1 }
-                }
+                matches!(opcode, 0x67 | 0x6F)
+                    && state.opcode == Some(opcode)
+                    && (1..=4).contains(&remaining_tstates)
+                    && pending.is_none()
+                    && address == state.registers.hl()
+                    && state.instruction_tstates
+                        >= 11 + u32::from(4 - remaining_tstates)
             }
             Z80MicroSequencerPhase::Ed16ArithmeticInternal {
                 opcode,
@@ -1438,6 +1416,42 @@ impl Z80MicroSequencer {
                         .opcode
                         .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                     next.retire(opcode)?
+                }
+            }
+            Z80MicroSequencerPhase::EdNibbleRotateInternal {
+                opcode,
+                address,
+                result_a,
+                result_memory,
+                remaining_tstates,
+            } => {
+                next.instruction_tstates = next_instruction_tstates;
+                if remaining_tstates == 1 {
+                    next.registers.a = result_a;
+                    let mut flags = (next.registers.f & FLAG_C)
+                        | (result_a & (FLAG_S | FLAG_XY));
+                    if result_a == 0 {
+                        flags |= FLAG_Z;
+                    }
+                    if result_a.count_ones().is_multiple_of(2) {
+                        flags |= FLAG_PV;
+                    }
+                    next.set_flags(flags);
+                    next.wz = address.wrapping_add(1);
+                    next.issue_write(address, result_memory)?
+                } else {
+                    next.phase = Z80MicroSequencerPhase::EdNibbleRotateInternal {
+                        opcode,
+                        address,
+                        result_a,
+                        result_memory,
+                        remaining_tstates: remaining_tstates - 1,
+                    };
+                    next.tstate_index = next
+                        .tstate_index
+                        .checked_add(1)
+                        .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                    Z80MicroStep::InternalCycle { tstates: 1 }
                 }
             }
             Z80MicroSequencerPhase::EdRegisterInternal { opcode } => {
