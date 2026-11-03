@@ -530,13 +530,15 @@ impl Z80MicroSequencer {
                     }
             }
             Z80MicroSequencerPhase::BaseRelativeBranchImmediate => {
-                state.opcode.is_some_and(|opcode| {
-                    matches!(opcode, 0x10 | 0x18 | 0x20 | 0x28 | 0x30 | 0x38)
-                }) && pending.is_some_and(|request| {
-                    request.operation == Z80BusOperation::MemoryRead
-                        && request.address == state.registers.pc
-                        && request.base_tstates == 3
-                }) && state.instruction_tstates >= 4
+                state
+                    .opcode
+                    .is_some_and(|opcode| matches!(opcode, 0x10 | 0x18 | 0x20 | 0x28 | 0x30 | 0x38))
+                    && pending.is_some_and(|request| {
+                        request.operation == Z80BusOperation::MemoryRead
+                            && request.address == state.registers.pc
+                            && request.base_tstates == 3
+                    })
+                    && state.instruction_tstates >= 4
             }
             Z80MicroSequencerPhase::BaseRelativeBranchInternal {
                 branch_taken,
@@ -1682,7 +1684,8 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::BaseRelativeBranchImmediate => {
                 let displacement = response
                     .data
-                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)? as i8;
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?
+                    as i8;
                 self.registers.pc = self.registers.pc.wrapping_add(1);
                 let opcode = self
                     .opcode
@@ -7898,13 +7901,10 @@ mod base_absolute_transfer_differential_tests {
     }
 }
 
-
 #[cfg(test)]
 mod base_relative_branch_differential_tests {
     use crate::bus::CpuBus;
-    use crate::{
-        Z80, Z80ArchitecturalState, Z80BusOperation, Z80MicroSequencer, Z80MicroStep,
-    };
+    use crate::{Z80, Z80ArchitecturalState, Z80BusOperation, Z80MicroSequencer, Z80MicroStep};
 
     const FLAG_C: u8 = 0x01;
     const FLAG_Z: u8 = 0x40;
@@ -7949,7 +7949,9 @@ mod base_relative_branch_differential_tests {
                             bus.write_memory(request.address, value);
                             None
                         }
-                        operation => panic!("unexpected relative-branch bus operation: {operation:?}"),
+                        operation => {
+                            panic!("unexpected relative-branch bus operation: {operation:?}")
+                        }
                     };
                     cpu.complete_bus_cycle(request.id, data).unwrap()
                 }
