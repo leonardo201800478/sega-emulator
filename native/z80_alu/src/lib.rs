@@ -140,7 +140,6 @@ pub fn cp8(lhs: u8, rhs: u8) -> AluResult {
     AluResult { value: lhs, flags }
 }
 
-
 /// Executes the four accumulator rotate instructions (RLCA, RRCA, RLA, RRA).
 /// Operation values are 0=RLCA, 1=RRCA, 2=RLA, 3=RRA.
 pub fn rotate_accumulator(value: u8, old_flags: u8, operation: u8) -> AluResult {
