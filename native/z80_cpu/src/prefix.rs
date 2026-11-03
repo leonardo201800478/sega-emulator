@@ -60,8 +60,8 @@ pub fn classify_index_opcode(opcode: u8) -> Z80IndexOpcodeClass {
         return Z80IndexOpcodeClass::UsesIndex;
     }
 
-    if (0x04..=0x3D).contains(&opcode) && matches!(opcode & 0xC7, 0x04 | 0x05 | 0x06) {
-        return if matches!((opcode >> 3) & 0x07, 4 | 5 | 6) {
+    if (0x04..=0x3D).contains(&opcode) && matches!(opcode & 0xC7, 0x04..=0x06) {
+        return if matches!((opcode >> 3) & 0x07, 4..=6) {
             Z80IndexOpcodeClass::UsesIndex
         } else {
             Z80IndexOpcodeClass::Ignored
@@ -71,7 +71,7 @@ pub fn classify_index_opcode(opcode: u8) -> Z80IndexOpcodeClass {
     if (0x40..=0x7F).contains(&opcode) && opcode != 0x76 {
         let destination = (opcode >> 3) & 0x07;
         let source = opcode & 0x07;
-        return if matches!(destination, 4 | 5 | 6) || matches!(source, 4 | 5 | 6) {
+        return if matches!(destination, 4..=6) || matches!(source, 4..=6) {
             Z80IndexOpcodeClass::UsesIndex
         } else {
             Z80IndexOpcodeClass::Ignored
@@ -79,7 +79,7 @@ pub fn classify_index_opcode(opcode: u8) -> Z80IndexOpcodeClass {
     }
 
     if (0x80..=0xBF).contains(&opcode) {
-        return if matches!(opcode & 0x07, 4 | 5 | 6) {
+        return if matches!(opcode & 0x07, 4..=6) {
             Z80IndexOpcodeClass::UsesIndex
         } else {
             Z80IndexOpcodeClass::Ignored
