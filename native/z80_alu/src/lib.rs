@@ -260,7 +260,7 @@ mod tests {
         assert_eq!(rotate_accumulator(0x81, 0xC4, 0).value, 0x03);
         assert_eq!(rotate_accumulator(0x81, 0xC4, 0).flags, 0xC5);
         assert_eq!(rotate_accumulator(0x01, 0x01, 3).value, 0x80);
-        assert_eq!(rotate_accumulator(0x01, 0x01, 3).flags, 0x81);
+        assert_eq!(rotate_accumulator(0x01, 0x01, 3).flags, 0x01);
     }
 
     #[test]
