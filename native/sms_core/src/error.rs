@@ -11,6 +11,7 @@ pub enum SmsCoreError {
     RomTooLargeForSegaMapper { size: usize, max_size: usize },
     InvalidBiosSize { size: usize, expected: usize },
     InvalidCartridgeRamSize { size: usize },
+    CartridgeRamUnsupportedMapper,
 }
 
 impl fmt::Display for SmsCoreError {
@@ -26,6 +27,9 @@ impl fmt::Display for SmsCoreError {
                 f,
                 "SMS cartridge RAM size {size} bytes is unsupported; expected 8192, 16384, or 32768 bytes"
             ),
+            Self::CartridgeRamUnsupportedMapper => {
+                f.write_str("cartridge SRAM is currently supported only by the Sega mapper")
+            },
             Self::RomTooLargeForSegaMapper { size, max_size } => write!(
                 f,
                 "ROM size {size} exceeds the standard Sega mapper range of {max_size} bytes; select a supported mapper"
