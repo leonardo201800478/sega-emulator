@@ -418,6 +418,29 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u8(opcode);
             writer.u8(remaining_tstates);
         }
+        Z80MicroSequencerPhase::EdBlockCompareRead { opcode, address } => {
+            writer.u8(26);
+            writer.u8(opcode);
+            writer.u16(address);
+        }
+        Z80MicroSequencerPhase::EdBlockCompareInternal {
+            opcode,
+            remaining_tstates,
+            repeat,
+        } => {
+            writer.u8(27);
+            writer.u8(opcode);
+            writer.u8(remaining_tstates);
+            writer.u8(u8::from(repeat));
+        }
+        Z80MicroSequencerPhase::EdBlockCompareRepeatInternal {
+            opcode,
+            remaining_tstates,
+        } => {
+            writer.u8(28);
+            writer.u8(opcode);
+            writer.u8(remaining_tstates);
+        }
     }
 }
 
@@ -525,6 +548,19 @@ fn read_phase(
             value: reader.u8()?,
         },
         25 => Z80MicroSequencerPhase::EdBlockRepeatInternal {
+            opcode: reader.u8()?,
+            remaining_tstates: reader.u8()?,
+        },
+        26 => Z80MicroSequencerPhase::EdBlockCompareRead {
+            opcode: reader.u8()?,
+            address: reader.u16()?,
+        },
+        27 => Z80MicroSequencerPhase::EdBlockCompareInternal {
+            opcode: reader.u8()?,
+            remaining_tstates: reader.u8()?,
+            repeat: read_bool(reader)?,
+        },
+        28 => Z80MicroSequencerPhase::EdBlockCompareRepeatInternal {
             opcode: reader.u8()?,
             remaining_tstates: reader.u8()?,
         },
