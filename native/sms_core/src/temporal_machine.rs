@@ -1821,6 +1821,7 @@ mod tests {
 mod base_absolute_transfer_temporal_tests {
     use super::SmsTemporalMachine;
     use sega_temporal_core::MachineTime;
+    use sega_z80_cpu::Z80MicroStep;
 
     #[test]
     fn absolute_memory_transfers_run_through_sms_scheduler_and_preserve_timing() {
