@@ -9752,3 +9752,107 @@ mod base_exchange_interrupt_control_differential_tests {
         assert_eq!(micro_bus.memory, atomic_bus.memory);
     }
 }
+
+
+#[cfg(test)]
+mod base_exchange_stack_differential_tests {
+    use crate::bus::CpuBus;
+    use crate::{
+        Z80, Z80ArchitecturalState, Z80BusOperation, Z80MicroSequencer, Z80MicroStep,
+    };
+
+    #[derive(Clone)]
+    struct TestBus {
+        memory: Box<[u8; 0x1_0000]>,
+    }
+
+    impl Default for TestBus {
+        fn default() -> Self {
+            Self {
+                memory: Box::new([0; 0x1_0000]),
+            }
+        }
+    }
+
+    impl CpuBus for TestBus {
+        fn read_memory(&mut self, address: u16) -> u8 {
+            self.memory[usize::from(address)]
+        }
+
+        fn write_memory(&mut self, address: u16, value: u8) {
+            self.memory[usize::from(address)] = value;
+        }
+    }
+
+    fn run_sequencer(
+        mut cpu: Z80MicroSequencer,
+        bus: &mut TestBus,
+    ) -> (Z80ArchitecturalState, u32) {
+        let mut step = cpu.begin_instruction().unwrap();
+        for _ in 0..24 {
+            step = match step {
+                Z80MicroStep::BusRequest(request) => {
+                    cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+                    let data = match request.operation {
+                        Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
+                            Some(bus.read_memory(request.address))
+                        }
+                        Z80BusOperation::MemoryWrite { value } => {
+                            bus.write_memory(request.address, value);
+                            None
+                        }
+                        operation => panic!("unexpected EX (SP),HL bus operation: {operation:?}"),
+                    };
+                    cpu.complete_bus_cycle(request.id, data).unwrap()
+                }
+                Z80MicroStep::InternalCycle { .. } => {
+                    cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+                    cpu.complete_internal_cycle().unwrap()
+                }
+                Z80MicroStep::InstructionRetired { tstates, .. } => {
+                    return (cpu.export_architectural_state(), tstates);
+                }
+            };
+        }
+        panic!("EX (SP),HL did not retire within 24 micro-operations");
+    }
+
+    fn compare_exchange(sp: u16) {
+        let mut initial = Z80::default().export_architectural_state();
+        initial.registers.pc = 0x1000;
+        initial.registers.sp = sp;
+        initial.registers.set_hl(0xABCD);
+        initial.registers.f = 0xD7;
+        initial.ei_delay = 1;
+
+        let mut atomic_bus = TestBus::default();
+        atomic_bus.memory[0x1000] = 0xE3;
+        atomic_bus.memory[usize::from(sp)] = 0x34;
+        atomic_bus.memory[usize::from(sp.wrapping_add(1))] = 0x12;
+        let mut micro_bus = atomic_bus.clone();
+
+        let mut atomic = Z80::default();
+        atomic.import_architectural_state(initial).unwrap();
+        let atomic_tstates = atomic.step(&mut atomic_bus).unwrap();
+
+        let mut micro = Z80MicroSequencer::default();
+        micro.import_architectural_state(initial).unwrap();
+        let (micro_state, micro_tstates) = run_sequencer(micro, &mut micro_bus);
+
+        assert_eq!(micro_tstates, 19);
+        assert_eq!(micro_tstates, atomic_tstates);
+        assert_eq!(micro_state.registers.hl(), 0x1234);
+        assert_eq!(micro_state.wz, 0x1234);
+        assert_eq!(micro_state.registers.sp, sp);
+        assert_eq!(micro_bus.memory[usize::from(sp)], 0xCD);
+        assert_eq!(micro_bus.memory[usize::from(sp.wrapping_add(1))], 0xAB);
+        assert_eq!(micro_state, atomic.export_architectural_state());
+        assert_eq!(micro_bus.memory, atomic_bus.memory);
+    }
+
+    #[test]
+    fn ex_sp_hl_matches_atomic_executor_with_normal_and_wrapping_addresses() {
+        compare_exchange(0x2000);
+        compare_exchange(0xFFFF);
+    }
+}
