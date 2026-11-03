@@ -19,7 +19,7 @@ use sega_z80_cpu::{
     Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
 };
 
-pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 14;
+pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 15;
 
 /// Runtime event trace emitted from actual Scheduler/bus dispatch boundaries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1931,8 +1931,11 @@ mod base_relative_branch_temporal_tests {
         let first = machine.begin_instruction().unwrap();
         assert!(matches!(first, Z80MicroStep::BusRequest(_)));
 
-        machine.schedule_pending_bus(0).unwrap();
-        let after_m1 = machine.dispatch_next().unwrap();
+        let mut after_m1 = first;
+        for _ in 0..4 {
+            machine.schedule_pending_bus(0).unwrap();
+            after_m1 = machine.dispatch_next().unwrap();
+        }
         assert!(matches!(after_m1, Z80MicroStep::BusRequest(_)));
 
         machine.schedule_pending_bus(0).unwrap();
@@ -2020,5 +2023,77 @@ mod base_absolute_jump_temporal_tests {
         );
         assert_eq!(restored.cpu().registers.pc, 3);
         assert_eq!(restored.now(), MachineTime::from_ticks(30));
+    }
+}
+
+#[cfg(test)]
+mod base_stack_temporal_tests {
+    use super::SmsTemporalMachine;
+    use sega_temporal_core::MachineTime;
+    use sega_z80_cpu::Z80MicroStep;
+
+    #[test]
+    fn push_and_pop_use_scheduler_bus_cycles_and_nominal_timing() {
+        let mut push = SmsTemporalMachine::new(vec![0xC5], 3).unwrap();
+        push.cpu_mut().registers.b = 0x12;
+        push.cpu_mut().registers.c = 0x34;
+        push.cpu_mut().registers.sp = 0xC100;
+        assert_eq!(
+            push.step_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xC5,
+                tstates: 11,
+            }
+        );
+        assert_eq!(push.cpu().registers.sp, 0xC0FE);
+        assert_eq!(push.bus.memory().read(0xC0FF), 0x12);
+        assert_eq!(push.bus.memory().read(0xC0FE), 0x34);
+        assert_eq!(push.now(), MachineTime::from_ticks(33));
+
+        let mut pop = SmsTemporalMachine::new(vec![0xF1], 3).unwrap();
+        pop.cpu_mut().registers.sp = 0xC0FE;
+        pop.bus.write_memory_for_test(0xC0FE, 0x34);
+        pop.bus.write_memory_for_test(0xC0FF, 0x12);
+        assert_eq!(
+            pop.step_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xF1,
+                tstates: 10,
+            }
+        );
+        assert_eq!(pop.cpu().registers.sp, 0xC100);
+        assert_eq!(pop.cpu().registers.a, 0x12);
+        assert_eq!(pop.cpu().registers.f, 0x34);
+        assert_eq!(pop.now(), MachineTime::from_ticks(30));
+    }
+
+    #[test]
+    fn push_internal_safe_point_restores_with_scheduler_state() {
+        let mut machine = SmsTemporalMachine::new(vec![0xC5], 3).unwrap();
+        machine.cpu_mut().registers.set_bc(0x1234);
+        machine.cpu_mut().registers.sp = 0xC100;
+        let first = machine.begin_instruction().unwrap();
+        assert!(matches!(first, Z80MicroStep::BusRequest(_)));
+
+        let mut after_m1 = first;
+        for _ in 0..4 {
+            machine.schedule_pending_bus(0).unwrap();
+            after_m1 = machine.dispatch_next().unwrap();
+        }
+        assert_eq!(after_m1, Z80MicroStep::InternalCycle { tstates: 1 });
+
+        let snapshot = machine.export_state();
+        let mut restored = SmsTemporalMachine::restore_state(snapshot).unwrap();
+        assert_eq!(
+            restored.resume_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xC5,
+                tstates: 11,
+            }
+        );
+        assert_eq!(restored.cpu().registers.sp, 0xC0FE);
+        assert_eq!(restored.bus.memory().read(0xC0FF), 0x12);
+        assert_eq!(restored.bus.memory().read(0xC0FE), 0x34);
+        assert_eq!(restored.now(), MachineTime::from_ticks(33));
     }
 }
