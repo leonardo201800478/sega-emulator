@@ -4883,8 +4883,13 @@ mod ed_absolute_register_pair_differential_tests {
         atomic_bus.memory[0xFFFF] = opcode;
         atomic_bus.memory[0x0000] = address as u8;
         atomic_bus.memory[0x0001] = (address >> 8) as u8;
-        atomic_bus.memory[usize::from(address)] = 0xC3;
-        atomic_bus.memory[usize::from(address.wrapping_add(1))] = 0x5A;
+        if !matches!(address, 0x0000 | 0x0001 | 0xFFFF) {
+            atomic_bus.memory[usize::from(address)] = 0xC3;
+        }
+        let next_address = address.wrapping_add(1);
+        if !matches!(next_address, 0x0000 | 0x0001 | 0xFFFF) {
+            atomic_bus.memory[usize::from(next_address)] = 0x5A;
+        }
         let mut sequenced_bus = atomic_bus.clone();
 
         assert_eq!(atomic.step(&mut atomic_bus), Ok(20), "ED {opcode:02X}");
