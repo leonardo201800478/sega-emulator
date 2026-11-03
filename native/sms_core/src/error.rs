@@ -10,6 +10,7 @@ pub enum SmsCoreError {
     Audio(PsgError),
     RomTooLargeForSegaMapper { size: usize, max_size: usize },
     InvalidBiosSize { size: usize, expected: usize },
+    InvalidCartridgeRamSize { size: usize },
 }
 
 impl fmt::Display for SmsCoreError {
@@ -20,6 +21,10 @@ impl fmt::Display for SmsCoreError {
             Self::InvalidBiosSize { size, expected } => write!(
                 f,
                 "SMS BIOS size {size} bytes is invalid; expected {expected} bytes"
+            ),
+            Self::InvalidCartridgeRamSize { size } => write!(
+                f,
+                "SMS cartridge RAM size {size} bytes is unsupported; expected 8192, 16384, or 32768 bytes"
             ),
             Self::RomTooLargeForSegaMapper { size, max_size } => write!(
                 f,
