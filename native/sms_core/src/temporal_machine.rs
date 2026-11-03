@@ -1361,7 +1361,10 @@ mod tests {
     fn internal_cycle_preflights_request_id_exhaustion_before_scheduling() {
         let mut machine = SmsTemporalMachine::new(vec![0x34; 0x4000], 3).unwrap();
         machine.cpu_mut().registers.set_hl(0xC000);
-        machine.begin_instruction().unwrap();
+        let fetch = match machine.begin_instruction().unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected fetch, got {other:?}"),
+        };
         complete_m1_fetch(&mut machine, 0);
         let read = match machine.dispatch_next().unwrap() {
             Z80MicroStep::BusRequest(request) => request,
@@ -1398,20 +1401,25 @@ mod tests {
         retired(machine.step_instruction(0).unwrap(), 0x34, 11);
 
         let trace = machine.take_trace();
-        assert_eq!(trace.len(), 4);
+        assert_eq!(trace.len(), 7);
         assert!(matches!(
             trace[0],
-            super::SmsTemporalTraceEvent::BusCompleted {
+            super::SmsTemporalTraceEvent::M1TStateCompleted {
                 timestamp,
-                operation: sega_z80_cpu::Z80BusOperation::OpcodeFetch,
-                base_tstates: 4,
-                wait_tstates: 0,
-                data: Some(0x34),
+                phase: sega_z80_cpu::Z80M1Phase::T1,
+                ..
+            } if timestamp == MachineTime::from_ticks(3)
+        ));
+        assert!(matches!(
+            trace[3],
+            super::SmsTemporalTraceEvent::M1TStateCompleted {
+                timestamp,
+                phase: sega_z80_cpu::Z80M1Phase::T4,
                 ..
             } if timestamp == MachineTime::from_ticks(12)
         ));
         assert!(matches!(
-            trace[1],
+            trace[4],
             super::SmsTemporalTraceEvent::BusCompleted {
                 timestamp,
                 operation: sega_z80_cpu::Z80BusOperation::MemoryRead,
@@ -1421,7 +1429,7 @@ mod tests {
             } if timestamp == MachineTime::from_ticks(21)
         ));
         assert!(matches!(
-            trace[2],
+            trace[5],
             super::SmsTemporalTraceEvent::InternalCycleCompleted {
                 timestamp,
                 tstates: 1,
@@ -1429,7 +1437,7 @@ mod tests {
             } if timestamp == MachineTime::from_ticks(24)
         ));
         assert!(matches!(
-            trace[3],
+            trace[6],
             super::SmsTemporalTraceEvent::BusCompleted {
                 timestamp,
                 operation: sega_z80_cpu::Z80BusOperation::MemoryWrite { value: 1 },
