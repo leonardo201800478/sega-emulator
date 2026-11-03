@@ -3064,27 +3064,39 @@ mod tests {
 
     #[test]
     fn repeated_index_prefixes_count_each_m1_and_last_prefix_is_retained() {
-        let mut cpu = Z80MicroSequencer::default();
-        let first = request(cpu.begin_instruction().unwrap());
-        let second = request(cpu.complete_bus_cycle(first.id, Some(0xDD)).unwrap());
-        let third = request(cpu.complete_bus_cycle(second.id, Some(0xFD)).unwrap());
-        assert_eq!(third.operation, Z80BusOperation::OpcodeFetch);
-        assert_eq!(third.address, 2);
-        assert_eq!(cpu.refresh, 2);
-        assert_eq!(cpu.export_state().opcode, Some(0xFD));
-        assert_eq!(cpu.export_state().instruction_tstates, 8);
-
-        let error = cpu.complete_bus_cycle(third.id, Some(0x00)).unwrap_err();
-        assert_eq!(
-            error,
-            Z80MicroSequencerError::UnsupportedOpcode {
-                opcode: 0x00,
-                address: 2
+        for (prefixes, expected_index) in [
+            (&[0xDD, 0xFD][..], 0x9ABC),
+            (&[0xFD, 0xDD][..], 0x1234),
+        ] {
+            let mut cpu = Z80MicroSequencer::default();
+            let mut fetch = request(cpu.begin_instruction().unwrap());
+            for prefix in prefixes {
+                let next = cpu.complete_bus_cycle(fetch.id, Some(*prefix)).unwrap();
+                fetch = request(next);
+                cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
             }
-        );
-        assert_eq!(cpu.registers.pc, 3);
-        assert_eq!(cpu.refresh, 3);
-        assert!(!cpu.instruction_active());
+            assert_eq!(fetch.operation, Z80BusOperation::OpcodeFetch);
+            assert_eq!(fetch.address, prefixes.len() as u16);
+            assert_eq!(cpu.refresh, prefixes.len() as u8);
+            assert_eq!(cpu.export_state().opcode, Some(prefixes[prefixes.len() - 1]));
+            assert_eq!(cpu.export_state().instruction_tstates, prefixes.len() as u32 * 4);
+
+            let low = request(cpu.complete_bus_cycle(fetch.id, Some(0x21)).unwrap());
+            let high = request(cpu.complete_bus_cycle(low.id, Some(expected_index as u8)).unwrap());
+            let expected_tstates = 14 + 4 * u32::from(prefixes.len() == 2);
+            retired(
+                cpu.complete_bus_cycle(high.id, Some((expected_index >> 8) as u8)).unwrap(),
+                0x21,
+                expected_tstates,
+            );
+            let selected = prefixes[prefixes.len() - 1];
+            assert_eq!(
+                if selected == 0xDD { cpu.ix } else { cpu.iy },
+                expected_index
+            );
+            assert_eq!(cpu.registers.pc, prefixes.len() as u16 + 3);
+            assert_eq!(cpu.refresh, prefixes.len() as u8 + 1);
+        }
     }
 
     #[test]
