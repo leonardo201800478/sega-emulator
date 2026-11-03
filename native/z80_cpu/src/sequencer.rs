@@ -443,9 +443,7 @@ impl Z80MicroSequencer {
             }
         };
         let indices_valid = match state.phase {
-            Z80MicroSequencerPhase::Ready => {
-                state.mcycle_index == 0 && state.tstate_index == 0
-            }
+            Z80MicroSequencerPhase::Ready => state.mcycle_index == 0 && state.tstate_index == 0,
             Z80MicroSequencerPhase::OpcodeFetch => {
                 state.tstate_index == 0
                     && match state.opcode {
@@ -616,11 +614,9 @@ impl Z80MicroSequencer {
                         .mcycle_index
                         .checked_add(1)
                         .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
-                    let request = self.handshake.begin(
-                        Z80BusOperation::OpcodeFetch,
-                        self.registers.pc,
-                        4,
-                    )?;
+                    let request =
+                        self.handshake
+                            .begin(Z80BusOperation::OpcodeFetch, self.registers.pc, 4)?;
                     self.mcycle_index = next_mcycle_index;
                     self.tstate_index = 0;
                     return Ok(Z80MicroStep::BusRequest(request));
@@ -1311,7 +1307,12 @@ mod tests {
             assert_eq!(state.instruction_tstates, 4);
             assert_eq!(cpu.registers.pc, 1);
             assert_eq!(cpu.refresh, 1);
-            assert_eq!(Z80MicroSequencer::restore_state(state).unwrap().pending_request(), Some(second));
+            assert_eq!(
+                Z80MicroSequencer::restore_state(state)
+                    .unwrap()
+                    .pending_request(),
+                Some(second)
+            );
         }
     }
 
