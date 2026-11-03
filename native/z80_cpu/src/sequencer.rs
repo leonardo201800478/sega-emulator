@@ -5716,6 +5716,22 @@ mod ed_absolute_register_pair_differential_tests {
         loop {
             match step {
                 Z80MicroStep::BusRequest(request) => {
+                    let state = cpu.export_state();
+                    match request.operation {
+                        Z80BusOperation::OpcodeFetch => {
+                            assert_eq!(request.base_tstates, 4);
+                            assert!(state.mcycle_index <= 1);
+                        }
+                        Z80BusOperation::PortRead | Z80BusOperation::MemoryRead => {
+                            assert_eq!(request.base_tstates, 3);
+                            assert_eq!(state.mcycle_index, 2);
+                        }
+                        Z80BusOperation::MemoryWrite { .. }
+                        | Z80BusOperation::PortWrite { .. } => {
+                            assert_eq!(request.base_tstates, 4);
+                            assert_eq!(state.mcycle_index, 3);
+                        }
+                    }
                     if add_waits {
                         cpu.insert_wait_tstate().unwrap();
                     }
@@ -6625,6 +6641,15 @@ mod ed_block_io_differential_tests {
                 }
                 Z80MicroStep::InternalCycle { tstates } => {
                     assert_eq!(tstates, 1);
+                    match cpu.export_state().phase {
+                        super::Z80MicroSequencerPhase::EdBlockIoInitialInternal { .. } => {
+                            assert_eq!((cpu.export_state().mcycle_index, cpu.export_state().tstate_index), (1, 4));
+                        }
+                        super::Z80MicroSequencerPhase::EdBlockIoRepeatInternal { .. } => {
+                            assert_eq!(cpu.export_state().mcycle_index, 4);
+                        }
+                        other => panic!("unexpected ED block-I/O internal phase: {other:?}"),
+                    }
                     round_trip(cpu);
                     let next = cpu.complete_internal_cycle().unwrap();
                     round_trip(cpu);
