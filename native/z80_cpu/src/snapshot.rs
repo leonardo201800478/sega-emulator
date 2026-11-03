@@ -985,6 +985,7 @@ mod tests {
             let mut reader = Reader::new(&encoded[FRAME_HEADER_LEN..checksum_offset]);
             reader.take(25).unwrap(); // registers, refresh and M/T counters
             reader.take(2).unwrap(); // opcode option tag and opcode
+            reader.u8().unwrap(); // active index tag (schema v19)
             super::read_phase(&mut reader).unwrap();
             reader.u64().unwrap(); // next request ID
             assert_eq!(reader.u8().unwrap(), 1); // pending request present
@@ -1054,6 +1055,7 @@ mod tests {
             let mut reader = Reader::new(&encoded[FRAME_HEADER_LEN..checksum_offset]);
             reader.take(25).unwrap();
             reader.take(2).unwrap();
+            reader.u8().unwrap(); // active index tag (schema v19)
             let phase_address_offset = reader.offset + 1;
             let phase = super::read_phase(&mut reader).unwrap();
             assert!(matches!(
