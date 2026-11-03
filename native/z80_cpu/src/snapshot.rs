@@ -406,6 +406,22 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u16(old_hl);
             writer.u8(remaining_tstates);
         }
+        Z80MicroSequencerPhase::BaseImmediatePortAddress { opcode } => {
+            writer.u8(50);
+            writer.u8(opcode);
+        }
+        Z80MicroSequencerPhase::BaseImmediatePortRead { port_address } => {
+            writer.u8(51);
+            writer.u16(port_address);
+        }
+        Z80MicroSequencerPhase::BaseImmediatePortWrite {
+            port_address,
+            value,
+        } => {
+            writer.u8(52);
+            writer.u16(port_address);
+            writer.u8(value);
+        }
         Z80MicroSequencerPhase::MemoryWrite { address, value } => {
             writer.u8(7);
             writer.u16(address);
@@ -701,6 +717,16 @@ fn read_phase(
             high: reader.u8()?,
             old_hl: reader.u16()?,
             remaining_tstates: reader.u8()?,
+        },
+        50 => Z80MicroSequencerPhase::BaseImmediatePortAddress {
+            opcode: reader.u8()?,
+        },
+        51 => Z80MicroSequencerPhase::BaseImmediatePortRead {
+            port_address: reader.u16()?,
+        },
+        52 => Z80MicroSequencerPhase::BaseImmediatePortWrite {
+            port_address: reader.u16()?,
+            value: reader.u8()?,
         },
         7 => Z80MicroSequencerPhase::MemoryWrite {
             address: reader.u16()?,
