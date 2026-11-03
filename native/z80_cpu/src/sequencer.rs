@@ -4763,3 +4763,166 @@ mod cb_register_differential_tests {
         assert!(cpu.instruction_active());
     }
 }
+
+
+#[cfg(test)]
+mod ed_absolute_register_pair_differential_tests {
+    use super::{Z80MicroSequencer, Z80MicroStep};
+    use crate::bus::CpuBus;
+    use crate::{Z80, Z80AlternateRegisters, Z80ArchitecturalState, Z80BusOperation, Z80Registers};
+
+    #[derive(Clone)]
+    struct TestBus {
+        memory: Box<[u8; 0x10000]>,
+        reads: Vec<u16>,
+        writes: Vec<(u16, u8)>,
+    }
+
+    impl Default for TestBus {
+        fn default() -> Self {
+            Self {
+                memory: Box::new([0; 0x10000]),
+                reads: Vec::new(),
+                writes: Vec::new(),
+            }
+        }
+    }
+
+    impl CpuBus for TestBus {
+        fn read_memory(&mut self, address: u16) -> u8 {
+            self.reads.push(address);
+            self.memory[usize::from(address)]
+        }
+
+        fn write_memory(&mut self, address: u16, value: u8) {
+            self.writes.push((address, value));
+            self.memory[usize::from(address)] = value;
+        }
+    }
+
+    fn architectural_state() -> Z80ArchitecturalState {
+        Z80ArchitecturalState {
+            registers: Z80Registers {
+                a: 0xA5,
+                f: 0xD7,
+                b: 0x12,
+                c: 0x34,
+                d: 0x56,
+                e: 0x78,
+                h: 0x9A,
+                l: 0xBC,
+                pc: 0xFFFE,
+                sp: 0xDEF0,
+            },
+            alternate: Z80AlternateRegisters::default(),
+            ix: 0x1357,
+            iy: 0x2468,
+            i: 0xA5,
+            r: 0xFE,
+            iff1: false,
+            iff2: true,
+            interrupt_mode: 1,
+            wz: 0xA328,
+            ei_delay: 0,
+            nmi_pending: false,
+            int_pending: None,
+            q: 0x28,
+            q_previous: 0x5A,
+            p: false,
+            halted: false,
+        }
+    }
+
+    fn roundtrip(cpu: Z80MicroSequencer) -> Z80MicroSequencer {
+        let encoded = cpu.export_state().encode().unwrap();
+        let decoded = crate::Z80MicroSequencerState::decode(&encoded).unwrap();
+        Z80MicroSequencer::restore_state(decoded).unwrap()
+    }
+
+    fn run_sequenced(
+        mut cpu: Z80MicroSequencer,
+        mut bus: TestBus,
+        add_waits: bool,
+    ) -> (Z80MicroSequencer, TestBus, u32) {
+        let mut step = cpu.begin_instruction().unwrap();
+        loop {
+            match step {
+                Z80MicroStep::BusRequest(request) => {
+                    if add_waits {
+                        cpu.insert_wait_tstate().unwrap();
+                    }
+                    let data = match request.operation {
+                        Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
+                            Some(bus.read_memory(request.address))
+                        }
+                        Z80BusOperation::MemoryWrite { value } => {
+                            bus.write_memory(request.address, value);
+                            None
+                        }
+                        other => panic!("unexpected ED absolute transfer operation: {other:?}"),
+                    };
+                    step = cpu.complete_bus_cycle(request.id, data).unwrap();
+                    cpu = roundtrip(cpu);
+                }
+                Z80MicroStep::InstructionRetired { opcode: _, tstates } => {
+                    return (cpu, bus, tstates);
+                }
+                Z80MicroStep::InternalCycle { .. } => {
+                    panic!("ED absolute register-pair transfers have no internal T-states")
+                }
+            }
+        }
+    }
+
+    fn run_case(opcode: u8, address: u16, add_waits: bool) {
+        let initial = architectural_state();
+        let mut atomic = Z80::default();
+        atomic.import_architectural_state(initial).unwrap();
+        let mut atomic_bus = TestBus::default();
+        atomic_bus.memory[0xFFFE] = 0xED;
+        atomic_bus.memory[0xFFFF] = opcode;
+        atomic_bus.memory[0x0000] = address as u8;
+        atomic_bus.memory[0x0001] = (address >> 8) as u8;
+        atomic_bus.memory[usize::from(address)] = 0xC3;
+        atomic_bus.memory[usize::from(address.wrapping_add(1))] = 0x5A;
+        let mut sequenced_bus = atomic_bus.clone();
+
+        assert_eq!(atomic.step(&mut atomic_bus), Ok(20), "ED {opcode:02X}");
+        let mut sequenced = Z80MicroSequencer::default();
+        sequenced.import_architectural_state(initial).unwrap();
+        let (sequenced, sequenced_bus, tstates) =
+            run_sequenced(sequenced, sequenced_bus, add_waits);
+
+        assert_eq!(tstates, 20 + if add_waits { 6 } else { 0 });
+        assert_eq!(
+            sequenced.export_architectural_state(),
+            atomic.export_architectural_state(),
+            "architectural mismatch for ED {opcode:02X} at {address:04X}"
+        );
+        assert_eq!(sequenced_bus.reads, atomic_bus.reads);
+        assert_eq!(sequenced_bus.writes, atomic_bus.writes);
+        assert_eq!(sequenced_bus.memory, atomic_bus.memory);
+        assert_eq!(sequenced.pending_request(), None);
+    }
+
+    #[test]
+    fn all_eight_ed_absolute_pair_encodings_match_atomic_state_and_bus_order() {
+        for opcode in [0x43, 0x53, 0x63, 0x73, 0x4B, 0x5B, 0x6B, 0x7B] {
+            run_case(opcode, 0x4000, false);
+        }
+    }
+
+    #[test]
+    fn absolute_pair_transfer_wraps_data_address_at_ffff() {
+        for opcode in [0x43, 0x4B, 0x73, 0x7B] {
+            run_case(opcode, 0xFFFF, false);
+        }
+    }
+
+    #[test]
+    fn waits_and_snapshot_restore_preserve_all_six_machine_cycles() {
+        for opcode in [0x43, 0x53, 0x63, 0x73, 0x4B, 0x5B, 0x6B, 0x7B] {
+            run_case(opcode, 0x7FFE, true);
+        }
+    }
+}
