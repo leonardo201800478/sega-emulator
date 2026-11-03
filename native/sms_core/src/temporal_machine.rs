@@ -709,7 +709,16 @@ impl SmsTemporalMachine {
         }
         let cpu = Z80MicroSequencer::restore_state(state.cpu.clone())?;
         let bus = SmsTemporalBus::restore_state(state.bus.clone())?;
-        if cpu.pending_request() != state.bus.pending_request
+        let m1 = state
+            .m1
+            .map(SmsTemporalM1::restore_state)
+            .transpose()?;
+        let expected_bus_request = if m1.is_some() {
+            None
+        } else {
+            cpu.pending_request()
+        };
+        if expected_bus_request != state.bus.pending_request
             || state.pending_internal_cycle_id != state.bus.pending_internal_cycle
             || state.pending_internal_cycle_id.is_some() != state.pending_internal_tstates.is_some()
             || state.pending_internal_tstates == Some(0)
@@ -726,6 +735,38 @@ impl SmsTemporalMachine {
             )
         {
             return Err(SmsTemporalMachineError::InvalidState);
+        }
+        match (m1, state.m1_fixture_wait_tstates) {
+            (Some(m1_cycle), Some(total_waits)) => {
+                let request = cpu
+                    .pending_request()
+                    .filter(|request| request.operation == Z80BusOperation::OpcodeFetch)
+                    .ok_or(SmsTemporalMachineError::InvalidState)?;
+                let m1_state = m1_cycle.export_state();
+                let events = &state.bus.coordinator.scheduler.event_queue.pending;
+                if state.bus.pending_request.is_some()
+                    || state.pending_internal_cycle_id.is_some()
+                    || cpu.handshake.wait_tstates != total_waits
+                    || m1_state.cycle.address != request.address
+                    || m1_state.cycle.refresh_after_m1
+                        != ((cpu.refresh & 0x80) | (cpu.refresh.wrapping_add(1) & 0x7F))
+                {
+                    return Err(SmsTemporalMachineError::InvalidState);
+                }
+                match (m1_state.pending_continuation_id, m1_state.pending_deadline) {
+                    (Some(id), Some(deadline))
+                        if events.len() == 1
+                            && events[0].payload
+                                == (crate::SmsTemporalEvent::M1TStateComplete {
+                                    continuation_id: id,
+                                })
+                            && events[0].timestamp == deadline => {}
+                    (None, None) if events.is_empty() => {}
+                    _ => return Err(SmsTemporalMachineError::InvalidState),
+                }
+            }
+            (None, None) => {}
+            _ => return Err(SmsTemporalMachineError::InvalidState),
         }
         // A restored internal-cycle event must still be completable by the CPU.
         // These values are rejected by schedule_internal_cycle() before creating
@@ -813,6 +854,8 @@ impl SmsTemporalMachine {
             next_internal_cycle_id: state.next_internal_cycle_id,
             pending_internal_cycle_id: state.pending_internal_cycle_id,
             pending_internal_tstates: state.pending_internal_tstates,
+            m1,
+            m1_fixture_wait_tstates: state.m1_fixture_wait_tstates,
             trace_enabled: false,
             trace_events: Vec::new(),
         })
