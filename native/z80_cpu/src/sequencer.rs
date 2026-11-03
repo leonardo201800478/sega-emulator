@@ -479,16 +479,16 @@ impl Z80MicroSequencer {
                 };
                 let expected_value = match state.opcode {
                     Some(opcode) if opcode & 0xC7 == 0x41 => match (opcode >> 3) & 0x07 {
-                            0 => Some(state.registers.b),
-                            1 => Some(state.registers.c),
-                            2 => Some(state.registers.d),
-                            3 => Some(state.registers.e),
-                            4 => Some(state.registers.h),
-                            5 => Some(state.registers.l),
-                            6 => Some(0),
-                            7 => Some(state.registers.a),
-                            _ => None,
-                        },
+                        0 => Some(state.registers.b),
+                        1 => Some(state.registers.c),
+                        2 => Some(state.registers.d),
+                        3 => Some(state.registers.e),
+                        4 => Some(state.registers.h),
+                        5 => Some(state.registers.l),
+                        6 => Some(0),
+                        7 => Some(state.registers.a),
+                        _ => None,
+                    },
                     _ => None,
                 };
                 expected_value == Some(value)
