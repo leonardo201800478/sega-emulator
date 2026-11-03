@@ -942,4 +942,42 @@ mod tests {
             }
         );
     }
+
+    #[test]
+    fn ed_register_internal_phase_round_trips_through_binary_codec() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.registers.a = 0x5A;
+        cpu.registers.pc = 0x0100;
+        let first = match cpu.begin_instruction().unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected ED prefix M1, got {other:?}"),
+        };
+        let second = match cpu.complete_bus_cycle(first.id, Some(0xED)).unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected ED opcode M1, got {other:?}"),
+        };
+        assert_eq!(
+            cpu.complete_bus_cycle(second.id, Some(0x47)).unwrap(),
+            crate::Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+
+        let state = cpu.export_state();
+        assert_eq!(
+            Z80MicroSequencerState::decode(&state.encode().unwrap()).unwrap(),
+            state
+        );
+        let mut restored = Z80MicroSequencer::restore_state(
+            Z80MicroSequencerState::decode(&state.encode().unwrap()).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            restored.complete_internal_cycle().unwrap(),
+            crate::Z80MicroStep::InstructionRetired {
+                opcode: 0x47,
+                tstates: 9
+            }
+        );
+        assert_eq!(restored.i, 0x5A);
+    }
+
 }
