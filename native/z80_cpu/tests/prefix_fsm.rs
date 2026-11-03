@@ -83,7 +83,10 @@ fn dd_fd_alternation_keeps_the_last_index_prefix_and_round_trips_snapshot() {
     );
     for _ in 0..5 {
         let step = cpu.complete_internal_cycle().unwrap();
-        let encoded = cpu.export_state().encode().expect("internal phase snapshot encodes");
+        let encoded = cpu
+            .export_state()
+            .encode()
+            .expect("internal phase snapshot encodes");
         let decoded = sega_z80_cpu::Z80MicroSequencerState::decode(&encoded)
             .expect("internal phase snapshot decodes");
         cpu = Z80MicroSequencer::restore_state(decoded).expect("internal phase snapshot restores");
@@ -98,7 +101,10 @@ fn dd_fd_alternation_keeps_the_last_index_prefix_and_round_trips_snapshot() {
                     address: 0x0FFF,
                 }
             );
-            let encoded = cpu.export_state().encode().expect("ALU read snapshot encodes");
+            let encoded = cpu
+                .export_state()
+                .encode()
+                .expect("ALU read snapshot encodes");
             let decoded = sega_z80_cpu::Z80MicroSequencerState::decode(&encoded)
                 .expect("ALU read snapshot decodes");
             cpu = Z80MicroSequencer::restore_state(decoded).expect("ALU read snapshot restores");
