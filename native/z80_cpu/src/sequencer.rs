@@ -2128,6 +2128,36 @@ impl Z80MicroSequencer {
                 }
                 self.retire(opcode)
             }
+            0x09 | 0x19 | 0x29 | 0x39 => {
+                let index = if prefix == 0xDD { self.ix } else { self.iy };
+                let pair = (opcode >> 4) & 0x03;
+                let operand = if pair == 2 { index } else { self.read_register_pair(pair) };
+                let sum = u32::from(index) + u32::from(operand);
+                let result = sum as u16;
+                let mut flags = self.registers.f & (FLAG_S | FLAG_Z | FLAG_PV);
+                flags |= ((result >> 8) as u8) & FLAG_XY;
+                if u32::from(index & 0x0FFF) + u32::from(operand & 0x0FFF) > 0x0FFF {
+                    flags |= FLAG_H;
+                }
+                if sum > u32::from(u16::MAX) {
+                    flags |= FLAG_C;
+                }
+                if prefix == 0xDD {
+                    self.ix = result;
+                } else {
+                    self.iy = result;
+                }
+                self.set_flags(flags);
+                self.wz = index.wrapping_add(1);
+                self.phase = Z80MicroSequencerPhase::Ed16ArithmeticInternal {
+                    opcode,
+                    remaining_tstates: 7,
+                };
+                self.mcycle_index = self.mcycle_index.checked_add(1)
+                    .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                self.tstate_index = 0;
+                Ok(Z80MicroStep::InternalCycle { tstates: 1 })
+            }
             _ => self.unsupported(opcode),
         }
     }
