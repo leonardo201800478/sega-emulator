@@ -101,6 +101,21 @@ pub enum Z80MicroSequencerPhase {
         low: u8,
         pair_value: u16,
     },
+    EdReturn {
+        stage: u8,
+        low: u8,
+    },
+    EdNibbleRotateRead {
+        opcode: u8,
+        address: u16,
+    },
+    EdNibbleRotateInternal {
+        opcode: u8,
+        address: u16,
+        result_a: u8,
+        result_memory: u8,
+        remaining_tstates: u8,
+    },
     MemoryIncDecInternal {
         decrement: bool,
         old: u8,
@@ -515,6 +530,42 @@ impl Z80MicroSequencer {
                     && address == state.registers.bc()
                     && state.instruction_tstates >= 8
             }
+            Z80MicroSequencerPhase::EdNibbleRotateInternal {
+                opcode,
+                address,
+                result_a,
+                result_memory,
+                remaining_tstates,
+            } => {
+                next.instruction_tstates = next_instruction_tstates;
+                if remaining_tstates == 1 {
+                    next.registers.a = result_a;
+                    let mut flags = (next.registers.f & FLAG_C)
+                        | (result_a & (FLAG_S | FLAG_XY));
+                    if result_a == 0 {
+                        flags |= FLAG_Z;
+                    }
+                    if result_a.count_ones().is_multiple_of(2) {
+                        flags |= FLAG_PV;
+                    }
+                    next.set_flags(flags);
+                    next.wz = address.wrapping_add(1);
+                    next.issue_write(address, result_memory)?
+                } else {
+                    next.phase = Z80MicroSequencerPhase::EdNibbleRotateInternal {
+                        opcode,
+                        address,
+                        result_a,
+                        result_memory,
+                        remaining_tstates: remaining_tstates - 1,
+                    };
+                    next.tstate_index = next
+                        .tstate_index
+                        .checked_add(1)
+                        .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                    Z80MicroStep::InternalCycle { tstates: 1 }
+                }
+            }
             Z80MicroSequencerPhase::Ed16ArithmeticInternal {
                 opcode,
                 remaining_tstates,
@@ -531,6 +582,41 @@ impl Z80MicroSequencer {
                             && state.tstate_index == u16::from(3 - remaining_tstates)
                     }
                     && state.instruction_tstates >= 8 + u32::from(7 - remaining_tstates)
+            }
+            Z80MicroSequencerPhase::EdReturn { stage, .. } => {
+                state.opcode.is_some_and(|opcode| opcode & 0xC7 == 0x45)
+                    && stage <= 1
+                    && pending.is_some_and(|request| {
+                        request.operation == Z80BusOperation::MemoryRead
+                            && request.address == state.registers.sp
+                            && request.base_tstates == 3
+                    })
+                    && state.instruction_tstates >= 8
+            }
+            Z80MicroSequencerPhase::EdNibbleRotateRead { opcode, address } => {
+                matches!(opcode, 0x67 | 0x6F)
+                    && state.opcode == Some(opcode)
+                    && pending.is_some_and(|request| {
+                        request.operation == Z80BusOperation::MemoryRead
+                            && request.address == address
+                            && request.base_tstates == 3
+                    })
+                    && address == state.registers.hl()
+                    && state.instruction_tstates >= 8
+            }
+            Z80MicroSequencerPhase::EdNibbleRotateInternal {
+                opcode,
+                address,
+                remaining_tstates,
+                ..
+            } => {
+                matches!(opcode, 0x67 | 0x6F)
+                    && state.opcode == Some(opcode)
+                    && (1..=4).contains(&remaining_tstates)
+                    && pending.is_none()
+                    && address == state.registers.hl()
+                    && state.instruction_tstates
+                        >= 11 + u32::from(4 - remaining_tstates)
             }
             Z80MicroSequencerPhase::EdAbsoluteTransfer {
                 stage,
@@ -617,6 +703,7 @@ impl Z80MicroSequencer {
                     Some(0x77) => (4, Some(state.registers.hl()), None),
                     Some(0x36) => (7, Some(state.registers.hl()), None),
                     Some(0x34 | 0x35) => (8, Some(state.registers.hl()), None),
+                    Some(0x67 | 0x6F) => (15, Some(state.registers.hl()), None),
                     _ => (u32::MAX, None, None),
                 };
                 let Z80BusOperation::MemoryWrite {
@@ -689,6 +776,15 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::EdAbsoluteTransfer { stage, .. } => {
                 state.mcycle_index == 2 + u32::from(stage) && state.tstate_index == 0
             }
+            Z80MicroSequencerPhase::EdReturn { stage, .. } => {
+                state.mcycle_index == 2 + u32::from(stage) && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::EdNibbleRotateRead { .. } => {
+                state.mcycle_index == 2 && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::EdNibbleRotateInternal { .. } => {
+                state.mcycle_index == 3 && state.tstate_index <= 3
+            }
             Z80MicroSequencerPhase::MemoryIncDecInternal { .. } => {
                 state.mcycle_index == 1
                     && state.tstate_index >= 3
@@ -709,6 +805,11 @@ impl Z80MicroSequencer {
                     state.mcycle_index == 2
                         && state.tstate_index == 0
                         && state.instruction_tstates >= 8
+                }
+                Some(0x67 | 0x6F) => {
+                    state.mcycle_index == 4
+                        && state.tstate_index == 0
+                        && state.instruction_tstates >= 15
                 }
                 _ => false,
             },
@@ -1122,6 +1223,64 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::Ed16ArithmeticInternal { .. } => {
                 Err(Z80MicroSequencerError::UnexpectedCompletion)
             }
+            Z80MicroSequencerPhase::EdReturn { stage, low } => match stage {
+                0 => {
+                    let low = response
+                        .data
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                    self.registers.sp = self.registers.sp.wrapping_add(1);
+                    self.issue_read(
+                        Z80MicroSequencerPhase::EdReturn { stage: 1, low },
+                        self.registers.sp,
+                    )
+                }
+                1 => {
+                    let high = response
+                        .data
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                    self.registers.sp = self.registers.sp.wrapping_add(1);
+                    self.registers.pc = u16::from_le_bytes([low, high]);
+                    if self.opcode != Some(0x4D) {
+                        self.iff1 = self.iff2;
+                    }
+                    self.wz = self.registers.pc;
+                    self.retire(
+                        self.opcode
+                            .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
+                    )
+                }
+                _ => Err(Z80MicroSequencerError::InvalidState),
+            },
+            Z80MicroSequencerPhase::EdNibbleRotateRead { opcode, address } => {
+                let memory_value = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                let accumulator = self.registers.a;
+                let (result_a, result_memory) = if opcode == 0x67 {
+                    (
+                        (accumulator & 0xF0) | (memory_value & 0x0F),
+                        ((accumulator & 0x0F) << 4) | (memory_value >> 4),
+                    )
+                } else {
+                    (
+                        (accumulator & 0xF0) | (memory_value >> 4),
+                        (memory_value << 4) | (accumulator & 0x0F),
+                    )
+                };
+                self.phase = Z80MicroSequencerPhase::EdNibbleRotateInternal {
+                    opcode,
+                    address,
+                    result_a,
+                    result_memory,
+                    remaining_tstates: 4,
+                };
+                self.mcycle_index = 3;
+                self.tstate_index = 0;
+                Ok(Z80MicroStep::InternalCycle { tstates: 1 })
+            }
+            Z80MicroSequencerPhase::EdNibbleRotateInternal { .. } => {
+                Err(Z80MicroSequencerError::UnexpectedCompletion)
+            }
             Z80MicroSequencerPhase::EdAbsoluteTransfer {
                 stage,
                 pair,
@@ -1426,6 +1585,19 @@ impl Z80MicroSequencer {
                     self.registers.pc,
                 )
             }
+            op if op & 0xC7 == 0x45 => {
+                self.issue_read(
+                    Z80MicroSequencerPhase::EdReturn { stage: 0, low: 0 },
+                    self.registers.sp,
+                )
+            }
+            0x67 | 0x6F => self.issue_read(
+                Z80MicroSequencerPhase::EdNibbleRotateRead {
+                    opcode,
+                    address: self.registers.hl(),
+                },
+                self.registers.hl(),
+            ),
             op if op & 0xCF == 0x4A || op & 0xCF == 0x42 => {
                 self.mcycle_index = 2;
                 self.tstate_index = 0;
