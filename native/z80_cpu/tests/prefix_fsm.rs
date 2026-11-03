@@ -58,8 +58,8 @@ fn dd_fd_alternation_keeps_the_last_index_prefix_and_round_trips_snapshot() {
     );
 
     assert!(matches!(
-        cpu.complete_bus_cycle(fetch.id, Some(0x21)),
-        Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x21, .. })
+        cpu.complete_bus_cycle(fetch.id, Some(0x22)),
+        Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x22, .. })
     ));
     assert_eq!(cpu.export_state().prefix_state, Z80PrefixState::None);
     assert!(!cpu.instruction_active());
@@ -151,7 +151,7 @@ fn repeated_prefix_stream_has_no_artificial_length_limit() {
     assert_eq!(state.instruction_tstates, 257 * 4);
     assert_eq!(state.registers.pc, 257);
     assert!(matches!(
-        cpu.complete_bus_cycle(fetch.id, Some(0x21)),
-        Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x21, .. })
+        cpu.complete_bus_cycle(fetch.id, Some(0x22)),
+        Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x22, .. })
     ));
 }
