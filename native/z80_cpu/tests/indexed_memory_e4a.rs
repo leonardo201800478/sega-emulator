@@ -49,7 +49,7 @@ fn ld_a_from_iy_minus_one_wraps_and_resumes_across_wait_and_snapshots() {
     let fetch = feed_prefix(&mut cpu, fetch, 0xDD);
     let fetch = feed_prefix(&mut cpu, fetch, 0xFD);
     let displacement = request(cpu.complete_bus_cycle(fetch.id, Some(0x7E)).unwrap());
-    assert_eq!(displacement.address, 2);
+    assert_eq!(displacement.address, 3);
     assert_eq!(displacement.operation, Z80BusOperation::MemoryRead);
     assert_eq!(cpu.export_state().mcycle_index, 3);
 
@@ -59,7 +59,7 @@ fn ld_a_from_iy_minus_one_wraps_and_resumes_across_wait_and_snapshots() {
         cpu.complete_bus_cycle(displacement.id, Some(0xFF)).unwrap(),
         Z80MicroStep::InternalCycle { tstates: 1 }
     );
-    assert_eq!(cpu.registers.pc, 3);
+    assert_eq!(cpu.registers.pc, 4);
     assert_eq!(cpu.wz, 0xFFFF);
     cpu = round_trip(cpu);
 
