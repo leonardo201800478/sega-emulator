@@ -3622,7 +3622,7 @@ mod indirect_bc_de_differential_tests {
 
             let mut sequenced = Z80MicroSequencer::default();
             sequenced.import_architectural_state(architectural).unwrap();
-            let mut sequenced_bus = atomic_bus.clone();
+            let sequenced_bus = atomic_bus.clone();
 
             assert_eq!(atomic.step(&mut atomic_bus).unwrap(), 7);
             let fetch = sequenced.begin_instruction().unwrap();
