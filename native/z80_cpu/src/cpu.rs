@@ -6,7 +6,7 @@
 //! claim cycle-by-cycle bus accuracy. Semantic coverage still requires
 //! independent vectors and bus-level validation.
 
-use crate::alu::{adc8, add8, and8, cp8, or8, sbc8, sub8, xor8};
+use crate::alu::{adc8, add8, and8, cp8, cpl8, daa8, or8, rotate_accumulator, sbc8, sub8, xor8};
 use crate::bus::{
     CpuBus, Z80BusEvent, Z80BusEventKind, Z80CpuSnapshot, Z80InstructionOutcome,
     Z80InstructionTrace, Z80TStatePhase, Z80TStateSample,
@@ -446,65 +446,27 @@ impl Z80 {
                 11
             }
             0x07 | 0x0F | 0x17 | 0x1F => {
-                let old_a = self.registers.a;
-                let old_carry = self.registers.f & FLAG_C != 0;
-                let (result, carry) = match opcode {
-                    0x07 => (old_a.rotate_left(1), old_a & 0x80 != 0),
-                    0x0F => (old_a.rotate_right(1), old_a & 0x01 != 0),
-                    0x17 => ((old_a << 1) | u8::from(old_carry), old_a & 0x80 != 0),
-                    _ => ((old_a >> 1) | (u8::from(old_carry) << 7), old_a & 0x01 != 0),
+                let operation = match opcode {
+                    0x07 => 0,
+                    0x0F => 1,
+                    0x17 => 2,
+                    _ => 3,
                 };
-                self.registers.a = result;
-                self.set_flags(
-                    (self.registers.f & (FLAG_S | FLAG_Z | FLAG_PV))
-                        | (result & FLAG_XY)
-                        | if carry { FLAG_C } else { 0 },
-                );
+                let result = rotate_accumulator(self.registers.a, self.registers.f, operation);
+                self.registers.a = result.value;
+                self.set_flags(result.flags);
                 4
             }
             0x27 => {
-                let a = self.registers.a;
-                let old_flags = self.registers.f;
-                let subtract = old_flags & FLAG_N != 0;
-                let mut correction = 0u8;
-                let mut carry = old_flags & FLAG_C != 0;
-                if old_flags & FLAG_H != 0 || (a & 0x0F) > 9 {
-                    correction |= 0x06;
-                }
-                if carry || a > 0x99 {
-                    correction |= 0x60;
-                    carry = true;
-                }
-                let result = if subtract {
-                    a.wrapping_sub(correction)
-                } else {
-                    a.wrapping_add(correction)
-                };
-                let mut flags = (old_flags & FLAG_N) | (result & (FLAG_S | FLAG_XY));
-                if result == 0 {
-                    flags |= FLAG_Z;
-                }
-                if result.count_ones().is_multiple_of(2) {
-                    flags |= FLAG_PV;
-                }
-                if (a ^ result) & 0x10 != 0 {
-                    flags |= FLAG_H;
-                }
-                if carry {
-                    flags |= FLAG_C;
-                }
-                self.registers.a = result;
-                self.set_flags(flags);
+                let result = daa8(self.registers.a, self.registers.f);
+                self.registers.a = result.value;
+                self.set_flags(result.flags);
                 4
             }
             0x2F => {
-                self.registers.a = !self.registers.a;
-                self.set_flags(
-                    (self.registers.f & (FLAG_S | FLAG_Z | FLAG_PV | FLAG_C))
-                        | (self.registers.a & FLAG_XY)
-                        | FLAG_H
-                        | FLAG_N,
-                );
+                let result = cpl8(self.registers.a, self.registers.f);
+                self.registers.a = result.value;
+                self.set_flags(result.flags);
                 4
             }
             0x37 => {

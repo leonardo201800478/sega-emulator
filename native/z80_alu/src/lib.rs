@@ -140,9 +140,73 @@ pub fn cp8(lhs: u8, rhs: u8) -> AluResult {
     AluResult { value: lhs, flags }
 }
 
+/// Executes the four accumulator rotate instructions (RLCA, RRCA, RLA, RRA).
+/// Operation values are 0=RLCA, 1=RRCA, 2=RLA, 3=RRA.
+pub fn rotate_accumulator(value: u8, old_flags: u8, operation: u8) -> AluResult {
+    let old_carry = old_flags & FLAG_C != 0;
+    let (result, carry) = match operation {
+        0 => (value.rotate_left(1), value & 0x80 != 0),
+        1 => (value.rotate_right(1), value & 0x01 != 0),
+        2 => ((value << 1) | u8::from(old_carry), value & 0x80 != 0),
+        3 => ((value >> 1) | (u8::from(old_carry) << 7), value & 0x01 != 0),
+        _ => unreachable!("two-bit accumulator rotate operation"),
+    };
+    let flags = (old_flags & (FLAG_S | FLAG_Z | FLAG_PV))
+        | (result & FLAG_XY)
+        | if carry { FLAG_C } else { 0 };
+    AluResult {
+        value: result,
+        flags,
+    }
+}
+
+/// Executes DAA using the pre-adjust accumulator and flags.
+pub fn daa8(accumulator: u8, old_flags: u8) -> AluResult {
+    let subtract = old_flags & FLAG_N != 0;
+    let mut correction = 0_u8;
+    let mut carry = old_flags & FLAG_C != 0;
+    if old_flags & FLAG_H != 0 || (accumulator & 0x0F) > 9 {
+        correction |= 0x06;
+    }
+    if carry || accumulator > 0x99 {
+        correction |= 0x60;
+        carry = true;
+    }
+    let value = if subtract {
+        accumulator.wrapping_sub(correction)
+    } else {
+        accumulator.wrapping_add(correction)
+    };
+    let mut flags = (old_flags & FLAG_N) | (value & (FLAG_S | FLAG_XY));
+    if value == 0 {
+        flags |= FLAG_Z;
+    }
+    if value.count_ones().is_multiple_of(2) {
+        flags |= FLAG_PV;
+    }
+    if (accumulator ^ value) & 0x10 != 0 {
+        flags |= FLAG_H;
+    }
+    if carry {
+        flags |= FLAG_C;
+    }
+    AluResult { value, flags }
+}
+
+/// Executes CPL: complement A, preserve S/Z/PV/C, and set H/N.
+pub fn cpl8(accumulator: u8, old_flags: u8) -> AluResult {
+    let value = !accumulator;
+    let flags =
+        (old_flags & (FLAG_S | FLAG_Z | FLAG_PV | FLAG_C)) | (value & FLAG_XY) | FLAG_H | FLAG_N;
+    AluResult { value, flags }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{adc8, add8, and8, cp8, or8, sbc8, sub8, xor8};
+    use super::{
+        FLAG_C, FLAG_H, FLAG_N, FLAG_PV, FLAG_S, FLAG_XY, FLAG_Z, adc8, add8, and8, cp8, cpl8,
+        daa8, or8, rotate_accumulator, sbc8, sub8, xor8,
+    };
 
     #[test]
     fn arithmetic_wraps_at_eight_bits() {
@@ -189,6 +253,31 @@ mod tests {
         assert_eq!(result.value, 0x10);
         assert_eq!(result.flags & 0x28, 0x28);
         assert_eq!(result.flags & 0x13, 0x13);
+    }
+
+    #[test]
+    fn accumulator_rotates_preserve_szp_and_update_xy_and_carry() {
+        assert_eq!(rotate_accumulator(0x81, 0xC4, 0).value, 0x03);
+        assert_eq!(rotate_accumulator(0x81, 0xC4, 0).flags, 0xC5);
+        assert_eq!(rotate_accumulator(0x01, 0x01, 3).value, 0x80);
+        assert_eq!(rotate_accumulator(0x01, 0x01, 3).flags, 0x01);
+    }
+
+    #[test]
+    fn daa_handles_add_subtract_and_carry_adjustments() {
+        assert_eq!(daa8(0x0A, 0x00).value, 0x10);
+        assert_eq!(daa8(0x10, FLAG_N | FLAG_H).value, 0x0A);
+        assert_eq!(daa8(0x9A, 0x00).flags & FLAG_C, FLAG_C);
+    }
+
+    #[test]
+    fn cpl_complements_accumulator_and_preserves_szpc() {
+        let result = cpl8(0x10, FLAG_S | FLAG_Z | FLAG_PV | FLAG_C);
+        assert_eq!(result.value, 0xEF);
+        assert_eq!(
+            result.flags,
+            FLAG_S | FLAG_Z | FLAG_PV | FLAG_C | FLAG_XY | FLAG_H | FLAG_N
+        );
     }
 
     #[test]

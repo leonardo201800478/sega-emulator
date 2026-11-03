@@ -5,7 +5,7 @@
 //! atomic executor; it does not yet cover interrupts, prefixes, HALT, refresh
 //! pin phases, or the full architectural state.
 
-use crate::alu::{adc8, add8, and8, cp8, or8, sbc8, sub8, xor8};
+use crate::alu::{adc8, add8, and8, cp8, cpl8, daa8, or8, rotate_accumulator, sbc8, sub8, xor8};
 use crate::{
     Z80_MICRO_SEQUENCER_STATE_VERSION, Z80BusHandshake, Z80BusHandshakeError, Z80BusOperation,
     Z80BusRequest, Z80Registers,
@@ -87,6 +87,8 @@ pub struct Z80MicroSequencerState {
     pub format_version: u16,
     pub registers: Z80Registers,
     pub refresh: u8,
+    pub q: u8,
+    pub q_previous: u8,
     pub handshake: crate::Z80BusHandshakeState,
     pub phase: Z80MicroSequencerPhase,
     pub opcode: Option<u8>,
@@ -108,6 +110,10 @@ pub struct Z80MicroSequencer {
     pub registers: Z80Registers,
     /// Low seven bits count M1 fetches; bit 7 is preserved.
     pub refresh: u8,
+    /// Flags written by the current instruction; zero when it does not write F.
+    pub q: u8,
+    /// Q value captured at the previous instruction boundary.
+    pub q_previous: u8,
     handshake: Z80BusHandshake,
     phase: Z80MicroSequencerPhase,
     opcode: Option<u8>,
@@ -121,6 +127,8 @@ impl Default for Z80MicroSequencer {
         Self {
             registers: Z80Registers::default(),
             refresh: 0,
+            q: 0,
+            q_previous: 0,
             handshake: Z80BusHandshake::default(),
             phase: Z80MicroSequencerPhase::Ready,
             opcode: None,
@@ -138,6 +146,8 @@ impl Z80MicroSequencer {
             format_version: Z80_MICRO_SEQUENCER_STATE_VERSION,
             registers: self.registers,
             refresh: self.refresh,
+            q: self.q,
+            q_previous: self.q_previous,
             handshake: self.handshake.export_state(),
             phase: self.phase,
             opcode: self.opcode,
@@ -312,6 +322,8 @@ impl Z80MicroSequencer {
         Ok(Self {
             registers: state.registers,
             refresh: state.refresh,
+            q: state.q,
+            q_previous: state.q_previous,
             handshake,
             phase: state.phase,
             opcode: state.opcode,
@@ -331,6 +343,8 @@ impl Z80MicroSequencer {
         self.mcycle_index = 0;
         self.tstate_index = 0;
         self.opcode = None;
+        self.q_previous = self.q;
+        self.q = 0;
         let request = self
             .handshake
             .begin(Z80BusOperation::OpcodeFetch, self.registers.pc, 4)?;
@@ -409,6 +423,14 @@ impl Z80MicroSequencer {
                 self.opcode = Some(opcode);
                 match opcode {
                     0x00 => self.retire(opcode),
+                    0x07 | 0x0F | 0x17 | 0x1F | 0x27 | 0x2F => {
+                        self.execute_accumulator_misc(opcode);
+                        self.retire(opcode)
+                    }
+                    0x37 | 0x3F => {
+                        self.execute_carry_flag_operation(opcode);
+                        self.retire(opcode)
+                    }
                     0x06 | 0x0E | 0x16 | 0x1E | 0x26 | 0x2E | 0x3E => {
                         let destination = (opcode >> 3) & 0x07;
                         self.issue_read(
@@ -625,10 +647,47 @@ impl Z80MicroSequencer {
             7 => cp8(accumulator, operand),
             _ => unreachable!("three-bit ALU operation field"),
         };
-        self.registers.f = result.flags;
+        self.set_flags(result.flags);
         if operation != 7 {
             self.registers.a = result.value;
         }
+    }
+
+    /// Execute accumulator-only BASE instructions whose effects commit at M1 completion.
+    fn execute_accumulator_misc(&mut self, opcode: u8) {
+        let result = match opcode {
+            0x07 => rotate_accumulator(self.registers.a, self.registers.f, 0),
+            0x0F => rotate_accumulator(self.registers.a, self.registers.f, 1),
+            0x17 => rotate_accumulator(self.registers.a, self.registers.f, 2),
+            0x1F => rotate_accumulator(self.registers.a, self.registers.f, 3),
+            0x27 => daa8(self.registers.a, self.registers.f),
+            0x2F => cpl8(self.registers.a, self.registers.f),
+            _ => unreachable!("accumulator-only instruction decode"),
+        };
+        self.registers.a = result.value;
+        self.set_flags(result.flags);
+    }
+
+    /// Execute SCF/CCF with the previous-instruction Q latch semantics.
+    fn execute_carry_flag_operation(&mut self, opcode: u8) {
+        let undocumented = (self.registers.a | (self.q_previous ^ self.registers.f)) & FLAG_XY;
+        let flags = match opcode {
+            0x37 => (self.registers.f & (FLAG_S | FLAG_Z | FLAG_PV)) | undocumented | FLAG_C,
+            0x3F => {
+                let carry = self.registers.f & FLAG_C != 0;
+                (self.registers.f & (FLAG_S | FLAG_Z | FLAG_PV))
+                    | undocumented
+                    | if carry { FLAG_H } else { FLAG_C }
+            }
+            _ => unreachable!("SCF/CCF opcode decode"),
+        };
+        self.set_flags(flags);
+    }
+
+    #[inline]
+    fn set_flags(&mut self, flags: u8) {
+        self.registers.f = flags;
+        self.q = flags;
     }
 
     /// Apply the Z80 8-bit INC/DEC flag rules while preserving Carry.
@@ -655,7 +714,7 @@ impl Z80MicroSequencer {
         if decrement {
             flags |= FLAG_N;
         }
-        self.registers.f = flags;
+        self.set_flags(flags);
         value
     }
 
@@ -1897,6 +1956,88 @@ mod tests {
                 9,
             );
             assert_eq!(cpu.registers.a, 0x11);
+        }
+    }
+
+    #[test]
+    fn scf_ccf_use_q_latch_and_preserve_previous_flag_write_across_snapshot() {
+        fn execute(cpu: &mut Z80MicroSequencer, opcode: u8) {
+            let fetch = request(cpu.begin_instruction().unwrap());
+            retired(
+                cpu.complete_bus_cycle(fetch.id, Some(opcode)).unwrap(),
+                opcode,
+                4,
+            );
+        }
+
+        let mut cpu = Z80MicroSequencer {
+            registers: Z80Registers {
+                a: 0x00,
+                b: 0x28,
+                ..Z80Registers::default()
+            },
+            ..Z80MicroSequencer::default()
+        };
+
+        // CP B writes undocumented X/Y from B, while A remains zero.
+        execute(&mut cpu, 0xB8);
+        assert_eq!(cpu.registers.f, 0xBB);
+        assert_eq!(cpu.q, 0xBB);
+
+        // The next instruction boundary moves Q to Q-previous and clears Q.
+        let fetch = request(cpu.begin_instruction().unwrap());
+        assert_eq!(cpu.q_previous, 0xBB);
+        assert_eq!(cpu.q, 0x00);
+
+        // Both Q values must survive a pending M1 snapshot/restore.
+        let encoded = cpu.export_state().encode().unwrap();
+        let decoded = crate::Z80MicroSequencerState::decode(&encoded).unwrap();
+        let mut restored = Z80MicroSequencer::restore_state(decoded).unwrap();
+        retired(
+            restored.complete_bus_cycle(fetch.id, Some(0x37)).unwrap(),
+            0x37,
+            4,
+        );
+        assert_eq!(restored.registers.f, 0x81);
+        assert_eq!(restored.q, 0x81);
+        assert_eq!(restored.q_previous, 0xBB);
+
+        // CCF consumes the current carry, clears it, and sets H.
+        execute(&mut restored, 0x3F);
+        assert_eq!(restored.registers.f, 0x90);
+        assert_eq!(restored.q, 0x90);
+    }
+
+    #[test]
+    fn scf_after_non_flag_instruction_uses_retained_f_for_xy() {
+        let mut cpu = Z80MicroSequencer {
+            registers: Z80Registers {
+                f: FLAG_XY,
+                ..Z80Registers::default()
+            },
+            ..Z80MicroSequencer::default()
+        };
+        let nop = request(cpu.begin_instruction().unwrap());
+        retired(cpu.complete_bus_cycle(nop.id, Some(0x00)).unwrap(), 0x00, 4);
+        assert_eq!(cpu.q, 0);
+
+        let scf = request(cpu.begin_instruction().unwrap());
+        retired(cpu.complete_bus_cycle(scf.id, Some(0x37)).unwrap(), 0x37, 4);
+        assert_eq!(cpu.registers.f, FLAG_XY | FLAG_C);
+    }
+
+    #[test]
+    fn accumulator_rotate_daa_and_cpl_retire_after_m1_without_extra_bus_cycles() {
+        for opcode in [0x07, 0x0F, 0x17, 0x1F, 0x27, 0x2F] {
+            let mut cpu = Z80MicroSequencer::default();
+            let fetch = request(cpu.begin_instruction().unwrap());
+            retired(
+                cpu.complete_bus_cycle(fetch.id, Some(opcode)).unwrap(),
+                opcode,
+                4,
+            );
+            assert_eq!(cpu.pending_request(), None, "opcode {opcode:02X}");
+            assert!(!cpu.instruction_active(), "opcode {opcode:02X}");
         }
     }
 }
