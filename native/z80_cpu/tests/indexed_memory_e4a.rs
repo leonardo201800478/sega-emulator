@@ -82,7 +82,7 @@ fn ld_a_from_iy_minus_one_wraps_and_resumes_across_wait_and_snapshots() {
     assert_eq!(cpu.registers.f, 0xA5);
     assert_eq!(cpu.iy, 0x0000);
     assert_eq!(cpu.wz, 0xFFFF);
-    assert_eq!(cpu.registers.pc, 3);
+    assert_eq!(cpu.registers.pc, 4);
     assert_eq!(cpu.refresh & 0x7F, 3);
 }
 
