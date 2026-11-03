@@ -1127,23 +1127,36 @@ mod tests {
             assert_eq!(restored.export_state(), low_state);
             assert_eq!(restored.pending_request(), Some(low));
 
-            let high = match restored.complete_bus_cycle(low.id, Some(expected_index as u8)).unwrap() {
+            let high = match restored
+                .complete_bus_cycle(low.id, Some(expected_index as u8))
+                .unwrap()
+            {
                 crate::Z80MicroStep::BusRequest(request) => request,
                 other => panic!("expected high-byte read, got {other:?}"),
             };
             let high_state = restored.export_state();
-            let high_decoded = Z80MicroSequencerState::decode(&high_state.encode().unwrap()).unwrap();
+            let high_decoded =
+                Z80MicroSequencerState::decode(&high_state.encode().unwrap()).unwrap();
             let mut restored = Z80MicroSequencer::restore_state(high_decoded).unwrap();
             assert_eq!(restored.export_state(), high_state);
             assert_eq!(restored.pending_request(), Some(high));
             assert_eq!(
-                restored.complete_bus_cycle(high.id, Some((expected_index >> 8) as u8)).unwrap(),
+                restored
+                    .complete_bus_cycle(high.id, Some((expected_index >> 8) as u8))
+                    .unwrap(),
                 crate::Z80MicroStep::InstructionRetired {
                     opcode: 0x21,
                     tstates: 14,
                 }
             );
-            assert_eq!(if prefix == 0xDD { restored.ix } else { restored.iy }, expected_index);
+            assert_eq!(
+                if prefix == 0xDD {
+                    restored.ix
+                } else {
+                    restored.iy
+                },
+                expected_index
+            );
         }
     }
 
