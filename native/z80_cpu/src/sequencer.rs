@@ -430,7 +430,12 @@ impl Z80MicroSequencer {
                     return Err(Z80MicroSequencerError::InvalidState);
                 };
                 state.opcode.is_some_and(|opcode| opcode & 0x07 == 0x06 && opcode >> 6 != 1)
-                    && request.operation == Z80BusOperation::MemoryWrite { value }
+                    && matches!(
+                        request.operation,
+                        Z80BusOperation::MemoryWrite {
+                            value: request_value
+                        } if request_value == value
+                    )
                     && request.address == address
                     && request.base_tstates == 3
                     && address == state.registers.hl()
