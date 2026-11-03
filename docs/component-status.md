@@ -169,3 +169,23 @@ A implementação reutiliza a ALU compartilhada `sega-z80-alu` e preserva o exec
 **Validação:** no SHA de código 35372cdd6705cbae57992fbc770b03982b4f10eb, cargo fmt, Clippy, testes direcionados SMS/SG-1000 e testes do workspace: PASS; Ruff formatação/lint e regressão Python: PASS; Windows x64 D3D12, testes de vídeo, WASAPI/XAudio2 e testes de áudio: PASS. Scheduler deterministic stress: SKIPPED. Execução local NOT RUN. A fatia recebe QUICK_PASS de validação automatizada; manter INTEGRATION_PENDING quanto à integração sistêmica/in-game.
 
 A PR #426 permanece Draft e empilhada sobre #425. Nenhum merge foi realizado.
+
+
+## 12. P7 — Q-latch e SCF/CCF no Z80 retomável, PR #427
+
+**Branch candidata:** `feat/z80-sms-accumulator-flags`  
+**SHA candidato atual:** `115fbcaa58357a2d4a36ae8885e86403ed50f2d8`  
+**PR:** https://github.com/leonardo201800478/sega-emulator/pull/427  
+**CI:** run `41569395817` — pendente nesta atualização.
+
+| Componente | Estado formal | Evidência / limite |
+|---|---|---|
+| RLCA/RRCA/RLA/RRA, DAA e CPL | IMPLEMENTED / QUICK_PASS | Shared ALU, M1 4 T, testes unitários e diferencial Scheduler/atomic; CI run `41568918251` PASS em Rust, Python e Windows x64 |
+| Q-latch do microsequenciador | IMPLEMENTED / QUICK_PASS pendente de CI atual | `q` e `q_previous` atualizados na fronteira de instrução; instruções que escrevem F atualizam Q; instruções sem escrita de F deixam Q=0 |
+| SCF/CCF | IMPLEMENTED / QUICK_PASS pendente de CI atual | Fórmula X/Y usa `(A | (Q_previous XOR F)) & 0x28`; CCF alterna C/H; teste após CP e instrução sem escrita de flags |
+| Snapshot Z80 | IMPLEMENTED / QUICK_PASS pendente de CI atual | Codec binário versão 5 serializa Q/Q_previous; teste de round-trip/restauração com M1 pendente |
+| SMS temporal machine state | IMPLEMENTED / QUICK_PASS pendente de CI atual | Versão incrementada de 7 para 8 para refletir o novo estado embutido do Z80 |
+| Z80 retomável completo | INTEGRATION_PENDING | Prefixos CB/ED/DD/FD, HALT, interrupções, I/O, instruções 16-bit, refresh elétrico e estado arquitetural completo permanecem pendentes |
+| TEMPORAL_PASS | NOT DECLARED | Sem oráculos independentes/físicos, WAIT físico e integração sistêmica completa |
+
+O executor atômico existente é a referência para SCF/CCF: no início de cada instrução ele captura `q_previous = q` e limpa `q`; `set_flags` grava F e Q. O microsequenciador reproduz essa fronteira e persiste ambos os latches. Não inferir validação in-game nem cobertura ZEXDOC/ZEXALL.
