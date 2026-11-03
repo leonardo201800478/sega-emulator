@@ -740,9 +740,7 @@ impl Z80MicroSequencer {
             }
             Z80MicroSequencerPhase::MemoryReadAlu { .. } => match state.prefix_state {
                 Z80PrefixState::None => true,
-                Z80PrefixState::Index(_) => {
-                    state.opcode.is_some_and(is_indexed_memory_alu_opcode)
-                }
+                Z80PrefixState::Index(_) => state.opcode.is_some_and(is_indexed_memory_alu_opcode),
                 _ => false,
             },
             Z80MicroSequencerPhase::MemoryReadRegister { destination } => {
