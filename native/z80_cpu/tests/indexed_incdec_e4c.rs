@@ -5,6 +5,13 @@ use sega_z80_cpu::{
     Z80MicroSequencerState, Z80MicroStep,
 };
 
+struct IndexedDisplacementBoundaryCase {
+    prefix: u8,
+    ix: u16,
+    iy: u16,
+    displacement: u8,
+}
+
 struct IndexedIncDecCase<'a> {
     prefixes: &'a [u8],
     ix: u16,
@@ -293,32 +300,63 @@ fn indexed_inc_dec_wraps_effective_address_and_program_counter() {
 
 #[test]
 fn indexed_inc_dec_covers_zero_and_signed_displacement_extremes_for_ix_and_iy() {
-    let cases: [(u8, u16, u16, u8, u8, u8, u8, u8); 6] = [
+    let cases = [
         // IX: zero displacement, negative boundary and positive boundary with 16-bit wrap.
-        (0xDD, 0x1234, 0x0000, 0x00, 0x34, 0x01, 0x35, 0xFE),
-        (0xDD, 0x0001, 0x0000, 0x80, 0x34, 0x01, 0x35, 0xFE),
-        (0xDD, 0xFFFF, 0x0000, 0x7F, 0x34, 0x01, 0x35, 0xFE),
+        IndexedDisplacementBoundaryCase {
+            prefix: 0xDD,
+            ix: 0x1234,
+            iy: 0,
+            displacement: 0x00,
+        },
+        IndexedDisplacementBoundaryCase {
+            prefix: 0xDD,
+            ix: 0x0001,
+            iy: 0,
+            displacement: 0x80,
+        },
+        IndexedDisplacementBoundaryCase {
+            prefix: 0xDD,
+            ix: 0xFFFF,
+            iy: 0,
+            displacement: 0x7F,
+        },
         // IY: the same displacement boundaries, including wrap in both directions.
-        (0xFD, 0x0000, 0x1234, 0x00, 0x34, 0x01, 0x35, 0xFE),
-        (0xFD, 0x0000, 0x0001, 0x80, 0x34, 0x01, 0x35, 0xFE),
-        (0xFD, 0x0000, 0xFF80, 0x7F, 0x34, 0x01, 0x35, 0xFE),
+        IndexedDisplacementBoundaryCase {
+            prefix: 0xFD,
+            ix: 0,
+            iy: 0x1234,
+            displacement: 0x00,
+        },
+        IndexedDisplacementBoundaryCase {
+            prefix: 0xFD,
+            ix: 0,
+            iy: 0x0001,
+            displacement: 0x80,
+        },
+        IndexedDisplacementBoundaryCase {
+            prefix: 0xFD,
+            ix: 0,
+            iy: 0xFF80,
+            displacement: 0x7F,
+        },
     ];
 
-    for (prefix, ix, iy, displacement, opcode, old_value, dec_opcode, dec_value) in cases {
-        let index_base = if prefix == 0xDD { ix } else { iy };
-        let effective_address = index_base.wrapping_add_signed(i16::from(displacement as i8));
+    for case in cases {
+        let index_base = if case.prefix == 0xDD { case.ix } else { case.iy };
+        let effective_address =
+            index_base.wrapping_add_signed(i16::from(case.displacement as i8));
         for (opcode, old_value, expected_value) in [
-            (opcode, old_value, old_value.wrapping_add(1)),
-            (dec_opcode, dec_value, dec_value.wrapping_sub(1)),
+            (0x34, 0x01, 0x02),
+            (0x35, 0xFE, 0xFD),
         ] {
             let cpu = execute_indexed_inc_dec(IndexedIncDecCase {
-                prefixes: &[prefix],
-                ix,
-                iy,
+                prefixes: &[case.prefix],
+                ix: case.ix,
+                iy: case.iy,
                 pc: 0,
                 opcode,
                 flags: 0x01,
-                displacement,
+                displacement: case.displacement,
                 old_value,
                 expected_value,
                 waits: &[0, 0, 0, 0, 0],
