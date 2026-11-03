@@ -516,11 +516,9 @@ impl Z80MicroSequencer {
                     && (1..=7).contains(&remaining_tstates)
                     && pending.is_none()
                     && if remaining_tstates >= 4 {
-                        state.mcycle_index == 2
-                            && state.tstate_index == 7 - remaining_tstates
+                        state.mcycle_index == 2 && state.tstate_index == 7 - remaining_tstates
                     } else {
-                        state.mcycle_index == 3
-                            && state.tstate_index == 3 - remaining_tstates
+                        state.mcycle_index == 3 && state.tstate_index == 3 - remaining_tstates
                     }
                     && state.instruction_tstates >= 8 + u32::from(7 - remaining_tstates)
             }
@@ -612,11 +610,9 @@ impl Z80MicroSequencer {
                 remaining_tstates, ..
             } => {
                 if remaining_tstates >= 4 {
-                    state.mcycle_index == 2
-                        && state.tstate_index == 7 - remaining_tstates
+                    state.mcycle_index == 2 && state.tstate_index == 7 - remaining_tstates
                 } else {
-                    state.mcycle_index == 3
-                        && state.tstate_index == 3 - remaining_tstates
+                    state.mcycle_index == 3 && state.tstate_index == 3 - remaining_tstates
                 }
             }
             Z80MicroSequencerPhase::ImmediateReadRegisterPairHigh { .. } => {
@@ -3430,7 +3426,6 @@ mod indirect_bc_de_differential_tests {
     }
 }
 
-
 #[cfg(test)]
 mod ed_16bit_arithmetic_differential_tests {
     use super::{Z80MicroSequencer, Z80MicroStep};
@@ -3536,7 +3531,11 @@ mod ed_16bit_arithmetic_differential_tests {
         sequenced.import_architectural_state(architectural).unwrap();
         let mut sequenced_bus = atomic_bus.clone();
 
-        assert_eq!(atomic.step(&mut atomic_bus), Ok(15), "atomic ED {opcode:02X}");
+        assert_eq!(
+            atomic.step(&mut atomic_bus),
+            Ok(15),
+            "atomic ED {opcode:02X}"
+        );
 
         let first = request(sequenced.begin_instruction().unwrap());
         let second = read_opcode(
