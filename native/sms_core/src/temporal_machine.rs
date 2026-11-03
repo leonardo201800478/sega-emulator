@@ -1365,8 +1365,7 @@ mod tests {
             Z80MicroStep::BusRequest(request) => request,
             other => panic!("expected fetch, got {other:?}"),
         };
-        complete_m1_fetch(&mut machine, 0);
-        let read = match machine.dispatch_next().unwrap() {
+        let read = match complete_m1_fetch(&mut machine, 0) {
             Z80MicroStep::BusRequest(request) => request,
             other => panic!("expected memory read, got {other:?}"),
         };
