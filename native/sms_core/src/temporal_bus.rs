@@ -7,7 +7,7 @@
 use core::fmt;
 
 use crate::{
-    CartridgeImage, SmsCoreError, SmsMemory, SmsTemporalCoordinator, SmsTemporalCoordinatorError,
+    CartridgeImage, SmsCartridgeRamFile, SmsCartridgeRamFileError, SmsCoreError, SmsMemory, SmsTemporalCoordinator, SmsTemporalCoordinatorError,
     SmsTemporalCoordinatorState, SmsTemporalEvent,
 };
 use sega_temporal_core::MachineTime;
@@ -368,6 +368,22 @@ impl SmsTemporalBus {
     /// Read-only access to the mapper-backed memory image.
     pub const fn memory(&self) -> &SmsMemory {
         &self.memory
+    }
+
+    /// Restore the configured mapper SRAM from a validated .srm image.
+    pub fn load_cartridge_ram_file(
+        &mut self,
+        save_file: &SmsCartridgeRamFile,
+    ) -> Result<bool, SmsCartridgeRamFileError> {
+        save_file.load_into(&mut self.memory)
+    }
+
+    /// Persist the mapper SRAM without performing I/O on CPU bus transactions.
+    pub fn save_cartridge_ram_file(
+        &self,
+        save_file: &SmsCartridgeRamFile,
+    ) -> Result<(), SmsCartridgeRamFileError> {
+        save_file.save_from_memory(&self.memory)
     }
 
     /// Export memory, scheduler, and in-flight response state.
