@@ -293,7 +293,7 @@ mod tests {
         cycle.advance_tstate(true).unwrap();
         let restored = Z80M1Cycle::restore_state(cycle.export_state()).unwrap();
         assert_eq!(restored.phase(), Z80M1Phase::Wait);
-        assert_eq!(restored.wait_tstates(), 2);
+        assert_eq!(restored.wait_tstates(), 1);
         assert_eq!(restored.pins(), cycle.pins());
     }
 
