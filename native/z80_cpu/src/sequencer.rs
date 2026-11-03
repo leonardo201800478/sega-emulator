@@ -1879,7 +1879,8 @@ impl Z80MicroSequencer {
                 };
                 Ok(Z80MicroStep::InternalCycle { tstates: 1 })
             }
-            Z80MicroSequencerPhase::MemoryIncDecInternal { .. } => {
+            Z80MicroSequencerPhase::BaseInternal { .. }
+            | Z80MicroSequencerPhase::MemoryIncDecInternal { .. } => {
                 Err(Z80MicroSequencerError::UnexpectedCompletion)
             }
             Z80MicroSequencerPhase::MemoryWrite { address, .. } => {
