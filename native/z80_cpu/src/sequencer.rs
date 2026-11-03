@@ -466,6 +466,16 @@ impl Z80MicroSequencer {
                         self.execute_carry_flag_operation(opcode);
                         self.retire(opcode)
                     }
+                    0xE9 => {
+                        self.registers.pc = self.registers.hl();
+                        self.retire(opcode)
+                    }
+                    0xEB => {
+                        let de = self.registers.de();
+                        self.registers.set_de(self.registers.hl());
+                        self.registers.set_hl(de);
+                        self.retire(opcode)
+                    }
                     0x01 | 0x11 | 0x21 | 0x31 => self.issue_read(
                         Z80MicroSequencerPhase::ImmediateReadRegisterPairLow {
                             pair: (opcode >> 4) & 0x03,
@@ -2155,6 +2165,50 @@ mod tests {
             13,
         );
         assert_eq!(cpu.registers.bc(), 0x1234);
+    }
+
+    #[test]
+    fn jp_hl_commits_target_at_m1_completion_without_extra_bus_cycle() {
+        let mut cpu = Z80MicroSequencer {
+            registers: Z80Registers {
+                h: 0x12,
+                l: 0x34,
+                ..Z80Registers::default()
+            },
+            ..Z80MicroSequencer::default()
+        };
+        let fetch = request(cpu.begin_instruction().unwrap());
+        retired(
+            cpu.complete_bus_cycle(fetch.id, Some(0xE9)).unwrap(),
+            0xE9,
+            4,
+        );
+        assert_eq!(cpu.registers.pc, 0x1234);
+        assert_eq!(cpu.pending_request(), None);
+    }
+
+    #[test]
+    fn ex_de_hl_swaps_register_pairs_at_m1_completion() {
+        let mut cpu = Z80MicroSequencer {
+            registers: Z80Registers {
+                d: 0x12,
+                e: 0x34,
+                h: 0x56,
+                l: 0x78,
+                ..Z80Registers::default()
+            },
+            ..Z80MicroSequencer::default()
+        };
+        let fetch = request(cpu.begin_instruction().unwrap());
+        retired(
+            cpu.complete_bus_cycle(fetch.id, Some(0xEB)).unwrap(),
+            0xEB,
+            4,
+        );
+        assert_eq!(cpu.registers.de(), 0x5678);
+        assert_eq!(cpu.registers.hl(), 0x1234);
+        assert_eq!(cpu.registers.pc, 1);
+        assert_eq!(cpu.pending_request(), None);
     }
 
     #[test]

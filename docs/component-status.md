@@ -183,7 +183,7 @@ A PR #426 permanece Draft e empilhada sobre #425. Nenhum merge foi realizado.
 | RLCA/RRCA/RLA/RRA, DAA e CPL | IMPLEMENTED / QUICK_PASS | Shared ALU, M1 4 T, testes unitários e diferencial Scheduler/atomic; CI run `41568918251` PASS em Rust, Python e Windows x64 |
 | Q-latch do microsequenciador | IMPLEMENTED / QUICK_PASS | `q` e `q_previous` atualizados na fronteira de instrução; instruções que escrevem F atualizam Q; instruções sem escrita de F deixam Q=0 |
 | SCF/CCF | IMPLEMENTED / QUICK_PASS atual | Fórmula X/Y usa `(A | (Q_previous XOR F)) & 0x28`; CCF alterna C/H; teste após CP e instrução sem escrita de flags |
-| Snapshot Z80 | IMPLEMENTED / QUICK_PASS pendente de CI atual | Codec binário versão 5 serializa Q/Q_previous; teste de round-trip/restauração com M1 pendente; CI `41569544969` PASS |
+| Snapshot Z80 | IMPLEMENTED / QUICK_PASS atual | Codec binário versão 5 serializa Q/Q_previous; teste de round-trip/restauração com M1 pendente; CI `41569544969` PASS |
 | SMS temporal machine state | IMPLEMENTED / QUICK_PASS pendente de CI atual | Versão incrementada de 7 para 8 para refletir o novo estado embutido do Z80; CI `41569544969` PASS |
 | Z80 retomável completo | INTEGRATION_PENDING | Prefixos CB/ED/DD/FD, HALT, interrupções, I/O, instruções 16-bit, refresh elétrico e estado arquitetural completo permanecem pendentes |
 | TEMPORAL_PASS | NOT DECLARED | Sem oráculos independentes/físicos, WAIT físico e integração sistêmica completa |
@@ -209,3 +209,21 @@ O executor atômico existente é a referência para SCF/CCF: no início de cada 
 **Critérios da fatia:** M1 4 T + leitura do byte baixo 3 T + leitura do byte alto 3 T = 10 T nominais. PC avança apenas quando cada leitura conclui; o par de registradores só é atualizado após a leitura do byte alto. WAIT de cada transação deve ser contabilizado no Scheduler. O executor atômico legado permanece como oráculo diferencial e não é removido.
 
 **Validação:** CI `41571174250` PASS em todos os jobs, incluindo Scheduler deterministic stress short. Execução local NOT RUN. O resultado cobre o SHA candidato desta branch; não comprova integração sistêmica completa nem TEMPORAL_PASS.
+
+## 14. P7 — Z80 BASE: JP (HL) e EX DE,HL no microsequenciador retomável
+
+**Branch candidata:** `feat/z80-sms-jp-hl-ex-de-hl`  
+**SHA de código candidato:** `21cf592322057a8ec59dba0b368062d5b6b97491`  
+**PR:** pendente de abertura  
+**Dependência:** PR #428 (empilhada; ainda não integrada à main).  
+**CI:** run `41571700032` no SHA documental `eaded3e77edbd5768bf967dc57f72f0a9e99b341` — Rust Formatting, Clippy, testes SMS/SG-1000, workspace, Ruff, pytest e Windows x64 D3D12/vídeo/WASAPI/XAudio2 PASS; Scheduler deterministic stress SKIPPED.
+
+| Componente | Estado formal | Evidência / limite |
+|---|---|---|
+| JP (HL) — E9 | IMPLEMENTED / QUICK_PASS pendente de CI | PC recebe HL na conclusão de M1; 4 T nominais, sem leitura adicional |
+| EX DE,HL — EB | IMPLEMENTED / QUICK_PASS pendente de CI | Troca DE/HL na conclusão de M1; 4 T nominais, sem transação adicional |
+| Diferencial temporal | IMPLEMENTED / QUICK_PASS pendente de CI | Teste compara todos os Z80Registers, refresh, Q e tempo do Scheduler contra o executor atômico |
+| Z80 retomável completo | INTEGRATION_PENDING | Prefixos, HALT, interrupções, I/O, famílias BASE restantes e estado/pinos completos continuam pendentes |
+| TEMPORAL_PASS | NOT DECLARED | A fatia não comprova execução sistêmica nem precisão elétrica completa |
+
+**Critérios:** efeitos arquiteturais aplicados somente após a conclusão de M1; ambas as instruções preservam F e não emitem transações extras. O executor atômico segue como oráculo diferencial. Execução local NOT RUN. Scheduler deterministic stress SKIPPED não foi contabilizado como PASS.

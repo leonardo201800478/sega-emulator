@@ -1399,6 +1399,47 @@ mod tests {
     }
 
     #[test]
+    fn jp_hl_and_ex_de_hl_match_atomic_reference_through_scheduler() {
+        for (opcode, de, hl) in [(0xE9, 0x2345, 0xC123), (0xEB, 0x2345, 0x6789)] {
+            let mut rom = vec![0; 0x4000];
+            rom[0] = opcode;
+            let initial_registers = Z80Registers {
+                a: 0xA5,
+                f: 0xD7,
+                b: 0x11,
+                c: 0x22,
+                d: (de >> 8) as u8,
+                e: de as u8,
+                h: (hl >> 8) as u8,
+                l: hl as u8,
+                sp: 0x7788,
+                pc: 0,
+            };
+
+            let mut temporal = SmsTemporalMachine::new(rom.clone(), 3).unwrap();
+            temporal.cpu_mut().registers = initial_registers;
+            let mut atomic = crate::Z80::default();
+            atomic.registers = initial_registers;
+            let mut atomic_bus = FlatBus::new(&rom);
+            let expected_tstates = atomic.step(&mut atomic_bus).unwrap();
+
+            retired(
+                temporal.step_instruction(0).unwrap(),
+                opcode,
+                expected_tstates,
+            );
+            assert_eq!(expected_tstates, 4);
+            assert_eq!(temporal.cpu().registers, atomic.registers);
+            assert_eq!(temporal.cpu().refresh, atomic.r);
+            assert_eq!(temporal.cpu().q, atomic.q);
+            assert_eq!(
+                temporal.now(),
+                MachineTime::from_ticks(u128::from(expected_tstates) * 3)
+            );
+        }
+    }
+
+    #[test]
     fn ld_register_pair_immediate_matrix_matches_atomic_reference_through_scheduler() {
         for (opcode, low, high) in [
             (0x01, 0x34, 0x12),
