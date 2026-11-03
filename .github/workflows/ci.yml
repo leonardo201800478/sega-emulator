@@ -43,6 +43,8 @@ jobs:
       - name: Workspace unit tests
         run: cargo test --workspace --locked
 
+      - name: PyO3 native adapter formatting
+        run: cargo fmt --manifest-path native/z80_core/Cargo.toml -- --check
       - name: PyO3 native adapter lint and unit tests
         run: |
           cargo clippy --manifest-path native/z80_core/Cargo.toml --all-targets -- -D warnings
