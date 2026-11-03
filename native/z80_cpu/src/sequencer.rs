@@ -810,7 +810,7 @@ mod tests {
             },
         );
         assert_eq!(compare.registers.a, 0x10, "CP must preserve A");
-        assert_eq!(compare.registers.f, 0xBF, "CP copies X/Y from its operand");
+        assert_eq!(compare.registers.f, 0xBB, "CP copies X/Y from its operand");
     }
 
     #[test]
