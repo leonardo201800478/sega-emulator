@@ -388,7 +388,11 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u8(result_memory);
             writer.u8(remaining_tstates);
         }
-        Z80MicroSequencerPhase::EdBlockTransferRead { opcode, source, destination } => {
+        Z80MicroSequencerPhase::EdBlockTransferRead {
+            opcode,
+            source,
+            destination,
+        } => {
             writer.u8(23);
             writer.u8(opcode);
             writer.u16(source);
@@ -406,7 +410,10 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u16(destination);
             writer.u8(value);
         }
-        Z80MicroSequencerPhase::EdBlockRepeatInternal { opcode, remaining_tstates } => {
+        Z80MicroSequencerPhase::EdBlockRepeatInternal {
+            opcode,
+            remaining_tstates,
+        } => {
             writer.u8(25);
             writer.u8(opcode);
             writer.u8(remaining_tstates);
