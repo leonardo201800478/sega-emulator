@@ -147,6 +147,20 @@ def _audio_output_warning(
     return None
 
 
+def _save_cartridge_ram(machine: object | None) -> None:
+    """Persist configured SMS SRAM before a machine is replaced or the app exits."""
+    if machine is None:
+        return
+    save = getattr(machine, "save_cartridge_ram", None)
+    if not callable(save):
+        return
+    try:
+        if save():
+            logger.info("SRAM do cartucho salva no disco.")
+    except Exception:
+        logger.exception("Falha ao persistir SRAM do cartucho SMS")
+
+
 def run(initial_path: Path | None = None) -> None:
     """Abre a interface de teste com teclado, telemetria e logs de sessão."""
     try:
@@ -801,6 +815,7 @@ def run(initial_path: Path | None = None) -> None:
         if vgm_recorder.active and not stop_vgm_recording():
             return
         if machine is not None:
+            _save_cartridge_ram(machine)
             machine.close_audio_output()
         audio_warning = _configure_machine_audio(
             loaded_machine, preferences, selected_audio_driver
