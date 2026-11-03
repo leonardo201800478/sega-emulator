@@ -2995,8 +2995,8 @@ mod tests {
                 );
                 restored = Z80MicroSequencer::restore_state(restored.export_state()).unwrap();
             }
-            let retired = restored.complete_internal_cycle().unwrap();
-            retired(retired, opcode, 15);
+            let retired_step = restored.complete_internal_cycle().unwrap();
+            retired(retired_step, opcode, 15);
             assert_eq!(
                 if prefix == 0xDD { restored.ix } else { restored.iy },
                 expected
