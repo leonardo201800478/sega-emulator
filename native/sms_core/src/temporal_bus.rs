@@ -13,7 +13,7 @@ use crate::{
 use sega_temporal_core::MachineTime;
 use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
 
-pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 5;
+pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 6;
 
 fn elapsed_tstates(
     started_at: MachineTime,
