@@ -40,7 +40,6 @@ impl std::fmt::Display for SmsCartridgeRamFileError {
             ),
             Self::ChecksumMismatch => f.write_str("cartridge SRAM file checksum does not match"),
             Self::NoCartridgeRam => f.write_str("the loaded cartridge has no configured SRAM"),
-            Self::SizeMismatch { expected, actual } => write!(f, "cartridge SRAM buffer has {actual} bytes; expected {expected}"),
         }
     }
 }
