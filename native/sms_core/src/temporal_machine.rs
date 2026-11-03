@@ -1400,10 +1400,7 @@ mod tests {
 
     #[test]
     fn jp_hl_and_ex_de_hl_match_atomic_reference_through_scheduler() {
-        for (opcode, de, hl) in [
-            (0xE9, 0x2345, 0xC123),
-            (0xEB, 0x2345, 0x6789),
-        ] {
+        for (opcode, de, hl) in [(0xE9, 0x2345, 0xC123), (0xEB, 0x2345, 0x6789)] {
             let mut rom = vec![0; 0x4000];
             rom[0] = opcode;
             let initial_registers = Z80Registers {
