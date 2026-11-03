@@ -530,20 +530,6 @@ impl Z80MicroSequencer {
                     && address == state.registers.bc()
                     && state.instruction_tstates >= 8
             }
-            Z80MicroSequencerPhase::EdNibbleRotateInternal {
-                opcode,
-                address,
-                remaining_tstates,
-                ..
-            } => {
-                matches!(opcode, 0x67 | 0x6F)
-                    && state.opcode == Some(opcode)
-                    && (1..=4).contains(&remaining_tstates)
-                    && pending.is_none()
-                    && address == state.registers.hl()
-                    && state.instruction_tstates
-                        >= 11 + u32::from(4 - remaining_tstates)
-            }
             Z80MicroSequencerPhase::Ed16ArithmeticInternal {
                 opcode,
                 remaining_tstates,
