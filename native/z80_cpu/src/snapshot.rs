@@ -1248,3 +1248,74 @@ mod tests {
         assert_eq!(restored.i, 0x5A);
     }
 }
+
+
+#[cfg(test)]
+mod base_internal_snapshot_tests {
+    use crate::{Z80MicroSequencer, Z80MicroStep, Z80MicroSequencerState};
+
+    fn round_trip(cpu: &Z80MicroSequencer) -> Z80MicroSequencer {
+        let state = cpu.export_state();
+        let encoded = state.encode().unwrap();
+        let decoded = Z80MicroSequencerState::decode(&encoded).unwrap();
+        assert_eq!(decoded, state);
+        Z80MicroSequencer::restore_state(decoded).unwrap()
+    }
+
+    #[test]
+    fn inc_pair_internal_phase_round_trips_at_each_safe_point() {
+        let mut cpu = Z80MicroSequencer::default();
+        let fetch = match cpu.begin_instruction().unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected opcode fetch, got {other:?}"),
+        };
+        assert_eq!(
+            cpu.complete_bus_cycle(fetch.id, Some(0x03)).unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+
+        cpu = round_trip(&cpu);
+        assert_eq!(
+            cpu.complete_internal_cycle().unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        cpu = round_trip(&cpu);
+        assert_eq!(
+            cpu.complete_internal_cycle().unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x03,
+                tstates: 6
+            }
+        );
+    }
+
+    #[test]
+    fn add_hl_pair_internal_mcycles_round_trip_at_each_safe_point() {
+        let mut cpu = Z80MicroSequencer::default();
+        let fetch = match cpu.begin_instruction().unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected opcode fetch, got {other:?}"),
+        };
+        assert_eq!(
+            cpu.complete_bus_cycle(fetch.id, Some(0x09)).unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+
+        cpu = round_trip(&cpu);
+        for tstate in 0..7 {
+            let step = cpu.complete_internal_cycle().unwrap();
+            if tstate == 6 {
+                assert_eq!(
+                    step,
+                    Z80MicroStep::InstructionRetired {
+                        opcode: 0x09,
+                        tstates: 11
+                    }
+                );
+            } else {
+                assert_eq!(step, Z80MicroStep::InternalCycle { tstates: 1 });
+                cpu = round_trip(&cpu);
+            }
+        }
+    }
+}
