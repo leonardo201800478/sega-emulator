@@ -89,6 +89,27 @@ impl Z80MicroSequencerState {
             }
         }
         body.u32(self.handshake.wait_tstates);
+        for value in [
+            self.alternate.a, self.alternate.f, self.alternate.b, self.alternate.c,
+            self.alternate.d, self.alternate.e, self.alternate.h, self.alternate.l,
+        ] {
+            body.u8(value);
+        }
+        body.u16(self.ix);
+        body.u16(self.iy);
+        body.u8(self.i);
+        body.u8(u8::from(self.iff1));
+        body.u8(u8::from(self.iff2));
+        body.u8(self.interrupt_mode);
+        body.u16(self.wz);
+        body.u8(self.ei_delay);
+        body.u8(u8::from(self.nmi_pending));
+        match self.int_pending {
+            None => body.u8(0),
+            Some(value) => { body.u8(1); body.u8(value); }
+        }
+        body.u8(u8::from(self.p));
+        body.u8(u8::from(self.halted));
 
         let body_len = u32::try_from(body.bytes.len())
             .map_err(|_| Z80MicroSequencerStateCodecError::InvalidState)?;
