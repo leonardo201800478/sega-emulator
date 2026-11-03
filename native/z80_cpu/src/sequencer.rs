@@ -2818,6 +2818,42 @@ mod tests {
     }
 
     #[test]
+    fn dd_fd_ld_index_pair_immediate_is_resumable_and_snapshot_safe() {
+        for (prefix, opcode_bytes, expected_ix, expected_iy) in [
+            (0xDD, [0xDD, 0x21, 0x34, 0x12], 0x1234, 0xBEEF),
+            (0xFD, [0xFD, 0x21, 0x78, 0x56], 0xCAFE, 0x5678),
+            (0xFD, [0xDD, 0xFD, 0x21, 0xBC, 0x9A], 0xBEEF, 0x9ABC),
+        ] {
+            let mut cpu = Z80MicroSequencer {
+                ix: 0xBEEF,
+                iy: 0xCAFE,
+                ..Z80MicroSequencer::default()
+            };
+            let first = request(cpu.begin_instruction().unwrap());
+            let mut next = cpu.complete_bus_cycle(first.id, Some(opcode_bytes[0])).unwrap();
+            cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+            for byte in opcode_bytes.iter().copied().skip(1).take(if opcode_bytes[0] == 0xDD && opcode_bytes[1] == 0xFD { 2 } else { 1 }) {
+                let fetch = request(next);
+                next = cpu.complete_bus_cycle(fetch.id, Some(byte)).unwrap();
+                cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+            }
+            let low_request = request(next);
+            assert_eq!(low_request.operation, Z80BusOperation::MemoryRead);
+            assert_eq!(low_request.base_tstates, 3);
+            next = cpu.complete_bus_cycle(low_request.id, Some(opcode_bytes[opcode_bytes.len() - 2])).unwrap();
+            cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+            let high_request = request(next);
+            assert_eq!(high_request.operation, Z80BusOperation::MemoryRead);
+            next = cpu.complete_bus_cycle(high_request.id, Some(opcode_bytes[opcode_bytes.len() - 1])).unwrap();
+            retired(next, 0x21, 14);
+            assert_eq!(cpu.ix, expected_ix);
+            assert_eq!(cpu.iy, expected_iy);
+            assert_eq!(cpu.registers.pc, opcode_bytes.len() as u16);
+            assert_eq!(cpu.refresh, if opcode_bytes[0] == 0xDD && opcode_bytes[1] == 0xFD { 3 } else { 2 });
+        }
+    }
+
+    #[test]
     fn alu_register_matrix_executes_all_56_register_source_encodings() {
         for operation in 0_u8..8 {
             for source in [0_u8, 1, 2, 3, 4, 5, 7] {
