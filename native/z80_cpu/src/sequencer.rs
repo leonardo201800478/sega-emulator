@@ -1302,7 +1302,7 @@ impl Z80MicroSequencer {
                     && state.instruction_tstates >= 4
             }
             Z80MicroSequencerPhase::IndexDisplacementRead => {
-                state.opcode.is_some_and(is_indexed_load_opcode)
+                state.opcode.is_some_and(is_indexed_displacement_opcode)
                     && prefix_m1_count(state.prefix_state, state.mcycle_index, 1)
                         .and_then(|count| minimum_prefixed_tstates(count, 0))
                         .is_some_and(|minimum| state.instruction_tstates >= minimum)
