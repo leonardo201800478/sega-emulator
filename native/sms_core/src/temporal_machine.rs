@@ -926,8 +926,7 @@ mod tests {
         let mut machine = SmsTemporalMachine::new(vec![0x34; 0x4000], 3).unwrap();
         machine.cpu_mut().registers.set_hl(0xC000);
         machine.begin_instruction().unwrap();
-        machine.schedule_pending_bus(0).unwrap();
-        let read = machine.dispatch_next().unwrap();
+        let read = complete_m1_fetch(&mut machine, 0);
         assert!(matches!(read, Z80MicroStep::BusRequest(_)));
         machine.schedule_pending_bus(0).unwrap();
         assert_eq!(
@@ -1004,9 +1003,8 @@ mod tests {
         let mut machine = SmsTemporalMachine::new(vec![0x34; 0x4000], 3).unwrap();
         machine.cpu_mut().registers.set_hl(0xC000);
         machine.begin_instruction().unwrap();
-        machine.schedule_pending_bus(0).unwrap();
         assert!(matches!(
-            machine.dispatch_next().unwrap(),
+            complete_m1_fetch(&mut machine, 0),
             Z80MicroStep::BusRequest(_)
         ));
         machine.schedule_pending_bus(0).unwrap();
@@ -1042,8 +1040,7 @@ mod tests {
         let mut machine = SmsTemporalMachine::new(vec![0x34; 0x4000], 3).unwrap();
         machine.cpu_mut().registers.set_hl(0xC000);
         machine.begin_instruction().unwrap();
-        machine.schedule_pending_bus(0).unwrap();
-        machine.dispatch_next().unwrap();
+        complete_m1_fetch(&mut machine, 0);
         machine.schedule_pending_bus(0).unwrap();
         assert_eq!(
             machine.dispatch_next().unwrap(),
@@ -1279,9 +1276,8 @@ mod tests {
         let mut machine = SmsTemporalMachine::new(vec![0x34; 0x4000], 3).unwrap();
         machine.cpu_mut().registers.set_hl(0xC000);
         machine.begin_instruction().unwrap();
-        machine.schedule_pending_bus(0).unwrap();
         assert!(matches!(
-            machine.dispatch_next().unwrap(),
+            complete_m1_fetch(&mut machine, 0),
             Z80MicroStep::BusRequest(_)
         ));
         machine.schedule_pending_bus(0).unwrap();
@@ -1364,11 +1360,8 @@ mod tests {
     fn internal_cycle_preflights_request_id_exhaustion_before_scheduling() {
         let mut machine = SmsTemporalMachine::new(vec![0x34; 0x4000], 3).unwrap();
         machine.cpu_mut().registers.set_hl(0xC000);
-        let fetch = match machine.begin_instruction().unwrap() {
-            Z80MicroStep::BusRequest(request) => request,
-            other => panic!("expected fetch, got {other:?}"),
-        };
-        machine.schedule_pending_bus(0).unwrap();
+        machine.begin_instruction().unwrap();
+        complete_m1_fetch(&mut machine, 0);
         let read = match machine.dispatch_next().unwrap() {
             Z80MicroStep::BusRequest(request) => request,
             other => panic!("expected memory read, got {other:?}"),
