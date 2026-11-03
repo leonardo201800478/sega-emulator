@@ -10,6 +10,7 @@ use crate::{
     Z80_MICRO_SEQUENCER_STATE_VERSION, Z80AlternateRegisters, Z80ArchitecturalState,
     Z80BusHandshake, Z80BusHandshakeError, Z80BusOperation, Z80BusRequest, Z80Registers,
 };
+use serde::{Deserialize, Serialize};
 
 const FLAG_C: u8 = 0x01;
 const FLAG_N: u8 = 0x02;
@@ -36,7 +37,7 @@ impl From<Z80BusHandshakeError> for Z80MicroSequencerError {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 pub enum Z80MicroSequencerPhase {
     Ready,
     OpcodeFetch,
@@ -89,7 +90,7 @@ pub enum Z80MicroStep {
 }
 
 /// Logical state needed to resume the currently implemented sequencer slice.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Z80MicroSequencerState {
     pub format_version: u16,
     pub registers: Z80Registers,
