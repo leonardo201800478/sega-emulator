@@ -8,6 +8,8 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
+use crate::SmsMemory;
+
 const MAGIC: &[u8; 8] = b"SMSRAM01";
 const FORMAT_VERSION: u16 = 1;
 const HEADER_SIZE: usize = 18;
@@ -38,6 +40,7 @@ impl std::fmt::Display for SmsCartridgeRamFileError {
             ),
             Self::ChecksumMismatch => f.write_str("cartridge SRAM file checksum does not match"),
             Self::NoCartridgeRam => f.write_str("the loaded cartridge has no configured SRAM"),
+            Self::SizeMismatch { expected, actual } => write!(f, "cartridge SRAM buffer has {actual} bytes; expected {expected}"),
         }
     }
 }
@@ -184,6 +187,29 @@ impl SmsCartridgeRamFile {
             fs::remove_file(backup)?;
         }
         Ok(())
+    }
+
+    /// Restore a validated save image into the already configured mapper SRAM.
+    /// Returns false when no save file exists; never silently replaces bad data.
+    pub fn load_into(&self, memory: &mut SmsMemory) -> Result<bool, SmsCartridgeRamFileError> {
+        let ram = memory.cartridge_ram_mut().ok_or(SmsCartridgeRamFileError::NoCartridgeRam)?;
+        let Some(saved) = self.load(ram.len())? else {
+            return Ok(false);
+        };
+        if saved.len() != ram.len() {
+            return Err(SmsCartridgeRamFileError::SizeMismatch {
+                expected: ram.len(),
+                actual: saved.len(),
+            });
+        }
+        ram.copy_from_slice(&saved);
+        Ok(true)
+    }
+
+    /// Persist the mapper's current SRAM image, rejecting cartridges without SRAM.
+    pub fn save_from_memory(&self, memory: &SmsMemory) -> Result<(), SmsCartridgeRamFileError> {
+        let ram = memory.cartridge_ram().ok_or(SmsCartridgeRamFileError::NoCartridgeRam)?;
+        self.save(ram)
     }
 
     fn recover_backup_if_needed(&self) -> Result<(), SmsCartridgeRamFileError> {
