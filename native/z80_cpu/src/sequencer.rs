@@ -2111,13 +2111,27 @@ impl Z80MicroSequencer {
         opcode: u8,
         prefix: u8,
     ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
-        if opcode == 0x21 {
-            return self.issue_read(
+        match opcode {
+            0x21 => self.issue_read(
                 Z80MicroSequencerPhase::IndexImmediateLow { prefix },
                 self.registers.pc,
-            );
+            ),
+            0x23 | 0x2B => {
+                let index = if prefix == 0xDD { self.ix } else { self.iy };
+                let result = if opcode == 0x23 {
+                    index.wrapping_add(1)
+                } else {
+                    index.wrapping_sub(1)
+                };
+                if prefix == 0xDD {
+                    self.ix = result;
+                } else {
+                    self.iy = result;
+                }
+                self.retire(opcode)
+            }
+            _ => self.unsupported(opcode),
         }
-        self.unsupported(opcode)
     }
 
     /// Execute the ED register/control subset that retires after two M1 fetches.
