@@ -7,6 +7,7 @@
 //! outside this sequencer slice.
 
 use crate::alu::{adc8, add8, and8, cp8, cpl8, daa8, or8, rotate_accumulator, sbc8, sub8, xor8};
+use crate::prefix::{Z80IndexRegister, Z80PrefixState, Z80PrefixTransition};
 use crate::{
     Z80_MICRO_SEQUENCER_STATE_VERSION, Z80AlternateRegisters, Z80ArchitecturalState,
     Z80BusHandshake, Z80BusHandshakeError, Z80BusOperation, Z80BusRequest, Z80Registers,
@@ -343,6 +344,7 @@ pub struct Z80MicroSequencerState {
     pub handshake: crate::Z80BusHandshakeState,
     pub phase: Z80MicroSequencerPhase,
     pub opcode: Option<u8>,
+    pub prefix_state: Z80PrefixState,
     pub instruction_tstates: u32,
     /// Zero-based M-cycle index within the active instruction.
     pub mcycle_index: u32,
@@ -394,6 +396,7 @@ pub struct Z80MicroSequencer {
     handshake: Z80BusHandshake,
     phase: Z80MicroSequencerPhase,
     opcode: Option<u8>,
+    prefix_state: Z80PrefixState,
     instruction_tstates: u32,
     mcycle_index: u32,
     tstate_index: u16,
@@ -422,6 +425,7 @@ impl Default for Z80MicroSequencer {
             handshake: Z80BusHandshake::default(),
             phase: Z80MicroSequencerPhase::Ready,
             opcode: None,
+            prefix_state: Z80PrefixState::None,
             instruction_tstates: 0,
             mcycle_index: 0,
             tstate_index: 0,
@@ -441,6 +445,7 @@ impl Z80MicroSequencer {
             handshake: self.handshake.export_state(),
             phase: self.phase,
             opcode: self.opcode,
+            prefix_state: self.prefix_state,
             instruction_tstates: self.instruction_tstates,
             mcycle_index: self.mcycle_index,
             tstate_index: self.tstate_index,
@@ -524,6 +529,18 @@ impl Z80MicroSequencer {
             return Err(Z80MicroSequencerError::InvalidState);
         }
         let pending = handshake.pending_request();
+        let prefix_state_valid = match state.phase {
+            Z80MicroSequencerPhase::Ready => state.prefix_state == Z80PrefixState::None,
+            Z80MicroSequencerPhase::OpcodeFetch => match state.opcode {
+                None => state.prefix_state == Z80PrefixState::None,
+                Some(0xCB) => state.prefix_state == Z80PrefixState::Cb,
+                Some(0xED) => state.prefix_state == Z80PrefixState::Ed,
+                Some(0xDD) => state.prefix_state == Z80PrefixState::Index(Z80IndexRegister::Ix),
+                Some(0xFD) => state.prefix_state == Z80PrefixState::Index(Z80IndexRegister::Iy),
+                Some(_) => false,
+            },
+            _ => state.prefix_state == Z80PrefixState::None,
+        };
         let valid = match state.phase {
             Z80MicroSequencerPhase::Ready => {
                 pending.is_none()
@@ -1702,7 +1719,7 @@ impl Z80MicroSequencer {
                 _ => false,
             },
         };
-        if !valid || !indices_valid {
+        if !valid || !indices_valid || !prefix_state_valid {
             return Err(Z80MicroSequencerError::InvalidState);
         }
         Ok(Self {
@@ -1726,6 +1743,7 @@ impl Z80MicroSequencer {
             handshake,
             phase: state.phase,
             opcode: state.opcode,
+            prefix_state: state.prefix_state,
             instruction_tstates: state.instruction_tstates,
             mcycle_index: state.mcycle_index,
             tstate_index: state.tstate_index,
@@ -1742,6 +1760,7 @@ impl Z80MicroSequencer {
         self.mcycle_index = 0;
         self.tstate_index = 0;
         self.opcode = None;
+        self.prefix_state = Z80PrefixState::None;
         self.q_previous = self.q;
         self.q = 0;
         let request = self
@@ -1820,19 +1839,33 @@ impl Z80MicroSequencer {
                 self.registers.pc = self.registers.pc.wrapping_add(1);
                 self.refresh = (self.refresh & 0x80) | (self.refresh.wrapping_add(1) & 0x7F);
                 let previous_prefix = self.opcode;
-                if Self::is_prefix_fetch(previous_prefix, opcode) {
-                    self.opcode = Some(opcode);
-                    let next_mcycle_index = self
-                        .mcycle_index
-                        .checked_add(1)
-                        .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
-                    let request =
-                        self.handshake
-                            .begin(Z80BusOperation::OpcodeFetch, self.registers.pc, 4)?;
-                    self.mcycle_index = next_mcycle_index;
-                    self.tstate_index = 0;
-                    return Ok(Z80MicroStep::BusRequest(request));
-                }
+                let index_opcode_class = match self.prefix_state.transition(opcode) {
+                    Z80PrefixTransition::Continue(next_state) => {
+                        self.prefix_state = next_state;
+                        self.opcode = Some(opcode);
+                        let next_mcycle_index = self
+                            .mcycle_index
+                            .checked_add(1)
+                            .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                        let request = self.handshake.begin(
+                            Z80BusOperation::OpcodeFetch,
+                            self.registers.pc,
+                            4,
+                        )?;
+                        self.mcycle_index = next_mcycle_index;
+                        self.tstate_index = 0;
+                        return Ok(Z80MicroStep::BusRequest(request));
+                    }
+                    Z80PrefixTransition::Execute {
+                        index,
+                        index_opcode_class,
+                    } => {
+                        self.prefix_state = index
+                            .map(Z80PrefixState::Index)
+                            .unwrap_or(Z80PrefixState::None);
+                        index_opcode_class
+                    }
+                };
                 self.opcode = Some(opcode);
                 if previous_prefix == Some(0xED) {
                     return self.execute_ed_register_control(opcode, waits);
@@ -1849,7 +1882,10 @@ impl Z80MicroSequencer {
                     self.execute_cb_register(opcode);
                     return self.retire(opcode);
                 }
-                if previous_prefix.is_some() {
+                if index_opcode_class.is_some()
+                    || self.prefix_state != Z80PrefixState::None
+                    || previous_prefix.is_some()
+                {
                     return self.unsupported(opcode);
                 }
                 match opcode {
@@ -3334,24 +3370,11 @@ impl Z80MicroSequencer {
         self.phase != Z80MicroSequencerPhase::Ready
     }
 
-    /// Return true when the byte just fetched is another M1 prefix byte.
-    ///
-    /// DD/FD prefixes may be repeated (the last one wins); ED supersedes an
-    /// index prefix. DD/FD CB is intentionally stopped here until its
-    /// displacement/non-M1 opcode sequence is implemented.
-    fn is_prefix_fetch(previous: Option<u8>, opcode: u8) -> bool {
-        match previous {
-            None => matches!(opcode, 0xCB | 0xED | 0xDD | 0xFD),
-            Some(0xDD | 0xFD) => matches!(opcode, 0xDD | 0xFD | 0xED),
-            Some(0xCB | 0xED) => false,
-            Some(_) => false,
-        }
-    }
-
     fn unsupported(&mut self, opcode: u8) -> Result<Z80MicroStep, Z80MicroSequencerError> {
         let address = self.registers.pc.wrapping_sub(1);
         self.phase = Z80MicroSequencerPhase::Ready;
         self.opcode = None;
+        self.prefix_state = Z80PrefixState::None;
         self.instruction_tstates = 0;
         self.mcycle_index = 0;
         self.tstate_index = 0;
@@ -4214,6 +4237,7 @@ impl Z80MicroSequencer {
         }
         self.phase = Z80MicroSequencerPhase::Ready;
         self.opcode = None;
+        self.prefix_state = Z80PrefixState::None;
         self.instruction_tstates = 0;
         self.mcycle_index = 0;
         self.tstate_index = 0;
