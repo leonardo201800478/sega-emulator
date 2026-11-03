@@ -673,20 +673,6 @@ impl Z80MicroSequencer {
                         _ => false,
                     }
             }
-            Z80MicroSequencerPhase::BaseReturnConditionInternal { branch_taken } => {
-                next.instruction_tstates = next_instruction_tstates;
-                let opcode = next
-                    .opcode
-                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
-                if branch_taken {
-                    next.issue_read(
-                        Z80MicroSequencerPhase::BaseReturnPop { stage: 0, low: 0 },
-                        next.registers.sp,
-                    )?
-                } else {
-                    next.retire(opcode)?
-                }
-            }
             Z80MicroSequencerPhase::BaseControlPushInternal { target, high, low } => {
                 let opcode = state.opcode;
                 let is_call = opcode.is_some_and(is_call_opcode);
@@ -745,11 +731,6 @@ impl Z80MicroSequencer {
                         state.mcycle_index == 1 + u32::from(stage)
                             && state.instruction_tstates >= 5 + u32::from(stage) * 3
                     }
-            }
-            Z80MicroSequencerPhase::BaseControlPushInternal { target, high, low } => {
-                next.instruction_tstates = next_instruction_tstates;
-                next.registers.sp = next.registers.sp.wrapping_sub(1);
-                next.issue_base_control_push_write(0, target, low, next.registers.sp, high)?
             }
             Z80MicroSequencerPhase::BaseStackPushInternal { high, low } => {
                 let opcode_matches = state
