@@ -813,10 +813,9 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::EdBlockTransferWrite { .. } => {
                 state.mcycle_index == 3 && state.tstate_index == 0
             }
-            Z80MicroSequencerPhase::EdBlockRepeatInternal { remaining_tstates, .. } => {
-                state.mcycle_index == 4
-                    && state.tstate_index == u16::from(5 - remaining_tstates)
-            }
+            Z80MicroSequencerPhase::EdBlockRepeatInternal {
+                remaining_tstates, ..
+            } => state.mcycle_index == 4 && state.tstate_index == u16::from(5 - remaining_tstates),
             Z80MicroSequencerPhase::MemoryIncDecInternal { .. } => {
                 state.mcycle_index == 1
                     && state.tstate_index >= 3
@@ -1300,8 +1299,7 @@ impl Z80MicroSequencer {
                 if matches!(opcode, 0xB0 | 0xB8) && count != 0 {
                     self.registers.pc = self.registers.pc.wrapping_sub(2);
                     self.wz = self.registers.pc.wrapping_add(1);
-                    flags = (flags & !FLAG_XY)
-                        | (((self.registers.pc >> 8) as u8) & FLAG_XY);
+                    flags = (flags & !FLAG_XY) | (((self.registers.pc >> 8) as u8) & FLAG_XY);
                     self.set_flags(flags);
                     self.mcycle_index = 4;
                     self.tstate_index = 0;
@@ -5481,14 +5479,13 @@ mod ed_return_nibble_rotate_differential_tests {
     }
 }
 
-
 #[cfg(test)]
 mod ed_block_transfer_differential_tests {
     use super::{Z80MicroSequencer, Z80MicroStep};
     use crate::bus::CpuBus;
     use crate::{
-        Z80, Z80AlternateRegisters, Z80ArchitecturalState, Z80BusOperation,
-        Z80MicroSequencerState, Z80Registers,
+        Z80, Z80AlternateRegisters, Z80ArchitecturalState, Z80BusOperation, Z80MicroSequencerState,
+        Z80Registers,
     };
 
     #[derive(Clone)]
@@ -5563,7 +5560,12 @@ mod ed_block_transfer_differential_tests {
         mut cpu: Z80MicroSequencer,
         mut bus: TestBus,
         add_waits: bool,
-    ) -> (Z80MicroSequencer, TestBus, u32, Vec<(Z80BusOperation, u16, u8)>) {
+    ) -> (
+        Z80MicroSequencer,
+        TestBus,
+        u32,
+        Vec<(Z80BusOperation, u16, u8)>,
+    ) {
         let mut step = cpu.begin_instruction().unwrap();
         let mut cycles = Vec::new();
         loop {
@@ -5688,8 +5690,7 @@ mod ed_block_transfer_differential_tests {
         assert_eq!(atomic.step(&mut atomic_bus), Ok(16));
         let mut sequenced = Z80MicroSequencer::default();
         sequenced.import_architectural_state(initial).unwrap();
-        let (sequenced, sequenced_bus, tstates, _) =
-            run_sequenced(sequenced, sequenced_bus, false);
+        let (sequenced, sequenced_bus, tstates, _) = run_sequenced(sequenced, sequenced_bus, false);
         assert_eq!(tstates, 16);
         assert_eq!(
             sequenced.export_architectural_state(),
