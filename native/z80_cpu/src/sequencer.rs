@@ -1609,6 +1609,9 @@ impl Z80MicroSequencer {
                     _ => Err(Z80MicroSequencerError::UnexpectedCompletion),
                 }
             }
+            Z80MicroSequencerPhase::BaseAbsoluteTransfer { .. } => {
+                Err(Z80MicroSequencerError::UnexpectedCompletion)
+            }
             Z80MicroSequencerPhase::ImmediateReadMemoryWrite => {
                 let value = response
                     .data
