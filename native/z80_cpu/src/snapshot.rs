@@ -1433,7 +1433,7 @@ mod base_relative_branch_snapshot_tests {
             Z80MicroStep::BusRequest(request) => request,
             other => panic!("expected displacement read, got {other:?}"),
         };
-        let restored = round_trip(&cpu);
+        let mut restored = round_trip(&cpu);
         let step = restored
             .complete_bus_cycle(request.id, Some(displacement))
             .unwrap();
