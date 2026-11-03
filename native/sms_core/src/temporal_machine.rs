@@ -697,6 +697,8 @@ impl SmsTemporalMachine {
             next_internal_cycle_id: self.next_internal_cycle_id,
             pending_internal_cycle_id: self.pending_internal_cycle_id,
             pending_internal_tstates: self.pending_internal_tstates,
+            m1: self.m1.map(SmsTemporalM1::export_state),
+            m1_fixture_wait_tstates: self.m1_fixture_wait_tstates,
         }
     }
 
