@@ -418,9 +418,10 @@ impl Z80MicroSequencer {
                     && address == state.registers.hl()
                     && state.instruction_tstates >= 8
             }
-            Z80MicroSequencerPhase::CbMemoryInternal { address, .. } => {
-                state.opcode.is_some_and(|opcode| opcode & 0x07 == 0x06)
-                    && pending.is_none()
+            Z80MicroSequencerPhase::CbMemoryInternal { address, result } => {
+                state.opcode.is_some_and(|opcode| {
+                    opcode & 0x07 == 0x06 && ((opcode >> 6 == 1) == result.is_none())
+                }) && pending.is_none()
                     && address == state.registers.hl()
                     && state.tstate_index >= 3
                     && state.instruction_tstates >= 8 + u32::from(state.tstate_index)
