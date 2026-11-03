@@ -377,8 +377,22 @@ Conclusão: prefixos DD/FD não são um problema insolúvel nem um bug obrigató
 - ZEXDOC/ZEXALL — conformidade funcional; não substituem testes temporais.
 - Testes de timing e rastros de barramento — necessários para provar T-state accuracy.
 
-## 10. Veredito
+## 10. Veredito atualizado — auditoria do HEAD atual da PR #447
 
-A PR #447 já contém um avanço concreto e testável para um subconjunto de instruções DD/FD e um codec Z80 v18 que preserva fases desse subconjunto. A documentação técnica confirma os timings e regras funcionais de ADD IX/IY e INC/DEC IX/IY e permite construir vetores confiáveis.
+**Código auditado:** `feature/z80-dd-fd-indexed-sequencer`, HEAD `e0a8d02ed3da5a30a568d4f62c9c27e4b5fe08b7` (2026-11-03).
+**Schema efetivamente definido em `native/z80_cpu/src/lib.rs`:** v19.
 
-O próximo incremento não é reescrever snapshots nem introduzir Bincode. É generalizar explicitamente o contexto de prefixos, implementar cancelamento por ED e instruções indexadas restantes, reconstruir DD/FD CB com rastros confiáveis e ampliar o replay serializado para o estado integrado da máquina. Até que esses gates sejam executados no SHA candidato, manter a classificação global como INTEGRATION_PENDING e não declarar TEMPORAL_PASS.
+A PR contém uma fatia concreta e testável do microsequenciador DD/FD:
+- `LD IX/IY,nn`, `INC/DEC IX/IY` e `ADD IX/IY,BC/DE/IX|IY/SP`;
+- latch explícito `active_index`, com precedência do último DD/FD e limpeza ao reconhecer ED;
+- caminho de `DD ED 47` exercitado com restore durante o ciclo interno;
+- whitelist demonstrada para NOP e EX DE,HL após DD/FD;
+- codec Z80 v19 com validações cruzadas e round-trip em fases selecionadas.
+
+**Evidência de CI observada:** CI #3936 SUCCESS. No CI #3937, o job Rust quality/unit regression concluiu SUCCESS, incluindo rustfmt, Clippy com `-D warnings`, testes SMS, SG-1000 e workspace; o crate Z80 reportou 186 passed, 0 failed. Python lint/regression e Windows x64 D3D12/WASAPI/XAudio2 também concluíram SUCCESS. O Scheduler deterministic stress ainda estava em execução na última consulta; portanto o CI #3937 não deve ser marcado como concluído até esse job terminar.
+
+**Pendências reais para expansão futura:** diferencial sistemático entre o sequenciador e `Z80::step()` (especialmente os oito casos ADD, comparando todos os registradores, flags, WZ e tempo); matriz ampla de instruções DD/FD afetadas/não afetadas e IXH/IXL/IYH/IYL; implementação de DD/FD CB com rastros de barramento por opcode e distinção BIT read-only vs read-modify-write; expansão de replay para todas as fases e, posteriormente, snapshot integral de máquina SMS.
+
+**Correção histórica:** as seções anteriores deste documento que rotulam PF-03 (DD/FD + ED) como pendente e descrevem o codec como v18 são fotografias de uma revisão anterior. Para o HEAD acima, o código e os testes já demonstram limpeza de `active_index` em ED, execução de `DD ED 47` e schema v19. A documentação não deve confundir essas evidências pontuais com suporte completo ao espaço ED ou com cobertura integral de prefixos DD/FD.
+
+**Classificação:** IMPLEMENTED/QUICK_PASS para a fatia efetivamente codificada; integração temporal global permanece INTEGRATION_PENDING. Não declarar FUNCTIONAL_PASS, STATE_PASS ou TEMPORAL_PASS global do Z80. Não fazer merge enquanto o Scheduler stress #3937 não terminar e enquanto a validação diferencial e a matriz de cobertura permanecerem explicitamente pendentes.
