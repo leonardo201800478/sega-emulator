@@ -189,3 +189,23 @@ A PR #426 permanece Draft e empilhada sobre #425. Nenhum merge foi realizado.
 | TEMPORAL_PASS | NOT DECLARED | Sem oráculos independentes/físicos, WAIT físico e integração sistêmica completa |
 
 O executor atômico existente é a referência para SCF/CCF: no início de cada instrução ele captura `q_previous = q` e limpa `q`; `set_flags` grava F e Q. O microsequenciador reproduz essa fronteira e persiste ambos os latches. CI `41569544969`: Rust Formatting, Clippy, testes direcionados SMS/SG-1000, workspace, Ruff, pytest e Windows x64 vídeo/áudio PASS; Scheduler deterministic stress SKIPPED. Execução local NOT RUN. Não inferir validação in-game nem cobertura ZEXDOC/ZEXALL.
+
+## 13. P7 — Z80 BASE: LD rr,nn no microsequenciador retomável
+
+**Branch candidata:** `feat/z80-sms-ld-register-pairs-immediate`  
+**SHA de código candidato:** `5295454db90cd9fba7d9250275d292c4ef4b8b15`  
+**PR:** pendente de abertura  
+**Dependência:** PR #427 (empilhada; ainda não integrada à main).  
+**CI:** pendente no SHA candidato.
+
+| Componente | Estado formal | Evidência / limite |
+|---|---|---|
+| LD BC,nn / LD DE,nn / LD HL,nn / LD SP,nn | IMPLEMENTED / QUICK_PASS pendente de CI | Quatro opcodes BASE (01/11/21/31); leitura little-endian em dois M-cycles de memória agendados após M1 |
+| Suspensão/retomada e snapshot | IMPLEMENTED / QUICK_PASS pendente de CI | Fases distintas para byte baixo e alto; validação de opcode, par, endereço, M-cycle e duração; codec Z80 versão 6 |
+| Integração temporal SMS | IMPLEMENTED / QUICK_PASS pendente de CI | Testes diferenciais planejados no SmsTemporalMachine/Scheduler contra o executor atômico; estado temporal SMS versão 9 |
+| Z80 retomável completo | INTEGRATION_PENDING | Cobertura ainda parcial; instruções BASE restantes, prefixos CB/ED/DD/FD, HALT, interrupções, I/O e estados/pinos completos pendentes |
+| TEMPORAL_PASS | NOT DECLARED | Sem comprovação elétrica independente ou integração sistêmica completa |
+
+**Critérios da fatia:** M1 4 T + leitura do byte baixo 3 T + leitura do byte alto 3 T = 10 T nominais. PC avança apenas quando cada leitura conclui; o par de registradores só é atualizado após a leitura do byte alto. WAIT de cada transação deve ser contabilizado no Scheduler. O executor atômico legado permanece como oráculo diferencial e não é removido.
+
+**Validação:** CI NOT RUN nesta atualização; execução local NOT RUN. Atualizar SHA e estados somente após workflow verde. Scheduler deterministic stress deve ser reportado separadamente; SKIPPED não é PASS.
