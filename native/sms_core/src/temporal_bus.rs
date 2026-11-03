@@ -7,8 +7,9 @@
 use core::fmt;
 
 use crate::{
-    CartridgeImage, SmsCartridgeRamFile, SmsCartridgeRamFileError, SmsCoreError, SmsMemory, SmsTemporalCoordinator, SmsTemporalCoordinatorError,
-    SmsTemporalCoordinatorState, SmsTemporalEvent,
+    CartridgeImage, SmsCartridgeRamFile, SmsCartridgeRamFileError, SmsCoreError, SmsMemory,
+    SmsTemporalCoordinator, SmsTemporalCoordinatorError, SmsTemporalCoordinatorState,
+    SmsTemporalEvent,
 };
 use sega_temporal_core::MachineTime;
 use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
