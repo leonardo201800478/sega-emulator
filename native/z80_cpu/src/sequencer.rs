@@ -1540,7 +1540,6 @@ impl Z80MicroSequencer {
                     }
             }
             Z80MicroSequencerPhase::ImmediateReadRegister { .. }
-            | Z80MicroSequencerPhase::ImmediateReadRegisterPairLow { .. }
             | Z80MicroSequencerPhase::ImmediateReadMemoryWrite
             | Z80MicroSequencerPhase::ImmediateReadAlu { .. }
             | Z80MicroSequencerPhase::MemoryReadRegister { .. }
@@ -1548,6 +1547,12 @@ impl Z80MicroSequencer {
             | Z80MicroSequencerPhase::MemoryReadIncDec { .. }
             | Z80MicroSequencerPhase::BaseRelativeBranchImmediate => {
                 state.mcycle_index == 1 && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::ImmediateReadRegisterPairLow { .. } => {
+                match state.prefix_state {
+                    Z80PrefixState::Index(_) => state.mcycle_index >= 2 && state.tstate_index == 0,
+                    _ => state.mcycle_index == 1 && state.tstate_index == 0,
+                }
             }
             Z80MicroSequencerPhase::BaseRelativeBranchInternal {
                 branch_taken,
@@ -1595,7 +1600,10 @@ impl Z80MicroSequencer {
                 }
             }
             Z80MicroSequencerPhase::ImmediateReadRegisterPairHigh { .. } => {
-                state.mcycle_index == 2 && state.tstate_index == 0
+                match state.prefix_state {
+                    Z80PrefixState::Index(_) => state.mcycle_index >= 3 && state.tstate_index == 0,
+                    _ => state.mcycle_index == 2 && state.tstate_index == 0,
+                }
             }
             Z80MicroSequencerPhase::BaseAbsoluteTransfer { stage, .. } => {
                 state.mcycle_index == 1 + u32::from(stage) && state.tstate_index == 0
@@ -1713,27 +1721,37 @@ impl Z80MicroSequencer {
                 opcode,
                 remaining_tstates,
             } => {
-                let completed_tstates = match opcode {
-                    0x03 | 0x0B | 0x13 | 0x1B | 0x23 | 0x2B | 0x33 | 0x3B | 0xF9 => {
-                        2_u8.saturating_sub(remaining_tstates)
-                    }
-                    0x09 | 0x19 | 0x29 | 0x39 => 7_u8.saturating_sub(remaining_tstates),
-                    _ => u8::MAX,
+                let total_internal_tstates = match opcode {
+                    0x03 | 0x0B | 0x13 | 0x1B | 0x23 | 0x2B | 0x33 | 0x3B | 0xF9 => 2_u8,
+                    0x09 | 0x19 | 0x29 | 0x39 => 7_u8,
+                    _ => 0,
                 };
-                match opcode {
-                    0x09 | 0x19 | 0x29 | 0x39 if remaining_tstates >= 4 => {
-                        state.mcycle_index == 1
-                            && state.tstate_index == u16::from(completed_tstates)
-                    }
-                    0x09 | 0x19 | 0x29 | 0x39 => {
-                        state.mcycle_index == 2
-                            && state.tstate_index == u16::from(3 - remaining_tstates)
-                    }
-                    _ => {
-                        state.mcycle_index == 0
-                            && state.tstate_index == 4 + u16::from(completed_tstates)
-                    }
-                }
+                let completed_tstates = total_internal_tstates.saturating_sub(remaining_tstates);
+                let internal_mcycle_offset = if total_internal_tstates == 7 {
+                    if remaining_tstates >= 4 { 1 } else { 2 }
+                } else {
+                    0
+                };
+                let prefix_m1_count = state.mcycle_index.checked_sub(internal_mcycle_offset);
+                let prefix_count_valid = match (state.prefix_state, prefix_m1_count) {
+                    (Z80PrefixState::None, Some(0)) => true,
+                    (Z80PrefixState::Index(_), Some(count)) => count >= 1,
+                    _ => false,
+                };
+                let expected_mcycle_index = prefix_m1_count
+                    .and_then(|count| count.checked_add(internal_mcycle_offset));
+                let position_valid = prefix_count_valid
+                    && expected_mcycle_index == Some(state.mcycle_index)
+                    && if total_internal_tstates == 7 {
+                        if remaining_tstates >= 4 {
+                            state.tstate_index == u16::from(completed_tstates)
+                        } else {
+                            state.tstate_index == u16::from(3 - remaining_tstates)
+                        }
+                    } else {
+                        state.tstate_index == 4 + u16::from(completed_tstates)
+                    };
+                position_valid
             }
             Z80MicroSequencerPhase::MemoryIncDecInternal { .. } => {
                 state.mcycle_index == 1
