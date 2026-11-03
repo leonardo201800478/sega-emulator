@@ -5,8 +5,8 @@
 
 use crate::SmsCoreError;
 use crate::bus::CpuBus;
-use crate::cartridge_ram_file::{SmsCartridgeRamFile, SmsCartridgeRamFileError};
 use crate::cartridge::CartridgeImage;
+use crate::cartridge_ram_file::{SmsCartridgeRamFile, SmsCartridgeRamFileError};
 use crate::config::{SmsMachineConfig, SpriteLimitMode};
 use crate::cpu::{CpuError, Z80};
 use crate::input::{ControllerButtons, SmsInputState};
