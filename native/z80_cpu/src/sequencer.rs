@@ -2960,12 +2960,9 @@ mod tests {
                 f: FLAG_S | FLAG_Z | FLAG_PV | FLAG_C,
                 ..Z80Registers::default()
             };
-            match pair {
-                0 => registers.set_bc(rhs),
-                1 => registers.set_de(rhs),
-                3 => registers.sp = rhs,
-                _ => {}
-            }
+            if pair == 0 { registers.set_bc(rhs); }
+            if pair == 1 { registers.set_de(rhs); }
+            if pair == 3 { registers.sp = rhs; }
             let mut cpu = Z80MicroSequencer {
                 ix: if prefix == 0xDD { lhs } else { 0x2468 },
                 iy: if prefix == 0xFD { lhs } else { 0x1357 },
@@ -2988,12 +2985,15 @@ mod tests {
             restored = Z80MicroSequencer::restore_state(
                 crate::Z80MicroSequencerState::decode(&bytes).unwrap()
             ).unwrap();
-            for _ in 1..7 {
-                assert_eq!(
-                    restored.complete_internal_cycle().unwrap(),
-                    Z80MicroStep::InternalCycle { tstates: 1 }
-                );
+            for remaining in 1..7 {
+                let step = restored.complete_internal_cycle().unwrap();
+                assert_eq!(step, Z80MicroStep::InternalCycle { tstates: 1 });
                 restored = Z80MicroSequencer::restore_state(restored.export_state()).unwrap();
+                let encoded = restored.export_state().encode().unwrap();
+                restored = Z80MicroSequencer::restore_state(
+                    crate::Z80MicroSequencerState::decode(&encoded).unwrap()
+                ).unwrap();
+                assert_eq!(restored.export_state().tstate_index, u16::from(remaining));
             }
             let retired_step = restored.complete_internal_cycle().unwrap();
             retired(retired_step, opcode, 15);
