@@ -19,7 +19,7 @@ use sega_z80_cpu::{
     Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
 };
 
-pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 13;
+pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 14;
 
 /// Runtime event trace emitted from actual Scheduler/bus dispatch boundaries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1956,5 +1956,72 @@ mod base_relative_branch_temporal_tests {
         );
         assert_eq!(restored.cpu().registers.pc, 4);
         assert_eq!(restored.now(), MachineTime::from_ticks(36));
+    }
+}
+
+#[cfg(test)]
+mod base_absolute_jump_temporal_tests {
+    use super::SmsTemporalMachine;
+    use sega_temporal_core::MachineTime;
+    use sega_z80_cpu::Z80MicroStep;
+
+    #[test]
+    fn absolute_jumps_run_through_sms_scheduler_with_ten_tstates() {
+        let mut jp = SmsTemporalMachine::new(vec![0xC3, 0x03, 0x00, 0x00, 0x00], 3).unwrap();
+        assert_eq!(
+            jp.step_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xC3,
+                tstates: 10,
+            }
+        );
+        assert_eq!(jp.cpu().registers.pc, 3);
+        assert_eq!(jp.cpu().wz, 3);
+        assert_eq!(jp.now(), MachineTime::from_ticks(30));
+
+        let mut jp_not_taken =
+            SmsTemporalMachine::new(vec![0xC2, 0x04, 0x00, 0x00, 0x00], 3).unwrap();
+        jp_not_taken.cpu_mut().registers.f = 0x40;
+        assert_eq!(
+            jp_not_taken.step_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xC2,
+                tstates: 10,
+            }
+        );
+        assert_eq!(jp_not_taken.cpu().registers.pc, 3);
+        assert_eq!(jp_not_taken.cpu().wz, 4);
+        assert_eq!(jp_not_taken.now(), MachineTime::from_ticks(30));
+    }
+
+    #[test]
+    fn absolute_jump_pending_immediate_read_restores_with_scheduler_state() {
+        let mut machine = SmsTemporalMachine::new(vec![0xC3, 0x03, 0x00, 0x00], 3).unwrap();
+        let first = machine.begin_instruction().unwrap();
+        assert!(matches!(first, Z80MicroStep::BusRequest(_)));
+
+        let mut after_m1 = first;
+        for _ in 0..4 {
+            machine.schedule_pending_bus(0).unwrap();
+            after_m1 = machine.dispatch_next().unwrap();
+        }
+        assert!(matches!(after_m1, Z80MicroStep::BusRequest(_)));
+
+        machine.schedule_pending_bus(0).unwrap();
+        let after_low = machine.dispatch_next().unwrap();
+        assert!(matches!(after_low, Z80MicroStep::BusRequest(_)));
+
+        machine.schedule_pending_bus(0).unwrap();
+        let snapshot = machine.export_state();
+        let mut restored = SmsTemporalMachine::restore_state(snapshot).unwrap();
+        assert_eq!(
+            restored.resume_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xC3,
+                tstates: 10,
+            }
+        );
+        assert_eq!(restored.cpu().registers.pc, 3);
+        assert_eq!(restored.now(), MachineTime::from_ticks(30));
     }
 }
