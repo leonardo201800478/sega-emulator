@@ -388,6 +388,36 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u8(result_memory);
             writer.u8(remaining_tstates);
         }
+        Z80MicroSequencerPhase::EdBlockTransferRead {
+            opcode,
+            source,
+            destination,
+        } => {
+            writer.u8(23);
+            writer.u8(opcode);
+            writer.u16(source);
+            writer.u16(destination);
+        }
+        Z80MicroSequencerPhase::EdBlockTransferWrite {
+            opcode,
+            source,
+            destination,
+            value,
+        } => {
+            writer.u8(24);
+            writer.u8(opcode);
+            writer.u16(source);
+            writer.u16(destination);
+            writer.u8(value);
+        }
+        Z80MicroSequencerPhase::EdBlockRepeatInternal {
+            opcode,
+            remaining_tstates,
+        } => {
+            writer.u8(25);
+            writer.u8(opcode);
+            writer.u8(remaining_tstates);
+        }
     }
 }
 
@@ -481,6 +511,21 @@ fn read_phase(
             address: reader.u16()?,
             result_a: reader.u8()?,
             result_memory: reader.u8()?,
+            remaining_tstates: reader.u8()?,
+        },
+        23 => Z80MicroSequencerPhase::EdBlockTransferRead {
+            opcode: reader.u8()?,
+            source: reader.u16()?,
+            destination: reader.u16()?,
+        },
+        24 => Z80MicroSequencerPhase::EdBlockTransferWrite {
+            opcode: reader.u8()?,
+            source: reader.u16()?,
+            destination: reader.u16()?,
+            value: reader.u8()?,
+        },
+        25 => Z80MicroSequencerPhase::EdBlockRepeatInternal {
+            opcode: reader.u8()?,
             remaining_tstates: reader.u8()?,
         },
         tag => return Err(Z80MicroSequencerStateCodecError::InvalidTag(tag)),
