@@ -599,9 +599,10 @@ impl Z80MicroSequencer {
                 matches!(opcode, 0x47 | 0x4F | 0x57 | 0x5F)
                     && state.opcode == Some(opcode)
                     && pending.is_none()
-                    && state.mcycle_index == 1
+                    && state.mcycle_index >= 1
                     && state.tstate_index >= 4
-                    && state.instruction_tstates >= 4 + u32::from(state.tstate_index)
+                    && state.instruction_tstates
+                        >= 4 * state.mcycle_index + u32::from(state.tstate_index)
             }
             Z80MicroSequencerPhase::EdPortRead { register, address } => {
                 state.opcode.is_some_and(|opcode| {
@@ -1005,9 +1006,10 @@ impl Z80MicroSequencer {
                 state.mcycle_index == 3 && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::EdRegisterInternal { .. } => {
-                state.mcycle_index == 1
+                state.mcycle_index >= 1
                     && state.tstate_index >= 4
-                    && state.instruction_tstates >= 4 + u32::from(state.tstate_index)
+                    && state.instruction_tstates
+                        >= 4 * state.mcycle_index + u32::from(state.tstate_index)
             }
             Z80MicroSequencerPhase::EdPortRead { .. }
             | Z80MicroSequencerPhase::EdPortWrite { .. } => {
@@ -2177,6 +2179,14 @@ impl Z80MicroSequencer {
         prefix: u8,
     ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
         match opcode {
+            // DD/FD is ignored by these instructions; the prefix still costs one M1.
+            0x00 => self.retire(opcode),
+            0xEB => {
+                let de = self.registers.de();
+                self.registers.set_de(self.registers.hl());
+                self.registers.set_hl(de);
+                self.retire(opcode)
+            }
             0x21 => self.issue_read(
                 Z80MicroSequencerPhase::IndexImmediateLow { prefix },
                 self.registers.pc,
@@ -2992,6 +3002,79 @@ mod tests {
         assert_eq!(restored.active_index, None);
         assert_eq!(restored.opcode, Some(0xED));
         assert_eq!(restored.pending_request(), Some(ed_opcode));
+    }
+
+    #[test]
+    fn dd_fd_prefix_preserves_unaffected_nop_and_ex_de_hl_semantics() {
+        for prefix in [0xDD, 0xFD] {
+            let mut nop_cpu = Z80MicroSequencer::default();
+            nop_cpu.registers.set_hl(0x1234);
+            nop_cpu.registers.set_de(0xABCD);
+            nop_cpu.ix = 0x4567;
+            nop_cpu.iy = 0x89AB;
+            let prefix_fetch = request(nop_cpu.begin_instruction().unwrap());
+            let opcode_fetch = request(
+                nop_cpu
+                    .complete_bus_cycle(prefix_fetch.id, Some(prefix))
+                    .unwrap(),
+            );
+            retired(
+                nop_cpu
+                    .complete_bus_cycle(opcode_fetch.id, Some(0x00))
+                    .unwrap(),
+                0x00,
+                8,
+            );
+            assert_eq!(nop_cpu.registers.hl(), 0x1234);
+            assert_eq!(nop_cpu.registers.de(), 0xABCD);
+            assert_eq!(nop_cpu.ix, 0x4567);
+            assert_eq!(nop_cpu.iy, 0x89AB);
+
+            let mut exchange_cpu = Z80MicroSequencer::default();
+            exchange_cpu.registers.set_hl(0x1234);
+            exchange_cpu.registers.set_de(0xABCD);
+            exchange_cpu.ix = 0x4567;
+            exchange_cpu.iy = 0x89AB;
+            let prefix_fetch = request(exchange_cpu.begin_instruction().unwrap());
+            let opcode_fetch = request(
+                exchange_cpu
+                    .complete_bus_cycle(prefix_fetch.id, Some(prefix))
+                    .unwrap(),
+            );
+            retired(
+                exchange_cpu
+                    .complete_bus_cycle(opcode_fetch.id, Some(0xEB))
+                    .unwrap(),
+                0xEB,
+                8,
+            );
+            assert_eq!(exchange_cpu.registers.hl(), 0xABCD);
+            assert_eq!(exchange_cpu.registers.de(), 0x1234);
+            assert_eq!(exchange_cpu.ix, 0x4567);
+            assert_eq!(exchange_cpu.iy, 0x89AB);
+        }
+    }
+
+    #[test]
+    fn dd_ed_executes_ed_opcode_after_clearing_index_latch_and_restores_mid_cycle() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.registers.a = 0x5A;
+        let dd = request(cpu.begin_instruction().unwrap());
+        let ed = request(cpu.complete_bus_cycle(dd.id, Some(0xDD)).unwrap());
+        let opcode = request(cpu.complete_bus_cycle(ed.id, Some(0xED)).unwrap());
+        assert_eq!(cpu.active_index, None);
+        let step = cpu.complete_bus_cycle(opcode.id, Some(0x47)).unwrap();
+        assert_eq!(step, Z80MicroStep::InternalCycle { tstates: 1 });
+        assert_eq!(cpu.active_index, None);
+
+        let encoded = cpu.export_state().encode().unwrap();
+        cpu = Z80MicroSequencer::restore_state(
+            crate::Z80MicroSequencerState::decode(&encoded).unwrap(),
+        )
+        .unwrap();
+        retired(cpu.complete_internal_cycle().unwrap(), 0x47, 13);
+        assert_eq!(cpu.i, 0x5A);
+        assert_eq!(cpu.active_index, None);
     }
 
     #[test]
