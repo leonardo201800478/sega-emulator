@@ -616,4 +616,27 @@ mod tests {
             Err(Z80MicroSequencerStateCodecError::InvalidState)
         );
     }
+
+    #[test]
+    fn pending_alu_operand_phases_round_trip_through_snapshot_codec() {
+        for opcode in [0xC6, 0x86] {
+            let mut cpu = Z80MicroSequencer::default();
+            cpu.registers.set_hl(0xC123);
+            let fetch = match cpu.begin_instruction().unwrap() {
+                crate::Z80MicroStep::BusRequest(request) => request,
+                other => panic!("expected fetch request, got {other:?}"),
+            };
+            let read = match cpu.complete_bus_cycle(fetch.id, Some(opcode)).unwrap() {
+                crate::Z80MicroStep::BusRequest(request) => request,
+                other => panic!("expected operand request, got {other:?}"),
+            };
+            cpu.insert_wait_tstate().unwrap();
+            let encoded = cpu.export_state().encode().unwrap();
+            let decoded = crate::Z80MicroSequencerState::decode(&encoded).unwrap();
+            let restored = Z80MicroSequencer::restore_state(decoded).unwrap();
+            assert_eq!(restored.pending_request(), Some(read));
+            assert_eq!(restored.export_state(), cpu.export_state());
+        }
+    }
+
 }
