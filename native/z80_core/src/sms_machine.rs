@@ -70,14 +70,9 @@ fn build_sms_machine_with_cartridge_ram(
         Some(size) => return Err(SmsMachineBuildError::InvalidCartridgeRamSize(size)),
         None => None,
     };
-    let mut machine = SmsMachine::with_bios_audio_and_cartridge_ram(
-        rom,
-        bios,
-        cartridge_ram,
-        config,
-        44_100,
-    )
-    .map_err(|error| SmsMachineBuildError::Machine(error.to_string()))?;
+    let mut machine =
+        SmsMachine::with_bios_audio_and_cartridge_ram(rom, bios, cartridge_ram, config, 44_100)
+            .map_err(|error| SmsMachineBuildError::Machine(error.to_string()))?;
     if let Some(save_file) = save_file {
         if cartridge_ram_size.is_none() {
             return Err(SmsMachineBuildError::CartridgeRamFile(
@@ -487,7 +482,7 @@ mod tests {
             total_instructions: 0,
             audio_session: None,
             audio_output_error: None,
-        sram_file: None,
+            sram_file: None,
         };
         assert_eq!(japan_machine.psg_clock_hz(), 3_579_545);
     }
@@ -554,7 +549,8 @@ mod tests {
 
     #[test]
     fn frame_runner_advances_native_vdp_and_exposes_frame_state() {
-        let mut machine = NativeSMSMachine::new(vec![0; 16], false, Some("usa"), None, None, None).unwrap();
+        let mut machine =
+            NativeSMSMachine::new(vec![0; 16], false, Some("usa"), None, None, None).unwrap();
         assert_eq!(machine.frame_number(), 0);
         let steps = machine.run_frame(100_000).unwrap();
         assert!(steps > 0 && steps <= 100_000);
