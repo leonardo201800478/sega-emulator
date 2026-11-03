@@ -729,7 +729,7 @@ impl Z80MicroSequencer {
                 matches!(opcode, 0xA3 | 0xAB | 0xB3 | 0xBB)
                     && state.opcode == Some(opcode)
                     && port_address == state.registers.bc()
-                    && memory_address.wrapping_add_signed(direction) == state.registers.hl()
+                    && (*memory_address).wrapping_add_signed(direction) == state.registers.hl()
                     && state.wz == port_address.wrapping_add_signed(direction)
                     && pending.is_some_and(|request| {
                         request.operation == Z80BusOperation::PortWrite { value }
@@ -5775,7 +5775,7 @@ mod ed_absolute_register_pair_differential_tests {
                             {
                                 assert_eq!(
                                     state.registers.b,
-                                    ((port_address >> 8) as u8).wrapping_sub(1)
+                                    ((*port_address >> 8) as u8).wrapping_sub(1)
                                 );
                                 assert_eq!(state.registers.hl(), *memory_address);
                             } else {
@@ -5818,7 +5818,7 @@ mod ed_absolute_register_pair_differential_tests {
                             } = &state.phase
                             {
                                 let direction =
-                                    if matches!(opcode, 0xAB | 0xBB) { -1_i16 } else { 1_i16 };
+                                    if matches!(*opcode, 0xAB | 0xBB) { -1_i16 } else { 1_i16 };
                                 assert_eq!(
                                     state.registers.hl(),
                                     memory_address.wrapping_add_signed(direction)
