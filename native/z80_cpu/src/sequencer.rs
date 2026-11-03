@@ -1738,8 +1738,8 @@ impl Z80MicroSequencer {
                     (Z80PrefixState::Index(_), Some(count)) => count >= 1,
                     _ => false,
                 };
-                let expected_mcycle_index = prefix_m1_count
-                    .and_then(|count| count.checked_add(internal_mcycle_offset));
+                let expected_mcycle_index =
+                    prefix_m1_count.and_then(|count| count.checked_add(internal_mcycle_offset));
                 let position_valid = prefix_count_valid
                     && expected_mcycle_index == Some(state.mcycle_index)
                     && if total_internal_tstates == 7 {
