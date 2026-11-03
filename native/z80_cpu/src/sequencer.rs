@@ -2233,6 +2233,15 @@ impl Z80MicroSequencer {
                     return self.unsupported(opcode);
                 }
                 match opcode {
+                    opcode
+                        if matches!(self.prefix_state, Z80PrefixState::Index(_))
+                            && is_indexed_load_opcode(opcode) =>
+                    {
+                        self.issue_read(
+                            Z80MicroSequencerPhase::IndexDisplacementRead,
+                            self.registers.pc,
+                        )
+                    }
                     0x00 => self.retire(opcode),
                     0x08 => {
                         std::mem::swap(&mut self.registers.a, &mut self.alternate.a);
