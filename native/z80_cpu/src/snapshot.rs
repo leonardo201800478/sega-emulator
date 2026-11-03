@@ -5,9 +5,9 @@
 //! architectural save state.
 
 use crate::{
-    Z80_MICRO_SEQUENCER_STATE_VERSION, Z80BusHandshakeState, Z80BusOperation, Z80BusRequest,
-    Z80AlternateRegisters, Z80MicroSequencer, Z80MicroSequencerPhase, Z80MicroSequencerState,
-    Z80Registers,
+    Z80_MICRO_SEQUENCER_STATE_VERSION, Z80AlternateRegisters, Z80BusHandshakeState,
+    Z80BusOperation, Z80BusRequest, Z80MicroSequencer, Z80MicroSequencerPhase,
+    Z80MicroSequencerState, Z80Registers,
 };
 use core::fmt;
 
