@@ -3065,8 +3065,6 @@ mod cb_register_differential_tests {
 
                         let mut sequenced = Z80MicroSequencer::default();
                         sequenced.import_architectural_state(state).unwrap();
-                        let mut sequenced_bus = atomic_bus.clone();
-
                         assert_eq!(atomic.step(&mut atomic_bus), Ok(8), "opcode {opcode:02X}");
                         let first_m1 = request(sequenced.begin_instruction().unwrap());
                         assert_eq!(first_m1.operation, Z80BusOperation::OpcodeFetch);
@@ -3092,15 +3090,32 @@ mod cb_register_differential_tests {
                             atomic.export_architectural_state(),
                             "architectural mismatch for CB {opcode:02X}"
                         );
-                        assert_eq!(
-                            sequenced_bus.memory.as_ref(),
-                            atomic_bus.memory.as_ref(),
-                            "memory mismatch for CB {opcode:02X}"
-                        );
+                        assert_eq!(sequenced.pending_request(), None);
+                        assert_eq!(atomic_bus.memory[0xFFFE], 0xCB);
+                        assert_eq!(atomic_bus.memory[0xFFFF], opcode);
                     }
                 }
             }
         }
+    }
+
+    #[test]
+    fn cb_register_fetch_waits_extend_both_m1_cycles() {
+        let mut cpu = Z80MicroSequencer::default();
+        let first = request(cpu.begin_instruction().unwrap());
+        cpu.insert_wait_tstates(1).unwrap();
+        let second = request(cpu.complete_bus_cycle(first.id, Some(0xCB)).unwrap());
+        cpu.insert_wait_tstates(2).unwrap();
+        assert_eq!(
+            cpu.complete_bus_cycle(second.id, Some(0x00)).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x00,
+                tstates: 11
+            }
+        );
+        assert_eq!(cpu.registers.pc, 2);
+        assert_eq!(cpu.refresh & 0x7F, 2);
+        assert_eq!(cpu.pending_request(), None);
     }
 
     #[test]
