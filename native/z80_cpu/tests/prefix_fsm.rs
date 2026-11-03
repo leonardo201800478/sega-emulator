@@ -1,8 +1,9 @@
 //! E2 prefix-FSM integration tests for the resumable Z80 sequencer.
 
 use sega_z80_cpu::{
-    Z80BusRequest, Z80IndexOpcodeClass, Z80IndexRegister, Z80MicroSequencer,
-    Z80MicroSequencerError, Z80MicroStep, Z80PrefixState, classify_index_opcode,
+    Z80BusOperation, Z80BusRequest, Z80IndexOpcodeClass, Z80IndexRegister, Z80MicroSequencer,
+    Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroStep, Z80PrefixState,
+    classify_index_opcode,
 };
 
 fn request(step: Z80MicroStep) -> Z80BusRequest {
@@ -57,10 +58,65 @@ fn dd_fd_alternation_keeps_the_last_index_prefix_and_round_trips_snapshot() {
         Z80PrefixState::Index(Z80IndexRegister::Ix)
     );
 
-    assert!(matches!(
-        cpu.complete_bus_cycle(fetch.id, Some(0x86)),
-        Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x86, .. })
-    ));
+    cpu.ix = 0x1000;
+    cpu.iy = 0x2000;
+    let displacement = request(
+        cpu.complete_bus_cycle(fetch.id, Some(0x86))
+            .expect("indexed ALU opcode requests its displacement"),
+    );
+    assert_eq!(displacement.operation, Z80BusOperation::MemoryRead);
+    assert_eq!(displacement.address, 4);
+    assert_eq!(displacement.base_tstates, 3);
+
+    let encoded = cpu
+        .export_state()
+        .encode()
+        .expect("indexed ALU displacement request snapshot encodes");
+    let decoded = sega_z80_cpu::Z80MicroSequencerState::decode(&encoded)
+        .expect("indexed ALU displacement request snapshot decodes");
+    cpu = Z80MicroSequencer::restore_state(decoded)
+        .expect("indexed ALU displacement request snapshot restores");
+
+    assert_eq!(
+        cpu.complete_bus_cycle(displacement.id, Some(0xFF)).unwrap(),
+        Z80MicroStep::InternalCycle { tstates: 1 }
+    );
+    for _ in 0..5 {
+        let step = cpu.complete_internal_cycle().unwrap();
+        let encoded = cpu.export_state().encode().expect("internal phase snapshot encodes");
+        let decoded = sega_z80_cpu::Z80MicroSequencerState::decode(&encoded)
+            .expect("internal phase snapshot decodes");
+        cpu = Z80MicroSequencer::restore_state(decoded).expect("internal phase snapshot restores");
+        if let Z80MicroStep::BusRequest(bus_request) = step {
+            assert_eq!(bus_request.operation, Z80BusOperation::MemoryRead);
+            assert_eq!(bus_request.address, 0x0FFF);
+            assert_eq!(bus_request.base_tstates, 3);
+            assert_eq!(
+                cpu.export_state().phase,
+                Z80MicroSequencerPhase::MemoryReadAlu {
+                    operation: 0,
+                    address: 0x0FFF,
+                }
+            );
+            let encoded = cpu.export_state().encode().expect("ALU read snapshot encodes");
+            let decoded = sega_z80_cpu::Z80MicroSequencerState::decode(&encoded)
+                .expect("ALU read snapshot decodes");
+            cpu = Z80MicroSequencer::restore_state(decoded).expect("ALU read snapshot restores");
+            assert_eq!(
+                cpu.complete_bus_cycle(bus_request.id, Some(0x01)).unwrap(),
+                Z80MicroStep::InstructionRetired {
+                    opcode: 0x86,
+                    tstates: 27,
+                }
+            );
+        } else {
+            assert_eq!(step, Z80MicroStep::InternalCycle { tstates: 1 });
+        }
+    }
+    assert_eq!(cpu.registers.a, 0x11);
+    assert_eq!(cpu.registers.f, 0x00);
+    assert_eq!(cpu.wz, 0x0FFF);
+    assert_eq!(cpu.registers.pc, 5);
     assert_eq!(cpu.export_state().prefix_state, Z80PrefixState::None);
     assert!(!cpu.instruction_active());
 }
@@ -151,7 +207,7 @@ fn repeated_prefix_stream_has_no_artificial_length_limit() {
     assert_eq!(state.instruction_tstates, 257 * 4);
     assert_eq!(state.registers.pc, 257);
     assert!(matches!(
-        cpu.complete_bus_cycle(fetch.id, Some(0x86)),
-        Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x86, .. })
+        cpu.complete_bus_cycle(fetch.id, Some(0xC6)),
+        Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0xC6, .. })
     ));
 }
