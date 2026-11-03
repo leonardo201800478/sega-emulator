@@ -193,10 +193,10 @@ O executor atômico existente é a referência para SCF/CCF: no início de cada 
 ## 13. P7 — Z80 BASE: LD rr,nn no microsequenciador retomável
 
 **Branch candidata:** `feat/z80-sms-ld-register-pairs-immediate`  
-**SHA de código candidato:** `21a8fe1915d9b1cb20a5934646a6229256e52bbf`  
+**SHA de código candidato:** `917eb97b3c5ec0dc0ada79d8c590c422a538197c`  
 **PR:** pendente de abertura  
 **Dependência:** PR #427 (empilhada; ainda não integrada à main).  
-**CI:** primeira execução `41570758837` falhou apenas em `cargo fmt --all -- --check`; formatação corrigida no SHA de código `21a8fe1915d9b1cb20a5934646a6229256e52bbf`; CI desse SHA ainda pendente.
+**CI:** primeira execução `41570758837` falhou apenas em `cargo fmt --all -- --check`; a primeira correção de formatação foi incompleta; nova correção aplicada no SHA de código `917eb97b3c5ec0dc0ada79d8c590c422a538197c`; CI desse SHA ainda pendente.
 
 | Componente | Estado formal | Evidência / limite |
 |---|---|---|
