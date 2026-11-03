@@ -183,7 +183,7 @@ A PR #426 permanece Draft e empilhada sobre #425. Nenhum merge foi realizado.
 | RLCA/RRCA/RLA/RRA, DAA e CPL | IMPLEMENTED / QUICK_PASS | Shared ALU, M1 4 T, testes unitários e diferencial Scheduler/atomic; CI run `41568918251` PASS em Rust, Python e Windows x64 |
 | Q-latch do microsequenciador | IMPLEMENTED / QUICK_PASS | `q` e `q_previous` atualizados na fronteira de instrução; instruções que escrevem F atualizam Q; instruções sem escrita de F deixam Q=0 |
 | SCF/CCF | IMPLEMENTED / QUICK_PASS atual | Fórmula X/Y usa `(A | (Q_previous XOR F)) & 0x28`; CCF alterna C/H; teste após CP e instrução sem escrita de flags |
-| Snapshot Z80 | IMPLEMENTED / QUICK_PASS pendente de CI atual | Codec binário versão 5 serializa Q/Q_previous; teste de round-trip/restauração com M1 pendente; CI `41569544969` PASS |
+| Snapshot Z80 | IMPLEMENTED / QUICK_PASS atual | Codec binário versão 5 serializa Q/Q_previous; teste de round-trip/restauração com M1 pendente; CI `41569544969` PASS |
 | SMS temporal machine state | IMPLEMENTED / QUICK_PASS pendente de CI atual | Versão incrementada de 7 para 8 para refletir o novo estado embutido do Z80; CI `41569544969` PASS |
 | Z80 retomável completo | INTEGRATION_PENDING | Prefixos CB/ED/DD/FD, HALT, interrupções, I/O, instruções 16-bit, refresh elétrico e estado arquitetural completo permanecem pendentes |
 | TEMPORAL_PASS | NOT DECLARED | Sem oráculos independentes/físicos, WAIT físico e integração sistêmica completa |
@@ -216,7 +216,7 @@ O executor atômico existente é a referência para SCF/CCF: no início de cada 
 **SHA de código candidato:** `21cf592322057a8ec59dba0b368062d5b6b97491`  
 **PR:** pendente de abertura  
 **Dependência:** PR #428 (empilhada; ainda não integrada à main).  
-**CI:** primeira execução `41571612626` falhou somente em `cargo fmt --all -- --check` por formatação do teste diferencial; corrigido no SHA `21cf592322057a8ec59dba0b368062d5b6b97491`; CI desse SHA pendente.
+**CI:** run `41571700032` no SHA documental `eaded3e77edbd5768bf967dc57f72f0a9e99b341` — Rust Formatting, Clippy, testes SMS/SG-1000, workspace, Ruff, pytest e Windows x64 D3D12/vídeo/WASAPI/XAudio2 PASS; Scheduler deterministic stress SKIPPED.
 
 | Componente | Estado formal | Evidência / limite |
 |---|---|---|
@@ -226,4 +226,4 @@ O executor atômico existente é a referência para SCF/CCF: no início de cada 
 | Z80 retomável completo | INTEGRATION_PENDING | Prefixos, HALT, interrupções, I/O, famílias BASE restantes e estado/pinos completos continuam pendentes |
 | TEMPORAL_PASS | NOT DECLARED | A fatia não comprova execução sistêmica nem precisão elétrica completa |
 
-**Critérios:** efeitos arquiteturais aplicados somente após a conclusão de M1; ambas as instruções preservam F e não emitem transações extras. O executor atômico segue como oráculo diferencial. Execução local NOT RUN; atualizar estados após CI no SHA candidato.
+**Critérios:** efeitos arquiteturais aplicados somente após a conclusão de M1; ambas as instruções preservam F e não emitem transações extras. O executor atômico segue como oráculo diferencial. Execução local NOT RUN. Scheduler deterministic stress SKIPPED não foi contabilizado como PASS.
