@@ -92,7 +92,10 @@ impl SmsCartridgeRamFile {
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(error) => return Err(error.into()),
         };
-        let mut bytes = Vec::new();
+        if file.metadata()?.len() != (HEADER_SIZE + expected_size) as u64 {
+            return Err(SmsCartridgeRamFileError::InvalidFile);
+        }
+        let mut bytes = Vec::with_capacity(HEADER_SIZE + expected_size);
         file.read_to_end(&mut bytes)?;
         if bytes.len() < HEADER_SIZE || &bytes[..8] != MAGIC {
             return Err(SmsCartridgeRamFileError::InvalidFile);
