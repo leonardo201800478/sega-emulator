@@ -5,8 +5,8 @@
 //! The machine event loop dispatches the scheduled event and then passes its
 //! payload to `complete_tstate`, keeping the M1 pins and machine clock aligned.
 
-use sega_z80_cpu::{Z80M1Cycle, Z80M1CycleState, Z80M1Error, Z80M1Phase, Z80M1Pins};
 use crate::{SmsTemporalCoordinator, SmsTemporalCoordinatorError, SmsTemporalEvent};
+use sega_z80_cpu::{Z80M1Cycle, Z80M1CycleState, Z80M1Error, Z80M1Phase, Z80M1Pins};
 
 /// Serializable continuation for one scheduler-driven M1 cycle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,9 +112,11 @@ impl SmsTemporalM1 {
         let Some(expected_id) = self.pending_continuation_id else {
             return Err(SmsTemporalM1Error::NoEventPending);
         };
-        if event != (SmsTemporalEvent::M1TStateComplete {
-            continuation_id: expected_id,
-        }) {
+        if event
+            != (SmsTemporalEvent::M1TStateComplete {
+                continuation_id: expected_id,
+            })
+        {
             return Err(SmsTemporalM1Error::EventMismatch);
         }
         let phase = self.cycle.advance_tstate(wait_asserted)?;
@@ -167,7 +169,8 @@ mod tests {
     ) -> Z80M1Phase {
         m1.schedule_next_tstate(coordinator).unwrap();
         let dispatch = coordinator.dispatch_next().unwrap().unwrap();
-        m1.complete_tstate(dispatch.event.payload, wait_asserted).unwrap()
+        m1.complete_tstate(dispatch.event.payload, wait_asserted)
+            .unwrap()
     }
 
     #[test]
@@ -184,7 +187,10 @@ mod tests {
         assert_eq!(tick(&mut m1, &mut timeline, false), Z80M1Phase::Complete);
         assert_eq!(m1.opcode(), Some(0x3E));
         assert_eq!(m1.refresh_after_m1(), 0xFF);
-        assert_eq!(timeline.now(), sega_temporal_core::MachineTime::from_ticks(12));
+        assert_eq!(
+            timeline.now(),
+            sega_temporal_core::MachineTime::from_ticks(12)
+        );
     }
 
     #[test]
@@ -203,18 +209,14 @@ mod tests {
         );
         let dispatch = timeline.dispatch_next().unwrap().unwrap();
         assert_eq!(
-            restored.complete_tstate(dispatch.event.payload, true).unwrap(),
+            restored
+                .complete_tstate(dispatch.event.payload, true)
+                .unwrap(),
             Z80M1Phase::Wait
         );
-        assert_eq!(
-            tick(&mut restored, &mut timeline, false),
-            Z80M1Phase::T3
-        );
+        assert_eq!(tick(&mut restored, &mut timeline, false), Z80M1Phase::T3);
         restored.sample_opcode(0x00).unwrap();
-        assert_eq!(
-            tick(&mut restored, &mut timeline, false),
-            Z80M1Phase::T4
-        );
+        assert_eq!(tick(&mut restored, &mut timeline, false), Z80M1Phase::T4);
         assert_eq!(
             tick(&mut restored, &mut timeline, false),
             Z80M1Phase::Complete
@@ -229,15 +231,15 @@ mod tests {
         m1.schedule_next_tstate(&mut timeline).unwrap();
         assert_eq!(
             m1.complete_tstate(
-                SmsTemporalEvent::InternalCycleComplete {
-                    continuation_id: 0
-                },
+                SmsTemporalEvent::InternalCycleComplete { continuation_id: 0 },
                 false
             ),
             Err(SmsTemporalM1Error::EventMismatch)
         );
         assert_eq!(m1.phase(), Z80M1Phase::T1);
-        assert_eq!(timeline.dispatch_next().unwrap().unwrap().event.payload,
-            SmsTemporalEvent::M1TStateComplete { continuation_id: 0 });
+        assert_eq!(
+            timeline.dispatch_next().unwrap().unwrap().event.payload,
+            SmsTemporalEvent::M1TStateComplete { continuation_id: 0 }
+        );
     }
 }
