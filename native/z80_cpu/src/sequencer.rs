@@ -1120,99 +1120,92 @@ impl Z80MicroSequencer {
                 address,
                 low,
                 pair_value,
-            } => {
-                match stage {
-                    0 => {
-                        let address_low = response.data.ok_or(
-                            Z80MicroSequencerError::UnexpectedCompletion,
-                        )?;
-                        self.registers.pc = self.registers.pc.wrapping_add(1);
-                        self.issue_read(
-                            Z80MicroSequencerPhase::EdAbsoluteTransfer {
-                                stage: 1,
-                                pair,
-                                store,
-                                address: u16::from(address_low),
-                                low: 0,
-                                pair_value,
-                            },
-                            self.registers.pc,
-                        )
-                    }
-                    1 => {
-                        let address_high = response.data.ok_or(
-                            Z80MicroSequencerError::UnexpectedCompletion,
-                        )?;
-                        self.registers.pc = self.registers.pc.wrapping_add(1);
-                        let address = u16::from_le_bytes([address as u8, address_high]);
-                        let next_phase = Z80MicroSequencerPhase::EdAbsoluteTransfer {
-                            stage: 2,
+            } => match stage {
+                0 => {
+                    let address_low = response
+                        .data
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                    self.registers.pc = self.registers.pc.wrapping_add(1);
+                    self.issue_read(
+                        Z80MicroSequencerPhase::EdAbsoluteTransfer {
+                            stage: 1,
                             pair,
                             store,
-                            address,
+                            address: u16::from(address_low),
                             low: 0,
                             pair_value,
-                        };
-                        if store {
-                            self.issue_ed_absolute_write(address, pair_value as u8, next_phase)
-                        } else {
-                            self.issue_read(next_phase, address)
-                        }
+                        },
+                        self.registers.pc,
+                    )
+                }
+                1 => {
+                    let address_high = response
+                        .data
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                    self.registers.pc = self.registers.pc.wrapping_add(1);
+                    let address = u16::from_le_bytes([address as u8, address_high]);
+                    let next_phase = Z80MicroSequencerPhase::EdAbsoluteTransfer {
+                        stage: 2,
+                        pair,
+                        store,
+                        address,
+                        low: 0,
+                        pair_value,
+                    };
+                    if store {
+                        self.issue_ed_absolute_write(address, pair_value as u8, next_phase)
+                    } else {
+                        self.issue_read(next_phase, address)
                     }
-                    2 if store => self.issue_ed_absolute_write(
-                        address.wrapping_add(1),
-                        (pair_value >> 8) as u8,
+                }
+                2 if store => self.issue_ed_absolute_write(
+                    address.wrapping_add(1),
+                    (pair_value >> 8) as u8,
+                    Z80MicroSequencerPhase::EdAbsoluteTransfer {
+                        stage: 3,
+                        pair,
+                        store,
+                        address,
+                        low: 0,
+                        pair_value,
+                    },
+                ),
+                2 => {
+                    let data_low = response
+                        .data
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                    self.issue_read(
                         Z80MicroSequencerPhase::EdAbsoluteTransfer {
                             stage: 3,
                             pair,
                             store,
                             address,
-                            low: 0,
+                            low: data_low,
                             pair_value,
                         },
-                    ),
-                    2 => {
-                        let data_low = response.data.ok_or(
-                            Z80MicroSequencerError::UnexpectedCompletion,
-                        )?;
-                        self.issue_read(
-                            Z80MicroSequencerPhase::EdAbsoluteTransfer {
-                                stage: 3,
-                                pair,
-                                store,
-                                address,
-                                low: data_low,
-                                pair_value,
-                            },
-                            address.wrapping_add(1),
-                        )
-                    }
-                    3 if store => {
-                        self.wz = address.wrapping_add(1);
-                        self.retire(
-                            self.opcode.ok_or(
-                                Z80MicroSequencerError::UnexpectedCompletion,
-                            )?,
-                        )
-                    }
-                    3 => {
-                        let data_high = response.data.ok_or(
-                            Z80MicroSequencerError::UnexpectedCompletion,
-                        )?;
-                        self.write_register_pair(
-                            pair,
-                            u16::from_le_bytes([low, data_high]),
-                        );
-                        self.wz = address.wrapping_add(1);
-                        self.retire(
-                            self.opcode.ok_or(
-                                Z80MicroSequencerError::UnexpectedCompletion,
-                            )?,
-                        )
-                    }
-                    _ => Err(Z80MicroSequencerError::InvalidState),
+                        address.wrapping_add(1),
+                    )
                 }
-            }
+                3 if store => {
+                    self.wz = address.wrapping_add(1);
+                    self.retire(
+                        self.opcode
+                            .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
+                    )
+                }
+                3 => {
+                    let data_high = response
+                        .data
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                    self.write_register_pair(pair, u16::from_le_bytes([low, data_high]));
+                    self.wz = address.wrapping_add(1);
+                    self.retire(
+                        self.opcode
+                            .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
+                    )
+                }
+                _ => Err(Z80MicroSequencerError::InvalidState),
+            },
             Z80MicroSequencerPhase::MemoryReadIncDec { decrement, address } => {
                 let old = response
                     .data
