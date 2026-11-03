@@ -3,7 +3,7 @@
 **Status:** Rota oficial de implementação progressiva.  
 **Estratégia de Engenharia (MÓDULOS COMPARTILHADOS):** Toda e qualquer integração deve ser realizada exclusivamente nos **módulos e crates compartilhados** do workspace Rust (`sega-core`, `sega-cpus`, `sega-video`, `sega-audio`, `sega-scheduler`, `sega-hosts`). É estritamente proibido criar implementações individuais, duplicadas ou isoladas por console. Cada nova plataforma adicionada deve reaproveitar, estender ou parametrizar os componentes centrais existentes.  
 **Baseline de Entrada:** SHA `04ee09f9839bfe29a595abbed831d055cc8d177a` (`main`, após PRs #471/E4A e #472/E4B).  
-**Candidato Z80 ativo:** PR #473 / E4C, SHA `949dd365046562835eef97e428dc9700e2ae2a70`.
+**Candidato Z80 ativo:** PR #473 / E4C, SHA `26182568055dc824a9725428e1770fed6cb8447e`.
 
 ---
 
