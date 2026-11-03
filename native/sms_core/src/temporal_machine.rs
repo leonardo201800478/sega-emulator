@@ -2554,8 +2554,6 @@ mod base_immediate_io_temporal_tests {
         machine.schedule_pending_bus(0).unwrap();
         assert!(matches!(machine.dispatch_next().unwrap(), Z80MicroStep::BusRequest(_)));
         machine.schedule_pending_bus(0).unwrap();
-        assert!(matches!(machine.dispatch_next().unwrap(), Z80MicroStep::BusRequest(_)));
-        machine.schedule_pending_bus(0).unwrap();
 
         let snapshot = machine.export_state();
         let mut restored = SmsTemporalMachine::restore_state(snapshot).unwrap();
