@@ -1190,7 +1190,48 @@ mod tests {
     }
 
     #[test]
-    fn pending_alu_operand_phases_round_trip_through_snapshot_codec() {
+        #[test]
+    fn pending_indexed_add_internal_phase_round_trips_v18_snapshot() {
+        for (prefix, opcode, initial, operand) in [
+            (0xDD, 0x09, 0x1234, 0x0102),
+            (0xFD, 0x19, 0x4321, 0x0203),
+        ] {
+            let mut cpu = Z80MicroSequencer {
+                ix: if prefix == 0xDD { initial } else { 0xAAAA },
+                iy: if prefix == 0xFD { initial } else { 0xBBBB },
+                ..Z80MicroSequencer::default()
+            };
+            if opcode == 0x09 {
+                cpu.registers.set_bc(operand);
+            } else {
+                cpu.registers.set_de(operand);
+            }
+            let fetch = match cpu.begin_instruction().unwrap() {
+                crate::Z80MicroStep::BusRequest(request) => request,
+                other => panic!("expected first prefix request, got {other:?}"),
+            };
+            let opcode_fetch = match cpu.complete_bus_cycle(fetch.id, Some(prefix)).unwrap() {
+                crate::Z80MicroStep::BusRequest(request) => request,
+                other => panic!("expected indexed opcode M1 request, got {other:?}"),
+            };
+            assert_eq!(
+                cpu.complete_bus_cycle(opcode_fetch.id, Some(opcode)).unwrap(),
+                crate::Z80MicroStep::InternalCycle { tstates: 1 }
+            );
+            assert_eq!(cpu.export_state().format_version, 18);
+            for _ in 0..3 {
+                cpu.complete_internal_cycle().unwrap();
+            }
+            let state = cpu.export_state();
+            let encoded = state.encode().unwrap();
+            let decoded = Z80MicroSequencerState::decode(&encoded).unwrap();
+            assert_eq!(decoded, state);
+            let restored = Z80MicroSequencer::restore_state(decoded).unwrap();
+            assert_eq!(restored.export_state(), state);
+        }
+    }
+
+fn pending_alu_operand_phases_round_trip_through_snapshot_codec() {
         for opcode in [0xC6, 0x86] {
             let mut cpu = Z80MicroSequencer::default();
             cpu.registers.set_hl(0xC123);
