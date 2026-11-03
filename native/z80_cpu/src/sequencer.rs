@@ -3206,20 +3206,25 @@ mod tests {
             let retired_step = cpu.complete_bus_cycle(third.id, Some(opcode)).unwrap();
             retired(retired_step, opcode, 14);
 
-            assert_eq!(
-                if prefix == 0xDD { cpu.ix } else { cpu.iy },
-                expected
-            );
+            assert_eq!(if prefix == 0xDD { cpu.ix } else { cpu.iy }, expected);
             assert_eq!(cpu.registers.f, original_flags);
             assert_eq!(cpu.q, 0);
             assert_eq!(cpu.registers.hl(), original_hl);
             assert_eq!(
                 cpu.ix,
-                if prefix == 0xDD { expected } else { original_ix }
+                if prefix == 0xDD {
+                    expected
+                } else {
+                    original_ix
+                }
             );
             assert_eq!(
                 cpu.iy,
-                if prefix == 0xFD { expected } else { original_iy }
+                if prefix == 0xFD {
+                    expected
+                } else {
+                    original_iy
+                }
             );
             assert_eq!(cpu.registers.pc, 3);
             assert_eq!(cpu.refresh, 3);
@@ -3450,7 +3455,8 @@ mod tests {
             );
             let expected_tstates = 14 + 4 * u32::from(prefixes.len() == 2);
             retired(
-                cpu.complete_bus_cycle(high.id, Some((expected_index >> 8) as u8)).unwrap(),
+                cpu.complete_bus_cycle(high.id, Some((expected_index >> 8) as u8))
+                    .unwrap(),
                 0x21,
                 expected_tstates,
             );
