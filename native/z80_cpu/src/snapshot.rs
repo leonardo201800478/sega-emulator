@@ -441,6 +441,60 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u8(opcode);
             writer.u8(remaining_tstates);
         }
+        Z80MicroSequencerPhase::EdBlockIoInitialInternal { opcode } => {
+            writer.u8(29);
+            writer.u8(opcode);
+        }
+        Z80MicroSequencerPhase::EdBlockIoInputPortRead {
+            opcode,
+            port_address,
+            memory_address,
+        } => {
+            writer.u8(30);
+            writer.u8(opcode);
+            writer.u16(port_address);
+            writer.u16(memory_address);
+        }
+        Z80MicroSequencerPhase::EdBlockIoInputMemoryWrite {
+            opcode,
+            port_address,
+            memory_address,
+            value,
+        } => {
+            writer.u8(31);
+            writer.u8(opcode);
+            writer.u16(port_address);
+            writer.u16(memory_address);
+            writer.u8(value);
+        }
+        Z80MicroSequencerPhase::EdBlockIoOutputMemoryRead {
+            opcode,
+            memory_address,
+        } => {
+            writer.u8(32);
+            writer.u8(opcode);
+            writer.u16(memory_address);
+        }
+        Z80MicroSequencerPhase::EdBlockIoOutputPortWrite {
+            opcode,
+            port_address,
+            memory_address,
+            value,
+        } => {
+            writer.u8(33);
+            writer.u8(opcode);
+            writer.u16(port_address);
+            writer.u16(memory_address);
+            writer.u8(value);
+        }
+        Z80MicroSequencerPhase::EdBlockIoRepeatInternal {
+            opcode,
+            remaining_tstates,
+        } => {
+            writer.u8(34);
+            writer.u8(opcode);
+            writer.u8(remaining_tstates);
+        }
     }
 }
 
@@ -561,6 +615,34 @@ fn read_phase(
             repeat: read_bool(reader)?,
         },
         28 => Z80MicroSequencerPhase::EdBlockCompareRepeatInternal {
+            opcode: reader.u8()?,
+            remaining_tstates: reader.u8()?,
+        },
+        29 => Z80MicroSequencerPhase::EdBlockIoInitialInternal {
+            opcode: reader.u8()?,
+        },
+        30 => Z80MicroSequencerPhase::EdBlockIoInputPortRead {
+            opcode: reader.u8()?,
+            port_address: reader.u16()?,
+            memory_address: reader.u16()?,
+        },
+        31 => Z80MicroSequencerPhase::EdBlockIoInputMemoryWrite {
+            opcode: reader.u8()?,
+            port_address: reader.u16()?,
+            memory_address: reader.u16()?,
+            value: reader.u8()?,
+        },
+        32 => Z80MicroSequencerPhase::EdBlockIoOutputMemoryRead {
+            opcode: reader.u8()?,
+            memory_address: reader.u16()?,
+        },
+        33 => Z80MicroSequencerPhase::EdBlockIoOutputPortWrite {
+            opcode: reader.u8()?,
+            port_address: reader.u16()?,
+            memory_address: reader.u16()?,
+            value: reader.u8()?,
+        },
+        34 => Z80MicroSequencerPhase::EdBlockIoRepeatInternal {
             opcode: reader.u8()?,
             remaining_tstates: reader.u8()?,
         },
