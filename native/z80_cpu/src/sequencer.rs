@@ -428,7 +428,7 @@ impl Z80MicroSequencer {
                 request_value == value
                     && request.address == address
                     && expected_address == Some(address)
-                    && expected_value.map_or(true, |expected| expected == request_value)
+                    && expected_value.is_none_or(|expected| expected == request_value)
                     && request.base_tstates == 3
                     && state.instruction_tstates >= minimum_tstates
             }
