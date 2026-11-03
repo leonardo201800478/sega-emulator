@@ -5867,14 +5867,13 @@ mod ed_block_transfer_differential_tests {
     }
 }
 
-
 #[cfg(test)]
 mod ed_block_compare_differential_tests {
     use super::{Z80MicroSequencer, Z80MicroStep};
     use crate::bus::CpuBus;
     use crate::{
-        Z80, Z80AlternateRegisters, Z80ArchitecturalState, Z80BusOperation,
-        Z80MicroSequencerState, Z80Registers,
+        Z80, Z80AlternateRegisters, Z80ArchitecturalState, Z80BusOperation, Z80MicroSequencerState,
+        Z80Registers,
     };
 
     #[derive(Clone)]
@@ -5949,7 +5948,12 @@ mod ed_block_compare_differential_tests {
         mut cpu: Z80MicroSequencer,
         mut bus: TestBus,
         add_waits: bool,
-    ) -> (Z80MicroSequencer, TestBus, u32, Vec<(Z80BusOperation, u16, u8)>) {
+    ) -> (
+        Z80MicroSequencer,
+        TestBus,
+        u32,
+        Vec<(Z80BusOperation, u16, u8)>,
+    ) {
         let mut step = cpu.begin_instruction().unwrap();
         let mut cycles = Vec::new();
         loop {
@@ -5984,7 +5988,13 @@ mod ed_block_compare_differential_tests {
         }
     }
 
-    fn run_case(opcode: u8, initial_count: u16, accumulator: u8, memory_value: u8, add_waits: bool) {
+    fn run_case(
+        opcode: u8,
+        initial_count: u16,
+        accumulator: u8,
+        memory_value: u8,
+        add_waits: bool,
+    ) {
         let mut initial = initial_state();
         initial.registers.a = accumulator;
         initial.registers.set_bc(initial_count);
@@ -5997,9 +6007,8 @@ mod ed_block_compare_differential_tests {
         let sequenced_bus = atomic_bus.clone();
 
         let result = accumulator.wrapping_sub(memory_value);
-        let repeats = matches!(opcode, 0xB1 | 0xB9)
-            && initial_count.wrapping_sub(1) != 0
-            && result != 0;
+        let repeats =
+            matches!(opcode, 0xB1 | 0xB9) && initial_count.wrapping_sub(1) != 0 && result != 0;
         let expected_tstates = if repeats { 21 } else { 16 };
         assert_eq!(
             atomic.step(&mut atomic_bus),
