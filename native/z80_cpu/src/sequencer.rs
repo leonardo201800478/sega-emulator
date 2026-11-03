@@ -4766,7 +4766,6 @@ mod cb_register_differential_tests {
     }
 }
 
-
 #[cfg(test)]
 mod ed_absolute_register_pair_differential_tests {
     use super::{Z80MicroSequencer, Z80MicroStep};
