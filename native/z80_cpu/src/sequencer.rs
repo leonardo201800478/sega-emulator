@@ -4437,6 +4437,15 @@ mod indirect_bc_de_differential_tests {
         flags: u8,
     }
 
+    struct RepeatFlagsVector {
+        opcode: u8,
+        hl: u16,
+        port: u16,
+        input: bool,
+        value: u8,
+        flags: u8,
+    }
+
     #[derive(Clone)]
     struct TestBus {
         memory: Box<[u8; 0x10000]>,
@@ -6954,14 +6963,49 @@ mod ed_block_io_differential_tests {
 
     #[test]
     fn block_io_repeat_flags_cover_half_carry_and_parity_edges() {
-        let cases: [(u8, u16, u16, bool, u8); 2] = [
-            // INIR: 0xFF + (C+1) carries; repeat-cycle PV clears and H remains set.
-            (0xB2, 0x4000, 0x1101, true, 0x33),
-            // OTIR: 0xFF + post-increment L carries; repeat-cycle PV sets and H remains set.
-            (0xB3, 0x40FE, 0x1001, false, 0x37),
+        let cases = [
+            RepeatFlagsVector {
+                opcode: 0xB2,
+                hl: 0x4000,
+                port: 0x1101,
+                input: true,
+                value: 0xFF,
+                flags: 0x33,
+            },
+            RepeatFlagsVector {
+                opcode: 0xB3,
+                hl: 0x40FE,
+                port: 0x1001,
+                input: false,
+                value: 0xFF,
+                flags: 0x37,
+            },
+            RepeatFlagsVector {
+                opcode: 0xBA,
+                hl: 0x4000,
+                port: 0x1102,
+                input: true,
+                value: 0xFF,
+                flags: 0x37,
+            },
+            RepeatFlagsVector {
+                opcode: 0xBB,
+                hl: 0x4101,
+                port: 0x1002,
+                input: false,
+                value: 0xFF,
+                flags: 0x26,
+            },
         ];
 
-        for (opcode, hl, port, input, expected_flags) in cases {
+        for RepeatFlagsVector {
+            opcode,
+            hl,
+            port,
+            input,
+            value,
+            flags: expected_flags,
+        } in cases {
             let state = state_with_registers(
                 Z80Registers {
                     b: 0x11,
@@ -6979,9 +7023,9 @@ mod ed_block_io_differential_tests {
             atomic_bus.memory[0x2000] = 0xED;
             atomic_bus.memory[0x2001] = opcode;
             if input {
-                atomic_bus.ports[usize::from(port)] = 0xFF;
+                atomic_bus.ports[usize::from(port)] = value;
             } else {
-                atomic_bus.memory[usize::from(hl)] = 0xFF;
+                atomic_bus.memory[usize::from(hl)] = value;
             }
 
             let mut sequenced = Z80MicroSequencer::default();
@@ -7006,9 +7050,9 @@ mod ed_block_io_differential_tests {
             assert_eq!(sequenced_bus.port_writes, atomic_bus.port_writes);
             if input {
                 assert_eq!(sequenced_bus.port_reads, vec![port]);
-                assert_eq!(sequenced_bus.memory[usize::from(hl)], 0xFF);
+                assert_eq!(sequenced_bus.memory[usize::from(hl)], value);
             } else {
-                assert_eq!(sequenced_bus.port_writes, vec![(port, 0xFF)]);
+                assert_eq!(sequenced_bus.port_writes, vec![(port, value)]);
             }
         }
     }
