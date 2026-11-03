@@ -1843,6 +1843,8 @@ impl Z80MicroSequencer {
                 } else {
                     1_i16
                 };
+                // M3 T1 captures old BC for IN and decrements B; OUT decrements B
+                // before its M3 memory read. These updates are visible at the bus boundary.
                 if matches!(opcode, 0xA2 | 0xAA | 0xB2 | 0xBA) {
                     let port_address = next.registers.bc();
                     let memory_address = next.registers.hl();
@@ -5762,13 +5764,68 @@ mod ed_absolute_register_pair_differential_tests {
                             assert_eq!(request.base_tstates, 4);
                             assert!(state.mcycle_index <= 1);
                         }
-                        Z80BusOperation::PortRead | Z80BusOperation::MemoryRead => {
+                        Z80BusOperation::PortRead => {
                             assert_eq!(request.base_tstates, 3);
                             assert_eq!(state.mcycle_index, 2);
+                            if let super::Z80MicroSequencerPhase::EdBlockIoInputPortRead {
+                                port_address,
+                                memory_address,
+                                ..
+                            } = &state.phase
+                            {
+                                assert_eq!(
+                                    state.registers.b,
+                                    ((port_address >> 8) as u8).wrapping_sub(1)
+                                );
+                                assert_eq!(state.registers.hl(), *memory_address);
+                            } else {
+                                panic!("port read is not in an ED block-I/O input phase");
+                            }
                         }
-                        Z80BusOperation::MemoryWrite { .. } | Z80BusOperation::PortWrite { .. } => {
+                        Z80BusOperation::MemoryRead => {
+                            assert_eq!(request.base_tstates, 3);
+                            assert_eq!(state.mcycle_index, 2);
+                            if let super::Z80MicroSequencerPhase::EdBlockIoOutputMemoryRead {
+                                memory_address,
+                                ..
+                            } = &state.phase
+                            {
+                                assert_eq!(state.registers.hl(), *memory_address);
+                            } else {
+                                panic!("memory read is not in an ED block-I/O output phase");
+                            }
+                        }
+                        Z80BusOperation::MemoryWrite { .. } => {
                             assert_eq!(request.base_tstates, 4);
                             assert_eq!(state.mcycle_index, 3);
+                            if let super::Z80MicroSequencerPhase::EdBlockIoInputMemoryWrite {
+                                memory_address,
+                                ..
+                            } = &state.phase
+                            {
+                                assert_eq!(state.registers.hl(), *memory_address);
+                            } else {
+                                panic!("memory write is not in an ED block-I/O input phase");
+                            }
+                        }
+                        Z80BusOperation::PortWrite { .. } => {
+                            assert_eq!(request.base_tstates, 4);
+                            assert_eq!(state.mcycle_index, 3);
+                            if let super::Z80MicroSequencerPhase::EdBlockIoOutputPortWrite {
+                                opcode,
+                                memory_address,
+                                ..
+                            } = &state.phase
+                            {
+                                let direction =
+                                    if matches!(opcode, 0xAB | 0xBB) { -1_i16 } else { 1_i16 };
+                                assert_eq!(
+                                    state.registers.hl(),
+                                    memory_address.wrapping_add_signed(direction)
+                                );
+                            } else {
+                                panic!("port write is not in an ED block-I/O output phase");
+                            }
                         }
                     }
                     if add_waits {
