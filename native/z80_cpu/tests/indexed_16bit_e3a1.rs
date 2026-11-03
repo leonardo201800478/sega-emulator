@@ -2,7 +2,7 @@
 
 use sega_z80_cpu::{
     Z80BusRequest, Z80IndexRegister, Z80MicroSequencer, Z80MicroSequencerError,
-    Z80MicroSequencerState, Z80MicroStep, Z80PrefixState, Z80Registers,
+    Z80MicroSequencerState, Z80MicroStep, Z80PrefixState,
 };
 
 const FLAG_S: u8 = 0x80;
@@ -106,14 +106,9 @@ fn repeated_alternating_prefixes_select_the_last_index_for_immediate_load() {
 
 #[test]
 fn inc_ix_and_dec_iy_preserve_flags_and_resume_from_internal_snapshot() {
-    let mut cpu = Z80MicroSequencer {
-        ix: 0xFFFF,
-        registers: Z80Registers {
-            f: 0xD7,
-            ..Z80Registers::default()
-        },
-        ..Z80MicroSequencer::default()
-    };
+    let mut cpu = Z80MicroSequencer::default();
+    cpu.ix = 0xFFFF;
+    cpu.registers.f = 0xD7;
     let fetch = start(&mut cpu);
     let fetch = feed_prefix(&mut cpu, fetch, 0xDD);
     assert_eq!(
@@ -136,14 +131,9 @@ fn inc_ix_and_dec_iy_preserve_flags_and_resume_from_internal_snapshot() {
     assert_eq!(cpu.ix, 0);
     assert_eq!(cpu.registers.f, 0xD7);
 
-    let mut cpu = Z80MicroSequencer {
-        iy: 0,
-        registers: Z80Registers {
-            f: 0xD7,
-            ..Z80Registers::default()
-        },
-        ..Z80MicroSequencer::default()
-    };
+    let mut cpu = Z80MicroSequencer::default();
+    cpu.iy = 0;
+    cpu.registers.f = 0xD7;
     let fetch = start(&mut cpu);
     let fetch = feed_prefix(&mut cpu, fetch, 0xFD);
     assert_eq!(
@@ -163,18 +153,13 @@ fn inc_ix_and_dec_iy_preserve_flags_and_resume_from_internal_snapshot() {
 
 #[test]
 fn add_ix_bc_uses_index_lhs_and_zilog_16bit_flag_rules() {
-    let mut cpu = Z80MicroSequencer {
-        ix: 0x0FFF,
-        registers: Z80Registers {
-            b: 0x00,
-            c: 0x01,
-            h: 0x80,
-            l: 0x00,
-            f: FLAG_S | FLAG_Z | FLAG_PV | FLAG_N,
-            ..Z80Registers::default()
-        },
-        ..Z80MicroSequencer::default()
-    };
+    let mut cpu = Z80MicroSequencer::default();
+    cpu.ix = 0x0FFF;
+    cpu.registers.b = 0x00;
+    cpu.registers.c = 0x01;
+    cpu.registers.h = 0x80;
+    cpu.registers.l = 0x00;
+    cpu.registers.f = FLAG_S | FLAG_Z | FLAG_PV | FLAG_N;
     let fetch = start(&mut cpu);
     let fetch = feed_prefix(&mut cpu, fetch, 0xDD);
     assert_eq!(
@@ -196,10 +181,8 @@ fn add_ix_bc_uses_index_lhs_and_zilog_16bit_flag_rules() {
 
 #[test]
 fn add_iy_iy_reads_and_writes_iy_and_sets_carry_on_wrap() {
-    let mut cpu = Z80MicroSequencer {
-        iy: 0x8000,
-        ..Z80MicroSequencer::default()
-    };
+    let mut cpu = Z80MicroSequencer::default();
+    cpu.iy = 0x8000;
     let fetch = start(&mut cpu);
     let fetch = feed_prefix(&mut cpu, fetch, 0xFD);
     assert_eq!(
@@ -220,10 +203,8 @@ fn add_iy_iy_reads_and_writes_iy_and_sets_carry_on_wrap() {
 
 #[test]
 fn jp_ix_and_ld_sp_iy_use_index_pair_without_extra_bus_cycles() {
-    let mut cpu = Z80MicroSequencer {
-        ix: 0x1234,
-        ..Z80MicroSequencer::default()
-    };
+    let mut cpu = Z80MicroSequencer::default();
+    cpu.ix = 0x1234;
     let fetch = start(&mut cpu);
     let fetch = feed_prefix(&mut cpu, fetch, 0xDD);
     assert_eq!(
@@ -235,10 +216,8 @@ fn jp_ix_and_ld_sp_iy_use_index_pair_without_extra_bus_cycles() {
     );
     assert_eq!(cpu.registers.pc, 0x1234);
 
-    let mut cpu = Z80MicroSequencer {
-        iy: 0xABCD,
-        ..Z80MicroSequencer::default()
-    };
+    let mut cpu = Z80MicroSequencer::default();
+    cpu.iy = 0xABCD;
     let fetch = start(&mut cpu);
     let fetch = feed_prefix(&mut cpu, fetch, 0xFD);
     assert_eq!(
@@ -276,15 +255,10 @@ fn ld_ix_immediate_wait_states_extend_operand_cycles() {
 
 #[test]
 fn unsupported_indexed_16bit_family_does_not_fall_back_to_hl() {
-    let mut cpu = Z80MicroSequencer {
-        ix: 0x1234,
-        registers: Z80Registers {
-            h: 0x56,
-            l: 0x78,
-            ..Z80Registers::default()
-        },
-        ..Z80MicroSequencer::default()
-    };
+    let mut cpu = Z80MicroSequencer::default();
+    cpu.ix = 0x1234;
+    cpu.registers.h = 0x56;
+    cpu.registers.l = 0x78;
     let fetch = start(&mut cpu);
     let fetch = feed_prefix(&mut cpu, fetch, 0xDD);
     assert!(matches!(
