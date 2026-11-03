@@ -4,8 +4,9 @@
 //! counters, trace buffers, and in-flight sequencer transactions are separate.
 
 use crate::{Z80AlternateRegisters, Z80Registers};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Z80ArchitecturalState {
     pub registers: Z80Registers,
     pub alternate: Z80AlternateRegisters,
