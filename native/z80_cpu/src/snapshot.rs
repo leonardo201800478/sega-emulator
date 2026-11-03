@@ -239,9 +239,7 @@ fn read_phase(
         2 => Z80MicroSequencerPhase::ImmediateReadRegister {
             destination: reader.u8()?,
         },
-        10 => Z80MicroSequencerPhase::ImmediateReadRegisterPairLow {
-            pair: reader.u8()?,
-        },
+        10 => Z80MicroSequencerPhase::ImmediateReadRegisterPairLow { pair: reader.u8()? },
         11 => Z80MicroSequencerPhase::ImmediateReadRegisterPairHigh {
             pair: reader.u8()?,
             low: reader.u8()?,
@@ -650,7 +648,10 @@ mod tests {
             assert_eq!(restored.pending_request(), Some(low_read));
             assert_eq!(restored.export_state(), low_state);
 
-            let high_read = match restored.complete_bus_cycle(low_read.id, Some(0x34)).unwrap() {
+            let high_read = match restored
+                .complete_bus_cycle(low_read.id, Some(0x34))
+                .unwrap()
+            {
                 crate::Z80MicroStep::BusRequest(request) => request,
                 other => panic!("expected high-byte read, got {other:?}"),
             };
@@ -662,7 +663,9 @@ mod tests {
             assert_eq!(restored.pending_request(), Some(high_read));
             assert_eq!(restored.export_state(), high_state);
             assert_eq!(
-                restored.complete_bus_cycle(high_read.id, Some(0x12)).unwrap(),
+                restored
+                    .complete_bus_cycle(high_read.id, Some(0x12))
+                    .unwrap(),
                 crate::Z80MicroStep::InstructionRetired {
                     opcode,
                     tstates: 12,
