@@ -66,6 +66,8 @@ impl Z80MicroSequencerState {
         body.u16(self.registers.sp);
         body.u16(self.registers.pc);
         body.u8(self.refresh);
+        body.u8(self.q);
+        body.u8(self.q_previous);
         body.u32(self.instruction_tstates);
         body.u32(self.mcycle_index);
         body.u16(self.tstate_index);
@@ -138,6 +140,8 @@ impl Z80MicroSequencerState {
             pc: reader.u16()?,
         };
         let refresh = reader.u8()?;
+        let q = reader.u8()?;
+        let q_previous = reader.u8()?;
         let instruction_tstates = reader.u32()?;
         let mcycle_index = reader.u32()?;
         let tstate_index = reader.u16()?;
@@ -162,6 +166,8 @@ impl Z80MicroSequencerState {
             format_version: version,
             registers,
             refresh,
+            q,
+            q_previous,
             handshake: Z80BusHandshakeState {
                 next_request_id,
                 pending_request,
