@@ -2094,3 +2094,114 @@ mod base_stack_temporal_tests {
         assert_eq!(restored.now(), MachineTime::from_ticks(33));
     }
 }
+
+
+#[cfg(test)]
+mod base_call_rst_temporal_tests {
+    use super::SmsTemporalMachine;
+    use sega_temporal_core::MachineTime;
+    use sega_z80_cpu::Z80MicroStep;
+
+    fn advance_m1(machine: &mut SmsTemporalMachine) -> Z80MicroStep {
+        let mut step = machine.begin_instruction().unwrap();
+        for _ in 0..4 {
+            machine.schedule_pending_bus(0).unwrap();
+            step = machine.dispatch_next().unwrap();
+        }
+        step
+    }
+
+    #[test]
+    fn call_and_rst_use_scheduler_stack_transactions_and_timing() {
+        let mut call = SmsTemporalMachine::new(vec![0xCD, 0x03, 0x00], 3).unwrap();
+        call.cpu_mut().registers.sp = 0xC100;
+        assert_eq!(
+            call.step_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xCD,
+                tstates: 17,
+            }
+        );
+        assert_eq!(call.cpu().registers.pc, 3);
+        assert_eq!(call.cpu().wz, 3);
+        assert_eq!(call.cpu().registers.sp, 0xC0FE);
+        assert_eq!(call.bus.memory().read(0xC0FF), 0x00);
+        assert_eq!(call.bus.memory().read(0xC0FE), 0x03);
+        assert_eq!(call.now(), MachineTime::from_ticks(51));
+
+        let mut call_not_taken =
+            SmsTemporalMachine::new(vec![0xC4, 0x04, 0x00], 3).unwrap();
+        call_not_taken.cpu_mut().registers.sp = 0xC100;
+        call_not_taken.cpu_mut().registers.f = 0x40;
+        assert_eq!(
+            call_not_taken.step_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xC4,
+                tstates: 10,
+            }
+        );
+        assert_eq!(call_not_taken.cpu().registers.pc, 3);
+        assert_eq!(call_not_taken.cpu().wz, 4);
+        assert_eq!(call_not_taken.cpu().registers.sp, 0xC100);
+        assert_eq!(call_not_taken.now(), MachineTime::from_ticks(30));
+
+        let mut rst = SmsTemporalMachine::new(vec![0xFF], 3).unwrap();
+        rst.cpu_mut().registers.sp = 0xC100;
+        assert_eq!(
+            rst.step_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xFF,
+                tstates: 11,
+            }
+        );
+        assert_eq!(rst.cpu().registers.pc, 0x0038);
+        assert_eq!(rst.cpu().wz, 0x0038);
+        assert_eq!(rst.cpu().registers.sp, 0xC0FE);
+        assert_eq!(rst.bus.memory().read(0xC0FF), 0x00);
+        assert_eq!(rst.bus.memory().read(0xC0FE), 0x01);
+        assert_eq!(rst.now(), MachineTime::from_ticks(33));
+    }
+
+    #[test]
+    fn call_and_rst_internal_safe_points_restore_with_scheduler_state() {
+        let mut call = SmsTemporalMachine::new(vec![0xCD, 0x03, 0x00], 3).unwrap();
+        call.cpu_mut().registers.sp = 0xC100;
+        assert!(matches!(advance_m1(&mut call), Z80MicroStep::BusRequest(_)));
+        call.schedule_pending_bus(0).unwrap();
+        assert!(matches!(call.dispatch_next().unwrap(), Z80MicroStep::BusRequest(_)));
+        call.schedule_pending_bus(0).unwrap();
+        assert_eq!(
+            call.dispatch_next().unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        let snapshot = call.export_state();
+        let mut restored_call = SmsTemporalMachine::restore_state(snapshot).unwrap();
+        assert_eq!(
+            restored_call.resume_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xCD,
+                tstates: 17,
+            }
+        );
+        assert_eq!(restored_call.cpu().registers.pc, 3);
+        assert_eq!(restored_call.now(), MachineTime::from_ticks(51));
+
+        let mut rst = SmsTemporalMachine::new(vec![0xFF], 3).unwrap();
+        rst.cpu_mut().registers.sp = 0xC100;
+        assert_eq!(
+            advance_m1(&mut rst),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        let snapshot = rst.export_state();
+        let mut restored_rst = SmsTemporalMachine::restore_state(snapshot).unwrap();
+        assert_eq!(
+            restored_rst.resume_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xFF,
+                tstates: 11,
+            }
+        );
+        assert_eq!(restored_rst.cpu().registers.pc, 0x0038);
+        assert_eq!(restored_rst.now(), MachineTime::from_ticks(33));
+    }
+}
