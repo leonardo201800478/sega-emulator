@@ -547,9 +547,10 @@ impl Z80MicroSequencer {
                     }
                     && state.instruction_tstates >= 8 + u32::from(7 - remaining_tstates)
             }
-            Z80MicroSequencerPhase::EdReturn { stage, .. } => {
+            Z80MicroSequencerPhase::EdReturn { stage, low } => {
                 state.opcode.is_some_and(|opcode| opcode & 0xC7 == 0x45)
                     && stage <= 1
+                    && (stage != 0 || low == 0)
                     && pending.is_some_and(|request| {
                         request.operation == Z80BusOperation::MemoryRead
                             && request.address == state.registers.sp
@@ -579,8 +580,7 @@ impl Z80MicroSequencer {
                     && (1..=4).contains(&remaining_tstates)
                     && pending.is_none()
                     && address == state.registers.hl()
-                    && state.instruction_tstates
-                        >= 11 + u32::from(4 - remaining_tstates)
+                    && state.instruction_tstates >= 11 + u32::from(4 - remaining_tstates)
             }
             Z80MicroSequencerPhase::EdAbsoluteTransfer {
                 stage,
@@ -1414,8 +1414,7 @@ impl Z80MicroSequencer {
                 next.instruction_tstates = next_instruction_tstates;
                 if remaining_tstates == 1 {
                     next.registers.a = result_a;
-                    let mut flags = (next.registers.f & FLAG_C)
-                        | (result_a & (FLAG_S | FLAG_XY));
+                    let mut flags = (next.registers.f & FLAG_C) | (result_a & (FLAG_S | FLAG_XY));
                     if result_a == 0 {
                         flags |= FLAG_Z;
                     }
@@ -1585,12 +1584,10 @@ impl Z80MicroSequencer {
                     self.registers.pc,
                 )
             }
-            op if op & 0xC7 == 0x45 => {
-                self.issue_read(
-                    Z80MicroSequencerPhase::EdReturn { stage: 0, low: 0 },
-                    self.registers.sp,
-                )
-            }
+            op if op & 0xC7 == 0x45 => self.issue_read(
+                Z80MicroSequencerPhase::EdReturn { stage: 0, low: 0 },
+                self.registers.sp,
+            ),
             0x67 | 0x6F => self.issue_read(
                 Z80MicroSequencerPhase::EdNibbleRotateRead {
                     opcode,
@@ -5105,14 +5102,13 @@ mod ed_absolute_register_pair_differential_tests {
     }
 }
 
-
 #[cfg(test)]
 mod ed_return_nibble_rotate_differential_tests {
     use super::{Z80MicroSequencer, Z80MicroStep};
     use crate::bus::CpuBus;
     use crate::{
-        Z80, Z80AlternateRegisters, Z80ArchitecturalState, Z80BusOperation,
-        Z80MicroSequencerState, Z80Registers,
+        Z80, Z80AlternateRegisters, Z80ArchitecturalState, Z80BusOperation, Z80MicroSequencerState,
+        Z80Registers,
     };
 
     #[derive(Clone)]
@@ -5209,7 +5205,10 @@ mod ed_return_nibble_rotate_differential_tests {
                     cpu = roundtrip(cpu);
                 }
                 Z80MicroStep::InternalCycle { tstates } => {
-                    assert_eq!(tstates, 1, "internal cycles are advanced one T-state at a time");
+                    assert_eq!(
+                        tstates, 1,
+                        "internal cycles are advanced one T-state at a time"
+                    );
                     step = cpu.complete_internal_cycle().unwrap();
                     cpu = roundtrip(cpu);
                 }
@@ -5232,8 +5231,16 @@ mod ed_return_nibble_rotate_differential_tests {
         atomic_bus.memory[0xC000] = 0x34;
         let sequenced_bus = atomic_bus.clone();
 
-        let expected = if matches!(opcode, 0x67 | 0x6F) { 18 } else { 14 };
-        assert_eq!(atomic.step(&mut atomic_bus), Ok(expected), "ED {opcode:02X}");
+        let expected = if matches!(opcode, 0x67 | 0x6F) {
+            18
+        } else {
+            14
+        };
+        assert_eq!(
+            atomic.step(&mut atomic_bus),
+            Ok(expected),
+            "ED {opcode:02X}"
+        );
         let mut sequenced = Z80MicroSequencer::default();
         sequenced.import_architectural_state(initial).unwrap();
         let (sequenced, sequenced_bus, tstates) =
