@@ -161,24 +161,24 @@ impl Z80M1Cycle {
     pub fn advance_tstate(&mut self, wait_asserted: bool) -> Result<Z80M1Phase, Z80M1Error> {
         self.state.phase = match self.state.phase {
             Z80M1Phase::T1 => Z80M1Phase::T2,
-            Z80M1Phase::T2 if wait_asserted => {
-                self.state.wait_tstates = self
-                    .state
-                    .wait_tstates
-                    .checked_add(1)
-                    .ok_or(Z80M1Error::WaitCounterOverflow)?;
-                Z80M1Phase::Wait
-            }
+            // WAIT is sampled at the end of T2. An asserted signal inserts
+            // the *next* Tw; the T2 state itself is not a WAIT T-state.
+            Z80M1Phase::T2 if wait_asserted => Z80M1Phase::Wait,
             Z80M1Phase::T2 => Z80M1Phase::T3,
-            Z80M1Phase::Wait if wait_asserted => {
+            // Every completed Tw counts, including the final Tw that samples
+            // WAIT deasserted and releases the CPU into T3.
+            Z80M1Phase::Wait => {
                 self.state.wait_tstates = self
                     .state
                     .wait_tstates
                     .checked_add(1)
                     .ok_or(Z80M1Error::WaitCounterOverflow)?;
-                Z80M1Phase::Wait
+                if wait_asserted {
+                    Z80M1Phase::Wait
+                } else {
+                    Z80M1Phase::T3
+                }
             }
-            Z80M1Phase::Wait => Z80M1Phase::T3,
             Z80M1Phase::T3 if self.state.opcode.is_some() => Z80M1Phase::T4,
             Z80M1Phase::T3 => return Err(Z80M1Error::MissingOpcodeAtT3End),
             Z80M1Phase::T4 => Z80M1Phase::Complete,
@@ -245,13 +245,13 @@ mod tests {
         let mut cycle = Z80M1Cycle::new(0x0000, 0x00, 0x00);
         cycle.advance_tstate(false).unwrap();
         assert_eq!(cycle.advance_tstate(true).unwrap(), Z80M1Phase::Wait);
-        assert_eq!(cycle.wait_tstates(), 1);
+        assert_eq!(cycle.wait_tstates(), 0);
         assert!(cycle.pins().wait_sample);
 
         assert_eq!(cycle.advance_tstate(true).unwrap(), Z80M1Phase::Wait);
-        assert_eq!(cycle.wait_tstates(), 2);
+        assert_eq!(cycle.wait_tstates(), 1);
         assert_eq!(cycle.advance_tstate(true).unwrap(), Z80M1Phase::Wait);
-        assert_eq!(cycle.wait_tstates(), 3);
+        assert_eq!(cycle.wait_tstates(), 2);
         assert_eq!(cycle.advance_tstate(false).unwrap(), Z80M1Phase::T3);
         assert_eq!(cycle.wait_tstates(), 3);
     }
