@@ -6,17 +6,20 @@
 
 use core::fmt;
 
-use crate::{SmsTemporalBus, SmsTemporalBusError, SmsTemporalBusState, SmsTemporalDispatch};
+use crate::{
+    SmsTemporalBus, SmsTemporalBusError, SmsTemporalBusState, SmsTemporalDispatch, SmsTemporalM1,
+    SmsTemporalM1Error, SmsTemporalM1State,
+};
 use sega_temporal_core::{
     BusContractError, BusCycleKind, BusDirection, BusOperationResult, BusPhase, BusTransaction,
     MCycleIndex, MachineTime, TStateIndex,
 };
 use sega_z80_cpu::{
-    Z80BusOperation, Z80MicroSequencer, Z80MicroSequencerError, Z80MicroSequencerPhase,
-    Z80MicroSequencerState, Z80MicroStep,
+    Z80BusOperation, Z80M1Phase, Z80M1Pins, Z80MicroSequencer, Z80MicroSequencerError,
+    Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
 };
 
-pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 9;
+pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 10;
 
 /// Runtime event trace emitted from actual Scheduler/bus dispatch boundaries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,6 +38,11 @@ pub enum SmsTemporalTraceEvent {
         continuation_id: u64,
         tstates: u32,
     },
+    M1TStateCompleted {
+        timestamp: MachineTime,
+        phase: Z80M1Phase,
+        pins: Z80M1Pins,
+    },
 }
 
 /// Versioned state spanning the CPU continuation and SMS memory/scheduler.
@@ -48,6 +56,8 @@ pub struct SmsTemporalMachineState {
     pub next_internal_cycle_id: u64,
     pub pending_internal_cycle_id: Option<u64>,
     pub pending_internal_tstates: Option<u32>,
+    pub m1: Option<SmsTemporalM1State>,
+    pub m1_fixture_wait_tstates: Option<u32>,
 }
 
 fn elapsed_tstates(
@@ -68,11 +78,41 @@ fn elapsed_tstates(
 
 fn instruction_timeline_is_valid(state: &SmsTemporalMachineState) -> bool {
     if matches!(state.cpu.phase, Z80MicroSequencerPhase::Ready) {
-        return state.instruction_started_at.is_none();
+        return state.instruction_started_at.is_none()
+            && state.m1.is_none()
+            && state.m1_fixture_wait_tstates.is_none();
     }
     let Some(instruction_started_at) = state.instruction_started_at else {
         return false;
     };
+    if let Some(m1) = state.m1 {
+        if state.bus.pending_request.is_some()
+            || state.bus.completion.is_some()
+            || state.bus.pending_internal_cycle.is_some()
+            || state.bus.internal_completion.is_some()
+            || state.m1_fixture_wait_tstates.is_none()
+            || state.cpu.handshake.wait_tstates != state.m1_fixture_wait_tstates.unwrap_or(0)
+        {
+            return false;
+        }
+        let waits = m1.cycle.wait_tstates;
+        let expected_tstates = match m1.cycle.phase {
+            Z80M1Phase::T1 => 0,
+            Z80M1Phase::T2 => 1,
+            Z80M1Phase::Wait => 2_u32.saturating_add(waits),
+            Z80M1Phase::T3 => 2_u32.saturating_add(waits),
+            Z80M1Phase::T4 => 3_u32.saturating_add(waits),
+            Z80M1Phase::Complete => 4_u32.saturating_add(waits),
+        };
+        return elapsed_tstates(
+            instruction_started_at,
+            state.bus.coordinator.scheduler.now,
+            state.bus.coordinator.master_ticks_per_tstate,
+        ) == Some(expected_tstates);
+    }
+    if state.m1_fixture_wait_tstates.is_some() {
+        return false;
+    }
     let cpu_tstates = state.cpu.instruction_tstates;
     let (boundary, expected_tstates) = match (
         state.bus.pending_request,
@@ -143,6 +183,7 @@ pub enum SmsTemporalMachineError {
     InvalidState,
     NoScheduledEvent,
     InternalCycleIdExhausted,
+    M1(SmsTemporalM1Error),
 }
 
 impl fmt::Display for SmsTemporalMachineError {
@@ -155,6 +196,7 @@ impl fmt::Display for SmsTemporalMachineError {
             Self::InternalCycleIdExhausted => {
                 f.write_str("SMS internal-cycle continuation ID exhausted")
             }
+            Self::M1(error) => write!(f, "SMS M1 continuation failed: {error:?}"),
         }
     }
 }
@@ -173,6 +215,12 @@ impl From<Z80MicroSequencerError> for SmsTemporalMachineError {
     }
 }
 
+impl From<SmsTemporalM1Error> for SmsTemporalMachineError {
+    fn from(error: SmsTemporalM1Error) -> Self {
+        Self::M1(error)
+    }
+}
+
 /// SMS Z80 + mapper memory + single scheduler timeline.
 #[derive(Debug, Clone)]
 pub struct SmsTemporalMachine {
@@ -182,6 +230,8 @@ pub struct SmsTemporalMachine {
     next_internal_cycle_id: u64,
     pending_internal_cycle_id: Option<u64>,
     pending_internal_tstates: Option<u32>,
+    m1: Option<SmsTemporalM1>,
+    m1_fixture_wait_tstates: Option<u32>,
     trace_enabled: bool,
     trace_events: Vec<SmsTemporalTraceEvent>,
 }
@@ -199,6 +249,8 @@ impl SmsTemporalMachine {
             next_internal_cycle_id: 0,
             pending_internal_cycle_id: None,
             pending_internal_tstates: None,
+            m1: None,
+            m1_fixture_wait_tstates: None,
             trace_enabled: false,
             trace_events: Vec::new(),
         })
@@ -298,6 +350,9 @@ impl SmsTemporalMachine {
         .map(Some)
     }
     /// Schedule the CPU's current pending bus request with fixture WAIT states.
+    ///
+    /// Opcode fetches use the explicit four-phase M1 model; data accesses retain
+    /// the transactional memory-cycle path.
     pub fn schedule_pending_bus(
         &mut self,
         fixture_wait_tstates: u32,
@@ -306,7 +361,38 @@ impl SmsTemporalMachine {
             .cpu
             .pending_request()
             .ok_or(SmsTemporalMachineError::InvalidState)?;
-        if self.bus.pending_request().is_some() {
+        if request.operation == Z80BusOperation::OpcodeFetch {
+            if self.bus.pending_request().is_some()
+                || self.bus.completion().is_some()
+                || self.pending_internal_cycle_id.is_some()
+            {
+                return Err(SmsTemporalMachineError::InvalidState);
+            }
+            if let Some(m1) = self.m1.as_mut() {
+                if self.m1_fixture_wait_tstates != Some(fixture_wait_tstates)
+                    || m1.export_state().pending_continuation_id.is_some()
+                {
+                    return Err(SmsTemporalMachineError::InvalidState);
+                }
+                m1.schedule_next_tstate(self.bus.coordinator_mut())?;
+                return Ok(m1.export_state().pending_deadline.unwrap());
+            }
+
+            let mut next_cpu = self.cpu.clone();
+            next_cpu.insert_wait_tstates(fixture_wait_tstates)?;
+            let mut m1 = SmsTemporalM1::new(request.address, next_cpu.i, next_cpu.refresh);
+            m1.schedule_next_tstate(self.bus.coordinator_mut())?;
+            let deadline = m1
+                .export_state()
+                .pending_deadline
+                .ok_or(SmsTemporalMachineError::InvalidState)?;
+            self.cpu = next_cpu;
+            self.m1 = Some(m1);
+            self.m1_fixture_wait_tstates = Some(fixture_wait_tstates);
+            return Ok(deadline);
+        }
+
+        if self.bus.pending_request().is_some() || self.m1.is_some() {
             return Err(SmsTemporalMachineError::InvalidState);
         }
         let cpu_before = self.cpu.export_state();
@@ -361,6 +447,28 @@ impl SmsTemporalMachine {
         Ok(deadline)
     }
 
+    fn finish_m1_fetch(&mut self) -> Result<Z80MicroStep, SmsTemporalMachineError> {
+        let m1 = self.m1.ok_or(SmsTemporalMachineError::InvalidState)?;
+        if m1.phase() != Z80M1Phase::Complete {
+            return Err(SmsTemporalMachineError::InvalidState);
+        }
+        let opcode = m1.opcode().ok_or(SmsTemporalMachineError::InvalidState)?;
+        let request = self
+            .cpu
+            .pending_request()
+            .filter(|request| request.operation == Z80BusOperation::OpcodeFetch)
+            .ok_or(SmsTemporalMachineError::InvalidState)?;
+        let mut next_cpu = self.cpu.clone();
+        let step = next_cpu.complete_bus_cycle(request.id, Some(opcode))?;
+        self.cpu = next_cpu;
+        self.m1 = None;
+        self.m1_fixture_wait_tstates = None;
+        if matches!(step, Z80MicroStep::InstructionRetired { .. }) {
+            self.instruction_started_at = None;
+        }
+        Ok(step)
+    }
+
     /// Dispatch one event and resume the matching CPU continuation.
     pub fn dispatch_next(&mut self) -> Result<Z80MicroStep, SmsTemporalMachineError> {
         let dispatch = self
@@ -403,6 +511,60 @@ impl SmsTemporalMachine {
                     });
                 }
                 Ok(step)
+            }
+            SmsTemporalDispatch::M1TStateComplete {
+                continuation_id,
+                completed_at,
+            } => {
+                let mut m1 = self.m1.ok_or(SmsTemporalMachineError::InvalidState)?;
+                let phase_before = m1.phase();
+                let pins = m1.pins();
+                let m1_state = m1.export_state();
+                if m1_state.pending_continuation_id != Some(continuation_id)
+                    || m1_state.pending_deadline != Some(completed_at)
+                {
+                    return Err(SmsTemporalMachineError::InvalidState);
+                }
+                let total_waits = self
+                    .m1_fixture_wait_tstates
+                    .ok_or(SmsTemporalMachineError::InvalidState)?;
+                let wait_asserted = match phase_before {
+                    Z80M1Phase::T2 => total_waits > 0,
+                    Z80M1Phase::Wait => m1_state.cycle.wait_tstates.saturating_add(1) < total_waits,
+                    _ => false,
+                };
+
+                // The opcode is sampled at the T3 completion boundary, before
+                // the M1 model advances to T4. Memory is not read at T1/T2/T4.
+                if phase_before == Z80M1Phase::T3 {
+                    let opcode = self.bus.memory().read(pins.address);
+                    m1.sample_opcode(opcode)?;
+                }
+                let next_phase = m1.complete_tstate(
+                    crate::SmsTemporalEvent::M1TStateComplete { continuation_id },
+                    completed_at,
+                    wait_asserted,
+                )?;
+
+                if self.trace_enabled {
+                    self.trace_events
+                        .push(SmsTemporalTraceEvent::M1TStateCompleted {
+                            timestamp: completed_at,
+                            phase: phase_before,
+                            pins,
+                        });
+                }
+
+                self.m1 = Some(m1);
+                if next_phase == Z80M1Phase::Complete {
+                    self.finish_m1_fetch()
+                } else {
+                    let request = self
+                        .cpu
+                        .pending_request()
+                        .ok_or(SmsTemporalMachineError::InvalidState)?;
+                    Ok(Z80MicroStep::BusRequest(request))
+                }
             }
             SmsTemporalDispatch::InternalCycleComplete(completion) => {
                 if self.pending_internal_cycle_id != Some(completion.continuation_id) {
@@ -475,10 +637,26 @@ impl SmsTemporalMachine {
         loop {
             step = match step {
                 Z80MicroStep::BusRequest(_) => {
-                    if self.bus.pending_request().is_none() {
-                        self.schedule_pending_bus(fixture_wait_tstates)?;
+                    if self
+                        .m1
+                        .as_ref()
+                        .is_some_and(|m1| m1.phase() == Z80M1Phase::Complete)
+                    {
+                        self.finish_m1_fetch()?
+                    } else {
+                        if self.m1.is_some() {
+                            if self.m1.as_ref().is_some_and(|m1| {
+                                m1.export_state().pending_continuation_id.is_none()
+                            }) {
+                                let m1_waits =
+                                    self.m1_fixture_wait_tstates.unwrap_or(fixture_wait_tstates);
+                                self.schedule_pending_bus(m1_waits)?;
+                            }
+                        } else if self.bus.pending_request().is_none() {
+                            self.schedule_pending_bus(fixture_wait_tstates)?;
+                        }
+                        self.dispatch_next()?
                     }
-                    self.dispatch_next()?
                 }
                 Z80MicroStep::InternalCycle { tstates } => {
                     if self.pending_internal_cycle_id.is_none() {
@@ -534,6 +712,8 @@ impl SmsTemporalMachine {
             next_internal_cycle_id: self.next_internal_cycle_id,
             pending_internal_cycle_id: self.pending_internal_cycle_id,
             pending_internal_tstates: self.pending_internal_tstates,
+            m1: self.m1.map(|m1| m1.export_state()),
+            m1_fixture_wait_tstates: self.m1_fixture_wait_tstates,
         }
     }
 
@@ -544,7 +724,13 @@ impl SmsTemporalMachine {
         }
         let cpu = Z80MicroSequencer::restore_state(state.cpu.clone())?;
         let bus = SmsTemporalBus::restore_state(state.bus.clone())?;
-        if cpu.pending_request() != state.bus.pending_request
+        let m1 = state.m1.map(SmsTemporalM1::restore_state).transpose()?;
+        let expected_bus_request = if m1.is_some() {
+            None
+        } else {
+            cpu.pending_request()
+        };
+        if expected_bus_request != state.bus.pending_request
             || state.pending_internal_cycle_id != state.bus.pending_internal_cycle
             || state.pending_internal_cycle_id.is_some() != state.pending_internal_tstates.is_some()
             || state.pending_internal_tstates == Some(0)
@@ -561,6 +747,38 @@ impl SmsTemporalMachine {
             )
         {
             return Err(SmsTemporalMachineError::InvalidState);
+        }
+        match (m1, state.m1_fixture_wait_tstates) {
+            (Some(m1_cycle), Some(total_waits)) => {
+                let request = cpu
+                    .pending_request()
+                    .filter(|request| request.operation == Z80BusOperation::OpcodeFetch)
+                    .ok_or(SmsTemporalMachineError::InvalidState)?;
+                let m1_state = m1_cycle.export_state();
+                let events = &state.bus.coordinator.scheduler.event_queue.pending;
+                if state.bus.pending_request.is_some()
+                    || state.pending_internal_cycle_id.is_some()
+                    || state.cpu.handshake.wait_tstates != total_waits
+                    || m1_state.cycle.address != request.address
+                    || m1_state.cycle.refresh_after_m1
+                        != ((cpu.refresh & 0x80) | (cpu.refresh.wrapping_add(1) & 0x7F))
+                {
+                    return Err(SmsTemporalMachineError::InvalidState);
+                }
+                match (m1_state.pending_continuation_id, m1_state.pending_deadline) {
+                    (Some(id), Some(deadline))
+                        if events.len() == 1
+                            && events[0].payload
+                                == (crate::SmsTemporalEvent::M1TStateComplete {
+                                    continuation_id: id,
+                                })
+                            && events[0].timestamp == deadline => {}
+                    (None, None) if events.is_empty() => {}
+                    _ => return Err(SmsTemporalMachineError::InvalidState),
+                }
+            }
+            (None, None) => {}
+            _ => return Err(SmsTemporalMachineError::InvalidState),
         }
         // A restored internal-cycle event must still be completable by the CPU.
         // These values are rejected by schedule_internal_cycle() before creating
@@ -648,6 +866,8 @@ impl SmsTemporalMachine {
             next_internal_cycle_id: state.next_internal_cycle_id,
             pending_internal_cycle_id: state.pending_internal_cycle_id,
             pending_internal_tstates: state.pending_internal_tstates,
+            m1,
+            m1_fixture_wait_tstates: state.m1_fixture_wait_tstates,
             trace_enabled: false,
             trace_events: Vec::new(),
         })
@@ -656,18 +876,32 @@ impl SmsTemporalMachine {
 
 #[cfg(test)]
 mod tests {
-    use super::{SmsTemporalBus, SmsTemporalMachine, SmsTemporalMachineError};
-    use sega_temporal_core::BusOperationResult;
+    use super::{SmsTemporalMachine, SmsTemporalMachineError};
     use sega_temporal_core::{
         BusCycleKind, BusDirection, BusPhase, MCycleIndex, MachineTime, TStateIndex,
     };
     use sega_z80_cpu::{
-        Z80MicroSequencer, Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroStep,
-        Z80Registers,
+        Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroStep, Z80Registers,
     };
 
     fn retired(step: Z80MicroStep, opcode: u8, tstates: u32) {
         assert_eq!(step, Z80MicroStep::InstructionRetired { opcode, tstates });
+    }
+
+    fn complete_m1_fetch(
+        machine: &mut SmsTemporalMachine,
+        fixture_wait_tstates: u32,
+    ) -> Z80MicroStep {
+        loop {
+            let m1 = machine.export_state().m1;
+            if m1.is_none() || m1.is_some_and(|state| state.pending_continuation_id.is_none()) {
+                machine.schedule_pending_bus(fixture_wait_tstates).unwrap();
+            }
+            let step = machine.dispatch_next().unwrap();
+            if machine.export_state().m1.is_none() {
+                return step;
+            }
+        }
     }
 
     #[test]
@@ -691,8 +925,7 @@ mod tests {
         let mut machine = SmsTemporalMachine::new(vec![0x34; 0x4000], 3).unwrap();
         machine.cpu_mut().registers.set_hl(0xC000);
         machine.begin_instruction().unwrap();
-        machine.schedule_pending_bus(0).unwrap();
-        let read = machine.dispatch_next().unwrap();
+        let read = complete_m1_fetch(&mut machine, 0);
         assert!(matches!(read, Z80MicroStep::BusRequest(_)));
         machine.schedule_pending_bus(0).unwrap();
         assert_eq!(
@@ -715,71 +948,49 @@ mod tests {
     }
 
     #[test]
-    fn overflow_keeps_completed_bus_write_latched_for_snapshot_restore_and_retry() {
-        let mut machine = SmsTemporalMachine::new(vec![0x77; 0x4000], 3).unwrap();
-        machine.cpu_mut().registers.a = 0x5A;
-        machine.cpu_mut().registers.set_hl(0xC000);
+    fn unsupported_decode_keeps_completed_m1_for_snapshot_restore_and_retry() {
+        let mut machine = SmsTemporalMachine::new(vec![0xFF; 0x4000], 3).unwrap();
         machine.begin_instruction().unwrap();
-        machine.schedule_pending_bus(0).unwrap();
-        assert!(matches!(
-            machine.dispatch_next().unwrap(),
-            Z80MicroStep::BusRequest(_)
-        ));
+
+        // Advance T1, T2, and T3. The opcode is sampled at T3 completion;
+        // T4 is then scheduled but not yet dispatched.
+        for _ in 0..3 {
+            machine.schedule_pending_bus(0).unwrap();
+            assert!(matches!(
+                machine.dispatch_next().unwrap(),
+                Z80MicroStep::BusRequest(_)
+            ));
+        }
         machine.schedule_pending_bus(0).unwrap();
 
-        let mut state = machine.export_state();
-        state.cpu.instruction_tstates = u32::MAX - 2;
-        // Fault-inject the CPU counter after restoring its own DTO. The machine
-        // restore gate rejects this impossible CPU/Scheduler combination; this
-        // test bypasses that gate to exercise atomic dispatch failure handling.
-        let cpu = Z80MicroSequencer::restore_state(state.cpu).unwrap();
-        let bus = SmsTemporalBus::restore_state(state.bus).unwrap();
-        let mut machine = SmsTemporalMachine {
-            cpu,
-            bus,
-            instruction_started_at: state.instruction_started_at,
-            next_internal_cycle_id: state.next_internal_cycle_id,
-            pending_internal_cycle_id: state.pending_internal_cycle_id,
-            pending_internal_tstates: state.pending_internal_tstates,
-            trace_enabled: false,
-            trace_events: Vec::new(),
-        };
         assert!(matches!(
             machine.dispatch_next(),
             Err(SmsTemporalMachineError::Cpu(
-                Z80MicroSequencerError::InstructionTStateOverflow
+                Z80MicroSequencerError::UnsupportedOpcode { opcode: 0xFF, .. }
             ))
         ));
-        let completed_transaction = machine.pending_bus_transaction().unwrap().unwrap();
-        assert_eq!(completed_transaction.phase(), BusPhase::Complete);
+        let completed_m1 = machine.export_state();
         assert_eq!(
-            completed_transaction.timestamp(),
-            MachineTime::from_ticks(12)
+            completed_m1.m1.unwrap().cycle.phase,
+            sega_z80_cpu::Z80M1Phase::Complete
         );
-        let completed_at = machine.now();
-        assert_eq!(
-            machine.pending_bus_operation_result(),
-            Some(BusOperationResult::Completed {
-                value: None,
-                completed_at,
-            })
+        assert!(
+            completed_m1
+                .bus
+                .coordinator
+                .scheduler
+                .event_queue
+                .pending
+                .is_empty()
         );
 
-        let mut state = machine.export_state();
-        assert_eq!(state.bus.completion.unwrap().request_id, 1);
-        assert_eq!(state.bus.pending_request.unwrap().id, 1);
-        assert_eq!(machine.memory().read(0xC000), 0x5A);
-
-        // Restore a valid CPU counter while preserving the already-committed,
-        // unacknowledged bus completion. Resume must consume it, not dispatch
-        // the memory write a second time.
-        // Preserve the four T-states already consumed by M1 before the
-        // pending M2 memory write; restore_state validates this phase minimum.
-        state.cpu.instruction_tstates = 4;
-        let mut restored = SmsTemporalMachine::restore_state(state).unwrap();
-        retired(restored.resume_instruction(0).unwrap(), 0x77, 7);
-        assert_eq!(restored.memory().read(0xC000), 0x5A);
-        assert!(restored.export_state().bus.completion.is_none());
+        let mut restored = SmsTemporalMachine::restore_state(completed_m1).unwrap();
+        assert!(matches!(
+            restored.resume_instruction(0),
+            Err(SmsTemporalMachineError::Cpu(
+                Z80MicroSequencerError::UnsupportedOpcode { opcode: 0xFF, .. }
+            ))
+        ));
     }
 
     #[test]
@@ -787,9 +998,8 @@ mod tests {
         let mut machine = SmsTemporalMachine::new(vec![0x34; 0x4000], 3).unwrap();
         machine.cpu_mut().registers.set_hl(0xC000);
         machine.begin_instruction().unwrap();
-        machine.schedule_pending_bus(0).unwrap();
         assert!(matches!(
-            machine.dispatch_next().unwrap(),
+            complete_m1_fetch(&mut machine, 0),
             Z80MicroStep::BusRequest(_)
         ));
         machine.schedule_pending_bus(0).unwrap();
@@ -825,8 +1035,7 @@ mod tests {
         let mut machine = SmsTemporalMachine::new(vec![0x34; 0x4000], 3).unwrap();
         machine.cpu_mut().registers.set_hl(0xC000);
         machine.begin_instruction().unwrap();
-        machine.schedule_pending_bus(0).unwrap();
-        machine.dispatch_next().unwrap();
+        complete_m1_fetch(&mut machine, 0);
         machine.schedule_pending_bus(0).unwrap();
         assert_eq!(
             machine.dispatch_next().unwrap(),
@@ -907,8 +1116,7 @@ mod tests {
         let mut machine = SmsTemporalMachine::new(vec![0x34; 0x4000], 3).unwrap();
         machine.cpu_mut().registers.set_hl(0xC000);
         machine.begin_instruction().unwrap();
-        machine.schedule_pending_bus(0).unwrap();
-        machine.dispatch_next().unwrap();
+        complete_m1_fetch(&mut machine, 0);
         machine.schedule_pending_bus(0).unwrap();
         assert_eq!(
             machine.dispatch_next().unwrap(),
@@ -1037,9 +1245,8 @@ mod tests {
         let mut machine = SmsTemporalMachine::new(vec![0x34; 0x4000], 3).unwrap();
         machine.cpu_mut().registers.set_hl(0xC000);
         machine.begin_instruction().unwrap();
-        machine.schedule_pending_bus(0).unwrap();
         assert!(matches!(
-            machine.dispatch_next().unwrap(),
+            complete_m1_fetch(&mut machine, 0),
             Z80MicroStep::BusRequest(_)
         ));
         machine.schedule_pending_bus(0).unwrap();
@@ -1062,9 +1269,8 @@ mod tests {
         let mut machine = SmsTemporalMachine::new(vec![0x34; 0x4000], 3).unwrap();
         machine.cpu_mut().registers.set_hl(0xC000);
         machine.begin_instruction().unwrap();
-        machine.schedule_pending_bus(0).unwrap();
         assert!(matches!(
-            machine.dispatch_next().unwrap(),
+            complete_m1_fetch(&mut machine, 0),
             Z80MicroStep::BusRequest(_)
         ));
         machine.schedule_pending_bus(0).unwrap();
@@ -1151,8 +1357,7 @@ mod tests {
             Z80MicroStep::BusRequest(request) => request,
             other => panic!("expected fetch, got {other:?}"),
         };
-        machine.schedule_pending_bus(0).unwrap();
-        let read = match machine.dispatch_next().unwrap() {
+        let read = match complete_m1_fetch(&mut machine, 0) {
             Z80MicroStep::BusRequest(request) => request,
             other => panic!("expected memory read, got {other:?}"),
         };
@@ -1187,20 +1392,25 @@ mod tests {
         retired(machine.step_instruction(0).unwrap(), 0x34, 11);
 
         let trace = machine.take_trace();
-        assert_eq!(trace.len(), 4);
+        assert_eq!(trace.len(), 7);
         assert!(matches!(
             trace[0],
-            super::SmsTemporalTraceEvent::BusCompleted {
+            super::SmsTemporalTraceEvent::M1TStateCompleted {
                 timestamp,
-                operation: sega_z80_cpu::Z80BusOperation::OpcodeFetch,
-                base_tstates: 4,
-                wait_tstates: 0,
-                data: Some(0x34),
+                phase: sega_z80_cpu::Z80M1Phase::T1,
+                ..
+            } if timestamp == MachineTime::from_ticks(3)
+        ));
+        assert!(matches!(
+            trace[3],
+            super::SmsTemporalTraceEvent::M1TStateCompleted {
+                timestamp,
+                phase: sega_z80_cpu::Z80M1Phase::T4,
                 ..
             } if timestamp == MachineTime::from_ticks(12)
         ));
         assert!(matches!(
-            trace[1],
+            trace[4],
             super::SmsTemporalTraceEvent::BusCompleted {
                 timestamp,
                 operation: sega_z80_cpu::Z80BusOperation::MemoryRead,
@@ -1210,7 +1420,7 @@ mod tests {
             } if timestamp == MachineTime::from_ticks(21)
         ));
         assert!(matches!(
-            trace[2],
+            trace[5],
             super::SmsTemporalTraceEvent::InternalCycleCompleted {
                 timestamp,
                 tstates: 1,
@@ -1218,7 +1428,7 @@ mod tests {
             } if timestamp == MachineTime::from_ticks(24)
         ));
         assert!(matches!(
-            trace[3],
+            trace[6],
             super::SmsTemporalTraceEvent::BusCompleted {
                 timestamp,
                 operation: sega_z80_cpu::Z80BusOperation::MemoryWrite { value: 1 },
@@ -1243,9 +1453,8 @@ mod tests {
     fn restore_rejects_instruction_tstates_ahead_of_scheduler_before_pending_bus_cycle() {
         let mut machine = SmsTemporalMachine::new(vec![0x3E, 0x42], 3).unwrap();
         machine.begin_instruction().unwrap();
-        machine.schedule_pending_bus(0).unwrap();
         assert!(matches!(
-            machine.dispatch_next().unwrap(),
+            complete_m1_fetch(&mut machine, 0),
             Z80MicroStep::BusRequest(_)
         ));
         machine.schedule_pending_bus(0).unwrap();
@@ -1289,13 +1498,12 @@ mod tests {
             original.begin_instruction().unwrap(),
             Z80MicroStep::BusRequest(_)
         ));
-        original.schedule_pending_bus(0).unwrap();
         assert!(matches!(
-            original.dispatch_next().unwrap(),
+            complete_m1_fetch(&mut original, 0),
             Z80MicroStep::BusRequest(_)
         ));
-        // Compare only the mapper write after the opcode-fetch trace boundary.
-        assert_eq!(original.take_trace().len(), 1);
+        // The four M1 phase boundaries are captured separately from the mapper write.
+        assert_eq!(original.take_trace().len(), 4);
 
         original.schedule_pending_bus(2).unwrap();
         assert_eq!(original.memory().selected_banks(), [0, 1, 2]);
@@ -1510,5 +1718,52 @@ mod tests {
         ] {
             assert_atomic_differential(&[opcode], accumulator, flags, 0, 0, opcode);
         }
+    }
+    #[test]
+    fn nop_opcode_fetch_uses_four_scheduler_driven_m1_tstates() {
+        let mut machine = SmsTemporalMachine::new(vec![0x00; 0x4000], 3).unwrap();
+        machine.set_trace_enabled(true);
+        retired(machine.step_instruction(0).unwrap(), 0x00, 4);
+        assert_eq!(machine.now(), MachineTime::from_ticks(12));
+        assert_eq!(machine.cpu().refresh, 1);
+        let trace = machine.take_trace();
+        let m1_events = trace
+            .iter()
+            .filter(|event| {
+                matches!(
+                    event,
+                    super::SmsTemporalTraceEvent::M1TStateCompleted { .. }
+                )
+            })
+            .count();
+        assert_eq!(m1_events, 4);
+        assert!(machine.export_state().m1.is_none());
+    }
+
+    #[test]
+    fn opcode_fetch_wait_states_are_scheduler_tw_events() {
+        let mut machine = SmsTemporalMachine::new(vec![0x00; 0x4000], 2).unwrap();
+        retired(machine.step_instruction(2).unwrap(), 0x00, 6);
+        assert_eq!(machine.now(), MachineTime::from_ticks(12));
+        assert_eq!(machine.cpu().refresh, 1);
+    }
+
+    #[test]
+    fn m1_snapshot_restores_pending_tstate_and_retires_exactly_once() {
+        let mut machine = SmsTemporalMachine::new(vec![0x00; 0x4000], 3).unwrap();
+        machine.begin_instruction().unwrap();
+        machine.schedule_pending_bus(1).unwrap();
+        assert!(matches!(
+            machine.dispatch_next().unwrap(),
+            Z80MicroStep::BusRequest(_)
+        ));
+        machine.schedule_pending_bus(1).unwrap();
+        let snapshot = machine.export_state();
+        assert!(snapshot.m1.is_some());
+        let mut restored = SmsTemporalMachine::restore_state(snapshot).unwrap();
+        retired(restored.resume_instruction(1).unwrap(), 0x00, 5);
+        assert_eq!(restored.now(), MachineTime::from_ticks(15));
+        assert_eq!(restored.cpu().registers.pc, 1);
+        assert!(restored.export_state().m1.is_none());
     }
 }

@@ -90,11 +90,8 @@ impl SmsTemporalM1 {
         if self.phase() == Z80M1Phase::Complete {
             return Err(SmsTemporalM1Error::CycleComplete);
         }
-        // Reject the irreversible scheduler event before it is queued if the
-        // opcode has not been sampled; the T3 completion edge cannot be retried.
-        if self.phase() == Z80M1Phase::T3 && self.opcode().is_none() {
-            return Err(SmsTemporalM1Error::Cycle(Z80M1Error::MissingOpcodeAtT3End));
-        }
+        // The machine samples memory at the dispatched T3 edge, then calls
+        // complete_tstate. Keep that sample inside the owning event loop.
         if self.pending_continuation_id.is_some() {
             return Err(SmsTemporalM1Error::EventAlreadyPending);
         }
@@ -162,8 +159,7 @@ impl SmsTemporalM1 {
             .is_some_and(|id| id >= state.next_continuation_id)
             || state.pending_continuation_id.is_some() != state.pending_deadline.is_some()
             || (state.pending_continuation_id.is_some()
-                && (state.cycle.phase == Z80M1Phase::Complete
-                    || (state.cycle.phase == Z80M1Phase::T3 && state.cycle.opcode.is_none())))
+                && state.cycle.phase == Z80M1Phase::Complete)
         {
             return Err(SmsTemporalM1Error::EventMismatch);
         }
@@ -251,22 +247,24 @@ mod tests {
     }
 
     #[test]
-    fn t3_requires_opcode_before_scheduling_irreversible_completion() {
+    fn t3_opcode_is_sampled_at_the_dispatched_completion_edge() {
         let mut timeline = SmsTemporalCoordinator::new(1).unwrap();
         let mut m1 = SmsTemporalM1::new(0, 0, 0);
         assert_eq!(tick(&mut m1, &mut timeline, false), Z80M1Phase::T2);
         assert_eq!(tick(&mut m1, &mut timeline, false), Z80M1Phase::T3);
+        m1.schedule_next_tstate(&mut timeline).unwrap();
+        let dispatch = timeline.dispatch_next().unwrap().unwrap();
+        m1.sample_opcode(0xA5).unwrap();
         assert_eq!(
-            m1.schedule_next_tstate(&mut timeline),
-            Err(SmsTemporalM1Error::Cycle(
-                sega_z80_cpu::Z80M1Error::MissingOpcodeAtT3End
-            ))
+            m1.complete_tstate(dispatch.event.payload, dispatch.event.timestamp, false)
+                .unwrap(),
+            Z80M1Phase::T4
         );
+        assert_eq!(m1.opcode(), Some(0xA5));
         assert_eq!(
             timeline.now(),
-            sega_temporal_core::MachineTime::from_ticks(2)
+            sega_temporal_core::MachineTime::from_ticks(3)
         );
-        assert_eq!(m1.phase(), Z80M1Phase::T3);
     }
 
     #[test]
