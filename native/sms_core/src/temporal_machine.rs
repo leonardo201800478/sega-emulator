@@ -2008,6 +2008,7 @@ mod base_absolute_jump_temporal_tests {
         let after_low = machine.dispatch_next().unwrap();
         assert!(matches!(after_low, Z80MicroStep::BusRequest(_)));
 
+        machine.schedule_pending_bus(0).unwrap();
         let snapshot = machine.export_state();
         let mut restored = SmsTemporalMachine::restore_state(snapshot).unwrap();
         assert_eq!(
