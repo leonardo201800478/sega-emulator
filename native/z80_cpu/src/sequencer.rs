@@ -7534,3 +7534,141 @@ mod base_16bit_register_differential_tests {
         }
     }
 }
+ 
+#[cfg(test)]
+mod base_absolute_transfer_differential_tests {
+    use super::{Z80MicroSequencer, Z80MicroStep};
+    use crate::bus::CpuBus;
+    use crate::{Z80, Z80AlternateRegisters, Z80ArchitecturalState, Z80BusOperation, Z80Registers};
+
+    #[derive(Clone)]
+    struct TestBus {
+        memory: Box<[u8; 0x1_0000]>,
+    }
+
+    impl Default for TestBus {
+        fn default() -> Self {
+            Self { memory: Box::new([0; 0x1_0000]) }
+        }
+    }
+
+    impl CpuBus for TestBus {
+        fn read_memory(&mut self, address: u16) -> u8 {
+            self.memory[usize::from(address)]
+        }
+        fn write_memory(&mut self, address: u16, value: u8) {
+            self.memory[usize::from(address)] = value;
+        }
+    }
+
+    fn initial_state() -> Z80ArchitecturalState {
+        let mut registers = Z80Registers {
+            a: 0xA5,
+            f: 0xD7,
+            pc: 0x1000,
+            sp: 0x8001,
+            ..Z80Registers::default()
+        };
+        registers.set_hl(0xBEEF);
+        Z80ArchitecturalState {
+            registers,
+            alternate: Z80AlternateRegisters::default(),
+            ix: 0x1357,
+            iy: 0x2468,
+            i: 0x81,
+            r: 0xFE,
+            iff1: true,
+            iff2: false,
+            interrupt_mode: 1,
+            wz: 0xA328,
+            ei_delay: 0,
+            nmi_pending: false,
+            int_pending: None,
+            q: 0xA5,
+            q_previous: 0x5A,
+            p: false,
+            halted: false,
+        }
+    }
+
+    fn sequencer_state(cpu: &Z80MicroSequencer) -> Z80ArchitecturalState {
+        Z80ArchitecturalState {
+            registers: cpu.registers,
+            alternate: cpu.alternate,
+            ix: cpu.ix,
+            iy: cpu.iy,
+            i: cpu.i,
+            r: cpu.refresh,
+            iff1: cpu.iff1,
+            iff2: cpu.iff2,
+            interrupt_mode: cpu.interrupt_mode,
+            wz: cpu.wz,
+            ei_delay: cpu.ei_delay,
+            nmi_pending: cpu.nmi_pending,
+            int_pending: cpu.int_pending,
+            q: cpu.q,
+            q_previous: cpu.q_previous,
+            p: cpu.p,
+            halted: cpu.halted,
+        }
+    }
+
+    fn run_sequencer(mut cpu: Z80MicroSequencer, bus: &mut TestBus) -> (Z80ArchitecturalState, u32) {
+        let mut step = cpu.begin_instruction().unwrap();
+        for _ in 0..16 {
+            step = match step {
+                Z80MicroStep::BusRequest(request) => {
+                    cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+                    let data = match request.operation {
+                        Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
+                            Some(bus.read_memory(request.address))
+                        }
+                        Z80BusOperation::MemoryWrite { value } => {
+                            bus.write_memory(request.address, value);
+                            None
+                        }
+                        operation => panic!("unexpected BASE bus operation: {operation:?}"),
+                    };
+                    cpu.complete_bus_cycle(request.id, data).unwrap()
+                }
+                Z80MicroStep::InternalCycle { .. } => {
+                    cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+                    cpu.complete_internal_cycle().unwrap()
+                }
+                Z80MicroStep::InstructionRetired { tstates, .. } => {
+                    return (sequencer_state(&cpu), tstates);
+                }
+            };
+        }
+        panic!("BASE absolute transfer did not retire");
+    }
+
+    #[test]
+    fn absolute_memory_transfers_match_atomic_executor_and_restore_every_bus_boundary() {
+        for opcode in [0x22, 0x2A, 0x32, 0x3A] {
+            let initial = initial_state();
+            let mut atomic_bus = TestBus::default();
+            atomic_bus.memory[0x1000] = opcode;
+            atomic_bus.memory[0x1001] = 0x00;
+            atomic_bus.memory[0x1002] = 0x20;
+            atomic_bus.memory[0x2000] = 0x34;
+            atomic_bus.memory[0x2001] = 0x12;
+
+            let mut atomic = Z80::default();
+            atomic.import_architectural_state(initial).unwrap();
+            let atomic_tstates = atomic.step(&mut atomic_bus).unwrap();
+
+            let mut micro_bus = atomic_bus.clone();
+            let mut micro = Z80MicroSequencer::default();
+            micro.import_architectural_state(initial).unwrap();
+            let (micro_state, micro_tstates) = run_sequencer(micro, &mut micro_bus);
+
+            assert_eq!(micro_tstates, atomic_tstates, "opcode {opcode:02X}");
+            assert_eq!(micro_state, atomic.export_architectural_state(),
+                "architectural mismatch for opcode {opcode:02X}");
+            assert_eq!(micro_bus.memory, atomic_bus.memory,
+                "memory mismatch for opcode {opcode:02X}");
+            assert_eq!(atomic_tstates, if matches!(opcode, 0x22 | 0x2A) { 16 } else { 13 });
+        }
+    }
+}
