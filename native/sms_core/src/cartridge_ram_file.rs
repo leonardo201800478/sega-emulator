@@ -92,18 +92,15 @@ impl SmsCartridgeRamFile {
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(error) => return Err(error.into()),
         };
-        if file.metadata()?.len() != (HEADER_SIZE + expected_size) as u64 {
-            return Err(SmsCartridgeRamFileError::InvalidFile);
-        }
-        let mut bytes = Vec::with_capacity(HEADER_SIZE + expected_size);
-        file.read_to_end(&mut bytes)?;
-        if bytes.len() < HEADER_SIZE || &bytes[..8] != MAGIC {
+        let mut header = [0_u8; HEADER_SIZE];
+        if file.read_exact(&mut header).is_err() || &header[..8] != MAGIC {
             return Err(SmsCartridgeRamFileError::InvalidFile);
         }
 
-        let version = u16::from_le_bytes([bytes[8], bytes[9]]);
-        let stored_size = u32::from_le_bytes([bytes[10], bytes[11], bytes[12], bytes[13]]) as usize;
-        let stored_checksum = u32::from_le_bytes([bytes[14], bytes[15], bytes[16], bytes[17]]);
+        let version = u16::from_le_bytes([header[8], header[9]]);
+        let stored_size =
+            u32::from_le_bytes([header[10], header[11], header[12], header[13]]) as usize;
+        let stored_checksum = u32::from_le_bytes([header[14], header[15], header[16], header[17]]);
         if version != FORMAT_VERSION || !SUPPORTED_SIZES.contains(&stored_size) {
             return Err(SmsCartridgeRamFileError::InvalidFile);
         }
@@ -113,14 +110,18 @@ impl SmsCartridgeRamFile {
                 actual: stored_size,
             });
         }
-        let payload = &bytes[HEADER_SIZE..];
-        if payload.len() != stored_size {
+        if file.metadata()?.len() != (HEADER_SIZE + stored_size) as u64 {
             return Err(SmsCartridgeRamFileError::InvalidFile);
         }
-        if crc32(payload) != stored_checksum {
+
+        let mut payload = vec![0; stored_size];
+        if file.read_exact(&mut payload).is_err() {
+            return Err(SmsCartridgeRamFileError::InvalidFile);
+        }
+        if crc32(&payload) != stored_checksum {
             return Err(SmsCartridgeRamFileError::ChecksumMismatch);
         }
-        Ok(Some(payload.to_vec()))
+        Ok(Some(payload))
     }
 
     /// Load a save or return a zero-initialized SRAM image on first launch.
