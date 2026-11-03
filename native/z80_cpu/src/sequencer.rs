@@ -9987,3 +9987,130 @@ mod base_exchange_stack_differential_tests {
         compare_exchange(0xFFFF);
     }
 }
+
+
+#[cfg(test)]
+mod base_immediate_io_differential_tests {
+    use crate::bus::CpuBus;
+    use crate::{
+        Z80, Z80ArchitecturalState, Z80BusOperation, Z80MicroSequencer, Z80MicroStep,
+    };
+
+    #[derive(Clone)]
+    struct TestBus {
+        memory: Box<[u8; 0x1_0000]>,
+        ports: Box<[u8; 0x100]>,
+        port_writes: Vec<(u16, u8)>,
+    }
+
+    impl Default for TestBus {
+        fn default() -> Self {
+            Self {
+                memory: Box::new([0; 0x1_0000]),
+                ports: Box::new([0; 0x100]),
+                port_writes: Vec::new(),
+            }
+        }
+    }
+
+    impl CpuBus for TestBus {
+        fn read_memory(&mut self, address: u16) -> u8 {
+            self.memory[usize::from(address)]
+        }
+
+        fn write_memory(&mut self, address: u16, value: u8) {
+            self.memory[usize::from(address)] = value;
+        }
+
+        fn read_port(&mut self, port: u16) -> u8 {
+            self.ports[usize::from(port as u8)]
+        }
+
+        fn write_port(&mut self, port: u16, value: u8) {
+            self.ports[usize::from(port as u8)] = value;
+            self.port_writes.push((port, value));
+        }
+    }
+
+    fn run_sequencer(
+        mut cpu: Z80MicroSequencer,
+        bus: &mut TestBus,
+    ) -> (Z80ArchitecturalState, u32) {
+        let mut step = cpu.begin_instruction().unwrap();
+        for _ in 0..12 {
+            step = match step {
+                Z80MicroStep::BusRequest(request) => {
+                    cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+                    let data = match request.operation {
+                        Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
+                            Some(bus.read_memory(request.address))
+                        }
+                        Z80BusOperation::MemoryWrite { value } => {
+                            bus.write_memory(request.address, value);
+                            None
+                        }
+                        Z80BusOperation::PortRead => Some(bus.read_port(request.address)),
+                        Z80BusOperation::PortWrite { value } => {
+                            bus.write_port(request.address, value);
+                            None
+                        }
+                    };
+                    cpu.complete_bus_cycle(request.id, data).unwrap()
+                }
+                Z80MicroStep::InternalCycle { .. } => {
+                    cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+                    cpu.complete_internal_cycle().unwrap()
+                }
+                Z80MicroStep::InstructionRetired { tstates, .. } => {
+                    return (cpu.export_architectural_state(), tstates);
+                }
+            };
+        }
+        panic!("immediate I/O instruction did not retire within 12 micro-operations");
+    }
+
+    fn compare_io(opcode: u8, accumulator: u8, port_low: u8, port_value: u8) {
+        let mut initial = Z80::default().export_architectural_state();
+        initial.registers.pc = 0x1000;
+        initial.registers.a = accumulator;
+        initial.registers.f = 0xD7;
+        initial.ei_delay = 1;
+
+        let mut atomic_bus = TestBus::default();
+        atomic_bus.memory[0x1000] = opcode;
+        atomic_bus.memory[0x1001] = port_low;
+        atomic_bus.ports[usize::from(port_low)] = port_value;
+        let mut micro_bus = atomic_bus.clone();
+
+        let mut atomic = Z80::default();
+        atomic.import_architectural_state(initial).unwrap();
+        let atomic_tstates = atomic.step(&mut atomic_bus).unwrap();
+
+        let mut micro = Z80MicroSequencer::default();
+        micro.import_architectural_state(initial).unwrap();
+        let (micro_state, micro_tstates) = run_sequencer(micro, &mut micro_bus);
+
+        let port_address = (u16::from(accumulator) << 8) | u16::from(port_low);
+        assert_eq!(micro_tstates, 11);
+        assert_eq!(micro_tstates, atomic_tstates);
+        assert_eq!(
+            micro_state.registers.a,
+            if opcode == 0xDB { port_value } else { accumulator }
+        );
+        if opcode == 0xD3 {
+            assert_eq!(micro_bus.port_writes, vec![(port_address, accumulator)]);
+        } else {
+            assert!(micro_bus.port_writes.is_empty());
+        }
+        assert_eq!(micro_state, atomic.export_architectural_state());
+        assert_eq!(micro_bus.memory, atomic_bus.memory);
+        assert_eq!(micro_bus.ports, atomic_bus.ports);
+        assert_eq!(micro_bus.port_writes, atomic_bus.port_writes);
+    }
+
+    #[test]
+    fn in_a_n_and_out_n_a_match_atomic_executor() {
+        compare_io(0xDB, 0x12, 0xDC, 0xFE);
+        compare_io(0xD3, 0x5A, 0x3F, 0x00);
+    }
+}
