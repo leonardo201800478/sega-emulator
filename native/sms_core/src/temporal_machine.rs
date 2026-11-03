@@ -2302,3 +2302,85 @@ mod base_return_temporal_tests {
         assert_eq!(restored.now(), MachineTime::from_ticks(33));
     }
 }
+
+#[cfg(test)]
+mod base_exchange_interrupt_control_temporal_tests {
+    use super::SmsTemporalMachine;
+    use sega_temporal_core::MachineTime;
+    use sega_z80_cpu::Z80MicroStep;
+
+    #[test]
+    fn exchange_and_interrupt_control_advance_four_scheduler_tstates() {
+        let mut ex_af = SmsTemporalMachine::new(vec![0x08], 3).unwrap();
+        ex_af.cpu_mut().registers.a = 0x12;
+        ex_af.cpu_mut().registers.f = 0xA5;
+        ex_af.cpu_mut().alternate.a = 0x34;
+        ex_af.cpu_mut().alternate.f = 0x56;
+        assert_eq!(
+            ex_af.step_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x08,
+                tstates: 4,
+            }
+        );
+        assert_eq!(ex_af.cpu().registers.a, 0x34);
+        assert_eq!(ex_af.cpu().registers.f, 0x56);
+        assert_eq!(ex_af.now(), MachineTime::from_ticks(12));
+
+        let mut exx = SmsTemporalMachine::new(vec![0xD9], 3).unwrap();
+        exx.cpu_mut().registers.set_bc(0x1234);
+        exx.cpu_mut().registers.set_de(0x5678);
+        exx.cpu_mut().registers.set_hl(0x9ABC);
+        exx.cpu_mut().alternate.b = 0xAB;
+        exx.cpu_mut().alternate.c = 0xCD;
+        exx.cpu_mut().alternate.d = 0xEF;
+        exx.cpu_mut().alternate.e = 0x01;
+        exx.cpu_mut().alternate.h = 0x23;
+        exx.cpu_mut().alternate.l = 0x45;
+        assert_eq!(
+            exx.step_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xD9,
+                tstates: 4,
+            }
+        );
+        assert_eq!(exx.cpu().registers.bc(), 0xABCD);
+        assert_eq!(exx.cpu().registers.de(), 0xEF01);
+        assert_eq!(exx.cpu().registers.hl(), 0x2345);
+        assert_eq!(exx.now(), MachineTime::from_ticks(12));
+
+        let mut di = SmsTemporalMachine::new(vec![0xF3], 3).unwrap();
+        assert_eq!(
+            di.step_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xF3,
+                tstates: 4,
+            }
+        );
+        assert!(!di.cpu().iff1);
+        assert!(!di.cpu().iff2);
+        assert_eq!(di.cpu().ei_delay, 0);
+        assert_eq!(di.now(), MachineTime::from_ticks(12));
+
+        let mut ei = SmsTemporalMachine::new(vec![0xFB, 0x00], 3).unwrap();
+        assert_eq!(
+            ei.step_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xFB,
+                tstates: 4,
+            }
+        );
+        assert!(ei.cpu().iff1);
+        assert!(ei.cpu().iff2);
+        assert_eq!(ei.cpu().ei_delay, 1);
+        assert_eq!(
+            ei.step_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x00,
+                tstates: 4,
+            }
+        );
+        assert_eq!(ei.cpu().ei_delay, 0);
+        assert_eq!(ei.now(), MachineTime::from_ticks(24));
+    }
+}
