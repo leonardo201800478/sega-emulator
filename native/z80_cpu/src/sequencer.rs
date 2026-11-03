@@ -78,6 +78,9 @@ pub enum Z80MicroSequencerPhase {
         address: u16,
         value: u8,
     },
+    EdRegisterInternal {
+        opcode: u8,
+    },
     MemoryIncDecInternal {
         decrement: bool,
         old: u8,
@@ -444,6 +447,14 @@ impl Z80MicroSequencer {
                     && address == state.registers.hl()
                     && state.instruction_tstates >= 12
             }
+            Z80MicroSequencerPhase::EdRegisterInternal { opcode } => {
+                matches!(opcode, 0x47 | 0x4F | 0x57 | 0x5F)
+                    && state.opcode == Some(opcode)
+                    && pending.is_none()
+                    && state.mcycle_index == 1
+                    && state.tstate_index >= 4
+                    && state.instruction_tstates >= 4 + u32::from(state.tstate_index)
+            }
             Z80MicroSequencerPhase::MemoryReadIncDec { decrement, address } => {
                 let expected_opcode = if decrement { 0x35 } else { 0x34 };
                 pending.is_some_and(|request| {
@@ -518,6 +529,11 @@ impl Z80MicroSequencer {
             }
             Z80MicroSequencerPhase::CbMemoryWrite { .. } => {
                 state.mcycle_index == 3 && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::EdRegisterInternal { .. } => {
+                state.mcycle_index == 1
+                    && state.tstate_index >= 4
+                    && state.instruction_tstates >= 4 + u32::from(state.tstate_index)
             }
             Z80MicroSequencerPhase::ImmediateReadRegisterPairHigh { .. } => {
                 state.mcycle_index == 2 && state.tstate_index == 0
@@ -678,6 +694,9 @@ impl Z80MicroSequencer {
                     return Ok(Z80MicroStep::BusRequest(request));
                 }
                 self.opcode = Some(opcode);
+                if previous_prefix == Some(0xED) {
+                    return self.execute_ed_register_control(opcode, waits);
+                }
                 if previous_prefix == Some(0xCB) {
                     if opcode & 0x07 == 0x06 {
                         return self.issue_read(
@@ -917,6 +936,10 @@ impl Z80MicroSequencer {
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 self.retire(opcode)
             }
+            Z80MicroSequencerPhase::EdRegisterInternal { opcode } => {
+                self.execute_ed_register_internal(opcode);
+                self.retire(opcode)
+            }
             Z80MicroSequencerPhase::MemoryReadIncDec { decrement, address } => {
                 let old = response
                     .data
@@ -983,6 +1006,11 @@ impl Z80MicroSequencer {
                     next.retire(opcode)?
                 }
             }
+            Z80MicroSequencerPhase::EdRegisterInternal { opcode } => {
+                next.instruction_tstates = next_instruction_tstates;
+                next.execute_ed_register_internal(opcode);
+                next.retire(opcode)?
+            }
             _ => return Err(Z80MicroSequencerError::UnexpectedCompletion),
         };
         *self = next;
@@ -1021,6 +1049,68 @@ impl Z80MicroSequencer {
         self.mcycle_index = 0;
         self.tstate_index = 0;
         Err(Z80MicroSequencerError::UnsupportedOpcode { opcode, address })
+    }
+
+    /// Execute the ED register/control subset that retires after two M1 fetches.
+    /// The four LD I/R variants expose the documented fifth T-state of M2.
+    fn execute_ed_register_control(
+        &mut self,
+        opcode: u8,
+        waits: u32,
+    ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
+        match opcode {
+            op if op & 0xC7 == 0x44 => {
+                let result = sub8(0, self.registers.a);
+                self.registers.a = result.value;
+                self.set_flags(result.flags);
+                self.retire(opcode)
+            }
+            0x46 | 0x4E | 0x66 | 0x6E => {
+                self.interrupt_mode = 0;
+                self.retire(opcode)
+            }
+            0x56 | 0x76 => {
+                self.interrupt_mode = 1;
+                self.retire(opcode)
+            }
+            0x5E | 0x7E => {
+                self.interrupt_mode = 2;
+                self.retire(opcode)
+            }
+            0x47 | 0x4F | 0x57 | 0x5F => {
+                let wait_offset = u16::try_from(waits)
+                    .ok()
+                    .and_then(|waits| 4_u16.checked_add(waits))
+                    .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                self.tstate_index = wait_offset;
+                self.phase = Z80MicroSequencerPhase::EdRegisterInternal { opcode };
+                Ok(Z80MicroStep::InternalCycle { tstates: 1 })
+            }
+            _ => self.unsupported(opcode),
+        }
+    }
+
+    /// Commit the semantic effect at the final T-state of an ED register load.
+    fn execute_ed_register_internal(&mut self, opcode: u8) {
+        match opcode {
+            0x47 => self.i = self.registers.a,
+            0x4F => self.refresh = self.registers.a,
+            0x57 | 0x5F => {
+                let value = if opcode == 0x57 { self.i } else { self.refresh };
+                self.registers.a = value;
+                let mut flags =
+                    (self.registers.f & FLAG_C) | (value & (FLAG_S | FLAG_XY));
+                if value == 0 {
+                    flags |= FLAG_Z;
+                }
+                if self.iff2 {
+                    flags |= FLAG_PV;
+                }
+                self.set_flags(flags);
+                self.p = true;
+            }
+            _ => unreachable!("ED register-load opcode validation"),
+        }
     }
 
     /// Execute a CB-prefixed operation whose operand is a CPU register.
