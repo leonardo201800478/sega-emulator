@@ -682,8 +682,10 @@ mod tests {
     }
 
     fn execute_alu_opcode(opcode: u8, registers: Z80Registers) -> Z80MicroSequencer {
-        let mut cpu = Z80MicroSequencer::default();
-        cpu.registers = registers;
+        let mut cpu = Z80MicroSequencer {
+            registers,
+            ..Z80MicroSequencer::default()
+        };
         let fetch = request(cpu.begin_instruction().unwrap());
         retired(
             cpu.complete_bus_cycle(fetch.id, Some(opcode)).unwrap(),
