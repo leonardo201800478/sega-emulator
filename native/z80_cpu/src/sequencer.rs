@@ -213,8 +213,7 @@ impl Z80MicroSequencer {
             }
             Z80MicroSequencerPhase::ImmediateReadRegisterPairHigh { pair, .. } => {
                 let opcode_matches = state.opcode.is_some_and(|opcode| {
-                    matches!(opcode, 0x01 | 0x11 | 0x21 | 0x31)
-                        && pair == ((opcode >> 4) & 0x03)
+                    matches!(opcode, 0x01 | 0x11 | 0x21 | 0x31) && pair == ((opcode >> 4) & 0x03)
                 });
                 opcode_matches
                     && pending.is_some_and(|request| {
