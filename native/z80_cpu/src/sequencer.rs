@@ -244,7 +244,9 @@ impl Z80MicroSequencer {
         &mut self,
         state: Z80ArchitecturalState,
     ) -> Result<(), Z80MicroSequencerError> {
-        state.validate().map_err(|_| Z80MicroSequencerError::InvalidState)?;
+        state
+            .validate()
+            .map_err(|_| Z80MicroSequencerError::InvalidState)?;
         if self.phase != Z80MicroSequencerPhase::Ready || self.handshake.is_pending() {
             return Err(Z80MicroSequencerError::InstructionAlreadyActive);
         }
@@ -2347,7 +2349,6 @@ mod tests {
     }
 }
 
-
 #[cfg(test)]
 mod architectural_state_tests {
     use super::Z80MicroSequencer;
@@ -2356,12 +2357,43 @@ mod architectural_state_tests {
     #[test]
     fn sequencer_import_export_preserves_the_shared_architectural_dto() {
         let state = Z80ArchitecturalState {
-            registers: Z80Registers { a: 0x12, f: 0xA5, b: 0x34, c: 0x56, d: 0x78, e: 0x9A, h: 0xBC, l: 0xDE, sp: 0xF012, pc: 0x3456 },
-            alternate: Z80AlternateRegisters { a: 0x21, f: 0x5A, b: 0x43, c: 0x65, d: 0x87, e: 0xA9, h: 0xCB, l: 0xED },
-            ix: 0x1357, iy: 0x2468, i: 0x81, r: 0xFE,
-            iff1: true, iff2: false, interrupt_mode: 2, wz: 0xABCD,
-            ei_delay: 1, nmi_pending: true, int_pending: Some(0xCF),
-            q: 0x28, q_previous: 0xD7, p: true, halted: true,
+            registers: Z80Registers {
+                a: 0x12,
+                f: 0xA5,
+                b: 0x34,
+                c: 0x56,
+                d: 0x78,
+                e: 0x9A,
+                h: 0xBC,
+                l: 0xDE,
+                sp: 0xF012,
+                pc: 0x3456,
+            },
+            alternate: Z80AlternateRegisters {
+                a: 0x21,
+                f: 0x5A,
+                b: 0x43,
+                c: 0x65,
+                d: 0x87,
+                e: 0xA9,
+                h: 0xCB,
+                l: 0xED,
+            },
+            ix: 0x1357,
+            iy: 0x2468,
+            i: 0x81,
+            r: 0xFE,
+            iff1: true,
+            iff2: false,
+            interrupt_mode: 2,
+            wz: 0xABCD,
+            ei_delay: 1,
+            nmi_pending: true,
+            int_pending: Some(0xCF),
+            q: 0x28,
+            q_previous: 0xD7,
+            p: true,
+            halted: true,
         };
         let mut cpu = Z80MicroSequencer::default();
         cpu.import_architectural_state(state).unwrap();
