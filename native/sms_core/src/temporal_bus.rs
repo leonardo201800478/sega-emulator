@@ -673,6 +673,29 @@ mod tests {
     }
 
     #[test]
+    fn cartridge_sram_write_is_applied_at_the_mapper_bus_deadline_and_survives_restore() {
+        let mut bus = SmsTemporalBus::new_with_cartridge_ram(
+            patterned_rom(4),
+            Some(vec![0; 0x2000]),
+            3,
+        )
+        .unwrap();
+        let mapper_enable = request(31, Z80BusOperation::MemoryWrite { value: 0x08 }, 0xFFFC, 3);
+        bus.begin_request(mapper_enable, 0).unwrap();
+        bus.dispatch_next().unwrap().unwrap();
+        bus.acknowledge_completion(31).unwrap();
+
+        let ram_write = request(32, Z80BusOperation::MemoryWrite { value: 0xA6 }, 0x8000, 3);
+        bus.begin_request(ram_write, 0).unwrap();
+        assert_eq!(bus.memory().read(0x8000), 2, "ROM remains visible before dispatch");
+        let completion = bus.dispatch_next().unwrap().unwrap();
+        let restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
+        assert_eq!(restored.memory().read(0x8000), 0xA6);
+        assert_eq!(restored.dispatch_next().unwrap(), Some(completion));
+        restored.acknowledge_completion(32).unwrap();
+    }
+
+    #[test]
     fn restore_rejects_bus_deadlines_shorter_than_nominal_cycle() {
         let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
         let request = request(1, Z80BusOperation::OpcodeFetch, 0, 4);
