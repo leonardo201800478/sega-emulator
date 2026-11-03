@@ -20,7 +20,13 @@ class SMSMachine:
     cpu_core = "rust"
 
     def __init__(
-        self, cartridge_rom: bytes, *, region: str = "usa", bios: bytes | None = None
+        self,
+        cartridge_rom: bytes,
+        *,
+        region: str = "usa",
+        bios: bytes | None = None,
+        cartridge_ram_size: int | None = None,
+        sram_path: str | Path | None = None,
     ) -> None:
         if not isinstance(cartridge_rom, bytes):
             raise TypeError("cartridge_rom deve ser bytes.")
@@ -30,6 +36,20 @@ class SMSMachine:
             raise ValueError("A BIOS SMS deve conter exatamente 8192 bytes.")
         if region not in {"usa", "brazil", "europe", "japan"}:
             raise ValueError("region deve ser usa, brazil, europe ou japan.")
+        if cartridge_ram_size is not None and (
+            type(cartridge_ram_size) is not int
+            or cartridge_ram_size not in {0x2000, 0x4000, 0x8000}
+        ):
+            raise ValueError(
+                "cartridge_ram_size deve ser 8192, 16384 ou 32768 bytes."
+            )
+        if (cartridge_ram_size is None) != (sram_path is None):
+            raise ValueError(
+                "cartridge_ram_size e sram_path devem ser informados juntos."
+            )
+        resolved_sram_path = (
+            str(Path(sram_path).expanduser()) if sram_path is not None else None
+        )
 
         try:
             from sega_z80_core import NativeSMSMachine
@@ -43,7 +63,15 @@ class SMSMachine:
         self.cartridge_rom = cartridge_rom
         self.region = region
         self.bios = bios
-        self.native_machine = NativeSMSMachine(cartridge_rom, region=region, bios=bios)
+        self.sram_path = Path(resolved_sram_path) if resolved_sram_path else None
+        self.cartridge_ram_size = cartridge_ram_size
+        self.native_machine = NativeSMSMachine(
+            cartridge_rom,
+            region=region,
+            bios=bios,
+            cartridge_ram_size=cartridge_ram_size,
+            sram_path=resolved_sram_path,
+        )
 
     @property
     def cpu(self):
@@ -125,6 +153,10 @@ class SMSMachine:
     def close_audio_output(self) -> None:
         """Stop and release the native Rust audio session."""
         self.native_machine.close_audio_output()
+
+    def save_cartridge_ram(self) -> bool:
+        """Persist configured cartridge SRAM; return False when SRAM is disabled."""
+        return bool(self.native_machine.save_cartridge_ram())
 
     @property
     def audio_output_error(self) -> str | None:
