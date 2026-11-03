@@ -284,6 +284,11 @@ impl SmsTemporalBus {
                 self.internal_completion = Some(completion);
                 Ok(Some(SmsTemporalDispatch::InternalCycleComplete(completion)))
             }
+            // M1 phase events are consumed by the explicit M1 adapter, not
+            // by the memory transaction layer.
+            SmsTemporalEvent::M1TStateComplete { .. } => {
+                Err(SmsTemporalBusError::UnsupportedOperation)
+            }
         }
     }
 
