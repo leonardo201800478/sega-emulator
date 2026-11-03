@@ -722,14 +722,13 @@ impl Z80MicroSequencer {
             }
             Z80MicroSequencerPhase::IndexDisplacementInternal { .. } => {
                 matches!(state.prefix_state, Z80PrefixState::Index(_))
-                    && state.opcode.is_some_and(|opcode| {
-                        is_indexed_load_opcode(opcode) && opcode != 0x36
-                    })
+                    && state
+                        .opcode
+                        .is_some_and(|opcode| is_indexed_load_opcode(opcode) && opcode != 0x36)
             }
             Z80MicroSequencerPhase::IndexedImmediateReadMemoryWrite { .. }
             | Z80MicroSequencerPhase::IndexedImmediateStoreInternal { .. } => {
-                matches!(state.prefix_state, Z80PrefixState::Index(_))
-                    && state.opcode == Some(0x36)
+                matches!(state.prefix_state, Z80PrefixState::Index(_)) && state.opcode == Some(0x36)
             }
             Z80MicroSequencerPhase::MemoryReadRegister { destination } => {
                 match state.prefix_state {
