@@ -4439,6 +4439,7 @@ mod indirect_bc_de_differential_tests {
 
     struct RepeatFlagsVector {
         opcode: u8,
+        c: u8,
         hl: u16,
         port: u16,
         input: bool,
@@ -6966,6 +6967,7 @@ mod ed_block_io_differential_tests {
         let cases = [
             RepeatFlagsVector {
                 opcode: 0xB2,
+                c: 0x01,
                 hl: 0x4000,
                 port: 0x1101,
                 input: true,
@@ -6974,6 +6976,7 @@ mod ed_block_io_differential_tests {
             },
             RepeatFlagsVector {
                 opcode: 0xB3,
+                c: 0x01,
                 hl: 0x40FE,
                 port: 0x1001,
                 input: false,
@@ -6982,6 +6985,7 @@ mod ed_block_io_differential_tests {
             },
             RepeatFlagsVector {
                 opcode: 0xBA,
+                c: 0x02,
                 hl: 0x4000,
                 port: 0x1102,
                 input: true,
@@ -6990,6 +6994,7 @@ mod ed_block_io_differential_tests {
             },
             RepeatFlagsVector {
                 opcode: 0xBB,
+                c: 0x02,
                 hl: 0x4101,
                 port: 0x1002,
                 input: false,
@@ -7000,6 +7005,7 @@ mod ed_block_io_differential_tests {
 
         for RepeatFlagsVector {
             opcode,
+            c,
             hl,
             port,
             input,
@@ -7009,7 +7015,7 @@ mod ed_block_io_differential_tests {
             let state = state_with_registers(
                 Z80Registers {
                     b: 0x11,
-                    c: 0x01,
+                    c,
                     h: (hl >> 8) as u8,
                     l: hl as u8,
                     pc: 0x2000,
