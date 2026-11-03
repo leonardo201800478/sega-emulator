@@ -1107,17 +1107,34 @@ mod tests {
 
     #[test]
     fn pending_dd_fd_index_immediate_phases_round_trip_through_snapshot_codec() {
-        for (prefix, expected_index) in [(0xDD, 0x1234), (0xFD, 0x5678)] {
+        for (prefixes, expected_index) in [
+            (&[0xDD][..], 0x1234),
+            (&[0xFD][..], 0x5678),
+            (&[0xDD, 0xFD][..], 0x9ABC),
+            (&[0xFD, 0xDD][..], 0xDEF0),
+        ] {
             let mut cpu = Z80MicroSequencer::default();
-            let first = match cpu.begin_instruction().unwrap() {
-                crate::Z80MicroStep::BusRequest(request) => request,
-                other => panic!("expected index prefix fetch, got {other:?}"),
+            let mut next = match cpu.begin_instruction().unwrap() {
+                crate::Z80MicroStep::BusRequest(request) => {
+                    cpu.complete_bus_cycle(request.id, Some(prefixes[0])).unwrap()
+                }
+                other => panic!("expected initial M1 request, got {other:?}"),
             };
-            let second = match cpu.complete_bus_cycle(first.id, Some(prefix)).unwrap() {
+
+            for prefix in prefixes.iter().copied().skip(1) {
+                let request = match next {
+                    crate::Z80MicroStep::BusRequest(request) => request,
+                    other => panic!("expected repeated prefix M1 request, got {other:?}"),
+                };
+                next = cpu.complete_bus_cycle(request.id, Some(prefix)).unwrap();
+                cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+            }
+
+            let opcode_fetch = match next {
                 crate::Z80MicroStep::BusRequest(request) => request,
-                other => panic!("expected index opcode fetch, got {other:?}"),
+                other => panic!("expected opcode M1 request, got {other:?}"),
             };
-            let low = match cpu.complete_bus_cycle(second.id, Some(0x21)).unwrap() {
+            let low_read = match cpu.complete_bus_cycle(opcode_fetch.id, Some(0x21)).unwrap() {
                 crate::Z80MicroStep::BusRequest(request) => request,
                 other => panic!("expected low-byte read, got {other:?}"),
             };
@@ -1125,10 +1142,10 @@ mod tests {
             let low_decoded = Z80MicroSequencerState::decode(&low_state.encode().unwrap()).unwrap();
             let mut restored = Z80MicroSequencer::restore_state(low_decoded).unwrap();
             assert_eq!(restored.export_state(), low_state);
-            assert_eq!(restored.pending_request(), Some(low));
+            assert_eq!(restored.pending_request(), Some(low_read));
 
-            let high = match restored
-                .complete_bus_cycle(low.id, Some(expected_index as u8))
+            let high_read = match restored
+                .complete_bus_cycle(low_read.id, Some(expected_index as u8))
                 .unwrap()
             {
                 crate::Z80MicroStep::BusRequest(request) => request,
@@ -1139,22 +1156,21 @@ mod tests {
                 Z80MicroSequencerState::decode(&high_state.encode().unwrap()).unwrap();
             let mut restored = Z80MicroSequencer::restore_state(high_decoded).unwrap();
             assert_eq!(restored.export_state(), high_state);
-            assert_eq!(restored.pending_request(), Some(high));
+            assert_eq!(restored.pending_request(), Some(high_read));
+
+            let expected_tstates = 14 + 4 * u32::from(prefixes.len() == 2);
             assert_eq!(
                 restored
-                    .complete_bus_cycle(high.id, Some((expected_index >> 8) as u8))
+                    .complete_bus_cycle(high_read.id, Some((expected_index >> 8) as u8))
                     .unwrap(),
                 crate::Z80MicroStep::InstructionRetired {
                     opcode: 0x21,
-                    tstates: 14,
+                    tstates: expected_tstates,
                 }
             );
+            let selected = prefixes[prefixes.len() - 1];
             assert_eq!(
-                if prefix == 0xDD {
-                    restored.ix
-                } else {
-                    restored.iy
-                },
+                if selected == 0xDD { restored.ix } else { restored.iy },
                 expected_index
             );
         }
