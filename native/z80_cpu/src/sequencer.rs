@@ -1,9 +1,10 @@
 //! First resumable instruction slice for the shared Z80.
 //!
 //! This deliberately small sequencer proves real suspend/resume semantics for
-//! NOP, LD A,n, LD A,(HL), LD (HL),A, and register-to-register LD. It is independent of the legacy
-//! atomic executor; it does not yet cover interrupts, prefixes, HALT, refresh
-//! pin phases, or the full architectural state.
+//! NOP, selected BASE operations, and the initial prefix-fetch pipeline. It is
+//! independent of the legacy atomic executor; full prefixed instruction
+//! semantics, interrupts, HALT, and the complete architectural state remain
+//! outside this sequencer slice.
 
 use crate::alu::{adc8, add8, and8, cp8, cpl8, daa8, or8, rotate_accumulator, sbc8, sub8, xor8};
 use crate::{
@@ -289,13 +290,21 @@ impl Z80MicroSequencer {
                     && state.mcycle_index == 0
                     && state.tstate_index == 0
             }
-            Z80MicroSequencerPhase::OpcodeFetch => pending.is_some_and(|request| {
-                request.operation == Z80BusOperation::OpcodeFetch
-                    && request.address == state.registers.pc
-                    && request.base_tstates == 4
-                    && state.opcode.is_none()
-                    && state.instruction_tstates == 0
-            }),
+            Z80MicroSequencerPhase::OpcodeFetch => {
+                let prefix_state_valid = match state.opcode {
+                    None => state.mcycle_index == 0 && state.instruction_tstates == 0,
+                    Some(0xCB | 0xED | 0xDD | 0xFD) => {
+                        state.mcycle_index >= 1 && state.instruction_tstates >= 4
+                    }
+                    Some(_) => false,
+                };
+                prefix_state_valid
+                    && pending.is_some_and(|request| {
+                        request.operation == Z80BusOperation::OpcodeFetch
+                            && request.address == state.registers.pc
+                            && request.base_tstates == 4
+                    })
+            }
             Z80MicroSequencerPhase::ImmediateReadRegister { destination } => {
                 let opcode_matches = state.opcode.is_some_and(|opcode| {
                     matches!(opcode, 0x06 | 0x0E | 0x16 | 0x1E | 0x26 | 0x2E | 0x3E)
@@ -434,8 +443,18 @@ impl Z80MicroSequencer {
             }
         };
         let indices_valid = match state.phase {
-            Z80MicroSequencerPhase::Ready | Z80MicroSequencerPhase::OpcodeFetch => {
+            Z80MicroSequencerPhase::Ready => {
                 state.mcycle_index == 0 && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::OpcodeFetch => {
+                state.tstate_index == 0
+                    && match state.opcode {
+                        None => state.mcycle_index == 0 && state.instruction_tstates == 0,
+                        Some(0xCB | 0xED | 0xDD | 0xFD) => {
+                            state.mcycle_index >= 1 && state.instruction_tstates >= 4
+                        }
+                        Some(_) => false,
+                    }
             }
             Z80MicroSequencerPhase::ImmediateReadRegister { .. }
             | Z80MicroSequencerPhase::ImmediateReadRegisterPairLow { .. }
@@ -590,7 +609,26 @@ impl Z80MicroSequencer {
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 self.registers.pc = self.registers.pc.wrapping_add(1);
                 self.refresh = (self.refresh & 0x80) | (self.refresh.wrapping_add(1) & 0x7F);
+                let previous_prefix = self.opcode;
+                if Self::is_prefix_fetch(previous_prefix, opcode) {
+                    self.opcode = Some(opcode);
+                    let next_mcycle_index = self
+                        .mcycle_index
+                        .checked_add(1)
+                        .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                    let request = self.handshake.begin(
+                        Z80BusOperation::OpcodeFetch,
+                        self.registers.pc,
+                        4,
+                    )?;
+                    self.mcycle_index = next_mcycle_index;
+                    self.tstate_index = 0;
+                    return Ok(Z80MicroStep::BusRequest(request));
+                }
                 self.opcode = Some(opcode);
+                if previous_prefix.is_some() {
+                    return self.unsupported(opcode);
+                }
                 match opcode {
                     0x00 => self.retire(opcode),
                     0x07 | 0x0F | 0x17 | 0x1F | 0x27 | 0x2F => {
@@ -857,6 +895,20 @@ impl Z80MicroSequencer {
     /// Whether an instruction is currently suspended or in progress.
     pub fn instruction_active(&self) -> bool {
         self.phase != Z80MicroSequencerPhase::Ready
+    }
+
+    /// Return true when the byte just fetched is another M1 prefix byte.
+    ///
+    /// DD/FD prefixes may be repeated (the last one wins); ED supersedes an
+    /// index prefix. DD/FD CB is intentionally stopped here until its
+    /// displacement/non-M1 opcode sequence is implemented.
+    fn is_prefix_fetch(previous: Option<u8>, opcode: u8) -> bool {
+        match previous {
+            None => matches!(opcode, 0xCB | 0xED | 0xDD | 0xFD),
+            Some(0xDD | 0xFD) => matches!(opcode, 0xDD | 0xFD | 0xED),
+            Some(0xCB | 0xED) => false,
+            Some(_) => false,
+        }
     }
 
     fn unsupported(&mut self, opcode: u8) -> Result<Z80MicroStep, Z80MicroSequencerError> {
@@ -1242,6 +1294,68 @@ mod tests {
         assert_eq!(cpu.registers.a, 0x42);
         assert!(!cpu.instruction_active());
         assert_eq!(cpu.pending_request(), None);
+    }
+
+    #[test]
+    fn cb_ed_and_index_prefixes_issue_a_second_m1_fetch() {
+        for prefix in [0xCB, 0xED, 0xDD, 0xFD] {
+            let mut cpu = Z80MicroSequencer::default();
+            let first = request(cpu.begin_instruction().unwrap());
+            let second = request(cpu.complete_bus_cycle(first.id, Some(prefix)).unwrap());
+            assert_eq!(second.operation, Z80BusOperation::OpcodeFetch);
+            assert_eq!(second.address, 1);
+            assert_eq!(second.base_tstates, 4);
+            let state = cpu.export_state();
+            assert_eq!(state.opcode, Some(prefix));
+            assert_eq!(state.mcycle_index, 1);
+            assert_eq!(state.instruction_tstates, 4);
+            assert_eq!(cpu.registers.pc, 1);
+            assert_eq!(cpu.refresh, 1);
+            assert_eq!(Z80MicroSequencer::restore_state(state).unwrap().pending_request(), Some(second));
+        }
+    }
+
+    #[test]
+    fn repeated_index_prefixes_count_each_m1_and_last_prefix_is_retained() {
+        let mut cpu = Z80MicroSequencer::default();
+        let first = request(cpu.begin_instruction().unwrap());
+        let second = request(cpu.complete_bus_cycle(first.id, Some(0xDD)).unwrap());
+        let third = request(cpu.complete_bus_cycle(second.id, Some(0xFD)).unwrap());
+        assert_eq!(third.operation, Z80BusOperation::OpcodeFetch);
+        assert_eq!(third.address, 2);
+        assert_eq!(cpu.refresh, 2);
+        assert_eq!(cpu.export_state().opcode, Some(0xFD));
+        assert_eq!(cpu.export_state().instruction_tstates, 8);
+
+        let error = cpu.complete_bus_cycle(third.id, Some(0x00)).unwrap_err();
+        assert_eq!(
+            error,
+            Z80MicroSequencerError::UnsupportedOpcode {
+                opcode: 0x00,
+                address: 2
+            }
+        );
+        assert_eq!(cpu.registers.pc, 3);
+        assert_eq!(cpu.refresh, 3);
+        assert!(!cpu.instruction_active());
+    }
+
+    #[test]
+    fn dd_cb_stops_before_treating_displacement_as_an_m1_opcode() {
+        let mut cpu = Z80MicroSequencer::default();
+        let first = request(cpu.begin_instruction().unwrap());
+        let second = request(cpu.complete_bus_cycle(first.id, Some(0xDD)).unwrap());
+        let error = cpu.complete_bus_cycle(second.id, Some(0xCB)).unwrap_err();
+        assert_eq!(
+            error,
+            Z80MicroSequencerError::UnsupportedOpcode {
+                opcode: 0xCB,
+                address: 1
+            }
+        );
+        assert_eq!(cpu.registers.pc, 2);
+        assert_eq!(cpu.refresh, 2);
+        assert!(!cpu.instruction_active());
     }
 
     #[test]
