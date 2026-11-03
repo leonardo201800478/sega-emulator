@@ -1,8 +1,8 @@
 # Meta de conclusão do Z80 — cobertura, validação e critérios de aceite
 
 **Data da revisão:** 2026-11-03  
-**Baseline de referência:** `main` — `e9a3eff6c3733b4f11443954a647471c9d3908ff`  
-**Candidato em andamento na revisão:** E4B / PR #472 — runtime candidato `245d42eb0337d41295329155de8e151feceb9022`; head documental reportado na PR: `615fbd907a368b0cf6d46e94a4e980286c5d5265`.  
+**Baseline de referência:** `main` — `04ee09f9839bfe29a595abbed831d055cc8d177a` (após integração da E4B / PR #472).  
+**Evidência E4B:** runtime validado `245d42eb0337d41295329155de8e151feceb9022`; head final da PR `615fbd907a368b0cf6d46e94a4e980286c5d5265`; CI [41738443518](https://github.com/leonardo201800478/sega-emulator/actions/runs/41738443518), 4/4 jobs PASS.  
 **Schema do microsequenciador na baseline:** 27.  
 **Status deste documento:** referência de planejamento e critérios de aceite. Não substitui a matriz semântica por opcode nem os relatórios de execução dos testes.
 
@@ -46,7 +46,7 @@ Os percentuais abaixo são **estimativas de engenharia**, usadas para dimensiona
 
 ## 3. Baseline técnica e estado conhecido
 
-A baseline consultada em `main` é `e9a3eff6c3733b4f11443954a647471c9d3908ff`, após a integração de E4A pela PR #471. E4B está registrada como candidata na PR #472; seu CI reportado passou nos quatro grupos de jobs, mas isso não significa que o candidato esteja integrado à `main`.
+A baseline consultada em `main` é `04ee09f9839bfe29a595abbed831d055cc8d177a`, após a integração de E4B pela PR #472. A presença da auditoria E4B e do teste `native/z80_cpu/tests/indexed_alu_e4b.rs` na `main` confirma que essa fatia já está integrada. Seu CI reportado passou nos quatro grupos de jobs.
 
 | Fase | Escopo | Estado na fotografia |
 |---|---|---|
@@ -54,7 +54,7 @@ A baseline consultada em `main` é `e9a3eff6c3733b4f11443954a647471c9d3908ff`, a
 | E3A1 | Operações 16-bit IX/IY | Integrada na main |
 | E3A2 | Transferências absolutas, PUSH/POP e EX (SP),IX/IY | Integrada na main |
 | E4A | LD r,(IX/IY+d), LD (IX/IY+d),r e LD (IX/IY+d),n | Integrada na main; IMPLEMENTED / SHORT_PASS |
-| E4B | ADD/ADC/SUB/SBC/AND/XOR/OR/CP (IX/IY+d) | IMPLEMENTED / QUICK_PASS / SHORT_PASS no candidato PR #472; CI 4/4 PASS reportado |
+| E4B | ADD/ADC/SUB/SBC/AND/XOR/OR/CP (IX/IY+d) | Integrada na main pela PR #472; IMPLEMENTED / QUICK_PASS / SHORT_PASS; CI 4/4 PASS |
 | E4C | INC/DEC (IX/IY+d) | Pendente no microsequenciador |
 | E5 | DDCB/FDCB completo | Pendente no microsequenciador |
 | E6 | Fallback geral e resolução de prefixos DD/FD/ED/CB | Pendente/incompleto no microsequenciador |
@@ -253,4 +253,4 @@ Toda atualização deve incluir data, SHA da baseline, SHA candidato, PR, workfl
 
 ---
 
-**Próxima meta operacional na baseline descrita:** concluir E4C — INC/DEC (IX/IY+d) — e então avançar para E5 DDCB/FDCB. A PR #472 / E4B deve ser tratada conforme seu estado real no GitHub; o candidato e seu CI aprovados não devem ser confundidos com merge na main.
+**Próxima meta operacional na baseline descrita:** concluir E4C — INC/DEC (IX/IY+d) — e então avançar para E5 DDCB/FDCB. E4B / PR #472 está integrada na main (`04ee09f9`); seus resultados SHORT_PASS permanecem limitados ao escopo implementado, sem promover LONG_PASS ou TEMPORAL_PASS.
