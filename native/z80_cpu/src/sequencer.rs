@@ -3228,10 +3228,7 @@ mod tests {
                     assert_eq!(state.mcycle_index, 3);
                     assert_eq!(state.tstate_index, u16::from(completed_tstates - 4));
                 }
-                assert_eq!(
-                    state.instruction_tstates,
-                    8 + u32::from(completed_tstates)
-                );
+                assert_eq!(state.instruction_tstates, 8 + u32::from(completed_tstates));
             }
             let retired_step = restored.complete_internal_cycle().unwrap();
             retired(retired_step, opcode, 15);
