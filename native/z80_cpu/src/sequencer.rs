@@ -21,6 +21,16 @@ const FLAG_Z: u8 = 0x40;
 const FLAG_S: u8 = 0x80;
 const FLAG_XY: u8 = 0x28;
 
+fn stack_pair_value(registers: &Z80Registers, opcode: u8) -> Option<u16> {
+    match opcode {
+        0xC5 | 0xC1 => Some(registers.bc()),
+        0xD5 | 0xD1 => Some(registers.de()),
+        0xE5 | 0xE1 => Some(registers.hl()),
+        0xF5 | 0xF1 => Some(u16::from_be_bytes([registers.a, registers.f])),
+        _ => None,
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Z80MicroSequencerError {
     Handshake(Z80BusHandshakeError),
