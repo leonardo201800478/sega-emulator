@@ -195,7 +195,7 @@ Não criar um campo redundante se o mesmo fato já estiver codificado numa fase 
 - Prefixos repetidos DD/FD e seleção do último prefixo nos vetores adicionados.
 - `INC IX/IY` e `DEC IX/IY`, com preservação das flags.
 - `ADD IX/IY,BC/DE/IX|IY/SP`, com sete T-states internos, commit final, flags e WZ.
-- Codec Z80 v18 com serialização das fases novas e testes de round-trip nos pontos intermediários.
+- Codec Z80 v19 com serialização das fases novas e testes de round-trip nos pontos intermediários.
 - WAIT inserido na requisição pendente em testes de sequenciador.
 
 ### Ainda fora da fatia implementada
