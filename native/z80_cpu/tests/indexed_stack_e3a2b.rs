@@ -42,16 +42,17 @@ fn push_ix_writes_high_then_low_with_waits_and_snapshot_resume() {
         cpu.complete_bus_cycle(fetch.id, Some(0xE5)).unwrap(),
         Z80MicroStep::InternalCycle { tstates: 1 }
     );
-    assert_eq!(cpu.export_state().mcycle_index, 4);
+    assert_eq!(cpu.export_state().mcycle_index, 1);
     cpu = round_trip(cpu);
     let high = request(cpu.complete_internal_cycle().unwrap());
-    assert_eq!(cpu.export_state().mcycle_index, 5);
+    assert_eq!(cpu.export_state().mcycle_index, 2);
     assert_eq!(high.address, 0xFFFF);
     assert_eq!(high.operation, Z80BusOperation::MemoryWrite { value: 0x12 });
     cpu.insert_wait_tstate().unwrap();
     cpu = round_trip(cpu);
 
     let low = request(cpu.complete_bus_cycle(high.id, None).unwrap());
+    assert_eq!(cpu.export_state().mcycle_index, 3);
     assert_eq!(cpu.registers.sp, 0xFFFF);
     assert_eq!(low.address, 0xFFFE);
     assert_eq!(low.operation, Z80BusOperation::MemoryWrite { value: 0x34 });
@@ -90,11 +91,15 @@ fn push_iy_uses_last_of_repeated_alternating_prefixes() {
         cpu.complete_bus_cycle(fetch.id, Some(0xE5)).unwrap(),
         Z80MicroStep::InternalCycle { tstates: 1 }
     );
+    assert_eq!(cpu.export_state().mcycle_index, 4);
+    cpu = round_trip(cpu);
     let high = request(cpu.complete_internal_cycle().unwrap());
+    assert_eq!(cpu.export_state().mcycle_index, 5);
     assert_eq!(high.address, 0x1FFF);
     assert_eq!(high.operation, Z80BusOperation::MemoryWrite { value: 0xAB });
     cpu = round_trip(cpu);
     let low = request(cpu.complete_bus_cycle(high.id, None).unwrap());
+    assert_eq!(cpu.export_state().mcycle_index, 6);
     assert_eq!(low.address, 0x1FFE);
     assert_eq!(low.operation, Z80BusOperation::MemoryWrite { value: 0xCD });
     cpu = round_trip(cpu);
