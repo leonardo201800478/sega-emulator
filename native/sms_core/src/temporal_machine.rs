@@ -648,7 +648,10 @@ impl SmsTemporalMachine {
                             if self.m1.as_ref().is_some_and(|m1| {
                                 m1.export_state().pending_continuation_id.is_none()
                             }) {
-                                self.schedule_pending_bus(fixture_wait_tstates)?;
+                                let m1_waits = self
+                                    .m1_fixture_wait_tstates
+                                    .unwrap_or(fixture_wait_tstates);
+                                self.schedule_pending_bus(m1_waits)?;
                             }
                         } else if self.bus.pending_request().is_none() {
                             self.schedule_pending_bus(fixture_wait_tstates)?;
