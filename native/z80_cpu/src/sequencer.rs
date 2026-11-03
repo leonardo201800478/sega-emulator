@@ -1515,8 +1515,8 @@ impl Z80MicroSequencer {
                 let address = u16::from_le_bytes([low, high]);
                 let opcode = self.opcode.ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 match opcode {
-                    0x22 => self.issue_write(address, self.registers.l),
-                    0x32 => self.issue_write(address, self.registers.a),
+                    0x22 => self.issue_base_absolute_write(address, self.registers.l, 2, 0),
+                    0x32 => self.issue_base_absolute_write(address, self.registers.a, 2, 0),
                     0x2A | 0x3A => self.issue_read(
                         Z80MicroSequencerPhase::BaseAbsoluteTransfer { stage: 2, address, low: 0 },
                         address,
@@ -1527,7 +1527,9 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::BaseAbsoluteTransfer { stage: 2, address, .. } => {
                 let opcode = self.opcode.ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 match opcode {
-                    0x22 => self.issue_write(address.wrapping_add(1), self.registers.h),
+                    0x22 => self.issue_base_absolute_write(
+                        address.wrapping_add(1), self.registers.h, 3, 0,
+                    ),
                     0x32 => {
                         self.wz = (u16::from(self.registers.a) << 8)
                             | (address.wrapping_add(1) & 0x00FF);
@@ -2980,6 +2982,30 @@ impl Z80MicroSequencer {
         self.mcycle_index = next_mcycle_index;
         self.tstate_index = 0;
         self.phase = phase;
+        Ok(Z80MicroStep::BusRequest(request))
+    }
+
+    fn issue_base_absolute_write(
+        &mut self,
+        address: u16,
+        value: u8,
+        stage: u8,
+        low: u8,
+    ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
+        let next_mcycle_index = self
+            .mcycle_index
+            .checked_add(1)
+            .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+        let request = self
+            .handshake
+            .begin(Z80BusOperation::MemoryWrite { value }, address, 3)?;
+        self.mcycle_index = next_mcycle_index;
+        self.tstate_index = 0;
+        self.phase = Z80MicroSequencerPhase::BaseAbsoluteTransfer {
+            stage,
+            address: if stage == 2 { address } else { address.wrapping_sub(1) },
+            low,
+        };
         Ok(Z80MicroStep::BusRequest(request))
     }
 
