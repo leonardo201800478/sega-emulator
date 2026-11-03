@@ -70,6 +70,10 @@ pub struct SmsInternalCycleCompletion {
 pub enum SmsTemporalDispatch {
     BusCompletion(SmsBusCompletion),
     InternalCycleComplete(SmsInternalCycleCompletion),
+    M1TStateComplete {
+        continuation_id: u64,
+        completed_at: MachineTime,
+    },
 }
 
 /// Complete in-memory continuation of the transactional bus adapter.
@@ -223,6 +227,21 @@ impl SmsTemporalBus {
         Ok(deadline)
     }
 
+    /// Schedule one explicit M1 T-state on the same coordinator as memory cycles.
+    pub fn schedule_m1_tstate(
+        &mut self,
+        continuation_id: u64,
+    ) -> Result<MachineTime, SmsTemporalBusError> {
+        if self.pending_request.is_some()
+            || self.completion.is_some()
+            || self.pending_internal_cycle.is_some()
+            || self.internal_completion.is_some()
+        {
+            return Err(SmsTemporalBusError::Busy);
+        }
+        Ok(self.coordinator.schedule_m1_tstate(continuation_id)?)
+    }
+
     /// Dispatch the next scheduled boundary and apply the memory side effect once.
     ///
     /// A read samples memory at this completion boundary. A write mutates memory
@@ -284,10 +303,18 @@ impl SmsTemporalBus {
                 self.internal_completion = Some(completion);
                 Ok(Some(SmsTemporalDispatch::InternalCycleComplete(completion)))
             }
-            // M1 phase events are consumed by the explicit M1 adapter, not
-            // by the memory transaction layer.
-            SmsTemporalEvent::M1TStateComplete { .. } => {
-                Err(SmsTemporalBusError::UnsupportedOperation)
+            SmsTemporalEvent::M1TStateComplete { continuation_id } => {
+                if self.pending_request.is_some()
+                    || self.pending_internal_cycle.is_some()
+                    || self.completion.is_some()
+                    || self.internal_completion.is_some()
+                {
+                    return Err(SmsTemporalBusError::InvalidState);
+                }
+                Ok(Some(SmsTemporalDispatch::M1TStateComplete {
+                    continuation_id,
+                    completed_at: dispatch.event.timestamp,
+                }))
             }
         }
     }
@@ -356,6 +383,10 @@ impl SmsTemporalBus {
         self.coordinator.now()
     }
 
+    pub(crate) fn coordinator_mut(&mut self) -> &mut SmsTemporalCoordinator {
+        &mut self.coordinator
+    }
+
     #[cfg(test)]
     pub(crate) fn write_memory_for_test(&mut self, address: u16, value: u8) {
         self.memory.write(address, value);
@@ -399,7 +430,13 @@ impl SmsTemporalBus {
             state.internal_cycle_started_at,
             state.internal_completion,
         ) {
-            (None, None, None, None, None, None) if pending_events.is_empty() => {}
+            (None, None, None, None, None, None)
+                if pending_events.is_empty()
+                    || (pending_events.len() == 1
+                        && matches!(
+                            pending_events[0].payload,
+                            SmsTemporalEvent::M1TStateComplete { .. }
+                        )) => {}
             (Some(request), Some(started_at), None, None, None, None)
                 if pending_events.len() == 1
                     && pending_events[0].payload
