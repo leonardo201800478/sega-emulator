@@ -3094,7 +3094,7 @@ mod tests {
             assert_eq!(cpu.step(&mut bus), Ok(14), "ED {opcode:02X}");
             assert_eq!(cpu.registers.pc, 0x1234, "ED {opcode:02X}");
             assert_eq!(cpu.registers.sp, 0xD002, "ED {opcode:02X}");
-            assert!(cpu.iff1, "ED {opcode:02X}: IFF1 should copy IFF2");
+            assert!(cpu.iff1, "ED {opcode:02X}: IFF1 must be restored from IFF2");
             assert!(cpu.iff2, "ED {opcode:02X}: IFF2 must remain unchanged");
         }
     }
