@@ -2183,6 +2183,58 @@ mod base_immediate_io_snapshot_tests {
     }
 
     #[test]
+    fn immediate_port_restore_rejects_coherently_mismatched_high_address_byte() {
+        let mut input = Z80MicroSequencer::default();
+        input.registers.pc = 0x1000;
+        input.registers.a = 0x12;
+        let fetch = match input.begin_instruction().unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected opcode fetch, got {other:?}"),
+        };
+        let immediate = match input.complete_bus_cycle(fetch.id, Some(0xDB)).unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected IN immediate read, got {other:?}"),
+        };
+        let _ = input.complete_bus_cycle(immediate.id, Some(0xDC)).unwrap();
+        let mut invalid_input = input.export_state();
+        invalid_input.phase = Z80MicroSequencerPhase::BaseImmediatePortRead {
+            port_address: 0x13DC,
+        };
+        invalid_input
+            .handshake
+            .pending_request
+            .as_mut()
+            .unwrap()
+            .address = 0x13DC;
+        assert!(Z80MicroSequencer::restore_state(invalid_input).is_err());
+
+        let mut output = Z80MicroSequencer::default();
+        output.registers.pc = 0x1000;
+        output.registers.a = 0x5A;
+        let fetch = match output.begin_instruction().unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected opcode fetch, got {other:?}"),
+        };
+        let immediate = match output.complete_bus_cycle(fetch.id, Some(0xD3)).unwrap() {
+            Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected OUT immediate read, got {other:?}"),
+        };
+        let _ = output.complete_bus_cycle(immediate.id, Some(0x3F)).unwrap();
+        let mut invalid_output = output.export_state();
+        invalid_output.phase = Z80MicroSequencerPhase::BaseImmediatePortWrite {
+            port_address: 0x5B3F,
+            value: 0x5A,
+        };
+        invalid_output
+            .handshake
+            .pending_request
+            .as_mut()
+            .unwrap()
+            .address = 0x5B3F;
+        assert!(Z80MicroSequencer::restore_state(invalid_output).is_err());
+    }
+
+    #[test]
     fn immediate_port_restore_rejects_mismatched_address() {
         let mut cpu = Z80MicroSequencer::default();
         cpu.registers.pc = 0x1000;
