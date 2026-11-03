@@ -1079,8 +1079,25 @@ impl Z80MicroSequencer {
             | Z80MicroSequencerPhase::ImmediateReadAlu { .. }
             | Z80MicroSequencerPhase::MemoryReadRegister { .. }
             | Z80MicroSequencerPhase::MemoryReadAlu { .. }
-            | Z80MicroSequencerPhase::MemoryReadIncDec { .. } => {
+            | Z80MicroSequencerPhase::MemoryReadIncDec { .. }
+            | Z80MicroSequencerPhase::BaseRelativeBranchImmediate => {
                 state.mcycle_index == 1 && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::BaseRelativeBranchInternal {
+                branch_taken,
+                remaining_tstates,
+                ..
+            } => {
+                let total_tstates = match (state.opcode, branch_taken) {
+                    (Some(0x10), true) => 6,
+                    (Some(0x10), false) => 1,
+                    (Some(0x18 | 0x20 | 0x28 | 0x30 | 0x38), true) => 5,
+                    _ => 0,
+                };
+                total_tstates != 0
+                    && state.mcycle_index == 2
+                    && state.tstate_index
+                        == u16::from(total_tstates.saturating_sub(remaining_tstates))
             }
             Z80MicroSequencerPhase::CbMemoryRead { .. } => {
                 state.mcycle_index == 2 && state.tstate_index == 0
