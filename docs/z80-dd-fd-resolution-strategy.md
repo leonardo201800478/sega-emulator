@@ -5,8 +5,10 @@
 **Baseline inicial E0:** `e4604f3152c09e8d16c37f94f94a4b344db33b62`  
 **Baseline após E1 / PR #467:** `aa4a4fa7661c28d3b2e21ac6d6eb4379fd297f65`  
 **Baseline após E2 / PR #468:** `abd154332b1dabfb68874f2b80f306da7e060552`  
-**Baseline de entrada após PR #466 e PR #469:** `bcc7ef7954bd8cadd148b22c464260810ff63fb3`  
-**PR de referência:** [#447](https://github.com/leonardo201800478/sega-emulator/pull/447) — manter aberta, sem merge  
+**Baseline atual da main após PR #470 / E3A2:** `5b61b918055613902a70d60a2fdf645bb543f807`  
+**Candidato E4A / PR #471:** `88b3c6fa7812c577a0c91693cebbe21e75b2c2c7`  
+**PR de referência histórica:** [#447](https://github.com/leonardo201800478/sega-emulator/pull/447) — manter aberta, sem merge  
+**PR ativa E4A:** [#471](https://github.com/leonardo201800478/sega-emulator/pull/471)  
 **Escopo:** microsequenciador Z80 compartilhado; não confundir conclusão do núcleo com integração temporal completa ao SMS.
 
 ---
@@ -23,7 +25,7 @@ Ordem de execução:
 5. Provar snapshot/replay e comportamento temporal separadamente.
 6. Integrar ao SMS somente após demonstrar o contrato do Z80 compartilhado.
 
-**A PR #467 concluiu a primeira fatia documental/testes E1 sem alterar runtime; foi integrada na main após todos os gates obrigatórios passarem.** A arquitetura permanece centralizada nos crates compartilhados. Não criar Z80 alternativo ou sequenciador específico do SMS.
+**A PR #467 concluiu a primeira fatia documental/testes E1 sem alterar runtime; foi integrada na main após todos os gates obrigatórios passarem. PRs #469 (E3A1) e #470 (E3A2) também foram integradas; a main atual é `5b61b918`. A arquitetura permanece centralizada nos crates compartilhados. Não criar Z80 alternativo ou sequenciador específico do SMS.
 
 ## 2. Baseline E0 — fatos confirmados
 
@@ -35,8 +37,11 @@ Ordem de execução:
 | SHA da main após E1 (#467) | `aa4a4fa7661c28d3b2e21ac6d6eb4379fd297f65` |
 | SHA da main após E2 (#468) | `abd154332b1dabfb68874f2b80f306da7e060552` |
 | SHA da main após E3A1 (#469) | `ee9d39fc017b53493cc48d1343a7ca4b77581d3b` |
+| SHA da main após E3A2 (#470) | `5b61b918055613902a70d60a2fdf645bb543f807` |
+| Candidato E4A / PR #471 | `88b3c6fa7812c577a0c91693cebbe21e75b2c2c7` |
 | Schema inicial E0 | `Z80_MICRO_SEQUENCER_STATE_VERSION = 25` |
-| Schema atual após E2 | `Z80_MICRO_SEQUENCER_STATE_VERSION = 26` |
+| Schema após E2 | `Z80_MICRO_SEQUENCER_STATE_VERSION = 26` |
+| Schema atual no candidato E4A | `Z80_MICRO_SEQUENCER_STATE_VERSION = 27` |
 | Codec | `native/z80_cpu/src/snapshot.rs`; não é save state integral da máquina SMS |
 | Inventário BASE | PR #465 integrada; 251 encodings com handler e 1 lacuna explícita (HALT), excluídos CB/DD/ED/FD |
 | Fonte da verdade | Código e testes da main no SHA acima |
@@ -178,7 +183,7 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 
 **Gate E2:** PASS para FSM, seleção de prefixo, classificação e snapshot. CI completo do SHA candidato: [run 41721337030](https://github.com/leonardo201800478/sega-emulator/actions/runs/41721337030). Isso não declara FUNCTIONAL_PASS das instruções DD/FD nem TEMPORAL_PASS.
 
-**Limites mantidos:** as famílias indexadas restantes, prefixos ignorados, DDCB/FDCB, traces por T-state e integração temporal permanecem nas etapas E4-E9.
+**Limites mantidos após E2:** famílias indexadas restantes, prefixos ignorados, DDCB/FDCB, traces por T-state e integração temporal permaneceram nas etapas E4-E9. E4A agora implementa apenas LD indexado com displacement; E4B/E4C e E5-E9 continuam pendentes.
 
 ### E3 — Operações 16-bit e substituição HL→IX/IY
 
@@ -193,7 +198,7 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 - [x] 10 testes direcionados E3A1; flags, WZ, wrap e tempos nominais cobertos.
 - [x] CI completo no SHA candidato: [run 41723613218](https://github.com/leonardo201800478/sega-emulator/actions/runs/41723613218).
 
-**E3A2 — implementado no candidato PR #470:**
+**E3A2 — implementado e integrado na main pela PR #470 (`5b61b918`):**
 - [x] `LD (nn),IX/IY` e `LD IX/IY,(nn)`, incluindo ordem little-endian, WZ=nn+1 e wrap em FFFF→0000.
 - [x] `PUSH IX/IY` e `POP IX/IY`, com decrementos/incrementos de SP nos pontos de barramento corretos.
 - [x] `EX (SP),IX/IY`, com leituras low/high, escritas low/high, SP preservado e commit após os T-states internos finais.
@@ -201,7 +206,7 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 - [x] Prefixos DD/FD repetidos e alternados, last-prefix-wins e M-cycle index acumulado.
 - [x] Wrap de nn, SP e SP+1; flags preservadas; PC e WZ cobertos.
 - [x] 11 testes direcionados E3A2a/b/c.
-- [x] CI completo do candidato `5cc45b9150006f3a53beb1493dc5bcc4be3965ae`: [run 41727716404](https://github.com/leonardo201800478/sega-emulator/actions/runs/41727716404), 4/4 workflows PASS.
+- [x] CI completo do candidato antes do merge: [run 41727716404](https://github.com/leonardo201800478/sega-emulator/actions/runs/41727716404), 4/4 workflows PASS; PR #470 integrada na main `5b61b918`.
 
 **Limite:** os resultados são QUICK_PASS/SHORT_PASS do microsequenciador para estas famílias; não representam oráculo físico independente, trace por T-state completo, ZEXDOC/ZEXALL ou TEMPORAL_PASS.
 
@@ -209,14 +214,28 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 
 ### E4 — Instruções indexadas com displacement
 
-Implementar as famílias que acessam `(IX+d)` e `(IY+d)`:
-- `LD r,(IX/IY+d)` e `LD (IX/IY+d),r`, incluindo as exceções em que H/L são os registradores HL comuns.
-- `LD (IX/IY+d),n`.
-- `ALU A,(IX/IY+d)`.
-- `INC (IX/IY+d)` e `DEC (IX/IY+d)`, com read-modify-write.
-- Calcular EA com displacement assinado e wrap de 16 bits; validar WZ/MEMPTR, estados internos, ordem de barramento, WAIT, commit e snapshots.
+**E4A — LD indexado/displacement implementado no candidato PR #471:**
+- [x] `LD r,(IX+d)` / `LD r,(IY+d)`.
+- [x] `LD (IX+d),r` / `LD (IY+d),r`.
+- [x] `LD (IX+d),n` / `LD (IY+d),n`.
+- [x] Displacement `i8` com wrap de 16 bits; PC e ordem dos operandos verificados.
+- [x] Exceção H/L convencional coberta para load e store; flags preservadas.
+- [x] Sequência nominal 5 M-cycles / 19 T-states (`4,4,3,5,3`) conforme ZiLOG UM008011-0816, com WAIT adicional.
+- [x] Snapshot/restore nas fases de displacement, ciclos internos, immediate e transação de memória.
+- [x] Prefixos DD/FD repetidos e alternados; last-prefix-wins; testes de borda `-128`, `+127`, zero e wrap de PC/endereço.
+- [x] CI completo no candidato `88b3c6fa`: [run 41734982519](https://github.com/leonardo201800478/sega-emulator/actions/runs/41734982519), Rust/Python/Scheduler stress/Windows x64 — 4/4 PASS.
 
-**Gate E4:** displacement 00–FF, bordas EA 0000/FFFF, todas as famílias de load/store/ALU/INC/DEC e exceções H/L cobertas por testes dirigidos e vetores independentes.
+**Estado E4A:** IMPLEMENTED / QUICK_PASS / SHORT_PASS para o escopo de LD indexado no microsequenciador. Não declarar LONG_PASS, diferencial externo, ZEXDOC/ZEXALL ou TEMPORAL_PASS.
+
+**E4B — ALU A,(IX/IY+d), pendente:**
+- [ ] ADD, ADC, SUB, SBC, AND, XOR, OR e CP.
+- [ ] Flags S/Z/H/PV/N/C e X/Y; WAIT, WZ, snapshot e commit.
+
+**E4C — INC/DEC (IX/IY+d), pendente:**
+- [ ] INC e DEC com leitura, ciclo interno e escrita.
+- [ ] Flags S/Z/H/PV/N atualizadas e C preservado; WAIT e snapshot em cada safe point.
+
+**Gate E4:** E4A + E4B + E4C concluídas; E4 não será declarada completa enquanto ALU e RMW não forem implementadas e validadas.
 
 ### E5 — Prefixos DDCB/FDCB
 
@@ -285,11 +304,11 @@ Além disso, Scheduler deterministic stress e Windows x64 D3D12/WASAPI/XAudio2 q
 4. WAIT: derivar amostragem e ciclos elegíveis dos diagramas; não assumir regra universal.
 5. DDCB/FDCB: validar sequência de barramento e R com fonte técnica e vetores.
 6. Oráculos: SingleStepTests deriva de um emulador; raxoft/z80test e hardware/documentação devem complementar.
-7. Schema: baseline inicial 25; E2 avançou para 26 com um latch de prefixo explícito. Próximas alterações devem considerar snapshots pendentes; nunca importar schema da PR #447.
+7. Schema: baseline inicial 25; E2 avançou para 26 com um latch de prefixo explícito; E4A avançou para 27 para serializar as fases de displacement e store imediato. Próximas alterações devem considerar snapshots pendentes; nunca importar schema da PR #447.
 8. Integração SMS: separada da conclusão funcional do conjunto de instruções.
 
 ## 8. Próxima ação
 
-Prosseguir para E4: instruções indexadas com displacement (IX+d)/(IY+d). Preservar a FSM E2 e as fases E3 já integradas; estender o microsequenciador com fases retomáveis, WAIT, snapshot e testes por família.
+Prosseguir para E4B: ALU A,(IX/IY+d), preservando as fases E4A já integradas no candidato e o contrato de WAIT/snapshot. Depois concluir E4C (INC/DEC indexed memory), antes de avançar para E5 DDCB/FDCB.
 
-**Estado atual DD/FD:** E2 aprovada na dimensão de FSM/snapshot; E3A1 e E3A2 implementadas no candidato PR #470 com CI 4/4 PASS; E4-E9 pendentes. DDCB/FDCB ainda sem displacement/subopcode no microsequenciador. Sem LONG_PASS ou TEMPORAL_PASS global.
+**Estado atual DD/FD:** E2 FSM/snapshot SHORT_PASS; E3A1/E3A2 integradas na main; E4A IMPLEMENTED/SHORT_PASS no candidato PR #471 com CI 4/4 PASS (run `41734982519`). E4B/E4C, E5 DDCB/FDCB, E6 fallback, E7 fechamento semântico, E8 formal e E9 integração temporal permanecem pendentes. Não há LONG_PASS nem TEMPORAL_PASS global.
