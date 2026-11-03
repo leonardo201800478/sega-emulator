@@ -478,8 +478,7 @@ impl Z80MicroSequencer {
                     return Err(Z80MicroSequencerError::InvalidState);
                 };
                 let expected_value = match state.opcode {
-                    Some(opcode) if opcode & 0xC7 == 0x41 => {
-                        match (opcode >> 3) & 0x07 {
+                    Some(opcode) if opcode & 0xC7 == 0x41 => match (opcode >> 3) & 0x07 {
                             0 => Some(state.registers.b),
                             1 => Some(state.registers.c),
                             2 => Some(state.registers.d),
@@ -1001,8 +1000,7 @@ impl Z80MicroSequencer {
                 if register != 6 {
                     self.write_register(register, value);
                 }
-                let mut flags =
-                    (self.registers.f & FLAG_C) | (value & (FLAG_S | FLAG_XY));
+                let mut flags = (self.registers.f & FLAG_C) | (value & (FLAG_S | FLAG_XY));
                 if value == 0 {
                     flags |= FLAG_Z;
                 }
@@ -1169,9 +1167,7 @@ impl Z80MicroSequencer {
                 self.phase = Z80MicroSequencerPhase::EdRegisterInternal { opcode };
                 Ok(Z80MicroStep::InternalCycle { tstates: 1 })
             }
-            op if op & 0xC7 == 0x40 => {
-                self.issue_ed_port_read((opcode >> 3) & 0x07)
-            }
+            op if op & 0xC7 == 0x40 => self.issue_ed_port_read((opcode >> 3) & 0x07),
             op if op & 0xC7 == 0x41 => {
                 let register = (opcode >> 3) & 0x07;
                 let value = if register == 6 {
@@ -1409,10 +1405,7 @@ impl Z80MicroSequencer {
         Ok(Z80MicroStep::BusRequest(request))
     }
 
-    fn issue_ed_port_read(
-        &mut self,
-        register: u8,
-    ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
+    fn issue_ed_port_read(&mut self, register: u8) -> Result<Z80MicroStep, Z80MicroSequencerError> {
         let address = self.registers.bc();
         let next_mcycle_index = self
             .mcycle_index
@@ -1427,10 +1420,7 @@ impl Z80MicroSequencer {
         Ok(Z80MicroStep::BusRequest(request))
     }
 
-    fn issue_ed_port_write(
-        &mut self,
-        value: u8,
-    ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
+    fn issue_ed_port_write(&mut self, value: u8) -> Result<Z80MicroStep, Z80MicroSequencerError> {
         let address = self.registers.bc();
         let next_mcycle_index = self
             .mcycle_index
@@ -3319,7 +3309,6 @@ mod indirect_bc_de_differential_tests {
     }
 }
 
-
 #[cfg(test)]
 mod ed_port_io_differential_tests {
     use super::{Z80MicroSequencer, Z80MicroStep};
@@ -3442,7 +3431,11 @@ mod ed_port_io_differential_tests {
             sequenced.import_architectural_state(architectural).unwrap();
             let mut sequenced_bus = atomic_bus.clone();
 
-            assert_eq!(atomic.step(&mut atomic_bus), Ok(12), "atomic ED {opcode:02X}");
+            assert_eq!(
+                atomic.step(&mut atomic_bus),
+                Ok(12),
+                "atomic ED {opcode:02X}"
+            );
 
             let first = request(sequenced.begin_instruction().unwrap());
             let second = read_opcode(
@@ -3451,11 +3444,7 @@ mod ed_port_io_differential_tests {
                 Z80MicroStep::BusRequest(first),
             );
             sequenced = roundtrip(sequenced);
-            let io_request = request(read_opcode(
-                &mut sequenced,
-                &mut sequenced_bus,
-                second,
-            ));
+            let io_request = request(read_opcode(&mut sequenced, &mut sequenced_bus, second));
             assert_eq!(io_request.address, 0x1234);
             assert_eq!(io_request.base_tstates, 4);
 
@@ -3468,9 +3457,7 @@ mod ed_port_io_differential_tests {
                 }
                 Z80BusOperation::PortWrite { value } => {
                     sequenced_bus.write_port(io_request.address, value);
-                    sequenced
-                        .complete_bus_cycle(io_request.id, None)
-                        .unwrap()
+                    sequenced.complete_bus_cycle(io_request.id, None).unwrap()
                 }
                 other => panic!("unexpected ED port operation: {other:?}"),
             };
@@ -3517,7 +3504,9 @@ mod ed_port_io_differential_tests {
         let mut restored_read = Z80MicroSequencer::restore_state(decoded).unwrap();
         let value = read_bus.read_port(read.address);
         assert_eq!(
-            restored_read.complete_bus_cycle(read.id, Some(value)).unwrap(),
+            restored_read
+                .complete_bus_cycle(read.id, Some(value))
+                .unwrap(),
             Z80MicroStep::InstructionRetired {
                 opcode: 0x40,
                 tstates: 17
