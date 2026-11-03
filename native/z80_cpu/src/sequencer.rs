@@ -2101,6 +2101,65 @@ mod tests {
     }
 
     #[test]
+    fn ld_register_pair_immediate_reads_little_endian_word_before_commit() {
+        for (opcode, expected_pair) in [
+            (0x01, 0x1234_u16),
+            (0x11, 0x5678_u16),
+            (0x21, 0x9ABC_u16),
+            (0x31, 0xDEF0_u16),
+        ] {
+            let mut cpu = Z80MicroSequencer::default();
+            let fetch = request(cpu.begin_instruction().unwrap());
+            let low_read = request(cpu.complete_bus_cycle(fetch.id, Some(opcode)).unwrap());
+            assert_eq!(low_read.address, 1);
+            assert_eq!(low_read.base_tstates, 3);
+            assert_eq!(cpu.registers.pc, 1);
+
+            let low = expected_pair as u8;
+            let high_read = request(cpu.complete_bus_cycle(low_read.id, Some(low)).unwrap());
+            assert_eq!(high_read.address, 2);
+            assert_eq!(high_read.base_tstates, 3);
+            assert_eq!(cpu.registers.pc, 2);
+            assert_eq!(cpu.registers.bc(), 0);
+            assert_eq!(cpu.registers.de(), 0);
+            assert_eq!(cpu.registers.hl(), 0);
+            assert_eq!(cpu.registers.sp, 0);
+
+            let high = (expected_pair >> 8) as u8;
+            retired(
+                cpu.complete_bus_cycle(high_read.id, Some(high)).unwrap(),
+                opcode,
+                10,
+            );
+            match opcode {
+                0x01 => assert_eq!(cpu.registers.bc(), expected_pair),
+                0x11 => assert_eq!(cpu.registers.de(), expected_pair),
+                0x21 => assert_eq!(cpu.registers.hl(), expected_pair),
+                0x31 => assert_eq!(cpu.registers.sp, expected_pair),
+                _ => unreachable!(),
+            }
+            assert_eq!(cpu.registers.pc, 3);
+            assert_eq!(cpu.pending_request(), None);
+        }
+    }
+
+    #[test]
+    fn ld_register_pair_immediate_waits_extend_both_operand_cycles() {
+        let mut cpu = Z80MicroSequencer::default();
+        let fetch = request(cpu.begin_instruction().unwrap());
+        let low_read = request(cpu.complete_bus_cycle(fetch.id, Some(0x01)).unwrap());
+        cpu.insert_wait_tstate().unwrap();
+        let high_read = request(cpu.complete_bus_cycle(low_read.id, Some(0x34)).unwrap());
+        cpu.insert_wait_tstates(2).unwrap();
+        retired(
+            cpu.complete_bus_cycle(high_read.id, Some(0x12)).unwrap(),
+            0x01,
+            13,
+        );
+        assert_eq!(cpu.registers.bc(), 0x1234);
+    }
+
+    #[test]
     fn accumulator_rotate_daa_and_cpl_retire_after_m1_without_extra_bus_cycles() {
         for opcode in [0x07, 0x0F, 0x17, 0x1F, 0x27, 0x2F] {
             let mut cpu = Z80MicroSequencer::default();
