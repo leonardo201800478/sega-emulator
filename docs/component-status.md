@@ -209,3 +209,21 @@ O executor atômico existente é a referência para SCF/CCF: no início de cada 
 **Critérios da fatia:** M1 4 T + leitura do byte baixo 3 T + leitura do byte alto 3 T = 10 T nominais. PC avança apenas quando cada leitura conclui; o par de registradores só é atualizado após a leitura do byte alto. WAIT de cada transação deve ser contabilizado no Scheduler. O executor atômico legado permanece como oráculo diferencial e não é removido.
 
 **Validação:** CI `41571174250` PASS em todos os jobs, incluindo Scheduler deterministic stress short. Execução local NOT RUN. O resultado cobre o SHA candidato desta branch; não comprova integração sistêmica completa nem TEMPORAL_PASS.
+
+## 14. P7 — Z80 BASE: JP (HL) e EX DE,HL no microsequenciador retomável
+
+**Branch candidata:** `feat/z80-sms-jp-hl-ex-de-hl`  
+**SHA de código candidato:** `140251ebd5403eceabf1e1cfe70e1b8d9ee67155`  
+**PR:** pendente de abertura  
+**Dependência:** PR #428 (empilhada; ainda não integrada à main).  
+**CI:** pendente.
+
+| Componente | Estado formal | Evidência / limite |
+|---|---|---|
+| JP (HL) — E9 | IMPLEMENTED / QUICK_PASS pendente de CI | PC recebe HL na conclusão de M1; 4 T nominais, sem leitura adicional |
+| EX DE,HL — EB | IMPLEMENTED / QUICK_PASS pendente de CI | Troca DE/HL na conclusão de M1; 4 T nominais, sem transação adicional |
+| Diferencial temporal | IMPLEMENTED / QUICK_PASS pendente de CI | Teste compara todos os Z80Registers, refresh, Q e tempo do Scheduler contra o executor atômico |
+| Z80 retomável completo | INTEGRATION_PENDING | Prefixos, HALT, interrupções, I/O, famílias BASE restantes e estado/pinos completos continuam pendentes |
+| TEMPORAL_PASS | NOT DECLARED | A fatia não comprova execução sistêmica nem precisão elétrica completa |
+
+**Critérios:** efeitos arquiteturais aplicados somente após a conclusão de M1; ambas as instruções preservam F e não emitem transações extras. O executor atômico segue como oráculo diferencial. Execução local NOT RUN; atualizar estados após CI no SHA candidato.
