@@ -978,6 +978,4 @@ mod tests {
             }
         );
         assert_eq!(restored.i, 0x5A);
-    }
-
-}
+    }}
