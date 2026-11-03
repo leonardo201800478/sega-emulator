@@ -42,8 +42,10 @@ fn push_ix_writes_high_then_low_with_waits_and_snapshot_resume() {
         cpu.complete_bus_cycle(fetch.id, Some(0xE5)).unwrap(),
         Z80MicroStep::InternalCycle { tstates: 1 }
     );
+    assert_eq!(cpu.export_state().mcycle_index, 4);
     cpu = round_trip(cpu);
     let high = request(cpu.complete_internal_cycle().unwrap());
+    assert_eq!(cpu.export_state().mcycle_index, 5);
     assert_eq!(high.address, 0xFFFF);
     assert_eq!(high.operation, Z80BusOperation::MemoryWrite { value: 0x12 });
     cpu.insert_wait_tstate().unwrap();
@@ -122,10 +124,12 @@ fn pop_ix_reads_low_then_high_wraps_sp_and_restores_both_read_phases() {
     let fetch = feed_prefix(&mut cpu, fetch, 0xFD);
     let fetch = feed_prefix(&mut cpu, fetch, 0xDD);
     let low = request(cpu.complete_bus_cycle(fetch.id, Some(0xE1)).unwrap());
+    assert_eq!(cpu.export_state().mcycle_index, 4);
     assert_eq!(low.address, 0xFFFF);
     cpu = round_trip(cpu);
 
     let high = request(cpu.complete_bus_cycle(low.id, Some(0x78)).unwrap());
+    assert_eq!(cpu.export_state().mcycle_index, 5);
     assert_eq!(cpu.registers.sp, 0x0000);
     assert_eq!(high.address, 0x0000);
     cpu = round_trip(cpu);
