@@ -422,6 +422,10 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u16(port_address);
             writer.u8(value);
         }
+        Z80MicroSequencerPhase::HaltedCycle { remaining_tstates } => {
+            writer.u8(53);
+            writer.u8(remaining_tstates);
+        }
         Z80MicroSequencerPhase::MemoryWrite { address, value } => {
             writer.u8(7);
             writer.u16(address);
@@ -727,6 +731,9 @@ fn read_phase(
         52 => Z80MicroSequencerPhase::BaseImmediatePortWrite {
             port_address: reader.u16()?,
             value: reader.u8()?,
+        },
+        53 => Z80MicroSequencerPhase::HaltedCycle {
+            remaining_tstates: reader.u8()?,
         },
         7 => Z80MicroSequencerPhase::MemoryWrite {
             address: reader.u16()?,
