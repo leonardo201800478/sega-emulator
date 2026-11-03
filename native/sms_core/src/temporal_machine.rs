@@ -1931,8 +1931,11 @@ mod base_relative_branch_temporal_tests {
         let first = machine.begin_instruction().unwrap();
         assert!(matches!(first, Z80MicroStep::BusRequest(_)));
 
-        machine.schedule_pending_bus(0).unwrap();
-        let after_m1 = machine.dispatch_next().unwrap();
+        let mut after_m1 = first;
+        for _ in 0..4 {
+            machine.schedule_pending_bus(0).unwrap();
+            after_m1 = machine.dispatch_next().unwrap();
+        }
         assert!(matches!(after_m1, Z80MicroStep::BusRequest(_)));
 
         machine.schedule_pending_bus(0).unwrap();
