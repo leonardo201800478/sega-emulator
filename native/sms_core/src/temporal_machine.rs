@@ -6,7 +6,10 @@
 
 use core::fmt;
 
-use crate::{SmsTemporalBus, SmsTemporalBusError, SmsTemporalBusState, SmsTemporalDispatch};
+use crate::{
+    SmsCartridgeRamFile, SmsCartridgeRamFileError, SmsTemporalBus, SmsTemporalBusError,
+    SmsTemporalBusState, SmsTemporalDispatch,
+};
 use sega_temporal_core::{
     BusContractError, BusCycleKind, BusDirection, BusOperationResult, BusPhase, BusTransaction,
     MCycleIndex, MachineTime, TStateIndex,
@@ -530,6 +533,22 @@ impl SmsTemporalMachine {
     /// Current mapper-backed memory (read-only).
     pub const fn memory(&self) -> &crate::SmsMemory {
         self.bus.memory()
+    }
+
+    /// Load a validated .srm image into the mapper SRAM before resuming execution.
+    pub fn load_cartridge_ram_file(
+        &mut self,
+        save_file: &SmsCartridgeRamFile,
+    ) -> Result<bool, SmsCartridgeRamFileError> {
+        self.bus.load_cartridge_ram_file(save_file)
+    }
+
+    /// Persist mapper SRAM at a host checkpoint or clean shutdown.
+    pub fn save_cartridge_ram_file(
+        &self,
+        save_file: &SmsCartridgeRamFile,
+    ) -> Result<(), SmsCartridgeRamFileError> {
+        self.bus.save_cartridge_ram_file(save_file)
     }
 
     /// Current absolute machine time.
