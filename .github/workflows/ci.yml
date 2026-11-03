@@ -49,12 +49,16 @@ jobs:
       (github.event_name == 'workflow_dispatch' && github.event.inputs.scheduler_stress_profile != 'none') ||
       (github.event_name == 'pull_request' && (
         contains(github.event.pull_request.labels.*.name, 'scheduler-stress-short') ||
-        contains(github.event.pull_request.labels.*.name, 'scheduler-stress-long')
+        contains(github.event.pull_request.labels.*.name, 'scheduler-stress-long') ||
+        (github.event.action == 'labeled' && (
+          github.event.label.name == 'scheduler-stress-short' ||
+          github.event.label.name == 'scheduler-stress-long'
+        ))
       ))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      SCHEDULER_STRESS_PROFILE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.scheduler_stress_profile || (contains(github.event.pull_request.labels.*.name, 'scheduler-stress-short') && 'short') || 'long' }}
+      SCHEDULER_STRESS_PROFILE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.scheduler_stress_profile || ((contains(github.event.pull_request.labels.*.name, 'scheduler-stress-short') || github.event.label.name == 'scheduler-stress-short') && 'short') || 'long' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
