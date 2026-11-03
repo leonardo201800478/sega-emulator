@@ -3640,6 +3640,10 @@ mod ed_16bit_arithmetic_differential_tests {
         );
         assert_eq!(
             cpu.complete_internal_cycle().unwrap(),
+            Z80MicroStep::InternalCycle { tstates: 1 }
+        );
+        assert_eq!(
+            cpu.complete_internal_cycle().unwrap(),
             Z80MicroStep::InstructionRetired {
                 opcode: 0x4A,
                 tstates: 18
