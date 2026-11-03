@@ -237,7 +237,7 @@ pub struct Z80MicroSequencerState {
     pub q_previous: u8,
     pub handshake: crate::Z80BusHandshakeState,
     pub phase: Z80MicroSequencerPhase,
-    /// Explicit DD/FD substitution latch, independent of the last fetched opcode.
+    /// Last DD/FD selection; retained across prefix M1 fetches and cleared by ED or retirement.
     pub active_index: Option<Z80IndexRegister>,
     pub opcode: Option<u8>,
     pub instruction_tstates: u32,
