@@ -6911,7 +6911,8 @@ mod ed_block_io_differential_tests {
             next_hl,
             wz,
             flags,
-        } in cases {
+        } in cases
+        {
             let state = state_with_registers(
                 Z80Registers {
                     a: 0x5A,
@@ -7011,7 +7012,8 @@ mod ed_block_io_differential_tests {
             input,
             value,
             flags: expected_flags,
-        } in cases {
+        } in cases
+        {
             let state = state_with_registers(
                 Z80Registers {
                     b: 0x11,
