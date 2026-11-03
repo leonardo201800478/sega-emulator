@@ -4425,28 +4425,6 @@ mod indirect_bc_de_differential_tests {
     use crate::bus::CpuBus;
     use crate::{Z80, Z80ArchitecturalState, Z80BusOperation, Z80Registers};
 
-    struct NormalFlagsVector {
-        opcode: u8,
-        b: u8,
-        c: u8,
-        hl: u16,
-        value: u8,
-        port: u16,
-        next_hl: u16,
-        wz: u16,
-        flags: u8,
-    }
-
-    struct RepeatFlagsVector {
-        opcode: u8,
-        c: u8,
-        hl: u16,
-        port: u16,
-        input: bool,
-        value: u8,
-        flags: u8,
-    }
-
     #[derive(Clone)]
     struct TestBus {
         memory: Box<[u8; 0x10000]>,
@@ -6591,6 +6569,28 @@ mod ed_block_io_differential_tests {
         Z80, Z80AlternateRegisters, Z80ArchitecturalState, Z80BusOperation, Z80MicroSequencer,
         Z80MicroSequencerState, Z80MicroStep, Z80Registers,
     };
+
+    struct NormalFlagsVector {
+        opcode: u8,
+        b: u8,
+        c: u8,
+        hl: u16,
+        value: u8,
+        port: u16,
+        next_hl: u16,
+        wz: u16,
+        flags: u8,
+    }
+
+    struct RepeatFlagsVector {
+        opcode: u8,
+        c: u8,
+        hl: u16,
+        port: u16,
+        input: bool,
+        value: u8,
+        flags: u8,
+    }
 
     #[derive(Clone)]
     struct TestBus {
