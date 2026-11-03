@@ -1,8 +1,8 @@
 //! E3A1 indexed 16-bit register operations in the resumable Z80 sequencer.
 
 use sega_z80_cpu::{
-    Z80BusRequest, Z80IndexRegister, Z80MicroSequencer, Z80MicroSequencerError,
-    Z80MicroSequencerState, Z80MicroStep, Z80PrefixState,
+    Z80BusRequest, Z80IndexRegister, Z80MicroSequencer, Z80MicroSequencerState, Z80MicroStep,
+    Z80PrefixState,
 };
 
 const FLAG_S: u8 = 0x80;
@@ -321,17 +321,34 @@ fn ld_ix_immediate_wait_states_extend_operand_cycles() {
 }
 
 #[test]
-fn unsupported_indexed_displacement_family_does_not_fall_back_to_hl() {
+fn indexed_displacement_family_uses_ix_and_not_hl_for_effective_address() {
     let mut cpu = Z80MicroSequencer::default();
     cpu.ix = 0x1234;
     cpu.registers.h = 0x56;
     cpu.registers.l = 0x78;
     let fetch = start(&mut cpu);
     let fetch = feed_prefix(&mut cpu, fetch, 0xDD);
-    assert!(matches!(
-        cpu.complete_bus_cycle(fetch.id, Some(0x66)),
-        Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x66, .. })
-    ));
+    let displacement = request(cpu.complete_bus_cycle(fetch.id, Some(0x66)).unwrap());
+    assert_eq!(displacement.address, 2);
+    assert_eq!(
+        cpu.complete_bus_cycle(displacement.id, Some(0x01)).unwrap(),
+        Z80MicroStep::InternalCycle { tstates: 1 }
+    );
+
+    let mut data_read = Z80MicroStep::InternalCycle { tstates: 1 };
+    for _ in 0..5 {
+        data_read = cpu.complete_internal_cycle().unwrap();
+    }
+    let data_read = request(data_read);
+    assert_eq!(data_read.address, 0x1235);
+    assert_eq!(
+        cpu.complete_bus_cycle(data_read.id, Some(0x9A)).unwrap(),
+        Z80MicroStep::InstructionRetired {
+            opcode: 0x66,
+            tstates: 19,
+        }
+    );
     assert_eq!(cpu.ix, 0x1234);
-    assert_eq!(cpu.registers.hl(), 0x5678);
+    assert_eq!(cpu.registers.h, 0x9A);
+    assert_eq!(cpu.registers.l, 0x78);
 }

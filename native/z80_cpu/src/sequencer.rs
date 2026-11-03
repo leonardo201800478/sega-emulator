@@ -63,6 +63,27 @@ fn indexed_stack_pair(prefix_state: Z80PrefixState, ix: u16, iy: u16) -> Option<
     }
 }
 
+fn is_indexed_memory_load_opcode(opcode: u8) -> bool {
+    (0x40..=0x7F).contains(&opcode)
+        && opcode != 0x76
+        && opcode & 0x07 == 0x06
+        && (opcode >> 3) & 0x07 != 0x06
+}
+
+fn is_indexed_memory_store_opcode(opcode: u8) -> bool {
+    opcode == 0x36
+        || ((0x70..=0x7F).contains(&opcode)
+            && opcode != 0x76
+            && (opcode >> 3) & 0x07 == 0x06
+            && opcode & 0x07 != 0x06)
+}
+
+fn is_indexed_load_opcode(opcode: u8) -> bool {
+    opcode == 0x36
+        || is_indexed_memory_load_opcode(opcode)
+        || is_indexed_memory_store_opcode(opcode)
+}
+
 fn stack_pair_value(registers: &Z80Registers, opcode: u8, index_pair: Option<u16>) -> Option<u16> {
     match opcode {
         0xC5 | 0xC1 => Some(registers.bc()),
@@ -187,6 +208,19 @@ pub enum Z80MicroSequencerPhase {
         value: u8,
     },
     ImmediateReadMemoryWrite,
+    IndexDisplacementRead,
+    IndexDisplacementInternal {
+        address: u16,
+        remaining_tstates: u8,
+    },
+    IndexedImmediateReadMemoryWrite {
+        address: u16,
+    },
+    IndexedImmediateStoreInternal {
+        address: u16,
+        value: u8,
+        remaining_tstates: u8,
+    },
     ImmediateReadAlu {
         operation: u8,
     },
@@ -345,6 +379,8 @@ impl Z80MicroSequencerPhase {
                 | Self::BaseReturnConditionInternal { .. }
                 | Self::BaseExchangeStackInternal { .. }
                 | Self::MemoryIncDecInternal { .. }
+                | Self::IndexDisplacementInternal { .. }
+                | Self::IndexedImmediateStoreInternal { .. }
         )
     }
 }
@@ -680,6 +716,37 @@ impl Z80MicroSequencer {
                     _ => false,
                 }
             }
+            Z80MicroSequencerPhase::IndexDisplacementRead => {
+                matches!(state.prefix_state, Z80PrefixState::Index(_))
+                    && state.opcode.is_some_and(is_indexed_load_opcode)
+            }
+            Z80MicroSequencerPhase::IndexDisplacementInternal { .. } => {
+                matches!(state.prefix_state, Z80PrefixState::Index(_))
+                    && state
+                        .opcode
+                        .is_some_and(|opcode| is_indexed_load_opcode(opcode) && opcode != 0x36)
+            }
+            Z80MicroSequencerPhase::IndexedImmediateReadMemoryWrite { .. }
+            | Z80MicroSequencerPhase::IndexedImmediateStoreInternal { .. } => {
+                matches!(state.prefix_state, Z80PrefixState::Index(_)) && state.opcode == Some(0x36)
+            }
+            Z80MicroSequencerPhase::MemoryReadRegister { destination } => {
+                match state.prefix_state {
+                    Z80PrefixState::None => true,
+                    Z80PrefixState::Index(_) => state.opcode.is_some_and(|opcode| {
+                        is_indexed_memory_load_opcode(opcode)
+                            && ((opcode >> 3) & 0x07) == destination
+                    }),
+                    _ => false,
+                }
+            }
+            Z80MicroSequencerPhase::MemoryWrite { .. } => match state.prefix_state {
+                Z80PrefixState::None => true,
+                Z80PrefixState::Index(_) => {
+                    state.opcode.is_some_and(is_indexed_memory_store_opcode)
+                }
+                _ => false,
+            },
             _ => state.prefix_state == Z80PrefixState::None,
         };
         let valid = match state.phase {
@@ -1221,6 +1288,60 @@ impl Z80MicroSequencer {
                     })
                     && state.instruction_tstates >= 4
             }
+            Z80MicroSequencerPhase::IndexDisplacementRead => {
+                state.opcode.is_some_and(is_indexed_load_opcode)
+                    && prefix_m1_count(state.prefix_state, state.mcycle_index, 1)
+                        .and_then(|count| minimum_prefixed_tstates(count, 0))
+                        .is_some_and(|minimum| state.instruction_tstates >= minimum)
+                    && pending.is_some_and(|request| {
+                        request.operation == Z80BusOperation::MemoryRead
+                            && request.address == state.registers.pc
+                            && request.base_tstates == 3
+                    })
+            }
+            Z80MicroSequencerPhase::IndexDisplacementInternal {
+                address,
+                remaining_tstates,
+            } => {
+                let completed_tstates = 5_u8.saturating_sub(remaining_tstates);
+                pending.is_none()
+                    && address == state.wz
+                    && (1..=5).contains(&remaining_tstates)
+                    && prefix_m1_count(state.prefix_state, state.mcycle_index, 2)
+                        .and_then(|count| {
+                            minimum_prefixed_tstates(count, 3 + u32::from(completed_tstates))
+                        })
+                        .is_some_and(|minimum| state.instruction_tstates >= minimum)
+                    && state.tstate_index == u16::from(completed_tstates)
+            }
+            Z80MicroSequencerPhase::IndexedImmediateReadMemoryWrite { address } => {
+                state.opcode == Some(0x36)
+                    && address == state.wz
+                    && prefix_m1_count(state.prefix_state, state.mcycle_index, 2)
+                        .and_then(|count| minimum_prefixed_tstates(count, 3))
+                        .is_some_and(|minimum| state.instruction_tstates >= minimum)
+                    && pending.is_some_and(|request| {
+                        request.operation == Z80BusOperation::MemoryRead
+                            && request.address == state.registers.pc
+                            && request.base_tstates == 3
+                    })
+            }
+            Z80MicroSequencerPhase::IndexedImmediateStoreInternal {
+                address,
+                remaining_tstates,
+                ..
+            } => {
+                pending.is_none()
+                    && state.opcode == Some(0x36)
+                    && address == state.wz
+                    && (1..=2).contains(&remaining_tstates)
+                    && state.tstate_index >= 3
+                    && prefix_m1_count(state.prefix_state, state.mcycle_index, 2)
+                        .and_then(|count| {
+                            minimum_prefixed_tstates(count, 3 + u32::from(state.tstate_index))
+                        })
+                        .is_some_and(|minimum| state.instruction_tstates >= minimum)
+            }
             Z80MicroSequencerPhase::ImmediateReadAlu { operation } => {
                 state.opcode.is_some_and(|opcode| {
                     matches!(
@@ -1234,26 +1355,42 @@ impl Z80MicroSequencer {
                 }) && state.instruction_tstates >= 4
             }
             Z80MicroSequencerPhase::MemoryReadRegister { destination } => {
-                let expected_address = state.opcode.and_then(|opcode| match opcode {
-                    0x0A if destination == 7 => Some(state.registers.bc()),
-                    0x1A if destination == 7 => Some(state.registers.de()),
-                    0x40..=0x7F
-                        if opcode != 0x76
-                            && opcode & 0x07 == 0x06
-                            && ((opcode >> 3) & 0x07) == destination
-                            && destination != 6 =>
-                    {
-                        Some(state.registers.hl())
+                let indexed = matches!(state.prefix_state, Z80PrefixState::Index(_));
+                let expected_address = state.opcode.and_then(|opcode| {
+                    if indexed {
+                        (is_indexed_memory_load_opcode(opcode)
+                            && ((opcode >> 3) & 0x07) == destination)
+                            .then_some(state.wz)
+                    } else {
+                        match opcode {
+                            0x0A if destination == 7 => Some(state.registers.bc()),
+                            0x1A if destination == 7 => Some(state.registers.de()),
+                            0x40..=0x7F
+                                if opcode != 0x76
+                                    && opcode & 0x07 == 0x06
+                                    && ((opcode >> 3) & 0x07) == destination
+                                    && destination != 6 =>
+                            {
+                                Some(state.registers.hl())
+                            }
+                            _ => None,
+                        }
                     }
-                    _ => None,
                 });
+                let minimum_tstates = if indexed {
+                    prefix_m1_count(state.prefix_state, state.mcycle_index, 3)
+                        .and_then(|count| minimum_prefixed_tstates(count, 8))
+                        .unwrap_or(u32::MAX)
+                } else {
+                    4
+                };
                 expected_address.is_some_and(|address| {
                     pending.is_some_and(|request| {
                         request.operation == Z80BusOperation::MemoryRead
                             && request.address == address
                             && request.base_tstates == 3
                     })
-                }) && state.instruction_tstates >= 4
+                }) && state.instruction_tstates >= minimum_tstates
             }
             Z80MicroSequencerPhase::MemoryReadAlu { operation, address } => {
                 state.opcode.is_some_and(|opcode| {
@@ -1698,7 +1835,14 @@ impl Z80MicroSequencer {
                 let Some(request) = pending else {
                     return Err(Z80MicroSequencerError::InvalidState);
                 };
+                let indexed = matches!(state.prefix_state, Z80PrefixState::Index(_));
+                let indexed_minimum = prefix_m1_count(state.prefix_state, state.mcycle_index, 3)
+                    .and_then(|count| minimum_prefixed_tstates(count, 8))
+                    .unwrap_or(u32::MAX);
                 let (minimum_tstates, expected_address, expected_value) = match state.opcode {
+                    Some(opcode) if indexed && is_indexed_memory_store_opcode(opcode) => {
+                        (indexed_minimum, Some(state.wz), None)
+                    }
                     Some(0x02) => (4, Some(state.registers.bc()), Some(state.registers.a)),
                     Some(0x12) => (4, Some(state.registers.de()), Some(state.registers.a)),
                     Some(0x77) => (4, Some(state.registers.hl()), None),
@@ -1738,11 +1882,40 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::ImmediateReadRegister { .. }
             | Z80MicroSequencerPhase::ImmediateReadMemoryWrite
             | Z80MicroSequencerPhase::ImmediateReadAlu { .. }
-            | Z80MicroSequencerPhase::MemoryReadRegister { .. }
             | Z80MicroSequencerPhase::MemoryReadAlu { .. }
             | Z80MicroSequencerPhase::MemoryReadIncDec { .. }
             | Z80MicroSequencerPhase::BaseRelativeBranchImmediate => {
                 state.mcycle_index == 1 && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::MemoryReadRegister { .. } => match state.prefix_state {
+                Z80PrefixState::Index(_) => {
+                    prefix_m1_count(state.prefix_state, state.mcycle_index, 3).is_some()
+                        && state.tstate_index == 0
+                }
+                Z80PrefixState::None => state.mcycle_index == 1 && state.tstate_index == 0,
+                _ => false,
+            },
+            Z80MicroSequencerPhase::IndexDisplacementRead => {
+                prefix_m1_count(state.prefix_state, state.mcycle_index, 1).is_some()
+                    && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::IndexDisplacementInternal {
+                remaining_tstates, ..
+            } => {
+                (1..=5).contains(&remaining_tstates)
+                    && prefix_m1_count(state.prefix_state, state.mcycle_index, 2).is_some()
+                    && state.tstate_index == u16::from(5 - remaining_tstates)
+            }
+            Z80MicroSequencerPhase::IndexedImmediateReadMemoryWrite { .. } => {
+                prefix_m1_count(state.prefix_state, state.mcycle_index, 2).is_some()
+                    && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::IndexedImmediateStoreInternal {
+                remaining_tstates, ..
+            } => {
+                (1..=2).contains(&remaining_tstates)
+                    && prefix_m1_count(state.prefix_state, state.mcycle_index, 2).is_some()
+                    && state.tstate_index >= 3
             }
             Z80MicroSequencerPhase::ImmediateReadRegisterPairLow { .. } => {
                 match state.prefix_state {
@@ -1979,32 +2152,39 @@ impl Z80MicroSequencer {
                     && state.tstate_index >= 3
                     && matches!(state.opcode, Some(0x34 | 0x35))
             }
-            Z80MicroSequencerPhase::MemoryWrite { .. } => match state.opcode {
-                Some(0x02 | 0x12 | 0x77) => {
-                    state.mcycle_index == 1
+            Z80MicroSequencerPhase::MemoryWrite { .. } => match state.prefix_state {
+                Z80PrefixState::Index(_) => {
+                    prefix_m1_count(state.prefix_state, state.mcycle_index, 3).is_some()
                         && state.tstate_index == 0
-                        && state.instruction_tstates >= 4
                 }
-                Some(0x36) => {
-                    state.mcycle_index == 2
-                        && state.tstate_index == 0
-                        && state.instruction_tstates >= 7
-                }
-                Some(0x22 | 0x32) => {
-                    state.mcycle_index == 3
-                        && state.tstate_index == 0
-                        && state.instruction_tstates >= 10
-                }
-                Some(0x34 | 0x35) => {
-                    state.mcycle_index == 2
-                        && state.tstate_index == 0
-                        && state.instruction_tstates >= 8
-                }
-                Some(0x67 | 0x6F) => {
-                    state.mcycle_index == 4
-                        && state.tstate_index == 0
-                        && state.instruction_tstates >= 15
-                }
+                Z80PrefixState::None => match state.opcode {
+                    Some(0x02 | 0x12 | 0x77) => {
+                        state.mcycle_index == 1
+                            && state.tstate_index == 0
+                            && state.instruction_tstates >= 4
+                    }
+                    Some(0x36) => {
+                        state.mcycle_index == 2
+                            && state.tstate_index == 0
+                            && state.instruction_tstates >= 7
+                    }
+                    Some(0x22 | 0x32) => {
+                        state.mcycle_index == 3
+                            && state.tstate_index == 0
+                            && state.instruction_tstates >= 10
+                    }
+                    Some(0x34 | 0x35) => {
+                        state.mcycle_index == 2
+                            && state.tstate_index == 0
+                            && state.instruction_tstates >= 8
+                    }
+                    Some(0x67 | 0x6F) => {
+                        state.mcycle_index == 4
+                            && state.tstate_index == 0
+                            && state.instruction_tstates >= 15
+                    }
+                    _ => false,
+                },
                 _ => false,
             },
         };
@@ -2188,13 +2368,24 @@ impl Z80MicroSequencer {
                             | 0xE9
                             | 0xF9
                     );
-                    if index_class != Z80IndexOpcodeClass::UsesIndex || !indexed_16bit_opcode {
+                    if index_class != Z80IndexOpcodeClass::UsesIndex
+                        || !(indexed_16bit_opcode || is_indexed_load_opcode(opcode))
+                    {
                         return self.unsupported(opcode);
                     }
                 } else if self.prefix_state != Z80PrefixState::None || previous_prefix.is_some() {
                     return self.unsupported(opcode);
                 }
                 match opcode {
+                    opcode
+                        if matches!(self.prefix_state, Z80PrefixState::Index(_))
+                            && is_indexed_load_opcode(opcode) =>
+                    {
+                        self.issue_read(
+                            Z80MicroSequencerPhase::IndexDisplacementRead,
+                            self.registers.pc,
+                        )
+                    }
                     0x00 => self.retire(opcode),
                     0x08 => {
                         std::mem::swap(&mut self.registers.a, &mut self.alternate.a);
@@ -2877,6 +3068,49 @@ impl Z80MicroSequencer {
                 self.registers.pc = self.registers.pc.wrapping_add(1);
                 self.issue_write(self.registers.hl(), value)
             }
+            Z80MicroSequencerPhase::IndexDisplacementRead => {
+                let displacement = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.registers.pc = self.registers.pc.wrapping_add(1);
+                let index_base = indexed_stack_pair(self.prefix_state, self.ix, self.iy)
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                let address = index_base.wrapping_add_signed(i16::from(displacement as i8));
+                self.wz = address;
+                if self.opcode == Some(0x36) {
+                    self.issue_read(
+                        Z80MicroSequencerPhase::IndexedImmediateReadMemoryWrite { address },
+                        self.registers.pc,
+                    )
+                } else {
+                    self.mcycle_index = self
+                        .mcycle_index
+                        .checked_add(1)
+                        .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                    self.tstate_index = 0;
+                    self.phase = Z80MicroSequencerPhase::IndexDisplacementInternal {
+                        address,
+                        remaining_tstates: 5,
+                    };
+                    Ok(Z80MicroStep::InternalCycle { tstates: 1 })
+                }
+            }
+            Z80MicroSequencerPhase::IndexedImmediateReadMemoryWrite { address } => {
+                let value = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.registers.pc = self.registers.pc.wrapping_add(1);
+                self.tstate_index = u16::try_from(waits)
+                    .ok()
+                    .and_then(|waits| 3_u16.checked_add(waits))
+                    .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                self.phase = Z80MicroSequencerPhase::IndexedImmediateStoreInternal {
+                    address,
+                    value,
+                    remaining_tstates: 2,
+                };
+                Ok(Z80MicroStep::InternalCycle { tstates: 1 })
+            }
             Z80MicroSequencerPhase::ImmediateReadAlu { operation } => {
                 let operand = response
                     .data
@@ -3314,7 +3548,9 @@ impl Z80MicroSequencer {
             | Z80MicroSequencerPhase::BaseControlPushInternal { .. }
             | Z80MicroSequencerPhase::BaseReturnConditionInternal { .. }
             | Z80MicroSequencerPhase::BaseExchangeStackInternal { .. }
-            | Z80MicroSequencerPhase::MemoryIncDecInternal { .. } => {
+            | Z80MicroSequencerPhase::MemoryIncDecInternal { .. }
+            | Z80MicroSequencerPhase::IndexDisplacementInternal { .. }
+            | Z80MicroSequencerPhase::IndexedImmediateStoreInternal { .. } => {
                 Err(Z80MicroSequencerError::UnexpectedCompletion)
             }
             Z80MicroSequencerPhase::MemoryWrite { address, .. } => {
@@ -3475,6 +3711,67 @@ impl Z80MicroSequencer {
                     next.phase = Z80MicroSequencerPhase::BaseRelativeBranchInternal {
                         displacement,
                         branch_taken,
+                        remaining_tstates,
+                    };
+                    Z80MicroStep::InternalCycle { tstates: 1 }
+                }
+            }
+            Z80MicroSequencerPhase::IndexDisplacementInternal {
+                address,
+                remaining_tstates,
+            } => {
+                let remaining_tstates = remaining_tstates
+                    .checked_sub(1)
+                    .ok_or(Z80MicroSequencerError::InvalidState)?;
+                next.instruction_tstates = next_instruction_tstates;
+                if remaining_tstates == 0 {
+                    let opcode = next
+                        .opcode
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                    if is_indexed_memory_load_opcode(opcode) {
+                        let destination = (opcode >> 3) & 0x07;
+                        next.issue_read(
+                            Z80MicroSequencerPhase::MemoryReadRegister { destination },
+                            address,
+                        )?
+                    } else if is_indexed_memory_store_opcode(opcode) && opcode != 0x36 {
+                        let source = opcode & 0x07;
+                        let value = next.read_register(source);
+                        next.issue_write(address, value)?
+                    } else {
+                        return Err(Z80MicroSequencerError::InvalidState);
+                    }
+                } else {
+                    next.tstate_index = next
+                        .tstate_index
+                        .checked_add(1)
+                        .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                    next.phase = Z80MicroSequencerPhase::IndexDisplacementInternal {
+                        address,
+                        remaining_tstates,
+                    };
+                    Z80MicroStep::InternalCycle { tstates: 1 }
+                }
+            }
+            Z80MicroSequencerPhase::IndexedImmediateStoreInternal {
+                address,
+                value,
+                remaining_tstates,
+            } => {
+                let remaining_tstates = remaining_tstates
+                    .checked_sub(1)
+                    .ok_or(Z80MicroSequencerError::InvalidState)?;
+                next.instruction_tstates = next_instruction_tstates;
+                if remaining_tstates == 0 {
+                    next.issue_write(address, value)?
+                } else {
+                    next.tstate_index = next
+                        .tstate_index
+                        .checked_add(1)
+                        .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                    next.phase = Z80MicroSequencerPhase::IndexedImmediateStoreInternal {
+                        address,
+                        value,
                         remaining_tstates,
                     };
                     Z80MicroStep::InternalCycle { tstates: 1 }
