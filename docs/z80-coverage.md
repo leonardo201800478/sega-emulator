@@ -1,3 +1,5 @@
+> **Estado do runtime Rust (2026-11-03):** este documento preserva a auditoria histórica da implementação Python arquivada. Não use seus estados como cobertura do microsequenciador Rust atual. A matriz normativa DD/FD é [docs/z80-dd-fd-semantic-matrix.md](z80-dd-fd-semantic-matrix.md), e o plano ativo é [docs/z80-dd-fd-resolution-strategy.md](z80-dd-fd-resolution-strategy.md). E4A/E4B estão integradas em `main`; E4C (#473) está em validação no SHA `949dd365`, com INC/DEC indexado em 23 T-states / 6 M-cycles conforme UM008011-0816. Validação diferencial/formal e TEMPORAL_PASS continuam pendentes.
+
 > **Atualização de estado (2026-10-27):** o hardware SG-1000 ativo é Rust-only. A implementação Python antiga e ferramentas/testes que dependiam dela estão em `legacy/python_reference/`; não fazem parte do runtime e os comandos históricos abaixo não são caminhos de execução ativos.
 
 # Auditoria de cobertura da CPU Z80
