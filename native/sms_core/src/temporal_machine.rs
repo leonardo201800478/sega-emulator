@@ -1875,7 +1875,6 @@ mod base_absolute_transfer_temporal_tests {
     }
 }
 
-
 #[cfg(test)]
 mod base_relative_branch_temporal_tests {
     use super::SmsTemporalMachine;
@@ -1956,7 +1955,6 @@ mod base_relative_branch_temporal_tests {
         assert_eq!(restored.now(), MachineTime::from_ticks(36));
     }
 }
-
 
 #[cfg(test)]
 mod base_absolute_jump_temporal_tests {
