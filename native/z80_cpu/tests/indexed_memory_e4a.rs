@@ -1,8 +1,8 @@
 //! E4A indexed-displacement load/store execution through the resumable sequencer.
 
 use sega_z80_cpu::{
-    Z80BusOperation, Z80BusRequest, Z80MicroSequencer, Z80MicroSequencerError, Z80MicroStep,
-    Z80MicroSequencerState,
+    Z80BusOperation, Z80BusRequest, Z80MicroSequencer, Z80MicroSequencerError,
+    Z80MicroSequencerState, Z80MicroStep,
 };
 
 fn request(step: Z80MicroStep) -> Z80BusRequest {
@@ -29,13 +29,12 @@ fn round_trip(cpu: Z80MicroSequencer) -> Z80MicroSequencer {
     Z80MicroSequencer::restore_state(decoded).expect("snapshot restores")
 }
 
-fn complete_internal_cycles(
-    cpu: &mut Z80MicroSequencer,
-    count: usize,
-) -> Z80MicroStep {
+fn complete_internal_cycles(cpu: &mut Z80MicroSequencer, count: usize) -> Z80MicroStep {
     let mut step = Z80MicroStep::InternalCycle { tstates: 1 };
     for _ in 0..count {
-        step = cpu.complete_internal_cycle().expect("internal T-state advances");
+        step = cpu
+            .complete_internal_cycle()
+            .expect("internal T-state advances");
     }
     step
 }

@@ -731,17 +731,21 @@ impl Z80MicroSequencer {
                 matches!(state.prefix_state, Z80PrefixState::Index(_))
                     && state.opcode == Some(0x36)
             }
-            Z80MicroSequencerPhase::MemoryReadRegister { destination } => match state.prefix_state {
-                Z80PrefixState::None => true,
-                Z80PrefixState::Index(_) => state.opcode.is_some_and(|opcode| {
-                    is_indexed_memory_load_opcode(opcode)
-                        && ((opcode >> 3) & 0x07) == destination
-                }),
-                _ => false,
-            },
+            Z80MicroSequencerPhase::MemoryReadRegister { destination } => {
+                match state.prefix_state {
+                    Z80PrefixState::None => true,
+                    Z80PrefixState::Index(_) => state.opcode.is_some_and(|opcode| {
+                        is_indexed_memory_load_opcode(opcode)
+                            && ((opcode >> 3) & 0x07) == destination
+                    }),
+                    _ => false,
+                }
+            }
             Z80MicroSequencerPhase::MemoryWrite { .. } => match state.prefix_state {
                 Z80PrefixState::None => true,
-                Z80PrefixState::Index(_) => state.opcode.is_some_and(is_indexed_memory_store_opcode),
+                Z80PrefixState::Index(_) => {
+                    state.opcode.is_some_and(is_indexed_memory_store_opcode)
+                }
                 _ => false,
             },
             _ => state.prefix_state == Z80PrefixState::None,
@@ -1306,10 +1310,7 @@ impl Z80MicroSequencer {
                     && (1..=5).contains(&remaining_tstates)
                     && prefix_m1_count(state.prefix_state, state.mcycle_index, 2)
                         .and_then(|count| {
-                            minimum_prefixed_tstates(
-                                count,
-                                3 + u32::from(completed_tstates),
-                            )
+                            minimum_prefixed_tstates(count, 3 + u32::from(completed_tstates))
                         })
                         .is_some_and(|minimum| state.instruction_tstates >= minimum)
                     && state.tstate_index == u16::from(completed_tstates)
@@ -1338,10 +1339,7 @@ impl Z80MicroSequencer {
                     && state.tstate_index >= 3
                     && prefix_m1_count(state.prefix_state, state.mcycle_index, 2)
                         .and_then(|count| {
-                            minimum_prefixed_tstates(
-                                count,
-                                3 + u32::from(state.tstate_index),
-                            )
+                            minimum_prefixed_tstates(count, 3 + u32::from(state.tstate_index))
                         })
                         .is_some_and(|minimum| state.instruction_tstates >= minimum)
             }
@@ -1903,8 +1901,7 @@ impl Z80MicroSequencer {
                     && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::IndexDisplacementInternal {
-                remaining_tstates,
-                ..
+                remaining_tstates, ..
             } => {
                 (1..=5).contains(&remaining_tstates)
                     && prefix_m1_count(state.prefix_state, state.mcycle_index, 2).is_some()
@@ -1915,8 +1912,7 @@ impl Z80MicroSequencer {
                     && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::IndexedImmediateStoreInternal {
-                remaining_tstates,
-                ..
+                remaining_tstates, ..
             } => {
                 (1..=2).contains(&remaining_tstates)
                     && prefix_m1_count(state.prefix_state, state.mcycle_index, 2).is_some()
