@@ -82,8 +82,14 @@ fn is_indexed_memory_alu_opcode(opcode: u8) -> bool {
     (0x80..=0xBF).contains(&opcode) && opcode & 0x07 == 0x06
 }
 
+fn is_indexed_memory_inc_dec_opcode(opcode: u8) -> bool {
+    matches!(opcode, 0x34 | 0x35)
+}
+
 fn is_indexed_displacement_opcode(opcode: u8) -> bool {
-    is_indexed_load_opcode(opcode) || is_indexed_memory_alu_opcode(opcode)
+    is_indexed_load_opcode(opcode)
+        || is_indexed_memory_alu_opcode(opcode)
+        || is_indexed_memory_inc_dec_opcode(opcode)
 }
 
 fn is_indexed_load_opcode(opcode: u8) -> bool {
@@ -743,6 +749,14 @@ impl Z80MicroSequencer {
                 Z80PrefixState::Index(_) => state.opcode.is_some_and(is_indexed_memory_alu_opcode),
                 _ => false,
             },
+            Z80MicroSequencerPhase::MemoryReadIncDec { .. }
+            | Z80MicroSequencerPhase::MemoryIncDecInternal { .. } => match state.prefix_state {
+                Z80PrefixState::None => true,
+                Z80PrefixState::Index(_) => {
+                    state.opcode.is_some_and(is_indexed_memory_inc_dec_opcode)
+                }
+                _ => false,
+            },
             Z80MicroSequencerPhase::MemoryReadRegister { destination } => {
                 match state.prefix_state {
                     Z80PrefixState::None => true,
@@ -755,9 +769,10 @@ impl Z80MicroSequencer {
             }
             Z80MicroSequencerPhase::MemoryWrite { .. } => match state.prefix_state {
                 Z80PrefixState::None => true,
-                Z80PrefixState::Index(_) => {
-                    state.opcode.is_some_and(is_indexed_memory_store_opcode)
-                }
+                Z80PrefixState::Index(_) => state.opcode.is_some_and(|opcode| {
+                    is_indexed_memory_store_opcode(opcode)
+                        || is_indexed_memory_inc_dec_opcode(opcode)
+                }),
                 _ => false,
             },
             _ => state.prefix_state == Z80PrefixState::None,
@@ -1796,14 +1811,27 @@ impl Z80MicroSequencer {
                     && state.instruction_tstates >= 8 + u32::from(stage) * 3
             }
             Z80MicroSequencerPhase::MemoryReadIncDec { decrement, address } => {
+                let indexed = matches!(state.prefix_state, Z80PrefixState::Index(_));
                 let expected_opcode = if decrement { 0x35 } else { 0x34 };
+                let expected_address = if indexed {
+                    state.wz
+                } else {
+                    state.registers.hl()
+                };
+                let minimum_tstates = if indexed {
+                    prefix_m1_count(state.prefix_state, state.mcycle_index, 3)
+                        .and_then(|count| minimum_prefixed_tstates(count, 8))
+                        .unwrap_or(u32::MAX)
+                } else {
+                    4
+                };
                 pending.is_some_and(|request| {
                     request.operation == Z80BusOperation::MemoryRead
                         && request.address == address
                         && request.base_tstates == 3
                 }) && state.opcode == Some(expected_opcode)
-                    && address == state.registers.hl()
-                    && state.instruction_tstates >= 4
+                    && address == expected_address
+                    && state.instruction_tstates >= minimum_tstates
             }
             Z80MicroSequencerPhase::BaseInternal {
                 opcode,
@@ -1855,11 +1883,25 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::MemoryIncDecInternal {
                 decrement, address, ..
             } => {
+                let indexed = matches!(state.prefix_state, Z80PrefixState::Index(_));
                 let expected_opcode = if decrement { 0x35 } else { 0x34 };
+                let expected_address = if indexed {
+                    state.wz
+                } else {
+                    state.registers.hl()
+                };
+                let minimum_tstates = if indexed {
+                    prefix_m1_count(state.prefix_state, state.mcycle_index, 3)
+                        .and_then(|count| minimum_prefixed_tstates(count, 8))
+                        .and_then(|minimum| minimum.checked_add(u32::from(state.tstate_index)))
+                        .unwrap_or(u32::MAX)
+                } else {
+                    4 + u32::from(state.tstate_index)
+                };
                 pending.is_none()
                     && state.opcode == Some(expected_opcode)
-                    && address == state.registers.hl()
-                    && state.instruction_tstates >= 4 + u32::from(state.tstate_index)
+                    && address == expected_address
+                    && state.instruction_tstates >= minimum_tstates
             }
             Z80MicroSequencerPhase::MemoryWrite { address, value } => {
                 let Some(request) = pending else {
@@ -1870,7 +1912,11 @@ impl Z80MicroSequencer {
                     .and_then(|count| minimum_prefixed_tstates(count, 8))
                     .unwrap_or(u32::MAX);
                 let (minimum_tstates, expected_address, expected_value) = match state.opcode {
-                    Some(opcode) if indexed && is_indexed_memory_store_opcode(opcode) => {
+                    Some(opcode)
+                        if indexed
+                            && (is_indexed_memory_store_opcode(opcode)
+                                || is_indexed_memory_inc_dec_opcode(opcode)) =>
+                    {
                         (indexed_minimum, Some(state.wz), None)
                     }
                     Some(0x02) => (4, Some(state.registers.bc()), Some(state.registers.a)),
@@ -1912,10 +1958,17 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::ImmediateReadRegister { .. }
             | Z80MicroSequencerPhase::ImmediateReadMemoryWrite
             | Z80MicroSequencerPhase::ImmediateReadAlu { .. }
-            | Z80MicroSequencerPhase::MemoryReadIncDec { .. }
             | Z80MicroSequencerPhase::BaseRelativeBranchImmediate => {
                 state.mcycle_index == 1 && state.tstate_index == 0
             }
+            Z80MicroSequencerPhase::MemoryReadIncDec { .. } => match state.prefix_state {
+                Z80PrefixState::Index(_) => {
+                    prefix_m1_count(state.prefix_state, state.mcycle_index, 3).is_some()
+                        && state.tstate_index == 0
+                }
+                Z80PrefixState::None => state.mcycle_index == 1 && state.tstate_index == 0,
+                _ => false,
+            },
             Z80MicroSequencerPhase::MemoryReadAlu { .. } => match state.prefix_state {
                 Z80PrefixState::Index(_) => {
                     prefix_m1_count(state.prefix_state, state.mcycle_index, 3).is_some()
@@ -2184,11 +2237,19 @@ impl Z80MicroSequencer {
                         state.tstate_index == 4 + u16::from(completed_tstates)
                     }
             }
-            Z80MicroSequencerPhase::MemoryIncDecInternal { .. } => {
-                state.mcycle_index == 1
-                    && state.tstate_index >= 3
-                    && matches!(state.opcode, Some(0x34 | 0x35))
-            }
+            Z80MicroSequencerPhase::MemoryIncDecInternal { .. } => match state.prefix_state {
+                Z80PrefixState::Index(_) => {
+                    prefix_m1_count(state.prefix_state, state.mcycle_index, 3).is_some()
+                        && state.tstate_index >= 3
+                        && matches!(state.opcode, Some(0x34 | 0x35))
+                }
+                Z80PrefixState::None => {
+                    state.mcycle_index == 1
+                        && state.tstate_index >= 3
+                        && matches!(state.opcode, Some(0x34 | 0x35))
+                }
+                _ => false,
+            },
             Z80MicroSequencerPhase::MemoryWrite { .. } => match state.prefix_state {
                 Z80PrefixState::Index(_) => {
                     prefix_m1_count(state.prefix_state, state.mcycle_index, 3).is_some()
@@ -3568,9 +3629,10 @@ impl Z80MicroSequencer {
                     .ok()
                     .and_then(|waits| 3_u16.checked_add(waits))
                     .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
-                // INC/DEC (HL) has three M-cycles: M1 fetch, M2 read plus
-                // its internal T-state, and M3 write. WAIT extends M2, so
-                // the internal interval begins at T3 + the M2 WAIT count.
+                // INC/DEC (HL) has three M-cycles. Indexed INC/DEC reaches this
+                // phase after its prefix, displacement and 5T internal cycle.
+                // The 3T read plus this internal T-state form the read M-cycle;
+                // WAIT extends that interval before the internal T-state.
                 self.tstate_index = wait_offset;
                 self.phase = Z80MicroSequencerPhase::MemoryIncDecInternal {
                     decrement,
@@ -3779,6 +3841,14 @@ impl Z80MicroSequencer {
                         next.issue_read(
                             Z80MicroSequencerPhase::MemoryReadAlu {
                                 operation: (opcode >> 3) & 0x07,
+                                address,
+                            },
+                            address,
+                        )?
+                    } else if is_indexed_memory_inc_dec_opcode(opcode) {
+                        next.issue_read(
+                            Z80MicroSequencerPhase::MemoryReadIncDec {
+                                decrement: opcode == 0x35,
                                 address,
                             },
                             address,
