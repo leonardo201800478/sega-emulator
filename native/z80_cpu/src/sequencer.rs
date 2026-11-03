@@ -8847,3 +8847,181 @@ mod base_stack_push_pop_differential_tests {
         }
     }
 }
+
+
+#[cfg(test)]
+mod base_call_rst_differential_tests {
+    use crate::bus::CpuBus;
+    use crate::{
+        Z80, Z80ArchitecturalState, Z80BusOperation, Z80MicroSequencer, Z80MicroStep,
+    };
+
+    const FLAG_C: u8 = 0x01;
+    const FLAG_PV: u8 = 0x04;
+    const FLAG_Z: u8 = 0x40;
+    const FLAG_S: u8 = 0x80;
+
+    #[derive(Clone)]
+    struct TestBus {
+        memory: Box<[u8; 0x1_0000]>,
+    }
+
+    impl Default for TestBus {
+        fn default() -> Self {
+            Self {
+                memory: Box::new([0; 0x1_0000]),
+            }
+        }
+    }
+
+    impl CpuBus for TestBus {
+        fn read_memory(&mut self, address: u16) -> u8 {
+            self.memory[usize::from(address)]
+        }
+
+        fn write_memory(&mut self, address: u16, value: u8) {
+            self.memory[usize::from(address)] = value;
+        }
+    }
+
+    fn run_sequencer(
+        mut cpu: Z80MicroSequencer,
+        bus: &mut TestBus,
+    ) -> (Z80ArchitecturalState, u32) {
+        let mut step = cpu.begin_instruction().unwrap();
+        for _ in 0..24 {
+            step = match step {
+                Z80MicroStep::BusRequest(request) => {
+                    cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+                    let data = match request.operation {
+                        Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
+                            Some(bus.read_memory(request.address))
+                        }
+                        Z80BusOperation::MemoryWrite { value } => {
+                            bus.write_memory(request.address, value);
+                            None
+                        }
+                        operation => panic!("unexpected CALL/RST bus operation: {operation:?}"),
+                    };
+                    cpu.complete_bus_cycle(request.id, data).unwrap()
+                }
+                Z80MicroStep::InternalCycle { .. } => {
+                    cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
+                    cpu.complete_internal_cycle().unwrap()
+                }
+                Z80MicroStep::InstructionRetired { tstates, .. } => {
+                    return (cpu.export_architectural_state(), tstates);
+                }
+            };
+        }
+        panic!("CALL/RST did not retire within 24 micro-operations");
+    }
+
+    fn compare_call(opcode: u8, flags: u8, taken: bool) {
+        let mut initial = Z80::default().export_architectural_state();
+        initial.registers.pc = 0x1000;
+        initial.registers.sp = 0x2000;
+        initial.registers.f = flags;
+        initial.ei_delay = 1;
+
+        let mut atomic_bus = TestBus::default();
+        atomic_bus.memory[0x1000] = opcode;
+        atomic_bus.memory[0x1001] = 0x00;
+        atomic_bus.memory[0x1002] = 0x20;
+        let mut micro_bus = atomic_bus.clone();
+
+        let mut atomic = Z80::default();
+        atomic.import_architectural_state(initial).unwrap();
+        let atomic_tstates = atomic.step(&mut atomic_bus).unwrap();
+
+        let mut micro = Z80MicroSequencer::default();
+        micro.import_architectural_state(initial).unwrap();
+        let (micro_state, micro_tstates) = run_sequencer(micro, &mut micro_bus);
+
+        assert_eq!(micro_tstates, if taken { 17 } else { 10 }, "CALL {opcode:02X}");
+        assert_eq!(micro_tstates, atomic_tstates, "CALL {opcode:02X}");
+        assert_eq!(
+            micro_state.registers.pc,
+            if taken { 0x2000 } else { 0x1003 },
+            "CALL {opcode:02X}"
+        );
+        assert_eq!(micro_state.wz, 0x2000, "CALL {opcode:02X}");
+        assert_eq!(
+            micro_state.registers.sp,
+            if taken { 0x1FFE } else { 0x2000 },
+            "CALL {opcode:02X}"
+        );
+        if taken {
+            assert_eq!(micro_bus.memory[0x1FFF], 0x10);
+            assert_eq!(micro_bus.memory[0x1FFE], 0x03);
+        }
+        assert_eq!(
+            micro_state,
+            atomic.export_architectural_state(),
+            "architectural mismatch for CALL {opcode:02X}"
+        );
+        assert_eq!(
+            micro_bus.memory, atomic_bus.memory,
+            "memory mismatch for CALL {opcode:02X}"
+        );
+    }
+
+    fn compare_rst(opcode: u8, sp: u16) {
+        let mut initial = Z80::default().export_architectural_state();
+        initial.registers.pc = 0x1000;
+        initial.registers.sp = sp;
+        initial.ei_delay = 1;
+
+        let mut atomic_bus = TestBus::default();
+        atomic_bus.memory[0x1000] = opcode;
+        let mut micro_bus = atomic_bus.clone();
+
+        let mut atomic = Z80::default();
+        atomic.import_architectural_state(initial).unwrap();
+        let atomic_tstates = atomic.step(&mut atomic_bus).unwrap();
+
+        let mut micro = Z80MicroSequencer::default();
+        micro.import_architectural_state(initial).unwrap();
+        let (micro_state, micro_tstates) = run_sequencer(micro, &mut micro_bus);
+
+        let vector = u16::from(opcode & 0x38);
+        assert_eq!(micro_tstates, 11, "RST {opcode:02X}");
+        assert_eq!(micro_tstates, atomic_tstates, "RST {opcode:02X}");
+        assert_eq!(micro_state.registers.pc, vector);
+        assert_eq!(micro_state.wz, vector);
+        assert_eq!(micro_state.registers.sp, sp.wrapping_sub(2));
+        assert_eq!(micro_bus.memory[usize::from(sp.wrapping_sub(1))], 0x10);
+        assert_eq!(micro_bus.memory[usize::from(sp.wrapping_sub(2))], 0x01);
+        assert_eq!(micro_state, atomic.export_architectural_state());
+        assert_eq!(micro_bus.memory, atomic_bus.memory);
+    }
+
+    #[test]
+    fn unconditional_and_conditional_calls_match_atomic_executor() {
+        compare_call(0xCD, 0x00, true);
+        compare_call(0xC4, 0x00, true);
+        compare_call(0xC4, FLAG_Z, false);
+        compare_call(0xCC, FLAG_Z, true);
+        compare_call(0xCC, 0x00, false);
+        compare_call(0xD4, 0x00, true);
+        compare_call(0xD4, FLAG_C, false);
+        compare_call(0xDC, FLAG_C, true);
+        compare_call(0xDC, 0x00, false);
+        compare_call(0xE4, 0x00, true);
+        compare_call(0xE4, FLAG_PV, false);
+        compare_call(0xEC, FLAG_PV, true);
+        compare_call(0xEC, 0x00, false);
+        compare_call(0xF4, 0x00, true);
+        compare_call(0xF4, FLAG_S, false);
+        compare_call(0xFC, FLAG_S, true);
+        compare_call(0xFC, 0x00, false);
+    }
+
+    #[test]
+    fn all_rst_vectors_match_atomic_executor_with_stack_wraparound() {
+        for opcode in [0xC7, 0xCF, 0xD7, 0xDF, 0xE7, 0xEF, 0xF7, 0xFF] {
+            compare_rst(opcode, 0x2000);
+        }
+        compare_rst(0xFF, 0x0000);
+    }
+}
