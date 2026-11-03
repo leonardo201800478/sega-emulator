@@ -1,6 +1,8 @@
 //! E3A2b indexed PUSH/POP operations through the resumable Z80 sequencer.
 
-use sega_z80_cpu::{Z80BusOperation, Z80BusRequest, Z80MicroSequencer, Z80MicroSequencerState, Z80MicroStep};
+use sega_z80_cpu::{
+    Z80BusOperation, Z80BusRequest, Z80MicroSequencer, Z80MicroSequencerState, Z80MicroStep,
+};
 
 fn request(step: Z80MicroStep) -> Z80BusRequest {
     match step {
