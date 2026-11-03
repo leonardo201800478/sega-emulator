@@ -517,10 +517,10 @@ impl Z80MicroSequencer {
                     && pending.is_none()
                     && if remaining_tstates >= 4 {
                         state.mcycle_index == 2
-                            && state.tstate_index == u16::from(7 - remaining_tstates)
+                        && state.tstate_index == u16::from(7 - remaining_tstates)
                     } else {
                         state.mcycle_index == 3
-                            && state.tstate_index == u16::from(3 - remaining_tstates)
+                        && state.tstate_index == u16::from(3 - remaining_tstates)
                     }
                     && state.instruction_tstates >= 8 + u32::from(7 - remaining_tstates)
             }
