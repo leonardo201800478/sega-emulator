@@ -149,23 +149,23 @@ A implementação reutiliza a ALU compartilhada `sega-z80-alu` e preserva o exec
 ## 11. P7 — Z80 ALU com operando imediato e indireto (HL), PR #426
 
 **Branch candidata:** feat/z80-sms-alu-immediate-memory  
-**SHA candidato atual:** 5fdb9ce8c8c705ae6af377151c1bb3b798a730c5  
+**SHA de código validado:** 35372cdd6705cbae57992fbc770b03982b4f10eb  
 **PR:** https://github.com/leonardo201800478/sega-emulator/pull/426  
 **Base:** feat/z80-sms-alu-register-matrix (PR #425; empilhada, não integrada à main).  
 **CI:** run 41564679857 falhou somente no step Formatting; Windows x64 e Python PASS; Scheduler deterministic stress SKIPPED. A correção de formatação foi aplicada no SHA candidato atual, mas a execução CI desse SHA ainda não foi localizada/confirmada.
 
 | Componente | Estado formal | Evidência / limite |
 |---|---|---|
-| ALU imediata A,n | IMPLEMENTED / INTEGRATION_PENDING | 8 opcodes C6/CE/D6/DE/E6/EE/F6/FE; leitura de operando agendada, PC avança na conclusão |
-| ALU com fonte (HL) | IMPLEMENTED / INTEGRATION_PENDING | 8 opcodes 86/8E/96/9E/A6/AE/B6/BE; leitura de memória agendada |
-| Continuação retomável e snapshot | IMPLEMENTED / INTEGRATION_PENDING | Fases ImmediateReadAlu/MemoryReadAlu e codec com tags próprias; versão do estado Z80 incrementada |
-| SMS temporal state | IMPLEMENTED / INTEGRATION_PENDING | Versão do estado SMS temporal incrementada; testes diferenciais propostos via Scheduler |
-| WAIT e timing nominal | IMPLEMENTED / INTEGRATION_PENDING | Testes adicionados para 7 T nominais e WAIT; ainda sem CI verde |
+| ALU imediata A,n | IMPLEMENTED / QUICK_PASS | 8 opcodes C6/CE/D6/DE/E6/EE/F6/FE; leitura de operando agendada, PC avança na conclusão; CI PASS |
+| ALU com fonte (HL) | IMPLEMENTED / QUICK_PASS | 8 opcodes 86/8E/96/9E/A6/AE/B6/BE; leitura de memória agendada; CI PASS |
+| Continuação retomável e snapshot | IMPLEMENTED / QUICK_PASS | Fases ImmediateReadAlu/MemoryReadAlu, codec com tags próprias e testes de round-trip pendente; CI PASS |
+| SMS temporal state | IMPLEMENTED / QUICK_PASS | Versão do estado SMS temporal incrementada; comparação diferencial via Scheduler PASS |
+| WAIT e timing nominal | IMPLEMENTED / QUICK_PASS | Testes de 7 T nominais e WAIT PASS |
 | Z80 retomável completo | INTEGRATION_PENDING | Prefixos CB/ED/DD/FD, HALT, interrupções, I/O, instruções 16-bit, refresh elétrico e estado arquitetural completo permanecem pendentes |
 | TEMPORAL_PASS | NOT DECLARED | Sem CI verde e sem execução in-game; não inferir fidelidade sistêmica total |
 
 **Critérios implementados no código:** M1 4 T + leitura 3 T; leitura imediata usa PC e incrementa PC somente ao concluir; (HL) solicita o byte pelo barramento temporal; WAIT entra no contador da instrução; snapshot preserva fase/request/WAIT. A suíte diferencial compara os oito grupos de operação com o executor atômico em registradores, refresh e tempo do Scheduler.
 
-**Validação:** as execuções 41564602106 e 41564679857 falharam no gate de formatação; a segunda também registrou Python e Windows x64 PASS. As correções de rustfmt e a correção do despacho da fase MemoryReadAlu estão no candidato atual; ainda aguardando execução CI desse SHA. Execução local NOT RUN. Manter INTEGRATION_PENDING até CI completo e evidência de integração.
+**Validação:** no SHA de código 35372cdd6705cbae57992fbc770b03982b4f10eb, cargo fmt, Clippy, testes direcionados SMS/SG-1000 e testes do workspace: PASS; Ruff formatação/lint e regressão Python: PASS; Windows x64 D3D12, testes de vídeo, WASAPI/XAudio2 e testes de áudio: PASS. Scheduler deterministic stress: SKIPPED. Execução local NOT RUN. A fatia recebe QUICK_PASS de validação automatizada; manter INTEGRATION_PENDING quanto à integração sistêmica/in-game.
 
 A PR #426 permanece Draft e empilhada sobre #425. Nenhum merge foi realizado.
