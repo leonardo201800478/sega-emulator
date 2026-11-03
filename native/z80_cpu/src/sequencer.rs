@@ -2678,7 +2678,6 @@ mod indirect_bc_de_validation_tests {
     }
 }
 
-
 #[cfg(test)]
 mod indirect_bc_de_differential_tests {
     use super::{Z80MicroSequencer, Z80MicroStep};
@@ -2784,10 +2783,7 @@ mod indirect_bc_de_differential_tests {
             let retired = service_request(&mut sequenced, &mut sequenced_bus, memory);
             assert_eq!(
                 retired,
-                Z80MicroStep::InstructionRetired {
-                    opcode,
-                    tstates: 7
-                },
+                Z80MicroStep::InstructionRetired { opcode, tstates: 7 },
                 "opcode {opcode:02X}"
             );
 
