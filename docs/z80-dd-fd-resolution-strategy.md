@@ -2,7 +2,8 @@
 
 **Status:** plano de execução para a próxima fatia de trabalho  
 **Data da auditoria:** 2026-11-03  
-**Baseline:** `main` — `e4604f3152c09e8d16c37f94f94a4b344db33b62`  
+**Baseline inicial E0:** `e4604f3152c09e8d16c37f94f94a4b344db33b62`  
+**Baseline atual após E1 / PR #467:** `aa4a4fa7661c28d3b2e21ac6d6eb4379fd297f65`  
 **PR de referência:** [#447](https://github.com/leonardo201800478/sega-emulator/pull/447) — manter aberta, sem merge  
 **Escopo:** microsequenciador Z80 compartilhado; não confundir conclusão do núcleo com integração temporal completa ao SMS.
 
@@ -20,7 +21,7 @@ Ordem de execução:
 5. Provar snapshot/replay e comportamento temporal separadamente.
 6. Integrar ao SMS somente após demonstrar o contrato do Z80 compartilhado.
 
-**A primeira PR não altera runtime.** A arquitetura permanece centralizada nos crates compartilhados. Não criar Z80 alternativo ou sequenciador específico do SMS.
+**A PR #467 concluiu a primeira fatia documental/testes E1 sem alterar runtime; foi integrada na main após todos os gates obrigatórios passarem.** A arquitetura permanece centralizada nos crates compartilhados. Não criar Z80 alternativo ou sequenciador específico do SMS.
 
 ## 2. Baseline E0 — fatos confirmados
 
@@ -28,7 +29,8 @@ Ordem de execução:
 
 | Item | Estado confirmado |
 |---|---|
-| SHA da main | `e4604f3152c09e8d16c37f94f94a4b344db33b62` |
+| SHA da main na auditoria inicial | `e4604f3152c09e8d16c37f94f94a4b344db33b62` |
+| SHA da main após E1 (#467) | `aa4a4fa7661c28d3b2e21ac6d6eb4379fd297f65` |
 | Schema do microsequenciador | `Z80_MICRO_SEQUENCER_STATE_VERSION = 25` |
 | Codec | `native/z80_cpu/src/snapshot.rs`; não é save state integral da máquina SMS |
 | Inventário BASE | PR #465 integrada; 251 encodings com handler e 1 lacuna explícita (HALT), excluídos CB/DD/ED/FD |
