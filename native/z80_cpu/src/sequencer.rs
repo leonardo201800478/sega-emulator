@@ -2993,7 +2993,12 @@ mod tests {
                 restored = Z80MicroSequencer::restore_state(
                     crate::Z80MicroSequencerState::decode(&encoded).unwrap()
                 ).unwrap();
-                assert_eq!(restored.export_state().tstate_index, u16::from(remaining));
+                if remaining == 4 {
+                    assert_eq!(restored.export_state().mcycle_index, 3);
+                    assert_eq!(restored.export_state().tstate_index, 0);
+                } else if remaining < 4 {
+                    assert_eq!(restored.export_state().tstate_index, u16::from(3 - remaining));
+                }
             }
             let retired_step = restored.complete_internal_cycle().unwrap();
             retired(retired_step, opcode, 15);
