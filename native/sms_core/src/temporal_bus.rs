@@ -7,13 +7,13 @@
 use core::fmt;
 
 use crate::{
-    CartridgeImage, SmsCoreError, SmsMemory, SmsTemporalCoordinator, SmsTemporalCoordinatorError,
-    SmsTemporalCoordinatorState, SmsTemporalEvent,
+    CartridgeImage, SmsCoreError, SmsIo, SmsMemory, SmsTemporalCoordinator,
+    SmsTemporalCoordinatorError, SmsTemporalCoordinatorState, SmsTemporalEvent,
 };
 use sega_temporal_core::MachineTime;
 use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
 
-pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 4;
+pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 5;
 
 fn elapsed_tstates(
     started_at: MachineTime,
@@ -76,11 +76,21 @@ pub enum SmsTemporalDispatch {
     },
 }
 
+/// Observable port write committed at a scheduled bus-completion boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SmsTemporalPortWrite {
+    pub port: u16,
+    pub value: u8,
+    pub completed_at: MachineTime,
+}
+
 /// Complete in-memory continuation of the transactional bus adapter.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SmsTemporalBusState {
     pub format_version: u16,
     pub memory: SmsMemory,
+    pub io: SmsIo,
+    pub port_write_trace: Vec<SmsTemporalPortWrite>,
     pub coordinator: SmsTemporalCoordinatorState,
     pub pending_request: Option<Z80BusRequest>,
     pub request_started_at: Option<MachineTime>,
@@ -116,7 +126,7 @@ impl fmt::Display for SmsTemporalBusError {
                 "SMS temporal bus expected request {expected}, received {received}"
             ),
             Self::UnsupportedOperation => {
-                f.write_str("this temporal bus slice supports memory cycles only")
+                f.write_str("this temporal bus operation is not implemented by the SMS temporal slice")
             }
             Self::InvalidState => f.write_str("SMS temporal bus snapshot is inconsistent"),
         }
@@ -141,6 +151,8 @@ impl From<SmsTemporalCoordinatorError> for SmsTemporalBusError {
 #[derive(Debug, Clone)]
 pub struct SmsTemporalBus {
     memory: SmsMemory,
+    io: SmsIo,
+    port_write_trace: Vec<SmsTemporalPortWrite>,
     coordinator: SmsTemporalCoordinator,
     pending_request: Option<Z80BusRequest>,
     request_started_at: Option<MachineTime>,
@@ -161,6 +173,8 @@ impl SmsTemporalBus {
         let coordinator = SmsTemporalCoordinator::new(master_ticks_per_tstate)?;
         Ok(Self {
             memory,
+            io: SmsIo::default(),
+            port_write_trace: Vec::new(),
             coordinator,
             pending_request: None,
             request_started_at: None,
@@ -192,6 +206,8 @@ impl SmsTemporalBus {
             Z80BusOperation::OpcodeFetch
                 | Z80BusOperation::MemoryRead
                 | Z80BusOperation::MemoryWrite { .. }
+                | Z80BusOperation::PortRead
+                | Z80BusOperation::PortWrite { .. }
         ) {
             return Err(SmsTemporalBusError::UnsupportedOperation);
         }
@@ -280,8 +296,10 @@ impl SmsTemporalBus {
                         self.memory.write(request.address, value);
                         None
                     }
-                    Z80BusOperation::PortRead | Z80BusOperation::PortWrite { .. } => {
-                        return Err(SmsTemporalBusError::UnsupportedOperation);
+                    Z80BusOperation::PortRead => Some(self.read_port(request.address)),
+                    Z80BusOperation::PortWrite { value } => {
+                        self.write_port(request.address, value, dispatch.event.timestamp);
+                        None
                     }
                 };
                 let completion = SmsBusCompletion {
@@ -392,6 +410,39 @@ impl SmsTemporalBus {
         self.memory.write(address, value);
     }
 
+    pub fn io(&self) -> &SmsIo {
+        &self.io
+    }
+
+    pub fn io_mut(&mut self) -> &mut SmsIo {
+        &mut self.io
+    }
+
+    pub fn port_write_trace(&self) -> &[SmsTemporalPortWrite] {
+        &self.port_write_trace
+    }
+
+    fn read_port(&self, port: u16) -> u8 {
+        match (port as u8) & 0xC1 {
+            0x40 | 0x41 | 0x80 | 0x81 => 0xFF,
+            _ => self.io.read_port(port),
+        }
+    }
+
+    fn write_port(&mut self, port: u16, value: u8, completed_at: MachineTime) {
+        let port_byte = port as u8;
+        if port_byte <= 0x3F && port_byte & 1 == 0 {
+            self.memory.write_control_port(value);
+        } else {
+            self.io.write_port(port, value);
+        }
+        self.port_write_trace.push(SmsTemporalPortWrite {
+            port,
+            value,
+            completed_at,
+        });
+    }
+
     /// Read-only access to the mapper-backed memory image.
     pub const fn memory(&self) -> &SmsMemory {
         &self.memory
@@ -402,6 +453,8 @@ impl SmsTemporalBus {
         SmsTemporalBusState {
             format_version: SMS_TEMPORAL_BUS_STATE_VERSION,
             memory: self.memory.clone(),
+            io: self.io.clone(),
+            port_write_trace: self.port_write_trace.clone(),
             coordinator: self.coordinator.export_state(),
             pending_request: self.pending_request,
             request_started_at: self.request_started_at,
@@ -421,6 +474,17 @@ impl SmsTemporalBus {
         let pending_events = &state.coordinator.scheduler.event_queue.pending;
         let scale = state.coordinator.master_ticks_per_tstate;
         let now = coordinator.now();
+        if state
+            .port_write_trace
+            .iter()
+            .any(|write| write.completed_at > now)
+            || state
+                .port_write_trace
+                .windows(2)
+                .any(|pair| pair[0].completed_at > pair[1].completed_at)
+        {
+            return Err(SmsTemporalBusError::InvalidState);
+        }
         let last_dispatch = state.coordinator.scheduler.last_dispatch_timestamp;
         match (
             state.pending_request,
@@ -479,6 +543,8 @@ impl SmsTemporalBus {
         }
         Ok(Self {
             memory: state.memory,
+            io: state.io,
+            port_write_trace: state.port_write_trace,
             coordinator,
             pending_request: state.pending_request,
             request_started_at: state.request_started_at,
