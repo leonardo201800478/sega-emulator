@@ -1128,9 +1128,9 @@ mod tests {
         ] {
             let mut cpu = Z80MicroSequencer::default();
             let mut next = match cpu.begin_instruction().unwrap() {
-                crate::Z80MicroStep::BusRequest(request) => {
-                    cpu.complete_bus_cycle(request.id, Some(prefixes[0])).unwrap()
-                }
+                crate::Z80MicroStep::BusRequest(request) => cpu
+                    .complete_bus_cycle(request.id, Some(prefixes[0]))
+                    .unwrap(),
                 other => panic!("expected initial M1 request, got {other:?}"),
             };
 
@@ -1183,14 +1183,17 @@ mod tests {
             );
             let selected = prefixes[prefixes.len() - 1];
             assert_eq!(
-                if selected == 0xDD { restored.ix } else { restored.iy },
+                if selected == 0xDD {
+                    restored.ix
+                } else {
+                    restored.iy
+                },
                 expected_index
             );
         }
     }
 
     #[test]
-        #[test]
     fn pending_indexed_add_internal_phase_round_trips_v18_snapshot() {
         for (prefix, opcode, initial, operand) in [
             (0xDD, 0x09, 0x1234, 0x0102),
@@ -1215,7 +1218,8 @@ mod tests {
                 other => panic!("expected indexed opcode M1 request, got {other:?}"),
             };
             assert_eq!(
-                cpu.complete_bus_cycle(opcode_fetch.id, Some(opcode)).unwrap(),
+                cpu.complete_bus_cycle(opcode_fetch.id, Some(opcode))
+                    .unwrap(),
                 crate::Z80MicroStep::InternalCycle { tstates: 1 }
             );
             assert_eq!(cpu.export_state().format_version, 18);
@@ -1231,7 +1235,7 @@ mod tests {
         }
     }
 
-fn pending_alu_operand_phases_round_trip_through_snapshot_codec() {
+    fn pending_alu_operand_phases_round_trip_through_snapshot_codec() {
         for opcode in [0xC6, 0x86] {
             let mut cpu = Z80MicroSequencer::default();
             cpu.registers.set_hl(0xC123);
