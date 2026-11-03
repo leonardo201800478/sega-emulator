@@ -319,6 +319,17 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u16(address);
             writer.u8(low);
         }
+        Z80MicroSequencerPhase::BaseRelativeBranchImmediate => writer.u8(37),
+        Z80MicroSequencerPhase::BaseRelativeBranchInternal {
+            displacement,
+            branch_taken,
+            remaining_tstates,
+        } => {
+            writer.u8(38);
+            writer.u8(displacement as u8);
+            writer.u8(u8::from(branch_taken));
+            writer.u8(remaining_tstates);
+        }
         Z80MicroSequencerPhase::MemoryWrite { address, value } => {
             writer.u8(7);
             writer.u16(address);
@@ -558,6 +569,12 @@ fn read_phase(
             stage: reader.u8()?,
             address: reader.u16()?,
             low: reader.u8()?,
+        },
+        37 => Z80MicroSequencerPhase::BaseRelativeBranchImmediate,
+        38 => Z80MicroSequencerPhase::BaseRelativeBranchInternal {
+            displacement: reader.u8()? as i8,
+            branch_taken: read_bool(reader)?,
+            remaining_tstates: reader.u8()?,
         },
         7 => Z80MicroSequencerPhase::MemoryWrite {
             address: reader.u16()?,
