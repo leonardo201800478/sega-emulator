@@ -5,7 +5,7 @@
 **Baseline inicial E0:** `e4604f3152c09e8d16c37f94f94a4b344db33b62`  
 **Baseline após E1 / PR #467:** `aa4a4fa7661c28d3b2e21ac6d6eb4379fd297f65`  
 **Baseline após E2 / PR #468:** `abd154332b1dabfb68874f2b80f306da7e060552`  
-**Baseline atual após E3A1 / PR #469:** `ee9d39fc017b53493cc48d1343a7ca4b77581d3b`  
+**Baseline de entrada após PR #466 e PR #469:** `bcc7ef7954bd8cadd148b22c464260810ff63fb3`  
 **PR de referência:** [#447](https://github.com/leonardo201800478/sega-emulator/pull/447) — manter aberta, sem merge  
 **Escopo:** microsequenciador Z80 compartilhado; não confundir conclusão do núcleo com integração temporal completa ao SMS.
 
@@ -169,7 +169,7 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 
 - [x] FSM integrada ao caminho OpcodeFetch com estados `None/Cb/Ed/Index(Ix|Iy)`.
 - [x] DD/FD repetidos e alternados aplicam last-prefix-wins; ED cancela o modo indexado.
-- [x] Classificador distingue `UsesIndex`, `Ignored` e `IndexedCb`; a execução de opcodes ignorados continua reservada a E4.
+- [x] Classificador distingue `UsesIndex`, `Ignored` e `IndexedCb`; a execução geral de opcodes ignorados continua reservada a E6.
 - [x] Sem limite artificial de prefixos; cadeia de 257 prefixos validada.
 - [x] Snapshot contém o latch, valida fase/opcode e faz round-trip com request M1 pendente.
 - [x] Schema incrementado uma única vez de 25 para 26; formato antigo não é reinterpretado.
@@ -178,7 +178,7 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 
 **Gate E2:** PASS para FSM, seleção de prefixo, classificação e snapshot. CI completo do SHA candidato: [run 41721337030](https://github.com/leonardo201800478/sega-emulator/actions/runs/41721337030). Isso não declara FUNCTIONAL_PASS das instruções DD/FD nem TEMPORAL_PASS.
 
-**Limites mantidos:** execução de instruções indexadas, semântica de prefixos ignorados, displacement, DDCB/FDCB, traces por T-state e integração temporal permanecem nas etapas E3-E9.
+**Limites mantidos:** as famílias indexadas restantes, prefixos ignorados, DDCB/FDCB, traces por T-state e integração temporal permanecem nas etapas E4-E9.
 
 ### E3 — Operações 16-bit e substituição HL→IX/IY
 
@@ -193,43 +193,70 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 - [x] 10 testes direcionados E3A1; flags, WZ, wrap e tempos nominais cobertos.
 - [x] CI completo no SHA candidato: [run 41723613218](https://github.com/leonardo201800478/sega-emulator/actions/runs/41723613218).
 
-**E3A2 — pendente:** LD (nn),IX/IY; LD IX/IY,(nn); PUSH/POP IX/IY; EX (SP),IX/IY.
+**E3A2 — implementado no candidato PR #470:**
+- [x] `LD (nn),IX/IY` e `LD IX/IY,(nn)`, incluindo ordem little-endian, WZ=nn+1 e wrap em FFFF→0000.
+- [x] `PUSH IX/IY` e `POP IX/IY`, com decrementos/incrementos de SP nos pontos de barramento corretos.
+- [x] `EX (SP),IX/IY`, com leituras low/high, escritas low/high, SP preservado e commit após os T-states internos finais.
+- [x] WAIT em operações de leitura/escrita e snapshot/restore nos estados intermediários de todas as três famílias.
+- [x] Prefixos DD/FD repetidos e alternados, last-prefix-wins e M-cycle index acumulado.
+- [x] Wrap de nn, SP e SP+1; flags preservadas; PC e WZ cobertos.
+- [x] 11 testes direcionados E3A2a/b/c.
+- [x] CI completo do candidato `5cc45b9150006f3a53beb1493dc5bcc4be3965ae`: [run 41727716404](https://github.com/leonardo201800478/sega-emulator/actions/runs/41727716404), 4/4 workflows PASS.
 
-**Gate E3:** E3A1 QUICK_PASS/SHORT_PASS; E3 integral ainda não concluído. Não declara oráculo independente nem TEMPORAL_PASS; os traces por T-state e commit semântico temporal continuam pendentes.
+**Limite:** os resultados são QUICK_PASS/SHORT_PASS do microsequenciador para estas famílias; não representam oráculo físico independente, trace por T-state completo, ZEXDOC/ZEXALL ou TEMPORAL_PASS.
 
-### E4 — Prefixos não afetados
+**Gate E3:** E3A1 + E3A2 implementadas e SHORT_PASS no candidato PR #470. E3 está funcionalmente fechada no escopo das operações de 16 bits IX/IY; validação diferencial independente, trace por T-state e integração temporal continuam pendentes. Não declarar TEMPORAL_PASS.
 
-Cobrir instruções que ignoram DD/FD e preservar custo dos prefixos. Distinguir instruções HL/H/L/(HL) afetadas das que não usam esses recursos. Validar EX DE,HL, EXX, ED e demais famílias.
+### E4 — Instruções indexadas com displacement
 
-**Gate E4:** nenhum opcode indexado cai silenciosamente no caminho base; cada fallback classificado e testado.
+Implementar as famílias que acessam `(IX+d)` e `(IY+d)`:
+- `LD r,(IX/IY+d)` e `LD (IX/IY+d),r`, incluindo as exceções em que H/L são os registradores HL comuns.
+- `LD (IX/IY+d),n`.
+- `ALU A,(IX/IY+d)`.
+- `INC (IX/IY+d)` e `DEC (IX/IY+d)`, com read-modify-write.
+- Calcular EA com displacement assinado e wrap de 16 bits; validar WZ/MEMPTR, estados internos, ordem de barramento, WAIT, commit e snapshots.
 
-### E5 — IXH/IXL/IYH/IYL
+**Gate E4:** displacement 00–FF, bordas EA 0000/FFFF, todas as famílias de load/store/ALU/INC/DEC e exceções H/L cobertas por testes dirigidos e vetores independentes.
 
-Implementar LD r,r', LD r,n, INC/DEC e ALU para registradores de metade. Tratar separadamente casos com (IX/IY+d), nos quais H/L pode referir-se aos registradores normais. Usar tabela independente para flags; helper ALU do projeto não é oráculo independente.
+### E5 — Prefixos DDCB/FDCB
 
-**Gate E5:** vetores de borda e varreduras exaustivas aplicáveis; diferenças de variante documentadas.
+Implementar a sequência completa DD/FD, CB, displacement e opcode final:
+- Fetch DD/FD e CB como M1; displacement e opcode final com classificação correta de M1/non-M1.
+- BIT como leitura sem write-back.
+- Rotações, shifts, RES e SET como read-modify-write; cópia opcional do resultado para o registrador indicado pelo campo z.
+- Validar R/refresh, flags X/Y, WZ, endereços, WAIT, snapshots e temporização por ciclo.
 
-### E6 — Endereçamento indexado com displacement
+**Gate E5:** 256 subopcodes por índice, com traces de barramento e T-states por fase; BIT não escreve memória.
 
-Ler displacement como byte assinado e calcular EA com wrap de 16 bits. Implementar LD, ALU, INC/DEC e operações de memória indexadas. Verificar EA, WZ/MEMPTR e ordem de leituras/escritas. Derivar ciclos internos e WAIT dos diagramas/traces, sem premissas não verificadas.
+### E6 — Prefixos ignorados e combinações DD/FD
 
-**Gate E6:** displacement 0x00–0xFF, bordas EA 0x0000/0xFFFF e modos de acesso relevantes.
+Validar explicitamente:
+- DD/FD seguido de instrução BASE que não usa HL/IX/IY.
+- DD/FD repetidos e alternados, incluindo last-prefix-wins e custo de cada M1.
+- DD/FD seguido de ED, cancelando a seleção IX/IY.
+- DD/FD seguido de CB, distinguindo DDCB/FDCB.
+- Prefixos ignorados em instruções com H/L/(HL), sem substituir registradores indevidamente.
+- Bytes consumidos, PC, R, M-cycles, T-states, flags, WZ e ausência de fetch duplicado.
 
-### E7 — DDCB/FDCB
+**Gate E6:** cada opcode classificado como UsesIndex, Ignored ou IndexedCb tem caminho e teste explícitos; nenhum fallback silencioso.
 
-Implementar DD/FD-CB, displacement e subopcode como estados distintos. Confirmar M1/non-M1, R, ordem do barramento e T-states por fontes; valores citados com frequência (23T RMW e 20T BIT) são hipóteses de teste até confirmação. BIT é read-only; rotações/shifts/RES/SET exigem read-modify-write. Validar cópia do resultado para registrador conforme campo z e flags X/Y conforme política de variante.
+### E7 — Fechamento semântico do Z80
 
-**Gate E7:** 256 subopcodes por prefixo; testes de memória/registradores, estado final, flags, R, T-states e trace.
+Auditar sistematicamente BASE, CB, ED, DD, FD, DDCB e FDCB. Fechar flags documentadas e não documentadas, Q/WZ/MEMPTR, R/I, HALT, INT/NMI, IM 0/1/2, EI delay, RETI/RETN, instruções de bloco, estados alternativos e condições de borda. Validar também snapshots e rejeição de estados inconsistentes em cada safe point.
 
-### E8 — Snapshot, interrupções e replay
+**Gate E7:** matriz por instrução/opcode com semântica, bytes, estado, flags, barramento, M-cycles, T-states, snapshot e nível de evidência; nenhuma família marcada completa apenas por existir handler.
 
-Snapshot em cada safe point alcançável, inclusive transação pendente e WAIT quando aplicável. Restore reproduz estado, trace, requests, respostas, escritas e resultado. Injetar INT/NMI em fronteiras relevantes; aceitar interrupção somente nos pontos confirmados pela documentação/testes da variante. Fuzz do codec rejeita estados inconsistentes sem panic. Snapshot integral SMS é gate separado.
+### E8 — Validação formal e diferencial
 
-**Gate E8:** replay determinístico e fuzz sem panic, com cobertura de cada fase/latch.
+Executar ZEXDOC, ZEXALL e vetores independentes compatíveis com a revisão de CPU-alvo. Comparar registradores, flags, PC, SP, WZ, memória, I/O e tempos contra oráculos independentes. SingleStepTests e executores internos são referências diferenciais úteis, mas não capturas diretas de silício.
 
-### E9 — Fechamento e integração
+**Gate E8:** resultados reproduzíveis vinculados ao SHA; divergências classificadas por instrução e variante; nenhum resultado esperado adaptado ao comportamento atual do emulador.
 
-Fechar cada célula com evidência; executar testes formais disponíveis (ZEXDOC/ZEXALL quando runner compatível); rodar todos os gates CI do SHA candidato. Integrar o Z80 ao `SmsTemporalBus` via contratos compartilhados e depois VDP/PSG/Scheduler/IRQ/ports em tarefas separadas. `TEMPORAL_PASS` exige traces temporais independentes e integração demonstrada.
+### E9 — Validação temporal e integração
+
+Demonstrar execução determinística por M-cycle/T-state, WAIT, interrupções, HALT, suspensão/retomada e snapshots. Integrar o mesmo Z80 compartilhado aos barramentos SMS e SG-1000, sem duplicar CPU ou deslocar timing para Python. Validar regressões BASE, Scheduler stress e invariância entre execuções equivalentes.
+
+**Gate E9:** traces temporais independentes e integração sistêmica comprovada. Somente então conceder `TEMPORAL_PASS`.
 
 ## 6. Critérios transversais
 
@@ -263,6 +290,6 @@ Além disso, Scheduler deterministic stress e Windows x64 D3D12/WASAPI/XAudio2 q
 
 ## 8. Próxima ação
 
-Prosseguir para E3A2: transferências de/para memória absoluta, PUSH/POP IX/IY e EX (SP),IX/IY. Preservar a FSM E2 e os contratos de barramento; acrescentar fases retomáveis, snapshot, WAIT e testes por família.
+Prosseguir para E4: instruções indexadas com displacement (IX+d)/(IY+d). Preservar a FSM E2 e as fases E3 já integradas; estender o microsequenciador com fases retomáveis, WAIT, snapshot e testes por família.
 
-**Estado atual DD/FD:** E2 aprovada na dimensão de FSM/snapshot; E3A1 implementada e QUICK_PASS/SHORT_PASS; E3A2, E4-E9 pendentes. DDCB/FDCB ainda sem displacement/subopcode no microsequenciador; sem LONG_PASS ou TEMPORAL_PASS global.
+**Estado atual DD/FD:** E2 aprovada na dimensão de FSM/snapshot; E3A1 e E3A2 implementadas no candidato PR #470 com CI 4/4 PASS; E4-E9 pendentes. DDCB/FDCB ainda sem displacement/subopcode no microsequenciador. Sem LONG_PASS ou TEMPORAL_PASS global.
