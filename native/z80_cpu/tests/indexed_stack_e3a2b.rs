@@ -139,16 +139,20 @@ fn pop_iy_uses_fd_prefix_and_commits_only_after_high_byte() {
     let fetch = feed_prefix(&mut cpu, fetch, 0xFD);
     let low = request(cpu.complete_bus_cycle(fetch.id, Some(0xE1)).unwrap());
     assert_eq!(low.address, 0x4000);
+    cpu.insert_wait_tstate().unwrap();
+    cpu = round_trip(cpu);
     assert_eq!(cpu.iy, 0xAAAA);
 
     let high = request(cpu.complete_bus_cycle(low.id, Some(0xCD)).unwrap());
     assert_eq!(high.address, 0x4001);
+    cpu.insert_wait_tstates(2).unwrap();
+    cpu = round_trip(cpu);
     assert_eq!(cpu.iy, 0xAAAA);
     assert_eq!(
         cpu.complete_bus_cycle(high.id, Some(0xAB)).unwrap(),
         Z80MicroStep::InstructionRetired {
             opcode: 0xE1,
-            tstates: 14,
+            tstates: 17,
         }
     );
     assert_eq!(cpu.iy, 0xABCD);
