@@ -1,8 +1,8 @@
 //! E3A1 indexed 16-bit register operations in the resumable Z80 sequencer.
 
 use sega_z80_cpu::{
-    Z80BusRequest, Z80IndexRegister, Z80MicroSequencer, Z80MicroSequencerError, Z80MicroStep,
-    Z80PrefixState, Z80Registers, Z80MicroSequencerState,
+    Z80BusRequest, Z80IndexRegister, Z80MicroSequencer, Z80MicroSequencerError,
+    Z80MicroSequencerState, Z80MicroStep, Z80PrefixState, Z80Registers,
 };
 
 const FLAG_S: u8 = 0x80;
@@ -86,7 +86,10 @@ fn repeated_alternating_prefixes_select_the_last_index_for_immediate_load() {
     let fetch = start(&mut cpu);
     let fetch = feed_prefix(&mut cpu, fetch, 0xDD);
     let fetch = feed_prefix(&mut cpu, fetch, 0xFD);
-    assert_eq!(cpu.export_state().prefix_state, Z80PrefixState::Index(Z80IndexRegister::Iy));
+    assert_eq!(
+        cpu.export_state().prefix_state,
+        Z80PrefixState::Index(Z80IndexRegister::Iy)
+    );
 
     let low = request(cpu.complete_bus_cycle(fetch.id, Some(0x21)).unwrap());
     let high = request(cpu.complete_bus_cycle(low.id, Some(0x78)).unwrap());
@@ -117,7 +120,10 @@ fn inc_ix_and_dec_iy_preserve_flags_and_resume_from_internal_snapshot() {
         cpu.complete_bus_cycle(fetch.id, Some(0x23)).unwrap(),
         Z80MicroStep::InternalCycle { tstates: 1 }
     );
-    let encoded = cpu.export_state().encode().expect("indexed INC snapshot encodes");
+    let encoded = cpu
+        .export_state()
+        .encode()
+        .expect("indexed INC snapshot encodes");
     let decoded = Z80MicroSequencerState::decode(&encoded).expect("indexed INC snapshot decodes");
     cpu = Z80MicroSequencer::restore_state(decoded).expect("indexed INC snapshot restores");
     assert_eq!(

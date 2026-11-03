@@ -7,9 +7,7 @@
 //! outside this sequencer slice.
 
 use crate::alu::{adc8, add8, and8, cp8, cpl8, daa8, or8, rotate_accumulator, sbc8, sub8, xor8};
-use crate::prefix::{
-    Z80IndexOpcodeClass, Z80IndexRegister, Z80PrefixState, Z80PrefixTransition,
-};
+use crate::prefix::{Z80IndexOpcodeClass, Z80IndexRegister, Z80PrefixState, Z80PrefixTransition};
 use crate::{
     Z80_MICRO_SEQUENCER_STATE_VERSION, Z80AlternateRegisters, Z80ArchitecturalState,
     Z80BusHandshake, Z80BusHandshakeError, Z80BusOperation, Z80BusRequest, Z80Registers,
@@ -541,16 +539,18 @@ impl Z80MicroSequencer {
                 Some(0xFD) => state.prefix_state == Z80PrefixState::Index(Z80IndexRegister::Iy),
                 Some(_) => false,
             },
-            Z80MicroSequencerPhase::ImmediateReadRegisterPairLow { pair } => match state.prefix_state {
-                Z80PrefixState::None => true,
-                Z80PrefixState::Index(_) => {
-                    state.opcode == Some(0x21)
-                        && pair == 2
-                        && state.mcycle_index >= 2
-                        && state.instruction_tstates >= 8
+            Z80MicroSequencerPhase::ImmediateReadRegisterPairLow { pair } => {
+                match state.prefix_state {
+                    Z80PrefixState::None => true,
+                    Z80PrefixState::Index(_) => {
+                        state.opcode == Some(0x21)
+                            && pair == 2
+                            && state.mcycle_index >= 2
+                            && state.instruction_tstates >= 8
+                    }
+                    _ => false,
                 }
-                _ => false,
-            },
+            }
             Z80MicroSequencerPhase::ImmediateReadRegisterPairHigh { pair, .. } => {
                 match state.prefix_state {
                     Z80PrefixState::None => true,
