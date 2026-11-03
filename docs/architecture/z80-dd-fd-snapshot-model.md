@@ -19,7 +19,8 @@ Responsabilidade:
 - definir codec canônico, validação de integridade e restauração sem mutação parcial.
 
 Conclusão:
-- `native/z80_cpu/src/snapshot.rs` já implementa um codec binário próprio, versionado, com magic `Z80SEQ\0\0`, comprimento do corpo, CRC32 do corpo e rejeição de truncamento/bytes excedentes;
+- `native/z80_cpu/src/snapshot.rs` implementa um codec binário próprio, versionado, com magic `Z80SEQ\0\0`, comprimento do corpo, CRC32 do corpo e rejeição de truncamento/bytes excedentes;
+- a evolução desta etapa introduz `Z80IndexRegister::{Ix,Iy}` e `active_index` explícito, independente do byte de prefixo/opcode guardado no campo legado `opcode`; o codec agora é schema v19 e valida a coerência do latch com a fase da FSM;
 - o codec valida o estado reconstruindo-o por `Z80MicroSequencer::restore_state`;
 - o estado serializado inclui registradores principais/alternativos, IX/IY, I/R, flags e estados de interrupção representados pelo sequenciador, fase, opcode, índices M/T, handshake, requisição pendente e WAIT acumulado;
 - isso cobre somente o subconjunto retomável representado pelo sequenciador; não é um save state completo do Z80 nem do SMS;
@@ -35,9 +36,10 @@ Responsabilidade:
 - auditar flags, WZ e sequências indexadas.
 
 Conclusão:
-- a PR #447 já cobre LD IX/IY,nn; prefixos DD/FD repetidos na sequência testada; INC/DEC IX/IY; ADD IX/IY,rr; estados internos suspensíveis e round-trip do codec v18;
+- a PR #447 já cobre LD IX/IY,nn; prefixos DD/FD repetidos na sequência testada; INC/DEC IX/IY; ADD IX/IY,rr; estados internos suspensíveis e round-trip do codec v19;
 - o campo `opcode` funciona atualmente como latch do prefixo anterior durante a busca; as fases `IndexImmediateLow/High` e `Ed16ArithmeticInternal.index_prefix` carregam o prefixo selecionado nos estados dessas instruções;
 - o desenho atual é uma fatia incremental, não um decodificador completo DD/FD;
+- o latch `active_index` torna explícita a seleção IX/IY e é atualizado em cada DD/FD; ED limpa o latch antes de decodificar o opcode ED. Prefixos repetidos e cancelamento por ED têm testes de round-trip do estado v19;
 - DD/FD seguido de ED e DD/FD CB ainda não têm semântica implementada na fatia atual. Prefixos antes de instruções não cobertas podem terminar em `UnsupportedOpcode`;
 - não se deve inferir suporte integral a IXH/IXL/IYH/IYL ou a todas as substituições de HL/H/L/(HL).
 
@@ -217,11 +219,20 @@ A fase `Ed16ArithmeticInternal` é reutilizada pela branch para ADD IX/IY, além
 
 A pesquisa anexada apresenta duas tabelas incompatíveis entre si e uma delas enumera oito M-cycles apesar de declarar seis. Essa decomposição não deve ser implementada.
 
-O manual Zilog confirma a codificação dos bytes `DD CB d op` e publica timings distintos por família: por exemplo, RLC indexed é 6 M / 23 T e BIT indexed é 5 M / 20 T. O documento de modelagem não presume uma distribuição elétrica por byte além do que a fonte comprova. Antes de implementar:
-1. extrair a sequência completa de barramento de uma referência independente (Fuse/MAME/Z80Ex) e, quando possível, captura lógica;
-2. confrontar cada borda com os diagramas Zilog;
-3. registrar separadamente os caminhos BIT (sem write-back) e rotate/shift/RES/SET (com write-back);
-4. validar o valor X/Y de BIT indexed contra fonte de engenharia reversa específica, não contra o manual Zilog.
+O manual Zilog confirma a codificação `DD CB d op` e timings distintos por família (RLC indexed: 6 M / 23 T; BIT indexed: 5 M / 20 T). A análise ciclo a ciclo de floooh e o microsequenciador Rust em emu198x confirmam a distinção elétrica crucial: DD e CB são dois M1; `d` é lido como memória; o opcode final `op` também é uma leitura de memória normal, sem M1/refresh. Logo, R incrementa duas vezes, não três. Depois da leitura de `op`, a sequência difere por família: BIT é somente leitura; rotate/shift/RES/SET executam read-modify-write. A simulação de netlist é uma referência de engenharia reversa e seu autor alerta para diferenças não documentadas em relação ao Z80 original; a implementação emu198x fornece uma segunda confirmação independente da ordem displacement/sub-opcode.
+
+A sequência mínima correta para modelar é:
+1. M1 fetch DD (4T, refresh);
+2. M1 fetch CB (4T, refresh);
+3. Memory Read do displacement `d` (3T);
+4. Memory Read do sub-opcode `op` (3T, não-M1, sem refresh);
+5. fase interna/geração de endereço efetivo e leitura do operando;
+6. BIT termina sem escrita; rotate/shift/RES/SET fazem a escrita de volta. Para as famílias documentadas, validar os totais por opcode (BIT 20T; RLC 23T), não por uma sequência genérica de 6 ou 8 M-cycles.
+
+A tabela antiga anexada que colocava uma pausa interna antes da leitura de `op` e depois deslocava a operação para M6–M8 não deve ser usada como especificação. Antes de implementar:
+- comparar a sequência por opcode com os diagramas/timings do manual Zilog e com uma referência independente;
+- modelar BIT (read-only) separado de rotate/shift/RES/SET (read-modify-write);
+- validar flags X/Y e cópia para registrador `z` em instruções não documentadas usando fonte específica de engenharia reversa e vetores de hardware.
 
 ## 6. Estratégia de prototipagem incremental
 
@@ -328,6 +339,8 @@ Critério: replay produz a mesma sequência ordenada de eventos e efeitos de mem
 
 - Fuse Z80 core — referência de comportamento e sequência de barramento.
 - MAME Z80 core — referência independente de emulação.
+- floooh, *Getting into way too much detail with the Z80 netlist simulation* — rastros half-cycle, prefixos repetidos, cancelamento ED e DDCB/FDCB: https://floooh.github.io/2021/12/06/z80-instruction-timing.html
+- `emu198x-zilog-z80` — FSM de meia fase, sequência DDCB/FDCB separando FetchDisp/FetchByte e reidratação de walker após snapshot: https://docs.rs/emu198x-zilog-z80/latest/src/emu198x_zilog_z80/z80.rs.html
 - Z80Ex — referência de execução orientada a ciclos.
 - ZEXDOC/ZEXALL — conformidade funcional; não substituem testes temporais.
 - Testes de timing e rastros de barramento — necessários para provar T-state accuracy.
