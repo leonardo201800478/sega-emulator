@@ -293,7 +293,7 @@ fn indexed_inc_dec_wraps_effective_address_and_program_counter() {
 
 #[test]
 fn indexed_inc_dec_covers_zero_and_signed_displacement_extremes_for_ix_and_iy() {
-    let cases = [
+    let cases: [(u8, u16, u16, u8, u8, u8, u8, u8); 6] = [
         // IX: zero displacement, negative boundary and positive boundary with 16-bit wrap.
         (0xDD, 0x1234, 0x0000, 0x00, 0x34, 0x01, 0x35, 0xFE),
         (0xDD, 0x0001, 0x0000, 0x80, 0x34, 0x01, 0x35, 0xFE),
