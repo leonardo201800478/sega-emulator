@@ -477,24 +477,29 @@ impl Z80MicroSequencer {
                 let Some(request) = pending else {
                     return Err(Z80MicroSequencerError::InvalidState);
                 };
-                state.opcode.is_some_and(|opcode| {
-                    opcode & 0xC7 == 0x41
-                        && value
-                            == if (opcode >> 3) & 0x07 == 6 {
-                                0
-                            } else {
-                                match (opcode >> 3) & 0x07 {
-                                    0 => state.registers.b,
-                                    1 => state.registers.c,
-                                    2 => state.registers.d,
-                                    3 => state.registers.e,
-                                    4 => state.registers.h,
-                                    5 => state.registers.l,
-                                    7 => state.registers.a,
-                                    _ => return false,
-                                }
-                            }
-                }) && request.operation == Z80BusOperation::PortWrite { value }
+                let expected_value = match state.opcode {
+                    Some(opcode) if opcode & 0xC7 == 0x41 => {
+                        match (opcode >> 3) & 0x07 {
+                            0 => Some(state.registers.b),
+                            1 => Some(state.registers.c),
+                            2 => Some(state.registers.d),
+                            3 => Some(state.registers.e),
+                            4 => Some(state.registers.h),
+                            5 => Some(state.registers.l),
+                            6 => Some(0),
+                            7 => Some(state.registers.a),
+                            _ => None,
+                        }
+                    }
+                    _ => None,
+                };
+                expected_value == Some(value)
+                    && matches!(
+                        request.operation,
+                        Z80BusOperation::PortWrite {
+                            value: request_value
+                        } if request_value == value
+                    )
                     && request.address == address
                     && request.base_tstates == 4
                     && address == state.registers.bc()
