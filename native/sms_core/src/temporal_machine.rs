@@ -963,6 +963,44 @@ mod tests {
     }
 
     #[test]
+    fn int_acknowledge_is_a_distinct_temporal_transaction_and_restores_waits() {
+        let mut machine = SmsTemporalMachine::new(vec![0x00; 0x4000], 3).unwrap();
+        machine.cpu_mut().iff1 = true;
+        machine.cpu_mut().iff2 = true;
+        machine.set_int_line(Some(0xCF));
+
+        let Z80MicroStep::BusRequest(request) = machine.begin_instruction().unwrap() else {
+            panic!("eligible INT must start an acknowledge request");
+        };
+        assert_eq!(
+            request.operation,
+            sega_z80_cpu::Z80BusOperation::InterruptAcknowledge
+        );
+        let transaction = machine.pending_bus_transaction().unwrap().unwrap();
+        assert_eq!(transaction.kind(), BusCycleKind::InterruptAcknowledge);
+        assert_eq!(transaction.direction(), BusDirection::Read);
+        assert_eq!(transaction.address(), None);
+        assert_eq!(transaction.data(), None);
+        assert_eq!(transaction.duration_tstates(), 7);
+
+        machine.schedule_pending_bus(1).unwrap();
+        let snapshot = machine.export_state();
+        let mut restored = SmsTemporalMachine::restore_state(snapshot).unwrap();
+        assert_eq!(
+            restored.dispatch_next().unwrap(),
+            Z80MicroStep::InterruptAcknowledge {
+                vector: 0xCF,
+                tstates: 8,
+            }
+        );
+        assert_eq!(restored.now(), MachineTime::from_ticks(24));
+        assert_eq!(
+            restored.cpu().export_state().phase,
+            Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector: 0xCF }
+        );
+    }
+
+    #[test]
     fn nop_runs_on_the_scheduler_timeline_for_four_tstates() {
         let mut machine = SmsTemporalMachine::new(vec![0x00; 0x4000], 3).unwrap();
         retired(machine.step_instruction(0).unwrap(), 0x00, 4);
