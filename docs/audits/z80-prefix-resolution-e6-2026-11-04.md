@@ -3,10 +3,10 @@
 **Data:** 2026-11-04  
 **PR:** [#486 — E6 general prefix resolution](https://github.com/leonardo201800478/sega-emulator/pull/486)  
 **Baseline main antes da E6:** `f4130104fa971289507c0b15ab2d8eabd1dd5b00` (E5 integrada pela PR #485)  
-**HEAD com validação funcional concluída:** `b66b97cb6202b270e857f6cfb55be85a0ea62a6b`  
-**HEAD atual da PR:** `6b533a186b1f3d1891216778ba8332e394470857`  
-**CI funcional anterior:** [#41757983537](https://github.com/leonardo201800478/sega-emulator/actions/runs/41757983537) — Rust, Python e Windows x64 PASS; Scheduler SKIPPED.  
-**CI do HEAD atual:** #41758908964 — execução pendente no momento desta revisão.
+**HEAD final da PR:** `de0166a54bd6613cd7d9379e4e03ca8e81e238eb`  
+**Merge SHA / main após E6:** `24a32e03e10c8e82022172faee69ec0c046f8cb0`  
+**CI da PR:** [#41759035927](https://github.com/leonardo201800478/sega-emulator/actions/runs/41759035927) — SUCCESS (Rust, Python e Windows x64 PASS; Scheduler SKIPPED).  
+**CI pós-merge na main:** [#41759330209](https://github.com/leonardo201800478/sega-emulator/actions/runs/41759330209) — SUCCESS (Rust, Python e Windows x64 PASS; Scheduler SKIPPED).
 
 ## 1. Objetivo e limites
 
@@ -76,7 +76,7 @@ CI #41757983537 no HEAD `b66b97cb6202b270e857f6cfb55be85a0ea62a6b`:
 | Windows x64 WASAPI/XAudio2 compile + audio-output tests | PASS |
 | Scheduler deterministic stress | SKIPPED — a PR não altera o Scheduler |
 
-O HEAD `6b533a186b1f3d1891216778ba8332e394470857` contém o refinamento da validação do offset de M-cycles nas fases ED e aguarda a execução final do CI #41758908964.
+O HEAD final da PR `de0166a54bd6613cd7d9379e4e03ca8e81e238eb` contém o refinamento da validação do offset de M-cycles nas fases ED. CI #41759035927 aprovou o HEAD final; CI de push #41759330209 confirmou o estado integrado na main.
 
 ## 5. Critérios de aceitação E6
 
@@ -101,4 +101,4 @@ O HEAD `6b533a186b1f3d1891216778ba8332e394470857` contém o refinamento da valid
 
 ## 7. Próxima etapa
 
-Após CI final aprovado, merge da PR #486 e confirmação do novo SHA remoto da main, iniciar exclusivamente **E7 — auditoria e fechamento semântico integral do Z80**.
+A PR #486 está fechada como merged e o SHA remoto da main foi confirmado como `24a32e03e10c8e82022172faee69ec0c046f8cb0`. Iniciar exclusivamente **E7 — auditoria e fechamento semântico integral do Z80**.
