@@ -776,6 +776,63 @@ fn run_xaudio2_worker(
         engine.StopEngine();
     }
 }
+// The output crate owns these concrete sink types, so it implements the
+// runtime's sink contract here without introducing a dependency cycle.
+impl sega_audio_runtime::PcmSink for NativeWasapiOutput {
+    fn write_pcm(&mut self, pcm: Vec<u8>) -> Result<(), String> {
+        NativeWasapiOutput::write_pcm(self, pcm).map_err(|error| error.to_string())
+    }
+
+    fn metrics(&self) -> (u64, u64) {
+        (self.underrun_count(), self.dropped_block_count())
+    }
+
+    fn close(&mut self) {
+        NativeWasapiOutput::close(self);
+    }
+}
+
+impl NativeWasapiOutput {
+    /// Compose this native endpoint with the Rust DSP/resampling session.
+    pub fn into_audio_session(
+        self,
+        output_sample_rate: u32,
+        volume: u8,
+    ) -> Result<sega_audio_runtime::NativeAudioSession<Self>, String> {
+        if self.sample_rate() != output_sample_rate {
+            return Err("WASAPI device rate must match the DSP output rate".to_owned());
+        }
+        sega_audio_runtime::NativeAudioSession::new(output_sample_rate, volume, self)
+    }
+}
+
+impl sega_audio_runtime::PcmSink for NativeXAudio2Output {
+    fn write_pcm(&mut self, pcm: Vec<u8>) -> Result<(), String> {
+        NativeXAudio2Output::write_pcm(self, pcm).map_err(|error| error.to_string())
+    }
+
+    fn metrics(&self) -> (u64, u64) {
+        (self.underrun_count(), self.dropped_block_count())
+    }
+
+    fn close(&mut self) {
+        NativeXAudio2Output::close(self);
+    }
+}
+
+impl NativeXAudio2Output {
+    /// Compose this native endpoint with the Rust DSP/resampling session.
+    pub fn into_audio_session(
+        self,
+        output_sample_rate: u32,
+        volume: u8,
+    ) -> Result<sega_audio_runtime::NativeAudioSession<Self>, String> {
+        if self.sample_rate() != output_sample_rate {
+            return Err("XAudio2 device rate must match the DSP output rate".to_owned());
+        }
+        sega_audio_runtime::NativeAudioSession::new(output_sample_rate, volume, self)
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -869,64 +926,5 @@ mod tests {
             NativeXAudio2Output::new_with_balance(44_100, 512, 4, -101),
             Err(AudioOutputError::InvalidBalance)
         ));
-    }
-}
-
-
-// The output crate owns these concrete sink types, so it implements the
-// runtime's sink contract here without introducing a dependency cycle.
-impl sega_audio_runtime::PcmSink for NativeWasapiOutput {
-    fn write_pcm(&mut self, pcm: Vec<u8>) -> Result<(), String> {
-        NativeWasapiOutput::write_pcm(self, pcm).map_err(|error| error.to_string())
-    }
-
-    fn metrics(&self) -> (u64, u64) {
-        (self.underrun_count(), self.dropped_block_count())
-    }
-
-    fn close(&mut self) {
-        NativeWasapiOutput::close(self);
-    }
-}
-
-impl NativeWasapiOutput {
-    /// Compose this native endpoint with the Rust DSP/resampling session.
-    pub fn into_audio_session(
-        self,
-        output_sample_rate: u32,
-        volume: u8,
-    ) -> Result<sega_audio_runtime::NativeAudioSession<Self>, String> {
-        if self.sample_rate() != output_sample_rate {
-            return Err("WASAPI device rate must match the DSP output rate".to_owned());
-        }
-        sega_audio_runtime::NativeAudioSession::new(output_sample_rate, volume, self)
-    }
-}
-
-impl sega_audio_runtime::PcmSink for NativeXAudio2Output {
-    fn write_pcm(&mut self, pcm: Vec<u8>) -> Result<(), String> {
-        NativeXAudio2Output::write_pcm(self, pcm).map_err(|error| error.to_string())
-    }
-
-    fn metrics(&self) -> (u64, u64) {
-        (self.underrun_count(), self.dropped_block_count())
-    }
-
-    fn close(&mut self) {
-        NativeXAudio2Output::close(self);
-    }
-}
-
-impl NativeXAudio2Output {
-    /// Compose this native endpoint with the Rust DSP/resampling session.
-    pub fn into_audio_session(
-        self,
-        output_sample_rate: u32,
-        volume: u8,
-    ) -> Result<sega_audio_runtime::NativeAudioSession<Self>, String> {
-        if self.sample_rate() != output_sample_rate {
-            return Err("XAudio2 device rate must match the DSP output rate".to_owned());
-        }
-        sega_audio_runtime::NativeAudioSession::new(output_sample_rate, volume, self)
     }
 }
