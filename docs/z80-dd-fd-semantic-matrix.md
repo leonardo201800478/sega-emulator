@@ -1,9 +1,9 @@
-# Matriz semântica DD/FD do Z80 — estado após E4C
+# Matriz semântica DD/FD do Z80 — estado após E5 candidata PR #477
 
 **Data:** 2026-11-04  
-**Baseline auditada:** `main` — `f89a52346e91e88e82ab37a4afcfffff2d793407`, após PR #475 / E4C.  
+**Baseline auditada:** `main` — `a0e58fd05c7f62c42f82b86d15d8532e06a9c59b`, após PR #476; implementação E5 candidata em PR #477.  
 **E4C validada:** HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS.  
-**Schema do microsequenciador:** 27  
+**Schema do microsequenciador:** 28 (candidato E5)  
 **Escopo:** decoder DD/FD, IX/IY, IXH/IXL/IYH/IYL, (IX/IY+d), DDCB/FDCB.  
 **Natureza:** inventário do código ativo e das evidências disponíveis; não declara conclusão funcional nem temporal do Z80.  
 **Meta global e scorecard:** consultar [Meta de conclusão do Z80 — cobertura, validação e critérios de aceite](z80-completion-scorecard.md) para percentuais de referência, fórmulas, níveis de evidência e critérios de conclusão.
@@ -101,21 +101,25 @@ O decoder atômico classifica os 256 subopcodes para IX e IY e tem teste exausti
 
 **BIT é read-only:** o handler não deve emitir write-back. Rotação/deslocamento, RES e SET são operações read-modify-write. O campo z controla a cópia adicional para registrador nas operações x=0,2,3; z=6 não seleciona registrador adicional.
 
-## 6. Estado arquitetural e snapshot — estado após E4C
+**E5 — candidato PR #477:** o microsequenciador agora possui fases próprias para displacement, opcode final non-M1, leitura efetiva e escrita opcional. O trace nominal implementado é `4,4,3,5,4` para BIT (20T) e `4,4,3,5,4,3` para RMW (23T). A leitura do opcode final é uma transação `MemoryRead` de 5T, não `OpcodeFetch`; portanto não incrementa R. O operando é lido em 4T. O WAIT é contabilizado pela transação pendente em cada fase.
+
+**BIT — limite documental:** UM008011-0816, páginas impressas 247–250, declara S e P/V desconhecidos para BIT indexado; C não é afetado e H é set. O candidato conserva o modelo atual do executor atômico para S/PV e os bits X/Y derivados do endereço, sem promover essa escolha a fato de hardware. A validação independente desses bits permanece aberta.
+
+## 6. Estado arquitetural e snapshot — estado após E5 candidato PR #477
 
 | Estado / recurso | Executor atômico | Microsequenciador DD/FD |
 |---|---|---|
-| IX/IY | Campos arquiteturais existentes | E3A1/E3A2, E4A, E4B e E4C executam operações 16-bit, loads/stores, ALU e RMW indexados via fases compartilhadas; commits ocorrem nas fases finais correspondentes |
+| IX/IY | Campos arquiteturais existentes | E3A1/E3A2, E4A, E4B, E4C e E5 candidato executam IX/IY, loads/stores, ALU, RMW e DDCB/FDCB via fases serializáveis; E5 usa as fases IndexedCbDisplacementRead, IndexedCbOpcodeRead, IndexedCbMemoryRead e IndexedCbMemoryWrite |
 | IXH/IXL/IYH/IYL | Acesso por helper de registrador indexado | Sem decode funcional no microsequenciador; permanece fora de E3A1/E3A2 |
 | PC / SP / wraparound | Handlers existentes; cobertura por família precisa ser ampliada | PC consome prefixos/opcodes; PUSH/POP/EX atualizam ou preservam SP nos pontos de barramento corretos; wrap testado |
 | Flags S/Z/H/PV/N/C e X/Y | Helpers e handlers existentes; não equivalem a validação independente | E3A1/E3A2 preservam flags; E4B atualiza flags ALU; E4C atualiza S/Z/H/PV/N e preserva C via helper INC/DEC compartilhado |
 | WZ/MEMPTR | Atualizado em handlers selecionados; falta matriz por família | E3A2: absolute transfers usam nn+1; E4A/E4B usam WZ=EA conforme o modelo MEMPTR do core; efeitos não documentados não são alegados como captura de silício |
 | Q / previous-Q | Não comprovado por esta auditoria para todas as famílias | Não comprovado |
-| R / refresh | Fetch de opcode no executor atômico; cobertura específica DD/FD incompleta | M1 de prefixos DD/FD e contagem acumulada cobertos nas famílias E3A1/E3A2/E4A/E4B/E4C |
+| R / refresh | Fetch de opcode no executor atômico; cobertura específica DD/FD incompleta | M1 de DD/FD e CB; o opcode final DDCB/FDCB é non-M1. A suíte E5 verifica que R conta somente os prefixos M1, incluindo cadeias repetidas/alternadas |
 | INT/NMI/EI delay/HALT | Há lógica geral no executor atômico; interação com instruções indexadas ainda precisa de vetores | Sem interrupção integrada em todas as fases DD/FD |
-| Snapshot schema | Não é save state integral do sistema | Schema 27; FSM DD/FD e fases E3A1/E3A2/E4A/E4B/E4C validam/restauram estados intermediários com requests pendentes |
+| Snapshot schema | Não é save state integral do sistema | Schema 28 no candidato; FSM DD/FD e fases E3A1/E3A2/E4A/E4B/E4C/E5 validam/restauram estados intermediários com requests pendentes |
 
-O schema 26 foi introduzido por E2; E4A elevou para 27 para serializar displacement e store imediato. E4B reutiliza as fases E4A e `MemoryReadAlu`; E4C reutiliza as fases de displacement e o caminho INC/DEC RMW compartilhado, sem novo bump de schema (27). Snapshot/restore foi exercitado nos estados intermediários cobertos; o codec não equivale a save state integral da máquina.
+O schema 26 foi introduzido por E2; E4A elevou para 27 para serializar displacement e store imediato. E4B e E4C reutilizaram fases existentes. E5 adiciona fases DDCB/FDCB e eleva o schema para 28. A suíte candidata faz round-trip antes de cada request pendente; o codec não equivale a save state integral da máquina.
 
 ## 7. Evidências e lacunas
 
@@ -129,6 +133,7 @@ O schema 26 foi introduzido por E2; E4A elevou para 27 para serializar displacem
 | `indexed_memory_e4a.rs` | Loads/stores IX/IY, displacement assinado, wrap, H/L, PC wrap, WAIT, snapshots e prefixos repetidos/alternados | Não substitui oráculo diferencial externo nem trace físico independente |
 | `indexed_alu_e4b.rs` | 16 vetores de ALU executados com IX e IY; flags, CP/A, X/Y, WAIT em cada acesso, snapshots e last-prefix-wins | Não substitui oráculo diferencial externo ou trace físico independente |
 | `indexed_incdec_e4c.rs` | 5 testes de INC/DEC indexado; IX/IY, flags/C, displacement, wrap, WAIT, snapshots, M-cycles e prefixos | Não substitui ZEXDOC/ZEXALL, oráculo diferencial externo ou trace físico independente |
+| `indexed_cb_e5.rs` (PR #477; CI pendente) | Testa 256 subopcodes em IX e IY, BIT sem escrita, RMW, destino z, flags conforme o modelo atual, sequência de transações, M-cycles/T-states, WAIT, prefixos e snapshot/restore | Ainda não executado em CI nesta fotografia; não é oráculo independente, trace físico ou TEMPORAL_PASS |
 | CI E4C — run `41747460761` | Rust, Python, Scheduler deterministic stress e Windows x64 D3D12/WASAPI/XAudio2: 4 jobs PASS no HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c` | Não prova LONG_PASS, ZEXDOC/ZEXALL ou TEMPORAL_PASS |
 | CI E4A — run `41734982519` | Rust, Python, Scheduler stress short e Windows x64 vídeo/áudio: 4 jobs PASS | Não prova LONG_PASS, ZEXDOC/ZEXALL ou TEMPORAL_PASS |
 | CI E4B — run `41738004725` | Rust, Python, Scheduler stress short e Windows x64 vídeo/áudio: 4 jobs PASS | Não prova LONG_PASS, ZEXDOC/ZEXALL ou TEMPORAL_PASS |
