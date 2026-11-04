@@ -22,7 +22,7 @@ pub mod prefix;
 pub mod sequencer;
 pub mod snapshot;
 
-pub const Z80_MICRO_SEQUENCER_STATE_VERSION: u16 = 30;
+pub const Z80_MICRO_SEQUENCER_STATE_VERSION: u16 = 31;
 
 pub use architectural_state::{Z80ArchitecturalState, Z80ArchitecturalStateError};
 pub use cpu::{CpuError, Z80, Z80AlternateRegisters, Z80Registers};
