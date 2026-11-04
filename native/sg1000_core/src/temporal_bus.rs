@@ -53,7 +53,7 @@ fn valid_internal_deadline(
     elapsed_tstates(started_at, deadline, master_ticks_per_tstate).is_some()
 }
 
-fn is_supported_memory_operation(operation: Z80BusOperation) -> bool {
+fn is_supported_bus_operation(operation: Z80BusOperation) -> bool {
     matches!(
         operation,
         Z80BusOperation::OpcodeFetch
@@ -201,7 +201,7 @@ impl Sg1000TemporalBus {
         {
             return Err(Sg1000TemporalBusError::Busy);
         }
-        if !is_supported_memory_operation(request.operation) {
+        if !is_supported_bus_operation(request.operation) {
             return Err(Sg1000TemporalBusError::UnsupportedOperation);
         }
         let started_at = self.coordinator.now();
@@ -434,7 +434,7 @@ impl Sg1000TemporalBus {
         ) {
             (None, None, None, None, None, None) if pending_events.is_empty() => {}
             (Some(request), Some(started_at), None, None, None, None)
-                if is_supported_memory_operation(request.operation)
+                if is_supported_bus_operation(request.operation)
                     && pending_events.len() == 1
                     && pending_events[0].payload
                         == (Sg1000TemporalEvent::BusCompletion {
@@ -454,7 +454,7 @@ impl Sg1000TemporalBus {
                             },
                     ) => {}
             (Some(request), Some(started_at), Some(completion), None, None, None)
-                if is_supported_memory_operation(request.operation)
+                if is_supported_bus_operation(request.operation)
                     && request.id == completion.request_id
                     && pending_events.is_empty()
                     && completion.completed_at == now
@@ -463,7 +463,12 @@ impl Sg1000TemporalBus {
                         started_at,
                         completion.completed_at,
                         scale,
-                        request.base_tstates,
+                        u16::from(request.base_tstates)
+                            + if request.operation == Z80BusOperation::InterruptAcknowledge {
+                                u16::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
+                            } else {
+                                0
+                            },
                     ) => {}
             (None, None, None, Some(continuation_id), Some(started_at), None)
                 if pending_events.len() == 1
