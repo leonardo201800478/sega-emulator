@@ -766,9 +766,7 @@ impl SmsTemporalBus {
 mod tests {
     use super::{SmsTemporalBus, SmsTemporalBusError, SmsTemporalDispatch};
     use sega_temporal_core::MachineTime;
-    use sega_z80_cpu::{
-        Z80BusOperation, Z80BusRequest, Z80MCycleTState, Z80MCycleWaitSource,
-    };
+    use sega_z80_cpu::{Z80BusOperation, Z80BusRequest, Z80MCycleTState, Z80MCycleWaitSource};
 
     fn request(id: u64, operation: Z80BusOperation, address: u16, tstates: u8) -> Z80BusRequest {
         Z80BusRequest {
