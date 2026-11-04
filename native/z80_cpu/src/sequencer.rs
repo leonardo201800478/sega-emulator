@@ -7,7 +7,10 @@
 //! outside this sequencer slice.
 
 use crate::alu::{adc8, add8, and8, cp8, cpl8, daa8, or8, rotate_accumulator, sbc8, sub8, xor8};
-use crate::prefix::{Z80IndexOpcodeClass, Z80IndexRegister, Z80PrefixState, Z80PrefixTransition};
+use crate::prefix::{
+    classify_index_opcode, Z80IndexOpcodeClass, Z80IndexRegister, Z80PrefixState,
+    Z80PrefixTransition,
+};
 use crate::{
     Z80_MICRO_SEQUENCER_STATE_VERSION, Z80AlternateRegisters, Z80ArchitecturalState,
     Z80BusHandshake, Z80BusHandshakeError, Z80BusOperation, Z80BusRequest, Z80Registers,
@@ -636,6 +639,19 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::IndexedCbMemoryRead { .. }
             | Z80MicroSequencerPhase::IndexedCbMemoryWrite { .. } => {
                 matches!(state.prefix_state, Z80PrefixState::Index(_)) && state.opcode.is_some()
+            }
+            Z80MicroSequencerPhase::ImmediateReadRegister { destination } => {
+                match state.prefix_state {
+                    Z80PrefixState::None => true,
+                    Z80PrefixState::Index(_) => state.opcode.is_some_and(|opcode| {
+                        classify_index_opcode(opcode) == Z80IndexOpcodeClass::Ignored
+                            && matches!(opcode, 0x06 | 0x0E | 0x16 | 0x1E | 0x26 | 0x2E | 0x3E)
+                            && destination == ((opcode >> 3) & 0x07)
+                            && state.mcycle_index >= 2
+                            && state.instruction_tstates >= 8
+                    }),
+                    _ => false,
+                }
             }
             Z80MicroSequencerPhase::ImmediateReadRegisterPairLow { pair } => {
                 match state.prefix_state {
@@ -2038,8 +2054,18 @@ impl Z80MicroSequencer {
                         Some(_) => false,
                     }
             }
-            Z80MicroSequencerPhase::ImmediateReadRegister { .. }
-            | Z80MicroSequencerPhase::ImmediateReadMemoryWrite
+            Z80MicroSequencerPhase::ImmediateReadRegister { .. } => match state.prefix_state {
+                Z80PrefixState::None => state.mcycle_index == 1 && state.tstate_index == 0,
+                Z80PrefixState::Index(_) => {
+                    state.opcode.is_some_and(|opcode| {
+                        classify_index_opcode(opcode) == Z80IndexOpcodeClass::Ignored
+                    }) && state.mcycle_index >= 2
+                        && state.instruction_tstates >= 8
+                        && state.tstate_index == 0
+                }
+                _ => false,
+            },
+            Z80MicroSequencerPhase::ImmediateReadMemoryWrite
             | Z80MicroSequencerPhase::ImmediateReadAlu { .. }
             | Z80MicroSequencerPhase::BaseRelativeBranchImmediate => {
                 state.mcycle_index == 1 && state.tstate_index == 0
@@ -2579,10 +2605,9 @@ impl Z80MicroSequencer {
                         }
                         Z80IndexOpcodeClass::Ignored => {
                             // DD/FD is consumed as an M1 prefix, but the terminal
-                            // opcode retains its ordinary BASE meaning. The fetch
-                            // and its timing are already accounted for; dispatch
-                            // this byte directly without issuing another fetch.
-                            self.prefix_state = Z80PrefixState::None;
+                            // opcode retains its ordinary BASE meaning. Keep the
+                            // index latch as timing/snapshot context; the classifier
+                            // guarantees that BASE dispatch will not substitute IX/IY.
                         }
                         Z80IndexOpcodeClass::IndexedCb => {
                             unreachable!("indexed-CB returns through its displacement path above")
