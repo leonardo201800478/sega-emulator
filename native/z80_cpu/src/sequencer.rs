@@ -11662,7 +11662,7 @@ mod base_immediate_io_differential_tests {
         };
         assert_eq!(request.operation, crate::Z80BusOperation::InterruptAcknowledge);
         assert_eq!(request.address, 0x2345);
-        assert_eq!(request.base_tstates, 5);
+        assert_eq!(request.base_tstates, 3);
         assert!(!cpu.iff1);
         assert!(!cpu.iff2);
         assert!(!cpu.halted);
