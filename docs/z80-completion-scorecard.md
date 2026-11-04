@@ -473,3 +473,23 @@ Não declarar E7 concluída, LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS nesta
 ### Estado quantitativo e limitações não alteradas
 
 A cobertura estrutural de 70 variantes, 70 writer arms, 70 reader arms e 70 restore-validator arms é uma contagem de estrutura. Os testes de restore por fase cobrem os estados gerados pelo corpus, não todas as combinações válidas possíveis. Casos UnsupportedOpcode excluídos não contam como semântica aprovada. O DTO SMS in-memory não é codec binário persistente da máquina SMS completa. WAIT e traces independentes ainda não estão demonstrados em todos os limites. E7 global continua INTEGRATION_PENDING.
+
+
+---
+
+## Fotografia operacional reconciliada — 2026-11-04 (após PR #509)
+
+Esta atualização prevalece sobre as fotografias históricas anteriores. Baseline verificada por comparação remota: `main` é idêntica ao merge commit da PR #509.
+
+- **main:** `869b402e4c8f2dbd9c5f5fa4a10d10ac26506461`.
+- **E7.2E:** PR #506 integrada no merge SHA `54f881872ec9f5a9923ebdb17643b37a19954ec5`. Workflow #41872451175: Rust quality/regression PASS; Python lint/regression PASS; Windows x64 D3D12 PASS; Scheduler deterministic stress PASS.
+- **E7.3:** PR #509 integrada no merge SHA `869b402e4c8f2dbd9c5f5fa4a10d10ac26506461`. Workflow #41877136387: Rust quality/regression PASS; Python lint/regression PASS; Windows x64 D3D12 PASS; Scheduler deterministic stress PASS.
+- **E7.3 limite:** CI verde demonstra os gates convencionais no HEAD validado, mas não substitui trace independente de barramento nem autoriza `TEMPORAL_PASS`.
+- **E7.4:** próxima etapa ativa. A auditoria `docs/audits/z80-e7-4-busreq-arbitration-2026-11-04.md` identificou que o runtime ainda não expõe uma notificação genérica e verificável de conclusão de M-cycle. `tstate_index` é explicitamente parcial e não representa bordas elétricas; não inferir amostragem BUSREQ desses índices.
+- **E7.4.1:** próximo incremento de código: explicitar e testar a fronteira M-cycle no contrato de transição do Z80 compartilhado, incluindo M1, ciclos de memória/I/O e ciclos internos. Somente depois integrar estado BUSREQ/BUSACK e arbitragem no perfil de máquina.
+- **E7.5–E7.7:** pendentes.
+- **E7 global:** `INTEGRATION_PENDING`; não declarar conclusão funcional/temporal.
+- **E8:** bloqueada até fechar E7. Não iniciar ZEXDOC/ZEXALL como etapa de conclusão antes da auditoria semântica E7.7.
+- **PRs documentais #507, #508 e #510:** permanecem abertas na base histórica `54f881...`; não considerar integradas nem atuais. A PR #508 é draft e contém a modelagem preliminar E7.3–E7.7. A auditoria E7.4 atual deve prevalecer quanto às lacunas de fronteira M-cycle.
+
+Classificação de suites: os quatro jobs de cada workflow #41872451175 e #41877136387 foram concluídos com SUCCESS. Testes locais nesta sessão: `NOT RUN` (clone indisponível por falha de resolução DNS de github.com). Não atribuir `LONG_PASS`, `DIFFERENTIAL_PASS` ou `TEMPORAL_PASS` com base apenas nesses workflows.
