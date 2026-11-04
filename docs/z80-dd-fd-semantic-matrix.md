@@ -1,7 +1,7 @@
-# Matriz semântica DD/FD do Z80 — estado após E5 candidata PR #480
+# Matriz semântica DD/FD do Z80 — estado após E5 candidata PR #481
 
 **Data:** 2026-11-04  
-**Baseline auditada:** `main` — `a0e58fd05c7f62c42f82b86d15d8532e06a9c59b`, após PR #476; implementação E5 candidata em PR #480.  
+**Baseline auditada:** `main` — `a0e58fd05c7f62c42f82b86d15d8532e06a9c59b`, após PR #476; implementação E5 candidata em PR #481.  
 **E4C validada:** HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS.  
 **Schema do microsequenciador:** 28 (candidato E5)  
 **Escopo:** decoder DD/FD, IX/IY, IXH/IXL/IYH/IYL, (IX/IY+d), DDCB/FDCB.  
@@ -101,11 +101,11 @@ O decoder atômico classifica os 256 subopcodes para IX e IY e tem teste exausti
 
 **BIT é read-only:** o handler não deve emitir write-back. Rotação/deslocamento, RES e SET são operações read-modify-write. O campo z controla a cópia adicional para registrador nas operações x=0,2,3; z=6 não seleciona registrador adicional.
 
-**E5 — candidato PR #480:** o microsequenciador agora possui fases próprias para displacement, opcode final non-M1, leitura efetiva e escrita opcional. O trace nominal implementado é `4,4,3,5,4` para BIT (20T) e `4,4,3,5,4,3` para RMW (23T). A leitura do opcode final é uma transação `MemoryRead` de 5T, não `OpcodeFetch`; portanto não incrementa R. O operando é lido em 4T. O WAIT é contabilizado pela transação pendente em cada fase.
+**E5 — candidato PR #481:** o microsequenciador agora possui fases próprias para displacement, opcode final non-M1, leitura efetiva e escrita opcional. O trace nominal implementado é `4,4,3,5,4` para BIT (20T) e `4,4,3,5,4,3` para RMW (23T). A leitura do opcode final é uma transação `MemoryRead` de 5T, não `OpcodeFetch`; portanto não incrementa R. O operando é lido em 4T. O WAIT é contabilizado pela transação pendente em cada fase.
 
 **BIT — limite documental:** UM008011-0816, páginas impressas 247–250, declara S e P/V desconhecidos para BIT indexado; C não é afetado e H é set. O candidato conserva o modelo atual do executor atômico para S/PV e os bits X/Y derivados do endereço, sem promover essa escolha a fato de hardware. A validação independente desses bits permanece aberta.
 
-## 6. Estado arquitetural e snapshot — estado após E5 candidato PR #480
+## 6. Estado arquitetural e snapshot — estado após E5 candidato PR #481
 
 | Estado / recurso | Executor atômico | Microsequenciador DD/FD |
 |---|---|---|
@@ -133,7 +133,7 @@ O schema 26 foi introduzido por E2; E4A elevou para 27 para serializar displacem
 | `indexed_memory_e4a.rs` | Loads/stores IX/IY, displacement assinado, wrap, H/L, PC wrap, WAIT, snapshots e prefixos repetidos/alternados | Não substitui oráculo diferencial externo nem trace físico independente |
 | `indexed_alu_e4b.rs` | 16 vetores de ALU executados com IX e IY; flags, CP/A, X/Y, WAIT em cada acesso, snapshots e last-prefix-wins | Não substitui oráculo diferencial externo ou trace físico independente |
 | `indexed_incdec_e4c.rs` | 5 testes de INC/DEC indexado; IX/IY, flags/C, displacement, wrap, WAIT, snapshots, M-cycles e prefixos | Não substitui ZEXDOC/ZEXALL, oráculo diferencial externo ou trace físico independente |
-| `indexed_cb_e5.rs` (PR #480; CI pendente) | Testa 256 subopcodes em IX e IY, BIT sem escrita, RMW, destino z, flags conforme o modelo atual, sequência de transações, M-cycles/T-states, WAIT, prefixos, displacement 0/-128/+127 e snapshot/restore | Ainda não executado em CI nesta fotografia; não é oráculo independente, trace físico ou TEMPORAL_PASS |
+| `indexed_cb_e5.rs` (PR #481; CI pendente) | Testa 256 subopcodes em IX e IY, BIT sem escrita, RMW, destino z, flags conforme o modelo atual, sequência de transações, M-cycles/T-states, WAIT, prefixos, displacement 0/-128/+127 e snapshot/restore | Ainda não executado em CI nesta fotografia; não é oráculo independente, trace físico ou TEMPORAL_PASS |
 | CI E4C — run `41747460761` | Rust, Python, Scheduler deterministic stress e Windows x64 D3D12/WASAPI/XAudio2: 4 jobs PASS no HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c` | Não prova LONG_PASS, ZEXDOC/ZEXALL ou TEMPORAL_PASS |
 | CI E4A — run `41734982519` | Rust, Python, Scheduler stress short e Windows x64 vídeo/áudio: 4 jobs PASS | Não prova LONG_PASS, ZEXDOC/ZEXALL ou TEMPORAL_PASS |
 | CI E4B — run `41738004725` | Rust, Python, Scheduler stress short e Windows x64 vídeo/áudio: 4 jobs PASS | Não prova LONG_PASS, ZEXDOC/ZEXALL ou TEMPORAL_PASS |
