@@ -260,7 +260,9 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 - [x] Campo z copia o resultado para B/C/D/E/H/L/A nos grupos x=0,2,3; H/L são os registradores convencionais.
 - [x] R conta apenas fetches M1; WZ recebe o endereço efetivo; WAIT e snapshot/restore são suportados nas transações pendentes.
 - [x] Schema 28 e suíte `indexed_cb_e5.rs` cobrindo 256 subopcodes por índice, IX/IY, prefixos repetidos/alternados, wrap, BIT sem escrita, destinos e WAIT.
-- [ ] CI e regressões da PR #484 ainda pendentes; QUICK_PASS/SHORT_PASS não atribuídos antes dos resultados no HEAD exato.
+- [x] QUICK_PASS / SHORT_PASS no candidato: Formatting, Clippy e `cargo test --workspace --locked` passaram no código SHA `b7bf61da6d44cf3ba34e3f8fcf0802fcd4eaa739`; a suíte E5 reportou 8/8 testes PASS e a suíte unitária Z80 216/216.
+- [x] SMS/SG-1000 targeted tests PASS; Python pytest/Ruff command steps PASS; Windows D3D12/video compile e testes PASS.
+- [ ] Windows WASAPI/XAudio2 compile e audio-output tests ainda IN PROGRESS no run #4229; revisão do diff pendente.
 - Limite ZiLOG: UM008011-0816 classifica S e P/V de BIT indexado como desconhecidos. O modelo do executor atômico é mantido, mas esses bits não estão comprovados contra hardware independente.
 
 **Gate E5:** 256 subopcodes por índice, ordem de barramento e M/T-cycles conferidos, BIT sem write-back e todos os safe points serializáveis. A implementação candidata existe; a aprovação permanece condicionada a CI e revisão.
@@ -327,6 +329,6 @@ Além disso, Scheduler deterministic stress e Windows x64 D3D12/WASAPI/XAudio2 q
 
 ## 8. Próxima ação
 
-Prosseguir na PR #484: revisar o diff e resolver CI E5 no HEAD exato; confirmar BIT read-only, M1/non-M1, 4,4,3,5,4 e 4,4,3,5,4,3, R, flags, WZ, WAIT e snapshots. Não fazer merge até todos os gates obrigatórios PASS.
+Prosseguir na PR #484: concluir Windows WASAPI/XAudio2 e audio-output tests, revisar o diff e confirmar os gates restantes. Formatting, Clippy, workspace tests e os vetores E5 passaram no código SHA b7bf61d. Não fazer merge enquanto o gate Windows de áudio estiver pendente.
 
 **Estado atual DD/FD:** E2 FSM/snapshot SHORT_PASS; E3A1/E3A2/E4A/E4B/E4C integradas na main `a0e58fd05c7f62c42f82b86d15d8532e06a9c59b`. E4C validada no HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`, CI `41747460761` 4/4 PASS. E5 implementada como candidata na PR #484 (`081522cf5169d9bf27a5e018db57b6b69ad378d3`); CI ainda pendente. E6 fallback, E7 fechamento semântico, E8 formal e E9 integração temporal permanecem pendentes. Não há LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS global.
