@@ -1,11 +1,11 @@
-# Matriz semântica DD/FD do Z80 — estado após E5 integrada pela PR #485
+# Matriz semântica DD/FD do Z80 — estado após E6 integrada pela PR #486
 
 **Data:** 2026-11-04  
-**Baseline auditada:** `main` — `f4130104fa971289507c0b15ab2d8eabd1dd5b00`, após merge da PR #485.  
+**Baseline auditada:** `main` — `6362075514809e6bce35582ac978d66eeb8e0d1b`, após E6 e reconciliação documental (#488/#489).  
 **E4C validada:** HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS.  
 **Schema do microsequenciador:** 28 (E5 integrada)  
 **Escopo:** decoder DD/FD, IX/IY, IXH/IXL/IYH/IYL, (IX/IY+d), DDCB/FDCB.  
-**Natureza:** inventário do código ativo e das evidências disponíveis; E5 está integrada e possui QUICK_PASS/SHORT_PASS, sem declarar conclusão funcional integral nem temporal do Z80.  
+**Natureza:** inventário do código ativo e das evidências disponíveis; E5 e E6 estão integradas com QUICK_PASS/SHORT_PASS nos escopos registrados, sem declarar conclusão funcional integral nem temporal do Z80.  
 **Meta global e scorecard:** consultar [Meta de conclusão do Z80 — cobertura, validação e critérios de aceite](z80-completion-scorecard.md) para percentuais de referência, fórmulas, níveis de evidência e critérios de conclusão.
 
 ## 1. Legenda e regra de leitura
@@ -151,7 +151,7 @@ O schema 26 foi introduzido por E2; E4A elevou para 27 para serializar displacem
 | DDCB/FDCB BIT | IMPLEMENTED no executor atômico | QUICK_PASS / SHORT_PASS no microsequenciador; 64 BIT opcodes por índice e destinos z cobertos; BIT read-only | NOT_RUN nesta auditoria | IMPLEMENTED_MICROSEQUENCED; schema 28 e snapshots nos safe points | TEMPORAL_UNVERIFIED |
 | DDCB/FDCB RMW | IMPLEMENTED no executor atômico | QUICK_PASS / SHORT_PASS no microsequenciador; rotações/shifts, RES/SET, cópia z e flags do modelo cobertos | NOT_RUN nesta auditoria | IMPLEMENTED_MICROSEQUENCED; schema 28 e snapshots em displacement/opcode/read/write | TEMPORAL_UNVERIFIED |
 | Prefixos repetidos/alternados | IMPLEMENTED | QUICK_PASS / SHORT_PASS; seleção do último DD/FD e contagem M1 verificados também para DDCB/FDCB | NOT_RUN nesta auditoria | Latch, fases E5 e snapshots cobertos; schema 28 | TEMPORAL_UNVERIFIED |
-| Prefixo ignorado / ED após DD/FD | IMPLEMENTED no executor atômico | Testes dirigidos; ampliar para todos os grupos | NOT_RUN nesta auditoria | Fallback geral pendente; próximo E6 | TEMPORAL_UNVERIFIED |
+| Prefixo ignorado / ED após DD/FD | IMPLEMENTED no executor atômico | E6 QUICK_PASS / SHORT_PASS nos grupos testados; ampliar auditoria semântica de todas as famílias | NOT_RUN nesta auditoria | Fallback geral integrado pela PR #486; BASE/ED não implementadas continuam explicitamente rejeitadas | TEMPORAL_UNVERIFIED |
 
 ## 8. Referências técnicas primárias
 
@@ -187,8 +187,8 @@ Links:
 - **E4C — INC/DEC (IX/IY+d):** IMPLEMENTED / QUICK_PASS / SHORT_PASS pela PR #475; CI 41747460761 4/4 PASS; 5 testes dirigidos; LONG_PASS/diferencial/temporal NOT_RUN.
 - **E5 — DDCB/FDCB:** IMPLEMENTED / QUICK_PASS / SHORT_PASS, integrada pela PR #485 no merge SHA `f4130104fa971289507c0b15ab2d8eabd1dd5b00`; CI #4245 3 jobs PASS, Scheduler stress SKIPPED corretamente por não alterar o Scheduler. Diferencial externo e temporal não executados.
 - **E6 — resolução geral DD/FD/ED/CB:** IMPLEMENTED / QUICK_PASS / SHORT_PASS pela PR #486; fallback BASE sem refetch, preservação de WAIT/snapshots/M-cycles e combinações repetidas/alternadas. CI #41757983537 Rust/Python/Windows PASS; Scheduler SKIPPED.
-- **E7 — fechamento semântico:** auditar BASE/CB/ED/DD/FD/DDCB/FDCB, flags, interrupções, HALT e snapshots.
+- **E7 — fechamento semântico:** em andamento. E7.1 adiciona HALT e M1 de retenção retomável; saída por NMI/INT, IM 0/1/2, restante das flags/estado e matriz integral permanecem pendentes. Ver [auditoria E7.1](audits/z80-e7-halt-m1-2026-11-04.md).
 - **E8 — formal/diferencial:** ZEXDOC/ZEXALL e oráculos independentes.
 - **E9 — temporal/integração:** M/T-states, WAIT, interrupções, snapshots, Scheduler e SMS/SG-1000.
 
-**Estado global:** E3A1/E3A2, E4A, E4B, E4C, E5 e E6 estão IMPLEMENTED no microsequenciador e QUICK_PASS/SHORT_PASS nos gates funcionais executados. E6 foi integrada pela PR #486; merge SHA do código `24a32e03e10c8e82022172faee69ec0c046f8cb0`. A documentação foi reconciliada pela PR #488, merge SHA `303a792b1caab1ba40dec9c9521208eb5aaa0b45`. CI #41759035927, #41759330209 e #41759833153 Rust/Python/Windows PASS; Scheduler stress SKIPPED. E7 — fechamento semântico global — é a próxima etapa. Diferencial externo completo, ZEXDOC/ZEXALL e traces independentes por T-state não foram executados; não declarar LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS. A integração temporal sistêmica do Z80 à máquina SMS permanece INTEGRATION_PENDING.
+**Estado global:** E3A1/E3A2, E4A, E4B, E4C, E5 e E6 estão IMPLEMENTED no microsequenciador e QUICK_PASS/SHORT_PASS nos gates funcionais executados. E6 foi integrada pela PR #486; merge SHA do código `24a32e03e10c8e82022172faee69ec0c046f8cb0`. A documentação foi reconciliada pela PR #488, merge SHA `303a792b1caab1ba40dec9c9521208eb5aaa0b45`. CI #41759035927, #41759330209 e #41759833153 Rust/Python/Windows PASS; Scheduler stress SKIPPED. E7 — fechamento semântico global — está em andamento, iniciado pela E7.1 HALT. Diferencial externo completo, ZEXDOC/ZEXALL e traces independentes por T-state não foram executados; não declarar LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS. A integração temporal sistêmica do Z80 à máquina SMS permanece INTEGRATION_PENDING.
