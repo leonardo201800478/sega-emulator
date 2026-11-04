@@ -244,3 +244,12 @@ Uma célula da matriz semântica só pode ser marcada como validada quando possu
 - resultado de teste vinculado ao SHA do código.
 
 A matriz estrutural de opcodes e os match arms do decoder não contam como cobertura semântica. O número de instruções implementadas não substitui a lista explícita de lacunas.
+
+
+---
+
+## Aditivo de continuidade — integração E7.2E (2026-11-04)
+
+- A PR [#506](https://github.com/leonardo201800478/sega-emulator/pull/506), E7.2E, foi integrada à `main` no merge commit `54f881872ec9f5a9923ebdb17643b37a19954ec5`. HEAD validado: `8d6751513f8763f5ebfca50ecbaeb9fe469f38fb`; CI [#41872451175](https://github.com/leonardo201800478/sega-emulator/actions/runs/41872451175) e [#41871621460](https://github.com/leonardo201800478/sega-emulator/actions/runs/41871621460) concluíram SUCCESS, incluindo Scheduler deterministic stress PASS.
+- A PR [#509](https://github.com/leonardo201800478/sega-emulator/pull/509) contém a implementação candidata E7.3 (HALT T4). Seu HEAD `2f6faa4763555321ce8e83f1433175d21d4242ee` teve Rust, Python e Windows x64 PASS no CI [#41874687487](https://github.com/leonardo201800478/sega-emulator/actions/runs/41874687487); Scheduler deterministic stress foi SKIPPED. Portanto, o resultado não constitui TEMPORAL_PASS e a PR precisa ser retargeted/revalidada sobre a main pós-#506 antes de integração.
+- A integração de E7.2E não encerra E7 global. E7.3–E7.7 permanecem dependentes de implementação e evidência próprias; E8 continua bloqueada até o fechamento completo de E7.
