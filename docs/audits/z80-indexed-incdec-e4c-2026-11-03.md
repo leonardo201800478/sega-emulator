@@ -4,7 +4,7 @@
 **Baseline:** `main` — `72483777dd2d7129b31fe8325d09733f15805e2e`  
 **PR:** [#475](https://github.com/leonardo201800478/sega-emulator/pull/475)  
 **Branch:** `feat/z80-e4c-integrated-baseline-2026-11-04`  
-**SHA validado integralmente nesta PR:** `704dfd391ae1ea994fd53b8fa4a9519275746ff8`  
+**SHA validado integralmente nesta PR (HEAD atual):** `981b14ae8307119bb7e057105e31bc3e52af35e4`  
 **Schema de snapshot:** 27 (sem alteração)
 
 ## 1. Escopo
@@ -66,7 +66,7 @@ Cobertura adicionada:
 | Implementação no microsequenciador | IMPLEMENTED |
 | Testes direcionados no candidato inicial `ad464672c2c3a01620a1f96b0f53395d0e905355` | QUICK_PASS / SHORT_PASS em CI |
 | Workflow inicial | [41739328124](https://github.com/leonardo201800478/sega-emulator/actions/runs/41739328124), 4/4 jobs PASS |
-| Execução integral dos gates no HEAD desta PR (`704dfd391ae1ea994fd53b8fa4a9519275746ff8`) | CI [41745463887](https://github.com/leonardo201800478/sega-emulator/actions/runs/41745463887): 4/4 jobs PASS |
+| Execução integral dos gates no candidato anterior (`704dfd391ae1ea994fd53b8fa4a9519275746ff8`) | CI [41745463887](https://github.com/leonardo201800478/sega-emulator/actions/runs/41745463887): 4/4 jobs PASS |\n| Execução integral dos gates no HEAD atual (`981b14ae8307119bb7e057105e31bc3e52af35e4`) | CI [41747221597](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747221597): 4/4 jobs PASS |
 | LONG_PASS | NOT RUN |
 | ZEXDOC / ZEXALL | NOT RUN |
 | Comparação diferencial externa completa | NOT RUN |
@@ -77,7 +77,7 @@ O CI verde confirma gates de compilação, lint, testes do workspace, stress det
 
 ## 6. Limitações remanescentes e próximos passos
 
-- Histórico de correções: `41741995929` identificou tipos ambíguos no fixture; `41742295721` identificou type-complexity; `41742519601` identificou formatação. As três correções foram aplicadas antes do SHA final `bac497462a3fc13a1f47892d25d435beefddd6d8`, cujo CI integral `41742682599` concluiu 4/4 jobs PASS. A validação final da PR #475 foi repetida no HEAD `704dfd391ae1ea994fd53b8fa4a9519275746ff8`, workflow `41745463887`, também com 4/4 jobs PASS.
+- Histórico de correções: `41741995929` identificou tipos ambíguos no fixture; `41742295721` identificou type-complexity; `41742519601` identificou formatação. As três correções foram aplicadas antes do SHA final `bac497462a3fc13a1f47892d25d435beefddd6d8`, cujo CI integral `41742682599` concluiu 4/4 jobs PASS. A validação final da PR #475 foi repetida no HEAD `704dfd391ae1ea994fd53b8fa4a9519275746ff8`, workflow `41745463887`, e novamente no HEAD atual `981b14ae8307119bb7e057105e31bc3e52af35e4`, workflow `41747221597`; ambos concluíram 4/4 jobs PASS.
 - Esta PR atualiza somente a auditoria específica E4C. A matriz semântica, o scorecard, a estratégia de resolução e os roadmaps ainda precisam ser reconciliados em uma atualização documental própria após a integração do código.
 - E4 só pode ser fechada após E4A, E4B e E4C aprovadas individualmente.
 - Prosseguir para E5: DDCB/FDCB no microsequenciador, distinguindo BIT (sem write-back) das operações RMW.
