@@ -1,4 +1,4 @@
-//! E6.1 tests for ignored DD/FD prefix fallback into the existing BASE/ED paths.
+//! E6 tests for ignored DD/FD prefix fallback into the existing BASE/ED paths.
 
 use sega_z80_cpu::{
     Z80BusOperation, Z80BusRequest, Z80MicroSequencer, Z80MicroSequencerState, Z80MicroStep,
