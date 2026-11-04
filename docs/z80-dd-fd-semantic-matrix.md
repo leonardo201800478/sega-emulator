@@ -4,7 +4,8 @@
 **Baseline auditada:** `main` — `e9a3eff6c3733b4f11443954a647471c9d3908ff`; candidato E4B PR #472 — `245d42eb0337d41295329155de8e151feceb9022`  
 **Schema do microsequenciador:** 27  
 **Escopo:** decoder DD/FD, IX/IY, IXH/IXL/IYH/IYL, (IX/IY+d), DDCB/FDCB.  
-**Natureza:** inventário do código ativo e das evidências disponíveis; não declara conclusão funcional nem temporal do Z80.
+**Natureza:** inventário do código ativo e das evidências disponíveis; não declara conclusão funcional nem temporal do Z80.  
+**Meta global e scorecard:** consultar [Meta de conclusão do Z80 — cobertura, validação e critérios de aceite](z80-completion-scorecard.md) para percentuais de referência, fórmulas, níveis de evidência e critérios de conclusão.
 
 ## 1. Legenda e regra de leitura
 
