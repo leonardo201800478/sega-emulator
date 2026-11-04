@@ -280,7 +280,7 @@ impl SmsTemporalMachine {
             Z80BusOperation::OpcodeFetch => (BusCycleKind::OpcodeFetch, BusDirection::Read, None),
             Z80BusOperation::InterruptAcknowledge => {
                 (BusCycleKind::InterruptAcknowledge, BusDirection::Read, None)
-            },
+            }
             Z80BusOperation::MemoryRead => (BusCycleKind::MemoryRead, BusDirection::Read, None),
             Z80BusOperation::MemoryWrite { value } => {
                 (BusCycleKind::MemoryWrite, BusDirection::Write, Some(value))
