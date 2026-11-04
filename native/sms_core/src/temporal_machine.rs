@@ -638,6 +638,13 @@ impl SmsTemporalMachine {
                 self.cpu = next_cpu;
                 self.pending_internal_tstates = None;
                 self.pending_internal_cycle_id = None;
+                if matches!(
+                    step,
+                    Z80MicroStep::InstructionRetired { .. }
+                        | Z80MicroStep::InterruptServiced { .. }
+                ) {
+                    self.instruction_started_at = None;
+                }
                 if self.trace_enabled {
                     self.trace_events
                         .push(SmsTemporalTraceEvent::InternalCycleCompleted {
