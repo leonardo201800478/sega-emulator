@@ -182,6 +182,9 @@ Os níveis abaixo são cumulativos no escopo declarado. O estado deve ser atribu
 - Aceite cumprido: sequências simples/repetidas/alternadas, WAIT aditivo, round-trip de snapshots e ausência de fetch duplicado.
 
 **E6.2 — Operandos, fases suspensas e snapshots BASE/ED: IMPLEMENTED.**
+- Estados suspensos com operandos imediatos, ALU imediato, branch relativo e memória read/write aceitam snapshot/restore e WAIT.
+- Prefixos DD/FD anteriores a ED não perdem M-cycles ao entrar em ED absolute transfer, ED block/IO ou fases internas; contadores são preservados em transições internas.
+- O latch Index é mantido como contexto de timing/serialização, enquanto a classificação Ignored evita semântica IX/IY no opcode BASE.
 
 **E6.3 — Fechamento combinatório: IMPLEMENTED.**
 
