@@ -2,8 +2,8 @@
 
 **Status:** Rota oficial de implementação progressiva.  
 **Estratégia de Engenharia (MÓDULOS COMPARTILHADOS):** Toda e qualquer integração deve ser realizada exclusivamente nos **módulos e crates compartilhados** do workspace Rust (`sega-core`, `sega-cpus`, `sega-video`, `sega-audio`, `sega-scheduler`, `sega-hosts`). É estritamente proibido criar implementações individuais, duplicadas ou isoladas por console. Cada nova plataforma adicionada deve reaproveitar, estender ou parametrizar os componentes centrais existentes.  
-**Baseline de Entrada:** SHA `e9a3eff6c3733b4f11443954a647471c9d3908ff` (`main`, após PR #471 / E4A).  
-**Candidato Z80 ativo:** PR #472 / E4B, SHA `245d42eb0337d41295329155de8e151feceb9022` (não integrado).
+**Baseline atual:** SHA `f89a52346e91e88e82ab37a4afcfffff2d793407` (`main`, após PR #475 / E4C).  
+**Última fatia Z80 integrada:** PR #475 / E4C, HEAD validado `8f04b44e6c6ba85920a7438b74c9876586d5736c`, CI 41747460761 4/4 PASS.
 
 ---
 
@@ -52,12 +52,12 @@ Esta sub-rota evolui o mesmo microsequenciador em `sega-cpus`; não cria impleme
 - [x] **CI do candidato E4A:** run 41734982519 — Rust, Python, Scheduler stress short e Windows x64 — 4/4 PASS.
 - [x] **E4B (candidato PR #472):** ADD, ADC, SUB, SBC, AND, XOR, OR e CP (IX/IY+d), ALU compartilhada, flags S/Z/H/PV/N/C e X/Y, CP preserva A e copia X/Y do operando, WAIT, snapshot/restore e last-prefix-wins.
 - [x] **CI do candidato E4B:** run 41738004725 — Rust, Python, Scheduler stress short e Windows x64 — 4/4 PASS.
-- [ ] **E4C:** INC/DEC (IX/IY+d), com read-modify-write e validação de flags.
-- [ ] **E4C:** INC/DEC (IX/IY+d), com read-modify-write e flags.
-- [ ] **E5:** DDCB/FDCB.
+- [x] **E4C (PR #475 integrada):** INC/DEC (IX/IY+d), read-modify-write compartilhado, flags S/Z/H/PV/N, C preservado, WAIT, snapshots, wrap, prefixos repetidos/alternados; 5 testes dirigidos.
+- [x] **CI E4C:** run 41747460761 — Rust, Python, Scheduler stress e Windows x64 — 4/4 PASS.
+- [ ] **E5:** DDCB/FDCB completo no microsequenciador.
 - [ ] **E6–E9:** prefixos ignorados, fechamento semântico, ZEXDOC/ZEXALL e integração temporal.
 
-**Estado:** E4A integrada na main e E4B IMPLEMENTED / SHORT_PASS no SHA candidato. E4 permanece aberta até E4C. Não declarar LONG_PASS ou TEMPORAL_PASS.
+**Estado:** E4A, E4B e E4C integradas na main. E4 está implementada e aprovada nos gates dirigidos, com E4C em QUICK_PASS / SHORT_PASS. Próxima tarefa: E5 DDCB/FDCB. Validação diferencial externa, ZEXDOC/ZEXALL, LONG_PASS e TEMPORAL_PASS permanecem pendentes.
 
 **Critério de Conclusão da Sprint SMS:** Boot e gameplay funcional de SMS via módulos compartilhados, em *host-null* e janela Rust nativa sem dependência de Python.
 
