@@ -357,3 +357,17 @@ Além disso, Scheduler deterministic stress e Windows x64 D3D12/WASAPI/XAudio2 q
 E6 foi integrada pela PR #486; merge SHA do código `24a32e03e10c8e82022172faee69ec0c046f8cb0`. A reconciliação documental foi integrada pela PR #488, merge SHA `303a792b1caab1ba40dec9c9521208eb5aaa0b45`. CI #41759035927, #41759330209 e #41759833153 concluídos com SUCCESS para Rust, Python e Windows x64. A E7 está em andamento: a primeira fatia E7.1 implementa HALT/M1 de retenção; o próximo incremento é o serviço de NMI/INT e saída de HALT.
 
 **Estado atual DD/FD:** E2 FSM/snapshot, E3A1/E3A2/E4A/E4B/E4C, E5 e E6 IMPLEMENTED / QUICK_PASS / SHORT_PASS nos escopos validados. E6 integrada pela PR #486 (merge SHA `24a32e03e10c8e82022172faee69ec0c046f8cb0`); documentação reconciliada pela PR #488 (merge SHA `303a792b1caab1ba40dec9c9521208eb5aaa0b45`). CI #41759035927, #41759330209 e #41759833153 Rust/Python/Windows PASS, Scheduler stress SKIPPED. E7 em andamento: E7.1 HALT/M1 integrada pela PR #490 (merge SHA `b1b5ced5c3d6053f8d59c8f4d932f40518db1064`); CI #41762232781 Rust/Python/Windows PASS e Scheduler stress SKIPPED; CI pós-merge #41765421167 no SHA da main: Rust/Python/Windows PASS, Scheduler stress SKIPPED. Próximo incremento E7.2 NMI/INT e saída de HALT. E8 formal/diferencial e E9 integração temporal permanecem pendentes. Não há LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS global.
+
+
+---
+
+## Aditivo operacional — estado após E7.3 (2026-11-04)
+
+Baseline remota desta reconciliação: `main` `fcd91302cb64a31d63b75f5e1d3b6eab336668d1`.
+
+- E6 (resolução geral de prefixos) foi integrada pela PR #486, merge SHA `24a32e03e10c8e82022172faee69ec0c046f8cb0`.
+- E7.3 (HALT T4) foi integrada pela PR #509, merge SHA `869b402e4c8f2dbd9c5f5fa4a10d10ac26506461`.
+- A PR #511 integrou auditoria documental BUSREQ/BUSACK (merge SHA `5452ec9eb4307b997badff1858bfc60e7078a937`); não implementou a arbitragem no runtime.
+- E7.4.1A (#512) e E7.4.1B de runtime (#514) permanecem candidatas abertas. A fidelidade WAIT/TW está bloqueada pela necessidade de falling edge explícita, TW automático de I/O/INT e amostragem WAIT durante TW obrigatório.
+- A próxima implementação é C1 no Temporal Core/Scheduler: instante racional compartilhado, ordenação causal, snapshots e codec. Não avançar para BUSREQ/BUSACK antes de C1–C6.
+- E7 global permanece `INTEGRATION_PENDING`; E8 está bloqueada até fechamento integral de E7. Nenhum LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS global é declarado.
