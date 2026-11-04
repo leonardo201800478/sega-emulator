@@ -27,9 +27,9 @@ Portanto, os campos presentes são estado arquitetural preparatório, não funci
 
 ### 2.1 Amostragem e prioridade
 
-1. NMI e INT são amostradas na borda de subida do clock no final da instrução; durante HALT, as linhas são amostradas na borda de subida de cada T4.
+1. NMI e INT são amostradas na borda de subida do clock no final da instrução; durante HALT, as linhas são amostradas na borda de subida de cada T4. Durante um ciclo BUSREQ, nenhuma das duas é atendida.
 2. NMI tem prioridade sobre INT e não pode ser mascarada por software.
-3. INT só é aceita se IFF1 estiver habilitada; o manual também condiciona o aceite à ausência de BUSREQ. A interação com BUSREQ deve permanecer explícita enquanto a máquina temporal não expuser esse sinal.
+3. INT só é aceita se IFF1 estiver habilitada. O manual também declara que, durante um ciclo BUSREQ, a CPU não pode ser interrompida por NMI nem INT. A interação com BUSREQ deve permanecer explícita enquanto a máquina temporal não expuser esse sinal.
 4. Se NMI e INT elegível estiverem presentes na mesma janela de amostragem de HALT, NMI deve ser atendida.
 5. Uma solicitação não elegível não pode provocar saída espúria de HALT.
 
