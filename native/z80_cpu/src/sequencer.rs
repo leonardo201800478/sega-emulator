@@ -122,6 +122,38 @@ fn is_rst_opcode(opcode: u8) -> bool {
     opcode & 0xC7 == 0xC7
 }
 
+fn ed_phase_base_mcycle(phase: Z80MicroSequencerPhase) -> Option<u32> {
+    match phase {
+        Z80MicroSequencerPhase::EdRegisterInternal { .. }
+        | Z80MicroSequencerPhase::EdBlockIoInitialInternal { .. } => Some(1),
+        Z80MicroSequencerPhase::EdPortRead { .. }
+        | Z80MicroSequencerPhase::EdPortWrite { .. }
+        | Z80MicroSequencerPhase::Ed16ArithmeticInternal { .. }
+        | Z80MicroSequencerPhase::EdAbsoluteTransfer { stage: 0, .. }
+        | Z80MicroSequencerPhase::EdReturn { stage: 0, .. }
+        | Z80MicroSequencerPhase::EdNibbleRotateRead { .. }
+        | Z80MicroSequencerPhase::EdBlockTransferRead { .. }
+        | Z80MicroSequencerPhase::EdBlockCompareRead { .. }
+        | Z80MicroSequencerPhase::EdBlockIoInputPortRead { .. }
+        | Z80MicroSequencerPhase::EdBlockIoOutputMemoryRead { .. } => Some(2),
+        Z80MicroSequencerPhase::EdAbsoluteTransfer { stage: 1, .. }
+        | Z80MicroSequencerPhase::EdReturn { stage: 1, .. }
+        | Z80MicroSequencerPhase::EdNibbleRotateInternal { .. }
+        | Z80MicroSequencerPhase::EdBlockCompareInternal { .. }
+        | Z80MicroSequencerPhase::EdBlockTransferWrite { .. }
+        | Z80MicroSequencerPhase::EdBlockIoInputMemoryWrite { .. }
+        | Z80MicroSequencerPhase::EdBlockIoOutputPortWrite { .. } => Some(3),
+        Z80MicroSequencerPhase::EdAbsoluteTransfer { stage: 2, .. }
+        | Z80MicroSequencerPhase::EdReturn { stage: 2, .. }
+        | Z80MicroSequencerPhase::EdBlockRepeatInternal { .. }
+        | Z80MicroSequencerPhase::EdBlockCompareRepeatInternal { .. }
+        | Z80MicroSequencerPhase::EdBlockIoRepeatInternal { .. } => Some(4),
+        Z80MicroSequencerPhase::EdAbsoluteTransfer { stage: 3, .. }
+        | Z80MicroSequencerPhase::EdReturn { stage: 3, .. } => Some(5),
+        _ => None,
+    }
+}
+
 fn has_general_prefix_fallback_context(
     prefix_state: Z80PrefixState,
     opcode: Option<u8>,
@@ -138,32 +170,10 @@ fn has_general_prefix_fallback_context(
                 && instruction_tstates >= 8
         }
         Z80PrefixState::Ed => mcycle_index >= 2 && instruction_tstates >= 8,
-        Z80PrefixState::None => {
-            let ed_phase = matches!(
-                phase,
-                Z80MicroSequencerPhase::EdRegisterInternal { .. }
-                    | Z80MicroSequencerPhase::EdPortRead { .. }
-                    | Z80MicroSequencerPhase::EdPortWrite { .. }
-                    | Z80MicroSequencerPhase::Ed16ArithmeticInternal { .. }
-                    | Z80MicroSequencerPhase::EdAbsoluteTransfer { .. }
-                    | Z80MicroSequencerPhase::EdReturn { .. }
-                    | Z80MicroSequencerPhase::EdNibbleRotateRead { .. }
-                    | Z80MicroSequencerPhase::EdNibbleRotateInternal { .. }
-                    | Z80MicroSequencerPhase::EdBlockTransferRead { .. }
-                    | Z80MicroSequencerPhase::EdBlockTransferWrite { .. }
-                    | Z80MicroSequencerPhase::EdBlockRepeatInternal { .. }
-                    | Z80MicroSequencerPhase::EdBlockCompareRead { .. }
-                    | Z80MicroSequencerPhase::EdBlockCompareInternal { .. }
-                    | Z80MicroSequencerPhase::EdBlockCompareRepeatInternal { .. }
-                    | Z80MicroSequencerPhase::EdBlockIoInitialInternal { .. }
-                    | Z80MicroSequencerPhase::EdBlockIoInputPortRead { .. }
-                    | Z80MicroSequencerPhase::EdBlockIoInputMemoryWrite { .. }
-                    | Z80MicroSequencerPhase::EdBlockIoOutputMemoryRead { .. }
-                    | Z80MicroSequencerPhase::EdBlockIoOutputPortWrite { .. }
-                    | Z80MicroSequencerPhase::EdBlockIoRepeatInternal { .. }
-            );
-            ed_phase && mcycle_index >= 2 && instruction_tstates >= 12
-        }
+        Z80PrefixState::None => ed_phase_base_mcycle(phase)
+            .is_some_and(|base_mcycle| {
+                mcycle_index > base_mcycle && instruction_tstates >= 12
+            }),
         _ => false,
     };
     let base_or_ed_phase = !matches!(
