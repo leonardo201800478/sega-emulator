@@ -2109,11 +2109,20 @@ mod tests {
 
     struct TestBus([u8; 0x10000]);
 
-    #[derive(Default)]
     struct RecordingBus {
         memory: [u8; 0x10000],
         reads: Vec<u16>,
         writes: Vec<(u16, u8)>,
+    }
+
+    impl Default for RecordingBus {
+        fn default() -> Self {
+            Self {
+                memory: [0; 0x10000],
+                reads: Vec::new(),
+                writes: Vec::new(),
+            }
+        }
     }
 
     impl CpuBus for RecordingBus {
