@@ -167,12 +167,15 @@ jobs:
           retention-days: 1
 
   scheduler-stress:
+    needs: [changes]
     name: Scheduler deterministic stress
     if: |
+      always() &&
       (github.event_name != 'workflow_dispatch' || !inputs.refresh_cargo_lockfiles) &&
       (
         (github.event_name == 'workflow_dispatch' && github.event.inputs.scheduler_stress_profile != 'none') ||
         (github.event_name == 'pull_request' && (
+          needs.changes.outputs.scheduler == 'true' ||
           contains(github.event.pull_request.labels.*.name, 'scheduler-stress-short') ||
           contains(github.event.pull_request.labels.*.name, 'scheduler-stress-long') ||
           (github.event.action == 'labeled' && (
@@ -184,7 +187,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      SCHEDULER_STRESS_PROFILE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.scheduler_stress_profile || ((contains(github.event.pull_request.labels.*.name, 'scheduler-stress-short') || github.event.label.name == 'scheduler-stress-short') && 'short') || 'long' }}
+      SCHEDULER_STRESS_PROFILE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.scheduler_stress_profile || (contains(github.event.pull_request.labels.*.name, 'scheduler-stress-long') && 'long') || ((needs.changes.outputs.scheduler == 'true' || contains(github.event.pull_request.labels.*.name, 'scheduler-stress-short') || github.event.label.name == 'scheduler-stress-short') && 'short') || 'long' }}
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: dtolnay/rust-toolchain@stable
