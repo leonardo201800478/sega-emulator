@@ -713,7 +713,7 @@ impl Z80MicroSequencer {
                     Z80PrefixState::Index(_) => {
                         state.opcode == Some(0x21)
                             && pair == 2
-                            && state.mcycle_index >= 3
+                            && state.mcycle_index >= 2
                             && state.instruction_tstates >= 11
                     }
                     _ => false,
