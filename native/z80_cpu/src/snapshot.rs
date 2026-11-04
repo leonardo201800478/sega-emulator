@@ -1669,6 +1669,9 @@ mod base_absolute_transfer_snapshot_tests {
                         };
                         cpu.complete_bus_cycle(request.id, data).unwrap()
                     }
+                    Z80MicroStep::InterruptAcknowledge { .. } => {
+                        panic!("unexpected INT acknowledge in absolute transfer test")
+                    }
                     Z80MicroStep::InstructionRetired { .. }
                     | Z80MicroStep::InterruptServiced { .. } => break,
                     Z80MicroStep::InternalCycle { .. } => {
