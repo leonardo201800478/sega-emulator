@@ -23,6 +23,22 @@ O núcleo ativo está em `native/z80_cpu`. Na baseline auditada:
 
 Portanto, os campos presentes são estado arquitetural preparatório, não funcionalidade implementada.
 
+## 1.1 Referência funcional existente: executor atômico
+
+A auditoria ampliada encontrou semântica NMI já implementada no executor atômico compartilhado, em `native/z80_cpu/src/cpu.rs`. Isso evita reimplementar a regra arquitetural a partir de suposições, mas não substitui a implementação retomável.
+
+- `request_nmi()` seta `nmi_pending`.
+- `step_inner()` prioriza NMI antes de INT, HALT e fetch normal.
+- `service_nmi()` consome a solicitação, sai de HALT, incrementa R preservando o bit 7, copia IFF1 para IFF2, limpa IFF1, empilha o PC, define PC/WZ em `0x0066` e retorna 11 T-states agregados.
+- `push16()` decrementa SP e escreve primeiro o byte alto, depois decrementa novamente e escreve o byte baixo.
+- A família RETN/RETI usa `IFF1 = IFF2` após recuperar o PC.
+- O teste `native/sms_core/tests/z80_nmi_halt_semantics.rs` cobre NMI saindo de HALT mesmo com INT mascarada, PC de retorno, bytes empilhados, destino e incremento de R.
+- O teste não cobre IFF1 inicialmente habilitada, preservação de IFF2 por NMI, request/snapshot durante cada fase, BUSREQ ou trace de barramento.
+
+**Limite do oráculo atômico:** o executor retorna 11 T-states agregados e chama `push16()` diretamente. Ele não expõe acknowledge/fetch NMI, WAIT, M-cycles, fases ou operações de barramento. Portanto, serve como referência para estado arquitetural final, mas não prova a sequência temporal. A implementação E7.2A deve reproduzir a semântica acima por requests retomáveis, sem copiar a mutação atômica nem assumir que 11 T-states agregados provam o timing.
+
+A auditoria também confirmou que `native/sms_core/tests/z80_interrupt_semantics.rs` cobre o executor atômico para IM0/1/2, mas esses casos não exercitam o microsequenciador nem o adaptador temporal.
+
 ## 2. Requisitos normativos extraídos do manual Zilog
 
 ### 2.1 Amostragem e prioridade
