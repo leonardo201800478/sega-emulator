@@ -61,3 +61,14 @@ Os resultados acima vêm do GitHub Actions; não representam execução local ne
 - A sequência integral de `SmsTemporalTraceEvent` e a equivalência sistêmica contínua/retomada continuam dependentes das próximas fatias E7.2E/E9.
 
 **Decisão:** esta PR melhora a integridade dos snapshots e passa nos gates convencionais do HEAD registrado. Não encerra E7.2E, não encerra E7 e não autoriza iniciar E8. Não atribuir LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS.
+
+
+## Revalidação do HEAD documental final
+
+Após a inclusão desta auditoria e a atualização do scorecard, o HEAD da PR passou a ser `1bb057ec126eb07de485a16bcdd98c42552f5c93`. O workflow [CI #41860812506](https://github.com/leonardo201800478/sega-emulator/actions/runs/41860812506), executado nesse HEAD exato, também concluiu **SUCCESS**:
+- Rust fmt, Clippy, testes SMS, SG-1000 e workspace: PASS.
+- Python Ruff format, Ruff lint e pytest: PASS.
+- Windows x64 D3D12/vídeo e WASAPI/XAudio2/áudio compile/tests: PASS.
+- Scheduler deterministic stress: SKIPPED.
+
+Assim, a documentação e o código da PR #506 estão validados no HEAD final informado. A PR continua aberta; esta evidência não é autorização de merge nem encerra E7.2E.
