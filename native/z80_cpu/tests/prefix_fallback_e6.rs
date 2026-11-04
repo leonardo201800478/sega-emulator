@@ -233,6 +233,7 @@ fn ignored_prefix_fallback_preserves_relative_branch_operand_fetch() {
         cpu.complete_bus_cycle(displacement.id, Some(0x02)).unwrap(),
         Z80MicroStep::InternalCycle { tstates: 1 }
     );
+    cpu = round_trip(cpu);
     assert_eq!(cpu.registers.pc, 3);
     assert_eq!(cpu.refresh & 0x7F, 2);
 }
