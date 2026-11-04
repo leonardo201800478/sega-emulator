@@ -995,6 +995,7 @@ mod tests {
         let mut machine = SmsTemporalMachine::new(vec![0x00; 0x4000], 3).unwrap();
         machine.cpu_mut().iff1 = true;
         machine.cpu_mut().iff2 = true;
+        machine.cpu_mut().registers.sp = 0xC002;
         machine.set_int_line(Some(0xCF));
 
         let Z80MicroStep::BusRequest(request) = machine.begin_instruction().unwrap() else {
@@ -1036,6 +1037,7 @@ mod tests {
             }
         );
         assert_eq!(resumed.cpu().registers.pc, 0x0008);
+        assert_eq!(resumed.cpu().registers.sp, 0xC000);
     }
 
     #[test]
