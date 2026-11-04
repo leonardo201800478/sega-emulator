@@ -700,6 +700,12 @@ impl SmsTemporalMachine {
         &mut self.cpu
     }
 
+    /// Latch an NMI input edge for acceptance at the next CPU instruction boundary.
+    /// This signal update does not advance machine time.
+    pub fn request_nmi(&mut self) {
+        self.cpu.request_nmi();
+    }
+
     /// Current mapper-backed memory (read-only).
     pub const fn memory(&self) -> &crate::SmsMemory {
         self.bus.memory()
