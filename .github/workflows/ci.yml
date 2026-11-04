@@ -21,14 +21,96 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Change impact classification
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+      python: ${{ steps.filter.outputs.python }}
+      qt: ${{ steps.filter.outputs.qt }}
+      pyo3: ${{ steps.filter.outputs.pyo3 }}
+      windows_native: ${{ steps.filter.outputs.windows_native }}
+      scheduler: ${{ steps.filter.outputs.scheduler }}
+      tooling: ${{ steps.filter.outputs.tooling }}
+      full: ${{ steps.filter.outputs.full }}
+    steps:
+      - name: Classify changed paths
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            rust:
+              - 'native/**/*.rs'
+              - '**/Cargo.toml'
+              - '**/Cargo.lock'
+              - '.cargo/**'
+              - 'rust-toolchain*'
+              - 'build.rs'
+            python:
+              - 'src/**/*.py'
+              - 'tests/**/*.py'
+              - 'tools/**/*.py'
+              - 'scripts/**/*.py'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'pytest.ini'
+              - 'ruff.toml'
+              - 'setup.cfg'
+              - 'requirements*.txt'
+            qt:
+              - 'src/sega_emulator/frontend/qt/**'
+              - 'tests/test_qt_*.py'
+              - 'tests/unit/test_vulkan_video_widget.py'
+              - 'tests/test_rom_library.py'
+              - 'tests/test_controller_profiles.py'
+              - 'tests/test_rust_controller_input.py'
+              - 'tests/test_native_input_runtime.py'
+              - 'pyproject.toml'
+              - 'uv.lock'
+            pyo3:
+              - 'native/z80_core/**'
+              - 'native/sega_emu_core/**'
+              - 'native/sg1000_core/**'
+              - 'native/sms_core/**'
+            windows_native:
+              - 'native/video_runtime/**'
+              - 'native/audio_output/**'
+              - 'native/audio_runtime/**'
+              - 'rust-toolchain*'
+            scheduler:
+              - 'native/machine_scheduler/**'
+              - 'native/temporal_core/**'
+            tooling:
+              - 'scripts/**/*.ps1'
+              - 'tools/project_manager.py'
+              - 'tests/tooling/**'
+            full:
+              - '.github/workflows/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'rust-toolchain*'
+              - '.cargo/**'
+              - 'tools/project_manager.py'
+              - 'scripts/common.ps1'
+
   rust:
-    if: github.event_name != 'workflow_dispatch' || !inputs.refresh_cargo_lockfiles
+    needs: [changes]
+    if: |
+      always() &&
+      (github.event_name != 'pull_request' ||
+       needs.changes.outputs.rust == 'true' ||
+       needs.changes.outputs.full == 'true') &&
+      (github.event_name != 'workflow_dispatch' || !inputs.refresh_cargo_lockfiles)
     name: Rust quality and unit regression
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -91,13 +173,13 @@ jobs:
       (
         (github.event_name == 'workflow_dispatch' && github.event.inputs.scheduler_stress_profile != 'none') ||
         (github.event_name == 'pull_request' && (
-        contains(github.event.pull_request.labels.*.name, 'scheduler-stress-short') ||
-        contains(github.event.pull_request.labels.*.name, 'scheduler-stress-long') ||
-        (github.event.action == 'labeled' && (
-          github.event.label.name == 'scheduler-stress-short' ||
-          github.event.label.name == 'scheduler-stress-long'
+          contains(github.event.pull_request.labels.*.name, 'scheduler-stress-short') ||
+          contains(github.event.pull_request.labels.*.name, 'scheduler-stress-long') ||
+          (github.event.action == 'labeled' && (
+            github.event.label.name == 'scheduler-stress-short' ||
+            github.event.label.name == 'scheduler-stress-long'
+          ))
         ))
-      ))
       )
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -119,7 +201,13 @@ jobs:
           "$test_bin" --ignored --nocapture
 
   python:
-    if: github.event_name != 'workflow_dispatch' || !inputs.refresh_cargo_lockfiles
+    needs: [changes]
+    if: |
+      always() &&
+      (github.event_name != 'pull_request' ||
+       needs.changes.outputs.python == 'true' ||
+       needs.changes.outputs.full == 'true') &&
+      (github.event_name != 'workflow_dispatch' || !inputs.refresh_cargo_lockfiles)
     name: Python lint and regression
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -161,7 +249,13 @@ jobs:
         run: uv run --locked pytest -q
 
   windows-python-qt:
-    if: github.event_name != 'workflow_dispatch' || !inputs.refresh_cargo_lockfiles
+    needs: [changes]
+    if: |
+      always() &&
+      (github.event_name != 'pull_request' ||
+       needs.changes.outputs.qt == 'true' ||
+       needs.changes.outputs.full == 'true') &&
+      (github.event_name != 'workflow_dispatch' || !inputs.refresh_cargo_lockfiles)
     name: Windows Python 3.15 Qt smoke test
     runs-on: windows-latest
     timeout-minutes: 20
@@ -171,7 +265,7 @@ jobs:
         with:
           python-version: "3.15.2"
       - name: Install uv
-        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e923fd43a15bba460eec2 # v10.3.3
         with:
           version-file: "pyproject.toml"
           checksum: "0cdc5b38fe5a8168ed6a25814f5ba43c21d313dd3187314fccb37b7cec46e021"
@@ -186,8 +280,47 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: uv run --locked python -c "from PySide6 import QtCore; import numpy; print(QtCore.qVersion(), numpy.__version__)"
 
+  windows-tooling:
+    needs: [changes]
+    if: |
+      always() &&
+      (github.event_name != 'pull_request' ||
+       needs.changes.outputs.tooling == 'true' ||
+       needs.changes.outputs.full == 'true') &&
+      (github.event_name != 'workflow_dispatch' || !inputs.refresh_cargo_lockfiles)
+    name: Windows PowerShell tooling syntax
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Parse all project PowerShell scripts
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Path scripts -Filter *.ps1 -Recurse
+          if (-not $files) { throw "No PowerShell scripts found under scripts/" }
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $file.FullName,
+              [ref]$tokens,
+              [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error "$($file.FullName): $($_.Message)" }
+              throw "PowerShell parse failed: $($file.FullName)"
+            }
+            Write-Host "PASS $($file.FullName)"
+          }
+
   windows-native-python-extension:
-    if: github.event_name != 'workflow_dispatch' || !inputs.refresh_cargo_lockfiles
+    needs: [changes]
+    if: |
+      always() &&
+      (github.event_name != 'pull_request' ||
+       needs.changes.outputs.pyo3 == 'true' ||
+       needs.changes.outputs.full == 'true') &&
+      (github.event_name != 'workflow_dispatch' || !inputs.refresh_cargo_lockfiles)
     name: Windows Python 3.15 PyO3 extension build
     runs-on: windows-latest
     timeout-minutes: 30
@@ -215,7 +348,13 @@ jobs:
         run: .\.venv\Scripts\python.exe -c "import sega_z80_core; print(sega_z80_core.__name__)"
 
   windows-d3d12:
-    if: github.event_name != 'workflow_dispatch' || !inputs.refresh_cargo_lockfiles
+    needs: [changes]
+    if: |
+      always() &&
+      (github.event_name != 'pull_request' ||
+       needs.changes.outputs.windows_native == 'true' ||
+       needs.changes.outputs.full == 'true') &&
+      (github.event_name != 'workflow_dispatch' || !inputs.refresh_cargo_lockfiles)
     name: Windows x64 D3D12 compile
     runs-on: windows-latest
     timeout-minutes: 20
