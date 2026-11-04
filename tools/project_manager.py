@@ -94,7 +94,7 @@ def discover_workspaces() -> tuple[list[Workspace], list[str], list[str]]:
     """Discover unique Cargo workspace roots without guessing directory layout."""
     cargo = shutil.which("cargo")
     if not cargo:
-        return [], ["cargo executable not found on PATH"]
+        return [], ["cargo executable not found on PATH"], []
 
     manifests: list[Path] = []
     for current, dirs, files in os.walk(ROOT):
@@ -198,26 +198,44 @@ def discover_workspaces() -> tuple[list[Workspace], list[str], list[str]]:
     )
 
 
+def prepare_python_runtime() -> None:
+    """Expose the base interpreter directory for Windows native child processes.
+
+    PyO3-linked test executables load pythonXY.dll as a native dependency.
+    Windows must be able to find the DLL even when Python is running in a venv.
+    """
+    if os.name == "nt":
+        base_prefix = str(Path(sys.base_prefix).resolve())
+        path_entries = os.environ.get("PATH", "").split(os.pathsep)
+        normalized = {entry.rstrip("\\/").casefold() for entry in path_entries}
+        if base_prefix.rstrip("\\/").casefold() not in normalized:
+            os.environ["PATH"] = os.pathsep.join(
+                [base_prefix, *[entry for entry in path_entries if entry]]
+            )
+
+
 def tool_versions() -> dict[str, str]:
-    """Report installed tool versions; never install or upgrade tools."""
-    versions = {}
-    tools = (
-        ("git", ["--version"]),
-        ("rustc", ["--version"]),
-        ("cargo", ["--version"]),
-        ("python", ["--version"]),
-        ("pip", ["--version"]),
-        ("ruff", ["--version"]),
-        ("pytest", ["--version"]),
-        ("maturin", ["--version"]),
+    """Report tool versions using this manager's Python interpreter."""
+    versions: dict[str, str] = {}
+    commands = (
+        ("git", ["git", "--version"]),
+        ("rustc", ["rustc", "--version"]),
+        ("cargo", ["cargo", "--version"]),
+        ("python", [sys.executable, "--version"]),
+        ("pip", [sys.executable, "-m", "pip", "--version"]),
+        ("ruff", [sys.executable, "-m", "ruff", "--version"]),
+        ("pytest", [sys.executable, "-m", "pytest", "--version"]),
+        ("maturin", [sys.executable, "-m", "maturin", "--version"]),
     )
-    for executable, args in tools:
-        path = shutil.which(executable)
-        if not path:
-            versions[executable] = "NOT FOUND"
+    for name, command in commands:
+        executable = (
+            command[0] if os.path.isabs(command[0]) else shutil.which(command[0])
+        )
+        if not executable:
+            versions[name] = "NOT FOUND"
             continue
-        result = run([path, *args], ROOT, 30)
-        versions[executable] = (
+        result = run([executable, *command[1:]], ROOT, 30)
+        versions[name] = (
             result.output.strip().splitlines()[0] if result.output else result.status
         )
     return versions
@@ -374,6 +392,7 @@ def print_results(results: list[Result], strict: bool = True) -> int:
 
 def main() -> int:
     """Parse the CLI and execute the selected read-only or explicit operation."""
+    prepare_python_runtime()
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser(

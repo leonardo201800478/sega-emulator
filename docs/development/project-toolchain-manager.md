@@ -15,7 +15,7 @@ Install/synchronize the locked Python environment with:
 
     uv sync --locked --extra dev --extra qt
 
-Activate the project .venv before using the Windows PowerShell wrapper.
+The Windows PowerShell wrapper automatically prefers `.venv\\Scripts\\python.exe` when present. It adds the base Python directory to the child-process `PATH`, required for Windows to load `pythonXY.dll` from PyO3-linked Rust test executables. Activation is optional.
 
 ## Commands
 
@@ -25,6 +25,9 @@ Activate the project .venv before using the Windows PowerShell wrapper.
     .\scripts\project.ps1 validate
     .\scripts\project.ps1 validate -Json artifacts\project-validation.json
     .\scripts\project.ps1 validate -RustOnly
+    .\scripts\compile-fast.ps1
+    .\scripts\compile-fast.ps1 -Release
+    .\scripts\compile-fast.ps1 -AllWorkspaces
 
 Cross-platform entry point:
 
@@ -57,7 +60,7 @@ native/32x_core, native/gg_core, native/md_core and native/scd_core. They remain
 scaffolds for future platform phases and are intentionally not activated by
 this toolchain migration.
 
-validate is comprehensive and may take time. Use audit for a fast inventory
+validate is comprehensive and may take time. Use `compile-fast.ps1` for a quick Rust compile check without running tests; `-Release` checks the Release profile and `-AllWorkspaces` includes every active Cargo workspace. Use audit for a fast inventory
 and locks to investigate lockfile consistency. Windows-specific D3D12,
 WASAPI/XAudio2 compilation and conditional deterministic Scheduler stress
 remain governed by GitHub Actions. A local host run cannot replace those jobs.

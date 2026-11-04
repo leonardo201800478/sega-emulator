@@ -8,9 +8,10 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$RepoRoot = (Get-Location).Path
+$RepoRoot = (Resolve-Path $PSScriptRoot).Path
+. (Join-Path $RepoRoot "scripts\common.ps1")
 $VenvPython = Join-Path $RepoRoot ".venv\Scripts\python.exe"
-$VenvMaturin = Join-Path $RepoRoot ".venv\Scripts\maturin.exe"
+$VenvMaturinModule = "no"
 
 # ---------------------------------------------------------------------------
 # FUNCOES AUXILIARES
@@ -371,6 +372,11 @@ if ($VenvPythonVersion -notmatch '^Python 3\.15\.') {
     throw "O ambiente .venv usa '$VenvPythonVersion'. Preserve-o como backup e recrie .venv com 'py -3.15 -m venv .venv' antes de continuar."
 }
 
+Initialize-SegaPythonRuntime -PythonExecutable $VenvPython
+Initialize-SegaMsvcEnvironment
+$VenvMaturinModule = & $VenvPython -c "import importlib.util; print('yes' if importlib.util.find_spec('maturin') else 'no')"
+if ($LASTEXITCODE -ne 0) { throw "Nao foi possivel verificar Maturin no ambiente virtual." }
+
 if ($NewVenv -or $DependenciesChanged) {
 
     Invoke-Checked `
@@ -383,6 +389,8 @@ if ($NewVenv -or $DependenciesChanged) {
             ".[dev,qt]"
         ) `
         -Step "Instalar/atualizar dependencias Python do projeto"
+    $VenvMaturinModule = & $VenvPython -c "import importlib.util; print('yes' if importlib.util.find_spec('maturin') else 'no')"
+    if ($LASTEXITCODE -ne 0) { throw "Falha ao verificar Maturin apos sincronizar dependencias." }
 }
 else {
 
@@ -400,7 +408,7 @@ Write-Host "Marcador de dependencias atualizado: $LocalSha" `
 # MATURIN
 # ---------------------------------------------------------------------------
 
-if (-not (Test-Path -LiteralPath $VenvMaturin -PathType Leaf)) {
+if ($VenvMaturinModule.Trim() -ne "yes") {
 
     Invoke-Checked `
         -File $VenvPython `
@@ -525,8 +533,10 @@ Push-Location (Join-Path $RepoRoot "native\z80_core")
 try {
 
     Invoke-Checked `
-        -File $VenvMaturin `
+        -File $VenvPython `
         -Arguments @(
+            "-m",
+            "maturin",
             "develop",
             "--release",
             "--locked",
