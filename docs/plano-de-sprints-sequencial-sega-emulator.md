@@ -102,3 +102,29 @@ Esta sub-rota evolui o mesmo microsequenciador em `sega-cpus`; não cria impleme
 
 ### Sprint 8 — Sega 32X & Sega CD 32X
 * Adição do núcleo Hitachi SH-2 em `sega-cpus`, VDP 32X em `sega-video` e PWM Audio em `sega-audio`.
+
+---
+
+## Atualização de execução — 2026-11-04 (prevalece sobre o status antigo da sub-sprint Z80)
+
+**Baseline main:** `644b2c22879d63447f63b730ed9415db11e81fab`; CI pós-merge #41831738966 SUCCESS.
+
+### Sub-sprint Z80 — status confirmado
+
+- [x] E3A1/E3A2 e E4A/E4B/E4C — integradas.
+- [x] E5 DDCB/FDCB — PR #485 integrada.
+- [x] E6 resolução geral de prefixos — PR #486 integrada.
+- [x] E7.1 HALT/M1 — PR #490 integrada.
+- [x] E7.2A NMI — PR #495 integrada.
+- [x] E7.2B INT acknowledge — PR #496 integrada.
+- [x] E7.2C IM0/IM1/IM2 — PR #498 integrada.
+- [x] E7.2D EI/DI — PR #500 integrada.
+- [x] E7.2E incremento de snapshot/trace — PR #504 integrada; restore/continuação das 70 fases geradas pelo corpus — PR #505 integrada.
+- [ ] E7.2E matriz ampliada de estados inválidos e WAIT — PR #506 aberta, CI pendente no HEAD consultado.
+- [ ] E7.3 HALT T4 e `EI;HALT;INT`.
+- [ ] E7.4 BUSREQ/arbitragem real.
+- [ ] E7.5 RETI/daisy-chain.
+- [ ] E7.6 IRQ real VDP SMS.
+- [ ] E7.7 auditoria semântica integral.
+
+**Estado:** E7 global `INTEGRATION_PENDING`. Não iniciar E8 até fechar E7. Scheduler stress SKIPPED não conta como PASS. A rota Z80 é transversal e continua compartilhada; não criar um core por console.

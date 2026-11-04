@@ -242,3 +242,18 @@ Game Gear, Mega Drive/Genesis, Sega CD, 32X, SVP e sistemas integrados de tercei
 - PRs #412 e #415 têm seus heads como ancestrais do SHA integrado; #412 foi reconhecida pelo GitHub como merged. PRs #413 e #414 foram encerradas como supersedidas: seus heads divergiam da stack consolidada, mas os entregáveis funcionais de snapshot/codec e coordinator estão no diff integrado de #416. Os hashes específicos dos commits divergentes de #413/#414 não foram preservados como ancestrais; a consolidação preservou o conteúdo funcional, não toda a linhagem histórica dessas duas branches.
 
 Estados: T1 `IMPLEMENTED / QUICK_PASS`; T2 `IMPLEMENTED / QUICK_PASS`; T3 `IMPLEMENTED / QUICK_PASS`; T4 `IMPLEMENTED / SHORT_PASS`; T5a `IMPLEMENTED / QUICK_PASS` (PR #418 integrada; CI da PR 4/4 PASS; CI pós-merge com Scheduler stress SKIPPED); SMS temporal completo `INTEGRATION_PENDING`; auditoria técnica pós-merge T5a `APROVADA TECNICAMENTE` (comentário 6590621514; escopo limitado, sem `TEMPORAL_PASS`); `TEMPORAL_PASS` NÃO declarado.
+
+
+---
+
+## Atualização operacional Z80 — 2026-11-04
+
+**Baseline atual consultada:** `main` = `644b2c22879d63447f63b730ed9415db11e81fab`; CI pós-merge #41831738966 SUCCESS.
+
+A rota P7 permanece ativa para o fechamento semântico e a expansão temporal do Z80. Status detalhado:
+- E7.1 HALT/M1, E7.2A NMI, E7.2B INT acknowledge, E7.2C IM0/IM1/IM2 e E7.2D EI/DI integradas (#490/#495/#496/#498/#500).
+- E7.2E em andamento na PR #506, HEAD inicial `09c6dcb9a8f5a7ff7ca3f5934c1223515b5529a1`, CI #41861829094 QUEUED. CI de SHAs anteriores não valida o HEAD atual.
+- E7.3 HALT T4; E7.4 BUSREQ; E7.5 RETI/daisy-chain; E7.6 IRQ real do VDP; E7.7 auditoria semântica integral: pendentes.
+- E8 só após E7 fechado; E9 permanece gate de integração temporal sistêmica.
+
+A PR #506 não está integrada. Nenhuma PR aberta com base histórica deve ser mesclada sem rebase/revisão e CI no HEAD final. A autoridade deste roadmap continua sendo o próprio `docs/project-roadmap.md`; documentos auxiliares devem permanecer sincronizados e não criar prioridades concorrentes.

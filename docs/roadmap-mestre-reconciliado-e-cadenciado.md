@@ -192,3 +192,13 @@ python -m pytest
 python -m ruff check .
 python -m ruff format --check .
 ```
+
+---
+
+## Reconciliação com a baseline remota — 2026-11-04
+
+Este documento auxiliar deve permanecer sincronizado com a fonte normativa única `docs/project-roadmap.md`. Não cria fases nem altera prioridades próprias.
+
+Baseline `main`: `644b2c22879d63447f63b730ed9415db11e81fab`; CI pós-merge #41831738966 SUCCESS. O Z80 está na etapa P7 de fechamento semântico/temporal. E3A1/E3A2, E4A–E4C, E5 e E6 estão integradas; E7.1, E7.2A–E7.2D também integradas. PRs #504 e #505 integradas como incrementos de E7.2E. PR #506 permanece aberta com matriz de estados inválidos e WAIT, HEAD inicial `09c6dcb9a8f5a7ff7ca3f5934c1223515b5529a1`, CI #41861829094 QUEUED.
+
+E7.3 HALT T4, E7.4 BUSREQ, E7.5 RETI/daisy-chain, E7.6 IRQ real do VDP e E7.7 auditoria semântica integral permanecem pendentes. E8 não começa antes do fechamento E7; E9 exige validação sistêmica independente. A main continua sendo a única fonte de verdade para integração.

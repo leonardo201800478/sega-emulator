@@ -8,11 +8,18 @@ fn machine(rom: Vec<u8>) -> SmsTemporalMachine {
 
 fn snapshot(machine: &SmsTemporalMachine) -> SmsTemporalMachine {
     let mut state = machine.export_state();
-    let bytes = state.cpu.encode().unwrap();
+    let bytes = state.cpu.encode().unwrap_or_else(|error| {
+        panic!(
+            "CPU snapshot encode failed: {error:?}; CPU state: {:#?}",
+            state.cpu
+        )
+    });
     let decoded = Z80MicroSequencerState::decode(&bytes).unwrap();
     assert_eq!(decoded, state.cpu);
     state.cpu = decoded;
-    let mut restored = SmsTemporalMachine::restore_state(state).unwrap();
+    let mut restored = SmsTemporalMachine::restore_state(state.clone()).unwrap_or_else(|error| {
+        panic!("SMS machine snapshot restore failed: {error:?}; machine state: {state:#?}")
+    });
     restored.set_trace_enabled(true);
     restored
 }
@@ -85,6 +92,18 @@ fn compare_runs(
     actual
 }
 
+fn compare_program_with_waits(
+    rom: Vec<u8>,
+    waits: u32,
+    configure: impl Fn(&mut SmsTemporalMachine),
+) -> Z80MicroStep {
+    let mut continuous = machine(rom.clone());
+    let mut resumed = machine(rom);
+    configure(&mut continuous);
+    configure(&mut resumed);
+    compare_runs(&mut continuous, &mut resumed, waits)
+}
+
 #[test]
 fn e7_2e_nmi_restores_response_internal_and_stack_phases_with_waits() {
     let mut continuous = machine(vec![0; 0x4000]);
@@ -121,11 +140,16 @@ fn e7_2e_im0_restores_acknowledge_and_injected_rst() {
         cpu.cpu_mut().registers.sp = 0xC100;
         cpu.set_int_line(Some(0xC7));
     }
-    let step = compare_runs(&mut continuous, &mut resumed, 1);
-    assert!(matches!(
-        step,
-        Z80MicroStep::InstructionRetired { opcode: 0xC7, .. }
-    ));
+    // ZiLOG UM008011-0816, pp. 13 and 17: IM0 adds two automatic
+    // wait states to the supplied instruction's normal execution time.
+    // RST is 11T; the three bus transactions each receive one fixture WAIT.
+    assert_eq!(
+        compare_runs(&mut continuous, &mut resumed, 1),
+        Z80MicroStep::InstructionRetired {
+            opcode: 0xC7,
+            tstates: 16,
+        }
+    );
     assert_eq!(resumed.cpu().registers.pc, 0x0000);
     assert_eq!(resumed.cpu().registers.sp, 0xC0FE);
     assert_eq!(resumed.memory().read(0xC0FF), 0x23);
@@ -264,5 +288,112 @@ fn e7_2e_nmi_restore_matches_trace_with_zero_and_multiple_wait_states() {
                 ..
             }
         ));
+    }
+}
+#[test]
+fn e7_2e_wait_matrix_covers_m1_memory_io_internal_and_interrupt_cycles() {
+    for waits in [0, 1, 3] {
+        assert_eq!(
+            compare_program_with_waits(vec![0x00], waits, |_| {}),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x00,
+                tstates: 4 + waits,
+            }
+        );
+
+        assert_eq!(
+            compare_program_with_waits(vec![0x7E], waits, |machine| {
+                machine.cpu_mut().registers.h = 0xC0;
+                machine.cpu_mut().registers.l = 0x00;
+            }),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x7E,
+                tstates: 7 + 2 * waits,
+            }
+        );
+
+        assert_eq!(
+            compare_program_with_waits(vec![0x77], waits, |machine| {
+                machine.cpu_mut().registers.h = 0xC0;
+                machine.cpu_mut().registers.l = 0x00;
+            }),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x77,
+                tstates: 7 + 2 * waits,
+            }
+        );
+
+        assert_eq!(
+            compare_program_with_waits(vec![0xDB, 0x10], waits, |_| {}),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xDB,
+                tstates: 11 + 3 * waits,
+            }
+        );
+
+        assert_eq!(
+            compare_program_with_waits(vec![0xD3, 0x10], waits, |_| {}),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xD3,
+                tstates: 11 + 3 * waits,
+            }
+        );
+
+        assert_eq!(
+            compare_program_with_waits(vec![0x03], waits, |_| {}),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x03,
+                tstates: 6 + waits,
+            }
+        );
+
+        assert_eq!(
+            compare_program_with_waits(vec![0; 0x4000], waits, |machine| {
+                machine.cpu_mut().interrupt_mode = 0;
+                machine.cpu_mut().iff1 = true;
+                machine.cpu_mut().iff2 = true;
+                machine.cpu_mut().registers.pc = 0x2345;
+                machine.cpu_mut().registers.sp = 0xC100;
+                machine.set_int_line(Some(0xC7));
+            }),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xC7,
+                tstates: 13 + 3 * waits,
+            }
+        );
+
+        assert_eq!(
+            compare_program_with_waits(vec![0; 0x4000], waits, |machine| {
+                machine.cpu_mut().interrupt_mode = 1;
+                machine.cpu_mut().iff1 = true;
+                machine.cpu_mut().iff2 = true;
+                machine.cpu_mut().registers.pc = 0x2345;
+                machine.cpu_mut().registers.sp = 0xC100;
+                machine.set_int_line(Some(0xFF));
+            }),
+            Z80MicroStep::InterruptServiced {
+                kind: Z80InterruptKind::Int,
+                tstates: 13 + 3 * waits,
+            }
+        );
+
+        let mut im2_rom = vec![0; 0x4000];
+        im2_rom[0x2080] = 0x78;
+        im2_rom[0x2081] = 0x56;
+        assert_eq!(
+            compare_program_with_waits(im2_rom, waits, |machine| {
+                machine.cpu_mut().interrupt_mode = 2;
+                machine.cpu_mut().iff1 = true;
+                machine.cpu_mut().iff2 = true;
+                machine.cpu_mut().i = 0x20;
+                machine.cpu_mut().registers.pc = 0x2345;
+                machine.cpu_mut().registers.sp = 0xC100;
+                machine.set_int_line(Some(0x80));
+            }),
+            Z80MicroStep::InterruptServiced {
+                kind: Z80InterruptKind::Int,
+                tstates: 19 + 5 * waits,
+            }
+        );
     }
 }

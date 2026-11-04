@@ -243,3 +243,22 @@ O executor atômico existente é a referência para SCF/CCF: no início de cada 
 | Próxima tarefa | E5 — DDCB/FDCB | Separar BIT read-only de RMW, opcode final non-M1, R/flags, WAIT, snapshots e timing. |
 
 A suíte Python do CI reportou 214 passed e 21 skipped por dependências/extensões ausentes no runner. Os skips não foram contabilizados como PASS.
+
+
+---
+
+## Atualização de estado dos componentes — 2026-11-04
+
+**Main:** `644b2c22879d63447f63b730ed9415db11e81fab`; CI #41831738966 SUCCESS.
+
+| Componente | Estado atual | Evidência / limite |
+|---|---|---|
+| Z80 — implementação | E3A1/E3A2, E4A–E4C, E5, E6, E7.1 e E7.2A–D integradas | E7.2E ainda em andamento; E7.3–E7.7 pendentes |
+| Z80 — snapshots | PRs #504 e #505 integradas | Restore/continuação por fases alcançadas pelo corpus; não cobre todas as combinações possíveis |
+| Z80 — estados inválidos/WAIT | PR #506 aberta, HEAD inicial `09c6dcb9a8f5a7ff7ca3f5934c1223515b5529a1` | CI #41861829094 QUEUED; não tratar como PASS |
+| SMS temporal machine save state | DTO in-memory | Não confundir com codec binário persistente completo de toda a máquina SMS |
+| IRQ/HALT/arbitragem | INTEGRATION_PENDING | HALT T4, BUSREQ, RETI/daisy-chain e IRQ real do VDP pendentes |
+| Z80 formal/diferencial | NOT RUN como gate global | E8 bloqueada até E7 fechado |
+| Integração temporal sistêmica | INTEGRATION_PENDING | E9 ainda não aprovada |
+
+PRs abertas #487/#447/#424 têm bases históricas divergentes; seus CI SUCCESS são históricos e não autorizam merge na main atual. #338 permanece Draft com CI FAILURE. Não considerar trabalho de PR aberta como componente integrado.

@@ -374,3 +374,102 @@ Toda atualização deve incluir data, SHA da baseline, SHA candidato, PR, workfl
 ---
 
 **Baseline operacional (2026-11-04):** main `9b606a6c785b9e7bb1999534e7e2292735254134` após merge da PR #503. E7.1, E7.2A, E7.2B, E7.2C e E7.2D integradas pelas PRs #490, #495, #496, #498 e #500. PR #501 integrada. PR #502 preservada como candidata histórica; PR #504 (`b78d3354119c3f9af475561ff15db7673e93fb06`) com CI #41825655861 PASS nos gates Rust/Python/Windows, Scheduler stress SKIPPED. E7.2E segue IN_PROGRESS. Próximo trabalho é concluir E7.2E e as fases E7.3–E7.7 antes de iniciar a validação E8. E7 global continua `INTEGRATION_PENDING`.
+
+
+## Atualização operacional — 2026-11-04, após PR #505
+
+Esta seção prevalece sobre fotografias operacionais anteriores deste documento.
+
+- **Baseline main:** `644b2c22879d63447f63b730ed9415db11e81fab`, após merge da PR #505.
+- **E7.2E:** PR #505 integrada; restore/continuação de estados completos para as 70 variantes de fase alcançadas pelo corpus suportado.
+- **PR #506:** aberta, branch `test/z80-e7-2e-invalid-state-matrix-20261104`, HEAD `73ab196feb09aec2b6cdf21b73ff4b7d1cc0dde1`. Acrescenta matriz de rejeição de estados inválidos e correções no validador de snapshots.
+- **CI #41860306541**, no HEAD exato da PR #506: Rust fmt/Clippy/workspace tests PASS; SMS core e SG-1000 core tests PASS; Python Ruff format/Ruff lint/pytest PASS; Windows x64 D3D12/vídeo e WASAPI/XAudio2/áudio compile/tests PASS. Scheduler deterministic stress SKIPPED (não foi alterado nesta PR).
+- A matriz percorre 70 fases geradas pelo corpus suportado, mantém um fixture válido por fase e executa mutações de M-cycle, T-state, request ID, monotonicidade do ID, endereço, operação/payload, duração, request ausente, fase/request incompatível, WAIT sem request e opcode ausente quando aplicável. O teste exige pelo menos 210 mutações e verifica rejeição pelo encoder e por `restore_state()`.
+- A matriz revelou validação insuficiente de M-cycle em snapshots de instruções imediatas com prefixo DD/FD ignorado. O validador agora relaciona a quantidade de M1s de prefixo ao mínimo de T-states acumulados, usando aritmética checked; verificações correlatas de fases imediatas foram endurecidas.
+- **Limites:** um fixture por variante de fase não representa todas as combinações de opcode/prefixo/request; casos UnsupportedOpcode não entram no corpus suportado. A matriz WAIT=0/1/múltiplo por família de barramento, T-states terminais de IM0, codec binário persistente da máquina SMS completa e comprovação temporal sistêmica continuam pendentes.
+- **Classificação:** PR #506 com CI convencional PASS no HEAD registrado; E7.2E permanece IN_PROGRESS / INTEGRATION_PENDING até fechar as lacunas remanescentes. E7 global permanece INTEGRATION_PENDING. Não atribuir LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS.
+
+
+
+**Revalidação documental do HEAD final da PR #506:** HEAD `1bb057ec126eb07de485a16bcdd98c42552f5c93`, CI [#41860812506](https://github.com/leonardo201800478/sega-emulator/actions/runs/41860812506) SUCCESS em Rust, Python e Windows x64; Scheduler stress SKIPPED. A PR permanece aberta e E7.2E/E7 global permanecem INTEGRATION_PENDING.
+
+
+---
+
+## Fotografia operacional reconciliada — 2026-11-04 (main 644b2c22879d63447f63b730ed9415db11e81fab)
+
+Esta atualização prevalece sobre fotografias históricas anteriores deste documento. A fonte da verdade é o estado remoto do GitHub.
+
+### Baseline e E7
+
+- `main`: `644b2c22879d63447f63b730ed9415db11e81fab`; CI pós-merge [#41831738966](https://github.com/leonardo201800478/sega-emulator/actions/runs/41831738966) SUCCESS.
+- Integradas: E7.1 HALT/M1 (#490), E7.2A NMI (#495), E7.2B INT acknowledge (#496), E7.2C IM0/IM1/IM2 (#498), E7.2D EI/DI (#500), além das reconciliações documentais #501/#503 e restore por fases #505.
+- PR #504 também está integrada; merge SHA `d64d86b5bb16305d6265a1522d095b68b8f4954a`.
+- E7.2E permanece **IN_PROGRESS / INTEGRATION_PENDING**. PR #506 é a continuação ativa, baseada na main atual.
+- PR #506 HEAD no início desta fotografia: `09c6dcb9a8f5a7ff7ca3f5934c1223515b5529a1`. CI [#41861829094](https://github.com/leonardo201800478/sega-emulator/actions/runs/41861829094) estava QUEUED nesse SHA. Portanto, o HEAD atual ainda não tem aprovação final.
+- CI [#41860306541](https://github.com/leonardo201800478/sega-emulator/actions/runs/41860306541) passou no HEAD `73ab196feb09aec2b6cdf21b73ff4b7d1cc0dde1`; CI [#41860812506](https://github.com/leonardo201800478/sega-emulator/actions/runs/41860812506) passou no HEAD documental anterior `1bb057ec126eb07de485a16bcdd98c42552f5c93`. Esses sucessos não substituem o CI do HEAD atual.
+- O run #41861604611 foi executado no SHA anterior `f2fc621...` e falhou em rustfmt por whitespace; o whitespace foi corrigido em `09c6dcb...`. A execução de Windows e Python daquele run não transforma o job Rust em PASS.
+- Scheduler deterministic stress foi SKIPPED nos workflows referidos; não contar como PASS.
+
+### Conteúdo ativo da PR #506
+
+- Restore/continuação dos estados completos das 70 variantes de fase alcançadas pelo corpus suportado (PR #505, já integrada).
+- Matriz de rejeição de estados inválidos: fixtures por fase, mutações de índices M/T, request ID, monotonicidade, endereço, operação/payload, duração, request ausente, incompatibilidade fase/request, WAIT sem request e opcode ausente.
+- Correção do validador para fases imediatas com DD/FD ignorado, vinculando contagem M1 ao mínimo de T-states.
+- Ampliação de testes WAIT=0/1/3 para M1, memória, I/O, ciclo interno e interrupções IM0/IM1/IM2; execução contínua versus retomada.
+- IM0 tem asserção terminal explícita. O resultado dessa nova matriz só será considerado validado após CI verde no HEAD final.
+
+### Próximas subfases
+
+1. Fechar E7.2E e suas lacunas de restore/WAIT/trace.
+2. E7.3: amostragem real de INT/NMI no T4 de HALT, incluindo `EI;HALT;INT`.
+3. E7.4: BUSREQ e arbitragem real, suspensível/retomável.
+4. E7.5: RETI e daisy-chain, distintos de RETN.
+5. E7.6: IRQ real do VDP SMS, status e acknowledge.
+6. E7.7: auditoria semântica integral BASE/CB/ED/DD/FD/DDCB/FDCB.
+7. Somente após E7 concluída: E8 diferencial/formal; E9 comprovação temporal sistêmica.
+
+Não declarar E7 concluída, LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS nesta fotografia.
+
+
+---
+
+## Fotografia operacional reconciliada — 2026-11-04 (main 644b2c22879d63447f63b730ed9415db11e81fab)
+
+Esta atualização prevalece sobre fotografias históricas anteriores deste documento. A fonte da verdade é o estado remoto do GitHub.
+
+### Baseline e E7
+
+- `main`: `644b2c22879d63447f63b730ed9415db11e81fab`; CI pós-merge [#41831738966](https://github.com/leonardo201800478/sega-emulator/actions/runs/41831738966) SUCCESS.
+- Integradas: E7.1 HALT/M1 (#490), E7.2A NMI (#495), E7.2B INT acknowledge (#496), E7.2C IM0/IM1/IM2 (#498), E7.2D EI/DI (#500), além das reconciliações documentais #501/#503 e restore por fases #505.
+- PR #504 também está integrada; merge SHA `d64d86b5bb16305d6265a1522d095b68b8f4954a`.
+- E7.2E permanece **IN_PROGRESS / INTEGRATION_PENDING**. PR #506 é a continuação ativa, baseada na main atual.
+- PR #506 HEAD no início desta fotografia: `09c6dcb9a8f5a7ff7ca3f5934c1223515b5529a1`. CI [#41861829094](https://github.com/leonardo201800478/sega-emulator/actions/runs/41861829094) estava QUEUED nesse SHA. Portanto, o HEAD atual ainda não tem aprovação final.
+- CI [#41860306541](https://github.com/leonardo201800478/sega-emulator/actions/runs/41860306541) passou no HEAD `73ab196feb09aec2b6cdf21b73ff4b7d1cc0dde1`; CI [#41860812506](https://github.com/leonardo201800478/sega-emulator/actions/runs/41860812506) passou no HEAD documental anterior `1bb057ec126eb07de485a16bcdd98c42552f5c93`. Esses sucessos não substituem o CI do HEAD atual.
+- O run #41861604611 foi executado no SHA anterior `f2fc621...` e falhou em rustfmt por whitespace; o whitespace foi corrigido em `09c6dcb...`. A execução de Windows e Python daquele run não transforma o job Rust em PASS.
+- Scheduler deterministic stress foi SKIPPED nos workflows referidos; não contar como PASS.
+
+### Conteúdo ativo da PR #506
+
+- Restore/continuação dos estados completos das 70 variantes de fase alcançadas pelo corpus suportado (PR #505, já integrada).
+- Matriz de rejeição de estados inválidos: fixtures por fase, mutações de índices M/T, request ID, monotonicidade, endereço, operação/payload, duração, request ausente, incompatibilidade fase/request, WAIT sem request e opcode ausente.
+- Correção do validador para fases imediatas com DD/FD ignorado, vinculando contagem M1 ao mínimo de T-states.
+- Ampliação de testes WAIT=0/1/3 para M1, memória, I/O, ciclo interno e interrupções IM0/IM1/IM2; execução contínua versus retomada.
+- IM0 tem asserção terminal explícita. O resultado dessa nova matriz só será considerado validado após CI verde no HEAD final.
+
+### Próximas subfases
+
+1. Fechar E7.2E e suas lacunas de restore/WAIT/trace.
+2. E7.3: amostragem real de INT/NMI no T4 de HALT, incluindo `EI;HALT;INT`.
+3. E7.4: BUSREQ e arbitragem real, suspensível/retomável.
+4. E7.5: RETI e daisy-chain, distintos de RETN.
+5. E7.6: IRQ real do VDP SMS, status e acknowledge.
+6. E7.7: auditoria semântica integral BASE/CB/ED/DD/FD/DDCB/FDCB.
+7. Somente após E7 concluída: E8 diferencial/formal; E9 comprovação temporal sistêmica.
+
+Não declarar E7 concluída, LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS nesta fotografia.
+
+
+### Estado quantitativo e limitações não alteradas
+
+A cobertura estrutural de 70 variantes, 70 writer arms, 70 reader arms e 70 restore-validator arms é uma contagem de estrutura. Os testes de restore por fase cobrem os estados gerados pelo corpus, não todas as combinações válidas possíveis. Casos UnsupportedOpcode excluídos não contam como semântica aprovada. O DTO SMS in-memory não é codec binário persistente da máquina SMS completa. WAIT e traces independentes ainda não estão demonstrados em todos os limites. E7 global continua INTEGRATION_PENDING.
