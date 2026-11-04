@@ -31,12 +31,12 @@ Cross-platform entry point:
 
 ## Safety model
 
-- audit is read-only. It inventories missing lockfiles as BLOCKED for policy review, but does not fail solely because a library-only standalone package has no lockfile.
-- locks runs cargo check --locked and must not modify lockfiles.
+- audit is read-only. It lists missing lockfiles and manifests outside active workspace membership without changing them. Unassigned manifests are NOT RUN until their workspace policy is decided.
+- locks runs cargo check --locked for every active workspace, including a workspace whose lockfile is absent; Cargo decides whether that absence is valid. It must not modify lockfiles.
 - locks --refresh-offline is an explicit mutating operation. It uses
   cargo check --offline, never cargo update, and never accesses the network.
 - Every successful refresh is followed by cargo check --locked.
-- Missing lockfiles are BLOCKED for manual policy review in lock checks/validation; they are never created implicitly.
+- locks --refresh-offline does not create missing lockfiles; it reports those workspaces as BLOCKED for manual policy review.
 - The manager never stages, commits, pushes, merges, deletes or stashes files.
 - Tool versions are inventoried, not installed or upgraded implicitly.
 - Failures remain FAIL or BLOCKED; no skipped check is counted as PASS.
