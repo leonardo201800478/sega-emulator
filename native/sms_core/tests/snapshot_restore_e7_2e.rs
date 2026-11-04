@@ -216,7 +216,10 @@ fn e7_2e_halt_m1_hold_restores_each_tstate_and_ignores_data() {
     assert!(resumed.cpu().halted);
     assert_eq!(
         compare_runs(&mut continuous, &mut resumed, 1),
-        Z80MicroStep::InstructionRetired { opcode: 0x00, tstates: 5 }
+        Z80MicroStep::InstructionRetired {
+            opcode: 0x00,
+            tstates: 5
+        }
     );
     assert!(resumed.cpu().halted);
     assert_eq!(resumed.cpu().registers.pc, 1);
