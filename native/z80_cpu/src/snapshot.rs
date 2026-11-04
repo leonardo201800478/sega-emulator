@@ -280,6 +280,33 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u8(65);
             writer.u8(vector);
         }
+        Z80MicroSequencerPhase::InterruptModeDispatchInternal {
+            mode, vector, return_address, remaining_tstates,
+        } => {
+            writer.u8(66);
+            writer.u8(mode);
+            writer.u8(vector);
+            writer.u16(return_address);
+            writer.u8(remaining_tstates);
+        }
+        Z80MicroSequencerPhase::InterruptStackPushWrite {
+            mode, vector, stage, return_address,
+        } => {
+            writer.u8(67);
+            writer.u8(mode);
+            writer.u8(vector);
+            writer.u8(stage);
+            writer.u16(return_address);
+        }
+        Z80MicroSequencerPhase::InterruptMode2VectorReadLow { vector_address } => {
+            writer.u8(68);
+            writer.u16(vector_address);
+        }
+        Z80MicroSequencerPhase::InterruptMode2VectorReadHigh { vector_address, low } => {
+            writer.u8(69);
+            writer.u16(vector_address);
+            writer.u8(low);
+        }
         Z80MicroSequencerPhase::NmiResponse => writer.u8(61),
         Z80MicroSequencerPhase::NmiStackPushInternal { return_address } => {
             writer.u8(62);
@@ -703,6 +730,25 @@ fn read_phase(
         64 => Z80MicroSequencerPhase::InterruptAcknowledge,
         65 => Z80MicroSequencerPhase::InterruptAcknowledgeComplete {
             vector: reader.u8()?,
+        },
+        66 => Z80MicroSequencerPhase::InterruptModeDispatchInternal {
+            mode: reader.u8()?,
+            vector: reader.u8()?,
+            return_address: reader.u16()?,
+            remaining_tstates: reader.u8()?,
+        },
+        67 => Z80MicroSequencerPhase::InterruptStackPushWrite {
+            mode: reader.u8()?,
+            vector: reader.u8()?,
+            stage: reader.u8()?,
+            return_address: reader.u16()?,
+        },
+        68 => Z80MicroSequencerPhase::InterruptMode2VectorReadLow {
+            vector_address: reader.u16()?,
+        },
+        69 => Z80MicroSequencerPhase::InterruptMode2VectorReadHigh {
+            vector_address: reader.u16()?,
+            low: reader.u8()?,
         },
         61 => Z80MicroSequencerPhase::NmiResponse,
         62 => Z80MicroSequencerPhase::NmiStackPushInternal {
