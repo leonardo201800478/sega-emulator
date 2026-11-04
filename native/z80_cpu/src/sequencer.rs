@@ -994,7 +994,7 @@ impl Z80MicroSequencer {
                 let expected_value = match stage {
                     0 => (return_address >> 8) as u8,
                     1 => return_address as u8,
-                    _ => return false,
+                    _ => return Err(Z80MicroSequencerError::InvalidState),
                 };
                 let minimum_tstates = if stage == 0 { 5 } else { 8 };
                 state.opcode.is_none()
