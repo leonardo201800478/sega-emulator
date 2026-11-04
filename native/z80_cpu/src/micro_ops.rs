@@ -14,9 +14,13 @@ pub enum Z80BusOperation {
     /// The temporal bus must expose IORQ (not MREQ) and return the device vector.
     InterruptAcknowledge,
     MemoryRead,
-    MemoryWrite { value: u8 },
+    MemoryWrite {
+        value: u8,
+    },
     PortRead,
-    PortWrite { value: u8 },
+    PortWrite {
+        value: u8,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
