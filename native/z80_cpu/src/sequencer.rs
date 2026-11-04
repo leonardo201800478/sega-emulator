@@ -12077,13 +12077,18 @@ mod e7_2c_interrupt_mode_tests {
         Z80MicroSequencer::restore_state(decoded).unwrap()
     }
     fn start_int(mode: u8, vector: u8) -> Z80MicroSequencer {
-        let mut cpu = Z80MicroSequencer::default();
-        cpu.interrupt_mode = mode;
-        cpu.iff1 = true;
-        cpu.iff2 = true;
-        cpu.registers.pc = 0x4567;
-        cpu.registers.sp = 0x9000;
-        cpu.i = 0x20;
+        let mut cpu = Z80MicroSequencer {
+            interrupt_mode: mode,
+            iff1: true,
+            iff2: true,
+            registers: crate::Z80Registers {
+                pc: 0x4567,
+                sp: 0x9000,
+                ..crate::Z80Registers::default()
+            },
+            i: 0x20,
+            ..Z80MicroSequencer::default()
+        };
         cpu.set_int_line(Some(vector));
         let ack = request(cpu.begin_instruction().unwrap());
         assert_eq!(ack.operation, Z80BusOperation::InterruptAcknowledge);
@@ -12198,12 +12203,17 @@ mod e7_2c_interrupt_mode_tests {
 
     #[test]
     fn im1_explicit_ack_and_stack_waits_extend_the_interrupt_duration() {
-        let mut cpu = Z80MicroSequencer::default();
-        cpu.interrupt_mode = 1;
-        cpu.iff1 = true;
-        cpu.iff2 = true;
-        cpu.registers.pc = 0x4567;
-        cpu.registers.sp = 0x9000;
+        let mut cpu = Z80MicroSequencer {
+            interrupt_mode: 1,
+            iff1: true,
+            iff2: true,
+            registers: crate::Z80Registers {
+                pc: 0x4567,
+                sp: 0x9000,
+                ..crate::Z80Registers::default()
+            },
+            ..Z80MicroSequencer::default()
+        };
         cpu.set_int_line(Some(0xFF));
         let ack = request(cpu.begin_instruction().unwrap());
         cpu.insert_wait_tstate().unwrap();
