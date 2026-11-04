@@ -39,13 +39,13 @@ def test_cargo_options_keep_manifest_as_cargo_argument() -> None:
     assert "--locked" in command
 
 
-def test_inventory_can_report_optional_lockfile_as_blocked(capsys) -> None:
+def test_inventory_reports_not_run_without_failing_audit(capsys) -> None:
     result = project_manager.Result(
-        "optional lockfile", "BLOCKED", output="manual policy review"
+        "unassigned manifest", "NOT RUN", output="outside active workspace"
     )
 
     assert project_manager.print_results([result], strict=False) == 0
-    assert "BLOCKED" in capsys.readouterr().out
+    assert "NOT RUN" in capsys.readouterr().out
 
 
 def test_validation_does_not_treat_blocked_as_pass(capsys) -> None:
