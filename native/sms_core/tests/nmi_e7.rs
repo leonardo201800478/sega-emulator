@@ -38,11 +38,21 @@ fn sms_temporal_nmi_uses_m1_ignores_data_and_pushes_pc_to_ram() {
     assert_eq!(machine.now(), MachineTime::from_ticks(33));
 
     let trace = machine.take_trace();
-    let m1_tstates = trace
+    let m1_pins: Vec<_> = trace
         .iter()
-        .filter(|event| matches!(event, SmsTemporalTraceEvent::M1TStateCompleted { .. }))
-        .count();
-    assert_eq!(m1_tstates, 4, "NMI response must execute one four-T-state M1");
+        .filter_map(|event| match event {
+            SmsTemporalTraceEvent::M1TStateCompleted { pins, .. } => Some(*pins),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(m1_pins.len(), 4, "NMI response must execute one four-T-state M1");
+    assert_eq!(m1_pins[0].address, 0x0001);
+    assert!(!m1_pins[0].m1_n);
+    assert!(!m1_pins[1].mreq_n);
+    assert!(!m1_pins[1].rd_n);
+    assert!(!m1_pins[2].mreq_n);
+    assert!(!m1_pins[2].rd_n);
+    assert!(!m1_pins[3].rfsh_n, "M1 T4 must expose the refresh phase");
 
     let bus_cycles: Vec<_> = trace
         .into_iter()
