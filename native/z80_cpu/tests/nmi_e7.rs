@@ -440,3 +440,37 @@ fn nmi_is_sampled_during_halt_even_when_iff1_is_disabled() {
     );
     assert!(!cpu.halted);
 }
+
+#[test]
+fn nmi_edge_after_halt_t4_is_sampled_on_the_next_halt_cycle() {
+    let mut cpu = Z80MicroSequencer {
+        iff1: false,
+        iff2: false,
+        halted: true,
+        ..Z80MicroSequencer::default()
+    };
+
+    let first_m1 = request(cpu.begin_instruction().unwrap());
+    cpu.complete_bus_cycle(first_m1.id, Some(0x00)).unwrap();
+    cpu.sample_halt_interrupts_at_t4().unwrap();
+    assert_eq!(cpu.export_state().halt_exit_pending, None);
+
+    // An edge after T4 is pending, but cannot be accepted until the next
+    // HALT M1 reaches its own effective T4 boundary.
+    cpu.request_nmi();
+    let second_m1 = request(cpu.begin_instruction().unwrap());
+    assert_eq!(second_m1.operation, Z80BusOperation::OpcodeFetch);
+    cpu.complete_bus_cycle(second_m1.id, Some(0x00)).unwrap();
+    cpu.sample_halt_interrupts_at_t4().unwrap();
+    assert_eq!(
+        cpu.export_state().halt_exit_pending,
+        Some(Z80HaltExit::Nmi)
+    );
+
+    let response = request(cpu.begin_instruction().unwrap());
+    assert_eq!(response.operation, Z80BusOperation::OpcodeFetch);
+    assert_eq!(
+        cpu.export_state().phase,
+        Z80MicroSequencerPhase::NmiResponse
+    );
+}
