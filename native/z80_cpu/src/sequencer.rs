@@ -12325,7 +12325,6 @@ mod e7_2c_interrupt_mode_tests {
     }
 }
 
-
 #[cfg(test)]
 mod e7_2d_ei_di_arbitration_tests {
     use super::{Z80MicroSequencer, Z80MicroStep};
@@ -12344,10 +12343,7 @@ mod e7_2d_ei_di_arbitration_tests {
         }
     }
 
-    fn run_until_boundary(
-        cpu: &mut Z80MicroSequencer,
-        bus: &mut TestBus,
-    ) -> Z80MicroStep {
+    fn run_until_boundary(cpu: &mut Z80MicroSequencer, bus: &mut TestBus) -> Z80MicroStep {
         let mut step = cpu.begin_instruction().unwrap();
         for _ in 0..128 {
             step = match step {
@@ -12366,9 +12362,7 @@ mod e7_2d_ei_di_arbitration_tests {
                     };
                     cpu.complete_bus_cycle(request.id, response).unwrap()
                 }
-                Z80MicroStep::InternalCycle { .. } => {
-                    cpu.complete_internal_cycle().unwrap()
-                }
+                Z80MicroStep::InternalCycle { .. } => cpu.complete_internal_cycle().unwrap(),
                 terminal => return terminal,
             };
         }
