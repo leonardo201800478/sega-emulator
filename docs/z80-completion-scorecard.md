@@ -1,7 +1,7 @@
 # Meta de conclusão do Z80 — cobertura, validação e critérios de aceite
 
 **Data da revisão:** 2026-11-04  
-**Baseline de referência:** `main` — `b1b5ced5c3d6053f8d59c8f4d932f40518db1064` (E7.1 HALT/M1 integrada pela PR #490).  
+**Baseline de referência:** `main` — `fd1d46925aecb29991580710131780749a980641` (E7.1 HALT/M1 integrada pela PR #490; contrato documental E7.2 reconciliado pela PR #491).  
 **Evidência E4C:** HEAD validado `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS; PR #475 integrada no merge SHA `f89a52346e91e88e82ab37a4afcfffff2d793407`.  
 **Schema do microsequenciador na baseline main:** 28, após a integração da E5 pela PR #485.  
 **Status deste documento:** referência de planejamento e critérios de aceite. Não substitui a matriz semântica por opcode nem os relatórios de execução dos testes.
@@ -46,7 +46,7 @@ Os percentuais abaixo são **estimativas de engenharia**, usadas para dimensiona
 
 ## 3. Baseline técnica e estado conhecido
 
-A baseline operacional consultada em `main` é `b1b5ced5c3d6053f8d59c8f4d932f40518db1064`. E1–E6 e E7.1 estão integradas nos escopos registrados; E7.1 foi integrada pela PR #490. A saída de HALT por interrupção, acknowledge, reset especial e demais lacunas semânticas continuam pendentes.
+A baseline operacional consultada em `main` é `fd1d46925aecb29991580710131780749a980641`; a PR #491 atualizou somente documentação do contrato E7.2, sem alterar o runtime. E1–E6 e E7.1 estão integradas nos escopos registrados; E7.1 foi integrada pela PR #490. A saída de HALT por interrupção, acknowledge, reset especial e demais lacunas semânticas continuam pendentes.
 
 | Fase | Escopo | Estado na fotografia |
 |---|---|---|
@@ -226,6 +226,7 @@ Aceite: nenhuma instrução documentada elegível sem classificação e critéri
 - Inventário BASE candidato: 252 opcodes implementados / 0 rejeitados explicitamente.
 - Evidência e limites: [auditoria E7.1 — HALT](audits/z80-e7-halt-m1-2026-11-04.md).
 - **Limite:** saída de HALT por NMI/INT, acknowledge, reset especial e validação independente ainda não estão implementados neste incremento. Não atribuir SHORT_PASS integral a HALT.
+- Auditoria de código E7 na baseline `fd1d46925aecb29991580710131780749a980641`: [auditoria E7 — semântica ED, microsequenciador, snapshots e interrupções](audits/z80-e7-code-validation-2026-11-04.md). Resultado: E7 permanece INTEGRATION_PENDING; handlers ED no microsequenciador não possuem suíte positiva dedicada, e E7.2 NMI/INT segue não implementada.
 
 ### E8 — Validação formal e diferencial
 
