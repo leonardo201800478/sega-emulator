@@ -11,9 +11,12 @@ use crate::{
     Sg1000TemporalCoordinatorError, Sg1000TemporalCoordinatorState, Sg1000TemporalEvent,
 };
 use sega_temporal_core::MachineTime;
-use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
+use sega_z80_cpu::{
+    Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES, Z80BusOperation, Z80BusRequest,
+};
 
-pub const SG1000_TEMPORAL_BUS_STATE_VERSION: u16 = 1;
+pub const SG1000_TEMPORAL_BUS_STATE_VERSION: u16 = 2;
+const DEFAULT_INTERRUPT_VECTOR: u8 = 0xFF;
 
 fn elapsed_tstates(
     started_at: MachineTime,
@@ -35,11 +38,11 @@ fn valid_bus_deadline(
     started_at: MachineTime,
     deadline: MachineTime,
     master_ticks_per_tstate: u64,
-    base_tstates: u8,
+    minimum_tstates: u16,
 ) -> bool {
-    base_tstates > 0
+    minimum_tstates > 0
         && elapsed_tstates(started_at, deadline, master_ticks_per_tstate)
-            .is_some_and(|total| total >= u32::from(base_tstates))
+            .is_some_and(|total| total >= u32::from(minimum_tstates))
 }
 
 fn valid_internal_deadline(
@@ -56,6 +59,7 @@ fn is_supported_memory_operation(operation: Z80BusOperation) -> bool {
         Z80BusOperation::OpcodeFetch
             | Z80BusOperation::MemoryRead
             | Z80BusOperation::MemoryWrite { .. }
+            | Z80BusOperation::InterruptAcknowledge
     )
 }
 
@@ -85,6 +89,7 @@ pub enum Sg1000TemporalDispatch {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sg1000TemporalBusState {
     pub format_version: u16,
+    pub interrupt_vector: u8,
     pub memory: Sg1000Memory,
     pub coordinator: Sg1000TemporalCoordinatorState,
     pub pending_request: Option<Z80BusRequest>,
@@ -153,6 +158,7 @@ pub struct Sg1000TemporalBus {
     pending_internal_cycle: Option<u64>,
     internal_cycle_started_at: Option<MachineTime>,
     internal_completion: Option<Sg1000InternalCycleCompletion>,
+    interrupt_vector: u8,
     #[cfg(test)]
     write_dispatch_count: u64,
 }
@@ -176,6 +182,7 @@ impl Sg1000TemporalBus {
             pending_internal_cycle: None,
             internal_cycle_started_at: None,
             internal_completion: None,
+            interrupt_vector: DEFAULT_INTERRUPT_VECTOR,
             #[cfg(test)]
             write_dispatch_count: 0,
         })
@@ -198,10 +205,18 @@ impl Sg1000TemporalBus {
             return Err(Sg1000TemporalBusError::UnsupportedOperation);
         }
         let started_at = self.coordinator.now();
+        let automatic_waits = if request.operation == Z80BusOperation::InterruptAcknowledge {
+            u32::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
+        } else {
+            0
+        };
+        let total_wait_tstates = fixture_wait_tstates
+            .checked_add(automatic_waits)
+            .ok_or(Sg1000TemporalBusError::InvalidState)?;
         let deadline = self.coordinator.schedule_bus_completion(
             request.id,
             request.base_tstates,
-            fixture_wait_tstates,
+            total_wait_tstates,
         )?;
         self.pending_request = Some(request);
         self.request_started_at = Some(started_at);
@@ -260,6 +275,7 @@ impl Sg1000TemporalBus {
                     Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
                         Some(self.memory.read(request.address))
                     }
+                    Z80BusOperation::InterruptAcknowledge => Some(self.interrupt_vector),
                     Z80BusOperation::MemoryWrite { value } => {
                         self.memory.write(request.address, value);
                         #[cfg(test)]
@@ -343,6 +359,12 @@ impl Sg1000TemporalBus {
         self.request_started_at
     }
 
+    /// Set the external byte driven during an INT acknowledge cycle.
+    /// This changes device input state without advancing scheduler time.
+    pub fn set_interrupt_vector(&mut self, vector: u8) {
+        self.interrupt_vector = vector;
+    }
+
     pub const fn completion(&self) -> Option<Sg1000BusCompletion> {
         self.completion
     }
@@ -377,6 +399,7 @@ impl Sg1000TemporalBus {
     pub fn export_state(&self) -> Sg1000TemporalBusState {
         Sg1000TemporalBusState {
             format_version: SG1000_TEMPORAL_BUS_STATE_VERSION,
+            interrupt_vector: self.interrupt_vector,
             memory: self.memory.clone(),
             coordinator: self.coordinator.export_state(),
             pending_request: self.pending_request,
@@ -423,7 +446,12 @@ impl Sg1000TemporalBus {
                         started_at,
                         pending_events[0].timestamp,
                         scale,
-                        request.base_tstates,
+                        u16::from(request.base_tstates)
+                            + if request.operation == Z80BusOperation::InterruptAcknowledge {
+                                u16::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
+                            } else {
+                                0
+                            },
                     ) => {}
             (Some(request), Some(started_at), Some(completion), None, None, None)
                 if is_supported_memory_operation(request.operation)
@@ -462,6 +490,7 @@ impl Sg1000TemporalBus {
             pending_internal_cycle: state.pending_internal_cycle,
             internal_cycle_started_at: state.internal_cycle_started_at,
             internal_completion: state.internal_completion,
+            interrupt_vector: state.interrupt_vector,
             #[cfg(test)]
             write_dispatch_count: state.write_dispatch_count,
         })
@@ -540,6 +569,26 @@ mod tests {
             Err(Sg1000TemporalBusError::NoPendingRequest)
         );
         assert!(restored.dispatch_next().unwrap().is_none());
+    }
+
+    #[test]
+    fn interrupt_acknowledge_uses_external_vector_and_automatic_waits() {
+        let mut bus = Sg1000TemporalBus::new(vec![0; 0x4000], MemoryConfig::default(), 3).unwrap();
+        bus.set_interrupt_vector(0xCF);
+        let request = request(71, Z80BusOperation::InterruptAcknowledge, 0x1234, 3);
+        let started_at = bus.now();
+        let deadline = bus.begin_request(request, 1).unwrap();
+        assert_eq!(deadline.checked_duration_since(started_at), Some(18));
+
+        let restored = Sg1000TemporalBus::restore_state(bus.export_state()).unwrap();
+        assert_eq!(restored.export_state(), bus.export_state());
+        let Some(Sg1000TemporalDispatch::BusCompletion(completion)) =
+            bus.dispatch_next().unwrap()
+        else {
+            panic!("expected INT acknowledge completion");
+        };
+        assert_eq!(completion.data, Some(0xCF));
+        assert_eq!(completion.completed_at, deadline);
     }
 
     #[test]
