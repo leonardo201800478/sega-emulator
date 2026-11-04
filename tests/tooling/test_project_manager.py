@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from tools.project_manager import Result, Workspace, cargo_for, print_results
+from tools import project_manager
 
 
 def test_cargo_fmt_manifest_is_before_rustfmt_separator() -> None:
