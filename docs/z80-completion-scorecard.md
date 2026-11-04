@@ -300,4 +300,4 @@ Toda atualização deve incluir data, SHA da baseline, SHA candidato, PR, workfl
 
 ---
 
-**Baseline operacional:** E6 integrada pela PR #486; merge SHA do código E6 `24a32e03e10c8e82022172faee69ec0c046f8cb0`. Documentação reconciliada pela PR #488, merge SHA `303a792b1caab1ba40dec9c9521208eb5aaa0b45`. CI #41759035927 (PR E6), #41759330209 (push após merge E6) e #41759833153 (push após reconciliação documental) concluídos com SUCCESS. Próxima etapa: E7 — fechamento semântico integral. Validação diferencial externa, ZEXDOC/ZEXALL, LONG_PASS e TEMPORAL_PASS continuam pendentes.
+**Baseline operacional:** E6 integrada pela PR #486; merge SHA do código E6 `24a32e03e10c8e82022172faee69ec0c046f8cb0`. Documentação reconciliada pela PR #488, merge SHA `303a792b1caab1ba40dec9c9521208eb5aaa0b45`. CI #41759035927 (PR E6), #41759330209 (push após merge E6) e #41759833153 (push após reconciliação documental) concluídos com SUCCESS. E7 em andamento: E7.1 HALT/M1 de retenção implementada na branch candidata, aguardando CI; E7.2 NMI/INT e saída de HALT é o próximo incremento. Validação diferencial externa, ZEXDOC/ZEXALL, LONG_PASS e TEMPORAL_PASS continuam pendentes.
