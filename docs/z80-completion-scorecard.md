@@ -1,7 +1,7 @@
 # Meta de conclusão do Z80 — cobertura, validação e critérios de aceite
 
 **Data da revisão:** 2026-11-04  
-**Baseline de referência:** `main` — `a756e51cf6c5245357831896de293cd2e9d3a859` (E7.2C — dispatch IM0/IM1/IM2 integrada pela PR #498).  
+**Baseline de código:** `main` — `a756e51cf6c5245357831896de293cd2e9d3a859` (E7.2C — PR #498). HEAD documental atual da `main`: `8d13178ad79763cc23180aa8d6d334028632c29a` (PR #499, sem alterações de hardware).  
 **Evidência E4C:** HEAD validado `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS; PR #475 integrada no merge SHA `f89a52346e91e88e82ab37a4afcfffff2d793407`.  
 **Schema do microsequenciador na baseline main:** `Z80_MICRO_SEQUENCER_STATE_VERSION = 31` em `native/z80_cpu/src/lib.rs`; o schema foi incrementado para serializar as fases retomáveis de E7.2C.  
 **Status deste documento:** referência de planejamento e critérios de aceite. Não substitui a matriz semântica por opcode nem os relatórios de execução dos testes.
@@ -46,7 +46,7 @@ Os percentuais abaixo são **estimativas de engenharia**, usadas para dimensiona
 
 ## 3. Baseline técnica e estado conhecido
 
-A baseline operacional desta revisão é `main` SHA `a756e51cf6c5245357831896de293cd2e9d3a859`. E7.1 (HALT/M1) foi integrada pela PR #490; E7.2A (NMI retomável) pela PR #495; E7.2B (INT acknowledge) pela PR #496; E7.2C (dispatch IM0/IM1/IM2) pela PR #498. O CI da PR #498 (#41792505837) e o CI pós-merge #41792924571 no SHA main `a756e51cf6c5245357831896de293cd2e9d3a859` passaram em Rust, Python e Windows x64. Scheduler deterministic stress SKIPPED em ambos. E7.2D (EI/DI na arbitragem), E7.2E (snapshots de todas as fases), amostragem T4, BUSREQ, RETI/daisy-chain e validação temporal/diferencial independente permanecem pendentes.
+O baseline de código atual é `main` SHA `a756e51cf6c5245357831896de293cd2e9d3a859`; o HEAD `8d13178ad79763cc23180aa8d6d334028632c29a` é a sincronização documental da PR #499. E7.1 (HALT/M1) foi integrada pela PR #490; E7.2A (NMI retomável) pela PR #495; E7.2B (INT acknowledge) pela PR #496; E7.2C (dispatch IM0/IM1/IM2) pela PR #498. E7.2D está sob validação na PR draft #500. CI da PR #498 (#41792505837) e pós-merge #41792924571 passaram em Rust, Python e Windows x64; Scheduler deterministic stress SKIPPED. E7.2E (snapshots de todas as fases), amostragem T4, BUSREQ, RETI/daisy-chain e validação temporal/diferencial independente permanecem pendentes.
 
 | Fase | Escopo | Estado na fotografia |
 |---|---|---|
@@ -226,7 +226,7 @@ Aceite: nenhuma instrução documentada elegível sem classificação e critéri
 - Inventário BASE candidato: 252 opcodes implementados / 0 rejeitados explicitamente.
 - Evidência e limites: [auditoria E7.1 — HALT](audits/z80-e7-halt-m1-2026-11-04.md).
 - **Limite:** o acknowledge e o dispatch NMI/INT estão implementados nas fases E7.2A/B/C, mas a saída de HALT ainda não possui amostragem T4 cycle-accurate. Reset especial e validação independente continuam pendentes. Não atribuir SHORT_PASS integral a HALT.
-- Auditoria de código E7 na baseline histórica `5768705658522deb46a0fb0556b51923ae8166b8`: [auditoria E7 — semântica ED, microsequenciador, snapshots e interrupções](audits/z80-e7-code-validation-2026-11-04.md). A revisão encontrou 26 testes ED positivos no microsequenciador, aprovados no CI #41775300143 (216 testes unitários totais no crate Z80). Esses testes incluem comparação com o executor atômico interno e validações de requests/WAIT/snapshots; não equivalem a oráculo externo nem a trace independente. E7 permanece INTEGRATION_PENDING por EI/DI, amostragem HALT T4, BUSREQ, RETI/daisy-chain, snapshots completos e validação temporal/diferencial independente.
+- Auditoria de código E7 na baseline histórica `5768705658522deb46a0fb0556b51923ae8166b8`: [auditoria E7 — semântica ED, microsequenciador, snapshots e interrupções](audits/z80-e7-code-validation-2026-11-04.md). A revisão encontrou 26 testes ED positivos no microsequenciador, aprovados no CI #41775300143 (216 testes unitários totais no crate Z80). Esses testes incluem comparação com o executor atômico interno e validações de requests/WAIT/snapshots; não equivalem a oráculo externo nem a trace independente. E7 permanece INTEGRATION_PENDING por HALT T4, BUSREQ, RETI/daisy-chain, snapshots completos e validação temporal/diferencial independente; E7.2D possui testes focados na PR #500, ainda não integrada.
 
 #### E7.2C — Dispatch retomável IM0/IM1/IM2 — PR #498 (integrada na main)
 
@@ -240,6 +240,18 @@ Aceite: nenhuma instrução documentada elegível sem classificação e critéri
 - CI [#41792143207](https://github.com/leonardo201800478/sega-emulator/actions/runs/41792143207), SHA de código `9cb576e957fdb37529d3c8dfb5d54fb22c2c907f`: Rust fmt/Clippy/SMS/SG-1000/workspace PASS; Python pytest/Ruff PASS; Windows x64 D3D12/video e WASAPI/XAudio2/audio compile/tests PASS. Scheduler deterministic stress SKIPPED.
 - CI pós-merge [#41792924571](https://github.com/leonardo201800478/sega-emulator/actions/runs/41792924571), main SHA `a756e51cf6c5245357831896de293cd2e9d3a859`: Rust quality/unit regression, Python lint/regression e Windows x64 D3D12/WASAPI/XAudio2 PASS; Scheduler deterministic stress SKIPPED.
 - Estado E7.2C: IMPLEMENTED / QUICK_PASS / SHORT_PASS para o escopo e cenários testados; cenários direcionados SMS pelo Scheduler PASS. PR #498 integrada no merge SHA `a756e51cf6c5245357831896de293cd2e9d3a859`. E7 completo continua INTEGRATION_PENDING; não declarar LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS.
+
+#### E7.2D — Arbitragem EI/DI e atraso de uma instrução — PR #500 (draft)
+
+- EI habilita IFF1/IFF2 e define `ei_delay = 1`; INT pendente só é aceito quando IFF1 está ativo e o atraso chegou a zero.
+- O atraso é consumido na aposentadoria da instrução seguinte, não na própria EI; um segundo EI reinicia o atraso.
+- DI limpa IFF1/IFF2 e cancela o atraso; a linha INT permanece pendente, mas mascarada.
+- NMI tem prioridade sobre INT e é aceito durante o atraso. O serviço NMI não consome o atraso; no cenário testado, RETN como primeira instrução do handler o consome, restaurando IFF1 a partir de IFF2 e permitindo INT no boundary seguinte.
+- Snapshot binário round-trip com `ei_delay = 1` antes da instrução seguinte.
+- Testes: `ei_defers_pending_int_until_the_following_instruction_and_survives_snapshot`, `di_cancels_ei_delay_and_keeps_pending_int_masked`, `a_second_ei_restarts_the_one_instruction_delay`, `nmi_is_accepted_during_ei_delay_and_retn_consumes_the_delay`.
+- CI [#41793815959](https://github.com/leonardo201800478/sega-emulator/actions/runs/41793815959), SHA `c6f0930f6820e760d8b0d60ae7770da9cb22be32`: Rust fmt/Clippy/SMS/SG-1000/workspace PASS; Python pytest/Ruff PASS; Windows x64 D3D12/video e WASAPI/XAudio2/audio compile/tests PASS. Scheduler deterministic stress SKIPPED.
+- **Limite:** `EI;HALT;INT` não é declarado coberto; a amostragem NMI/INT no T4 dos ciclos HALT continua pendente. BUSREQ, RETI/daisy-chain e validação diferencial/temporal independente também permanecem fora deste incremento.
+- Estado dos cenários EI/DI testados: IMPLEMENTED / QUICK_PASS / SHORT_PASS. PR #500 ainda draft; E7 global continua INTEGRATION_PENDING.
 
 ### E8 — Validação formal e diferencial
 

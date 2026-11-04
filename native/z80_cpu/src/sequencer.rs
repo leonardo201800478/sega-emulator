@@ -12324,3 +12324,217 @@ mod e7_2c_interrupt_mode_tests {
         assert_eq!(vector_low.address, 0x2081);
     }
 }
+
+#[cfg(test)]
+mod e7_2d_ei_di_arbitration_tests {
+    use super::{Z80MicroSequencer, Z80MicroStep};
+    use crate::{Z80BusOperation, Z80InterruptKind, Z80MicroSequencerState};
+
+    #[derive(Clone)]
+    struct TestBus {
+        memory: Vec<u8>,
+    }
+
+    impl Default for TestBus {
+        fn default() -> Self {
+            Self {
+                memory: vec![0; 0x1_0000],
+            }
+        }
+    }
+
+    fn run_until_boundary(cpu: &mut Z80MicroSequencer, bus: &mut TestBus) -> Z80MicroStep {
+        let mut step = cpu.begin_instruction().unwrap();
+        for _ in 0..128 {
+            step = match step {
+                Z80MicroStep::BusRequest(request) => {
+                    let address = usize::from(request.address);
+                    let response = match request.operation {
+                        Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
+                            Some(bus.memory[address])
+                        }
+                        Z80BusOperation::MemoryWrite { value } => {
+                            bus.memory[address] = value;
+                            None
+                        }
+                        Z80BusOperation::InterruptAcknowledge => Some(0xFF),
+                        operation => panic!("unexpected bus operation: {operation:?}"),
+                    };
+                    cpu.complete_bus_cycle(request.id, response).unwrap()
+                }
+                Z80MicroStep::InternalCycle { .. } => cpu.complete_internal_cycle().unwrap(),
+                terminal => return terminal,
+            };
+        }
+        panic!("microsequencer did not reach an instruction boundary");
+    }
+
+    fn cpu_with_int_line() -> Z80MicroSequencer {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.registers.pc = 0x1000;
+        cpu.registers.sp = 0xC100;
+        cpu.set_int_line(Some(0xFF));
+        cpu
+    }
+
+    #[test]
+    fn ei_defers_pending_int_until_the_following_instruction_and_survives_snapshot() {
+        let mut cpu = cpu_with_int_line();
+        let mut bus = TestBus::default();
+        bus.memory[0x1000] = 0xFB;
+        bus.memory[0x1001] = 0x00;
+
+        assert_eq!(
+            run_until_boundary(&mut cpu, &mut bus),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xFB,
+                tstates: 4,
+            }
+        );
+        assert_eq!(cpu.ei_delay, 1);
+        assert!(cpu.iff1 && cpu.iff2);
+
+        let bytes = cpu.export_state().encode().unwrap();
+        let state = Z80MicroSequencerState::decode(&bytes).unwrap();
+        cpu = Z80MicroSequencer::restore_state(state).unwrap();
+        assert_eq!(cpu.ei_delay, 1);
+
+        assert_eq!(
+            run_until_boundary(&mut cpu, &mut bus),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x00,
+                tstates: 4,
+            }
+        );
+        assert_eq!(cpu.ei_delay, 0);
+
+        assert_eq!(
+            run_until_boundary(&mut cpu, &mut bus),
+            Z80MicroStep::InterruptAcknowledge {
+                vector: 0xFF,
+                tstates: 5,
+            }
+        );
+        assert!(!cpu.iff1 && !cpu.iff2);
+    }
+
+    #[test]
+    fn di_cancels_ei_delay_and_keeps_pending_int_masked() {
+        let mut cpu = cpu_with_int_line();
+        let mut bus = TestBus::default();
+        bus.memory[0x1000] = 0xFB;
+        bus.memory[0x1001] = 0xF3;
+        bus.memory[0x1002] = 0x00;
+
+        assert_eq!(
+            run_until_boundary(&mut cpu, &mut bus),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xFB,
+                tstates: 4,
+            }
+        );
+        assert_eq!(cpu.ei_delay, 1);
+
+        assert_eq!(
+            run_until_boundary(&mut cpu, &mut bus),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xF3,
+                tstates: 4,
+            }
+        );
+        assert_eq!(cpu.ei_delay, 0);
+        assert!(!cpu.iff1 && !cpu.iff2);
+
+        assert_eq!(
+            run_until_boundary(&mut cpu, &mut bus),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x00,
+                tstates: 4,
+            }
+        );
+        assert_eq!(cpu.int_pending, Some(0xFF));
+    }
+
+    #[test]
+    fn a_second_ei_restarts_the_one_instruction_delay() {
+        let mut cpu = cpu_with_int_line();
+        let mut bus = TestBus::default();
+        bus.memory[0x1000] = 0xFB;
+        bus.memory[0x1001] = 0xFB;
+        bus.memory[0x1002] = 0x00;
+
+        for _ in 0..2 {
+            assert_eq!(
+                run_until_boundary(&mut cpu, &mut bus),
+                Z80MicroStep::InstructionRetired {
+                    opcode: 0xFB,
+                    tstates: 4,
+                }
+            );
+            assert_eq!(cpu.ei_delay, 1);
+        }
+
+        assert_eq!(
+            run_until_boundary(&mut cpu, &mut bus),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x00,
+                tstates: 4,
+            }
+        );
+        assert_eq!(cpu.ei_delay, 0);
+        assert!(matches!(
+            run_until_boundary(&mut cpu, &mut bus),
+            Z80MicroStep::InterruptAcknowledge { vector: 0xFF, .. }
+        ));
+    }
+
+    #[test]
+    fn nmi_is_accepted_during_ei_delay_and_retn_consumes_the_delay() {
+        let mut cpu = cpu_with_int_line();
+        let mut bus = TestBus::default();
+        bus.memory[0x1000] = 0xFB;
+        bus.memory[0x0066] = 0xED;
+        bus.memory[0x0067] = 0x45;
+
+        assert_eq!(
+            run_until_boundary(&mut cpu, &mut bus),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xFB,
+                tstates: 4,
+            }
+        );
+        assert_eq!(cpu.ei_delay, 1);
+        cpu.request_nmi();
+
+        assert_eq!(
+            run_until_boundary(&mut cpu, &mut bus),
+            Z80MicroStep::InterruptServiced {
+                kind: Z80InterruptKind::Nmi,
+                tstates: 11,
+            }
+        );
+        assert_eq!(cpu.ei_delay, 1);
+        assert!(!cpu.iff1 && cpu.iff2);
+        assert_eq!(cpu.registers.pc, 0x0066);
+
+        assert_eq!(
+            run_until_boundary(&mut cpu, &mut bus),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0x45,
+                tstates: 14,
+            }
+        );
+        assert_eq!(cpu.ei_delay, 0);
+        assert!(cpu.iff1 && cpu.iff2);
+        assert_eq!(cpu.registers.pc, 0x1001);
+        assert_eq!(cpu.registers.sp, 0xC100);
+
+        assert_eq!(
+            run_until_boundary(&mut cpu, &mut bus),
+            Z80MicroStep::InterruptAcknowledge {
+                vector: 0xFF,
+                tstates: 5,
+            }
+        );
+    }
+}
