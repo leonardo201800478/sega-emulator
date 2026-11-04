@@ -102,7 +102,12 @@ fn execute_one(
         phases.insert(phase_name(&state.phase));
 
         if restore_each_boundary {
-            let encoded = state.encode().expect("encode valid in-flight state");
+            let encoded = state.encode().unwrap_or_else(|error| {
+                panic!(
+                    "encode generated in-flight state for {program:02X?}, phase {:?}: {error:?}; state={state:#?}",
+                    state.phase
+                )
+            });
             let decoded = Z80MicroSequencerState::decode(&encoded).expect("decode in-flight state");
             assert_eq!(
                 decoded, state,
