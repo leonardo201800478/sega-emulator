@@ -169,3 +169,15 @@ Esta auditoria é revisão documental/estática e de evidências remotas. Não s
 - A PR #502 diverge da main em 11 commits à frente e 11 atrás. Seus commits não foram descartados.
 - A continuação incremental transporta os arquivos da implementação candidata para uma branch baseada na main atual e adiciona comparação integral de `SmsTemporalTraceEvent`, cenários NMI com WAIT=0/1/3 e correções na auditoria do formato.
 - A continuação será submetida em PR própria (#504). E7.2E permanece IN_PROGRESS até CI no SHA final e fechamento das lacunas de restore completo/estados inválidos. E7 global continua INTEGRATION_PENDING.
+
+---
+
+## Atualização operacional — PR #504 integrada e PR #505 em validação
+
+- PR #504 integrada na main pelo merge SHA d64d86b5bb16305d6265a1522d095b68b8f4954a; CI pós-merge #41826301233 passou em Rust, Python e Windows x64. Scheduler stress SKIPPED.
+- PR #502 fechada como supersedida; seus commits originais permanecem preservados no histórico Git.
+- PR #505 testa restore/continuação de estados completos para as 70 variantes de fase geradas pelo corpus suportado, com comparação contínuo/retomado e cobertura NMI/IM0/IM1/IM2.
+- CI #41830953731 no HEAD a21506ac4a2d8b66df94dfacdd7c749295e6bb5d: Rust fmt/Clippy/workspace PASS; Python pytest/Ruff PASS; Windows x64 D3D12/WASAPI/XAudio2 PASS; Scheduler deterministic stress SKIPPED.
+- O corpus identificou e permitiu corrigir lacunas no validador de LD (HL),r, RET condicional e RST/CALL com prefixo DD/FD ignorado.
+- A PR #505 ainda não foi integrada. A matriz abrangente de estados inválidos, WAIT por todas as famílias, IM0 T-states, codec binário SMS completo e demais subfases E7.3–E7.7 permanecem pendentes.
+- Estado global: E7 INTEGRATION_PENDING; E8 continua bloqueada até o fechamento das dependências E7.
