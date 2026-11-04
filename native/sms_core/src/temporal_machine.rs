@@ -3,8 +3,9 @@
 //! This composition uses the resumable Z80 subset, the mapper-backed SMS
 //! memory/I/O adapter, and one machine scheduler. Immediate port transactions
 //! support controller and memory-control effects; VDP/PSG devices remain
-//! unconnected (open-bus reads and bounded write diagnostics). Interrupts, DMA
-//! and physical WAIT wiring remain outside this temporal slice.
+//! unconnected (open-bus reads and bounded write diagnostics). NMI is integrated
+//! and INT acknowledge is being added incrementally; DMA and physical WAIT
+//! wiring remain outside this temporal slice.
 
 use core::fmt;
 
@@ -19,6 +20,7 @@ use sega_temporal_core::{
 use sega_z80_cpu::{
     Z80BusOperation, Z80M1Phase, Z80M1Pins, Z80MicroSequencer, Z80MicroSequencerError,
     Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
+    Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES,
 };
 
 pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 21;
@@ -316,7 +318,7 @@ impl SmsTemporalMachine {
             data,
             u16::from(request.base_tstates)
                 + if request.operation == Z80BusOperation::InterruptAcknowledge {
-                    2
+                    u128::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
                 } else {
                     0
                 },
@@ -870,7 +872,7 @@ impl SmsTemporalMachine {
             let total_tstates = elapsed / scale;
             let automatic_wait_tstates =
                 if request.operation == Z80BusOperation::InterruptAcknowledge {
-                    2
+                    u16::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
                 } else {
                     0
                 };
