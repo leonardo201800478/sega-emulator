@@ -144,3 +144,36 @@ fn index_prefix_before_ed_uses_the_existing_ed_decoder_and_keeps_m1_cost() {
         assert!(!cpu.instruction_active());
     }
 }
+
+#[test]
+fn ignored_prefix_fallback_reuses_base_immediate_operand_read() {
+    let mut cpu = Z80MicroSequencer::default();
+    let prefix_fetch = request(cpu.begin_instruction().expect("instruction starts"));
+    let (next_cpu, step) = complete_fetch(cpu, prefix_fetch, 0xDD, 0);
+    cpu = next_cpu;
+    let opcode_fetch = request(step);
+
+    let (next_cpu, step) = complete_fetch(cpu, opcode_fetch, 0x3E, 0);
+    cpu = next_cpu;
+    let operand_read = request(step);
+    assert_eq!(operand_read.operation, Z80BusOperation::MemoryRead);
+    assert_eq!(operand_read.address, 2);
+    assert_eq!(operand_read.base_tstates, 3);
+    assert_eq!(cpu.registers.pc, 2);
+    assert_eq!(cpu.refresh & 0x7F, 2);
+
+    cpu = round_trip(cpu);
+    cpu.insert_wait_tstate().expect("operand WAIT is accepted");
+    cpu = round_trip(cpu);
+    assert_eq!(
+        cpu.complete_bus_cycle(operand_read.id, Some(0x42)).unwrap(),
+        Z80MicroStep::InstructionRetired {
+            opcode: 0x3E,
+            tstates: 12,
+        }
+    );
+    assert_eq!(cpu.registers.a, 0x42);
+    assert_eq!(cpu.registers.pc, 3);
+    assert_eq!(cpu.refresh & 0x7F, 2);
+    assert!(!cpu.instruction_active());
+}
