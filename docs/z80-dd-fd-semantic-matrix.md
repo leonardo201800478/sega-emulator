@@ -1,4 +1,4 @@
-# Matriz semântica DD/FD do Z80 — estado após E5 candidata PR #485
+# Matriz semântica DD/FD do Z80 — estado após E5 integrada na main
 
 **Data:** 2026-11-04  
 **Baseline auditada:** `main` — `a0e58fd05c7f62c42f82b86d15d8532e06a9c59b`, após PR #476; implementação E5 candidata em PR #485.  
@@ -105,7 +105,7 @@ O decoder atômico classifica os 256 subopcodes para IX e IY e tem teste exausti
 
 **BIT — limite documental:** UM008011-0816, páginas impressas 247–250, declara S e P/V desconhecidos para BIT indexado; C não é afetado e H é set. O candidato conserva o modelo atual do executor atômico para S/PV e os bits X/Y derivados do endereço, sem promover essa escolha a fato de hardware. A validação independente desses bits permanece aberta.
 
-## 6. Estado arquitetural e snapshot — estado após E5 candidato PR #485
+## 6. Estado arquitetural e snapshot — estado após E5 integrada (main)
 
 | Estado / recurso | Executor atômico | Microsequenciador DD/FD |
 |---|---|---|
@@ -113,8 +113,8 @@ O decoder atômico classifica os 256 subopcodes para IX e IY e tem teste exausti
 | IXH/IXL/IYH/IYL | Acesso por helper de registrador indexado | Sem decode funcional no microsequenciador; permanece fora de E3A1/E3A2 |
 | PC / SP / wraparound | Handlers existentes; cobertura por família precisa ser ampliada | PC consome prefixos/opcodes; PUSH/POP/EX atualizam ou preservam SP nos pontos de barramento corretos; wrap testado |
 | Flags S/Z/H/PV/N/C e X/Y | Helpers e handlers existentes; não equivalem a validação independente | E3A1/E3A2 preservam flags; E4B atualiza flags ALU; E4C atualiza S/Z/H/PV/N e preserva C via helper INC/DEC compartilhado |
-| WZ/MEMPTR | Atualizado em handlers selecionados; falta matriz por família | E3A2: absolute transfers usam nn+1; E4A/E4B usam WZ=EA conforme o modelo MEMPTR do core; efeitos não documentados não são alegados como captura de silício |
-| Q / previous-Q | Não comprovado por esta auditoria para todas as famílias | Não comprovado |
+| WZ/MEMPTR | Campo presente no estado e nos snapshots; handlers atualizam WZ em famílias selecionadas. | E3A2: absolute transfers usam nn+1; E4A/E4B usam WZ=EA; E5 preserva o endereço efetivo em DDCB/FDCB. A matriz completa por família e a validação independente continuam pendentes. |
+| Q / previous-Q | O runtime Rust modela q e q_previous; SCF/CCF usa o latch anterior. | Os campos são serializados no estado do microsequenciador; a semântica Q ainda não tem aprovação diferencial independente (z80ccf NOT RUN). |
 | R / refresh | Fetch de opcode no executor atômico; cobertura específica DD/FD incompleta | M1 de DD/FD e CB; o opcode final DDCB/FDCB é non-M1. A suíte E5 verifica que R conta somente os prefixos M1, incluindo cadeias repetidas/alternadas |
 | INT/NMI/EI delay/HALT | Há lógica geral no executor atômico; interação com instruções indexadas ainda precisa de vetores | Sem interrupção integrada em todas as fases DD/FD |
 | Snapshot schema | Não é save state integral do sistema | Schema 28 no candidato; FSM DD/FD e fases E3A1/E3A2/E4A/E4B/E4C/E5 validam/restauram estados intermediários com requests pendentes |
@@ -185,10 +185,10 @@ Links:
 - **E4A — LD indexado/displacement:** IMPLEMENTED e SHORT_PASS no candidato PR #471; 19T/5M, WAIT e snapshots nas fases cobertas.
 - **E4B — ALU A,(IX/IY+d):** IMPLEMENTED / QUICK_PASS / SHORT_PASS no escopo registrado; diferencial externo NOT_RUN.
 - **E4C — INC/DEC (IX/IY+d):** IMPLEMENTED / QUICK_PASS / SHORT_PASS pela PR #475; CI 41747460761 4/4 PASS; 5 testes dirigidos; LONG_PASS/diferencial/temporal NOT_RUN.
-- **E5 — DDCB/FDCB:** IMPLEMENTED / QUICK_PASS / SHORT_PASS na PR #485; 256 subopcodes por IX/IY, BIT read-only, RMW, M1/non-M1, WAIT e snapshots. Windows D3D12/WASAPI/XAudio2 e audio-output tests PASS no CI 3/3; diferencial externo e temporal não executados.
-- **E6 — prefixos ignorados:** implementar fallback BASE sem fetch duplicado e todas as combinações DD/FD/ED/CB.
+- **E5 — DDCB/FDCB:** IMPLEMENTED / QUICK_PASS / SHORT_PASS, integrada na main pela PR #485; 256 subopcodes por IX/IY, BIT read-only, RMW, M1/non-M1, WAIT e snapshots. Windows D3D12/WASAPI/XAudio2 e audio-output tests PASS no CI 3/3; diferencial externo e temporal não executados.
+- **E6.1 — prefixos ignorados:** PR #486 aberta para encaminhar Ignored ao dispatch BASE sem fetch duplicado; ainda não integrada. E6 geral e todas as combinações DD/FD/ED/CB continuam pendentes.
 - **E7 — fechamento semântico:** auditar BASE/CB/ED/DD/FD/DDCB/FDCB, flags, interrupções, HALT e snapshots.
 - **E8 — formal/diferencial:** ZEXDOC/ZEXALL e oráculos independentes.
 - **E9 — temporal/integração:** M/T-states, WAIT, interrupções, snapshots, Scheduler e SMS/SG-1000.
 
-**Estado global:** E3A1/E3A2, E4A, E4B, E4C e E5 DDCB/FDCB estão IMPLEMENTED no microsequenciador e QUICK_PASS/SHORT_PASS nos gates funcionais executados. E5 concluiu CI aplicável 3/3 PASS na PR #485. O fallback geral E6 permanece pendente. Diferencial externo completo, ZEXDOC/ZEXALL e traces independentes por T-state não foram executados; não declarar LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS. A integração temporal sistêmica do Z80 à máquina SMS permanece INTEGRATION_PENDING.
+**Estado global:** E3A1/E3A2, E4A, E4B, E4C e E5 DDCB/FDCB estão IMPLEMENTED no microsequenciador e QUICK_PASS/SHORT_PASS nos gates funcionais executados. E5 concluiu CI aplicável 3/3 PASS e está integrada na main pela PR #485. E6.1 está em PR #486 aberta; o fallback geral E6 permanece pendente. Diferencial externo completo, ZEXDOC/ZEXALL e traces independentes por T-state não foram executados; não declarar LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS. A integração temporal sistêmica do Z80 à máquina SMS permanece INTEGRATION_PENDING.
