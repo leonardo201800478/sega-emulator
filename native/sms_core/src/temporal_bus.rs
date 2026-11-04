@@ -13,10 +13,11 @@ use crate::{
     SmsTemporalCoordinatorError, SmsTemporalCoordinatorState, SmsTemporalEvent,
 };
 use sega_temporal_core::MachineTime;
-use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
+use sega_z80_cpu::{
+    Z80BusOperation, Z80BusRequest, Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES,
+};
 
 pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 7;
-const INT_ACK_AUTOMATIC_WAIT_TSTATES: u32 = 2;
 const DEFAULT_INTERRUPT_VECTOR: u8 = 0xFF;
 const MAX_PORT_WRITE_TRACE: usize = 64;
 
@@ -222,7 +223,7 @@ impl SmsTemporalBus {
         }
         let started_at = self.coordinator.now();
         let automatic_waits = if request.operation == Z80BusOperation::InterruptAcknowledge {
-            INT_ACK_AUTOMATIC_WAIT_TSTATES
+            u32::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
         } else {
             0
         };
@@ -544,7 +545,7 @@ impl SmsTemporalBus {
                         scale,
                         u16::from(request.base_tstates)
                             + if request.operation == Z80BusOperation::InterruptAcknowledge {
-                                2
+                                u16::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
                             } else {
                                 0
                             },
