@@ -1,6 +1,6 @@
 use sega_z80_cpu::{
-    Z80BusOperation, Z80BusRequest, Z80InterruptKind, Z80MicroSequencer, Z80MicroSequencerError,
-    Z80HaltExit, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
+    Z80BusOperation, Z80BusRequest, Z80HaltExit, Z80InterruptKind, Z80MicroSequencer,
+    Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
 };
 
 fn request(step: Z80MicroStep) -> Z80BusRequest {
@@ -166,10 +166,7 @@ fn nmi_requested_during_halt_m1_is_serviced_at_the_next_boundary() {
 
     cpu.sample_halt_interrupts_at_t4().unwrap();
     assert!(!cpu.nmi_pending);
-    assert_eq!(
-        cpu.export_state().halt_exit_pending,
-        Some(Z80HaltExit::Nmi)
-    );
+    assert_eq!(cpu.export_state().halt_exit_pending, Some(Z80HaltExit::Nmi));
     cpu = round_trip(cpu);
 
     let nmi_response = request(cpu.begin_instruction().unwrap());
@@ -269,7 +266,6 @@ fn retn_restores_iff1_after_resumable_nmi_entry() {
     assert!(cpu.iff2);
 }
 
-
 #[test]
 fn halt_int_is_sampled_at_t4_and_latched_after_the_line_deasserts() {
     let mut cpu = Z80MicroSequencer {
@@ -297,20 +293,14 @@ fn halt_int_is_sampled_at_t4_and_latched_after_the_line_deasserts() {
     assert_eq!(cpu.export_state().halt_exit_pending, None);
 
     cpu.sample_halt_interrupts_at_t4().unwrap();
-    assert_eq!(
-        cpu.export_state().halt_exit_pending,
-        Some(Z80HaltExit::Int)
-    );
+    assert_eq!(cpu.export_state().halt_exit_pending, Some(Z80HaltExit::Int));
 
     // The accepted request is edge-sampled; deasserting INT after T4 must
     // not cancel the already-latched HALT exit.
     cpu.set_int_line(None);
     cpu = round_trip(cpu);
     let acknowledge = request(cpu.begin_instruction().unwrap());
-    assert_eq!(
-        acknowledge.operation,
-        Z80BusOperation::InterruptAcknowledge
-    );
+    assert_eq!(acknowledge.operation, Z80BusOperation::InterruptAcknowledge);
     assert_eq!(
         cpu.export_state().phase,
         Z80MicroSequencerPhase::InterruptAcknowledge
