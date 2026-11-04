@@ -48,7 +48,7 @@ Detalhes técnicos e testes: [perfis de RAM DahJee/Jumbo e Othello](docs/hardwar
 ## Requisitos
 
 - Windows x64
-- Python 3.14.x x64 (ambiente de desenvolvimento: Python 3.14.7)
+- Python 3.15.2 x64 (ambiente de desenvolvimento: Python 3.15.2)
 - Git for Windows, PowerShell e VS Code (recomendados)
 
 ## Instalação no PowerShell
@@ -56,7 +56,7 @@ Detalhes técnicos e testes: [perfis de RAM DahJee/Jumbo e Othello](docs/hardwar
 Na raiz do repositório:
 
 ```powershell
-py -3.14 -m venv .venv
+py -3.15 -m venv .venv
 .\\.venv\\Scripts\\python.exe -m pip install --upgrade pip
 .\\.venv\\Scripts\\python.exe -m pip install -e ".[dev,qt]"
 ```
@@ -65,9 +65,9 @@ py -3.14 -m venv .venv
 
 Abra a **raiz do repositório** no VS Code. O projeto fornece configurações em `.vscode/launch.json` e tarefas em `.vscode/tasks.json`.
 
-Requisitos: Windows x64, Python 3.14 x64, Rust stable e Visual Studio Build Tools com a carga de trabalho **Desenvolvimento para desktop com C++** (MSVC).
+Requisitos: Windows x64, Python 3.15.2 x64, Rust stable e Visual Studio Build Tools com a carga de trabalho **Desenvolvimento para desktop com C++** (MSVC).
 
-1. No VS Code, execute **Terminal → Run Task… → Sega Emulator: Create Python 3.14 venv** uma vez.
+1. No VS Code, execute **Terminal → Run Task… → Sega Emulator: Create Python 3.15.2 venv** uma vez.
 2. Execute **Terminal → Run Task… → Sega Emulator: Install development dependencies**.
 3. Pressione **F5** e escolha **Sega Emulator: Qt (desenvolvimento)**. A tarefa prévia compila e instala o runtime Rust/PyO3 em Release; em seguida o debugger inicia o módulo `sega_emulator`.
 4. Para abrir uma ROM local, escolha **Sega Emulator: Qt com ROM** e informe o caminho completo quando solicitado.
