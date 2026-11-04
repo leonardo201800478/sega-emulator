@@ -631,13 +631,11 @@ impl Z80MicroSequencer {
             },
             Z80MicroSequencerPhase::IndexedCbDisplacementRead
             | Z80MicroSequencerPhase::IndexedCbOpcodeRead { .. } => {
-                matches!(state.prefix_state, Z80PrefixState::Index(_))
-                    && state.opcode == Some(0xCB)
+                matches!(state.prefix_state, Z80PrefixState::Index(_)) && state.opcode == Some(0xCB)
             }
             Z80MicroSequencerPhase::IndexedCbMemoryRead { .. }
             | Z80MicroSequencerPhase::IndexedCbMemoryWrite { .. } => {
-                matches!(state.prefix_state, Z80PrefixState::Index(_))
-                    && state.opcode.is_some()
+                matches!(state.prefix_state, Z80PrefixState::Index(_)) && state.opcode.is_some()
             }
             Z80MicroSequencerPhase::ImmediateReadRegisterPairLow { pair } => {
                 match state.prefix_state {
@@ -3322,9 +3320,7 @@ impl Z80MicroSequencer {
                 }
             }
             Z80MicroSequencerPhase::IndexedCbMemoryWrite {
-                value,
-                destination,
-                ..
+                value, destination, ..
             } => {
                 let opcode = self
                     .opcode
