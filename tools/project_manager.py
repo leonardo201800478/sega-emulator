@@ -240,6 +240,7 @@ def tool_versions() -> dict[str, str]:
         )
     return versions
 
+
 def audit() -> tuple[dict[str, Any], list[Result]]:
     """Build a read-only inventory and report missing lockfiles for review."""
     workspaces, errors, unassigned = discover_workspaces()
