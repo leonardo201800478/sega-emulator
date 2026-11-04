@@ -10,7 +10,7 @@
 **PR de referência histórica:** [#447](https://github.com/leonardo201800478/sega-emulator/pull/447) — manter aberta, sem merge  
 **PR integrada E4A:** [#471](https://github.com/leonardo201800478/sega-emulator/pull/471)  
 **PR integrada E4C:** [#475](https://github.com/leonardo201800478/sega-emulator/pull/475)  
-**PR candidata E5:** [#485](https://github.com/leonardo201800478/sega-emulator/pull/485), commit corrigido `b7bf61da6d44cf3ba34e3f8fcf0802fcd4eaa739`; CI ainda pendente.  
+**PR candidata E5:** [#485](https://github.com/leonardo201800478/sega-emulator/pull/485), código SHA `2f1dff62ce23c8d6d321b26d6ffc1b4bd198cb5f`; CI run #4238 3/3 PASS.  
 **Escopo:** microsequenciador Z80 compartilhado; não confundir conclusão do núcleo com integração temporal completa ao SMS.
 
 ---
@@ -186,7 +186,7 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 
 **Gate E2:** PASS para FSM, seleção de prefixo, classificação e snapshot. CI completo do SHA candidato: [run 41721337030](https://github.com/leonardo201800478/sega-emulator/actions/runs/41721337030). Isso não declara FUNCTIONAL_PASS das instruções DD/FD nem TEMPORAL_PASS.
 
-**Limites mantidos após E2:** famílias indexadas restantes, prefixos ignorados, DDCB/FDCB, traces por T-state e integração temporal permanecem nas etapas E4-E9. E4A (LD), E4B (ALU indexada) e E4C (INC/DEC indexado) estão integradas na main; E4C foi publicada pela PR #475. E5 está implementada como candidata na PR #485; E6-E9 continuam pendentes.
+**Limites mantidos após E2:** famílias indexadas restantes, prefixos ignorados, DDCB/FDCB, traces por T-state e integração temporal permanecem nas etapas E4-E9. E4A (LD), E4B (ALU indexada) e E4C (INC/DEC indexado) estão integradas na main; E4C foi publicada pela PR #475. E5 está implementada e QUICK_PASS/SHORT_PASS na PR #485; E6-E9 continuam pendentes.
 
 ### E3 — Operações 16-bit e substituição HL→IX/IY
 
@@ -265,7 +265,7 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 - [x] Windows WASAPI/XAudio2 compile e audio-output tests PASS; CI aplicável 3/3 jobs PASS no run #4238. Scheduler stress SKIPPED corretamente por não haver alteração no Scheduler.
 - Limite ZiLOG: UM008011-0816 classifica S e P/V de BIT indexado como desconhecidos. O modelo do executor atômico é mantido, mas esses bits não estão comprovados contra hardware independente.
 
-**Gate E5:** 256 subopcodes por índice, ordem de barramento e M/T-cycles conferidos, BIT sem write-back e todos os safe points serializáveis. A implementação candidata existe; a aprovação permanece condicionada a CI e revisão.
+**Gate E5:** 256 subopcodes por índice, ordem de barramento e M/T-cycles conferidos, BIT sem write-back e todos os safe points serializáveis. A implementação passou CI 3/3 no SHA de código 2f1dff; revisão permanece pendente.
 
 ### E6 — Prefixos ignorados e combinações DD/FD
 
@@ -324,11 +324,11 @@ Além disso, Scheduler deterministic stress e Windows x64 D3D12/WASAPI/XAudio2 q
 4. WAIT: derivar amostragem e ciclos elegíveis dos diagramas; não assumir regra universal.
 5. DDCB/FDCB: validar sequência de barramento e R com fonte técnica e vetores.
 6. Oráculos: SingleStepTests deriva de um emulador; raxoft/z80test e hardware/documentação devem complementar.
-7. Schema: baseline inicial 25; E2 avançou para 26; E4A para 27; E5 candidata para 28 para serializar fases DDCB/FDCB e requests pendentes. Nunca importar schema da PR #447.
+7. Schema: baseline inicial 25; E2 avançou para 26; E4A para 27; E5 avançou para schema 28 para serializar fases DDCB/FDCB e requests pendentes. Nunca importar schema da PR #447.
 8. Integração SMS: separada da conclusão funcional do conjunto de instruções.
 
 ## 8. Próxima ação
 
-Prosseguir na PR #485: revisão final do diff e validação documental; os gates Rust, Python, Windows D3D12 e WASAPI/XAudio2 passaram no run #4238 para o código SHA b7bf61d. Não fazer merge sem autorização explícita; LONG_PASS, DIFFERENTIAL_PASS e TEMPORAL_PASS permanecem pendentes.
+Prosseguir na PR #485: revisão final do diff e validação documental; os gates Rust, Python, Windows D3D12 e WASAPI/XAudio2 passaram no run #4238 para o código SHA 2f1dff62. Não fazer merge sem autorização explícita; LONG_PASS, DIFFERENTIAL_PASS e TEMPORAL_PASS permanecem pendentes.
 
-**Estado atual DD/FD:** E2 FSM/snapshot SHORT_PASS; E3A1/E3A2/E4A/E4B/E4C integradas na main `a0e58fd05c7f62c42f82b86d15d8532e06a9c59b`. E4C validada no HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`, CI `41747460761` 4/4 PASS. E5 implementada como candidata na PR #485 (`081522cf5169d9bf27a5e018db57b6b69ad378d3`); CI ainda pendente. E6 fallback, E7 fechamento semântico, E8 formal e E9 integração temporal permanecem pendentes. Não há LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS global.
+**Estado atual DD/FD:** E2 FSM/snapshot SHORT_PASS; E3A1/E3A2/E4A/E4B/E4C integradas na main `a0e58fd05c7f62c42f82b86d15d8532e06a9c59b`. E4C validada no HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`, CI `41747460761` 4/4 PASS. E5 implementada na PR #485 (código SHA `2f1dff62ce23c8d6d321b26d6ffc1b4bd198cb5f`); CI run #4238 3/3 PASS. E6 fallback, E7 fechamento semântico, E8 formal e E9 integração temporal permanecem pendentes. Não há LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS global.
