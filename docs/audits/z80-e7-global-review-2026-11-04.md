@@ -35,7 +35,7 @@ A PR #502 é uma candidata inicial de E7.2E, não uma validação concluída. O 
 
 ### 3.1 Conteúdo observado
 
-HEAD consultado: `69ea4299b3858787f0f91682f3ea823371cde3b0`, 11 commits à frente da base original `ea327025b312feb53f1e3e5326b5a5e7c40e72f1`, 0 atrás dessa base original no momento da comparação. Depois do merge documental #501, a branch fica desatualizada em relação à main por um commit documental.
+HEAD consultado: `69ea4299b3858787f0f91682f3ea823371cde3b0`, 11 commits à frente da base original `ea327025b312feb53f1e3e5326b5a5e7c40e72f1`, 0 atrás dessa base original no momento da comparação. Após o merge documental #501, a comparação remota registra a branch #502 divergente, 11 commits à frente e 4 atrás da main atual.
 
 Arquivos alterados:
 - `docs/audits/z80-e7-2e-snapshot-restore-2026-11-04.md`
