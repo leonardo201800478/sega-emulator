@@ -138,6 +138,32 @@ fn has_general_prefix_fallback_context(
                 && instruction_tstates >= 8
         }
         Z80PrefixState::Ed => mcycle_index >= 2 && instruction_tstates >= 8,
+        Z80PrefixState::None => {
+            let ed_phase = matches!(
+                phase,
+                Z80MicroSequencerPhase::EdRegisterInternal { .. }
+                    | Z80MicroSequencerPhase::EdPortRead { .. }
+                    | Z80MicroSequencerPhase::EdPortWrite { .. }
+                    | Z80MicroSequencerPhase::Ed16ArithmeticInternal { .. }
+                    | Z80MicroSequencerPhase::EdAbsoluteTransfer { .. }
+                    | Z80MicroSequencerPhase::EdReturn { .. }
+                    | Z80MicroSequencerPhase::EdNibbleRotateRead { .. }
+                    | Z80MicroSequencerPhase::EdNibbleRotateInternal { .. }
+                    | Z80MicroSequencerPhase::EdBlockTransferRead { .. }
+                    | Z80MicroSequencerPhase::EdBlockTransferWrite { .. }
+                    | Z80MicroSequencerPhase::EdBlockRepeatInternal { .. }
+                    | Z80MicroSequencerPhase::EdBlockCompareRead { .. }
+                    | Z80MicroSequencerPhase::EdBlockCompareInternal { .. }
+                    | Z80MicroSequencerPhase::EdBlockCompareRepeatInternal { .. }
+                    | Z80MicroSequencerPhase::EdBlockIoInitialInternal { .. }
+                    | Z80MicroSequencerPhase::EdBlockIoInputPortRead { .. }
+                    | Z80MicroSequencerPhase::EdBlockIoInputMemoryWrite { .. }
+                    | Z80MicroSequencerPhase::EdBlockIoOutputMemoryRead { .. }
+                    | Z80MicroSequencerPhase::EdBlockIoOutputPortWrite { .. }
+                    | Z80MicroSequencerPhase::EdBlockIoRepeatInternal { .. }
+            );
+            ed_phase && mcycle_index >= 2 && instruction_tstates >= 12
+        }
         _ => false,
     };
     let base_or_ed_phase = !matches!(
@@ -3312,7 +3338,9 @@ impl Z80MicroSequencer {
                     self.retire(opcode)
                 } else {
                     let [high, low] = self.registers.pc.to_be_bytes();
-                    self.mcycle_index = 2;
+                    if self.prefix_state == Z80PrefixState::None {
+                        self.mcycle_index = 2;
+                    }
                     self.tstate_index = 3;
                     self.phase =
                         Z80MicroSequencerPhase::BaseControlPushInternal { target, high, low };
@@ -3406,7 +3434,9 @@ impl Z80MicroSequencer {
                     } else {
                         5
                     };
-                    self.mcycle_index = 2;
+                    if self.prefix_state == Z80PrefixState::None {
+                        self.mcycle_index = 2;
+                    }
                     self.tstate_index = 0;
                     self.phase = Z80MicroSequencerPhase::BaseRelativeBranchInternal {
                         displacement,
@@ -3718,7 +3748,10 @@ impl Z80MicroSequencer {
                     self.wz = self.registers.pc.wrapping_add(1);
                     flags = (flags & !FLAG_XY) | (((self.registers.pc >> 8) as u8) & FLAG_XY);
                     self.set_flags(flags);
-                    self.mcycle_index = 4;
+                    self.mcycle_index = self
+                        .mcycle_index
+                        .checked_add(1)
+                        .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
                     self.tstate_index = 0;
                     self.phase = Z80MicroSequencerPhase::EdBlockRepeatInternal {
                         opcode,
@@ -3771,7 +3804,10 @@ impl Z80MicroSequencer {
                     self.wz = self.wz.wrapping_add_signed(direction);
                 }
                 self.set_flags(flags);
-                self.mcycle_index = 3;
+                self.mcycle_index = self
+                    .mcycle_index
+                    .checked_add(1)
+                    .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
                 self.tstate_index = 0;
                 self.phase = Z80MicroSequencerPhase::EdBlockCompareInternal {
                     opcode,
@@ -3833,7 +3869,10 @@ impl Z80MicroSequencer {
                     result_memory,
                     remaining_tstates: 4,
                 };
-                self.mcycle_index = 3;
+                self.mcycle_index = self
+                    .mcycle_index
+                    .checked_add(1)
+                    .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
                 self.tstate_index = 0;
                 Ok(Z80MicroStep::InternalCycle { tstates: 1 })
             }
@@ -4327,7 +4366,10 @@ impl Z80MicroSequencer {
                 next.instruction_tstates = next_instruction_tstates;
                 if remaining_tstates == 1 {
                     if repeat {
-                        next.mcycle_index = 4;
+                        next.mcycle_index = next
+                            .mcycle_index
+                            .checked_add(1)
+                            .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
                         next.tstate_index = 0;
                         next.phase = Z80MicroSequencerPhase::EdBlockCompareRepeatInternal {
                             opcode,
@@ -4385,7 +4427,10 @@ impl Z80MicroSequencer {
                 } else {
                     let remaining_tstates = remaining_tstates - 1;
                     if remaining_tstates == 3 {
-                        next.mcycle_index = 3;
+                        next.mcycle_index = next
+                            .mcycle_index
+                            .checked_add(1)
+                            .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
                         next.tstate_index = 0;
                     } else {
                         next.tstate_index = next
@@ -4502,7 +4547,6 @@ impl Z80MicroSequencer {
                 )
             }
             0xA2 | 0xAA | 0xB2 | 0xBA | 0xA3 | 0xAB | 0xB3 | 0xBB => {
-                self.mcycle_index = 1;
                 self.tstate_index = 4;
                 self.phase = Z80MicroSequencerPhase::EdBlockIoInitialInternal { opcode };
                 Ok(Z80MicroStep::InternalCycle { tstates: 1 })
@@ -4534,7 +4578,10 @@ impl Z80MicroSequencer {
                 self.registers.hl(),
             ),
             op if op & 0xCF == 0x4A || op & 0xCF == 0x42 => {
-                self.mcycle_index = 2;
+                self.mcycle_index = self
+                    .mcycle_index
+                    .checked_add(1)
+                    .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
                 self.tstate_index = 0;
                 self.phase = Z80MicroSequencerPhase::Ed16ArithmeticInternal {
                     opcode,
@@ -5150,7 +5197,6 @@ impl Z80MicroSequencer {
                 }
             }
             self.set_flags(flags);
-            self.mcycle_index = 4;
             self.tstate_index = 0;
             self.phase = Z80MicroSequencerPhase::EdBlockIoRepeatInternal {
                 opcode,
