@@ -1,7 +1,7 @@
 # Meta de conclusão do Z80 — cobertura, validação e critérios de aceite
 
 **Data da revisão:** 2026-11-04  
-**Baseline de referência:** `main` — `f4130104fa971289507c0b15ab2d8eabd1dd5b00` (após integração da E5 pela PR #485).  
+**Baseline de referência:** `main` — `6362075514809e6bce35582ac978d66eeb8e0d1b` (E6 integrada; PRs documentais #488 e #489 também integradas).  
 **Evidência E4C:** HEAD validado `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS; PR #475 integrada no merge SHA `f89a52346e91e88e82ab37a4afcfffff2d793407`.  
 **Schema do microsequenciador na baseline main:** 28, após a integração da E5 pela PR #485.  
 **Status deste documento:** referência de planejamento e critérios de aceite. Não substitui a matriz semântica por opcode nem os relatórios de execução dos testes.
@@ -46,7 +46,7 @@ Os percentuais abaixo são **estimativas de engenharia**, usadas para dimensiona
 
 ## 3. Baseline técnica e estado conhecido
 
-A baseline consultada em `main` é `f4130104fa971289507c0b15ab2d8eabd1dd5b00`, após a integração da E5 pela PR #485. A auditoria E4C, os testes E4A-E5 e os três documentos de referência DD/FD estão integrados.
+A baseline operacional consultada em `main` é `6362075514809e6bce35582ac978d66eeb8e0d1b`. E1–E6 estão integradas nos escopos registrados; a E6 foi integrada pela PR #486 e reconciliada documentalmente pelas PRs #488/#489. A E7 começou pela auditoria e implementação parcial de HALT (E7.1); interrupções e demais lacunas semânticas continuam pendentes.
 
 | Fase | Escopo | Estado na fotografia |
 |---|---|---|
@@ -58,7 +58,7 @@ A baseline consultada em `main` é `f4130104fa971289507c0b15ab2d8eabd1dd5b00`, a
 | E4C | INC/DEC (IX/IY+d) | Integrada na main pela PR #475; IMPLEMENTED / QUICK_PASS / SHORT_PASS; 5 testes dirigidos; CI 4/4 PASS |
 | E5 | DDCB/FDCB completo | IMPLEMENTED / QUICK_PASS / SHORT_PASS; PR #485 merged; CI #4245 3 jobs PASS, Scheduler SKIPPED |
 | E6 | Fallback geral e resolução de prefixos DD/FD/ED/CB | IMPLEMENTED / QUICK_PASS / SHORT_PASS; PR #486 merged; CI #41759035927 e push main #41759330209 PASS; Scheduler SKIPPED |
-| E7 | Fechamento semântico global BASE/CB/ED/DD/FD/DDCB/FDCB | Pendente |
+| E7 | Fechamento semântico global BASE/CB/ED/DD/FD/DDCB/FDCB | Em andamento: E7.1 HALT M1 implementado na branch; saída por interrupção e demais famílias pendentes |
 | E8 | Validação formal e diferencial (ZEXDOC/ZEXALL e corpora independentes) | Pendente |
 | E9 | Integração temporal sistêmica com bus, WAIT, Scheduler, SMS e SG-1000 | Pendente |
 
@@ -216,6 +216,15 @@ Auditar BASE, CB, ED, DD, FD, DDCB e FDCB, incluindo:
 - Decisão documentada para opcodes não documentados e diferenças entre Z80 clássico e clones.
 
 Aceite: nenhuma instrução documentada elegível sem classificação e critério de teste; lacunas não documentadas explicitamente declaradas.
+
+#### E7.1 — HALT e ciclos M1 de retenção
+
+- Implementado na branch candidata: HALT entra após M1 normal; PC avança uma vez.
+- Durante HALT sem interrupção elegível, cada chamada emite M1 no endereço atual de PC; o byte é ignorado, PC não avança e R incrementa preservando o bit 7.
+- WAIT e snapshot/restore do M1 pendente são cobertos; schema permanece 28.
+- Inventário BASE candidato: 252 opcodes implementados / 0 rejeitados explicitamente.
+- Evidência e limites: [auditoria E7.1 — HALT](audits/z80-e7-halt-m1-2026-11-04.md).
+- **Limite:** saída de HALT por NMI/INT, acknowledge, reset especial e validação independente ainda não estão implementados neste incremento. Não atribuir SHORT_PASS integral a HALT.
 
 ### E8 — Validação formal e diferencial
 
