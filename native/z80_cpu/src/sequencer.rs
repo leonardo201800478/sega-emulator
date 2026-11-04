@@ -4490,7 +4490,14 @@ impl Z80MicroSequencer {
                     next.prefix_state = Z80PrefixState::None;
                     next.mcycle_index = 0;
                     next.tstate_index = 0;
-                    next.decode_opcode_fetch(vector, 0, false, false)?
+                    match next.decode_opcode_fetch(vector, 0, false, false) {
+                        Ok(step) => step,
+                        Err(error @ Z80MicroSequencerError::UnsupportedOpcode { .. }) => {
+                            *self = next;
+                            return Err(error);
+                        }
+                        Err(error) => return Err(error),
+                    }
                 } else if mode == 1 || mode == 2 {
                     next.registers.sp = next.registers.sp.wrapping_sub(1);
                     let high = (return_address >> 8) as u8;
