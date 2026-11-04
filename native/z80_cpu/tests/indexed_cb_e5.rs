@@ -175,7 +175,8 @@ fn all_256_indexed_cb_subopcodes_are_executed_for_ix_and_iy() {
             let ix = 0x2100;
             let iy = 0x3200;
             let displacement = 0xFE;
-            let address = if prefix == 0xDD { ix } else { iy }.wrapping_add_signed(-2);
+            let index_base = if prefix == 0xDD { ix } else { iy };
+            let address = index_base.wrapping_add_signed(-2);
             let old_value = 0x96;
             let initial_flags = 0xA5;
             let result = run_indexed_cb(
