@@ -1,5 +1,5 @@
 use sega_z80_cpu::{
-    Z80MicroSequencer, Z80MicroSequencerStateCodecError, Z80_MICRO_SEQUENCER_STATE_VERSION,
+    Z80_MICRO_SEQUENCER_STATE_VERSION, Z80MicroSequencer, Z80MicroSequencerStateCodecError,
 };
 
 #[test]
