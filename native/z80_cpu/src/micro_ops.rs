@@ -15,8 +15,9 @@ pub const Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES: u8 = 2;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 pub enum Z80BusOperation {
     OpcodeFetch,
-    /// Special M1 cycle used to acknowledge a maskable interrupt.
-    /// The temporal bus must expose IORQ (not MREQ) and return the device vector.
+    /// Logical special M1 cycle used to acknowledge a maskable interrupt.
+    /// Adapters must preserve IORQ acknowledge semantics, not route it as MREQ memory access;
+    /// physical pin waveforms remain the responsibility of the machine profile.
     InterruptAcknowledge,
     MemoryRead,
     MemoryWrite {
