@@ -140,7 +140,10 @@ jobs:
         run: cargo check --locked --all-targets --features python-extension --manifest-path native/z80_core/Cargo.toml
       - name: Build native extension with Maturin
         working-directory: native/z80_core
-        run: ${{ github.workspace }}\.venv\Scripts\maturin.exe develop --release --features python-extension
+        run: |
+          $env:VIRTUAL_ENV = "$env:GITHUB_WORKSPACE\.venv"
+          $env:PATH = "$env:VIRTUAL_ENV\Scripts;$env:PATH"
+          & "$env:VIRTUAL_ENV\Scripts\maturin.exe" develop --release --features python-extension
       - name: Import the native extension
         run: .\.venv\Scripts\python.exe -c "import sega_z80_core; print(sega_z80_core.__name__)"
 
