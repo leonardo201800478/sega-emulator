@@ -1,10 +1,9 @@
 //! First resumable instruction slice for the shared Z80.
 //!
-//! This deliberately small sequencer proves real suspend/resume semantics for
-//! NOP, selected BASE operations, and the initial prefix-fetch pipeline. It is
-//! independent of the legacy atomic executor; full prefixed instruction
-//! semantics, interrupts, HALT, and the complete architectural state remain
-//! outside this sequencer slice.
+//! This sequencer implements resumable BASE/prefix operations and staged interrupt
+//! entry. NMI and the INT acknowledge boundary are represented as explicit
+//! continuations; IM-mode dispatch and consolidated interrupt snapshot coverage
+//! remain in the subsequent E7.2 increments.
 
 use crate::alu::{adc8, add8, and8, cp8, cpl8, daa8, or8, rotate_accumulator, sbc8, sub8, xor8};
 use crate::prefix::{
@@ -14,6 +13,7 @@ use crate::prefix::{
 use crate::{
     Z80_MICRO_SEQUENCER_STATE_VERSION, Z80AlternateRegisters, Z80ArchitecturalState,
     Z80BusHandshake, Z80BusHandshakeError, Z80BusOperation, Z80BusRequest, Z80Registers,
+    Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES, Z80_INT_ACK_BASE_TSTATES,
 };
 use serde::{Deserialize, Serialize};
 
@@ -993,7 +993,7 @@ impl Z80MicroSequencer {
                     && pending.is_some_and(|request| {
                         request.operation == Z80BusOperation::InterruptAcknowledge
                             && request.address == state.registers.pc
-                            && request.base_tstates == 3
+                            && request.base_tstates == Z80_INT_ACK_BASE_TSTATES
                     })
             }
             Z80MicroSequencerPhase::InterruptAcknowledgeComplete { .. } => {
@@ -2754,7 +2754,7 @@ impl Z80MicroSequencer {
                 let request = self.handshake.begin(
                     Z80BusOperation::InterruptAcknowledge,
                     self.registers.pc,
-                    3,
+                    Z80_INT_ACK_BASE_TSTATES,
                 )?;
                 self.halted = false;
                 self.iff1 = false;
@@ -2825,7 +2825,7 @@ impl Z80MicroSequencer {
             .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
         let waits = self.handshake.wait_tstates().unwrap_or(0);
         let automatic_waits = if request.operation == Z80BusOperation::InterruptAcknowledge {
-            2
+            u32::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
         } else {
             0
         };
