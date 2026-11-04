@@ -1,6 +1,6 @@
 use sega_z80_cpu::{
-    Z80BusOperation, Z80HaltExit, Z80MicroSequencer, Z80MicroSequencerPhase, Z80MicroSequencerState,
-    Z80MicroStep, Z80PrefixState,
+    Z80BusOperation, Z80HaltExit, Z80MicroSequencer, Z80MicroSequencerPhase,
+    Z80MicroSequencerState, Z80MicroStep, Z80PrefixState,
 };
 
 fn bus_request(step: Z80MicroStep) -> sega_z80_cpu::Z80BusRequest {
@@ -97,7 +97,6 @@ fn halt_snapshot_rejects_incompatible_in_flight_phase() {
     ));
 }
 
-
 #[test]
 fn halt_exit_latch_round_trips_and_rejects_non_halted_or_in_flight_states() {
     let mut cpu = Z80MicroSequencer {
@@ -111,10 +110,7 @@ fn halt_exit_latch_round_trips_and_rejects_non_halted_or_in_flight_states() {
     let hold = bus_request(cpu.begin_instruction().unwrap());
     cpu.complete_bus_cycle(hold.id, Some(0x00)).unwrap();
     cpu.sample_halt_interrupts_at_t4().unwrap();
-    assert_eq!(
-        cpu.export_state().halt_exit_pending,
-        Some(Z80HaltExit::Int)
-    );
+    assert_eq!(cpu.export_state().halt_exit_pending, Some(Z80HaltExit::Int));
 
     let encoded = cpu.export_state().encode().unwrap();
     let decoded = Z80MicroSequencerState::decode(&encoded).unwrap();
