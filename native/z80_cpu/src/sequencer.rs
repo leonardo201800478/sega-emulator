@@ -2989,9 +2989,17 @@ impl Z80MicroSequencer {
         // host instruction boundary. They must first be sampled on the actual
         // T4 edge of a completed HALT M1 cycle.
         if self.halted {
-            return match self.halt_exit_pending.take() {
-                Some(Z80HaltExit::Nmi) => self.begin_nmi_response(false),
-                Some(Z80HaltExit::Int) => self.begin_interrupt_acknowledge(),
+            return match self.halt_exit_pending {
+                Some(Z80HaltExit::Nmi) => {
+                    let step = self.begin_nmi_response(false)?;
+                    self.halt_exit_pending = None;
+                    Ok(step)
+                }
+                Some(Z80HaltExit::Int) => {
+                    let step = self.begin_interrupt_acknowledge()?;
+                    self.halt_exit_pending = None;
+                    Ok(step)
+                }
                 None => self.begin_opcode_fetch(),
             };
         }
