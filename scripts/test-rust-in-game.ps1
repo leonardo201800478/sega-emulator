@@ -1,45 +1,34 @@
-param(
-    [Parameter(Position = 0)]
-    [string]$RomPath
-)
+[CmdletBinding()]
+param([string]$RomPath)
 
 $ErrorActionPreference = "Stop"
-$repoRoot = Split-Path -Parent $PSScriptRoot
-Set-Location $repoRoot
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+. (Join-Path $PSScriptRoot "common.ps1")
+$python = Get-SegaPython -RepositoryRoot $repoRoot
+Initialize-SegaPythonRuntime -PythonExecutable $python
+Initialize-SegaMsvcEnvironment
 
-$python = Join-Path $repoRoot ".venv\Scripts\python.exe"
-if (-not (Test-Path $python)) {
-    throw "Ambiente virtual não encontrado em .venv. Crie-o e instale as dependências conforme README.md."
+$maturinCheck = & $python -c "import importlib.util; print('yes' if importlib.util.find_spec('maturin') else 'no')"
+if ($LASTEXITCODE -ne 0) { throw "Nao foi possivel verificar Maturin no ambiente Python." }
+if ($maturinCheck.Trim() -ne "yes") {
+    throw "Maturin nao esta instalado na .venv. Execute: .\.venv\Scripts\python.exe -m pip install maturin==1.16.0"
 }
 
-Write-Host "==> Instalando Maturin no ambiente virtual"
-& $python -m pip install maturin
-if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar Maturin." }
-
-Write-Host "==> Compilando a extensão PyO3 do runtime SG-1000 existente (Release)"
 Push-Location (Join-Path $repoRoot "native\z80_core")
 try {
-    & (Join-Path $repoRoot ".venv\Scripts\maturin.exe") develop --release --features python-extension
-    if ($LASTEXITCODE -ne 0) { throw "Falha ao compilar/instalar a extensão Rust." }
+    Invoke-SegaChecked -File $python -Arguments @(
+        "-m", "maturin", "develop", "--release", "--locked", "--features", "python-extension"
+    ) -Step "Build Release da extensao PyO3"
 }
-finally {
-    Pop-Location
-}
+finally { Pop-Location }
 
-Write-Host "==> Verificando importação da extensão nativa"
-& $python -c "from sega_z80_core import NativeSG1000Machine; print('Extensão PyO3 NativeSG1000Machine: import OK')"
-if ($LASTEXITCODE -ne 0) { throw "A extensão foi compilada, mas não pôde ser importada." }
+Invoke-SegaChecked -File $python -Arguments @(
+    "-c", "from sega_z80_core import NativeSG1000Machine, NativeSMSMachine; print('Extensao PyO3 SMS/SG-1000: import OK')"
+) -Step "Smoke test da extensao nativa"
 
-if ([string]::IsNullOrWhiteSpace($RomPath)) {
-    Write-Host "Build concluído. Abrindo frontend Qt; use Arquivo > Abrir ROM."
-    & $python -m sega_emulator
+$appArgs = @("-m", "sega_emulator")
+if (-not [string]::IsNullOrWhiteSpace($RomPath)) {
+    if (-not (Test-Path -LiteralPath $RomPath -PathType Leaf)) { throw "ROM nao encontrada: $RomPath" }
+    $appArgs += (Resolve-Path -LiteralPath $RomPath).Path
 }
-else {
-    $resolvedRom = (Resolve-Path $RomPath).Path
-    Write-Host "Abrindo ROM para teste manual: $resolvedRom"
-    & $python -m sega_emulator $resolvedRom
-}
-
-if ($LASTEXITCODE -ne 0) {
-    throw "O frontend terminou com código de saída $LASTEXITCODE."
-}
+Invoke-SegaChecked -File $python -Arguments $appArgs -Step "Abrir frontend Qt"
