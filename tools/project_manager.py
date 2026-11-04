@@ -181,7 +181,9 @@ def discover_workspaces() -> tuple[list[Workspace], list[str], list[str]]:
                 manifest=str(workspace_manifest.relative_to(ROOT)),
                 root=str(workspace_root.relative_to(ROOT)),
                 lockfile=str(lockfile.relative_to(ROOT)),
-                packages=sorted(package["name"] for package in data.get("packages", [])),
+                packages=sorted(
+                    package["name"] for package in data.get("packages", [])
+                ),
                 is_root=workspace_root == ROOT,
                 lockfile_exists=lockfile.is_file(),
             )
@@ -323,7 +325,9 @@ def validate(workspaces: list[Workspace], include_python: bool) -> list[Result]:
                 ROOT,
             )
         )
-        results.append(run(cargo_for(workspace, "test", "--workspace", "--locked"), ROOT))
+        results.append(
+            run(cargo_for(workspace, "test", "--workspace", "--locked"), ROOT)
+        )
 
     if include_python and (ROOT / "pyproject.toml").is_file():
         python = sys.executable
@@ -359,12 +363,18 @@ def main() -> int:
     """Parse the CLI and execute the selected read-only or explicit operation."""
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
-    subparsers.add_parser("audit", help="inventory tools, Cargo workspaces and lockfiles")
+    subparsers.add_parser(
+        "audit", help="inventory tools, Cargo workspaces and lockfiles"
+    )
 
-    locks = subparsers.add_parser("locks", help="check or explicitly refresh Cargo lockfiles")
+    locks = subparsers.add_parser(
+        "locks", help="check or explicitly refresh Cargo lockfiles"
+    )
     locks.add_argument("--refresh-offline", action="store_true")
 
-    validation = subparsers.add_parser("validate", help="run Rust and Python quality gates")
+    validation = subparsers.add_parser(
+        "validate", help="run Rust and Python quality gates"
+    )
     validation.add_argument("--rust-only", action="store_true")
     validation.add_argument("--json", dest="json_path", type=Path)
     args = parser.parse_args()
@@ -377,9 +387,7 @@ def main() -> int:
     workspaces = [Workspace(**workspace) for workspace in report["workspaces"]]
     if args.command == "locks":
         results += (
-            lock_refresh(workspaces)
-            if args.refresh_offline
-            else lock_check(workspaces)
+            lock_refresh(workspaces) if args.refresh_offline else lock_check(workspaces)
         )
     else:
         results += validate(workspaces, not args.rust_only)
