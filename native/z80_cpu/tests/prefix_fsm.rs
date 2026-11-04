@@ -223,8 +223,23 @@ fn repeated_prefix_stream_has_no_artificial_length_limit() {
     assert_eq!(state.mcycle_index, 257);
     assert_eq!(state.instruction_tstates, 257 * 4);
     assert_eq!(state.registers.pc, 257);
-    assert!(matches!(
-        cpu.complete_bus_cycle(fetch.id, Some(0xC6)),
-        Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0xC6, .. })
-    ));
+    let operand = match cpu.complete_bus_cycle(fetch.id, Some(0xC6)).unwrap() {
+        Z80MicroStep::BusRequest(request) => request,
+        other => panic!("expected BASE immediate operand read, got {other:?}"),
+    };
+    assert_eq!(operand.operation, Z80BusOperation::MemoryRead);
+    assert_eq!(operand.address, 257);
+    assert_eq!(operand.base_tstates, 3);
+    assert_eq!(cpu.registers.pc, 258);
+    assert_eq!(cpu.refresh & 0x7F, (258_u32 & 0x7F) as u8);
+    assert_eq!(
+        cpu.complete_bus_cycle(operand.id, Some(0x01)).unwrap(),
+        Z80MicroStep::InstructionRetired {
+            opcode: 0xC6,
+            tstates: 257 * 4 + 4 + 3,
+        }
+    );
+    assert_eq!(cpu.registers.a, 0x01);
+    assert_eq!(cpu.registers.pc, 259);
+    assert_eq!(cpu.refresh & 0x7F, (258_u32 & 0x7F) as u8);
 }
