@@ -166,7 +166,7 @@ Os níveis abaixo são cumulativos no escopo declarado. O estado deve ser atribu
 - [x] Windows x64 D3D12/video compile e video-runtime tests: PASS.
 - [x] Windows WASAPI/XAudio2 compile e audio-output tests: PASS.
 - [x] CI aplicável: 3/3 jobs PASS; Scheduler deterministic stress SKIPPED corretamente por não haver alteração no Scheduler.
-- Estado: IMPLEMENTED / QUICK_PASS / SHORT_PASS para cobertura funcional estrutural e microsequenciada no candidato. A aprovação de integração da PR aguarda o gate Windows de áudio e revisão.
+- Estado: IMPLEMENTED / QUICK_PASS / SHORT_PASS para cobertura funcional estrutural e microsequenciada no candidato. CI da PR #485 no HEAD 79bb17a: 3/3 jobs PASS; revisão final concluída antes da integração.
 
 - Limite de fonte: ZiLOG UM008011-0816 marca S e P/V de BIT indexado como desconhecidos; o candidato mantém o modelo já existente no executor atômico. Isso não comprova esses bits contra silício.
 - Não promover LONG_PASS, DIFFERENTIAL_PASS, ZEXDOC/ZEXALL ou TEMPORAL_PASS sem evidência independente.
