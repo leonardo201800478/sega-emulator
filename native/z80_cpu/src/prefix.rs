@@ -28,14 +28,14 @@ pub enum Z80IndexOpcodeClass {
     UsesIndex,
     /// The instruction ignores DD/FD and retains its ordinary BASE meaning.
     Ignored,
-    /// DD/FD-CB enters the separate displacement/subopcode path implemented in E7.
+    /// DD/FD-CB enters the separate displacement/subopcode path implemented in E5.
     IndexedCb,
 }
 
 /// Classify the effect of DD/FD on the following BASE opcode.
 ///
-/// This classifies prefix semantics only; the sequencer does not yet execute
-/// indexed or ignored-prefix forms. Those handlers are introduced in E3-E7.
+/// This classifies prefix semantics only; indexed handlers are implemented in E3-E5.
+/// General execution of ignored-prefix fallbacks is implemented in E6.
 pub fn classify_index_opcode(opcode: u8) -> Z80IndexOpcodeClass {
     if opcode == 0xCB {
         return Z80IndexOpcodeClass::IndexedCb;

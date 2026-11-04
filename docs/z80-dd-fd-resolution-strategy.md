@@ -5,12 +5,12 @@
 **Baseline inicial E0:** `e4604f3152c09e8d16c37f94f94a4b344db33b62`  
 **Baseline após E1 / PR #467:** `aa4a4fa7661c28d3b2e21ac6d6eb4379fd297f65`  
 **Baseline após E2 / PR #468:** `abd154332b1dabfb68874f2b80f306da7e060552`  
-**Baseline atual da main após PR #476:** `a0e58fd05c7f62c42f82b86d15d8532e06a9c59b`  
+**Baseline atual da main após PR #485:** `f4130104fa971289507c0b15ab2d8eabd1dd5b00`  
 **HEAD E4C validado:** `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 PASS.  
 **PR de referência histórica:** [#447](https://github.com/leonardo201800478/sega-emulator/pull/447) — manter aberta, sem merge  
 **PR integrada E4A:** [#471](https://github.com/leonardo201800478/sega-emulator/pull/471)  
 **PR integrada E4C:** [#475](https://github.com/leonardo201800478/sega-emulator/pull/475)  
-**PR candidata E5:** [#485](https://github.com/leonardo201800478/sega-emulator/pull/485), código SHA `2f1dff62ce23c8d6d321b26d6ffc1b4bd198cb5f`; CI run #4238 3/3 PASS.  
+**PR E5 integrada:** [#485](https://github.com/leonardo201800478/sega-emulator/pull/485), HEAD `2cc6105a0c8c3589994870a6a67ceffb1e8c02f8`; CI #4245 SUCCESS (Rust, Python, Windows PASS; Scheduler SKIPPED); merge SHA `f4130104fa971289507c0b15ab2d8eabd1dd5b00`.  
 **Escopo:** microsequenciador Z80 compartilhado; não confundir conclusão do núcleo com integração temporal completa ao SMS.
 
 ---
@@ -186,7 +186,7 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 
 **Gate E2:** PASS para FSM, seleção de prefixo, classificação e snapshot. CI completo do SHA candidato: [run 41721337030](https://github.com/leonardo201800478/sega-emulator/actions/runs/41721337030). Isso não declara FUNCTIONAL_PASS das instruções DD/FD nem TEMPORAL_PASS.
 
-**Limites mantidos após E2:** famílias indexadas restantes, prefixos ignorados, DDCB/FDCB, traces por T-state e integração temporal permanecem nas etapas E4-E9. E4A (LD), E4B (ALU indexada) e E4C (INC/DEC indexado) estão integradas na main; E4C foi publicada pela PR #475. E5 está implementada e QUICK_PASS/SHORT_PASS na PR #485; E6-E9 continuam pendentes.
+**Limites mantidos após E2:** famílias indexadas remanescentes, validação diferencial, traces por T-state e integração temporal. E4A/E4B/E4C, E5 e E6 estão implementadas nos escopos registrados; E6 cobre fallback BASE/ED sem refetch e preservação de M-cycles/snapshots.
 
 ### E3 — Operações 16-bit e substituição HL→IX/IY
 
@@ -252,7 +252,7 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 
 **Gate E4:** E4A + E4B + E4C implementadas e aprovadas nos critérios dirigidos de cada fatia. A validação independente e temporal permanece como trabalho posterior; não confundir gate de implementação E4 com conformidade integral do Z80.
 
-### E5 — Prefixos DDCB/FDCB — candidato implementado na PR #485
+### E5 — Prefixos DDCB/FDCB — integrada pela PR #485
 
 - [x] Fases serializáveis para displacement, opcode final non-M1, leitura efetiva e write-back opcional no microsequenciador compartilhado.
 - [x] DD/FD e CB são M1; displacement é MemoryRead/3T; opcode final é MemoryRead non-M1/5T; leitura efetiva é MemoryRead/4T; escrita RMW é MemoryWrite/3T.
@@ -260,24 +260,43 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 - [x] Campo z copia o resultado para B/C/D/E/H/L/A nos grupos x=0,2,3; H/L são os registradores convencionais.
 - [x] R conta apenas fetches M1; WZ recebe o endereço efetivo; WAIT e snapshot/restore são suportados nas transações pendentes.
 - [x] Schema 28 e suíte `indexed_cb_e5.rs` cobrindo 256 subopcodes por índice, IX/IY, prefixos repetidos/alternados, wrap, BIT sem escrita, destinos e WAIT.
-- [x] QUICK_PASS / SHORT_PASS no candidato: Formatting, Clippy e `cargo test --workspace --locked` passaram no código SHA `2f1dff62ce23c8d6d321b26d6ffc1b4bd198cb5f`; a suíte E5 reportou 8/8 testes PASS e a suíte unitária Z80 216/216.
+- [x] QUICK_PASS / SHORT_PASS no escopo implementado; `cargo fmt`, Clippy e `cargo test --workspace --locked` PASS no CI #4245, HEAD `2cc6105a0c8c3589994870a6a67ceffb1e8c02f8`; suíte E5 8/8 e suíte unitária Z80 216/216.
 - [x] SMS/SG-1000 targeted tests PASS; Python pytest/Ruff command steps PASS; Windows D3D12/video compile e testes PASS.
-- [x] Windows WASAPI/XAudio2 compile e audio-output tests PASS; CI aplicável 3/3 jobs PASS no run #4238. Scheduler stress SKIPPED corretamente por não haver alteração no Scheduler.
+- [x] Windows WASAPI/XAudio2 compile e audio-output tests PASS; CI #4245 concluído com Rust, Python e Windows PASS; Scheduler stress SKIPPED corretamente por não haver alteração no Scheduler.
 - Limite ZiLOG: UM008011-0816 classifica S e P/V de BIT indexado como desconhecidos. O modelo do executor atômico é mantido, mas esses bits não estão comprovados contra hardware independente.
 
-**Gate E5:** 256 subopcodes por índice, ordem de barramento e M/T-cycles conferidos, BIT sem write-back e todos os safe points serializáveis. A implementação passou CI 3/3 no HEAD da PR #485, SHA 79bb17a; revisão de escopo concluída.
+**Gate E5:** 256 subopcodes por índice, ordem de barramento e M/T-cycles conferidos, BIT sem write-back e safe points serializáveis. PR #485 integrada; CI #4245 SUCCESS no HEAD `2cc6105a0c8c3589994870a6a67ceffb1e8c02f8`; merge SHA `f4130104fa971289507c0b15ab2d8eabd1dd5b00`.
 
-### E6 — Prefixos ignorados e combinações DD/FD
+### E6 — Resolução geral de prefixos DD/FD/ED/CB
 
-Validar explicitamente:
-- DD/FD seguido de instrução BASE que não usa HL/IX/IY.
-- DD/FD repetidos e alternados, incluindo last-prefix-wins e custo de cada M1.
-- DD/FD seguido de ED, cancelando a seleção IX/IY.
-- DD/FD seguido de CB, distinguindo DDCB/FDCB.
-- Prefixos ignorados em instruções com H/L/(HL), sem substituir registradores indevidamente.
-- Bytes consumidos, PC, R, M-cycles, T-states, flags, WZ e ausência de fetch duplicado.
+**E6.1 — Fallback BASE para opcodes já suportados: IMPLEMENTED.**
+- Encaminhar `Ignored` ao dispatch BASE sem refetch; preservar o custo do M1 DD/FD já consumido.
+- Preservar PC, R, M1, WAIT e snapshots dos fetches pendentes.
+- Demonstrar last-prefix-wins em cadeias repetidas/alternadas e ausência de substituição de IX/IY/H/L nas instruções BASE ignoradas.
+- Reutilizar o decoder ED para ED após DD/FD; preservar a rota DDCB/FDCB E5.
+- Não adicionar handlers BASE ausentes: `UnsupportedOpcode` continua explícito para lacunas do decoder BASE.
+- Testar instruções BASE/ED já suportadas em fases de fetch, operandos imediatos, leituras/escritas, ciclos internos, WAIT e snapshots.
 
-**Gate E6:** cada opcode classificado como UsesIndex, Ignored ou IndexedCb tem caminho e teste explícitos; nenhum fallback silencioso.
+**E6.2 — Fallback com operandos e fases suspensas: IMPLEMENTED.**
+- Estender a resolução para as instruções BASE/ED já suportadas que possuem leituras, escritas e ciclos internos.
+- Ajustar invariantes de snapshot e contagem M-cycle para prefixos ignorados, sem alterar semântica BASE.
+
+**E6.3 — Fechamento combinatório: IMPLEMENTED.**
+- Cobrir DD, FD, DD DD, FD FD, DD FD, FD DD, DD/FD+ED, DD/FD+CB e cadeias longas.
+- Verificar bytes consumidos, PC, R, M1/non-M1, flags, WZ, M-cycles, T-states e ausência de fetch duplicado.
+- Não impor limite artificial de prefixos repetidos.
+
+**Gate E6: PASS no escopo declarado.** OpCodes `UsesIndex`, `Ignored` e `IndexedCb` seguem caminhos explícitos; fallback BASE não relê opcode; cadeias repetidas/alternadas e snapshots preservam prefixos já consumidos.
+
+**Cobertura E6 validada:**
+- DD/FD seguido de instrução BASE que não usa HL/IX/IY, incluindo EX DE,HL.
+- DD/FD repetidos e alternados, last-prefix-wins e cadeia de 257 prefixos.
+- DD/FD seguido de ED, cancelando seleção IX/IY e preservando M-cycles em fases ED retomáveis.
+- DD/FD seguido de CB, mantendo a rota DDCB/FDCB implementada na E5.
+- BASE imediato, ALU imediato, branch relativo, memória read/write e ED absolute transfer com snapshots/WAIT.
+- PC, R, bytes consumidos, M1/non-M1, M-cycles, T-states e ausência de fetch duplicado.
+
+**Gate E6: PASS** no escopo declarado; instruções BASE ausentes permanecem `UnsupportedOpcode` e são assunto da auditoria E7.
 
 ### E7 — Fechamento semântico do Z80
 
@@ -329,6 +348,6 @@ Além disso, Scheduler deterministic stress e Windows x64 D3D12/WASAPI/XAudio2 q
 
 ## 8. Próxima ação
 
-Prosseguir na PR #485: revisão final do diff e validação documental; os gates Rust, Python, Windows D3D12 e WASAPI/XAudio2 passaram no run #4238 para o código SHA 2f1dff62. Não fazer merge sem autorização explícita; LONG_PASS, DIFFERENTIAL_PASS e TEMPORAL_PASS permanecem pendentes.
+E6 está implementada na PR #486, HEAD `b66b97cb6202b270e857f6cfb55be85a0ea62a6b`; CI #41757983537 aprovado para Rust, Python e Windows x64. Após merge e confirmação da nova main, a próxima etapa é E7 — fechamento semântico integral do Z80.
 
-**Estado atual DD/FD:** E2 FSM/snapshot SHORT_PASS; E3A1/E3A2/E4A/E4B/E4C integradas na main `a0e58fd05c7f62c42f82b86d15d8532e06a9c59b`. E4C validada no HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`, CI `41747460761` 4/4 PASS. E5 implementada na PR #485 (código SHA `2f1dff62ce23c8d6d321b26d6ffc1b4bd198cb5f`); CI run #4238 3/3 PASS. E6 fallback, E7 fechamento semântico, E8 formal e E9 integração temporal permanecem pendentes. Não há LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS global.
+**Estado atual DD/FD:** E2 FSM/snapshot, E3A1/E3A2/E4A/E4B/E4C, E5 e E6 IMPLEMENTED / QUICK_PASS / SHORT_PASS nos escopos validados. E6 PR #486 HEAD `b66b97cb6202b270e857f6cfb55be85a0ea62a6b`; CI #41757983537 Rust/Python/Windows PASS, Scheduler stress SKIPPED. Próxima etapa: E7 fechamento semântico; E8 formal/diferencial e E9 integração temporal permanecem pendentes. Não há LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS global.
