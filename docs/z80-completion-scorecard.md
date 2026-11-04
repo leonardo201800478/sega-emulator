@@ -4,7 +4,7 @@
 **Baseline de referência:** `main` — `f4130104fa971289507c0b15ab2d8eabd1dd5b00` (E5 integrada pela PR #485).  
 **Evidência E5:** PR #485 integrada; CI #4238 reportado como 3/3 jobs PASS no HEAD candidato descrito na PR; commit atual da main: `f4130104fa971289507c0b15ab2d8eabd1dd5b00`.  
 **Schema do microsequenciador na baseline main:** 28.  
-**Próxima fatia:** PR #486 aberta para E6.1 (fallback de prefixos DD/FD ignorados); não integrada nesta baseline.  
+**Próxima fatia:** PR #486 aberta para E6 (resolução geral de prefixos DD/FD/ED/CB); CI #41757983537: Rust/Python/Windows x64 PASS, Scheduler stress SKIPPED; ainda não integrada nesta baseline.  
 **Status deste documento:** referência de planejamento e critérios de aceite. Não substitui a matriz semântica por opcode nem os relatórios de execução dos testes.
 
 ---
@@ -47,7 +47,7 @@ Os percentuais abaixo são **estimativas de engenharia**, usadas para dimensiona
 
 ## 3. Baseline técnica e estado conhecido
 
-A baseline consultada em `main` é `f4130104fa971289507c0b15ab2d8eabd1dd5b00`, após a integração da E5 pela PR #485. A E4C e a auditoria `docs/audits/z80-indexed-incdec-e4c-2026-11-03.md` permanecem integradas; E5 acrescenta DDCB/FDCB microsequenciados e eleva o schema para 28. A PR #486 está aberta para E6.1.
+A baseline consultada em `main` é `f4130104fa971289507c0b15ab2d8eabd1dd5b00`, após a integração da E5 pela PR #485. A E4C e a auditoria `docs/audits/z80-indexed-incdec-e4c-2026-11-03.md` permanecem integradas; E5 acrescenta DDCB/FDCB microsequenciados e eleva o schema para 28. A PR #486 está aberta para E6.
 
 | Fase | Escopo | Estado na fotografia |
 |---|---|---|
@@ -58,7 +58,7 @@ A baseline consultada em `main` é `f4130104fa971289507c0b15ab2d8eabd1dd5b00`, a
 | E4B | ADD/ADC/SUB/SBC/AND/XOR/OR/CP (IX/IY+d) | Integrada na main pela PR #472; IMPLEMENTED / QUICK_PASS / SHORT_PASS; CI 4/4 PASS |
 | E4C | INC/DEC (IX/IY+d) | Integrada na main pela PR #475; IMPLEMENTED / QUICK_PASS / SHORT_PASS; 5 testes dirigidos; CI 4/4 PASS |
 | E5 | DDCB/FDCB completo | Integrada na main pela PR #485; IMPLEMENTED / QUICK_PASS / SHORT_PASS no escopo testado; CI aplicável 3/3 PASS |
-| E6 | Fallback geral e resolução de prefixos DD/FD/ED/CB | E6.1 em PR #486 aberta; E6 global ainda pendente/incompleta |
+| E6 | Fallback geral e resolução de prefixos DD/FD/ED/CB | E6 em PR #486 aberta; E6 global ainda pendente/incompleta |
 | E7 | Fechamento semântico global BASE/CB/ED/DD/FD/DDCB/FDCB | Pendente |
 | E8 | Validação formal e diferencial (ZEXDOC/ZEXALL e corpora independentes) | Pendente |
 | E9 | Integração temporal sistêmica com bus, WAIT, Scheduler, SMS e SG-1000 | Pendente |
