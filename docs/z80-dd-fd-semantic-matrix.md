@@ -148,9 +148,9 @@ O schema 26 foi introduzido por E2; E4A elevou para 27 para serializar displacem
 | LD indexado / displacement (E4A) | IMPLEMENTED no executor atômico | SHORT_PASS no microsequenciador; testes dirigidos de IX/IY, H/L, WAIT, PC/address wrap e prefixos | NOT_RUN nesta auditoria | IMPLEMENTED_MICROSEQUENCED; schema 27 e snapshots por fases cobertas | TEMPORAL_UNVERIFIED |
 | ALU indexada (E4B) | IMPLEMENTED no executor atômico | SHORT_PASS no microsequenciador; 16 vetores x IX/IY, flags, WAIT, snapshot e prefixos | NOT_RUN nesta auditoria | IMPLEMENTED_MICROSEQUENCED; reutiliza MemoryReadAlu e schema 27 | TEMPORAL_UNVERIFIED |
 | INC/DEC (IX/IY+d) (E4C) | IMPLEMENTED no executor atômico | QUICK_PASS / SHORT_PASS no microsequenciador; 5 testes dirigidos, flags/C, IX/IY, WAIT e prefixos | NOT_RUN nesta auditoria | IMPLEMENTED_MICROSEQUENCED; schema 27 e snapshots nos safe points cobertos | TEMPORAL_UNVERIFIED |
-| DDCB/FDCB BIT | IMPLEMENTED no executor atômico | FUNCTIONAL_UNVERIFIED; teste de classificação | NOT_RUN nesta auditoria | NOT_IMPLEMENTED no sequenciador; próximo E5 | TEMPORAL_UNVERIFIED |
-| DDCB/FDCB RMW | IMPLEMENTED no executor atômico | DIFFERENTIAL_PARTIAL para rotate/shift memória-only; RES/SET com cobertura menor | NOT_RUN nesta auditoria | NOT_IMPLEMENTED no sequenciador; próximo E5 | TEMPORAL_UNVERIFIED |
-| Prefixos repetidos/alternados | IMPLEMENTED | Testes dirigidos de seleção do último prefixo | NOT_RUN nesta auditoria | Latch e contagem M1 preservados; execução E3A1/E3A2 coberta | TEMPORAL_UNVERIFIED |
+| DDCB/FDCB BIT | IMPLEMENTED no executor atômico | QUICK_PASS / SHORT_PASS no microsequenciador; 64 BIT opcodes por índice e destinos z cobertos; BIT read-only | NOT_RUN nesta auditoria | IMPLEMENTED_MICROSEQUENCED; schema 28 e snapshots nos safe points | TEMPORAL_UNVERIFIED |
+| DDCB/FDCB RMW | IMPLEMENTED no executor atômico | QUICK_PASS / SHORT_PASS no microsequenciador; rotações/shifts, RES/SET, cópia z e flags do modelo cobertos | NOT_RUN nesta auditoria | IMPLEMENTED_MICROSEQUENCED; schema 28 e snapshots em displacement/opcode/read/write | TEMPORAL_UNVERIFIED |
+| Prefixos repetidos/alternados | IMPLEMENTED | QUICK_PASS / SHORT_PASS; seleção do último DD/FD e contagem M1 verificados também para DDCB/FDCB | NOT_RUN nesta auditoria | Latch, fases E5 e snapshots cobertos; schema 28 | TEMPORAL_UNVERIFIED |
 | Prefixo ignorado / ED após DD/FD | IMPLEMENTED no executor atômico | Testes dirigidos; ampliar para todos os grupos | NOT_RUN nesta auditoria | Fallback geral pendente; próximo E6 | TEMPORAL_UNVERIFIED |
 
 ## 8. Referências técnicas primárias
@@ -185,10 +185,10 @@ Links:
 - **E4A — LD indexado/displacement:** IMPLEMENTED e SHORT_PASS no candidato PR #471; 19T/5M, WAIT e snapshots nas fases cobertas.
 - **E4B — ALU A,(IX/IY+d):** IMPLEMENTED / QUICK_PASS / SHORT_PASS no escopo registrado; diferencial externo NOT_RUN.
 - **E4C — INC/DEC (IX/IY+d):** IMPLEMENTED / QUICK_PASS / SHORT_PASS pela PR #475; CI 41747460761 4/4 PASS; 5 testes dirigidos; LONG_PASS/diferencial/temporal NOT_RUN.
-- **E5 — DDCB/FDCB:** separar fetches M1, displacement, opcode final, leitura e RMW.
+- **E5 — DDCB/FDCB:** IMPLEMENTED / QUICK_PASS / SHORT_PASS na PR #484; 256 subopcodes por IX/IY, BIT read-only, RMW, M1/non-M1, WAIT e snapshots. Windows audio-output test ainda pendente; diferencial externo e temporal não executados.
 - **E6 — prefixos ignorados:** implementar fallback BASE sem fetch duplicado e todas as combinações DD/FD/ED/CB.
 - **E7 — fechamento semântico:** auditar BASE/CB/ED/DD/FD/DDCB/FDCB, flags, interrupções, HALT e snapshots.
 - **E8 — formal/diferencial:** ZEXDOC/ZEXALL e oráculos independentes.
 - **E9 — temporal/integração:** M/T-states, WAIT, interrupções, snapshots, Scheduler e SMS/SG-1000.
 
-**Estado global:** E3A1/E3A2, E4A (LD indexado), E4B (ALU A,(IX/IY+d)) e E4C (INC/DEC indexado) estão IMPLEMENTED no microsequenciador e QUICK_PASS/SHORT_PASS nos gates executados. DDCB/FDCB e fallback geral permanecem pendentes. Diferencial externo, ZEXDOC/ZEXALL e traces independentes por T-state não foram executados; não declarar LONG_PASS ou TEMPORAL_PASS. A integração temporal sistêmica do Z80 à máquina SMS permanece INTEGRATION_PENDING.
+**Estado global:** E3A1/E3A2, E4A, E4B, E4C e E5 DDCB/FDCB estão IMPLEMENTED no microsequenciador e QUICK_PASS/SHORT_PASS nos gates funcionais executados. E5 aguarda o fechamento do gate Windows WASAPI/XAudio2 na PR #484. O fallback geral E6 permanece pendente. Diferencial externo completo, ZEXDOC/ZEXALL e traces independentes por T-state não foram executados; não declarar LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS. A integração temporal sistêmica do Z80 à máquina SMS permanece INTEGRATION_PENDING.
