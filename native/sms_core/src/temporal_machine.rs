@@ -768,8 +768,9 @@ impl SmsTemporalMachine {
         &mut self.cpu
     }
 
-    /// Latch an NMI input edge for acceptance at the next CPU instruction boundary.
-    /// This signal update does not advance machine time.
+    /// Latch an NMI input edge. Outside HALT it is accepted at the next
+    /// instruction boundary; during HALT it is sampled at the next completed
+    /// M1 T4. This signal update does not advance machine time.
     pub fn request_nmi(&mut self) {
         self.cpu.request_nmi();
     }
@@ -781,7 +782,9 @@ impl SmsTemporalMachine {
     }
 
     /// Drive the level-sensitive INT input and its acknowledge vector.
-    /// None deasserts INT. Signal changes do not advance machine time.
+    /// Outside HALT it is accepted at an instruction boundary; during HALT
+    /// the line is sampled at each completed M1 T4. None deasserts INT.
+    /// Signal changes do not advance machine time.
     pub fn set_int_line(&mut self, vector: Option<u8>) {
         self.cpu.set_int_line(vector);
         if let Some(vector) = vector {
