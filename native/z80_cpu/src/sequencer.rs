@@ -2162,7 +2162,7 @@ impl Z80MicroSequencer {
                         && state.tstate_index == 0
                 }
                 _ => false,
-            }
+            },
             Z80MicroSequencerPhase::MemoryReadIncDec { .. } => match state.prefix_state {
                 Z80PrefixState::Index(_) => {
                     prefix_m1_count(state.prefix_state, state.mcycle_index, 3).is_some()
