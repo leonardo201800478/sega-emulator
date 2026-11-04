@@ -228,6 +228,18 @@ Aceite: nenhuma instrução documentada elegível sem classificação e critéri
 - **Limite:** saída de HALT por NMI/INT, acknowledge, reset especial e validação independente ainda não estão implementados neste incremento. Não atribuir SHORT_PASS integral a HALT.
 - Auditoria de código E7 corrigida para a baseline atual `5768705658522deb46a0fb0556b51923ae8166b8`: [auditoria E7 — semântica ED, microsequenciador, snapshots e interrupções](audits/z80-e7-code-validation-2026-11-04.md). A revisão encontrou 26 testes ED positivos no microsequenciador, aprovados no CI pós-merge #41775300143 (216 testes unitários totais no crate Z80). Esses testes incluem comparação com o executor atômico interno e validações de requests/WAIT/snapshots; não equivalem a oráculo externo nem a trace independente. E7 permanece INTEGRATION_PENDING porque E7.2 NMI/INT e a validação temporal independente seguem pendentes.
 
+#### E7.2C — Dispatch retomável IM0/IM1/IM2 — PR #498 (ainda não integrada)
+
+- IM0 reutiliza o decoder microsequenciado existente para o byte fornecido no acknowledge, sem incrementar PC/R novamente; bytes seguintes de prefixo e operandos vêm da memória. Cobertos NOP, JP nn e DD 21 nn.
+- IM1 empilha PC high/low em requests distintos, define PC=0038h e retorna 13 T-states. WZ permanece inalterado, sem inferir semântica MEMPTR não documentada.
+- IM2 empilha PC, lê low/high da tabela em `(I << 8) | vector`, define PC/WZ para o destino e retorna 19 T-states. O vetor não é mascarado; dispositivo conforme deve fornecer vetor par.
+- Modo IM é capturado na fase de acknowledge concluído. Fases de dispatch, stack push e leituras IM2 são retomáveis; snapshot schema 31, tags 65–69.
+- `SmsTemporalMachine::resume_instruction()` retoma o dispatch após acknowledge; testes SMS exercitam IM0 RST, IM1 e IM2 pelo Scheduler.
+- Testes Z80: NOP/JP/prefixo IM0; IM1 13T, ordem high/low, WAITs e snapshots; IM2 19T, leitura low/high, snapshots e preservação do vetor bruto.
+- Evidência detalhada: [auditoria E7.2C — IM0/IM1/IM2](audits/z80-e7-2c-interrupt-modes-2026-11-04.md).
+- CI [#41792143207](https://github.com/leonardo201800478/sega-emulator/actions/runs/41792143207), SHA de código `9cb576e957fdb37529d3c8dfb5d54fb22c2c907f`: Rust fmt/Clippy/SMS/SG-1000/workspace PASS; Python pytest/Ruff PASS; Windows x64 D3D12/video e WASAPI/XAudio2/audio compile/tests PASS. Scheduler deterministic stress SKIPPED.
+- Estado E7.2C: IMPLEMENTED / QUICK_PASS / SHORT_PASS para o escopo e cenários testados. E7 completo continua INTEGRATION_PENDING; não declarar LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS. PR #498 ainda aberta e não integrada.
+
 ### E8 — Validação formal e diferencial
 
 - Inspecionar os runners e manifests existentes antes de criar infraestrutura duplicada.
