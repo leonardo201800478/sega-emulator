@@ -22,7 +22,7 @@ pub mod prefix;
 pub mod sequencer;
 pub mod snapshot;
 
-pub const Z80_MICRO_SEQUENCER_STATE_VERSION: u16 = 31;
+pub const Z80_MICRO_SEQUENCER_STATE_VERSION: u16 = 32;
 
 pub use architectural_state::{Z80ArchitecturalState, Z80ArchitecturalStateError};
 pub use cpu::{CpuError, Z80, Z80AlternateRegisters, Z80Registers};
@@ -33,7 +33,7 @@ pub use micro_ops::{
 };
 pub use prefix::{Z80IndexOpcodeClass, Z80IndexRegister, Z80PrefixState, classify_index_opcode};
 pub use sequencer::{
-    Z80InterruptKind, Z80MicroSequencer, Z80MicroSequencerError, Z80MicroSequencerPhase,
+    Z80HaltExit, Z80InterruptKind, Z80MicroSequencer, Z80MicroSequencerError, Z80MicroSequencerPhase,
     Z80MicroSequencerState, Z80MicroStep,
 };
 pub use snapshot::Z80MicroSequencerStateCodecError;
