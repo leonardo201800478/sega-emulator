@@ -3288,6 +3288,54 @@ impl Z80MicroSequencer {
                     }
                     _ => self.unsupported(opcode),
                 }
+    }
+
+    fn complete_bus_cycle_inner(
+        &mut self,
+        request_id: u64,
+        data: Option<u8>,
+    ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
+        if self.phase == Z80MicroSequencerPhase::Ready {
+            return Err(Z80MicroSequencerError::NoInstructionActive);
+        }
+        let request = self
+            .handshake
+            .pending_request()
+            .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+        let waits = self.handshake.wait_tstates().unwrap_or(0);
+        let automatic_waits = if request.operation == Z80BusOperation::InterruptAcknowledge {
+            u32::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
+        } else {
+            0
+        };
+        let next_instruction_tstates = self
+            .instruction_tstates
+            .checked_add(u32::from(request.base_tstates))
+            .and_then(|total| total.checked_add(waits))
+            .and_then(|total| total.checked_add(automatic_waits))
+            .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+        let response = self.handshake.complete(request_id, data)?;
+        self.instruction_tstates = next_instruction_tstates;
+
+        match self.phase {
+            Z80MicroSequencerPhase::InterruptAcknowledge => {
+                let vector = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.refresh = (self.refresh & 0x80) | (self.refresh.wrapping_add(1) & 0x7F);
+                self.mcycle_index = 1;
+                self.tstate_index = 0;
+                self.phase = Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector };
+                Ok(Z80MicroStep::InterruptAcknowledge {
+                    vector,
+                    tstates: self.instruction_tstates,
+                })
+            }
+            Z80MicroSequencerPhase::OpcodeFetch => {
+                let opcode = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.decode_opcode_fetch(opcode, waits, true, true)
             }
             Z80MicroSequencerPhase::ImmediateReadRegister { destination } => {
                 let value = response
@@ -3872,9 +3920,549 @@ impl Z80MicroSequencer {
                     self.opcode
                         .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
                 )
+            }
+            Z80MicroSequencerPhase::NmiResponse => {
+                // NMI uses the M1/MREQ/RD response cycle at the interrupted PC.
+                // The sampled byte is discarded; PC is not incremented.
+                let _ignored_data = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.refresh = (self.refresh & 0x80) | (self.refresh.wrapping_add(1) & 0x7F);
+                // The extra internal T-state is the fifth T-state of the
+                // NMI response M1; the first stack write begins M-cycle 1.
+                self.tstate_index = 4;
+                self.phase = Z80MicroSequencerPhase::NmiStackPushInternal {
+                    return_address: self.registers.pc,
+                };
+                Ok(Z80MicroStep::InternalCycle { tstates: 1 })
+            }
+            Z80MicroSequencerPhase::CbMemoryRead { address } => {
+                let value = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                let opcode = self
+                    .opcode
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                let result = self.execute_cb_value(opcode, value, (self.wz >> 8) as u8);
+                let wait_offset = u16::try_from(waits)
+                    .ok()
+                    .and_then(|waits| 3_u16.checked_add(waits))
+                    .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                self.tstate_index = wait_offset;
+                self.phase = Z80MicroSequencerPhase::CbMemoryInternal { address, result };
+                Ok(Z80MicroStep::InternalCycle { tstates: 1 })
+            }
+            Z80MicroSequencerPhase::CbMemoryInternal { .. } => {
+                Err(Z80MicroSequencerError::UnexpectedCompletion)
+            }
+            Z80MicroSequencerPhase::CbMemoryWrite { .. } => {
+                let opcode = self
+                    .opcode
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.retire(opcode)
+            }
+            Z80MicroSequencerPhase::EdRegisterInternal { opcode } => {
+                self.execute_ed_register_internal(opcode);
+                self.retire(opcode)
+            }
+            Z80MicroSequencerPhase::EdPortRead { register, address } => {
+                let value = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                if register != 6 {
+                    self.write_register(register, value);
+                }
+                let mut flags = (self.registers.f & FLAG_C) | (value & (FLAG_S | FLAG_XY));
+                if value == 0 {
+                    flags |= FLAG_Z;
+                }
+                if value.count_ones().is_multiple_of(2) {
+                    flags |= FLAG_PV;
+                }
+                self.set_flags(flags);
+                self.wz = address.wrapping_add(1);
+                self.retire(
+                    self.opcode
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
+                )
+            }
+            Z80MicroSequencerPhase::EdPortWrite { address, .. } => {
+                self.wz = address.wrapping_add(1);
+                self.retire(
+                    self.opcode
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
+                )
+            }
+            Z80MicroSequencerPhase::Ed16ArithmeticInternal { .. } => {
+                Err(Z80MicroSequencerError::UnexpectedCompletion)
+            }
+            Z80MicroSequencerPhase::EdBlockIoInputPortRead {
+                opcode,
+                port_address,
+                memory_address,
+            } => {
+                let value = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.issue_block_io_memory_write(opcode, port_address, memory_address, value)
+            }
+            Z80MicroSequencerPhase::EdBlockIoInputMemoryWrite {
+                opcode,
+                port_address,
+                value,
+                ..
+            } => {
+                let direction = if matches!(opcode, 0xAA | 0xBA) {
+                    -1_i16
+                } else {
+                    1_i16
+                };
+                self.registers
+                    .set_hl(self.registers.hl().wrapping_add_signed(direction));
+                self.finish_block_io_iteration(opcode, port_address, value)
+            }
+            Z80MicroSequencerPhase::EdBlockIoOutputMemoryRead {
+                opcode,
+                memory_address,
+            } => {
+                let value = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                let direction = if matches!(opcode, 0xAB | 0xBB) {
+                    -1_i16
+                } else {
+                    1_i16
+                };
+                self.registers
+                    .set_hl(self.registers.hl().wrapping_add_signed(direction));
+                self.issue_block_io_port_write(opcode, memory_address, value)
+            }
+            Z80MicroSequencerPhase::EdBlockIoOutputPortWrite {
+                opcode,
+                port_address,
+                value,
+                ..
+            } => self.finish_block_io_iteration(opcode, port_address, value),
+            Z80MicroSequencerPhase::EdBlockIoInitialInternal { .. }
+            | Z80MicroSequencerPhase::EdBlockIoRepeatInternal { .. } => {
+                Err(Z80MicroSequencerError::UnexpectedCompletion)
+            }
+            Z80MicroSequencerPhase::EdBlockTransferRead {
+                opcode,
+                source,
+                destination,
+            } => {
+                let value = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.issue_ed_block_write(
+                    destination,
+                    value,
+                    Z80MicroSequencerPhase::EdBlockTransferWrite {
+                        opcode,
+                        source,
+                        destination,
+                        value,
+                    },
+                )
+            }
+            Z80MicroSequencerPhase::EdBlockTransferWrite {
+                opcode,
+                source,
+                destination,
+                value,
+            } => {
+                let direction = if matches!(opcode, 0xA8 | 0xB8) {
+                    -1_i16
+                } else {
+                    1_i16
+                };
+                self.registers.set_hl(source.wrapping_add_signed(direction));
+                self.registers
+                    .set_de(destination.wrapping_add_signed(direction));
+                let count = self.registers.bc().wrapping_sub(1);
+                self.registers.set_bc(count);
+                let sum = self.registers.a.wrapping_add(value);
+                let mut flags = self.registers.f & (FLAG_S | FLAG_Z | FLAG_C);
+                if count != 0 {
+                    flags |= FLAG_PV;
+                }
+                flags |= sum & 0x08;
+                flags |= (sum & 0x02) << 4;
+                if matches!(opcode, 0xB0 | 0xB8) && count != 0 {
+                    self.registers.pc = self.registers.pc.wrapping_sub(2);
+                    self.wz = self.registers.pc.wrapping_add(1);
+                    flags = (flags & !FLAG_XY) | (((self.registers.pc >> 8) as u8) & FLAG_XY);
+                    self.set_flags(flags);
+                    self.mcycle_index = self
+                        .mcycle_index
+                        .checked_add(1)
+                        .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                    self.tstate_index = 0;
+                    self.phase = Z80MicroSequencerPhase::EdBlockRepeatInternal {
+                        opcode,
+                        remaining_tstates: 5,
+                    };
+                    Ok(Z80MicroStep::InternalCycle { tstates: 1 })
+                } else {
+                    self.set_flags(flags);
+                    self.retire(opcode)
+                }
+            }
+            Z80MicroSequencerPhase::EdBlockRepeatInternal { .. } => {
+                Err(Z80MicroSequencerError::UnexpectedCompletion)
+            }
+            Z80MicroSequencerPhase::EdBlockCompareRead { opcode, address } => {
+                let value = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                let direction = if matches!(opcode, 0xA9 | 0xB9) {
+                    -1_i16
+                } else {
+                    1_i16
+                };
+                let accumulator = self.registers.a;
+                let result = accumulator.wrapping_sub(value);
+                let half = (accumulator & 0x0F) < (value & 0x0F);
+                self.registers
+                    .set_hl(address.wrapping_add_signed(direction));
+                let count = self.registers.bc().wrapping_sub(1);
+                self.registers.set_bc(count);
+                let adjusted = result.wrapping_sub(u8::from(half));
+                let mut flags = (self.registers.f & FLAG_C) | FLAG_N | (result & FLAG_S);
+                if result == 0 {
+                    flags |= FLAG_Z;
+                }
+                if half {
+                    flags |= FLAG_H;
+                }
+                if count != 0 {
+                    flags |= FLAG_PV;
+                }
+                flags |= adjusted & 0x08;
+                flags |= (adjusted & 0x02) << 4;
+                let repeat = matches!(opcode, 0xB1 | 0xB9) && count != 0 && result != 0;
+                if repeat {
+                    self.registers.pc = self.registers.pc.wrapping_sub(2);
+                    self.wz = self.registers.pc.wrapping_add(1);
+                    flags = (flags & !FLAG_XY) | (((self.registers.pc >> 8) as u8) & FLAG_XY);
+                } else {
+                    self.wz = self.wz.wrapping_add_signed(direction);
+                }
+                self.set_flags(flags);
+                self.mcycle_index = self
+                    .mcycle_index
+                    .checked_add(1)
+                    .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                self.tstate_index = 0;
+                self.phase = Z80MicroSequencerPhase::EdBlockCompareInternal {
+                    opcode,
+                    remaining_tstates: 5,
+                    repeat,
+                };
+                Ok(Z80MicroStep::InternalCycle { tstates: 1 })
+            }
+            Z80MicroSequencerPhase::EdBlockCompareInternal { .. }
+            | Z80MicroSequencerPhase::EdBlockCompareRepeatInternal { .. } => {
+                Err(Z80MicroSequencerError::UnexpectedCompletion)
+            }
+            Z80MicroSequencerPhase::EdReturn { stage, low } => match stage {
+                0 => {
+                    let low = response
+                        .data
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                    self.registers.sp = self.registers.sp.wrapping_add(1);
+                    self.issue_read(
+                        Z80MicroSequencerPhase::EdReturn { stage: 1, low },
+                        self.registers.sp,
+                    )
+                }
+                1 => {
+                    let high = response
+                        .data
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                    self.registers.sp = self.registers.sp.wrapping_add(1);
+                    self.registers.pc = u16::from_le_bytes([low, high]);
+                    self.iff1 = self.iff2;
+                    self.wz = self.registers.pc;
+                    self.retire(
+                        self.opcode
+                            .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
+                    )
+                }
+                _ => Err(Z80MicroSequencerError::InvalidState),
+            },
+            Z80MicroSequencerPhase::EdNibbleRotateRead { opcode, address } => {
+                let memory_value = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                let accumulator = self.registers.a;
+                let (result_a, result_memory) = if opcode == 0x67 {
+                    (
+                        (accumulator & 0xF0) | (memory_value & 0x0F),
+                        ((accumulator & 0x0F) << 4) | (memory_value >> 4),
+                    )
+                } else {
+                    (
+                        (accumulator & 0xF0) | (memory_value >> 4),
+                        (memory_value << 4) | (accumulator & 0x0F),
+                    )
+                };
+                self.phase = Z80MicroSequencerPhase::EdNibbleRotateInternal {
+                    opcode,
+                    address,
+                    result_a,
+                    result_memory,
+                    remaining_tstates: 4,
+                };
+                self.mcycle_index = self
+                    .mcycle_index
+                    .checked_add(1)
+                    .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                self.tstate_index = 0;
+                Ok(Z80MicroStep::InternalCycle { tstates: 1 })
+            }
+            Z80MicroSequencerPhase::EdNibbleRotateInternal { .. } => {
+                Err(Z80MicroSequencerError::UnexpectedCompletion)
+            }
+            Z80MicroSequencerPhase::EdAbsoluteTransfer {
+                stage,
+                pair,
+                store,
+                address,
+                low,
+                pair_value,
+            } => match stage {
+                0 => {
+                    let address_low = response
+                        .data
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                    self.registers.pc = self.registers.pc.wrapping_add(1);
+                    self.issue_read(
+                        Z80MicroSequencerPhase::EdAbsoluteTransfer {
+                            stage: 1,
+                            pair,
+                            store,
+                            address: u16::from(address_low),
+                            low: 0,
+                            pair_value,
+                        },
+                        self.registers.pc,
+                    )
+                }
+                1 => {
+                    let address_high = response
+                        .data
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                    self.registers.pc = self.registers.pc.wrapping_add(1);
+                    let address = u16::from_le_bytes([address as u8, address_high]);
+                    let next_phase = Z80MicroSequencerPhase::EdAbsoluteTransfer {
+                        stage: 2,
+                        pair,
+                        store,
+                        address,
+                        low: 0,
+                        pair_value,
+                    };
+                    if store {
+                        self.issue_ed_absolute_write(address, pair_value as u8, next_phase)
+                    } else {
+                        self.issue_read(next_phase, address)
+                    }
+                }
+                2 if store => self.issue_ed_absolute_write(
+                    address.wrapping_add(1),
+                    (pair_value >> 8) as u8,
+                    Z80MicroSequencerPhase::EdAbsoluteTransfer {
+                        stage: 3,
+                        pair,
+                        store,
+                        address,
+                        low: 0,
+                        pair_value,
+                    },
+                ),
+                2 => {
+                    let data_low = response
+                        .data
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                    self.issue_read(
+                        Z80MicroSequencerPhase::EdAbsoluteTransfer {
+                            stage: 3,
+                            pair,
+                            store,
+                            address,
+                            low: data_low,
+                            pair_value,
+                        },
+                        address.wrapping_add(1),
+                    )
+                }
+                3 if store => {
+                    self.wz = address.wrapping_add(1);
+                    self.retire(
+                        self.opcode
+                            .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
+                    )
+                }
+                3 => {
+                    let data_high = response
+                        .data
+                        .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                    self.write_register_pair(pair, u16::from_le_bytes([low, data_high]));
+                    self.wz = address.wrapping_add(1);
+                    self.retire(
+                        self.opcode
+                            .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
+                    )
+                }
+                _ => Err(Z80MicroSequencerError::InvalidState),
+            },
+            Z80MicroSequencerPhase::MemoryReadIncDec { decrement, address } => {
+                let old = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                let wait_offset = u16::try_from(waits)
+                    .ok()
+                    .and_then(|waits| 3_u16.checked_add(waits))
+                    .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                // INC/DEC (HL) has three M-cycles. Indexed INC/DEC reaches this
+                // phase after its prefix, displacement and 5T internal cycle.
+                // The 3T read plus this internal T-state form the read M-cycle;
+                // WAIT extends that interval before the internal T-state.
+                self.tstate_index = wait_offset;
+                self.phase = Z80MicroSequencerPhase::MemoryIncDecInternal {
+                    decrement,
+                    old,
+                    address,
+                };
+                Ok(Z80MicroStep::InternalCycle { tstates: 1 })
+            }
+            Z80MicroSequencerPhase::NmiStackPushInternal { .. }
+            | Z80MicroSequencerPhase::InterruptModeDispatchInternal { .. }
+            | Z80MicroSequencerPhase::BaseInternal { .. }
+            | Z80MicroSequencerPhase::BaseRelativeBranchInternal { .. }
+            | Z80MicroSequencerPhase::BaseStackPushInternal { .. }
+            | Z80MicroSequencerPhase::BaseControlPushInternal { .. }
+            | Z80MicroSequencerPhase::BaseReturnConditionInternal { .. }
+            | Z80MicroSequencerPhase::BaseExchangeStackInternal { .. }
+            | Z80MicroSequencerPhase::MemoryIncDecInternal { .. }
+            | Z80MicroSequencerPhase::IndexDisplacementInternal { .. }
+            | Z80MicroSequencerPhase::IndexedImmediateStoreInternal { .. } => {
+                Err(Z80MicroSequencerError::UnexpectedCompletion)
+            }
+            Z80MicroSequencerPhase::NmiStackPushWrite {
+                stage,
+                return_address,
+            } => match stage {
+                0 => {
+                    let low = return_address as u8;
+                    self.registers.sp = self.registers.sp.wrapping_sub(1);
+                    let next_mcycle_index = self
+                        .mcycle_index
+                        .checked_add(1)
+                        .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                    let request = self.handshake.begin(
+                        Z80BusOperation::MemoryWrite { value: low },
+                        self.registers.sp,
+                        3,
+                    )?;
+                    self.mcycle_index = next_mcycle_index;
+                    self.tstate_index = 0;
+                    self.phase = Z80MicroSequencerPhase::NmiStackPushWrite {
+                        stage: 1,
+                        return_address,
+                    };
+                    Ok(Z80MicroStep::BusRequest(request))
+                }
+                1 => {
+                    self.registers.pc = 0x0066;
+                    self.wz = 0x0066;
+                    self.retire_interrupt(Z80InterruptKind::Nmi)
+                }
+                _ => Err(Z80MicroSequencerError::InvalidState),
+            },
+            Z80MicroSequencerPhase::InterruptStackPushWrite {
+                mode,
+                vector,
+                stage,
+                return_address,
+            } => match stage {
+                0 => {
+                    let low = return_address as u8;
+                    self.registers.sp = self.registers.sp.wrapping_sub(1);
+                    let next_mcycle_index = self.mcycle_index.checked_add(1)
+                        .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                    let request = self.handshake.begin(
+                        Z80BusOperation::MemoryWrite { value: low }, self.registers.sp, 3,
+                    )?;
+                    self.mcycle_index = next_mcycle_index;
+                    self.tstate_index = 0;
+                    self.phase = Z80MicroSequencerPhase::InterruptStackPushWrite {
+                        mode, vector, stage: 1, return_address,
+                    };
+                    Ok(Z80MicroStep::BusRequest(request))
+                }
+                1 if mode == 1 => {
+                    self.registers.pc = 0x0038;
+                    self.wz = 0x0038;
+                    self.retire_interrupt(Z80InterruptKind::Int)
+                }
+                1 if mode == 2 => {
+                    let vector_address = (u16::from(self.i) << 8) | u16::from(vector);
+                    let next_mcycle_index = self.mcycle_index.checked_add(1)
+                        .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                    let request = self.handshake.begin(
+                        Z80BusOperation::MemoryRead, vector_address, 3,
+                    )?;
+                    self.mcycle_index = next_mcycle_index;
+                    self.tstate_index = 0;
+                    self.phase = Z80MicroSequencerPhase::InterruptMode2VectorReadLow {
+                        vector_address,
+                    };
+                    Ok(Z80MicroStep::BusRequest(request))
+                }
+                _ => Err(Z80MicroSequencerError::InvalidState),
+            },
+            Z80MicroSequencerPhase::InterruptMode2VectorReadLow { vector_address } => {
+                let low = response.data.ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                let address = vector_address.wrapping_add(1);
+                let next_mcycle_index = self.mcycle_index.checked_add(1)
+                    .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                let request = self.handshake.begin(Z80BusOperation::MemoryRead, address, 3)?;
+                self.mcycle_index = next_mcycle_index;
+                self.tstate_index = 0;
+                self.phase = Z80MicroSequencerPhase::InterruptMode2VectorReadHigh {
+                    vector_address,
+                    low,
+                };
+                Ok(Z80MicroStep::BusRequest(request))
+            }
+            Z80MicroSequencerPhase::InterruptMode2VectorReadHigh { low, .. } => {
+                let high = response.data.ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                let target = u16::from_le_bytes([low, high]);
+                self.registers.pc = target;
+                self.wz = target;
+                self.retire_interrupt(Z80InterruptKind::Int)
+            }
+            Z80MicroSequencerPhase::MemoryWrite { address, .. } => {
+                let opcode = self
+                    .opcode
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                if matches!(opcode, 0x02 | 0x12) {
+                    self.wz =
+                        (u16::from(self.registers.a) << 8) | (address.wrapping_add(1) & 0x00FF);
+                }
+                self.retire(opcode)
+            }
+            Z80MicroSequencerPhase::InterruptAcknowledgeComplete { .. } => {
+                Err(Z80MicroSequencerError::UnexpectedCompletion)
+            }
+            Z80MicroSequencerPhase::Ready => Err(Z80MicroSequencerError::NoInstructionActive),
+        }
     }
 
-    fn complete_bus_cycle_inner(
+
         &mut self,
         request_id: u64,
         data: Option<u8>,
