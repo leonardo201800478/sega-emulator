@@ -22,7 +22,10 @@ fn run_boundary(
     machine: &mut SmsTemporalMachine,
     snapshot_each: bool,
     waits: u32,
-) -> (Z80MicroStep, Vec<sega_sms_core::temporal_machine::SmsTemporalTraceEvent>) {
+) -> (
+    Z80MicroStep,
+    Vec<sega_sms_core::temporal_machine::SmsTemporalTraceEvent>,
+) {
     let mut captured_trace = Vec::new();
     let mut step = machine.begin_instruction().unwrap();
     for _ in 0..128 {
@@ -74,8 +77,7 @@ fn compare_runs(
     let (actual, resumed_trace) = run_boundary(resumed, true, waits);
     assert_eq!(actual, expected);
     assert_eq!(
-        resumed_trace,
-        continuous_trace,
+        resumed_trace, continuous_trace,
         "continuous and restored Scheduler traces must match"
     );
     assert_eq!(resumed.export_state(), continuous.export_state());

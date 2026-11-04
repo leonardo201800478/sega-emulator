@@ -1,6 +1,4 @@
-use sega_z80_cpu::{
-    Z80MicroSequencer, Z80MicroSequencerState, Z80MicroSequencerStateCodecError,
-};
+use sega_z80_cpu::{Z80MicroSequencer, Z80MicroSequencerState, Z80MicroSequencerStateCodecError};
 
 fn crc32(bytes: &[u8]) -> u32 {
     let mut crc = !0_u32;
@@ -26,7 +24,10 @@ fn e7_2e_codec_rejects_unknown_phase_tag_after_valid_checksum() {
     let checksum_offset = HEADER_LEN + body_len;
     let phase_tag_offset = HEADER_LEN + PHASE_TAG_OFFSET_IN_BODY;
 
-    assert_eq!(bytes[phase_tag_offset], 0, "default Ready phase uses tag zero");
+    assert_eq!(
+        bytes[phase_tag_offset], 0,
+        "default Ready phase uses tag zero"
+    );
     bytes[phase_tag_offset] = 0xFF;
     let checksum = crc32(&bytes[HEADER_LEN..checksum_offset]);
     bytes[checksum_offset..checksum_offset + 4].copy_from_slice(&checksum.to_be_bytes());

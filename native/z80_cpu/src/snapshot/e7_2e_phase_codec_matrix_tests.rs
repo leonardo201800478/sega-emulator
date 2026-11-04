@@ -1,4 +1,4 @@
-use super::{read_phase, write_phase, Reader, Writer, Z80MicroSequencerPhase};
+use super::{Reader, Writer, Z80MicroSequencerPhase, read_phase, write_phase};
 
 fn assert_phase_round_trip(phase: Z80MicroSequencerPhase) {
     let mut writer = Writer::default();
@@ -7,7 +7,11 @@ fn assert_phase_round_trip(phase: Z80MicroSequencerPhase) {
     let mut reader = Reader::new(&writer.bytes);
     let decoded = read_phase(&mut reader).expect("phase tag and payload decode");
     assert_eq!(decoded, phase);
-    assert_eq!(reader.offset, writer.bytes.len(), "phase decoder consumes exact payload");
+    assert_eq!(
+        reader.offset,
+        writer.bytes.len(),
+        "phase decoder consumes exact payload"
+    );
 }
 
 #[test]
@@ -47,16 +51,9 @@ fn e7_2e_all_seventy_phase_variants_round_trip_with_distinct_tags() {
             stage: 1,
             return_address: 0x1234,
         },
-        Z80MicroSequencerPhase::ImmediateReadRegister {
-            destination: 7,
-        },
-        Z80MicroSequencerPhase::ImmediateReadRegisterPairLow {
-            pair: 2,
-        },
-        Z80MicroSequencerPhase::ImmediateReadRegisterPairHigh {
-            pair: 2,
-            low: 0x34,
-        },
+        Z80MicroSequencerPhase::ImmediateReadRegister { destination: 7 },
+        Z80MicroSequencerPhase::ImmediateReadRegisterPairLow { pair: 2 },
+        Z80MicroSequencerPhase::ImmediateReadRegisterPairHigh { pair: 2, low: 0x34 },
         Z80MicroSequencerPhase::BaseAbsoluteTransfer {
             stage: 3,
             address: 0x4567,
@@ -98,9 +95,7 @@ fn e7_2e_all_seventy_phase_variants_round_trip_with_distinct_tags() {
             target: 0x1234,
             low: 0x34,
         },
-        Z80MicroSequencerPhase::BaseReturnConditionInternal {
-            branch_taken: true,
-        },
+        Z80MicroSequencerPhase::BaseReturnConditionInternal { branch_taken: true },
         Z80MicroSequencerPhase::BaseReturnPop {
             stage: 1,
             low: 0x34,
@@ -118,9 +113,7 @@ fn e7_2e_all_seventy_phase_variants_round_trip_with_distinct_tags() {
             old_hl: 0x5678,
             remaining_tstates: 1,
         },
-        Z80MicroSequencerPhase::BaseImmediatePortAddress {
-            opcode: 0xDB,
-        },
+        Z80MicroSequencerPhase::BaseImmediatePortAddress { opcode: 0xDB },
         Z80MicroSequencerPhase::BaseImmediatePortRead {
             port_address: 0x12FE,
         },
@@ -131,12 +124,8 @@ fn e7_2e_all_seventy_phase_variants_round_trip_with_distinct_tags() {
         Z80MicroSequencerPhase::ImmediateReadMemoryWrite,
         Z80MicroSequencerPhase::IndexDisplacementRead,
         Z80MicroSequencerPhase::IndexedCbDisplacementRead,
-        Z80MicroSequencerPhase::IndexedCbOpcodeRead {
-            address: 0x1234,
-        },
-        Z80MicroSequencerPhase::IndexedCbMemoryRead {
-            address: 0x1234,
-        },
+        Z80MicroSequencerPhase::IndexedCbOpcodeRead { address: 0x1234 },
+        Z80MicroSequencerPhase::IndexedCbMemoryRead { address: 0x1234 },
         Z80MicroSequencerPhase::IndexedCbMemoryWrite {
             address: 0x1234,
             value: 0xA5,
@@ -146,20 +135,14 @@ fn e7_2e_all_seventy_phase_variants_round_trip_with_distinct_tags() {
             address: 0x1234,
             remaining_tstates: 2,
         },
-        Z80MicroSequencerPhase::IndexedImmediateReadMemoryWrite {
-            address: 0x1234,
-        },
+        Z80MicroSequencerPhase::IndexedImmediateReadMemoryWrite { address: 0x1234 },
         Z80MicroSequencerPhase::IndexedImmediateStoreInternal {
             address: 0x1234,
             value: 0xA5,
             remaining_tstates: 1,
         },
-        Z80MicroSequencerPhase::ImmediateReadAlu {
-            operation: 7,
-        },
-        Z80MicroSequencerPhase::MemoryReadRegister {
-            destination: 7,
-        },
+        Z80MicroSequencerPhase::ImmediateReadAlu { operation: 7 },
+        Z80MicroSequencerPhase::MemoryReadRegister { destination: 7 },
         Z80MicroSequencerPhase::MemoryReadAlu {
             operation: 7,
             address: 0x1234,
@@ -168,9 +151,7 @@ fn e7_2e_all_seventy_phase_variants_round_trip_with_distinct_tags() {
             decrement: true,
             address: 0x1234,
         },
-        Z80MicroSequencerPhase::CbMemoryRead {
-            address: 0x1234,
-        },
+        Z80MicroSequencerPhase::CbMemoryRead { address: 0x1234 },
         Z80MicroSequencerPhase::CbMemoryInternal {
             address: 0x1234,
             result: Some(0xA5),
@@ -179,9 +160,7 @@ fn e7_2e_all_seventy_phase_variants_round_trip_with_distinct_tags() {
             address: 0x1234,
             value: 0xA5,
         },
-        Z80MicroSequencerPhase::EdRegisterInternal {
-            opcode: 0x44,
-        },
+        Z80MicroSequencerPhase::EdRegisterInternal { opcode: 0x44 },
         Z80MicroSequencerPhase::EdPortRead {
             register: 7,
             address: 0x1234,
@@ -245,9 +224,7 @@ fn e7_2e_all_seventy_phase_variants_round_trip_with_distinct_tags() {
             opcode: 0xB1,
             remaining_tstates: 1,
         },
-        Z80MicroSequencerPhase::EdBlockIoInitialInternal {
-            opcode: 0xA2,
-        },
+        Z80MicroSequencerPhase::EdBlockIoInitialInternal { opcode: 0xA2 },
         Z80MicroSequencerPhase::EdBlockIoInputPortRead {
             opcode: 0xA2,
             port_address: 0x1234,
