@@ -260,23 +260,43 @@ fn e7_2e_every_generated_phase_round_trips_and_continues_equivalently() {
         let (phases, supported) =
             assert_continuous_equals_restored(&[0xED, opcode, 0, 0], 0xFF, 0, None);
         observed_phases.extend(phases);
-        if supported { supported_cases += 1; } else { unsupported_cases += 1; }
+        if supported {
+            supported_cases += 1;
+        } else {
+            unsupported_cases += 1;
+        }
         let (phases, supported) =
             assert_continuous_equals_restored(&[0xDD, opcode, 0, 0, 0], 0xFF, 0, None);
         observed_phases.extend(phases);
-        if supported { supported_cases += 1; } else { unsupported_cases += 1; }
+        if supported {
+            supported_cases += 1;
+        } else {
+            unsupported_cases += 1;
+        }
         let (phases, supported) =
             assert_continuous_equals_restored(&[0xFD, opcode, 0, 0, 0], 0xFF, 0, None);
         observed_phases.extend(phases);
-        if supported { supported_cases += 1; } else { unsupported_cases += 1; }
+        if supported {
+            supported_cases += 1;
+        } else {
+            unsupported_cases += 1;
+        }
         let (phases, supported) =
             assert_continuous_equals_restored(&[0xDD, 0xCB, 0, opcode], 0xFF, 0, None);
         observed_phases.extend(phases);
-        if supported { supported_cases += 1; } else { unsupported_cases += 1; }
+        if supported {
+            supported_cases += 1;
+        } else {
+            unsupported_cases += 1;
+        }
         let (phases, supported) =
             assert_continuous_equals_restored(&[0xFD, 0xCB, 0, opcode], 0xFF, 0, None);
         observed_phases.extend(phases);
-        if supported { supported_cases += 1; } else { unsupported_cases += 1; }
+        if supported {
+            supported_cases += 1;
+        } else {
+            unsupported_cases += 1;
+        }
     }
 
     for interrupt in [
