@@ -160,9 +160,7 @@ fn instruction_timeline_is_valid(state: &SmsTemporalMachineState) -> bool {
             let Some(mcycle) = state.bus.mcycle else {
                 return false;
             };
-            let Some(expected_tstates) =
-                cpu_tstates.checked_add(mcycle.elapsed_tstates)
-            else {
+            let Some(expected_tstates) = cpu_tstates.checked_add(mcycle.elapsed_tstates) else {
                 return false;
             };
             (request_started_at, expected_tstates)
