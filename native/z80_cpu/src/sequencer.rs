@@ -11684,6 +11684,7 @@ mod base_immediate_io_differential_tests {
             cpu.phase,
             Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector: 0xCF }
         );
+        assert_eq!(cpu.registers.pc, 0x2345, "INT acknowledge must not increment PC");
         assert_eq!(cpu.refresh, 0xFF);
         assert_eq!(cpu.int_pending, Some(0xCF));
     }
