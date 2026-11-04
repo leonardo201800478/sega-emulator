@@ -506,6 +506,12 @@ impl SmsTemporalMachine {
             .ok_or(SmsTemporalMachineError::InvalidState)?;
         let mut next_cpu = self.cpu.clone();
         let step = next_cpu.complete_bus_cycle(request.id, Some(opcode))?;
+        // finish_m1_fetch is called only at the effective T4 completion edge.
+        // Decode/retire first so HALT and the EI-delay decrement are visible to
+        // the interrupt sampler at this same edge.
+        if next_cpu.halted {
+            next_cpu.sample_halt_interrupts_at_t4()?;
+        }
         self.cpu = next_cpu;
         self.m1 = None;
         self.m1_fixture_wait_tstates = None;
