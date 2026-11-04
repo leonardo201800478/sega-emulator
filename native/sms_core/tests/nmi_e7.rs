@@ -58,8 +58,7 @@ fn sms_temporal_nmi_uses_m1_ignores_data_and_pushes_pc_to_ram() {
     assert!(!m1_pins[2].mreq_n);
     assert!(!m1_pins[2].rd_n);
     assert_eq!(
-        m1_pins[3].address,
-        0x0081,
+        m1_pins[3].address, 0x0081,
         "refresh address must use I:R after R increments"
     );
     assert!(!m1_pins[3].rfsh_n, "M1 T4 must expose the refresh phase");
