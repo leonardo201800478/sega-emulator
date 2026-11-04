@@ -2238,11 +2238,11 @@ impl Z80MicroSequencer {
                 state.mcycle_index == 0 && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::NmiStackPushInternal { .. } => {
-                state.mcycle_index == 1 && state.tstate_index == 0
+                state.mcycle_index == 0 && state.tstate_index == 4
             }
             Z80MicroSequencerPhase::NmiStackPushWrite { stage, .. } => {
                 stage <= 1
-                    && state.mcycle_index == 2 + u32::from(stage)
+                    && state.mcycle_index == 1 + u32::from(stage)
                     && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::ImmediateReadRegister { .. } => match state.prefix_state {
@@ -3713,11 +3713,9 @@ impl Z80MicroSequencer {
                     .data
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 self.refresh = (self.refresh & 0x80) | (self.refresh.wrapping_add(1) & 0x7F);
-                self.mcycle_index = self
-                    .mcycle_index
-                    .checked_add(1)
-                    .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
-                self.tstate_index = 0;
+                // The extra internal T-state is the fifth T-state of the
+                // NMI response M1; the first stack write begins M-cycle 1.
+                self.tstate_index = 4;
                 self.phase = Z80MicroSequencerPhase::NmiStackPushInternal {
                     return_address: self.registers.pc,
                 };
