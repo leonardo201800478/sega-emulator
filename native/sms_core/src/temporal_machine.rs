@@ -2884,10 +2884,7 @@ mod bus_tstate_safe_point_tests {
             SmsTemporalDispatch::BusTStateProgress { .. }
         ));
         let final_edge = restored.dispatch_next_bus_tstate().unwrap();
-        assert!(matches!(
-            final_edge,
-            SmsTemporalDispatch::BusCompletion(_)
-        ));
+        assert!(matches!(final_edge, SmsTemporalDispatch::BusCompletion(_)));
         assert_eq!(restored.now(), MachineTime::from_ticks(21));
         assert_eq!(restored.cpu().registers.pc, 1);
 
