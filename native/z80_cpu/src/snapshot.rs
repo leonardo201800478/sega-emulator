@@ -1587,7 +1587,7 @@ mod base_internal_snapshot_tests {
             cpu.complete_bus_cycle(request.id, Some(0xCF)).unwrap(),
             crate::Z80MicroStep::InterruptAcknowledge {
                 vector: 0xCF,
-                tstates: 9,
+                tstates: 7,
             }
         );
         cpu = round_trip(&cpu);
