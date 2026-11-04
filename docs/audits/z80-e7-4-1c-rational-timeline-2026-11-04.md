@@ -21,9 +21,9 @@ A implementação de código fica bloqueada nesta sessão porque o clone local f
 
 Fonte primária: [Z80 CPU User Manual, UM008011-0816](https://www.zilog.com/docs/z80/um0080.pdf).
 
-- A seção Timing, página impressa 8, estabelece que WAIT é amostrado na borda descendente do clock durante T2 e em cada TW subsequente.
+- A seção Timing, página impressa 7, estabelece que WAIT é amostrado na borda descendente do clock durante T2 e em cada TW subsequente.
 - A seção Input or Output Cycles, página impressa 10, determina um TW automático em cada ciclo I/O, entre T2 e T3; o pedido WAIT é amostrado durante esse TW.
-- A Figura 9, página impressa 12, mostra dois TWs automáticos no interrupt acknowledge.
+- A Figura 9, página impressa 13, mostra dois TWs automáticos no interrupt acknowledge.
 - A mesma seção explica que o acknowledge é um M1 especial com IORQ, e não um ciclo I/O comum.
 
 Consequência: WAIT externo não pode ser ignorado enquanto um TW obrigatório estiver em andamento. As origens dos waits precisam permanecer distinguíveis para que a política de TW automático e a amostragem externa sejam reproduzíveis.
