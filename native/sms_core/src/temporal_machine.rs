@@ -656,6 +656,13 @@ impl SmsTemporalMachine {
             Z80MicroStep::BusRequest(request)
         } else if self.cpu.export_state().phase.is_internal_cycle() {
             Z80MicroStep::InternalCycle { tstates: 1 }
+        } else if let Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector } =
+            self.cpu.export_state().phase
+        {
+            return Ok(Z80MicroStep::InterruptAcknowledge {
+                vector,
+                tstates: self.cpu.export_state().instruction_tstates,
+            });
         } else {
             return Err(SmsTemporalMachineError::InvalidState);
         };
@@ -863,8 +870,14 @@ impl SmsTemporalMachine {
                 return Err(SmsTemporalMachineError::InvalidState);
             }
             let total_tstates = elapsed / scale;
+            let automatic_wait_tstates = if request.operation == Z80BusOperation::InterruptAcknowledge {
+                2
+            } else {
+                0
+            };
             let wait_tstates = total_tstates
                 .checked_sub(u128::from(request.base_tstates))
+                .and_then(|waits| waits.checked_sub(automatic_wait_tstates))
                 .ok_or(SmsTemporalMachineError::InvalidState)?;
             if wait_tstates != u128::from(state.cpu.handshake.wait_tstates) {
                 return Err(SmsTemporalMachineError::InvalidState);
