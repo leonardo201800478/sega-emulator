@@ -155,7 +155,7 @@ def validate(workspaces: list[Workspace], include_python: bool) -> list[Result]:
                         run([py, "-m", "pytest"], ROOT)])
     return results
 
-def print_results(results: list[Result]) -> int:
+def print_results(results: list[Result], strict: bool = True) -> int:
     for item in results:
         print(f"[{item.status:7}] {item.name}")
         if item.status != "PASS" and item.output:
@@ -163,7 +163,9 @@ def print_results(results: list[Result]) -> int:
     counts = {s: sum(r.status == s for r in results)
               for s in ("PASS", "FAIL", "BLOCKED", "NOT RUN")}
     print("\nSummary: " + " | ".join(f"{k}={v}" for k, v in counts.items()))
-    return 0 if counts["FAIL"] == 0 and counts["BLOCKED"] == 0 else 1
+    if counts["FAIL"] > 0:
+        return 1
+    return 1 if strict and counts["BLOCKED"] > 0 else 0
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -178,7 +180,7 @@ def main() -> int:
     report, results = audit()
     if args.command == "audit":
         print(json.dumps(report, indent=2, ensure_ascii=False))
-        return print_results(results)
+        return print_results(results, strict=False)
     workspaces = [Workspace(**w) for w in report["workspaces"]]
     if args.command == "locks":
         results += lock_refresh(workspaces) if args.refresh_offline else lock_check(workspaces)
