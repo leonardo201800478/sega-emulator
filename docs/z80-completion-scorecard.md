@@ -1,9 +1,10 @@
 # Meta de conclusão do Z80 — cobertura, validação e critérios de aceite
 
-**Data da revisão:** 2026-11-04  
-**Baseline de referência:** `main` — `a0e58fd05c7f62c42f82b86d15d8532e06a9c59b` (após PR #476; código E4C integrado pela PR #475).  
-**Evidência E4C:** HEAD validado `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS; PR #475 integrada no merge SHA `f89a52346e91e88e82ab37a4afcfffff2d793407`.  
-**Schema do microsequenciador na baseline main:** 27. O candidato E5 da PR #485 eleva para 28.  
+**Data da revisão:** 2026-11-03 (horário local de São Paulo)  
+**Baseline de referência:** `main` — `f4130104fa971289507c0b15ab2d8eabd1dd5b00` (E5 integrada pela PR #485).  
+**Evidência E5:** PR #485 integrada; CI #4238 reportado como 3/3 jobs PASS no HEAD candidato descrito na PR; commit atual da main: `f4130104fa971289507c0b15ab2d8eabd1dd5b00`.  
+**Schema do microsequenciador na baseline main:** 28.  
+**Próxima fatia:** PR #486 aberta para E6.1 (fallback de prefixos DD/FD ignorados); não integrada nesta baseline.  
 **Status deste documento:** referência de planejamento e critérios de aceite. Não substitui a matriz semântica por opcode nem os relatórios de execução dos testes.
 
 ---
@@ -46,7 +47,7 @@ Os percentuais abaixo são **estimativas de engenharia**, usadas para dimensiona
 
 ## 3. Baseline técnica e estado conhecido
 
-A baseline consultada em `main` é `f89a52346e91e88e82ab37a4afcfffff2d793407`, após a integração da E4C pela PR #475. A auditoria `docs/audits/z80-indexed-incdec-e4c-2026-11-03.md` e o teste `native/z80_cpu/tests/indexed_incdec_e4c.rs` estão integrados. O HEAD da PR passou nos quatro grupos de CI.
+A baseline consultada em `main` é `f4130104fa971289507c0b15ab2d8eabd1dd5b00`, após a integração da E5 pela PR #485. A E4C e a auditoria `docs/audits/z80-indexed-incdec-e4c-2026-11-03.md` permanecem integradas; E5 acrescenta DDCB/FDCB microsequenciados e eleva o schema para 28. A PR #486 está aberta para E6.1.
 
 | Fase | Escopo | Estado na fotografia |
 |---|---|---|
@@ -56,8 +57,8 @@ A baseline consultada em `main` é `f89a52346e91e88e82ab37a4afcfffff2d793407`, a
 | E4A | LD r,(IX/IY+d), LD (IX/IY+d),r e LD (IX/IY+d),n | Integrada na main; IMPLEMENTED / SHORT_PASS |
 | E4B | ADD/ADC/SUB/SBC/AND/XOR/OR/CP (IX/IY+d) | Integrada na main pela PR #472; IMPLEMENTED / QUICK_PASS / SHORT_PASS; CI 4/4 PASS |
 | E4C | INC/DEC (IX/IY+d) | Integrada na main pela PR #475; IMPLEMENTED / QUICK_PASS / SHORT_PASS; 5 testes dirigidos; CI 4/4 PASS |
-| E5 | DDCB/FDCB completo | IMPLEMENTED / QUICK_PASS / SHORT_PASS; CI PR #485 3/3 PASS |
-| E6 | Fallback geral e resolução de prefixos DD/FD/ED/CB | Pendente/incompleto no microsequenciador |
+| E5 | DDCB/FDCB completo | Integrada na main pela PR #485; IMPLEMENTED / QUICK_PASS / SHORT_PASS no escopo testado; CI aplicável 3/3 PASS |
+| E6 | Fallback geral e resolução de prefixos DD/FD/ED/CB | E6.1 em PR #486 aberta; E6 global ainda pendente/incompleta |
 | E7 | Fechamento semântico global BASE/CB/ED/DD/FD/DDCB/FDCB | Pendente |
 | E8 | Validação formal e diferencial (ZEXDOC/ZEXALL e corpora independentes) | Pendente |
 | E9 | Integração temporal sistêmica com bus, WAIT, Scheduler, SMS e SG-1000 | Pendente |
@@ -268,3 +269,10 @@ Toda atualização deve incluir data, SHA da baseline, SHA candidato, PR, workfl
 ---
 
 **Próxima meta operacional na baseline atual:** iniciar E6 — fallback geral e resolução de prefixos DD/FD/ED/CB. E4A, E4B e E4C estão integradas na main; E5 DDCB/FDCB está implementada e QUICK_PASS/SHORT_PASS na PR #485, com CI 3/3 PASS no SHA de código 2f1dff62. Validação diferencial externa, ZEXDOC/ZEXALL, LONG_PASS e TEMPORAL_PASS continuam pendentes.
+
+
+### Nota de reconciliação do estado auxiliar e das fontes históricas
+
+A leitura do runtime Rust na baseline f4130104fa971289507c0b15ab2d8eabd1dd5b00 confirma que WZ/MEMPTR, Q e q_previous existem no estado do microsequenciador e no contrato de snapshot. A lógica SCF/CCF consome q_previous; WZ é atualizado em handlers selecionados. Portanto, os rótulos antigos “WZ ausente” e “Q ausente” são incorretos para o Rust atual. O estado correto é **IMPLEMENTED no código, validação independente INCOMPLETA/NOT RUN**. A matriz de atualização WZ por família, os exercitadores z80memptr/z80ccf, flags X/Y de bloco e a política formal NMOS/CMOS continuam pendentes.
+
+O adaptador SingleStepTests e a execução histórica de 24/10/2026 pertencem ao núcleo Python em legacy/python_reference/. Não constituem DIFFERENTIAL_PASS do runtime Rust. A primeira execução teve 5.401 aprovados, 0 divergentes e 5.599 excluídos de 11.000; não declarar os 11.000 como aprovados. Os testes E5 internos não substituem comparação com oráculo externo.
