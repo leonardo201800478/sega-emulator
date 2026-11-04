@@ -5,9 +5,9 @@
 **Baseline inicial E0:** `e4604f3152c09e8d16c37f94f94a4b344db33b62`  
 **Baseline após E1 / PR #467:** `aa4a4fa7661c28d3b2e21ac6d6eb4379fd297f65`  
 **Baseline após E2 / PR #468:** `abd154332b1dabfb68874f2b80f306da7e060552`  
-**Baseline atual da main após PR #489:** `6362075514809e6bce35582ac978d66eeb8e0d1b`  
+**Baseline atual da main após PR #490:** `b1b5ced5c3d6053f8d59c8f4d932f40518db1064`  
 **HEAD E4C validado:** `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 PASS.  
-**PR de referência histórica:** [#447](https://github.com/leonardo201800478/sega-emulator/pull/447) — manter aberta, sem merge  
+**PR de referência histórica:** [#447](https://github.com/leonardo201800478/sega-emulator/pull/447) — manter aberta, sem merge; branch antiga e não candidata a integração direta  
 **PR integrada E4A:** [#471](https://github.com/leonardo201800478/sega-emulator/pull/471)  
 **PR integrada E4C:** [#475](https://github.com/leonardo201800478/sega-emulator/pull/475)  
 **PR E5 integrada:** [#485](https://github.com/leonardo201800478/sega-emulator/pull/485), HEAD `2cc6105a0c8c3589994870a6a67ceffb1e8c02f8`; CI #4245 SUCCESS (Rust, Python, Windows PASS; Scheduler SKIPPED); merge SHA `f4130104fa971289507c0b15ab2d8eabd1dd5b00`.  
@@ -63,7 +63,7 @@ Inspeção de `native/z80_cpu/src/sequencer.rs`:
 - Prefixos indexados seguidos de opcode terminal ainda resultam em `UnsupportedOpcode` até a implementação das respectivas famílias.
 - O snapshot inclui o latch e valida a coerência fase/opcode; schema 26. O round-trip após DD está coberto.
 - Não há limite artificial para cadeias DD/FD; teste com 257 prefixos alternados.
-- HALT (0x76) permanece explicitamente não implementado no inventário BASE do microsequenciador.
+- HALT (0x76) foi implementado na E7.1 e integrada pela PR #490; saída por NMI/INT e acknowledge continuam pendentes.
 
 Estado correto: **FSM DD/FD implementada e QUICK_PASS/SHORT_PASS na dimensão de transição/estado; sem conclusão semântica ou temporal das instruções indexadas**.
 
@@ -356,4 +356,4 @@ Além disso, Scheduler deterministic stress e Windows x64 D3D12/WASAPI/XAudio2 q
 
 E6 foi integrada pela PR #486; merge SHA do código `24a32e03e10c8e82022172faee69ec0c046f8cb0`. A reconciliação documental foi integrada pela PR #488, merge SHA `303a792b1caab1ba40dec9c9521208eb5aaa0b45`. CI #41759035927, #41759330209 e #41759833153 concluídos com SUCCESS para Rust, Python e Windows x64. A E7 está em andamento: a primeira fatia E7.1 implementa HALT/M1 de retenção; o próximo incremento é o serviço de NMI/INT e saída de HALT.
 
-**Estado atual DD/FD:** E2 FSM/snapshot, E3A1/E3A2/E4A/E4B/E4C, E5 e E6 IMPLEMENTED / QUICK_PASS / SHORT_PASS nos escopos validados. E6 integrada pela PR #486 (merge SHA `24a32e03e10c8e82022172faee69ec0c046f8cb0`); documentação reconciliada pela PR #488 (merge SHA `303a792b1caab1ba40dec9c9521208eb5aaa0b45`). CI #41759035927, #41759330209 e #41759833153 Rust/Python/Windows PASS, Scheduler stress SKIPPED. E7 em andamento: E7.1 HALT/M1 de retenção na branch candidata; próximo incremento E7.2 NMI/INT e saída de HALT. E8 formal/diferencial e E9 integração temporal permanecem pendentes. Não há LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS global.
+**Estado atual DD/FD:** E2 FSM/snapshot, E3A1/E3A2/E4A/E4B/E4C, E5 e E6 IMPLEMENTED / QUICK_PASS / SHORT_PASS nos escopos validados. E6 integrada pela PR #486 (merge SHA `24a32e03e10c8e82022172faee69ec0c046f8cb0`); documentação reconciliada pela PR #488 (merge SHA `303a792b1caab1ba40dec9c9521208eb5aaa0b45`). CI #41759035927, #41759330209 e #41759833153 Rust/Python/Windows PASS, Scheduler stress SKIPPED. E7 em andamento: E7.1 HALT/M1 integrada pela PR #490 (merge SHA `b1b5ced5c3d6053f8d59c8f4d932f40518db1064`); CI #41762232781 Rust/Python/Windows PASS e Scheduler stress SKIPPED; CI pós-merge #41765421167 no SHA da main: Rust/Python/Windows PASS, Scheduler stress SKIPPED. Próximo incremento E7.2 NMI/INT e saída de HALT. E8 formal/diferencial e E9 integração temporal permanecem pendentes. Não há LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS global.
