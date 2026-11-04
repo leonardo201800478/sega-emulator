@@ -29,8 +29,8 @@ pub use architectural_state::{Z80ArchitecturalState, Z80ArchitecturalStateError}
 pub use cpu::{CpuError, Z80, Z80AlternateRegisters, Z80Registers};
 pub use m1::{Z80M1Cycle, Z80M1CycleState, Z80M1Error, Z80M1Phase, Z80M1Pins};
 pub use mcycle::{
-    Z80MCycle, Z80MCycleEdge, Z80MCycleError, Z80MCycleKind, Z80MCycleState,
-    Z80MCycleTState, Z80MCycleWaitSource,
+    Z80MCycle, Z80MCycleEdge, Z80MCycleError, Z80MCycleKind, Z80MCycleState, Z80MCycleTState,
+    Z80MCycleWaitSource,
 };
 pub use micro_ops::{
     Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES, Z80_INT_ACK_BASE_TSTATES, Z80BusHandshake,
