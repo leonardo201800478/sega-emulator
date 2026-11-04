@@ -257,10 +257,7 @@ def audit() -> tuple[dict[str, Any], list[Result]]:
                 output=(
                     "present"
                     if workspace.lockfile_exists
-                    else (
-                        "not present; cargo --locked determines whether "
-                        "one is required"
-                    )
+                    else "missing; check whether Cargo requires this lockfile"
                 ),
             )
         )
@@ -269,10 +266,7 @@ def audit() -> tuple[dict[str, Any], list[Result]]:
             Result(
                 f"not assigned to an active workspace: {manifest}",
                 "NOT RUN",
-                output=(
-                    "Manifest is outside the declared workspace membership; "
-                    "review before activation."
-                ),
+                output="Outside declared workspace; policy review required.",
             )
         )
     return report, results
