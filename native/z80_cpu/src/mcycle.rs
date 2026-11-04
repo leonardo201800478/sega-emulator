@@ -249,6 +249,7 @@ impl Z80MCycle {
         if state.elapsed_tstates != expected_elapsed
             || (state.completed_base_tstates < 2
                 && (fixed_waits_completed != 0 || state.external_wait_tstates != 0))
+            || (state.fixed_wait_remaining > 0 && state.external_wait_tstates != 0)
             || (state.completed_base_tstates > 2 && state.fixed_wait_remaining != 0)
             || (state.completed_base_tstates == state.nominal_tstates
                 && state.fixed_wait_remaining != 0)
@@ -372,6 +373,19 @@ mod tests {
             cycle.advance_tstate(false).unwrap()
         );
         assert_eq!(restored.export_state(), cycle.export_state());
+    }
+
+    #[test]
+    fn snapshot_state_round_trips_through_the_versioned_serde_codec() {
+        let mut cycle = Z80MCycle::new(Z80MCycleKind::InterruptAcknowledge, 4, 2).unwrap();
+        cycle.advance_tstate(false).unwrap();
+        cycle.advance_tstate(false).unwrap();
+        cycle.advance_tstate(true).unwrap();
+        let snapshot = cycle.export_state();
+        let encoded = serde_json::to_vec(&snapshot).unwrap();
+        let decoded = serde_json::from_slice(&encoded).unwrap();
+        assert_eq!(decoded, snapshot);
+        assert_eq!(Z80MCycle::restore_state(decoded).unwrap().export_state(), snapshot);
     }
 
     #[test]
