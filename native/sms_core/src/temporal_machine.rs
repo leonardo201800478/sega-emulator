@@ -154,9 +154,9 @@ fn instruction_timeline_is_valid(state: &SmsTemporalMachineState) -> bool {
         state.bus.internal_completion,
     ) {
         (Some(_), None, None, None) => {
-            let Some(request_started_at) = state.bus.request_started_at else {
+            if state.bus.request_started_at.is_none() {
                 return false;
-            };
+            }
             let Some(mcycle) = state.bus.mcycle else {
                 return false;
             };
