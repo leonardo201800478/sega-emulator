@@ -281,7 +281,10 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u8(vector);
         }
         Z80MicroSequencerPhase::InterruptModeDispatchInternal {
-            mode, vector, return_address, remaining_tstates,
+            mode,
+            vector,
+            return_address,
+            remaining_tstates,
         } => {
             writer.u8(66);
             writer.u8(mode);
@@ -290,7 +293,10 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u8(remaining_tstates);
         }
         Z80MicroSequencerPhase::InterruptStackPushWrite {
-            mode, vector, stage, return_address,
+            mode,
+            vector,
+            stage,
+            return_address,
         } => {
             writer.u8(67);
             writer.u8(mode);
@@ -302,7 +308,10 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u8(68);
             writer.u16(vector_address);
         }
-        Z80MicroSequencerPhase::InterruptMode2VectorReadHigh { vector_address, low } => {
+        Z80MicroSequencerPhase::InterruptMode2VectorReadHigh {
+            vector_address,
+            low,
+        } => {
             writer.u8(69);
             writer.u16(vector_address);
             writer.u8(low);
