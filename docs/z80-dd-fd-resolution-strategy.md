@@ -186,7 +186,7 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 
 **Gate E2:** PASS para FSM, seleção de prefixo, classificação e snapshot. CI completo do SHA candidato: [run 41721337030](https://github.com/leonardo201800478/sega-emulator/actions/runs/41721337030). Isso não declara FUNCTIONAL_PASS das instruções DD/FD nem TEMPORAL_PASS.
 
-**Limites mantidos após E2:** famílias indexadas remanescentes, fallback de prefixos ignorados, validação diferencial, traces por T-state e integração temporal. E4A/E4B/E4C e E5 estão integradas na main; E6.1 iniciou o fallback BASE para opcodes ignorados já suportados.
+**Limites mantidos após E2:** famílias indexadas remanescentes, validação diferencial, traces por T-state e integração temporal. E4A/E4B/E4C, E5 e E6 estão implementadas nos escopos registrados; E6 cobre fallback BASE/ED sem refetch e preservação de M-cycles/snapshots.
 
 ### E3 — Operações 16-bit e substituição HL→IX/IY
 
@@ -269,7 +269,7 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 
 ### E6 — Prefixos ignorados e combinações DD/FD
 
-**E6.1 — Fallback BASE para opcodes já suportados (em andamento):**
+**E6.1 — Fallback BASE para opcodes já suportados: IMPLEMENTED.**
 - Encaminhar `Ignored` ao dispatch BASE sem refetch; preservar o custo do M1 DD/FD já consumido.
 - Preservar PC, R, M1, WAIT e snapshots dos fetches pendentes.
 - Demonstrar last-prefix-wins em cadeias repetidas/alternadas e ausência de substituição de IX/IY/H/L nas instruções BASE ignoradas.
@@ -277,16 +277,16 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 - Não adicionar handlers BASE ausentes: `UnsupportedOpcode` continua explícito para lacunas do decoder BASE.
 - Testar o subconjunto BASE/ED que já possui caminho de execução sem novos operandos/bus phases.
 
-**E6.2 — Fallback com operandos e fases suspensas:**
+**E6.2 — Fallback com operandos e fases suspensas: IMPLEMENTED.**
 - Estender a resolução para as instruções BASE/ED já suportadas que possuem leituras, escritas e ciclos internos.
 - Ajustar invariantes de snapshot e contagem M-cycle para prefixos ignorados, sem alterar semântica BASE.
 
-**E6.3 — Fechamento combinatório:**
+**E6.3 — Fechamento combinatório: IMPLEMENTED.**
 - Cobrir DD, FD, DD DD, FD FD, DD FD, FD DD, DD/FD+ED, DD/FD+CB e cadeias longas.
 - Verificar bytes consumidos, PC, R, M1/non-M1, flags, WZ, M-cycles, T-states e ausência de fetch duplicado.
 - Não impor limite artificial de prefixos repetidos.
 
-**Gate E6:** cada opcode classificado como UsesIndex, Ignored ou IndexedCb tem resolução explícita; fallback BASE não relê opcode; combinações e snapshots não perdem prefixos já consumidos.
+**Gate E6: PASS no escopo declarado.** OpCodes `UsesIndex`, `Ignored` e `IndexedCb` seguem caminhos explícitos; fallback BASE não relê opcode; cadeias repetidas/alternadas e snapshots preservam prefixos já consumidos.
 
 Validar explicitamente:
 - DD/FD seguido de instrução BASE que não usa HL/IX/IY.
@@ -348,6 +348,6 @@ Além disso, Scheduler deterministic stress e Windows x64 D3D12/WASAPI/XAudio2 q
 
 ## 8. Próxima ação
 
-E5 está integrada na main. Prosseguir com E6.1 na branch `feat/z80-prefix-fallback-e6a-2026-11-04`; os gates do E5 passaram no CI #4245. LONG_PASS, DIFFERENTIAL_PASS e TEMPORAL_PASS permanecem pendentes.
+E6 está implementada na PR #486, HEAD `b66b97cb6202b270e857f6cfb55be85a0ea62a6b`; CI #41757983537 aprovado para Rust, Python e Windows x64. Após merge e confirmação da nova main, a próxima etapa é E7 — fechamento semântico integral do Z80.
 
-**Estado atual DD/FD:** E2 FSM/snapshot SHORT_PASS; E3A1/E3A2/E4A/E4B/E4C e E5 integradas na main `f4130104fa971289507c0b15ab2d8eabd1dd5b00`. E5 pela PR #485; CI #4245 SUCCESS (Rust, Python e Windows PASS; Scheduler SKIPPED). E6.1 fallback BASE está em andamento; E6.2/E6.3, E7 fechamento semântico, E8 formal e E9 integração temporal permanecem pendentes. Não há LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS global.
+**Estado atual DD/FD:** E2 FSM/snapshot, E3A1/E3A2/E4A/E4B/E4C, E5 e E6 IMPLEMENTED / QUICK_PASS / SHORT_PASS nos escopos validados. E6 PR #486 HEAD `b66b97cb6202b270e857f6cfb55be85a0ea62a6b`; CI #41757983537 Rust/Python/Windows PASS, Scheduler stress SKIPPED. Próxima etapa: E7 fechamento semântico; E8 formal/diferencial e E9 integração temporal permanecem pendentes. Não há LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS global.
