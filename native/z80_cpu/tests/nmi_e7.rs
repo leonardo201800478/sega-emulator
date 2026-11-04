@@ -117,6 +117,8 @@ fn nmi_edge_latched_during_an_instruction_is_accepted_at_the_next_boundary() {
     let fetch = request(cpu.begin_instruction().unwrap());
     cpu.request_nmi();
     assert!(cpu.nmi_pending);
+    cpu = round_trip(cpu);
+    assert!(cpu.nmi_pending, "the pending NMI edge must survive snapshot restore");
     assert_eq!(
         cpu.complete_bus_cycle(fetch.id, Some(0x00)).unwrap(),
         Z80MicroStep::InstructionRetired {
