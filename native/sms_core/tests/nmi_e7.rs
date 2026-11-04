@@ -135,6 +135,7 @@ fn sms_temporal_halt_samples_int_after_effective_t4_and_restores_the_latch() {
     machine.cpu_mut().halted = true;
     machine.cpu_mut().registers.sp = 0xC100;
     machine.set_int_line(Some(0xFF));
+    machine.set_trace_enabled(true);
 
     // Two WAIT states extend this repeated HALT M1. The sample must occur at
     // its effective T4 completion, not at the nominal four-T-state boundary.
@@ -148,15 +149,24 @@ fn sms_temporal_halt_samples_int_after_effective_t4_and_restores_the_latch() {
     assert!(machine.cpu().halted);
     assert_eq!(machine.cpu().halt_exit_pending, Some(Z80HaltExit::Int));
     assert_eq!(machine.now(), MachineTime::from_ticks(18));
+    assert!(!machine.take_trace().is_empty());
 
     let state = machine.export_state();
     let mut restored = SmsTemporalMachine::restore_state(state).unwrap();
+    restored.set_trace_enabled(true);
+    machine.set_int_line(None);
     restored.set_int_line(None);
-    let acknowledge = match restored.begin_instruction().unwrap() {
-        Z80MicroStep::BusRequest(request) => request,
-        other => panic!("expected latched INT acknowledge, got {other:?}"),
-    };
-    assert_eq!(acknowledge.operation, Z80BusOperation::InterruptAcknowledge);
+
+    let expected = machine.step_instruction(0).unwrap();
+    let actual = restored.step_instruction(0).unwrap();
+    assert_eq!(actual, expected);
+    assert!(matches!(
+        actual,
+        Z80MicroStep::InterruptAcknowledge { vector: 0xFF, .. }
+    ));
+    assert_eq!(restored.take_trace(), machine.take_trace());
+    assert_eq!(restored.export_state(), machine.export_state());
+    assert_eq!(restored.now(), machine.now());
     assert!(!restored.cpu().halted);
 }
 
