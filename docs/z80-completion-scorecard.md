@@ -57,7 +57,7 @@ A baseline consultada em `main` é `f4130104fa971289507c0b15ab2d8eabd1dd5b00`, a
 | E4B | ADD/ADC/SUB/SBC/AND/XOR/OR/CP (IX/IY+d) | Integrada na main pela PR #472; IMPLEMENTED / QUICK_PASS / SHORT_PASS; CI 4/4 PASS |
 | E4C | INC/DEC (IX/IY+d) | Integrada na main pela PR #475; IMPLEMENTED / QUICK_PASS / SHORT_PASS; 5 testes dirigidos; CI 4/4 PASS |
 | E5 | DDCB/FDCB completo | IMPLEMENTED / QUICK_PASS / SHORT_PASS; PR #485 merged; CI #4245 3 jobs PASS, Scheduler SKIPPED |
-| E6 | Fallback geral e resolução de prefixos DD/FD/ED/CB | Pendente/incompleto no microsequenciador |
+| E6 | Fallback geral e resolução de prefixos DD/FD/ED/CB | IMPLEMENTED / QUICK_PASS / SHORT_PASS; PR #486; CI #41757983537 Rust/Python/Windows PASS; Scheduler SKIPPED |
 | E7 | Fechamento semântico global BASE/CB/ED/DD/FD/DDCB/FDCB | Pendente |
 | E8 | Validação formal e diferencial (ZEXDOC/ZEXALL e corpora independentes) | Pendente |
 | E9 | Integração temporal sistêmica com bus, WAIT, Scheduler, SMS e SG-1000 | Pendente |
@@ -173,23 +173,30 @@ Os níveis abaixo são cumulativos no escopo declarado. O estado deve ser atribu
 
 ### E6 — Resolução geral de prefixos
 
-**E6.1 — Fallback BASE de prefixos DD/FD (em andamento na branch `feat/z80-prefix-fallback-e6a-2026-11-04`):**
+**E6.1 — Fallback BASE DD/FD: IMPLEMENTED.**
 - Encaminhar opcodes `Ignored` já obtidos ao dispatch BASE, sem novo fetch.
 - Preservar PC, R, M1, T-states acumulados, WAIT e snapshots dos fetches pendentes; manter o latch Index como contexto de timing/serialização, sem aplicar substituição IX/IY a opcodes `Ignored`.
 - Demonstrar que H/L e IX/IY não são substituídos em instruções BASE ignoradas.
 - Reutilizar o decoder ED quando ED segue DD/FD; manter DDCB/FDCB na rota E5.
 - Limite deste incremento: somente instruções BASE/ED já suportadas pelo sequenciador; `UnsupportedOpcode` continua explícito para lacunas do decoder BASE.
-- Aceite: matriz de sequências simples/repetidas/alternadas, WAIT aditivo, round-trip de snapshots e ausência de fetch duplicado.
+- Aceite cumprido: sequências simples/repetidas/alternadas, WAIT aditivo, round-trip de snapshots e ausência de fetch duplicado.
 
-**E6.2 — Expansão do fallback para as demais fases BASE/ED já suportadas:** ajustar validação de estados suspensos e contagem de M-cycles sem alterar semântica de instruções.
+**E6.2 — Operandos, fases suspensas e snapshots BASE/ED: IMPLEMENTED.**
 
-**E6.3 — Fechamento combinatório:** cadeias longas, combinações DD/FD/ED/CB, stress e regressões integrais. Não impor limite artificial de prefixos.
+**E6.3 — Fechamento combinatório: IMPLEMENTED.**
 
 - Cobrir DD, FD, DD DD, FD FD, DD FD, FD DD, DD/FD+ED, DD/FD+CB e prefixos redundantes/ignorados.
 - Garantir last-prefix-wins, incremento de R, PC, bytes consumidos, M1 e custo temporal.
 - Prefixos ignorados devem executar a instrução BASE correta sem fetch duplicado ou substituição indevida de HL/H/L.
 - Não impor limite artificial de prefixos repetidos.
-- Aceite: matriz combinatória, stress de cadeias longas, snapshot/restore e regressões sem duplicação de fetch.
+- Aceite cumprido: matriz de combinações, stress de cadeias longas, snapshot/restore e regressões sem fetch duplicado.
+
+**Evidência E6 — PR #486, HEAD `b66b97cb6202b270e857f6cfb55be85a0ea62a6b`:**
+- CI [#41757983537](https://github.com/leonardo201800478/sega-emulator/actions/runs/41757983537): Rust PASS (fmt, Clippy, workspace tests); Python PASS (pytest, Ruff check, Ruff format); Windows x64 PASS (D3D12, WASAPI/XAudio2 e testes); Scheduler stress SKIPPED por não haver alteração no Scheduler.
+- `native/z80_cpu/tests/prefix_fallback_e6.rs`: 9/9 testes PASS, incluindo BASE register, immediate, ALU, relative branch, memória read/write, ED absolute transfer, WAIT e snapshots.
+- `native/z80_cpu/tests/prefix_fsm.rs`: last-prefix-wins, repetição/alternância e cadeia de 257 prefixos sem limite artificial.
+- Regressão Z80 existente: 216/216 testes unitários PASS; E5 indexed-CB permanece coberta por 8/8 testes.
+- E6 não reivindica ZEXDOC/ZEXALL, LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS. `UnsupportedOpcode` continua explícito para instruções BASE que o executor ainda não implementa.
 
 ### E7 — Fechamento semântico de todo o Z80 clássico
 
@@ -279,4 +286,4 @@ Toda atualização deve incluir data, SHA da baseline, SHA candidato, PR, workfl
 
 ---
 
-**Baseline operacional:** E5 DDCB/FDCB integrada na `main` `f4130104fa971289507c0b15ab2d8eabd1dd5b00` pela PR #485, CI #4245 concluído com sucesso. E6.1 está em implementação na branch `feat/z80-prefix-fallback-e6a-2026-11-04`. Validação diferencial externa, ZEXDOC/ZEXALL, LONG_PASS e TEMPORAL_PASS continuam pendentes.
+**Baseline operacional:** E5 integrada na `main` `f4130104fa971289507c0b15ab2d8eabd1dd5b00` pela PR #485. E6 implementada na PR #486, HEAD `b66b97cb6202b270e857f6cfb55be85a0ea62a6b`; CI #41757983537 aprovado. Próxima etapa: E7 — fechamento semântico integral. Validação diferencial externa, ZEXDOC/ZEXALL, LONG_PASS e TEMPORAL_PASS continuam pendentes.
