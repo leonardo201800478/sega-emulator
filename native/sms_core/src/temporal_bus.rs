@@ -242,13 +242,23 @@ impl SmsTemporalBus {
         };
         let mcycle = Z80MCycle::new(kind, request.base_tstates, mandatory_waits)
             .map_err(|_| SmsTemporalBusError::InvalidState)?;
-        let deadline = self.coordinator.schedule_bus_tstate(request.id, 0)?;
+        let total_tstates = u32::from(request.base_tstates)
+            .checked_add(mandatory_waits)
+            .and_then(|total| total.checked_add(fixture_wait_tstates))
+            .ok_or(SmsTemporalBusError::InvalidState)?;
+        let duration = u128::from(total_tstates)
+            .checked_mul(u128::from(self.coordinator.master_ticks_per_tstate()))
+            .ok_or(SmsTemporalBusError::InvalidState)?;
+        let completion_deadline = started_at
+            .checked_add(duration)
+            .ok_or(SmsTemporalBusError::InvalidState)?;
+        self.coordinator.schedule_bus_tstate(request.id, 0)?;
         self.pending_request = Some(request);
         self.request_started_at = Some(started_at);
         self.mcycle = Some(mcycle);
         self.fixture_wait_tstates = Some(fixture_wait_tstates);
         self.fixture_wait_remaining = Some(fixture_wait_tstates);
-        Ok(deadline)
+        Ok(completion_deadline)
     }
 
     /// Schedule one internal CPU interval without creating a fake bus access.
@@ -887,6 +897,43 @@ mod tests {
     }
 
     #[test]
+    fn bus_write_is_deferred_until_the_final_tstate_and_intermediate_state_restores() {
+        let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
+        let request = request(41, Z80BusOperation::MemoryWrite { value: 0xA7 }, 0xC010, 3);
+        let deadline = bus.begin_request(request, 0).unwrap();
+        assert_eq!(deadline, MachineTime::from_ticks(9));
+        assert_eq!(bus.memory().read(0xC010), 0);
+
+        assert!(matches!(
+            bus.dispatch_next_boundary().unwrap(),
+            Some(SmsTemporalDispatch::BusTStateProgress { .. })
+        ));
+        assert_eq!(bus.now(), MachineTime::from_ticks(3));
+        assert_eq!(bus.memory().read(0xC010), 0);
+
+        let mut restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
+        assert!(matches!(
+            restored.dispatch_next_boundary().unwrap(),
+            Some(SmsTemporalDispatch::BusTStateProgress { .. })
+        ));
+        assert_eq!(restored.now(), MachineTime::from_ticks(6));
+        assert_eq!(restored.memory().read(0xC010), 0);
+
+        let Some(SmsTemporalDispatch::BusCompletion(completion)) =
+            restored.dispatch_next_boundary().unwrap()
+        else {
+            panic!("expected the final M-cycle edge to commit the write");
+        };
+        assert_eq!(completion.completed_at, deadline);
+        assert_eq!(restored.memory().read(0xC010), 0xA7);
+        assert_eq!(
+            restored.dispatch_next().unwrap(),
+            Some(SmsTemporalDispatch::BusCompletion(completion))
+        );
+        assert_eq!(restored.memory().read(0xC010), 0xA7);
+    }
+
+    #[test]
     fn memory_write_occurs_only_at_its_scheduled_completion() {
         let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
         let request = request(2, Z80BusOperation::MemoryWrite { value: 0x5A }, 0xC000, 3);
@@ -936,13 +983,13 @@ mod tests {
     }
 
     #[test]
-    fn restore_rejects_bus_deadlines_shorter_than_nominal_cycle() {
+    fn restore_rejects_a_bus_tstate_event_with_a_skipped_timestamp() {
         let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
         let request = request(1, Z80BusOperation::OpcodeFetch, 0, 4);
         bus.begin_request(request, 0).unwrap();
 
         let mut state = bus.export_state();
-        state.coordinator.scheduler.event_queue.pending[0].timestamp = MachineTime::from_ticks(3);
+        state.coordinator.scheduler.event_queue.pending[0].timestamp = MachineTime::from_ticks(6);
         assert_eq!(
             SmsTemporalBus::restore_state(state).err(),
             Some(SmsTemporalBusError::InvalidState)
