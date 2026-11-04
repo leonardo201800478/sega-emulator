@@ -192,6 +192,7 @@ fn execute_one(
             terminal @ Z80MicroStep::InterruptServiced { .. } => {
                 let state = cpu.export_state();
                 phases.insert(phase_name(&state.phase));
+                snapshots.push(state.clone());
                 if restore_each_boundary {
                     let encoded = state.encode().expect("encode terminal interrupt state");
                     let decoded = Z80MicroSequencerState::decode(&encoded)
@@ -371,7 +372,6 @@ fn e7_2e_every_generated_phase_round_trips_and_continues_equivalently() {
             let (phases, supported, snapshots) =
                 assert_continuous_equals_restored(&[opcode, 0, 0, 0, 0], flags, 0, None);
             observed_phases.extend(phases);
-        valid_phase_states.extend(snapshots);
             valid_phase_states.extend(snapshots);
             if supported {
                 supported_cases += 1;
@@ -380,59 +380,23 @@ fn e7_2e_every_generated_phase_round_trips_and_continues_equivalently() {
             }
         }
 
-        let (phases, supported, snapshots) =
-            assert_continuous_equals_restored(&[0xCB, opcode, 0, 0], 0xFF, 0, None);
-        observed_phases.extend(phases);
-        valid_phase_states.extend(snapshots);
-        if supported {
-            supported_cases += 1;
-        } else {
-            unsupported_cases += 1;
-        }
-        let (phases, supported, snapshots) =
-            assert_continuous_equals_restored(&[0xED, opcode, 0, 0], 0xFF, 0, None);
-        observed_phases.extend(phases);
-        valid_phase_states.extend(snapshots);
-        if supported {
-            supported_cases += 1;
-        } else {
-            unsupported_cases += 1;
-        }
-        let (phases, supported, snapshots) =
-            assert_continuous_equals_restored(&[0xDD, opcode, 0, 0, 0], 0xFF, 0, None);
-        observed_phases.extend(phases);
-        valid_phase_states.extend(snapshots);
-        if supported {
-            supported_cases += 1;
-        } else {
-            unsupported_cases += 1;
-        }
-        let (phases, supported, snapshots) =
-            assert_continuous_equals_restored(&[0xFD, opcode, 0, 0, 0], 0xFF, 0, None);
-        observed_phases.extend(phases);
-        valid_phase_states.extend(snapshots);
-        if supported {
-            supported_cases += 1;
-        } else {
-            unsupported_cases += 1;
-        }
-        let (phases, supported, snapshots) =
-            assert_continuous_equals_restored(&[0xDD, 0xCB, 0, opcode], 0xFF, 0, None);
-        observed_phases.extend(phases);
-        valid_phase_states.extend(snapshots);
-        if supported {
-            supported_cases += 1;
-        } else {
-            unsupported_cases += 1;
-        }
-        let (phases, supported, snapshots) =
-            assert_continuous_equals_restored(&[0xFD, 0xCB, 0, opcode], 0xFF, 0, None);
-        observed_phases.extend(phases);
-        valid_phase_states.extend(snapshots);
-        if supported {
-            supported_cases += 1;
-        } else {
-            unsupported_cases += 1;
+        for program in [
+            vec![0xCB, opcode, 0, 0],
+            vec![0xED, opcode, 0, 0],
+            vec![0xDD, opcode, 0, 0, 0],
+            vec![0xFD, opcode, 0, 0, 0],
+            vec![0xDD, 0xCB, 0, opcode],
+            vec![0xFD, 0xCB, 0, opcode],
+        ] {
+            let (phases, supported, snapshots) =
+                assert_continuous_equals_restored(&program, 0xFF, 0, None);
+            observed_phases.extend(phases);
+            valid_phase_states.extend(snapshots);
+            if supported {
+                supported_cases += 1;
+            } else {
+                unsupported_cases += 1;
+            }
         }
     }
 
