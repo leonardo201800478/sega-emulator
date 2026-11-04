@@ -1,7 +1,7 @@
 # Meta de conclusão do Z80 — cobertura, validação e critérios de aceite
 
 **Data da revisão:** 2026-11-04  
-**Baseline de código/main:** `ea327025b312feb53f1e3e5326b5a5e7c40e72f1` (E7.2D — testes de arbitragem integrados pela PR #500; implementação de hardware IM0/IM1/IM2 na PR #498).  
+**Baseline de código:** `ea327025b312feb53f1e3e5326b5a5e7c40e72f1` (E7.2D integrada pela PR #500). **HEAD documental da main após PR #501:** `a324361574a45a80f8ae3aa70868630250e55d30`.  
 **Evidência E4C:** HEAD validado `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS; PR #475 integrada no merge SHA `f89a52346e91e88e82ab37a4afcfffff2d793407`.  
 **Schema do microsequenciador na baseline main:** `Z80_MICRO_SEQUENCER_STATE_VERSION = 31` em `native/z80_cpu/src/lib.rs`; o schema foi incrementado para serializar as fases retomáveis de E7.2C.  
 **Status deste documento:** referência de planejamento e critérios de aceite. Não substitui a matriz semântica por opcode nem os relatórios de execução dos testes.
@@ -46,7 +46,7 @@ Os percentuais abaixo são **estimativas de engenharia**, usadas para dimensiona
 
 ## 3. Baseline técnica e estado conhecido
 
-O HEAD atual de main é `ea327025b312feb53f1e3e5326b5a5e7c40e72f1`. E7.1 (HALT/M1) foi integrada pela PR #490; E7.2A (NMI retomável) pela PR #495; E7.2B (INT acknowledge) pela PR #496; E7.2C (dispatch IM0/IM1/IM2) pela PR #498; E7.2D (evidência EI/DI/NMI) pela PR #500. CI da PR #500 (#41794174397) e pós-merge #41794506556 passaram em Rust, Python e Windows x64; Scheduler deterministic stress SKIPPED. E7.2E (snapshots de todas as fases), amostragem T4, BUSREQ, RETI/daisy-chain e validação temporal/diferencial independente permanecem pendentes.
+O código ativo da main permanece no SHA `ea327025b312feb53f1e3e5326b5a5e7c40e72f1`; a documentação foi reconciliada pela PR #501, merge SHA `a324361574a45a80f8ae3aa70868630250e55d30`. E7.1 (HALT/M1) foi integrada pela PR #490; E7.2A (NMI retomável) pela PR #495; E7.2B (INT acknowledge) pela PR #496; E7.2C (dispatch IM0/IM1/IM2) pela PR #498; E7.2D (evidência EI/DI/NMI) pela PR #500. CI da PR #500 (#41794174397) e pós-merge #41794506556 passaram em Rust, Python e Windows x64; Scheduler deterministic stress SKIPPED. E7.2E (snapshots de todas as fases), amostragem T4, BUSREQ, RETI/daisy-chain e validação temporal/diferencial independente permanecem pendentes.
 
 | Fase | Escopo | Estado na fotografia |
 |---|---|---|
@@ -58,7 +58,7 @@ O HEAD atual de main é `ea327025b312feb53f1e3e5326b5a5e7c40e72f1`. E7.1 (HALT/M
 | E4C | INC/DEC (IX/IY+d) | Integrada na main pela PR #475; IMPLEMENTED / QUICK_PASS / SHORT_PASS; 5 testes dirigidos; CI 4/4 PASS |
 | E5 | DDCB/FDCB completo | IMPLEMENTED / QUICK_PASS / SHORT_PASS; PR #485 merged; CI #4245 3 jobs PASS, Scheduler SKIPPED |
 | E6 | Fallback geral e resolução de prefixos DD/FD/ED/CB | IMPLEMENTED / QUICK_PASS / SHORT_PASS; PR #486 merged; CI #41759035927 e push main #41759330209 PASS; Scheduler SKIPPED |
-| E7 | Fechamento semântico global BASE/CB/ED/DD/FD/DDCB/FDCB | E7.1 HALT/M1, E7.2A NMI, E7.2B INT acknowledge, E7.2C IM0/IM1/IM2 e E7.2D EI/DI integradas; E7.2E snapshots/restauração ainda pendente. HALT T4, BUSREQ, RETI/daisy-chain, IRQ real do VDP SMS e validação independente pendentes. INTEGRATION_PENDING |
+| E7 | Fechamento semântico global BASE/CB/ED/DD/FD/DDCB/FDCB | E7.1 HALT/M1, E7.2A NMI, E7.2B INT acknowledge, E7.2C IM0/IM1/IM2 e E7.2D EI/DI integradas; E7.2E candidata na PR #502 (HEAD `69ea4299b3858787f0f91682f3ea823371cde3b0`), sem CI para esse SHA e ainda incompleta; HALT T4, BUSREQ, RETI/daisy-chain, IRQ real do VDP SMS e validação independente pendentes. INTEGRATION_PENDING |
 | E8 | Validação formal e diferencial (ZEXDOC/ZEXALL e corpora independentes) | Pendente |
 | E9 | Integração temporal sistêmica com bus, WAIT, Scheduler, SMS e SG-1000 | Pendente |
 
@@ -226,7 +226,7 @@ Aceite: nenhuma instrução documentada elegível sem classificação e critéri
 - Inventário BASE candidato: 252 opcodes implementados / 0 rejeitados explicitamente.
 - Evidência e limites: [auditoria E7.1 — HALT](audits/z80-e7-halt-m1-2026-11-04.md).
 - **Limite:** o acknowledge e o dispatch NMI/INT estão implementados nas fases E7.2A/B/C, mas a saída de HALT ainda não possui amostragem T4 cycle-accurate. Reset especial e validação independente continuam pendentes. Não atribuir SHORT_PASS integral a HALT.
-- Auditoria de código E7 na baseline histórica `5768705658522deb46a0fb0556b51923ae8166b8`: [auditoria E7 — semântica ED, microsequenciador, snapshots e interrupções](audits/z80-e7-code-validation-2026-11-04.md). A revisão encontrou 26 testes ED positivos no microsequenciador, aprovados no CI #41775300143 (216 testes unitários totais no crate Z80). Esses testes incluem comparação com o executor atômico interno e validações de requests/WAIT/snapshots; não equivalem a oráculo externo nem a trace independente. E7 permanece INTEGRATION_PENDING por HALT T4, BUSREQ, RETI/daisy-chain, snapshots completos e validação temporal/diferencial independente; E7.2D possui testes focados na PR #500, ainda não integrada.
+- Auditoria de código E7 na baseline histórica `5768705658522deb46a0fb0556b51923ae8166b8`: [auditoria E7 — semântica ED, microsequenciador, snapshots e interrupções](audits/z80-e7-code-validation-2026-11-04.md). A revisão encontrou 26 testes ED positivos no microsequenciador, aprovados no CI #41775300143 (216 testes unitários totais no crate Z80). Esses testes incluem comparação com o executor atômico interno e validações de requests/WAIT/snapshots; não equivalem a oráculo externo nem a trace independente. E7 permanece INTEGRATION_PENDING por HALT T4, BUSREQ, RETI/daisy-chain, snapshots completos e validação temporal/diferencial independente; E7.2D foi integrada pela PR #500.
 
 #### E7.2C — Dispatch retomável IM0/IM1/IM2 — PR #498 (integrada na main)
 
@@ -253,6 +253,39 @@ Aceite: nenhuma instrução documentada elegível sem classificação e critéri
 - CI pós-merge [#41794506556](https://github.com/leonardo201800478/sega-emulator/actions/runs/41794506556), main SHA `ea327025b312feb53f1e3e5326b5a5e7c40e72f1`: Rust quality/unit regression, Python lint/regression e Windows x64 D3D12/WASAPI/XAudio2 PASS; Scheduler deterministic stress SKIPPED.
 - **Limite:** `EI;HALT;INT` não é declarado coberto; a amostragem NMI/INT no T4 dos ciclos HALT continua pendente. BUSREQ, RETI/daisy-chain e validação diferencial/temporal independente também permanecem fora deste incremento.
 - Estado dos cenários EI/DI testados: IMPLEMENTED / QUICK_PASS / SHORT_PASS; PR #500 integrada no merge SHA `ea327025b312feb53f1e3e5326b5a5e7c40e72f1`. E7 global continua INTEGRATION_PENDING.
+
+#### E7.2E — Snapshots, restauração e equivalência contínua/retomada — PR #502 (candidata, NÃO integrada)
+
+- HEAD consultado: `69ea4299b3858787f0f91682f3ea823371cde3b0`; base original `ea327025b312feb53f1e3e5326b5a5e7c40e72f1`; 11 commits à frente e 0 atrás da base original. Após o merge documental #501, a comparação remota registra a branch #502 divergente, 11 commits à frente e 4 atrás da main atual.
+- Alterações candidatas: seis arquivos; teste temporal SMS de snapshots para NMI, IM0/IM1/IM2, EI delay e HALT/M1; round-trip de 70 variantes da fase; rejeição de tag inválida; validação de schema.
+- Auditoria estrutural no código-base: 70 variantes do enum, 70 writer arms, 70 reader arms e 70 restore-validator arms. É cobertura estrutural, não validação de todas as combinações de estado.
+- O teste temporal compara o resultado terminal, DTO completo exportado e tempo absoluto entre execução contínua e execução com restore nos safe points exercitados. WAIT=1 é usado em NMI/IM0/IM1/IM2 e HALT; EI usa WAIT=0.
+- **Limites encontrados na revisão:** a matriz das 70 variantes testa tag/payload isolados, não restauração/continuação válida de cada fase completa; estados inválidos por fase ainda não estão sistematicamente cobertos; WAIT zero/múltiplo e limites de transação não estão abrangidos em todas as famílias; o cenário IM0 não fixa explicitamente o T-state terminal esperado; o teste de tag inválida depende do offset binário fixo 27; a alteração de versão não recalcula CRC, devendo isolar explicitamente a validação de versão da validação de checksum.
+- **Limite de formato:** `SmsTemporalMachineState` continua DTO em memória com `export_state()/restore_state()`; não existe evidência de codec binário versionado para save state completo da máquina SMS. O codec binário validado é o do estado CPU Z80.
+- CI para o HEAD #502: **NOT RUN / nenhum workflow associado** na consulta de 2026-11-04. Os candidatos anteriores tiveram falhas de rustfmt e não validam o HEAD atual. Execução local: BLOCKED por falha de resolução DNS de `github.com` no ambiente desta sessão.
+- Estado: **IN_PROGRESS / INTEGRATION_PENDING**. Não atribuir QUICK_PASS/SHORT_PASS, LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS à E7.2E antes de CI atual e cobertura complementar.
+
+**Próximos critérios E7.2E:** (1) CI completo no SHA exato; (2) snapshot/restore/continuação por fase e por combinação de estado válida; (3) rejeição de estados incoerentes, truncados, com CRC/tags/schema inválidos; (4) WAIT 0, 1 e múltiplos em fronteiras de bus/internal/M1; (5) comparação de trace, CPU, memória, scheduler e tempo entre contínuo e retomada; (6) documentar separadamente CPU codec e DTO SMS.
+
+#### E7.3 — Amostragem de INT/NMI no T4 de HALT
+
+Pendente. Definir a borda exata de amostragem e demonstrar a saída de HALT em cada combinação de NMI/INT/IFF/EI delay, com PC/R, acknowledge e M-cycles coerentes. O caso `EI;HALT;INT` permanece explicitamente não aprovado.
+
+#### E7.4 — BUSREQ e arbitragem de barramento
+
+Pendente. Modelar BUSREQ/WAIT/contensão e retomada sem perder request, fase M1, estado CPU ou causalidade do Scheduler. Não simular BUSREQ como atraso genérico.
+
+#### E7.5 — RETI e daisy-chain
+
+Pendente. Distinguir RETI de RETN e representar a notificação de fim de serviço para periféricos/daisy-chain; validar sequência de barramento e efeitos de IFF.
+
+#### E7.6 — Fonte IRQ real do VDP SMS
+
+Pendente. Conectar IRQ do VDP ao pino INT pelo contrato de máquina, incluindo status/acknowledge do dispositivo e nível de linha; não usar vetor fixo artificial como substituto da fonte real.
+
+#### E7.7 — Auditoria semântica integral
+
+Pendente. Fechar a matriz BASE/CB/ED/DD/FD/DDCB/FDCB, flags documentadas e indeterminadas, Q/WZ, estados alternativos, instruções de bloco, I/O, aliases e opcodes não documentados; vincular cada célula a testes e evidências. A auditoria histórica de 26 testes ED no microsequenciador é QUICK_PASS apenas para os casos examinados, não para ED integral.
 
 ### E8 — Validação formal e diferencial
 
@@ -328,4 +361,4 @@ Toda atualização deve incluir data, SHA da baseline, SHA candidato, PR, workfl
 
 ---
 
-**Baseline operacional (2026-11-04, revisão E7.2D):** `main` SHA `ea327025b312feb53f1e3e5326b5a5e7c40e72f1`. E7.1, E7.2A, E7.2B e E7.2C integradas pelas PRs #490, #495, #496 e #498; E7.2D integrada pela PR #500. PR #501 reconcilia esta documentação e permanece separada da implementação técnica. Próximo incremento: E7.2E — auditoria integral de snapshots, restauração e equivalência entre execução contínua e retomada. Amostragem HALT T4, BUSREQ, RETI/daisy-chain, IRQ real do VDP SMS, diferencial externo, ZEXDOC/ZEXALL e traces temporais independentes permanecem pendentes. E7 global continua `INTEGRATION_PENDING`.
+**Baseline operacional (2026-11-04):** código main `ea327025b312feb53f1e3e5326b5a5e7c40e72f1`; HEAD documental após PR #501 `a324361574a45a80f8ae3aa70868630250e55d30`. E7.1, E7.2A, E7.2B, E7.2C e E7.2D integradas pelas PRs #490, #495, #496, #498 e #500. PR #501 integrada. PR #502 (E7.2E) aberta, HEAD `69ea4299b3858787f0f91682f3ea823371cde3b0`, sem CI para esse SHA e sem merge. Próximo trabalho é concluir E7.2E e as fases E7.3–E7.7 antes de iniciar a validação E8. E7 global continua `INTEGRATION_PENDING`.
