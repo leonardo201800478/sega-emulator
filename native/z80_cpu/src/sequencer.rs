@@ -6506,8 +6506,7 @@ mod tests {
     fn unsupported_ed_opcode_does_not_leave_a_phantom_pending_request() {
         let mut cpu = Z80MicroSequencer::default();
         let prefix_fetch = request(cpu.begin_instruction().unwrap());
-        let subopcode_fetch =
-            request(cpu.complete_bus_cycle(prefix_fetch.id, Some(0xED)).unwrap());
+        let subopcode_fetch = request(cpu.complete_bus_cycle(prefix_fetch.id, Some(0xED)).unwrap());
         assert!(matches!(
             cpu.complete_bus_cycle(subopcode_fetch.id, Some(0x00)),
             Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x00, .. })
