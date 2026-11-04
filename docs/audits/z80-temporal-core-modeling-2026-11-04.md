@@ -186,9 +186,10 @@ Scheduler stress `SKIPPED` não é `PASS`. Compilação não é correção; exec
 
 ## 11. Estado no momento desta modelagem
 
-- A PR #506 contém a matriz E7.2E de estados inválidos, WAIT e restore. No HEAD `8d6751513f8763f5ebfca50ecbaeb9fe469f38fb`, o teste Rust `e7_2e_wait_matrix_covers_m1_memory_io_internal_and_interrupt_cycles` passou após correção do timestamp de início da instrução no caminho de conclusão de ciclo interno.
-- No momento do registro, o job Windows x64 ainda estava em execução e Scheduler deterministic stress estava SKIPPED. Portanto, E7.2E permanece `INTEGRATION_PENDING`.
-- Nenhuma das subfases E7.3–E7.7 é declarada implementada por este documento.
+- A PR #506 contém a matriz E7.2E de estados inválidos, WAIT e restore. No HEAD `8d6751513f8763f5ebfca50ecbaeb9fe469f38fb`, Rust quality/regression, Python lint/regression, Windows x64 D3D12 e Scheduler deterministic stress (short) passaram no run [#41872451175](https://github.com/leonardo201800478/sega-emulator/actions/runs/41872451175). A PR permanece aberta e não integrada à main; por isso, o estado de integração ainda é `INTEGRATION_PENDING`.
+- A modelagem E7.3 foi convertida em implementação candidata na PR empilhada [#509](https://github.com/leonardo201800478/sega-emulator/pull/509), branch `feat/z80-e7-3-halt-t4-20261104`, sobre o HEAD da PR #506. O HEAD atual é `74b8ec1e36c9837ccb276267775dee1fd9fd21b3`; o CI correspondente, run [#41874086066](https://github.com/leonardo201800478/sega-emulator/actions/runs/41874086066), está pendente.
+- O primeiro CI da implementação E7.3 identificou divergências de rustfmt; elas foram corrigidas em commits posteriores. Nenhum resultado de teste funcional/temporal no HEAD atual está declarado ainda.
+- E7.4–E7.7 continuam como modelagem/implementação pendente. Este documento não declara essas etapas como `IMPLEMENTED`, `INTEGRATION_PASS` ou `TEMPORAL_PASS`.
 
 Este documento define a modelagem e os critérios para as próximas alterações; o estado remoto do GitHub e os testes no SHA final continuam sendo a fonte da verdade.
 
