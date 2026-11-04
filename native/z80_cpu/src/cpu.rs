@@ -240,6 +240,8 @@ impl Z80 {
         self.r = (self.r & 0x80) | (self.r.wrapping_add(1) & 0x7F);
         self.iff2 = self.iff1;
         self.iff1 = false;
+        // The Z80 performs an M1 memory-read response at PC; its data is ignored.
+        let _ignored_data = bus.read_memory(self.registers.pc);
         self.push16(bus, self.registers.pc);
         self.registers.pc = 0x0066;
         self.wz = self.registers.pc;
