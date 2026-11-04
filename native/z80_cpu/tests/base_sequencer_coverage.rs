@@ -162,7 +162,8 @@ fn execute_base_opcode(opcode: u8) -> Result<u32, Z80MicroSequencerError> {
                 cpu.complete_bus_cycle(request.id, data)?
             }
             Z80MicroStep::InternalCycle { .. } => cpu.complete_internal_cycle()?,
-            Z80MicroStep::InstructionRetired { tstates, .. } => return Ok(tstates),
+            Z80MicroStep::InstructionRetired { tstates, .. }
+            | Z80MicroStep::InterruptServiced { tstates, .. } => return Ok(tstates),
         };
     }
 

@@ -275,6 +275,19 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
     match phase {
         Z80MicroSequencerPhase::Ready => writer.u8(0),
         Z80MicroSequencerPhase::OpcodeFetch => writer.u8(1),
+        Z80MicroSequencerPhase::NmiResponse => writer.u8(61),
+        Z80MicroSequencerPhase::NmiStackPushInternal { return_address } => {
+            writer.u8(62);
+            writer.u16(return_address);
+        }
+        Z80MicroSequencerPhase::NmiStackPushWrite {
+            stage,
+            return_address,
+        } => {
+            writer.u8(63);
+            writer.u8(stage);
+            writer.u16(return_address);
+        }
         Z80MicroSequencerPhase::ImmediateReadRegister { destination } => {
             writer.u8(2);
             writer.u8(destination);
@@ -682,6 +695,14 @@ fn read_phase(
     Ok(match reader.u8()? {
         0 => Z80MicroSequencerPhase::Ready,
         1 => Z80MicroSequencerPhase::OpcodeFetch,
+        61 => Z80MicroSequencerPhase::NmiResponse,
+        62 => Z80MicroSequencerPhase::NmiStackPushInternal {
+            return_address: reader.u16()?,
+        },
+        63 => Z80MicroSequencerPhase::NmiStackPushWrite {
+            stage: reader.u8()?,
+            return_address: reader.u16()?,
+        },
         2 => Z80MicroSequencerPhase::ImmediateReadRegister {
             destination: reader.u8()?,
         },
@@ -1639,7 +1660,8 @@ mod base_absolute_transfer_snapshot_tests {
                         };
                         cpu.complete_bus_cycle(request.id, data).unwrap()
                     }
-                    Z80MicroStep::InstructionRetired { .. } => break,
+                    Z80MicroStep::InstructionRetired { .. }
+                    | Z80MicroStep::InterruptServiced { .. } => break,
                     Z80MicroStep::InternalCycle { .. } => {
                         panic!("absolute transfer has no internal cycle")
                     }
