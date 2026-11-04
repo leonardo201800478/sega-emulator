@@ -402,6 +402,39 @@ fn indexed_cb_bit_is_read_only_and_preserves_memory_for_all_z_fields() {
 }
 
 #[test]
+fn indexed_cb_displacement_covers_zero_minimum_and_maximum_signed_offsets() {
+    for (prefix, index_base, displacement, expected_address) in [
+        (0xDD, 0x0000, 0x00, 0x0000),
+        (0xDD, 0x0000, 0x80, 0xFF80),
+        (0xDD, 0x0000, 0x7F, 0x007F),
+        (0xFD, 0xFFFF, 0x00, 0xFFFF),
+        (0xFD, 0xFFFF, 0x80, 0xFF7F),
+        (0xFD, 0xFFFF, 0x7F, 0x007E),
+    ] {
+        let (ix, iy) = if prefix == 0xDD {
+            (index_base, 0x4000)
+        } else {
+            (0x4000, index_base)
+        };
+        let result = run_indexed_cb(
+            &[prefix],
+            ix,
+            iy,
+            0x1000,
+            displacement,
+            0x46,
+            0x80,
+            FLAG_C,
+            &[],
+        );
+        assert_eq!(result.cpu.wz, expected_address);
+        assert_eq!(result.cpu.registers.pc, 0x1004);
+        assert_eq!(result.tstates, 20);
+        assert!(result.writes.is_empty());
+    }
+}
+
+#[test]
 fn indexed_cb_phase_snapshots_keep_pending_requests_and_phase_invariants() {
     let result = run_indexed_cb(
         &[0xDD],
