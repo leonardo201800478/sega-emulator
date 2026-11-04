@@ -852,7 +852,7 @@ impl Z80MicroSequencer {
                             opcode,
                             0xC0 | 0xC8 | 0xD0 | 0xD8 | 0xE0 | 0xE8 | 0xF0 | 0xF8
                         ) && classify_index_opcode(opcode) == Z80IndexOpcodeClass::Ignored
-                            && state.mcycle_index == 0
+                            && state.mcycle_index == 1
                             && state.tstate_index == 4
                             && state.instruction_tstates >= 8
                     }),
@@ -2631,7 +2631,17 @@ impl Z80MicroSequencer {
                 _ => false,
             },
             Z80MicroSequencerPhase::BaseReturnConditionInternal { .. } => {
-                state.mcycle_index == 0 && state.tstate_index == 4
+                match state.prefix_state {
+                    Z80PrefixState::None => {
+                        state.mcycle_index == 0 && state.tstate_index == 4
+                    }
+                    Z80PrefixState::Index(_) => {
+                        state.mcycle_index == 1
+                            && state.tstate_index == 4
+                            && state.instruction_tstates >= 8
+                    }
+                    _ => false,
+                }
             }
             Z80MicroSequencerPhase::BaseReturnPop { stage, .. } => {
                 stage <= 1 && state.mcycle_index == 1 + u32::from(stage) && state.tstate_index == 0
