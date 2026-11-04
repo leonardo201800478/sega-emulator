@@ -466,7 +466,10 @@ impl SmsTemporalMachine {
         self.cpu = next_cpu;
         self.m1 = None;
         self.m1_fixture_wait_tstates = None;
-        if matches!(step, Z80MicroStep::InstructionRetired { .. } | Z80MicroStep::InterruptServiced { .. }) {
+        if matches!(
+            step,
+            Z80MicroStep::InstructionRetired { .. } | Z80MicroStep::InterruptServiced { .. }
+        ) {
             self.instruction_started_at = None;
         }
         Ok(step)
@@ -498,7 +501,10 @@ impl SmsTemporalMachine {
                 let step = next_cpu.complete_bus_cycle(completion.request_id, completion.data)?;
                 self.bus.acknowledge_completion(completion.request_id)?;
                 self.cpu = next_cpu;
-                if matches!(step, Z80MicroStep::InstructionRetired { .. } | Z80MicroStep::InterruptServiced { .. }) {
+                if matches!(
+            step,
+            Z80MicroStep::InstructionRetired { .. } | Z80MicroStep::InterruptServiced { .. }
+        ) {
                     self.instruction_started_at = None;
                 }
 
