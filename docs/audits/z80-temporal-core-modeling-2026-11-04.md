@@ -1,8 +1,8 @@
 # Modelo de execução temporal do Z80 — E7.3 a E7.7
 
-**Data:** 2026-11-04  
-**Baseline documental:** `main` em `644b2c22879d63447f63b730ed9415db11e81fab`  
-**Continuação de E7.2E:** PR [#506](https://github.com/leonardo201800478/sega-emulator/pull/506), HEAD observado durante esta análise: `8d6751513f8763f5ebfca50ecbaeb9fe469f38fb`  
+**Data:** 2026-11-04\
+**Baseline documental:** `main` em `644b2c22879d63447f63b730ed9415db11e81fab`\
+**Continuação de E7.2E:** PR [#506](https://github.com/leonardo201800478/sega-emulator/pull/506), HEAD observado durante esta análise: `8d6751513f8763f5ebfca50ecbaeb9fe469f38fb`\
 **Estado deste documento:** proposta de modelagem baseada em código e fontes; não é evidência de implementação nem de aprovação temporal.
 
 ## 1. Objetivo
