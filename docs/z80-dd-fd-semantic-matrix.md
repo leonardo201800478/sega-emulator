@@ -109,17 +109,17 @@ O decoder atômico classifica os 256 subopcodes para IX e IY e tem teste exausti
 
 | Estado / recurso | Executor atômico | Microsequenciador DD/FD |
 |---|---|---|
-| IX/IY | Campos arquiteturais existentes | E3A1/E3A2, E4A, E4B, E4C e E5 candidato executam IX/IY, loads/stores, ALU, RMW e DDCB/FDCB via fases serializáveis; E5 usa as fases IndexedCbDisplacementRead, IndexedCbOpcodeRead, IndexedCbMemoryRead e IndexedCbMemoryWrite |
+| IX/IY | Campos arquiteturais existentes | E3A1/E3A2, E4A, E4B, E4C e E5 integrado executam IX/IY, loads/stores, ALU, RMW e DDCB/FDCB via fases serializáveis; E5 usa IndexedCbDisplacementRead, IndexedCbOpcodeRead, IndexedCbMemoryRead e IndexedCbMemoryWrite |
 | IXH/IXL/IYH/IYL | Acesso por helper de registrador indexado | Sem decode funcional no microsequenciador; permanece fora de E3A1/E3A2 |
 | PC / SP / wraparound | Handlers existentes; cobertura por família precisa ser ampliada | PC consome prefixos/opcodes; PUSH/POP/EX atualizam ou preservam SP nos pontos de barramento corretos; wrap testado |
 | Flags S/Z/H/PV/N/C e X/Y | Helpers e handlers existentes; não equivalem a validação independente | E3A1/E3A2 preservam flags; E4B atualiza flags ALU; E4C atualiza S/Z/H/PV/N e preserva C via helper INC/DEC compartilhado |
-| WZ/MEMPTR | Campo presente no estado e nos snapshots; handlers atualizam WZ em famílias selecionadas. | E3A2: absolute transfers usam nn+1; E4A/E4B usam WZ=EA; E5 preserva o endereço efetivo em DDCB/FDCB. A matriz completa por família e a validação independente continuam pendentes. |
-| Q / previous-Q | O runtime Rust modela q e q_previous; SCF/CCF usa o latch anterior. | Os campos são serializados no estado do microsequenciador; a semântica Q ainda não tem aprovação diferencial independente (z80ccf NOT RUN). |
+| WZ/MEMPTR | Não classificado nesta matriz para o executor atômico. | Campo presente no estado arquitetural e snapshots do microsequenciador; handlers atualizam WZ em famílias selecionadas. E3A2 usa nn+1; E4A/E4B usam WZ=EA; E5 preserva o endereço efetivo em DDCB/FDCB. A matriz completa por família e a validação independente continuam pendentes. |
+| Q / previous-Q | Não classificado nesta matriz para o executor atômico. | O microsequenciador Rust modela e serializa q e q_previous; SCF/CCF usa o latch anterior. A semântica Q ainda não tem aprovação diferencial independente (z80ccf NOT RUN). |
 | R / refresh | Fetch de opcode no executor atômico; cobertura específica DD/FD incompleta | M1 de DD/FD e CB; o opcode final DDCB/FDCB é non-M1. A suíte E5 verifica que R conta somente os prefixos M1, incluindo cadeias repetidas/alternadas |
 | INT/NMI/EI delay/HALT | Há lógica geral no executor atômico; interação com instruções indexadas ainda precisa de vetores | Sem interrupção integrada em todas as fases DD/FD |
-| Snapshot schema | Não é save state integral do sistema | Schema 28 no candidato; FSM DD/FD e fases E3A1/E3A2/E4A/E4B/E4C/E5 validam/restauram estados intermediários com requests pendentes |
+| Snapshot schema | Não é save state integral do sistema | Schema 28 integrado na main; FSM DD/FD e fases E3A1/E3A2/E4A/E4B/E4C/E5 validam/restauram estados intermediários com requests pendentes |
 
-O schema 26 foi introduzido por E2; E4A elevou para 27 para serializar displacement e store imediato. E4B e E4C reutilizaram fases existentes. E5 adiciona fases DDCB/FDCB e eleva o schema para 28. A suíte candidata faz round-trip antes de cada request pendente; o codec não equivale a save state integral da máquina.
+O schema 26 foi introduzido por E2; E4A elevou para 27 para serializar displacement e store imediato. E4B e E4C reutilizaram fases existentes. E5 adicionou fases DDCB/FDCB e elevou o schema para 28. A suíte integrada faz round-trip antes de cada request pendente; o codec não equivale a save state integral da máquina.
 
 ## 7. Evidências e lacunas
 
