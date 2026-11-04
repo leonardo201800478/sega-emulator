@@ -750,12 +750,6 @@ impl Z80MicroSequencer {
                     _ => false,
                 }
             }
-            Z80MicroSequencerPhase::IndexedCbDisplacementRead
-            | Z80MicroSequencerPhase::IndexedCbOpcodeRead { .. }
-            | Z80MicroSequencerPhase::IndexedCbMemoryRead { .. }
-            | Z80MicroSequencerPhase::IndexedCbMemoryWrite { .. } => {
-                matches!(state.prefix_state, Z80PrefixState::Index(_))
-            }
             Z80MicroSequencerPhase::IndexDisplacementRead => {
                 matches!(state.prefix_state, Z80PrefixState::Index(_))
                     && state.opcode.is_some_and(is_indexed_displacement_opcode)
