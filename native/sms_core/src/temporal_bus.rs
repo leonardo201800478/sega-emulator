@@ -47,6 +47,25 @@ fn valid_internal_deadline(
     elapsed_tstates(started_at, deadline, master_ticks_per_tstate).is_some()
 }
 
+fn mcycle_kind(operation: Z80BusOperation) -> Z80MCycleKind {
+    match operation {
+        Z80BusOperation::OpcodeFetch => Z80MCycleKind::OpcodeFetch,
+        Z80BusOperation::MemoryRead => Z80MCycleKind::MemoryRead,
+        Z80BusOperation::MemoryWrite { .. } => Z80MCycleKind::MemoryWrite,
+        Z80BusOperation::PortRead => Z80MCycleKind::IoRead,
+        Z80BusOperation::PortWrite { .. } => Z80MCycleKind::IoWrite,
+        Z80BusOperation::InterruptAcknowledge => Z80MCycleKind::InterruptAcknowledge,
+    }
+}
+
+fn mandatory_wait_tstates(operation: Z80BusOperation) -> u32 {
+    if operation == Z80BusOperation::InterruptAcknowledge {
+        u32::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
+    } else {
+        0
+    }
+}
+
 /// Result latched at the completion boundary of one bus transaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SmsBusCompletion {
@@ -227,19 +246,8 @@ impl SmsTemporalBus {
             return Err(SmsTemporalBusError::UnsupportedOperation);
         }
         let started_at = self.coordinator.now();
-        let mandatory_waits = if request.operation == Z80BusOperation::InterruptAcknowledge {
-            u32::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
-        } else {
-            0
-        };
-        let kind = match request.operation {
-            Z80BusOperation::OpcodeFetch => Z80MCycleKind::OpcodeFetch,
-            Z80BusOperation::MemoryRead => Z80MCycleKind::MemoryRead,
-            Z80BusOperation::MemoryWrite { .. } => Z80MCycleKind::MemoryWrite,
-            Z80BusOperation::PortRead => Z80MCycleKind::IoRead,
-            Z80BusOperation::PortWrite { .. } => Z80MCycleKind::IoWrite,
-            Z80BusOperation::InterruptAcknowledge => Z80MCycleKind::InterruptAcknowledge,
-        };
+        let mandatory_waits = mandatory_wait_tstates(request.operation);
+        let kind = mcycle_kind(request.operation);
         let mcycle = Z80MCycle::new(kind, request.base_tstates, mandatory_waits)
             .map_err(|_| SmsTemporalBusError::InvalidState)?;
         let total_tstates = u32::from(request.base_tstates)
@@ -668,37 +676,22 @@ impl SmsTemporalBus {
             ) if started_at <= now
                 && pending_events.len() == 1
                 && pending_events[0].payload
-                        == (SmsTemporalEvent::BusTStateComplete {
-                            request_id: request.id,
-                            elapsed_tstates: mcycle_state.elapsed_tstates,
-                        })
+                    == (SmsTemporalEvent::BusTStateComplete {
+                        request_id: request.id,
+                        elapsed_tstates: mcycle_state.elapsed_tstates,
+                    })
                 && pending_events[0].timestamp
-                        == now
-                            .checked_add(u128::from(scale))
-                            .ok_or(SmsTemporalBusError::InvalidState)?
+                    == now
+                        .checked_add(u128::from(scale))
+                        .ok_or(SmsTemporalBusError::InvalidState)?
                 && elapsed_tstates(started_at, now, scale)
-                        == Some(u128::from(mcycle_state.elapsed_tstates))
+                    == Some(u128::from(mcycle_state.elapsed_tstates))
                 && fixture_remaining <= fixture_total
                 && fixture_total - fixture_remaining == mcycle_state.external_wait_tstates
                 && Z80MCycle::restore_state(mcycle_state).is_ok()
                 && mcycle_state.nominal_tstates == request.base_tstates
-                && mcycle_state.fixed_wait_tstates
-                        == if request.operation == Z80BusOperation::InterruptAcknowledge {
-                            u32::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
-                        } else {
-                            0
-                        }
-                && mcycle_state.kind
-                        == match request.operation {
-                        Z80BusOperation::OpcodeFetch => Z80MCycleKind::OpcodeFetch,
-                        Z80BusOperation::MemoryRead => Z80MCycleKind::MemoryRead,
-                        Z80BusOperation::MemoryWrite { .. } => Z80MCycleKind::MemoryWrite,
-                        Z80BusOperation::PortRead => Z80MCycleKind::IoRead,
-                        Z80BusOperation::PortWrite { .. } => Z80MCycleKind::IoWrite,
-                        Z80BusOperation::InterruptAcknowledge => {
-                            Z80MCycleKind::InterruptAcknowledge
-                        }
-                    } => {}
+                && mcycle_state.fixed_wait_tstates == mandatory_wait_tstates(request.operation)
+                && mcycle_state.kind == mcycle_kind(request.operation) => {}
             (
                 Some(request),
                 Some(started_at),
@@ -718,23 +711,8 @@ impl SmsTemporalBus {
                 && fixture_total == mcycle_state.external_wait_tstates
                 && mcycle_state.completed_base_tstates == mcycle_state.nominal_tstates
                 && mcycle_state.nominal_tstates == request.base_tstates
-                && mcycle_state.fixed_wait_tstates
-                    == if request.operation == Z80BusOperation::InterruptAcknowledge {
-                        u32::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
-                    } else {
-                        0
-                    }
-                && mcycle_state.kind
-                    == match request.operation {
-                        Z80BusOperation::OpcodeFetch => Z80MCycleKind::OpcodeFetch,
-                        Z80BusOperation::MemoryRead => Z80MCycleKind::MemoryRead,
-                        Z80BusOperation::MemoryWrite { .. } => Z80MCycleKind::MemoryWrite,
-                        Z80BusOperation::PortRead => Z80MCycleKind::IoRead,
-                        Z80BusOperation::PortWrite { .. } => Z80MCycleKind::IoWrite,
-                        Z80BusOperation::InterruptAcknowledge => {
-                            Z80MCycleKind::InterruptAcknowledge
-                        }
-                    }
+                && mcycle_state.fixed_wait_tstates == mandatory_wait_tstates(request.operation)
+                && mcycle_state.kind == mcycle_kind(request.operation)
                 && Z80MCycle::restore_state(mcycle_state).is_ok() => {}
             (None, None, None, None, None, None, Some(continuation_id), Some(started_at), None)
                 if pending_events.len() == 1
