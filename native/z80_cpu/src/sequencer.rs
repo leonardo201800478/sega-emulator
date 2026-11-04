@@ -2749,20 +2749,18 @@ impl Z80MicroSequencer {
             self.phase = Z80MicroSequencerPhase::NmiResponse;
             return Ok(Z80MicroStep::BusRequest(request));
         }
-        if self.iff1 && self.ei_delay == 0 {
-            if let Some(_vector) = self.int_pending {
-                let request = self.handshake.begin(
-                    Z80BusOperation::InterruptAcknowledge,
-                    self.registers.pc,
-                    Z80_INT_ACK_BASE_TSTATES,
-                )?;
-                self.halted = false;
-                self.iff1 = false;
-                self.iff2 = false;
-                self.p = false;
-                self.phase = Z80MicroSequencerPhase::InterruptAcknowledge;
-                return Ok(Z80MicroStep::BusRequest(request));
-            }
+        if self.iff1 && self.ei_delay == 0 && self.int_pending.is_some() {
+            let request = self.handshake.begin(
+                Z80BusOperation::InterruptAcknowledge,
+                self.registers.pc,
+                Z80_INT_ACK_BASE_TSTATES,
+            )?;
+            self.halted = false;
+            self.iff1 = false;
+            self.iff2 = false;
+            self.p = false;
+            self.phase = Z80MicroSequencerPhase::InterruptAcknowledge;
+            return Ok(Z80MicroStep::BusRequest(request));
         }
         let request = self
             .handshake
@@ -11689,11 +11687,16 @@ mod base_immediate_io_differential_tests {
 
     #[test]
     fn int_acknowledge_uses_distinct_bus_operation_and_captures_vector() {
-        let mut cpu = Z80MicroSequencer::default();
-        cpu.registers.pc = 0x2345;
-        cpu.iff1 = true;
-        cpu.iff2 = true;
-        cpu.refresh = 0xFE;
+        let mut cpu = Z80MicroSequencer {
+            registers: crate::Z80Registers {
+                pc: 0x2345,
+                ..crate::Z80Registers::default()
+            },
+            iff1: true,
+            iff2: true,
+            refresh: 0xFE,
+            ..Z80MicroSequencer::default()
+        };
         cpu.set_int_line(Some(0xCF));
 
         let Z80MicroStep::BusRequest(request) = cpu.begin_instruction().unwrap() else {
@@ -11731,9 +11734,11 @@ mod base_immediate_io_differential_tests {
 
     #[test]
     fn nmi_keeps_priority_over_an_eligible_int_line() {
-        let mut cpu = Z80MicroSequencer::default();
-        cpu.iff1 = true;
-        cpu.iff2 = true;
+        let mut cpu = Z80MicroSequencer {
+            iff1: true,
+            iff2: true,
+            ..Z80MicroSequencer::default()
+        };
         cpu.set_int_line(Some(0xCF));
         cpu.request_nmi();
 
