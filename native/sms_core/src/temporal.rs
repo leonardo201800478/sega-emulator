@@ -23,6 +23,10 @@ pub enum SmsTemporalEvent {
     BusCompletion {
         request_id: u64,
     },
+    BusTStateComplete {
+        request_id: u64,
+        elapsed_tstates: u32,
+    },
     InternalCycleComplete {
         continuation_id: u64,
     },
@@ -148,6 +152,31 @@ impl SmsTemporalCoordinator {
             HardwarePhase::new(0),
             PlatformPriority::new(0),
             SmsTemporalEvent::BusCompletion { request_id },
+        )?;
+        Ok(deadline)
+    }
+
+    /// Schedule exactly one next T-state edge for a resumable bus M-cycle.
+    ///
+    /// elapsed_tstates identifies the number of edges already dispatched; the
+    /// event therefore represents the following edge at now + one T-state.
+    pub fn schedule_bus_tstate(
+        &mut self,
+        request_id: u64,
+        elapsed_tstates: u32,
+    ) -> Result<MachineTime, SmsTemporalCoordinatorError> {
+        let deadline = self
+            .now()
+            .checked_add(u128::from(self.master_ticks_per_tstate))
+            .ok_or(SmsTemporalCoordinatorError::DeadlineOverflow)?;
+        self.scheduler.schedule_at_with_phase(
+            deadline,
+            HardwarePhase::new(0),
+            PlatformPriority::new(0),
+            SmsTemporalEvent::BusTStateComplete {
+                request_id,
+                elapsed_tstates,
+            },
         )?;
         Ok(deadline)
     }
