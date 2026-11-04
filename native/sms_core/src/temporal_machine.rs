@@ -21,7 +21,7 @@ use sega_z80_cpu::{
     Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
 };
 
-pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 19;
+pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 20;
 
 /// Runtime event trace emitted from actual Scheduler/bus dispatch boundaries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -466,7 +466,7 @@ impl SmsTemporalMachine {
         self.cpu = next_cpu;
         self.m1 = None;
         self.m1_fixture_wait_tstates = None;
-        if matches!(step, Z80MicroStep::InstructionRetired { .. }) {
+        if matches!(step, Z80MicroStep::InstructionRetired { .. } | Z80MicroStep::InterruptServiced { .. }) {
             self.instruction_started_at = None;
         }
         Ok(step)
@@ -498,7 +498,7 @@ impl SmsTemporalMachine {
                 let step = next_cpu.complete_bus_cycle(completion.request_id, completion.data)?;
                 self.bus.acknowledge_completion(completion.request_id)?;
                 self.cpu = next_cpu;
-                if matches!(step, Z80MicroStep::InstructionRetired { .. }) {
+                if matches!(step, Z80MicroStep::InstructionRetired { .. } | Z80MicroStep::InterruptServiced { .. }) {
                     self.instruction_started_at = None;
                 }
 
@@ -618,6 +618,7 @@ impl SmsTemporalMachine {
                     self.dispatch_next()?
                 }
                 retired @ Z80MicroStep::InstructionRetired { .. } => return Ok(retired),
+                serviced @ Z80MicroStep::InterruptServiced { .. } => return Ok(serviced),
             };
         }
     }
@@ -665,6 +666,7 @@ impl SmsTemporalMachine {
                     self.dispatch_next()?
                 }
                 retired @ Z80MicroStep::InstructionRetired { .. } => return Ok(retired),
+                serviced @ Z80MicroStep::InterruptServiced { .. } => return Ok(serviced),
             };
         }
     }
