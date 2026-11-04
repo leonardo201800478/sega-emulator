@@ -493,3 +493,25 @@ Esta atualização prevalece sobre as fotografias históricas anteriores. Baseli
 - **PRs documentais #507, #508 e #510:** permanecem abertas na base histórica `54f881...`; não considerar integradas nem atuais. A PR #508 é draft e contém a modelagem preliminar E7.3–E7.7. A auditoria E7.4 atual deve prevalecer quanto às lacunas de fronteira M-cycle.
 
 Classificação de suites: os quatro jobs de cada workflow #41872451175 e #41877136387 foram concluídos com SUCCESS. Testes locais nesta sessão: `NOT RUN` (clone indisponível por falha de resolução DNS de github.com). Não atribuir `LONG_PASS`, `DIFFERENTIAL_PASS` ou `TEMPORAL_PASS` com base apenas nesses workflows.
+
+
+## Atualização E7.4.1B — auditoria temporal WAIT/TW (2026-11-04)
+
+Esta fotografia complementa a auditoria BUSREQ e prevalece para o estado da subfase E7.4.1B. A implementação de eventos de borda T-state na PR #514 passou os jobs Rust, Python e Windows no HEAD ed81de385f7f4a0e7ed50de434b1f4c143cdad9f (workflow 41896166347); Scheduler deterministic stress foi SKIPPED e não conta como PASS. Testes locais: NOT RUN.
+
+A revisão direta do ZiLOG UM008011-0816 encontrou requisitos não representados pelo runtime candidato:
+- WAIT é amostrado na borda de descida durante T2 e em cada TW subsequente; o evento atual só identifica conclusão por T-state/borda de subida e não registra a fase de amostragem.
+- Cada ciclo I/O possui um TW automático entre T2 e T3; PortRead/PortWrite permanecem requests de 4T, mas o M-cycle atual os representa como quatro T-states nominais, sem fase TW automática explícita.
+- O acknowledge INT possui dois TW automáticos; a rotina atual consome waits mandatórios antes de consultar WAIT externo, portanto não demonstra amostragem WAIT durante os TW mandatórios.
+- A escala temporal atual ainda precisa demonstrar representação exata da meia-fase, especialmente quando master_ticks_per_tstate é ímpar. Não arredondar falling edge nem introduzir relógio paralelo.
+
+A especificação foi retificada na PR #513, HEAD 143cdce6fde85621c81de0a1bc43350b180422cc, incluindo estado de fase de clock, TW automático, amostras WAIT, snapshots entre falling/rising edges e equivalência contínua/retomada.
+
+**Classificação:** E7.4.1A (contrato isolado M-cycle) e E7.4.1B (progressão runtime por evento) possuem implementação candidata e CI convencional parcial PASS, mas E7.4.1B permanece **INCOMPLETE / BLOCKED** por fidelidade da fase WAIT/TW. Não avançar para BUSREQ/BUSACK até corrigir e validar:
+1. falling-edge sampling e a resolução temporal exata;
+2. TW automático de I/O e sua posição T2–T3;
+3. WAIT amostrado nas fases T2/TW, inclusive TW obrigatório de I/O/INT;
+4. snapshots em cada fase e equivalência de execução contínua/retomada;
+5. regressão de M1, ciclos internos, HALT e interrupções.
+
+E8 permanece bloqueada até fechamento de E7. Não atribuir TEMPORAL_PASS com base no CI convencional.
