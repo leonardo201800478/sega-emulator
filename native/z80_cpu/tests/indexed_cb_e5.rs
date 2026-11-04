@@ -38,7 +38,9 @@ fn request(step: Z80MicroStep) -> Z80BusRequest {
 }
 
 fn round_trip(cpu: Z80MicroSequencer, stage: &str) -> Z80MicroSequencer {
-    let encoded = cpu.export_state().encode()
+    let encoded = cpu
+        .export_state()
+        .encode()
         .unwrap_or_else(|error| panic!("snapshot at {stage} encodes: {error:?}"));
     let decoded = Z80MicroSequencerState::decode(&encoded)
         .unwrap_or_else(|error| panic!("snapshot at {stage} decodes: {error:?}"));
@@ -47,8 +49,15 @@ fn round_trip(cpu: Z80MicroSequencer, stage: &str) -> Z80MicroSequencer {
 }
 
 fn run_indexed_cb(
-    prefixes: &[u8], ix: u16, iy: u16, pc: u16, displacement: u8,
-    opcode: u8, old_value: u8, flags: u8, waits: &[u32],
+    prefixes: &[u8],
+    ix: u16,
+    iy: u16,
+    pc: u16,
+    displacement: u8,
+    opcode: u8,
+    old_value: u8,
+    flags: u8,
+    waits: &[u32],
 ) -> RunResult {
     assert!(!prefixes.is_empty());
     assert!(prefixes.iter().all(|prefix| matches!(prefix, 0xDD | 0xFD)));
@@ -78,7 +87,11 @@ fn run_indexed_cb(
     let opcode_address = displacement_address.wrapping_add(1);
     memory[opcode_address as usize] = opcode;
 
-    let index_base = if prefixes.last() == Some(&0xDD) { ix } else { iy };
+    let index_base = if prefixes.last() == Some(&0xDD) {
+        ix
+    } else {
+        iy
+    };
     let effective_address = index_base.wrapping_add_signed(i16::from(displacement as i8));
     memory[effective_address as usize] = old_value;
 
@@ -117,9 +130,18 @@ fn run_indexed_cb(
         request_index += 1;
         match step {
             Z80MicroStep::BusRequest(next) => pending = next,
-            Z80MicroStep::InstructionRetired { opcode: retired, tstates } => {
+            Z80MicroStep::InstructionRetired {
+                opcode: retired,
+                tstates,
+            } => {
                 assert_eq!(retired, opcode);
-                return RunResult { cpu, memory, writes, trace, tstates };
+                return RunResult {
+                    cpu,
+                    memory,
+                    writes,
+                    trace,
+                    tstates,
+                };
             }
             other => panic!("indexed-CB must remain bus-suspended, got {other:?}"),
         }
@@ -143,16 +165,26 @@ fn expected_result(opcode: u8, value: u8, flags: u8, address: u16) -> (u8, u8, b
                 _ => (value >> 1, value & 0x01 != 0),
             };
             let mut next_flags = result & (FLAG_S | FLAG_XY);
-            if result == 0 { next_flags |= FLAG_Z; }
-            if result.count_ones().is_multiple_of(2) { next_flags |= FLAG_PV; }
-            if carry { next_flags |= FLAG_C; }
+            if result == 0 {
+                next_flags |= FLAG_Z;
+            }
+            if result.count_ones().is_multiple_of(2) {
+                next_flags |= FLAG_PV;
+            }
+            if carry {
+                next_flags |= FLAG_C;
+            }
             (result, next_flags, true)
         }
         1 => {
             let bit_clear = value & (1 << bit) == 0;
             let mut next_flags = (flags & FLAG_C) | FLAG_H | ((address >> 8) as u8 & FLAG_XY);
-            if bit_clear { next_flags |= FLAG_Z | FLAG_PV; }
-            if bit == 7 && !bit_clear { next_flags |= FLAG_S; }
+            if bit_clear {
+                next_flags |= FLAG_Z | FLAG_PV;
+            }
+            if bit == 7 && !bit_clear {
+                next_flags |= FLAG_S;
+            }
             (value, next_flags, false)
         }
         2 => (value & !(1 << bit), flags, true),
@@ -162,9 +194,14 @@ fn expected_result(opcode: u8, value: u8, flags: u8, address: u16) -> (u8, u8, b
 
 fn register_value(cpu: &Z80MicroSequencer, code: u8) -> u8 {
     match code {
-        0 => cpu.registers.b, 1 => cpu.registers.c, 2 => cpu.registers.d,
-        3 => cpu.registers.e, 4 => cpu.registers.h, 5 => cpu.registers.l,
-        7 => cpu.registers.a, _ => panic!("code 6 is memory, not a register"),
+        0 => cpu.registers.b,
+        1 => cpu.registers.c,
+        2 => cpu.registers.d,
+        3 => cpu.registers.e,
+        4 => cpu.registers.h,
+        5 => cpu.registers.l,
+        7 => cpu.registers.a,
+        _ => panic!("code 6 is memory, not a register"),
     }
 }
 
@@ -180,16 +217,35 @@ fn all_256_indexed_cb_subopcodes_are_executed_for_ix_and_iy() {
             let old_value = 0x96;
             let initial_flags = 0xA5;
             let result = run_indexed_cb(
-                &[prefix], ix, iy, 0x1000, displacement, opcode,
-                old_value, initial_flags, &[],
+                &[prefix],
+                ix,
+                iy,
+                0x1000,
+                displacement,
+                opcode,
+                old_value,
+                initial_flags,
+                &[],
             );
             let (expected_memory, expected_flags, writes_memory) =
                 expected_result(opcode, old_value, initial_flags, address);
 
-            assert_eq!(result.cpu.registers.pc, 0x1004, "prefix={prefix:02X} opcode={opcode:02X}");
-            assert_eq!(result.cpu.refresh, 0x82, "prefix={prefix:02X} opcode={opcode:02X}");
-            assert_eq!(result.cpu.wz, address, "prefix={prefix:02X} opcode={opcode:02X}");
-            assert_eq!(result.cpu.registers.f, expected_flags, "prefix={prefix:02X} opcode={opcode:02X}");
+            assert_eq!(
+                result.cpu.registers.pc, 0x1004,
+                "prefix={prefix:02X} opcode={opcode:02X}"
+            );
+            assert_eq!(
+                result.cpu.refresh, 0x82,
+                "prefix={prefix:02X} opcode={opcode:02X}"
+            );
+            assert_eq!(
+                result.cpu.wz, address,
+                "prefix={prefix:02X} opcode={opcode:02X}"
+            );
+            assert_eq!(
+                result.cpu.registers.f, expected_flags,
+                "prefix={prefix:02X} opcode={opcode:02X}"
+            );
             assert_eq!(result.cpu.ix, ix);
             assert_eq!(result.cpu.iy, iy);
             assert_eq!(result.memory[address as usize], expected_memory);
@@ -197,16 +253,25 @@ fn all_256_indexed_cb_subopcodes_are_executed_for_ix_and_iy() {
             if writes_memory {
                 assert_eq!(result.writes, vec![(address, expected_memory)]);
                 if opcode >> 6 != 1 && opcode & 7 != 6 {
-                    assert_eq!(register_value(&result.cpu, opcode & 7), expected_memory,
-                        "destination copy: prefix={prefix:02X} opcode={opcode:02X}");
+                    assert_eq!(
+                        register_value(&result.cpu, opcode & 7),
+                        expected_memory,
+                        "destination copy: prefix={prefix:02X} opcode={opcode:02X}"
+                    );
                 }
             } else {
-                assert!(result.writes.is_empty(), "BIT must not write: {prefix:02X} {opcode:02X}");
+                assert!(
+                    result.writes.is_empty(),
+                    "BIT must not write: {prefix:02X} {opcode:02X}"
+                );
                 assert_eq!(result.memory[address as usize], old_value);
             }
 
             let expected_tstates = if opcode >> 6 == 1 { 20 } else { 23 };
-            assert_eq!(result.tstates, expected_tstates, "prefix={prefix:02X} opcode={opcode:02X}");
+            assert_eq!(
+                result.tstates, expected_tstates,
+                "prefix={prefix:02X} opcode={opcode:02X}"
+            );
             assert_eq!(result.trace.len(), if opcode >> 6 == 1 { 5 } else { 6 });
             assert_eq!(result.trace[0].operation, Z80BusOperation::OpcodeFetch);
             assert_eq!(result.trace[0].base_tstates, 4);
@@ -219,7 +284,12 @@ fn all_256_indexed_cb_subopcodes_are_executed_for_ix_and_iy() {
             assert_eq!(result.trace[4].operation, Z80BusOperation::MemoryRead);
             assert_eq!(result.trace[4].base_tstates, 4);
             if opcode >> 6 != 1 {
-                assert_eq!(result.trace[5].operation, Z80BusOperation::MemoryWrite { value: expected_memory });
+                assert_eq!(
+                    result.trace[5].operation,
+                    Z80BusOperation::MemoryWrite {
+                        value: expected_memory
+                    }
+                );
                 assert_eq!(result.trace[5].base_tstates, 3);
             }
         }
@@ -248,7 +318,17 @@ fn indexed_cb_waits_are_additive_and_snapshots_resume_each_bus_phase() {
         (0x86, [1, 2, 3, 4, 5, 6]),
         (0xC6, [1, 2, 3, 4, 5, 6]),
     ] {
-        let result = run_indexed_cb(&[0xDD], 0x4000, 0x5000, 0x1000, 0xFF, opcode, 0x80, 0x01, &waits);
+        let result = run_indexed_cb(
+            &[0xDD],
+            0x4000,
+            0x5000,
+            0x1000,
+            0xFF,
+            opcode,
+            0x80,
+            0x01,
+            &waits,
+        );
         let base = if opcode >> 6 == 1 { 20 } else { 23 };
         let wait_total: u32 = waits.iter().take(result.trace.len()).copied().sum();
         assert_eq!(result.tstates, base + wait_total);
@@ -259,16 +339,27 @@ fn indexed_cb_waits_are_additive_and_snapshots_resume_each_bus_phase() {
 #[test]
 fn indexed_cb_repeated_prefixes_use_last_index_and_count_only_m1_refreshes() {
     for prefixes in [
-        vec![0xDD, 0xDD], vec![0xFD, 0xFD], vec![0xDD, 0xFD],
-        vec![0xFD, 0xDD], vec![0xDD, 0xFD, 0xDD], vec![0xFD, 0xDD, 0xFD],
+        vec![0xDD, 0xDD],
+        vec![0xFD, 0xFD],
+        vec![0xDD, 0xFD],
+        vec![0xFD, 0xDD],
+        vec![0xDD, 0xFD, 0xDD],
+        vec![0xFD, 0xDD, 0xFD],
     ] {
         let ix = 0x1000;
         let iy = 0x2000;
         let result = run_indexed_cb(&prefixes, ix, iy, 0x3000, 0xFF, 0x06, 0x81, 0, &[]);
-        let expected_base = if prefixes.last() == Some(&0xDD) { ix } else { iy };
+        let expected_base = if prefixes.last() == Some(&0xDD) {
+            ix
+        } else {
+            iy
+        };
         assert_eq!(result.cpu.wz, expected_base.wrapping_sub(1));
         assert_eq!(result.cpu.refresh, 0x80 | (prefixes.len() as u8 + 1));
-        assert_eq!(result.cpu.registers.pc, 0x3000_u16.wrapping_add(prefixes.len() as u16 + 3));
+        assert_eq!(
+            result.cpu.registers.pc,
+            0x3000_u16.wrapping_add(prefixes.len() as u16 + 3)
+        );
         assert_eq!(result.tstates, 23 + 4 * (prefixes.len() as u32 - 1));
     }
 }
@@ -289,9 +380,20 @@ fn indexed_cb_bit_is_read_only_and_preserves_memory_for_all_z_fields() {
             for destination in 0_u8..8 {
                 let opcode = 0x40 | (bit << 3) | destination;
                 let result = run_indexed_cb(
-                    &[prefix], 0x6000, 0x7000, 0x1000, 0x00, opcode, 0xA5, 0x01, &[],
+                    &[prefix],
+                    0x6000,
+                    0x7000,
+                    0x1000,
+                    0x00,
+                    opcode,
+                    0xA5,
+                    0x01,
+                    &[],
                 );
-                assert!(result.writes.is_empty(), "BIT write: {prefix:02X} {opcode:02X}");
+                assert!(
+                    result.writes.is_empty(),
+                    "BIT write: {prefix:02X} {opcode:02X}"
+                );
                 assert_eq!(result.memory[result.cpu.wz as usize], 0xA5);
                 assert_eq!(result.tstates, 20);
             }
@@ -302,8 +404,19 @@ fn indexed_cb_bit_is_read_only_and_preserves_memory_for_all_z_fields() {
 #[test]
 fn indexed_cb_phase_snapshots_keep_pending_requests_and_phase_invariants() {
     let result = run_indexed_cb(
-        &[0xDD], 0xABFF, 0xCD00, 0x1000, 0x01, 0x46, 0x80, 0x01, &[1, 1, 1, 1, 1],
+        &[0xDD],
+        0xABFF,
+        0xCD00,
+        0x1000,
+        0x01,
+        0x46,
+        0x80,
+        0x01,
+        &[1, 1, 1, 1, 1],
     );
     assert_eq!(result.trace.len(), 5);
-    assert_eq!(result.cpu.export_state().phase, Z80MicroSequencerPhase::Ready);
+    assert_eq!(
+        result.cpu.export_state().phase,
+        Z80MicroSequencerPhase::Ready
+    );
 }
