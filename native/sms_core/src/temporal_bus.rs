@@ -13,9 +13,12 @@ use crate::{
     SmsTemporalCoordinatorError, SmsTemporalCoordinatorState, SmsTemporalEvent,
 };
 use sega_temporal_core::MachineTime;
-use sega_z80_cpu::{Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES, Z80BusOperation, Z80BusRequest};
+use sega_z80_cpu::{
+    Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES, Z80BusOperation, Z80BusRequest, Z80MCycle,
+    Z80MCycleEdge, Z80MCycleKind, Z80MCycleState, Z80MCycleTState, Z80MCycleWaitSource,
+};
 
-pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 7;
+pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 8;
 const DEFAULT_INTERRUPT_VECTOR: u8 = 0xFF;
 const MAX_PORT_WRITE_TRACE: usize = 64;
 
@@ -34,16 +37,6 @@ fn elapsed_tstates(
     }
     let tstates = elapsed / scale;
     (tstates <= u128::from(u32::MAX)).then_some(tstates)
-}
-
-fn valid_bus_deadline(
-    started_at: MachineTime,
-    deadline: MachineTime,
-    master_ticks_per_tstate: u64,
-    minimum_tstates: u16,
-) -> bool {
-    elapsed_tstates(started_at, deadline, master_ticks_per_tstate)
-        .is_some_and(|total| total >= u128::from(minimum_tstates))
 }
 
 fn valid_internal_deadline(
@@ -72,6 +65,11 @@ pub struct SmsInternalCycleCompletion {
 /// One dispatched event owned by the SMS temporal bus/coordinator boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SmsTemporalDispatch {
+    BusTStateProgress {
+        request_id: u64,
+        edge: Z80MCycleEdge,
+        completed_at: MachineTime,
+    },
     BusCompletion(SmsBusCompletion),
     InternalCycleComplete(SmsInternalCycleCompletion),
     M1TStateComplete {
@@ -100,6 +98,9 @@ pub struct SmsTemporalBusState {
     pub pending_request: Option<Z80BusRequest>,
     pub request_started_at: Option<MachineTime>,
     pub completion: Option<SmsBusCompletion>,
+    pub mcycle: Option<Z80MCycleState>,
+    pub fixture_wait_tstates: Option<u32>,
+    pub fixture_wait_remaining: Option<u32>,
     pub pending_internal_cycle: Option<u64>,
     pub internal_cycle_started_at: Option<MachineTime>,
     pub internal_completion: Option<SmsInternalCycleCompletion>,
@@ -162,6 +163,9 @@ pub struct SmsTemporalBus {
     pending_request: Option<Z80BusRequest>,
     request_started_at: Option<MachineTime>,
     completion: Option<SmsBusCompletion>,
+    mcycle: Option<Z80MCycle>,
+    fixture_wait_tstates: Option<u32>,
+    fixture_wait_remaining: Option<u32>,
     pending_internal_cycle: Option<u64>,
     internal_cycle_started_at: Option<MachineTime>,
     internal_completion: Option<SmsInternalCycleCompletion>,
@@ -185,6 +189,9 @@ impl SmsTemporalBus {
             pending_request: None,
             request_started_at: None,
             completion: None,
+            mcycle: None,
+            fixture_wait_tstates: None,
+            fixture_wait_remaining: None,
             pending_internal_cycle: None,
             internal_cycle_started_at: None,
             internal_completion: None,
@@ -220,21 +227,27 @@ impl SmsTemporalBus {
             return Err(SmsTemporalBusError::UnsupportedOperation);
         }
         let started_at = self.coordinator.now();
-        let automatic_waits = if request.operation == Z80BusOperation::InterruptAcknowledge {
+        let mandatory_waits = if request.operation == Z80BusOperation::InterruptAcknowledge {
             u32::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
         } else {
             0
         };
-        let total_wait_tstates = fixture_wait_tstates
-            .checked_add(automatic_waits)
-            .ok_or(SmsTemporalBusError::InvalidState)?;
-        let deadline = self.coordinator.schedule_bus_completion(
-            request.id,
-            request.base_tstates,
-            total_wait_tstates,
-        )?;
+        let kind = match request.operation {
+            Z80BusOperation::OpcodeFetch => Z80MCycleKind::OpcodeFetch,
+            Z80BusOperation::MemoryRead => Z80MCycleKind::MemoryRead,
+            Z80BusOperation::MemoryWrite { .. } => Z80MCycleKind::MemoryWrite,
+            Z80BusOperation::PortRead => Z80MCycleKind::IoRead,
+            Z80BusOperation::PortWrite { .. } => Z80MCycleKind::IoWrite,
+            Z80BusOperation::InterruptAcknowledge => Z80MCycleKind::InterruptAcknowledge,
+        };
+        let mcycle = Z80MCycle::new(kind, request.base_tstates, mandatory_waits)
+            .map_err(|_| SmsTemporalBusError::InvalidState)?;
+        let deadline = self.coordinator.schedule_bus_tstate(request.id, 0)?;
         self.pending_request = Some(request);
         self.request_started_at = Some(started_at);
+        self.mcycle = Some(mcycle);
+        self.fixture_wait_tstates = Some(fixture_wait_tstates);
+        self.fixture_wait_remaining = Some(fixture_wait_tstates);
         Ok(deadline)
     }
 
@@ -290,6 +303,83 @@ impl SmsTemporalBus {
             return Ok(None);
         };
         match dispatch.event.payload {
+            SmsTemporalEvent::BusTStateComplete {
+                request_id,
+                elapsed_tstates: expected_elapsed_tstates,
+            } => {
+                let request = self
+                    .pending_request
+                    .ok_or(SmsTemporalBusError::NoPendingRequest)?;
+                if request.id != request_id {
+                    return Err(SmsTemporalBusError::WrongRequestId {
+                        expected: request.id,
+                        received: request_id,
+                    });
+                }
+                let started_at = self.request_started_at.ok_or(SmsTemporalBusError::InvalidState)?;
+                let mut mcycle = self.mcycle.ok_or(SmsTemporalBusError::InvalidState)?;
+                let fixture_remaining =
+                    self.fixture_wait_remaining.ok_or(SmsTemporalBusError::InvalidState)?;
+                if mcycle.elapsed_tstates() != expected_elapsed_tstates
+                    || elapsed_tstates(
+                        started_at,
+                        dispatch.event.timestamp,
+                        self.coordinator.master_ticks_per_tstate(),
+                    ) != Some(u128::from(expected_elapsed_tstates) + 1)
+                {
+                    return Err(SmsTemporalBusError::InvalidState);
+                }
+                let edge = mcycle
+                    .advance_tstate(fixture_remaining > 0)
+                    .map_err(|_| SmsTemporalBusError::InvalidState)?;
+                if matches!(
+                    edge.tstate,
+                    Z80MCycleTState::Wait {
+                        source: Z80MCycleWaitSource::External,
+                        ..
+                    }
+                ) {
+                    self.fixture_wait_remaining = Some(
+                        fixture_remaining.checked_sub(1).ok_or(SmsTemporalBusError::InvalidState)?,
+                    );
+                }
+                self.mcycle = Some(mcycle);
+
+                if !edge.mcycle_completed {
+                    self.coordinator
+                        .schedule_bus_tstate(request_id, mcycle.elapsed_tstates())?;
+                    return Ok(Some(SmsTemporalDispatch::BusTStateProgress {
+                        request_id,
+                        edge,
+                        completed_at: dispatch.event.timestamp,
+                    }));
+                }
+                if self.fixture_wait_remaining != Some(0) {
+                    return Err(SmsTemporalBusError::InvalidState);
+                }
+                let data = match request.operation {
+                    Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
+                        Some(self.memory.read(request.address))
+                    }
+                    Z80BusOperation::InterruptAcknowledge => Some(self.interrupt_vector),
+                    Z80BusOperation::MemoryWrite { value } => {
+                        self.memory.write(request.address, value);
+                        None
+                    }
+                    Z80BusOperation::PortRead => Some(self.read_port(request.address)),
+                    Z80BusOperation::PortWrite { value } => {
+                        self.write_port(request.address, value, dispatch.event.timestamp);
+                        None
+                    }
+                };
+                let completion = SmsBusCompletion {
+                    request_id,
+                    data,
+                    completed_at: dispatch.event.timestamp,
+                };
+                self.completion = Some(completion);
+                Ok(Some(SmsTemporalDispatch::BusCompletion(completion)))
+            }
             SmsTemporalEvent::BusCompletion { request_id } => {
                 let request = self
                     .pending_request
@@ -371,6 +461,9 @@ impl SmsTemporalBus {
         self.completion = None;
         self.pending_request = None;
         self.request_started_at = None;
+        self.mcycle = None;
+        self.fixture_wait_tstates = None;
+        self.fixture_wait_remaining = None;
         Ok(completion)
     }
 
@@ -486,6 +579,9 @@ impl SmsTemporalBus {
             pending_request: self.pending_request,
             request_started_at: self.request_started_at,
             completion: self.completion,
+            mcycle: self.mcycle.map(Z80MCycle::export_state),
+            fixture_wait_tstates: self.fixture_wait_tstates,
+            fixture_wait_remaining: self.fixture_wait_remaining,
             pending_internal_cycle: self.pending_internal_cycle,
             internal_cycle_started_at: self.internal_cycle_started_at,
             internal_completion: self.internal_completion,
@@ -518,60 +614,66 @@ impl SmsTemporalBus {
             state.pending_request,
             state.request_started_at,
             state.completion,
+            state.mcycle,
+            state.fixture_wait_tstates,
+            state.fixture_wait_remaining,
             state.pending_internal_cycle,
             state.internal_cycle_started_at,
             state.internal_completion,
         ) {
-            (None, None, None, None, None, None)
+            (None, None, None, None, None, None, None, None, None)
                 if pending_events.is_empty()
                     || (pending_events.len() == 1
                         && matches!(
                             pending_events[0].payload,
                             SmsTemporalEvent::M1TStateComplete { .. }
                         )) => {}
-            (Some(request), Some(started_at), None, None, None, None)
-                if pending_events.len() == 1
+            (Some(request), Some(started_at), None, Some(mcycle_state), Some(fixture_total), Some(fixture_remaining), None, None, None)
+                if started_at <= now
+                    && pending_events.len() == 1
                     && pending_events[0].payload
-                        == (SmsTemporalEvent::BusCompletion {
+                        == (SmsTemporalEvent::BusTStateComplete {
                             request_id: request.id,
+                            elapsed_tstates: mcycle_state.elapsed_tstates,
                         })
-                    && started_at <= now
-                    && pending_events[0].timestamp >= now
-                    && valid_bus_deadline(
-                        started_at,
-                        pending_events[0].timestamp,
-                        scale,
-                        u16::from(request.base_tstates)
-                            + if request.operation == Z80BusOperation::InterruptAcknowledge {
-                                u16::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
-                            } else {
-                                0
-                            },
-                    ) => {}
-            (Some(request), Some(started_at), Some(completion), None, None, None)
+                    && pending_events[0].timestamp
+                        == now.checked_add(u128::from(scale)).ok_or(SmsTemporalBusError::InvalidState)?
+                    && elapsed_tstates(started_at, now, scale)
+                        == Some(u128::from(mcycle_state.elapsed_tstates))
+                    && fixture_remaining <= fixture_total
+                    && fixture_total - fixture_remaining == mcycle_state.external_wait_tstates
+                    && Z80MCycle::restore_state(mcycle_state).is_ok()
+                    && mcycle_state.nominal_tstates == request.base_tstates
+                    && mcycle_state.fixed_wait_tstates
+                        == if request.operation == Z80BusOperation::InterruptAcknowledge {
+                            u32::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
+                        } else { 0 }
+                    && mcycle_state.kind == match request.operation {
+                        Z80BusOperation::OpcodeFetch => Z80MCycleKind::OpcodeFetch,
+                        Z80BusOperation::MemoryRead => Z80MCycleKind::MemoryRead,
+                        Z80BusOperation::MemoryWrite { .. } => Z80MCycleKind::MemoryWrite,
+                        Z80BusOperation::PortRead => Z80MCycleKind::IoRead,
+                        Z80BusOperation::PortWrite { .. } => Z80MCycleKind::IoWrite,
+                        Z80BusOperation::InterruptAcknowledge => Z80MCycleKind::InterruptAcknowledge,
+                    } => {}
+            (Some(request), Some(started_at), Some(completion), Some(mcycle_state), Some(fixture_total), Some(0), None, None, None)
                 if request.id == completion.request_id
                     && pending_events.is_empty()
                     && completion.completed_at == now
                     && last_dispatch == Some(completion.completed_at)
-                    && valid_bus_deadline(
-                        started_at,
-                        completion.completed_at,
-                        scale,
-                        u16::from(request.base_tstates)
-                            + if request.operation == Z80BusOperation::InterruptAcknowledge {
-                                u16::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
-                            } else {
-                                0
-                            },
-                    ) => {}
-            (None, None, None, Some(continuation_id), Some(started_at), None)
+                    && elapsed_tstates(started_at, completion.completed_at, scale)
+                        == Some(u128::from(mcycle_state.elapsed_tstates))
+                    && fixture_total == mcycle_state.external_wait_tstates
+                    && mcycle_state.completed_base_tstates == mcycle_state.nominal_tstates
+                    && Z80MCycle::restore_state(mcycle_state).is_ok() => {}
+            (None, None, None, None, None, None, Some(continuation_id), Some(started_at), None)
                 if pending_events.len() == 1
                     && pending_events[0].payload
                         == (SmsTemporalEvent::InternalCycleComplete { continuation_id })
                     && started_at <= now
                     && pending_events[0].timestamp >= now
                     && valid_internal_deadline(started_at, pending_events[0].timestamp, scale) => {}
-            (None, None, None, Some(continuation_id), Some(started_at), Some(completion))
+            (None, None, None, None, None, None, Some(continuation_id), Some(started_at), Some(completion))
                 if continuation_id == completion.continuation_id
                     && pending_events.is_empty()
                     && completion.completed_at == now
@@ -587,6 +689,9 @@ impl SmsTemporalBus {
             pending_request: state.pending_request,
             request_started_at: state.request_started_at,
             completion: state.completion,
+            mcycle: state.mcycle.map(Z80MCycle::restore_state).transpose().map_err(|_| SmsTemporalBusError::InvalidState)?,
+            fixture_wait_tstates: state.fixture_wait_tstates,
+            fixture_wait_remaining: state.fixture_wait_remaining,
             pending_internal_cycle: state.pending_internal_cycle,
             internal_cycle_started_at: state.internal_cycle_started_at,
             internal_completion: state.internal_completion,
