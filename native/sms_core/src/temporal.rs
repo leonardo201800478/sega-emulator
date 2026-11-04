@@ -14,7 +14,7 @@ use sega_temporal_core::{
     ClockDomainSnapshot, ClockRatio, HardwarePhase, MachineTime, PlatformPriority,
 };
 
-pub const SMS_TEMPORAL_COORDINATOR_STATE_VERSION: u16 = 2;
+pub const SMS_TEMPORAL_COORDINATOR_STATE_VERSION: u16 = 3;
 pub const SMS_Z80_CLOCK_DOMAIN_ID: ClockDomainId = ClockDomainId(0);
 
 /// Typed machine event consumed by the SMS coordinator.
