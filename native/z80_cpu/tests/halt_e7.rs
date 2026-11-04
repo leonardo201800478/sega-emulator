@@ -99,12 +99,10 @@ fn halt_snapshot_rejects_incompatible_in_flight_phase() {
 
 #[test]
 fn halt_exit_latch_round_trips_and_rejects_non_halted_or_in_flight_states() {
-    let mut cpu = Z80MicroSequencer {
-        iff1: true,
-        iff2: true,
-        halted: true,
-        ..Z80MicroSequencer::default()
-    };
+    let mut cpu = Z80MicroSequencer::default();
+    cpu.iff1 = true;
+    cpu.iff2 = true;
+    cpu.halted = true;
     cpu.set_int_line(Some(0xFF));
 
     let hold = bus_request(cpu.begin_instruction().unwrap());
