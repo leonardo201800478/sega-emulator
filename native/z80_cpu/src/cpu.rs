@@ -2109,6 +2109,25 @@ mod tests {
 
     struct TestBus([u8; 0x10000]);
 
+    #[derive(Default)]
+    struct RecordingBus {
+        memory: [u8; 0x10000],
+        reads: Vec<u16>,
+        writes: Vec<(u16, u8)>,
+    }
+
+    impl CpuBus for RecordingBus {
+        fn read_memory(&mut self, address: u16) -> u8 {
+            self.reads.push(address);
+            self.memory[usize::from(address)]
+        }
+
+        fn write_memory(&mut self, address: u16, value: u8) {
+            self.writes.push((address, value));
+            self.memory[usize::from(address)] = value;
+        }
+    }
+
     impl CpuBus for TestBus {
         fn read_memory(&mut self, address: u16) -> u8 {
             self.0[usize::from(address)]
@@ -2275,6 +2294,26 @@ mod tests {
         assert_eq!(cpu.registers.pc, 0x0038);
         assert_eq!(cpu.registers.f & FLAG_PV, 0);
         assert!(!cpu.p);
+    }
+
+    #[test]
+    fn nmi_reads_and_ignores_the_response_byte_before_pushing_pc() {
+        let mut cpu = Z80::default();
+        cpu.registers.pc = 0x1234;
+        cpu.registers.sp = 0xC100;
+        cpu.iff1 = true;
+        cpu.request_nmi();
+
+        let mut bus = RecordingBus::default();
+        bus.memory[0x1234] = 0x76;
+
+        assert_eq!(cpu.step(&mut bus).unwrap(), 11);
+        assert_eq!(bus.reads, vec![0x1234]);
+        assert_eq!(bus.writes, vec![(0xC0FF, 0x12), (0xC0FE, 0x34)]);
+        assert_eq!(cpu.registers.pc, 0x0066);
+        assert_eq!(cpu.registers.sp, 0xC0FE);
+        assert!(!cpu.iff1);
+        assert!(cpu.iff2);
     }
 
     #[test]
