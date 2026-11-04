@@ -51,9 +51,19 @@ Esses testes pertencem ao executor atômico em `cpu.rs`. Eles não demonstram qu
 
 A função `execute_ed_register_control()` contém dispatch para NEG, IM 0/1/2, LD I/R, IN/OUT, transferências absolutas, operações de bloco, RETN/RETI, RRD/RLD e ADC/SBC HL. Há fases explícitas como `EdRegisterInternal`, `EdPortRead`, `EdAbsoluteTransfer`, `EdReturn`, `EdBlockTransferRead/Write`, `EdBlockCompareRead/Internal` e `EdBlockIo*`.
 
-A auditoria dos nomes de testes no módulo `#[cfg(test)]` de `sequencer.rs` não encontrou testes positivos dedicados a essas fases ED. O teste ED localizado valida somente a rejeição explícita de um subopcode não suportado, sem request fantasma.
+**Correção da revisão anterior:** a afirmação de que não havia testes positivos ED no microsequenciador estava incorreta. O blob de `sequencer.rs` examinado nesta auditoria (`fdb54e0d45b1b2e5e41178927945ce8322c4d6ed`) já continha grupos de testes positivos sob `#[cfg(test)]`. A revisão corrigida identificou **26 testes ED específicos** executados com sucesso no CI pós-merge #41775300143, no SHA `5768705658522deb46a0fb0556b51923ae8166b8`:
+- ADC/SBC HL: todos os pares de registradores, M-cycles internos, WAIT e snapshots.
+- IN/OUT (C): todas as codificações, trace de portas, WAIT e snapshots.
+- NEG, IM 0/1/2, LD I/R e fases internas retomáveis.
+- Transferências absolutas ED: oito codificações, ordem de barramento, wrap e snapshots.
+- RETN/RETI: aliases, ordem da pilha, IFF1/IFF2 e snapshots.
+- RRD/RLD: rotação de nibbles, flags, WAIT e snapshots.
+- LDI/LDD/LDIR/LDDR e CPI/CPD/CPIR/CPDR: repetição, wrap, flags, ordem, WAIT e snapshots.
+- Block I/O: oito opcodes, wrap de contador, portas, flags, WZ, WAIT e snapshots.
 
-**Conclusão A:** executor atômico ED = IMPLEMENTED com testes internos dirigidos; ED microsequenciado = IMPLEMENTED em parte do dispatch, mas validação funcional positiva = NOT RUN / não demonstrada nesta revisão. Não atribuir SHORT_PASS global às famílias ED.
+O job Rust registrou **216 testes unitários aprovados no crate `sega_z80_cpu`**, incluindo esses 26 casos ED. A evidência é positiva para os escopos testados, mas os testes de nome `*_differential_tests` comparam o microsequenciador ao executor atômico interno do projeto; essa comparação não é um oráculo externo independente.
+
+**Conclusão A corrigida:** ED microsequenciado = IMPLEMENTED para as famílias cobertas, com QUICK_PASS sustentado pelos 26 testes ED no CI #41775300143. Não promover o conjunto ED inteiro a SHORT_PASS global, DIFFERENTIAL_PASS ou TEMPORAL_PASS: ainda faltam cobertura comprovada de todos os campos/casos elegíveis, oráculo externo independente e traces elétricos independentes por T-state.
 
 ### Revisão B — microsequenciamento e barramento
 
@@ -67,9 +77,9 @@ Limitações encontradas:
 1. `Z80BusOperation` contém somente `OpcodeFetch`, `MemoryRead`, `MemoryWrite`, `PortRead` e `PortWrite`. Não existe operação de acknowledge de INT com semântica M1/IORQ.
 2. A operação `OpcodeFetch` não distingue o sinal especial de RETI necessário para notificação de daisy-chain. A fase `EdReturn` restaura IFF1 a partir de IFF2, mas não emite um evento de RETI para periféricos.
 3. Os ciclos ED codificados e suas durações nominais não foram comparados aqui com traces independentes por T-state. Portanto, não há evidência TEMPORAL_PASS para ED.
-4. Não foi localizada uma suíte microsequenciada ED que valide a ordem de leitura/escrita, WAIT em cada request e retomada contínua-versus-blocos.
+4. Os 26 testes ED identificados validam ordem de requests em escopos específicos, WAIT e round-trip de snapshots nas fases cobertas. Não constituem, porém, trace elétrico independente por T-state nem comparação externa. A equivalência contínua-versus-blocos não está demonstrada de forma global para todas as famílias ED.
 
-**Conclusão B:** fases ED existentes = IMPLEMENTED; cobertura de requests ED e temporalidade independente = NOT RUN. A modelagem atual não permite representar o acknowledge de INT nem o sinal especial de RETI.
+**Conclusão B corrigida:** handlers, requests e fases ED = IMPLEMENTED nos escopos cobertos; validação funcional positiva = QUICK_PASS nesses casos. A temporalidade ED independente permanece NOT RUN. A modelagem ainda não representa o acknowledge de INT nem o sinal/evento especial de RETI para daisy-chain.
 
 ### Revisão C — estado, snapshots e interrupções
 
@@ -97,10 +107,10 @@ Confirmações:
 |---|---|---|
 | BASE estrutural | IMPLEMENTED | Inventário de 252 codificações no teste BASE; não prova semântica integral |
 | ED no executor atômico | IMPLEMENTED | Testes dirigidos ED em `cpu.rs`; sem diferencial externo |
-| ED no microsequenciador | IMPLEMENTED parcial | Handlers e fases presentes; falta suíte positiva ED dedicada |
-| ED flags e estado completo | NOT RUN | Não há matriz de resultados retomáveis por família |
-| ED WAIT e snapshots | NOT RUN | Handshake/codec genéricos existem; falta validação específica das fases ED |
-| ED M-cycles/T-states | NOMINAL_ONLY | Durações codificadas, sem trace temporal independente |
+| ED no microsequenciador | IMPLEMENTED / QUICK_PASS (escopos testados) | 26 testes ED positivos no CI #41775300143; comparação interna com executor atômico e vetores dirigidos |
+| ED flags e estado completo | PARTIAL | Estado arquitetural, flags e efeitos cobertos por família; não há matriz completa de todos os campos/casos elegíveis |
+| ED WAIT e snapshots | QUICK_PASS (fases cobertas) | WAIT e round-trip testados em requests/fases ED selecionados; não generalizar a todas as fases |
+| ED M-cycles/T-states | NOMINAL_ONLY | M-cycles/T-states e ordem de requests testados internamente; sem trace elétrico independente por T-state |
 | RETN/RETI | PARTIAL | Restauração IFF1 presente; sinal/evento RETI para daisy-chain não representado |
 | HALT hold M1 | IMPLEMENTED | E7.1 integrada pela PR #490 |
 | NMI no microsequenciador | NOT IMPLEMENTED | Sem arbitragem/fases de serviço retomável |
@@ -121,22 +131,21 @@ Workflow da `main`: [#41768733643](https://github.com/leonardo201800478/sega-emu
 | Windows x64 D3D12 / WASAPI / XAudio2 | PASS |
 | Scheduler deterministic stress | SKIPPED |
 
-Os resultados acima são evidência do workflow existente na baseline; não representam execução de uma nova suíte E7 ED. O Scheduler stress não foi aprovado.
+O CI pós-merge #41775300143 foi executado sobre o SHA `5768705658522deb46a0fb0556b51923ae8166b8`: Rust quality/unit regression PASS (incluindo 216 testes unitários do crate Z80, com os 26 casos ED acima), Python lint/regression PASS e Windows x64 D3D12/WASAPI/XAudio2 PASS. Scheduler deterministic stress SKIPPED; não contabilizar como PASS.
 
 **Execução local nesta sessão:** BLOCKED. O transporte Git no ambiente de execução falhou ao resolver `github.com` via DNS. A API GitHub permaneceu acessível para leitura remota. Não foram executados localmente `cargo fmt`, `cargo clippy`, `cargo test`, `pytest` ou Ruff nesta sessão.
 
 ## 5. Próximas ações obrigatórias para fechar E7
 
-1. Criar uma suíte `ed_microsequencer_e7.rs` com casos positivos para cada família ED documentada e aliases, exercitando o microsequenciador — não somente o executor atômico.
-2. Verificar estado completo: AF/BC/DE/HL, IX/IY, I/R, IFF1/IFF2, IM, EI delay, PC/SP, WZ, Q/P, memória e I/O.
-3. Cobrir WAIT e round-trip do codec em cada request/fase ED suspensível; comparar execução contínua com execução em blocos.
-4. Confrontar os resultados com oráculo independente fixado e documentar exclusões/indeterminações de flags não documentadas.
-5. Representar o evento RETI/daisy-chain sem confundi-lo com RETN.
-6. Implementar E7.2A–E7.2F conforme o contrato de interrupções: NMI, INT acknowledge, IM 0/1/2, HALT/EI delay e integração dos adaptadores.
-7. Executar os gates completos no SHA candidato e atualizar scorecard com evidência reproduzível.
+1. Manter a cobertura ED existente rastreável por família; ampliar somente onde a matriz de evidências apontar lacuna concreta, sem criar uma segunda suíte redundante.
+2. Auditar os campos arquiteturais ainda não cobertos de forma completa por família: AF/BC/DE/HL, IX/IY, I/R, IFF1/IFF2, IM, EI delay, PC/SP, WZ, Q/P, memória e I/O.
+3. Planejar comparação ED com oráculo externo fixado, distinguindo-a da comparação atual com o executor atômico interno; documentar flags indeterminadas e divergências.
+4. Representar o evento RETI/daisy-chain sem confundi-lo com RETN.
+5. Implementar E7.2A–E7.2F conforme o contrato de interrupções, começando por NMI retomável; depois INT acknowledge, IM 0/1/2, HALT/EI delay e integração dos adaptadores.
+6. Executar os gates completos no SHA candidato e atualizar scorecard/auditoria com evidência reproduzível.
 
 ## 6. Decisão
 
-**Não aprovar fechamento global de E7 nesta baseline.** O código contém implementação significativa, mas faltam testes positivos do caminho ED retomável, validação temporal independente e o serviço de interrupções no microsequenciador.
+**Não aprovar fechamento global de E7 nesta baseline.** Há validação funcional positiva do caminho ED retomável em 26 casos específicos, mas permanecem lacunas de cobertura completa, oráculo diferencial externo, traces temporais independentes e serviço de interrupções no microsequenciador. E7.2 continua pendente.
 
 Nenhum código de hardware foi alterado nesta auditoria. Este relatório e a reconciliação do baseline do scorecard são alterações documentais destinadas a registrar o estado real, sem transformar ausência de evidência em aprovação.
