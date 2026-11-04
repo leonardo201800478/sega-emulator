@@ -1,9 +1,9 @@
 # Meta de conclusão do Z80 — cobertura, validação e critérios de aceite
 
 **Data da revisão:** 2026-11-04  
-**Baseline de referência:** `main` — `f89a52346e91e88e82ab37a4afcfffff2d793407` (após merge da PR #475 / E4C).  
+**Baseline de referência:** `main` — `a0e58fd05c7f62c42f82b86d15d8532e06a9c59b` (após PR #476; código E4C integrado pela PR #475).  
 **Evidência E4C:** HEAD validado `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS; PR #475 integrada no merge SHA `f89a52346e91e88e82ab37a4afcfffff2d793407`.  
-**Schema do microsequenciador na baseline:** 27.  
+**Schema do microsequenciador na baseline main:** 27. O candidato E5 da PR #478 eleva para 28.  
 **Status deste documento:** referência de planejamento e critérios de aceite. Não substitui a matriz semântica por opcode nem os relatórios de execução dos testes.
 
 ---
@@ -157,7 +157,7 @@ Os níveis abaixo são cumulativos no escopo declarado. O estado deve ser atribu
 - [x] Cópia opcional para B/C/D/E/H/L/A nos grupos x=0,2,3; H/L são os registradores convencionais, não IXH/IXL/IYH/IYL.
 - [x] R incrementa somente nos M1; WZ mantém o endereço efetivo; IX/IY, last-prefix-wins, displacement assinado e wrap.
 - [x] WAIT em cada transação e snapshot/restore nas fases com request pendente; schema 28.
-- [x] Adicionada suíte `indexed_cb_e5.rs`: 256 subopcodes por índice, BIT read-only, RMW, cópia z, flags modeladas, prefixos repetidos, wrap e round-trip de snapshots.
+- [x] Adicionada suíte `indexed_cb_e5.rs`: 256 subopcodes por índice, BIT read-only, RMW, cópia z, flags modeladas, prefixos repetidos/alternados, displacement 0/-128/+127, wrap de endereço/PC e round-trip de snapshots.
 - [ ] CI da PR #478 e revisão do diff: pendentes nesta fotografia.
 - Estado: IMPLEMENTED no candidato. QUICK_PASS/SHORT_PASS permanecem NOT RUN até CI e regressões no HEAD exato.
 - Limite de fonte: ZiLOG UM008011-0816 marca S e P/V de BIT indexado como desconhecidos; o candidato mantém o modelo já existente no executor atômico. Isso não comprova esses bits contra silício.
