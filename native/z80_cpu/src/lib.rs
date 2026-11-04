@@ -29,7 +29,7 @@ pub use cpu::{CpuError, Z80, Z80AlternateRegisters, Z80Registers};
 pub use m1::{Z80M1Cycle, Z80M1CycleState, Z80M1Error, Z80M1Phase, Z80M1Pins};
 pub use micro_ops::{
     Z80BusHandshake, Z80BusHandshakeError, Z80BusHandshakeState, Z80BusOperation, Z80BusRequest,
-    Z80BusResponse,
+    Z80BusResponse, Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES, Z80_INT_ACK_BASE_TSTATES,
 };
 pub use prefix::{Z80IndexOpcodeClass, Z80IndexRegister, Z80PrefixState, classify_index_opcode};
 pub use sequencer::{
