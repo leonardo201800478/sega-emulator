@@ -276,9 +276,10 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
         Z80MicroSequencerPhase::Ready => writer.u8(0),
         Z80MicroSequencerPhase::OpcodeFetch => writer.u8(1),
         Z80MicroSequencerPhase::InterruptAcknowledge => writer.u8(64),
-        Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector } => {
+        Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector, mode } => {
             writer.u8(65);
             writer.u8(vector);
+            writer.u8(mode);
         }
         Z80MicroSequencerPhase::InterruptModeDispatchInternal {
             mode,
@@ -739,6 +740,7 @@ fn read_phase(
         64 => Z80MicroSequencerPhase::InterruptAcknowledge,
         65 => Z80MicroSequencerPhase::InterruptAcknowledgeComplete {
             vector: reader.u8()?,
+            mode: reader.u8()?,
         },
         66 => Z80MicroSequencerPhase::InterruptModeDispatchInternal {
             mode: reader.u8()?,
