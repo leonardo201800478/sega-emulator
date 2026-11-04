@@ -1025,7 +1025,7 @@ impl Z80MicroSequencer {
                     && state.prefix_state == Z80PrefixState::None
                     && !state.iff1 && !state.iff2 && !state.halted
                     && pending.is_none() && state.instruction_tstates >= 5
-                    && state.mcycle_index == 1 && state.tstate_index == 0
+                    && state.mcycle_index == 0 && state.tstate_index == 5
             }
             Z80MicroSequencerPhase::InterruptModeDispatchInternal {
                 mode, return_address, remaining_tstates, ..
@@ -2347,11 +2347,11 @@ impl Z80MicroSequencer {
                 state.mcycle_index == 0 && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::InterruptAcknowledgeComplete { .. } => {
-                state.mcycle_index == 1 && state.tstate_index == 0
+                state.mcycle_index == 0 && state.tstate_index == 5
             }
             Z80MicroSequencerPhase::InterruptModeDispatchInternal { mode, remaining_tstates, .. } => {
-                state.mcycle_index == 1
-                    && state.tstate_index == if mode == 0 {
+                state.mcycle_index == 0
+                    && state.tstate_index == 5 + if mode == 0 {
                         0
                     } else {
                         u16::from(2_u8.saturating_sub(remaining_tstates))
@@ -2876,8 +2876,8 @@ impl Z80MicroSequencer {
             return_address: self.registers.pc,
             remaining_tstates,
         };
-        self.mcycle_index = 1;
-        self.tstate_index = 0;
+        self.mcycle_index = 0;
+        self.tstate_index = 5;
         Ok(Z80MicroStep::InternalCycle { tstates: 1 })
     }
 
@@ -3323,8 +3323,11 @@ impl Z80MicroSequencer {
                     .data
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
                 self.refresh = (self.refresh & 0x80) | (self.refresh.wrapping_add(1) & 0x7F);
-                self.mcycle_index = 1;
-                self.tstate_index = 0;
+                // The acknowledge is M1 (3 base T-states + two automatic
+                // WAIT states). Keep its M-cycle open for the mode-specific
+                // internal T-states that follow the acknowledge.
+                self.mcycle_index = 0;
+                self.tstate_index = 5;
                 self.phase = Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector };
                 Ok(Z80MicroStep::InterruptAcknowledge {
                     vector,
