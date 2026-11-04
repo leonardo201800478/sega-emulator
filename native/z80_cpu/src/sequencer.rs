@@ -2339,7 +2339,9 @@ impl Z80MicroSequencer {
                     }
                     Some(0x02) => (4, Some(state.registers.bc()), Some(state.registers.a)),
                     Some(0x12) => (4, Some(state.registers.de()), Some(state.registers.a)),
-                    Some(0x77) => (4, Some(state.registers.hl()), None),
+                    Some(opcode) if (0x70..=0x75).contains(&opcode) || opcode == 0x77 => {
+                        (4, Some(state.registers.hl()), None)
+                    }
                     Some(0x36) => (7, Some(state.registers.hl()), None),
                     Some(0x22) => (10, Some(address), None),
                     Some(0x32) => (10, Some(address), Some(state.registers.a)),
@@ -7045,6 +7047,51 @@ mod tests {
 
         let restored = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
         assert_eq!(restored.pending_request(), Some(write));
+    }
+
+    #[test]
+    fn restore_accepts_ld_hl_register_write_phases_for_all_source_registers() {
+        for opcode in [0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x77] {
+            let mut cpu = Z80MicroSequencer {
+                registers: Z80Registers {
+                    a: 0xA5,
+                    b: 0xB1,
+                    c: 0xC2,
+                    d: 0xD3,
+                    e: 0xE4,
+                    h: 0xC0,
+                    l: 0x10,
+                    ..Z80Registers::default()
+                },
+                ..Z80MicroSequencer::default()
+            };
+            let fetch = request(cpu.begin_instruction().unwrap());
+            let write = request(cpu.complete_bus_cycle(fetch.id, Some(opcode)).unwrap());
+            assert_eq!(write.address, 0xC010);
+            let state = cpu.export_state();
+
+            let restored = Z80MicroSequencer::restore_state(state.clone()).unwrap();
+            assert_eq!(restored.export_state(), state);
+            let encoded = state.encode().unwrap();
+            assert_eq!(
+                Z80MicroSequencerState::decode(&encoded).unwrap(),
+                state,
+                "opcode {opcode:02X}"
+            );
+
+            let mut invalid = state;
+            let pending = invalid.handshake.pending_request.as_mut().unwrap();
+            if let Z80BusOperation::MemoryWrite { value } = pending.operation {
+                pending.operation = Z80BusOperation::MemoryWrite { value: value ^ 1 };
+            } else {
+                panic!("expected pending memory write");
+            }
+            assert_eq!(
+                Z80MicroSequencer::restore_state(invalid),
+                Err(Z80MicroSequencerError::InvalidState),
+                "opcode {opcode:02X} payload mismatch"
+            );
+        }
     }
 
     #[test]
