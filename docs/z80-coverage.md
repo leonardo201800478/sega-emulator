@@ -1,3 +1,5 @@
+> **Estado operacional do Z80 — 2026-11-04, `main` `fcd91302cb64a31d63b75f5e1d3b6eab336668d1`:** E6 está integrada pela PR #486 e E7.3 (HALT T4) pela PR #509. A PR #511 integrou uma auditoria documental de BUSREQ/BUSACK, não a arbitragem no runtime. E7.4.1A (#512) e E7.4.1B de runtime (#514) permanecem abertas e não integradas; a especificação WAIT/TW registra bloqueios de falling edge, TW automático de I/O/INT e amostragem durante TW obrigatório. A próxima implementação é C1: instante racional compartilhado no Temporal Core/Scheduler. E7 global segue `INTEGRATION_PENDING`; E8 continua bloqueada.
+
 > **Atualização de estado (2026-10-27):** o hardware SG-1000 ativo é Rust-only. A implementação Python antiga e ferramentas/testes que dependiam dela estão em `legacy/python_reference/`; não fazem parte do runtime e os comandos históricos abaixo não são caminhos de execução ativos.
 
 # Auditoria de cobertura da CPU Z80
@@ -90,10 +92,10 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 
 ## Estado interno, interrupções e ciclo de barramento
 
-O código atual modela registradores principais e alternativos, I/R, IX/IY, SP, PC, flags e um acumulador de T-states nominais. Ainda faltam, entre outros:
+Na implementação Python arquivada, auditada em 22/10/2026, estavam modelados registradores principais e alternativos, I/R, IX/IY, SP, PC, flags e um acumulador de T-states nominais. As lacunas daquela revisão incluíam, entre outras:
 
 - Os registradores alternativos AF', BC', DE' e HL', I/R e IX/IY estão modelados.
-- IFF1/IFF2, modos 0–2, HALT e solicitações NMI/INT têm um modelo inicial. Em IM 0, o byte de acknowledge é executado como opcode externo; há testes sintéticos para RST, NOP, `LD A,n`, `CALL`, prefixos CB/ED/DD e consumo de operandos subsequentes pela memória. Essa cobertura caracteriza o contrato atual, mas ainda requer validação diferencial para confirmar a semântica e os ciclos do acknowledge.
+- IFF1/IFF2, modos 0–2, HALT e solicitações NMI/INT têm um modelo inicial. Em IM 0, o byte de acknowledge é executado como opcode externo; há testes sintéticos para RST, NOP, `LD A,n`, `CALL`, prefixos CB/ED/DD e consumo de operandos subsequentes pela memória. Essa cobertura caracteriza somente o contrato daquela revisão Python; não confirma o comportamento do runtime Rust.
 - `test_nmi_during_halt_has_priority_over_pending_int` caracteriza a sequência EI → HALT → NMI com INT pendente: NMI sai de HALT, empilha o PC após HALT, incrementa R, copia IFF1 para IFF2 e mantém INT pendente. É um teste de regressão sintético; ainda não equivale a validação diferencial contra hardware.
 - `test_retn_reti_aliases_restore_iff1_from_iff2` percorre os oito aliases ED de RETN/RETI com IFF2 em ambos os estados, verificando restauração de PC/SP, preservação de F e incremento de R. A cobertura é sintética e não modela o sinal externo de daisy chain que distingue RETI em sistemas com controlador de prioridades.
 - Ciclos M1, ciclos de leitura/escrita e I/O, estados de espera, contenção e temporização de barramento.
@@ -170,7 +172,7 @@ A auditoria histórica da implementação Python identificou lacunas de arquitet
 Prioridades confirmadas:
 1. **Temporização:** os ciclos ainda são contabilizados por instrução; os acessos ao barramento não são agendados em T-states.
 2. **Interrupções:** a cobertura atual inclui testes para incremento de R em NMI/INT, modos IM 0/1/2, atraso de EI, saída de HALT por INT e execução de opcodes externos em IM 0 (NOP, `LD A,n`, `CALL`, prefixos CB/ED/DD e RST). Ainda faltam validação diferencial abrangente do acknowledge, dos estados IFF e das sequências de borda; não tratar os testes sintéticos como prova de compatibilidade física.
-3. **Comportamentos auxiliares:** WZ/MEMPTR e Q latch não estão modelados.
+3. **Comportamentos auxiliares:** esta afirmação é válida apenas para a fotografia histórica do núcleo Python auditado. No runtime Rust, WZ/MEMPTR, Q e q_previous estão modelados no estado do microsequenciador e nos snapshots; a matriz completa de atualização WZ e a validação diferencial independente de Q continuam pendentes.
 4. **ED:** handlers importantes existem, mas falta classificar e testar todos os 256 segundos bytes, incluindo aliases e NOPs não documentados.
 5. **Validação semântica:** os testes “todos os opcodes têm caminho” não demonstram correção de resultados, flags, ciclos ou ordem de barramento. DAA, flags X/Y, prefixos e operações de bloco precisam de comparação diferencial.
 
@@ -280,8 +282,27 @@ A implementação agora deriva os bits F3/F5 de `BIT b,(HL)` do byte alto de WZ/
 
 
 
-## Transição para motor Z80 compartilhado — 2026-10-31
+## Transição para motor Z80 compartilhado — registro histórico de 2026-10-31
 
-Esta matriz continua sendo a referência de cobertura semântica do Z80 e deve ser preservada durante a extração. A existência de executores semelhantes em SG-1000 e SMS não significa que a CPU já esteja unificada: no baseline observado, ambos ainda possuem `cpu.rs` em seus próprios crates. A extração planejada para `native/z80_cpu` deve manter todos os vetores, fixtures, proveniência, limites de licença e estados de validação, acrescentando execução dos mesmos testes contra os adaptadores de cada máquina.
+Na fotografia de 2026-10-31, os executores SG-1000 e SMS ainda estavam em processo de extração. Essa descrição é histórica: o runtime Z80 compartilhado está atualmente em `native/z80_cpu`. A extração não promove automaticamente itens para IMPLEMENTED/SHORT_PASS/LONG_PASS; cada família precisa de evidência própria. O plano de reorganização permanece como registro da migração, não como descrição do estado atual.
 
-A unificação não promove automaticamente itens para IMPLEMENTED/SHORT_PASS/LONG_PASS. O modo de instrução e o futuro modo por micro-operações devem compartilhar uma única semântica; T-states agregados continuam distintos de eventos de barramento temporizados. Ver [plano de reorganização do runtime e Z80](architecture/migrations/shared-z80-runtime-reorganization.md).
+
+## Estado atual do runtime Rust — verificação documental (2026-11-03)
+
+O inventário opcode-a-opcode acima é histórico e descreve a implementação Python arquivada. A tabela abaixo registra somente fatos confirmados por leitura do código Rust em native/z80_cpu/src/sequencer.rs, snapshot.rs e testes associados; não converte cobertura histórica em cobertura Rust.
+
+| Área | Evidência no Rust | Status de validação |
+|---|---|---|
+| WZ/MEMPTR | wz integra Z80MicroSequencer, Z80MicroSequencerState e o DTO arquitetural; handlers selecionados atualizam o campo, incluindo saltos, transferências absolutas, I/O, operações indexadas e ED. | IMPLEMENTED no código; tabela completa por família e diferencial externo NOT RUN. |
+| Q / previous-Q | q e q_previous são exportados/importados; a fronteira de instrução captura Q anterior; SCF/CCF calcula X/Y com (A OR (q_previous XOR F)) AND XY. | IMPLEMENTED no código; z80ccf/validação independente NOT RUN. |
+| BIT em memória | O caminho CB fornece o byte alto de WZ como fonte dos bits X/Y para operação de memória. | Implementação presente; comportamento da variante-alvo ainda requer confirmação independente. |
+| ED block transfer/compare/I/O | Existem fases microsequenciadas e atualização de HL/DE/BC, flags e WZ para transferências, comparações e I/O de bloco, incluindo repetição. | Implementação e testes internos presentes; cobertura diferencial externa de todas as flags/casos NOT RUN. |
+| DDCB/FDCB | E5 implementado no microsequenciador, com BIT read-only, RMW, destino opcional z, WAIT e snapshots nas fases cobertas. | QUICK_PASS / SHORT_PASS no escopo documentado da PR #485; sem LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS. |
+| Prefixos ignorados | E6 implementada e integrada pela PR #486; fallback BASE sem fetch duplicado. | CI candidato #41757983537: Rust/Python/Windows PASS; Scheduler stress SKIPPED. A integração foi concluída, mas a validação diferencial/temporal integral continua pendente. |
+| IM 0 / acknowledge | A auditoria histórica Python não é evidência do comportamento Rust. | NÃO CONFIRMADO no Rust nesta revisão. |
+| RETI / daisy chain | Há teste de RETI/RETN restaurando IFF1 a partir de IFF2. | Notificação de daisy chain não confirmada; pendente. |
+| Temporalidade | O microsequenciador emite requests de barramento ordenados com duração-base e acompanha M-cycle/T-state para as famílias implementadas. | Cobertura parcial; os arrays cycles do corpus SingleStepTests não estão comparados de forma geral. |
+
+**Correção importante sobre a auditoria SingleStepTests histórica:** os 11.000 vetores representam o total dos 11 arquivos baixados. Na primeira execução registrada, 5.401 foram aprovados, 0 divergiram e 5.599 foram excluídos pelo latch p; portanto, não registrar “11.000 aprovados”. Uma execução posterior ampliou o subconjunto sem exclusões, mas esta documentação histórica não fornece uma contagem inequívoca para declarar aprovação integral dos 11.000. Em qualquer caso, esses resultados são do núcleo Python arquivado, não do Rust.
+
+A referência normativa para o estado e os gates atuais é o [scorecard de conclusão do Z80](z80-completion-scorecard.md), complementado pela [matriz semântica DD/FD](z80-dd-fd-semantic-matrix.md).
