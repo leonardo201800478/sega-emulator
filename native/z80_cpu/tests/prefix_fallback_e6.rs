@@ -237,3 +237,64 @@ fn ignored_prefix_fallback_preserves_relative_branch_operand_fetch() {
     assert_eq!(cpu.registers.pc, 3);
     assert_eq!(cpu.refresh & 0x7F, 2);
 }
+
+#[test]
+fn ignored_prefix_fallback_preserves_base_memory_read_and_snapshot() {
+    let mut cpu = Z80MicroSequencer::default();
+    cpu.registers.set_bc(0x2345);
+    let prefix_fetch = request(cpu.begin_instruction().expect("instruction starts"));
+    let (next_cpu, step) = complete_fetch(cpu, prefix_fetch, 0xDD, 0);
+    cpu = next_cpu;
+    let opcode_fetch = request(step);
+
+    let (next_cpu, step) = complete_fetch(cpu, opcode_fetch, 0x0A, 0);
+    cpu = next_cpu;
+    let memory_read = request(step);
+    assert_eq!(memory_read.operation, Z80BusOperation::MemoryRead);
+    assert_eq!(memory_read.address, 0x2345);
+    assert_eq!(memory_read.base_tstates, 3);
+
+    cpu = round_trip(cpu);
+    assert_eq!(
+        cpu.complete_bus_cycle(memory_read.id, Some(0xA5)).unwrap(),
+        Z80MicroStep::InstructionRetired {
+            opcode: 0x0A,
+            tstates: 11,
+        }
+    );
+    assert_eq!(cpu.registers.a, 0xA5);
+    assert_eq!(cpu.registers.pc, 2);
+    assert_eq!(cpu.refresh & 0x7F, 2);
+}
+
+#[test]
+fn ignored_prefix_fallback_preserves_base_memory_write_and_snapshot() {
+    let mut cpu = Z80MicroSequencer::default();
+    cpu.registers.set_bc(0x3456);
+    cpu.registers.a = 0xA5;
+    let prefix_fetch = request(cpu.begin_instruction().expect("instruction starts"));
+    let (next_cpu, step) = complete_fetch(cpu, prefix_fetch, 0xFD, 0);
+    cpu = next_cpu;
+    let opcode_fetch = request(step);
+
+    let (next_cpu, step) = complete_fetch(cpu, opcode_fetch, 0x12, 0);
+    cpu = next_cpu;
+    let memory_write = request(step);
+    assert_eq!(
+        memory_write.operation,
+        Z80BusOperation::MemoryWrite { value: 0xA5 }
+    );
+    assert_eq!(memory_write.address, 0x3456);
+    assert_eq!(memory_write.base_tstates, 3);
+
+    cpu = round_trip(cpu);
+    assert_eq!(
+        cpu.complete_bus_cycle(memory_write.id, None).unwrap(),
+        Z80MicroStep::InstructionRetired {
+            opcode: 0x12,
+            tstates: 11,
+        }
+    );
+    assert_eq!(cpu.registers.pc, 2);
+    assert_eq!(cpu.refresh & 0x7F, 2);
+}
