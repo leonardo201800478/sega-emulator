@@ -935,12 +935,11 @@ impl SmsTemporalMachine {
                 .bus
                 .fixture_wait_remaining
                 .ok_or(SmsTemporalMachineError::InvalidState)?;
-            let mandatory_waits =
-                if request.operation == Z80BusOperation::InterruptAcknowledge {
-                    u32::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
-                } else {
-                    0
-                };
+            let mandatory_waits = if request.operation == Z80BusOperation::InterruptAcknowledge {
+                u32::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
+            } else {
+                0
+            };
             if fixture_total != state.cpu.handshake.wait_tstates
                 || fixture_remaining > fixture_total
                 || fixture_total - fixture_remaining != mcycle.external_wait_tstates
