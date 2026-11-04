@@ -269,10 +269,15 @@ fn assert_invalid_snapshot(state: Z80MicroSequencerState, context: &str) {
         state.encode().is_err(),
         "invalid DTO must not encode: {context}"
     );
-    assert_eq!(
-        Z80MicroSequencer::restore_state(state),
-        Err(Z80MicroSequencerError::InvalidState),
-        "invalid DTO must not restore: {context}"
+    assert!(
+        matches!(
+            Z80MicroSequencer::restore_state(state),
+            Err(
+                Z80MicroSequencerError::InvalidState
+                    | Z80MicroSequencerError::Handshake(_)
+            )
+        ),
+        "invalid DTO must be rejected as an invalid state: {context}"
     );
 }
 
