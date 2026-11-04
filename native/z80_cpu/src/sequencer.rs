@@ -2573,7 +2573,7 @@ impl Z80MicroSequencer {
                             .and_then(|count| minimum_prefixed_tstates(count, 0))
                             .is_some_and(|minimum| state.instruction_tstates >= minimum)
                             && state.tstate_index == 0
-                    },
+                    }
                     _ => state.mcycle_index == 1 && state.tstate_index == 0,
                 }
             }
