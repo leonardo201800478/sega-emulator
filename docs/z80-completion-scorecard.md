@@ -515,3 +515,21 @@ A especificação foi retificada na PR #513, HEAD 143cdce6fde85621c81de0a1bc4335
 5. regressão de M1, ciclos internos, HALT e interrupções.
 
 E8 permanece bloqueada até fechamento de E7. Não atribuir TEMPORAL_PASS com base no CI convencional.
+
+
+---
+
+## Fotografia operacional reconciliada — 2026-11-04 (E7.4.1C / linha temporal racional)
+
+Esta atualização prevalece sobre fotografias anteriores deste scorecard. Baseline remota verificada: `main` = `5452ec9eb4307b997badff1858bfc60e7078a937` (PR #511 integrada).
+
+- E7.3 HALT T4 está integrada pela PR #509; a PR #511 acrescentou a auditoria documental BUSREQ/BUSACK e os bloqueios WAIT/TW.
+- E7.4.1A (#512) e E7.4.1B (#514) continuam candidatas abertas, não integradas. A PR #513 contém a retificação documental de WAIT/TW, também não integrada.
+- CI nos HEADs candidatos: #512 workflow 41891089747 = 4/4 PASS; #513 workflow 41896880779 = Rust/Python/Windows PASS e Scheduler stress SKIPPED; #514 workflow 41896166347 = Rust/Python/Windows PASS e Scheduler stress SKIPPED. SKIPPED não é PASS e nenhum desses resultados comprova TEMPORAL_PASS.
+- A auditoria E7.4.1C identificou que `ClockEdgeTime` calcula bordas racionais exatas, mas `MachineScheduler`, `EventQueue`, watermarks, clock-domain state e codec ainda usam `MachineTime` inteiro. `HardwarePhase` é apenas ordenação ordinal, não sub-tick.
+- C1 passa a ser o bloqueio arquitetural explícito: definir e implementar instante racional compartilhado em temporal-core/Scheduler, com comparação, aritmética verificada, ordenação causal, snapshots e codec. Não arredondar meia-fase nem criar timeline paralela SMS.
+- Após C1: C2 falling/rising edges; C3 TW automático e WAIT por origem; C4 integração Z80/SMS; C5 snapshots; C6 validação contínua/blocos e traces. Somente depois retomar BUSREQ/BUSACK.
+- Clone local indisponível por falha DNS de `github.com`; testes locais NOT RUN. CI pós-merge da #511 não foi encontrado na consulta de workflow e fica NOT VERIFIED.
+- E8 continua bloqueada até fechamento integral de E7; não declarar LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS.
+
+Relatório técnico: [Auditoria E7.4.1C — linha temporal racional compartilhada](audits/z80-e7-4-1c-rational-timeline-2026-11-04.md).
