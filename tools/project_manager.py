@@ -112,7 +112,11 @@ def audit() -> tuple[dict[str, Any], list[Result]]:
     return report, results
 
 def cargo_for(ws: Workspace, *args: str) -> list[str]:
-    return ["cargo", *args, "--manifest-path", str(ROOT / ws.manifest)]
+    manifest = ["--manifest-path", str(ROOT / ws.manifest)]
+    if "--" in args:
+        separator = args.index("--")
+        return ["cargo", *args[:separator], *manifest, "--", *args[separator + 1:]]
+    return ["cargo", *args, *manifest]
 
 def lock_check(workspaces: list[Workspace]) -> list[Result]:
     results = []
