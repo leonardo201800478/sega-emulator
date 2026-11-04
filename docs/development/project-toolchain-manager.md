@@ -43,9 +43,11 @@ Cross-platform entry point:
 
 ## Scope and limitations
 
-Every discovered Cargo workspace receives independent formatting, Clippy and
-test invocations. This includes standalone native workspaces such as
-native/z80_core and native/audio_output.
+Every active Cargo workspace receives independent formatting, Clippy and
+test invocations. Manifests that are not included in any declared workspace
+are reported separately as NOT RUN, rather than silently treated as active
+crates. This includes standalone native workspaces such as native/z80_core
+and native/audio_output.
 
 validate is comprehensive and may take time. Use audit for a fast inventory
 and locks to investigate lockfile consistency. Windows-specific D3D12,
