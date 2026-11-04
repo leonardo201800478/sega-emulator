@@ -10,7 +10,7 @@
 **PR de referência histórica:** [#447](https://github.com/leonardo201800478/sega-emulator/pull/447) — manter aberta, sem merge  
 **PR integrada E4A:** [#471](https://github.com/leonardo201800478/sega-emulator/pull/471)  
 **PR integrada E4C:** [#475](https://github.com/leonardo201800478/sega-emulator/pull/475)  
-**PR candidata E5:** [#477](https://github.com/leonardo201800478/sega-emulator/pull/477), HEAD `081522cf5169d9bf27a5e018db57b6b69ad378d3`; CI ainda pendente.  
+**PR candidata E5:** [#478](https://github.com/leonardo201800478/sega-emulator/pull/478), commit de implementação `da13d309c8902b4b3cc637a518c95cb5e47d55c1`; CI ainda pendente.  
 **Escopo:** microsequenciador Z80 compartilhado; não confundir conclusão do núcleo com integração temporal completa ao SMS.
 
 ---
