@@ -10,6 +10,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 pub enum Z80BusOperation {
     OpcodeFetch,
+    /// Special M1 cycle used to acknowledge a maskable interrupt.
+    /// The temporal bus must expose IORQ (not MREQ) and return the device vector.
+    InterruptAcknowledge,
     MemoryRead,
     MemoryWrite { value: u8 },
     PortRead,
@@ -139,7 +142,10 @@ impl Z80BusHandshake {
         }
         let requires_data = matches!(
             pending.request.operation,
-            Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead | Z80BusOperation::PortRead
+            Z80BusOperation::OpcodeFetch
+                | Z80BusOperation::InterruptAcknowledge
+                | Z80BusOperation::MemoryRead
+                | Z80BusOperation::PortRead
         );
         if requires_data && data.is_none() {
             return Err(Z80BusHandshakeError::MissingReadData);
@@ -201,6 +207,24 @@ mod tests {
             bus.complete(request.id, Some(0xA5)).unwrap().data,
             Some(0xA5)
         );
+        assert!(!bus.is_pending());
+    }
+
+    #[test]
+    fn interrupt_acknowledge_requires_and_returns_external_vector_data() {
+        let mut bus = Z80BusHandshake::default();
+        let request = bus
+            .begin(Z80BusOperation::InterruptAcknowledge, 0x1234, 5)
+            .unwrap();
+
+        assert_eq!(
+            bus.complete(request.id, None),
+            Err(Z80BusHandshakeError::MissingReadData)
+        );
+        assert_eq!(bus.pending_request(), Some(request));
+
+        let response = bus.complete(request.id, Some(0xCF)).unwrap();
+        assert_eq!(response.data, Some(0xCF));
         assert!(!bus.is_pending());
     }
 
