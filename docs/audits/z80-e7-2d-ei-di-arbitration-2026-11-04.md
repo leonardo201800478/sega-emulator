@@ -1,11 +1,13 @@
 # Z80 E7.2D — Arbitragem EI/DI e atraso de INT
 
 **Data:** 2026-11-04  
-**Estado:** cenários focados implementados por testes na PR #500; PR ainda draft e não integrada  
-**Base main:** HEAD 8d13178ad79763cc23180aa8d6d334028632c29a (PR #499, documentação); baseline de código a756e51cf6c5245357831896de293cd2e9d3a859  
+**Estado:** cenários focados integrados à main pela PR #500  
+**Base main antes da PR:** HEAD 8d13178ad79763cc23180aa8d6d334028632c29a (PR #499, documentação); baseline de código a756e51cf6c5245357831896de293cd2e9d3a859  
+**Merge SHA main:** ea327025b312feb53f1e3e5326b5a5e7c40e72f1  
 **SHA candidato:** c6f0930f6820e760d8b0d60ae7770da9cb22be32  
 **PR:** [#500 — testes de arbitragem EI/DI](https://github.com/leonardo201800478/sega-emulator/pull/500)  
-**CI:** [run #41793815959](https://github.com/leonardo201800478/sega-emulator/actions/runs/41793815959) — SUCCESS  
+**CI da PR:** [run #41793815959](https://github.com/leonardo201800478/sega-emulator/actions/runs/41793815959) — SUCCESS  
+**CI pós-merge:** [run #41794506556](https://github.com/leonardo201800478/sega-emulator/actions/runs/41794506556) — SUCCESS no merge SHA acima.  
 **Referência:** ZiLOG Z80 CPU User Manual UM008011-0816, comportamento EI/DI/NMI/INT; implementação auditada em native/z80_cpu/src/sequencer.rs.
 
 ---
@@ -92,4 +94,4 @@ SKIPPED não é contabilizado como PASS. Nenhum LONG_PASS, DIFFERENTIAL_PASS ou 
 - Não foram executados ZEXDOC/ZEXALL nem oráculo diferencial externo.
 - A lógica de produção EI/DI foi auditada e exercitada; esta PR não deve ser descrita como implementação de um novo mecanismo de hardware.
 
-**Conclusão:** os cenários EI/DI e NMI durante atraso foram demonstrados no microsequenciador e passaram os gates convencionais no SHA candidato. A PR ainda não foi integrada. E7 global permanece INTEGRATION_PENDING, especialmente pela amostragem HALT T4, BUSREQ, RETI/daisy-chain e validação independente.
+**Conclusão:** os cenários EI/DI e NMI durante atraso foram demonstrados no microsequenciador e integrados à main; os gates convencionais passaram tanto na PR quanto no CI pós-merge. E7 global permanece INTEGRATION_PENDING, especialmente pela amostragem HALT T4, BUSREQ, RETI/daisy-chain e validação independente.
