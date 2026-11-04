@@ -195,6 +195,7 @@ Os níveis abaixo são cumulativos no escopo declarado. O estado deve ser atribu
 - Aceite cumprido: matriz de combinações, stress de cadeias longas, snapshot/restore e regressões sem fetch duplicado.
 
 **Evidência E6 — PR #486, HEAD `b66b97cb6202b270e857f6cfb55be85a0ea62a6b`:**
+- Auditoria técnica detalhada: [E6 — Resolução geral dos prefixos Z80](audits/z80-prefix-resolution-e6-2026-11-04.md).
 - CI [#41757983537](https://github.com/leonardo201800478/sega-emulator/actions/runs/41757983537): Rust PASS (fmt, Clippy, workspace tests); Python PASS (pytest, Ruff check, Ruff format); Windows x64 PASS (D3D12, WASAPI/XAudio2 e testes); Scheduler stress SKIPPED por não haver alteração no Scheduler.
 - `native/z80_cpu/tests/prefix_fallback_e6.rs`: 9/9 testes PASS, incluindo BASE register, immediate, ALU, relative branch, memória read/write, ED absolute transfer, WAIT e snapshots.
 - `native/z80_cpu/tests/prefix_fsm.rs`: last-prefix-wins, repetição/alternância e cadeia de 257 prefixos sem limite artificial.
