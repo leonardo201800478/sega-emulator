@@ -994,9 +994,10 @@ mod tests {
         let first_error = restored.resume_instruction(0).unwrap_err();
         assert!(matches!(
             first_error,
-            SmsTemporalMachineError::Cpu(
-                Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x00, .. }
-            )
+            SmsTemporalMachineError::Cpu(Z80MicroSequencerError::UnsupportedOpcode {
+                opcode: 0x00,
+                ..
+            })
         ));
 
         let mut retried = SmsTemporalMachine::restore_state(prefix_snapshot).unwrap();
