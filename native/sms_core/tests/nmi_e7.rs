@@ -10,7 +10,7 @@ fn nmi_machine() -> SmsTemporalMachine {
     machine.cpu_mut().iff1 = true;
     machine.cpu_mut().iff2 = false;
     machine.cpu_mut().ei_delay = 1;
-    machine.cpu_mut().request_nmi();
+    machine.request_nmi();
     machine
 }
 
