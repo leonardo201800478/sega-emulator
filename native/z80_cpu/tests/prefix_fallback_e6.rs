@@ -270,7 +270,7 @@ fn ignored_prefix_fallback_preserves_base_memory_read_and_snapshot() {
 #[test]
 fn ignored_prefix_fallback_preserves_base_memory_write_and_snapshot() {
     let mut cpu = Z80MicroSequencer::default();
-    cpu.registers.set_bc(0x3456);
+    cpu.registers.set_de(0x3456);
     cpu.registers.a = 0xA5;
     let prefix_fetch = request(cpu.begin_instruction().expect("instruction starts"));
     let (next_cpu, step) = complete_fetch(cpu, prefix_fetch, 0xFD, 0);
