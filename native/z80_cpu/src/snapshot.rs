@@ -275,6 +275,11 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
     match phase {
         Z80MicroSequencerPhase::Ready => writer.u8(0),
         Z80MicroSequencerPhase::OpcodeFetch => writer.u8(1),
+        Z80MicroSequencerPhase::InterruptAcknowledge => writer.u8(64),
+        Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector } => {
+            writer.u8(65);
+            writer.u8(vector);
+        }
         Z80MicroSequencerPhase::NmiResponse => writer.u8(61),
         Z80MicroSequencerPhase::NmiStackPushInternal { return_address } => {
             writer.u8(62);
@@ -695,6 +700,8 @@ fn read_phase(
     Ok(match reader.u8()? {
         0 => Z80MicroSequencerPhase::Ready,
         1 => Z80MicroSequencerPhase::OpcodeFetch,
+        64 => Z80MicroSequencerPhase::InterruptAcknowledge,
+        65 => Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector: reader.u8()? },
         61 => Z80MicroSequencerPhase::NmiResponse,
         62 => Z80MicroSequencerPhase::NmiStackPushInternal {
             return_address: reader.u16()?,
