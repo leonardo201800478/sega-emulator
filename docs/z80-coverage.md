@@ -296,7 +296,7 @@ O inventário opcode-a-opcode acima é histórico e descreve a implementação P
 | BIT em memória | O caminho CB fornece o byte alto de WZ como fonte dos bits X/Y para operação de memória. | Implementação presente; comportamento da variante-alvo ainda requer confirmação independente. |
 | ED block transfer/compare/I/O | Existem fases microsequenciadas e atualização de HL/DE/BC, flags e WZ para transferências, comparações e I/O de bloco, incluindo repetição. | Implementação e testes internos presentes; cobertura diferencial externa de todas as flags/casos NOT RUN. |
 | DDCB/FDCB | E5 implementado no microsequenciador, com BIT read-only, RMW, destino opcional z, WAIT e snapshots nas fases cobertas. | QUICK_PASS / SHORT_PASS no escopo documentado da PR #485; sem LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS. |
-| Prefixos ignorados | PR #486 (E6.1) encaminha Ignored ao dispatch BASE sem fetch duplicado. | PR aberta; não integrada na main consultada. |
+| Prefixos ignorados | PR #486 (E6) implementa resolução geral de prefixos e fallback BASE sem fetch duplicado; CI candidato PASS, mas PR ainda aberta. | PR aberta; não integrada na main consultada. |
 | IM 0 / acknowledge | A auditoria histórica Python não é evidência do comportamento Rust. | NÃO CONFIRMADO no Rust nesta revisão. |
 | RETI / daisy chain | Há teste de RETI/RETN restaurando IFF1 a partir de IFF2. | Notificação de daisy chain não confirmada; pendente. |
 | Temporalidade | O microsequenciador emite requests de barramento ordenados com duração-base e acompanha M-cycle/T-state para as famílias implementadas. | Cobertura parcial; os arrays cycles do corpus SingleStepTests não estão comparados de forma geral. |
