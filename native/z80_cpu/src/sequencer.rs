@@ -848,8 +848,10 @@ impl Z80MicroSequencer {
                 match state.prefix_state {
                     Z80PrefixState::None => true,
                     Z80PrefixState::Index(_) => state.opcode.is_some_and(|opcode| {
-                        matches!(opcode, 0xC0 | 0xC8 | 0xD0 | 0xD8 | 0xE0 | 0xE8 | 0xF0 | 0xF8)
-                            && classify_index_opcode(opcode) == Z80IndexOpcodeClass::Ignored
+                        matches!(
+                            opcode,
+                            0xC0 | 0xC8 | 0xD0 | 0xD8 | 0xE0 | 0xE8 | 0xF0 | 0xF8
+                        ) && classify_index_opcode(opcode) == Z80IndexOpcodeClass::Ignored
                             && state.mcycle_index == 0
                             && state.tstate_index == 4
                             && state.instruction_tstates >= 8
