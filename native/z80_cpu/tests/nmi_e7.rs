@@ -143,6 +143,39 @@ fn nmi_edge_latched_during_an_instruction_is_accepted_at_the_next_boundary() {
 }
 
 #[test]
+fn nmi_requested_during_halt_m1_is_serviced_at_the_next_boundary() {
+    let mut cpu = Z80MicroSequencer::default();
+    cpu.registers.pc = 0x4321;
+    cpu.registers.sp = 0xC100;
+    cpu.halted = true;
+
+    let halt_m1 = request(cpu.begin_instruction().unwrap());
+    assert_eq!(halt_m1.operation, Z80BusOperation::OpcodeFetch);
+    assert_eq!(halt_m1.address, 0x4321);
+
+    cpu.request_nmi();
+    assert_eq!(
+        cpu.complete_bus_cycle(halt_m1.id, Some(0x76)).unwrap(),
+        Z80MicroStep::InstructionRetired {
+            opcode: 0x00,
+            tstates: 4,
+        }
+    );
+    assert_eq!(cpu.registers.pc, 0x4321);
+    assert!(cpu.halted);
+    assert!(cpu.nmi_pending);
+
+    let nmi_response = request(cpu.begin_instruction().unwrap());
+    assert_eq!(nmi_response.address, 0x4321);
+    assert_eq!(
+        cpu.export_state().phase,
+        Z80MicroSequencerPhase::NmiResponse
+    );
+    assert!(!cpu.halted);
+    assert!(!cpu.nmi_pending);
+}
+
+#[test]
 fn nmi_service_is_independent_of_iff1_and_interrupt_mode() {
     let mut cpu = Z80MicroSequencer::default();
     cpu.registers.pc = 0x2345;
