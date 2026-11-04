@@ -262,3 +262,22 @@ A suíte Python do CI reportou 214 passed e 21 skipped por dependências/extens�
 | Integração temporal sistêmica | INTEGRATION_PENDING | E9 ainda não aprovada |
 
 PRs abertas #487/#447/#424 têm bases históricas divergentes; seus CI SUCCESS são históricos e não autorizam merge na main atual. #338 permanece Draft com CI FAILURE. Não considerar trabalho de PR aberta como componente integrado.
+
+
+---
+
+## Atualização operacional dos componentes — 2026-11-04
+
+**Baseline remota:** `main` = `fcd91302cb64a31d63b75f5e1d3b6eab336668d1` (após PR #517). Esta seção prevalece sobre fotografias de componentes anteriores.
+
+| Componente | Estado atual | Evidência / limite |
+|---|---|---|
+| CPU Z80 compartilhada | IMPLEMENTED estruturalmente em `native/z80_cpu`; uso compartilhado SMS/SG-1000 | E6 integrada pela #486; E7.3 HALT T4 integrada pela #509. Não declarar fechamento semântico/diferencial global. |
+| Microsequenciador Z80 / E7 | INTEGRATION_PENDING | E7.1–E7.3 integradas; E7.4.1A (#512) e E7.4.1B (#514) candidatas abertas; E7.5–E7.7 pendentes. |
+| WAIT/TW do Z80 | INCOMPLETE / BLOCKED | Necessários falling/rising edges, TW automático de I/O, dois TWs automáticos de INT acknowledge e amostragem WAIT externo durante TW obrigatório. |
+| BUSREQ/BUSACK | NOT IMPLEMENTED no runtime | PR #511 é auditoria documental, não implementação de arbitragem. Só avançar após C1–C6. |
+| Timeline racional comum | NOT IMPLEMENTED | `ClockEdgeTime` ainda não integra `MachineScheduler`, EventQueue, watermarks, clock domains e codec. C1 é a próxima implementação. |
+| Scheduler determinístico | IMPLEMENTED no escopo atual; validação sistêmica pendente | PR #517 CI no HEAD `fc5f710f8c56698cb82dd4e49e881cea15e4639b`, run `41908119554`: 4/4 jobs PASS. Isso não comprova TEMPORAL_PASS do Z80/SMS. |
+| E8 diferencial/formal | BLOCKED | Não iniciar ZEXDOC/ZEXALL até o fechamento integral de E7. |
+
+**Próxima tarefa técnica:** C1 no `sega-temporal-core` e `machine-scheduler`, conforme [auditoria da timeline racional](audits/z80-e7-4-1c-rational-timeline-2026-11-04.md). Não declarar `LONG_PASS`, `DIFFERENTIAL_PASS` ou `TEMPORAL_PASS` global com base em CI convencional.
