@@ -1433,15 +1433,22 @@ impl Z80MicroSequencer {
                     && timing_valid
             }
             Z80MicroSequencerPhase::BaseReturnConditionInternal { branch_taken } => {
-                state.opcode.is_some_and(|opcode| {
+                let opcode_valid = state.opcode.is_some_and(|opcode| {
                     matches!(
                         opcode,
                         0xC0 | 0xC8 | 0xD0 | 0xD8 | 0xE0 | 0xE8 | 0xF0 | 0xF8
                     ) && branch_taken == self_condition(state.registers.f, (opcode >> 3) & 0x07)
-                }) && pending.is_none()
-                    && state.mcycle_index == 0
-                    && state.tstate_index == 4
-                    && state.instruction_tstates >= 4
+                });
+                let timing_valid = match state.prefix_state {
+                    Z80PrefixState::None => {
+                        state.mcycle_index == 0 && state.instruction_tstates >= 4
+                    }
+                    Z80PrefixState::Index(_) => {
+                        state.mcycle_index == 1 && state.instruction_tstates >= 8
+                    }
+                    _ => false,
+                };
+                opcode_valid && pending.is_none() && timing_valid && state.tstate_index == 4
             }
             Z80MicroSequencerPhase::BaseReturnPop { stage, low } => {
                 let return_condition_valid = state.opcode.is_some_and(|opcode| {
