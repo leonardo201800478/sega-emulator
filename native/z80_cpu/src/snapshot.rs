@@ -440,6 +440,28 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
             writer.u8(value);
         }
         Z80MicroSequencerPhase::IndexDisplacementRead => writer.u8(53),
+        Z80MicroSequencerPhase::IndexedCbDisplacementRead => writer.u8(57),
+        Z80MicroSequencerPhase::IndexedCbOpcodeRead { address } => {
+            writer.u8(58);
+            writer.u16(address);
+        }
+        Z80MicroSequencerPhase::IndexedCbMemoryRead { address } => {
+            writer.u8(59);
+            writer.u16(address);
+        }
+        Z80MicroSequencerPhase::IndexedCbMemoryWrite {
+            address,
+            value,
+            destination,
+        } => {
+            writer.u8(60);
+            writer.u16(address);
+            writer.u8(value);
+            writer.u8(u8::from(destination.is_some()));
+            if let Some(destination) = destination {
+                writer.u8(destination);
+            }
+        }
         Z80MicroSequencerPhase::IndexDisplacementInternal {
             address,
             remaining_tstates,
@@ -764,6 +786,27 @@ fn read_phase(
             value: reader.u8()?,
         },
         53 => Z80MicroSequencerPhase::IndexDisplacementRead,
+        57 => Z80MicroSequencerPhase::IndexedCbDisplacementRead,
+        58 => Z80MicroSequencerPhase::IndexedCbOpcodeRead {
+            address: reader.u16()?,
+        },
+        59 => Z80MicroSequencerPhase::IndexedCbMemoryRead {
+            address: reader.u16()?,
+        },
+        60 => {
+            let address = reader.u16()?;
+            let value = reader.u8()?;
+            let destination = if read_bool(reader)? {
+                Some(reader.u8()?)
+            } else {
+                None
+            };
+            Z80MicroSequencerPhase::IndexedCbMemoryWrite {
+                address,
+                value,
+                destination,
+            }
+        }
         54 => Z80MicroSequencerPhase::IndexDisplacementInternal {
             address: reader.u16()?,
             remaining_tstates: reader.u8()?,
