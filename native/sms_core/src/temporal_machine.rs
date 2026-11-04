@@ -727,6 +727,15 @@ impl SmsTemporalMachine {
         self.bus.set_interrupt_vector(vector);
     }
 
+    /// Drive the level-sensitive INT input and its acknowledge vector.
+    /// None deasserts INT. Signal changes do not advance machine time.
+    pub fn set_int_line(&mut self, vector: Option<u8>) {
+        self.cpu.set_int_line(vector);
+        if let Some(vector) = vector {
+            self.bus.set_interrupt_vector(vector);
+        }
+    }
+
     /// Current mapper-backed memory (read-only).
     pub const fn memory(&self) -> &crate::SmsMemory {
         self.bus.memory()
