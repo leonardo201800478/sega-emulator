@@ -120,6 +120,29 @@ fn instruction_timeline_is_valid(state: &SmsTemporalMachineState) -> bool {
             state.bus.coordinator.master_ticks_per_tstate,
         ) == Some(expected_tstates);
     }
+    if let Z80MicroSequencerPhase::InterruptAcknowledgeComplete { .. } = state.cpu.phase {
+        if state.bus.pending_request.is_some()
+            || state.bus.request_started_at.is_some()
+            || state.bus.completion.is_some()
+            || state.bus.pending_internal_cycle.is_some()
+            || state.bus.internal_cycle_started_at.is_some()
+            || state.bus.internal_completion.is_some()
+            || state.m1.is_some()
+            || state.m1_fixture_wait_tstates.is_some()
+            || state.pending_internal_cycle_id.is_some()
+            || state.pending_internal_tstates.is_some()
+        {
+            return false;
+        }
+        let Some(instruction_started_at) = state.instruction_started_at else {
+            return false;
+        };
+        return elapsed_tstates(
+            instruction_started_at,
+            state.bus.coordinator.scheduler.now,
+            state.bus.coordinator.master_ticks_per_tstate,
+        ) == Some(state.cpu.instruction_tstates);
+    }
     if state.m1_fixture_wait_tstates.is_some() {
         return false;
     }
@@ -140,8 +163,15 @@ fn instruction_timeline_is_valid(state: &SmsTemporalMachineState) -> bool {
             if request.id != completion.request_id {
                 return false;
             }
-            let Some(current_cycle_tstates) =
-                u32::from(request.base_tstates).checked_add(state.cpu.handshake.wait_tstates)
+            let automatic_wait_tstates =
+                if request.operation == Z80BusOperation::InterruptAcknowledge {
+                    u32::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
+                } else {
+                    0
+                };
+            let Some(current_cycle_tstates) = u32::from(request.base_tstates)
+                .checked_add(state.cpu.handshake.wait_tstates)
+                .and_then(|tstates| tstates.checked_add(automatic_wait_tstates))
             else {
                 return false;
             };
