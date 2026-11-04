@@ -1,9 +1,9 @@
 # Meta de conclusão do Z80 — cobertura, validação e critérios de aceite
 
 **Data da revisão:** 2026-11-04  
-**Baseline de referência:** `main` — `a0e58fd05c7f62c42f82b86d15d8532e06a9c59b` (após PR #476; código E4C integrado pela PR #475).  
+**Baseline de referência:** `main` — `f4130104fa971289507c0b15ab2d8eabd1dd5b00` (após integração da E5 pela PR #485).  
 **Evidência E4C:** HEAD validado `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS; PR #475 integrada no merge SHA `f89a52346e91e88e82ab37a4afcfffff2d793407`.  
-**Schema do microsequenciador na baseline main:** 27. O candidato E5 da PR #485 eleva para 28.  
+**Schema do microsequenciador na baseline main:** 28, após a integração da E5 pela PR #485.  
 **Status deste documento:** referência de planejamento e critérios de aceite. Não substitui a matriz semântica por opcode nem os relatórios de execução dos testes.
 
 ---
@@ -46,7 +46,7 @@ Os percentuais abaixo são **estimativas de engenharia**, usadas para dimensiona
 
 ## 3. Baseline técnica e estado conhecido
 
-A baseline consultada em `main` é `f89a52346e91e88e82ab37a4afcfffff2d793407`, após a integração da E4C pela PR #475. A auditoria `docs/audits/z80-indexed-incdec-e4c-2026-11-03.md` e o teste `native/z80_cpu/tests/indexed_incdec_e4c.rs` estão integrados. O HEAD da PR passou nos quatro grupos de CI.
+A baseline consultada em `main` é `f4130104fa971289507c0b15ab2d8eabd1dd5b00`, após a integração da E5 pela PR #485. A auditoria E4C, os testes E4A-E5 e os três documentos de referência DD/FD estão integrados.
 
 | Fase | Escopo | Estado na fotografia |
 |---|---|---|
@@ -56,7 +56,7 @@ A baseline consultada em `main` é `f89a52346e91e88e82ab37a4afcfffff2d793407`, a
 | E4A | LD r,(IX/IY+d), LD (IX/IY+d),r e LD (IX/IY+d),n | Integrada na main; IMPLEMENTED / SHORT_PASS |
 | E4B | ADD/ADC/SUB/SBC/AND/XOR/OR/CP (IX/IY+d) | Integrada na main pela PR #472; IMPLEMENTED / QUICK_PASS / SHORT_PASS; CI 4/4 PASS |
 | E4C | INC/DEC (IX/IY+d) | Integrada na main pela PR #475; IMPLEMENTED / QUICK_PASS / SHORT_PASS; 5 testes dirigidos; CI 4/4 PASS |
-| E5 | DDCB/FDCB completo | IMPLEMENTED / QUICK_PASS / SHORT_PASS; CI PR #485 3/3 PASS |
+| E5 | DDCB/FDCB completo | IMPLEMENTED / QUICK_PASS / SHORT_PASS; PR #485 merged; CI #4245 3 jobs PASS, Scheduler SKIPPED |
 | E6 | Fallback geral e resolução de prefixos DD/FD/ED/CB | Pendente/incompleto no microsequenciador |
 | E7 | Fechamento semântico global BASE/CB/ED/DD/FD/DDCB/FDCB | Pendente |
 | E8 | Validação formal e diferencial (ZEXDOC/ZEXALL e corpora independentes) | Pendente |
@@ -158,20 +158,32 @@ Os níveis abaixo são cumulativos no escopo declarado. O estado deve ser atribu
 - [x] R incrementa somente nos M1; WZ mantém o endereço efetivo; IX/IY, last-prefix-wins, displacement assinado e wrap.
 - [x] WAIT em cada transação e snapshot/restore nas fases com request pendente; schema 28.
 - [x] Adicionada suíte `indexed_cb_e5.rs`: 256 subopcodes por índice, BIT read-only, RMW, cópia z, flags modeladas, prefixos repetidos/alternados, displacement 0/-128/+127, wrap de endereço/PC e round-trip de snapshots.
-- [x] `cargo fmt --all -- --check`: PASS no CI run #4238, código SHA `2f1dff62ce23c8d6d321b26d6ffc1b4bd198cb5f`.
-- [x] `cargo clippy --workspace --all-targets --locked -- -D warnings`: PASS no mesmo SHA.
-- [x] `cargo test --workspace --locked`: PASS; 216 testes unitários do crate Z80 e 8 testes da nova suíte indexed-CB passaram, além das demais suítes do workspace.
+- [x] `cargo fmt --all -- --check`: PASS no CI run #4245, HEAD `2cc6105a0c8c3589994870a6a67ceffb1e8c02f8`.
+- [x] `cargo clippy --workspace --all-targets --locked -- -D warnings`: PASS no mesmo workflow.
+- [x] `cargo test --workspace --locked`: PASS; 216 testes unitários do crate Z80 e 8 testes da suíte indexed-CB passaram, além das demais suítes do workspace.
 - [x] Testes direcionados SMS e SG-1000: PASS.
-- [x] `python -m pytest`, `ruff check` e `ruff format --check`: etapas de comando PASS; job concluiu PASS no run #4238.
+- [x] `python -m pytest`, `ruff check` e `ruff format --check`: job Python PASS no run #4245.
 - [x] Windows x64 D3D12/video compile e video-runtime tests: PASS.
 - [x] Windows WASAPI/XAudio2 compile e audio-output tests: PASS.
 - [x] CI aplicável: 3/3 jobs PASS; Scheduler deterministic stress SKIPPED corretamente por não haver alteração no Scheduler.
-- Estado: IMPLEMENTED / QUICK_PASS / SHORT_PASS para cobertura funcional estrutural e microsequenciada no candidato. CI da PR #485 no HEAD 79bb17a: 3/3 jobs PASS; revisão final concluída antes da integração.
+- Estado: IMPLEMENTED / QUICK_PASS / SHORT_PASS para o escopo E5 integrado. CI #4245 no HEAD `2cc6105a0c8c3589994870a6a67ceffb1e8c02f8`: Rust, Python e Windows PASS; Scheduler stress SKIPPED por não haver alteração no Scheduler. Merge SHA `f4130104fa971289507c0b15ab2d8eabd1dd5b00`.
 
 - Limite de fonte: ZiLOG UM008011-0816 marca S e P/V de BIT indexado como desconhecidos; o candidato mantém o modelo já existente no executor atômico. Isso não comprova esses bits contra silício.
 - Não promover LONG_PASS, DIFFERENTIAL_PASS, ZEXDOC/ZEXALL ou TEMPORAL_PASS sem evidência independente.
 
-### E6 — Resolução de prefixos
+### E6 — Resolução geral de prefixos
+
+**E6.1 — Fallback BASE de prefixos DD/FD (em andamento na branch `feat/z80-prefix-fallback-e6a-2026-11-04`):**
+- Encaminhar opcodes `Ignored` já obtidos ao dispatch BASE, sem novo fetch.
+- Preservar PC, R, M1, T-states acumulados, WAIT e snapshots dos fetches pendentes.
+- Demonstrar que H/L e IX/IY não são substituídos em instruções BASE ignoradas.
+- Reutilizar o decoder ED quando ED segue DD/FD; manter DDCB/FDCB na rota E5.
+- Limite deste incremento: somente instruções BASE/ED já suportadas pelo sequenciador; `UnsupportedOpcode` continua explícito para lacunas do decoder BASE.
+- Aceite: matriz de sequências simples/repetidas/alternadas, WAIT aditivo, round-trip de snapshots e ausência de fetch duplicado.
+
+**E6.2 — Expansão do fallback para as demais fases BASE/ED já suportadas:** ajustar validação de estados suspensos e contagem de M-cycles sem alterar semântica de instruções.
+
+**E6.3 — Fechamento combinatório:** cadeias longas, combinações DD/FD/ED/CB, stress e regressões integrais. Não impor limite artificial de prefixos.
 
 - Cobrir DD, FD, DD DD, FD FD, DD FD, FD DD, DD/FD+ED, DD/FD+CB e prefixos redundantes/ignorados.
 - Garantir last-prefix-wins, incremento de R, PC, bytes consumidos, M1 e custo temporal.
@@ -267,4 +279,4 @@ Toda atualização deve incluir data, SHA da baseline, SHA candidato, PR, workfl
 
 ---
 
-**Próxima meta operacional na baseline atual:** iniciar E6 — fallback geral e resolução de prefixos DD/FD/ED/CB. E4A, E4B e E4C estão integradas na main; E5 DDCB/FDCB está implementada e QUICK_PASS/SHORT_PASS na PR #485, com CI 3/3 PASS no SHA de código 2f1dff62. Validação diferencial externa, ZEXDOC/ZEXALL, LONG_PASS e TEMPORAL_PASS continuam pendentes.
+**Baseline operacional:** E5 DDCB/FDCB integrada na `main` `f4130104fa971289507c0b15ab2d8eabd1dd5b00` pela PR #485, CI #4245 concluído com sucesso. E6.1 está em implementação na branch `feat/z80-prefix-fallback-e6a-2026-11-04`. Validação diferencial externa, ZEXDOC/ZEXALL, LONG_PASS e TEMPORAL_PASS continuam pendentes.
