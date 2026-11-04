@@ -1,8 +1,8 @@
 use std::collections::BTreeSet;
 
 use sega_z80_cpu::{
-    Z80BusOperation, Z80MicroSequencer, Z80MicroSequencerPhase, Z80MicroSequencerState,
-    Z80MicroSequencerError, Z80MicroStep,
+    Z80BusOperation, Z80MicroSequencer, Z80MicroSequencerError, Z80MicroSequencerPhase,
+    Z80MicroSequencerState, Z80MicroStep,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -136,7 +136,9 @@ fn execute_one(
                     Err(error @ Z80MicroSequencerError::UnsupportedOpcode { .. }) => {
                         return Err(error);
                     }
-                    Err(error) => panic!("complete generated bus request for {program:02X?}: {error:?}"),
+                    Err(error) => {
+                        panic!("complete generated bus request for {program:02X?}: {error:?}")
+                    }
                 };
             }
             Z80MicroStep::InternalCycle { .. } => {
@@ -237,62 +239,42 @@ fn e7_2e_every_generated_phase_round_trips_and_continues_equivalently() {
 
     for opcode in 0_u8..=u8::MAX {
         for flags in [0x00, 0xFF] {
-            let (phases, supported) = assert_continuous_equals_restored(
-                &[opcode, 0, 0, 0, 0],
-                flags,
-                0,
-                None,
-            );
+            let (phases, supported) =
+                assert_continuous_equals_restored(&[opcode, 0, 0, 0, 0], flags, 0, None);
             observed_phases.extend(phases);
-            if supported { supported_cases += 1; } else { unsupported_cases += 1; }
+            if supported {
+                supported_cases += 1;
+            } else {
+                unsupported_cases += 1;
+            }
         }
 
-        let (phases, supported) = assert_continuous_equals_restored(
-            &[0xCB, opcode, 0, 0],
-            0xFF,
-            0,
-            None,
-        );
+        let (phases, supported) =
+            assert_continuous_equals_restored(&[0xCB, opcode, 0, 0], 0xFF, 0, None);
+        observed_phases.extend(phases);
+        if supported {
+            supported_cases += 1;
+        } else {
+            unsupported_cases += 1;
+        }
+        let (phases, supported) =
+            assert_continuous_equals_restored(&[0xED, opcode, 0, 0], 0xFF, 0, None);
         observed_phases.extend(phases);
         if supported { supported_cases += 1; } else { unsupported_cases += 1; }
-        let (phases, supported) = assert_continuous_equals_restored(
-            &[0xED, opcode, 0, 0],
-            0xFF,
-            0,
-            None,
-        );
+        let (phases, supported) =
+            assert_continuous_equals_restored(&[0xDD, opcode, 0, 0, 0], 0xFF, 0, None);
         observed_phases.extend(phases);
         if supported { supported_cases += 1; } else { unsupported_cases += 1; }
-        let (phases, supported) = assert_continuous_equals_restored(
-            &[0xDD, opcode, 0, 0, 0],
-            0xFF,
-            0,
-            None,
-        );
+        let (phases, supported) =
+            assert_continuous_equals_restored(&[0xFD, opcode, 0, 0, 0], 0xFF, 0, None);
         observed_phases.extend(phases);
         if supported { supported_cases += 1; } else { unsupported_cases += 1; }
-        let (phases, supported) = assert_continuous_equals_restored(
-            &[0xFD, opcode, 0, 0, 0],
-            0xFF,
-            0,
-            None,
-        );
+        let (phases, supported) =
+            assert_continuous_equals_restored(&[0xDD, 0xCB, 0, opcode], 0xFF, 0, None);
         observed_phases.extend(phases);
         if supported { supported_cases += 1; } else { unsupported_cases += 1; }
-        let (phases, supported) = assert_continuous_equals_restored(
-            &[0xDD, 0xCB, 0, opcode],
-            0xFF,
-            0,
-            None,
-        );
-        observed_phases.extend(phases);
-        if supported { supported_cases += 1; } else { unsupported_cases += 1; }
-        let (phases, supported) = assert_continuous_equals_restored(
-            &[0xFD, 0xCB, 0, opcode],
-            0xFF,
-            0,
-            None,
-        );
+        let (phases, supported) =
+            assert_continuous_equals_restored(&[0xFD, 0xCB, 0, opcode], 0xFF, 0, None);
         observed_phases.extend(phases);
         if supported { supported_cases += 1; } else { unsupported_cases += 1; }
     }
@@ -312,17 +294,19 @@ fn e7_2e_every_generated_phase_round_trips_and_continues_equivalently() {
             vector: 0x80,
         },
     ] {
-        let (phases, supported) = assert_continuous_equals_restored(
-            &[0, 0, 0, 0],
-            0,
-            0x2345,
-            Some(interrupt),
+        let (phases, supported) =
+            assert_continuous_equals_restored(&[0, 0, 0, 0], 0, 0x2345, Some(interrupt));
+        assert!(
+            supported,
+            "interrupt entry must be supported: {interrupt:?}"
         );
-        assert!(supported, "interrupt entry must be supported: {interrupt:?}");
         observed_phases.extend(phases);
     }
 
-    assert!(supported_cases > 0, "the corpus must exercise supported instructions");
+    assert!(
+        supported_cases > 0,
+        "the corpus must exercise supported instructions"
+    );
     assert!(
         unsupported_cases < 7 * 256 + 4,
         "too many opcode cases are unsupported: {unsupported_cases}"
