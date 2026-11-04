@@ -46,15 +46,15 @@ A matriz antiga `docs/z80-opcode-matrix.md` descreve principalmente a implementa
 
 | Sequência | Comportamento no executor atômico | Microsequenciador | Evidência / lacuna |
 |---|---|---|---|
-| `DD op` | Decoder indexado; substitui HL/H/L conforme família | Executa E3A1/E3A2, E4A, E4B, E4C e DDCB/FDCB E5; fallback geral de opcodes ignorados em E6 | Suítes E3A1/E3A2, E4A-E5 |
-| `FD op` | Decoder indexado para IY | Executa E3A1/E3A2, E4A, E4B, E4C e DDCB/FDCB E5; fallback geral de opcodes ignorados em E6 | Suítes E3A1/E3A2, E4A-E5, IX/IY |
-| `DD DD op`, `FD FD op` | Repetições contam 4T por prefixo extra | M1 repetidos, last-prefix-wins e execução E3A1/E3A2/E4A/E4B/E4C/E5; fallback de opcodes ignorados é o escopo E6 | Testes E3A1/E3A2/E4A-E5 |
-| `DD FD op`, `FD DD op` | Último prefixo seleciona IY/IX, respectivamente | Last-prefix-wins executa E3A1/E3A2/E4A/E4B/E4C/E5; fallback de opcodes ignorados é o escopo E6 | Testes E3A1/E3A2/E4A-E5 |
-| `DD/FD ED op` | Prefixo de índice ignorado; ED segue o decoder base | FSM cancela indexação e encaminha ao subset ED existente; testes de combinações e estados pendentes ainda serão ampliados em E6 | `prefix_fsm.rs`; E6 |
+| `DD op` | Decoder indexado; substitui HL/H/L conforme família | E3A1/E3A2/E4A/E4B/E4C/E5; fallback BASE para `Ignored` executa opcode já obtido sem refetch | Suítes E3A1/E3A2, E4A-E5 e `prefix_fallback_e6.rs` |
+| `FD op` | Decoder indexado para IY | E3A1/E3A2/E4A/E4B/E4C/E5; fallback BASE para `Ignored` executa opcode já obtido sem refetch | Suítes E3A1/E3A2, E4A-E5 e `prefix_fallback_e6.rs` |
+| `DD DD op`, `FD FD op` | Repetições contam 4T por prefixo extra | M1 repetidos, last-prefix-wins, fallback BASE e cadeia de 257 prefixos sem limite artificial | `prefix_fsm.rs`; `prefix_fallback_e6.rs` |
+| `DD FD op`, `FD DD op` | Último prefixo seleciona IY/IX, respectivamente | Last-prefix-wins e fallback BASE preservam o opcode terminal e o custo de todos os prefixos | `prefix_fsm.rs`; `prefix_fallback_e6.rs` |
+| `DD/FD ED op` | Prefixo de índice ignorado; ED segue o decoder ED | Index latch é cancelado para semântica; M-cycles/T-states do prefixo anterior permanecem nos estados suspensos e snapshots | `prefix_fallback_e6.rs`; ED absolute transfer; CI #41757983537 |
 | `DD/FD CB d op` | Consome displacement e subopcode e executa indexed-CB | Implementado na rota E5: CB M1, displacement MemoryRead/3T, opcode final MemoryRead non-M1/5T e operação indexed-CB | `indexed_cb_e5.rs`; teste legado de rejeição substituído por teste de request de displacement |
-| `DD/FD op` não afetado | Fallback ao decoder base sem reler o opcode; custo adicional do prefixo preservado | Fallback geral ausente na baseline E5; E6.1 implementa o primeiro incremento para BASE já suportado | `prefix_fallback_e6.rs` na branch E6.1 |
+| `DD/FD op` não afetado | Fallback ao decoder BASE sem reler opcode; custo M1 preservado | Implementado para todas as instruções BASE já suportadas pelo executor; lacunas BASE continuam `UnsupportedOpcode` | `prefix_fallback_e6.rs`; CI #41757983537 |
 
-Não existe limite artificial de prefixos repetidos no contrato arquitetural. Testes de stress para cadeias longas ainda precisam ser associados ao caminho retomável.
+Cadeias repetidas/alternadas não possuem limite artificial; teste com 257 prefixos confirma PC, R, M-cycles, T-states e dispatch do opcode BASE terminal.
 
 ## 4. Matriz de famílias DD/FD
 
@@ -186,9 +186,9 @@ Links:
 - **E4B — ALU A,(IX/IY+d):** IMPLEMENTED / QUICK_PASS / SHORT_PASS no escopo registrado; diferencial externo NOT_RUN.
 - **E4C — INC/DEC (IX/IY+d):** IMPLEMENTED / QUICK_PASS / SHORT_PASS pela PR #475; CI 41747460761 4/4 PASS; 5 testes dirigidos; LONG_PASS/diferencial/temporal NOT_RUN.
 - **E5 — DDCB/FDCB:** IMPLEMENTED / QUICK_PASS / SHORT_PASS, integrada pela PR #485 no merge SHA `f4130104fa971289507c0b15ab2d8eabd1dd5b00`; CI #4245 3 jobs PASS, Scheduler stress SKIPPED corretamente por não alterar o Scheduler. Diferencial externo e temporal não executados.
-- **E6 — prefixos ignorados:** E6.1 em implementação na branch `feat/z80-prefix-fallback-e6a-2026-11-04`; fallback BASE sem fetch duplicado para as instruções já suportadas, seguido de expansão para fases suspensas e combinações completas DD/FD/ED/CB.
+- **E6 — resolução geral DD/FD/ED/CB:** IMPLEMENTED / QUICK_PASS / SHORT_PASS pela PR #486; fallback BASE sem refetch, preservação de WAIT/snapshots/M-cycles e combinações repetidas/alternadas. CI #41757983537 Rust/Python/Windows PASS; Scheduler SKIPPED.
 - **E7 — fechamento semântico:** auditar BASE/CB/ED/DD/FD/DDCB/FDCB, flags, interrupções, HALT e snapshots.
 - **E8 — formal/diferencial:** ZEXDOC/ZEXALL e oráculos independentes.
 - **E9 — temporal/integração:** M/T-states, WAIT, interrupções, snapshots, Scheduler e SMS/SG-1000.
 
-**Estado global:** E3A1/E3A2, E4A, E4B, E4C e E5 DDCB/FDCB estão IMPLEMENTED no microsequenciador e QUICK_PASS/SHORT_PASS nos gates funcionais executados. E5 foi integrada pela PR #485 (merge SHA `f4130104fa971289507c0b15ab2d8eabd1dd5b00`), CI #4245 concluído com sucesso. E6.1 está em andamento; fallback geral para todos os grupos ainda não está concluído. Diferencial externo completo, ZEXDOC/ZEXALL e traces independentes por T-state não foram executados; não declarar LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS. A integração temporal sistêmica do Z80 à máquina SMS permanece INTEGRATION_PENDING.
+**Estado global:** E3A1/E3A2, E4A, E4B, E4C, E5 e E6 estão IMPLEMENTED no microsequenciador e QUICK_PASS/SHORT_PASS nos gates funcionais executados. E6 foi implementada pela PR #486, HEAD `b66b97cb6202b270e857f6cfb55be85a0ea62a6b`; CI #41757983537 Rust/Python/Windows PASS, Scheduler stress SKIPPED. E7 — fechamento semântico global — é a próxima etapa. Diferencial externo completo, ZEXDOC/ZEXALL e traces independentes por T-state não foram executados; não declarar LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS. A integração temporal sistêmica do Z80 à máquina SMS permanece INTEGRATION_PENDING.
