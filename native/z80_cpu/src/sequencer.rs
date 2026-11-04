@@ -11591,4 +11591,68 @@ mod base_immediate_io_differential_tests {
         compare_io(0xD3, 0x5A, 0x3F, 0x00);
         compare_io(0xD3, 0xFF, 0xFF, 0x00);
     }
+    #[test]
+    fn int_acknowledge_is_selected_only_when_iff1_is_enabled() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.set_int_line(Some(0xCF));
+
+        let Z80MicroStep::BusRequest(request) = cpu.begin_instruction().unwrap() else {
+            panic!("masked INT must not be accepted");
+        };
+        assert_eq!(request.operation, crate::Z80BusOperation::OpcodeFetch);
+        assert_eq!(cpu.int_pending, Some(0xCF));
+    }
+
+    #[test]
+    fn int_acknowledge_uses_distinct_bus_operation_and_captures_vector() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.registers.pc = 0x2345;
+        cpu.iff1 = true;
+        cpu.iff2 = true;
+        cpu.refresh = 0xFE;
+        cpu.set_int_line(Some(0xCF));
+
+        let Z80MicroStep::BusRequest(request) = cpu.begin_instruction().unwrap() else {
+            panic!("eligible INT must issue an acknowledge request");
+        };
+        assert_eq!(request.operation, crate::Z80BusOperation::InterruptAcknowledge);
+        assert_eq!(request.address, 0x2345);
+        assert_eq!(request.base_tstates, 5);
+        assert!(!cpu.iff1);
+        assert!(!cpu.iff2);
+        assert!(!cpu.halted);
+
+        cpu.insert_wait_tstates(3).unwrap();
+        assert_eq!(
+            cpu.complete_bus_cycle(request.id, Some(0xCF)).unwrap(),
+            Z80MicroStep::InterruptAcknowledge {
+                vector: 0xCF,
+                tstates: 10,
+            }
+        );
+        assert_eq!(
+            cpu.phase,
+            Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector: 0xCF }
+        );
+        assert_eq!(cpu.refresh, 0xFF);
+        assert_eq!(cpu.int_pending, Some(0xCF));
+    }
+
+    #[test]
+    fn nmi_keeps_priority_over_an_eligible_int_line() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.iff1 = true;
+        cpu.iff2 = true;
+        cpu.set_int_line(Some(0xCF));
+        cpu.request_nmi();
+
+        let Z80MicroStep::BusRequest(request) = cpu.begin_instruction().unwrap() else {
+            panic!("NMI must issue its response request first");
+        };
+        assert_eq!(request.operation, crate::Z80BusOperation::OpcodeFetch);
+        assert_eq!(cpu.phase, Z80MicroSequencerPhase::NmiResponse);
+        assert_eq!(cpu.iff2, true);
+        assert_eq!(cpu.int_pending, Some(0xCF));
+    }
+
 }
