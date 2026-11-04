@@ -717,6 +717,24 @@ impl SmsTemporalBus {
                         == Some(u128::from(mcycle_state.elapsed_tstates))
                 && fixture_total == mcycle_state.external_wait_tstates
                 && mcycle_state.completed_base_tstates == mcycle_state.nominal_tstates
+                && mcycle_state.nominal_tstates == request.base_tstates
+                && mcycle_state.fixed_wait_tstates
+                    == if request.operation == Z80BusOperation::InterruptAcknowledge {
+                        u32::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
+                    } else {
+                        0
+                    }
+                && mcycle_state.kind
+                    == match request.operation {
+                        Z80BusOperation::OpcodeFetch => Z80MCycleKind::OpcodeFetch,
+                        Z80BusOperation::MemoryRead => Z80MCycleKind::MemoryRead,
+                        Z80BusOperation::MemoryWrite { .. } => Z80MCycleKind::MemoryWrite,
+                        Z80BusOperation::PortRead => Z80MCycleKind::IoRead,
+                        Z80BusOperation::PortWrite { .. } => Z80MCycleKind::IoWrite,
+                        Z80BusOperation::InterruptAcknowledge => {
+                            Z80MCycleKind::InterruptAcknowledge
+                        }
+                    }
                 && Z80MCycle::restore_state(mcycle_state).is_ok() => {}
             (None, None, None, None, None, None, Some(continuation_id), Some(started_at), None)
                 if pending_events.len() == 1
@@ -974,6 +992,45 @@ mod tests {
             Some(SmsTemporalDispatch::BusCompletion(completion))
         );
         assert_eq!(restored.memory().read(0xC010), 0xA7);
+    }
+
+    #[test]
+    fn wait_fixture_tstate_is_serialized_and_commits_only_after_the_final_edge() {
+        let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
+        let request = request(42, Z80BusOperation::MemoryWrite { value: 0xB6 }, 0xC011, 3);
+        let deadline = bus.begin_request(request, 1).unwrap();
+        assert_eq!(deadline, MachineTime::from_ticks(12));
+
+        for expected_index in 0..2 {
+            let Some(SmsTemporalDispatch::BusTStateProgress { edge, .. }) =
+                bus.dispatch_next_boundary().unwrap()
+            else {
+                panic!("expected a nominal T-state edge");
+            };
+            assert_eq!(edge.tstate, Z80MCycleTState::Base { index: expected_index });
+        }
+        let Some(SmsTemporalDispatch::BusTStateProgress { edge, .. }) =
+            bus.dispatch_next_boundary().unwrap()
+        else {
+            panic!("expected the fixture WAIT T-state");
+        };
+        assert_eq!(
+            edge.tstate,
+            Z80MCycleTState::Wait {
+                index: 0,
+                source: Z80MCycleWaitSource::External,
+            }
+        );
+        assert_eq!(bus.memory().read(0xC011), 0);
+
+        let mut restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
+        let Some(SmsTemporalDispatch::BusCompletion(completion)) =
+            restored.dispatch_next_boundary().unwrap()
+        else {
+            panic!("expected final nominal T-state to complete the M-cycle");
+        };
+        assert_eq!(completion.completed_at, deadline);
+        assert_eq!(restored.memory().read(0xC011), 0xB6);
     }
 
     #[test]
