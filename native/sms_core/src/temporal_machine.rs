@@ -959,12 +959,28 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_decode_keeps_completed_m1_for_snapshot_restore_and_retry() {
-        let mut machine = SmsTemporalMachine::new(vec![0x76; 0x4000], 3).unwrap();
+    fn unsupported_ed_decode_keeps_completed_m1_for_snapshot_restore_and_retry() {
+        let mut rom = vec![0; 0x4000];
+        rom[..2].copy_from_slice(&[0xED, 0x00]);
+        let mut machine = SmsTemporalMachine::new(rom, 3).unwrap();
         machine.begin_instruction().unwrap();
 
-        // Advance T1, T2, and T3. The opcode is sampled at T3 completion;
-        // T4 is then scheduled but not yet dispatched.
+        // Complete the ED prefix M1. Its T4 schedules the second M1 fetch.
+        for _ in 0..3 {
+            machine.schedule_pending_bus(0).unwrap();
+            assert!(matches!(
+                machine.dispatch_next().unwrap(),
+                Z80MicroStep::BusRequest(_)
+            ));
+        }
+        machine.schedule_pending_bus(0).unwrap();
+        assert!(matches!(
+            machine.dispatch_next().unwrap(),
+            Z80MicroStep::BusRequest(_)
+        ));
+
+        // Advance T1, T2, and T3 of the ED sub-opcode fetch. The opcode is
+        // sampled at T3 completion; T4 is then scheduled but not dispatched.
         for _ in 0..3 {
             machine.schedule_pending_bus(0).unwrap();
             assert!(matches!(
@@ -977,7 +993,7 @@ mod tests {
         assert!(matches!(
             machine.dispatch_next(),
             Err(SmsTemporalMachineError::Cpu(
-                Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x76, .. }
+                Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x00, .. }
             ))
         ));
         let completed_m1 = machine.export_state();
@@ -999,7 +1015,7 @@ mod tests {
         assert!(matches!(
             restored.resume_instruction(0),
             Err(SmsTemporalMachineError::Cpu(
-                Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x76, .. }
+                Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x00, .. }
             ))
         ));
     }
