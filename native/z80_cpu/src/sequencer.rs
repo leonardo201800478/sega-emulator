@@ -1508,12 +1508,20 @@ impl Z80MicroSequencer {
                         prefix_m1_count(state.prefix_state, state.mcycle_index, 2).is_some()
                             && state.tstate_index == 3
                             && state.instruction_tstates
-                                >= 10 + u32::from(matches!(state.prefix_state, Z80PrefixState::Index(_))) * 4
+                                >= if matches!(state.prefix_state, Z80PrefixState::Index(_)) {
+                                    14
+                                } else {
+                                    10
+                                }
                     } else {
                         prefix_m1_count(state.prefix_state, state.mcycle_index, 0).is_some()
                             && state.tstate_index == 4
                             && state.instruction_tstates
-                                >= 4 + u32::from(matches!(state.prefix_state, Z80PrefixState::Index(_))) * 4
+                                >= if matches!(state.prefix_state, Z80PrefixState::Index(_)) {
+                                    8
+                                } else {
+                                    4
+                                }
                     }
             }
             Z80MicroSequencerPhase::BaseControlPushWrite { stage, target, low } => {
