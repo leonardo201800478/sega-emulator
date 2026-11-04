@@ -7074,7 +7074,7 @@ mod tests {
             assert_eq!(restored.export_state(), state);
             let encoded = state.encode().unwrap();
             assert_eq!(
-                Z80MicroSequencerState::decode(&encoded).unwrap(),
+                crate::Z80MicroSequencerState::decode(&encoded).unwrap(),
                 state,
                 "opcode {opcode:02X}"
             );
