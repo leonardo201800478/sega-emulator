@@ -186,9 +186,9 @@ Links:
 - **E4B — ALU A,(IX/IY+d):** IMPLEMENTED / QUICK_PASS / SHORT_PASS no escopo registrado; diferencial externo NOT_RUN.
 - **E4C — INC/DEC (IX/IY+d):** IMPLEMENTED / QUICK_PASS / SHORT_PASS pela PR #475; CI 41747460761 4/4 PASS; 5 testes dirigidos; LONG_PASS/diferencial/temporal NOT_RUN.
 - **E5 — DDCB/FDCB:** IMPLEMENTED / QUICK_PASS / SHORT_PASS, integrada na main pela PR #485; 256 subopcodes por IX/IY, BIT read-only, RMW, M1/non-M1, WAIT e snapshots. Windows D3D12/WASAPI/XAudio2 e audio-output tests PASS no CI 3/3; diferencial externo e temporal não executados.
-- **E6.1 — prefixos ignorados:** PR #486 aberta para encaminhar Ignored ao dispatch BASE sem fetch duplicado; ainda não integrada. E6 geral e todas as combinações DD/FD/ED/CB continuam pendentes.
+- **E6 — prefixos ignorados:** PR #486 aberta para encaminhar Ignored ao dispatch BASE sem fetch duplicado; ainda não integrada. E6 geral e todas as combinações DD/FD/ED/CB continuam pendentes.
 - **E7 — fechamento semântico:** auditar BASE/CB/ED/DD/FD/DDCB/FDCB, flags, interrupções, HALT e snapshots.
 - **E8 — formal/diferencial:** ZEXDOC/ZEXALL e oráculos independentes.
 - **E9 — temporal/integração:** M/T-states, WAIT, interrupções, snapshots, Scheduler e SMS/SG-1000.
 
-**Estado global:** E3A1/E3A2, E4A, E4B, E4C e E5 DDCB/FDCB estão IMPLEMENTED no microsequenciador e QUICK_PASS/SHORT_PASS nos gates funcionais executados. E5 concluiu CI aplicável 3/3 PASS e está integrada na main pela PR #485. E6.1 está em PR #486 aberta; o fallback geral E6 permanece pendente. Diferencial externo completo, ZEXDOC/ZEXALL e traces independentes por T-state não foram executados; não declarar LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS. A integração temporal sistêmica do Z80 à máquina SMS permanece INTEGRATION_PENDING.
+**Estado global:** E3A1/E3A2, E4A, E4B, E4C e E5 DDCB/FDCB estão IMPLEMENTED no microsequenciador e QUICK_PASS/SHORT_PASS nos gates funcionais executados. E5 concluiu CI aplicável 3/3 PASS e está integrada na main pela PR #485. E6 está em PR #486 aberta; o fallback geral E6 permanece pendente. Diferencial externo completo, ZEXDOC/ZEXALL e traces independentes por T-state não foram executados; não declarar LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS. A integração temporal sistêmica do Z80 à máquina SMS permanece INTEGRATION_PENDING.
