@@ -274,14 +274,19 @@ fn all_256_indexed_cb_subopcodes_are_executed_for_ix_and_iy() {
             );
             assert_eq!(result.trace.len(), if opcode >> 6 == 1 { 5 } else { 6 });
             assert_eq!(result.trace[0].operation, Z80BusOperation::OpcodeFetch);
+            assert_eq!(result.trace[0].address, 0x1000);
             assert_eq!(result.trace[0].base_tstates, 4);
             assert_eq!(result.trace[1].operation, Z80BusOperation::OpcodeFetch);
+            assert_eq!(result.trace[1].address, 0x1001);
             assert_eq!(result.trace[1].base_tstates, 4);
             assert_eq!(result.trace[2].operation, Z80BusOperation::MemoryRead);
+            assert_eq!(result.trace[2].address, 0x1002);
             assert_eq!(result.trace[2].base_tstates, 3);
             assert_eq!(result.trace[3].operation, Z80BusOperation::MemoryRead);
+            assert_eq!(result.trace[3].address, 0x1003);
             assert_eq!(result.trace[3].base_tstates, 5);
             assert_eq!(result.trace[4].operation, Z80BusOperation::MemoryRead);
+            assert_eq!(result.trace[4].address, address);
             assert_eq!(result.trace[4].base_tstates, 4);
             if opcode >> 6 != 1 {
                 assert_eq!(
