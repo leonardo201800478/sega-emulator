@@ -68,11 +68,24 @@ fn execute_one(
     if program.first() == Some(&0xED)
         && matches!(
             program.get(1).copied(),
-            Some(0xA2 | 0xA3 | 0xAA | 0xAB | 0xB2 | 0xB3 | 0xBA | 0xBB)
+            Some(0xA2 | 0xA3 | 0xAA | 0xAB)
         )
     {
         cpu.registers.b = 1;
         cpu.registers.c = 0;
+    }
+    if program.first() == Some(&0xED) {
+        match program.get(1).copied() {
+            Some(0xB0 | 0xB1 | 0xB8 | 0xB9) => {
+                cpu.registers.b = 0;
+                cpu.registers.c = 2;
+            }
+            Some(0xB2 | 0xB3 | 0xBA | 0xBB) => {
+                cpu.registers.b = 2;
+                cpu.registers.c = 0;
+            }
+            _ => {}
+        }
     }
 
     let acknowledge_vector = match interrupt {
