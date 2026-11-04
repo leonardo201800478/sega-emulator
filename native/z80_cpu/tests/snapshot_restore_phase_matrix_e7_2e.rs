@@ -176,12 +176,12 @@ fn execute_one(
                     cpu = Z80MicroSequencer::restore_state(decoded)
                         .expect("restore terminal interrupt boundary");
                 }
-                return RunResult {
+                return Ok(RunResult {
                     terminal,
                     state: cpu.export_state(),
                     events,
                     phases,
-                };
+                });
             }
         }
     }
