@@ -1,9 +1,9 @@
 # Meta de conclusão do Z80 — cobertura, validação e critérios de aceite
 
 **Data da revisão:** 2026-11-04  
-**Baseline de referência:** `main` — `5768705658522deb46a0fb0556b51923ae8166b8` (E7.1 HALT/M1 e auditorias E7.2; PR #493 corrigiu somente o host D3D12, sem alterar o Z80).  
+**Baseline de referência:** `main` — `09e6a07efb7b6bbab12021db5b328ed73e4822ae` (E7.2B — INT acknowledge integrada pela PR #496).  
 **Evidência E4C:** HEAD validado `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS; PR #475 integrada no merge SHA `f89a52346e91e88e82ab37a4afcfffff2d793407`.  
-**Schema do microsequenciador na baseline main:** 28, após a integração da E5 pela PR #485.  
+**Schema do microsequenciador na baseline main:** consultar `Z80_MICRO_SEQUENCER_STATE_VERSION` em `native/z80_cpu/src/lib.rs`; schemas foram incrementados nas fases E7.1/E7.2.  
 **Status deste documento:** referência de planejamento e critérios de aceite. Não substitui a matriz semântica por opcode nem os relatórios de execução dos testes.
 
 ---
@@ -46,7 +46,7 @@ Os percentuais abaixo são **estimativas de engenharia**, usadas para dimensiona
 
 ## 3. Baseline técnica e estado conhecido
 
-A baseline operacional consultada em `main` é `5768705658522deb46a0fb0556b51923ae8166b8`. A PR #493 alterou somente `native/video_runtime/src/d3d12.rs`; não alterou o runtime Z80. O CI pós-merge #41775300143 passou em Rust, Python e Windows x64; Scheduler deterministic stress foi SKIPPED. E1–E6 e E7.1 estão integradas nos escopos registrados. A saída de HALT por interrupção, acknowledge, reset especial e demais lacunas semânticas continuam pendentes.
+A baseline operacional desta revisão é `main` SHA `09e6a07efb7b6bbab12021db5b328ed73e4822ae`. E7.1 (HALT/M1) foi integrada pela PR #490; E7.2A (NMI retomável) pela PR #495; E7.2B (INT acknowledge) pela PR #496. CI pós-merge #41783897867: Rust quality/unit regression PASS, Python lint/regression PASS, Windows x64 D3D12 PASS, Scheduler deterministic stress SKIPPED. E7.2C (dispatch IM0/IM1/IM2), E7.2D (EI/DI na arbitragem), E7.2E (snapshots de todas as fases), evento RETI/daisy-chain, BUSREQ e validação temporal/diferencial independente permanecem pendentes.
 
 | Fase | Escopo | Estado na fotografia |
 |---|---|---|
@@ -58,7 +58,7 @@ A baseline operacional consultada em `main` é `5768705658522deb46a0fb0556b51923
 | E4C | INC/DEC (IX/IY+d) | Integrada na main pela PR #475; IMPLEMENTED / QUICK_PASS / SHORT_PASS; 5 testes dirigidos; CI 4/4 PASS |
 | E5 | DDCB/FDCB completo | IMPLEMENTED / QUICK_PASS / SHORT_PASS; PR #485 merged; CI #4245 3 jobs PASS, Scheduler SKIPPED |
 | E6 | Fallback geral e resolução de prefixos DD/FD/ED/CB | IMPLEMENTED / QUICK_PASS / SHORT_PASS; PR #486 merged; CI #41759035927 e push main #41759330209 PASS; Scheduler SKIPPED |
-| E7 | Fechamento semântico global BASE/CB/ED/DD/FD/DDCB/FDCB | E7.1 HALT/M1 integrada na main pela PR #490; E7.2 NMI/INT e saída de HALT pendentes |
+| E7 | Fechamento semântico global BASE/CB/ED/DD/FD/DDCB/FDCB | E7.1 HALT/M1, E7.2A NMI e E7.2B INT acknowledge integradas; E7.2C IM0/1/2, E7.2D EI/DI, E7.2E snapshots, arbitragem T4/BUSREQ e RETI/daisy-chain pendentes. INTEGRATION_PENDING |
 | E8 | Validação formal e diferencial (ZEXDOC/ZEXALL e corpora independentes) | Pendente |
 | E9 | Integração temporal sistêmica com bus, WAIT, Scheduler, SMS e SG-1000 | Pendente |
 
@@ -302,4 +302,4 @@ Toda atualização deve incluir data, SHA da baseline, SHA candidato, PR, workfl
 
 ---
 
-**Baseline operacional:** E6 integrada pela PR #486; merge SHA do código E6 `24a32e03e10c8e82022172faee69ec0c046f8cb0`. Documentação reconciliada pela PR #488, merge SHA `303a792b1caab1ba40dec9c9521208eb5aaa0b45`. CI #41759035927 (PR E6), #41759330209 (push após merge E6) e #41759833153 (push após reconciliação documental) concluídos com SUCCESS. E7 em andamento: E7.1 HALT/M1 integrada pela PR #490 (merge SHA `b1b5ced5c3d6053f8d59c8f4d932f40518db1064`); CI da PR #490: Rust fmt/Clippy/SMS/SG-1000/workspace PASS, Python pytest/Ruff PASS e Windows x64 D3D12/WASAPI/XAudio2 PASS. Scheduler deterministic stress: SKIPPED. CI pós-merge #41765421167: Rust/Python/Windows PASS; Scheduler stress SKIPPED. E7.2 NMI/INT e saída de HALT é o próximo incremento. Validação diferencial externa, ZEXDOC/ZEXALL, LONG_PASS e TEMPORAL_PASS continuam pendentes.
+**Baseline operacional (2026-11-04):** `main` SHA `09e6a07efb7b6bbab12021db5b328ed73e4822ae`. E7.1/HALT-M1 integrada pela PR #490; E7.2A/NMI pela PR #495 (merge SHA `eccd7131d72711e4d0e486993a0026ddc89b543f`); E7.2B/INT acknowledge pela PR #496 (merge SHA `09e6a07efb7b6bbab12021db5b328ed73e4822ae`). CI pós-merge #41783897867: Rust, Python e Windows x64 PASS; Scheduler deterministic stress SKIPPED. Próximo incremento: E7.2C — dispatch retomável IM0/IM1/IM2. E7.2D/E, BUSREQ, amostragem física T4, evento RETI/daisy-chain, diferencial externo, LONG_PASS e TEMPORAL_PASS permanecem pendentes. A etapa E7 global continua `INTEGRATION_PENDING`.
