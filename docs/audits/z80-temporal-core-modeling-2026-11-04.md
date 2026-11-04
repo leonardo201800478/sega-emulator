@@ -129,6 +129,7 @@ Testes: request em cada classe de fronteira M-cycle, BUSREQ simultâneo com INT/
 - RETI deve produzir um evento explícito de fim de serviço no limite de execução definido pela referência, consumível pelo controlador de interrupções/periféricos da máquina. A CPU não deve depender de callback Python nem conhecer o dispositivo concreto.
 - O controlador daisy-chain mantém prioridade em cadeia e estado de serviço; RETI libera o dispositivo em serviço conforme a ordem de prioridade.
 - Verificar separadamente o opcode documentado e aliases encontrados nos cores de referência. Não promover aliases não documentados a comportamento universal sem classificar variante e evidência.
+- **Divergência documentada:** ZiLOG UM008011-0816 descreve ED 4D como RETI e ED 45 como RETN. As tabelas de MAME e ares também classificam ED 5D/6D/7D como RETI e ED 55/65/75 como RETN. Esses bytes devem ser tratados como aliases observados em implementações de referência, não como equivalência documental universal. A interação exata desses aliases com daisy-chain deve ser verificada por variante e teste independente antes de emitir o sinal externo.
 
 Testes: RETI versus RETN, IFF1/IFF2, pilha e PC, evento emitido uma única vez, snapshot antes/depois do evento e sequência com dois dispositivos de prioridades diferentes.
 
