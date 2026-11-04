@@ -12096,7 +12096,7 @@ mod e7_2c_interrupt_mode_tests {
         cpu.insert_wait_tstate().unwrap();
         let low = request(cpu.complete_bus_cycle(high.id, None).unwrap());
         assert_eq!(cpu.complete_bus_cycle(low.id, None).unwrap(),
-            Z80MicroStep::InterruptServiced { kind: Z80InterruptKind::Int, tstates: 14 });
+            Z80MicroStep::InterruptServiced { kind: Z80InterruptKind::Int, tstates: 15 });
     }
 
     #[test]
