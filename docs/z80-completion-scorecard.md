@@ -148,7 +148,7 @@ Os níveis abaixo são cumulativos no escopo declarado. O estado deve ser atribu
 - [x] 5 testes dirigidos `indexed_incdec_e4c.rs` e CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS no HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`.
 - Estado: IMPLEMENTED / QUICK_PASS / SHORT_PASS para o escopo implementado. Não promover LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS sem evidência independente.
 
-### E5 — DDCB/FDCB — implementação candidata PR #485
+### E5 — DDCB/FDCB — implementação PR #485
 
 - [x] Caminho microsequenciado para os 256 subopcodes DDCB e 256 FDCB, usando o executor atômico existente como referência funcional, sem duplicar a semântica CB.
 - [x] DD/FD e CB como M1; displacement como leitura de 3T; opcode final como leitura non-M1 de 5T; leitura efetiva de 4T; escrita RMW de 3T.
@@ -267,4 +267,4 @@ Toda atualização deve incluir data, SHA da baseline, SHA candidato, PR, workfl
 
 ---
 
-**Próxima meta operacional na baseline atual:** iniciar E5 — DDCB/FDCB no microsequenciador. E4A, E4B e E4C estão integradas na main; E4C foi integrada pela PR #475 (`f89a5234`) após CI 4/4 PASS. Os resultados QUICK_PASS/SHORT_PASS permanecem limitados aos escopos testados; validação diferencial externa, ZEXDOC/ZEXALL e TEMPORAL_PASS continuam pendentes.
+**Próxima meta operacional na baseline atual:** iniciar E6 — fallback geral e resolução de prefixos DD/FD/ED/CB. E4A, E4B e E4C estão integradas na main; E5 DDCB/FDCB está implementada e QUICK_PASS/SHORT_PASS na PR #485, com CI 3/3 PASS no SHA de código 2f1dff62. Validação diferencial externa, ZEXDOC/ZEXALL, LONG_PASS e TEMPORAL_PASS continuam pendentes.
