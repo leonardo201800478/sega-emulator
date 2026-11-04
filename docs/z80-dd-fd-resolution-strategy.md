@@ -265,7 +265,7 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 - [x] Windows WASAPI/XAudio2 compile e audio-output tests PASS; CI aplicável 3/3 jobs PASS no run #4238. Scheduler stress SKIPPED corretamente por não haver alteração no Scheduler.
 - Limite ZiLOG: UM008011-0816 classifica S e P/V de BIT indexado como desconhecidos. O modelo do executor atômico é mantido, mas esses bits não estão comprovados contra hardware independente.
 
-**Gate E5:** 256 subopcodes por índice, ordem de barramento e M/T-cycles conferidos, BIT sem write-back e todos os safe points serializáveis. A implementação passou CI 3/3 no SHA de código 2f1dff; revisão permanece pendente.
+**Gate E5:** 256 subopcodes por índice, ordem de barramento e M/T-cycles conferidos, BIT sem write-back e todos os safe points serializáveis. A implementação passou CI 3/3 no HEAD da PR #485, SHA 79bb17a; revisão de escopo concluída.
 
 ### E6 — Prefixos ignorados e combinações DD/FD
 
