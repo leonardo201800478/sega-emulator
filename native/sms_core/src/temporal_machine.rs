@@ -18,9 +18,8 @@ use sega_temporal_core::{
     MCycleIndex, MachineTime, TStateIndex,
 };
 use sega_z80_cpu::{
-    Z80BusOperation, Z80M1Phase, Z80M1Pins, Z80MicroSequencer, Z80MicroSequencerError,
-    Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
-    Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES,
+    Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES, Z80BusOperation, Z80M1Phase, Z80M1Pins, Z80MicroSequencer,
+    Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
 };
 
 pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 21;
