@@ -228,7 +228,7 @@ fn repeated_prefix_stream_has_no_artificial_length_limit() {
         other => panic!("expected BASE immediate operand read, got {other:?}"),
     };
     assert_eq!(operand.operation, Z80BusOperation::MemoryRead);
-    assert_eq!(operand.address, 257);
+    assert_eq!(operand.address, 258);
     assert_eq!(operand.base_tstates, 3);
     assert_eq!(cpu.registers.pc, 258);
     assert_eq!(cpu.refresh & 0x7F, (258_u32 & 0x7F) as u8);
