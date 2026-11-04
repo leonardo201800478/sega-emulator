@@ -1652,7 +1652,10 @@ mod base_internal_snapshot_tests {
         cpu = round_trip(&cpu);
         assert_eq!(
             cpu.export_state().phase,
-            crate::Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector: 0xCF, mode: 0 }
+            crate::Z80MicroSequencerPhase::InterruptAcknowledgeComplete {
+                vector: 0xCF,
+                mode: 0,
+            }
         );
     }
 
