@@ -48,7 +48,9 @@ fn halt_repeats_m1_at_next_pc_ignores_data_and_preserves_snapshot() {
     let mut restored = Z80MicroSequencer::restore_state(state).unwrap();
 
     assert_eq!(
-        restored.complete_bus_cycle(repeated_fetch.id, Some(0x3E)).unwrap(),
+        restored
+            .complete_bus_cycle(repeated_fetch.id, Some(0x3E))
+            .unwrap(),
         Z80MicroStep::InstructionRetired {
             opcode: 0x00,
             tstates: 6,
@@ -72,7 +74,8 @@ fn halt_hold_cycle_does_not_decode_prefix_or_change_architectural_flags() {
     let repeated_fetch = bus_request(cpu.begin_instruction().unwrap());
     assert_eq!(repeated_fetch.address, 1);
     assert_eq!(
-        cpu.complete_bus_cycle(repeated_fetch.id, Some(0xDD)).unwrap(),
+        cpu.complete_bus_cycle(repeated_fetch.id, Some(0xDD))
+            .unwrap(),
         Z80MicroStep::InstructionRetired {
             opcode: 0x00,
             tstates: 4,
@@ -82,4 +85,19 @@ fn halt_hold_cycle_does_not_decode_prefix_or_change_architectural_flags() {
     assert_eq!(cpu.registers.pc, 1);
     assert_eq!(cpu.registers.f, flags_after_halt);
     assert_eq!(cpu.export_state().prefix_state, Z80PrefixState::None);
+}
+
+#[test]
+fn halt_snapshot_rejects_incompatible_in_flight_phase() {
+    let mut cpu = Z80MicroSequencer::default();
+    let halt_fetch = bus_request(cpu.begin_instruction().unwrap());
+    cpu.complete_bus_cycle(halt_fetch.id, Some(0x76)).unwrap();
+
+    let mut invalid = cpu.export_state();
+    invalid.phase = Z80MicroSequencerPhase::ImmediateReadRegister { destination: 0 };
+
+    assert!(matches!(
+        Z80MicroSequencer::restore_state(invalid),
+        Err(sega_z80_cpu::Z80MicroSequencerError::InvalidState)
+    ));
 }
