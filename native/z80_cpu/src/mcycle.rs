@@ -68,7 +68,6 @@ pub enum Z80MCycleError {
     InvalidTiming,
     InvalidState,
     AlreadyComplete,
-    WaitOnInternalCycle,
     TStateOverflow,
 }
 
@@ -150,10 +149,6 @@ impl Z80MCycle {
         if self.is_complete() {
             return Err(Z80MCycleError::AlreadyComplete);
         }
-        if self.state.kind == Z80MCycleKind::Internal && wait_asserted {
-            return Err(Z80MCycleError::WaitOnInternalCycle);
-        }
-
         let elapsed_tstate_index = self.state.elapsed_tstates;
         let mut next = self.state;
 
@@ -342,15 +337,12 @@ mod tests {
     }
 
     #[test]
-    fn internal_cycles_do_not_accept_wait() {
+    fn internal_cycles_ignore_wait_because_it_is_not_sampled() {
         let mut cycle = Z80MCycle::new(Z80MCycleKind::Internal, 1, 0).unwrap();
-        let before = cycle.export_state();
-        assert_eq!(
-            cycle.advance_tstate(true),
-            Err(Z80MCycleError::WaitOnInternalCycle)
-        );
-        assert_eq!(cycle.export_state(), before);
-        assert!(cycle.advance_tstate(false).unwrap().mcycle_completed);
+        let edge = cycle.advance_tstate(true).unwrap();
+        assert!(edge.mcycle_completed);
+        assert_eq!(cycle.wait_tstates(), 0);
+        assert_eq!(cycle.elapsed_tstates(), 1);
     }
 
     #[test]
