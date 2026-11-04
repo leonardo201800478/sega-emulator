@@ -256,6 +256,14 @@ def audit() -> tuple[dict[str, Any], list[Result]]:
                 ),
             )
         )
+    for manifest in unassigned:
+        results.append(
+            Result(
+                f"not assigned to an active workspace: {manifest}",
+                "NOT RUN",
+                output="Manifest is outside the declared workspace membership; review before activation.",
+            )
+        )
     return report, results
 
 
