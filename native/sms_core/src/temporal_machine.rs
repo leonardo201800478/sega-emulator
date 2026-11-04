@@ -318,7 +318,7 @@ impl SmsTemporalMachine {
             data,
             u16::from(request.base_tstates)
                 + if request.operation == Z80BusOperation::InterruptAcknowledge {
-                    u128::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
+                    u16::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
                 } else {
                     0
                 },
@@ -872,7 +872,7 @@ impl SmsTemporalMachine {
             let total_tstates = elapsed / scale;
             let automatic_wait_tstates =
                 if request.operation == Z80BusOperation::InterruptAcknowledge {
-                    u16::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
+                    u128::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
                 } else {
                     0
                 };
