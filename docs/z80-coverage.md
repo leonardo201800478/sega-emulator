@@ -90,10 +90,10 @@ O projeto deve escolher explicitamente o alvo inicial como Zilog Z80 clássico c
 
 ## Estado interno, interrupções e ciclo de barramento
 
-O código atual modela registradores principais e alternativos, I/R, IX/IY, SP, PC, flags e um acumulador de T-states nominais. Ainda faltam, entre outros:
+Na implementação Python arquivada, auditada em 22/10/2026, estavam modelados registradores principais e alternativos, I/R, IX/IY, SP, PC, flags e um acumulador de T-states nominais. As lacunas daquela revisão incluíam, entre outras:
 
 - Os registradores alternativos AF', BC', DE' e HL', I/R e IX/IY estão modelados.
-- IFF1/IFF2, modos 0–2, HALT e solicitações NMI/INT têm um modelo inicial. Em IM 0, o byte de acknowledge é executado como opcode externo; há testes sintéticos para RST, NOP, `LD A,n`, `CALL`, prefixos CB/ED/DD e consumo de operandos subsequentes pela memória. Essa cobertura caracteriza o contrato atual, mas ainda requer validação diferencial para confirmar a semântica e os ciclos do acknowledge.
+- IFF1/IFF2, modos 0–2, HALT e solicitações NMI/INT têm um modelo inicial. Em IM 0, o byte de acknowledge é executado como opcode externo; há testes sintéticos para RST, NOP, `LD A,n`, `CALL`, prefixos CB/ED/DD e consumo de operandos subsequentes pela memória. Essa cobertura caracteriza somente o contrato daquela revisão Python; não confirma o comportamento do runtime Rust.
 - `test_nmi_during_halt_has_priority_over_pending_int` caracteriza a sequência EI → HALT → NMI com INT pendente: NMI sai de HALT, empilha o PC após HALT, incrementa R, copia IFF1 para IFF2 e mantém INT pendente. É um teste de regressão sintético; ainda não equivale a validação diferencial contra hardware.
 - `test_retn_reti_aliases_restore_iff1_from_iff2` percorre os oito aliases ED de RETN/RETI com IFF2 em ambos os estados, verificando restauração de PC/SP, preservação de F e incremento de R. A cobertura é sintética e não modela o sinal externo de daisy chain que distingue RETI em sistemas com controlador de prioridades.
 - Ciclos M1, ciclos de leitura/escrita e I/O, estados de espera, contenção e temporização de barramento.
