@@ -21,7 +21,7 @@ function Initialize-SegaMsvcEnvironment {
     [CmdletBinding()]
     param()
     if (Get-Command link.exe -ErrorAction SilentlyContinue) { return }
-    $programFilesX86 = \${env:ProgramFiles(x86)}
+    $programFilesX86 = ${env:ProgramFiles(x86)}
     if ([string]::IsNullOrWhiteSpace($programFilesX86)) { $programFilesX86 = $env:ProgramFiles }
     $vswhere = Join-Path $programFilesX86 "Microsoft Visual Studio\Installer\vswhere.exe"
     if (-not (Test-Path -LiteralPath $vswhere -PathType Leaf)) { throw "MSVC linker nao encontrado e vswhere.exe indisponivel. Instale Visual Studio Build Tools com MSVC C++ x64/x86." }
