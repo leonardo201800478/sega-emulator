@@ -219,6 +219,10 @@ impl From<Z80BusHandshakeError> for Z80MicroSequencerError {
 pub enum Z80MicroSequencerPhase {
     Ready,
     OpcodeFetch,
+    /// Maskable-interrupt acknowledge M1 with IORQ and externally sampled vector.
+    InterruptAcknowledge,
+    /// Stable boundary after the acknowledge vector has been captured; IM dispatch follows in E7.2C.
+    InterruptAcknowledgeComplete { vector: u8 },
     /// NMI response M1 at the interrupted PC; sampled memory data is ignored.
     NmiResponse,
     /// One internal T-state between the NMI response M1 and the stack writes.
@@ -521,6 +525,9 @@ pub enum Z80MicroStep {
         kind: Z80InterruptKind,
         tstates: u32,
     },
+    /// INT acknowledge completed and the external vector byte was sampled.
+    /// Mode-specific execution is deliberately deferred to E7.2C.
+    InterruptAcknowledge { vector: u8, tstates: u32 },
     /// One non-bus internal T-state; advance machine time before resuming.
     InternalCycle { tstates: u32 },
 }
@@ -973,6 +980,30 @@ impl Z80MicroSequencer {
                             && request.address == state.registers.pc
                             && request.base_tstates == 4
                     })
+            }
+            Z80MicroSequencerPhase::InterruptAcknowledge => {
+                state.opcode.is_none()
+                    && state.prefix_state == Z80PrefixState::None
+                    && !state.iff1
+                    && !state.iff2
+                    && !state.halted
+                    && state.instruction_tstates == 0
+                    && pending.is_some_and(|request| {
+                        request.operation == Z80BusOperation::InterruptAcknowledge
+                            && request.address == state.registers.pc
+                            && request.base_tstates == 5
+                    })
+            }
+            Z80MicroSequencerPhase::InterruptAcknowledgeComplete { .. } => {
+                state.opcode.is_none()
+                    && state.prefix_state == Z80PrefixState::None
+                    && !state.iff1
+                    && !state.iff2
+                    && !state.halted
+                    && pending.is_none()
+                    && state.instruction_tstates >= 7
+                    && state.mcycle_index == 1
+                    && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::NmiResponse => {
                 state.opcode.is_none()
@@ -2243,6 +2274,12 @@ impl Z80MicroSequencer {
                         Some(_) => false,
                     }
             }
+            Z80MicroSequencerPhase::InterruptAcknowledge => {
+                state.mcycle_index == 0 && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::InterruptAcknowledgeComplete { .. } => {
+                state.mcycle_index == 1 && state.tstate_index == 0
+            }
             Z80MicroSequencerPhase::NmiResponse => {
                 state.mcycle_index == 0 && state.tstate_index == 0
             }
@@ -2681,6 +2718,12 @@ impl Z80MicroSequencer {
         self.nmi_pending = true;
     }
 
+    /// Update the level-sensitive INT request and the vector supplied by its device.
+    /// Passing None deasserts INT; changing this input does not advance machine time.
+    pub fn set_int_line(&mut self, vector: Option<u8>) {
+        self.int_pending = vector;
+    }
+
     pub fn begin_instruction(&mut self) -> Result<Z80MicroStep, Z80MicroSequencerError> {
         if self.phase != Z80MicroSequencerPhase::Ready || self.handshake.is_pending() {
             return Err(Z80MicroSequencerError::InstructionAlreadyActive);
@@ -2703,6 +2746,21 @@ impl Z80MicroSequencer {
             self.p = false;
             self.phase = Z80MicroSequencerPhase::NmiResponse;
             return Ok(Z80MicroStep::BusRequest(request));
+        }
+        if self.iff1 && self.ei_delay == 0 {
+            if let Some(_vector) = self.int_pending {
+                let request = self.handshake.begin(
+                    Z80BusOperation::InterruptAcknowledge,
+                    self.registers.pc,
+                    5,
+                )?;
+                self.halted = false;
+                self.iff1 = false;
+                self.iff2 = false;
+                self.p = false;
+                self.phase = Z80MicroSequencerPhase::InterruptAcknowledge;
+                return Ok(Z80MicroStep::BusRequest(request));
+            }
         }
         let request = self
             .handshake
@@ -2764,15 +2822,34 @@ impl Z80MicroSequencer {
             .pending_request()
             .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
         let waits = self.handshake.wait_tstates().unwrap_or(0);
+        let automatic_waits = if request.operation == Z80BusOperation::InterruptAcknowledge {
+            2
+        } else {
+            0
+        };
         let next_instruction_tstates = self
             .instruction_tstates
             .checked_add(u32::from(request.base_tstates))
             .and_then(|total| total.checked_add(waits))
+            .and_then(|total| total.checked_add(automatic_waits))
             .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
         let response = self.handshake.complete(request_id, data)?;
         self.instruction_tstates = next_instruction_tstates;
 
         match self.phase {
+            Z80MicroSequencerPhase::InterruptAcknowledge => {
+                let vector = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.refresh = (self.refresh & 0x80) | (self.refresh.wrapping_add(1) & 0x7F);
+                self.mcycle_index = 1;
+                self.tstate_index = 0;
+                self.phase = Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector };
+                Ok(Z80MicroStep::InterruptAcknowledge {
+                    vector,
+                    tstates: self.instruction_tstates,
+                })
+            }
             Z80MicroSequencerPhase::OpcodeFetch => {
                 let opcode = response
                     .data
