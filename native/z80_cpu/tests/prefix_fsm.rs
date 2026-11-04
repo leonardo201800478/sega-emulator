@@ -188,12 +188,21 @@ fn dd_fd_prefix_classifies_ignored_indexed_and_index_cb_opcodes() {
     assert_eq!(classify_index_opcode(0xCB), Z80IndexOpcodeClass::IndexedCb);
 
     let mut cpu = Z80MicroSequencer::default();
+    cpu.registers.set_de(0x1234);
+    cpu.registers.set_hl(0xABCD);
+    cpu.ix = 0x5678;
     let fetch = start(&mut cpu);
     let fetch = feed_prefix(&mut cpu, fetch, 0xDD);
-    assert!(matches!(
-        cpu.complete_bus_cycle(fetch.id, Some(0xEB)),
-        Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0xEB, .. })
-    ));
+    assert_eq!(
+        cpu.complete_bus_cycle(fetch.id, Some(0xEB)).unwrap(),
+        Z80MicroStep::InstructionRetired {
+            opcode: 0xEB,
+            tstates: 8,
+        }
+    );
+    assert_eq!(cpu.registers.de(), 0xABCD);
+    assert_eq!(cpu.registers.hl(), 0x1234);
+    assert_eq!(cpu.ix, 0x5678);
 }
 
 #[test]
