@@ -218,7 +218,7 @@ mod tests {
     fn interrupt_acknowledge_requires_and_returns_external_vector_data() {
         let mut bus = Z80BusHandshake::default();
         let request = bus
-            .begin(Z80BusOperation::InterruptAcknowledge, 0x1234, 5)
+            .begin(Z80BusOperation::InterruptAcknowledge, 0x1234, 3)
             .unwrap();
 
         assert_eq!(
