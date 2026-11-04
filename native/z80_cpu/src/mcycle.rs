@@ -82,7 +82,7 @@ impl Z80MCycle {
     ///
     /// Mandatory waits are kept separate from externally sampled WAIT states.
     /// For bus cycles, WAIT is sampled after nominal T2 and remains sampleable
-    /// on each inserted TW state. Internal cycles do not accept WAIT.
+    /// on each inserted TW state. Internal cycles do not sample WAIT.
     pub fn new(
         kind: Z80MCycleKind,
         nominal_tstates: u8,
@@ -362,7 +362,7 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_state_round_trips_through_the_versioned_serde_codec() {
+    fn snapshot_state_round_trips_through_serde_codec() {
         let mut cycle = Z80MCycle::new(Z80MCycleKind::InterruptAcknowledge, 4, 2).unwrap();
         cycle.advance_tstate(false).unwrap();
         cycle.advance_tstate(false).unwrap();
