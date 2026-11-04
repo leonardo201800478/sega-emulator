@@ -5,11 +5,12 @@
 **Baseline inicial E0:** `e4604f3152c09e8d16c37f94f94a4b344db33b62`  
 **Baseline após E1 / PR #467:** `aa4a4fa7661c28d3b2e21ac6d6eb4379fd297f65`  
 **Baseline após E2 / PR #468:** `abd154332b1dabfb68874f2b80f306da7e060552`  
-**Baseline atual da main após PR #475 / E4C:** `f89a52346e91e88e82ab37a4afcfffff2d793407`  
+**Baseline atual da main após PR #476:** `a0e58fd05c7f62c42f82b86d15d8532e06a9c59b`  
 **HEAD E4C validado:** `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 PASS.  
 **PR de referência histórica:** [#447](https://github.com/leonardo201800478/sega-emulator/pull/447) — manter aberta, sem merge  
 **PR integrada E4A:** [#471](https://github.com/leonardo201800478/sega-emulator/pull/471)  
 **PR integrada E4C:** [#475](https://github.com/leonardo201800478/sega-emulator/pull/475)  
+**PR candidata E5:** [#477](https://github.com/leonardo201800478/sega-emulator/pull/477), HEAD `081522cf5169d9bf27a5e018db57b6b69ad378d3`; CI ainda pendente.  
 **Escopo:** microsequenciador Z80 compartilhado; não confundir conclusão do núcleo com integração temporal completa ao SMS.
 
 ---
@@ -185,7 +186,7 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 
 **Gate E2:** PASS para FSM, seleção de prefixo, classificação e snapshot. CI completo do SHA candidato: [run 41721337030](https://github.com/leonardo201800478/sega-emulator/actions/runs/41721337030). Isso não declara FUNCTIONAL_PASS das instruções DD/FD nem TEMPORAL_PASS.
 
-**Limites mantidos após E2:** famílias indexadas restantes, prefixos ignorados, DDCB/FDCB, traces por T-state e integração temporal permanecem nas etapas E4-E9. E4A (LD), E4B (ALU indexada) e E4C (INC/DEC indexado) estão integradas na main; E4C foi publicada pela PR #475. E5-E9 continuam pendentes.
+**Limites mantidos após E2:** famílias indexadas restantes, prefixos ignorados, DDCB/FDCB, traces por T-state e integração temporal permanecem nas etapas E4-E9. E4A (LD), E4B (ALU indexada) e E4C (INC/DEC indexado) estão integradas na main; E4C foi publicada pela PR #475. E5 está implementada como candidata na PR #477; E6-E9 continuam pendentes.
 
 ### E3 — Operações 16-bit e substituição HL→IX/IY
 
@@ -251,15 +252,18 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 
 **Gate E4:** E4A + E4B + E4C implementadas e aprovadas nos critérios dirigidos de cada fatia. A validação independente e temporal permanece como trabalho posterior; não confundir gate de implementação E4 com conformidade integral do Z80.
 
-### E5 — Prefixos DDCB/FDCB
+### E5 — Prefixos DDCB/FDCB — candidato implementado na PR #477
 
-Implementar a sequência completa DD/FD, CB, displacement e opcode final:
-- Fetch DD/FD e CB como M1; displacement e opcode final com classificação correta de M1/non-M1.
-- BIT como leitura sem write-back.
-- Rotações, shifts, RES e SET como read-modify-write; cópia opcional do resultado para o registrador indicado pelo campo z.
-- Validar R/refresh, flags X/Y, WZ, endereços, WAIT, snapshots e temporização por ciclo.
+- [x] Fases serializáveis para displacement, opcode final non-M1, leitura efetiva e write-back opcional no microsequenciador compartilhado.
+- [x] DD/FD e CB são M1; displacement é MemoryRead/3T; opcode final é MemoryRead non-M1/5T; leitura efetiva é MemoryRead/4T; escrita RMW é MemoryWrite/3T.
+- [x] BIT é read-only: 5 M-cycles / 20T (`4,4,3,5,4`); rotações/shifts, RES e SET fazem RMW: 6 M-cycles / 23T (`4,4,3,5,4,3`).
+- [x] Campo z copia o resultado para B/C/D/E/H/L/A nos grupos x=0,2,3; H/L são os registradores convencionais.
+- [x] R conta apenas fetches M1; WZ recebe o endereço efetivo; WAIT e snapshot/restore são suportados nas transações pendentes.
+- [x] Schema 28 e suíte `indexed_cb_e5.rs` cobrindo 256 subopcodes por índice, IX/IY, prefixos repetidos/alternados, wrap, BIT sem escrita, destinos e WAIT.
+- [ ] CI e regressões da PR #477 ainda pendentes; QUICK_PASS/SHORT_PASS não atribuídos antes dos resultados no HEAD exato.
+- Limite ZiLOG: UM008011-0816 classifica S e P/V de BIT indexado como desconhecidos. O modelo do executor atômico é mantido, mas esses bits não estão comprovados contra hardware independente.
 
-**Gate E5:** 256 subopcodes por índice, com traces de barramento e T-states por fase; BIT não escreve memória.
+**Gate E5:** 256 subopcodes por índice, ordem de barramento e M/T-cycles conferidos, BIT sem write-back e todos os safe points serializáveis. A implementação candidata existe; a aprovação permanece condicionada a CI e revisão.
 
 ### E6 — Prefixos ignorados e combinações DD/FD
 
@@ -318,11 +322,11 @@ Além disso, Scheduler deterministic stress e Windows x64 D3D12/WASAPI/XAudio2 q
 4. WAIT: derivar amostragem e ciclos elegíveis dos diagramas; não assumir regra universal.
 5. DDCB/FDCB: validar sequência de barramento e R com fonte técnica e vetores.
 6. Oráculos: SingleStepTests deriva de um emulador; raxoft/z80test e hardware/documentação devem complementar.
-7. Schema: baseline inicial 25; E2 avançou para 26 com um latch de prefixo explícito; E4A avançou para 27 para serializar as fases de displacement e store imediato. Próximas alterações devem considerar snapshots pendentes; nunca importar schema da PR #447.
+7. Schema: baseline inicial 25; E2 avançou para 26; E4A para 27; E5 candidata para 28 para serializar fases DDCB/FDCB e requests pendentes. Nunca importar schema da PR #447.
 8. Integração SMS: separada da conclusão funcional do conjunto de instruções.
 
 ## 8. Próxima ação
 
-Prosseguir para E5: implementar DDCB/FDCB no microsequenciador, separando BIT read-only das operações RMW; manter validação de opcode final não-M1, R, flags, WAIT, snapshots e M/T-states.
+Prosseguir na PR #477: revisar o diff e resolver CI E5 no HEAD exato; confirmar BIT read-only, M1/non-M1, 4,4,3,5,4 e 4,4,3,5,4,3, R, flags, WZ, WAIT e snapshots. Não fazer merge até todos os gates obrigatórios PASS.
 
-**Estado atual DD/FD:** E2 FSM/snapshot SHORT_PASS; E3A1/E3A2, E4A, E4B e E4C integradas na main (`f89a5234`). E4C foi validada no HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`, CI `41747460761` 4/4 PASS. Próxima tarefa: E5 DDCB/FDCB. E6 fallback, E7 fechamento semântico, E8 formal e E9 integração temporal permanecem pendentes. Não há LONG_PASS nem TEMPORAL_PASS global.
+**Estado atual DD/FD:** E2 FSM/snapshot SHORT_PASS; E3A1/E3A2/E4A/E4B/E4C integradas na main `a0e58fd05c7f62c42f82b86d15d8532e06a9c59b`. E4C validada no HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`, CI `41747460761` 4/4 PASS. E5 implementada como candidata na PR #477 (`081522cf5169d9bf27a5e018db57b6b69ad378d3`); CI ainda pendente. E6 fallback, E7 fechamento semântico, E8 formal e E9 integração temporal permanecem pendentes. Não há LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS global.
