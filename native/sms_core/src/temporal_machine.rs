@@ -685,13 +685,11 @@ impl SmsTemporalMachine {
             Z80MicroStep::BusRequest(request)
         } else if self.cpu.export_state().phase.is_internal_cycle() {
             Z80MicroStep::InternalCycle { tstates: 1 }
-        } else if let Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector } =
-            self.cpu.export_state().phase
-        {
-            return Ok(Z80MicroStep::InterruptAcknowledge {
-                vector,
-                tstates: self.cpu.export_state().instruction_tstates,
-            });
+        } else if matches!(
+            self.cpu.export_state().phase,
+            Z80MicroSequencerPhase::InterruptAcknowledgeComplete { .. }
+        ) {
+            self.cpu.begin_instruction()?
         } else {
             return Err(SmsTemporalMachineError::InvalidState);
         };
@@ -1032,11 +1030,12 @@ mod tests {
         let mut resumed = SmsTemporalMachine::restore_state(completed_snapshot).unwrap();
         assert_eq!(
             resumed.resume_instruction(0).unwrap(),
-            Z80MicroStep::InterruptAcknowledge {
-                vector: 0xCF,
-                tstates: 6,
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xCF,
+                tstates: 14,
             }
         );
+        assert_eq!(resumed.cpu().registers.pc, 0x0008);
     }
 
     #[test]
