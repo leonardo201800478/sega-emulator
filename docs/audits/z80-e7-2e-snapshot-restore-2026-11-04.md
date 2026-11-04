@@ -166,4 +166,6 @@ Esses resultados validam a baseline main, não a nova revisão E7.2E. O novo HEA
 - O DTO `SmsTemporalMachineState` não é codec binário persistente completo do SMS.
 - Scheduler stress permanece separado e SKIPPED na baseline atual.
 
-**Estado:** E7.2E permanece IN_PROGRESS / INTEGRATION_PENDING até CI da nova PR e fechamento das lacunas remanescentes.
+**CI da PR #504:** workflow #41825655861 no HEAD `b78d3354119c3f9af475561ff15db7673e93fb06` — Rust fmt/Clippy/workspace PASS; Python pytest/Ruff PASS; Windows x64 D3D12/vídeo e WASAPI/XAudio2/áudio PASS; Scheduler deterministic stress SKIPPED.
+
+**Estado:** E7.2E permanece IN_PROGRESS / INTEGRATION_PENDING. O CI aprova esta fatia incremental, mas não fecha restore completo das 70 fases, matriz ampla de estados inválidos, T-states IM0 nem codec binário persistente da máquina SMS.
