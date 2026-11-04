@@ -923,44 +923,34 @@ impl SmsTemporalMachine {
             return Err(SmsTemporalMachineError::InvalidState);
         }
         if let Some(request) = state.bus.pending_request {
-            let started_at = state
+            let mcycle = state
                 .bus
-                .request_started_at
+                .mcycle
                 .ok_or(SmsTemporalMachineError::InvalidState)?;
-            let completed_at = state
+            let fixture_total = state
                 .bus
-                .completion
-                .map(|completion| completion.completed_at)
-                .or_else(|| {
-                    state
-                        .bus
-                        .coordinator
-                        .scheduler
-                        .event_queue
-                        .pending
-                        .first()
-                        .map(|event| event.timestamp)
-                })
+                .fixture_wait_tstates
                 .ok_or(SmsTemporalMachineError::InvalidState)?;
-            let scale = u128::from(state.bus.coordinator.master_ticks_per_tstate);
-            let elapsed = completed_at
-                .checked_duration_since(started_at)
+            let fixture_remaining = state
+                .bus
+                .fixture_wait_remaining
                 .ok_or(SmsTemporalMachineError::InvalidState)?;
-            if scale == 0 || elapsed % scale != 0 {
-                return Err(SmsTemporalMachineError::InvalidState);
-            }
-            let total_tstates = elapsed / scale;
-            let automatic_wait_tstates =
+            let mandatory_waits =
                 if request.operation == Z80BusOperation::InterruptAcknowledge {
-                    u128::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
+                    u32::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
                 } else {
                     0
                 };
-            let wait_tstates = total_tstates
-                .checked_sub(u128::from(request.base_tstates))
-                .and_then(|waits| waits.checked_sub(automatic_wait_tstates))
-                .ok_or(SmsTemporalMachineError::InvalidState)?;
-            if wait_tstates != u128::from(state.cpu.handshake.wait_tstates) {
+            if fixture_total != state.cpu.handshake.wait_tstates
+                || fixture_remaining > fixture_total
+                || fixture_total - fixture_remaining != mcycle.external_wait_tstates
+                || mcycle.nominal_tstates != request.base_tstates
+                || mcycle.fixed_wait_tstates != mandatory_waits
+                || mcycle.elapsed_tstates
+                    != u32::from(mcycle.completed_base_tstates)
+                        + (mcycle.fixed_wait_tstates - mcycle.fixed_wait_remaining)
+                        + mcycle.external_wait_tstates
+            {
                 return Err(SmsTemporalMachineError::InvalidState);
             }
         }
