@@ -708,7 +708,7 @@ impl SmsTemporalBus {
                 && completion.completed_at == now
                 && last_dispatch == Some(completion.completed_at)
                 && elapsed_tstates(started_at, completion.completed_at, scale)
-                        == Some(u128::from(mcycle_state.elapsed_tstates))
+                    == Some(u128::from(mcycle_state.elapsed_tstates))
                 && fixture_total == mcycle_state.external_wait_tstates
                 && mcycle_state.completed_base_tstates == mcycle_state.nominal_tstates
                 && mcycle_state.nominal_tstates == request.base_tstates
@@ -986,7 +986,12 @@ mod tests {
             else {
                 panic!("expected a nominal T-state edge");
             };
-            assert_eq!(edge.tstate, Z80MCycleTState::Base { index: expected_index });
+            assert_eq!(
+                edge.tstate,
+                Z80MCycleTState::Base {
+                    index: expected_index
+                }
+            );
         }
         let Some(SmsTemporalDispatch::BusTStateProgress { edge, .. }) =
             bus.dispatch_next_boundary().unwrap()
