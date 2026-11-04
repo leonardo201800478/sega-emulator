@@ -13,9 +13,7 @@ use crate::{
     SmsTemporalCoordinatorError, SmsTemporalCoordinatorState, SmsTemporalEvent,
 };
 use sega_temporal_core::MachineTime;
-use sega_z80_cpu::{
-    Z80BusOperation, Z80BusRequest, Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES,
-};
+use sega_z80_cpu::{Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES, Z80BusOperation, Z80BusRequest};
 
 pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 7;
 const DEFAULT_INTERRUPT_VECTOR: u8 = 0xFF;
