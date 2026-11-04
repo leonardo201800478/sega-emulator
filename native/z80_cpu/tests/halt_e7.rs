@@ -12,14 +12,9 @@ fn bus_request(step: Z80MicroStep) -> sega_z80_cpu::Z80BusRequest {
 
 #[test]
 fn halt_repeats_m1_at_next_pc_ignores_data_and_preserves_snapshot() {
-    let mut cpu = Z80MicroSequencer {
-        registers: sega_z80_cpu::Z80Registers {
-            pc: 0xFFFF,
-            ..sega_z80_cpu::Z80Registers::default()
-        },
-        refresh: 0xFF,
-        ..Z80MicroSequencer::default()
-    };
+    let mut cpu = Z80MicroSequencer::default();
+    cpu.registers.pc = 0xFFFF;
+    cpu.refresh = 0xFF;
 
     let halt_fetch = bus_request(cpu.begin_instruction().unwrap());
     assert_eq!(halt_fetch.operation, Z80BusOperation::OpcodeFetch);
