@@ -2495,8 +2495,9 @@ impl Z80MicroSequencer {
                 Z80PrefixState::Index(_) => {
                     state.opcode.is_some_and(|opcode| {
                         classify_index_opcode(opcode) == Z80IndexOpcodeClass::Ignored
-                    }) && state.mcycle_index >= 2
-                        && state.instruction_tstates >= 8
+                    }) && prefix_m1_count(state.prefix_state, state.mcycle_index, 1)
+                        .and_then(|count| minimum_prefixed_tstates(count, 0))
+                        .is_some_and(|minimum| state.instruction_tstates >= minimum)
                         && state.tstate_index == 0
                 }
                 _ => false,
