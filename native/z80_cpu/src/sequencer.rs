@@ -1573,8 +1573,7 @@ impl Z80MicroSequencer {
                         )
                         .is_some()
                             && state.instruction_tstates
-                                >= 5
-                                    + u32::from(stage) * 3
+                                >= 5 + u32::from(stage) * 3
                                     + if matches!(state.prefix_state, Z80PrefixState::Index(_)) {
                                         4
                                     } else {
