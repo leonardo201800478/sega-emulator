@@ -73,7 +73,11 @@ fn compare_runs(
     let (expected, continuous_trace) = run_boundary(continuous, false, waits);
     let (actual, resumed_trace) = run_boundary(resumed, true, waits);
     assert_eq!(actual, expected);
-    assert_eq!(resumed_trace, continuous_trace, "continuous and restored Scheduler traces must match");
+    assert_eq!(
+        resumed_trace,
+        continuous_trace,
+        "continuous and restored Scheduler traces must match"
+    );
     assert_eq!(resumed.export_state(), continuous.export_state());
     assert_eq!(resumed.now(), continuous.now());
     actual
