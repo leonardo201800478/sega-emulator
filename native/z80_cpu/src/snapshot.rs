@@ -963,6 +963,7 @@ fn write_request(writer: &mut Writer, request: Z80BusRequest) {
     match request.operation {
         Z80BusOperation::OpcodeFetch => writer.u8(0),
         Z80BusOperation::MemoryRead => writer.u8(1),
+        Z80BusOperation::InterruptAcknowledge => writer.u8(5),
         Z80BusOperation::MemoryWrite { value } => {
             writer.u8(2);
             writer.u8(value);
@@ -984,6 +985,7 @@ fn read_request(
     let operation = match reader.u8()? {
         0 => Z80BusOperation::OpcodeFetch,
         1 => Z80BusOperation::MemoryRead,
+        5 => Z80BusOperation::InterruptAcknowledge,
         2 => Z80BusOperation::MemoryWrite {
             value: reader.u8()?,
         },
