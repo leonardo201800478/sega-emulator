@@ -702,6 +702,18 @@ impl Z80MicroSequencer {
                         .and_then(|count| minimum_prefixed_tstates(count, trailing_tstates))
                         .is_some_and(|minimum| state.instruction_tstates >= minimum)
             }
+            Z80MicroSequencerPhase::BaseRelativeBranchInternal { .. } => {
+                match state.prefix_state {
+                    Z80PrefixState::None => true,
+                    Z80PrefixState::Index(_) => state.opcode.is_some_and(|opcode| {
+                        matches!(opcode, 0x10 | 0x18 | 0x20 | 0x28 | 0x30 | 0x38)
+                            && classify_index_opcode(opcode) == Z80IndexOpcodeClass::Ignored
+                            && state.mcycle_index >= 3
+                            && state.instruction_tstates >= 11
+                    }),
+                    _ => false,
+                }
+            }
             Z80MicroSequencerPhase::BaseExchangeStackInternal {
                 stage,
                 remaining_tstates,
@@ -2182,7 +2194,15 @@ impl Z80MicroSequencer {
                     _ => 0,
                 };
                 total_tstates != 0
-                    && state.mcycle_index == 2
+                    && match state.prefix_state {
+                        Z80PrefixState::None => state.mcycle_index == 2,
+                        Z80PrefixState::Index(_) => {
+                            state.opcode.is_some_and(|opcode| {
+                                classify_index_opcode(opcode) == Z80IndexOpcodeClass::Ignored
+                            }) && state.mcycle_index >= 3
+                        }
+                        _ => false,
+                    }
                     && state.tstate_index
                         == u16::from(total_tstates.saturating_sub(remaining_tstates))
             }
