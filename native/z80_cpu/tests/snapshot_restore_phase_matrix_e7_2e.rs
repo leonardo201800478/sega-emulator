@@ -302,7 +302,7 @@ fn assert_invalid_mutations(states: BTreeMap<String, Z80MicroSequencerState>) {
         mutation_count += 1;
 
         let mut invalid = state.clone();
-        invalid.tstate_index = u8::MAX;
+        invalid.tstate_index = u16::MAX;
         assert_invalid_snapshot(invalid, &format!("{phase}: invalid T-state index"));
         mutation_count += 1;
 
