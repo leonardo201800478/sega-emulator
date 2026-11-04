@@ -35,6 +35,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Discover toolchains and Cargo workspaces
         run: python tools/project_manager.py audit
+      - name: Verify every Cargo workspace lockfile
+        run: python tools/project_manager.py locks
       - name: Formatting
         run: cargo fmt --all -- --check
       - name: Clippy
@@ -117,6 +119,30 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: python -c "from PySide6 import QtCore; import numpy; print(QtCore.qVersion(), numpy.__version__)"
+
+  windows-native-python-extension:
+    name: Windows Python 3.15 PyO3 extension build
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.1.0
+        with:
+          python-version: "3.15.2"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.99.1
+      - name: Create isolated Python build environment
+        run: |
+          python -m venv .venv
+          .\.venv\Scripts\python.exe -m pip install maturin==1.16.0
+      - name: Check PyO3 crate against the committed lockfile
+        run: cargo check --locked --all-targets --features python-extension --manifest-path native/z80_core/Cargo.toml
+      - name: Build native extension with Maturin
+        working-directory: native/z80_core
+        run: ${{ github.workspace }}\.venv\Scripts\maturin.exe develop --release --features python-extension
+      - name: Import the native extension
+        run: .\.venv\Scripts\python.exe -c "import sega_z80_core; print(sega_z80_core.__name__)"
 
   windows-d3d12:
     name: Windows x64 D3D12 compile
