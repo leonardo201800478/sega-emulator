@@ -280,11 +280,9 @@ A implementação agora deriva os bits F3/F5 de `BIT b,(HL)` do byte alto de WZ/
 
 
 
-## Transição para motor Z80 compartilhado — 2026-10-31
+## Transição para motor Z80 compartilhado — registro histórico de 2026-10-31
 
-Esta matriz continua sendo a referência de cobertura semântica do Z80 e deve ser preservada durante a extração. A existência de executores semelhantes em SG-1000 e SMS não significa que a CPU já esteja unificada: no baseline observado, ambos ainda possuem `cpu.rs` em seus próprios crates. A extração planejada para `native/z80_cpu` deve manter todos os vetores, fixtures, proveniência, limites de licença e estados de validação, acrescentando execução dos mesmos testes contra os adaptadores de cada máquina.
-
-A unificação não promove automaticamente itens para IMPLEMENTED/SHORT_PASS/LONG_PASS. O modo de instrução e o futuro modo por micro-operações devem compartilhar uma única semântica; T-states agregados continuam distintos de eventos de barramento temporizados. Ver [plano de reorganização do runtime e Z80](architecture/migrations/shared-z80-runtime-reorganization.md).
+Na fotografia de 2026-10-31, os executores SG-1000 e SMS ainda estavam em processo de extração. Essa descrição é histórica: o runtime Z80 compartilhado está atualmente em `native/z80_cpu`. A extração não promove automaticamente itens para IMPLEMENTED/SHORT_PASS/LONG_PASS; cada família precisa de evidência própria. O plano de reorganização permanece como registro da migração, não como descrição do estado atual.
 
 
 ## Estado atual do runtime Rust — verificação documental (2026-11-03)
