@@ -45,14 +45,21 @@ fn sms_temporal_nmi_uses_m1_ignores_data_and_pushes_pc_to_ram() {
             _ => None,
         })
         .collect();
-    assert_eq!(m1_pins.len(), 4, "NMI response must execute one four-T-state M1");
+    assert_eq!(
+        m1_pins.len(),
+        4,
+        "NMI response must execute one four-T-state M1"
+    );
     assert_eq!(m1_pins[0].address, 0x0001);
     assert!(!m1_pins[0].m1_n);
     assert!(!m1_pins[1].mreq_n);
     assert!(!m1_pins[1].rd_n);
     assert!(!m1_pins[2].mreq_n);
     assert!(!m1_pins[2].rd_n);
-    assert!(!m1_pins[3].rfsh_n, "M1 T4 must expose the refresh phase");
+    assert!(
+        !m1_pins[3].rfsh_n,
+        "M1 T4 must expose the refresh phase"
+    );
 
     let bus_cycles: Vec<_> = trace
         .into_iter()
