@@ -1,7 +1,7 @@
 use sega_sms_core::SmsTemporalMachine;
 use sega_sms_core::temporal_machine::SmsTemporalTraceEvent;
 use sega_temporal_core::MachineTime;
-use sega_z80_cpu::{Z80BusOperation, Z80InterruptKind, Z80MicroStep};
+use sega_z80_cpu::{Z80BusOperation, Z80HaltExit, Z80InterruptKind, Z80MicroStep};
 
 fn nmi_machine() -> SmsTemporalMachine {
     let mut machine = SmsTemporalMachine::new(vec![0x00, 0x76], 3).unwrap();
@@ -125,4 +125,113 @@ fn sms_temporal_nmi_waits_extend_m1_and_both_stack_writes() {
     assert_eq!(machine.cpu().registers.sp, 0xC0FE);
     assert_eq!(machine.memory().read(0xC0FF), 0x00);
     assert_eq!(machine.memory().read(0xC0FE), 0x01);
+}
+
+#[test]
+fn sms_temporal_halt_samples_int_after_effective_t4_and_restores_the_latch() {
+    let mut machine = SmsTemporalMachine::new(vec![0x76, 0x00], 3).unwrap();
+    machine.cpu_mut().iff1 = true;
+    machine.cpu_mut().iff2 = true;
+    machine.cpu_mut().halted = true;
+    machine.cpu_mut().registers.sp = 0xC100;
+    machine.set_int_line(Some(0xFF));
+    machine.set_trace_enabled(true);
+
+    // Two WAIT states extend this repeated HALT M1. The sample must occur at
+    // its effective T4 completion, not at the nominal four-T-state boundary.
+    assert_eq!(
+        machine.step_instruction(2).unwrap(),
+        Z80MicroStep::InstructionRetired {
+            opcode: 0x00,
+            tstates: 6,
+        }
+    );
+    assert!(machine.cpu().halted);
+    assert_eq!(machine.cpu().halt_exit_pending, Some(Z80HaltExit::Int));
+    assert_eq!(machine.now(), MachineTime::from_ticks(18));
+    assert!(!machine.take_trace().is_empty());
+
+    let state = machine.export_state();
+    let mut restored = SmsTemporalMachine::restore_state(state).unwrap();
+    restored.set_trace_enabled(true);
+    machine.set_int_line(None);
+    restored.set_int_line(None);
+
+    let expected = machine.step_instruction(0).unwrap();
+    let actual = restored.step_instruction(0).unwrap();
+    assert_eq!(actual, expected);
+    assert!(matches!(
+        actual,
+        Z80MicroStep::InterruptAcknowledge { vector: 0xFF, .. }
+    ));
+    assert_eq!(restored.take_trace(), machine.take_trace());
+    assert_eq!(restored.export_state(), machine.export_state());
+    assert_eq!(restored.now(), machine.now());
+    assert!(!restored.cpu().halted);
+}
+
+#[test]
+fn sms_temporal_int_asserted_after_halt_t4_waits_for_next_halt_cycle() {
+    let mut machine = SmsTemporalMachine::new(vec![0x76, 0x00], 3).unwrap();
+    machine.cpu_mut().iff1 = true;
+    machine.cpu_mut().iff2 = true;
+
+    assert_eq!(
+        machine.step_instruction(0).unwrap(),
+        Z80MicroStep::InstructionRetired {
+            opcode: 0x76,
+            tstates: 4,
+        }
+    );
+    assert_eq!(machine.cpu().halt_exit_pending, None);
+
+    machine.set_int_line(Some(0xFF));
+    assert_eq!(
+        machine.step_instruction(0).unwrap(),
+        Z80MicroStep::InstructionRetired {
+            opcode: 0x00,
+            tstates: 4,
+        }
+    );
+    assert_eq!(machine.cpu().halt_exit_pending, Some(Z80HaltExit::Int));
+
+    let acknowledge = match machine.begin_instruction().unwrap() {
+        Z80MicroStep::BusRequest(request) => request,
+        other => panic!("expected INT acknowledge after next HALT T4, got {other:?}"),
+    };
+    assert_eq!(acknowledge.operation, Z80BusOperation::InterruptAcknowledge);
+}
+
+#[test]
+fn sms_temporal_ei_halt_int_observes_delay_consumption_at_halt_t4() {
+    let mut machine = SmsTemporalMachine::new(vec![0xFB, 0x76, 0x00], 3).unwrap();
+    machine.cpu_mut().registers.sp = 0xC100;
+    machine.set_int_line(Some(0xFF));
+
+    assert_eq!(
+        machine.step_instruction(0).unwrap(),
+        Z80MicroStep::InstructionRetired {
+            opcode: 0xFB,
+            tstates: 4,
+        }
+    );
+    assert_eq!(machine.cpu().ei_delay, 1);
+    assert!(machine.cpu().iff1 && machine.cpu().iff2);
+
+    assert_eq!(
+        machine.step_instruction(0).unwrap(),
+        Z80MicroStep::InstructionRetired {
+            opcode: 0x76,
+            tstates: 4,
+        }
+    );
+    assert!(machine.cpu().halted);
+    assert_eq!(machine.cpu().ei_delay, 0);
+    assert_eq!(machine.cpu().halt_exit_pending, Some(Z80HaltExit::Int));
+
+    let acknowledge = match machine.begin_instruction().unwrap() {
+        Z80MicroStep::BusRequest(request) => request,
+        other => panic!("expected EI;HALT;INT acknowledge, got {other:?}"),
+    };
+    assert_eq!(acknowledge.operation, Z80BusOperation::InterruptAcknowledge);
 }

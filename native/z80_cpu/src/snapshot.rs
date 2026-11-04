@@ -6,8 +6,8 @@
 
 use crate::{
     Z80_MICRO_SEQUENCER_STATE_VERSION, Z80AlternateRegisters, Z80BusHandshakeState,
-    Z80BusOperation, Z80BusRequest, Z80IndexRegister, Z80MicroSequencer, Z80MicroSequencerPhase,
-    Z80MicroSequencerState, Z80PrefixState, Z80Registers,
+    Z80BusOperation, Z80BusRequest, Z80HaltExit, Z80IndexRegister, Z80MicroSequencer,
+    Z80MicroSequencerPhase, Z80MicroSequencerState, Z80PrefixState, Z80Registers,
 };
 use core::fmt;
 
@@ -126,6 +126,11 @@ impl Z80MicroSequencerState {
         }
         body.u8(u8::from(self.p));
         body.u8(u8::from(self.halted));
+        body.u8(match self.halt_exit_pending {
+            None => 0,
+            Some(Z80HaltExit::Nmi) => 1,
+            Some(Z80HaltExit::Int) => 2,
+        });
 
         let body_len = u32::try_from(body.bytes.len())
             .map_err(|_| Z80MicroSequencerStateCodecError::InvalidState)?;
@@ -230,6 +235,12 @@ impl Z80MicroSequencerState {
         };
         let p = read_bool(&mut reader)?;
         let halted = read_bool(&mut reader)?;
+        let halt_exit_pending = match reader.u8()? {
+            0 => None,
+            1 => Some(Z80HaltExit::Nmi),
+            2 => Some(Z80HaltExit::Int),
+            tag => return Err(Z80MicroSequencerStateCodecError::InvalidTag(tag)),
+        };
         if !reader.finished() {
             return Err(Z80MicroSequencerStateCodecError::TrailingData);
         }
@@ -264,6 +275,7 @@ impl Z80MicroSequencerState {
             int_pending,
             p,
             halted,
+            halt_exit_pending,
         };
         Z80MicroSequencer::restore_state(state.clone())
             .map_err(|_| Z80MicroSequencerStateCodecError::InvalidState)?;

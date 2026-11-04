@@ -1,6 +1,6 @@
 use sega_z80_cpu::{
-    Z80BusOperation, Z80MicroSequencer, Z80MicroSequencerPhase, Z80MicroSequencerState,
-    Z80MicroStep, Z80PrefixState,
+    Z80BusOperation, Z80HaltExit, Z80MicroSequencer, Z80MicroSequencerPhase,
+    Z80MicroSequencerState, Z80MicroStep, Z80PrefixState,
 };
 
 fn bus_request(step: Z80MicroStep) -> sega_z80_cpu::Z80BusRequest {
@@ -95,4 +95,35 @@ fn halt_snapshot_rejects_incompatible_in_flight_phase() {
         Z80MicroSequencer::restore_state(invalid),
         Err(sega_z80_cpu::Z80MicroSequencerError::InvalidState)
     ));
+}
+
+#[test]
+fn halt_exit_latch_round_trips_and_rejects_non_halted_or_in_flight_states() {
+    let mut cpu = Z80MicroSequencer::default();
+    cpu.iff1 = true;
+    cpu.iff2 = true;
+    cpu.halted = true;
+    cpu.set_int_line(Some(0xFF));
+
+    let hold = bus_request(cpu.begin_instruction().unwrap());
+    cpu.complete_bus_cycle(hold.id, Some(0x00)).unwrap();
+    cpu.sample_halt_interrupts_at_t4().unwrap();
+    assert_eq!(cpu.export_state().halt_exit_pending, Some(Z80HaltExit::Int));
+
+    let encoded = cpu.export_state().encode().unwrap();
+    let decoded = Z80MicroSequencerState::decode(&encoded).unwrap();
+    assert_eq!(decoded, cpu.export_state());
+    let restored = Z80MicroSequencer::restore_state(decoded).unwrap();
+    assert_eq!(
+        restored.export_state().halt_exit_pending,
+        Some(Z80HaltExit::Int)
+    );
+
+    let mut non_halted = restored.export_state();
+    non_halted.halted = false;
+    assert!(Z80MicroSequencer::restore_state(non_halted).is_err());
+
+    let mut in_flight = restored.export_state();
+    in_flight.phase = Z80MicroSequencerPhase::OpcodeFetch;
+    assert!(Z80MicroSequencer::restore_state(in_flight).is_err());
 }
