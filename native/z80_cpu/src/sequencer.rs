@@ -5434,21 +5434,21 @@ mod tests {
     }
 
     #[test]
-    fn dd_cb_stops_before_treating_displacement_as_an_m1_opcode() {
+    fn dd_cb_requests_displacement_as_non_m1_memory_read() {
         let mut cpu = Z80MicroSequencer::default();
         let first = request(cpu.begin_instruction().unwrap());
         let second = request(cpu.complete_bus_cycle(first.id, Some(0xDD)).unwrap());
-        let error = cpu.complete_bus_cycle(second.id, Some(0xCB)).unwrap_err();
-        assert_eq!(
-            error,
-            Z80MicroSequencerError::UnsupportedOpcode {
-                opcode: 0xCB,
-                address: 1
-            }
-        );
+        let displacement = request(cpu.complete_bus_cycle(second.id, Some(0xCB)).unwrap());
+        assert_eq!(displacement.operation, Z80BusOperation::MemoryRead);
+        assert_eq!(displacement.address, 2);
+        assert_eq!(displacement.base_tstates, 3);
         assert_eq!(cpu.registers.pc, 2);
         assert_eq!(cpu.refresh, 2);
-        assert!(!cpu.instruction_active());
+        assert_eq!(
+            cpu.export_state().phase,
+            Z80MicroSequencerPhase::IndexedCbDisplacementRead
+        );
+        assert!(cpu.instruction_active());
     }
 
     #[test]
