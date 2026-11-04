@@ -3,6 +3,14 @@ use sega_z80_cpu::{
     Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
 };
 
+fn halted_cpu(iff1: bool, iff2: bool) -> Z80MicroSequencer {
+    let mut cpu = Z80MicroSequencer::default();
+    cpu.iff1 = iff1;
+    cpu.iff2 = iff2;
+    cpu.halted = true;
+    cpu
+}
+
 fn request(step: Z80MicroStep) -> Z80BusRequest {
     match step {
         Z80MicroStep::BusRequest(request) => request,
@@ -268,16 +276,8 @@ fn retn_restores_iff1_after_resumable_nmi_entry() {
 
 #[test]
 fn halt_int_is_sampled_at_t4_and_latched_after_the_line_deasserts() {
-    let mut cpu = Z80MicroSequencer {
-        registers: sega_z80_cpu::Z80Registers {
-            pc: 0x4321,
-            ..sega_z80_cpu::Z80Registers::default()
-        },
-        iff1: true,
-        iff2: true,
-        halted: true,
-        ..Z80MicroSequencer::default()
-    };
+    let mut cpu = halted_cpu(true, true);
+    cpu.registers.pc = 0x4321;
     cpu.set_int_line(Some(0xFF));
 
     let halt_m1 = request(cpu.begin_instruction().unwrap());
@@ -310,12 +310,7 @@ fn halt_int_is_sampled_at_t4_and_latched_after_the_line_deasserts() {
 
 #[test]
 fn int_asserted_after_halt_t4_waits_for_the_next_halt_m1_t4() {
-    let mut cpu = Z80MicroSequencer {
-        iff1: true,
-        iff2: true,
-        halted: true,
-        ..Z80MicroSequencer::default()
-    };
+    let mut cpu = halted_cpu(true, true);
 
     let first_m1 = request(cpu.begin_instruction().unwrap());
     cpu.complete_bus_cycle(first_m1.id, Some(0x00)).unwrap();
@@ -335,12 +330,10 @@ fn int_asserted_after_halt_t4_waits_for_the_next_halt_m1_t4() {
 
 #[test]
 fn ei_halt_int_is_accepted_at_the_halt_instruction_t4() {
-    let mut cpu = Z80MicroSequencer {
-        iff1: true,
-        iff2: true,
-        ei_delay: 1,
-        ..Z80MicroSequencer::default()
-    };
+    let mut cpu = Z80MicroSequencer::default();
+    cpu.iff1 = true;
+    cpu.iff2 = true;
+    cpu.ei_delay = 1;
     cpu.set_int_line(Some(0xFF));
 
     // INT is still inhibited by EI's one-instruction delay, so HALT itself
@@ -365,12 +358,7 @@ fn ei_halt_int_is_accepted_at_the_halt_instruction_t4() {
 
 #[test]
 fn nmi_has_priority_over_int_when_both_are_present_at_halt_t4() {
-    let mut cpu = Z80MicroSequencer {
-        iff1: true,
-        iff2: true,
-        halted: true,
-        ..Z80MicroSequencer::default()
-    };
+    let mut cpu = halted_cpu(true, true);
     cpu.set_int_line(Some(0xFF));
     cpu.request_nmi();
 
@@ -391,12 +379,7 @@ fn nmi_has_priority_over_int_when_both_are_present_at_halt_t4() {
 
 #[test]
 fn masked_int_is_not_latched_until_iff1_is_enabled_at_a_later_halt_t4() {
-    let mut cpu = Z80MicroSequencer {
-        iff1: false,
-        iff2: false,
-        halted: true,
-        ..Z80MicroSequencer::default()
-    };
+    let mut cpu = halted_cpu(false, false);
     cpu.set_int_line(Some(0xFF));
 
     let first_m1 = request(cpu.begin_instruction().unwrap());
@@ -419,12 +402,7 @@ fn masked_int_is_not_latched_until_iff1_is_enabled_at_a_later_halt_t4() {
 
 #[test]
 fn nmi_is_sampled_during_halt_even_when_iff1_is_disabled() {
-    let mut cpu = Z80MicroSequencer {
-        iff1: false,
-        iff2: false,
-        halted: true,
-        ..Z80MicroSequencer::default()
-    };
+    let mut cpu = halted_cpu(false, false);
     cpu.request_nmi();
 
     let halt_m1 = request(cpu.begin_instruction().unwrap());
@@ -443,12 +421,7 @@ fn nmi_is_sampled_during_halt_even_when_iff1_is_disabled() {
 
 #[test]
 fn nmi_edge_after_halt_t4_is_sampled_on_the_next_halt_cycle() {
-    let mut cpu = Z80MicroSequencer {
-        iff1: false,
-        iff2: false,
-        halted: true,
-        ..Z80MicroSequencer::default()
-    };
+    let mut cpu = halted_cpu(false, false);
 
     let first_m1 = request(cpu.begin_instruction().unwrap());
     cpu.complete_bus_cycle(first_m1.id, Some(0x00)).unwrap();
