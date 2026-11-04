@@ -137,14 +137,13 @@ Não implementar o serviço como uma mutação atômica de PC/SP sem requests de
 
 | Incremento | Escopo | Critério de aceite |
 |---|---|---|
-| E7.2A | Contrato de entrada e serviço NMI | NMI edge-latched, prioridade, IFF1/IFF2, stack writes, PC=0066, RETN, WAIT e snapshots |
-| E7.2B | Linha INT + acknowledge | IORQ/M1 distinto, vetor, dois T-states automáticos, WAIT externo e snapshots |
-| E7.2C | IM 1 e IM 2 | RST 38, lookup IM2 low/high, vetor par, PC/WZ e stack |
-| E7.2D | IM 0 | Primeiro opcode vindo do acknowledge; operandos subsequentes da memória; fluxo completo e retomável |
-| E7.2E | HALT + interrupções + EI delay | Amostragem T4, NMI prioritária, EI delay e retomada sem interrupção perdida |
-| E7.2F | Integração dos adaptadores e regressão | SMS/SG-1000 consumidores exaustivos, snapshots, WAIT e invariância de execução em blocos |
+| E7.2A | NMI | Detecção edge-latched, prioridade, IFF2 preservada, IFF1 limpa, empilhamento do PC e vetor 0066h |
+| E7.2B | INT e acknowledge | Aceitação condicionada a IFF1, prioridade de NMI, ciclo M1/IORQ distinto, captura do vetor e WAIT automático/externo |
+| E7.2C | Modos IM 0/1/2 | Opcode fornecido pelo dispositivo em IM0, RST 38 em IM1, tabela IM2, PC/WZ e stack |
+| E7.2D | EI/DI | Atraso de EI, cancelamento por DI e interação com solicitações pendentes |
+| E7.2E | Suspensão e snapshots | Restauração em cada fase de interrupção, requests pendentes, vetor capturado e WAIT |
 
-A ordem pode ser ajustada somente se uma dependência concreta exigir; não ampliar para E8/E9 antes de fechar os critérios desta etapa.
+A sequência E7.2A → E7.2B → E7.2C → E7.2D → E7.2E é fixa. Não criar incrementos E7.2F nem antecipar E8/E9.
 
 ---
 
@@ -153,16 +152,18 @@ A ordem pode ser ajustada somente se uma dependência concreta exigir; não ampl
 - NMI com IFF1=0 e IFF1=1; IFF2 preservada; RETN restaura IFF1.
 - NMI simultânea a INT: NMI vence; INT permanece conforme o nível/latch externo.
 - INT com IFF1=0: não aceita; HALT permanece.
-- INT com IFF1=1: aceita no boundary permitido; IFF e EI delay corretos.
+- INT com IFF1=1: aceita no boundary permitido; IFF1/IFF2 são limpas e o acknowledge retorna o vetor do dispositivo.
+- INT com BUSREQ ativo: não aceita; até o adaptador expor BUSREQ, registrar essa limitação e não declarar E7.2B fechado.
 - EI seguido por uma instrução: INT não aceita antes da conclusão da instrução seguinte.
 - DI cancela a elegibilidade de INT; NMI continua elegível.
 - HALT: NMI/INT amostradas em T4; bytes de memória durante M1 de retenção ignorados; PC não avança durante retenção.
-- IM0: vetor RST e instrução multi-byte fornecida pelo dispositivo.
-- IM1: PC empilhado e destino `0x0038`.
-- IM2: vetor, endereço `(I << 8) | vector`, leitura low/high e destino.
+- IM0: vetor RST e instrução multi-byte fornecida pelo dispositivo (E7.2C).
+- IM1: PC empilhado e destino `0x0038` (E7.2C).
+- IM2: vetor, endereço `(I << 8) | vector`, leitura low/high e destino (E7.2C).
+- Snapshot/restore antes/depois de cada fase de acknowledge, vetor capturado e WAIT (E7.2E).
 - SP wrap em `0x0000/0xFFFF`; PC wrap; vetor/tabela nas bordas de página.
 - WAIT zero, WAIT múltiplo e acknowledge com dois T-states automáticos.
-- Snapshot/restore antes/depois de cada operação e entre bytes de stack/tabela.
+- Snapshot/restore antes/depois de cada operação e entre bytes de stack/tabela (E7.2E).
 - Rejeição de request ID incorreto, resposta sem dado, dado inesperado e snapshots incoerentes.
 - Equivalência entre execução contínua e retomada em blocos.
 
@@ -193,7 +194,7 @@ Registrar separadamente:
 
 CI da PR #490 (run #41762232781, HEAD `ed84fac03f5aa03c3438d67548354dd8c3c13999`) teve Rust fmt/Clippy/SMS/SG-1000/workspace PASS, Python pytest/Ruff PASS e Windows x64 D3D12/WASAPI/XAudio2 PASS. Scheduler deterministic stress foi SKIPPED. CI pós-merge #41765421167 da main SHA `b1b5ced5c3d6053f8d59c8f4d932f40518db1064`: Rust quality/unit regression, Python lint/regression e Windows x64 D3D12/WASAPI/XAudio2 PASS; Scheduler deterministic stress SKIPPED.
 
-Nenhum desses resultados valida NMI/INT: E7.2 permanece NOT IMPLEMENTED até haver código, testes e evidência próprios. Não declarar SHORT_PASS/LONG_PASS/DIFFERENTIAL_PASS/TEMPORAL_PASS global.
+A PR #495 integrou E7.2A (NMI) na main no SHA `eccd7131d72711e4d0e486993a0026ddc89b543f`; isso não equivale a validação diferencial ou temporal independente. E7.2B está em implementação na PR #496. A etapa global permanece `INTEGRATION_PENDING` até E7.2A–E estarem concluídas e sustentadas por testes reproduzíveis. Não declarar SHORT_PASS/LONG_PASS/DIFFERENTIAL_PASS/TEMPORAL_PASS global.
 
 ---
 
@@ -202,5 +203,7 @@ Nenhum desses resultados valida NMI/INT: E7.2 permanece NOT IMPLEMENTED até hav
 - ZiLOG, *Z80 CPU User Manual*, UM008011-0816 (2016), pp. 12–20: ciclos de acknowledge, NMI, HALT Exit, IFF e modos IM0/IM1/IM2.
 - Arquivo de referência do projeto: `um0080.pdf`.
 - Runtime atual: `native/z80_cpu/src/sequencer.rs`, `micro_ops.rs`, `snapshot.rs`, `m1.rs`.
+- PR #495: NMI E7.2A integrada; PR #496: implementação candidata de INT/acknowledge E7.2B.
+- ZiLOG UM008011-0816, Figura 9, p. 13: acknowledge M1 composto por T1, T2, TW, TW, T3 (5 T-states totais: 3T-base + 2 WAIT automáticos).
 - Adaptador temporal atual: `native/sms_core/src/temporal_machine.rs`.
 - Auditoria E7.1: `docs/audits/z80-e7-halt-m1-2026-11-04.md`.

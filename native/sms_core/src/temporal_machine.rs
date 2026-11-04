@@ -3,8 +3,9 @@
 //! This composition uses the resumable Z80 subset, the mapper-backed SMS
 //! memory/I/O adapter, and one machine scheduler. Immediate port transactions
 //! support controller and memory-control effects; VDP/PSG devices remain
-//! unconnected (open-bus reads and bounded write diagnostics). Interrupts, DMA
-//! and physical WAIT wiring remain outside this temporal slice.
+//! unconnected (open-bus reads and bounded write diagnostics). NMI is integrated
+//! and INT acknowledge is being added incrementally; DMA and physical WAIT
+//! wiring remain outside this temporal slice.
 
 use core::fmt;
 
@@ -17,11 +18,11 @@ use sega_temporal_core::{
     MCycleIndex, MachineTime, TStateIndex,
 };
 use sega_z80_cpu::{
-    Z80BusOperation, Z80M1Phase, Z80M1Pins, Z80MicroSequencer, Z80MicroSequencerError,
-    Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
+    Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES, Z80BusOperation, Z80M1Phase, Z80M1Pins, Z80MicroSequencer,
+    Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
 };
 
-pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 20;
+pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 21;
 
 /// Runtime event trace emitted from actual Scheduler/bus dispatch boundaries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -119,6 +120,29 @@ fn instruction_timeline_is_valid(state: &SmsTemporalMachineState) -> bool {
             state.bus.coordinator.master_ticks_per_tstate,
         ) == Some(expected_tstates);
     }
+    if let Z80MicroSequencerPhase::InterruptAcknowledgeComplete { .. } = state.cpu.phase {
+        if state.bus.pending_request.is_some()
+            || state.bus.request_started_at.is_some()
+            || state.bus.completion.is_some()
+            || state.bus.pending_internal_cycle.is_some()
+            || state.bus.internal_cycle_started_at.is_some()
+            || state.bus.internal_completion.is_some()
+            || state.m1.is_some()
+            || state.m1_fixture_wait_tstates.is_some()
+            || state.pending_internal_cycle_id.is_some()
+            || state.pending_internal_tstates.is_some()
+        {
+            return false;
+        }
+        let Some(instruction_started_at) = state.instruction_started_at else {
+            return false;
+        };
+        return elapsed_tstates(
+            instruction_started_at,
+            state.bus.coordinator.scheduler.now,
+            state.bus.coordinator.master_ticks_per_tstate,
+        ) == Some(state.cpu.instruction_tstates);
+    }
     if state.m1_fixture_wait_tstates.is_some() {
         return false;
     }
@@ -139,8 +163,15 @@ fn instruction_timeline_is_valid(state: &SmsTemporalMachineState) -> bool {
             if request.id != completion.request_id {
                 return false;
             }
-            let Some(current_cycle_tstates) =
-                u32::from(request.base_tstates).checked_add(state.cpu.handshake.wait_tstates)
+            let automatic_wait_tstates =
+                if request.operation == Z80BusOperation::InterruptAcknowledge {
+                    u32::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
+                } else {
+                    0
+                };
+            let Some(current_cycle_tstates) = u32::from(request.base_tstates)
+                .checked_add(state.cpu.handshake.wait_tstates)
+                .and_then(|tstates| tstates.checked_add(automatic_wait_tstates))
             else {
                 return false;
             };
@@ -278,6 +309,9 @@ impl SmsTemporalMachine {
         let state = self.cpu.export_state();
         let (kind, direction, data) = match request.operation {
             Z80BusOperation::OpcodeFetch => (BusCycleKind::OpcodeFetch, BusDirection::Read, None),
+            Z80BusOperation::InterruptAcknowledge => {
+                (BusCycleKind::InterruptAcknowledge, BusDirection::Read, None)
+            }
             Z80BusOperation::MemoryRead => (BusCycleKind::MemoryRead, BusDirection::Read, None),
             Z80BusOperation::MemoryWrite { value } => {
                 (BusCycleKind::MemoryWrite, BusDirection::Write, Some(value))
@@ -305,9 +339,18 @@ impl SmsTemporalMachine {
             phase,
             kind,
             direction,
-            Some(request.address),
+            if request.operation == Z80BusOperation::InterruptAcknowledge {
+                None
+            } else {
+                Some(request.address)
+            },
             data,
-            u16::from(request.base_tstates),
+            u16::from(request.base_tstates)
+                + if request.operation == Z80BusOperation::InterruptAcknowledge {
+                    u16::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
+                } else {
+                    0
+                },
         )
         .map(Some)
     }
@@ -625,6 +668,9 @@ impl SmsTemporalMachine {
                     self.dispatch_next()?
                 }
                 retired @ Z80MicroStep::InstructionRetired { .. } => return Ok(retired),
+                acknowledged @ Z80MicroStep::InterruptAcknowledge { .. } => {
+                    return Ok(acknowledged);
+                }
                 serviced @ Z80MicroStep::InterruptServiced { .. } => return Ok(serviced),
             };
         }
@@ -639,6 +685,13 @@ impl SmsTemporalMachine {
             Z80MicroStep::BusRequest(request)
         } else if self.cpu.export_state().phase.is_internal_cycle() {
             Z80MicroStep::InternalCycle { tstates: 1 }
+        } else if let Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector } =
+            self.cpu.export_state().phase
+        {
+            return Ok(Z80MicroStep::InterruptAcknowledge {
+                vector,
+                tstates: self.cpu.export_state().instruction_tstates,
+            });
         } else {
             return Err(SmsTemporalMachineError::InvalidState);
         };
@@ -673,6 +726,9 @@ impl SmsTemporalMachine {
                     self.dispatch_next()?
                 }
                 retired @ Z80MicroStep::InstructionRetired { .. } => return Ok(retired),
+                acknowledged @ Z80MicroStep::InterruptAcknowledge { .. } => {
+                    return Ok(acknowledged);
+                }
                 serviced @ Z80MicroStep::InterruptServiced { .. } => return Ok(serviced),
             };
         }
@@ -705,6 +761,21 @@ impl SmsTemporalMachine {
     /// This signal update does not advance machine time.
     pub fn request_nmi(&mut self) {
         self.cpu.request_nmi();
+    }
+
+    /// Set the external byte driven during an INT acknowledge cycle.
+    /// This signal update does not advance machine time.
+    pub fn set_interrupt_vector(&mut self, vector: u8) {
+        self.bus.set_interrupt_vector(vector);
+    }
+
+    /// Drive the level-sensitive INT input and its acknowledge vector.
+    /// None deasserts INT. Signal changes do not advance machine time.
+    pub fn set_int_line(&mut self, vector: Option<u8>) {
+        self.cpu.set_int_line(vector);
+        if let Some(vector) = vector {
+            self.bus.set_interrupt_vector(vector);
+        }
     }
 
     /// Current mapper-backed memory (read-only).
@@ -828,8 +899,15 @@ impl SmsTemporalMachine {
                 return Err(SmsTemporalMachineError::InvalidState);
             }
             let total_tstates = elapsed / scale;
+            let automatic_wait_tstates =
+                if request.operation == Z80BusOperation::InterruptAcknowledge {
+                    u128::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
+                } else {
+                    0
+                };
             let wait_tstates = total_tstates
                 .checked_sub(u128::from(request.base_tstates))
+                .and_then(|waits| waits.checked_sub(automatic_wait_tstates))
                 .ok_or(SmsTemporalMachineError::InvalidState)?;
             if wait_tstates != u128::from(state.cpu.handshake.wait_tstates) {
                 return Err(SmsTemporalMachineError::InvalidState);
@@ -912,6 +990,53 @@ mod tests {
                 return step;
             }
         }
+    }
+
+    #[test]
+    fn int_acknowledge_is_a_distinct_temporal_transaction_and_restores_waits() {
+        let mut machine = SmsTemporalMachine::new(vec![0x00; 0x4000], 3).unwrap();
+        machine.cpu_mut().iff1 = true;
+        machine.cpu_mut().iff2 = true;
+        machine.set_int_line(Some(0xCF));
+
+        let Z80MicroStep::BusRequest(request) = machine.begin_instruction().unwrap() else {
+            panic!("eligible INT must start an acknowledge request");
+        };
+        assert_eq!(
+            request.operation,
+            sega_z80_cpu::Z80BusOperation::InterruptAcknowledge
+        );
+        let transaction = machine.pending_bus_transaction().unwrap().unwrap();
+        assert_eq!(transaction.kind(), BusCycleKind::InterruptAcknowledge);
+        assert_eq!(transaction.direction(), BusDirection::Read);
+        assert_eq!(transaction.address(), None);
+        assert_eq!(transaction.data(), None);
+        assert_eq!(transaction.duration_tstates(), 5);
+
+        machine.schedule_pending_bus(1).unwrap();
+        let snapshot = machine.export_state();
+        let mut restored = SmsTemporalMachine::restore_state(snapshot).unwrap();
+        assert_eq!(
+            restored.dispatch_next().unwrap(),
+            Z80MicroStep::InterruptAcknowledge {
+                vector: 0xCF,
+                tstates: 6,
+            }
+        );
+        assert_eq!(restored.now(), MachineTime::from_ticks(18));
+        assert_eq!(
+            restored.cpu().export_state().phase,
+            Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector: 0xCF }
+        );
+        let completed_snapshot = restored.export_state();
+        let mut resumed = SmsTemporalMachine::restore_state(completed_snapshot).unwrap();
+        assert_eq!(
+            resumed.resume_instruction(0).unwrap(),
+            Z80MicroStep::InterruptAcknowledge {
+                vector: 0xCF,
+                tstates: 6,
+            }
+        );
     }
 
     #[test]

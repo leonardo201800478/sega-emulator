@@ -275,6 +275,11 @@ fn write_phase(writer: &mut Writer, phase: Z80MicroSequencerPhase) {
     match phase {
         Z80MicroSequencerPhase::Ready => writer.u8(0),
         Z80MicroSequencerPhase::OpcodeFetch => writer.u8(1),
+        Z80MicroSequencerPhase::InterruptAcknowledge => writer.u8(64),
+        Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector } => {
+            writer.u8(65);
+            writer.u8(vector);
+        }
         Z80MicroSequencerPhase::NmiResponse => writer.u8(61),
         Z80MicroSequencerPhase::NmiStackPushInternal { return_address } => {
             writer.u8(62);
@@ -695,6 +700,10 @@ fn read_phase(
     Ok(match reader.u8()? {
         0 => Z80MicroSequencerPhase::Ready,
         1 => Z80MicroSequencerPhase::OpcodeFetch,
+        64 => Z80MicroSequencerPhase::InterruptAcknowledge,
+        65 => Z80MicroSequencerPhase::InterruptAcknowledgeComplete {
+            vector: reader.u8()?,
+        },
         61 => Z80MicroSequencerPhase::NmiResponse,
         62 => Z80MicroSequencerPhase::NmiStackPushInternal {
             return_address: reader.u16()?,
@@ -963,6 +972,7 @@ fn write_request(writer: &mut Writer, request: Z80BusRequest) {
     match request.operation {
         Z80BusOperation::OpcodeFetch => writer.u8(0),
         Z80BusOperation::MemoryRead => writer.u8(1),
+        Z80BusOperation::InterruptAcknowledge => writer.u8(5),
         Z80BusOperation::MemoryWrite { value } => {
             writer.u8(2);
             writer.u8(value);
@@ -984,6 +994,7 @@ fn read_request(
     let operation = match reader.u8()? {
         0 => Z80BusOperation::OpcodeFetch,
         1 => Z80BusOperation::MemoryRead,
+        5 => Z80BusOperation::InterruptAcknowledge,
         2 => Z80BusOperation::MemoryWrite {
             value: reader.u8()?,
         },
@@ -1560,6 +1571,35 @@ mod base_internal_snapshot_tests {
     }
 
     #[test]
+    fn interrupt_acknowledge_pending_and_vector_latch_round_trip_through_codec() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.iff1 = true;
+        cpu.iff2 = true;
+        cpu.set_int_line(Some(0xCF));
+
+        let request = match cpu.begin_instruction().unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected INT acknowledge request, got {other:?}"),
+        };
+        cpu.insert_wait_tstates(2).unwrap();
+        cpu = round_trip(&cpu);
+        assert_eq!(cpu.pending_request(), Some(request));
+
+        assert_eq!(
+            cpu.complete_bus_cycle(request.id, Some(0xCF)).unwrap(),
+            crate::Z80MicroStep::InterruptAcknowledge {
+                vector: 0xCF,
+                tstates: 7,
+            }
+        );
+        cpu = round_trip(&cpu);
+        assert_eq!(
+            cpu.export_state().phase,
+            crate::Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector: 0xCF }
+        );
+    }
+
+    #[test]
     fn inc_pair_internal_phase_round_trips_at_each_safe_point() {
         let mut cpu = Z80MicroSequencer::default();
         let fetch = match cpu.begin_instruction().unwrap() {
@@ -1659,6 +1699,9 @@ mod base_absolute_transfer_snapshot_tests {
                             operation => panic!("unexpected operation: {operation:?}"),
                         };
                         cpu.complete_bus_cycle(request.id, data).unwrap()
+                    }
+                    Z80MicroStep::InterruptAcknowledge { .. } => {
+                        panic!("unexpected INT acknowledge in absolute transfer test")
                     }
                     Z80MicroStep::InstructionRetired { .. }
                     | Z80MicroStep::InterruptServiced { .. } => break,

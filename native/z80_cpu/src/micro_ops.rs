@@ -7,13 +7,26 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Nominal T-states in the INT acknowledge M1 before automatic WAIT states.
+pub const Z80_INT_ACK_BASE_TSTATES: u8 = 3;
+/// ZiLOG inserts two automatic TW states in every maskable interrupt acknowledge.
+pub const Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES: u8 = 2;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 pub enum Z80BusOperation {
     OpcodeFetch,
+    /// Logical special M1 cycle used to acknowledge a maskable interrupt.
+    /// Adapters must preserve IORQ acknowledge semantics, not route it as MREQ memory access;
+    /// physical pin waveforms remain the responsibility of the machine profile.
+    InterruptAcknowledge,
     MemoryRead,
-    MemoryWrite { value: u8 },
+    MemoryWrite {
+        value: u8,
+    },
     PortRead,
-    PortWrite { value: u8 },
+    PortWrite {
+        value: u8,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -139,7 +152,10 @@ impl Z80BusHandshake {
         }
         let requires_data = matches!(
             pending.request.operation,
-            Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead | Z80BusOperation::PortRead
+            Z80BusOperation::OpcodeFetch
+                | Z80BusOperation::InterruptAcknowledge
+                | Z80BusOperation::MemoryRead
+                | Z80BusOperation::PortRead
         );
         if requires_data && data.is_none() {
             return Err(Z80BusHandshakeError::MissingReadData);
@@ -201,6 +217,24 @@ mod tests {
             bus.complete(request.id, Some(0xA5)).unwrap().data,
             Some(0xA5)
         );
+        assert!(!bus.is_pending());
+    }
+
+    #[test]
+    fn interrupt_acknowledge_requires_and_returns_external_vector_data() {
+        let mut bus = Z80BusHandshake::default();
+        let request = bus
+            .begin(Z80BusOperation::InterruptAcknowledge, 0x1234, 3)
+            .unwrap();
+
+        assert_eq!(
+            bus.complete(request.id, None),
+            Err(Z80BusHandshakeError::MissingReadData)
+        );
+        assert_eq!(bus.pending_request(), Some(request));
+
+        let response = bus.complete(request.id, Some(0xCF)).unwrap();
+        assert_eq!(response.data, Some(0xCF));
         assert!(!bus.is_pending());
     }
 

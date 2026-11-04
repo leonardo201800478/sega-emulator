@@ -3,7 +3,8 @@
 //! Memory and port transactions become visible only at their scheduled
 //! completion boundary. Controller/control-port effects are applied there;
 //! VDP/PSG devices remain outside this temporal slice, with writes retained in
-//! a bounded diagnostic trace and unconnected reads returning open bus.
+//! a bounded diagnostic trace, unconnected reads returning open bus, and INT
+//! acknowledge data supplied through an explicit external vector input.
 
 use core::fmt;
 
@@ -12,9 +13,10 @@ use crate::{
     SmsTemporalCoordinatorError, SmsTemporalCoordinatorState, SmsTemporalEvent,
 };
 use sega_temporal_core::MachineTime;
-use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
+use sega_z80_cpu::{Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES, Z80BusOperation, Z80BusRequest};
 
-pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 6;
+pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 7;
+const DEFAULT_INTERRUPT_VECTOR: u8 = 0xFF;
 const MAX_PORT_WRITE_TRACE: usize = 64;
 
 fn elapsed_tstates(
@@ -38,10 +40,10 @@ fn valid_bus_deadline(
     started_at: MachineTime,
     deadline: MachineTime,
     master_ticks_per_tstate: u64,
-    base_tstates: u8,
+    minimum_tstates: u16,
 ) -> bool {
     elapsed_tstates(started_at, deadline, master_ticks_per_tstate)
-        .is_some_and(|total| total >= u128::from(base_tstates))
+        .is_some_and(|total| total >= u128::from(minimum_tstates))
 }
 
 fn valid_internal_deadline(
@@ -90,6 +92,7 @@ pub struct SmsTemporalPortWrite {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SmsTemporalBusState {
     pub format_version: u16,
+    pub interrupt_vector: u8,
     pub memory: SmsMemory,
     pub io: SmsIo,
     pub port_write_trace: Vec<SmsTemporalPortWrite>,
@@ -162,6 +165,7 @@ pub struct SmsTemporalBus {
     pending_internal_cycle: Option<u64>,
     internal_cycle_started_at: Option<MachineTime>,
     internal_completion: Option<SmsInternalCycleCompletion>,
+    interrupt_vector: u8,
 }
 
 impl SmsTemporalBus {
@@ -184,6 +188,7 @@ impl SmsTemporalBus {
             pending_internal_cycle: None,
             internal_cycle_started_at: None,
             internal_completion: None,
+            interrupt_vector: DEFAULT_INTERRUPT_VECTOR,
         })
     }
 
@@ -210,14 +215,23 @@ impl SmsTemporalBus {
                 | Z80BusOperation::MemoryWrite { .. }
                 | Z80BusOperation::PortRead
                 | Z80BusOperation::PortWrite { .. }
+                | Z80BusOperation::InterruptAcknowledge
         ) {
             return Err(SmsTemporalBusError::UnsupportedOperation);
         }
         let started_at = self.coordinator.now();
+        let automatic_waits = if request.operation == Z80BusOperation::InterruptAcknowledge {
+            u32::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
+        } else {
+            0
+        };
+        let total_wait_tstates = fixture_wait_tstates
+            .checked_add(automatic_waits)
+            .ok_or(SmsTemporalBusError::InvalidState)?;
         let deadline = self.coordinator.schedule_bus_completion(
             request.id,
             request.base_tstates,
-            fixture_wait_tstates,
+            total_wait_tstates,
         )?;
         self.pending_request = Some(request);
         self.request_started_at = Some(started_at);
@@ -294,6 +308,7 @@ impl SmsTemporalBus {
                     Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
                         Some(self.memory.read(request.address))
                     }
+                    Z80BusOperation::InterruptAcknowledge => Some(self.interrupt_vector),
                     Z80BusOperation::MemoryWrite { value } => {
                         self.memory.write(request.address, value);
                         None
@@ -420,6 +435,12 @@ impl SmsTemporalBus {
         &mut self.io
     }
 
+    /// Set the byte driven by the external interrupting device during acknowledge.
+    /// This changes the input level only; it does not advance scheduler time.
+    pub fn set_interrupt_vector(&mut self, vector: u8) {
+        self.interrupt_vector = vector;
+    }
+
     pub fn port_write_trace(&self) -> &[SmsTemporalPortWrite] {
         &self.port_write_trace
     }
@@ -457,6 +478,7 @@ impl SmsTemporalBus {
     pub fn export_state(&self) -> SmsTemporalBusState {
         SmsTemporalBusState {
             format_version: SMS_TEMPORAL_BUS_STATE_VERSION,
+            interrupt_vector: self.interrupt_vector,
             memory: self.memory.clone(),
             io: self.io.clone(),
             port_write_trace: self.port_write_trace.clone(),
@@ -519,7 +541,12 @@ impl SmsTemporalBus {
                         started_at,
                         pending_events[0].timestamp,
                         scale,
-                        request.base_tstates,
+                        u16::from(request.base_tstates)
+                            + if request.operation == Z80BusOperation::InterruptAcknowledge {
+                                u16::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
+                            } else {
+                                0
+                            },
                     ) => {}
             (Some(request), Some(started_at), Some(completion), None, None, None)
                 if request.id == completion.request_id
@@ -530,7 +557,12 @@ impl SmsTemporalBus {
                         started_at,
                         completion.completed_at,
                         scale,
-                        request.base_tstates,
+                        u16::from(request.base_tstates)
+                            + if request.operation == Z80BusOperation::InterruptAcknowledge {
+                                u16::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
+                            } else {
+                                0
+                            },
                     ) => {}
             (None, None, None, Some(continuation_id), Some(started_at), None)
                 if pending_events.len() == 1
@@ -558,6 +590,7 @@ impl SmsTemporalBus {
             pending_internal_cycle: state.pending_internal_cycle,
             internal_cycle_started_at: state.internal_cycle_started_at,
             internal_completion: state.internal_completion,
+            interrupt_vector: state.interrupt_vector,
         })
     }
 }
@@ -692,6 +725,30 @@ mod tests {
         assert_eq!(restored.acknowledge_completion(20).unwrap(), completion);
         assert_eq!(restored.dispatch_next().unwrap(), None);
         assert_eq!(restored.memory().selected_banks(), [3, 1, 2]);
+    }
+
+    #[test]
+    fn interrupt_acknowledge_returns_external_vector_after_two_automatic_wait_states() {
+        let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
+        bus.set_interrupt_vector(0xCF);
+        let request = request(90, Z80BusOperation::InterruptAcknowledge, 0x1234, 3);
+        let started_at = bus.now();
+        let deadline = bus.begin_request(request, 1).unwrap();
+
+        assert_eq!(
+            deadline.checked_duration_since(started_at),
+            Some(18),
+            "three base T-states plus two automatic and one external WAIT"
+        );
+
+        let restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
+        assert_eq!(restored.export_state(), bus.export_state());
+        let Some(SmsTemporalDispatch::BusCompletion(completion)) = bus.dispatch_next().unwrap()
+        else {
+            panic!("expected interrupt acknowledge completion");
+        };
+        assert_eq!(completion.data, Some(0xCF));
+        assert_eq!(completion.completed_at, deadline);
     }
 
     #[test]

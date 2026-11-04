@@ -156,12 +156,18 @@ fn execute_base_opcode(opcode: u8) -> Result<u32, Z80MicroSequencerError> {
                         Some(opcode)
                     }
                     Z80BusOperation::OpcodeFetch => Some(0x00),
+                    Z80BusOperation::InterruptAcknowledge => {
+                        panic!("unexpected INT acknowledge in BASE instruction coverage")
+                    }
                     Z80BusOperation::MemoryRead | Z80BusOperation::PortRead => Some(0x5A),
                     Z80BusOperation::MemoryWrite { .. } | Z80BusOperation::PortWrite { .. } => None,
                 };
                 cpu.complete_bus_cycle(request.id, data)?
             }
             Z80MicroStep::InternalCycle { .. } => cpu.complete_internal_cycle()?,
+            Z80MicroStep::InterruptAcknowledge { .. } => {
+                panic!("unexpected INT acknowledge in BASE instruction coverage")
+            }
             Z80MicroStep::InstructionRetired { tstates, .. }
             | Z80MicroStep::InterruptServiced { tstates, .. } => return Ok(tstates),
         };

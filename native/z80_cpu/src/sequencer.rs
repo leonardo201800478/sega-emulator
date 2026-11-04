@@ -1,10 +1,9 @@
 //! First resumable instruction slice for the shared Z80.
 //!
-//! This deliberately small sequencer proves real suspend/resume semantics for
-//! NOP, selected BASE operations, and the initial prefix-fetch pipeline. It is
-//! independent of the legacy atomic executor; full prefixed instruction
-//! semantics, interrupts, HALT, and the complete architectural state remain
-//! outside this sequencer slice.
+//! This sequencer implements resumable BASE/prefix operations and staged interrupt
+//! entry. NMI and the INT acknowledge boundary are represented as explicit
+//! continuations; IM-mode dispatch and consolidated interrupt snapshot coverage
+//! remain in the subsequent E7.2 increments.
 
 use crate::alu::{adc8, add8, and8, cp8, cpl8, daa8, or8, rotate_accumulator, sbc8, sub8, xor8};
 use crate::prefix::{
@@ -12,6 +11,7 @@ use crate::prefix::{
     classify_index_opcode,
 };
 use crate::{
+    Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES, Z80_INT_ACK_BASE_TSTATES,
     Z80_MICRO_SEQUENCER_STATE_VERSION, Z80AlternateRegisters, Z80ArchitecturalState,
     Z80BusHandshake, Z80BusHandshakeError, Z80BusOperation, Z80BusRequest, Z80Registers,
 };
@@ -219,6 +219,12 @@ impl From<Z80BusHandshakeError> for Z80MicroSequencerError {
 pub enum Z80MicroSequencerPhase {
     Ready,
     OpcodeFetch,
+    /// Maskable-interrupt acknowledge M1 with IORQ and externally sampled vector.
+    InterruptAcknowledge,
+    /// Stable boundary after the acknowledge vector has been captured; IM dispatch follows in E7.2C.
+    InterruptAcknowledgeComplete {
+        vector: u8,
+    },
     /// NMI response M1 at the interrupted PC; sampled memory data is ignored.
     NmiResponse,
     /// One internal T-state between the NMI response M1 and the stack writes.
@@ -521,6 +527,9 @@ pub enum Z80MicroStep {
         kind: Z80InterruptKind,
         tstates: u32,
     },
+    /// INT acknowledge completed and the external vector byte was sampled.
+    /// Mode-specific execution is deliberately deferred to E7.2C.
+    InterruptAcknowledge { vector: u8, tstates: u32 },
     /// One non-bus internal T-state; advance machine time before resuming.
     InternalCycle { tstates: u32 },
 }
@@ -973,6 +982,30 @@ impl Z80MicroSequencer {
                             && request.address == state.registers.pc
                             && request.base_tstates == 4
                     })
+            }
+            Z80MicroSequencerPhase::InterruptAcknowledge => {
+                state.opcode.is_none()
+                    && state.prefix_state == Z80PrefixState::None
+                    && !state.iff1
+                    && !state.iff2
+                    && !state.halted
+                    && state.instruction_tstates == 0
+                    && pending.is_some_and(|request| {
+                        request.operation == Z80BusOperation::InterruptAcknowledge
+                            && request.address == state.registers.pc
+                            && request.base_tstates == Z80_INT_ACK_BASE_TSTATES
+                    })
+            }
+            Z80MicroSequencerPhase::InterruptAcknowledgeComplete { .. } => {
+                state.opcode.is_none()
+                    && state.prefix_state == Z80PrefixState::None
+                    && !state.iff1
+                    && !state.iff2
+                    && !state.halted
+                    && pending.is_none()
+                    && state.instruction_tstates >= 5
+                    && state.mcycle_index == 1
+                    && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::NmiResponse => {
                 state.opcode.is_none()
@@ -2243,6 +2276,12 @@ impl Z80MicroSequencer {
                         Some(_) => false,
                     }
             }
+            Z80MicroSequencerPhase::InterruptAcknowledge => {
+                state.mcycle_index == 0 && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::InterruptAcknowledgeComplete { .. } => {
+                state.mcycle_index == 1 && state.tstate_index == 0
+            }
             Z80MicroSequencerPhase::NmiResponse => {
                 state.mcycle_index == 0 && state.tstate_index == 0
             }
@@ -2681,6 +2720,12 @@ impl Z80MicroSequencer {
         self.nmi_pending = true;
     }
 
+    /// Update the level-sensitive INT request and the vector supplied by its device.
+    /// Passing None deasserts INT; changing this input does not advance machine time.
+    pub fn set_int_line(&mut self, vector: Option<u8>) {
+        self.int_pending = vector;
+    }
+
     pub fn begin_instruction(&mut self) -> Result<Z80MicroStep, Z80MicroSequencerError> {
         if self.phase != Z80MicroSequencerPhase::Ready || self.handshake.is_pending() {
             return Err(Z80MicroSequencerError::InstructionAlreadyActive);
@@ -2702,6 +2747,19 @@ impl Z80MicroSequencer {
             self.iff1 = false;
             self.p = false;
             self.phase = Z80MicroSequencerPhase::NmiResponse;
+            return Ok(Z80MicroStep::BusRequest(request));
+        }
+        if self.iff1 && self.ei_delay == 0 && self.int_pending.is_some() {
+            let request = self.handshake.begin(
+                Z80BusOperation::InterruptAcknowledge,
+                self.registers.pc,
+                Z80_INT_ACK_BASE_TSTATES,
+            )?;
+            self.halted = false;
+            self.iff1 = false;
+            self.iff2 = false;
+            self.p = false;
+            self.phase = Z80MicroSequencerPhase::InterruptAcknowledge;
             return Ok(Z80MicroStep::BusRequest(request));
         }
         let request = self
@@ -2764,15 +2822,34 @@ impl Z80MicroSequencer {
             .pending_request()
             .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
         let waits = self.handshake.wait_tstates().unwrap_or(0);
+        let automatic_waits = if request.operation == Z80BusOperation::InterruptAcknowledge {
+            u32::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
+        } else {
+            0
+        };
         let next_instruction_tstates = self
             .instruction_tstates
             .checked_add(u32::from(request.base_tstates))
             .and_then(|total| total.checked_add(waits))
+            .and_then(|total| total.checked_add(automatic_waits))
             .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
         let response = self.handshake.complete(request_id, data)?;
         self.instruction_tstates = next_instruction_tstates;
 
         match self.phase {
+            Z80MicroSequencerPhase::InterruptAcknowledge => {
+                let vector = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.refresh = (self.refresh & 0x80) | (self.refresh.wrapping_add(1) & 0x7F);
+                self.mcycle_index = 1;
+                self.tstate_index = 0;
+                self.phase = Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector };
+                Ok(Z80MicroStep::InterruptAcknowledge {
+                    vector,
+                    tstates: self.instruction_tstates,
+                })
+            }
             Z80MicroSequencerPhase::OpcodeFetch => {
                 let opcode = response
                     .data
@@ -4182,6 +4259,9 @@ impl Z80MicroSequencer {
                         (u16::from(self.registers.a) << 8) | (address.wrapping_add(1) & 0x00FF);
                 }
                 self.retire(opcode)
+            }
+            Z80MicroSequencerPhase::InterruptAcknowledgeComplete { .. } => {
+                Err(Z80MicroSequencerError::UnexpectedCompletion)
             }
             Z80MicroSequencerPhase::Ready => Err(Z80MicroSequencerError::NoInstructionActive),
         }
@@ -8635,6 +8715,9 @@ mod ed_absolute_register_pair_differential_tests {
                     step = cpu.complete_bus_cycle(request.id, data).unwrap();
                     cpu = roundtrip(cpu);
                 }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
+                }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
                 }
@@ -8815,6 +8898,9 @@ mod ed_return_nibble_rotate_differential_tests {
                     );
                     step = cpu.complete_internal_cycle().unwrap();
                     cpu = roundtrip(cpu);
+                }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
@@ -9026,6 +9112,9 @@ mod ed_block_transfer_differential_tests {
                     assert_eq!(tstates, 1);
                     step = cpu.complete_internal_cycle().unwrap();
                     cpu = roundtrip(cpu);
+                }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
@@ -9254,6 +9343,9 @@ mod ed_block_compare_differential_tests {
                     assert_eq!(tstates, 1);
                     step = cpu.complete_internal_cycle().unwrap();
                     cpu = roundtrip(cpu);
+                }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
@@ -9549,6 +9641,9 @@ mod ed_block_io_differential_tests {
                         Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
                             Some(bus.read_memory(request.address))
                         }
+                        Z80BusOperation::InterruptAcknowledge => {
+                            panic!("unexpected INT acknowledge in instruction-only test")
+                        }
                         Z80BusOperation::MemoryWrite { value } => {
                             bus.write_memory(request.address, value);
                             None
@@ -9586,6 +9681,9 @@ mod ed_block_io_differential_tests {
                     let next = cpu.complete_internal_cycle().unwrap();
                     round_trip(cpu);
                     next
+                }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
@@ -10042,6 +10140,9 @@ mod base_16bit_register_differential_tests {
                         Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
                             Some(bus.read_memory(request.address))
                         }
+                        Z80BusOperation::InterruptAcknowledge => {
+                            panic!("unexpected INT acknowledge in instruction-only test")
+                        }
                         Z80BusOperation::MemoryWrite { value } => {
                             bus.write_memory(request.address, value);
                             None
@@ -10054,6 +10155,9 @@ mod base_16bit_register_differential_tests {
                     // Every internal safe point must survive snapshot/restore.
                     cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
                     cpu.complete_internal_cycle().unwrap()
+                }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
@@ -10198,6 +10302,9 @@ mod base_absolute_transfer_differential_tests {
                         Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
                             Some(bus.read_memory(request.address))
                         }
+                        Z80BusOperation::InterruptAcknowledge => {
+                            panic!("unexpected INT acknowledge in instruction-only test")
+                        }
                         Z80BusOperation::MemoryWrite { value } => {
                             bus.write_memory(request.address, value);
                             None
@@ -10209,6 +10316,9 @@ mod base_absolute_transfer_differential_tests {
                 Z80MicroStep::InternalCycle { .. } => {
                     cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
                     cpu.complete_internal_cycle().unwrap()
+                }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
@@ -10313,6 +10423,9 @@ mod base_relative_branch_differential_tests {
                         Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
                             Some(bus.read_memory(request.address))
                         }
+                        Z80BusOperation::InterruptAcknowledge => {
+                            panic!("unexpected INT acknowledge in instruction-only test")
+                        }
                         Z80BusOperation::MemoryWrite { value } => {
                             bus.write_memory(request.address, value);
                             None
@@ -10326,6 +10439,9 @@ mod base_relative_branch_differential_tests {
                 Z80MicroStep::InternalCycle { .. } => {
                     cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
                     cpu.complete_internal_cycle().unwrap()
+                }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
@@ -10465,6 +10581,9 @@ mod base_absolute_jump_differential_tests {
                         Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
                             Some(bus.read_memory(request.address))
                         }
+                        Z80BusOperation::InterruptAcknowledge => {
+                            panic!("unexpected INT acknowledge in instruction-only test")
+                        }
                         Z80BusOperation::MemoryWrite { value } => {
                             bus.write_memory(request.address, value);
                             None
@@ -10478,6 +10597,9 @@ mod base_absolute_jump_differential_tests {
                 Z80MicroStep::InternalCycle { .. } => {
                     cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
                     cpu.complete_internal_cycle().unwrap()
+                }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
@@ -10617,6 +10739,9 @@ mod base_stack_push_pop_differential_tests {
                         Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
                             Some(bus.read_memory(request.address))
                         }
+                        Z80BusOperation::InterruptAcknowledge => {
+                            panic!("unexpected INT acknowledge in instruction-only test")
+                        }
                         Z80BusOperation::MemoryWrite { value } => {
                             bus.write_memory(request.address, value);
                             None
@@ -10628,6 +10753,9 @@ mod base_stack_push_pop_differential_tests {
                 Z80MicroStep::InternalCycle { .. } => {
                     cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
                     cpu.complete_internal_cycle().unwrap()
+                }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
@@ -10789,6 +10917,9 @@ mod base_call_rst_differential_tests {
                         Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
                             Some(bus.read_memory(request.address))
                         }
+                        Z80BusOperation::InterruptAcknowledge => {
+                            panic!("unexpected INT acknowledge in instruction-only test")
+                        }
                         Z80BusOperation::MemoryWrite { value } => {
                             bus.write_memory(request.address, value);
                             None
@@ -10800,6 +10931,9 @@ mod base_call_rst_differential_tests {
                 Z80MicroStep::InternalCycle { .. } => {
                     cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
                     cpu.complete_internal_cycle().unwrap()
+                }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
@@ -10971,6 +11105,9 @@ mod base_return_differential_tests {
                         Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
                             Some(bus.read_memory(request.address))
                         }
+                        Z80BusOperation::InterruptAcknowledge => {
+                            panic!("unexpected INT acknowledge in instruction-only test")
+                        }
                         Z80BusOperation::MemoryWrite { value } => {
                             bus.write_memory(request.address, value);
                             None
@@ -10982,6 +11119,9 @@ mod base_return_differential_tests {
                 Z80MicroStep::InternalCycle { .. } => {
                     cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
                     cpu.complete_internal_cycle().unwrap()
+                }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
@@ -11138,6 +11278,9 @@ mod base_exchange_interrupt_control_differential_tests {
                         Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
                             Some(bus.read_memory(request.address))
                         }
+                        Z80BusOperation::InterruptAcknowledge => {
+                            panic!("unexpected INT acknowledge in instruction-only test")
+                        }
                         Z80BusOperation::MemoryWrite { value } => {
                             bus.write_memory(request.address, value);
                             None
@@ -11151,6 +11294,9 @@ mod base_exchange_interrupt_control_differential_tests {
                 Z80MicroStep::InternalCycle { .. } => {
                     cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
                     cpu.complete_internal_cycle().unwrap()
+                }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
@@ -11311,6 +11457,9 @@ mod base_exchange_stack_differential_tests {
                         Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
                             Some(bus.read_memory(request.address))
                         }
+                        Z80BusOperation::InterruptAcknowledge => {
+                            panic!("unexpected INT acknowledge in instruction-only test")
+                        }
                         Z80BusOperation::MemoryWrite { value } => {
                             bus.write_memory(request.address, value);
                             None
@@ -11322,6 +11471,9 @@ mod base_exchange_stack_differential_tests {
                 Z80MicroStep::InternalCycle { .. } => {
                     cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
                     cpu.complete_internal_cycle().unwrap()
+                }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
@@ -11428,6 +11580,9 @@ mod base_immediate_io_differential_tests {
                         Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
                             Some(bus.read_memory(request.address))
                         }
+                        Z80BusOperation::InterruptAcknowledge => {
+                            panic!("unexpected INT acknowledge in instruction-only test")
+                        }
                         Z80BusOperation::MemoryWrite { value } => {
                             bus.write_memory(request.address, value);
                             None
@@ -11443,6 +11598,9 @@ mod base_immediate_io_differential_tests {
                 Z80MicroStep::InternalCycle { .. } => {
                     cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
                     cpu.complete_internal_cycle().unwrap()
+                }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
@@ -11513,5 +11671,83 @@ mod base_immediate_io_differential_tests {
         compare_io(0xDB, 0x12, 0xFF, 0xA6);
         compare_io(0xD3, 0x5A, 0x3F, 0x00);
         compare_io(0xD3, 0xFF, 0xFF, 0x00);
+    }
+
+    #[test]
+    fn int_acknowledge_is_selected_only_when_iff1_is_enabled() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.set_int_line(Some(0xCF));
+
+        let Z80MicroStep::BusRequest(request) = cpu.begin_instruction().unwrap() else {
+            panic!("masked INT must not be accepted");
+        };
+        assert_eq!(request.operation, crate::Z80BusOperation::OpcodeFetch);
+        assert_eq!(cpu.int_pending, Some(0xCF));
+    }
+
+    #[test]
+    fn int_acknowledge_uses_distinct_bus_operation_and_captures_vector() {
+        let mut cpu = Z80MicroSequencer {
+            registers: crate::Z80Registers {
+                pc: 0x2345,
+                ..crate::Z80Registers::default()
+            },
+            iff1: true,
+            iff2: true,
+            refresh: 0xFE,
+            ..Z80MicroSequencer::default()
+        };
+        cpu.set_int_line(Some(0xCF));
+
+        let Z80MicroStep::BusRequest(request) = cpu.begin_instruction().unwrap() else {
+            panic!("eligible INT must issue an acknowledge request");
+        };
+        assert_eq!(
+            request.operation,
+            crate::Z80BusOperation::InterruptAcknowledge
+        );
+        assert_eq!(request.address, 0x2345);
+        assert_eq!(request.base_tstates, 3);
+        assert!(!cpu.iff1);
+        assert!(!cpu.iff2);
+        assert!(!cpu.halted);
+
+        cpu.insert_wait_tstates(3).unwrap();
+        assert_eq!(
+            cpu.complete_bus_cycle(request.id, Some(0xCF)).unwrap(),
+            Z80MicroStep::InterruptAcknowledge {
+                vector: 0xCF,
+                tstates: 8,
+            }
+        );
+        assert_eq!(
+            cpu.phase,
+            crate::Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector: 0xCF }
+        );
+        assert_eq!(
+            cpu.registers.pc, 0x2345,
+            "INT acknowledge must not increment PC"
+        );
+        assert_eq!(cpu.refresh, 0xFF);
+        assert_eq!(cpu.int_pending, Some(0xCF));
+    }
+
+    #[test]
+    fn nmi_keeps_priority_over_an_eligible_int_line() {
+        let mut cpu = Z80MicroSequencer {
+            iff1: true,
+            iff2: true,
+            ..Z80MicroSequencer::default()
+        };
+        cpu.set_int_line(Some(0xCF));
+        cpu.request_nmi();
+
+        let Z80MicroStep::BusRequest(request) = cpu.begin_instruction().unwrap() else {
+            panic!("NMI must issue its response request first");
+        };
+        assert_eq!(request.operation, crate::Z80BusOperation::OpcodeFetch);
+        assert_eq!(cpu.phase, crate::Z80MicroSequencerPhase::NmiResponse);
+        assert!(cpu.iff2);
+        assert_eq!(cpu.int_pending, Some(0xCF));
     }
 }

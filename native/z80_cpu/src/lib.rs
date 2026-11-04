@@ -22,14 +22,14 @@ pub mod prefix;
 pub mod sequencer;
 pub mod snapshot;
 
-pub const Z80_MICRO_SEQUENCER_STATE_VERSION: u16 = 29;
+pub const Z80_MICRO_SEQUENCER_STATE_VERSION: u16 = 30;
 
 pub use architectural_state::{Z80ArchitecturalState, Z80ArchitecturalStateError};
 pub use cpu::{CpuError, Z80, Z80AlternateRegisters, Z80Registers};
 pub use m1::{Z80M1Cycle, Z80M1CycleState, Z80M1Error, Z80M1Phase, Z80M1Pins};
 pub use micro_ops::{
-    Z80BusHandshake, Z80BusHandshakeError, Z80BusHandshakeState, Z80BusOperation, Z80BusRequest,
-    Z80BusResponse,
+    Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES, Z80_INT_ACK_BASE_TSTATES, Z80BusHandshake,
+    Z80BusHandshakeError, Z80BusHandshakeState, Z80BusOperation, Z80BusRequest, Z80BusResponse,
 };
 pub use prefix::{Z80IndexOpcodeClass, Z80IndexRegister, Z80PrefixState, classify_index_opcode};
 pub use sequencer::{
