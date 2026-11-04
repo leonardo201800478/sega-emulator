@@ -502,9 +502,9 @@ impl SmsTemporalMachine {
                 self.bus.acknowledge_completion(completion.request_id)?;
                 self.cpu = next_cpu;
                 if matches!(
-            step,
-            Z80MicroStep::InstructionRetired { .. } | Z80MicroStep::InterruptServiced { .. }
-        ) {
+                    step,
+                    Z80MicroStep::InstructionRetired { .. } | Z80MicroStep::InterruptServiced { .. }
+                ) {
                     self.instruction_started_at = None;
                 }
 
