@@ -10,9 +10,7 @@ def test_cargo_fmt_manifest_is_before_rustfmt_separator() -> None:
         lockfile="native/z80_core/Cargo.lock",
     )
 
-    command = project_manager.cargo_for(
-        workspace, "fmt", "--all", "--", "--check"
-    )
+    command = project_manager.cargo_for(workspace, "fmt", "--all", "--", "--check")
 
     assert command == [
         "cargo",
