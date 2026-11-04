@@ -1,9 +1,9 @@
 # Meta de conclusão do Z80 — cobertura, validação e critérios de aceite
 
 **Data da revisão:** 2026-11-04  
-**Baseline de referência:** `main` — `f89a52346e91e88e82ab37a4afcfffff2d793407` (após merge da PR #475 / E4C).  
+**Baseline de referência:** `main` — `a0e58fd05c7f62c42f82b86d15d8532e06a9c59b` (após PR #476; código E4C integrado pela PR #475).  
 **Evidência E4C:** HEAD validado `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS; PR #475 integrada no merge SHA `f89a52346e91e88e82ab37a4afcfffff2d793407`.  
-**Schema do microsequenciador na baseline:** 27.  
+**Schema do microsequenciador na baseline main:** 27. O candidato E5 da PR #485 eleva para 28.  
 **Status deste documento:** referência de planejamento e critérios de aceite. Não substitui a matriz semântica por opcode nem os relatórios de execução dos testes.
 
 ---
@@ -56,7 +56,7 @@ A baseline consultada em `main` é `f89a52346e91e88e82ab37a4afcfffff2d793407`, a
 | E4A | LD r,(IX/IY+d), LD (IX/IY+d),r e LD (IX/IY+d),n | Integrada na main; IMPLEMENTED / SHORT_PASS |
 | E4B | ADD/ADC/SUB/SBC/AND/XOR/OR/CP (IX/IY+d) | Integrada na main pela PR #472; IMPLEMENTED / QUICK_PASS / SHORT_PASS; CI 4/4 PASS |
 | E4C | INC/DEC (IX/IY+d) | Integrada na main pela PR #475; IMPLEMENTED / QUICK_PASS / SHORT_PASS; 5 testes dirigidos; CI 4/4 PASS |
-| E5 | DDCB/FDCB completo | Pendente no microsequenciador |
+| E5 | DDCB/FDCB completo | IMPLEMENTED / QUICK_PASS / SHORT_PASS; CI PR #485 3/3 PASS |
 | E6 | Fallback geral e resolução de prefixos DD/FD/ED/CB | Pendente/incompleto no microsequenciador |
 | E7 | Fechamento semântico global BASE/CB/ED/DD/FD/DDCB/FDCB | Pendente |
 | E8 | Validação formal e diferencial (ZEXDOC/ZEXALL e corpora independentes) | Pendente |
@@ -148,14 +148,28 @@ Os níveis abaixo são cumulativos no escopo declarado. O estado deve ser atribu
 - [x] 5 testes dirigidos `indexed_incdec_e4c.rs` e CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS no HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`.
 - Estado: IMPLEMENTED / QUICK_PASS / SHORT_PASS para o escopo implementado. Não promover LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS sem evidência independente.
 
-### E5 — DDCB/FDCB completo
+### E5 — DDCB/FDCB — implementação PR #485
 
-- Implementar RLC, RRC, RL, RR, SLA, SRA, SLL, SRL, BIT, RES e SET para IX e IY.
-- Separar corretamente M1 de DD/FD e CB, leitura de displacement, fetch do opcode final (não M1), leitura de memória, ciclo interno e escrita quando aplicável.
-- BIT deve ser somente leitura; rotações/shifts, RES e SET devem respeitar read-modify-write.
-- Implementar cópia opcional para registrador de destino nos campos aplicáveis; preservar a semântica de H/L e os efeitos de flags.
-- Cobrir todos os subopcodes, os dois índices, deslocamentos, wrap, WAIT, snapshots e ordem dos acessos.
-- Aceite: QUICK_PASS/SHORT_PASS por subfamília; LONG_PASS e DIFFERENTIAL_PASS após corpus ampliado e comparação independente.
+- [x] Caminho microsequenciado para os 256 subopcodes DDCB e 256 FDCB, usando o executor atômico existente como referência funcional, sem duplicar a semântica CB.
+- [x] DD/FD e CB como M1; displacement como leitura de 3T; opcode final como leitura non-M1 de 5T; leitura efetiva de 4T; escrita RMW de 3T.
+- [x] BIT encerra após leitura, sem write-back: 5 M-cycles / 20 T-states (`4,4,3,5,4`).
+- [x] Rotações/shifts, RES e SET em read-modify-write: 6 M-cycles / 23 T-states (`4,4,3,5,4,3`).
+- [x] Cópia opcional para B/C/D/E/H/L/A nos grupos x=0,2,3; H/L são os registradores convencionais, não IXH/IXL/IYH/IYL.
+- [x] R incrementa somente nos M1; WZ mantém o endereço efetivo; IX/IY, last-prefix-wins, displacement assinado e wrap.
+- [x] WAIT em cada transação e snapshot/restore nas fases com request pendente; schema 28.
+- [x] Adicionada suíte `indexed_cb_e5.rs`: 256 subopcodes por índice, BIT read-only, RMW, cópia z, flags modeladas, prefixos repetidos/alternados, displacement 0/-128/+127, wrap de endereço/PC e round-trip de snapshots.
+- [x] `cargo fmt --all -- --check`: PASS no CI run #4238, código SHA `2f1dff62ce23c8d6d321b26d6ffc1b4bd198cb5f`.
+- [x] `cargo clippy --workspace --all-targets --locked -- -D warnings`: PASS no mesmo SHA.
+- [x] `cargo test --workspace --locked`: PASS; 216 testes unitários do crate Z80 e 8 testes da nova suíte indexed-CB passaram, além das demais suítes do workspace.
+- [x] Testes direcionados SMS e SG-1000: PASS.
+- [x] `python -m pytest`, `ruff check` e `ruff format --check`: etapas de comando PASS; job concluiu PASS no run #4238.
+- [x] Windows x64 D3D12/video compile e video-runtime tests: PASS.
+- [x] Windows WASAPI/XAudio2 compile e audio-output tests: PASS.
+- [x] CI aplicável: 3/3 jobs PASS; Scheduler deterministic stress SKIPPED corretamente por não haver alteração no Scheduler.
+- Estado: IMPLEMENTED / QUICK_PASS / SHORT_PASS para cobertura funcional estrutural e microsequenciada no candidato. CI da PR #485 no HEAD 79bb17a: 3/3 jobs PASS; revisão final concluída antes da integração.
+
+- Limite de fonte: ZiLOG UM008011-0816 marca S e P/V de BIT indexado como desconhecidos; o candidato mantém o modelo já existente no executor atômico. Isso não comprova esses bits contra silício.
+- Não promover LONG_PASS, DIFFERENTIAL_PASS, ZEXDOC/ZEXALL ou TEMPORAL_PASS sem evidência independente.
 
 ### E6 — Resolução de prefixos
 
@@ -253,4 +267,4 @@ Toda atualização deve incluir data, SHA da baseline, SHA candidato, PR, workfl
 
 ---
 
-**Próxima meta operacional na baseline atual:** iniciar E5 — DDCB/FDCB no microsequenciador. E4A, E4B e E4C estão integradas na main; E4C foi integrada pela PR #475 (`f89a5234`) após CI 4/4 PASS. Os resultados QUICK_PASS/SHORT_PASS permanecem limitados aos escopos testados; validação diferencial externa, ZEXDOC/ZEXALL e TEMPORAL_PASS continuam pendentes.
+**Próxima meta operacional na baseline atual:** iniciar E6 — fallback geral e resolução de prefixos DD/FD/ED/CB. E4A, E4B e E4C estão integradas na main; E5 DDCB/FDCB está implementada e QUICK_PASS/SHORT_PASS na PR #485, com CI 3/3 PASS no SHA de código 2f1dff62. Validação diferencial externa, ZEXDOC/ZEXALL, LONG_PASS e TEMPORAL_PASS continuam pendentes.
