@@ -16,11 +16,7 @@ fn snapshot(machine: &SmsTemporalMachine) -> SmsTemporalMachine {
 }
 
 // Snapshot only at scheduler-owned safe points, after an event has been scheduled.
-fn run_boundary(
-    machine: &mut SmsTemporalMachine,
-    snapshot_each: bool,
-    waits: u32,
-) -> Z80MicroStep {
+fn run_boundary(machine: &mut SmsTemporalMachine, snapshot_each: bool, waits: u32) -> Z80MicroStep {
     let mut step = machine.begin_instruction().unwrap();
     for _ in 0..128 {
         step = match step {
@@ -106,7 +102,10 @@ fn e7_2e_im0_restores_acknowledge_and_injected_rst() {
         cpu.set_int_line(Some(0xC7));
     }
     let step = compare_runs(&mut continuous, &mut resumed, 1);
-    assert!(matches!(step, Z80MicroStep::InstructionRetired { opcode: 0xC7, .. }));
+    assert!(matches!(
+        step,
+        Z80MicroStep::InstructionRetired { opcode: 0xC7, .. }
+    ));
     assert_eq!(resumed.cpu().registers.pc, 0x0000);
     assert_eq!(resumed.cpu().registers.sp, 0xC0FE);
     assert_eq!(resumed.memory().read(0xC0FF), 0x23);
@@ -179,17 +178,26 @@ fn e7_2e_ei_delay_survives_machine_snapshot_until_following_instruction() {
     }
     assert_eq!(
         compare_runs(&mut continuous, &mut resumed, 0),
-        Z80MicroStep::InstructionRetired { opcode: 0xFB, tstates: 4 }
+        Z80MicroStep::InstructionRetired {
+            opcode: 0xFB,
+            tstates: 4
+        }
     );
     assert_eq!(resumed.cpu().ei_delay, 1);
     assert_eq!(
         compare_runs(&mut continuous, &mut resumed, 0),
-        Z80MicroStep::InstructionRetired { opcode: 0x00, tstates: 4 }
+        Z80MicroStep::InstructionRetired {
+            opcode: 0x00,
+            tstates: 4
+        }
     );
     assert_eq!(resumed.cpu().ei_delay, 0);
     assert_eq!(
         compare_runs(&mut continuous, &mut resumed, 0),
-        Z80MicroStep::InterruptServiced { kind: Z80InterruptKind::Int, tstates: 13 }
+        Z80MicroStep::InterruptServiced {
+            kind: Z80InterruptKind::Int,
+            tstates: 13
+        }
     );
 }
 
@@ -200,7 +208,10 @@ fn e7_2e_halt_m1_hold_restores_each_tstate_and_ignores_data() {
     let mut resumed = machine(rom);
     assert_eq!(
         compare_runs(&mut continuous, &mut resumed, 1),
-        Z80MicroStep::InstructionRetired { opcode: 0x76, tstates: 5 }
+        Z80MicroStep::InstructionRetired {
+            opcode: 0x76,
+            tstates: 5
+        }
     );
     assert!(resumed.cpu().halted);
     assert_eq!(
