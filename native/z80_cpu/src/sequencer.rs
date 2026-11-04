@@ -222,9 +222,14 @@ pub enum Z80MicroSequencerPhase {
     /// NMI response M1 at the interrupted PC; sampled memory data is ignored.
     NmiResponse,
     /// One internal T-state between the NMI response M1 and the stack writes.
-    NmiStackPushInternal { return_address: u16 },
+    NmiStackPushInternal {
+        return_address: u16,
+    },
     /// NMI pushes the interrupted PC high byte first, then low byte.
-    NmiStackPushWrite { stage: u8, return_address: u16 },
+    NmiStackPushWrite {
+        stage: u8,
+        return_address: u16,
+    },
     ImmediateReadRegister {
         destination: u8,
     },
@@ -512,7 +517,10 @@ pub enum Z80MicroStep {
     /// WAIT states inserted while its bus requests were pending.
     InstructionRetired { opcode: u8, tstates: u32 },
     /// An interrupt entry sequence completed; this is not an instruction retirement.
-    InterruptServiced { kind: Z80InterruptKind, tstates: u32 },
+    InterruptServiced {
+        kind: Z80InterruptKind,
+        tstates: u32,
+    },
     /// One non-bus internal T-state; advance machine time before resuming.
     InternalCycle { tstates: u32 },
 }
@@ -1003,9 +1011,11 @@ impl Z80MicroSequencer {
                     && !state.halted
                     && return_address == state.registers.pc
                     && pending.is_some_and(|request| {
-                        request.operation == Z80BusOperation::MemoryWrite {
-                            value: expected_value,
-                        } && request.address == state.registers.sp
+                        request.operation
+                            == Z80BusOperation::MemoryWrite {
+                                value: expected_value,
+                            }
+                            && request.address == state.registers.sp
                             && request.base_tstates == 3
                     })
                     && state.instruction_tstates >= minimum_tstates
@@ -2241,9 +2251,7 @@ impl Z80MicroSequencer {
                 state.mcycle_index == 0 && state.tstate_index == 4
             }
             Z80MicroSequencerPhase::NmiStackPushWrite { stage, .. } => {
-                stage <= 1
-                    && state.mcycle_index == 1 + u32::from(stage)
-                    && state.tstate_index == 0
+                stage <= 1 && state.mcycle_index == 1 + u32::from(stage) && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::ImmediateReadRegister { .. } => match state.prefix_state {
                 Z80PrefixState::None => state.mcycle_index == 1 && state.tstate_index == 0,
@@ -2686,9 +2694,9 @@ impl Z80MicroSequencer {
         self.q_previous = self.q;
         self.q = 0;
         if self.nmi_pending {
-            let request = self
-                .handshake
-                .begin(Z80BusOperation::OpcodeFetch, self.registers.pc, 4)?;
+            let request =
+                self.handshake
+                    .begin(Z80BusOperation::OpcodeFetch, self.registers.pc, 4)?;
             self.nmi_pending = false;
             self.halted = false;
             self.iff2 = self.iff1;
