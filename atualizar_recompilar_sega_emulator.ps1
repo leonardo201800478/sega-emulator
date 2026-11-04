@@ -357,12 +357,18 @@ if ($NewVenv) {
 
     Invoke-Checked `
         -File "py" `
-        -Arguments @("-3.14", "-m", "venv", ".venv") `
-        -Step "Criar ambiente virtual Python 3.14"
+        -Arguments @("-3.15", "-m", "venv", ".venv") `
+        -Step "Criar ambiente virtual Python 3.15.2"
 }
 
 if (-not (Test-Path -LiteralPath $VenvPython -PathType Leaf)) {
-    throw "Python 3.14 nao encontrado. Instale-o e tente novamente."
+    throw "Python 3.15.2 nao encontrado. Instale-o e tente novamente."
+}
+
+$VenvPythonVersion = (& $VenvPython --version 2>&1 | Out-String).Trim()
+
+if ($VenvPythonVersion -notmatch '^Python 3\.15\.') {
+    throw "O ambiente .venv usa '$VenvPythonVersion'. Preserve-o como backup e recrie .venv com 'py -3.15 -m venv .venv' antes de continuar."
 }
 
 if ($NewVenv -or $DependenciesChanged) {
@@ -402,7 +408,7 @@ if (-not (Test-Path -LiteralPath $VenvMaturin -PathType Leaf)) {
             "-m",
             "pip",
             "install",
-            "maturin>=1.9,<2"
+            "maturin==1.16.0"
         ) `
         -Step "Instalar Maturin ausente"
 }
