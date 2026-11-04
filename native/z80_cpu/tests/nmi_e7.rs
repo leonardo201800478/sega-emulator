@@ -330,10 +330,7 @@ fn int_asserted_after_halt_t4_waits_for_the_next_halt_m1_t4() {
     assert_eq!(cpu.export_state().halt_exit_pending, Some(Z80HaltExit::Int));
 
     let acknowledge = request(cpu.begin_instruction().unwrap());
-    assert_eq!(
-        acknowledge.operation,
-        Z80BusOperation::InterruptAcknowledge
-    );
+    assert_eq!(acknowledge.operation, Z80BusOperation::InterruptAcknowledge);
 }
 
 #[test]
@@ -361,15 +358,9 @@ fn ei_halt_int_is_accepted_at_the_halt_instruction_t4() {
     assert_eq!(cpu.ei_delay, 0);
 
     cpu.sample_halt_interrupts_at_t4().unwrap();
-    assert_eq!(
-        cpu.export_state().halt_exit_pending,
-        Some(Z80HaltExit::Int)
-    );
+    assert_eq!(cpu.export_state().halt_exit_pending, Some(Z80HaltExit::Int));
     let acknowledge = request(cpu.begin_instruction().unwrap());
-    assert_eq!(
-        acknowledge.operation,
-        Z80BusOperation::InterruptAcknowledge
-    );
+    assert_eq!(acknowledge.operation, Z80BusOperation::InterruptAcknowledge);
 }
 
 #[test]
@@ -419,10 +410,7 @@ fn masked_int_is_not_latched_until_iff1_is_enabled_at_a_later_halt_t4() {
     assert_eq!(second_m1.operation, Z80BusOperation::OpcodeFetch);
     cpu.complete_bus_cycle(second_m1.id, Some(0x00)).unwrap();
     cpu.sample_halt_interrupts_at_t4().unwrap();
-    assert_eq!(
-        cpu.export_state().halt_exit_pending,
-        Some(Z80HaltExit::Int)
-    );
+    assert_eq!(cpu.export_state().halt_exit_pending, Some(Z80HaltExit::Int));
     assert_eq!(
         request(cpu.begin_instruction().unwrap()).operation,
         Z80BusOperation::InterruptAcknowledge
@@ -442,10 +430,7 @@ fn nmi_is_sampled_during_halt_even_when_iff1_is_disabled() {
     let halt_m1 = request(cpu.begin_instruction().unwrap());
     cpu.complete_bus_cycle(halt_m1.id, Some(0x00)).unwrap();
     cpu.sample_halt_interrupts_at_t4().unwrap();
-    assert_eq!(
-        cpu.export_state().halt_exit_pending,
-        Some(Z80HaltExit::Nmi)
-    );
+    assert_eq!(cpu.export_state().halt_exit_pending, Some(Z80HaltExit::Nmi));
 
     let response = request(cpu.begin_instruction().unwrap());
     assert_eq!(response.operation, Z80BusOperation::OpcodeFetch);
