@@ -542,7 +542,11 @@ impl SmsTemporalBus {
                         pending_events[0].timestamp,
                         scale,
                         u16::from(request.base_tstates)
-                            + if request.operation == Z80BusOperation::InterruptAcknowledge { 2 } else { 0 },
+                            + if request.operation == Z80BusOperation::InterruptAcknowledge {
+                                2
+                            } else {
+                                0
+                            },
                     ) => {}
             (Some(request), Some(started_at), Some(completion), None, None, None)
                 if request.id == completion.request_id
@@ -553,7 +557,12 @@ impl SmsTemporalBus {
                         started_at,
                         completion.completed_at,
                         scale,
-                        request.base_tstates + if request.operation == Z80BusOperation::InterruptAcknowledge { 2 } else { 0 },
+                        u16::from(request.base_tstates)
+                            + if request.operation == Z80BusOperation::InterruptAcknowledge {
+                                2
+                            } else {
+                                0
+                            },
                     ) => {}
             (None, None, None, Some(continuation_id), Some(started_at), None)
                 if pending_events.len() == 1
@@ -734,8 +743,7 @@ mod tests {
 
         let restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
         assert_eq!(restored.export_state(), bus.export_state());
-        let Some(SmsTemporalDispatch::BusCompletion(completion)) =
-            bus.dispatch_next().unwrap()
+        let Some(SmsTemporalDispatch::BusCompletion(completion)) = bus.dispatch_next().unwrap()
         else {
             panic!("expected interrupt acknowledge completion");
         };
