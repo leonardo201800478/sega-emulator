@@ -1,9 +1,9 @@
 # Matriz semântica DD/FD do Z80 — estado após E5 integrada na main
 
-**Data:** 2026-11-04  
-**Baseline auditada:** `main` — `a0e58fd05c7f62c42f82b86d15d8532e06a9c59b`, após PR #476; implementação E5 candidata em PR #485.  
+**Data:** 2026-11-03 (horário local de São Paulo)  
+**Baseline auditada:** `main` — `f4130104fa971289507c0b15ab2d8eabd1dd5b00`, após PR #485 (E5 integrada).  
 **E4C validada:** HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS.  
-**Schema do microsequenciador:** 28 (candidato E5)  
+**Schema do microsequenciador:** 28 (E5 integrado na main)  
 **Escopo:** decoder DD/FD, IX/IY, IXH/IXL/IYH/IYL, (IX/IY+d), DDCB/FDCB.  
 **Natureza:** inventário do código ativo e das evidências disponíveis; E5 possui QUICK_PASS/SHORT_PASS, mas isso não declara conclusão funcional integral nem temporal do Z80.  
 **Meta global e scorecard:** consultar [Meta de conclusão do Z80 — cobertura, validação e critérios de aceite](z80-completion-scorecard.md) para percentuais de referência, fórmulas, níveis de evidência e critérios de conclusão.
@@ -101,9 +101,9 @@ O decoder atômico classifica os 256 subopcodes para IX e IY e tem teste exausti
 
 **BIT é read-only:** o handler não deve emitir write-back. Rotação/deslocamento, RES e SET são operações read-modify-write. O campo z controla a cópia adicional para registrador nas operações x=0,2,3; z=6 não seleciona registrador adicional.
 
-**E5 — candidato PR #485:** o microsequenciador agora possui fases próprias para displacement, opcode final non-M1, leitura efetiva e escrita opcional. O trace nominal implementado é `4,4,3,5,4` para BIT (20T) e `4,4,3,5,4,3` para RMW (23T). A leitura do opcode final é uma transação `MemoryRead` de 5T, não `OpcodeFetch`; portanto não incrementa R. O operando é lido em 4T. O WAIT é contabilizado pela transação pendente em cada fase.
+**E5 — integrada pela PR #485:** o microsequenciador agora possui fases próprias para displacement, opcode final non-M1, leitura efetiva e escrita opcional. O trace nominal implementado é `4,4,3,5,4` para BIT (20T) e `4,4,3,5,4,3` para RMW (23T). A leitura do opcode final é uma transação `MemoryRead` de 5T, não `OpcodeFetch`; portanto não incrementa R. O operando é lido em 4T. O WAIT é contabilizado pela transação pendente em cada fase.
 
-**BIT — limite documental:** UM008011-0816, páginas impressas 247–250, declara S e P/V desconhecidos para BIT indexado; C não é afetado e H é set. O candidato conserva o modelo atual do executor atômico para S/PV e os bits X/Y derivados do endereço, sem promover essa escolha a fato de hardware. A validação independente desses bits permanece aberta.
+**BIT — limite documental:** UM008011-0816, páginas impressas 247–250, declara S e P/V desconhecidos para BIT indexado; C não é afetado e H é set. A implementação integrada conserva o modelo atual do executor atômico para S/PV e os bits X/Y derivados do endereço, sem promover essa escolha a fato de hardware. A validação independente desses bits permanece aberta.
 
 ## 6. Estado arquitetural e snapshot — estado após E5 integrada (main)
 
