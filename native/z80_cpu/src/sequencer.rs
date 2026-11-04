@@ -2956,7 +2956,10 @@ impl Z80MicroSequencer {
     /// Begin the next instruction by issuing its M1 opcode-fetch request.
     /// During HALT, the fetch is repeated at the next-PC address; its data is
     /// ignored and PC is not incremented when the request completes.
-    /// Latch a negative-edge NMI request. It is accepted at the next instruction boundary.
+    /// Latch a negative-edge NMI request.
+    ///
+    /// Outside HALT it is accepted at the next instruction boundary. During
+    /// HALT it is first sampled at the next completed M1 T4 boundary.
     pub fn request_nmi(&mut self) {
         self.nmi_pending = true;
     }
