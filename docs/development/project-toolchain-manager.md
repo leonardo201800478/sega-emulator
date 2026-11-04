@@ -78,7 +78,7 @@ cargo update --manifest-path native/z80_core/Cargo.toml
 
 The root workspace has exact pins for its direct Serde and Windows dependencies;
 Cargo may update only compatible transitive versions. The standalone Z80
-workspace must resolve PyO3 0.30.0 for Python 3.15.2. The audio-output workspace
+workspace must resolve PyO3 0.30.1 for Python 3.15.2. The audio-output workspace
 has its own lockfile and must be resolved independently.
 
 After updating, inspect every lockfile diff, then run:
