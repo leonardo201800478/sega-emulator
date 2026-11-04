@@ -44,7 +44,8 @@ fn valid_internal_deadline(
     deadline: MachineTime,
     master_ticks_per_tstate: u64,
 ) -> bool {
-    elapsed_tstates(started_at, deadline, master_ticks_per_tstate).is_some()
+    elapsed_tstates(started_at, deadline, master_ticks_per_tstate)
+        .is_some_and(|tstates| tstates > 0)
 }
 
 fn mcycle_kind(operation: Z80BusOperation) -> Z80MCycleKind {
