@@ -1569,6 +1569,35 @@ mod base_internal_snapshot_tests {
     }
 
     #[test]
+    fn interrupt_acknowledge_pending_and_vector_latch_round_trip_through_codec() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.iff1 = true;
+        cpu.iff2 = true;
+        cpu.set_int_line(Some(0xCF));
+
+        let request = match cpu.begin_instruction().unwrap() {
+            crate::Z80MicroStep::BusRequest(request) => request,
+            other => panic!("expected INT acknowledge request, got {other:?}"),
+        };
+        cpu.insert_wait_tstates(2).unwrap();
+        cpu = round_trip(&cpu);
+        assert_eq!(cpu.pending_request(), Some(request));
+
+        assert_eq!(
+            cpu.complete_bus_cycle(request.id, Some(0xCF)).unwrap(),
+            crate::Z80MicroStep::InterruptAcknowledge {
+                vector: 0xCF,
+                tstates: 9,
+            }
+        );
+        cpu = round_trip(&cpu);
+        assert_eq!(
+            cpu.export_state().phase,
+            crate::Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector: 0xCF }
+        );
+    }
+
+    #[test]
     fn inc_pair_internal_phase_round_trips_at_each_safe_point() {
         let mut cpu = Z80MicroSequencer::default();
         let fetch = match cpu.begin_instruction().unwrap() {
