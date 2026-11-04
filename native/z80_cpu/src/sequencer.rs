@@ -171,9 +171,7 @@ fn has_general_prefix_fallback_context(
         }
         Z80PrefixState::Ed => mcycle_index >= 2 && instruction_tstates >= 8,
         Z80PrefixState::None => ed_phase_base_mcycle(phase)
-            .is_some_and(|base_mcycle| {
-                mcycle_index > base_mcycle && instruction_tstates >= 12
-            }),
+            .is_some_and(|base_mcycle| mcycle_index > base_mcycle && instruction_tstates >= 12),
         _ => false,
     };
     let base_or_ed_phase = !matches!(
