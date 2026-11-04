@@ -282,7 +282,7 @@ fn e7_2e_nmi_restore_matches_trace_with_zero_and_multiple_wait_states() {
             }
         ));
     }
-} 
+}
 #[test]
 fn e7_2e_wait_matrix_covers_m1_memory_io_internal_and_interrupt_cycles() {
     for waits in [0, 1, 3] {
