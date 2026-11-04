@@ -209,8 +209,8 @@ fn register_value(cpu: &Z80MicroSequencer, code: u8) -> u8 {
 fn all_256_indexed_cb_subopcodes_are_executed_for_ix_and_iy() {
     for prefix in [0xDD, 0xFD] {
         for opcode in 0_u8..=u8::MAX {
-            let ix = 0x2100;
-            let iy = 0x3200;
+            let ix: u16 = 0x2100;
+            let iy: u16 = 0x3200;
             let displacement = 0xFE;
             let index_base = if prefix == 0xDD { ix } else { iy };
             let address = index_base.wrapping_add_signed(-2);
