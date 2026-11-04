@@ -160,8 +160,6 @@ A sequência E7.2A → E7.2B → E7.2C → E7.2D → E7.2E é fixa. Não criar i
 - IM0: vetor RST e instrução multi-byte fornecida pelo dispositivo (E7.2C).
 - IM1: PC empilhado e destino `0x0038` (E7.2C).
 - IM2: vetor, endereço `(I << 8) | vector`, leitura low/high e destino (E7.2C).
-- EI seguido por uma instrução: INT não aceita antes da conclusão da instrução seguinte (E7.2D).
-- DI cancela a elegibilidade de INT; NMI continua elegível (E7.2D).
 - Snapshot/restore antes/depois de cada fase de acknowledge, vetor capturado e WAIT (E7.2E).
 - SP wrap em `0x0000/0xFFFF`; PC wrap; vetor/tabela nas bordas de página.
 - WAIT zero, WAIT múltiplo e acknowledge com dois T-states automáticos.
