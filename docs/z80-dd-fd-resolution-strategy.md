@@ -1,16 +1,17 @@
 # Estratégia de conclusão DD/FD do Z80
 
 **Status:** plano de execução para a próxima fatia de trabalho  
-**Data da auditoria:** 2026-11-04  
+**Data da auditoria:** 2026-11-03 (horário local de São Paulo)  
 **Baseline inicial E0:** `e4604f3152c09e8d16c37f94f94a4b344db33b62`  
 **Baseline após E1 / PR #467:** `aa4a4fa7661c28d3b2e21ac6d6eb4379fd297f65`  
 **Baseline após E2 / PR #468:** `abd154332b1dabfb68874f2b80f306da7e060552`  
-**Baseline atual da main após PR #476:** `a0e58fd05c7f62c42f82b86d15d8532e06a9c59b`  
+**Baseline atual da main após PR #485 (E5):** `f4130104fa971289507c0b15ab2d8eabd1dd5b00`  
 **HEAD E4C validado:** `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 PASS.  
 **PR de referência histórica:** [#447](https://github.com/leonardo201800478/sega-emulator/pull/447) — manter aberta, sem merge  
 **PR integrada E4A:** [#471](https://github.com/leonardo201800478/sega-emulator/pull/471)  
 **PR integrada E4C:** [#475](https://github.com/leonardo201800478/sega-emulator/pull/475)  
-**PR candidata E5:** [#485](https://github.com/leonardo201800478/sega-emulator/pull/485), código SHA `2f1dff62ce23c8d6d321b26d6ffc1b4bd198cb5f`; CI run #4238 3/3 PASS.  
+**PR integrada E5:** [#485](https://github.com/leonardo201800478/sega-emulator/pull/485), integrada na main; CI run #4238 3/3 PASS no HEAD candidato documentado na PR.  
+**PR candidata E6:** [#486](https://github.com/leonardo201800478/sega-emulator/pull/486), resolução geral de prefixos; CI #41757983537 Rust/Python/Windows x64 PASS, Scheduler stress SKIPPED; PR aberta, ainda não integrada.  
 **Escopo:** microsequenciador Z80 compartilhado; não confundir conclusão do núcleo com integração temporal completa ao SMS.
 
 ---
@@ -186,7 +187,7 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 
 **Gate E2:** PASS para FSM, seleção de prefixo, classificação e snapshot. CI completo do SHA candidato: [run 41721337030](https://github.com/leonardo201800478/sega-emulator/actions/runs/41721337030). Isso não declara FUNCTIONAL_PASS das instruções DD/FD nem TEMPORAL_PASS.
 
-**Limites mantidos após E2:** famílias indexadas restantes, prefixos ignorados, DDCB/FDCB, traces por T-state e integração temporal permanecem nas etapas E4-E9. E4A (LD), E4B (ALU indexada) e E4C (INC/DEC indexado) estão integradas na main; E4C foi publicada pela PR #475. E5 está implementada e QUICK_PASS/SHORT_PASS na PR #485; E6-E9 continuam pendentes.
+**Limites mantidos após E2:** famílias indexadas restantes, prefixos ignorados, DDCB/FDCB, traces por T-state e integração temporal permanecem nas etapas E4-E9. E4A (LD), E4B (ALU indexada) e E4C (INC/DEC indexado) estão integradas na main; E4C foi publicada pela PR #475. E5 está integrada na main e QUICK_PASS/SHORT_PASS no escopo registrado. E6 está implementada no candidato da PR #486 e passou nos gates Rust/Python/Windows x64; Scheduler stress foi SKIPPED. A PR ainda aguarda integração. E7-E9 permanecem pendentes.
 
 ### E3 — Operações 16-bit e substituição HL→IX/IY
 
@@ -329,6 +330,6 @@ Além disso, Scheduler deterministic stress e Windows x64 D3D12/WASAPI/XAudio2 q
 
 ## 8. Próxima ação
 
-Prosseguir na PR #485: revisão final do diff e validação documental; os gates Rust, Python, Windows D3D12 e WASAPI/XAudio2 passaram no run #4238 para o código SHA 2f1dff62. Não fazer merge sem autorização explícita; LONG_PASS, DIFFERENTIAL_PASS e TEMPORAL_PASS permanecem pendentes.
+Prosseguir com a revisão da PR #486 (E6) e integrar somente após confirmar mergeabilidade e os gates obrigatórios no HEAD atual. A CI #41757983537 reporta Rust/Python/Windows x64 PASS e Scheduler stress SKIPPED. Após E6, iniciar E7 — fechamento semântico global. LONG_PASS, DIFFERENTIAL_PASS e TEMPORAL_PASS permanecem pendentes.
 
-**Estado atual DD/FD:** E2 FSM/snapshot SHORT_PASS; E3A1/E3A2/E4A/E4B/E4C integradas na main `a0e58fd05c7f62c42f82b86d15d8532e06a9c59b`. E4C validada no HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`, CI `41747460761` 4/4 PASS. E5 implementada na PR #485 (código SHA `2f1dff62ce23c8d6d321b26d6ffc1b4bd198cb5f`); CI run #4238 3/3 PASS. E6 fallback, E7 fechamento semântico, E8 formal e E9 integração temporal permanecem pendentes. Não há LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS global.
+**Estado atual DD/FD:** E2 FSM/snapshot SHORT_PASS; E3A1/E3A2/E4A/E4B/E4C integradas na main `a0e58fd05c7f62c42f82b86d15d8532e06a9c59b`. E4C validada no HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`, CI `41747460761` 4/4 PASS. E5 integrada na main pela PR #485; CI run #4238 3/3 PASS no candidato. E6 implementada no candidato da PR #486; CI #41757983537 Rust/Python/Windows x64 PASS, Scheduler stress SKIPPED; PR ainda aberta. E7 fechamento semântico, E8 formal e E9 integração temporal permanecem pendentes. Não há LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS global.
