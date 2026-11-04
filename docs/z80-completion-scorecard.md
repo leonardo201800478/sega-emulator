@@ -56,7 +56,7 @@ A baseline consultada em `main` é `f89a52346e91e88e82ab37a4afcfffff2d793407`, a
 | E4A | LD r,(IX/IY+d), LD (IX/IY+d),r e LD (IX/IY+d),n | Integrada na main; IMPLEMENTED / SHORT_PASS |
 | E4B | ADD/ADC/SUB/SBC/AND/XOR/OR/CP (IX/IY+d) | Integrada na main pela PR #472; IMPLEMENTED / QUICK_PASS / SHORT_PASS; CI 4/4 PASS |
 | E4C | INC/DEC (IX/IY+d) | Integrada na main pela PR #475; IMPLEMENTED / QUICK_PASS / SHORT_PASS; 5 testes dirigidos; CI 4/4 PASS |
-| E5 | DDCB/FDCB completo | Pendente no microsequenciador |
+| E5 | DDCB/FDCB completo | IMPLEMENTED no candidato PR #477; QUICK_PASS/SHORT_PASS aguardam CI |
 | E6 | Fallback geral e resolução de prefixos DD/FD/ED/CB | Pendente/incompleto no microsequenciador |
 | E7 | Fechamento semântico global BASE/CB/ED/DD/FD/DDCB/FDCB | Pendente |
 | E8 | Validação formal e diferencial (ZEXDOC/ZEXALL e corpora independentes) | Pendente |
@@ -148,14 +148,20 @@ Os níveis abaixo são cumulativos no escopo declarado. O estado deve ser atribu
 - [x] 5 testes dirigidos `indexed_incdec_e4c.rs` e CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS no HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`.
 - Estado: IMPLEMENTED / QUICK_PASS / SHORT_PASS para o escopo implementado. Não promover LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS sem evidência independente.
 
-### E5 — DDCB/FDCB completo
+### E5 — DDCB/FDCB — implementação candidata PR #477
 
-- Implementar RLC, RRC, RL, RR, SLA, SRA, SLL, SRL, BIT, RES e SET para IX e IY.
-- Separar corretamente M1 de DD/FD e CB, leitura de displacement, fetch do opcode final (não M1), leitura de memória, ciclo interno e escrita quando aplicável.
-- BIT deve ser somente leitura; rotações/shifts, RES e SET devem respeitar read-modify-write.
-- Implementar cópia opcional para registrador de destino nos campos aplicáveis; preservar a semântica de H/L e os efeitos de flags.
-- Cobrir todos os subopcodes, os dois índices, deslocamentos, wrap, WAIT, snapshots e ordem dos acessos.
-- Aceite: QUICK_PASS/SHORT_PASS por subfamília; LONG_PASS e DIFFERENTIAL_PASS após corpus ampliado e comparação independente.
+- [x] Caminho microsequenciado para os 256 subopcodes DDCB e 256 FDCB, usando o executor atômico existente como referência funcional, sem duplicar a semântica CB.
+- [x] DD/FD e CB como M1; displacement como leitura de 3T; opcode final como leitura non-M1 de 5T; leitura efetiva de 4T; escrita RMW de 3T.
+- [x] BIT encerra após leitura, sem write-back: 5 M-cycles / 20 T-states (`4,4,3,5,4`).
+- [x] Rotações/shifts, RES e SET em read-modify-write: 6 M-cycles / 23 T-states (`4,4,3,5,4,3`).
+- [x] Cópia opcional para B/C/D/E/H/L/A nos grupos x=0,2,3; H/L são os registradores convencionais, não IXH/IXL/IYH/IYL.
+- [x] R incrementa somente nos M1; WZ mantém o endereço efetivo; IX/IY, last-prefix-wins, displacement assinado e wrap.
+- [x] WAIT em cada transação e snapshot/restore nas fases com request pendente; schema 28.
+- [x] Adicionada suíte `indexed_cb_e5.rs`: 256 subopcodes por índice, BIT read-only, RMW, cópia z, flags modeladas, prefixos repetidos, wrap e round-trip de snapshots.
+- [ ] CI da PR #477 e revisão do diff: pendentes nesta fotografia.
+- Estado: IMPLEMENTED no candidato. QUICK_PASS/SHORT_PASS permanecem NOT RUN até CI e regressões no HEAD exato.
+- Limite de fonte: ZiLOG UM008011-0816 marca S e P/V de BIT indexado como desconhecidos; o candidato mantém o modelo já existente no executor atômico. Isso não comprova esses bits contra silício.
+- Não promover LONG_PASS, DIFFERENTIAL_PASS, ZEXDOC/ZEXALL ou TEMPORAL_PASS sem evidência independente.
 
 ### E6 — Resolução de prefixos
 
