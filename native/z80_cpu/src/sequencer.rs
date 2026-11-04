@@ -5432,12 +5432,11 @@ mod tests {
         assert_eq!(cpu.export_state().opcode, Some(0xFD));
         assert_eq!(cpu.export_state().instruction_tstates, 8);
 
-        let error = cpu.complete_bus_cycle(third.id, Some(0x00)).unwrap_err();
         assert_eq!(
-            error,
-            Z80MicroSequencerError::UnsupportedOpcode {
+            cpu.complete_bus_cycle(third.id, Some(0x00)).unwrap(),
+            Z80MicroStep::InstructionRetired {
                 opcode: 0x00,
-                address: 2
+                tstates: 12,
             }
         );
         assert_eq!(cpu.registers.pc, 3);
