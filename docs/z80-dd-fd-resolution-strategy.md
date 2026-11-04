@@ -1,12 +1,13 @@
-## Atualização de continuidade — E4C (2026-11-03)
+## Atualização de continuidade — E4C validada (2026-11-03)
 
-- `main` auditada: `04ee09f9839bfe29a595abbed831d055cc8d177a`; PR #471/E4A e PR #472/E4B estão integradas.
-- PR #473/E4C: `feat/z80-indexed-displacement-e4c-2026-11-03`; candidato atualizado `186a9996f5bbc26b65362040ac3759c9e62d3e09`.
-- INC/DEC (IX/IY+d) reutiliza `IndexDisplacementRead`, `IndexDisplacementInternal`, `MemoryReadIncDec`, `MemoryIncDecInternal` e `MemoryWrite`; schema 27 inalterado.
-- O UM008011-0816 especifica 6 M-cycles / 23 T-states: `4,4,3,5,4,3`; Carry preservado e flags S/Z/H/PV/N conforme INC/DEC.
-- Testes incluem IX/IY, valores de borda, displacement 0/-128/+127, wrap, WAIT, snapshots e prefixos repetidos/alternados.
-- CI inicial no SHA `ad464672c2c3a01620a1f96b0f53395d0e905355`: workflow `41739328124`, 4/4 PASS. Candidato com cobertura adicional `949dd365...`: workflow `41741995929` detectou E0689 no fixture de teste; corrigido no SHA `186a9996f5bbc26b65362040ac3759c9e62d3e09`, aguardar CI novo.
-- E4 somente fecha após validação final E4C. Não declarar LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS. Próxima etapa: E5 DDCB/FDCB.
+- Baseline auditada da `main`: `04ee09f9839bfe29a595abbed831d055cc8d177a`; E4A (#471) e E4B (#472) integradas.
+- PR #473 / E4C: branch `feat/z80-indexed-displacement-e4c-2026-11-03`; SHA validado `bac497462a3fc13a1f47892d25d435beefddd6d8`.
+- CI do SHA validado: workflow [41742682599](https://github.com/leonardo201800478/sega-emulator/actions/runs/41742682599), 4/4 jobs PASS: Rust, Python, Windows x64 D3D12/WASAPI/XAudio2 e Scheduler deterministic stress.
+- INC/DEC (IX/IY+d) reutiliza as fases compartilhadas `IndexDisplacementRead`, `IndexDisplacementInternal`, `MemoryReadIncDec`, `MemoryIncDecInternal` e `MemoryWrite`; schema 27 inalterado.
+- UM008011-0816: 6 M-cycles / 23 T-states, sequência `4,4,3,5,4,3`; Carry preservado, flags S/Z/H/PV/N atualizadas.
+- Testes dirigidos cobrem IX/IY, operandos de borda, displacement 0/-128/+127, wrap, WAIT, snapshots e prefixos repetidos/alternados.
+- E4C: IMPLEMENTED / QUICK_PASS / SHORT_PASS no escopo testado. LONG_PASS, DIFFERENTIAL_PASS, ZEXDOC/ZEXALL e TEMPORAL_PASS permanecem NOT RUN.
+- Próxima etapa de implementação: E5 DDCB/FDCB, somente após integrar esta PR e reconciliar a documentação.
 
 Esta atualização substitui as anotações históricas abaixo que indicavam E4B como ativa e E4C como pendente; os registros históricos são preservados para rastreabilidade.
 
@@ -19,11 +20,11 @@ Esta atualização substitui as anotações históricas abaixo que indicavam E4B
 **Baseline inicial E0:** `e4604f3152c09e8d16c37f94f94a4b344db33b62`  
 **Baseline após E1 / PR #467:** `aa4a4fa7661c28d3b2e21ac6d6eb4379fd297f65`  
 **Baseline após E2 / PR #468:** `abd154332b1dabfb68874f2b80f306da7e060552`  
-**Baseline atual da main após PR #471 / E4A:** `e9a3eff6c3733b4f11443954a647471c9d3908ff`  
-**Candidato E4B / PR #472:** `245d42eb0337d41295329155de8e151feceb9022`  
+**Baseline atual da main após PR #472 / E4B:** `04ee09f9839bfe29a595abbed831d055cc8d177a`  
+**Candidato E4C / PR #473:** `bac497462a3fc13a1f47892d25d435beefddd6d8`  
 **PR de referência histórica:** [#447](https://github.com/leonardo201800478/sega-emulator/pull/447) — manter aberta, sem merge  
 **PR integrada E4A:** [#471](https://github.com/leonardo201800478/sega-emulator/pull/471)  
-**PR ativa E4B:** [#472](https://github.com/leonardo201800478/sega-emulator/pull/472)  
+**PR ativa E4C:** [#473](https://github.com/leonardo201800478/sega-emulator/pull/473)  
 **Escopo:** microsequenciador Z80 compartilhado; não confundir conclusão do núcleo com integração temporal completa ao SMS.
 
 ---
@@ -254,11 +255,19 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 
 **Estado E4B:** IMPLEMENTED / QUICK_PASS / SHORT_PASS para as oito operações ALU indexadas. Não declarar LONG_PASS, diferencial externo, ZEXDOC/ZEXALL ou TEMPORAL_PASS.
 
-**E4C — INC/DEC (IX/IY+d), pendente:**
+**E4C — INC/DEC (IX/IY+d), validada no candidato PR #473:**
+- [x] Sequência compartilhada read-modify-write, flags e preservação de Carry.
+- [x] WAIT e snapshot/restore em pontos intermediários e requests pendentes.
+- [x] IX/IY, displacement e wrap, prefixos repetidos/alternados.
+- [x] CI `41742682599` no SHA `bac497462a3fc13a1f47892d25d435beefddd6d8`: 4/4 jobs PASS.
+
+**Estado E4C:** IMPLEMENTED / QUICK_PASS / SHORT_PASS no escopo dirigido. LONG_PASS, DIFFERENTIAL_PASS, ZEXDOC/ZEXALL e TEMPORAL_PASS permanecem NOT RUN.
+
+**Gate E4:**
 - [ ] INC e DEC com leitura, ciclo interno e escrita.
 - [ ] Flags S/Z/H/PV/N atualizadas e C preservado; WAIT e snapshot em cada safe point.
 
-**Gate E4:** E4A + E4B + E4C concluídas; E4 não será declarada completa enquanto ALU e RMW não forem implementadas e validadas.
+**Gate E4:** E4A + E4B + E4C possuem implementação e SHORT_PASS no escopo dirigido; E4C aguarda merge da PR #473. A conclusão global do Z80 continua dependente de E5–E9.
 
 ### E5 — Prefixos DDCB/FDCB
 
@@ -334,4 +343,4 @@ Além disso, Scheduler deterministic stress e Windows x64 D3D12/WASAPI/XAudio2 q
 
 Prosseguir para E4C: INC/DEC (IX/IY+d), com leitura, ciclo interno e escrita; validar flags S/Z/H/PV/N, C preservado, WAIT e snapshots em cada safe point. Depois avançar para E5 DDCB/FDCB.
 
-**Estado atual DD/FD:** E2 FSM/snapshot SHORT_PASS; E3A1/E3A2 e E4A integradas na main (`e9a3eff6`); E4B IMPLEMENTED/SHORT_PASS no candidato PR #472 com CI 4/4 PASS (run `41738004725`). E4C, E5 DDCB/FDCB, E6 fallback, E7 fechamento semântico, E8 formal e E9 integração temporal permanecem pendentes. Não há LONG_PASS nem TEMPORAL_PASS global.
+**Estado atual DD/FD:** E2 FSM/snapshot SHORT_PASS; E3A1/E3A2, E4A e E4B integradas na main `04ee09f9`; E4C IMPLEMENTED / QUICK_PASS / SHORT_PASS no candidato PR #473 (`bac497462a3fc13a1f47892d25d435beefddd6d8`), CI `41742682599` 4/4 PASS. E4C aguarda merge. E5 DDCB/FDCB, E6 fallback, E7 fechamento semântico, E8 formal e E9 integração temporal permanecem pendentes. Não há LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS global.
