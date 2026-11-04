@@ -1,6 +1,6 @@
 use sega_z80_cpu::{
     Z80BusOperation, Z80MicroSequencer, Z80MicroSequencerPhase, Z80MicroSequencerState,
-    Z80MicroStep,
+    Z80MicroStep, Z80PrefixState,
 };
 
 fn bus_request(step: Z80MicroStep) -> sega_z80_cpu::Z80BusRequest {
@@ -81,5 +81,5 @@ fn halt_hold_cycle_does_not_decode_prefix_or_change_architectural_flags() {
     assert!(cpu.halted);
     assert_eq!(cpu.registers.pc, 1);
     assert_eq!(cpu.registers.f, flags_after_halt);
-    assert_eq!(cpu.prefix_state(), None);
+    assert_eq!(cpu.export_state().prefix_state, Z80PrefixState::None);
 }
