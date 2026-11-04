@@ -222,6 +222,7 @@ Aceite: nenhuma instrução documentada elegível sem classificação e critéri
 - Implementado na branch candidata: HALT entra após M1 normal; PC avança uma vez.
 - Durante HALT sem interrupção elegível, cada chamada emite M1 no endereço atual de PC; o byte é ignorado, PC não avança e R incrementa preservando o bit 7.
 - WAIT e snapshot/restore do M1 pendente são cobertos; schema permanece 28.
+- Validador temporal SMS ajustado para contabilizar M1s anteriores já concluídos, permitindo snapshot no M1 subsequente a prefixo ED.
 - Inventário BASE candidato: 252 opcodes implementados / 0 rejeitados explicitamente.
 - Evidência e limites: [auditoria E7.1 — HALT](audits/z80-e7-halt-m1-2026-11-04.md).
 - **Limite:** saída de HALT por NMI/INT, acknowledge, reset especial e validação independente ainda não estão implementados neste incremento. Não atribuir SHORT_PASS integral a HALT.
