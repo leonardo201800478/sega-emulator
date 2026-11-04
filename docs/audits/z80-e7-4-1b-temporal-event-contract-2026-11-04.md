@@ -134,3 +134,67 @@ Não implementar BUSREQ/BUSACK, DMA, ownership externo, refresh DRAM, pins elét
 - PR #512 — contrato isolado `Z80MCycle`.
 - SMS Power, Cartridge Slot: https://www.smspower.org/Development/CartridgeSlot
 - SMS Power, SMS Cartridge: https://www.smspower.org/Development/SMSCartridge
+
+
+## 12. Retificação obrigatória — fase elétrica de WAIT e TW automático (2026-11-04)
+
+A revisão direta do ZiLOG UM008011-0816 (edição 0816) encontrou dois requisitos que precisam ser tratados como parte do contrato, não como detalhes de implementação.
+
+### 12.1 Fase de amostragem
+
+O manual especifica que a CPU amostra WAIT na **borda de descida do clock** durante T2 e em cada TW subsequente. A decisão de inserir o próximo TW é, portanto, tomada na fase de descida; a borda de subida seguinte completa a transição temporal correspondente.
+
+O contrato atual de E7.4.1B expõe somente eventos de conclusão por T-state e Z80MCycle::advance_tstate(wait_asserted) recebe o nível WAIT no mesmo avanço que retorna uma borda descrita como subida. Isso não identifica nem valida a fase de descida. A fixture atual pode testar contagem determinística, mas não pode ser chamada de amostragem elétrica fiel.
+
+**Decisão de modelagem:** separar explicitamente:
+- fase de clock/borda de descida em que WAIT é amostrado;
+- nível WAIT amostrado e decisão de manter/encerrar a janela de espera;
+- borda de subida que conclui o T-state e avança o M-cycle;
+- TW efetivamente inseridos, com origem obrigatória ou externa.
+
+O Scheduler continua sendo a única autoridade temporal. Antes da implementação, deve-se provar que a resolução temporal de MachineTime representa a meia-fase do clock sem arredondamento. Se a escala atual não representar meia unidade de T-state (por exemplo, quando há número ímpar de master ticks por T-state), definir uma representação racional/quantum temporal apropriada no domínio compartilhado; não arredondar a amostragem para uma borda inteira nem criar um relógio paralelo no SMS.
+
+### 12.2 I/O possui um TW automático
+
+O UM008011-0816, seção Input or Output Cycles e Figura 7 (página impressa 10), especifica que cada ciclo de I/O contém um TW automaticamente inserido entre T2 e T3. Esse TW existe para permitir a decodificação do endereço e a ativação de WAIT pelo periférico. WAIT é amostrado durante esse estado e pode prolongar o ciclo.
+
+No caminho atual, os requests PortRead/PortWrite são descritos como 4T, mas mandatory_wait_tstates() só reconhece InterruptAcknowledge. Assim, a implementação candidata representa I/O como quatro T-states nominais e não identifica o TW automático. A duração agregada de 4T não basta para demonstrar a posição correta do TW nem a janela de amostragem.
+
+**Decisão de modelagem:** a representação do ciclo I/O deve conter três T-states nominais e um TW automático posicionado entre T2 e T3, além de TWs externos adicionais quando WAIT permanecer ativo nas bordas de amostragem aplicáveis. O contrato de request deve explicitar se base_tstates significa duração total mínima ou apenas T-states nominais; não inferir essa semântica pelo valor numérico 4. A migração deve preservar os tempos totais esperados e atualizar validadores/testes de fase.
+
+### 12.3 Acknowledge de INT e waits automáticos
+
+O UM008011-0816, seção Interrupt Request/Acknowledge Cycle e Figura 9 (página impressa 12), determina dois waits automáticos no ciclo especial de acknowledge. O estado de ciclo deve identificar esses TWs como fases temporais reais, sem somá-los ao contador de WAIT externo. A janela de amostragem WAIT deve seguir a regra geral de T2/TW do manual; não ignorar amostras durante TW obrigatório.
+
+### 12.4 Consequências para o contrato e snapshots
+
+O estado serializável deve preservar, no mínimo:
+- fase atual do clock (incluindo se a próxima transição é amostragem em falling edge ou conclusão em rising edge);
+- fase T/M atual e ordinal monotônico de transição;
+- TW automático pendente/consumido e sua posição no ciclo;
+- nível WAIT amostrado na borda correta, origem da amostra e decisão resultante;
+- contagem separada de TW automáticos e TW externos;
+- próxima timestamp/quantum do Scheduler e identidade do request.
+
+Snapshot/restore deve ser exercitado imediatamente antes e depois da borda de amostragem, durante TW automático de I/O, durante cada TW do acknowledge INT, durante TW externo e entre falling/rising edges. Execução contínua e retomada devem produzir a mesma sequência ordenada de amostras, bordas, efeitos de barramento e timestamp final.
+
+### 12.5 Critérios de aceite adicionais
+
+| Caso | Critério |
+|---|---|
+| Memory read/write | WAIT amostrado no falling edge de T2; TW adicional decidido nessa amostra |
+| M1 | Não alterar o caminho M1 nesta subetapa; abrir integração específica que valide o mesmo ponto de amostragem e refresh |
+| I/O read/write | 3T nominais + 1 TW automático na posição T2–T3; WAIT amostrado durante o TW e extensão quando aplicável |
+| INT acknowledge | Dois TW automáticos explicitamente posicionados; WAIT não ignorado nas amostras T2/TW |
+| WAIT pulse fora da janela | Não inserir TW se o nível não estiver ativo na borda de amostragem definida |
+| WAIT ativo na amostra | Inserir TW seguinte e repetir a amostragem em cada TW |
+| Snapshot em falling/rising boundary | Restore preserva a fase exata e não duplica nem omite uma amostra |
+| Resolução temporal ímpar | Nenhuma aproximação/arredondamento; representação temporal exata ou estado BLOCKED |
+
+### 12.6 Fontes e classificação da evidência
+
+- **Fonte primária:** ZiLOG, Z80 CPU User Manual, UM008011-0816, pp. 7–8 (WAIT amostrado na borda de descida durante T2 e cada TW), p. 10/Figura 7 (um TW automático por ciclo I/O), p. 12/Figura 9 (dois TW automáticos em INT acknowledge). PDF oficial: https://www.zilog.com/docs/z80/um0080.pdf
+- **Engenharia reversa independente:** Floooh, Getting into way too much detail with the Z80 netlist simulation, que descreve a amostragem WAIT em meia-fase e a dependência da fase conforme o tipo de M-cycle: https://floooh.github.io/2021/12/06/z80-instruction-timing.html
+- **Referência comparativa de emulador:** MAME Z80 (src/devices/cpu/z80/z80.cpp e z80.hxx), a ser inspecionado para comparação de estados/serviços, sem tratá-lo como autoridade superior ao manual: https://github.com/mamedev/mame/tree/master/src/devices/cpu/z80
+
+**Status revisado:** o evento de uma borda por T-state continua sendo um avanço útil, mas a modelagem de WAIT/TW está **INCOMPLETE** até representar a fase de amostragem e os TWs automáticos de I/O/INT. E7.4.1B não pode ser concluída nem servir de base para BUSREQ/BUSACK antes de resolver e validar estes pontos.
