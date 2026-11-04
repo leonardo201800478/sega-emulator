@@ -222,7 +222,9 @@ pub enum Z80MicroSequencerPhase {
     /// Maskable-interrupt acknowledge M1 with IORQ and externally sampled vector.
     InterruptAcknowledge,
     /// Stable boundary after the acknowledge vector has been captured; IM dispatch follows in E7.2C.
-    InterruptAcknowledgeComplete { vector: u8 },
+    InterruptAcknowledgeComplete {
+        vector: u8,
+    },
     /// NMI response M1 at the interrupted PC; sampled memory data is ignored.
     NmiResponse,
     /// One internal T-state between the NMI response M1 and the stack writes.
@@ -11660,7 +11662,10 @@ mod base_immediate_io_differential_tests {
         let Z80MicroStep::BusRequest(request) = cpu.begin_instruction().unwrap() else {
             panic!("eligible INT must issue an acknowledge request");
         };
-        assert_eq!(request.operation, crate::Z80BusOperation::InterruptAcknowledge);
+        assert_eq!(
+            request.operation,
+            crate::Z80BusOperation::InterruptAcknowledge
+        );
         assert_eq!(request.address, 0x2345);
         assert_eq!(request.base_tstates, 3);
         assert!(!cpu.iff1);
