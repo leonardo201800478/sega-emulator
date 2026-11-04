@@ -8712,6 +8712,9 @@ mod ed_absolute_register_pair_differential_tests {
                     step = cpu.complete_bus_cycle(request.id, data).unwrap();
                     cpu = roundtrip(cpu);
                 }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
+                }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
                 }
@@ -8892,6 +8895,9 @@ mod ed_return_nibble_rotate_differential_tests {
                     );
                     step = cpu.complete_internal_cycle().unwrap();
                     cpu = roundtrip(cpu);
+                }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
@@ -9103,6 +9109,9 @@ mod ed_block_transfer_differential_tests {
                     assert_eq!(tstates, 1);
                     step = cpu.complete_internal_cycle().unwrap();
                     cpu = roundtrip(cpu);
+                }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
@@ -9331,6 +9340,9 @@ mod ed_block_compare_differential_tests {
                     assert_eq!(tstates, 1);
                     step = cpu.complete_internal_cycle().unwrap();
                     cpu = roundtrip(cpu);
+                }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
@@ -9663,6 +9675,9 @@ mod ed_block_io_differential_tests {
                     let next = cpu.complete_internal_cycle().unwrap();
                     round_trip(cpu);
                     next
+                }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
@@ -10132,6 +10147,9 @@ mod base_16bit_register_differential_tests {
                     cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
                     cpu.complete_internal_cycle().unwrap()
                 }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
+                }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
                 }
@@ -10287,6 +10305,9 @@ mod base_absolute_transfer_differential_tests {
                     cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
                     cpu.complete_internal_cycle().unwrap()
                 }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
+                }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
                 }
@@ -10403,6 +10424,9 @@ mod base_relative_branch_differential_tests {
                 Z80MicroStep::InternalCycle { .. } => {
                     cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
                     cpu.complete_internal_cycle().unwrap()
+                }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
@@ -10556,6 +10580,9 @@ mod base_absolute_jump_differential_tests {
                     cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
                     cpu.complete_internal_cycle().unwrap()
                 }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
+                }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
                 }
@@ -10705,6 +10732,9 @@ mod base_stack_push_pop_differential_tests {
                 Z80MicroStep::InternalCycle { .. } => {
                     cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
                     cpu.complete_internal_cycle().unwrap()
+                }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
@@ -10877,6 +10907,9 @@ mod base_call_rst_differential_tests {
                 Z80MicroStep::InternalCycle { .. } => {
                     cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
                     cpu.complete_internal_cycle().unwrap()
+                }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
@@ -11060,6 +11093,9 @@ mod base_return_differential_tests {
                     cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
                     cpu.complete_internal_cycle().unwrap()
                 }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
+                }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
                 }
@@ -11228,6 +11264,9 @@ mod base_exchange_interrupt_control_differential_tests {
                 Z80MicroStep::InternalCycle { .. } => {
                     cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
                     cpu.complete_internal_cycle().unwrap()
+                }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
@@ -11400,6 +11439,9 @@ mod base_exchange_stack_differential_tests {
                     cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
                     cpu.complete_internal_cycle().unwrap()
                 }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
+                }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
                 }
@@ -11520,6 +11562,9 @@ mod base_immediate_io_differential_tests {
                 Z80MicroStep::InternalCycle { .. } => {
                     cpu = Z80MicroSequencer::restore_state(cpu.export_state()).unwrap();
                     cpu.complete_internal_cycle().unwrap()
+                }
+                Z80MicroStep::InterruptAcknowledge { .. } => {
+                    panic!("unexpected INT acknowledge in instruction-only test")
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
@@ -11651,7 +11696,7 @@ mod base_immediate_io_differential_tests {
         };
         assert_eq!(request.operation, crate::Z80BusOperation::OpcodeFetch);
         assert_eq!(cpu.phase, Z80MicroSequencerPhase::NmiResponse);
-        assert_eq!(cpu.iff2, true);
+        assert!(cpu.iff2);
         assert_eq!(cpu.int_pending, Some(0xCF));
     }
 
