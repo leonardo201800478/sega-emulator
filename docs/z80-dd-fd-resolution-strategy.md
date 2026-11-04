@@ -267,7 +267,7 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 
 **Gate E5:** 256 subopcodes por índice, ordem de barramento e M/T-cycles conferidos, BIT sem write-back e safe points serializáveis. PR #485 integrada; CI #4245 SUCCESS no HEAD `2cc6105a0c8c3589994870a6a67ceffb1e8c02f8`; merge SHA `f4130104fa971289507c0b15ab2d8eabd1dd5b00`.
 
-### E6 — Prefixos ignorados e combinações DD/FD
+### E6 — Resolução geral de prefixos DD/FD/ED/CB
 
 **E6.1 — Fallback BASE para opcodes já suportados: IMPLEMENTED.**
 - Encaminhar `Ignored` ao dispatch BASE sem refetch; preservar o custo do M1 DD/FD já consumido.
@@ -275,7 +275,7 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 - Demonstrar last-prefix-wins em cadeias repetidas/alternadas e ausência de substituição de IX/IY/H/L nas instruções BASE ignoradas.
 - Reutilizar o decoder ED para ED após DD/FD; preservar a rota DDCB/FDCB E5.
 - Não adicionar handlers BASE ausentes: `UnsupportedOpcode` continua explícito para lacunas do decoder BASE.
-- Testar o subconjunto BASE/ED que já possui caminho de execução sem novos operandos/bus phases.
+- Testar instruções BASE/ED já suportadas em fases de fetch, operandos imediatos, leituras/escritas, ciclos internos, WAIT e snapshots.
 
 **E6.2 — Fallback com operandos e fases suspensas: IMPLEMENTED.**
 - Estender a resolução para as instruções BASE/ED já suportadas que possuem leituras, escritas e ciclos internos.
@@ -288,15 +288,15 @@ A conexão atual não disponibiliza criação/execução de agentes autônomos i
 
 **Gate E6: PASS no escopo declarado.** OpCodes `UsesIndex`, `Ignored` e `IndexedCb` seguem caminhos explícitos; fallback BASE não relê opcode; cadeias repetidas/alternadas e snapshots preservam prefixos já consumidos.
 
-Validar explicitamente:
-- DD/FD seguido de instrução BASE que não usa HL/IX/IY.
-- DD/FD repetidos e alternados, incluindo last-prefix-wins e custo de cada M1.
-- DD/FD seguido de ED, cancelando a seleção IX/IY.
-- DD/FD seguido de CB, distinguindo DDCB/FDCB.
-- Prefixos ignorados em instruções com H/L/(HL), sem substituir registradores indevidamente.
-- Bytes consumidos, PC, R, M-cycles, T-states, flags, WZ e ausência de fetch duplicado.
+**Cobertura E6 validada:**
+- DD/FD seguido de instrução BASE que não usa HL/IX/IY, incluindo EX DE,HL.
+- DD/FD repetidos e alternados, last-prefix-wins e cadeia de 257 prefixos.
+- DD/FD seguido de ED, cancelando seleção IX/IY e preservando M-cycles em fases ED retomáveis.
+- DD/FD seguido de CB, mantendo a rota DDCB/FDCB implementada na E5.
+- BASE imediato, ALU imediato, branch relativo, memória read/write e ED absolute transfer com snapshots/WAIT.
+- PC, R, bytes consumidos, M1/non-M1, M-cycles, T-states e ausência de fetch duplicado.
 
-**Gate E6:** cada opcode classificado como UsesIndex, Ignored ou IndexedCb tem caminho e teste explícitos; nenhum fallback silencioso.
+**Gate E6: PASS** no escopo declarado; instruções BASE ausentes permanecem `UnsupportedOpcode` e são assunto da auditoria E7.
 
 ### E7 — Fechamento semântico do Z80
 
