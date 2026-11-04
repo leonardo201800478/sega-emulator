@@ -8637,7 +8637,7 @@ mod ed_absolute_register_pair_differential_tests {
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
-                },
+                }
                 Z80MicroStep::InstructionRetired { opcode: _, tstates } => {
                     return (cpu, bus, tstates);
                 }
@@ -8818,7 +8818,7 @@ mod ed_return_nibble_rotate_differential_tests {
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
-                },
+                }
                 Z80MicroStep::InstructionRetired { tstates, .. } => {
                     return (cpu, bus, tstates);
                 }
@@ -9029,7 +9029,7 @@ mod ed_block_transfer_differential_tests {
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
-                },
+                }
                 Z80MicroStep::InstructionRetired { tstates, .. } => {
                     return (cpu, bus, tstates, cycles);
                 }
@@ -9257,7 +9257,7 @@ mod ed_block_compare_differential_tests {
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
-                },
+                }
                 Z80MicroStep::InstructionRetired { tstates, .. } => {
                     return (cpu, bus, tstates, cycles);
                 }
@@ -9589,7 +9589,7 @@ mod ed_block_io_differential_tests {
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
-                },
+                }
                 Z80MicroStep::InstructionRetired { tstates, .. } => return tstates,
             };
         }
@@ -10057,7 +10057,7 @@ mod base_16bit_register_differential_tests {
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
-                },
+                }
                 Z80MicroStep::InstructionRetired { opcode: _, tstates } => {
                     return (sequencer_state(&cpu), tstates);
                 }
@@ -10212,7 +10212,7 @@ mod base_absolute_transfer_differential_tests {
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
-                },
+                }
                 Z80MicroStep::InstructionRetired { tstates, .. } => {
                     return (sequencer_state(&cpu), tstates);
                 }
@@ -10329,7 +10329,7 @@ mod base_relative_branch_differential_tests {
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
-                },
+                }
                 Z80MicroStep::InstructionRetired { tstates, .. } => {
                     return (cpu.export_architectural_state(), tstates);
                 }
@@ -10481,7 +10481,7 @@ mod base_absolute_jump_differential_tests {
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
-                },
+                }
                 Z80MicroStep::InstructionRetired { tstates, .. } => {
                     return (cpu.export_architectural_state(), tstates);
                 }
@@ -10631,7 +10631,7 @@ mod base_stack_push_pop_differential_tests {
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
-                },
+                }
                 Z80MicroStep::InstructionRetired { tstates, .. } => {
                     return (cpu.export_architectural_state(), tstates);
                 }
@@ -10803,7 +10803,7 @@ mod base_call_rst_differential_tests {
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
-                },
+                }
                 Z80MicroStep::InstructionRetired { tstates, .. } => {
                     return (cpu.export_architectural_state(), tstates);
                 }
@@ -10985,7 +10985,7 @@ mod base_return_differential_tests {
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
-                },
+                }
                 Z80MicroStep::InstructionRetired { tstates, .. } => {
                     return (cpu.export_architectural_state(), tstates);
                 }
@@ -11154,7 +11154,7 @@ mod base_exchange_interrupt_control_differential_tests {
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
-                },
+                }
                 Z80MicroStep::InstructionRetired { tstates, .. } => return (cpu, tstates),
             };
         }
@@ -11325,7 +11325,7 @@ mod base_exchange_stack_differential_tests {
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
-                },
+                }
                 Z80MicroStep::InstructionRetired { tstates, .. } => {
                     return (cpu.export_architectural_state(), tstates);
                 }
@@ -11446,7 +11446,7 @@ mod base_immediate_io_differential_tests {
                 }
                 Z80MicroStep::InterruptServiced { .. } => {
                     panic!("unexpected interrupt service in instruction-only test")
-                },
+                }
                 Z80MicroStep::InstructionRetired { tstates, .. } => {
                     return (cpu.export_architectural_state(), tstates);
                 }
