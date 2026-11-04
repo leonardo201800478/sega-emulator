@@ -56,7 +56,7 @@ A baseline consultada em `main` é `f89a52346e91e88e82ab37a4afcfffff2d793407`, a
 | E4A | LD r,(IX/IY+d), LD (IX/IY+d),r e LD (IX/IY+d),n | Integrada na main; IMPLEMENTED / SHORT_PASS |
 | E4B | ADD/ADC/SUB/SBC/AND/XOR/OR/CP (IX/IY+d) | Integrada na main pela PR #472; IMPLEMENTED / QUICK_PASS / SHORT_PASS; CI 4/4 PASS |
 | E4C | INC/DEC (IX/IY+d) | Integrada na main pela PR #475; IMPLEMENTED / QUICK_PASS / SHORT_PASS; 5 testes dirigidos; CI 4/4 PASS |
-| E5 | DDCB/FDCB completo | IMPLEMENTED no candidato PR #477; QUICK_PASS/SHORT_PASS aguardam CI |
+| E5 | DDCB/FDCB completo | IMPLEMENTED no candidato PR #478; QUICK_PASS/SHORT_PASS aguardam CI |
 | E6 | Fallback geral e resolução de prefixos DD/FD/ED/CB | Pendente/incompleto no microsequenciador |
 | E7 | Fechamento semântico global BASE/CB/ED/DD/FD/DDCB/FDCB | Pendente |
 | E8 | Validação formal e diferencial (ZEXDOC/ZEXALL e corpora independentes) | Pendente |
@@ -148,7 +148,7 @@ Os níveis abaixo são cumulativos no escopo declarado. O estado deve ser atribu
 - [x] 5 testes dirigidos `indexed_incdec_e4c.rs` e CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS no HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`.
 - Estado: IMPLEMENTED / QUICK_PASS / SHORT_PASS para o escopo implementado. Não promover LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS sem evidência independente.
 
-### E5 — DDCB/FDCB — implementação candidata PR #477
+### E5 — DDCB/FDCB — implementação candidata PR #478
 
 - [x] Caminho microsequenciado para os 256 subopcodes DDCB e 256 FDCB, usando o executor atômico existente como referência funcional, sem duplicar a semântica CB.
 - [x] DD/FD e CB como M1; displacement como leitura de 3T; opcode final como leitura non-M1 de 5T; leitura efetiva de 4T; escrita RMW de 3T.
@@ -158,7 +158,7 @@ Os níveis abaixo são cumulativos no escopo declarado. O estado deve ser atribu
 - [x] R incrementa somente nos M1; WZ mantém o endereço efetivo; IX/IY, last-prefix-wins, displacement assinado e wrap.
 - [x] WAIT em cada transação e snapshot/restore nas fases com request pendente; schema 28.
 - [x] Adicionada suíte `indexed_cb_e5.rs`: 256 subopcodes por índice, BIT read-only, RMW, cópia z, flags modeladas, prefixos repetidos, wrap e round-trip de snapshots.
-- [ ] CI da PR #477 e revisão do diff: pendentes nesta fotografia.
+- [ ] CI da PR #478 e revisão do diff: pendentes nesta fotografia.
 - Estado: IMPLEMENTED no candidato. QUICK_PASS/SHORT_PASS permanecem NOT RUN até CI e regressões no HEAD exato.
 - Limite de fonte: ZiLOG UM008011-0816 marca S e P/V de BIT indexado como desconhecidos; o candidato mantém o modelo já existente no executor atômico. Isso não comprova esses bits contra silício.
 - Não promover LONG_PASS, DIFFERENTIAL_PASS, ZEXDOC/ZEXALL ou TEMPORAL_PASS sem evidência independente.
