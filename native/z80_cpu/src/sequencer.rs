@@ -219,6 +219,12 @@ impl From<Z80BusHandshakeError> for Z80MicroSequencerError {
 pub enum Z80MicroSequencerPhase {
     Ready,
     OpcodeFetch,
+    /// NMI response M1 at the interrupted PC; sampled memory data is ignored.
+    NmiResponse,
+    /// One internal T-state between the NMI response M1 and the stack writes.
+    NmiStackPushInternal { return_address: u16 },
+    /// NMI pushes the interrupted PC high byte first, then low byte.
+    NmiStackPushWrite { stage: u8, return_address: u16 },
     ImmediateReadRegister {
         destination: u8,
     },
@@ -469,6 +475,7 @@ impl Z80MicroSequencerPhase {
         matches!(
             self,
             Self::CbMemoryInternal { .. }
+                | Self::NmiStackPushInternal { .. }
                 | Self::EdRegisterInternal { .. }
                 | Self::Ed16ArithmeticInternal { .. }
                 | Self::EdNibbleRotateInternal { .. }
@@ -490,6 +497,12 @@ impl Z80MicroSequencerPhase {
     }
 }
 
+/// Kind of interrupt service completed by the resumable CPU.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Z80InterruptKind {
+    Nmi,
+}
+
 /// Observable result after a completed bus transaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Z80MicroStep {
@@ -498,6 +511,8 @@ pub enum Z80MicroStep {
     /// One instruction has retired. T-states include base cycle lengths and
     /// WAIT states inserted while its bus requests were pending.
     InstructionRetired { opcode: u8, tstates: u32 },
+    /// An interrupt entry sequence completed; this is not an instruction retirement.
+    InterruptServiced { kind: Z80InterruptKind, tstates: u32 },
     /// One non-bus internal T-state; advance machine time before resuming.
     InternalCycle { tstates: u32 },
 }
@@ -950,6 +965,50 @@ impl Z80MicroSequencer {
                             && request.address == state.registers.pc
                             && request.base_tstates == 4
                     })
+            }
+            Z80MicroSequencerPhase::NmiResponse => {
+                state.opcode.is_none()
+                    && state.prefix_state == Z80PrefixState::None
+                    && !state.iff1
+                    && !state.halted
+                    && state.instruction_tstates == 0
+                    && pending.is_some_and(|request| {
+                        request.operation == Z80BusOperation::OpcodeFetch
+                            && request.address == state.registers.pc
+                            && request.base_tstates == 4
+                    })
+            }
+            Z80MicroSequencerPhase::NmiStackPushInternal { return_address } => {
+                state.opcode.is_none()
+                    && state.prefix_state == Z80PrefixState::None
+                    && !state.iff1
+                    && !state.halted
+                    && return_address == state.registers.pc
+                    && pending.is_none()
+                    && state.instruction_tstates >= 4
+            }
+            Z80MicroSequencerPhase::NmiStackPushWrite {
+                stage,
+                return_address,
+            } => {
+                let expected_value = match stage {
+                    0 => (return_address >> 8) as u8,
+                    1 => return_address as u8,
+                    _ => return false,
+                };
+                let minimum_tstates = if stage == 0 { 5 } else { 8 };
+                state.opcode.is_none()
+                    && state.prefix_state == Z80PrefixState::None
+                    && !state.iff1
+                    && !state.halted
+                    && return_address == state.registers.pc
+                    && pending.is_some_and(|request| {
+                        request.operation == Z80BusOperation::MemoryWrite {
+                            value: expected_value,
+                        } && request.address == state.registers.sp
+                            && request.base_tstates == 3
+                    })
+                    && state.instruction_tstates >= minimum_tstates
             }
             Z80MicroSequencerPhase::ImmediateReadRegister { destination } => {
                 let opcode_matches = state.opcode.is_some_and(|opcode| {
@@ -2175,6 +2234,17 @@ impl Z80MicroSequencer {
                         Some(_) => false,
                     }
             }
+            Z80MicroSequencerPhase::NmiResponse => {
+                state.mcycle_index == 0 && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::NmiStackPushInternal { .. } => {
+                state.mcycle_index == 1 && state.tstate_index == 0
+            }
+            Z80MicroSequencerPhase::NmiStackPushWrite { stage, .. } => {
+                stage <= 1
+                    && state.mcycle_index == 2 + u32::from(stage)
+                    && state.tstate_index == 0
+            }
             Z80MicroSequencerPhase::ImmediateReadRegister { .. } => match state.prefix_state {
                 Z80PrefixState::None => state.mcycle_index == 1 && state.tstate_index == 0,
                 Z80PrefixState::Index(_) => {
@@ -2599,6 +2669,11 @@ impl Z80MicroSequencer {
     /// Begin the next instruction by issuing its M1 opcode-fetch request.
     /// During HALT, the fetch is repeated at the next-PC address; its data is
     /// ignored and PC is not incremented when the request completes.
+    /// Latch a negative-edge NMI request. It is accepted at the next instruction boundary.
+    pub fn request_nmi(&mut self) {
+        self.nmi_pending = true;
+    }
+
     pub fn begin_instruction(&mut self) -> Result<Z80MicroStep, Z80MicroSequencerError> {
         if self.phase != Z80MicroSequencerPhase::Ready || self.handshake.is_pending() {
             return Err(Z80MicroSequencerError::InstructionAlreadyActive);
@@ -2610,6 +2685,18 @@ impl Z80MicroSequencer {
         self.prefix_state = Z80PrefixState::None;
         self.q_previous = self.q;
         self.q = 0;
+        if self.nmi_pending {
+            let request = self
+                .handshake
+                .begin(Z80BusOperation::OpcodeFetch, self.registers.pc, 4)?;
+            self.nmi_pending = false;
+            self.halted = false;
+            self.iff2 = self.iff1;
+            self.iff1 = false;
+            self.p = false;
+            self.phase = Z80MicroSequencerPhase::NmiResponse;
+            return Ok(Z80MicroStep::BusRequest(request));
+        }
         let request = self
             .handshake
             .begin(Z80BusOperation::OpcodeFetch, self.registers.pc, 4)?;
@@ -3619,6 +3706,23 @@ impl Z80MicroSequencer {
                         .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?,
                 )
             }
+            Z80MicroSequencerPhase::NmiResponse => {
+                // NMI uses the M1/MREQ/RD response cycle at the interrupted PC.
+                // The sampled byte is discarded; PC is not incremented.
+                let _ignored_data = response
+                    .data
+                    .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                self.refresh = (self.refresh & 0x80) | (self.refresh.wrapping_add(1) & 0x7F);
+                self.mcycle_index = self
+                    .mcycle_index
+                    .checked_add(1)
+                    .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                self.tstate_index = 0;
+                self.phase = Z80MicroSequencerPhase::NmiStackPushInternal {
+                    return_address: self.registers.pc,
+                };
+                Ok(Z80MicroStep::InternalCycle { tstates: 1 })
+            }
             Z80MicroSequencerPhase::CbMemoryRead { address } => {
                 let value = response
                     .data
@@ -4021,7 +4125,8 @@ impl Z80MicroSequencer {
                 };
                 Ok(Z80MicroStep::InternalCycle { tstates: 1 })
             }
-            Z80MicroSequencerPhase::BaseInternal { .. }
+            Z80MicroSequencerPhase::NmiStackPushInternal { .. }
+            | Z80MicroSequencerPhase::BaseInternal { .. }
             | Z80MicroSequencerPhase::BaseRelativeBranchInternal { .. }
             | Z80MicroSequencerPhase::BaseStackPushInternal { .. }
             | Z80MicroSequencerPhase::BaseControlPushInternal { .. }
@@ -4032,6 +4137,37 @@ impl Z80MicroSequencer {
             | Z80MicroSequencerPhase::IndexedImmediateStoreInternal { .. } => {
                 Err(Z80MicroSequencerError::UnexpectedCompletion)
             }
+            Z80MicroSequencerPhase::NmiStackPushWrite {
+                stage,
+                return_address,
+            } => match stage {
+                0 => {
+                    let low = return_address as u8;
+                    self.registers.sp = self.registers.sp.wrapping_sub(1);
+                    let next_mcycle_index = self
+                        .mcycle_index
+                        .checked_add(1)
+                        .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                    let request = self.handshake.begin(
+                        Z80BusOperation::MemoryWrite { value: low },
+                        self.registers.sp,
+                        3,
+                    )?;
+                    self.mcycle_index = next_mcycle_index;
+                    self.tstate_index = 0;
+                    self.phase = Z80MicroSequencerPhase::NmiStackPushWrite {
+                        stage: 1,
+                        return_address,
+                    };
+                    Ok(Z80MicroStep::BusRequest(request))
+                }
+                1 => {
+                    self.registers.pc = 0x0066;
+                    self.wz = 0x0066;
+                    self.retire_interrupt(Z80InterruptKind::Nmi)
+                }
+                _ => Err(Z80MicroSequencerError::InvalidState),
+            },
             Z80MicroSequencerPhase::MemoryWrite { address, .. } => {
                 let opcode = self
                     .opcode
@@ -4055,6 +4191,27 @@ impl Z80MicroSequencer {
             .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
         let mut next = self.clone();
         let step = match next.phase {
+            Z80MicroSequencerPhase::NmiStackPushInternal { return_address } => {
+                next.instruction_tstates = next_instruction_tstates;
+                let high = (return_address >> 8) as u8;
+                next.registers.sp = next.registers.sp.wrapping_sub(1);
+                let next_mcycle_index = next
+                    .mcycle_index
+                    .checked_add(1)
+                    .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
+                let request = next.handshake.begin(
+                    Z80BusOperation::MemoryWrite { value: high },
+                    next.registers.sp,
+                    3,
+                )?;
+                next.mcycle_index = next_mcycle_index;
+                next.tstate_index = 0;
+                next.phase = Z80MicroSequencerPhase::NmiStackPushWrite {
+                    stage: 0,
+                    return_address,
+                };
+                Z80MicroStep::BusRequest(request)
+            }
             Z80MicroSequencerPhase::BaseInternal {
                 opcode,
                 remaining_tstates,
@@ -5395,6 +5552,20 @@ impl Z80MicroSequencer {
         self.tstate_index = 0;
         self.phase = Z80MicroSequencerPhase::MemoryWrite { address, value };
         Ok(Z80MicroStep::BusRequest(request))
+    }
+
+    fn retire_interrupt(
+        &mut self,
+        kind: Z80InterruptKind,
+    ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
+        let tstates = self.instruction_tstates;
+        self.phase = Z80MicroSequencerPhase::Ready;
+        self.opcode = None;
+        self.prefix_state = Z80PrefixState::None;
+        self.instruction_tstates = 0;
+        self.mcycle_index = 0;
+        self.tstate_index = 0;
+        Ok(Z80MicroStep::InterruptServiced { kind, tstates })
     }
 
     fn retire(&mut self, opcode: u8) -> Result<Z80MicroStep, Z80MicroSequencerError> {
