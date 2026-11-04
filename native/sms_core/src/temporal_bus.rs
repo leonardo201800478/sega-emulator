@@ -40,10 +40,10 @@ fn valid_bus_deadline(
     started_at: MachineTime,
     deadline: MachineTime,
     master_ticks_per_tstate: u64,
-    base_tstates: u8,
+    minimum_tstates: u16,
 ) -> bool {
     elapsed_tstates(started_at, deadline, master_ticks_per_tstate)
-        .is_some_and(|total| total >= u128::from(base_tstates))
+        .is_some_and(|total| total >= u128::from(minimum_tstates))
 }
 
 fn valid_internal_deadline(
@@ -541,7 +541,8 @@ impl SmsTemporalBus {
                         started_at,
                         pending_events[0].timestamp,
                         scale,
-                        request.base_tstates + if request.operation == Z80BusOperation::InterruptAcknowledge { 2 } else { 0 },
+                        u16::from(request.base_tstates)
+                            + if request.operation == Z80BusOperation::InterruptAcknowledge { 2 } else { 0 },
                     ) => {}
             (Some(request), Some(started_at), Some(completion), None, None, None)
                 if request.id == completion.request_id
