@@ -1039,6 +1039,77 @@ mod tests {
     }
 
     #[test]
+    fn im1_interrupt_dispatch_resumes_through_sms_scheduler() {
+        let mut machine = SmsTemporalMachine::new(vec![0x00; 0x4000], 3).unwrap();
+        {
+            let cpu = machine.cpu_mut();
+            cpu.interrupt_mode = 1;
+            cpu.iff1 = true;
+            cpu.iff2 = true;
+            cpu.registers.pc = 0x4567;
+            cpu.registers.sp = 0xC002;
+        }
+        machine.set_int_line(Some(0xFF));
+        machine.begin_instruction().unwrap();
+        machine.schedule_pending_bus(0).unwrap();
+        assert_eq!(
+            machine.dispatch_next().unwrap(),
+            Z80MicroStep::InterruptAcknowledge {
+                vector: 0xFF,
+                tstates: 5,
+            }
+        );
+        assert_eq!(
+            machine.resume_instruction(0).unwrap(),
+            Z80MicroStep::InterruptServiced {
+                kind: sega_z80_cpu::Z80InterruptKind::Int,
+                tstates: 13,
+            }
+        );
+        assert_eq!(machine.cpu().registers.pc, 0x0038);
+        assert_eq!(machine.cpu().registers.sp, 0xC000);
+        assert_eq!(machine.now(), MachineTime::from_ticks(39));
+    }
+
+    #[test]
+    fn im2_interrupt_dispatch_reads_vector_table_through_sms_scheduler() {
+        let mut rom = vec![0x00; 0x4000];
+        rom[0x2080] = 0x34;
+        rom[0x2081] = 0x12;
+        let mut machine = SmsTemporalMachine::new(rom, 3).unwrap();
+        {
+            let cpu = machine.cpu_mut();
+            cpu.interrupt_mode = 2;
+            cpu.iff1 = true;
+            cpu.iff2 = true;
+            cpu.registers.pc = 0x4567;
+            cpu.registers.sp = 0xC002;
+            cpu.i = 0x20;
+        }
+        machine.set_int_line(Some(0x80));
+        machine.begin_instruction().unwrap();
+        machine.schedule_pending_bus(0).unwrap();
+        assert_eq!(
+            machine.dispatch_next().unwrap(),
+            Z80MicroStep::InterruptAcknowledge {
+                vector: 0x80,
+                tstates: 5,
+            }
+        );
+        assert_eq!(
+            machine.resume_instruction(0).unwrap(),
+            Z80MicroStep::InterruptServiced {
+                kind: sega_z80_cpu::Z80InterruptKind::Int,
+                tstates: 19,
+            }
+        );
+        assert_eq!(machine.cpu().registers.pc, 0x1234);
+        assert_eq!(machine.cpu().wz, 0x1234);
+        assert_eq!(machine.cpu().registers.sp, 0xC000);
+        assert_eq!(machine.now(), MachineTime::from_ticks(57));
+    }
+
+    #[test]
     fn nop_runs_on_the_scheduler_timeline_for_four_tstates() {
         let mut machine = SmsTemporalMachine::new(vec![0x00; 0x4000], 3).unwrap();
         retired(machine.step_instruction(0).unwrap(), 0x00, 4);
