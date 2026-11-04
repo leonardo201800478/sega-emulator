@@ -17,7 +17,9 @@ fn snapshot(machine: &SmsTemporalMachine) -> SmsTemporalMachine {
     let decoded = Z80MicroSequencerState::decode(&bytes).unwrap();
     assert_eq!(decoded, state.cpu);
     state.cpu = decoded;
-    let mut restored = SmsTemporalMachine::restore_state(state).unwrap();
+    let mut restored = SmsTemporalMachine::restore_state(state.clone()).unwrap_or_else(|error| {
+        panic!("SMS machine snapshot restore failed: {error:?}; machine state: {state:#?}")
+    });
     restored.set_trace_enabled(true);
     restored
 }
