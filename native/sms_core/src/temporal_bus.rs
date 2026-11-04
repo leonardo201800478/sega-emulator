@@ -722,14 +722,14 @@ mod tests {
     fn interrupt_acknowledge_returns_external_vector_after_two_automatic_wait_states() {
         let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
         bus.set_interrupt_vector(0xCF);
-        let request = request(90, Z80BusOperation::InterruptAcknowledge, 0x1234, 5);
+        let request = request(90, Z80BusOperation::InterruptAcknowledge, 0x1234, 3);
         let started_at = bus.now();
         let deadline = bus.begin_request(request, 1).unwrap();
 
         assert_eq!(
             deadline.checked_duration_since(started_at),
-            Some(24),
-            "five acknowledge T-states plus two automatic and one external WAIT"
+            Some(18),
+            "three base T-states plus two automatic and one external WAIT"
         );
 
         let restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
