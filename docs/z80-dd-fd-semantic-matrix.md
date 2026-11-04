@@ -46,10 +46,10 @@ A matriz antiga `docs/z80-opcode-matrix.md` descreve principalmente a implementa
 
 | Sequência | Comportamento no executor atômico | Microsequenciador | Evidência / lacuna |
 |---|---|---|---|
-| `DD op` | Decoder indexado; substitui HL/H/L conforme família | Executa E3A1/E3A2, E4A, E4B e E4C; DDCB/FDCB ainda pendentes | `indexed_16bit_e3a1.rs`, `indexed_absolute_transfer_e3a2a.rs`, `indexed_stack_e3a2b.rs`, `indexed_exchange_stack_e3a2c.rs` |
+| `DD op` | Decoder indexado; substitui HL/H/L conforme família | Executa E3A1/E3A2, E4A, E4B e E4C; DDCB/FDCB implementados na rota indexed-CB E5; outras famílias DD ainda pendentes | `indexed_16bit_e3a1.rs`, `indexed_absolute_transfer_e3a2a.rs`, `indexed_stack_e3a2b.rs`, `indexed_exchange_stack_e3a2c.rs` |
 | `FD op` | Decoder indexado para IY | Executa o subconjunto E3A1/E3A2; rejeita displacement e famílias ainda não implementadas | Mesmas suítes E3A1/E3A2, cobrindo IX e IY |
 | `DD DD op`, `FD FD op` | Repetições contam 4T por prefixo extra | M1 repetidos, last-prefix-wins e execução E3A1/E3A2/E4A/E4B/E4C; outras famílias ainda rejeitadas | Testes E3A1/E3A2 com prefixos repetidos/alternados e M-cycle acumulado |
-| `DD FD op`, `FD DD op` | Último prefixo seleciona IY/IX, respectivamente | Last-prefix-wins executa E3A1/E3A2/E4A/E4B/E4C; demais famílias ainda pendentes | Testes E3A1/E3A2 de seleção IX/IY e prefixos alternados |
+| `DD FD op`, `FD DD op` | Último prefixo seleciona IY/IX, respectivamente | Last-prefix-wins executa E3A1/E3A2/E4A/E4B/E4C e DDCB/FDCB E5; demais famílias ainda pendentes | Testes E3A1/E3A2 de seleção IX/IY e prefixos alternados |
 | `DD/FD ED op` | Prefixo de índice ignorado; ED segue o decoder base | O estado de prefixo ED é reconhecido; execução ED pode seguir seu subset próprio | Exige teste de estado e custo total por instrução |
 | `DD/FD CB d op` | Consome displacement e subopcode e executa indexed-CB | Rejeita CB após DD/FD; não consome displacement/subopcode | `dd_cb_stops_before_treating_displacement_as_an_m1_opcode` |
 | `DD/FD op` não afetado | Fallback ao decoder base sem reler o opcode; custo adicional do prefixo preservado | Fallback ainda não está implementado de forma geral para DD/FD | Testar bytes consumidos, R, PC, custo e ausência de leitura duplicada |
@@ -129,7 +129,7 @@ O schema 26 foi introduzido por E2; E4A elevou para 27 para serializar displacem
 | Teste de classificação dos 256 indexed-CB para IX/IY | Todos os subopcodes alcançam caminho sem erro | Ausência de escrita em BIT, resultado correto, cópia z, trace ou timing |
 | Teste dirigido `indexed_prefix_supports_ix_iy_displacements_and_indexed_cb` | Uma sequência representativa de IX/IY, half-register, displacement, BIT e SET | Todas as variantes e condições de borda |
 | Teste `z80_indexed_cb_exhaustive_rotate_shift.rs` | Rotate/shift indexed-CB memória-only exaustivo em valores/carry | BIT/RES/SET, cópia z e microsequenciador |
-| Testes de prefixo no sequenciador | Reconhecimento DD/FD, M1, R e latch do último prefixo; execução E3A1/E3A2/E4A/E4B/E4C | DDCB/FDCB e fallback geral ainda pendentes |
+| Testes de prefixo no sequenciador | Reconhecimento DD/FD/CB, M1, R, last-prefix-wins e execução E3A1/E3A2/E4A/E4B/E4C/E5 | Fallback geral E6 ainda pendente |
 | `indexed_memory_e4a.rs` | Loads/stores IX/IY, displacement assinado, wrap, H/L, PC wrap, WAIT, snapshots e prefixos repetidos/alternados | Não substitui oráculo diferencial externo nem trace físico independente |
 | `indexed_alu_e4b.rs` | 16 vetores de ALU executados com IX e IY; flags, CP/A, X/Y, WAIT em cada acesso, snapshots e last-prefix-wins | Não substitui oráculo diferencial externo ou trace físico independente |
 | `indexed_incdec_e4c.rs` | 5 testes de INC/DEC indexado; IX/IY, flags/C, displacement, wrap, WAIT, snapshots, M-cycles e prefixos | Não substitui ZEXDOC/ZEXALL, oráculo diferencial externo ou trace físico independente |
@@ -185,7 +185,7 @@ Links:
 - **E4A — LD indexado/displacement:** IMPLEMENTED e SHORT_PASS no candidato PR #471; 19T/5M, WAIT e snapshots nas fases cobertas.
 - **E4B — ALU A,(IX/IY+d):** IMPLEMENTED / QUICK_PASS / SHORT_PASS no escopo registrado; diferencial externo NOT_RUN.
 - **E4C — INC/DEC (IX/IY+d):** IMPLEMENTED / QUICK_PASS / SHORT_PASS pela PR #475; CI 41747460761 4/4 PASS; 5 testes dirigidos; LONG_PASS/diferencial/temporal NOT_RUN.
-- **E5 — DDCB/FDCB:** IMPLEMENTED / QUICK_PASS / SHORT_PASS na PR #485; 256 subopcodes por IX/IY, BIT read-only, RMW, M1/non-M1, WAIT e snapshots. Windows audio-output test ainda pendente; diferencial externo e temporal não executados.
+- **E5 — DDCB/FDCB:** IMPLEMENTED / QUICK_PASS / SHORT_PASS na PR #485; 256 subopcodes por IX/IY, BIT read-only, RMW, M1/non-M1, WAIT e snapshots. Windows D3D12/WASAPI/XAudio2 e audio-output tests PASS no CI 3/3; diferencial externo e temporal não executados.
 - **E6 — prefixos ignorados:** implementar fallback BASE sem fetch duplicado e todas as combinações DD/FD/ED/CB.
 - **E7 — fechamento semântico:** auditar BASE/CB/ED/DD/FD/DDCB/FDCB, flags, interrupções, HALT e snapshots.
 - **E8 — formal/diferencial:** ZEXDOC/ZEXALL e oráculos independentes.
