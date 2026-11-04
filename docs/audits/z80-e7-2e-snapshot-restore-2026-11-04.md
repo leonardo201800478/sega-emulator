@@ -73,7 +73,7 @@ Essas evidências não substituem uma matriz de retomada para todas as 70 fases.
 
 ## 3. Novos testes desta fatia
 
-Arquivo: `native/sms_core/tests/snapshot_restore_e7_2e.rs`.
+Arquivos: `native/sms_core/tests/snapshot_restore_e7_2e.rs`, `native/z80_cpu/tests/snapshot_codec_versioning_e7_2e.rs` e `native/z80_cpu/src/snapshot/e7_2e_phase_codec_matrix_tests.rs`.
 
 O helper de teste:
 
@@ -91,7 +91,9 @@ Cenários adicionados:
 - IM1 com dispatch e stack high/low;
 - IM2 com stack e leitura low/high da tabela de vetores;
 - EI delay preservado entre EI, instrução seguinte e INT;
-- HALT M1/hold com WAIT e byte de barramento ignorado.
+- HALT M1/hold com WAIT e byte de barramento ignorado;
+- matriz de round-trip direto de tag/payload para as 70 variantes de fase, com consumo exato do payload (detecta colisões de tags);
+- rejeição de versão de schema não suportada no decoder e de DTO com versão antiga no encoder.
 
 Os testes comparam o resultado terminal, o DTO completo da máquina, o estado da CPU, memória relevante e tempo absoluto.
 
@@ -100,7 +102,7 @@ Os testes comparam o resultado terminal, o DTO completo da máquina, o estado da
 ## 4. Limites ainda abertos nesta E7.2E
 
 - Executar CI do SHA candidato e corrigir qualquer falha.
-- Completar a matriz de round-trip/restore/continuação para as demais fases BASE, CB, ED, DD/FD e DDCB/FDCB, sem inferir cobertura a partir apenas de enum/codec.
+- Completar a matriz de restore/continuação de estados CPU válidos para cada fase BASE, CB, ED, DD/FD e DDCB/FDCB. A matriz de 70 tags testa somente o encoder/decoder da fase isolada, não as invariantes de estado completo.
 - Verificar sistematicamente estados inválidos por fase, inclusive índices M/T, payload, endereço e request ID.
 - Verificar equivalência em WAIT zero, WAIT múltiplo e fronteiras de transação para as famílias restantes.
 - Separar a evidência de CPU codec da evidência de restauração da máquina SMS.
