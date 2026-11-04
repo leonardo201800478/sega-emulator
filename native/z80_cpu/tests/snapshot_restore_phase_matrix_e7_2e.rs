@@ -272,10 +272,7 @@ fn assert_invalid_snapshot(state: Z80MicroSequencerState, context: &str) {
     assert!(
         matches!(
             Z80MicroSequencer::restore_state(state),
-            Err(
-                Z80MicroSequencerError::InvalidState
-                    | Z80MicroSequencerError::Handshake(_)
-            )
+            Err(Z80MicroSequencerError::InvalidState | Z80MicroSequencerError::Handshake(_))
         ),
         "invalid DTO must be rejected as an invalid state: {context}"
     );
