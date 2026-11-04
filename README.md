@@ -128,7 +128,15 @@ PyO3 expõe snapshots e operações da máquina. O GIL permanece adquirido duran
 
 Os getters `vram` e `registers` do VDP nativo retornam cópias para diagnóstico. Alterar diretamente essas cópias não altera o estado interno do VDP; use as portas modeladas para modificar o hardware. O runtime Rust é obrigatório no Qt; as cópias retornadas são destinadas a diagnóstico.
 
-Para compilar e instalar a extensão no Windows/PowerShell, com o ambiente virtual ativado e a partir da raiz do repositório:
+Para uma verificação rápida de compilação Rust no Windows/PowerShell, a partir da raiz do repositório:
+
+```powershell
+.\scripts\compile-fast.ps1
+```
+
+O comando executa `cargo check --workspace --locked`, sem executar testes. Use `-Release` para verificar o perfil Release e `-AllWorkspaces` para incluir todos os workspaces Cargo ativos. O script seleciona automaticamente `.venv` e prepara o ambiente MSVC/Python DLL necessário ao PyO3.
+
+Para compilar e instalar a extensão no Windows/PowerShell, a partir da raiz do repositório (o script prioriza `.venv` automaticamente):
 
 ```powershell
 python -m pip install maturin
