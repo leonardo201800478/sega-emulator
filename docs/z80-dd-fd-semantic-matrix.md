@@ -101,7 +101,7 @@ O decoder atômico classifica os 256 subopcodes para IX e IY e tem teste exausti
 
 **BIT é read-only:** o handler não deve emitir write-back. Rotação/deslocamento, RES e SET são operações read-modify-write. O campo z controla a cópia adicional para registrador nas operações x=0,2,3; z=6 não seleciona registrador adicional.
 
-## 6. Estado arquitetural e snapshot — estado após E4B
+## 6. Estado arquitetural e snapshot — estado após E4C
 
 | Estado / recurso | Executor atômico | Microsequenciador DD/FD |
 |---|---|---|
@@ -176,8 +176,8 @@ Links:
 - **E2 — FSM:** criar estado de prefixo efetivo e continuação indexada sem limite artificial de prefixos; preservar o caminho sem prefixo.
 - **E3 — operações IX/IY de 16 bits:** E3A1/E3A2 implementadas no microsequenciador retomável; PR #470 candidata, CI 4/4 PASS.
 - **E4A — LD indexado/displacement:** IMPLEMENTED e SHORT_PASS no candidato PR #471; 19T/5M, WAIT e snapshots nas fases cobertas.
-- **E4B — ALU A,(IX/IY+d):** pendente; validar flags S/Z/H/PV/N/C e X/Y.
-- **E4C — INC/DEC (IX/IY+d):** pendente; validar read-modify-write e flags.
+- **E4B — ALU A,(IX/IY+d):** IMPLEMENTED / QUICK_PASS / SHORT_PASS no escopo registrado; diferencial externo NOT_RUN.
+- **E4C — INC/DEC (IX/IY+d):** IMPLEMENTED / QUICK_PASS / SHORT_PASS pela PR #475; CI 41747460761 4/4 PASS; 5 testes dirigidos; LONG_PASS/diferencial/temporal NOT_RUN.
 - **E5 — DDCB/FDCB:** separar fetches M1, displacement, opcode final, leitura e RMW.
 - **E6 — prefixos ignorados:** implementar fallback BASE sem fetch duplicado e todas as combinações DD/FD/ED/CB.
 - **E7 — fechamento semântico:** auditar BASE/CB/ED/DD/FD/DDCB/FDCB, flags, interrupções, HALT e snapshots.
