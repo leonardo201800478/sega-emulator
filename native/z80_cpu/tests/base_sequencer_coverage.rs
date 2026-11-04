@@ -9,8 +9,8 @@
 use sega_z80_cpu::{Z80BusOperation, Z80MicroSequencer, Z80MicroSequencerError, Z80MicroStep};
 
 const BASE_PREFIXES: [u8; 4] = [0xCB, 0xDD, 0xED, 0xFD];
-const EXPECTED_IMPLEMENTED_BASE_ENCODINGS: usize = 251;
-const EXPECTED_UNSUPPORTED_BASE_ENCODINGS: usize = 1;
+const EXPECTED_IMPLEMENTED_BASE_ENCODINGS: usize = 252;
+const EXPECTED_UNSUPPORTED_BASE_ENCODINGS: usize = 0;
 
 fn is_base_prefix(opcode: u8) -> bool {
     BASE_PREFIXES.contains(&opcode)
@@ -113,6 +113,7 @@ fn expected_base_handler(opcode: u8) -> bool {
                 | 0xEC
                 | 0xF4
                 | 0xFC
+                | 0x76
                 | 0xC7
                 | 0xCF
                 | 0xD7

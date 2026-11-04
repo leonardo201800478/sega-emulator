@@ -98,13 +98,20 @@ fn instruction_timeline_is_valid(state: &SmsTemporalMachineState) -> bool {
             return false;
         }
         let waits = m1.cycle.wait_tstates;
-        let expected_tstates = match m1.cycle.phase {
+        let current_m1_tstates = match m1.cycle.phase {
             Z80M1Phase::T1 => 0,
             Z80M1Phase::T2 => 1,
             Z80M1Phase::Wait => 2_u32.saturating_add(waits),
             Z80M1Phase::T3 => 2_u32.saturating_add(waits),
             Z80M1Phase::T4 => 3_u32.saturating_add(waits),
             Z80M1Phase::Complete => 4_u32.saturating_add(waits),
+        };
+        let Some(expected_tstates) = state
+            .cpu
+            .instruction_tstates
+            .checked_add(current_m1_tstates)
+        else {
+            return false;
         };
         return elapsed_tstates(
             instruction_started_at,
@@ -959,49 +966,43 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_decode_keeps_completed_m1_for_snapshot_restore_and_retry() {
-        let mut machine = SmsTemporalMachine::new(vec![0x76; 0x4000], 3).unwrap();
+    fn unsupported_ed_decode_resumes_after_prefix_snapshot_and_retries_deterministically() {
+        let mut rom = vec![0; 0x4000];
+        rom[..2].copy_from_slice(&[0xED, 0x00]);
+        let mut machine = SmsTemporalMachine::new(rom, 3).unwrap();
         machine.begin_instruction().unwrap();
 
-        // Advance T1, T2, and T3. The opcode is sampled at T3 completion;
-        // T4 is then scheduled but not yet dispatched.
-        for _ in 0..3 {
-            machine.schedule_pending_bus(0).unwrap();
-            assert!(matches!(
-                machine.dispatch_next().unwrap(),
-                Z80MicroStep::BusRequest(_)
-            ));
-        }
+        // Complete the ED prefix M1 and schedule the sub-opcode M1.
+        assert!(matches!(
+            complete_m1_fetch(&mut machine, 0),
+            Z80MicroStep::BusRequest(_)
+        ));
         machine.schedule_pending_bus(0).unwrap();
 
-        assert!(matches!(
-            machine.dispatch_next(),
-            Err(SmsTemporalMachineError::Cpu(
-                Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x76, .. }
-            ))
-        ));
-        let completed_m1 = machine.export_state();
+        let prefix_snapshot = machine.export_state();
+        assert_eq!(prefix_snapshot.cpu.instruction_tstates, 4);
         assert_eq!(
-            completed_m1.m1.unwrap().cycle.phase,
-            sega_z80_cpu::Z80M1Phase::Complete
+            prefix_snapshot.cpu.phase,
+            Z80MicroSequencerPhase::OpcodeFetch
         );
-        assert!(
-            completed_m1
-                .bus
-                .coordinator
-                .scheduler
-                .event_queue
-                .pending
-                .is_empty()
+        assert_eq!(
+            prefix_snapshot.cpu.prefix_state,
+            sega_z80_cpu::Z80PrefixState::Ed
         );
 
-        let mut restored = SmsTemporalMachine::restore_state(completed_m1).unwrap();
+        let mut restored = SmsTemporalMachine::restore_state(prefix_snapshot.clone()).unwrap();
+        let first_error = restored.resume_instruction(0).unwrap_err();
         assert!(matches!(
-            restored.resume_instruction(0),
-            Err(SmsTemporalMachineError::Cpu(
-                Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x76, .. }
-            ))
+            first_error,
+            SmsTemporalMachineError::Cpu(Z80MicroSequencerError::UnsupportedOpcode {
+                opcode: 0x00,
+                ..
+            })
         ));
+
+        let mut retried = SmsTemporalMachine::restore_state(prefix_snapshot).unwrap();
+        let retry_error = retried.resume_instruction(0).unwrap_err();
+        assert_eq!(retry_error, first_error);
     }
 
     #[test]

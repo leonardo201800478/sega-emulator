@@ -698,6 +698,15 @@ impl Z80MicroSequencer {
             return Err(Z80MicroSequencerError::InvalidState);
         }
         let pending = handshake.pending_request();
+        if state.halted
+            && (!matches!(
+                state.phase,
+                Z80MicroSequencerPhase::Ready | Z80MicroSequencerPhase::OpcodeFetch
+            ) || state.opcode.is_some()
+                || state.prefix_state != Z80PrefixState::None)
+        {
+            return Err(Z80MicroSequencerError::InvalidState);
+        }
         let prefix_state_valid = match state.phase {
             Z80MicroSequencerPhase::Ready => state.prefix_state == Z80PrefixState::None,
             Z80MicroSequencerPhase::OpcodeFetch => match state.opcode {
@@ -2588,7 +2597,8 @@ impl Z80MicroSequencer {
     }
 
     /// Begin the next instruction by issuing its M1 opcode-fetch request.
-    /// Architectural PC/R changes occur only when that request completes.
+    /// During HALT, the fetch is repeated at the next-PC address; its data is
+    /// ignored and PC is not incremented when the request completes.
     pub fn begin_instruction(&mut self) -> Result<Z80MicroStep, Z80MicroSequencerError> {
         if self.phase != Z80MicroSequencerPhase::Ready || self.handshake.is_pending() {
             return Err(Z80MicroSequencerError::InstructionAlreadyActive);
@@ -2673,6 +2683,13 @@ impl Z80MicroSequencer {
                 let opcode = response
                     .data
                     .ok_or(Z80MicroSequencerError::UnexpectedCompletion)?;
+                if self.halted {
+                    // HALT performs repeated M1 fetches at the next-PC address.
+                    // The sampled memory byte is ignored and PC remains stable;
+                    // the cycle is an internally forced NOP.
+                    self.refresh = (self.refresh & 0x80) | (self.refresh.wrapping_add(1) & 0x7F);
+                    return self.retire(0x00);
+                }
                 self.registers.pc = self.registers.pc.wrapping_add(1);
                 self.refresh = (self.refresh & 0x80) | (self.refresh.wrapping_add(1) & 0x7F);
                 let previous_prefix = self.opcode;
@@ -2772,6 +2789,10 @@ impl Z80MicroSequencer {
                         )
                     }
                     0x00 => self.retire(opcode),
+                    0x76 => {
+                        self.halted = true;
+                        self.retire(opcode)
+                    }
                     0x08 => {
                         std::mem::swap(&mut self.registers.a, &mut self.alternate.a);
                         std::mem::swap(&mut self.registers.f, &mut self.alternate.f);
@@ -5844,13 +5865,16 @@ mod tests {
     }
 
     #[test]
-    fn halt_opcode_is_not_decoded_as_a_register_load() {
+    fn halt_opcode_enters_halted_state_without_register_load_side_effects() {
         let mut cpu = Z80MicroSequencer::default();
         let fetch = request(cpu.begin_instruction().unwrap());
-        assert!(matches!(
-            cpu.complete_bus_cycle(fetch.id, Some(0x76)),
-            Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x76, .. })
-        ));
+        retired(
+            cpu.complete_bus_cycle(fetch.id, Some(0x76)).unwrap(),
+            0x76,
+            4,
+        );
+        assert!(cpu.halted);
+        assert_eq!(cpu.registers.pc, 1);
         assert!(!cpu.instruction_active());
         assert!(cpu.pending_request().is_none());
     }
@@ -6479,12 +6503,13 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_opcode_does_not_leave_a_phantom_pending_request() {
+    fn unsupported_ed_opcode_does_not_leave_a_phantom_pending_request() {
         let mut cpu = Z80MicroSequencer::default();
-        let fetch = request(cpu.begin_instruction().unwrap());
+        let prefix_fetch = request(cpu.begin_instruction().unwrap());
+        let subopcode_fetch = request(cpu.complete_bus_cycle(prefix_fetch.id, Some(0xED)).unwrap());
         assert!(matches!(
-            cpu.complete_bus_cycle(fetch.id, Some(0x76)),
-            Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x76, .. })
+            cpu.complete_bus_cycle(subopcode_fetch.id, Some(0x00)),
+            Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x00, .. })
         ));
         assert!(!cpu.instruction_active());
         assert!(cpu.pending_request().is_none());
