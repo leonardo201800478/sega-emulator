@@ -132,9 +132,9 @@ fn has_general_prefix_fallback_context(
 ) -> bool {
     let prefix_context = match prefix_state {
         Z80PrefixState::Index(_) => {
-            opcode.is_some_and(|opcode| {
-                classify_index_opcode(opcode) == Z80IndexOpcodeClass::Ignored
-            }) && mcycle_index >= 1
+            opcode
+                .is_some_and(|opcode| classify_index_opcode(opcode) == Z80IndexOpcodeClass::Ignored)
+                && mcycle_index >= 1
                 && instruction_tstates >= 8
         }
         Z80PrefixState::Ed => mcycle_index >= 2 && instruction_tstates >= 8,
@@ -719,18 +719,18 @@ impl Z80MicroSequencer {
                     _ => false,
                 }
             }
-            Z80MicroSequencerPhase::ImmediateReadAlu { operation } => {
-                match state.prefix_state {
-                    Z80PrefixState::None => true,
-                    Z80PrefixState::Index(_) => state.opcode.is_some_and(|opcode| {
-                        matches!(opcode, 0xC6 | 0xCE | 0xD6 | 0xDE | 0xE6 | 0xEE | 0xF6 | 0xFE)
-                            && operation == ((opcode >> 3) & 0x07)
-                            && state.mcycle_index >= 2
-                            && state.instruction_tstates >= 8
-                    }),
-                    _ => false,
-                }
-            }
+            Z80MicroSequencerPhase::ImmediateReadAlu { operation } => match state.prefix_state {
+                Z80PrefixState::None => true,
+                Z80PrefixState::Index(_) => state.opcode.is_some_and(|opcode| {
+                    matches!(
+                        opcode,
+                        0xC6 | 0xCE | 0xD6 | 0xDE | 0xE6 | 0xEE | 0xF6 | 0xFE
+                    ) && operation == ((opcode >> 3) & 0x07)
+                        && state.mcycle_index >= 2
+                        && state.instruction_tstates >= 8
+                }),
+                _ => false,
+            },
             Z80MicroSequencerPhase::BaseExchangeStack { stage, .. } => {
                 let trailing_tstates = match stage {
                     0 => 0,
@@ -744,18 +744,16 @@ impl Z80MicroSequencer {
                         .and_then(|count| minimum_prefixed_tstates(count, trailing_tstates))
                         .is_some_and(|minimum| state.instruction_tstates >= minimum)
             }
-            Z80MicroSequencerPhase::BaseRelativeBranchInternal { .. } => {
-                match state.prefix_state {
-                    Z80PrefixState::None => true,
-                    Z80PrefixState::Index(_) => state.opcode.is_some_and(|opcode| {
-                        matches!(opcode, 0x10 | 0x18 | 0x20 | 0x28 | 0x30 | 0x38)
-                            && classify_index_opcode(opcode) == Z80IndexOpcodeClass::Ignored
-                            && state.mcycle_index >= 3
-                            && state.instruction_tstates >= 11
-                    }),
-                    _ => false,
-                }
-            }
+            Z80MicroSequencerPhase::BaseRelativeBranchInternal { .. } => match state.prefix_state {
+                Z80PrefixState::None => true,
+                Z80PrefixState::Index(_) => state.opcode.is_some_and(|opcode| {
+                    matches!(opcode, 0x10 | 0x18 | 0x20 | 0x28 | 0x30 | 0x38)
+                        && classify_index_opcode(opcode) == Z80IndexOpcodeClass::Ignored
+                        && state.mcycle_index >= 2
+                        && state.instruction_tstates >= 11
+                }),
+                _ => false,
+            },
             Z80MicroSequencerPhase::BaseExchangeStackInternal {
                 stage,
                 remaining_tstates,
@@ -2143,19 +2141,17 @@ impl Z80MicroSequencer {
                 _ => false,
             },
             Z80MicroSequencerPhase::ImmediateReadMemoryWrite
-            | Z80MicroSequencerPhase::BaseRelativeBranchImmediate => {
-                match state.prefix_state {
-                    Z80PrefixState::None => state.mcycle_index == 1 && state.tstate_index == 0,
-                    Z80PrefixState::Index(_) => {
-                        state.opcode.is_some_and(|opcode| {
-                            classify_index_opcode(opcode) == Z80IndexOpcodeClass::Ignored
-                        }) && state.mcycle_index >= 2
-                            && state.instruction_tstates >= 8
-                            && state.tstate_index == 0
-                    }
-                    _ => false,
+            | Z80MicroSequencerPhase::BaseRelativeBranchImmediate => match state.prefix_state {
+                Z80PrefixState::None => state.mcycle_index == 1 && state.tstate_index == 0,
+                Z80PrefixState::Index(_) => {
+                    state.opcode.is_some_and(|opcode| {
+                        classify_index_opcode(opcode) == Z80IndexOpcodeClass::Ignored
+                    }) && state.mcycle_index >= 2
+                        && state.instruction_tstates >= 8
+                        && state.tstate_index == 0
                 }
-            }
+                _ => false,
+            },
             Z80MicroSequencerPhase::ImmediateReadAlu { .. } => match state.prefix_state {
                 Z80PrefixState::None => state.mcycle_index == 1 && state.tstate_index == 0,
                 Z80PrefixState::Index(_) => {
