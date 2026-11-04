@@ -175,7 +175,7 @@ Os níveis abaixo são cumulativos no escopo declarado. O estado deve ser atribu
 
 **E6.1 — Fallback BASE de prefixos DD/FD (em andamento na branch `feat/z80-prefix-fallback-e6a-2026-11-04`):**
 - Encaminhar opcodes `Ignored` já obtidos ao dispatch BASE, sem novo fetch.
-- Preservar PC, R, M1, T-states acumulados, WAIT e snapshots dos fetches pendentes.
+- Preservar PC, R, M1, T-states acumulados, WAIT e snapshots dos fetches pendentes; manter o latch Index como contexto de timing/serialização, sem aplicar substituição IX/IY a opcodes `Ignored`.
 - Demonstrar que H/L e IX/IY não são substituídos em instruções BASE ignoradas.
 - Reutilizar o decoder ED quando ED segue DD/FD; manter DDCB/FDCB na rota E5.
 - Limite deste incremento: somente instruções BASE/ED já suportadas pelo sequenciador; `UnsupportedOpcode` continua explícito para lacunas do decoder BASE.
