@@ -3021,9 +3021,7 @@ impl Z80MicroSequencer {
     /// consumed and the CPU is back at Ready. NMI has priority; INT is eligible
     /// only when IFF1 is set and the EI delay has expired. The INT vector itself
     /// remains a bus value sampled later during Interrupt Acknowledge.
-    pub fn sample_halt_interrupts_at_t4(
-        &mut self,
-    ) -> Result<(), Z80MicroSequencerError> {
+    pub fn sample_halt_interrupts_at_t4(&mut self) -> Result<(), Z80MicroSequencerError> {
         if !self.halted
             || self.phase != Z80MicroSequencerPhase::Ready
             || self.handshake.is_pending()
@@ -3044,9 +3042,9 @@ impl Z80MicroSequencer {
         &mut self,
         clear_pending_edge: bool,
     ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
-        let request =
-            self.handshake
-                .begin(Z80BusOperation::OpcodeFetch, self.registers.pc, 4)?;
+        let request = self
+            .handshake
+            .begin(Z80BusOperation::OpcodeFetch, self.registers.pc, 4)?;
         if clear_pending_edge {
             self.nmi_pending = false;
         }
@@ -3058,9 +3056,7 @@ impl Z80MicroSequencer {
         Ok(Z80MicroStep::BusRequest(request))
     }
 
-    fn begin_interrupt_acknowledge(
-        &mut self,
-    ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
+    fn begin_interrupt_acknowledge(&mut self) -> Result<Z80MicroStep, Z80MicroSequencerError> {
         let request = self.handshake.begin(
             Z80BusOperation::InterruptAcknowledge,
             self.registers.pc,
