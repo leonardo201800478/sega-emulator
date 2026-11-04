@@ -1045,7 +1045,7 @@ impl Z80MicroSequencer {
                     (return_address >> 8) as u8
                 } else { return_address as u8 };
                 let minimum_tstates = if stage == 0 { 7 } else { 10 };
-                (mode == 1 || mode == 2) && stage <= 1
+                (mode == 1 || mode == 2) && mode == state.interrupt_mode && stage <= 1
                     && return_address == state.registers.pc
                     && state.opcode.is_none() && state.prefix_state == Z80PrefixState::None
                     && !state.iff1 && !state.iff2 && !state.halted
@@ -1056,7 +1056,9 @@ impl Z80MicroSequencer {
                     && state.instruction_tstates >= minimum_tstates
             }
             Z80MicroSequencerPhase::InterruptMode2VectorReadLow { vector_address } => {
-                state.opcode.is_none() && state.prefix_state == Z80PrefixState::None
+                state.interrupt_mode == 2
+                    && (vector_address >> 8) as u8 == state.i
+                    && state.opcode.is_none() && state.prefix_state == Z80PrefixState::None
                     && !state.iff1 && !state.iff2 && !state.halted
                     && pending.is_some_and(|request| {
                         request.operation == Z80BusOperation::MemoryRead
@@ -1065,7 +1067,9 @@ impl Z80MicroSequencer {
                     && state.instruction_tstates >= 13
             }
             Z80MicroSequencerPhase::InterruptMode2VectorReadHigh { vector_address, .. } => {
-                state.opcode.is_none() && state.prefix_state == Z80PrefixState::None
+                state.interrupt_mode == 2
+                    && (vector_address >> 8) as u8 == state.i
+                    && state.opcode.is_none() && state.prefix_state == Z80PrefixState::None
                     && !state.iff1 && !state.iff2 && !state.halted
                     && pending.is_some_and(|request| {
                         request.operation == Z80BusOperation::MemoryRead
@@ -12039,6 +12043,60 @@ mod e7_2c_interrupt_mode_tests {
         assert_eq!(cpu.complete_bus_cycle(high.id, Some(0x12)).unwrap(),
             Z80MicroStep::InstructionRetired { opcode: 0xC3, tstates: 12 });
         assert_eq!(cpu.registers.pc, 0x1234);
+    }
+
+    #[test]
+    fn im0_index_prefix_fetches_the_remaining_instruction_from_memory() {
+        let mut cpu = start_int(0, 0xDD);
+        assert_eq!(cpu.begin_instruction().unwrap(), Z80MicroStep::InternalCycle { tstates: 1 });
+        let index_opcode = request(cpu.complete_internal_cycle().unwrap());
+        assert_eq!(index_opcode.operation, Z80BusOperation::OpcodeFetch);
+        assert_eq!(index_opcode.address, 0x4567);
+        let low = request(cpu.complete_bus_cycle(index_opcode.id, Some(0x21)).unwrap());
+        assert_eq!(low.address, 0x4568);
+        let high = request(cpu.complete_bus_cycle(low.id, Some(0x34)).unwrap());
+        assert_eq!(high.address, 0x4569);
+        assert_eq!(cpu.complete_bus_cycle(high.id, Some(0x12)).unwrap(),
+            Z80MicroStep::InstructionRetired { opcode: 0x21, tstates: 16 });
+        assert_eq!(cpu.ix, 0x1234);
+        assert_eq!(cpu.registers.pc, 0x456A);
+    }
+
+    #[test]
+    fn im1_stack_write_snapshots_preserve_both_push_stages() {
+        let mut cpu = start_int(1, 0xFF);
+        cpu.begin_instruction().unwrap();
+        cpu = round_trip(&cpu);
+        cpu.complete_internal_cycle().unwrap();
+        let high = request(cpu.complete_internal_cycle().unwrap());
+        cpu = round_trip(&cpu);
+        let low = request(cpu.complete_bus_cycle(high.id, None).unwrap());
+        cpu = round_trip(&cpu);
+        assert_eq!(cpu.pending_request(), Some(low));
+        assert_eq!(cpu.complete_bus_cycle(low.id, None).unwrap(),
+            Z80MicroStep::InterruptServiced { kind: Z80InterruptKind::Int, tstates: 13 });
+    }
+
+    #[test]
+    fn im1_explicit_ack_and_stack_waits_extend_the_interrupt_duration() {
+        let mut cpu = Z80MicroSequencer::default();
+        cpu.interrupt_mode = 1;
+        cpu.iff1 = true;
+        cpu.iff2 = true;
+        cpu.registers.pc = 0x4567;
+        cpu.registers.sp = 0x9000;
+        cpu.set_int_line(Some(0xFF));
+        let ack = request(cpu.begin_instruction().unwrap());
+        cpu.insert_wait_tstate().unwrap();
+        assert_eq!(cpu.complete_bus_cycle(ack.id, Some(0xFF)).unwrap(),
+            Z80MicroStep::InterruptAcknowledge { vector: 0xFF, tstates: 6 });
+        cpu.begin_instruction().unwrap();
+        cpu.complete_internal_cycle().unwrap();
+        let high = request(cpu.complete_internal_cycle().unwrap());
+        cpu.insert_wait_tstate().unwrap();
+        let low = request(cpu.complete_bus_cycle(high.id, None).unwrap());
+        assert_eq!(cpu.complete_bus_cycle(low.id, None).unwrap(),
+            Z80MicroStep::InterruptServiced { kind: Z80InterruptKind::Int, tstates: 14 });
     }
 
     #[test]
