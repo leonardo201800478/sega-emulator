@@ -515,3 +515,24 @@ A especificação foi retificada na PR #513, HEAD 143cdce6fde85621c81de0a1bc4335
 5. regressão de M1, ciclos internos, HALT e interrupções.
 
 E8 permanece bloqueada até fechamento de E7. Não atribuir TEMPORAL_PASS com base no CI convencional.
+
+
+---
+
+## Fotografia operacional reconciliada — 2026-11-04 (C1 / E7.4.1C)
+
+Esta seção prevalece sobre fotografias históricas anteriores. Baseline remota após PR #517: `main` = `fcd91302cb64a31d63b75f5e1d3b6eab336668d1`.
+
+- **E6:** integrada pela PR #486, merge SHA `24a32e03e10c8e82022172faee69ec0c046f8cb0`.
+- **E7.3:** HALT T4 integrada pela PR #509, merge SHA `869b402e4c8f2dbd9c5f5fa4a10d10ac26506461`. CI de integração registrado como PASS nos quatro jobs; isso não constitui TEMPORAL_PASS global.
+- **E7.4 documentação:** PR #511 integrada, merge SHA `5452ec9eb4307b997badff1858bfc60e7078a937`; ela audita BUSREQ/BUSACK, mas não implementa arbitragem no runtime.
+- **E7.4.1A — M-cycle:** PR #512 permanece aberta e não integrada. CI no HEAD `19866f365b4873603a7dd230121a1127aeca9c2d`, workflow `41891089747`, 4/4 jobs PASS. A revisão semântica identificou lacunas WAIT/TW/falling-edge; CI verde não remove o bloqueio.
+- **E7.4.1B — eventos T-state SMS:** PR #514 permanece aberta e não integrada. Workflow `41896166347`: Rust/Python/Windows PASS; Scheduler stress SKIPPED. O contrato atual não comprova amostragem WAIT na falling edge, TW automático tipado de I/O/INT nem amostragem externa durante TW obrigatório.
+- **E7.4.1C — C1:** `ClockEdgeTime` calcula bordas racionais, mas ainda não integra a unidade temporal de `MachineScheduler`, `EventQueue`, watermarks, estados de clock domain e codec. Esses consumidores continuam em `MachineTime` inteiro; `HardwarePhase` não representa sub-tick.
+- **Próxima implementação:** C1 no `sega-temporal-core` e `machine-scheduler`: instante racional canônico, aritmética/comparação exatas e verificadas, ordenação causal, watermarks, snapshot/restore, codec versionado e chunk invariance. Não arredondar falling edge nem criar scheduler paralelo SMS.
+- **Sequência após C1:** C2 falling/rising edges; C3 TW automático e WAIT por origem; C4 integração Z80/SMS; C5 snapshots em subfases; C6 validação contínua/em blocos e traces. Só depois retomar BUSREQ/BUSACK.
+- **E7.5–E7.7:** RETI/daisy-chain, IRQ real do VDP e auditoria semântica integral permanecem pendentes.
+- **E8:** bloqueada até fechamento integral de E7. Não declarar LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS global com base em CI convencional.
+- **Infraestrutura:** PR #516 integrou o gerenciador centralizado de toolchains (merge SHA `d06d4d203412d103a327a57604471074ef15faf6`); PR #517 integrou lockfiles independentes e correção Clippy (merge SHA `fcd91302cb64a31d63b75f5e1d3b6eab336668d1`). Validação local da #517: 20 PASS, 0 FAIL, 0 BLOCKED; quatro manifests fora dos workspaces ativos continuam NOT RUN. CI da #517 no HEAD `fc5f710f8c56698cb82dd4e49e881cea15e4639b`, workflow `41908119554`: 4/4 jobs PASS.
+
+**Classificação global:** E7 permanece `INTEGRATION_PENDING`; C1 é o próximo bloqueio arquitetural. Esta fotografia documental não altera nem aprova código de hardware.
