@@ -46,7 +46,7 @@ Os percentuais abaixo são **estimativas de engenharia**, usadas para dimensiona
 
 ## 3. Baseline técnica e estado conhecido
 
-O código ativo da main permanece no SHA `ea327025b312feb53f1e3e5326b5a5e7c40e72f1`; a documentação foi reconciliada pela PR #501, merge SHA `a324361574a45a80f8ae3aa70868630250e55d30`. E7.1 (HALT/M1) foi integrada pela PR #490; E7.2A (NMI retomável) pela PR #495; E7.2B (INT acknowledge) pela PR #496; E7.2C (dispatch IM0/IM1/IM2) pela PR #498; E7.2D (evidência EI/DI/NMI) pela PR #500. CI da PR #500 (#41794174397) e pós-merge #41794506556 passaram em Rust, Python e Windows x64; Scheduler deterministic stress SKIPPED. E7.2E (snapshots de todas as fases), amostragem T4, BUSREQ, RETI/daisy-chain e validação temporal/diferencial independente permanecem pendentes.
+O código ativo da main está no SHA `d64d86b5bb16305d6265a1522d095b68b8f4954a`, após merge da PR #504. E7.1 e E7.2A–E7.2D seguem integradas pelas PRs #490, #495, #496, #498 e #500. E7.2E recebeu a fatia de trace/WAIT da PR #504 e está em ampliação pela PR #505, que valida restore/continuação dos 70 tipos de fase gerados pelo corpus suportado. CI #41830953731 no HEAD `a21506ac4a2d8b66df94dfacdd7c749295e6bb5d`: Rust, Python e Windows x64 PASS; Scheduler deterministic stress SKIPPED. E7 global permanece INTEGRATION_PENDING por estados inválidos abrangentes, WAIT por todas as famílias, HALT T4, BUSREQ, RETI/daisy-chain, IRQ real VDP e validação independente.
 
 | Fase | Escopo | Estado na fotografia |
 |---|---|---|
@@ -58,7 +58,7 @@ O código ativo da main permanece no SHA `ea327025b312feb53f1e3e5326b5a5e7c40e72
 | E4C | INC/DEC (IX/IY+d) | Integrada na main pela PR #475; IMPLEMENTED / QUICK_PASS / SHORT_PASS; 5 testes dirigidos; CI 4/4 PASS |
 | E5 | DDCB/FDCB completo | IMPLEMENTED / QUICK_PASS / SHORT_PASS; PR #485 merged; CI #4245 3 jobs PASS, Scheduler SKIPPED |
 | E6 | Fallback geral e resolução de prefixos DD/FD/ED/CB | IMPLEMENTED / QUICK_PASS / SHORT_PASS; PR #486 merged; CI #41759035927 e push main #41759330209 PASS; Scheduler SKIPPED |
-| E7 | Fechamento semântico global BASE/CB/ED/DD/FD/DDCB/FDCB | E7.1 HALT/M1, E7.2A NMI, E7.2B INT acknowledge, E7.2C IM0/IM1/IM2 e E7.2D EI/DI integradas; E7.2E candidata na PR #502 (HEAD `69ea4299b3858787f0f91682f3ea823371cde3b0`), sem CI para esse SHA e ainda incompleta; HALT T4, BUSREQ, RETI/daisy-chain, IRQ real do VDP SMS e validação independente pendentes. INTEGRATION_PENDING |
+| E7 | Fechamento semântico global BASE/CB/ED/DD/FD/DDCB/FDCB | E7.1–E7.2D integradas; E7.2E com incremento #504 integrado e matriz de restore/continuação das 70 fases em PR #505 (CI Rust/Python/Windows PASS no HEAD registrado); matriz abrangente de estados inválidos, WAIT por famílias, HALT T4, BUSREQ, RETI/daisy-chain, IRQ real VDP e validação independente ainda pendentes. INTEGRATION_PENDING |
 | E8 | Validação formal e diferencial (ZEXDOC/ZEXALL e corpora independentes) | Pendente |
 | E9 | Integração temporal sistêmica com bus, WAIT, Scheduler, SMS e SG-1000 | Pendente |
 
@@ -254,7 +254,7 @@ Aceite: nenhuma instrução documentada elegível sem classificação e critéri
 - **Limite:** `EI;HALT;INT` não é declarado coberto; a amostragem NMI/INT no T4 dos ciclos HALT continua pendente. BUSREQ, RETI/daisy-chain e validação diferencial/temporal independente também permanecem fora deste incremento.
 - Estado dos cenários EI/DI testados: IMPLEMENTED / QUICK_PASS / SHORT_PASS; PR #500 integrada no merge SHA `ea327025b312feb53f1e3e5326b5a5e7c40e72f1`. E7 global continua INTEGRATION_PENDING.
 
-#### E7.2E — Snapshots, restauração e equivalência contínua/retomada — PR #504 (revisão incremental; PR #502 preservada)
+#### E7.2E — Snapshots, restauração e equivalência contínua/retomada — PR #504 (incremento integrado; PR #502 supersedida)
 
 - HEAD consultado: `69ea4299b3858787f0f91682f3ea823371cde3b0`; base original `ea327025b312feb53f1e3e5326b5a5e7c40e72f1`; 11 commits à frente e 0 atrás da base original. Após o merge documental #501, a comparação remota registra a branch #502 divergente, 11 commits à frente e 4 atrás da main atual.
 - Alterações candidatas: seis arquivos; teste temporal SMS de snapshots para NMI, IM0/IM1/IM2, EI delay e HALT/M1; round-trip de 70 variantes da fase; rejeição de tag inválida; validação de schema.
@@ -268,6 +268,16 @@ Aceite: nenhuma instrução documentada elegível sem classificação e critéri
 - Estado: **IN_PROGRESS / INTEGRATION_PENDING**. O CI convencional desta fatia passou, mas não atribuir LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS à E7.2E; a cobertura complementar permanece pendente.
 
 **Próximos critérios E7.2E:** (1) CI completo no SHA exato; (2) snapshot/restore/continuação por fase e por combinação de estado válida; (3) rejeição de estados incoerentes, truncados, com CRC/tags/schema inválidos; (4) WAIT 0, 1 e múltiplos em fronteiras de bus/internal/M1; (5) comparação de trace, CPU, memória, scheduler e tempo entre contínuo e retomada; (6) documentar separadamente CPU codec e DTO SMS.
+
+
+#### E7.2E.1 — Restore/continuação por fase completa — PR #505 (em validação)
+
+- Corpus: 256 opcodes BASE com flags 0x00/0xFF e 256 bytes em CB, ED, DD, FD, DDCB e FDCB; casos de interrupção NMI e IM0/IM1/IM2.
+- Em cada boundary microsequenciado gerado, o teste codifica o DTO completo, decodifica, restaura e continua; compara microstep terminal, estado completo, sequência de requests/responses de barramento e conjunto de fases.
+- O teste exige que o corpus alcance as 70 variantes de Z80MicroSequencerPhase. Casos que retornam UnsupportedOpcode são excluídos explicitamente; não contam como cobertura semântica.
+- Defeitos encontrados e corrigidos no validador: MemoryWrite para LD (HL),r (70h–75h/77h); fase interna de RET condicional após prefixo DD/FD ignorado; fases internas e escritas de stack de RST/CALL após DD/FD ignorado.
+- CI #41830953731 no HEAD a21506ac4a2d8b66df94dfacdd7c749295e6bb5d: Rust fmt/Clippy/SMS/SG-1000/workspace PASS; Python pytest/Ruff PASS; Windows x64 D3D12/vídeo e WASAPI/XAudio2/áudio PASS; Scheduler stress SKIPPED.
+- Limites restantes: matriz de estados inválidos por fase/request/payload/índices; WAIT 0/1/múltiplo por famílias e fronteiras; T-states terminais IM0; codec binário persistente do SMS completo. E7.2E e E7 global permanecem INTEGRATION_PENDING.
 
 #### E7.3 — Amostragem de INT/NMI no T4 de HALT
 

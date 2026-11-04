@@ -169,3 +169,47 @@ Esses resultados validam a baseline main, não a nova revisão E7.2E. O novo HEA
 **CI da PR #504:** workflow #41825655861 no HEAD `b78d3354119c3f9af475561ff15db7673e93fb06` — Rust fmt/Clippy/workspace PASS; Python pytest/Ruff PASS; Windows x64 D3D12/vídeo e WASAPI/XAudio2/áudio PASS; Scheduler deterministic stress SKIPPED.
 
 **Estado:** E7.2E permanece IN_PROGRESS / INTEGRATION_PENDING. O CI aprova esta fatia incremental, mas não fecha restore completo das 70 fases, matriz ampla de estados inválidos, T-states IM0 nem codec binário persistente da máquina SMS.
+
+---
+
+## Resultado da matriz de restore por fase — PR #505
+
+**HEAD testado:** a21506ac4a2d8b66df94dfacdd7c749295e6bb5d  
+**Workflow:** https://github.com/leonardo201800478/sega-emulator/actions/runs/41830953731
+
+### Corpus e critério
+
+- 256 opcodes BASE com flags 0x00 e 0xFF.
+- 256 bytes de opcode para cada família CB, ED, DD, FD, DDCB e FDCB.
+- Cenários de NMI e IM0/IM1/IM2.
+- Snapshot binário do DTO completo, decode, restore e continuação em cada boundary microsequenciado gerado.
+- Comparação entre execução contínua e retomada: microstep terminal, estado completo, sequência de bus requests/responses e conjunto de fases.
+- O teste exige exatamente as 70 variantes de Z80MicroSequencerPhase no conjunto observado.
+
+Casos que retornam UnsupportedOpcode são excluídos explicitamente da comparação. Isso não representa aprovação semântica dessas instruções nem cobertura de seus estados.
+
+### Defeitos encontrados no validador e corrigidos
+
+1. MemoryWrite para LD (HL),r (opcodes 70h–75h e 77h) era produzido pelo sequenciador, mas rejeitado pelo validador de restore. Os dois gates de validação (coerência de payload/endereço e índices M/T) foram alinhados.
+2. BaseReturnConditionInternal após prefixo DD/FD ignorado não aceitava o M-cycle adicional e o total de T-states do prefixo.
+3. BaseControlPushInternal e BaseControlPushWrite de RST/CALL após prefixo DD/FD ignorado rejeitavam os índices de M-cycle com o prefixo contabilizado. A validação agora usa a contagem de M1 do prefixo e mantém os limites de T-state, endereço e payload.
+
+As correções não removem a validação: tornam explícitos os offsets de prefixo nas fases compatíveis.
+
+### Resultado CI
+
+- Rust fmt: PASS.
+- Rust Clippy: PASS.
+- SMS core e SG-1000 core: PASS.
+- Rust workspace tests, incluindo a matriz de 70 fases: PASS.
+- Python pytest/Ruff: PASS.
+- Windows x64 D3D12/vídeo e WASAPI/XAudio2/áudio: PASS.
+- Scheduler deterministic stress: SKIPPED (não equivale a PASS).
+
+### Limites remanescentes
+
+- A matriz de estados inválidos ainda não percorre sistematicamente toda combinação de fase, request ID, operação, endereço, payload, M-cycle, T-state e WAIT.
+- WAIT 0/1/múltiplo precisa ser expandido por todas as famílias de barramento e ciclos internos; a cobertura NMI 0/1/3 da PR #504 é apenas um subconjunto.
+- O T-state terminal de IM0 ainda precisa de asserção baseada em contrato e evidência independente.
+- SmsTemporalMachineState continua DTO em memória, não codec binário persistente completo da máquina SMS.
+- Não declarar LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS. E7.2E permanece IN_PROGRESS / INTEGRATION_PENDING.
