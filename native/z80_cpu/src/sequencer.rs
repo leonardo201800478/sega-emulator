@@ -5865,13 +5865,16 @@ mod tests {
     }
 
     #[test]
-    fn halt_opcode_is_not_decoded_as_a_register_load() {
+    fn halt_opcode_enters_halted_state_without_register_load_side_effects() {
         let mut cpu = Z80MicroSequencer::default();
         let fetch = request(cpu.begin_instruction().unwrap());
-        assert!(matches!(
-            cpu.complete_bus_cycle(fetch.id, Some(0x76)),
-            Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x76, .. })
-        ));
+        retired(
+            cpu.complete_bus_cycle(fetch.id, Some(0x76)).unwrap(),
+            0x76,
+            4,
+        );
+        assert!(cpu.halted);
+        assert_eq!(cpu.registers.pc, 1);
         assert!(!cpu.instruction_active());
         assert!(cpu.pending_request().is_none());
     }
@@ -6500,12 +6503,14 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_opcode_does_not_leave_a_phantom_pending_request() {
+    fn unsupported_ed_opcode_does_not_leave_a_phantom_pending_request() {
         let mut cpu = Z80MicroSequencer::default();
-        let fetch = request(cpu.begin_instruction().unwrap());
+        let prefix_fetch = request(cpu.begin_instruction().unwrap());
+        let subopcode_fetch =
+            request(cpu.complete_bus_cycle(prefix_fetch.id, Some(0xED)).unwrap());
         assert!(matches!(
-            cpu.complete_bus_cycle(fetch.id, Some(0x76)),
-            Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x76, .. })
+            cpu.complete_bus_cycle(subopcode_fetch.id, Some(0x00)),
+            Err(Z80MicroSequencerError::UnsupportedOpcode { opcode: 0x00, .. })
         ));
         assert!(!cpu.instruction_active());
         assert!(cpu.pending_request().is_none());
