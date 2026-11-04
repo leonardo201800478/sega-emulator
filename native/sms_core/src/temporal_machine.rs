@@ -22,7 +22,7 @@ use sega_z80_cpu::{
     Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
 };
 
-pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 21;
+pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 22;
 
 /// Runtime event trace emitted from actual Scheduler/bus dispatch boundaries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -157,7 +157,15 @@ fn instruction_timeline_is_valid(state: &SmsTemporalMachineState) -> bool {
             let Some(request_started_at) = state.bus.request_started_at else {
                 return false;
             };
-            (request_started_at, cpu_tstates)
+            let Some(mcycle) = state.bus.mcycle else {
+                return false;
+            };
+            let Some(expected_tstates) =
+                cpu_tstates.checked_add(mcycle.elapsed_tstates)
+            else {
+                return false;
+            };
+            (request_started_at, expected_tstates)
         }
         (Some(request), Some(completion), None, None) => {
             if request.id != completion.request_id {
@@ -175,9 +183,15 @@ fn instruction_timeline_is_valid(state: &SmsTemporalMachineState) -> bool {
             else {
                 return false;
             };
-            let Some(expected_tstates) = cpu_tstates.checked_add(current_cycle_tstates) else {
+            let Some(mcycle) = state.bus.mcycle else {
                 return false;
             };
+            let Some(expected_tstates) = cpu_tstates.checked_add(mcycle.elapsed_tstates) else {
+                return false;
+            };
+            if mcycle.elapsed_tstates != current_cycle_tstates {
+                return false;
+            }
             (completion.completed_at, expected_tstates)
         }
         (None, None, Some(_), None) => {
@@ -450,6 +464,26 @@ impl SmsTemporalMachine {
         }
     }
 
+    /// Dispatch exactly one edge of an active non-M1 bus M-cycle.
+    ///
+    /// Intermediate edges advance only the Scheduler/M-cycle continuation;
+    /// the CPU is resumed only after the final BusCompletion is acknowledged
+    /// through dispatch_next. This method exposes serializable T-state safe points.
+    pub fn dispatch_next_bus_tstate(
+        &mut self,
+    ) -> Result<SmsTemporalDispatch, SmsTemporalMachineError> {
+        if self.bus.pending_request().is_none()
+            || self.m1.is_some()
+            || self.pending_internal_cycle_id.is_some()
+            || self.bus.completion().is_some()
+        {
+            return Err(SmsTemporalMachineError::InvalidState);
+        }
+        self.bus
+            .dispatch_next_boundary()?
+            .ok_or(SmsTemporalMachineError::NoScheduledEvent)
+    }
+
     /// Schedule the current exposed internal CPU interval.
     pub fn schedule_internal_cycle(
         &mut self,
@@ -531,6 +565,11 @@ impl SmsTemporalMachine {
             .dispatch_next()?
             .ok_or(SmsTemporalMachineError::NoScheduledEvent)?;
         match dispatch {
+            SmsTemporalDispatch::BusTStateProgress { .. } => {
+                // dispatch_next drains intermediate edges; callers that need
+                // a safe point use dispatch_next_bus_tstate explicitly.
+                Err(SmsTemporalMachineError::InvalidState)
+            }
             SmsTemporalDispatch::BusCompletion(completion) => {
                 let trace_data = if self.trace_enabled {
                     let request = self
