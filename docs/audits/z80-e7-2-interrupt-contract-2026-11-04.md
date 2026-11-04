@@ -191,7 +191,7 @@ Registrar separadamente:
 - testes de interrupção e snapshots;
 - traces temporais independentes.
 
-CI da PR #490 (run #41762232781, HEAD `ed84fac03f5aa03c3438d67548354dd8c3c13999`) teve Rust fmt/Clippy/SMS/SG-1000/workspace PASS, Python pytest/Ruff PASS e Windows x64 D3D12/WASAPI/XAudio2 PASS. Scheduler deterministic stress foi SKIPPED. CI pós-merge da main SHA `b1b5ced5c3d6053f8d59c8f4d932f40518db1064` não foi verificada nesta auditoria.
+CI da PR #490 (run #41762232781, HEAD `ed84fac03f5aa03c3438d67548354dd8c3c13999`) teve Rust fmt/Clippy/SMS/SG-1000/workspace PASS, Python pytest/Ruff PASS e Windows x64 D3D12/WASAPI/XAudio2 PASS. Scheduler deterministic stress foi SKIPPED. CI pós-merge #41765421167 da main SHA `b1b5ced5c3d6053f8d59c8f4d932f40518db1064`: Rust quality/unit regression, Python lint/regression e Windows x64 D3D12/WASAPI/XAudio2 PASS; Scheduler deterministic stress SKIPPED.
 
 Nenhum desses resultados valida NMI/INT: E7.2 permanece NOT IMPLEMENTED até haver código, testes e evidência próprios. Não declarar SHORT_PASS/LONG_PASS/DIFFERENTIAL_PASS/TEMPORAL_PASS global.
 
