@@ -365,6 +365,12 @@ if (-not (Test-Path -LiteralPath $VenvPython -PathType Leaf)) {
     throw "Python 3.15.2 nao encontrado. Instale-o e tente novamente."
 }
 
+$VenvPythonVersion = (& $VenvPython --version 2>&1 | Out-String).Trim()
+
+if ($VenvPythonVersion -notmatch '^Python 3\.15\.') {
+    throw "O ambiente .venv usa '$VenvPythonVersion'. Preserve-o como backup e recrie .venv com 'py -3.15 -m venv .venv' antes de continuar."
+}
+
 if ($NewVenv -or $DependenciesChanged) {
 
     Invoke-Checked `
