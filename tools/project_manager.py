@@ -111,10 +111,33 @@ def discover_workspaces() -> tuple[list[Workspace], list[str]]:
             60,
         )
         if located.status != "PASS":
-            errors.append(f"{manifest.relative_to(ROOT)}: {located.output.strip()}")
-            continue
-
-        workspace_manifest = Path(located.output.strip().splitlines()[-1]).resolve()
+            # Excluded standalone packages may not belong to an ancestor workspace.
+            standalone = run(
+                [
+                    cargo,
+                    "locate-project",
+                    "--message-format",
+                    "plain",
+                    "--manifest-path",
+                    str(manifest),
+                ],
+                ROOT,
+                60,
+            )
+            if standalone.status != "PASS":
+                errors.append(
+                    f"{manifest.relative_to(ROOT)}: "
+                    f"workspace lookup: {located.output.strip()}; "
+                    f"standalone lookup: {standalone.output.strip()}"
+                )
+                continue
+            workspace_manifest = Path(
+                standalone.output.strip().splitlines()[-1]
+            ).resolve()
+        else:
+            workspace_manifest = Path(
+                located.output.strip().splitlines()[-1]
+            ).resolve()
         if workspace_manifest in roots:
             continue
 
