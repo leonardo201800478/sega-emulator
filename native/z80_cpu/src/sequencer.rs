@@ -1551,11 +1551,35 @@ impl Z80MicroSequencer {
                             && request.base_tstates == 3
                     })
                     && if is_call {
-                        state.mcycle_index == 3 + u32::from(stage)
-                            && state.instruction_tstates >= 11 + u32::from(stage) * 3
+                        prefix_m1_count(
+                            state.prefix_state,
+                            state.mcycle_index,
+                            3 + u32::from(stage),
+                        )
+                        .is_some()
+                            && state.instruction_tstates
+                                >= 11
+                                    + u32::from(stage) * 3
+                                    + if matches!(state.prefix_state, Z80PrefixState::Index(_)) {
+                                        4
+                                    } else {
+                                        0
+                                    }
                     } else {
-                        state.mcycle_index == 1 + u32::from(stage)
-                            && state.instruction_tstates >= 5 + u32::from(stage) * 3
+                        prefix_m1_count(
+                            state.prefix_state,
+                            state.mcycle_index,
+                            1 + u32::from(stage),
+                        )
+                        .is_some()
+                            && state.instruction_tstates
+                                >= 5
+                                    + u32::from(stage) * 3
+                                    + if matches!(state.prefix_state, Z80PrefixState::Index(_)) {
+                                        4
+                                    } else {
+                                        0
+                                    }
                     }
             }
             Z80MicroSequencerPhase::BaseStackPushInternal { high, low } => {
@@ -2679,10 +2703,22 @@ impl Z80MicroSequencer {
                 stage <= 1
                     && match state.opcode {
                         Some(opcode) if is_call_opcode(opcode) => {
-                            state.mcycle_index == 3 + u32::from(stage) && state.tstate_index == 0
+                            prefix_m1_count(
+                                state.prefix_state,
+                                state.mcycle_index,
+                                3 + u32::from(stage),
+                            )
+                            .is_some()
+                                && state.tstate_index == 0
                         }
                         Some(opcode) if is_rst_opcode(opcode) => {
-                            state.mcycle_index == 1 + u32::from(stage) && state.tstate_index == 0
+                            prefix_m1_count(
+                                state.prefix_state,
+                                state.mcycle_index,
+                                1 + u32::from(stage),
+                            )
+                            .is_some()
+                                && state.tstate_index == 0
                         }
                         _ => false,
                     }
