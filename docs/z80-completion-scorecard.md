@@ -283,6 +283,8 @@ Aceite: nenhuma instrução documentada elegível sem classificação e critéri
 
 Pendente. Definir a borda exata de amostragem e demonstrar a saída de HALT em cada combinação de NMI/INT/IFF/EI delay, com PC/R, acknowledge e M-cycles coerentes. O caso `EI;HALT;INT` permanece explicitamente não aprovado.
 
+Modelo arquitetural e critérios de aceitação para E7.3–E7.7: [modelo de execução temporal do Z80](audits/z80-temporal-core-modeling-2026-11-04.md).
+
 #### E7.4 — BUSREQ e arbitragem de barramento
 
 Pendente. Modelar BUSREQ/WAIT/contensão e retomada sem perder request, fase M1, estado CPU ou causalidade do Scheduler. Não simular BUSREQ como atraso genérico.
