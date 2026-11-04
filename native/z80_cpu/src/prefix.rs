@@ -35,7 +35,7 @@ pub enum Z80IndexOpcodeClass {
 /// Classify the effect of DD/FD on the following BASE opcode.
 ///
 /// This classifies prefix semantics only; indexed handlers are implemented in E3-E5.
-/// General execution of ignored-prefix fallbacks is being completed in E6.
+/// General execution of ignored-prefix fallbacks is implemented in E6.
 pub fn classify_index_opcode(opcode: u8) -> Z80IndexOpcodeClass {
     if opcode == 0xCB {
         return Z80IndexOpcodeClass::IndexedCb;
