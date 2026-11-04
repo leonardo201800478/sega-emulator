@@ -3,7 +3,8 @@
 //! Memory and port transactions become visible only at their scheduled
 //! completion boundary. Controller/control-port effects are applied there;
 //! VDP/PSG devices remain outside this temporal slice, with writes retained in
-//! a bounded diagnostic trace and unconnected reads returning open bus.
+//! a bounded diagnostic trace, unconnected reads returning open bus, and INT
+//! acknowledge data supplied through an explicit external vector input.
 
 use core::fmt;
 
