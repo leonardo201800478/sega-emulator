@@ -1,11 +1,13 @@
 # Z80 E7.2C — Dispatch retomável de INT nos modos IM 0/1/2
 
 **Data:** 2026-11-04  
-**Estado:** IMPLEMENTED na branch da PR #498; ainda não integrado à main  
-**Base main:** `793a1c72ef9797e045903ae2be32f8a17e2acd23`  
+**Estado:** IMPLEMENTED e integrado à main pela PR #498  
+**Base main antes da PR:** `793a1c72ef9797e045903ae2be32f8a17e2acd23`  
+**Merge SHA main:** `a756e51cf6c5245357831896de293cd2e9d3a859`  
 **SHA do candidato de código validado:** `9cb576e957fdb37529d3c8dfb5d54fb22c2c907f`  
 **PR:** [#498 — IM0/IM1/IM2 retomáveis](https://github.com/leonardo201800478/sega-emulator/pull/498)  
-**CI:** [run #41792143207](https://github.com/leonardo201800478/sega-emulator/actions/runs/41792143207)  
+**CI da PR:** [run #41792143207](https://github.com/leonardo201800478/sega-emulator/actions/runs/41792143207)  
+**CI pós-merge:** [run #41792924571](https://github.com/leonardo201800478/sega-emulator/actions/runs/41792924571) — SUCCESS no SHA main acima.  
 **Referência normativa:** ZiLOG, *Z80 CPU User Manual*, UM008011-0816, seções de INT acknowledge e CPU response. A referência foi fornecida no contexto do projeto.
 
 ---
@@ -108,4 +110,4 @@ O workflow #41792143207 terminou SUCCESS. SKIPPED não é contabilizado como PAS
 - IM0 reutiliza o decoder existente; instruções que ainda retornam `UnsupportedOpcode` continuam fora do conjunto implementado.
 - O teste de vetor ímpar verifica ausência de mascaramento silencioso; não afirma que vetor ímpar seja um valor válido para um dispositivo conforme ao manual.
 
-**Conclusão:** E7.2C está implementado e passou os gates convencionais e os testes focados de integração SMS no SHA indicado. A PR ainda precisa ser integrada à main; E7 e o Z80 completo permanecem INTEGRATION_PENDING até os incrementos restantes e validação independente.
+**Conclusão:** E7.2C está implementado e integrado à main; os gates convencionais e os testes focados de integração SMS passaram tanto na PR quanto no CI pós-merge. E7 e o Z80 completo permanecem INTEGRATION_PENDING até os incrementos restantes e validação independente.
