@@ -389,3 +389,6 @@ Esta seção prevalece sobre fotografias operacionais anteriores deste documento
 - **Limites:** um fixture por variante de fase não representa todas as combinações de opcode/prefixo/request; casos UnsupportedOpcode não entram no corpus suportado. A matriz WAIT=0/1/múltiplo por família de barramento, T-states terminais de IM0, codec binário persistente da máquina SMS completa e comprovação temporal sistêmica continuam pendentes.
 - **Classificação:** PR #506 com CI convencional PASS no HEAD registrado; E7.2E permanece IN_PROGRESS / INTEGRATION_PENDING até fechar as lacunas remanescentes. E7 global permanece INTEGRATION_PENDING. Não atribuir LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS.
 
+
+
+**Revalidação documental do HEAD final da PR #506:** HEAD `1bb057ec126eb07de485a16bcdd98c42552f5c93`, CI [#41860812506](https://github.com/leonardo201800478/sega-emulator/actions/runs/41860812506) SUCCESS em Rust, Python e Windows x64; Scheduler stress SKIPPED. A PR permanece aberta e E7.2E/E7 global permanecem INTEGRATION_PENDING.
