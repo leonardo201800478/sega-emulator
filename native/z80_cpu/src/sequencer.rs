@@ -11708,5 +11708,4 @@ mod base_immediate_io_differential_tests {
         assert!(cpu.iff2);
         assert_eq!(cpu.int_pending, Some(0xCF));
     }
-
 }
