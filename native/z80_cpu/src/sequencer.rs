@@ -224,6 +224,7 @@ pub enum Z80MicroSequencerPhase {
     /// Stable boundary after the acknowledge vector has been captured; IM dispatch follows in E7.2C.
     InterruptAcknowledgeComplete {
         vector: u8,
+        mode: u8,
     },
     /// Internal T-states between INT acknowledge and mode-specific execution.
     InterruptModeDispatchInternal {
@@ -1020,8 +1021,10 @@ impl Z80MicroSequencer {
                             && request.base_tstates == Z80_INT_ACK_BASE_TSTATES
                     })
             }
-            Z80MicroSequencerPhase::InterruptAcknowledgeComplete { .. } => {
-                state.opcode.is_none()
+            Z80MicroSequencerPhase::InterruptAcknowledgeComplete { mode, .. } => {
+                mode <= 2
+                    && mode == state.interrupt_mode
+                    && state.opcode.is_none()
                     && state.prefix_state == Z80PrefixState::None
                     && !state.iff1
                     && !state.iff2
@@ -2843,8 +2846,8 @@ impl Z80MicroSequencer {
     }
 
     pub fn begin_instruction(&mut self) -> Result<Z80MicroStep, Z80MicroSequencerError> {
-        if let Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector } = self.phase {
-            return self.begin_interrupt_dispatch(vector);
+        if let Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector, mode } = self.phase {
+            return self.begin_interrupt_dispatch(vector, mode);
         }
         if self.phase != Z80MicroSequencerPhase::Ready || self.handshake.is_pending() {
             return Err(Z80MicroSequencerError::InstructionAlreadyActive);
@@ -2891,19 +2894,22 @@ impl Z80MicroSequencer {
     fn begin_interrupt_dispatch(
         &mut self,
         vector: u8,
+        mode: u8,
     ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
-        if self.interrupt_mode > 2
+        if mode > 2
             || !matches!(
                 self.phase,
-                Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector: latched }
-                    if latched == vector
+                Z80MicroSequencerPhase::InterruptAcknowledgeComplete {
+                    vector: latched_vector,
+                    mode: latched_mode,
+                } if latched_vector == vector && latched_mode == mode
             )
         {
             return Err(Z80MicroSequencerError::InvalidState);
         }
-        let remaining_tstates = if self.interrupt_mode == 0 { 1 } else { 2 };
+        let remaining_tstates = if mode == 0 { 1 } else { 2 };
         self.phase = Z80MicroSequencerPhase::InterruptModeDispatchInternal {
-            mode: self.interrupt_mode,
+            mode,
             vector,
             return_address: self.registers.pc,
             remaining_tstates,
@@ -3354,7 +3360,10 @@ impl Z80MicroSequencer {
                 // internal T-states that follow the acknowledge.
                 self.mcycle_index = 0;
                 self.tstate_index = 5;
-                self.phase = Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector };
+                self.phase = Z80MicroSequencerPhase::InterruptAcknowledgeComplete {
+                    vector,
+                    mode: self.interrupt_mode,
+                };
                 Ok(Z80MicroStep::InterruptAcknowledge {
                     vector,
                     tstates: self.instruction_tstates,
