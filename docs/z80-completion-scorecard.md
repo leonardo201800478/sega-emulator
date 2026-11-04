@@ -219,7 +219,7 @@ Aceite: nenhuma instrução documentada elegível sem classificação e critéri
 
 #### E7.1 — HALT e ciclos M1 de retenção
 
-- Integrado na main pela PR #490: HALT entra após M1 normal; PC avança uma vez. CI #41762232781 passou nos gates Rust/Python/Windows; Scheduler stress SKIPPED; CI pós-merge NOT VERIFIED.
+- Integrado na main pela PR #490: HALT entra após M1 normal; PC avança uma vez. CI #41762232781 passou nos gates Rust/Python/Windows; Scheduler stress SKIPPED. CI pós-merge #41765421167 no SHA `b1b5ced5c3d6053f8d59c8f4d932f40518db1064`: Rust/Python/Windows PASS; Scheduler stress SKIPPED.
 - Durante HALT sem interrupção elegível, cada chamada emite M1 no endereço atual de PC; o byte é ignorado, PC não avança e R incrementa preservando o bit 7.
 - WAIT e snapshot/restore do M1 pendente são cobertos; schema permanece 28.
 - Validador temporal SMS ajustado para contabilizar M1s anteriores já concluídos, permitindo snapshot no M1 subsequente a prefixo ED.
@@ -301,4 +301,4 @@ Toda atualização deve incluir data, SHA da baseline, SHA candidato, PR, workfl
 
 ---
 
-**Baseline operacional:** E6 integrada pela PR #486; merge SHA do código E6 `24a32e03e10c8e82022172faee69ec0c046f8cb0`. Documentação reconciliada pela PR #488, merge SHA `303a792b1caab1ba40dec9c9521208eb5aaa0b45`. CI #41759035927 (PR E6), #41759330209 (push após merge E6) e #41759833153 (push após reconciliação documental) concluídos com SUCCESS. E7 em andamento: E7.1 HALT/M1 integrada pela PR #490 (merge SHA `b1b5ced5c3d6053f8d59c8f4d932f40518db1064`); CI da PR #490: Rust fmt/Clippy/SMS/SG-1000/workspace PASS, Python pytest/Ruff PASS e Windows x64 D3D12/WASAPI/XAudio2 PASS. Scheduler deterministic stress: SKIPPED. CI pós-merge: NOT VERIFIED. E7.2 NMI/INT e saída de HALT é o próximo incremento. Validação diferencial externa, ZEXDOC/ZEXALL, LONG_PASS e TEMPORAL_PASS continuam pendentes.
+**Baseline operacional:** E6 integrada pela PR #486; merge SHA do código E6 `24a32e03e10c8e82022172faee69ec0c046f8cb0`. Documentação reconciliada pela PR #488, merge SHA `303a792b1caab1ba40dec9c9521208eb5aaa0b45`. CI #41759035927 (PR E6), #41759330209 (push após merge E6) e #41759833153 (push após reconciliação documental) concluídos com SUCCESS. E7 em andamento: E7.1 HALT/M1 integrada pela PR #490 (merge SHA `b1b5ced5c3d6053f8d59c8f4d932f40518db1064`); CI da PR #490: Rust fmt/Clippy/SMS/SG-1000/workspace PASS, Python pytest/Ruff PASS e Windows x64 D3D12/WASAPI/XAudio2 PASS. Scheduler deterministic stress: SKIPPED. CI pós-merge #41765421167: Rust/Python/Windows PASS; Scheduler stress SKIPPED. E7.2 NMI/INT e saída de HALT é o próximo incremento. Validação diferencial externa, ZEXDOC/ZEXALL, LONG_PASS e TEMPORAL_PASS continuam pendentes.
