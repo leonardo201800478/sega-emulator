@@ -32,7 +32,7 @@ fn elapsed_tstates(
         return None;
     }
     let elapsed = completed_at.checked_duration_since(started_at)?;
-    if elapsed == 0 || elapsed % scale != 0 {
+    if elapsed % scale != 0 {
         return None;
     }
     let tstates = elapsed / scale;
@@ -287,11 +287,23 @@ impl SmsTemporalBus {
         Ok(self.coordinator.schedule_m1_tstate(continuation_id)?)
     }
 
-    /// Dispatch the next scheduled boundary and apply its bus side effect once.
+    /// Dispatch through intermediate T-state edges until the bus transaction completes.
     ///
-    /// A read samples memory at this completion boundary. A write mutates memory
-    /// at this completion boundary. The response is latched until acknowledged.
+    /// Use dispatch_next_boundary when a caller needs to snapshot at an individual
+    /// T-state safe point. Memory and I/O effects remain deferred to the final edge.
     pub fn dispatch_next(&mut self) -> Result<Option<SmsTemporalDispatch>, SmsTemporalBusError> {
+        loop {
+            match self.dispatch_next_boundary()? {
+                Some(SmsTemporalDispatch::BusTStateProgress { .. }) => continue,
+                other => return Ok(other),
+            }
+        }
+    }
+
+    /// Dispatch exactly one scheduler boundary, exposing intermediate M-cycle progress.
+    pub fn dispatch_next_boundary(
+        &mut self,
+    ) -> Result<Option<SmsTemporalDispatch>, SmsTemporalBusError> {
         // Dispatched boundaries remain latched until the CPU accepts them.
         if let Some(completion) = self.completion {
             return Ok(Some(SmsTemporalDispatch::BusCompletion(completion)));
