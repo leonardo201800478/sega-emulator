@@ -8,7 +8,9 @@ fn machine(rom: Vec<u8>) -> SmsTemporalMachine {
 
 fn snapshot(machine: &SmsTemporalMachine) -> SmsTemporalMachine {
     let mut state = machine.export_state();
-    let bytes = state.cpu.encode().unwrap();
+    let bytes = state.cpu.encode().unwrap_or_else(|error| {
+        panic!("CPU snapshot encode failed: {error:?}; CPU state: {:#?}", state.cpu)
+    });
     let decoded = Z80MicroSequencerState::decode(&bytes).unwrap();
     assert_eq!(decoded, state.cpu);
     state.cpu = decoded;
