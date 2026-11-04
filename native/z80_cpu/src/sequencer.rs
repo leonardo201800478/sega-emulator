@@ -2584,9 +2584,9 @@ impl Z80MicroSequencer {
                             // this byte directly without issuing another fetch.
                             self.prefix_state = Z80PrefixState::None;
                         }
-                        Z80IndexOpcodeClass::IndexedCb => unreachable!(
-                            "indexed-CB returns through its displacement path above"
-                        ),
+                        Z80IndexOpcodeClass::IndexedCb => {
+                            unreachable!("indexed-CB returns through its displacement path above")
+                        }
                     }
                 } else if self.prefix_state != Z80PrefixState::None || previous_prefix.is_some() {
                     return self.unsupported(opcode);
