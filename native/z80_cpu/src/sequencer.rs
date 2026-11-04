@@ -1505,13 +1505,15 @@ impl Z80MicroSequencer {
                     && low == return_bytes[1]
                     && pending.is_none()
                     && if is_call {
-                        state.mcycle_index == 2
+                        prefix_m1_count(state.prefix_state, state.mcycle_index, 2).is_some()
                             && state.tstate_index == 3
-                            && state.instruction_tstates >= 10
+                            && state.instruction_tstates
+                                >= 10 + u32::from(matches!(state.prefix_state, Z80PrefixState::Index(_))) * 4
                     } else {
-                        state.mcycle_index == 0
+                        prefix_m1_count(state.prefix_state, state.mcycle_index, 0).is_some()
                             && state.tstate_index == 4
-                            && state.instruction_tstates >= 4
+                            && state.instruction_tstates
+                                >= 4 + u32::from(matches!(state.prefix_state, Z80PrefixState::Index(_))) * 4
                     }
             }
             Z80MicroSequencerPhase::BaseControlPushWrite { stage, target, low } => {
@@ -2656,10 +2658,12 @@ impl Z80MicroSequencer {
             }
             Z80MicroSequencerPhase::BaseControlPushInternal { .. } => match state.opcode {
                 Some(opcode) if is_call_opcode(opcode) => {
-                    state.mcycle_index == 2 && state.tstate_index == 3
+                    prefix_m1_count(state.prefix_state, state.mcycle_index, 2).is_some()
+                        && state.tstate_index == 3
                 }
                 Some(opcode) if is_rst_opcode(opcode) => {
-                    state.mcycle_index == 0 && state.tstate_index == 4
+                    prefix_m1_count(state.prefix_state, state.mcycle_index, 0).is_some()
+                        && state.tstate_index == 4
                 }
                 _ => false,
             },
