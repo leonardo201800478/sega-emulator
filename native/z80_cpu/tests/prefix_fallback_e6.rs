@@ -77,7 +77,10 @@ fn ignored_dd_fd_prefixes_dispatch_the_already_fetched_base_opcode() {
         assert_eq!(cpu.registers.hl(), 0x1234);
         assert_eq!(cpu.ix, 0x5678);
         assert_eq!(cpu.iy, 0x9ABC);
-        assert_eq!(cpu.export_state().prefix_state, sega_z80_cpu::Z80PrefixState::None);
+        assert_eq!(
+            cpu.export_state().prefix_state,
+            sega_z80_cpu::Z80PrefixState::None
+        );
         assert!(cpu.pending_request().is_none());
         assert!(!cpu.instruction_active());
     }
