@@ -462,10 +462,7 @@ fn nmi_edge_after_halt_t4_is_sampled_on_the_next_halt_cycle() {
     assert_eq!(second_m1.operation, Z80BusOperation::OpcodeFetch);
     cpu.complete_bus_cycle(second_m1.id, Some(0x00)).unwrap();
     cpu.sample_halt_interrupts_at_t4().unwrap();
-    assert_eq!(
-        cpu.export_state().halt_exit_pending,
-        Some(Z80HaltExit::Nmi)
-    );
+    assert_eq!(cpu.export_state().halt_exit_pending, Some(Z80HaltExit::Nmi));
 
     let response = request(cpu.begin_instruction().unwrap());
     assert_eq!(response.operation, Z80BusOperation::OpcodeFetch);
