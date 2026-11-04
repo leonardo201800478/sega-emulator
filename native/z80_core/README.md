@@ -4,7 +4,7 @@ This crate exposes the native SG-1000 machine to the Qt frontend through PyO3. T
 
 ## Build on Windows PowerShell
 
-Activate the repository's Python 3.14 virtual environment, then run from the repository root:
+Activate the repository's Python 3.15.2 virtual environment, then run from the repository root:
 
 ```powershell
 python -m pip install maturin
