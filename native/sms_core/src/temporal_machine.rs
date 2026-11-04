@@ -1025,7 +1025,7 @@ mod tests {
         assert_eq!(restored.now(), MachineTime::from_ticks(18));
         assert_eq!(
             restored.cpu().export_state().phase,
-            Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector: 0xCF }
+            Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector: 0xCF, mode: 0 }
         );
         let completed_snapshot = restored.export_state();
         let mut resumed = SmsTemporalMachine::restore_state(completed_snapshot).unwrap();
