@@ -228,7 +228,9 @@ def tool_versions() -> dict[str, str]:
         ("maturin", [sys.executable, "-m", "maturin", "--version"]),
     )
     for name, command in commands:
-        executable = command[0] if os.path.isabs(command[0]) else shutil.which(command[0])
+        executable = (
+            command[0] if os.path.isabs(command[0]) else shutil.which(command[0])
+        )
         if not executable:
             versions[name] = "NOT FOUND"
             continue
