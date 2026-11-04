@@ -6,8 +6,8 @@ validated once even when several member crates contain a Cargo.toml.
 
 ## Requirements
 
-- Python 3.14, as declared by pyproject.toml
-- Rust stable with rustfmt and clippy
+- Python 3.15.2, as declared by pyproject.toml
+- Rust 1.99.1 pinned with rustfmt and clippy
 - Cargo and Git on PATH
 - Development dependencies installed from .[dev]
 
@@ -56,4 +56,4 @@ remain governed by GitHub Actions. A local host run cannot replace those jobs.
 
 The first version reports tool versions rather than pinning/upgrading them.
 Toolchain pinning is a separate reviewed change because current CI selects
-Rust stable and Python 3.14.
+Rust stable and Python 3.15.2.
