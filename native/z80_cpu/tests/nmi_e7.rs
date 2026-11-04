@@ -53,15 +53,21 @@ fn nmi_response_ignores_m1_data_pushes_pc_high_then_low_and_preserves_state() {
     );
     assert_eq!(cpu.registers.pc, 0x1234);
     assert_eq!(cpu.refresh, 0xFF);
+    let response_state = cpu.export_state();
     assert_eq!(
-        cpu.export_state().phase,
+        response_state.phase,
         Z80MicroSequencerPhase::NmiStackPushInternal {
             return_address: 0x1234
         }
     );
+    assert_eq!(response_state.mcycle_index, 0);
+    assert_eq!(response_state.tstate_index, 4);
 
     cpu = round_trip(cpu);
     let high = request(cpu.complete_internal_cycle().unwrap());
+    let high_state = cpu.export_state();
+    assert_eq!(high_state.mcycle_index, 1);
+    assert_eq!(high_state.tstate_index, 0);
     assert_eq!(high.operation, Z80BusOperation::MemoryWrite { value: 0x12 });
     assert_eq!(high.address, 0xFFFF);
     assert_eq!(high.base_tstates, 3);
@@ -70,6 +76,9 @@ fn nmi_response_ignores_m1_data_pushes_pc_high_then_low_and_preserves_state() {
     cpu.insert_wait_tstates(1).unwrap();
     cpu = round_trip(cpu);
     let low = request(cpu.complete_bus_cycle(high.id, None).unwrap());
+    let low_state = cpu.export_state();
+    assert_eq!(low_state.mcycle_index, 2);
+    assert_eq!(low_state.tstate_index, 0);
     assert_eq!(low.operation, Z80BusOperation::MemoryWrite { value: 0x34 });
     assert_eq!(low.address, 0xFFFE);
     assert_eq!(low.base_tstates, 3);
