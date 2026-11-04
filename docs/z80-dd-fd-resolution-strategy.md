@@ -1,15 +1,15 @@
 # Estratégia de conclusão DD/FD do Z80
 
 **Status:** plano de execução para a próxima fatia de trabalho  
-**Data da auditoria:** 2026-11-03  
+**Data da auditoria:** 2026-11-04  
 **Baseline inicial E0:** `e4604f3152c09e8d16c37f94f94a4b344db33b62`  
 **Baseline após E1 / PR #467:** `aa4a4fa7661c28d3b2e21ac6d6eb4379fd297f65`  
 **Baseline após E2 / PR #468:** `abd154332b1dabfb68874f2b80f306da7e060552`  
-**Baseline atual da main após PR #471 / E4A:** `e9a3eff6c3733b4f11443954a647471c9d3908ff`  
-**Candidato E4B / PR #472:** `245d42eb0337d41295329155de8e151feceb9022`  
+**Baseline atual da main após PR #475 / E4C:** `f89a52346e91e88e82ab37a4afcfffff2d793407`  
+**HEAD E4C validado:** `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 PASS.  
 **PR de referência histórica:** [#447](https://github.com/leonardo201800478/sega-emulator/pull/447) — manter aberta, sem merge  
 **PR integrada E4A:** [#471](https://github.com/leonardo201800478/sega-emulator/pull/471)  
-**PR ativa E4B:** [#472](https://github.com/leonardo201800478/sega-emulator/pull/472)  
+**PR integrada E4C:** [#475](https://github.com/leonardo201800478/sega-emulator/pull/475)  
 **Escopo:** microsequenciador Z80 compartilhado; não confundir conclusão do núcleo com integração temporal completa ao SMS.
 
 ---
@@ -325,4 +325,4 @@ Além disso, Scheduler deterministic stress e Windows x64 D3D12/WASAPI/XAudio2 q
 
 Prosseguir para E5: implementar DDCB/FDCB no microsequenciador, separando BIT read-only das operações RMW; manter validação de opcode final não-M1, R, flags, WAIT, snapshots e M/T-states.
 
-**Estado atual DD/FD:** E2 FSM/snapshot SHORT_PASS; E3A1/E3A2 e E4A integradas na main (`e9a3eff6`); E4B IMPLEMENTED/SHORT_PASS no candidato PR #472 com CI 4/4 PASS (run `41738004725`). E4C, E5 DDCB/FDCB, E6 fallback, E7 fechamento semântico, E8 formal e E9 integração temporal permanecem pendentes. Não há LONG_PASS nem TEMPORAL_PASS global.
+**Estado atual DD/FD:** E2 FSM/snapshot SHORT_PASS; E3A1/E3A2, E4A, E4B e E4C integradas na main (`f89a5234`). E4C foi validada no HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`, CI `41747460761` 4/4 PASS. Próxima tarefa: E5 DDCB/FDCB. E6 fallback, E7 fechamento semântico, E8 formal e E9 integração temporal permanecem pendentes. Não há LONG_PASS nem TEMPORAL_PASS global.
