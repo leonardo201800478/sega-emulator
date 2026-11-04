@@ -4450,7 +4450,6 @@ impl Z80MicroSequencer {
                 }
                 1 if mode == 1 => {
                     self.registers.pc = 0x0038;
-                    self.wz = 0x0038;
                     self.retire_interrupt(Z80InterruptKind::Int)
                 }
                 1 if mode == 2 => {
@@ -12090,6 +12089,7 @@ mod e7_2c_interrupt_mode_tests {
                 ..crate::Z80Registers::default()
             },
             i: 0x20,
+            wz: 0xA55A,
             ..Z80MicroSequencer::default()
         };
         cpu.set_int_line(Some(vector));
@@ -12135,6 +12135,7 @@ mod e7_2c_interrupt_mode_tests {
         );
         assert_eq!(cpu.registers.pc, 0x4567);
         assert_eq!(cpu.refresh, 1);
+        assert_eq!(cpu.wz, 0xA55A);
     }
 
     #[test]
@@ -12267,7 +12268,7 @@ mod e7_2c_interrupt_mode_tests {
             }
         );
         assert_eq!(cpu.registers.pc, 0x0038);
-        assert_eq!(cpu.wz, 0x0038);
+        assert_eq!(cpu.wz, 0xA55A, "IM1 must not invent an undocumented WZ update");
         assert_eq!(cpu.registers.sp, 0x8FFE);
     }
 
