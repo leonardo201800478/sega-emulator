@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.99.1
@@ -63,7 +63,7 @@ jobs:
     env:
       SCHEDULER_STRESS_PROFILE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.scheduler_stress_profile || ((contains(github.event.pull_request.labels.*.name, 'scheduler-stress-short') || github.event.label.name == 'scheduler-stress-short') && 'short') || 'long' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.99.1
@@ -82,13 +82,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - uses: actions/setup-python@v7.1.0
         with:
           python-version: "3.15.2"
           cache: pip
       - name: Install development dependencies
-        run: python -m pip install -e ".[dev]"
+        run: python -m pip install -e ".[dev,qt]"
+      - name: Validate Qt and numerical runtime imports
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python -c "from PySide6 import QtCore; import numpy; print(QtCore.qVersion(), numpy.__version__)"
       - name: Validate tooling manager syntax
         run: python -m py_compile tools/project_manager.py
       - name: Ruff formatting
@@ -103,7 +107,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.99.1
