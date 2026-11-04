@@ -82,7 +82,7 @@ A arquitetura de destino deve ser alcançada incrementalmente, sem criar crates 
 
 - Portar SG-1000 primeiro, preservando TMS9918A, PSG, memória, I/O, entrada e testes.
 - Portar SMS em PR separado, preservando VDP Mode 4, perfil PSG, mappers, memória, I/O e testes.
-- Manter os executores Z80 específicos até a fase P3.
+- Durante o port as-is, preservar temporariamente os executores existentes; essa transição foi encerrada estruturalmente pela P3. O runtime deve manter uma única CPU Z80 compartilhada, sem duplicação por console.
 - Adaptar interfaces sem alterar semântica de hardware.
 - Manter a fachada de compatibilidade atual durante a migração.
 
@@ -94,6 +94,8 @@ A arquitetura de destino deve ser alcançada incrementalmente, sem criar crates 
 - Parametrizar o barramento e criar adaptadores SG-1000 e SMS.
 - Portar a suíte de testes e executar comparação diferencial entre executor antigo e novo.
 - Remover duplicações somente quando ambos os sistemas usarem o novo núcleo e não houver desvio semântico inexplicado.
+
+**Estado operacional (2026-11-04):** a extração estrutural do Z80 compartilhado está presente em `native/z80_cpu` e é consumida pelos perfis SMS/SG-1000. Não manter executores independentes por console. O fechamento semântico, diferencial e temporal continua em P7/P9; extração estrutural não equivale a CPU completa nem a `TEMPORAL_PASS`.
 
 **Saída:** uma implementação de CPU em produção, consumida pelos dois consoles.
 
@@ -246,14 +248,19 @@ Estados: T1 `IMPLEMENTED / QUICK_PASS`; T2 `IMPLEMENTED / QUICK_PASS`; T3 `IMPLE
 
 ---
 
-## Atualização operacional Z80 — 2026-11-04
+## Atualização operacional Z80 — 2026-11-04 (baseline após PR #517)
 
-**Baseline atual consultada:** `main` = `644b2c22879d63447f63b730ed9415db11e81fab`; CI pós-merge #41831738966 SUCCESS.
+**Baseline remota:** `main` = `fcd91302cb64a31d63b75f5e1d3b6eab336668d1`.
 
-A rota P7 permanece ativa para o fechamento semântico e a expansão temporal do Z80. Status detalhado:
-- E7.1 HALT/M1, E7.2A NMI, E7.2B INT acknowledge, E7.2C IM0/IM1/IM2 e E7.2D EI/DI integradas (#490/#495/#496/#498/#500).
-- E7.2E em andamento na PR #506, HEAD inicial `09c6dcb9a8f5a7ff7ca3f5934c1223515b5529a1`, CI #41861829094 QUEUED. CI de SHAs anteriores não valida o HEAD atual.
-- E7.3 HALT T4; E7.4 BUSREQ; E7.5 RETI/daisy-chain; E7.6 IRQ real do VDP; E7.7 auditoria semântica integral: pendentes.
-- E8 só após E7 fechado; E9 permanece gate de integração temporal sistêmica.
+- **Arquitetura compartilhada:** uma única CPU Z80 em `native/z80_cpu`; os perfis SMS e SG-1000 não devem introduzir executores duplicados.
+- **E6:** resolução geral de prefixos integrada pela PR #486, merge SHA `24a32e03e10c8e82022172faee69ec0c046f8cb0`.
+- **E7.3:** HALT T4 integrada pela PR #509, merge SHA `869b402e4c8f2dbd9c5f5fa4a10d10ac26506461`.
+- **E7.4:** PR #511 integrou auditoria documental BUSREQ/BUSACK (merge SHA `5452ec9eb4307b997badff1858bfc60e7078a937`), não a arbitragem executável.
+- **E7.4.1A/B:** PRs #512 e #514 permanecem abertas e não integradas. WAIT/TW continua INCOMPLETE: falta fase falling/rising explícita, TW automático de I/O/INT e amostragem WAIT externo durante TW obrigatório.
+- **E7.4.1C:** C1 é a próxima implementação: instante racional canônico no Temporal Core/Scheduler, com ordenação causal, watermarks, aritmética verificada, snapshots e codec versionado. Não arredondar meia-fase nem criar scheduler paralelo SMS.
+- **E7.5–E7.7:** RETI/daisy-chain, IRQ real do VDP e auditoria semântica integral permanecem pendentes.
+- **E7 global:** `INTEGRATION_PENDING`. E8 permanece bloqueada até o fechamento integral de E7; E9 só recebe `TEMPORAL_PASS` com traces independentes e determinismo sistêmico demonstrados.
+- **Tooling:** PR #516 integrada em `d06d4d203412d103a327a57604471074ef15faf6`; PR #517 integrada nesta baseline em `fcd91302cb64a31d63b75f5e1d3b6eab336668d1`.
+- **Documentação:** PR #518 consolida as auditorias WAIT/TW, C1, modelo temporal e reconciliação do scorecard.
 
-A PR #506 não está integrada. Nenhuma PR aberta com base histórica deve ser mesclada sem rebase/revisão e CI no HEAD final. A autoridade deste roadmap continua sendo o próprio `docs/project-roadmap.md`; documentos auxiliares devem permanecer sincronizados e não criar prioridades concorrentes.
+A P6 permanece ativa para a integração temporal progressiva SG-1000/SMS. A P7 permanece ativa para o fechamento semântico e temporal do Z80. Não avançar para plataformas futuras enquanto os gates P1–P2 e os bloqueios temporais atuais não estiverem resolvidos.

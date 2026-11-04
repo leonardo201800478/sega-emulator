@@ -203,3 +203,12 @@ A matriz DD/FD continua sendo inventário semântico por família e não uma dec
 A PR #506 acrescenta matriz de estados inválidos e cenários WAIT=0/1/3 em M1, memória, I/O, ciclos internos e IM0/IM1/IM2. O HEAD `09c6dcb9a8f5a7ff7ca3f5934c1223515b5529a1` tinha CI #41861829094 QUEUED na última consulta. Portanto, esses novos testes ainda não são PASS comprovado.
 
 As famílias BASE/CB/ED/DD/FD/DDCB/FDCB devem continuar classificadas individualmente por implementação, validação funcional, diferencial e temporal. Não extrapolar testes internos para oráculo independente. E7.3 HALT T4, E7.4 BUSREQ, E7.5 RETI/daisy-chain, E7.6 IRQ real VDP e E7.7 auditoria integral permanecem pendentes. E8 bloqueada até fechar E7; E9 continua dependente de integração temporal sistêmica.
+
+
+---
+
+## Aditivo operacional — baseline após E7.3 (2026-11-04)
+
+Baseline remota: `main` `fcd91302cb64a31d63b75f5e1d3b6eab336668d1`.
+
+E6 continua integrada pela PR #486 (merge SHA `24a32e03e10c8e82022172faee69ec0c046f8cb0`). E7.3 (HALT T4) foi integrada pela PR #509 (merge SHA `869b402e4c8f2dbd9c5f5fa4a10d10ac26506461`). O estado de E7.3 não promove automaticamente as famílias DD/FD a validação diferencial ou temporal completa. E7.4.1A (#512) e E7.4.1B (#514) continuam não integradas; C1 — instante racional comum do Temporal Core/Scheduler — é a próxima etapa. Diferencial externo completo, ZEXDOC/ZEXALL, LONG_PASS e TEMPORAL_PASS global permanecem pendentes.
