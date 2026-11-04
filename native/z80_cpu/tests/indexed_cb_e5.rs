@@ -48,8 +48,8 @@ fn round_trip(cpu: Z80MicroSequencer, stage: &str) -> Z80MicroSequencer {
         .unwrap_or_else(|error| panic!("snapshot at {stage} restores: {error:?}"))
 }
 
-fn run_indexed_cb(
-    prefixes: &[u8],
+struct IndexedCbInput<'a> {
+    prefixes: &'a [u8],
     ix: u16,
     iy: u16,
     pc: u16,
@@ -57,8 +57,19 @@ fn run_indexed_cb(
     opcode: u8,
     old_value: u8,
     flags: u8,
-    waits: &[u32],
-) -> RunResult {
+}
+
+fn run_indexed_cb(input: IndexedCbInput<'_>, waits: &[u32]) -> RunResult {
+    let IndexedCbInput {
+        prefixes,
+        ix,
+        iy,
+        pc,
+        displacement,
+        opcode,
+        old_value,
+        flags,
+    } = input;
     assert!(!prefixes.is_empty());
     assert!(prefixes.iter().all(|prefix| matches!(prefix, 0xDD | 0xFD)));
 
@@ -110,11 +121,11 @@ fn run_indexed_cb(
         }
 
         trace.push(BusTrace {
-            operation: pending.operation.clone(),
+            operation: pending.operation,
             address: pending.address,
             base_tstates: pending.base_tstates,
         });
-        let data = match pending.operation.clone() {
+        let data = match pending.operation {
             Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
                 Some(memory[pending.address as usize])
             }
@@ -217,14 +228,16 @@ fn all_256_indexed_cb_subopcodes_are_executed_for_ix_and_iy() {
             let old_value = 0x96;
             let initial_flags = 0xA5;
             let result = run_indexed_cb(
-                &[prefix],
-                ix,
-                iy,
-                0x1000,
-                displacement,
-                opcode,
-                old_value,
-                initial_flags,
+                IndexedCbInput {
+                    prefixes: &[prefix],
+                    ix,
+                    iy,
+                    pc: 0x1000,
+                    displacement,
+                    opcode,
+                    old_value,
+                    flags: initial_flags,
+                },
                 &[],
             );
             let (expected_memory, expected_flags, writes_memory) =
@@ -306,7 +319,19 @@ fn indexed_cb_register_destinations_use_h_and_l_not_index_halves() {
     for (prefix, opcode) in [(0xDD, 0x04), (0xFD, 0x0D), (0xDD, 0x84), (0xFD, 0xAD)] {
         let ix = 0x1234;
         let iy = 0x5678;
-        let result = run_indexed_cb(&[prefix], ix, iy, 0x2000, 0, opcode, 0x81, 0x01, &[]);
+        let result = run_indexed_cb(
+            IndexedCbInput {
+                prefixes: &[prefix],
+                ix,
+                iy,
+                pc: 0x2000,
+                displacement: 0,
+                opcode,
+                old_value: 0x81,
+                flags: 0x01,
+            },
+            &[],
+        );
         let address = if prefix == 0xDD { ix } else { iy };
         let (value, _, _) = expected_result(opcode, 0x81, 0x01, address);
         assert_eq!(result.cpu.ix, ix);
@@ -324,14 +349,16 @@ fn indexed_cb_waits_are_additive_and_snapshots_resume_each_bus_phase() {
         (0xC6, [1, 2, 3, 4, 5, 6]),
     ] {
         let result = run_indexed_cb(
-            &[0xDD],
-            0x4000,
-            0x5000,
-            0x1000,
-            0xFF,
-            opcode,
-            0x80,
-            0x01,
+            IndexedCbInput {
+                prefixes: &[0xDD],
+                ix: 0x4000,
+                iy: 0x5000,
+                pc: 0x1000,
+                displacement: 0xFF,
+                opcode,
+                old_value: 0x80,
+                flags: 0x01,
+            },
             &waits,
         );
         let base = if opcode >> 6 == 1 { 20 } else { 23 };
@@ -353,7 +380,19 @@ fn indexed_cb_repeated_prefixes_use_last_index_and_count_only_m1_refreshes() {
     ] {
         let ix = 0x1000;
         let iy = 0x2000;
-        let result = run_indexed_cb(&prefixes, ix, iy, 0x3000, 0xFF, 0x06, 0x81, 0, &[]);
+        let result = run_indexed_cb(
+            IndexedCbInput {
+                prefixes: &prefixes,
+                ix,
+                iy,
+                pc: 0x3000,
+                displacement: 0xFF,
+                opcode: 0x06,
+                old_value: 0x81,
+                flags: 0,
+            },
+            &[],
+        );
         let expected_base = if prefixes.last() == Some(&0xDD) {
             ix
         } else {
@@ -371,7 +410,19 @@ fn indexed_cb_repeated_prefixes_use_last_index_and_count_only_m1_refreshes() {
 
 #[test]
 fn indexed_cb_wraps_effective_address_and_program_counter() {
-    let result = run_indexed_cb(&[0xFD], 0, 0xFFFF, 0xFFFC, 0x01, 0xC6, 0x00, 0, &[]);
+    let result = run_indexed_cb(
+        IndexedCbInput {
+            prefixes: &[0xFD],
+            ix: 0,
+            iy: 0xFFFF,
+            pc: 0xFFFC,
+            displacement: 0x01,
+            opcode: 0xC6,
+            old_value: 0x00,
+            flags: 0,
+        },
+        &[],
+    );
     assert_eq!(result.cpu.wz, 0x0000);
     assert_eq!(result.cpu.registers.pc, 0x0000);
     assert_eq!(result.cpu.refresh, 0x82);
@@ -385,14 +436,16 @@ fn indexed_cb_bit_is_read_only_and_preserves_memory_for_all_z_fields() {
             for destination in 0_u8..8 {
                 let opcode = 0x40 | (bit << 3) | destination;
                 let result = run_indexed_cb(
-                    &[prefix],
-                    0x6000,
-                    0x7000,
-                    0x1000,
-                    0x00,
-                    opcode,
-                    0xA5,
-                    0x01,
+                    IndexedCbInput {
+                        prefixes: &[prefix],
+                        ix: 0x6000,
+                        iy: 0x7000,
+                        pc: 0x1000,
+                        displacement: 0x00,
+                        opcode,
+                        old_value: 0xA5,
+                        flags: 0x01,
+                    },
                     &[],
                 );
                 assert!(
@@ -422,14 +475,16 @@ fn indexed_cb_displacement_covers_zero_minimum_and_maximum_signed_offsets() {
             (0x4000, index_base)
         };
         let result = run_indexed_cb(
-            &[prefix],
-            ix,
-            iy,
-            0x1000,
-            displacement,
-            0x46,
-            0x80,
-            FLAG_C,
+            IndexedCbInput {
+                prefixes: &[prefix],
+                ix,
+                iy,
+                pc: 0x1000,
+                displacement,
+                opcode: 0x46,
+                old_value: 0x80,
+                flags: FLAG_C,
+            },
             &[],
         );
         assert_eq!(result.cpu.wz, expected_address);
@@ -442,14 +497,16 @@ fn indexed_cb_displacement_covers_zero_minimum_and_maximum_signed_offsets() {
 #[test]
 fn indexed_cb_phase_snapshots_keep_pending_requests_and_phase_invariants() {
     let result = run_indexed_cb(
-        &[0xDD],
-        0xABFF,
-        0xCD00,
-        0x1000,
-        0x01,
-        0x46,
-        0x80,
-        0x01,
+        IndexedCbInput {
+            prefixes: &[0xDD],
+            ix: 0xABFF,
+            iy: 0xCD00,
+            pc: 0x1000,
+            displacement: 0x01,
+            opcode: 0x46,
+            old_value: 0x80,
+            flags: 0x01,
+        },
         &[1, 1, 1, 1, 1],
     );
     assert_eq!(result.trace.len(), 5);
