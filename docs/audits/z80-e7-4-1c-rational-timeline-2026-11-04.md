@@ -1,8 +1,8 @@
 # Auditoria E7.4.1C — linha temporal racional compartilhada e fases WAIT/TW
 
-**Data:** 2026-11-04  
-**Baseline documental atualizada:** `main` = `fcd91302cb64a31d63b75f5e1d3b6eab336668d1` (após PR #517)  
-**Branch:** `docs/z80-e7-4-1c-rational-timeline-audit-20261104`  
+**Data:** 2026-11-04\
+**Baseline documental atualizada:** `main` = `fcd91302cb64a31d63b75f5e1d3b6eab336668d1` (após PR #517)\
+**Branch:** `docs/z80-e7-4-1c-rational-timeline-audit-20261104`\
 **Escopo:** auditoria técnica e decisão arquitetural preparatória. Não altera runtime, não integra PRs candidatas e não declara E7.4.1 concluída.
 
 ## 1. Resultado executivo
