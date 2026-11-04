@@ -219,12 +219,11 @@ fn assert_continuous_equals_restored(
     flags: u8,
     start_pc: u16,
     interrupt: Option<InterruptSetup>,
-)
-    -> (
-        BTreeSet<String>,
-        bool,
-        BTreeMap<String, Z80MicroSequencerState>,
-    ) {
+) -> (
+    BTreeSet<String>,
+    bool,
+    BTreeMap<String, Z80MicroSequencerState>,
+) {
     let continuous = execute_one(program, flags, start_pc, interrupt, false);
     let restored = execute_one(program, flags, start_pc, interrupt, true);
 
