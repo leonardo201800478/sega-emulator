@@ -2571,10 +2571,22 @@ impl Z80MicroSequencer {
                             self.registers.pc,
                         );
                     }
-                    if index_class != Z80IndexOpcodeClass::UsesIndex
-                        || !(indexed_16bit_opcode || is_indexed_displacement_opcode(opcode))
-                    {
-                        return self.unsupported(opcode);
+                    match index_class {
+                        Z80IndexOpcodeClass::UsesIndex => {
+                            if !(indexed_16bit_opcode || is_indexed_displacement_opcode(opcode)) {
+                                return self.unsupported(opcode);
+                            }
+                        }
+                        Z80IndexOpcodeClass::Ignored => {
+                            // DD/FD is consumed as an M1 prefix, but the terminal
+                            // opcode retains its ordinary BASE meaning. The fetch
+                            // and its timing are already accounted for; dispatch
+                            // this byte directly without issuing another fetch.
+                            self.prefix_state = Z80PrefixState::None;
+                        }
+                        Z80IndexOpcodeClass::IndexedCb => unreachable!(
+                            "indexed-CB returns through its displacement path above"
+                        ),
                     }
                 } else if self.prefix_state != Z80PrefixState::None || previous_prefix.is_some() {
                     return self.unsupported(opcode);
