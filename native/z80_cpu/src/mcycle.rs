@@ -146,10 +146,7 @@ impl Z80MCycle {
     /// It is consulted only after T2 and while the wait window remains open.
     /// The returned completion marker identifies the exact final M-cycle edge
     /// on which BUSREQ arbitration may later be attached.
-    pub fn advance_tstate(
-        &mut self,
-        wait_asserted: bool,
-    ) -> Result<Z80MCycleEdge, Z80MCycleError> {
+    pub fn advance_tstate(&mut self, wait_asserted: bool) -> Result<Z80MCycleEdge, Z80MCycleError> {
         if self.is_complete() {
             return Err(Z80MCycleError::AlreadyComplete);
         }
@@ -262,9 +259,7 @@ impl Z80MCycle {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        Z80MCycle, Z80MCycleError, Z80MCycleKind, Z80MCycleTState, Z80MCycleWaitSource,
-    };
+    use super::{Z80MCycle, Z80MCycleError, Z80MCycleKind, Z80MCycleTState, Z80MCycleWaitSource};
 
     #[test]
     fn memory_cycle_exposes_each_nominal_tstate_and_exact_final_edge() {
@@ -314,8 +309,7 @@ mod tests {
 
     #[test]
     fn mandatory_waits_and_external_waits_remain_distinguishable() {
-        let mut cycle =
-            Z80MCycle::new(Z80MCycleKind::InterruptAcknowledge, 4, 2).unwrap();
+        let mut cycle = Z80MCycle::new(Z80MCycleKind::InterruptAcknowledge, 4, 2).unwrap();
         cycle.advance_tstate(false).unwrap();
         cycle.advance_tstate(false).unwrap();
         for index in 0..2 {
@@ -385,7 +379,10 @@ mod tests {
         let encoded = serde_json::to_vec(&snapshot).unwrap();
         let decoded = serde_json::from_slice(&encoded).unwrap();
         assert_eq!(decoded, snapshot);
-        assert_eq!(Z80MCycle::restore_state(decoded).unwrap().export_state(), snapshot);
+        assert_eq!(
+            Z80MCycle::restore_state(decoded).unwrap().export_state(),
+            snapshot
+        );
     }
 
     #[test]
