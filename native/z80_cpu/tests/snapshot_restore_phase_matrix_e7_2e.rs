@@ -67,7 +67,7 @@ fn execute_one(
 
     if program.first() == Some(&0xED)
         && matches!(
-            program.get(1),
+            program.get(1).copied(),
             Some(0xA2 | 0xA3 | 0xAA | 0xAB | 0xB2 | 0xB3 | 0xBA | 0xBB)
         )
     {
