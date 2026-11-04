@@ -4262,6 +4262,9 @@ impl Z80MicroSequencer {
                 }
                 self.retire(opcode)
             }
+            Z80MicroSequencerPhase::InterruptAcknowledgeComplete { .. } => {
+                Err(Z80MicroSequencerError::UnexpectedCompletion)
+            }
             Z80MicroSequencerPhase::Ready => Err(Z80MicroSequencerError::NoInstructionActive),
         }
     }
@@ -9640,6 +9643,9 @@ mod ed_block_io_differential_tests {
                         Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
                             Some(bus.read_memory(request.address))
                         }
+                        Z80BusOperation::InterruptAcknowledge => {
+                            panic!("unexpected INT acknowledge in instruction-only test")
+                        }
                         Z80BusOperation::MemoryWrite { value } => {
                             bus.write_memory(request.address, value);
                             None
@@ -10136,6 +10142,9 @@ mod base_16bit_register_differential_tests {
                         Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
                             Some(bus.read_memory(request.address))
                         }
+                        Z80BusOperation::InterruptAcknowledge => {
+                            panic!("unexpected INT acknowledge in instruction-only test")
+                        }
                         Z80BusOperation::MemoryWrite { value } => {
                             bus.write_memory(request.address, value);
                             None
@@ -10295,6 +10304,9 @@ mod base_absolute_transfer_differential_tests {
                         Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
                             Some(bus.read_memory(request.address))
                         }
+                        Z80BusOperation::InterruptAcknowledge => {
+                            panic!("unexpected INT acknowledge in instruction-only test")
+                        }
                         Z80BusOperation::MemoryWrite { value } => {
                             bus.write_memory(request.address, value);
                             None
@@ -10412,6 +10424,9 @@ mod base_relative_branch_differential_tests {
                     let data = match request.operation {
                         Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
                             Some(bus.read_memory(request.address))
+                        }
+                        Z80BusOperation::InterruptAcknowledge => {
+                            panic!("unexpected INT acknowledge in instruction-only test")
                         }
                         Z80BusOperation::MemoryWrite { value } => {
                             bus.write_memory(request.address, value);
@@ -10568,6 +10583,9 @@ mod base_absolute_jump_differential_tests {
                         Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
                             Some(bus.read_memory(request.address))
                         }
+                        Z80BusOperation::InterruptAcknowledge => {
+                            panic!("unexpected INT acknowledge in instruction-only test")
+                        }
                         Z80BusOperation::MemoryWrite { value } => {
                             bus.write_memory(request.address, value);
                             None
@@ -10722,6 +10740,9 @@ mod base_stack_push_pop_differential_tests {
                     let data = match request.operation {
                         Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
                             Some(bus.read_memory(request.address))
+                        }
+                        Z80BusOperation::InterruptAcknowledge => {
+                            panic!("unexpected INT acknowledge in instruction-only test")
                         }
                         Z80BusOperation::MemoryWrite { value } => {
                             bus.write_memory(request.address, value);
@@ -10897,6 +10918,9 @@ mod base_call_rst_differential_tests {
                     let data = match request.operation {
                         Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
                             Some(bus.read_memory(request.address))
+                        }
+                        Z80BusOperation::InterruptAcknowledge => {
+                            panic!("unexpected INT acknowledge in instruction-only test")
                         }
                         Z80BusOperation::MemoryWrite { value } => {
                             bus.write_memory(request.address, value);
@@ -11083,6 +11107,9 @@ mod base_return_differential_tests {
                         Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
                             Some(bus.read_memory(request.address))
                         }
+                        Z80BusOperation::InterruptAcknowledge => {
+                            panic!("unexpected INT acknowledge in instruction-only test")
+                        }
                         Z80BusOperation::MemoryWrite { value } => {
                             bus.write_memory(request.address, value);
                             None
@@ -11252,6 +11279,9 @@ mod base_exchange_interrupt_control_differential_tests {
                     let data = match request.operation {
                         Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
                             Some(bus.read_memory(request.address))
+                        }
+                        Z80BusOperation::InterruptAcknowledge => {
+                            panic!("unexpected INT acknowledge in instruction-only test")
                         }
                         Z80BusOperation::MemoryWrite { value } => {
                             bus.write_memory(request.address, value);
@@ -11429,6 +11459,9 @@ mod base_exchange_stack_differential_tests {
                         Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
                             Some(bus.read_memory(request.address))
                         }
+                        Z80BusOperation::InterruptAcknowledge => {
+                            panic!("unexpected INT acknowledge in instruction-only test")
+                        }
                         Z80BusOperation::MemoryWrite { value } => {
                             bus.write_memory(request.address, value);
                             None
@@ -11548,6 +11581,9 @@ mod base_immediate_io_differential_tests {
                     let data = match request.operation {
                         Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
                             Some(bus.read_memory(request.address))
+                        }
+                        Z80BusOperation::InterruptAcknowledge => {
+                            panic!("unexpected INT acknowledge in instruction-only test")
                         }
                         Z80BusOperation::MemoryWrite { value } => {
                             bus.write_memory(request.address, value);
@@ -11682,7 +11718,7 @@ mod base_immediate_io_differential_tests {
         );
         assert_eq!(
             cpu.phase,
-            Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector: 0xCF }
+            crate::Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector: 0xCF }
         );
         assert_eq!(
             cpu.registers.pc, 0x2345,
@@ -11704,7 +11740,7 @@ mod base_immediate_io_differential_tests {
             panic!("NMI must issue its response request first");
         };
         assert_eq!(request.operation, crate::Z80BusOperation::OpcodeFetch);
-        assert_eq!(cpu.phase, Z80MicroSequencerPhase::NmiResponse);
+        assert_eq!(cpu.phase, crate::Z80MicroSequencerPhase::NmiResponse);
         assert!(cpu.iff2);
         assert_eq!(cpu.int_pending, Some(0xCF));
     }
