@@ -21,7 +21,7 @@ use sega_z80_cpu::{
     Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
 };
 
-pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 20;
+pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 21;
 
 /// Runtime event trace emitted from actual Scheduler/bus dispatch boundaries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -278,6 +278,11 @@ impl SmsTemporalMachine {
         let state = self.cpu.export_state();
         let (kind, direction, data) = match request.operation {
             Z80BusOperation::OpcodeFetch => (BusCycleKind::OpcodeFetch, BusDirection::Read, None),
+            Z80BusOperation::InterruptAcknowledge => (
+                BusCycleKind::InterruptAcknowledge,
+                BusDirection::Read,
+                None,
+            ),
             Z80BusOperation::MemoryRead => (BusCycleKind::MemoryRead, BusDirection::Read, None),
             Z80BusOperation::MemoryWrite { value } => {
                 (BusCycleKind::MemoryWrite, BusDirection::Write, Some(value))
@@ -305,9 +310,18 @@ impl SmsTemporalMachine {
             phase,
             kind,
             direction,
-            Some(request.address),
+            if request.operation == Z80BusOperation::InterruptAcknowledge {
+                None
+            } else {
+                Some(request.address)
+            },
             data,
-            u16::from(request.base_tstates),
+            u16::from(request.base_tstates)
+                + if request.operation == Z80BusOperation::InterruptAcknowledge {
+                    2
+                } else {
+                    0
+                },
         )
         .map(Some)
     }
@@ -705,6 +719,12 @@ impl SmsTemporalMachine {
     /// This signal update does not advance machine time.
     pub fn request_nmi(&mut self) {
         self.cpu.request_nmi();
+    }
+
+    /// Set the external byte driven during an INT acknowledge cycle.
+    /// This signal update does not advance machine time.
+    pub fn set_interrupt_vector(&mut self, vector: u8) {
+        self.bus.set_interrupt_vector(vector);
     }
 
     /// Current mapper-backed memory (read-only).
