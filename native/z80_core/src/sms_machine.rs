@@ -325,8 +325,7 @@ mod tests {
 
     #[test]
     fn sms_sprite_limit_can_be_toggled_through_native_binding() {
-        let mut machine =
-            NativeSMSMachine::new(vec![0; 0x4000], false, Some("usa"), None).unwrap();
+        let mut machine = NativeSMSMachine::new(vec![0; 0x4000], false, Some("usa"), None).unwrap();
         assert!(machine.sprite_limit_enabled());
         machine.set_sprite_limit_enabled(false);
         assert!(!machine.sprite_limit_enabled());
