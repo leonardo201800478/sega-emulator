@@ -164,7 +164,7 @@ No caminho atual, os requests PortRead/PortWrite são descritos como 4T, mas man
 
 ### 12.3 Acknowledge de INT e waits automáticos
 
-O UM008011-0816, seção Interrupt Request/Acknowledge Cycle e Figura 9 (página impressa 12), determina dois waits automáticos no ciclo especial de acknowledge. O estado de ciclo deve identificar esses TWs como fases temporais reais, sem somá-los ao contador de WAIT externo. A janela de amostragem WAIT deve seguir a regra geral de T2/TW do manual; não ignorar amostras durante TW obrigatório.
+O UM008011-0816, seção Interrupt Request/Acknowledge Cycle e Figura 9 (página impressa 13), determina dois waits automáticos no ciclo especial de acknowledge. O estado de ciclo deve identificar esses TWs como fases temporais reais, sem somá-los ao contador de WAIT externo. A janela de amostragem WAIT deve seguir a regra geral de T2/TW do manual; não ignorar amostras durante TW obrigatório.
 
 ### 12.4 Consequências para o contrato e snapshots
 
