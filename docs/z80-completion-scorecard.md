@@ -219,7 +219,7 @@ Aceite: nenhuma instrução documentada elegível sem classificação e critéri
 
 #### E7.1 — HALT e ciclos M1 de retenção
 
-- Implementado na branch candidata: HALT entra após M1 normal; PC avança uma vez.
+- Integrado na main pela PR #490: HALT entra após M1 normal; PC avança uma vez. CI #41762232781 passou nos gates Rust/Python/Windows; Scheduler stress SKIPPED; CI pós-merge NOT VERIFIED.
 - Durante HALT sem interrupção elegível, cada chamada emite M1 no endereço atual de PC; o byte é ignorado, PC não avança e R incrementa preservando o bit 7.
 - WAIT e snapshot/restore do M1 pendente são cobertos; schema permanece 28.
 - Validador temporal SMS ajustado para contabilizar M1s anteriores já concluídos, permitindo snapshot no M1 subsequente a prefixo ED.
