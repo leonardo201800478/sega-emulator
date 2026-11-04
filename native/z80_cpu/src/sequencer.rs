@@ -12268,7 +12268,10 @@ mod e7_2c_interrupt_mode_tests {
             }
         );
         assert_eq!(cpu.registers.pc, 0x0038);
-        assert_eq!(cpu.wz, 0xA55A, "IM1 must not invent an undocumented WZ update");
+        assert_eq!(
+            cpu.wz, 0xA55A,
+            "IM1 must not invent an undocumented WZ update"
+        );
         assert_eq!(cpu.registers.sp, 0x8FFE);
     }
 
