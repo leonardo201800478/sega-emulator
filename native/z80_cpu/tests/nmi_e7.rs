@@ -403,3 +403,62 @@ fn nmi_has_priority_over_int_when_both_are_present_at_halt_t4() {
     );
     assert!(!cpu.halted);
 }
+
+
+#[test]
+fn masked_int_is_not_latched_until_iff1_is_enabled_at_a_later_halt_t4() {
+    let mut cpu = Z80MicroSequencer {
+        iff1: false,
+        iff2: false,
+        halted: true,
+        ..Z80MicroSequencer::default()
+    };
+    cpu.set_int_line(Some(0xFF));
+
+    let first_m1 = request(cpu.begin_instruction().unwrap());
+    cpu.complete_bus_cycle(first_m1.id, Some(0x00)).unwrap();
+    cpu.sample_halt_interrupts_at_t4().unwrap();
+    assert_eq!(cpu.export_state().halt_exit_pending, None);
+
+    // Enabling IFF1 between T4 boundaries must not accept the unsampled line.
+    cpu.iff1 = true;
+    let second_m1 = request(cpu.begin_instruction().unwrap());
+    assert_eq!(second_m1.operation, Z80BusOperation::OpcodeFetch);
+    cpu.complete_bus_cycle(second_m1.id, Some(0x00)).unwrap();
+    cpu.sample_halt_interrupts_at_t4().unwrap();
+    assert_eq!(
+        cpu.export_state().halt_exit_pending,
+        Some(Z80HaltExit::Int)
+    );
+    assert_eq!(
+        request(cpu.begin_instruction().unwrap()).operation,
+        Z80BusOperation::InterruptAcknowledge
+    );
+}
+
+#[test]
+fn nmi_is_sampled_during_halt_even_when_iff1_is_disabled() {
+    let mut cpu = Z80MicroSequencer {
+        iff1: false,
+        iff2: false,
+        halted: true,
+        ..Z80MicroSequencer::default()
+    };
+    cpu.request_nmi();
+
+    let halt_m1 = request(cpu.begin_instruction().unwrap());
+    cpu.complete_bus_cycle(halt_m1.id, Some(0x00)).unwrap();
+    cpu.sample_halt_interrupts_at_t4().unwrap();
+    assert_eq!(
+        cpu.export_state().halt_exit_pending,
+        Some(Z80HaltExit::Nmi)
+    );
+
+    let response = request(cpu.begin_instruction().unwrap());
+    assert_eq!(response.operation, Z80BusOperation::OpcodeFetch);
+    assert_eq!(
+        cpu.export_state().phase,
+        Z80MicroSequencerPhase::NmiResponse
+    );
+    assert!(!cpu.halted);
+}
