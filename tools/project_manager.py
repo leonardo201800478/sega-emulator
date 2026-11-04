@@ -144,9 +144,7 @@ def discover_workspaces() -> tuple[list[Workspace], list[str], list[str]]:
                 standalone.output.strip().splitlines()[-1]
             ).resolve()
         else:
-            workspace_manifest = Path(
-                located.output.strip().splitlines()[-1]
-            ).resolve()
+            workspace_manifest = Path(located.output.strip().splitlines()[-1]).resolve()
         if workspace_manifest in roots:
             continue
 
@@ -165,7 +163,10 @@ def discover_workspaces() -> tuple[list[Workspace], list[str], list[str]]:
             output_limit=None,
         )
         if metadata.status != "PASS":
-            if "current package believes it's in a workspace when it's not" in metadata.output:
+            if (
+                "current package believes it's in a workspace when it's not"
+                in metadata.output
+            ):
                 unassigned.append(str(manifest.relative_to(ROOT)))
             else:
                 errors.append(
@@ -190,7 +191,11 @@ def discover_workspaces() -> tuple[list[Workspace], list[str], list[str]]:
         except (KeyError, ValueError, OSError) as exc:
             errors.append(f"{workspace_manifest}: invalid metadata: {exc}")
 
-    return sorted(roots.values(), key=lambda workspace: workspace.root), errors, unassigned
+    return (
+        sorted(roots.values(), key=lambda workspace: workspace.root),
+        errors,
+        unassigned,
+    )
 
 
 def tool_versions() -> dict[str, str]:
