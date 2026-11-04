@@ -256,7 +256,7 @@ Aceite: nenhuma instrução documentada elegível sem classificação e critéri
 
 #### E7.2E — Snapshots, restauração e equivalência contínua/retomada — PR #502 (candidata, NÃO integrada)
 
-- HEAD consultado: `69ea4299b3858787f0f91682f3ea823371cde3b0`; base original `ea327025b312feb53f1e3e5326b5a5e7c40e72f1`; 11 commits à frente e 0 atrás da base original. Após o merge documental #501, a branch ficou atrás da main por um commit documental.
+- HEAD consultado: `69ea4299b3858787f0f91682f3ea823371cde3b0`; base original `ea327025b312feb53f1e3e5326b5a5e7c40e72f1`; 11 commits à frente e 0 atrás da base original. Após o merge documental #501, a comparação remota registra a branch #502 divergente, 11 commits à frente e 4 atrás da main atual.
 - Alterações candidatas: seis arquivos; teste temporal SMS de snapshots para NMI, IM0/IM1/IM2, EI delay e HALT/M1; round-trip de 70 variantes da fase; rejeição de tag inválida; validação de schema.
 - Auditoria estrutural no código-base: 70 variantes do enum, 70 writer arms, 70 reader arms e 70 restore-validator arms. É cobertura estrutural, não validação de todas as combinações de estado.
 - O teste temporal compara o resultado terminal, DTO completo exportado e tempo absoluto entre execução contínua e execução com restore nos safe points exercitados. WAIT=1 é usado em NMI/IM0/IM1/IM2 e HALT; EI usa WAIT=0.
