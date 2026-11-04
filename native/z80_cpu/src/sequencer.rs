@@ -11,9 +11,9 @@ use crate::prefix::{
     classify_index_opcode,
 };
 use crate::{
+    Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES, Z80_INT_ACK_BASE_TSTATES,
     Z80_MICRO_SEQUENCER_STATE_VERSION, Z80AlternateRegisters, Z80ArchitecturalState,
     Z80BusHandshake, Z80BusHandshakeError, Z80BusOperation, Z80BusRequest, Z80Registers,
-    Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES, Z80_INT_ACK_BASE_TSTATES,
 };
 use serde::{Deserialize, Serialize};
 
