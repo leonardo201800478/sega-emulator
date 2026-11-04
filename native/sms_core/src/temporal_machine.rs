@@ -278,11 +278,9 @@ impl SmsTemporalMachine {
         let state = self.cpu.export_state();
         let (kind, direction, data) = match request.operation {
             Z80BusOperation::OpcodeFetch => (BusCycleKind::OpcodeFetch, BusDirection::Read, None),
-            Z80BusOperation::InterruptAcknowledge => (
-                BusCycleKind::InterruptAcknowledge,
-                BusDirection::Read,
-                None,
-            ),
+            Z80BusOperation::InterruptAcknowledge => {
+                (BusCycleKind::InterruptAcknowledge, BusDirection::Read, None)
+            },
             Z80BusOperation::MemoryRead => (BusCycleKind::MemoryRead, BusDirection::Read, None),
             Z80BusOperation::MemoryWrite { value } => {
                 (BusCycleKind::MemoryWrite, BusDirection::Write, Some(value))
@@ -870,11 +868,12 @@ impl SmsTemporalMachine {
                 return Err(SmsTemporalMachineError::InvalidState);
             }
             let total_tstates = elapsed / scale;
-            let automatic_wait_tstates = if request.operation == Z80BusOperation::InterruptAcknowledge {
-                2
-            } else {
-                0
-            };
+            let automatic_wait_tstates =
+                if request.operation == Z80BusOperation::InterruptAcknowledge {
+                    2
+                } else {
+                    0
+                };
             let wait_tstates = total_tstates
                 .checked_sub(u128::from(request.base_tstates))
                 .and_then(|waits| waits.checked_sub(automatic_wait_tstates))
