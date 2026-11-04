@@ -298,3 +298,55 @@ fn ignored_prefix_fallback_preserves_base_memory_write_and_snapshot() {
     assert_eq!(cpu.registers.pc, 2);
     assert_eq!(cpu.refresh & 0x7F, 2);
 }
+
+#[test]
+fn ignored_dd_prefix_before_ed_reuses_ed_memory_transfer_with_snapshots() {
+    let mut cpu = Z80MicroSequencer::default();
+    cpu.registers.set_bc(0x1234);
+    let mut fetch = request(cpu.begin_instruction().expect("instruction starts"));
+
+    let (next_cpu, step) = complete_fetch(cpu, fetch, 0xDD, 0);
+    cpu = next_cpu;
+    fetch = request(step);
+    let (next_cpu, step) = complete_fetch(cpu, fetch, 0xED, 0);
+    cpu = next_cpu;
+    fetch = request(step);
+    let (next_cpu, step) = complete_fetch(cpu, fetch, 0x43, 0);
+    cpu = next_cpu;
+    let address_low = request(step);
+    assert_eq!(address_low.operation, Z80BusOperation::MemoryRead);
+    assert_eq!(address_low.address, 3);
+    cpu = round_trip(cpu);
+
+    let address_high = request(cpu.complete_bus_cycle(address_low.id, Some(0x00)).unwrap());
+    assert_eq!(address_high.operation, Z80BusOperation::MemoryRead);
+    assert_eq!(address_high.address, 4);
+    cpu = round_trip(cpu);
+
+    let write_low = request(cpu.complete_bus_cycle(address_high.id, Some(0x20)).unwrap());
+    assert_eq!(
+        write_low.operation,
+        Z80BusOperation::MemoryWrite { value: 0x34 }
+    );
+    assert_eq!(write_low.address, 0x2000);
+    cpu = round_trip(cpu);
+
+    let write_high = request(cpu.complete_bus_cycle(write_low.id, None).unwrap());
+    assert_eq!(
+        write_high.operation,
+        Z80BusOperation::MemoryWrite { value: 0x12 }
+    );
+    assert_eq!(write_high.address, 0x2001);
+    cpu = round_trip(cpu);
+
+    assert_eq!(
+        cpu.complete_bus_cycle(write_high.id, None).unwrap(),
+        Z80MicroStep::InstructionRetired {
+            opcode: 0x43,
+            tstates: 24,
+        }
+    );
+    assert_eq!(cpu.registers.pc, 5);
+    assert_eq!(cpu.refresh & 0x7F, 3);
+    assert!(!cpu.instruction_active());
+}
