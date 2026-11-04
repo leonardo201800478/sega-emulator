@@ -639,6 +639,9 @@ impl SmsTemporalMachine {
                     self.dispatch_next()?
                 }
                 retired @ Z80MicroStep::InstructionRetired { .. } => return Ok(retired),
+                acknowledged @ Z80MicroStep::InterruptAcknowledge { .. } => {
+                    return Ok(acknowledged);
+                }
                 serviced @ Z80MicroStep::InterruptServiced { .. } => return Ok(serviced),
             };
         }
@@ -687,6 +690,9 @@ impl SmsTemporalMachine {
                     self.dispatch_next()?
                 }
                 retired @ Z80MicroStep::InstructionRetired { .. } => return Ok(retired),
+                acknowledged @ Z80MicroStep::InterruptAcknowledge { .. } => {
+                    return Ok(acknowledged);
+                }
                 serviced @ Z80MicroStep::InterruptServiced { .. } => return Ok(serviced),
             };
         }
