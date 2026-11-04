@@ -37,8 +37,14 @@ fn sms_temporal_nmi_uses_m1_ignores_data_and_pushes_pc_to_ram() {
     assert_eq!(machine.memory().read(0xC0FE), 0x01);
     assert_eq!(machine.now(), MachineTime::from_ticks(33));
 
-    let bus_cycles: Vec<_> = machine
-        .take_trace()
+    let trace = machine.take_trace();
+    let m1_tstates = trace
+        .iter()
+        .filter(|event| matches!(event, SmsTemporalTraceEvent::M1TStateCompleted { .. }))
+        .count();
+    assert_eq!(m1_tstates, 4, "NMI response must execute one four-T-state M1");
+
+    let bus_cycles: Vec<_> = trace
         .into_iter()
         .filter_map(|event| match event {
             SmsTemporalTraceEvent::BusCompleted {
@@ -53,7 +59,6 @@ fn sms_temporal_nmi_uses_m1_ignores_data_and_pushes_pc_to_ram() {
     assert_eq!(
         bus_cycles,
         vec![
-            (Z80BusOperation::OpcodeFetch, 0x0001, Some(0x76)),
             (Z80BusOperation::MemoryWrite { value: 0x00 }, 0xC0FF, None),
             (Z80BusOperation::MemoryWrite { value: 0x01 }, 0xC0FE, None),
         ]
