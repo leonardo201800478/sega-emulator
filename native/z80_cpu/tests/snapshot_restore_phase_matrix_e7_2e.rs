@@ -103,9 +103,11 @@ fn execute_one(
 
         if restore_each_boundary {
             let encoded = state.encode().expect("encode valid in-flight state");
-            let decoded =
-                Z80MicroSequencerState::decode(&encoded).expect("decode in-flight state");
-            assert_eq!(decoded, state, "codec round-trip must preserve the complete DTO");
+            let decoded = Z80MicroSequencerState::decode(&encoded).expect("decode in-flight state");
+            assert_eq!(
+                decoded, state,
+                "codec round-trip must preserve the complete DTO"
+            );
             cpu = Z80MicroSequencer::restore_state(decoded)
                 .expect("every generated valid phase must restore");
         }
@@ -134,10 +136,14 @@ fn execute_one(
                     .expect("complete generated bus request");
             }
             Z80MicroStep::InternalCycle { .. } => {
-                step = cpu.complete_internal_cycle().expect("complete internal T-state");
+                step = cpu
+                    .complete_internal_cycle()
+                    .expect("complete internal T-state");
             }
             Z80MicroStep::InterruptAcknowledge { .. } => {
-                step = cpu.begin_instruction().expect("begin interrupt-mode dispatch");
+                step = cpu
+                    .begin_instruction()
+                    .expect("begin interrupt-mode dispatch");
             }
             terminal @ Z80MicroStep::InstructionRetired { .. } => {
                 let state = cpu.export_state();
@@ -188,10 +194,22 @@ fn assert_continuous_equals_restored(
     let continuous = execute_one(program, flags, start_pc, interrupt, false);
     let restored = execute_one(program, flags, start_pc, interrupt, true);
 
-    assert_eq!(restored.terminal, continuous.terminal, "terminal microstep: {program:02X?}");
-    assert_eq!(restored.state, continuous.state, "final CPU state: {program:02X?}");
-    assert_eq!(restored.events, continuous.events, "bus sequence: {program:02X?}");
-    assert_eq!(restored.phases, continuous.phases, "phase sequence: {program:02X?}");
+    assert_eq!(
+        restored.terminal, continuous.terminal,
+        "terminal microstep: {program:02X?}"
+    );
+    assert_eq!(
+        restored.state, continuous.state,
+        "final CPU state: {program:02X?}"
+    );
+    assert_eq!(
+        restored.events, continuous.events,
+        "bus sequence: {program:02X?}"
+    );
+    assert_eq!(
+        restored.phases, continuous.phases,
+        "phase sequence: {program:02X?}"
+    );
 
     restored.phases
 }
