@@ -127,7 +127,6 @@ fn sms_temporal_nmi_waits_extend_m1_and_both_stack_writes() {
     assert_eq!(machine.memory().read(0xC0FE), 0x01);
 }
 
-
 #[test]
 fn sms_temporal_halt_samples_int_after_effective_t4_and_restores_the_latch() {
     let mut machine = SmsTemporalMachine::new(vec![0x76, 0x00], 3).unwrap();
@@ -147,10 +146,7 @@ fn sms_temporal_halt_samples_int_after_effective_t4_and_restores_the_latch() {
         }
     );
     assert!(machine.cpu().halted);
-    assert_eq!(
-        machine.cpu().halt_exit_pending,
-        Some(Z80HaltExit::Int)
-    );
+    assert_eq!(machine.cpu().halt_exit_pending, Some(Z80HaltExit::Int));
     assert_eq!(machine.now(), MachineTime::from_ticks(18));
 
     let state = machine.export_state();
@@ -160,10 +156,7 @@ fn sms_temporal_halt_samples_int_after_effective_t4_and_restores_the_latch() {
         Z80MicroStep::BusRequest(request) => request,
         other => panic!("expected latched INT acknowledge, got {other:?}"),
     };
-    assert_eq!(
-        acknowledge.operation,
-        Z80BusOperation::InterruptAcknowledge
-    );
+    assert_eq!(acknowledge.operation, Z80BusOperation::InterruptAcknowledge);
     assert!(!restored.cpu().halted);
 }
 
