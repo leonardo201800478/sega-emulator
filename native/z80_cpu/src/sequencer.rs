@@ -5197,6 +5197,10 @@ impl Z80MicroSequencer {
                 }
             }
             self.set_flags(flags);
+            self.mcycle_index = self
+                .mcycle_index
+                .checked_add(1)
+                .ok_or(Z80MicroSequencerError::InstructionTStateOverflow)?;
             self.tstate_index = 0;
             self.phase = Z80MicroSequencerPhase::EdBlockIoRepeatInternal {
                 opcode,
