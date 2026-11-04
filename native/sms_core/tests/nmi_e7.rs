@@ -1,5 +1,5 @@
-use sega_sms_core::temporal_machine::SmsTemporalTraceEvent;
 use sega_sms_core::SmsTemporalMachine;
+use sega_sms_core::temporal_machine::SmsTemporalTraceEvent;
 use sega_temporal_core::MachineTime;
 use sega_z80_cpu::{Z80BusOperation, Z80InterruptKind, Z80MicroStep};
 
