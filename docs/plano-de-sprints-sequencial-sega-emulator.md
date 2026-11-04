@@ -57,7 +57,7 @@ Esta sub-rota evolui o mesmo microsequenciador em `sega-cpus`; não cria impleme
 - [ ] **E5:** DDCB/FDCB.
 - [ ] **E6–E9:** prefixos ignorados, fechamento semântico, ZEXDOC/ZEXALL e integração temporal.
 
-**Estado:** E4A, E4B e E4C integradas? Não — E4C permanece em PR #473 até o merge. E4C está IMPLEMENTED / QUICK_PASS / SHORT_PASS no SHA `bac497462a3fc13a1f47892d25d435beefddd6d8`, CI `41742682599` 4/4 PASS. Não declarar LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS.
+**Estado:** E4A e E4B estão integradas na main. E4C está IMPLEMENTED / QUICK_PASS / SHORT_PASS no candidato da PR #473, SHA `bac497462a3fc13a1f47892d25d435beefddd6d8`, CI `41742682599` 4/4 PASS; aguarda merge. Não declarar LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS.
 
 **Critério de Conclusão da Sprint SMS:** Boot e gameplay funcional de SMS via módulos compartilhados, em *host-null* e janela Rust nativa sem dependência de Python.
 
