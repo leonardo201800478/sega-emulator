@@ -35,8 +35,8 @@ Registrar separadamente Windows x64 D3D12/vídeo, WASAPI/XAudio2/áudio e Schedu
 
 - Main consultada: `644b2c22879d63447f63b730ed9415db11e81fab`.
 - CI pós-merge main: #41831738966 SUCCESS.
-- PR #506: `test/z80-e7-2e-invalid-state-matrix-20261104`, HEAD observado `09c6dcb9a8f5a7ff7ca3f5934c1223515b5529a1`, baseada na main atual.
-- CI #41861829094 estava QUEUED nesse HEAD. Os CI #41860306541 (HEAD `73ab196...`) e #41860812506 (HEAD documental `1bb057e...`) passaram em SHAs anteriores; não validam os testes WAIT/IM0 acrescentados depois.
+- PR #506: `test/z80-e7-2e-invalid-state-matrix-20261104`, HEAD de código/documentação observado agora `59717aee63665d000f73e893e255b829972df519`, baseada na main atual.
+- CI #41863000434 está QUEUED nesse HEAD. CI #41861829094 estava QUEUED no HEAD anterior `09c6dcb9a8f5a7ff7ca3f5934c1223515b5529a1`; #41860306541 (HEAD `73ab196...`) e #41860812506 (HEAD documental `1bb057e...`) passaram em SHAs anteriores e não validam os testes WAIT/IM0 nem a documentação mais recente.
 - O run #41861604611 no SHA anterior `f2fc621...` falhou em rustfmt por whitespace, corrigido em `09c6dcb...`. Não declarar o novo HEAD aprovado até CI completo.
 - PR #487: HEAD `d01e6ceedce26ca436c843473cd8747df0b056eb`, CI #41758752168 SUCCESS, mas base histórica `f4130104...` e 184 commits atrás da main consultada. Precisa rebase/revisão.
 - PR #447: HEAD `405944de94b7a90b921867a1ce8a827e658f08b9`, CI #41665270882 SUCCESS, base antiga `eba8faae...`, 262 commits atrás. Não assumir que feature ainda não foi absorvida.
