@@ -1,4 +1,5 @@
 from pathlib import Path
+import sys
 
 from tools import project_manager
 
@@ -53,3 +54,29 @@ def test_validation_does_not_treat_blocked_as_pass(capsys) -> None:
 
     assert project_manager.print_results([result]) == 1
     assert "BLOCKED" in capsys.readouterr().out
+
+
+def test_discover_workspaces_returns_three_values_without_cargo(monkeypatch) -> None:
+    monkeypatch.setattr(project_manager.shutil, "which", lambda _name: None)
+
+    workspaces, errors, unassigned = project_manager.discover_workspaces()
+
+    assert workspaces == []
+    assert errors == ["cargo executable not found on PATH"]
+    assert unassigned == []
+
+
+def test_tool_versions_uses_the_current_python_interpreter(monkeypatch) -> None:
+    commands: list[list[str]] = []
+
+    def fake_run(command, cwd, timeout=1800, output_limit=12000):
+        commands.append(command)
+        return project_manager.Result("test", "PASS", output="Python test\n")
+
+    monkeypatch.setattr(project_manager, "run", fake_run)
+    monkeypatch.setattr(project_manager.shutil, "which", lambda name: f"/bin/{name}")
+
+    project_manager.tool_versions()
+
+    assert [sys.executable, "--version"] in commands
+    assert [sys.executable, "-m", "ruff", "--version"] in commands
