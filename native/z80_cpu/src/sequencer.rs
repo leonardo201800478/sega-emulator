@@ -2632,9 +2632,7 @@ impl Z80MicroSequencer {
             },
             Z80MicroSequencerPhase::BaseReturnConditionInternal { .. } => {
                 match state.prefix_state {
-                    Z80PrefixState::None => {
-                        state.mcycle_index == 0 && state.tstate_index == 4
-                    }
+                    Z80PrefixState::None => state.mcycle_index == 0 && state.tstate_index == 4,
                     Z80PrefixState::Index(_) => {
                         state.mcycle_index == 1
                             && state.tstate_index == 4
