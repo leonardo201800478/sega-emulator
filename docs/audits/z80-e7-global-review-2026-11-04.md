@@ -159,3 +159,13 @@ Nenhum status de workflow anterior foi reaproveitado como evidência do HEAD atu
 - Não declarar o Z80 completo, LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS.
 
 Esta auditoria é revisão documental/estática e de evidências remotas. Não substitui execução dos testes no HEAD candidato, oráculo externo ou trace temporal independente.
+
+---
+
+## Aditivo — continuidade E7.2E após publicação da auditoria
+
+- A PR #503 foi integrada na main pelo merge SHA `9b606a6c785b9e7bb1999534e7e2292735254134`.
+- O workflow pós-merge #41824734622 passou em Rust fmt, Clippy, testes SMS/SG-1000/workspace, Python pytest/Ruff e Windows x64 D3D12/WASAPI/XAudio2. Scheduler deterministic stress ficou SKIPPED.
+- A PR #502 diverge da main em 11 commits à frente e 11 atrás. Seus commits não foram descartados.
+- A continuação incremental transporta os arquivos da implementação candidata para uma branch baseada na main atual e adiciona comparação integral de `SmsTemporalTraceEvent`, cenários NMI com WAIT=0/1/3 e correções na auditoria do formato.
+- A continuação será submetida em PR própria (#504). E7.2E permanece IN_PROGRESS até CI no SHA final e fechamento das lacunas de restore completo/estados inválidos. E7 global continua INTEGRATION_PENDING.

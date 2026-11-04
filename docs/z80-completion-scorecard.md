@@ -254,7 +254,7 @@ Aceite: nenhuma instrução documentada elegível sem classificação e critéri
 - **Limite:** `EI;HALT;INT` não é declarado coberto; a amostragem NMI/INT no T4 dos ciclos HALT continua pendente. BUSREQ, RETI/daisy-chain e validação diferencial/temporal independente também permanecem fora deste incremento.
 - Estado dos cenários EI/DI testados: IMPLEMENTED / QUICK_PASS / SHORT_PASS; PR #500 integrada no merge SHA `ea327025b312feb53f1e3e5326b5a5e7c40e72f1`. E7 global continua INTEGRATION_PENDING.
 
-#### E7.2E — Snapshots, restauração e equivalência contínua/retomada — PR #502 (candidata, NÃO integrada)
+#### E7.2E — Snapshots, restauração e equivalência contínua/retomada — PR #504 (revisão incremental; PR #502 preservada)
 
 - HEAD consultado: `69ea4299b3858787f0f91682f3ea823371cde3b0`; base original `ea327025b312feb53f1e3e5326b5a5e7c40e72f1`; 11 commits à frente e 0 atrás da base original. Após o merge documental #501, a comparação remota registra a branch #502 divergente, 11 commits à frente e 4 atrás da main atual.
 - Alterações candidatas: seis arquivos; teste temporal SMS de snapshots para NMI, IM0/IM1/IM2, EI delay e HALT/M1; round-trip de 70 variantes da fase; rejeição de tag inválida; validação de schema.
@@ -361,4 +361,4 @@ Toda atualização deve incluir data, SHA da baseline, SHA candidato, PR, workfl
 
 ---
 
-**Baseline operacional (2026-11-04):** código main `ea327025b312feb53f1e3e5326b5a5e7c40e72f1`; HEAD documental após PR #501 `a324361574a45a80f8ae3aa70868630250e55d30`. E7.1, E7.2A, E7.2B, E7.2C e E7.2D integradas pelas PRs #490, #495, #496, #498 e #500. PR #501 integrada. PR #502 (E7.2E) aberta, HEAD `69ea4299b3858787f0f91682f3ea823371cde3b0`, sem CI para esse SHA e sem merge. Próximo trabalho é concluir E7.2E e as fases E7.3–E7.7 antes de iniciar a validação E8. E7 global continua `INTEGRATION_PENDING`.
+**Baseline operacional (2026-11-04):** main `9b606a6c785b9e7bb1999534e7e2292735254134` após merge da PR #503. E7.1, E7.2A, E7.2B, E7.2C e E7.2D integradas pelas PRs #490, #495, #496, #498 e #500. PR #501 integrada. PR #502 preservada como candidata histórica; a continuação corrigida está na PR #504 e aguarda CI no HEAD final. Próximo trabalho é concluir E7.2E e as fases E7.3–E7.7 antes de iniciar a validação E8. E7 global continua `INTEGRATION_PENDING`.
