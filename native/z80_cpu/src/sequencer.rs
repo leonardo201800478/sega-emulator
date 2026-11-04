@@ -2765,7 +2765,12 @@ impl Z80MicroSequencer {
                         && state.tstate_index == 0
                 }
                 Z80PrefixState::None => match state.opcode {
-                    Some(0x02 | 0x12 | 0x77) => {
+                    Some(0x02 | 0x12) => {
+                        state.mcycle_index == 1
+                            && state.tstate_index == 0
+                            && state.instruction_tstates >= 4
+                    }
+                    Some(opcode) if (0x70..=0x75).contains(&opcode) || opcode == 0x77 => {
                         state.mcycle_index == 1
                             && state.tstate_index == 0
                             && state.instruction_tstates >= 4
