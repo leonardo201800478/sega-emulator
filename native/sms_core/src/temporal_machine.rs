@@ -997,6 +997,15 @@ mod tests {
             restored.cpu().export_state().phase,
             Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector: 0xCF }
         );
+        let completed_snapshot = restored.export_state();
+        let mut resumed = SmsTemporalMachine::restore_state(completed_snapshot).unwrap();
+        assert_eq!(
+            resumed.resume_instruction(0).unwrap(),
+            Z80MicroStep::InterruptAcknowledge {
+                vector: 0xCF,
+                tstates: 6,
+            }
+        );
     }
 
     #[test]
