@@ -7,6 +7,11 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Nominal T-states in the INT acknowledge M1 before automatic WAIT states.
+pub const Z80_INT_ACK_BASE_TSTATES: u8 = 3;
+/// ZiLOG inserts two automatic TW states in every maskable interrupt acknowledge.
+pub const Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES: u8 = 2;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 pub enum Z80BusOperation {
     OpcodeFetch,
