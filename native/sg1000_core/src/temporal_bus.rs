@@ -11,9 +11,7 @@ use crate::{
     Sg1000TemporalCoordinatorError, Sg1000TemporalCoordinatorState, Sg1000TemporalEvent,
 };
 use sega_temporal_core::MachineTime;
-use sega_z80_cpu::{
-    Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES, Z80BusOperation, Z80BusRequest,
-};
+use sega_z80_cpu::{Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES, Z80BusOperation, Z80BusRequest};
 
 pub const SG1000_TEMPORAL_BUS_STATE_VERSION: u16 = 2;
 const DEFAULT_INTERRUPT_VECTOR: u8 = 0xFF;
@@ -587,8 +585,7 @@ mod tests {
 
         let restored = Sg1000TemporalBus::restore_state(bus.export_state()).unwrap();
         assert_eq!(restored.export_state(), bus.export_state());
-        let Some(Sg1000TemporalDispatch::BusCompletion(completion)) =
-            bus.dispatch_next().unwrap()
+        let Some(Sg1000TemporalDispatch::BusCompletion(completion)) = bus.dispatch_next().unwrap()
         else {
             panic!("expected INT acknowledge completion");
         };
