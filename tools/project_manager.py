@@ -48,7 +48,12 @@ class Result:
     output: str = ""
 
 
-def run(command: list[str], cwd: Path, timeout: int = 1800) -> Result:
+def run(
+    command: list[str],
+    cwd: Path,
+    timeout: int = 1800,
+    output_limit: int | None = 12000,
+) -> Result:
     """Run one command and preserve its output and explicit result classification."""
     try:
         proc = subprocess.run(
@@ -60,12 +65,15 @@ def run(command: list[str], cwd: Path, timeout: int = 1800) -> Result:
             timeout=timeout,
             check=False,
         )
+        output = proc.stdout
+        if output_limit is not None:
+            output = output[-output_limit:]
         return Result(
             " ".join(command),
             "PASS" if proc.returncode == 0 else "FAIL",
             command,
             proc.returncode,
-            proc.stdout[-12000:],
+            output,
         )
     except FileNotFoundError as exc:
         return Result(" ".join(command), "BLOCKED", command, None, str(exc))
@@ -82,7 +90,7 @@ def run(command: list[str], cwd: Path, timeout: int = 1800) -> Result:
         )
 
 
-def discover_workspaces() -> tuple[list[Workspace], list[str]]:
+def discover_workspaces() -> tuple[list[Workspace], list[str], list[str]]:
     """Discover unique Cargo workspace roots without guessing directory layout."""
     cargo = shutil.which("cargo")
     if not cargo:
@@ -96,6 +104,7 @@ def discover_workspaces() -> tuple[list[Workspace], list[str]]:
 
     roots: dict[Path, Workspace] = {}
     errors: list[str] = []
+    unassigned: list[str] = []
     for manifest in sorted(manifests):
         located = run(
             [
@@ -153,11 +162,15 @@ def discover_workspaces() -> tuple[list[Workspace], list[str]]:
             ],
             workspace_manifest.parent,
             120,
+            output_limit=None,
         )
         if metadata.status != "PASS":
-            errors.append(
-                f"{workspace_manifest}: cargo metadata failed: {metadata.output}"
-            )
+            if "current package believes it's in a workspace when it's not" in metadata.output:
+                unassigned.append(str(manifest.relative_to(ROOT)))
+            else:
+                errors.append(
+                    f"{workspace_manifest}: cargo metadata failed: {metadata.output}"
+                )
             continue
 
         try:
@@ -175,7 +188,7 @@ def discover_workspaces() -> tuple[list[Workspace], list[str]]:
         except (KeyError, ValueError, OSError) as exc:
             errors.append(f"{workspace_manifest}: invalid metadata: {exc}")
 
-    return sorted(roots.values(), key=lambda workspace: workspace.root), errors
+    return sorted(roots.values(), key=lambda workspace: workspace.root), errors, unassigned
 
 
 def tool_versions() -> dict[str, str]:
@@ -205,12 +218,13 @@ def tool_versions() -> dict[str, str]:
 
 def audit() -> tuple[dict[str, Any], list[Result]]:
     """Build a read-only inventory and report missing lockfiles for review."""
-    workspaces, errors = discover_workspaces()
+    workspaces, errors, unassigned = discover_workspaces()
     report = {
         "repository": str(ROOT),
         "tools": tool_versions(),
         "workspaces": [asdict(workspace) for workspace in workspaces],
         "discovery_errors": errors,
+        "unassigned_manifests": unassigned,
         "python_project": (ROOT / "pyproject.toml").is_file(),
         "rust_toolchain_file": next(
             (
@@ -232,8 +246,12 @@ def audit() -> tuple[dict[str, Any], list[Result]]:
         results.append(
             Result(
                 f"lockfile exists: {workspace.lockfile}",
-                "PASS" if workspace.lockfile_exists else "BLOCKED",
-                output="present" if workspace.lockfile_exists else "missing",
+                "PASS" if workspace.lockfile_exists else "NOT RUN",
+                output=(
+                    "present"
+                    if workspace.lockfile_exists
+                    else "not present; cargo --locked determines whether one is required"
+                ),
             )
         )
     return report, results
@@ -258,16 +276,7 @@ def lock_check(workspaces: list[Workspace]) -> list[Result]:
     """Verify each existing lockfile without allowing Cargo to modify it."""
     results = []
     for workspace in workspaces:
-        if not workspace.lockfile_exists:
-            results.append(
-                Result(
-                    f"locked check: {workspace.root}",
-                    "BLOCKED",
-                    output=f"Missing {workspace.lockfile}",
-                )
-            )
-        else:
-            results.append(run(cargo_for(workspace, "check", "--locked"), ROOT))
+        results.append(run(cargo_for(workspace, "check", "--locked"), ROOT))
     return results
 
 
