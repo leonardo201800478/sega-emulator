@@ -1,3 +1,5 @@
+> **Estado operacional do Z80 — 2026-11-04, `main` `fcd91302cb64a31d63b75f5e1d3b6eab336668d1`:** E6 está integrada pela PR #486 e E7.3 (HALT T4) pela PR #509. A PR #511 integrou uma auditoria documental de BUSREQ/BUSACK, não a arbitragem no runtime. E7.4.1A (#512) e E7.4.1B de runtime (#514) permanecem abertas e não integradas; a especificação WAIT/TW registra bloqueios de falling edge, TW automático de I/O/INT e amostragem durante TW obrigatório. A próxima implementação é C1: instante racional compartilhado no Temporal Core/Scheduler. E7 global segue `INTEGRATION_PENDING`; E8 continua bloqueada.
+
 > **Atualização de estado (2026-10-27):** o hardware SG-1000 ativo é Rust-only. A implementação Python antiga e ferramentas/testes que dependiam dela estão em `legacy/python_reference/`; não fazem parte do runtime e os comandos históricos abaixo não são caminhos de execução ativos.
 
 # Plano de fechamento das lacunas do Z80
@@ -36,10 +38,10 @@ Legenda de evidência: **D** = documentado por fonte primária; **R** = literatu
 | GAP-02 | Prefixos DD/FD repetidos/alternados e semântica H/L versus IXH/IXL | D + R; caminhos existem, caracterização incompleta | Criar testes de bytes consumidos, PC, R, flags, memória e ciclos nominais para sequências discriminantes | P0 |
 | GAP-03 | Todos os 256 segundos bytes ED classificados, mas nem todas as semânticas/aliases validadas | D + R; smoke test de aceitação/rejeição existe | Gerar matriz de 256 linhas com classe, efeito esperado e fonte; testar handlers e aliases separadamente | P0 |
 | GAP-04 | IM 0 e acknowledge de prefixos ainda exigem validação diferencial | O núcleo e os testes sintéticos já executam opcodes de acknowledge RST, NOP, `LD A,n`, `CALL` e prefixos CB/ED/DD; permanecem dúvidas de conformidade física, ciclos e variantes | Comparar estado, bytes consumidos, PC, R, pilha e ciclos com referência independente; manter a implementação estável até identificar divergência reproduzível | P0 |
-| GAP-05 | Flags X/Y de operações de bloco e I/O de bloco, SCF/CCF e Q não têm confirmação independente suficiente | T sintético + R; Q ausente | Separar testes de flags documentadas dos testes de hipóteses não documentadas; investigar Q em sequências SCF/CCF | P1 |
-| GAP-06 | WZ/MEMPTR ausente | R e artigos no catálogo; não é necessário para a maioria das instruções básicas | Especificar atualizações por família e só então adicionar estado e testes de salto, I/O, BIT indexado e bloco | P1 |
-| GAP-07 | Temporização real do barramento não é observável | D; arquitetura atual retorna T-states agregados | Introduzir um traço determinístico de eventos/micro-operações antes de modelar contenção/WAIT | P1 arquitetural |
-| GAP-08 | Não existe harness diferencial reprodutível no fluxo principal | T; catálogo lista exercitadores e testes de terceiros | Definir adaptador de estado/entrada/saída, manifesto de proveniência e comparação campo a campo; começar com pequenos testes licenciados | P1 |
+| GAP-05 | Flags X/Y de operações de bloco e I/O de bloco ainda exigem validação independente; Q já está modelado no runtime Rust | O microsequenciador Rust mantém q e q_previous, serializa ambos e aplica q_previous na lógica de SCF/CCF. A implementação não equivale a validação independente do comportamento Q nem fecha todas as flags X/Y de bloco/I/O. | Manter a modelagem Q; validar sequências SCF/CCF com oráculo compatível com a variante e ampliar vetores independentes para flags de bloco e I/O. | P1 |
+| GAP-06 | WZ/MEMPTR modelado no Rust, mas a tabela de atualização por família e a validação independente não estão fechadas | Z80MicroSequencer e seus estados/snapshots contêm wz; há atualizações implementadas para saltos, transferências absolutas, I/O, operações indexadas e operações ED selecionadas. BIT b,(HL) usa o byte alto de WZ para X/Y no modelo. Isso não prova cobertura completa de todas as famílias nem equivalência física. | Substituir a alegação de ausência por uma matriz por família: instrução, valor anterior, atualização, fonte e teste. Executar z80memptr em ambiente compatível e registrar divergências por variante. | P1 |
+| GAP-07 | Modelo temporal Rust é parcial; cobertura por micro-operações/eventos ainda não abrange o conjunto completo | O microsequenciador Rust emite BusRequest ordenados com operação, endereço e T-states-base, mantém índices M-cycle/T-state e suporta WAIT/suspensão em famílias implementadas. O caminho atômico/compatibilidade e as famílias ainda não migradas não oferecem a mesma cobertura. Nenhum resultado deve ser confundido com comparação completa do array cycles dos vetores externos. | Completar a cobertura microsequenciada por família e validar traces independentes de M-cycles/T-states, WAIT e ordem de barramento antes de TEMPORAL_PASS. | P1 arquitetural |
+| GAP-08 | Harness SingleStepTests documentado pertence ao runtime Python arquivado; validação diferencial externa do Rust permanece NÃO CONFIRMADA | O adaptador e workflow citados nas seções históricas residem em legacy/python_reference/ e legacy/workflows/. Os testes E5 do Rust comparam caminhos internos/estados microsequenciados, não substituem oráculo externo. | Portar/reimplementar o harness para Rust sem depender do runtime Python legado; fixar corpus, licença, hashes, campos comparados e exclusões; registrar resultados por SHA. | P1 |
 | GAP-09 | Operações de 16 bits não têm varredura integral de todos os pares | T amostrado; ferramenta longa já existe | Executar a bateria prolongada no workflow estendido do GitHub Actions; preservar amostragem local curta e publicar log/artefato | P2 |
 | GAP-10 | Reset explícito implementado; política de variante ainda pendente | O construtor delega a `reset()`; teste cobre registradores, interrupções pendentes, contador, preservação de barramento/RAM e retomada por NOP. Execução do teste ainda precisa ser confirmada localmente/CI | Formalizar o alvo Zilog Z80 clássico e as exceções de variante; não interpretar o estado determinístico zerado como garantia elétrica do chip | P2 parcial |
 | GAP-11 | RETI não sinaliza controlador externo de prioridades | D; impacto depende da integração | Acrescentar evento/callback opcional no contrato de CPU/periférico quando houver daisy chain; não simular dispositivo inexistente | P2 |
@@ -145,7 +147,7 @@ Em 23/10/2026, foi adicionado `Z80Cpu.reset()`. O construtor agora associa os ba
 
 Foi acrescentado `test_reset_clears_cpu_state_and_pending_interrupts_without_clearing_memory`, que verifica o contrato, inclusive a execução de um NOP após o reset. O teste foi adicionado ao repositório; **ainda não há resultado de execução nesta etapa**. A política de variante física permanece pendente.
 
-## 4. Cruzamento com suites externas
+## 4.1 Cruzamento com suites externas
 
 **Fontes consultadas em 24/10/2026.** Este cruzamento separa vetores de estado final, programas exercitadores e evidência temporal. Não tratar todas as fontes como oráculos equivalentes.
 
@@ -175,9 +177,9 @@ Foi acrescentado `test_reset_clears_cpu_state_and_pending_interrupts_without_cle
 
 **Conclusão do cruzamento:** SingleStepTests é a rota prática para criar o primeiro harness automatizado de estado final; raxoft/z80test é a validação independente posterior para documentadas, Q/SCF/CCF e MEMPTR. Nenhuma das duas substitui o trabalho futuro de traço de barramento para precisão temporal (GAP-07).
 
-## 5. Adaptador SingleStepTests implementado
+## 5. Adaptador SingleStepTests histórico — Python arquivado
 
-O módulo `legacy/python_reference/src/sega_emulator/testing/z80_singlestep.py` implementa a primeira versão do adaptador para os vetores JSON de [SingleStepTests/z80](https://github.com/SingleStepTests/z80). Ele usa uma RAM plana de 64 KiB e um barramento de I/O de teste, sem alterar o mapa de memória físico do SG-1000.
+O módulo arquivado `legacy/python_reference/src/sega_emulator/testing/z80_singlestep.py` implementava a primeira versão do adaptador para os vetores JSON de [SingleStepTests/z80](https://github.com/SingleStepTests/z80). Ele usa uma RAM plana de 64 KiB e um barramento de I/O de teste, sem alterar o mapa de memória físico do SG-1000.
 
 ### Executar
 
@@ -206,9 +208,9 @@ python -m sega_emulator.testing.z80_singlestep caminho\para\v1\00.json --limit 2
 5. Manter a bateria completa como auditoria prolongada; o subconjunto atual é um gate de regressão dos campos modelados, não uma certificação geral de conformidade.
 
 
-## 6. Auditoria diferencial exploratória com corpus externo
+## 6. Auditoria diferencial histórica — Python arquivado
 
-O workflow `legacy/workflows/z80-singlestep-audit.yml` baixa, durante a execução, 11 arquivos JSON selecionados de [SingleStepTests/Z80](https://github.com/SingleStepTests/z80), sempre da revisão upstream fixa `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7` (commit assinado e verificado pelo GitHub). A revisão está registrada em [SingleStepTests/Z80 commit](https://github.com/SingleStepTests/z80/commit/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7). O corpus não é copiado como código-fonte para o repositório do emulador; os arquivos baixados e o relatório JSON são preservados como artefato da execução por 30 dias.
+O workflow histórico `legacy/workflows/z80-singlestep-audit.yml` baixava, durante a execução, 11 arquivos JSON selecionados de [SingleStepTests/Z80](https://github.com/SingleStepTests/z80), sempre da revisão upstream fixa `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7` (commit assinado e verificado pelo GitHub). A revisão está registrada em [SingleStepTests/Z80 commit](https://github.com/SingleStepTests/z80/commit/ebe1875d48f374bcfd4b505d8eb8ee751568b5f7). O corpus não é copiado como código-fonte para o repositório do emulador; os arquivos baixados e o relatório JSON são preservados como artefato da execução por 30 dias.
 
 O manifesto `legacy/python_reference/tools/audits/singlestep-corpus-manifest.json` registra o commit, a licença MIT com URL imutável e o SHA-256 e tamanho em bytes esperados para cada arquivo. O verificador `legacy/python_reference/tools/audits/verify_singlestep_corpus.py` valida todos os arquivos baixados antes da auditoria. Se um hash, tamanho ou arquivo não corresponder ao manifesto, o workflow falha antes de executar os vetores. O relatório inclui a revisão upstream e os hashes correspondentes. Assim, alterações futuras na branch `main` do corpus não alteram silenciosamente os dados usados pelo teste.
 
@@ -219,9 +221,9 @@ O script `legacy/python_reference/tools/audits/run_singlestep_corpus.py` carrega
 A licença MIT foi conferida no arquivo `LICENSE` da mesma revisão fixa. O workflow guarda no artefato `SOURCE.txt` o commit utilizado e inclui uma cópia do manifesto. Os hashes são calculados sobre os bytes dos arquivos baixados, não sobre JSON reserializado.
 
 
-### Resultado da primeira execução diferencial (24/10/2026)
+### Resultado da primeira execução diferencial (24/10/2026) — somente núcleo Python arquivado
 
-O workflow executou 11 arquivos do corpus, com 1.000 vetores por arquivo (**11.000 vetores totais**). No estado atual do código, o relatório registrou **5.401 aprovados, 0 divergentes e 5.599 excluídos** porque o campo interno `p` estava ativo. Os vetores excluídos não são contados como aprovados.
+O workflow executou 11 arquivos do corpus, com 1.000 vetores por arquivo (**11.000 vetores totais**). Naquela revisão, o relatório registrou **5.401 aprovados, 0 divergentes e 5.599 excluídos** porque o campo interno `p` estava ativo. Portanto, a formulação correta é “0 divergências entre os 5.401 vetores efetivamente comparados na primeira execução”, e não “11.000 vetores aprovados”. Os 5.599 vetores excluídos não são contados como aprovados.
 
 A primeira execução com os vetores de I/O expôs divergências no registrador WZ:
 - `OUT (n),A`: WZ precisava preservar o byte alto do endereço da porta e incrementar apenas o byte baixo, inclusive no wrap de `FFh` para `00h`.
@@ -262,3 +264,21 @@ Não adiar regressões baratas nem ignorar falhas conhecidas. Não declarar comp
 A extração do Z80 para um crate compartilhado é uma mudança arquitetural separada do fechamento das lacunas semânticas desta auditoria. Não reescrever nem simplificar o decoder apenas para acomodar a nova estrutura. Primeiro estabelecer equivalência do executor SG-1000/SMS, consolidar o contrato de barramento e manter os testes/fixtures existentes. Depois, converter famílias de instruções para micro-operações retomáveis em fatias pequenas, preservando a API por instrução como fachada compatível enquanto for necessária.
 
 O Z80 de Game Gear reutilizará o mesmo motor com adaptador/perfil próprio. No Mega Drive/Genesis, o Z80 é auxiliar ao 68000 e deve obedecer ao barramento/ownership da máquina; isso pertence ao core Mega Drive e ao scheduler da plataforma, não a condicionais de console no decoder. Detalhes e gates em [reorganização arquitetural](architecture/migrations/shared-z80-runtime-reorganization.md).
+
+
+## Estado do runtime Z80 Rust — reconciliação documental (2026-11-03)
+
+Esta seção descreve o código ativo em native/z80_cpu/; não herda automaticamente resultados da implementação Python arquivada.
+
+| Área | Estado observado no Rust | Limite que permanece |
+|---|---|---|
+| WZ/MEMPTR | Campo arquitetural no microsequenciador e nos snapshots; atualizado em famílias BASE, I/O, indexadas e ED selecionadas. | Matriz de atualização por todas as famílias e validação independente ainda incompletas. |
+| Q / previous-Q | q e q_previous fazem parte do estado exportado/importado; SCF/CCF usa q_previous na composição de X/Y. | Sem aprovação diferencial independente de z80ccf; comportamento por variante continua pendente. |
+| Flags de bloco ED | Há fórmulas para transferência, comparação e I/O de bloco, incluindo repetição e X/Y no código Rust. | Testes dirigidos/internos não comprovam todas as combinações nem a variante física; ampliar diferencial externo. |
+| DD/FD | E5 DDCB/FDCB e E6 (resolução geral de prefixos) estão integradas na main pelas PRs #485 e #486. | CI E6 #41757983537: Rust/Python/Windows PASS; Scheduler stress SKIPPED. A cobertura semântica completa e a validação independente permanecem pendentes. |
+| IM 0 / acknowledge | Não confirmado por esta auditoria documental do Rust. | Não transportar os testes históricos Python para o estado Rust; verificar implementação e testes específicos antes de classificar. |
+| RETI / daisy chain | O teste Rust localizado confirma restauração de IFF1 a partir de IFF2 para RETI/RETN. | Não foi encontrada evidência de notificação explícita de daisy chain; permanece pendente. |
+| Temporização | O microsequenciador produz requests de barramento com M-cycles/T-states para o subconjunto implementado. | Não há comparação geral dos arrays cycles dos vetores externos nem cobertura microsequenciada integral; TEMPORAL_PASS não concedido. |
+| Variante-alvo | A documentação aponta o Zilog Z80 clássico como alvo geral. | Decisão formal NMOS/CMOS/revisão e exceções por comportamento não documentado ainda pendente. |
+
+**Regra de evidência:** “modelado no código Rust” não significa DIFFERENTIAL_PASS, LONG_PASS ou TEMPORAL_PASS. A execução SingleStepTests de 24/10/2026 e os caminhos legacy/python_reference/ são evidências históricas do Python arquivado, não validação do Rust.
