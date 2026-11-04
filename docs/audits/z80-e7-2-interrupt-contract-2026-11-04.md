@@ -1,7 +1,7 @@
 # Contrato técnico E7.2 — interrupções NMI/INT e saída de HALT
 
 **Data:** 2026-11-04  
-**Baseline:** `main` — `b1b5ced5c3d6053f8d59c8f4d932f40518db1064`  
+**Baseline de reconciliação:** `main` — `09e6a07efb7b6bbab12021db5b328ed73e4822ae`  
 **PR de origem:** #490 (E7.1 HALT/M1), merge commit `b1b5ced5c3d6053f8d59c8f4d932f40518db1064`  
 **Referência normativa principal:** ZiLOG, *Z80 CPU User Manual*, UM008011-0816, seções “Interrupt Request/Acknowledge Cycle”, “Nonmaskable Interrupt Response”, “HALT Exit” e “CPU Response”.  
 **Escopo deste documento:** fixar requisitos verificáveis antes de alterar o microsequenciador compartilhado. Não declara implementação de interrupções.
@@ -13,7 +13,7 @@
 O núcleo ativo está em `native/z80_cpu`. Na baseline auditada:
 
 - `Z80MicroSequencerState` e `Z80MicroSequencer` já contêm `iff1`, `iff2`, `interrupt_mode`, `ei_delay`, `nmi_pending`, `int_pending` e `halted`.
-- O codec de snapshot inclui esses campos e o schema é 28.
+- O codec de snapshot inclui esses campos e o schema evoluiu após E7.1; consultar a constante de versão atual no código.
 - BASE `DI (F3)` limpa IFF1/IFF2 e EI delay; BASE `EI (FB)` seta IFF1/IFF2 e `ei_delay = 1`.
 - `begin_instruction()` ainda inicia diretamente um `OpcodeFetch`; não arbitra NMI/INT antes do fetch.
 - Não há API pública de entrada de NMI/INT nem fases de serviço de interrupção no microsequenciador.
@@ -138,7 +138,7 @@ Não implementar o serviço como uma mutação atômica de PC/SP sem requests de
 | Incremento | Escopo | Critério de aceite |
 |---|---|---|
 | E7.2A | NMI | Detecção edge-latched, prioridade, IFF2 preservada, IFF1 limpa, empilhamento do PC e vetor 0066h |
-| E7.2B | INT e acknowledge | Aceitação condicionada a IFF1, prioridade de NMI, ciclo M1/IORQ distinto, captura do vetor e WAIT automático/externo |
+| E7.2B | INT e acknowledge | IMPLEMENTED na main pela PR #496; aceite de código/CI convencional PASS. Dispatch IM e validação independente ainda pendentes. |
 | E7.2C | Modos IM 0/1/2 | Opcode fornecido pelo dispositivo em IM0, RST 38 em IM1, tabela IM2, PC/WZ e stack |
 | E7.2D | EI/DI | Atraso de EI, cancelamento por DI e interação com solicitações pendentes |
 | E7.2E | Suspensão e snapshots | Restauração em cada fase de interrupção, requests pendentes, vetor capturado e WAIT |
@@ -159,7 +159,7 @@ A sequência E7.2A → E7.2B → E7.2C → E7.2D → E7.2E é fixa. Não criar i
 - HALT: NMI/INT amostradas em T4; bytes de memória durante M1 de retenção ignorados; PC não avança durante retenção.
 - IM0: vetor RST e instrução multi-byte fornecida pelo dispositivo (E7.2C).
 - IM1: PC empilhado e destino `0x0038` (E7.2C).
-- IM2: vetor, endereço `(I << 8) | vector`, leitura low/high e destino (E7.2C).
+- IM2: vetor de acknowledge com bit 0 em zero, endereço `(I << 8) | vector`, leitura low/high e destino (E7.2C; requisito documentado no UM008011-0816).
 - Snapshot/restore antes/depois de cada fase de acknowledge, vetor capturado e WAIT (E7.2E).
 - SP wrap em `0x0000/0xFFFF`; PC wrap; vetor/tabela nas bordas de página.
 - WAIT zero, WAIT múltiplo e acknowledge com dois T-states automáticos.
@@ -194,16 +194,16 @@ Registrar separadamente:
 
 CI da PR #490 (run #41762232781, HEAD `ed84fac03f5aa03c3438d67548354dd8c3c13999`) teve Rust fmt/Clippy/SMS/SG-1000/workspace PASS, Python pytest/Ruff PASS e Windows x64 D3D12/WASAPI/XAudio2 PASS. Scheduler deterministic stress foi SKIPPED. CI pós-merge #41765421167 da main SHA `b1b5ced5c3d6053f8d59c8f4d932f40518db1064`: Rust quality/unit regression, Python lint/regression e Windows x64 D3D12/WASAPI/XAudio2 PASS; Scheduler deterministic stress SKIPPED.
 
-A PR #495 integrou E7.2A (NMI) na main no SHA `eccd7131d72711e4d0e486993a0026ddc89b543f`; isso não equivale a validação diferencial ou temporal independente. E7.2B está em implementação na PR #496. A etapa global permanece `INTEGRATION_PENDING` até E7.2A–E estarem concluídas e sustentadas por testes reproduzíveis. Não declarar SHORT_PASS/LONG_PASS/DIFFERENTIAL_PASS/TEMPORAL_PASS global.
+A PR #495 integrou E7.2A/NMI na main no SHA `eccd7131d72711e4d0e486993a0026ddc89b543f`. A PR #496 integrou E7.2B/INT acknowledge na main no SHA `09e6a07efb7b6bbab12021db5b328ed73e4822ae`. CI pós-merge #41783897867: Rust quality/unit regression PASS, Python lint/regression PASS, Windows x64 D3D12 PASS e Scheduler deterministic stress SKIPPED. E7.2C (IM0/IM1/IM2) é o próximo incremento. E7 permanece `INTEGRATION_PENDING`; não declarar SHORT_PASS/LONG_PASS/DIFFERENTIAL_PASS/TEMPORAL_PASS global.
 
 ---
 
 ## 7. Referências
 
-- ZiLOG, *Z80 CPU User Manual*, UM008011-0816 (2016), pp. 12–20: ciclos de acknowledge, NMI, HALT Exit, IFF e modos IM0/IM1/IM2.
+- ZiLOG, *Z80 CPU User Manual*, UM008011-0816 (2016), pp. 12–20: acknowledge, NMI, HALT Exit, IFF, EI delay e IM0/IM1/IM2. IM2 usa sete bits do vetor e exige bit 0 zero.
 - Arquivo de referência do projeto: `um0080.pdf`.
 - Runtime atual: `native/z80_cpu/src/sequencer.rs`, `micro_ops.rs`, `snapshot.rs`, `m1.rs`.
-- PR #495: NMI E7.2A integrada; PR #496: implementação candidata de INT/acknowledge E7.2B.
+- PR #495: NMI E7.2A integrada; PR #496: INT acknowledge E7.2B integrada. CI pós-merge #41783897867 PASS em Rust/Python/Windows; Scheduler stress SKIPPED.
 - ZiLOG UM008011-0816, Figura 9, p. 13: acknowledge M1 composto por T1, T2, TW, TW, T3 (5 T-states totais: 3T-base + 2 WAIT automáticos).
 - Adaptador temporal atual: `native/sms_core/src/temporal_machine.rs`.
 - Auditoria E7.1: `docs/audits/z80-e7-halt-m1-2026-11-04.md`.
