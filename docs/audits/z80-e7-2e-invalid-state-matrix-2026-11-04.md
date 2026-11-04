@@ -72,3 +72,10 @@ Após a inclusão desta auditoria e a atualização do scorecard, o HEAD da PR p
 - Scheduler deterministic stress: SKIPPED.
 
 Assim, a documentação e o código da PR #506 estão validados no HEAD final informado. A PR continua aberta; esta evidência não é autorização de merge nem encerra E7.2E.
+
+
+---
+
+## Aditivo — reconciliação de 2026-11-04
+
+Main: `644b2c22879d63447f63b730ed9415db11e81fab`. PR #506 é a continuação ativa de E7.2E, branch baseada na main atual, HEAD inicial `09c6dcb9a8f5a7ff7ca3f5934c1223515b5529a1`. O CI #41861829094 estava QUEUED nesse SHA. Os CI #41860306541 e #41860812506 passaram em SHAs anteriores; não validam os novos testes WAIT/IM0. A matriz de estados inválidos e os novos cenários WAIT são candidatos até o CI final PASS no HEAD exato. E7.2E e E7 global permanecem INTEGRATION_PENDING.

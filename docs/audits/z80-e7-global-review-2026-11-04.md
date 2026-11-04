@@ -181,3 +181,28 @@ Esta auditoria é revisão documental/estática e de evidências remotas. Não s
 - O corpus identificou e permitiu corrigir lacunas no validador de LD (HL),r, RET condicional e RST/CALL com prefixo DD/FD ignorado.
 - A PR #505 ainda não foi integrada. A matriz abrangente de estados inválidos, WAIT por todas as famílias, IM0 T-states, codec binário SMS completo e demais subfases E7.3–E7.7 permanecem pendentes.
 - Estado global: E7 INTEGRATION_PENDING; E8 continua bloqueada até o fechamento das dependências E7.
+
+
+---
+
+## Aditivo de auditoria remota — 2026-11-04, main 644b2c22879d63447f63b730ed9415db11e81fab
+
+### PRs abertas verificadas
+
+| PR | HEAD / base observados | CI no HEAD | Decisão |
+|---|---|---|---|
+| #506 E7.2E | `09c6dcb9`, base main atual | #41861829094 QUEUED | Não integrar até CI final PASS no HEAD exato |
+| #487 reconciliação documental Z80 | `d01e6cee`, base histórica `f4130104`; 184 commits atrás da main atual | #41758752168 SUCCESS no HEAD | Rebase/revisão necessários; não integrar branch divergente |
+| #447 DD/FD LD IX/IY | `405944de`, base histórica `eba8faae`; 262 commits atrás | #41665270882 SUCCESS no HEAD | Candidata antiga; rebase e auditoria de equivalência necessários |
+| #424 SRAM mapper SMS | `bda933fa`, base histórica `9c9b6dca`; 400 commits atrás | #41564391709 SUCCESS no HEAD documental | Não integrar: não houve teste in-game, DAT/seleção automática pendente e branch muito divergente |
+| #338 VDP/backends | `99d68af5`, base histórica `0da30988`; 958 commits atrás | #41347940527 FAILURE | Draft, não validada, fora da integração E7 |
+
+O status SUCCESS de #487/#447/#424 é histórico e vinculado ao HEAD indicado, não prova compatibilidade com a main atual. Nenhuma dessas três branches deve ser mesclada sem atualização/rebase seguro e nova validação. A PR #338 continua Draft e falhou no CI. Não fechar branches nem descartar commits sem decisão específica.
+
+### PR #506 e evidências
+
+A main está em `644b2c22879d63447f63b730ed9415db11e81fab`; seu CI pós-merge #41831738966 foi SUCCESS. A PR #506 é a única PR aberta baseada diretamente nessa main. Seu HEAD `09c6dcb9a8f5a7ff7ca3f5934c1223515b5529a1` tinha CI #41861829094 QUEUED. O CI #41860306541 passou no HEAD anterior `73ab196...` e #41860812506 passou em `1bb057e...`, mas não validam os testes WAIT acrescentados depois. Não fazer merge enquanto #41861829094 ou o CI substituto no HEAD final não terminar SUCCESS.
+
+### Decisão
+
+E7 global continua `INTEGRATION_PENDING`. Nenhuma PR adicional além das já integradas #504/#505 está autorizada por evidência para merge nesta fotografia. A continuação é E7.2E na #506; E7.3–E7.7 continuam pendentes. E8 permanece bloqueada.

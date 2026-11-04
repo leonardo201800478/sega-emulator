@@ -192,3 +192,14 @@ Links:
 - **E9 — temporal/integração:** M/T-states, WAIT, interrupções, snapshots, Scheduler e SMS/SG-1000.
 
 **Estado global:** E3A1/E3A2, E4A, E4B, E4C, E5 e E6 estão IMPLEMENTED no microsequenciador e QUICK_PASS/SHORT_PASS nos gates funcionais executados. E6 foi integrada pela PR #486; merge SHA do código `24a32e03e10c8e82022172faee69ec0c046f8cb0`. A documentação foi reconciliada pela PR #488, merge SHA `303a792b1caab1ba40dec9c9521208eb5aaa0b45`. CI #41759035927, #41759330209 e #41759833153 Rust/Python/Windows PASS; Scheduler stress SKIPPED. E7 — fechamento semântico global — está em andamento, iniciado pela E7.1 HALT. Diferencial externo completo, ZEXDOC/ZEXALL e traces independentes por T-state não foram executados; não declarar LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS. A integração temporal sistêmica do Z80 à máquina SMS permanece INTEGRATION_PENDING.
+
+
+---
+
+## Atualização E7 — baseline main 644b2c22879d63447f63b730ed9415db11e81fab (2026-11-04)
+
+A matriz DD/FD continua sendo inventário semântico por família e não uma declaração de conclusão global. E5 e E6 estão integradas; E7.1 e E7.2A–E7.2D estão integradas nas PRs #490, #495, #496, #498 e #500. E7.2E permanece IN_PROGRESS na PR #506.
+
+A PR #506 acrescenta matriz de estados inválidos e cenários WAIT=0/1/3 em M1, memória, I/O, ciclos internos e IM0/IM1/IM2. O HEAD `09c6dcb9a8f5a7ff7ca3f5934c1223515b5529a1` tinha CI #41861829094 QUEUED na última consulta. Portanto, esses novos testes ainda não são PASS comprovado.
+
+As famílias BASE/CB/ED/DD/FD/DDCB/FDCB devem continuar classificadas individualmente por implementação, validação funcional, diferencial e temporal. Não extrapolar testes internos para oráculo independente. E7.3 HALT T4, E7.4 BUSREQ, E7.5 RETI/daisy-chain, E7.6 IRQ real VDP e E7.7 auditoria integral permanecem pendentes. E8 bloqueada até fechar E7; E9 continua dependente de integração temporal sistêmica.
