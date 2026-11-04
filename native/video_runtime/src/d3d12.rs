@@ -109,7 +109,7 @@ impl NativeVideoWindow {
         };
 
         unsafe {
-            ShowWindow(hwnd, SW_SHOW);
+            let _ = ShowWindow(hwnd, SW_SHOW);
         }
 
         Ok(Self { hwnd })
@@ -131,7 +131,7 @@ impl NativeVideoWindow {
                     running = false;
                     break;
                 }
-                TranslateMessage(&message);
+                let _ = TranslateMessage(&message);
                 DispatchMessageW(&message);
             }
         }
@@ -812,13 +812,24 @@ fn convert_frame_row_to_rgba8888(frame: &VideoFrame, y: u32, destination: &mut [
             destination.copy_from_slice(source);
         }
         PixelFormat::Rgb565Le => {
-            if source.len() != (frame.width() as usize) * 2 {
+            let Some(expected_source_len) = (frame.width() as usize).checked_mul(2) else {
+                return false;
+            };
+            if source.len() != expected_source_len {
                 return false;
             }
+
+            let (source_pixels, []) = source.as_chunks::<2>() else {
+                return false;
+            };
+            let (destination_pixels, []) = destination.as_chunks_mut::<4>() else {
+                return false;
+            };
+
             for (source_pixel, destination_pixel) in
-                source.chunks_exact(2).zip(destination.chunks_exact_mut(4))
+                source_pixels.iter().zip(destination_pixels.iter_mut())
             {
-                let pixel = u16::from_le_bytes([source_pixel[0], source_pixel[1]]);
+                let pixel = u16::from_le_bytes(*source_pixel);
                 let red = ((pixel >> 11) & 0x1F) as u8;
                 let green = ((pixel >> 5) & 0x3F) as u8;
                 let blue = (pixel & 0x1F) as u8;
@@ -830,6 +841,28 @@ fn convert_frame_row_to_rgba8888(frame: &VideoFrame, y: u32, destination: &mut [
         }
     }
     true
+}
+
+impl Drop for D3d12Host {
+    fn drop(&mut self) {
+        let _ = self.wait_for_gpu();
+
+        if !self.frame_latency_handle.is_invalid() {
+            unsafe {
+                let _ = CloseHandle(self.frame_latency_handle);
+            }
+            self.frame_latency_handle = HANDLE::default();
+        }
+        if !self.fence_event.is_invalid() {
+            unsafe {
+                let _ = CloseHandle(self.fence_event);
+            }
+            self.fence_event = HANDLE::default();
+        }
+
+        // The HWND is the final field, so its owner is dropped after DXGI.
+        let _ = &self.rtv_heap;
+    }
 }
 
 #[cfg(test)]
@@ -859,6 +892,23 @@ mod tests {
     }
 
     #[test]
+    fn converts_rgb565_active_row_without_padding() {
+        let frame = VideoFrame::new(
+            1,
+            1,
+            1,
+            PixelFormat::Rgb565Le,
+            4,
+            vec![0x00, 0xF8, 0xAA, 0xBB],
+        )
+        .unwrap();
+        let mut output = [0; 4];
+
+        assert!(convert_frame_row_to_rgba8888(&frame, 0, &mut output));
+        assert_eq!(output, [255, 0, 0, 255]);
+    }
+
+    #[test]
     fn copies_rgba8888_active_row_without_padding() {
         let frame = VideoFrame::new(
             2,
@@ -881,27 +931,5 @@ mod tests {
 
         assert!(!convert_frame_row_to_rgba8888(&frame, 1, &mut [0; 4]));
         assert!(!convert_frame_row_to_rgba8888(&frame, 0, &mut [0; 3]));
-    }
-}
-
-impl Drop for D3d12Host {
-    fn drop(&mut self) {
-        let _ = self.wait_for_gpu();
-
-        if !self.frame_latency_handle.is_invalid() {
-            unsafe {
-                let _ = CloseHandle(self.frame_latency_handle);
-            }
-            self.frame_latency_handle = HANDLE::default();
-        }
-        if !self.fence_event.is_invalid() {
-            unsafe {
-                let _ = CloseHandle(self.fence_event);
-            }
-            self.fence_event = HANDLE::default();
-        }
-
-        // The HWND is the final field, so its owner is dropped after DXGI.
-        let _ = &self.rtv_heap;
     }
 }
