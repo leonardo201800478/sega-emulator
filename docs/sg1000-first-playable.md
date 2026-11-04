@@ -13,7 +13,7 @@ A validação do núcleo usa testes Rust e testes de integração da extensão. 
 Instale dependências e a aplicação:
 
 ```powershell
-py -3.14 -m venv .venv
+py -3.15 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev,qt]"
 .\.venv\Scripts\python.exe -m pip install maturin
 Push-Location native/z80_core
