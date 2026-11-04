@@ -981,7 +981,7 @@ mod tests {
         assert_eq!(transaction.direction(), BusDirection::Read);
         assert_eq!(transaction.address(), None);
         assert_eq!(transaction.data(), None);
-        assert_eq!(transaction.duration_tstates(), 7);
+        assert_eq!(transaction.duration_tstates(), 5);
 
         machine.schedule_pending_bus(1).unwrap();
         let snapshot = machine.export_state();
@@ -990,10 +990,10 @@ mod tests {
             restored.dispatch_next().unwrap(),
             Z80MicroStep::InterruptAcknowledge {
                 vector: 0xCF,
-                tstates: 8,
+                tstates: 6,
             }
         );
-        assert_eq!(restored.now(), MachineTime::from_ticks(24));
+        assert_eq!(restored.now(), MachineTime::from_ticks(18));
         assert_eq!(
             restored.cpu().export_state().phase,
             Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector: 0xCF }
