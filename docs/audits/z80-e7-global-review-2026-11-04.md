@@ -4,6 +4,7 @@
 **Baseline de código da main:** `ea327025b312feb53f1e3e5326b5a5e7c40e72f1`  
 **HEAD documental da main após PR #501:** `a324361574a45a80f8ae3aa70868630250e55d30`  
 **Branch desta reconciliação:** `docs/z80-e7-audit-e8-handoff-20261104`  
+**PR documental:** [#503](https://github.com/leonardo201800478/sega-emulator/pull/503) — CI pendente no HEAD final.  
 **PR E7.2E em análise:** [#502](https://github.com/leonardo201800478/sega-emulator/pull/502), HEAD `69ea4299b3858787f0f91682f3ea823371cde3b0`  
 **Resultado global:** `INTEGRATION_PENDING` — E7 não está concluída.
 
