@@ -133,15 +133,16 @@ fn sms_temporal_halt_samples_int_after_effective_t4_and_restores_the_latch() {
     let mut machine = SmsTemporalMachine::new(vec![0x76, 0x00], 3).unwrap();
     machine.cpu_mut().iff1 = true;
     machine.cpu_mut().iff2 = true;
+    machine.cpu_mut().halted = true;
     machine.cpu_mut().registers.sp = 0xC100;
     machine.set_int_line(Some(0xFF));
 
-    // Two WAIT states extend this M1. The sample must occur at its effective
-    // T4 completion, after the HALT opcode has been decoded and retired.
+    // Two WAIT states extend this repeated HALT M1. The sample must occur at
+    // its effective T4 completion, not at the nominal four-T-state boundary.
     assert_eq!(
         machine.step_instruction(2).unwrap(),
         Z80MicroStep::InstructionRetired {
-            opcode: 0x76,
+            opcode: 0x00,
             tstates: 6,
         }
     );
