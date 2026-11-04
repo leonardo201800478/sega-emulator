@@ -58,7 +58,7 @@ O HEAD atual de main é `ea327025b312feb53f1e3e5326b5a5e7c40e72f1`. E7.1 (HALT/M
 | E4C | INC/DEC (IX/IY+d) | Integrada na main pela PR #475; IMPLEMENTED / QUICK_PASS / SHORT_PASS; 5 testes dirigidos; CI 4/4 PASS |
 | E5 | DDCB/FDCB completo | IMPLEMENTED / QUICK_PASS / SHORT_PASS; PR #485 merged; CI #4245 3 jobs PASS, Scheduler SKIPPED |
 | E6 | Fallback geral e resolução de prefixos DD/FD/ED/CB | IMPLEMENTED / QUICK_PASS / SHORT_PASS; PR #486 merged; CI #41759035927 e push main #41759330209 PASS; Scheduler SKIPPED |
-| E7 | Fechamento semântico global BASE/CB/ED/DD/FD/DDCB/FDCB | E7.1 HALT/M1, E7.2A NMI e E7.2B INT acknowledge integradas; E7.2C IM0/1/2, E7.2D EI/DI, E7.2E snapshots, arbitragem T4/BUSREQ e RETI/daisy-chain pendentes. INTEGRATION_PENDING |
+| E7 | Fechamento semântico global BASE/CB/ED/DD/FD/DDCB/FDCB | E7.1 HALT/M1, E7.2A NMI, E7.2B INT acknowledge, E7.2C IM0/IM1/IM2 e E7.2D EI/DI integradas; E7.2E snapshots/restauração ainda pendente. HALT T4, BUSREQ, RETI/daisy-chain, IRQ real do VDP SMS e validação independente pendentes. INTEGRATION_PENDING |
 | E8 | Validação formal e diferencial (ZEXDOC/ZEXALL e corpora independentes) | Pendente |
 | E9 | Integração temporal sistêmica com bus, WAIT, Scheduler, SMS e SG-1000 | Pendente |
 
@@ -328,4 +328,4 @@ Toda atualização deve incluir data, SHA da baseline, SHA candidato, PR, workfl
 
 ---
 
-**Baseline operacional (2026-11-04):** `main` SHA `09e6a07efb7b6bbab12021db5b328ed73e4822ae`. E7.1/HALT-M1 integrada pela PR #490; E7.2A/NMI pela PR #495 (merge SHA `eccd7131d72711e4d0e486993a0026ddc89b543f`); E7.2B/INT acknowledge pela PR #496 (merge SHA `09e6a07efb7b6bbab12021db5b328ed73e4822ae`). CI pós-merge #41783897867: Rust, Python e Windows x64 PASS; Scheduler deterministic stress SKIPPED. Próximo incremento: E7.2C — dispatch retomável IM0/IM1/IM2. E7.2D/E, BUSREQ, amostragem física T4, evento RETI/daisy-chain, diferencial externo, LONG_PASS e TEMPORAL_PASS permanecem pendentes. A etapa E7 global continua `INTEGRATION_PENDING`.
+**Baseline operacional (2026-11-04, revisão E7.2D):** `main` SHA `ea327025b312feb53f1e3e5326b5a5e7c40e72f1`. E7.1, E7.2A, E7.2B e E7.2C integradas pelas PRs #490, #495, #496 e #498; E7.2D integrada pela PR #500. PR #501 reconcilia esta documentação e permanece separada da implementação técnica. Próximo incremento: E7.2E — auditoria integral de snapshots, restauração e equivalência entre execução contínua e retomada. Amostragem HALT T4, BUSREQ, RETI/daisy-chain, IRQ real do VDP SMS, diferencial externo, ZEXDOC/ZEXALL e traces temporais independentes permanecem pendentes. E7 global continua `INTEGRATION_PENDING`.
