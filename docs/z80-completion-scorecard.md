@@ -46,7 +46,7 @@ Os percentuais abaixo são **estimativas de engenharia**, usadas para dimensiona
 
 ## 3. Baseline técnica e estado conhecido
 
-A baseline operacional desta revisão é `main` SHA `a756e51cf6c5245357831896de293cd2e9d3a859`. E7.1 (HALT/M1) foi integrada pela PR #490; E7.2A (NMI retomável) pela PR #495; E7.2B (INT acknowledge) pela PR #496; E7.2C (dispatch IM0/IM1/IM2) pela PR #498. O CI da PR #498 (#41792505837) passou em Rust, Python e Windows x64; o workflow pós-merge #41792924571 está em execução nesta revisão documental. Scheduler deterministic stress SKIPPED. E7.2D (EI/DI na arbitragem), E7.2E (snapshots de todas as fases), amostragem T4, BUSREQ, RETI/daisy-chain e validação temporal/diferencial independente permanecem pendentes.
+A baseline operacional desta revisão é `main` SHA `a756e51cf6c5245357831896de293cd2e9d3a859`. E7.1 (HALT/M1) foi integrada pela PR #490; E7.2A (NMI retomável) pela PR #495; E7.2B (INT acknowledge) pela PR #496; E7.2C (dispatch IM0/IM1/IM2) pela PR #498. O CI da PR #498 (#41792505837) e o CI pós-merge #41792924571 no SHA main `a756e51cf6c5245357831896de293cd2e9d3a859` passaram em Rust, Python e Windows x64. Scheduler deterministic stress SKIPPED em ambos. E7.2D (EI/DI na arbitragem), E7.2E (snapshots de todas as fases), amostragem T4, BUSREQ, RETI/daisy-chain e validação temporal/diferencial independente permanecem pendentes.
 
 | Fase | Escopo | Estado na fotografia |
 |---|---|---|
@@ -238,6 +238,7 @@ Aceite: nenhuma instrução documentada elegível sem classificação e critéri
 - Testes Z80: NOP/JP/prefixo IM0; IM1 13T, ordem high/low, WAITs e snapshots; IM2 19T, leitura low/high, snapshots e preservação do vetor bruto.
 - Evidência detalhada: [auditoria E7.2C — IM0/IM1/IM2](audits/z80-e7-2c-interrupt-modes-2026-11-04.md).
 - CI [#41792143207](https://github.com/leonardo201800478/sega-emulator/actions/runs/41792143207), SHA de código `9cb576e957fdb37529d3c8dfb5d54fb22c2c907f`: Rust fmt/Clippy/SMS/SG-1000/workspace PASS; Python pytest/Ruff PASS; Windows x64 D3D12/video e WASAPI/XAudio2/audio compile/tests PASS. Scheduler deterministic stress SKIPPED.
+- CI pós-merge [#41792924571](https://github.com/leonardo201800478/sega-emulator/actions/runs/41792924571), main SHA `a756e51cf6c5245357831896de293cd2e9d3a859`: Rust quality/unit regression, Python lint/regression e Windows x64 D3D12/WASAPI/XAudio2 PASS; Scheduler deterministic stress SKIPPED.
 - Estado E7.2C: IMPLEMENTED / QUICK_PASS / SHORT_PASS para o escopo e cenários testados; cenários direcionados SMS pelo Scheduler PASS. PR #498 integrada no merge SHA `a756e51cf6c5245357831896de293cd2e9d3a859`. E7 completo continua INTEGRATION_PENDING; não declarar LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS.
 
 ### E8 — Validação formal e diferencial
