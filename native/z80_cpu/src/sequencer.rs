@@ -539,6 +539,14 @@ pub enum Z80InterruptKind {
     Int,
 }
 
+/// Interrupt sampled at the T4 boundary of a HALT M1 cycle.
+/// The INT vector is sampled later during the acknowledge bus cycle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+pub enum Z80HaltExit {
+    Nmi,
+    Int,
+}
+
 /// Observable result after a completed bus transaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Z80MicroStep {
@@ -590,6 +598,8 @@ pub struct Z80MicroSequencerState {
     pub int_pending: Option<u8>,
     pub p: bool,
     pub halted: bool,
+    /// Interrupt accepted at a HALT T4 boundary, awaiting the next CPU edge.
+    pub halt_exit_pending: Option<Z80HaltExit>,
 }
 
 /// A resumable subset of the Z80 instruction engine.
@@ -619,6 +629,8 @@ pub struct Z80MicroSequencer {
     pub int_pending: Option<u8>,
     pub p: bool,
     pub halted: bool,
+    /// T4-sampled HALT exit; separate from live NMI/INT input levels.
+    pub halt_exit_pending: Option<Z80HaltExit>,
     handshake: Z80BusHandshake,
     phase: Z80MicroSequencerPhase,
     opcode: Option<u8>,
@@ -648,6 +660,7 @@ impl Default for Z80MicroSequencer {
             int_pending: None,
             p: false,
             halted: false,
+            halt_exit_pending: None,
             handshake: Z80BusHandshake::default(),
             phase: Z80MicroSequencerPhase::Ready,
             opcode: None,
@@ -688,6 +701,7 @@ impl Z80MicroSequencer {
             int_pending: self.int_pending,
             p: self.p,
             halted: self.halted,
+            halt_exit_pending: self.halt_exit_pending,
         }
     }
 
@@ -722,7 +736,10 @@ impl Z80MicroSequencer {
         state
             .validate()
             .map_err(|_| Z80MicroSequencerError::InvalidState)?;
-        if self.phase != Z80MicroSequencerPhase::Ready || self.handshake.is_pending() {
+        if self.phase != Z80MicroSequencerPhase::Ready
+            || self.handshake.is_pending()
+            || self.halt_exit_pending.is_some()
+        {
             return Err(Z80MicroSequencerError::InstructionAlreadyActive);
         }
         self.registers = state.registers;
@@ -761,6 +778,18 @@ impl Z80MicroSequencer {
                 Z80MicroSequencerPhase::Ready | Z80MicroSequencerPhase::OpcodeFetch
             ) || state.opcode.is_some()
                 || state.prefix_state != Z80PrefixState::None)
+        {
+            return Err(Z80MicroSequencerError::InvalidState);
+        }
+        if state.halt_exit_pending.is_some()
+            && (!state.halted
+                || state.phase != Z80MicroSequencerPhase::Ready
+                || pending.is_some()
+                || state.opcode.is_some()
+                || state.prefix_state != Z80PrefixState::None
+                || state.instruction_tstates != 0
+                || state.mcycle_index != 0
+                || state.tstate_index != 0)
         {
             return Err(Z80MicroSequencerError::InvalidState);
         }
@@ -2913,6 +2942,7 @@ impl Z80MicroSequencer {
             int_pending: state.int_pending,
             p: state.p,
             halted: state.halted,
+            halt_exit_pending: state.halt_exit_pending,
             handshake,
             phase: state.phase,
             opcode: state.opcode,
@@ -2951,31 +2981,89 @@ impl Z80MicroSequencer {
         self.prefix_state = Z80PrefixState::None;
         self.q_previous = self.q;
         self.q = 0;
+
+        // While halted, live interrupt inputs are not accepted at an arbitrary
+        // host instruction boundary. They must first be sampled on the actual
+        // T4 edge of a completed HALT M1 cycle.
+        if self.halted {
+            return match self.halt_exit_pending.take() {
+                Some(Z80HaltExit::Nmi) => self.begin_nmi_response(false),
+                Some(Z80HaltExit::Int) => self.begin_interrupt_acknowledge(),
+                None => self.begin_opcode_fetch(),
+            };
+        }
+        if self.halt_exit_pending.is_some() {
+            return Err(Z80MicroSequencerError::InvalidState);
+        }
         if self.nmi_pending {
-            let request =
-                self.handshake
-                    .begin(Z80BusOperation::OpcodeFetch, self.registers.pc, 4)?;
-            self.nmi_pending = false;
-            self.halted = false;
-            self.iff2 = self.iff1;
-            self.iff1 = false;
-            self.p = false;
-            self.phase = Z80MicroSequencerPhase::NmiResponse;
-            return Ok(Z80MicroStep::BusRequest(request));
+            return self.begin_nmi_response(true);
         }
         if self.iff1 && self.ei_delay == 0 && self.int_pending.is_some() {
-            let request = self.handshake.begin(
-                Z80BusOperation::InterruptAcknowledge,
-                self.registers.pc,
-                Z80_INT_ACK_BASE_TSTATES,
-            )?;
-            self.halted = false;
-            self.iff1 = false;
-            self.iff2 = false;
-            self.p = false;
-            self.phase = Z80MicroSequencerPhase::InterruptAcknowledge;
-            return Ok(Z80MicroStep::BusRequest(request));
+            return self.begin_interrupt_acknowledge();
         }
+        self.begin_opcode_fetch()
+    }
+
+    /// Sample interrupt inputs on the rising edge of T4 after a completed HALT M1.
+    ///
+    /// The machine calls this only after the opcode-fetch completion has been
+    /// consumed and the CPU is back at Ready. NMI has priority; INT is eligible
+    /// only when IFF1 is set and the EI delay has expired. The INT vector itself
+    /// remains a bus value sampled later during Interrupt Acknowledge.
+    pub fn sample_halt_interrupts_at_t4(
+        &mut self,
+    ) -> Result<(), Z80MicroSequencerError> {
+        if !self.halted
+            || self.phase != Z80MicroSequencerPhase::Ready
+            || self.handshake.is_pending()
+            || self.halt_exit_pending.is_some()
+        {
+            return Err(Z80MicroSequencerError::InvalidState);
+        }
+        if self.nmi_pending {
+            self.nmi_pending = false;
+            self.halt_exit_pending = Some(Z80HaltExit::Nmi);
+        } else if self.iff1 && self.ei_delay == 0 && self.int_pending.is_some() {
+            self.halt_exit_pending = Some(Z80HaltExit::Int);
+        }
+        Ok(())
+    }
+
+    fn begin_nmi_response(
+        &mut self,
+        clear_pending_edge: bool,
+    ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
+        let request =
+            self.handshake
+                .begin(Z80BusOperation::OpcodeFetch, self.registers.pc, 4)?;
+        if clear_pending_edge {
+            self.nmi_pending = false;
+        }
+        self.halted = false;
+        self.iff2 = self.iff1;
+        self.iff1 = false;
+        self.p = false;
+        self.phase = Z80MicroSequencerPhase::NmiResponse;
+        Ok(Z80MicroStep::BusRequest(request))
+    }
+
+    fn begin_interrupt_acknowledge(
+        &mut self,
+    ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
+        let request = self.handshake.begin(
+            Z80BusOperation::InterruptAcknowledge,
+            self.registers.pc,
+            Z80_INT_ACK_BASE_TSTATES,
+        )?;
+        self.halted = false;
+        self.iff1 = false;
+        self.iff2 = false;
+        self.p = false;
+        self.phase = Z80MicroSequencerPhase::InterruptAcknowledge;
+        Ok(Z80MicroStep::BusRequest(request))
+    }
+
+    fn begin_opcode_fetch(&mut self) -> Result<Z80MicroStep, Z80MicroSequencerError> {
         let request = self
             .handshake
             .begin(Z80BusOperation::OpcodeFetch, self.registers.pc, 4)?;
