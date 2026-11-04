@@ -1,8 +1,8 @@
 # Meta de conclusão do Z80 — cobertura, validação e critérios de aceite
 
-**Data da revisão:** 2026-11-03  
-**Baseline de referência:** `main` — `04ee09f9839bfe29a595abbed831d055cc8d177a` (após integração da E4B / PR #472).  
-**Evidência E4B:** runtime validado `245d42eb0337d41295329155de8e151feceb9022`; head final da PR `615fbd907a368b0cf6d46e94a4e980286c5d5265`; CI [41738443518](https://github.com/leonardo201800478/sega-emulator/actions/runs/41738443518), 4/4 jobs PASS.  
+**Data da revisão:** 2026-11-04  
+**Baseline de referência:** `main` — `f89a52346e91e88e82ab37a4afcfffff2d793407` (após merge da PR #475 / E4C).  
+**Evidência E4C:** HEAD validado `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS; PR #475 integrada no merge SHA `f89a52346e91e88e82ab37a4afcfffff2d793407`.  
 **Schema do microsequenciador na baseline:** 27.  
 **Status deste documento:** referência de planejamento e critérios de aceite. Não substitui a matriz semântica por opcode nem os relatórios de execução dos testes.
 
@@ -46,7 +46,7 @@ Os percentuais abaixo são **estimativas de engenharia**, usadas para dimensiona
 
 ## 3. Baseline técnica e estado conhecido
 
-A baseline consultada em `main` é `04ee09f9839bfe29a595abbed831d055cc8d177a`, após a integração de E4B pela PR #472. A presença da auditoria E4B e do teste `native/z80_cpu/tests/indexed_alu_e4b.rs` na `main` confirma que essa fatia já está integrada. Seu CI reportado passou nos quatro grupos de jobs.
+A baseline consultada em `main` é `f89a52346e91e88e82ab37a4afcfffff2d793407`, após a integração da E4C pela PR #475. A auditoria `docs/audits/z80-indexed-incdec-e4c-2026-11-03.md` e o teste `native/z80_cpu/tests/indexed_incdec_e4c.rs` estão integrados. O HEAD da PR passou nos quatro grupos de CI.
 
 | Fase | Escopo | Estado na fotografia |
 |---|---|---|
@@ -55,7 +55,7 @@ A baseline consultada em `main` é `04ee09f9839bfe29a595abbed831d055cc8d177a`, a
 | E3A2 | Transferências absolutas, PUSH/POP e EX (SP),IX/IY | Integrada na main |
 | E4A | LD r,(IX/IY+d), LD (IX/IY+d),r e LD (IX/IY+d),n | Integrada na main; IMPLEMENTED / SHORT_PASS |
 | E4B | ADD/ADC/SUB/SBC/AND/XOR/OR/CP (IX/IY+d) | Integrada na main pela PR #472; IMPLEMENTED / QUICK_PASS / SHORT_PASS; CI 4/4 PASS |
-| E4C | INC/DEC (IX/IY+d) | Pendente no microsequenciador |
+| E4C | INC/DEC (IX/IY+d) | Integrada na main pela PR #475; IMPLEMENTED / QUICK_PASS / SHORT_PASS; 5 testes dirigidos; CI 4/4 PASS |
 | E5 | DDCB/FDCB completo | Pendente no microsequenciador |
 | E6 | Fallback geral e resolução de prefixos DD/FD/ED/CB | Pendente/incompleto no microsequenciador |
 | E7 | Fechamento semântico global BASE/CB/ED/DD/FD/DDCB/FDCB | Pendente |
@@ -139,14 +139,14 @@ Os níveis abaixo são cumulativos no escopo declarado. O estado deve ser atribu
 
 ## 6. Plano obrigatório para chegar a 100%
 
-### E4C — INC/DEC (IX/IY+d)
+### E4C — INC/DEC (IX/IY+d) — concluída no microsequenciador
 
-- Implementar INC e DEC indexados no microsequenciador com read-modify-write completo.
-- Preservar C; calcular S/Z/H/PV/N e X/Y corretamente.
-- Respeitar o calendário nominal ZiLOG de 23 T-states / 6 M-cycles, verificando a distribuição por fase contra a referência.
-- Testar IX e IY, displacement 0, -128 e +127, wrap de endereço, valores 00/01/7F/80/FE/FF, carry preservado e half-carry/borrow.
-- Cobrir WAIT em cada acesso, snapshots antes/depois de cada safe point e retomada sem acesso duplicado.
-- Aceite: QUICK_PASS e SHORT_PASS; não promover a temporal sem trace independente.
+- [x] INC/DEC indexados com read-modify-write compartilhado (`MemoryReadIncDec → MemoryIncDecInternal → MemoryWrite`), sem ALU/RMW duplicado.
+- [x] IX/IY; flags S/Z/H/PV/N e Carry preservado; displacement 0/-128/+127; wrap de endereço efetivo e PC.
+- [x] WAIT nos fetches M1, displacement, leitura efetiva e escrita; snapshot/restore nos safe points intermediários.
+- [x] Prefixos repetidos/alternados e last-prefix-wins; 23 T-states / 6 M-cycles (`4,4,3,5,4,3`) conforme ZiLOG UM008011-0816.
+- [x] 5 testes dirigidos `indexed_incdec_e4c.rs` e CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS no HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`.
+- Estado: IMPLEMENTED / QUICK_PASS / SHORT_PASS para o escopo implementado. Não promover LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS sem evidência independente.
 
 ### E5 — DDCB/FDCB completo
 
@@ -253,4 +253,4 @@ Toda atualização deve incluir data, SHA da baseline, SHA candidato, PR, workfl
 
 ---
 
-**Próxima meta operacional na baseline descrita:** concluir E4C — INC/DEC (IX/IY+d) — e então avançar para E5 DDCB/FDCB. E4B / PR #472 está integrada na main (`04ee09f9`); seus resultados SHORT_PASS permanecem limitados ao escopo implementado, sem promover LONG_PASS ou TEMPORAL_PASS.
+**Próxima meta operacional na baseline atual:** iniciar E5 — DDCB/FDCB no microsequenciador. E4A, E4B e E4C estão integradas na main; E4C foi integrada pela PR #475 (`f89a5234`) após CI 4/4 PASS. Os resultados QUICK_PASS/SHORT_PASS permanecem limitados aos escopos testados; validação diferencial externa, ZEXDOC/ZEXALL e TEMPORAL_PASS continuam pendentes.

@@ -1,6 +1,6 @@
 # Estado dos componentes — SG-1000 + Master System
 
-**Base de referência:** `main` em `b2c8e6533d8ffb698e14a213b324de5c9cbab108` (2026-11-02, após PR #421/T6a).
+**Base de referência:** `main` em `f89a52346e91e88e82ab37a4afcfffff2d793407` (2026-11-04, após PR #475 / E4C).
 **Natureza:** inventário documental do estado observado no repositório e das auditorias disponíveis. Não substitui testes no SHA candidato nem declara precisão ciclo a ciclo.
 
 Este documento responde o que já existe, o que permanece como componente válido e o que ainda precisa ser integrado ou concluído. Componentes existentes não devem ser apagados só porque a arquitetura-alvo muda; a migração deve preservar APIs e testes até haver substituição comprovada.
@@ -18,7 +18,7 @@ Este documento responde o que já existe, o que permanece como componente válid
 
 | Componente | Implementação / localização observada | Estado e trabalho restante |
 |---|---|---|
-| Z80 — execução | Executores atômicos legados permanecem nos cores SG-1000/SMS; `native/z80_cpu` contém microsequenciador retomável consumido pela fatia temporal SMS | Microsequenciador ainda restrito ao subconjunto testado; executor atômico preservado como oráculo diferencial. Não é ainda o executor compartilhado completo em produção |
+| Z80 — execução | `native/z80_cpu` mantém o executor atômico e o microsequenciador retomável compartilhados; SMS consome a fatia temporal atual e SG-1000 ainda preserva seu runtime legado | Microsequenciador implementa E3A1/E3A2, E4A, E4B e E4C (INC/DEC indexed-memory); E5 DDCB/FDCB, E6 fallback geral, E7 auditoria semântica, E8 diferencial e E9 integração sistêmica permanecem pendentes. Não declarar Z80 completo nem TEMPORAL_PASS |
 | Z80 — ALU | `native/z80_alu` | Biblioteca compartilhada existente; continuar auditoria de flags/opcodes e cobertura independente |
 | Z80 — bus | `native/z80_bus` e adaptador `SmsTemporalBus` em `native/sms_core/src/temporal_bus.rs` | Fetch/read/write de memória são agendados por deadline; T5a expõe índices M-cycle/T-state no subconjunto retomável e mapeia transações para `BusTransaction`; conclusão de barramento e ciclo interno ficam latched até commit/acknowledgement; WAIT continua sendo fixture |
 | Memória e barramentos SG-1000 | `native/sg1000_core` | Funcionais no runtime; ampliar testes de mapa, espelhamento, RAM e cartuchos |
@@ -227,3 +227,19 @@ O executor atômico existente é a referência para SCF/CCF: no início de cada 
 | TEMPORAL_PASS | NOT DECLARED | A fatia não comprova execução sistêmica nem precisão elétrica completa |
 
 **Critérios:** efeitos arquiteturais aplicados somente após a conclusão de M1; ambas as instruções preservam F e não emitem transações extras. O executor atômico segue como oráculo diferencial. Execução local NOT RUN. Scheduler deterministic stress SKIPPED não foi contabilizado como PASS.
+
+
+## 8. Atualização do núcleo Z80 — PR #475 / E4C (2026-11-04)
+
+**Baseline main:** `f89a52346e91e88e82ab37a4afcfffff2d793407`  
+**HEAD validado da PR:** `8f04b44e6c6ba85920a7438b74c9876586d5736c`  
+**Merge:** PR [#475](https://github.com/leonardo201800478/sega-emulator/pull/475), merge SHA `f89a52346e91e88e82ab37a4afcfffff2d793407`.  
+**CI:** [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), quatro jobs PASS.
+
+| Escopo | Estado formal | Evidência / limite |
+|---|---|---|
+| E4C — INC/DEC (IX/IY+d) | IMPLEMENTED / QUICK_PASS / SHORT_PASS | 5 testes dirigidos; IX/IY, flags S/Z/H/PV/N, C preservado, displacement, wrap, WAIT, snapshots, prefixos e 23T/6M. Não é validação diferencial externa nem TEMPORAL_PASS. |
+| E4 global (E4A/E4B/E4C) | IMPLEMENTED nos escopos registrados | As três fatias indexadas de displacement estão integradas. Não declarar LONG_PASS, ZEXDOC/ZEXALL ou TEMPORAL_PASS. |
+| Próxima tarefa | E5 — DDCB/FDCB | Separar BIT read-only de RMW, opcode final non-M1, R/flags, WAIT, snapshots e timing. |
+
+A suíte Python do CI reportou 214 passed e 21 skipped por dependências/extensões ausentes no runner. Os skips não foram contabilizados como PASS.
