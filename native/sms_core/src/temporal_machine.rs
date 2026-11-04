@@ -163,7 +163,7 @@ fn instruction_timeline_is_valid(state: &SmsTemporalMachineState) -> bool {
             let Some(expected_tstates) = cpu_tstates.checked_add(mcycle.elapsed_tstates) else {
                 return false;
             };
-            (request_started_at, expected_tstates)
+            (state.bus.coordinator.scheduler.now, expected_tstates)
         }
         (Some(request), Some(completion), None, None) => {
             if request.id != completion.request_id {
@@ -2848,5 +2848,53 @@ mod base_immediate_io_temporal_tests {
         );
         assert_eq!(restored.cpu().registers.a, 0xFE);
         assert_eq!(restored.now(), MachineTime::from_ticks(33));
+    }
+}
+
+#[cfg(test)]
+mod bus_tstate_safe_point_tests {
+    use super::SmsTemporalMachine;
+    use crate::SmsTemporalDispatch;
+    use sega_temporal_core::MachineTime;
+    use sega_z80_cpu::Z80MicroStep;
+
+    #[test]
+    fn machine_snapshot_restores_between_bus_tstates_without_early_cpu_completion() {
+        let mut machine = SmsTemporalMachine::new(vec![0x32, 0x00, 0xC0], 3).unwrap();
+        let mut step = machine.begin_instruction().unwrap();
+        for _ in 0..4 {
+            machine.schedule_pending_bus(0).unwrap();
+            step = machine.dispatch_next().unwrap();
+        }
+        assert!(matches!(step, Z80MicroStep::BusRequest(_)));
+
+        machine.schedule_pending_bus(0).unwrap();
+        assert!(matches!(
+            machine.dispatch_next_bus_tstate().unwrap(),
+            SmsTemporalDispatch::BusTStateProgress { .. }
+        ));
+        assert_eq!(machine.now(), MachineTime::from_ticks(15));
+        assert_eq!(machine.cpu().registers.pc, 1);
+
+        let snapshot = machine.export_state();
+        let mut restored = SmsTemporalMachine::restore_state(snapshot).unwrap();
+        assert_eq!(restored.now(), MachineTime::from_ticks(15));
+        assert!(matches!(
+            restored.dispatch_next_bus_tstate().unwrap(),
+            SmsTemporalDispatch::BusTStateProgress { .. }
+        ));
+        let final_edge = restored.dispatch_next_bus_tstate().unwrap();
+        assert!(matches!(
+            final_edge,
+            SmsTemporalDispatch::BusCompletion(_)
+        ));
+        assert_eq!(restored.now(), MachineTime::from_ticks(21));
+        assert_eq!(restored.cpu().registers.pc, 1);
+
+        assert!(matches!(
+            restored.dispatch_next().unwrap(),
+            Z80MicroStep::BusRequest(_)
+        ));
+        assert_eq!(restored.cpu().registers.pc, 2);
     }
 }
