@@ -8,8 +8,8 @@
 
 use crate::alu::{adc8, add8, and8, cp8, cpl8, daa8, or8, rotate_accumulator, sbc8, sub8, xor8};
 use crate::prefix::{
-    classify_index_opcode, Z80IndexOpcodeClass, Z80IndexRegister, Z80PrefixState,
-    Z80PrefixTransition,
+    Z80IndexOpcodeClass, Z80IndexRegister, Z80PrefixState, Z80PrefixTransition,
+    classify_index_opcode,
 };
 use crate::{
     Z80_MICRO_SEQUENCER_STATE_VERSION, Z80AlternateRegisters, Z80ArchitecturalState,
