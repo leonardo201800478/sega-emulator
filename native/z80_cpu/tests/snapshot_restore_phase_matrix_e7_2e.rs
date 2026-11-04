@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 
 use sega_z80_cpu::{
     Z80BusOperation, Z80MicroSequencer, Z80MicroSequencerPhase, Z80MicroSequencerState,
-    Z80MicroStep,
+    Z80MicroSequencerError, Z80MicroStep,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -40,7 +40,7 @@ fn execute_one(
     start_pc: u16,
     interrupt: Option<InterruptSetup>,
     restore_each_boundary: bool,
-) -> RunResult {
+) -> Result<RunResult, Z80MicroSequencerError> {
     let mut memory = vec![0_u8; 0x1_0000];
     memory[start_pc as usize..start_pc as usize + program.len()].copy_from_slice(program);
     memory[0x8000] = 0xA5;
@@ -131,9 +131,13 @@ fn execute_one(
                     address: request.address,
                     response,
                 });
-                step = cpu
-                    .complete_bus_cycle(request.id, response)
-                    .expect("complete generated bus request");
+                step = match cpu.complete_bus_cycle(request.id, response) {
+                    Ok(next) => next,
+                    Err(error @ Z80MicroSequencerError::UnsupportedOpcode { .. }) => {
+                        return Err(error);
+                    }
+                    Err(error) => panic!("complete generated bus request for {program:02X?}: {error:?}"),
+                };
             }
             Z80MicroStep::InternalCycle { .. } => {
                 step = cpu
@@ -155,12 +159,12 @@ fn execute_one(
                     cpu = Z80MicroSequencer::restore_state(decoded)
                         .expect("restore terminal boundary");
                 }
-                return RunResult {
+                return Ok(RunResult {
                     terminal,
                     state: cpu.export_state(),
                     events,
                     phases,
-                };
+                });
             }
             terminal @ Z80MicroStep::InterruptServiced { .. } => {
                 let state = cpu.export_state();
@@ -190,80 +194,107 @@ fn assert_continuous_equals_restored(
     flags: u8,
     start_pc: u16,
     interrupt: Option<InterruptSetup>,
-) -> BTreeSet<String> {
+) -> (BTreeSet<String>, bool) {
     let continuous = execute_one(program, flags, start_pc, interrupt, false);
     let restored = execute_one(program, flags, start_pc, interrupt, true);
 
-    assert_eq!(
-        restored.terminal, continuous.terminal,
-        "terminal microstep: {program:02X?}"
-    );
-    assert_eq!(
-        restored.state, continuous.state,
-        "final CPU state: {program:02X?}"
-    );
-    assert_eq!(
-        restored.events, continuous.events,
-        "bus sequence: {program:02X?}"
-    );
-    assert_eq!(
-        restored.phases, continuous.phases,
-        "phase sequence: {program:02X?}"
-    );
+    match (continuous, restored) {
+        (
+            Err(Z80MicroSequencerError::UnsupportedOpcode { .. }),
+            Err(Z80MicroSequencerError::UnsupportedOpcode { .. }),
+        ) => (BTreeSet::new(), false),
+        (Ok(continuous), Ok(restored)) => {
+            assert_eq!(
+                restored.terminal, continuous.terminal,
+                "terminal microstep: {program:02X?}"
+            );
+            assert_eq!(
+                restored.state, continuous.state,
+                "final CPU state: {program:02X?}"
+            );
+            assert_eq!(
+                restored.events, continuous.events,
+                "bus sequence: {program:02X?}"
+            );
+            assert_eq!(
+                restored.phases, continuous.phases,
+                "phase sequence: {program:02X?}"
+            );
 
-    restored.phases
+            (restored.phases, true)
+        }
+        (continuous, restored) => panic!(
+            "continuous/restored execution diverged for {program:02X?}: {continuous:?} vs {restored:?}"
+        ),
+    }
 }
 
 #[test]
 fn e7_2e_every_generated_phase_round_trips_and_continues_equivalently() {
     let mut observed_phases = BTreeSet::new();
+    let mut supported_cases = 0_usize;
+    let mut unsupported_cases = 0_usize;
 
     for opcode in 0_u8..=u8::MAX {
         for flags in [0x00, 0xFF] {
-            observed_phases.extend(assert_continuous_equals_restored(
+            let (phases, supported) = assert_continuous_equals_restored(
                 &[opcode, 0, 0, 0, 0],
                 flags,
                 0,
                 None,
-            ));
+            );
+            observed_phases.extend(phases);
+            if supported { supported_cases += 1; } else { unsupported_cases += 1; }
         }
 
-        observed_phases.extend(assert_continuous_equals_restored(
+        let (phases, supported) = assert_continuous_equals_restored(
             &[0xCB, opcode, 0, 0],
             0xFF,
             0,
             None,
-        ));
-        observed_phases.extend(assert_continuous_equals_restored(
+        );
+        observed_phases.extend(phases);
+        if supported { supported_cases += 1; } else { unsupported_cases += 1; }
+        let (phases, supported) = assert_continuous_equals_restored(
             &[0xED, opcode, 0, 0],
             0xFF,
             0,
             None,
-        ));
-        observed_phases.extend(assert_continuous_equals_restored(
+        );
+        observed_phases.extend(phases);
+        if supported { supported_cases += 1; } else { unsupported_cases += 1; }
+        let (phases, supported) = assert_continuous_equals_restored(
             &[0xDD, opcode, 0, 0, 0],
             0xFF,
             0,
             None,
-        ));
-        observed_phases.extend(assert_continuous_equals_restored(
+        );
+        observed_phases.extend(phases);
+        if supported { supported_cases += 1; } else { unsupported_cases += 1; }
+        let (phases, supported) = assert_continuous_equals_restored(
             &[0xFD, opcode, 0, 0, 0],
             0xFF,
             0,
             None,
-        ));
-        observed_phases.extend(assert_continuous_equals_restored(
+        );
+        observed_phases.extend(phases);
+        if supported { supported_cases += 1; } else { unsupported_cases += 1; }
+        let (phases, supported) = assert_continuous_equals_restored(
             &[0xDD, 0xCB, 0, opcode],
             0xFF,
             0,
             None,
-        ));
-        observed_phases.extend(assert_continuous_equals_restored(
+        );
+        observed_phases.extend(phases);
+        if supported { supported_cases += 1; } else { unsupported_cases += 1; }
+        let (phases, supported) = assert_continuous_equals_restored(
             &[0xFD, 0xCB, 0, opcode],
             0xFF,
             0,
             None,
-        ));
+        );
+        observed_phases.extend(phases);
+        if supported { supported_cases += 1; } else { unsupported_cases += 1; }
     }
 
     for interrupt in [
@@ -281,14 +312,21 @@ fn e7_2e_every_generated_phase_round_trips_and_continues_equivalently() {
             vector: 0x80,
         },
     ] {
-        observed_phases.extend(assert_continuous_equals_restored(
+        let (phases, supported) = assert_continuous_equals_restored(
             &[0, 0, 0, 0],
             0,
             0x2345,
             Some(interrupt),
-        ));
+        );
+        assert!(supported, "interrupt entry must be supported: {interrupt:?}");
+        observed_phases.extend(phases);
     }
 
+    assert!(supported_cases > 0, "the corpus must exercise supported instructions");
+    assert!(
+        unsupported_cases < 7 * 256 + 4,
+        "too many opcode cases are unsupported: {unsupported_cases}"
+    );
     assert_eq!(
         observed_phases.len(),
         70,
