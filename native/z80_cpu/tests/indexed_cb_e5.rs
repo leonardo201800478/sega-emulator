@@ -97,11 +97,11 @@ fn run_indexed_cb(
         }
 
         trace.push(BusTrace {
-            operation: pending.operation,
+            operation: pending.operation.clone(),
             address: pending.address,
             base_tstates: pending.base_tstates,
         });
-        let data = match pending.operation {
+        let data = match pending.operation.clone() {
             Z80BusOperation::OpcodeFetch | Z80BusOperation::MemoryRead => {
                 Some(memory[pending.address as usize])
             }
