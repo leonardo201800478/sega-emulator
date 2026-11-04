@@ -1,9 +1,9 @@
 # Meta de conclusão do Z80 — cobertura, validação e critérios de aceite
 
 **Data da revisão:** 2026-11-04  
-**Baseline de referência:** `main` — `09e6a07efb7b6bbab12021db5b328ed73e4822ae` (E7.2B — INT acknowledge integrada pela PR #496).  
+**Baseline de referência:** `main` — `a756e51cf6c5245357831896de293cd2e9d3a859` (E7.2C — dispatch IM0/IM1/IM2 integrada pela PR #498).  
 **Evidência E4C:** HEAD validado `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS; PR #475 integrada no merge SHA `f89a52346e91e88e82ab37a4afcfffff2d793407`.  
-**Schema do microsequenciador na baseline main:** consultar `Z80_MICRO_SEQUENCER_STATE_VERSION` em `native/z80_cpu/src/lib.rs`; schemas foram incrementados nas fases E7.1/E7.2.  
+**Schema do microsequenciador na baseline main:** `Z80_MICRO_SEQUENCER_STATE_VERSION = 31` em `native/z80_cpu/src/lib.rs`; o schema foi incrementado para serializar as fases retomáveis de E7.2C.  
 **Status deste documento:** referência de planejamento e critérios de aceite. Não substitui a matriz semântica por opcode nem os relatórios de execução dos testes.
 
 ---
@@ -46,7 +46,7 @@ Os percentuais abaixo são **estimativas de engenharia**, usadas para dimensiona
 
 ## 3. Baseline técnica e estado conhecido
 
-A baseline operacional desta revisão é `main` SHA `09e6a07efb7b6bbab12021db5b328ed73e4822ae`. E7.1 (HALT/M1) foi integrada pela PR #490; E7.2A (NMI retomável) pela PR #495; E7.2B (INT acknowledge) pela PR #496. CI pós-merge #41783897867: Rust quality/unit regression PASS, Python lint/regression PASS, Windows x64 D3D12 PASS, Scheduler deterministic stress SKIPPED. E7.2C (dispatch IM0/IM1/IM2), E7.2D (EI/DI na arbitragem), E7.2E (snapshots de todas as fases), evento RETI/daisy-chain, BUSREQ e validação temporal/diferencial independente permanecem pendentes.
+A baseline operacional desta revisão é `main` SHA `a756e51cf6c5245357831896de293cd2e9d3a859`. E7.1 (HALT/M1) foi integrada pela PR #490; E7.2A (NMI retomável) pela PR #495; E7.2B (INT acknowledge) pela PR #496; E7.2C (dispatch IM0/IM1/IM2) pela PR #498. O CI da PR #498 (#41792505837) passou em Rust, Python e Windows x64; o workflow pós-merge #41792924571 está em execução nesta revisão documental. Scheduler deterministic stress SKIPPED. E7.2D (EI/DI na arbitragem), E7.2E (snapshots de todas as fases), amostragem T4, BUSREQ, RETI/daisy-chain e validação temporal/diferencial independente permanecem pendentes.
 
 | Fase | Escopo | Estado na fotografia |
 |---|---|---|
@@ -225,10 +225,10 @@ Aceite: nenhuma instrução documentada elegível sem classificação e critéri
 - Validador temporal SMS ajustado para contabilizar M1s anteriores já concluídos, permitindo snapshot no M1 subsequente a prefixo ED.
 - Inventário BASE candidato: 252 opcodes implementados / 0 rejeitados explicitamente.
 - Evidência e limites: [auditoria E7.1 — HALT](audits/z80-e7-halt-m1-2026-11-04.md).
-- **Limite:** saída de HALT por NMI/INT, acknowledge, reset especial e validação independente ainda não estão implementados neste incremento. Não atribuir SHORT_PASS integral a HALT.
-- Auditoria de código E7 corrigida para a baseline atual `5768705658522deb46a0fb0556b51923ae8166b8`: [auditoria E7 — semântica ED, microsequenciador, snapshots e interrupções](audits/z80-e7-code-validation-2026-11-04.md). A revisão encontrou 26 testes ED positivos no microsequenciador, aprovados no CI pós-merge #41775300143 (216 testes unitários totais no crate Z80). Esses testes incluem comparação com o executor atômico interno e validações de requests/WAIT/snapshots; não equivalem a oráculo externo nem a trace independente. E7 permanece INTEGRATION_PENDING porque E7.2 NMI/INT e a validação temporal independente seguem pendentes.
+- **Limite:** o acknowledge e o dispatch NMI/INT estão implementados nas fases E7.2A/B/C, mas a saída de HALT ainda não possui amostragem T4 cycle-accurate. Reset especial e validação independente continuam pendentes. Não atribuir SHORT_PASS integral a HALT.
+- Auditoria de código E7 na baseline histórica `5768705658522deb46a0fb0556b51923ae8166b8`: [auditoria E7 — semântica ED, microsequenciador, snapshots e interrupções](audits/z80-e7-code-validation-2026-11-04.md). A revisão encontrou 26 testes ED positivos no microsequenciador, aprovados no CI #41775300143 (216 testes unitários totais no crate Z80). Esses testes incluem comparação com o executor atômico interno e validações de requests/WAIT/snapshots; não equivalem a oráculo externo nem a trace independente. E7 permanece INTEGRATION_PENDING por EI/DI, amostragem HALT T4, BUSREQ, RETI/daisy-chain, snapshots completos e validação temporal/diferencial independente.
 
-#### E7.2C — Dispatch retomável IM0/IM1/IM2 — PR #498 (ainda não integrada)
+#### E7.2C — Dispatch retomável IM0/IM1/IM2 — PR #498 (integrada na main)
 
 - IM0 reutiliza o decoder microsequenciado existente para o byte fornecido no acknowledge, sem incrementar PC/R novamente; bytes seguintes de prefixo e operandos vêm da memória. Cobertos NOP, JP nn e DD 21 nn.
 - IM1 empilha PC high/low em requests distintos, define PC=0038h e retorna 13 T-states. WZ permanece inalterado, sem inferir semântica MEMPTR não documentada.
@@ -238,7 +238,7 @@ Aceite: nenhuma instrução documentada elegível sem classificação e critéri
 - Testes Z80: NOP/JP/prefixo IM0; IM1 13T, ordem high/low, WAITs e snapshots; IM2 19T, leitura low/high, snapshots e preservação do vetor bruto.
 - Evidência detalhada: [auditoria E7.2C — IM0/IM1/IM2](audits/z80-e7-2c-interrupt-modes-2026-11-04.md).
 - CI [#41792143207](https://github.com/leonardo201800478/sega-emulator/actions/runs/41792143207), SHA de código `9cb576e957fdb37529d3c8dfb5d54fb22c2c907f`: Rust fmt/Clippy/SMS/SG-1000/workspace PASS; Python pytest/Ruff PASS; Windows x64 D3D12/video e WASAPI/XAudio2/audio compile/tests PASS. Scheduler deterministic stress SKIPPED.
-- Estado E7.2C: IMPLEMENTED / QUICK_PASS / SHORT_PASS para o escopo e cenários testados. E7 completo continua INTEGRATION_PENDING; não declarar LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS. PR #498 ainda aberta e não integrada.
+- Estado E7.2C: IMPLEMENTED / QUICK_PASS / SHORT_PASS para o escopo e cenários testados; cenários direcionados SMS pelo Scheduler PASS. PR #498 integrada no merge SHA `a756e51cf6c5245357831896de293cd2e9d3a859`. E7 completo continua INTEGRATION_PENDING; não declarar LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS.
 
 ### E8 — Validação formal e diferencial
 
