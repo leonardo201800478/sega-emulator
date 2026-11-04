@@ -1,4 +1,4 @@
-> **Atualização do núcleo Z80 (2026-11-03):** `main` inclui E4A/E4B até `04ee09f9`. E4C (INC/DEC indexed-memory) está em PR #473, candidato corrigido `186a9996f5bbc26b65362040ac3759c9e62d3e09`; as execuções `41741995929` e `41742295721` detectaram, respectivamente, tipos ambíguos e type-complexity no fixture; ambos corrigidos. O run `41742519601` detectou apenas formatação rustfmt, corrigida no SHA atual. Aguardando nova execução integral. Não declarar LONG_PASS, integração temporal completa ou TEMPORAL_PASS.
+> **Atualização do núcleo Z80 (2026-11-03):** baseline `main` `04ee09f9839bfe29a595abbed831d055cc8d177a`; E4A/E4B integradas. E4C está implementada na PR #473, SHA validado `bac497462a3fc13a1f47892d25d435beefddd6d8`; CI `41742682599` concluiu 4/4 jobs PASS (Rust, Python, Windows x64 vídeo/áudio e Scheduler deterministic stress). Estado: IMPLEMENTED / QUICK_PASS / SHORT_PASS para o escopo dirigido. Não declarar LONG_PASS, DIFFERENTIAL_PASS, TEMPORAL_PASS ou integração sistêmica completa.
 
 # Estado dos componentes — SG-1000 + Master System
 
