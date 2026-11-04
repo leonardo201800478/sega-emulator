@@ -1,8 +1,8 @@
 # E7.4.1B — contrato de eventos T-state para o barramento temporal SMS
 
-**Data:** 2026-11-04  
-**Baseline:** `main` = `869b402e4c8f2dbd9c5f5fa4a10d10ac26506461`  
-**Contrato-base:** PR #512, HEAD `19866f365b4873603a7dd230121a1127aeca9c2d`  
+**Data:** 2026-11-04\
+**Baseline:** `main` = `869b402e4c8f2dbd9c5f5fa4a10d10ac26506461`\
+**Contrato-base:** PR #512, HEAD `19866f365b4873603a7dd230121a1127aeca9c2d`\
 **Status:** decisão de arquitetura para orientar a implementação; NÃO é integração funcional.
 
 ## 1. Auditoria do comportamento existente
