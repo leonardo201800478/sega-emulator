@@ -12105,7 +12105,7 @@ mod e7_2c_interrupt_mode_tests {
     #[test]
     fn acknowledge_snapshot_latches_the_interrupt_mode() {
         let cpu = start_int(2, 0x80);
-        let restored = round_trip(&cpu);
+        let mut restored = round_trip(&cpu);
         assert_eq!(
             restored.phase,
             super::Z80MicroSequencerPhase::InterruptAcknowledgeComplete {
