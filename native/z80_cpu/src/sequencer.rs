@@ -244,6 +244,7 @@ pub enum Z80MicroSequencerPhase {
         vector_address: u16,
     },
     InterruptMode2VectorReadHigh {
+        vector_address: u16,
         low: u8,
     },
     /// NMI response M1 at the interrupted PC; sampled memory data is ignored.
@@ -1029,7 +1030,8 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::InterruptModeDispatchInternal {
                 mode, return_address, remaining_tstates, ..
             } => {
-                (mode == 0 && remaining_tstates == 1
+                mode == state.interrupt_mode
+                    && (mode == 0 && remaining_tstates == 1
                     || (mode == 1 || mode == 2) && (1..=2).contains(&remaining_tstates))
                     && return_address == state.registers.pc
                     && state.opcode.is_none() && state.prefix_state == Z80PrefixState::None
@@ -1062,11 +1064,13 @@ impl Z80MicroSequencer {
                     })
                     && state.instruction_tstates >= 13
             }
-            Z80MicroSequencerPhase::InterruptMode2VectorReadHigh { .. } => {
+            Z80MicroSequencerPhase::InterruptMode2VectorReadHigh { vector_address, .. } => {
                 state.opcode.is_none() && state.prefix_state == Z80PrefixState::None
                     && !state.iff1 && !state.iff2 && !state.halted
                     && pending.is_some_and(|request| {
-                        request.operation == Z80BusOperation::MemoryRead && request.base_tstates == 3
+                        request.operation == Z80BusOperation::MemoryRead
+                            && request.address == vector_address.wrapping_add(1)
+                            && request.base_tstates == 3
                     })
                     && state.instruction_tstates >= 16
             }
@@ -2345,9 +2349,13 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::InterruptAcknowledgeComplete { .. } => {
                 state.mcycle_index == 1 && state.tstate_index == 0
             }
-            Z80MicroSequencerPhase::InterruptModeDispatchInternal { remaining_tstates, .. } => {
+            Z80MicroSequencerPhase::InterruptModeDispatchInternal { mode, remaining_tstates, .. } => {
                 state.mcycle_index == 1
-                    && state.tstate_index == u16::from(2_u8.saturating_sub(remaining_tstates))
+                    && state.tstate_index == if mode == 0 {
+                        0
+                    } else {
+                        u16::from(2_u8.saturating_sub(remaining_tstates))
+                    }
             }
             Z80MicroSequencerPhase::InterruptStackPushWrite { stage, .. } => {
                 stage <= 1 && state.mcycle_index == 1 + u32::from(stage) && state.tstate_index == 0
@@ -2853,7 +2861,11 @@ impl Z80MicroSequencer {
         vector: u8,
     ) -> Result<Z80MicroStep, Z80MicroSequencerError> {
         if self.interrupt_mode > 2
-            || self.phase != Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector }
+            || !matches!(
+                self.phase,
+                Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector: latched }
+                    if latched == vector
+            )
         {
             return Err(Z80MicroSequencerError::InvalidState);
         }
@@ -2924,16 +2936,16 @@ impl Z80MicroSequencer {
                     // The sampled memory byte is ignored and PC remains stable;
                     // the cycle is an internally forced NOP.
                     if increment_refresh {
-                        if increment_refresh {
-                    self.refresh = (self.refresh & 0x80) | (self.refresh.wrapping_add(1) & 0x7F);
-                }
+                        self.refresh = (self.refresh & 0x80) | (self.refresh.wrapping_add(1) & 0x7F);
                     }
                     return self.retire(0x00);
                 }
                 if advance_pc {
                     self.registers.pc = self.registers.pc.wrapping_add(1);
                 }
-                self.refresh = (self.refresh & 0x80) | (self.refresh.wrapping_add(1) & 0x7F);
+                if increment_refresh {
+                    self.refresh = (self.refresh & 0x80) | (self.refresh.wrapping_add(1) & 0x7F);
+                }
                 let previous_prefix = self.opcode;
                 let index_opcode_class = match self.prefix_state.transition(opcode) {
                     Z80PrefixTransition::Continue(next_state) => {
@@ -4420,7 +4432,10 @@ impl Z80MicroSequencer {
                 let request = self.handshake.begin(Z80BusOperation::MemoryRead, address, 3)?;
                 self.mcycle_index = next_mcycle_index;
                 self.tstate_index = 0;
-                self.phase = Z80MicroSequencerPhase::InterruptMode2VectorReadHigh { low };
+                self.phase = Z80MicroSequencerPhase::InterruptMode2VectorReadHigh {
+                    vector_address,
+                    low,
+                };
                 Ok(Z80MicroStep::BusRequest(request))
             }
             Z80MicroSequencerPhase::InterruptMode2VectorReadHigh { low } => {
