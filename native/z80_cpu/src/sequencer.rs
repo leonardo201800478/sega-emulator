@@ -12028,7 +12028,10 @@ mod base_immediate_io_differential_tests {
         );
         assert_eq!(
             cpu.phase,
-            crate::Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector: 0xCF, mode: 0 }
+            crate::Z80MicroSequencerPhase::InterruptAcknowledgeComplete {
+                vector: 0xCF,
+                mode: 0
+            }
         );
         assert_eq!(
             cpu.registers.pc, 0x2345,
