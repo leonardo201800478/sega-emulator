@@ -57,7 +57,7 @@ A baseline consultada em `main` é `f4130104fa971289507c0b15ab2d8eabd1dd5b00`, a
 | E4B | ADD/ADC/SUB/SBC/AND/XOR/OR/CP (IX/IY+d) | Integrada na main pela PR #472; IMPLEMENTED / QUICK_PASS / SHORT_PASS; CI 4/4 PASS |
 | E4C | INC/DEC (IX/IY+d) | Integrada na main pela PR #475; IMPLEMENTED / QUICK_PASS / SHORT_PASS; 5 testes dirigidos; CI 4/4 PASS |
 | E5 | DDCB/FDCB completo | IMPLEMENTED / QUICK_PASS / SHORT_PASS; PR #485 merged; CI #4245 3 jobs PASS, Scheduler SKIPPED |
-| E6 | Fallback geral e resolução de prefixos DD/FD/ED/CB | IMPLEMENTED / QUICK_PASS / SHORT_PASS; PR #486; CI #41757983537 Rust/Python/Windows PASS; Scheduler SKIPPED |
+| E6 | Fallback geral e resolução de prefixos DD/FD/ED/CB | IMPLEMENTED / QUICK_PASS / SHORT_PASS; PR #486 merged; CI #41759035927 e push main #41759330209 PASS; Scheduler SKIPPED |
 | E7 | Fechamento semântico global BASE/CB/ED/DD/FD/DDCB/FDCB | Pendente |
 | E8 | Validação formal e diferencial (ZEXDOC/ZEXALL e corpora independentes) | Pendente |
 | E9 | Integração temporal sistêmica com bus, WAIT, Scheduler, SMS e SG-1000 | Pendente |
@@ -194,9 +194,10 @@ Os níveis abaixo são cumulativos no escopo declarado. O estado deve ser atribu
 - Não impor limite artificial de prefixos repetidos.
 - Aceite cumprido: matriz de combinações, stress de cadeias longas, snapshot/restore e regressões sem fetch duplicado.
 
-**Evidência E6 — PR #486, HEAD `b66b97cb6202b270e857f6cfb55be85a0ea62a6b`:**
+**Evidência E6 — PR #486, HEAD final `de0166a54bd6613cd7d9379e4e03ca8e81e238eb`, merge SHA `24a32e03e10c8e82022172faee69ec0c046f8cb0`:**
 - Auditoria técnica detalhada: [E6 — Resolução geral dos prefixos Z80](audits/z80-prefix-resolution-e6-2026-11-04.md).
-- CI [#41757983537](https://github.com/leonardo201800478/sega-emulator/actions/runs/41757983537): Rust PASS (fmt, Clippy, workspace tests); Python PASS (pytest, Ruff check, Ruff format); Windows x64 PASS (D3D12, WASAPI/XAudio2 e testes); Scheduler stress SKIPPED por não haver alteração no Scheduler.
+- CI [#41759035927](https://github.com/leonardo201800478/sega-emulator/actions/runs/41759035927) no HEAD final: Rust PASS (fmt, Clippy, workspace tests); Python PASS (pytest, Ruff check, Ruff format); Windows x64 PASS (D3D12, WASAPI/XAudio2 e testes); Scheduler stress SKIPPED por não haver alteração no Scheduler.
+- CI de push na `main`, [#41759330209](https://github.com/leonardo201800478/sega-emulator/actions/runs/41759330209), SHA `24a32e03e10c8e82022172faee69ec0c046f8cb0`: SUCCESS; Rust, Python e Windows PASS; Scheduler SKIPPED.
 - `native/z80_cpu/tests/prefix_fallback_e6.rs`: 9/9 testes PASS, incluindo BASE register, immediate, ALU, relative branch, memória read/write, ED absolute transfer, WAIT e snapshots.
 - `native/z80_cpu/tests/prefix_fsm.rs`: last-prefix-wins, repetição/alternância e cadeia de 257 prefixos sem limite artificial.
 - Regressão Z80 existente: 216/216 testes unitários PASS; E5 indexed-CB permanece coberta por 8/8 testes.
@@ -290,4 +291,4 @@ Toda atualização deve incluir data, SHA da baseline, SHA candidato, PR, workfl
 
 ---
 
-**Baseline operacional:** E5 integrada na `main` `f4130104fa971289507c0b15ab2d8eabd1dd5b00` pela PR #485. E6 implementada na PR #486, HEAD `b66b97cb6202b270e857f6cfb55be85a0ea62a6b`; CI #41757983537 aprovado. Próxima etapa: E7 — fechamento semântico integral. Validação diferencial externa, ZEXDOC/ZEXALL, LONG_PASS e TEMPORAL_PASS continuam pendentes.
+**Baseline operacional:** E6 integrada na `main` pela PR #486. SHA atual da `main`: `24a32e03e10c8e82022172faee69ec0c046f8cb0`. CI #41759035927 (PR) e #41759330209 (push main) concluídos com SUCCESS. Próxima etapa: E7 — fechamento semântico integral. Validação diferencial externa, ZEXDOC/ZEXALL, LONG_PASS e TEMPORAL_PASS continuam pendentes.
