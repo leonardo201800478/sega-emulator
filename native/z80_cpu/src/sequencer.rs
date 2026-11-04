@@ -2081,7 +2081,10 @@ impl Z80MicroSequencer {
                 let Some(request) = pending else {
                     return Err(Z80MicroSequencerError::InvalidState);
                 };
-                let indexed = matches!(state.prefix_state, Z80PrefixState::Index(_));
+                let indexed = matches!(state.prefix_state, Z80PrefixState::Index(_))
+                    && state.opcode.is_some_and(|opcode| {
+                        classify_index_opcode(opcode) != Z80IndexOpcodeClass::Ignored
+                    });
                 let indexed_minimum = prefix_m1_count(state.prefix_state, state.mcycle_index, 3)
                     .and_then(|count| minimum_prefixed_tstates(count, 8))
                     .unwrap_or(u32::MAX);
