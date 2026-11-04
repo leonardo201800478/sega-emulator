@@ -991,7 +991,7 @@ impl Z80MicroSequencer {
                     && pending.is_some_and(|request| {
                         request.operation == Z80BusOperation::InterruptAcknowledge
                             && request.address == state.registers.pc
-                            && request.base_tstates == 5
+                            && request.base_tstates == 3
                     })
             }
             Z80MicroSequencerPhase::InterruptAcknowledgeComplete { .. } => {
@@ -1001,7 +1001,7 @@ impl Z80MicroSequencer {
                     && !state.iff2
                     && !state.halted
                     && pending.is_none()
-                    && state.instruction_tstates >= 7
+                    && state.instruction_tstates >= 5
                     && state.mcycle_index == 1
                     && state.tstate_index == 0
             }
@@ -2752,7 +2752,7 @@ impl Z80MicroSequencer {
                 let request = self.handshake.begin(
                     Z80BusOperation::InterruptAcknowledge,
                     self.registers.pc,
-                    5,
+                    3,
                 )?;
                 self.halted = false;
                 self.iff1 = false;
@@ -11672,7 +11672,7 @@ mod base_immediate_io_differential_tests {
             cpu.complete_bus_cycle(request.id, Some(0xCF)).unwrap(),
             Z80MicroStep::InterruptAcknowledge {
                 vector: 0xCF,
-                tstates: 10,
+                tstates: 8,
             }
         );
         assert_eq!(
