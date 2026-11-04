@@ -6,7 +6,8 @@
 **HEAD final da PR:** `de0166a54bd6613cd7d9379e4e03ca8e81e238eb`  
 **Merge SHA / main após E6:** `24a32e03e10c8e82022172faee69ec0c046f8cb0`  
 **CI da PR:** [#41759035927](https://github.com/leonardo201800478/sega-emulator/actions/runs/41759035927) — SUCCESS (Rust, Python e Windows x64 PASS; Scheduler SKIPPED).  
-**CI pós-merge na main:** [#41759330209](https://github.com/leonardo201800478/sega-emulator/actions/runs/41759330209) — SUCCESS (Rust, Python e Windows x64 PASS; Scheduler SKIPPED).
+**CI pós-merge na main após integração do código E6:** [#41759330209](https://github.com/leonardo201800478/sega-emulator/actions/runs/41759330209) — SUCCESS (Rust, Python e Windows x64 PASS; Scheduler SKIPPED).  
+**Reconciliação documental:** PR #488, merge SHA `303a792b1caab1ba40dec9c9521208eb5aaa0b45`; CI pós-merge [#41759833153](https://github.com/leonardo201800478/sega-emulator/actions/runs/41759833153) — SUCCESS.
 
 ## 1. Objetivo e limites
 
