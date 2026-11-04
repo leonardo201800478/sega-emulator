@@ -13,6 +13,11 @@ on:
         type: choice
         options: [none, short, long]
         default: none
+      refresh_cargo_lockfiles:
+        description: "Generate updated Cargo.lock files and upload them as an artifact"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -47,6 +52,36 @@ jobs:
         run: cargo test -p sega-sg1000-core --locked
       - name: Workspace unit tests
         run: cargo test --workspace --locked
+
+  refresh-lockfiles:
+    name: Refresh Cargo lockfiles (manual artifact)
+    if: github.event_name == 'workflow_dispatch' && inputs.refresh_cargo_lockfiles
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.99.1
+      - name: Refresh root workspace dependencies
+        run: cargo update --workspace
+      - name: Refresh standalone audio-output workspace
+        run: cargo update --manifest-path native/audio_output/Cargo.toml
+      - name: Refresh standalone PyO3 workspace
+        run: cargo update --manifest-path native/z80_core/Cargo.toml
+      - name: Verify all lockfiles are consistent
+        run: python tools/project_manager.py locks
+      - name: Upload generated Cargo lockfiles
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-lockfiles-${{ github.run_id }}
+          path: |
+            Cargo.lock
+            native/audio_output/Cargo.lock
+            native/z80_core/Cargo.lock
+            native/sega_emu_core/Cargo.lock
+          if-no-files-found: error
+          retention-days: 1
 
   scheduler-stress:
     name: Scheduler deterministic stress
