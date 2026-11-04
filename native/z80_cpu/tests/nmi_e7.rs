@@ -1,6 +1,6 @@
 use sega_z80_cpu::{
-    Z80BusOperation, Z80BusRequest, Z80InterruptKind, Z80MicroSequencer,
-    Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
+    Z80BusOperation, Z80BusRequest, Z80InterruptKind, Z80MicroSequencer, Z80MicroSequencerError,
+    Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
 };
 
 fn request(step: Z80MicroStep) -> Z80BusRequest {
@@ -36,7 +36,10 @@ fn nmi_response_ignores_m1_data_pushes_pc_high_then_low_and_preserves_state() {
     assert_eq!(response.operation, Z80BusOperation::OpcodeFetch);
     assert_eq!(response.address, 0x1234);
     assert_eq!(response.base_tstates, 4);
-    assert_eq!(cpu.export_state().phase, Z80MicroSequencerPhase::NmiResponse);
+    assert_eq!(
+        cpu.export_state().phase,
+        Z80MicroSequencerPhase::NmiResponse
+    );
     assert!(!cpu.nmi_pending);
     assert!(!cpu.halted);
     assert!(!cpu.iff1);
@@ -127,7 +130,10 @@ fn nmi_edge_latched_during_an_instruction_is_accepted_at_the_next_boundary() {
     let response = request(cpu.begin_instruction().unwrap());
     assert_eq!(response.operation, Z80BusOperation::OpcodeFetch);
     assert_eq!(response.address, 0x4001);
-    assert_eq!(cpu.export_state().phase, Z80MicroSequencerPhase::NmiResponse);
+    assert_eq!(
+        cpu.export_state().phase,
+        Z80MicroSequencerPhase::NmiResponse
+    );
     assert!(!cpu.nmi_pending);
 }
 
