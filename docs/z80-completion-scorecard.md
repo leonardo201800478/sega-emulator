@@ -1,7 +1,7 @@
 # Meta de conclusão do Z80 — cobertura, validação e critérios de aceite
 
 **Data da revisão:** 2026-11-04  
-**Baseline de referência:** `main` — `6362075514809e6bce35582ac978d66eeb8e0d1b` (E6 integrada; PRs documentais #488 e #489 também integradas).  
+**Baseline de referência:** `main` — `b1b5ced5c3d6053f8d59c8f4d932f40518db1064` (E7.1 HALT/M1 integrada pela PR #490).  
 **Evidência E4C:** HEAD validado `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS; PR #475 integrada no merge SHA `f89a52346e91e88e82ab37a4afcfffff2d793407`.  
 **Schema do microsequenciador na baseline main:** 28, após a integração da E5 pela PR #485.  
 **Status deste documento:** referência de planejamento e critérios de aceite. Não substitui a matriz semântica por opcode nem os relatórios de execução dos testes.
@@ -46,7 +46,7 @@ Os percentuais abaixo são **estimativas de engenharia**, usadas para dimensiona
 
 ## 3. Baseline técnica e estado conhecido
 
-A baseline operacional consultada em `main` é `6362075514809e6bce35582ac978d66eeb8e0d1b`. E1–E6 estão integradas nos escopos registrados; a E6 foi integrada pela PR #486 e reconciliada documentalmente pelas PRs #488/#489. A E7 começou pela auditoria e implementação parcial de HALT (E7.1); interrupções e demais lacunas semânticas continuam pendentes.
+A baseline operacional consultada em `main` é `b1b5ced5c3d6053f8d59c8f4d932f40518db1064`. E1–E6 e E7.1 estão integradas nos escopos registrados; E7.1 foi integrada pela PR #490. A saída de HALT por interrupção, acknowledge, reset especial e demais lacunas semânticas continuam pendentes.
 
 | Fase | Escopo | Estado na fotografia |
 |---|---|---|
@@ -58,7 +58,7 @@ A baseline operacional consultada em `main` é `6362075514809e6bce35582ac978d66e
 | E4C | INC/DEC (IX/IY+d) | Integrada na main pela PR #475; IMPLEMENTED / QUICK_PASS / SHORT_PASS; 5 testes dirigidos; CI 4/4 PASS |
 | E5 | DDCB/FDCB completo | IMPLEMENTED / QUICK_PASS / SHORT_PASS; PR #485 merged; CI #4245 3 jobs PASS, Scheduler SKIPPED |
 | E6 | Fallback geral e resolução de prefixos DD/FD/ED/CB | IMPLEMENTED / QUICK_PASS / SHORT_PASS; PR #486 merged; CI #41759035927 e push main #41759330209 PASS; Scheduler SKIPPED |
-| E7 | Fechamento semântico global BASE/CB/ED/DD/FD/DDCB/FDCB | Em andamento: E7.1 HALT M1 implementado na branch; saída por interrupção e demais famílias pendentes |
+| E7 | Fechamento semântico global BASE/CB/ED/DD/FD/DDCB/FDCB | E7.1 HALT/M1 integrada na main pela PR #490; E7.2 NMI/INT e saída de HALT pendentes |
 | E8 | Validação formal e diferencial (ZEXDOC/ZEXALL e corpora independentes) | Pendente |
 | E9 | Integração temporal sistêmica com bus, WAIT, Scheduler, SMS e SG-1000 | Pendente |
 
@@ -301,4 +301,4 @@ Toda atualização deve incluir data, SHA da baseline, SHA candidato, PR, workfl
 
 ---
 
-**Baseline operacional:** E6 integrada pela PR #486; merge SHA do código E6 `24a32e03e10c8e82022172faee69ec0c046f8cb0`. Documentação reconciliada pela PR #488, merge SHA `303a792b1caab1ba40dec9c9521208eb5aaa0b45`. CI #41759035927 (PR E6), #41759330209 (push após merge E6) e #41759833153 (push após reconciliação documental) concluídos com SUCCESS. E7 em andamento: E7.1 HALT/M1 de retenção implementada na branch candidata, aguardando CI; E7.2 NMI/INT e saída de HALT é o próximo incremento. Validação diferencial externa, ZEXDOC/ZEXALL, LONG_PASS e TEMPORAL_PASS continuam pendentes.
+**Baseline operacional:** E6 integrada pela PR #486; merge SHA do código E6 `24a32e03e10c8e82022172faee69ec0c046f8cb0`. Documentação reconciliada pela PR #488, merge SHA `303a792b1caab1ba40dec9c9521208eb5aaa0b45`. CI #41759035927 (PR E6), #41759330209 (push após merge E6) e #41759833153 (push após reconciliação documental) concluídos com SUCCESS. E7 em andamento: E7.1 HALT/M1 integrada pela PR #490 (merge SHA `b1b5ced5c3d6053f8d59c8f4d932f40518db1064`); CI da PR #490: Rust fmt/Clippy/SMS/SG-1000/workspace PASS, Python pytest/Ruff PASS e Windows x64 D3D12/WASAPI/XAudio2 PASS. Scheduler deterministic stress: SKIPPED. CI pós-merge: NOT VERIFIED. E7.2 NMI/INT e saída de HALT é o próximo incremento. Validação diferencial externa, ZEXDOC/ZEXALL, LONG_PASS e TEMPORAL_PASS continuam pendentes.
