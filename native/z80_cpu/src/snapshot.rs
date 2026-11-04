@@ -2477,3 +2477,7 @@ mod base_immediate_io_snapshot_tests {
         assert!(Z80MicroSequencer::restore_state(invalid).is_err());
     }
 }
+
+#[cfg(test)]
+#[path = "snapshot/e7_2e_phase_codec_matrix_tests.rs"]
+mod e7_2e_phase_codec_matrix_tests;
