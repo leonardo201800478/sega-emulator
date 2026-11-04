@@ -58,7 +58,7 @@ A baseline consultada em `main` é `f4130104fa971289507c0b15ab2d8eabd1dd5b00`, a
 | E4B | ADD/ADC/SUB/SBC/AND/XOR/OR/CP (IX/IY+d) | Integrada na main pela PR #472; IMPLEMENTED / QUICK_PASS / SHORT_PASS; CI 4/4 PASS |
 | E4C | INC/DEC (IX/IY+d) | Integrada na main pela PR #475; IMPLEMENTED / QUICK_PASS / SHORT_PASS; 5 testes dirigidos; CI 4/4 PASS |
 | E5 | DDCB/FDCB completo | Integrada na main pela PR #485; IMPLEMENTED / QUICK_PASS / SHORT_PASS no escopo testado; CI aplicável 3/3 PASS |
-| E6 | Fallback geral e resolução de prefixos DD/FD/ED/CB | E6 em PR #486 aberta; E6 global ainda pendente/incompleta |
+| E6 | Fallback geral e resolução de prefixos DD/FD/ED/CB | Implementada no candidato da PR #486; CI #41757983537 Rust/Python/Windows x64 PASS, Scheduler stress SKIPPED; aguarda integração na main |
 | E7 | Fechamento semântico global BASE/CB/ED/DD/FD/DDCB/FDCB | Pendente |
 | E8 | Validação formal e diferencial (ZEXDOC/ZEXALL e corpora independentes) | Pendente |
 | E9 | Integração temporal sistêmica com bus, WAIT, Scheduler, SMS e SG-1000 | Pendente |
@@ -268,7 +268,7 @@ Toda atualização deve incluir data, SHA da baseline, SHA candidato, PR, workfl
 
 ---
 
-**Próxima meta operacional na baseline atual:** iniciar E6 — fallback geral e resolução de prefixos DD/FD/ED/CB. E4A, E4B e E4C estão integradas na main; E5 DDCB/FDCB está implementada e QUICK_PASS/SHORT_PASS na PR #485, com CI 3/3 PASS no SHA de código 2f1dff62. Validação diferencial externa, ZEXDOC/ZEXALL, LONG_PASS e TEMPORAL_PASS continuam pendentes.
+**Próxima meta operacional na baseline atual:** revisar e integrar a PR #486 (E6) após confirmação dos critérios de merge; o candidato já passou nos gates Rust/Python/Windows x64, com Scheduler stress SKIPPED. Após E6, avançar para E7 — fechamento semântico integral. E5 DDCB/FDCB já está integrada na main. Validação diferencial externa, ZEXDOC/ZEXALL, LONG_PASS e TEMPORAL_PASS continuam pendentes.
 
 
 ### Nota de reconciliação do estado auxiliar e das fontes históricas
