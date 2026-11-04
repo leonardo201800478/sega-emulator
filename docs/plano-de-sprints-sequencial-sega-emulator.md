@@ -3,7 +3,7 @@
 **Status:** Rota oficial de implementação progressiva.  
 **Estratégia de Engenharia (MÓDULOS COMPARTILHADOS):** Toda e qualquer integração deve ser realizada exclusivamente nos **módulos e crates compartilhados** do workspace Rust (`sega-core`, `sega-cpus`, `sega-video`, `sega-audio`, `sega-scheduler`, `sega-hosts`). É estritamente proibido criar implementações individuais, duplicadas ou isoladas por console. Cada nova plataforma adicionada deve reaproveitar, estender ou parametrizar os componentes centrais existentes.  
 **Baseline de Entrada:** SHA `04ee09f9839bfe29a595abbed831d055cc8d177a` (`main`, após PRs #471/E4A e #472/E4B).  
-**Candidato Z80 ativo:** PR #473 / E4C, SHA `186a9996f5bbc26b65362040ac3759c9e62d3e09`.
+**Candidato Z80 validado:** PR #473 / E4C, SHA `bac497462a3fc13a1f47892d25d435beefddd6d8`; CI `41742682599`, 4/4 jobs PASS.
 
 ---
 
@@ -57,7 +57,7 @@ Esta sub-rota evolui o mesmo microsequenciador em `sega-cpus`; não cria impleme
 - [ ] **E5:** DDCB/FDCB.
 - [ ] **E6–E9:** prefixos ignorados, fechamento semântico, ZEXDOC/ZEXALL e integração temporal.
 
-**Estado:** E4A e E4B integradas na main; E4C IMPLEMENTED no candidato PR #473, aguardando CI final e atualização de SHORT_PASS. Não declarar LONG_PASS ou TEMPORAL_PASS.
+**Estado:** E4A, E4B e E4C integradas? Não — E4C permanece em PR #473 até o merge. E4C está IMPLEMENTED / QUICK_PASS / SHORT_PASS no SHA `bac497462a3fc13a1f47892d25d435beefddd6d8`, CI `41742682599` 4/4 PASS. Não declarar LONG_PASS, DIFFERENTIAL_PASS ou TEMPORAL_PASS.
 
 **Critério de Conclusão da Sprint SMS:** Boot e gameplay funcional de SMS via módulos compartilhados, em *host-null* e janela Rust nativa sem dependência de Python.
 
