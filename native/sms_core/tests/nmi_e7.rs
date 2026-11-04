@@ -193,19 +193,13 @@ fn sms_temporal_int_asserted_after_halt_t4_waits_for_next_halt_cycle() {
             tstates: 4,
         }
     );
-    assert_eq!(
-        machine.cpu().halt_exit_pending,
-        Some(Z80HaltExit::Int)
-    );
+    assert_eq!(machine.cpu().halt_exit_pending, Some(Z80HaltExit::Int));
 
     let acknowledge = match machine.begin_instruction().unwrap() {
         Z80MicroStep::BusRequest(request) => request,
         other => panic!("expected INT acknowledge after next HALT T4, got {other:?}"),
     };
-    assert_eq!(
-        acknowledge.operation,
-        Z80BusOperation::InterruptAcknowledge
-    );
+    assert_eq!(acknowledge.operation, Z80BusOperation::InterruptAcknowledge);
 }
 
 #[test]
@@ -233,17 +227,11 @@ fn sms_temporal_ei_halt_int_observes_delay_consumption_at_halt_t4() {
     );
     assert!(machine.cpu().halted);
     assert_eq!(machine.cpu().ei_delay, 0);
-    assert_eq!(
-        machine.cpu().halt_exit_pending,
-        Some(Z80HaltExit::Int)
-    );
+    assert_eq!(machine.cpu().halt_exit_pending, Some(Z80HaltExit::Int));
 
     let acknowledge = match machine.begin_instruction().unwrap() {
         Z80MicroStep::BusRequest(request) => request,
         other => panic!("expected EI;HALT;INT acknowledge, got {other:?}"),
     };
-    assert_eq!(
-        acknowledge.operation,
-        Z80BusOperation::InterruptAcknowledge
-    );
+    assert_eq!(acknowledge.operation, Z80BusOperation::InterruptAcknowledge);
 }
