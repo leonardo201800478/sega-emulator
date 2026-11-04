@@ -190,3 +190,55 @@ Scheduler stress `SKIPPED` não é `PASS`. Compilação não é correção; exec
 - Nenhuma das subfases E7.3–E7.7 é declarada implementada por este documento.
 
 Este documento define a modelagem e os critérios para as próximas alterações; o estado remoto do GitHub e os testes no SHA final continuam sendo a fonte da verdade.
+
+
+## 12. Catálogo de templates temporais por família
+
+A matriz abaixo define a ordem de operações que deve ser usada ao modelar cada família. Os custos nominais abaixo são referências-base do manual ZiLOG; prefixos, caminhos condicionais, ciclos internos e WAIT devem ser contabilizados separadamente. Quando a documentação não fixa um detalhe de borda, ele permanece pendente de evidência.
+
+| Família | Template de micro-operações | Regra temporal e semântica |
+|---|---|---|
+| BASE — registrador/ALU | M1; commit da ALU/flags no ponto de conclusão definido para a instrução. | Sem acesso adicional quando ambos operandos são registradores. Não criar um M-cycle fictício para operação interna da ALU. |
+| BASE — imediato 8-bit | M1; leitura do byte imediato. | Leitura de memória separada do fetch M1; PC avança somente na transação correspondente. |
+| BASE — imediato 16-bit | M1; leitura low; leitura high; commit do par/destino. | Duas leituras distintas, com wrap de PC validado. |
+| BASE — memória simples | M1; leitura ou escrita de memória. | Ciclo de memória normal tem base de três T-states antes de WAIT. |
+| BASE — read/modify/write | M1; leitura; ciclo interno; escrita. | Não fundir o ciclo interno à leitura nem aplicar o resultado antes da conclusão correta. INC/DEC (HL) é um exemplo de referência: 4 + 3 + 1 + 3 T-states nominais. |
+| BASE — 16-bit arithmetic | M1; ciclo(s) interno(s); commit de par e flags. | ADD HL,ss e variantes indexadas devem preservar a duração interna e flags específicas. |
+| BASE — branch | M1; leitura de displacement/operandos; ciclo interno apenas no caminho tomado quando aplicável. | Caminhos tomado/não tomado têm traces diferentes; validar signed displacement e wrap de PC. |
+| BASE — stack/control | M1; ciclos internos exigidos; leituras/escritas high/low em requests distintos. | CALL/RST/PUSH/POP/RET devem validar ordem de bytes, SP e commits de PC. Não agrupar as duas escritas/leitura em uma transação. |
+| BASE — I/O imediato | M1; leitura do imediato; ciclo I/O. | O endereço da porta e o valor efetivo devem ser preservados; ciclo I/O inclui o wait state automático documentado, além de WAIT externo. |
+| CB — registrador | M1 CB; M1 subopcode; operação sobre registrador; commit de flags. | O segundo byte é fetch M1. Flags e bits X/Y devem ser classificados por instrução e variante. |
+| CB — (HL) | M1 CB; M1 subopcode; leitura (HL); para RMW, ciclo interno e escrita; BIT não escreve. | Separar BIT read-only de rotate/shift/RES/SET RMW; não emitir escrita para BIT. |
+| ED — controle/registrador | M1 ED; M1 subopcode; operação interna ou ciclo I/O/memória específico. | Inclui NEG, IM, LD I/R, RETN/RETI e aliases. A classe de retorno precisa distinguir RETI do RETN. |
+| ED — transferência absoluta | M1 ED; M1 subopcode; leitura low/high do endereço; acessos de memória low/high; commit do par. | Cada acesso é um request independente; endereços e ordem dos bytes devem ser validados. |
+| ED — bloco transferência/comparação | M1 ED; M1 subopcode; leitura memória; escrita (transferência) ou ciclo interno (comparação); ciclo(s) de repetição quando a condição persistir. | LDI/LDD/LDIR/LDDR e CPI/CPD/CPIR/CPDR precisam testar término antecipado, BC=0000, wrap, flags e interrupção entre iterações. O manual descreve 16T para a iteração terminal e 21T para repetição em famílias documentadas. |
+| ED — bloco I/O | M1 ED; M1 subopcode; ciclo interno inicial quando aplicável; I/O; memória; ciclo(s) internos/repetição. | INI/IND/INIR/INDR e OUTI/OUTD/OTIR/OTDR exigem modelagem independente de portas, WAIT automático e efeitos de memória. |
+| DD/FD — prefixo | M1 DD/FD; fetch M1 da instrução seguinte; resolver último prefixo efetivo. | Prefixos ignorados ainda custam M1/R; substituição HL/H/L por IX/IY/IXH/IXL/IYH/IYL depende da classe de opcode. |
+| DD/FD — memória indexada | M1 do prefixo; M1 do opcode; leitura displacement; ciclos internos documentados; memória read/write. | Calcular IX/IY+d com wrap de 16 bits; preservar deslocamento assinado e flags; cada etapa deve ser suspensível. |
+| DDCB/FDCB | M1 DD/FD; M1 CB; leitura displacement; leitura não-M1 do subopcode; leitura de memória; ciclo interno; escrita opcional. | BIT é read-only; rotate/shift/RES/SET são RMW. Quando aplicável, o resultado também é copiado para o registrador z. O subopcode não deve incrementar R como um fetch M1. |
+| NMI | resposta M1; ciclo interno; escrita PC high; escrita PC low; vetor 0066h. | NMI tem prioridade sobre INT; IFF1/IFF2 e R precisam ser comparados com manual e traces. |
+| INT IM0/1/2 | acknowledge M1 com IORQ e vetor externo; dispatch por modo; operações adicionais específicas. | Dois waits automáticos do acknowledge não podem ser confundidos com WAIT externo. IM0 executa o opcode injetado; IM1 empilha PC e usa 0038h; IM2 lê a tabela low/high. |
+| HALT | M1 repetido no PC estável; byte ignorado; refresh/R incrementado; amostragem T4. | A saída só ocorre após amostragem real de NMI/INT no T4 efetivo; o caso EI;HALT;INT deve ser explícito. |
+| BUSREQ/BUSACK | conclusão do M-cycle; amostragem BUSREQ; cessão de barramento; eventos DMA; retomada. | Não é um ciclo de WAIT nem uma instrução. Preservar a continuação da CPU e impedir aceite de INT/NMI enquanto BUSACK estiver ativo. |
+
+### 12.1 Regras de implementação comuns
+
+- O microsequenciador emite uma operação por vez. A máquina agenda a operação e só chama a continuação depois de validar o evento e a conclusão correspondente.
+- Leitura não atualiza registradores antes de receber o dado; escrita não produz efeito antes do commit do barramento.
+- Ciclos internos são eventos temporais explícitos. Se uma fase solicita N T-states, cada T-state deve poder ser interrompido/snapshotado quando o contrato da fase exigir.
+- Prefixos e bytes de operandos têm contabilidade própria de PC, R, M-cycle e T-state; uma leitura de subopcode DDCB/FDCB não deve ser promovida a M1 sem evidência.
+- WAIT alonga a operação em curso; não pode criar um segundo request nem repetir side effects. O WAIT automático de I/O e o acknowledge automático de INT são componentes distintos do WAIT externo.
+- O estado salvo deve conter a menor continuação suficiente: fase, operandos já capturados, request pendente, índices M/T, latch de interrupção/arbitragem e eventos correlatos da máquina. Estados impossíveis devem ser rejeitados, não normalizados silenciosamente.
+
+### 12.2 Critério de fechamento da matriz
+
+Uma célula da matriz semântica só pode ser marcada como validada quando possuir:
+- classificação de opcode/prefixo e regra de alias;
+- micro-operações e sequência de barramento;
+- flags/registradores/PC/SP/WZ/Q/R cobertos por casos discriminantes;
+- T-states nominais e WAIT testados quando aplicáveis;
+- snapshot/restore em fases suspensíveis;
+- comparação com referência externa fixada ou documentação primária;
+- resultado de teste vinculado ao SHA do código.
+
+A matriz estrutural de opcodes e os match arms do decoder não contam como cobertura semântica. O número de instruções implementadas não substitui a lista explícita de lacunas.
