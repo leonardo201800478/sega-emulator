@@ -158,13 +158,14 @@ Os níveis abaixo são cumulativos no escopo declarado. O estado deve ser atribu
 - [x] R incrementa somente nos M1; WZ mantém o endereço efetivo; IX/IY, last-prefix-wins, displacement assinado e wrap.
 - [x] WAIT em cada transação e snapshot/restore nas fases com request pendente; schema 28.
 - [x] Adicionada suíte `indexed_cb_e5.rs`: 256 subopcodes por índice, BIT read-only, RMW, cópia z, flags modeladas, prefixos repetidos/alternados, displacement 0/-128/+127, wrap de endereço/PC e round-trip de snapshots.
-- [x] `cargo fmt --all -- --check`: PASS no CI run #4229, código SHA `b7bf61da6d44cf3ba34e3f8fcf0802fcd4eaa739`.
+- [x] `cargo fmt --all -- --check`: PASS no CI run #4228, código SHA `b7bf61da6d44cf3ba34e3f8fcf0802fcd4eaa739`.
 - [x] `cargo clippy --workspace --all-targets --locked -- -D warnings`: PASS no mesmo SHA.
 - [x] `cargo test --workspace --locked`: PASS; 216 testes unitários do crate Z80 e 8 testes da nova suíte indexed-CB passaram, além das demais suítes do workspace.
 - [x] Testes direcionados SMS e SG-1000: PASS.
-- [x] `python -m pytest`, `ruff check` e `ruff format --check`: etapas de comando PASS; job foi encerrado como cancelled após a conclusão bem-sucedida dos passos.
+- [x] `python -m pytest`, `ruff check` e `ruff format --check`: etapas de comando PASS; job concluiu PASS no run #4228.
 - [x] Windows x64 D3D12/video compile e video-runtime tests: PASS.
-- [ ] Windows WASAPI/XAudio2 compile e audio-output tests: IN PROGRESS no run #4229.
+- [x] Windows WASAPI/XAudio2 compile e audio-output tests: PASS.
+- [x] CI aplicável: 3/3 jobs PASS; Scheduler deterministic stress SKIPPED corretamente por não haver alteração no Scheduler.
 - Estado: IMPLEMENTED / QUICK_PASS / SHORT_PASS para cobertura funcional estrutural e microsequenciada no candidato. A aprovação de integração da PR aguarda o gate Windows de áudio e revisão.
 
 - Limite de fonte: ZiLOG UM008011-0816 marca S e P/V de BIT indexado como desconhecidos; o candidato mantém o modelo já existente no executor atômico. Isso não comprova esses bits contra silício.
