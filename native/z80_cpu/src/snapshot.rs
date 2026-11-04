@@ -701,7 +701,9 @@ fn read_phase(
         0 => Z80MicroSequencerPhase::Ready,
         1 => Z80MicroSequencerPhase::OpcodeFetch,
         64 => Z80MicroSequencerPhase::InterruptAcknowledge,
-        65 => Z80MicroSequencerPhase::InterruptAcknowledgeComplete { vector: reader.u8()? },
+        65 => Z80MicroSequencerPhase::InterruptAcknowledgeComplete {
+            vector: reader.u8()?,
+        },
         61 => Z80MicroSequencerPhase::NmiResponse,
         62 => Z80MicroSequencerPhase::NmiStackPushInternal {
             return_address: reader.u16()?,
