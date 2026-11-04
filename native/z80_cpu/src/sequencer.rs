@@ -1011,11 +1011,10 @@ impl Z80MicroSequencer {
                     && !state.halted
                     && return_address == state.registers.pc
                     && pending.is_some_and(|request| {
-                        request.operation
-                            == Z80BusOperation::MemoryWrite {
-                                value: expected_value,
-                            }
-                            && request.address == state.registers.sp
+                        matches!(
+                            request.operation,
+                            Z80BusOperation::MemoryWrite { value } if value == expected_value
+                        ) && request.address == state.registers.sp
                             && request.base_tstates == 3
                     })
                     && state.instruction_tstates >= minimum_tstates
