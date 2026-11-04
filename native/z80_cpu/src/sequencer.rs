@@ -11674,6 +11674,7 @@ mod base_immediate_io_differential_tests {
         compare_io(0xD3, 0x5A, 0x3F, 0x00);
         compare_io(0xD3, 0xFF, 0xFF, 0x00);
     }
+
     #[test]
     fn int_acknowledge_is_selected_only_when_iff1_is_enabled() {
         let mut cpu = Z80MicroSequencer::default();
