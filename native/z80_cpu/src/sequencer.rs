@@ -2965,7 +2965,9 @@ impl Z80MicroSequencer {
     }
 
     /// Update the level-sensitive INT request and the vector supplied by its device.
-    /// Passing None deasserts INT; changing this input does not advance machine time.
+    /// Outside HALT, INT is accepted at an instruction boundary; during HALT,
+    /// the line is sampled at each completed M1 T4. Passing None deasserts INT.
+    /// Changing this input does not advance machine time.
     pub fn set_int_line(&mut self, vector: Option<u8>) {
         self.int_pending = vector;
     }
