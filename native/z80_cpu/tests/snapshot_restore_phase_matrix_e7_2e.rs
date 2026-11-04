@@ -204,6 +204,7 @@ fn execute_one(
                     state: cpu.export_state(),
                     events,
                     phases,
+                    snapshots,
                 });
             }
         }
@@ -301,8 +302,8 @@ fn assert_invalid_mutations(states: BTreeMap<String, Z80MicroSequencerState>) {
 
         if let Some(pending) = state.handshake.pending_request.as_ref() {
             let mut invalid = state.clone();
-            invalid.handshake.pending_request.as_mut().unwrap().id =
-                invalid.handshake.next_request_id;
+            let next_request_id = invalid.handshake.next_request_id;
+            invalid.handshake.pending_request.as_mut().unwrap().id = next_request_id;
             assert_invalid_snapshot(invalid, &format!("{phase}: request ID not allocated"));
             mutation_count += 1;
 
@@ -379,49 +380,55 @@ fn e7_2e_every_generated_phase_round_trips_and_continues_equivalently() {
             }
         }
 
-        let (phases, supported) =
+        let (phases, supported, snapshots) =
             assert_continuous_equals_restored(&[0xCB, opcode, 0, 0], 0xFF, 0, None);
         observed_phases.extend(phases);
+        valid_phase_states.extend(snapshots);
         if supported {
             supported_cases += 1;
         } else {
             unsupported_cases += 1;
         }
-        let (phases, supported) =
+        let (phases, supported, snapshots) =
             assert_continuous_equals_restored(&[0xED, opcode, 0, 0], 0xFF, 0, None);
         observed_phases.extend(phases);
+        valid_phase_states.extend(snapshots);
         if supported {
             supported_cases += 1;
         } else {
             unsupported_cases += 1;
         }
-        let (phases, supported) =
+        let (phases, supported, snapshots) =
             assert_continuous_equals_restored(&[0xDD, opcode, 0, 0, 0], 0xFF, 0, None);
         observed_phases.extend(phases);
+        valid_phase_states.extend(snapshots);
         if supported {
             supported_cases += 1;
         } else {
             unsupported_cases += 1;
         }
-        let (phases, supported) =
+        let (phases, supported, snapshots) =
             assert_continuous_equals_restored(&[0xFD, opcode, 0, 0, 0], 0xFF, 0, None);
         observed_phases.extend(phases);
+        valid_phase_states.extend(snapshots);
         if supported {
             supported_cases += 1;
         } else {
             unsupported_cases += 1;
         }
-        let (phases, supported) =
+        let (phases, supported, snapshots) =
             assert_continuous_equals_restored(&[0xDD, 0xCB, 0, opcode], 0xFF, 0, None);
         observed_phases.extend(phases);
+        valid_phase_states.extend(snapshots);
         if supported {
             supported_cases += 1;
         } else {
             unsupported_cases += 1;
         }
-        let (phases, supported) =
+        let (phases, supported, snapshots) =
             assert_continuous_equals_restored(&[0xFD, 0xCB, 0, opcode], 0xFF, 0, None);
         observed_phases.extend(phases);
+        valid_phase_states.extend(snapshots);
         if supported {
             supported_cases += 1;
         } else {
@@ -444,7 +451,7 @@ fn e7_2e_every_generated_phase_round_trips_and_continues_equivalently() {
             vector: 0x80,
         },
     ] {
-        let (phases, supported) =
+        let (phases, supported, snapshots) =
             assert_continuous_equals_restored(&[0, 0, 0, 0], 0, 0x2345, Some(interrupt));
         assert!(
             supported,
