@@ -57,3 +57,37 @@ remain governed by GitHub Actions. A local host run cannot replace those jobs.
 The first version reports tool versions rather than pinning/upgrading them.
 Toolchain pinning is a separate reviewed change because current CI selects
 Rust stable and Python 3.15.2.
+
+## Controlled dependency upgrades
+
+The project pins the interpreter to Python 3.15.2 and Rust to 1.99.1.
+Direct Python development/runtime dependencies are pinned in `pyproject.toml`.
+A Python transitive lockfile (`uv.lock`) has not yet been introduced; do not
+claim full Python dependency reproducibility until that lockfile is generated
+and the CI installation path consumes it.
+
+Cargo lockfiles are generated artifacts and must never be edited manually.
+For an explicit online dependency-refresh branch, update each independent
+workspace separately:
+
+```powershell
+cargo update --workspace
+cargo update --manifest-path native/audio_output/Cargo.toml
+cargo update --manifest-path native/z80_core/Cargo.toml
+```
+
+The root workspace has exact pins for its direct Serde and Windows dependencies;
+Cargo may update only compatible transitive versions. The standalone Z80
+workspace must resolve PyO3 0.30.0 for Python 3.15.2. The audio-output workspace
+has its own lockfile and must be resolved independently.
+
+After updating, inspect every lockfile diff, then run:
+
+```powershell
+python tools/project_manager.py locks
+.\\scripts\\project.ps1 validate
+```
+
+Do not use `locks -RefreshOffline` as a substitute for an online version
+upgrade: that command intentionally runs `cargo check --offline` from the
+local cache and never performs `cargo update`.
