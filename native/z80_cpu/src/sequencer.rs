@@ -1338,7 +1338,7 @@ impl Z80MicroSequencer {
             }
             Z80MicroSequencerPhase::IndexedCbDisplacementRead => {
                 state.opcode == Some(0xCB)
-                    && prefix_m1_count(state.prefix_state, state.mcycle_index, 2)
+                    && prefix_m1_count(state.prefix_state, state.mcycle_index, 1)
                         .and_then(|count| minimum_prefixed_tstates(count, 0))
                         .is_some_and(|minimum| state.instruction_tstates >= minimum)
                     && pending.is_some_and(|request| {
@@ -1350,7 +1350,7 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::IndexedCbOpcodeRead { address } => {
                 state.opcode == Some(0xCB)
                     && address == state.wz
-                    && prefix_m1_count(state.prefix_state, state.mcycle_index, 3)
+                    && prefix_m1_count(state.prefix_state, state.mcycle_index, 2)
                         .and_then(|count| minimum_prefixed_tstates(count, 3))
                         .is_some_and(|minimum| state.instruction_tstates >= minimum)
                     && pending.is_some_and(|request| {
@@ -1362,7 +1362,7 @@ impl Z80MicroSequencer {
             Z80MicroSequencerPhase::IndexedCbMemoryRead { address } => {
                 state.opcode.is_some()
                     && address == state.wz
-                    && prefix_m1_count(state.prefix_state, state.mcycle_index, 4)
+                    && prefix_m1_count(state.prefix_state, state.mcycle_index, 3)
                         .and_then(|count| minimum_prefixed_tstates(count, 8))
                         .is_some_and(|minimum| state.instruction_tstates >= minimum)
                     && pending.is_some_and(|request| {
@@ -1387,7 +1387,7 @@ impl Z80MicroSequencer {
                 });
                 opcode_valid
                     && address == state.wz
-                    && prefix_m1_count(state.prefix_state, state.mcycle_index, 5)
+                    && prefix_m1_count(state.prefix_state, state.mcycle_index, 4)
                         .and_then(|count| minimum_prefixed_tstates(count, 12))
                         .is_some_and(|minimum| state.instruction_tstates >= minimum)
                     && pending.is_some_and(|request| {
@@ -2069,19 +2069,19 @@ impl Z80MicroSequencer {
                 _ => false,
             },
             Z80MicroSequencerPhase::IndexedCbDisplacementRead => {
-                prefix_m1_count(state.prefix_state, state.mcycle_index, 2).is_some()
+                prefix_m1_count(state.prefix_state, state.mcycle_index, 1).is_some()
                     && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::IndexedCbOpcodeRead { .. } => {
-                prefix_m1_count(state.prefix_state, state.mcycle_index, 3).is_some()
+                prefix_m1_count(state.prefix_state, state.mcycle_index, 2).is_some()
                     && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::IndexedCbMemoryRead { .. } => {
-                prefix_m1_count(state.prefix_state, state.mcycle_index, 4).is_some()
+                prefix_m1_count(state.prefix_state, state.mcycle_index, 3).is_some()
                     && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::IndexedCbMemoryWrite { .. } => {
-                prefix_m1_count(state.prefix_state, state.mcycle_index, 5).is_some()
+                prefix_m1_count(state.prefix_state, state.mcycle_index, 4).is_some()
                     && state.tstate_index == 0
             }
             Z80MicroSequencerPhase::IndexDisplacementRead => {
