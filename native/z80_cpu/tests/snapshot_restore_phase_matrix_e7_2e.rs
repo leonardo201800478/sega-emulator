@@ -219,7 +219,12 @@ fn assert_continuous_equals_restored(
     flags: u8,
     start_pc: u16,
     interrupt: Option<InterruptSetup>,
-) -> (BTreeSet<String>, bool, BTreeMap<String, Z80MicroSequencerState>) {
+)
+    -> (
+        BTreeSet<String>,
+        bool,
+        BTreeMap<String, Z80MicroSequencerState>,
+    ) {
     let continuous = execute_one(program, flags, start_pc, interrupt, false);
     let restored = execute_one(program, flags, start_pc, interrupt, true);
 
@@ -260,7 +265,6 @@ fn assert_continuous_equals_restored(
     }
 }
 
-
 fn assert_invalid_snapshot(state: Z80MicroSequencerState, context: &str) {
     assert!(
         state.encode().is_err(),
@@ -277,9 +281,7 @@ fn mismatched_operation(operation: Z80BusOperation) -> Z80BusOperation {
     match operation {
         Z80BusOperation::OpcodeFetch => Z80BusOperation::MemoryRead,
         Z80BusOperation::MemoryRead => Z80BusOperation::MemoryWrite { value: 0 },
-        Z80BusOperation::MemoryWrite { value } => {
-            Z80BusOperation::MemoryWrite { value: value ^ 1 }
-        }
+        Z80BusOperation::MemoryWrite { value } => Z80BusOperation::MemoryWrite { value: value ^ 1 },
         Z80BusOperation::PortRead => Z80BusOperation::PortWrite { value: 0 },
         Z80BusOperation::PortWrite { .. } => Z80BusOperation::PortRead,
         Z80BusOperation::InterruptAcknowledge => Z80BusOperation::MemoryRead,
@@ -287,7 +289,11 @@ fn mismatched_operation(operation: Z80BusOperation) -> Z80BusOperation {
 }
 
 fn assert_invalid_mutations(states: BTreeMap<String, Z80MicroSequencerState>) {
-    assert_eq!(states.len(), 70, "invalid-state matrix needs one valid fixture per phase");
+    assert_eq!(
+        states.len(),
+        70,
+        "invalid-state matrix needs one valid fixture per phase"
+    );
     let mut mutation_count = 0_usize;
 
     for (phase, state) in states {
@@ -314,13 +320,25 @@ fn assert_invalid_mutations(states: BTreeMap<String, Z80MicroSequencerState>) {
             mutation_count += 1;
 
             let mut invalid = state.clone();
-            invalid.handshake.pending_request.as_mut().unwrap().operation =
-                mismatched_operation(pending.operation);
-            assert_invalid_snapshot(invalid, &format!("{phase}: request operation/payload mismatch"));
+            invalid
+                .handshake
+                .pending_request
+                .as_mut()
+                .unwrap()
+                .operation = mismatched_operation(pending.operation);
+            assert_invalid_snapshot(
+                invalid,
+                &format!("{phase}: request operation/payload mismatch"),
+            );
             mutation_count += 1;
 
             let mut invalid = state.clone();
-            invalid.handshake.pending_request.as_mut().unwrap().base_tstates = 0;
+            invalid
+                .handshake
+                .pending_request
+                .as_mut()
+                .unwrap()
+                .base_tstates = 0;
             assert_invalid_snapshot(invalid, &format!("{phase}: zero-duration bus request"));
             mutation_count += 1;
 
