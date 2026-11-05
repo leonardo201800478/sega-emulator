@@ -459,7 +459,11 @@ mod tests {
         assert_eq!(machine.cpu.registers.pc, 0x0038);
         assert_eq!(machine.step(), Ok(11)); // IN A,($BF).
 
-        assert_ne!(machine.cpu.registers.a & 0x80, 0, "status identifies VBlank");
+        assert_ne!(
+            machine.cpu.registers.a & 0x80,
+            0,
+            "status identifies VBlank"
+        );
         assert_eq!(machine.cpu.registers.pc, 0x003A);
         assert_eq!(machine.cpu.int_pending, None);
         assert!(!machine.vdp().interrupt_pending());
@@ -487,7 +491,11 @@ mod tests {
         assert_eq!(machine.cpu.registers.pc, 0x0038);
         assert_eq!(machine.step(), Ok(11)); // IN A,($BF).
 
-        assert_eq!(machine.cpu.registers.a & 0x80, 0, "status identifies line IRQ");
+        assert_eq!(
+            machine.cpu.registers.a & 0x80,
+            0,
+            "status identifies line IRQ"
+        );
         assert_eq!(machine.cpu.registers.pc, 0x003A);
         assert_eq!(machine.cpu.int_pending, None);
         assert!(!machine.vdp().interrupt_pending());
