@@ -188,7 +188,7 @@ impl NativeVideoWindow {
             }
         }
 
-        running && unsafe { IsWindow(self.hwnd).as_bool() }
+        running && unsafe { IsWindow(Some(self.hwnd)).as_bool() }
     }
 }
 
