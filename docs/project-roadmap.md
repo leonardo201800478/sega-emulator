@@ -22,6 +22,67 @@ O objetivo é uma emulação funcionalmente correta e temporalmente fiel nos cam
 
 Não manter roadmaps ou planos de sprint paralelos. ADRs, auditorias e referências de hardware não criam fases ou prioridades concorrentes.
 
+## Contrato da primeira interface operacional — SMS e SG-1000
+
+A primeira entrega utilizável não exige biblioteca visual completa nem todos os recursos avançados do frontend P7. Exige, porém, uma interface Qt coerente para selecionar sistema, abrir jogos, controlar a sessão e configurar os recursos básicos de vídeo, áudio, controles e região. A Qt é camada de apresentação e configuração; execução, entrada de gameplay, vídeo, áudio e temporização pertencem aos runtimes/hosts nativos em Rust.
+
+### Sistemas e modelos
+
+- Seletor de sistema: **Master System** e **SG-1000**. A troca de sistema seleciona o runtime correspondente e não reutiliza indevidamente o mapa de memória, VDP ou perfil de hardware do outro console.
+- No Master System, seletor de modelo com **SMS1 disponível**. **SMS2** aparece como opção futura/desabilitada até existir perfil e validação próprios. Não criar uma segunda implementação de CPU ou máquina sem diferença real de hardware; preferir perfis/adaptadores sobre componentes compartilhados.
+- SG-1000 continua selecionável e seus testes/regressões permanecem obrigatórios durante a migração.
+
+### ROMs, histórico e região
+
+- Ação **Abrir ROM**, com histórico persistente das **15 ROMs abertas mais recentemente**. Cada entrada identifica o caminho e, quando aplicável, o membro interno de um ZIP.
+- Suporte a arquivos ZIP: enumerar apenas entradas compatíveis, permitir seleção explícita quando houver mais de uma ROM suportada e carregar o conteúdo selecionado sem extração automática insegura. Validar tamanho descompactado, integridade e caminhos; rejeitar entradas inválidas e arquivos compactados abusivos.
+- O histórico não copia ROMs para o repositório nem as distribui. Caminhos inexistentes devem ser sinalizados e removidos/limpos de forma controlada.
+- Menu de região: **Auto, Brasil, USA, Europa, Japão, Coreia e UNL**. Auto usa identificação confiável da ROM/perfil e apresenta fallback explícito quando não houver dados suficientes. UNL força execução sem BIOS, independentemente da configuração global. A seleção de região é independente do modelo SMS1/SMS2.
+- Opções gerais incluem, no mínimo, diretórios de ROMs e BIOS e caminhos de dados do usuário. BIOS é opcional conforme o sistema/jogo; nunca embutir ou versionar BIOS proprietária.
+
+### Transporte da emulação
+
+- Comandos visíveis com ícones: **Play/Iniciar, Pause e Stop**, além de Reset e Fechar ROM no fluxo de sessão.
+- Pause congela a máquina; Play inicia ou retoma; Stop encerra a sessão e libera recursos nativos; Reset reinicia a máquina mantendo a ROM carregada. O fechamento libera worker, áudio e recursos gráficos sem deixar threads órfãs.
+- Atalhos de controle da emulação são separados dos botões enviados ao jogo. O comando Pause do emulador não pode ser confundido com o botão físico Pause/NMI do Master System.
+
+### Vídeo e apresentação
+
+- API selecionável: **Direct3D 12 (única API disponível inicialmente)**. Não exibir Vulkan/OpenGL como opções funcionais antes de implementá-las.
+- Modos: janela, tela cheia e tela cheia sem bordas. Em D3D12, “tela cheia” deve seguir o modelo de apresentação suportado pelo DXGI/Windows; não prometer fullscreen exclusive, que não é suportado pelo D3D12.
+- Aspecto selecionável: **1:1 (pixels quadrados)** e **4:3 (apresentação de TV)**, preservando a geometria do frame e sem alterar o VDP.
+- Sincronização: Mailbox como política padrão de apresentação; VSync configurável; VRR e G-Sync expostos somente quando o host/driver/display confirmarem suporte. G-Sync é uma capacidade do conjunto GPU/driver/display, não uma API gráfica independente.
+- Mailbox deve atuar somente na fila de apresentação: o Scheduler continua processando todos os ciclos e frames emulados, sem frame skipping, aceleração ou alteração do tempo da máquina. Se a apresentação substituir frames pendentes, isso precisa ser identificado como descarte de apresentação, nunca como descarte de trabalho de emulação.
+- Filtros executados exclusivamente no host D3D12, em passes HLSL de pós-processamento sobre o frame imutável: **NTSC Blended/Composite** e **Horizontal Blend** (interpolação/blur gaussiano 1D no eixo X). A saída nativa do VDP permanece intacta. Shaders de terceiros (por exemplo, famílias CRT/NTSC) só entram após auditoria de licença e portabilidade; arquivos .slang não são tratados como shaders HLSL executáveis diretamente.
+
+### Áudio
+
+- Backend selecionável: **XAudio2** ou **WASAPI**. Disponibilizar volume geral, balanço, latência/buffer e opções DSP que tenham implementação e testes reais.
+- Controles de DSP devem ser aplicados no caminho nativo de áudio; não processar áudio de gameplay em Python. Preferências não suportadas pelo dispositivo/backend devem aparecer indisponíveis, não simular funcionamento.
+
+### Controles e entrada
+
+- Mapeamento de controles via **SDL3**, com configuração por dispositivo e preservação dos mapeamentos padrão.
+- Deadzone analógica configurável, padrão **15%** para sticks; triggers/eixos unipolares usam limiar próprio, evitando aplicar uma zona radial inadequada.
+- A captura e normalização de gameplay ficam no runtime nativo de entrada. A Qt pode configurar mapeamentos e atalhos, mas não faz polling por instrução nem decide quando o Scheduler avança.
+- Pause do emulador é ação de host, separada do Pause/NMI do console. Eventos de botão devem ser tratados por transição (edge-trigger), sem repetição enquanto o botão permanecer pressionado. Validar especificamente a sequência de boot/introdução de **Road Rash**: uma pressão não pode gerar uma série de NMI nem manter o jogo preso no logotipo. Inputs devem ser amostrados/latchados em fronteiras determinísticas, sem ler estado antigo antes de o novo input ser aplicado.
+
+### Limite real de sprites
+
+Não remover nem desativar por padrão os limites reais de sprites do VDP SMS1/SG-1000: eles fazem parte do comportamento do hardware e afetam prioridade, overflow e flicker. Não existe “desbloqueio” que preserve fidelidade se ele altera essa regra. O requisito é remover qualquer limite artificial da interface/renderer; qualquer modo de compatibilidade que altere o limite real exigiria decisão explícita separada e não faria parte do perfil fiel.
+
+### Critérios de aceite da interface inicial
+
+1. Selecionar SMS/SG-1000 e carregar ROM local ou membro selecionado de ZIP.
+2. Reabrir qualquer uma das 15 entradas recentes e restaurar sistema, modelo e região compatíveis.
+3. SMS1 operacional; SMS2 claramente marcado como futuro até validação.
+4. Play/Pause/Stop/Reset/Fechar ROM com ciclo de vida nativo completo.
+5. Menus de vídeo, áudio, controles, região e opções persistem preferências e refletem capacidades realmente disponíveis.
+6. Nenhum pixel, PCM de gameplay, ciclo de hardware ou stepping por frame atravessa Python.
+7. Testes de SDL3 para deadzone, transições de botão, hotkey Pause versus NMI e regressão Road Rash; regressões SG-1000 obrigatórias.
+8. Testes de apresentação para resize, janela/tela cheia/borderless, aspecto, sincronização, encerramento e fallback explícito quando VRR/G-Sync não estiverem disponíveis.
+9. Filtros HLSL determinísticos, com comparação de frames de referência e sem modificar o frame produzido pelo VDP.
+
 ## 1. Princípios de execução
 
 1. Rust é o único runtime de hardware; Python/PySide6 é frontend, launcher, configuração, diagnóstico e tooling.
