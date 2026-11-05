@@ -263,6 +263,11 @@ impl SmsTemporalCoordinator {
             || domain.ratio_denominator != state.master_ticks_per_tstate
             || psg_domain.ratio_numerator != 1
             || psg_domain.ratio_denominator != state.master_ticks_per_tstate
+            || domain.current_time != psg_domain.current_time
+            || domain.total_cycles != psg_domain.total_cycles
+            || domain.phase != psg_domain.phase
+            || domain.registration_start != psg_domain.registration_start
+            || domain.initial_phase != psg_domain.initial_phase
         {
             return Err(SmsTemporalCoordinatorError::InvalidState);
         }
