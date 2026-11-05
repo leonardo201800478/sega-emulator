@@ -38,56 +38,211 @@ impl MachineTime {
     }
 }
 
-/// Exact position of a local clock edge on the machine timeline.
+/// Canonical absolute position on the machine's rational timeline.
 ///
-/// The timestamp is represented as an integer master tick plus a reduced
-/// fractional master tick. The fractional numerator and denominator are
-/// u64, so cross-multiplication for ordering fits exactly in u128.
+/// An instant consists of an integer profile-defined master tick and a
+/// reduced fractional master tick. The fraction uses u128 components so
+/// independently generated clock domains can be compared without floating
+/// point or overflow-prone cross multiplication.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ClockEdgeTime {
+pub struct MachineInstant {
     whole_ticks: MachineTime,
-    fractional_numerator: u64,
-    fractional_denominator: u64,
+    fractional_numerator: u128,
+    fractional_denominator: u128,
 }
 
-impl ClockEdgeTime {
+/// Compatibility name for exact clock-edge positions.
+pub type ClockEdgeTime = MachineInstant;
+
+impl MachineInstant {
+    /// The origin of the machine timeline.
+    pub const ZERO: Self = Self {
+        whole_ticks: MachineTime::ZERO,
+        fractional_numerator: 0,
+        fractional_denominator: 1,
+    };
+
+    /// Construct an integral instant.
+    pub const fn from_ticks(ticks: u128) -> Self {
+        Self {
+            whole_ticks: MachineTime::from_ticks(ticks),
+            fractional_numerator: 0,
+            fractional_denominator: 1,
+        }
+    }
+
+    /// Construct and normalize an exact rational instant.
+    ///
+    /// The fractional numerator may exceed the denominator; its whole part is
+    /// carried into whole_ticks. A zero denominator and whole-tick overflow
+    /// are rejected.
+    pub fn from_parts(
+        whole_ticks: MachineTime,
+        fractional_numerator: u128,
+        fractional_denominator: u128,
+    ) -> Result<Self, ClockError> {
+        if fractional_denominator == 0 {
+            return Err(ClockError::ZeroInstantDenominator);
+        }
+        let carry = fractional_numerator / fractional_denominator;
+        let remainder = fractional_numerator % fractional_denominator;
+        let ticks = whole_ticks
+            .checked_add(carry)
+            .ok_or(ClockError::ArithmeticOverflow)?;
+        let divisor = gcd_u128(remainder, fractional_denominator);
+        Ok(Self {
+            whole_ticks: ticks,
+            fractional_numerator: remainder / divisor,
+            fractional_denominator: fractional_denominator / divisor,
+        })
+    }
+
     /// Return the integer master-tick component.
     pub const fn whole_ticks(self) -> MachineTime {
         self.whole_ticks
     }
 
     /// Return the reduced fractional numerator.
-    pub const fn fractional_numerator(self) -> u64 {
+    pub const fn fractional_numerator(self) -> u128 {
         self.fractional_numerator
     }
 
     /// Return the reduced fractional denominator.
     ///
     /// An integral timestamp has a denominator of one and a numerator of zero.
-    pub const fn fractional_denominator(self) -> u64 {
+    pub const fn fractional_denominator(self) -> u128 {
         self.fractional_denominator
+    }
+
+    /// Add two exact timeline offsets without floating point.
+    ///
+    /// Denominators are reduced by their GCD before multiplication. If the
+    /// canonical result cannot be represented by the u128 fraction fields,
+    /// the operation returns ArithmeticOverflow.
+    pub fn checked_add(self, other: Self) -> Result<Self, ClockError> {
+        let common = gcd_u128(self.fractional_denominator, other.fractional_denominator);
+        let left_scale = other.fractional_denominator / common;
+        let right_scale = self.fractional_denominator / common;
+        let denominator = self
+            .fractional_denominator
+            .checked_mul(left_scale)
+            .ok_or(ClockError::ArithmeticOverflow)?;
+        let left = self
+            .fractional_numerator
+            .checked_mul(left_scale)
+            .ok_or(ClockError::ArithmeticOverflow)?;
+        let right = other
+            .fractional_numerator
+            .checked_mul(right_scale)
+            .ok_or(ClockError::ArithmeticOverflow)?;
+        let (carry, numerator) = if left >= denominator - right {
+            (1, left - (denominator - right))
+        } else {
+            (0, left + right)
+        };
+        let whole = self
+            .whole_ticks
+            .checked_add(other.whole_ticks.ticks())
+            .and_then(|ticks| ticks.checked_add(carry))
+            .ok_or(ClockError::ArithmeticOverflow)?;
+        Self::from_parts(whole, numerator, denominator)
+    }
+
+    /// Subtract an earlier instant, returning an exact non-negative offset.
+    pub fn checked_sub(self, earlier: Self) -> Result<Self, ClockError> {
+        if self < earlier {
+            return Err(ClockError::TimeWentBackwards);
+        }
+        let common = gcd_u128(self.fractional_denominator, earlier.fractional_denominator);
+        let left_scale = earlier.fractional_denominator / common;
+        let right_scale = self.fractional_denominator / common;
+        let denominator = self
+            .fractional_denominator
+            .checked_mul(left_scale)
+            .ok_or(ClockError::ArithmeticOverflow)?;
+        let left = self
+            .fractional_numerator
+            .checked_mul(left_scale)
+            .ok_or(ClockError::ArithmeticOverflow)?;
+        let right = earlier
+            .fractional_numerator
+            .checked_mul(right_scale)
+            .ok_or(ClockError::ArithmeticOverflow)?;
+        let whole_delta = self
+            .whole_ticks
+            .checked_duration_since(earlier.whole_ticks)
+            .ok_or(ClockError::TimeWentBackwards)?;
+        let (whole, numerator) = if left < right {
+            let whole = whole_delta
+                .checked_sub(1)
+                .ok_or(ClockError::TimeWentBackwards)?;
+            (whole, denominator - (right - left))
+        } else {
+            (whole_delta, left - right)
+        };
+        Self::from_parts(MachineTime::from_ticks(whole), numerator, denominator)
     }
 }
 
-impl Ord for ClockEdgeTime {
+impl Ord for MachineInstant {
     fn cmp(&self, other: &Self) -> Ordering {
         self.whole_ticks.cmp(&other.whole_ticks).then_with(|| {
-            let left =
-                u128::from(self.fractional_numerator) * u128::from(other.fractional_denominator);
-            let right =
-                u128::from(other.fractional_numerator) * u128::from(self.fractional_denominator);
-            left.cmp(&right)
+            cmp_fraction_u128(
+                self.fractional_numerator,
+                self.fractional_denominator,
+                other.fractional_numerator,
+                other.fractional_denominator,
+            )
         })
     }
 }
 
-impl PartialOrd for ClockEdgeTime {
+impl PartialOrd for MachineInstant {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-const fn gcd_u64(mut left: u64, mut right: u64) -> u64 {
+/// Compare proper non-negative fractions using Euclid's algorithm.
+///
+/// Continued-fraction comparison avoids multiplying numerators by the other
+/// denominator, so ordering remains exact across the full u128 range.
+fn cmp_fraction_u128(
+    mut left_numerator: u128,
+    mut left_denominator: u128,
+    mut right_numerator: u128,
+    mut right_denominator: u128,
+) -> Ordering {
+    let mut reversed = false;
+    loop {
+        let left_whole = left_numerator / left_denominator;
+        let right_whole = right_numerator / right_denominator;
+        if left_whole != right_whole {
+            let ordering = left_whole.cmp(&right_whole);
+            return if reversed { ordering.reverse() } else { ordering };
+        }
+
+        let left_remainder = left_numerator % left_denominator;
+        let right_remainder = right_numerator % right_denominator;
+        if left_remainder == 0 || right_remainder == 0 {
+            let ordering = match (left_remainder == 0, right_remainder == 0) {
+                (true, true) => Ordering::Equal,
+                (true, false) => Ordering::Less,
+                (false, true) => Ordering::Greater,
+                (false, false) => unreachable!(),
+            };
+            return if reversed { ordering.reverse() } else { ordering };
+        }
+
+        left_numerator = left_denominator;
+        left_denominator = left_remainder;
+        right_numerator = right_denominator;
+        right_denominator = right_remainder;
+        reversed = !reversed;
+    }
+}
+
+const fn gcd_u128(mut left: u128, mut right: u128) -> u128 {
     while right != 0 {
         let remainder = left % right;
         left = right;
@@ -177,6 +332,8 @@ pub enum ClockError {
     ZeroEdgeIndex,
     /// Stored clock history is inconsistent with its exact rational ratio.
     InvalidClockHistory,
+    /// An exact machine instant cannot have a zero fractional denominator.
+    ZeroInstantDenominator,
 }
 
 impl fmt::Display for ClockError {
@@ -189,6 +346,7 @@ impl fmt::Display for ClockError {
             Self::PhaseOutOfRange => write!(f, "clock phase must be smaller than its denominator"),
             Self::ZeroEdgeIndex => write!(f, "local clock edge index must be positive"),
             Self::InvalidClockHistory => write!(f, "clock-domain history is inconsistent"),
+            Self::ZeroInstantDenominator => write!(f, "machine instant denominator must be positive"),
         }
     }
 }
@@ -316,7 +474,7 @@ impl ClockDomain {
     /// timestamp and retained phase. No state is mutated. The returned
     /// timestamp is an exact rational master-time position, not rounded to
     /// MachineTime.
-    pub fn edge_time_after(&self, edge_index: u128) -> Result<ClockEdgeTime, ClockError> {
+    pub fn edge_time_after(&self, edge_index: u128) -> Result<MachineInstant, ClockError> {
         if edge_index == 0 {
             return Err(ClockError::ZeroEdgeIndex);
         }
@@ -360,16 +518,16 @@ impl ClockDomain {
             .checked_add(whole_offset)
             .ok_or(ClockError::ArithmeticOverflow)?;
 
-        let divisor = gcd_u64(fractional_numerator, self.ratio.cycles_numerator);
-        Ok(ClockEdgeTime {
+        let divisor = gcd_u128(u128::from(fractional_numerator), numerator);
+        Ok(MachineInstant {
             whole_ticks,
-            fractional_numerator: fractional_numerator / divisor,
-            fractional_denominator: self.ratio.cycles_numerator / divisor,
+            fractional_numerator: u128::from(fractional_numerator) / divisor,
+            fractional_denominator: numerator / divisor,
         })
     }
 
     /// Return the exact timestamp of the next local clock edge.
-    pub fn next_edge_time(&self) -> Result<ClockEdgeTime, ClockError> {
+    pub fn next_edge_time(&self) -> Result<MachineInstant, ClockError> {
         self.edge_time_after(1)
     }
 
@@ -797,4 +955,54 @@ mod tests {
         assert_eq!(domain.advance_to(MachineTime::from_ticks(9)), Ok(0));
         assert_eq!(domain.total_cycles(), 0);
     }
+    #[test]
+    fn machine_instant_normalizes_equivalent_rational_positions() {
+        let a = super::MachineInstant::from_parts(MachineTime::from_ticks(4), 2, 6).unwrap();
+        let b = super::MachineInstant::from_parts(MachineTime::from_ticks(4), 1, 3).unwrap();
+        assert_eq!(a, b);
+        assert_eq!(a.fractional_numerator(), 1);
+        assert_eq!(a.fractional_denominator(), 3);
+        let carried = super::MachineInstant::from_parts(MachineTime::from_ticks(4), 7, 3).unwrap();
+        assert_eq!(carried.whole_ticks(), MachineTime::from_ticks(6));
+        assert_eq!(carried.fractional_numerator(), 1);
+        assert_eq!(carried.fractional_denominator(), 3);
+    }
+
+    #[test]
+    fn machine_instant_comparison_does_not_cross_multiply_u128_values() {
+        let denominator = u128::MAX;
+        let left = super::MachineInstant::from_parts(MachineTime::ZERO, 1, denominator).unwrap();
+        let right = super::MachineInstant::from_parts(MachineTime::ZERO, 1, denominator - 1).unwrap();
+        assert!(left < right);
+        assert_eq!(left.cmp(&left), core::cmp::Ordering::Equal);
+    }
+
+    #[test]
+    fn machine_instant_addition_and_subtraction_are_exact() {
+        let a = super::MachineInstant::from_parts(MachineTime::from_ticks(5), 2, 3).unwrap();
+        let b = super::MachineInstant::from_parts(MachineTime::ZERO, 1, 2).unwrap();
+        let sum = a.checked_add(b).unwrap();
+        assert_eq!(sum.whole_ticks(), MachineTime::from_ticks(6));
+        assert_eq!(sum.fractional_numerator(), 1);
+        assert_eq!(sum.fractional_denominator(), 6);
+
+        let difference = sum.checked_sub(a).unwrap();
+        assert_eq!(difference.whole_ticks(), MachineTime::ZERO);
+        assert_eq!(difference.fractional_numerator(), 1);
+        assert_eq!(difference.fractional_denominator(), 2);
+        assert_eq!(a.checked_sub(sum), Err(ClockError::TimeWentBackwards));
+    }
+
+    #[test]
+    fn machine_instant_rejects_unrepresentable_denominators_and_tick_overflow() {
+        assert_eq!(
+            super::MachineInstant::from_parts(MachineTime::ZERO, 0, 0),
+            Err(ClockError::ZeroInstantDenominator)
+        );
+        assert_eq!(
+            super::MachineInstant::from_parts(MachineTime::from_ticks(u128::MAX), 1, 1),
+            Err(ClockError::ArithmeticOverflow)
+        );
+    }
+
 }
