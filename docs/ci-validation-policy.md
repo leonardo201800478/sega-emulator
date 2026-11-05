@@ -27,8 +27,10 @@ configuration, or shared project tooling trigger the broad validation set.
 - Pull requests run only the validation domains selected by the classifier.
 - Pushes to `main` run the full CI matrix as post-merge regression.
 - Manual lockfile refresh remains an explicit workflow-dispatch operation.
-- Scheduler stress remains opt-in (short/long profile or the corresponding PR
-  label) because it is intentionally resource-intensive.
+- Scheduler stress remains opt-in for ordinary scoped changes (short/long profile
+  or the corresponding PR label) because it is intentionally resource-intensive.
+- Broad validation (`full`) automatically runs the bounded short Scheduler stress
+  profile so workflow/toolchain/shared-contract changes exercise the temporal gate.
 - Manual Z80 conformance and Qt/native integration workflows remain available
   for milestone, architecture, and release validation.
 - A skipped domain means it was not applicable to that change; it is not recorded
