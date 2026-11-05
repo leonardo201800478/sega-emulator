@@ -72,7 +72,7 @@ A fotografia original acima permanece histórica. Após a auditoria E7 em três 
 | PR | Escopo | HEAD consultado | Estado |
 |---|---|---|---|
 | #538 | Matriz de 48.000 casos para flags ED de I/O em bloco + auditoria NMOS | `4a78a04c0851acef3951f0faa78065a9f36d601b` | Aberta; Rust/Python/PyO3/D3D12/change-impact PASS; Scheduler stress/PowerShell/Qt/lock refresh SKIPPED |
-| #539 | Erratum P/V de LD A,I/R no microsequenciador; sincronização de Q e testes de snapshot | `f3af2b7b1e3f6c8b9f4c8d4c4b3a2f8d1e7a9c0b` | Aberta; Rust/Python/PyO3/D3D12/change-impact PASS; Scheduler stress/PowerShell/Qt/lock refresh SKIPPED |
+| #539 | Erratum P/V de LD A,I/R no microsequenciador; sincronização de Q e testes de snapshot | `f3afc000c2805559d83d06b693ed1f2f634cf39b` | Aberta; Rust/Python/PyO3/D3D12/change-impact PASS; Scheduler stress/PowerShell/Qt/lock refresh SKIPPED |
 | #540 | Matriz DD/FD de LD r,r' com IXH/IXL/IYH/IYL e exceções H/L indexed-memory | `9e263bd4070c68b0b5e0c99e08b6d05688bb3f06` | Aberta; CI em execução |
 
 Os SHAs acima vinculam a fotografia desta revisão; consultar novamente o HEAD antes de qualquer merge. Jobs SKIPPED permanecem SKIPPED, nunca PASS. Os scripts locais `project.ps1 audit/locks/validate` continuam NOT RUN nesta sessão.
