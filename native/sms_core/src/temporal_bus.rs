@@ -10,9 +10,9 @@
 use core::fmt;
 
 use crate::{
-    CartridgeImage, PsgError, SmsCoreError, SmsIo, SmsMemory, SmsTemporalCoordinator,
-    SmsTemporalCoordinatorError, SmsTemporalCoordinatorState, SmsTemporalEvent,
-    SMS_PSG_CLOCK_DOMAIN_ID,
+    CartridgeImage, PsgError, SMS_PSG_CLOCK_DOMAIN_ID, SmsCoreError, SmsIo, SmsMemory,
+    SmsTemporalCoordinator, SmsTemporalCoordinatorError, SmsTemporalCoordinatorState,
+    SmsTemporalEvent,
 };
 use sega_audio_runtime::{PsgClockError, ScheduledPsg};
 use sega_sn76489::{PsgProfile, Sn76489Core};
@@ -972,12 +972,7 @@ mod tests {
         assert_eq!(bus.psg().clock_hz(), DEFAULT_SMS_PSG_CLOCK_HZ);
         assert_eq!(bus.psg().clock_divider_phase(), 0);
 
-        let write = request(
-            70,
-            Z80BusOperation::PortWrite { value: 0x85 },
-            0x7E,
-            4,
-        );
+        let write = request(70, Z80BusOperation::PortWrite { value: 0x85 }, 0x7E, 4);
         let deadline = bus.begin_request(write, 0).unwrap();
         let mut restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
         assert_eq!(restored.psg().clock_divider_phase(), 0);
@@ -996,24 +991,14 @@ mod tests {
         assert_eq!(restored.port_write_trace().last().unwrap().port, 0x7E);
         restored.acknowledge_completion(70).unwrap();
 
-        let data = request(
-            71,
-            Z80BusOperation::PortWrite { value: 0x12 },
-            0x7F,
-            4,
-        );
+        let data = request(71, Z80BusOperation::PortWrite { value: 0x12 }, 0x7F, 4);
         restored.begin_request(data, 0).unwrap();
         restored.dispatch_next().unwrap();
         assert_eq!(restored.psg().tone_periods()[0], 0x125);
         assert_eq!(restored.psg().clock_divider_phase(), 8);
         restored.acknowledge_completion(71).unwrap();
 
-        let volume = request(
-            72,
-            Z80BusOperation::PortWrite { value: 0x90 },
-            0x40,
-            4,
-        );
+        let volume = request(72, Z80BusOperation::PortWrite { value: 0x90 }, 0x40, 4);
         restored.begin_request(volume, 0).unwrap();
         restored.dispatch_next().unwrap();
         assert_eq!(restored.psg().attenuations()[0], 0);
@@ -1039,7 +1024,9 @@ mod tests {
         whole.acknowledge_internal_completion(1).unwrap();
 
         for continuation_id in 1..=10 {
-            chunked.schedule_internal_cycle(continuation_id, 10_000).unwrap();
+            chunked
+                .schedule_internal_cycle(continuation_id, 10_000)
+                .unwrap();
             let Some(SmsTemporalDispatch::InternalCycleComplete(_)) =
                 chunked.dispatch_next().unwrap()
             else {
@@ -1065,8 +1052,14 @@ mod tests {
         let request = request(73, Z80BusOperation::MemoryRead, 0x0000, 7);
         bus.begin_request(request, 2).unwrap();
         bus.dispatch_next().unwrap();
-        assert_eq!(bus.coordinator.z80_clock_snapshot().unwrap().total_cycles, 9);
-        assert_eq!(bus.coordinator.psg_clock_snapshot().unwrap().total_cycles, 9);
+        assert_eq!(
+            bus.coordinator.z80_clock_snapshot().unwrap().total_cycles,
+            9
+        );
+        assert_eq!(
+            bus.coordinator.psg_clock_snapshot().unwrap().total_cycles,
+            9
+        );
         assert_eq!(bus.psg().clock_divider_phase(), 9 % 16);
     }
 
