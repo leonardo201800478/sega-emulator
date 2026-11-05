@@ -93,7 +93,7 @@ Não aplicar correção cosmética ao framebuffer do hardware. Separar:
 4. **Deslocamento de sprites:** R0 bit 3 desloca os sprites 8 pixels à esquerda; não é a mesma coisa que mascarar a coluna.
 5. **Viewport do frontend:** escolha de enquadramento/crop e proporção sem alterar pixels, registradores, clocks ou raster emulado.
 
-A Qt deve permitir visualizar o frame ativo padrão, inspecionar o raster/overscan completo quando disponível e optar por ocultar/cortar a coluna esquerda mascarada para a apresentação. O frame bruto e seus metadados permanecem disponíveis para testes, capturas e diagnóstico. A preferência visual jamais altera o estado do VDP.
+A Qt deve oferecer as opções **Não**, **Auto** e **Sempre** para ocultar a barra esquerda de 8 pixels. O padrão será **Auto**: corta os 8 pixels somente quando o jogo habilitar R0 bit 5 e quando o modo de apresentação não estiver exibindo o raster/overscan completo. Esse comportamento segue o modelo de opção de apresentação usado pelo Gearsystem, mas o corte ocorrerá exclusivamente no viewport. Deve ser possível visualizar o frame ativo sem corte e inspecionar o raster/overscan completo quando disponível. O frame bruto e seus metadados permanecem disponíveis para testes, capturas e diagnóstico. A preferência visual jamais altera o estado do VDP.
 
 A divisão exata dos 342 dots horizontais, os offsets do H counter, a cor de cada intervalo de blanking/borda e as particularidades por revisão serão tratados como matriz de evidências. Valores publicados em pesquisas que alertam para diferenças entre SMS e Genesis não serão promovidos a verdade de silício sem confirmação.
 
@@ -153,6 +153,9 @@ O Master System só poderá ser declarado operacional quando:
 - SMS Power — SN76489: https://www.smspower.org/Development/SN76489
 - SMS Power — Software Reference Manual for the SEGA Mark III: https://www.smspower.org/Development/SMSOfficialDocs
 - SMS Power — Master System Service Manual: https://www.smspower.org/Development/SegaMasterSystemServiceManual
+- MAME — VDP 315-5124/315-5246 (referência comparativa; declara TODO para mid-scanline changes e restrições de acesso VRAM/CRAM): https://github.com/mamedev/mame/blob/master/src/devices/video/315_5124.cpp
+- Gearsystem — implementação e opção Hide Left Bar (referência comparativa, não oráculo de silício): https://github.com/drhelius/Gearsystem/blob/master/src/Video.cpp
+- Gearsystem — documentação VDP derivada do trabalho de Charles MacDonald: https://github.com/drhelius/Gearsystem/blob/master/skills/gearsystem-debugging/references/msvdp.md
 - Referência independente VDP (deve ser confrontada com SMS Power e manual): https://github.com/franckverrot/EmulationResources/blob/master/consoles/sms-gg/Sega%20Master%20System%20VDP%20documentation.txt
 - Cargo Features: https://doc.rust-lang.org/cargo/reference/features.html
 - Qt for Python 6.12: https://doc.qt.io/qtforpython-6/
