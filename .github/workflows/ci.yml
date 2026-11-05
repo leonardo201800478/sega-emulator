@@ -20,6 +20,7 @@ on:
         default: false
 
 permissions:
+  actions: write
   contents: read
   pull-requests: read
 
@@ -30,6 +31,12 @@ concurrency:
 jobs:
   changes:
     name: Change impact classification
+      - name: CI supervisor - cancel remaining jobs on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
+
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     outputs:
@@ -105,6 +112,12 @@ jobs:
 
   rust:
     needs: [changes]
+      - name: CI supervisor - cancel remaining jobs on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
+
     if: |
       always() &&
       (github.event_name != 'pull_request' ||
@@ -138,6 +151,12 @@ jobs:
 
   refresh-lockfiles:
     name: Refresh Cargo lockfiles (manual artifact)
+      - name: CI supervisor - cancel remaining jobs on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
+
     if: github.event_name == 'workflow_dispatch' && inputs.refresh_cargo_lockfiles
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -168,6 +187,12 @@ jobs:
 
   scheduler-stress:
     needs: [changes]
+      - name: CI supervisor - cancel remaining jobs on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
+
     name: Scheduler deterministic stress
     if: |
       always() &&
@@ -206,6 +231,12 @@ jobs:
 
   python:
     needs: [changes]
+      - name: CI supervisor - cancel remaining jobs on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
+
     if: |
       always() &&
       (github.event_name != 'pull_request' ||
@@ -253,6 +284,12 @@ jobs:
 
   windows-python-qt:
     needs: [changes]
+      - name: CI supervisor - cancel remaining jobs on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
+
     if: |
       always() &&
       (github.event_name != 'pull_request' ||
@@ -285,6 +322,12 @@ jobs:
 
   windows-tooling:
     needs: [changes]
+      - name: CI supervisor - cancel remaining jobs on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
+
     if: |
       always() &&
       (github.event_name != 'pull_request' ||
@@ -318,6 +361,12 @@ jobs:
 
   windows-native-python-extension:
     needs: [changes]
+      - name: CI supervisor - cancel remaining jobs on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
+
     if: |
       always() &&
       (github.event_name != 'pull_request' ||
@@ -352,6 +401,12 @@ jobs:
 
   windows-d3d12:
     needs: [changes]
+      - name: CI supervisor - cancel remaining jobs on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
+
     if: |
       always() &&
       (github.event_name != 'pull_request' ||
