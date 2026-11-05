@@ -163,20 +163,19 @@ impl VideoFrameMetadata {
         if self.timestamp_ticks > 0 && self.timebase_hz == 0 {
             return Err(VideoFrameError::InvalidTimestamp);
         }
-        if self
-            .masked_regions
-            .iter()
-            .any(|region| !region.is_within(width, height))
-        {
+        if self.masked_regions.iter().any(|region| {
+            !region.is_within(width, height) || !self.visible_rect.contains(*region)
+        }) {
             return Err(VideoFrameError::InvalidMaskedRegion);
         }
-        if let Some(raster) = self.raster
-            && (raster.dots_per_line == 0
+        if let Some(raster) = self.raster {
+            if raster.dots_per_line == 0
                 || raster.lines_per_frame == 0
                 || raster.master_ticks_per_dot_numerator == 0
-                || raster.master_ticks_per_dot_denominator == 0)
-        {
-            return Err(VideoFrameError::InvalidRasterMetadata);
+                || raster.master_ticks_per_dot_denominator == 0
+            {
+                return Err(VideoFrameError::InvalidRasterMetadata);
+            }
         }
         Ok(())
     }
@@ -646,6 +645,35 @@ mod tests {
                 metadata,
             ),
             Err(VideoFrameError::ActiveAreaOutsideVisibleArea)
+        );
+    }
+
+    #[test]
+    fn rejects_masked_region_outside_visible_area() {
+        let mut metadata = super::VideoFrameMetadata::full_frame(16, 16);
+        metadata.visible_rect = super::VideoRect {
+            x: 4,
+            y: 0,
+            width: 8,
+            height: 16,
+        };
+        metadata.masked_regions.push(super::VideoRect {
+            x: 0,
+            y: 0,
+            width: 2,
+            height: 16,
+        });
+        assert_eq!(
+            VideoFrame::new_with_metadata(
+                1,
+                16,
+                16,
+                PixelFormat::Rgba8888,
+                64,
+                vec![0; 16 * 16 * 4],
+                metadata,
+            ),
+            Err(VideoFrameError::InvalidMaskedRegion)
         );
     }
 
