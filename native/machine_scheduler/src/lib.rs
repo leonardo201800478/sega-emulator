@@ -16,7 +16,7 @@ pub use sega_temporal_core::{ClockRatio, EventPriority, MachineInstant, MachineT
 
 use sega_temporal_core::{
     ClockDomain, ClockDomainSnapshot, ClockError, EventQueue, EventQueueError, HardwarePhase,
-    PlatformPriority, ScheduledEvent,
+    PlatformPriority,
 };
 
 /// Stable identity for one clock domain registered with a machine scheduler.
