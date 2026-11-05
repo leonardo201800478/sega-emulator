@@ -10,6 +10,7 @@ mod input;
 mod machine;
 mod sms_machine;
 mod sms_temporal_machine;
+mod sms_temporal_worker;
 
 use input::NativeInputManager;
 use machine::{NativeCpuSnapshot, NativePsgSnapshot, NativeSG1000Machine, NativeVdpSnapshot};
