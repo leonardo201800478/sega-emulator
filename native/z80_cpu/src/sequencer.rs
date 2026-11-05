@@ -3076,7 +3076,7 @@ impl Z80MicroSequencer {
         // ZiLOG UM008011-0816: an INT accepted during LD A,I/R clears P/V.
         // NMI deliberately does not apply this maskable-interrupt erratum.
         if self.p {
-            self.registers.f &= !FLAG_PV;
+            self.set_flags(self.registers.f & !FLAG_PV);
         }
         self.p = false;
         self.phase = Z80MicroSequencerPhase::InterruptAcknowledge;
