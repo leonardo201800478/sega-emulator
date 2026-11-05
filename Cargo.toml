@@ -17,6 +17,7 @@ members = [
     "native/temporal_core",
     "native/machine_scheduler",
     "native/video_runtime",
+    "native/video_core",
 ]
 default-members = [
     "native/sg1000_core",
