@@ -363,10 +363,8 @@ mod tests {
     #[test]
     fn rational_subtick_instants_precede_phase_and_priority_ordering() {
         let mut queue = EventQueue::new();
-        let one_third =
-            MachineInstant::from_parts(MachineTime::ZERO, 1, 3).unwrap();
-        let one_half =
-            MachineInstant::from_parts(MachineTime::ZERO, 1, 2).unwrap();
+        let one_third = MachineInstant::from_parts(MachineTime::ZERO, 1, 3).unwrap();
+        let one_half = MachineInstant::from_parts(MachineTime::ZERO, 1, 2).unwrap();
 
         queue
             .schedule_with_phase(
