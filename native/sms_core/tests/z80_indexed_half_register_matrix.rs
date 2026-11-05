@@ -122,15 +122,42 @@ fn initial_registers() -> RegisterImage {
 }
 
 fn assert_registers(cpu: &Z80, expected: RegisterImage, prefix: u8, opcode: u8) {
-    assert_eq!(cpu.registers.a, expected.a, "prefix={prefix:02X} opcode={opcode:02X}: A");
-    assert_eq!(cpu.registers.b, expected.b, "prefix={prefix:02X} opcode={opcode:02X}: B");
-    assert_eq!(cpu.registers.c, expected.c, "prefix={prefix:02X} opcode={opcode:02X}: C");
-    assert_eq!(cpu.registers.d, expected.d, "prefix={prefix:02X} opcode={opcode:02X}: D");
-    assert_eq!(cpu.registers.e, expected.e, "prefix={prefix:02X} opcode={opcode:02X}: E");
-    assert_eq!(cpu.registers.h, expected.h, "prefix={prefix:02X} opcode={opcode:02X}: H");
-    assert_eq!(cpu.registers.l, expected.l, "prefix={prefix:02X} opcode={opcode:02X}: L");
-    assert_eq!(cpu.ix, expected.ix, "prefix={prefix:02X} opcode={opcode:02X}: IX");
-    assert_eq!(cpu.iy, expected.iy, "prefix={prefix:02X} opcode={opcode:02X}: IY");
+    assert_eq!(
+        cpu.registers.a, expected.a,
+        "prefix={prefix:02X} opcode={opcode:02X}: A"
+    );
+    assert_eq!(
+        cpu.registers.b, expected.b,
+        "prefix={prefix:02X} opcode={opcode:02X}: B"
+    );
+    assert_eq!(
+        cpu.registers.c, expected.c,
+        "prefix={prefix:02X} opcode={opcode:02X}: C"
+    );
+    assert_eq!(
+        cpu.registers.d, expected.d,
+        "prefix={prefix:02X} opcode={opcode:02X}: D"
+    );
+    assert_eq!(
+        cpu.registers.e, expected.e,
+        "prefix={prefix:02X} opcode={opcode:02X}: E"
+    );
+    assert_eq!(
+        cpu.registers.h, expected.h,
+        "prefix={prefix:02X} opcode={opcode:02X}: H"
+    );
+    assert_eq!(
+        cpu.registers.l, expected.l,
+        "prefix={prefix:02X} opcode={opcode:02X}: L"
+    );
+    assert_eq!(
+        cpu.ix, expected.ix,
+        "prefix={prefix:02X} opcode={opcode:02X}: IX"
+    );
+    assert_eq!(
+        cpu.iy, expected.iy,
+        "prefix={prefix:02X} opcode={opcode:02X}: IY"
+    );
 }
 
 #[test]
@@ -155,8 +182,7 @@ fn dd_fd_ld_register_matrix_uses_index_halves_and_hl_memory_exceptions() {
             let index = expected.index(prefix);
             let effective_address = signed_effective_address(index, displacement);
             let memory_value = 0x87;
-            let source_value =
-                expected.read_register(prefix, source, memory_operand, memory_value);
+            let source_value = expected.read_register(prefix, source, memory_operand, memory_value);
 
             if destination != 6 {
                 expected.write_register(prefix, destination, memory_operand, source_value);
@@ -196,7 +222,10 @@ fn dd_fd_ld_register_matrix_uses_index_halves_and_hl_memory_exceptions() {
                 PROGRAM_PC + if memory_operand { 3 } else { 2 },
                 "prefix={prefix:02X} opcode={opcode:02X}: PC"
             );
-            assert_eq!(cpu.registers.f, 0xD7, "prefix={prefix:02X} opcode={opcode:02X}: F");
+            assert_eq!(
+                cpu.registers.f, 0xD7,
+                "prefix={prefix:02X} opcode={opcode:02X}: F"
+            );
             assert_eq!(cpu.r, 0x22, "prefix={prefix:02X} opcode={opcode:02X}: R");
 
             if destination == 6 {
