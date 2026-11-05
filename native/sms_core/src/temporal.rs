@@ -94,10 +94,16 @@ impl SmsTemporalCoordinator {
             return Err(SmsTemporalCoordinatorError::ZeroTStateScale);
         }
         let mut scheduler = MachineScheduler::new();
-        let cpu_clock_ratio = ClockRatio::new(1, master_ticks_per_tstate)
-            .map_err(|_| SmsTemporalCoordinatorError::InvalidState)?;
-        scheduler.register_clock_domain(SMS_Z80_CLOCK_DOMAIN_ID, cpu_clock_ratio)?;
-        scheduler.register_clock_domain(SMS_PSG_CLOCK_DOMAIN_ID, cpu_clock_ratio)?;
+        scheduler.register_clock_domain(
+            SMS_Z80_CLOCK_DOMAIN_ID,
+            ClockRatio::new(1, master_ticks_per_tstate)
+                .map_err(|_| SmsTemporalCoordinatorError::InvalidState)?,
+        )?;
+        scheduler.register_clock_domain(
+            SMS_PSG_CLOCK_DOMAIN_ID,
+            ClockRatio::new(1, master_ticks_per_tstate)
+                .map_err(|_| SmsTemporalCoordinatorError::InvalidState)?,
+        )?;
         Ok(Self {
             scheduler,
             master_ticks_per_tstate,
