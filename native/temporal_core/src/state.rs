@@ -4,13 +4,13 @@
 //! They define a canonical, codec-independent representation; validation and
 //! heap reconstruction are implemented by the queue in a later milestone.
 
-use crate::{HardwarePhase, MachineTime, PlatformPriority, ScheduledEvent};
+use crate::{HardwarePhase, MachineInstant, PlatformPriority, ScheduledEvent};
 
 /// Causal watermark retained after the most recently dispatched event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EventQueueWatermark {
     /// Absolute integer timestamp of the last dispatched event.
-    pub timestamp: MachineTime,
+    pub timestamp: MachineInstant,
     /// Hardware-ordering stratum of the last dispatched event.
     pub hardware_phase: HardwarePhase,
     /// Software dispatch priority of the last dispatched event.
