@@ -206,7 +206,7 @@ fn all_ed_block_io_opcodes_match_nmos_flag_equations_at_boundaries() {
                             bus.last_port_write = None;
                             bus.memory[usize::from(pc)] = 0xED;
                             bus.memory[usize::from(pc.wrapping_add(1))] = opcode;
-                            bus.memory[usize::from(hl)] = value;
+                            bus.memory[usize::from(hl)] = if input { value ^ 0xFF } else { value };
                             bus.ports[usize::from(old_bc)] = value;
 
                             let mut cpu = Z80::default();
