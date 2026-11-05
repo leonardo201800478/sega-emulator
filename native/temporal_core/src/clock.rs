@@ -396,9 +396,7 @@ impl WideUint {
         let mut limbs = [0; 5];
         let mut carry = 0_u128;
         for (index, limb) in limbs.iter_mut().enumerate() {
-            let sum = u128::from(self.limbs[index])
-                + u128::from(other.limbs[index])
-                + carry;
+            let sum = u128::from(self.limbs[index]) + u128::from(other.limbs[index]) + carry;
             *limb = sum as u64;
             carry = sum >> 64;
         }
@@ -434,8 +432,7 @@ impl WideUint {
         for (index, limb) in limbs.iter_mut().enumerate() {
             let (without_other, first_borrow) =
                 self.limbs[index].overflowing_sub(other.limbs[index]);
-            let (value, second_borrow) =
-                without_other.overflowing_sub(if borrow { 1 } else { 0 });
+            let (value, second_borrow) = without_other.overflowing_sub(if borrow { 1 } else { 0 });
             *limb = value;
             borrow = first_borrow || second_borrow;
         }
@@ -1334,12 +1331,8 @@ mod tests {
         assert_eq!(instant_sum.fractional_numerator(), 1);
         assert_eq!(instant_sum.fractional_denominator(), 6);
 
-        let later = super::MachineInstant::from_parts(
-            MachineTime::ZERO,
-            (g + 3) / 2,
-            3 * g,
-        )
-        .unwrap();
+        let later =
+            super::MachineInstant::from_parts(MachineTime::ZERO, (g + 3) / 2, 3 * g).unwrap();
         let earlier = super::MachineInstant::from_parts(MachineTime::ZERO, 1, 2 * g).unwrap();
         let difference = later.checked_duration_since(earlier).unwrap();
         assert_eq!(difference.fractional_numerator(), 1);
@@ -1350,10 +1343,7 @@ mod tests {
     fn rational_arithmetic_still_rejects_unrepresentable_reduced_results() {
         let left = super::MachineDuration::from_parts(0, 1, u128::MAX).unwrap();
         let right = super::MachineDuration::from_parts(0, 1, u128::MAX - 1).unwrap();
-        assert_eq!(
-            left.checked_add(right),
-            Err(ClockError::ArithmeticOverflow)
-        );
+        assert_eq!(left.checked_add(right), Err(ClockError::ArithmeticOverflow));
     }
 
 }
