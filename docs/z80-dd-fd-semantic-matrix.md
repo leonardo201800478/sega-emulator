@@ -286,7 +286,8 @@ Este aditivo preserva as fotografias históricas acima e atualiza o estado opera
 ### E7.7 — novas evidências e candidatos não integrados
 
 - **PR #538:** adiciona matriz de 48.000 casos para as oito instruções ED de I/O em bloco e documenta a semântica empiricamente caracterizada para Zilog NMOS. No HEAD consultado, Rust/Python/Windows PyO3/Windows D3D12/change-impact PASS; Scheduler stress, PowerShell, Qt smoke e refresh de lockfiles SKIPPED. Não altera runtime e permanece aberta.
-- **PR #539:** corrige a divergência do latch `p` de LD A,I/R no microsequenciador. O executor atômico já aplicava a exceção P/V ao aceitar INT na fronteira imediatamente seguinte. A branch candidata adiciona testes de INT, NMI, instrução intermediária e snapshot/restore; CI está pendente. Não integrada.
+- **PR #539:** corrige a divergência do latch `p` de LD A,I/R no microsequenciador. O executor atômico já aplicava a exceção P/V ao aceitar INT na fronteira imediatamente seguinte. A branch candidata adiciona testes de INT, NMI, instrução intermediária, snapshot/restore e sincronização de Q. Rust/Python/PyO3/D3D12/change-impact PASS no HEAD `f3afc000c2805559d83d06b693ed1f2f634cf39b`; Scheduler stress/PowerShell/Qt/lock refresh SKIPPED. Não integrada.
+- **PR #540:** adiciona matriz DD/FD de 126 casos para `LD r,r'`, IXH/IXL/IYH/IYL e exceções H/L em indexed-memory. Não altera runtime; CI em execução no HEAD `9e263bd4070c68b0b5e0c99e08b6d05688bb3f06`. Não integrada.
 - A semântica de `OUT (C),0` permanece específica de variante; o perfil Zilog NMOS documentado para o SMS escreve zero, conforme o handler e os testes atuais. CMOS/clones não são generalizados.
 - LDI/LDD/LDIR/LDDR e CPI/CPD/CPIR/CPDR foram comparados com MAME/redcode para flags e WZ; não foi identificada divergência de runtime nesta inspeção. Isso não substitui validação física/diferencial independente.
 
