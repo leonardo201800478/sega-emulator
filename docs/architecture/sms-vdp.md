@@ -18,7 +18,7 @@ A lista é um resumo funcional, não uma certificação de todas as revisões de
 
 A implementação atual usa o modelo de raster e os pontos de integração que estão presentes no runtime. Isso não é dot-accurate nem pretende ser uma simulação elétrica do ASIC.
 
-A granularidade deve ser refinada quando um efeito observável exigir: por exemplo, uma escrita de registrador durante a linha, uma mudança de scroll, um contador/IRQ ou um efeito de sprite que jogos realmente utilizem. Se o efeito puder ser reproduzido corretamente por scanline ou por evento, não criar um pipeline por pixel ou evento por dot apenas por completude teórica.
+A precisão temporal deve ser priorizada para efeitos de gameplay sensíveis ao instante: escrita de registrador durante a linha, mudança de scroll, H/V counter, IRQ ou comportamento de sprite que jogos realmente utilizem. Para o restante, manter a composição funcional atômica/por scanline e duração nominal correta. Se o efeito puder ser reproduzido por scanline ou evento, não criar pipeline por pixel ou evento por dot apenas por completude teórica.
 
 ## Limites conhecidos
 
