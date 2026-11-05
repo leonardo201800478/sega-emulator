@@ -1090,15 +1090,8 @@ mod tests {
 
     #[test]
     fn converts_rgb888_active_row_without_padding() {
-        let frame = VideoFrame::new(
-            3,
-            1,
-            1,
-            PixelFormat::Rgb888,
-            5,
-            vec![12, 34, 56, 90, 91],
-        )
-        .unwrap();
+        let frame =
+            VideoFrame::new(3, 1, 1, PixelFormat::Rgb888, 5, vec![12, 34, 56, 90, 91]).unwrap();
         let mut output = [0; 4];
 
         assert!(convert_frame_row_to_rgba8888(&frame, 0, &mut output));
