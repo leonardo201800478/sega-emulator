@@ -4,7 +4,7 @@
 **Escopo:** VDP do SMS1 com ASIC 315-5124.  
 **Estado:** T0 parcial — evidência documental inicial registrada; medições físicas, vetores independentes e cronologia sublinha continuam pendentes.  
 **Branch de pesquisa:** `research/sms1-vdp-t0-characterization-2026-11-02`  
-**Arquitetura-base:** `docs/architecture/sms-vdp-cycle-accurate-design.md` (PR #342, arquitetura-alvo).  
+**Referência arquitetural vigente:** [ADR-0016 — fidelidade observável](../architecture/adr/0016-observable-fidelity-and-proportional-timing.md). Esta auditoria é um registro histórico de caracterização; não define pipeline por dot como requisito.  
 **Runtime:** nenhuma alteração nesta etapa.
 
 ## 1. Decisão de escopo
