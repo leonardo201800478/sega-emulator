@@ -165,3 +165,27 @@ def test_temporal_adapter_forwards_native_audio_configuration(
     assert ("close_audio_output",) in machine.native_machine.calls
     assert machine.audio_output_error is None
     assert machine.audio_output_metrics == (0, 0)
+
+
+def test_reset_reopens_the_previous_native_audio_configuration(
+    temporal_machine_module: SimpleNamespace,
+) -> None:
+    machine = TemporalSMSMachine(b"rom")
+    machine.configure_audio_output("wasapi", sample_rate=48_000)
+    machine.reset()
+
+    audio_calls = [
+        call
+        for call in machine.native_machine.calls
+        if call[0] == "configure_audio_output"
+    ]
+    assert len(audio_calls) == 2
+    assert audio_calls[1] == (
+        "configure_audio_output",
+        "wasapi",
+        48_000,
+        512,
+        4,
+        100,
+        0,
+    )
