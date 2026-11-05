@@ -450,9 +450,13 @@ mod tests {
         write_vdp_register(&mut machine, 1, 0xA0); // Enable display and VBlank IRQ.
         // Advance through the real machine path to the documented VBlank
         // boundary at the end of the 192-line active display.
-        while !machine.vdp().interrupt_pending() {
+        for _ in 0..(228 * 192 / 4) {
+            if machine.vdp().interrupt_pending() {
+                break;
+            }
             machine.step().unwrap();
         }
+        assert!(machine.vdp().interrupt_pending(), "VBlank IRQ must assert");
         assert_eq!(machine.vdp().raster_position().line, 192);
         assert_eq!(machine.cpu.int_pending, Some(0xFF));
         assert_eq!(machine.step(), Ok(13)); // IM 1 acknowledge.
@@ -484,14 +488,22 @@ mod tests {
         write_vdp_register(&mut machine, 10, 1); // R10=1 requests line 2, 4, 6, ...
         // The line counter is reloaded from R10 during VBlank. Reach the next
         // frame through normal machine stepping before enabling line IRQ.
-        while machine.vdp().frame_number() == 0 {
+        for _ in 0..(228 * 262 / 4) {
+            if machine.vdp().frame_number() != 0 {
+                break;
+            }
             machine.step().unwrap();
         }
+        assert_eq!(machine.vdp().frame_number(), 1, "first frame must complete");
         let _ = machine.vdp_mut().read_port(0xBF); // Clear prior frame/status flags.
         write_vdp_register(&mut machine, 0, 0x10); // Enable line IRQ.
-        while !machine.vdp().interrupt_pending() {
+        for _ in 0..(228 * 2 / 4) {
+            if machine.vdp().interrupt_pending() {
+                break;
+            }
             machine.step().unwrap();
         }
+        assert!(machine.vdp().interrupt_pending(), "line IRQ must assert"); 
         assert_eq!(machine.vdp().raster_position().line, 2);
         assert_eq!(machine.cpu.int_pending, Some(0xFF));
         assert_eq!(machine.vdp().status() & 0x80, 0, "not a VBlank source");
