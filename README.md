@@ -16,6 +16,10 @@ O projeto não busca simulação elétrica integral, reprodução de transistore
 
 O estado exato de cada componente e das PRs deve ser conferido na [main](https://github.com/leonardo201800478/sega-emulator) e em [Estado dos componentes](docs/component-status.md). Documentos históricos não prevalecem sobre o código integrado nem sobre a ADR-0016.
 
+## Política de precisão
+
+A semântica funcional é exata em todas as instruções e operações suportadas. A precisão temporal recebe prioridade nos caminhos de instrução e processos que influenciam gameplay — por exemplo, I/O, raster/VDP, áudio, mapper, interrupções e contenção real. Operações sem efeito intermediário observável usam execução atômica determinística, preservando duração nominal conhecida. Não se exige simulação elétrica nem precisão por pino. A [ADR-0016](docs/architecture/adr/0016-observable-fidelity-and-proportional-timing.md) define os critérios.
+
 ## Arquitetura
 
 | Camada | Responsabilidade |
