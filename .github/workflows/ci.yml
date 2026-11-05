@@ -385,6 +385,7 @@ jobs:
         run: |
           python -m venv .venv
           .\.venv\Scripts\python.exe -m pip install maturin==1.16.0
+          .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
       - name: Format the standalone PyO3 crate
         working-directory: native/z80_core
         run: cargo fmt --all -- --check
