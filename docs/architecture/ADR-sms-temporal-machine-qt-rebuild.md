@@ -48,7 +48,7 @@ A decisão sobre feature gating versus crate arquivado será tomada após a matr
 
 ### D3 — PSG SMS completo e temporal, reutilizando `sega-sn76489`
 
-O SMS utiliza o PSG integrado à família SN76489. O núcleo compartilhado `Sn76489Core` será a única implementação digital. A máquina SMS fornece o perfil e o relógio corretos.
+O SMS utiliza o PSG integrado à família SN76489. O núcleo compartilhado `Sn76489Core` será a única implementação digital. A máquina SMS fornece o perfil e o relógio corretos e reutiliza `sega-audio-runtime::ScheduledPsg` para consumir os avanços de clock do Scheduler e aplicar escritas no boundary de dispatch; não será criada uma segunda ponte temporal local.
 
 Requisitos:
 - quatro canais: três tons e um ruído;
