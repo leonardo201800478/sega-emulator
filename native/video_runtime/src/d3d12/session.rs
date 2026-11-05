@@ -132,6 +132,7 @@ pub struct D3d12Session {
     running: Arc<AtomicBool>,
     last_presented_sequence: Arc<AtomicU64>,
     cancelled_pending_frames: Arc<AtomicU64>,
+    device_recoveries: Arc<AtomicU64>,
 }
 
 impl D3d12Session {
@@ -156,6 +157,8 @@ impl D3d12Session {
         let worker_last_presented = Arc::clone(&last_presented_sequence);
         let cancelled_pending_frames = Arc::new(AtomicU64::new(0));
         let worker_cancelled_frames = Arc::clone(&cancelled_pending_frames);
+        let device_recoveries = Arc::new(AtomicU64::new(0));
+        let worker_device_recoveries = Arc::clone(&device_recoveries);
 
         let (startup_sender, startup_receiver) = mpsc::sync_channel::<Result<(), String>>(1);
 
@@ -258,6 +261,8 @@ impl D3d12Session {
                                         }
                                     };
 
+                                    worker_device_recoveries.fetch_add(1, Ordering::AcqRel);
+
                                     if let Err(retry_error) = host.present_frame(&frame) {
                                         in_flight_cancelled =
                                             in_flight_cancelled.saturating_add(1);
@@ -315,6 +320,7 @@ impl D3d12Session {
                 running,
                 last_presented_sequence,
                 cancelled_pending_frames,
+                device_recoveries,
             }),
             Ok(Err(message)) => {
                 let _ = worker.join();
@@ -351,6 +357,11 @@ impl D3d12Session {
         self.cancelled_pending_frames.load(Ordering::Acquire)
     }
 
+    /// Return how many successful D3D12 device recreations occurred in this session.
+    pub fn device_recovery_count(&self) -> u64 {
+        self.device_recoveries.load(Ordering::Acquire)
+    }
+
     /// Return the number of frames waiting for presentation.
     pub fn queued_frames(&self) -> Result<usize, D3d12SessionError> {
         self.queue.len().map_err(D3d12SessionError::Queue)
@@ -383,5 +394,47 @@ impl Drop for D3d12Session {
     fn drop(&mut self) {
         let _ = self.queue.close();
         let _ = self.join_worker();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_recoverable_device_loss, is_window_closed_error};
+    use windows::Win32::Graphics::Dxgi::{
+        DXGI_ERROR_DEVICE_HUNG, DXGI_ERROR_DEVICE_REMOVED, DXGI_ERROR_DEVICE_RESET,
+        DXGI_ERROR_DRIVER_INTERNAL_ERROR,
+    };
+    use windows::core::{Error, HRESULT};
+
+    #[test]
+    fn only_removed_and_reset_are_automatically_recoverable() {
+        assert!(is_recoverable_device_loss(&Error::new(
+            DXGI_ERROR_DEVICE_REMOVED,
+            "removed"
+        )));
+        assert!(is_recoverable_device_loss(&Error::new(
+            DXGI_ERROR_DEVICE_RESET,
+            "reset"
+        )));
+        assert!(!is_recoverable_device_loss(&Error::new(
+            DXGI_ERROR_DEVICE_HUNG,
+            "hung"
+        )));
+        assert!(!is_recoverable_device_loss(&Error::new(
+            DXGI_ERROR_DRIVER_INTERNAL_ERROR,
+            "driver internal error"
+        )));
+    }
+
+    #[test]
+    fn recognizes_only_the_explicit_window_closed_hresult() {
+        assert!(is_window_closed_error(&Error::new(
+            HRESULT(0x8000_4004_u32 as i32),
+            "window closed"
+        )));
+        assert!(!is_window_closed_error(&Error::new(
+            HRESULT(0x8000_4005_u32 as i32),
+            "generic failure"
+        )));
     }
 }
