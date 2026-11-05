@@ -1,11 +1,11 @@
 # Roadmap mestre — Sega Emulator
 
 **Status:** única rota normativa de implementação.  
-**Baseline consultada:** `main` em `f4e428ad31c0d2e214e8ed15aab8fa705b1c795e` (2026-11-05).  
+**Baseline documental atualizada:** `main` em `c8da934d051f69f0fad01d133a923c26248a7250` (2026-11-05); esta alteração é documental.  
 **Prioridade imediata:** Master System e consolidação do Z80 compartilhado, preservando o SG-1000.  
 **Política de fidelidade:** [ADR-0016](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
 
-O objetivo é uma emulação funcional e temporal próxima ao console original, com desempenho adequado. Não é requisito reproduzir todos os pinos, fases elétricas, estados internos ou transições analógicas dos chips. A precisão adicional deve ser justificada por comportamento observável de um console, jogo ou periférico.
+O objetivo é uma emulação funcionalmente correta e temporalmente fiel nos caminhos de execução que influenciam jogos e periféricos. O detalhamento temporal é prioritário para sequências de instruções e processos de gameplay sensíveis a ordem/duração; o restante usa operações atômicas determinísticas e semanticamente exatas. Não reproduzir pinos, fases elétricas ou estados internos sem efeito observável.
 
 Não manter roadmaps ou planos de sprint paralelos. ADRs, auditorias e referências de hardware não criam fases ou prioridades concorrentes.
 
@@ -20,6 +20,17 @@ Não manter roadmaps ou planos de sprint paralelos. ADRs, auditorias e referênc
 7. Desempenho deve ser medido; não usar JIT, frame skipping, hacks de timing ou otimizações especulativas.
 8. Mudanças não triviais seguem branch + PR. Sem commit direto na main, force-push ou merge sem gates verdes no HEAD final.
 9. ROMs comerciais, BIOS proprietárias e dumps protegidos não entram no Git.
+
+## Regra normativa de granularidade — prioridade temporal e execução atômica
+
+O projeto adota dois níveis complementares, sem reduzir a correção funcional:
+
+1. **Precisão temporal prioritária para gameplay:** instruções, sequências e processos cuja ordem ou duração possa alterar a execução de jogos ou a interação entre CPU, memória/barramento, mapper, VDP/raster, PSG/FM/PCM, interrupções, DMA ou periféricos. Nesses caminhos, preservar clocks, ordem causal, pontos de interação e a menor resolução temporal que reproduza o efeito observado. Usar M-cycles, T-states, WAIT, suspensão/retomada ou fases de transação somente quando testes, documentação ou divergência reproduzível demonstrarem essa necessidade.
+2. **Precisão funcional atômica como padrão para o restante:** executar a operação em uma unidade atômica definida pela interface (instrução, acesso, escrita de registrador, avanço de scanline/bloco ou amostra), com resultado, flags, memória, efeitos colaterais, estado e duração nominal corretos quando conhecidos. Não criar micro-operações, fases internas, safe points ou eventos por tick apenas para espelhar a estrutura elétrica do chip.
+
+A semântica funcional de toda instrução e operação suportada continua obrigatoriamente correta. “Atômica” não significa aproximada, nondeterminística ou incompleta; significa que estados intermediários não observáveis não são modelados sem necessidade. O detalhamento temporal deve concentrar-se nos caminhos de gameplay sensíveis ao tempo. **Não existe requisito de precisão por pino, por borda elétrica ou por transistor.**
+
+Antes de elevar uma operação do nível atômico ao temporal, registrar: jogo/console/revisão/periférico afetado, efeito observável, evidência, menor granularidade suficiente, teste de regressão e custo. Na ausência dessa evidência, manter execução atômica e registrar a incerteza sem bloquear a plataforma.
 
 ## 2. Fases de plataforma
 
@@ -39,7 +50,7 @@ Prioridade principal. Consolidar a máquina SMS em Rust:
 - sincronização CPU/vídeo/áudio nos pontos de interação que afetem jogos;
 - compatibilidade com ROMs de teste e jogos representativos.
 
-A precisão temporal deve ser incremental e seletiva. Não exigir execução por T-state de todas as instruções nem representação integral dos pinos.
+Priorizar temporização de instruções e processos que afetem gameplay: escritas/leituras de I/O e registradores de VDP/PSG, efeitos de mapper, interrupções, raster/H-counter, DMA, contenção e WAIT quando presentes no console. Instruções puramente internas de CPU e operações sem interação observável permanecem atômicas, preservando semântica e duração nominal conhecida. Não exigir execução por T-state de todas as instruções nem representação integral dos pinos.
 
 ### P2 — SG-1000
 
@@ -84,10 +95,11 @@ Critérios funcionais:
 - interrupções e HALT conforme o uso da plataforma;
 - regressões SG-1000 e SMS.
 
-Critérios temporais:
-- preservar durações e relações de clock necessárias aos consumidores;
-- representar transações suspensíveis ou WAIT somente quando o barramento real exigir;
-- adicionar M-cycle/T-state ou sinais derivados apenas quando necessários a uma interação observável;
+Critérios temporais prioritários:
+- preservar duração nominal e ordem das instruções executadas por jogos;
+- detalhar sequência temporal quando uma instrução/processo interagir com VDP, áudio, mapper, I/O, interrupção ou barramento de modo sensível ao instante;
+- manter atomicidade para operações internas sem efeito intermediário observável;
+- representar transações suspensíveis, WAIT, M-cycle/T-state e sinais derivados somente quando a plataforma exigir;
 - não simular todos os pinos ou estados internos como meta independente.
 
 Suítes externas como ZEXDOC/ZEXALL e traces de barramento são instrumentos de diagnóstico/validação. Não são autorização para ampliar indefinidamente o escopo nem substituem testes de integração nos consoles.
