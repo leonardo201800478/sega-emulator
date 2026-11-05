@@ -1821,8 +1821,7 @@ mod tests {
         expected.advance(228);
 
         assert_eq!(
-            actual.working_framebuffer,
-            expected.working_framebuffer,
+            actual.working_framebuffer, expected.working_framebuffer,
             "writes before the R8 latch boundary must be visible on this line"
         );
     }
