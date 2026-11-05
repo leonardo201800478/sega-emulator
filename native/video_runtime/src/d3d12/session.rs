@@ -12,6 +12,8 @@ use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
+use windows::Win32::Graphics::Dxgi::{DXGI_ERROR_DEVICE_REMOVED, DXGI_ERROR_DEVICE_RESET};
+
 use super::D3d12Host;
 use crate::{FrameQueue, FrameQueueError, VideoFrame};
 
@@ -28,9 +30,13 @@ pub enum D3d12SessionError {
     StartupChannelClosed,
     /// Presenting a frame failed for a reason other than device loss.
     Presentation(windows::core::Error),
-    /// D3D12 reported that its device was removed, reset, or otherwise invalid.
-    /// The original HRESULT is preserved; automatic recreation is not yet enabled.
+    /// D3D12 reported a non-recoverable device-loss reason.
     DeviceLost(windows::core::Error),
+    /// Device recreation or the single retry of the interrupted frame failed.
+    DeviceRecoveryFailed {
+        initial_reason: windows::core::Error,
+        recovery_error: String,
+    },
     /// The worker thread panicked before returning its result.
     WorkerPanicked,
     /// The native window was closed by the user.
@@ -62,11 +68,15 @@ impl fmt::Display for D3d12SessionError {
                 write!(formatter, "D3D12 frame presentation failed: {error}")
             }
             Self::DeviceLost(error) => {
-                write!(
-                    formatter,
-                    "D3D12 device loss detected; recovery is pending: {error}"
-                )
+                write!(formatter, "non-recoverable D3D12 device loss: {error}")
             }
+            Self::DeviceRecoveryFailed {
+                initial_reason,
+                recovery_error,
+            } => write!(
+                formatter,
+                "D3D12 device recovery failed after {initial_reason}: {recovery_error}"
+            ),
             Self::WorkerPanicked => write!(formatter, "D3D12 presentation worker panicked"),
             Self::WindowClosed => write!(formatter, "native D3D12 presentation window was closed"),
             Self::PendingFramesCancelled(count) => write!(
@@ -83,6 +93,7 @@ impl std::error::Error for D3d12SessionError {
             Self::Queue(error) => Some(error),
             Self::WorkerStart(error) => Some(error),
             Self::Presentation(error) | Self::DeviceLost(error) => Some(error),
+            Self::DeviceRecoveryFailed { initial_reason, .. } => Some(initial_reason),
             _ => None,
         }
     }
@@ -92,6 +103,16 @@ impl From<FrameQueueError> for D3d12SessionError {
     fn from(error: FrameQueueError) -> Self {
         Self::Queue(error)
     }
+}
+
+/// Only explicit DXGI removed/reset reasons are automatically recoverable.
+/// DEVICE_HUNG, DRIVER_INTERNAL_ERROR and INVALID_CALL remain visible failures.
+fn is_recoverable_device_loss(error: &windows::core::Error) -> bool {
+    error.code() == DXGI_ERROR_DEVICE_REMOVED || error.code() == DXGI_ERROR_DEVICE_RESET
+}
+
+fn is_window_closed_error(error: &windows::core::Error) -> bool {
+    error.code().0 == 0x8000_4004_u32 as i32
 }
 
 struct RunningFlagGuard(Arc<AtomicBool>);
@@ -115,6 +136,7 @@ pub struct D3d12Session {
     running: Arc<AtomicBool>,
     last_presented_sequence: Arc<AtomicU64>,
     cancelled_pending_frames: Arc<AtomicU64>,
+    device_recoveries: Arc<AtomicU64>,
 }
 
 impl D3d12Session {
@@ -139,6 +161,8 @@ impl D3d12Session {
         let worker_last_presented = Arc::clone(&last_presented_sequence);
         let cancelled_pending_frames = Arc::new(AtomicU64::new(0));
         let worker_cancelled_frames = Arc::clone(&cancelled_pending_frames);
+        let device_recoveries = Arc::new(AtomicU64::new(0));
+        let worker_device_recoveries = Arc::clone(&device_recoveries);
 
         let (startup_sender, startup_receiver) = mpsc::sync_channel::<Result<(), String>>(1);
 
@@ -215,11 +239,60 @@ impl D3d12Session {
                             }
 
                             if let Err(error) = host.present_frame(&frame) {
-                                in_flight_cancelled = in_flight_cancelled.saturating_add(1);
-                                return Err(match host.device_removed_reason() {
-                                    Err(reason) => D3d12SessionError::DeviceLost(reason),
-                                    Ok(()) => D3d12SessionError::Presentation(error),
-                                });
+                                let device_reason = host.device_removed_reason().err();
+                                let classification_reason =
+                                    device_reason.as_ref().unwrap_or(&error);
+
+                                if is_recoverable_device_loss(classification_reason) {
+                                    let initial_reason = device_reason.unwrap_or(error);
+                                    // Drop all old COM resources and the old
+                                    // HWND before creating a new device and
+                                    // swap chain. The window class is reusable.
+                                    drop(host);
+                                    host = match D3d12Host::initialize_with_window_size(
+                                        render_width,
+                                        render_height,
+                                        window_width,
+                                        window_height,
+                                    ) {
+                                        Ok(host) => host,
+                                        Err(recovery_error) => {
+                                            in_flight_cancelled =
+                                                in_flight_cancelled.saturating_add(1);
+                                            return Err(D3d12SessionError::DeviceRecoveryFailed {
+                                                initial_reason,
+                                                recovery_error: recovery_error.to_string(),
+                                            });
+                                        }
+                                    };
+
+                                    worker_device_recoveries.fetch_add(1, Ordering::AcqRel);
+
+                                    if let Err(retry_error) = host.present_frame(&frame) {
+                                        in_flight_cancelled = in_flight_cancelled.saturating_add(1);
+                                        let recovery_error = match host.device_removed_reason() {
+                                            Err(reason) => {
+                                                format!(
+                                                    "retry also lost the D3D12 device: {reason}"
+                                                )
+                                            }
+                                            Ok(()) => retry_error.to_string(),
+                                        };
+                                        return Err(D3d12SessionError::DeviceRecoveryFailed {
+                                            initial_reason,
+                                            recovery_error,
+                                        });
+                                    }
+                                } else {
+                                    in_flight_cancelled = in_flight_cancelled.saturating_add(1);
+                                    return Err(match device_reason {
+                                        Some(reason) => D3d12SessionError::DeviceLost(reason),
+                                        None if is_window_closed_error(&error) => {
+                                            D3d12SessionError::WindowClosed
+                                        }
+                                        None => D3d12SessionError::Presentation(error),
+                                    });
+                                }
                             }
                             worker_last_presented.store(frame.sequence(), Ordering::Release);
                         } else if worker_queue.is_closed()? {
@@ -252,6 +325,7 @@ impl D3d12Session {
                 running,
                 last_presented_sequence,
                 cancelled_pending_frames,
+                device_recoveries,
             }),
             Ok(Err(message)) => {
                 let _ = worker.join();
@@ -288,6 +362,11 @@ impl D3d12Session {
         self.cancelled_pending_frames.load(Ordering::Acquire)
     }
 
+    /// Return how many successful D3D12 device recreations occurred in this session.
+    pub fn device_recovery_count(&self) -> u64 {
+        self.device_recoveries.load(Ordering::Acquire)
+    }
+
     /// Return the number of frames waiting for presentation.
     pub fn queued_frames(&self) -> Result<usize, D3d12SessionError> {
         self.queue.len().map_err(D3d12SessionError::Queue)
@@ -320,5 +399,47 @@ impl Drop for D3d12Session {
     fn drop(&mut self) {
         let _ = self.queue.close();
         let _ = self.join_worker();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{is_recoverable_device_loss, is_window_closed_error};
+    use windows::Win32::Graphics::Dxgi::{
+        DXGI_ERROR_DEVICE_HUNG, DXGI_ERROR_DEVICE_REMOVED, DXGI_ERROR_DEVICE_RESET,
+        DXGI_ERROR_DRIVER_INTERNAL_ERROR,
+    };
+    use windows::core::{Error, HRESULT};
+
+    #[test]
+    fn only_removed_and_reset_are_automatically_recoverable() {
+        assert!(is_recoverable_device_loss(&Error::new(
+            DXGI_ERROR_DEVICE_REMOVED,
+            "removed"
+        )));
+        assert!(is_recoverable_device_loss(&Error::new(
+            DXGI_ERROR_DEVICE_RESET,
+            "reset"
+        )));
+        assert!(!is_recoverable_device_loss(&Error::new(
+            DXGI_ERROR_DEVICE_HUNG,
+            "hung"
+        )));
+        assert!(!is_recoverable_device_loss(&Error::new(
+            DXGI_ERROR_DRIVER_INTERNAL_ERROR,
+            "driver internal error"
+        )));
+    }
+
+    #[test]
+    fn recognizes_only_the_explicit_window_closed_hresult() {
+        assert!(is_window_closed_error(&Error::new(
+            HRESULT(0x8000_4004_u32 as i32),
+            "window closed"
+        )));
+        assert!(!is_window_closed_error(&Error::new(
+            HRESULT(0x8000_4005_u32 as i32),
+            "generic failure"
+        )));
     }
 }

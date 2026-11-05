@@ -18,8 +18,8 @@ use std::slice;
 use super::{FrameMailbox, FrameMailboxError, PixelFormat, VideoFrame};
 
 use windows::Win32::Foundation::{
-    CloseHandle, HANDLE, HINSTANCE, HWND, LPARAM, LRESULT, RECT, WAIT_OBJECT_0, WAIT_TIMEOUT,
-    WPARAM,
+    CloseHandle, ERROR_CLASS_ALREADY_EXISTS, GetLastError, HANDLE, HINSTANCE, HWND, LPARAM,
+    LRESULT, RECT, WAIT_OBJECT_0, WAIT_TIMEOUT, WPARAM,
 };
 use windows::Win32::Graphics::Direct3D::D3D_FEATURE_LEVEL_11_0;
 use windows::Win32::Graphics::Direct3D12::{
@@ -59,10 +59,9 @@ use windows::Win32::UI::HiDpi::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, DestroyWindow,
-    DispatchMessageW, IsIconic, MSG, PM_REMOVE, PeekMessageW, PostQuitMessage, RegisterClassW,
-    SW_SHOW, SWP_NOACTIVATE, SWP_NOZORDER, SetWindowPos, ShowWindow, TranslateMessage,
-    WINDOW_EX_STYLE, WINDOW_STYLE, WM_DESTROY, WM_DPICHANGED, WM_NCCREATE, WNDCLASSW,
-    WS_OVERLAPPEDWINDOW,
+    DispatchMessageW, IsIconic, IsWindow, MSG, PM_REMOVE, PeekMessageW, RegisterClassW, SW_SHOW,
+    SWP_NOACTIVATE, SWP_NOZORDER, SetWindowPos, ShowWindow, TranslateMessage, WINDOW_EX_STYLE,
+    WINDOW_STYLE, WM_DESTROY, WM_DPICHANGED, WM_NCCREATE, WNDCLASSW, WS_OVERLAPPEDWINDOW,
 };
 use windows::core::{Error, Interface, Result, w};
 
@@ -126,7 +125,13 @@ impl NativeVideoWindow {
 
         let atom = unsafe { RegisterClassW(&class) };
         if atom == 0 {
-            return Err(Error::from_thread());
+            // A device-loss recovery may recreate the HWND on this same
+            // presentation thread. The process-wide window class remains
+            // registered after the old HWND is destroyed.
+            let last_error = unsafe { GetLastError() };
+            if last_error != ERROR_CLASS_ALREADY_EXISTS {
+                return Err(Error::from_thread());
+            }
         }
 
         let hwnd = unsafe {
@@ -183,7 +188,7 @@ impl NativeVideoWindow {
             }
         }
 
-        running
+        running && unsafe { IsWindow(Some(self.hwnd)).as_bool() }
     }
 }
 
@@ -234,7 +239,9 @@ unsafe extern "system" fn window_proc(
     }
 
     if message == WM_DESTROY {
-        unsafe { PostQuitMessage(0) };
+        // Do not post WM_QUIT here: a device-loss recovery can destroy and
+        // recreate this HWND on the same worker thread. pump_messages() checks
+        // whether its own HWND still exists to detect user closure.
         return LRESULT(0);
     }
 
