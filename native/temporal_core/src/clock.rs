@@ -134,30 +134,17 @@ impl MachineInstant {
     /// value that cannot be represented by the u128 rational fields is
     /// rejected rather than rounded.
     pub fn checked_add(self, duration: MachineDuration) -> Result<Self, ClockError> {
-        let common = gcd_u128(self.fractional_denominator, duration.fractional_denominator);
-        let left_scale = duration.fractional_denominator / common;
-        let right_scale = self.fractional_denominator / common;
-        let denominator = self
-            .fractional_denominator
-            .checked_mul(left_scale)
-            .ok_or(ClockError::ArithmeticOverflow)?;
-        let left = self
-            .fractional_numerator
-            .checked_mul(left_scale)
-            .ok_or(ClockError::ArithmeticOverflow)?;
-        let right = duration
-            .fractional_numerator
-            .checked_mul(right_scale)
-            .ok_or(ClockError::ArithmeticOverflow)?;
-        let (carry, numerator) = if left >= denominator - right {
-            (1, left - (denominator - right))
-        } else {
-            (0, left + right)
-        };
+        let (carry, numerator, denominator) = combine_fraction_parts(
+            self.fractional_numerator,
+            self.fractional_denominator,
+            duration.fractional_numerator,
+            duration.fractional_denominator,
+            false,
+        )?;
         let whole = self
             .whole_ticks
             .checked_add(duration.whole_ticks)
-            .and_then(|ticks| ticks.checked_add(carry))
+            .and_then(|ticks| ticks.checked_add(if carry { 1 } else { 0 }))
             .ok_or(ClockError::ArithmeticOverflow)?;
         Self::from_parts(whole, numerator, denominator)
     }
@@ -167,32 +154,23 @@ impl MachineInstant {
         if self < earlier {
             return Err(ClockError::TimeWentBackwards);
         }
-        let common = gcd_u128(self.fractional_denominator, earlier.fractional_denominator);
-        let left_scale = earlier.fractional_denominator / common;
-        let right_scale = self.fractional_denominator / common;
-        let denominator = self
-            .fractional_denominator
-            .checked_mul(left_scale)
-            .ok_or(ClockError::ArithmeticOverflow)?;
-        let left = self
-            .fractional_numerator
-            .checked_mul(left_scale)
-            .ok_or(ClockError::ArithmeticOverflow)?;
-        let right = earlier
-            .fractional_numerator
-            .checked_mul(right_scale)
-            .ok_or(ClockError::ArithmeticOverflow)?;
         let whole_delta = self
             .whole_ticks
             .checked_duration_since(earlier.whole_ticks)
             .ok_or(ClockError::TimeWentBackwards)?;
-        let (whole, numerator) = if left < right {
-            let whole = whole_delta
+        let (borrow, numerator, denominator) = combine_fraction_parts(
+            self.fractional_numerator,
+            self.fractional_denominator,
+            earlier.fractional_numerator,
+            earlier.fractional_denominator,
+            true,
+        )?;
+        let whole = if borrow {
+            whole_delta
                 .checked_sub(1)
-                .ok_or(ClockError::TimeWentBackwards)?;
-            (whole, denominator - (right - left))
+                .ok_or(ClockError::TimeWentBackwards)?
         } else {
-            (whole_delta, left - right)
+            whole_delta
         };
         MachineDuration::from_parts(whole, numerator, denominator)
     }
@@ -291,30 +269,17 @@ impl MachineDuration {
 
     /// Add another exact duration, rejecting unrepresentable arithmetic.
     pub fn checked_add(self, other: Self) -> Result<Self, ClockError> {
-        let common = gcd_u128(self.fractional_denominator, other.fractional_denominator);
-        let left_scale = other.fractional_denominator / common;
-        let right_scale = self.fractional_denominator / common;
-        let denominator = self
-            .fractional_denominator
-            .checked_mul(left_scale)
-            .ok_or(ClockError::ArithmeticOverflow)?;
-        let left = self
-            .fractional_numerator
-            .checked_mul(left_scale)
-            .ok_or(ClockError::ArithmeticOverflow)?;
-        let right = other
-            .fractional_numerator
-            .checked_mul(right_scale)
-            .ok_or(ClockError::ArithmeticOverflow)?;
-        let (carry, numerator) = if left >= denominator - right {
-            (1, left - (denominator - right))
-        } else {
-            (0, left + right)
-        };
+        let (carry, numerator, denominator) = combine_fraction_parts(
+            self.fractional_numerator,
+            self.fractional_denominator,
+            other.fractional_numerator,
+            other.fractional_denominator,
+            false,
+        )?;
         let whole_ticks = self
             .whole_ticks
             .checked_add(other.whole_ticks)
-            .and_then(|ticks| ticks.checked_add(carry))
+            .and_then(|ticks| ticks.checked_add(if carry { 1 } else { 0 }))
             .ok_or(ClockError::ArithmeticOverflow)?;
         Self::from_parts(whole_ticks, numerator, denominator)
     }
@@ -394,6 +359,173 @@ const fn gcd_u128(mut left: u128, mut right: u128) -> u128 {
     }
     left
 }
+/// Five limbs are sufficient for the sum of two u128-by-u128 products
+/// (at most 257 significant bits). This keeps rational reduction exact
+/// without introducing a runtime dependency or rejecting reducible results.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct WideUint {
+    limbs: [u64; 5],
+}
+
+impl WideUint {
+    const ZERO: Self = Self { limbs: [0; 5] };
+
+    fn from_u128(value: u128) -> Self {
+        Self {
+            limbs: [value as u64, (value >> 64) as u64, 0, 0, 0],
+        }
+    }
+
+    fn multiply_u128(left: u128, right: u128) -> Self {
+        let mut product = Self::ZERO;
+        let mut addend = Self::from_u128(left);
+        let mut multiplier = right;
+        while multiplier != 0 {
+            if multiplier & 1 != 0 {
+                product = product.add(addend);
+            }
+            multiplier >>= 1;
+            if multiplier != 0 {
+                addend = addend.shift_left_one();
+            }
+        }
+        product
+    }
+
+    fn add(self, other: Self) -> Self {
+        let mut limbs = [0; 5];
+        let mut carry = 0_u128;
+        for (index, limb) in limbs.iter_mut().enumerate() {
+            let sum = u128::from(self.limbs[index])
+                + u128::from(other.limbs[index])
+                + carry;
+            *limb = sum as u64;
+            carry = sum >> 64;
+        }
+        debug_assert_eq!(carry, 0);
+        Self { limbs }
+    }
+
+    fn shift_left_one(self) -> Self {
+        let mut limbs = [0; 5];
+        let mut carry = 0_u64;
+        for (index, limb) in limbs.iter_mut().enumerate() {
+            *limb = (self.limbs[index] << 1) | carry;
+            carry = self.limbs[index] >> 63;
+        }
+        debug_assert_eq!(carry, 0);
+        Self { limbs }
+    }
+
+    fn compare(self, other: Self) -> Ordering {
+        for index in (0..5).rev() {
+            match self.limbs[index].cmp(&other.limbs[index]) {
+                Ordering::Equal => {}
+                ordering => return ordering,
+            }
+        }
+        Ordering::Equal
+    }
+
+    fn subtract(self, other: Self) -> Self {
+        debug_assert!(self.compare(other) != Ordering::Less);
+        let mut limbs = [0; 5];
+        let mut borrow = false;
+        for (index, limb) in limbs.iter_mut().enumerate() {
+            let (without_other, first_borrow) =
+                self.limbs[index].overflowing_sub(other.limbs[index]);
+            let (value, second_borrow) =
+                without_other.overflowing_sub(if borrow { 1 } else { 0 });
+            *limb = value;
+            borrow = first_borrow || second_borrow;
+        }
+        debug_assert!(!borrow);
+        Self { limbs }
+    }
+
+    fn bit(self, index: usize) -> bool {
+        (self.limbs[index / 64] & (1_u64 << (index % 64))) != 0
+    }
+
+    fn set_bit(&mut self, index: usize) {
+        self.limbs[index / 64] |= 1_u64 << (index % 64);
+    }
+
+    /// Divide by a non-zero u128 divisor using a 129-bit remainder.
+    fn divide_u128(self, divisor: u128) -> (Self, u128) {
+        debug_assert_ne!(divisor, 0);
+        let mut quotient = Self::ZERO;
+        let mut remainder = 0_u128;
+        for bit_index in (0..320).rev() {
+            let overflow = remainder >> 127 != 0;
+            remainder = (remainder << 1) | if self.bit(bit_index) { 1 } else { 0 };
+            if overflow || remainder >= divisor {
+                remainder = remainder.wrapping_sub(divisor);
+                quotient.set_bit(bit_index);
+            }
+        }
+        (quotient, remainder)
+    }
+
+    fn to_u128(self) -> Option<u128> {
+        if self.limbs[2..].iter().any(|&limb| limb != 0) {
+            return None;
+        }
+        Some(u128::from(self.limbs[0]) | (u128::from(self.limbs[1]) << 64))
+    }
+}
+
+/// Combine two reduced fractional parts and return carry/borrow, numerator,
+/// and denominator. Intermediate products are kept wide; only the final
+/// reduced numerator and denominator must fit the public u128 representation.
+fn combine_fraction_parts(
+    left_numerator: u128,
+    left_denominator: u128,
+    right_numerator: u128,
+    right_denominator: u128,
+    subtract: bool,
+) -> Result<(bool, u128, u128), ClockError> {
+    let common = gcd_u128(left_denominator, right_denominator);
+    let left_scale = right_denominator / common;
+    let right_scale = left_denominator / common;
+    let denominator = WideUint::multiply_u128(left_denominator, left_scale);
+    let left = WideUint::multiply_u128(left_numerator, left_scale);
+    let right = WideUint::multiply_u128(right_numerator, right_scale);
+
+    let (carry_or_borrow, numerator) = if subtract {
+        if left.compare(right) == Ordering::Less {
+            (true, denominator.subtract(right.subtract(left)))
+        } else {
+            (false, left.subtract(right))
+        }
+    } else {
+        let sum = left.add(right);
+        if sum.compare(denominator) != Ordering::Less {
+            (true, sum.subtract(denominator))
+        } else {
+            (false, sum)
+        }
+    };
+
+    // For reduced input fractions, any common factor of the result numerator
+    // and the LCM denominator divides gcd(left_denominator, right_denominator).
+    let (_, numerator_mod_common) = numerator.divide_u128(common);
+    let reduction = gcd_u128(numerator_mod_common, common);
+    let (reduced_numerator, numerator_remainder) = numerator.divide_u128(reduction);
+    let (reduced_denominator, denominator_remainder) = denominator.divide_u128(reduction);
+    if numerator_remainder != 0 || denominator_remainder != 0 {
+        return Err(ClockError::ArithmeticOverflow);
+    }
+
+    let numerator = reduced_numerator
+        .to_u128()
+        .ok_or(ClockError::ArithmeticOverflow)?;
+    let denominator = reduced_denominator
+        .to_u128()
+        .ok_or(ClockError::ArithmeticOverflow)?;
+    Ok((carry_or_borrow, numerator, denominator))
+}
+
 
 /// Convert elapsed machine ticks into local cycles and retained phase.
 ///
@@ -1187,4 +1319,41 @@ mod tests {
             Err(ClockError::ArithmeticOverflow)
         );
     }
+    #[test]
+    fn rational_arithmetic_reduces_wide_intermediates_before_narrowing() {
+        let g: u128 = 68_056_473_384_187_692_692_674_921_486_353_642_281;
+        let left = super::MachineDuration::from_parts(0, 1, 2 * g).unwrap();
+        let right = super::MachineDuration::from_parts(0, (g - 3) / 2, 3 * g).unwrap();
+
+        let sum = left.checked_add(right).unwrap();
+        assert_eq!(sum.fractional_numerator(), 1);
+        assert_eq!(sum.fractional_denominator(), 6);
+
+        let instant = super::MachineInstant::from_parts(MachineTime::ZERO, 1, 2 * g).unwrap();
+        let instant_sum = instant.checked_add(right).unwrap();
+        assert_eq!(instant_sum.fractional_numerator(), 1);
+        assert_eq!(instant_sum.fractional_denominator(), 6);
+
+        let later = super::MachineInstant::from_parts(
+            MachineTime::ZERO,
+            (g + 3) / 2,
+            3 * g,
+        )
+        .unwrap();
+        let earlier = super::MachineInstant::from_parts(MachineTime::ZERO, 1, 2 * g).unwrap();
+        let difference = later.checked_duration_since(earlier).unwrap();
+        assert_eq!(difference.fractional_numerator(), 1);
+        assert_eq!(difference.fractional_denominator(), 6);
+    }
+
+    #[test]
+    fn rational_arithmetic_still_rejects_unrepresentable_reduced_results() {
+        let left = super::MachineDuration::from_parts(0, 1, u128::MAX).unwrap();
+        let right = super::MachineDuration::from_parts(0, 1, u128::MAX - 1).unwrap();
+        assert_eq!(
+            left.checked_add(right),
+            Err(ClockError::ArithmeticOverflow)
+        );
+    }
+
 }
