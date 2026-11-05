@@ -1060,7 +1060,7 @@ mod tests {
             bus.coordinator.psg_clock_snapshot().unwrap().total_cycles,
             9
         );
-        assert_eq!(bus.psg().clock_divider_phase(), 9 % 16);
+        assert_eq!(bus.psg().clock_divider_phase(), 9);
     }
 
     #[test]
