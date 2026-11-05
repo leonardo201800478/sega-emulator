@@ -1335,8 +1335,8 @@ mod tests {
                 SmsVdpRevision::Sega3155124,
             );
             assert_eq!(
-                &frame[(y * usize::from(SMS_VDP_WIDTH) + 10) * 3
-                    ..(y * usize::from(SMS_VDP_WIDTH) + 10) * 3 + 3],
+                &frame[(y * SMS_VDP_WIDTH + 10) * 3
+                    ..(y * SMS_VDP_WIDTH + 10) * 3 + 3],
                 &[255, 0, 0],
                 "sprite row {y} must use the even tile pair and duplicate vertically"
             );
