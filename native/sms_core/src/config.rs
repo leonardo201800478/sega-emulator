@@ -12,9 +12,7 @@ pub enum SmsConsoleModel {
     Sms2,
 }
 
-pub use sega_video::sms::{
-    SmsVdpProfile, SmsVdpRevision, SpriteLimitMode, VideoStandard,
-};
+pub use sega_video::sms::{SmsVdpProfile, SmsVdpRevision, SpriteLimitMode, VideoStandard};
 
 /// Console territory/model family. This is not inferred from video standard.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
