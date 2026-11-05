@@ -118,7 +118,9 @@ class SMSMachine:
         if not isinstance(data, bytes):
             raise TypeError("data deve ser bytes.")
         if len(data) != 0x2000:
-            raise ValueError("A SRAM do cartucho SMS deve conter exatamente 8192 bytes.")
+            raise ValueError(
+                "A SRAM do cartucho SMS deve conter exatamente 8192 bytes."
+            )
         self.native_machine.load_cartridge_ram(data)
 
     def configure_audio_output(
