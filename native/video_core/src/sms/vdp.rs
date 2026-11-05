@@ -1412,7 +1412,7 @@ mod tests {
 
         assert_ne!(status & OVERFLOW, 0);
         assert_eq!(status & 0x1F, 8);
-        assert_eq!(frame.iter().all(|pixel| *pixel == 0), true);
+        assert!(frame.iter().all(|pixel| *pixel == 0));
     }
 
     #[test]
