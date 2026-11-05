@@ -50,9 +50,7 @@ class MinimalSmsWindow(QMainWindow):
         self.viewport.setObjectName("smsViewport")
         self.viewport.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.viewport.setMinimumSize(256, 192)
-        self.viewport.setStyleSheet(
-            "QLabel { background: #000000; color: #d0d0d0; }"
-        )
+        self.viewport.setStyleSheet("QLabel { background: #000000; color: #d0d0d0; }")
         self.setCentralWidget(self.viewport)
 
         toolbar = QToolBar("Emulação", self)
