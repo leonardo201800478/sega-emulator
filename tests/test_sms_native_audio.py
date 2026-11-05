@@ -72,6 +72,20 @@ def test_sms_brazil_pal_m_profile_uses_ntsc_like_clock() -> None:
     assert adapter.psg_clock_hz == 3_579_545
 
 
+def test_sms_adapter_round_trips_cartridge_sram() -> None:
+    machine = SMSMachine(bytes([0x00]) * 0x4000)
+    assert len(machine.cartridge_ram) == 0x2000
+
+    image = bytes([0xA5]) * 0x2000
+    machine.load_cartridge_ram(image)
+    assert machine.cartridge_ram == image
+
+    with pytest.raises(TypeError, match="bytes"):
+        machine.load_cartridge_ram(bytearray(image))
+    with pytest.raises(ValueError, match="8192"):
+        machine.load_cartridge_ram(image[:-1])
+
+
 def test_sms_adapter_routes_console_pause_to_z80_nmi() -> None:
     machine = SMSMachine(bytes([0x31, 0xF0, 0xDF, 0x00]))
     machine.step()
