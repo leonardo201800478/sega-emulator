@@ -18,9 +18,9 @@ use crate::{
     SmsTemporalEvent,
 };
 use sega_audio_runtime::{PsgClockError, ScheduledPsg};
-use sega_video::sms::SmsVdpProfile;
 use sega_sn76489::{PsgProfile, Sn76489Core};
 use sega_temporal_core::MachineTime;
+use sega_video::sms::SmsVdpProfile;
 use sega_z80_cpu::{Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES, Z80BusOperation, Z80BusRequest};
 
 pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 9;
@@ -1220,7 +1220,6 @@ mod immediate_port_transaction_tests {
     }
 }
 
-
 #[cfg(test)]
 mod temporal_vdp_tests {
     use super::{SmsTemporalBus, SmsTemporalDispatch};
@@ -1240,8 +1239,7 @@ mod temporal_vdp_tests {
             base_tstates: 4,
         };
         bus.begin_request(request, 0).unwrap();
-        let Some(SmsTemporalDispatch::BusCompletion(completion)) =
-            bus.dispatch_next().unwrap()
+        let Some(SmsTemporalDispatch::BusCompletion(completion)) = bus.dispatch_next().unwrap()
         else {
             panic!("expected scheduled port transaction");
         };
@@ -1250,12 +1248,7 @@ mod temporal_vdp_tests {
     }
 
     fn write_vdp_control(bus: &mut SmsTemporalBus, id: u64, value: u8) {
-        transact(
-            bus,
-            id,
-            Z80BusOperation::PortWrite { value },
-            0x00BF,
-        );
+        transact(bus, id, Z80BusOperation::PortWrite { value }, 0x00BF);
     }
 
     #[test]
@@ -1322,20 +1315,10 @@ mod temporal_vdp_tests {
     #[test]
     fn vdp_counters_are_read_through_the_sms_mirrored_ports() {
         let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
-        let v_counter = transact(
-            &mut bus,
-            1,
-            Z80BusOperation::PortRead,
-            0x127E,
-        );
+        let v_counter = transact(&mut bus, 1, Z80BusOperation::PortRead, 0x127E);
         assert_eq!(v_counter.data, Some(0));
 
-        let h_counter = transact(
-            &mut bus,
-            2,
-            Z80BusOperation::PortRead,
-            0x127F,
-        );
+        let h_counter = transact(&mut bus, 2, Z80BusOperation::PortRead, 0x127F);
         assert_eq!(h_counter.data, Some(8));
     }
 
