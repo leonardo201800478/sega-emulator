@@ -408,7 +408,7 @@ impl SmsVdp {
             );
             if self.light_trigger && self.light_y == line {
                 self.light_pulse = true;
-                self.light_h_counter = Some((self.light_x / 2) as u8);
+                self.light_h_counter = Some(0x08 + (self.light_x / 2) as u8);
                 self.latch_light_h_counter();
             }
             if self.line_counter == 0 {
@@ -969,7 +969,15 @@ mod tests {
         v.latch_h_counter();
         assert_eq!(v.read_h_counter(), 0x93);
 
-        v.advance(32);
+        v.advance(1);
+        v.latch_h_counter();
+        assert_eq!(v.read_h_counter(), 0xE9);
+
+        v.advance(30);
+        v.latch_h_counter();
+        assert_eq!(v.read_h_counter(), 0xFF);
+
+        v.advance(1);
         v.latch_h_counter();
         assert_eq!(v.read_h_counter(), 0x00);
 
@@ -999,7 +1007,7 @@ mod tests {
         v.set_light_phaser_input(120, 45, true);
         v.advance(228 * 46);
         assert!(v.light_pulse_active());
-        assert_eq!(v.read_h_counter(), 60);
+        assert_eq!(v.read_h_counter(), 0x08 + 60);
         v.set_light_phaser_input(120, 45, false);
         assert!(!v.light_pulse_active());
     }
