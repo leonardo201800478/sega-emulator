@@ -168,17 +168,14 @@ impl D3d12Session {
                         if host.is_minimized() {
                             if worker_queue.is_closed()? {
                                 let mut cancelled = u64::from(pending_frame.take().is_some());
-                                while let Some(_frame) =
-                                    worker_queue.pop_timeout(Duration::ZERO)?
-                                {
+                                while let Some(_frame) = worker_queue.pop_timeout(Duration::ZERO)? {
                                     cancelled = cancelled.saturating_add(1);
                                 }
-                                in_flight_cancelled =
-                                    in_flight_cancelled.saturating_add(cancelled);
+                                in_flight_cancelled = in_flight_cancelled.saturating_add(cancelled);
                                 if cancelled > 0 {
-                                    return Err(
-                                        D3d12SessionError::PendingFramesCancelled(cancelled),
-                                    );
+                                    return Err(D3d12SessionError::PendingFramesCancelled(
+                                        cancelled,
+                                    ));
                                 }
                                 break;
                             }
