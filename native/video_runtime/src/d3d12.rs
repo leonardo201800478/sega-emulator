@@ -50,11 +50,16 @@ use windows::Win32::Graphics::Dxgi::{
     IDXGISwapChain3,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::UI::HiDpi::{
+    DPI_AWARENESS_CONTEXT, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE,
+    DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetThreadDpiAwarenessContext,
+};
 use windows::Win32::System::Threading::{CreateEventW, INFINITE, WaitForSingleObjectEx};
 use windows::Win32::UI::WindowsAndMessaging::{
     CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, DestroyWindow,
     DispatchMessageW, IsIconic, MSG, PM_REMOVE, PeekMessageW, PostQuitMessage, RegisterClassW,
-    SW_SHOW, ShowWindow, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_DESTROY, WNDCLASSW,
+    SetWindowPos, SWP_NOACTIVATE, SWP_NOZORDER, SW_SHOW, ShowWindow, TranslateMessage,
+    WINDOW_EX_STYLE, WINDOW_STYLE, WM_DESTROY, WM_DPICHANGED, WNDCLASSW,
     WS_OVERLAPPEDWINDOW,
 };
 use windows::core::{Error, Interface, Result, w};
@@ -63,6 +68,16 @@ mod session;
 pub use session::{D3d12Session, D3d12SessionError};
 
 const SWAP_CHAIN_BUFFER_COUNT: u32 = 2;
+
+struct ThreadDpiAwarenessGuard(DPI_AWARENESS_CONTEXT);
+
+impl Drop for ThreadDpiAwarenessGuard {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = SetThreadDpiAwarenessContext(self.0);
+        }
+    }
+}
 
 /// Native Win32 window owned by the Rust video host.
 pub struct NativeVideoWindow {
@@ -78,6 +93,23 @@ impl NativeVideoWindow {
                 "window dimensions must be in the non-zero i32 range",
             ));
         }
+
+        // Assign DPI awareness to this HWND only. Restore the worker thread's
+        // prior context immediately after CreateWindowExW so the host does not
+        // mutate the process-wide or long-lived thread policy.
+        let previous_context = unsafe {
+            let per_monitor_v2 =
+                SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+            if per_monitor_v2.is_invalid() {
+                SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE)
+            } else {
+                per_monitor_v2
+            }
+        };
+        if previous_context.is_invalid() {
+            return Err(Error::from_thread());
+        }
+        let dpi_guard = ThreadDpiAwarenessGuard(previous_context);
 
         let instance = unsafe { GetModuleHandleW(None)? };
         let class_name = w!("SegaEmulatorD3D12Window");
@@ -115,6 +147,7 @@ impl NativeVideoWindow {
             let _ = ShowWindow(hwnd, SW_SHOW);
         }
 
+        drop(dpi_guard);
         Ok(Self { hwnd })
     }
 
@@ -168,6 +201,29 @@ unsafe extern "system" fn window_proc(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
+    if message == WM_DPICHANGED && lparam.0 != 0 {
+        // Windows supplies the suggested outer-window rectangle for the new
+        // monitor DPI. The swap-chain's logical SMS surface remains unchanged;
+        // DXGI stretch scaling continues to map it to the resized client area.
+        let suggested = unsafe { &*(lparam.0 as *const RECT) };
+        let width = suggested.right - suggested.left;
+        let height = suggested.bottom - suggested.top;
+        let resized = unsafe {
+            SetWindowPos(
+                hwnd,
+                None,
+                suggested.left,
+                suggested.top,
+                width,
+                height,
+                SWP_NOZORDER | SWP_NOACTIVATE,
+            )
+        };
+        if resized.is_ok() {
+            return LRESULT(0);
+        }
+    }
+
     if message == WM_DESTROY {
         unsafe { PostQuitMessage(0) };
         return LRESULT(0);
