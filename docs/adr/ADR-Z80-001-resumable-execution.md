@@ -85,25 +85,24 @@ Conditional branches, block instructions, undocumented opcodes, and all indexed 
 
 ### Unit / primitive tests
 
-- Exact M-cycle sequence and duration for each primitive instruction.
-- Read/write side effects occur on the documented completion phase, not at request creation.
-- Zero, one, and multiple WAIT states preserve request identity and suspend/resume correctly.
-- I/O cycles include their automatic WAIT state.
-- Interrupt acknowledge includes its automatic two WAIT states.
-- Prefix fetches and refresh increments are not duplicated across suspension.
-- Save/restore while a bus request is pending produces the same continuation and final state.
+- For each primitive explicitly assigned to the temporal gameplay path, validate exact M-cycle sequence/duration and the documented completion point of external side effects.
+- For temporal bus requests, zero/one/multiple WAIT states preserve request identity and suspend/resume correctly when the target platform exposes WAIT.
+- Model automatic I/O/interrupt-acknowledge waits only in profiles where the CPU/platform contract requires them.
+- Prefix fetches and refresh increments must not be duplicated across suspension when that path is active.
+- Save/restore during a pending temporal bus request produces the same continuation and final state.
+- Operations not assigned to a temporal path remain valid through the atomic executor with exact semantics and nominal timing.
 
 ### Differential tests
 
-Run the atomic executor and resumable executor from identical initial snapshots and deterministic memory/bus scripts. Compare all architectural registers and latches, memory writes, port writes, interrupt state, HALT state, and final nominal T-state count after every retired instruction. Record expected differences separately; do not silently weaken assertions.
+Where both paths implement the same temporal-relevant operation, run the atomic and resumable executors from identical snapshots and deterministic scripts. Compare architectural registers/latches, memory and port side effects, interrupt/HALT state and nominal duration. Do not require a resumable-path counterpart for atomic-only instructions; record the exact overlap and any intentional timing-model differences.
 
 ### Machine integration gates
 
-- SMS and SG-1000 adapters independently validate address decode, open-bus behavior, interrupt wiring, and WAIT policy.
-- Device clock domains are registered with the machine scheduler using verified rational ratios and preserved phase.
-- PSG writes are applied at the completed I/O bus phase, not at an instruction-relative estimate.
-- Scheduler stress and deterministic trace replay must PASS; SKIPPED is not PASS.
-- Only after both machine integrations pass may the atomic path be considered for deprecation. Removal requires a separate PR and explicit compatibility evidence.
+- SMS and SG-1000 adapters validate functional address decode, open-bus behavior and interrupt wiring. WAIT and detailed bus timing are added only for a real, evidenced consumer.
+- Register device clock domains with the Scheduler only for components participating in the selected temporal path, using verified ratios/phases.
+- Apply PSG writes at a completed I/O bus phase when gameplay/audio evidence requires that timing; otherwise preserve the defined atomic write semantics and nominal offset.
+- Scheduler stress and deterministic trace replay are required for a temporal integration change; SKIPPED is not PASS.
+- The atomic path is not deprecated merely because a temporal path exists. Any future removal requires a separate ADR, demonstrated need and compatibility evidence.
 
 ## Non-goals
 
