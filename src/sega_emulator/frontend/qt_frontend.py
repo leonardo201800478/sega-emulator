@@ -3,48 +3,12 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
-import time
-from collections import deque
 from pathlib import Path
 
-from sega_emulator.audio.vgm_recorder import VgmRecorder
-from sega_emulator.frontend.controller_profiles import (
-    ACTIONS,
-    DEFAULT_GAMEPAD_BINDINGS,
-    SUPPORTED_BUTTONS,
-    ControllerInputConfig,
-    PlayerInputProfile,
-)
-from sega_emulator.frontend.qt.focus_pause import (
-    EmulationPauseController,
-    FocusPauseController,
-)
-from sega_emulator.frontend.qt.frame_pacer import FramePacer
 from sega_emulator.frontend.qt.preferences import FrontendPreferences
-from sega_emulator.frontend.rust_controller_input import RustControllerInput
-from sega_emulator.machine.sg1000 import SG1000Machine
-from sega_emulator.machine.sms import SMSMachine, load_sms_rom
-from sega_emulator.machine.sms_firmware import (
-    load_sms_bios_for_boot,
-    sms_bios_region_for_rom,
-)
-from sega_emulator.machine.sms_region import (
-    normalize_sms_region_preference,
-    resolve_sms_region_profile,
-    sms_frame_period_seconds,
-)
-from sega_emulator.rom_catalog import RomCatalog
-from sega_emulator.rom_loader import LoadedRom, list_rom_members, load_rom
 
 logger = logging.getLogger(__name__)
-
-# Clock nominal do Z80 no SG-1000 NTSC: 10,738635 MHz / 3.
-Z80_CLOCK_HZ = 3_579_545
-
-# NTSC frame pacing estimate: 228 Z80 T-states per line, 262 lines.
-FRAME_PERIOD_SECONDS = (228 * 262) / Z80_CLOCK_HZ
 
 
 def _runtime_diagnostic(machine: object, rom_sha256: str) -> dict[str, object]:
