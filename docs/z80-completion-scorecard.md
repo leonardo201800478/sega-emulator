@@ -1,6 +1,6 @@
 # Z80 compartilhado — scorecard de conclusão
 
-**Baseline reconciliada:** main em `57d9405218de46795dd45876a52e3dbcec186ffd` (2026-11-05, parent de PR #536); fotografia histórica, não representa necessariamente o estado atual.  
+**Baseline reconciliada:** main em `1da784f556b9524f5a6f43ce8a7c525e68354f9e` (2026-11-05, merge PR #536); fotografia vinculada a esse SHA.  
 **Política vigente:** [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).  
 **Escopo:** um único núcleo Z80 compartilhado pelos consoles que realmente utilizam essa CPU.
 
@@ -29,7 +29,7 @@ A matriz [DD/FD semântica](z80-dd-fd-semantic-matrix.md) permanece referência 
 - A entrega de VBlank IRQ e Line IRQ do SMS ao Z80 está coberta pelos testes de integração da PR #531, integrada nesta baseline.
 - A semântica do pino RESET do Z80 está coberta por testes unitários e de integração SMS na PR #536: PC/I/R zerados, IFF1/IFF2 desabilitados, IM 0, HALT/NMI/EI delay limpos; registradores gerais/alternativos, IX/IY, SP, linha INT externa e T-states da máquina preservados.
 - A duração elétrica mínima do pulso RESET não é simulada: o reset de host é uma transição atômica de estado, conforme ADR-0016; não há consumidor de gameplay demonstrado para a largura do pulso.
-- O fechamento semântico global ainda não foi comprovado como concluído; a divergência de flags de I/O em bloco e a auditoria semântica integral permanecem abertas.
+- A subquestão de flags de I/O em bloco foi caracterizada para o perfil Zilog NMOS por pesquisa documental/experimental e comparação do executor; CMOS/clones permanecem não comprovados. A auditoria semântica global E7.7 continua aberta. Ver [auditoria complementar de flags de I/O em bloco](audits/z80-e7-block-io-flags-2026-11-05.md).
 - O caminho de barramento/temporização está implementado apenas em fatias; não há prova de integração temporal sistêmica completa.
 
 Esta lista é uma fotografia histórica. Antes de alterar código ou declarar qualquer critério concluído, confirmar os arquivos, testes, PRs e workflows no SHA atual da `main`. PR aberta ou Draft não equivale a implementação integrada.
@@ -60,6 +60,7 @@ Uma representação diagnóstica de sinais pode ser derivada do estado do core, 
 - Testes de integração com os barramentos e periféricos dos consoles suportados.
 - Testes de regressão SG-1000 e SMS.
 - Testes diferenciais e ROMs de diagnóstico quando agregarem evidência independente.
+- A nova matriz `z80_ed_block_io_flag_reference_model.rs` cobre 48.000 combinações determinísticas com um modelo de referência derivado de pesquisa NMOS; não é oráculo de silício e só será PASS após CI no HEAD candidato.
 - Testes temporais detalhados apenas para interações cuja ordem/duração altere o resultado observável.
 - Desempenho Release medido quando houver mudança no caminho crítico.
 
