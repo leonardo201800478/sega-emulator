@@ -583,11 +583,7 @@ impl D3d12Host {
     pub fn wait_for_frame_slot(&self) -> Result<()> {
         loop {
             let result = unsafe {
-                WaitForSingleObjectEx(
-                    self.frame_latency_handle,
-                    PRESENTATION_WAIT_POLL_MS,
-                    false,
-                )
+                WaitForSingleObjectEx(self.frame_latency_handle, PRESENTATION_WAIT_POLL_MS, false)
             };
 
             if result == WAIT_OBJECT_0 {
@@ -893,11 +889,7 @@ impl D3d12Host {
 
         loop {
             let result = unsafe {
-                WaitForSingleObjectEx(
-                    self.fence_event,
-                    PRESENTATION_WAIT_POLL_MS,
-                    false,
-                )
+                WaitForSingleObjectEx(self.fence_event, PRESENTATION_WAIT_POLL_MS, false)
             };
 
             if result == WAIT_OBJECT_0 {
