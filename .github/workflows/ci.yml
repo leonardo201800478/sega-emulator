@@ -385,6 +385,9 @@ jobs:
           & "$env:VIRTUAL_ENV\Scripts\maturin.exe" develop --release --features python-extension
       - name: Import the native extension
         run: .\.venv\Scripts\python.exe -c "import sega_z80_core; print(sega_z80_core.__name__)"
+      - name: Smoke test the temporal SMS binding with a synthetic ROM
+        run: |
+          .\.venv\Scripts\python.exe -c "from sega_z80_core import NativeSMSTemporalMachine; machine = NativeSMSTemporalMachine(bytes(0x4000), region='brazil'); assert machine.region == 'brazil'; assert machine.frame_number == 0; assert machine.step_frame() > 0; assert machine.frame_number == 1; assert len(machine.framebuffer) == machine.width * machine.height * 3; machine.set_controller(1, True, False, False, False, True, False); machine.pause(); machine.reset(); assert machine.frame_number == 0"
 
       - name: CI supervisor - cancel remaining jobs on failure
         if: failure()
