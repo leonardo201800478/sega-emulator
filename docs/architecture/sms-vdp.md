@@ -14,7 +14,7 @@ A sequência de migração é:
 3. Migrar o renderer funcional existente para o crate compartilhado, preservando seus testes como regressão; não manter dois engines SMS paralelos.
 4. Integrar o dispositivo ao Scheduler por spans/eventos na menor granularidade observável comprovada.
 
-Estado desta migração: os tipos de perfil e o renderer funcional foram movidos para `sega-video::sms`; `sms_core::vdp` agora é uma camada de reexportação compatível. O renderer continua scanline-level e usa timing legado não validado; `vdp_sms1.rs` ainda é uma fundação parcial não consolidada. O PSG temporal já foi integrado, mas o VDP ainda não está conectado à `SmsTemporalMachine`.
+Estado desta migração: os tipos de perfil e o renderer funcional foram movidos para `sega-video::sms`; `sms_core::vdp` agora é uma camada de reexportação compatível. O renderer continua scanline-level e usa timing legado não validado. A fundação duplicada `vdp_sms1.rs` foi arquivada em `legacy/rust/sms_vdp1_prototype.rs`; seus vetores exclusivos de máscaras R5/R6, zoom, colisão e prioridade foram migrados para os testes do engine compartilhado. O PSG temporal já foi integrado, mas o VDP ainda não está conectado à `SmsTemporalMachine`.
 
 ## Comportamento implementado
 
