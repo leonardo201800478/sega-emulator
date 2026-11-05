@@ -155,8 +155,7 @@ impl VideoFrameMetadata {
         if !self.visible_rect.contains(self.active_rect) {
             return Err(VideoFrameError::ActiveAreaOutsideVisibleArea);
         }
-        if self.display_aspect_ratio.numerator == 0 || self.display_aspect_ratio.denominator == 0
-        {
+        if self.display_aspect_ratio.numerator == 0 || self.display_aspect_ratio.denominator == 0 {
             return Err(VideoFrameError::InvalidAspectRatio);
         }
         if self.timestamp_ticks > 0 && self.timebase_hz == 0 {
