@@ -1,11 +1,11 @@
 //! Standalone, Python-independent Sega Master System core.
 //!
-//! The SMS-owned Z80 instruction engine, standard cartridge mapper/work RAM,
-//! initial CPU-to-memory/I/O integration, and a scheduler-driven Z80/memory/PSG
-//! vertical slice are present. The temporal slice is deliberately separate from
-//! the legacy machine path; VDP, host audio-session integration, full interrupt
-//! behavior and complete console scheduling remain pending, so this crate is not
-//! a complete console.
+//! The Scheduler-driven SMS path now combines the shared Z80 microsequencer,
+//! mapper-backed memory, controller I/O, SN76489, and the shared SMS1 VDP with
+//! scanline/frame output. It remains a staged temporal implementation: dot-level
+//! raster/fetch arbitration, physical WAIT wiring, complete machine interrupt
+//! integration, host audio output, and persistent serialized save states remain
+//! separate acceptance gates. The legacy machine is retained during migration.
 
 pub mod alu;
 pub mod bus;
@@ -41,7 +41,8 @@ pub use machine::{SegaScopeLens, SegaScopeState, SmsMachine, SmsMachineBus};
 pub use memory::SmsMemory;
 pub use psg::{PsgError, Sn76489};
 pub use temporal::{
-    SMS_PSG_CLOCK_DOMAIN_ID, SMS_TEMPORAL_COORDINATOR_STATE_VERSION, SMS_Z80_CLOCK_DOMAIN_ID,
+    SMS_PSG_CLOCK_DOMAIN_ID, SMS_TEMPORAL_COORDINATOR_STATE_VERSION, SMS_VDP_CLOCK_DOMAIN_ID,
+    SMS_Z80_CLOCK_DOMAIN_ID,
     SmsTemporalCoordinator, SmsTemporalCoordinatorError, SmsTemporalCoordinatorState,
     SmsTemporalEvent,
 };
@@ -55,5 +56,6 @@ pub use temporal_machine::{
     SmsTemporalMachineState,
 };
 pub use vdp::{
-    SMS_VDP_MAX_HEIGHT, SMS_VDP_WIDTH, SmsRasterPosition, SmsVdp, SmsVdpEye, StereoPresentation,
+    SMS_VDP_MAX_HEIGHT, SMS_VDP_WIDTH, SmsRasterPosition, SmsVdp, SmsVdpEye,
+    StereoPresentation,
 };
