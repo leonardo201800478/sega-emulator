@@ -449,8 +449,7 @@ impl Sg1000TemporalBus {
                                 deadline,
                                 scale,
                                 u16::from(request.base_tstates)
-                                    + if request.operation
-                                        == Z80BusOperation::InterruptAcknowledge
+                                    + if request.operation == Z80BusOperation::InterruptAcknowledge
                                     {
                                         u16::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
                                     } else {
