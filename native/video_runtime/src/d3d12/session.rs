@@ -158,6 +158,7 @@ impl D3d12Session {
                 }
 
                 let mut in_flight_cancelled = 0_u64;
+                let mut pending_frame: Option<VideoFrame> = None;
                 let result = (|| {
                     loop {
                         if !host.pump_messages() {
@@ -166,7 +167,7 @@ impl D3d12Session {
 
                         if host.is_minimized() {
                             if worker_queue.is_closed()? {
-                                let mut cancelled = 0_u64;
+                                let mut cancelled = u64::from(pending_frame.take().is_some());
                                 while let Some(_frame) =
                                     worker_queue.pop_timeout(Duration::ZERO)?
                                 {
@@ -189,16 +190,27 @@ impl D3d12Session {
                             continue;
                         }
 
-                        match worker_queue.pop_timeout(Duration::from_millis(8))? {
-                            Some(frame) => {
-                                if let Err(error) = host.present_frame(&frame) {
-                                    in_flight_cancelled = in_flight_cancelled.saturating_add(1);
-                                    return Err(D3d12SessionError::Presentation(error.to_string()));
-                                }
-                                worker_last_presented.store(frame.sequence(), Ordering::Release);
+                        let next_frame = match pending_frame.take() {
+                            Some(frame) => Some(frame),
+                            None => worker_queue.pop_timeout(Duration::from_millis(8))?,
+                        };
+
+                        if let Some(frame) = next_frame {
+                            // Recheck after dequeue to close the race where
+                            // the user minimizes between the loop's first
+                            // IsIconic check and the queue pop.
+                            if host.is_minimized() {
+                                pending_frame = Some(frame);
+                                continue;
                             }
-                            None if worker_queue.is_closed()? => break,
-                            None => {}
+
+                            if let Err(error) = host.present_frame(&frame) {
+                                in_flight_cancelled = in_flight_cancelled.saturating_add(1);
+                                return Err(D3d12SessionError::Presentation(error.to_string()));
+                            }
+                            worker_last_presented.store(frame.sequence(), Ordering::Release);
+                        } else if worker_queue.is_closed()? {
+                            break;
                         }
                     }
                     Ok(())
