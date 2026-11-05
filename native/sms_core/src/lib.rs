@@ -1,10 +1,11 @@
 //! Standalone, Python-independent Sega Master System core.
 //!
 //! The SMS-owned Z80 instruction engine, standard cartridge mapper/work RAM,
-//! initial CPU-to-memory/I/O integration, and first scheduler-driven Z80/memory
+//! initial CPU-to-memory/I/O integration, and a scheduler-driven Z80/memory/PSG
 //! vertical slice are present. The temporal slice is deliberately separate from
-//! the legacy machine path; VDP, audio, full interrupt behavior and complete
-//! console scheduling remain pending, so this crate is not a complete console.
+//! the legacy machine path; VDP, host audio-session integration, full interrupt
+//! behavior and complete console scheduling remain pending, so this crate is not
+//! a complete console.
 
 pub mod alu;
 pub mod bus;
