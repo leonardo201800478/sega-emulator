@@ -304,6 +304,10 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: uv run --locked python -c "from PySide6 import QtCore; import numpy; print(QtCore.qVersion(), numpy.__version__)"
+      - name: Smoke test minimal SMS Qt window
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: uv run --locked pytest -q tests/test_qt_minimal_sms.py
 
       - name: CI supervisor - cancel remaining jobs on failure
         if: failure()
