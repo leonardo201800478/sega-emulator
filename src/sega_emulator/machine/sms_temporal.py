@@ -31,6 +31,7 @@ class TemporalSMSMachine:
 
         self.cartridge_rom = cartridge_rom
         self.region = region
+        self._audio_config: dict[str, object] | None = None
         self.native_machine = NativeSMSTemporalMachine(cartridge_rom, region=region)
 
     @property
@@ -71,6 +72,7 @@ class TemporalSMSMachine:
             raise ValueError("A ROM do Master System não pode estar vazia.")
         self.native_machine.load_rom(cartridge_rom)
         self.cartridge_rom = cartridge_rom
+        self._restore_audio_output()
 
     def start(self) -> None:
         """Allow the host frame loop to request further frames."""
@@ -87,6 +89,7 @@ class TemporalSMSMachine:
     def reset(self) -> None:
         """Reset the loaded cartridge to the machine's power-on state."""
         self.native_machine.reset()
+        self._restore_audio_output()
 
     def step_frame(self, max_instructions: int = 100_000) -> int:
         """Execute one complete VDP frame through the Rust Scheduler."""
@@ -130,10 +133,24 @@ class TemporalSMSMachine:
         self.native_machine.configure_audio_output(
             backend, sample_rate, buffer_size, queue_blocks, volume, balance
         )
+        self._audio_config = {
+            "backend": backend,
+            "sample_rate": sample_rate,
+            "buffer_size": buffer_size,
+            "queue_blocks": queue_blocks,
+            "volume": volume,
+            "balance": balance,
+        }
+
+    def _restore_audio_output(self) -> None:
+        """Reopen the previous native audio session after machine replacement."""
+        if self._audio_config is not None:
+            self.native_machine.configure_audio_output(**self._audio_config)
 
     def close_audio_output(self) -> None:
         """Stop and release the native audio output session."""
         self.native_machine.close_audio_output()
+        self._audio_config = None
 
     @property
     def audio_output_error(self) -> str | None:
