@@ -28,9 +28,7 @@ impl NativeSMSTemporalMachine {
 
     /// Load a new cartridge on the Rust execution thread.
     fn load_rom(&mut self, rom: Vec<u8>) -> PyResult<()> {
-        self.worker
-            .load_rom(rom)
-            .map_err(PyRuntimeError::new_err)
+        self.worker.load_rom(rom).map_err(PyRuntimeError::new_err)
     }
 
     /// Rebuild the loaded cartridge at its power-on state on the Rust worker.
@@ -185,8 +183,7 @@ mod tests {
         assert_eq!(europe.video_standard, VideoStandard::Pal);
         assert_eq!(europe_clock, 3_546_895);
 
-        let (japan_territory, japan, japan_clock) =
-            sms_temporal_region_profile("japan").unwrap();
+        let (japan_territory, japan, japan_clock) = sms_temporal_region_profile("japan").unwrap();
         assert_eq!(japan_territory, Territory::Japan);
         assert_eq!(japan.video_standard, VideoStandard::Ntsc);
         assert_eq!(japan_clock, 3_579_545);
