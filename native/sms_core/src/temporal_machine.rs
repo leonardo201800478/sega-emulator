@@ -11,7 +11,7 @@ use core::fmt;
 
 use crate::{
     SmsTemporalBus, SmsTemporalBusError, SmsTemporalBusState, SmsTemporalDispatch, SmsTemporalM1,
-    SmsTemporalM1Error, SmsTemporalM1State,
+    SmsTemporalM1Error, SmsTemporalM1State, SmsVdp,
 };
 use sega_sn76489::Sn76489Core;
 use sega_temporal_core::{
@@ -23,7 +23,7 @@ use sega_z80_cpu::{
     Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
 };
 
-pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 22;
+pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 23;
 
 /// Runtime event trace emitted from actual Scheduler/bus dispatch boundaries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -218,6 +218,7 @@ pub enum SmsTemporalMachineError {
     Cpu(Z80MicroSequencerError),
     InvalidState,
     NoScheduledEvent,
+    FrameStepLimitReached,
     InternalCycleIdExhausted,
     M1(SmsTemporalM1Error),
 }
@@ -229,6 +230,9 @@ impl fmt::Display for SmsTemporalMachineError {
             Self::Cpu(error) => write!(f, "SMS resumable Z80 failed: {error:?}"),
             Self::InvalidState => f.write_str("SMS temporal machine snapshot is inconsistent"),
             Self::NoScheduledEvent => f.write_str("SMS temporal machine has no event to dispatch"),
+            Self::FrameStepLimitReached => {
+                f.write_str("SMS temporal machine did not complete a frame within the instruction limit")
+            }
             Self::InternalCycleIdExhausted => {
                 f.write_str("SMS internal-cycle continuation ID exhausted")
             }
@@ -692,6 +696,45 @@ impl SmsTemporalMachine {
                 Ok(step)
             }
         }
+    }
+
+    /// Read-only access to the SMS VDP owned by the temporal bus.
+    pub const fn vdp(&self) -> &SmsVdp {
+        self.bus.vdp()
+    }
+
+    /// Current completed-frame counter from the temporal VDP.
+    pub fn frame_number(&self) -> u64 {
+        self.bus.vdp().frame_number()
+    }
+
+    /// Current RGB24 frame from the temporal VDP.
+    pub fn framebuffer(&self) -> &[u8] {
+        self.bus.vdp().framebuffer()
+    }
+
+    /// Advance the machine until one VDP frame completes.
+    ///
+    /// The instruction limit is a safety bound, not a timing source. Hardware
+    /// time advances only through the Scheduler while the CPU executes.
+    pub fn step_frame(
+        &mut self,
+        max_instructions: usize,
+    ) -> Result<usize, SmsTemporalMachineError> {
+        if max_instructions == 0 {
+            return Err(SmsTemporalMachineError::FrameStepLimitReached);
+        }
+        let initial_frame = self.frame_number();
+        for instructions in 1..=max_instructions {
+            let step = self.step_instruction(0)?;
+            if matches!(step, Z80MicroStep::InterruptAcknowledge { .. }) {
+                let _ = self.resume_instruction(0)?;
+            }
+            if self.frame_number() != initial_frame {
+                return Ok(instructions);
+            }
+        }
+        Err(SmsTemporalMachineError::FrameStepLimitReached)
     }
 
     /// Run the next instruction to retirement, using deterministic fixture WAIT.
