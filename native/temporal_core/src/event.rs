@@ -326,7 +326,7 @@ mod tests {
     use super::{
         EventPriority, EventQueue, EventQueueError, HardwarePhase, PlatformPriority, ScheduledEvent,
     };
-    use crate::{EventQueueState, EventQueueWatermark, MachineTime};
+    use crate::{EventQueueState, EventQueueWatermark, MachineInstant, MachineTime};
 
     #[test]
     fn events_order_by_absolute_time_phase_priority_and_stable_sequence() {
@@ -492,7 +492,7 @@ mod tests {
     #[test]
     fn restore_rejects_noncanonical_order_and_watermark_regression() {
         let event = |timestamp, phase, priority, sequence| ScheduledEvent {
-            timestamp: MachineTime::from_ticks(timestamp),
+            timestamp: MachineInstant::from_ticks(timestamp),
             hardware_phase: HardwarePhase::new(phase),
             priority: PlatformPriority::new(priority),
             sequence,
@@ -511,7 +511,7 @@ mod tests {
             pending: vec![event(5, 1, 0, 0)],
             next_sequence: 2,
             last_dispatched: Some(EventQueueWatermark {
-                timestamp: MachineTime::from_ticks(5),
+                timestamp: MachineInstant::from_ticks(5),
                 hardware_phase: HardwarePhase::new(2),
                 priority: PlatformPriority::new(0),
                 sequence: 1,
@@ -526,14 +526,14 @@ mod tests {
     #[test]
     fn restore_validates_full_watermark_sequence_tiebreak() {
         let event = |sequence| ScheduledEvent {
-            timestamp: MachineTime::from_ticks(5),
+            timestamp: MachineInstant::from_ticks(5),
             hardware_phase: HardwarePhase::new(1),
             priority: PlatformPriority::new(1),
             sequence,
             payload: (),
         };
         let watermark = EventQueueWatermark {
-            timestamp: MachineTime::from_ticks(5),
+            timestamp: MachineInstant::from_ticks(5),
             hardware_phase: HardwarePhase::new(1),
             priority: PlatformPriority::new(1),
             sequence: 1,
@@ -558,7 +558,7 @@ mod tests {
 
         let reused_dispatched_sequence = EventQueueState {
             pending: vec![ScheduledEvent {
-                timestamp: MachineTime::from_ticks(6),
+                timestamp: MachineInstant::from_ticks(6),
                 hardware_phase: HardwarePhase::new(0),
                 priority: PlatformPriority::new(0),
                 sequence: 1,
@@ -579,7 +579,7 @@ mod tests {
             pending: vec![],
             next_sequence: 2,
             last_dispatched: Some(EventQueueWatermark {
-                timestamp: MachineTime::from_ticks(5),
+                timestamp: MachineInstant::from_ticks(5),
                 hardware_phase: HardwarePhase::new(1),
                 priority: PlatformPriority::new(1),
                 sequence: 2,
