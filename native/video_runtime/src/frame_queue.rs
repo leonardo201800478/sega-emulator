@@ -145,10 +145,7 @@ impl FrameQueue {
 
     /// Remove the oldest frame, returning None when the timeout expires or
     /// after the closed queue has been drained.
-    pub fn pop_timeout(
-        &self,
-        timeout: Duration,
-    ) -> Result<Option<VideoFrame>, FrameQueueError> {
+    pub fn pop_timeout(&self, timeout: Duration) -> Result<Option<VideoFrame>, FrameQueueError> {
         let deadline = Instant::now()
             .checked_add(timeout)
             .ok_or(FrameQueueError::TimeoutOverflow)?;
@@ -226,7 +223,6 @@ impl FrameQueue {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::{FrameQueue, FrameQueueError};
@@ -248,7 +244,10 @@ mod tests {
 
     #[test]
     fn rejects_zero_capacity() {
-        assert_eq!(FrameQueue::new(0).unwrap_err(), FrameQueueError::ZeroCapacity);
+        assert_eq!(
+            FrameQueue::new(0).unwrap_err(),
+            FrameQueueError::ZeroCapacity
+        );
     }
 
     #[test]
@@ -331,13 +330,11 @@ mod tests {
     #[test]
     fn timeout_returns_none_without_consuming_future_frames() {
         let queue = FrameQueue::new(1).unwrap();
-        assert_eq!(
-            queue.pop_timeout(Duration::from_millis(1)).unwrap(),
-            None
-        );
+        assert_eq!(queue.pop_timeout(Duration::from_millis(1)).unwrap(), None);
         queue.push(frame(12)).unwrap();
         assert_eq!(
-            queue.pop_timeout(Duration::from_millis(1))
+            queue
+                .pop_timeout(Duration::from_millis(1))
                 .unwrap()
                 .unwrap()
                 .sequence(),
