@@ -1,7 +1,7 @@
 # Roadmap mestre — Sega Emulator
 
 **Status:** única rota normativa de implementação.  
-**Baseline documental atualizada:** `main` em `c8da934d051f69f0fad01d133a923c26248a7250` (2026-11-05); esta alteração é documental.  
+**Regra de atualização:** este documento define a sequência normativa, não uma fotografia de branches/PRs. Antes de cada tarefa, auditar o SHA corrente da `main`, código, PRs e workflows.  
 **Prioridade imediata:** Master System e consolidação do Z80 compartilhado, preservando o SG-1000.  
 **Política de fidelidade:** [ADR-0016](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
 
@@ -131,15 +131,16 @@ python -m ruff format --check .
 
 Cada suíte é PASS, FAIL, BLOCKED ou NOT RUN. SKIPPED nunca é PASS. Registrar o SHA exato, jobs executados e jobs não executados.
 
-## 6. Estado observado na baseline consultada
+## 6. Como determinar o estado atual
 
-- O repositório contém runtimes Rust para SG-1000 e Master System e uma CPU Z80 compartilhada.
-- E5 DDCB/FDCB e E6 resolução geral de prefixos constam como integradas na main nas auditorias recentes.
-- E7.3/HALT T4 consta como integrada. O fechamento semântico global e a integração temporal completa não estão comprovados.
-- PRs #512, #514 e #526 permanecem propostas abertas/Draft na consulta; não são código integrado em main. A PR #527 também é documental e não foi integrada.
-- O runtime não possui comprovação de cycle-accuracy sistêmica. Isso não é, por si só, um defeito: o critério passa a ser a fidelidade observável necessária aos consoles suportados.
+Este roadmap define a ordem e os critérios de saída; não declara, por si só, que uma fase ou componente está concluído. Para cada nova tarefa:
 
-A descrição acima é uma fotografia documental. Antes de qualquer implementação, conferir novamente main, PRs e workflows. O código integrado prevalece sobre status antigo de auditoria.
+1. Consultar o SHA mais recente da `main` e confirmar o código efetivamente integrado.
+2. Consultar PRs abertas e distinguir explicitamente Draft, aberta, aprovada e mesclada. Uma PR não mesclada não integra a `main`.
+3. Conferir os workflows e os resultados vinculados ao SHA exato; jobs SKIPPED ou NOT RUN não são PASS.
+4. Reconciliar o [estado dos componentes](component-status.md), o [scorecard Z80](z80-completion-scorecard.md) e a [matriz DD/FD](z80-dd-fd-semantic-matrix.md) com o código e os testes atuais antes de usá-los como evidência.
+
+Não manter snapshots de PRs abertas neste roadmap. Auditorias datadas e relatórios de PR preservam evidências históricas, não definem prioridade nem estado integrado. O contrato de aceitação final é acompanhado pela [PR permanente de conclusão #533](https://github.com/leonardo201800478/sega-emulator/pull/533); ela não substitui esta rota normativa.
 
 ## 7. Autoridade documental
 
