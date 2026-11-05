@@ -402,113 +402,16 @@ fn worker_loop(
         };
 
         if let Some(command) = command {
-            match command {
-                WorkerCommand::Start(reply) => {
-                    running = true;
-                    telemetry.running.store(true, Ordering::Release);
-                    let _ = reply.send(Ok(()));
-                }
-                WorkerCommand::Pause(reply) | WorkerCommand::Stop(reply) => {
-                    running = false;
-                    telemetry.running.store(false, Ordering::Release);
-                    let _ = reply.send(Ok(()));
-                }
-                WorkerCommand::Reset(reply) => {
-                    match build_sms_temporal_machine(rom.clone(), &region) {
-                        Ok(reset_machine) => {
-                            machine = reset_machine;
-                            telemetry.reset_machine_counters();
-                            let _ = reply.send(Ok(()));
-                        }
-                        Err(error) => {
-                            let _ = reply.send(Err(error));
-                        }
-                    }
-                }
-                WorkerCommand::LoadRom(new_rom, reply) => {
-                    match build_sms_temporal_machine(new_rom.clone(), &region) {
-                        Ok(new_machine) => {
-                            running = false;
-                            telemetry.running.store(false, Ordering::Release);
-                            machine = new_machine;
-                            rom = new_rom;
-                            telemetry.reset_machine_counters();
-                            let _ = reply.send(Ok(()));
-                        }
-                        Err(error) => {
-                            let _ = reply.send(Err(error));
-                        }
-                    }
-                }
-                WorkerCommand::StepFrame(max_instructions, reply) => {
-                    if running {
-                        let _ = reply.send(Err(
-                            "step_frame is available only while the native worker is paused"
-                                .to_owned(),
-                        ));
-                    } else if max_instructions == 0 {
-                        let _ = reply.send(Err("max_instructions must be positive".to_owned()));
-                    } else {
-                        match execute_frame(
-                            &mut machine,
-                            max_instructions,
-                            &mut audio_session,
-                            &telemetry,
-                        ) {
-                            Ok((instructions, _)) => {
-                                let _ = reply.send(Ok(instructions));
-                            }
-                            Err(error) => {
-                                telemetry.set_runtime_error(Some(error.clone()));
-                                let _ = reply.send(Err(error));
-                            }
-                        }
-                    }
-                }
-                WorkerCommand::SetController(player, buttons, reply) => {
-                    let result = machine
-                        .set_controller(player, buttons)
-                        .map_err(|error| error.to_string());
-                    let _ = reply.send(result);
-                }
-                WorkerCommand::RequestNmi => machine.request_nmi(),
-                WorkerCommand::ConfigureAudio(config, reply) => {
-                    match open_audio_session(
-                        &config.backend,
-                        config.sample_rate,
-                        config.buffer_size,
-                        config.queue_blocks,
-                        config.volume,
-                        config.balance,
-                    ) {
-                        Ok(session) => {
-                            audio_session = Some(session);
-                            telemetry.set_audio_error(None);
-                            telemetry.set_audio_metrics((0, 0));
-                            let _ = reply.send(Ok(()));
-                        }
-                        Err(error) => {
-                            telemetry.set_audio_error(Some(error.clone()));
-                            let _ = reply.send(Err(error));
-                        }
-                    }
-                }
-                WorkerCommand::CloseAudio(reply) => {
-                    if let Some(mut session) = audio_session.take() {
-                        session.close();
-                    }
-                    telemetry.set_audio_error(None);
-                    telemetry.set_audio_metrics((0, 0));
-                    let _ = reply.send(());
-                }
-                WorkerCommand::Shutdown => {
-                    running = false;
-                    telemetry.running.store(false, Ordering::Release);
-                    if let Some(mut session) = audio_session.take() {
-                        session.close();
-                    }
-                    break;
-                }
+            if !handle_command(
+                command,
+                &mut machine,
+                &mut rom,
+                &region,
+                &mut running,
+                &mut audio_session,
+                &telemetry,
+            ) {
+                break;
             }
             continue;
         }
@@ -523,18 +426,17 @@ fn worker_loop(
                 if !frame_wait.is_zero() {
                     match commands.recv_timeout(frame_wait) {
                         Ok(command) => {
-                            // Preserve the command for the next loop iteration.
-                            // The channel is unbounded; forwarding is immediate.
-                            let _ = handle_deferred_command(
+                            if !handle_command(
                                 command,
-                                &commands,
                                 &mut machine,
                                 &mut rom,
                                 &region,
                                 &mut running,
                                 &mut audio_session,
                                 &telemetry,
-                            );
+                            ) {
+                                break;
+                            }
                         }
                         Err(RecvTimeoutError::Timeout) => {}
                         Err(RecvTimeoutError::Disconnected) => break,
@@ -551,20 +453,22 @@ fn worker_loop(
             }
         }
     }
+
+    telemetry.running.store(false, Ordering::Release);
+    if let Some(mut session) = audio_session.take() {
+        session.close();
+    }
 }
 
-fn handle_deferred_command(
+fn handle_command(
     command: WorkerCommand,
-    commands: &Receiver<WorkerCommand>,
     machine: &mut SmsTemporalMachine,
     rom: &mut Vec<u8>,
     region: &str,
     running: &mut bool,
     audio_session: &mut Option<MachineAudioSession>,
     telemetry: &WorkerTelemetry,
-) -> Result<(), String> {
-    // Requeueing into std::sync::mpsc::Receiver is not supported; this helper
-    // executes the command at the frame boundary where it was received.
+) -> bool {
     match command {
         WorkerCommand::Start(reply) => {
             *running = true;
@@ -637,7 +541,9 @@ fn handle_deferred_command(
                 config.balance,
             ) {
                 Ok(session) => {
-                    *audio_session = Some(session);
+                    if let Some(mut previous) = audio_session.replace(session) {
+                        previous.close();
+                    }
                     telemetry.set_audio_error(None);
                     telemetry.set_audio_metrics((0, 0));
                     let _ = reply.send(Ok(()));
@@ -662,10 +568,10 @@ fn handle_deferred_command(
             if let Some(mut session) = audio_session.take() {
                 session.close();
             }
+            return false;
         }
     }
-    let _ = commands;
-    Ok(())
+    true
 }
 
 #[cfg(test)]
