@@ -32,6 +32,8 @@ pub enum D3d12SessionError {
     WorkerPanicked,
     /// The native window was closed by the user.
     WindowClosed,
+    /// Shutdown occurred while minimized and accepted frames could not be presented.
+    PendingFramesCancelled(u64),
 }
 
 impl fmt::Display for D3d12SessionError {
@@ -58,6 +60,10 @@ impl fmt::Display for D3d12SessionError {
             }
             Self::WorkerPanicked => write!(formatter, "D3D12 presentation worker panicked"),
             Self::WindowClosed => write!(formatter, "native D3D12 presentation window was closed"),
+            Self::PendingFramesCancelled(count) => write!(
+                formatter,
+                "D3D12 session shutdown while minimized; {count} accepted frame(s) were cancelled"
+            ),
         }
     }
 }
@@ -156,6 +162,30 @@ impl D3d12Session {
                     loop {
                         if !host.pump_messages() {
                             return Err(D3d12SessionError::WindowClosed);
+                        }
+
+                        if host.is_minimized() {
+                            if worker_queue.is_closed()? {
+                                let mut cancelled = 0_u64;
+                                while let Some(_frame) =
+                                    worker_queue.pop_timeout(Duration::ZERO)?
+                                {
+                                    cancelled = cancelled.saturating_add(1);
+                                }
+                                worker_cancelled_frames.store(cancelled, Ordering::Release);
+                                if cancelled > 0 {
+                                    return Err(
+                                        D3d12SessionError::PendingFramesCancelled(cancelled),
+                                    );
+                                }
+                                break;
+                            }
+
+                            // Do not dequeue while minimized: retain every
+                            // accepted frame and let bounded-queue backpressure
+                            // apply at the completed-frame submission boundary.
+                            thread::sleep(Duration::from_millis(8));
+                            continue;
                         }
 
                         match worker_queue.pop_timeout(Duration::from_millis(8))? {
