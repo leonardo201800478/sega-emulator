@@ -825,7 +825,7 @@ mod tests {
         bus.begin_request(request, 0).unwrap();
 
         let mut state = bus.export_state();
-        state.coordinator.scheduler.event_queue.pending[0].timestamp = MachineTime::from_ticks(3);
+        state.coordinator.scheduler.event_queue.pending[0].timestamp = sega_temporal_core::MachineInstant::from_ticks(3);
         assert_eq!(
             SmsTemporalBus::restore_state(state).err(),
             Some(SmsTemporalBusError::InvalidState)
@@ -839,7 +839,7 @@ mod tests {
         bus.begin_request(request, 0).unwrap();
 
         let mut state = bus.export_state();
-        state.coordinator.scheduler.event_queue.pending[0].timestamp = MachineTime::from_ticks(13);
+        state.coordinator.scheduler.event_queue.pending[0].timestamp = sega_temporal_core::MachineInstant::from_ticks(13);
         assert_eq!(
             SmsTemporalBus::restore_state(state).err(),
             Some(SmsTemporalBusError::InvalidState)
