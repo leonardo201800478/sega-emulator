@@ -1,6 +1,6 @@
 # ADR-Z80-001 — Resumable Z80 execution and timed bus transactions
 
-> **Policy note (2026-11-05):** this proposal is subordinate to [ADR-0016](../docs/architecture/adr/0016-observable-fidelity-and-proportional-timing.md). A resumable/microsequenced execution path is conditional, not a universal requirement. Implement it only for a supported console/game/peripheral interaction whose observable result requires suspension between instruction/bus phases. The atomic executor remains the default for operations without observable intermediate effects.
+> **Policy note (2026-11-05):** this proposal is subordinate to [ADR-0016](../architecture/adr/0016-observable-fidelity-and-proportional-timing.md). A resumable/microsequenced execution path is conditional, not a universal requirement. Implement it only for a supported console/game/peripheral interaction whose observable result requires suspension between instruction/bus phases. The atomic executor remains the default for operations without observable intermediate effects.
 
 - Status: PROPOSED
 - Date: 2026-11-02
