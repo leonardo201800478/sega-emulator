@@ -114,14 +114,14 @@ impl MachineInstant {
         self.fractional_denominator
     }
 
-    /// Add two exact timeline offsets without floating point.
+    /// Add a non-negative duration to this absolute instant.
     ///
-    /// Denominators are reduced by their GCD before multiplication. If the
-    /// canonical result cannot be represented by the u128 fraction fields,
-    /// the operation returns ArithmeticOverflow.
-    pub fn checked_add(self, other: Self) -> Result<Self, ClockError> {
-        let common = gcd_u128(self.fractional_denominator, other.fractional_denominator);
-        let left_scale = other.fractional_denominator / common;
+    /// Fractional arithmetic is exact and checked. An intermediate or final
+    /// value that cannot be represented by the u128 rational fields is
+    /// rejected rather than rounded.
+    pub fn checked_add(self, duration: MachineDuration) -> Result<Self, ClockError> {
+        let common = gcd_u128(self.fractional_denominator, duration.fractional_denominator);
+        let left_scale = duration.fractional_denominator / common;
         let right_scale = self.fractional_denominator / common;
         let denominator = self
             .fractional_denominator
@@ -131,7 +131,7 @@ impl MachineInstant {
             .fractional_numerator
             .checked_mul(left_scale)
             .ok_or(ClockError::ArithmeticOverflow)?;
-        let right = other
+        let right = duration
             .fractional_numerator
             .checked_mul(right_scale)
             .ok_or(ClockError::ArithmeticOverflow)?;
@@ -142,14 +142,14 @@ impl MachineInstant {
         };
         let whole = self
             .whole_ticks
-            .checked_add(other.whole_ticks.ticks())
+            .checked_add(duration.whole_ticks)
             .and_then(|ticks| ticks.checked_add(carry))
             .ok_or(ClockError::ArithmeticOverflow)?;
         Self::from_parts(whole, numerator, denominator)
     }
 
-    /// Subtract an earlier instant, returning an exact non-negative offset.
-    pub fn checked_sub(self, earlier: Self) -> Result<Self, ClockError> {
+    /// Return the exact non-negative duration elapsed since an earlier instant.
+    pub fn checked_duration_since(self, earlier: Self) -> Result<MachineDuration, ClockError> {
         if self < earlier {
             return Err(ClockError::TimeWentBackwards);
         }
@@ -180,7 +180,7 @@ impl MachineInstant {
         } else {
             (whole_delta, left - right)
         };
-        Self::from_parts(MachineTime::from_ticks(whole), numerator, denominator)
+        MachineDuration::from_parts(whole, numerator, denominator)
     }
 }
 
@@ -198,6 +198,123 @@ impl Ord for MachineInstant {
 }
 
 impl PartialOrd for MachineInstant {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+
+/// A non-negative exact displacement on the machine timeline.
+///
+/// Unlike MachineInstant, a duration has no absolute origin and can be added
+/// to another duration or to an instant. Its fractional component is always
+/// reduced; arithmetic never uses floating point.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MachineDuration {
+    whole_ticks: u128,
+    fractional_numerator: u128,
+    fractional_denominator: u128,
+}
+
+impl MachineDuration {
+    /// The zero duration.
+    pub const ZERO: Self = Self {
+        whole_ticks: 0,
+        fractional_numerator: 0,
+        fractional_denominator: 1,
+    };
+
+    /// Construct an integral duration.
+    pub const fn from_ticks(ticks: u128) -> Self {
+        Self {
+            whole_ticks: ticks,
+            fractional_numerator: 0,
+            fractional_denominator: 1,
+        }
+    }
+
+    /// Construct and normalize a non-negative rational duration.
+    pub fn from_parts(
+        whole_ticks: u128,
+        fractional_numerator: u128,
+        fractional_denominator: u128,
+    ) -> Result<Self, ClockError> {
+        if fractional_denominator == 0 {
+            return Err(ClockError::ZeroInstantDenominator);
+        }
+        let carry = fractional_numerator / fractional_denominator;
+        let remainder = fractional_numerator % fractional_denominator;
+        let whole_ticks = whole_ticks
+            .checked_add(carry)
+            .ok_or(ClockError::ArithmeticOverflow)?;
+        let divisor = gcd_u128(remainder, fractional_denominator);
+        Ok(Self {
+            whole_ticks,
+            fractional_numerator: remainder / divisor,
+            fractional_denominator: fractional_denominator / divisor,
+        })
+    }
+
+    /// Return the integral component of this duration.
+    pub const fn whole_ticks(self) -> u128 {
+        self.whole_ticks
+    }
+
+    /// Return the reduced fractional numerator.
+    pub const fn fractional_numerator(self) -> u128 {
+        self.fractional_numerator
+    }
+
+    /// Return the reduced fractional denominator.
+    pub const fn fractional_denominator(self) -> u128 {
+        self.fractional_denominator
+    }
+
+    /// Add another exact duration, rejecting unrepresentable arithmetic.
+    pub fn checked_add(self, other: Self) -> Result<Self, ClockError> {
+        let common = gcd_u128(self.fractional_denominator, other.fractional_denominator);
+        let left_scale = other.fractional_denominator / common;
+        let right_scale = self.fractional_denominator / common;
+        let denominator = self
+            .fractional_denominator
+            .checked_mul(left_scale)
+            .ok_or(ClockError::ArithmeticOverflow)?;
+        let left = self
+            .fractional_numerator
+            .checked_mul(left_scale)
+            .ok_or(ClockError::ArithmeticOverflow)?;
+        let right = other
+            .fractional_numerator
+            .checked_mul(right_scale)
+            .ok_or(ClockError::ArithmeticOverflow)?;
+        let (carry, numerator) = if left >= denominator - right {
+            (1, left - (denominator - right))
+        } else {
+            (0, left + right)
+        };
+        let whole_ticks = self
+            .whole_ticks
+            .checked_add(other.whole_ticks)
+            .and_then(|ticks| ticks.checked_add(carry))
+            .ok_or(ClockError::ArithmeticOverflow)?;
+        Self::from_parts(whole_ticks, numerator, denominator)
+    }
+}
+
+impl Ord for MachineDuration {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.whole_ticks.cmp(&other.whole_ticks).then_with(|| {
+            cmp_fraction_u128(
+                self.fractional_numerator,
+                self.fractional_denominator,
+                other.fractional_numerator,
+                other.fractional_denominator,
+            )
+        })
+    }
+}
+
+impl PartialOrd for MachineDuration {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
@@ -237,8 +354,7 @@ fn cmp_fraction_u128(
             };
             return if reversed {
                 ordering.reverse()
-            } else {
-                ordering
+            } else {                ordering
             };
         }
 
@@ -477,7 +593,6 @@ impl ClockDomain {
     pub const fn total_cycles(&self) -> u128 {
         self.total_cycles
     }
-
     /// Return the exact timestamp of the edge_index-th future local edge.
     ///
     /// The index is one-based relative to this domain's current integer
@@ -717,8 +832,7 @@ mod tests {
         );
     }
 
-    #[test]
-    fn edge_time_comparison_is_exact_for_different_denominators() {
+    #[test]    fn edge_time_comparison_is_exact_for_different_denominators() {
         let ratio_a = ClockRatio::new(3, 2).unwrap();
         let ratio_b = ClockRatio::new(7, 3).unwrap();
         let a = ClockDomain::new(ratio_a, MachineTime::ZERO)
@@ -957,8 +1071,7 @@ mod tests {
                 }
             }
         }
-    }
-    #[test]
+    }    #[test]
     fn same_timestamp_is_a_valid_noop() {
         let ratio = ClockRatio::new(7, 3).unwrap();
         let mut domain = ClockDomain::new(ratio, MachineTime::from_ticks(9));
@@ -991,33 +1104,36 @@ mod tests {
     #[test]
     fn machine_instant_addition_and_subtraction_are_exact() {
         let a = super::MachineInstant::from_parts(MachineTime::from_ticks(5), 2, 3).unwrap();
-        let b = super::MachineInstant::from_parts(MachineTime::ZERO, 1, 2).unwrap();
-        let sum = a.checked_add(b).unwrap();
+        let duration = super::MachineDuration::from_parts(0, 1, 2).unwrap();
+        let sum = a.checked_add(duration).unwrap();
         assert_eq!(sum.whole_ticks(), MachineTime::from_ticks(6));
         assert_eq!(sum.fractional_numerator(), 1);
         assert_eq!(sum.fractional_denominator(), 6);
 
-        let difference = sum.checked_sub(a).unwrap();
-        assert_eq!(difference.whole_ticks(), MachineTime::ZERO);
+        let difference = sum.checked_duration_since(a).unwrap();
+        assert_eq!(difference.whole_ticks(), 0);
         assert_eq!(difference.fractional_numerator(), 1);
         assert_eq!(difference.fractional_denominator(), 2);
-        assert_eq!(a.checked_sub(sum), Err(ClockError::TimeWentBackwards));
+        assert_eq!(
+            a.checked_duration_since(sum),
+            Err(ClockError::TimeWentBackwards)
+        );
     }
 
     #[test]
-    fn machine_instant_fraction_order_and_arithmetic_match_small_integer_oracles() {
+    fn machine_duration_fraction_order_and_arithmetic_match_small_integer_oracles() {
         for left_denominator in 1_u128..=12 {
             for left_numerator in 0..left_denominator {
-                let left = super::MachineInstant::from_parts(
-                    MachineTime::ZERO,
+                let left = super::MachineDuration::from_parts(
+                    0,
                     left_numerator,
                     left_denominator,
                 )
                 .unwrap();
                 for right_denominator in 1_u128..=12 {
                     for right_numerator in 0..right_denominator {
-                        let right = super::MachineInstant::from_parts(
-                            MachineTime::ZERO,
+                        let right = super::MachineDuration::from_parts(
+                            0,
                             right_numerator,
                             right_denominator,
                         )
@@ -1027,31 +1143,19 @@ mod tests {
                         assert_eq!(left.cmp(&right), expected);
 
                         let sum = left.checked_add(right).unwrap();
-                        let expected_sum = super::MachineInstant::from_parts(
-                            MachineTime::ZERO,
-                            left_numerator * right_denominator + right_numerator * left_denominator,
+                        let expected_sum = super::MachineDuration::from_parts(
+                            0,
+                            left_numerator * right_denominator
+                                + right_numerator * left_denominator,
                             left_denominator * right_denominator,
                         )
                         .unwrap();
                         assert_eq!(sum, expected_sum);
-
-                        if left >= right {
-                            let difference = left.checked_sub(right).unwrap();
-                            let expected_difference = super::MachineInstant::from_parts(
-                                MachineTime::ZERO,
-                                left_numerator * right_denominator
-                                    - right_numerator * left_denominator,
-                                left_denominator * right_denominator,
-                            )
-                            .unwrap();
-                            assert_eq!(difference, expected_difference);
-                        }
                     }
                 }
             }
         }
     }
-
     #[test]
     fn machine_instant_rejects_unrepresentable_denominators_and_tick_overflow() {
         assert_eq!(
