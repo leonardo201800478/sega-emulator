@@ -52,14 +52,15 @@ use windows::Win32::Graphics::Dxgi::{
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::HiDpi::{
     DPI_AWARENESS_CONTEXT, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE,
-    DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetThreadDpiAwarenessContext,
+    DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, EnableNonClientDpiScaling,
+    SetThreadDpiAwarenessContext,
 };
 use windows::Win32::System::Threading::{CreateEventW, INFINITE, WaitForSingleObjectEx};
 use windows::Win32::UI::WindowsAndMessaging::{
     CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, DestroyWindow,
     DispatchMessageW, IsIconic, MSG, PM_REMOVE, PeekMessageW, PostQuitMessage, RegisterClassW,
     SetWindowPos, SWP_NOACTIVATE, SWP_NOZORDER, SW_SHOW, ShowWindow, TranslateMessage,
-    WINDOW_EX_STYLE, WINDOW_STYLE, WM_DESTROY, WM_DPICHANGED, WNDCLASSW,
+    WINDOW_EX_STYLE, WINDOW_STYLE, WM_DESTROY, WM_DPICHANGED, WM_NCCREATE, WNDCLASSW,
     WS_OVERLAPPEDWINDOW,
 };
 use windows::core::{Error, Interface, Result, w};
@@ -201,6 +202,12 @@ unsafe extern "system" fn window_proc(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
+    if message == WM_NCCREATE {
+        // PMv2 scales non-client areas automatically. This call additionally
+        // enables that behavior for the PMv1 fallback context.
+        let _ = unsafe { EnableNonClientDpiScaling(hwnd) };
+    }
+
     if message == WM_DPICHANGED && lparam.0 != 0 {
         // Windows supplies the suggested outer-window rectangle for the new
         // monitor DPI. The swap-chain's logical SMS surface remains unchanged;
