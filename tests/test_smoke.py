@@ -13,24 +13,30 @@ def test_package_version_is_defined() -> None:
     assert __version__ == "0.1.1"
 
 
-def test_entry_point_without_rom_opens_qt_frontend_without_starting_gui(
+def test_entry_point_without_rom_opens_minimal_sms_control_window(
     capsys, monkeypatch, tmp_path
 ) -> None:
-    """Sem ROM, o CLI delega ao frontend Qt sem iniciar uma janela no teste."""
+    """Sem ROM, o CLI delega à janela mínima sem iniciar GUI no teste."""
     from sega_emulator.__main__ import main
 
-    calls: list[object] = []
+    calls: list[tuple[object, ...]] = []
 
-    def fake_run(rom: object) -> None:
-        calls.append(rom)
+    def fake_run(rom: object, *, region: str) -> None:
+        calls.append((rom, region))
 
-    frontend = ModuleType("sega_emulator.frontend.qt_frontend")
-    frontend.run = fake_run
-    monkeypatch.setitem(sys.modules, "sega_emulator.frontend.qt_frontend", frontend)
+    frontend = ModuleType(
+        "sega_emulator.frontend.qt.minimal_sms_window"
+    )
+    frontend.run_minimal_sms = fake_run
+    monkeypatch.setitem(
+        sys.modules,
+        "sega_emulator.frontend.qt.minimal_sms_window",
+        frontend,
+    )
 
     main(["--log-dir", str(tmp_path)])
 
-    assert calls == [None]
+    assert calls == [(None, "usa")]
     assert capsys.readouterr().out == ""
 
 
