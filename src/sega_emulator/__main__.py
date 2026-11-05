@@ -16,7 +16,7 @@ from sega_emulator.rom_loader import list_rom_members
 def main(argv: Sequence[str] | None = None) -> int:
     """Abre a interface Qt; o carregador também pode listar ROMs de um ZIP."""
     parser = argparse.ArgumentParser(
-        description="Sega Emulator — interface Qt com runtimes nativos em Rust",
+        description="Sega Emulator — janela Qt mínima com runtimes nativos em Rust",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
@@ -26,7 +26,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         "rom",
         type=Path,
         nargs="?",
-        help="caminho para ROM .sg/.rom/.bin ou arquivo ZIP contendo ROM",
+        help="caminho para ROM .sms/.bin/.rom (SMS) ou .sg (SG-1000)",
+    )
+    parser.add_argument(
+        "--system",
+        choices=("sms", "sg1000"),
+        default="sms",
+        help="sistema a iniciar (padrão: Master System)",
+    )
+    parser.add_argument(
+        "--region",
+        choices=("usa", "brazil", "europe", "japan"),
+        default="usa",
+        help="perfil regional do Master System",
     )
     parser.add_argument(
         "--log-dir",
@@ -67,9 +79,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     configure_session_logging(args.log_dir, level=getattr(logging, args.log_level))
     try:
-        from sega_emulator.frontend.qt_frontend import run
+        if args.system == "sms":
+            from sega_emulator.frontend.qt.minimal_sms_window import run_minimal_sms
 
-        run(args.rom)
+            run_minimal_sms(args.rom, region=args.region)
+        else:
+            from sega_emulator.frontend.qt_frontend import run
+
+            run(args.rom)
     except (RuntimeError, ImportError) as exc:
         parser.error(str(exc))
     return 0

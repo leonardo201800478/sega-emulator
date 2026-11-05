@@ -1,74 +1,39 @@
-"""Offscreen checks for the Qt raster/Vulkan presentation selector."""
+"""The former Python Qt video renderer must remain disabled."""
 
 from __future__ import annotations
 
-import os
+from pathlib import Path
 
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+import pytest
 
-import pytest  # noqa: E402
-
-pytest.importorskip("PySide6")
-
-from PySide6.QtGui import QImage  # noqa: E402
-from PySide6.QtQuick import QSGRendererInterface  # noqa: E402
-from PySide6.QtWidgets import QApplication  # noqa: E402
-
-from sega_emulator.frontend.qt.video_widget import (  # noqa: E402
-    VideoWidget,
-    _graphics_api_for_mode,
-)
+from sega_emulator.frontend.qt.video_widget import VideoWidget
 
 
-@pytest.fixture
-def qt_app():
-    app = QApplication.instance() or QApplication([])
-    yield app
+def test_legacy_video_widget_is_rejected() -> None:
+    with pytest.raises(RuntimeError, match="não pode receber framebuffers"):
+        VideoWidget()
 
 
-def test_forced_raster_driver_remains_selected_after_frame_updates(qt_app) -> None:
-    widget = VideoWidget()
-    assert widget.set_render_backend("raster")
-    frame = QImage(256, 192, QImage.Format.Format_RGB888)
-    frame.fill(0)
-    widget.set_framebuffer(frame)
-    assert widget._render_backend == "raster"
-    assert widget._stack.currentWidget() is widget._fallback
-    widget.close()
+def test_active_qt_modules_do_not_import_or_present_video_pixels() -> None:
+    root = Path(__file__).resolve().parents[1]
+    active_modules = (
+        root / "src/sega_emulator/frontend/qt/minimal_sms_window.py",
+        root / "src/sega_emulator/frontend/qt/main_window.py",
+        root / "src/sega_emulator/frontend/qt/video_widget.py",
+        root / "src/sega_emulator/frontend/qt/video_filters.py",
+        root / "src/sega_emulator/frontend/qt_frontend.py",
+    )
+    forbidden = (
+        "QImage",
+        "QPixmap",
+        "QQuickView",
+        "FramebufferImageProvider",
+        "set_framebuffer(",
+        "machine.framebuffer",
+        "numpy",
+    )
 
-
-def test_unknown_video_driver_is_rejected(qt_app) -> None:
-    widget = VideoWidget()
-    with pytest.raises(ValueError, match="mode"):
-        widget.set_render_backend("directx")
-    widget.close()
-
-
-@pytest.mark.parametrize(
-    ("mode", "expected"),
-    [
-        ("auto", QSGRendererInterface.GraphicsApi.Vulkan),
-        ("vulkan", QSGRendererInterface.GraphicsApi.Vulkan),
-        ("d3d11", QSGRendererInterface.GraphicsApi.Direct3D11),
-        ("d3d12", QSGRendererInterface.GraphicsApi.Direct3D12),
-    ],
-)
-def test_native_graphics_api_mapping(mode, expected) -> None:
-    assert _graphics_api_for_mode(mode) == expected
-
-
-def test_raster_is_not_a_hardware_graphics_api() -> None:
-    with pytest.raises(ValueError, match="graphics API"):
-        _graphics_api_for_mode("raster")
-
-
-def test_raster_startup_displays_published_frame(qt_app) -> None:
-    widget = VideoWidget(graphics_api="raster")
-    widget.resize(768, 576)
-    frame = QImage(256, 192, QImage.Format.Format_RGB888)
-    frame.fill(0)
-    widget.set_framebuffer(frame)
-
-    assert widget._render_backend == "raster"
-    assert not widget._fallback.pixmap().isNull()
-    widget.close()
+    for module in active_modules:
+        source = module.read_text(encoding="utf-8")
+        for symbol in forbidden:
+            assert symbol not in source, f"{symbol} found in {module.name}"

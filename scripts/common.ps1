@@ -11,6 +11,10 @@ function Get-SegaPython {
 function Initialize-SegaPythonRuntime {
     [CmdletBinding()]
     param([Parameter(Mandatory = $true)][string]$PythonExecutable)
+    $pythonVersion = (& $PythonExecutable -c "import sys; print('.'.join(map(str, sys.version_info[:3])))").Trim()
+    if ($LASTEXITCODE -ne 0 -or $pythonVersion -ne "3.15.2") {
+        throw "O projeto exige CPython 3.15.2; encontrado '$pythonVersion' em '$PythonExecutable'. Recrie .venv com Python 3.15.2."
+    }
     $basePrefix = (& $PythonExecutable -c "import sys; print(sys.base_prefix)").Trim()
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($basePrefix)) { throw "Nao foi possivel determinar sys.base_prefix de '$PythonExecutable'." }
     $pathEntries = @($env:PATH -split [System.IO.Path]::PathSeparator)

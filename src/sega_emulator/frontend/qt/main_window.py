@@ -22,7 +22,6 @@ from PySide6.QtWidgets import (
 
 from sega_emulator import __version__
 from sega_emulator.frontend.qt.localization import translate
-from sega_emulator.frontend.qt.video_widget import VideoWidget
 
 
 def persisted_window_dimensions(
@@ -100,14 +99,20 @@ class EmulatorMainWindow(QMainWindow):
             """
         )
 
-        self.video_widget = VideoWidget(self, graphics_api=video_driver)
-        self.video_widget.setObjectName("emulatorVideoSurface")
         screen = QWidget(self)
         layout = QVBoxLayout(screen)
         self._central_layout = layout
         layout.setContentsMargins(18, 18, 18, 18)
         layout.setSpacing(12)
-        layout.addWidget(self.video_widget, 1)
+        self.video_status_label = QLabel(
+            "Apresentação de vídeo desativada na camada Python/Qt. "
+            "O host gráfico nativo em Rust ainda será conectado.",
+            screen,
+        )
+        self.video_status_label.setObjectName("nativeVideoHostStatus")
+        self.video_status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.video_status_label.setWordWrap(True)
+        layout.addWidget(self.video_status_label, 1)
 
         self.central_tabs = QTabWidget(self)
         self.central_tabs.setObjectName("mainContentTabs")
@@ -365,7 +370,7 @@ class EmulatorMainWindow(QMainWindow):
         self.exit_fullscreen_action.setEnabled(enabled)
         if enabled:
             self.showFullScreen()
-            self.video_widget.setFocus()
+            self.video_status_label.setFocus()
         else:
             self.showNormal()
 
@@ -405,10 +410,14 @@ class EmulatorMainWindow(QMainWindow):
         self.setWindowTitle(f"Sega Emulator | {labels[system]}")
 
     def set_video_scale(self, scale: int) -> None:
+        """Store a future native-host preference; never scale/render pixels in Qt."""
         if scale not in (2, 3, 4):
             raise ValueError("video scale must be 2, 3, or 4")
         self._video_scale = scale
-        self.resize(max(760, 256 * scale + 64), max(560, 192 * scale + 150))
+        self.video_status_label.setText(
+            "Apresentação de vídeo desativada na camada Python/Qt. "
+            f"Escala {scale}x registrada para o futuro host nativo em Rust."
+        )
 
     def set_recent_roms(
         self,

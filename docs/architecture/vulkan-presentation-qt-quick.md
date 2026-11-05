@@ -1,3 +1,5 @@
+> **SUPERSEDIDO — não implementar.** Esta proposta de apresentação via Qt Quick/Vulkan foi substituída pela [ADR-0012](decisions/ADR-0012-native-d3d12-video-runtime.md). Python/PySide6 não pode receber framebuffers nem apresentar vídeo. O caminho de pixels e a apresentação são exclusivamente Rust/D3D12. O arquivo permanece apenas como registro histórico.
+
 # Implementação Vulkan de apresentação de vídeo no Qt Quick
 
 Esta documentação descreve o protótipo executável da superfície Vulkan. O contrato mais amplo de backends/configuração gráfica está sendo tratado separadamente na PR #78 (`feat/video-rendering-backends`); este documento não substitui nem redefine aquele contrato.
