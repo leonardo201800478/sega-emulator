@@ -66,10 +66,10 @@ class MinimalSmsWindow(QMainWindow):
         self.open_action.triggered.connect(self._open_rom_dialog)
         toolbar.addAction(self.open_action)
 
-        self.step_action = QAction("Avançar quadro", self)
-        self.step_action.setShortcut("F5")
-        self.step_action.triggered.connect(self._step_one_frame)
-        toolbar.addAction(self.step_action)
+        self.run_action = QAction("Iniciar", self)
+        self.run_action.setShortcut("F5")
+        self.run_action.triggered.connect(self._toggle_running)
+        toolbar.addAction(self.run_action)
 
         self.reset_action = QAction("Reset", self)
         self.reset_action.setShortcut("F10")
@@ -121,27 +121,28 @@ class MinimalSmsWindow(QMainWindow):
         self.status_label.setText(
             f"ROM carregada: {path.name}\n"
             "Vídeo desabilitado nesta interface.\n"
-            "Use Avançar quadro (F5) para executar um frame e gerar áudio."
+            "Use Iniciar/Pausar para controlar a sessão nativa."
         )
         self.statusBar().showMessage(
             f"{path.name} | {self._region} | {audio_status} | vídeo: desabilitado"
         )
         self._update_actions()
 
-    def _step_one_frame(self) -> None:
+    def _toggle_running(self) -> None:
         machine = self._machine
         if machine is None:
             return
-        try:
-            machine.step_frame()
-        except (RuntimeError, ValueError) as exc:
-            QMessageBox.critical(self, "Falha ao avançar a máquina", str(exc))
-            return
+        if machine.is_running:
+            machine.pause()
+            state = "pausada"
+        else:
+            machine.start()
+            state = "iniciada"
         self.status_label.setText(
             f"ROM: {self._rom_path.name if self._rom_path else 'carregada'}\n"
-            f"Quadros executados: {machine.frame_number}\n"
-            "Vídeo desabilitado nesta interface; áudio é processado no backend Rust."
+            f"Sessão {state}. A Qt não executa ciclos nem apresenta vídeo."
         )
+        self._update_actions()
 
     def _reset(self) -> None:
         machine = self._machine
@@ -168,9 +169,13 @@ class MinimalSmsWindow(QMainWindow):
 
     def _update_actions(self) -> None:
         loaded = self._machine is not None
-        self.step_action.setEnabled(loaded)
+        self.run_action.setEnabled(loaded)
         self.reset_action.setEnabled(loaded)
         self.close_rom_action.setEnabled(loaded)
+        if not loaded or not self._machine.is_running:
+            self.run_action.setText("Iniciar")
+        else:
+            self.run_action.setText("Pausar")
 
     def _update_controller(self) -> None:
         if self._machine is None:
