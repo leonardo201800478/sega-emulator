@@ -657,6 +657,7 @@ mod tests {
             width: 8,
             height: 16,
         };
+        metadata.active_rect = metadata.visible_rect;
         metadata.masked_regions.push(super::VideoRect {
             x: 0,
             y: 0,
