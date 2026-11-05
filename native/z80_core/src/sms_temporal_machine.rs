@@ -3,7 +3,6 @@
 use crate::audio::{MachineAudioSession, open_audio_session};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::PyBytes;
 use sega_sms_core::{
     ControllerButtons, SmsTemporalMachine, SmsVdpProfile, SmsVdpRevision, SpriteLimitMode,
     Territory, VideoStandard,
@@ -175,21 +174,6 @@ impl NativeSMSTemporalMachine {
     #[getter]
     fn frame_number(&self) -> u64 {
         self.machine.frame_number()
-    }
-
-    #[getter]
-    fn width(&self) -> usize {
-        256
-    }
-
-    #[getter]
-    fn height(&self) -> u16 {
-        self.machine.vdp().visible_height()
-    }
-
-    #[getter]
-    fn framebuffer<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
-        PyBytes::new(py, self.machine.framebuffer())
     }
 
     /// Execute exactly one complete VDP frame through the Rust Scheduler.
