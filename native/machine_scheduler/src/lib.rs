@@ -126,7 +126,10 @@ impl fmt::Display for SchedulerError {
             Self::Clock(error) => write!(f, "clock-domain advancement failed: {error}"),
             Self::EventQueue(error) => write!(f, "event scheduling failed: {error}"),
             Self::TimeWentBackwards => write!(f, "machine scheduler cannot move backwards"),
-            Self::SubTickEventUnsupported => write!(f, "scheduler clock domains do not yet advance to rational sub-tick instants"),
+            Self::SubTickEventUnsupported => write!(
+                f,
+                "scheduler clock domains do not yet advance to rational sub-tick instants"
+            ),
             Self::EventPendingBeforeTarget => {
                 write!(f, "cannot advance idle time past an undispatched event")
             }
@@ -524,7 +527,9 @@ impl<T> MachineScheduler<T> {
 
     /// Return the timestamp of the next pending event.
     pub fn next_event_time(&self) -> Option<MachineTime> {
-        self.events.next_timestamp().and_then(MachineInstant::as_machine_time)
+        self.events
+            .next_timestamp()
+            .and_then(MachineInstant::as_machine_time)
     }
 
     /// Return the number of pending events.
