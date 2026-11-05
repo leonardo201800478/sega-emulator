@@ -155,17 +155,18 @@ impl VideoFrameMetadata {
         if !self.visible_rect.contains(self.active_rect) {
             return Err(VideoFrameError::ActiveAreaOutsideVisibleArea);
         }
-        if self.display_aspect_ratio.numerator == 0
-            || self.display_aspect_ratio.denominator == 0
+        if self.display_aspect_ratio.numerator == 0 || self.display_aspect_ratio.denominator == 0
         {
             return Err(VideoFrameError::InvalidAspectRatio);
         }
         if self.timestamp_ticks > 0 && self.timebase_hz == 0 {
             return Err(VideoFrameError::InvalidTimestamp);
         }
-        if self.masked_regions.iter().any(|region| {
-            !region.is_within(width, height) || !self.visible_rect.contains(*region)
-        }) {
+        if self
+            .masked_regions
+            .iter()
+            .any(|region| !region.is_within(width, height) || !self.visible_rect.contains(*region))
+        {
             return Err(VideoFrameError::InvalidMaskedRegion);
         }
         if let Some(raster) = self.raster {
@@ -232,12 +233,26 @@ impl fmt::Display for VideoFrameError {
                 "video frame storage has {actual} bytes; expected exactly {expected}"
             ),
             Self::InvalidActiveRect => write!(formatter, "video frame active rectangle is invalid"),
-            Self::InvalidVisibleRect => write!(formatter, "video frame visible rectangle is invalid"),
-            Self::ActiveAreaOutsideVisibleArea => write!(formatter, "video frame active area is outside the visible area"),
-            Self::InvalidAspectRatio => write!(formatter, "video frame display aspect ratio is invalid"),
-            Self::InvalidTimestamp => write!(formatter, "video frame timestamp requires a non-zero timebase"),
-            Self::InvalidMaskedRegion => write!(formatter, "video frame masked region is outside the frame"),
-            Self::InvalidRasterMetadata => write!(formatter, "video frame raster metadata is invalid"),
+            Self::InvalidVisibleRect => {
+                write!(formatter, "video frame visible rectangle is invalid")
+            }
+            Self::ActiveAreaOutsideVisibleArea => write!(
+                formatter,
+                "video frame active area is outside the visible area"
+            ),
+            Self::InvalidAspectRatio => {
+                write!(formatter, "video frame display aspect ratio is invalid")
+            }
+            Self::InvalidTimestamp => write!(
+                formatter,
+                "video frame timestamp requires a non-zero timebase"
+            ),
+            Self::InvalidMaskedRegion => {
+                write!(formatter, "video frame masked region is outside the frame")
+            }
+            Self::InvalidRasterMetadata => {
+                write!(formatter, "video frame raster metadata is invalid")
+            }
         }
     }
 }
@@ -607,9 +622,15 @@ mod tests {
 
     #[test]
     fn default_metadata_marks_the_entire_frame_active_and_visible() {
-        let frame =
-            VideoFrame::new(1, 256, 192, PixelFormat::Rgba8888, 1024, vec![0; 256 * 192 * 4])
-                .unwrap();
+        let frame = VideoFrame::new(
+            1,
+            256,
+            192,
+            PixelFormat::Rgba8888,
+            1024,
+            vec![0; 256 * 192 * 4],
+        )
+        .unwrap();
 
         assert_eq!(
             frame.metadata().active_rect,
