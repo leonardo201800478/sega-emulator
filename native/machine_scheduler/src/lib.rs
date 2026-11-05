@@ -791,9 +791,9 @@ mod tests {
         assert_eq!(first.event.payload, "early-a");
         assert_eq!(second.event.payload, "early-b");
         assert_eq!(third.event.payload, "late");
-        assert_eq!(first.event.timestamp, timestamp);
-        assert_eq!(second.event.timestamp, timestamp);
-        assert_eq!(third.event.timestamp, timestamp);
+        assert_eq!(first.event.timestamp, MachineInstant::from(timestamp));
+        assert_eq!(second.event.timestamp, MachineInstant::from(timestamp));
+        assert_eq!(third.event.timestamp, MachineInstant::from(timestamp));
         assert_eq!(scheduler.now(), timestamp);
         assert_eq!(scheduler.pending_events(), 0);
     }
