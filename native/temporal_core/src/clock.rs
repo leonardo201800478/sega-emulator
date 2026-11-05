@@ -235,7 +235,11 @@ fn cmp_fraction_u128(
                 (false, true) => Ordering::Greater,
                 (false, false) => unreachable!(),
             };
-            return if reversed { ordering.reverse() } else { ordering };
+            return if reversed {
+                ordering.reverse()
+            } else {
+                ordering
+            };
         }
 
         left_numerator = left_denominator;
