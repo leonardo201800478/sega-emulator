@@ -50,6 +50,8 @@ Uma implementação de outro emulador é evidência comparativa, não prova de h
 | VDP-F26 | Raster write | Escritas de R0/R1/R7/R8/R9, VRAM e CRAM antes/depois de boundaries | Pixels e efeitos seguintes refletem o instante de commit real | RE + HW |
 | VDP-F27 | Reset | Reset com preservação/limpeza de VRAM conforme tipo de reset | Registradores, latches, status e memória no estado definido para cada reset | DOC + TEST |
 | VDP-F28 | Save state | Snapshot durante linha ativa, sprite evaluation e VBlank | Restore bit-a-bit e continuidade idêntica | TEST |
+| VDP-F29 | DAC/paleta | Todos os 64 valores CRAM em 315-5124 e 315-5246 | Tabela de saída RGB por revisão; SMS1 deve testar nível azul não linear; SMS2 possui níveis distintos | RE + DIFF + HW |
+| VDP-F30 | Raster/overscan | Capturar bordas, blanking, sync e active window por linha | Geometria/offsets e cor de cada segmento correspondem à revisão e standard | DOC + DIFF + HW |
 
 ### 2.1 Overscan, blanking e origem do viewport
 
@@ -71,6 +73,20 @@ A documentação independente consultada descreve uma linha de 342 dots, com 256
 - os dois bits têm efeitos independentes e podem coexistir;
 - a opção de cortar esses 8 pixels é uma transformação do viewport, nunca uma alteração do framebuffer bruto, do VDP ou do save state;
 - capturas de referência e testes sempre guardam a imagem bruta e metadados (active rect, overscan rect, revisão, altura, standard, R0/R7).
+
+### 2.2 Comparação independente e limites das referências
+
+A auditoria comparativa inicial encontrou:
+
+- **MAME** mantém dispositivos separados para 315-5124 e 315-5246, descreve segmentos horizontais/verticais de raster e tabelas de timing por standard/altura. A implementação declara explicitamente que *mid-scanline changes* e restrições de acesso VRAM/CRAM ainda são TODO; portanto, não será tratada como referência completa para esses fenômenos.
+- O MAME usa tabelas RGB diferentes por revisão: no 315-5124, níveis `{0,78,160,238}` e canal azul `{0,98,160,238}`; no 315-5246, níveis `{0,89,174,255}`. O renderer legado do projeto usa escala linear `0,85,170,255`, logo não é uma referência de saída RGB por revisão. Os valores MAME são evidência comparativa a confirmar por medições/fonte primária.
+- **Gearsystem** separa overscan de *Hide Left Bar* e oferece comportamento `Auto` condicionado ao left-column masking. Isso é uma boa referência de UX: o novo Qt adotará `Não/Auto/Sempre`, com `Auto` como padrão, sem modificar o raster bruto.
+- A documentação de Charles MacDonald descreve a coluna 0 mascarada com R7 e o deslocamento de sprites por R0 bit 3 como controles distintos. O teste precisa cobrir cada bit isolado e ambos juntos.
+
+Fontes comparativas:
+- MAME VDP: https://github.com/mamedev/mame/blob/master/src/devices/video/315_5124.cpp
+- Gearsystem Video: https://github.com/drhelius/Gearsystem/blob/master/src/Video.cpp
+- Gearsystem VDP reference: https://github.com/drhelius/Gearsystem/blob/master/skills/gearsystem-debugging/references/msvdp.md
 
 ## 3. VDP — matriz temporal
 
@@ -137,7 +153,7 @@ A documentação independente consultada descreve uma linha de 342 dots, com 256
 | PAL VDP/master | Manual SMS II/placas PAL | 10.640684 MHz nominal | DOC; confirmar placa e divisor |
 | PAL-M | Perfil regional | Não assumir equivalência completa a PAL nem NTSC | BLOCKED até matriz de placas/fontes |
 
-O código antigo em `SmsVdp::system_clock_hz()` informa `3_546_895` para PAL, enquanto a documentação consultada informa `3_546_893`. Não copiar a constante antiga para a máquina temporal. O perfil deve usar razão racional/oscillator/divider quando a fonte sustentar esse nível de exatidão.
+O código antigo em `SmsVdp::system_clock_hz()` informa `3_546_895` para PAL; o manual/guia de serviço consultado informa aproximadamente `3_546_893` e a documentação de placas MAME registra `3.54689 MHz`. O VDP PAL aparece como aproximadamente `10.6406`/`10.640684 MHz` em fontes distintas. Não classificar automaticamente a constante antiga como bug: reconciliar placa, revisão do ASIC, oscilador e divisores. O perfil deve usar razão racional/oscillator/divider quando a fonte sustentar esse nível de exatidão.
 
 ## 7. Integração e determinismo — gate sistêmico
 
@@ -157,7 +173,7 @@ O código antigo em `SmsVdp::system_clock_hz()` informa `3_546_895` para PAL, en
 | SYS-T12 | Cargo isolation | Runtime Legacy não aparece no build padrão nem nas dependências ativadas |
 | SYS-T13 | Python packaging | Nenhum import/entrypoint instala ou inicializa Qt antigo/adaptador SMS antigo |
 
-## 8. Gate de classificação
+## 8. Apresentação Qt — validação do viewport\n\n| ID | Opção | Critério |\n|---|---|---|\n| UI-V01 | Left bar = Não | Preserva os 256 pixels ativos, inclusive a coluna mascarada |\n| UI-V02 | Left bar = Auto (padrão) | Corta 8 px somente quando R0 bit 5 estiver ativo e overscan completo não estiver selecionado |\n| UI-V03 | Left bar = Sempre | Corta 8 px independentemente de R0 bit 5, apenas na apresentação |\n| UI-V04 | Overscan completo | Mostra bordas/raster disponíveis e desabilita o crop automático |\n| UI-V05 | Raw capture | Exporta frame bruto + active rect/overscan rect e configuração de hardware, sem viewport transform |\n| UI-V06 | Proporção | Crop, escala e aspect ratio não alteram pixels, registradores ou timeline |\n\n## 9. Gate de classificação
 
 Para cada suíte e cenário:
 - **PASS:** executado no SHA declarado, resultado integral aprovado.
