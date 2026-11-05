@@ -70,9 +70,7 @@ def test_minimal_sms_window_loads_runs_resets_and_closes_rom(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    monkeypatch.setattr(
-        minimal_window, "TemporalSMSMachine", FakeTemporalSMSMachine
-    )
+    monkeypatch.setattr(minimal_window, "TemporalSMSMachine", FakeTemporalSMSMachine)
     rom_path = tmp_path / "test.sms"
     rom_path.write_bytes(b"test-rom")
 
