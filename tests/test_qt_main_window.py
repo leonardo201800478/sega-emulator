@@ -132,7 +132,7 @@ def test_main_window_exposes_brazil_pal_m_region_action(qt_app) -> None:
 
 
 @pytest.mark.parametrize("scale", [2, 3, 4])
-def test_video_scale_updates_window_size(qt_app, scale: int) -> None:
+def test_video_scale_is_only_a_native_host_preference(qt_app, scale: int) -> None:
     window = EmulatorMainWindow(
         on_open_rom=lambda: None,
         on_pause_resume=lambda: None,
@@ -144,11 +144,12 @@ def test_video_scale_updates_window_size(qt_app, scale: int) -> None:
         on_show_machine_state=lambda: None,
         on_video_scale=lambda selected: None,
     )
+    initial_size = (window.width(), window.height())
 
     window.set_video_scale(scale)
 
-    assert window.width() == max(760, 256 * scale + 64)
-    assert window.height() == max(560, 192 * scale + 150)
+    assert (window.width(), window.height()) == initial_size
+    assert f"Escala {scale}x registrada" in window.video_status_label.text()
     window.close()
 
 
