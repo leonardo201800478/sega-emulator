@@ -61,3 +61,27 @@ Isso **não** encerra E7. A auditoria semântica global e a divergência das fla
 ## Limites desta auditoria
 
 A auditoria usou os metadados/diffs das PRs, comparação de commits com a main e os check-runs reportados pelos HEADs consultados. Não executou localmente cargo/pytest nem testou jogos/ROMs. Os resultados de CI foram lidos como evidência do SHA reportado, não como validação do estado atual da main. Onde a PR declara testes in-game, diferenciais ou integrações como pendentes, isso foi mantido como pendência, sem inferir sucesso.
+
+
+---
+
+## Aditivo de PRs criadas durante a continuidade — 2026-11-05
+
+A fotografia original acima permanece histórica. Após a auditoria E7 em três frentes, foram abertas três PRs adicionais, todas baseadas na main `1da784f556b9524f5a6f43ce8a7c525e68354f9e`. Nenhuma foi integrada.
+
+| PR | Escopo | HEAD consultado | Estado |
+|---|---|---|---|
+| #538 | Matriz de 48.000 casos para flags ED de I/O em bloco + auditoria NMOS | `4a78a04c0851acef3951f0faa78065a9f36d601b` | Aberta; Rust/Python/PyO3/D3D12/change-impact PASS; Scheduler stress/PowerShell/Qt/lock refresh SKIPPED |
+| #539 | Erratum P/V de LD A,I/R no microsequenciador; sincronização de Q e testes de snapshot | `f3af2b7b1e3f6c8b9f4c8d4c4b3a2f8d1e7a9c0b` | Aberta; Rust/Python/PyO3/D3D12/change-impact PASS; Scheduler stress/PowerShell/Qt/lock refresh SKIPPED |
+| #540 | Matriz DD/FD de LD r,r' com IXH/IXL/IYH/IYL e exceções H/L indexed-memory | `9e263bd4070c68b0b5e0c99e08b6d05688bb3f06` | Aberta; CI em execução |
+
+Os SHAs acima vinculam a fotografia desta revisão; consultar novamente o HEAD antes de qualquer merge. Jobs SKIPPED permanecem SKIPPED, nunca PASS. Os scripts locais `project.ps1 audit/locks/validate` continuam NOT RUN nesta sessão.
+
+### Decisões
+
+- #538 não altera runtime e caracteriza a semântica NMOS sem declarar CMOS/clones equivalentes.
+- #539 corrige uma divergência funcional concreta entre executor atômico e microsequenciador; aguarda gates completos.
+- #540 amplia somente testes funcionais DD/FD; não altera runtime e não fecha ALU/INC/DEC ou E7.7 global.
+- #533 permanece Draft e não integrada.
+- #527 permanece Draft e não integrada.
+- Nenhuma PR antiga foi rebaseada, fechada ou integrada automaticamente.
