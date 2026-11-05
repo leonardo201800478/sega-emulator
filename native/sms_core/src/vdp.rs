@@ -171,6 +171,11 @@ impl SmsVdp {
     pub fn status(&self) -> u8 {
         self.status
     }
+
+    #[cfg(test)]
+    pub(crate) fn latched_scroll_y_for_test(&self) -> u8 {
+        self.latched_scroll_y
+    }
     pub fn address(&self) -> u16 {
         self.address
     }
