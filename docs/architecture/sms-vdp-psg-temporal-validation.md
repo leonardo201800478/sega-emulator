@@ -134,10 +134,12 @@ A regra T0.1 é obrigatória: todo teste que dependa de posição horizontal, fa
 | PSG-F10 | Divider | Avanços que terminam antes, exatamente em e depois de 16 clocks | Fase residual correta; nenhum drift por chunking | DOC + TEST |
 | PSG-F11 | Port mapping | Escritas em $40-$7F, inclusive $7E/$7F | Decode/mirror correto para SMS | DOC + TEST |
 | PSG-F12 | Reset | Reset de chip e reset de console | Estado inicial SMS integrado correto e distinguido de chips discretos | DOC + TEST |
-| PSG-F13 | Mixer | Canais isolados e somados | Mix determinístico; clipping/normalização documentados | TEST |
+| PSG-F13 | Digital mixer | Canais isolados e somados | Mix digital determinístico e escala explícita; não confundir com circuito de saída da placa | TEST |
 | PSG-F14 | Sampling | 44.1/48/96 kHz e clocks NTSC/PAL | Sample count/phase exatos sem comandar o chip pelo host | MODEL + TEST |
 | PSG-F15 | Filter | FIR history/position e continuidade em blocos | Sem descontinuidade ao mudar o tamanho do bloco; filtro identificado como output stage, não circuito analógico físico | TEST |
 | PSG-F16 | Save state | Durante tom, ruído e fase intermediária do divisor | Restore reproduz exatamente a sequência digital e amostras futuras | TEST |
+| PSG-F17 | Board output circuit | Medir os 16 níveis de volume e combinações de canais em placas SMS1/SMS2 identificadas | Perfil de saída é separado do SN76489 digital; variante de resistor só é habilitada com curva medida; não inferir apenas pelo ASIC | BLOCKED até medição |
+| PSG-F18 | PCM/DC response | Reproduzir padrões PCM por volume writes e capturar saída de placa | Qualquer decay/RC ou resposta não linear precisa de parâmetros medidos e teste independente; não adicionar circuito analógico genérico | BLOCKED até medição |
 
 ## 5. PSG — integração temporal
 
@@ -153,7 +155,8 @@ A regra T0.1 é obrigatória: todo teste que dependa de posição horizontal, fa
 | PSG-T08 | Determinismo | Diferentes tamanhos de avanço geram a mesma sequência de bits e samples |
 | PSG-T09 | Restore | Snapshot inclui fase do divisor, counters, outputs, LFSR, filtro e fase de sample |
 | PSG-T10 | CPU/VDP/PSG | Escritas de CPU, eventos VDP e PSG seguem ordem causal única |
-| PSG-T11 | Shared clock | Clock Z80/PSG derivado do mesmo perfil SMS | Domínios avançam com razão racional e snapshots validam fase/ciclos iguais | MODEL + TEST |
+| PSG-T11 | Shared clock | Clock Z80/PSG derivado do mesmo perfil SMS | Domínios avançam com razão racional; relação nominal 3:1 VDP:CPU/PSG no SMS1 NTSC não fixa fase inicial | MODEL + TEST |
+| PSG-T12 | Board output stage | Perfil de circuito processa samples já gerados pelo chip | Estado/curva do estágio é determinístico e serializável; não retroage no clock digital do PSG | TEST; BLOCKED até perfil medido |
 
 ## 6. Clock profile — itens que precisam de reconciliação
 
