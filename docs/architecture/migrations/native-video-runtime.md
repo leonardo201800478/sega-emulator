@@ -18,7 +18,7 @@ Transferir para Rust o caminho completo de vídeo: contrato de frame, recursos, 
 - **Master Scheduler:** único proprietário de MachineTime e da ordenação temporal dos dispositivos. Não espera GPU/fences e não ajusta ciclos ao refresh da tela.
 - **VideoFrame:** frame imutável com dimensões, formato, pitch/stride e sequência. Formatos iniciais: RGB565 e RGBA8888. Ownership e backpressure explícitos.
 - **Rust video host:** proprietário do HWND, D3D12 device, direct queue, command allocators/lists, resources, descriptors, shaders/PSO, upload, DXGI swap chain, fences e apresentação.
-- **Python/PySide6:** launcher, menus, configuração, comandos coarse-grained, logs e telemetria. Não recebe pixels por frame, não cria QImage/QPixmap por frame, não participa do stepping nem do frame pacing e não possui recursos gráficos do caminho principal.
+- **Python/PySide6:** launcher, menus, configuração, comandos coarse-grained, logs e telemetria. Não recebe pixels por frame, não cria QImage/QPixmap por frame, não participa do stepping nem do frame pacing e não possui recursos gráficos do caminho principal. A janela Qt mínima é somente de controle; não oferece viewport, não chama `step_frame` e não executa loops/timers de emulação.
 
 O renderer apenas apresenta um frame já produzido. Nenhum shader pode implementar registradores, fetch, sprite evaluation, colisão, IRQ, H/V counters ou timing do VDP. O runtime da máquina deve continuar testável headless, sem device gráfico.
 
