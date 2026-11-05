@@ -86,7 +86,7 @@ A arquitetura pretendida é híbrida no sentido de manter **uma única semântic
 1. **Modo de instrução:** API coarse-grained que executa uma instrução até a próxima fronteira segura e retorna resultado/telemetria. Deve preservar o caminho de compatibilidade durante a extração inicial e continuar útil para testes sem exigir que o scheduler execute uma chamada por T-state.
 2. **Modo temporal condicional:** somente instruções/processos cuja interação de gameplay dependa da ordem/duração são decompostos nas micro-operações e acessos ao barramento mínimos necessários. O Scheduler pode suspender e retomar a CPU nas fronteiras realmente observáveis, incluindo WAIT/contenção quando existentes. As demais instruções permanecem atômicas.
 
-Não criar dois decodificadores nem manter dois motores semanticamente independentes. O modo por instrução deve consumir a mesma sequência de operações do motor temporal, ou permanecer uma fachada transitória com equivalência demonstrada durante a migração.
+Não criar dois decodificadores nem manter dois motores semanticamente independentes. Os caminhos atômico e temporal devem compartilhar a mesma fonte de semântica/decodificação e helpers de estado; comparar diferencialmente as operações que existirem nos dois caminhos. Não exigir que toda instrução atômica seja convertida em micro-operações.
 
 ### 3.3 Responsabilidades do motor CPU
 
