@@ -171,8 +171,7 @@ impl SmsMemory {
             }
             0x8000..=0xBFFF => {
                 if self.mapper == MapperKind::Sega && self.mapper_control & 0x08 != 0 {
-                    self.cartridge_ram
-                        [(usize::from(address) - 0x8000) & (CARTRIDGE_RAM_SIZE - 1)]
+                    self.cartridge_ram[(usize::from(address) - 0x8000) & (CARTRIDGE_RAM_SIZE - 1)]
                 } else {
                     self.read_bank(self.bank_registers[2], usize::from(address) - 0x8000)
                 }
@@ -182,8 +181,7 @@ impl SmsMemory {
                     && self.mapper_control & 0x10 != 0
                     && self.control_port & 0x10 != 0
                 {
-                    self.cartridge_ram
-                        [usize::from(address - RAM_START) & (CARTRIDGE_RAM_SIZE - 1)]
+                    self.cartridge_ram[usize::from(address - RAM_START) & (CARTRIDGE_RAM_SIZE - 1)]
                 } else if self.control_port & 0x10 != 0 {
                     0xFF
                 } else {
@@ -202,8 +200,7 @@ impl SmsMemory {
             && self.mapper == MapperKind::Sega
             && self.mapper_control & 0x08 != 0
         {
-            self.cartridge_ram
-                [(usize::from(address) - 0x8000) & (CARTRIDGE_RAM_SIZE - 1)] = value;
+            self.cartridge_ram[(usize::from(address) - 0x8000) & (CARTRIDGE_RAM_SIZE - 1)] = value;
         }
 
         if address >= RAM_START && self.control_port & 0x10 == 0 {
@@ -212,8 +209,7 @@ impl SmsMemory {
             && self.control_port & 0x40 == 0
             && self.mapper_control & 0x10 != 0
         {
-            self.cartridge_ram
-                [usize::from(address - RAM_START) & (CARTRIDGE_RAM_SIZE - 1)] = value;
+            self.cartridge_ram[usize::from(address - RAM_START) & (CARTRIDGE_RAM_SIZE - 1)] = value;
         }
 
         // The mapper registers belong to the cartridge slot. A BIOS-only
@@ -330,7 +326,10 @@ impl SmsMemory {
 
 #[cfg(test)]
 mod tests {
-    use super::{BANK_SIZE, BIOS_POWER_ON_CONTROL, CARTRIDGE_RAM_SIZE, MAX_ROM_SIZE, MapperKind, RAM_SIZE, SmsMemory};
+    use super::{
+        BANK_SIZE, BIOS_POWER_ON_CONTROL, CARTRIDGE_RAM_SIZE, MAX_ROM_SIZE, MapperKind, RAM_SIZE,
+        SmsMemory,
+    };
     use crate::{CartridgeImage, SmsCoreError};
 
     fn patterned_rom(bank_count: usize) -> CartridgeImage {
@@ -682,12 +681,20 @@ mod bus_contract_tests {
         memory.write(0xFFFC, 0x08);
         memory.write(0x8000, 0x5A);
         assert_eq!(memory.read(0x8000), 0x5A);
-        assert_eq!(memory.read(0xA000), 0x5A, "8 KiB SRAM mirrors in 16 KiB slot");
+        assert_eq!(
+            memory.read(0xA000),
+            0x5A,
+            "8 KiB SRAM mirrors in 16 KiB slot"
+        );
 
         memory.write(0xFFFF, 3);
         assert_eq!(memory.read(0x8000), 0x5A, "SRAM overrides slot-2 ROM bank");
         memory.write(0xFFFC, 0x00);
-        assert_eq!(memory.read(0x8000), 3, "disabling SRAM restores selected ROM bank");
+        assert_eq!(
+            memory.read(0x8000),
+            3,
+            "disabling SRAM restores selected ROM bank"
+        );
     }
 
     #[test]
@@ -707,7 +714,10 @@ mod bus_contract_tests {
         let image = vec![0xA5; CARTRIDGE_RAM_SIZE];
         memory.load_cartridge_ram(&image).unwrap();
         assert_eq!(memory.cartridge_ram(), image.as_slice());
-        assert!(memory.load_cartridge_ram(&image[..image.len() - 1]).is_err());
+        assert!(
+            memory
+                .load_cartridge_ram(&image[..image.len() - 1])
+                .is_err()
+        );
     }
-
 }
