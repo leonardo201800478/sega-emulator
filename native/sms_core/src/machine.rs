@@ -395,8 +395,10 @@ mod tests {
 
     #[test]
     fn machine_applies_configured_vdp_asic_revision() {
-        let mut config = SmsMachineConfig::default();
-        config.vdp_revision = SmsVdpRevision::Sega3155124;
+        let config = SmsMachineConfig {
+            vdp_revision: SmsVdpRevision::Sega3155124,
+            ..SmsMachineConfig::default()
+        };
 
         let machine = SmsMachine::with_bios_audio(vec![0; 0x4000], None, config, 44_100).unwrap();
 
