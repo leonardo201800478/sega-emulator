@@ -223,7 +223,6 @@ jobs:
       - uses: actions/setup-python@v7.1.0
         with:
           python-version: "3.15.2"
-          cache: pip
       - name: Install system libraries required by headless Qt
         run: |
           sudo apt-get update
