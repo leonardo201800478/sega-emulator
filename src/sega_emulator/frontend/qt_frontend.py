@@ -148,7 +148,12 @@ def _audio_output_warning(
 
 
 def run(initial_path: Path | None = None) -> None:
-    """Abre a interface de teste com teclado, telemetria e logs de sessão."""
+    """Reject the retired Python video frontend; presentation is Rust-owned."""
+    raise RuntimeError(
+        "O frontend Qt legado com renderização Python está desativado por ADR-0012. "
+        "A Qt deve permanecer somente como interface de controle; o host D3D12 "
+        "nativo ainda precisa ser conectado à máquina SG-1000."
+    )
     try:
         from PySide6.QtCore import QEvent, QObject, QSettings, Qt, QTimer
         from PySide6.QtGui import QImage, QKeySequence
