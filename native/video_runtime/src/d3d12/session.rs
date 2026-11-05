@@ -26,8 +26,11 @@ pub enum D3d12SessionError {
     HostInitialization(String),
     /// The startup handshake ended before the host reported readiness.
     StartupChannelClosed,
-    /// Presenting a frame failed on the presentation thread.
-    Presentation(String),
+    /// Presenting a frame failed for a reason other than device loss.
+    Presentation(windows::core::Error),
+    /// D3D12 reported that its device was removed, reset, or otherwise invalid.
+    /// The original HRESULT is preserved; automatic recreation is not yet enabled.
+    DeviceLost(windows::core::Error),
     /// The worker thread panicked before returning its result.
     WorkerPanicked,
     /// The native window was closed by the user.
@@ -58,6 +61,9 @@ impl fmt::Display for D3d12SessionError {
             Self::Presentation(error) => {
                 write!(formatter, "D3D12 frame presentation failed: {error}")
             }
+            Self::DeviceLost(error) => {
+                write!(formatter, "D3D12 device loss detected; recovery is pending: {error}")
+            }
             Self::WorkerPanicked => write!(formatter, "D3D12 presentation worker panicked"),
             Self::WindowClosed => write!(formatter, "native D3D12 presentation window was closed"),
             Self::PendingFramesCancelled(count) => write!(
@@ -73,6 +79,7 @@ impl std::error::Error for D3d12SessionError {
         match self {
             Self::Queue(error) => Some(error),
             Self::WorkerStart(error) => Some(error),
+            Self::Presentation(error) | Self::DeviceLost(error) => Some(error),
             _ => None,
         }
     }
@@ -206,7 +213,10 @@ impl D3d12Session {
 
                             if let Err(error) = host.present_frame(&frame) {
                                 in_flight_cancelled = in_flight_cancelled.saturating_add(1);
-                                return Err(D3d12SessionError::Presentation(error.to_string()));
+                                return Err(match host.device_removed_reason() {
+                                    Err(reason) => D3d12SessionError::DeviceLost(reason),
+                                    Ok(()) => D3d12SessionError::Presentation(error),
+                                });
                             }
                             worker_last_presented.store(frame.sequence(), Ordering::Release);
                         } else if worker_queue.is_closed()? {
