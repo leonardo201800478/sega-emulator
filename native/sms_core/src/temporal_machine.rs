@@ -1390,7 +1390,7 @@ mod tests {
 
         let mut state = machine.export_state();
         state.bus.coordinator.scheduler.event_queue.pending[0].timestamp =
-            MachineTime::from_ticks(12);
+            sega_temporal_core::MachineInstant::from_ticks(12);
         assert!(SmsTemporalMachine::restore_state(state).is_err());
     }
 
@@ -1410,7 +1410,7 @@ mod tests {
         let mut state = machine.export_state();
         state.pending_internal_tstates = Some(2);
         state.bus.coordinator.scheduler.event_queue.pending[0].timestamp =
-            MachineTime::from_ticks(27);
+            sega_temporal_core::MachineInstant::from_ticks(27);
         assert!(SmsTemporalMachine::restore_state(state).is_err());
     }
 
