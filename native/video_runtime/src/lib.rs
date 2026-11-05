@@ -380,15 +380,8 @@ mod tests {
 
     #[test]
     fn accepts_tightly_packed_rgb888_frame() {
-        let frame = VideoFrame::new(
-            8,
-            2,
-            1,
-            PixelFormat::Rgb888,
-            6,
-            vec![255, 0, 0, 0, 255, 0],
-        )
-        .unwrap();
+        let frame =
+            VideoFrame::new(8, 2, 1, PixelFormat::Rgb888, 6, vec![255, 0, 0, 0, 255, 0]).unwrap();
 
         assert_eq!(frame.sequence(), 8);
         assert_eq!(frame.row_bytes(), 6);
