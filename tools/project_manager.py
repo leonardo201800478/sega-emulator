@@ -10,9 +10,9 @@ import shutil
 import subprocess
 import sys
 from collections import deque
-from threading import Thread
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from threading import Thread
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
