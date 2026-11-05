@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pathlib import Path
 
 from sega_emulator.frontend.qt.video_widget import VideoWidget
 
@@ -13,7 +14,7 @@ def test_legacy_video_widget_is_rejected() -> None:
 
 
 def test_active_qt_modules_do_not_import_or_present_video_pixels() -> None:
-    root = project_root()
+    root = Path(__file__).resolve().parents[1]
     active_modules = (
         root / "src/sega_emulator/frontend/qt/minimal_sms_window.py",
         root / "src/sega_emulator/frontend/qt/main_window.py",
@@ -33,9 +34,3 @@ def test_active_qt_modules_do_not_import_or_present_video_pixels() -> None:
         source = module.read_text(encoding="utf-8")
         for symbol in forbidden:
             assert symbol not in source, f"{symbol} found in {module.name}"
-
-
-def project_root():
-    from pathlib import Path
-
-    return Path(__file__).resolve().parents[1]
