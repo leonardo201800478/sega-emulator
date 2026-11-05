@@ -59,6 +59,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::{Error, Interface, Result, w};
 
+mod session;
+pub use session::{D3d12Session, D3d12SessionError};
+
 const SWAP_CHAIN_BUFFER_COUNT: u32 = 2;
 
 /// Native Win32 window owned by the Rust video host.
