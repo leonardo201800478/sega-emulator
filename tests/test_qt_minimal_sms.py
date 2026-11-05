@@ -106,9 +106,7 @@ def test_minimal_sms_window_maps_keyboard_levels_without_clocking_hardware(
     qapplication: QApplication,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(
-        minimal_window, "TemporalSMSMachine", FakeTemporalSMSMachine
-    )
+    monkeypatch.setattr(minimal_window, "TemporalSMSMachine", FakeTemporalSMSMachine)
     window = minimal_window.MinimalSmsWindow()
     machine = FakeTemporalSMSMachine(b"rom", region="usa")
     window._machine = machine
