@@ -12,7 +12,7 @@ pub enum SmsVdpRevision {
 
 impl SmsVdpRevision {
     /// Return the numeric Sega ASIC identifier.
-    pub const fn asic_number(self) -> u16 {
+    pub const fn asic_number(self) -> u32 {
         match self {
             Self::Sega3155124 => 315_5124,
             Self::Sega3155246 => 315_5246,
