@@ -8,6 +8,9 @@
 #[cfg(windows)]
 pub mod d3d12;
 
+pub mod frame_queue;
+pub use frame_queue::{FrameQueue, FrameQueueError};
+
 use core::fmt;
 use std::sync::Arc;
 
