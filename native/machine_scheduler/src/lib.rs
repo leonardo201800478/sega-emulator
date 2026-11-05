@@ -1302,7 +1302,7 @@ mod tests {
         ));
 
         let mut event_before_now = scheduler_snapshot_fixture();
-        event_before_now.event_queue.pending[0].timestamp = MachineTime::from_ticks(4);
+        event_before_now.event_queue.pending[0].timestamp = MachineInstant::from_ticks(4);
         assert!(matches!(
             MachineScheduler::restore_state(event_before_now),
             Err(SchedulerError::PendingEventBeforeNow)
@@ -1317,7 +1317,7 @@ mod tests {
             .last_dispatched
             .as_mut()
             .unwrap()
-            .timestamp = MachineTime::from_ticks(6);
+            .timestamp = MachineInstant::from_ticks(6);
         assert!(matches!(
             MachineScheduler::restore_state(watermark_after_now),
             Err(SchedulerError::WatermarkAfterNow)
