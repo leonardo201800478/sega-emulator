@@ -1,3 +1,5 @@
+> **SUPERSEDED (2026-11-05):** esta proposta de reconstrução incremental, que preservava o runtime SMS legado, foi substituída pela decisão aceita em [ADR — Reconstrução Qt Temporal e fechamento vertical do Master System](ADR-sms-temporal-machine-qt-rebuild.md). O texto abaixo é mantido como histórico e não governa novas implementações.
+
 > **Estado vigente (2026-10-27):** hardware SG-1000 ativo exclusivamente em Rust (`native/sg1000_core`). A aplicação Qt usa uma fachada Python fina para PyO3 e carregadores de ROM/perfil. Implementações de hardware Python, ferramentas e testes que dependiam delas foram arquivados sob `legacy/` e não são executados pelo projeto ativo. Descrições de estados anteriores neste documento são históricas, não instruções atuais.
 
 # ADR: Reconstrução do frontend Qt
