@@ -637,6 +637,46 @@ mod tests {
     }
 
     #[test]
+    fn codec_round_trips_rational_subtick_event_timestamps() {
+        let mut state = state_fixture();
+        state.event_queue.pending[0].timestamp =
+            MachineInstant::from_parts(MachineTime::from_ticks(5), 1, 3).unwrap();
+
+        let encoded = encode_scheduler_state(&state, &U32PayloadCodec).unwrap();
+        let decoded = decode_scheduler_state(&encoded, &U32PayloadCodec).unwrap();
+        assert_eq!(decoded, state);
+        assert_eq!(
+            decoded.event_queue.pending[0].timestamp.fractional_numerator(),
+            1
+        );
+        assert_eq!(
+            decoded.event_queue.pending[0].timestamp.fractional_denominator(),
+            3
+        );
+    }
+
+    #[test]
+    fn codec_rejects_noncanonical_rational_event_timestamp() {
+        let mut state = state_fixture();
+        state.clock_domains.clear();
+        let mut encoded = encode_scheduler_state(&state, &U32PayloadCodec).unwrap();
+
+        // Frame header is 20 bytes. The body fields before the event timestamp
+        // are now(16), domain_count(4), pending_count(4), next_sequence(8),
+        // and last_dispatched tag(1). Set the timestamp denominator to zero.
+        let denominator_offset = 20 + 16 + 4 + 4 + 8 + 1 + 32;
+        encoded[denominator_offset..denominator_offset + 16].fill(0);
+        let body_end = encoded.len() - 4;
+        let checksum = crc32(&encoded[20..body_end]);
+        encoded[body_end..].copy_from_slice(&checksum.to_be_bytes());
+
+        assert_eq!(
+            decode_scheduler_state(&encoded, &U32PayloadCodec),
+            Err(SchedulerStateCodecError::InvalidTimestamp)
+        );
+    }
+
+    #[test]
     fn codec_rejects_truncated_and_trailing_frames() {
         let encoded = encode_scheduler_state(&state_fixture(), &U32PayloadCodec).unwrap();
         assert_eq!(
