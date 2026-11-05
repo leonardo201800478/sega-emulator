@@ -503,7 +503,7 @@ mod tests {
             }
             machine.step().unwrap();
         }
-        assert!(machine.vdp().interrupt_pending(), "line IRQ must assert"); 
+        assert!(machine.vdp().interrupt_pending(), "line IRQ must assert");
         assert_eq!(machine.vdp().raster_position().line, 2);
         assert_eq!(machine.cpu.int_pending, Some(0xFF));
         assert_eq!(machine.vdp().status() & 0x80, 0, "not a VBlank source");
