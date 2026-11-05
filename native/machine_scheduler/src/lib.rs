@@ -549,6 +549,7 @@ mod tests {
     };
     use sega_temporal_core::{
         ClockRatio, EventPriority, HardwarePhase, MachineInstant, MachineTime, PlatformPriority,
+        ScheduledEvent,
     };
 
     #[test]
@@ -669,6 +670,28 @@ mod tests {
             Err(SchedulerError::EventPendingBeforeTarget)
         );
         assert_eq!(scheduler.now(), MachineTime::ZERO);
+    }
+
+    #[test]
+    fn restore_rejects_subtick_events_until_clock_domains_are_rational() {
+        let mut scheduler = MachineScheduler::<()>::new();
+        let mut state = scheduler.export_state();
+        state.event_queue.pending.push(ScheduledEvent {
+            timestamp: MachineInstant::from_parts(MachineTime::ZERO, 1, 2).unwrap(),
+            hardware_phase: HardwarePhase::new(0),
+            priority: PlatformPriority::new(0),
+            sequence: 0,
+            payload: (),
+        });
+        state.event_queue.next_sequence = 1;
+
+        assert_eq!(
+            MachineScheduler::restore_state(state),
+            Err(SchedulerError::SubTickEventUnsupported)
+        );
+        // The source scheduler remains untouched by the rejected DTO.
+        assert_eq!(scheduler.now(), MachineTime::ZERO);
+        assert_eq!(scheduler.pending_events(), 0);
     }
 
     #[test]
