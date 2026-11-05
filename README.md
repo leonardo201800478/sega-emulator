@@ -1,6 +1,6 @@
 # Sega Emulator
 
-Emulador multi-sistema Sega com runtime de hardware em Rust e frontend Python/Qt. O objetivo é oferecer **fidelidade funcional e temporal próxima ao console original**, com execução eficiente e comportamento consistente em jogos e periféricos.
+Emulador multi-sistema Sega com runtime de hardware em Rust e uma janela Qt mínima para operação do emulador. O objetivo é oferecer **fidelidade funcional e temporal próxima ao console original**, com execução eficiente e comportamento consistente em jogos e periféricos.
 
 O projeto não busca simulação elétrica integral, reprodução de transistores ou atualização de todos os pinos físicos. A precisão é aplicada onde influencia o comportamento observável do console. Consulte a [ADR-0016 — fidelidade observável](docs/architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
 
@@ -10,7 +10,7 @@ O projeto não busca simulação elétrica integral, reprodução de transistore
 - **CPU:** núcleo Z80 compartilhado em Rust. Correção funcional de instruções, registradores, flags e interrupções é prioritária; detalhamento de ciclos e sinais só é exigido quando uma plataforma depender dele.
 - **Vídeo e áudio:** componentes específicos por console, com sincronização na granularidade necessária aos efeitos observáveis.
 - **Scheduler:** coordena o tempo da máquina e os eventos relevantes; não exige um evento por pino, tick ou pixel.
-- **Frontend:** Python/PySide6 para interface, launcher, biblioteca, configurações, logs e telemetria.
+- **Qt inicial:** Python/PySide6 apenas para viewport, abertura/fechamento de ROM, controles de sessão e entrada; biblioteca, capas, perfis, abas de diagnóstico e configurações avançadas ficam fora do escopo inicial.
 - **Integração:** PyO3 coarse-grained, sem callbacks Python por instrução.
 - **Precisão elétrica/analógica:** fora do escopo.
 
@@ -38,7 +38,7 @@ A semântica funcional é exata em todas as instruções e operações suportada
 | Camada | Responsabilidade |
 |---|---|
 | Rust | CPUs, ALUs, memória, barramentos, mappers, VDPs, áudio, interrupções, sincronização e Scheduler |
-| Python / PySide6 | GUI, launcher, biblioteca, configurações, logs, diagnóstico e automação |
+| Python / PySide6 | Janela mínima, viewport, diálogos de ROM, comandos de sessão e entrada; sem lógica de hardware |
 | PyO3 | Comandos de alto nível e telemetria; sem callbacks por instrução |
 
 Componentes são compartilhados quando representam hardware compatível. Diferenças reais de console, revisão, região ou periférico permanecem em perfis/adaptadores próprios.
@@ -69,15 +69,15 @@ py -3.15 -m venv .venv
 .\.venv\Scripts\python.exe -m sega_emulator
 ```
 
-A interface Qt abre sem ROM carregada. Use **Arquivo → Abrir ROM** para selecionar uma ROM local.
+A janela Qt mínima abre sem ROM carregada. Use **Abrir ROM** na barra superior para selecionar uma ROM local. O caminho SMS usa `SmsTemporalMachine`; para manter o SG-1000 no host atual, inicie com `--system sg1000`.
 
 Para iniciar diretamente uma ROM:
 
 ```powershell
-.\.venv\Scripts\python.exe -m sega_emulator "C:\caminho\para\jogo.sms"
+.\.venv\Scripts\python.exe -m sega_emulator "C:\caminho\para\jogo.sms" --region brazil
 ```
 
-O carregador também aceita formatos suportados pelo console e arquivos ZIP. Se houver múltiplas ROMs compatíveis no ZIP, a seleção é explícita; o conteúdo não é extraído automaticamente.
+A janela SMS mínima aceita ROM local `.sms`, `.bin` ou `.rom`. A seleção de região é explícita por `--region usa|brazil|europe|japan`; o padrão é `usa`. O fluxo ZIP e o frontend anterior permanecem no caminho SG-1000/legado até a migração ser validada.
 
 ## Compilar e testar
 
