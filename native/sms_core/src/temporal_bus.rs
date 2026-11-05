@@ -499,6 +499,9 @@ impl SmsTemporalBus {
         }
         let coordinator = SmsTemporalCoordinator::restore_state(state.coordinator.clone())?;
         let pending_events = &state.coordinator.scheduler.event_queue.pending;
+        let pending_event_time = pending_events
+            .first()
+            .and_then(|event| event.timestamp.as_machine_time());
         let scale = state.coordinator.master_ticks_per_tstate;
         let now = coordinator.now();
         if state.port_write_trace.len() > MAX_PORT_WRITE_TRACE
@@ -536,18 +539,22 @@ impl SmsTemporalBus {
                             request_id: request.id,
                         })
                     && started_at <= now
-                    && pending_events[0].timestamp >= now
-                    && valid_bus_deadline(
-                        started_at,
-                        pending_events[0].timestamp,
-                        scale,
-                        u16::from(request.base_tstates)
-                            + if request.operation == Z80BusOperation::InterruptAcknowledge {
-                                u16::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
-                            } else {
-                                0
-                            },
-                    ) => {}
+                    && pending_event_time.is_some_and(|deadline| {
+                        deadline >= now
+                            && valid_bus_deadline(
+                                started_at,
+                                deadline,
+                                scale,
+                                u16::from(request.base_tstates)
+                                    + if request.operation
+                                        == Z80BusOperation::InterruptAcknowledge
+                                    {
+                                        u16::from(Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES)
+                                    } else {
+                                        0
+                                    },
+                            )
+                    }) => {}
             (Some(request), Some(started_at), Some(completion), None, None, None)
                 if request.id == completion.request_id
                     && pending_events.is_empty()
@@ -569,8 +576,9 @@ impl SmsTemporalBus {
                     && pending_events[0].payload
                         == (SmsTemporalEvent::InternalCycleComplete { continuation_id })
                     && started_at <= now
-                    && pending_events[0].timestamp >= now
-                    && valid_internal_deadline(started_at, pending_events[0].timestamp, scale) => {}
+                    && pending_event_time.is_some_and(|deadline| {
+                        deadline >= now && valid_internal_deadline(started_at, deadline, scale)
+                    }) => {}
             (None, None, None, Some(continuation_id), Some(started_at), Some(completion))
                 if continuation_id == completion.continuation_id
                     && pending_events.is_empty()
