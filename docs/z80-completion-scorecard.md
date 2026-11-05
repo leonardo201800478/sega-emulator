@@ -82,3 +82,13 @@ Atualizar este scorecard somente quando uma mudança integrada, um teste executa
 A main avançou após a fotografia histórica acima. As PRs #531 (IRQ VDP SMS) e #536 (RESET Z80) estão integradas. O estado E7 continua parcial: IRQ VDP SMS e RESET funcional possuem cobertura dedicada; isso não fecha a auditoria semântica global nem comprova integração temporal sistêmica.
 
 A auditoria de PRs abertas em 2026-11-05 não encontrou candidato pronto para merge. Ver [auditoria de integração das PRs abertas](audits/open-pr-integration-audit-2026-11-05.md). PRs Draft, divergentes ou com validação incompleta não são evidência de funcionalidade integrada.
+
+
+## Atualização E7.7 — candidatos adicionais (2026-11-05)
+
+- **PR #539 — LD A,I/R:** o microsequenciador agora aplica a exceção P/V ao aceitar INT na fronteira imediatamente seguinte, consome o latch `p` na instrução normal subsequente, mantém NMI fora do erratum e serializa o latch. Run #42014043705 PASS em Rust/Python/PyO3/D3D12; Scheduler stress/Qt/PowerShell/lock refresh SKIPPED. Hardware e CMOS/clones permanecem não verificados. A PR está aberta, não integrada.
+- **PR #540 — DD/FD LD r,r':** 126 casos cobrem a família LD com IXH/IXL/IYH/IYL e exceções H/L em indexed-memory. Run #42015058399 PASS em Rust/Python/PyO3/D3D12; jobs não aplicáveis SKIPPED. A PR está aberta, não integrada.
+- **PR #541 — DD/FD ALU e INC/DEC:** 10.816 casos ALU amostrados e 4.096 casos INC/DEC passaram no run #42025639950 (HEAD `5f60c1f4fa0357c05379f5e1d5857ca49f267fbb`). A comparação com BASE H/L compartilha helpers e não é oracle independente. PR aberta, não integrada.
+- **PR #538 — Block I/O NMOS:** a caracterização documental/experimental e a matriz de 48.000 casos passaram no run #42012991355 no HEAD anterior `4a78a04c0851acef3951f0faa78065a9f36d601b`. O HEAD atual da PR é `6268d586c84c9e96a4b3edb0ec63479bdfb62ad9` após retirar a alteração concorrente deste scorecard; não há execução de CI observada nesse novo HEAD. A caracterização permanece restrita ao perfil NMOS e não valida hardware SMS físico nem CMOS/clones.
+- O scorecard centraliza a atualização documental destas PRs; a edição concorrente do scorecard foi removida da PR #538 para evitar sobreposição. A PR #537 está com CI #42025922287 em andamento após a reconciliação.
+- E7.7 continua IN_PROGRESS; E8 continua BLOCKED. Nenhuma dessas PRs está integrada na main.
