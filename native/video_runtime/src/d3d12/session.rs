@@ -6,9 +6,9 @@
 //! fence from inside Scheduler advancement.
 
 use std::fmt;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc;
-use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -39,13 +39,19 @@ impl fmt::Display for D3d12SessionError {
         match self {
             Self::Queue(error) => write!(formatter, "video session queue error: {error}"),
             Self::WorkerStart(error) => {
-                write!(formatter, "could not start D3D12 presentation worker: {error}")
+                write!(
+                    formatter,
+                    "could not start D3D12 presentation worker: {error}"
+                )
             }
             Self::HostInitialization(error) => {
                 write!(formatter, "could not initialize D3D12 host: {error}")
             }
             Self::StartupChannelClosed => {
-                write!(formatter, "D3D12 presentation startup channel closed unexpectedly")
+                write!(
+                    formatter,
+                    "D3D12 presentation startup channel closed unexpectedly"
+                )
             }
             Self::Presentation(error) => {
                 write!(formatter, "D3D12 frame presentation failed: {error}")
@@ -118,8 +124,7 @@ impl D3d12Session {
         let cancelled_pending_frames = Arc::new(AtomicU64::new(0));
         let worker_cancelled_frames = Arc::clone(&cancelled_pending_frames);
 
-        let (startup_sender, startup_receiver) =
-            mpsc::sync_channel::<Result<(), String>>(1);
+        let (startup_sender, startup_receiver) = mpsc::sync_channel::<Result<(), String>>(1);
 
         let worker = thread::Builder::new()
             .name("sega-d3d12-presentation".to_owned())
@@ -156,14 +161,10 @@ impl D3d12Session {
                         match worker_queue.pop_timeout(Duration::from_millis(8))? {
                             Some(frame) => {
                                 if let Err(error) = host.present_frame(&frame) {
-                                    in_flight_cancelled =
-                                        in_flight_cancelled.saturating_add(1);
-                                    return Err(D3d12SessionError::Presentation(
-                                        error.to_string(),
-                                    ));
+                                    in_flight_cancelled = in_flight_cancelled.saturating_add(1);
+                                    return Err(D3d12SessionError::Presentation(error.to_string()));
                                 }
-                                worker_last_presented
-                                    .store(frame.sequence(), Ordering::Release);
+                                worker_last_presented.store(frame.sequence(), Ordering::Release);
                             }
                             None if worker_queue.is_closed()? => break,
                             None => {}
