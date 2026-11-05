@@ -140,7 +140,8 @@ class MinimalSmsWindow(QMainWindow):
             state = "iniciada"
         self.status_label.setText(
             f"ROM: {self._rom_path.name if self._rom_path else 'carregada'}\n"
-            f"Sessão {state}. A Qt não executa ciclos nem apresenta vídeo."
+            f"Comando de sessão {state} enviado. A execução contínua ainda depende "
+            "do host nativo Rust; a Qt não executa ciclos nem apresenta vídeo."
         )
         self._update_actions()
 
