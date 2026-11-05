@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import pytest
 from pathlib import Path
+
+import pytest
 
 from sega_emulator.frontend.qt.video_widget import VideoWidget
 
