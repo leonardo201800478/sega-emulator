@@ -387,7 +387,12 @@ mod tests {
 
         assert_eq!(queue.pop_next().unwrap().payload, "one-third");
         assert_eq!(
-            queue.schedule(one_third, PlatformPriority::new(0), "same-instant"),
+            queue.schedule_with_phase(
+                one_third,
+                HardwarePhase::new(9),
+                PlatformPriority::new(9),
+                "same-instant",
+            ),
             Ok(2)
         );
         let earlier = MachineInstant::from_parts(MachineTime::ZERO, 1, 4).unwrap();
