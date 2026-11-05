@@ -4,8 +4,8 @@
 //! completion boundary. Controller/control-port effects and the shared
 //! scheduler-driven PSG are applied there; the VDP remains outside this slice.
 //! Unconnected reads return open bus, port writes are retained in a bounded
-//! diagnostic trace, and INT
-//! acknowledge data supplied through an explicit external vector input.
+//! diagnostic trace, and INT acknowledge data comes from an explicit external
+//! vector input.
 
 use core::fmt;
 
@@ -673,7 +673,10 @@ impl SmsTemporalBus {
 
 #[cfg(test)]
 mod tests {
-    use super::{SmsTemporalBus, SmsTemporalBusError, SmsTemporalDispatch};
+    use super::{
+        DEFAULT_SMS_PSG_CLOCK_HZ, PsgProfile, SmsTemporalBus, SmsTemporalBusError,
+        SmsTemporalDispatch,
+    };
     use sega_temporal_core::MachineTime;
     use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
 
