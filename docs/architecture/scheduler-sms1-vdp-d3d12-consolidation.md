@@ -274,3 +274,21 @@ Fontes de implementação:
 - `native/video_runtime/README.md`
 
 **Conclusão:** Scheduler, SMS1 VDP funcional parcial e host D3D12 estão estabelecidos como entregas separadas. O trabalho restante não é documentação cosmética: é integração temporal e visual real, sustentada por evidência. Até lá, manter `INTEGRATION_PENDING` e não reivindicar `TEMPORAL_PASS`.
+
+
+## Atualização de implementação — 2026-11-05
+
+Desde a base descrita no início deste documento, o lado de apresentação D3D12 foi ampliado e publicado na `main` pelas PRs #546/#547/#550/#553/#555/#558. Há agora uma FIFO lossless com backpressure na fronteira de frame completo, uma `D3d12Session` Rust-owned em thread dedicada, retenção FIFO durante minimize/restore, handling de DPI por janela, waits finitos com `GetDeviceRemovedReason` e recuperação one-shot para removed/reset. A PR #560 adicionou testes funcionais independentes para portas, VRAM read-ahead/wrap, CRAM, R0–R10, mirroring e status do novo `Sms1Vdp`.
+
+Essas entregas **não alteram a conclusão de integração temporal** desta consolidação:
+
+- O Scheduler não executa callbacks de hardware; a máquina consome seus eventos e coordena os dispositivos.
+- `SmsMachine` ainda utiliza o VDP legado no caminho ativo.
+- `SmsTemporalMachine` continua sem VDP/PSG conectados ao Scheduler.
+- `Sms1Vdp` permanece funcional por scanline, sem raster advance/fetch arbitration/IRQ temporal/WAIT.
+- A fila e a sessão D3D12 recebem frames completos, mas a cadeia `SmsMachine → MachineScheduler → Sms1Vdp → VideoFrame → D3d12Session` não está ligada.
+- O gate T0/T0.1 315-5124 continua PARTIAL/BLOCKED para fase VDP/Z80, H-counter, fronteiras de linha/frame, fetch slots, contenção e WAIT real.
+
+O CI dos sete HEADs integrados passou. Isso comprova os gates automatizados de compilação/testes; não substitui execução de janela em GPU física, injeção real de device loss, validação mixed-DPI, replay headless-vs-GPU ou hardware oracle. Esses itens permanecem `NOT RUN`.
+
+Para os SHAs, merge commits, runs de CI e sequência de trabalho, consulte [Auditoria de integração D3D12 e testes SMS1 — 2026-11-05](../audits/video-runtime-d3d12-session-merge-audit-2026-11-05.md).

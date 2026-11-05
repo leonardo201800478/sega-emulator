@@ -89,4 +89,15 @@ A janela de apresentação é criada/gerenciada pelo host Rust. O frontend pode 
 
 ## Situação
 
-**DOCUMENTAÇÃO / DECISÃO ARQUITETURAL.** Nenhum backend D3D12 foi implementado por esta atualização. O VDP SMS1 permanece scanline-functional e a integração temporal com Scheduler permanece pendente. Não atribuir QUICK_PASS, SHORT_PASS, LONG_PASS ou TEMPORAL_PASS a esta decisão documental.
+**Estado na publicação original desta proposta:** DOCUMENTAÇÃO / DECISÃO ARQUITETURAL; o backend D3D12 ainda não estava implementado. O histórico posterior está registrado na seção Implementação publicada abaixo. O VDP SMS1 permanece scanline-functional e a integração temporal com Scheduler permanece pendente. Não atribuir QUICK_PASS, SHORT_PASS, LONG_PASS ou TEMPORAL_PASS a esta decisão documental.
+
+
+## Implementação publicada — 2026-11-05
+
+A implementação do host D3D12 avançou e foi integrada à `main` pelas PRs #546, #547, #550, #553, #555 e #558. O contrato funcional público do novo VDP SMS1 recebeu testes externos na #560. As entregas incluem fila FIFO lossless com backpressure, sessão Rust-owned em worker dedicado, retenção de frames durante minimize/restore, DPI por janela PMv2/PMv1, waits finitos com detecção de device loss e recuperação one-shot para `DXGI_ERROR_DEVICE_REMOVED` / `DXGI_ERROR_DEVICE_RESET`.
+
+A recuperação retenta uma única vez o mesmo frame imutável; não avança nem reinicia o Scheduler. Falha de recuperação é reportada explicitamente. A recriação também substitui o HWND, portanto a preservação exata de posição ainda requer validação.
+
+**Estado atualizado:** o host/sessão de apresentação está implementado e CI passou nos HEADs integrados. Ainda não há wiring da máquina SMS1 ativa para `VideoFrame`/D3D12. `SmsMachine` continua usando o VDP legado e `SmsTemporalMachine` não conecta VDP/PSG ao Scheduler. O VDP SMS1 permanece scanline-functional; fase, H-counter, fetch schedule, arbitragem, WAIT e IRQ temporal continuam bloqueados pela evidência T0/T0.1. GPU física, device-loss forçado, mixed-DPI real e replay headless-vs-GPU permanecem `NOT RUN`.
+
+Registro detalhado: [auditoria de merges e validação de 2026-11-05](../../audits/video-runtime-d3d12-session-merge-audit-2026-11-05.md).
