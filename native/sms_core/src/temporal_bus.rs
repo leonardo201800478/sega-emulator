@@ -1353,9 +1353,7 @@ mod temporal_vdp_tests {
         whole.acknowledge_internal_completion(1).unwrap();
 
         for (id, tstates) in [(1, FRAME_TSTATES / 2), (2, FRAME_TSTATES / 2)] {
-            chunked
-                .schedule_internal_cycle(id, tstates)
-                .unwrap();
+            chunked.schedule_internal_cycle(id, tstates).unwrap();
             assert!(matches!(
                 chunked.dispatch_next().unwrap(),
                 Some(SmsTemporalDispatch::InternalCycleComplete(_))
