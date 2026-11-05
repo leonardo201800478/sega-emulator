@@ -155,8 +155,8 @@ A regra T0.1 é obrigatória: todo teste que dependa de posição horizontal, fa
 | PSG-T08 | Determinismo | Diferentes tamanhos de avanço geram a mesma sequência de bits e samples |
 | PSG-T09 | Restore | Snapshot inclui fase do divisor, counters, outputs, LFSR, filtro e fase de sample |
 | PSG-T10 | CPU/VDP/PSG | Escritas de CPU, eventos VDP e PSG seguem ordem causal única |
-| PSG-T11 | Shared clock | Clock Z80/PSG derivado do mesmo perfil SMS | Domínios avançam com razão racional; relação nominal 3:1 VDP:CPU/PSG no SMS1 NTSC não fixa fase inicial | MODEL + TEST |
-| PSG-T12 | Board output stage | Perfil de circuito processa samples já gerados pelo chip | Estado/curva do estágio é determinístico e serializável; não retroage no clock digital do PSG | TEST; BLOCKED até perfil medido |
+| PSG-T11 | Shared clock | Domínios avançam com razão racional; relação nominal 3:1 VDP:CPU/PSG no SMS1 NTSC não fixa fase inicial |
+| PSG-T12 | Board output stage | Perfil de circuito processa samples já gerados pelo chip; estado/curva é determinístico e serializável, sem retroagir no clock digital do PSG. BLOCKED até perfil medido |
 
 ## 6. Clock profile — itens que precisam de reconciliação
 
