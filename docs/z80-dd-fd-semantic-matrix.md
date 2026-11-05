@@ -1,7 +1,7 @@
 # Matriz semântica DD/FD do Z80 — estado após E6 integrada pela PR #486
 
 **Data:** 2026-11-04  
-**Baseline auditada:** `main` — `57d9405218de46795dd45876a52e3dbcec186ffd` (2026-11-05, após PR #531; parent de PR #536).  
+**Baseline operacional atual:** `main` — `1da784f556b9524f5a6f43ce8a7c525e68354f9e` (2026-11-05). As baselines anteriores permanecem registradas nos aditivos históricos.  
 **E4C validada:** HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS.  
 **Schema do microsequenciador:** 28 (E5 integrada)  
 **Escopo:** decoder DD/FD, IX/IY, IXH/IXL/IYH/IYL, (IX/IY+d), DDCB/FDCB.  
