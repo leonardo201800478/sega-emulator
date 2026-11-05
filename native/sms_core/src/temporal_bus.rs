@@ -1,9 +1,10 @@
 //! Transactional SMS memory/I/O bus adapter for the Scheduler-driven path.
 //!
 //! Memory and port transactions become visible only at their scheduled
-//! completion boundary. Controller/control-port effects are applied there;
-//! VDP/PSG devices remain outside this temporal slice, with writes retained in
-//! a bounded diagnostic trace, unconnected reads returning open bus, and INT
+//! completion boundary. Controller/control-port effects and the shared
+//! scheduler-driven PSG are applied there; the VDP remains outside this slice.
+//! Unconnected reads return open bus, port writes are retained in a bounded
+//! diagnostic trace, and INT
 //! acknowledge data supplied through an explicit external vector input.
 
 use core::fmt;
@@ -337,18 +338,11 @@ impl SmsTemporalBus {
         let Some(dispatch) = self.coordinator.dispatch_next()? else {
             return Ok(None);
         };
-        let psg_clocks = dispatch
-            .clock_advances
-            .iter()
-            .find(|advance| advance.domain == SMS_PSG_CLOCK_DOMAIN_ID)
-            .ok_or(SmsTemporalBusError::InvalidState)?
-            .elapsed_cycles;
         let psg_advance = dispatch
             .clock_advances
             .iter()
             .find(|advance| advance.domain == SMS_PSG_CLOCK_DOMAIN_ID)
             .ok_or(SmsTemporalBusError::InvalidState)?;
-        debug_assert_eq!(psg_advance.elapsed_cycles, psg_clocks);
         self.psg.apply_clock_advance(psg_advance)?;
         match dispatch.event.payload {
             SmsTemporalEvent::BusCompletion { request_id } => {
@@ -1027,6 +1021,39 @@ mod tests {
         let round_trip = SmsTemporalBus::restore_state(snapshot.clone()).unwrap();
         assert_eq!(round_trip.export_state(), snapshot);
         assert_eq!(round_trip.psg().clock_divider_phase(), 12);
+    }
+
+    #[test]
+    fn psg_output_is_identical_for_continuous_and_chunked_scheduler_advancement() {
+        let mut whole = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
+        let mut chunked = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
+
+        whole.schedule_internal_cycle(1, 100_000).unwrap();
+        let Some(SmsTemporalDispatch::InternalCycleComplete(_)) = whole.dispatch_next().unwrap()
+        else {
+            panic!("expected one whole-interval completion");
+        };
+        whole.acknowledge_internal_completion(1).unwrap();
+
+        for continuation_id in 1..=10 {
+            chunked.schedule_internal_cycle(continuation_id, 10_000).unwrap();
+            let Some(SmsTemporalDispatch::InternalCycleComplete(_)) =
+                chunked.dispatch_next().unwrap()
+            else {
+                panic!("expected chunked interval completion");
+            };
+            chunked
+                .acknowledge_internal_completion(continuation_id)
+                .unwrap();
+        }
+
+        assert_eq!(whole.psg(), chunked.psg());
+        assert_eq!(
+            whole.drain_audio_samples(None),
+            chunked.drain_audio_samples(None)
+        );
+        assert_eq!(whole.psg(), chunked.psg());
+        assert_eq!(whole.now(), chunked.now());
     }
 
     #[test]
