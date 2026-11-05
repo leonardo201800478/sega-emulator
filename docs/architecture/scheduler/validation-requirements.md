@@ -83,7 +83,7 @@ Executar também workflows de arquitetura, headless/golden, Windows x64 e stress
 - **SHORT_PASS:** campanha curta repetida e integrada passa.
 - **LONG_PASS:** campanha longa/replay/stress passa.
 - **INTEGRATION_PENDING:** falta integração de sistema.
-- **TEMPORAL_PASS:** prova integrada de cronologia e causalidade do sistema completo.
+- **TEMPORAL_PASS:** prova integrada de cronologia e causalidade dos caminhos temporais relevantes da plataforma avaliada.
 
 TEMPORAL_PASS, quando declarado para uma plataforma/caminho específico, exige traces e comparação de CPU/bus/VDP/áudio somente nos caminhos temporais relevantes ao gameplay, oráculos independentes ou evidência física adequada, primeira divergência, determinismo, save/restore dos estados temporais ativos e CI verde no mesmo SHA. Não exige cobertura elétrica de todos os pinos nem microsequenciamento de operações atômicas. Não pode ser inferido de unit tests do Scheduler.
 
