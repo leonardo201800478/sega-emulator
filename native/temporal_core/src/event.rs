@@ -401,6 +401,36 @@ mod tests {
     }
 
     #[test]
+    fn rational_event_queue_snapshot_restores_order_and_watermark() {
+        let mut queue = EventQueue::new();
+        let one_third = MachineInstant::from_parts(MachineTime::ZERO, 1, 3).unwrap();
+        let one_half = MachineInstant::from_parts(MachineTime::ZERO, 1, 2).unwrap();
+
+        queue
+            .schedule_with_phase(
+                one_third,
+                HardwarePhase::new(2),
+                PlatformPriority::new(3),
+                "dispatched",
+            )
+            .unwrap();
+        assert_eq!(queue.pop_next().unwrap().payload, "dispatched");
+        queue
+            .schedule_with_phase(
+                one_half,
+                HardwarePhase::new(0),
+                PlatformPriority::new(0),
+                "pending",
+            )
+            .unwrap();
+
+        let state = queue.export_state();
+        let mut restored = EventQueue::restore_state(state.clone()).unwrap();
+        assert_eq!(restored.export_state(), state);
+        assert_eq!(restored.pop_next().unwrap().payload, "pending");
+    }
+
+    #[test]
     fn causal_events_cannot_regress_phase_or_priority() {
         let mut q = EventQueue::new();
         let t = MachineTime::from_ticks(10);
