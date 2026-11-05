@@ -11,10 +11,7 @@ fn new_sms1() -> SmsVdp {
 
 fn select(vdp: &mut SmsVdp, address: u16, code: u8) {
     vdp.write_port(0xBF, address as u8);
-    vdp.write_port(
-        0xBF,
-        ((code & 0x03) << 6) | ((address >> 8) as u8 & 0x3F),
-    );
+    vdp.write_port(0xBF, ((code & 0x03) << 6) | ((address >> 8) as u8 & 0x3F));
 }
 
 #[test]
