@@ -111,12 +111,6 @@ class MinimalSmsWindow(QMainWindow):
         self._machine = machine
         self._rom_path = path
         self._pressed_actions.clear()
-        try:
-            machine.configure_audio_output("wasapi")
-            audio_status = "áudio nativo ativo"
-        except RuntimeError as exc:
-            audio_status = f"áudio indisponível: {exc}"
-
         self.setWindowTitle(f"Sega Emulator — {path.name}")
         self.status_label.setText(
             f"ROM carregada: {path.name}\n"
@@ -124,7 +118,7 @@ class MinimalSmsWindow(QMainWindow):
             "Use Iniciar/Pausar para controlar a sessão nativa."
         )
         self.statusBar().showMessage(
-            f"{path.name} | {self._region} | {audio_status} | vídeo: desabilitado"
+            f"{path.name} | {self._region} | áudio: aguardando host nativo | vídeo: desabilitado"
         )
         self._update_actions()
 
