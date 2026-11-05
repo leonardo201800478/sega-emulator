@@ -477,6 +477,7 @@ impl fmt::Display for ClockError {
 }
 
 impl std::error::Error for ClockError {}
+
 /// Snapshot of a clock domain's deterministic conversion state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ClockDomainSnapshot {
@@ -591,6 +592,7 @@ impl ClockDomain {
     pub const fn total_cycles(&self) -> u128 {
         self.total_cycles
     }
+
     /// Return the exact timestamp of the edge_index-th future local edge.
     ///
     /// The index is one-based relative to this domain's current integer
@@ -829,7 +831,8 @@ mod tests {
         );
     }
 
-    #[test]    fn edge_time_comparison_is_exact_for_different_denominators() {
+    #[test]
+    fn edge_time_comparison_is_exact_for_different_denominators() {
         let ratio_a = ClockRatio::new(3, 2).unwrap();
         let ratio_b = ClockRatio::new(7, 3).unwrap();
         let a = ClockDomain::new(ratio_a, MachineTime::ZERO)
@@ -1068,7 +1071,9 @@ mod tests {
                 }
             }
         }
-    }    #[test]
+    }
+
+    #[test]
     fn same_timestamp_is_a_valid_noop() {
         let ratio = ClockRatio::new(7, 3).unwrap();
         let mut domain = ClockDomain::new(ratio, MachineTime::from_ticks(9));
