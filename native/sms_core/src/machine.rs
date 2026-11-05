@@ -782,15 +782,23 @@ mod tests {
     }
 
     #[test]
-    fn r9_write_is_applied_after_vblank_boundary_inside_out_instruction() {
-        // LD A,$5A; OUT ($BF),A; LD A,$89; OUT ($BF),A writes R9=$5A.
-        let rom = [0x3E, 0x5A, 0xD3, 0xBF, 0x3E, 0x89, 0xD3, 0xBF];
-        let mut machine = SmsMachine::new(rom.to_vec()).unwrap();
-        machine.vdp_mut().advance(191 * 228 + 195);
+    fn r9_write_is_applied_after_vblank_boundary_at_io_completion() {
+        let mut machine = SmsMachine::new(vec![0; 0x4000]).unwrap();
+        machine.vdp.advance(191 * 228 + 220);
+        // The first control byte is already latched while the beam is on line 191.
+        machine.vdp.write_port(0xBF, 0x5A);
 
-        for _ in 0..4 {
-            machine.step().unwrap();
+        {
+            let mut bus = SmsMachineBus::new(
+                &mut machine.memory,
+                &mut machine.io,
+                &mut machine.sega_scope,
+                &mut machine.vdp,
+            );
+            // The second OUT completes 11T later, after the active-display boundary.
+            bus.synchronize_tstates(11);
+            bus.write_port(0xBF, 0x89);
         }
 
-        assert_eq!(machine.vdp().latched_scroll_y_for_test(), 0x5A);
+        assert_eq!(machine.vdp.latched_scroll_y_for_test(), 0x5A);
     }}
