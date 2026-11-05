@@ -1343,4 +1343,5 @@ mod tests {
         let left = super::MachineDuration::from_parts(0, 1, u128::MAX).unwrap();
         let right = super::MachineDuration::from_parts(0, 1, u128::MAX - 1).unwrap();
         assert_eq!(left.checked_add(right), Err(ClockError::ArithmeticOverflow));
-    }}
+    }
+}
