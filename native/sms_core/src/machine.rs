@@ -448,12 +448,12 @@ mod tests {
         machine.cpu.interrupt_mode = 1;
 
         write_vdp_register(&mut machine, 1, 0x20); // Enable VBlank IRQ.
-        machine.vdp_mut().advance(228 * 192);
-        assert!(machine.vdp().interrupt_pending());
-
-        // The instruction boundary samples the VDP line; IM 1 is accepted
-        // on the following CPU step, then the handler reads status at $BF.
-        assert_eq!(machine.step(), Ok(4)); // NOP at $0000.
+        // Advance through the real machine path until the VDP asserts INT.
+        // SmsMachine::step synchronizes the VDP line after each instruction;
+        // the next CPU boundary must accept it without an extra NOP.
+        while !machine.vdp().interrupt_pending() {
+            machine.step().unwrap();
+        }
         assert_eq!(machine.cpu.int_pending, Some(0xFF));
         assert_eq!(machine.step(), Ok(13)); // IM 1 acknowledge.
         assert_eq!(machine.cpu.registers.pc, 0x0038);
@@ -481,12 +481,13 @@ mod tests {
 
         write_vdp_register(&mut machine, 0, 0x10); // Enable line IRQ.
         write_vdp_register(&mut machine, 10, 1); // Reload after one line.
-        machine.vdp_mut().advance(228 * 2);
-        assert!(machine.vdp().interrupt_pending());
-        assert_eq!(machine.vdp().status() & 0x80, 0, "not a VBlank source");
-
-        assert_eq!(machine.step(), Ok(4)); // NOP at $0000.
+        // Exercise the VDP-to-CPU line through the normal machine stepping
+        // path, rather than advancing the VDP out of band.
+        while !machine.vdp().interrupt_pending() {
+            machine.step().unwrap();
+        }
         assert_eq!(machine.cpu.int_pending, Some(0xFF));
+        assert_eq!(machine.vdp().status() & 0x80, 0, "not a VBlank source");
         assert_eq!(machine.step(), Ok(13)); // IM 1 acknowledge.
         assert_eq!(machine.cpu.registers.pc, 0x0038);
         assert_eq!(machine.step(), Ok(11)); // IN A,($BF).
