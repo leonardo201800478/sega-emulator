@@ -26,3 +26,15 @@ The crate exposes two deliberately different delivery contracts:
 - `FrameQueue` is a bounded FIFO that preserves every accepted frame. A producer blocks when the queue is full and resumes when the presentation consumer removes a frame. This backpressure belongs at a completed-frame host boundary, never inside Scheduler advancement. It can reduce wall-clock throughput but does not alter logical emulated time.
 
 The native runtime integration must choose the lossless queue unless an explicit product-level policy authorizes presentation-frame coalescing. Neither contract may skip machine execution or Scheduler events.
+
+## Rust-owned D3D12 session
+
+On Windows x64, the `D3d12Session` API creates the HWND and D3D12 host on a dedicated Rust worker thread. The worker owns the message pump, consumes the bounded lossless `FrameQueue`, uploads completed immutable `VideoFrame` values, and presents them. The emulation side submits only at a completed-frame boundary; it does not pass graphics objects, wait for GPU fences, or let VSync advance the Scheduler.
+
+Run the session smoke test on a Windows x64 machine with a D3D12-capable adapter:
+
+```powershell
+cargo run --release --locked -p sega-video-runtime --example d3d12_session_smoke
+```
+
+The example presents one synthetic frame and keeps the worker alive until the native window is closed. It is a thread/lifecycle and transfer smoke test, not a real-game or VDP timing test. Resize/DPI handling, minimize/restore, device removed/reset recovery, physical-GPU validation and machine-to-session wiring remain pending. If the window closes or presentation fails with queued frames, the session closes the queue and reports the number of pending frames canceled; it does not report them as presented.
