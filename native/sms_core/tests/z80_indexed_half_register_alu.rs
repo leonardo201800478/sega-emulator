@@ -191,12 +191,16 @@ fn dd_fd_inc_dec_half_registers_match_base_h_l_for_every_byte_and_carry() {
                     } else {
                         value.wrapping_sub(1)
                     };
-                    let (expected_ix, expected_iy) = if prefix == 0xDD {
-                        (expected_half, iy)
-                    } else if code == 4 {
-                        (ix, (u16::from(expected_value) << 8) | (iy & 0x00FF))
+                    let current_index = if prefix == 0xDD { ix } else { iy };
+                    let updated_index = if code == 4 {
+                        (u16::from(expected_value) << 8) | (current_index & 0x00FF)
                     } else {
-                        (ix, (iy & 0xFF00) | u16::from(expected_value))
+                        (current_index & 0xFF00) | u16::from(expected_value)
+                    };
+                    let (expected_ix, expected_iy) = if prefix == 0xDD {
+                        (updated_index, iy)
+                    } else {
+                        (ix, updated_index)
                     };
                     assert_eq!(indexed.ix, expected_ix);
                     assert_eq!(indexed.iy, expected_iy);
