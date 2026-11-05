@@ -9,7 +9,7 @@ use crate::{HardwarePhase, MachineInstant, PlatformPriority, ScheduledEvent};
 /// Causal watermark retained after the most recently dispatched event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EventQueueWatermark {
-    /// Absolute integer timestamp of the last dispatched event.
+    /// Exact rational timestamp of the last dispatched event.
     pub timestamp: MachineInstant,
     /// Hardware-ordering stratum of the last dispatched event.
     pub hardware_phase: HardwarePhase,
