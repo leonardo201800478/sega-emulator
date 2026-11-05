@@ -31,6 +31,8 @@ configuration, or shared project tooling trigger the broad validation set.
   or the corresponding PR label) because it is intentionally resource-intensive.
 - Broad validation (`full`) automatically runs the bounded short Scheduler stress
   profile so workflow/toolchain/shared-contract changes exercise the temporal gate.
+- The Python job uses the `uv` cache keyed by `pyproject.toml` and `uv.lock`; a
+  separate pip cache is omitted because that job installs dependencies through uv.
 - Manual Z80 conformance and Qt/native integration workflows remain available
   for milestone, architecture, and release validation.
 - A skipped domain means it was not applicable to that change; it is not recorded
