@@ -382,6 +382,13 @@ mod tests {
     use crate::bus::CpuBus;
     use crate::config::{SmsMachineConfig, VideoStandard};
     use crate::input::{ControllerButtons, SmsInputState};
+    fn write_vdp_register(machine: &mut SmsMachine, register: u8, value: u8) {
+        machine.vdp_mut().write_port(0xBF, value);
+        machine
+            .vdp_mut()
+            .write_port(0xBF, 0x80 | register);
+    }
+
 
     #[test]
     fn runtime_sprite_limit_policy_updates_vdp_and_machine_config() {
@@ -430,6 +437,63 @@ mod tests {
         assert_eq!(machine.step().unwrap(), 11);
         assert_eq!(machine.cpu().registers.pc, 0x0066);
         assert_eq!(machine.cpu().registers.sp, 0xDFEE);
+    }
+
+
+    #[test]
+    fn vblank_irq_reaches_z80_and_status_read_acknowledges_vdp() {
+        let mut rom = vec![0; 0x4000];
+        rom[0x38..0x3A].copy_from_slice(&[0xDB, 0xBF]); // IN A,($BF)
+        let mut machine = SmsMachine::new(rom).unwrap();
+        machine.cpu.registers.sp = 0xC100;
+        machine.cpu.iff1 = true;
+        machine.cpu.iff2 = true;
+        machine.cpu.interrupt_mode = 1;
+
+        write_vdp_register(&mut machine, 1, 0x20); // Enable VBlank IRQ.
+        machine.vdp_mut().advance(228 * 192);
+        assert!(machine.vdp().interrupt_pending());
+
+        // The instruction boundary samples the VDP line; IM 1 is accepted
+        // on the following CPU step, then the handler reads status at $BF.
+        assert_eq!(machine.step(), Ok(4)); // NOP at $0000.
+        assert_eq!(machine.cpu.int_pending, Some(0xFF));
+        assert_eq!(machine.step(), Ok(13)); // IM 1 acknowledge.
+        assert_eq!(machine.cpu.registers.pc, 0x0038);
+        assert_eq!(machine.step(), Ok(11)); // IN A,($BF).
+
+        assert_ne!(machine.cpu.registers.a & 0x80, 0, "status identifies VBlank");
+        assert_eq!(machine.cpu.registers.pc, 0x003A);
+        assert_eq!(machine.cpu.int_pending, None);
+        assert!(!machine.vdp().interrupt_pending());
+    }
+
+    #[test]
+    fn line_irq_reaches_z80_and_status_read_distinguishes_its_source() {
+        let mut rom = vec![0; 0x4000];
+        rom[0x38..0x3A].copy_from_slice(&[0xDB, 0xBF]); // IN A,($BF)
+        let mut machine = SmsMachine::new(rom).unwrap();
+        machine.cpu.registers.sp = 0xC100;
+        machine.cpu.iff1 = true;
+        machine.cpu.iff2 = true;
+        machine.cpu.interrupt_mode = 1;
+
+        write_vdp_register(&mut machine, 0, 0x10); // Enable line IRQ.
+        write_vdp_register(&mut machine, 10, 1); // Reload after one line.
+        machine.vdp_mut().advance(228 * 2);
+        assert!(machine.vdp().interrupt_pending());
+        assert_eq!(machine.vdp().status() & 0x80, 0, "not a VBlank source");
+
+        assert_eq!(machine.step(), Ok(4)); // NOP at $0000.
+        assert_eq!(machine.cpu.int_pending, Some(0xFF));
+        assert_eq!(machine.step(), Ok(13)); // IM 1 acknowledge.
+        assert_eq!(machine.cpu.registers.pc, 0x0038);
+        assert_eq!(machine.step(), Ok(11)); // IN A,($BF).
+
+        assert_eq!(machine.cpu.registers.a & 0x80, 0, "status identifies line IRQ");
+        assert_eq!(machine.cpu.registers.pc, 0x003A);
+        assert_eq!(machine.cpu.int_pending, None);
+        assert!(!machine.vdp().interrupt_pending());
     }
 
     #[test]
