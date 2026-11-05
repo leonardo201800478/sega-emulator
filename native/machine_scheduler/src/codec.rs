@@ -7,7 +7,7 @@
 use std::fmt;
 
 use sega_temporal_core::{
-    EventQueueState, EventQueueWatermark, HardwarePhase, MachineTime, PlatformPriority,
+    EventQueueState, EventQueueWatermark, HardwarePhase, MachineInstant, MachineTime, PlatformPriority,
     ScheduledEvent,
 };
 
@@ -17,7 +17,7 @@ use crate::{ClockDomainId, ClockDomainState, SCHEDULER_STATE_FORMAT_VERSION, Sch
 pub const SCHEDULER_STATE_MAGIC: [u8; 8] = *b"SEGSCHD\0";
 
 const CLOCK_DOMAIN_WIRE_SIZE: usize = 2 + 8 + 8 + (16 * 5);
-const EVENT_FIXED_WIRE_SIZE: usize = 16 + 2 + 2 + 8 + 4;
+const EVENT_FIXED_WIRE_SIZE: usize = 48 + 2 + 2 + 8 + 4;
 
 /// Errors returned by the scheduler-state wire codec.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -34,6 +34,7 @@ pub enum SchedulerStateCodecError {
     PayloadTooLarge,
     AllocationFailed,
     InvalidOptionTag(u8),
+    InvalidTimestamp,
     Payload(String),
 }
 
@@ -67,6 +68,7 @@ impl fmt::Display for SchedulerStateCodecError {
             Self::InvalidOptionTag(tag) => {
                 write!(f, "scheduler-state frame contains invalid option tag {tag}")
             }
+            Self::InvalidTimestamp => write!(f, "scheduler-state frame contains a non-canonical rational timestamp"),
             Self::Payload(message) => write!(f, "event payload codec failed: {message}"),
         }
     }
@@ -142,7 +144,7 @@ where
     }
 
     for event in &state.event_queue.pending {
-        body.write_u128(event.timestamp.ticks())?;
+        write_instant(&mut body, event.timestamp)?;
         body.write_u16(event.hardware_phase.value())?;
         body.write_u16(event.priority.value())?;
         body.write_u64(event.sequence)?;
@@ -264,7 +266,7 @@ where
         .try_reserve_exact(pending_count_usize)
         .map_err(|_| SchedulerStateCodecError::AllocationFailed)?;
     for _ in 0..pending_count {
-        let timestamp = MachineTime::from_ticks(reader.read_u128()?);
+        let timestamp = read_instant(&mut reader)?;
         let hardware_phase = HardwarePhase::new(reader.read_u16()?);
         let priority = PlatformPriority::new(reader.read_u16()?);
         let sequence = reader.read_u64()?;
@@ -322,11 +324,35 @@ fn crc32(bytes: &[u8]) -> u32 {
     !checksum
 }
 
+fn write_instant(
+    writer: &mut Writer,
+    instant: MachineInstant,
+) -> Result<(), SchedulerStateCodecError> {
+    writer.write_u128(instant.whole_ticks().ticks())?;
+    writer.write_u128(instant.fractional_numerator())?;
+    writer.write_u128(instant.fractional_denominator())
+}
+
+fn read_instant(reader: &mut Reader<'_>) -> Result<MachineInstant, SchedulerStateCodecError> {
+    let whole_ticks = MachineTime::from_ticks(reader.read_u128()?);
+    let numerator = reader.read_u128()?;
+    let denominator = reader.read_u128()?;
+    let instant = MachineInstant::from_parts(whole_ticks, numerator, denominator)
+        .map_err(|_| SchedulerStateCodecError::InvalidTimestamp)?;
+    if instant.whole_ticks() != whole_ticks
+        || instant.fractional_numerator() != numerator
+        || instant.fractional_denominator() != denominator
+    {
+        return Err(SchedulerStateCodecError::InvalidTimestamp);
+    }
+    Ok(instant)
+}
+
 fn write_watermark(
     writer: &mut Writer,
     watermark: EventQueueWatermark,
 ) -> Result<(), SchedulerStateCodecError> {
-    writer.write_u128(watermark.timestamp.ticks())?;
+    write_instant(writer, watermark.timestamp)?;
     writer.write_u16(watermark.hardware_phase.value())?;
     writer.write_u16(watermark.priority.value())?;
     writer.write_u64(watermark.sequence)
@@ -336,7 +362,7 @@ fn read_watermark(
     reader: &mut Reader<'_>,
 ) -> Result<EventQueueWatermark, SchedulerStateCodecError> {
     Ok(EventQueueWatermark {
-        timestamp: MachineTime::from_ticks(reader.read_u128()?),
+        timestamp: read_instant(reader)?, 
         hardware_phase: HardwarePhase::new(reader.read_u16()?),
         priority: PlatformPriority::new(reader.read_u16()?),
         sequence: reader.read_u64()?,
@@ -449,7 +475,7 @@ mod tests {
         decode_scheduler_state, encode_scheduler_state,
     };
     use sega_temporal_core::{
-        EventQueueState, EventQueueWatermark, HardwarePhase, MachineTime, PlatformPriority,
+        EventQueueState, EventQueueWatermark, HardwarePhase, MachineInstant, MachineTime, PlatformPriority,
         ScheduledEvent,
     };
 
@@ -493,7 +519,7 @@ mod tests {
             }],
             event_queue: EventQueueState {
                 pending: vec![ScheduledEvent {
-                    timestamp: MachineTime::from_ticks(5),
+                    timestamp: MachineInstant::from_ticks(5),
                     hardware_phase: HardwarePhase::new(2),
                     priority: PlatformPriority::new(3),
                     sequence: 0,
@@ -536,7 +562,7 @@ mod tests {
         state.event_queue.pending[0].sequence = 1;
         state.event_queue.next_sequence = 2;
         state.event_queue.last_dispatched = Some(EventQueueWatermark {
-            timestamp: MachineTime::from_ticks(4),
+            timestamp: MachineInstant::from_ticks(4),
             hardware_phase: HardwarePhase::new(1),
             priority: PlatformPriority::new(1),
             sequence: 0,
@@ -557,7 +583,7 @@ mod tests {
         state.now = MachineTime::from_ticks(u128::MAX);
         state.clock_domains[0].current_time = MachineTime::from_ticks(u128::MAX);
         state.clock_domains[0].total_cycles = u128::MAX;
-        state.event_queue.pending[0].timestamp = MachineTime::from_ticks(u128::MAX);
+        state.event_queue.pending[0].timestamp = MachineInstant::from_ticks(u128::MAX);
 
         let encoded = encode_scheduler_state(&state, &U32PayloadCodec).unwrap();
         assert_eq!(&encoded[..8], &SCHEDULER_STATE_MAGIC);
@@ -566,7 +592,7 @@ mod tests {
         assert_eq!(decoded.now.ticks(), u128::MAX);
         assert_eq!(decoded.clock_domains[0].total_cycles, u128::MAX);
         assert_eq!(decoded.clock_domains[0].current_time.ticks(), u128::MAX);
-        assert_eq!(decoded.event_queue.pending[0].timestamp.ticks(), u128::MAX);
+        assert_eq!(decoded.event_queue.pending[0].timestamp.whole_ticks().ticks(), u128::MAX);
     }
 
     #[test]
