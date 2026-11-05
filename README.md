@@ -59,6 +59,7 @@ Na raiz do repositório:
 
 ```powershell
 py -3.15 -m venv .venv
+.\.venv\Scripts\python.exe -c "import sys; assert sys.version_info[:3] == (3, 15, 2), sys.version; print(sys.version)"
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install -e ".[dev,qt]"
 ```
