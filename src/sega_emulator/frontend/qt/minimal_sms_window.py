@@ -118,7 +118,8 @@ class MinimalSmsWindow(QMainWindow):
             "Use Iniciar/Pausar para controlar a sessão nativa."
         )
         self.statusBar().showMessage(
-            f"{path.name} | {self._region} | áudio: aguardando host nativo | vídeo: desabilitado"
+            f"{path.name} | {self._region} | áudio: aguardando host nativo | "
+            "vídeo: desabilitado"
         )
         self._update_actions()
 
