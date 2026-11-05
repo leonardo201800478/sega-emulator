@@ -3002,7 +3002,10 @@ impl Z80MicroSequencer {
                     self.halt_exit_pending = None;
                     Ok(step)
                 }
-                None => self.begin_opcode_fetch(),
+                None => {
+                    self.p = false;
+                    self.begin_opcode_fetch()
+                }
             };
         }
         if self.halt_exit_pending.is_some() {
@@ -3014,6 +3017,9 @@ impl Z80MicroSequencer {
         if self.iff1 && self.ei_delay == 0 && self.int_pending.is_some() {
             return self.begin_interrupt_acknowledge();
         }
+        // The LD A,I/R NMOS interrupt erratum is valid only at the immediately
+        // following instruction boundary. A normal fetch consumes the latch.
+        self.p = false;
         self.begin_opcode_fetch()
     }
 
@@ -3067,6 +3073,11 @@ impl Z80MicroSequencer {
         self.halted = false;
         self.iff1 = false;
         self.iff2 = false;
+        // ZiLOG UM008011-0816: an INT accepted during LD A,I/R clears P/V.
+        // NMI deliberately does not apply this maskable-interrupt erratum.
+        if self.p {
+            self.registers.f &= !FLAG_PV;
+        }
         self.p = false;
         self.phase = Z80MicroSequencerPhase::InterruptAcknowledge;
         Ok(Z80MicroStep::BusRequest(request))
