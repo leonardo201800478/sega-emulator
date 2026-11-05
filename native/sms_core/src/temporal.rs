@@ -2,8 +2,9 @@
 //!
 //! This layer owns the machine timeline and schedules typed boundaries. It
 //! deliberately does not execute devices or assign electrical bus phases.
-//! The caller supplies the master-tick scale for one Z80 T-state; no regional
-//! SMS clock ratio is inferred by this module.
+//! The caller supplies the master-tick scale for one Z80 T-state; the Z80 and
+//! SMS PSG domains share that cycle ratio. No regional oscillator value is
+//! inferred by this module.
 
 use core::fmt;
 
@@ -87,8 +88,8 @@ impl SmsTemporalCoordinator {
     /// Construct a timeline with an explicit, profile-supplied T-state scale.
     ///
     /// The scale is a configuration input, not a claim about any SMS region or
-    /// board revision. The coordinator registers one Z80 domain and advances
-    /// it only when the machine scheduler dispatches a boundary.
+    /// board revision. The coordinator registers the Z80 and PSG input domains
+    /// with the same cycle ratio and advances both only at scheduler boundaries.
     pub fn new(master_ticks_per_tstate: u64) -> Result<Self, SmsTemporalCoordinatorError> {
         if master_ticks_per_tstate == 0 {
             return Err(SmsTemporalCoordinatorError::ZeroTStateScale);
