@@ -1,5 +1,7 @@
 # ADR-Z80-001 — Resumable Z80 execution and timed bus transactions
 
+> **Policy note (2026-11-05):** this proposal is subordinate to [ADR-0016](../architecture/adr/0016-observable-fidelity-and-proportional-timing.md). A resumable/microsequenced execution path is conditional, not a universal requirement. Implement it only for a supported console/game/peripheral interaction whose observable result requires suspension between instruction/bus phases. The atomic executor remains the default for operations without observable intermediate effects.
+
 - Status: PROPOSED
 - Date: 2026-11-02
 - Scope: `native/z80_cpu`, `native/z80_bus`, and future SMS / SG-1000 machine adapters
@@ -12,7 +14,7 @@ The shared Z80 currently exposes `Z80::step<B: CpuBus>()`. It runs an entire ins
 
 The SMS machine therefore executes the complete instruction before advancing its devices. Its PSG write queue uses a nominal instruction-relative offset for `OUT (n),A`; that offset is diagnostic/coarse timing, not a physical bus transaction. The same architectural limitation exists in the SG-1000 machine.
 
-A cycle-accurate machine cannot use this atomic interface as its execution primitive. It must be possible to stop the CPU between bus phases, let the machine advance all devices to a common timestamp, and resume the CPU only after the bus transaction completes.
+If a supported platform/game interaction requires observing a bus operation before the instruction retires, the atomic interface alone is insufficient for that specific path. In that case the CPU must be suspendible at the minimum required bus boundary, allow the machine to advance relevant devices to the corresponding timestamp, and resume after the transaction completes. This is not a requirement to microsequence every instruction.
 
 ## Hardware timing constraints from the Zilog Z80 CPU User Manual (UM008011-0816)
 
@@ -29,7 +31,7 @@ These are CPU-family timing rules. The SMS and SG-1000 adapters must still provi
 
 ## Decision
 
-Implement a second, resumable execution interface in the shared Z80 crate. Keep the existing atomic `step()` path intact as a compatibility and differential reference until the new path has broad equivalence evidence.
+Where a demonstrated gameplay dependency requires resumable bus operations, provide a resumable execution interface in the shared Z80 crate and keep the atomic `step()` path for operations that do not require temporal suspension. Both paths must preserve one semantic implementation and be compared where they overlap. This proposal does not authorize universal microsequencing or deprecating the atomic path.
 
 The resumable path is a CPU state machine, not an instruction decoder that runs ahead and replays recorded bus accesses. It must not perform a read/write side effect before the corresponding bus phase has reached its scheduled completion point.
 
@@ -83,25 +85,24 @@ Conditional branches, block instructions, undocumented opcodes, and all indexed 
 
 ### Unit / primitive tests
 
-- Exact M-cycle sequence and duration for each primitive instruction.
-- Read/write side effects occur on the documented completion phase, not at request creation.
-- Zero, one, and multiple WAIT states preserve request identity and suspend/resume correctly.
-- I/O cycles include their automatic WAIT state.
-- Interrupt acknowledge includes its automatic two WAIT states.
-- Prefix fetches and refresh increments are not duplicated across suspension.
-- Save/restore while a bus request is pending produces the same continuation and final state.
+- For each primitive explicitly assigned to the temporal gameplay path, validate exact M-cycle sequence/duration and the documented completion point of external side effects.
+- For temporal bus requests, zero/one/multiple WAIT states preserve request identity and suspend/resume correctly when the target platform exposes WAIT.
+- Model automatic I/O/interrupt-acknowledge waits only in profiles where the CPU/platform contract requires them.
+- Prefix fetches and refresh increments must not be duplicated across suspension when that path is active.
+- Save/restore during a pending temporal bus request produces the same continuation and final state.
+- Operations not assigned to a temporal path remain valid through the atomic executor with exact semantics and nominal timing.
 
 ### Differential tests
 
-Run the atomic executor and resumable executor from identical initial snapshots and deterministic memory/bus scripts. Compare all architectural registers and latches, memory writes, port writes, interrupt state, HALT state, and final nominal T-state count after every retired instruction. Record expected differences separately; do not silently weaken assertions.
+Where both paths implement the same temporal-relevant operation, run the atomic and resumable executors from identical snapshots and deterministic scripts. Compare architectural registers/latches, memory and port side effects, interrupt/HALT state and nominal duration. Do not require a resumable-path counterpart for atomic-only instructions; record the exact overlap and any intentional timing-model differences.
 
 ### Machine integration gates
 
-- SMS and SG-1000 adapters independently validate address decode, open-bus behavior, interrupt wiring, and WAIT policy.
-- Device clock domains are registered with the machine scheduler using verified rational ratios and preserved phase.
-- PSG writes are applied at the completed I/O bus phase, not at an instruction-relative estimate.
-- Scheduler stress and deterministic trace replay must PASS; SKIPPED is not PASS.
-- Only after both machine integrations pass may the atomic path be considered for deprecation. Removal requires a separate PR and explicit compatibility evidence.
+- SMS and SG-1000 adapters validate functional address decode, open-bus behavior and interrupt wiring. WAIT and detailed bus timing are added only for a real, evidenced consumer.
+- Register device clock domains with the Scheduler only for components participating in the selected temporal path, using verified ratios/phases.
+- Apply PSG writes at a completed I/O bus phase when gameplay/audio evidence requires that timing; otherwise preserve the defined atomic write semantics and nominal offset.
+- Scheduler stress and deterministic trace replay are required for a temporal integration change; SKIPPED is not PASS.
+- The atomic path is not deprecated merely because a temporal path exists. Any future removal requires a separate ADR, demonstrated need and compatibility evidence.
 
 ## Non-goals
 

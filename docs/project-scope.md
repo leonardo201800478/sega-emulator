@@ -13,9 +13,13 @@ Este documento define princípios e limites transversais. A sequência e as prio
 
 Construir um emulador Sega modular, determinístico, compatível e eficiente, com comportamento funcional e temporal próximo ao dos consoles originais.
 
-A meta não é reproduzir a engenharia elétrica integral dos chips. A precisão deve ser suficiente para executar jogos e periféricos corretamente, respeitando clocks, sincronização e interações que tenham efeito observável.
+A meta não é reproduzir a engenharia elétrica integral dos chips. A prioridade é precisão temporal nos caminhos de instrução e processos cuja ordem/duração afete gameplay; para o restante, a implementação atômica e determinística é o padrão.
 
-**Fidelidade antes de complexidade:** um detalhe interno só deve ser modelado quando houver dependência real do console, jogo ou periférico, sustentada por documentação, medição ou teste reproduzível.
+**Dois níveis de fidelidade:**
+- **Temporal para gameplay:** preservar a ordem e a duração dos caminhos CPU/barramento/VDP/áudio/mapper/IRQ/periférico quando isso alterar o resultado de um jogo.
+- **Atômico para o restante:** operações com semântica exata, efeitos colaterais e duração nominal conhecida, sem expor microestados que nenhum consumidor observa.
+
+**Fidelidade antes de complexidade:** qualquer promoção de uma operação atômica para execução temporal detalhada exige console/jogo/revisão/periférico afetado, efeito observável, evidência e teste reproduzível. Não existe requisito de simulação elétrica ou por pino.
 
 ## 2. Limites de escopo
 
@@ -63,12 +67,16 @@ A fronteira deve ser coarse-grained, com ownership e sincronização explícitos
 
 ## 5. Temporização e precisão
 
-- Um único Scheduler coordena a timeline da máquina composta quando necessário.
-- CPU, vídeo, áudio, barramento e periféricos devem permanecer sincronizados nos pontos em que interagem.
-- O avanço pode ocorrer por instrução, bloco, scanline, amostra ou evento, conforme a menor granularidade que preserve o comportamento observável.
-- M-cycles, T-states, WAIT, fases de borda, arbitragem e sinais de barramento não são exigências universais. Modelar somente quando a plataforma realmente depender deles.
+Aplicar a política em dois níveis definida pela ADR-0016:
+
+- **Temporal prioritário para gameplay:** instruções e processos que influenciam diretamente o resultado de jogos, incluindo acessos de memória/I/O com efeitos em hardware, escritas de registradores VDP/PSG/FM, alterações de mapper, raster/scroll/H-counter, IRQ/NMI, DMA, contenção e WAIT quando o circuito suportado realmente os utilizar.
+- **Precisão atômica padrão:** instruções internas sem interação externa observável, operações simples de memória/registrador, atualizações digitais e processamento de dispositivos que possam avançar em blocos devem produzir resultado exato e determinístico em uma unidade atômica. Preservar duração nominal documentada quando conhecida, sem inventar microfases.
+- A semântica funcional de todas as instruções suportadas é obrigatória; a precisão temporal detalhada não é universal.
+- Um único Scheduler coordena a timeline da máquina composta quando houver mais de um domínio/interação temporal relevante. Sua existência não obriga todos os dispositivos a serem scheduler-driven.
+- CPU, vídeo, áudio, barramento e periféricos sincronizam-se nos pontos em que uma interação pode alterar o estado de outro componente.
+- O avanço pode ocorrer por instrução, transação, scanline, bloco, amostra ou evento, conforme a menor granularidade que preserve o comportamento observável.
+- M-cycles, T-states, WAIT, fases de borda e arbitragem são modelados somente quando um jogo ou periférico suportado depender deles.
 - Não representar todos os pinos físicos nem simular fenômenos analógicos/elétricos.
-- WAIT ou outra linha de controle deve ser implementada quando houver ligação e efeito real no console suportado.
 - A velocidade real do host e o pacing de apresentação não podem alterar a sequência lógica emulada.
 
 ## 6. Performance e estado

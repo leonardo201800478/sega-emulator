@@ -6,11 +6,12 @@ O Sega Emulator busca fidelidade funcional e temporal próxima ao hardware origi
 
 A [ADR-0016 — fidelidade observável e precisão proporcional ao console](architecture/adr/0016-observable-fidelity-and-proportional-timing.md) é a decisão vigente para definir a granularidade da emulação.
 
-- Modelar corretamente o comportamento que jogos, periféricos e componentes do console conseguem observar.
-- Preservar clocks, sincronização e ordem causal nos pontos em que alteram a execução.
-- Usar a menor granularidade que reproduza o comportamento: instrução, transação, scanline, amostra ou evento.
-- Implementar M-cycles, T-states, WAIT, arbitragem e sinais somente quando um console suportado depender deles.
-- Não simular todos os pinos, fenômenos analógicos ou detalhes elétricos sem uma necessidade demonstrada.
+- A semântica de todas as instruções/operações suportadas deve ser exata.
+- Priorizar precisão temporal para sequências de instruções e processos cuja ordem/duração afete gameplay ou interação com VDP/raster, áudio, mapper, barramento, IRQ/NMI, DMA e periféricos.
+- Usar execução atômica determinística para operações sem estado intermediário observável, preservando resultado, flags, side effects e duração nominal conhecida.
+- Escolher a menor granularidade suficiente: instrução, transação, scanline, bloco, amostra ou evento.
+- Implementar M-cycles, T-states, WAIT e arbitragem somente quando a dependência do console estiver demonstrada.
+- Não simular todos os pinos, fenômenos analógicos ou detalhes elétricos sem necessidade demonstrada.
 - Medir o custo de CPU/memória e evitar eventos e estados desnecessários.
 
 ## Responsabilidades por linguagem

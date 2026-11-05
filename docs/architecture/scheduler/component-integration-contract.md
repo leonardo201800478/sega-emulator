@@ -6,19 +6,15 @@ Este documento define o que um componente deve oferecer para participar da timel
 
 ## 2. Identidade e ownership
 
-Cada instância possui:
-- identidade estável no perfil da máquina;
-- zero ou mais domínios de clock explicitamente registrados;
-- estado funcional e temporal próprio;
-- estado de execução restaurável;
-- lista de eventos que pode produzir;
-- fronteiras seguras de suspensão/retomada.
+Cada instância possui identidade estável, estado funcional determinístico e estado restaurável. Domínios de clock, eventos próprios e fronteiras seguras de suspensão/retomada são capacidades **condicionais**, exigidas somente quando o componente participa de um caminho temporal observável de gameplay. Um componente puramente atômico não precisa simular microestados nem registrar um domínio individual no Scheduler.
 
 O Scheduler é dono da timeline global. O componente é dono de seu estado interno. A máquina é dona da composição e das interações.
 
-## 3. Capacidades conceituais exigidas
+## 3. Capacidades conceituais
 
-Um componente temporal integrado deve permitir à máquina:
+Um componente de execução atômica deve oferecer operações determinísticas, resultado/efeitos colaterais exatos e avanço em bloco com duração nominal definida quando conhecida.
+
+Somente um componente selecionado para integração temporal detalhada deve permitir à máquina:
 1. conhecer o próximo deadline/fronteira observável;
 2. avançar deterministicamente até um deadline que não ultrapasse;
 3. preservar fase e estado interno ao suspender;
@@ -29,9 +25,9 @@ Um componente temporal integrado deve permitir à máquina:
 
 Não se exige que cada oscilador interno gere um evento global por ciclo. Avanço interno em lote é permitido se equivalência for provada.
 
-## 4. Safe point
+## 4. Safe point — somente para caminhos temporais suspensíveis
 
-Safe point é uma fronteira na qual a execução pode parar sem perder informação causal nem duplicar efeitos. Deve preservar:
+Safe point é uma fronteira na qual uma operação temporal em andamento pode parar sem perder informação causal nem duplicar efeitos. Só é requisito quando a interação de gameplay precisa suspender/retomar a operação. Nesse caso, deve preservar:
 - instante absoluto e fase local;
 - micro-op/operação em andamento;
 - endereço, dados e direção de transação pendente;
@@ -68,14 +64,22 @@ Não representar pausa ou clock parado por razão de clock zero. A razão é pos
 
 O snapshot deve permitir continuação equivalente após restauração. Capturar também estado parcial e transações pendentes. A operação deve ser atômica: se qualquer componente falhar na validação, não expor máquina parcialmente restaurada.
 
-## 9. Critérios de aceitação por componente
+## 9. Critérios de aceitação por nível
 
+**Componente atômico (padrão):**
+- semântica, registradores, flags, memória e efeitos colaterais corretos;
+- duração nominal preservada quando conhecida;
+- determinismo e avanço agregado reproduzíveis;
+- snapshot/restore do estado funcional necessário;
+- regressão nos sistemas já funcionais.
+
+**Componente temporal (somente quando gameplay exigir):**
 - clock/ratio/fase documentados e rastreáveis;
-- deadline e safe points definidos;
+- deadline e safe points definidos nos pontos de interação;
 - nenhuma passagem por eventos externos;
-- chunk invariance demonstrada;
+- chunk invariance demonstrada até as fronteiras relevantes;
 - eventos determinísticos e ordenados;
-- estado de suspensão/retomada serializável;
-- snapshot/restore com replay equivalente;
-- teste diferencial contra caminho de referência;
+- suspensão/retomada serializável quando uma transação puder ser interrompida;
+- snapshot/restore e replay equivalentes nos pontos temporais ativos;
+- teste diferencial contra referência adequada;
 - sem regressão nos sistemas já funcionais.

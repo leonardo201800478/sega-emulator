@@ -16,6 +16,23 @@ O projeto não busca simulação elétrica integral, reprodução de transistore
 
 O estado exato de cada componente e das PRs deve ser conferido na [main](https://github.com/leonardo201800478/sega-emulator) e em [Estado dos componentes](docs/component-status.md). Documentos históricos não prevalecem sobre o código integrado nem sobre a ADR-0016.
 
+## Fonte da verdade, roadmap e conclusão
+
+- **GitHub `main` é a fonte da verdade.** Código em branches e PRs ainda não mescladas não está integrado, mesmo quando a PR está aberta, aprovada ou com CI verde.
+- **Existe um único roadmap normativo:** [Roadmap mestre](docs/project-roadmap.md). Ele define a ordem P0–P9. Não criar cronogramas, listas de sprints ou roadmaps paralelos.
+- [Estado dos componentes](docs/component-status.md), scorecards e auditorias podem conter fotografias históricas. Antes de iniciar trabalho, conferir o SHA atual da `main`, o código integrado, as PRs abertas e os workflows; não tratar um SHA antigo ou o estado de uma PR como estado integrado.
+- A [PR permanente de conclusão #533](https://github.com/leonardo201800478/sega-emulator/pull/533) é o gate final do projeto. Ela permanece Draft e aberta durante o desenvolvimento e só poderá ser finalizada quando todas as fases P0–P9, os critérios funcionais/temporais, a compatibilidade, o determinismo, os save states/replays e os gates finais estiverem comprovados no SHA final da `main`. Ela não substitui o roadmap nem autoriza antecipar fases.
+
+### Ordem obrigatória das plataformas
+
+P0 Infraestrutura/Hosts → P1 Master System → P2 SG-1000 → P3 Game Gear → P4 Mega Drive/Genesis → P5 Sega CD → P6 32X/Sega CD 32X → P7 Frontend Qt/PyO3 → P8 Compatibilidade/Auditoria → P9 Validação sistêmica.
+
+A prioridade atual dentro dessa sequência é consolidar o Master System e o Z80 compartilhado, preservando o SG-1000. Uma prioridade não significa que a fase esteja concluída.
+
+## Política de precisão
+
+A semântica funcional é exata em todas as instruções e operações suportadas. A precisão temporal recebe prioridade nos caminhos de instrução e processos cuja ordem ou duração possa alterar gameplay — por exemplo, I/O, raster/VDP, áudio, mapper, interrupções, DMA e contenção comprovada. Operações sem efeito intermediário observável usam execução atômica determinística, preservando resultado, flags, estado, efeitos colaterais e duração nominal conhecida. M-cycles, T-states, WAIT e suspensão/retomada são exigidos apenas quando uma dependência concreta estiver demonstrada. Não se exige cycle-accuracy universal, simulação elétrica nem precisão por pino. A [ADR-0016](docs/architecture/adr/0016-observable-fidelity-and-proportional-timing.md) define os critérios.
+
 ## Arquitetura
 
 | Camada | Responsabilidade |

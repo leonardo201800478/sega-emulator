@@ -111,11 +111,9 @@ jobs:
         run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
   rust:
     needs: [changes]
+    # Required by the main ruleset: run on every PR; do not path-filter.
     if: |
       always() &&
-      (github.event_name != 'pull_request' ||
-       needs.changes.outputs.rust == 'true' ||
-       needs.changes.outputs.full == 'true') &&
       (github.event_name != 'workflow_dispatch' || !inputs.refresh_cargo_lockfiles)
     name: Rust quality and unit regression
     runs-on: ubuntu-latest
@@ -227,11 +225,9 @@ jobs:
         run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
   python:
     needs: [changes]
+    # Required by the main ruleset: run on every PR; do not path-filter.
     if: |
       always() &&
-      (github.event_name != 'pull_request' ||
-       needs.changes.outputs.python == 'true' ||
-       needs.changes.outputs.full == 'true') &&
       (github.event_name != 'workflow_dispatch' || !inputs.refresh_cargo_lockfiles)
     name: Python lint and regression
     runs-on: ubuntu-latest
@@ -393,11 +389,9 @@ jobs:
         run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
   windows-d3d12:
     needs: [changes]
+    # Required by the main ruleset: run on every PR; do not path-filter.
     if: |
       always() &&
-      (github.event_name != 'pull_request' ||
-       needs.changes.outputs.windows_native == 'true' ||
-       needs.changes.outputs.full == 'true') &&
       (github.event_name != 'workflow_dispatch' || !inputs.refresh_cargo_lockfiles)
     name: Windows x64 D3D12 compile
     runs-on: windows-latest

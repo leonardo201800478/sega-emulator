@@ -18,13 +18,14 @@ A precisão deve ser proporcional ao que jogos, periféricos e componentes de ca
 
 ## Fidelidade e granularidade
 
-1. Implementar corretamente instruções, registradores, flags e operações que o software dos consoles suportados pode executar.
-2. Preservar a ordem e a temporização das interações que alteram o comportamento observável de CPU, vídeo, áudio, barramento e periféricos.
-3. Escolher a menor granularidade suficiente: instrução, transação, scanline, amostra ou evento.
-4. Modelar M-cycles, T-states, WAIT, arbitragem, sinais e fases somente quando uma plataforma realmente depender deles.
-5. Não exigir representação de todos os pinos físicos, estados internos não observáveis ou fenômenos analógicos.
-6. Evitar eventos, alocações e estados de snapshot sem efeito funcional. Medir desempenho e validar que otimizações preservam o comportamento.
-7. Se a evidência for insuficiente, registrar a incerteza sem transformar a hipótese em requisito universal.
+1. A semântica de todas as instruções e operações suportadas deve ser exata.
+2. **Priorizar precisão temporal em gameplay:** detalhar sequência/duração de instruções e processos quando a interação com barramento, mapper, VDP/raster, áudio, IRQ/NMI, DMA ou periféricos puder alterar o resultado do jogo.
+3. **Usar precisão atômica no restante:** executar instruções internas e operações sem efeito intermediário observável como unidades determinísticas, preservando estado, flags, side effects e duração nominal conhecida.
+4. Escolher a menor granularidade suficiente: instrução, transação, scanline, bloco, amostra ou evento.
+5. Modelar M-cycles, T-states, WAIT, arbitragem, sinais e fases somente quando uma dependência real estiver demonstrada.
+6. Não exigir representação de pinos físicos, estados internos não observáveis ou fenômenos analógicos.
+7. Evitar eventos, alocações e estados de snapshot sem efeito funcional. Medir desempenho e validar que otimizações preservam o comportamento.
+8. Se a evidência for insuficiente, manter o caminho atômico e registrar a incerteza sem transformar hipótese em requisito universal.
 
 ## Roadmap
 

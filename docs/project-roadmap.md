@@ -1,11 +1,11 @@
 # Roadmap mestre — Sega Emulator
 
 **Status:** única rota normativa de implementação.  
-**Baseline consultada:** `main` em `f4e428ad31c0d2e214e8ed15aab8fa705b1c795e` (2026-11-05).  
+**Regra de atualização:** este documento define a sequência normativa, não uma fotografia de branches/PRs. Antes de cada tarefa, auditar o SHA corrente da `main`, código, PRs e workflows.  
 **Prioridade imediata:** Master System e consolidação do Z80 compartilhado, preservando o SG-1000.  
 **Política de fidelidade:** [ADR-0016](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
 
-O objetivo é uma emulação funcional e temporal próxima ao console original, com desempenho adequado. Não é requisito reproduzir todos os pinos, fases elétricas, estados internos ou transições analógicas dos chips. A precisão adicional deve ser justificada por comportamento observável de um console, jogo ou periférico.
+O objetivo é uma emulação funcionalmente correta e temporalmente fiel nos caminhos de execução que influenciam jogos e periféricos. O detalhamento temporal é prioritário para sequências de instruções e processos de gameplay sensíveis a ordem/duração; o restante usa operações atômicas determinísticas e semanticamente exatas. Não reproduzir pinos, fases elétricas ou estados internos sem efeito observável.
 
 Não manter roadmaps ou planos de sprint paralelos. ADRs, auditorias e referências de hardware não criam fases ou prioridades concorrentes.
 
@@ -20,6 +20,17 @@ Não manter roadmaps ou planos de sprint paralelos. ADRs, auditorias e referênc
 7. Desempenho deve ser medido; não usar JIT, frame skipping, hacks de timing ou otimizações especulativas.
 8. Mudanças não triviais seguem branch + PR. Sem commit direto na main, force-push ou merge sem gates verdes no HEAD final.
 9. ROMs comerciais, BIOS proprietárias e dumps protegidos não entram no Git.
+
+## Regra normativa de granularidade — prioridade temporal e execução atômica
+
+O projeto adota dois níveis complementares, sem reduzir a correção funcional:
+
+1. **Precisão temporal prioritária para gameplay:** instruções, sequências e processos cuja ordem ou duração possa alterar a execução de jogos ou a interação entre CPU, memória/barramento, mapper, VDP/raster, PSG/FM/PCM, interrupções, DMA ou periféricos. Nesses caminhos, preservar clocks, ordem causal, pontos de interação e a menor resolução temporal que reproduza o efeito observado. Usar M-cycles, T-states, WAIT, suspensão/retomada ou fases de transação somente quando testes, documentação ou divergência reproduzível demonstrarem essa necessidade.
+2. **Precisão funcional atômica como padrão para o restante:** executar a operação em uma unidade atômica definida pela interface (instrução, acesso, escrita de registrador, avanço de scanline/bloco ou amostra), com resultado, flags, memória, efeitos colaterais, estado e duração nominal corretos quando conhecidos. Não criar micro-operações, fases internas, safe points ou eventos por tick apenas para espelhar a estrutura elétrica do chip.
+
+A semântica funcional de toda instrução e operação suportada continua obrigatoriamente correta. “Atômica” não significa aproximada, nondeterminística ou incompleta; significa que estados intermediários não observáveis não são modelados sem necessidade. O detalhamento temporal deve concentrar-se nos caminhos de gameplay sensíveis ao tempo. **Não existe requisito de precisão por pino, por borda elétrica ou por transistor.**
+
+Antes de elevar uma operação do nível atômico ao temporal, registrar: jogo/console/revisão/periférico afetado, efeito observável, evidência, menor granularidade suficiente, teste de regressão e custo. Na ausência dessa evidência, manter execução atômica e registrar a incerteza sem bloquear a plataforma.
 
 ## 2. Fases de plataforma
 
@@ -39,7 +50,7 @@ Prioridade principal. Consolidar a máquina SMS em Rust:
 - sincronização CPU/vídeo/áudio nos pontos de interação que afetem jogos;
 - compatibilidade com ROMs de teste e jogos representativos.
 
-A precisão temporal deve ser incremental e seletiva. Não exigir execução por T-state de todas as instruções nem representação integral dos pinos.
+Priorizar temporização de instruções e processos que afetem gameplay: escritas/leituras de I/O e registradores de VDP/PSG, efeitos de mapper, interrupções, raster/H-counter, DMA, contenção e WAIT quando presentes no console. Instruções puramente internas de CPU e operações sem interação observável permanecem atômicas, preservando semântica e duração nominal conhecida. Não exigir execução por T-state de todas as instruções nem representação integral dos pinos.
 
 ### P2 — SG-1000
 
@@ -84,10 +95,11 @@ Critérios funcionais:
 - interrupções e HALT conforme o uso da plataforma;
 - regressões SG-1000 e SMS.
 
-Critérios temporais:
-- preservar durações e relações de clock necessárias aos consumidores;
-- representar transações suspensíveis ou WAIT somente quando o barramento real exigir;
-- adicionar M-cycle/T-state ou sinais derivados apenas quando necessários a uma interação observável;
+Critérios temporais prioritários:
+- preservar duração nominal e ordem das instruções executadas por jogos;
+- detalhar sequência temporal quando uma instrução/processo interagir com VDP, áudio, mapper, I/O, interrupção ou barramento de modo sensível ao instante;
+- manter atomicidade para operações internas sem efeito intermediário observável;
+- representar transações suspensíveis, WAIT, M-cycle/T-state e sinais derivados somente quando a plataforma exigir;
 - não simular todos os pinos ou estados internos como meta independente.
 
 Suítes externas como ZEXDOC/ZEXALL e traces de barramento são instrumentos de diagnóstico/validação. Não são autorização para ampliar indefinidamente o escopo nem substituem testes de integração nos consoles.
@@ -119,15 +131,16 @@ python -m ruff format --check .
 
 Cada suíte é PASS, FAIL, BLOCKED ou NOT RUN. SKIPPED nunca é PASS. Registrar o SHA exato, jobs executados e jobs não executados.
 
-## 6. Estado observado na baseline consultada
+## 6. Como determinar o estado atual
 
-- O repositório contém runtimes Rust para SG-1000 e Master System e uma CPU Z80 compartilhada.
-- E5 DDCB/FDCB e E6 resolução geral de prefixos constam como integradas na main nas auditorias recentes.
-- E7.3/HALT T4 consta como integrada. O fechamento semântico global e a integração temporal completa não estão comprovados.
-- PRs #512, #514 e #526 permanecem propostas abertas/Draft na consulta; não são código integrado em main. A PR #527 também é documental e não foi integrada.
-- O runtime não possui comprovação de cycle-accuracy sistêmica. Isso não é, por si só, um defeito: o critério passa a ser a fidelidade observável necessária aos consoles suportados.
+Este roadmap define a ordem e os critérios de saída; não declara, por si só, que uma fase ou componente está concluído. Para cada nova tarefa:
 
-A descrição acima é uma fotografia documental. Antes de qualquer implementação, conferir novamente main, PRs e workflows. O código integrado prevalece sobre status antigo de auditoria.
+1. Consultar o SHA mais recente da `main` e confirmar o código efetivamente integrado.
+2. Consultar PRs abertas e distinguir explicitamente Draft, aberta, aprovada e mesclada. Uma PR não mesclada não integra a `main`.
+3. Conferir os workflows e os resultados vinculados ao SHA exato; jobs SKIPPED ou NOT RUN não são PASS.
+4. Reconciliar o [estado dos componentes](component-status.md), o [scorecard Z80](z80-completion-scorecard.md) e a [matriz DD/FD](z80-dd-fd-semantic-matrix.md) com o código e os testes atuais antes de usá-los como evidência.
+
+Não manter snapshots de PRs abertas neste roadmap. Auditorias datadas e relatórios de PR preservam evidências históricas, não definem prioridade nem estado integrado. O contrato de aceitação final é acompanhado pela [PR permanente de conclusão #533](https://github.com/leonardo201800478/sega-emulator/pull/533); ela não substitui esta rota normativa.
 
 ## 7. Autoridade documental
 
@@ -136,4 +149,4 @@ A descrição acima é uma fotografia documental. Antes de qualquer implementaç
 - [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md)
 - [ADRs de arquitetura](architecture/adr/README.md)
 
-Documentos históricos podem explicar como uma proposta surgiu, mas não devem ser tratados como requisitos vigentes quando conflitam com esta política.
+Documentos históricos podem explicar como uma proposta surgiu, mas não devem ser tratados como requisitos vigentes quando conflitam com esta política. Planos de sprint avulsos ou roadmaps reconciliados fora do repositório (incluindo cópias anexadas em conversas) são referências históricas, não uma segunda rota de execução; tarefas antigas que exijam microsequenciamento universal devem ser reinterpretadas pela regra temporal-para-gameplay/atômica-para-o-restante. Não manter nem atualizar cronogramas paralelos.

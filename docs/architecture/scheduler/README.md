@@ -24,6 +24,8 @@ O Scheduler coordena o tempo virtual e os eventos relevantes de uma instância d
 | Scheduler da máquina | native/machine_scheduler |
 | Adaptadores e estado de plataforma | crates de cada console |
 
+**Regra de granularidade:** o Scheduler dá suporte à precisão temporal dos caminhos de gameplay que precisam de coordenação entre componentes. Ele não converte todo dispositivo em um componente temporal de granularidade fina. Operações sem interação intermediária observável podem permanecer atômicas e avançar em blocos, desde que preservem resultado, duração nominal e determinismo.
+
 ## Estado e limites
 
 A infraestrutura do Scheduler é compartilhada e pode ser usada para coordenar múltiplos domínios. Sua existência não exige que cada chip seja atualizado a cada tick nem que todos os pinos sejam representados.

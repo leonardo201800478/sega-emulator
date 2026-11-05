@@ -3,13 +3,13 @@
 - **Status:** ACEITA
 - **Data:** 2026-11-02
 - **Escopo:** Windows x64; caminho de vídeo do Sega Emulator, começando pela integração SMS1
-- **Decisões relacionadas:** ADR-0011 (modelo temporal cycle-accurate); proposta `native-video-runtime.md`
+- **Decisões relacionadas:** ADR-0016 (fidelidade observável e precisão temporal proporcional); proposta `native-video-runtime.md`
 
 ## Contexto
 
 A proposta de migração de vídeo integrada pela PR #333 deixou a API gráfica em aberto e previa Qt como proprietário da janela/surface. A direção aprovada para esta etapa é mais restrita: o VDP SMS1, o Scheduler, a composição do frame e a apresentação Direct3D 12 devem executar em Rust. Python/PySide6 é somente frontend e tooling; não pode participar do caminho de pixels, do stepping da máquina, do frame pacing nem da sincronização com a GPU.
 
-O novo `Sms1Vdp` já possui comportamento funcional por scanline, mas não é ainda o VDP temporal integrado à máquina. A implementação temporal deve seguir ADR-0011 e a matriz de evidências SMS1. Um renderer de apresentação não pode definir nem corrigir comportamento de hardware.
+O novo `Sms1Vdp` já possui comportamento funcional por scanline, mas não é ainda o VDP integrado à máquina nos caminhos temporais de gameplay. Qualquer refinamento deve seguir ADR-0016 e a matriz de evidências SMS1, priorizando efeitos de raster/registradores que jogos realmente observem e mantendo processamento por scanline/evento quando suficiente. Um renderer de apresentação não pode definir nem corrigir comportamento de hardware.
 
 ## Decisão
 
@@ -67,8 +67,8 @@ O runtime da máquina não depende de D3D12. O renderer consome somente o contra
 
 ## Plano de execução e gates
 
-1. **T0 — Contratos e evidências:** reconciliar esta ADR com ADR-0011, matriz SMS1 T0.1 e `native-video-runtime.md`; documentar as incógnitas temporais e não inferir clocks/fases.
-2. **T1 — VDP temporal:** implementar TimingGenerator, fetch pipeline, sprite evaluation, pixel pipeline, status/IRQ e acesso ao barramento em Rust, com eventos no Scheduler e testes determinísticos. Não migrar a máquina para o VDP novo antes de cobrir os requisitos de aceitação.
+1. **T0 — Contratos e evidências:** reconciliar esta ADR com ADR-0016, matriz SMS1 T0.1 e `native-video-runtime.md`; documentar incógnitas temporais e não inferir clocks/fases.
+2. **T1 — VDP com precisão proporcional:** implementar o comportamento funcional e os eventos/estados temporais de que jogos SMS realmente dependam (por exemplo, raster, status/IRQ e efeitos intralinha demonstrados). Usar scanline/evento como granularidade quando suficiente; não exigir pipeline por dot/pixel sem evidência. Não migrar a máquina para o VDP novo antes de cobrir os requisitos de aceitação.
 3. **T2 — Frame contract/headless:** publicar frame imutável e testes de golden frame/determinismo sem API gráfica.
 4. **T3 — D3D12 host mínimo:** janela HWND Rust, device/queue, swap chain flip-model, upload e apresentação de padrão sintético; validar resize, DPI, minimize/restore e shutdown.
 5. **T4 — Integração:** ligar a máquina SMS1 ao frame sink Rust e o sink ao host D3D12; Python somente inicia e controla.
