@@ -12,9 +12,10 @@ use core::fmt;
 
 use crate::{
     SmsTemporalBus, SmsTemporalBusError, SmsTemporalBusState, SmsTemporalDispatch, SmsTemporalM1,
-    SmsTemporalM1Error, SmsTemporalM1State, SmsVdp,
+    SmsTemporalM1Error, SmsTemporalM1State, SmsVdp, Territory,
 };
 use sega_sn76489::Sn76489Core;
+use sega_video::sms::SmsVdpProfile;
 use sega_temporal_core::{
     BusContractError, BusCycleKind, BusDirection, BusOperationResult, BusPhase, BusTransaction,
     MCycleIndex, MachineTime, TStateIndex,
@@ -307,13 +308,34 @@ impl SmsTemporalMachine {
         psg_clock_hz: u64,
         sample_rate: u64,
     ) -> Result<Self, SmsTemporalMachineError> {
+        Self::new_with_hardware_profile(
+            rom,
+            master_ticks_per_tstate,
+            psg_clock_hz,
+            sample_rate,
+            SmsVdpProfile::sms1_t0_ntsc(),
+            Territory::Export,
+        )
+    }
+
+    /// Construct the temporal machine with explicit SMS VDP and territory profiles.
+    pub fn new_with_hardware_profile(
+        rom: impl Into<Vec<u8>>,
+        master_ticks_per_tstate: u64,
+        psg_clock_hz: u64,
+        sample_rate: u64,
+        vdp_profile: SmsVdpProfile,
+        territory: Territory,
+    ) -> Result<Self, SmsTemporalMachineError> {
         Ok(Self {
             cpu: Z80MicroSequencer::default(),
-            bus: SmsTemporalBus::new_with_psg_config(
+            bus: SmsTemporalBus::new_with_hardware_profile(
                 rom,
                 master_ticks_per_tstate,
                 psg_clock_hz,
                 sample_rate,
+                vdp_profile,
+                territory,
             )?,
             instruction_started_at: None,
             next_internal_cycle_id: 0,
