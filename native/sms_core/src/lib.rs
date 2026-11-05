@@ -23,7 +23,6 @@ pub mod temporal_bus;
 pub mod temporal_m1;
 pub mod temporal_machine;
 pub mod vdp;
-pub mod vdp_sms1;
 
 pub use bus::{
     CpuBus, Z80BusEvent, Z80BusEventKind, Z80CpuSnapshot, Z80InstructionOutcome,
