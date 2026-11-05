@@ -950,8 +950,8 @@ mod tests {
                         let expected_remainder = exact_numerator % u128::from(numerator);
                         assert_eq!(edge.whole_ticks().ticks(), expected_whole);
                         assert_eq!(
-                            u128::from(edge.fractional_numerator()) * u128::from(numerator),
-                            expected_remainder * u128::from(edge.fractional_denominator())
+                            edge.fractional_numerator() * u128::from(numerator),
+                            expected_remainder * edge.fractional_denominator()
                         );
                     }
                 }
