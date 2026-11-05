@@ -51,6 +51,19 @@ A janela de apresentação é criada/gerenciada pelo host Rust. O frontend pode 
 6. **Validação Windows:** resize/DPI/fullscreen windowed/minimize/restore/shutdown, device loss, fences, frame pacing, replay e regressão SG-1000.
 7. **Remoção do legado:** somente após equivalência funcional/temporal demonstrada e gates aprovados.
 
+## HDR, VRR, G-Sync e latência de entrada
+
+Esses recursos são critérios de aceitação do host nativo, não capacidades presumidas por usar D3D12:
+
+- **HDR10:** validar formato/bit depth, espaço de cor DXGI, metadata HDR estática, cadeia de apresentação e monitor HDR real.
+- **HDR10+:** exige suporte explícito à metadata dinâmica HDR10+ no caminho de apresentação e compatibilidade do display. HDR10 estático não comprova HDR10+.
+- **VRR:** comprovar a apresentação variável com monitor, cabo, driver, modo de janela e configuração suportados; VSync desligado por si só não comprova VRR.
+- **G-Sync:** validar em hardware NVIDIA compatível, com indicador/telemetria do driver e medições. Não inferir G-Sync apenas de VRR/DXGI.
+- **Input lag:** não prometer custo zero. O objetivo é latência baixa e mensurável, com fila limitada, frames-in-flight controlados e timestamps de input → emulação → Present. A medição deve usar hardware físico e metodologia repetível.
+- Nenhum desses recursos pode alterar o relógio lógico da máquina, acelerar/atrasar o Scheduler ou descartar trabalho de emulação.
+
+A Qt/Python não participa desses caminhos. Até que os gates acima estejam comprovados, a apresentação permanece desabilitada na camada Python e nenhuma alegação de HDR10+, VRR, G-Sync ou input lag zero é permitida.
+
 ## Requisitos D3D12
 
 - DXGI flip-model: `FLIP_DISCARD` ou `FLIP_SEQUENTIAL`, conforme a matriz de compatibilidade.
