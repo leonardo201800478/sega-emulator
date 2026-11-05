@@ -74,7 +74,7 @@ A janela Qt mínima abre sem ROM carregada. Use **Abrir ROM** na barra superior 
 Para iniciar diretamente uma ROM:
 
 ```powershell
-.\.venv\Scripts\python.exe -m sega_emulator "C:\caminho\para\jogo.sms"
+.\.venv\Scripts\python.exe -m sega_emulator "C:\caminho\para\jogo.sms" --region brazil
 ```
 
 A janela SMS mínima aceita ROM local `.sms`, `.bin` ou `.rom`. A seleção de região é explícita por `--region usa|brazil|europe|japan`; o padrão é `usa`. O fluxo ZIP e o frontend anterior permanecem no caminho SG-1000/legado até a migração ser validada.
