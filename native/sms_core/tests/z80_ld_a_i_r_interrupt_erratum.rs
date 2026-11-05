@@ -66,7 +66,7 @@ fn atomic_executor_does_not_apply_ld_a_i_r_erratum_to_nmi() {
         cpu.request_nmi();
         assert_eq!(cpu.step(&mut bus), Ok(11), "ED {opcode:02X}");
         assert_ne!(cpu.registers.f & FLAG_PV, 0, "ED {opcode:02X}");
-        assert!(!cpu.p, "ED {opcode:02X}");
+        assert!(!cpu.export_architectural_state().p, "ED {opcode:02X}");
     }
 }
 
@@ -76,7 +76,7 @@ fn atomic_executor_consumes_ld_a_i_r_latch_on_the_next_normal_instruction() {
         let (mut cpu, mut bus) = cpu_and_bus(opcode);
         assert_eq!(cpu.step(&mut bus), Ok(9), "ED {opcode:02X}");
         assert_eq!(cpu.step(&mut bus), Ok(4), "ED {opcode:02X}: NOP");
-        assert!(!cpu.p, "ED {opcode:02X}");
+        assert!(!cpu.export_architectural_state().p, "ED {opcode:02X}");
         cpu.request_int(0xFF);
         assert_eq!(cpu.step(&mut bus), Ok(13), "ED {opcode:02X}");
         assert_ne!(cpu.registers.f & FLAG_PV, 0, "ED {opcode:02X}");
