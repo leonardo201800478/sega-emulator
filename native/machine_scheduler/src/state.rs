@@ -9,7 +9,7 @@ use sega_temporal_core::{ClockDomain, ClockError, ClockRatio, EventQueueState, M
 use crate::ClockDomainId;
 
 /// Version of the top-level scheduler state schema.
-pub const SCHEDULER_STATE_FORMAT_VERSION: u16 = 1;
+pub const SCHEDULER_STATE_FORMAT_VERSION: u16 = 2;
 
 /// Complete persistence DTO for one registered clock domain.
 ///
