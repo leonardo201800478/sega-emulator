@@ -38,3 +38,9 @@ cargo run --release --locked -p sega-video-runtime --example d3d12_session_smoke
 ```
 
 The example presents one synthetic frame and keeps the worker alive until the native window is closed. It is a thread/lifecycle and transfer smoke test, not a real-game or VDP timing test. Resize/DPI handling, minimize/restore, device removed/reset recovery, physical-GPU validation and machine-to-session wiring remain pending. If the window closes or presentation fails with queued frames, the session closes the queue and reports the number of pending frames canceled; it does not report them as presented.
+
+## Minimize, restore and resize behavior
+
+The D3D12 worker checks the native HWND minimized state before dequeuing. While minimized it continues pumping Win32 messages but retains all accepted frames in the bounded FIFO. If the producer continues, normal queue backpressure applies only at completed-frame submission; no accepted frame is replaced or skipped. Restoring the window resumes FIFO presentation in sequence order.
+
+The swap-chain surface remains at the logical frame dimensions (for SMS, the VDP output size). The existing DXGI `DXGI_SCALING_STRETCH` policy scales that surface to the current client area during window resize; it does not resize the emulated framebuffer or alter Scheduler timing. This is not yet a DPI-awareness implementation or a swap-chain ResizeBuffers path. If shutdown is requested while still minimized, queued frames are explicitly counted as cancelled and the shutdown returns `PendingFramesCancelled`; they are not reported as presented.

@@ -32,6 +32,8 @@ pub enum D3d12SessionError {
     WorkerPanicked,
     /// The native window was closed by the user.
     WindowClosed,
+    /// Shutdown occurred while minimized and accepted frames could not be presented.
+    PendingFramesCancelled(u64),
 }
 
 impl fmt::Display for D3d12SessionError {
@@ -58,6 +60,10 @@ impl fmt::Display for D3d12SessionError {
             }
             Self::WorkerPanicked => write!(formatter, "D3D12 presentation worker panicked"),
             Self::WindowClosed => write!(formatter, "native D3D12 presentation window was closed"),
+            Self::PendingFramesCancelled(count) => write!(
+                formatter,
+                "D3D12 session shutdown while minimized; {count} accepted frame(s) were cancelled"
+            ),
         }
     }
 }
@@ -152,22 +158,59 @@ impl D3d12Session {
                 }
 
                 let mut in_flight_cancelled = 0_u64;
+                let mut pending_frame: Option<VideoFrame> = None;
                 let result = (|| {
                     loop {
                         if !host.pump_messages() {
                             return Err(D3d12SessionError::WindowClosed);
                         }
 
-                        match worker_queue.pop_timeout(Duration::from_millis(8))? {
-                            Some(frame) => {
-                                if let Err(error) = host.present_frame(&frame) {
-                                    in_flight_cancelled = in_flight_cancelled.saturating_add(1);
-                                    return Err(D3d12SessionError::Presentation(error.to_string()));
+                        if host.is_minimized() {
+                            if worker_queue.is_closed()? {
+                                let mut cancelled: u64 = match pending_frame.take() {
+                                    Some(_) => 1,
+                                    None => 0,
+                                };
+                                while let Some(_frame) = worker_queue.pop_timeout(Duration::ZERO)? {
+                                    cancelled = cancelled.saturating_add(1);
                                 }
-                                worker_last_presented.store(frame.sequence(), Ordering::Release);
+                                in_flight_cancelled = in_flight_cancelled.saturating_add(cancelled);
+                                if cancelled > 0 {
+                                    return Err(D3d12SessionError::PendingFramesCancelled(
+                                        cancelled,
+                                    ));
+                                }
+                                break;
                             }
-                            None if worker_queue.is_closed()? => break,
-                            None => {}
+
+                            // Do not dequeue while minimized: retain every
+                            // accepted frame and let bounded-queue backpressure
+                            // apply at the completed-frame submission boundary.
+                            thread::sleep(Duration::from_millis(8));
+                            continue;
+                        }
+
+                        let next_frame = match pending_frame.take() {
+                            Some(frame) => Some(frame),
+                            None => worker_queue.pop_timeout(Duration::from_millis(8))?,
+                        };
+
+                        if let Some(frame) = next_frame {
+                            // Recheck after dequeue to close the race where
+                            // the user minimizes between the loop's first
+                            // IsIconic check and the queue pop.
+                            if host.is_minimized() {
+                                pending_frame = Some(frame);
+                                continue;
+                            }
+
+                            if let Err(error) = host.present_frame(&frame) {
+                                in_flight_cancelled = in_flight_cancelled.saturating_add(1);
+                                return Err(D3d12SessionError::Presentation(error.to_string()));
+                            }
+                            worker_last_presented.store(frame.sequence(), Ordering::Release);
+                        } else if worker_queue.is_closed()? {
+                            break;
                         }
                     }
                     Ok(())
