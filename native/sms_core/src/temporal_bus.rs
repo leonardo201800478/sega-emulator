@@ -1,8 +1,10 @@
 //! Transactional SMS memory/I/O bus adapter for the Scheduler-driven path.
 //!
 //! Memory and port transactions become visible only at their scheduled
-//! completion boundary. Controller/control-port effects and the shared
-//! scheduler-driven PSG are applied there; the VDP remains outside this slice.
+//! completion boundary. Controller/control-port effects, the shared
+//! scheduler-driven PSG, and SMS1 VDP port effects are applied there. The VDP
+//! scanline clock advances from Scheduler-dispatched Z80 cycles; dot/fetch
+//! arbitration and mid-scanline effects remain outside this slice.
 //! Unconnected reads return open bus, port writes are retained in a bounded
 //! diagnostic trace, and INT acknowledge data comes from an explicit external
 //! vector input.
