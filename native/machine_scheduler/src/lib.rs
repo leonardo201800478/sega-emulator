@@ -674,7 +674,7 @@ mod tests {
 
     #[test]
     fn restore_rejects_subtick_events_until_clock_domains_are_rational() {
-        let mut scheduler = MachineScheduler::<()>::new();
+        let scheduler = MachineScheduler::<()>::new();
         let mut state = scheduler.export_state();
         state.event_queue.pending.push(ScheduledEvent {
             timestamp: MachineInstant::from_parts(MachineTime::ZERO, 1, 2).unwrap(),
@@ -685,10 +685,10 @@ mod tests {
         });
         state.event_queue.next_sequence = 1;
 
-        assert_eq!(
+        assert!(matches!(
             MachineScheduler::restore_state(state),
             Err(SchedulerError::SubTickEventUnsupported)
-        );
+        ));
         // The source scheduler remains untouched by the rejected DTO.
         assert_eq!(scheduler.now(), MachineTime::ZERO);
         assert_eq!(scheduler.pending_events(), 0);
