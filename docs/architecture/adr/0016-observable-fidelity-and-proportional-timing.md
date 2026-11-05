@@ -29,13 +29,13 @@ A fidelidade será definida pelo comportamento observável do console e pelos re
 2. **Prioridade temporal para gameplay:** preservar clocks, relações de frequência, ordem causal e duração nos caminhos de instrução/processo que possam alterar o comportamento de jogos ou interações com hardware.
 3. **Atomicidade funcional padrão:** operações sem estado intermediário observável executam atomicamente, com resultado exato e duração nominal conhecida; não precisam de microsequenciamento interno.
 4. **Precisão seletiva:** M-cycles, T-states, WAIT, fases de borda, arbitragem, IRQs e detalhes de barramento serão modelados quando uma característica concreta do console depender deles. Não são requisitos universais por si só.
-4. **Sinais físicos:** não é necessário representar todos os pinos do encapsulamento nem atualizar um vetor elétrico completo a cada clock. Uma interface de sinais pode existir quando um periférico ou barramento realmente consumir esses sinais.
-5. **Sem simulação elétrica:** capacitância, tensão, ruído, carga, propagação analógica e nível de transistor estão fora do escopo, salvo se uma futura funcionalidade de produto justificar explicitamente um modelo específico.
-6. **Granularidade eficiente:** dispositivos podem avançar em blocos, scanlines, amostras ou eventos, desde que não atravessem uma interação observável e preservem o resultado esperado. Não criar eventos por tick/pixel/pino sem necessidade comprovada.
-7. **Estado e save states:** serializar o estado necessário para retomar a execução de forma determinística. Não persistir microestados ou sinais que não participem do modelo ativo.
-8. **Desempenho:** estruturas compactas, baixo overhead e ausência de alocações/eventos desnecessários no caminho crítico. Otimização deve ser medida e não pode alterar o comportamento emulado.
-9. **Evidência proporcional:** cada detalhe adicional deve ter uma justificativa ligada a documentação, medição, teste independente, jogo/periférico afetado ou divergência reproduzível.
-10. **Sem falsa alegação:** declarar com precisão o que foi implementado e validado. Não usar “cycle-accurate”, “pin-accurate” ou equivalência elétrica como rótulo global sem demonstração específica e necessária.
+5. **Sinais físicos:** não é necessário representar todos os pinos do encapsulamento nem atualizar um vetor elétrico completo a cada clock. Uma interface de sinais pode existir quando um periférico ou barramento realmente consumir esses sinais.
+6. **Sem simulação elétrica:** capacitância, tensão, ruído, carga, propagação analógica e nível de transistor estão fora do escopo, salvo se uma futura funcionalidade de produto justificar explicitamente um modelo específico.
+7. **Granularidade eficiente:** dispositivos podem avançar em blocos, scanlines, amostras ou eventos, desde que não atravessem uma interação observável e preservem o resultado esperado. Não criar eventos por tick/pixel/pino sem necessidade comprovada.
+8. **Estado e save states:** serializar o estado necessário para retomar a execução de forma determinística. Não persistir microestados ou sinais que não participem do modelo ativo.
+9. **Desempenho:** estruturas compactas, baixo overhead e ausência de alocações/eventos desnecessários no caminho crítico. Otimização deve ser medida e não pode alterar o comportamento emulado.
+10. **Evidência proporcional:** cada detalhe adicional deve ter uma justificativa ligada a documentação, medição, teste independente, jogo/periférico afetado ou divergência reproduzível.
+11. **Sem falsa alegação:** declarar com precisão o que foi implementado e validado. Não usar “cycle-accurate”, “pin-accurate” ou equivalência elétrica como rótulo global sem demonstração específica e necessária.
 
 ## Aplicação ao Z80
 
