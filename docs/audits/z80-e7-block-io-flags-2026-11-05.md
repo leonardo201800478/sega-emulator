@@ -257,7 +257,7 @@ Manter a semântica atual do executor e do microsequenciador para o perfil Zilog
 |---|---|
 | Texto oficial UM008011-0816 | PASS — consultado; documenta limites/flags indefinidas |
 | Pesquisa Banks 2018 | PASS — fórmula documentada para repetição interrompida |
-| Teste físico Helcmanovsky | PASS — fonte e procedimento consultados; não executado nesta sessão |
+| Teste físico Helcmanovsky | NOT RUN — resultados e procedimento upstream consultados; nenhum hardware foi executado nesta sessão |
 | Comparação MAME/redcode | PASS — fórmulas de flags concordantes |
 | Confronto com executor atômico | PASS por inspeção de código; novo teste ainda aguarda CI |
 | Confronto com microsequenciador | PASS por inspeção de código; novo teste ainda aguarda CI |
