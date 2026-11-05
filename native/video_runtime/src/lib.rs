@@ -246,7 +246,10 @@ impl fmt::Display for VideoFrameError {
                 "video frame timestamp requires a non-zero timebase"
             ),
             Self::InvalidMaskedRegion => {
-                write!(formatter, "video frame masked region is outside the visible area")
+                write!(
+                    formatter,
+                    "video frame masked region is outside the visible area"
+                )
             }
             Self::InvalidRasterMetadata => {
                 write!(formatter, "video frame raster metadata is invalid")
