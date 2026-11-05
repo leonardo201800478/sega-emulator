@@ -251,3 +251,10 @@ Este aditivo supersede os estados históricos anteriores que ainda listavam E7.6
 - **E7.7 — auditoria semântica integral:** permanece IN_PROGRESS. A divergência de flags de I/O em bloco continua sem oráculo independente: UM008011-0816 declara C não afetado em INI/IND, enquanto a referência secundária descreve C/H derivados de soma. A implementação atual segue a hipótese secundária de compatibilidade NMOS; vetores SingleStepTests com ancestralidade em Ares não provam silício independente. `OUT (C),0` também permanece variante-dependente.
 - **E8:** BLOCKED até o fechamento formal de E7. Não iniciar ZEXDOC/ZEXALL ou declarar DIFFERENTIAL_PASS antes de resolver a evidência semântica pendente.
 - **E9:** permanece posterior à integração temporal observável e à comprovação de determinismo; não há TEMPORAL_PASS global.
+
+
+## Aditivo operacional — auditoria da main 1da784f556b9524f5a6f43ce8a7c525e68354f9e (2026-11-05)
+
+A PR #531 integrou a entrega de VBlank/Line IRQ do VDP SMS ao Z80 e a PR #536 integrou semântica funcional de RESET Z80. Esses incrementos atualizam os itens E7.6 e cobertura de RESET, mas não fecham E7.7 nem autorizam iniciar E8. A auditoria das PRs ainda abertas identificou branches fortemente divergentes da main, propostas temporais incompatíveis com o escopo proporcional da ADR-0016 e gates incompletos; ver [relatório de integração](audits/open-pr-integration-audit-2026-11-05.md).
+
+O baseline corrente para novas decisões é 1da784f556b9524f5a6f43ce8a7c525e68354f9e. As seções anteriores permanecem como histórico, não como estado atual.
