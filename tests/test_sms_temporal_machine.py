@@ -15,9 +15,6 @@ class FakeNativeSMSTemporalMachine:
         self.rom = rom
         self.region = region
         self.frame_number = 0
-        self.framebuffer = bytes(256 * 192 * 3)
-        self.width = 256
-        self.height = 192
         self.total_instructions = 0
         self.is_running = False
         self.audio_output_error = None
@@ -71,7 +68,7 @@ def temporal_machine_module(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
     return module
 
 
-def test_temporal_adapter_exposes_frame_data_and_session_controls(
+def test_temporal_adapter_exposes_session_controls_without_video_buffers(
     temporal_machine_module: SimpleNamespace,
 ) -> None:
     machine = TemporalSMSMachine(b"rom", region="brazil")
