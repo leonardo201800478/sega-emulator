@@ -571,7 +571,7 @@ mod tests {
     use super::{PixelFormat, VideoFrame, VideoFrameError};
 
     #[test]
-    fn explicit_metadata_preserves_active_visible_and_timing_geometry() {
+    fn explicit_metadata_preserves_active_visible_and_timestamp_geometry() {
         let metadata = super::VideoFrameMetadata {
             active_rect: super::VideoRect {
                 x: 13,
@@ -589,20 +589,15 @@ mod tests {
                 numerator: 4,
                 denominator: 3,
             },
-            timestamp_ticks: 179_208,
-            timebase_hz: 10_738_635,
+            timestamp_ticks: 42,
+            timebase_hz: 1_000_000,
             masked_regions: vec![super::VideoRect {
                 x: 13,
                 y: 24,
                 width: 8,
                 height: 192,
             }],
-            raster: Some(super::VideoRasterMetadata {
-                dots_per_line: 342,
-                lines_per_frame: 262,
-                master_ticks_per_dot_numerator: 2,
-                master_ticks_per_dot_denominator: 1,
-            }),
+            raster: None,
         };
         let frame = VideoFrame::new_with_metadata(
             9,
@@ -619,6 +614,7 @@ mod tests {
         assert_eq!(frame.metadata().active_rect.width, 256);
         assert_eq!(frame.metadata().masked_regions[0].width, 8);
         assert_eq!(frame.metadata().display_aspect_ratio.numerator, 4);
+        assert_eq!(frame.metadata().raster, None);
     }
 
     #[test]
@@ -704,9 +700,9 @@ mod tests {
     fn rejects_invalid_raster_clock_ratio() {
         let mut metadata = super::VideoFrameMetadata::full_frame(8, 8);
         metadata.raster = Some(super::VideoRasterMetadata {
-            dots_per_line: 342,
-            lines_per_frame: 262,
-            master_ticks_per_dot_numerator: 2,
+            dots_per_line: 12,
+            lines_per_frame: 8,
+            master_ticks_per_dot_numerator: 1,
             master_ticks_per_dot_denominator: 0,
         });
         assert_eq!(
