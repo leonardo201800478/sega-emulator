@@ -1,7 +1,5 @@
 # ADR-0011 — precisão temporal cycle-accurate como requisito arquitetural
 
-<badge>Supersedida</badge>
-
 **Estado:** Supersedida pela [ADR-0016 — fidelidade observável e precisão proporcional ao console](0016-observable-fidelity-and-proportional-timing.md), em 2026-11-05.
 
 Esta ADR registra a decisão histórica de tratar precisão cycle-accurate como requisito arquitetural universal. Essa decisão não é mais normativa. O projeto agora prioriza fidelidade funcional e temporal observável, com granularidade proporcional às necessidades reais de cada console.
