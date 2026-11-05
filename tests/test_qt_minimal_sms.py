@@ -85,6 +85,7 @@ def test_minimal_sms_window_loads_controls_and_closes_rom(
     assert not hasattr(window, "_frame_timer")
     assert window.status_label.text().find("Vídeo desabilitado") >= 0
     assert window.run_action.isEnabled()
+    assert not any(call[0] == "configure_audio_output" for call in machine.calls)
 
     window._toggle_running()
     assert machine.is_running
