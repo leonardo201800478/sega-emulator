@@ -5,6 +5,19 @@
 **Prioridade imediata:** Master System e consolidação do Z80 compartilhado, preservando o SG-1000.  
 **Política de fidelidade:** [ADR-0016](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).
 
+## Diretriz vigente — 2026-11-05
+
+A prioridade imediata de P1 é fechar uma máquina Master System temporal completa antes de declarar gameplay operacional pelo novo caminho. A decisão aceita em [ADR SMS Temporal + Qt](architecture/ADR-sms-temporal-machine-qt-rebuild.md) substitui a reconstrução incremental da Qt.
+
+Ordem vertical atual:
+1. PSG SN76489 SMS temporal, integrado ao scheduler e ao instante de commit das escritas I/O.
+2. VDP SMS por revisão (315-5124/315-5246), incluindo raster, modos, sprites, IRQ, counters, overscan e coluna esquerda.
+3. Integração Z80 + bus + memória/mapper + VDP + PSG + input + outputs numa única timeline.
+4. Fronteira PyO3 coarse-grained e novo frontend Qt do zero.
+5. Arquivamento do frontend/adaptador SMS antigo e exclusão do runtime Rust Legacy do build padrão, sem remover componentes compartilhados nem regredir SG-1000.
+
+A matriz de aceite e evidências está em [sms-vdp-psg-temporal-validation.md](architecture/sms-vdp-psg-temporal-validation.md). A implementação só avança de gate com testes executados e classificados individualmente. A interrupção temporária de gameplay pelo runtime SMS antigo foi aceita; isso não reduz o critério final de gameplay temporal funcional.
+
 O objetivo é uma emulação funcionalmente correta e temporalmente fiel nos caminhos de execução que influenciam jogos e periféricos. O detalhamento temporal é prioritário para sequências de instruções e processos de gameplay sensíveis a ordem/duração; o restante usa operações atômicas determinísticas e semanticamente exatas. Não reproduzir pinos, fases elétricas ou estados internos sem efeito observável.
 
 Não manter roadmaps ou planos de sprint paralelos. ADRs, auditorias e referências de hardware não criam fases ou prioridades concorrentes.
