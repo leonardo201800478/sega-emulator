@@ -95,7 +95,8 @@ impl WorkerTelemetry {
 
     fn set_audio_metrics(&self, metrics: (u64, u64)) {
         self.audio_underruns.store(metrics.0, Ordering::Release);
-        self.audio_dropped_blocks.store(metrics.1, Ordering::Release);
+        self.audio_dropped_blocks
+            .store(metrics.1, Ordering::Release);
     }
 
     fn reset_machine_counters(&self) {
@@ -174,7 +175,9 @@ impl SmsTemporalWorker {
             }
             Err(error) => {
                 let _ = worker.join();
-                Err(format!("SMS machine worker startup channel closed: {error}"))
+                Err(format!(
+                    "SMS machine worker startup channel closed: {error}"
+                ))
             }
         }
     }
