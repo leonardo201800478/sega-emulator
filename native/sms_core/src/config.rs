@@ -12,17 +12,7 @@ pub enum SmsConsoleModel {
     Sms2,
 }
 
-/// VDP ASIC revision installed in the modeled console.
-///
-/// Do not infer this from SmsConsoleModel: real hardware variants and
-/// replacement boards can combine console families and VDP revisions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum SmsVdpRevision {
-    Sega3155124,
-    /// Default VDP revision for new configurations.
-    #[default]
-    Sega3155246,
-}
+pub use sega_video::sms::{SmsVdpRevision, SpriteLimitMode, VideoStandard};
 
 /// Console territory/model family. This is not inferred from video standard.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
