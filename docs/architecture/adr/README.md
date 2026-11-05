@@ -12,7 +12,7 @@ Este índice lista decisões vigentes e registros históricos. ADR aceita não s
 | [ADR-0013 — snapshot/restore determinístico](0013-deterministic-scheduler-snapshot-restore.md) | Snapshot, restauração e replay determinísticos. | Aplicar ao estado ativo da máquina |
 | [ADR-0014 — execução e sincronização temporal](0014-temporal-device-execution-and-synchronization.md) | Proposta geral para dispositivos temporizados. | Não impõe granularidade universal |
 | [ADR-0015 — contrato temporal SMS/Z80/barramento](0015-sms-z80-bus-temporal-contract.md) | Proposta e histórico da integração temporal SMS. | Referência histórica; aplicar somente o necessário |
-| [ADR-0016 — fidelidade observável](0016-observable-fidelity-and-proportional-timing.md) | Fidelidade comportamental e temporal proporcional ao console, sem simulação elétrica integral. | **Vigente** |
+| [ADR-0016 — fidelidade observável](0016-observable-fidelity-and-proportional-timing.md) | Precisão temporal prioritária nos caminhos de gameplay; execução funcional atômica para operações sem estado intermediário observável; sem precisão elétrica universal. | **Vigente** |
 
 ## Documentação de referência
 
