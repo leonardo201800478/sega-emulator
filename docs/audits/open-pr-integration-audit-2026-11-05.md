@@ -71,7 +71,7 @@ Esta atualização substitui a fotografia operacional anterior das PRs #538–#5
 
 | PR | HEAD atual consultado | CI / classificação | Estado |
 |---|---|---|---|
-| #537 | `c92643f1036ba90a9e780a389067134986423eb9` | Run #42025922287 em andamento após reconciliação documental | OPEN |
+| #537 | `26a3b9fe13a2797281a262d7e1dd7607e8158e12` | Run #42025922287 foi iniciado no HEAD anterior `c92643f1036ba90a9e780a389067134986423eb9`; o HEAD atual contém somente documentação adicional e não tem run próprio observado | OPEN; HEAD atual NOT RUN |
 | #538 | `6268d586c84c9e96a4b3edb0ec63479bdfb62ad9` | O código/teste passou no HEAD anterior `4a78a04c0851acef3951f0faa78065a9f36d601b`; o HEAD atual contém apenas remoção da sobreposição no scorecard e ainda não tem CI observado | OPEN; HEAD atual NOT RUN |
 | #539 | `f3afc000c2805559d83d06b693ed1f2f634cf39b` | Run #42014043705: Rust, Python, PyO3 e Windows D3D12 PASS; Scheduler stress, Qt, PowerShell e lock refresh SKIPPED | OPEN |
 | #540 | `6a7fadfc245ac40c44ebfdfaa8fd675ae7123c63` | Run #42015058399: Rust, Python, PyO3 e Windows D3D12 PASS; Scheduler stress, Qt, PowerShell e lock refresh SKIPPED | OPEN |
@@ -83,7 +83,7 @@ Esta atualização substitui a fotografia operacional anterior das PRs #538–#5
 - **#539:** correção localizada do latch `p` para o erratum P/V de LD A,I/R no aceite de INT. O CI PASS confirma a suíte no HEAD exato; hardware físico e equivalência CMOS/clones permanecem NOT RUN/NOT VERIFIED.
 - **#540:** 126 casos da família LD r,r' DD/FD. Não cobre ALU, INC/DEC ou todas as famílias DD/FD.
 - **#541:** 10.816 casos ALU por amostragem de 13 valores de A e 13 operandos, e 4.096 casos INC/DEC para todos os bytes/carry. O oráculo ALU/INC/DEC compara com H/L BASE que compartilha helpers; portanto não é validação aritmética independente de silício. A correção de rustfmt foi publicada no HEAD atual e o CI completo aplicável concluiu sucesso.
-- **#537:** a reconciliação documental foi atualizada para centralizar a sobreposição do scorecard com #538. Seu novo CI permanece em andamento.
+- **#537:** a reconciliação documental foi atualizada para centralizar a sobreposição do scorecard com #538. O run #42025922287 refere-se ao HEAD anterior `c92643f1036ba90a9e780a389067134986423eb9`; o HEAD atual `26a3b9fe13a2797281a262d7e1dd7607e8158e12` não possui CI próprio observado.
 - Jobs SKIPPED permanecem SKIPPED, não PASS. Nenhuma validação local foi executada nesta sessão: o ambiente não possui `cargo`, `rustc` nem `pwsh`; os scripts `project.ps1 audit/locks/validate` permanecem NOT RUN.
 - A ausência de Scheduler stress/Qt/PowerShell/lock refresh deve ser mantida explícita. Sua obrigatoriedade precisa ser avaliada por impacto/paths e regras do workflow, não promovida a PASS.
 
