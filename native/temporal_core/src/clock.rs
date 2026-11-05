@@ -1080,6 +1080,7 @@ mod tests {
         assert_eq!(domain.advance_to(MachineTime::from_ticks(9)), Ok(0));
         assert_eq!(domain.total_cycles(), 0);
     }
+
     #[test]
     fn machine_instant_normalizes_equivalent_rational_positions() {
         let a = super::MachineInstant::from_parts(MachineTime::from_ticks(4), 2, 6).unwrap();
@@ -1153,6 +1154,7 @@ mod tests {
             }
         }
     }
+
     #[test]
     fn machine_instant_rejects_unrepresentable_denominators_and_tick_overflow() {
         assert_eq!(
