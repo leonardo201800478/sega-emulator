@@ -94,7 +94,7 @@ fn dd_fd_alu_half_registers_match_the_corresponding_base_register_semantics() {
                         for carry in [0, 1] {
                             let (ix, iy) = index_with_half(prefix, source, operand);
                             let hl = if source == 4 {
-                                0xA500 | u16::from(operand)
+                                (u16::from(operand) << 8) | 0x00E7
                             } else {
                                 (0x5A << 8) | u16::from(operand)
                             };
@@ -169,7 +169,7 @@ fn dd_fd_inc_dec_half_registers_match_base_h_l_for_every_byte_and_carry() {
                 for carry in [0, 1] {
                     let (ix, iy) = index_with_half(prefix, code, value);
                     let hl = if code == 4 {
-                        0xA500 | u16::from(value)
+                        (u16::from(value) << 8) | 0x00E7
                     } else {
                         (0x5A << 8) | u16::from(value)
                     };
