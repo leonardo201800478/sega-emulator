@@ -50,16 +50,16 @@ use windows::Win32::Graphics::Dxgi::{
     IDXGISwapChain3,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::System::Threading::{CreateEventW, INFINITE, WaitForSingleObjectEx};
 use windows::Win32::UI::HiDpi::{
     DPI_AWARENESS_CONTEXT, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE,
     DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, EnableNonClientDpiScaling,
     SetThreadDpiAwarenessContext,
 };
-use windows::Win32::System::Threading::{CreateEventW, INFINITE, WaitForSingleObjectEx};
 use windows::Win32::UI::WindowsAndMessaging::{
     CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, DestroyWindow,
     DispatchMessageW, IsIconic, MSG, PM_REMOVE, PeekMessageW, PostQuitMessage, RegisterClassW,
-    SetWindowPos, SWP_NOACTIVATE, SWP_NOZORDER, SW_SHOW, ShowWindow, TranslateMessage,
+    SW_SHOW, SWP_NOACTIVATE, SWP_NOZORDER, SetWindowPos, ShowWindow, TranslateMessage,
     WINDOW_EX_STYLE, WINDOW_STYLE, WM_DESTROY, WM_DPICHANGED, WM_NCCREATE, WNDCLASSW,
     WS_OVERLAPPEDWINDOW,
 };
