@@ -62,7 +62,7 @@ Requisitos:
 - clock do PSG derivado do mesmo domínio físico da máquina, sem relógio de parede e sem avanço provocado pela demanda do dispositivo de áudio;
 - snapshots completos, incluindo contadores, saídas, LFSR, registrador latched, fase do divisor, fase de amostragem, filtro e filas de amostras, com política explícita de buffers de host;
 - separar o perfil digital do SN76489 do circuito de saída da placa: o perfil SMS do chip mantém LFSR/divisor/registradores; uma etapa de saída compartilhada poderá modelar a curva de amplitude/resposta de placa quando houver medição;
-- a variante de resistor de saída discutida para algumas placas SMS2 não será tratada como clipping interno do SN76489 nem inferida automaticamente apenas pelo ASIC/console; será um perfil de circuito explícito, com curva medida e estado serializável;
+- a variante de resistor de saída discutida para algumas placas SMS2 não será tratada como clipping interno do SN76489 nem inferida automaticamente apenas pelo ASIC/console; será um perfil de circuito explícito, com curva medida e estado serializável. A discussão SMS Power é COMMUNITY_DOC e não substitui medição: https://www.smspower.org/forums/17121-HelpSoundDifferenceInMasterSystemVDPRevisions;
 - o FIR/resampler atual do core é filtro de saída digital, não um modelo elétrico completo da placa; não duplicar filtros nem adicionar decay/RC sem evidência de impacto e parâmetros medidos.
 
 O PSG é integrado ao VDP/ASIC SMS e ao mapa real de I/O. A escrita de porta deve produzir efeito no instante de conclusão da transação de barramento, não no instante em que Python ou o dispositivo de áudio solicitar uma amostra.
