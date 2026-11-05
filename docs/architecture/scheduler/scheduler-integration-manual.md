@@ -75,6 +75,8 @@ A fila rejeita eventos retroativos e regressões causais. Eventos simultâneos s
 
 ## 7. Granularidade e eficiência
 
+A integração temporal detalhada é prioritária para sequências de gameplay cuja ordem/duração afete a interação entre CPU, barramento, mapper, VDP/raster, áudio, IRQ/DMA ou periféricos. Operações sem estado intermediário observável permanecem atômicas: executam corretamente na fronteira definida e retornam sua duração nominal, sem microestados artificiais. O Scheduler coordena apenas os domínios e eventos necessários a essas interações; não exige que todo dispositivo seja scheduler-driven.
+
 O Scheduler não precisa emitir um evento para cada tick mestre se nenhum componente precisar observar aquele tick. Pode-se avançar em spans até o próximo evento/fronteira, desde que:
 - o estado final seja idêntico ao avanço detalhado;
 - todos os eventos internos produzidos sejam preservados;
