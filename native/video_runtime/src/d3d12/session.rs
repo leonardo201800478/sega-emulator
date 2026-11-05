@@ -62,7 +62,10 @@ impl fmt::Display for D3d12SessionError {
                 write!(formatter, "D3D12 frame presentation failed: {error}")
             }
             Self::DeviceLost(error) => {
-                write!(formatter, "D3D12 device loss detected; recovery is pending: {error}")
+                write!(
+                    formatter,
+                    "D3D12 device loss detected; recovery is pending: {error}"
+                )
             }
             Self::WorkerPanicked => write!(formatter, "D3D12 presentation worker panicked"),
             Self::WindowClosed => write!(formatter, "native D3D12 presentation window was closed"),
