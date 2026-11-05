@@ -59,10 +59,9 @@ use windows::Win32::UI::HiDpi::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, DestroyWindow,
-    DispatchMessageW, IsIconic, IsWindow, MSG, PM_REMOVE, PeekMessageW, RegisterClassW,
-    SW_SHOW, SWP_NOACTIVATE, SWP_NOZORDER, SetWindowPos, ShowWindow, TranslateMessage,
-    WINDOW_EX_STYLE, WINDOW_STYLE, WM_DESTROY, WM_DPICHANGED, WM_NCCREATE, WNDCLASSW,
-    WS_OVERLAPPEDWINDOW,
+    DispatchMessageW, IsIconic, IsWindow, MSG, PM_REMOVE, PeekMessageW, RegisterClassW, SW_SHOW,
+    SWP_NOACTIVATE, SWP_NOZORDER, SetWindowPos, ShowWindow, TranslateMessage, WINDOW_EX_STYLE,
+    WINDOW_STYLE, WM_DESTROY, WM_DPICHANGED, WM_NCCREATE, WNDCLASSW, WS_OVERLAPPEDWINDOW,
 };
 use windows::core::{Error, Interface, Result, w};
 
