@@ -82,7 +82,7 @@ impl MachineInstant {
         fractional_denominator: u128,
     ) -> Result<Self, ClockError> {
         if fractional_denominator == 0 {
-            return Err(ClockError::ZeroInstantDenominator);
+            return Err(ClockError::ZeroRationalDenominator);
         }
         let carry = fractional_numerator / fractional_denominator;
         let remainder = fractional_numerator % fractional_denominator;
@@ -259,7 +259,7 @@ impl MachineDuration {
         fractional_denominator: u128,
     ) -> Result<Self, ClockError> {
         if fractional_denominator == 0 {
-            return Err(ClockError::ZeroInstantDenominator);
+            return Err(ClockError::ZeroRationalDenominator);
         }
         let carry = fractional_numerator / fractional_denominator;
         let remainder = fractional_numerator % fractional_denominator;
@@ -477,7 +477,7 @@ pub enum ClockError {
     /// Stored clock history is inconsistent with its exact rational ratio.
     InvalidClockHistory,
     /// An exact machine instant cannot have a zero fractional denominator.
-    ZeroInstantDenominator,
+    ZeroRationalDenominator,
 }
 
 impl fmt::Display for ClockError {
@@ -490,8 +490,8 @@ impl fmt::Display for ClockError {
             Self::PhaseOutOfRange => write!(f, "clock phase must be smaller than its denominator"),
             Self::ZeroEdgeIndex => write!(f, "local clock edge index must be positive"),
             Self::InvalidClockHistory => write!(f, "clock-domain history is inconsistent"),
-            Self::ZeroInstantDenominator => {
-                write!(f, "machine instant denominator must be positive")
+            Self::ZeroRationalDenominator => {
+                write!(f, "rational denominator must be positive")
             }
         }
     }
@@ -1180,7 +1180,7 @@ mod tests {
     fn machine_instant_rejects_unrepresentable_denominators_and_tick_overflow() {
         assert_eq!(
             super::MachineInstant::from_parts(MachineTime::ZERO, 0, 0),
-            Err(ClockError::ZeroInstantDenominator)
+            Err(ClockError::ZeroRationalDenominator)
         );
         assert_eq!(
             super::MachineInstant::from_parts(MachineTime::from_ticks(u128::MAX), 1, 1),
