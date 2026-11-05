@@ -87,6 +87,7 @@ pub struct SmsVdp {
     light_trigger: bool,
     light_pulse: bool,
     light_h_counter: Option<u8>,
+    h_counter_latch: u8,
     stereo_eye: SmsVdpEye,
     stereo_presentation: StereoPresentation,
     left_frame: Vec<u8>,
@@ -122,6 +123,7 @@ impl SmsVdp {
             light_trigger: false,
             light_pulse: false,
             light_h_counter: None,
+            h_counter_latch: 0,
             stereo_eye: SmsVdpEye::Right,
             stereo_presentation: StereoPresentation::Alternating,
             left_frame: vec![0; FRAME_SIZE],
@@ -280,6 +282,7 @@ impl SmsVdp {
         self.line_irq_pending = false;
         self.light_pulse = false;
         self.light_h_counter = None;
+        self.h_counter_latch = 0;
         self.framebuffer.fill(0);
         self.working_framebuffer.fill(0);
         self.left_frame.fill(0);
@@ -337,10 +340,29 @@ impl SmsVdp {
             _ => line as u8,
         }
     }
-    /// Approximate H-counter outside the click latch; sub-instruction timing is pending.
+    /// Return the last H-counter value captured by a TH transition.
     pub fn read_h_counter(&self) -> u8 {
-        self.light_h_counter
-            .unwrap_or_else(|| ((u64::from(self.tstates_into_line) * 256) / LINE_TSTATES) as u8)
+        self.h_counter_latch
+    }
+
+    /// Capture the current SMS H-counter when a controller TH output changes.
+    pub(crate) fn latch_h_counter(&mut self) {
+        self.h_counter_latch = self.current_h_counter();
+    }
+
+    /// Capture the synthetic Light Phaser position when its TH line becomes active.
+    pub(crate) fn latch_light_h_counter(&mut self) {
+        self.h_counter_latch = self
+            .light_h_counter
+            .unwrap_or_else(|| self.current_h_counter());
+    }
+
+    fn current_h_counter(&self) -> u8 {
+        // MAME's 315-5124 model derives HCounter from the 342-dot line,
+        // with the counter offset by 46 dots and a wrap through $E9-$FF.
+        let hpos = (u64::from(self.tstates_into_line) * 3 / 2) % 342;
+        let hclock = if hpos == 0 { 341 } else { hpos - 1 };
+        ((hclock as i16 - 46) >> 1) as u8
     }
 
     pub fn advance(&mut self, tstates: u64) {
@@ -386,7 +408,8 @@ impl SmsVdp {
             );
             if self.light_trigger && self.light_y == line {
                 self.light_pulse = true;
-                self.light_h_counter = Some(0x08 + (self.light_x / 2) as u8);
+                self.light_h_counter = Some((self.light_x / 2) as u8);
+                self.latch_light_h_counter();
             }
             if self.line_counter == 0 {
                 self.line_irq_pending = true;
@@ -941,12 +964,42 @@ mod tests {
         );
     }
     #[test]
+    fn h_counter_follows_sms_wrapped_horizontal_sequence() {
+        let mut v = SmsVdp::default();
+        v.latch_h_counter();
+        assert_eq!(v.read_h_counter(), 0x93);
+
+        v.advance(32);
+        v.latch_h_counter();
+        assert_eq!(v.read_h_counter(), 0x00);
+
+        v.advance(196);
+        v.latch_h_counter();
+        assert_eq!(v.read_h_counter(), 0x93);
+    }
+
+    #[test]
+    fn h_counter_remains_latched_until_another_th_transition() {
+        let mut v = SmsVdp::default();
+        v.advance(32);
+        v.latch_h_counter();
+        let latched = v.read_h_counter();
+
+        v.advance(20);
+        assert_eq!(v.read_h_counter(), latched);
+
+        v.latch_h_counter();
+        assert_eq!(v.read_h_counter(), 0x0F);
+        assert_ne!(v.read_h_counter(), latched);
+    }
+
+    #[test]
     fn mouse_click_is_qualified_by_raster_line() {
         let mut v = SmsVdp::default();
         v.set_light_phaser_input(120, 45, true);
         v.advance(228 * 46);
         assert!(v.light_pulse_active());
-        assert_eq!(v.read_h_counter(), 0x08 + 60);
+        assert_eq!(v.read_h_counter(), 60);
         v.set_light_phaser_input(120, 45, false);
         assert!(!v.light_pulse_active());
     }
