@@ -11,7 +11,7 @@ use std::fmt;
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::{VideoFrame, VideoFrameSink};
+use crate::VideoFrame;
 
 /// Errors returned by the bounded lossless frame queue.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
