@@ -1787,11 +1787,11 @@ mod tests {
         let mut next_line_reference = setup_midline_write_fixture();
 
         actual.advance(114);
-        reg(&mut actual, 8, 8);
+        reg(&mut actual, 8, 1);
         actual.advance(114);
 
         current_line_reference.advance(228);
-        reg(&mut next_line_reference, 8, 8);
+        reg(&mut next_line_reference, 8, 1);
         next_line_reference.advance(228);
         actual.advance(228);
 
@@ -1814,10 +1814,10 @@ mod tests {
         let mut expected = setup_midline_write_fixture();
 
         actual.advance(3);
-        reg(&mut actual, 8, 8);
+        reg(&mut actual, 8, 1);
         actual.advance(225);
 
-        reg(&mut expected, 8, 8);
+        reg(&mut expected, 8, 1);
         expected.advance(228);
 
         assert_eq!(
