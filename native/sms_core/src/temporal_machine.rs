@@ -2919,3 +2919,30 @@ mod base_immediate_io_temporal_tests {
         assert_eq!(restored.now(), MachineTime::from_ticks(33));
     }
 }
+
+
+#[cfg(test)]
+mod temporal_frame_tests {
+    use super::SmsTemporalMachine;
+
+    #[test]
+    fn step_frame_returns_a_complete_sms1_rgb24_frame() {
+        let mut machine = SmsTemporalMachine::new(vec![0; 0x4000], 1).unwrap();
+
+        let instructions = machine.step_frame(100_000).unwrap();
+
+        assert!(instructions > 0);
+        assert_eq!(machine.frame_number(), 1);
+        assert_eq!(machine.framebuffer().len(), 256 * 192 * 3);
+        assert_eq!(machine.vdp().frame_number(), 1);
+    }
+
+    #[test]
+    fn frame_step_limit_is_reported_without_faking_vdp_progress() {
+        let mut machine = SmsTemporalMachine::new(vec![0; 0x4000], 1).unwrap();
+
+        assert!(machine.step_frame(0).is_err());
+        assert_eq!(machine.frame_number(), 0);
+        assert!(machine.framebuffer().is_empty() == false);
+    }
+}
