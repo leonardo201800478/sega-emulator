@@ -680,7 +680,7 @@ mod bus_contract_tests {
         memory.write(0xFFFF, 3);
         assert_eq!(memory.read(0x8000), 0x5A, "SRAM overrides slot-2 ROM bank");
         memory.write(0xFFFC, 0x00);
-        assert_eq!(memory.read(0x8000), 2, "disabling SRAM restores selected ROM bank");
+        assert_eq!(memory.read(0x8000), 3, "disabling SRAM restores selected ROM bank");
     }
 
     #[test]
