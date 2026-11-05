@@ -203,7 +203,6 @@ impl PartialOrd for MachineInstant {
     }
 }
 
-
 /// A non-negative exact displacement on the machine timeline.
 ///
 /// Unlike MachineInstant, a duration has no absolute origin and can be added
@@ -478,7 +477,6 @@ impl fmt::Display for ClockError {
 }
 
 impl std::error::Error for ClockError {}
-
 /// Snapshot of a clock domain's deterministic conversion state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ClockDomainSnapshot {
@@ -718,7 +716,6 @@ mod tests {
         let ratio = ClockRatio::new(3, 2).unwrap();
         let mut whole = ClockDomain::new(ratio, MachineTime::ZERO);
         let mut chunked = whole.clone();
-
         assert_eq!(whole.advance_to(MachineTime::from_ticks(10)), Ok(15));
         assert_eq!(chunked.advance_to(MachineTime::from_ticks(3)), Ok(4));
         assert_eq!(chunked.advance_to(MachineTime::from_ticks(7)), Ok(6));
@@ -1124,12 +1121,8 @@ mod tests {
     fn machine_duration_fraction_order_and_arithmetic_match_small_integer_oracles() {
         for left_denominator in 1_u128..=12 {
             for left_numerator in 0..left_denominator {
-                let left = super::MachineDuration::from_parts(
-                    0,
-                    left_numerator,
-                    left_denominator,
-                )
-                .unwrap();
+                let left =
+                    super::MachineDuration::from_parts(0, left_numerator, left_denominator).unwrap();
                 for right_denominator in 1_u128..=12 {
                     for right_numerator in 0..right_denominator {
                         let right = super::MachineDuration::from_parts(
@@ -1145,8 +1138,7 @@ mod tests {
                         let sum = left.checked_add(right).unwrap();
                         let expected_sum = super::MachineDuration::from_parts(
                             0,
-                            left_numerator * right_denominator
-                                + right_numerator * left_denominator,
+                            left_numerator * right_denominator + right_numerator * left_denominator,
                             left_denominator * right_denominator,
                         )
                         .unwrap();
