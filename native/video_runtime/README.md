@@ -37,7 +37,7 @@ Run the session smoke test on a Windows x64 machine with a D3D12-capable adapter
 cargo run --release --locked -p sega-video-runtime --example d3d12_session_smoke
 ```
 
-The example presents one synthetic frame and keeps the worker alive until the native window is closed. It is a thread/lifecycle and transfer smoke test, not a real-game or VDP timing test. Resize/DPI handling, minimize/restore, device removed/reset recovery, physical-GPU validation and machine-to-session wiring remain pending. If the window closes or presentation fails with queued frames, the session closes the queue and reports the number of pending frames canceled; it does not report them as presented.
+The example presents one synthetic frame and keeps the worker alive until the native window is closed. It is a thread/lifecycle and transfer smoke test, not a real-game or VDP timing test. Window resize via DXGI stretch, minimize/restore queue preservation, and per-monitor DPI notification handling are implemented in the stacked session PRs. Device removed/reset recovery, physical-GPU/mixed-DPI validation and machine-to-session wiring remain pending. If the window closes or presentation fails with queued frames, the session closes the queue and reports the number of pending frames canceled; it does not report them as presented.
 
 ## Minimize, restore and resize behavior
 
@@ -48,3 +48,7 @@ The swap-chain surface remains at the logical frame dimensions (for SMS, the VDP
 ## Per-monitor DPI behavior
 
 The native HWND is created while the presentation worker temporarily uses `DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2`, falling back to Per-Monitor V1 if V2 is unavailable. The previous thread DPI context is restored immediately after HWND creation; no process-wide DPI mode is changed. The window procedure enables non-client scaling during `WM_NCCREATE` for the Per-Monitor V1 fallback (PMv2 already enables it automatically) and handles `WM_DPICHANGED` by applying Windows' suggested outer-window rectangle through `SetWindowPos(SWP_NOZORDER | SWP_NOACTIVATE)`. The swap-chain's logical frame dimensions remain unchanged and DXGI stretch scaling continues to fit the client area. Mixed-DPI monitor movement and scale changes still require runtime validation on Windows hardware.
+
+## Responsive waits and device-loss reporting
+
+The D3D12 frame-latency and fence waits use finite 16 ms polling rather than an infinite wait. While waiting, the presentation thread pumps Win32 messages and queries `ID3D12Device::GetDeviceRemovedReason`. This prevents a removed adapter from leaving the presentation worker blocked forever on a frame-latency handle and preserves the driver's original HRESULT. The session reports a distinct `DeviceLost` error and counts the in-flight/queued frames that cannot be presented. Automatic device/swap-chain recreation and retry of the interrupted frame remain pending; no Scheduler state is changed or replayed as part of this detection path.
