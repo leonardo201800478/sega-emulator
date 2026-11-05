@@ -1,8 +1,9 @@
 //! Versioned, deterministic binary codec for machine-scheduler state.
 //!
 //! The wire format is explicit and independent of Serde. Every u128 temporal
-//! scalar is encoded as exactly 16 unsigned big-endian bytes. Event payloads
-//! are delegated to a caller-supplied codec and length-prefixed.
+//! scalar is encoded as exactly 16 unsigned big-endian bytes; each rational
+//! event instant stores its whole tick, numerator, and denominator. Event
+//! payloads are delegated to a caller-supplied codec and length-prefixed.
 
 use std::fmt;
 
