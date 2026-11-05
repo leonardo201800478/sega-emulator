@@ -773,17 +773,23 @@ mod tests {
     }
     #[test]
     fn immediate_port_read_samples_h_counter_at_the_io_completion_boundary() {
+        // Toggle TH twice, then read the last latched H-counter value.
+        // LD A,$DD; OUT ($3F),A; LD A,$FD; OUT ($3F),A;
         // LD A,$7F; IN A,($41); LD ($C000),A.
-        let rom = [0x3E, 0x7F, 0xDB, 0x41, 0x32, 0x00, 0xC0];
+        let rom = [
+            0x3E, 0xDD, 0xD3, 0x3F, 0x3E, 0xFD, 0xD3, 0x3F, 0x3E, 0x7F, 0xDB, 0x41, 0x32, 0x00,
+            0xC0,
+        ];
         let mut machine = SmsMachine::new(rom.to_vec()).unwrap();
         machine.vdp_mut().advance(100);
 
-        machine.step().unwrap(); // 7T: load the high port-address byte.
-        machine.step().unwrap(); // 11T: sample H-counter at the I/O boundary.
-        machine.step().unwrap(); // Store the sampled value for the assertion.
+        for _ in 0..7 {
+            machine.step().unwrap();
+        }
 
-        let expected = ((118_u64 * 256) / 228) as u8;
-        assert_eq!(machine.read_memory(0xC000), expected);
+        // The second TH transition completes at T-state 136. The SMS H-counter
+        // model maps that point to $4E; the later IN samples the frozen latch.
+        assert_eq!(machine.read_memory(0xC000), 0x4E);
     }
 
     #[test]
