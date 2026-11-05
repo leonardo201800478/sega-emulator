@@ -20,6 +20,7 @@ def test_active_qt_modules_do_not_import_or_present_video_pixels() -> None:
         root / "src/sega_emulator/frontend/qt/minimal_sms_window.py",
         root / "src/sega_emulator/frontend/qt/main_window.py",
         root / "src/sega_emulator/frontend/qt/video_widget.py",
+        root / "src/sega_emulator/frontend/qt/video_filters.py",
         root / "src/sega_emulator/frontend/qt_frontend.py",
     )
     forbidden = (
@@ -29,6 +30,7 @@ def test_active_qt_modules_do_not_import_or_present_video_pixels() -> None:
         "FramebufferImageProvider",
         "set_framebuffer(",
         "machine.framebuffer",
+        "numpy",
     )
 
     for module in active_modules:
