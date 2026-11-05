@@ -167,7 +167,10 @@ impl D3d12Session {
 
                         if host.is_minimized() {
                             if worker_queue.is_closed()? {
-                                let mut cancelled = if pending_frame.take().is_some() { 1 } else { 0 };
+                                let mut cancelled = match pending_frame.take() {
+                                    Some(_) => 1,
+                                    None => 0,
+                                };
                                 while let Some(_frame) = worker_queue.pop_timeout(Duration::ZERO)? {
                                     cancelled = cancelled.saturating_add(1);
                                 }
