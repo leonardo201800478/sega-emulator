@@ -65,23 +65,28 @@ A auditoria usou os metadados/diffs das PRs, comparação de commits com a main 
 
 ---
 
-## Aditivo de PRs criadas durante a continuidade — 2026-11-05
+## Aditivo de PRs E7.7 — atualização após auditoria dos HEADs (2026-11-05)
 
-A fotografia original acima permanece histórica. Após a auditoria E7 em três frentes, foram abertas três PRs adicionais, todas baseadas na main `1da784f556b9524f5a6f43ce8a7c525e68354f9e`. Nenhuma foi integrada.
+Esta atualização substitui a fotografia operacional anterior das PRs #538–#540, preservando o histórico acima. Nenhuma PR foi mesclada.
 
-| PR | Escopo | HEAD consultado | Estado |
+| PR | HEAD atual consultado | CI / classificação | Estado |
 |---|---|---|---|
-| #538 | Matriz de 48.000 casos para flags ED de I/O em bloco + auditoria NMOS | `4a78a04c0851acef3951f0faa78065a9f36d601b` | Aberta; Rust/Python/PyO3/D3D12/change-impact PASS; Scheduler stress/PowerShell/Qt/lock refresh SKIPPED |
-| #539 | Erratum P/V de LD A,I/R no microsequenciador; sincronização de Q e testes de snapshot | `f3afc000c2805559d83d06b693ed1f2f634cf39b` | Aberta; Rust/Python/PyO3/D3D12/change-impact PASS; Scheduler stress/PowerShell/Qt/lock refresh SKIPPED |
-| #540 | Matriz DD/FD de LD r,r' com IXH/IXL/IYH/IYL e exceções H/L indexed-memory | `6a7fadfc245ac40c44ebfdfaa8fd675ae7123c63` | Aberta; primeira execução falhou apenas em rustfmt, correção publicada; CI reexecutado no HEAD atual |
+| #537 | `c92643f1036ba90a9e780a389067134986423eb9` | Run #42025922287 em andamento após reconciliação documental | OPEN |
+| #538 | `6268d586c84c9e96a4b3edb0ec63479bdfb62ad9` | O código/teste passou no HEAD anterior `4a78a04c0851acef3951f0faa78065a9f36d601b`; o HEAD atual contém apenas remoção da sobreposição no scorecard e ainda não tem CI observado | OPEN; HEAD atual NOT RUN |
+| #539 | `f3afc000c2805559d83d06b693ed1f2f634cf39b` | Run #42014043705: Rust, Python, PyO3 e Windows D3D12 PASS; Scheduler stress, Qt, PowerShell e lock refresh SKIPPED | OPEN |
+| #540 | `6a7fadfc245ac40c44ebfdfaa8fd675ae7123c63` | Run #42015058399: Rust, Python, PyO3 e Windows D3D12 PASS; Scheduler stress, Qt, PowerShell e lock refresh SKIPPED | OPEN |
+| #541 | `5f60c1f4fa0357c05379f5e1d5857ca49f267fbb` | Run #42025639950: Rust (fmt, Clippy, SMS, SG-1000 e workspace), Python, PyO3 e Windows D3D12 PASS; Scheduler stress, Qt, PowerShell e lock refresh SKIPPED | OPEN |
 
-Os SHAs acima vinculam a fotografia desta revisão; consultar novamente o HEAD antes de qualquer merge. Jobs SKIPPED permanecem SKIPPED, nunca PASS. Os scripts locais `project.ps1 audit/locks/validate` continuam NOT RUN nesta sessão.
+### Decisões e limites
 
-### Decisões
+- **#538:** 48.000 combinações determinísticas para os oito opcodes Block I/O. O teste é uma referência matemática independente dos helpers de produção, derivada de pesquisa NMOS; não é oráculo de silício. O CI PASS refere-se ao HEAD anterior indicado, não ao HEAD atual após a remoção da edição concorrente do scorecard.
+- **#539:** correção localizada do latch `p` para o erratum P/V de LD A,I/R no aceite de INT. O CI PASS confirma a suíte no HEAD exato; hardware físico e equivalência CMOS/clones permanecem NOT RUN/NOT VERIFIED.
+- **#540:** 126 casos da família LD r,r' DD/FD. Não cobre ALU, INC/DEC ou todas as famílias DD/FD.
+- **#541:** 10.816 casos ALU por amostragem de 13 valores de A e 13 operandos, e 4.096 casos INC/DEC para todos os bytes/carry. O oráculo ALU/INC/DEC compara com H/L BASE que compartilha helpers; portanto não é validação aritmética independente de silício. A correção de rustfmt foi publicada no HEAD atual e o CI completo aplicável concluiu sucesso.
+- **#537:** a reconciliação documental foi atualizada para centralizar a sobreposição do scorecard com #538. Seu novo CI permanece em andamento.
+- Jobs SKIPPED permanecem SKIPPED, não PASS. Nenhuma validação local foi executada nesta sessão: o ambiente não possui `cargo`, `rustc` nem `pwsh`; os scripts `project.ps1 audit/locks/validate` permanecem NOT RUN.
+- A ausência de Scheduler stress/Qt/PowerShell/lock refresh deve ser mantida explícita. Sua obrigatoriedade precisa ser avaliada por impacto/paths e regras do workflow, não promovida a PASS.
 
-- #538 não altera runtime e caracteriza a semântica NMOS sem declarar CMOS/clones equivalentes.
-- #539 corrige uma divergência funcional concreta entre executor atômico e microsequenciador; aguarda gates completos.
-- #540 amplia somente testes funcionais DD/FD; não altera runtime e não fecha ALU/INC/DEC ou E7.7 global.
-- #533 permanece Draft e não integrada.
-- #527 permanece Draft e não integrada.
-- Nenhuma PR antiga foi rebaseada, fechada ou integrada automaticamente.
+### Estado global
+
+E7.7 continua IN_PROGRESS. E8 permanece BLOCKED. Não há autorização técnica para merge nesta fotografia: #537 ainda está em CI; #538 teve alteração posterior sem CI no HEAD atual; #539–#541 têm CI convencional aplicável PASS, mas as lacunas semânticas globais DD/FD permanecem abertas.
