@@ -19,6 +19,8 @@ use std::sync::Arc;
 pub enum PixelFormat {
     /// 16-bit RGB, little-endian byte order (R5:G6:B5).
     Rgb565Le,
+    /// Three bytes per pixel in red, green, blue order.
+    Rgb888,
     /// Four bytes per pixel in red, green, blue, alpha order.
     Rgba8888,
 }
@@ -28,6 +30,7 @@ impl PixelFormat {
     pub const fn bytes_per_pixel(self) -> usize {
         match self {
             Self::Rgb565Le => 2,
+            Self::Rgb888 => 3,
             Self::Rgba8888 => 4,
         }
     }
@@ -376,6 +379,16 @@ mod tests {
     }
 
     #[test]
+    fn accepts_tightly_packed_rgb888_frame() {
+        let frame =
+            VideoFrame::new(8, 2, 1, PixelFormat::Rgb888, 6, vec![255, 0, 0, 0, 255, 0]).unwrap();
+
+        assert_eq!(frame.sequence(), 8);
+        assert_eq!(frame.row_bytes(), 6);
+        assert_eq!(frame.row(0), Some(&[255, 0, 0, 0, 255, 0][..]));
+    }
+
+    #[test]
     fn row_access_excludes_alignment_padding() {
         let frame = VideoFrame::new(
             3,
@@ -528,6 +541,7 @@ mod tests {
     #[test]
     fn pixel_format_reports_exact_bytes_per_pixel() {
         assert_eq!(PixelFormat::Rgb565Le.bytes_per_pixel(), 2);
+        assert_eq!(PixelFormat::Rgb888.bytes_per_pixel(), 3);
         assert_eq!(PixelFormat::Rgba8888.bytes_per_pixel(), 4);
     }
 }

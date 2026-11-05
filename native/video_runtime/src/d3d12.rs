@@ -726,8 +726,8 @@ impl D3d12Host {
     /// Upload and present one immutable emulator frame.
     ///
     /// The host's swap-chain dimensions must match the frame dimensions.
-    /// RGB565 is expanded to RGBA8888 in the mapped upload buffer; RGBA8888
-    /// rows are copied directly. D3D12's GetCopyableFootprints supplies the
+    /// RGB565 and RGB888 are expanded to RGBA8888 in the mapped upload buffer;
+    /// RGBA8888 rows are copied directly. D3D12's GetCopyableFootprints supplies the
     /// required row pitch, so the source frame stride is never assumed to be
     /// GPU-aligned.
     pub fn present_frame(&mut self, frame: &VideoFrame) -> Result<()> {
@@ -950,6 +950,30 @@ fn convert_frame_row_to_rgba8888(frame: &VideoFrame, y: u32, destination: &mut [
             }
             destination.copy_from_slice(source);
         }
+        PixelFormat::Rgb888 => {
+            let Some(expected_source_len) = (frame.width() as usize).checked_mul(3) else {
+                return false;
+            };
+            if source.len() != expected_source_len {
+                return false;
+            }
+
+            let (source_pixels, []) = source.as_chunks::<3>() else {
+                return false;
+            };
+            let (destination_pixels, []) = destination.as_chunks_mut::<4>() else {
+                return false;
+            };
+
+            for (source_pixel, destination_pixel) in
+                source_pixels.iter().zip(destination_pixels.iter_mut())
+            {
+                destination_pixel[0] = source_pixel[0];
+                destination_pixel[1] = source_pixel[1];
+                destination_pixel[2] = source_pixel[2];
+                destination_pixel[3] = u8::MAX;
+            }
+        }
         PixelFormat::Rgb565Le => {
             let Some(expected_source_len) = (frame.width() as usize).checked_mul(2) else {
                 return false;
@@ -1045,6 +1069,33 @@ mod tests {
 
         assert!(convert_frame_row_to_rgba8888(&frame, 0, &mut output));
         assert_eq!(output, [255, 0, 0, 255]);
+    }
+
+    #[test]
+    fn converts_rgb888_primary_colors_to_rgba8888() {
+        let frame = VideoFrame::new(
+            2,
+            3,
+            1,
+            PixelFormat::Rgb888,
+            9,
+            vec![255, 0, 0, 0, 255, 0, 0, 0, 255],
+        )
+        .unwrap();
+        let mut output = [0; 12];
+
+        assert!(convert_frame_row_to_rgba8888(&frame, 0, &mut output));
+        assert_eq!(output, [255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255]);
+    }
+
+    #[test]
+    fn converts_rgb888_active_row_without_padding() {
+        let frame =
+            VideoFrame::new(3, 1, 1, PixelFormat::Rgb888, 5, vec![12, 34, 56, 90, 91]).unwrap();
+        let mut output = [0; 4];
+
+        assert!(convert_frame_row_to_rgba8888(&frame, 0, &mut output));
+        assert_eq!(output, [12, 34, 56, 255]);
     }
 
     #[test]
