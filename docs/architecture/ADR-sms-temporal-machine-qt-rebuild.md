@@ -64,32 +64,32 @@ Requisitos:
 
 O PSG é integrado ao VDP/ASIC SMS e ao mapa real de I/O. A escrita de porta deve produzir efeito no instante de conclusão da transação de barramento, não no instante em que Python ou o dispositivo de áudio solicitar uma amostra.
 
-### D4 — VDP SMS de alta fidelidade com revisão explícita
+### D4 — VDP SMS em crate compartilhado, por ASIC
 
-Modelar separadamente a identidade do VDP (315-5124 SMS1, 315-5246 SMS2 e revisões adicionais somente com evidência) da região/standard de vídeo. Não inferir a revisão do VDP apenas do nome do console.
+O primeiro alvo funcional é o **SMS1 com ASIC 315-5124**. O SMS2/315-5246 será uma etapa comparativa posterior, não uma segunda implementação paralela nesta fase. A revisão será selecionada por identidade ASIC/perfil explícito; não inferir revisão apenas pelo nome comercial do console. NTSC/PAL é dimensão independente.
 
-**Local arquitetural obrigatório:** o engine de hardware será o crate compartilhado `native/video_core`, pacote Rust `sega-video`, com módulo `sega_video::sms`. Ele não será implementado dentro de `sms_core` e não será colocado em `native/video_runtime`: este último continua sendo o contrato/transportador de frames e a camada host de apresentação. Os tipos `SmsVdpRevision`, `VideoStandard` e `SpriteLimitMode` passam a pertencer ao perfil SMS de `sega-video`; `sms_core::config` poderá reexportá-los para compatibilidade.
+O engine fica no crate compartilhado `native/video_core`, pacote Rust `sega-video`, módulo `sega_video::sms`. O crate pode hospedar outros chips de vídeo em módulos separados, mas SMS VDP e TMS9918A do SG-1000 são chips diferentes: compartilhar o crate/utilitários comprovadamente comuns não autoriza fundir registradores, estado ou pipeline. `native/video_runtime` permanece como contrato/transportador de frames e camada host de apresentação.
 
-O `sms_core/src/vdp.rs` é uma referência funcional scanline-level com máscara R0 bit 5, sprite shift R0 bit 3 e limite de sprites; `vdp_sms1.rs` é uma fundação parcial. Não manter dois VDPs paralelos: consolidar comportamento comprovado numa única implementação compartilhada e evoluí-la temporalmente.
+O `sms_core/src/vdp.rs` é um baseline funcional scanline-level, não um oráculo de hardware; `vdp_sms1.rs` é uma fundação parcial. Não manter dois VDPs SMS paralelos. Consolidar semântica funcional validada no novo engine e manter incógnitas temporais explicitamente bloqueadas.
 
-Requisitos funcionais e temporais:
-- 16 KiB VRAM, CRAM de 32 bytes com formato e máscaras por revisão, 16 registradores e portas espelhadas;
-- protocolo de duas escritas no control port, data port, read-ahead buffer, wrap de endereço, leitura de status e cancelamento de comando parcial;
-- Mode 4 com tilemap 32 colunas, paletas de background/sprites, prioridade por pixel, transparência e scroll horizontal/vertical;
-- compatibilidade com modos TMS9918 herdados quando suportados pelo perfil de máquina;
-- modos de 192 linhas e modos estendidos 224/240 somente nos perfis/revisões que os suportam;
-- tabela de atributos de sprites, 64 sprites, 8 sprites por scanline no perfil com limite físico, overflow e collision flags, prioridade, transparência, tamanho 8x8/8x16, deslocamento horizontal e padrões; `SpriteLimitMode::HardwareLimit` é o padrão, e `UnlockedCompatibility` só pode ser opção explícita de diagnóstico/compatibilidade;
-- diferenças SMS1/SMS2 para DAC/paleta, máscaras de endereço da tabela de atributos e seleção de tile de sprite devem ser parametrizadas por revisão;
-- avaliação de sprites deve respeitar a janela temporal anterior à linha de exibição e o fetch dos dados deve refletir o momento real de leitura, não uma cópia integral da SAT no início do frame;
-- a máscara da coluna esquerda precisa afetar também colisões na região mascarada conforme perfil; o comportamento de fine-scroll nos primeiros pixels deve ter vetor diferencial próprio;
-- R0 bit 7/6 scroll locks, bit 5 left-column blank, bit 4 line IRQ enable, bit 3 sprite shift-left e bits de modo;
-- R1 screen enable, VBlank IRQ, seleção de altura/modo e tamanho de sprite;
-- R7 backdrop/overscan color, R8 horizontal scroll, R9 vertical scroll e R10 line counter;
-- status/IRQ e seus clears conforme leitura de status;
-- H/V counters, TH latch para lightgun, frame/scanline/dot e efeitos de escrita em registradores/VRAM/CRAM no instante em que o barramento conclui a operação;
-- snapshots completos de VRAM, CRAM, registradores, status, latches, fetch pipeline, sprite evaluation, beam/raster, interrupções, framebuffer parcial e eventos pendentes.
+Requisitos funcionais iniciais do 315-5124:
+- VRAM de 16 KiB, CRAM de 32 bytes com valores digitais de 6 bits, portas espelhadas e protocolo de controle/data;
+- command latch de dois bytes, read-ahead buffer, wrap de endereço, leitura/clear de status e cancelamento de comando parcial;
+- Mode 4, modos herdados suportados pelo VDP SMS, scroll, paletas, prioridade por pixel, transparência e backdrop;
+- máscaras de endereço SMS1 documentadas em R2–R6, com assertions separadas e ressalvas para efeitos secundários ainda não testados;
+- 64 entradas SAT e buffer lógico de até oito sprites por linha; overflow baseado em sprites elegíveis, não apenas pixels finalmente desenhados;
+- peculiaridade SMS1 de zoom: zoom vertical aplica-se a todos; zoom horizontal não se aplica aos últimos quatro sprites encontrados na linha;
+- `SpriteLimitMode::HardwareLimit` como padrão; modo sem limite apenas como opção explícita de compatibilidade, sem alterar overflow/status de hardware;
+- máscara R0 bit 5 e sprite shift R0 bit 3 como controles distintos; status bit 6 overflow e bit 5 collision conforme referência PRIMARY_DOC, mantendo a divergência editorial da fonte comunitária registrada;
+- 192 linhas no perfil SMS1. Modos 224/240 são bloqueados no 315-5124 e ficam para o perfil 315-5246 posterior;
+- R8/R9/R10, H/V counters, VBlank/HINT e status com semântica funcional documentada, sem inventar fase ou offset sublinha.
 
-A granularidade temporal será a menor que reproduza os efeitos observáveis: scanline/frame não substituem dot/fetch quando uma escrita raster, scroll latch, sprite evaluation, counter ou IRQ puder ser observada dentro da linha. O engine compartilhado consumirá avanços do Scheduler e manterá pipeline/fase internos; não criar um scheduler independente por VDP. Não simular transistor/pino sem requisito demonstrável.
+Limites temporais obrigatórios:
+- A documentação SMS1 descreve avaliação da SAT durante uma linha para selecionar sprites da linha seguinte, mas não fornece offsets de clock/dot de avaliação, fetch, overflow ou colisão. Modelar a regra funcional; manter fases/fetch slots UNKNOWN.
+- A hipótese MAME de colisão suprimida na coluna esquerda mascarada e o comportamento especial de fine-scroll são itens de investigação diferencial, não requisitos confirmados sem teste independente.
+- H-counter offsets/wrap, fase de reset, R8 intralinha, fronteira exata de R9, fase de HINT/VBlank, fetch slots, arbitragem VRAM/CRAM e prioridade de eventos simultâneos permanecem BLOCKED até evidência SMS1 apropriada.
+- A cadência de acesso de 16 T-states em VBlank e 29 T-states em active video é regra de software documentada; não prova WAIT automático no Z80.
+- Aplicar ADR-0016: granularidade temporal proporcional ao efeito observável. Não criar eventos por dot/pixel nem pipeline interno sem consumidor/teste que demonstre necessidade.
 
 ### D5 — Representação da tela, overscan e coluna esquerda
 
@@ -106,7 +106,11 @@ A divisão exata dos 342 dots horizontais, os offsets do H counter, a cor de cad
 
 ### D6 — Base temporal e clocks
 
-O scheduler é o único proprietário do tempo. A base de `MachineTime` SMS será o ciclo do clock mestre de entrada do VDP. CPU Z80 e PSG usam domínios racionais derivados desse clock (perfil SMS nominal: 1/3); o VDP consome o domínio mestre 1/1 e mantém internamente a fase do divisor de pixel/H-counter. A hipótese de 342 posições horizontais por linha e 228 T-states Z80 por linha implica 684 ciclos mestre por linha; a relação exata do divisor deve ser validada por revisão/standard, sem converter H-count em CPU cycles. A máquina deve declarar domínios de clock explícitos e relações racionais, evitando frequências arredondadas como fonte de deriva. O perfil NTSC de serviço identifica 10.738635 MHz no clock de vídeo e 3.579545 MHz na CPU. A documentação técnica consultada reporta 3.546893 MHz para CPU PAL; o código legado atual contém 3.546895 MHz, divergência de 2 Hz que deve ser investigada e corrigida por evidência antes de reutilização.
+O Scheduler continua sendo a única autoridade temporal. Para SMS1, o manual de serviço registra nominalmente IC5 pino 30 = 10.738635 MHz ±100 Hz e IC5 pino 34 = 3.579545 MHz ±30 Hz; a razão aritmética nominal é 3:1. Essa relação pode ser representada por domínios racionais, mas não determina fase inicial, duty cycle, offsets internos ou amostragem relativa CPU/VDP. Não assumir fase zero.
+
+O perfil NTSC e o perfil PAL devem permanecer separados. A divergência entre 3.546893 MHz e 3.546895 MHz para CPU PAL continua aberta e exige reconciliação documental/medida antes de ser fixada. Não importar para SMS1 os 342 dots/171 H-counts/228 CPU clocks citados para Game Gear; a constante legada de 228 T-states por linha é hipótese de compatibilidade, não fato físico confirmado para o 315-5124.
+
+O VDP recebe avanços do Scheduler em spans/eventos e pode processar blocos até a próxima fronteira observável. O domínio de clock não obriga o dispositivo a executar um evento por dot. A menor granularidade suficiente é escolhida por comportamento documentado/testado, em conformidade com ADR-0016.
 
 A máquina deverá preservar causalidade e equivalência entre:
 - execução contínua;
@@ -115,7 +119,7 @@ A máquina deverá preservar causalidade e equivalência entre:
 - save/restore em safe points;
 - replay determinístico.
 
-O áudio produzido e os frames de vídeo devem carregar timestamps derivados da timeline da máquina. O clock PAL deve ser reconciliado por oscilador/divisor e revisão de placa; a divergência 3.546893/3.546895 MHz continua sendo questão aberta, não bug confirmado.
+O áudio produzido e os frames de vídeo devem carregar timestamps derivados da timeline da máquina. A fase temporal só será adicionada ao estado quando houver evidência e consumidor observável que a exijam.
 
 ### D7 — Contrato PyO3 e novo frontend
 
