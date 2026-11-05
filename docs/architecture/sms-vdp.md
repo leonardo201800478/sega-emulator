@@ -36,7 +36,7 @@ A precisão temporal deve ser priorizada para efeitos de gameplay sensíveis ao 
 
 ## Limites conhecidos
 
-- Efeitos de registrador no meio da scanline e certas fases do H-counter ainda podem ser aproximados.
+- Efeitos de registrador no meio da scanline e certas fases do H-counter ainda podem ser aproximados. A constante legada `LINE_TSTATES = 228` e a fórmula atual de H-counter são aproximações de compatibilidade, não fatos físicos validados para SMS1/315-5124; não usar como oracle temporal.
 - Diferenças específicas entre SMS1/315-5124 e SMS2/315-5246 precisam ser tratadas quando houver evidência e impacto em software.
 - Modos de 224/240 linhas precisam respeitar o perfil de hardware que os suporta.
 - A conversão CRAM é digital; não representa a cadeia analógica completa de vídeo.
