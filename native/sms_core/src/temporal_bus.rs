@@ -13,6 +13,7 @@ use core::fmt;
 
 use crate::{
     CartridgeImage, PsgError, SMS_PSG_CLOCK_DOMAIN_ID, SmsCoreError, SmsIo, SmsMemory, SmsVdp,
+    Territory,
     SmsTemporalCoordinator, SmsTemporalCoordinatorError, SmsTemporalCoordinatorState,
     SmsTemporalEvent,
 };
@@ -221,6 +222,25 @@ impl SmsTemporalBus {
         psg_clock_hz: u64,
         sample_rate: u64,
     ) -> Result<Self, SmsTemporalBusError> {
+        Self::new_with_hardware_profile(
+            rom,
+            master_ticks_per_tstate,
+            psg_clock_hz,
+            sample_rate,
+            SmsVdpProfile::sms1_t0_ntsc(),
+            Territory::Export,
+        )
+    }
+
+    /// Construct the temporal bus with explicit VDP ASIC and territory profiles.
+    pub fn new_with_hardware_profile(
+        rom: impl Into<Vec<u8>>,
+        master_ticks_per_tstate: u64,
+        psg_clock_hz: u64,
+        sample_rate: u64,
+        vdp_profile: SmsVdpProfile,
+        territory: Territory,
+    ) -> Result<Self, SmsTemporalBusError> {
         let cartridge = CartridgeImage::new(rom)?;
         let memory = SmsMemory::new(cartridge)?;
         let coordinator = SmsTemporalCoordinator::new(master_ticks_per_tstate)?;
@@ -232,9 +252,9 @@ impl SmsTemporalBus {
         )?;
         Ok(Self {
             memory,
-            io: SmsIo::default(),
+            io: SmsIo::new(territory),
             psg,
-            vdp: SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc()),
+            vdp: SmsVdp::new_with_profile(vdp_profile),
             port_write_trace: Vec::new(),
             coordinator,
             pending_request: None,
