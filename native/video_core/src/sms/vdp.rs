@@ -378,7 +378,7 @@ impl SmsVdp {
         if line < height {
             let mut render_registers = self.registers;
             render_registers[9] = self.latched_scroll_y;
-            render_scanline(
+            render_scanline_for_revision(
                 &self.vram,
                 &self.cram,
                 &render_registers,
@@ -386,6 +386,7 @@ impl SmsVdp {
                 &mut self.working_framebuffer,
                 usize::from(line),
                 self.profile.sprite_limit == SpriteLimitMode::HardwareLimit,
+                self.profile.revision,
             );
             if self.light_trigger && self.light_y == line {
                 self.light_pulse = true;
@@ -509,6 +510,22 @@ fn tms_quarter(frame: &mut [u8], x: usize, y: usize, color: u8) {
     for dx in 0..4 {
         tms_pixel(frame, x + dx, y, color);
     }
+}
+
+/// SMS1 R5 bit 0 gates address bit 7 across the sprite attribute table.
+fn sms1_sprite_attribute_address(sat_base: usize, offset: usize, register5: u8) -> usize {
+    let address = (sat_base + offset) & 0x3FFF;
+    if register5 & 0x01 == 0 {
+        address & !0x0080
+    } else {
+        address
+    }
+}
+
+/// SMS1 R6 bits 1-0 gate sprite pattern address bits 12-11.
+fn sms1_sprite_pattern_address(address: usize, register6: u8) -> usize {
+    let mask = usize::from(register6 & 0x03) << 11;
+    (address & !0x1800) | (address & mask)
 }
 
 fn render_legacy_scanline(
@@ -692,6 +709,28 @@ fn render_scanline(
     y: usize,
     hardware_sprite_limit: bool,
 ) {
+    render_scanline_for_revision(
+        vram,
+        cram,
+        regs,
+        status,
+        frame,
+        y,
+        hardware_sprite_limit,
+        SmsVdpRevision::Sega3155246,
+    );
+}
+
+fn render_scanline_for_revision(
+    vram: &[u8],
+    cram: &[u8; CRAM_SIZE],
+    regs: &[u8; 16],
+    status: &mut u8,
+    frame: &mut [u8],
+    y: usize,
+    hardware_sprite_limit: bool,
+    revision: SmsVdpRevision,
+) {
     if regs[0] & 0x04 == 0 {
         render_legacy_scanline(vram, regs, status, frame, y, !hardware_sprite_limit);
         return;
@@ -782,7 +821,12 @@ fn render_scanline(
     let zoom = if regs[1] & 0x01 != 0 { 2 } else { 1 };
     let mut active: Vec<(usize, i32, usize, usize)> = Vec::with_capacity(64);
     for index in 0..64 {
-        let raw_y = vram[(sat + index) & 0x3FFF];
+        let y_address = if revision == SmsVdpRevision::Sega3155124 {
+            sms1_sprite_attribute_address(sat, index, regs[5])
+        } else {
+            (sat + index) & 0x3FFF
+        };
+        let raw_y = vram[y_address];
         if raw_y == 0xD0 && height == 192 {
             break;
         }
@@ -794,12 +838,22 @@ fn render_scanline(
         if (y as i32) < sy || (y as i32) >= sy + (sprite_height * zoom) {
             continue;
         }
-        let attr = (sat + 0x80 + index * 2) & 0x3FFF;
-        let mut sx = i32::from(vram[attr]);
+        let x_offset = 0x80 + index * 2;
+        let x_address = if revision == SmsVdpRevision::Sega3155124 {
+            sms1_sprite_attribute_address(sat, x_offset, regs[5])
+        } else {
+            (sat + x_offset) & 0x3FFF
+        };
+        let tile_address = if revision == SmsVdpRevision::Sega3155124 {
+            sms1_sprite_attribute_address(sat, x_offset + 1, regs[5])
+        } else {
+            (sat + x_offset + 1) & 0x3FFF
+        };
+        let mut sx = i32::from(vram[x_address]);
         if regs[0] & 0x08 != 0 {
             sx -= 8;
         }
-        let mut tile = usize::from(vram[(attr + 1) & 0x3FFF]);
+        let mut tile = usize::from(vram[tile_address]);
         if sprite_height == 16 {
             tile &= !1;
         }
@@ -817,14 +871,24 @@ fn render_scanline(
     let mut occupied = [false; SMS_VDP_WIDTH];
     let mut sprite_rgb: [Option<[u8; 3]>; SMS_VDP_WIDTH] = [None; SMS_VDP_WIDTH];
     // Lower sprite index wins visually; all drawn opaque sprite pixels affect collision.
-    for &(_index, sx, tile, row) in active.iter().take(count) {
+    for (rank, &(_index, sx, tile, row)) in active.iter().take(count).enumerate() {
         let tile_row = if sprite_height == 16 && row >= 8 {
             tile + 1
         } else {
             tile
         };
         let py = if sprite_height == 16 { row & 7 } else { row };
-        let p = (sprite_pattern + tile_row * 32 + py * 4) & 0x3FFF;
+        let raw_pattern = (sprite_pattern + tile_row * 32 + py * 4) & 0x3FFF;
+        let p = if revision == SmsVdpRevision::Sega3155124 {
+            sms1_sprite_pattern_address(raw_pattern, regs[6])
+        } else {
+            raw_pattern
+        };
+        let width_scale = if revision == SmsVdpRevision::Sega3155124 && zoom == 2 {
+            if rank < count.saturating_sub(4) { 2 } else { 1 }
+        } else {
+            zoom
+        };
         for px in 0..8 {
             let mut color = 0_u8;
             for plane in 0..4 {
@@ -833,8 +897,8 @@ fn render_scanline(
             if color == 0 {
                 continue;
             }
-            for zx in 0..zoom {
-                let x = sx + (px * zoom + zx);
+            for zx in 0..width_scale {
+                let x = sx + (px * width_scale + zx);
                 if !(0..SMS_VDP_WIDTH as i32).contains(&x) {
                     continue;
                 }
