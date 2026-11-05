@@ -498,6 +498,7 @@ impl Z80 {
             0xD3 => {
                 let port_low = self.fetch8(bus);
                 let port = (u16::from(self.registers.a) << 8) | u16::from(port_low);
+                bus.synchronize_tstates(11);
                 bus.write_port(port, self.registers.a);
                 self.wz = (port & 0xFF00) | (port.wrapping_add(1) & 0x00FF);
                 11
@@ -506,6 +507,7 @@ impl Z80 {
                 let port_low = self.fetch8(bus);
                 let port = (u16::from(self.registers.a) << 8) | u16::from(port_low);
                 self.wz = port.wrapping_add(1);
+                bus.synchronize_tstates(11);
                 self.registers.a = bus.read_port(port);
                 11
             }
@@ -1232,6 +1234,7 @@ impl Z80 {
             op if op & 0xC7 == 0x40 => {
                 let register = (op >> 3) & 7;
                 let port = self.registers.bc();
+                bus.synchronize_tstates(12);
                 let value = bus.read_port(port);
                 if register != 6 {
                     self.write_register(bus, register, value);
@@ -1255,6 +1258,7 @@ impl Z80 {
                 } else {
                     self.read_register(bus, register)
                 };
+                bus.synchronize_tstates(12);
                 bus.write_port(port, value);
                 self.wz = port.wrapping_add(1);
                 12
@@ -1840,6 +1844,7 @@ impl Z80 {
         };
         let old_bc = self.registers.bc();
         let value = if input {
+            bus.synchronize_tstates(12);
             let value = bus.read_port(old_bc);
             bus.write_memory(self.registers.hl(), value);
             value
@@ -1847,6 +1852,7 @@ impl Z80 {
             let value = bus.read_memory(self.registers.hl());
             let output_port =
                 (u16::from(self.registers.b.wrapping_sub(1)) << 8) | u16::from(self.registers.c);
+            bus.synchronize_tstates(15);
             bus.write_port(output_port, value);
             value
         };
