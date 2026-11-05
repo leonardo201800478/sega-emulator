@@ -186,11 +186,7 @@ fn all_ed_block_io_opcodes_match_nmos_flag_equations_at_boundaries() {
                             let new_bc = u16::from_be_bytes([new_b, c]);
                             let repeated = repeat && new_b != 0;
                             let expected_hl = add_direction_u16(hl, direction);
-                            let expected_pc = if repeated {
-                                pc
-                            } else {
-                                pc.wrapping_add(2)
-                            };
+                            let expected_pc = if repeated { pc } else { pc.wrapping_add(2) };
                             let expected_wz = if repeated {
                                 pc.wrapping_add(1)
                             } else if input {
@@ -199,8 +195,7 @@ fn all_ed_block_io_opcodes_match_nmos_flag_equations_at_boundaries() {
                                 add_direction_u16(new_bc, direction)
                             };
                             let expected_tstates = if repeated { 21 } else { 16 };
-                            let expected_f =
-                                reference_flags(opcode, initial_b, c, hl, value, pc);
+                            let expected_f = reference_flags(opcode, initial_b, c, hl, value, pc);
 
                             bus.last_port_read = None;
                             bus.last_port_write = None;
