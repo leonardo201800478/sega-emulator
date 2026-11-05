@@ -6,21 +6,11 @@ const ALU_OPERANDS: [u8; 13] = [
     0x00, 0x01, 0x0F, 0x10, 0x1F, 0x38, 0x55, 0x7F, 0x80, 0x81, 0xAA, 0xFE, 0xFF,
 ];
 
-struct TestBus {
-    memory: Box<[u8]>,
-}
-
-impl Default for TestBus {
-    fn default() -> Self {
-        Self {
-            memory: vec![0; 0x1_0000].into_boxed_slice(),
-        }
-    }
-}
+struct TestBus([u8; 4]);
 
 impl CpuBus for TestBus {
     fn read_memory(&mut self, address: u16) -> u8 {
-        self.memory[usize::from(address)]
+        self.0[usize::from(address)]
     }
 
     fn write_memory(&mut self, address: u16, value: u8) {
@@ -42,8 +32,8 @@ fn execute(
     ix: u16,
     iy: u16,
 ) -> (Z80, u32) {
-    let mut bus = TestBus::default();
-    bus.memory[..program.len()].copy_from_slice(program);
+    let mut bus = TestBus([0; 4]);
+    bus.0[..program.len()].copy_from_slice(program);
 
     let mut cpu = Z80::default();
     cpu.registers.pc = 0;
