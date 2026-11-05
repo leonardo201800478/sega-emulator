@@ -168,14 +168,13 @@ impl VideoFrameMetadata {
         {
             return Err(VideoFrameError::InvalidMaskedRegion);
         }
-        if let Some(raster) = self.raster {
-            if raster.dots_per_line == 0
+        if let Some(raster) = self.raster
+            && (raster.dots_per_line == 0
                 || raster.lines_per_frame == 0
                 || raster.master_ticks_per_dot_numerator == 0
-                || raster.master_ticks_per_dot_denominator == 0
-            {
-                return Err(VideoFrameError::InvalidRasterMetadata);
-            }
+                || raster.master_ticks_per_dot_denominator == 0)
+        {
+            return Err(VideoFrameError::InvalidRasterMetadata);
         }
         Ok(())
     }
@@ -212,7 +211,7 @@ pub enum VideoFrameError {
     InvalidAspectRatio,
     /// A non-zero timestamp has no timebase frequency.
     InvalidTimestamp,
-    /// A masked/presentation region is outside the frame.
+    /// A masked/presentation region is outside the visible frame region.
     InvalidMaskedRegion,
     /// Raster timing contains a zero dimension or clock ratio.
     InvalidRasterMetadata,
@@ -247,7 +246,7 @@ impl fmt::Display for VideoFrameError {
                 "video frame timestamp requires a non-zero timebase"
             ),
             Self::InvalidMaskedRegion => {
-                write!(formatter, "video frame masked region is outside the frame")
+                write!(formatter, "video frame masked region is outside the visible area")
             }
             Self::InvalidRasterMetadata => {
                 write!(formatter, "video frame raster metadata is invalid")
@@ -357,12 +356,12 @@ impl VideoFrame {
         self.sequence
     }
 
-    /// Return the active image width in pixels.
+    /// Return the stored frame width in pixels.
     pub const fn width(&self) -> u32 {
         self.width
     }
 
-    /// Return the active image height in pixels.
+    /// Return the stored frame height in pixels.
     pub const fn height(&self) -> u32 {
         self.height
     }
@@ -377,7 +376,7 @@ impl VideoFrame {
         self.stride_bytes
     }
 
-    /// Return the number of active pixel bytes in one row, excluding padding.
+    /// Return the number of stored pixel bytes in one row, excluding padding.
     pub const fn row_bytes(&self) -> usize {
         self.row_bytes
     }
@@ -392,7 +391,7 @@ impl VideoFrame {
         &self.pixels
     }
 
-    /// Borrow one active pixel row, excluding alignment padding.
+    /// Borrow one stored pixel row, excluding alignment padding.
     pub fn row(&self, y: u32) -> Option<&[u8]> {
         if y >= self.height {
             return None;
