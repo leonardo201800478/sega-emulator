@@ -272,7 +272,13 @@ impl NativeSMSTemporalMachine {
 #[cfg(test)]
 mod tests {
     use super::sms_temporal_region_profile;
-    use sega_sms_core::{SmsVdpRevision, Territory, VideoStandard};
+    use sega_sms_core::{SmsTemporalMachine, SmsVdpRevision, Territory, VideoStandard};
+
+    #[test]
+    fn temporal_machine_is_send_for_a_rust_owned_execution_worker() {
+        fn assert_send<T: Send>() {}
+        assert_send::<SmsTemporalMachine>();
+    }
 
     #[test]
     fn brazil_uses_pal_m_without_changing_the_sms1_asic() {
