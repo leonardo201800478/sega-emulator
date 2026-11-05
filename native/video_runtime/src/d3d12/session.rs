@@ -236,7 +236,8 @@ impl D3d12Session {
 
                             if let Err(error) = host.present_frame(&frame) {
                                 let device_reason = host.device_removed_reason().err();
-                                let classification_reason = device_reason.as_ref().unwrap_or(&error);
+                                let classification_reason =
+                                    device_reason.as_ref().unwrap_or(&error);
 
                                 if is_recoverable_device_loss(classification_reason) {
                                     let initial_reason = device_reason.unwrap_or(error);
@@ -264,11 +265,12 @@ impl D3d12Session {
                                     worker_device_recoveries.fetch_add(1, Ordering::AcqRel);
 
                                     if let Err(retry_error) = host.present_frame(&frame) {
-                                        in_flight_cancelled =
-                                            in_flight_cancelled.saturating_add(1);
+                                        in_flight_cancelled = in_flight_cancelled.saturating_add(1);
                                         let recovery_error = match host.device_removed_reason() {
                                             Err(reason) => {
-                                                format!("retry also lost the D3D12 device: {reason}")
+                                                format!(
+                                                    "retry also lost the D3D12 device: {reason}"
+                                                )
                                             }
                                             Ok(()) => retry_error.to_string(),
                                         };
@@ -278,8 +280,7 @@ impl D3d12Session {
                                         });
                                     }
                                 } else {
-                                    in_flight_cancelled =
-                                        in_flight_cancelled.saturating_add(1);
+                                    in_flight_cancelled = in_flight_cancelled.saturating_add(1);
                                     return Err(match device_reason {
                                         Some(reason) => D3d12SessionError::DeviceLost(reason),
                                         None if is_window_closed_error(&error) => {
