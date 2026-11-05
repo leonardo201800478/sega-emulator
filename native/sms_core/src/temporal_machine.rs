@@ -2,7 +2,8 @@
 //!
 //! This composition uses the resumable Z80 subset, the mapper-backed SMS
 //! memory/I/O adapter, and one machine scheduler. Immediate port transactions
-//! support controller and memory-control effects; VDP/PSG devices remain
+//! support controller and memory-control effects; the shared SMS PSG is
+//! scheduler-driven and commits writes at bus completion. The VDP remains
 //! unconnected (open-bus reads and bounded write diagnostics). NMI is integrated
 //! and INT acknowledge is being added incrementally; DMA and physical WAIT
 //! wiring remain outside this temporal slice.
@@ -2811,6 +2812,29 @@ mod base_immediate_io_temporal_tests {
             }
         );
         assert_eq!(memory_control.bus.memory().control_port(), 0x55);
+    }
+
+    #[test]
+    fn immediate_out_to_psg_commits_at_the_io_boundary_and_restores() {
+        let mut machine = SmsTemporalMachine::new(vec![0xD3, 0x7E], 3).unwrap();
+        machine.cpu_mut().registers.a = 0x85;
+        assert_eq!(
+            machine.step_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xD3,
+                tstates: 11,
+            }
+        );
+        assert_eq!(machine.psg().latched_register(), 0);
+        assert_eq!(machine.psg().tone_periods()[0], 5);
+        assert_eq!(machine.psg().clock_divider_phase(), 11);
+        assert_eq!(machine.now(), MachineTime::from_ticks(33));
+
+        let snapshot = machine.export_state();
+        let restored = SmsTemporalMachine::restore_state(snapshot.clone()).unwrap();
+        assert_eq!(restored.export_state(), snapshot);
+        assert_eq!(restored.psg().tone_periods()[0], 5);
+        assert_eq!(restored.psg().clock_divider_phase(), 11);
     }
 
     #[test]
