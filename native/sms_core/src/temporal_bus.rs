@@ -10,16 +10,17 @@
 use core::fmt;
 
 use crate::{
-    CartridgeImage, PsgError, SMS_PSG_CLOCK_DOMAIN_ID, SmsCoreError, SmsIo, SmsMemory,
+    CartridgeImage, PsgError, SMS_PSG_CLOCK_DOMAIN_ID, SmsCoreError, SmsIo, SmsMemory, SmsVdp,
     SmsTemporalCoordinator, SmsTemporalCoordinatorError, SmsTemporalCoordinatorState,
     SmsTemporalEvent,
 };
 use sega_audio_runtime::{PsgClockError, ScheduledPsg};
+use sega_video::sms::SmsVdpProfile;
 use sega_sn76489::{PsgProfile, Sn76489Core};
 use sega_temporal_core::MachineTime;
 use sega_z80_cpu::{Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES, Z80BusOperation, Z80BusRequest};
 
-pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 8;
+pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 9;
 const DEFAULT_INTERRUPT_VECTOR: u8 = 0xFF;
 const DEFAULT_SMS_PSG_CLOCK_HZ: u64 = 3_579_545;
 const DEFAULT_AUDIO_SAMPLE_RATE: u64 = 44_100;
@@ -102,6 +103,7 @@ pub struct SmsTemporalBusState {
     pub memory: SmsMemory,
     pub io: SmsIo,
     pub psg: ScheduledPsg,
+    pub vdp: SmsVdp,
     pub port_write_trace: Vec<SmsTemporalPortWrite>,
     pub coordinator: SmsTemporalCoordinatorState,
     pub pending_request: Option<Z80BusRequest>,
@@ -181,6 +183,7 @@ pub struct SmsTemporalBus {
     memory: SmsMemory,
     io: SmsIo,
     psg: ScheduledPsg,
+    vdp: SmsVdp,
     port_write_trace: Vec<SmsTemporalPortWrite>,
     coordinator: SmsTemporalCoordinator,
     pending_request: Option<Z80BusRequest>,
@@ -229,6 +232,7 @@ impl SmsTemporalBus {
             memory,
             io: SmsIo::default(),
             psg,
+            vdp: SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc()),
             port_write_trace: Vec::new(),
             coordinator,
             pending_request: None,
@@ -344,6 +348,12 @@ impl SmsTemporalBus {
             .find(|advance| advance.domain == SMS_PSG_CLOCK_DOMAIN_ID)
             .ok_or(SmsTemporalBusError::InvalidState)?;
         self.psg.apply_clock_advance(psg_advance)?;
+        let z80_advance = dispatch
+            .clock_advances
+            .iter()
+            .find(|advance| advance.domain == crate::SMS_Z80_CLOCK_DOMAIN_ID)
+            .ok_or(SmsTemporalBusError::InvalidState)?;
+        self.vdp.advance(z80_advance.elapsed_cycles);
         match dispatch.event.payload {
             SmsTemporalEvent::BusCompletion { request_id } => {
                 let request = self
@@ -510,21 +520,24 @@ impl SmsTemporalBus {
         self.psg.core_mut().drain_samples(max_samples)
     }
 
-    fn read_port(&self, port: u16) -> u8 {
+    fn read_port(&mut self, port: u16) -> u8 {
         match (port as u8) & 0xC1 {
-            0x40 | 0x41 | 0x80 | 0x81 => 0xFF,
+            0x40 => self.vdp.read_v_counter(),
+            0x41 => self.vdp.read_h_counter(),
+            0x80 | 0x81 => self.vdp.read_port(port),
             _ => self.io.read_port(port),
         }
     }
 
     fn write_port(&mut self, port: u16, value: u8, completed_at: MachineTime) {
         let port_byte = port as u8;
-        if (port_byte & 0xC0) == 0x40 {
-            self.psg.write_at_dispatch(value);
-        } else if port_byte <= 0x3F && port_byte & 1 == 0 {
-            self.memory.write_control_port(value);
-        } else {
-            self.io.write_port(port, value);
+        match port_byte & 0xC1 {
+            0x80 | 0x81 => self.vdp.write_port(port, value),
+            _ if (port_byte & 0xC0) == 0x40 => self.psg.write_at_dispatch(value),
+            _ if port_byte <= 0x3F && port_byte & 1 == 0 => {
+                self.memory.write_control_port(value);
+            }
+            _ => self.io.write_port(port, value),
         }
         if self.port_write_trace.len() == MAX_PORT_WRITE_TRACE {
             self.port_write_trace.remove(0);
@@ -541,6 +554,11 @@ impl SmsTemporalBus {
         &self.memory
     }
 
+    /// Read-only access to the SMS1 VDP connected to the temporal bus.
+    pub const fn vdp(&self) -> &SmsVdp {
+        &self.vdp
+    }
+
     /// Export memory, scheduler, and in-flight response state.
     pub fn export_state(&self) -> SmsTemporalBusState {
         SmsTemporalBusState {
@@ -549,6 +567,7 @@ impl SmsTemporalBus {
             memory: self.memory.clone(),
             io: self.io.clone(),
             psg: self.psg.clone(),
+            vdp: self.vdp.clone(),
             port_write_trace: self.port_write_trace.clone(),
             coordinator: self.coordinator.export_state(),
             pending_request: self.pending_request,
@@ -658,6 +677,7 @@ impl SmsTemporalBus {
             memory: state.memory,
             io: state.io,
             psg: state.psg,
+            vdp: state.vdp,
             port_write_trace: state.port_write_trace,
             coordinator,
             pending_request: state.pending_request,
