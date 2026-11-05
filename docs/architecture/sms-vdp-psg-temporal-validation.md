@@ -18,105 +18,105 @@
 
 Uma implementação de outro emulador é evidência comparativa, não prova de hardware. Um teste em Z80 de outro console não é teste de VDP/PSG SMS. Quando duas fontes divergem, preservar a divergência e não escolher silenciosamente.
 
-## 2. VDP — matriz funcional
+## 2. VDP — matriz funcional SMS1/315-5124
 
-| ID | Área | Vetor / cenário | Resultado exigido | Evidência inicial |
+A primeira matriz executável é exclusivamente para SMS1 com ASIC 315-5124. SMS2/315-5246 terá uma matriz comparativa posterior. As expectativas funcionais abaixo não fixam timestamps, fase, fetch slot ou prioridade sublinha.
+
+| ID | Área | Vetor / cenário | Resultado funcional exigido | Evidência / limite |
 |---|---|---|---|---|
-| VDP-F01 | Portas | Data/control ports em todos os espelhos de endereço | Decodificação correta, sem aliases inventados | DOC |
-| VDP-F02 | Control word | Primeira escrita pendente, segunda escrita seleciona VRAM read/write, CRAM ou registrador | Estado parcial correto; operação aplicada somente no segundo byte | DOC + TEST |
-| VDP-F03 | Read-ahead | Selecionar VRAM read, ler sequência, atravessar $3FFF | Primeiro byte vem do buffer; prefetch e wrap corretos | DOC + TEST |
-| VDP-F04 | Status | Ler status com VBlank/overflow/collision/line IRQ pendentes | Retorno dos bits e clear/latches conforme perfil | DOC + TEST |
-| VDP-F05 | VRAM | Escrita/leitura nos limites e espelhamentos de tabela | 16 KiB e máscaras por revisão | DOC + TEST |
-| VDP-F06 | CRAM | Valores 0x00..0xFF em cada entrada | Máscara de bits e conversão de cor por perfil | DOC + TEST |
-| VDP-F07 | R0 bit 5 | Background e sprites desenhados na coluna x=0..7 | Pixels da coluna esquerda mascarados com backdrop quando bit=1; x>=8 inalterado | DOC + TEST |
-| VDP-F08 | R0 bit 3 | Sprite em X=0 e X=1, com bit=0/1 | Deslocamento de sprite -8 px reproduzido; independente do bit 5 | DOC + TEST |
-| VDP-F09 | R0 bits 5+3 | Combinar máscara e sprite shift | Sem deslocamento duplicado, sem faixa extra; entrada/saída de sprites correta | DOC + TEST |
-| VDP-F10 | R7 | Alterar backdrop e sprite palette entries | Cor da área mascarada/backdrop correta; não confundir com cor de background palette | DOC + TEST |
-| VDP-F11 | R0 bit 6 | Scroll horizontal em linhas 0–15 e 16+ | Scroll fixo nas linhas superiores quando habilitado | DOC + TEST |
-| VDP-F12 | R0 bit 7 | Scroll vertical nas colunas 24–31 e demais | Colunas fixas conforme regra do registrador | DOC + TEST |
-| VDP-F13 | R8 | Todos os valores 0..255 | Fine scroll, coarse column, wrap e pixels de borda corretos | DOC + TEST |
-| VDP-F14 | R9 | Todos os valores 0..255 e escrita durante frame | Vertical scroll, latch e momento de aplicação corretos | DOC + TEST |
-| VDP-F15 | R10 | Contagem zero, underflow, reload e escrita em período ativo | Line IRQ no ponto correto e clear correto | DOC + TEST |
-| VDP-F16 | Background | Tiles, duas paletas, flip H/V, prioridade e transparência | Pixel final correto por coordenada | DOC + TEST |
-| VDP-F17 | Sprites | 64 entradas, terminador, 8x8/8x16, padrões, flips e prioridade | Avaliação e composição por scanline conforme hardware | DOC + TEST |
-| VDP-F18 | Overflow | 9+ sprites em linha, incluindo sprites transparentes/fora da área útil | Overflow de acordo com a avaliação da tabela, não só pixels visíveis | RE + HW |
-| VDP-F19 | Collision | Sprites opacos sobrepostos; pixels transparentes; x=0 mascarado | Collision flag conforme lógica de sprite, sem falsos positivos | RE + HW |
-| VDP-F20 | VBlank | Última linha ativa, primeira linha de VBlank, leitura de status | Flag, IRQ e frame-ready no timestamp correto | DOC + TEST |
-| VDP-F21 | Altura | 192/224/240 por revisão e standard | Apenas combinações suportadas; tabelas e endereços de name table corretos | DOC + TEST |
-| VDP-F22 | SMS1 masks | Máscaras dos registradores de tabela em 315-5124 | Endereços VRAM e aliases refletem gates físicos do SMS1 | DOC + TEST |
-| VDP-F23 | SMS2 masks | Comparar 315-5246 | Não aplicar máscaras exclusivas de SMS1 ao SMS2 | DOC + TEST |
-| VDP-F24 | V/H counters | Cada linha e posição horizontal; wrap regional | Valor de contador e wrap conforme standard/revisão | DOC + RE + HW |
-| VDP-F25 | TH/H counter | Capturar H counter em transições TH de ambos os ports | Latch no instante da transição, leitura estável até nova transição | DOC + HW |
-| VDP-F26 | Raster write | Escritas de R0/R1/R7/R8/R9, VRAM e CRAM antes/depois de boundaries | Pixels e efeitos seguintes refletem o instante de commit real | RE + HW |
-| VDP-F27 | Reset | Reset com preservação/limpeza de VRAM conforme tipo de reset | Registradores, latches, status e memória no estado definido para cada reset | DOC + TEST |
-| VDP-F28 | Save state | Snapshot durante linha ativa, sprite evaluation e VBlank | Restore bit-a-bit e continuidade idêntica | TEST |
-| VDP-F29 | DAC/paleta | Todos os 64 valores CRAM em 315-5124 e 315-5246 | Tabela de saída RGB por revisão; SMS1 deve testar nível azul não linear; SMS2 possui níveis distintos | RE + DIFF + HW |
-| VDP-F30 | Raster/overscan | Capturar bordas, blanking, sync e active window por linha | Geometria/offsets e cor de cada segmento correspondem à revisão e standard | DOC + DIFF + HW |
-| VDP-F31 | Sprite evaluation | SAT alterada antes/durante/depois da janela de avaliação | Seleção para linha seguinte e fetch de atributos/padrões refletem o instante real de leitura | RE + DIFF + HW |
-| VDP-F32 | Collision + left mask | Dois sprites opacos sobrepostos em x=0..7 com R0 bit 5 em 0/1 | Colisão suprimida na coluna mascarada conforme revisão; fora dela permanece | RE + DIFF + HW |
-| VDP-F33 | SMS1/SMS2 sprite address | Variar R5/R6 e SAT em 315-5124/315-5246 | Extra offset e seleção de tile obedecem máscaras específicas de cada ASIC | RE + DIFF + HW |
-| VDP-F34 | Sprite zoom | 8x8/8x16 com zoom e 9+ sprites na mesma linha | Limites de avaliação/zoom e overflow seguem perfil do ASIC | RE + DIFF + HW |
-| VDP-F35 | Fine-scroll left edge | R8 com valores 1..7 e padrões específicos na coluna anterior | Primeiros pixels reproduzem o fetch/quirk observado, sem preencher cegamente com backdrop | RE + DIFF + HW |
-| VDP-F36 | Sprite limit option | HardwareLimit e UnlockedCompatibility | HardwareLimit é default; modo sem limite só altera compatibilidade explicitamente | TEST |
-| VDP-F37 | Frame geometry | 192/224/240 e NTSC/PAL com overscan | Frame transporta active_rect, visible_rect, aspecto e timestamp; viewport não altera raster | TEST |
+| VDP-F01 | Portas | Data/control ports nos espelhos documentados | Decodificação correta dos espelhos, sem aliases inventados | DOC |
+| VDP-F02 | Control word | Primeiro byte pendente; segundo byte em separado | Palavra de controle decodifica code/address; ação ocorre no segundo byte | DOC + TEST |
+| VDP-F03 | Read-ahead | Programar VRAM read, ler sequência e atravessar $3FFF | Buffer retorna byte anterior, prefetch e wrap corretos | DOC + TEST |
+| VDP-F04 | Status | Flags VBlank/overflow/collision pendentes; ler $BF duas vezes | Primeira leitura retorna e limpa flags definidas; segunda não repete flags reconhecidas | PRIMARY_DOC + TEST; collision bit 5/overflow bit 6 é baseline documental, hardware oracle pendente |
+| VDP-F05 | VRAM | Acessar limites e endereços com máscaras R2–R6 | 16 KiB e gates de endereço documentados do 315-5124 | DOC + PROPERTY |
+| VDP-F06 | CRAM | Escrever valores 0x00..0xFF em índices conhecidos | 32 bytes; apenas seis bits digitais de cor são armazenados; alias de endereço correto | DOC + TEST; não valida DAC analógico |
+| VDP-F07 | R0 bit 5 | Padrões de background/sprite nos primeiros 8 pixels ativos | Coluna esquerda é substituída por backdrop quando habilitada | DOC + TEST |
+| VDP-F08 | R0 bit 3 | Sprite em X=0/1 com bit 3 em 0/1 | Deslocamento horizontal de sprites de -8 pixels; independente da máscara bit 5 | DOC + TEST |
+| VDP-F09 | R0 bits 5+3 | Combinar máscara e sprite shift | Efeitos permanecem independentes; sem deslocamento duplicado | TEST |
+| VDP-F10 | R7 | Alterar backdrop e sprite palette entries | Backdrop/área mascarada usa a cor definida por R7 conforme o modo | DOC + TEST |
+| VDP-F11 | R0 bit 6 | Scroll horizontal nas primeiras 16 linhas e restante | Horizontal scroll lock nas linhas superiores conforme o registrador | DOC + TEST |
+| VDP-F12 | R0 bit 7 | Scroll vertical nas colunas 24–31 e demais | Vertical scroll lock nas colunas da direita conforme o registrador | DOC + TEST |
+| VDP-F13 | R8 | Valores 0..255 em testes funcionais por linha | Fine/coarse scroll, wrap e coordenadas funcionais corretas | DOC + TEST; aplicação intralinha UNKNOWN |
+| VDP-F14 | R9 | Valores 0..255 e alterações antes/durante área efetiva | Semântica de scroll vertical e condição funcional descrita no manual | PRIMARY_DOC + TEST; fronteira exata UNKNOWN |
+| VDP-F15 | R10 | Down-counter com valores conhecidos | Contagem/reload funcional do line counter e habilitação H-Line IRQ | PRIMARY_DOC + TEST; fase de assert UNKNOWN |
+| VDP-F16 | Background | Tiles, paletas, flips, prioridade, transparência e scroll | Pixel funcional correto para estado estático de linha | DOC + TEST |
+| VDP-F17 | Sprites | 64 SAT entries, buffer de até 8 por linha, 8x8/8x16, prioridade | Seleção/composição funcional segundo elegibilidade SAT | DOC + TEST |
+| VDP-F18 | Overflow | 7/8/9+ sprites elegíveis; incluir transparentes e X fora da área útil | Overflow reflete sprites adicionais elegíveis, não só pixels desenhados | COMMUNITY_DOC + TEST; fase UNKNOWN |
+| VDP-F19 | Collision | Pixels opacos sobrepostos; repetir com transparência | Collision somente quando pixels opacos de sprites se sobrepõem | DOC + TEST; primeira posição/clock UNKNOWN |
+| VDP-F20 | VBlank | Status antes/depois da transição funcional para VBlank | Flag e clear por leitura corretos; não fixar timestamp de linha sem oracle | DOC + STATE_TRANSITION |
+| VDP-F21 | Altura | Perfil 315-5124 | Somente modo de 192 linhas no primeiro perfil; 224/240 não habilitados | DOC + TEST |
+| VDP-F22 | SMS1 masks | Variar individualmente R2–R6 | Geração de endereços segue gates AND documentados do 315-5124 | COMMUNITY_DOC + TEST; efeitos secundários não testados permanecem fora |
+| VDP-F23 | SMS2 | 315-5246 | Fora do primeiro gate; implementar depois em perfil/testes independentes | BLOCKED / FUTURE |
+| VDP-F24 | V-counter | Sequências de 192 linhas NTSC/PAL | Valores funcionais apenas quando sustentados por tabela SMS1 específica | COMMUNITY_DOC; PARTIAL |
+| VDP-F25 | H-counter/TH | Ler $7E/$7F e variar TH | Contrato/offset/latch SMS1 ainda UNKNOWN; não fixar valores | BLOCKED até T0 hardware/oracle |
+| VDP-F26 | Raster writes | R0/R1/R7/R8/R9, VRAM e CRAM durante active display | Sem expectativa de pixel/timestamp até evidência independente | BLOCKED |
+| VDP-F27 | Reset | Power-on/reset funcional com memória/latches conhecidos | Estado inicial definido por perfil e teste; não assumir fase de clock | DOC + TEST; fase UNKNOWN |
+| VDP-F28 | Save state | Snapshot em estado funcional estável e depois em linha ativa quando suportado | Restore reproduz exatamente o estado serializado e a execução subsequente | TEST; não prova fidelidade temporal |
+| VDP-F29 | CRAM/DAC | Todos os 64 códigos de cor digitais | CRAM digital correto; conversão RGB comparativa não é hardware PASS | DOC + TEST; colorimetria física UNKNOWN |
+| VDP-F30 | Overscan/raster geometry | Capturas e retângulos por perfil | Não publicar offsets/áreas de borda como hardware sem fonte/medição SMS1 | BLOCKED até evidência |
+| VDP-F31 | Sprite evaluation | 7/8/9/10 sprites elegíveis, SAT de 64 entradas | Avaliação durante uma linha seleciona sprites da linha seguinte; overflow conta elegíveis | COMMUNITY_DOC + TEST; fase UNKNOWN |
+| VDP-F32 | Collision + left mask | Colisão opaca em x=0..7 com R0 bit 5 em 0/1 | Hipótese MAME de supressão de colisão na coluna mascarada permanece investigativa | BLOCKED até hardware/oracle |
+| VDP-F33 | SMS1 zoom | Grupos de 2/4/6/8 sprites com padrões assimétricos | Zoom vertical aplica-se a todos; zoom horizontal não se aplica aos últimos quatro sprites encontrados | COMMUNITY_DOC + TEST |
+| VDP-F34 | Fine-scroll left edge | R8=1..7 e padrões de borda | Comportamento de primeiros pixels é hipótese diferencial; não fixar sem vetor SMS1 independente | BLOCKED / RESEARCH |
+| VDP-F35 | Sprite limit option | HardwareLimit e UnlockedCompatibility | HardwareLimit é padrão; modo sem limite altera apenas política de desenho, não overflow/status | TEST |
+| VDP-F36 | Frame metadata | Frame com active/visible rect, aspect ratio, timestamp e masked regions | Metadados são validados e não alteram pixels/estado de hardware | TEST; geometria SMS específica só com perfil validado |
 
 ### 2.1 Overscan, blanking e origem do viewport
 
-A matriz deve distinguir três coordenadas, sem sobrepor semânticas:
-
-- **Dot/raster coordinate:** posição do feixe no total da linha.
+A matriz distingue:
 - **Active-area coordinate:** coordenada 0..255 da imagem ativa do VDP.
-- **Presentation coordinate:** coordenada após crop/escala/proporção do frontend.
+- **Raster coordinate:** posição do feixe/contador, somente quando o perfil tiver evidência.
+- **Presentation coordinate:** coordenada após crop, escala e proporção do frontend.
 
-A documentação independente consultada descreve uma linha de 342 dots, com 256 dots de área ativa e segmentos de borda, blanking, sync e color burst. A própria fonte alerta que parte dessa descrição deriva de manual TMS9918 e medições em Genesis, podendo divergir do SMS real. Portanto:
-- 342 dots é hipótese inicial de modelo a verificar por revisão;
-- intervalos exatos de borda/blanking/sync e cor não podem ser considerados HW-PASS sem medição SMS ou fonte primária específica;
-- a saída ativa de 256 pixels é separada dos pixels de borda;
-- o raster completo pode ser exposto para diagnóstico quando a codificação de cada segmento estiver sustentada por evidência.
+Para o SMS1/315-5124, a geometria completa de overscan, offsets de borda e número de posições horizontais ainda não está fixada pela evidência T0. Não importar 342 dots/171 H-counts/228 CPU clocks da documentação Game Gear. Também não promover 228 T-states/linha do renderer legado a fato físico.
 
 **Regra visual da coluna esquerda:**
-- R0 bit 5 substitui os primeiros 8 pixels da área ativa pela cor de backdrop/overscan;
-- R0 bit 3 desloca os sprites 8 pixels à esquerda;
-- os dois bits têm efeitos independentes e podem coexistir;
-- a opção de cortar esses 8 pixels é uma transformação do viewport, nunca uma alteração do framebuffer bruto, do VDP ou do save state;
-- capturas de referência e testes sempre guardam a imagem bruta e metadados (active rect, overscan rect, revisão, altura, standard, R0/R7).
+- R0 bit 5 substitui os primeiros 8 pixels da área ativa pela cor de backdrop;
+- R0 bit 3 desloca sprites 8 pixels à esquerda;
+- os dois bits são independentes;
+- o crop é uma transformação do viewport, nunca alteração do framebuffer bruto, VDP ou save state;
+- Auto só corta quando a região está mascarada em toda a altura ativa;
+- Full 284/Full 320 permanecem presets candidatos; só podem ser habilitados quando o perfil fornecer retângulos de viewport sustentados por fonte/medição SMS1.
 
 ### 2.2 Comparação independente e limites das referências
 
-A auditoria comparativa inicial encontrou:
-
-- **MAME** mantém dispositivos separados para 315-5124 e 315-5246, descreve segmentos horizontais/verticais de raster e tabelas de timing por standard/altura. A implementação declara explicitamente que *mid-scanline changes* e restrições de acesso VRAM/CRAM ainda são TODO; portanto, não será tratada como referência completa para esses fenômenos. O código comparativo também seleciona sprites para a linha seguinte, lê atributos/padrões em momentos distintos e documenta que a máscara da coluna zero suprime colisões nessa região.
-- O MAME usa tabelas RGB diferentes por revisão: no 315-5124, níveis `{0,78,160,238}` e canal azul `{0,98,160,238}`; no 315-5246, níveis `{0,89,174,255}`. O renderer legado do projeto usa escala linear `0,85,170,255`, logo não é uma referência de saída RGB por revisão. Os valores MAME são evidência comparativa a confirmar por medições/fonte primária.
-- **Gearsystem** separa overscan de *Hide Left Bar* e oferece comportamento `Auto` condicionado ao left-column masking. Isso é uma boa referência de UX: o novo Qt adotará `Não/Auto/Sempre`, com `Auto` como padrão, sem modificar o raster bruto.
-- A documentação de Charles MacDonald descreve a coluna 0 mascarada com R7 e o deslocamento de sprites por R0 bit 3 como controles distintos. O teste precisa cobrir cada bit isolado e ambos juntos. O MAME diferencia ainda a máscara do extra offset da SAT e da seleção de tile entre 315-5124 e 315-5246. Seu modelo de fine-scroll nos primeiros pixels usa dados específicos do padrão/tile anterior; isso é hipótese diferencial a confirmar, não verdade de silício sem teste SMS.
+- **MAME** é EMULATOR_SOURCE, não oráculo físico. A implementação separa 315-5124/315-5246 e serve para gerar hipóteses sobre sprite evaluation, máscaras, DAC e raster. Não promove offsets/fases desconhecidos a fatos.
+- O código MAME sugere supressão de colisões na coluna zero mascarada e descreve comportamento especial dos primeiros pixels em fine-scroll. Ambos permanecem hipóteses diferenciais até teste SMS1 independente.
+- As tabelas RGB MAME (315-5124 e 315-5246) são comparação de software; a colorimetria física do DAC SMS1 permanece UNKNOWN.
+- **Gearsystem** separa overscan de Hide Left Bar e oferece Auto condicionado ao left-column masking. É referência de UX, não fonte de geometria/timing SMS1.
+- SMS Power VDP Registers, Sprites, Control Port e SMS Official Docs são fontes documentais com classes/proveniência registradas no T0/T0.1. A discrepância editorial dos bits de collision deve continuar isolada.
 
 Fontes comparativas:
 - MAME VDP: https://github.com/mamedev/mame/blob/master/src/devices/video/315_5124.cpp
 - Gearsystem Video: https://github.com/drhelius/Gearsystem/blob/master/src/Video.cpp
-- Gearsystem VDP reference: https://github.com/drhelius/Gearsystem/blob/master/skills/gearsystem-debugging/references/msvdp.md
+- SMS Power VDP Registers: https://www.smspower.org/Development/VDPRegisters
+- SMS Power Sprites: https://www.smspower.org/Development/Sprites
+- SMS Official Docs: https://www.smspower.org/Development/SMSOfficialDocs
 
-## 3. VDP — matriz temporal
+## 3. VDP — matriz temporal e bloqueios T0
 
-| ID | Evento | Critério temporal |
+A regra T0.1 é obrigatória: todo teste que dependa de posição horizontal, fase, fetch slot, WAIT ou desempate simultâneo permanece BLOCKED sem evidência apropriada. Determinismo não comprova fidelidade temporal.
+
+| ID | Evento | Estado / critério |
 |---|---|---|
-| VDP-T01 | Clock de dot e scanline | Domínio racional e fase preservada em avanço contínuo ou fracionado |
-| VDP-T02 | Linha completa | Próxima linha inicia no timestamp esperado; nenhum drift acumulado |
-| VDP-T03 | Avaliação de sprites | SAT é lida/avaliada no intervalo documentado; escritas durante avaliação testadas |
-| VDP-T04 | Fetch de tile/pattern/CRAM | Mudanças de VRAM/CRAM após o fetch não reescrevem pixels já emitidos |
-| VDP-T05 | Scroll latches | R8/R9 são amostrados no ponto efetivo, inclusive mudanças dentro de frame |
-| VDP-T06 | R0/R1 e screen enable | Mudanças afetam o raster no boundary observado; não retroagem pixels emitidos |
-| VDP-T07 | Line IRQ | Underflow e assert no instante exato, com prioridade determinística |
-| VDP-T08 | VBlank IRQ | Assert na fronteira de início de VBlank, sincronizada com o beam |
-| VDP-T09 | Status read | Leitura limpa apenas flags especificadas e no timestamp de commit |
-| VDP-T10 | H counter | Valor derivado do domínio de dots; latch TH não é sintetizado pelo frontend |
-| VDP-T11 | CPU/VDP bus | Escritas e leituras de portas ordenadas por timestamp e prioridade de hardware |
-| VDP-T12 | Save/restore | Preserva beam, fase de dot, fetches pendentes, avaliação de sprite e eventos agendados |
-| VDP-T13 | Determinismo | Execução em blocos N, N+1 e contínua produz mesmo raster/IRQ/trace |
-| VDP-T14 | Contenção/WAIT | Implementar somente quando evidência demonstrar bloqueio de barramento/CPU; WAIT de fixture não é WAIT físico |
-| VDP-T15 | Master clock | Avanços de master ticks fracionados em relação a CPU T-state | VDP preserva fase interna do divisor de pixel/H-counter e não arredonda por scanline | MODEL + TEST |
-| VDP-T16 | Sprite evaluation pipeline | Avaliação da linha N para exibição em N+1 e fetches posteriores | Escritas concorrentes em SAT/VRAM produzem efeitos no boundary correto | RE + DIFF + HW |
-| VDP-T17 | Mid-dot I/O write | Escrita CPU em posições alternadas de fase VDP | Pixels já emitidos não mudam; fetches futuros observam o commit conforme pipeline | RE + HW |
-| VDP-T18 | IRQ/beam ordering | HINT/VINT no mesmo timestamp de acesso I/O | Ordem de eventos e prioridade são estáveis e reproduzíveis | MODEL + TEST |
+| VDP-T01 | Clock nominal | SMS1 service manual: 10.738635 MHz VDP e 3.579545 MHz CPU, razão nominal 3:1; fase inicial/duty/offset UNKNOWN |
+| VDP-T02 | Linha/frame | Contagem e fronteiras NTSC/PAL SMS1 ainda PARTIAL; não usar 228 T-states/linha do legado como oracle |
+| VDP-T03 | V-counter 192 | Sequências regionais SMS1 precisam de vetor independente; manter PARTIAL até confirmação |
+| VDP-T04 | H-counter/TH latch | UNKNOWN; offsets, wrap e instante de latch BLOCKED |
+| VDP-T05 | HBlank/active display | UNKNOWN em fase precisa; não inferir de descrição aproximada |
+| VDP-T06 | R8 intralinha | BLOCKED até captura/oracle que determine a primeira posição afetada |
+| VDP-T07 | R9 latch | Semântica funcional documentada; fronteira exata UNKNOWN |
+| VDP-T08 | R10/HINT | Down-counter e função documentados; fase de assert/reload e amostragem Z80 UNKNOWN |
+| VDP-T09 | Sprite evaluation | Regra funcional de seleção para linha seguinte documentada; offsets de SAT read/buffer close UNKNOWN |
+| VDP-T10 | Pattern/VRAM/CRAM fetch | Fetch slots e prioridade de write simultâneo UNKNOWN |
+| VDP-T11 | VRAM access cadence | 16 T-states em VBlank/29 em active video é cadência documentada de software; não prova WAIT automático |
+| VDP-T12 | IRQ/CPU sample | Fase de INT e amostragem Z80 UNKNOWN; tie-break simultâneo BLOCKED |
+| VDP-T13 | Save/restore | Preservar estado temporal que esteja efetivamente implementado; não serializar fases hipotéticas |
+| VDP-T14 | Determinismo | Avanços contínuos/particionados equivalentes produzem mesmo estado/eventos; não prova hardware timing |
+| VDP-T15 | Dot/pixel pipeline | Não é requisito universal; só implementar se uma dependência observável e evidência justificarem a granularidade |
+| VDP-T16 | WAIT/contention | BLOCKED até trace de barramento provar qual transação recebe stall |
+| VDP-T17 | Sprite collision first pixel | BLOCKED; condição funcional documentada, instante de assert UNKNOWN |
+| VDP-T18 | Midline writes | BLOCKED até teste SMS1 que determine primeira posição/pixel afetado |
 
 ## 4. PSG — matriz funcional
 
@@ -159,13 +159,14 @@ Fontes comparativas:
 
 | Perfil | Fonte inicial | Frequência | Estado |
 |---|---|---:|---|
-| NTSC VDP/master | Manual de serviço SMS | 10.738635 MHz nominal | DOC; preservar precisão/racional |
-| NTSC CPU/PSG input | Manual de serviço SMS | 3.579545 MHz nominal | DOC |
-| PAL CPU/PSG input | Manual/guia de serviço consultado | 3.546893 MHz | DOC; investigar contra cada placa/revisão |
-| PAL VDP/master | Manual SMS II/placas PAL | 10.640684 MHz nominal | DOC; confirmar placa e divisor |
+| SMS1 NTSC VDP/IC5 pino 30 | Manual de serviço SMS | 10.738635 MHz ±100 Hz | PRIMARY_DOC nominal; fase UNKNOWN |
+| SMS1 NTSC CPU/PSG/IC5 pino 34 | Manual de serviço SMS | 3.579545 MHz ±30 Hz | PRIMARY_DOC nominal |
+| Relação VDP:CPU/PSG | Valores nominais do manual | 3:1 aritmética | DOC; não determina fase |
+| SMS1 PAL CPU/PSG | Fontes de serviço/comunitárias | 3.546893 MHz reportado | PARTIAL; reconciliar placa/revisão |
+| SMS1 PAL VDP | Fontes de serviço/comunitárias | 10.640684 MHz reportado | PARTIAL; confirmar placa/divisor |
 | PAL-M | Perfil regional | Não assumir equivalência completa a PAL nem NTSC | BLOCKED até matriz de placas/fontes |
 
-O código antigo em `SmsVdp::system_clock_hz()` informa `3_546_895` para PAL; o manual/guia de serviço consultado informa aproximadamente `3_546_893` e a documentação de placas MAME registra `3.54689 MHz`. O VDP PAL aparece como aproximadamente `10.6406`/`10.640684 MHz` em fontes distintas. Não classificar automaticamente a constante antiga como bug: reconciliar placa, revisão do ASIC, oscilador e divisores. O perfil deve usar razão racional/oscillator/divider quando a fonte sustentar esse nível de exatidão.
+A constante legada 3_546_895 Hz e o valor reportado 3_546_893 Hz diferem em 2 Hz; não classificar automaticamente como bug. Reconciliar placa, revisão, oscilador e divisor. Não importar clocks/contadores de Game Gear. Nenhum clock nominal fixa fase inicial, H-counter offset, fetch slot ou prioridade de evento.
 
 ## 7. Integração e determinismo — gate sistêmico
 
@@ -188,18 +189,18 @@ O código antigo em `SmsVdp::system_clock_hz()` informa `3_546_895` para PAL; o 
 
 ## 8. Apresentação Qt — validação do viewport
 
-O engine compartilhado `sega-video` produz pixels e geometria de hardware; `sega-video-runtime` transporta frames e não implementa o VDP. O frame deve carregar active/visible rect, proporção, raster geometry e timestamp/timebase. A Qt só escolhe o viewport.
+O engine compartilhado sega-video produz pixels e metadados; sega-video-runtime transporta frames e não implementa o VDP. O frame pode transportar active_rect, visible_rect, proporção, timestamp/timebase, regiões mascaradas e raster metadata quando conhecido. Metadados de raster desconhecido devem permanecer ausentes, não preenchidos por constantes de outro console.
 
 | ID | Opção | Critério |
 |---|---|---|
-| UI-V01 | Left bar = Não | Preserva os 256 pixels ativos, inclusive a coluna mascarada |
-| UI-V02 | Left bar = Auto (padrão) | Corta 8 px somente se todos os scanlines ativos tiverem R0 bit 5 aplicado e overscan completo não estiver selecionado |
+| UI-V01 | Left bar = Não | Preserva os pixels ativos, inclusive a coluna mascarada |
+| UI-V02 | Left bar = Auto (padrão) | Corta 8 px somente se todos os scanlines ativos tiverem R0 bit 5 aplicado e o viewport não estiver exibindo overscan completo |
 | UI-V03 | Left bar = Sempre | Corta 8 px independentemente de R0 bit 5, apenas na apresentação |
-| UI-V04 | Overscan = Desativado | Mostra apenas a área ativa |
-| UI-V05 | Overscan = Superior/Inferior | Mostra bordas verticais e preserva largura ativa |
-| UI-V06 | Overscan = Completo 284 | Mostra área ativa + bordas laterais visíveis conforme geometria do perfil |
-| UI-V07 | Overscan = Completo 320 | Preset de compatibilidade, offsets provenientes dos metadados do frame |
-| UI-V08 | Raw capture | Exporta pixels brutos + active/visible rect, revisão, standard, R0/R7 e timestamp |
+| UI-V04 | Overscan = Desativado | Mostra apenas active_rect |
+| UI-V05 | Overscan = Superior/Inferior | Só habilitar quando retângulo vertical do perfil estiver validado |
+| UI-V06 | Overscan = Full 284 | Preset candidato; habilitar somente quando retângulo 284 for sustentado para o ASIC/standard |
+| UI-V07 | Overscan = Full 320 | Preset candidato; habilitar somente quando retângulo 320 for sustentado para o ASIC/standard |
+| UI-V08 | Raw capture | Exporta pixels brutos + active/visible rect, perfil ASIC/standard e timestamp |
 | UI-V09 | Proporção | Crop, escala e aspect ratio não alteram pixels, registradores ou timeline |
 
 ## 9. Gate de classificação
