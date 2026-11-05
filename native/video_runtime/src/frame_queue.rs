@@ -226,22 +226,6 @@ impl FrameQueue {
     }
 }
 
-impl VideoFrameSink for FrameQueue {
-    fn submit(&self, frame: VideoFrame) -> Result<(), crate::FrameMailboxError> {
-        self.push(frame).map_err(|error| match error {
-            FrameQueueError::NonMonotonicSequence { last, incoming } => {
-                crate::FrameMailboxError::NonMonotonicSequence { last, incoming }
-            }
-            FrameQueueError::Closed => crate::FrameMailboxError::Closed,
-            FrameQueueError::SynchronizationPoisoned => {
-                crate::FrameMailboxError::SynchronizationPoisoned
-            }
-            FrameQueueError::ZeroCapacity | FrameQueueError::TimeoutOverflow => {
-                crate::FrameMailboxError::SynchronizationPoisoned
-            }
-        })
-    }
-}
 
 #[cfg(test)]
 mod tests {
