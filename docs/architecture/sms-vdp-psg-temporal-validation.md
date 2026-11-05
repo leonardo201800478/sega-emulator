@@ -52,6 +52,13 @@ Uma implementação de outro emulador é evidência comparativa, não prova de h
 | VDP-F28 | Save state | Snapshot durante linha ativa, sprite evaluation e VBlank | Restore bit-a-bit e continuidade idêntica | TEST |
 | VDP-F29 | DAC/paleta | Todos os 64 valores CRAM em 315-5124 e 315-5246 | Tabela de saída RGB por revisão; SMS1 deve testar nível azul não linear; SMS2 possui níveis distintos | RE + DIFF + HW |
 | VDP-F30 | Raster/overscan | Capturar bordas, blanking, sync e active window por linha | Geometria/offsets e cor de cada segmento correspondem à revisão e standard | DOC + DIFF + HW |
+| VDP-F31 | Sprite evaluation | SAT alterada antes/durante/depois da janela de avaliação | Seleção para linha seguinte e fetch de atributos/padrões refletem o instante real de leitura | RE + DIFF + HW |
+| VDP-F32 | Collision + left mask | Dois sprites opacos sobrepostos em x=0..7 com R0 bit 5 em 0/1 | Colisão suprimida na coluna mascarada conforme revisão; fora dela permanece | RE + DIFF + HW |
+| VDP-F33 | SMS1/SMS2 sprite address | Variar R5/R6 e SAT em 315-5124/315-5246 | Extra offset e seleção de tile obedecem máscaras específicas de cada ASIC | RE + DIFF + HW |
+| VDP-F34 | Sprite zoom | 8x8/8x16 com zoom e 9+ sprites na mesma linha | Limites de avaliação/zoom e overflow seguem perfil do ASIC | RE + DIFF + HW |
+| VDP-F35 | Fine-scroll left edge | R8 com valores 1..7 e padrões específicos na coluna anterior | Primeiros pixels reproduzem o fetch/quirk observado, sem preencher cegamente com backdrop | RE + DIFF + HW |
+| VDP-F36 | Sprite limit option | HardwareLimit e UnlockedCompatibility | HardwareLimit é default; modo sem limite só altera compatibilidade explicitamente | TEST |
+| VDP-F37 | Frame geometry | 192/224/240 e NTSC/PAL com overscan | Frame transporta active_rect, visible_rect, aspecto e timestamp; viewport não altera raster | TEST |
 
 ### 2.1 Overscan, blanking e origem do viewport
 
@@ -78,10 +85,10 @@ A documentação independente consultada descreve uma linha de 342 dots, com 256
 
 A auditoria comparativa inicial encontrou:
 
-- **MAME** mantém dispositivos separados para 315-5124 e 315-5246, descreve segmentos horizontais/verticais de raster e tabelas de timing por standard/altura. A implementação declara explicitamente que *mid-scanline changes* e restrições de acesso VRAM/CRAM ainda são TODO; portanto, não será tratada como referência completa para esses fenômenos.
+- **MAME** mantém dispositivos separados para 315-5124 e 315-5246, descreve segmentos horizontais/verticais de raster e tabelas de timing por standard/altura. A implementação declara explicitamente que *mid-scanline changes* e restrições de acesso VRAM/CRAM ainda são TODO; portanto, não será tratada como referência completa para esses fenômenos. O código comparativo também seleciona sprites para a linha seguinte, lê atributos/padrões em momentos distintos e documenta que a máscara da coluna zero suprime colisões nessa região.
 - O MAME usa tabelas RGB diferentes por revisão: no 315-5124, níveis `{0,78,160,238}` e canal azul `{0,98,160,238}`; no 315-5246, níveis `{0,89,174,255}`. O renderer legado do projeto usa escala linear `0,85,170,255`, logo não é uma referência de saída RGB por revisão. Os valores MAME são evidência comparativa a confirmar por medições/fonte primária.
 - **Gearsystem** separa overscan de *Hide Left Bar* e oferece comportamento `Auto` condicionado ao left-column masking. Isso é uma boa referência de UX: o novo Qt adotará `Não/Auto/Sempre`, com `Auto` como padrão, sem modificar o raster bruto.
-- A documentação de Charles MacDonald descreve a coluna 0 mascarada com R7 e o deslocamento de sprites por R0 bit 3 como controles distintos. O teste precisa cobrir cada bit isolado e ambos juntos.
+- A documentação de Charles MacDonald descreve a coluna 0 mascarada com R7 e o deslocamento de sprites por R0 bit 3 como controles distintos. O teste precisa cobrir cada bit isolado e ambos juntos. O MAME diferencia ainda a máscara do extra offset da SAT e da seleção de tile entre 315-5124 e 315-5246. Seu modelo de fine-scroll nos primeiros pixels usa dados específicos do padrão/tile anterior; isso é hipótese diferencial a confirmar, não verdade de silício sem teste SMS.
 
 Fontes comparativas:
 - MAME VDP: https://github.com/mamedev/mame/blob/master/src/devices/video/315_5124.cpp
@@ -106,6 +113,10 @@ Fontes comparativas:
 | VDP-T12 | Save/restore | Preserva beam, fase de dot, fetches pendentes, avaliação de sprite e eventos agendados |
 | VDP-T13 | Determinismo | Execução em blocos N, N+1 e contínua produz mesmo raster/IRQ/trace |
 | VDP-T14 | Contenção/WAIT | Implementar somente quando evidência demonstrar bloqueio de barramento/CPU; WAIT de fixture não é WAIT físico |
+| VDP-T15 | Master clock | Avanços de master ticks fracionados em relação a CPU T-state | VDP preserva fase interna do divisor de pixel/H-counter e não arredonda por scanline | MODEL + TEST |
+| VDP-T16 | Sprite evaluation pipeline | Avaliação da linha N para exibição em N+1 e fetches posteriores | Escritas concorrentes em SAT/VRAM produzem efeitos no boundary correto | RE + DIFF + HW |
+| VDP-T17 | Mid-dot I/O write | Escrita CPU em posições alternadas de fase VDP | Pixels já emitidos não mudam; fetches futuros observam o commit conforme pipeline | RE + HW |
+| VDP-T18 | IRQ/beam ordering | HINT/VINT no mesmo timestamp de acesso I/O | Ordem de eventos e prioridade são estáveis e reproduzíveis | MODEL + TEST |
 
 ## 4. PSG — matriz funcional
 
@@ -142,6 +153,7 @@ Fontes comparativas:
 | PSG-T08 | Determinismo | Diferentes tamanhos de avanço geram a mesma sequência de bits e samples |
 | PSG-T09 | Restore | Snapshot inclui fase do divisor, counters, outputs, LFSR, filtro e fase de sample |
 | PSG-T10 | CPU/VDP/PSG | Escritas de CPU, eventos VDP e PSG seguem ordem causal única |
+| PSG-T11 | Shared clock | Clock Z80/PSG derivado do mesmo perfil SMS | Domínios avançam com razão racional e snapshots validam fase/ciclos iguais | MODEL + TEST |
 
 ## 6. Clock profile — itens que precisam de reconciliação
 
@@ -172,8 +184,25 @@ O código antigo em `SmsVdp::system_clock_hz()` informa `3_546_895` para PAL; o 
 | SYS-T11 | Qt | Interface não avança hardware por timer/callback; apenas comandos coarse-grained |
 | SYS-T12 | Cargo isolation | Runtime Legacy não aparece no build padrão nem nas dependências ativadas |
 | SYS-T13 | Python packaging | Nenhum import/entrypoint instala ou inicializa Qt antigo/adaptador SMS antigo |
+| SYS-T14 | FM variant | `FmHardware::Ym2413` habilitado | Não declarar suporte completo sem core YM2413, mixer e timeline próprios | BLOCKED até implementação |
 
-## 8. Apresentação Qt — validação do viewport\n\n| ID | Opção | Critério |\n|---|---|---|\n| UI-V01 | Left bar = Não | Preserva os 256 pixels ativos, inclusive a coluna mascarada |\n| UI-V02 | Left bar = Auto (padrão) | Corta 8 px somente quando R0 bit 5 estiver ativo e overscan completo não estiver selecionado |\n| UI-V03 | Left bar = Sempre | Corta 8 px independentemente de R0 bit 5, apenas na apresentação |\n| UI-V04 | Overscan completo | Mostra bordas/raster disponíveis e desabilita o crop automático |\n| UI-V05 | Raw capture | Exporta frame bruto + active rect/overscan rect e configuração de hardware, sem viewport transform |\n| UI-V06 | Proporção | Crop, escala e aspect ratio não alteram pixels, registradores ou timeline |\n\n## 9. Gate de classificação
+## 8. Apresentação Qt — validação do viewport
+
+O engine compartilhado `sega-video` produz pixels e geometria de hardware; `sega-video-runtime` transporta frames e não implementa o VDP. O frame deve carregar active/visible rect, proporção, raster geometry e timestamp/timebase. A Qt só escolhe o viewport.
+
+| ID | Opção | Critério |
+|---|---|---|
+| UI-V01 | Left bar = Não | Preserva os 256 pixels ativos, inclusive a coluna mascarada |
+| UI-V02 | Left bar = Auto (padrão) | Corta 8 px somente se todos os scanlines ativos tiverem R0 bit 5 aplicado e overscan completo não estiver selecionado |
+| UI-V03 | Left bar = Sempre | Corta 8 px independentemente de R0 bit 5, apenas na apresentação |
+| UI-V04 | Overscan = Desativado | Mostra apenas a área ativa |
+| UI-V05 | Overscan = Superior/Inferior | Mostra bordas verticais e preserva largura ativa |
+| UI-V06 | Overscan = Completo 284 | Mostra área ativa + bordas laterais visíveis conforme geometria do perfil |
+| UI-V07 | Overscan = Completo 320 | Preset de compatibilidade, offsets provenientes dos metadados do frame |
+| UI-V08 | Raw capture | Exporta pixels brutos + active/visible rect, revisão, standard, R0/R7 e timestamp |
+| UI-V09 | Proporção | Crop, escala e aspect ratio não alteram pixels, registradores ou timeline |
+
+## 9. Gate de classificação
 
 Para cada suíte e cenário:
 - **PASS:** executado no SHA declarado, resultado integral aprovado.
