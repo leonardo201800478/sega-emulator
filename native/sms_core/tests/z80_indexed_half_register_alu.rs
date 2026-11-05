@@ -14,7 +14,7 @@ impl CpuBus for TestBus {
     }
 
     fn write_memory(&mut self, address: u16, value: u8) {
-        self.memory[usize::from(address)] = value;
+        self.0[usize::from(address)] = value;
     }
 
     fn read_port(&mut self, _address: u16) -> u8 {
