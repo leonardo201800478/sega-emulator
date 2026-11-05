@@ -142,7 +142,12 @@ impl CpuBus for SmsMachineBus<'_> {
         } else if matches!(port_byte & 0xC1, 0x80 | 0x81) {
             self.vdp.write_port(port, value);
         } else {
+            let th_before = self.io.read_port(0xDD) & 0xC0;
             self.io.write_port(port, value);
+            let th_after = self.io.read_port(0xDD) & 0xC0;
+            if th_before != th_after {
+                self.vdp.latch_h_counter();
+            }
             if (0x40..=0x7F).contains(&port_byte)
                 && let Some(pending) = self.pending_psg_writes.as_mut()
             {
@@ -274,7 +279,12 @@ impl SmsMachine {
             self.psg.write(event.value);
         }
         self.advance_psg_to_tstate(end_tstate);
+        let th_before = self.io.read_port(0xDD) & 0xC0;
         self.io.set_light_pulse(self.vdp.light_pulse_active());
+        let th_after = self.io.read_port(0xDD) & 0xC0;
+        if th_before & !th_after & 0xC0 != 0 {
+            self.vdp.latch_light_h_counter();
+        }
         if self.vdp.interrupt_pending() {
             self.cpu.request_int(0xFF);
         } else {
@@ -779,6 +789,28 @@ mod tests {
 
         let expected = ((118_u64 * 256) / 228) as u8;
         assert_eq!(machine.read_memory(0xC000), expected);
+    }
+
+    #[test]
+    fn io_control_th_transitions_latch_h_counter_at_the_io_boundary() {
+        let mut machine = SmsMachine::new(vec![0; 0x4000]).unwrap();
+        machine.vdp.advance(32);
+
+        {
+            let mut bus = SmsMachineBus::new(
+                &mut machine.memory,
+                &mut machine.io,
+                &mut machine.sega_scope,
+                &mut machine.vdp,
+            );
+            bus.write_port(0x3F, 0xDD);
+            bus.synchronize_tstates(20);
+            bus.write_port(0x3F, 0xFD);
+        }
+
+        assert_eq!(machine.vdp.read_h_counter(), 0x0F);
+        machine.vdp.advance(20);
+        assert_eq!(machine.vdp.read_h_counter(), 0x0F);
     }
 
     #[test]
