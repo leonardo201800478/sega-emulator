@@ -12,8 +12,7 @@ use core::fmt;
 
 use crate::{
     ControllerButtons, SmsTemporalBus, SmsTemporalBusError, SmsTemporalBusState,
-    SmsTemporalDispatch, SmsTemporalM1, SmsTemporalM1Error, SmsTemporalM1State, SmsVdp,
-    Territory,
+    SmsTemporalDispatch, SmsTemporalM1, SmsTemporalM1Error, SmsTemporalM1State, SmsVdp, Territory,
 };
 use sega_sn76489::Sn76489Core;
 use sega_video::sms::SmsVdpProfile;
@@ -233,9 +232,9 @@ impl fmt::Display for SmsTemporalMachineError {
             Self::Cpu(error) => write!(f, "SMS resumable Z80 failed: {error:?}"),
             Self::InvalidState => f.write_str("SMS temporal machine snapshot is inconsistent"),
             Self::NoScheduledEvent => f.write_str("SMS temporal machine has no event to dispatch"),
-            Self::FrameStepLimitReached => {
-                f.write_str("SMS temporal machine did not complete a frame within the instruction limit")
-            }
+            Self::FrameStepLimitReached => f.write_str(
+                "SMS temporal machine did not complete a frame within the instruction limit",
+            ),
             Self::InternalCycleIdExhausted => {
                 f.write_str("SMS internal-cycle continuation ID exhausted")
             }
@@ -2953,7 +2952,6 @@ mod base_immediate_io_temporal_tests {
         assert_eq!(restored.now(), MachineTime::from_ticks(33));
     }
 }
-
 
 #[cfg(test)]
 mod temporal_frame_tests {
