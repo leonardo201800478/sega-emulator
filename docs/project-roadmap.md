@@ -10,10 +10,10 @@
 A prioridade imediata de P1 é fechar uma máquina Master System temporal completa antes de declarar gameplay operacional pelo novo caminho. A decisão aceita em [ADR SMS Temporal + Qt](architecture/ADR-sms-temporal-machine-qt-rebuild.md) substitui a reconstrução incremental da Qt.
 
 Ordem vertical atual:
-1. PSG SN76489 SMS temporal, integrado ao scheduler e ao instante de commit das escritas I/O.
-2. VDP SMS por revisão (315-5124/315-5246), incluindo raster, modos, sprites, IRQ, counters, overscan e coluna esquerda.
-3. Integração Z80 + bus + memória/mapper + VDP + PSG + input + outputs numa única timeline.
-4. Fronteira PyO3 coarse-grained e novo frontend Qt do zero.
+1. PSG SN76489 SMS temporal, integrado ao scheduler e ao instante de commit das escritas I/O, reutilizando `sega-sn76489` e `sega-audio-runtime::ScheduledPsg`.
+2. Criar o crate compartilhado `sega-video` em `native/video_core`; consolidar nele o VDP 315-5124/315-5246, com perfis por revisão, raster, modos, sprites, IRQ, counters, overscan e coluna esquerda. `sega-video-runtime` permanece como frame transport/host renderer.
+3. Integrar Z80 + bus + memória/mapper + VDP + PSG + input + outputs numa única timeline; suportar YM2413 somente em perfis com FM quando o core opcional estiver validado.
+4. Fronteira PyO3 coarse-grained e novo frontend Qt do zero, com metadados de frame para active area, overscan, aspecto e timestamp.
 5. Arquivamento do frontend/adaptador SMS antigo e exclusão do runtime Rust Legacy do build padrão, sem remover componentes compartilhados nem regredir SG-1000.
 
 A matriz de aceite e evidências está em [sms-vdp-psg-temporal-validation.md](architecture/sms-vdp-psg-temporal-validation.md). A implementação só avança de gate com testes executados e classificados individualmente. A interrupção temporária de gameplay pelo runtime SMS antigo foi aceita; isso não reduz o critério final de gameplay temporal funcional.
