@@ -59,6 +59,7 @@ pub struct SmsMachineBus<'a> {
     vdp: &'a mut SmsVdp,
     pending_psg_writes: Option<&'a mut Vec<SmsPsgWriteEvent>>,
     tstate: u64,
+    instruction_tstates_advanced: u32,
 }
 
 impl<'a> SmsMachineBus<'a> {
@@ -75,6 +76,7 @@ impl<'a> SmsMachineBus<'a> {
             vdp,
             pending_psg_writes: None,
             tstate: 0,
+            instruction_tstates_advanced: 0,
         }
     }
 
@@ -93,11 +95,20 @@ impl<'a> SmsMachineBus<'a> {
             vdp,
             pending_psg_writes: Some(pending_psg_writes),
             tstate,
+            instruction_tstates_advanced: 0,
         }
     }
 }
 
 impl CpuBus for SmsMachineBus<'_> {
+    fn synchronize_tstates(&mut self, elapsed_tstates: u32) {
+        debug_assert!(elapsed_tstates >= self.instruction_tstates_advanced);
+        let target = elapsed_tstates.max(self.instruction_tstates_advanced);
+        let delta = target - self.instruction_tstates_advanced;
+        self.vdp.advance(u64::from(delta));
+        self.instruction_tstates_advanced = target;
+    }
+
     fn read_memory(&mut self, address: u16) -> u8 {
         self.memory.read(address)
     }
@@ -136,9 +147,8 @@ impl CpuBus for SmsMachineBus<'_> {
                 && let Some(pending) = self.pending_psg_writes.as_mut()
             {
                 pending.push(SmsPsgWriteEvent {
-                    // Nominal edge for immediate OUT (n),A; full bus-phase
-                    // timing is a separate temporal-accuracy milestone.
-                    tstate: self.tstate.saturating_add(11),
+                    // CPU supplied the instruction-relative I/O boundary.
+                    tstate: self.tstate.saturating_add(u64::from(self.instruction_tstates_advanced)),
                     value,
                 });
             }
@@ -230,7 +240,7 @@ impl SmsMachine {
     /// machine timing.
     pub fn step(&mut self) -> Result<u32, CpuError> {
         let start_tstate = self.cpu.total_tstates;
-        let cycles = {
+        let (cycles, synchronized_tstates) = {
             let mut bus = SmsMachineBus::with_psg_queue(
                 &mut self.memory,
                 &mut self.io,
@@ -239,10 +249,13 @@ impl SmsMachine {
                 &mut self.pending_psg_writes,
                 start_tstate,
             );
-            self.cpu.step(&mut bus)?
+            let cycles = self.cpu.step(&mut bus)?;
+            (cycles, bus.instruction_tstates_advanced)
         };
+        debug_assert!(synchronized_tstates <= cycles);
         let end_tstate = self.cpu.total_tstates;
-        self.vdp.advance(u64::from(cycles));
+        self.vdp
+            .advance(u64::from(cycles.saturating_sub(synchronized_tstates)));
         loop {
             let next = self
                 .pending_psg_writes
@@ -751,4 +764,33 @@ mod tests {
         assert_eq!(machine.read_memory(0xFFF8), 0x01);
         assert_eq!(machine.read_memory(0xDFF8), 0x01);
     }
+    #[test]
+    fn immediate_port_read_samples_h_counter_at_the_io_completion_boundary() {
+        // LD A,$7F; IN A,($41); LD ($C000),A.
+        let rom = [0x3E, 0x7F, 0xDB, 0x41, 0x32, 0x00, 0xC0];
+        let mut machine = SmsMachine::new(rom.to_vec()).unwrap();
+        machine.vdp_mut().advance(100);
+
+        machine.step().unwrap(); // 7T: load the high port-address byte.
+        machine.step().unwrap(); // 11T: sample H-counter at the I/O boundary.
+        machine.step().unwrap(); // Store the sampled value for the assertion.
+
+        let expected = ((118_u64 * 256) / 228) as u8;
+        assert_eq!(machine.read_memory(0xC000), expected);
+    }
+
+    #[test]
+    fn r9_write_is_applied_after_vblank_boundary_inside_out_instruction() {
+        // LD A,$5A; OUT ($BF),A; LD A,$89; OUT ($BF),A writes R9=$5A.
+        let rom = [0x3E, 0x5A, 0xD3, 0xBF, 0x3E, 0x89, 0xD3, 0xBF];
+        let mut machine = SmsMachine::new(rom.to_vec()).unwrap();
+        machine.vdp_mut().advance(191 * 228 + 195);
+
+        for _ in 0..4 {
+            machine.step().unwrap();
+        }
+
+        assert_eq!(machine.vdp().latched_scroll_y_for_test(), 0x5A);
+    }
+
 }
