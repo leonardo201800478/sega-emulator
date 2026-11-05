@@ -1,4 +1,4 @@
-//! Sega Master System VDP profile and device implementation.
+//! Sega Master System VDP profiles and capability contracts; device migration is in progress.
 
 mod profile;
 
