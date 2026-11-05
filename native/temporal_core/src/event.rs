@@ -505,7 +505,7 @@ mod tests {
     #[test]
     fn restore_rejects_duplicate_and_out_of_range_sequences() {
         let event = |sequence| ScheduledEvent {
-            timestamp: super::MachineInstant::from_ticks(4),
+            timestamp: MachineInstant::from_ticks(4),
             hardware_phase: HardwarePhase::new(0),
             priority: PlatformPriority::new(0),
             sequence,
