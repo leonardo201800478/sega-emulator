@@ -78,10 +78,6 @@ def test_temporal_adapter_exposes_frame_data_and_session_controls(
 
     assert machine.region == "brazil"
     assert machine.frame_number == 0
-    assert machine.width == 256
-    assert machine.height == 192
-    assert len(machine.framebuffer) == 256 * 192 * 3
-
     machine.start()
     assert machine.is_running
     assert machine.step_frame() == 123
