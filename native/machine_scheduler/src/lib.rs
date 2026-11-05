@@ -489,7 +489,7 @@ impl<T> MachineScheduler<T> {
         if self
             .events
             .next_timestamp()
-            .is_some_and(|next| next <= target)
+            .is_some_and(|next| next <= MachineInstant::from(target))
         {
             return Err(SchedulerError::EventPendingBeforeTarget);
         }
