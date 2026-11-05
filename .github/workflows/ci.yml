@@ -255,6 +255,8 @@ jobs:
             uv.lock
       - name: Install locked development and Qt dependencies
         run: uv sync --locked --extra dev --extra qt
+      - name: Assert the pinned CPython runtime
+        run: uv run --locked python -c "import sys; assert sys.version_info[:3] == (3, 15, 2), sys.version; print(sys.version)"
       - name: Validate Qt and numerical runtime imports
         env:
           QT_QPA_PLATFORM: offscreen
@@ -265,8 +267,12 @@ jobs:
         run: uv run --locked ruff format --check .
       - name: Ruff lint
         run: uv run --locked ruff check .
-      - name: Python regression suite
-        run: uv run --locked pytest -q
+      - name: Pytest collection diagnostics
+        run: timeout --signal=TERM --kill-after=15s 120s uv run --locked pytest --collect-only -q
+      - name: Python regression suite with per-test diagnostics
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: timeout --signal=TERM --kill-after=30s 12m uv run --locked pytest -vv -ra --durations=30 -o faulthandler_timeout=180
 
       - name: CI supervisor - cancel remaining jobs on failure
         if: failure()
