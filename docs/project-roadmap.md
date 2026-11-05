@@ -11,8 +11,8 @@ A prioridade imediata de P1 é fechar uma máquina Master System temporal comple
 
 Ordem vertical atual:
 1. PSG SN76489 SMS temporal, integrado ao scheduler e ao instante de commit das escritas I/O, reutilizando `sega-sn76489` e `sega-audio-runtime::ScheduledPsg`.
-2. Criar o crate compartilhado `sega-video` em `native/video_core`; consolidar nele o VDP 315-5124/315-5246, com perfis por revisão, raster, modos, sprites, IRQ, counters, overscan e coluna esquerda. `sega-video-runtime` permanece como frame transport/host renderer.
-3. Integrar Z80 + bus + memória/mapper + VDP + PSG + input + outputs numa única timeline; suportar YM2413 somente em perfis com FM quando o core opcional estiver validado.
+2. Criar o crate compartilhado `sega-video` em `native/video_core`; primeiro implementar o perfil SMS1/315-5124 com semântica funcional e testes T0/T0.1. SMS2/315-5246 será perfil comparativo posterior. Não importar 342/171/228 de Game Gear, não fixar fase/fetch/WAIT e não criar pipeline por dot sem evidência. `sega-video-runtime` permanece como frame transport/host renderer.
+3. Integrar Z80 + bus + memória/mapper + VDP + PSG + input + outputs numa única timeline, usando a granularidade temporal proporcional do ADR-0016. Completar a saída de áudio com perfil de circuito/placa separado do PSG digital (incluindo variantes de resistor documentadas) e suportar YM2413 somente em perfis com FM quando o core opcional estiver validado.
 4. Fronteira PyO3 coarse-grained e novo frontend Qt do zero, com metadados de frame para active area, overscan, aspecto e timestamp.
 5. Arquivamento do frontend/adaptador SMS antigo e exclusão do runtime Rust Legacy do build padrão, sem remover componentes compartilhados nem regredir SG-1000.
 
