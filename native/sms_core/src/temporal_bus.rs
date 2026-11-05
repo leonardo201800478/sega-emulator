@@ -1,8 +1,10 @@
 //! Transactional SMS memory/I/O bus adapter for the Scheduler-driven path.
 //!
 //! Memory and port transactions become visible only at their scheduled
-//! completion boundary. Controller/control-port effects and the shared
-//! scheduler-driven PSG are applied there; the VDP remains outside this slice.
+//! completion boundary. Controller/control-port effects, the shared
+//! scheduler-driven PSG, and SMS1 VDP port effects are applied there. The VDP
+//! scanline clock advances from Scheduler-dispatched Z80 cycles; dot/fetch
+//! arbitration and mid-scanline effects remain outside this slice.
 //! Unconnected reads return open bus, port writes are retained in a bounded
 //! diagnostic trace, and INT acknowledge data comes from an explicit external
 //! vector input.
@@ -10,16 +12,18 @@
 use core::fmt;
 
 use crate::{
-    CartridgeImage, PsgError, SMS_PSG_CLOCK_DOMAIN_ID, SmsCoreError, SmsIo, SmsMemory,
+    CartridgeImage, ControllerButtons, PsgError, SMS_PSG_CLOCK_DOMAIN_ID, SmsCoreError, SmsIo,
+    SmsIoError, SmsMemory, SmsVdp, Territory,
     SmsTemporalCoordinator, SmsTemporalCoordinatorError, SmsTemporalCoordinatorState,
     SmsTemporalEvent,
 };
 use sega_audio_runtime::{PsgClockError, ScheduledPsg};
 use sega_sn76489::{PsgProfile, Sn76489Core};
 use sega_temporal_core::MachineTime;
+use sega_video::sms::SmsVdpProfile;
 use sega_z80_cpu::{Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES, Z80BusOperation, Z80BusRequest};
 
-pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 8;
+pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 10;
 const DEFAULT_INTERRUPT_VECTOR: u8 = 0xFF;
 const DEFAULT_SMS_PSG_CLOCK_HZ: u64 = 3_579_545;
 const DEFAULT_AUDIO_SAMPLE_RATE: u64 = 44_100;
@@ -102,6 +106,7 @@ pub struct SmsTemporalBusState {
     pub memory: SmsMemory,
     pub io: SmsIo,
     pub psg: ScheduledPsg,
+    pub vdp: SmsVdp,
     pub port_write_trace: Vec<SmsTemporalPortWrite>,
     pub coordinator: SmsTemporalCoordinatorState,
     pub pending_request: Option<Z80BusRequest>,
@@ -119,6 +124,7 @@ pub enum SmsTemporalBusError {
     Psg(PsgError),
     PsgClock(PsgClockError),
     Coordinator(SmsTemporalCoordinatorError),
+    Io(SmsIoError),
     Busy,
     NoPendingRequest,
     WrongRequestId { expected: u64, received: u64 },
@@ -133,6 +139,7 @@ impl fmt::Display for SmsTemporalBusError {
             Self::Psg(error) => write!(f, "SMS temporal PSG initialization failed: {error}"),
             Self::PsgClock(error) => write!(f, "SMS temporal PSG clock advance failed: {error}"),
             Self::Coordinator(error) => write!(f, "SMS temporal coordinator failed: {error}"),
+            Self::Io(error) => write!(f, "SMS temporal controller input failed: {error}"),
             Self::Busy => {
                 f.write_str("SMS temporal bus already owns an unacknowledged transaction")
             }
@@ -175,12 +182,19 @@ impl From<SmsTemporalCoordinatorError> for SmsTemporalBusError {
     }
 }
 
+impl From<SmsIoError> for SmsTemporalBusError {
+    fn from(error: SmsIoError) -> Self {
+        Self::Io(error)
+    }
+}
+
 /// SMS mapper-backed memory and its scheduler-owned bus completion timeline.
 #[derive(Debug, Clone)]
 pub struct SmsTemporalBus {
     memory: SmsMemory,
     io: SmsIo,
     psg: ScheduledPsg,
+    vdp: SmsVdp,
     port_write_trace: Vec<SmsTemporalPortWrite>,
     coordinator: SmsTemporalCoordinator,
     pending_request: Option<Z80BusRequest>,
@@ -216,6 +230,25 @@ impl SmsTemporalBus {
         psg_clock_hz: u64,
         sample_rate: u64,
     ) -> Result<Self, SmsTemporalBusError> {
+        Self::new_with_hardware_profile(
+            rom,
+            master_ticks_per_tstate,
+            psg_clock_hz,
+            sample_rate,
+            SmsVdpProfile::sms1_t0_ntsc(),
+            Territory::Export,
+        )
+    }
+
+    /// Construct the temporal bus with explicit VDP ASIC and territory profiles.
+    pub fn new_with_hardware_profile(
+        rom: impl Into<Vec<u8>>,
+        master_ticks_per_tstate: u64,
+        psg_clock_hz: u64,
+        sample_rate: u64,
+        vdp_profile: SmsVdpProfile,
+        territory: Territory,
+    ) -> Result<Self, SmsTemporalBusError> {
         let cartridge = CartridgeImage::new(rom)?;
         let memory = SmsMemory::new(cartridge)?;
         let coordinator = SmsTemporalCoordinator::new(master_ticks_per_tstate)?;
@@ -227,8 +260,9 @@ impl SmsTemporalBus {
         )?;
         Ok(Self {
             memory,
-            io: SmsIo::default(),
+            io: SmsIo::new(territory),
             psg,
+            vdp: SmsVdp::new_with_profile(vdp_profile),
             port_write_trace: Vec::new(),
             coordinator,
             pending_request: None,
@@ -344,6 +378,14 @@ impl SmsTemporalBus {
             .find(|advance| advance.domain == SMS_PSG_CLOCK_DOMAIN_ID)
             .ok_or(SmsTemporalBusError::InvalidState)?;
         self.psg.apply_clock_advance(psg_advance)?;
+        let z80_advance = dispatch
+            .clock_advances
+            .iter()
+            .find(|advance| advance.domain == crate::SMS_VDP_CLOCK_DOMAIN_ID)
+            .ok_or(SmsTemporalBusError::InvalidState)?;
+        let vdp_tstates = u64::try_from(z80_advance.elapsed_cycles)
+            .map_err(|_| SmsTemporalBusError::InvalidState)?;
+        self.vdp.advance(vdp_tstates);
         match dispatch.event.payload {
             SmsTemporalEvent::BusCompletion { request_id } => {
                 let request = self
@@ -490,6 +532,16 @@ impl SmsTemporalBus {
         &mut self.io
     }
 
+    /// Update controller levels without advancing scheduler time.
+    pub fn set_controller(
+        &mut self,
+        player: u8,
+        buttons: ControllerButtons,
+    ) -> Result<(), SmsTemporalBusError> {
+        self.io.set_controller(player, buttons)?;
+        Ok(())
+    }
+
     /// Set the byte driven by the external interrupting device during acknowledge.
     /// This changes the input level only; it does not advance scheduler time.
     pub fn set_interrupt_vector(&mut self, vector: u8) {
@@ -510,21 +562,24 @@ impl SmsTemporalBus {
         self.psg.core_mut().drain_samples(max_samples)
     }
 
-    fn read_port(&self, port: u16) -> u8 {
+    fn read_port(&mut self, port: u16) -> u8 {
         match (port as u8) & 0xC1 {
-            0x40 | 0x41 | 0x80 | 0x81 => 0xFF,
+            0x40 => self.vdp.read_v_counter(),
+            0x41 => self.vdp.read_h_counter(),
+            0x80 | 0x81 => self.vdp.read_port(port),
             _ => self.io.read_port(port),
         }
     }
 
     fn write_port(&mut self, port: u16, value: u8, completed_at: MachineTime) {
         let port_byte = port as u8;
-        if (port_byte & 0xC0) == 0x40 {
-            self.psg.write_at_dispatch(value);
-        } else if port_byte <= 0x3F && port_byte & 1 == 0 {
-            self.memory.write_control_port(value);
-        } else {
-            self.io.write_port(port, value);
+        match port_byte & 0xC1 {
+            0x80 | 0x81 => self.vdp.write_port(port, value),
+            _ if (port_byte & 0xC0) == 0x40 => self.psg.write_at_dispatch(value),
+            _ if port_byte <= 0x3F && port_byte & 1 == 0 => {
+                self.memory.write_control_port(value);
+            }
+            _ => self.io.write_port(port, value),
         }
         if self.port_write_trace.len() == MAX_PORT_WRITE_TRACE {
             self.port_write_trace.remove(0);
@@ -541,6 +596,11 @@ impl SmsTemporalBus {
         &self.memory
     }
 
+    /// Read-only access to the SMS1 VDP connected to the temporal bus.
+    pub const fn vdp(&self) -> &SmsVdp {
+        &self.vdp
+    }
+
     /// Export memory, scheduler, and in-flight response state.
     pub fn export_state(&self) -> SmsTemporalBusState {
         SmsTemporalBusState {
@@ -549,6 +609,7 @@ impl SmsTemporalBus {
             memory: self.memory.clone(),
             io: self.io.clone(),
             psg: self.psg.clone(),
+            vdp: self.vdp.clone(),
             port_write_trace: self.port_write_trace.clone(),
             coordinator: self.coordinator.export_state(),
             pending_request: self.pending_request,
@@ -658,6 +719,7 @@ impl SmsTemporalBus {
             memory: state.memory,
             io: state.io,
             psg: state.psg,
+            vdp: state.vdp,
             port_write_trace: state.port_write_trace,
             coordinator,
             pending_request: state.pending_request,
@@ -1155,5 +1217,139 @@ mod immediate_port_transaction_tests {
         assert_eq!(restored.io().io_control(), 0xD5);
         assert_eq!(restored.memory().control_port(), 0x55);
         assert_eq!(restored.port_write_trace(), bus.port_write_trace());
+    }
+}
+
+#[cfg(test)]
+mod temporal_vdp_tests {
+    use super::{SmsTemporalBus, SmsTemporalDispatch};
+    use sega_temporal_core::MachineTime;
+    use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
+
+    fn transact(
+        bus: &mut SmsTemporalBus,
+        id: u64,
+        operation: Z80BusOperation,
+        address: u16,
+    ) -> super::SmsBusCompletion {
+        let request = Z80BusRequest {
+            id,
+            operation,
+            address,
+            base_tstates: 4,
+        };
+        bus.begin_request(request, 0).unwrap();
+        let Some(SmsTemporalDispatch::BusCompletion(completion)) = bus.dispatch_next().unwrap()
+        else {
+            panic!("expected scheduled port transaction");
+        };
+        bus.acknowledge_completion(id).unwrap();
+        completion
+    }
+
+    fn write_vdp_control(bus: &mut SmsTemporalBus, id: u64, value: u8) {
+        transact(bus, id, Z80BusOperation::PortWrite { value }, 0x00BF);
+    }
+
+    #[test]
+    fn vdp_data_write_is_invisible_until_the_scheduled_port_boundary() {
+        let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
+        assert_eq!(bus.vdp().vram()[0], 0);
+
+        // Select VRAM address zero for writing through the two-byte control word.
+        write_vdp_control(&mut bus, 1, 0x00);
+        write_vdp_control(&mut bus, 2, 0x40);
+
+        let request = Z80BusRequest {
+            id: 3,
+            operation: Z80BusOperation::PortWrite { value: 0xA5 },
+            address: 0x00BE,
+            base_tstates: 4,
+        };
+        bus.begin_request(request, 0).unwrap();
+        assert_eq!(bus.vdp().vram()[0], 0);
+
+        let Some(SmsTemporalDispatch::BusCompletion(completion)) =
+            bus.dispatch_next().unwrap()
+        else {
+            panic!("expected VDP data-port write completion");
+        };
+        assert_eq!(completion.completed_at, MachineTime::from_ticks(36));
+        assert_eq!(bus.vdp().vram()[0], 0xA5);
+        bus.acknowledge_completion(3).unwrap();
+    }
+
+    #[test]
+    fn vdp_read_ahead_is_sampled_at_the_scheduled_data_port_boundary() {
+        let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
+        write_vdp_control(&mut bus, 1, 0x00);
+        write_vdp_control(&mut bus, 2, 0x40);
+        transact(
+            &mut bus,
+            3,
+            Z80BusOperation::PortWrite { value: 0x5A },
+            0x00BE,
+        );
+
+        // Select address zero for VRAM read; the control-word completion
+        // preloads the VDP read-ahead buffer.
+        write_vdp_control(&mut bus, 4, 0x00);
+        write_vdp_control(&mut bus, 5, 0x00);
+
+        let request = Z80BusRequest {
+            id: 6,
+            operation: Z80BusOperation::PortRead,
+            address: 0x00BE,
+            base_tstates: 4,
+        };
+        bus.begin_request(request, 0).unwrap();
+        let Some(SmsTemporalDispatch::BusCompletion(completion)) =
+            bus.dispatch_next().unwrap()
+        else {
+            panic!("expected VDP data-port read completion");
+        };
+        assert_eq!(completion.data, Some(0x5A));
+        bus.acknowledge_completion(6).unwrap();
+    }
+
+    #[test]
+    fn vdp_counters_are_read_through_the_sms_mirrored_ports() {
+        let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
+        let v_counter = transact(&mut bus, 1, Z80BusOperation::PortRead, 0x127E);
+        assert_eq!(v_counter.data, Some(0));
+
+        let h_counter = transact(&mut bus, 2, Z80BusOperation::PortRead, 0x127F);
+        assert_eq!(h_counter.data, Some(8));
+    }
+
+    #[test]
+    fn vdp_raster_progress_is_chunk_invariant_and_survives_bus_restore() {
+        const FRAME_TSTATES: u32 = 228 * 262;
+        let mut whole = SmsTemporalBus::new(vec![0; 0x4000], 1).unwrap();
+        let mut chunked = SmsTemporalBus::new(vec![0; 0x4000], 1).unwrap();
+
+        whole.schedule_internal_cycle(1, FRAME_TSTATES).unwrap();
+        assert!(matches!(
+            whole.dispatch_next().unwrap(),
+            Some(SmsTemporalDispatch::InternalCycleComplete(_))
+        ));
+        whole.acknowledge_internal_completion(1).unwrap();
+
+        for (id, tstates) in [(1, FRAME_TSTATES / 2), (2, FRAME_TSTATES / 2)] {
+            chunked.schedule_internal_cycle(id, tstates).unwrap();
+            assert!(matches!(
+                chunked.dispatch_next().unwrap(),
+                Some(SmsTemporalDispatch::InternalCycleComplete(_))
+            ));
+            chunked.acknowledge_internal_completion(id).unwrap();
+        }
+
+        assert_eq!(whole.vdp().frame_number(), 1);
+        assert_eq!(whole.vdp(), chunked.vdp());
+
+        let snapshot = whole.export_state();
+        let restored = SmsTemporalBus::restore_state(snapshot.clone()).unwrap();
+        assert_eq!(restored.export_state(), snapshot);
+        assert_eq!(restored.vdp(), whole.vdp());
     }
 }
