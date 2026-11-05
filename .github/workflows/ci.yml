@@ -375,8 +375,15 @@ jobs:
         run: |
           python -m venv .venv
           .\.venv\Scripts\python.exe -m pip install maturin==1.16.0
+      - name: Format the standalone PyO3 crate
+        working-directory: native/z80_core
+        run: cargo fmt --all -- --check
       - name: Check PyO3 crate against the committed lockfile
         run: cargo check --locked --all-targets --features python-extension --manifest-path native/z80_core/Cargo.toml
+      - name: Clippy the standalone PyO3 crate
+        run: cargo clippy --locked --all-targets --manifest-path native/z80_core/Cargo.toml -- -D warnings
+      - name: Test the standalone PyO3 crate
+        run: cargo test --locked --all-targets --manifest-path native/z80_core/Cargo.toml
       - name: Build native extension with Maturin
         working-directory: native/z80_core
         run: |
