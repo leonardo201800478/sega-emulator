@@ -458,6 +458,7 @@ mod tests {
         }
         assert!(machine.vdp().interrupt_pending(), "VBlank IRQ must assert");
         assert_eq!(machine.vdp().raster_position().line, 192);
+        assert_eq!(machine.vdp().raster_position().tstates, 0);
         assert_eq!(machine.cpu.int_pending, Some(0xFF));
         assert_eq!(machine.step(), Ok(13)); // IM 1 acknowledge.
         assert_eq!(machine.cpu.registers.pc, 0x0038);
@@ -505,6 +506,7 @@ mod tests {
         }
         assert!(machine.vdp().interrupt_pending(), "line IRQ must assert");
         assert_eq!(machine.vdp().raster_position().line, 2);
+        assert_eq!(machine.vdp().raster_position().tstates, 0);
         assert_eq!(machine.cpu.int_pending, Some(0xFF));
         assert_eq!(machine.vdp().status() & 0x80, 0, "not a VBlank source");
         assert_eq!(machine.step(), Ok(13)); // IM 1 acknowledge.
