@@ -398,10 +398,12 @@ mod tests {
         let mut config = SmsMachineConfig::default();
         config.vdp_revision = SmsVdpRevision::Sega3155124;
 
-        let machine =
-            SmsMachine::with_bios_audio(vec![0; 0x4000], None, config, 44_100).unwrap();
+        let machine = SmsMachine::with_bios_audio(vec![0; 0x4000], None, config, 44_100).unwrap();
 
-        assert_eq!(machine.vdp().profile().revision, SmsVdpRevision::Sega3155124);
+        assert_eq!(
+            machine.vdp().profile().revision,
+            SmsVdpRevision::Sega3155124
+        );
     }
 
     #[test]
