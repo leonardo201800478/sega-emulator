@@ -9,11 +9,11 @@
 use core::fmt;
 
 use crate::{
-    CartridgeImage, PsgError, PsgProfile, SmsCoreError, SmsIo, SmsMemory,
-    SmsTemporalCoordinator, SmsTemporalCoordinatorError, SmsTemporalCoordinatorState,
-    SmsTemporalEvent, SMS_PSG_CLOCK_DOMAIN_ID,
+    CartridgeImage, PsgError, SmsCoreError, SmsIo, SmsMemory, SmsTemporalCoordinator,
+    SmsTemporalCoordinatorError, SmsTemporalCoordinatorState, SmsTemporalEvent,
+    SMS_PSG_CLOCK_DOMAIN_ID,
 };
-use sega_sn76489::Sn76489Core;
+use sega_sn76489::{PsgProfile, Sn76489Core};
 use sega_temporal_core::MachineTime;
 use sega_z80_cpu::{Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES, Z80BusOperation, Z80BusRequest};
 
