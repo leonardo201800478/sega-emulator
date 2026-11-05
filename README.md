@@ -70,7 +70,7 @@ py -3.15 -m venv .venv
 .\.venv\Scripts\python.exe -m sega_emulator
 ```
 
-A janela Qt mínima abre sem ROM carregada. Use **Abrir ROM** para selecionar uma ROM e **Iniciar/Pausar** para enviar comandos coarse-grained à sessão. A Qt não executa stepping, não apresenta vídeo nem recebe dados de pixels. O caminho SMS usa `SmsTemporalMachine`; O caminho Qt legado do SG-1000 permanece desativado até o host D3D12 nativo em Rust ser conectado; o núcleo SG-1000 continua preservado e testável.
+A janela Qt mínima abre sem ROM carregada. Use **Abrir ROM** para selecionar uma ROM e **Iniciar/Pausar** para enviar comandos coarse-grained à sessão. O loop contínuo de execução nativo ainda precisa ser conectado. A Qt não executa stepping, não apresenta vídeo nem recebe dados de pixels. O caminho SMS usa `SmsTemporalMachine`; O caminho Qt legado do SG-1000 permanece desativado até o host D3D12 nativo em Rust ser conectado; o núcleo SG-1000 continua preservado e testável.
 
 Para iniciar diretamente uma ROM:
 
