@@ -8,8 +8,8 @@
 use std::fmt;
 
 use sega_temporal_core::{
-    EventQueueState, EventQueueWatermark, HardwarePhase, MachineInstant, MachineTime, PlatformPriority,
-    ScheduledEvent,
+    EventQueueState, EventQueueWatermark, HardwarePhase, MachineInstant, MachineTime,
+    PlatformPriority, ScheduledEvent,
 };
 
 use crate::{ClockDomainId, ClockDomainState, SCHEDULER_STATE_FORMAT_VERSION, SchedulerState};
@@ -69,7 +69,10 @@ impl fmt::Display for SchedulerStateCodecError {
             Self::InvalidOptionTag(tag) => {
                 write!(f, "scheduler-state frame contains invalid option tag {tag}")
             }
-            Self::InvalidTimestamp => write!(f, "scheduler-state frame contains a non-canonical rational timestamp"),
+            Self::InvalidTimestamp => write!(
+                f,
+                "scheduler-state frame contains a non-canonical rational timestamp"
+            ),
             Self::Payload(message) => write!(f, "event payload codec failed: {message}"),
         }
     }
@@ -363,7 +366,7 @@ fn read_watermark(
     reader: &mut Reader<'_>,
 ) -> Result<EventQueueWatermark, SchedulerStateCodecError> {
     Ok(EventQueueWatermark {
-        timestamp: read_instant(reader)?, 
+        timestamp: read_instant(reader)?,
         hardware_phase: HardwarePhase::new(reader.read_u16()?),
         priority: PlatformPriority::new(reader.read_u16()?),
         sequence: reader.read_u64()?,
@@ -476,8 +479,8 @@ mod tests {
         decode_scheduler_state, encode_scheduler_state,
     };
     use sega_temporal_core::{
-        EventQueueState, EventQueueWatermark, HardwarePhase, MachineInstant, MachineTime, PlatformPriority,
-        ScheduledEvent,
+        EventQueueState, EventQueueWatermark, HardwarePhase, MachineInstant, MachineTime,
+        PlatformPriority, ScheduledEvent,
     };
 
     use crate::{
@@ -593,7 +596,13 @@ mod tests {
         assert_eq!(decoded.now.ticks(), u128::MAX);
         assert_eq!(decoded.clock_domains[0].total_cycles, u128::MAX);
         assert_eq!(decoded.clock_domains[0].current_time.ticks(), u128::MAX);
-        assert_eq!(decoded.event_queue.pending[0].timestamp.whole_ticks().ticks(), u128::MAX);
+        assert_eq!(
+            decoded.event_queue.pending[0]
+                .timestamp
+                .whole_ticks()
+                .ticks(),
+            u128::MAX
+        );
     }
 
     #[test]
@@ -657,11 +666,15 @@ mod tests {
         let decoded = decode_scheduler_state(&encoded, &U32PayloadCodec).unwrap();
         assert_eq!(decoded, state);
         assert_eq!(
-            decoded.event_queue.pending[0].timestamp.fractional_numerator(),
+            decoded.event_queue.pending[0]
+                .timestamp
+                .fractional_numerator(),
             1
         );
         assert_eq!(
-            decoded.event_queue.pending[0].timestamp.fractional_denominator(),
+            decoded.event_queue.pending[0]
+                .timestamp
+                .fractional_denominator(),
             3
         );
     }
