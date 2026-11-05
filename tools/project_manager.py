@@ -106,7 +106,11 @@ def run(
                     while output_tail and output_size > output_limit:
                         output_size -= len(output_tail.popleft())
 
-        reader = Thread(target=forward_output, name="project-command-output", daemon=True)
+        reader = Thread(
+            target=forward_output,
+            name="project-command-output",
+            daemon=True,
+        )
         reader.start()
         timed_out = False
         try:
