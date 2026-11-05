@@ -10,7 +10,7 @@ O projeto não busca simulação elétrica integral, reprodução de transistore
 - **CPU:** núcleo Z80 compartilhado em Rust. Correção funcional de instruções, registradores, flags e interrupções é prioritária; detalhamento de ciclos e sinais só é exigido quando uma plataforma depender dele.
 - **Vídeo e áudio:** componentes específicos por console, com sincronização na granularidade necessária aos efeitos observáveis.
 - **Scheduler:** coordena o tempo da máquina e os eventos relevantes; não exige um evento por pino, tick ou pixel.
-- **Qt inicial:** Python/PySide6 apenas para viewport, abertura/fechamento de ROM, controles de sessão e entrada; biblioteca, capas, perfis, abas de diagnóstico e configurações avançadas ficam fora do escopo inicial.
+- **Qt inicial:** Python/PySide6 exclusivamente para comandos de sessão, abertura/fechamento de ROM, entrada e telemetria textual. Não recebe framebuffer, não converte pixels e não renderiza vídeo. A apresentação ficará em um host gráfico nativo separado.
 - **Integração:** PyO3 coarse-grained, sem callbacks Python por instrução.
 - **Precisão elétrica/analógica:** fora do escopo.
 
@@ -38,7 +38,7 @@ A semântica funcional é exata em todas as instruções e operações suportada
 | Camada | Responsabilidade |
 |---|---|
 | Rust | CPUs, ALUs, memória, barramentos, mappers, VDPs, áudio, interrupções, sincronização e Scheduler |
-| Python / PySide6 | Janela mínima, viewport, diálogos de ROM, comandos de sessão e entrada; sem lógica de hardware |
+| Python / PySide6 | Janela de controle, diálogos de ROM, comandos coarse-grained, entrada e status; sem lógica de hardware ou renderização de vídeo |
 | PyO3 | Comandos de alto nível e telemetria; sem callbacks por instrução |
 
 Componentes são compartilhados quando representam hardware compatível. Diferenças reais de console, revisão, região ou periférico permanecem em perfis/adaptadores próprios.
@@ -69,7 +69,7 @@ py -3.15 -m venv .venv
 .\.venv\Scripts\python.exe -m sega_emulator
 ```
 
-A janela Qt mínima abre sem ROM carregada. Use **Abrir ROM** na barra superior para selecionar uma ROM local. O caminho SMS usa `SmsTemporalMachine`; para manter o SG-1000 no host atual, inicie com `--system sg1000`.
+A janela Qt mínima abre sem ROM carregada. Use **Abrir ROM** para selecionar uma ROM e **Avançar quadro** (F5) para executar um frame de teste. A Qt não apresenta vídeo nem recebe dados de pixels. O caminho SMS usa `SmsTemporalMachine`; para manter o SG-1000 no host atual, inicie com `--system sg1000`.
 
 Para iniciar diretamente uma ROM:
 
@@ -96,7 +96,7 @@ maturin develop --release --features python-extension
 Pop-Location
 ```
 
-Executar a interface com uma ROM local após instalar a extensão:
+Executar a janela de controle com uma ROM local após instalar a extensão:
 
 ```powershell
 .\scripts\test-rust-in-game.ps1 "C:\caminho\para\jogo.sms"
