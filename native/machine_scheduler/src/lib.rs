@@ -12,7 +12,7 @@ pub mod codec;
 pub mod state;
 pub use state::{ClockDomainState, SCHEDULER_STATE_FORMAT_VERSION, SchedulerState};
 
-pub use sega_temporal_core::{ClockRatio, EventPriority, MachineTime};
+pub use sega_temporal_core::{ClockRatio, EventPriority, MachineInstant, MachineTime};
 
 use sega_temporal_core::{
     ClockDomain, ClockDomainSnapshot, ClockError, EventQueue, EventQueueError, HardwarePhase,
@@ -83,6 +83,7 @@ pub enum SchedulerError {
     Clock(ClockError),
     EventQueue(EventQueueError),
     TimeWentBackwards,
+    SubTickEventUnsupported,
     EventPendingBeforeTarget,
     ZeroDeltaEventLimit,
     DeltaEventLimitExceeded { timestamp: MachineTime, limit: u64 },
@@ -111,6 +112,7 @@ impl fmt::Display for SchedulerError {
             Self::Clock(error) => write!(f, "clock-domain advancement failed: {error}"),
             Self::EventQueue(error) => write!(f, "event scheduling failed: {error}"),
             Self::TimeWentBackwards => write!(f, "machine scheduler cannot move backwards"),
+            Self::SubTickEventUnsupported => write!(f, "scheduler clock domains do not yet advance to rational sub-tick instants"),
             Self::EventPendingBeforeTarget => {
                 write!(f, "cannot advance idle time past an undispatched event")
             }
@@ -342,14 +344,18 @@ impl<T> MachineScheduler<T> {
             _ => return Err(SchedulerError::DispatchHistoryMismatch),
         }
 
-        if state
-            .event_queue
-            .last_dispatched
-            .is_some_and(|watermark| watermark.timestamp > state.now)
-        {
-            return Err(SchedulerError::WatermarkAfterNow);
-        }
-        if state.event_queue.last_dispatched.map(|w| w.timestamp) != state.last_dispatch_timestamp {
+        if let Some(watermark) = state.event_queue.last_dispatched {
+            let watermark_time = watermark
+                .timestamp
+                .as_machine_time()
+                .ok_or(SchedulerError::SubTickEventUnsupported)?;
+            if watermark_time > state.now {
+                return Err(SchedulerError::WatermarkAfterNow);
+            }
+            if Some(watermark_time) != state.last_dispatch_timestamp {
+                return Err(SchedulerError::DispatchWatermarkMismatch);
+            }
+        } else if state.last_dispatch_timestamp.is_some() {
             return Err(SchedulerError::DispatchWatermarkMismatch);
         }
 
@@ -359,13 +365,14 @@ impl<T> MachineScheduler<T> {
             return Err(SchedulerError::DispatchHistoryMismatch);
         }
 
-        if state
-            .event_queue
-            .pending
-            .iter()
-            .any(|event| event.timestamp < state.now)
-        {
-            return Err(SchedulerError::PendingEventBeforeNow);
+        for event in &state.event_queue.pending {
+            let event_time = event
+                .timestamp
+                .as_machine_time()
+                .ok_or(SchedulerError::SubTickEventUnsupported)?;
+            if event_time < state.now {
+                return Err(SchedulerError::PendingEventBeforeNow);
+            }
         }
 
         let mut clocks = BTreeMap::new();
@@ -432,9 +439,12 @@ impl<T> MachineScheduler<T> {
     /// loop. If clock arithmetic fails, the queue is not popped and no clock
     /// domain is partially advanced.
     pub fn dispatch_next(&mut self) -> Result<Option<MachineDispatch<T>>, SchedulerError> {
-        let Some(timestamp) = self.events.next_timestamp() else {
+        let Some(instant) = self.events.next_timestamp() else {
             return Ok(None);
         };
+        let timestamp = instant
+            .as_machine_time()
+            .ok_or(SchedulerError::SubTickEventUnsupported)?;
 
         let next_dispatch_count = if self.last_dispatch_timestamp == Some(timestamp) {
             if self.dispatched_at_timestamp >= self.delta_event_policy.max_events_per_timestamp {
@@ -490,7 +500,7 @@ impl<T> MachineScheduler<T> {
 
     /// Return the timestamp of the next pending event.
     pub fn next_event_time(&self) -> Option<MachineTime> {
-        self.events.next_timestamp()
+        self.events.next_timestamp().and_then(MachineInstant::as_machine_time)
     }
 
     /// Return the number of pending events.
@@ -538,7 +548,7 @@ mod tests {
         SchedulerError, SchedulerState,
     };
     use sega_temporal_core::{
-        ClockRatio, EventPriority, HardwarePhase, MachineTime, PlatformPriority,
+        ClockRatio, EventPriority, HardwarePhase, MachineInstant, MachineTime, PlatformPriority,
     };
 
     #[test]
@@ -639,7 +649,7 @@ mod tests {
 
         let dispatch = scheduler.dispatch_next().unwrap().unwrap();
         assert_eq!(dispatch.event.payload, "vdp-edge");
-        assert_eq!(dispatch.event.timestamp, MachineTime::from_ticks(2));
+        assert_eq!(dispatch.event.timestamp, MachineInstant::from_ticks(2));
         assert_eq!(dispatch.clock_advances[0].domain, ClockDomainId(1));
         assert_eq!(dispatch.clock_advances[0].elapsed_cycles, 4);
         assert_eq!(dispatch.clock_advances[1].domain, ClockDomainId(2));
