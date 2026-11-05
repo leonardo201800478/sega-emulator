@@ -114,6 +114,20 @@ impl MachineInstant {
         self.fractional_denominator
     }
 
+    /// Return whether this instant lies exactly on an integer master tick.
+    pub const fn is_integral(self) -> bool {
+        self.fractional_numerator == 0
+    }
+
+    /// Return the integer timestamp only when no fractional component is lost.
+    pub const fn as_machine_time(self) -> Option<MachineTime> {
+        if self.is_integral() {
+            Some(self.whole_ticks)
+        } else {
+            None
+        }
+    }
+
     /// Add a non-negative duration to this absolute instant.
     ///
     /// Fractional arithmetic is exact and checked. An intermediate or final
@@ -181,6 +195,12 @@ impl MachineInstant {
             (whole_delta, left - right)
         };
         MachineDuration::from_parts(whole, numerator, denominator)
+    }
+}
+
+impl From<MachineTime> for MachineInstant {
+    fn from(time: MachineTime) -> Self {
+        Self::from_ticks(time.ticks())
     }
 }
 
