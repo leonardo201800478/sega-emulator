@@ -1177,3 +1177,156 @@ mod immediate_port_transaction_tests {
         assert_eq!(restored.port_write_trace(), bus.port_write_trace());
     }
 }
+
+
+#[cfg(test)]
+mod temporal_vdp_tests {
+    use super::{SmsTemporalBus, SmsTemporalDispatch};
+    use sega_temporal_core::MachineTime;
+    use sega_z80_cpu::{Z80BusOperation, Z80BusRequest};
+
+    fn transact(
+        bus: &mut SmsTemporalBus,
+        id: u64,
+        operation: Z80BusOperation,
+        address: u16,
+    ) -> super::SmsBusCompletion {
+        let request = Z80BusRequest {
+            id,
+            operation,
+            address,
+            base_tstates: 4,
+        };
+        bus.begin_request(request, 0).unwrap();
+        let Some(SmsTemporalDispatch::BusCompletion(completion)) =
+            bus.dispatch_next().unwrap()
+        else {
+            panic!("expected scheduled port transaction");
+        };
+        bus.acknowledge_completion(id).unwrap();
+        completion
+    }
+
+    fn write_vdp_control(bus: &mut SmsTemporalBus, id: u64, value: u8) {
+        transact(
+            bus,
+            id,
+            Z80BusOperation::PortWrite { value },
+            0x00BF,
+        );
+    }
+
+    #[test]
+    fn vdp_data_write_is_invisible_until_the_scheduled_port_boundary() {
+        let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
+        assert_eq!(bus.vdp().vram()[0], 0);
+
+        // Select VRAM address zero for writing through the two-byte control word.
+        write_vdp_control(&mut bus, 1, 0x00);
+        write_vdp_control(&mut bus, 2, 0x40);
+
+        let request = Z80BusRequest {
+            id: 3,
+            operation: Z80BusOperation::PortWrite { value: 0xA5 },
+            address: 0x00BE,
+            base_tstates: 4,
+        };
+        bus.begin_request(request, 0).unwrap();
+        assert_eq!(bus.vdp().vram()[0], 0);
+
+        let Some(SmsTemporalDispatch::BusCompletion(completion)) =
+            bus.dispatch_next().unwrap()
+        else {
+            panic!("expected VDP data-port write completion");
+        };
+        assert_eq!(completion.completed_at, MachineTime::from_ticks(36));
+        assert_eq!(bus.vdp().vram()[0], 0xA5);
+        bus.acknowledge_completion(3).unwrap();
+    }
+
+    #[test]
+    fn vdp_read_ahead_is_sampled_at_the_scheduled_data_port_boundary() {
+        let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
+        write_vdp_control(&mut bus, 1, 0x00);
+        write_vdp_control(&mut bus, 2, 0x40);
+        transact(
+            &mut bus,
+            3,
+            Z80BusOperation::PortWrite { value: 0x5A },
+            0x00BE,
+        );
+
+        // Select address zero for VRAM read; the control-word completion
+        // preloads the VDP read-ahead buffer.
+        write_vdp_control(&mut bus, 4, 0x00);
+        write_vdp_control(&mut bus, 5, 0x00);
+
+        let request = Z80BusRequest {
+            id: 6,
+            operation: Z80BusOperation::PortRead,
+            address: 0x00BE,
+            base_tstates: 4,
+        };
+        bus.begin_request(request, 0).unwrap();
+        let Some(SmsTemporalDispatch::BusCompletion(completion)) =
+            bus.dispatch_next().unwrap()
+        else {
+            panic!("expected VDP data-port read completion");
+        };
+        assert_eq!(completion.data, Some(0x5A));
+        bus.acknowledge_completion(6).unwrap();
+    }
+
+    #[test]
+    fn vdp_counters_are_read_through_the_sms_mirrored_ports() {
+        let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
+        let v_counter = transact(
+            &mut bus,
+            1,
+            Z80BusOperation::PortRead,
+            0x127E,
+        );
+        assert_eq!(v_counter.data, Some(0));
+
+        let h_counter = transact(
+            &mut bus,
+            2,
+            Z80BusOperation::PortRead,
+            0x127F,
+        );
+        assert_eq!(h_counter.data, Some(8));
+    }
+
+    #[test]
+    fn vdp_raster_progress_is_chunk_invariant_and_survives_bus_restore() {
+        const FRAME_TSTATES: u32 = 228 * 262;
+        let mut whole = SmsTemporalBus::new(vec![0; 0x4000], 1).unwrap();
+        let mut chunked = SmsTemporalBus::new(vec![0; 0x4000], 1).unwrap();
+
+        whole.schedule_internal_cycle(1, FRAME_TSTATES).unwrap();
+        assert!(matches!(
+            whole.dispatch_next().unwrap(),
+            Some(SmsTemporalDispatch::InternalCycleComplete(_))
+        ));
+        whole.acknowledge_internal_completion(1).unwrap();
+
+        for (id, tstates) in [(1, FRAME_TSTATES / 2), (2, FRAME_TSTATES / 2)] {
+            chunked
+                .schedule_internal_cycle(id, tstates)
+                .unwrap();
+            assert!(matches!(
+                chunked.dispatch_next().unwrap(),
+                Some(SmsTemporalDispatch::InternalCycleComplete(_))
+            ));
+            chunked.acknowledge_internal_completion(id).unwrap();
+        }
+
+        assert_eq!(whole.vdp().frame_number(), 1);
+        assert_eq!(whole.vdp(), chunked.vdp());
+
+        let snapshot = whole.export_state();
+        let restored = SmsTemporalBus::restore_state(snapshot.clone()).unwrap();
+        assert_eq!(restored.export_state(), snapshot);
+        assert_eq!(restored.vdp(), whole.vdp());
+    }
+}
