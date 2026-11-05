@@ -331,6 +331,16 @@ impl SmsMachine {
         &self.memory
     }
 
+    /// Export the 8 KiB Sega cartridge SRAM for host-managed persistence.
+    pub fn cartridge_ram(&self) -> &[u8] {
+        self.memory.cartridge_ram()
+    }
+
+    /// Restore an 8 KiB Sega cartridge SRAM image loaded by the host.
+    pub fn load_cartridge_ram(&mut self, data: &[u8]) -> Result<(), &'static str> {
+        self.memory.load_cartridge_ram(data)
+    }
+
     pub fn io(&self) -> &SmsIo {
         &self.io
     }
