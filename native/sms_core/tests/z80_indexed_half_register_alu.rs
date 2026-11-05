@@ -24,14 +24,7 @@ impl CpuBus for TestBus {
     fn write_port(&mut self, _address: u16, _value: u8) {}
 }
 
-fn execute(
-    program: &[u8],
-    accumulator: u8,
-    flags: u8,
-    hl: u16,
-    ix: u16,
-    iy: u16,
-) -> (Z80, u32) {
+fn execute(program: &[u8], accumulator: u8, flags: u8, hl: u16, ix: u16, iy: u16) -> (Z80, u32) {
     let mut bus = TestBus([0; 4]);
     bus.0[..program.len()].copy_from_slice(program);
 
@@ -98,23 +91,14 @@ fn dd_fd_alu_half_registers_match_the_corresponding_base_register_semantics() {
                                 ix,
                                 iy,
                             );
-                            let (base, base_cycles) = execute(
-                                &[opcode],
-                                accumulator,
-                                initial_flags,
-                                hl,
-                                0xA1B2,
-                                0xC3D4,
-                            );
+                            let (base, base_cycles) =
+                                execute(&[opcode], accumulator, initial_flags, hl, 0xA1B2, 0xC3D4);
 
                             assert_eq!(
                                 indexed_cycles, 8,
                                 "prefix={prefix:02X} opcode={opcode:02X}"
                             );
-                            assert_eq!(
-                                base_cycles, 4,
-                                "base opcode={opcode:02X}"
-                            );
+                            assert_eq!(base_cycles, 4, "base opcode={opcode:02X}");
                             assert_eq!(
                                 indexed.registers.a, base.registers.a,
                                 "A: prefix={prefix:02X} opcode={opcode:02X} A={accumulator:02X} operand={operand:02X} C={carry}"
@@ -167,14 +151,8 @@ fn dd_fd_inc_dec_half_registers_match_base_h_l_for_every_byte_and_carry() {
                     };
                     let initial_flags = 0xA8 | carry;
 
-                    let (indexed, indexed_cycles) = execute(
-                        &[prefix, opcode],
-                        0x96,
-                        initial_flags,
-                        0xD6E7,
-                        ix,
-                        iy,
-                    );
+                    let (indexed, indexed_cycles) =
+                        execute(&[prefix, opcode], 0x96, initial_flags, 0xD6E7, ix, iy);
                     let (base, base_cycles) =
                         execute(&[opcode], 0x96, initial_flags, hl, 0xA1B2, 0xC3D4);
 
@@ -182,10 +160,7 @@ fn dd_fd_inc_dec_half_registers_match_base_h_l_for_every_byte_and_carry() {
                         indexed_cycles, 8,
                         "prefix={prefix:02X} opcode={opcode:02X} value={value:02X}"
                     );
-                    assert_eq!(
-                        base_cycles, 4,
-                        "base opcode={opcode:02X} value={value:02X}"
-                    );
+                    assert_eq!(base_cycles, 4, "base opcode={opcode:02X} value={value:02X}");
                     let expected_value = if opcode == 0x24 || opcode == 0x2C {
                         value.wrapping_add(1)
                     } else {
