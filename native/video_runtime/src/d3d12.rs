@@ -53,8 +53,8 @@ use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::{CreateEventW, INFINITE, WaitForSingleObjectEx};
 use windows::Win32::UI::WindowsAndMessaging::{
     CS_HREDRAW, CS_VREDRAW, CW_USEDEFAULT, CreateWindowExW, DefWindowProcW, DestroyWindow,
-    DispatchMessageW, MSG, PM_REMOVE, PeekMessageW, PostQuitMessage, RegisterClassW, SW_SHOW,
-    ShowWindow, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_DESTROY, WNDCLASSW,
+    DispatchMessageW, IsIconic, MSG, PM_REMOVE, PeekMessageW, PostQuitMessage, RegisterClassW,
+    SW_SHOW, ShowWindow, TranslateMessage, WINDOW_EX_STYLE, WINDOW_STYLE, WM_DESTROY, WNDCLASSW,
     WS_OVERLAPPEDWINDOW,
 };
 use windows::core::{Error, Interface, Result, w};
@@ -121,6 +121,14 @@ impl NativeVideoWindow {
     /// Return the native HWND without transferring its ownership.
     pub const fn hwnd(&self) -> HWND {
         self.hwnd
+    }
+
+    /// Return whether Windows currently considers this window minimized.
+    ///
+    /// The caller must avoid dequeuing completed frames while minimized so
+    /// presentation suspension cannot silently discard accepted frames.
+    pub fn is_minimized(&self) -> bool {
+        unsafe { IsIconic(self.hwnd).as_bool() }
     }
 
     /// Pump pending Win32 messages; return false after WM_QUIT.
@@ -493,6 +501,14 @@ impl D3d12Host {
     /// Return the configured maximum queued presentation latency.
     pub fn maximum_frame_latency(&self) -> Result<u32> {
         unsafe { self.swap_chain2.GetMaximumFrameLatency() }
+    }
+
+    /// Return whether the native window is minimized.
+    ///
+    /// The logical swap-chain dimensions remain fixed; DXGI stretch scaling
+    /// adapts presentation to the client area without changing emulated pixels.
+    pub fn is_minimized(&self) -> bool {
+        self.window.is_minimized()
     }
 
     /// Block the presentation thread until DXGI allows another frame.
