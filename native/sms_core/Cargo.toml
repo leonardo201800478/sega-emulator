@@ -15,3 +15,4 @@ sega-sn76489 = { path = "../sn76489" }
 sega-audio-runtime = { path = "../audio_runtime" }
 sega-temporal-core = { path = "../temporal_core" }
 sega-machine-scheduler = { path = "../machine_scheduler" }
+sega-video = { path = "../video_core" }

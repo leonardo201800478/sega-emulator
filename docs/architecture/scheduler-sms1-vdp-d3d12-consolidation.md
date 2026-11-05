@@ -66,17 +66,17 @@ WAIT, arbitragem CPU/VDP, contenção e prioridade de acessos simultâneos perma
 
 O primeiro alvo do VDP novo é exclusivamente o ASIC **SMS1 / 315-5124**. A revisão SMS2 / 315-5246 é uma etapa comparativa posterior. NTSC, PAL-M, PAL e perfil desconhecido são dimensões regionais/configuracionais distintas da identidade ASIC; não inferir a revisão pelo nome comercial do console.
 
-O módulo `native/sms_core/src/vdp_sms1.rs` contém:
-- `VdpRevision::Sms1_315_5124` e `VdpProfile` com região separada;
-- 16 KiB de VRAM, 32 bytes de CRAM e 16 posições de registrador bruto;
+O engine compartilhado `native/video_core/src/sms/vdp.rs` contém o renderer funcional migrado de `sms_core/src/vdp.rs`, agora selecionável por `SmsVdpProfile`:
+- perfil ASIC explícito SMS1/315-5124 ou SMS2/315-5246, independente do standard regional;
+- 16 KiB de VRAM, 32 bytes de CRAM e registradores;
 - protocolo de portas de dados/controle, palavra de controle em dois bytes e buffer de read-ahead;
 - endereço VDP de 14 bits e wrap;
 - escrita CRAM com valor digital limitado a seis bits;
 - leitura de status com clear e cancelamento de palavra de controle parcial;
-- composição funcional Mode 4 de scanline para background e sprites, incluindo flags de status;
-- estado `Option<u8>` para valor H Counter capturado por chamada explícita `capture_h_counter_on_th_transition`.
+- composição funcional Mode 4 scanline para background e sprites, incluindo flags de status;
+- máscaras SMS1 de endereço de sprites R5/R6 e peculiaridade de zoom horizontal, com testes migrados do protótipo.
 
-O latch H Counter armazena apenas o valor recebido. Ele não calcula H Counter, fase de dot, transição TH ou instante de captura. A leitura permanece indisponível até uma amostra ser fornecida; reset limpa o latch. A PR #393 integrou essa capacidade aditiva e seus testes.
+O antigo `native/sms_core/src/vdp_sms1.rs` foi arquivado em `legacy/rust/sms_vdp1_prototype.rs`; seus vetores exclusivos relevantes foram migrados para o engine compartilhado. O hook experimental de injeção de H Counter do protótipo não é uma medição nem uma implementação de TH/H-counter físico e permanece fora do caminho de produção.
 
 ### 3.1 Limites do modelo funcional atual
 
@@ -267,13 +267,15 @@ As PRs documentais empilhadas não são incorporadas automaticamente: suas branc
 
 Fontes de implementação:
 - `native/machine_scheduler/src/lib.rs`
-- `native/sms_core/src/vdp_sms1.rs`
+- `native/video_core/src/sms/vdp.rs`
+- `native/video_core/src/sms/profile.rs`
+- `legacy/rust/sms_vdp1_prototype.rs` (referência arquivada, não compilada)
 - `native/sms_core/src/machine.rs` (runtime SMS atual e VDP legado)
 - `native/video_runtime/src/lib.rs`
 - `native/video_runtime/src/d3d12.rs`
 - `native/video_runtime/README.md`
 
-**Conclusão:** Scheduler, SMS1 VDP funcional parcial e host D3D12 estão estabelecidos como entregas separadas. O trabalho restante não é documentação cosmética: é integração temporal e visual real, sustentada por evidência. Até lá, manter `INTEGRATION_PENDING` e não reivindicar `TEMPORAL_PASS`.
+**Conclusão:** Scheduler, SMS1 VDP funcional parcial e host D3D12 estão estabelecidos como entregas separadas. O trabalho restante não é documentação cosmética: é integração temporal e visual real, sustentada por evidência. O engine compartilhado continua scanline-level; ainda não produz frames via SmsTemporalMachine nem tem fase sublinha validada. Até lá, manter `INTEGRATION_PENDING` e não reivindicar `TEMPORAL_PASS`.
 
 
 ## Atualização de implementação — 2026-11-05

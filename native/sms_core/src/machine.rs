@@ -6,7 +6,7 @@
 use crate::SmsCoreError;
 use crate::bus::CpuBus;
 use crate::cartridge::CartridgeImage;
-use crate::config::{SmsMachineConfig, SpriteLimitMode};
+use crate::config::{SmsMachineConfig, SmsVdpProfile, SpriteLimitMode};
 use crate::cpu::{CpuError, Z80};
 use crate::input::{ControllerButtons, SmsInputState};
 use crate::io::{SmsIo, SmsIoError};
@@ -201,7 +201,11 @@ impl SmsMachine {
         let memory = SmsMemory::with_bios(cartridge, bios)?;
         let mut cpu = Z80::default();
         cpu.reset();
-        let vdp = SmsVdp::new(config.video_standard, config.sprite_limit);
+        let vdp = SmsVdp::new_with_profile(SmsVdpProfile::new(
+            config.vdp_revision,
+            config.video_standard,
+            config.sprite_limit,
+        ));
         let psg = Sn76489::new(vdp.system_clock_hz(), sample_rate)?;
         Ok(Self {
             cpu,
@@ -381,12 +385,27 @@ impl SmsMachine {
 mod tests {
     use super::{SegaScopeLens, SmsMachine, SmsMachineBus};
     use crate::bus::CpuBus;
-    use crate::config::{SmsMachineConfig, VideoStandard};
+    use crate::config::{SmsMachineConfig, SmsVdpRevision, VideoStandard};
     use crate::input::{ControllerButtons, SmsInputState};
 
     fn write_vdp_register(machine: &mut SmsMachine, register: u8, value: u8) {
         machine.vdp_mut().write_port(0xBF, value);
         machine.vdp_mut().write_port(0xBF, 0x80 | register);
+    }
+
+    #[test]
+    fn machine_applies_configured_vdp_asic_revision() {
+        let config = SmsMachineConfig {
+            vdp_revision: SmsVdpRevision::Sega3155124,
+            ..SmsMachineConfig::default()
+        };
+
+        let machine = SmsMachine::with_bios_audio(vec![0; 0x4000], None, config, 44_100).unwrap();
+
+        assert_eq!(
+            machine.vdp().profile().revision,
+            SmsVdpRevision::Sega3155124
+        );
     }
 
     #[test]

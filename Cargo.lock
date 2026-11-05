@@ -69,6 +69,7 @@ dependencies = [
  "sega-machine-scheduler",
  "sega-sn76489",
  "sega-temporal-core",
+ "sega-video",
  "sega-z80-bus",
  "sega-z80-cpu",
 ]
@@ -79,6 +80,10 @@ version = "0.1.0"
 
 [[package]]
 name = "sega-temporal-core"
+version = "0.1.0"
+
+[[package]]
+name = "sega-video"
 version = "0.1.0"
 
 [[package]]

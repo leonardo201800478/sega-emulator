@@ -23,7 +23,6 @@ pub mod temporal_bus;
 pub mod temporal_m1;
 pub mod temporal_machine;
 pub mod vdp;
-pub mod vdp_sms1;
 
 pub use bus::{
     CpuBus, Z80BusEvent, Z80BusEventKind, Z80CpuSnapshot, Z80InstructionOutcome,
@@ -31,8 +30,8 @@ pub use bus::{
 };
 pub use cartridge::CartridgeImage;
 pub use config::{
-    FmHardware, SmsConsoleModel, SmsMachineConfig, SmsVdpRevision, SpriteLimitMode, Territory,
-    VideoStandard,
+    FmHardware, SmsConsoleModel, SmsMachineConfig, SmsVdpProfile, SmsVdpRevision, SpriteLimitMode,
+    Territory, VideoStandard,
 };
 pub use cpu::{CpuError, Z80};
 pub use error::SmsCoreError;

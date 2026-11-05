@@ -12,17 +12,7 @@ pub enum SmsConsoleModel {
     Sms2,
 }
 
-/// VDP ASIC revision installed in the modeled console.
-///
-/// Do not infer this from SmsConsoleModel: real hardware variants and
-/// replacement boards can combine console families and VDP revisions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum SmsVdpRevision {
-    Sega3155124,
-    /// Default VDP revision for new configurations.
-    #[default]
-    Sega3155246,
-}
+pub use sega_video::sms::{SmsVdpProfile, SmsVdpRevision, SpriteLimitMode, VideoStandard};
 
 /// Console territory/model family. This is not inferred from video standard.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,29 +22,11 @@ pub enum Territory {
     Unknown,
 }
 
-/// Video timing family, kept separate from territory and console revision.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VideoStandard {
-    Ntsc,
-    /// Brazil PAL-M: NTSC-like 525/60 timing with a distinct regional profile.
-    /// The RGB framebuffer does not model composite PAL-M chroma encoding.
-    PalM,
-    Pal,
-    Unknown,
-}
-
 /// Whether the modeled console has an installed YM2413-compatible FM unit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FmHardware {
     Absent,
     Ym2413Present,
-}
-
-/// Unlocked mode is a compatibility enhancement, not a faithful hardware mode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SpriteLimitMode {
-    HardwareLimit,
-    UnlockedCompatibility,
 }
 
 /// Immutable hardware profile supplied when constructing an SMS machine.
