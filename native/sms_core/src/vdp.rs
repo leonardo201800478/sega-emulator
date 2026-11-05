@@ -9,6 +9,9 @@ pub const SMS_VDP_MAX_HEIGHT: usize = 240;
 const VRAM_SIZE: usize = 0x4000;
 const CRAM_SIZE: usize = 0x20;
 const LINE_TSTATES: u64 = 228;
+// MAME's SMS 315-5124 model latches R8 at HPos 21; at 3 VDP clocks
+// per Z80 T-state this is 7T. Keep this comparative timing assumption isolated.
+const XSCROLL_LATCH_TSTATES: u64 = 7;
 const STRIDE: usize = SMS_VDP_WIDTH * 3;
 const FRAME_SIZE: usize = STRIDE * SMS_VDP_MAX_HEIGHT;
 const VBLANK: u8 = 0x80;
@@ -62,6 +65,7 @@ pub struct SmsVdp {
     cram: [u8; CRAM_SIZE],
     registers: [u8; 16],
     latched_scroll_y: u8,
+    latched_scroll_x: u8,
     pending_scroll_y: Option<u8>,
     status: u8,
     address: u16,
@@ -96,6 +100,7 @@ impl SmsVdp {
             cram: [0; CRAM_SIZE],
             registers: [0; 16],
             latched_scroll_y: 0,
+            latched_scroll_x: 0,
             pending_scroll_y: None,
             status: 0,
             address: 0,
@@ -341,9 +346,19 @@ impl SmsVdp {
     pub fn advance(&mut self, tstates: u64) {
         let mut remaining = tstates;
         while remaining > 0 {
-            let step = remaining.min(LINE_TSTATES - u64::from(self.tstates_into_line));
+            let current = u64::from(self.tstates_into_line);
+            let next_boundary = if current < XSCROLL_LATCH_TSTATES {
+                XSCROLL_LATCH_TSTATES
+            } else {
+                LINE_TSTATES
+            };
+            let step = remaining.min(next_boundary - current);
             self.tstates_into_line += step as u16;
             remaining -= step;
+
+            if u64::from(self.tstates_into_line) == XSCROLL_LATCH_TSTATES {
+                self.latched_scroll_x = self.registers[8];
+            }
             if u64::from(self.tstates_into_line) == LINE_TSTATES {
                 self.tstates_into_line = 0;
                 self.complete_scanline();
@@ -358,6 +373,7 @@ impl SmsVdp {
         let height = self.visible_height();
         if line < height {
             let mut render_registers = self.registers;
+            render_registers[8] = self.latched_scroll_x;
             render_registers[9] = self.latched_scroll_y;
             render_scanline(
                 &self.vram,
@@ -1756,30 +1772,59 @@ mod tests {
         v.registers[2] = 0x0E;
         v.registers[5] = 0x7E;
         v.cram[1] = 0x03;
-        v.vram[0] = 0x80;
+        for row in 0..8 {
+            v.vram[row * 4] = 0x80;
+        }
         v.vram[0x3800] = 0;
         v.vram[0x3F00] = 0xD0;
         v
     }
 
     #[test]
-    fn midline_r8_write_is_sampled_for_the_whole_scanline_by_current_model() {
+    fn midline_r8_write_is_latched_for_the_following_scanline() {
         let mut actual = setup_midline_write_fixture();
-        let mut expected = setup_midline_write_fixture();
-
-        // Configure the expected final state before the line starts. The
-        // current renderer samples R8 only when the scanline is completed.
-        reg(&mut expected, 8, 8);
-        expected.advance(228);
+        let mut current_line_reference = setup_midline_write_fixture();
+        let mut next_line_reference = setup_midline_write_fixture();
 
         actual.advance(114);
         reg(&mut actual, 8, 8);
         actual.advance(114);
 
-        // This characterizes the current abstraction, not hardware-correct
-        // timing: a mid-line write produces the same completed line as if R8
-        // had been set before the line began.
-        assert_eq!(actual.working_framebuffer, expected.working_framebuffer);
+        current_line_reference.advance(228);
+        reg(&mut next_line_reference, 8, 8);
+        next_line_reference.advance(228);
+        actual.advance(228);
+
+        let line_bytes = SMS_VDP_WIDTH * 3;
+        assert_eq!(
+            &actual.working_framebuffer[..line_bytes],
+            &current_line_reference.working_framebuffer[..line_bytes],
+            "a mid-display R8 write must not retroactively change the current line"
+        );
+        assert_eq!(
+            &actual.working_framebuffer[line_bytes..line_bytes * 2],
+            &next_line_reference.working_framebuffer[..line_bytes],
+            "the R8 value latched in HBlank must be used by the following line"
+        );
+    }
+
+    #[test]
+    fn r8_write_before_horizontal_scroll_latch_affects_the_current_line() {
+        let mut actual = setup_midline_write_fixture();
+        let mut expected = setup_midline_write_fixture();
+
+        actual.advance(3);
+        reg(&mut actual, 8, 8);
+        actual.advance(225);
+
+        reg(&mut expected, 8, 8);
+        expected.advance(228);
+
+        assert_eq!(
+            actual.working_framebuffer,
+            expected.working_framebuffer,
+            "writes before the R8 latch boundary must be visible on this line"
+        );
     }
 
     #[test]
