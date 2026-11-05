@@ -93,10 +93,7 @@ fn normal_instruction_consumes_ld_a_i_r_erratum_latch_without_clearing_pv() {
         );
         cpu.set_int_line(Some(0xFF));
         let acknowledge = request(cpu.begin_instruction().unwrap());
-        assert_eq!(
-            acknowledge.operation,
-            Z80BusOperation::InterruptAcknowledge
-        );
+        assert_eq!(acknowledge.operation, Z80BusOperation::InterruptAcknowledge);
         assert_ne!(
             cpu.registers.f & FLAG_PV,
             0,
