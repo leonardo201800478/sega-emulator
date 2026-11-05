@@ -12,6 +12,8 @@ use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
+use windows::Win32::Graphics::Dxgi::{DXGI_ERROR_DEVICE_REMOVED, DXGI_ERROR_DEVICE_RESET};
+
 use super::D3d12Host;
 use crate::{FrameQueue, FrameQueueError, VideoFrame};
 
@@ -28,9 +30,13 @@ pub enum D3d12SessionError {
     StartupChannelClosed,
     /// Presenting a frame failed for a reason other than device loss.
     Presentation(windows::core::Error),
-    /// D3D12 reported that its device was removed, reset, or otherwise invalid.
-    /// The original HRESULT is preserved; automatic recreation is not yet enabled.
+    /// D3D12 reported a non-recoverable device-loss reason.
     DeviceLost(windows::core::Error),
+    /// Device recreation or the single retry of the interrupted frame failed.
+    DeviceRecoveryFailed {
+        initial_reason: windows::core::Error,
+        recovery_error: String,
+    },
     /// The worker thread panicked before returning its result.
     WorkerPanicked,
     /// The native window was closed by the user.
@@ -83,6 +89,7 @@ impl std::error::Error for D3d12SessionError {
             Self::Queue(error) => Some(error),
             Self::WorkerStart(error) => Some(error),
             Self::Presentation(error) | Self::DeviceLost(error) => Some(error),
+            Self::DeviceRecoveryFailed { initial_reason, .. } => Some(initial_reason),
             _ => None,
         }
     }
@@ -92,6 +99,16 @@ impl From<FrameQueueError> for D3d12SessionError {
     fn from(error: FrameQueueError) -> Self {
         Self::Queue(error)
     }
+}
+
+/// Only explicit DXGI removed/reset reasons are automatically recoverable.
+/// DEVICE_HUNG, DRIVER_INTERNAL_ERROR and INVALID_CALL remain visible failures.
+fn is_recoverable_device_loss(error: &windows::core::Error) -> bool {
+    error.code() == DXGI_ERROR_DEVICE_REMOVED || error.code() == DXGI_ERROR_DEVICE_RESET
+}
+
+fn is_window_closed_error(error: &windows::core::Error) -> bool {
+    error.code().0 == 0x8000_4004_u32 as i32
 }
 
 struct RunningFlagGuard(Arc<AtomicBool>);
@@ -215,11 +232,57 @@ impl D3d12Session {
                             }
 
                             if let Err(error) = host.present_frame(&frame) {
-                                in_flight_cancelled = in_flight_cancelled.saturating_add(1);
-                                return Err(match host.device_removed_reason() {
-                                    Err(reason) => D3d12SessionError::DeviceLost(reason),
-                                    Ok(()) => D3d12SessionError::Presentation(error),
-                                });
+                                let device_reason = host.device_removed_reason().err();
+                                let classification_reason = device_reason.as_ref().unwrap_or(&error);
+
+                                if is_recoverable_device_loss(classification_reason) {
+                                    let initial_reason = device_reason.unwrap_or(error);
+                                    // Drop all old COM resources and the old
+                                    // HWND before creating a new device and
+                                    // swap chain. The window class is reusable.
+                                    drop(host);
+                                    host = match D3d12Host::initialize_with_window_size(
+                                        render_width,
+                                        render_height,
+                                        window_width,
+                                        window_height,
+                                    ) {
+                                        Ok(host) => host,
+                                        Err(recovery_error) => {
+                                            in_flight_cancelled =
+                                                in_flight_cancelled.saturating_add(1);
+                                            return Err(D3d12SessionError::DeviceRecoveryFailed {
+                                                initial_reason,
+                                                recovery_error: recovery_error.to_string(),
+                                            });
+                                        }
+                                    };
+
+                                    if let Err(retry_error) = host.present_frame(&frame) {
+                                        in_flight_cancelled =
+                                            in_flight_cancelled.saturating_add(1);
+                                        let recovery_error = match host.device_removed_reason() {
+                                            Err(reason) => {
+                                                format!("retry also lost the D3D12 device: {reason}")
+                                            }
+                                            Ok(()) => retry_error.to_string(),
+                                        };
+                                        return Err(D3d12SessionError::DeviceRecoveryFailed {
+                                            initial_reason,
+                                            recovery_error,
+                                        });
+                                    }
+                                } else {
+                                    in_flight_cancelled =
+                                        in_flight_cancelled.saturating_add(1);
+                                    return Err(match device_reason {
+                                        Some(reason) => D3d12SessionError::DeviceLost(reason),
+                                        None if is_window_closed_error(&error) => {
+                                            D3d12SessionError::WindowClosed
+                                        }
+                                        None => D3d12SessionError::Presentation(error),
+                                    });
+                                }
                             }
                             worker_last_presented.store(frame.sequence(), Ordering::Release);
                         } else if worker_queue.is_closed()? {
