@@ -28,6 +28,7 @@ A matriz [DD/FD semântica](z80-dd-fd-semantic-matrix.md) permanece referência 
 - E7.3/HALT T4 consta como integrada.
 - A entrega de VBlank IRQ e Line IRQ do SMS ao Z80 está coberta pelos testes de integração da PR #531, integrada nesta baseline.
 - A semântica do pino RESET do Z80 está coberta por testes unitários e de integração SMS na PR #536: PC/I/R zerados, IFF1/IFF2 desabilitados, IM 0, HALT/NMI/EI delay limpos; registradores gerais/alternativos, IX/IY, SP, linha INT externa e T-states da máquina preservados.
+- A duração elétrica mínima do pulso RESET não é simulada: o reset de host é uma transição atômica de estado, conforme ADR-0016; não há consumidor de gameplay demonstrado para a largura do pulso.
 - O fechamento semântico global ainda não foi comprovado como concluído; a divergência de flags de I/O em bloco e a auditoria semântica integral permanecem abertas.
 - O caminho de barramento/temporização está implementado apenas em fatias; não há prova de integração temporal sistêmica completa.
 
