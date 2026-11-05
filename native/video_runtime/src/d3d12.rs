@@ -6,9 +6,9 @@
 //! mailbox, converts RGB565 to RGBA8888 when required, and presents through
 //! DXGI. The synthetic color-bar path remains available as a host diagnostic.
 //!
-//! Resize handling, device-loss recovery, and physical-GPU validation remain
-//! outside this milestone. GPU waits are restricted to the presentation thread
-//! and must never gate emulation or Scheduler advancement.
+//! Window resize/DPI handling is owned by Win32/DXGI. Device-loss recovery and
+//! physical-GPU validation remain pending. GPU waits use finite polling on the
+//! presentation thread and must never gate emulation or Scheduler advancement.
 
 use core::fmt;
 use core::mem::ManuallyDrop;
@@ -18,7 +18,8 @@ use std::slice;
 use super::{FrameMailbox, FrameMailboxError, PixelFormat, VideoFrame};
 
 use windows::Win32::Foundation::{
-    CloseHandle, HANDLE, HINSTANCE, HWND, LPARAM, LRESULT, RECT, WPARAM,
+    CloseHandle, HANDLE, HINSTANCE, HWND, LPARAM, LRESULT, RECT, WAIT_OBJECT_0, WAIT_TIMEOUT,
+    WPARAM,
 };
 use windows::Win32::Graphics::Direct3D::D3D_FEATURE_LEVEL_11_0;
 use windows::Win32::Graphics::Direct3D12::{
@@ -50,7 +51,7 @@ use windows::Win32::Graphics::Dxgi::{
     IDXGISwapChain3,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-use windows::Win32::System::Threading::{CreateEventW, INFINITE, WaitForSingleObjectEx};
+use windows::Win32::System::Threading::{CreateEventW, WaitForSingleObjectEx};
 use windows::Win32::UI::HiDpi::{
     DPI_AWARENESS_CONTEXT, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE,
     DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, EnableNonClientDpiScaling,
@@ -69,6 +70,7 @@ mod session;
 pub use session::{D3d12Session, D3d12SessionError};
 
 const SWAP_CHAIN_BUFFER_COUNT: u32 = 2;
+const PRESENTATION_WAIT_POLL_MS: u32 = 16;
 
 struct ThreadDpiAwarenessGuard(DPI_AWARENESS_CONTEXT);
 
@@ -579,11 +581,34 @@ impl D3d12Host {
     /// Call this only from the host/render thread. It must never gate machine
     /// stepping or Scheduler time.
     pub fn wait_for_frame_slot(&self) -> Result<()> {
-        let result = unsafe { WaitForSingleObjectEx(self.frame_latency_handle, INFINITE, false) };
-        if result.0 == 0 {
-            Ok(())
-        } else {
-            Err(Error::from_thread())
+        loop {
+            let result = unsafe {
+                WaitForSingleObjectEx(
+                    self.frame_latency_handle,
+                    PRESENTATION_WAIT_POLL_MS,
+                    false,
+                )
+            };
+
+            if result == WAIT_OBJECT_0 {
+                return Ok(());
+            }
+            if result == WAIT_TIMEOUT {
+                if !self.window.pump_messages() {
+                    return Err(Error::new(
+                        windows::core::HRESULT(0x8000_4004_u32 as i32),
+                        "native presentation window closed while waiting for a frame slot",
+                    ));
+                }
+
+                // The frame-latency handle is not guaranteed to signal after
+                // adapter removal. Poll the D3D12 device reason on each finite
+                // wait so the worker can fail fast instead of blocking forever.
+                self.device_removed_reason()?;
+                continue;
+            }
+
+            return Err(Error::from_thread());
         }
     }
 
@@ -845,28 +870,61 @@ impl D3d12Host {
 
     fn wait_for_gpu(&self) -> Result<()> {
         let completed_value = unsafe { self.fence.GetCompletedValue() };
-        // D3D12 returns UINT64_MAX when the device has been removed. Do not
-        // mistake that sentinel for successful completion of every fence.
+        // D3D12 returns UINT64_MAX when the device has been removed. Preserve
+        // the driver's actual removal reason instead of flattening it to a
+        // generic timeout or successful fence completion.
         if completed_value == u64::MAX {
-            return Err(Error::new(
-                windows::core::HRESULT(0x887A_0005_u32 as i32),
-                "D3D12 device was removed while waiting for the GPU fence",
-            ));
+            return match self.device_removed_reason() {
+                Err(reason) => Err(reason),
+                Ok(()) => Err(Error::new(
+                    windows::core::HRESULT(0x887A_0005_u32 as i32),
+                    "D3D12 fence returned the device-removed sentinel",
+                )),
+            };
         }
         if self.last_submitted_fence == 0 || completed_value >= self.last_submitted_fence {
-            return Ok(());
+            return self.device_removed_reason();
         }
 
         unsafe {
             self.fence
                 .SetEventOnCompletion(self.last_submitted_fence, self.fence_event)?;
-            let result = WaitForSingleObjectEx(self.fence_event, INFINITE, false);
-            if result.0 == 0 {
-                Ok(())
-            } else {
-                Err(Error::from_thread())
-            }
         }
+
+        loop {
+            let result = unsafe {
+                WaitForSingleObjectEx(
+                    self.fence_event,
+                    PRESENTATION_WAIT_POLL_MS,
+                    false,
+                )
+            };
+
+            if result == WAIT_OBJECT_0 {
+                return self.device_removed_reason();
+            }
+            if result == WAIT_TIMEOUT {
+                if !self.window.pump_messages() {
+                    return Err(Error::new(
+                        windows::core::HRESULT(0x8000_4004_u32 as i32),
+                        "native presentation window closed while waiting for the GPU",
+                    ));
+                }
+                self.device_removed_reason()?;
+                continue;
+            }
+
+            return Err(Error::from_thread());
+        }
+    }
+
+    /// Query the original D3D12 device-removal reason.
+    ///
+    /// Returns Ok only while the device remains valid. When the adapter is
+    /// removed/reset or the driver reports another device-loss condition, the
+    /// returned Windows error preserves the original HRESULT for the session.
+    pub fn device_removed_reason(&self) -> Result<()> {
+        unsafe { self._device.GetDeviceRemovedReason() }
     }
 }
 
