@@ -1,10 +1,11 @@
 //! Standalone, Python-independent Sega Master System core.
 //!
 //! The SMS-owned Z80 instruction engine, standard cartridge mapper/work RAM,
-//! initial CPU-to-memory/I/O integration, and first scheduler-driven Z80/memory
+//! initial CPU-to-memory/I/O integration, and a scheduler-driven Z80/memory/PSG
 //! vertical slice are present. The temporal slice is deliberately separate from
-//! the legacy machine path; VDP, audio, full interrupt behavior and complete
-//! console scheduling remain pending, so this crate is not a complete console.
+//! the legacy machine path; VDP, host audio-session integration, full interrupt
+//! behavior and complete console scheduling remain pending, so this crate is not
+//! a complete console.
 
 pub mod alu;
 pub mod bus;
@@ -41,8 +42,9 @@ pub use machine::{SegaScopeLens, SegaScopeState, SmsMachine, SmsMachineBus};
 pub use memory::SmsMemory;
 pub use psg::{PsgError, Sn76489};
 pub use temporal::{
-    SMS_TEMPORAL_COORDINATOR_STATE_VERSION, SMS_Z80_CLOCK_DOMAIN_ID, SmsTemporalCoordinator,
-    SmsTemporalCoordinatorError, SmsTemporalCoordinatorState, SmsTemporalEvent,
+    SMS_PSG_CLOCK_DOMAIN_ID, SMS_TEMPORAL_COORDINATOR_STATE_VERSION, SMS_Z80_CLOCK_DOMAIN_ID,
+    SmsTemporalCoordinator, SmsTemporalCoordinatorError, SmsTemporalCoordinatorState,
+    SmsTemporalEvent,
 };
 pub use temporal_bus::{
     SMS_TEMPORAL_BUS_STATE_VERSION, SmsBusCompletion, SmsInternalCycleCompletion, SmsTemporalBus,

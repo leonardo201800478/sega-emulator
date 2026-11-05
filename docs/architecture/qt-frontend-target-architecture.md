@@ -1,3 +1,5 @@
+> **SUPERSEDED (2026-11-05):** a diretriz de evolução incremental foi substituída pela [ADR — Reconstrução Qt Temporal e fechamento vertical do Master System](ADR-sms-temporal-machine-qt-rebuild.md). Use o documento novo como autoridade para o frontend SMS Temporal; este arquivo permanece como referência histórica de conceitos que não conflitem com a ADR aceita.
+
 # Arquitetura-alvo enxuta do frontend Qt
 
 **Estado:** MODELING — proposta inicial para revisão.  

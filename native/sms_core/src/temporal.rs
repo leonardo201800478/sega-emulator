@@ -2,8 +2,9 @@
 //!
 //! This layer owns the machine timeline and schedules typed boundaries. It
 //! deliberately does not execute devices or assign electrical bus phases.
-//! The caller supplies the master-tick scale for one Z80 T-state; no regional
-//! SMS clock ratio is inferred by this module.
+//! The caller supplies the master-tick scale for one Z80 T-state; the Z80 and
+//! SMS PSG domains share that cycle ratio. No regional oscillator value is
+//! inferred by this module.
 
 use core::fmt;
 
@@ -14,8 +15,10 @@ use sega_temporal_core::{
     ClockDomainSnapshot, ClockRatio, HardwarePhase, MachineTime, PlatformPriority,
 };
 
-pub const SMS_TEMPORAL_COORDINATOR_STATE_VERSION: u16 = 2;
+pub const SMS_TEMPORAL_COORDINATOR_STATE_VERSION: u16 = 3;
 pub const SMS_Z80_CLOCK_DOMAIN_ID: ClockDomainId = ClockDomainId(0);
+/// PSG input clock follows the SMS Z80 clock on the supported SMS profiles.
+pub const SMS_PSG_CLOCK_DOMAIN_ID: ClockDomainId = ClockDomainId(1);
 
 /// Typed machine event consumed by the SMS coordinator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -85,8 +88,8 @@ impl SmsTemporalCoordinator {
     /// Construct a timeline with an explicit, profile-supplied T-state scale.
     ///
     /// The scale is a configuration input, not a claim about any SMS region or
-    /// board revision. The coordinator registers one Z80 domain and advances
-    /// it only when the machine scheduler dispatches a boundary.
+    /// board revision. The coordinator registers the Z80 and PSG input domains
+    /// with the same cycle ratio and advances both only at scheduler boundaries.
     pub fn new(master_ticks_per_tstate: u64) -> Result<Self, SmsTemporalCoordinatorError> {
         if master_ticks_per_tstate == 0 {
             return Err(SmsTemporalCoordinatorError::ZeroTStateScale);
@@ -94,6 +97,11 @@ impl SmsTemporalCoordinator {
         let mut scheduler = MachineScheduler::new();
         scheduler.register_clock_domain(
             SMS_Z80_CLOCK_DOMAIN_ID,
+            ClockRatio::new(1, master_ticks_per_tstate)
+                .map_err(|_| SmsTemporalCoordinatorError::InvalidState)?,
+        )?;
+        scheduler.register_clock_domain(
+            SMS_PSG_CLOCK_DOMAIN_ID,
             ClockRatio::new(1, master_ticks_per_tstate)
                 .map_err(|_| SmsTemporalCoordinatorError::InvalidState)?,
         )?;
@@ -214,6 +222,13 @@ impl SmsTemporalCoordinator {
         Ok(())
     }
 
+    /// Inspect the PSG input-clock domain without changing the timeline.
+    pub fn psg_clock_snapshot(&self) -> Result<ClockDomainSnapshot, SmsTemporalCoordinatorError> {
+        self.scheduler
+            .clock_snapshot(SMS_PSG_CLOCK_DOMAIN_ID)
+            .map_err(Into::into)
+    }
+
     /// Export the complete scheduler timeline and the profile scale.
     pub fn export_state(&self) -> SmsTemporalCoordinatorState {
         SmsTemporalCoordinatorState {
@@ -238,7 +253,21 @@ impl SmsTemporalCoordinator {
             .iter()
             .find(|domain| domain.id == SMS_Z80_CLOCK_DOMAIN_ID)
             .ok_or(SmsTemporalCoordinatorError::InvalidState)?;
-        if domain.ratio_numerator != 1 || domain.ratio_denominator != state.master_ticks_per_tstate
+        let psg_domain = state
+            .scheduler
+            .clock_domains
+            .iter()
+            .find(|domain| domain.id == SMS_PSG_CLOCK_DOMAIN_ID)
+            .ok_or(SmsTemporalCoordinatorError::InvalidState)?;
+        if domain.ratio_numerator != 1
+            || domain.ratio_denominator != state.master_ticks_per_tstate
+            || psg_domain.ratio_numerator != 1
+            || psg_domain.ratio_denominator != state.master_ticks_per_tstate
+            || domain.current_time != psg_domain.current_time
+            || domain.total_cycles != psg_domain.total_cycles
+            || domain.phase != psg_domain.phase
+            || domain.registration_start != psg_domain.registration_start
+            || domain.initial_phase != psg_domain.initial_phase
         {
             return Err(SmsTemporalCoordinatorError::InvalidState);
         }
@@ -253,8 +282,8 @@ impl SmsTemporalCoordinator {
 #[cfg(test)]
 mod tests {
     use super::{
-        SMS_Z80_CLOCK_DOMAIN_ID, SmsTemporalCoordinator, SmsTemporalCoordinatorError,
-        SmsTemporalEvent,
+        SMS_PSG_CLOCK_DOMAIN_ID, SMS_Z80_CLOCK_DOMAIN_ID, SmsTemporalCoordinator,
+        SmsTemporalCoordinatorError, SmsTemporalEvent,
     };
     use sega_temporal_core::MachineTime;
 
@@ -272,10 +301,17 @@ mod tests {
             SmsTemporalEvent::BusCompletion { request_id: 7 }
         );
         assert_eq!(machine.now(), deadline);
-        assert_eq!(dispatch.clock_advances.len(), 1);
-        assert_eq!(dispatch.clock_advances[0].domain, SMS_Z80_CLOCK_DOMAIN_ID);
-        assert_eq!(dispatch.clock_advances[0].elapsed_cycles, 5);
+        assert_eq!(dispatch.clock_advances.len(), 2);
+        for domain in [SMS_Z80_CLOCK_DOMAIN_ID, SMS_PSG_CLOCK_DOMAIN_ID] {
+            let advance = dispatch
+                .clock_advances
+                .iter()
+                .find(|advance| advance.domain == domain)
+                .expect("both SMS CPU and PSG clock domains advance together");
+            assert_eq!(advance.elapsed_cycles, 5);
+        }
         assert_eq!(machine.z80_clock_snapshot().unwrap().total_cycles, 5);
+        assert_eq!(machine.psg_clock_snapshot().unwrap().total_cycles, 5);
     }
 
     #[test]
@@ -293,6 +329,23 @@ mod tests {
     }
 
     #[test]
+    fn restore_rejects_divergent_cpu_and_psg_clock_domain_history() {
+        let machine = SmsTemporalCoordinator::new(3).unwrap();
+        let mut state = machine.export_state();
+        let psg = state
+            .scheduler
+            .clock_domains
+            .iter_mut()
+            .find(|domain| domain.id == SMS_PSG_CLOCK_DOMAIN_ID)
+            .unwrap();
+        psg.total_cycles = 1;
+        assert_eq!(
+            SmsTemporalCoordinator::restore_state(state).err(),
+            Some(SmsTemporalCoordinatorError::InvalidState)
+        );
+    }
+
+    #[test]
     fn m1_tstate_events_advance_the_shared_clock_one_cycle_at_a_time() {
         let mut machine = SmsTemporalCoordinator::new(3).unwrap();
         for continuation_id in 0..4 {
@@ -307,7 +360,24 @@ mod tests {
                 dispatch.event.payload,
                 SmsTemporalEvent::M1TStateComplete { continuation_id }
             );
-            assert_eq!(dispatch.clock_advances[0].elapsed_cycles, 1);
+            assert_eq!(
+                dispatch
+                    .clock_advances
+                    .iter()
+                    .find(|advance| advance.domain == SMS_Z80_CLOCK_DOMAIN_ID)
+                    .unwrap()
+                    .elapsed_cycles,
+                1
+            );
+            assert_eq!(
+                dispatch
+                    .clock_advances
+                    .iter()
+                    .find(|advance| advance.domain == SMS_PSG_CLOCK_DOMAIN_ID)
+                    .unwrap()
+                    .elapsed_cycles,
+                1
+            );
             assert_eq!(machine.now(), deadline);
         }
         assert_eq!(machine.z80_clock_snapshot().unwrap().total_cycles, 4);

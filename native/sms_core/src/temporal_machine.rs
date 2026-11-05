@@ -1,11 +1,11 @@
-//! First scheduler-driven SMS Z80/memory vertical slice.
+//! First scheduler-driven SMS Z80/memory/PSG vertical slice.
 //!
-//! This composition uses the resumable Z80 subset, the mapper-backed SMS
-//! memory/I/O adapter, and one machine scheduler. Immediate port transactions
-//! support controller and memory-control effects; VDP/PSG devices remain
-//! unconnected (open-bus reads and bounded write diagnostics). NMI is integrated
-//! and INT acknowledge is being added incrementally; DMA and physical WAIT
-//! wiring remain outside this temporal slice.
+//! This composition uses the resumable Z80 subset, mapper-backed SMS memory/I/O,
+//! the shared scheduler-driven PSG and one machine timeline. PSG writes commit
+//! at the scheduled I/O boundary and its input clock advances with the CPU.
+//! The VDP remains unconnected (open-bus reads and bounded write diagnostics).
+//! NMI is integrated and INT acknowledge is being added incrementally; DMA and
+//! physical WAIT wiring remain outside this temporal slice.
 
 use core::fmt;
 
@@ -13,6 +13,7 @@ use crate::{
     SmsTemporalBus, SmsTemporalBusError, SmsTemporalBusState, SmsTemporalDispatch, SmsTemporalM1,
     SmsTemporalM1Error, SmsTemporalM1State,
 };
+use sega_sn76489::Sn76489Core;
 use sega_temporal_core::{
     BusContractError, BusCycleKind, BusDirection, BusOperationResult, BusPhase, BusTransaction,
     MCycleIndex, MachineTime, TStateIndex,
@@ -22,7 +23,7 @@ use sega_z80_cpu::{
     Z80MicroSequencerError, Z80MicroSequencerPhase, Z80MicroSequencerState, Z80MicroStep,
 };
 
-pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 21;
+pub const SMS_TEMPORAL_MACHINE_STATE_VERSION: u16 = 22;
 
 /// Runtime event trace emitted from actual Scheduler/bus dispatch boundaries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,7 +50,7 @@ pub enum SmsTemporalTraceEvent {
 }
 
 /// Versioned state spanning the CPU continuation and SMS memory/scheduler.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SmsTemporalMachineState {
     pub format_version: u16,
     pub cpu: Z80MicroSequencerState,
@@ -280,6 +281,35 @@ impl SmsTemporalMachine {
         Ok(Self {
             cpu: Z80MicroSequencer::default(),
             bus: SmsTemporalBus::new(rom, master_ticks_per_tstate)?,
+            instruction_started_at: None,
+            next_internal_cycle_id: 0,
+            pending_internal_cycle_id: None,
+            pending_internal_tstates: None,
+            m1: None,
+            m1_fixture_wait_tstates: None,
+            trace_enabled: false,
+            trace_events: Vec::new(),
+        })
+    }
+
+    /// Construct the temporal SMS slice with an explicit PSG clock and output rate.
+    ///
+    /// The PSG clock must match the selected SMS CPU/PSG hardware profile.
+    /// The sample rate controls resampling only; scheduler time owns chip clocks.
+    pub fn new_with_psg_config(
+        rom: impl Into<Vec<u8>>,
+        master_ticks_per_tstate: u64,
+        psg_clock_hz: u64,
+        sample_rate: u64,
+    ) -> Result<Self, SmsTemporalMachineError> {
+        Ok(Self {
+            cpu: Z80MicroSequencer::default(),
+            bus: SmsTemporalBus::new_with_psg_config(
+                rom,
+                master_ticks_per_tstate,
+                psg_clock_hz,
+                sample_rate,
+            )?,
             instruction_started_at: None,
             next_internal_cycle_id: 0,
             pending_internal_cycle_id: None,
@@ -795,6 +825,16 @@ impl SmsTemporalMachine {
     /// Current mapper-backed memory (read-only).
     pub const fn memory(&self) -> &crate::SmsMemory {
         self.bus.memory()
+    }
+
+    /// Inspect the SMS-profile PSG without advancing machine time.
+    pub fn psg(&self) -> &Sn76489Core {
+        self.bus.psg()
+    }
+
+    /// Drain audio samples already produced by scheduler-owned PSG clocks.
+    pub fn drain_audio_samples(&mut self, max_samples: Option<usize>) -> Vec<f64> {
+        self.bus.drain_audio_samples(max_samples)
     }
 
     /// Current absolute machine time.
@@ -2771,6 +2811,29 @@ mod base_immediate_io_temporal_tests {
             }
         );
         assert_eq!(memory_control.bus.memory().control_port(), 0x55);
+    }
+
+    #[test]
+    fn immediate_out_to_psg_commits_at_the_io_boundary_and_restores() {
+        let mut machine = SmsTemporalMachine::new(vec![0xD3, 0x7E], 3).unwrap();
+        machine.cpu_mut().registers.a = 0x85;
+        assert_eq!(
+            machine.step_instruction(0).unwrap(),
+            Z80MicroStep::InstructionRetired {
+                opcode: 0xD3,
+                tstates: 11,
+            }
+        );
+        assert_eq!(machine.psg().latched_register(), 0);
+        assert_eq!(machine.psg().tone_periods()[0], 5);
+        assert_eq!(machine.psg().clock_divider_phase(), 11);
+        assert_eq!(machine.now(), MachineTime::from_ticks(33));
+
+        let snapshot = machine.export_state();
+        let restored = SmsTemporalMachine::restore_state(snapshot.clone()).unwrap();
+        assert_eq!(restored.export_state(), snapshot);
+        assert_eq!(restored.psg().tone_periods()[0], 5);
+        assert_eq!(restored.psg().clock_divider_phase(), 11);
     }
 
     #[test]
