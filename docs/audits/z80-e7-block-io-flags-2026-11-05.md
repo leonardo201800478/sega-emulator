@@ -95,7 +95,8 @@ Documento: *Z80 CPU User Manual*, UM008011-0816, fornecido no contexto do projet
 
 Nas descrições de INI/IND/INIR/INDR/OUTI/OUTD/OTIR/OTDR, o manual não especifica todas as flags reais:
 
-- S/Z são descritas em relação ao decremento de B;
+- Z é determinada pelo valor de B após o decremento;
+- S, H e P/V são declaradas desconhecidas;
 - N é setada;
 - H/PV são desconhecidas;
 - C aparece como não afetada nas descrições correspondentes.
