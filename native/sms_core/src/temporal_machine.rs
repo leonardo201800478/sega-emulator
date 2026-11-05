@@ -867,7 +867,7 @@ impl SmsTemporalMachine {
                                 == (crate::SmsTemporalEvent::M1TStateComplete {
                                     continuation_id: id,
                                 })
-                            && events[0].timestamp == deadline => {}
+                            && events[0].timestamp.as_machine_time() == Some(deadline) => {}
                     (None, None) if events.is_empty() => {}
                     _ => return Err(SmsTemporalMachineError::InvalidState),
                 }
@@ -902,7 +902,7 @@ impl SmsTemporalMachine {
                         .event_queue
                         .pending
                         .first()
-                        .map(|event| event.timestamp)
+                        .and_then(|event| event.timestamp.as_machine_time())
                 })
                 .ok_or(SmsTemporalMachineError::InvalidState)?;
             let scale = u128::from(state.bus.coordinator.master_ticks_per_tstate);
@@ -947,7 +947,7 @@ impl SmsTemporalMachine {
                         .event_queue
                         .pending
                         .first()
-                        .map(|event| event.timestamp)
+                        .and_then(|event| event.timestamp.as_machine_time())
                 })
                 .ok_or(SmsTemporalMachineError::InvalidState)?;
             let scale = u128::from(state.bus.coordinator.master_ticks_per_tstate);
