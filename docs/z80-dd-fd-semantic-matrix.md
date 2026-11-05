@@ -6,7 +6,7 @@
 **Schema do microsequenciador:** 28 (E5 integrada)  
 **Escopo:** decoder DD/FD, IX/IY, IXH/IXL/IYH/IYL, (IX/IY+d), DDCB/FDCB.  
 **Natureza:** inventário do código ativo e das evidências disponíveis; E5 e E6 estão integradas com QUICK_PASS/SHORT_PASS nos escopos registrados, sem declarar conclusão funcional integral nem temporal do Z80.  
-**Meta global e scorecard:** consultar [Meta de conclusão do Z80 — cobertura, validação e critérios de aceite](z80-completion-scorecard.md) para percentuais de referência, fórmulas, níveis de evidência e critérios de conclusão.
+**Meta global e scorecard:** consultar [Meta de conclusão do Z80 — cobertura, validação e critérios de aceite](z80-completion-scorecard.md) para critérios de cobertura, níveis de evidência e critérios de conclusão.
 
 ## 1. Legenda e regra de leitura
 
@@ -225,3 +225,13 @@ As famílias BASE/CB/ED/DD/FD/DDCB/FDCB devem continuar classificadas individual
 Baseline remota: `main` `fcd91302cb64a31d63b75f5e1d3b6eab336668d1`.
 
 E6 continua integrada pela PR #486 (merge SHA `24a32e03e10c8e82022172faee69ec0c046f8cb0`). E7.3 (HALT T4) foi integrada pela PR #509 (merge SHA `869b402e4c8f2dbd9c5f5fa4a10d10ac26506461`). O estado de E7.3 não promove automaticamente as famílias DD/FD a validação diferencial ou temporal completa. E7.4.1A (#512) e E7.4.1B (#514) continuam não integradas; C1 — instante racional comum do Temporal Core/Scheduler — é a próxima etapa. Diferencial externo completo, ZEXDOC/ZEXALL, LONG_PASS e TEMPORAL_PASS global permanecem pendentes.
+
+
+---
+
+## Aditivo normativo — granularidade temporal (2026-11-05)
+
+A política vigente da [ADR-0016](architecture/adr/0016-observable-fidelity-and-proportional-timing.md) estabelece prioridade temporal para instruções/processos de gameplay cuja ordem ou duração altere uma interação com o console. Para instruções internas sem estado intermediário observável, execução atômica semanticamente exata e duração nominal conhecida são suficientes.
+
+As classificações históricas `TEMPORAL_UNVERIFIED`, `NOT_IMPLEMENTED` no microsequenciador e referências a traces por T-state devem ser interpretadas dentro desse escopo. Elas não criam obrigação de implementar microsequenciamento universal nem bloqueio funcional automático. O E7 deve fechar a semântica de todas as famílias suportadas; a validação temporal deve cobrir somente as interações que jogos/periféricos realmente observam. E8 continua subordinada ao fechamento semântico de E7, não a uma exigência de precisão elétrica.
+
