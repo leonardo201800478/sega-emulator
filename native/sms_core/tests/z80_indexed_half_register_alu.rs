@@ -123,6 +123,8 @@ fn dd_fd_alu_half_registers_match_the_corresponding_base_register_semantics() {
                                 indexed.registers.f, base.registers.f,
                                 "F: prefix={prefix:02X} opcode={opcode:02X} A={accumulator:02X} operand={operand:02X} C={carry}"
                             );
+                            assert_eq!(indexed.ix, ix, "IX must remain unchanged");
+                            assert_eq!(indexed.iy, iy, "IY must remain unchanged");
                             assert_eq!(
                                 indexed_half(prefix, source, indexed.ix, indexed.iy),
                                 operand,
@@ -184,13 +186,23 @@ fn dd_fd_inc_dec_half_registers_match_base_h_l_for_every_byte_and_carry() {
                         base_cycles, 4,
                         "base opcode={opcode:02X} value={value:02X}"
                     );
+                    let expected_value = if opcode == 0x24 || opcode == 0x2C {
+                        value.wrapping_add(1)
+                    } else {
+                        value.wrapping_sub(1)
+                    };
+                    let (expected_ix, expected_iy) = if prefix == 0xDD {
+                        (expected_half, iy)
+                    } else if code == 4 {
+                        (ix, (u16::from(expected_value) << 8) | (iy & 0x00FF))
+                    } else {
+                        (ix, (iy & 0xFF00) | u16::from(expected_value))
+                    };
+                    assert_eq!(indexed.ix, expected_ix);
+                    assert_eq!(indexed.iy, expected_iy);
                     assert_eq!(
                         indexed_half(prefix, code, indexed.ix, indexed.iy),
-                        if opcode == 0x24 || opcode == 0x2C {
-                            value.wrapping_add(1)
-                        } else {
-                            value.wrapping_sub(1)
-                        },
+                        expected_value,
                         "index result: prefix={prefix:02X} opcode={opcode:02X} value={value:02X}"
                     );
                     assert_eq!(
