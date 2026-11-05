@@ -867,7 +867,9 @@ mod tests {
         COLLISION, FRAME_SIZE, LINE_TSTATES, OVERFLOW, SMS_VDP_WIDTH, SmsVdp, StereoPresentation,
         TMS_PALETTE, VBLANK, render_legacy_scanline, render_legacy_sprites, render_scanline,
     };
-    use super::super::profile::{SpriteLimitMode, VideoStandard};
+    use super::super::profile::{
+        SmsVdpProfile, SmsVdpRevision, SpriteLimitMode, VideoStandard,
+    };
     fn reg(v: &mut SmsVdp, i: u8, value: u8) {
         v.write_port(0xBF, value);
         v.write_port(0xBF, 0x80 | i);
@@ -924,6 +926,31 @@ mod tests {
         assert_eq!((pm.total_lines(), pm.system_clock_hz()), (262, 3_579_545));
         assert_eq!((p.total_lines(), p.system_clock_hz()), (313, 3_546_895));
     }
+    #[test]
+    fn explicit_sms1_profile_keeps_only_192_line_mode() {
+        let mut vdp = SmsVdp::new_with_profile(SmsVdpProfile::sms1_t0_ntsc());
+
+        assert_eq!(vdp.profile().revision, SmsVdpRevision::Sega3155124);
+        assert_eq!(vdp.visible_height(), 192);
+
+        vdp.registers[1] = 0x08;
+        assert_eq!(vdp.visible_height(), 192);
+
+        vdp.registers[1] = 0x10;
+        assert_eq!(vdp.visible_height(), 192);
+    }
+
+    #[test]
+    fn legacy_constructor_preserves_sms2_profile_and_extended_modes() {
+        let mut vdp = SmsVdp::new(VideoStandard::Ntsc, SpriteLimitMode::HardwareLimit);
+
+        assert_eq!(vdp.profile().revision, SmsVdpRevision::Sega3155246);
+        vdp.registers[1] = 0x10;
+        assert_eq!(vdp.visible_height(), 224);
+        vdp.registers[1] = 0x08;
+        assert_eq!(vdp.visible_height(), 240);
+    }
+
     #[test]
     fn extended_modes_expose_224_and_240_line_framebuffers() {
         let mut v = SmsVdp::default();
