@@ -37,7 +37,7 @@ fn execute_ld_a_i_or_r(cpu: &mut Z80MicroSequencer, opcode: u8, int_during_instr
             tstates: 9,
         }
     );
-    assert!(cpu.p, "LD A,I/R must arm the one-boundary erratum latch");
+    assert!(cpu.export_state().p, "LD A,I/R must arm the one-boundary erratum latch");
     assert_ne!(cpu.registers.f & FLAG_PV, 0, "IFF2 is copied into P/V");
     assert_ne!(cpu.registers.f & FLAG_C, 0, "carry must be preserved");
 }
@@ -72,7 +72,7 @@ fn int_acknowledge_clears_pv_after_ld_a_i_and_ld_a_r_even_after_snapshot_restore
         );
         assert_eq!(cpu.registers.f & FLAG_PV, 0, "ED {opcode:02X}");
         assert_ne!(cpu.registers.f & FLAG_C, 0, "ED {opcode:02X}");
-        assert!(!cpu.p, "ED {opcode:02X}");
+        assert!(!cpu.export_state().p, "ED {opcode:02X}");
     }
 }
 
@@ -84,7 +84,7 @@ fn normal_instruction_consumes_ld_a_i_r_erratum_latch_without_clearing_pv() {
 
         let next = request(cpu.begin_instruction().unwrap());
         assert_eq!(next.operation, Z80BusOperation::OpcodeFetch);
-        assert!(!cpu.p, "ED {opcode:02X}: the next normal fetch consumes P");
+        assert!(!cpu.export_state().p, "ED {opcode:02X}: the next normal fetch consumes P");
         assert_ne!(cpu.registers.f & FLAG_PV, 0);
 
         assert_eq!(
@@ -122,6 +122,6 @@ fn nmi_after_ld_a_i_or_r_does_not_apply_maskable_interrupt_pv_erratum() {
             0,
             "ED {opcode:02X}: NMI must not clear P/V"
         );
-        assert!(!cpu.p, "ED {opcode:02X}");
+        assert!(!cpu.export_state().p, "ED {opcode:02X}");
     }
 }
