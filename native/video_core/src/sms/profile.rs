@@ -148,7 +148,9 @@ impl SmsVdpProfile {
 
 #[cfg(test)]
 mod tests {
-    use super::{SmsVdpCapabilities, SmsVdpProfile, SmsVdpRevision, SpriteLimitMode, VideoStandard};
+    use super::{
+        SmsVdpCapabilities, SmsVdpProfile, SmsVdpRevision, SpriteLimitMode, VideoStandard,
+    };
 
     #[test]
     fn initial_sms1_target_is_315_5124_ntsc_with_hardware_sprite_limit() {
