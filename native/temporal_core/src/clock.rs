@@ -523,7 +523,6 @@ fn combine_fraction_parts(
     Ok((carry_or_borrow, numerator, denominator))
 }
 
-
 /// Convert elapsed machine ticks into local cycles and retained phase.
 ///
 /// Splitting the elapsed value before multiplication keeps the remainder
