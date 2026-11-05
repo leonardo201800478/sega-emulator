@@ -167,7 +167,7 @@ impl D3d12Session {
 
                         if host.is_minimized() {
                             if worker_queue.is_closed()? {
-                                let mut cancelled = match pending_frame.take() {
+                                let mut cancelled: u64 = match pending_frame.take() {
                                     Some(_) => 1,
                                     None => 0,
                                 };
