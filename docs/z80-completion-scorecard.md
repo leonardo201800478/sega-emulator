@@ -1,6 +1,6 @@
 # Z80 compartilhado — scorecard de conclusão
 
-**Baseline documental consultada:** main em c8da934d051f69f0fad01d133a923c26248a7250 (2026-11-05).  
+**Baseline histórica:** main em `c8da934d051f69f0fad01d133a923c26248a7250` (2026-11-05); não representa necessariamente o estado atual.  
 **Política vigente:** [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).  
 **Escopo:** um único núcleo Z80 compartilhado pelos consoles que realmente utilizam essa CPU.
 
@@ -29,7 +29,7 @@ A matriz [DD/FD semântica](z80-dd-fd-semantic-matrix.md) permanece referência 
 - O fechamento semântico global ainda não foi comprovado como concluído.
 - O caminho de barramento/temporização está implementado apenas em fatias; não há prova de integração temporal sistêmica completa.
 
-Esta lista é uma fotografia documental. Antes de alterar código, confirmar os arquivos, testes e workflows no SHA atual.
+Esta lista é uma fotografia histórica. Antes de alterar código ou declarar qualquer critério concluído, confirmar os arquivos, testes, PRs e workflows no SHA atual da `main`. PR aberta ou Draft não equivale a implementação integrada.
 
 ## 3. Política temporal do Z80 — prioridade de gameplay e baseline atômica
 
