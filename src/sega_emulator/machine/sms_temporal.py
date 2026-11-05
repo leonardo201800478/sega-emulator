@@ -40,21 +40,6 @@ class TemporalSMSMachine:
         return int(self.native_machine.frame_number)
 
     @property
-    def framebuffer(self) -> bytes:
-        """Return the current immutable RGB24 frame from the Rust VDP."""
-        return bytes(self.native_machine.framebuffer)
-
-    @property
-    def width(self) -> int:
-        """Return the active framebuffer width in pixels."""
-        return int(self.native_machine.width)
-
-    @property
-    def height(self) -> int:
-        """Return the active framebuffer height in pixels."""
-        return int(self.native_machine.height)
-
-    @property
     def total_instructions(self) -> int:
         """Return the number of CPU instructions executed by frame stepping."""
         return int(self.native_machine.total_instructions)
