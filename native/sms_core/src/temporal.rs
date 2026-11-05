@@ -14,8 +14,10 @@ use sega_temporal_core::{
     ClockDomainSnapshot, ClockRatio, HardwarePhase, MachineTime, PlatformPriority,
 };
 
-pub const SMS_TEMPORAL_COORDINATOR_STATE_VERSION: u16 = 2;
+pub const SMS_TEMPORAL_COORDINATOR_STATE_VERSION: u16 = 3;
 pub const SMS_Z80_CLOCK_DOMAIN_ID: ClockDomainId = ClockDomainId(0);
+/// PSG input clock follows the SMS Z80 clock on the supported SMS profiles.
+pub const SMS_PSG_CLOCK_DOMAIN_ID: ClockDomainId = ClockDomainId(1);
 
 /// Typed machine event consumed by the SMS coordinator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,11 +94,10 @@ impl SmsTemporalCoordinator {
             return Err(SmsTemporalCoordinatorError::ZeroTStateScale);
         }
         let mut scheduler = MachineScheduler::new();
-        scheduler.register_clock_domain(
-            SMS_Z80_CLOCK_DOMAIN_ID,
-            ClockRatio::new(1, master_ticks_per_tstate)
-                .map_err(|_| SmsTemporalCoordinatorError::InvalidState)?,
-        )?;
+        let cpu_clock_ratio = ClockRatio::new(1, master_ticks_per_tstate)
+            .map_err(|_| SmsTemporalCoordinatorError::InvalidState)?;
+        scheduler.register_clock_domain(SMS_Z80_CLOCK_DOMAIN_ID, cpu_clock_ratio)?;
+        scheduler.register_clock_domain(SMS_PSG_CLOCK_DOMAIN_ID, cpu_clock_ratio)?;
         Ok(Self {
             scheduler,
             master_ticks_per_tstate,
@@ -214,6 +215,13 @@ impl SmsTemporalCoordinator {
         Ok(())
     }
 
+    /// Inspect the PSG input-clock domain without changing the timeline.
+    pub fn psg_clock_snapshot(&self) -> Result<ClockDomainSnapshot, SmsTemporalCoordinatorError> {
+        self.scheduler
+            .clock_snapshot(SMS_PSG_CLOCK_DOMAIN_ID)
+            .map_err(Into::into)
+    }
+
     /// Export the complete scheduler timeline and the profile scale.
     pub fn export_state(&self) -> SmsTemporalCoordinatorState {
         SmsTemporalCoordinatorState {
@@ -238,7 +246,16 @@ impl SmsTemporalCoordinator {
             .iter()
             .find(|domain| domain.id == SMS_Z80_CLOCK_DOMAIN_ID)
             .ok_or(SmsTemporalCoordinatorError::InvalidState)?;
-        if domain.ratio_numerator != 1 || domain.ratio_denominator != state.master_ticks_per_tstate
+        let psg_domain = state
+            .scheduler
+            .clock_domains
+            .iter()
+            .find(|domain| domain.id == SMS_PSG_CLOCK_DOMAIN_ID)
+            .ok_or(SmsTemporalCoordinatorError::InvalidState)?;
+        if domain.ratio_numerator != 1
+            || domain.ratio_denominator != state.master_ticks_per_tstate
+            || psg_domain.ratio_numerator != 1
+            || psg_domain.ratio_denominator != state.master_ticks_per_tstate
         {
             return Err(SmsTemporalCoordinatorError::InvalidState);
         }
@@ -272,10 +289,17 @@ mod tests {
             SmsTemporalEvent::BusCompletion { request_id: 7 }
         );
         assert_eq!(machine.now(), deadline);
-        assert_eq!(dispatch.clock_advances.len(), 1);
-        assert_eq!(dispatch.clock_advances[0].domain, SMS_Z80_CLOCK_DOMAIN_ID);
-        assert_eq!(dispatch.clock_advances[0].elapsed_cycles, 5);
+        assert_eq!(dispatch.clock_advances.len(), 2);
+        for domain in [SMS_Z80_CLOCK_DOMAIN_ID, SMS_PSG_CLOCK_DOMAIN_ID] {
+            let advance = dispatch
+                .clock_advances
+                .iter()
+                .find(|advance| advance.domain == domain)
+                .expect("both SMS CPU and PSG clock domains advance together");
+            assert_eq!(advance.elapsed_cycles, 5);
+        }
         assert_eq!(machine.z80_clock_snapshot().unwrap().total_cycles, 5);
+        assert_eq!(machine.psg_clock_snapshot().unwrap().total_cycles, 5);
     }
 
     #[test]
@@ -307,7 +331,24 @@ mod tests {
                 dispatch.event.payload,
                 SmsTemporalEvent::M1TStateComplete { continuation_id }
             );
-            assert_eq!(dispatch.clock_advances[0].elapsed_cycles, 1);
+            assert_eq!(
+                dispatch
+                    .clock_advances
+                    .iter()
+                    .find(|advance| advance.domain == SMS_Z80_CLOCK_DOMAIN_ID)
+                    .unwrap()
+                    .elapsed_cycles,
+                1
+            );
+            assert_eq!(
+                dispatch
+                    .clock_advances
+                    .iter()
+                    .find(|advance| advance.domain == SMS_PSG_CLOCK_DOMAIN_ID)
+                    .unwrap()
+                    .elapsed_cycles,
+                1
+            );
             assert_eq!(machine.now(), deadline);
         }
         assert_eq!(machine.z80_clock_snapshot().unwrap().total_cycles, 4);
