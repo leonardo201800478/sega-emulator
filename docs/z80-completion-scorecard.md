@@ -1,6 +1,6 @@
 # Z80 compartilhado — scorecard de conclusão
 
-**Baseline documental consultada:** main em f4e428ad31c0d2e214e8ed15aab8fa705b1c795e (2026-11-05).  
+**Baseline documental consultada:** main em c8da934d051f69f0fad01d133a923c26248a7250 (2026-11-05).  
 **Política vigente:** [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).  
 **Escopo:** um único núcleo Z80 compartilhado pelos consoles que realmente utilizam essa CPU.
 
@@ -31,20 +31,23 @@ A matriz [DD/FD semântica](z80-dd-fd-semantic-matrix.md) permanece referência 
 
 Esta lista é uma fotografia documental. Antes de alterar código, confirmar os arquivos, testes e workflows no SHA atual.
 
-## 3. Precisão temporal — somente quando necessária
+## 3. Política temporal do Z80 — prioridade de gameplay e baseline atômica
 
-Detalhes adicionais entram no runtime somente se um console ou periférico suportado depender deles:
+A semântica de cada instrução suportada deve ser correta, independentemente do caminho de execução. A implementação atômica é suficiente como padrão para instruções cujo estado intermediário não seja observável pelo console. A precisão temporal detalhada é prioritária para sequências executadas por jogos quando a ordem/duração altera uma interação com o hardware.
 
-| Recurso | Regra |
-|---|---|
-| M-cycles / T-states | Usar quando necessários para ordenar uma interação observável |
-| WAIT | Implementar conforme a ligação e o uso real na plataforma |
-| INT / NMI | Preservar os instantes de amostragem que alterem o comportamento do console |
-| BUSREQ / BUSACK | Não implementar por completude abstrata; exigir consumidor real |
-| RETI / daisy chain | Implementar notificação externa se houver controlador compatível no sistema suportado |
-| M1 / RFSH e outros sinais | Modelar apenas se algum consumidor depender deles |
-| Pinos físicos | Não exigir representação individual nem atualização universal por clock |
-| Estados elétricos/analógicos | Fora do escopo |
+| Caminho | Nível obrigatório | Critério |
+|---|---|---|
+| ALU/registradores internos sem acesso externo | Atômico | Resultado, flags, PC/R e duração nominal correta; sem microfases obrigatórias |
+| Fetch/decode e prefixos | Atômico por instrução como base | Bytes consumidos, seleção de prefixo, PC/R e semântica exatos; detalhar M1 somente se consumidor exigir |
+| Acesso a RAM/ROM sem contenção ou efeito temporal | Atômico | Endereço, dado, side effects e duração nominal |
+| Escritas/leitura de I/O e registradores VDP/PSG | Temporal prioritário quando o instante afeta gameplay | Ordenação relativa à CPU/VDP/áudio e efeito no instante correto |
+| Mapper/banco de cartucho | Atômico por transação, temporal se a troca interagir com execução em andamento | Estado de banco e ordem observável corretos |
+| INT/NMI, EI delay, HALT, acknowledge e leitura de status | Temporal nos pontos de amostragem/aceitação observáveis | Prioridade, fronteira de instrução e efeitos colaterais corretos |
+| Raster/H-counter, scroll e writes intralinha | Temporal quando jogos usam a interação | Reproduzir a menor fronteira temporal demonstrada |
+| WAIT/arbitragem/DMA | Condicional | Exigir ligação real no console e efeito reproduzível |
+| Pinos e fases elétricas | Fora do escopo | Não são requisito de conclusão |
+
+**Regra de leitura do scorecard:** `IMPLEMENTED_ATOMIC` pode satisfazer integralmente o requisito funcional de uma família. `NOT_IMPLEMENTED` no microsequenciador indica apenas ausência daquele caminho temporal, não ausência da instrução no executor atômico. Só registrar uma lacuna temporal como bloqueio quando houver consumidor de gameplay e evidência que exija essa granularidade.
 
 Uma representação diagnóstica de sinais pode ser derivada do estado do core, mas nunca deve criar uma segunda CPU ou caminho de execução.
 
