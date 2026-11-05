@@ -15,10 +15,7 @@ fn request(step: Z80MicroStep) -> Z80BusRequest {
 fn execute_ld_a_i_or_r(cpu: &mut Z80MicroSequencer, opcode: u8, int_during_instruction: bool) {
     let prefix = request(cpu.begin_instruction().unwrap());
     assert_eq!(prefix.operation, Z80BusOperation::OpcodeFetch);
-    let terminal = request(
-        cpu.complete_bus_cycle(prefix.id, Some(0xED))
-            .unwrap(),
-    );
+    let terminal = request(cpu.complete_bus_cycle(prefix.id, Some(0xED)).unwrap());
     assert_eq!(terminal.operation, Z80BusOperation::OpcodeFetch);
     assert_eq!(terminal.address, 1);
 
@@ -32,12 +29,12 @@ fn execute_ld_a_i_or_r(cpu: &mut Z80MicroSequencer, opcode: u8, int_during_instr
     );
     assert_eq!(
         cpu.complete_internal_cycle().unwrap(),
-        Z80MicroStep::InstructionRetired {
-            opcode,
-            tstates: 9,
-        }
+        Z80MicroStep::InstructionRetired { opcode, tstates: 9 }
     );
-    assert!(cpu.export_state().p, "LD A,I/R must arm the one-boundary erratum latch");
+    assert!(
+        cpu.export_state().p,
+        "LD A,I/R must arm the one-boundary erratum latch"
+    );
     assert_ne!(cpu.registers.f & FLAG_PV, 0, "IFF2 is copied into P/V");
     assert_ne!(cpu.registers.f & FLAG_C, 0, "carry must be preserved");
 }
@@ -66,10 +63,7 @@ fn int_acknowledge_clears_pv_after_ld_a_i_and_ld_a_r_even_after_snapshot_restore
         cpu = Z80MicroSequencer::restore_state(decoded).unwrap();
 
         let acknowledge = request(cpu.begin_instruction().unwrap());
-        assert_eq!(
-            acknowledge.operation,
-            Z80BusOperation::InterruptAcknowledge
-        );
+        assert_eq!(acknowledge.operation, Z80BusOperation::InterruptAcknowledge);
         assert_eq!(cpu.registers.f & FLAG_PV, 0, "ED {opcode:02X}");
         assert_ne!(cpu.registers.f & FLAG_C, 0, "ED {opcode:02X}");
         assert!(!cpu.export_state().p, "ED {opcode:02X}");
@@ -84,7 +78,10 @@ fn normal_instruction_consumes_ld_a_i_r_erratum_latch_without_clearing_pv() {
 
         let next = request(cpu.begin_instruction().unwrap());
         assert_eq!(next.operation, Z80BusOperation::OpcodeFetch);
-        assert!(!cpu.export_state().p, "ED {opcode:02X}: the next normal fetch consumes P");
+        assert!(
+            !cpu.export_state().p,
+            "ED {opcode:02X}: the next normal fetch consumes P"
+        );
         assert_ne!(cpu.registers.f & FLAG_PV, 0);
 
         assert_eq!(
