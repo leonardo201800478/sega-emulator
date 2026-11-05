@@ -1,6 +1,6 @@
 # Estado atual dos componentes — Sega Emulator
 
-**Baseline histórica:** main em `c8da934d051f69f0fad01d133a923c26248a7250` (2026-11-05); não representa necessariamente o estado atual.  
+**Baseline reconciliada:** main em `57d9405218de46795dd45876a52e3dbcec186ffd` (2026-11-05, parent de PR #536); fotografia histórica, não representa necessariamente o estado atual.  
 **Política de fidelidade:** [ADR-0016](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).  
 **Prioridade:** Master System, mantendo SG-1000 funcional e sem regressões.
 
@@ -20,9 +20,9 @@ Este documento registra uma fotografia histórica do estado conhecido na baselin
 
 | Componente | Estado conhecido | Prioridade / limite |
 |---|---|---|
-| Z80 compartilhado | Implementado em Rust e consumido pelos perfis SG-1000/SMS | Corrigir semântica e regressões; não duplicar o core |
+| Z80 compartilhado | Implementado em Rust e consumido pelos perfis SG-1000/SMS | Corrigir semântica e regressões; não duplicar o core. RESET e entrega de IRQ do SMS possuem cobertura dedicada nas PRs #531/#536 |
 | Z80 E5 / E6 | Consta como integrado na main nas auditorias recentes | Confirmar testes no SHA candidato antes de novas alterações |
-| Z80 E7 | Parcial; E7.3/HALT T4 consta como integrada | Revisar somente comportamentos relevantes aos consoles suportados |
+| Z80 E7 | Parcial; E7.3/HALT T4, VBlank/Line IRQ SMS e RESET funcional possuem cobertura integrada | Fechamento semântico global ainda aberto; revisar somente comportamentos relevantes aos consoles suportados |
 | Z80 M-cycle/T-state | Há contratos e fatias temporais no runtime | Não exigir microsequenciamento integral de todas as instruções |
 | WAIT / arbitragem | Dependem do circuito e dos consumidores de cada plataforma | Implementar somente quando houver ligação e efeito demonstrados |
 | Memória / mappers SMS | Implementações Rust presentes | Corrigir compatibilidade de cartuchos e mapas reais |

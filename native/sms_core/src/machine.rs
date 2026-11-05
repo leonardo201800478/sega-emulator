@@ -384,6 +384,11 @@ mod tests {
     use crate::config::{SmsMachineConfig, VideoStandard};
     use crate::input::{ControllerButtons, SmsInputState};
 
+    fn write_vdp_register(machine: &mut SmsMachine, register: u8, value: u8) {
+        machine.vdp_mut().write_port(0xBF, value);
+        machine.vdp_mut().write_port(0xBF, 0x80 | register);
+    }
+
     #[test]
     fn runtime_sprite_limit_policy_updates_vdp_and_machine_config() {
         let mut machine = SmsMachine::new(vec![0; 0x4000]).unwrap();
@@ -431,6 +436,94 @@ mod tests {
         assert_eq!(machine.step().unwrap(), 11);
         assert_eq!(machine.cpu().registers.pc, 0x0066);
         assert_eq!(machine.cpu().registers.sp, 0xDFEE);
+    }
+
+    #[test]
+    fn vblank_irq_reaches_z80_and_status_read_acknowledges_vdp() {
+        let mut rom = vec![0; 0x4000];
+        rom[..2].copy_from_slice(&[0x18, 0xFE]); // JR -2: stay away from the IM 1 vector.
+        rom[0x38..0x3A].copy_from_slice(&[0xDB, 0xBF]); // IN A,($BF)
+        let mut machine = SmsMachine::new(rom).unwrap();
+        machine.cpu.registers.sp = 0xC100;
+        machine.cpu.iff1 = true;
+        machine.cpu.iff2 = true;
+        machine.cpu.interrupt_mode = 1;
+
+        write_vdp_register(&mut machine, 1, 0xA0); // Enable display and VBlank IRQ.
+        // Advance through the real machine path to the documented VBlank
+        // boundary at the end of the 192-line active display.
+        for _ in 0..(228 * 192 / 12) {
+            if machine.vdp().interrupt_pending() {
+                break;
+            }
+            machine.step().unwrap();
+        }
+        assert!(machine.vdp().interrupt_pending(), "VBlank IRQ must assert");
+        assert_eq!(machine.vdp().raster_position().line, 192);
+        assert_eq!(machine.vdp().raster_position().tstates_into_line, 0);
+        assert_eq!(machine.cpu.int_pending, Some(0xFF));
+        assert_eq!(machine.step(), Ok(13)); // IM 1 acknowledge.
+        assert_eq!(machine.cpu.registers.pc, 0x0038);
+        assert_eq!(machine.step(), Ok(11)); // IN A,($BF).
+
+        assert_ne!(
+            machine.cpu.registers.a & 0x80,
+            0,
+            "status identifies VBlank"
+        );
+        assert_eq!(machine.cpu.registers.pc, 0x003A);
+        assert_eq!(machine.cpu.int_pending, None);
+        assert!(!machine.vdp().interrupt_pending());
+    }
+
+    #[test]
+    fn line_irq_reaches_z80_and_status_read_distinguishes_its_source() {
+        let mut rom = vec![0; 0x4000];
+        rom[..2].copy_from_slice(&[0x18, 0xFE]); // JR -2: stay away from the IM 1 vector.
+        rom[0x38..0x3A].copy_from_slice(&[0xDB, 0xBF]); // IN A,($BF)
+        let mut machine = SmsMachine::new(rom).unwrap();
+        machine.cpu.registers.sp = 0xC100;
+        machine.cpu.iff1 = true;
+        machine.cpu.iff2 = true;
+        machine.cpu.interrupt_mode = 1;
+
+        write_vdp_register(&mut machine, 1, 0x80); // Disable VBlank IRQ.
+        write_vdp_register(&mut machine, 0, 0x00); // Keep line IRQ disabled initially.
+        write_vdp_register(&mut machine, 10, 1); // R10=1 requests line 2, 4, 6, ...
+        // The line counter is reloaded from R10 during VBlank. Reach the next
+        // frame through normal machine stepping before enabling line IRQ.
+        for _ in 0..(228 * 262 / 12) {
+            if machine.vdp().frame_number() != 0 {
+                break;
+            }
+            machine.step().unwrap();
+        }
+        assert_eq!(machine.vdp().frame_number(), 1, "first frame must complete");
+        let _ = machine.vdp_mut().read_port(0xBF); // Clear prior frame/status flags.
+        write_vdp_register(&mut machine, 0, 0x10); // Enable line IRQ.
+        for _ in 0..(228 * 2 / 12) {
+            if machine.vdp().interrupt_pending() {
+                break;
+            }
+            machine.step().unwrap();
+        }
+        assert!(machine.vdp().interrupt_pending(), "line IRQ must assert");
+        assert_eq!(machine.vdp().raster_position().line, 2);
+        assert_eq!(machine.vdp().raster_position().tstates_into_line, 0);
+        assert_eq!(machine.cpu.int_pending, Some(0xFF));
+        assert_eq!(machine.vdp().status() & 0x80, 0, "not a VBlank source");
+        assert_eq!(machine.step(), Ok(13)); // IM 1 acknowledge.
+        assert_eq!(machine.cpu.registers.pc, 0x0038);
+        assert_eq!(machine.step(), Ok(11)); // IN A,($BF).
+
+        assert_eq!(
+            machine.cpu.registers.a & 0x80,
+            0,
+            "status identifies line IRQ"
+        );
+        assert_eq!(machine.cpu.registers.pc, 0x003A);
+        assert_eq!(machine.cpu.int_pending, None);
+        assert!(!machine.vdp().interrupt_pending());
     }
 
     #[test]
