@@ -1,6 +1,6 @@
 # Z80 compartilhado — scorecard de conclusão
 
-**Baseline reconciliada:** main em `57d9405218de46795dd45876a52e3dbcec186ffd` (2026-11-05, parent de PR #536); fotografia histórica, não representa necessariamente o estado atual.  
+**Baseline reconciliada:** main em `1da784f556b9524f5a6f43ce8a7c525e68354f9e` (2026-11-05).  
 **Política vigente:** [ADR-0016 — fidelidade observável](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).  
 **Escopo:** um único núcleo Z80 compartilhado pelos consoles que realmente utilizam essa CPU.
 
@@ -74,3 +74,10 @@ A PR #527 é uma proposta documental não integrada. Não usar os relatórios de
 ## 6. Regra de atualização
 
 Atualizar este scorecard somente quando uma mudança integrada, um teste executado ou uma evidência de hardware alterar o estado de um critério funcional relevante. Não criar fases, percentuais de completude ou bloqueios de precisão elétrica sem necessidade comprovada.
+
+
+## Reconciliação da main — 1da784f556b9524f5a6f43ce8a7c525e68354f9e (2026-11-05)
+
+A main avançou após a fotografia histórica acima. As PRs #531 (IRQ VDP SMS) e #536 (RESET Z80) estão integradas. O estado E7 continua parcial: IRQ VDP SMS e RESET funcional possuem cobertura dedicada; isso não fecha a auditoria semântica global nem comprova integração temporal sistêmica.
+
+A auditoria de PRs abertas em 2026-11-05 não encontrou candidato pronto para merge. Ver [auditoria de integração das PRs abertas](audits/open-pr-integration-audit-2026-11-05.md). PRs Draft, divergentes ou com validação incompleta não são evidência de funcionalidade integrada.
