@@ -206,3 +206,49 @@ A main está em `644b2c22879d63447f63b730ed9415db11e81fab`; seu CI pós-merge #4
 ### Decisão
 
 E7 global continua `INTEGRATION_PENDING`. Nenhuma PR adicional além das já integradas #504/#505 está autorizada por evidência para merge nesta fotografia. A continuação é E7.2E na #506; E7.3–E7.7 continuam pendentes. E8 permanece bloqueada.
+
+
+---
+
+## Aditivo de continuidade — reconciliação com a main 1da784f (2026-11-05)
+
+Este aditivo preserva a fotografia histórica de 2026-11-04 acima e corrige sua leitura operacional à luz dos merges posteriores. Não apaga a evidência anterior.
+
+**Baseline consultada:** `1da784f556b9524f5a6f43ce8a7c525e68354f9e`.
+
+### Estado atualizado das fatias
+
+| Fatia | Estado na main atual | Evidência |
+|---|---|---|
+| E7.1 — HALT/M1 | Integrada | PR #490 |
+| E7.2A — NMI retomável | Integrada | PR #495 |
+| E7.2B — INT acknowledge | Integrada | PR #496 |
+| E7.2C — IM0/IM1/IM2 | Integrada | PR #498 |
+| E7.2D — EI/DI | Integrada | PR #500 e reconciliação #501 |
+| E7.2E — snapshot/restore e WAIT | Integrada no escopo declarado | PR #506; não significa cobertura exaustiva de todas as 70 fases |
+| E7.3 — amostragem HALT T4 | Integrada | PR #509 |
+| E7.4 — BUSREQ/arbitragem | Adiada pela ADR-0016 | Não há consumidor suportado que justifique modelagem genérica nesta fase |
+| E7.5 — RETI/daisy-chain | Adiada pela ADR-0016 | Não há periférico com daisy-chain suportado que justifique o evento externo agora |
+| E7.6 — IRQ real do VDP SMS | Integração funcional coberta | PR #531: VBlank, Line IRQ, entrega INT, IM1 e reconhecimento pelo status |
+| RESET funcional | Integrado | PR #536; preserva estado conforme contrato documentado |
+| E7.7 — auditoria semântica integral | IN_PROGRESS | Continua sendo o gate global para E8 |
+
+### Novas auditorias E7.7
+
+- PR #538: matriz de flags de I/O em bloco para perfil Zilog NMOS e reconciliação documental. A fórmula integrada foi comparada com Banks, Helcmanovsky, MAME e redcode. A PR não altera runtime; CI convencional PASS no HEAD consultado, com jobs não aplicáveis classificados SKIPPED.
+- PR #539: correção candidata da exceção P/V de LD A,I/R no microsequenciador. O executor atômico já tratava o erratum; a auditoria identificou divergência na vida útil do latch `p`. A PR aguarda CI e não está integrada.
+
+### Restrições de arquitetura
+
+As propostas históricas de timeline racional genérica, BUSREQ/BUSACK sem consumidor, fases sub-T-state e modelagem elétrica de pinos não são reabertas por este aditivo. ADR-0016 permanece normativa.
+
+### Estado global
+
+- E7.1–E7.3: integradas.
+- E7.2E: integrada no escopo documentado; não equivale a prova exaustiva de toda combinação de snapshot.
+- E7.4/E7.5: adiadas por proporcionalidade e ausência de consumidor concreto.
+- E7.6: integração VDP→INT coberta pelos testes SMS da PR #531.
+- E7.7: IN_PROGRESS, com subitens caracterizados e novas divergências sendo corrigidas em PRs separadas.
+- E8: BLOCKED até a conclusão formal de E7.7 e dos demais critérios aplicáveis.
+
+A PR #533 continua sendo o contrato permanente Draft, não integrado. Nenhuma PR de código ou documentação é automaticamente promovida por este aditivo.
