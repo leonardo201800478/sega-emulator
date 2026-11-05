@@ -12,13 +12,23 @@ O projeto acumulou propostas que tratavam a reprodução integral de M-cycles, T
 
 O objetivo do Sega Emulator é emular consoles com fidelidade comportamental e temporal próxima ao hardware original. Não é construir uma réplica elétrica, analógica ou transistor a transistor dos componentes.
 
+## Modelo normativo de precisão: temporal para gameplay, atômica para o restante
+
+A decisão é aplicada por dois níveis complementares:
+
+1. **Precisão temporal prioritária nos caminhos de gameplay.** Instruções, sequências e processos devem preservar ordem causal e duração quando isso puder alterar a execução de jogos ou a interação entre CPU, memória/barramento, mapper, VDP/raster, PSG/FM/PCM, interrupções, DMA ou periféricos. Exemplos incluem escrita de registradores durante o raster, leitura de H/V counter, escrita de áudio sensível ao instante, troca de banco observável, aceitação/acknowledge de IRQ e contenção real.
+2. **Precisão funcional atômica como padrão para o restante.** Instruções internas e operações sem efeito intermediário observável podem ser executadas atomicamente na fronteira apropriada (instrução, acesso, operação de registrador, scanline, bloco ou amostra). Devem produzir resultado, flags, estado, memória e efeitos colaterais corretos e preservar a duração nominal documentada quando conhecida. Não se criam micro-operações, fases internas, safe points ou eventos por tick sem consumidor.
+
+A semântica funcional de toda instrução/operação suportada continua obrigatória. A atomicidade define a granularidade do modelo, não autoriza aproximações no resultado. A precisão temporal deve ser investida primeiro nos caminhos que jogos realmente observam; não é uma meta uniforme para cada operação do chip.
+
 ## Decisão
 
 A fidelidade será definida pelo comportamento observável do console e pelos requisitos reais de seus jogos, periféricos e dispositivos.
 
 1. **Semântica funcional:** implementar corretamente as instruções e operações que o software do console pode executar. Particularidades não documentadas só serão adicionadas quando houver evidência de impacto em software ou hardware suportado.
-2. **Temporização suficiente:** preservar clocks, relações de frequência, ordem causal e sincronização entre componentes na granularidade necessária para reproduzir o comportamento observável.
-3. **Precisão seletiva:** M-cycles, T-states, WAIT, fases de borda, arbitragem, IRQs e detalhes de barramento serão modelados quando uma característica concreta do console depender deles. Não são requisitos universais por si só.
+2. **Prioridade temporal para gameplay:** preservar clocks, relações de frequência, ordem causal e duração nos caminhos de instrução/processo que possam alterar o comportamento de jogos ou interações com hardware.
+3. **Atomicidade funcional padrão:** operações sem estado intermediário observável executam atomicamente, com resultado exato e duração nominal conhecida; não precisam de microsequenciamento interno.
+4. **Precisão seletiva:** M-cycles, T-states, WAIT, fases de borda, arbitragem, IRQs e detalhes de barramento serão modelados quando uma característica concreta do console depender deles. Não são requisitos universais por si só.
 4. **Sinais físicos:** não é necessário representar todos os pinos do encapsulamento nem atualizar um vetor elétrico completo a cada clock. Uma interface de sinais pode existir quando um periférico ou barramento realmente consumir esses sinais.
 5. **Sem simulação elétrica:** capacitância, tensão, ruído, carga, propagação analógica e nível de transistor estão fora do escopo, salvo se uma futura funcionalidade de produto justificar explicitamente um modelo específico.
 6. **Granularidade eficiente:** dispositivos podem avançar em blocos, scanlines, amostras ou eventos, desde que não atravessem uma interação observável e preservem o resultado esperado. Não criar eventos por tick/pixel/pino sem necessidade comprovada.
