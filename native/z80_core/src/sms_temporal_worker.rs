@@ -46,10 +46,7 @@ pub(super) fn sms_temporal_region_profile(
     }
 }
 
-fn build_sms_temporal_machine(
-    rom: Vec<u8>,
-    region: &str,
-) -> Result<SmsTemporalMachine, String> {
+fn build_sms_temporal_machine(rom: Vec<u8>, region: &str) -> Result<SmsTemporalMachine, String> {
     let (territory, vdp_profile, psg_clock_hz) =
         sms_temporal_region_profile(region).map_err(str::to_owned)?;
     SmsTemporalMachine::new_with_hardware_profile(
@@ -98,7 +95,8 @@ impl WorkerTelemetry {
 
     fn set_audio_metrics(&self, metrics: (u64, u64)) {
         self.audio_underruns.store(metrics.0, Ordering::Release);
-        self.audio_dropped_blocks.store(metrics.1, Ordering::Release);
+        self.audio_dropped_blocks
+            .store(metrics.1, Ordering::Release);
     }
 
     fn reset_machine_counters(&self) {
@@ -161,13 +159,7 @@ impl SmsTemporalWorker {
                         return;
                     }
                 };
-                worker_loop(
-                    machine,
-                    rom,
-                    worker_region,
-                    receiver,
-                    worker_telemetry,
-                );
+                worker_loop(machine, rom, worker_region, receiver, worker_telemetry);
             })
             .map_err(|error| format!("could not start SMS machine worker: {error}"))?;
 
@@ -183,7 +175,9 @@ impl SmsTemporalWorker {
             }
             Err(error) => {
                 let _ = worker.join();
-                Err(format!("SMS machine worker startup channel closed: {error}"))
+                Err(format!(
+                    "SMS machine worker startup channel closed: {error}"
+                ))
             }
         }
     }
@@ -307,9 +301,7 @@ impl SmsTemporalWorker {
     pub(super) fn audio_output_metrics(&self) -> (u64, u64) {
         (
             self.telemetry.audio_underruns.load(Ordering::Acquire),
-            self.telemetry
-                .audio_dropped_blocks
-                .load(Ordering::Acquire),
+            self.telemetry.audio_dropped_blocks.load(Ordering::Acquire),
         )
     }
 
@@ -318,11 +310,11 @@ impl SmsTemporalWorker {
         let Ok(observed) = self.telemetry.frame_signal.0.lock() else {
             return false;
         };
-        let Ok((observed, timeout_result)) = self
-            .telemetry
-            .frame_signal
-            .1
-            .wait_timeout_while(observed, timeout, |current| *current <= frame_number)
+        let Ok((observed, timeout_result)) =
+            self.telemetry
+                .frame_signal
+                .1
+                .wait_timeout_while(observed, timeout, |current| *current <= frame_number)
         else {
             return false;
         };
@@ -375,9 +367,7 @@ fn execute_frame(
     }
 
     let sample_count = samples.len().max(1) as f64;
-    let frame_duration = Duration::from_secs_f64(
-        sample_count / SMS_TEMPORAL_SAMPLE_RATE as f64,
-    );
+    let frame_duration = Duration::from_secs_f64(sample_count / SMS_TEMPORAL_SAMPLE_RATE as f64);
     Ok((
         instructions,
         frame_duration.saturating_sub(frame_started.elapsed()),
