@@ -55,6 +55,6 @@ pub use temporal_machine::{
     SmsTemporalMachineState,
 };
 pub use vdp::{
-    SMS_VDP_MAX_HEIGHT, SMS_VDP_WIDTH, SmsRasterPosition, SmsVdp, SmsVdpEye, SmsVdpProfile,
+    SMS_VDP_MAX_HEIGHT, SMS_VDP_WIDTH, SmsRasterPosition, SmsVdp, SmsVdpEye,
     StereoPresentation,
 };
