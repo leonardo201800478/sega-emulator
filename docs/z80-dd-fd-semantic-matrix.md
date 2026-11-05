@@ -298,3 +298,27 @@ O texto histórico que apontava C1 — timeline racional comum — como próxima
 ### Gate
 
 E7.7 continua IN_PROGRESS; E8 permanece BLOCKED. A matriz DD/FD por família permanece válida como inventário, mas as classificações de validação diferencial/temporal não são promovidas por estes aditivos.
+
+
+---
+
+## Aditivo E7.7 — DD/FD half-register ALU e INC/DEC (PR #541, 2026-11-05)
+
+**HEAD auditado:** `5f60c1f4fa0357c05379f5e1d5857ca49f267fbb`.  
+**CI:** run #42025639950 concluído SUCCESS: Rust formatting, Clippy, testes SMS, SG-1000 e workspace PASS; Python PASS; Windows PyO3 e D3D12 PASS. Scheduler stress, Qt smoke, PowerShell e lock refresh SKIPPED.
+
+A PR #541 adiciona:
+- **ALU:** 10.816 casos para ADD/ADC/SUB/SBC/AND/XOR/OR/CP, prefixos DD/FD, quatro half-registers, 13 valores de A, 13 valores do operando e carry 0/1.
+- **INC/DEC:** 4.096 casos, DD/FD, IXH/IXL/IYH/IYL, todos os 256 valores e carry 0/1.
+- Verificações de resultado/flags, preservação do outro byte do índice e de H/L normal, PC, R e custo nominal adicional de 4T.
+
+**Limite do oráculo:** a comparação com H/L BASE isola seleção do operando e write-back, mas usa helpers aritméticos compartilhados. Ela não é um oracle independente para a aritmética nem uma medição de silício. Os 13×13 valores ALU são amostras de borda, não varredura exaustiva de 256×256 combinações.
+
+**Limites da matriz DD/FD que permanecem:**
+1. DDCB/FDCB: o teste exaustivo de 8.192 casos cobre rotate/shift com destino somente memória (z=6); BIT, RES, SET e cópias z para B/C/D/E/H/L/A não têm cobertura combinatória completa. BIT indexed ainda mantém incerteza documental para S/PV e bits X/Y.
+2. Memória indexada: E4A/E4B/E4C e os vetores existentes cobrem cenários direcionados de loads/stores, ALU e INC/DEC (IX/IY+d), mas não constituem uma matriz integral de todas as operações, operandos, estados e endereços.
+3. WZ/MEMPTR: efeitos são conhecidos em famílias selecionadas; não existe ainda tabela exaustiva por opcode/família com classificação de confiança para todos os casos.
+4. Prefixos repetidos/alternados e prefixos ignorados têm testes E6 específicos, incluindo cadeias longas, mas a interação de todas as famílias com interrupções, HALT e snapshot não está provada.
+5. Instruções especiais de 16 bits (EX DE,HL, EX (SP),HL/IX/IY, JP (HL/IX/IY), LD SP,HL/IX/IY, PUSH/POP HL/IX/IY e ADD IX/IY,rr) têm cobertura distribuída entre testes anteriores; ainda falta uma auditoria consolidada de estado completo e das exceções de substituição/ignorância.
+
+A execução atômica continua sendo suficiente para operações internas sem estado intermediário externamente observável, conforme ADR-0016. As lacunas acima são de cobertura semântica/evidência, não autorização para criar microsequenciamento universal.
