@@ -13,7 +13,7 @@ Ordem vertical atual:
 1. PSG SN76489 SMS temporal, integrado ao scheduler e ao instante de commit das escritas I/O.
 2. VDP SMS por revisão (315-5124/315-5246), incluindo raster, modos, sprites, IRQ, counters, overscan e coluna esquerda.
 3. Integração Z80 + bus + memória/mapper + VDP + PSG + input + outputs numa única timeline.
-4. Fronteira PyO3 coarse-grained e janela Qt mínima de emulador (viewport, abrir/fechar ROM, executar/pausar, reset), com metadados de frame para active area, overscan, aspecto e timestamp. Biblioteca, capas, perfis, diagnóstico visual e configurações avançadas ficam fora do escopo inicial.
+4. Fronteira PyO3 coarse-grained e interface operacional Qt para SMS/SG-1000: seletor de sistema/modelo, abrir ROM/ZIP e histórico das 15 recentes, Play/Pause/Stop/Reset, menus essenciais de vídeo/áudio/controles/região/opções e viewport alimentado pelo host gráfico Rust/D3D12. O contrato detalhado e seus critérios de aceite estão na seção **Contrato da primeira interface operacional** abaixo. Biblioteca com capas/scraping, automação ampla e ferramentas avançadas de diagnóstico permanecem fora desta entrega inicial.
 5. Retirada controlada do runtime SMS antigo somente após a nova máquina temporal, PyO3 e smoke test Qt passarem; preservar componentes Qt compartilhados e não regredir SG-1000.
 
 A matriz de aceite e evidências está em [sms-vdp-psg-temporal-validation.md](architecture/sms-vdp-psg-temporal-validation.md). A implementação só avança de gate com testes executados e classificados individualmente. A interrupção temporária de gameplay pelo runtime SMS antigo foi aceita; isso não reduz o critério final de gameplay temporal funcional.
