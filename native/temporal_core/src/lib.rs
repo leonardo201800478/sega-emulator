@@ -10,7 +10,7 @@ pub mod event;
 pub mod state;
 
 pub use clock::{
-    ClockDomain, ClockDomainSnapshot, ClockEdgeTime, ClockError, ClockRatio, MachineTime,
+    ClockDomain, ClockDomainSnapshot, ClockEdgeTime, ClockError, ClockRatio, MachineInstant, MachineTime,
 };
 pub use contract::{
     BusContractError, BusCycleKind, BusDirection, BusOperationResult, BusPhase, BusTransaction,
