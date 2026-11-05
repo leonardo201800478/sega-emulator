@@ -24,29 +24,11 @@ pub enum Territory {
     Unknown,
 }
 
-/// Video timing family, kept separate from territory and console revision.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VideoStandard {
-    Ntsc,
-    /// Brazil PAL-M: NTSC-like 525/60 timing with a distinct regional profile.
-    /// The RGB framebuffer does not model composite PAL-M chroma encoding.
-    PalM,
-    Pal,
-    Unknown,
-}
-
 /// Whether the modeled console has an installed YM2413-compatible FM unit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FmHardware {
     Absent,
     Ym2413Present,
-}
-
-/// Unlocked mode is a compatibility enhancement, not a faithful hardware mode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SpriteLimitMode {
-    HardwareLimit,
-    UnlockedCompatibility,
 }
 
 /// Immutable hardware profile supplied when constructing an SMS machine.
