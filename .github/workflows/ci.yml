@@ -306,6 +306,8 @@ jobs:
             uv.lock
       - name: Install locked development and Qt dependencies
         run: uv sync --locked --extra dev --extra qt
+      - name: Assert the pinned CPython runtime
+        run: uv run --locked python -c "import sys; assert sys.version_info[:3] == (3, 15, 2), sys.version; print(sys.version)"
       - name: Validate Windows Qt and NumPy runtime imports
         env:
           QT_QPA_PLATFORM: offscreen
@@ -377,6 +379,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.99.1
+      - name: Assert the pinned CPython runtime
+        run: python -c "import sys; assert sys.version_info[:3] == (3, 15, 2), sys.version; print(sys.version)"
       - name: Create isolated Python build environment
         run: |
           python -m venv .venv
