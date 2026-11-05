@@ -385,12 +385,23 @@ impl SmsMachine {
 mod tests {
     use super::{SegaScopeLens, SmsMachine, SmsMachineBus};
     use crate::bus::CpuBus;
-    use crate::config::{SmsMachineConfig, VideoStandard};
+    use crate::config::{SmsMachineConfig, SmsVdpRevision, VideoStandard};
     use crate::input::{ControllerButtons, SmsInputState};
 
     fn write_vdp_register(machine: &mut SmsMachine, register: u8, value: u8) {
         machine.vdp_mut().write_port(0xBF, value);
         machine.vdp_mut().write_port(0xBF, 0x80 | register);
+    }
+
+    #[test]
+    fn machine_applies_configured_vdp_asic_revision() {
+        let mut config = SmsMachineConfig::default();
+        config.vdp_revision = SmsVdpRevision::Sega3155124;
+
+        let machine =
+            SmsMachine::with_bios_audio(vec![0; 0x4000], None, config, 44_100).unwrap();
+
+        assert_eq!(machine.vdp().profile().revision, SmsVdpRevision::Sega3155124);
     }
 
     #[test]
