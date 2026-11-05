@@ -26,7 +26,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "rom",
         type=Path,
         nargs="?",
-        help="caminho para ROM .sg/.rom/.bin ou arquivo ZIP contendo ROM",
+        help="caminho para ROM .sms/.bin/.rom (SMS) ou .sg (SG-1000)",
     )
     parser.add_argument(
         "--system",
