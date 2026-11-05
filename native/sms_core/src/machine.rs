@@ -148,7 +148,9 @@ impl CpuBus for SmsMachineBus<'_> {
             {
                 pending.push(SmsPsgWriteEvent {
                     // CPU supplied the instruction-relative I/O boundary.
-                    tstate: self.tstate.saturating_add(u64::from(self.instruction_tstates_advanced)),
+                    tstate: self
+                        .tstate
+                        .saturating_add(u64::from(self.instruction_tstates_advanced)),
                     value,
                 });
             }
