@@ -382,13 +382,11 @@ mod tests {
     use crate::bus::CpuBus;
     use crate::config::{SmsMachineConfig, VideoStandard};
     use crate::input::{ControllerButtons, SmsInputState};
+
     fn write_vdp_register(machine: &mut SmsMachine, register: u8, value: u8) {
         machine.vdp_mut().write_port(0xBF, value);
-        machine
-            .vdp_mut()
-            .write_port(0xBF, 0x80 | register);
+        machine.vdp_mut().write_port(0xBF, 0x80 | register);
     }
-
 
     #[test]
     fn runtime_sprite_limit_policy_updates_vdp_and_machine_config() {
@@ -438,7 +436,6 @@ mod tests {
         assert_eq!(machine.cpu().registers.pc, 0x0066);
         assert_eq!(machine.cpu().registers.sp, 0xDFEE);
     }
-
 
     #[test]
     fn vblank_irq_reaches_z80_and_status_read_acknowledges_vdp() {
