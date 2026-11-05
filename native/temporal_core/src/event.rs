@@ -50,7 +50,7 @@ pub type EventPriority = PlatformPriority;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScheduledEvent<T> {
     /// Absolute timestamp in the machine profile's time unit.
-    pub timestamp: super::MachineTime,
+    pub timestamp: super::MachineInstant,
     /// Profile-defined ordering stratum at this timestamp.
     pub hardware_phase: HardwarePhase,
     /// Software dispatch priority within the hardware phase.
@@ -67,7 +67,7 @@ struct QueueEntry<T> {
 }
 
 impl<T> QueueEntry<T> {
-    fn key(&self) -> (super::MachineTime, HardwarePhase, PlatformPriority, u64) {
+    fn key(&self) -> (super::MachineInstant, HardwarePhase, PlatformPriority, u64) {
         (
             self.event.timestamp,
             self.event.hardware_phase,
@@ -137,7 +137,7 @@ impl std::error::Error for EventQueueError {}
 pub struct EventQueue<T> {
     heap: BinaryHeap<QueueEntry<T>>,
     next_sequence: u64,
-    last_dispatched: Option<(super::MachineTime, HardwarePhase, PlatformPriority, u64)>,
+    last_dispatched: Option<(super::MachineInstant, HardwarePhase, PlatformPriority, u64)>,
 }
 impl<T> Default for EventQueue<T> {
     fn default() -> Self {
@@ -249,7 +249,7 @@ impl<T> EventQueue<T> {
     /// Insert using the compatibility zero-phase ordering.
     pub fn schedule(
         &mut self,
-        timestamp: super::MachineTime,
+        timestamp: impl Into<super::MachineInstant>,
         priority: PlatformPriority,
         payload: T,
     ) -> Result<u64, EventQueueError> {
@@ -259,11 +259,12 @@ impl<T> EventQueue<T> {
     /// Insert an event with independent phase and platform-priority keys.
     pub fn schedule_with_phase(
         &mut self,
-        timestamp: super::MachineTime,
+        timestamp: impl Into<super::MachineInstant>,
         hardware_phase: HardwarePhase,
         priority: PlatformPriority,
         payload: T,
     ) -> Result<u64, EventQueueError> {
+        let timestamp = timestamp.into();
         if let Some((last_time, last_phase, last_priority, _last_sequence)) = self.last_dispatched {
             if timestamp < last_time {
                 return Err(EventQueueError::EventInPast);
@@ -301,7 +302,7 @@ impl<T> EventQueue<T> {
         Some(entry.event)
     }
     /// Return the next queued absolute timestamp.
-    pub fn next_timestamp(&self) -> Option<super::MachineTime> {
+    pub fn next_timestamp(&self) -> Option<super::MachineInstant> {
         self.heap.peek().map(|entry| entry.event.timestamp)
     }
     /// Return the number of queued events.
@@ -462,7 +463,7 @@ mod tests {
     #[test]
     fn restore_rejects_duplicate_and_out_of_range_sequences() {
         let event = |sequence| ScheduledEvent {
-            timestamp: MachineTime::from_ticks(4),
+            timestamp: super::MachineInstant::from_ticks(4),
             hardware_phase: HardwarePhase::new(0),
             priority: PlatformPriority::new(0),
             sequence,
