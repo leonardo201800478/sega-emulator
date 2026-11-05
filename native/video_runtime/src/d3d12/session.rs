@@ -172,7 +172,8 @@ impl D3d12Session {
                                 {
                                     cancelled = cancelled.saturating_add(1);
                                 }
-                                worker_cancelled_frames.store(cancelled, Ordering::Release);
+                                in_flight_cancelled =
+                                    in_flight_cancelled.saturating_add(cancelled);
                                 if cancelled > 0 {
                                     return Err(
                                         D3d12SessionError::PendingFramesCancelled(cancelled),
