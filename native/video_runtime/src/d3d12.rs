@@ -143,11 +143,11 @@ impl NativeVideoWindow {
             )?
         };
 
+        drop(dpi_guard);
+
         unsafe {
             let _ = ShowWindow(hwnd, SW_SHOW);
         }
-
-        drop(dpi_guard);
         Ok(Self { hwnd })
     }
 
