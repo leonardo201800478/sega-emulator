@@ -65,6 +65,7 @@ fn int_acknowledge_clears_pv_after_ld_a_i_and_ld_a_r_even_after_snapshot_restore
         let acknowledge = request(cpu.begin_instruction().unwrap());
         assert_eq!(acknowledge.operation, Z80BusOperation::InterruptAcknowledge);
         assert_eq!(cpu.registers.f & FLAG_PV, 0, "ED {opcode:02X}");
+        assert_eq!(cpu.export_state().q, cpu.registers.f, "ED {opcode:02X}: Q");
         assert_ne!(cpu.registers.f & FLAG_C, 0, "ED {opcode:02X}");
         assert!(!cpu.export_state().p, "ED {opcode:02X}");
     }
