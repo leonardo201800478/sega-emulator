@@ -219,7 +219,11 @@ fn cmp_fraction_u128(
         let right_whole = right_numerator / right_denominator;
         if left_whole != right_whole {
             let ordering = left_whole.cmp(&right_whole);
-            return if reversed { ordering.reverse() } else { ordering };
+            return if reversed {
+                ordering.reverse()
+            } else {
+                ordering
+            };
         }
 
         let left_remainder = left_numerator % left_denominator;
@@ -346,7 +350,9 @@ impl fmt::Display for ClockError {
             Self::PhaseOutOfRange => write!(f, "clock phase must be smaller than its denominator"),
             Self::ZeroEdgeIndex => write!(f, "local clock edge index must be positive"),
             Self::InvalidClockHistory => write!(f, "clock-domain history is inconsistent"),
-            Self::ZeroInstantDenominator => write!(f, "machine instant denominator must be positive"),
+            Self::ZeroInstantDenominator => {
+                write!(f, "machine instant denominator must be positive")
+            }
         }
     }
 }
@@ -972,7 +978,8 @@ mod tests {
     fn machine_instant_comparison_does_not_cross_multiply_u128_values() {
         let denominator = u128::MAX;
         let left = super::MachineInstant::from_parts(MachineTime::ZERO, 1, denominator).unwrap();
-        let right = super::MachineInstant::from_parts(MachineTime::ZERO, 1, denominator - 1).unwrap();
+        let right =
+            super::MachineInstant::from_parts(MachineTime::ZERO, 1, denominator - 1).unwrap();
         assert!(left < right);
         assert_eq!(left.cmp(&left), core::cmp::Ordering::Equal);
     }
@@ -1018,8 +1025,7 @@ mod tests {
                         let sum = left.checked_add(right).unwrap();
                         let expected_sum = super::MachineInstant::from_parts(
                             MachineTime::ZERO,
-                            left_numerator * right_denominator
-                                + right_numerator * left_denominator,
+                            left_numerator * right_denominator + right_numerator * left_denominator,
                             left_denominator * right_denominator,
                         )
                         .unwrap();
@@ -1053,5 +1059,4 @@ mod tests {
             Err(ClockError::ArithmeticOverflow)
         );
     }
-
 }
