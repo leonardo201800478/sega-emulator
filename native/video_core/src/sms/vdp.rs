@@ -702,7 +702,7 @@ fn render_legacy_sprites(
 
 #[expect(
     clippy::too_many_arguments,
-    reason = "explicit render inputs keep hardware state ownership at the VDP boundary",
+    reason = "explicit render inputs keep hardware state ownership at the VDP boundary"
 )]
 fn render_scanline_for_revision(
     vram: &[u8],
