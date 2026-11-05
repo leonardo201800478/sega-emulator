@@ -268,6 +268,7 @@ impl SmsMachine {
         Ok(cycles)
     }
 
+    /// Apply the console's CPU reset without rewinding VDP, PSG or machine time.
     pub fn reset_cpu(&mut self) {
         self.cpu.reset();
         self.memory.reset_control_port();

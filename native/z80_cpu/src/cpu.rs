@@ -188,11 +188,13 @@ impl Z80 {
         Ok(())
     }
 
+    /// Apply the architectural state produced by the Z80 RESET input.
+    ///
+    /// RESET clears PC, I, R, both interrupt-enable flip-flops and selects IM 0.
+    /// General-purpose, alternate, index and stack registers are not reset.
+    /// The external INT level and machine T-state timeline are also preserved.
     pub fn reset(&mut self) {
-        self.registers = Z80Registers::default();
-        self.alternate = Z80AlternateRegisters::default();
-        self.ix = 0;
-        self.iy = 0;
+        self.registers.pc = 0;
         self.i = 0;
         self.r = 0;
         self.iff1 = false;
@@ -201,14 +203,12 @@ impl Z80 {
         self.wz = 0;
         self.ei_delay = 0;
         self.nmi_pending = false;
-        self.int_pending = None;
         self.injected_opcode = None;
         self.q = 0;
         self.q_previous = 0;
         self.p = false;
         self.step_depth = false;
         self.halted = false;
-        self.total_tstates = 0;
         self.instruction_count = 0;
         self.opcode_trace_bytes = [0; 8];
         self.opcode_trace_len = 0;
@@ -2850,6 +2850,79 @@ mod tests {
         assert_eq!(cpu.r, 0x81);
         cpu.reset();
         assert_eq!(cpu.r, 0);
+    }
+
+    #[test]
+    fn reset_preserves_general_registers_external_int_and_machine_time() {
+        let mut cpu = Z80::default();
+        cpu.registers.a = 0x12;
+        cpu.registers.f = 0x34;
+        cpu.registers.b = 0x56;
+        cpu.registers.c = 0x78;
+        cpu.registers.d = 0x9A;
+        cpu.registers.e = 0xBC;
+        cpu.registers.h = 0xDE;
+        cpu.registers.l = 0xF0;
+        cpu.registers.sp = 0x1357;
+        cpu.registers.pc = 0x2468;
+        cpu.alternate.a = 0x21;
+        cpu.alternate.f = 0x43;
+        cpu.alternate.b = 0x65;
+        cpu.alternate.c = 0x87;
+        cpu.alternate.d = 0xA9;
+        cpu.alternate.e = 0xCB;
+        cpu.alternate.h = 0xED;
+        cpu.alternate.l = 0x0F;
+        cpu.ix = 0x1122;
+        cpu.iy = 0x3344;
+        cpu.i = 0x55;
+        cpu.r = 0x66;
+        cpu.iff1 = true;
+        cpu.iff2 = true;
+        cpu.interrupt_mode = 2;
+        cpu.wz = 0x7788;
+        cpu.ei_delay = 1;
+        cpu.nmi_pending = true;
+        cpu.request_int(0x5A);
+        cpu.halted = true;
+        cpu.total_tstates = 0x1234;
+        cpu.instruction_count = 99;
+
+        cpu.reset();
+
+        assert_eq!(cpu.registers.pc, 0);
+        assert_eq!(cpu.registers.a, 0x12);
+        assert_eq!(cpu.registers.f, 0x34);
+        assert_eq!(cpu.registers.b, 0x56);
+        assert_eq!(cpu.registers.c, 0x78);
+        assert_eq!(cpu.registers.d, 0x9A);
+        assert_eq!(cpu.registers.e, 0xBC);
+        assert_eq!(cpu.registers.h, 0xDE);
+        assert_eq!(cpu.registers.l, 0xF0);
+        assert_eq!(cpu.registers.sp, 0x1357);
+        assert_eq!(cpu.alternate.a, 0x21);
+        assert_eq!(cpu.alternate.f, 0x43);
+        assert_eq!(cpu.alternate.b, 0x65);
+        assert_eq!(cpu.alternate.c, 0x87);
+        assert_eq!(cpu.alternate.d, 0xA9);
+        assert_eq!(cpu.alternate.e, 0xCB);
+        assert_eq!(cpu.alternate.h, 0xED);
+        assert_eq!(cpu.alternate.l, 0x0F);
+        assert_eq!(cpu.ix, 0x1122);
+        assert_eq!(cpu.iy, 0x3344);
+
+        assert_eq!(cpu.i, 0);
+        assert_eq!(cpu.r, 0);
+        assert!(!cpu.iff1);
+        assert!(!cpu.iff2);
+        assert_eq!(cpu.interrupt_mode, 0);
+        assert_eq!(cpu.wz, 0);
+        assert_eq!(cpu.ei_delay, 0);
+        assert!(!cpu.nmi_pending);
+        assert_eq!(cpu.int_pending, Some(0x5A));
+        assert!(!cpu.halted);
+        assert_eq!(cpu.total_tstates, 0x1234);
+        assert_eq!(cpu.instruction_count, 0);
     }
 
     #[test]

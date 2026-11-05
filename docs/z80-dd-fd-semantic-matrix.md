@@ -1,7 +1,7 @@
 # Matriz semântica DD/FD do Z80 — estado após E6 integrada pela PR #486
 
 **Data:** 2026-11-04  
-**Baseline auditada:** `main` — `b1b5ced5c3d6053f8d59c8f4d932f40518db1064`, após E7.1 integrada pela PR #490.  
+**Baseline auditada:** `main` — `57d9405218de46795dd45876a52e3dbcec186ffd` (2026-11-05, após PR #531; parent de PR #536).  
 **E4C validada:** HEAD `8f04b44e6c6ba85920a7438b74c9876586d5736c`; CI [41747460761](https://github.com/leonardo201800478/sega-emulator/actions/runs/41747460761), 4/4 jobs PASS.  
 **Schema do microsequenciador:** 28 (E5 integrada)  
 **Escopo:** decoder DD/FD, IX/IY, IXH/IXL/IYH/IYL, (IX/IY+d), DDCB/FDCB.  
@@ -235,3 +235,19 @@ A política vigente da [ADR-0016](architecture/adr/0016-observable-fidelity-and-
 
 As classificações históricas `TEMPORAL_UNVERIFIED`, `NOT_IMPLEMENTED` no microsequenciador e referências a traces por T-state devem ser interpretadas dentro desse escopo. Elas não criam obrigação de implementar microsequenciamento universal nem bloqueio funcional automático. O E7 deve fechar a semântica de todas as famílias suportadas; a validação temporal deve cobrir somente as interações que jogos/periféricos realmente observam. E8 continua subordinada ao fechamento semântico de E7, não a uma exigência de precisão elétrica.
 
+
+
+---
+
+## Aditivo operacional — baseline após IRQ VDP SMS e RESET Z80 (2026-11-05)
+
+Este aditivo supersede os estados históricos anteriores que ainda listavam E7.6 como pendente. A baseline é a `main` em `57d9405218de46795dd45876a52e3dbcec186ffd`; a cobertura de RESET é adicionada pela PR #536.
+
+- **E7.6 — IRQ real do VDP SMS:** integrada pela PR #531. Testes executam `SmsMachine::step()` e verificam VBlank na linha 192 e Line IRQ na linha 2 com R10=1, entrega da linha INT ao Z80, aceitação IM 1 e reconhecimento via leitura do status do VDP. Isso comprova o caminho SMS VDP→Z80 coberto, não todos os modos/variantes de interrupção.
+- **RESET Z80:** a PR #536 cobre PC/I/R, IFF1/IFF2, IM 0, saída de HALT, limpeza de NMI/EI delay, preservação dos registradores gerais/alternativos, IX/IY, SP, linha INT externa e monotonicidade do tempo da máquina/PSG/VDP.
+- **Escopo temporal do RESET:** a operação de host é uma transição atômica para o estado definido pelo pino RESET; a largura elétrica mínima do pulso não é simulada sem consumidor de gameplay demonstrado, conforme ADR-0016.
+- **E7.4 — BUSREQ/BUSACK:** não integrar microsequenciamento genérico agora. A arbitragem será retomada quando a integração Mega Drive (P4) apresentar o consumidor concreto do Z80 compartilhado.
+- **E7.5 — RETI/daisy-chain:** a semântica funcional RETI/RETN permanece coberta; notificação externa de daisy-chain fica diferida até existir periférico suportado que a consuma. Não criar eventos por instrução sem esse consumidor.
+- **E7.7 — auditoria semântica integral:** permanece IN_PROGRESS. A divergência de flags de I/O em bloco continua sem oráculo independente: UM008011-0816 declara C não afetado em INI/IND, enquanto a referência secundária descreve C/H derivados de soma. A implementação atual segue a hipótese secundária de compatibilidade NMOS; vetores SingleStepTests com ancestralidade em Ares não provam silício independente. `OUT (C),0` também permanece variante-dependente.
+- **E8:** BLOCKED até o fechamento formal de E7. Não iniciar ZEXDOC/ZEXALL ou declarar DIFFERENTIAL_PASS antes de resolver a evidência semântica pendente.
+- **E9:** permanece posterior à integração temporal observável e à comprovação de determinismo; não há TEMPORAL_PASS global.
