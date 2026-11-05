@@ -54,8 +54,8 @@ class FakeNativeSMSTemporalMachine:
     def request_nmi(self) -> None:
         self.calls.append(("request_nmi",))
 
-    def configure_audio_output(self, *args: object) -> None:
-        self.calls.append(("configure_audio_output", *args))
+    def configure_audio_output(self, *args: object, **kwargs: object) -> None:
+        self.calls.append(("configure_audio_output", *args, *kwargs.values()))
 
     def close_audio_output(self) -> None:
         self.calls.append(("close_audio_output",))
