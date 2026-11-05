@@ -89,7 +89,7 @@ A janela de apresentação é criada/gerenciada pelo host Rust. O frontend pode 
 
 ## Situação
 
-**DOCUMENTAÇÃO / DECISÃO ARQUITETURAL.** Nenhum backend D3D12 foi implementado por esta atualização. O VDP SMS1 permanece scanline-functional e a integração temporal com Scheduler permanece pendente. Não atribuir QUICK_PASS, SHORT_PASS, LONG_PASS ou TEMPORAL_PASS a esta decisão documental.
+**Estado na publicação original desta proposta:** DOCUMENTAÇÃO / DECISÃO ARQUITETURAL; o backend D3D12 ainda não estava implementado. O histórico posterior está registrado na seção Implementação publicada abaixo. O VDP SMS1 permanece scanline-functional e a integração temporal com Scheduler permanece pendente. Não atribuir QUICK_PASS, SHORT_PASS, LONG_PASS ou TEMPORAL_PASS a esta decisão documental.
 
 
 ## Implementação publicada — 2026-11-05
