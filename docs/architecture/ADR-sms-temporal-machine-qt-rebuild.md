@@ -23,28 +23,36 @@ Logo, não se deve criar um segundo PSG nem promover o renderer antigo a VDP tem
 
 ## 2. Decisões
 
-### D1 — Novo Qt, sem modernização incremental do frontend antigo
+### D1 — Qt mínimo de emulador, sem frontend de produto
 
-O frontend atual será arquivado em `legacy/qt/`. O novo frontend será escrito em módulos novos e terá como backend SMS exclusivo o contrato temporal. A aplicação permanece Python/PySide6 apenas como apresentação, launcher, biblioteca, preferências, logs, telemetria e orquestração coarse-grained.
+A Qt será inicialmente uma janela de emulador simples, não um frontend de produto. Não serão implementados nesta fase biblioteca de jogos, capas, perfis, abas de diagnóstico, sistema de temas, configuração avançada, telemetria visual ou menus extensos.
+
+A superfície mínima terá somente:
+- viewport para apresentar o frame produzido pelo backend;
+- abrir ROM local e fechar jogo;
+- executar/pausar e reset;
+- estado essencial da sessão e mensagens de erro;
+- encerramento limpo da aplicação.
+
+A mesma janela poderá receber futuramente outros sistemas, mas nesta etapa o fluxo de aceite é Master System. A compatibilidade SG-1000 existente deve continuar coberta e não será removida como efeito colateral da simplificação.
 
 Camadas:
-- Presentation: janela, menus, toolbar, viewport, diálogos e acessibilidade.
-- Application: controller e serviços de sessão, mídia, preferências, capabilities e diagnóstico.
-- PyO3: API de alto nível para criar/carregar, start, pause, stop, reset, step-frame e consultar snapshots/filas de saída.
-- Rust: único proprietário de CPU, barramento, memória, VDP, PSG, scheduler, raster, interrupções, áudio e vídeo.
+- Qt/PySide6: janela, viewport, diálogos mínimos e encaminhamento de input;
+- PyO3: contrato coarse-grained de sessão (`load_rom`, `start`, `pause`, `stop`, `reset`, `step_frame`) e consulta/retirada de outputs imutáveis;
+- Rust: único proprietário de CPU, barramento, memória, mapper, VDP, PSG, scheduler, interrupções, áudio e vídeo.
 
-A interface não terá timers que avancem o hardware, loops de FPS que controlem a máquina, lógica de chip, callbacks por instrução/T-state/pixel/amostra ou fallback Python.
+Timers Qt poderão apenas atualizar a apresentação/consultar filas; jamais avançarão o hardware nem definirão o ritmo da emulação. A execução contínua deverá ocorrer fora da thread visual. Não haverá callbacks Python por instrução, M-cycle, T-state, dot, pixel ou amostra, nem fallback para hardware em Python.
 
-### D2 — Arquivamento e isolamento do legado
+### D2 — Substituição segura do runtime, preservando SG-1000
 
-- Qt antigo: mover para `legacy/qt/`, fora dos entrypoints e do pacote operacional.
-- Adaptadores Python SMS que chamam `NativeSMSMachine`: arquivar em `legacy/`; não serão importados pelo novo frontend.
+- O runtime SMS antigo e o adaptador `NativeSMSMachine` permanecem disponíveis durante a migração, mas não serão selecionáveis como fallback silencioso quando a máquina temporal SMS assumir o fluxo de produção.
+- O caminho antigo só poderá ser retirado do build operacional após a máquina temporal, a ponte PyO3 e o smoke test Qt passarem os gates; até lá, preservá-lo como referência de regressão/rollback, sem duplicar componentes novos.
+- A Qt existente não será arquivada em bloco: auditar e preservar o que for compartilhado com o SG-1000. A simplificação da janela SMS não pode quebrar a inicialização, entrada, vídeo ou áudio do SG-1000.
 - `legacy/python_reference/` permanece referência histórica, sem instalação/importação operacional.
-- O runtime Rust `SmsMachine` anterior deve deixar de compilar no build padrão. A implementação poderá ser preservada temporariamente atrás de feature explícita não-default ou em crate arquivado excluído do workspace, conforme a auditoria de dependências determinar.
-- O caminho PyO3 antigo `NativeSMSMachine` deve ser removido do build operacional; a ponte temporal SMS será exposta sem depender da feature antiga.
-- Não desabilitar nem duplicar Z80 compartilhado, scheduler, mapper/memória, PSG SN76489 ou módulos que o caminho temporal/SG-1000 consuma. `cargo` não compila Python; a retirada do Qt/Python antigo exige também ajustar entrypoints, packaging, imports, testes e workflows.
+- Não desabilitar nem duplicar Z80 compartilhado, scheduler, mapper/memória, PSG SN76489, host de áudio/vídeo ou módulos que o caminho temporal/SG-1000 consuma.
+- A retirada do runtime antigo exige matriz de dependências, ajuste de entrypoints/packaging/imports/testes/workflows e teste explícito de que o caminho removido não pode ser reativado acidentalmente.
 
-A decisão sobre feature gating versus crate arquivado será tomada após a matriz de dependências. Nenhum módulo será movido/desativado por nome sem verificar seus consumidores.
+Nenhum módulo será movido ou desativado por nome sem verificar seus consumidores. A simplificação visual é independente da remoção do runtime antigo.
 
 ### D3 — PSG SMS completo e temporal, reutilizando `sega-sn76489`
 
@@ -110,11 +118,11 @@ A máquina deverá preservar causalidade e equivalência entre:
 
 O áudio produzido e os frames de vídeo devem carregar timestamps derivados da timeline da máquina.
 
-### D7 — Contrato PyO3 e novo frontend
+### D7 — Contrato PyO3 e janela mínima
 
-A API Python será coarse-grained. O frontend não recebe callbacks por instrução, M-cycle, T-state, dot, pixel ou amostra. Os contratos de sessão e capacidades devem distinguir backend selecionado, backend efetivo e estado real da máquina. Não expor comandos de VDP/PSG como API de jogador; diagnósticos podem consultar snapshots imutáveis.
+A API Python será coarse-grained e orientada à sessão. O contrato inicial deve cobrir `load_rom`, `start`, `pause`, `stop`, `reset` e `step_frame`, além de consultar estado, retirar frames completos e encaminhar input. A execução contínua deve ficar sob ownership de uma sessão Rust; a thread Qt não executa loops de instruções nem controla clocks.
 
-O novo frontend poderá começar como shell de sessão, biblioteca, preferências, monitor de estado, visualização de frame e saída de áudio somente quando esses dados forem fornecidos pelo runtime temporal. Recursos ainda não implementados devem permanecer indisponíveis, não simulados.
+A janela não expõe comandos internos de VDP/PSG. O frame entregue ao viewport é uma cópia imutável com dimensões, formato e timestamp explícitos. O áudio permanece no caminho nativo de saída, sem transportar amostras por callbacks Python. Capacidades não implementadas ficam desabilitadas/ausentes; nunca são simuladas.
 
 ## 3. Sequência de implementação
 
@@ -124,8 +132,8 @@ O novo frontend poderá começar como shell de sessão, biblioteca, preferência
 4. **S3 — VDP temporal:** clock/raster/counters/fetch/evaluation/IRQ e efeitos de escritas em pontos de barramento; integrar à mesma timeline do PSG e Z80.
 5. **S4 — Máquina vertical:** mapper, memória, I/O, Z80, VDP, PSG, interrupções, input e outputs de frame/áudio numa única máquina temporal.
 6. **S5 — PyO3:** API de sessão, execução contínua controlada por Rust, comandos coarse-grained, snapshots e filas de frame/áudio.
-7. **S6 — Novo Qt:** shell modular e apresentação de vídeo/áudio reais; configuração de overscan/viewport exclusivamente visual.
-8. **S7 — Remoção operacional do legado:** mover Qt e adaptadores antigos para `legacy/`, retirar entrypoints/packaging/imports, desativar feature/código Rust antigo no build padrão e revisar workflows.
+7. **S6 — Qt mínimo:** integrar a janela única com viewport, abrir/fechar ROM, executar/pausar, reset e encerramento; vídeo e áudio vêm exclusivamente do runtime Rust.
+8. **S7 — Remoção operacional controlada:** retirar o caminho SMS antigo somente após equivalência funcional suficiente e aceite do novo runtime; preservar componentes/fluxos Qt compartilhados com SG-1000.
 9. **S8 — Validação sistêmica:** suites funcionais, temporais, diferenciais, raster, áudio, determinismo, save states, regressões SG-1000 e smoke tests Windows.
 
 As etapas podem ser divididas em PRs pequenos; não serão condensadas numa migração monolítica.
@@ -141,7 +149,7 @@ O Master System só poderá ser declarado operacional quando:
 - PSG passar vetores de latch/data, tons, volumes, ruído periódico/white, LFSR SMS, clock divider e continuidade de amostras;
 - execução em blocos e contínua forem equivalentes; save/restore/replay preservarem 100% do estado temporal;
 - saída de áudio e vídeo tiver timestamps e não controlar a timeline;
-- novo Qt executar somente pelo contrato temporal;
+- janela Qt mínima executar somente pelo contrato temporal, sem bloquear a thread visual e sem controlar o clock da máquina;
 - SG-1000 continuar passando sua suíte sem regressão;
 - Rust fmt, Clippy sem warnings, testes, Python pytest/Ruff/format, build Maturin/PyO3 e testes de host aplicáveis forem classificados individualmente PASS/FAIL/BLOCKED/NOT RUN;
 - nenhuma suíte SKIPPED seja contabilizada como PASS.
