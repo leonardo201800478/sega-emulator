@@ -31,12 +31,6 @@ concurrency:
 jobs:
   changes:
     name: Change impact classification
-      - name: CI supervisor - cancel remaining jobs on failure
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
-
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     outputs:
@@ -110,14 +104,13 @@ jobs:
               - 'tools/project_manager.py'
               - 'scripts/common.ps1'
 
-  rust:
-    needs: [changes]
       - name: CI supervisor - cancel remaining jobs on failure
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
-
+  rust:
+    needs: [changes]
     if: |
       always() &&
       (github.event_name != 'pull_request' ||
@@ -149,14 +142,13 @@ jobs:
       - name: Workspace unit tests
         run: cargo test --workspace --locked
 
-  refresh-lockfiles:
-    name: Refresh Cargo lockfiles (manual artifact)
       - name: CI supervisor - cancel remaining jobs on failure
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
-
+  refresh-lockfiles:
+    name: Refresh Cargo lockfiles (manual artifact)
     if: github.event_name == 'workflow_dispatch' && inputs.refresh_cargo_lockfiles
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -185,14 +177,13 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  scheduler-stress:
-    needs: [changes]
       - name: CI supervisor - cancel remaining jobs on failure
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
-
+  scheduler-stress:
+    needs: [changes]
     name: Scheduler deterministic stress
     if: |
       always() &&
@@ -229,14 +220,13 @@ jobs:
           if [ "$SCHEDULER_STRESS_PROFILE" = "short" ]; then ulimit -v 524288; else ulimit -v 2097152; fi
           "$test_bin" --ignored --nocapture
 
-  python:
-    needs: [changes]
       - name: CI supervisor - cancel remaining jobs on failure
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
-
+  python:
+    needs: [changes]
     if: |
       always() &&
       (github.event_name != 'pull_request' ||
@@ -282,14 +272,13 @@ jobs:
       - name: Python regression suite
         run: uv run --locked pytest -q
 
-  windows-python-qt:
-    needs: [changes]
       - name: CI supervisor - cancel remaining jobs on failure
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
-
+  windows-python-qt:
+    needs: [changes]
     if: |
       always() &&
       (github.event_name != 'pull_request' ||
@@ -320,14 +309,13 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: uv run --locked python -c "from PySide6 import QtCore; import numpy; print(QtCore.qVersion(), numpy.__version__)"
 
-  windows-tooling:
-    needs: [changes]
       - name: CI supervisor - cancel remaining jobs on failure
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
-
+  windows-tooling:
+    needs: [changes]
     if: |
       always() &&
       (github.event_name != 'pull_request' ||
@@ -359,14 +347,13 @@ jobs:
             Write-Host "PASS $($file.FullName)"
           }
 
-  windows-native-python-extension:
-    needs: [changes]
       - name: CI supervisor - cancel remaining jobs on failure
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
-
+  windows-native-python-extension:
+    needs: [changes]
     if: |
       always() &&
       (github.event_name != 'pull_request' ||
@@ -399,14 +386,13 @@ jobs:
       - name: Import the native extension
         run: .\.venv\Scripts\python.exe -c "import sega_z80_core; print(sega_z80_core.__name__)"
 
-  windows-d3d12:
-    needs: [changes]
       - name: CI supervisor - cancel remaining jobs on failure
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
-
+  windows-d3d12:
+    needs: [changes]
     if: |
       always() &&
       (github.event_name != 'pull_request' ||
@@ -430,3 +416,9 @@ jobs:
         run: cargo check --locked --all-targets --manifest-path native/audio_output/Cargo.toml --target x86_64-pc-windows-msvc
       - name: Run native audio-output unit tests
         run: cargo test --locked --manifest-path native/audio_output/Cargo.toml --target x86_64-pc-windows-msvc
+
+      - name: CI supervisor - cancel remaining jobs on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/cancel"
