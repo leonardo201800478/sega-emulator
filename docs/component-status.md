@@ -1,6 +1,6 @@
 # Estado atual dos componentes — Sega Emulator
 
-**Baseline reconciliada:** main em `57d9405218de46795dd45876a52e3dbcec186ffd` (2026-11-05, parent de PR #536); fotografia histórica, não representa necessariamente o estado atual.  
+**Baseline reconciliada:** main em `1da784f556b9524f5a6f43ce8a7c525e68354f9e` (2026-11-05).  
 **Política de fidelidade:** [ADR-0016](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).  
 **Prioridade:** Master System, mantendo SG-1000 funcional e sem regressões.
 
@@ -64,3 +64,8 @@ Nenhuma validação global de cycle-accuracy ou pin-accuracy é requisito univer
 - [Matriz semântica DD/FD](z80-dd-fd-semantic-matrix.md)
 
 Auditorias datadas preservam evidências históricas; não devem ser usadas como status corrente sem reconciliação com a main.
+
+
+## Reconciliação da main — 1da784f556b9524f5a6f43ce8a7c525e68354f9e (2026-11-05)
+
+A fotografia anterior foi supersedida pela main 1da784f556b9524f5a6f43ce8a7c525e68354f9e. PRs #531 e #536 estão integradas; o estado Z80 inclui a entrega de IRQ VBlank/Line do VDP SMS e RESET funcional cobertos por testes, sem declarar fechamento global de E7. O inventário atualizado das PRs abertas, seus bloqueios e decisões de integração está em [auditoria de PRs abertas](audits/open-pr-integration-audit-2026-11-05.md).
