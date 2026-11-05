@@ -66,10 +66,10 @@ class MinimalSmsWindow(QMainWindow):
         self.open_action.triggered.connect(self._open_rom_dialog)
         toolbar.addAction(self.open_action)
 
-        self.run_action = QAction("Iniciar", self)
-        self.run_action.setShortcut("F5")
-        self.run_action.triggered.connect(self._toggle_running)
-        toolbar.addAction(self.run_action)
+        self.step_action = QAction("Avançar quadro", self)
+        self.step_action.setShortcut("F5")
+        self.step_action.triggered.connect(self._step_one_frame)
+        toolbar.addAction(self.step_action)
 
         self.reset_action = QAction("Reset", self)
         self.reset_action.setShortcut("F10")
@@ -121,46 +121,37 @@ class MinimalSmsWindow(QMainWindow):
         self.status_label.setText(
             f"ROM carregada: {path.name}\n"
             "Vídeo desabilitado nesta interface.\n"
-            "Use Iniciar para controlar a sessão."
+            "Use Avançar quadro (F5) para executar um frame e gerar áudio."
         )
         self.statusBar().showMessage(
             f"{path.name} | {self._region} | {audio_status} | vídeo: desabilitado"
         )
         self._update_actions()
 
-    def _toggle_running(self) -> None:
+    def _step_one_frame(self) -> None:
         machine = self._machine
         if machine is None:
             return
-        if machine.is_running:
-            machine.pause()
-            self.run_action.setText("Iniciar")
-            self.status_label.setText(
-                f"ROM: {self._rom_path.name if self._rom_path else 'carregada'}\n"
-                "Sessão pausada. Vídeo não é renderizado pela Qt."
-            )
-        else:
-            machine.start()
-            self.run_action.setText("Pausar")
-            self.status_label.setText(
-                f"ROM: {self._rom_path.name if self._rom_path else 'carregada'}\n"
-                "Sessão iniciada. Vídeo não é renderizado pela Qt."
-            )
-        self._update_actions()
+        try:
+            machine.step_frame()
+        except (RuntimeError, ValueError) as exc:
+            QMessageBox.critical(self, "Falha ao avançar a máquina", str(exc))
+            return
+        self.status_label.setText(
+            f"ROM: {self._rom_path.name if self._rom_path else 'carregada'}\n"
+            f"Quadros executados: {machine.frame_number}\n"
+            "Vídeo desabilitado nesta interface; áudio é processado no backend Rust."
+        )
 
     def _reset(self) -> None:
         machine = self._machine
         if machine is None:
             return
-        was_running = machine.is_running
         machine.reset()
-        if was_running:
-            machine.start()
         self.status_label.setText(
             f"ROM: {self._rom_path.name if self._rom_path else 'carregada'}\n"
             "Máquina reiniciada. Vídeo não é renderizado pela Qt."
         )
-        self.run_action.setText("Pausar" if was_running else "Iniciar")
         self._update_actions()
 
     def _close_rom(self) -> None:
@@ -177,15 +168,9 @@ class MinimalSmsWindow(QMainWindow):
 
     def _update_actions(self) -> None:
         loaded = self._machine is not None
-        self.run_action.setEnabled(loaded)
+        self.step_action.setEnabled(loaded)
         self.reset_action.setEnabled(loaded)
         self.close_rom_action.setEnabled(loaded)
-        if not loaded:
-            self.run_action.setText("Iniciar")
-        elif not self._machine.is_running:
-            self.run_action.setText("Iniciar")
-        else:
-            self.run_action.setText("Pausar")
 
     def _update_controller(self) -> None:
         if self._machine is None:
