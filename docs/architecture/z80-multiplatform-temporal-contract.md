@@ -84,17 +84,19 @@ O snapshot da máquina contém adicionalmente fase dos clock domains, fila de ev
 - A SEGA documenta Z-80A a aproximadamente 3,58 MHz.
 - Placas NTSC comuns usam 3,579545 MHz; variantes PAL documentadas usam 3,546893 MHz.
 - O clock do Z80 é derivado do domínio de vídeo.
-- Uma referência de engenharia reversa de placa SG-1000 descreve `/WAIT` do Z80 ligado ao sinal READY do PSG.
+- Em placas SG-1000/SC-3000 com SN76489 discreto, análises de esquema descrevem READY do PSG ligado diretamente a /WAIT do Z80.
+- A ligação não deve ser generalizada para revisões SG-1000 II com PSG/VDP integrados ou variantes sem a mesma interface externa. O hardware posterior precisa de perfil separado.
 
 **Regra de implementação**
-- Usar o mesmo sequenciador Z80 e um perfil SG-1000 próprio.
+- Usar o mesmo sequenciador Z80 e perfis de placa SG-1000 distintos.
 - Modelar a relação de clock CPU/VDP com razão exata do perfil da placa.
-- Tratar READY do PSG como fonte de WAIT somente nos perfis de placa/PSG cuja ligação esteja confirmada por esquema ou medição. Não aplicar WAIT indiscriminadamente a todo SG-1000.
+- No perfil com SN76489 discreto e READY ligado a /WAIT, a prontidão do PSG é uma fonte real de WAIT durante a escrita ao PSG. A linha READY deve ser modelada como sinal do chip; não substituir por uma constante de 32 T-states sem evidência de fase e comportamento.
+- No perfil com PSG integrado, não inserir WAIT por analogia com a placa discreta.
 - Inserir TW no ciclo afetado, preservando a fase de amostragem do Z80; não simular a espera como atraso global depois da instrução.
 - Preservar o botão HOLD/PAUSE do console como sinal/entrada do sistema, sem confundi-lo com pausa do host.
 
 **Pendente de confirmação**
-- Vincular por revisão de placa e variante de PSG a ligação READY → WAIT, polaridade, condição de busy e ciclo de escrita afetado. A referência disponível é secundária; obter esquema primário ou medição antes de fixar o comportamento como padrão de todos os SG-1000.
+- Mapear a ligação READY → WAIT por revisão exata de placa e PSG. SMS Power e análises de esquemas secundárias confirmam a ligação em placas discretas e relatam que a prontidão pode manter o Z80 esperando até o PSG aceitar o byte; a hipótese de amostragem interna a cada 32 clocks ainda precisa de confirmação primária/medição e não será codificada como constante.
 
 ### 3.2 Master System / Mark III
 
@@ -153,7 +155,7 @@ O snapshot da máquina contém adicionalmente fase dos clock domains, fila de ev
 | Core Z80 | Compartilhado | Compartilhado | Compartilhado | Compartilhado |
 | Clock NTSC de referência | 3,579545 MHz | 3,579545 MHz | 3,579545 MHz | 3,579545 MHz |
 | Clock PAL de referência | 3,546893 MHz | 3,546893 MHz | A confirmar por variante | 3,546895 MHz |
-| WAIT | READY/PSG em placas identificadas; confirmar revisão | Linha exposta; normalmente não dirigida pelo cartucho | Não assumir sem evidência | Não confundir com BUSREQ |
+| WAIT | READY → /WAIT em placas com SN76489 discreto; perfil integrado separado | Linha exposta; normalmente não dirigida pelo cartucho | Não assumir sem evidência | Não confundir com BUSREQ |
 | BUSREQ/BUSACK | Somente se dispositivo/perfil comprovar | Cartucho/dispositivo compatível | Não herdar do SMS | Arbitragem 68000 ↔ Z80 |
 | INT | Perfil VDP/periférico SG | Perfil VDP SMS | Sincronizada ao vídeo | Fontes do subsistema de som/hardware MD |
 | Barramento | Memória/I/O SG | Memória/I/O SMS | Memória/I/O GG | Sound RAM, YM2612, PSG, banco 68000 |
@@ -241,7 +243,9 @@ A ordem respeita o roadmap mestre. Nenhuma etapa autoriza pular os gates da plat
 ### Referências técnicas / engenharia reversa
 - SMS Power, SMS cartridge bus signals: https://www.smspower.org/Development/SMSCartridge
 - SMS Power, cartridge slot and signal descriptions: https://www.smspower.org/Development/CartridgeSlot
-- SG-1000 board analysis (WAIT from PSG): https://retrotechwiki.com/Sega_SG-1000
+- SG-1000 board analysis (READY → /WAIT on discrete PSG boards): https://retrotechwiki.com/Sega_SG-1000
+- SMS Power discussion with board-level confirmation for SC-3000/discrete SN76489A and caveats for integrated PSG revisions: https://www.smspower.org/forums/17233-SN76489SegaPSGAndCPUWaits
+- SN76489 system-specific access notes: https://www.smspower.org/Development/SN76489
 - MAME Z80 device: https://github.com/mamedev/mame/blob/master/src/devices/cpu/z80/z80.cpp
 - MAME CPU bus/wait scheduling concepts: https://docs.mamedev.org/techspecs/cpu_device.html
 - Mega Drive clock-domain reference: https://github.com/user-none/emmd/blob/main/docs/genesis_system_reference.md
