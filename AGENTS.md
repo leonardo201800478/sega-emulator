@@ -13,15 +13,15 @@ Estas regras orientam agentes e revisores. As decisões normativas vigentes são
 
 ## Fidelidade e desempenho
 
-O objetivo é reproduzir o comportamento funcional e temporal observável de cada console com desempenho adequado. Não construir uma réplica elétrica integral.
+A correção funcional de toda instrução/operação suportada é obrigatória. A granularidade segue dois níveis:
 
-- Implementar corretamente as instruções e operações que o software dos consoles suportados pode executar.
-- Preservar clocks, ordem causal e sincronização nos pontos em que afetam o resultado de jogos e periféricos.
-- Usar a menor granularidade suficiente: instrução, transação, scanline, amostra ou evento.
-- M-cycles, T-states, WAIT, arbitragem, fases e sinais são requisitos somente quando houver dependência concreta da plataforma.
+- **Temporal prioritário para gameplay:** preservar ordem e duração de instruções/processos que interagem com barramento, mapper, VDP/raster, PSG/FM/PCM, interrupções, DMA ou periféricos quando o instante altera o jogo.
+- **Atômico como padrão:** instruções internas e operações sem efeito intermediário observável executam como unidades determinísticas, com semântica, flags, estado, side effects e duração nominal correta quando conhecida.
+- M-cycles, T-states, WAIT, arbitragem, fases e sinais só são exigidos quando a dependência concreta estiver demonstrada.
 - Não exigir representação de todos os pinos nem simular capacitância, tensão, transistores ou fenômenos analógicos.
 - Não adicionar eventos por tick/pixel/pino ou estados serializados sem necessidade demonstrada.
-- Antes de detalhar um componente, identificar o console, jogo, periférico ou divergência que depende desse detalhe e escolher a menor solução capaz de reproduzir o comportamento.
+- Antes de detalhar um componente, identificar jogo/console/periférico, efeito observável, evidência e menor granularidade capaz de reproduzi-lo.
+- Ausência de microsequenciamento não é falha funcional quando a execução atômica satisfaz o contrato observável.
 - Medir desempenho no caminho crítico; otimizar sem alterar a saída funcional/temporal.
 
 ## Antes de alterar

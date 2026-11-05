@@ -3,7 +3,9 @@
 
 # Migration control board — Clean Architecture
 
-This board is the source of truth for migration sequencing and evidence. GitHub Actions are validators, not autonomous AI reviewers. A phase advances only when its evidence is recorded against the same candidate SHA.
+> **Status clarification (2026-11-05):** this board is a historical migration/evidence record, not the active source of truth for roadmap sequencing. The sole normative route is [docs/project-roadmap.md](../project-roadmap.md); fidelity and granularity are governed by [ADR-0016](adr/0016-observable-fidelity-and-proportional-timing.md). Historical cycle-accurate targets below must be interpreted as conditional gameplay-timing work, not universal requirements.
+
+This board preserves migration sequencing and evidence from its original period. GitHub Actions are validators, not autonomous AI reviewers. A phase advances only when its evidence is recorded against the same candidate SHA.
 
 ## Roles (independent validation lanes)
 
@@ -59,7 +61,7 @@ A CI workflow only validates the commands it actually executes. A green Python w
 - The Rust SG-1000 and SMS crates remain partial. No fidelity or standalone-runtime acceptance is implied.
 - Baseline crate validation: **PASS** on main SHA `632f2f69e7a9e6d9a81b19a4f994bb1ce42eb951` via [Rust SG-1000 Workspace run #131](https://github.com/leonardo201800478/sega-emulator/actions/runs/40442082201): formatting, Clippy, and workspace tests succeeded; logs show 22 SG-1000 tests passed, plus 15 SMS and 7 Z80 ALU tests. This run predates the migration branch's documentation-only commits and validates the same SG-1000 source blobs.
 - Historical baseline note (before PR #126): VDP, PSG and machine-wide scheduling were not integrated. The current status is recorded below; the crate is still not a complete standalone emulator.
-- **Status atualizado:** Python production cores are archived; the Qt application uses the Rust-only facade. Cycle-accurate timing remains an open fidelity goal.
+- **Status atualizado:** Python production cores are archived; the Qt application uses the Rust-only facade. Gameplay-sensitive temporal behavior remains a selective fidelity goal; operations without observable intermediate effects use the atomic execution baseline. No universal cycle-accurate or pin-accurate target remains.
 
 - **Historical snapshot (2026-10-27):** [PR #139 — Bind PyO3 SG-1000 runtime to consolidated Rust core](https://github.com/leonardo201800478/sega-emulator/pull/139) was open and Draft at that time; this line records the state then, not the current PR state.
 - **Architecture:** the Qt application uses a Rust-only PyO3 facade; CPU, memory/map, I/O, VDP, PSG and machine coordination are implemented in `native/sg1000_core`.

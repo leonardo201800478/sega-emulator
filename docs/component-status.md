@@ -1,6 +1,6 @@
 # Estado atual dos componentes — Sega Emulator
 
-**Baseline consultada:** main em f4e428ad31c0d2e214e8ed15aab8fa705b1c795e (2026-11-05).  
+**Baseline documental:** main em c8da934d051f69f0fad01d133a923c26248a7250 (2026-11-05).  
 **Política de fidelidade:** [ADR-0016](architecture/adr/0016-observable-fidelity-and-proportional-timing.md).  
 **Prioridade:** Master System, mantendo SG-1000 funcional e sem regressões.
 
@@ -31,6 +31,13 @@ Este documento é a fotografia resumida do estado conhecido na baseline acima. A
 | PSG / áudio | Runtime de áudio Rust integrado | Validar comportamento audível e temporização necessária |
 | Machine Scheduler | Infraestrutura Rust presente | Coordenar eventos relevantes sem impor eventos por pino/tick |
 | PyO3 / Qt | Extensão nativa e frontend ativos | Manter interface coarse-grained; sem lógica de hardware em Python |
+
+## 2.1 Regra de granularidade vigente
+
+- **Temporal prioritário:** caminhos de instrução/processo cuja ordem ou duração afete gameplay (I/O, registradores VDP/PSG, raster, mapper, IRQ/NMI, DMA, contenção e WAIT comprovado).
+- **Atômico padrão:** operações sem efeito intermediário observável; devem ser semanticamente exatas, determinísticas e preservar duração nominal conhecida, sem microestados artificiais.
+- A ausência de microsequenciamento não é falha funcional quando a execução atômica atende ao contrato observável.
+- Nenhuma plataforma exige precisão universal por pino ou ciclo elétrico.
 
 ## 3. Modelagem temporal em pausa
 

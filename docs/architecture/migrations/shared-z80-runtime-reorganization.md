@@ -3,7 +3,9 @@
 **Data do inventário:** 2026-10-31  
 **Baseline de `main` antes desta atualização documental:** `3cf846d688798080d35f997f6e0d34680372d7e3`  
 **Natureza desta publicação:** documentação e decisões de arquitetura; nenhum código de runtime é alterado por este documento.  
-**Estado global:** REORGANIZATION_PLANNED; migrações e integrações permanecem em andamento.
+**Estado global:** registro histórico da reorganização; migrações e integrações devem ser conferidas na main atual.
+
+> **Diretriz vigente (2026-11-05):** a [ADR-0016](../adr/0016-observable-fidelity-and-proportional-timing.md) prioriza precisão temporal nos caminhos de instrução/processo que afetam gameplay e adota execução atômica para operações sem estado intermediário observável. Os modos temporais descritos neste documento são condicionais; não constituem mandato de microsequenciamento universal.
 
 ## 1. Objetivo
 
@@ -82,9 +84,9 @@ O novo crate será a única implementação de semântica de instruções Z80 em
 A arquitetura pretendida é híbrida no sentido de manter **uma única semântica/decodificação**, com duas formas de conduzir a execução:
 
 1. **Modo de instrução:** API coarse-grained que executa uma instrução até a próxima fronteira segura e retorna resultado/telemetria. Deve preservar o caminho de compatibilidade durante a extração inicial e continuar útil para testes sem exigir que o scheduler execute uma chamada por T-state.
-2. **Modo temporal:** a mesma instrução é decomposta progressivamente em micro-operações e acessos ao barramento com instante/duração explícitos. O scheduler pode suspender e retomar a CPU entre fronteiras temporais, WAIT, contenção ou arbitragem.
+2. **Modo temporal condicional:** somente instruções/processos cuja interação de gameplay dependa da ordem/duração são decompostos nas micro-operações e acessos ao barramento mínimos necessários. O Scheduler pode suspender e retomar a CPU nas fronteiras realmente observáveis, incluindo WAIT/contenção quando existentes. As demais instruções permanecem atômicas.
 
-Não criar dois decodificadores nem manter dois motores semanticamente independentes. O modo por instrução deve consumir a mesma sequência de operações do motor temporal, ou permanecer uma fachada transitória com equivalência demonstrada durante a migração.
+Não criar dois decodificadores nem manter dois motores semanticamente independentes. Os caminhos atômico e temporal devem compartilhar a mesma fonte de semântica/decodificação e helpers de estado; comparar diferencialmente as operações que existirem nos dois caminhos. Não exigir que toda instrução atômica seja convertida em micro-operações.
 
 ### 3.3 Responsabilidades do motor CPU
 

@@ -12,18 +12,16 @@ Seguir a sequência P0 infraestrutura/hosts → P1 Master System → P2 SG-1000 
 
 Prioridade imediata: consolidar o Z80 compartilhado e o Master System, preservando o SG-1000.
 
-## 2. Regra de fidelidade
+## 2. Regra de fidelidade — dois níveis
 
-A emulação deve ser próxima ao console original nos resultados que jogos e periféricos conseguem observar. Não é objetivo simular todos os detalhes elétricos do chip.
+A correção semântica é obrigatória para toda instrução/operação suportada. A granularidade de execução, porém, é selecionada por efeito observável:
 
-- Correção funcional de instruções, registradores, flags, memória, I/O, vídeo, áudio e interrupções é essencial.
-- Preservar clocks, ordem causal e sincronização nos pontos em que alteram a execução.
-- Usar a menor granularidade suficiente: instrução, transação, scanline, amostra ou evento.
-- M-cycles, T-states, WAIT, arbitragem, fases e sinais são modelados quando houver dependência concreta do console.
+- **Precisão temporal prioritária para gameplay:** detalhar instruções e processos quando ordem/duração afetam a interação entre CPU, barramento, mapper, VDP/raster, áudio, IRQ/NMI, DMA ou periféricos. Preservar a sequência causal e o instante de efeitos externos.
+- **Precisão atômica padrão:** instruções internas e operações sem estado intermediário observável executam atomicamente com resultados, flags, memória, efeitos colaterais e duração nominal correta quando conhecida. Não criar micro-operações, eventos ou estados de snapshot sem consumidor.
+- M-cycles, T-states, WAIT, arbitragem, fases e sinais só são exigidos quando uma dependência concreta de console/jogo/periférico estiver demonstrada.
 - Não exigir todos os pinos físicos, microestados internos não observáveis, capacitância, tensão ou simulação transistor-level.
-- Não criar eventos por tick/pixel/pino, alocações ou campos de save state sem efeito necessário.
-- Um detalhe adicional precisa de justificativa: console/revisão/jogo/periférico afetado, fonte ou teste, menor granularidade e custo de CPU/memória/manutenção.
-- Quando não houver evidência suficiente, registrar UNKNOWN/hipótese; não bloquear o projeto por completude abstrata.
+- Cada promoção de atomicidade para precisão temporal deve registrar console/revisão/jogo/periférico, efeito observável, evidência, menor granularidade e teste.
+- Na ausência de evidência suficiente, manter o caminho atômico e registrar UNKNOWN/hipótese; não bloquear por completude abstrata.
 
 ## 3. Estratégia por componente
 
