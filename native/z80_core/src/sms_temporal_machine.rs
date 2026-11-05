@@ -11,7 +11,6 @@ use sega_sms_core::{
 
 const SMS_TEMPORAL_SAMPLE_RATE: u64 = 44_100;
 const SMS_TEMPORAL_MASTER_TICKS_PER_TSTATE: u64 = 1;
-const DEFAULT_MAX_FRAME_INSTRUCTIONS: usize = 100_000;
 
 fn sms_temporal_region_profile(
     region: &str,
