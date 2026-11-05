@@ -11,8 +11,9 @@
 use core::fmt;
 
 use crate::{
-    SmsTemporalBus, SmsTemporalBusError, SmsTemporalBusState, SmsTemporalDispatch, SmsTemporalM1,
-    SmsTemporalM1Error, SmsTemporalM1State, SmsVdp, Territory,
+    ControllerButtons, SmsTemporalBus, SmsTemporalBusError, SmsTemporalBusState,
+    SmsTemporalDispatch, SmsTemporalM1, SmsTemporalM1Error, SmsTemporalM1State, SmsVdp,
+    Territory,
 };
 use sega_sn76489::Sn76489Core;
 use sega_video::sms::SmsVdpProfile;
@@ -862,6 +863,16 @@ impl SmsTemporalMachine {
     /// Mutable CPU access for initial register setup and deterministic tests.
     pub fn cpu_mut(&mut self) -> &mut Z80MicroSequencer {
         &mut self.cpu
+    }
+
+    /// Update the controller input levels without advancing machine time.
+    pub fn set_controller(
+        &mut self,
+        player: u8,
+        buttons: ControllerButtons,
+    ) -> Result<(), SmsTemporalMachineError> {
+        self.bus.set_controller(player, buttons)?;
+        Ok(())
     }
 
     /// Latch an NMI input edge. Outside HALT it is accepted at the next
