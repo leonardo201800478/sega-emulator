@@ -17,11 +17,7 @@ fn sms_temporal_region_profile(
     let sms1 = SmsVdpRevision::Sega3155124;
     let sprite_limit = SpriteLimitMode::HardwareLimit;
     match region {
-        "usa" => Ok((
-            Territory::Export,
-            SmsVdpProfile::sms1_t0_ntsc(),
-            3_579_545,
-        )),
+        "usa" => Ok((Territory::Export, SmsVdpProfile::sms1_t0_ntsc(), 3_579_545)),
         "brazil" => Ok((
             Territory::Export,
             SmsVdpProfile::new(sms1, VideoStandard::PalM, sprite_limit),
@@ -92,16 +88,13 @@ impl NativeSMSTemporalMachine {
     }
 
     fn replace_machine(&mut self, rom: Vec<u8>) -> PyResult<()> {
-        let machine = build_sms_temporal_machine(rom.clone(), &self.region).map_err(|error| {
-            match error {
+        let machine =
+            build_sms_temporal_machine(rom.clone(), &self.region).map_err(|error| match error {
                 SmsTemporalMachineBuildError::InvalidRegion(message) => {
                     PyValueError::new_err(message)
                 }
-                SmsTemporalMachineBuildError::Machine(message) => {
-                    PyRuntimeError::new_err(message)
-                }
-            }
-        })?;
+                SmsTemporalMachineBuildError::Machine(message) => PyRuntimeError::new_err(message),
+            })?;
         self.close_audio_output();
         self.machine = machine;
         self.rom = rom;
@@ -116,10 +109,13 @@ impl NativeSMSTemporalMachine {
     #[new]
     #[pyo3(signature = (rom, region="usa"))]
     fn new(rom: Vec<u8>, region: &str) -> PyResult<Self> {
-        let machine = build_sms_temporal_machine(rom.clone(), region).map_err(|error| match error {
-            SmsTemporalMachineBuildError::InvalidRegion(message) => PyValueError::new_err(message),
-            SmsTemporalMachineBuildError::Machine(message) => PyRuntimeError::new_err(message),
-        })?;
+        let machine =
+            build_sms_temporal_machine(rom.clone(), region).map_err(|error| match error {
+                SmsTemporalMachineBuildError::InvalidRegion(message) => {
+                    PyValueError::new_err(message)
+                }
+                SmsTemporalMachineBuildError::Machine(message) => PyRuntimeError::new_err(message),
+            })?;
         Ok(Self {
             machine,
             rom,
@@ -186,9 +182,7 @@ impl NativeSMSTemporalMachine {
             .machine
             .step_frame(max_instructions)
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
-        self.total_instructions = self
-            .total_instructions
-            .saturating_add(instructions as u64);
+        self.total_instructions = self.total_instructions.saturating_add(instructions as u64);
         self.pump_audio_output();
         Ok(instructions)
     }
@@ -295,8 +289,7 @@ mod tests {
         assert_eq!(europe.video_standard, VideoStandard::Pal);
         assert_eq!(europe_clock, 3_546_895);
 
-        let (japan_territory, japan, japan_clock) =
-            sms_temporal_region_profile("japan").unwrap();
+        let (japan_territory, japan, japan_clock) = sms_temporal_region_profile("japan").unwrap();
         assert_eq!(japan_territory, Territory::Japan);
         assert_eq!(japan.video_standard, VideoStandard::Ntsc);
         assert_eq!(japan_clock, 3_579_545);
