@@ -178,7 +178,10 @@ impl SmsMemory {
                 }
             }
             0xC000..=0xFFFF => {
-                if self.mapper_control & 0x10 != 0 && self.control_port & 0x10 != 0 {
+                if self.control_port & 0x40 == 0
+                    && self.mapper_control & 0x10 != 0
+                    && self.control_port & 0x10 != 0
+                {
                     self.cartridge_ram
                         [usize::from(address - RAM_START) & (CARTRIDGE_RAM_SIZE - 1)]
                 } else if self.control_port & 0x10 != 0 {
@@ -195,6 +198,7 @@ impl SmsMemory {
         // Work RAM is mirrored through FFFF. Mapper writes update both the
         // mapper register and the RAM mirror at the same logical address.
         if (0x8000..=0xBFFF).contains(&address)
+            && self.control_port & 0x40 == 0
             && self.mapper == MapperKind::Sega
             && self.mapper_control & 0x08 != 0
         {
@@ -204,7 +208,10 @@ impl SmsMemory {
 
         if address >= RAM_START && self.control_port & 0x10 == 0 {
             self.work_ram[usize::from(address - RAM_START) & (RAM_SIZE - 1)] = value;
-        } else if address >= RAM_START && self.mapper_control & 0x10 != 0 {
+        } else if address >= RAM_START
+            && self.control_port & 0x40 == 0
+            && self.mapper_control & 0x10 != 0
+        {
             self.cartridge_ram
                 [usize::from(address - RAM_START) & (CARTRIDGE_RAM_SIZE - 1)] = value;
         }
