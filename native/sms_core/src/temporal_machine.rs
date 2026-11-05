@@ -2943,6 +2943,6 @@ mod temporal_frame_tests {
 
         assert!(machine.step_frame(0).is_err());
         assert_eq!(machine.frame_number(), 0);
-        assert!(machine.framebuffer().is_empty() == false);
+        assert!(!machine.framebuffer().is_empty());
     }
 }
