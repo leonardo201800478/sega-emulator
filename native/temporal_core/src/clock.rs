@@ -1030,7 +1030,6 @@ mod tests {
                             let expected_difference = super::MachineInstant::from_parts(
                                 MachineTime::ZERO,
                                 left_numerator * right_denominator
-                                    + left_denominator * right_denominator
                                     - right_numerator * left_denominator,
                                 left_denominator * right_denominator,
                             )
