@@ -108,6 +108,19 @@ class SMSMachine:
             raise ValueError("address deve estar entre 0000h e FFFFh.")
         return int(self.native_machine.read_port(address))
 
+    @property
+    def cartridge_ram(self) -> bytes:
+        """Return the native 8 KiB cartridge SRAM image for host persistence."""
+        return bytes(self.native_machine.cartridge_ram)
+
+    def load_cartridge_ram(self, data: bytes) -> None:
+        """Restore an 8 KiB cartridge SRAM image loaded by the host."""
+        if not isinstance(data, bytes):
+            raise TypeError("data deve ser bytes.")
+        if len(data) != 0x2000:
+            raise ValueError("A SRAM do cartucho SMS deve conter exatamente 8192 bytes.")
+        self.native_machine.load_cartridge_ram(data)
+
     def configure_audio_output(
         self,
         backend: str,
