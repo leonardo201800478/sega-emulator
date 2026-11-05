@@ -606,6 +606,16 @@ mod tests {
             Err(SchedulerStateCodecError::InvalidMagic)
         );
 
+        let mut legacy = encode_scheduler_state(&state, &U32PayloadCodec).unwrap();
+        legacy[8..10].copy_from_slice(&1_u16.to_be_bytes());
+        assert_eq!(
+            decode_scheduler_state(&legacy, &U32PayloadCodec),
+            Err(SchedulerStateCodecError::UnsupportedVersion {
+                expected: SCHEDULER_STATE_FORMAT_VERSION,
+                actual: 1,
+            })
+        );
+
         let mut encoded = encode_scheduler_state(&state, &U32PayloadCodec).unwrap();
         encoded[8..10].copy_from_slice(&u16::MAX.to_be_bytes());
         assert_eq!(
