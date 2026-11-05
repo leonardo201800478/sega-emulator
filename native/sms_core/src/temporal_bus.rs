@@ -9,14 +9,18 @@
 use core::fmt;
 
 use crate::{
-    CartridgeImage, SmsCoreError, SmsIo, SmsMemory, SmsTemporalCoordinator,
-    SmsTemporalCoordinatorError, SmsTemporalCoordinatorState, SmsTemporalEvent,
+    CartridgeImage, PsgError, PsgProfile, SmsCoreError, SmsIo, SmsMemory,
+    SmsTemporalCoordinator, SmsTemporalCoordinatorError, SmsTemporalCoordinatorState,
+    SmsTemporalEvent, SMS_PSG_CLOCK_DOMAIN_ID,
 };
+use sega_sn76489::Sn76489Core;
 use sega_temporal_core::MachineTime;
 use sega_z80_cpu::{Z80_INT_ACK_AUTOMATIC_WAIT_TSTATES, Z80BusOperation, Z80BusRequest};
 
-pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 7;
+pub const SMS_TEMPORAL_BUS_STATE_VERSION: u16 = 8;
 const DEFAULT_INTERRUPT_VECTOR: u8 = 0xFF;
+const DEFAULT_SMS_PSG_CLOCK_HZ: u64 = 3_579_545;
+const DEFAULT_AUDIO_SAMPLE_RATE: u64 = 48_000;
 const MAX_PORT_WRITE_TRACE: usize = 64;
 
 fn elapsed_tstates(
@@ -89,12 +93,13 @@ pub struct SmsTemporalPortWrite {
 }
 
 /// Complete in-memory continuation of the transactional bus adapter.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SmsTemporalBusState {
     pub format_version: u16,
     pub interrupt_vector: u8,
     pub memory: SmsMemory,
     pub io: SmsIo,
+    pub psg: Sn76489Core,
     pub port_write_trace: Vec<SmsTemporalPortWrite>,
     pub coordinator: SmsTemporalCoordinatorState,
     pub pending_request: Option<Z80BusRequest>,
@@ -109,6 +114,7 @@ pub struct SmsTemporalBusState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SmsTemporalBusError {
     Core(SmsCoreError),
+    Psg(PsgError),
     Coordinator(SmsTemporalCoordinatorError),
     Busy,
     NoPendingRequest,
@@ -121,6 +127,7 @@ impl fmt::Display for SmsTemporalBusError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Core(error) => write!(f, "SMS memory initialization failed: {error}"),
+            Self::Psg(error) => write!(f, "SMS temporal PSG initialization failed: {error}"),
             Self::Coordinator(error) => write!(f, "SMS temporal coordinator failed: {error}"),
             Self::Busy => {
                 f.write_str("SMS temporal bus already owns an unacknowledged transaction")
@@ -146,6 +153,12 @@ impl From<SmsCoreError> for SmsTemporalBusError {
     }
 }
 
+impl From<PsgError> for SmsTemporalBusError {
+    fn from(error: PsgError) -> Self {
+        Self::Psg(error)
+    }
+}
+
 impl From<SmsTemporalCoordinatorError> for SmsTemporalBusError {
     fn from(error: SmsTemporalCoordinatorError) -> Self {
         Self::Coordinator(error)
@@ -157,6 +170,7 @@ impl From<SmsTemporalCoordinatorError> for SmsTemporalBusError {
 pub struct SmsTemporalBus {
     memory: SmsMemory,
     io: SmsIo,
+    psg: Sn76489Core,
     port_write_trace: Vec<SmsTemporalPortWrite>,
     coordinator: SmsTemporalCoordinator,
     pending_request: Option<Z80BusRequest>,
@@ -174,12 +188,32 @@ impl SmsTemporalBus {
         rom: impl Into<Vec<u8>>,
         master_ticks_per_tstate: u64,
     ) -> Result<Self, SmsTemporalBusError> {
+        Self::new_with_psg_config(
+            rom,
+            master_ticks_per_tstate,
+            DEFAULT_SMS_PSG_CLOCK_HZ,
+            DEFAULT_AUDIO_SAMPLE_RATE,
+        )
+    }
+
+    /// Construct a bus with an explicit SMS PSG input clock and host sample rate.
+    ///
+    /// The PSG input clock must follow the selected SMS CPU/PSG clock profile.
+    /// The sample rate controls only output resampling; it never clocks the chip.
+    pub fn new_with_psg_config(
+        rom: impl Into<Vec<u8>>,
+        master_ticks_per_tstate: u64,
+        psg_clock_hz: u64,
+        sample_rate: u64,
+    ) -> Result<Self, SmsTemporalBusError> {
         let cartridge = CartridgeImage::new(rom)?;
         let memory = SmsMemory::new(cartridge)?;
         let coordinator = SmsTemporalCoordinator::new(master_ticks_per_tstate)?;
+        let psg = Sn76489Core::new_with_profile(psg_clock_hz, sample_rate, PsgProfile::Sms)?;
         Ok(Self {
             memory,
             io: SmsIo::default(),
+            psg,
             port_write_trace: Vec::new(),
             coordinator,
             pending_request: None,
@@ -289,6 +323,13 @@ impl SmsTemporalBus {
         let Some(dispatch) = self.coordinator.dispatch_next()? else {
             return Ok(None);
         };
+        let psg_clocks = dispatch
+            .clock_advances
+            .iter()
+            .find(|advance| advance.domain == SMS_PSG_CLOCK_DOMAIN_ID)
+            .ok_or(SmsTemporalBusError::InvalidState)?
+            .elapsed_cycles;
+        self.psg.advance_clocks(psg_clocks);
         match dispatch.event.payload {
             SmsTemporalEvent::BusCompletion { request_id } => {
                 let request = self
@@ -445,6 +486,16 @@ impl SmsTemporalBus {
         &self.port_write_trace
     }
 
+    /// Inspect the integrated SMS-profile PSG without advancing machine time.
+    pub fn psg(&self) -> &Sn76489Core {
+        &self.psg
+    }
+
+    /// Consume samples already generated by scheduler-driven PSG clocks.
+    pub fn drain_audio_samples(&mut self, max_samples: Option<usize>) -> Vec<f64> {
+        self.psg.drain_samples(max_samples)
+    }
+
     fn read_port(&self, port: u16) -> u8 {
         match (port as u8) & 0xC1 {
             0x40 | 0x41 | 0x80 | 0x81 => 0xFF,
@@ -454,7 +505,9 @@ impl SmsTemporalBus {
 
     fn write_port(&mut self, port: u16, value: u8, completed_at: MachineTime) {
         let port_byte = port as u8;
-        if port_byte <= 0x3F && port_byte & 1 == 0 {
+        if (port_byte & 0xC0) == 0x40 {
+            self.psg.write(value);
+        } else if port_byte <= 0x3F && port_byte & 1 == 0 {
             self.memory.write_control_port(value);
         } else {
             self.io.write_port(port, value);
@@ -481,6 +534,7 @@ impl SmsTemporalBus {
             interrupt_vector: self.interrupt_vector,
             memory: self.memory.clone(),
             io: self.io.clone(),
+            psg: self.psg.clone(),
             port_write_trace: self.port_write_trace.clone(),
             coordinator: self.coordinator.export_state(),
             pending_request: self.pending_request,
@@ -495,6 +549,12 @@ impl SmsTemporalBus {
     /// Restore only when the scheduler event and bus transaction agree.
     pub fn restore_state(state: SmsTemporalBusState) -> Result<Self, SmsTemporalBusError> {
         if state.format_version != SMS_TEMPORAL_BUS_STATE_VERSION {
+            return Err(SmsTemporalBusError::InvalidState);
+        }
+        if state.psg.profile() != PsgProfile::Sms
+            || state.psg.clock_hz() == 0
+            || state.psg.sample_rate() == 0
+        {
             return Err(SmsTemporalBusError::InvalidState);
         }
         let coordinator = SmsTemporalCoordinator::restore_state(state.coordinator.clone())?;
@@ -582,6 +642,7 @@ impl SmsTemporalBus {
         Ok(Self {
             memory: state.memory,
             io: state.io,
+            psg: state.psg,
             port_write_trace: state.port_write_trace,
             coordinator,
             pending_request: state.pending_request,
@@ -884,6 +945,78 @@ mod tests {
             }
         );
         assert_eq!(restored.dispatch_next().unwrap(), None);
+    }
+
+    #[test]
+    fn psg_writes_commit_at_the_bus_deadline_and_restore_with_clock_phase() {
+        let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 3).unwrap();
+        assert_eq!(bus.psg().profile(), PsgProfile::Sms);
+        assert_eq!(bus.psg().clock_hz(), DEFAULT_SMS_PSG_CLOCK_HZ);
+        assert_eq!(bus.psg().clock_divider_phase(), 0);
+
+        let write = request(
+            70,
+            Z80BusOperation::PortWrite { value: 0x85 },
+            0x7E,
+            4,
+        );
+        let deadline = bus.begin_request(write, 0).unwrap();
+        let mut restored = SmsTemporalBus::restore_state(bus.export_state()).unwrap();
+        assert_eq!(restored.psg().clock_divider_phase(), 0);
+        assert_eq!(restored.psg().latched_register(), 0);
+
+        let Some(SmsTemporalDispatch::BusCompletion(completion)) =
+            restored.dispatch_next().unwrap()
+        else {
+            panic!("expected PSG port-write completion");
+        };
+        assert_eq!(completion.completed_at, deadline);
+        assert_eq!(deadline, MachineTime::from_ticks(12));
+        assert_eq!(restored.psg().clock_divider_phase(), 4);
+        assert_eq!(restored.psg().latched_register(), 0);
+        assert_eq!(restored.psg().tone_periods()[0], 5);
+        assert_eq!(restored.port_write_trace().last().unwrap().port, 0x7E);
+        restored.acknowledge_completion(70).unwrap();
+
+        let data = request(
+            71,
+            Z80BusOperation::PortWrite { value: 0x12 },
+            0x7F,
+            4,
+        );
+        restored.begin_request(data, 0).unwrap();
+        restored.dispatch_next().unwrap();
+        assert_eq!(restored.psg().tone_periods()[0], 0x125);
+        assert_eq!(restored.psg().clock_divider_phase(), 8);
+        restored.acknowledge_completion(71).unwrap();
+
+        let volume = request(
+            72,
+            Z80BusOperation::PortWrite { value: 0x90 },
+            0x40,
+            4,
+        );
+        restored.begin_request(volume, 0).unwrap();
+        restored.dispatch_next().unwrap();
+        assert_eq!(restored.psg().attenuations()[0], 0);
+        assert_eq!(restored.psg().clock_divider_phase(), 12);
+        restored.acknowledge_completion(72).unwrap();
+
+        let snapshot = restored.export_state();
+        let round_trip = SmsTemporalBus::restore_state(snapshot.clone()).unwrap();
+        assert_eq!(round_trip.export_state(), snapshot);
+        assert_eq!(round_trip.psg().clock_divider_phase(), 12);
+    }
+
+    #[test]
+    fn psg_clock_advances_with_cpu_clock_domain_for_each_dispatched_boundary() {
+        let mut bus = SmsTemporalBus::new(vec![0; 0x4000], 5).unwrap();
+        let request = request(73, Z80BusOperation::MemoryRead, 0x0000, 7);
+        bus.begin_request(request, 2).unwrap();
+        bus.dispatch_next().unwrap();
+        assert_eq!(bus.coordinator.z80_clock_snapshot().unwrap().total_cycles, 9);
+        assert_eq!(bus.coordinator.psg_clock_snapshot().unwrap().total_cycles, 9);
+        assert_eq!(bus.psg().clock_divider_phase(), 9 % 16);
     }
 
     #[test]
