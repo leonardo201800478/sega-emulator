@@ -279,12 +279,7 @@ impl SmsMachine {
             self.psg.write(event.value);
         }
         self.advance_psg_to_tstate(end_tstate);
-        let th_before = self.io.read_port(0xDD) & 0xC0;
         self.io.set_light_pulse(self.vdp.light_pulse_active());
-        let th_after = self.io.read_port(0xDD) & 0xC0;
-        if th_before & !th_after & 0xC0 != 0 {
-            self.vdp.latch_light_h_counter();
-        }
         if self.vdp.interrupt_pending() {
             self.cpu.request_int(0xFF);
         } else {
