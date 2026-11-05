@@ -927,13 +927,11 @@ fn render_scanline_for_revision(
 
 #[cfg(test)]
 mod tests {
+    use super::super::profile::{SmsVdpProfile, SmsVdpRevision, SpriteLimitMode, VideoStandard};
     use super::{
         COLLISION, FRAME_SIZE, LINE_TSTATES, OVERFLOW, SMS_VDP_WIDTH, SmsVdp, StereoPresentation,
         TMS_PALETTE, VBLANK, render_legacy_scanline, render_legacy_sprites, render_scanline,
         render_scanline_for_revision,
-    };
-    use super::super::profile::{
-        SmsVdpProfile, SmsVdpRevision, SpriteLimitMode, VideoStandard,
     };
     fn reg(v: &mut SmsVdp, i: u8, value: u8) {
         v.write_port(0xBF, value);
@@ -954,8 +952,7 @@ mod tests {
         let base = usize::from(tile) * 32;
         for row in 0..8 {
             for plane in 0..4 {
-                v.vram[base + row * 4 + plane] =
-                    if color & (1 << plane) != 0 { 0xFF } else { 0 };
+                v.vram[base + row * 4 + plane] = if color & (1 << plane) != 0 { 0xFF } else { 0 };
             }
         }
     }
